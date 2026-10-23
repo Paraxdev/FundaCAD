@@ -12,15 +12,31 @@ class MockHost implements ConstraintHost {
   _cons: SketchConstraint[] = [];
   _fillet: number | null = null;
   solves = 0;
-  tool() { return this._tool; }
-  entities() { return this._ents; }
-  constraints() { return this._cons; }
-  pickTol() { return 1; }
-  getFilletFirst() { return this._fillet; }
-  setFilletFirst(i: number | null) { this._fillet = i; }
-  requestSolve() { this.solves++; }
+  tool() {
+    return this._tool;
+  }
+  entities() {
+    return this._ents;
+  }
+  constraints() {
+    return this._cons;
+  }
+  pickTol() {
+    return 1;
+  }
+  getFilletFirst() {
+    return this._fillet;
+  }
+  setFilletFirst(i: number | null) {
+    this._fillet = i;
+  }
+  requestSolve() {
+    this.solves++;
+  }
   warnings: string[] = [];
-  warn(msg: string) { this.warnings.push(msg); }
+  warn(msg: string) {
+    this.warnings.push(msg);
+  }
 }
 
 const v = (x: number, y: number) => new THREE.Vector2(x, y);
@@ -83,7 +99,10 @@ describe("ConstraintTools.applicable (SK-3: selection-driven constraint menu)", 
     const opts = ct.applicable([{ id: "l1" }, { id: "l2" }]);
     expect(labels(opts)).toEqual(["Collinear", "Equal", "Horizontal", "Parallel", "Perpendicular", "Vertical"]);
     pick(opts, "Horizontal").apply();
-    expect(h._cons).toEqual([{ type: "horizontal", line: "l1" }, { type: "horizontal", line: "l2" }]);
+    expect(h._cons).toEqual([
+      { type: "horizontal", line: "l1" },
+      { type: "horizontal", line: "l2" },
+    ]);
     expect(h.solves).toBe(1);
   });
 
@@ -121,11 +140,18 @@ describe("ConstraintTools.applicable (SK-3: selection-driven constraint menu)", 
     expect(labels(ct.applicable([{ id: "l1" }]))).toEqual(["Horizontal", "Vertical"]);
 
     const h2 = new MockHost();
-    h2._ents = [{
-      type: "projected", id: "p1",
-      source: { kind: "edge", body: "body1", sel: { kind: "edge", by: "match", fp: { mid: [0, 0, 0], dir: [1, 0, 0] } } },
-      curve: { kind: "line", x1: 0, y1: 0, x2: 10, y2: 0 },
-    }];
+    h2._ents = [
+      {
+        type: "projected",
+        id: "p1",
+        source: {
+          kind: "edge",
+          body: "body1",
+          sel: { kind: "edge", by: "match", fp: { mid: [0, 0, 0], dir: [1, 0, 0] } },
+        },
+        curve: { kind: "line", x1: 0, y1: 0, x2: 10, y2: 0 },
+      },
+    ];
     const ct2 = new ConstraintTools(h2);
     expect(ct2.applicable([{ id: "p1" }])).toEqual([]);
   });
@@ -202,7 +228,11 @@ describe("ConstraintTools.resolvePoint (the pickEndpoint/circle gap SK-3 needed 
 });
 
 describe("ConstraintTools.applicable: point on curve, alignment, chains, rectangle sides", () => {
-  const host = (ents: ResolvedEntity[]) => { const h = new MockHost(); h._ents = ents; return { h, ct: new ConstraintTools(h) }; };
+  const host = (ents: ResolvedEntity[]) => {
+    const h = new MockHost();
+    h._ents = ents;
+    return { h, ct: new ConstraintTools(h) };
+  };
   const L: ResolvedEntity = { type: "line", id: "L", x1: 0, y1: 0, x2: 40, y2: 0 };
   const P: ResolvedEntity = { type: "point", id: "P", x: 10, y: 10 };
   const A: ResolvedEntity = { type: "arc", id: "A", x1: 10, y1: 0, x2: -10, y2: 0, mx: 0, my: 10 };
@@ -232,7 +262,10 @@ describe("ConstraintTools.applicable: point on curve, alignment, chains, rectang
 
   it("the first coincident option for a point and a circle is On curve, which the I key takes", () => {
     const { ct } = host([A, C, P]);
-    for (const sel of [[{ id: "P" }, { id: "C" }], [{ id: "C" }, { id: "P" }]]) {
+    for (const sel of [
+      [{ id: "P" }, { id: "C" }],
+      [{ id: "C" }, { id: "P" }],
+    ]) {
       expect(ct.applicable(sel).find((o) => o.tool === "coincident")?.label).toBe("On curve");
     }
   });
@@ -240,7 +273,16 @@ describe("ConstraintTools.applicable: point on curve, alignment, chains, rectang
   it("two clicked line ends offer Coincident first, which the I key takes", () => {
     const M: ResolvedEntity = { type: "line", id: "M", x1: 5, y1: 20, x2: 15, y2: 30 };
     const { ct } = host([L, M]);
-    for (const sel of [[{ id: "M", p: 1 }, { id: "L", p: 0 }], [{ id: "L", p: 0 }, { id: "M", p: 1 }]]) {
+    for (const sel of [
+      [
+        { id: "M", p: 1 },
+        { id: "L", p: 0 },
+      ],
+      [
+        { id: "L", p: 0 },
+        { id: "M", p: 1 },
+      ],
+    ]) {
       expect(ct.applicable(sel).find((o) => o.tool === "coincident")?.label).toBe("Coincident");
     }
   });
@@ -286,7 +328,10 @@ describe("ConstraintTools.applicable: point on curve, alignment, chains, rectang
     expect(labels(opts)).toEqual(["Fix centre", "Fix end", "Fix start", "Radius"]);
     pick(opts, "Fix centre").apply();
     pick(opts, "Radius").apply();
-    expect(h._cons).toEqual([{ type: "fix", e: "A", p: 2 }, { type: "radius", e: "A", value: 10 }]);
+    expect(h._cons).toEqual([
+      { type: "fix", e: "A", p: 2 },
+      { type: "radius", e: "A", value: 10 },
+    ]);
   });
 
   it("three lines chain Equal, Parallel and Collinear to the first in one step", () => {
@@ -295,10 +340,16 @@ describe("ConstraintTools.applicable: point on curve, alignment, chains, rectang
     const opts = ct.applicable([{ id: "a" }, { id: "b" }, { id: "c" }]);
     expect(labels(opts)).toEqual(["Collinear", "Equal", "Horizontal", "Parallel", "Vertical"]);
     pick(opts, "Equal").apply();
-    expect(h._cons).toEqual([{ type: "equal", l1: "a", l2: "b" }, { type: "equal", l1: "a", l2: "c" }]);
+    expect(h._cons).toEqual([
+      { type: "equal", l1: "a", l2: "b" },
+      { type: "equal", l1: "a", l2: "c" },
+    ]);
     expect(h.solves).toBe(1);
     pick(opts, "Parallel").apply();
-    expect(h._cons.slice(2)).toEqual([{ type: "parallel", l1: "a", l2: "b" }, { type: "parallel", l1: "a", l2: "c" }]);
+    expect(h._cons.slice(2)).toEqual([
+      { type: "parallel", l1: "a", l2: "b" },
+      { type: "parallel", l1: "a", l2: "c" },
+    ]);
   });
 
   it("three circles chain Equal radius and Concentric", () => {
@@ -307,7 +358,10 @@ describe("ConstraintTools.applicable: point on curve, alignment, chains, rectang
     const opts = ct.applicable([{ id: "a" }, { id: "b" }, { id: "c" }]);
     expect(labels(opts)).toEqual(["Align horizontally", "Align vertically", "Concentric", "Equal"]);
     pick(opts, "Equal").apply();
-    expect(h._cons).toEqual([{ type: "equalRadius", a: "a", b: "b" }, { type: "equalRadius", a: "a", b: "c" }]);
+    expect(h._cons).toEqual([
+      { type: "equalRadius", a: "a", b: "b" },
+      { type: "equalRadius", a: "a", b: "c" },
+    ]);
   });
 
   it("three points chain Coincident", () => {
@@ -328,7 +382,11 @@ describe("ConstraintTools.applicable: point on curve, alignment, chains, rectang
     expect(labels(opts)).toEqual(["Collinear", "Equal", "Parallel", "Perpendicular"]);
     pick(opts, "Parallel").apply();
     expect(h._cons).toEqual([{ type: "parallel", l1: "Q~0", l2: "S" }]);
-    expect(labels(ct.applicable([{ id: "Q~1" }, { id: "C" }]))).toEqual(["Centre at midpoint", "Centre on line", "Tangent"]);
+    expect(labels(ct.applicable([{ id: "Q~1" }, { id: "C" }]))).toEqual([
+      "Centre at midpoint",
+      "Centre on line",
+      "Tangent",
+    ]);
     pick(ct.applicable([{ id: "P" }, { id: "Q~2" }]), "On curve").apply();
     expect(h._cons[1]).toEqual({ type: "pointOnCurve", e: "P", p: 0, curve: "Q~2" });
     expect(ct.applicable([{ id: "Q~7" }, { id: "S" }])).toEqual([]);

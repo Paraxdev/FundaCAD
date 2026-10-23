@@ -1,9 +1,5 @@
-// What Home sits on: the theme's paper (the default), the dimmed workspace, or a
-// picture of the user's own.
-//
-// The picture lives in IndexedDB in the desktop build too: the Tauri fs scope
-// reaches no app data folder and there is no asset protocol to show a file from
-// one, while WebView2 keeps IndexedDB in the app's own data folder anyway.
+// Home's backdrop: the theme's paper, the dimmed workspace, or the user's picture. The picture is in IndexedDB on
+// desktop too: the Tauri fs scope reaches no app data folder, and WebView2 keeps IndexedDB there anyway.
 
 import { readSetting } from "./storedSetting";
 
@@ -26,7 +22,9 @@ export function asHomeBackground(v: unknown): HomeBackground | null {
 
 let current: HomeBackground = asHomeBackground(readSetting(KEY)) ?? DEFAULT_HOME_BACKGROUND;
 const listeners = new Set<() => void>();
-const notify = () => { for (const fn of listeners) fn(); };
+const notify = () => {
+  for (const fn of listeners) fn();
+};
 
 export function getHomeBackground(): HomeBackground {
   return current;
@@ -61,8 +59,6 @@ export function homeBackgroundStyle(bg: HomeBackground, imageUrl: string | null)
   return bg === "image" && imageUrl ? { "--home-image": `url("${imageUrl}")` } : undefined;
 }
 
-// ---- the picture ------------------------------------------------------------
-
 export interface HomeImageStore {
   get(): Promise<Blob | undefined>;
   put(image: Blob): Promise<void>;
@@ -72,20 +68,26 @@ export function memoryImageStore(): HomeImageStore {
   let image: Blob | undefined;
   return {
     get: async () => image,
-    put: async (b) => { image = b; },
+    put: async (b) => {
+      image = b;
+    },
   };
 }
 
 export function indexedDbImageStore(name = "fundacad-home"): HomeImageStore {
   let opened: Promise<IDBDatabase> | null = null;
-  const db = () => (opened ??= new Promise<IDBDatabase>((resolve, reject) => {
-    const req = indexedDB.open(name, 1);
-    req.onupgradeneeded = () => {
-      if (!req.result.objectStoreNames.contains("images")) req.result.createObjectStore("images");
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => { opened = null; reject(req.error); };
-  }));
+  const db = () =>
+    (opened ??= new Promise<IDBDatabase>((resolve, reject) => {
+      const req = indexedDB.open(name, 1);
+      req.onupgradeneeded = () => {
+        if (!req.result.objectStoreNames.contains("images")) req.result.createObjectStore("images");
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => {
+        opened = null;
+        reject(req.error);
+      };
+    }));
   const run = async <T>(mode: IDBTransactionMode, op: (s: IDBObjectStore) => IDBRequest): Promise<T> => {
     const tx = (await db()).transaction("images", mode);
     const req = op(tx.objectStore("images"));
@@ -97,7 +99,9 @@ export function indexedDbImageStore(name = "fundacad-home"): HomeImageStore {
   };
   return {
     get: () => run<Blob | undefined>("readonly", (s) => s.get("image")),
-    put: async (b) => { await run("readwrite", (s) => s.put(b, "image")); },
+    put: async (b) => {
+      await run("readwrite", (s) => s.put(b, "image"));
+    },
   };
 }
 

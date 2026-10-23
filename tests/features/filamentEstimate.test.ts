@@ -63,8 +63,12 @@ describe("filamentLengthMm", () => {
 describe("estimateFilament", () => {
   it("masses a 10mm PLA cube (1000mm3) at 1.24g, 100% infill", () => {
     const est = estimateFilament({
-      volumeMm3: 1000, areaMm2: 600, densityGPerCm3: 1.24,
-      infillPct: 100, wallThicknessMm: 0.8, filamentDiameterMm: 1.75,
+      volumeMm3: 1000,
+      areaMm2: 600,
+      densityGPerCm3: 1.24,
+      infillPct: 100,
+      wallThicknessMm: 0.8,
+      filamentDiameterMm: 1.75,
     });
     expect(est.massG).toBeCloseTo(1.24, 6);
     expect(est.effectiveVolumeMm3).toBeCloseTo(1000);
@@ -72,8 +76,12 @@ describe("estimateFilament", () => {
 
   it("reports both grams and metres, metres = mm length / 1000", () => {
     const est = estimateFilament({
-      volumeMm3: 1000, areaMm2: 600, densityGPerCm3: 1.24,
-      infillPct: 100, wallThicknessMm: 0.8, filamentDiameterMm: 1.75,
+      volumeMm3: 1000,
+      areaMm2: 600,
+      densityGPerCm3: 1.24,
+      infillPct: 100,
+      wallThicknessMm: 0.8,
+      filamentDiameterMm: 1.75,
     });
     expect(est.lengthM).toBeCloseTo(est.lengthMm / 1000);
     expect(est.lengthM).toBeGreaterThan(0.4);
@@ -82,12 +90,20 @@ describe("estimateFilament", () => {
 
   it("a lower infill masses less than a higher one, same body", () => {
     const low = estimateFilament({
-      volumeMm3: 8000, areaMm2: 2400, densityGPerCm3: 1.24,
-      infillPct: 10, wallThicknessMm: 0.8, filamentDiameterMm: 1.75,
+      volumeMm3: 8000,
+      areaMm2: 2400,
+      densityGPerCm3: 1.24,
+      infillPct: 10,
+      wallThicknessMm: 0.8,
+      filamentDiameterMm: 1.75,
     });
     const high = estimateFilament({
-      volumeMm3: 8000, areaMm2: 2400, densityGPerCm3: 1.24,
-      infillPct: 90, wallThicknessMm: 0.8, filamentDiameterMm: 1.75,
+      volumeMm3: 8000,
+      areaMm2: 2400,
+      densityGPerCm3: 1.24,
+      infillPct: 90,
+      wallThicknessMm: 0.8,
+      filamentDiameterMm: 1.75,
     });
     expect(low.massG).toBeLessThan(high.massG);
   });

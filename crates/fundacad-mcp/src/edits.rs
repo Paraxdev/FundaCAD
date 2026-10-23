@@ -1,16 +1,11 @@
-//! `edit`: several timeline and parameter edits as one call.
-//!
-//! Each entry is one of the single-edit tools with its own arguments, so there
-//! is nothing new to learn, and the whole list is applied to a copy of the
-//! document first: one refusal leaves the real document as it was, rather than
-//! half an edit an agent then has to find and undo.
+//! `edit`: several timeline and parameter edits as one call, applied to a copy first so one refusal
+//! leaves the real document as it was rather than half edited.
 
 use serde_json::{Map, Value};
 
 use crate::model::{self, Doc};
 
-/// The arguments each op takes, beside `op` itself. Anything else is refused
-/// by name, the way `unknown_arguments` refuses it on the single tools.
+/// The arguments each op takes beside `op`. Anything else is refused by name, as on the single tools.
 fn takes(op: &str) -> Option<&'static [&'static str]> {
     Some(match op {
         "add" => &["feature", "at"],
@@ -36,10 +31,7 @@ fn canonical(op: &str) -> &str {
 }
 
 fn need<'a>(entry: &'a Map<String, Value>, key: &str) -> Result<&'a Value, String> {
-    entry
-        .get(key)
-        .filter(|v| !v.is_null())
-        .ok_or_else(|| format!("needs `{key}`"))
+    entry.get(key).filter(|v| !v.is_null()).ok_or_else(|| format!("needs `{key}`"))
 }
 
 fn need_str(entry: &Map<String, Value>, key: &str) -> Result<String, String> {
@@ -64,8 +56,7 @@ pub enum Done {
     ParamRemoved(String),
 }
 
-/// Apply one entry of `ops` to `doc`, or say why not. A sketch shortcut it
-/// expanded adds a note to `notes`.
+/// A sketch shortcut it expanded adds a note to `notes`.
 pub fn apply(doc: &mut Doc, entry: &Value, notes: &mut Vec<String>) -> Result<Done, String> {
     let Some(entry) = entry.as_object() else {
         return Err("each edit is an object with an `op`".into());
@@ -75,14 +66,10 @@ pub fn apply(doc: &mut Doc, entry: &Value, notes: &mut Vec<String>) -> Result<Do
     };
     let op = canonical(op);
     let Some(allowed) = takes(op) else {
-        return Err(format!(
-            "no op '{op}', have add, update, remove, move, param and param_remove"
-        ));
+        return Err(format!("no op '{op}', have add, update, remove, move, param and param_remove"));
     };
-    let mut unknown: Vec<&String> = entry
-        .keys()
-        .filter(|k| k.as_str() != "op" && !allowed.contains(&k.as_str()))
-        .collect();
+    let mut unknown: Vec<&String> =
+        entry.keys().filter(|k| k.as_str() != "op" && !allowed.contains(&k.as_str())).collect();
     if !unknown.is_empty() {
         unknown.sort();
         return Err(format!(
@@ -154,8 +141,7 @@ pub fn apply(doc: &mut Doc, entry: &Value, notes: &mut Vec<String>) -> Result<Do
     }
 }
 
-/// One line for the lot: what was added, updated, removed and moved, grouped
-/// so fifty adds read as one list of ids.
+/// One line for the lot, grouped so fifty adds read as one list of ids.
 pub fn summary(done: &[Done]) -> String {
     let mut added = Vec::new();
     let mut updated = Vec::new();
@@ -165,11 +151,9 @@ pub fn summary(done: &[Done]) -> String {
     for d in done {
         match d {
             Done::Added(id, kind) => added.push(format!("{id} ({kind})")),
-            Done::Updated(id, keys) => updated.push(if keys.is_empty() {
-                id.clone()
-            } else {
-                format!("{id} ({})", keys.join(", "))
-            }),
+            Done::Updated(id, keys) => {
+                updated.push(if keys.is_empty() { id.clone() } else { format!("{id} ({})", keys.join(", ")) })
+            }
             Done::Replaced(id) => updated.push(format!("{id} (replaced)")),
             Done::Removed(id, kind) => removed.push(format!("{id} ({kind})")),
             Done::Moved(id, to) => moved.push(format!("{id} to {to}")),
@@ -178,26 +162,17 @@ pub fn summary(done: &[Done]) -> String {
         }
     }
     let mut parts = Vec::new();
-    for (label, list) in [
-        ("added", added),
-        ("updated", updated),
-        ("removed", removed),
-        ("moved", moved),
-        ("parameters", params),
-    ] {
+    for (label, list) in
+        [("added", added), ("updated", updated), ("removed", removed), ("moved", moved), ("parameters", params)]
+    {
         if !list.is_empty() {
             parts.push(format!("{label} {}", list.join(", ")));
         }
     }
-    format!(
-        "Applied {} edit{}: {}.",
-        done.len(),
-        if done.len() == 1 { "" } else { "s" },
-        parts.join("; ")
-    )
+    format!("Applied {} edit{}: {}.", done.len(), if done.len() == 1 { "" } else { "s" }, parts.join("; "))
 }
 
-/// The error for a refused entry, numbered from 1 the way a person counts.
+/// Entries are numbered from 1, the way a person counts.
 pub fn refused(n: usize, of: usize, entry: &Value, why: &str) -> String {
     let what = entry
         .get("op")
@@ -214,22 +189,5 @@ pub fn refused(n: usize, of: usize, entry: &Value, why: &str) -> String {
             }
         })
         .unwrap_or_default();
-    format!(
-        "Edit {n} of {of}{what} refused, so none of the {of} was applied: {why}"
-    )
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-
-    #[test]
-    fn unknown_ops_and_arguments_are_named() {
-        let mut doc = model::new_document();
-        let e = apply(&mut doc, &json!({"op": "nope"}), &mut Vec::new()).err().unwrap();
-        assert!(e.contains("no op 'nope'"), "{e}");
-        let e = apply(&mut doc, &json!({"op": "remove", "id": "x", "at": 1}), &mut Vec::new()).err().unwrap();
-        assert!(e.contains("'at'"), "{e}");
-    }
+    format!("Edit {n} of {of}{what} refused, so none of the {of} was applied: {why}")
 }

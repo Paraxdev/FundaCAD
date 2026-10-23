@@ -77,7 +77,7 @@ def test_type_into_a_button_is_refused_before_anything_is_clicked():
 
 def test_type_with_enter_says_when_the_app_refused_the_value():
     from fundacad_harness.errors import StepFailed
-    said = 'Size: "M12" is not a size, type M5 or a diameter'
+    said = 'Size: "M13" is not a size, use M2 to M20 or a diameter in mm'
 
     class Refusing(One):
         reads = 0
@@ -85,7 +85,7 @@ def test_type_with_enter_says_when_the_app_refused_the_value():
         def call(self, method, **args):
             if method == "fieldValue":
                 self.reads += 1
-                return {"text": "M12", "typed": True, "problem": said if self.reads > 2 else ""}
+                return {"text": "M13", "typed": True, "problem": said if self.reads > 2 else ""}
             return super().call(method, **args)
 
     s = Session(engine=sys.executable, chrome=sys.executable, repo=REPO, open=False)
@@ -94,6 +94,34 @@ def test_type_with_enter_says_when_the_app_refused_the_value():
     s.page = types.SimpleNamespace(locator=lambda sel: types.SimpleNamespace(click=lambda **k: None),
                                    keyboard=keys, evaluate=lambda js: None)
     s.settle = lambda *a, **k: "settled"
-    with pytest.raises(StepFailed, match=r'field:size "Size" did not take "M12" on Enter: Size: "M12" is not a size'):
-        s.type("Size", "M12", enter=True)
+    with pytest.raises(StepFailed, match=r'field:size "Size" did not take "M13" on Enter: Size: "M13" is not a size'):
+        s.type("Size", "M13", enter=True)
     s.close()
+
+
+def test_expand_asks_the_page_for_a_folder_and_click_for_any_control():
+    asked = []
+
+    class Spy(One):
+        def call(self, method, **args):
+            if method == "locate":
+                asked.append(args)
+            return super().call(method, **args)
+
+    carets = []
+    row = types.SimpleNamespace(
+        get_attribute=lambda name: "false",
+        click=lambda **k: None,
+        locator=lambda sel: types.SimpleNamespace(click=lambda **k: carets.append(sel)),
+    )
+    s = Session(engine=sys.executable, chrome=sys.executable, repo=REPO, open=False)
+    s.bridge = Spy({"ref": "folder:n:f1/0", "label": "Robot", "region": "items"})
+    s.page = types.SimpleNamespace(locator=lambda sel: row)
+    s.settle = lambda *a, **k: "settled"
+    try:
+        assert str(s.expand("Robot")).startswith('opened folder:n:f1/0 "Robot"')
+        s.click("Robot")
+    finally:
+        s.close()
+    assert asked == [{"target": "Robot", "folder": True}, {"target": "Robot"}]
+    assert carets == [".tree-caret"]

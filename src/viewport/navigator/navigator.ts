@@ -1,28 +1,35 @@
-// The navigator: one pose, eased gestures applied as exact transforms, flights,
-// limits and the checks that keep the target on what is being looked at.
-// No DOM and no three.js cameras here; rig.ts binds it to both.
-//
+// No DOM and no three.js cameras here, rig.ts binds the navigator to both.
 // Pixel coordinates are the viewport's own, origin top left, y down.
 
 import * as THREE from "three";
 import type { NavScene, ProjectionMode } from "../cameras";
-import {
-  centreDepth, orbitPivot, zoomAnchor, type AnchorContext,
-} from "./anchor";
+import { centreDepth, orbitPivot, zoomAnchor, type AnchorContext } from "./anchor";
 import { stepAngles, type StepDir } from "../viewStep";
 import { OrbitChannel, PanChannel, ZoomChannel } from "./channels";
 import { makeFlight, stepFlight, type Flight } from "./flight";
-import {
-  clampScale, contentLimits, defaultLimits, elevRange, minScaleOf, type Limits,
-} from "./limits";
+import { clampScale, contentLimits, defaultLimits, elevRange, minScaleOf, type Limits } from "./limits";
 import { decompose, turntableQuat, wrapAngle } from "./math";
+import { rotateAbout, rotateWorldAbout, reseat, scaleAbout, truck, turntableAbout } from "./motions";
 import {
-  rotateAbout, rotateWorldAbout, reseat, scaleAbout, truck, turntableAbout,
-} from "./motions";
-import {
-  boxOffScreen, clonePose, copyPose, depthOf, distanceOf, eyeOf, forwardOf, halfTan, makePose,
-  poseFinite, project, rightOf, setOrientation, setTurntable, upOf, worldPerPixel,
-  type Frame, type Pose,
+  aspectOf,
+  boxOffScreen,
+  clonePose,
+  copyPose,
+  depthOf,
+  distanceOf,
+  eyeOf,
+  forwardOf,
+  halfTan,
+  makePose,
+  poseFinite,
+  project,
+  rightOf,
+  setOrientation,
+  setTurntable,
+  upOf,
+  worldPerPixel,
+  type Frame,
+  type Pose,
 } from "./pose";
 
 /** One wheel pixel of zoom, as a log factor: 100px (a notch) is 1.17x. */
@@ -31,8 +38,7 @@ export const WHEEL_LOG_PER_PX = Math.log(1.0016);
 export const PINCH_LOG_PER_PX = 0.01;
 /** Mouse orbit speed, radians per viewport height. */
 export const ORBIT_PER_HEIGHT = 2 * Math.PI;
-/** An orbit press that stays within this many pixels is a right click (the
- *  viewport's menu threshold), so it turns nothing. */
+/** An orbit press within this many pixels is a right click (the menu threshold), so it turns nothing. */
 export const CLICK_SLOP_PX = 5;
 /** Wheel pixels per pixel of a zoom drag: a 300 px drag is about a 4x zoom. */
 export const ZOOM_PER_DRAG_PX = 3;
@@ -58,7 +64,11 @@ export interface NavigatorOptions {
   preferredPivot: (() => THREE.Vector3 | null) | null;
 }
 
-type Gesture = { kind: "orbit"; x: number; y: number; vx: number; vy: number; started: boolean } | { kind: "pan" } | { kind: "zoom"; x: number; y: number; ly: number } | null;
+type Gesture =
+  | { kind: "orbit"; x: number; y: number; vx: number; vy: number; started: boolean }
+  | { kind: "pan" }
+  | { kind: "zoom"; x: number; y: number; ly: number }
+  | null;
 
 export class Navigator {
   readonly pose: Pose = makePose();
@@ -93,7 +103,10 @@ export class Navigator {
   private version = 0;
   private stamp = makePose();
   private listeners: Record<NavigatorEvent, Set<() => void>> = {
-    inputstart: new Set(), inputend: new Set(), change: new Set(), rest: new Set(),
+    inputstart: new Set(),
+    inputend: new Set(),
+    change: new Set(),
+    rest: new Set(),
   };
 
   constructor() {
@@ -101,8 +114,6 @@ export class Navigator {
     copyPose(this.good, this.pose);
     copyPose(this.stamp, this.pose);
   }
-
-  // --- events -----------------------------------------------------------------
 
   on(ev: NavigatorEvent, fn: () => void): () => void {
     this.listeners[ev].add(fn);
@@ -120,8 +131,6 @@ export class Navigator {
     this.version++;
     this.emit("change");
   }
-
-  // --- configuration ------------------------------------------------------------
 
   setFrame(width: number, height: number) {
     const w = Math.max(1, width);
@@ -159,8 +168,12 @@ export class Navigator {
     if (this.box) {
       const r = this.box.getBoundingSphere(new THREE.Sphere()).radius;
       const m = Math.max(
-        Math.abs(this.box.min.x), Math.abs(this.box.min.y), Math.abs(this.box.min.z),
-        Math.abs(this.box.max.x), Math.abs(this.box.max.y), Math.abs(this.box.max.z),
+        Math.abs(this.box.min.x),
+        Math.abs(this.box.min.y),
+        Math.abs(this.box.min.z),
+        Math.abs(this.box.max.x),
+        Math.abs(this.box.max.y),
+        Math.abs(this.box.max.z),
       );
       base = contentLimits(base, r, m, this.pose.fov, this.frame.height);
     }
@@ -191,8 +204,6 @@ export class Navigator {
     return { scene: this.scene, plane: this.plane, box: this.box, frame: this.frame };
   }
 
-  // --- reading ------------------------------------------------------------------
-
   eye(out = new THREE.Vector3()): THREE.Vector3 {
     return eyeOf(this.pose, out);
   }
@@ -203,8 +214,14 @@ export class Navigator {
     return this.flight !== null;
   }
   isBusy(): boolean {
-    return this.flight !== null || this.gesture !== null || this.zooms.length > 0
-      || this.orbit !== null || this.pan !== null || this.wheelAt !== null;
+    return (
+      this.flight !== null ||
+      this.gesture !== null ||
+      this.zooms.length > 0 ||
+      this.orbit !== null ||
+      this.pan !== null ||
+      this.wheelAt !== null
+    );
   }
   pixelOf(point: THREE.Vector3): { x: number; y: number; depth: number } {
     return project(this.pose, this.frame, point);
@@ -212,8 +229,6 @@ export class Navigator {
   pivotAt(x: number, y: number): THREE.Vector3 {
     return this.orbitPoint?.clone() ?? this.opts.preferredPivot?.() ?? orbitPivot(this.pose, this.ctx(), x, y);
   }
-
-  // --- gestures -------------------------------------------------------------------
 
   /** A soft flight gives way to input at the frame on screen; a hard one does
    *  not take input at all. False when the input has to be ignored. */
@@ -376,10 +391,8 @@ export class Navigator {
     this.emit("inputstart");
   }
 
-  /** Two-finger scroll as an orbit: the view turns as if the fingers dragged
-   *  it, about the pivot under the cursor. `fresh` starts a new swipe, which
-   *  takes a new pivot; the rest of the swipe keeps that one, though the model
-   *  turns away from under the cursor that chose it. */
+  /** `fresh` starts a new swipe, which takes a new pivot; the rest of the swipe keeps it,
+   *  though the model turns away from under the cursor that chose it. */
   scrollOrbit(x: number, y: number, dx: number, dy: number, fresh = true) {
     if (this.locked) {
       this.scrollPan(x, y, dx, dy);
@@ -393,8 +406,11 @@ export class Navigator {
       if (this.flight?.hard) return;
       this.flight = null;
     } else if (!this.takeInput()) return;
-    const same = !fresh && this.scrollPivot !== null
-      && Math.abs(this.scrollPivot.x - x) < 2 && Math.abs(this.scrollPivot.y - y) < 2;
+    const same =
+      !fresh &&
+      this.scrollPivot !== null &&
+      Math.abs(this.scrollPivot.x - x) < 2 &&
+      Math.abs(this.scrollPivot.y - y) < 2;
     if (!same) this.scrollPivot = { x, y, pivot: this.pivotAt(x, y) };
     if (!ours || !same) {
       this.endGesture(true);
@@ -432,8 +448,6 @@ export class Navigator {
     ch.add(w.log);
     this.unsettled = true;
   }
-
-  // --- the frame ------------------------------------------------------------------
 
   /** Advance one frame of `dt` seconds. True when the pose changed. */
   update(dt: number): boolean {
@@ -540,9 +554,8 @@ export class Navigator {
     }
   }
 
-  /** After a gesture: put the target on the surface at the centre of the screen,
-   *  or, over empty space, inside the model's ball. Only along the view axis,
-   *  so nothing on screen moves. */
+  /** After a gesture, put the target on the surface at the screen centre or, over empty space,
+   *  inside the model's ball. Only along the view axis, so nothing on screen moves. */
   reseatAndContain() {
     const p = this.pose;
     const d = centreDepth(p, this.ctx());
@@ -617,8 +630,6 @@ export class Navigator {
     copyPose(this.good, p);
   }
 
-  // --- programmatic motions -----------------------------------------------------
-
   private stopAll() {
     this.zooms = [];
     this.orbit = null;
@@ -629,7 +640,15 @@ export class Navigator {
 
   /** Go to a pose, flying when asked. Input cancels a soft flight where it
    *  stands; a hard one lands first. */
-  flyTo(to: Pose, opts: { animate?: boolean | undefined; hard?: boolean; onArrive?: (() => void) | undefined; duration?: number } = {}) {
+  flyTo(
+    to: Pose,
+    opts: {
+      animate?: boolean | undefined;
+      hard?: boolean;
+      onArrive?: (() => void) | undefined;
+      duration?: number;
+    } = {},
+  ) {
     this.stopAll();
     this.flight = null;
     const target = clonePose(to);
@@ -645,9 +664,8 @@ export class Navigator {
     this.flight = f;
   }
 
-  /** Where the view is going: a flight's destination while one is in the air,
-   *  so a programmatic change asked for mid-flight builds on it rather than on
-   *  the frame it happened to be at. */
+  /** A flight's destination while one is in the air, so a programmatic change asked for
+   *  mid-flight builds on it rather than on the frame it happened to be at. */
   private destination(): Pose {
     return clonePose(this.flight?.to ?? this.pose);
   }
@@ -735,7 +753,8 @@ export class Navigator {
     this.reseatAndContain();
     const up = upOf(this.pose, new THREE.Vector3());
     const right = rightOf(this.pose, new THREE.Vector3());
-    const r = new THREE.Quaternion().setFromAxisAngle(up, az)
+    const r = new THREE.Quaternion()
+      .setFromAxisAngle(up, az)
       .multiply(new THREE.Quaternion().setFromAxisAngle(right, pol));
     rotateWorldAbout(this.pose, this.orbitPoint ?? this.pose.target.clone(), r);
     this.moved();
@@ -787,12 +806,32 @@ export class Navigator {
     this.flyTo(p, { animate: opts.animate });
   }
 
-  /** The view a fresh window opens on. */
-  resetView(center: THREE.Vector3 | null, radius: number, animate: boolean) {
+  /** Frame a box, keeping the view direction, FIT_MARGIN clear on every side. */
+  fitBox(box: THREE.Box3, opts: { animate?: boolean } = {}) {
+    const p = this.destination();
+    if (!frameBox(p, this.frame, box)) {
+      const c = box.isEmpty() ? null : box.getCenter(new THREE.Vector3());
+      if (!c || !Number.isFinite(c.x + c.y + c.z)) {
+        this.fitSphere(new THREE.Vector3(), -1, opts);
+        return;
+      }
+      p.target.copy(c);
+      p.scale = frameScale(p, this.frame, EMPTY_VIEW_MM);
+    }
+    this.flyTo(p, { animate: opts.animate });
+  }
+
+  /** The view a fresh window opens on. Given the box, it frames the box itself
+   *  rather than its bounding ball. */
+  resetView(center: THREE.Vector3 | null, radius: number, animate: boolean, box?: THREE.Box3) {
     const p = clonePose(this.pose);
     const home = HOME_EYE.clone().normalize();
     const q = lookQuat(home, new THREE.Vector3());
     setOrientation(p, q);
+    if (box && frameBox(p, this.frame, box)) {
+      this.flyTo(p, { animate });
+      return;
+    }
     if (center) {
       p.target.copy(center);
       p.scale = frameScale(p, this.frame, radius * 1.15);
@@ -803,24 +842,25 @@ export class Navigator {
     this.flyTo(p, { animate });
   }
 
-  /** Turn to an orientation about what is being looked at, the target, keeping
-   *  the scale, so a detail zoomed in on stays centred and the same size. When
-   *  that would leave the model wholly off screen the turn frames it instead. */
+  /** Turn about the target keeping the scale, so a zoomed detail stays centred and the same size.
+   *  When that would leave the model wholly off screen the turn frames it instead. */
   turnTo(q: THREE.Quaternion, animate = true) {
     if (!this.flight && this.unsettled) {
       this.unsettled = false;
       this.reseatAndContain();
     }
     const p = this.poseWith(q);
-    if (this.box && boxOffScreen(p, this.frame, this.box)) {
-      const s = this.box.getBoundingSphere(new THREE.Sphere());
-      p.target.copy(s.center);
-      p.scale = frameScale(p, this.frame, s.radius * 1.15);
-    }
+    if (this.box && boxOffScreen(p, this.frame, this.box)) frameBox(p, this.frame, this.box);
     this.flyTo(p, { animate });
   }
 
-  lookAtPlane(origin: THREE.Vector3, normal: THREE.Vector3, up: THREE.Vector3, animate: boolean, onArrive?: () => void) {
+  lookAtPlane(
+    origin: THREE.Vector3,
+    normal: THREE.Vector3,
+    up: THREE.Vector3,
+    animate: boolean,
+    onArrive?: () => void,
+  ) {
     const n = normal.clone().normalize();
     const q = lookQuatUp(n, up);
     this.flyTo(this.poseWith(q, origin, this.pose.scale), { animate, hard: true, onArrive });
@@ -836,13 +876,51 @@ export class Navigator {
     if (!keepScale && !p.ortho) p.scale = this.pose.scale * (halfTan(want) / halfTan(this.pose.fov));
     this.flyTo(p, { animate });
   }
-
 }
 
 /** Where a fresh window's camera sits, relative to what it looks at. */
 export const HOME_EYE = new THREE.Vector3(80, -120, 90);
 /** Half-extent framed when there is nothing to frame (an empty document), in mm. */
 export const EMPTY_VIEW_MM = 50;
+
+/** The share of the view's width and of its height left clear on each side of
+ *  a framed model. */
+export const FIT_MARGIN = 0.12;
+
+const corner = new THREE.Vector3();
+const axes = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()] as const;
+/** Aim p at the box centre with the scale that puts its silhouette `margin` in from every edge.
+ *  False, p untouched, for an empty, non finite or zero size box. */
+export function frameBox(p: Pose, v: Frame, box: THREE.Box3, margin = FIT_MARGIN): boolean {
+  if (box.isEmpty()) return false;
+  const c = box.getCenter(new THREE.Vector3());
+  if (!Number.isFinite(c.x + c.y + c.z)) return false;
+  const a = aspectOf(v);
+  const k = 1 - 2 * margin;
+  const right = rightOf(p, axes[0]);
+  const up = upOf(p, axes[1]);
+  const fwd = forwardOf(p, axes[2]);
+  const t = halfTan(p.fov);
+  let need = 0;
+  for (let i = 0; i < 8; i++) {
+    corner.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z).sub(c);
+    const x = Math.abs(corner.dot(right)) / (a * k);
+    const y = Math.abs(corner.dot(up)) / k;
+    if (p.ortho) {
+      need = Math.max(need, x, y);
+    } else {
+      // The eye distance from the target that holds this corner inside the
+      // shrunk frustum; z is its depth beyond the target.
+      const z = corner.dot(fwd);
+      need = Math.max(need, x / t - z, y / t - z);
+    }
+  }
+  const scale = p.ortho ? need : need * t;
+  if (!(Number.isFinite(scale) && scale > 1e-9)) return false;
+  p.target.copy(c);
+  p.scale = scale;
+  return true;
+}
 
 /** The half height at the target that fits a ball of radius r in both
  *  directions of the frame. */

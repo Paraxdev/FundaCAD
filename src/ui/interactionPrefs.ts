@@ -42,8 +42,6 @@ export function onHoverDwellChange(fn: () => void): () => void {
   return () => listeners.delete(fn);
 }
 
-// --- navigation ----------------------------------------------------------------
-
 /** Which camera rig the viewport runs: the navigator (the default), or the camera-controls
  *  one kept for a release behind `?nav=legacy` or this setting. */
 export type NavigatorChoice = "v2" | "legacy";
@@ -89,7 +87,13 @@ export interface NavPrefs {
 }
 
 const NAV_PREFS_KEY = "fundacad.navigation";
-const NAV_DEFAULTS: NavPrefs = { orbitPivot: "auto", inertia: false, wheelDevice: "auto", touchpadScroll: "orbit", smoothTime: 0.125 };
+const NAV_DEFAULTS: NavPrefs = {
+  orbitPivot: "auto",
+  inertia: false,
+  wheelDevice: "auto",
+  touchpadScroll: "orbit",
+  smoothTime: 0.125,
+};
 
 export function asWheelDevice(v: unknown): WheelDevicePref | null {
   return v === "auto" || v === "touchpad" || v === "mouse" ? v : null;
@@ -105,7 +109,8 @@ function readNavPrefs(): NavPrefs {
   try {
     const raw = readSetting(NAV_PREFS_KEY);
     const v = raw ? (JSON.parse(raw) as Partial<NavPrefs> & { scrollPans?: unknown }) : {};
-    const t = typeof v.smoothTime === "number" && Number.isFinite(v.smoothTime) ? v.smoothTime : NAV_DEFAULTS.smoothTime;
+    const t =
+      typeof v.smoothTime === "number" && Number.isFinite(v.smoothTime) ? v.smoothTime : NAV_DEFAULTS.smoothTime;
     // "Scroll pans" made every wheel pan, which is a touchpad that pans.
     const legacyPans = v.scrollPans === true && v.wheelDevice === undefined && v.touchpadScroll === undefined;
     return {
@@ -141,8 +146,6 @@ export function onNavPrefsChange(fn: () => void): () => void {
   navListeners.add(fn);
   return () => navListeners.delete(fn);
 }
-
-// --- the wheel device seen --------------------------------------------------------
 
 /** What the last scroll was read as, for the setting's "Automatic" readout. */
 let detectedWheel: "touchpad" | "mouse" | null = null;

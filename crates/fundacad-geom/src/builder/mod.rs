@@ -1,10 +1,5 @@
-//! Timeline replay, replacing the Python engine's `builder.py` `rebuild` and the helpers of
-//! the Python engine's `handler_util.py`.
-//!
-//! The document's features run in order against an ordered list of bodies. A
-//! feature that fails is a no-op with an error naming it, and the build goes
-//! on. Bodies get their ids from `BodyIds` exactly as the Python engine assigns
-//! them, so a document keeps its ids whichever engine built it.
+//! Timeline replay, `rebuild` of builder.py: features run in order against an ordered list of bodies, a failed
+//! feature is a no-op with an error, and `BodyIds` hands out ids exactly as the Python engine does.
 
 mod fmt;
 pub mod owners;
@@ -36,20 +31,14 @@ pub const MISSING_FEATURE: &str = "missingFeature";
 /// A refusal naming a feature that is not above this one. Written from what is
 /// above only, `forward_references` says so when it is below instead.
 pub fn missing_reference(message: impl Into<String>) -> Fail {
-    Fail::Value {
-        message: message.into(),
-        code: Some(MISSING_FEATURE),
-    }
+    Fail::Value { message: message.into(), code: Some(MISSING_FEATURE) }
 }
 
 /// Why a feature did nothing: the arms of the Python rebuild loop's `except`.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Fail {
     /// A refusal written for the user (`ValueError`, `GeomError`).
-    Value {
-        message: String,
-        code: Option<&'static str>,
-    },
+    Value { message: String, code: Option<&'static str> },
     /// The feature lacks a field its handler reads (`KeyError`).
     Missing(String),
     /// Anything else, named by its exception class.
@@ -58,10 +47,7 @@ pub enum Fail {
 
 impl Fail {
     pub fn msg(message: impl Into<String>) -> Fail {
-        Fail::Value {
-            message: message.into(),
-            code: None,
-        }
+        Fail::Value { message: message.into(), code: None }
     }
 }
 
@@ -77,12 +63,8 @@ impl From<KernelError> for Fail {
     }
 }
 
-/// The handful of raw OCCT exception names worth turning into a sentence a
-/// caller can act on, the same way `require_positive` already reads for a
-/// negative dimension. Everything else stays `Internal`, named by its
-/// exception class rather than guessed at, because a name not on this list
-/// has not been checked to mean the same thing in every feature that can
-/// raise it.
+/// Turns the few raw OCCT exception names checked to mean one thing in every feature into an actionable
+/// sentence. Anything else stays `Internal` under its exception class rather than guessed at.
 fn translate_kernel_error(name: String) -> Fail {
     match name.as_str() {
         "Standard_DomainError" => Fail::msg(
@@ -117,9 +99,8 @@ pub struct FeatureError {
     pub feature_id: Option<String>,
     pub message: String,
     pub code: Option<String>,
-    /// For the error report: the kernel calls, the bodies and the parameter
-    /// values at the moment it failed. `None` for errors restored from a
-    /// checkpoint written before this existed.
+    /// The kernel calls, bodies and parameter values when it failed, for the error report.
+    /// `None` for errors restored from an older checkpoint.
     pub detail: Option<Value>,
 }
 
@@ -128,10 +109,7 @@ impl FeatureError {
     pub fn wire(&self) -> Value {
         let mut m = Map::new();
         m.insert("message".into(), Value::String(self.message.clone()));
-        m.insert(
-            "feature_id".into(),
-            self.feature_id.clone().map_or(Value::Null, Value::String),
-        );
+        m.insert("feature_id".into(), self.feature_id.clone().map_or(Value::Null, Value::String));
         if let Some(code) = &self.code {
             m.insert("code".into(), Value::String(code.clone()));
         }
@@ -183,17 +161,15 @@ impl Body {
         (self.uid, self.generation)
     }
 
-    /// The same body over a copy of its shape. OCCT algorithms write p-curves
-    /// and tolerances into the shapes they are handed, and a body the rebuild
-    /// cache keeps is handed to every rebuild that resumes from it.
+    /// The same body over a copy of its shape. OCCT writes p-curves and tolerances into the shapes it is handed,
+    /// and a cached body is handed to every rebuild that resumes from it.
     pub fn detached(&self) -> Body {
         let shape = kernel::copy_topology(&self.shape).unwrap_or_else(|_| self.shape.clone());
         Body { shape, ..self.clone() }
     }
 
-    /// The owner of each face in face order, when the owners were last worked
-    /// out for the shape the body holds now. A face's place in that order is
-    /// the one thing about it a blob gives back exactly.
+    /// The owner of each face in face order, when worked out for the shape the body holds now.
+    /// Face order is the one thing about a face a blob gives back exactly.
     pub fn face_owners(&self) -> Option<&[Option<String>]> {
         self.face_owners
             .as_ref()
@@ -272,9 +248,8 @@ pub struct Ctx {
     pub tracked_faces: IndexMap<String, Value>,
     /// Projected sketch entity refresh entries, the Python engine's `projection_refresh.py`.
     pub projections: Vec<Value>,
-    /// The cut or join each feature applied so far, by feature id, which is
-    /// what a feature pattern repeats. Kept only for the features in
-    /// `patterned`, so a document without feature patterns holds no tools.
+    /// The cut or join each feature applied so far, by feature id, which a feature pattern repeats.
+    /// Kept only for the features in `patterned`.
     pub tools: HashMap<String, Vec<ToolRecord>>,
     pub patterned: HashSet<String>,
     /// Each datum point by id, read from the document before the build.
@@ -292,7 +267,6 @@ pub struct Ctx {
 /// A body moved as a whole, each point `p` going to `rot * p + shift`.
 #[derive(Debug, Clone)]
 pub struct RigidMove {
-    /// The body's id.
     pub body: String,
     pub rot: glam::DMat3,
     pub shift: glam::DVec3,
@@ -435,10 +409,7 @@ impl Ctx {
     /// The refusal for a reference scan named as an operand of `what`.
     pub fn scan_refusal(&self, index: usize, what: &str) -> Fail {
         let b = &self.bodies[index];
-        Fail::msg(format!(
-            "{} ({}) is a reference scan, {what} cannot use it. Make it solid first.",
-            b.name, b.id
-        ))
+        Fail::msg(format!("{} ({}) is a reference scan, {what} cannot use it. Make it solid first.", b.name, b.id))
     }
 
     /// `index` back unless it is a reference scan, which has no faces or edges to edit.
@@ -461,10 +432,7 @@ impl Ctx {
         if !self.patterned.contains(feature_id) {
             return;
         }
-        self.tools
-            .entry(feature_id.to_owned())
-            .or_default()
-            .push(ToolRecord { kind, bodies, tool });
+        self.tools.entry(feature_id.to_owned()).or_default().push(ToolRecord { kind, bodies, tool });
     }
 
     /// The signed volume a feature measured for this body's current shape.
@@ -527,9 +495,8 @@ fn pieces(shape: &Shape) -> usize {
     kernel::count(&kernel::drop_debris(shape), kernel::Kind::Solid)
 }
 
-/// Says so when a feature that removed material left a body in more pieces
-/// than it found it. The pieces stay in the body, and without this nothing
-/// would tell the user a tip fell off. Split exists to do this, so it is quiet.
+/// Notes when a feature that removed material left a body in more pieces, which nothing else would tell
+/// the user (a tip fell off). Split exists to do this, so it is quiet.
 fn note_splits(ctx: &mut Ctx, fid: &str, rawf: &Value, pre: &[(u64, u64, Shape)]) {
     if rawf.get("type").and_then(Value::as_str) == Some("split") {
         return;
@@ -540,9 +507,7 @@ fn note_splits(ctx: &mut Ctx, fid: &str, rawf: &Value, pre: &[(u64, u64, Shape)]
     };
     let mut notes = Vec::new();
     for b in &ctx.bodies {
-        let Some((_, _, old)) = pre
-            .iter()
-            .find(|(uid, generation, _)| *uid == b.uid && *generation != b.generation)
+        let Some((_, _, old)) = pre.iter().find(|(uid, generation, _)| *uid == b.uid && *generation != b.generation)
         else {
             continue;
         };
@@ -551,11 +516,7 @@ fn note_splits(ctx: &mut Ctx, fid: &str, rawf: &Value, pre: &[(u64, u64, Shape)]
         }
         let now = pieces(&b.shape);
         if now > pieces(old) && kernel::volume(&b.shape).abs() < kernel::volume(old).abs() {
-            notes.push(advisory(
-                fid,
-                "bodySplit",
-                format!("{noun} split {} into {now} pieces", b.name),
-            ));
+            notes.push(advisory(fid, "bodySplit", format!("{noun} split {} into {now} pieces", b.name)));
         }
     }
     // First, since a chip shows one note and a lost piece matters most.
@@ -567,17 +528,19 @@ fn note_splits(ctx: &mut Ctx, fid: &str, rawf: &Value, pre: &[(u64, u64, Shape)]
     ctx.diagnostics.splice(at..at, notes);
 }
 
-/// How much is wrong with a solid body, to tell a feature that made it worse
-/// from one that passed it on. A surface body counts nothing here, it is
-/// judged on its own below.
+/// How much is wrong with a solid body, to tell a feature that made it worse from one that passed it on.
+/// A surface body counts nothing here, it is judged on its own below.
 fn unsoundness(s: &Soundness) -> usize {
     let k = &s.skin;
-    if k.solids == 0 { 0 } else { k.open_edges + k.crowded_edges + k.flipped_edges + s.inward }
+    if k.solids == 0 {
+        0
+    } else {
+        k.open_edges + k.crowded_edges + k.flipped_edges + s.inward
+    }
 }
 
-/// Features that bring in or copy a surface on purpose: an import that does
-/// not close, and a copy of a body that already was one, made from a body the
-/// copy leaves as it was.
+/// Features that bring in or copy a surface on purpose: an import that does not close, and a duplicate
+/// of a body that already was one.
 const KEEPS_SURFACES: [&str; 2] = ["import", "duplicate"];
 
 fn is_sound_solid(shape: &Shape) -> bool {
@@ -585,20 +548,9 @@ fn is_sound_solid(shape: &Shape) -> bool {
     s.fault().is_none() && s.inward == 0
 }
 
-/// Says so when a feature left a solid body that is not closed and facing
-/// outward: holes in its skin (edges that bound only one face), an edge on
-/// more than two faces, faces that disagree about which side is inside, or the
-/// whole of it inside out. Its volume can still come out right, so no other
-/// check sees it, and every cut, join and measurement after it can be wrong.
-/// Judged over all the bodies the feature changed, made or consumed, since a
-/// join or split gives its result a new body: a body that was already at fault
-/// is not called out again for every later feature. Which way a body faces is
-/// only asked of one the feature made, a feature does not turn one over.
-///
-/// A body left with no solid in it is said so only when the feature was meant
-/// to give a solid and what it worked on was sound: a surface an import brings
-/// in, or one a feature was handed and passed on (what thicken starts from),
-/// is a state to model in.
+/// Notes a solid left open or inside out, which a right looking volume hides from every other check. Judged
+/// over the bodies the feature changed, made or consumed, so an inherited fault is not blamed again, and
+/// orientation only on bodies it made. A lost solid counts only when the feature's input was sound.
 fn note_unsound(ctx: &mut Ctx, fid: &str, kind: Option<&str>, pre: &[(u64, u64, Shape)]) {
     let now: HashSet<(u64, u64)> = ctx.bodies.iter().map(Body::identity).collect();
     let was: HashSet<(u64, u64)> = pre.iter().map(|(uid, generation, _)| (*uid, *generation)).collect();
@@ -641,9 +593,8 @@ fn note_unsound(ctx: &mut Ctx, fid: &str, kind: Option<&str>, pre: &[(u64, u64, 
         for (b, _) in changed.iter().filter(|(b, s)| surface(b, s)) {
             // A body that was there before came from itself and what the
             // feature used up, a new one from everything the feature touched.
-            let mut from = gone
-                .iter()
-                .filter(|(uid, _, _)| !known.contains(&b.uid) || *uid == b.uid || !alive.contains(uid));
+            let mut from =
+                gone.iter().filter(|(uid, _, _)| !known.contains(&b.uid) || *uid == b.uid || !alive.contains(uid));
             if from.all(|(_, _, s)| is_sound_solid(s)) {
                 notes.push(advisory(fid, "notSolid", format!("{} {}", b.name, NOT_SOLID)));
             }
@@ -690,7 +641,11 @@ fn note_fallbacks(ctx: &mut Ctx, fid: &str, fallbacks: &[kernel::Fallback]) {
 fn tolerance_mm(f: f64) -> String {
     let places = (1 - f.log10().floor() as i32).max(0) as usize;
     let s = format!("{f:.places$}");
-    if s.contains('.') { s.trim_end_matches('0').trim_end_matches('.').to_string() } else { s }
+    if s.contains('.') {
+        s.trim_end_matches('0').trim_end_matches('.').to_string()
+    } else {
+        s
+    }
 }
 
 /// Says which fields a built-in feature carries without reading them, so a
@@ -759,7 +714,6 @@ pub struct Cancelled;
 /// Hooks the engine hands a rebuild: progress per feature, cancel between them.
 pub trait Watch {
     fn feature(&self, _index: usize) {}
-    /// Meshing `done` of `total` bodies.
     fn meshing(&self, _done: usize, _total: usize) {}
     fn cancelled(&self) -> bool {
         false
@@ -898,8 +852,7 @@ fn with_python_defaults(raw: &Value) -> Option<Value> {
 
 /// The typed feature, and the raw object it came from.
 fn typed(raw: &Value) -> Feature {
-    let parsed: Feature =
-        serde_json::from_value(raw.clone()).unwrap_or_else(|_| Feature::Unknown(raw.clone()));
+    let parsed: Feature = serde_json::from_value(raw.clone()).unwrap_or_else(|_| Feature::Unknown(raw.clone()));
     if parsed.is_invalid() {
         if let Some(patched) = with_python_defaults(raw) {
             if let Ok(f) = serde_json::from_value::<Feature>(patched) {
@@ -924,11 +877,7 @@ fn failure_detail(ctx: &Ctx, index: usize, type_name: Option<&str>, took: Durati
         .collect();
     let mut params: Vec<(&String, &f64)> = ctx.params.iter().collect();
     params.sort_by(|a, b| a.0.cmp(b.0));
-    let params: Map<String, Value> = params
-        .into_iter()
-        .take(64)
-        .map(|(k, v)| (k.clone(), json!(v)))
-        .collect();
+    let params: Map<String, Value> = params.into_iter().take(64).map(|(k, v)| (k.clone(), json!(v))).collect();
     json!({
         "index": index,
         "type": type_name,
@@ -941,10 +890,8 @@ fn failure_detail(ctx: &Ctx, index: usize, type_name: Option<&str>, took: Durati
     })
 }
 
-/// A missing reference that names a feature further down the timeline says
-/// that, rather than that the feature does not exist. Done after the rebuild
-/// because a checkpoint keeps each feature's error while later ones change.
-/// The code is internal to this pass and is not sent.
+/// A missing reference to a feature further down says so instead of claiming it does not exist. Runs after
+/// the rebuild because a checkpoint keeps each feature's error while later ones change.
 fn forward_references(errors: &mut [FeatureError], raw: &[Value], timeline: &[Step]) {
     for e in errors.iter_mut().filter(|e| e.code.as_deref() == Some(MISSING_FEATURE)) {
         e.code = None;
@@ -966,7 +913,13 @@ fn forward_references(errors: &mut [FeatureError], raw: &[Value], timeline: &[St
         } else {
             ("", this.kind.clone())
         };
-        let named = |s: &Step| if s.label == s.kind { format!("{} {}", s.kind, s.id) } else { format!("{} ({})", s.label, s.id) };
+        let named = |s: &Step| {
+            if s.label == s.kind {
+                format!("{} {}", s.kind, s.id)
+            } else {
+                format!("{} ({})", s.label, s.id)
+            }
+        };
         e.message = format!(
             "{prefix}{} comes after this {what} in the timeline, and a feature can only use what is above it. Move {} above {}, or move {} below it.",
             named(step),
@@ -988,13 +941,8 @@ fn datum_line(raw: &Value) -> Option<[[f64; 3]; 2]> {
     Some([v("origin")?, v("dir")?])
 }
 
-/// The bodies whose ids were not there before take the feature's name, one
-/// alone as it is, several as "name 1", "name 2", the way an import names the
-/// parts of an assembly. A body merged into one that was there before (its
-/// id assigned since `mark` inheriting, maybe through other merges in this
-/// feature, from an id in `before`) is that body still, whatever id the
-/// recorded map gave it, and keeps its name. One this feature made and then
-/// joined into is still new.
+/// New body ids take the feature's name, several as "name 1", "name 2" like assembly parts. A body merged into
+/// one that existed before `mark` keeps that name, one this feature made and then joined into is still new.
 fn name_new_bodies(ctx: &mut Ctx, before: &HashSet<String>, mark: usize, name: &str) {
     let events = &ctx.ids.events()[mark..];
     let parent: HashMap<&str, &str> =
@@ -1025,10 +973,7 @@ fn name_new_bodies(ctx: &mut Ctx, before: &HashSet<String>, mark: usize, name: &
 
 fn label_of(raw: &Value) -> String {
     let s = |k: &str| raw.get(k).and_then(Value::as_str).filter(|s| !s.is_empty());
-    s("name")
-        .or_else(|| s("type"))
-        .unwrap_or("feature")
-        .to_owned()
+    s("name").or_else(|| s("type")).unwrap_or("feature").to_owned()
 }
 
 /// A serde complaint about a feature, as the Python handler would have failed.
@@ -1060,21 +1005,14 @@ fn is_inactive(ctx: &Ctx, cond: Option<Num>) -> FResult<bool> {
 fn references_any<'a>(node: &Value, ids: &'a [String]) -> Option<&'a str> {
     match node {
         Value::String(s) => ids.iter().find(|i| *i == s).map(String::as_str),
-        Value::Object(m) => m
-            .iter()
-            .filter(|(k, _)| k.as_str() != "id")
-            .find_map(|(_, v)| references_any(v, ids)),
+        Value::Object(m) => m.iter().filter(|(k, _)| k.as_str() != "id").find_map(|(_, v)| references_any(v, ids)),
         Value::Array(a) => a.iter().find_map(|v| references_any(v, ids)),
         _ => None,
     }
 }
 
 /// `_switched_off_owner`: the switched off feature whose body a message names.
-fn switched_off_owner(
-    message: &str,
-    recorded: &IndexMap<String, String>,
-    inactive: &[String],
-) -> Option<String> {
+fn switched_off_owner(message: &str, recorded: &IndexMap<String, String>, inactive: &[String]) -> Option<String> {
     for bid in body_tokens(message) {
         for (key, got) in recorded {
             if *got == bid {
@@ -1126,16 +1064,11 @@ fn strip_key_suffix(key: &str) -> &str {
 }
 
 fn params_of(doc: &CadDocument) -> HashMap<String, f64> {
-    doc.parameters
-        .iter()
-        .flatten()
-        .map(|(k, v)| (k.clone(), v.get()))
-        .collect()
+    doc.parameters.iter().flatten().map(|(k, v)| (k.clone(), v.get())).collect()
 }
 
-/// A snapshot at `at` can be resumed only when it still holds the tool of
-/// every feature before `at` that a feature pattern after it repeats. A disk
-/// checkpoint keeps none, so that document replays from the start.
+/// A snapshot at `at` resumes only when it holds the tool of every feature before `at` that a later
+/// feature pattern repeats. A disk checkpoint keeps none, so that document replays from the start.
 fn tools_kept(features: &[Feature], at: usize, tools: &HashMap<String, Vec<ToolRecord>>) -> bool {
     let before: HashSet<&str> = features[..at].iter().map(Feature::id).collect();
     features[at..]
@@ -1151,8 +1084,7 @@ pub fn rebuild(doc: &CadDocument, raw: &Value, watch: &dyn Watch) -> Result<Rebu
     rebuild_from(doc, raw, watch, None, &mut NoTap)
 }
 
-/// `rebuild` resuming at `resume.0` from the state after the feature before
-/// it, reporting every replayed feature to `tap`. A snapshot the document
+/// `rebuild` resuming at `resume.0`, reporting every replayed feature to `tap`. A snapshot the document
 /// numbers differently is ignored and the whole timeline replays.
 pub fn rebuild_from(
     doc: &CadDocument,
@@ -1162,19 +1094,9 @@ pub fn rebuild_from(
     tap: &mut dyn Tap,
 ) -> Result<Rebuild, Cancelled> {
     crate::par::configure_occt();
-    let params: HashMap<String, f64> = doc
-        .parameters
-        .iter()
-        .flatten()
-        .map(|(k, v)| (k.clone(), v.get()))
-        .collect();
-    let hidden_bodies = doc
-        .body_visibility
-        .iter()
-        .flatten()
-        .filter(|(_, vis)| !**vis)
-        .map(|(k, _)| k.clone())
-        .collect();
+    let params: HashMap<String, f64> = doc.parameters.iter().flatten().map(|(k, v)| (k.clone(), v.get())).collect();
+    let hidden_bodies =
+        doc.body_visibility.iter().flatten().filter(|(_, vis)| !**vis).map(|(k, _)| k.clone()).collect();
     let recorded = doc.body_ids.clone();
     let mut ctx = Ctx {
         params,
@@ -1196,18 +1118,9 @@ pub fn rebuild_from(
         face_fps: owners::FaceFps::default(),
         volumes: HashMap::new(),
     };
-    let raw_features: Vec<Value> = raw
-        .get("features")
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
+    let raw_features: Vec<Value> = raw.get("features").and_then(Value::as_array).cloned().unwrap_or_default();
     let features: Vec<Feature> = raw_features.iter().map(typed).collect();
-    ctx.patterned = features
-        .iter()
-        .filter_map(features::pattern_sources)
-        .flatten()
-        .cloned()
-        .collect();
+    ctx.patterned = features.iter().filter_map(features::pattern_sources).flatten().cloned().collect();
     ctx.points = features
         .iter()
         .filter_map(|f| match f {
@@ -1228,10 +1141,7 @@ pub fn rebuild_from(
 
     let mut start = 0;
     if let Some((at, snap)) = resume {
-        if at <= features.len()
-            && tools_kept(&features, at, &snap.tools)
-            && ctx.ids.restore(&snap.id_events)
-        {
+        if at <= features.len() && tools_kept(&features, at, &snap.tools) && ctx.ids.restore(&snap.id_events) {
             start = at;
             ctx.tools = snap.tools;
             ctx.bodies = snap.bodies;
@@ -1275,32 +1185,15 @@ pub fn rebuild_from(
         let type_name = rawf.get("type").and_then(Value::as_str);
         let prov = !type_name.is_some_and(|t| NOT_PROVENANCE.contains(&t))
             && !inactive.iter().any(|x| Some(x.as_str()) == fid);
-        let pre: Vec<(u64, u64)> = if prov {
-            ctx.bodies.iter().map(|b| (b.uid, b.generation)).collect()
-        } else {
-            Vec::new()
-        };
-        let pre_owners: Vec<(u64, Owners)> = if prov {
-            ctx.bodies
-                .iter()
-                .map(|b| (b.uid, b.owners.clone()))
-                .collect()
-        } else {
-            Vec::new()
-        };
-        let pre_shapes: Vec<(u64, u64, Shape)> = if prov {
-            ctx.bodies
-                .iter()
-                .map(|b| (b.uid, b.generation, b.shape.clone()))
-                .collect()
-        } else {
-            Vec::new()
-        };
+        let pre: Vec<(u64, u64)> =
+            if prov { ctx.bodies.iter().map(|b| (b.uid, b.generation)).collect() } else { Vec::new() };
+        let pre_owners: Vec<(u64, Owners)> =
+            if prov { ctx.bodies.iter().map(|b| (b.uid, b.owners.clone())).collect() } else { Vec::new() };
+        let pre_shapes: Vec<(u64, u64, Shape)> =
+            if prov { ctx.bodies.iter().map(|b| (b.uid, b.generation, b.shape.clone())).collect() } else { Vec::new() };
 
-        // A feature's `name` names the bodies it makes, so a part is "Slider"
-        // in the build, the STEP tree and the part list rather than
-        // "Cylinder". Only bodies with an id this feature brought in: a join
-        // or a cut keeps the name of the body it worked on.
+        // A feature's `name` names the bodies it brings in, so a part reads "Slider" rather than "Cylinder"
+        // everywhere. A join or a cut keeps the name of the body it worked on.
         let naming = rawf
             .get("name")
             .and_then(Value::as_str)
@@ -1373,14 +1266,7 @@ pub fn rebuild_from(
             note_unread(&mut ctx, f, fid.unwrap_or(""), type_name.unwrap_or(""));
         }
         crate::bench::phase("after_feature", || {
-            tap.after_feature(
-                i,
-                &State {
-                    ctx: &ctx,
-                    errors: &errors,
-                },
-                began.elapsed(),
-            );
+            tap.after_feature(i, &State { ctx: &ctx, errors: &errors }, began.elapsed());
         });
         watch.feature(i);
     }
@@ -1391,19 +1277,16 @@ pub fn rebuild_from(
             if e.message.contains("switched off") {
                 continue;
             }
-            let index = raw_features
-                .iter()
-                .position(|r| r.get("id").and_then(Value::as_str) == e.feature_id.as_deref());
+            let index =
+                raw_features.iter().position(|r| r.get("id").and_then(Value::as_str) == e.feature_id.as_deref());
             let by_id = index.map(|k| &raw_features[k]);
             if let Some(off) = by_id.and_then(|node| references_any(node, &inactive)) {
-                e.message
-                    .push_str(&format!(" ({off} is switched off by its activeWhen)"));
+                e.message.push_str(&format!(" ({off} is switched off by its activeWhen)"));
                 continue;
             }
             if recorded.is_some() {
                 if let Some(owner) = switched_off_owner(&e.message, &resulting, &inactive) {
-                    e.message
-                        .push_str(&format!(" ({owner} is switched off by its activeWhen)"));
+                    e.message.push_str(&format!(" ({owner} is switched off by its activeWhen)"));
                 }
                 continue;
             }
@@ -1434,11 +1317,7 @@ pub fn rebuild_from(
         .into_iter()
         .map(|b| BuiltBody {
             identity: (b.uid, b.generation),
-            shape: if b.intact {
-                b.shape
-            } else {
-                kernel::drop_debris(&b.shape)
-            },
+            shape: if b.intact { b.shape } else { kernel::drop_debris(&b.shape) },
             id: b.id,
             name: b.name,
             owners: b.owners,
@@ -1487,10 +1366,7 @@ fn skipped_features(
             let Some(t) = f.type_name() else { return true };
             !*declared.entry(t).or_insert_with(|| plugin_declares(t))
         })
-        .map(|(_, f)| Skipped {
-            feature_id: f.id().to_owned(),
-            type_name: f.type_name().unwrap_or("").to_owned(),
-        })
+        .map(|(_, f)| Skipped { feature_id: f.id().to_owned(), type_name: f.type_name().unwrap_or("").to_owned() })
         .collect()
 }
 
@@ -1522,9 +1398,7 @@ fn name_skipped_causes(
     let bodies: Vec<String> = owned.iter().map(|(b, _)| b.clone()).collect();
     let owner_of = |body: &str| owned.iter().find(|(b, _)| b == body).map(|(_, f)| f.clone());
     for e in errors.iter_mut() {
-        let node = raw_features
-            .iter()
-            .find(|r| r.get("id").and_then(Value::as_str) == e.feature_id.as_deref());
+        let node = raw_features.iter().find(|r| r.get("id").and_then(Value::as_str) == e.feature_id.as_deref());
         let cause = node
             .and_then(|n| references_any(n, &ids).map(str::to_owned))
             .or_else(|| node.and_then(|n| references_any(n, &bodies)).and_then(owner_of))
@@ -1543,9 +1417,7 @@ fn name_skipped_causes(
                     e.message.replace_range(at..at + advice.len(), with);
                 }
             }
-            e.message.push_str(&format!(
-                " ({label} is from a newer version of FundaCAD and is not built here)"
-            ));
+            e.message.push_str(&format!(" ({label} is from a newer version of FundaCAD and is not built here)"));
         }
     }
 }
@@ -1557,12 +1429,7 @@ enum Ran {
     Skipped,
 }
 
-fn run_feature(
-    ctx: &mut Ctx,
-    f: &Feature,
-    type_name: Option<&str>,
-    watch: &dyn Watch,
-) -> FResult<Ran> {
+fn run_feature(ctx: &mut Ctx, f: &Feature, type_name: Option<&str>, watch: &dyn Watch) -> FResult<Ran> {
     let Some(t) = type_name else {
         return Err(Fail::Missing("type".into()));
     };
@@ -1630,10 +1497,7 @@ pub fn result_fields(doc: &CadDocument, r: &Rebuild) -> Map<String, Value> {
     if !r.bodies.is_empty() || !r.skipped.is_empty() {
         if let Some(last) = r.errors.last() {
             m.insert("featureError".into(), last.wire());
-            m.insert(
-                "featureErrors".into(),
-                Value::Array(r.errors.iter().map(FeatureError::wire_full).collect()),
-            );
+            m.insert("featureErrors".into(), Value::Array(r.errors.iter().map(FeatureError::wire_full).collect()));
         }
     }
     m
@@ -1654,10 +1518,7 @@ mod tests {
 
     #[test]
     fn body_tokens_need_word_boundaries() {
-        assert_eq!(
-            body_tokens("no such body body3, body5 x"),
-            vec!["body3", "body5"]
-        );
+        assert_eq!(body_tokens("no such body body3, body5 x"), vec!["body3", "body5"]);
         assert!(body_tokens("somebody12 body").is_empty());
     }
 

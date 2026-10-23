@@ -1,7 +1,5 @@
-// Aiming the key light on the canvas, in Render: a stalk stands on the model's
-// centre pointing at the light, and dragging its ball swings the light round
-// the model. Writes the two angles the render settings hold (keyAzimuth,
-// keyElevation), snapped like a datum tilt, with boxes to type them exactly.
+// Aiming the key light in Render: drag the ball of a stalk on the model's centre to swing the light round it.
+// Writes keyAzimuth and keyElevation, snapped like a datum tilt.
 
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
@@ -17,8 +15,7 @@ import { aimFollow, aimPoint, createAimStalk, STALK_PX, type AimStalk } from "./
 /** A warm white, the colour of the light being aimed rather than of a tool. */
 const SUN = 0xffd66b;
 
-/** The angles a drag lands on: the light's direction turned by the drag, each
- *  angle snapped to `step` degrees (0 is free). */
+/** Each angle snapped to `step` degrees, 0 is free. */
 export function aimedAngles(
   start: { azimuth: number; elevation: number },
   from: THREE.Vector3,
@@ -123,7 +120,10 @@ export class LightAimTool {
     this.dim.takeOver("azimuth");
     this.dragging = true;
     this.grab = this.angles;
-    this.from.copy(aimPoint(this.ray(e).ray, this.foot, this.radius())).sub(this.foot).normalize();
+    this.from
+      .copy(aimPoint(this.ray(e).ray, this.foot, this.radius()))
+      .sub(this.foot)
+      .normalize();
     this.viewport.domElement.style.cursor = "grabbing";
   }
 

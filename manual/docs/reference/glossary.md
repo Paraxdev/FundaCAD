@@ -100,7 +100,7 @@ Hover over an underlined word anywhere in the manual to see its meaning from thi
 
 ## Render and plugins
 
-**Bloom.** A soft halo around bright areas that does not light other objects.
+**Bloom.** A soft halo around faces with Emission turned up that does not light other objects. The path traced view also spills bright highlights.
 
 **Emission.** A material setting that makes a body give off light. It is a heavy effect on a large model.
 

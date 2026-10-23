@@ -38,10 +38,7 @@ describe("asThemeId", () => {
     // is in the library. This is the whole reason asThemeId reads the live set
     // rather than a constant, a removed theme's id must stop being accepted.
 
-    const res = addCustomTheme(
-      { "--bg": "#010203" },
-      "Midnight.json",
-    );
+    const res = addCustomTheme({ "--bg": "#010203" }, "Midnight.json");
 
     expect(res.ok).toBe(true);
 
@@ -269,10 +266,7 @@ describe("addCustomTheme", () => {
       "--bg": "#111",
     });
 
-    const c = addCustomTheme(
-      { "--bg": "#111" },
-      "Warehouse.json",
-    );
+    const c = addCustomTheme({ "--bg": "#111" }, "Warehouse.json");
 
     expect(a.ok && a.theme.label).toBe("Studio");
     expect(b.ok && b.theme.label).toBe("Loft");

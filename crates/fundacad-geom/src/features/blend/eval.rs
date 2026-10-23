@@ -1,8 +1,5 @@
-//! the Python engine's `eval_fillet_corpus.py` on this engine: every case rebuilt, the
-//! blend feature failed on an error (not a selector miss), on a result that is
-//! not one valid solid, on too few faces, or on removed volume more than 2% off
-//! the reference. The corpus self hash is left to the Python tool, whose float
-//! formatting it depends on.
+//! eval_fillet_corpus.py on this engine: a case fails on an error, a result that is not one valid solid, too
+//! few faces or removed volume over 2% off. The corpus self hash depends on Python float text, so it stays there.
 
 use std::collections::BTreeMap;
 
@@ -37,8 +34,7 @@ fn is_selector_miss(msg: &str) -> bool {
 /// One case: `None` when it passed, else what failed.
 fn score(case: &Value, r: &mut Report) -> Result<(), String> {
     let doc = &case["doc"];
-    let typed: CadDocument =
-        serde_json::from_value(doc.clone()).map_err(|e| format!("document: {e}"))?;
+    let typed: CadDocument = serde_json::from_value(doc.clone()).map_err(|e| format!("document: {e}"))?;
     let built = builder::rebuild(&typed, doc, &NoWatch).map_err(|_| "cancelled".to_owned())?;
     let op_id = case["op_feature_id"].as_str().unwrap_or("");
     let id = case["id"].as_str().unwrap_or("?").to_owned();
@@ -46,11 +42,7 @@ fn score(case: &Value, r: &mut Report) -> Result<(), String> {
     r.by_band.entry(band.clone()).or_default().0 += 1;
 
     let mut failed = false;
-    if let Some(err) = built
-        .errors
-        .iter()
-        .find(|e| e.feature_id.as_deref() == Some(op_id))
-    {
+    if let Some(err) = built.errors.iter().find(|e| e.feature_id.as_deref() == Some(op_id)) {
         if is_selector_miss(&err.message) {
             r.selector_miss += 1;
             r.outcomes.push((id, "selector-miss"));
@@ -104,9 +96,7 @@ fn score(case: &Value, r: &mut Report) -> Result<(), String> {
                 }
                 if removed <= 0.0 {
                     checks.push("removed<=0".into());
-                } else if reference != 0.0
-                    && (removed - reference).abs() > VOLUME_TOL * reference.abs()
-                {
+                } else if reference != 0.0 && (removed - reference).abs() > VOLUME_TOL * reference.abs() {
                     checks.push(format!("volume-{kind}"));
                 }
             }
@@ -114,9 +104,7 @@ fn score(case: &Value, r: &mut Report) -> Result<(), String> {
         if !checks.is_empty() {
             failed = true;
             r.other += 1;
-            *r.messages
-                .entry(format!("invariant:{}", checks.join("+")))
-                .or_default() += 1;
+            *r.messages.entry(format!("invariant:{}", checks.join("+"))).or_default() += 1;
         }
     }
     if failed {
@@ -129,13 +117,8 @@ fn score(case: &Value, r: &mut Report) -> Result<(), String> {
 }
 
 pub fn run(corpus: &Value, mut progress: impl FnMut(&str)) -> Result<Report, String> {
-    let cases = corpus["cases"]
-        .as_array()
-        .ok_or("the corpus has no cases")?;
-    let mut r = Report {
-        count: cases.len(),
-        ..Report::default()
-    };
+    let cases = corpus["cases"].as_array().ok_or("the corpus has no cases")?;
+    let mut r = Report { count: cases.len(), ..Report::default() };
     for case in cases {
         score(case, &mut r)?;
         progress(case["id"].as_str().unwrap_or("?"));
@@ -145,30 +128,17 @@ pub fn run(corpus: &Value, mut progress: impl FnMut(&str)) -> Result<Report, Str
 
 /// The Python tool's report, ending in its exact last line.
 pub fn render(path: &str, corpus: &Value, r: &Report, show_ids: bool) -> String {
-    let mut out = vec![format!(
-        "corpus {path}: {} cases, seed {}",
-        r.count, corpus["seed"]
-    )];
+    let mut out = vec![format!("corpus {path}: {} cases, seed {}", r.count, corpus["seed"])];
     out.push("per-band failure:".into());
     for (band, (total, failed)) in &r.by_band {
-        let rate = if *total > 0 {
-            *failed as f64 / *total as f64 * 100.0
-        } else {
-            0.0
-        };
+        let rate = if *total > 0 { *failed as f64 / *total as f64 * 100.0 } else { 0.0 };
         out.push(format!("  {band:>8}  {failed:3}/{total:<3}  {rate:5.1}%"));
     }
     out.push("taxonomy:".into());
     out.push(format!("  per-edge     {}", r.per_edge));
     out.push(format!("  combination  {}", r.combination));
-    out.push(format!(
-        "  other        {}  (invariant failures + errors w/o edge probe)",
-        r.other
-    ));
-    out.push(format!(
-        "  selector-miss {}  (separate from headline)",
-        r.selector_miss
-    ));
+    out.push(format!("  other        {}  (invariant failures + errors w/o edge probe)", r.other));
+    out.push(format!("  selector-miss {}  (separate from headline)", r.selector_miss));
     if !r.messages.is_empty() {
         out.push("  top messages:".into());
         let mut top: Vec<(&String, &usize)> = r.messages.iter().collect();
@@ -180,14 +150,7 @@ pub fn render(path: &str, corpus: &Value, r: &Report, show_ids: bool) -> String 
     if show_ids && !r.failed_ids.is_empty() {
         out.push(format!("  failed ids: {}", r.failed_ids.join(", ")));
     }
-    let rate = if r.count > 0 {
-        r.failed as f64 / r.count as f64 * 100.0
-    } else {
-        0.0
-    };
-    out.push(format!(
-        "failed={}/{} rate={rate:.2}% selector-miss={}",
-        r.failed, r.count, r.selector_miss
-    ));
+    let rate = if r.count > 0 { r.failed as f64 / r.count as f64 * 100.0 } else { 0.0 };
+    out.push(format!("failed={}/{} rate={rate:.2}% selector-miss={}", r.failed, r.count, r.selector_miss));
     out.join("\n")
 }

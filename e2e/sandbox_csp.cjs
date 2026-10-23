@@ -35,12 +35,9 @@ const fs = require("fs");
 const path = require("path");
 
 const ROOT = path.resolve(__dirname, "..");
-const EXE =
-  process.env.SC_CHROME ||
-  "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe";
+const EXE = process.env.SC_CHROME || "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe";
 
-const CSP = JSON.parse(fs.readFileSync(path.join(ROOT, "src-tauri/tauri.conf.json"), "utf8"))
-  .app.security.csp;
+const CSP = JSON.parse(fs.readFileSync(path.join(ROOT, "src-tauri/tauri.conf.json"), "utf8")).app.security.csp;
 
 /** The shipped policy with `'unsafe-eval'` taken out.
  *
@@ -167,7 +164,10 @@ const files = {
 async function attempt(csp, browser) {
   const server = http.createServer((req, res) => {
     const f = files[req.url.split("?")[0]];
-    if (!f) { res.writeHead(404); return res.end(); }
+    if (!f) {
+      res.writeHead(404);
+      return res.end();
+    }
     res.writeHead(200, { "Content-Type": f.type, "Content-Security-Policy": csp });
     res.end(f.body);
   });
@@ -176,7 +176,9 @@ async function attempt(csp, browser) {
 
   const page = await browser.newPage();
   const refusals = [];
-  page.on("console", (m) => { if (/Content Security Policy/i.test(m.text())) refusals.push(m.text()); });
+  page.on("console", (m) => {
+    if (/Content Security Policy/i.test(m.text())) refusals.push(m.text());
+  });
   await page.goto(`http://127.0.0.1:${port}/`);
   let result;
   try {
@@ -200,8 +202,13 @@ async function main() {
 
   // --- the real thing, under the shipped policy with 'unsafe-eval' removed ---
   console.log("policy under test (shipped, minus 'unsafe-eval'):");
-  console.log("  " + CSP_WITHOUT_EVAL.split(";").map((d) => d.trim())
-    .filter((d) => /^(default|script|worker|child)-src/.test(d)).join("; "));
+  console.log(
+    "  " +
+      CSP_WITHOUT_EVAL.split(";")
+        .map((d) => d.trim())
+        .filter((d) => /^(default|script|worker|child)-src/.test(d))
+        .join("; "),
+  );
 
   const { result, refusals } = await attempt(CSP_WITHOUT_EVAL, browser);
   console.log("  result: " + JSON.stringify(result));
@@ -235,4 +242,7 @@ async function main() {
   if (process.exitCode === 1) process.exit(1);
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

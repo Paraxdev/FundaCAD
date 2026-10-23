@@ -1,7 +1,5 @@
-//! The `printability` op: the document rebuilt through the warm cache, the
-//! bodies asked for meshed finely, on copies so the viewport's stored
-//! triangulation is left alone, and checked. The reply has every finding with
-//! its face, for the app to colour, and the text report the MCP tool prints.
+//! The `printability` op. Bodies are meshed finely on copies, leaving the viewport's stored
+//! triangulation alone, and every finding goes back with its face for the app to colour.
 
 use std::collections::{BTreeSet, HashMap};
 use std::time::Duration;
@@ -41,7 +39,12 @@ pub fn printability_result(req: &Map<String, Value>, watch: &dyn Watch) -> JobRe
     }
 }
 
-fn check(args: &Map<String, Value>, s: &Settings, built: &[BuiltBody], watch: &dyn Watch) -> Result<Map<String, Value>, String> {
+fn check(
+    args: &Map<String, Value>,
+    s: &Settings,
+    built: &[BuiltBody],
+    watch: &dyn Watch,
+) -> Result<Map<String, Value>, String> {
     let wanted: Vec<String> = args
         .get("bodies")
         .and_then(Value::as_array)
@@ -170,7 +173,8 @@ fn check(args: &Map<String, Value>, s: &Settings, built: &[BuiltBody], watch: &d
         let faces = match detail {
             Some(d) => Some(d),
             None => {
-                let some: Vec<&BuiltBody> = chosen.iter().copied().filter(|b| flagged.contains(b.id.as_str())).collect();
+                let some: Vec<&BuiltBody> =
+                    chosen.iter().copied().filter(|b| flagged.contains(b.id.as_str())).collect();
                 inspect(&some, Level::Detail).ok()
             }
         };
@@ -205,7 +209,10 @@ fn check(args: &Map<String, Value>, s: &Settings, built: &[BuiltBody], watch: &d
                 .collect(),
         ),
     );
-    m.insert("findings".into(), Value::Array(ordered(&findings).into_iter().map(|f| finding_json(f, &bodies)).collect()));
+    m.insert(
+        "findings".into(),
+        Value::Array(ordered(&findings).into_iter().map(|f| finding_json(f, &bodies)).collect()),
+    );
     Ok(m)
 }
 
@@ -227,12 +234,12 @@ fn id_of(b: &Value) -> String {
 fn inspect(bodies: &[&BuiltBody], level: Level) -> Result<Vec<Value>, String> {
     let live: Vec<InspectBody<'_>> =
         bodies.iter().map(|b| InspectBody { id: json!(b.id), name: json!(b.name), shape: Some(&b.shape) }).collect();
-    inspect_bodies_at(&live, level, MAX_FACES, MAX_EDGES).map_err(|e| format!("Could not measure the bodies: {}", crate::inspect::fail_text(&e)))
+    inspect_bodies_at(&live, level, MAX_FACES, MAX_EDGES)
+        .map_err(|e| format!("Could not measure the bodies: {}", crate::inspect::fail_text(&e)))
 }
 
-/// Each body meshed on a copy of its shape. The live shape keeps the
-/// triangulation the viewport has, which a fine mesh written into it would
-/// replace for every later rebuild.
+/// On a copy: the live shape keeps the viewport's triangulation, which a fine mesh written into it
+/// would replace for every later rebuild.
 fn mesh_copies(chosen: &[&BuiltBody], watch: &dyn Watch) -> Result<Vec<fundacad_protocol::FullBody>, String> {
     let copies: Vec<Shape> = chosen
         .iter()
@@ -282,9 +289,8 @@ fn no_such_body(wanted: &str, built: &[BuiltBody]) -> String {
     format!("no body '{wanted}' in this build, have {}", have.join(", "))
 }
 
-/// The face a body goes down on, as `export {layFlat}` picks it in the MCP
-/// crate's layflat.rs: the one asked for, else its largest flat face. None
-/// for a body with no flat face at all.
+/// As `export {layFlat}` picks it in the MCP crate's layflat.rs: the one asked for, else the largest
+/// flat face. None for a body with no flat face.
 fn pick_face(body: &Value, asked: Option<i64>) -> Result<Option<(i64, [f64; 3])>, String> {
     let faces = body.get("faces").and_then(Value::as_array).map_or(&[][..], Vec::as_slice);
     let vec3 = |v: Option<&Value>| -> Option<[f64; 3]> {

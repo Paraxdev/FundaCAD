@@ -1,6 +1,4 @@
-// Expression tokenizer + parser for the parameters engine. No dependencies.
-//
-// Grammar (Fusion-flavored):
+// Expression tokenizer and parser for the parameters engine. Grammar (Fusion-flavored):
 //   expr    := or
 //   or      := and ('||' and)*
 //   and     := cmp ('&&' cmp)*
@@ -11,16 +9,10 @@
 //   pow     := primary ('^' unary)?           // right-assoc; -2^2 = -(2^2)
 //   primary := NUMBER unit? | IDENT '(' expr (';' expr)* ')' | IDENT | '(' expr ')'
 //
-// Truth is a number: comparisons and logic yield 1 or 0, and anything non-zero
-// counts as true. `==` and `!=` compare with a relative tolerance of 1e-9, so a
-// value built from arithmetic (0.1 + 0.2) still equals the literal it should.
-//
-// Unit suffixes bind to NUMBER literals only and convert to canonical units at
-// parse time (lengths → mm, angles → degrees); the AST keeps the unit tag so a
-// dimensional checker can be added later without a format change. Function
-// arguments use SEMICOLON separators (Fusion convention, comma is ambiguous in
-// comma-decimal locales). Identifiers are case-sensitive; '.' is rejected in
-// identifiers (qualified names are reserved for the future).
+// Truth is a number: comparisons and logic yield 1 or 0, and non-zero is true; `==` and `!=` use a 1e-9 relative
+// tolerance so 0.1 + 0.2 equals 0.3. Unit suffixes bind to number literals and convert to mm or degrees at parse
+// time, the AST keeping the tag. Function arguments are separated by `;` since `,` is a decimal comma in some
+// locales. Identifiers are case-sensitive and may not contain '.'.
 
 export class ExprError extends Error {
   constructor(
@@ -63,9 +55,7 @@ export const FUNCTIONS: Record<string, { arity: [number, number]; apply: (args: 
 
 /** Reserved-but-unimplemented function names (future grammar additions must not
  *  be shadowed by user parameters). */
-export const RESERVED_FUNCTIONS = new Set([
-  "pow", "ln", "log", "exp", "sign", "random", "sinh", "cosh", "tanh",
-]);
+export const RESERVED_FUNCTIONS = new Set(["pow", "ln", "log", "exp", "sign", "random", "sinh", "cosh", "tanh"]);
 
 export const CONSTANTS: Record<string, number> = { PI: Math.PI };
 
@@ -73,8 +63,6 @@ export const CONSTANTS: Record<string, number> = { PI: Math.PI };
 export function isReservedName(name: string): boolean {
   return name in FUNCTIONS || RESERVED_FUNCTIONS.has(name) || name in UNITS || name in CONSTANTS;
 }
-
-// --- tokens ---
 
 export type Token =
   | { kind: "num"; value: number; start: number; end: number }
@@ -94,7 +82,7 @@ export function tokenize(src: string): Token[] {
       i++;
       continue;
     }
-    if (ch >= "0" && ch <= "9" || (ch === "." && src[i + 1]! >= "0" && src[i + 1]! <= "9")) {
+    if ((ch >= "0" && ch <= "9") || (ch === "." && src[i + 1]! >= "0" && src[i + 1]! <= "9")) {
       const start = i;
       while (i < src.length && ((src[i]! >= "0" && src[i]! <= "9") || src[i] === ".")) i++;
       if (src[i] === "e" || src[i] === "E") {
@@ -134,8 +122,6 @@ export function tokenize(src: string): Token[] {
   return out;
 }
 
-// --- AST ---
-
 export type BinOp = "+" | "-" | "*" | "/" | "^" | "<" | "<=" | ">" | ">=" | "==" | "!=" | "&&" | "||";
 
 export type ExprNode =
@@ -168,7 +154,11 @@ class Parser {
     if (this.toks.length === 0) throw new ExprError("empty expression");
     const node = this.expr();
     const left = this.peek();
-    if (left) throw new ExprError(`unexpected "${left.kind === "op" ? left.op : left.kind === "ident" ? left.name : left.value}"`, left.start);
+    if (left)
+      throw new ExprError(
+        `unexpected "${left.kind === "op" ? left.op : left.kind === "ident" ? left.name : left.value}"`,
+        left.start,
+      );
     return node;
   }
 
@@ -306,9 +296,7 @@ export function renameRefs(src: string, from: string, to: string): string {
   for (let i = 0; i < toks.length; i++) {
     const t = toks[i]!;
     if (t.kind !== "ident" || t.name !== from) continue;
-    // an ident directly followed by "(" is a function name, not a reference,
-    // unreachable for valid renames (param names can't shadow functions), but
-    // keep the splice honest anyway
+    // An ident followed by "(" is a function name; unreachable for valid renames, but the splice stays honest.
     const next = toks[i + 1];
     if (next?.kind === "op" && next.op === "(") continue;
     // a unit suffix directly after a number is not a reference

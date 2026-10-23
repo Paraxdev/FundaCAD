@@ -157,7 +157,13 @@ describe("the ribbon", () => {
 describe("the action dispatcher", () => {
   it("hands an id it does not know to whoever claimed it", () => {
     let ran = 0;
-    contribute("A.One", { actions: { "print-send": () => { ran++; } } });
+    contribute("A.One", {
+      actions: {
+        "print-send": () => {
+          ran++;
+        },
+      },
+    });
     createActions(fakeEngine())("print-send");
     expect(ran).toBe(1);
   });
@@ -176,9 +182,19 @@ describe("the action dispatcher", () => {
     let opened = 0;
     const e = fakeEngine();
     (e as unknown as { ui: { home: { open: () => void } } }).ui = {
-      home: { open: () => { opened++; } },
+      home: {
+        open: () => {
+          opened++;
+        },
+      },
     };
-    contribute("A.One", { actions: { welcome: () => { stolen++; } } });
+    contribute("A.One", {
+      actions: {
+        welcome: () => {
+          stolen++;
+        },
+      },
+    });
     createActions(e)("welcome");
     expect(opened).toBe(1);
     expect(stolen).toBe(0);

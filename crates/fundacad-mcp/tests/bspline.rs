@@ -28,12 +28,18 @@ fn a_bspline_profile_builds_and_inspects_as_a_bspline_edge() {
         t
     };
     call("param_set", json!({"name": "reach", "expr": 34}));
-    call("feature_add", json!({"feature": {"id": "s", "type": "sketch", "plane": "XY", "entities": [
-        {"type": "bspline", "id": "b", "closed": true, "poles": [
-            {"x": 0, "y": -20}, {"x": 25, "y": -18}, {"x": "reach", "y": 5}, {"x": 12, "y": 28}, {"x": -15, "y": 22}, {"x": -28, "y": 0}
-        ]}
-    ]}}));
-    call("feature_add", json!({"feature": {"id": "e", "type": "extrude", "sketch": "s", "distance": 10, "operation": "new"}}));
+    call(
+        "feature_add",
+        json!({"feature": {"id": "s", "type": "sketch", "plane": "XY", "entities": [
+            {"type": "bspline", "id": "b", "closed": true, "poles": [
+                {"x": 0, "y": -20}, {"x": 25, "y": -18}, {"x": "reach", "y": 5}, {"x": 12, "y": 28}, {"x": -15, "y": 22}, {"x": -28, "y": 0}
+            ]}
+        ]}}),
+    );
+    call(
+        "feature_add",
+        json!({"feature": {"id": "e", "type": "extrude", "sketch": "s", "distance": 10, "operation": "new"}}),
+    );
     let built = call("build", json!({}));
     assert!(built.contains("body1"), "{built}");
     let inspected = call("inspect", json!({"detail": true}));

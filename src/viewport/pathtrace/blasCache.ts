@@ -1,7 +1,5 @@
-// One mirror mesh per traced body, kept across edits and across the tracer's
-// idle disposal. The key changes exactly when the body's triangles do, so an
-// edit to one body builds one SAH tree, off the main thread, while every other
-// body keeps the tree it has.
+// One mirror mesh per traced body, kept across edits and idle disposal. The key changes exactly when the
+// body's triangles do, so an edit builds one SAH tree off the main thread and every other body keeps its own.
 
 import * as THREE from "three";
 import { MeshBVH, SAH } from "three-mesh-bvh";
@@ -122,7 +120,6 @@ export class BlasCache {
     return { meshes: pending ? null : meshes, key: keys.join("|") };
   }
 
-  /** Copies each body's placement onto its mirror. */
   syncTransforms() {
     for (const e of this.entries.values()) {
       e.src.updateWorldMatrix(true, false);
@@ -151,7 +148,10 @@ export class BlasCache {
 
   private add(key: string, src: THREE.Mesh): Entry {
     const mirror = mirrorBody(src, false);
-    mirror.userData.traced = { id: (src.userData.owner as Owner | undefined)?.id ?? src.uuid, key } satisfies TracedBody;
+    mirror.userData.traced = {
+      id: (src.userData.owner as Owner | undefined)?.id ?? src.uuid,
+      key,
+    } satisfies TracedBody;
     const e: Entry = { src, mirror, ready: false, colorKey: "" };
     this.entries.set(key, e);
     const g = src.geometry;
@@ -166,7 +166,9 @@ export class BlasCache {
       const geo = mirror.geometry;
       geo.setIndex(new THREE.BufferAttribute(t.index, 1));
       (geo as unknown as { boundsTree: MeshBVH }).boundsTree = MeshBVH.deserialize(
-        { version: 1, roots: t.roots, index: t.index, indirectBuffer: null } as unknown as Parameters<typeof MeshBVH.deserialize>[0],
+        { version: 1, roots: t.roots, index: t.index, indirectBuffer: null } as unknown as Parameters<
+          typeof MeshBVH.deserialize
+        >[0],
         geo,
         { setIndex: false },
       );
@@ -174,14 +176,11 @@ export class BlasCache {
     };
     const out = this.builder.build(job);
     if (out instanceof Promise) {
-      out.then(
-        land,
-        (err) => {
-          if (this.entries.get(key) !== e) return;
-          console.warn("BLAS worker build failed, building on the main thread", err);
-          land(buildBlas({ ...job, position: positionCopy(g), index: indexCopy(g) }));
-        },
-      );
+      out.then(land, (err) => {
+        if (this.entries.get(key) !== e) return;
+        console.warn("BLAS worker build failed, building on the main thread", err);
+        land(buildBlas({ ...job, position: positionCopy(g), index: indexCopy(g) }));
+      });
     } else land(out);
     return e;
   }

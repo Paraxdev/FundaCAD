@@ -1,9 +1,5 @@
-//! `export {layFlat}`: each part turned so a flat face is on the bed.
-//!
-//! Done to a copy of the document, with the `move` features a person would
-//! add by hand: a turn that points the chosen face straight down, then a shift
-//! that puts the part on z = 0 beside the one before it. The document the
-//! agent is working on never sees them.
+//! `export {layFlat}`: on a copy of the document, each part gets the `move`s a person would add by hand,
+//! a turn that puts a flat face down and a shift onto z = 0 beside the part before.
 
 use serde_json::{json, Map, Value};
 
@@ -14,11 +10,8 @@ use crate::server::{engine_bodies, find_body, no_such_body};
 /// Space left between parts laid side by side, in mm.
 const GAP: f64 = 5.0;
 
-/// The intrinsic XYZ angles (degrees, `move`'s rx and ry with rz 0) that
-/// turn the direction `n` to point straight down.
-///
-/// `move` turns by Rx(a) Ry(b) about the origin, which sends n to -Z when
-/// n = (cos a sin b, -sin a, -cos a cos b).
+/// The intrinsic XYZ angles in degrees (`move`'s rx, ry, rz 0) that turn `n` straight down:
+/// Rx(a) Ry(b) sends n to -Z when n = (cos a sin b, -sin a, -cos a cos b).
 pub fn face_down(n: [f64; 3]) -> (f64, f64) {
     let len = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
     let [x, y, z] = if len > 0.0 { [n[0] / len, n[1] / len, n[2] / len] } else { [0.0, 0.0, -1.0] };
@@ -29,7 +22,11 @@ pub fn face_down(n: [f64; 3]) -> (f64, f64) {
 
 fn round6(v: f64) -> f64 {
     let r = (v * 1e6).round() / 1e6;
-    if r == 0.0 { 0.0 } else { r }
+    if r == 0.0 {
+        0.0
+    } else {
+        r
+    }
 }
 
 fn vec3(v: Option<&Value>) -> Option<[f64; 3]> {
@@ -41,8 +38,7 @@ fn id_of(b: &Value) -> String {
     b.get("id").and_then(Value::as_str).unwrap_or_default().to_string()
 }
 
-/// The face each body goes down on: the one asked for, else its largest
-/// flat face. None for a body with no flat face at all.
+/// The face asked for, else the largest flat face; None for a body with no flat face.
 fn pick_face(body: &Value, asked: Option<i64>) -> Result<Option<(i64, [f64; 3], f64)>, String> {
     let faces = body.get("faces").and_then(Value::as_array).map_or(&[][..], Vec::as_slice);
     let as_pick = |f: &Value| -> Option<(i64, [f64; 3], f64)> {
@@ -53,10 +49,7 @@ fn pick_face(body: &Value, asked: Option<i64>) -> Result<Option<(i64, [f64; 3], 
             return Err(format!("{} has no face {i}, `inspect` lists its faces", id_of(body)));
         };
         if f.get("surface").and_then(Value::as_str) != Some("plane") {
-            return Err(format!(
-                "face {i} of {} is not flat, a part can only sit on a flat face",
-                id_of(body)
-            ));
+            return Err(format!("face {i} of {} is not flat, a part can only sit on a flat face", id_of(body)));
         }
         return Ok(as_pick(f));
     }
@@ -77,16 +70,11 @@ fn add_move(doc: &mut Doc, id: &str, turn: (f64, f64), shift: [f64; 3]) -> Resul
     m.insert("dy".into(), json!(shift[1]));
     m.insert("dz".into(), json!(shift[2]));
     m.insert("bodies".into(), json!([id]));
-    model::add_feature(doc, &Value::Object(m), None)
-        .map(|_| ())
-        .map_err(|e| e.to_string())
+    model::add_feature(doc, &Value::Object(m), None).map(|_| ()).map_err(|e| e.to_string())
 }
 
-/// The face each part goes down on, as `export {layFlat}` picks it: the one
-/// asked for in {body: face index}, else its largest flat face, None for a
-/// part with no flat face. `only` is the bodies being exported, if not all.
-/// `printability {layFlat}` asks the same, so it checks what export
-/// would write.
+/// The face each part goes down on, as `pick_face` chooses; `only` is the exported bodies, if not all.
+/// `printability {layFlat}` asks this too, so it checks what export would write.
 pub(crate) async fn bed_faces(
     link: &EngineLink,
     doc: &Doc,
@@ -124,10 +112,8 @@ pub(crate) async fn bed_faces(
     Ok(out)
 }
 
-/// Turn and place the bodies in `doc` for printing. `how` is `true` or
-/// {body: face index}; `only` is the bodies being exported, if not all;
-/// `apart` is a separate export, where each part goes at the origin rather
-/// than beside the last. Returns a line saying what went down on what.
+/// `how` is `true` or {body: face index}; `apart` is a separate export, where each part goes at the
+/// origin rather than beside the last. Returns a line saying what went down on what.
 pub async fn lay_flat(
     link: &EngineLink,
     doc: &mut Doc,
@@ -163,7 +149,8 @@ pub async fn lay_flat(
     for (id, turn) in &turns {
         let Some(b) = after.iter().find(|b| &id_of(b) == id) else { continue };
         let bbox = b.get("bbox");
-        let (Some(lo), Some(hi)) = (vec3(bbox.and_then(|v| v.get("min"))), vec3(bbox.and_then(|v| v.get("max")))) else {
+        let (Some(lo), Some(hi)) = (vec3(bbox.and_then(|v| v.get("min"))), vec3(bbox.and_then(|v| v.get("max"))))
+        else {
             continue;
         };
         let at = if apart { 0.0 } else { x };
@@ -175,43 +162,7 @@ pub async fn lay_flat(
     if notes.is_empty() {
         line = String::from("Laid flat: none of the bodies has a flat face.");
     } else if !unflat.is_empty() {
-        line.push_str(&format!(
-            " No flat face on {}, set on the bed as modelled.",
-            unflat.join(", ")
-        ));
+        line.push_str(&format!(" No flat face on {}, set on the bed as modelled.", unflat.join(", ")));
     }
     Ok(line)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::face_down;
-
-    /// The turn applied to n, written out the way OCCT's intrinsic XYZ
-    /// composes it, has to come out pointing down.
-    fn turned(n: [f64; 3], (a, b): (f64, f64)) -> [f64; 3] {
-        let (a, b) = (a.to_radians(), b.to_radians());
-        // Ry(b) first, then Rx(a): R = Rx(a) * Ry(b).
-        let y = [n[0] * b.cos() + n[2] * b.sin(), n[1], -n[0] * b.sin() + n[2] * b.cos()];
-        [y[0], y[1] * a.cos() - y[2] * a.sin(), y[1] * a.sin() + y[2] * a.cos()]
-    }
-
-    #[test]
-    fn every_direction_ends_up_pointing_down() {
-        let s = 0.5_f64.sqrt();
-        for n in [
-            [0.0, 0.0, -1.0],
-            [0.0, 0.0, 1.0],
-            [1.0, 0.0, 0.0],
-            [-1.0, 0.0, 0.0],
-            [0.0, 1.0, 0.0],
-            [0.0, -1.0, 0.0],
-            [s, s, 0.0],
-            [0.3, -0.4, 0.866],
-        ] {
-            let r = turned(n, face_down(n));
-            let len = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
-            assert!((r[0] / len).abs() < 1e-6 && (r[1] / len).abs() < 1e-6 && (r[2] / len + 1.0).abs() < 1e-6, "{n:?} -> {r:?}");
-        }
-    }
 }

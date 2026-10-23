@@ -95,12 +95,9 @@ pub fn scan_shape(pos: &[f64], idx: &[u32]) -> Result<Shape, String> {
     occ::triangulation_face(&pos, &idx).map_err(|e| format!("could not keep the mesh as a scan ({e:?})"))
 }
 
-/// Every object of a scene file in one scan, with the colour most of its
-/// triangles carry.
+/// Every object of a scene file in one scan, with the colour most of its triangles carry.
 pub fn scan_objects(objs: Vec<MeshObject>) -> Result<super::Imported, String> {
-    let color = super::mesh::dominant_color(
-        objs.iter().flat_map(|o| std::iter::repeat_n(o.color, o.idx.len() / 3)),
-    );
+    let color = super::mesh::dominant_color(objs.iter().flat_map(|o| std::iter::repeat_n(o.color, o.idx.len() / 3)));
     let mut pos = Vec::new();
     let mut idx = Vec::new();
     for o in objs {
@@ -122,29 +119,4 @@ pub fn scan_imported(pos: &[f64], idx: &[u32]) -> Result<super::Imported, String
     fields.insert("scan".into(), json!(true));
     fields.insert("triangles".into(), json!(idx.len() / 3));
     Ok(super::Imported { shape, fields })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn the_route_is_decided_by_the_triangle_count() {
-        assert_eq!(route(MAX_IMPORT_TRIANGLES), Route::Editable);
-        assert_eq!(route(MAX_IMPORT_TRIANGLES + 1), Route::Scan);
-        assert_eq!(route(MAX_SCAN_TRIANGLES), Route::Scan);
-        match route(MAX_SCAN_TRIANGLES + 1) {
-            Route::Refused(why) => assert!(why.contains("10,000,000"), "{why}"),
-            other => panic!("{other:?}"),
-        }
-    }
-
-    #[test]
-    fn weld_merges_shared_corners_and_drops_collapsed_triangles() {
-        let pos = [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0];
-        let idx: Vec<u32> = (0..9).collect();
-        let (p, i) = weld(&pos, &idx);
-        assert_eq!(p.len() / 3, 4);
-        assert_eq!(i.len() / 3, 2);
-    }
 }

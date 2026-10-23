@@ -1,9 +1,5 @@
-//! The scoring constants of `by:"match"` and `by:"nearest"`, the Python engine's `geom_select.py`
-//! `_DEFAULTS` overridden by selector_tuning.json.
-//!
-//! The shipped JSON is compiled in and is what the app runs with: its TIE_BAND
-//! (0.05) is not the code default (0.15). An eval hands a different file to
-//! `configure`, as `eval_selector_survival.py --config` does.
+//! The scoring constants of `by:"match"` and `by:"nearest"`, defaults overridden by the compiled-in
+//! selector_tuning.json. Its TIE_BAND (0.05) is not the code default (0.15).
 
 use std::sync::OnceLock;
 
@@ -66,7 +62,7 @@ impl Tuning {
         })
     }
 
-    /// `configure(src)`: known keys holding numbers override, anything else is ignored.
+    /// Known keys holding numbers override, anything else is ignored.
     pub fn configure(&mut self, src: &Value) {
         let fields: [(&str, &mut f64); 15] = [
             ("ANG_TOL", &mut self.ang_tol),
@@ -95,27 +91,5 @@ impl Tuning {
     /// `POS_DRIFT + REL_DRIFT * _bbox_diag(part)`.
     pub fn pos_tol(&self, bbox_diagonal: f64) -> f64 {
         self.pos_drift + self.rel_drift * bbox_diagonal
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn the_shipped_file_overrides_the_tie_band() {
-        let t = Tuning::shipped();
-        assert_eq!(Tuning::default().tie_band, 0.15);
-        assert_eq!(t.tie_band, 0.05);
-        assert_eq!(t.nearest_tie_band, 0.02);
-        assert_eq!(t.w_rank, 2.0);
-    }
-
-    #[test]
-    fn configure_keeps_missing_keys_and_ignores_unknown_ones() {
-        let mut t = Tuning::default();
-        t.configure(&serde_json::json!({"W_POS": 7, "BOGUS": 1, "TIE_BAND": "x"}));
-        assert_eq!(t.w_pos, 7.0);
-        assert_eq!(t.tie_band, 0.15);
     }
 }

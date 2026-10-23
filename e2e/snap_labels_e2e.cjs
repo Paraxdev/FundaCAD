@@ -16,7 +16,10 @@ const TOKEN = process.env.SC_TOKEN || "";
 const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const URL = process.env.SC_URL || "http://localhost:5173/";
 const OUT = path.resolve(process.argv[2] || "snap_labels_shots");
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 let failures = 0;
 const check = (name, ok, detail) => {
   console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail ? `, ${detail}` : ""}`);
@@ -27,20 +30,32 @@ const check = (name, ok, detail) => {
   fs.mkdirSync(OUT, { recursive: true });
   const browser = await chromium.launch({ executablePath: EXE, args: ["--use-angle=swiftshader", "--no-sandbox"] });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-  page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
+  page.on("pageerror", (e) => {
+    console.error("PAGE ERROR:", e.message);
+    failures++;
+  });
   await page.goto(`${URL}?token=${TOKEN}`);
   await page.waitForTimeout(3000);
   const modal = await page.$(".modal-close");
-  if (modal) { await modal.click(); await page.waitForTimeout(400); }
+  if (modal) {
+    await modal.click();
+    await page.waitForTimeout(400);
+  }
   await page.waitForFunction(() => !!window.store && !!window.sketch && !!window.viewport, null, { timeout: 60000 });
 
-  const tag = () => page.evaluate(() => {
-    const el = document.querySelector("[data-testid=snap-tag]");
-    return el && !el.hidden ? el.textContent : "";
-  });
+  const tag = () =>
+    page.evaluate(() => {
+      const el = document.querySelector("[data-testid=snap-tag]");
+      return el && !el.hidden ? el.textContent : "";
+    });
 
   await page.evaluate(async () => {
-    window.store.addFeature({ id: "s1", type: "sketch", plane: "XY", entities: [{ type: "circle", id: "c1", x: 30, y: 20, radius: 25 }] });
+    window.store.addFeature({
+      id: "s1",
+      type: "sketch",
+      plane: "XY",
+      entities: [{ type: "circle", id: "c1", x: 30, y: 20, radius: 25 }],
+    });
     window.store.addFeature({ id: "e1", type: "extrude", sketch: "s1", distance: 20, operation: "new" });
     await window.store.rebuildNow();
   });
@@ -55,7 +70,9 @@ const check = (name, ok, detail) => {
   await page.evaluate(() => window.sketch.setTool("circle"));
   await page.waitForTimeout(300);
 
-  const centre = await page.evaluate(() => window.viewport.projectToScreen(new window.viewport.camera.position.constructor(30, 20, 20)));
+  const centre = await page.evaluate(() =>
+    window.viewport.projectToScreen(new window.viewport.camera.position.constructor(30, 20, 20)),
+  );
   await page.mouse.move(centre.x + 40, centre.y + 40);
   await page.mouse.move(centre.x + 2, centre.y + 1, { steps: 6 });
   await page.waitForTimeout(300);
@@ -82,7 +99,11 @@ const check = (name, ok, detail) => {
     return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
   });
   const mid = { x: (centre.x + rim.x) / 2, y: (centre.y + rim.y) / 2 };
-  check("the diameter field sits halfway along the radius", !!box && Math.hypot(box.x - mid.x, box.y - mid.y) < 25, JSON.stringify({ box, mid }));
+  check(
+    "the diameter field sits halfway along the radius",
+    !!box && Math.hypot(box.x - mid.x, box.y - mid.y) < 25,
+    JSON.stringify({ box, mid }),
+  );
   await page.screenshot({ path: path.join(OUT, "02_diameter_field.png") });
   await page.keyboard.press("Escape");
 

@@ -1,15 +1,6 @@
-//! Open and save timings for documents with big imports, one JSON line per stage.
-//!
-//!   cargo run --release -p fundacad-cli --example bench_open -- scan scan2m.stl --triangles 2000000
-//!   cargo run --release -p fundacad-cli --example bench_open -- pack part.step out/part
-//!   cargo run --release -p fundacad-cli --example bench_open -- open out/part.fundab --repeat 5
-//!   cargo run --release -p fundacad-cli --example bench_open -- reopen out/part.fundab --repeat 5
-//!
-//! `pack` imports a file and saves it as `<stem>.fundab` and `<stem>.funda`.
-//! `open` reads a document into an empty blob store and rebuilds it cold,
-//! `reopen` reads it again with the store already filled, the common case.
-//! `--threads N` sets FUNDACAD_THREADS for the file layer, `--file-only` stops
-//! after it, before the engine stages.
+//! Open and save timings for documents with big imports, one JSON line per stage:
+//! `cargo run --release -p fundacad-cli --example bench_open -- scan|pack|open|reopen <path> [--repeat N]`.
+//! `open` rebuilds into an empty blob store, `reopen` into a filled one, the common case.
 
 use std::collections::BTreeMap;
 use std::io::Write;
@@ -115,8 +106,11 @@ fn stage_scan(args: &[String]) {
         for c in 0..=cols {
             let phi = 2.0 * std::f64::consts::PI * c as f64 / cols as f64;
             let rr = radius + 0.4 * noise() + 2.0 * (5.0 * theta).sin() * (7.0 * phi).cos();
-            grid[r * (cols + 1) + c] =
-                [(rr * theta.sin() * phi.cos()) as f32, (rr * theta.sin() * phi.sin()) as f32, (rr * theta.cos()) as f32];
+            grid[r * (cols + 1) + c] = [
+                (rr * theta.sin() * phi.cos()) as f32,
+                (rr * theta.sin() * phi.sin()) as f32,
+                (rr * theta.cos()) as f32,
+            ];
         }
     }
     let t = Instant::now();
@@ -204,7 +198,6 @@ fn stage_pack(args: &[String]) {
     let _ = std::fs::remove_dir_all(&root);
 }
 
-/// Read the document into `blob_dir`, timing the file layer stages apart.
 fn file_layer(path: &Path, blob_dir: &Path, repeat: usize, refill: bool) -> String {
     let size = std::fs::metadata(path).unwrap().len();
     let binary = fnda::looks_like_fnda(path);
@@ -242,7 +235,12 @@ fn file_layer(path: &Path, blob_dir: &Path, repeat: usize, refill: bool) -> Stri
         let opened = container::open_document_full(path, blob_dir, None, None).expect("the open");
         (t.elapsed(), opened.document)
     });
-    emit(if refill { "open_file_empty_store" } else { "open_file_filled_store" }, took, size, json!({"stored": dir_bytes(blob_dir)}));
+    emit(
+        if refill { "open_file_empty_store" } else { "open_file_filled_store" },
+        took,
+        size,
+        json!({"stored": dir_bytes(blob_dir)}),
+    );
     let (took, _) = median_of(repeat, || {
         let t = Instant::now();
         let v: Value = serde_json::from_str(&doc).unwrap();
@@ -318,6 +316,8 @@ fn main() {
         Some("pack") => stage_pack(rest),
         Some("open") => stage_open(rest, true),
         Some("reopen") => stage_open(rest, false),
-        _ => eprintln!("bench_open scan|pack|open|reopen, see the header of crates/fundacad-cli/examples/bench_open.rs"),
+        _ => {
+            eprintln!("bench_open scan|pack|open|reopen, see the header of crates/fundacad-cli/examples/bench_open.rs")
+        }
     }
 }

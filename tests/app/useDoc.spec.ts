@@ -37,7 +37,11 @@ function makeFakeEngine() {
       docVersion.value++;
     },
     engine: {
-      store: { get document() { return doc; } },
+      store: {
+        get document() {
+          return doc;
+        },
+      },
       bridge: { docVersion },
     } as unknown as Engine,
   };
@@ -50,7 +54,9 @@ function trackDerived(fake: ReturnType<typeof makeFakeEngine>, pick: (d: CadDocu
   const Comp = defineComponent({
     setup() {
       const v = useDocValue(pick);
-      watchEffect(() => { seen.push(v.value); });
+      watchEffect(() => {
+        seen.push(v.value);
+      });
       return () => h("div", String(v.value));
     },
   });
@@ -65,7 +71,9 @@ describe("useDocValue", () => {
 
     expect(seen).toEqual([10]);
 
-    fake.edit((d) => { d.parameters.width = 25; });
+    fake.edit((d) => {
+      d.parameters.width = 25;
+    });
     await Promise.resolve();
 
     // The regression this guards: `seen` stays [10] because the intermediate
@@ -78,7 +86,9 @@ describe("useDocValue", () => {
     const { seen } = trackDerived(fake, (d) => d.parameters.width);
 
     for (const w of [1, 2, 3]) {
-      fake.edit((d) => { d.parameters.width = w; });
+      fake.edit((d) => {
+        d.parameters.width = w;
+      });
       await Promise.resolve();
     }
     expect(seen).toEqual([10, 1, 2, 3]);
@@ -90,7 +100,9 @@ describe("useDocValue", () => {
 
     // An unrelated edit bumps the version but must not churn this dependent,
     // the computed still short-circuits, which is the behaviour we WANT here.
-    fake.edit((d) => { d.parameters.depth = 3; });
+    fake.edit((d) => {
+      d.parameters.depth = 3;
+    });
     await Promise.resolve();
 
     expect(seen).toEqual([10]);
@@ -100,7 +112,9 @@ describe("useDocValue", () => {
     const fake = makeFakeEngine();
     const { seen } = trackDerived(fake, (d) => d.features.length);
 
-    fake.edit((d) => { d.features.push({ id: "f1", type: "box" } as never); });
+    fake.edit((d) => {
+      d.features.push({ id: "f1", type: "box" } as never);
+    });
     await Promise.resolve();
 
     expect(seen).toEqual([0, 1]);

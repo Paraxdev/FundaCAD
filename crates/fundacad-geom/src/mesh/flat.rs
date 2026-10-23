@@ -1,25 +1,5 @@
-//! Triangles without area leave a body's mesh here, before it is handed out.
-//!
-//! The kernel's mesher triangulates a face in the face's own parameters. A
-//! pole of the surface (the tip of a sphere, the corner patch three fillets
-//! leave, the point a lofted face closes to) is a whole side of the face
-//! there: it gets a node at each end, both at the one point, and the triangle
-//! on that side has no area. Every such face has one, and the join of split
-//! edges flattens triangles the same way.
-//!
-//! Three cases, none of which opens the mesh:
-//! - two corners at one point: the other two sides are one side run both
-//!   ways, the triangle just goes;
-//! - two corners closer than the limit: they become one point on every
-//!   triangle that holds either, which makes it the first case;
-//! - three corners on a line: the triangle across its long side is divided at
-//!   the corner in the middle, and takes over its two short sides. The faces
-//!   a mesh pass displaces hold these too.
-//!
-//! One that cannot be removed this way stays, and the printability check
-//! reports it: its long side is shared with more than one triangle, or the
-//! halves of the triangle across would be flat themselves (a tip of a face
-//! narrower than the limit over a long run).
+//! Drops triangles without area, which the mesher leaves at surface poles and split edge joins,
+//! never opening the mesh. One that cannot go stays for the printability check to report.
 
 use std::collections::HashMap;
 
@@ -29,16 +9,8 @@ fn single(v: f64) -> f64 {
     f64::from(v as f32)
 }
 
-/// How low over its longest side a triangle may stand before it counts as
-/// without area: two steps of single precision at the mesh's largest
-/// coordinate.
-///
-/// The viewport, a binary STL and a GLB hold single precision, which puts
-/// every corner up to half a step off in each coordinate, 0.87 of a step in
-/// space. A triangle and the one handed out for it are sure to face the same
-/// way, and to both have area, only when the lower of them stands more than
-/// 1.74 steps high. `is_flat` measures the one handed out, so the mesh in
-/// double precision and the same mesh in single get the same answer.
+/// Two single precision steps at the largest coordinate. A f32 corner is up to 0.87 step off, so a
+/// triangle and its f32 copy surely agree only above 1.74 steps, and both precisions get one answer.
 pub fn limit(coordinates: impl IntoIterator<Item = f64>) -> f64 {
     2.0 * f64::from(f32::EPSILON) * coordinates.into_iter().fold(0.0f64, |m, v| m.max(single(v).abs()))
 }
@@ -82,7 +54,11 @@ type Side = [[u64; 3]; 2];
 
 fn side(positions: &[f64], a: u32, b: u32) -> Side {
     let (a, b) = (position_key(&positions[3 * a as usize..]), position_key(&positions[3 * b as usize..]));
-    if a <= b { [a, b] } else { [b, a] }
+    if a <= b {
+        [a, b]
+    } else {
+        [b, a]
+    }
 }
 
 /// A flat triangle that only joins two of its corners needs a few rounds at
@@ -158,11 +134,8 @@ fn join_close_corners(out: &mut Tessellation, flat: &[usize], limit: f64) -> boo
     true
 }
 
-/// A flat triangle with its corners apart is a corner lying on the side
-/// between the other two. The triangle across that side is divided at the
-/// corner, into two that run the short sides the way the flat one did. With
-/// nothing across (the rim of an open sheet) the flat one just goes, the rim
-/// then runs its two short sides.
+/// The corner lying on the long side divides the triangle across it into two that run the short sides.
+/// With nothing across (an open sheet's rim) the flat one just goes.
 fn divide_across_long_sides(
     out: &mut Tessellation,
     dead: &mut Vec<bool>,
@@ -178,7 +151,10 @@ fn divide_across_long_sides(
         .filter_map(|&t| {
             let lengths = sides(&corners(&out.positions, &out.indices[3 * t..3 * t + 3]));
             let k = (0..3).max_by(|a, b| lengths[*a].total_cmp(&lengths[*b]))?;
-            lengths.iter().all(|s| *s >= limit * limit).then(|| (t, [0, 1, 2].map(|j| out.indices[3 * t + (k + j) % 3])))
+            lengths
+                .iter()
+                .all(|s| *s >= limit * limit)
+                .then(|| (t, [0, 1, 2].map(|j| out.indices[3 * t + (k + j) % 3])))
         })
         .collect();
     if apart.is_empty() {
@@ -210,9 +186,8 @@ fn divide_across_long_sides(
         }
         let n: [u32; 3] = [0, 1, 2].map(|j| out.indices[3 * across + j]);
         let at = |i: u32| position_key(&out.positions[3 * i as usize..]);
-        // Whichever way round the neighbour runs the long side: the way a
-        // triangle without area is wound says nothing, a mesh pass may hand
-        // it over either way, and the halves keep the neighbour's winding.
+        // Either way round: a flat triangle's winding says nothing, a mesh pass may hand it over either way,
+        // and the halves keep the neighbour's winding.
         let ends = [at(from), at(to)];
         let Some(j) = (0..3).find(|&j| {
             let run = [at(n[j]), at(n[(j + 1) % 3])];
@@ -223,9 +198,8 @@ fn divide_across_long_sides(
         let (start, end, far) = (n[j], n[(j + 1) % 3], n[(j + 2) % 3]);
         let [s, e, f] = [start, end, far].map(|i| point(&out.positions, i));
         if is_flat(&[s, e, f], limit) {
-            // Two flat triangles back to back over one long side. The side
-            // turns to run between their middle corners, which leaves each
-            // with a long side that a triangle with area is across.
+            // Two flat triangles back to back over one long side: the side turns to run between their middle
+            // corners, leaving each a long side with a real triangle across.
             let lengths = sides(&[s, e, f]);
             if lengths[2] >= lengths[0].max(lengths[1]) && lengths.iter().all(|l| *l >= limit * limit) {
                 out.indices[3 * t..3 * t + 3].copy_from_slice(&[mid, from, far]);
@@ -335,12 +309,12 @@ mod tests {
 
     #[test]
     fn a_corner_on_the_side_between_the_other_two_divides_the_triangle_across() {
-        // M lies on the side from B to C, a quarter of the way. One face runs
-        // that side whole, the other in two steps, and a triangle of no area
-        // lies between.
+        // M lies a quarter of the way from B to C. One face runs that side whole, the other in two steps,
+        // and a triangle of no area lies between.
         let m = [0.75, 0.25, 0.0];
         let mut t = mesh(&[A, B, C, D, m], &[0, 2, 1, 0, 1, 3, 0, 3, 2, 1, 4, 3, 4, 2, 3, 1, 2, 4]);
-        t.normals = Some([[0.0, 0.0, -1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [0.0, 0.0, 1.0]].concat());
+        t.normals =
+            Some([[0.0, 0.0, -1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [0.0, 0.0, 1.0]].concat());
         assert_eq!(faults(&t), (0, 1));
         remove(&mut t);
         // The half of the divided triangle that was added sits beside it.
@@ -369,10 +343,8 @@ mod tests {
         // B, M1, M2, C on one line. The fan from C runs it in three steps on
         // one face, the triangle A B C runs it whole on the other.
         let (m1, m2) = ([0.75, 0.25, 0.0], [0.5, 0.5, 0.0]);
-        let mut t = mesh(
-            &[A, B, C, D, m1, m2],
-            &[0, 2, 1, 0, 1, 3, 0, 3, 2, 1, 4, 3, 4, 5, 3, 5, 2, 3, 1, 2, 5, 1, 5, 4],
-        );
+        let mut t =
+            mesh(&[A, B, C, D, m1, m2], &[0, 2, 1, 0, 1, 3, 0, 3, 2, 1, 4, 3, 4, 5, 3, 5, 2, 3, 1, 2, 5, 1, 5, 4]);
         assert_eq!(faults(&t), (0, 2));
         remove(&mut t);
         assert_eq!(t.face_ids, vec![0, 0, 0, 1, 2, 3, 4, 5]);
@@ -381,10 +353,8 @@ mod tests {
 
     #[test]
     fn a_triangle_whose_halves_would_be_flat_is_not_divided() {
-        // M lies on the side from A to B. The triangle across runs to F, far
-        // along that side and one and a half limits off it at B: its half
-        // from A to M stands half as high, so dividing it would only pass
-        // the fault along.
+        // M lies on A to B. The triangle across runs to F, one and a half limits off the side at B, so its
+        // half from A to M is half as high and dividing it would only pass the fault along.
         let l = limit([5.0]);
         let (m, f) = ([0.5, 0.0, 0.0], [5.0, 7.5 * l, 0.0]);
         let mut t = mesh(&[A, B, m, f], &[0, 2, 1, 0, 1, 3]);
@@ -407,10 +377,8 @@ mod tests {
         // One face runs the side from B to C by way of M1, the other by way
         // of M2, and the two flat triangles between them share that side.
         let (m1, m2) = ([0.75, 0.25, 0.0], [0.25, 0.75, 0.0]);
-        let mut t = mesh(
-            &[A, B, C, D, m1, m2],
-            &[0, 2, 4, 0, 4, 1, 0, 1, 3, 0, 3, 2, 1, 5, 3, 5, 2, 3, 1, 4, 2, 2, 5, 1],
-        );
+        let mut t =
+            mesh(&[A, B, C, D, m1, m2], &[0, 2, 4, 0, 4, 1, 0, 1, 3, 0, 3, 2, 1, 5, 3, 5, 2, 3, 1, 4, 2, 2, 5, 1]);
         assert_eq!(faults(&t), (0, 2));
         remove(&mut t);
         assert_eq!(t.face_ids, vec![0, 0, 1, 2, 3, 4, 4, 5]);

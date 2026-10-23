@@ -1,9 +1,5 @@
-//! The document the engine rebuilds from: `CadDocument` and everything in it,
-//! with the JSON names of `src/types.ts` and `src/document/versions.ts`.
-//!
-//! Loss-free by construction. Every object keeps the keys it does not know in
-//! `extra`, every object union keeps a member it does not know as `Unknown`,
-//! every string union keeps a spelling it does not know as `Other`, and numbers
+//! The document the engine rebuilds from, with the JSON names of `src/types.ts` and `src/document/versions.ts`. Loss
+//! free: unknown keys go to `extra`, unknown union members to `Unknown`, unknown spellings to `Other`, and numbers
 //! keep their integer or float spelling, so `to_value(from_value(doc)) == doc`.
 
 pub mod feature;
@@ -17,8 +13,7 @@ use serde::{Deserialize, Serialize};
 pub use feature::*;
 pub use selector::*;
 pub use sketch::{
-    DimPlace, PlaceOffset, ProjectedCurve, ProjectedSource, SketchConstraint, SketchEntity,
-    SketchPattern, Text,
+    DimPlace, PlaceOffset, ProjectedCurve, ProjectedSource, SketchConstraint, SketchEntity, SketchPattern, Text,
 };
 pub use value::{Extra, Invalid, Num, OneOrMany, Real, UnresolvedNum, Vec3};
 
@@ -36,24 +31,10 @@ open_enum! {
     pub enum ParamUnit { Mm = "mm", Deg = "deg", Count = "count" }
 }
 
-plain_struct!(TargetFeature {
-    feature: String,
-    field: String
-});
-plain_struct!(TargetConstraint {
-    sketch: String,
-    constraint: String
-});
-plain_struct!(TargetEntity {
-    sketch: String,
-    entity: String,
-    field: String
-});
-plain_struct!(TargetPattern {
-    sketch: String,
-    pattern: String,
-    field: String
-});
+plain_struct!(TargetFeature { feature: String, field: String });
+plain_struct!(TargetConstraint { sketch: String, constraint: String });
+plain_struct!(TargetEntity { sketch: String, entity: String, field: String });
+plain_struct!(TargetPattern { sketch: String, pattern: String, field: String });
 
 tagged_enum! {
     /// Where a model parameter's value is written, by stable id.
@@ -76,10 +57,7 @@ plain_struct!(ControlSlider {
     #[serde(default, skip_serializing_if = "Option::is_none")] step: Option<Real>,
 });
 plain_struct!(ControlToggle {});
-plain_struct!(Choice {
-    label: String,
-    value: Real
-});
+plain_struct!(Choice { label: String, value: Real });
 plain_struct!(ControlChoice { choices: Vec<Choice> });
 
 tagged_enum! {
@@ -109,20 +87,12 @@ plain_struct!(
     }
 );
 
-plain_struct!(ParamGroup {
-    id: String,
-    name: String
-});
+plain_struct!(ParamGroup { id: String, name: String });
 plain_struct!(ParamConfiguration { id: String, name: String, values: IndexMap<String, String> });
 open_enum! {
     pub enum CheckLevel { Warning = "warning", Error = "error" }
 }
-plain_struct!(ParamCheck {
-    id: String,
-    expr: String,
-    message: String,
-    level: CheckLevel
-});
+plain_struct!(ParamCheck { id: String, expr: String, message: String, level: CheckLevel });
 plain_struct!(ParamExtras {
     #[serde(default, skip_serializing_if = "Option::is_none")] groups: Option<Vec<ParamGroup>>,
     #[serde(default, skip_serializing_if = "Option::is_none")] configurations: Option<Vec<ParamConfiguration>>,
@@ -130,10 +100,7 @@ plain_struct!(ParamExtras {
     #[serde(default, skip_serializing_if = "Option::is_none")] checks: Option<Vec<ParamCheck>>,
 });
 
-plain_struct!(ViewOverride {
-    normal: Vec3,
-    up: Vec3
-});
+plain_struct!(ViewOverride { normal: Vec3, up: Vec3 });
 
 plain_struct!(VersionTree {
     /// Object hash per feature, in history order.
@@ -234,11 +201,9 @@ impl CadDocument {
         serde_json::to_string(self)
     }
 
-    /// The document as typed as it can be: each top level key that does not fit
-    /// (a newer `materials` row, a `versions` repo of another shape) is left out
-    /// with an stderr line rather than refusing the whole document, and a
-    /// `parameters` map keeps its numeric entries. A build reads `parameters`,
-    /// `features` and a few maps, none of which such a key changes.
+    /// The document typed as far as it goes: a top level key that does not fit (a newer `materials` row, another
+    /// `versions` shape) is dropped with an stderr line instead of refusing the document, and `parameters` keeps its
+    /// numeric entries. A build never reads such keys.
     pub fn from_value_lenient(v: &serde_json::Value) -> serde_json::Result<Self> {
         let whole = serde_json::from_value::<Self>(v.clone());
         let (Err(_), serde_json::Value::Object(m)) = (&whole, v) else {

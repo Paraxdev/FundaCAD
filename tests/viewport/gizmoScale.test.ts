@@ -6,11 +6,7 @@
 // bottom of the zoom range. These pin the shared rule both glyphs now use.
 
 import { describe, expect, it } from "vitest";
-import {
-  GLYPH_MODEL_FRACTION,
-  glyphScale,
-  glyphWorldScale,
-} from "../../src/viewport/gizmoScale";
+import { GLYPH_MODEL_FRACTION, glyphScale, glyphWorldScale } from "../../src/viewport/gizmoScale";
 
 describe("glyphScale", () => {
   it("leaves the pixel size alone while the model is the bigger of the two", () => {
@@ -77,7 +73,7 @@ describe("glyphWorldScale", () => {
     // 88 pixels whatever the zoom. This is the assertion the report was about.
     for (const px of [0.5, 0.016, 0.00024]) {
       const world = glyphWorldScale(88, 200, px, 0.3);
-      expect(world * 88 / px).toBeCloseTo(88, 6);
+      expect((world * 88) / px).toBeCloseTo(88, 6);
     }
   });
 

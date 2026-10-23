@@ -1,11 +1,10 @@
-// The WebGPU path tracer (three-gpu-pathtracer, pinned) behind TracerBackend.
-// Both modules are imported inside init, so the 330 kB chunk only loads the
-// first time Path traced is picked.
+// three-gpu-pathtracer (pinned) is imported inside init, so its 330 kB chunk only loads the first time
+// Path traced is picked.
 
 import * as THREE from "three";
 import type { Denoise } from "../../ui/renderPrefs";
 import { SAMPLE_CAP, type PictureOptions, type TraceLook, type TraceScene, type TracerBackend } from "./backend";
-import { FrameBudget } from "./budget";
+import { fitPreview, FrameBudget, type PreviewTracer } from "./budget";
 import { repackInPlace, type SwappableBvhData } from "./bvhSwap";
 import { traceCameraFor, type TraceLens } from "./camera";
 import { backgroundTexture } from "./environment";
@@ -89,7 +88,10 @@ export class WebGpuTracer implements TracerBackend {
 
   async init() {
     const [gpu, tracerMod, oidnWeb, tsl, bloomMod] = await Promise.all([
-      import("three/webgpu"), import("three-gpu-pathtracer/webgpu"), import("oidn-web"), import("three/tsl"),
+      import("three/webgpu"),
+      import("three-gpu-pathtracer/webgpu"),
+      import("oidn-web"),
+      import("three/tsl"),
       import("three/examples/jsm/tsl/display/BloomNode.js"),
     ]);
     this.tracerMod = tracerMod;
@@ -98,13 +100,17 @@ export class WebGpuTracer implements TracerBackend {
     this.initUNetFromURL = oidnWeb.initUNetFromURL;
     // Above the 128 MiB floor when the adapter offers more, so a model of a few
     // million triangles fits its attribute buffer.
-    const nav = globalThis.navigator as unknown as { gpu?: { requestAdapter(): Promise<{ limits: Record<string, number> } | null> } };
+    const nav = globalThis.navigator as unknown as {
+      gpu?: { requestAdapter(): Promise<{ limits: Record<string, number> } | null> };
+    };
     const adapter = await nav.gpu?.requestAdapter();
     const offered = adapter?.limits;
     const requiredLimits = offered
       ? { maxStorageBufferBindingSize: offered.maxStorageBufferBindingSize, maxBufferSize: offered.maxBufferSize }
       : undefined;
-    const r = new gpu.WebGPURenderer({ canvas: this.canvas, antialias: false, requiredLimits } as ConstructorParameters<typeof gpu.WebGPURenderer>[0]);
+    const r = new gpu.WebGPURenderer({ canvas: this.canvas, antialias: false, requiredLimits } as ConstructorParameters<
+      typeof gpu.WebGPURenderer
+    >[0]);
     r.setPixelRatio(1);
     await r.init();
     const backend = r.backend as unknown as { isWebGPUBackend?: boolean };
@@ -194,15 +200,17 @@ export class WebGpuTracer implements TracerBackend {
     return step.more;
   }
 
-  /** Albedo, and the view normal with view depth in alpha, for the a-trous
-   *  stops. Drawn once per restart, the scene is still while it traces. Glass
-   *  is drawn over it as no surface, so it stays as traced. */
+  /** Albedo, and view normal with view depth in alpha, for the a-trous stops. Drawn once per restart since
+   *  the scene is still while it traces; glass is drawn as no surface, so it stays as traced. */
   private renderGuides(w: number, h: number): THREE.RenderTarget | null {
     const tsl = this.tsl;
     if (!tsl || !this.camera) return null;
     if (!this.guides) {
       this.guides = new THREE.RenderTarget(w, h, {
-        count: 2, type: THREE.HalfFloatType, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter,
+        count: 2,
+        type: THREE.HalfFloatType,
+        minFilter: THREE.NearestFilter,
+        magFilter: THREE.NearestFilter,
       });
       // The MRT keys are matched against these names.
       this.guides.textures[0]!.name = "output";
@@ -211,16 +219,30 @@ export class WebGpuTracer implements TracerBackend {
     const g = this.guides;
     g.setSize(w, h);
     const r = this.renderer as unknown as {
-      toneMapping: THREE.ToneMapping; autoClear: boolean;
-      getRenderTarget(): unknown; setRenderTarget(t: unknown): void; getMRT(): unknown; setMRT(m: unknown): void;
+      toneMapping: THREE.ToneMapping;
+      autoClear: boolean;
+      getRenderTarget(): unknown;
+      setRenderTarget(t: unknown): void;
+      getMRT(): unknown;
+      setMRT(m: unknown): void;
       render(s: THREE.Scene, c: THREE.Camera): void;
     };
     const meshes: THREE.Mesh[] = [];
-    this.scene.traverse((o) => { if ((o as THREE.Mesh).isMesh) meshes.push(o as THREE.Mesh); });
-    const glassy = (m: THREE.Mesh) => ([] as THREE.Material[]).concat(m.material).some((x) =>
-      x.transparent || x.opacity < 1 || ((x as THREE.MeshPhysicalMaterial).transmission ?? 0) > 0);
+    this.scene.traverse((o) => {
+      if ((o as THREE.Mesh).isMesh) meshes.push(o as THREE.Mesh);
+    });
+    const glassy = (m: THREE.Mesh) =>
+      ([] as THREE.Material[])
+        .concat(m.material)
+        .some((x) => x.transparent || x.opacity < 1 || ((x as THREE.MeshPhysicalMaterial).transmission ?? 0) > 0);
     const glass = new Set(meshes.filter(glassy));
-    const was = { target: r.getRenderTarget(), mrt: r.getMRT(), tone: r.toneMapping, auto: r.autoClear, background: this.scene.background };
+    const was = {
+      target: r.getRenderTarget(),
+      mrt: r.getMRT(),
+      tone: r.toneMapping,
+      auto: r.autoClear,
+      background: this.scene.background,
+    };
     const surfaces = tsl.mrt({
       output: tsl.diffuseColor,
       normal: tsl.vec4(tsl.normalView.mul(0.5).add(0.5), tsl.positionView.z.negate()),
@@ -293,6 +315,7 @@ export class WebGpuTracer implements TracerBackend {
     scene.backgroundIntensity = look.environmentBehind ? look.brightness : 1;
     scene.environment = look.environment;
     scene.environmentIntensity = look.brightness;
+    if (this.tracer) this.tracer.maxBounces = look.bounces ?? MAX_BOUNCES;
     for (const l of look.lights) {
       const d = new THREE.DirectionalLight(l.color, l.intensity);
       d.position.copy(l.position);
@@ -358,8 +381,7 @@ export class WebGpuTracer implements TracerBackend {
     if (this.tracer) this.tracer.renderScale = scale;
   }
 
-  /** The library's own preview: a restart's first frame traced small with
-   *  several bounces, shown until every pixel has a sample, then faded out.
+  /** A restart's first frame traced small with several bounces, shown until every pixel has a sample.
    *  Without it a restart shows black, a bounce traced per frame. */
   setMotionPreview(on: boolean) {
     this.preview = on;
@@ -386,8 +408,19 @@ export class WebGpuTracer implements TracerBackend {
     return this.gpuTime(t0);
   }
 
+  /** Before every renderSample: the preview's size follows the frame budget. */
+  private fitPreview() {
+    if (!this.tracer || !this.renderer) return;
+    fitPreview(
+      this.tracer as unknown as PreviewTracer,
+      this.renderer.getDrawingBufferSize(new THREE.Vector2()),
+      PREVIEW_SCALE,
+    );
+  }
+
   private trace(samples: number) {
     if (!this.tracer) return;
+    this.fitPreview();
     this.tracer.renderSample();
     this.showsDenoise = false;
     const raw = this.internals._pathTracer.outputTarget;
@@ -416,7 +449,13 @@ export class WebGpuTracer implements TracerBackend {
     const r = this.renderer;
     const t = this.tracer;
     if (!r || !t || !this.camera) throw new Error("Path tracing is not running");
-    const was = { ratio: r.getPixelRatio(), size: r.getSize(new THREE.Vector2()), scale: t.renderScale, budget: t.frameBudget, level: this.level };
+    const was = {
+      ratio: r.getPixelRatio(),
+      size: r.getSize(new THREE.Vector2()),
+      scale: t.renderScale,
+      budget: t.frameBudget,
+      level: this.level,
+    };
     const cancelled = () => new DOMException("The picture was cancelled", "AbortError");
     r.setPixelRatio(1);
     r.setSize(o.width, o.height, false);
@@ -436,6 +475,7 @@ export class WebGpuTracer implements TracerBackend {
         if (this.disposed) throw new Error("Path tracing stopped");
         t.frameBudget = budget.budget;
         const t0 = performance.now();
+        this.fitPreview();
         t.renderSample();
         const ms = await this.gpuTime(t0);
         // The first frames at the picture's size compile and allocate.

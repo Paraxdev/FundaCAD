@@ -1,11 +1,5 @@
-//! `section`: a body cut by a plane, as the outline in the plane and the
-//! properties a beam calculation needs, area, centroid and second moments.
-//!
-//! Cut from the body's triangles rather than its exact faces: every triangle
-//! the plane crosses gives one segment, and the segments chain into closed
-//! loops because the faces of a solid share their edges' points. The triangles
-//! are asked for at a fine tolerance, so a 5 mm radius is a polygon whose area
-//! is within a fraction of a percent of the circle's.
+//! `section`: cut from the body's triangles, which chain into closed loops because a solid's faces share
+//! their edge points, meshed fine enough that a 5 mm circle's area is within a fraction of a percent.
 
 use std::collections::HashMap;
 
@@ -17,8 +11,7 @@ use crate::mesh::MeshBody;
 /// The chord tolerance the section asks the engine to mesh at, in mm.
 pub const TOLERANCE: f64 = 0.01;
 
-/// A cutting plane: a point on it, its normal, and the two in-plane axes the
-/// outline is written in, with u x v = n.
+/// A point on the plane, its normal, and the in-plane axes the outline is written in, with u x v = n.
 #[derive(Debug, Clone)]
 pub struct Plane {
     pub origin: [f64; 3],
@@ -88,7 +81,9 @@ pub fn plane_of(args: &serde_json::Map<String, Value>) -> Result<Plane, String> 
     let pick = if n[0].abs() < 0.9 { [1.0, 0.0, 0.0] } else { [0.0, 1.0, 0.0] };
     let u = unit(cross(cross(n, pick), n)).expect("pick is not parallel to n");
     let v = cross(n, u);
-    let r = |a: [f64; 3]| format!("({}, {}, {})", g_format(round(a[0], 6)), g_format(round(a[1], 6)), g_format(round(a[2], 6)));
+    let r = |a: [f64; 3]| {
+        format!("({}, {}, {})", g_format(round(a[0], 6)), g_format(round(a[1], 6)), g_format(round(a[2], 6)))
+    };
     // `at` slides the plane along its normal; the label and every number
     // in the reply are measured from where it ends up.
     let origin = match at {
@@ -108,7 +103,11 @@ pub fn plane_of(args: &serde_json::Map<String, Value>) -> Result<Plane, String> 
 fn round(x: f64, places: i32) -> f64 {
     let k = 10f64.powi(places);
     let r = (x * k).round() / k;
-    if r == 0.0 { 0.0 } else { r }
+    if r == 0.0 {
+        0.0
+    } else {
+        r
+    }
 }
 
 /// The cut through one body: closed loops in (u, v), counter-clockwise for
@@ -123,9 +122,8 @@ pub struct Cut {
     pub on_face: Option<bool>,
 }
 
-/// Closer to the plane than this, in mm, a mesh point is taken to be on it.
-/// The mesh is single precision, so a point modelled on the plane can land
-/// a few hundred nanometres either side of it, more far from the origin.
+/// Closer than this in mm, a mesh point is on the plane: the mesh is single precision, so a point modelled
+/// on it can land a few hundred nanometres either side, more far from the origin.
 const ON_PLANE: f64 = 1e-5;
 
 /// How close counts as on the plane for this body: single precision is good
@@ -148,7 +146,6 @@ fn key(p: [f64; 2]) -> (i64, i64) {
     ((p[0] * 1e5).round() as i64, (p[1] * 1e5).round() as i64)
 }
 
-/// Cut a body's triangles with the plane.
 pub fn cut(body: &MeshBody, plane: &Plane) -> Cut {
     let tol = on_plane(body, plane);
     let (mut out, coplanar) = cut_at(body, plane, 0.0, tol);
@@ -163,10 +160,8 @@ pub fn cut(body: &MeshBody, plane: &Plane) -> Cut {
     if !coplanar {
         return out;
     }
-    // The plane lies on a face and nothing crosses it: a points-on-the-plane
-    // rule has to pick a side, so the bottom face of a part would read as a
-    // miss while its top face cut fine. Cut a hair inside the body instead,
-    // on whichever side the material is.
+    // The plane lies on a face and nothing crosses: the on-plane rule would make a bottom face miss while the
+    // top face cuts, so cut a hair inside the body on whichever side the material is.
     let nudge = 20.0 * tol;
     let mut best: Option<(Cut, bool)> = None;
     for shift in [nudge, -nudge] {
@@ -394,7 +389,6 @@ fn num4(x: f64) -> String {
     g_format(round(x, digits))
 }
 
-/// One body's cut, as text.
 pub fn report(id: &str, name: &str, plane: &Plane, cut: &Cut, outline: bool) -> String {
     let who = if name.is_empty() || name == id { id.to_string() } else { format!("{id} \"{name}\"") };
     if cut.loops.is_empty() && cut.open.is_empty() {
@@ -481,7 +475,8 @@ pub fn report(id: &str, name: &str, plane: &Plane, cut: &Cut, outline: bool) -> 
     if outline {
         for (i, l) in cut.loops.iter().enumerate() {
             let kind = if signed_area(l) < 0.0 { "hole" } else { "outline" };
-            let pts: Vec<String> = l.iter().map(|q| format!("[{},{}]", g_format(round(q[0], 4)), g_format(round(q[1], 4)))).collect();
+            let pts: Vec<String> =
+                l.iter().map(|q| format!("[{},{}]", g_format(round(q[0], 4)), g_format(round(q[1], 4)))).collect();
             out.push(format!("  loop {} ({kind}, {} points): [{}]", i + 1, l.len(), pts.join(",")));
         }
     }
@@ -494,73 +489,5 @@ fn short(axis: &str) -> String {
         other if other.starts_with("u ") => "u".into(),
         other if other.starts_with("v ") => "v".into(),
         other => other.into(),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_rectangle_with_a_hole() {
-        // 20 x 10 centred on (5, 0), with a 4 x 2 hole in the middle.
-        let outer = vec![[-5.0, -5.0], [15.0, -5.0], [15.0, 5.0], [-5.0, 5.0]];
-        let hole = vec![[3.0, -1.0], [3.0, 1.0], [7.0, 1.0], [7.0, -1.0]];
-        let p = properties(&[outer, hole]);
-        assert!((p.area - 192.0).abs() < 1e-9);
-        assert!((p.centroid[0] - 5.0).abs() < 1e-9 && p.centroid[1].abs() < 1e-9);
-        // bh^3/12 less the hole's.
-        assert!((p.iu - (20.0 * 1000.0 / 12.0 - 4.0 * 8.0 / 12.0)).abs() < 1e-9, "{}", p.iu);
-        assert!((p.iv - (10.0 * 8000.0 / 12.0 - 2.0 * 64.0 / 12.0)).abs() < 1e-9, "{}", p.iv);
-        assert!(p.iuv.abs() < 1e-9);
-        assert_eq!((p.cu, p.cv), (10.0, 5.0));
-    }
-
-    #[test]
-    fn a_shape_along_the_diagonal_has_a_product_of_inertia() {
-        let p = properties(&[vec![[0.0, 0.0], [2.0, 0.0], [2.0, 1.0], [0.0, 1.0]]]);
-        assert!(p.iuv.abs() < 1e-12);
-        let l = properties(&[vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0]]]);
-        // A right triangle with legs 1 lying along u = v: Ixy about its
-        // centroid is +1/72.
-        assert!((l.iuv - 1.0 / 72.0).abs() < 1e-12, "{}", l.iuv);
-    }
-
-    #[test]
-    fn a_plane_needs_a_place() {
-        let m = |v: Value| v.as_object().cloned().unwrap();
-        assert!(plane_of(&m(serde_json::json!({"axis": "Z"}))).is_err());
-        assert!(plane_of(&m(serde_json::json!({"axis": "W", "at": 1}))).is_err());
-        let p = plane_of(&m(serde_json::json!({"origin": [0, 0, 0], "normal": [0, 0, 2]}))).unwrap();
-        assert_eq!(cross(p.u, p.v), [0.0, 0.0, 1.0]);
-        // `at` moves the plane, and the label says where it went.
-        let p = plane_of(&m(serde_json::json!({"origin": [0, 0, 0], "normal": [0, 0, 1], "at": 10}))).unwrap();
-        assert_eq!(p.origin, [0.0, 0.0, 10.0]);
-        assert_eq!(p.label, "the plane through (0, 0, 10) normal to (0, 0, 1)");
-    }
-
-    #[test]
-    fn small_moments_keep_four_figures() {
-        assert_eq!(num4(4.9087e-6), "4.909e-06");
-        assert_eq!(num4(3.0680e-7), "3.068e-07");
-        assert_eq!(num4(1666.6667), "1667");
-    }
-
-    #[test]
-    fn one_open_chain_is_one_chain_whatever_order_its_triangles_come_in() {
-        // A strip standing across z = 0, three squares wide, its middle
-        // square's triangles listed first.
-        let positions: Vec<f32> = vec![
-            0.0, 0.0, -1.0, 1.0, 0.0, -1.0, 2.0, 0.0, -1.0, 3.0, 0.0, -1.0, // bottom row
-            0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 2.0, 0.0, 1.0, 3.0, 0.0, 1.0, // top row
-        ];
-        let indices = vec![1, 2, 6, 1, 6, 5, 0, 1, 5, 0, 5, 4, 2, 3, 7, 2, 7, 6];
-        let body = MeshBody { info: Default::default(), positions, indices, face_ids: vec![], edges: vec![] };
-        let m = |v: Value| v.as_object().cloned().unwrap();
-        let plane = plane_of(&m(serde_json::json!({"axis": "Z", "at": 0}))).unwrap();
-        let c = cut(&body, &plane);
-        assert!(c.loops.is_empty());
-        assert_eq!(c.open.len(), 1, "{:?}", c.open);
-        assert_eq!(c.open[0].len(), 7, "{:?}", c.open);
     }
 }

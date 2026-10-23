@@ -1,9 +1,5 @@
-// What opening a document tells the person about what this version leaves out.
-//
-// One cause, one toast. A feature whose type a shipped plugin declares keeps the
-// plugin's own message (turn it on, or install it). Every other type this build
-// cannot build is from a newer FundaCAD, or from something nobody here knows,
-// and gets one notice for all of them together.
+// What opening a document says about what this version leaves out: a plugin-declared type keeps the plugin's own
+// message, every other unbuildable type shares one notice.
 
 import type { CadDocument, Feature } from "../types";
 import { FORMAT_VERSION } from "./migrate";
@@ -12,7 +8,7 @@ import { missingPluginMessage, missingPlugins } from "./missingPlugins";
 export interface OpenNotice {
   message: string;
   kind: "info" | "warning";
-  /** The full list, for the console log. */
+  // The full list, for the console log.
   detail?: string;
 }
 
@@ -24,13 +20,12 @@ function namesOf(names: string[]): string {
   return `${names.slice(0, MOST_NAMES).join(", ")} and ${names.length - MOST_NAMES} more`;
 }
 
-/** A feature as History names it: its own name, else its type. */
+// As History names it.
 function rowName(f: Pick<Feature, "type">): string {
   return (f as { name?: string }).name?.trim() || f.type;
 }
 
-/** The notices for a document just opened, `openedVersion` being the `version`
- *  the file was stamped with. */
+// `openedVersion` is the `version` the file was stamped with.
 export function openNotices(doc: Pick<CadDocument, "features">, openedVersion: number): OpenNotice[] {
   const out: OpenNotice[] = [];
   const unknown: { type: string; count: number }[] = [];
@@ -42,7 +37,10 @@ export function openNotices(doc: Pick<CadDocument, "features">, openedVersion: n
   const total = unknown.reduce((n, u) => n + u.count, 0);
   if (total === 0) {
     if (newer) {
-      out.unshift({ message: `${NEWER} Anything this version does not know is kept and saved with the file.`, kind: "info" });
+      out.unshift({
+        message: `${NEWER} Anything this version does not know is kept and saved with the file.`,
+        kind: "info",
+      });
     }
     return out;
   }
@@ -53,8 +51,8 @@ export function openNotices(doc: Pick<CadDocument, "features">, openedVersion: n
   const kept = one
     ? "It is kept and saved with the file. Bodies after it may differ."
     : "They are kept and saved with the file. Bodies after them may differ.";
-  // An older stamp means no newer version wrote these, so most likely a plugin
-  // that is not running here, which can also be one the engine still builds.
+  // An older stamp means no newer version wrote these, so most likely a plugin not running here, which can also be one
+  // the engine still builds.
   const sentence = newer
     ? `${NEWER} ${one ? "1 feature was" : `${total} features were`} not included because this version does not know ${one ? "it" : "them"}: ${names}. ${kept} Update FundaCAD to build ${one ? "it" : "them"}.`
     : `${one ? "1 feature needs" : `${total} features need`} a plugin that is not running here: ${names}. ${kept}`;

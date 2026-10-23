@@ -1,13 +1,11 @@
-/* The built-in theme, NeoNoir: violet-black surfaces, cream text and a mint
-   neon accent. It lives on :root so it is on screen before any script runs; an
-   uploaded palette overrides only the colour tokens (ui/theme.ts), never the
-   shape tokens below. */
+/* The built-in NeoNoir theme, on :root so it paints before any script runs. An uploaded
+   palette (ui/theme.ts) overrides only the colour tokens, never the shape tokens. */
 
 :root {
   /* Native controls (select popups, scrollbars) default to a light scheme otherwise. */
   color-scheme: dark;
 
-  /* --- surfaces, back to front --- */
+  /* Surfaces, back to front. */
   --bg: #050409;
   --panel: #1b1826;
   --panel-2: #272233;
@@ -16,18 +14,15 @@
   /* Read by the Three side (viewport/themeColors), not by any CSS rule. */
   --viewport-bg: #0b0912;
 
-  /* --- borders ---
-     Kept off pure black: --line-strong also draws the scrollbar thumb. */
+  /* Kept off pure black: --line-strong also draws the scrollbar thumb. */
   --line: #322c42;
   --line-strong: #5c5470;
 
-  /* --- text --- */
   --text: #f6f0e4;
   --text-dim: #aaa1b5;
   --text-mute: #7d7590;
 
-  /* --- accent ---
-     Also what selected edges, dimensions and manipulator handles are drawn in. */
+  /* Also draws selected edges, dimensions and manipulator handles. */
   --accent: #4bf9bc;
   --accent-hot: #7dffd4;
   --accent-tint: rgba(75, 249, 188, 0.14);
@@ -35,28 +30,27 @@
   --accent-glow: rgba(75, 249, 188, 0.35);
   --on-accent: #00140d;
 
-  /* --- semantic ---
-     --ok is a step deeper than the accent so an ok badge and a selection differ. */
+  /* --ok is a step deeper than the accent so an ok badge and a selection differ. */
   --ok: #17c99a;
   --warn: #ffab2e;
   --error: #ff5c5c;
   --error-tint: rgba(255, 92, 92, 0.14);
+  /* A second pick colour, apart from the accent: the Mirror line or plane in the viewport. */
+  --pick-line: #b48cff;
 
   /* legacy alias */
   --accent-blue: var(--accent);
 
-  /* --- type (self-hosted, see main.ts) --- */
+  /* Self-hosted, see main.ts. */
   --ui: "Space Grotesk", "Inter", system-ui, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
-  /* --- radii --- */
   --r-xs: 2px;
   --r-sm: 3px;
   --r-md: 4px;
   --r-lg: 5px;
   --r-pill: 999px;
 
-  /* --- spacing --- */
   --s-0: 2px;
   --s-1: 4px;
   --s-2: 8px;
@@ -66,19 +60,16 @@
   --s-6: 28px;
   --s-7: 36px;
 
-  /* --- elevation: hard offsets, zero blur --- */
   --shadow-1: none;
   --shadow-2: 4px 4px 0 rgba(0, 0, 0, 0.85);
   --shadow-3: 6px 6px 0 rgba(0, 0, 0, 0.9);
   --shadow-pill: 4px 4px 0 rgba(0, 0, 0, 0.85);
 
-  /* --- motion --- */
   --ease: cubic-bezier(0.2, 0, 0.15, 1);
   --t-fast: 110ms;
   --t-med: 160ms;
 
-  /* --- floating shell ---
-     Soft shadows here: a hard offset over a lit model reads as a hole in the scene. */
+  /* Soft shadows: a hard offset over a lit model reads as a hole in the scene. */
   --float-bg: color-mix(in srgb, var(--panel) 72%, transparent);
   --float-bg-solid: color-mix(in srgb, var(--panel) 92%, transparent);
   --float-line: rgba(255, 255, 255, 0.09);
@@ -100,11 +91,11 @@
     color-mix(in srgb, var(--accent) 34%, transparent)
   );
 
-  /* --- stacking, back to front --- */
   --z-float: 20;
   --z-popover: 200;
   --z-menu: 3000;
   --z-modal: 4000;
+  --z-guide: 4500;
   --z-toast: 5000;
 }
 

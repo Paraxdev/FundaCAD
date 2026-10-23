@@ -25,7 +25,10 @@ const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const URL = process.env.SC_URL || "http://localhost:5173/";
 const ENGINE_PORT = process.env.SC_ENGINE_PORT || "8765";
 const OUT = path.resolve(process.argv[2] || "press_pull_axis_shots");
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 let failures = 0;
 const check = (name, ok, detail) => {
   console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail !== undefined ? `, ${JSON.stringify(detail)}` : ""}`);
@@ -39,47 +42,80 @@ const polygon = (pts) => pts.map((p, i) => line(`l${i}`, p, pts[(i + 1) % pts.le
   fs.mkdirSync(OUT, { recursive: true });
   const browser = await chromium.launch({ executablePath: EXE, args: ["--use-angle=swiftshader", "--no-sandbox"] });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-  page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
+  page.on("pageerror", (e) => {
+    console.error("PAGE ERROR:", e.message);
+    failures++;
+  });
   await page.addInitScript((port) => {
     const N = window.WebSocket;
     class P extends N {
-      constructor(u, p) { super(String(u).replace(":8765", `:${port}`), p); }
+      constructor(u, p) {
+        super(String(u).replace(":8765", `:${port}`), p);
+      }
     }
     window.WebSocket = P;
   }, ENGINE_PORT);
   await page.goto(`${URL}?token=${TOKEN}`);
-  await page.waitForFunction(() => !!window.store && !!window.viewport && !!window.__fundacad, null, { timeout: 60000 });
+  await page.waitForFunction(() => !!window.store && !!window.viewport && !!window.__fundacad, null, {
+    timeout: 60000,
+  });
   await page.waitForTimeout(1500);
   const modal = await page.$(".modal-close");
-  if (modal) { await modal.click(); await page.waitForTimeout(300); }
+  if (modal) {
+    await modal.click();
+    await page.waitForTimeout(300);
+  }
   const shot = (name) => page.screenshot({ path: path.join(OUT, `${name}.png`) });
   const settle = async () => {
     await page.waitForTimeout(400);
     await page.waitForFunction(() => !window.store.buildState.building, null, { timeout: 60000 });
     await page.waitForTimeout(400);
   };
-  const screen = (p) => page.evaluate((p) => {
-    const v = window.viewport; const V = v.camera.position.constructor;
-    return v.projectToScreen(new V(p[0], p[1], p[2]));
-  }, p);
-  const tool = () => page.evaluate(() => {
-    const t = window.pressPull;
-    const r = (v) => [v.x, v.y, v.z].map((c) => Math.round(c * 1000) / 1000);
-    return { active: t.active, direction: t.direction, anchor: r(t.anchor), axis: r(t.axis), value: t.value };
-  });
-  const button = () => page.evaluate(() => {
-    const b = document.querySelector(".dim-input .dim-direction");
-    return b ? { text: b.textContent, on: b.classList.contains("on"), shown: b.style.display !== "none" } : null;
-  });
+  const screen = (p) =>
+    page.evaluate((p) => {
+      const v = window.viewport;
+      const V = v.camera.position.constructor;
+      return v.projectToScreen(new V(p[0], p[1], p[2]));
+    }, p);
+  const tool = () =>
+    page.evaluate(() => {
+      const t = window.pressPull;
+      const r = (v) => [v.x, v.y, v.z].map((c) => Math.round(c * 1000) / 1000);
+      return { active: t.active, direction: t.direction, anchor: r(t.anchor), axis: r(t.axis), value: t.value };
+    });
+  const button = () =>
+    page.evaluate(() => {
+      const b = document.querySelector(".dim-input .dim-direction");
+      return b ? { text: b.textContent, on: b.classList.contains("on"), shown: b.style.display !== "none" } : null;
+    });
 
-  await page.evaluate(async (hole) => {
-    window.store.loadDocument({ parameters: {}, features: [
-      { id: "block", type: "box", length: 40, width: 40, height: 20 },
-      { id: "hole_sk", type: "sketch", plane: "XZ", entities: hole },
-      { id: "hole", type: "revolve", sketch: "hole_sk", axis: "Z", angle: 360, operation: "cut", targets: ["body1"] },
-    ] });
-    await window.store.rebuildNow();
-  }, polygon([[0, 11], [8, 11], [8, 8], [0, 0]]));
+  await page.evaluate(
+    async (hole) => {
+      window.store.loadDocument({
+        parameters: {},
+        features: [
+          { id: "block", type: "box", length: 40, width: 40, height: 20 },
+          { id: "hole_sk", type: "sketch", plane: "XZ", entities: hole },
+          {
+            id: "hole",
+            type: "revolve",
+            sketch: "hole_sk",
+            axis: "Z",
+            angle: 360,
+            operation: "cut",
+            targets: ["body1"],
+          },
+        ],
+      });
+      await window.store.rebuildNow();
+    },
+    polygon([
+      [0, 11],
+      [8, 11],
+      [8, 8],
+      [0, 0],
+    ]),
+  );
   await settle();
   await page.evaluate(() => window.__fundacad.handleAction("iso"));
   await page.waitForTimeout(600);
@@ -102,33 +138,54 @@ const polygon = (pts) => pts.map((p, i) => line(`l${i}`, p, pts[(i + 1) % pts.le
   let b = await button();
   check("picking the floor cone starts the tool", t.active, t);
   check("the box offers Along axis and starts on it", !!b && b.shown && b.on && b.text === "Along axis", b);
-  check("the arrow stands on the hole's axis and points up it",
-    t.direction === "axis" && Math.abs(t.anchor[0]) < 1e-3 && Math.abs(t.anchor[1]) < 1e-3 &&
-    Math.abs(t.axis[2] - 1) < 1e-3, t);
-  const angleShown = () => page.evaluate(() => {
-    const i = [...document.querySelectorAll(".dim-input label.dim-field")].find((l) => l.querySelector(".dim-name")?.title === "Angle");
-    return !!i && i.style.display !== "none";
-  });
+  check(
+    "the arrow stands on the hole's axis and points up it",
+    t.direction === "axis" &&
+      Math.abs(t.anchor[0]) < 1e-3 &&
+      Math.abs(t.anchor[1]) < 1e-3 &&
+      Math.abs(t.axis[2] - 1) < 1e-3,
+    t,
+  );
+  const angleShown = () =>
+    page.evaluate(() => {
+      const i = [...document.querySelectorAll(".dim-input label.dim-field")].find(
+        (l) => l.querySelector(".dim-name")?.title === "Angle",
+      );
+      return !!i && i.style.display !== "none";
+    });
   check("the Angle field is hidden along the axis, where it does nothing", !(await angleShown()));
   const modeToggle = await page.$(".dim-input .dim-toggle");
   check("the operation button is still the box's toggle", !!modeToggle && (await modeToggle.textContent()) === "Auto");
   await shot("01_picked");
 
   const flip = async () => {
-    await page.evaluate(() => document.querySelector(".dim-input .dim-direction")
-      .dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0 })));
+    await page.evaluate(() =>
+      document
+        .querySelector(".dim-input .dim-direction")
+        .dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0 })),
+    );
     await page.waitForTimeout(300);
   };
   await flip();
   t = await tool();
   b = await button();
-  check("the switch goes to Along normal", b && !b.on && b.text === "Along normal" && t.direction === "normal", { b, t });
+  check("the switch goes to Along normal", b && !b.on && b.text === "Along normal" && t.direction === "normal", {
+    b,
+    t,
+  });
   const offset = await page.evaluate(() => {
     const box = [...document.querySelectorAll(".dim-input")].find((b) => b.style.display !== "none");
     const toggle = box?.querySelector(".dim-toggle");
-    return { name: box?.querySelector(".dim-name")?.textContent ?? null, mode: !!toggle && toggle.style.display !== "none" };
+    return {
+      name: box?.querySelector(".dim-name")?.textContent ?? null,
+      mode: !!toggle && toggle.style.display !== "none",
+    };
   });
-  check("and along the normal the cone reads an Offset, with no angle or mode", offset.name === "Offset" && !offset.mode && !(await angleShown()), offset);
+  check(
+    "and along the normal the cone reads an Offset, with no angle or mode",
+    offset.name === "Offset" && !offset.mode && !(await angleShown()),
+    offset,
+  );
   await settle();
   await shot("02_along_normal");
   await flip();
@@ -139,7 +196,8 @@ const polygon = (pts) => pts.map((p, i) => line(`l${i}`, p, pts[(i + 1) % pts.le
 
   // The handle runs 5 to 45 px up the arrow from its anchor, constant on screen.
   const grip = await page.evaluate(() => {
-    const t = window.pressPull; const v = window.viewport;
+    const t = window.pressPull;
+    const v = window.viewport;
     const k = v.pixelWorldSize(t.anchor);
     const p = t.anchor.clone().addScaledVector(t.axis, k * 25);
     const s = v.projectToScreen(p);
@@ -169,14 +227,24 @@ const polygon = (pts) => pts.map((p, i) => line(`l${i}`, p, pts[(i + 1) % pts.le
   const pp = await page.evaluate(() => window.store.document.features.filter((f) => f.type === "press-pull"));
   check("one press/pull is stored", pp.length === 1, pp);
   const f = pp[0] || {};
-  check("it carries direction axis and a negative distance", f.direction === "axis" && typeof f.distance === "number" && f.distance < 0, f);
+  check(
+    "it carries direction axis and a negative distance",
+    f.direction === "axis" && typeof f.distance === "number" && f.distance < 0,
+    f,
+  );
   check("with no taper and no mode", f.taper === undefined && f.mode === undefined, f);
   const state = await page.evaluate(() => ({
     err: window.store.buildState.errorFeatureId ?? null,
     bodies: (window.store.buildState.result?.bodies ?? []).length,
-    notes: (window.store.buildState.result?.diagnostics ?? []).filter((d) => d.feature_id === window.store.document.features.at(-1).id),
+    notes: (window.store.buildState.result?.diagnostics ?? []).filter(
+      (d) => d.feature_id === window.store.document.features.at(-1).id,
+    ),
   }));
-  check("it builds, one body, with nothing to say", state.err === null && state.bodies === 1 && state.notes.length === 0, state);
+  check(
+    "it builds, one body, with nothing to say",
+    state.err === null && state.bodies === 1 && state.notes.length === 0,
+    state,
+  );
   await shot("04_committed");
 
   await browser.close();

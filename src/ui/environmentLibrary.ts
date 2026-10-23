@@ -1,8 +1,5 @@
-// The user's saved environments, and the imported panoramas they light with.
-//
-// IndexedDB rather than the fundacad.* localStorage keys: one 2k panorama is
-// about 8 MB, past what localStorage holds for the whole origin. Panoramas are
-// kept by hash in their own table, so two saved looks share one file.
+// The user's saved environments and their panoramas, in IndexedDB: one 2k panorama is about 8 MB, past what
+// localStorage holds. Panoramas are kept by hash, so two saved looks share one file.
 
 import type { EnvSettings } from "./renderPrefs";
 
@@ -39,22 +36,31 @@ export function memoryKv(): KvStore {
   const tables: Record<EnvTable, Map<string, unknown>> = { entries: new Map(), hdrs: new Map() };
   return {
     get: async <T>(t: EnvTable, k: string) => structuredClone(tables[t].get(k)) as T | undefined,
-    put: async (t, k, v) => { tables[t].set(k, structuredClone(v)); },
-    delete: async (t, k) => { tables[t].delete(k); },
+    put: async (t, k, v) => {
+      tables[t].set(k, structuredClone(v));
+    },
+    delete: async (t, k) => {
+      tables[t].delete(k);
+    },
     values: async <T>(t: EnvTable) => [...tables[t].values()].map((v) => structuredClone(v) as T),
   };
 }
 
 export function indexedDbKv(name = "fundacad-environments"): KvStore {
   let opened: Promise<IDBDatabase> | null = null;
-  const db = () => (opened ??= new Promise<IDBDatabase>((resolve, reject) => {
-    const req = indexedDB.open(name, 1);
-    req.onupgradeneeded = () => {
-      for (const t of ["entries", "hdrs"]) if (!req.result.objectStoreNames.contains(t)) req.result.createObjectStore(t);
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => { opened = null; reject(req.error); };
-  }));
+  const db = () =>
+    (opened ??= new Promise<IDBDatabase>((resolve, reject) => {
+      const req = indexedDB.open(name, 1);
+      req.onupgradeneeded = () => {
+        for (const t of ["entries", "hdrs"])
+          if (!req.result.objectStoreNames.contains(t)) req.result.createObjectStore(t);
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => {
+        opened = null;
+        reject(req.error);
+      };
+    }));
   const run = async <T>(t: EnvTable, mode: IDBTransactionMode, op: (s: IDBObjectStore) => IDBRequest): Promise<T> => {
     const tx = (await db()).transaction(t, mode);
     const req = op(tx.objectStore(t));
@@ -66,8 +72,12 @@ export function indexedDbKv(name = "fundacad-environments"): KvStore {
   };
   return {
     get: (t, k) => run(t, "readonly", (s) => s.get(k)),
-    put: async (t, k, v) => { await run(t, "readwrite", (s) => s.put(v, k)); },
-    delete: async (t, k) => { await run(t, "readwrite", (s) => s.delete(k)); },
+    put: async (t, k, v) => {
+      await run(t, "readwrite", (s) => s.put(v, k));
+    },
+    delete: async (t, k) => {
+      await run(t, "readwrite", (s) => s.delete(k));
+    },
     values: (t) => run(t, "readonly", (s) => s.getAll()),
   };
 }
@@ -97,13 +107,11 @@ export interface EnvLibrary {
 
 const hashOf = (s: EnvSettings) => (s.environment.startsWith("hdr:") ? s.environment.slice(4) : null);
 
-export function createEnvLibrary(
-  kv: KvStore,
-  opts: { now?: () => number; newId?: () => string } = {},
-): EnvLibrary {
+export function createEnvLibrary(kv: KvStore, opts: { now?: () => number; newId?: () => string } = {}): EnvLibrary {
   const now = opts.now ?? Date.now;
   const newId = opts.newId ?? (() => crypto.randomUUID().replace(/-/g, "").slice(0, 16));
-  const list = async () => (await kv.values<EnvEntry>("entries")).sort((a, b) => a.created - b.created || a.id.localeCompare(b.id));
+  const list = async () =>
+    (await kv.values<EnvEntry>("entries")).sort((a, b) => a.created - b.created || a.id.localeCompare(b.id));
   const named = (name: string) => {
     const n = cleanEnvName(name);
     if (!n) throw new Error("A saved environment needs a name.");
@@ -114,7 +122,16 @@ export function createEnvLibrary(
     async save(name, settings, thumb) {
       const n = named(name);
       const all = await list();
-      const entry: EnvEntry = { id: newId(), name: uniqueName(n, all.map((e) => e.name)), settings: { ...settings }, thumb, created: now() };
+      const entry: EnvEntry = {
+        id: newId(),
+        name: uniqueName(
+          n,
+          all.map((e) => e.name),
+        ),
+        settings: { ...settings },
+        thumb,
+        created: now(),
+      };
       await kv.put("entries", entry.id, entry);
       return entry;
     },
@@ -123,7 +140,13 @@ export function createEnvLibrary(
       const all = await list();
       const entry = all.find((e) => e.id === id);
       if (!entry) return null;
-      const next = { ...entry, name: uniqueName(n, all.filter((e) => e.id !== id).map((e) => e.name)) };
+      const next = {
+        ...entry,
+        name: uniqueName(
+          n,
+          all.filter((e) => e.id !== id).map((e) => e.name),
+        ),
+      };
       await kv.put("entries", id, next);
       return next;
     },

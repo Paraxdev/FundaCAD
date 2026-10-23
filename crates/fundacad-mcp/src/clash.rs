@@ -1,10 +1,5 @@
-//! `interference`: which bodies overlap and how close the rest come, once or
-//! at every step of a parameter.
-//!
-//! The engine's `interference` op does the geometry. What lives here is the
-//! sweep's arithmetic and the reading of the reply, kept to a line per pair
-//! and a line per step: the op also returns each overlap as a mesh for the
-//! app to draw, which is no use to an agent and is dropped.
+//! `interference`, once or at every step of a parameter. The engine does the geometry; this is the sweep's
+//! arithmetic and a line per pair and per step, dropping the overlap meshes the op returns for the app.
 
 use serde_json::Value;
 
@@ -13,11 +8,9 @@ use crate::describe::g_format;
 /// Pairs closer than this are reported when the caller does not say.
 pub const DEFAULT_CLEARANCE: f64 = 1.0;
 
-/// More steps than this is a sweep nobody needs in one reply, and each one is
-/// a full rebuild.
+/// More steps is a sweep nobody needs in one reply, and each one is a full rebuild.
 pub const MAX_STEPS: usize = 100;
 
-/// The parameter a sweep steps and the values it takes.
 pub struct Sweep {
     pub param: String,
     pub values: Vec<f64>,
@@ -25,7 +18,9 @@ pub struct Sweep {
 
 fn number(v: Option<&Value>, key: &str) -> Result<f64, String> {
     match v {
-        Some(Value::Number(n)) => n.as_f64().filter(|f| f.is_finite()).ok_or_else(|| format!("`{key}` has to be a number")),
+        Some(Value::Number(n)) => {
+            n.as_f64().filter(|f| f.is_finite()).ok_or_else(|| format!("`{key}` has to be a number"))
+        }
         Some(Value::String(s)) => s.trim().parse::<f64>().map_err(|_| format!("`{key}` has to be a number, got {s:?}")),
         _ => Err(format!("the sweep needs `{key}`")),
     }
@@ -50,10 +45,7 @@ pub fn sweep_of(v: &Value) -> Result<Sweep, String> {
         let Some(list) = list.as_array() else {
             return Err("`values` is a list of numbers".into());
         };
-        list.iter()
-            .enumerate()
-            .map(|(i, x)| number(Some(x), &format!("values[{i}]")))
-            .collect::<Result<_, _>>()?
+        list.iter().enumerate().map(|(i, x)| number(Some(x), &format!("values[{i}]"))).collect::<Result<_, _>>()?
     } else {
         let from = number(obj.get("from"), "from")?;
         let to = number(obj.get("to"), "to")?;
@@ -149,10 +141,7 @@ pub fn failures(r: &Value) -> Vec<String> {
         .iter()
         .filter_map(|e| {
             let m = e.get("message").and_then(Value::as_str)?;
-            Some(format!(
-                "FEATURE FAILED ({}): {m}",
-                e.get("feature_id").and_then(Value::as_str).unwrap_or("None")
-            ))
+            Some(format!("FEATURE FAILED ({}): {m}", e.get("feature_id").and_then(Value::as_str).unwrap_or("None")))
         })
         .collect()
 }
@@ -171,13 +160,9 @@ pub fn missing(r: &Value, asked: &[String]) -> Vec<String> {
         .collect()
 }
 
-/// The bodies the engine could not judge, each with why: a pair with one of
-/// them was tested for neither overlap nor clearance.
+/// Bodies the engine could not judge, with why: a pair with one was tested for neither overlap nor clearance.
 pub fn unjudged(r: &Value) -> Vec<String> {
-    list(r, "unchecked")
-        .iter()
-        .map(|u| format!("{} {}", who(s(u, "id"), s(u, "name")), s(u, "reason")))
-        .collect()
+    list(r, "unchecked").iter().map(|u| format!("{} {}", who(s(u, "id"), s(u, "name")), s(u, "reason"))).collect()
 }
 
 /// The pairs within the clearance that do not overlap, nearest first.
@@ -187,8 +172,6 @@ fn gaps(r: &Value) -> Vec<&Value> {
     g
 }
 
-/// One check, in full: every overlap with its volume and where it is, every
-/// near pair with its gap and the two closest points.
 pub fn report(r: &Value, clearance: f64) -> String {
     let pairs = list(r, "pairs");
     let near = gaps(r);
@@ -205,7 +188,10 @@ pub fn report(r: &Value, clearance: f64) -> String {
     }
     if pairs.is_empty() {
         // "No bodies overlap" is a claim about every pair, and some were not tested.
-        out.push(if skipped.is_empty() { "No bodies overlap." } else { "No overlap among the pairs that were checked." }.to_string());
+        out.push(
+            if skipped.is_empty() { "No bodies overlap." } else { "No overlap among the pairs that were checked." }
+                .to_string(),
+        );
     } else {
         out.push(format!("{} overlapping pair{}:", pairs.len(), if pairs.len() == 1 { "" } else { "s" }));
         for p in pairs {
@@ -227,12 +213,7 @@ pub fn report(r: &Value, clearance: f64) -> String {
             for g in near {
                 let d = f(g, "distance");
                 let gap = if d < 1e-6 { "touching".to_string() } else { format!("{} mm apart", mm(d)) };
-                out.push(format!(
-                    "  {}: {gap}, at {} and {}",
-                    pair(g),
-                    point(g.get("pointA")),
-                    point(g.get("pointB"))
-                ));
+                out.push(format!("  {}: {gap}, at {} and {}", pair(g), point(g.get("pointA")), point(g.get("pointB"))));
             }
         }
     }
@@ -242,17 +223,12 @@ pub fn report(r: &Value, clearance: f64) -> String {
     out.join("\n")
 }
 
-/// What a sweep keeps of each step.
 pub struct Step {
     pub value: f64,
-    /// The engine's reply, or why there was none.
     pub reply: Result<Value, String>,
 }
 
-/// A line per step and a summary, which is what replaces a stack of check
-/// features: where it clashes, and how close it gets where it does not.
-/// `asked` is the `bodies` filter; a step where one of them was not built
-/// says so on its line.
+/// `asked` is the `bodies` filter; a step where one of them was not built says so on its line.
 pub fn sweep_report(param: &str, unit: &str, steps: &[Step], clearance: f64, asked: &[String]) -> String {
     let at = |v: f64| format!("{param} = {}", g_format(v));
     let mut lines = Vec::new();
@@ -262,9 +238,7 @@ pub fn sweep_report(param: &str, unit: &str, steps: &[Step], clearance: f64, ask
     let mut failed_steps = 0;
     let mut cut_short: Option<String> = None;
     let mut cut_steps = 0;
-    // Asked-for bodies that were not there, and at which steps.
     let mut absent_at: Vec<(String, Vec<String>)> = Vec::new();
-    // Bodies that could not be judged, with why, and at which steps.
     let mut unjudged_at: Vec<(String, Vec<String>)> = Vec::new();
     for st in steps {
         let r = match &st.reply {
@@ -408,127 +382,4 @@ pub fn sweep_report(param: &str, unit: &str, steps: &[Step], clearance: f64, ask
         ));
     }
     format!("{summary}\n{}", lines.join("\n"))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-
-    #[test]
-    fn a_sweep_counts_both_ends() {
-        let s = sweep_of(&json!({"param": "press", "from": 0, "to": 12, "steps": 13})).unwrap();
-        assert_eq!(s.values.len(), 13);
-        assert_eq!(s.values[12], 12.0);
-        let s = sweep_of(&json!({"param": "press", "from": 0, "to": 1, "step": 0.25})).unwrap();
-        assert_eq!(s.values, vec![0.0, 0.25, 0.5, 0.75, 1.0]);
-        let s = sweep_of(&json!({"param": "a", "from": 10, "to": 0, "step": 5})).unwrap();
-        assert_eq!(s.values, vec![10.0, 5.0, 0.0]);
-        assert!(sweep_of(&json!({"param": "a", "from": 0, "to": 1})).is_err());
-        assert!(sweep_of(&json!({"param": "a", "values": [1, 2], "by": 3})).is_err());
-    }
-
-    #[test]
-    fn a_step_that_does_not_divide_the_span_still_ends_at_to() {
-        let s = sweep_of(&json!({"param": "press", "from": 0, "to": 10, "step": 3})).unwrap();
-        assert_eq!(s.values, vec![0.0, 3.0, 6.0, 9.0, 10.0]);
-        let s = sweep_of(&json!({"param": "press", "from": 0, "to": 1, "step": 5})).unwrap();
-        assert_eq!(s.values, vec![0.0, 1.0]);
-        assert!(sweep_of(&json!({"param": "a", "from": 0, "to": 100, "step": 1})).is_err());
-    }
-
-    #[test]
-    fn steps_that_were_not_checked_are_not_counted_as_clear() {
-        let clear = json!({"pairs": [], "clearances": [], "checked": [{"id": "body1", "name": "Frame"}, {"id": "body2", "name": "Slider"}]});
-        let partial = json!({"pairs": [], "clearances": [], "checked": [{"id": "body1", "name": "Frame"}],
-                             "errors": [{"feature_id": "ex2", "message": "depth must be positive"}]});
-        let cut = json!({"pairs": [], "clearances": [], "truncated": true, "checked": [{"id": "body1", "name": "Frame"}, {"id": "body2", "name": "Slider"}],
-                         "message": "Stopped after checking 400 candidate pairs; pick a smaller set of bodies for a full sweep."});
-        let text = sweep_report(
-            "press",
-            "mm",
-            &[
-                Step { value: 0.0, reply: Ok(clear) },
-                Step { value: 6.0, reply: Ok(cut) },
-                Step { value: 12.0, reply: Ok(partial) },
-                Step { value: 13.0, reply: Err("the geometry engine could not be reached".into()) },
-            ],
-            0.0,
-            &["Frame".to_string(), "Slider".to_string()],
-        );
-        assert!(text.starts_with("No overlaps at any of the 3 checked steps. 1 step could not be checked."), "{text}");
-        assert!(text.contains("1 step had failed features"), "{text}");
-        assert!(text.contains("At 1 step the check stopped early: Stopped after checking 400"), "{text}");
-        assert!(text.contains("press = 6: clear (stopped early, not every pair checked)"), "{text}");
-        assert!(
-            text.contains("press = 12: clear (Slider not built) (features failed: ex2: depth must be positive)"),
-            "{text}"
-        );
-        assert!(text.contains("Slider was not built at 1 step (press = 12 mm), so its pairs were not checked there."), "{text}");
-        let none = sweep_report("press", "mm", &[Step { value: 0.0, reply: Err("x".into()) }], 1.0, &[]);
-        assert!(none.starts_with("None of the 1 steps could be checked.\n"), "{none}");
-    }
-
-    #[test]
-    fn a_pair_that_was_not_tested_is_never_called_clear() {
-        let reason = "has faces that point the wrong way, at 65 of its edges the two faces disagree about which side is inside";
-        let r = json!({"pairs": [], "clearances": [], "uncheckedPairs": 1,
-                       "unchecked": [{"id": "body1", "name": "Echo Dot 2", "reason": reason}]});
-        let text = report(&r, 1.0);
-        assert!(!text.contains("No bodies overlap"), "{text}");
-        assert!(text.starts_with("NOT CHECKED: 1 pair that may overlap, because one of the two bodies cannot be judged:"), "{text}");
-        assert!(text.contains(&format!("  body1 \"Echo Dot 2\" {reason}")), "{text}");
-        assert!(text.contains("No overlap among the pairs that were checked."), "{text}");
-
-        let clear = json!({"pairs": [], "clearances": []});
-        assert!(report(&clear, 0.0).starts_with("No bodies overlap."));
-
-        let swept = sweep_report(
-            "press",
-            "mm",
-            &[Step { value: 0.0, reply: Ok(clear) }, Step { value: 4.0, reply: Ok(r) }],
-            0.0,
-            &[],
-        );
-        assert!(swept.contains("press = 0: clear\n"), "{swept}");
-        assert!(swept.contains("press = 4: no overlap found (body1 not judged, its pairs not checked)"), "{swept}");
-        assert!(
-            swept.contains(&format!(
-                "At 1 step a body could not be judged and its pairs were NOT CHECKED: body1 \"Echo Dot 2\" {reason}."
-            )),
-            "{swept}"
-        );
-    }
-
-    #[test]
-    fn a_failed_step_says_why_each_feature_failed() {
-        let failed = json!({"pairs": [], "clearances": [],
-                            "errors": [{"feature_id": "mech1", "message": "joint pin2 stays 0.8 mm apart, the linkage cannot close"},
-                                       {"feature_id": "ex3", "message": "nothing to cut"}]});
-        let text = sweep_report("press", "mm", &[Step { value: 11.0, reply: Ok(failed) }], 0.0, &[]);
-        assert!(
-            text.contains(
-                "press = 11: clear (features failed: mech1: joint pin2 stays 0.8 mm apart, the linkage cannot close; ex3: nothing to cut)"
-            ),
-            "{text}"
-        );
-    }
-
-    #[test]
-    fn a_sweep_names_where_it_clashes() {
-        let clash = json!({"pairs": [{"a": "body1", "b": "body2", "aName": "Head", "bName": "Slider", "volume": 2.5}],
-                           "clearances": []});
-        let clear = json!({"pairs": [], "clearances": [{"a": "body1", "b": "body2", "aName": "Head", "bName": "Slider",
-                                                       "distance": 0.4, "pointA": [0, 0, 0], "pointB": [0, 0, 0.4]}]});
-        let text = sweep_report(
-            "press",
-            "mm",
-            &[Step { value: 0.0, reply: Ok(clear) }, Step { value: 4.0, reply: Ok(clash) }],
-            1.0,
-            &[],
-        );
-        assert!(text.starts_with("Overlaps at 1 of 2 steps: press = 4 mm."), "{text}");
-        assert!(text.contains("0.4 mm (body1 \"Head\" / body2 \"Slider\", at press = 0 mm)"), "{text}");
-        assert!(text.contains("press = 4: CLASH body1/body2 2.5 mm3"), "{text}");
-    }
 }

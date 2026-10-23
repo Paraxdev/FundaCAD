@@ -1,9 +1,17 @@
 <script setup lang="ts">
 import { onMounted } from "vue";
-import { denoiserState as s, describeDenoiser, downloadDenoiser, refreshDenoiser, sizeLabel } from "../../viewport/pathtrace/denoiser";
+import {
+  denoiserState as s,
+  describeDenoiser,
+  downloadDenoiser,
+  refreshDenoiser,
+  sizeLabel,
+} from "../../viewport/pathtrace/denoiser";
 
 defineProps<{ hintClass: string; buttonClass: string }>();
-onMounted(() => { void refreshDenoiser(); });
+onMounted(() => {
+  void refreshDenoiser();
+});
 </script>
 
 <template>
@@ -16,6 +24,7 @@ onMounted(() => { void refreshDenoiser(); });
       data-denoiser-download
       :disabled="s.downloading"
       @click="downloadDenoiser()"
-    >High quality denoise ({{ sizeLabel(s.info.bytes) }})</button>
+      >High quality denoise ({{ sizeLabel(s.info.bytes) }})</button
+    >
   </div>
 </template>

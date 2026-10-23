@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { ExprError, extractRefs, isNumericLiteral, isReservedName, parseExpr, renameRefs } from "../../src/params/parse";
+import {
+  ExprError,
+  extractRefs,
+  isNumericLiteral,
+  isReservedName,
+  parseExpr,
+  renameRefs,
+} from "../../src/params/parse";
 import { evalExpr } from "../../src/params/eval";
 
 const ev = (src: string, values: Record<string, number> = {}) => evalExpr(src, values);

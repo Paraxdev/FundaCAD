@@ -92,13 +92,22 @@ describe("catcher plane", () => {
     const small = new THREE.Box3(new THREE.Vector3(0, 0, 0), new THREE.Vector3(1e-6, 1e-6, 1e-6));
     const big = new THREE.Box3(new THREE.Vector3(-100, -50, 0), new THREE.Vector3(100, 50, 10));
     expect(catcherPlane(small, 0)!.extent).toBeGreaterThan(0.5);
-    expect(catcherPlane(big, 0)!.extent).toBeGreaterThan(catcherPlane(new THREE.Box3(new THREE.Vector3(-10, -5, 0), new THREE.Vector3(10, 5, 10)), 0)!.extent);
+    expect(catcherPlane(big, 0)!.extent).toBeGreaterThan(
+      catcherPlane(new THREE.Box3(new THREE.Vector3(-10, -5, 0), new THREE.Vector3(10, 5, 10)), 0)!.extent,
+    );
     expect(catcherPlane(new THREE.Box3(), 0)).toBeNull();
   });
 });
 
 describe("when the catcher is drawn and baked", () => {
-  const on = { ground: "shadow", lowPower: false, potato: false, viewMode: "realtime", tracing: false, xray: false } as const;
+  const on = {
+    ground: "shadow",
+    lowPower: false,
+    potato: false,
+    viewMode: "realtime",
+    tracing: false,
+    xray: false,
+  } as const;
 
   it("draws only for a shadow ground on the full render in Realtime", () => {
     expect(catcherShown(on)).toBe(true);

@@ -1,11 +1,6 @@
 <script setup lang="ts">
-// On-canvas constraint glyphs: small badges projected onto the sketch, mirroring
-// SketchDimLayer. Each shows a constraint's type; clicking one (in the select
-// tool) deletes that constraint. Conflicting constraints render red.
-//
-// Replaces the DOM half of sketch/sketchGlyphs.ts, which stays as the facade
-// SketchMode talks to. Read that file's header for the split; the short version
-// is that Vue owns WHICH glyphs exist and the rAF loop below owns WHERE they are.
+// Constraint glyphs on the sketch canvas. Vue owns which glyphs exist, the rAF loop below owns where they are
+// (sketch/sketchGlyphs.ts has the split).
 
 import Icon from "../shell/Icon.vue";
 import * as THREE from "three";
@@ -16,11 +11,7 @@ import type { GlyphItem } from "../../sketch/sketchGlyphs";
 
 const s = useSketchAnnotationStore();
 
-// --- position: deliberately outside reactivity ----------------------------
-// A plain array, not a ref and not reactive(), filled by the :ref function on
-// each badge. `scratch`, `lastPose` and `raf` are plain locals for the same
-// reason: this loop runs on every frame the camera moves and writes one style
-// property per glyph, and nothing about that benefits from being tracked.
+// els, scratch, lastPose and raf stay outside reactivity: the loop writes one style per glyph on every camera frame.
 const els: (HTMLElement | null)[] = [];
 const scratch = new THREE.Vector3();
 let lastPose = -1;
@@ -51,8 +42,7 @@ function stop() {
   raf = 0;
 }
 
-// The loop only runs while a sketch is open, exactly as the class did, an
-// always-on rAF callback that early-returns is a frame budget nobody asked for.
+// The loop runs only while a sketch is open, an always-on rAF that early-returns wastes frame budget.
 watch(
   () => s.glyphPlane,
   (plane) => {
@@ -64,11 +54,16 @@ watch(
 
 // A new glyph set is at the same camera as the old one, so the pose check would
 // skip it forever. flush: "post" so the :ref functions have run.
-watch(() => s.glyphItems, () => { lastPose = -1; }, { flush: "post" });
+watch(
+  () => s.glyphItems,
+  () => {
+    lastPose = -1;
+  },
+  { flush: "post" },
+);
 
 onUnmounted(stop);
 
-// --- interaction ---------------------------------------------------------
 /** set by the pointerdown hook below; consumed by the click that follows */
 let suppressDelete = false;
 
@@ -95,16 +90,10 @@ function onWheel(e: WheelEvent) {
 </script>
 
 <template>
-  <!-- Teleported to body because that is where the class appended itself, and
-       .sketch-glyphs is `position: absolute; inset: 0` against the initial
-       containing block. Inside #app's grid it would inherit a stacking context
-       and land behind the canvas. -->
+  <!-- Teleported: .sketch-glyphs is absolute, inset 0 against the initial containing block, and inside #app's grid
+  it would land behind the canvas. -->
   <Teleport to="body">
-    <div
-      class="sketch-glyphs"
-      :class="{ 'glyphs-passive': s.glyphsPassive }"
-      @wheel="onWheel"
-    >
+    <div class="sketch-glyphs" :class="{ 'glyphs-passive': s.glyphsPassive }" @wheel="onWheel">
       <div
         v-for="(g, i) in s.glyphItems"
         :key="i"
@@ -113,7 +102,8 @@ function onWheel(e: WheelEvent) {
         :title="g.title"
         @pointerdown="onDown"
         @click="onClick($event, g)"
-      ><Icon :name="g.icon" :size="12" /></div>
+        ><Icon :name="g.icon" :size="12"
+      /></div>
     </div>
   </Teleport>
 </template>

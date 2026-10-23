@@ -1,5 +1,6 @@
-// How much work the path tracer is handed per frame, at what resolution, and
-// where it stops. Pure, so the controller is tested without a GPU.
+// Pure, so the per frame budget controller is tested without a GPU.
+
+import { experimentalPrefs, type ExperimentalPrefs } from "../../ui/experimentalPrefs";
 
 /** GPU time per traced frame that leaves the UI near 60 fps. */
 export const TARGET_MS = 12;
@@ -86,25 +87,64 @@ export interface CostProfile {
   budgetScale: number;
 }
 
-export function costProfile(p: { discharging: boolean }): CostProfile {
-  return p.discharging ? { cap: 64, budgetScale: 0.5 } : { cap: 256, budgetScale: 1 };
+type Limits = Pick<ExperimentalPrefs, "sampleCap" | "batterySampleCap" | "traceScale" | "pictureMegapixels">;
+
+/** The caps default to 256 on mains and 64 on battery (ui/experimentalPrefs.ts). */
+export function costProfile(p: { discharging: boolean }, x: Limits = experimentalPrefs()): CostProfile {
+  return p.discharging ? { cap: x.batterySampleCap, budgetScale: 0.5 } : { cap: x.sampleCap, budgetScale: 1 };
 }
 
-/** The tracer's renderScale, against a canvas drawn at CSS size (pixel ratio
- *  at most 1), so the trace lands at 0.75 of the device pixels, or 0.5 on a
- *  dense or very large screen or on battery. */
-export function renderScaleFor(p: { cssHeight: number; dpr: number; discharging: boolean }): number {
+/** Against a canvas drawn at CSS size (pixel ratio at most 1), the trace lands at 0.75 of the device
+ *  pixels, or 0.5 on a dense or very large screen or on battery. */
+export function renderScaleFor(
+  p: { cssHeight: number; dpr: number; discharging: boolean },
+  x: Limits = experimentalPrefs(),
+): number {
   const dpr = p.dpr > 0 ? p.dpr : 1;
-  const device = p.discharging || dpr > 1.5 || p.cssHeight * dpr > 1440 ? 0.5 : 0.75;
+  const auto = p.discharging || dpr > 1.5 || p.cssHeight * dpr > 1440 ? 0.5 : 0.75;
+  const device = x.traceScale > 0 ? x.traceScale : auto;
   return Math.min(1, (device * dpr) / Math.min(dpr, 1));
 }
 
-/** About a 4K frame: the tracer keeps several float targets of the picture's
- *  size, and the denoiser more. */
-export const MAX_PICTURE_PIXELS = 3840 * 2160;
+/** About a 4K frame by default: the tracer keeps several float targets of the picture's size, and the denoiser
+ *  more. */
+export function maxPicturePixels(x: Limits = experimentalPrefs()): number {
+  return Math.round(x.pictureMegapixels * 1e6);
+}
 
 /** The multiple of the view a traced picture is taken at, at most `scale`. */
-export function tracedPictureScale(w: number, h: number, scale: number, maxDimension: number): number {
-  const k = Math.min(scale, Math.sqrt(MAX_PICTURE_PIXELS / (w * h)), maxDimension / Math.max(w, h));
+export function tracedPictureScale(
+  w: number,
+  h: number,
+  scale: number,
+  maxDimension: number,
+  x: Limits = experimentalPrefs(),
+): number {
+  const k = Math.min(scale, Math.sqrt(maxPicturePixels(x) / (w * h)), maxDimension / Math.max(w, h));
   return Math.floor(k * 1000) / 1000;
+}
+
+/** The library previews a restart in one frame of a few wavefront steps, and pixels past the path slots
+ *  never get traced, so a preview with more pixels than slots is a band on black. */
+export function previewScale(slots: number, w: number, h: number, most: number): number {
+  const px = (s: number) => Math.ceil(s * w) * Math.ceil(s * h);
+  let s = Math.min(most, Math.sqrt(slots / Math.max(1, w * h)));
+  for (let i = 0; i < 16 && px(s) > slots; i++) s *= 0.99 * Math.sqrt(slots / px(s));
+  return s;
+}
+
+export interface PreviewTracer {
+  _resetTime: number;
+  frameBudget: number;
+  renderScale: number;
+  lowResScale: number;
+}
+
+/** Only on a restart's first frame: the switch to full resolution sizes its copy of the preview
+ *  from lowResScale, so a change after the first frame cuts it. */
+export function fitPreview(t: PreviewTracer, buffer: { x: number; y: number }, most: number) {
+  if (t._resetTime !== -1) return;
+  const w = Math.max(1, Math.floor(t.renderScale * buffer.x));
+  const h = Math.max(1, Math.floor(t.renderScale * buffer.y));
+  t.lowResScale = previewScale(t.frameBudget, w, h, most);
 }

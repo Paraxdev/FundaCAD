@@ -12,16 +12,34 @@ function doc(entities: unknown[]): Feature[] {
 
 describe("thin extrude of an open sketch", () => {
   it("builds a wall along every curve of the sketch", () => {
-    const f = thinExtrudeOf(doc([
-      { type: "line", id: "a", x1: 0, y1: 0, x2: 40, y2: 0 },
-      { type: "line", id: "b", x1: 40, y1: 0, x2: 40, y2: 30 },
-      { type: "line", id: "c", x1: 0, y1: 10, x2: 40, y2: 10, construction: true },
-      { type: "point", id: "p", x: 1, y: 1 },
-      { type: "spline", id: "s", points: [{ x: 0, y: 0 }, { x: 1, y: 2 }] },
-    ]), "sk", "ex");
+    const f = thinExtrudeOf(
+      doc([
+        { type: "line", id: "a", x1: 0, y1: 0, x2: 40, y2: 0 },
+        { type: "line", id: "b", x1: 40, y1: 0, x2: 40, y2: 30 },
+        { type: "line", id: "c", x1: 0, y1: 10, x2: 40, y2: 10, construction: true },
+        { type: "point", id: "p", x: 1, y: 1 },
+        {
+          type: "spline",
+          id: "s",
+          points: [
+            { x: 0, y: 0 },
+            { x: 1, y: 2 },
+          ],
+        },
+      ]),
+      "sk",
+      "ex",
+    );
     expect(f).toEqual({
-      id: "ex", type: "extrude", sketch: "sk", distance: 10, operation: "new",
-      thin: true, curves: ["a", "b"], thickness: 2, side: "center",
+      id: "ex",
+      type: "extrude",
+      sketch: "sk",
+      distance: 10,
+      operation: "new",
+      thin: true,
+      curves: ["a", "b"],
+      thickness: 2,
+      side: "center",
     });
   });
 

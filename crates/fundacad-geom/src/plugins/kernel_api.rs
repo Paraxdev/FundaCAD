@@ -19,14 +19,11 @@ use crate::import::blobstore::{self, BlobStore};
 use crate::kernel;
 use crate::mesh::{self, MeshParams};
 
-use super::host::types::{
-    BooleanOp, Circle, Curve, Cylinder, Line, Mesh, Plane, PointState, ShapeKind, Surface, Vec3,
-};
+use super::host::types::{BooleanOp, Circle, Curve, Cylinder, Line, Mesh, Plane, PointState, ShapeKind, Surface, Vec3};
 
 pub fn tuple(v: [f64; 3]) -> Vec3 {
     (v[0], v[1], v[2])
 }
-
 
 pub(super) fn nonnull(p: UniquePtr<TopoDS_Shape>, what: &str) -> Result<Shape, String> {
     let s = Shape::from_raw(p);
@@ -38,9 +35,7 @@ pub(super) fn nonnull(p: UniquePtr<TopoDS_Shape>, what: &str) -> Result<Shape, S
 }
 
 fn shapes(v: UniquePtr<cxx::CxxVector<TopoDS_Shape>>) -> Vec<Shape> {
-    v.as_ref()
-        .map(|v| v.iter().map(Shape::from_raw_ref).collect())
-        .unwrap_or_default()
+    v.as_ref().map(|v| v.iter().map(Shape::from_raw_ref).collect()).unwrap_or_default()
 }
 
 pub fn kind(s: &Shape) -> ShapeKind {
@@ -83,75 +78,44 @@ pub fn inner_wires(face: &Shape) -> Vec<Shape> {
     let Some(outer) = outer_wire(face) else {
         return Vec::new();
     };
-    items(face, Items::Wires)
-        .into_iter()
-        .filter(|w| !is_same(w, &outer))
-        .collect()
+    items(face, Items::Wires).into_iter().filter(|w| !is_same(w, &outer)).collect()
 }
 
 pub fn is_same(a: &Shape, b: &Shape) -> bool {
     opencascade_sys::builder_ops::bo_is_same(a.raw(), b.raw())
 }
 
-const SURFACE_NAMES: [&str; 11] = [
-    "plane", "cylinder", "cone", "sphere", "torus", "bezier", "bspline", "revolution",
-    "extrusion", "offset", "other",
-];
+const SURFACE_NAMES: [&str; 11] =
+    ["plane", "cylinder", "cone", "sphere", "torus", "bezier", "bspline", "revolution", "extrusion", "offset", "other"];
 
 pub fn surface(face: &Shape) -> Surface {
     let mut o = [0.0; 7];
     match ffi::po_surface(face.raw(), &mut o) {
-        0 => Surface::Plane(Plane {
-            origin: (o[0], o[1], o[2]),
-            normal: (o[3], o[4], o[5]),
-        }),
-        1 => Surface::Cylinder(Cylinder {
-            origin: (o[0], o[1], o[2]),
-            axis: (o[3], o[4], o[5]),
-            radius: o[6],
-        }),
+        0 => Surface::Plane(Plane { origin: (o[0], o[1], o[2]), normal: (o[3], o[4], o[5]) }),
+        1 => Surface::Cylinder(Cylinder { origin: (o[0], o[1], o[2]), axis: (o[3], o[4], o[5]), radius: o[6] }),
         -1 => Surface::Other("not a face".into()),
-        code => Surface::Other(
-            SURFACE_NAMES
-                .get(usize::try_from(code - 10).unwrap_or(10))
-                .unwrap_or(&"other")
-                .to_string(),
-        ),
+        code => {
+            Surface::Other(SURFACE_NAMES.get(usize::try_from(code - 10).unwrap_or(10)).unwrap_or(&"other").to_string())
+        }
     }
 }
 
-const CURVE_NAMES: [&str; 9] = [
-    "line", "circle", "ellipse", "hyperbola", "parabola", "bezier", "bspline", "offset", "other",
-];
+const CURVE_NAMES: [&str; 9] =
+    ["line", "circle", "ellipse", "hyperbola", "parabola", "bezier", "bspline", "offset", "other"];
 
 pub fn curve(edge: &Shape) -> Curve {
     let mut o = [0.0; 7];
     match ffi::po_curve(edge.raw(), &mut o) {
-        0 => Curve::Line(Line {
-            origin: (o[0], o[1], o[2]),
-            direction: (o[3], o[4], o[5]),
-        }),
-        1 => Curve::Circle(Circle {
-            center: (o[0], o[1], o[2]),
-            axis: (o[3], o[4], o[5]),
-            radius: o[6],
-        }),
+        0 => Curve::Line(Line { origin: (o[0], o[1], o[2]), direction: (o[3], o[4], o[5]) }),
+        1 => Curve::Circle(Circle { center: (o[0], o[1], o[2]), axis: (o[3], o[4], o[5]), radius: o[6] }),
         -1 => Curve::Other("not an edge".into()),
-        code => Curve::Other(
-            CURVE_NAMES
-                .get(usize::try_from(code - 10).unwrap_or(8))
-                .unwrap_or(&"other")
-                .to_string(),
-        ),
+        code => Curve::Other(CURVE_NAMES.get(usize::try_from(code - 10).unwrap_or(8)).unwrap_or(&"other").to_string()),
     }
 }
 
 pub fn sample_edges(s: &Shape, segments: u32) -> Vec<Vec3> {
     let n = i32::try_from(segments.clamp(1, 10_000)).unwrap_or(1);
-    ffi::po_sample_edges(s.raw(), n)
-        .chunks_exact(3)
-        .map(|c| (c[0], c[1], c[2]))
-        .collect()
+    ffi::po_sample_edges(s.raw(), n).chunks_exact(3).map(|c| (c[0], c[1], c[2])).collect()
 }
 
 pub fn point_at(edge: &Shape, position: f64) -> Option<Vec3> {
@@ -193,21 +157,12 @@ pub fn triangulate(face: &Shape, deflection: f64) -> Result<Mesh, String> {
     let t = mesh::tessellate(
         face,
         &access,
-        MeshParams {
-            linear: deflection,
-            angular: 0.5,
-            relative: false,
-            display: true,
-            force_remesh: false,
-        },
+        MeshParams { linear: deflection, angular: 0.5, relative: false, display: true, force_remesh: false },
     );
     Ok(Mesh {
         positions: t.positions,
         indices: t.indices,
-        normals: t
-            .normals
-            .map(|n| n.iter().map(|&v| v as f32).collect())
-            .unwrap_or_default(),
+        normals: t.normals.map(|n| n.iter().map(|&v| v as f32).collect()).unwrap_or_default(),
     })
 }
 
@@ -298,10 +253,7 @@ pub fn prism(profile: &Shape, d: Vec3) -> Result<Shape, String> {
 pub fn revolve(profile: &Shape, o: Vec3, a: Vec3, degrees: f64) -> Result<Shape, String> {
     finite(&[o.0, o.1, o.2, degrees])?;
     let a = unit(a)?;
-    nonnull(
-        ffi::po_revolve(profile.raw(), o.0, o.1, o.2, a.0, a.1, a.2, degrees),
-        "a revolved solid",
-    )
+    nonnull(ffi::po_revolve(profile.raw(), o.0, o.1, o.2, a.0, a.1, a.2, degrees), "a revolved solid")
 }
 
 pub fn boolean(op: BooleanOp, base: &Shape, tools: &[&Shape]) -> Result<Shape, String> {
@@ -351,7 +303,6 @@ fn vec_of(v: Option<&Value>, what: &str, default: Vec3) -> Result<Vec3, String> 
     Ok((n[0], n[1], n[2]))
 }
 
-/// shape_generate.py `place`.
 pub fn place_json(s: &Shape, placement: &Value) -> Result<Shape, String> {
     let o = vec_of(placement.get("origin"), "origin", (0.0, 0.0, 0.0))?;
     let z = vec_of(placement.get("zAxis"), "zAxis", (0.0, 0.0, 1.0))?;
@@ -366,7 +317,7 @@ pub enum Blend {
     Chamfer(f64, f64),
 }
 
-/// A batch blend, then with `one_by_one` blends.py `_sequential_blend`.
+/// A batch blend, or sequential blends with `one_by_one`.
 pub fn blend(s: &Shape, edges: &[Shape], how: Blend, one_by_one: bool) -> Result<(Shape, u32), String> {
     if edges.is_empty() {
         return Err("no edges to blend".into());
@@ -396,19 +347,14 @@ pub fn blend(s: &Shape, edges: &[Shape], how: Blend, one_by_one: bool) -> Result
     };
     let (out, unresolved) = sequential_blend(s, edges, &apply, size);
     if unresolved.len() == edges.len() {
-        return Err(format!(
-            "the kernel could not {verb} any of the {} edge(s), try a smaller size",
-            edges.len()
-        ));
+        return Err(format!("the kernel could not {verb} any of the {} edge(s), try a smaller size", edges.len()));
     }
     Ok((out, unresolved.len() as u32))
 }
 
 pub fn read_blob(id: &str) -> Result<Shape, String> {
     let store = BlobStore::open(blobstore::default_root()).map_err(|e| e.to_string())?;
-    let bytes = store
-        .get_bytes(id)
-        .ok_or_else(|| format!("no stored geometry {id:?}"))?;
+    let bytes = store.get_bytes(id).ok_or_else(|| format!("no stored geometry {id:?}"))?;
     opencascade::xcaf::from_bin(&bytes).map_err(|e| e.to_string())
 }
 
@@ -430,7 +376,7 @@ fn round_to(v: f64, digits: i32) -> f64 {
     (v * m).round() / m
 }
 
-/// shape_generate.py `_measure` plus the mesh or the stored blob.
+/// Measurements plus the mesh or the stored blob.
 pub fn generated_reply(s: &Shape, output: &str) -> Result<Map<String, Value>, String> {
     let solids = items(s, Items::Solids);
     if solids.is_empty() {
@@ -479,7 +425,6 @@ pub fn generated_reply(s: &Shape, output: &str) -> Result<Map<String, Value>, St
     Ok(m)
 }
 
-/// server.py `_plugin_export_job`.
 pub fn export_with(
     req: &Map<String, Value>,
     watch: &dyn Watch,
@@ -494,10 +439,7 @@ pub fn export_with(
     if !options.is_object() || options.to_string().len() > 262_144 {
         return Err("exportWith: bad options".into());
     }
-    let path = req
-        .get("path")
-        .and_then(Value::as_str)
-        .ok_or("exportWith: a request needs a path")?;
+    let path = req.get("path").and_then(Value::as_str).ok_or("exportWith: a request needs a path")?;
     let doc = req.get("document").ok_or("exportWith: a request needs a document")?;
     super::exporter_declared(exporter)?;
     let typed: fundacad_core::CadDocument =
@@ -522,12 +464,7 @@ pub fn export_with(
         if let Some(refusal) = export::budget_refusal(ntri) {
             return Err(refusal);
         }
-        meshed.push(ExportMesh {
-            id: b.id.clone(),
-            name: b.name.clone(),
-            positions,
-            indices,
-        });
+        meshed.push(ExportMesh { id: b.id.clone(), name: b.name.clone(), positions, indices });
     }
     if meshed.is_empty() {
         return Err("nothing to export, no meshable bodies".into());
@@ -541,10 +478,7 @@ pub fn export_with(
         res.insert("info".into(), info);
     }
     if !r.errors.is_empty() {
-        res.insert(
-            "warnings".into(),
-            Value::Array(r.errors.iter().map(builder::FeatureError::wire).collect()),
-        );
+        res.insert("warnings".into(), Value::Array(r.errors.iter().map(builder::FeatureError::wire).collect()));
     }
     Ok(res)
 }

@@ -1,12 +1,5 @@
-// Interactive Loft (Fusion-style): pick two or more profile AREAS in order and
-// the loft previews live as soon as the second profile is added, click more to
-// add, click a picked one again to drop it, Enter to commit, Esc to cancel. Each
-// profile keeps its holes, so two concentric-ring profiles loft into a tube (the
-// engine resolves each region anchor to its face; see builder._handle_loft).
-//
-// Profiles are stored as {sketch, anchor} DATA, not live WorldRegion refs: a
-// preview rebuild re-detects regions, so a held ref would go stale. The anchor
-// point is stable and re-resolves against the rebuilt regions each time.
+// Interactive Loft over two or more profile areas in order; holes are kept, so rings loft into a tube. Profiles are
+// stored as {sketch, anchor}, since a preview rebuild re-detects regions and a held WorldRegion would go stale.
 
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
@@ -49,8 +42,7 @@ export class LoftTool {
     this.onDone = onDone;
     this.previewId = this.store.nextId();
     this.viewport.suspendPicking = true;
-    // seed from any profiles already selected in the model view, in the order
-    // the selection reports them (so "pick both, then Loft" works too)
+    // Seed from profiles already selected, in selection order, so "pick both, then Loft" works too.
     this.profiles = this.overlay.selectedRegions().map((wr) => this.toProfile(wr));
     const el = this.viewport.domElement;
     el.addEventListener("pointermove", this.boundMove);
@@ -78,17 +70,22 @@ export class LoftTool {
     e.preventDefault();
     const prof = this.toProfile(r);
     const i = this.profiles.findIndex((p) => p.key === prof.key);
-    if (i >= 0) this.profiles.splice(i, 1); // click a picked profile again to drop it
+    if (i >= 0)
+      this.profiles.splice(i, 1); // click a picked profile again to drop it
     else this.profiles.push(prof);
     this.refresh();
   }
 
   private onKey(e: KeyboardEvent) {
-    if (e.key === "Escape") { e.preventDefault(); this.cancel(); }
-    else if (e.key === "Enter") { e.preventDefault(); this.commit(); }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      this.cancel();
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      this.commit();
+    }
   }
 
-  /** re-highlight the picked profiles and refresh the live preview */
   private refresh() {
     this.overlay.selectRegionsByPoints(this.profiles.map((p) => p.region));
     const n = this.profiles.length;
@@ -153,7 +150,10 @@ export class LoftTool {
       if (!ray.intersectPlane(wr.plane.plane, this.hitScratch)) continue;
       if (!pointInRegion(wr.plane.to2D(this.hitScratch), wr.region)) continue;
       const d = ray.origin.distanceToSquared(this.hitScratch);
-      if (d < bestDist) { bestDist = d; best = wr; }
+      if (d < bestDist) {
+        bestDist = d;
+        best = wr;
+      }
     }
     return best;
   }

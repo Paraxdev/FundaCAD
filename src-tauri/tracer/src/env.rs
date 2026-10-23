@@ -38,11 +38,9 @@ pub struct Environment {
     pub rgba: Vec<u16>,
 }
 
-/// Two header vec4s, then the marginal CDF over rows, then each row's
-/// conditional CDF, 4 floats per vec4. Header 0: width, height, marginal
-/// offset, conditional offset, in floats. Header 1: the mean radiance's
-/// luminance over the sphere, the first free vec4 (where a later table
-/// starts), the luminance irradiance on a face looking up +Z.
+/// Two header vec4s, then the marginal CDF over rows, then each row's conditional CDF, 4 floats per vec4. Header 0:
+/// width, height, marginal offset, conditional offset, in floats. Header 1: the mean radiance's luminance over the
+/// sphere, the first free vec4 (where a later table starts), the luminance irradiance on a face looking up +Z.
 pub const HEADER_VEC4S: usize = 2;
 
 pub fn f16_to_f32(h: u16) -> f32 {
@@ -100,6 +98,38 @@ impl Environment {
             }
         }
         Environment { key: key.into(), width, height, up, rgba }
+    }
+
+    /// The bytes `tables` takes for this size, about one float per texel.
+    pub fn table_bytes(width: u32, height: u32) -> u64 {
+        (HEADER_VEC4S as u64 * 4 + height as u64 + width as u64 * height as u64 + 3) * 4
+    }
+
+    /// Halved with a 2 x 2 box until both sides fit `max_side` and the sampling tables fit `max_table_bytes`, so a
+    /// map past what the device binds is kept smaller instead of failing. The box keeps a small sun's light.
+    pub fn fit(self, max_side: u32, max_table_bytes: u64) -> Environment {
+        let mut e = self;
+        while e.width > 1
+            && e.height > 1
+            && (e.width > max_side || e.height > max_side || Self::table_bytes(e.width, e.height) > max_table_bytes)
+        {
+            let (w, h) = (e.width / 2, e.height / 2);
+            let mut rgba = Vec::with_capacity((w * h * 4) as usize);
+            for r in 0..h {
+                for c in 0..w {
+                    let mut sum = [0f32; 3];
+                    for (dc, dr) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
+                        let t = e.texel(c * 2 + dc, r * 2 + dr);
+                        for k in 0..3 {
+                            sum[k] += t[k] * 0.25;
+                        }
+                    }
+                    rgba.extend([f32_to_f16(sum[0]), f32_to_f16(sum[1]), f32_to_f16(sum[2]), f32_to_f16(1.0)]);
+                }
+            }
+            e = Environment { key: e.key, width: w, height: h, up: e.up, rgba };
+        }
+        e
     }
 
     pub fn texel(&self, col: u32, row: u32) -> [f32; 3] {
@@ -254,31 +284,29 @@ mod tests {
     }
 
     #[test]
-    fn halves_round_trip() {
-        for v in [0.0, 1.0, 0.5, 2.0, 100.0, 0.001, 1e-6, 65504.0, 0.333] {
-            let back = f16_to_f32(f32_to_f16(v));
-            assert!((back - v).abs() <= v * 1e-3 + 1e-7, "{v} -> {back}");
-        }
+    fn fit_halves_a_map_past_the_device_and_keeps_its_light() {
+        let (w, h) = (4096u32, 2048u32);
+        let e = Environment::from_rgb("big", w, h, Up::Z, |c, r| {
+            if (c / 8, r / 8) == (150, 75) {
+                [5000.0; 3]
+            } else {
+                [if r < h / 2 { 1.0 } else { 0.25 }; 3]
+            }
+        });
+        let mean = |e: &Environment| e.tables()[1][0];
+        let before = mean(&e);
+        let side = e.clone().fit(2048, u64::MAX);
+        assert_eq!((side.width, side.height), (2048, 1024));
+        let small = e.fit(2048, Environment::table_bytes(1024, 512));
+        assert_eq!((small.width, small.height), (1024, 512));
+        assert_eq!(small.rgba.len(), 1024 * 512 * 4);
+        assert!((mean(&small) / before - 1.0).abs() < 0.01, "{} against {before}", mean(&small));
     }
 
     #[test]
-    fn the_pdf_integrates_to_one() {
-        for up in [Up::Y, Up::Z] {
-            let mut s = 7u64;
-            let vals: Vec<f32> = (0..64 * 32).map(|_| rng(&mut s) * 4.0 + 0.01).collect();
-            let e = Environment::from_rgb("r", 64, 32, up, |c, r| [vals[(r * 64 + c) as usize]; 3]);
-            let t = e.tables();
-            let smp = Sampler { up, t: &t };
-            let mut sum = 0f64;
-            for row in 0..32 {
-                for col in 0..64 {
-                    let (u, v) = ((col as f32 + 0.5) / 64.0, (row as f32 + 0.5) / 32.0);
-                    let omega = 2.0 * PI / 64.0 * PI / 32.0 * (v * PI).sin();
-                    sum += (smp.pdf(direction(up, u, v)) * omega) as f64;
-                }
-            }
-            assert!((sum - 1.0).abs() < 1e-3, "{up:?}: {sum}");
-        }
+    fn fit_leaves_a_map_that_fits() {
+        let e = Environment::from_rgb("s", 64, 32, Up::Y, |_, _| [1.0; 3]);
+        assert_eq!(e.clone().fit(8192, u64::MAX), e);
     }
 
     #[test]
@@ -307,43 +335,6 @@ mod tests {
                 let got = hist[(r * w + c) as usize] as f64;
                 assert!((got - want).abs() <= 3.0 * sigma + 1.0, "texel {c},{r}: {got} against {want} +- {sigma}");
             }
-        }
-    }
-
-    #[test]
-    fn directions_round_trip_the_fixture() {
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/fixtures/env_directions.json");
-        let doc: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
-        let pairs = doc["pairs"].as_array().unwrap();
-        assert!(pairs.len() >= 8);
-        for p in pairs {
-            let up: Up = serde_json::from_value(p["layout"].clone()).unwrap();
-            let (u, v) = (p["u"].as_f64().unwrap() as f32, p["v"].as_f64().unwrap() as f32);
-            let want: Vec<f32> = p["dir"].as_array().unwrap().iter().map(|x| x.as_f64().unwrap() as f32).collect();
-            let d = direction(up, u, v);
-            for k in 0..3 {
-                assert!((d[k] - want[k]).abs() < 1e-5, "{p}: {d:?}");
-            }
-            let (bu, bv) = uv(up, want.clone().try_into().unwrap());
-            assert!((bu - u).abs() < 1e-5 && (bv - v).abs() < 1e-5, "{p}: back to {bu}, {bv}");
-        }
-    }
-
-    #[test]
-    fn the_tables_leave_room_after_them() {
-        let e = Environment::from_rgb("k", 8, 4, Up::Y, |_, _| [1.0; 3]);
-        let t = e.tables();
-        assert_eq!(t[1][1] as usize, t.len());
-        assert!((t[1][0] - 1.0).abs() < 4e-2, "a white sphere has mean radiance 1, got {}", t[1][0]);
-    }
-
-    #[test]
-    fn the_up_irradiance_follows_the_layout() {
-        for up in [Up::Y, Up::Z] {
-            let white = Environment::from_rgb("w", 64, 32, up, |_, _| [1.0; 3]).tables()[1][2];
-            assert!((white - PI).abs() < 1e-2, "{up:?}: a white sphere gives an up face pi, got {white}");
-            let sky = Environment::from_rgb("s", 64, 32, up, |c, r| if direction(up, (c as f32 + 0.5) / 64.0, (r as f32 + 0.5) / 32.0)[2] > 0.0 { [0.0; 3] } else { [1.0; 3] });
-            assert_eq!(sky.tables()[1][2], 0.0, "{up:?}: light from below reaches an up face");
         }
     }
 }

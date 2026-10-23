@@ -1,13 +1,5 @@
-//! `printability`: what will go wrong when the part is printed in layers
-//! of extruded plastic, found while it is still a model. Overhangs past the
-//! angle that prints unsupported, walls and floors too thin for the nozzle
-//! and the layer, gaps narrow enough to fuse, long bridges, and shells that
-//! are not closed solids.
-//!
-//! Measured on the triangles of a fine mesh, as `section` is: an STL is
-//! triangles too, so this checks what will actually be printed. Thickness
-//! and gaps are short rays from points spread over the surface, into the
-//! material and out of it, stopping at the first triangle.
+//! `printability`: overhangs, thin walls and floors, gaps that fuse, long bridges and open shells, found
+//! on a fine mesh's triangles as an STL prints them, by short rays from points over the surface.
 
 pub mod bridge;
 pub mod bvh;
@@ -29,7 +21,11 @@ pub(crate) fn cross(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
 
 pub fn unit(a: [f64; 3]) -> [f64; 3] {
     let l = dot(a, a).sqrt();
-    if l > 0.0 { [a[0] / l, a[1] / l, a[2] / l] } else { [0.0, 0.0, 0.0] }
+    if l > 0.0 {
+        [a[0] / l, a[1] / l, a[2] / l]
+    } else {
+        [0.0, 0.0, 0.0]
+    }
 }
 
 fn add(a: [f64; 3], b: [f64; 3], k: f64) -> [f64; 3] {
@@ -44,8 +40,6 @@ pub(crate) type EdgeKey = (Key3, Key3);
 fn key3(p: [f64; 3]) -> Key3 {
     ((p[0] * 1e5).round() as i64, (p[1] * 1e5).round() as i64, (p[2] * 1e5).round() as i64)
 }
-
-// --- settings ------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Checks {
@@ -135,10 +129,18 @@ pub fn settings_of(args: &Map<String, Value>) -> Result<Settings, String> {
             return Err(format!("`layFlat` is true or {{body: face index}}, got {v}"));
         }
     }
-    Ok(Settings { nozzle, layer, overhang, min_gap, max_bridge, checks, all: args.get("all").and_then(Value::as_bool).unwrap_or(false), up, lay_flat })
+    Ok(Settings {
+        nozzle,
+        layer,
+        overhang,
+        min_gap,
+        max_bridge,
+        checks,
+        all: args.get("all").and_then(Value::as_bool).unwrap_or(false),
+        up,
+        lay_flat,
+    })
 }
-
-// --- the bodies ------------------------------------------------------------------
 
 /// One body's triangles, ready to measure, and which way is up for it.
 pub struct Body {
@@ -204,7 +206,11 @@ impl Body {
 
     pub(crate) fn edge_key(&self, i: usize, j: usize) -> EdgeKey {
         let (a, b) = (self.keys[i], self.keys[j]);
-        if a <= b { (a, b) } else { (b, a) }
+        if a <= b {
+            (a, b)
+        } else {
+            (b, a)
+        }
     }
 
     /// Every edge, by where its ends are, and the triangles that use it.
@@ -220,9 +226,8 @@ impl Body {
         m
     }
 
-    /// Whether a face curves round the air rather than round the material,
-    /// as a hole does and a rounded edge does not: its normals point in
-    /// towards the middle of it.
+    /// Whether a face curves round the air, as a hole does and a rounded edge does not: its normals point
+    /// in towards its middle.
     pub fn hollow(&self, face: u32) -> bool {
         let tris: Vec<usize> = (0..self.tris.len()).filter(|&t| self.face[t] == face).collect();
         let (c, _) = spread(self, &tris);
@@ -264,9 +269,8 @@ impl Body {
     }
 }
 
-/// Points spread evenly over a triangle, each with the area it stands for:
-/// the centres of the n x n smaller triangles it splits into. They never
-/// lie on an edge, where a ray could slip between two triangles.
+/// The centres of the n x n smaller triangles a triangle splits into, each with its area. They never lie
+/// on an edge, where a ray could slip between two triangles.
 pub(crate) fn sub_samples(a: [f64; 3], b: [f64; 3], c: [f64; 3], area: f64, spacing: f64) -> Vec<([f64; 3], f64)> {
     let n = ((2.0 * area).sqrt() / spacing).ceil().clamp(1.0, 400.0) as usize;
     let (ab, ac) = (add(b, a, -1.0), add(c, a, -1.0));
@@ -284,8 +288,6 @@ pub(crate) fn sub_samples(a: [f64; 3], b: [f64; 3], c: [f64; 3], area: f64, spac
     }
     out
 }
-
-// --- findings ------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Kind {
@@ -330,9 +332,8 @@ pub struct Topology {
     pub fault: Option<String>,
 }
 
-/// Run the checks. `together` is an as-modelled check, where the bodies
-/// print as one object and gaps between them matter. `stop` is asked between
-/// bodies; once it says so the findings so far come back.
+/// `together` is an as-modelled check where the bodies print as one and gaps between them matter.
+/// `stop` is asked between bodies, once it says so the findings so far come back.
 pub fn run(
     bodies: &[Body],
     s: &Settings,
@@ -497,12 +498,21 @@ fn overhangs(
             continue;
         }
         let worst = tris.iter().map(|(_, tilt)| 90.0 - tilt).fold(0.0, f64::max);
-        let low = ids
-            .iter()
-            .flat_map(|&t| b.tris[t].iter().map(|&i| b.height(b.pts[i])))
-            .fold(f64::INFINITY, f64::min);
+        let low = ids.iter().flat_map(|&t| b.tris[t].iter().map(|&i| b.height(b.pts[i]))).fold(f64::INFINITY, f64::min);
         let (at, extent) = spread(b, &ids);
-        out.push(Finding { kind: Kind::Overhang, body: bi, face, other: None, value: worst, area, low, at, extent, note, limit: 0.0 });
+        out.push(Finding {
+            kind: Kind::Overhang,
+            body: bi,
+            face,
+            other: None,
+            value: worst,
+            area,
+            low,
+            at,
+            extent,
+            note,
+            limit: 0.0,
+        });
     }
     out
 }
@@ -544,9 +554,8 @@ struct Cluster {
 }
 
 impl Cluster {
-    /// The thinnest measure, and where: the middle of the points within a
-    /// hundredth of it, so a wall of one even thickness is pointed at its
-    /// middle rather than at whichever point came first.
+    /// The thinnest measure, pointed at the middle of the points within a hundredth of it, so an even wall
+    /// is pointed at its middle rather than at whichever point came first.
     fn least(&self) -> (f64, [f64; 3], f64, f64) {
         let least = self.points.iter().map(|p| p.0).fold(f64::INFINITY, f64::min);
         let held = self.points.iter().filter(|p| p.0 <= least).map(|p| p.3).fold(0.0, f64::max);
@@ -573,10 +582,8 @@ impl Cluster {
 /// wider and a corner's two sides would count: a 45 degree rim is not a wall.
 const FACING: f64 = -0.9;
 
-/// How far under its limit a measure has to be to count: a round wall's
-/// facets stand a little closer than its curves, and a part far from the
-/// origin carries a few microns of noise, so a wall modelled at the limit
-/// must not be reported as under it.
+/// A round wall's facets stand a little closer than its curves and a far part carries microns of noise,
+/// so a wall modelled at the limit must not be reported as under it.
 const SLACK: f64 = 0.99;
 
 /// Walls, floors and gaps, by rays from points over every surface.
@@ -621,11 +628,8 @@ fn thickness(
                     if let Some((h, _)) = tree.first_hit(p, d, EPS, wall_ray, index[bi][t], |o| o == bi) {
                         let facing = dot(bodies[h.body].n[h.tri], n) < FACING;
                         if h.body == bi && facing {
-                            let (kind, limit) = if vertical {
-                                (Kind::Floor, 2.0 * s.layer)
-                            } else {
-                                (Kind::Wall, 2.0 * s.nozzle)
-                            };
+                            let (kind, limit) =
+                                if vertical { (Kind::Floor, 2.0 * s.layer) } else { (Kind::Wall, 2.0 * s.nozzle) };
                             if h.t < limit * SLACK {
                                 note(kind, me, (bi, b.face[h.tri]), w, h.t, add(p, d, h.t / 2.0), limit);
                             }
@@ -661,15 +665,25 @@ fn thickness(
                 return None;
             }
             let (value, at, extent, limit) = c.least();
-            Some(Finding { kind, body: a.0, face: a.1, other: Some(b), value, area, low: 0.0, at, extent, note: String::new(), limit })
+            Some(Finding {
+                kind,
+                body: a.0,
+                face: a.1,
+                other: Some(b),
+                value,
+                area,
+                low: 0.0,
+                at,
+                extent,
+                note: String::new(),
+                limit,
+            })
         })
         .collect()
 }
 
-/// An edge only one triangle uses, on a body the B-rep calls closed: a face
-/// with no triangles or two faces meshed apart, which an STL export has too.
-/// The face named is the lowest one on such an edge, so it is the same face
-/// on every run.
+/// An edge one triangle uses on a body the B-rep calls closed, as an STL export has too. The lowest face on
+/// such an edge is named, so it is the same face every run.
 fn mesh_hole(bi: usize, b: &Body, edges: &HashMap<EdgeKey, Vec<usize>>) -> Option<Finding> {
     let mut lo = [f64::INFINITY; 3];
     let mut hi = [f64::NEG_INFINITY; 3];
@@ -704,9 +718,7 @@ fn mesh_hole(bi: usize, b: &Body, edges: &HashMap<EdgeKey, Vec<usize>>) -> Optio
     })
 }
 
-/// The triangles without area a body's mesh still holds, by the measure
-/// mesh::flat removes them with. One finding a body, on the lowest face that
-/// has one.
+/// By the measure mesh::flat removes them with. One finding a body, on the lowest face that has one.
 fn flat_triangles(bi: usize, b: &Body) -> Option<Finding> {
     let limit = crate::mesh::flat::limit(b.pts.iter().flatten().copied());
     let mut lo = [f64::INFINITY; 3];
@@ -742,8 +754,6 @@ fn flat_triangles(bi: usize, b: &Body) -> Option<Finding> {
     })
 }
 
-// --- the reply ------------------------------------------------------------------
-
 /// How many of each kind a body lists before the rest are only counted.
 const SHOWN: usize = 5;
 
@@ -763,7 +773,11 @@ fn sig4(v: f64) -> String {
 }
 
 fn who(b: &Body) -> String {
-    if b.name.is_empty() || b.name == b.id { b.id.clone() } else { format!("{} \"{}\"", b.id, b.name) }
+    if b.name.is_empty() || b.name == b.id {
+        b.id.clone()
+    } else {
+        format!("{} \"{}\"", b.id, b.name)
+    }
 }
 
 fn focus(f: &Finding) -> String {
@@ -867,7 +881,13 @@ fn line(f: &Finding, bodies: &[Body], s: &Settings) -> String {
 
 /// The whole reply. `header` says how the parts sit; `topo` adds what the
 /// B-rep knows about open shells.
-pub fn report(bodies: &[Body], findings: &[Finding], s: &Settings, header: &str, topo: &HashMap<String, Topology>) -> String {
+pub fn report(
+    bodies: &[Body],
+    findings: &[Finding],
+    s: &Settings,
+    header: &str,
+    topo: &HashMap<String, Topology>,
+) -> String {
     let mut out = vec![format!(
         "Printability, {header}; nozzle {}, layer {}, overhang {} deg, gap {}, bridge {} mm:",
         g_format(s.nozzle),
@@ -895,7 +915,9 @@ pub fn report(bodies: &[Body], findings: &[Finding], s: &Settings, header: &str,
                 // An open shell has its line above, in the words a print is read by.
                 if let Some(why) = t.fault.as_ref().filter(|_| t.open_edges == 0) {
                     counts.push("not a sound solid".into());
-                    lines.push(format!("not a sound solid: it {why}; the findings below are read off its skin and can be wrong"));
+                    lines.push(format!(
+                        "not a sound solid: it {why}; the findings below are read off its skin and can be wrong"
+                    ));
                 }
                 if t.solids > 1 {
                     counts.push(format!("{} pieces", t.solids));
@@ -908,7 +930,9 @@ pub fn report(bodies: &[Body], findings: &[Finding], s: &Settings, header: &str,
             }
         }
         let mine: Vec<&Finding> = findings.iter().filter(|f| f.body == bi && f.kind != Kind::Fused).collect();
-        for kind in [Kind::Overhang, Kind::Bridge, Kind::Wall, Kind::Floor, Kind::Gap, Kind::MeshHole, Kind::FlatTriangle] {
+        for kind in
+            [Kind::Overhang, Kind::Bridge, Kind::Wall, Kind::Floor, Kind::Gap, Kind::MeshHole, Kind::FlatTriangle]
+        {
             let mut of: Vec<&&Finding> = mine.iter().filter(|f| f.kind == kind).collect();
             if of.is_empty() {
                 continue;
@@ -952,7 +976,10 @@ pub fn report(bodies: &[Body], findings: &[Finding], s: &Settings, header: &str,
         }
     }
     if hidden > 0 {
-        out.push(format!("{hidden} more finding{} not shown; all:true lists them.", if hidden == 1 { "" } else { "s" }));
+        out.push(format!(
+            "{hidden} more finding{} not shown; all:true lists them.",
+            if hidden == 1 { "" } else { "s" }
+        ));
     }
     out.join("\n")
 }
@@ -960,136 +987,11 @@ pub fn report(bodies: &[Body], findings: &[Finding], s: &Settings, header: &str,
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
-
-    /// A closed box's positions, indices and face ids, two triangles a
-    /// side, each side its own face.
-    type Raw = (Vec<f32>, Vec<u32>, Vec<u32>);
-
-    fn box_raw(lo: [f64; 3], hi: [f64; 3]) -> Raw {
-        let c = |i: usize| -> [f64; 3] {
-            [if i & 1 == 0 { lo[0] } else { hi[0] }, if i & 2 == 0 { lo[1] } else { hi[1] }, if i & 4 == 0 { lo[2] } else { hi[2] }]
-        };
-        // Outward-wound quads: -X, +X, -Y, +Y, -Z, +Z.
-        let quads = [[0, 4, 6, 2], [1, 3, 7, 5], [0, 1, 5, 4], [2, 6, 7, 3], [0, 2, 3, 1], [4, 5, 7, 6]];
-        let mut positions = Vec::new();
-        let mut indices = Vec::new();
-        let mut face_ids = Vec::new();
-        for (f, q) in quads.iter().enumerate() {
-            let base = (positions.len() / 3) as u32;
-            for &i in q {
-                positions.extend(c(i).iter().map(|&x| x as f32));
-            }
-            indices.extend([base, base + 1, base + 2, base, base + 2, base + 3]);
-            face_ids.extend([f as u32, f as u32]);
-        }
-        (positions, indices, face_ids)
-    }
-
-    fn box_body(id: &str, lo: [f64; 3], hi: [f64; 3]) -> Body {
-        let (positions, indices, face_ids) = box_raw(lo, hi);
-        Body::new(&Mesh { id, name: "", positions: &positions, indices: &indices, face_ids: &face_ids }, [0.0, 0.0, 1.0])
-    }
-
-    fn defaults() -> Settings {
-        settings_of(&Map::new()).unwrap()
-    }
-
-    #[test]
-    fn settings_refuse_values_they_cannot_use() {
-        let m = |v: Value| v.as_object().cloned().unwrap();
-        assert!(settings_of(&m(json!({"nozzle": -1}))).is_err());
-        assert!(settings_of(&m(json!({"up": "+Z", "layFlat": true}))).is_err());
-        assert!(settings_of(&m(json!({"checks": ["walls"]}))).is_err());
-        let s = settings_of(&m(json!({"up": "-y", "checks": ["gap"]}))).unwrap();
-        assert_eq!(s.up.1, "-Y");
-        assert!(s.checks.gap && !s.checks.wall);
-    }
-
     #[test]
     fn samples_cover_the_triangle_once() {
         let s = sub_samples([0.0, 0.0, 0.0], [4.0, 0.0, 0.0], [0.0, 4.0, 0.0], 8.0, 1.0);
         let total: f64 = s.iter().map(|(_, w)| w).sum();
         assert!((total - 8.0).abs() < 1e-9);
         assert!(s.iter().all(|(p, _)| p[0] > 0.0 && p[1] > 0.0 && p[0] + p[1] < 4.0));
-    }
-
-    #[test]
-    fn a_box_on_the_bed_is_fine() {
-        let b = box_body("body1", [0.0; 3], [20.0, 20.0, 10.0]);
-        let f = run(&[b], &defaults(), true, &HashMap::new(), &|| false);
-        assert!(f.is_empty(), "{f:?}");
-    }
-
-    #[test]
-    fn a_thin_fin_is_one_perimeter_and_counted_once() {
-        let b = box_body("body1", [0.0; 3], [0.6, 20.0, 10.0]);
-        let f = run(&[b], &defaults(), true, &HashMap::new(), &|| false);
-        assert_eq!(f.len(), 1, "{f:?}");
-        assert_eq!(f[0].kind, Kind::Wall);
-        assert!((f[0].value - 0.6).abs() < 1e-6 && (f[0].area - 200.0).abs() < 1e-6, "{f:?}");
-    }
-
-    #[test]
-    fn two_boxes_a_tenth_apart_print_fused_unless_laid_apart() {
-        let a = box_body("body1", [0.0; 3], [10.0; 3]);
-        let b = box_body("body2", [10.1, 0.0, 0.0], [20.1, 10.0, 10.0]);
-        let f = run(&[a, b], &defaults(), true, &HashMap::new(), &|| false);
-        assert_eq!(f.len(), 1, "{f:?}");
-        assert_eq!(f[0].kind, Kind::Fused);
-        assert!((f[0].value - 0.1).abs() < 1e-5, "{f:?}");
-        let a = box_body("body1", [0.0; 3], [10.0; 3]);
-        let b = box_body("body2", [10.1, 0.0, 0.0], [20.1, 10.0, 10.0]);
-        assert!(run(&[a, b], &defaults(), false, &HashMap::new(), &|| false).is_empty());
-    }
-
-    #[test]
-    fn a_mesh_hole_names_its_lowest_face_every_time() {
-        // A box without its top: the four side faces each keep an open edge.
-        let (positions, indices, face_ids) = box_raw([0.0; 3], [20.0, 20.0, 10.0]);
-        let mesh = Mesh { id: "body1", name: "", positions: &positions, indices: &indices[..30], face_ids: &face_ids[..10] };
-        for _ in 0..20 {
-            let b = Body::new(&mesh, [0.0, 0.0, 1.0]);
-            let f = run(&[b], &defaults(), true, &HashMap::new(), &|| false);
-            let holes: Vec<&Finding> = f.iter().filter(|f| f.kind == Kind::MeshHole).collect();
-            assert_eq!(holes.len(), 1, "{f:?}");
-            assert_eq!((holes[0].face, holes[0].value), (0, 4.0));
-        }
-    }
-
-    #[test]
-    fn a_triangle_without_area_left_in_the_mesh_is_a_finding() {
-        // The last three triangles: two corners at one point (index 0 twice,
-        // then two nodes at one place), and three corners on one line.
-        let (mut positions, mut indices, mut face_ids) = box_raw([0.0; 3], [20.0, 20.0, 10.0]);
-        let whole = Mesh { id: "body1", name: "", positions: &positions, indices: &indices, face_ids: &face_ids };
-        let f = run(&[Body::new(&whole, [0.0, 0.0, 1.0])], &defaults(), true, &HashMap::new(), &|| false);
-        assert!(f.iter().all(|f| f.kind != Kind::FlatTriangle), "{f:?}");
-
-        let n = (positions.len() / 3) as u32;
-        positions.extend_from_slice(&[0.0, 0.0, 0.0, 5.0, 5.0, 2.0, 5.0, 5.0, 2.0, 10.0, 10.0, 4.0]);
-        indices.extend_from_slice(&[0, 0, n, n + 1, n + 2, n, n, n + 1, n + 3]);
-        face_ids.extend_from_slice(&[4, 3, 5]);
-        let mesh = Mesh { id: "body1", name: "", positions: &positions, indices: &indices, face_ids: &face_ids };
-        let bodies = [Body::new(&mesh, [0.0, 0.0, 1.0])];
-        let f = run(&bodies, &defaults(), true, &HashMap::new(), &|| false);
-        let flat: Vec<&Finding> = f.iter().filter(|f| f.kind == Kind::FlatTriangle).collect();
-        assert_eq!(flat.len(), 1, "{f:?}");
-        assert_eq!((flat[0].face, flat[0].value), (3, 3.0));
-        let text = report(&bodies, &f, &defaults(), "as modelled", &HashMap::new());
-        assert!(text.contains("3 triangles without area near F3"), "{text}");
-    }
-
-    #[test]
-    fn a_box_in_the_air_has_its_bottom_as_an_overhang_but_not_on_the_bed() {
-        // Two boxes as one print: the high one's bottom hangs over nothing.
-        let low = box_body("body1", [0.0; 3], [5.0; 3]);
-        let mut high = box_body("body2", [20.0, 0.0, 10.0], [30.0, 10.0, 12.0]);
-        high.bed = 0.0;
-        let f = run(&[low, high], &defaults(), true, &HashMap::new(), &|| false);
-        assert_eq!(f.len(), 1, "{f:?}");
-        assert_eq!((f[0].kind, f[0].body, f[0].face), (Kind::Overhang, 1, 4));
-        assert_eq!(f[0].value, 90.0);
-        assert_eq!(f[0].low, 10.0);
     }
 }

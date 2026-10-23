@@ -1,10 +1,8 @@
-// 3-point arc math (start, end, and a point the arc passes through). Shared by
-// rendering (overlay), region tessellation, snapping, and dimensions. The
-// engine builds the authoritative B-rep arc edge from the same three points.
+// 3-point arc math (start, end, through point) shared by overlay, regions, snapping and dimensions.
+// The engine builds the B-rep arc edge from the same three points.
 
 import * as THREE from "three";
 
-/** circumcenter of three 2D points, or null if they're collinear */
 export function circumcenter(
   a: { x: number; y: number },
   b: { x: number; y: number },
@@ -20,32 +18,25 @@ export function circumcenter(
   return new THREE.Vector2(ux, uy);
 }
 
-export function arcRadius(
-  start: THREE.Vector2,
-  end: THREE.Vector2,
-  through: THREE.Vector2,
-): number {
+export function arcRadius(start: THREE.Vector2, end: THREE.Vector2, through: THREE.Vector2): number {
   const c = circumcenter(start, end, through);
   return c ? c.distanceTo(start) : 0;
 }
 
-/** center + radius of a 3-point arc entity (start/end + through-point), or null
- *  if the three points are collinear. One place for the reconstruction every
- *  arc consumer (dimensions, modify tools, fix) otherwise re-inlines. */
-export function arcCenterRadius(
-  e: { x1: number; y1: number; x2: number; y2: number; mx: number; my: number },
-): { c: THREE.Vector2; r: number } | null {
+export function arcCenterRadius(e: {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  mx: number;
+  my: number;
+}): { c: THREE.Vector2; r: number } | null {
   const c = circumcenter({ x: e.x1, y: e.y1 }, { x: e.x2, y: e.y2 }, { x: e.mx, y: e.my });
   return c ? { c, r: Math.hypot(e.x1 - c.x, e.y1 - c.y) } : null;
 }
 
-/** sample the arc start → through → end as a polyline of n+1 points */
-export function arcPolyline(
-  start: THREE.Vector2,
-  end: THREE.Vector2,
-  through: THREE.Vector2,
-  n = 48,
-): THREE.Vector2[] {
+/** n+1 points from start through `through` to end. */
+export function arcPolyline(start: THREE.Vector2, end: THREE.Vector2, through: THREE.Vector2, n = 48): THREE.Vector2[] {
   const c = circumcenter(start, end, through);
   if (!c) return [start.clone(), end.clone()]; // collinear → straight
   const r = c.distanceTo(start);

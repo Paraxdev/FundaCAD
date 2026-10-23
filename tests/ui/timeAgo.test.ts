@@ -18,7 +18,9 @@ describe("ago", () => {
 
   it("gives the date for anything older", () => {
     const t = NOW - 30 * 24 * 60 * MIN;
-    expect(ago(t, NOW)).toBe(new Date(t).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }));
+    expect(ago(t, NOW)).toBe(
+      new Date(t).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }),
+    );
     expect(ago(t, NOW)).not.toMatch(/^\d+\/\d+\/\d+$/);
   });
 

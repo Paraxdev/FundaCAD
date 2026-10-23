@@ -85,9 +85,16 @@ fn place(id: &str, at: [f32; 3], mat: PageMaterial) -> BodyDesc {
 /// The golden scene at 96x64, committed. The sample cap is the caller's.
 pub fn build_golden(t: &mut Tracer) {
     t.resize(W, H);
-    t.set_camera(Camera { eye: [4.0, -6.0, 3.0], target: [0.0, 0.0, 0.8], up: [0.0, 0.0, 1.0], fov: 40.0, ..Default::default() });
+    t.set_camera(Camera {
+        eye: [4.0, -6.0, 3.0],
+        target: [0.0, 0.0, 0.8],
+        up: [0.0, 0.0, 1.0],
+        fov: 40.0,
+        ..Default::default()
+    });
     t.set_look(Look { sun_dir: [0.4, -0.3, 1.0], sun_color: [2.0; 3], ..Look::default() });
-    let bodies = vec![place("ball", [0.0, 0.0, 1.0], matte([0.8, 0.3, 0.2])), place("floor", [0.0; 3], matte([0.7; 3]))];
+    let bodies =
+        vec![place("ball", [0.0, 0.0, 1.0], matte([0.8, 0.3, 0.2])), place("floor", [0.0; 3], matte([0.7; 3]))];
     for key in t.set_bodies(bodies) {
         t.add_mesh(&key, if key.starts_with("floor") { floor(20.0) } else { sphere(1.0, 48, 24) });
     }
@@ -105,7 +112,10 @@ impl Reference {
         let mut buf = vec![0; r.output_buffer_size()];
         let info = r.next_frame(&mut buf).expect("the committed reference decodes");
         assert_eq!((info.width, info.height, info.bit_depth), (W, H, png::BitDepth::Sixteen));
-        let rgb = buf[..info.buffer_size()].chunks_exact(2).map(|b| u16::from_be_bytes([b[0], b[1]]) as f32 / 257.0).collect();
+        let rgb = buf[..info.buffer_size()]
+            .chunks_exact(2)
+            .map(|b| u16::from_be_bytes([b[0], b[1]]) as f32 / 257.0)
+            .collect();
         Reference { rgb }
     }
 }
@@ -144,12 +154,11 @@ fn tone(hdr: &[[f32; 3]]) -> Vec<f32> {
     hdr.iter().flat_map(|c| display16(*c)).map(|v| v as f32 / 257.0).collect()
 }
 
-/// `picture` is the resolved RGBA8 of all samples, `first` and `all` the mean
-/// of the first half and of every sample, linear. The second half's mean is
-/// what is left of `all`, and the two halves differ by twice the noise of
-/// `all`.
+/// `picture` is the resolved RGBA8 of all samples, `first` and `all` linear means of the first half and of every
+/// sample. The second half is what is left of `all`, and the two halves differ by twice the noise of `all`.
 fn judge(picture: &[u8], first: &[[f32; 3]], all: &[[f32; 3]], reference: &Reference) -> (f64, f64) {
-    let second: Vec<[f32; 3]> = first.iter().zip(all).map(|(a, m)| [0, 1, 2].map(|k| (2.0 * m[k] - a[k]).max(0.0))).collect();
+    let second: Vec<[f32; 3]> =
+        first.iter().zip(all).map(|(a, m)| [0, 1, 2].map(|k| (2.0 * m[k] - a[k]).max(0.0))).collect();
     let noise = mean_abs(&down(&tone(first)), &down(&tone(&second))) / 2.0;
     let rgb: Vec<f32> = picture.chunks_exact(4).flat_map(|p| [p[0] as f32, p[1] as f32, p[2] as f32]).collect();
     (mean_abs(&down(&rgb), &down(&reference.rgb)), noise)
@@ -162,7 +171,8 @@ impl Tracer {
 
     pub fn self_check_against(&self, reference: &Reference) -> Result<SelfCheck, String> {
         let start = Instant::now();
-        let mut t = Tracer::new(TracerOptions { software: self.path() == Path::Software, ..Default::default() }).map_err(|e| e.to_string())?;
+        let mut t = Tracer::new(TracerOptions { software: self.path() == Path::Software, ..Default::default() })
+            .map_err(|e| e.to_string())?;
         build_golden(&mut t);
         t.set_cap(SPP);
         t.render_samples(SPP / 2);
@@ -175,6 +185,13 @@ impl Tracer {
         }
         let (diff, noise) = judge(&picture, &first, &all, reference);
         let threshold = NOISE_FACTOR * noise + FLOOR;
-        Ok(SelfCheck { diff, threshold, noise, ms: start.elapsed().as_secs_f64() * 1e3, path: t.path(), passed: diff <= threshold })
+        Ok(SelfCheck {
+            diff,
+            threshold,
+            noise,
+            ms: start.elapsed().as_secs_f64() * 1e3,
+            path: t.path(),
+            passed: diff <= threshold,
+        })
     }
 }

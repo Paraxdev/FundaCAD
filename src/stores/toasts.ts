@@ -15,7 +15,7 @@ export interface ToastItem {
   leaving: boolean;
 }
 
-/** Cap: oldest is evicted first. Unchanged from the original stack. */
+/** Cap: oldest is evicted first. */
 const MAX = 3;
 /** Must match the .toast-out transition in styles/_utilities.scss. */
 const EXIT_MS = 180;
@@ -30,8 +30,7 @@ export const useToastStore = defineStore("toasts", () => {
     if (!t || t.leaving) return;
     window.clearTimeout(timers.get(id));
     timers.delete(id);
-    // Two-phase removal so the CSS exit transition still runs, exactly as the
-    // imperative version did with classList.add("toast-out") + a 180ms timer.
+    // Two-phase removal so the CSS exit transition still runs.
     t.leaving = true;
     window.setTimeout(() => {
       items.value = items.value.filter((x) => x.id !== id);
@@ -39,16 +38,21 @@ export const useToastStore = defineStore("toasts", () => {
   }
 
   function push(message: string, kind: ToastItem["kind"], action: ToastAction | undefined, timeout: number): number {
-    // The same line again restarts the one already showing rather than stacking
-    // a copy: the stack grows up over the canvas and a copy can take a click.
-    const same = items.value.find((x) => !x.leaving && x.message === message && x.kind === kind && !x.action && !action);
+    // The same line restarts the one showing rather than stacking a copy that could take a click over the canvas.
+    // With the same button it takes the newer action, the command that asked last.
+    const same = items.value.find(
+      (x) => !x.leaving && x.message === message && x.kind === kind && x.action?.label === action?.label,
+    );
     if (same) {
+      if (action) same.action = markRaw(action);
       window.clearTimeout(timers.get(same.id));
-      timers.set(same.id, window.setTimeout(() => dismiss(same.id), timeout));
+      timers.set(
+        same.id,
+        window.setTimeout(() => dismiss(same.id), timeout),
+      );
       return same.id;
     }
     const id = nextId++;
-    // keep the stack short, oldest goes first
     while (items.value.length >= MAX) {
       const oldest = items.value[0];
       if (!oldest) break;
@@ -56,11 +60,12 @@ export const useToastStore = defineStore("toasts", () => {
       timers.delete(oldest.id);
       items.value.shift();
     }
-    // markRaw: `action` carries a closure over raw engine objects (it is how a
-    // failed-feature toast offers "Show" / "Re-pick face"). There is nothing to
-    // gain from proxying it and a real cost if a Feature rides along.
+    // markRaw: `action` closes over raw engine objects, like a failed feature toast's "Show" or "Re-pick face".
     items.value.push({ id, message, kind, ...(action ? { action: markRaw(action) } : {}), leaving: false });
-    timers.set(id, window.setTimeout(() => dismiss(id), timeout));
+    timers.set(
+      id,
+      window.setTimeout(() => dismiss(id), timeout),
+    );
     return id;
   }
 

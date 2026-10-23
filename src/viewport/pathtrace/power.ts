@@ -1,6 +1,4 @@
-// Battery and a minimised window, the two things the page's visibility state
-// does not tell the tracer. Both are best effort: getBattery is missing outside
-// Chromium, and a desktop without a battery reports charging.
+// Best effort: getBattery is missing outside Chromium, and a desktop without a battery reports charging.
 
 export interface PowerState {
   discharging: boolean;
@@ -17,7 +15,8 @@ export function watchPower(cb: (p: PowerState) => void): void {
   const emit = () => cb({ ...st });
   try {
     const nav = globalThis.navigator as Navigator & { getBattery?: () => Promise<BatteryLike> };
-    void nav.getBattery?.()
+    void nav
+      .getBattery?.()
       .then((b) => {
         const read = () => {
           st.discharging = !b.charging;
@@ -27,7 +26,9 @@ export function watchPower(cb: (p: PowerState) => void): void {
         read();
       })
       .catch(() => {});
-  } catch { /* blocked by a permissions policy */ }
+  } catch {
+    /* blocked by a permissions policy */
+  }
   if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) return;
   // WebView2 skips SetIsVisible on a minimise, so visibilityState can stay
   // "visible" while nobody can see the window.

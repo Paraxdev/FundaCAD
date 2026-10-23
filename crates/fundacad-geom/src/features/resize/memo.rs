@@ -1,9 +1,6 @@
-//! What a resize works out about a body and its face that does not depend on
-//! the size asked for, kept for the next call: a drag asks for the same face
-//! of the same body again at every new size. The shapes are held, so a freed
-//! one's address is never read as another's. Keys are shape identities, so a
-//! shape the kernel edited in place would get stale answers: unifying a result
-//! in pieces did that, and `check::one_solid` refuses one before unifying it.
+//! What a resize works out about a body and face independent of the size, kept since a drag asks again at every
+//! size. Shapes are held so a freed address is never read as another's, and keys are shape identities, so a shape
+//! edited in place would get stale answers: `check::one_solid` refuses a result in pieces before unifying it.
 
 use std::cell::{Cell, RefCell};
 
@@ -112,7 +109,8 @@ pub(super) fn whole_surface(face: &Shape, size: f64, make: impl FnOnce(f64) -> O
     // Sizes are kept in steps of a power of two, so a drag reuses the one it made first.
     let step = 2f64.powi(size.max(1.0).log2().ceil() as i32);
     let key = step.to_bits();
-    let hit = SURFACES.with(|m| m.borrow().iter().find(|((f, k), _)| *k == key && f.is_same(face)).map(|e| e.1.clone()));
+    let hit =
+        SURFACES.with(|m| m.borrow().iter().find(|((f, k), _)| *k == key && f.is_same(face)).map(|e| e.1.clone()));
     if hit.is_some() {
         return hit;
     }

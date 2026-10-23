@@ -1,10 +1,4 @@
-// Measure (Inspect): click a face or edge to read its size, or a second one to
-// read the distance between them. While aiming, whatever would be picked lights
-// up under the cursor. Between two picks the tool reports the TRUE SHORTEST
-// distance (min over vertex↔triangle both ways + segment↔segment, exact for
-// planar faces / straight edges at any tessellation), draws a marker line
-// between the closest pair, and lists the closest-approach ΔX/ΔY/ΔZ + angle.
-// Computed from the tessellated model: instant, no rebuild round-trip.
+// Measure (Inspect) reads from the tessellated model, so it is instant with no rebuild round trip.
 
 import * as THREE from "three";
 import type { EdgeRef } from "../viewport/edgeLines";
@@ -19,7 +13,6 @@ type Probe =
   | { kind: "face"; faceId: number; point: THREE.Vector3; dir: THREE.Vector3; area: number }
   | { kind: "edge"; line: EdgeRef; point: THREE.Vector3; dir: THREE.Vector3; length: number };
 
-/** Geometry soup for shortest-distance: triangles (faces only), segments, points. */
 interface Soup {
   tris: THREE.Triangle[];
   segs: [THREE.Vector3, THREE.Vector3][];
@@ -55,8 +48,7 @@ export class MeasureTool {
     setPrompt("Click a face or edge, then a second one · Esc");
   }
 
-  /** Start measuring with the first probe already picked (right-click →
-   *  "Measure from here"): same as start() + one click on `hit`. */
+  /** Right-click "Measure from here": start() plus one click on `hit`. */
   startWith(hit: Hit, onDone?: () => void) {
     if (this.active) return;
     this.start(onDone);
@@ -69,7 +61,6 @@ export class MeasureTool {
   }
 
   private onMove(e: PointerEvent) {
-    // live aiming feedback: light up exactly what a click would pick
     this.viewport.hoverEntity(this.viewport.pickEntity(e.clientX, e.clientY));
   }
 
@@ -103,14 +94,15 @@ export class MeasureTool {
     const pts = raw.map((p) => new THREE.Vector3(p[0], p[1], p[2]));
     let length = 0;
     for (let i = 1; i < pts.length; i++) {
-      const a = pts[i], b = pts[i - 1];
+      const a = pts[i],
+        b = pts[i - 1];
       if (a && b) length += a.distanceTo(b);
     }
-    // the same arc-length midpoint edge selectors use, so the measure readout
-    // and a fillet pick report the same point on the edge
+    // The arc-length midpoint edge selectors use, so the readout and a fillet pick agree on the point.
     const m = polylineMid(raw);
     const mid = m ? new THREE.Vector3(m[0], m[1], m[2]) : undefined;
-    const first = pts[0], last = pts[pts.length - 1];
+    const first = pts[0],
+      last = pts[pts.length - 1];
     if (!mid || !first || !last) return null;
     const dir = last.clone().sub(first).normalize();
     return { kind: "edge", line: hit.edge, point: mid, dir, length };
@@ -127,20 +119,17 @@ export class MeasureTool {
       }
       return { tris, segs, pts };
     }
-    const pts = p.line.points.map(
-      (q) => new THREE.Vector3(q[0], q[1], q[2]),
-    );
+    const pts = p.line.points.map((q) => new THREE.Vector3(q[0], q[1], q[2]));
     const segs: [THREE.Vector3, THREE.Vector3][] = [];
     for (let i = 1; i < pts.length; i++) {
-      const a = pts[i - 1], b = pts[i];
+      const a = pts[i - 1],
+        b = pts[i];
       if (a && b) segs.push([a, b]);
     }
     return { tris: [], segs, pts };
   }
 
-  /** True shortest distance between two probes: min over vertex↔triangle (both
-   *  directions) and segment↔segment. Exact for planar faces and straight
-   *  edges; a fine-tessellation approximation on curved geometry. */
+  /** Exact for planar faces and straight edges, a tessellation approximation on curved geometry. */
   private closestPair(a: Probe, b: Probe): { d: number; pa: THREE.Vector3; pb: THREE.Vector3 } {
     const A = this.soupOf(a);
     const B = this.soupOf(b);
@@ -153,9 +142,7 @@ export class MeasureTool {
           t.closestPointToPoint(p, tmp);
           const d = p.distanceTo(tmp);
           if (d < best.d) {
-            best = flip
-              ? { d, pa: tmp.clone(), pb: p.clone() }
-              : { d, pa: p.clone(), pb: tmp.clone() };
+            best = flip ? { d, pa: tmp.clone(), pb: p.clone() } : { d, pa: p.clone(), pb: tmp.clone() };
           }
         }
       }
@@ -181,9 +168,6 @@ export class MeasureTool {
 
   private update() {
     const [a, b] = this.probes;
-    // The shortest-distance search and the marker it feeds stay here: they are
-    // geometry, and setMeasureMarker is a Three.js write. Only the labelled
-    // lines are handed over, measureRows() is pure, and unit-tested.
     const near = a && b ? this.closestPair(a, b) : null;
     if (near) this.viewport.setMeasureMarker(near.pa, near.pb);
     useToolPanelStore().measure = measureRows(a, b, near);
@@ -209,8 +193,7 @@ export class MeasureTool {
   }
 }
 
-/** Closest points between segments [p1,q1] and [p2,q2] (Ericson, Real-Time
- *  Collision Detection §5.1.9), robust for parallel/degenerate segments. */
+/** Ericson, Real-Time Collision Detection §5.1.9, robust for parallel and degenerate segments. */
 function closestOnSegments(
   p1: THREE.Vector3,
   q1: THREE.Vector3,

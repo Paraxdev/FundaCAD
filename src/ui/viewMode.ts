@@ -1,10 +1,5 @@
-// How the viewport shades the model: Matcap (flat studio clay, the cheapest),
-// Realtime (the full PBR look) or Path traced. One choice per workspace, kept
-// in the render prefs, so modelling can stay on Matcap while Render opens on
-// the real look.
-//
-// No Vue and no Three here, same as workspace.ts: the low power tier comes in
-// as an argument so the headless suite can drive every case.
+// How the viewport shades the model (Matcap, Realtime, Path traced), one choice per workspace in the render prefs.
+// The low power tier comes in as an argument so the headless suite can drive every case.
 
 import { asViewMode, groundKey, renderPrefs, setRenderPref, type Ground, type ViewMode } from "./renderPrefs";
 import { workspace, type Workspace } from "./workspace";
@@ -19,21 +14,21 @@ export const VIEW_MODES: readonly { id: ViewMode; label: string; icon: string }[
   { id: "pathtraced", label: "Path traced", icon: "view-pathtraced" },
 ];
 
-/** The effective render tier: performance or potato mode, or a machine the
- *  viewport detected as weak (`auto`), whether the web view offers a real
- *  WebGPU adapter and whether the app has a native tracer (each undefined
- *  while its probe is still out). */
+/** Performance or potato mode or a weak machine (`auto`), plus WebGPU adapter and native tracer availability, each
+ *  undefined while its probe is out. */
 export interface RenderTier {
   lowPower: boolean;
   auto: boolean;
   webgpu?: boolean | undefined;
-  native?: {
-    available: boolean;
-    path?: "rayquery" | "software" | undefined;
-    /** Why the native tracer refused this computer; absent from an older app. */
-    class?: string | undefined;
-    storageBuffers?: number | undefined;
-  } | undefined;
+  native?:
+    | {
+        available: boolean;
+        path?: "rayquery" | "software" | undefined;
+        /** Why the native tracer refused this computer; absent from an older app. */
+        class?: string | undefined;
+        storageBuffers?: number | undefined;
+      }
+    | undefined;
   /** The tracer hit a second GPU fault this session. */
   traceFault?: boolean;
 }
@@ -45,7 +40,8 @@ export const PATH_TRACING_AUTO =
 export const PATH_TRACING_NO_GPU = "Path tracing needs a GPU tracer, which this system does not have";
 export const PATH_TRACING_NO_ADAPTER = "Path tracing needs a graphics card, and FundaCAD found none on this computer";
 export const PATH_TRACING_CPU = "This computer only offers software graphics, which is too slow to path trace";
-export const PATH_TRACING_SELF_CHECK = "This graphics card drew the path tracer's test scene wrong, so path tracing is off";
+export const PATH_TRACING_SELF_CHECK =
+  "This graphics card drew the path tracer's test scene wrong, so path tracing is off";
 export const pathTracingLimits = (storageBuffers: number): string =>
   `This graphics card binds ${storageBuffers} storage buffers and path tracing needs 12`;
 export const PATH_TRACING_PROBING = "Checking whether this system can path trace";
@@ -72,7 +68,8 @@ export function pathTracedBlock(tier: RenderTier): { reason: PathTracedBlockReas
     return { reason: "perf", tooltip: tier.auto ? `${PATH_TRACING_OFF} ${PATH_TRACING_AUTO}` : PATH_TRACING_OFF };
   }
   if (!tier.webgpu) {
-    if (tier.webgpu === undefined || tier.native === undefined) return { reason: "probing", tooltip: PATH_TRACING_PROBING };
+    if (tier.webgpu === undefined || tier.native === undefined)
+      return { reason: "probing", tooltip: PATH_TRACING_PROBING };
     if (!tier.native.available) return { reason: "nogpu", tooltip: refusalTooltip(tier.native) };
   }
   if (tier.traceFault) return { reason: "fault", tooltip: PATH_TRACING_FAULT };
@@ -81,11 +78,16 @@ export function pathTracedBlock(tier: RenderTier): { reason: PathTracedBlockReas
 
 function refusalTooltip(n: { class?: string | undefined; storageBuffers?: number | undefined }): string {
   switch (n.class) {
-    case "noadapter": return PATH_TRACING_NO_ADAPTER;
-    case "cpu": return PATH_TRACING_CPU;
-    case "limits": return n.storageBuffers === undefined ? PATH_TRACING_NO_GPU : pathTracingLimits(n.storageBuffers);
-    case "selfcheck": return PATH_TRACING_SELF_CHECK;
-    default: return PATH_TRACING_NO_GPU;
+    case "noadapter":
+      return PATH_TRACING_NO_ADAPTER;
+    case "cpu":
+      return PATH_TRACING_CPU;
+    case "limits":
+      return n.storageBuffers === undefined ? PATH_TRACING_NO_GPU : pathTracingLimits(n.storageBuffers);
+    case "selfcheck":
+      return PATH_TRACING_SELF_CHECK;
+    default:
+      return PATH_TRACING_NO_GPU;
   }
 }
 

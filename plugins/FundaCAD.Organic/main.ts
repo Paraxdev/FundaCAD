@@ -1,6 +1,4 @@
-// Node bodies: rounded, organic solids from sized nodes. The feature type, its
-// rows, its tool and its geometry (geometry-rs/) all live here; the app only
-// carries a node body it cannot build when this plugin is gone.
+// Node bodies: the feature type, its rows, its tool and its geometry (geometry-rs/) all live here.
 
 import { contribute } from "fundacad";
 import type { Engine } from "fundacad";
@@ -29,27 +27,31 @@ export async function activate(e: Engine): Promise<() => void> {
   }
 
   const off = contribute(ID, {
-    tools: [{
-      id: "nodeBody",
-      label: "Node Body",
-      iconName: "node-body",
-      consumes: [],
-      source: "selection",
-      busy: () => tool.active,
-      cancel: () => tool.cancel(),
-    }],
+    tools: [
+      {
+        id: "nodeBody",
+        label: "Node Body",
+        iconName: "node-body",
+        consumes: [],
+        source: "selection",
+        busy: () => tool.active,
+        cancel: () => tool.cancel(),
+      },
+    ],
     actions: { nodeBody: start },
     ribbon: [{ group: "CREATE", items: [{ action: "nodeBody", label: "Node Body", iconName: "node-body" }] }],
     icons: { "node-body": NODE_ICON },
     overlays: [NodePanel],
-    features: [{
-      type: NODE_TYPE,
-      meta: { icon: "node-body", label: "Node body" },
-      choiceFields: NODE_CHOICE_FIELDS,
-      numFields: nodeNumFields,
-      targets: NODE_TARGETS,
-      edit: (featureId, done) => tool.startEdit(featureId, done),
-    }],
+    features: [
+      {
+        type: NODE_TYPE,
+        meta: { icon: "node-body", label: "Node body" },
+        choiceFields: NODE_CHOICE_FIELDS,
+        numFields: nodeNumFields,
+        targets: NODE_TARGETS,
+        edit: (featureId, done) => tool.startEdit(featureId, done),
+      },
+    ],
   });
 
   return () => {

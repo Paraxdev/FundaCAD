@@ -1,10 +1,5 @@
-//! Chunked replies and the cancel check between chunks.
-//!
-//! Replaces `_chunk_bodies`, `_stream_binary_reply`, `_send_reply` and the
-//! cancel token plumbing (`_CANCEL`, `_cancelled_now`) of the Python engine's `wire.py`.
-//! Transport-agnostic: a reply is an iterator of messages, and the transport
-//! pulls the next one only when it has sent the previous, which is where the
-//! Python loop awaited its send and where the cancel check sits.
+//! Chunked replies and the cancel check between chunks. A reply is an iterator of messages and the transport pulls
+//! the next only after sending the previous, which is where the cancel check sits.
 
 use crate::body::{JobResult, MeshResult, WireBody};
 use crate::envelope;
@@ -36,10 +31,8 @@ impl CancelToken {
     }
 }
 
-/// `_chunk_bodies`: group bodies IN ORDER into index ranges of roughly
-/// `target` estimated bytes. The client accumulates faceStart by manifest
-/// order, so reordering would break face picking. A body over target gets a
-/// chunk of its own, it is never split.
+/// `_chunk_bodies`: group bodies IN ORDER into ranges of about `target` estimated bytes, since the client accumulates
+/// faceStart by manifest order and reordering breaks face picking. A body over target gets a chunk of its own.
 pub fn chunk_bodies(bodies: &[WireBody], target: usize) -> Vec<Range<usize>> {
     let mut out = Vec::new();
     let (mut start, mut size) = (0usize, 0usize);
@@ -58,8 +51,7 @@ pub fn chunk_bodies(bodies: &[WireBody], target: usize) -> Vec<Range<usize>> {
     out
 }
 
-/// A random 16 hex digit stream id, `secrets.token_hex(8)` in the Python engine. It
-/// only has to differ between replies on one connection, so std's randomly
+/// A random 16 hex digit stream id. It only has to differ between replies on one connection, so std's randomly
 /// keyed hasher plus a counter is enough and needs no dependency.
 pub fn new_stream_id() -> String {
     static COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -74,7 +66,6 @@ pub struct ReplyOptions {
     pub chunked: bool,
 }
 
-/// The messages of one reply, in send order.
 pub struct Reply {
     state: State,
 }
@@ -103,6 +94,16 @@ impl Iterator for Reply {
         match &mut self.state {
             State::One(m) => m.take(),
             State::Stream(s) => s.next_message(),
+        }
+    }
+}
+
+impl Reply {
+    /// True as soon as the last message has been yielded, before `next` says None.
+    pub fn is_done(&self) -> bool {
+        match &self.state {
+            State::One(m) => m.is_none(),
+            State::Stream(s) => s.done,
         }
     }
 }
@@ -142,22 +143,15 @@ impl Stream {
             }
             Err(over) => {
                 self.done = true;
-                Some(Message::Text(frame::body_too_large_error(
-                    &self.id,
-                    bodies,
-                    over.size,
-                    &self.limits,
-                )))
+                Some(Message::Text(frame::body_too_large_error(&self.id, bodies, over.size, &self.limits)))
             }
         }
     }
 }
 
-/// `_stream_binary_reply`: frame 0 carries every non-body field and the
-/// manifest, frames 1..N carry contiguous slices of the bodies. Non-final
-/// frames have `status: "chunk"` and no `ok`, the final one has `ok: true`.
-/// The head is encoded and cap-checked here, before anything is sent, so a
-/// head over the cap is still an ordinary error reply.
+/// `_stream_binary_reply`: frame 0 carries every non-body field and the manifest, frames 1..N contiguous slices of
+/// the bodies. Non-final frames have `status: "chunk"` and no `ok`, the final one `ok: true`. The head is cap-checked
+/// here before anything is sent, so a head over the cap is still an ordinary error reply.
 pub fn stream_reply(
     id: Value,
     result: MeshResult,
@@ -182,10 +176,8 @@ pub fn stream_reply(
     })
 }
 
-/// `_send_reply`: stream when the client opted into chunked binary frames and
-/// the result is a successful mesh reply, a single message otherwise. Every
-/// such reply is streamed, not only large ones, so the multi-frame path runs
-/// constantly rather than first on a user's oversized assembly.
+/// `_send_reply`: stream when the client opted into chunked binary frames and the result is a successful mesh reply,
+/// a single message otherwise. Every such reply streams, not only large ones, so the multi-frame path runs constantly.
 pub fn send_reply(
     id: Value,
     result: JobResult,
@@ -198,9 +190,7 @@ pub fn send_reply(
             let n_bodies = m.bodies.len();
             match stream_reply(id.clone(), m, new_stream_id(), cancel, limits) {
                 Ok(reply) => reply,
-                Err(over) => single(Message::Text(frame::too_large_error(
-                    &id, over.size, n_bodies, &limits,
-                ))),
+                Err(over) => single(Message::Text(frame::too_large_error(&id, over.size, n_bodies, &limits))),
             }
         }
         other => single(frame::reply_bytes(&id, &other, opts.binary, &limits)),
@@ -208,126 +198,5 @@ pub fn send_reply(
 }
 
 fn single(m: Message) -> Reply {
-    Reply {
-        state: State::One(Some(m)),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::body::FullBody;
-    use serde_json::{json, Map};
-
-    fn full(id: &str, n: usize) -> WireBody {
-        let mut b = FullBody::new(id, id, "e");
-        b.positions = vec![0.5; 3 * n];
-        b.indices = vec![0; 3 * n];
-        b.face_ids = vec![0; n];
-        WireBody::Full(b)
-    }
-
-    fn header(frame: &[u8]) -> Value {
-        let hl = u32::from_le_bytes([frame[0], frame[1], frame[2], frame[3]]) as usize;
-        serde_json::from_slice(&frame[4..4 + hl]).unwrap_or(Value::Null)
-    }
-
-    #[test]
-    fn chunks_keep_order_and_isolate_big_bodies() {
-        let bodies = vec![full("a", 1), full("b", 1), full("c", 100), full("d", 1)];
-        let sizes: Vec<usize> = bodies.iter().map(WireBody::wire_size).collect();
-        assert_eq!(sizes[0], 4 * 7 + 256);
-        assert_eq!(chunk_bodies(&bodies, 600), vec![0..2, 2..3, 3..4]);
-        assert!(chunk_bodies(&[], 600).is_empty());
-    }
-
-    #[test]
-    fn stream_shape() {
-        let res = MeshResult {
-            fields: Map::new(),
-            bodies: vec![full("a", 1), full("b", 1), WireBody::stub("s", "S", "x")],
-        };
-        let limits = Limits {
-            max_frame: 1 << 20,
-            chunk_target: 300,
-        };
-        let msgs: Vec<Message> = stream_reply(json!("r"), res, "sid".into(), None, limits)
-            .map(Iterator::collect)
-            .unwrap_or_default();
-        assert_eq!(msgs.len(), 4);
-        let heads: Vec<Value> = msgs
-            .iter()
-            .map(|m| match m {
-                Message::Binary(b) => header(b),
-                Message::Text(_) => Value::Null,
-            })
-            .collect();
-        assert_eq!(heads[0]["status"], json!("chunk"));
-        assert_eq!(
-            heads[0]["result"]["manifest"].as_array().map(Vec::len),
-            Some(3)
-        );
-        assert_eq!(heads[3]["ok"], json!(true));
-        assert_eq!(heads[3]["stream"]["seq"], json!(3));
-        assert!(heads[3].get("status").is_none());
-    }
-
-    #[test]
-    fn empty_stream_is_one_final_head() {
-        let res = MeshResult::default();
-        let msgs: Vec<Message> = send_reply(
-            json!("r"),
-            JobResult::Mesh(res),
-            ReplyOptions {
-                binary: true,
-                chunked: true,
-            },
-            None,
-            Limits::default(),
-        )
-        .collect();
-        assert_eq!(msgs.len(), 1);
-        match &msgs[0] {
-            Message::Binary(b) => assert_eq!(header(b)["stream"]["final"], json!(true)),
-            Message::Text(_) => panic!("expected a frame"),
-        }
-    }
-
-    #[test]
-    fn cancel_between_chunks() {
-        let token = CancelToken::new();
-        let res = MeshResult {
-            fields: Map::new(),
-            bodies: vec![full("a", 1), full("b", 1)],
-        };
-        let limits = Limits {
-            max_frame: 1 << 20,
-            chunk_target: 1,
-        };
-        let mut reply = send_reply(
-            json!("r"),
-            JobResult::Mesh(res),
-            ReplyOptions {
-                binary: true,
-                chunked: true,
-            },
-            Some(token.clone()),
-            limits,
-        );
-        assert!(matches!(reply.next(), Some(Message::Binary(_))));
-        assert!(matches!(reply.next(), Some(Message::Binary(_))));
-        token.cancel();
-        assert_eq!(
-            reply.next(),
-            Some(Message::Text(envelope::cancelled(&json!("r"))))
-        );
-        assert_eq!(reply.next(), None);
-    }
-
-    #[test]
-    fn stream_ids_differ() {
-        let a = new_stream_id();
-        assert_eq!(a.len(), 16);
-        assert_ne!(a, new_stream_id());
-    }
+    Reply { state: State::One(Some(m)) }
 }

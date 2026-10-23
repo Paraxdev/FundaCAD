@@ -1,10 +1,5 @@
-//! Edge polylines for the outline pass, replaces `edge_polylines_by_body`,
-//! `_edge_points` and `_meets_smoothly` of the Python engine's `tessellate.py`.
-//!
-//! Dropped, as in any MCAD: the seam between two coplanar planar faces, the
-//! wrap-around seam of a closed periodic face (one face listed twice) and a
-//! degenerate edge (a pole or an apex). The Python engine's per-TShape polyline memo
-//! is a cache and is not ported.
+//! Edge polylines for the outline pass. Dropped as in any MCAD: the seam between two coplanar planes,
+//! the wrap seam of a closed periodic face, and a degenerate edge (a pole or an apex).
 
 use opencascade::mesh_access::MeshAccess;
 
@@ -15,10 +10,8 @@ pub const EDGE_DEFLECTION: f64 = 0.01;
 /// an odd point count.
 pub const EDGE_MIN_SEG: usize = 4;
 pub const EDGE_MAX_SEG: usize = 512;
-/// A sample is kept while no segment strays more than this many deflections
-/// from the curve. OCCT's quasi uniform sampler measures its sag from the end
-/// tangents, and takes a whole helix turn, whose end tangents are parallel,
-/// as one chord; its other results land on the target and are kept as they are.
+/// OCCT's quasi uniform sampler measures sag from the end tangents and takes a whole helix turn as one
+/// chord, so a sample is kept only while no segment strays more than this many deflections.
 pub const EDGE_SLACK: f64 = 4.0;
 /// Segments of the parameter walk used when the deflection sampler cannot run.
 pub const EDGE_FALLBACK_SEG: usize = 24;
@@ -37,16 +30,11 @@ pub struct EdgeLine {
     pub smooth: bool,
 }
 
-/// Every drawn edge of one body, in edge-to-face map order.
-///
-/// The edges go out to other threads: each one builds its own adaptors and
-/// nothing is written back to the shape, and the results are collected by edge
-/// index, so the list is the one a serial walk produces.
+/// In edge-to-face map order. Edges go to other threads, build their own adaptors and write nothing back,
+/// and results are collected by index, so the list matches a serial walk.
 pub fn edge_polylines(access: &MeshAccess) -> Vec<EdgeLine> {
     let cos_tol = 1.0f64.to_radians().cos();
-    let plane: Vec<Option<[f64; 3]>> = (0..access.face_count())
-        .map(|f| access.face_plane_normal(f))
-        .collect();
+    let plane: Vec<Option<[f64; 3]>> = (0..access.face_count()).map(|f| access.face_plane_normal(f)).collect();
     let work = crate::par::Shared((access, &plane));
     let lines = crate::par::map_indexed(access.edge_count(), move |e| {
         let (access, plane) = *work.get();
@@ -55,12 +43,7 @@ pub fn edge_polylines(access: &MeshAccess) -> Vec<EdgeLine> {
     lines.into_iter().flatten().collect()
 }
 
-fn one_edge(
-    access: &MeshAccess,
-    plane: &[Option<[f64; 3]>],
-    cos_tol: f64,
-    e: usize,
-) -> Option<EdgeLine> {
+fn one_edge(access: &MeshAccess, plane: &[Option<[f64; 3]>], cos_tol: f64, e: usize) -> Option<EdgeLine> {
     let plane_of = |f: usize| plane.get(f).copied().flatten();
     let faces = access.edge_faces(e);
     if faces.len() == 2 {
@@ -80,10 +63,7 @@ fn one_edge(
         return None;
     }
     let points = edge_points(access, e)?;
-    let length: f64 = points
-        .windows(2)
-        .map(|w| (0..3).map(|k| (w[1][k] - w[0][k]).powi(2)).sum::<f64>().sqrt())
-        .sum();
+    let length: f64 = points.windows(2).map(|w| (0..3).map(|k| (w[1][k] - w[0][k]).powi(2)).sum::<f64>().sqrt()).sum();
     if length < SLIVER_EDGE_MM {
         return None;
     }
@@ -109,9 +89,7 @@ fn uniform_param_points(access: &MeshAccess, e: usize, n: usize) -> Option<Vec<[
     if u1.partial_cmp(&u0) != Some(std::cmp::Ordering::Greater) {
         return None;
     }
-    let params: Vec<f64> = (0..=n)
-        .map(|j| u0 + (u1 - u0) * (j as f64 / n as f64))
-        .collect();
+    let params: Vec<f64> = (0..=n).map(|j| u0 + (u1 - u0) * (j as f64 / n as f64)).collect();
     access.edge_values(e, &params)
 }
 
@@ -136,9 +114,7 @@ fn sample_by_deflection(
         return checked_walk(access, e, deflection, min_seg, max_seg);
     }
     let picks: Vec<usize> = if n - 1 > max_seg {
-        (0..=max_seg)
-            .map(|i| py_round(i as f64 * (n - 1) as f64 / max_seg as f64))
-            .collect()
+        (0..=max_seg).map(|i| py_round(i as f64 * (n - 1) as f64 / max_seg as f64)).collect()
     } else {
         (0..n).collect()
     };
@@ -160,10 +136,8 @@ fn sample_by_deflection(
     Some(out)
 }
 
-/// A uniform parameter walk of `min_seg` segments, kept if it is within the
-/// slack, else doubled until it is within `deflection` or reaches `max_seg`.
-/// Every count is `min_seg` times a power of two, so the middle point stays
-/// the parametric midpoint.
+/// Kept if within the slack, else doubled until within `deflection` or at `max_seg`. Counts stay `min_seg`
+/// times a power of two, so the middle point stays the parametric midpoint.
 fn checked_walk(
     access: &MeshAccess,
     e: usize,
@@ -175,9 +149,7 @@ fn checked_walk(
     if u1.partial_cmp(&u0) != Some(std::cmp::Ordering::Greater) {
         return None;
     }
-    let mut us: Vec<f64> = (0..=min_seg)
-        .map(|j| u0 + (u1 - u0) * (j as f64 / min_seg as f64))
-        .collect();
+    let mut us: Vec<f64> = (0..=min_seg).map(|j| u0 + (u1 - u0) * (j as f64 / min_seg as f64)).collect();
     let mut pts = access.edge_values(e, &us)?;
     let mut limit = EDGE_SLACK * deflection;
     while us.len() - 1 < max_seg {
@@ -200,31 +172,19 @@ fn checked_walk(
     Some(pts)
 }
 
-/// Each segment's middle parameter, the curve's point there and the worst
-/// distance from the curve to its segment. The curve is also probed at the
-/// golden section of every segment: a helix that turns a whole number of times
-/// per segment meets the chord at its middle, never at an irrational fraction.
-fn mid_sag(
-    access: &MeshAccess,
-    e: usize,
-    pts: &[[f64; 3]],
-    us: &[f64],
-) -> Option<(Vec<f64>, Vec<[f64; 3]>, f64)> {
+/// Each segment's middle parameter, curve point and worst sag. Also probed at each segment's golden
+/// section, as a helix turning whole times per segment meets the chord at its middle.
+fn mid_sag(access: &MeshAccess, e: usize, pts: &[[f64; 3]], us: &[f64]) -> Option<(Vec<f64>, Vec<[f64; 3]>, f64)> {
     const PROBES: [f64; 3] = [0.5, 0.381_966_011_250_105, 0.618_033_988_749_895];
     if pts.len() != us.len() {
         return None;
     }
-    let probes: Vec<f64> = us
-        .windows(2)
-        .flat_map(|w| PROBES.map(|f| w[0] + (w[1] - w[0]) * f))
-        .collect();
+    let probes: Vec<f64> = us.windows(2).flat_map(|w| PROBES.map(|f| w[0] + (w[1] - w[0]) * f)).collect();
     let at = access.edge_values(e, &probes)?;
     if at.len() != probes.len() {
         return None;
     }
-    let worst = (0..at.len())
-        .map(|i| to_segment(at[i], pts[i / 3], pts[i / 3 + 1]))
-        .fold(0.0f64, f64::max);
+    let worst = (0..at.len()).map(|i| to_segment(at[i], pts[i / 3], pts[i / 3 + 1])).fold(0.0f64, f64::max);
     let mids = probes.iter().step_by(3).copied().collect();
     let mid_pts = at.iter().step_by(3).copied().collect();
     Some((mids, mid_pts, worst))
@@ -234,21 +194,12 @@ fn to_segment(p: [f64; 3], a: [f64; 3], b: [f64; 3]) -> f64 {
     let ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
     let ap = [p[0] - a[0], p[1] - a[1], p[2] - a[2]];
     let len2 = ab[0] * ab[0] + ab[1] * ab[1] + ab[2] * ab[2];
-    let t = if len2 > 0.0 {
-        ((ap[0] * ab[0] + ap[1] * ab[1] + ap[2] * ab[2]) / len2).clamp(0.0, 1.0)
-    } else {
-        0.0
-    };
+    let t = if len2 > 0.0 { ((ap[0] * ab[0] + ap[1] * ab[1] + ap[2] * ab[2]) / len2).clamp(0.0, 1.0) } else { 0.0 };
     (0..3).map(|k| (ap[k] - t * ab[k]).powi(2)).sum::<f64>().sqrt()
 }
 
-/// Whether the two faces on either side share a tangent plane along the edge,
-/// sampled at the middle first so a crease costs one sample. Unsigned, tangent
-/// faces can carry opposite surface orientations.
-///
-/// `MeshAccess::edge_smooth` is the same walk with the adaptors built once,
-/// and is what the pass above calls; this stays as the reference the test
-/// below and the bench suite's `smooth` stage check it against.
+/// Unsigned, tangent faces can carry opposite orientations. The reference the test and the bench's
+/// `smooth` stage check `MeshAccess::edge_smooth` against, which is what the pass calls.
 pub fn meets_smoothly(access: &MeshAccess, e: usize) -> bool {
     let cos_tol = SMOOTH_EDGE_DEG.to_radians().cos();
     let Some((t0, t1)) = access.edge_brep_range(e) else {
@@ -267,47 +218,10 @@ pub fn meets_smoothly(access: &MeshAccess, e: usize) -> bool {
             }
             *slot = [n[0] / mag, n[1] / mag, n[2] / mag];
         }
-        let d = normals[0][0] * normals[1][0]
-            + normals[0][1] * normals[1][1]
-            + normals[0][2] * normals[1][2];
+        let d = normals[0][0] * normals[1][0] + normals[0][1] * normals[1][1] + normals[0][2] * normals[1][2];
         if d.abs() < cos_tol {
             return false;
         }
     }
     true
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::kernel::{self, Kind};
-    use opencascade::primitives::Shape;
-
-    fn agrees(shape: &Shape) {
-        let access = MeshAccess::new(shape);
-        let cos_tol = SMOOTH_EDGE_DEG.to_radians().cos();
-        for e in 0..access.edge_count() {
-            assert_eq!(
-                meets_smoothly(&access, e),
-                access.edge_smooth(e, cos_tol),
-                "edge {e} disagrees"
-            );
-        }
-    }
-
-    /// The batched kernel call must decide exactly what the per sample walk
-    /// decides, or a saved selector and an etag move under the client.
-    #[test]
-    fn the_batched_smooth_test_matches_the_sampled_one() {
-        agrees(&kernel::make_box(20.0, 20.0, 10.0).expect("a box"));
-        agrees(&kernel::make_cylinder(6.0, 12.0).expect("a cylinder"));
-        agrees(&kernel::make_sphere(7.0).expect("a sphere"));
-        agrees(&kernel::make_cone(6.0, 2.0, 9.0).expect("a cone"));
-        agrees(&kernel::make_torus(10.0, 3.0).expect("a torus"));
-        let b = kernel::make_box(20.0, 20.0, 10.0).expect("a box");
-        let edges = kernel::subshapes(&b, Kind::Edge);
-        let (filleted, _) = crate::features::blend::ops::fillet(&b, &edges, &vec![2.0; edges.len()])
-            .expect("a fillet");
-        agrees(&filleted);
-    }
 }

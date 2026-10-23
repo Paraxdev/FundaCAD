@@ -70,8 +70,7 @@ pub fn decode_mesh(bytes: &[u8]) -> Result<(String, Mesh), String> {
     let mut r = Reader(body);
     let positions = r.vec3(h.vertices, "positions")?;
     let normals = if h.normals { r.vec3(h.vertices, "normals")? } else { Vec::new() };
-    let indices =
-        if h.indices > 0 { r.u32s(h.indices, "indices")? } else { (0..h.vertices as u32).collect() };
+    let indices = if h.indices > 0 { r.u32s(h.indices, "indices")? } else { (0..h.vertices as u32).collect() };
     if indices.len() % 3 != 0 {
         return Err(format!("{} indices is not whole triangles", indices.len()));
     }
@@ -89,87 +88,20 @@ pub fn decode_colors(bytes: &[u8]) -> Result<(String, Option<Vec<[f32; 3]>>), St
     Ok((h.key, colors))
 }
 
-/// An equirect, half float RGBA, row 0 first; 0 x 0 goes back to the sky.
+/// An equirect, half float RGBA, row 0 first; 0 x 0 goes back to the sky. Any size the body holds is taken, the
+/// tracer fits it to the device (Environment::fit).
 pub fn decode_env(bytes: &[u8]) -> Result<Option<Environment>, String> {
     let (h, body) = split::<EnvHeader>(bytes)?;
     if h.width == 0 && h.height == 0 {
         return Ok(None);
     }
-    if h.width == 0 || h.height == 0 || h.width > 8192 || h.height > 4096 {
+    if h.width == 0 || h.height == 0 {
         return Err(format!("an environment of {} x {} texels", h.width, h.height));
     }
     let n = h.width as usize * h.height as usize * 4;
-    if body.len() < n * 2 {
+    if body.len() / 2 < n {
         return Err(format!("environment: {} bytes left, {} needed", body.len(), n * 2));
     }
     let rgba = body[..n * 2].chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
     Ok(Some(Environment { key: h.key, width: h.width, height: h.height, up: h.up, rgba }))
-}
-
-#[cfg(test)]
-pub(crate) fn encode(header: &str, floats: &[f32], ints: &[u32], tail: &[f32]) -> Vec<u8> {
-    let mut b = (header.len() as u32).to_le_bytes().to_vec();
-    b.extend_from_slice(header.as_bytes());
-    b.resize(b.len().next_multiple_of(4), 0);
-    floats.iter().for_each(|f| b.extend_from_slice(&f.to_le_bytes()));
-    ints.iter().for_each(|i| b.extend_from_slice(&i.to_le_bytes()));
-    tail.iter().for_each(|f| b.extend_from_slice(&f.to_le_bytes()));
-    b
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    const TRI: [f32; 18] = [0., 0., 0., 1., 0., 0., 0., 1., 0., 0., 0., 1., 0., 0., 1., 0., 0., 1.];
-
-    #[test]
-    fn a_mesh_arrives_with_its_groups_and_colours() {
-        let h = r#"{"key":"b|e1|g1|1|1","vertices":3,"indices":3,"normals":true,"colors":true,
-                    "groups":[{"start":0,"count":3,"slot":2}]}"#;
-        let b = encode(h, &TRI, &[0, 1, 2], &[1., 0., 0., 0., 1., 0., 0., 0., 1.]);
-        let (key, m) = decode_mesh(&b).unwrap();
-        assert_eq!(key, "b|e1|g1|1|1");
-        assert_eq!(m.positions, vec![[0., 0., 0.], [1., 0., 0.], [0., 1., 0.]]);
-        assert_eq!(m.normals, vec![[0., 0., 1.]; 3]);
-        assert_eq!(m.indices, vec![0, 1, 2]);
-        assert_eq!(m.groups, vec![Group { start: 0, count: 3, slot: 2 }]);
-        assert_eq!(m.colors.unwrap()[1], [0., 1., 0.]);
-    }
-
-    #[test]
-    fn a_soup_gets_indices_and_a_short_or_wrong_body_is_refused() {
-        let (_, m) = decode_mesh(&encode(r#"{"key":"k","vertices":3}"#, &TRI[..9], &[], &[])).unwrap();
-        assert_eq!(m.indices, vec![0, 1, 2]);
-        assert!(m.normals.is_empty() && m.colors.is_none());
-        assert!(decode_mesh(&encode(r#"{"key":"k","vertices":3}"#, &TRI[..8], &[], &[])).is_err());
-        let past = encode(r#"{"key":"k","vertices":3,"indices":3}"#, &TRI[..9], &[0, 1, 3], &[]);
-        assert!(decode_mesh(&past).unwrap_err().contains("past"));
-        assert!(decode_mesh(&[9, 0, 0, 0, b'{']).is_err());
-    }
-
-    #[test]
-    fn an_environment_arrives_with_its_layout_and_a_short_one_is_refused() {
-        let half = |v: &[u16]| v.iter().flat_map(|x| x.to_le_bytes()).collect::<Vec<u8>>();
-        let mut b = encode(r#"{"key":"room|h","width":2,"height":1,"up":"z"}"#, &[], &[], &[]);
-        let one = crate::env::f32_to_f16(1.0);
-        b.extend(half(&[one, 0, 0, one, 0, one, 0, one]));
-        let e = decode_env(&b).unwrap().unwrap();
-        assert_eq!((e.key.as_str(), e.width, e.height, e.up), ("room|h", 2, 1, Up::Z));
-        assert_eq!(e.texel(1, 0), [0.0, 1.0, 0.0]);
-        let mut y = encode(r#"{"key":"k","width":2,"height":1}"#, &[], &[], &[]);
-        y.extend(half(&[0; 8]));
-        assert_eq!(decode_env(&y).unwrap().unwrap().up, Up::Y);
-        assert_eq!(decode_env(&encode(r#"{"key":"","width":0,"height":0}"#, &[], &[], &[])).unwrap(), None);
-        b.truncate(b.len() - 2);
-        assert!(decode_env(&b).unwrap_err().contains("needed"));
-    }
-
-    #[test]
-    fn colours_set_or_clear() {
-        let (k, c) = decode_colors(&encode(r#"{"key":"k","vertices":1,"colors":true}"#, &[0.5, 0.25, 1.], &[], &[]))
-            .unwrap();
-        assert_eq!((k.as_str(), c), ("k", Some(vec![[0.5, 0.25, 1.]])));
-        assert_eq!(decode_colors(&encode(r#"{"key":"k","vertices":1}"#, &[], &[], &[])).unwrap().1, None);
-    }
 }

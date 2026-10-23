@@ -1,14 +1,8 @@
-// Display/input units. Geometry is ALWAYS stored in millimetres internally
-// (build123d's base unit; correct for STL/STEP/3MF export and 3D printing).
-// The unit setting only converts what the user sees and types, lengths shown
-// in the dialog/inspector are divided by the factor, typed values multiplied
-// back to mm. Angles are always degrees and never converted.
+// Display and input units. Geometry is always stored in mm; the setting only converts what the user sees and types.
+// Angles are always degrees.
 
 import { readSetting } from "./storedSetting";
-// THE display-precision rule. It lives in ui/measure, next to the parser that
-// reads the numbers back in, and is re-exported here under the name the display
-// side calls it by: almost everything that shows a number already imports from
-// ui/units, and a second import path is how two rules start.
+// The display precision rule lives in ui/measure beside the parser; re-exported here so there is one import path.
 import { roundForDisplay as displayRound } from "./measure";
 export { displayRound };
 
@@ -21,11 +15,8 @@ const LEGACY_KEYS = ["neocad.unit", "sindricad.unit"];
 let current: Unit = readStored();
 const listeners = new Set<() => void>();
 
-/** Narrow an untrusted string, a `<select>` value, a stored setting, to a Unit,
- *  or null. Every boundary that feeds `current` MUST come through here instead of
- *  casting: the unit is interpolated raw into innerHTML markup downstream (the
- *  properties and interference panels), so an unchecked value is a script-injection
- *  path into the privileged webview. */
+/** Every boundary feeding `current` must narrow here, not cast: the unit is interpolated raw into innerHTML in the
+ *  properties and interference panels, so an unchecked value is a script injection path. */
 export function asUnit(v: unknown): Unit | null {
   return v === "mm" || v === "cm" || v === "in" ? v : null;
 }
@@ -70,10 +61,8 @@ export function fmtLength(mm: number): string {
   return `${displayRound(toDisplay(mm))} ${current}`;
 }
 
-/** Quantise for STORAGE: a thousandth, which is `snap()`'s lattice floor and the
- *  finest a drag can land on (viewport/dragStep.ts). Not the same question as
- *  how many decimals to SHOW, that one is `displayRound`, and mixing them is
- *  how a panel ends up reading 24.098723. */
+/** Quantise for storage to a thousandth, `snap()`'s lattice floor and the finest drag step (viewport/dragStep.ts).
+ *  Display decimals are `displayRound`'s job. */
 export function round(v: number): number {
   return Math.round(v * 1000) / 1000;
 }
@@ -95,8 +84,7 @@ export function snap(v: number, step: number): number {
   return round(Math.round(v / step) * step);
 }
 
-// FieldKind lives in the document layer (numFields.ts); re-exported here for
-// the input-side consumers that historically import it from units.
+// FieldKind lives in document/numFields.ts; re-exported for the input consumers that import it from here.
 import type { FieldKind } from "../document/numFields";
 export type { FieldKind };
 import { canonicalTyping, tryParseMeasure, unitById } from "./measure";
@@ -106,18 +94,8 @@ export function displayValue(mm: number, kind: FieldKind = "length"): number {
   return kind === "length" ? displayRound(toDisplay(mm)) : displayRound(mm); // angle/count: raw
 }
 
-/** Parse a typed field back to mm (length) or degrees (angle); null if invalid.
- *
- *  This was `parseFloat`, which is why every field in the app was quietly NOT
- *  unit agnostic: "2mm" came back as 2 in whatever the field was showing, "1
- *  inch" as 1, "1/2" as 1. parseFloat never fails on those, it stops at the
- *  first character it does not like and returns what it has, so there was
- *  nothing to report and the part was simply the wrong size.
- *
- *  It now goes through ui/measure, so anything typeable in one field is
- *  typeable in all of them: units, symbols, compounds, fractions, arithmetic.
- *  A COUNT takes arithmetic but no unit. It was parseFloat too, and so read
- *  "12abc" as 12 and "20,5" as 20 without a word. */
+/** Parses through ui/measure, so every field takes units, symbols, compounds, fractions and arithmetic; a count takes
+ *  arithmetic but no unit. Null if invalid. */
 export function parseField(raw: string, kind: FieldKind = "length"): number | null {
   if (kind === "count") {
     const m = tryParseMeasure(raw, null);
@@ -127,9 +105,7 @@ export function parseField(raw: string, kind: FieldKind = "length"): number | nu
   return tryParseMeasure(raw, display)?.value ?? null;
 }
 
-/** The unit a typed field NAMED, if it named one, so a surface can adopt it as
- *  its display unit rather than showing the number back in a unit the user just
- *  told it not to use. Null for a bare number. */
+/** The unit a typed field named, so a surface can adopt it as its display unit. Null for a bare number. */
 export function parsedUnit(raw: string, kind: FieldKind = "length"): string | null {
   if (kind === "count") return null;
   const display = kind === "length" ? unitById(current) : unitById("deg");

@@ -1,27 +1,6 @@
-//! The ops a plugin cannot serve itself: asking the person for a file, reading
-//! the one they chose, writing one where they say, and asking what it is
-//! running on.
-//!
-//! WHY THESE ARE HERE. Not because the webview is untrusted, it is the app,
-//! but because this is where the paths and the dialogs are, and the useful
-//! property is that a path never leaves. What a plugin gets back is a handle, a
-//! file name and a length; to read the file it hands the handle back. The rules
-//! about handles, names and titles are all in ./handed.rs, which is written
-//! without Tauri so it can actually be run by a test.
-//!
-//! WHAT THIS DOES NOT DO is decide whether the plugin was allowed to ask. That
-//! is the broker, in src/plugins/broker/, against the grants recorded at
-//! install; this side knows nothing about `files.read` and must not learn, for
-//! the same reason the installer next door knows nothing about
-//! `document.write`. Two places that both understand a permission are two
-//! places that can come to understand it differently.
-//!
-//! THE DIALOG IS THE LAST WORD REGARDLESS. Every one of these opens a native
-//! picker and does nothing at all if it is dismissed, so a plugin holding every
-//! grant in the vocabulary still cannot touch a file nobody chose. A dismissed
-//! dialog is `None` and not an error: "I would rather not" is a complete
-//! answer, and a plugin that reported it as a failure would show somebody an
-//! error for having changed their mind.
+//! The ops a plugin cannot serve itself: picking, reading and writing files the person chooses, and the app info. A
+//! path never leaves, a plugin gets a handle (rules in ./handed.rs). Grants are checked by the broker in
+//! src/plugins/broker/, not here, and a dismissed dialog is `None`, not an error.
 
 use base64::Engine;
 use serde::Serialize;
@@ -63,12 +42,7 @@ pub struct Picked {
     pub len: u64,
 }
 
-/// A file's contents, as whichever of the two a plugin can actually use.
-///
-/// Both fields rather than always base64: a plugin reading JSON, CSV, SVG, STEP
-/// or another text format wants text, and making every one of them decode base64
-/// would be a worse API for the common case. Binary (STL, 3MF) still works, and
-/// which one arrived is not a guess, because exactly one is ever set.
+/// Text for text formats, base64 for binary. Exactly one is set, so which arrived is never a guess.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FileBody {
@@ -95,12 +69,7 @@ pub struct AppInfo {
     pub arch: String,
 }
 
-/// A handle nobody can guess.
-///
-/// Random rather than a counter, because a counter would let a plugin name a
-/// file it was never offered by asking for the handle next to its own. The
-/// per-plugin check in `Table::path_for` would still refuse it, but a guard
-/// that only works because of a second guard is one guard.
+/// Random rather than a counter, so a plugin cannot name a file it was never offered by guessing the next handle.
 fn token() -> Result<String, String> {
     let mut raw = [0u8; 16];
     getrandom::getrandom(&mut raw).map_err(|e| format!("no randomness available: {e}"))?;
@@ -132,15 +101,11 @@ pub async fn plugin_file_pick(
         dialog = dialog.add_filter("Files", &refs);
     }
 
-    // Blocking, from an `async` command, which Tauri runs off the main thread.
-    // The blocking dialog APIs deadlock when called ON the main thread, so this
-    // command must stay async even though nothing in it is awaited.
+    // The blocking dialog APIs deadlock on the main thread, so this command stays async though nothing is awaited.
     let Some(picked) = dialog.blocking_pick_file() else {
         return Ok(None);
     };
-    let path = picked
-        .into_path()
-        .map_err(|e| format!("that file has no readable path: {e}"))?;
+    let path = picked.into_path().map_err(|e| format!("that file has no readable path: {e}"))?;
 
     let meta = std::fs::metadata(&path).map_err(|e| format!("{}: {e}", name_of(&path)))?;
     if !meta.is_file() {
@@ -150,25 +115,13 @@ pub async fn plugin_file_pick(
     let handle = token()?;
     let name = name_of(&path);
     let len = meta.len();
-    handles
-        .0
-        .lock()
-        .map_err(|_| POISONED.to_string())?
-        .remember(handle.clone(), plugin, path, now_secs());
+    handles.0.lock().map_err(|_| POISONED.to_string())?.remember(handle.clone(), plugin, path, now_secs());
     Ok(Some(Picked { handle, name, len }))
 }
 
-/// Read a file the person already picked for this plugin.
-///
-/// NOT a file reader. It takes a handle, never a path, so the set of files it
-/// can reach is exactly the set somebody chose, and the plugin named on the
-/// handle has to be the plugin asking.
+/// Takes a handle, never a path, so it reaches only files somebody chose, and only for the plugin named on the handle.
 #[tauri::command]
-pub fn plugin_file_read(
-    handles: State<'_, Handles>,
-    plugin: String,
-    handle: String,
-) -> Result<FileBody, String> {
+pub fn plugin_file_read(handles: State<'_, Handles>, plugin: String, handle: String) -> Result<FileBody, String> {
     let plugin = safe_id(&plugin)?;
     let path = handles
         .0
@@ -189,12 +142,7 @@ pub fn plugin_file_read(
     let name = name_of(&path);
 
     match String::from_utf8(bytes) {
-        Ok(text) => Ok(FileBody {
-            name,
-            len,
-            text: Some(text),
-            base64: None,
-        }),
+        Ok(text) => Ok(FileBody { name, len, text: Some(text), base64: None }),
         Err(e) => Ok(FileBody {
             name,
             len,
@@ -204,11 +152,7 @@ pub fn plugin_file_read(
     }
 }
 
-/// Ask the person where to put something, and put it there.
-///
-/// There is no handle for writing and no way to write twice to one place
-/// without asking again, which is the difference between "save this file" and
-/// "may I write to your disk".
+/// Asks where to put something and puts it there. There is no write handle, so writing twice to one place asks twice.
 #[tauri::command]
 pub async fn plugin_file_write(
     app: AppHandle,
@@ -243,22 +187,13 @@ pub async fn plugin_file_write(
     let Some(target) = dialog.blocking_save_file() else {
         return Ok(None);
     };
-    let path = target
-        .into_path()
-        .map_err(|e| format!("that location has no writable path: {e}"))?;
+    let path = target.into_path().map_err(|e| format!("that location has no writable path: {e}"))?;
 
     std::fs::write(&path, &bytes).map_err(|e| format!("{}: {e}", name_of(&path)))?;
-    Ok(Some(Wrote {
-        name: name_of(&path),
-        len: bytes.len() as u64,
-    }))
+    Ok(Some(Wrote { name: name_of(&path), len: bytes.len() as u64 }))
 }
 
-/// What build of what app, on what machine.
-///
-/// No grant, and the argument is the one `schema` makes: a plugin that cannot
-/// tell which version it is running on has to either assume or break, and none
-/// of these three says anything about the person.
+/// No grant needed: a plugin has to know which version it runs on, and none of this says anything about the person.
 #[tauri::command]
 pub fn plugin_app_info(app: AppHandle) -> AppInfo {
     AppInfo {

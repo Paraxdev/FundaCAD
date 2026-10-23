@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { MOTION_LEVELS, MotionQuality } from "../../src/viewport/motionQuality";
+import { MOTION_LEVELS, MotionQuality, motionPixelScale } from "../../src/viewport/motionQuality";
+import type { ViewMode } from "../../src/ui/renderPrefs";
 
 /** Feed `n` camera frames of `ms` each, starting at `t0`; returns the clock after. */
 function feed(q: MotionQuality, ms: number, n: number, t0 = 0): number {
@@ -173,5 +174,28 @@ describe("MotionQuality", () => {
     // About 5 minutes of motion: the old 30 s memory alone retried ten times.
     expect(t).toBeGreaterThan(290_000);
     expect(changes).toBeLessThan(10);
+  });
+});
+
+describe("motionPixelScale", () => {
+  // A 12 M triangle assembly measured 10.2 ms a Matcap frame at full size and
+  // 9.8 ms at half, so a smaller canvas only blurs it.
+  const view = (viewMode: ViewMode, tracing = false, potato = false) => ({ viewMode, tracing, potato });
+
+  it("keeps Matcap at full resolution whatever the level", () => {
+    for (const s of MOTION_LEVELS) expect(motionPixelScale(view("matcap"), s)).toBe(1);
+  });
+
+  it("keeps a shown trace at full resolution", () => {
+    expect(motionPixelScale(view("pathtraced", true), 0.5)).toBe(1);
+  });
+
+  it("applies the level where pixels are the cost", () => {
+    expect(motionPixelScale(view("realtime"), 0.5)).toBe(0.5);
+    expect(motionPixelScale(view("pathtraced"), 0.75)).toBe(0.75);
+  });
+
+  it("applies it in potato mode, which draws its own way in Matcap too", () => {
+    expect(motionPixelScale(view("matcap", false, true), 0.5)).toBe(0.5);
   });
 });

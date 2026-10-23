@@ -191,7 +191,7 @@ describe("ScreenExtent", () => {
     // that reports a sliver; adding the rest of the face corrects it. This is
     // the shape of the prefix-vs-sample bug, in the box that measures it.
     const row = new ScreenExtent();
-    for (let x = 0; x < 360; x += 4) row.add(x, 0), row.add(x, 9);
+    for (let x = 0; x < 360; x += 4) (row.add(x, 0), row.add(x, 9));
     expect(row.min).toBe(9);
 
     const whole = new ScreenExtent();

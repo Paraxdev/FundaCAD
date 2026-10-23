@@ -1,6 +1,5 @@
-//! Sketch shortcuts: a `polyline` and a `rectangle` by its corners are
-//! stored as the entities the app already knows, and a sketch's entities are
-//! checked when they are sent. Spawns the engine.
+//! A `polyline` and a corner `rectangle` are stored as entities the app knows, and a sketch's entities
+//! are checked when sent. Spawns the engine.
 
 mod common;
 
@@ -49,7 +48,11 @@ fn a_closed_polyline_and_a_corner_rectangle_build_the_same_plate() {
     assert_eq!(lines[1], json!({"type": "line", "id": "p_2", "x1": 20, "y1": 0, "x2": 20, "y2": "h"}));
     assert_eq!((&lines[3]["x2"], &lines[3]["y2"]), (&json!(0), &json!(0)), "it closes on the first point");
     ok(&mut mcp, "param_set", json!({"name": "h", "expr": 10}));
-    ok(&mut mcp, "feature_add", json!({"feature": {"type": "extrude", "sketch": "sk1", "distance": 5, "operation": "new"}}));
+    ok(
+        &mut mcp,
+        "feature_add",
+        json!({"feature": {"type": "extrude", "sketch": "sk1", "distance": 5, "operation": "new"}}),
+    );
     let poly = ok(&mut mcp, "build", json!({}));
 
     let mut mcp = start();
@@ -62,7 +65,10 @@ fn a_closed_polyline_and_a_corner_rectangle_build_the_same_plate() {
         ]}),
     );
     assert!(text.contains("In sk1, r from corners became 20 x 10 centred at (10, 5)."), "{text}");
-    assert_eq!(entities(&mut mcp)[0], json!({"type": "rectangle", "id": "r", "width": 20.0, "height": 10.0, "x": 10.0, "y": 5.0}));
+    assert_eq!(
+        entities(&mut mcp)[0],
+        json!({"type": "rectangle", "id": "r", "width": 20.0, "height": 10.0, "x": 10.0, "y": 5.0})
+    );
     let rect = ok(&mut mcp, "build", json!({}));
     for built in [&poly, &rect] {
         assert!(built.contains("20.0 x 10.0 x 5.0 mm, vol 1000 mm3"), "{built}");
@@ -132,7 +138,10 @@ fn merging_overlapping_rectangles_keeps_the_solid_and_leaves_one_area() {
     );
     let whole = volume(&ok(&mut mcp, "build", json!({})));
     let text = ok(&mut mcp, "sketch_merge", json!({"sketch": "sk1", "entities": ["a", "b"], "build": true}));
-    assert!(text.contains("Merged a, b in sk1 into 6 entities (m1_1..m1_6): 1 outline. A point inside it: [") , "{text}");
+    assert!(
+        text.contains("Merged a, b in sk1 into 6 entities (m1_1..m1_6): 1 outline. A point inside it: ["),
+        "{text}"
+    );
     assert!(text.contains("Dropped 1 constraint on the merged shapes."), "{text}");
     // The build after it found the very same solid.
     assert!(text.ends_with("build:\nall bodies unchanged (1)"), "{text}");
@@ -159,7 +168,11 @@ fn a_merged_frame_keeps_its_hole_with_the_seed_it_gives() {
     assert!(text.contains("1 outline with 1 hole") && text.contains("give it `regions`"), "{text}");
     let at = text.find("A point inside it: ").unwrap() + "A point inside it: ".len();
     let seed: Value = serde_json::from_str(&text[at..text[at..].find(']').unwrap() + at + 1]).unwrap();
-    ok(&mut mcp, "feature_add", json!({"feature": {"type": "extrude", "sketch": "sk1", "distance": 2, "operation": "new", "regions": [seed]}}));
+    ok(
+        &mut mcp,
+        "feature_add",
+        json!({"feature": {"type": "extrude", "sketch": "sk1", "distance": 2, "operation": "new", "regions": [seed]}}),
+    );
     let built = ok(&mut mcp, "build", json!({}));
     assert!((volume(&built) - 1000.0).abs() < 1e-6, "{built}");
 }
@@ -218,6 +231,10 @@ fn a_merge_trims_offsets_names_what_reads_the_sketch_and_reuses_no_id() {
     assert!(text.contains("ex2 reads areas of this sketch by point"), "{text}");
     let doc: Value = serde_json::from_str(&ok(&mut mcp, "doc_get", json!({}))).unwrap();
     assert_eq!(doc["features"][0]["constraints"][0]["pairs"], json!([{"src": "d~0", "cpy": "c~1"}]));
-    let text = ok(&mut mcp, "sketch_merge", json!({"sketch": "sk1", "entities": ["m1_1", "m1_2", "m1_3", "m1_4", "m1_5", "m1_6", "m1_7", "m1_8", "c"]}));
+    let text = ok(
+        &mut mcp,
+        "sketch_merge",
+        json!({"sketch": "sk1", "entities": ["m1_1", "m1_2", "m1_3", "m1_4", "m1_5", "m1_6", "m1_7", "m1_8", "c"]}),
+    );
     assert!(text.contains("(m2_1, m2_2") || text.contains("(m2_1.."), "{text}");
 }

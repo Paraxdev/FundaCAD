@@ -1,6 +1,4 @@
-// Modify → Parameters. The dialog itself is
-// components/overlays/ParamsDialog.vue; this is the one-line facade its callers
-// (app/actions.ts, the menubar) still go through.
+// Modify → Parameters: a facade over components/overlays/ParamsDialog.vue for app/actions.ts and the menubar.
 
 import { usePanelsStore } from "../stores/panels";
 

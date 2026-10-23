@@ -1,8 +1,16 @@
 import { describe, expect, it } from "vitest";
 import manifest from "../../plugins/FundaCAD.PrintToolbox/manifest.json";
 import {
-  ELEPHANT_FOOT_CHAMFER, PRINT_TOOLS, SACRIFICIAL_LAYER, TEARDROP, COUNTERBORE_BRIDGE, VERTICAL_FILLET,
-  bodyFeatureFor, faceSelectors, featureFor, toolById,
+  ELEPHANT_FOOT_CHAMFER,
+  PRINT_TOOLS,
+  SACRIFICIAL_LAYER,
+  TEARDROP,
+  COUNTERBORE_BRIDGE,
+  VERTICAL_FILLET,
+  bodyFeatureFor,
+  faceSelectors,
+  featureFor,
+  toolById,
 } from "../../plugins/FundaCAD.PrintToolbox/printForm";
 
 describe("the toolbox's tools", () => {
@@ -22,7 +30,10 @@ describe("the toolbox's tools", () => {
   it("offer a choice's fallback among its own options", () => {
     for (const t of PRINT_TOOLS) {
       for (const c of t.choiceFields) {
-        expect(c.options.map((o) => o.value), `${t.type}.${c.field}`).toContain(c.fallback);
+        expect(
+          c.options.map((o) => o.value),
+          `${t.type}.${c.field}`,
+        ).toContain(c.fallback);
       }
     }
   });
@@ -48,7 +59,10 @@ describe("featureFor", () => {
   });
 
   it("keeps several picks as a list, and leaves a body off a pick that has none", () => {
-    const f = featureFor(SACRIFICIAL_LAYER, "f2", [pick, { point: [4, 5, 6], body: null }], "+Z") as unknown as Record<string, unknown>;
+    const f = featureFor(SACRIFICIAL_LAYER, "f2", [pick, { point: [4, 5, 6], body: null }], "+Z") as unknown as Record<
+      string,
+      unknown
+    >;
     expect(f["faces"]).toEqual(faceSelectors([pick, { point: [4, 5, 6], body: null }]));
     expect((f["faces"] as unknown[])[1]).toEqual({ kind: "face", by: "nearest", point: [4, 5, 6] });
     expect(f).toMatchObject({ layerHeight: 0.2, layers: 1, depth: 0, side: "bottom", buildDir: "+Z" });
@@ -81,7 +95,11 @@ describe("body-target tools", () => {
 describe("bodyFeatureFor", () => {
   it("writes the selected bodies, the defaults and the build direction", () => {
     expect(bodyFeatureFor(ELEPHANT_FOOT_CHAMFER, "f1", ["b1", "b2"], "-Z")).toEqual({
-      id: "f1", type: "elephantFootChamfer", bodies: ["b1", "b2"], size: 0.4, buildDir: "-Z",
+      id: "f1",
+      type: "elephantFootChamfer",
+      bodies: ["b1", "b2"],
+      size: 0.4,
+      buildDir: "-Z",
     });
   });
 

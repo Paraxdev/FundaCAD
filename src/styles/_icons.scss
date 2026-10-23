@@ -1,32 +1,14 @@
-/* ============================================================================
-   Icons
-
-   Every mark in the chrome used to be a Unicode character sitting in a text
-   node, so it laid out as text: a font-size decided how big it was, a line-box
-   decided where it sat, and `text-align: center` was enough to centre it. They
-   are <svg> elements now (components/shell/Icon.vue), which are replaced
-   inline-level boxes, same flow, but with a baseline that leaves a descender
-   gap under them and no relationship at all to font-size.
-
-   This file is the small amount of CSS that difference costs. It is loaded LAST
-   so a slot's own rules stay readable next to the rest of that component's
-   styles rather than being pre-empted here, and because the ribbon's
-   `.ribbon-btn svg` sizing must keep winning, which it does on specificity
-   (0,1,1 over `.icon`'s 0,1,0) whatever the order.
-   ============================================================================ */
+/* Layout for the <svg> icons (components/shell/Icon.vue). Loaded last; `.ribbon-btn svg`
+   sizing still wins on specificity (0,1,1 over 0,1,0). */
 
 .icon {
-  /* In a flex slot the icon is fixed furniture, never the thing that gives.
-     Without this a long tree label squeezes the eye down to nothing. */
+  /* Without this a long tree label squeezes the eye down to nothing. */
   flex: 0 0 auto;
-  /* Kills the descender gap in the slots that are still text flow, and lines
-     the mark up with the label's x-height rather than its baseline. */
+  /* Kills the descender gap under an inline svg and centres it on the x-height. */
   vertical-align: middle;
 }
 
-/* Slots that centre a single icon and nothing else. Flex rather than
-   text-align, which no longer reaches a replaced element's box the way it
-   reached a glyph's. */
+/* Flex, not text-align: text-align does not centre a replaced element's box. */
 .tree-caret,
 .tree-eye,
 .feature-icon,
@@ -45,10 +27,8 @@
   justify-content: center;
 }
 
-/* The check gutter, shared by the menu bar and the context menu.
-   A fixed width, always present once ANY row in that menu is a toggle: the
-   whole point is that turning a toggle on must not shove its label sideways
-   relative to the rows above and below it. */
+/* Fixed width, present once any row in the menu is a toggle, so turning a toggle on
+   does not shove its label sideways. */
 .menu-check,
 .ctx-check {
   display: inline-flex;
@@ -59,15 +39,12 @@
   color: var(--accent);
 }
 
-/* .menu-item is `justify-content: space-between` over what used to be exactly
-   two children. The check gutter makes three, which would have parked the label
-   in the middle of the row; an auto margin on the shortcut pins it right
-   regardless of how many siblings precede it. */
+/* .menu-item is space-between, and the check gutter makes three children, which would
+   park the label mid row; the auto margin pins the shortcut right. */
 .menu-shortcut {
   margin-left: auto;
 }
 
-/* The unsaved-document mark, after the name so the filename does not shift. */
 .docname .dirty-mark {
   color: var(--accent);
 }

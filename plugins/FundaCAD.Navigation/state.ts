@@ -1,5 +1,4 @@
-// The live config, shared by main.ts and the Preferences section. The app's
-// settings store keeps it; this is the parsed view the plugin works from.
+// The parsed view of the config the app's settings store keeps, shared by main.ts and the Preferences section.
 
 import { reactive } from "vue";
 import { definePluginSettings } from "fundacad";

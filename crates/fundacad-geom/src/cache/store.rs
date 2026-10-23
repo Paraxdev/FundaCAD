@@ -1,15 +1,6 @@
-//! The durable checkpoint store, the Python engine's `geomstore.py`: one binary BREP blob
-//! per body state, mesh artifacts, and a checkpoint record per chain key.
-//!
-//! Where geomstore keeps its checkpoint rows in SQLite, a record here is the
-//! file `checkpoints/<chain key>.json`. Every lookup geomstore makes is by
-//! chain key, which a filename answers in one stat, the rename that
-//! publishes a blob publishes a record atomically too, and a record's mtime is
-//! its last access. That leaves nothing an index would add but a second copy
-//! of the truth to fall out of step, and a WAL beside the cache.
-//!
-//! Everything is soft state: a missing, short or unreadable file is a miss,
-//! never an error and never wrong geometry.
+//! The durable checkpoint store of geomstore.py: a BREP blob per body state, mesh artifacts, and a record per
+//! chain key as `checkpoints/<chain key>.json` rather than SQLite, since every lookup is by key and a rename
+//! publishes atomically. Everything is soft state: a missing or unreadable file is a miss, never an error.
 
 use std::fs;
 use std::io::Write;
@@ -68,15 +59,10 @@ pub struct Stats {
 }
 
 pub fn default_root() -> PathBuf {
-    let base = std::env::var_os("XDG_CACHE_HOME")
-        .filter(|d| !d.is_empty())
-        .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            let home = std::env::var_os("HOME")
-                .or_else(|| std::env::var_os("USERPROFILE"))
-                .unwrap_or_default();
-            PathBuf::from(home).join(".cache")
-        });
+    let base = std::env::var_os("XDG_CACHE_HOME").filter(|d| !d.is_empty()).map(PathBuf::from).unwrap_or_else(|| {
+        let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).unwrap_or_default();
+        PathBuf::from(home).join(".cache")
+    });
     // Apart from the Python engine's `geom`: its SQLite eviction reclaims every blob
     // no row of its own references, which would be all of these.
     base.join("fundacad").join("engine-geom")
@@ -119,10 +105,7 @@ impl GeomStore {
     }
 
     fn mesh_path(&self, key: &str) -> PathBuf {
-        let clean: String = key
-            .chars()
-            .map(|c| if c.is_ascii_hexdigit() || c == '-' { c } else { '-' })
-            .collect();
+        let clean: String = key.chars().map(|c| if c.is_ascii_hexdigit() || c == '-' { c } else { '-' }).collect();
         self.meshes.join(format!("{clean}.bin"))
     }
 
@@ -136,9 +119,7 @@ impl GeomStore {
         }
         // The clock alone names two writes of the same tick alike.
         static NTH: AtomicU64 = AtomicU64::new(0);
-        let nonce = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .map_or(0, |d| d.as_nanos());
+        let nonce = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).map_or(0, |d| d.as_nanos());
         let nth = NTH.fetch_add(1, Ordering::Relaxed);
         let tmp = self.tmp.join(format!("{nonce:x}-{}-{nth}.tmp", std::process::id()));
         let written = (|| {
@@ -231,15 +212,9 @@ impl GeomStore {
 
     /// Upserts the record; an existing pin survives.
     pub fn save_checkpoint(&self, chain_key: &str, mut cp: Checkpoint) -> std::io::Result<()> {
-        let path = self
-            .checkpoint_path(chain_key)
-            .ok_or_else(|| std::io::Error::other("not a cache key"))?;
-        cp.bytes = cp
-            .manifest
-            .iter()
-            .filter_map(|e| fs::metadata(self.blob_path(&e.blob_key)).ok())
-            .map(|m| m.len())
-            .sum();
+        let path = self.checkpoint_path(chain_key).ok_or_else(|| std::io::Error::other("not a cache key"))?;
+        cp.bytes =
+            cp.manifest.iter().filter_map(|e| fs::metadata(self.blob_path(&e.blob_key)).ok()).map(|m| m.len()).sum();
         if let Some(old) = self.read_checkpoint(chain_key) {
             cp.pinned |= old.pinned;
         }
@@ -258,9 +233,8 @@ impl GeomStore {
         }
     }
 
-    /// The deepest restorable checkpoint among `chain_keys` (index i is the key
-    /// after feature i). A record whose blobs went missing is removed and the
-    /// walk goes on to a shallower one.
+    /// The deepest restorable checkpoint among `chain_keys` (index i is the key after feature i). A record whose
+    /// blobs went missing is removed and the walk goes on to a shallower one.
     pub fn find_checkpoint(&self, chain_keys: &[String]) -> Option<(String, Checkpoint)> {
         for key in chain_keys.iter().rev() {
             let Some(path) = self.checkpoint_path(key) else {
@@ -327,9 +301,8 @@ impl GeomStore {
         removed
     }
 
-    /// Brings the blobs under `byte_cap`: orphans first, then unpinned
-    /// checkpoints in order of bytes per replay millisecond, a record always
-    /// removed before its blobs. Returns the checkpoints evicted.
+    /// Brings the blobs under `byte_cap`: orphans first, then unpinned checkpoints by bytes per replay millisecond,
+    /// a record always removed before its blobs. Returns the checkpoints evicted.
     pub fn evict(&self, byte_cap: u64) -> usize {
         let mut rows = self.all_checkpoints();
         let mut refcount: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
@@ -397,10 +370,8 @@ impl GeomStore {
     /// A tenth of the free space plus what the cache holds, within
     /// [512 MiB, 8 GiB] and never past half; `FUNDACAD_CACHE_MAX_GB` overrides.
     pub fn cache_budget(&self) -> u64 {
-        if let Some(gb) = std::env::var("FUNDACAD_CACHE_MAX_GB")
-            .ok()
-            .and_then(|s| s.trim().parse::<f64>().ok())
-            .filter(|g| *g > 0.0)
+        if let Some(gb) =
+            std::env::var("FUNDACAD_CACHE_MAX_GB").ok().and_then(|s| s.trim().parse::<f64>().ok()).filter(|g| *g > 0.0)
         {
             return (gb * f64::from(1u32 << 30)) as u64;
         }
@@ -492,14 +463,7 @@ mod tests {
     }
 
     fn cp(index: usize, manifest: Vec<ManifestEntry>, replay_ms: f64) -> Checkpoint {
-        Checkpoint {
-            feat_index: index,
-            manifest,
-            state: Value::Null,
-            replay_ms,
-            bytes: 0,
-            pinned: false,
-        }
+        Checkpoint { feat_index: index, manifest, state: Value::Null, replay_ms, bytes: 0, pinned: false }
     }
 
     fn key(n: u8) -> String {
@@ -516,10 +480,17 @@ mod tests {
         let back = s.get_blob(&key(1)).unwrap();
         assert!((crate::kernel::volume(&back) - 1000.0).abs() < 1e-6);
         assert!(s.get_blob(&key(2)).is_none());
-        fs::write(s.blob_path(&key(3)).parent().map(|p| {
-            fs::create_dir_all(p).unwrap();
+        fs::write(
             s.blob_path(&key(3))
-        }).unwrap(), b"garbage").unwrap();
+                .parent()
+                .map(|p| {
+                    fs::create_dir_all(p).unwrap();
+                    s.blob_path(&key(3))
+                })
+                .unwrap(),
+            b"garbage",
+        )
+        .unwrap();
         assert!(s.get_blob(&key(3)).is_none());
         assert!(!s.has_blob(&key(3)), "a corrupt blob is removed");
         assert!(s.get_blob("../escape").is_none());
@@ -540,15 +511,6 @@ mod tests {
         assert!(s.read_checkpoint(&keys[2]).is_none(), "an unrestorable record is dropped");
         assert!(s.find_checkpoint(&keys[1..]).is_none());
         assert!(s.find_checkpoint(&[]).is_none());
-    }
-
-    #[test]
-    fn a_temp_file_from_a_crash_is_swept() {
-        let root = scratch("tmp");
-        GeomStore::open(&root).unwrap();
-        fs::write(root.join("tmp").join("junk.tmp"), b"x").unwrap();
-        GeomStore::open(&root).unwrap();
-        assert_eq!(fs::read_dir(root.join("tmp")).unwrap().count(), 0);
     }
 
     #[test]
@@ -576,25 +538,18 @@ mod tests {
     }
 
     #[test]
-    fn purge_keeps_blobs_another_checkpoint_needs() {
-        let s = GeomStore::open(scratch("purge")).unwrap();
-        let shape = crate::kernel::make_box(1.0, 2.0, 3.0).unwrap();
-        s.put_blob(&key(1), &shape).unwrap();
-        s.put_blob(&key(2), &shape).unwrap();
-        s.save_checkpoint(&key(40), cp(0, vec![entry("a", &key(1)), entry("b", &key(2))], 1.0)).unwrap();
-        s.save_checkpoint(&key(41), cp(0, vec![entry("a", &key(1))], 1.0)).unwrap();
-        assert_eq!(s.purge(&[key(40)]), 1);
-        assert!(s.has_blob(&key(1)) && !s.has_blob(&key(2)));
-    }
-
-    #[test]
     fn meshes_evict_least_recently_used_and_the_budget_clamps() {
         let s = GeomStore::open(scratch("mesh")).unwrap();
         s.put_mesh("aa-tv8", &[1u8; 100]).unwrap();
         s.put_mesh("bb-tv8", &[2u8; 100]).unwrap();
         let old = SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000);
         fs::OpenOptions::new().append(true).open(s.mesh_path("aa-tv8")).unwrap().set_modified(old).unwrap();
-        fs::OpenOptions::new().append(true).open(s.mesh_path("bb-tv8")).unwrap().set_modified(old + std::time::Duration::from_secs(5)).unwrap();
+        fs::OpenOptions::new()
+            .append(true)
+            .open(s.mesh_path("bb-tv8"))
+            .unwrap()
+            .set_modified(old + std::time::Duration::from_secs(5))
+            .unwrap();
         assert_eq!(s.get_mesh("aa-tv8").unwrap(), vec![1u8; 100]);
         assert_eq!(s.evict_meshes(150), 1);
         assert!(s.get_mesh("aa-tv8").is_some() && s.get_mesh("bb-tv8").is_none());

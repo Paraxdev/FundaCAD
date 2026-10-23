@@ -36,6 +36,10 @@ const TABLE: &[(&str, (bool, bool, bool, bool))] = &[
     ("ui_do", (false, true, false, false)),
     ("ui_open", (false, false, true, false)),
     ("ui_close", (false, true, true, false)),
+    // A step and a wait change what the user sees, never the document.
+    ("guide_highlight", (false, false, true, false)),
+    ("guide_wait", (true, false, false, false)),
+    ("guide_clear", (false, false, true, false)),
 ];
 
 #[test]
@@ -48,10 +52,7 @@ fn every_tool_carries_the_hints_of_the_table() {
     assert_eq!(offered, classified, "a tool is offered that the table does not classify, or the reverse");
     for tool in &tools {
         let want = TABLE.iter().find(|(n, _)| *n == tool.name).expect("checked above").1;
-        let a = tool
-            .annotations
-            .as_ref()
-            .unwrap_or_else(|| panic!("{} has no annotations", tool.name));
+        let a = tool.annotations.as_ref().unwrap_or_else(|| panic!("{} has no annotations", tool.name));
         let got = (a.read_only_hint, a.destructive_hint, a.idempotent_hint, a.open_world_hint);
         assert_eq!(
             got,

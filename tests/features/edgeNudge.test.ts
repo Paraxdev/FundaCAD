@@ -99,15 +99,25 @@ describe("handlePlacement", () => {
 
 describe("pointOnEdge", () => {
   it("stands on the edge where it was clicked, not mid-edge", () => {
-    const line: [number, number, number][] = [[0, 0, 0], [10, 0, 0]];
+    const line: [number, number, number][] = [
+      [0, 0, 0],
+      [10, 0, 0],
+    ];
     expect(pointOnEdge(line, [8, 1, 0])).toEqual({ anchor: [8, 0, 0], tangent: [1, 0, 0] });
   });
   it("clamps past the ends", () => {
-    const line: [number, number, number][] = [[0, 0, 0], [10, 0, 0]];
+    const line: [number, number, number][] = [
+      [0, 0, 0],
+      [10, 0, 0],
+    ];
     expect(pointOnEdge(line, [-4, 0, 0])?.anchor).toEqual([0, 0, 0]);
   });
   it("takes the local direction on a curve", () => {
-    const bend: [number, number, number][] = [[0, 0, 0], [10, 0, 0], [10, 10, 0]];
+    const bend: [number, number, number][] = [
+      [0, 0, 0],
+      [10, 0, 0],
+      [10, 10, 0],
+    ];
     expect(pointOnEdge(bend, [10.5, 7, 0])).toEqual({ anchor: [10, 7, 0], tangent: [0, 1, 0] });
   });
   it("has nothing to stand on without a segment", () => {

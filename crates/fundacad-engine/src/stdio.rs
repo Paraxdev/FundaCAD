@@ -1,8 +1,5 @@
-//! The worker's transport to the app: framed messages on stdin and stdout.
-//!
-//! OpenCASCADE writes diagnostics to the C runtime's stdout, which would land
-//! inside a frame, so the frames get a private duplicate of the stdout handle
-//! and descriptor 1 is pointed at stderr before any kernel code runs.
+//! The worker's framed stdin and stdout transport to the app. OpenCASCADE writes diagnostics to the C runtime's
+//! stdout, so frames get a private duplicate of the handle and descriptor 1 points at stderr before any kernel code.
 
 use crate::{Engine, EngineOptions, Jobs, Outbox};
 use fundacad_protocol::{read_message, write_message, Message};
@@ -22,9 +19,8 @@ impl Outbox for FrameOut {
     }
 }
 
-/// Serves requests from stdin until the app closes it, then exits the process.
-/// Exiting on EOF is also what ends a worker whose app crashed, even while a
-/// kernel call is still running on the job thread.
+/// Serves requests from stdin until the app closes it, then exits the process, which also ends a worker whose app
+/// crashed while a kernel call still runs on the job thread.
 pub fn run<J: Jobs + Default>(jobs: J) -> ! {
     serve(jobs, |_| {})
 }
@@ -44,10 +40,7 @@ pub fn serve<J: Jobs + Default>(jobs: J, beside: impl FnOnce(&Arc<Engine>)) -> !
     let engine = Arc::new(Engine::start_with(
         jobs,
         Some(Arc::new(J::default)),
-        EngineOptions {
-            exit_on_breach: true,
-            ..EngineOptions::from_env()
-        },
+        EngineOptions { exit_on_breach: true, ..EngineOptions::from_env() },
         Arc::new(FrameOut(Mutex::new(BufWriter::new(frames)))),
     ));
     beside(&engine);
@@ -64,9 +57,8 @@ pub fn serve<J: Jobs + Default>(jobs: J, beside: impl FnOnce(&Arc<Engine>)) -> !
     }
 }
 
-/// A private handle on the real stdout, with descriptor 1 and the OS standard
-/// handle pointed at stderr, so kernel diagnostics cannot corrupt what the
-/// caller writes. Call it before any other thread exists.
+/// A private handle on the real stdout, with descriptor 1 and the OS standard handle pointed at stderr so kernel
+/// diagnostics cannot corrupt it. Call it before any other thread exists.
 pub fn take_stdout() -> io::Result<File> {
     io::stdout().flush()?;
     // SAFETY: plain descriptor calls on the process's own standard streams,

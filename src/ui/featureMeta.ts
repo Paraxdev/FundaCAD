@@ -1,14 +1,5 @@
-// Display metadata for feature types (icon name + label), shared by the timeline,
-// browser tree, and toolbar.
-//
-// `icon` is a name in the icon registry (ui/icons.ts), not a character. It used
-// to be a Unicode glyph, which cost nothing to write and everything to look at:
-// the marks came from four different Unicode blocks, so they rendered at four
-// different weights and baselines out of whatever fallback font the platform
-// happened to reach for, and a few (Clean Up, Remove Body) were emoji that the
-// OS drew in full colour in the middle of a monochrome timeline. A name into a
-// hand-drawn 24×24 set is the same amount of typing and renders identically on
-// every machine.
+// Icon name and label per feature type, for the timeline, browser tree and toolbar. `icon` names a glyph in
+// ui/icons.ts, not a Unicode character: those rendered at mixed weights, some as colour emoji.
 import { BOOLEAN_COMMANDS } from "../features/booleanOps";
 import { contributedFeature } from "../plugins/contrib";
 import type { Feature, FeatureType } from "../types";
@@ -18,20 +9,8 @@ export interface FeatureMeta {
   label: string;
 }
 
-/** The mark and the word for every feature type THE APPLICATION DRAWS.
- *
- *  Partial over the union, and it used to be total. The union is the document
- *  FORMAT, every type a file may contain, which is a wider thing than every
- *  type this build knows how to present, and the two came apart when a tool
- *  became a plugin. A total Record could only have been kept by leaving a mark
- *  here for a feature the application has no other knowledge of.
- *
- *  Totality was worth something, so it is not simply dropped: a new feature type
- *  with no mark anywhere is still a bug, and `tests/ui/featureMeta.test.ts`
- *  catches it by asking that every type in the union resolve to a mark from
- *  SOMEWHERE, the table here, or a plugin in this repository. That is a
- *  stricter question than the Record was asking, because it holds the plugins to
- *  it too. */
+/** Partial: the union is every type a file may hold, wider than what this build draws now that tools can be plugins.
+ *  tests/ui/featureMeta.test.ts still checks every type gets a mark from here or a plugin in this repository. */
 export const FEATURE_META: Partial<Record<FeatureType, FeatureMeta>> = {
   sketch: { icon: "sketch", label: "Sketch" },
   extrude: { icon: "extrude", label: "Extrude" },
@@ -50,10 +29,7 @@ export const FEATURE_META: Partial<Record<FeatureType, FeatureMeta>> = {
   split: { icon: "split", label: "Split Body" },
   separate: { icon: "split", label: "Separate" },
   imprint: { icon: "imprint", label: "Divide Face" },
-  // The type-level entry for the booleans, and the one nothing should reach in
-  // practice: `featureMeta` below reads the operation and names the actual
-  // command. It stays because this table is a Record over the whole union and a
-  // hole in it is a crash on a document from a newer build.
+  // featureMeta names the actual boolean command, so this entry is only the type's fallback.
   boolean: { icon: "booleanUnion", label: "Boolean" },
   box: { icon: "box", label: "Box" },
   cylinder: { icon: "cylinder", label: "Cylinder" },
@@ -80,35 +56,43 @@ export const FEATURE_META: Partial<Record<FeatureType, FeatureMeta>> = {
   removeBody: { icon: "removeBody", label: "Remove Body" },
 };
 
-/** The mark and the word for ONE feature, which is not always a fact about its
- *  type alone.
- *
- *  A boolean is three commands sharing a feature type, so a history that named
- *  them all "Boolean" would be a column of identical chips over three different
- *  operations, you could not tell a part being cut from a part being joined
- *  without opening each one. Everything else answers from its type.
- *
- *  Tolerant of a feature this build has never heard of, for the same reason the
- *  table is a total Record: a document from a newer version must render as
- *  something rather than throw mid-draw and make File→Open look like a no-op.
- *
- *  A PLUGIN CAN NAME ONE, and is asked after the table rather than before it, so
- *  a plugin cannot rename the app's own features by claiming a type it does not
- *  own. It is asked BEFORE the grey-dot fallback, because that fallback is what
- *  a feature whose plugin is missing correctly looks like: the document still
- *  opens, the history still has a row for it, and it reads as something the
- *  build does not understand, which is exactly what it is. */
+/** A boolean is three commands sharing one type, so it is named by its operation. An unknown type renders as a grey
+ *  dot rather than throw. Plugins are asked after the table, so they cannot rename the app's own features. */
 export function featureMeta(f: { type: string; operation?: unknown; thin?: unknown }): FeatureMeta {
   if (f.type === "boolean") {
     const cmd = BOOLEAN_COMMANDS.find((c) => c.op === f.operation);
     if (cmd) return { icon: cmd.iconName, label: cmd.label };
   }
   if (f.type === "extrude" && f.thin === true) return { icon: "extrude", label: "Thin extrude" };
-  return (
-    FEATURE_META[f.type as FeatureType] ??
-    contributedFeature(f.type)?.meta ??
-    { icon: "dot", label: f.type }
-  );
+  return FEATURE_META[f.type as FeatureType] ?? contributedFeature(f.type)?.meta ?? { icon: "dot", label: f.type };
+}
+
+type Nameable = {
+  type: string;
+  name?: string;
+  source?: string;
+  nodes?: readonly { name: string; parent: number | null }[];
+  operation?: unknown;
+  thin?: unknown;
+};
+
+/** The one root of an import's assembly tree, the folder name Items shows. */
+export function assemblyName(f: Nameable): string | null {
+  const roots = f.type === "import" ? (f.nodes ?? []).filter((n) => n.parent === null) : [];
+  return roots.length === 1 ? roots[0]!.name || null : null;
+}
+
+/** The name History and Items agree on. An import takes its assembly name, but only while its
+ *  name is still the file's: `source` is a path, and the engine names an import after the file
+ *  stem (or the stem of a .gz one), so a name that is not that was typed. */
+export function stepName(f: Nameable): string {
+  const own = f.name?.trim() ?? "";
+  const asm = assemblyName(f);
+  if (asm && own && f.source) {
+    const file = (f.source.split(/[\x5c/]/).pop() ?? "").toLowerCase();
+    if (file.startsWith(`${own.toLowerCase()}.`)) return asm;
+  }
+  return own || featureMeta(f).label;
 }
 
 /** The same answer for a whole feature, when the caller has one. */

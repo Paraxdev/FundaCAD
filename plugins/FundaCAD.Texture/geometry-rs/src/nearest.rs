@@ -39,11 +39,7 @@ impl Tree {
         }
         let axis = depth % self.dim;
         let diff = q[axis] - p[axis];
-        let (near, far) = if diff < 0.0 {
-            ((lo, mid), (mid + 1, hi))
-        } else {
-            ((mid + 1, hi), (lo, mid))
-        };
+        let (near, far) = if diff < 0.0 { ((lo, mid), (mid + 1, hi)) } else { ((mid + 1, hi), (lo, mid)) };
         self.search(near.0, near.1, depth + 1, q, best);
         if diff * diff < *best {
             self.search(far.0, far.1, depth + 1, q, best);

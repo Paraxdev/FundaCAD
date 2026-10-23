@@ -54,9 +54,14 @@ async function countInk(page, tag) {
   const r = await page.evaluate(async () => {
     const url = window.viewport.renderStill(1, { edges: false });
     const img = new Image();
-    await new Promise((ok, no) => { img.onload = ok; img.onerror = no; img.src = url; });
+    await new Promise((ok, no) => {
+      img.onload = ok;
+      img.onerror = no;
+      img.src = url;
+    });
     const c = document.createElement("canvas");
-    c.width = img.width; c.height = img.height;
+    c.width = img.width;
+    c.height = img.height;
     const g = c.getContext("2d");
     g.drawImage(img, 0, 0);
     const px = g.getImageData(0, 0, c.width, c.height).data;
@@ -91,23 +96,36 @@ async function countInk(page, tag) {
   await page.keyboard.press("Escape");
   await until(page, () => window.__fundacad.toolBusy() === false, "the window to be idle");
 
-  await page.evaluate(([slot, ink]) => {
-    window.__fundacad.store.setPaletteSlot(slot, { name: "Probe", color: ink });
-  }, [SLOT, INK]);
+  await page.evaluate(
+    ([slot, ink]) => {
+      window.__fundacad.store.setPaletteSlot(slot, { name: "Probe", color: ink });
+    },
+    [SLOT, INK],
+  );
 
   /** A knurled cube, with or without a palette slot on the texture. */
   const build = async (withSlot) => {
-    await page.evaluate(([withSlot, slot]) => {
-      const s = window.__fundacad.store;
-      for (const f of [...s.document.features]) s.removeFeature(f.id);
-      s.addFeature({ id: "b1", type: "box", length: 30, width: 30, height: 30 });
-      s.addFeature(Object.assign(
-        { id: "t1", type: "texture", body: "body1", kind: "knurl", depth: 0.8, scale: 3, faces: { by: "all" } },
-        withSlot ? { colorSlot: slot } : {},
-      ));
-    }, [withSlot, SLOT]);
-    await until(page, () => (window.__fundacad.store.buildState.result?.mesh?.positions?.length ?? 0) > 400
-      && window.__fundacad.store.buildState.building === false, "a built textured body");
+    await page.evaluate(
+      ([withSlot, slot]) => {
+        const s = window.__fundacad.store;
+        for (const f of [...s.document.features]) s.removeFeature(f.id);
+        s.addFeature({ id: "b1", type: "box", length: 30, width: 30, height: 30 });
+        s.addFeature(
+          Object.assign(
+            { id: "t1", type: "texture", body: "body1", kind: "knurl", depth: 0.8, scale: 3, faces: { by: "all" } },
+            withSlot ? { colorSlot: slot } : {},
+          ),
+        );
+      },
+      [withSlot, SLOT],
+    );
+    await until(
+      page,
+      () =>
+        (window.__fundacad.store.buildState.result?.mesh?.positions?.length ?? 0) > 400 &&
+        window.__fundacad.store.buildState.building === false,
+      "a built textured body",
+    );
     await page.waitForTimeout(2500);
   };
 
@@ -117,8 +135,7 @@ async function countInk(page, tag) {
     const b = window.__fundacad.store.buildState.result.bodies[0];
     return { slots: b.faceColorSlots || null, distinct: [...new Set(b.faceColorSlots || [])] };
   });
-  check("the window receives the per-face palette slots the engine sent",
-    !!wire.slots && wire.slots.length === 6);
+  check("the window receives the per-face palette slots the engine sent", !!wire.slots && wire.slots.length === 6);
   check("and they are the slot the texture asked for", wire.distinct.join() === String(SLOT));
 
   // --- 2. and they are painted ----------------------------------------------
@@ -140,4 +157,7 @@ async function countInk(page, tag) {
   console.log(`pictures in ${OUT}`);
   await browser.close();
   process.exit(failures.length ? 1 : 0);
-})().catch((e) => { console.error("ERROR:", e.message); process.exit(1); });
+})().catch((e) => {
+  console.error("ERROR:", e.message);
+  process.exit(1);
+});

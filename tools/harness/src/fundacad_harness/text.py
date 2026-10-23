@@ -92,6 +92,19 @@ def status(v: dict, now: float | None = None) -> str:
     return "\n".join(lines)
 
 
+def guide(v: dict) -> str:
+    def box(b):
+        return f"{b['left']},{b['top']} {b['width']}x{b['height']}" if b else "none"
+
+    lines = [f"{v.get('count') or 'Guide'}: {v.get('caption', '')}"]
+    if v.get("hint"):
+        lines.append(f"hint: {v['hint']}")
+    lines.append(f"ring on {v.get('on') or '?'} at {box(v.get('ring'))}, bubble at {box(v.get('bubble'))}")
+    if v.get("outline"):
+        lines.append(f"model outline at {box(v['outline'])}")
+    return "\n".join(lines)
+
+
 def selection(v: dict) -> str:
     parts = []
     if v.get("bodies"):

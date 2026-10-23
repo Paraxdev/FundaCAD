@@ -10,11 +10,19 @@ import { CLICK_SLOP_PX } from "../../../src/viewport/navigator/navigator";
 
 const PX_TOL = 1e-9 * H;
 
-function drag(nav: ReturnType<typeof setup>["nav"], x0: number, y0: number, path: [number, number][], each?: () => void) {
+function drag(
+  nav: ReturnType<typeof setup>["nav"],
+  x0: number,
+  y0: number,
+  path: [number, number][],
+  each?: () => void,
+) {
   nav.beginOrbit(x0, y0);
-  let x = x0, y = y0;
+  let x = x0,
+    y = y0;
   for (const [dx, dy] of path) {
-    x += dx; y += dy;
+    x += dx;
+    y += dy;
     nav.dragTo(x, y);
     nav.update(1 / 60);
     each?.();
@@ -43,7 +51,10 @@ describe("mouse orbit", () => {
             expect(Math.abs(rightZ(nav))).toBeLessThan(1e-12);
           };
           drag(nav, x0, y0, path, check);
-          for (let f = 0; f < 200 && nav.isBusy(); f++) { nav.update(1 / 60); check(); }
+          for (let f = 0; f < 200 && nav.isBusy(); f++) {
+            nav.update(1 / 60);
+            check();
+          }
           settle(nav);
         }
       });
@@ -52,7 +63,12 @@ describe("mouse orbit", () => {
     it(`reaches Top exactly and leaves it smoothly (tau ${tau})`, () => {
       const { nav } = setup({ tau });
       // a long drag down takes the camera up and over, clamped at straight down
-      drag(nav, 400, 300, Array.from({ length: 40 }, () => [0, 20] as [number, number]));
+      drag(
+        nav,
+        400,
+        300,
+        Array.from({ length: 40 }, () => [0, 20] as [number, number]),
+      );
       settle(nav);
       expect(nav.pose.elev).toBe(0);
       const f = fwd(nav);
@@ -63,13 +79,20 @@ describe("mouse orbit", () => {
       // frame moves the view direction by about the drag, with no flip
       let prev = fwd(nav);
       let first = true;
-      const path: [number, number][] = [[0, -(CLICK_SLOP_PX + 1)], ...Array.from({ length: 30 }, () => [0, -1] as [number, number])];
+      const path: [number, number][] = [
+        [0, -(CLICK_SLOP_PX + 1)],
+        ...Array.from({ length: 30 }, () => [0, -1] as [number, number]),
+      ];
       drag(nav, 400, 300, path, () => {
         const now = fwd(nav);
-        if (first) { first = false; prev = now; return; }
+        if (first) {
+          first = false;
+          prev = now;
+          return;
+        }
         const step = now.angleTo(prev);
         // eased, the slop step is still being caught up for a few frames
-        expect(step).toBeLessThan((2 * Math.PI) / H * (tau ? 2 : 1.01) + 1e-12);
+        expect(step).toBeLessThan(((2 * Math.PI) / H) * (tau ? 2 : 1.01) + 1e-12);
         prev = now;
         expect(Math.abs(rightZ(nav))).toBeLessThan(1e-12);
       });
@@ -97,7 +120,11 @@ describe("mouse orbit", () => {
     settle(nav);
     const q0 = nav.pose.q.clone();
     const t0 = nav.pose.target.clone();
-    drag(nav, 400, 300, [[2, 1], [1, 2], [-1, 1]]);
+    drag(nav, 400, 300, [
+      [2, 1],
+      [1, 2],
+      [-1, 1],
+    ]);
     settle(nav);
     expect(nav.pose.q.angleTo(q0)).toBe(0);
     expect(nav.pose.target.equals(t0)).toBe(true);
@@ -105,7 +132,13 @@ describe("mouse orbit", () => {
   });
 
   it("a drag past the click slop turns by the whole distance from the press", () => {
-    const ends = [[[40, 0]], [[3, 0], [37, 0]]].map((path) => {
+    const ends = [
+      [[40, 0]],
+      [
+        [3, 0],
+        [37, 0],
+      ],
+    ].map((path) => {
       const { nav } = setup({ tau: 0 });
       drag(nav, 400, 300, path as [number, number][]);
       settle(nav);
@@ -164,7 +197,10 @@ describe("mouse orbit", () => {
     const pivot = nav.pivotAt(400, 300);
     const p0 = pixel(nav, pivot);
     nav.beginOrbit(400, 300);
-    for (let i = 1; i <= 5; i++) { nav.dragTo(400 + i * 10, 300); nav.update(1 / 60); }
+    for (let i = 1; i <= 5; i++) {
+      nav.dragTo(400 + i * 10, 300);
+      nav.update(1 / 60);
+    }
     const yawAtRelease = nav.pose.yaw;
     nav.endGesture();
     settle(nav);

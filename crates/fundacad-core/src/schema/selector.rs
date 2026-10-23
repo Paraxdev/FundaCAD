@@ -67,9 +67,7 @@ impl<'de> Deserialize<'de> for FaceRef {
         use serde::de::Error as _;
         let v = Value::deserialize(d)?;
         if v.get("by").is_none() {
-            return serde_json::from_value(v)
-                .map(FaceRef::Fingerprint)
-                .map_err(D::Error::custom);
+            return serde_json::from_value(v).map(FaceRef::Fingerprint).map_err(D::Error::custom);
         }
         let s: Selector = serde_json::from_value(v).map_err(D::Error::custom)?;
         match (&s, s.kind()) {
@@ -108,11 +106,9 @@ pub enum SelectorBy {
     FaceNearest {
         point: Vec3,
     },
-    /// A flat face kept by its outward normal, which follows it wherever a
-    /// change upstream moves it. `extent` is its outline's `[umin, umax, vmin,
-    /// vmax]` in the face frame when this was written: a point placed on it
-    /// keeps its offset from the nearest of each axis's min, middle and max.
-    /// `center`, the older form, moves every point with the outline's centre.
+    /// A flat face kept by its outward normal. `extent` is its outline's `[umin, umax, vmin, vmax]` in the face frame
+    /// when written: a point on it keeps its offset from the nearest of each axis's min, middle and max. The older
+    /// `center` form moves every point with the outline's centre.
     FaceTracked {
         point: Vec3,
         normal: Vec3,
@@ -168,9 +164,7 @@ impl Selector {
                 | SelectorBy::EdgeOfFace { .. } => "edge",
                 _ => "face",
             }),
-            Selector::Unknown(v) | Selector::Invalid(Invalid { raw: v, .. }) => {
-                v.get("kind").and_then(Value::as_str)
-            }
+            Selector::Unknown(v) | Selector::Invalid(Invalid { raw: v, .. }) => v.get("kind").and_then(Value::as_str),
         }
     }
 
@@ -186,74 +180,43 @@ impl Selector {
                 SelectorBy::EdgeTangentChain { .. } => "tangentChain",
                 SelectorBy::EdgeOfFace { .. } => "ofFace",
             }),
-            Selector::Unknown(v) | Selector::Invalid(Invalid { raw: v, .. }) => {
-                v.get("by").and_then(Value::as_str)
-            }
+            Selector::Unknown(v) | Selector::Invalid(Invalid { raw: v, .. }) => v.get("by").and_then(Value::as_str),
         }
     }
 
     pub fn body(&self) -> Option<&str> {
         match self {
             Selector::Known(k) => k.body.as_deref(),
-            Selector::Unknown(v) | Selector::Invalid(Invalid { raw: v, .. }) => {
-                v.get("body").and_then(Value::as_str)
-            }
+            Selector::Unknown(v) | Selector::Invalid(Invalid { raw: v, .. }) => v.get("body").and_then(Value::as_str),
         }
     }
 }
 
-fn take<T: serde::de::DeserializeOwned>(
-    m: &mut Extra,
-    key: &str,
-) -> Result<Option<T>, serde_json::Error> {
+fn take<T: serde::de::DeserializeOwned>(m: &mut Extra, key: &str) -> Result<Option<T>, serde_json::Error> {
     m.shift_remove(key).map(serde_json::from_value).transpose()
 }
 
 fn need<T: serde::de::DeserializeOwned>(m: &mut Extra, key: &str) -> Result<T, serde_json::Error> {
-    take(m, key)?.ok_or_else(|| {
-        <serde_json::Error as serde::de::Error>::custom(format!("missing field `{key}`"))
-    })
+    take(m, key)?.ok_or_else(|| <serde_json::Error as serde::de::Error>::custom(format!("missing field `{key}`")))
 }
 
-fn parse_known(
-    kind: &str,
-    by: &str,
-    m: &mut Extra,
-) -> Result<Option<SelectorBy>, serde_json::Error> {
+fn parse_known(kind: &str, by: &str, m: &mut Extra) -> Result<Option<SelectorBy>, serde_json::Error> {
     Ok(Some(match (kind, by) {
-        ("edge", "axis") => SelectorBy::EdgeAxis {
-            axis: need(m, "axis")?,
-        },
-        ("edge", "nearest") => SelectorBy::EdgeNearest {
-            point: need(m, "point")?,
-        },
+        ("edge", "axis") => SelectorBy::EdgeAxis { axis: need(m, "axis")? },
+        ("edge", "nearest") => SelectorBy::EdgeNearest { point: need(m, "point")? },
         ("edge", "all") => SelectorBy::EdgeAll,
-        ("face", "normal") => SelectorBy::FaceNormal {
-            dir: need(m, "dir")?,
-        },
-        ("face", "nearest") => SelectorBy::FaceNearest {
-            point: need(m, "point")?,
-        },
-        ("edge", "match") => SelectorBy::EdgeMatch {
-            fp: need(m, "fp")?,
-            nth: take(m, "nth")?,
-        },
+        ("face", "normal") => SelectorBy::FaceNormal { dir: need(m, "dir")? },
+        ("face", "nearest") => SelectorBy::FaceNearest { point: need(m, "point")? },
+        ("edge", "match") => SelectorBy::EdgeMatch { fp: need(m, "fp")?, nth: take(m, "nth")? },
         ("face", "tracked") => SelectorBy::FaceTracked {
             point: need(m, "point")?,
             normal: need(m, "normal")?,
             center: take(m, "center")?,
             extent: take(m, "extent")?,
         },
-        ("face", "match") => SelectorBy::FaceMatch {
-            fp: need(m, "fp")?,
-            nth: take(m, "nth")?,
-        },
-        ("edge", "tangentChain") => SelectorBy::EdgeTangentChain {
-            seed: need(m, "seed")?,
-        },
-        ("edge", "ofFace") => SelectorBy::EdgeOfFace {
-            face: need(m, "face")?,
-        },
+        ("face", "match") => SelectorBy::FaceMatch { fp: need(m, "fp")?, nth: take(m, "nth")? },
+        ("edge", "tangentChain") => SelectorBy::EdgeTangentChain { seed: need(m, "seed")? },
+        ("edge", "ofFace") => SelectorBy::EdgeOfFace { face: need(m, "face")? },
         _ => return Ok(None),
     }))
 }
@@ -279,10 +242,7 @@ impl<'de> Deserialize<'de> for Selector {
         Ok(match parsed {
             Ok(Some((by, body))) => Selector::Known(KnownSelector { by, body, extra: m }),
             Ok(None) => Selector::Unknown(v),
-            Err(e) => Selector::Invalid(Invalid {
-                error: format!("selector {kind} by {by}: {e}"),
-                raw: v,
-            }),
+            Err(e) => Selector::Invalid(Invalid { error: format!("selector {kind} by {by}: {e}"), raw: v }),
         })
     }
 }
@@ -290,9 +250,7 @@ impl<'de> Deserialize<'de> for Selector {
 impl Serialize for Selector {
     fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
         let k = match self {
-            Selector::Unknown(v) | Selector::Invalid(Invalid { raw: v, .. }) => {
-                return v.serialize(s)
-            }
+            Selector::Unknown(v) | Selector::Invalid(Invalid { raw: v, .. }) => return v.serialize(s),
             Selector::Known(k) => k,
         };
         let mut m = Extra::new();

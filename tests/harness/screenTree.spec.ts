@@ -18,10 +18,22 @@ describe("walkControls", () => {
   });
 
   it("builds a ref from each hook the DOM has", () => {
-    expect(refs()).toEqual(expect.arrayContaining([
-      "#undo-btn", "#docname", "action:sketch", "family:cat:CREATE", "feature:e1",
-      "field:angle", "item:body1", "eye:body1", "ctx:Rename", "menu:File", "#prompt", 'text:"Cancel"',
-    ]));
+    expect(refs()).toEqual(
+      expect.arrayContaining([
+        "#undo-btn",
+        "#docname",
+        "action:sketch",
+        "family:cat:CREATE",
+        "feature:e1",
+        "field:angle",
+        "item:body1",
+        "eye:body1",
+        "ctx:Rename",
+        "menu:File",
+        "#prompt",
+        'text:"Cancel"',
+      ]),
+    );
   });
 
   it("reads labels without key hints and flags state", () => {
@@ -48,19 +60,29 @@ describe("walkControls", () => {
   });
 
   it("names a choice by its label, without the hint under it", () => {
-    document.body.insertAdjacentHTML("beforeend",
-      '<div class="choice-backdrop"><button class="choice-btn"><span>Box</span><small>l×w×h</small></button></div>');
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      '<div class="choice-backdrop"><button class="choice-btn"><span>Box</span><small>l×w×h</small></button></div>',
+    );
     const box = walkControls(document, { rect }).controls.find((c) => c.ref.startsWith("choice:"))!;
     expect([box.ref, box.label]).toEqual(["choice:Box", "Box"]);
   });
 
   it("names a tab by its value, so a tab and a button with one label stay apart", () => {
     const tabs = mount(Tabs, {
-      props: { tabs: [{ value: "views", label: "Views" }, { value: "appearance", label: "Appearance" }], modelValue: "views" },
+      props: {
+        tabs: [
+          { value: "views", label: "Views" },
+          { value: "appearance", label: "Appearance" },
+        ],
+        modelValue: "views",
+      },
       attachTo: document.body,
     });
     document.body.insertAdjacentHTML("beforeend", '<button class="icon-btn" aria-label="Views"></button>');
-    const views = walkControls(document, { rect }).controls.filter((c) => c.label === "Views").map((c) => c.ref);
+    const views = walkControls(document, { rect })
+      .controls.filter((c) => c.label === "Views")
+      .map((c) => c.ref);
     expect(views.sort()).toEqual(["tab:views", 'text:"Views"']);
     tabs.unmount();
   });
@@ -82,8 +104,12 @@ describe("screenLines", () => {
   });
 
   it("calls the dialog region modal only when a backdrop covers the app", () => {
-    const note = () => screenLines(walkControls(document, { rect }), { region: "dialog" }).lines.find((l) => l[0] === 0)?.[3];
-    document.body.insertAdjacentHTML("beforeend", '<div class="logcon" role="dialog" aria-label="Console"><button>Clear</button></div>');
+    const note = () =>
+      screenLines(walkControls(document, { rect }), { region: "dialog" }).lines.find((l) => l[0] === 0)?.[3];
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      '<div class="logcon" role="dialog" aria-label="Console"><button>Clear</button></div>',
+    );
     expect(note()).toBe("");
     document.body.insertAdjacentHTML("beforeend", '<div class="modal-overlay"><button>Discard</button></div>');
     expect(note()).toBe("modal");
@@ -98,7 +124,7 @@ describe("screenLines", () => {
 
   it("reads one region", () => {
     const { lines } = screenLines(walkControls(document, { rect }), { region: "valuebox" });
-    expect(lines.map((l) => l[1])).toEqual(["valuebox", "field:angle", "text:\"Confirm\""]);
+    expect(lines.map((l) => l[1])).toEqual(["valuebox", "field:angle", 'text:"Confirm"']);
   });
 });
 

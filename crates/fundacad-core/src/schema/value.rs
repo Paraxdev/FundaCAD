@@ -8,9 +8,8 @@ use serde_json::{Map, Number, Value};
 /// Unknown keys of an open object, kept verbatim for the next save.
 pub type Extra = Map<String, Value>;
 
-/// A JSON number kept exactly as it was read. `5` and `5.0` are different
-/// documents to a byte comparison, and Python writes the second where the app
-/// writes the first, so the integer or float spelling survives a round trip.
+/// A JSON number kept exactly as read. Python writes `5.0` where the app writes `5` and a byte comparison tells them
+/// apart, so the integer or float spelling survives a round trip.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct Real(pub Number);
@@ -42,10 +41,8 @@ impl From<i64> for Real {
 
 pub type Vec3 = [Real; 3];
 
-/// A numeric field that may name a parameter instead: `number | string` in TS.
-/// The string is a parameter name on the legacy path; the app evaluates
-/// expressions before a build, so the engine resolves names only
-/// (the Python engine's `handler_util.py` `_make_val`).
+/// A numeric field that may name a parameter instead, `number | string` in TS. The app evaluates expressions before a
+/// build, so the string is only ever a legacy parameter name for the engine to resolve.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Num {
     Number(Real),
@@ -59,10 +56,7 @@ pub struct UnresolvedNum(pub String);
 impl Num {
     /// The value, a parameter name looked up in `params`. Any other string is
     /// an error, never a guess, exactly as the Python builder refuses it.
-    pub fn resolve<'a>(
-        &self,
-        params: impl Fn(&str) -> Option<f64> + 'a,
-    ) -> Result<f64, UnresolvedNum> {
+    pub fn resolve<'a>(&self, params: impl Fn(&str) -> Option<f64> + 'a) -> Result<f64, UnresolvedNum> {
         match self {
             Num::Number(r) => Ok(r.get()),
             Num::Expr(name) => params(name).ok_or_else(|| UnresolvedNum(name.clone())),
@@ -97,9 +91,7 @@ impl<'de> Deserialize<'de> for Num {
         match Value::deserialize(d)? {
             Value::Number(n) => Ok(Num::Number(Real(n))),
             Value::String(s) => Ok(Num::Expr(s)),
-            other => Err(D::Error::custom(format!(
-                "expected a number or a parameter name, got {other}"
-            ))),
+            other => Err(D::Error::custom(format!("expected a number or a parameter name, got {other}"))),
         }
     }
 }
@@ -138,9 +130,7 @@ impl<'de, T: serde::de::DeserializeOwned> Deserialize<'de> for OneOrMany<T> {
                 .collect::<Result<Vec<T>, _>>()
                 .map(OneOrMany::Many)
                 .map_err(D::Error::custom),
-            v => serde_json::from_value(v)
-                .map(OneOrMany::One)
-                .map_err(D::Error::custom),
+            v => serde_json::from_value(v).map(OneOrMany::One).map_err(D::Error::custom),
         }
     }
 }
@@ -150,10 +140,7 @@ pub mod nullable {
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
     #[allow(clippy::option_option)]
-    pub fn serialize<S: Serializer, T: Serialize>(
-        v: &Option<Option<T>>,
-        s: S,
-    ) -> Result<S::Ok, S::Error> {
+    pub fn serialize<S: Serializer, T: Serialize>(v: &Option<Option<T>>, s: S) -> Result<S::Ok, S::Error> {
         match v {
             Some(inner) => inner.serialize(s),
             None => s.serialize_none(),
@@ -161,9 +148,7 @@ pub mod nullable {
     }
 
     #[allow(clippy::option_option)]
-    pub fn deserialize<'de, D: Deserializer<'de>, T: Deserialize<'de>>(
-        d: D,
-    ) -> Result<Option<Option<T>>, D::Error> {
+    pub fn deserialize<'de, D: Deserializer<'de>, T: Deserialize<'de>>(d: D) -> Result<Option<Option<T>>, D::Error> {
         Option::<T>::deserialize(d).map(Some)
     }
 }
@@ -214,20 +199,16 @@ macro_rules! open_enum {
 }
 pub(crate) use open_enum;
 
-/// A member of a known form that does not fit it: a required field missing, a
-/// value of the wrong type. The Python engine loads such a document and fails
-/// that one feature with a message, so the document must load here too; the
-/// raw object is written back as it was and `error` says what did not fit.
+/// A known form that does not fit it, such as a missing field or a wrong type. The document still loads and only that
+/// feature fails: the raw object is written back as it was and `error` says what did not fit.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Invalid {
     pub error: String,
     pub raw: Value,
 }
 
-/// An object union discriminated by one string key (`type` or `kind`). Known
-/// tags deserialize into their struct, whose `extra` keeps unknown keys; an
-/// unknown tag (a plugin's feature, an entity from a newer build) is kept whole
-/// as `Unknown`, and a known tag that does not fit its struct as `Invalid`.
+/// An object union keyed by `type` or `kind`. A known tag deserializes into its struct, whose `extra` keeps unknown
+/// keys; an unknown tag (a plugin's feature, a newer entity) is kept whole as `Unknown`, a misfit as `Invalid`.
 macro_rules! tagged_enum {
     (
         $(#[$meta:meta])* $vis:vis enum $name:ident, tag = $tag:literal, first = [$($first:literal),*] {

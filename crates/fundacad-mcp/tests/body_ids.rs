@@ -1,6 +1,5 @@
-//! A document built in one session comes out of a fresh one with the same body
-//! ids and the same volumes, whether it travels through `doc_get` and
-//! `doc_set` or through a saved file. Spawns the engine.
+//! A document built in one session comes out of a fresh one with the same body ids and volumes, through
+//! `doc_get` and `doc_set` or a saved file. Spawns the engine.
 
 mod common;
 
@@ -13,9 +12,8 @@ fn session() -> Mcp {
     Mcp::start(&BTreeMap::new(), &std::env::temp_dir())
 }
 
-/// The shape of the timeline that lost its ids: a join, a join that names
-/// body1, then a sphere and a cylinder that later features address as body2
-/// and body3.
+/// The timeline that once lost its ids: a join, a join naming body1, then a sphere and a cylinder
+/// that later features address as body2 and body3.
 fn timeline() -> Vec<Value> {
     vec![
         json!({"id": "floor", "type": "box", "length": 100, "width": 100, "height": 6, "operation": "new"}),
@@ -101,17 +99,13 @@ fn a_document_rebuilds_the_same_ids_in_a_fresh_engine() {
 #[test]
 fn a_long_running_session_numbers_a_new_document_from_the_document() {
     let mut mcp = session();
-    let other: Vec<Value> = (0..4)
-        .map(|i| json!({"id": format!("b{i}"), "type": "box", "length": 5, "width": 5, "height": 5}))
-        .collect();
+    let other: Vec<Value> =
+        (0..4).map(|i| json!({"id": format!("b{i}"), "type": "box", "length": 5, "width": 5, "height": 5})).collect();
     doc_set(&mut mcp, &json!({"features": other}));
     assert_eq!(outcome(&mut mcp).len(), 4);
 
     doc_set(&mut mcp, &json!({"features": timeline()}));
-    let ids: Vec<String> = outcome(&mut mcp)
-        .iter()
-        .map(|l| l.split(' ').next().unwrap_or("").to_owned())
-        .collect();
+    let ids: Vec<String> = outcome(&mut mcp).iter().map(|l| l.split(' ').next().unwrap_or("").to_owned()).collect();
     assert_eq!(ids, ["body1", "body2", "body3"]);
 }
 
@@ -125,11 +119,7 @@ fn a_file_saved_before_the_map_keeps_the_numbering_it_was_made_with() {
         .chain([json!({"id": "cap", "type": "box", "length": 4, "width": 4, "height": 80,
                         "operation": "join", "targets": ["body2"]})])
         .collect();
-    std::fs::write(
-        &path,
-        json!({"version": 9, "parameters": {}, "features": features}).to_string(),
-    )
-    .expect("written");
+    std::fs::write(&path, json!({"version": 9, "parameters": {}, "features": features}).to_string()).expect("written");
     let mut mcp = session();
     let open = mcp.call("doc_open", json!({"path": path.to_string_lossy().replace('\\', "/")}));
     assert!(!open.is_error, "{}", open.text);
@@ -140,9 +130,7 @@ fn a_file_saved_before_the_map_keeps_the_numbering_it_was_made_with() {
 
 #[test]
 fn a_revolve_made_a_join_through_doc_set_keeps_its_targets_id() {
-    // The report: a revolve set to join into body1 came out as body3. It had
-    // been built as a new body first, and the edit that made it a join went
-    // through doc_get and doc_set, which kept its record of body3.
+    // A revolve built as a new body, then made a join into body1 through doc_get and doc_set, came out as body3.
     let mut mcp = session();
     let sketch = json!({"id": "sk", "type": "sketch", "plane": "XZ", "entities": [
         {"type": "rectangle", "width": 4, "height": 10, "x": 12, "y": 0, "angle": 0}]});
@@ -160,10 +148,8 @@ fn a_revolve_made_a_join_through_doc_set_keeps_its_targets_id() {
     assert_eq!(ids, ["body1", "body2", "body3"]);
 
     let mut doc: Value = serde_json::from_str(&mcp.call("doc_get", json!({})).text).expect("JSON");
-    let rv = doc["features"]
-        .as_array_mut()
-        .and_then(|fs| fs.iter_mut().find(|f| f["id"] == "rv"))
-        .expect("the revolve");
+    let rv =
+        doc["features"].as_array_mut().and_then(|fs| fs.iter_mut().find(|f| f["id"] == "rv")).expect("the revolve");
     rv["operation"] = json!("join");
     rv["targets"] = json!(["body1"]);
     doc_set(&mut mcp, &doc);

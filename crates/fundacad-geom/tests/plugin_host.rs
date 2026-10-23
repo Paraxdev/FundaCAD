@@ -1,7 +1,5 @@
-//! The plugin host end to end on the PrintToolbox component, with the same
-//! documents and analytic volumes as plugins/FundaCAD.PrintToolbox/geometry/tests.
-//! Needs `python scripts/build-plugin-wasm.py FundaCAD.PrintToolbox` first;
-//! without the component every case is skipped with a note.
+//! The plugin host end to end on the PrintToolbox component, against plugins/FundaCAD.PrintToolbox/geometry/tests.
+//! Needs `python scripts/build-plugin-wasm.py FundaCAD.PrintToolbox` first, else every case is skipped with a note.
 #![cfg(feature = "plugins")]
 
 use std::f64::consts::PI;
@@ -102,10 +100,7 @@ fn roof_bridge_and_ribs_and_errors() {
     let mut f = base();
     f.push(json!({"id": "tr", "type": "threadRibs", "faces": face_at([0.0, 0.0, Z + R]), "ribCount": 2}));
     let r = build(f);
-    assert_eq!(
-        r.errors[0].message,
-        "Thread-forming ribs: the rib count must be a whole number from 3 to 8 (got 2)"
-    );
+    assert_eq!(r.errors[0].message, "Thread-forming ribs: the rib count must be a whole number from 3 to 8 (got 2)");
 }
 
 #[test]
@@ -133,9 +128,8 @@ fn job(r: fundacad_protocol::JobResult) -> serde_json::Map<String, Value> {
     }
 }
 
-/// A texture on the top of a plate: the rebuild stashes its spec, the viewport
-/// mesh of that face is displaced (more triangles, raised within its depth,
-/// its colour slot on the payload) and the other faces are untouched.
+/// The rebuild stashes the texture spec, and the face's mesh gets more triangles, rises within its depth and
+/// has its colour slot on the payload.
 #[test]
 fn a_texture_displaces_its_face_and_only_its_face() {
     if !built("FundaCAD.Texture") {
@@ -213,9 +207,8 @@ fn textured_face_spread(m: &fundacad_protocol::MeshResult, n: [f64; 3]) -> f64 {
     along.iter().copied().fold(f64::MIN, f64::max) - along.iter().copied().fold(f64::MAX, f64::min)
 }
 
-/// A knurl on one 1.41 mm wide chamfer face: every row of its lattice landed
-/// on a zero line of the pattern and every raised vertex sat on the pinned
-/// boundary, so the face stayed flat and nothing said so.
+/// On a 1.41 mm wide chamfer every row of a knurl lattice can land on a zero line of the pattern and every raised
+/// vertex on the pinned boundary, leaving the face flat without a word.
 #[test]
 fn a_texture_on_a_narrow_chamfer_raises_it() {
     if !built("FundaCAD.Texture") {
@@ -232,9 +225,8 @@ fn a_texture_on_a_narrow_chamfer_raises_it() {
     assert!(spread > 0.1 && spread < 0.4 + 1e-3, "{spread}");
 }
 
-/// A 0.42 mm chamfer lies in one flat land of a 2 mm knurl, so no mesh can
-/// raise it: the face stays plain and the feature says why, from a cached
-/// mesh too, although its rebuild had nothing to report.
+/// A 0.42 mm chamfer lies in one flat land of a 2 mm knurl, so no mesh can raise it: the feature says why,
+/// from a cached mesh too, although its rebuild had nothing to report.
 #[test]
 fn a_texture_that_leaves_its_face_flat_says_so() {
     if !built("FundaCAD.Texture") {
@@ -299,8 +291,10 @@ fn a_fastener_is_generated() {
     let want = PI * (4.5f64.powi(2) - 2.15f64.powi(2)) * 0.8;
     assert!((m["volume"].as_f64().unwrap() - want).abs() < 1e-6 * want);
     let m = job(fundacad_geom::plugins::generate_shape_result(
-        &serde_json::from_value(json!({"generator": "fastener", "params": {"kind": "washer", "units": "mm", "name": "w"}}))
-            .unwrap(),
+        &serde_json::from_value(
+            json!({"generator": "fastener", "params": {"kind": "washer", "units": "mm", "name": "w"}}),
+        )
+        .unwrap(),
         None,
     ));
     assert_eq!(m["error"]["message"], json!("Fastener: missing washer type"));
@@ -318,8 +312,10 @@ fn a_slicer_project_is_exported() {
     let path = dir.join("proj.3mf");
     let doc = json!({"parameters": {}, "features": block(20.0, 20.0, 5.0)});
     let m = job(fundacad_geom::plugins::export_with_result(
-        &serde_json::from_value(json!({"exporter": "print-project-3mf", "path": path.to_string_lossy(), "document": doc,
-                                       "options": {"palette": [{"name": "Red", "color": "#e03030"}]}}))
+        &serde_json::from_value(
+            json!({"exporter": "print-project-3mf", "path": path.to_string_lossy(), "document": doc,
+                                       "options": {"palette": [{"name": "Red", "color": "#e03030"}]}}),
+        )
         .unwrap(),
         &NoWatch,
         None,
@@ -327,8 +323,13 @@ fn a_slicer_project_is_exported() {
     assert_eq!(m["info"], json!({}), "{m:?}");
     let bytes = std::fs::read(&path).unwrap();
     let _ = std::fs::remove_dir_all(&dir);
-    let names: Vec<&str> = ["[Content_Types].xml", "_rels/.rels", "3D/3dmodel.model", "Metadata/model_settings.config",
-        "Metadata/project_settings.config"]
+    let names: Vec<&str> = [
+        "[Content_Types].xml",
+        "_rels/.rels",
+        "3D/3dmodel.model",
+        "Metadata/model_settings.config",
+        "Metadata/project_settings.config",
+    ]
     .to_vec();
     for n in names {
         assert!(bytes.windows(n.len()).any(|w| w == n.as_bytes()), "{n} is in the zip");
@@ -345,10 +346,7 @@ fn an_op_names_the_plugin_it_cannot_find() {
     ) else {
         panic!("a json reply")
     };
-    assert_eq!(
-        m["error"]["message"],
-        json!("no plugin that is running offers the shape 'nope'")
-    );
+    assert_eq!(m["error"]["message"], json!("no plugin that is running offers the shape 'nope'"));
 
     let JobResult::Json(m) = fundacad_geom::plugins::export_with_result(
         &serde_json::from_value(json!({"exporter": "nope", "path": "x.bin", "document": {"features": []}})).unwrap(),
@@ -357,8 +355,5 @@ fn an_op_names_the_plugin_it_cannot_find() {
     ) else {
         panic!("a json reply")
     };
-    assert_eq!(
-        m["error"]["message"],
-        json!("no installed plugin provides the 'nope' export")
-    );
+    assert_eq!(m["error"]["message"], json!("no installed plugin provides the 'nope' export"));
 }

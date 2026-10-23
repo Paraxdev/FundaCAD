@@ -1,30 +1,7 @@
 <script setup lang="ts">
 import { fmtKeys } from "../../input/platform";
-// Left browser, MCAD-style: object-oriented, collapsible folders rather than a
-// flat feature list. Origin (the three base planes, click to start a sketch on
-// one), Bodies (grouped by the imported assembly tree when there is one) and
-// Sketches, plus whatever the running plugins add between the two. The
-// chronological operations (extrude/fillet/…) live in the bottom Timeline, as in
-// mainstream MCAD.
-//
-// A filament palette used to be a section here, with two node kinds of its own,
-// a connection dot, a one-shot network probe and a thirty-second staleness poll,
-// a panel about something outside the document, inside the panel that lists what is
-// in the document, behind checks on two capabilities. It is contributed now, by
-// the capability whose subject it is, and this file does not know it exists.
-//
-// What the imperative class needed and this does not: a render-skip signature
-// (the panel rebuilt its whole innerHTML on every doc change AND every build, so
-// it had to hash everything it displayed to avoid painting twice), scroll
-// save/restore around that wipe, and a per-render map of rename hooks so
-// "Rename…" from the viewport could reach a row. Vue patches in place, so the
-// scroll position and an open inline edit simply survive; see TreeRow/InlineLabel.
-//
-// The panel is a FLAT list of nodes rather than nested components. That is the
-// DOM the stylesheet targets (`.tree-child` is a padding-left, not a container)
-// and what the e2e suite walks, and it keeps the assembly recursion in one
-// readable pass instead of a recursive component whose props thread through
-// every level.
+// A flat list of nodes, not nested components: the stylesheet targets that DOM (`.tree-child` is a padding, not a
+// container) and the e2e suite walks it.
 
 import { computed, onMounted, onUnmounted, ref, shallowRef, useTemplateRef, watch } from "vue";
 import { useEngine } from "../../app/engineKey";
@@ -37,14 +14,28 @@ import Icon from "./Icon.vue";
 import { useShellStore } from "../../stores/shell";
 import { contextMenu } from "../../ui/menu";
 import {
-  bodyExtraMenu, buildBodyTree, collectGroupBodyIds, elementMoveMenu, elementPath,
-  importColorMenu, importTrees, materialMenu, type BodyRef, type TreeGroup,
+  bodyExtraMenu,
+  buildBodyTree,
+  collectGroupBodyIds,
+  elementMoveMenu,
+  elementPath,
+  importColorMenu,
+  importTrees,
+  materialMenu,
+  type BodyRef,
+  type TreeGroup,
 } from "../../ui/browserTree";
 import { adoptImportedColors, exportModel, sketchFlatSource } from "../../io/files";
 import { ancestryOf } from "../../document/elements";
 import {
-  BROWSER_FILTERS, asBrowserFilter, getBrowserFilter, isBrowserSection,
-  onBrowserFilterChange, sectionVisible, setBrowserFilter, type BrowserSection,
+  BROWSER_FILTERS,
+  asBrowserFilter,
+  getBrowserFilter,
+  isBrowserSection,
+  onBrowserFilterChange,
+  sectionVisible,
+  setBrowserFilter,
+  type BrowserSection,
 } from "../../ui/browserFilter";
 import type { CtxItem } from "../../ui/menu";
 import { actOn as actOnSelection, EMPTY_SELECTION, modsOf, selectGroup, selectRow } from "../../ui/rowSelection";
@@ -66,9 +57,17 @@ function openMore(ev: MouseEvent) {
   const bodies = store.buildState.result?.bodies ?? [];
   const anyHidden = bodies.some((b) => !store.isBodyVisible(b.id));
   contextMenu(r.left, r.top - 8, [
-    { label: "Hide Selected Bodies", disabled: !engine.viewport.getSelectedBodies().length, onClick: () => engine.handleAction("hide-selected") },
+    {
+      label: "Hide Selected Bodies",
+      disabled: !engine.viewport.getSelectedBodies().length,
+      onClick: () => engine.handleAction("hide-selected"),
+    },
     { label: "Show Hidden Bodies", disabled: !anyHidden, onClick: () => engine.handleAction("show-all-bodies") },
-    { label: "Invert Body Visibility", disabled: !bodies.length, onClick: () => store.setBodiesVisibility(new Map(bodies.map((b) => [b.id, !store.isBodyVisible(b.id)]))) },
+    {
+      label: "Invert Body Visibility",
+      disabled: !bodies.length,
+      onClick: () => store.setBodiesVisibility(new Map(bodies.map((b) => [b.id, !store.isBodyVisible(b.id)]))),
+    },
   ]);
 }
 const store = engine.store;
@@ -77,12 +76,11 @@ const browser = useBrowserStore();
 const root = useTemplateRef<HTMLElement>("root");
 const shell = useShellStore();
 
-// The chosen filter is module state in a plain .ts, not a store, so nothing
-// tracks it, the same arrangement ui/theme.ts, icons.ts and units.ts use,
-// and for the same reason: ui/browserFilter.ts has to stay Vue-free for the
-// headless suite.
+// The filter is plain module state (ui/browserFilter.ts stays Vue-free for the headless suite), so it is mirrored here.
 const filter = ref(getBrowserFilter());
-const offFilter = onBrowserFilterChange(() => { filter.value = getBrowserFilter(); });
+const offFilter = onBrowserFilterChange(() => {
+  filter.value = getBrowserFilter();
+});
 onUnmounted(offFilter);
 
 function onFilterInput(ev: Event) {
@@ -90,14 +88,11 @@ function onFilterInput(ev: Event) {
   if (id) setBrowserFilter(id);
 }
 
-// --- the node model ------------------------------------------------------
-
 /** The lists whose eyes paint together: a drag started on a sketch's eye shows
  *  or hides sketches and nothing else. Element and assembly heads are bodies. */
 type VisCategory = "bodies" | "sketches" | "planes" | "datums";
 
-/** What a row's eye stands for. `key` is the row within its category, a body or
- *  feature id, or `g:<collapse key>` for a folder head, whose eye stands for
+/** What a row's eye stands for. `key` is a body or feature id, or `g:<collapse key>` for a folder head standing for
  *  every body in `ids`. */
 interface VisTag {
   category: VisCategory;
@@ -156,15 +151,22 @@ interface RowNode {
   acceptDrop?: (() => boolean) | undefined;
   dropHere?: (() => void) | undefined;
 }
-interface EmptyNode { kind: "empty"; k: string; text: string }
+interface EmptyNode {
+  kind: "empty";
+  k: string;
+  text: string;
+}
 /** A section some plugin contributed, drawn as its own component. The panel
  *  places it and knows nothing else about it. */
-interface PluginNode { kind: "plugin"; k: string; component: Component }
+interface PluginNode {
+  kind: "plugin";
+  k: string;
+  component: Component;
+}
 type TreeNode = FolderNode | RowNode | EmptyNode | PluginNode;
 
-// --- engine callbacks (was app/browserWiring.ts) -------------------------
-// The panel reads live engine state directly rather than being handed props,
-// which is why several of these consult the viewport or a tool.
+// The panel reads live engine state directly rather than taking props, so several callbacks consult the viewport or a
+// tool.
 
 function sketchOnPlane(plane: Plane3) {
   if (engine.sketch.active) {
@@ -174,7 +176,7 @@ function sketchOnPlane(plane: Plane3) {
   engine.sketch.enter(plane, store);
 }
 
-// --- a tool waiting for a pick takes the row first --------------------------
+// A tool waiting for a pick takes the row first.
 
 /** A tool holds the screen but takes no rows (Extrude aiming, a gizmo up, a
  *  plugin's pick). A sketch is left out: the rows keep working inside one. */
@@ -202,22 +204,15 @@ function editRow(id: string) {
   };
 }
 
-// --- showing and hiding ----------------------------------------------------
-//
-// Every eye in the panel goes through setVisibility, one write per gesture
-// step, whether that step is a click, a stretch of a paint drag or a solo. The
-// three kinds of thing are shown and hidden three different ways underneath,
-// which is exactly why they meet here and nowhere else.
+// Every eye goes through setVisibility, one write per gesture step: bodies, sketches and planes hide three different
+// ways underneath, so they meet only here.
 
 /** Set each row of `category` in `changes`, as ONE write. */
 function setVisibility(category: string, changes: ReadonlyMap<string, boolean>) {
   if (!changes.size) return;
   if (category === "bodies") {
-    // A folder head's key stands for every body under it. One batched store call
-    // however many bodies: each call re-renders the whole model (setModel plus
-    // the flush-seam pass), so a per-body loop would repaint it once per body.
-    // Visibility, names and colours re-emit the build, so buildVersion carries
-    // the refresh.
+    // One batched store call however many bodies, each call re-renders the whole model. Visibility re-emits the build,
+    // so buildVersion carries the refresh.
     const vis = new Map<string, boolean>();
     for (const [key, v] of changes) {
       for (const id of visIndex.value.ids.get(key) ?? [key]) vis.set(id, v);
@@ -293,7 +288,10 @@ function eye(tag: VisTag, visible: boolean) {
     eyeOver: () => eyeOver(tag),
     // A click that no pointer pressed: the keyboard, a screen reader, a script.
     // It shows or hides the one row, as a press would, and paints nothing.
-    toggleVis: () => { paint.begin(tag.category, tag.key, visible); paint.end(); },
+    toggleVis: () => {
+      paint.begin(tag.category, tag.key, visible);
+      paint.end();
+    },
   };
 }
 
@@ -307,8 +305,14 @@ function visibilityMenu(category: VisCategory, keys: readonly string[], plural: 
   const n = keys.length;
   const children: CtxItem[] = [];
   if (n > 1) {
-    children.push({ label: `Show these ${n}`, onClick: () => setVisibility(category, new Map(keys.map((k) => [k, true]))) });
-    children.push({ label: `Hide these ${n}`, onClick: () => setVisibility(category, new Map(keys.map((k) => [k, false]))) });
+    children.push({
+      label: `Show these ${n}`,
+      onClick: () => setVisibility(category, new Map(keys.map((k) => [k, true]))),
+    });
+    children.push({
+      label: `Hide these ${n}`,
+      onClick: () => setVisibility(category, new Map(keys.map((k) => [k, false]))),
+    });
   }
   children.push({ label: n > 1 ? `Show only these ${n}` : "Show only this", onClick: () => showOnly(category, keys) });
   children.push({
@@ -318,14 +322,15 @@ function visibilityMenu(category: VisCategory, keys: readonly string[], plural: 
   return { label: "Visibility", children };
 }
 
-// --- selecting -------------------------------------------------------------
-
 /** Click, Ctrl-click or Shift-click a body row. The run is over the body rows as
  *  drawn; the selection itself goes to the viewport, which owns it. */
 function selectBody(id: string, e: MouseEvent) {
   const order = (visIndex.value.order.get("bodies") ?? []).filter((k) => !k.startsWith("g:"));
   const next = selectRow(
-    { keys: engine.viewport.getSelectedBodies(), anchor: browser.bodyAnchor }, order, id, modsOf(e),
+    { keys: engine.viewport.getSelectedBodies(), anchor: browser.bodyAnchor },
+    order,
+    id,
+    modsOf(e),
   );
   browser.bodyAnchor = next.anchor;
   engine.viewport.setSelectedBodies([...next.keys]); // fires back into browser.selectedBodyIds
@@ -338,9 +343,8 @@ function selectFolder(ids: readonly string[], e: MouseEvent) {
   engine.viewport.setSelectedBodies(next);
 }
 
-/** Click, Ctrl-click or Shift-click a sketch row. The one feature the timeline
- *  and inspector follow is the row just clicked while it is still selected; a
- *  Ctrl-click that takes the current one out hands that role to another. */
+/** Click, Ctrl-click or Shift-click a sketch row. The timeline and inspector follow the row just clicked, a Ctrl-click
+ *  removing it hands that role to another. */
 function selectSketch(id: string, e: MouseEvent) {
   const order = featuresOf(store.document.features, "sketch").map((f) => f.id);
   const next = selectRow(browser.sketchSelection, order, id, modsOf(e));
@@ -361,53 +365,40 @@ watch(
   },
 );
 
-// --- shaping -------------------------------------------------------------
-
 /** The per-body list the panel renders: the rebuild's own bodies, or a single
  *  implicit body when the backend sent no body metadata but a solid exists. */
 function bodyList(): { id: string; name: string; nodeRef?: string }[] {
   const result = store.buildState.result;
   if (result?.bodies?.length) {
     return result.bodies.map((b) => ({
-      id: b.id, name: b.name,
+      id: b.id,
+      name: b.name,
       ...(b.nodeRef !== undefined ? { nodeRef: b.nodeRef } : {}),
     }));
   }
   return (result?.mesh.positions.length ?? 0) > 0 ? [{ id: "body1", name: "Body1" }] : [];
 }
 
-/** The whole body tree: the user's elements over whatever structure the imports
- *  brought with them. Elements live in the store rather than in the document
- *  object useDocValue hands out (they are a display overlay, like body names),
- *  so they are read fresh here and their setters re-emit the build. */
+/** Elements live in the store, not the document useDocValue hands out (a display overlay like body names), so they are
+ *  read fresh here and their setters re-emit the build. */
 function bodyTree(doc: CadDocument) {
   return buildBodyTree(bodyList(), importTrees(doc), store.bodyElements, store.bodyElementMap());
 }
 
-/** body id → the folder keys enclosing it, so a programmatic rename can open the
- *  whole chain before the row is looked for. Read only when a rename is
- *  requested, so the second shaping pass costs nothing in the ordinary case. */
+/** body id -> enclosing folder keys, so a programmatic rename can open the chain first. Read only on a rename. */
 const bodyAncestors = useDocValue((doc) => {
   engine.bridge.buildVersion.value;
   return bodyTree(doc).ancestors;
 });
 
-// --- elements: filing bodies into folders ---------------------------------
-
-/** The bodies one gesture acts on: the whole selection when the row that was
- *  grabbed is part of it, otherwise just that row.
- *
- *  The rule every file manager uses, and the one that makes this usable at all:
- *  organising an import means moving hundreds of parts, and a menu that silently
- *  acted on one of a selection of two hundred would be worse than no menu. */
+/** The whole selection when the grabbed row is in it, else just that row, as in every file manager: organising an
+ *  import moves hundreds of parts. */
 function actOn(bodyId: string): string[] {
   return actOnSelection(browser.selectedBodyIds, bodyId);
 }
 
-/** Put `ids` in a brand new element and start naming it. The element is made
- *  first and the bodies moved into it second, two writes, because both are
- *  display overlays and neither is undoable, so there is nothing to be atomic
- *  about. */
+/** Puts `ids` in a new element and starts naming it. Two writes, both display overlays and not undoable, so nothing
+ *  needs to be atomic. */
 function fileIntoNewElement(ids: readonly string[], parent: string | null = null) {
   const id = store.addElement(undefined, parent);
   if (ids.length) store.setBodiesElement(ids, id);
@@ -416,7 +407,6 @@ function fileIntoNewElement(ids: readonly string[], parent: string | null = null
   browser.beginRename(id);
 }
 
-/** The "Move to" submenu for a set of bodies. */
 function moveBodiesMenu(ids: readonly string[], from: string | undefined): CtxItem {
   return elementMoveMenu(store.bodyElements, ids, from, {
     toNew: () => fileIntoNewElement(ids),
@@ -433,15 +423,15 @@ function assemblyMenu(key: string): CtxItem[] {
     (f): f is Extract<Feature, { type: "import" }> => f.id === featureId && f.type === "import",
   );
   if (!feature) return [];
-  return [importColorMenu(store.importColorSource(featureId), (source) => {
-    store.setImportColorSource(featureId, source);
-    void adoptImportedColors(store, featureId, feature);
-  })];
+  return [
+    importColorMenu(store.importColorSource(featureId), (source) => {
+      store.setImportColorSource(featureId, source);
+      void adoptImportedColors(store, featureId, feature);
+    }),
+  ];
 }
 
-/** The "Move to element" submenu for an element itself (reparenting a folder).
- *  Its own subtree is left out: a folder cannot go inside itself, and offering
- *  the move only to refuse it is a menu that lies. */
+/** "Move to element" for an element itself. Its own subtree is left out, offering a move only to refuse it lies. */
 function moveElementMenu(id: string): CtxItem {
   const inside = store.elementSubtree(id);
   const rows: CtxItem[] = [
@@ -461,11 +451,8 @@ function moveElementMenu(id: string): CtxItem {
   return { label: "Move to", children: rows };
 }
 
-/** Drop the dragged bodies onto ANOTHER body to group them. If the target is
- *  already in an element, the dragged bodies join it; otherwise a fresh element
- *  is made holding the target and the dragged bodies together. This is the
- *  "parent one thing under another" gesture people reach for before they find
- *  the Move-to-element menu, so it does the sensible thing rather than nothing. */
+/** Dropping bodies onto another body groups them: into the target's element if it has one, else a new element holding
+ *  both. People reach for this before they find Move to element. */
 function dropOntoBody(targetId: string) {
   const d = browser.drag;
   browser.endDrag();
@@ -484,9 +471,8 @@ function canDropOntoBody(targetId: string): boolean {
   return !!d && d.kind === "bodies" && d.ids.some((id) => id !== targetId);
 }
 
-/** Take the in-flight drag into `element` (null = the top level). Both drop
- *  kinds land here so the two targets, a folder head and the Bodies head,
- *  cannot drift apart. */
+/** Takes the in-flight drag into `element` (null is the top level). Both drop targets land here so they cannot drift
+ *  apart. */
 function dropInto(element: string | null) {
   const d = browser.drag;
   browser.endDrag();
@@ -495,9 +481,8 @@ function dropInto(element: string | null) {
   else store.setElementParent(d.id, element);
 }
 
-/** Would that drop do anything? A folder onto itself or into its own subtree is
- *  refused here rather than on the drop, so the row never lights up as a target
- *  it is going to reject. */
+/** Refuses a folder onto itself or its own subtree here, not on the drop, so the row never lights up as a target it
+ *  will reject. */
 function canDropInto(element: string | null): boolean {
   const d = browser.drag;
   if (!d) return false;
@@ -505,19 +490,16 @@ function canDropInto(element: string | null): boolean {
   return element === null ? true : !store.elementSubtree(d.id).has(element);
 }
 
-/** The sections the running plugins add, mirrored into a ref so the node list
- *  re-runs when one starts or stops. The registry is deliberately Vue-free (that
- *  is what lets the headless suite import it), so nothing tracks it without
- *  this. */
+/** The plugin sections, mirrored so the node list re-runs when one starts or stops: the registry is Vue-free for the
+ *  headless suite. */
 const sections = shallowRef(contributedBrowserSections());
-const stopContrib = onContribChange(() => { sections.value = contributedBrowserSections(); });
+const stopContrib = onContribChange(() => {
+  sections.value = contributedBrowserSections();
+});
 onUnmounted(stopContrib);
 
-/** The whole panel, as a flat list.
- *
- *  Reads docVersion (through useDocValue), buildVersion and the view tick
- *  FIRST and unconditionally, see app/useDoc.ts for why every derived computed
- *  has to do that in its own body rather than lean on an intermediate. */
+/** The whole panel as a flat list. Reads docVersion, buildVersion and the view tick first and unconditionally, see
+ *  app/useDoc.ts. */
 const nodes = useDocValue((doc): TreeNode[] => {
   engine.bridge.buildVersion.value; // bodies, body names, body colours
   browser.viewTick; // sketch + plane visibility, which the store does not emit
@@ -550,74 +532,87 @@ const nodes = useDocValue((doc): TreeNode[] => {
     out.push(...rows);
   };
 
-  // --- Origin ---
-  if (show("origin")) folder("Origin", "origin", (["XY", "XZ", "YZ"] as Plane3[]).map((p) => ({
-    kind: "row" as const,
-    k: `o:${p}`,
-    depth: 1,
-    label: `${p} plane`,
-    icon: "plane",
-    dim: true,
-    activate: viaTool(() => ({ kind: "basePlane", plane: p }), () => sketchOnPlane(p)),
-    title: `Start a sketch on the ${p} plane`,
-  })));
+  if (show("origin"))
+    folder(
+      "Origin",
+      "origin",
+      (["XY", "XZ", "YZ"] as Plane3[]).map((p) => ({
+        kind: "row" as const,
+        k: `o:${p}`,
+        depth: 1,
+        label: `${p} plane`,
+        icon: "plane",
+        dim: true,
+        activate: viaTool(
+          () => ({ kind: "basePlane", plane: p }),
+          () => sketchOnPlane(p),
+        ),
+        title: `Start a sketch on the ${p} plane`,
+      })),
+    );
 
-  // --- Construction / datum planes (only when present) ---
   if (datums.length && show("planes")) {
-    folder("Planes", "plane", datums.map((f, i) => ({
-      kind: "row" as const,
-      k: `p:${f.id}`,
-      depth: 1,
-      label: f.name || `Plane${i + 1}`,
-      icon: "plane",
-      selected: selection.featureId === f.id,
-      error: errId === f.id,
-      ...eye({ category: "planes", key: f.id }, store.isPlaneVisible(f.id)),
-      activate: viaTool(() => featurePick(engine, f), () => engine.selectFeature(f.id)),
-      extraMenu: [
-        { label: "Cut all bodies", onClick: () => void engine.starters.startCutByPlane(f.id) },
-        visibilityMenu("planes", [f.id], "planes"),
-      ],
-      rename: (name: string) => store.updateFeature(f.id, { name } as Partial<Feature>),
-      remove: () => store.removeFeature(f.id),
-      title: "Construction plane, select then Split Body cuts by it · right-click for Cut / Rename / Delete · eye to show/hide",
-    })));
+    folder(
+      "Planes",
+      "plane",
+      datums.map((f, i) => ({
+        kind: "row" as const,
+        k: `p:${f.id}`,
+        depth: 1,
+        label: f.name || `Plane${i + 1}`,
+        icon: "plane",
+        selected: selection.featureId === f.id,
+        error: errId === f.id,
+        ...eye({ category: "planes", key: f.id }, store.isPlaneVisible(f.id)),
+        activate: viaTool(
+          () => featurePick(engine, f),
+          () => engine.selectFeature(f.id),
+        ),
+        extraMenu: [
+          { label: "Cut all bodies", onClick: () => void engine.starters.startCutByPlane(f.id) },
+          visibilityMenu("planes", [f.id], "planes"),
+        ],
+        rename: (name: string) => store.updateFeature(f.id, { name } as Partial<Feature>),
+        remove: () => store.removeFeature(f.id),
+        title:
+          "Construction plane, select then Split Body cuts by it · right-click for Cut / Rename / Delete · eye to show/hide",
+      })),
+    );
   }
 
-  // --- Datum points and axes (only when present) ---
-  // Reference geometry that builds no body, so it sits with the planes rather
-  // than among the bodies, under the same "planes" filter section. Each row
-  // carries its own mark (a point or an axis) so the two kinds read apart.
+  // Datum points and axes build no body, so they sit with the planes under the same filter, each with its own mark.
   const refGeom = doc.features.filter(
     (f): f is Extract<Feature, { type: "datumPoint" | "datumAxis" }> =>
       f.type === "datumPoint" || f.type === "datumAxis",
   );
   if (refGeom.length && show("planes")) {
-    folder("Datums", "datumPoint", refGeom.map((f, i) => ({
-      kind: "row" as const,
-      k: `d:${f.id}`,
-      depth: 1,
-      label: f.name || (f.type === "datumAxis" ? `Axis${i + 1}` : `Point${i + 1}`),
-      icon: f.type === "datumAxis" ? "datumAxis" : "datumPoint",
-      selected: selection.featureId === f.id,
-      error: errId === f.id,
-      ...eye({ category: "datums", key: f.id }, store.isPlaneVisible(f.id)),
-      activate: viaTool(() => featurePick(engine, f), () => engine.selectFeature(f.id)),
-      extraMenu: [visibilityMenu("datums", [f.id], "datums")],
-      rename: (name: string) => store.updateFeature(f.id, { name } as Partial<Feature>),
-      remove: () => store.removeFeature(f.id),
-      title: "Reference geometry · select to use as a mate or measure reference · right-click to Rename / Delete · eye to show/hide",
-    })));
+    folder(
+      "Datums",
+      "datumPoint",
+      refGeom.map((f, i) => ({
+        kind: "row" as const,
+        k: `d:${f.id}`,
+        depth: 1,
+        label: f.name || (f.type === "datumAxis" ? `Axis${i + 1}` : `Point${i + 1}`),
+        icon: f.type === "datumAxis" ? "datumAxis" : "datumPoint",
+        selected: selection.featureId === f.id,
+        error: errId === f.id,
+        ...eye({ category: "datums", key: f.id }, store.isPlaneVisible(f.id)),
+        activate: viaTool(
+          () => featurePick(engine, f),
+          () => engine.selectFeature(f.id),
+        ),
+        extraMenu: [visibilityMenu("datums", [f.id], "datums")],
+        rename: (name: string) => store.updateFeature(f.id, { name } as Partial<Feature>),
+        remove: () => store.removeFeature(f.id),
+        title:
+          "Reference geometry · select to use as a mate or measure reference · right-click to Rename / Delete · eye to show/hide",
+      })),
+    );
   }
 
-  // --- what the plugins add, between the document's structure and its bodies ---
-  //
-  // Here rather than at the end, because the one section that exists is about
-  // the bodies below it and read best above them. A section names one of the
-  // panel's own filter sections to be hidden with, or none, in which case it is
-  // always shown: this file cannot decide for it, and the alternative, a
-  // section that vanishes under a narrow filter nobody told it about, is worse
-  // than one that stays.
+  // Plugin sections go between the structure and the bodies, the one that exists is about the bodies. A section with no
+  // filter section of its own is always shown, rather than vanishing under a filter nobody told it about.
   for (const { key, section } of sections.value) {
     if (section.filter && isBrowserSection(section.filter) && !show(section.filter)) continue;
     out.push({ kind: "plugin", k: `x:${key}`, component: section.component });
@@ -625,19 +620,12 @@ const nodes = useDocValue((doc): TreeNode[] => {
 
   const scanIds = new Set((store.buildState.result?.bodies ?? []).filter((b) => b.scan).map((b) => b.id));
   const bodyRow = (b: BodyRef, depth: number): RowNode => {
-    // The swatch is the slot assignment made visible. Drawn only while
-    // something is contributing a colour menu for a body, because that is the
-    // same capability that decides a body HAS a colour: a chip with no way to
-    // change it, on a document whose palette is not shown anywhere, is a colour
-    // nobody chose and nobody can undo. The assignment stays in the document
-    // either way.
+    // The slot swatch shows only while something contributes a body colour menu, a chip nobody can change is a colour
+    // nobody chose. The assignment stays in the document either way.
     const slot = paintedBodies ? store.bodyColorSlot(b.id) : undefined;
-    // The palette slot is preferred for the chip when there is one, for the same reason it
-    // is preferred on the model: a slot is a deliberate choice about a real print and a
-    // material is usually whatever the imported file said. With no slot the
-    // chip is the material, so a row says what the body is made of.
-    const chip = (slot != null ? store.colorPalette[slot]?.color : undefined)
-      ?? store.bodyMaterialOf(b.id)?.color;
+    // The palette slot wins for the chip, as on the model: a slot is a deliberate print choice, a material is usually
+    // what the import said.
+    const chip = (slot != null ? store.colorPalette[slot]?.color : undefined) ?? store.bodyMaterialOf(b.id)?.color;
     return {
       kind: "row",
       k: `b:${b.id}`,
@@ -648,11 +636,15 @@ const nodes = useDocValue((doc): TreeNode[] => {
       ...(chip ? { swatch: chip } : {}),
       selected: selectedIds.has(b.id),
       ...eye({ category: "bodies", key: b.id }, store.isBodyVisible(b.id)),
-      activate: viaTool(() => ({ kind: "body", id: b.id }), (e) => selectBody(b.id, e)),
+      activate: viaTool(
+        () => ({ kind: "body", id: b.id }),
+        (e) => selectBody(b.id, e),
+      ),
       extraMenu: [
         moveBodiesMenu(actOn(b.id), store.bodyElementOf(b.id)),
-        materialMenu(store.materialLibrary, actOn(b.id), store.bodyMaterialId(b.id),
-          (m) => store.setBodiesMaterial(actOn(b.id), m)),
+        materialMenu(store.materialLibrary, actOn(b.id), store.bodyMaterialId(b.id), (m) =>
+          store.setBodiesMaterial(actOn(b.id), m),
+        ),
         visibilityMenu("bodies", actOn(b.id), "bodies"),
         ...bodyExtraMenu(b.id),
       ],
@@ -661,18 +653,14 @@ const nodes = useDocValue((doc): TreeNode[] => {
       dropHere: () => dropOntoBody(b.id),
       rename: (name: string) => store.setBodyName(b.id, name),
       remove: () => store.removeBody(b.id),
-      title: fmtKeys("Click to select (Ctrl+click adds, Shift+click takes a run) · drag onto another body to group them, or into an element · double-click to rename · right-click for Move / Material / Visibility / Rename / Delete · drag across eyes to show or hide many"),
+      title: fmtKeys(
+        "Click to select (Ctrl+click adds, Shift+click takes a run) · drag onto another body to group them, or into an element · double-click to rename · right-click for Move / Material / Visibility / Rename / Delete · drag across eyes to show or hide many",
+      ),
     };
   };
 
-  /** One folder of the body tree and everything under it.
-   *
-   *  An ASSEMBLY node that owns exactly one body and no children is emitted as
-   *  that body's ROW, not as a folder wrapping a single entry: the body already
-   *  carries the product's name, so a folder there would just say everything
-   *  twice. An ELEMENT is never collapsed away like that, however little it
-   *  holds, because it is a folder the user made on purpose and one that
-   *  disappeared when it got down to one part could not be filled again. */
+  /** One folder and everything under it. An assembly node with one body and no children is emitted as that body's
+   *  row, but an element never collapses, it is a folder the user made on purpose. */
   const groupNode = (g: TreeGroup, depth: number) => {
     if (g.kind === "assembly" && g.children.length === 0 && g.bodies.length === 1) {
       out.push(bodyRow(g.bodies[0]!, depth));
@@ -683,16 +671,23 @@ const nodes = useDocValue((doc): TreeNode[] => {
     const collapsed = browser.isCollapsed(g.key);
     const element = g.kind === "element" ? g.id! : null;
     out.push({
-      kind: "folder", k: g.key, key: g.key, label: g.label,
+      kind: "folder",
+      k: g.key,
+      key: g.key,
+      label: g.label,
       icon: g.kind === "element" ? "element" : "assembly",
-      count: g.total, depth, collapsed,
-      activate: viaTool(() => ({ kind: "bodies", ids }), (e) => selectFolder(ids, e)),
+      count: g.total,
+      depth,
+      collapsed,
+      activate: viaTool(
+        () => ({ kind: "bodies", ids }),
+        (e) => selectFolder(ids, e),
+      ),
       selected: ids.length > 0 && ids.every((id) => selectedIds.has(id)),
       // The head's eye stands for every body under it, see setVisibility.
       ...eye({ category: "bodies", key: `g:${g.key}`, ids }, anyVisible),
-      // Everything below is an element's, and absent on an assembly node, which
-      // is a fact about a file: it cannot be renamed, deleted or dropped into,
-      // and TreeFolder renders no menu at all when given none of them.
+      // The rest is an element's. An assembly node is a fact about a file, so it gets none of it and TreeFolder draws no
+      // menu.
       ...(element
         ? {
             id: element,
@@ -719,12 +714,16 @@ const nodes = useDocValue((doc): TreeNode[] => {
     const tree = bodyTree(doc);
     const collapsed = browser.isCollapsed("f:Bodies");
     out.push({
-      kind: "folder", k: "f:Bodies", key: "f:Bodies", label: "Bodies", icon: "body",
-      count: bodies.length, depth: 0, collapsed,
+      kind: "folder",
+      k: "f:Bodies",
+      key: "f:Bodies",
+      label: "Bodies",
+      icon: "body",
+      count: bodies.length,
+      depth: 0,
+      collapsed,
       extraMenu: [{ label: "New element", onClick: () => fileIntoNewElement([]) }],
-      // The head is also the way OUT of a folder: dropping onto "Bodies" is what
-      // orphans a body again, and without it a part filed by mistake could be
-      // moved between folders but never back to the top level by dragging.
+      // Dropping onto Bodies is the way out of a folder, or a misfiled part could never return to the top level by drag.
       acceptDrop: () => canDropInto(null),
       dropHere: () => dropInto(null),
     });
@@ -737,85 +736,97 @@ const nodes = useDocValue((doc): TreeNode[] => {
     }
   }
 
-  // --- Joints (only when present) ---
-  // How the bodies are held together. Listed with the bodies because a joint is
-  // about them, and selecting one raises its offset/angle handles on the mate
-  // axis, the same as editing it from the timeline.
-  const joints = doc.features.filter(
-    (f): f is Extract<Feature, { type: "joint" }> => f.type === "joint",
-  );
+  // Joints sit with the bodies they hold together, and selecting one raises its handles on the mate axis.
+  const joints = doc.features.filter((f): f is Extract<Feature, { type: "joint" }> => f.type === "joint");
   if (joints.length && show("bodies")) {
     const nameOf = (id: string | undefined) => bodies.find((b) => b.id === id)?.name ?? id ?? "?";
-    folder("Joints", "assembly", joints.map((f, i) => ({
-      kind: "row" as const,
-      k: `j:${f.id}`,
-      depth: 1,
-      label: f.name || `${nameOf(f.moving)} → ${nameOf(f.to?.body)}`,
-      icon: "assembly",
-      selected: selection.featureId === f.id,
-      error: errId === f.id,
-      activate: viaTool(() => ({ kind: "feature", id: f.id }), () => engine.selectFeature(f.id)),
-      edit: editRow(f.id),
-      rename: (name: string) => store.updateFeature(f.id, { name } as Partial<Feature>),
-      remove: () => store.removeFeature(f.id),
-      title: `Joint ${i + 1} · select or double-click to adjust its offset/angle handles · right-click to Rename / Delete`,
-    })));
+    folder(
+      "Joints",
+      "assembly",
+      joints.map((f, i) => ({
+        kind: "row" as const,
+        k: `j:${f.id}`,
+        depth: 1,
+        label: f.name || `${nameOf(f.moving)} → ${nameOf(f.to?.body)}`,
+        icon: "assembly",
+        selected: selection.featureId === f.id,
+        error: errId === f.id,
+        activate: viaTool(
+          () => ({ kind: "feature", id: f.id }),
+          () => engine.selectFeature(f.id),
+        ),
+        edit: editRow(f.id),
+        rename: (name: string) => store.updateFeature(f.id, { name } as Partial<Feature>),
+        remove: () => store.removeFeature(f.id),
+        title: `Joint ${i + 1} · select or double-click to adjust its offset/angle handles · right-click to Rename / Delete`,
+      })),
+    );
   }
 
-  // --- Mechanisms (only when present) ---
-  // Linkages, after the joints for the same reason: they are about the bodies.
-  // Double-click raises the drive's handle, as it does from the timeline.
-  const mechanisms = doc.features.filter(
-    (f): f is Extract<Feature, { type: "mechanism" }> => f.type === "mechanism",
-  );
+  // Mechanisms follow the joints, and double-click raises the drive's handle as from the timeline.
+  const mechanisms = doc.features.filter((f): f is Extract<Feature, { type: "mechanism" }> => f.type === "mechanism");
   if (mechanisms.length && show("bodies")) {
     const nameOf = (id: string | undefined) => bodies.find((b) => b.id === id)?.name ?? id ?? "?";
-    folder("Mechanisms", "mechanism", mechanisms.map((f, i) => ({
-      kind: "row" as const,
-      k: `m:${f.id}`,
-      depth: 1,
-      label: f.name || `Mechanism ${i + 1}`,
-      icon: "mechanism",
-      selected: selection.featureId === f.id,
-      error: errId === f.id,
-      activate: viaTool(() => ({ kind: "feature", id: f.id }), () => engine.selectFeature(f.id)),
-      edit: editRow(f.id),
-      rename: (name: string) => store.updateFeature(f.id, { name } as Partial<Feature>),
-      remove: () => store.removeFeature(f.id),
-      title: `Mechanism ${i + 1} on ${nameOf(f.ground)} · double-click to drag its drive · right-click to Rename / Delete`,
-    })));
+    folder(
+      "Mechanisms",
+      "mechanism",
+      mechanisms.map((f, i) => ({
+        kind: "row" as const,
+        k: `m:${f.id}`,
+        depth: 1,
+        label: f.name || `Mechanism ${i + 1}`,
+        icon: "mechanism",
+        selected: selection.featureId === f.id,
+        error: errId === f.id,
+        activate: viaTool(
+          () => ({ kind: "feature", id: f.id }),
+          () => engine.selectFeature(f.id),
+        ),
+        edit: editRow(f.id),
+        rename: (name: string) => store.updateFeature(f.id, { name } as Partial<Feature>),
+        remove: () => store.removeFeature(f.id),
+        title: `Mechanism ${i + 1} on ${nameOf(f.ground)} · double-click to drag its drive · right-click to Rename / Delete`,
+      })),
+    );
   }
 
-  // --- Sketches ---
   const pickedSketches = browser.sketchSelection.keys;
-  if (show("sketches")) folder("Sketches", "sketch", sketches.map((f, i) => ({
-    kind: "row" as const,
-    k: `s:${f.id}`,
-    depth: 1,
-    label: f.name || `Sketch${i + 1}`,
-    icon: "sketch",
-    selected: pickedSketches.includes(f.id) || selection.featureId === f.id,
-    error: errId === f.id,
-    ...eye({ category: "sketches", key: f.id }, engine.isSketchVisible(f.id)),
-    activate: viaTool(() => ({ kind: "sketch", id: f.id }), (e) => selectSketch(f.id, e)),
-    edit: editRow(f.id),
-    extraMenu: [
-      visibilityMenu("sketches", actOnSelection(pickedSketches, f.id), "sketches"),
-      { label: "Export as DXF…", onClick: () => exportSketch(f.id, "dxf") },
-      { label: "Export as SVG…", onClick: () => exportSketch(f.id, "svg") },
-    ],
-    rename: (name: string) => store.updateFeature(f.id, { name } as Partial<Feature>),
-    remove: () => store.removeFeature(f.id),
-    title: fmtKeys("Click to select (Ctrl+click adds, Shift+click takes a run) · double-click to edit · right-click for Visibility / Edit / Rename / Delete · drag across eyes to show or hide many"),
-  })));
+  if (show("sketches"))
+    folder(
+      "Sketches",
+      "sketch",
+      sketches.map((f, i) => ({
+        kind: "row" as const,
+        k: `s:${f.id}`,
+        depth: 1,
+        label: f.name || `Sketch${i + 1}`,
+        icon: "sketch",
+        selected: pickedSketches.includes(f.id) || selection.featureId === f.id,
+        error: errId === f.id,
+        ...eye({ category: "sketches", key: f.id }, engine.isSketchVisible(f.id)),
+        activate: viaTool(
+          () => ({ kind: "sketch", id: f.id }),
+          (e) => selectSketch(f.id, e),
+        ),
+        edit: editRow(f.id),
+        extraMenu: [
+          visibilityMenu("sketches", actOnSelection(pickedSketches, f.id), "sketches"),
+          { label: "Export as DXF…", onClick: () => exportSketch(f.id, "dxf") },
+          { label: "Export as SVG…", onClick: () => exportSketch(f.id, "svg") },
+        ],
+        rename: (name: string) => store.updateFeature(f.id, { name } as Partial<Feature>),
+        remove: () => store.removeFeature(f.id),
+        title: fmtKeys(
+          "Click to select (Ctrl+click adds, Shift+click takes a run) · double-click to edit · right-click for Visibility / Edit / Rename / Delete · drag across eyes to show or hide many",
+        ),
+      })),
+    );
 
   return out;
 });
 
-/** Each category's eyes in the order they are drawn, which is what a paint drag
- *  fills across and a Shift-click measures a run over, plus the bodies behind
- *  each folder head's key. Derived from the node list itself so it can never
- *  disagree with what is on screen. */
+/** Each category's eyes in drawn order (what a paint drag fills and a Shift-click run measures), plus the bodies behind
+ *  each folder head. Derived from the node list so it cannot disagree with the screen. */
 const visIndex = computed(() => {
   const order = new Map<VisCategory, string[]>();
   const ids = new Map<string, readonly string[]>();
@@ -841,18 +852,8 @@ watch(
   },
 );
 
-// --- lifecycle -----------------------------------------------------------
-
-// WebKitGTK quirk, carried over verbatim from mountUi's `for (const id of
-// ["browser", "inspector"])` loop: wheel events over an overflow panel don't
-// reliably reach the native scroller (GTK kinetic scrolling eats them, fine in
-// Chromium, dead in the webview), so drive the scroll explicitly, deltaMode-
-// normalized like the viewport's zoom wheel.
-//
-// Attached by hand rather than with @wheel because it MUST be non-passive:
-// preventDefault is the whole point, and a passive listener would silently
-// no-op it. (The Parameters panel this was written alongside carried the twin
-// of it; the browser is the only docked scroller left.)
+// WebKitGTK quirk: wheel events over an overflow panel do not reliably reach the native scroller (kinetic scrolling
+// eats them), so the scroll is driven here, deltaMode-normalized. Bound by hand because it must be non-passive.
 function onWheel(ev: WheelEvent) {
   const el = root.value;
   if (!el || el.scrollHeight <= el.clientHeight) return;
@@ -868,7 +869,9 @@ onUnmounted(() => root.value?.removeEventListener("wheel", onWheel));
   <aside id="browser" class="float-card">
     <div class="float-card-head">
       <span class="float-card-title">Items</span>
-      <button class="float-card-close" :title="fmtKeys('Hide the items (Ctrl+Alt+S)')" @click="shell.setItems(false)"><Icon name="close" :size="14" /></button>
+      <button class="float-card-close" :title="fmtKeys('Hide the items (Ctrl+Alt+S)')" @click="shell.setItems(false)"
+        ><Icon name="close" :size="14"
+      /></button>
     </div>
     <div class="browser-title">
       <select
@@ -882,64 +885,66 @@ onUnmounted(() => root.value?.removeEventListener("wheel", onWheel));
       </select>
     </div>
     <div ref="root" class="float-card-body">
-    <template v-for="n in nodes" :key="n.k">
-      <TreeFolder
-        v-if="n.kind === 'folder'"
-        :data-key="n.key"
-        :label="n.label"
-        :icon="n.icon"
-        :count="n.count"
-        :depth="n.depth"
-        :collapsed="n.collapsed"
-        :visible="n.visible"
-        :eye-down="n.eyeDown"
-        :toggle-vis="n.toggleVis"
-        :eye-over="n.eyeOver"
-        :id="n.id"
-        :rename="n.rename"
-        :remove="n.remove"
-        :extra-menu="n.extraMenu"
-        :drag-start="n.dragStart"
-        :accept-drop="n.acceptDrop"
-        :drop-here="n.dropHere"
-        :activate="n.activate"
-        :selected="n.selected"
-        @toggle="browser.toggle(n.key)"
-      />
-      <TreeRow
-        v-else-if="n.kind === 'row'"
-        :label="n.label"
-        :icon="n.icon"
-        :depth="n.depth"
-        :id="n.id"
-        :swatch="n.swatch"
-        :dim="n.dim"
-        :selected="n.selected"
-        :error="n.error"
-        :visible="n.visible"
-        :title="n.title"
-        :activate="n.activate"
-        :eye-down="n.eyeDown"
-        :toggle-vis="n.toggleVis"
-        :eye-over="n.eyeOver"
-        :edit="n.edit"
-        :rename="n.rename"
-        :remove="n.remove"
-        :extra-menu="n.extraMenu"
-        :drag-start="n.dragStart"
-        :accept-drop="n.acceptDrop"
-        :drop-here="n.dropHere"
-      />
-      <div v-else-if="n.kind === 'empty'" class="empty-state tree-child">{{ n.text }}</div>
+      <template v-for="n in nodes" :key="n.k">
+        <TreeFolder
+          v-if="n.kind === 'folder'"
+          :data-key="n.key"
+          :label="n.label"
+          :icon="n.icon"
+          :count="n.count"
+          :depth="n.depth"
+          :collapsed="n.collapsed"
+          :visible="n.visible"
+          :eye-down="n.eyeDown"
+          :toggle-vis="n.toggleVis"
+          :eye-over="n.eyeOver"
+          :id="n.id"
+          :rename="n.rename"
+          :remove="n.remove"
+          :extra-menu="n.extraMenu"
+          :drag-start="n.dragStart"
+          :accept-drop="n.acceptDrop"
+          :drop-here="n.dropHere"
+          :activate="n.activate"
+          :selected="n.selected"
+          @toggle="browser.toggle(n.key)"
+        />
+        <TreeRow
+          v-else-if="n.kind === 'row'"
+          :label="n.label"
+          :icon="n.icon"
+          :depth="n.depth"
+          :id="n.id"
+          :swatch="n.swatch"
+          :dim="n.dim"
+          :selected="n.selected"
+          :error="n.error"
+          :visible="n.visible"
+          :title="n.title"
+          :activate="n.activate"
+          :eye-down="n.eyeDown"
+          :toggle-vis="n.toggleVis"
+          :eye-over="n.eyeOver"
+          :edit="n.edit"
+          :rename="n.rename"
+          :remove="n.remove"
+          :extra-menu="n.extraMenu"
+          :drag-start="n.dragStart"
+          :accept-drop="n.acceptDrop"
+          :drop-here="n.dropHere"
+        />
+        <div v-else-if="n.kind === 'empty'" class="empty-state tree-child">{{ n.text }}</div>
 
-      <!-- A section some plugin added. It draws its own rows, decides its own
+        <!-- A section some plugin added. It draws its own rows, decides its own
            visibility and is unmounted when its capability stops. -->
-      <component :is="n.component" v-else />
-    </template>
+        <component :is="n.component" v-else />
+      </template>
     </div>
     <div class="float-card-foot">
       <span class="float-card-spacer"></span>
-      <button class="float-card-more" title="More" aria-label="More" @click="openMore($event)"><Icon name="more" :size="18" /></button>
+      <button class="float-card-more" title="More" aria-label="More" @click="openMore($event)"
+        ><Icon name="more" :size="18"
+      /></button>
     </div>
   </aside>
 </template>

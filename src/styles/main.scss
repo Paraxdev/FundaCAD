@@ -1,42 +1,22 @@
-// FundaCAD stylesheet entry point.
-//
-// This is src/styles.css split by section, a pure byte-move, nothing was
-// rewritten. The load order below IS the old file's top-to-bottom order and
-// must stay that way: several rules depend on a later-is-preferred cascade (most visibly
-// `.hidden { display: none !important }` in _utilities, which has to be able to
-// take precedence over the display rules declared above it).
-//
-// Two deliberate non-decisions:
-//
-//   * No SFC <style> blocks anywhere. `<style scoped>` rewrites `.tree-row` to
-//     `.tree-row[data-v-abc]`, which raises specificity from (0,1,0) to (0,2,0);
-//     across ~336 class selectors with a lot of descendant/compound interplay
-//     that silently moves cascade outcomes. "Identical output" and "scoped" are
-//     mutually exclusive, and the e2e suite selects on these class names.
-//   * No SCSS variables. The theme is CSS custom properties on :root
-//     (_tokens.scss), so every component already gets it for free through the
-//     cascade and there is nothing to import or hoist. SCSS is here for @use
-//     file-splitting and nothing else.
+// The load order is the cascade, later rules win (.hidden in _utilities must beat display rules).
+// No SFC <style scoped>: it raises the specificity of ~336 class selectors and silently shifts the cascade,
+// and the e2e suite selects on these class names. No SCSS variables, the theme is custom properties.
 
 @use "tokens";
 @use "base";
 @use "titlebar";
 @use "palette";
-// The "MAIN, browser | viewport" section. Named _layout rather than _main so
-// it can't be confused with this entry file, which Sass would otherwise refuse
-// to disambiguate.
+// Not _main, which Sass would confuse with this entry file.
 @use "layout";
-// After _layout: the dock lives in #main's third grid track, which _layout
-// declares.
+// After _layout, which declares the #main grid track the dock lives in.
 @use "renderdock";
 @use "timeline";
-// Named for the docked panel it was written for, which is gone. What is left is
-// the .param-row / .panel-title vocabulary the feature values are still drawn
-// with, wherever they are shown.
+// The .param-row and .panel-title rules for feature values, not a docked inspector panel.
 @use "inspector";
 @use "utilities";
 @use "browser";
 @use "modals";
+@use "stress";
 @use "home";
 // After the panels it restyles as floating cards (_layout, _timeline, _browser).
 @use "float";
@@ -44,12 +24,12 @@
 @use "console";
 @use "notice";
 @use "prefs";
+@use "guide";
 // After every surface it repaints, so its finish is the one that shows.
 @use "glass";
 // After the layout and glass rules it bends below the two breakpoints.
 @use "responsive";
-// After every surface whose small targets it grows for a finger, and after
-// _responsive, so a breakpoint never undoes a touch rule. See its header.
+// After every surface it grows for a finger, and after _responsive so a breakpoint never undoes it.
 @use "touch";
 // Last on purpose, see the header of _icons.scss.
 @use "icons";

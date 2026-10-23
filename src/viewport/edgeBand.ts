@@ -1,40 +1,5 @@
-// How close to an edge you have to be before the edge takes the click.
-//
-// The gate used to be a fixed 3px halo inside every face border, so how much of
-// a face survived it depended entirely on how big that face happened to be on
-// screen. A small face at a shallow angle has no interior left at all:
-//
-//   at 45deg fov, 1440x900, a face 300mm away (one pixel is 0.276mm)
-//
-//     3mm  head-on     11 x 11 px    a 3px halo leaves 20% of it
-//     3mm  at 60 deg   11 x  5 px    leaves NOTHING, and that is the complaint
-//     6mm  at 60 deg   22 x 11 px    32%
-//     24mm at 60 deg   87 x 43 px    80%
-//
-// So the band is a FRACTION of the face rather than a fixed number of pixels,
-// capped so that nothing which is comfortably clickable today moves:
-//
-//     band = clamp(minScreenExtentPx * BAND_FRACTION, BAND_MIN_PX, EDGE_NEAR_PX)
-//
-// The cap is the safety property. At a minimum screen extent of 15px or more
-// (EDGE_NEAR_PX / BAND_FRACTION) the band is 3px again, so every face that picks
-// well now picks identically, and edges stay preferred everywhere they are preferred now.
-// It is the MINIMUM dimension that decides, not the area or the diagonal: the
-// 6mm row above is 22px along its long side and is still changed, because its
-// short side is 11px and that sliver is the whole problem.
-//
-// The floor stops the band vanishing entirely on a face reduced to a line, where
-// an edge must still be reachable.
-//
-// KNOWN LIMIT, measured rather than assumed: the extent is an AXIS-ALIGNED
-// screen box, so it over-measures a sliver lying diagonally on screen. A
-// chamfer strip seen in an isometric view is exactly that, and the band stays
-// at EDGE_NEAR_PX for it. Front-on, where the box is honest, the same strips at
-// 5.1px go from 57.8% to 67.4% of their pixels resolving as the face, while a
-// 118px face stays put (95.9% to 96.7%, the same 44,625 pixels). Fixing the
-// diagonal case needs the minimum width over all directions rather than over
-// the two screen axes, which is a rotating-calipers pass over the projected
-// hull; worth doing, and worth doing only with that measurement in hand.
+// How close to an edge a click must be for the edge to win. The band is a fraction of the face's short screen side,
+// capped at EDGE_NEAR_PX, so a small face at a shallow angle keeps an interior (a 3mm face at 60 deg is 11 x 5 px).
 
 /** How far from an edge, in screen px, the edge tools still take it: the
  *  grab radius of every edge pick, whatever the zoom. */
@@ -51,22 +16,14 @@ export const BAND_FRACTION = 0.2;
  *  edges unpickable. */
 export const BAND_MIN_PX = 0.75;
 
-/** The edge-priority band for a face of this minimum on-screen extent.
- *
- *  `minExtentPx` of null (no face under the cursor, or a face whose extent
- *  could not be measured) gives the plain constant, which is the behaviour
- *  everything had before the face was measured at all.
- */
+/** Null (no face, or one not measured) gives the plain EDGE_NEAR_PX. */
 export function edgeBandPx(minExtentPx: number | null): number {
   if (minExtentPx == null || !Number.isFinite(minExtentPx)) return EDGE_NEAR_PX;
   return Math.max(BAND_MIN_PX, Math.min(EDGE_NEAR_PX, minExtentPx * BAND_FRACTION));
 }
 
-// The opposite problem, and the other end of an isometric box: a vertical
-// edge foreshortens toward a point as the view approaches edge-on, so its own
-// projected length, not the face beside it, is what makes it hard to click. A
-// 3px band around a segment that is itself only a couple of px long leaves
-// almost no forgiveness; a short edge gets some back.
+// A vertical edge foreshortens toward a point as the view nears edge on, and its own short projection makes it hard
+// to click, so a short edge gets a wider band.
 
 /** An edge projecting shorter than this on screen counts as foreshortened. */
 export const EDGE_SHORT_MAX_PX = 15;
@@ -74,9 +31,7 @@ export const EDGE_SHORT_MAX_PX = 15;
 /** The most a foreshortened edge's band may grow by, at (or near) zero length. */
 export const EDGE_SHORT_BOOST_PX = 6;
 
-/** Extra radius (added to edgeBandPx's result) for a short edge, 0 once its own
- *  projected length reaches EDGE_SHORT_MAX_PX so an ordinary edge is untouched.
- *  `edgeLengthPx` of null (not measured) also gives 0, the prior behaviour. */
+/** Added to edgeBandPx's result, 0 from EDGE_SHORT_MAX_PX up or when not measured. */
 export function shortEdgeBoostPx(edgeLengthPx: number | null): number {
   if (edgeLengthPx == null || !Number.isFinite(edgeLengthPx) || edgeLengthPx >= EDGE_SHORT_MAX_PX) return 0;
   const t = 1 - Math.max(0, edgeLengthPx) / EDGE_SHORT_MAX_PX;
@@ -87,8 +42,8 @@ export function shortEdgeBoostPx(edgeLengthPx: number | null): number {
  *  cannot change the answer. Lets the walk below stop early. */
 export const BAND_CAP_EXTENT_PX = EDGE_NEAR_PX / BAND_FRACTION;
 
-/** The smaller side of a screen-space bounding box, or null if nothing was
- *  added to it. Separated so the walk can be tested without a renderer. */
+/** The smaller side of a screen box, null when empty. Axis aligned, so it over-measures a diagonal sliver such as an
+ *  isometric chamfer strip; the fix would be a rotating calipers pass over the projected hull. */
 export class ScreenExtent {
   private minX = Infinity;
   private minY = Infinity;
@@ -121,20 +76,8 @@ export class ScreenExtent {
   }
 }
 
-/** Indices into `total` items, spread ACROSS the range rather than taken from
- *  the front.
- *
- *  This is the whole difference between measuring a face and measuring a corner
- *  of one. Triangle order out of a tessellator is spatially coherent, so the
- *  first N triangles of a large face are a couple of ROWS of it: a prefix walk
- *  under-estimates by the entire unwalked remainder, and reports a large face as
- *  a sliver. A spread sample is wrong only by the geometry lying between two
- *  neighbouring samples.
- *
- *  It is also cheaper rather than dearer. Consecutive samples are far apart on a
- *  big face, so an early exit on BAND_CAP_EXTENT_PX fires within a few of them,
- *  where a prefix walk runs its whole budget without ever exiting.
- */
+/** Spread across the range, not a prefix: tessellator order is spatially coherent, so a prefix measures a couple of
+ *  rows of a big face as a sliver. Spread samples also reach the BAND_CAP_EXTENT_PX early exit within a few. */
 export function sampleIndices(total: number, budget: number): number[] {
   if (total <= 0 || budget <= 0) return [];
   if (total <= budget) return Array.from({ length: total }, (_, i) => i);
@@ -143,14 +86,8 @@ export function sampleIndices(total: number, budget: number): number[] {
   return out;
 }
 
-// Tangent (smooth) edges, where two faces meet without a crease, as along a
-// fillet's borders. They are drawn faint because there is no corner there to
-// see, and a click beside one nearly always means one of the faces either side
-// of it or a sharp edge close by. So a smooth edge ranks behind any sharp edge
-// that is nearly as close, and is preferred over the face under the pointer
-// only when the pointer is on its drawn line. With no face under the pointer,
-// and in the edge tools where faces do not compete, it is still an edge like
-// any other.
+// A smooth (tangent) edge is drawn faint and a click beside it usually means a face or a nearby sharp edge, so it ranks
+// behind sharp edges and beats the face under the pointer only on its drawn line.
 
 /** A smooth edge ranks as if it were this much further from the pointer, so a
  *  sharp edge up to this much further away is preferred over it. */
@@ -165,9 +102,7 @@ export function edgeRankPx(screenDist: number, smooth: boolean): number {
   return screenDist + (smooth ? SMOOTH_EDGE_PENALTY_PX : 0);
 }
 
-/** How close the pointer has to be for this edge to be preferred over the face
- *  under it, given that face's band (edgeBandPx) and the edge's own short-edge
- *  boost (shortEdgeBoostPx). */
+/** How close the pointer must be for this edge to beat the face under it. */
 export function edgeBandForPx(faceBandPx: number, shortBoostPx: number, smooth: boolean): number {
   return smooth ? Math.min(faceBandPx, SMOOTH_EDGE_BAND_PX) : faceBandPx + shortBoostPx;
 }
@@ -175,21 +110,20 @@ export function edgeBandForPx(faceBandPx: number, shortBoostPx: number, smooth: 
 export interface BandCandidate {
   /** distance from the pointer, in screen px */
   screenDist: number;
-  /** round the back of the body (picking.occludedEdge) */
-  occluded: boolean;
-  /** edgeBandForPx for this edge */
-  bandPx: number;
+  /** round the back of the body (picking.occludedEdge). A sight ray through
+   *  every body, so asked last and only of a candidate that could win. */
+  occluded: () => boolean;
+  /** edgeBandForPx for this edge, asked only over a face */
+  bandPx: () => number;
 }
 
-/** Which edge, if any, the pointer means rather than the face under it: the
- *  first candidate, in rank order, that is not occluded and lies within its own
- *  band. With no face under the pointer every candidate is within reach, so the
- *  first visible one is the answer. Null means the face. */
+/** The first candidate in rank order that is not occluded and lies within its band, null for the face. With no face
+ *  under the pointer every candidate is in reach. */
 export function preferredEdge(cands: readonly BandCandidate[], overFace: boolean): number | null {
   for (let i = 0; i < cands.length; i++) {
     const c = cands[i]!;
-    if (c.occluded) continue;
-    if (!overFace || c.screenDist <= c.bandPx) return i;
+    if (overFace && c.screenDist > c.bandPx()) continue;
+    if (!c.occluded()) return i;
   }
   return null;
 }

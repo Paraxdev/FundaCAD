@@ -10,15 +10,25 @@ import { expandPackedEdges } from "../../src/geometry/client";
 describe("expandPackedEdges", () => {
   it("re-splits a packed buffer into per-edge point triples", () => {
     // two edges: one of 2 points, one of 3
-    const pts = new Float32Array([
-      0, 0, 0, 1, 2, 3,
-      4, 5, 6, 7, 8, 9, 1.5, -2.5, 0.25,
-    ]);
+    const pts = new Float32Array([0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 1.5, -2.5, 0.25]);
     const counts = new Uint32Array([2, 3]);
 
     expect(expandPackedEdges(pts, counts, "b1")).toEqual([
-      { points: [[0, 0, 0], [1, 2, 3]], body: "b1" },
-      { points: [[4, 5, 6], [7, 8, 9], [1.5, -2.5, 0.25]], body: "b1" },
+      {
+        points: [
+          [0, 0, 0],
+          [1, 2, 3],
+        ],
+        body: "b1",
+      },
+      {
+        points: [
+          [4, 5, 6],
+          [7, 8, 9],
+          [1.5, -2.5, 0.25],
+        ],
+        body: "b1",
+      },
     ]);
   });
 
@@ -36,9 +46,7 @@ describe("expandPackedEdges", () => {
 
   it("handles an empty edge list and a zero-point edge", () => {
     expect(expandPackedEdges(new Float32Array(0), new Uint32Array(0), "b1")).toEqual([]);
-    expect(expandPackedEdges(new Float32Array(0), new Uint32Array([0]), "b1")).toEqual([
-      { points: [], body: "b1" },
-    ]);
+    expect(expandPackedEdges(new Float32Array(0), new Uint32Array([0]), "b1")).toEqual([{ points: [], body: "b1" }]);
   });
 
   it("consumes the buffer exactly, so edge N starts where edge N-1 ended", () => {

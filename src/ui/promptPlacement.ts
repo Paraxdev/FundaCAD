@@ -1,7 +1,5 @@
-// Where the viewport prompt may sit: the span along its row that no floating
-// card covers. The viewport runs full bleed under the left and right columns,
-// so centring on the viewport alone slid the prompt under the tool rail as soon
-// as the Render panel narrowed the view.
+// The span of the prompt's row no floating card covers: the viewport runs full bleed, so centring alone slid the
+// prompt under the tool rail once the Render panel narrowed the view.
 
 export interface Box {
   left: number;
@@ -15,12 +13,8 @@ export interface Insets {
   right: number;
 }
 
-/** Insets from `area`'s sides that keep a row spanning `band` clear of the
- *  left and right columns' cards, `gap` from each. The side comes from the
- *  column, not from where a card lies: in a narrow view the rail's labels reach
- *  past the middle. A card that misses the band vertically is ignored, so a
- *  column that ends above the row does not squeeze it. When less than
- *  `minWidth` would be left, the right inset gives way first, then the left. */
+/** The side comes from the column, not the card position, since in a narrow view the rail labels reach past the
+ *  middle. Cards missing the band are ignored. Below `minWidth` the right inset gives way first, then the left. */
 export function promptInsets(
   area: Box,
   band: { top: number; bottom: number },
@@ -28,8 +22,7 @@ export function promptInsets(
   gap: number,
   minWidth: number,
 ): Insets {
-  const inRow = (o: Box) =>
-    o.right > o.left && o.bottom > o.top && o.bottom > band.top && o.top < band.bottom;
+  const inRow = (o: Box) => o.right > o.left && o.bottom > o.top && o.bottom > band.top && o.top < band.bottom;
   let left = gap;
   let right = gap;
   for (const o of cards.left) if (inRow(o)) left = Math.max(left, o.right - area.left + gap);
@@ -43,4 +36,46 @@ export function promptInsets(
     if (short > 0) left = Math.max(gap, left - short);
   }
   return { left: Math.round(left), right: Math.round(right) };
+}
+
+export interface Row extends Insets {
+  top: number;
+}
+
+/** The highest row at or below `top` where a box of `size` fits between the columns' cards, `gap` from each, with
+ *  its top and its insets from `area`'s sides. Rows start at `top` and under each card. Null when none fits. */
+export function clearRow(
+  area: Box,
+  size: { width: number; height: number },
+  top: number,
+  cards: { left: readonly Box[]; right: readonly Box[] },
+  gap: number,
+): Row | null {
+  const under = [...cards.left, ...cards.right].map((o) => o.bottom + gap).filter((t) => t > top);
+  for (const t of [top, ...under].sort((a, b) => a - b)) {
+    if (t + size.height > area.bottom - gap) break;
+    const { left, right } = promptInsets(area, { top: t, bottom: t + size.height }, cards, gap, 0);
+    if (area.right - area.left - left - right >= size.width) return { top: t, left, right };
+  }
+  return null;
+}
+
+// The rail's buttons rather than the rail: its box runs the full height at the
+// width of its widest label, which sits at the top.
+export const LEFT_CARDS =
+  "#float-layer .float-left-stack > *, #float-layer .tool-rail .rail-btn, #float-layer .tool-rail .rail-group";
+export const RIGHT_CARDS = "#float-layer .float-right > *";
+
+const rects = (sel: string): Box[] => [...document.querySelectorAll(sel)].map((o) => o.getBoundingClientRect());
+
+/** The part of `area` a row spanning `band` can use without sliding under a card. */
+export function clearOfCards(area: Box, band: { top: number; bottom: number }, gap: number, minWidth: number): Box {
+  const { left, right } = promptInsets(
+    area,
+    band,
+    { left: rects(LEFT_CARDS), right: rects(RIGHT_CARDS) },
+    gap,
+    minWidth,
+  );
+  return { left: area.left + left, right: area.right - right, top: area.top, bottom: area.bottom };
 }

@@ -7,6 +7,7 @@ body {
   margin: 0;
   height: 100%;
   overflow: hidden;
+  overflow: clip;
   font-family: var(--ui, "Inter", system-ui, sans-serif);
   font-size: 13px;
   font-feature-settings: "cv11", "ss01", "tnum";
@@ -18,31 +19,34 @@ body {
 
 #app {
   display: grid;
-  /* An explicit minmax(0, 1fr) column, not the implicit auto one: an `auto`
-     grid track is sized to its items' MAX-CONTENT width, so one wide row (the
-     titlebar carrying a long engine error) used to stretch the whole app past
-     the window, the ribbon un-collapsed, the browser and inspector slid out of
-     bounds. The 0 minimum lets every row be narrower than its content instead. */
+  /* Not the implicit auto track: auto sizes to max-content, so one wide row (a long
+     engine error in the titlebar) stretched the whole app past the window. */
   grid-template-columns: minmax(0, 1fr);
-  /* The title bar, then the stage. Everything else floats over the viewport
-     (_float.scss). */
+  /* Everything but the title bar and the stage floats over the viewport (_float.scss). */
   grid-template-rows: 36px minmax(0, 1fr);
   grid-template-areas: "title" "main";
   height: 100vh;
   width: 100%;
   overflow: hidden;
+  /* clip, not hidden: a hidden box still scrolls, and the rail foot's shadow pokes
+     20px below the window, so scrollIntoView scrolled the shell up. */
+  overflow: clip;
 }
-#titlebar { grid-area: title; }
-#main { grid-area: main; }
+#titlebar {
+  grid-area: title;
+}
+#main {
+  grid-area: main;
+}
 
-/* --- shared focus ring (accent) --- */
 :focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent-glow);
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 0 0 4px var(--accent-glow);
   border-radius: var(--r-sm);
 }
 
-/* --- custom scrollbars --- */
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--line-strong) transparent;

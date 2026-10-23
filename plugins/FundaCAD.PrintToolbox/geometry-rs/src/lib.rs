@@ -1,7 +1,5 @@
-//! The 3D Printing Toolbox's feature geometry as a FundaCAD plugin component,
-//! the Rust twin of geometry/*.py. Every tool edits the body's exact B-rep
-//! through the engine's generic kernel, so a later fillet or boolean sees the
-//! reshaped hole.
+//! The 3D Printing Toolbox's feature geometry, the Rust twin of geometry/*.py. Every tool edits the body's exact
+//! B-rep through the engine's generic kernel, so a later fillet or boolean sees the reshaped hole.
 
 wit_bindgen::generate!({
     world: "plugin",
@@ -52,11 +50,7 @@ impl F {
 
     /// `f.get(key) or default` for a string field.
     pub fn text<'a>(&'a self, key: &str, default: &'a str) -> &'a str {
-        self.raw
-            .get(key)
-            .and_then(Value::as_str)
-            .filter(|s| !s.is_empty())
-            .unwrap_or(default)
+        self.raw.get(key).and_then(Value::as_str).filter(|s| !s.is_empty()).unwrap_or(default)
     }
 
     /// `bool(f.get(key, False))`.
@@ -103,7 +97,13 @@ impl Guest for Toolbox {
         Err(format!("no mesh pass {pass:?} here"))
     }
 
-    fn displace(pass: String, _face: &Shape, _spec: String, _tag: String, _options: DisplaceOptions) -> Result<Mesh, String> {
+    fn displace(
+        pass: String,
+        _face: &Shape,
+        _spec: String,
+        _tag: String,
+        _options: DisplaceOptions,
+    ) -> Result<Mesh, String> {
         Err(format!("no mesh pass {pass:?} here"))
     }
 

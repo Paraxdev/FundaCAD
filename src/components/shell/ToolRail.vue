@@ -1,7 +1,6 @@
 <script setup lang="ts">
-// The floating tool rail down the left of the viewport. It carries every tool
-// the ribbon did, and swaps its whole content with the mode: categories for the
-// model, the tools that fit a selection, or the drawing tools inside a sketch.
+// The floating tool rail. It swaps its whole content with the mode: categories, the tools that fit a selection, or the
+// drawing tools inside a sketch.
 
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, useTemplateRef, watch } from "vue";
 import { useEngine } from "../../app/engineKey";
@@ -9,10 +8,17 @@ import { useBuildValue, useDocValue } from "../../app/useDoc";
 import { useRibbonStore } from "../../stores/ribbon";
 import { useCommandPaletteStore } from "../../stores/commandPalette";
 import { useSketchPaletteStore } from "../../stores/sketchPalette";
+import { onShortcutsChange } from "../../input/shortcuts";
 import { onContribChange } from "../../plugins/contrib";
 import {
-  faceOf, familyOf, modelRail, sketchRail, sketchTool,
-  type RailEntry, type RailFamily, type RailTool,
+  faceOf,
+  familyOf,
+  modelRail,
+  sketchRail,
+  sketchTool,
+  type RailEntry,
+  type RailFamily,
+  type RailTool,
 } from "../../ui/railDefs";
 import { HOLD_MS, IDLE, holdStep, type HoldEvent, type HoldPhase } from "../../ui/holdGesture";
 import { contextMenu } from "../../ui/menu";
@@ -57,8 +63,15 @@ onUnmounted(() => fitRo?.disconnect());
 
 const pluginTick = ref(0);
 let offPlugins: (() => void) | null = null;
-onMounted(() => { offPlugins = onContribChange(() => pluginTick.value++); });
+onMounted(() => {
+  offPlugins = onContribChange(() => pluginTick.value++);
+});
 onUnmounted(() => offPlugins?.());
+let offShortcuts: (() => void) | null = null;
+onMounted(() => {
+  offShortcuts = onShortcutsChange(() => pluginTick.value++);
+});
+onUnmounted(() => offShortcuts?.());
 
 // A plugin's tool group starts open; folding it away is remembered by plugin id
 // for the session. Collapsing changes the list height, so the fit is remeasured.
@@ -93,14 +106,22 @@ const entries = computed<RailEntry[]>(() => {
   if (mode.value === "running") return [];
   if (mode.value === "selection") {
     const onFace = sel.kind.value === "face" && engine.viewport.selectedFaceSketchPlane() ? sketchTool() : null;
-    // App tools flat here; a plugin's tools are drawn below as their own
-    // collapsible groups (see the template), so they are left out of this list.
+    // Plugin tools are drawn below as their own collapsible groups, so they are left out here.
     return [
       ...(onFace ? [onFace] : []),
       ...sel.appOffers.value.map((o): RailTool => ({
-        kind: "tool", action: `offer:${o.tool}`, label: o.label, icon: o.iconName, ...(o.hint ? { keys: o.hint } : {}),
+        kind: "tool",
+        action: `offer:${o.tool}`,
+        label: o.label,
+        icon: o.iconName,
+        ...(o.hint ? { keys: o.hint } : {}),
       })),
-      ...sel.looks.value.map((o): RailTool => ({ kind: "tool", action: `look:${o.id}`, label: o.label, icon: o.iconName })),
+      ...sel.looks.value.map((o): RailTool => ({
+        kind: "tool",
+        action: `look:${o.id}`,
+        label: o.label,
+        icon: o.iconName,
+      })),
     ];
   }
   return modelRail();
@@ -115,12 +136,15 @@ const sketchName = useDocValue((doc) => {
   return named || `Sketch ${i + 1}`;
 });
 
-// --- live state the engine does not publish --------------------------------
-
+// Live state the engine does not publish.
 const pulse = ref(0);
 let pulseRaf = 0;
 function bump() {
-  if (!pulseRaf) pulseRaf = requestAnimationFrame(() => { pulseRaf = 0; pulse.value++; });
+  if (!pulseRaf)
+    pulseRaf = requestAnimationFrame(() => {
+      pulseRaf = 0;
+      pulse.value++;
+    });
 }
 let unsubs: (() => void)[] = [];
 onMounted(() => {
@@ -137,11 +161,16 @@ onUnmounted(() => {
 
 // Isolate/solo only, not any manual body hide (store.isolateActive tracks which).
 const isolateActive = useBuildValue(() => engine.store.isolateActive);
-const sectionOn = computed(() => { pulse.value; return engine.tools.section.active || engine.tools.section.picking; });
-const measureOn = computed(() => { pulse.value; return engine.tools.measure.active; });
+const sectionOn = computed(() => {
+  pulse.value;
+  return engine.tools.section.active || engine.tools.section.picking;
+});
+const measureOn = computed(() => {
+  pulse.value;
+  return engine.tools.measure.active;
+});
 
-// --- families: last used on the face, press and hold for the rest ----------
-
+// A family shows its last used tool on the face, press and hold for the rest.
 const chosen = ref<Record<string, string>>({});
 watch(
   () => ribbon.activeSketchTool,
@@ -165,7 +194,10 @@ function tileOf(ev: Event): HTMLElement {
   return ev.currentTarget as HTMLElement;
 }
 function clearHoldTimer() {
-  if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+  if (holdTimer) {
+    clearTimeout(holdTimer);
+    holdTimer = null;
+  }
 }
 function closeFlyout() {
   flyout.value = null;
@@ -182,18 +214,19 @@ function openFlyout(f: RailFamily) {
 // always `fam:${slot.id}`, see railDefs.ts's sketchRail).
 const CONSTRAIN_FAMILY_ID = "fam:constrain";
 
-/** The Constrain family's face click, with something already selected in the
- *  sketch: offer the constraint types that apply to that selection instead of
- *  always arming Horizontal (SK-3). Returns false (caller falls through to the
- *  normal default-tool click) when there's no sketch selection or nothing in
- *  it is constrainable, so an empty selection behaves exactly as before. */
+/** With a sketch selection, the Constrain face click offers the constraint types that apply instead of arming
+ *  Horizontal (SK-3). False when nothing selected is constrainable, so the caller falls through to the default. */
 function offerConstraintPopup(f: RailFamily): boolean {
   const sk = engine.sketch;
   if (!sk.active) return false;
   const items = sk.constraintOptions();
   if (!items.length) return false;
   const r = tiles.get(f.id)?.getBoundingClientRect();
-  contextMenu(r ? r.right + 8 : 0, r ? r.top : 0, items.map((o) => ({ label: o.label, onClick: o.apply })));
+  contextMenu(
+    r ? r.right + 8 : 0,
+    r ? r.top : 0,
+    items.map((o) => ({ label: o.label, onClick: o.apply })),
+  );
   return true;
 }
 
@@ -292,7 +325,11 @@ const flyoutRows = computed(() => {
 });
 
 // A mode swap replaces every button, so a flyout would be hanging off nothing.
-watch(mode, async () => { closeFlyout(); await nextTick(); measureFit(); });
+watch(mode, async () => {
+  closeFlyout();
+  await nextTick();
+  measureFit();
+});
 
 function pickFromFlyout(t: RailTool, ev: MouseEvent) {
   const open = flyout.value;
@@ -301,8 +338,6 @@ function pickFromFlyout(t: RailTool, ev: MouseEvent) {
   closeFlyout();
   run(t.action, ev);
 }
-
-// --- running ---------------------------------------------------------------
 
 function run(action: string, ev?: MouseEvent) {
   if (action.startsWith("offer:")) {
@@ -338,7 +373,15 @@ function toggleIsolate() {
 </script>
 
 <template>
-  <nav id="toolrail" ref="railEl" class="tool-rail" :class="{ compact, scrolls }" :data-mode="mode" :data-sketch-tool="mode === 'sketch' ? ribbon.activeSketchTool : undefined" aria-label="Tools">
+  <nav
+    id="toolrail"
+    ref="railEl"
+    class="tool-rail"
+    :class="{ compact, scrolls }"
+    :data-mode="mode"
+    :data-sketch-tool="mode === 'sketch' ? ribbon.activeSketchTool : undefined"
+    aria-label="Tools"
+  >
     <div ref="listEl" class="rail-list">
       <RailButton
         icon="search"
@@ -389,7 +432,9 @@ function toggleIsolate() {
           v-else
           :icon="e.style === 'variants' ? faceOf(e, chosen[e.id]).icon : e.icon"
           :label="e.label"
-          :sub="e.style === 'variants' && faceOf(e, chosen[e.id]).label !== e.label ? faceOf(e, chosen[e.id]).label : ''"
+          :sub="
+            e.style === 'variants' && faceOf(e, chosen[e.id]).label !== e.label ? faceOf(e, chosen[e.id]).label : ''
+          "
           :keys="e.style === 'variants' ? faceOf(e, chosen[e.id]).keys : ''"
           :active="e.items.some((t) => isActive(t.action)) || flyout?.id === e.id"
           menu
@@ -403,7 +448,7 @@ function toggleIsolate() {
       </template>
 
       <!-- A plugin's tools, folded under its own name (selection mode only). -->
-      <template v-for="g in (mode === 'selection' ? sel.pluginGroups.value : [])" :key="`grp:${g.pluginId}`">
+      <template v-for="g in mode === 'selection' ? sel.pluginGroups.value : []" :key="`grp:${g.pluginId}`">
         <button
           type="button"
           class="rail-group"
@@ -421,7 +466,7 @@ function toggleIsolate() {
           </span>
         </button>
         <RailButton
-          v-for="o in (isCollapsed(g.pluginId) ? [] : g.offers)"
+          v-for="o in isCollapsed(g.pluginId) ? [] : g.offers"
           :key="`offer:${o.tool}`"
           class="rail-child"
           :icon="o.iconName"
@@ -441,7 +486,7 @@ function toggleIsolate() {
           :sub="sketchPalette.state.construction ? 'On' : 'Off'"
           :active="sketchPalette.state.construction"
           data-action="construction"
-          @click="sketchPalette.set('construction', !sketchPalette.state.construction)"
+          @click="engine.handleAction('construction')"
         />
       </template>
       <template v-else>
@@ -481,17 +526,17 @@ function toggleIsolate() {
       @close="closeFlyout()"
     >
       <div class="rail-flyout-grid" :style="{ gridTemplateRows: `repeat(${flyoutRows}, auto)` }">
-      <RailButton
-        v-for="(t, i) in flyout.items"
-        :key="t.action"
-        :style="{ '--i': i }"
-        :icon="t.icon"
-        :label="t.label"
-        :keys="t.keys"
-        :active="isActive(t.action)"
-        :data-pick="t.action"
-        @click="pickFromFlyout(t, $event)"
-      />
+        <RailButton
+          v-for="(t, i) in flyout.items"
+          :key="t.action"
+          :style="{ '--i': i }"
+          :icon="t.icon"
+          :label="t.label"
+          :keys="t.keys"
+          :active="isActive(t.action)"
+          :data-pick="t.action"
+          @click="pickFromFlyout(t, $event)"
+        />
       </div>
     </Popover>
   </nav>

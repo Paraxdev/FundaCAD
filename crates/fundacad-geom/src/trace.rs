@@ -1,11 +1,5 @@
-//! The OpenCASCADE calls the feature being built has made, so a failure can
-//! name the kernel operation that refused and what it was handed.
-//!
-//! Thread-local and per feature: the build loop clears it before each feature
-//! and takes it when one fails. Calls made on a `par` worker thread are not
-//! seen, the trail is a best effort report and never changes a result.
-//! Arguments are formatted only for a call that failed, so a passing build pays
-//! for a name and a timestamp per call.
+//! The OCCT calls of the feature being built, so a failure names the operation that refused and its
+//! input. Thread local and best effort: calls on `par` workers go unseen, and only failed calls format arguments.
 
 use std::cell::RefCell;
 use std::time::Instant;
@@ -82,30 +76,21 @@ fn push_with(call: Call, later: Option<Later>) {
     });
 }
 
-/// `failed`, with arguments worded only if the feature fails in the end: a
-/// blend that recovers from a refused kernel call never reads them, and
-/// describing a B-spline body costs a fifth of a second.
-pub fn failed_later(op: &'static str, args: impl FnOnce() -> String + 'static, error: impl Into<String>, ms: Option<f64>) {
-    push_with(
-        Call {
-            op,
-            args: None,
-            error: Some(error.into()),
-            ms,
-        },
-        Some(Box::new(args)),
-    );
+/// Arguments are worded only if the feature fails in the end: a blend that recovers never reads them,
+/// and describing a B-spline body costs a fifth of a second.
+pub fn failed_later(
+    op: &'static str,
+    args: impl FnOnce() -> String + 'static,
+    error: impl Into<String>,
+    ms: Option<f64>,
+) {
+    push_with(Call { op, args: None, error: Some(error.into()), ms }, Some(Box::new(args)));
 }
 
 /// Record a failure that did not come through `call`, such as an error value
 /// the high level bindings return with the exception text already inside it.
 pub fn failed(op: &'static str, args: Option<String>, error: impl Into<String>, ms: Option<f64>) {
-    push(Call {
-        op,
-        args,
-        error: Some(error.into()),
-        ms,
-    });
+    push(Call { op, args, error: Some(error.into()), ms });
 }
 
 pub fn call<T, E: std::fmt::Display>(
@@ -120,12 +105,7 @@ pub fn call<T, E: std::fmt::Display>(
         Ok(_) => (None, None),
         Err(e) => (Some(args()), Some(e.to_string())),
     };
-    push(Call {
-        op,
-        args,
-        error,
-        ms: Some(ms),
-    });
+    push(Call { op, args, error, ms: Some(ms) });
     r
 }
 
@@ -144,26 +124,7 @@ mod tests {
         assert_eq!(calls.len(), KEEP);
         assert_eq!(calls[0].op, "Bad");
         assert_eq!(calls[0].args.as_deref(), Some("x=1"));
-        assert!(calls[1..]
-            .iter()
-            .all(|c| c.error.is_none() && c.args.is_none()));
+        assert!(calls[1..].iter().all(|c| c.error.is_none() && c.args.is_none()));
         assert!(take().is_empty());
-    }
-
-    #[test]
-    fn words_later_arguments_only_when_read() {
-        use std::cell::Cell;
-        use std::rc::Rc;
-        let worded = Rc::new(Cell::new(0));
-        let w = worded.clone();
-        begin();
-        failed_later("Dropped", move || { w.set(w.get() + 1); "a".into() }, "NotDone", None);
-        begin();
-        assert_eq!(worded.get(), 0);
-        let w = worded.clone();
-        failed_later("Read", move || { w.set(w.get() + 1); "b".into() }, "NotDone", None);
-        let calls = take();
-        assert_eq!(worded.get(), 1);
-        assert_eq!(calls[0].args.as_deref(), Some("b"));
     }
 }

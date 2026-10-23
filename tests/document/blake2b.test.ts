@@ -5,7 +5,11 @@ import { blake2b128Hex } from "../../src/document/blake2b";
 // engine's blob store names a blob by (crates/fundacad-format json_doc.rs).
 const bytes = (n: number) => Uint8Array.from({ length: n }, (_, i) => i % 251);
 const text = (s: string) => new TextEncoder().encode(s);
-const PNG = import.meta.glob("../fixtures/refimg/ref400x200.png", { query: "?inline", import: "default", eager: true }) as Record<string, string>;
+const PNG = import.meta.glob("../fixtures/refimg/ref400x200.png", {
+  query: "?inline",
+  import: "default",
+  eager: true,
+}) as Record<string, string>;
 
 describe("blake2b128Hex", () => {
   it("matches the engine's hash", () => {

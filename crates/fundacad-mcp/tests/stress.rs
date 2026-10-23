@@ -1,6 +1,5 @@
-//! The `stress` tool: a cantilever against the real engine, with its report
-//! and its picture, arguments refused before the engine is asked anything,
-//! and a body that is not there named alongside the features that failed.
+//! The `stress` tool on a cantilever against the real engine: report, picture, arguments refused before
+//! the engine is asked, and a missing body named with the features that failed.
 
 mod common;
 
@@ -134,10 +133,7 @@ async fn malformed_arguments_are_refused_before_the_engine_is_asked() {
                    "material": {"E": -1, "nu": 0.3}}),
             "`material.E`",
         ),
-        (
-            json!({"body": "body1", "fixed": face([-1.0, 0.0, 0.0]), "loads": good_load, "size": -2}),
-            "`size`",
-        ),
+        (json!({"body": "body1", "fixed": face([-1.0, 0.0, 0.0]), "loads": good_load, "size": -2}), "`size`"),
         (
             json!({"body": "body1", "fixed": face([-1.0, 0.0, 0.0]), "loads": good_load, "view": "under"}),
             "no view 'under'",

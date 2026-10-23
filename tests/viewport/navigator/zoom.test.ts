@@ -4,9 +4,7 @@
 
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import {
-  H, TAUS, W, eye, lineOfSightClear, maxDiff, pixel, probePoints, rng, screenPrint, settle, setup,
-} from "./kit";
+import { H, TAUS, W, eye, lineOfSightClear, maxDiff, pixel, probePoints, rng, screenPrint, settle, setup } from "./kit";
 import { distanceOf } from "../../../src/viewport/navigator/pose";
 import { zoomAnchor, PROBE_COUNT } from "../../../src/viewport/navigator/anchor";
 
@@ -65,10 +63,17 @@ describe("wheel zoom", () => {
       const pts = probePoints(scene.box());
       const before = screenPrint(nav, pts);
       const e0 = eye(nav);
-      const x = 420, y = 280;
-      for (let i = 0; i < 10; i++) { nav.wheel(x, y, -100); nav.update(1 / 60); }
+      const x = 420,
+        y = 280;
+      for (let i = 0; i < 10; i++) {
+        nav.wheel(x, y, -100);
+        nav.update(1 / 60);
+      }
       settle(nav);
-      for (let i = 0; i < 10; i++) { nav.wheel(x, y, 100); nav.update(1 / 60); }
+      for (let i = 0; i < 10; i++) {
+        nav.wheel(x, y, 100);
+        nav.update(1 / 60);
+      }
       settle(nav);
       expect(maxDiff(before, screenPrint(nav, pts))).toBeLessThan(1e-6);
       expect(eye(nav).distanceTo(e0)).toBeLessThan(1e-6 * Math.max(1, e0.length()));
@@ -125,9 +130,13 @@ describe("wheel zoom", () => {
     it(`a wheel right after an orbit release stops the turn, so its anchor stays pinned (inertia ${inertia})`, () => {
       const { nav } = setup({ tau: 0.125 });
       nav.opts.inertia = inertia;
-      const x = 380, y = 320;
+      const x = 380,
+        y = 320;
       nav.beginOrbit(x, y);
-      for (let i = 1; i <= 8; i++) { nav.dragTo(x + i * 25, y, 0.008); nav.update(1 / 120); }
+      for (let i = 1; i <= 8; i++) {
+        nav.dragTo(x + i * 25, y, 0.008);
+        nav.update(1 / 120);
+      }
       nav.endGesture();
       nav.wheel(x + 200, y, -100);
       nav.update(1 / 60);

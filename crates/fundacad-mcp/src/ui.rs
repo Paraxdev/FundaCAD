@@ -1,10 +1,5 @@
-//! The ui tools: a private copy of the app in a browser, driven the way a
-//! person drives it, through the harness in tools/harness (docs/HARNESS.md).
-//!
-//! The browser is owned by a Python child, `python -m fundacad_harness serve`,
-//! spoken to in JSON lines on its stdin and stdout. It starts on the first
-//! `ui_open` and stops with the server. Standalone only, so the window it
-//! drives is never the user's.
+//! The ui tools: a private copy of the app in a browser, driven through the harness (docs/HARNESS.md) by a
+//! Python child speaking JSON lines on stdio. Standalone only, so the window it drives is never the user's.
 
 use std::collections::VecDeque;
 use std::process::Stdio;
@@ -25,15 +20,11 @@ pub const RELAY_TIMEOUT: Duration = Duration::from_secs(180);
 
 const CLOSE_GRACE: Duration = Duration::from_secs(20);
 
-const INSTALL_HINT: &str =
-    "pip install -e tools/harness into the Python that FUNDACAD_HARNESS_PYTHON names";
+const INSTALL_HINT: &str = "pip install -e tools/harness into the Python that FUNDACAD_HARNESS_PYTHON names";
 
 /// `FUNDACAD_HARNESS_PYTHON`, else the Python on PATH.
 pub fn python_command() -> Vec<String> {
-    match std::env::var("FUNDACAD_HARNESS_PYTHON")
-        .ok()
-        .filter(|p| !p.trim().is_empty())
-    {
+    match std::env::var("FUNDACAD_HARNESS_PYTHON").ok().filter(|p| !p.trim().is_empty()) {
         Some(p) => crate::link::split_command(&p),
         None => vec![if cfg!(windows) { "python" } else { "python3" }.into()],
     }
@@ -42,13 +33,7 @@ pub fn python_command() -> Vec<String> {
 /// The inverse of `split_command`, which groups by quotes and has no escapes.
 pub fn join_command(argv: &[String]) -> String {
     argv.iter()
-        .map(|a| {
-            if a.chars().any(char::is_whitespace) {
-                format!("\"{a}\"")
-            } else {
-                a.clone()
-            }
-        })
+        .map(|a| if a.chars().any(char::is_whitespace) { format!("\"{a}\"") } else { a.clone() })
         .collect::<Vec<_>>()
         .join(" ")
 }
@@ -71,10 +56,7 @@ impl UiBridge {
         let mut cmd = Command::new(&argv[0]);
         cmd.args(&argv[1..]).args(["-m", "fundacad_harness", "serve"]);
         let engine = crate::link::engine_command();
-        if engine
-            .first()
-            .is_some_and(|p| std::path::Path::new(p).is_file())
-        {
+        if engine.first().is_some_and(|p| std::path::Path::new(p).is_file()) {
             cmd.env("FUNDACAD_ENGINE_CMD", join_command(&engine));
         }
         cmd.env("PYTHONIOENCODING", "utf-8")
@@ -124,8 +106,7 @@ impl UiBridge {
         })
     }
 
-    /// The reply to one call. An Err means the child is gone or stuck, and
-    /// the bridge is no use any more.
+    /// An Err means the child is gone or stuck and the bridge is no use any more.
     pub async fn request(&mut self, call: &str, args: Value) -> Result<Value, String> {
         self.next_id += 1;
         let id = self.next_id;
@@ -167,13 +148,7 @@ impl UiBridge {
         // The stderr reader may still be draining what the child said last.
         let _ = tokio::time::timeout(Duration::from_secs(2), self.child.wait()).await;
         tokio::time::sleep(Duration::from_millis(100)).await;
-        let said: Vec<String> = self
-            .said
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .iter()
-            .cloned()
-            .collect();
+        let said: Vec<String> = self.said.lock().unwrap_or_else(|p| p.into_inner()).iter().cloned().collect();
         if said.iter().any(|l| l.contains("No module named")) {
             return format!("the harness is not installed for {}: {INSTALL_HINT}.", self.python);
         }
@@ -181,10 +156,7 @@ impl UiBridge {
         if tail.is_empty() {
             "the ui harness stopped without a word. ui_open starts a fresh one.".to_string()
         } else {
-            format!(
-                "the ui harness stopped. ui_open starts a fresh one. It said:\n{}",
-                tail.join("\n")
-            )
+            format!("the ui harness stopped. ui_open starts a fresh one. It said:\n{}", tail.join("\n"))
         }
     }
 
@@ -192,8 +164,7 @@ impl UiBridge {
         self.child.id()
     }
 
-    /// Ends stdin, which closes the session and everything it started, and
-    /// kills the child only if that takes too long.
+    /// Ends stdin, which closes the session and all it started, and kills the child only if that takes too long.
     pub async fn stop(mut self) {
         self.stdin = None;
         if tokio::time::timeout(CLOSE_GRACE, self.child.wait()).await.is_err() {
@@ -210,10 +181,9 @@ fn reply_result(reply: &Value) -> CallToolResult {
         return failure(said);
     }
     match reply.get("png").and_then(Value::as_str) {
-        Some(png) => CallToolResult::success(vec![
-            ContentBlock::text(said),
-            ContentBlock::image(png.to_string(), "image/png"),
-        ]),
+        Some(png) => {
+            CallToolResult::success(vec![ContentBlock::text(said), ContentBlock::image(png.to_string(), "image/png")])
+        }
         None => text(said),
     }
 }
@@ -281,10 +251,8 @@ impl FundaCad {
     pub async fn t_ui_do(&self, mut args: JsonObject) -> Result<CallToolResult, McpError> {
         if let Some(steps) = args.get_mut("steps").and_then(Value::as_array_mut) {
             for step in steps.iter_mut().filter_map(Value::as_object_mut) {
-                let files = matches!(
-                    step.get("do").and_then(Value::as_str),
-                    Some("open_file" | "import_file" | "save_as")
-                );
+                let files =
+                    matches!(step.get("do").and_then(Value::as_str), Some("open_file" | "import_file" | "save_as"));
                 let Some(raw) = step.get("path").and_then(Value::as_str).filter(|_| files) else {
                     continue;
                 };

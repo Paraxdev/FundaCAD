@@ -1,5 +1,3 @@
-// Typed text and key presses turned into setting values, for the settings form.
-
 import { measureError, parseMeasure, toUnit, unitById, type UnitDef } from "../ui/measure";
 import { valueProblem, type NumberSetting } from "./settings";
 
@@ -15,7 +13,6 @@ export function numberText(p: NumberSetting, v: number, lengthUnit: string): str
   return String(toUnit(v, fieldUnit(p, lengthUnit)));
 }
 
-/** What a unit suffix beside the field says. */
 export function unitLabel(p: NumberSetting, lengthUnit: string): string {
   return fieldUnit(p, lengthUnit)?.label ?? p.unit ?? "";
 }
@@ -39,9 +36,8 @@ export function parseNumberField(
   return { error: problem };
 }
 
-/** The value an arrow key moves a number to: `times` steps of its declared
- *  step (1 for an integer without one), onto the step grid and inside its
- *  limits. Null when the property declares nothing to step by. */
+/** `times` steps of the declared step (1 for an integer without one), on the step grid and inside the limits.
+ *  Null when the property declares nothing to step by. */
 export function stepNumber(p: NumberSetting, v: number, times: number): number | null {
   const step = p.step ?? (p.integer ? 1 : undefined);
   if (!step || !(step > 0)) return null;
@@ -56,7 +52,13 @@ const MODIFIER_KEYS = new Set(["Control", "Shift", "Alt", "Meta"]);
 
 /** A key press written the way the shortcut sheet writes one, "Ctrl+Shift+K",
  *  or null while only modifiers are held. */
-export function keyCombo(ev: { key: string; ctrlKey: boolean; shiftKey: boolean; altKey: boolean; metaKey: boolean }): string | null {
+export function keyCombo(ev: {
+  key: string;
+  ctrlKey: boolean;
+  shiftKey: boolean;
+  altKey: boolean;
+  metaKey: boolean;
+}): string | null {
   if (MODIFIER_KEYS.has(ev.key)) return null;
   const name = ev.key === " " ? "Space" : ev.key.replace(/^Arrow/, "");
   const key = name.length === 1 ? name.toUpperCase() : name;

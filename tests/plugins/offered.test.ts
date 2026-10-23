@@ -41,7 +41,9 @@ describe("the plugins this build offers", () => {
     // behind a consent screen somebody had just answered. Every one of them is
     // packaged now, so holding any of them back would be hiding a plugin that
     // exists.
-    const offered = officialPlugins().map((p) => p.manifest.id).sort();
+    const offered = officialPlugins()
+      .map((p) => p.manifest.id)
+      .sort();
     expect(offered).toEqual([
       "FundaCAD.ExtraParameters",
       "FundaCAD.Gamepad",

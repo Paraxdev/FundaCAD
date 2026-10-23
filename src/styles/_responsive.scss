@@ -1,21 +1,8 @@
-/* ============================================================================
-   RESPONSIVE, the shell below the size it was laid out for. Nothing above
-   either breakpoint changes.
-
-   narrow: a STAGE under ui/layoutBreakpoints.ts STAGE_NARROW_PX, which App.vue
-     marks as #stage.narrow. Items and History stop fitting beside the rail and
-     the view controls, so they become drawers laid over the model, one at a
-     time (stores/shell.ts), opened from the view controls column.
-   compact title bar: a WINDOW under 760px. Tighter spacing, and the
-     workspace switch keeps only its icons.
-   phone: a WINDOW under 560px. The title bar sheds what it can spare, the
-     rail drops its label pills (each tile keeps its tooltip) and the Render
-     dock stacks under the model instead of beside it.
-   ============================================================================ */
+/* #stage.narrow is a STAGE width (STAGE_NARROW_PX in ui/layoutBreakpoints.ts, set by App.vue), where Items
+   and History become drawers, one at a time (stores/shell.ts); the media queries are window widths. */
 
 #stage.narrow {
-  // Over the rail rather than beside it, so opening Items never shoves the
-  // rail across the model. The column of view controls stays reachable.
+  // Over the rail, not beside it, so opening Items never shoves the rail across the model.
   .float-left-stack {
     position: absolute;
     top: 0;
@@ -37,9 +24,8 @@
     max-height: 100%;
     max-width: calc(100vw - 3 * var(--float-gap) - 48px);
   }
-  // A short stage runs the controls column to the bottom edge, so it scrolls
-  // rather than spilling. Padding and margin cancel so the shadows are not
-  // clipped, the same as .rail-list.
+  // Scrolls on a short stage; padding and margin cancel so the shadows are not clipped,
+  // as in .rail-list.
   #viewcontrols {
     max-height: 100%;
     overflow-y: auto;
@@ -50,13 +36,11 @@
   #viewcontrols::-webkit-scrollbar {
     display: none;
   }
-  // The sketch options are a fixed stack of controls taller than a short
-  // stage, so the whole card scrolls rather than only its relations list.
+  // The sketch options outgrow a short stage, so the whole card scrolls, not only its list.
   .float-right > #palette {
     overflow-y: auto;
   }
-  // A diagnostic, and the one readout with no room left: the prompt and the
-  // controls column both reach into its corner here.
+  // No room left: the prompt and the controls column both reach into its corner.
   .roundtrip {
     display: none;
   }
@@ -75,6 +59,8 @@
   }
 }
 
+/* Phone: the rail drops its label pills, each tile keeps its tooltip, and the Render dock stacks under
+   the model. */
 @media (max-width: 560px) {
   #titlebar .brand,
   #titlebar .context-tab,

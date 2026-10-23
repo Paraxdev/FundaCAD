@@ -1,22 +1,13 @@
-// The Measure (Inspect) readout, as a pure function of what has been picked.
-//
-// Split out of measureTool.ts when the panel's markup moved to
-// components/overlays/MeasureReadout.vue. The tool keeps the picking, the
-// shortest-distance search and the viewport marker; this is only the part that
-// turns the result into labelled, unit-formatted lines, which is also the only
-// part of that file a headless test could ever reach.
+// The Measure readout as a pure function of the picks, kept apart from measureTool.ts so a headless test reaches it.
 
 import * as THREE from "three";
 import { getUnit, toDisplay, displayRound } from "../ui/units";
 
-/** What the tool has picked, stripped of the ids and edge references it keeps
- *  for highlighting. `size` is an area (mm²) on a face and a length (mm) on an
- *  edge, the unit differs, which is exactly why `kind` travels with it. */
+/** `size` is an area (mm²) on a face and a length (mm) on an edge, which is why `kind` travels with it. */
 export type MeasureProbe =
   | { kind: "face"; point: THREE.Vector3; dir: THREE.Vector3; area: number }
   | { kind: "edge"; point: THREE.Vector3; dir: THREE.Vector3; length: number };
 
-/** The closest pair between two probes, as closestPair() computes it. */
 export interface ClosestPair {
   d: number;
   pa: THREE.Vector3;
@@ -37,7 +28,8 @@ export function measureRows(
   const f = toDisplay(1); // display units per mm (area uses f²)
   const L = (mm: number) => `${displayRound(toDisplay(mm))} ${unit}`;
   const A = (mm2: number) => `${displayRound(mm2 * f * f)} ${unit}²`;
-  const xyz = (v: THREE.Vector3) => `${displayRound(toDisplay(v.x))}, ${displayRound(toDisplay(v.y))}, ${displayRound(toDisplay(v.z))}`;
+  const xyz = (v: THREE.Vector3) =>
+    `${displayRound(toDisplay(v.x))}, ${displayRound(toDisplay(v.y))}, ${displayRound(toDisplay(v.z))}`;
 
   const rows: MeasureRow[] = [];
   const push = (k: string, v: string) => rows.push({ k, v });

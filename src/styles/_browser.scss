@@ -1,18 +1,13 @@
-/* ============================================================================
-   BROWSER TREE  (MCAD-style folders)
-   ============================================================================ */
-/* The panel heading carries the kind filter, so it is a row rather than a line
-   of text. The base .panel-title (in _timeline.scss, shared with the inspector)
-   still supplies the type and the margins, this only adds the layout. */
+/* Type and margins come from .panel-title in _timeline.scss; this adds the row layout
+   for the kind filter. */
 .browser-title {
   display: flex;
   align-items: center;
   gap: var(--s-2);
 }
 .browser-filter {
-  /* Takes what the heading does not: the labels are long ("Planes and axes")
-     and the panel is a fixed 232px, so the control shrinks rather than pushing
-     the heading out of the panel. */
+  /* Labels are long ("Planes and axes") in a fixed 232px panel, so this shrinks instead
+     of pushing the heading out. */
   flex: 1 1 auto;
   min-width: 0;
   appearance: none;
@@ -22,8 +17,7 @@
   border-radius: var(--r-sm);
   padding: 2px var(--s-2);
   color: var(--text-dim);
-  /* Deliberately not inheriting .panel-title's uppercase + 1px tracking: this is
-     a value the user picked, not a heading. */
+  /* Not .panel-title's uppercase tracking: this is a value the user picked, not a heading. */
   font: inherit;
   font-size: 11px;
   letter-spacing: normal;
@@ -47,11 +41,8 @@
   display: flex;
   align-items: center;
   gap: var(--s-2);
-  /* Same row height as .feature-row below it, they are alternating rows of one
-     tree and used to be 5px each against different horizontals, which is the
-     near-duplicate that made the panel look hand-placed. The inline value stays
-     at --s-1 because .tree-child's indent is derived from it (see below): the
-     tree's alignment, not a free choice. */
+  /* Same row height as .feature-row. The inline --s-1 is fixed: .tree-child's indent is
+     derived from it. */
   padding: var(--s-2) var(--s-1);
   cursor: pointer;
   user-select: none;
@@ -64,10 +55,8 @@
 .tree-folder:hover {
   background: var(--raised);
 }
-/* The folder a drop would land in. An inset ring rather than a background:
-   the head already changes background on hover, and the pointer is by
-   definition over it during a drag, so a second background is a state the user
-   cannot tell from the one they get by moving the mouse. */
+/* An inset ring, not a background: during a drag the pointer is over the head, so a
+   background would look like plain hover. */
 .tree-folder.drop-into,
 .feature-row.drop-into {
   box-shadow: inset 0 0 0 1px var(--accent);
@@ -96,14 +85,17 @@
 .tree-count:empty {
   display: none;
 }
-/* A computed alignment, kept in step with folderIndent/rowIndent in
-   ui/browserTree.ts: a section's leaf row is one level in (caret + gap) plus
-   the caret space it does not have, so its icon sits under a nested folder's. */
+/* Kept in step with folderIndent/rowIndent in ui/browserTree.ts: one level in plus the
+   caret space a leaf lacks, so its icon sits under a nested folder's. */
 .tree-child {
   padding-left: calc(var(--s-1) + 2 * (12px + var(--s-2)));
 }
 .tree-folder.selected {
-  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 22%, transparent), color-mix(in srgb, var(--accent) 6%, transparent));
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--accent) 22%, transparent),
+    color-mix(in srgb, var(--accent) 6%, transparent)
+  );
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent);
   color: var(--accent-hot);
 }
@@ -112,9 +104,8 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* The inline rename is a contenteditable span inside a row that cannot be
-   selected. WebKit inherits -webkit-user-select, and an editable region that
-   inherited none there can refuse the caret, so it says text for itself. */
+/* WebKit inherits -webkit-user-select, and a contenteditable that inherited none can
+   refuse the caret. */
 .tree-label.renaming {
   -webkit-user-select: text;
   user-select: text;
@@ -125,7 +116,9 @@
   opacity: 0.35;
   padding: 0 var(--s-2);
   cursor: pointer;
-  transition: color var(--t-fast) var(--ease), opacity var(--t-fast) var(--ease);
+  transition:
+    color var(--t-fast) var(--ease),
+    opacity var(--t-fast) var(--ease);
 }
 .feature-row:hover .tree-eye {
   opacity: 0.9;
@@ -135,17 +128,8 @@
   opacity: 1;
 }
 
-/* ---- editable in-canvas sketch dimensions ----
-   Everything from here down keeps its literal pixel values ON PURPOSE, and is
-   the one part of the stylesheet deliberately left off the spacing scale. These
-   boxes are not laid out by CSS: their positions are projected from Three.js
-   world coordinates every frame and written to `left`/`top` in px, and the
-   labels are then centred on that point with a translate(-50%, -50%). Their
-   size is therefore part of a picking and legibility budget measured against
-   the geometry underneath, how much of an edge a dimension label is allowed to
-   cover, and not part of the chrome's rhythm, which is what the scale governs.
-   Rounding them to the nearest rung would move the labels off the features they
-   annotate for no gain anyone can see. */
+/* In-canvas sketch dimensions stay off the spacing scale on purpose: they are projected
+   from Three.js every frame, so their px sizes are a picking budget, not chrome. */
 .sketch-dims {
   position: fixed;
   inset: 0;
@@ -172,58 +156,66 @@
   fill: var(--accent);
   opacity: 0.9;
 }
-.sketch-dim-leaders .driven line { stroke: var(--text-dim, #8a90a0); }
+.sketch-dim-leaders .driven line {
+  stroke: var(--text-dim, #8a90a0);
+}
 .sketch-dim-leaders .driven circle,
-.sketch-dim-leaders .driven polygon { fill: var(--text-dim, #8a90a0); }
+.sketch-dim-leaders .driven polygon {
+  fill: var(--text-dim, #8a90a0);
+}
 .sketch-dim {
   position: absolute;
   transform: translate(-50%, -50%);
-  background: rgba(18, 20, 25, 0.92);
-  -webkit-backdrop-filter: blur(6px);
-          backdrop-filter: blur(6px);
-  border: 1px solid var(--accent);
   color: var(--text);
   font-size: 11px;
   font-weight: 550;
   font-variant-numeric: tabular-nums;
   padding: 2px 7px;
-  border-radius: var(--r-sm);
   white-space: nowrap;
   cursor: pointer;
   pointer-events: auto;
-  box-shadow: var(--shadow-1);
-  transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
+  transition:
+    background var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease);
 }
-.sketch-dim:hover {
-  background: var(--accent-tint);
+.sketch-dim:not(.sketch-dim-driven):hover {
+  background: linear-gradient(var(--accent-tint), var(--accent-tint)), var(--float-bg);
   border-color: var(--accent-hot);
   color: var(--accent-hot);
 }
-/* driven (reference) dimension: measured-only, shown bracketed + muted, read-only */
-.sketch-dim-driven {
+/* A driven (reference) dimension, measured only. */
+.sketch-dim.sketch-dim-driven {
   border-style: dashed;
   border-color: var(--text-dim, #8a90a0);
   color: var(--text-dim, #8a90a0);
   cursor: default;
 }
-.sketch-dim-driven:hover {
-  background: rgba(18, 20, 25, 0.92);
-  border-color: var(--text-dim, #8a90a0);
-  color: var(--text-dim, #8a90a0);
+/* Solver flags: red is conflicting, amber is redundant (over defined). */
+.sketch-dim.conflict {
+  border-color: var(--error);
+  color: color-mix(in srgb, var(--error) 60%, var(--text));
 }
-/* solver-flagged dimensions: red = conflicting, amber = redundant/over-defined */
-.sketch-dim.conflict { border-color: #ff4444; color: #ff4444; }
-.sketch-dim.over { border-color: #e0a020; color: #e0a020; }
-/* the dimension the Delete key will remove (set by a click or a right-click) */
-.sketch-dim.is-selected { outline: 2px solid var(--accent, #4a9eff); outline-offset: 1px; }
-/* non-select tools: labels visible but click-through (a label floating over a
-   circle center must not swallow the dimension/draw pick underneath) */
+.sketch-dim.over {
+  border-color: var(--warn);
+  color: color-mix(in srgb, var(--warn) 60%, var(--text));
+}
+/* The dimension the Delete key will remove. */
+.sketch-dim.is-selected {
+  outline: 2px solid var(--accent, #4a9eff);
+  outline-offset: 1px;
+}
+/* Click through under other tools, so a label over a circle centre does not swallow the
+   pick underneath. */
 .sketch-dims.dims-passive .sketch-dim {
   pointer-events: none;
   cursor: default;
 }
-/* constraint glyphs: small square badges showing a relationship's type */
-.sketch-glyphs { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
+.sketch-glyphs {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+}
 .sketch-glyph {
   position: absolute;
   transform: translate(-50%, -50%);
@@ -233,21 +225,29 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(18, 20, 25, 0.9);
-  border: 1px solid var(--accent);
-  color: var(--accent);
+  color: var(--accent-hot);
   font-size: 10px;
   font-weight: 600;
   line-height: 1;
-  border-radius: 3px;
   cursor: pointer;
   pointer-events: auto;
-  box-shadow: var(--shadow-1);
 }
-.sketch-glyph:hover { border-color: var(--accent-hot); color: var(--accent-hot); }
-.sketch-glyph.conflict { border-color: #ff4444; color: #ff4444; }
-.sketch-glyph.over { border-color: #e0a020; color: #e0a020; }
-.sketch-glyphs.glyphs-passive .sketch-glyph { pointer-events: none; cursor: default; }
+.sketch-glyph:hover {
+  border-color: var(--accent-hot);
+  color: var(--accent-hot);
+}
+.sketch-glyph.conflict {
+  border-color: var(--error);
+  color: color-mix(in srgb, var(--error) 60%, var(--text));
+}
+.sketch-glyph.over {
+  border-color: var(--warn);
+  color: color-mix(in srgb, var(--warn) 60%, var(--text));
+}
+.sketch-glyphs.glyphs-passive .sketch-glyph {
+  pointer-events: none;
+  cursor: default;
+}
 .sketch-dim input {
   width: 52px;
   border: 1px solid var(--line-strong);
@@ -262,4 +262,9 @@
   outline: none;
   border-color: var(--accent-hot);
 }
-.sketch-glyph.pattern { height: 20px; min-width: 20px; border-radius: 5px; margin: -20px 0 0 20px; }
+.sketch-glyph.pattern {
+  height: 20px;
+  min-width: 20px;
+  border-radius: 5px;
+  margin: -20px 0 0 20px;
+}

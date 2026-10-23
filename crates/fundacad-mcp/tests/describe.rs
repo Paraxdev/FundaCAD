@@ -1,10 +1,5 @@
-//! The numbers an `inspect` report prints.
-//!
-//! `describe.py` leans on two things Python does and Rust does not: `round()`
-//! goes to the even neighbour on a tie, and `%g` keeps six significant digits,
-//! trims trailing zeros and keeps the sign of a negative zero. Every one of
-//! those was a difference between the two servers' reports at some point, and
-//! a difference in a measurement is the kind nobody notices.
+//! The numbers an `inspect` report prints, matching Python's `round()` (ties to even) and `%g` (six significant
+//! digits, trailing zeros trimmed, negative zero kept), since a difference in a measurement goes unnoticed.
 
 use fundacad_mcp::describe::{describe, fmt, g_format};
 use serde_json::json;
@@ -13,7 +8,7 @@ use serde_json::json;
 fn a_rounded_number_prints_the_way_python_prints_it() {
     let cases: &[(f64, i32, &str)] = &[
         (20.0, 3, "20"),
-        (0.5, 0, "0"),   // halves go to the even neighbour
+        (0.5, 0, "0"), // halves go to the even neighbour
         (1.5, 0, "2"),
         (2.5, 0, "2"),
         (-2.5, 0, "-2"),
@@ -67,10 +62,7 @@ fn a_body_reads_as_one_line_and_its_traps_as_warnings() {
     assert!(summary.contains("! 1 face(s) wrap all the way round (F0)"), "{summary}");
     assert!(summary.contains("! 1 edge(s) bound only ONE face"), "{summary}");
     assert!(summary.contains("this body is 2 solids that do not touch"), "{summary}");
-    assert!(
-        summary.contains("ERROR (feature fil1): the blend was refused"),
-        "{summary}"
-    );
+    assert!(summary.contains("ERROR (feature fil1): the blend was refused"), "{summary}");
     assert!(!summary.contains("  faces:"), "a summary lists no faces");
 
     let detail = describe(&report, true);
@@ -78,16 +70,10 @@ fn a_body_reads_as_one_line_and_its_traps_as_warnings() {
         detail.contains("  F0 cylinder | area 1884.95 | r 10 | at (0, 0, 0) | normal (1, -0, 0) | WRAPS"),
         "{detail}"
     );
-    assert!(
-        detail.contains("  E0 line | len 30 | mid (10, 0, 0) | between F0 | SEAM | OPEN"),
-        "{detail}"
-    );
+    assert!(detail.contains("  E0 line | len 30 | mid (10, 0, 0) | between F0 | SEAM | OPEN"), "{detail}");
 }
 
 #[test]
 fn nothing_built_says_so() {
-    assert_eq!(
-        describe(&json!({"bodies": []}), true),
-        "No bodies. The document built nothing."
-    );
+    assert_eq!(describe(&json!({"bodies": []}), true), "No bodies. The document built nothing.");
 }

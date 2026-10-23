@@ -24,7 +24,10 @@ const { chromium } = require("playwright-core");
 const fs = require("fs");
 
 const TOKEN = process.env.SC_TOKEN || "";
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 const SIZES = [100, 1000, 3000];
 const DOCS = process.env.SC_PERF_DIR || "/tmp";
 const REPEATS = 7;
@@ -56,7 +59,10 @@ const REPEATS = 7;
   await page.goto("http://localhost:5173/");
   await page.waitForTimeout(3500);
   const modal = await page.$(".modal-close");
-  if (modal) { await modal.click(); await page.waitForTimeout(400); }
+  if (modal) {
+    await modal.click();
+    await page.waitForTimeout(400);
+  }
   await page.waitForFunction(() => !!window.store && !!window.tree, null, { timeout: 60000 });
 
   const results = [];

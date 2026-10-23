@@ -36,9 +36,13 @@ const NATIVE = process.env.SC_TRACER === "native-dev";
 const BACKEND = NATIVE ? /^native/ : /WebGPU/;
 const [VW, VH] = (process.env.SC_VIEWPORT || "1200x800").split("x").map(Number);
 const target = process.env.CARGO_TARGET_DIR || path.join(__dirname, "..", "src-tauri", "target");
-const SERVE = process.env.SC_TRACER_SERVE
-  || path.join(target, "release", "examples", process.platform === "win32" ? "tracer_serve.exe" : "tracer_serve");
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+const SERVE =
+  process.env.SC_TRACER_SERVE ||
+  path.join(target, "release", "examples", process.platform === "win32" ? "tracer_serve.exe" : "tracer_serve");
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 let failures = 0;
 const check = (name, ok, detail) => {
   console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail ? `, ${detail}` : ""}`);
@@ -74,29 +78,48 @@ let serve = null;
   const browser = await chromium.launch({
     ...(EXE ? { executablePath: EXE } : { channel: "chrome" }),
     // The native page still draws Realtime with WebGL, and a runner without a GPU has none unless ANGLE is told to use SwiftShader.
-    args: ["--no-sandbox", "--enable-gpu", "--ignore-gpu-blocklist", "--enable-unsafe-webgpu", ...(NATIVE ? ["--use-angle=swiftshader"] : [])],
+    args: [
+      "--no-sandbox",
+      "--enable-gpu",
+      "--ignore-gpu-blocklist",
+      "--enable-unsafe-webgpu",
+      ...(NATIVE ? ["--use-angle=swiftshader"] : []),
+    ],
   });
   try {
     const page = await browser.newPage({ viewport: { width: VW, height: VH } });
-    page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
+    page.on("pageerror", (e) => {
+      console.error("PAGE ERROR:", e.message);
+      failures++;
+    });
     // Only the engine's socket: the native frames carry their own token.
-    await page.addInitScript(([port, t]) => {
-      const N = window.WebSocket;
-      window.WebSocket = class extends N {
-        constructor(u, p) {
-          if (!String(u).includes(":8765/") && !String(u).endsWith(":8765")) { super(u, p); return; }
-          let s = String(u).replace(":8765", ":" + port);
-          s = s.replace(/([?&])token=[^&]*/, `$1token=${t}`);
-          super(s.includes("token=") ? s : s + (s.includes("?") ? "&" : "?") + "token=" + t, p);
-        }
-      };
-    }, [PORT, TOKEN]);
+    await page.addInitScript(
+      ([port, t]) => {
+        const N = window.WebSocket;
+        window.WebSocket = class extends N {
+          constructor(u, p) {
+            if (!String(u).includes(":8765/") && !String(u).endsWith(":8765")) {
+              super(u, p);
+              return;
+            }
+            let s = String(u).replace(":8765", ":" + port);
+            s = s.replace(/([?&])token=[^&]*/, `$1token=${t}`);
+            super(s.includes("token=") ? s : s + (s.includes("?") ? "&" : "?") + "token=" + t, p);
+          }
+        };
+      },
+      [PORT, TOKEN],
+    );
     await page.goto(url);
     await page.waitForFunction(() => !!window.store && !!window.viewport, null, { timeout: 60000 });
     await page.waitForTimeout(1500);
     const modal = await page.$(".modal-close");
-    if (modal) { await modal.click(); await page.waitForTimeout(300); }
-    const setPref = (k, v) => page.evaluate(async ([k, v]) => (await import("/src/ui/renderPrefs.ts")).setRenderPref(k, v), [k, v]);
+    if (modal) {
+      await modal.click();
+      await page.waitForTimeout(300);
+    }
+    const setPref = (k, v) =>
+      page.evaluate(async ([k, v]) => (await import("/src/ui/renderPrefs.ts")).setRenderPref(k, v), [k, v]);
     await setPref("bloom", 0);
     await setPref("denoise", "off");
     await page.evaluate(async () => {
@@ -129,73 +152,113 @@ let serve = null;
       return "data:image/png;base64," + buf.toString("base64");
     };
     // Max delta and mean gain over a region, the region in image pixels.
-    const compare = (a, b, region) => page.evaluate(async ([a, b, region]) => {
-      const px = async (s) => {
-        const bm = await createImageBitmap(await (await fetch(s)).blob());
-        const c = new OffscreenCanvas(bm.width, bm.height);
-        const g = c.getContext("2d");
-        g.drawImage(bm, 0, 0);
-        return { d: g.getImageData(0, 0, bm.width, bm.height).data, w: bm.width, h: bm.height };
-      };
-      const A = await px(a), B = await px(b);
-      const r = region || { x: 0, y: 0, w: A.w, h: A.h };
-      let max = 0, sum = 0, n = 0;
-      for (let y = Math.max(0, r.y); y < Math.min(A.h, r.y + r.h); y++) {
-        for (let x = Math.max(0, r.x); x < Math.min(A.w, r.x + r.w); x++) {
-          const i = (y * A.w + x) * 4;
-          const d = Math.max(Math.abs(A.d[i] - B.d[i]), Math.abs(A.d[i + 1] - B.d[i + 1]), Math.abs(A.d[i + 2] - B.d[i + 2]));
-          if (d > max) max = d;
-          sum += (B.d[i] + B.d[i + 1] + B.d[i + 2]) - (A.d[i] + A.d[i + 1] + A.d[i + 2]);
-          n++;
-        }
-      }
-      return { max, meanGain: +(sum / Math.max(1, n) / 3).toFixed(3), pixels: n };
-    }, [a, b, region]);
+    const compare = (a, b, region) =>
+      page.evaluate(
+        async ([a, b, region]) => {
+          const px = async (s) => {
+            const bm = await createImageBitmap(await (await fetch(s)).blob());
+            const c = new OffscreenCanvas(bm.width, bm.height);
+            const g = c.getContext("2d");
+            g.drawImage(bm, 0, 0);
+            return { d: g.getImageData(0, 0, bm.width, bm.height).data, w: bm.width, h: bm.height };
+          };
+          const A = await px(a),
+            B = await px(b);
+          const r = region || { x: 0, y: 0, w: A.w, h: A.h };
+          let max = 0,
+            sum = 0,
+            n = 0;
+          for (let y = Math.max(0, r.y); y < Math.min(A.h, r.y + r.h); y++) {
+            for (let x = Math.max(0, r.x); x < Math.min(A.w, r.x + r.w); x++) {
+              const i = (y * A.w + x) * 4;
+              const d = Math.max(
+                Math.abs(A.d[i] - B.d[i]),
+                Math.abs(A.d[i + 1] - B.d[i + 1]),
+                Math.abs(A.d[i + 2] - B.d[i + 2]),
+              );
+              if (d > max) max = d;
+              sum += B.d[i] + B.d[i + 1] + B.d[i + 2] - (A.d[i] + A.d[i + 1] + A.d[i + 2]);
+              n++;
+            }
+          }
+          return { max, meanGain: +(sum / Math.max(1, n) / 3).toFixed(3), pixels: n };
+        },
+        [a, b, region],
+      );
     // Mean gain of both looks over the region's pixels darker than 48 in both bloom 0 images.
-    const darkGain = (a0, a1, b0, b1, region) => page.evaluate(async ([a0, a1, b0, b1, r]) => {
-      const px = async (s) => {
-        const bm = await createImageBitmap(await (await fetch(s)).blob());
+    const darkGain = (a0, a1, b0, b1, region) =>
+      page.evaluate(
+        async ([a0, a1, b0, b1, r]) => {
+          const px = async (s) => {
+            const bm = await createImageBitmap(await (await fetch(s)).blob());
+            const c = new OffscreenCanvas(bm.width, bm.height);
+            const g = c.getContext("2d");
+            g.drawImage(bm, 0, 0);
+            return { d: g.getImageData(0, 0, bm.width, bm.height).data, w: bm.width, h: bm.height };
+          };
+          const [A0, A1, B0, B1] = await Promise.all([a0, a1, b0, b1].map(px));
+          const sum = (P, i) => P.d[i] + P.d[i + 1] + P.d[i + 2];
+          const peak = (P, i) => Math.max(P.d[i], P.d[i + 1], P.d[i + 2]);
+          let sa = 0,
+            sb = 0,
+            n = 0;
+          for (let y = Math.max(0, r.y); y < Math.min(A0.h, r.y + r.h); y++) {
+            for (let x = Math.max(0, r.x); x < Math.min(A0.w, r.x + r.w); x++) {
+              const i = (y * A0.w + x) * 4;
+              if (peak(A0, i) >= 48 || peak(B0, i) >= 48) continue;
+              sa += sum(A1, i) - sum(A0, i);
+              sb += sum(B1, i) - sum(B0, i);
+              n++;
+            }
+          }
+          return {
+            realtime: +(sa / Math.max(1, n) / 3).toFixed(3),
+            traced: +(sb / Math.max(1, n) / 3).toFixed(3),
+            pixels: n,
+          };
+        },
+        [a0, a1, b0, b1, region],
+      );
+    // The emitter's centre: the saturated green of #42e07a once tone mapped.
+    const emitterAt = (a) =>
+      page.evaluate(async (a) => {
+        const bm = await createImageBitmap(await (await fetch(a)).blob());
         const c = new OffscreenCanvas(bm.width, bm.height);
         const g = c.getContext("2d");
         g.drawImage(bm, 0, 0);
-        return { d: g.getImageData(0, 0, bm.width, bm.height).data, w: bm.width, h: bm.height };
-      };
-      const [A0, A1, B0, B1] = await Promise.all([a0, a1, b0, b1].map(px));
-      const sum = (P, i) => P.d[i] + P.d[i + 1] + P.d[i + 2];
-      const peak = (P, i) => Math.max(P.d[i], P.d[i + 1], P.d[i + 2]);
-      let sa = 0, sb = 0, n = 0;
-      for (let y = Math.max(0, r.y); y < Math.min(A0.h, r.y + r.h); y++) {
-        for (let x = Math.max(0, r.x); x < Math.min(A0.w, r.x + r.w); x++) {
-          const i = (y * A0.w + x) * 4;
-          if (peak(A0, i) >= 48 || peak(B0, i) >= 48) continue;
-          sa += sum(A1, i) - sum(A0, i);
-          sb += sum(B1, i) - sum(B0, i);
-          n++;
+        const d = g.getImageData(0, 0, bm.width, bm.height).data;
+        let sx = 0,
+          sy = 0,
+          n = 0;
+        for (let i = 0; i < d.length; i += 4) {
+          if (d[i + 1] > 230 && d[i] < 200 && d[i + 2] < 220) {
+            const p = i / 4;
+            sx += p % bm.width;
+            sy += Math.floor(p / bm.width);
+            n++;
+          }
         }
-      }
-      return { realtime: +(sa / Math.max(1, n) / 3).toFixed(3), traced: +(sb / Math.max(1, n) / 3).toFixed(3), pixels: n };
-    }, [a0, a1, b0, b1, region]);
-    // The emitter's centre: the saturated green of #42e07a once tone mapped.
-    const emitterAt = (a) => page.evaluate(async (a) => {
-      const bm = await createImageBitmap(await (await fetch(a)).blob());
-      const c = new OffscreenCanvas(bm.width, bm.height);
-      const g = c.getContext("2d");
-      g.drawImage(bm, 0, 0);
-      const d = g.getImageData(0, 0, bm.width, bm.height).data;
-      let sx = 0, sy = 0, n = 0;
-      for (let i = 0; i < d.length; i += 4) {
-        if (d[i + 1] > 230 && d[i] < 200 && d[i + 2] < 220) { const p = i / 4; sx += p % bm.width; sy += Math.floor(p / bm.width); n++; }
-      }
-      return n ? { x: Math.round(sx / n), y: Math.round(sy / n), n } : null;
-    }, a);
-    const settle = (ms = 1200) => page.evaluate(async (ms) => { window.viewport.requestRender(); await new Promise((r) => setTimeout(r, ms)); }, ms);
-    const waitDone = () => page.waitForFunction(() => {
-      const s = window.viewport.traceStatus;
-      return s.state === "done" && s.samples >= 256 ? s : null;
-    }, null, { timeout: 240000, polling: 250 }).then((h) => h.jsonValue());
+        return n ? { x: Math.round(sx / n), y: Math.round(sy / n), n } : null;
+      }, a);
+    const settle = (ms = 1200) =>
+      page.evaluate(async (ms) => {
+        window.viewport.requestRender();
+        await new Promise((r) => setTimeout(r, ms));
+      }, ms);
+    const waitDone = () =>
+      page
+        .waitForFunction(
+          () => {
+            const s = window.viewport.traceStatus;
+            return s.state === "done" && s.samples >= 256 ? s : null;
+          },
+          null,
+          { timeout: 240000, polling: 250 },
+        )
+        .then((h) => h.jsonValue());
 
     // Background only, clear of the panels and 400 px from the emitter.
-    const corner = { x: Math.round(950 * VW / 1200), y: Math.round(560 * VH / 800), w: 60, h: 60 };
+    const corner = { x: Math.round((950 * VW) / 1200), y: Math.round((560 * VH) / 800), w: 60, h: 60 };
 
     await settle();
     const rt0 = await shot("rt-bloom0.png");
@@ -229,10 +292,21 @@ let serve = null;
     const ptCorner = await compare(pt0, pt6, corner);
     check("bloom 0.6 glows around the emitter in Path traced", ptHalo.meanGain > 1, JSON.stringify(ptHalo));
     const dark = await darkGain(rt0, rt6, pt0, pt6, halo);
-    check("the glow is of Realtime's order", dark.pixels > 5000 && dark.traced > dark.realtime / 5 && dark.traced < dark.realtime * 4,
-      `traced ${dark.traced}, realtime ${dark.realtime} over ${dark.pixels} dark pixels`);
-    check("the slider redraws without restarting the samples", st.samples === s0 && st.state === "done", `${s0} -> ${st.samples}`);
-    check("the background out of the halo is unchanged", ptCorner.max <= Math.max(1, rtCorner.max), JSON.stringify(ptCorner));
+    check(
+      "the glow is of Realtime's order",
+      dark.pixels > 5000 && dark.traced > dark.realtime / 5 && dark.traced < dark.realtime * 4,
+      `traced ${dark.traced}, realtime ${dark.realtime} over ${dark.pixels} dark pixels`,
+    );
+    check(
+      "the slider redraws without restarting the samples",
+      st.samples === s0 && st.state === "done",
+      `${s0} -> ${st.samples}`,
+    );
+    check(
+      "the background out of the halo is unchanged",
+      ptCorner.max <= Math.max(1, rtCorner.max),
+      JSON.stringify(ptCorner),
+    );
 
     await setPref("bloom", 0);
     await settle(1500);
@@ -256,7 +330,11 @@ let serve = null;
       const picHalo = await compare(pic0, pic6, halo);
       const picCorner = await compare(pic0, pic6, corner);
       check("the traced Picture glows at 0.6", picHalo.meanGain > 1, JSON.stringify(picHalo));
-      check("the Picture's background out of the halo is unchanged", picCorner.max <= Math.max(2, rtCorner.max), JSON.stringify(picCorner));
+      check(
+        "the Picture's background out of the halo is unchanged",
+        picCorner.max <= Math.max(2, rtCorner.max),
+        JSON.stringify(picCorner),
+      );
     }
 
     const tracedAfter = await page.evaluate(() => window.viewport.traceStatus.backend);
@@ -267,4 +345,8 @@ let serve = null;
   }
   console.log(failures ? `${failures} FAILED` : "all passed");
   process.exit(failures ? 1 : 0);
-})().catch((e) => { console.error(e); serve?.srv.kill(); process.exit(1); });
+})().catch((e) => {
+  console.error(e);
+  serve?.srv.kill();
+  process.exit(1);
+});

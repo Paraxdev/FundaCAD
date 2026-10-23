@@ -68,12 +68,14 @@ done
 # models that ship with vendored code. The stress samples in examples/stress
 # are allowed too: small parts modelled from parameters so the Stress panel has
 # something to open, and Home's templates in src/templates, the same two
-# parts plus a parametric plate. So are the hand written files in tests/fixtures/versions
+# parts plus a parametric plate, box and capsule holder. So is the generic printer STEP file
+# (tests/fixtures/printer_3000.stpz) written by
+# scripts/examples/gen_printer.py, and the hand written files in tests/fixtures/versions
 # (one per document version, plus segmented.fundab for the segmented geometry format) and tests/fixtures/future. Add to this list only for files that are genuinely
 # synthetic or already public.
 echo "checking for tracked CAD models…"
 models=$(git ls-files -- '*.funda' '*.fundab' '*.neocad' '*.sindri' '*.3mf' '*.stl' '*.step' '*.stp' '*.igs' '*.iges' '*.FCStd' '*.fcstd' '*.stpz' '*.gz' '*.xbf' '*.3dm' '*.ifc' '*.dxf' '*.fbx' '*.3ds' '*.svg' 2>/dev/null \
-  | grep -vE '^(tests/fixtures/textured_box\.funda$|tests/fixtures/asm_[a-z_]+\.step$|tests/fixtures/loose_faces_[a-z_]+\.step$|tests/fixtures/inside_out_[a-z_]+\.step$|tests/fixtures/heal_edge_off\.step$|tests/fixtures/(two_parts_mode[01]|face_soup)\.igs$|tests/fixtures/(plate|bracket)\.FCStd$|tests/fixtures/asm_colors(\.stpz|_zip\.stpz|\.step\.gz)$|tests/fixtures/(two_parts(_m)?|shared_inch)\.xbf$|tests/fixtures/rhino_[a-z_]+\.3dm$|tests/fixtures/ifc_[a-z_]+\.ifc$|tests/fixtures/dxf_[a-z_0-9]+\.dxf$|tests/fixtures/fbx_[a-z_0-9]+\.fbx$|tests/fixtures/threeds_[a-z_0-9]+\.3ds$|tests/fixtures/svg_[a-z_0-9]+\.svg$|src/assets/|assets/brand/|examples/stress/[a-z0-9-]+\.funda$|src/templates/[a-z0-9-]+\.funda$|tests/fixtures/versions/(v[0-9]+|segmented)\.fundab?$|tests/fixtures/future/[a-z0-9_]+\.funda$|third_party/)' || true)
+  | grep -vE '^(tests/fixtures/textured_box\.funda$|tests/fixtures/asm_[a-z_]+\.step$|tests/fixtures/loose_faces_[a-z_]+\.step$|tests/fixtures/inside_out_[a-z_]+\.step$|tests/fixtures/heal_edge_off\.step$|tests/fixtures/(two_parts_mode[01]|face_soup)\.igs$|tests/fixtures/(plate|bracket)\.FCStd$|tests/fixtures/asm_colors(\.stpz|_zip\.stpz|\.step\.gz)$|tests/fixtures/(two_parts(_m)?|shared_inch)\.xbf$|tests/fixtures/rhino_[a-z_]+\.3dm$|tests/fixtures/ifc_[a-z_]+\.ifc$|tests/fixtures/dxf_[a-z_0-9]+\.dxf$|tests/fixtures/fbx_[a-z_0-9]+\.fbx$|tests/fixtures/threeds_[a-z_0-9]+\.3ds$|tests/fixtures/svg_[a-z_0-9]+\.svg$|src/assets/|assets/brand/|examples/stress/[a-z0-9-]+\.funda$|src/templates/[a-z0-9-]+\.funda$|src/templates/[a-z0-9-]+\.stpz$|tests/fixtures/printer_[0-9]+\.stpz$|tests/fixtures/versions/(v[0-9]+|segmented)\.fundab?$|tests/fixtures/future/[a-z0-9_]+\.funda$|third_party/)' || true)
 if [ -n "$models" ]; then
   note "tracked CAD model — is this a real part in a public repo?:"
   printf '%s\n' "$models" | sed 's/^/    /'
@@ -140,6 +142,34 @@ dashes=$(git grep -In -e '—' -e '–' -- . \
 if [ -n "$dashes" ]; then
   note "an em or en dash is used where a comma belongs:"
   printf '%s\n' "$dashes" | cut -c1-160 | sed 's/^/    /'
+fi
+
+# --- source files open with code ----------------------------------------------
+# A file opens with code, or a few comment lines saying what it is for, never an
+# essay: a GitHub preview shows only the top of a file. Counted up to the first
+# line of code, so a short header plus the first item's doc fits in 5. The two
+# exceptions document a grammar and a file layout that the code cannot show.
+echo "checking file opening comments…"
+headers=$(git ls-files -- 'src/**' 'plugins/**' 'crates/**' 'src-tauri/**' 2>/dev/null \
+  | grep -E '\.(ts|vue|rs|js|mjs|cjs|scss)$' \
+  | grep -vE '(\.d\.ts$|/vendor/|/generated/|/catalogue/|^src/params/parse\.ts$|^crates/fundacad-format/src/container\.rs$)' \
+  | xargs awk '
+      function report() { if (f != "" && n > 5) print "    " f ": " n " comment lines before the first line of code" }
+      FNR == 1 { report(); f = FILENAME; n = 0; inblock = 0; done = 0 }
+      done { next }
+      { sub(/\r$/, "") }
+      FNR == 1 && /^[ \t]*<script/ { next }
+      inblock { n++; if (index($0, "*/") || index($0, "-->")) inblock = 0; next }
+      /^[ \t]*$/ { next }
+      /^[ \t]*(\/\/|#!)/ { n++; next }
+      /^[ \t]*\/\*/ { n++; s = $0; sub(/^[ \t]*\/\*/, "", s); if (!index(s, "*/")) inblock = 1; next }
+      /^[ \t]*<!--/ { n++; if (!index($0, "-->")) inblock = 1; next }
+      { done = 1 }
+      END { report() }
+    ')
+if [ -n "$headers" ]; then
+  note "a file opens with a comment essay, keep what it is for to a line or two above the code:"
+  printf '%s\n' "$headers"
 fi
 
 if [ "$fail" -ne 0 ]; then

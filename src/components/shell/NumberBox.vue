@@ -1,9 +1,6 @@
 <script setup lang="ts">
-// A number box that reads what is typed through the shared measure grammar
-// (units, fractions, arithmetic, decimal comma) where a type="number" input
-// would refuse everything but digits. Text that does not parse keeps the last
-// good value in the model, turns the box red and puts the reason in its title,
-// the same signal ValidatedInput gives.
+// Reads typed text through the shared measure grammar (units, fractions, arithmetic, decimal comma). Unparsed text
+// keeps the last good value and turns the box red with the reason in its title, as ValidatedInput does.
 
 import { computed, ref, watch } from "vue";
 import { fieldError, fieldNumber } from "../../ui/measure";
@@ -23,11 +20,14 @@ const error = computed(() => fieldError(text.value));
 let sent = props.modelValue;
 
 // Resync only when the model moved for a reason other than this box's own emit.
-watch(() => props.modelValue, (v) => {
-  if (v === sent) return;
-  sent = v;
-  text.value = v == null ? "" : String(v);
-});
+watch(
+  () => props.modelValue,
+  (v) => {
+    if (v === sent) return;
+    sent = v;
+    text.value = v == null ? "" : String(v);
+  },
+);
 
 function send(v: number | null) {
   sent = v;
@@ -52,7 +52,7 @@ function onInput(e: Event) {
     inputmode="decimal"
     :value="text"
     :class="{ 'input-error': !!error }"
-    :title="error ?? $attrs.title as string | undefined"
+    :title="error ?? ($attrs.title as string | undefined)"
     @input="onInput"
   />
 </template>

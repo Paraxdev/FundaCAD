@@ -52,7 +52,6 @@ fn near3(a: [f64; 3], b: [f64; 3]) -> bool {
     (0..3).all(|k| near(a[k], b[k]))
 }
 
-/// The face `inspect` lists in `body` with this outward normal, its selector.
 fn face_by_normal(ins: &Value, body: usize, n: [f64; 3]) -> Value {
     ins["bodies"][body]["faces"]
         .as_array()
@@ -74,13 +73,7 @@ fn face_by_surface(ins: &Value, body: usize, surface: &str, z: Option<f64>) -> V
 }
 
 fn edge_where(ins: &Value, body: usize, ok: impl Fn(&Value) -> bool) -> Value {
-    ins["bodies"][body]["edges"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|e| ok(e))
-        .expect("no such edge")["selector"]
-        .clone()
+    ins["bodies"][body]["edges"].as_array().unwrap().iter().find(|e| ok(e)).expect("no such edge")["selector"].clone()
 }
 
 fn box_doc() -> Value {
@@ -219,10 +212,7 @@ fn a_sphere_gives_its_radius_centre_area_and_volume() {
 }
 
 fn error_of(m: &Value) -> String {
-    m["error"]["message"]
-        .as_str()
-        .unwrap_or_else(|| panic!("no error: {m}"))
-        .to_string()
+    m["error"]["message"].as_str().unwrap_or_else(|| panic!("no error: {m}")).to_string()
 }
 
 #[test]

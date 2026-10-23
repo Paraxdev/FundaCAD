@@ -11,6 +11,8 @@ import { contribute, resetContributions } from "../../../src/plugins/contrib";
 import { ENGINE } from "../../../src/app/engineKey";
 import { setWorkspace } from "../../../src/ui/workspace";
 import type { Engine } from "../../../src/app/engine";
+import { useHomeStore } from "../../../src/stores/home";
+import type { HomeCallbacks } from "../../../src/ui/home";
 
 vi.mock("../../../src/viewport/materialPreview", () => ({
   materialPreview: () => null,
@@ -42,7 +44,14 @@ const Mine = defineComponent({
     h(RenderSection, { title: "Mine", hint: "plugin hint" }, () => [
       h(RenderSlider, { label: "Amount", value: 0.5, min: 0, max: 1 }),
       h(RenderSwitch, { label: "Flag", value: true }),
-      h(RenderChoices, { label: "Mode", value: "a", options: [{ id: "a", label: "A" }, { id: "b", label: "B" }] }),
+      h(RenderChoices, {
+        label: "Mode",
+        value: "a",
+        options: [
+          { id: "a", label: "A" },
+          { id: "b", label: "B" },
+        ],
+      }),
     ]),
 });
 
@@ -83,5 +92,33 @@ describe("Render dock sections from a plugin", () => {
     off();
     await nextTick();
     expect(cam.find("[data-render-section]").exists()).toBe(false);
+  });
+});
+
+// Home covers #stage only, and the dock sat in its own track beside it, over Home.
+describe("Render dock and Home", () => {
+  const dock = () => w.find("#renderdock").exists();
+
+  it("is put away while Home is up and back when Home closes on the same document", async () => {
+    const home = useHomeStore();
+    home.bind({} as HomeCallbacks);
+    expect(dock()).toBe(true);
+    home.visible = true;
+    await nextTick();
+    expect(dock()).toBe(false);
+    home.visible = false;
+    await nextTick();
+    expect(dock()).toBe(true);
+  });
+
+  it("stays away in Model whether or not Home is up", async () => {
+    const home = useHomeStore();
+    home.bind({} as HomeCallbacks);
+    setWorkspace("model");
+    await nextTick();
+    expect(dock()).toBe(false);
+    home.visible = true;
+    await nextTick();
+    expect(dock()).toBe(false);
   });
 });

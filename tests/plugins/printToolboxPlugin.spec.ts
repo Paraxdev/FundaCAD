@@ -9,7 +9,12 @@ import { loadBedFitSetting } from "../../plugins/FundaCAD.PrintToolbox/bedFit";
 import { customBedReq } from "../../plugins/FundaCAD.PrintToolbox/customBedDialog";
 import { printabilityPanel } from "../../plugins/FundaCAD.PrintToolbox/printabilityPanel";
 import {
-  anyToolBusy, contributedAction, contributedOverlays, contributedRibbon, contributors, resetContributions,
+  anyToolBusy,
+  contributedAction,
+  contributedOverlays,
+  contributedRibbon,
+  contributors,
+  resetContributions,
 } from "../../src/plugins/contrib";
 import { applicableTools } from "../../src/features/toolCapabilities";
 import { iconPaths } from "../../src/ui/icons";
@@ -33,29 +38,42 @@ function fakeEngine() {
   };
   const listen = () => {
     state.listeners++;
-    return () => { state.listeners--; };
+    return () => {
+      state.listeners--;
+    };
   };
   const viewport = {
     setSelectionMode: vi.fn(),
-    clearSelection: () => { state.faces = []; },
+    clearSelection: () => {
+      state.faces = [];
+    },
     faceIdToBodyId: (id: number) => `body${id}`,
     getSelectedBodies: () => state.bodies,
-    get draftConfig() { return { dir: state.dir, threshold: 45 }; },
-    setFaceMarks: (marks: unknown, layer?: string) => { state.marks.push({ marks, layer }); },
+    get draftConfig() {
+      return { dir: state.dir, threshold: 45 };
+    },
+    setFaceMarks: (marks: unknown, layer?: string) => {
+      state.marks.push({ marks, layer });
+    },
     frameAround: vi.fn(),
     stressOverlayBody: () => null,
     onStressOverlayChange: listen,
-    selectedFacesForPressPull: () => state.faces.length
-      ? {
-        selectors: state.faces.map((f) => ({ kind: "face", by: "nearest", point: f.point })),
-        faceIds: state.faces.map((f) => f.faceId),
-      }
-      : null,
+    selectedFacesForPressPull: () =>
+      state.faces.length
+        ? {
+            selectors: state.faces.map((f) => ({ kind: "face", by: "nearest", point: f.point })),
+            faceIds: state.faces.map((f) => f.faceId),
+          }
+        : null,
   };
   const store = {
     nextId: () => `f${state.added.length + 1}`,
-    addFeature: (f: Record<string, unknown>) => { state.added.push(f); },
-    get buildState() { return { result: state.bbox ? { bbox: state.bbox } : null }; },
+    addFeature: (f: Record<string, unknown>) => {
+      state.added.push(f);
+    },
+    get buildState() {
+      return { result: state.bbox ? { bbox: state.bbox } : null };
+    },
     builtDocument: () => ({ features: [] }),
     isBodyVisible: () => true,
     onDocChange: listen,
@@ -69,7 +87,9 @@ function fakeEngine() {
     geometry,
     toolBusy: () => false,
     hasBody: () => state.hasBody,
-    setStatus: (t: string) => { state.status = t; },
+    setStatus: (t: string) => {
+      state.status = t;
+    },
     noteCommitted: vi.fn(),
     selectFeature: vi.fn(),
   };
@@ -105,8 +125,14 @@ describe("the 3D Printing Toolbox, switched on and off", () => {
 
   it("adds eight tools, a bed fit check and the printability check, in a PRINT ribbon group, with marks", () => {
     expect(contributors()).toEqual(["FundaCAD.PrintToolbox"]);
-    const faceIds = ["print-teardrop", "print-roof-bridge", "print-counterbore-bridge", "print-sacrificial-layer",
-      "print-thread-ribs", "print-zip-tie-channel"];
+    const faceIds = [
+      "print-teardrop",
+      "print-roof-bridge",
+      "print-counterbore-bridge",
+      "print-sacrificial-layer",
+      "print-thread-ribs",
+      "print-zip-tie-channel",
+    ];
     const bodyIds = ["print-elephant-foot-chamfer", "print-vertical-fillet"];
     for (const id of faceIds) {
       expect(applicableTools({ face: 1 })).toContain(id);
@@ -118,7 +144,12 @@ describe("the 3D Printing Toolbox, switched on and off", () => {
       expect(contributedAction(id)).toBeTypeOf("function");
     }
     const group = contributedRibbon().find((g) => g.group === "PRINT");
-    expect(group?.items.map((i) => i.action)).toEqual([...faceIds, ...bodyIds, "print-bed-fit-check", "print-printability"]);
+    expect(group?.items.map((i) => i.action)).toEqual([
+      ...faceIds,
+      ...bodyIds,
+      "print-bed-fit-check",
+      "print-printability",
+    ]);
     expect(contributedAction("print-printability")).toBeTypeOf("function");
     expect(iconPaths("printTeardrop")).toContain("<path");
     expect(iconPaths("printBedFit")).toContain("<rect");
@@ -139,9 +170,15 @@ describe("the 3D Printing Toolbox, switched on and off", () => {
     engine.state.bodies = ["b1", "b2"];
     engine.state.dir = "-Z";
     contributedAction("print-elephant-foot-chamfer")!();
-    expect(engine.state.added).toEqual([{
-      id: "f1", type: "elephantFootChamfer", bodies: ["b1", "b2"], size: 0.4, buildDir: "-Z",
-    }]);
+    expect(engine.state.added).toEqual([
+      {
+        id: "f1",
+        type: "elephantFootChamfer",
+        bodies: ["b1", "b2"],
+        size: 0.4,
+        buildDir: "-Z",
+      },
+    ]);
     expect(anyToolBusy()).toBe(false);
     expect(engine.calls.selectFeature).toHaveBeenCalledWith("f1");
   });
@@ -195,11 +232,17 @@ describe("the 3D Printing Toolbox, switched on and off", () => {
     engine.state.faces = [{ point: [0, 0, 13], faceId: 4 }];
     engine.state.dir = "+X";
     contributedAction("print-teardrop")!();
-    expect(engine.state.added).toEqual([{
-      id: "f1", type: "teardropHole",
-      faces: { kind: "face", by: "nearest", point: [0, 0, 13], body: "body4" },
-      angle: 45, roof: "pointed", flatHeight: 0, buildDir: "+X",
-    }]);
+    expect(engine.state.added).toEqual([
+      {
+        id: "f1",
+        type: "teardropHole",
+        faces: { kind: "face", by: "nearest", point: [0, 0, 13], body: "body4" },
+        angle: 45,
+        roof: "pointed",
+        flatHeight: 0,
+        buildDir: "+X",
+      },
+    ]);
     expect(anyToolBusy()).toBe(false);
     expect(engine.calls.selectFeature).toHaveBeenCalledWith("f1");
   });
@@ -210,11 +253,14 @@ describe("the 3D Printing Toolbox, switched on and off", () => {
     press("Enter");
     expect(engine.state.added).toHaveLength(0);
     expect(anyToolBusy()).toBe(true);
-    engine.state.faces = [{ point: [1, 1, 1], faceId: 2 }, { point: [2, 2, 2], faceId: 3 }];
+    engine.state.faces = [
+      { point: [1, 1, 1], faceId: 2 },
+      { point: [2, 2, 2], faceId: 3 },
+    ];
     press("Enter");
     expect(engine.state.added).toHaveLength(1);
     expect(engine.state.added[0]!["type"]).toBe("roofBridge");
-    expect((engine.state.added[0]!["faces"] as unknown[])).toHaveLength(2);
+    expect(engine.state.added[0]!["faces"] as unknown[]).toHaveLength(2);
     expect(anyToolBusy()).toBe(false);
   });
 

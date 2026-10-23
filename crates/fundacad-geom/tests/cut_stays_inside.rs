@@ -1,6 +1,5 @@
-//! A cut only takes material away. The kernel can hand back the body with the
-//! whole tool as a loose solid beside it, and the two sum to the body's own
-//! volume, so by volume alone it passes for a cut that removed next to nothing.
+//! A cut only takes material away. The kernel can hand back the body with the whole tool as a loose solid
+//! beside it, which by volume alone passes for a cut that removed next to nothing.
 
 use fundacad_geom::kernel::{self, BoolKind, Kind};
 
@@ -15,7 +14,10 @@ fn a_cut_result_that_reaches_outside_its_body_is_not_taken() {
     assert_eq!(kernel::count(&got, Kind::Solid), 1, "the loose solid came through");
     let (inner, outer) = (kernel::bbox(&got).unwrap(), kernel::bbox(&body).unwrap());
     for k in 0..3 {
-        assert!(inner[k] >= outer[k] - 1e-6 && inner[k + 3] <= outer[k + 3] + 1e-6, "{inner:?} reaches outside {outer:?}");
+        assert!(
+            inner[k] >= outer[k] - 1e-6 && inner[k + 3] <= outer[k + 3] + 1e-6,
+            "{inner:?} reaches outside {outer:?}"
+        );
     }
     assert!((kernel::volume_precise(&got) - 3500.0).abs() < 1e-6);
 }

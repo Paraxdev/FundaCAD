@@ -21,12 +21,7 @@ pub const RELS: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 </Relationships>"#;
 
 /// The `3D/3dmodel.model` part.
-pub fn write_model(
-    positions: &[f64],
-    indices: &[u32],
-    unit: &str,
-    out: &mut impl Write,
-) -> io::Result<()> {
+pub fn write_model(positions: &[f64], indices: &[u32], unit: &str, out: &mut impl Write) -> io::Result<()> {
     write!(
         out,
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<model unit=\"{unit}\" xml:lang=\"en-US\" \
@@ -35,34 +30,17 @@ pub fn write_model(
     )?;
     out.write_all(b"<mesh><vertices>")?;
     for p in positions.chunks_exact(3) {
-        write!(
-            out,
-            "<vertex x=\"{}\" y=\"{}\" z=\"{}\"/>",
-            g6(p[0]),
-            g6(p[1]),
-            g6(p[2])
-        )?;
+        write!(out, "<vertex x=\"{}\" y=\"{}\" z=\"{}\"/>", g6(p[0]), g6(p[1]), g6(p[2]))?;
     }
     out.write_all(b"</vertices><triangles>")?;
     for t in indices.chunks_exact(3) {
-        write!(
-            out,
-            "<triangle v1=\"{}\" v2=\"{}\" v3=\"{}\"/>",
-            t[0], t[1], t[2]
-        )?;
+        write!(out, "<triangle v1=\"{}\" v2=\"{}\" v3=\"{}\"/>", t[0], t[1], t[2])?;
     }
     out.write_all(b"</triangles></mesh>")?;
-    out.write_all(
-        b"</object></resources>\n <build><item objectid=\"1\" printable=\"1\"/></build>\n</model>",
-    )
+    out.write_all(b"</object></resources>\n <build><item objectid=\"1\" printable=\"1\"/></build>\n</model>")
 }
 
-pub fn write(
-    positions: &[f64],
-    indices: &[u32],
-    unit: &str,
-    out: impl Write + Seek,
-) -> zip::result::ZipResult<()> {
+pub fn write(positions: &[f64], indices: &[u32], unit: &str, out: impl Write + Seek) -> zip::result::ZipResult<()> {
     let mut z = ZipWriter::new(out);
     let opts = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
     z.start_file("[Content_Types].xml", opts)?;

@@ -1,8 +1,5 @@
-//! A helical thread along a round face. The face is found again at every
-//! build, so a thread follows its hole or shaft when that changes size.
-//!
-//! Each start is its own single profile sweep on a meridian turned 360k/N about
-//! the axis: profiles stacked in one sketch and swept once leave open shells.
+//! A helical thread along a round face, found again every build so it follows its hole or shaft. Each start is
+//! its own single profile sweep on a meridian turned 360k/N, since profiles swept together leave open shells.
 
 use fundacad_core::schema::{Hand, Operation, Thread};
 use glam::DVec3;
@@ -115,7 +112,8 @@ pub fn handle(ctx: &mut Ctx, f: &Thread) -> FResult {
     }
     let deepest = prof.iter().map(|p| p.0.abs()).fold(0.0, f64::max).max(1e-3);
 
-    let (z0, z1) = kernel::axial_extent(&face, arr(o), arr(d)).ok_or_else(|| bad("Thread: the face has no length along its axis"))?;
+    let (z0, z1) = kernel::axial_extent(&face, arr(o), arr(d))
+        .ok_or_else(|| bad("Thread: the face has no length along its axis"))?;
     let zm = (z0 + z1) / 2.0;
     let e = (0.05 * r).clamp(1e-3, 0.05);
     let at = |z: f64, rad: f64, x: DVec3| arr(o + d * z + x * rad);
@@ -136,11 +134,12 @@ pub fn handle(ctx: &mut Ctx, f: &Thread) -> FResult {
         return Err(bad("Thread: the profile is deeper than the shaft's radius"));
     }
 
-    // An end with no material beyond it lets the thread run out past it, so the
-    // last turn is whole; an end against material (a shoulder, a blind bottom)
-    // stops the thread at the face.
+    // An end with no material beyond lets the thread run out past it so the last turn is whole, an end against
+    // material (a shoulder, a blind bottom) stops it at the face.
     let gap = (0.02 * pitch).max(0.01);
-    let open = |z: f64| probe.iter().step_by(2).all(|&x| !kernel::point_inside(&shape, at(z, r + into * deepest * 0.5, x), 1e-7));
+    let open = |z: f64| {
+        probe.iter().step_by(2).all(|&x| !kernel::point_inside(&shape, at(z, r + into * deepest * 0.5, x), 1e-7))
+    };
     let offset = ctx.val_or(f.offset.as_ref(), 0.0)?;
     let a = z0 + offset;
     let b = match &f.length {
@@ -180,12 +179,9 @@ pub fn handle(ctx: &mut Ctx, f: &Thread) -> FResult {
     let before_solids = kernel::count(&work, Kind::Solid);
     let kind = if cut { BoolKind::Cut } else { BoolKind::Fuse };
 
-    // A long helical tool nearly parallel to the face defeats the kernel: the
-    // boolean reports success and changes nothing, or half. So the sweep is cut
-    // up a turn or two per tool, and the first split whose result changes the
-    // volume it should is kept.
-    // A join is fused whole first: tools a turn long touch end to end, and the
-    // fuse refuses those seams.
+    // A long helical tool nearly parallel to the face defeats the kernel, reporting success with nothing or half
+    // changed, so the sweep is cut a turn or two per tool and the first split that changes the right volume is kept.
+    // A join is fused whole first: tools a turn long touch end to end, and the fuse refuses those seams.
     let strategies: &[(f64, f64)] = match (cut, lo < a) {
         (false, _) => &[(f64::INFINITY, 0.0), (1.0, 0.0), (2.0, 0.0)],
         (true, true) => &[(1.0, 0.0), (2.0, 0.0), (2.0, 0.37)],
@@ -206,7 +202,11 @@ pub fn handle(ctx: &mut Ctx, f: &Thread) -> FResult {
                 let pts: Vec<[f64; 3]> = prof.iter().map(|&(i, s)| at(z + s, r + into * (i + clearance), x)).collect();
                 let face = kernel::polygon_face(&pts)?;
                 let (angle, signed_lead) = if left { (-360.0 * turns, -lead) } else { (360.0 * turns, lead) };
-                let face = if left { kernel::rotated_about(&face, arr(o), arr(d), -360.0 * done)? } else { kernel::rotated_about(&face, arr(o), arr(d), 360.0 * done)? };
+                let face = if left {
+                    kernel::rotated_about(&face, arr(o), arr(d), -360.0 * done)?
+                } else {
+                    kernel::rotated_about(&face, arr(o), arr(d), 360.0 * done)?
+                };
                 tools.push(screw_revolve(&face, arr(o), arr(d), angle, signed_lead)?);
                 done += turns;
             }
@@ -234,7 +234,9 @@ pub fn handle(ctx: &mut Ctx, f: &Thread) -> FResult {
         ctx.record_tool(&f.id, kind, vec![body_id], kernel::compound(&tools));
         return Ok(());
     }
-    Err(last_err.unwrap_or_else(|| bad("Thread: the kernel could not sweep the thread into the body, try a shorter length or a coarser pitch")))
+    Err(last_err.unwrap_or_else(|| {
+        bad("Thread: the kernel could not sweep the thread into the body, try a shorter length or a coarser pitch")
+    }))
 }
 
 /// The area of the profile on one side of the face (`side` 1 for into the

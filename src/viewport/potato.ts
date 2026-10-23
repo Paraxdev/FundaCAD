@@ -1,12 +1,5 @@
-// Potato mode's draw. For the length of one render every PBR material is swapped
-// for a Lambert twin, every fat line (LineSegments2, Line2) for a plain 1px
-// LineSegments twin, and the emitter lights are hidden, then everything is put
-// back. The real materials and objects are never written to, so turning potato
-// mode off restores them exactly, and picking still raycasts the real objects.
-//
-// The frame is drawn into a target with no multisampling and copied to the
-// canvas, because the canvas was created with antialias and that cannot be
-// turned off on a live context.
+// For one render, PBR materials, fat lines and emitter lights are swapped for twins and put back, so the real
+// objects are never written to. Drawn via a target without MSAA, since a live context's antialias is fixed.
 
 import * as THREE from "three";
 
@@ -27,12 +20,30 @@ const PRUNE_AFTER_FRAMES = 30;
 /** Plain Material fields copied onto a twin every frame. None of them changes the
  *  shader program, so copying them never recompiles. */
 export const MIRRORED = [
-  "side", "transparent", "opacity", "alphaTest", "blending", "premultipliedAlpha",
-  "depthTest", "depthWrite", "depthFunc", "colorWrite",
-  "polygonOffset", "polygonOffsetFactor", "polygonOffsetUnits",
-  "stencilWrite", "stencilFunc", "stencilRef", "stencilFuncMask", "stencilWriteMask",
-  "stencilFail", "stencilZFail", "stencilZPass",
-  "clippingPlanes", "clipIntersection", "visible",
+  "side",
+  "transparent",
+  "opacity",
+  "alphaTest",
+  "blending",
+  "premultipliedAlpha",
+  "depthTest",
+  "depthWrite",
+  "depthFunc",
+  "colorWrite",
+  "polygonOffset",
+  "polygonOffsetFactor",
+  "polygonOffsetUnits",
+  "stencilWrite",
+  "stencilFunc",
+  "stencilRef",
+  "stencilFuncMask",
+  "stencilWriteMask",
+  "stencilFail",
+  "stencilZFail",
+  "stencilZPass",
+  "clippingPlanes",
+  "clipIntersection",
+  "visible",
 ] as const;
 
 export function mirror(dst: THREE.Material, src: THREE.Material) {
@@ -60,7 +71,10 @@ export function isCostlyLight(o: THREE.Object3D): boolean {
   return l.isRectAreaLight === true || l.isPointLight === true || l.isSpotLight === true;
 }
 
-interface MatTwin { cheap: THREE.MeshLambertMaterial; seen: number }
+interface MatTwin {
+  cheap: THREE.MeshLambertMaterial;
+  seen: number;
+}
 interface LineTwin {
   proxy: THREE.LineSegments<THREE.BufferGeometry, THREE.LineBasicMaterial>;
   source: THREE.BufferGeometry;
@@ -133,14 +147,12 @@ export class PotatoDraw {
     if (!this.target) {
       // Stencil kept: the section caps draw through it.
       this.target = new THREE.WebGLRenderTarget(this.size.x, this.size.y, {
-        depthBuffer: true, stencilBuffer: true, colorSpace: THREE.SRGBColorSpace,
+        depthBuffer: true,
+        stencilBuffer: true,
+        colorSpace: THREE.SRGBColorSpace,
       });
-      // Note: three only tone maps and encodes to sRGB when drawing to the canvas
-      // or to an XR target. Flagged as one, and stored as plain RGBA8, this target
-      // gets the same encoded values and the same blending the canvas would, so
-      // the grid and the see-through planes keep their brightness.
-      // Note: isXRRenderTarget is an internal three flag upstream plans to remove
-      // (three.js #23278), so every three upgrade has to re-verify this path.
+      // Note: three only tone maps and encodes sRGB for the canvas or an XR target, so this RGBA8 target is
+      // flagged as XR. That flag is internal and slated for removal (three.js #23278), recheck on upgrades.
       this.target.texture.internalFormat = "RGBA8";
       (this.target as { isXRRenderTarget?: boolean }).isXRRenderTarget = true;
       const material = new THREE.ShaderMaterial({
@@ -230,8 +242,10 @@ export class PotatoDraw {
     c.wireframe = src.wireframe;
     // These shape the compiled program, which three only rebuilds on a version bump.
     if (
-      c.vertexColors !== src.vertexColors || c.flatShading !== src.flatShading
-      || !!c.map !== !!src.map || !!c.emissiveMap !== !!src.emissiveMap
+      c.vertexColors !== src.vertexColors ||
+      c.flatShading !== src.flatShading ||
+      !!c.map !== !!src.map ||
+      !!c.emissiveMap !== !!src.emissiveMap
     ) {
       c.vertexColors = src.vertexColors;
       c.flatShading = src.flatShading;
@@ -260,8 +274,13 @@ export class PotatoDraw {
       const proxy = new THREE.LineSegments(g, new THREE.LineBasicMaterial());
       proxy.matrixAutoUpdate = false;
       t = {
-        proxy, source: geo, posData: start.data, colData: colStart?.data ?? null,
-        posVersion: start.data.version, colVersion: colStart?.data.version ?? 0, seen: 0,
+        proxy,
+        source: geo,
+        posData: start.data,
+        colData: colStart?.data ?? null,
+        posVersion: start.data.version,
+        colVersion: colStart?.data.version ?? 0,
+        seen: 0,
       };
       this.lines.set(line, t);
     }

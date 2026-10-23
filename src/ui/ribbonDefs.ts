@@ -1,7 +1,4 @@
-// The ribbon's content: which tools exist, how they group, and how the groups
-// collapse when the window narrows. Pure data + one helper, kept apart from the
-// component so ui/commands.ts can build the command list from the same tables
-// without pulling in a Vue component.
+// The ribbon's tools, groups and collapse order, apart from the component so ui/commands.ts can use the same tables.
 
 import { contributedRibbon } from "../plugins/contrib";
 import { BOOLEAN_COMMANDS } from "../features/booleanOps";
@@ -16,10 +13,8 @@ interface ToolItem {
   key?: string;
   kind?: "finish" | "toggle";
 }
-// Split button: the FULL dropdown list lives in `children` (children[0] is the
-// initial one-click primary; `label` names the family for the arrow tooltip).
-// Picking a child runs it and makes it the primary, last-used-is-preferred, mainstream MCAD
-// convention. Each tool is defined exactly once, in `children`.
+// Split button: `children` holds every tool, children[0] is the initial primary and `label` names the family for the
+// arrow tooltip. Picking a child runs it and makes it the primary.
 interface SplitItem {
   label: string;
   children: ToolItem[];
@@ -69,26 +64,15 @@ export const MODEL: Group[] = [
           { action: "mirror", label: "Mirror", iconName: "mirror" },
           { action: "joint", label: "Joint", iconName: "assembly" },
           { action: "mechanism", label: "Mechanism", iconName: "mechanism" },
-          // Two entries, not one that asks. Linear and circular are different
-          // gestures, pull an arrow along an axis, or sweep around one, so
-          // the choice belongs on the button rather than in a dialog the
-          // button raises.
+          // Two entries: linear and circular are different gestures, so the choice belongs on the button.
           { action: "pattern-linear", label: "Linear Pattern", iconName: "patternLinear" },
           { action: "pattern-circular", label: "Circular Pattern", iconName: "patternCircular" },
         ],
       },
-      // The three booleans are a family and share a split button. Split Body is
-      // not one of them, it cuts ONE body into pieces with a plane, where a
-      // boolean is two bodies meeting, and it used to be filed under Combine
-      // purely because both change how many bodies there are. It stands on its
-      // own now.
+      // Split Body is not a boolean: it cuts one body with a plane, so it stands on its own.
       {
         label: "Boolean",
-        // The hint is READ from the keymap rather than written again. Every
-        // other row here spells its own key, which is a promise this table
-        // cannot keep on its own, and the booleans are the first rows whose key
-        // carries a modifier, so a hand-written "U" would advertise a binding
-        // that does nothing.
+        // Hints are read from the keymap, since the booleans' keys carry a modifier a hand-written "U" would misstate.
         children: BOOLEAN_COMMANDS.map((c) => {
           const key = keyHint(c.action);
           return {
@@ -159,13 +143,7 @@ export const MODEL: Group[] = [
           { action: "component-colors", label: "Body Colors", iconName: "componentColors" },
         ],
       },
-      // Filed with the other "how does it look" tools rather than given a group
-      // of its own. It lived only in the Edit menu, which is where a user finds
-      // a command they already know the name of, not where they discover one,
-      // and a library of finishes is no use to somebody who never learns it is
-      // there. Its neighbours here are Zebra, Curvature and Body Colors, which
-      // are the same kind of thing: ways of looking at the model rather than
-      // changes to it.
+      // Beside Zebra, Curvature and Body Colors, ways of looking at the model; in the Edit menu alone nobody found it.
       { action: "materials", label: "Materials", iconName: "material" },
     ],
   },
@@ -181,28 +159,11 @@ export const MODEL: Group[] = [
   },
 ];
 
-/** Collapse priority for a group nobody gave one.
- *
- *  Below every group the app defines, so a contributed group folds into the
- *  overflow before any of the modelling tools do. When the window is too narrow
- *  for everything, the thing somebody added is the thing they are least likely
- *  to be reaching for at that moment. */
+/** Below every app group, so a contributed group folds into the overflow before the modelling tools do. */
 const CONTRIBUTED_PRIORITY = 10;
 
-/** The model ribbon as it should be drawn right now: the app's own groups, plus
- *  whatever the running plugins add.
- *
- *  MODEL above stays the full definition of what the APP has, and this is the
- *  answer to "what can be reached", which became a different question the moment
- *  a capability could be turned off. It used to be answered by filtering MODEL:
- *  a plugin's group was written out here and two of its three buttons were
- *  removed again when that capability was off, so this file held both the
- *  capability's buttons and the rule for hiding them. Now it holds neither, and
- *  a group that is not contributed is not drawn because it does not exist.
- *
- *  Contributed groups go at the end, in the order the plugins started. Merged by
- *  heading, so two capabilities that both call their group PRINT share one
- *  rather than drawing two ribbons' worth of the same word. */
+/** The app's own groups plus what running plugins add; MODEL stays the full app definition. Contributed groups go at
+ *  the end in plugin start order, merged by heading so two PRINT groups share one. */
 export function modelGroups(): Group[] {
   const extra = contributedRibbon();
   if (!extra.length) return MODEL;
@@ -229,11 +190,8 @@ export const SKETCH: Group[] = [
     label: "CREATE",
     items: [
       { action: "line", label: "Line", iconName: "line", key: "L" },
-      // Three rectangles and three circles held six of this group's fourteen
-      // buttons, and each trio is ONE shape anchored differently: from a corner,
-      // from its centre, or on a drawn edge. They fold into the split button the
-      // ribbon already has, which remembers the one last used, and the family
-      // opens on the caret, on a right-click, or by holding the face down.
+      // Each rectangle and circle trio is one shape anchored differently (corner, centre, edge), so each folds into one
+      // split button that remembers the last used.
       {
         label: "Rectangle",
         children: [
@@ -299,20 +257,22 @@ export const SKETCH: Group[] = [
       {
         label: "Constrain",
         // the hint is read from the keymap, as for the booleans, since some carry Shift
-        children: ([
-          ["horizontal", "Horizontal"],
-          ["vertical", "Vertical"],
-          ["parallel", "Parallel"],
-          ["perpendicular", "Perpendic."],
-          ["equal", "Equal"],
-          ["tangent", "Tangent"],
-          ["coincident", "Coincident"],
-          ["concentric", "Concentric"],
-          ["midpoint", "Midpoint"],
-          ["collinear", "Collinear"],
-          ["symmetric", "Symmetric"],
-          ["fix", "Fix"],
-        ] as const).map(([action, label]) => {
+        children: (
+          [
+            ["horizontal", "Horizontal"],
+            ["vertical", "Vertical"],
+            ["parallel", "Parallel"],
+            ["perpendicular", "Perpendic."],
+            ["equal", "Equal"],
+            ["tangent", "Tangent"],
+            ["coincident", "Coincident"],
+            ["concentric", "Concentric"],
+            ["midpoint", "Midpoint"],
+            ["collinear", "Collinear"],
+            ["symmetric", "Symmetric"],
+            ["fix", "Fix"],
+          ] as const
+        ).map(([action, label]) => {
           const key = keyHint(action);
           return { action, label, iconName: action, ...(key !== undefined ? { key } : {}) };
         }),

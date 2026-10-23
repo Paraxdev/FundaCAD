@@ -1,6 +1,5 @@
 <script setup lang="ts">
-// A small viewer of one generated fastener: the mesh comes from the geometry engine, so what is
-// shown is the solid that Insert would put in the model. Drag to turn it, wheel to zoom.
+// The mesh comes from the geometry engine, so the preview is the solid Insert would put in the model.
 
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import * as THREE from "three";
@@ -79,7 +78,8 @@ async function load(spec: FastenerSpec | null) {
   const { positions, indices, normals } = reply.shape.mesh;
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-  if (normals.length === positions.length) geometry.setAttribute("normal", new THREE.Float32BufferAttribute(normals, 3));
+  if (normals.length === positions.length)
+    geometry.setAttribute("normal", new THREE.Float32BufferAttribute(normals, 3));
   geometry.setIndex(indices);
   if (normals.length !== positions.length) geometry.computeVertexNormals();
   geometry.computeBoundingBox();
@@ -165,7 +165,14 @@ onBeforeUnmount(() => {
     <canvas
       ref="canvas"
       class="scr-preview"
-      :style="{ width: '100%', height: '100%', display: 'block', cursor: 'grab', borderRadius: 'var(--r-md, 4px)', background: 'var(--viewport-bg, #0b0912)' }"
+      :style="{
+        width: '100%',
+        height: '100%',
+        display: 'block',
+        cursor: 'grab',
+        borderRadius: 'var(--r-md, 4px)',
+        background: 'var(--viewport-bg, #0b0912)',
+      }"
       @pointerdown="onDown"
       @pointermove="onMove"
       @pointerup="onUp"
@@ -175,7 +182,14 @@ onBeforeUnmount(() => {
     <div
       v-if="status"
       class="scr-preview-status"
-      :style="{ position: 'absolute', left: '8px', right: '8px', bottom: '6px', fontSize: '11px', color: 'var(--text-dim, #aaa1b5)' }"
+      :style="{
+        position: 'absolute',
+        left: '8px',
+        right: '8px',
+        bottom: '6px',
+        fontSize: '11px',
+        color: 'var(--text-dim, #aaa1b5)',
+      }"
     >
       {{ status }}
     </div>

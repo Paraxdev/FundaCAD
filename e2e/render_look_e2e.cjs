@@ -19,7 +19,10 @@ const URL = process.env.SC_URL || "http://localhost:5173/";
 const PORT = process.env.SC_ENGINE_PORT || "8765";
 const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const OUT = path.resolve(process.argv[2] || "render_shots");
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 let failures = 0;
 const check = (name, ok, detail) => {
   console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail ? `, ${detail}` : ""}`);
@@ -33,23 +36,32 @@ const check = (name, ok, detail) => {
     args: ["--use-angle=swiftshader", "--no-sandbox"],
   });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-  page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
-  await page.addInitScript(([port, t]) => {
-    const N = window.WebSocket;
-    class P extends N {
-      constructor(u, p) {
-        let s = String(u).replace("127.0.0.1:8765", "127.0.0.1:" + port);
-        s = s.replace(/([?&])token=[^&]*/, `$1token=${t}`);
-        super(s.includes("token=") ? s : s + (s.includes("?") ? "&" : "?") + "token=" + t, p);
+  page.on("pageerror", (e) => {
+    console.error("PAGE ERROR:", e.message);
+    failures++;
+  });
+  await page.addInitScript(
+    ([port, t]) => {
+      const N = window.WebSocket;
+      class P extends N {
+        constructor(u, p) {
+          let s = String(u).replace("127.0.0.1:8765", "127.0.0.1:" + port);
+          s = s.replace(/([?&])token=[^&]*/, `$1token=${t}`);
+          super(s.includes("token=") ? s : s + (s.includes("?") ? "&" : "?") + "token=" + t, p);
+        }
       }
-    }
-    window.WebSocket = P;
-  }, [PORT, TOKEN]);
+      window.WebSocket = P;
+    },
+    [PORT, TOKEN],
+  );
 
   await page.goto(URL);
   await page.waitForTimeout(3000);
   const modal = await page.$(".modal-close");
-  if (modal) { await modal.click(); await page.waitForTimeout(400); }
+  if (modal) {
+    await modal.click();
+    await page.waitForTimeout(400);
+  }
   await page.waitForFunction(() => !!window.store && !!window.viewport, null, { timeout: 60000 });
 
   // A row of parts covering the range: a matt one, a polished metal, and one
@@ -59,8 +71,12 @@ const check = (name, ok, detail) => {
       const id = window.store.nextId();
       window.store.addFeature({ id, type: "cylinder", radius: 9, height: 26 });
       window.store.addFeature({
-        id: window.store.nextId(), type: "move", body: `body${i + 1}`,
-        dx: (i - 1) * 26, dy: 0, dz: 0,
+        id: window.store.nextId(),
+        type: "move",
+        body: `body${i + 1}`,
+        dx: (i - 1) * 26,
+        dy: 0,
+        dz: 0,
       });
     }
     await window.store.rebuildNow();
@@ -81,35 +97,42 @@ const check = (name, ok, detail) => {
   const canvasBox = await page.$eval("canvas", (c) => {
     const r = c.getBoundingClientRect();
     return {
-      x: Math.round(r.x), y: Math.round(r.y),
-      width: Math.round(r.width) - 130, height: Math.round(r.height) - 70,
+      x: Math.round(r.x),
+      y: Math.round(r.y),
+      width: Math.round(r.width) - 130,
+      height: Math.round(r.height) - 70,
     };
   });
 
   // ---- 1. a glowing material is actually emissive --------------------------
   console.log("\n1. glow");
-  const mats = () => page.evaluate(() => window.viewport.bodyMeshes.map((b) => {
-    const m = b.mesh.material;
-    return {
-      id: b.id,
-      emissive: "#" + m.emissive.getHexString(),
-      intensity: m.emissiveIntensity,
-      metalness: m.metalness,
-      roughness: m.roughness,
-    };
-  }));
+  const mats = () =>
+    page.evaluate(() =>
+      window.viewport.bodyMeshes.map((b) => {
+        const m = b.mesh.material;
+        return {
+          id: b.id,
+          emissive: "#" + m.emissive.getHexString(),
+          intensity: m.emissiveIntensity,
+          metalness: m.metalness,
+          roughness: m.roughness,
+        };
+      }),
+    );
   const lit = await mats();
-  for (const m of lit) console.log(`  ${m.id}: emissive ${m.emissive} x${m.intensity}, `
-    + `metalness ${m.metalness}, roughness ${m.roughness}`);
+  for (const m of lit)
+    console.log(
+      `  ${m.id}: emissive ${m.emissive} x${m.intensity}, ` + `metalness ${m.metalness}, roughness ${m.roughness}`,
+    );
   const glowing = lit.find((m) => m.id === "body3");
   check("the lit indicator gives off light", glowing.intensity > 0, JSON.stringify(glowing));
-  check("brightly enough to get past the bloom threshold",
-    glowing.intensity > 1, `intensity ${glowing.intensity}`);
-  check("and it glows in its OWN colour, not white",
-    glowing.emissive === "#42e07a", glowing.emissive);
-  check("the parts that are not lit give off nothing (control)",
+  check("brightly enough to get past the bloom threshold", glowing.intensity > 1, `intensity ${glowing.intensity}`);
+  check("and it glows in its OWN colour, not white", glowing.emissive === "#42e07a", glowing.emissive);
+  check(
+    "the parts that are not lit give off nothing (control)",
     lit.filter((m) => m.id !== "body3").every((m) => m.intensity === 0),
-    JSON.stringify(lit.filter((m) => m.id !== "body3").map((m) => m.intensity)));
+    JSON.stringify(lit.filter((m) => m.id !== "body3").map((m) => m.intensity)),
+  );
 
   // ---- 2. the post chain keeps what the direct path had --------------------
   console.log("\n2. the post chain");
@@ -122,14 +145,18 @@ const check = (name, ok, detail) => {
       outputColorSpace: r.outputColorSpace,
     };
   });
-  check("tone mapping is on, and it is the neutral one",
-    chain.neutral, `toneMapping=${chain.toneMapping}, exposure=${chain.exposure}`);
+  check(
+    "tone mapping is on, and it is the neutral one",
+    chain.neutral,
+    `toneMapping=${chain.toneMapping}, exposure=${chain.exposure}`,
+  );
 
   const samples = await page.evaluate(() => window.viewport.scene.post.samples);
-  check("rendering through the passes keeps the multisampling",
+  check(
+    "rendering through the passes keeps the multisampling",
     samples >= 4,
-    `${samples} samples (a composer's default target has none, which would trade `
-    + `the antialiasing for the glow)`);
+    `${samples} samples (a composer's default target has none, which would trade ` + `the antialiasing for the glow)`,
+  );
 
   // ---- 3. the settings reach the renderer ----------------------------------
   //
@@ -147,10 +174,11 @@ const check = (name, ok, detail) => {
   };
   const setBloom = async (level) => {
     await page.keyboard.press("Control+Comma");
-    await page.waitForSelector("#prefs-bloom", { timeout: 5000 });
-    await page.selectOption("#prefs-bloom", level);
+    await page.click('[data-category="viewport"]');
+    await page.waitForSelector("#prefs-bloom", { state: "visible", timeout: 5000 });
+    await page.fill("#prefs-bloom", String(level));
     await page.waitForTimeout(200);
-    // The close BUTTON, not Escape: the focus is in the select that was just
+    // The close BUTTON, not Escape: the focus is in the slider that was just
     // used, which swallows it, and a dialog left standing over the viewport
     // means every screenshot below is a picture of the dialog. (It was, and
     // three of them "differed" only in which option the Bloom row was showing.)
@@ -160,20 +188,25 @@ const check = (name, ok, detail) => {
   };
 
   await shot("1-bloom-subtle");
-  await setBloom("strong");
+  await setBloom(1);
   await shot("2-bloom-strong");
-  await setBloom("off");
+  await setBloom(0);
   await shot("3-bloom-off");
 
-  const md5 = (n) => require("crypto").createHash("md5")
-    .update(fs.readFileSync(path.join(OUT, `${n}.png`))).digest("hex");
+  const md5 = (n) =>
+    require("crypto")
+      .createHash("md5")
+      .update(fs.readFileSync(path.join(OUT, `${n}.png`)))
+      .digest("hex");
   const hashes = ["1-bloom-subtle", "2-bloom-strong", "3-bloom-off"].map(md5);
-  check("each bloom level draws a different picture",
-    new Set(hashes).size === 3, hashes.map((h) => h.slice(0, 8)).join(" "));
+  check(
+    "each bloom level draws a different picture",
+    new Set(hashes).size === 3,
+    hashes.map((h) => h.slice(0, 8)).join(" "),
+  );
 
-  await setBloom("subtle");
-  check("the dialog closed again",
-    await page.evaluate(() => document.querySelector("#prefs-bloom") === null));
+  await setBloom(0.4);
+  check("the dialog closed again", await page.evaluate(() => document.querySelector("#prefs-bloom") === null));
 
   console.log(`\nshots in ${OUT}`);
   await browser.close();

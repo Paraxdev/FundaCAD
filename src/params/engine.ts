@@ -1,18 +1,7 @@
-// The parameters engine: evaluates the document's parameter table (paramDefs),
-// writes evaluated numbers into bound fields, and owns the lifecycle rules
-// (bind/rename/delete/cycle). All functions mutate the given document IN PLACE
-// and are meant to run inside one store.mutate() so a parameter edit and its
-// write-back cascade land as a single undo step. The engine never sees any of
-// this, only the derived `doc.parameters` numbers and the fields themselves.
-//
-// Invariants:
-//  - `paramDefs` is the source of truth; `doc.parameters` is a derived
-//    name→value cache regenerated after every recompute.
-//  - The engine is the sole writer of bound fields (a field's number always
-//    equals its bound param's cached value after recompute).
-//  - A broken expression is never STORED via the commit path (validate first);
-//    load-time breakage (hand-edited files) keeps the cached value and is
-//    reported in `issues`.
+// The parameters engine: evaluates paramDefs, writes values into bound fields and owns bind, rename, delete and
+// cycle rules. Mutates in place, inside one store.mutate() so an edit and its cascade are one undo step.
+// paramDefs is the truth and doc.parameters a derived cache, recompute is the sole writer of bound fields, and a
+// broken expression is never committed; load-time breakage keeps its cached value and shows in `issues`.
 
 import { asFeature } from "../types";
 import type { CadDocument, ParamDef, ParamTarget } from "../types";
@@ -23,8 +12,7 @@ import { kindUnit, NON_NUM_STRING_FIELDS, resolveTarget, writeTarget } from "../
 import type { FieldKind } from "../document/numFields";
 
 export interface RecomputeResult {
-  /** sketch feature ids whose constraint/entity/pattern values changed, these
-   *  need a re-solve (open sketch: live; closed: headless cascade). */
+  /** Sketch ids whose values changed and need a re-solve (live if open, headless cascade if closed). */
   affectedSketches: Set<string>;
   /** param name → why it kept its cached value (cycle, unknown ref, non-finite,
    *  missing target). Empty on a healthy document. */
@@ -45,8 +33,7 @@ export function nextDName(defs: Record<string, ParamDef>): string {
   return `d${n}`;
 }
 
-/** Parse every def once; an unparsable expression maps to null (it will surface
- *  as an issue at evaluation and can't reference anything). */
+/** Parse every def once; an unparsable expression maps to null and surfaces as an issue at evaluation. */
 function parseDefs(defs: Record<string, ParamDef>): Map<string, ExprNode | null> {
   const nodes = new Map<string, ExprNode | null>();
   for (const [name, def] of Object.entries(defs)) {
@@ -79,15 +66,12 @@ export function recompute(doc: CadDocument): RecomputeResult {
   const issues: Record<string, string> = {};
   const affectedSketches = new Set<string>();
   const nodes = parseDefs(defs);
-  // each def's in-table references, walked ONCE, serves both the GC set and
-  // the topo-sort deps (GC only deletes UNreferenced defs, so surviving
-  // entries stay accurate)
+  // Each def's references, walked once for both GC and topo-sort deps (GC drops only unreferenced defs).
   const refsByName = new Map<string, string[]>();
   for (const [name, node] of nodes) refsByName.set(name, extractDefRefs(node, defs));
 
-  // --- GC dangling model params (their dim/feature was deleted). Unreferenced
-  // ones are dropped SILENTLY by design, an auto-minted dN is meaningless
-  // without its target, and undo restores it via the doc snapshot anyway. ---
+  // GC model params whose target was deleted. Unreferenced ones drop silently: an orphan dN means nothing, and
+  // undo restores it from the snapshot.
   const referenced = new Set<string>();
   for (const rs of refsByName.values()) for (const r of rs) referenced.add(r);
   for (const [name, def] of Object.entries(defs)) {
@@ -101,7 +85,7 @@ export function recompute(doc: CadDocument): RecomputeResult {
     }
   }
 
-  // --- topological order (Kahn); cycle members keep their cached value ---
+  // Topological order (Kahn); cycle members keep their cached value.
   const names = Object.keys(defs);
   const deps = refsByName;
   const indeg = new Map(names.map((n) => [n, deps.get(n)!.length]));
@@ -121,7 +105,7 @@ export function recompute(doc: CadDocument): RecomputeResult {
   const inOrder = new Set(order);
   for (const n of names) if (!inOrder.has(n)) issues[n] ??= "circular reference";
 
-  // --- evaluate in order; every def contributes its (possibly cached) value ---
+  // Every def contributes its value, the cached one when it cannot be evaluated.
   const values: Record<string, number> = {};
   for (const n of names) values[n] = defs[n]!.value; // cycle/error fallback scope
   for (const n of order) {
@@ -144,14 +128,13 @@ export function recompute(doc: CadDocument): RecomputeResult {
     }
   }
 
-  // --- write changed values into bound fields ---
   for (const def of Object.values(defs)) {
     if (!def.target) continue;
     const w = writeTarget(doc, def.target, def.value);
     if (w?.sketch) affectedSketches.add(w.sketch);
   }
 
-  // --- refresh the derived cache the engine/legacy readers consume ---
+  // The derived cache the engine and legacy readers consume.
   doc.parameters = Object.fromEntries(Object.entries(defs).map(([n, d]) => [n, d.value]));
 
   return { affectedSketches, issues };
@@ -217,18 +200,22 @@ export function validateExpr(doc: CadDocument, name: string | null, expr: string
 
 function hasUnitLiteral(n: ExprNode): boolean {
   switch (n.t) {
-    case "num": return n.unit !== undefined;
-    case "ref": return false;
-    case "call": return n.args.some(hasUnitLiteral);
-    case "bin": return hasUnitLiteral(n.l) || hasUnitLiteral(n.r);
+    case "num":
+      return n.unit !== undefined;
+    case "ref":
+      return false;
+    case "call":
+      return n.args.some(hasUnitLiteral);
+    case "bin":
+      return hasUnitLiteral(n.l) || hasUnitLiteral(n.r);
     case "neg":
-    case "not": return hasUnitLiteral(n.e);
+    case "not":
+      return hasUnitLiteral(n.e);
   }
 }
 
-/** Set an existing (or add a new user) parameter's expression. Validate with
- *  validateExpr FIRST, this trusts its input. Evaluation/write-back happens in
- *  store.mutate()'s recompute (the single owner of that invariant). */
+/** Set or add a user parameter's expression. Validate with validateExpr first, this trusts its input;
+ *  store.mutate()'s recompute evaluates it. */
 export function commitParamExpr(doc: CadDocument, name: string, expr: string, unit?: ParamDef["unit"]): void {
   const defs = defsOf(doc);
   const def = defs[name];
@@ -237,9 +224,18 @@ export function commitParamExpr(doc: CadDocument, name: string, expr: string, un
 }
 
 const OBJECT_PROTO_NAMES = new Set([
-  "constructor", "toString", "valueOf", "hasOwnProperty",
-  "isPrototypeOf", "propertyIsEnumerable", "toLocaleString",
-  "__proto__", "__defineGetter__", "__defineSetter__", "__lookupGetter__", "__lookupSetter__",
+  "constructor",
+  "toString",
+  "valueOf",
+  "hasOwnProperty",
+  "isPrototypeOf",
+  "propertyIsEnumerable",
+  "toLocaleString",
+  "__proto__",
+  "__defineGetter__",
+  "__defineSetter__",
+  "__lookupGetter__",
+  "__lookupSetter__",
 ]);
 
 /** Reject bad user-parameter names in one place. Returns an error or null. */
@@ -252,7 +248,6 @@ export function validateName(defs: Record<string, ParamDef>, name: string): stri
   return null;
 }
 
-/** The param bound to `target`, if any. */
 export function boundParam(doc: CadDocument, target: ParamTarget): string | null {
   for (const [name, def] of Object.entries(defsOf(doc))) {
     if (def.target && sameTarget(def.target, target)) return name;
@@ -263,10 +258,14 @@ export function boundParam(doc: CadDocument, target: ParamTarget): string | null
 export function sameTarget(a: ParamTarget, b: ParamTarget): boolean {
   if (a.kind !== b.kind) return false;
   switch (a.kind) {
-    case "feature": return b.kind === "feature" && a.feature === b.feature && a.field === b.field;
-    case "constraint": return b.kind === "constraint" && a.sketch === b.sketch && a.constraint === b.constraint;
-    case "entity": return b.kind === "entity" && a.sketch === b.sketch && a.entity === b.entity && a.field === b.field;
-    case "pattern": return b.kind === "pattern" && a.sketch === b.sketch && a.pattern === b.pattern && a.field === b.field;
+    case "feature":
+      return b.kind === "feature" && a.feature === b.feature && a.field === b.field;
+    case "constraint":
+      return b.kind === "constraint" && a.sketch === b.sketch && a.constraint === b.constraint;
+    case "entity":
+      return b.kind === "entity" && a.sketch === b.sketch && a.entity === b.entity && a.field === b.field;
+    case "pattern":
+      return b.kind === "pattern" && a.sketch === b.sketch && a.pattern === b.pattern && a.field === b.field;
   }
 }
 
@@ -277,12 +276,8 @@ export function isBound(doc: CadDocument, target: ParamTarget): boolean {
   return name !== null && !isNumericLiteral(defsOf(doc)[name]!.expr);
 }
 
-/** The OTHER parameter `target`'s own binding is nothing but a bare reference
- *  to, e.g. a fillet radius whose auto-created dN has `expr: "wall_blend_r"`.
- *  Null for an unbound target, a plain literal, or a real expression
- *  ("wall_blend_r * 2"): only a bare name is safe for a drag tool to edit in
- *  place, by writing the REFERENCED parameter's own value rather than this
- *  field's wrapper (which recompute would just overwrite right back). */
+/** The parameter that `target`'s binding merely names (expr "wall_blend_r"), else null. Only a bare name is safe
+ *  for a drag tool to edit, by writing the referenced value, since recompute would overwrite this field's wrapper. */
 export function bareParamRef(doc: CadDocument, target: ParamTarget): string | null {
   const name = boundParam(doc, target);
   if (!name) return null;
@@ -290,10 +285,8 @@ export function bareParamRef(doc: CadDocument, target: ParamTarget): string | nu
   return isIdentName(expr) && expr in defsOf(doc) ? expr : null;
 }
 
-/** Bind an expression to a field: updates the existing model param for that
- *  target or mints the next dN. Validate with validateExpr first (pass the
- *  bound name from boundParam, or null for a fresh binding). Evaluation and
- *  write-back happen in store.mutate()'s recompute. */
+/** Bind an expression to a field, updating its model param or minting the next dN. Validate with validateExpr
+ *  first (bound name from boundParam, or null); recompute evaluates it. */
 export function commitFieldExpr(doc: CadDocument, target: ParamTarget, expr: string, kind: FieldKind): void {
   const defs = defsOf(doc);
   const existing = boundParam(doc, target);
@@ -304,10 +297,15 @@ export function commitFieldExpr(doc: CadDocument, target: ParamTarget, expr: str
   }
 }
 
-/** Fusion's on-the-fly `name=expr` in a dim field: the field's model param
- *  gets the CHOSEN name (renaming an existing dN binding). Validate the name
- *  (validateName) and the expr (validateExpr) first, this trusts its input. */
-export function commitNamedFieldExpr(doc: CadDocument, target: ParamTarget, name: string, expr: string, kind: FieldKind): void {
+/** Fusion's on-the-fly `name=expr` in a dim field: the field's model param takes the chosen name. Validate the
+ *  name and the expr first, this trusts its input. */
+export function commitNamedFieldExpr(
+  doc: CadDocument,
+  target: ParamTarget,
+  name: string,
+  expr: string,
+  kind: FieldKind,
+): void {
   const defs = defsOf(doc);
   const existing = boundParam(doc, target);
   if (existing) commitRenameParam(doc, existing, name);
@@ -321,19 +319,17 @@ export function splitNameValue(raw: string): { name: string; expr: string } | nu
   return m ? { name: m[1]!, expr: m[2]!.trim() } : null;
 }
 
-export type ExprInput =
-  | { ok: true; value: number; expr: string; name?: string }
-  | { ok: false; error: string };
+export type ExprInput = { ok: true; value: number; expr: string; name?: string } | { ok: false; error: string };
 
-/** Classify raw EXPRESSION input for a bindable field/dim, including Fusion's
- *  on-the-fly `name=expr` form: split, validate the name when it's genuinely
- *  new, validate the expression. The single home of that sequence, the
- *  store's doc commit and the sketch editor's pending bindings both route
- *  through it. `name` is set only when the input renames the binding (a name
- *  equal to the current bound/pending one is a no-op rename → plain
- *  re-expression). The plain-number/display-unit fork stays caller-side (it
- *  needs UI units). */
-export function classifyExprInput(doc: CadDocument, raw: string, kind: FieldKind | undefined, boundName: string | null, pendingName?: string | null): ExprInput {
+/** Classify raw expression input for a bindable field, including `name=expr`: split, validate a new name, validate
+ *  the expression. Shared by the store commit and sketch editor; `name` is set only on a real rename. */
+export function classifyExprInput(
+  doc: CadDocument,
+  raw: string,
+  kind: FieldKind | undefined,
+  boundName: string | null,
+  pendingName?: string | null,
+): ExprInput {
   const nv = splitNameValue(raw);
   const renames = nv !== null && nv.name !== boundName && nv.name !== pendingName;
   if (nv && renames) {
@@ -346,11 +342,8 @@ export function classifyExprInput(doc: CadDocument, raw: string, kind: FieldKind
   return { ok: true, value: v.value, expr, ...(renames ? { name: nv.name } : {}) };
 }
 
-/** Walk every legacy bare-name string field (feature + sketch entity) whose
- *  value is exactly `name`, calling `hit` with a label and a setter. Scans ALL
- *  string fields minus a denylist (rather than the numFields allowlists) on
- *  purpose: legacy pre-engine files could hold a bare param name on any
- *  numeric field, so over-catching is preferred over missing a reference. */
+/** Visit every legacy string field (feature and sketch entity) equal to `name`. Scans all string fields minus a
+ *  denylist, since pre-engine files could hold a bare name on any numeric field. */
 function eachBareNameRef(doc: CadDocument, name: string, hit: (label: string, set: (v: string) => void) => void): void {
   for (const f of doc.features) {
     for (const [k, v] of Object.entries(f)) {
@@ -382,10 +375,8 @@ function eachBareNameRef(doc: CadDocument, name: string, hit: (label: string, se
   }
 }
 
-/** Everything that references `name`: other params' expressions, checks and
- *  configuration values that read it, plus legacy bare-name strings still
- *  sitting in feature/entity fields. A configuration that merely SETS `name` is
- *  not a reference; deleting the parameter drops that entry instead. */
+/** Everything that references `name`: expressions, checks, configuration values that read it, and legacy
+ *  bare-name fields. A configuration that only sets `name` is not a reference; deleting drops that entry. */
 export function referencesTo(doc: CadDocument, name: string): string[] {
   const defs = defsOf(doc);
   const out: string[] = [];
@@ -435,9 +426,8 @@ export function commitDeleteParam(doc: CadDocument, name: string): void {
   for (const cfg of doc.paramExtras?.configurations ?? []) delete cfg.values[name];
 }
 
-/** Rename a parameter, rewriting every referencing expression via the
- *  tokenizer (never regex) and following legacy bare-name fields. Validate
- *  FIRST (`from` exists + validateName(to)), this trusts its input. */
+/** Rename a parameter, rewriting references with the tokenizer (never regex) and legacy bare-name fields.
+ *  Validate first (`from` exists, validateName(to)). */
 export function commitRenameParam(doc: CadDocument, from: string, to: string): void {
   const defs = defsOf(doc);
   for (const def of Object.values(defs)) def.expr = renameIn(def.expr, from, to);

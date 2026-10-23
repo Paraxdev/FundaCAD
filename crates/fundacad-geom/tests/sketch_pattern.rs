@@ -10,24 +10,15 @@ use serde_json::{json, Value};
 /// centre, rectCorners in src/sketch/region.ts.
 fn corners(w: f64, h: f64, x: f64, y: f64, deg: f64) -> [[f64; 2]; 4] {
     let (s, c) = deg.to_radians().sin_cos();
-    [
-        [-w / 2.0, -h / 2.0],
-        [w / 2.0, -h / 2.0],
-        [w / 2.0, h / 2.0],
-        [-w / 2.0, h / 2.0],
-    ]
-    .map(|[lx, ly]| [x + lx * c - ly * s, y + lx * s + ly * c])
+    [[-w / 2.0, -h / 2.0], [w / 2.0, -h / 2.0], [w / 2.0, h / 2.0], [-w / 2.0, h / 2.0]]
+        .map(|[lx, ly]| [x + lx * c - ly * s, y + lx * s + ly * c])
 }
 
 fn build(features: Value) -> Vec<fundacad_geom::builder::BuiltBody> {
     let doc = json!({ "features": features });
     let typed: CadDocument = serde_json::from_value(doc.clone()).expect("parses");
     let r = builder::rebuild(&typed, &doc, &NoWatch).expect("not cancelled");
-    assert!(
-        r.errors.is_empty(),
-        "{:?}",
-        r.errors.iter().map(|e| &e.message).collect::<Vec<_>>()
-    );
+    assert!(r.errors.is_empty(), "{:?}", r.errors.iter().map(|e| &e.message).collect::<Vec<_>>());
     r.bodies
 }
 
@@ -71,32 +62,16 @@ fn quarter_turned(b: [f64; 6], cx: f64, cy: f64, k: usize) -> [f64; 6] {
 }
 
 fn assert_close(got: (f64, [f64; 6]), want: (f64, [f64; 6]), what: &str) {
-    assert!(
-        (got.0 - want.0).abs() < 1e-5 * want.0.abs().max(1.0),
-        "{what}: volume {} want {}",
-        got.0,
-        want.0
-    );
+    assert!((got.0 - want.0).abs() < 1e-5 * want.0.abs().max(1.0), "{what}: volume {} want {}", got.0, want.0);
     for k in 0..6 {
-        assert!(
-            (got.1[k] - want.1[k]).abs() < 1e-4,
-            "{what}: box {:?}, want {:?}",
-            got.1,
-            want.1
-        );
+        assert!((got.1[k] - want.1[k]).abs() < 1e-4, "{what}: box {:?}, want {:?}", got.1, want.1);
     }
 }
 
-/// `entities` patterned twice, once in a row of two 100 apart, once four
-/// times round (200, 0), each copy the same shape as the original moved or
-/// turned with it.
+/// `entities` patterned in a row of two 100 apart and four times round (200, 0), each copy the original's shape
+/// moved or turned with it.
 fn keeps_its_shape(entities: Value, what: &str) {
-    let sources: Vec<Value> = entities
-        .as_array()
-        .expect("a list")
-        .iter()
-        .map(|e| e["id"].clone())
-        .collect();
+    let sources: Vec<Value> = entities.as_array().expect("a list").iter().map(|e| e["id"].clone()).collect();
     let one = extruded(&entities, None);
     assert!(one.0 > 0.0, "{what}: the original has an area");
 
@@ -120,13 +95,13 @@ fn keeps_its_shape(entities: Value, what: &str) {
 fn a_rectangular_pattern_of_a_rotated_rectangle_repeats_it_rotated() {
     let (v, got) = extruded(
         &json!([{"type": "rectangle", "id": "r", "width": 20, "height": 6, "x": 0, "y": 0, "angle": 30}]),
-        Some(json!([{"type": "patternRect", "id": "p", "sources": ["r"], "countX": 3, "countY": 1, "spacingX": 40, "spacingY": 0}])),
+        Some(
+            json!([{"type": "patternRect", "id": "p", "sources": ["r"], "countX": 3, "countY": 1, "spacingX": 40, "spacingY": 0}]),
+        ),
     );
     assert!((v - 3.0 * 20.0 * 6.0 * 5.0).abs() < 1e-6 * v, "volume {v}");
     #[allow(clippy::cast_precision_loss)]
-    let c: Vec<[f64; 2]> = (0..3)
-        .flat_map(|i| corners(20.0, 6.0, 40.0 * i as f64, 0.0, 30.0))
-        .collect();
+    let c: Vec<[f64; 2]> = (0..3).flat_map(|i| corners(20.0, 6.0, 40.0 * i as f64, 0.0, 30.0)).collect();
     let lo = |k: usize| c.iter().map(|p| p[k]).fold(f64::INFINITY, f64::min);
     let hi = |k: usize| c.iter().map(|p| p[k]).fold(f64::NEG_INFINITY, f64::max);
     assert_close((v, got), (v, [lo(0), lo(1), 0.0, hi(0), hi(1), 5.0]), "rotated rectangle");
@@ -170,10 +145,7 @@ fn a_circle_keeps_its_shape() {
 
 #[test]
 fn an_ellipse_keeps_its_shape() {
-    keeps_its_shape(
-        json!([{"type": "ellipse", "id": "c", "rx": 6, "ry": 2, "x": 4, "y": 1, "angle": 20}]),
-        "ellipse",
-    );
+    keeps_its_shape(json!([{"type": "ellipse", "id": "c", "rx": 6, "ry": 2, "x": 4, "y": 1, "angle": 20}]), "ellipse");
 }
 
 #[test]
@@ -186,10 +158,7 @@ fn a_polygon_keeps_its_shape() {
 
 #[test]
 fn a_slot_keeps_its_shape() {
-    keeps_its_shape(
-        json!([{"type": "slot", "id": "s", "x1": 0, "y1": 0, "x2": 10, "y2": 4, "width": 3}]),
-        "slot",
-    );
+    keeps_its_shape(json!([{"type": "slot", "id": "s", "x1": 0, "y1": 0, "x2": 10, "y2": 4, "width": 3}]), "slot");
 }
 
 #[test]

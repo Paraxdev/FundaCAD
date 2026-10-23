@@ -1,7 +1,5 @@
-//! A round up the miter where two G2 blends meet: the kernel closes the seam
-//! between its two surface pieces with an edge it calls degenerated, with one
-//! vertex 6.35 mm wide standing in for both ends, and every mesh of the body
-//! fans to that vertex.
+//! A round up the miter where two G2 blends meet: the kernel closes the seam between its two surface
+//! pieces with a degenerated edge whose one vertex, 6.35 mm wide, stands in for both ends.
 
 use fundacad_core::CadDocument;
 use fundacad_geom::builder::{self, NoWatch};

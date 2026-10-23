@@ -1,12 +1,6 @@
-// The build identity an engine answers `ping` with (docs/PROTOCOL.md), for the
-// build scripts of the two executables that host the engine: `include!`d by
-// crates/fundacad-cli/build.rs and src-tauri/build.rs, which pass it on with
-// `fundacad_engine::set_build(env!("FUNDACAD_BUILD"))`.
-//
-// The identity is the commit the engine's source was at and, when that source
-// had changes nobody committed, a hash of them, so two executables built from
-// the same tree say the same thing whichever of the two they are. Without git
-// it is `{}`, which a client reads as "cannot say".
+// The build identity an engine answers `ping` with (docs/PROTOCOL.md), `include!`d by the cli and src-tauri build
+// scripts. It is the source commit plus a hash of uncommitted changes, so two executables built from one tree agree,
+// and `{}` without git, which a client reads as "cannot say".
 
 /// What counts as the engine's source: everything an engine executable
 /// compiles in, less the MCP server, which does not build geometry.
@@ -16,11 +10,7 @@ const NOT_ENGINE_SOURCE: &str = ":(exclude)crates/fundacad-mcp";
 fn emit_engine_build() {
     let manifest = std::path::PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap_or_default());
     let git = |args: &[&str]| -> Option<Vec<u8>> {
-        let out = std::process::Command::new("git")
-            .args(args)
-            .current_dir(&manifest)
-            .output()
-            .ok()?;
+        let out = std::process::Command::new("git").args(args).current_dir(&manifest).output().ok()?;
         out.status.success().then_some(out.stdout)
     };
     let text = |args: &[&str]| git(args).map(|o| String::from_utf8_lossy(&o).trim().to_string());
@@ -36,19 +26,12 @@ fn emit_engine_build() {
     let mut watched: Vec<std::path::PathBuf> = ["HEAD", "packed-refs"]
         .iter()
         .filter_map(|p| text(&["rev-parse", "--git-path", p]))
-        .chain(
-            text(&["symbolic-ref", "-q", "HEAD"])
-                .and_then(|r| text(&["rev-parse", "--git-path", &r])),
-        )
+        .chain(text(&["symbolic-ref", "-q", "HEAD"]).and_then(|r| text(&["rev-parse", "--git-path", &r])))
         .map(|p| manifest.join(p))
         .collect();
     if let Ok(crates) = std::fs::read_dir(root.join("crates")) {
-        watched.extend(
-            crates
-                .flatten()
-                .map(|e| e.path())
-                .filter(|p| p.file_name().is_some_and(|n| n != "fundacad-mcp")),
-        );
+        watched
+            .extend(crates.flatten().map(|e| e.path()).filter(|p| p.file_name().is_some_and(|n| n != "fundacad-mcp")));
     }
     watched.extend(ENGINE_SOURCE.iter().filter(|p| **p != "crates").map(|p| root.join(p)));
     for p in &watched {

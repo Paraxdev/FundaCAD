@@ -1,32 +1,5 @@
-// Interactive multi-body Move: one gizmo at the selection's centroid carrying
-// three arrows and three rings. Grab an arrow to slide the bodies along that
-// axis; grab a ring to turn them about it. Both drive a LIVE preview (the mesh
-// and its edges transformed in place, no engine round-trip), type a value for
-// precision, click off the gizmo / Enter to commit, Esc to revert.
-//
-// Rotation is the addition, and it needed one thing that was not obvious. The
-// `move` feature turns about the WORLD ORIGIN and only then translates, so a
-// body 300mm out along the part, turned a quarter turn, used to swing 424mm
-// across the scene instead of spinning where it stands. The correction is
-// arithmetic, not a new feature, see features/transformGizmo.composeMove, and
-// it lives there with its control test rather than inline here, because the
-// symptom of getting it wrong is a body in a plausible-looking wrong place.
-//
-// The preview and the committed feature are built from the SAME six numbers, so
-// they cannot disagree about what the drag meant.
-//
-// A cube at each arrow's tip RESIZES along that axis, about the same origin the
-// rings turn about. It commits a second feature (a `scale`, written before the
-// `move`), and the preview composes the two in that same order, because they are
-// applied in that order on rebuild and a preview built the other way round
-// agrees only while one of them is the identity.
-//
-// The gizmo's ORIGIN is draggable, and snaps to the model, a corner, the middle
-// of an edge, the centre of a face. That is what turns "rotate this" into
-// "rotate this about that corner", which is the only form of the request anyone
-// actually has. Dragging it never moves the part: the translation absorbs the
-// change of pivot exactly (see `setPivot`), so the origin is a statement about
-// the NEXT drag and not itself an edit.
+// Multi-body Move: arrows slide, rings turn, cubes resize, squares slide in a plane, the origin is a draggable pivot.
+// The `move` feature turns about the world origin, so the pivot correction lives in transformGizmo.composeMove.
 
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
@@ -52,6 +25,7 @@ import {
 import { CanvasGesture } from "./canvasGesture";
 import { RotateDial } from "../viewport/rotateDial";
 import { overlayMaterial } from "../viewport/overlayMaterial";
+import { resolveShortcut } from "../input/shortcuts";
 import { createSlimRing, ringLook, type SlimRing } from "./slimRing";
 
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
@@ -63,65 +37,37 @@ const AXES = [
   { dir: new THREE.Vector3(0, 0, 1), color: 0x5a9bff }, // Z blue
 ];
 
-// Gizmo units are SCREEN PIXELS: the whole group is scaled by pixelWorldSize
-// every frame, so it is the same size on a 6mm part and a 600mm one.
-//
-// The arrows reach past the rings rather than stopping inside them. An arrow
-// only ever crosses the OTHER two rings, the ring you turn about X lies in the
-// YZ plane, which the X arrow passes through at its centre, so the crossings
-// are two per arrow and both are near the tips, where an arrow is thick enough
-// to read over a ring drawn behind it.
-/** The arrow. Its head was once 20px long and 14 ACROSS, wider than the edge
- *  handle's while sitting on a shorter arrow, and drawn on top of the model it
- *  read as oversized. */
+// Gizmo units are screen pixels: the group is scaled by pixelWorldSize every frame. The arrows reach past
+// the rings so each crosses the other two rings near its tip, where it is thick enough to read over them.
 const ARROW_LENGTH = 68;
 const ARROW_HEAD = 16;
 const ARROW_HEAD_R = 4.6;
 const ARROW_SHAFT = ARROW_LENGTH - ARROW_HEAD;
 const ARROW_SHAFT_R = 1.6;
-/** How wide the invisible cylinder an arrow is grabbed by is. Same reasoning as
- *  the slim rings' RING_BAND and as the edge handle's own proxies: how big a handle is
- *  DRAWN and how big it is to aim at are two questions, and slimming the arrow
- *  must not spend the aiming margin. A uniform cylinder, so the tip is as easy
- *  to hit as the root, the drawn cone tapers to nothing and used to be the
- *  hardest part of the arrow to press. */
+/** Radius of the invisible grab cylinder: aim size is not draw size, and a uniform cylinder makes the tip as
+ *  easy to hit as the root. */
 const ARROW_GRAB_R = 6.5;
 const RING_RADIUS = 46;
-/** The draggable origin, in gizmo units. Small enough that it never covers the
- *  arrows' own root and large enough to grab. */
+/** In gizmo units, small enough to never cover the arrows' root. */
 const ORIGIN_R = 5.5;
-/** Lit while the origin is sitting on a point the model actually has, rather
- *  than wherever the cursor was. The one thing the handle has to say. */
+/** Lit while the origin sits on a point the model actually has, rather than wherever the cursor was. */
 const SNAPPED = 0x64d2ff;
 const ORIGIN_IDLE = 0xdfe6ee;
 /** The resize cube, past the arrowhead so the two never share a pixel. */
 const SCALE_BOX = 9;
 const SCALE_AT = ARROW_SHAFT + ARROW_HEAD + 11;
-/** The planar-move square: a small quad sitting in the quadrant between two
- *  axes, dragged to slide the selection across the plane those two span (its
- *  normal is the THIRD axis). PLANE_AT is the square's centre offset along each
- *  spanning axis; drawn well inside the rings and clear of the origin dot, and
- *  the invisible hit quad is fatter so a small square is still an easy target. */
+/** Centre offset of the planar-move square along each spanning axis, inside the rings and clear of the origin
+ *  dot; its invisible hit quad is fatter. */
 const PLANE_AT = 25;
 const PLANE_SIZE = 14;
 const PLANE_HIT = 21;
-/** How far the value fields sit off the gizmo's centre, in SCREEN pixels.
- *  Clear of the outermost handle, so the boxes never cover the thing they are
- *  reporting on. */
+/** In screen pixels, clear of the outermost handle so the boxes never cover what they report. */
 const FIELDS_OFFSET_PX = SCALE_AT + 18;
 
-/** How far the gizmo reaches from its origin, in SCREEN pixels.
- *
- *  It is drawn at a constant screen size, so this is a constant. Exported for
- *  the one thing that has to stand clear of it: the selection toolbar floats
- *  above a picked body, and a body selection always carries this gizmo, so
- *  measuring its lift off the edge handle's much shorter reach parked the bar
- *  inside the rings. The value fields sit off to the SIDE (see start()), so
- *  what has to be cleared vertically is the outermost drawn handle. */
+/** In screen pixels, for the selection toolbar that must clear it. The value fields sit to the side, so only
+ *  the outermost handle matters vertically. */
 export const GIZMO_REACH_PX = SCALE_AT + SCALE_BOX;
 
-/** Which handle a press landed on. Two families, so they can be hit-tested
- *  separately and a ring behind an arrow can never steal the arrow's press. */
 type Grab = { kind: "axis" | "ring" | "origin" | "size" | "plane"; index: number } | null;
 
 function idlePrompt(canResize: boolean): string {
@@ -129,7 +75,6 @@ function idlePrompt(canResize: boolean): string {
   return `Drag an arrow to slide, a square to slide in a plane, a ring to turn,${resize} the centre to move what those act about · Enter · Esc`;
 }
 
-/** The two world axes a plane spans, given the axis its normal is. */
 function planeAxes(normal: number): [number, number] {
   return [(normal + 1) % 3, (normal + 2) % 3];
 }
@@ -140,10 +85,9 @@ export class MoveTool {
   private frame: Frame = WORLD_FRAME;
   private copy = false;
   private suspendedBefore = false;
-  /** the gizmo's origin: what the arrows start from and what the rings turn
-   *  about. The selection centroid, and fixed for the session. */
+  /** The gizmo's origin, the selection centroid, fixed for the session. */
   private anchor = new THREE.Vector3();
-  private t = new THREE.Vector3(); // current translation
+  private t = new THREE.Vector3();
   private rot = new THREE.Quaternion(); // current rotation, about `anchor`
 
   private gizmo: THREE.Group | null = null;
@@ -151,15 +95,13 @@ export class MoveTool {
   private rings: { ring: SlimRing; axis: number }[] = [];
   private cubes: { mesh: THREE.Mesh; mat: THREE.MeshBasicMaterial; axis: number }[] = [];
   private planes: { mesh: THREE.Mesh; hit: THREE.Mesh; mat: THREE.MeshBasicMaterial; axis: number }[] = [];
-  /** where the cursor met the drag plane when a planar handle was grabbed, and
-   *  the translation the selection already carried at that moment */
+  /** Where the cursor met the drag plane at grab, and the translation the selection carried then. */
   private grabPlanePoint = new THREE.Vector3();
   private grabT = new THREE.Vector3();
   /** per-axis resize about `anchor`, 1 meaning untouched */
   private scl = new THREE.Vector3(1, 1, 1);
   private grabScale = 1;
   private origin: { mesh: THREE.Mesh; mat: THREE.MeshBasicMaterial } | null = null;
-  /** the origin is sitting on real model geometry, not on empty space */
   private pivotSnapped = false;
   private hover: Grab = null;
   private grab: Grab = null;
@@ -167,8 +109,7 @@ export class MoveTool {
   private last: Grab = null;
   private grabVal = 0;
   private grabProj = 0;
-  /** where the cursor sat on the ring when it was grabbed, and the rotation the
-   *  selection already carried at that moment */
+  /** Where the cursor sat on the ring at grab, and the rotation the selection carried then. */
   private grabAngle = 0;
   private grabRot = new THREE.Quaternion();
   /** total turn on the grabbed ring, degrees, the value the field shows */
@@ -179,8 +120,7 @@ export class MoveTool {
   private ringStep = 0;
   private dial: RotateDial | null = null;
   private downPos = { x: 0, y: 0 };
-  /** the selection's world box when the session opened, what resize steps are
-   *  measured against */
+  /** The selection's world box when the session opened, what resize steps measure against. */
   private box: THREE.Box3 | null = null;
   private stepLabel = "";
 
@@ -188,11 +128,9 @@ export class MoveTool {
   private onDone: ((id: string | null) => void) | null = null;
   /** unsubscribes a settled drag's wait for its rebuild */
   private pendingReopen: (() => void) | null = null;
-  /** Where a plain click that stood the tool down landed, so the caller can let
-   *  that same click do its ordinary work, usually picking the next body. */
+  /** Where a click that stood the tool down landed, so that same click can still pick the next body. */
   onClickThrough: ((x: number, y: number, additive: boolean) => void) | null = null;
-  /** Raised by a body selection rather than started, so it draws only when
-   *  the user's handles overlay is on. Kept over the re-open after a drag. */
+  /** Raised by a body selection, so it draws only with the handles overlay on. Kept over a drag's re-open. */
   ambient = false;
   private unwatchOverlays: (() => void) | null = null;
 
@@ -215,8 +153,7 @@ export class MoveTool {
     this.startTarget(bodyMoveTarget(this.viewport, this.store, bodies), onDone);
   }
 
-  /** A session already up is cancelled first, so its gizmo never stays drawn
-   *  on the old target. */
+  /** A session already up is cancelled first, so its gizmo never stays drawn on the old target. */
   startTarget(target: MoveTarget, onDone: (id: string | null) => void) {
     this.dropPendingReopen();
     if (this.active) this.cancel();
@@ -231,8 +168,7 @@ export class MoveTool {
     this.syncHidden();
   }
 
-  /** Move asked for over the gizmo a selection raised: the same session,
-   *  now shown whatever the overlay switches say. */
+  /** Move asked for over a selection's gizmo: the same session, now shown whatever the overlay switches say. */
   claim() {
     this.ambient = false;
     this.syncHidden();
@@ -266,7 +202,9 @@ export class MoveTool {
       [
         { name: "move", label: "Move", kind: "length" },
         { name: "turn", label: "Angle", kind: "angle" },
-        ...(target.handles.cubes.length ? [{ name: "size", label: "Scale", kind: "count" as const, ...featureValueRule("scale", "factor") }] : []),
+        ...(target.handles.cubes.length
+          ? [{ name: "size", label: "Scale", kind: "count" as const, ...featureValueRule("scale", "factor") }]
+          : []),
       ],
       () => this.settleTyped(),
       () => this.cancel(),
@@ -311,15 +249,8 @@ export class MoveTool {
     this.t.addScaledVector(this.frame[i]!, v - this.comp(i));
   }
 
-  // --- rotation ------------------------------------------------------------
-
-  /** Where the cursor sits on the ring for `axis`, as an angle about the gizmo.
-   *
-   *  The cursor ray is intersected with the ring's own plane, which is the only
-   *  reading that stays put as the camera moves. Null when that plane is nearly
-   *  edge-on, where a pixel of pointer movement is an unbounded jump in angle,
-   *  the ring is a line on screen there, and refusing is better than spinning
-   *  the part (see transformGizmo.ringDragDegenerate). */
+  /** The ray meets the ring's own plane, the only reading stable as the camera moves. Null when that plane is
+   *  nearly edge-on, where a pixel is an unbounded angle (see transformGizmo.ringDragDegenerate). */
   private ringAngle(axis: number, clientX: number, clientY: number): number | null {
     const dir = this.frame[axis];
     if (!dir) return null;
@@ -331,10 +262,7 @@ export class MoveTool {
     return angleInFrame(at, this.anchor, rotationFrame(dir));
   }
 
-  /** Turn to `deg` about the grabbed ring's axis, from where the selection
-   *  stood when the ring was taken hold of. Absolute rather than incremental:
-   *  an incremental one accumulates the snap's rounding error every frame, and
-   *  after a full turn the part is degrees out from what the field says. */
+  /** Absolute from the grab pose: an incremental turn accumulates the snap's rounding error every frame. */
   private applyRing(axis: number, deg: number) {
     const dir = this.frame[axis];
     if (!dir) return;
@@ -345,18 +273,8 @@ export class MoveTool {
     this.refreshPreview();
   }
 
-  /** Move what the gizmo turns about, WITHOUT moving the selection.
-   *
-   *  `where` is a point in the scene as it stands, so it is on the ghost rather
-   *  than on the original body: the pivot is stored in the body's own
-   *  coordinates, which is what the feature's rotation is applied in, so the
-   *  point has to come back through the current transform first.
-   *
-   *  Then the translation absorbs the change. The feature's translation carries
-   *  the pivot correction (c - R·c); swapping c for c' and adding the difference
-   *  back into t leaves the composed transform bit for bit what it was, which is
-   *  the promise this handle makes, the part does not twitch when you decide
-   *  where to turn it from. */
+  /** Moves the pivot, not the selection. `where` is on the ghost, so it comes back through the current transform,
+   *  and t absorbs the change of (c - R·c) so the composed transform stays bit for bit the same. */
   private setPivot(where: THREE.Vector3) {
     const before = this.values();
     const inv = moveMatrix(before).invert();
@@ -394,21 +312,21 @@ export class MoveTool {
       for (const j of [u, v]) {
         const dj = this.frame[j]!;
         const stepped = snap(this.grabT.dot(dj) + delta.dot(dj), step);
-        if (stepped !== this.comp(j)) { this.setComp(j, stepped); changed = true; }
+        if (stepped !== this.comp(j)) {
+          this.setComp(j, stepped);
+          changed = true;
+        }
       }
       if (!changed) return;
       const du = this.comp(u) - this.grabT.dot(this.frame[u]!);
       const dv = this.comp(v) - this.grabT.dot(this.frame[v]!);
-      this.dim.updateFromCursor({ move: Math.hypot(du, dv) }); // in-plane distance, as feedback
+      this.dim.updateFromCursor({ move: Math.hypot(du, dv) });
       this.refreshPreview();
       return;
     }
     if (g?.kind === "origin") {
       const hit = this.viewport.pointAt(e.clientX, e.clientY);
-      // Off the model entirely: slide the origin in the plane facing the
-      // camera through where it already is, so it still follows the cursor
-      // instead of sticking. It is a pivot, not a constraint, putting it in
-      // mid-air is a legitimate thing to want.
+      // Off the model: slide the origin in the camera-facing plane, a pivot in mid-air is a legitimate want.
       const at = hit?.p ?? this.freePivotPoint(e.clientX, e.clientY);
       this.pivotSnapped = !!hit && hit.kind !== "surface";
       if (at) this.setPivot(at);
@@ -418,10 +336,7 @@ export class MoveTool {
       const dir = this.frame[g.index];
       if (!dir) return;
       const proj = axisDragDistance(this.viewport, e.clientX, e.clientY, this.anchor, dir);
-      // Ratio, not difference: the handle sits a fixed number of PIXELS out
-      // from the origin, so how far it started from the pivot in millimetres
-      // depends on the zoom. A difference would resize by an amount that
-      // changed with how far in you were.
+      // Ratio, not difference: the handle sits a fixed number of pixels out, so its distance in mm depends on zoom.
       if (Math.abs(this.grabProj) < 1e-9) return;
       const step = this.moveStep(e.shiftKey);
       this.showStep(fmtLength(step));
@@ -510,19 +425,13 @@ export class MoveTool {
       this.stepLabel = "";
       setPrompt(idlePrompt(this.cubes.length > 0));
       this.viewport.domElement.style.cursor = this.hover ? "grab" : "default";
-      // Each drag is its own row in the timeline. Writing it here rather than
-      // at the end of the session is what makes an undo undo the LAST nudge
-      // instead of the whole sitting, and what lets the next drag start from
-      // the pose this one produced. The gizmo comes straight back on the
-      // rebuilt body, so from the hand's point of view nothing closed.
+      // Each drag is its own timeline row, so undo undoes the last nudge and the next drag starts from this pose.
       this.settleDrag();
       return;
     }
-    const moved =
-      Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
-    // A clean click off the handles ends the session, and then means whatever
-    // it would have meant with no gizmo up. Picking is suspended while the tool
-    // owns the pointer, so the click has to be replayed once it does not.
+    const moved = Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
+    // A clean click off the handles ends the session and is replayed, since picking is suspended while the
+    // tool owns the pointer.
     if (!moved && !this.hitHandle(e.clientX, e.clientY)) {
       const through = this.onClickThrough;
       const at = { x: e.clientX, y: e.clientY, add: e.ctrlKey || e.metaKey };
@@ -531,29 +440,20 @@ export class MoveTool {
     }
   }
 
-  /** Write the drag just finished and re-open on the same bodies.
-   *
-   *  The re-open waits for the rebuild, because everything the gizmo is placed
-   *  from, the bodies' centroid, the ghost it drags, is read off the model,
-   *  and the model between addFeature and the build landing is still the old
-   *  one. Re-opening against that would put the gizmo back where the body used
-   *  to be and the next drag would double the move. */
+  /** The re-open waits for the rebuild: the gizmo is placed from the model, and the old one would double the
+   *  next move. */
   private settleDrag() {
     this.commitAndReopen(true);
   }
 
-  /** Enter in the value box. Re-opens like a drag once something was written,
-   *  and closes when nothing was. */
+  /** Re-opens like a drag once something was written, closes when nothing was. */
   private settleTyped() {
     const unplaced = this.typedWithoutHandle();
     if (unplaced) return this.dim.flag(unplaced);
     this.commitAndReopen(false);
   }
 
-  /** A typed value only means something along a handle: which arrow a distance
-   *  runs along, which ring an angle turns about, which cube a scale stretches.
-   *  Typed before any handle was picked it went nowhere, and Enter closed the
-   *  box as if it had worked. */
+  /** A typed value only means something along a handle, so one typed before any handle was picked is refused. */
   private typedWithoutHandle(): string | null {
     const typed = (name: string) => {
       if (!this.dim.isUserDriven(name)) return false;
@@ -572,14 +472,11 @@ export class MoveTool {
     const target = this.target;
     const done = this.onDone;
     const through = this.onClickThrough;
-    // The handle last taken hold of outlives the re-open, so a click on an arrow
-    // (which re-opens at once, having moved nothing) still says which way the
-    // next typed distance goes.
+    // The last grabbed handle outlives the re-open, so a click on an arrow still says where the next typed distance goes.
     const chosen = this.last;
     const res = this.commit();
     if (!target || (!res && !evenUnchanged)) return;
-    // Asked only once the rebuild has landed, so an owner that has closed by
-    // then can answer null.
+    // Asked only once the rebuild has landed, so an owner that has closed by then can answer null.
     const reopen = () => {
       this.pendingReopen = null;
       if (this.active) return; // something else claimed the tool meanwhile
@@ -591,22 +488,23 @@ export class MoveTool {
       if (chosen?.kind === "size") this.dim.focusField("size");
       else if (chosen?.kind === "ring") this.dim.focusField("turn");
     };
-    // A drag that ended back where it started writes nothing (commit() falls
-    // through to cancel()), so there is no rebuild to wait for.
+    // A drag that ended where it started writes nothing, so there is no rebuild to wait for.
     if (!res?.rebuild) return reopen();
-    // Wait for the FALLING edge, not merely for `building === false`: onBuild
-    // replays the current state to a new subscriber, and at this instant the
-    // round-trip may not have been announced yet. Re-opening on that replay
-    // would place the gizmo from the pre-move model and the next drag would
-    // count this one twice.
+    // Wait for the falling edge: onBuild replays the current state to a new subscriber before the round trip
+    // is announced, and re-opening on that replay would count this drag twice.
     let started = false;
     const off = this.store.onBuild((s) => {
-      if (s.building) { started = true; return; }
+      if (s.building) {
+        started = true;
+        return;
+      }
       if (!started) return;
       off();
       reopen();
     });
-    this.pendingReopen = () => { off(); };
+    this.pendingReopen = () => {
+      off();
+    };
   }
 
   private dropPendingReopen() {
@@ -614,17 +512,11 @@ export class MoveTool {
     this.pendingReopen = null;
   }
 
-  /** Where the cursor meets the drag plane of the planar handle for `axis`: the
-   *  plane through the gizmo whose normal is that world axis. Null when the plane
-   *  is edge-on to the view, where a pixel of motion is an unbounded slide.
-   *
-   *  Read live rather than frozen at grab time, which is safe: a planar drag only
-   *  moves the gizmo WITHIN this plane, so the plane it defines never changes. */
+  /** Null when the plane is edge-on. Read live, which is safe: a planar drag only moves the gizmo within it. */
   private planeDragPoint(axis: number, clientX: number, clientY: number): THREE.Vector3 | null {
     const dir = this.frame[axis];
     if (!dir) return null;
-    // Bail if the axis (the plane's normal) is nearly across the screen, the same
-    // degeneracy ringDragDegenerate guards for a ring viewed edge-on.
+    // The same degeneracy ringDragDegenerate guards for a ring viewed edge-on.
     const view = this.viewport.camera.getWorldDirection(new THREE.Vector3());
     if (Math.abs(view.dot(dir)) < 0.12) return null;
     const at = this.anchor.clone().applyMatrix4(this.transform());
@@ -632,8 +524,7 @@ export class MoveTool {
     return this.viewport.screenToPlane(clientX, clientY, plane);
   }
 
-  /** Where the cursor is, in the plane through the gizmo that faces the camera.
-   *  The fallback when the pointer is over no geometry at all. */
+  /** The fallback when the pointer is over no geometry. */
   private freePivotPoint(clientX: number, clientY: number): THREE.Vector3 | null {
     const at = this.anchor.clone().applyMatrix4(this.transform());
     const n = this.viewport.camera.getWorldDirection(new THREE.Vector3());
@@ -642,6 +533,13 @@ export class MoveTool {
   }
 
   private onKey(e: KeyboardEvent) {
+    // The raised gizmo's field already has focus, so the tool's own key would otherwise be typed into it.
+    if (this.ambient && resolveShortcut(e.key.toLowerCase(), e.shiftKey, "model", e.ctrlKey || e.metaKey) === "move") {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      this.claim();
+      return;
+    }
     if (e.key !== "Escape") return;
     if (this.target?.ownsEscape) e.stopImmediatePropagation();
     this.cancel();
@@ -649,13 +547,12 @@ export class MoveTool {
 
   private tick() {
     if (!this.active || !this.gizmo) return;
-    // The gizmo sits where the selection now is: the anchor carried through the
-    // same transform the bodies are under. It has to, or turning the part
-    // leaves the rings behind on the original centroid.
+    // The anchor carried through the bodies' transform, or turning the part leaves the rings on the old centroid.
     const pos = this.placeGizmo(this.gizmo);
     const lit = (kind: NonNullable<Grab>["kind"], i: number) =>
-      (this.grab ? this.grab.kind === kind && this.grab.index === i
-        : (this.hover ?? this.last)?.kind === kind && (this.hover ?? this.last)?.index === i);
+      this.grab
+        ? this.grab.kind === kind && this.grab.index === i
+        : (this.hover ?? this.last)?.kind === kind && (this.hover ?? this.last)?.index === i;
     for (const a of this.arrows) {
       const ax = AXES[a.axis];
       if (ax) a.mat.color.set(lit("axis", a.axis) ? HOT : ax.color);
@@ -664,7 +561,11 @@ export class MoveTool {
     const ringAxes = this.rings.map((r) => r.axis);
     for (const r of this.rings) {
       const ax = AXES[r.axis];
-      if (ax) r.ring.paint(ringLook(r.axis, ringAt(this.hover ?? this.last), this.grab ? ringAt(this.grab) ?? -1 : null, ringAxes), ax.color);
+      if (ax)
+        r.ring.paint(
+          ringLook(r.axis, ringAt(this.hover ?? this.last), this.grab ? (ringAt(this.grab) ?? -1) : null, ringAxes),
+          ax.color,
+        );
     }
     for (const c of this.cubes) {
       const ax = AXES[c.axis];
@@ -675,7 +576,7 @@ export class MoveTool {
       if (!ax) continue;
       const hot = lit("plane", p.axis);
       p.mat.color.set(hot ? HOT : ax.color);
-      p.mat.opacity = hot ? 0.85 : 0.5; // firm up on hover, so it reads as grabbable
+      p.mat.opacity = hot ? 0.85 : 0.5;
     }
     if (this.origin) {
       const hot = lit("origin", 0);
@@ -691,27 +592,18 @@ export class MoveTool {
     this.gesture.frame();
   }
 
-  /** Where the gizmo sits and how big it is on screen. Run on open as well as
-   *  every frame, so a press that lands before the first frame is tested
-   *  against the gizmo as drawn and not against an unplaced one. */
+  /** Run on open as well as every frame, so a press before the first frame is tested against the gizmo as drawn. */
   private placeGizmo(gizmo: THREE.Object3D): THREE.Vector3 {
     const pos = this.anchor.clone().applyMatrix4(this.transform());
     const k = this.viewport.pixelWorldSize(pos);
     if (!gizmo.position.equals(pos) || gizmo.scale.x !== k) this.viewport.requestRender();
     gizmo.position.copy(pos);
-    // Deliberately NOT turned with the selection. dx/dy/dz are world axes and
-    // so are rx/ry/rz, so an arrow that had rotated away from world X would
-    // still slide the bodies along world X, a handle pointing one way and
-    // acting another. The rings stay world-aligned for the same reason.
+    // Not turned with the selection: the drags act along world axes, so the handles stay world aligned.
     gizmo.scale.setScalar(k);
     return pos;
   }
 
-  /** A typed value retargets the handle most recently dragged.
-   *
-   *  The field is the truth, sign included: the old code re-applied the drag's
-   *  sign onto |v|, so a typed "-0.3" after a positive move went +0.3 and a
-   *  typed value could never cross zero. */
+  /** The field is the truth, sign included, so a typed value can cross zero. */
   private applyTyped() {
     const l = this.last;
     if (this.grab || !l) return;
@@ -736,14 +628,12 @@ export class MoveTool {
     }
   }
 
-  /** The six numbers, from the one place that knows how to combine a pivot,
-   *  a rotation and a translation. */
+  /** The six numbers the preview and the committed feature are both built from, so they cannot disagree. */
   private values() {
     return composeMove(this.anchor, this.rot, this.t);
   }
 
-  /** The whole gizmo as one matrix, in the order the two features are applied:
-   *  the resize first, then the move. */
+  /** Resize first, then move, the order the two features apply on rebuild. */
   private transform(): THREE.Matrix4 {
     return moveMatrix(this.values()).multiply(scaleAbout(this.anchor, this.scl));
   }
@@ -752,8 +642,7 @@ export class MoveTool {
     return Math.abs(this.scl.x - 1) + Math.abs(this.scl.y - 1) + Math.abs(this.scl.z - 1) > 1e-9;
   }
 
-  /** Resize along one axis. `f` is the factor for that axis alone; the other
-   *  two are left where they are, which is what dragging ONE cube means. */
+  /** `f` scales that axis alone, the other two stay put. */
   private applySize(axis: number, f: number) {
     const v = Math.max(MIN_SCALE, f);
     if (Math.abs(this.scl.getComponent(axis) - v) < 1e-9) return;
@@ -776,14 +665,14 @@ export class MoveTool {
       const dir = this.frame[i];
       if (!a || !dir || !hs) continue;
       if (hs.axes.includes(i)) {
-        const mat = overlayMaterial(new THREE.MeshBasicMaterial({ color: a.color, depthTest: false, depthWrite: false }));
-        const shaft = new THREE.Mesh(
-          new THREE.CylinderGeometry(ARROW_SHAFT_R, ARROW_SHAFT_R, ARROW_SHAFT, 12), mat);
+        const mat = overlayMaterial(
+          new THREE.MeshBasicMaterial({ color: a.color, depthTest: false, depthWrite: false }),
+        );
+        const shaft = new THREE.Mesh(new THREE.CylinderGeometry(ARROW_SHAFT_R, ARROW_SHAFT_R, ARROW_SHAFT, 12), mat);
         shaft.position.y = ARROW_SHAFT / 2;
         const head = new THREE.Mesh(new THREE.ConeGeometry(ARROW_HEAD_R, ARROW_HEAD, 18), mat);
         head.position.y = ARROW_SHAFT + ARROW_HEAD / 2;
-        // Never drawn, always hit: `material.visible` keeps it out of the render
-        // list while leaving it in the raycast, which `object.visible` would not.
+        // `material.visible` keeps it out of the render list but in the raycast, which `object.visible` would not.
         const sleeve = new THREE.Mesh(
           new THREE.CylinderGeometry(ARROW_GRAB_R, ARROW_GRAB_R, ARROW_LENGTH, 8),
           new THREE.MeshBasicMaterial({ visible: false }),
@@ -801,9 +690,7 @@ export class MoveTool {
         this.arrows.push({ group: arrow, mat, axis: i });
       }
 
-      // One ring per axis, in that axis's own colour: the ring you turn about X
-      // is red, like the arrow you slide along X, so the two families read as
-      // one gizmo rather than as two stacked ones.
+      // Each ring in its axis's colour, so the arrows and rings read as one gizmo.
       if (hs.rings.includes(i)) {
         const ring = createSlimRing(RING_RADIUS);
         // A torus is built in the XY plane, so its own axis is +Z.
@@ -815,12 +702,14 @@ export class MoveTool {
       }
 
       if (hs.cubes.includes(i)) {
-        const cmat = overlayMaterial(new THREE.MeshBasicMaterial({
-          color: a.color, depthTest: false, depthWrite: false,
-        }));
-        const cube = new THREE.Mesh(
-          new THREE.BoxGeometry(SCALE_BOX, SCALE_BOX, SCALE_BOX), cmat,
+        const cmat = overlayMaterial(
+          new THREE.MeshBasicMaterial({
+            color: a.color,
+            depthTest: false,
+            depthWrite: false,
+          }),
         );
+        const cube = new THREE.Mesh(new THREE.BoxGeometry(SCALE_BOX, SCALE_BOX, SCALE_BOX), cmat);
         cube.quaternion.setFromUnitVectors(Y_AXIS, dir);
         cube.position.copy(dir).multiplyScalar(SCALE_AT);
         cube.renderOrder = 999;
@@ -830,25 +719,26 @@ export class MoveTool {
         this.cubes.push({ mesh: cube, mat: cmat, axis: i });
       }
 
-      // One planar handle per axis, coloured by that axis and lying in the plane
-      // it is normal to: a translucent square in the quadrant between the OTHER
-      // two arrows, dragged to slide the selection across their plane. Faint so
-      // it never hides a ring behind it, DoubleSide so it reads from either face.
+      // One translucent square per axis in the quadrant between the other two arrows; faint so it never hides
+      // a ring, DoubleSide so it reads from either face.
       if (!hs.planes.includes(i)) continue;
       const [u, v] = planeAxes(i);
-      const du = this.frame[u], dv = this.frame[v];
+      const du = this.frame[u],
+        dv = this.frame[v];
       if (!du || !dv) continue;
-      const centre = du.clone().multiplyScalar(PLANE_AT)
-        .add(dv.clone().multiplyScalar(PLANE_AT));
+      const centre = du.clone().multiplyScalar(PLANE_AT).add(dv.clone().multiplyScalar(PLANE_AT));
       const pmat = new THREE.MeshBasicMaterial({
-        color: a.color, depthTest: false, depthWrite: false,
-        side: THREE.DoubleSide, transparent: true, opacity: 0.5,
+        color: a.color,
+        depthTest: false,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.5,
       });
       const quad = new THREE.Mesh(new THREE.PlaneGeometry(PLANE_SIZE, PLANE_SIZE), pmat);
       quad.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
       quad.position.copy(centre);
-      // Over the rings and arrows it sits among (all depthTest:false), so the
-      // square always reads as a foreground handle rather than half-behind a ring.
+      // Over the depthTest:false rings and arrows, so the square always reads as foreground.
       quad.renderOrder = 1000;
       // Fatter invisible target, same idea as the arrow sleeve and ring band.
       const phit = new THREE.Mesh(
@@ -862,9 +752,13 @@ export class MoveTool {
       g.add(quad, phit);
       this.planes.push({ mesh: quad, hit: phit, mat: pmat, axis: i });
     }
-    const omat = overlayMaterial(new THREE.MeshBasicMaterial({
-      color: ORIGIN_IDLE, depthTest: false, depthWrite: false,
-    }));
+    const omat = overlayMaterial(
+      new THREE.MeshBasicMaterial({
+        color: ORIGIN_IDLE,
+        depthTest: false,
+        depthWrite: false,
+      }),
+    );
     const dot = new THREE.Mesh(new THREE.SphereGeometry(ORIGIN_R, 20, 14), omat);
     dot.renderOrder = 1000; // over the arrows' roots, which meet here
     dot.userData.origin = true;
@@ -877,12 +771,7 @@ export class MoveTool {
     this.viewport.addToScene(g);
   }
 
-  /** Which handle is under the cursor.
-   *
-   *  Arrows are tested FIRST and are preferred outright. The two families overlap where
-   *  an arrow crosses its neighbours' rings, and an arrow is the smaller target
-   *  of the two, losing it to a ring drawn over it would make the commonest
-   *  gesture the hard one. */
+  /** Arrows beat rings where they overlap: the arrow is the smaller target and the commonest gesture. */
   private hitHandle(x: number, y: number): Grab {
     if (!this.gizmo) return null;
     // Note: matrixWorld only follows placeGizmo on the next render.
@@ -892,13 +781,9 @@ export class MoveTool {
     const planeHits = this.planes.map((p) => p.hit);
     const cubeMeshes = this.cubes.map((c) => c.mesh);
     const ringBands = this.rings.map((r) => r.ring.band);
-    // The family order below holds per ray: a finger's extra rays are only asked
-    // when the one under it hits nothing at all, so an arrow under the touch
-    // still beats a ring beside it.
+    // The family order holds per ray: a finger's extra rays are asked only when the one under it hits nothing.
     return this.viewport.probe(x, y, (ray): Grab => {
-      // The origin is tested first and is preferred outright: it sits where all three
-      // arrows meet, so anything else tested before it would take every press
-      // aimed at the middle of the gizmo.
+      // The origin first: it sits where all three arrows meet, so anything before it takes every middle press.
       if (this.origin && ray.intersectObject(this.origin.mesh, false).length) {
         return { kind: "origin", index: 0 };
       }
@@ -908,9 +793,7 @@ export class MoveTool {
         while (o && o.userData.axis === undefined) o = o.parent;
         if (o) return { kind: "axis", index: o.userData.axis as number };
       }
-      // Planes before cubes and rings: they sit in the open quadrants between the
-      // arrows, so nothing else is competing for those pixels, and after the arrows
-      // so a square never steals a press meant for the arrow root beside it.
+      // Planes after arrows so a square never steals a press meant for the arrow root beside it.
       const onPlane = ray.intersectObjects(planeHits, false)[0];
       if (onPlane) return { kind: "plane", index: onPlane.object.userData.plane as number };
       const onCube = ray.intersectObjects(cubeMeshes, false)[0];
@@ -925,14 +808,12 @@ export class MoveTool {
     if (!this.active || !this.target) return null;
     this.applyTyped();
     const v = this.values();
-    // Measured on the composed transform, not on `t`: moving the pivot rewrites
-    // t to keep the transform unchanged, so a session that only repositioned
-    // the origin has a non-zero t and has not moved anything.
+    // Measured on the composed transform, not `t`: moving the pivot rewrites t without moving anything.
     const moved = Math.hypot(v.dx, v.dy, v.dz) > 1e-9;
     const turned = Math.abs(v.rx) + Math.abs(v.ry) + Math.abs(v.rz) > 1e-9;
     const sized = this.resized();
     if (!moved && !turned && !sized) {
-      this.cancel(); // nothing happened
+      this.cancel();
       return null;
     }
     const res = this.target.commit({
@@ -952,8 +833,7 @@ export class MoveTool {
     return res;
   }
 
-  /** Safe with nothing up, where it only drops a gizmo still waiting to come
-   *  back after a drag's rebuild. */
+  /** Safe with nothing up, where it only drops a gizmo still waiting to come back after a drag's rebuild. */
   cancel() {
     this.dropPendingReopen();
     if (!this.active) return;

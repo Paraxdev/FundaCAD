@@ -31,10 +31,17 @@ const saved = (store: DocumentStore) => JSON.parse(store.toJSON()) as Record<str
 const study: StressStudy = {
   body: "body1",
   supports: [{ id: 1, type: "fixed", faces: [{ kind: "face", by: "nearest", point: [0, 0, 0], body: "body1" }] }],
-  loads: [{
-    id: 1, kind: "force", faces: [{ kind: "face", by: "nearest", point: [5, 0, 5], body: "body1" }],
-    force: 20, direction: "-Z", custom: [0, 0, -1], pressure: 0.1,
-  }],
+  loads: [
+    {
+      id: 1,
+      kind: "force",
+      faces: [{ kind: "face", by: "nearest", point: [5, 0, 5], body: "body1" }],
+      force: 20,
+      direction: "-Z",
+      custom: [0, 0, -1],
+      pressure: 0.1,
+    },
+  ],
   gravity: { on: false, direction: "-Z" },
   material: "PETG",
   custom: { E: 2000, nu: 0.35, yield: 40, density: 1.2 },
@@ -109,11 +116,21 @@ describe("top level data this version does not know", () => {
       importColorSource: { i1: "faces" },
       stress: study,
       environment: { settings: { exposure: 1 } },
+      sectionView: { origin: [12, -7.5, 4], normal: [0, 0.6, 0.8], offset: 3.25, side: -1, ghost: "strong" },
     });
     store.saveVersion("first");
     const written = Object.keys(saved(store));
     expect(written.filter((k) => !KNOWN_DOC_KEYS.has(k))).toEqual([]);
-    for (const k of ["stress", "environment", "versions", "elements", "materials", "palette", "rollback"]) {
+    for (const k of [
+      "stress",
+      "environment",
+      "sectionView",
+      "versions",
+      "elements",
+      "materials",
+      "palette",
+      "rollback",
+    ]) {
       expect(written).toContain(k);
     }
   });
@@ -172,14 +189,18 @@ describe("sections of a .fundab this version does not read", () => {
   it("stay through a replacing load of the same document", () => {
     const store = opened({ parameters: {}, features: [box] });
     store.carriedSections = carried;
-    store.loadDocument({ parameters: {}, features: [{ ...box, length: 2 }] } as unknown as CadDocument, { replace: true });
+    store.loadDocument({ parameters: {}, features: [{ ...box, length: 2 }] } as unknown as CadDocument, {
+      replace: true,
+    });
     expect(store.carriedSections).toEqual(carried);
   });
 
   it("go when a replacing load brings a different document", () => {
     const store = opened({ parameters: {}, features: [box] });
     store.carriedSections = carried;
-    store.loadDocument({ parameters: {}, features: [{ ...box, id: "other" }] } as unknown as CadDocument, { replace: true });
+    store.loadDocument({ parameters: {}, features: [{ ...box, id: "other" }] } as unknown as CadDocument, {
+      replace: true,
+    });
     expect(store.carriedSections).toEqual([]);
   });
 });

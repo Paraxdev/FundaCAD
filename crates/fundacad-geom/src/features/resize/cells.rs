@@ -1,6 +1,5 @@
-//! A resize as the band between the old and the new surface, split along each
-//! neighbour's whole surface, keeping the cells that touch the face: the
-//! neighbours keep their own surfaces and are trimmed or extended to meet it.
+//! A resize as the band between the old and the new surface, split along each neighbour's whole surface, keeping
+//! the cells that touch the face, so the neighbours keep their surfaces and are trimmed or extended to meet it.
 
 use opencascade::boolean_op::{bop_split, BooleanKind, BooleanOp, BooleanOptions, Glue};
 use opencascade::primitives::Shape;
@@ -35,11 +34,8 @@ pub(super) fn boolean(a: &Shape, b: &Shape, k: BoolKind, vols: &[f64]) -> Result
     Ok(kernel::unwrap_compound(&Shape::from_raw(out)))
 }
 
-/// `keep` taken out of `body` (`cut`) or added to it. The cells lie inside
-/// the body or outside it, meeting it only where their faces lie on its
-/// faces, so the kernel is first told they only touch, which skips
-/// intersecting faces that cannot cross. That answer is taken only as a
-/// valid solid of the volume expected, else it is built in full.
+/// `keep` taken out of `body` (`cut`) or added to it. The cells only touch the body, so the kernel is told so
+/// first, skipping intersections, and that answer is taken only as a valid solid of the expected volume.
 pub(super) fn apply(body: &Shape, keep: &[Shape], cut: bool, e: &Expect) -> Result<Shape, Bad> {
     let a = memo::volume(body);
     let vols: Vec<f64> = keep.iter().map(kernel::volume).collect();
@@ -73,9 +69,8 @@ pub(super) fn apply(body: &Shape, keep: &[Shape], cut: bool, e: &Expect) -> Resu
     crate::bench::phase("resize_check", || checked(body, &out, cut, None, e))
 }
 
-/// `a` could lie on `b`: the same plane or analytic surface, or `b` is
-/// freeform. A boolean keeps the surface of a face it splits, so a piece of
-/// an analytic face is never freeform.
+/// `a` could lie on `b`: the same plane or analytic surface, or `b` is freeform. A boolean keeps the surface of a
+/// face it splits, so a piece of an analytic face is never freeform.
 fn could_lie_on(a: &Surf, b: &Surf) -> bool {
     match (*a, *b) {
         (Surf::Plane { n, loc }, Surf::Plane { n: n2, loc: l2 }) => parallel(n, n2) && (l2 - loc).dot(n).abs() < 1e-5,
@@ -113,7 +108,13 @@ pub(super) fn touches(cell: &Shape, faces: &[Shape]) -> bool {
 
 /// The pieces of `band` that are material (`cut`) or void, split along the
 /// whole surfaces in `tools`, keeping the ones touching `faces`.
-pub(super) fn split_keep(body: &Shape, band: &Shape, cut: bool, tools: &[Shape], faces: &[Shape]) -> Result<Vec<Shape>, Bad> {
+pub(super) fn split_keep(
+    body: &Shape,
+    band: &Shape,
+    cut: bool,
+    tools: &[Shape],
+    faces: &[Shape],
+) -> Result<Vec<Shape>, Bad> {
     let pieces = crate::bench::phase("resize_pieces", || {
         let (vb, vt) = (memo::volume(body), kernel::volume(band));
         if cut {

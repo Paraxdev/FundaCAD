@@ -1,54 +1,11 @@
-// The whole of what a plugin may reach, in one module.
-//
-// A plugin imports `fundacad` and nothing else from this application. That is
-// the point of the file and it is worth being blunt about why, because the
-// arrangement it replaces worked perfectly well for the plugins that SHIP here:
-// they reached in by relative path, `../../src/app/engine`,
-// `../../src/components/overlays/ModalFrame.vue`, nineteen specifiers in all,
-// and every one of those is an internal module that moves when the app is
-// refactored.
-//
-// That is only a maintenance question while a plugin is compiled together with
-// the app. It stops being one the moment a plugin is BUILT SEPARATELY and
-// downloaded, because then the app it was built against and the app it runs in
-// are different versions. What the plugin imports has to be a promise, and a
-// promise cannot be "every file under src/".
-//
-// So this module is the promise. Everything a plugin can see is named here,
-// once, on purpose. Adding to it is a deliberate act with a cost; a plugin that
-// wants something not on this list needs it added in the open.
-//
-// WHAT IS NOT HERE, and will not be: anything that lets a plugin reach the
-// document, the geometry engine or the file system WITHOUT going through the
-// broker. `DocumentStore` and `Engine` appear below as TYPES only, erased
-// before anything runs, because the plugins that ship here are handed a live
-// engine by `activate(e)` and always have been. A downloaded plugin gets what
-// its manifest asked for, checked at the broker, and the ops table is the door.
-//
-// THREE MORE MODULES a plugin may import, and they are not re-exported here
-// because they are not ours: `vue`, `three`, and `@tauri-apps/api/*`. A built
-// plugin must externalise them for a reason with teeth, two copies of Vue is
-// two reactivity systems that cannot see each other's refs, and two copies of
-// three.js is `instanceof` failing between them. scripts/build-plugin-code.mjs
-// is what enforces that.
-//
-// THE COMPONENTS ARE NEXT DOOR, in `fundacad/ui`, and the split is not
-// cosmetic: this module must stay importable with no DOM. A plugin's own logic
-// tests run in a node environment, exactly as this repository's do, and one
-// `.vue` re-exported from here would make every one of them need a DOM to parse
-// a file it never renders. Anything that drags Vue in goes there; everything
-// else goes here.
+// `fundacad`, the whole of what a plugin may import from the app. It is a promise across versions, since a downloaded
+// plugin runs in an app it was not built against. Nothing here reaches the document, engine or disk around the broker.
 
 import { useDialogStore } from "../stores/dialogs";
 import { pluginFocus } from "./settingsFocus";
 
-// --- the contribution table: the only way onto the app's surfaces -----------
-export {
-  contribute,
-  contributedPalette,
-  onContribChange,
-  service,
-} from "./contrib";
+// The contribution table, the only way onto the app's surfaces.
+export { contribute, contributedPalette, onContribChange, service } from "./contrib";
 export type {
   BrowserSection,
   Contribution,
@@ -68,27 +25,19 @@ export type {
   Unregister,
 } from "./contrib";
 
-// The shapes those two new points are written in. Types only: a plugin fills
-// them in, the application reads them, and neither needs anything at runtime.
+// Row shapes a FeatureTypeContribution is written in. Types only: a plugin cannot reach into src/.
 export type { ChoiceField, ChoiceOption, FileField, ToggleField } from "../document/optionFields";
-// The two row inventories a plugin that OWNS a feature type has to describe: the
-// numeric rows and the geometry-selection rows. Exported here for the same
-// reason ChoiceField is, a plugin cannot reach into src/ and these are the
-// shapes its contribution has to match.
+// The numeric and geometry selection rows a plugin that owns a feature type has to describe.
 export type { FieldKind } from "../document/numFields";
 export type { TargetField } from "../features/selectionTargets";
 export type { FeatureMeta } from "../ui/featureMeta";
 export type { EntityKind, EntitySource } from "../features/toolCapabilities";
 
-// --- the shapes a plugin is handed ------------------------------------------
-//
-// Types, every one. They describe what `activate(e)` receives and what the
-// app's own calls take; none of them is a way to obtain one.
+// Types for what `activate(e)` receives and what the app's calls take. None is a way to obtain one.
 export type { Engine } from "../app/engine";
 export type { DocumentStore } from "../document/store";
 export type { GeneratedShape, GeneratedShapeReply, GeometryBackend, ShapePlacement } from "../geometry/client";
-// The engine's printability check, as `GeometryBackend.printability` takes and
-// answers it.
+// The engine's printability check, as `GeometryBackend.printability` takes and answers it.
 export type {
   PrintabilityCheck,
   PrintabilityFinding,
@@ -103,34 +52,37 @@ export type { Viewport } from "../viewport/viewport";
 export { SketchPlane } from "../sketch/plane";
 export type { CtxItem, MenuDef, MenuItem } from "../ui/menu";
 
-// --- what the buttons and keys do (contributions need the input.remap grant) ---
+// What the buttons and keys do. Contributing bindings or a keymap needs the input.remap grant.
 export { openMenuAt, dismissRadialMenu, radialMenuOpen } from "../ui/menu";
 export type { MenuAtOptions } from "../ui/menu";
 export type { RadialTrigger } from "../ui/radialMenu";
-export { DEFAULT_BINDINGS, bindingKeys, bindingRows, pointerBindings, validateBindings } from "../viewport/navigator/bindings";
+export {
+  DEFAULT_BINDINGS,
+  bindingKeys,
+  bindingRows,
+  pointerBindings,
+  validateBindings,
+} from "../viewport/navigator/bindings";
 export type { PointerBinding, PointerButton, PointerDrag, PointerGesture } from "../viewport/navigator/bindings";
-export { SHORTCUTS, activeShortcuts, checkShortcut, describeShortcutProblem, formatShortcut, keyHint } from "../input/shortcuts";
+export {
+  SHORTCUTS,
+  activeShortcuts,
+  checkShortcut,
+  describeShortcutProblem,
+  formatShortcut,
+  keyHint,
+} from "../input/shortcuts";
 export type { Shortcut, ShortcutOverride, ShortcutProblem } from "../input/shortcuts";
 export type { CadDocument, Feature, Num, PlaneSpec, RebuildResult, Selector } from "../types";
 
-// --- moving something with the app's own gizmo -------------------------------
-//
-// `engine.tools.move.startTarget(target, done)` puts the arrows, rings, planar
-// squares and resize cubes on whatever a MoveTarget describes. A plugin that
-// has its own things to move (points, handles) describes them here instead of
-// drawing a second gizmo with different habits. A second startTarget replaces
-// the first, and `move.cancel()` in a tool's teardown is safe with nothing up.
+// `engine.tools.move.startTarget(target, done)` puts the app's gizmo on whatever a MoveTarget describes, so a plugin
+// never draws a second one. A second startTarget replaces the first, and `move.cancel()` is safe with nothing up.
 export { ALL_HANDLES, IN_PLANE_HANDLES, WORLD_FRAME } from "../features/moveTarget";
 export type { Frame, MoveCommit, MoveHandleSet, MoveResult, MoveTarget } from "../features/moveTarget";
 
-// --- telling somebody something ---------------------------------------------
 export { toast } from "../ui/toast";
-/** The line under the viewport that says what a running tool wants next.
- *
- *  A modal gesture with no prompt is a window that has stopped responding to
- *  half its own commands for a reason it does not state, so a plugin whose tool
- *  takes over the pick needs this as much as the application's own do. Passing
- *  null clears it, and a tool's teardown must. */
+/** The line under the viewport that says what a running tool wants next. A plugin tool that takes over the pick needs
+ *  it. Passing null clears it, and a tool's teardown must. */
 export { setPrompt } from "../ui/prompt";
 export { choose, listModal } from "../ui/choice";
 /** A failed write, as a native dialog in the app and the console outside it. */
@@ -143,14 +95,11 @@ export { importPath } from "../io/files";
 /** A breadcrumb that survives twenty later toasts, for a bug report. */
 export { stickyFact } from "../diagnostics/breadcrumbs";
 
-// --- what can be done ----------------------------------------------------------
-/** Every command the palette offers, by the action id `Engine.handleAction`
- *  takes. For a plugin that lets another input (a game controller) bind to
- *  commands by name, without keeping a second list that drifts from the ribbon. */
+/** Every palette command by its `Engine.handleAction` id, so another input can bind to commands without a second
+ *  list. */
 export { allCommands } from "../ui/commands";
 export type { Command } from "../ui/commands";
 
-// --- remembering something ---------------------------------------------------
 /** One `fundacad.*` localStorage key, read forward through its older names. */
 export { readSetting } from "../ui/storedSetting";
 /** A plugin's own settings, drawn under its row in Preferences > Plugins. */
@@ -162,22 +111,15 @@ export function openPluginSettings(pluginId: string) {
 }
 export type { PluginSettings, SettingProp, SettingValues, SettingsSchema } from "./settings";
 
-// --- showing a number --------------------------------------------------------
-/** The app's display-precision rule, so a plugin's readout rounds a length the
- *  way every other panel in the window does. */
+/** The app's display precision rule, so a plugin's readout rounds a length like every other panel. */
 export { roundForDisplay as displayRound } from "../ui/measure";
-/** Number boxes read through the app's measure grammar (units, fractions,
- *  arithmetic, decimal comma). */
+/** Number boxes read through the app's measure grammar (units, fractions, arithmetic, decimal comma). */
 export { fieldNumber, fieldError } from "../ui/measure";
 
-// --- the document, as a name rather than as content --------------------------
 export { stripDocumentExt } from "../io/documentExt";
 
-// --- the parameter table's controls, configurations and checks ----------------
-//
-// The data is the document's (types.ts ParamDef and ParamExtras) so a rename or
-// a delete keeps it right with no plugin loaded. What a panel over it computes
-// lives with the engine, so the panel and the store's commits cannot disagree.
+// Parameter controls, configurations and checks. The data is the document's, so a rename keeps it right with no plugin
+// loaded; what a panel computes lives with the engine, so the panel and the store's commits cannot disagree.
 export {
   captureConfiguration,
   checkResults,
@@ -191,38 +133,18 @@ export type { BodyFinish, MaterialDef, SurfaceGraph, SurfaceNode } from "../docu
 export { evalExpr } from "../params/eval";
 export type { ParamCheck, ParamConfiguration, ParamControl, ParamDef, ParamExtras } from "../types";
 
-// --- reading the app's live state from inside a component --------------------
+// The app's live state, read from inside a component.
 export { useEngine } from "../app/engineKey";
 export { useBuildValue, useDocValue } from "../app/useDoc";
 export { useBrowserStore } from "../stores/browser";
 
-// --- the Rust side ------------------------------------------------------------
-//
-// READ THIS BEFORE ADDING ANYTHING NEAR IT. `invoke` calls any command the
-// application registered, which is the app's own reach and nothing less: it
-// goes around the broker, around the grant list, and around the consent screen.
-// A plugin holding it can do whatever this application can do.
-//
-// It is here because the capabilities that need it cannot exist without it. A
-// 3D mouse plugin's whole job is `spacemouse_start` and an event stream; a
-// plugin talking to a device on the network needs `plugin_local_request`.
-// Neither is expressible as a broker op, and inventing one op per Rust command would be the same reach
-// wearing a longer name.
-//
-// So it is the reason a bundle carrying app-side code may be loaded ONLY from
-// an origin this project signed. That is not a policy statement to be softened
-// later: it is the single condition under which handing out this export is
-// defensible, and `sandboxNote("builtin")` already tells the person exactly
-// that in the words they will read.
+// `invoke` is the app's whole reach, around the broker, grants and consent screen. Some capabilities need it, which is
+// why a bundle with app-side code loads ONLY from an origin this project signed. Never soften that condition.
 export { invoke } from "@tauri-apps/api/core";
 export { listen } from "@tauri-apps/api/event";
 export type { UnlistenFn } from "@tauri-apps/api/event";
 
-/** The native save dialog, or null when dismissed.
- *
- *  A wrapper rather than a re-export, so the plugin has no DYNAMIC import of a
- *  package to resolve. The laziness is real and stays on this side: the dialog
- *  plugin is a chunk the app loads the first time anything saves. */
+/** Null when dismissed. A wrapper rather than a re-export, so the plugin has no dynamic import to resolve. */
 export async function saveDialog(opts: {
   filters?: { name: string; extensions: string[] }[];
   defaultPath?: string;
@@ -231,11 +153,8 @@ export async function saveDialog(opts: {
   return await save(opts);
 }
 
-/** The native open dialog, or null when dismissed. Single selection only: a
- *  plugin that wanted many would be describing a different gesture. */
-export async function openDialog(opts: {
-  filters?: { name: string; extensions: string[] }[];
-}): Promise<string | null> {
+/** Null when dismissed. Single selection only. */
+export async function openDialog(opts: { filters?: { name: string; extensions: string[] }[] }): Promise<string | null> {
   const { open } = await import("@tauri-apps/plugin-dialog");
   const picked = await open({ ...opts, multiple: false });
   return typeof picked === "string" ? picked : null;

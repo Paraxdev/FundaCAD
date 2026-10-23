@@ -1,6 +1,5 @@
-//! texture.py `_displacement_geometry` and `displace_face`: one face's
-//! triangulation refined in the pattern's frame, then pushed along its normals
-//! by the height field, with analytic displaced normals for shading.
+//! texture.py `_displacement_geometry` and `displace_face`: a face's triangulation refined in the pattern's frame and
+//! pushed along its normals by the height field.
 
 use crate::chart::{self, Surf};
 use crate::height::{self, triplanar_field};
@@ -225,13 +224,7 @@ impl Heights {
             spec_h.scale = 4.0 * geom.mean_edge;
         }
         let use_tp = geom.freeform && kind != "image" && (spec.projection == "triplanar" || spec.projection == "box");
-        let mut h = Heights {
-            taper,
-            slope,
-            spec_h,
-            use_tp,
-            signed: Vec::new(),
-        };
+        let mut h = Heights { taper, slope, spec_h, use_tp, signed: Vec::new() };
         h.signed = h.at(geom, spec, 0.0, 0.0)?;
         Ok(h)
     }
@@ -269,7 +262,13 @@ impl Heights {
 /// displaced normals. `bleed` is a grime neighbour's tag; `split_creases`
 /// (viewport only) hands a faceted profile back unshared, with each triangle's
 /// own normal, so its creases shade hard.
-pub fn displace_face(face: &Shape, spec_in: &Spec, bleed: bool, density_cap: u32, split_creases: bool) -> Result<Mesh, String> {
+pub fn displace_face(
+    face: &Shape,
+    spec_in: &Spec,
+    bleed: bool,
+    density_cap: u32,
+    split_creases: bool,
+) -> Result<Mesh, String> {
     let flip = face.is_reversed();
     let mut spec = spec_in.clone();
     if spec.grime > 0.0 && bleed {
@@ -353,11 +352,7 @@ pub fn displace_face(face: &Shape, spec_in: &Spec, bleed: bool, density_cap: u32
             }
         }
         let count = (positions.len() / 3) as u32;
-        return Ok(Mesh {
-            positions,
-            indices: (0..count).collect(),
-            normals,
-        });
+        return Ok(Mesh { positions, indices: (0..count).collect(), normals });
     }
     Ok(Mesh {
         positions: disp.iter().flatten().copied().collect(),

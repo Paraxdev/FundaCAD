@@ -1,6 +1,5 @@
-//! A STEP file whose faces share no edge, so the reader hands back loose
-//! faces where the file declared solids. tests/fixtures/loose_faces_*.step are
-//! written by tests/step/gen_loose_faces.py.
+//! A STEP file whose faces share no edge, so the reader hands back loose faces where it declared solids.
+//! tests/fixtures/loose_faces_*.step are written by tests/step/gen_loose_faces.py.
 
 use std::path::PathBuf;
 use std::sync::OnceLock;
@@ -71,9 +70,7 @@ fn channels(hex: &str) -> [i32; 3] {
 }
 
 fn is_color(hex: Option<&str>, want: [f64; 3]) -> bool {
-    hex.is_some_and(|h| {
-        channels(h).iter().zip(want).all(|(got, w)| (f64::from(*got) - w * 255.0).abs() <= 1.0)
-    })
+    hex.is_some_and(|h| channels(h).iter().zip(want).all(|(got, w)| (f64::from(*got) - w * 255.0).abs() <= 1.0))
 }
 
 fn is_closed_solid(shape: &Shape) -> Result<(), String> {
@@ -152,9 +149,8 @@ fn a_face_the_file_gets_wrong_does_not_spoil_its_solid() {
     let flat = notes.iter().find(|n| n.starts_with("Housing 2")).expect("nothing names the plug");
     assert!(flat.contains("1 face with no area became a flat face"), "{flat}");
 
-    // The post's round face ends on an edge 2 mm away from it, which the
-    // reader lays on the far half of the cylinder. Its bottom is that edge, so
-    // no volume is expected of it.
+    // The post's round face ends on an edge 2 mm away that the reader lays on the far half of the cylinder.
+    // Its bottom is that edge, so no volume is expected of it.
     is_closed_solid(&r.bodies[2].shape).unwrap();
     assert_eq!(kernel::count(&r.bodies[2].shape, Kind::Face), 3);
     let post: Vec<&String> = notes.iter().filter(|n| n.starts_with("Housing 3")).collect();

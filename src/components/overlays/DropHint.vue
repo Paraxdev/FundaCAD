@@ -6,7 +6,11 @@ import { installDesktopDrop } from "../../io/desktopDrop";
 const engine = useEngine();
 const shown = ref(false);
 let uninstall: (() => void) | null = null;
-onMounted(() => { uninstall = installDesktopDrop(engine, (on) => { shown.value = on; }); });
+onMounted(() => {
+  uninstall = installDesktopDrop(engine, (on) => {
+    shown.value = on;
+  });
+});
 onUnmounted(() => uninstall?.());
 </script>
 

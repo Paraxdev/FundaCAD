@@ -1,12 +1,11 @@
-//! Safe calls into the builder's OpenCASCADE operations (opencascade-sys
-//! `builder_ops`), over the `Shape` the rest of the crate uses.
+//! Safe calls into the builder's OpenCASCADE operations, over the crate's `Shape`.
 
 use cxx::UniquePtr;
-use std::cell::RefCell;
 use opencascade::primitives::Shape;
 use opencascade_sys::builder_ops as ffi;
 use opencascade_sys::feature_ops as fo;
 use opencascade_sys::topo_ds::TopoDS_Shape;
+use std::cell::RefCell;
 
 /// An OpenCASCADE exception, by class name (`StdFail_NotDone`, ...).
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -46,7 +45,12 @@ pub fn describe(s: &Shape) -> String {
         let r = |v: f64| (v * 1e4).round() / 1e4;
         out.push_str(&format!(
             ", bbox=[{}, {}, {}]..[{}, {}, {}]",
-            r(b[0]), r(b[1]), r(b[2]), r(b[3]), r(b[4]), r(b[5])
+            r(b[0]),
+            r(b[1]),
+            r(b[2]),
+            r(b[3]),
+            r(b[4]),
+            r(b[5])
         ));
     }
     out.push(')');
@@ -158,9 +162,8 @@ pub fn volume(s: &Shape) -> f64 {
     ffi::bo_volume(s.raw())
 }
 
-/// `volume` integrated to a millionth of the body. The quick one misses by about
-/// a percent on lofted spline faces, so a verdict that hangs on a small change
-/// is checked with this before it refuses anything.
+/// `volume` integrated to a millionth of the body. The quick one misses by about a percent on lofted
+/// spline faces, so a verdict that hangs on a small change checks with this before refusing.
 pub fn volume_precise(s: &Shape) -> f64 {
     ffi::bo_volume_precise(s.raw())
 }
@@ -175,9 +178,8 @@ pub fn bbox(s: &Shape) -> Option<[f64; 6]> {
     ffi::bo_bbox(s.raw(), true, &mut out).then_some(out)
 }
 
-/// A box from the B-rep's own geometry, never a triangulation, so the same
-/// shape always gets the same one. Looser than `bbox` on a B-spline, and
-/// milliseconds where `bbox` of an import that was never meshed is seconds.
+/// From the B-rep's own geometry, never a triangulation, so stable for a shape. Looser than `bbox` on
+/// a B-spline, but milliseconds where `bbox` of a never meshed import is seconds.
 pub fn coarse_bbox(s: &Shape) -> Option<[f64; 6]> {
     let mut out = [0.0; 6];
     matches!(opencascade_sys::face_query::FQ_bbox(s.raw(), false, &mut out), Ok(true)).then_some(out)
@@ -190,9 +192,8 @@ thread_local! {
     static DIAGONALS: Remembered<f64> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
-/// An exact box of a B-spline body takes 200 ms, and a blend asks for the same
-/// body's again with every selector it matches and every retry that fails. The
-/// shapes are held, so a freed one's address is never read as another's.
+/// An exact B-spline box takes 200 ms and a blend asks again per selector and retry. The shapes are
+/// held, so a freed one's address is never read as another's.
 fn remembered<T: Copy>(
     memo: &'static std::thread::LocalKey<Remembered<T>>,
     s: &Shape,
@@ -224,7 +225,6 @@ pub fn remember_copy(from: &Shape, to: &Shape) {
     share(&DIAGONALS, from, to);
 }
 
-/// `bbox`, remembered for the last few shapes.
 fn bbox_remembered(s: &Shape) -> Option<[f64; 6]> {
     remembered(&BOXES, s, || bbox(s))
 }
@@ -267,9 +267,8 @@ pub fn outline_center(face: &Shape) -> Option<[f64; 3]> {
 /// `[umin, umax, vmin, vmax]` of a face's outer boundary along the unit
 /// directions `u` and `v`, measured on the curves, not a mesh of them.
 pub fn outline_extent(face: &Shape, u: [f64; 3], v: [f64; 3]) -> Option<[f64; 4]> {
-    // A copy without the mesh: `axial_extent` bounds a meshed edge by its
-    // polygon grown by the mesh deflection, so a face drawn once would measure
-    // larger than the same face built fresh.
+    // A copy without the mesh: `axial_extent` bounds a meshed edge by its polygon grown by the
+    // deflection, so a face drawn once would measure larger than the same face built fresh.
     let wire = outer_wire(face)?.deep_copy(true, false).ok()?;
     let (u0, u1) = axial_extent(&wire, [0.0; 3], u)?;
     let (v0, v1) = axial_extent(&wire, [0.0; 3], v)?;
@@ -291,9 +290,8 @@ pub fn void_count(s: &Shape) -> i32 {
     ffi::bo_void_count(s.raw())
 }
 
-/// Edges of the shape's solids that bound only one face. Zero for a closed
-/// solid; anything else is a hole in its skin that the volume does not show.
-/// A line drawn inside a face, as an imprint leaves, is not one.
+/// Edges of the solids that bound only one face, a hole in the skin the volume does not show.
+/// Zero for a closed solid. A line drawn inside a face, as an imprint leaves, is not one.
 pub fn open_edge_count(s: &Shape) -> usize {
     usize::try_from(ffi::bo_open_edge_count(s.raw())).unwrap_or(0)
 }
@@ -357,19 +355,26 @@ pub fn location_translation(s: &Shape) -> [f64; 3] {
 }
 
 pub fn rotated(s: &Shape, r: [f64; 3]) -> KResult<Shape> {
-    run("BRepBuilderAPI_Transform (rotate)", || format!("shape={}, euler_deg={r:?}", describe(s)), || ffi::bo_rotated(s.raw(), r[0], r[1], r[2]))
+    run(
+        "BRepBuilderAPI_Transform (rotate)",
+        || format!("shape={}, euler_deg={r:?}", describe(s)),
+        || ffi::bo_rotated(s.raw(), r[0], r[1], r[2]),
+    )
 }
 
 /// Turned `deg` degrees about the line through `origin` along `dir`.
 pub fn rotated_about(s: &Shape, origin: [f64; 3], dir: [f64; 3], deg: f64) -> KResult<Shape> {
     let [ox, oy, oz] = origin;
     let [dx, dy, dz] = dir;
-    run("BRepBuilderAPI_Transform (rotate about)", || format!("shape={}, origin={origin:?}, dir={dir:?}, deg={deg}", describe(s)), || ffi::bo_rotated_about(s.raw(), ox, oy, oz, dx, dy, dz, deg))
+    run(
+        "BRepBuilderAPI_Transform (rotate about)",
+        || format!("shape={}, origin={origin:?}, dir={dir:?}, deg={deg}", describe(s)),
+        || ffi::bo_rotated_about(s.raw(), ox, oy, oz, dx, dy, dz, deg),
+    )
 }
 
-/// `s` turned by the rotation whose columns `x` and `z` are where the world x
-/// and z axes go, then shifted by `shift`. Only the location changes, so the
-/// moved body shares its geometry and triangulation with the original.
+/// The rotation's columns `x` and `z` are where the world x and z axes go. Only the location
+/// changes, so the moved body shares geometry and triangulation with the original.
 pub fn rigid_moved(s: &Shape, x: [f64; 3], z: [f64; 3], shift: [f64; 3]) -> KResult<Shape> {
     // Mated flush with no offset or angle, a world frame onto (shift, z, x) is
     // exactly the rigid move.
@@ -383,32 +388,27 @@ pub fn rigid_moved(s: &Shape, x: [f64; 3], z: [f64; 3], shift: [f64; 3]) -> KRes
 }
 
 pub fn translated(s: &Shape, d: [f64; 3]) -> KResult<Shape> {
-    run("BRepBuilderAPI_Transform (translate)", || format!("shape={}, by={d:?}", describe(s)), || ffi::bo_translated(s.raw(), d[0], d[1], d[2]))
+    run(
+        "BRepBuilderAPI_Transform (translate)",
+        || format!("shape={}, by={d:?}", describe(s)),
+        || ffi::bo_translated(s.raw(), d[0], d[1], d[2]),
+    )
 }
 
 pub fn scaled(s: &Shape, f: [f64; 3], about: [f64; 3], uniform: bool) -> KResult<Shape> {
-    run("BRepBuilderAPI_GTransform (scale)", || format!("shape={}, factor={f:?}, about={about:?}, uniform={uniform}", describe(s)), || ffi::bo_scaled(
-        s.raw(),
-        f[0],
-        f[1],
-        f[2],
-        about[0],
-        about[1],
-        about[2],
-        uniform,
-    ))
+    run(
+        "BRepBuilderAPI_GTransform (scale)",
+        || format!("shape={}, factor={f:?}, about={about:?}, uniform={uniform}", describe(s)),
+        || ffi::bo_scaled(s.raw(), f[0], f[1], f[2], about[0], about[1], about[2], uniform),
+    )
 }
 
 pub fn mirrored(s: &Shape, origin: [f64; 3], normal: [f64; 3]) -> KResult<Shape> {
-    run("BRepBuilderAPI_Transform (mirror)", || format!("shape={}, origin={origin:?}, normal={normal:?}", describe(s)), || ffi::bo_mirrored(
-        s.raw(),
-        origin[0],
-        origin[1],
-        origin[2],
-        normal[0],
-        normal[1],
-        normal[2],
-    ))
+    run(
+        "BRepBuilderAPI_Transform (mirror)",
+        || format!("shape={}, origin={origin:?}, normal={normal:?}", describe(s)),
+        || ffi::bo_mirrored(s.raw(), origin[0], origin[1], origin[2], normal[0], normal[1], normal[2]),
+    )
 }
 
 /// A plane as the kernel sees it: origin and orthonormal axes.
@@ -425,8 +425,7 @@ impl Frame {
     pub fn new(origin: [f64; 3], xdir: [f64; 3], normal: [f64; 3]) -> Frame {
         let mut out = [0.0; 12];
         ffi::bo_plane_frame(
-            origin[0], origin[1], origin[2], xdir[0], xdir[1], xdir[2], normal[0], normal[1],
-            normal[2], &mut out,
+            origin[0], origin[1], origin[2], xdir[0], xdir[1], xdir[2], normal[0], normal[1], normal[2], &mut out,
         );
         Frame {
             origin: [out[0], out[1], out[2]],
@@ -438,18 +437,11 @@ impl Frame {
 
     pub fn locate(&self, s: &Shape) -> KResult<Shape> {
         let (o, x, n) = (self.origin, self.x, self.z);
-        run("BRepBuilderAPI_Transform (to plane)", || format!("shape={}, frame={self:?}", describe(s)), || ffi::bo_on_plane(
-            s.raw(),
-            o[0],
-            o[1],
-            o[2],
-            x[0],
-            x[1],
-            x[2],
-            n[0],
-            n[1],
-            n[2],
-        ))
+        run(
+            "BRepBuilderAPI_Transform (to plane)",
+            || format!("shape={}, frame={self:?}", describe(s)),
+            || ffi::bo_on_plane(s.raw(), o[0], o[1], o[2], x[0], x[1], x[2], n[0], n[1], n[2]),
+        )
     }
 }
 
@@ -570,25 +562,23 @@ pub fn note_fallback(kind: BoolKind, rung: Rung) {
 pub fn boolean_op(base: &Shape, tools: &[&Shape], kind: BoolKind) -> KResult<Shape> {
     let t = compound(tools.iter().copied());
     let (mut code, mut fuzz) = (0, 0.0);
-    let out = run(kind.occt(), || bool_args(base, tools, 0.0), || {
-        ffi::bo_boolean_rung(base.raw(), t.raw(), kind as i32, true, 0.0, true, &mut code, &mut fuzz)
-    })?;
+    let out = run(
+        kind.occt(),
+        || bool_args(base, tools, 0.0),
+        || ffi::bo_boolean_rung(base.raw(), t.raw(), kind as i32, true, 0.0, true, &mut code, &mut fuzz),
+    )?;
     note_fallback(kind, Rung::from_ffi(code, fuzz));
     Ok(out)
 }
 
-/// booleans.py `_serial_bool`: with the pick fuzz, cleaned. Python forced it
-/// serial because OCP's parallel BOP was 5x slower on many glyph tools; OCCT
-/// 7.8.1 here is 3x faster in parallel on those, and gives the same bytes on
-/// the golden corpus.
+/// With the pick fuzz, cleaned. Runs parallel: OCCT 7.8.1 is 3x faster that way on many glyph
+/// tools and gives the same bytes on the golden corpus.
 pub fn serial_bool(base: &Shape, tools: &[&Shape], kind: BoolKind) -> KResult<Shape> {
     serial_bool_known(base, tools, kind, &[]).map(|(s, _)| s)
 }
 
-/// `serial_bool` handed the operands' signed volumes, the base's then each
-/// tool's, so the plausibility check does not integrate them again; empty
-/// measures them. Also gives the result's signed volume when the clean left
-/// the checked result exactly as it was.
+/// `serial_bool` given the operands' signed volumes, base then each tool, so the check skips
+/// integrating them; empty measures them. Gives the result's volume when the clean left it as is.
 pub fn serial_bool_known(
     base: &Shape,
     tools: &[&Shape],
@@ -601,32 +591,60 @@ pub fn serial_bool_known(
     let mut checked_vol = f64::NAN;
     let mut unchanged = false;
     let (mut code, mut used) = (0, fuzz);
-    let out = run(kind.occt(), || bool_args(base, tools, fuzz), || {
-        let raw = crate::bench::phase("bool_build", || ffi::bo_bool_build(base.raw(), t.raw(), k, true, fuzz))?;
-        let checked = crate::bench::phase("bool_check", || {
-            ffi::bo_bool_check(&raw, base.raw(), t.raw(), k, true, fuzz, vols, &mut checked_vol, &mut code, &mut used)
-        })?;
-        let out = crate::bench::phase("bool_unify", || ffi::bo_clean(&checked))?;
-        unchanged = ffi::bo_is_equal(&checked, &out);
-        Ok(out)
-    })?;
+    let out = run(
+        kind.occt(),
+        || bool_args(base, tools, fuzz),
+        || {
+            let raw = crate::bench::phase("bool_build", || ffi::bo_bool_build(base.raw(), t.raw(), k, true, fuzz))?;
+            let checked = crate::bench::phase("bool_check", || {
+                ffi::bo_bool_check(
+                    &raw,
+                    base.raw(),
+                    t.raw(),
+                    k,
+                    true,
+                    fuzz,
+                    vols,
+                    &mut checked_vol,
+                    &mut code,
+                    &mut used,
+                )
+            })?;
+            let out = crate::bench::phase("bool_unify", || ffi::bo_clean(&checked))?;
+            unchanged = ffi::bo_is_equal(&checked, &out);
+            Ok(out)
+        },
+    )?;
     note_fallback(kind, Rung::from_ffi(code, used));
     Ok((out, unchanged.then_some(checked_vol)))
 }
 
-/// A test hook, nothing in the engine calls it: the check `serial_bool` holds
-/// its own result to, for a result made elsewhere. `result` when it could be
-/// what `kind` gives from these operands, the boolean done again when not, an
-/// error when that is no better.
+/// Test hook only: the check `serial_bool` holds its own result to. `result` when `kind` could give
+/// it from these operands, else the boolean redone, an error when that is no better.
 #[doc(hidden)]
 pub fn bool_checked(result: &Shape, base: &Shape, tools: &[&Shape], kind: BoolKind) -> KResult<(Shape, Rung)> {
     let t = compound(tools.iter().copied());
     let fuzz = operand_fuzz(base, tools);
     let mut vol = f64::NAN;
     let (mut code, mut used) = (0, fuzz);
-    let out = run(kind.occt(), || bool_args(base, tools, fuzz), || {
-        ffi::bo_bool_check(result.raw(), base.raw(), t.raw(), kind as i32, true, fuzz, &[], &mut vol, &mut code, &mut used)
-    })?;
+    let out = run(
+        kind.occt(),
+        || bool_args(base, tools, fuzz),
+        || {
+            ffi::bo_bool_check(
+                result.raw(),
+                base.raw(),
+                t.raw(),
+                kind as i32,
+                true,
+                fuzz,
+                &[],
+                &mut vol,
+                &mut code,
+                &mut used,
+            )
+        },
+    )?;
     Ok((out, Rung::from_ffi(code, used)))
 }
 
@@ -640,7 +658,6 @@ fn operand_fuzz(base: &Shape, tools: &[&Shape]) -> f64 {
     pick_fuzz(ext)
 }
 
-/// the Python engine's `pick_fuzz.py`.
 pub fn pick_fuzz(extent_mm: Option<f64>) -> f64 {
     const FLOOR_MM: f64 = 1e-6;
     const CEILING_MM: f64 = 1e-3;
@@ -653,9 +670,8 @@ pub fn pick_fuzz(extent_mm: Option<f64>) -> f64 {
     }
 }
 
-/// The fuzz where sketch curves split the model. A corner the app snapped to a
-/// model vertex arrives up to a few 1e-5 mm off it whatever the part's size, and
-/// an exact split leaves an edge that short, so anything within a sliver merges.
+/// A corner the app snapped to a model vertex arrives up to a few 1e-5 mm off whatever the part's
+/// size, and an exact split leaves an edge that short, so anything within a sliver merges.
 pub fn sketch_fuzz(extent_mm: Option<f64>) -> f64 {
     pick_fuzz(extent_mm).max(crate::mesh::edges::SLIVER_EDGE_MM)
 }
@@ -682,11 +698,19 @@ pub fn unify_body_known(s: &Shape, volume: f64) -> Shape {
 }
 
 pub fn edge_line(a: [f64; 2], b: [f64; 2]) -> KResult<Shape> {
-    run("BRepBuilderAPI_MakeEdge (line)", || format!("from={a:?}, to={b:?}"), || ffi::bo_edge_line(a[0], a[1], b[0], b[1]))
+    run(
+        "BRepBuilderAPI_MakeEdge (line)",
+        || format!("from={a:?}, to={b:?}"),
+        || ffi::bo_edge_line(a[0], a[1], b[0], b[1]),
+    )
 }
 
 pub fn edge_arc3(a: [f64; 2], m: [f64; 2], b: [f64; 2]) -> KResult<Shape> {
-    run("GC_MakeArcOfCircle", || format!("start={a:?}, mid={m:?}, end={b:?}"), || ffi::bo_edge_arc3(a[0], a[1], m[0], m[1], b[0], b[1]))
+    run(
+        "GC_MakeArcOfCircle",
+        || format!("start={a:?}, mid={m:?}, end={b:?}"),
+        || ffi::bo_edge_arc3(a[0], a[1], m[0], m[1], b[0], b[1]),
+    )
 }
 
 pub fn edge_circle(c: [f64; 2], r: f64) -> KResult<Shape> {
@@ -694,7 +718,11 @@ pub fn edge_circle(c: [f64; 2], r: f64) -> KResult<Shape> {
 }
 
 pub fn edge_ellipse(c: [f64; 2], rx: f64, ry: f64, angle: f64) -> KResult<Shape> {
-    run("BRepBuilderAPI_MakeEdge (ellipse)", || format!("centre={c:?}, rx={rx}, ry={ry}, angle={angle}"), || ffi::bo_edge_ellipse(c[0], c[1], rx, ry, angle))
+    run(
+        "BRepBuilderAPI_MakeEdge (ellipse)",
+        || format!("centre={c:?}, rx={rx}, ry={ry}, angle={angle}"),
+        || ffi::bo_edge_ellipse(c[0], c[1], rx, ry, angle),
+    )
 }
 
 pub fn edge_spline(points: &[[f64; 2]]) -> KResult<Shape> {
@@ -702,9 +730,8 @@ pub fn edge_spline(points: &[[f64; 2]]) -> KResult<Shape> {
     run("GeomAPI_Interpolate", || format!("{} points {points:?}", points.len()), || ffi::bo_edge_spline(&flat))
 }
 
-/// The degree and distinct knots a control-point B-spline is built with, the rule
-/// src/sketch/bspline.ts evaluates: the degree lowered to fit the poles, stored
-/// knots when they are well formed, else uniform 0, 1, 2, ...
+/// The rule src/sketch/bspline.ts evaluates: the degree lowered to fit the poles, stored knots
+/// when they are well formed, else uniform 0, 1, 2, ...
 pub fn bspline_knots(n: usize, degree: Option<f64>, closed: bool, stored: Option<&[f64]>) -> (usize, Vec<f64>) {
     let want = degree.filter(|d| d.is_finite()).map_or(3.0, |d| d.round().max(1.0));
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
@@ -742,7 +769,11 @@ pub fn edge_eval(e: &Shape, t: f64) -> Option<([f64; 3], [f64; 2])> {
 }
 
 pub fn face_rect(x: f64, y: f64, w: f64, h: f64, angle: f64) -> KResult<Shape> {
-    run("BRepBuilderAPI_MakeFace (rectangle)", || format!("x={x}, y={y}, w={w}, h={h}, angle={angle}"), || ffi::bo_face_rect(x, y, w, h, angle))
+    run(
+        "BRepBuilderAPI_MakeFace (rectangle)",
+        || format!("x={x}, y={y}, w={w}, h={h}, angle={angle}"),
+        || ffi::bo_face_rect(x, y, w, h, angle),
+    )
 }
 
 pub fn wires_from_edges(edges: &[Shape], tol: f64) -> KResult<Vec<Shape>> {
@@ -804,9 +835,8 @@ pub fn split_profile_cells(
     ))
 }
 
-/// The model edges `split_profile_cells` cuts along, as polylines within
-/// `deflection`: those reaching the box of the `reach` points, else over the
-/// whole plane. None when an edge will not sample.
+/// The model edges `split_profile_cells` cuts along as polylines within `deflection`: those reaching
+/// the box of the `reach` points, else the whole plane. None when an edge will not sample.
 pub fn profile_cuts(
     shapes: &[&Shape],
     origin: [f64; 3],
@@ -854,39 +884,42 @@ pub fn face_has_holes(f: &Shape) -> bool {
 }
 
 pub fn prism(face: &Shape, d: [f64; 3]) -> KResult<Shape> {
-    run("BRepPrimAPI_MakePrism", || format!("face={}, vector={d:?}", describe(face)), || ffi::bo_prism(face.raw(), d[0], d[1], d[2]))
+    run(
+        "BRepPrimAPI_MakePrism",
+        || format!("face={}, vector={d:?}", describe(face)),
+        || ffi::bo_prism(face.raw(), d[0], d[1], d[2]),
+    )
 }
 
-pub fn prism_taper(
-    face: &Shape,
-    d: [f64; 3],
-    taper: f64,
-    plane: &Frame,
-    dprism: bool,
-) -> KResult<Shape> {
+pub fn prism_taper(face: &Shape, d: [f64; 3], taper: f64, plane: &Frame, dprism: bool) -> KResult<Shape> {
     let (o, x, n) = (plane.origin, plane.x, plane.z);
-    run("tapered prism", || format!("face={}, vector={d:?}, taper_deg={taper}, dprism={dprism}, plane={plane:?}", describe(face)), || ffi::bo_prism_taper(
-        face.raw(),
-        d[0],
-        d[1],
-        d[2],
-        taper,
-        o[0],
-        o[1],
-        o[2],
-        x[0],
-        x[1],
-        x[2],
-        n[0],
-        n[1],
-        n[2],
-        dprism,
-    ))
+    run(
+        "tapered prism",
+        || format!("face={}, vector={d:?}, taper_deg={taper}, dprism={dprism}, plane={plane:?}", describe(face)),
+        || {
+            ffi::bo_prism_taper(
+                face.raw(),
+                d[0],
+                d[1],
+                d[2],
+                taper,
+                o[0],
+                o[1],
+                o[2],
+                x[0],
+                x[1],
+                x[2],
+                n[0],
+                n[1],
+                n[2],
+                dprism,
+            )
+        },
+    )
 }
 
-/// `s` with every vertex within `tol` of the axis moved onto it and every arc
-/// centred within `tol` of it rebuilt centred on it, None when nothing needed
-/// that. See `bo_snap_to_axis`.
+/// Vertices within `tol` of the axis moved onto it and arcs centred within `tol` rebuilt centred
+/// on it, None when nothing needed that. See `bo_snap_to_axis`.
 pub fn snap_to_axis(s: &Shape, origin: [f64; 3], dir: [f64; 3], tol: f64) -> Option<Shape> {
     let [ox, oy, oz] = origin;
     let [dx, dy, dz] = dir;
@@ -895,16 +928,11 @@ pub fn snap_to_axis(s: &Shape, origin: [f64; 3], dir: [f64; 3], tol: f64) -> Opt
 }
 
 pub fn revolve(s: &Shape, origin: [f64; 3], dir: [f64; 3], angle_deg: f64) -> KResult<Shape> {
-    run("BRepPrimAPI_MakeRevol", || format!("shape={}, axis_origin={origin:?}, axis_dir={dir:?}, angle_deg={angle_deg}", describe(s)), || ffi::bo_revolve(
-        s.raw(),
-        origin[0],
-        origin[1],
-        origin[2],
-        dir[0],
-        dir[1],
-        dir[2],
-        angle_deg,
-    ))
+    run(
+        "BRepPrimAPI_MakeRevol",
+        || format!("shape={}, axis_origin={origin:?}, axis_dir={dir:?}, angle_deg={angle_deg}", describe(s)),
+        || ffi::bo_revolve(s.raw(), origin[0], origin[1], origin[2], dir[0], dir[1], dir[2], angle_deg),
+    )
 }
 
 /// build123d `Face(Wire.make_polygon(pts, close=True))`.
@@ -926,12 +954,20 @@ pub fn length(s: &Shape) -> f64 {
 pub fn loft(sections: &[Shape]) -> KResult<Shape> {
     let c = compound(sections);
     let ruled = sections.len() == 2;
-    run("BRepOffsetAPI_ThruSections", || format!("sections=[{}]", sections.iter().map(describe).collect::<Vec<_>>().join("; ")), || fo::fo_loft(c.raw(), ruled))
+    run(
+        "BRepOffsetAPI_ThruSections",
+        || format!("sections=[{}]", sections.iter().map(describe).collect::<Vec<_>>().join("; ")),
+        || fo::fo_loft(c.raw(), ruled),
+    )
 }
 
 /// build123d `sweep` with `Transition.RIGHT` and no Frenet frame.
 pub fn sweep(profile: &Shape, path: &Shape) -> KResult<Shape> {
-    run("BRepOffsetAPI_MakePipeShell", || format!("profile={}, path={}", describe(profile), describe(path)), || fo::fo_sweep(profile.raw(), path.raw()))
+    run(
+        "BRepOffsetAPI_MakePipeShell",
+        || format!("profile={}, path={}", describe(profile), describe(path)),
+        || fo::fo_sweep(profile.raw(), path.raw()),
+    )
 }
 
 /// `(zmin, zmax)` of the shape in a frame at `origin` whose z is `dir`.
@@ -948,7 +984,11 @@ pub fn face_wire_list(face: &Shape) -> KResult<Vec<Shape>> {
 }
 
 pub fn axial_scale(s: &Shape, factor: f64, dir: [f64; 3], hold: f64) -> KResult<Shape> {
-    run("BRepBuilderAPI_GTransform (axial scale)", || format!("shape={}, factor={factor}, dir={dir:?}, hold={hold}", describe(s)), || fo::fo_axial_scale(s.raw(), factor, dir[0], dir[1], dir[2], hold))
+    run(
+        "BRepBuilderAPI_GTransform (axial scale)",
+        || format!("shape={}, factor={factor}, dir={dir:?}, hold={hold}", describe(s)),
+        || fo::fo_axial_scale(s.raw(), factor, dir[0], dir[1], dir[2], hold),
+    )
 }
 
 /// A helix of `pitch` rising `height`, radius `radius`, on the plane at `origin`
@@ -966,25 +1006,36 @@ pub fn screw_sweep(
     lefthand: bool,
 ) -> KResult<Shape> {
     let p = origin;
-    run("BRepOffsetAPI_MakePipeShell (helix)", || format!("profile={}, origin={origin:?}, radius={radius}, pitch={pitch}, height={height}, lefthand={lefthand}", describe(wire)), || fo::fo_screw_sweep(
-        wire.raw(),
-        p[0],
-        p[1],
-        p[2],
-        x[0],
-        x[1],
-        x[2],
-        z[0],
-        z[1],
-        z[2],
-        axis[0],
-        axis[1],
-        axis[2],
-        radius,
-        pitch,
-        height,
-        lefthand,
-    ))
+    run(
+        "BRepOffsetAPI_MakePipeShell (helix)",
+        || {
+            format!(
+                "profile={}, origin={origin:?}, radius={radius}, pitch={pitch}, height={height}, lefthand={lefthand}",
+                describe(wire)
+            )
+        },
+        || {
+            fo::fo_screw_sweep(
+                wire.raw(),
+                p[0],
+                p[1],
+                p[2],
+                x[0],
+                x[1],
+                x[2],
+                z[0],
+                z[1],
+                z[2],
+                axis[0],
+                axis[1],
+                axis[2],
+                radius,
+                pitch,
+                height,
+                lefthand,
+            )
+        },
+    )
 }
 
 /// True when `p` lies strictly inside the solid `s`.

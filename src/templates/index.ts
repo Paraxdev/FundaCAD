@@ -1,15 +1,16 @@
+import examples from "./examples.json";
+
 export interface TemplateInfo {
   id: string;
   name: string;
+  /** The card's second line, what the example shows. */
+  caption: string;
   hint: string;
   icon: string;
 }
 
-export const TEMPLATES: TemplateInfo[] = [
-  { id: "plate", name: "Plate", hint: "A plate with four holes, sized by parameters", icon: "box" },
-  { id: "wall-bracket", name: "Wall bracket", hint: "An L bracket with a stress study ready to run", icon: "stress" },
-  { id: "pinned-lever", name: "Pinned lever", hint: "A lever on a pin with a stress study ready to run", icon: "rotate" },
-];
+// The cards in Home's order. Kept as data beside the files they open, since a model's name is content.
+export const TEMPLATES = examples as TemplateInfo[];
 
 const files = import.meta.glob<string>("./*.funda", { query: "?raw", import: "default" });
 

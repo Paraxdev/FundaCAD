@@ -1,6 +1,14 @@
 import type { Engine } from "../app/engine";
-import { mayDiscard } from "../app/documentActions";
-import { importFileBytes, importPath, openDocumentAtPath, openDocumentBytes, reportError, type OpenOutcome } from "./files";
+import { mayDiscard, placeImport } from "../app/documentActions";
+import {
+  importFileBytes,
+  importInTurn,
+  importPath,
+  openDocumentAtPath,
+  openDocumentBytes,
+  reportError,
+  type OpenOutcome,
+} from "./files";
 import { describeDropLeftovers, planDrop } from "./dropRouting";
 import { closeHome } from "../ui/home";
 
@@ -12,7 +20,7 @@ export interface DroppedFile {
   file?: File;
 }
 
-type DropEngine = Pick<Engine, "store" | "sketch" | "geometry">;
+type DropEngine = Pick<Engine, "store" | "sketch" | "geometry" | "viewport">;
 
 /** Open the dropped document, if any, then import the rest in drop order. */
 export async function takeDroppedFiles(e: DropEngine, items: readonly DroppedFile[]): Promise<void> {
@@ -30,22 +38,68 @@ export async function takeDroppedFiles(e: DropEngine, items: readonly DroppedFil
     // user just chose to discard.
     if (outcome !== "ok") return;
   }
-  if (plan.imports.length || plan.environments.length) closeHome();
-  for (const item of plan.imports) {
-    if (item.path) await importPath(e.store, e.geometry, item.path);
-    else if (item.file) await importFileBytes(e.store, e.geometry, item.file);
-  }
   const env = plan.environments[plan.environments.length - 1];
-  if (env?.file) {
-    const { importEnvironmentFile } = await import("../ui/environmentImport");
-    const refused = await importEnvironmentFile(e.store, env.file);
-    if (refused) await reportError(refused);
+  const envFile = env?.file;
+  const run = () =>
+    importInTurn(e.store, [
+      ...plan.imports.map((item) => ({
+        name: item.name,
+        run: async () => {
+          if (item.path) return importPath(e.store, e.geometry, item.path, undefined, { batched: true });
+          if (item.file) return importFileBytes(e.store, e.geometry, item.file, undefined, { batched: true });
+        },
+      })),
+      ...(env && envFile
+        ? [
+            {
+              name: env.name,
+              run: async () => {
+                // The panorama is read and stored before the look changes, a document opened by then keeps its own.
+                // Watched before the module loads, an open can come while it does.
+                let opened = false;
+                let left = false;
+                const offOpen = e.store.onOpen(() => (opened = true));
+                try {
+                  const { importEnvironmentFile } = await import("../ui/environmentImport");
+                  const refused = await importEnvironmentFile(e.store, envFile, { leftOut: () => (left = opened) });
+                  if (refused) await reportError(refused);
+                } finally {
+                  offOpen();
+                }
+                return left ? ("dropped" as const) : undefined;
+              },
+            },
+          ]
+        : []),
+    ]);
+  // Parts dropped over Home may be meant for a new document. An environment alone is not a part.
+  if (!doc && plan.imports.length) {
+    if (
+      !(await placeImport(
+        e,
+        plan.imports.map((i) => i.name),
+        run,
+      ))
+    )
+      return;
+  } else {
+    if (plan.imports.length || plan.environments.length) closeHome();
+    await run();
   }
   if (leftovers) await reportError(leftovers);
 }
 
 function carriesFileType(ev: DragEvent): boolean {
   return !!ev.dataTransfer && Array.from(ev.dataTransfer.types).includes("Files");
+}
+
+/** WebKitGTK shows the page neither the files of a desktop drop nor its
+ *  uri-list (webkit.org/b/271957), only the type names, so in the Linux app a
+ *  uri-list with no Files is taken as a file drag and its paths come from GTK. */
+function gtkFileDrag(ev: DragEvent): boolean {
+  if (!ev.dataTransfer || !("__TAURI_INTERNALS__" in window) || !/linux/i.test(navigator.platform)) return false;
+  const types = Array.from(ev.dataTransfer.types);
+  return types.includes("text/uri-list") && !types.includes("Files");
 }
 
 interface PathBridge {
@@ -64,18 +118,20 @@ const PATH_REPLY_MS = 1500;
 let nextRequest = 0;
 
 /** The real paths of dropped files, from src-tauri/src/drop_paths.rs, or null
- *  when nothing answered. */
-async function askPaths(bridge: PathBridge, files: File[]): Promise<(string | null)[] | null> {
+ *  when nothing answered. `send` puts the request to it. */
+async function askPaths(send: (id: string) => unknown): Promise<(string | null)[] | null> {
   const { listen } = await import("@tauri-apps/api/event");
   const id = String(++nextRequest);
   let settle: (paths: (string | null)[] | null) => void = () => {};
-  const reply = new Promise<(string | null)[] | null>((resolve) => { settle = resolve; });
+  const reply = new Promise<(string | null)[] | null>((resolve) => {
+    settle = resolve;
+  });
   const unlisten = await listen<{ id: string; paths: (string | null)[] }>("files-dropped", (ev) => {
     if (ev.payload.id === id) settle(ev.payload.paths);
   });
   const timer = setTimeout(() => settle(null), PATH_REPLY_MS);
   try {
-    bridge.postMessageWithAdditionalObjects(`fundacad-drop:${id}`, files);
+    await send(id);
     return await reply;
   } catch {
     return null;
@@ -87,8 +143,18 @@ async function askPaths(bridge: PathBridge, files: File[]): Promise<(string | nu
 
 async function collect(files: File[]): Promise<DroppedFile[]> {
   const bridge = pathBridge();
-  const paths = bridge ? await askPaths(bridge, files) : null;
+  const paths = bridge
+    ? await askPaths((id) => bridge.postMessageWithAdditionalObjects(`fundacad-drop:${id}`, files))
+    : null;
   return files.map((file, i) => ({ name: file.name, path: paths?.[i] ?? null, file }));
+}
+
+/** The files of a WebKitGTK drop, by the paths GTK held for it. There are no
+ *  bytes to fall back on. */
+async function collectFromGtk(): Promise<DroppedFile[]> {
+  const { invoke } = await import("@tauri-apps/api/core");
+  const paths = await askPaths((id) => invoke("drop_paths_take", { id }));
+  return (paths ?? []).flatMap((path) => (path ? [{ name: path.split("/").pop() || path, path }] : []));
 }
 
 /** Listen for files dragged onto the window from the desktop. `hint` is told
@@ -101,10 +167,18 @@ export function installDesktopDrop(e: DropEngine, hint: (shown: boolean) => void
   // them, so the types alone cannot tell it from a desktop file. A drag from
   // outside never fires dragstart in this window.
   let inPage = false;
-  const carriesFiles = (ev: DragEvent) => !inPage && carriesFileType(ev);
-  const hide = () => { depth = 0; hint(false); };
-  const onStart = () => { inPage = true; };
-  const onEnd = () => { inPage = false; hide(); };
+  const carriesFiles = (ev: DragEvent) => !inPage && (carriesFileType(ev) || gtkFileDrag(ev));
+  const hide = () => {
+    depth = 0;
+    hint(false);
+  };
+  const onStart = () => {
+    inPage = true;
+  };
+  const onEnd = () => {
+    inPage = false;
+    hide();
+  };
 
   const onEnter = (ev: DragEvent) => {
     if (!carriesFiles(ev)) return;
@@ -116,7 +190,10 @@ export function installDesktopDrop(e: DropEngine, hint: (shown: boolean) => void
     if (!carriesFiles(ev)) return;
     ev.preventDefault();
     if (ev.dataTransfer) ev.dataTransfer.dropEffect = "copy";
-    if (depth === 0) { depth = 1; hint(true); }
+    if (depth === 0) {
+      depth = 1;
+      hint(true);
+    }
   };
   const onLeave = (ev: DragEvent) => {
     if (!carriesFiles(ev)) return;
@@ -132,10 +209,13 @@ export function installDesktopDrop(e: DropEngine, hint: (shown: boolean) => void
     ev.preventDefault();
     hide();
     const files = Array.from(ev.dataTransfer?.files ?? []);
-    if (!files.length) return;
-    queue = queue.then(async () => takeDroppedFiles(e, await collect(files))).catch((err) => {
-      void reportError(`Couldn't take the dropped files: ${err instanceof Error ? err.message : String(err)}`);
-    });
+    const fromGtk = !files.length && gtkFileDrag(ev);
+    if (!files.length && !fromGtk) return;
+    queue = queue
+      .then(async () => takeDroppedFiles(e, await (fromGtk ? collectFromGtk() : collect(files))))
+      .catch((err) => {
+        void reportError(`Couldn't take the dropped files: ${err instanceof Error ? err.message : String(err)}`);
+      });
   };
 
   const opts = { capture: true };

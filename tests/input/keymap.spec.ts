@@ -11,11 +11,16 @@ function ctrlZ(target: EventTarget) {
 }
 
 describe("installKeymap", () => {
-  afterEach(() => { document.body.innerHTML = ""; });
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
 
   it("a live, visible input still blocks the shortcut (normal typing is safe)", () => {
     const actions: string[] = [];
-    installKeymap((a) => actions.push(a), () => "model");
+    installKeymap(
+      (a) => actions.push(a),
+      () => "model",
+    );
     const input = document.createElement("input");
     document.body.appendChild(input);
     input.focus();
@@ -25,7 +30,10 @@ describe("installKeymap", () => {
 
   it("a hidden ghost input is released and the shortcut still fires", () => {
     const actions: string[] = [];
-    installKeymap((a) => actions.push(a), () => "model");
+    installKeymap(
+      (a) => actions.push(a),
+      () => "model",
+    );
     const input = document.createElement("input");
     document.body.appendChild(input);
     input.focus();
@@ -37,7 +45,10 @@ describe("installKeymap", () => {
 
   it("a detached ghost input is released and the shortcut still fires", () => {
     const actions: string[] = [];
-    installKeymap((a) => actions.push(a), () => "model");
+    installKeymap(
+      (a) => actions.push(a),
+      () => "model",
+    );
     const input = document.createElement("input");
     document.body.appendChild(input);
     input.focus();

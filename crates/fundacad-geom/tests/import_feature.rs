@@ -1,6 +1,5 @@
-//! The import feature, the oracles of the Python engine's `test_assembly.py` and
-//! test_blob_rebuild.py: a STEP imported through the `import` op, rebuilt from
-//! its blob.
+//! The import feature against the Python engine's assembly and blob rebuild oracles: a STEP imported
+//! through the `import` op, rebuilt from its blob.
 
 use std::path::PathBuf;
 use std::sync::OnceLock;

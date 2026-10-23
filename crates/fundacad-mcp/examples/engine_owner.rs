@@ -1,12 +1,5 @@
-//! An owner for an engine, so `tests/lifetime.rs` has something to kill.
-//!
-//! `job` starts the engine the way the MCP server does, inside the
-//! kill-on-close job object. `nojob` spawns the same binary with nothing
-//! holding it, which is the control: without the job object the engine MUST
-//! outlive a hard kill of its owner, or the machine is reaping it for us and
-//! the test proves nothing.
-//!
-//! Either way it prints `PID <n>` and then waits to be killed.
+//! An engine owner for `tests/lifetime.rs` to kill. `job` holds the engine in the kill-on-close job
+//! object; `nojob` is the control, whose engine must outlive a hard kill or the test proves nothing.
 
 use std::io::Write;
 
@@ -17,14 +10,10 @@ async fn main() {
     let job = std::env::args().nth(1).as_deref() != Some("nojob");
     let pid = if job {
         let link = EngineLink::private();
-        // A real request, so the engine is actually up rather than merely
-        // spawned: a process that has not finished starting is not what leaks.
-        link.call("ping", serde_json::json!({}))
-            .await
-            .expect("the engine answers");
+        // A real request, since an engine that has not finished starting is not what leaks.
+        link.call("ping", serde_json::json!({})).await.expect("the engine answers");
         let pid = link.engine_pid().await.expect("it spawned one");
-        // Leaked on purpose: dropping the link would kill the engine tidily,
-        // which is the one thing this owner must not do.
+        // Leaked on purpose: dropping the link would kill the engine tidily.
         std::mem::forget(link);
         pid
     } else {

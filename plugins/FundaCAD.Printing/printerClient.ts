@@ -1,16 +1,6 @@
-// The printer device layer: Moonraker over the local network (Snapmaker U1 now,
-// Qidi and other Moonraker machines later).
-//
-// This used to be Rust in the app shell. The app now offers only a generic
-// request to a device on the local network (`plugin_local_request`), and every
-// byte of the protocol is here: which endpoints exist, what a job upload looks
-// like, how status and filament state are read out of the replies.
-//
-// Facts pinned to the U1's shipped firmware (fw 1.3.0, verified against
-// Snapmaker's open-sourced u1-moonraker/u1-klipper): LAN is fully trusted (no
-// API key), filament state lives in the `print_task_config` printer object, and
-// a job is sent by POST /server/files/upload then POST
-// /server/files/start_local_print with a `map_table` filament remap.
+// Moonraker over the app's generic local-network request. U1 firmware 1.3.0 (checked against Snapmaker's u1-moonraker
+// and u1-klipper): LAN fully trusted (no API key), filament state in the `print_task_config` printer object, and a job
+// sent by POST /server/files/upload then POST /server/files/start_local_print with a `map_table` filament remap.
 
 import { readSetting } from "fundacad";
 import { dataAdopt, dataRead, dataWrite, localRequest, type LocalRequest, type LocalResponse } from "./native";
@@ -64,13 +54,10 @@ export interface PrinterError {
 
 const fail = (code: PrinterError["code"], message: string): PrinterError => ({ code, message });
 
-/** true when a rejection is a PrinterError. */
 export function asPrinterError(e: unknown): PrinterError | null {
   if (e && typeof e === "object" && "code" in e && "message" in e) return e as PrinterError;
   return null;
 }
-
-// --- registry -----------------------------------------------------------------
 
 const REGISTRY = "printers.json";
 
@@ -156,8 +143,6 @@ async function resolve(id: string): Promise<PrinterConfig> {
 export const baseUrl = (cfg: PrinterConfig) => `http://${cfg.host}:${cfg.port}`;
 export const webcamBaseUrl = (cfg: PrinterConfig) => `http://${cfg.host}:${cfg.webcam_port}`;
 
-// --- transport ----------------------------------------------------------------
-
 async function send(req: LocalRequest): Promise<LocalResponse> {
   try {
     return await localRequest({ timeoutMs: 10_000, ...req });
@@ -195,8 +180,6 @@ export function argbToHex(color: string): string {
   const s = color.replace(/^#+/, "");
   return /^[0-9a-fA-F]{6}/.test(s) ? `#${s.slice(0, 6).toUpperCase()}` : "#808080";
 }
-
-// --- commands -----------------------------------------------------------------
 
 export async function printerProbe(id: string): Promise<ProbeInfo> {
   const cfg = await resolve(id);
@@ -268,11 +251,12 @@ export function interpretStartReply(v: Record<string, unknown>): PrinterError | 
   if (state === "success") return null;
   if (state === "busy") return fail("Busy", msg || "printer is busy");
   const low = msg.toLowerCase();
-  const code = low.includes("busy") || low.includes("printing") || low.includes("not ready")
-    ? "Busy"
-    : low.includes("nozzle")
-      ? "NozzleMismatch"
-      : "Rejected";
+  const code =
+    low.includes("busy") || low.includes("printing") || low.includes("not ready")
+      ? "Busy"
+      : low.includes("nozzle")
+        ? "NozzleMismatch"
+        : "Rejected";
   return fail(code, msg || "printer rejected the job");
 }
 
@@ -356,8 +340,6 @@ export async function printerSetFilament(
   if (!ok(r)) throw fail("Rejected", r.text ?? "");
 }
 
-// --- status monitor (poll every 2 s while printing) ---------------------------
-
 type StatusFn = (e: PrintStatus & { id: string }) => void;
 type IdFn = (id: string) => void;
 
@@ -409,10 +391,8 @@ export function printerMonitorStop(id: string): void {
   monitors.delete(id);
 }
 
-// --- camera (snapshot polling at ~1 fps while a panel is open) ----------------
-//
-// The U1's webcam server (fw 1.3.0) serves /webcam/snapshot.jpg. Frames reach
-// the panel as data: URLs, which the window's CSP already allows in img-src.
+// The U1's webcam server (fw 1.3.0) serves /webcam/snapshot.jpg. Frames reach the panel as data: URLs, which the
+// window's CSP already allows in img-src.
 
 type FrameFn = (e: { id: string; data_url: string }) => void;
 
@@ -466,7 +446,7 @@ export function printerCameraStop(id: string): void {
   cameras.delete(id);
 }
 
-// --- active-printer selection (display concern, so localStorage) --------------
+// The active printer is a display concern, so localStorage.
 
 const ACTIVE_KEY = "fundacad.activePrinter";
 const LEGACY_ACTIVE_KEYS = ["neocad.activePrinter", "sindri.activePrinter"];

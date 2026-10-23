@@ -1,10 +1,5 @@
-//! Not rebuilding what has not changed, the Python engine's `rebuild_cache.py` and the
-//! `rebuild_cached` half of builder.py, over the store of geomstore.py.
-//!
-//! Two tiers resume a rebuild at the longest unchanged prefix of chain keys:
-//! a ring of per-feature snapshots in this process, and disk checkpoints that
-//! outlive it. Built payloads are kept the same two ways. Every hit is counted
-//! in `CacheStats`, which is also logged the way the Python engine logs it.
+//! Not rebuilding what has not changed, rebuild_cache.py and `rebuild_cached`. A rebuild resumes at the longest
+//! unchanged chain key prefix from an in process snapshot ring or a disk checkpoint, payloads are kept likewise.
 
 pub mod checkpoint;
 pub mod keys;
@@ -145,6 +140,17 @@ impl RebuildCache {
         self.brep_sigs.clear();
     }
 
+    /// No document is open any more: the snapshots and payloads it held go, the disk checkpoints stay for a reopen.
+    pub fn release(&mut self) {
+        self.reset();
+        self.mesh_keys.clear();
+    }
+
+    /// The snapshots and viewport payloads this process holds.
+    pub fn holding(&self) -> (usize, usize) {
+        (self.ring.iter().flatten().count(), self.payloads.len())
+    }
+
     /// `_compute_all_job`: every tier dropped for this document, disk included.
     pub fn purge(&mut self, raw: &Value) {
         let keys = self.chain_keys(raw);
@@ -163,10 +169,8 @@ impl RebuildCache {
         let mut source = Source::Full;
         let mut modified = Modified::new();
 
-        // Never resume PAST the first sketch that projects: an unapplied
-        // projection update is not derivable from the document, so that sketch
-        // runs again. The RAM tier may pass the cap when the previous build of
-        // this prefix emitted no updates at all, a quiet proof.
+        // Never resume past the first sketch that projects, its unapplied update is not derivable from the document.
+        // The RAM tier may pass the cap when this prefix's previous build emitted no updates at all.
         let cap = projection_cap(raw);
         let mut common = keys.iter().zip(&self.ring_keys).take_while(|(a, b)| a == b).count();
         if let Some(cap) = cap {
@@ -216,9 +220,8 @@ impl RebuildCache {
 
         // A disk resume at a snapshot is held in RAM from here on, or every
         // later ask of this document reads the checkpoint back again.
-        let restored = (source == Source::Disk)
-            .then(|| resume.as_ref().map(|(at, snap)| (*at, snap.clone())))
-            .flatten();
+        let restored =
+            (source == Source::Disk).then(|| resume.as_ref().map(|(at, snap)| (*at, snap.clone()))).flatten();
 
         let began = Instant::now();
         let mut tap = CacheTap {
@@ -237,9 +240,8 @@ impl RebuildCache {
         let built = builder::rebuild_from(doc, raw, watch, resume, &mut tap);
         let elapsed = began.elapsed();
 
-        // A blob that arrived, or was dropped as corrupt, while this built: the
-        // keys no longer say what the imports read, so nothing is kept under
-        // them, the checkpoints a cancelled build left included.
+        // A blob arrived or was dropped as corrupt during this build, so the keys no longer say what the imports
+        // read and nothing is kept under them, including the checkpoints a cancelled build left.
         if absent_geometry(raw) != absent {
             let replayed = std::mem::take(&mut tap.replayed);
             drop(tap);
@@ -248,12 +250,7 @@ impl RebuildCache {
             if let Some(s) = &self.store {
                 s.purge(&keys);
             }
-            self.stats = CacheStats {
-                source,
-                resumed_at: start,
-                replayed,
-                ..CacheStats::default()
-            };
+            self.stats = CacheStats { source, resumed_at: start, replayed, ..CacheStats::default() };
             return built;
         }
         let r = built?;
@@ -279,11 +276,8 @@ impl RebuildCache {
                 *slot = Some(snap);
             }
         }
-        let beyond: Vec<Snapshot> = ring
-            .iter_mut()
-            .take(n.saturating_sub(self.window))
-            .filter_map(Option::take)
-            .collect();
+        let beyond: Vec<Snapshot> =
+            ring.iter_mut().take(n.saturating_sub(self.window)).filter_map(Option::take).collect();
         reap(beyond);
 
         let mut written = 0;
@@ -294,11 +288,7 @@ impl RebuildCache {
                 }
             }
             written = p.written;
-            self.mesh_keys = p
-                .modified
-                .into_iter()
-                .map(|(id, (_, key))| (id, key))
-                .collect();
+            self.mesh_keys = p.modified.into_iter().map(|(id, (_, key))| (id, key)).collect();
         } else {
             self.mesh_keys.clear();
         }
@@ -306,13 +296,8 @@ impl RebuildCache {
         self.proj_quiet = r.projection_updates.is_empty();
         self.ring = ring;
         self.ring_keys = keys;
-        self.stats = CacheStats {
-            source,
-            resumed_at: start,
-            replayed,
-            checkpoints_written: written,
-            ..CacheStats::default()
-        };
+        self.stats =
+            CacheStats { source, resumed_at: start, replayed, checkpoints_written: written, ..CacheStats::default() };
         Ok(r)
     }
 
@@ -367,9 +352,7 @@ impl RebuildCache {
 
 /// The stored geometry the document's imports name and the blob store lacks.
 fn absent_geometry(raw: &Value) -> BTreeSet<String> {
-    let store = BlobStore {
-        root: blobstore::default_root(),
-    };
+    let store = BlobStore { root: blobstore::default_root() };
     raw.get("features")
         .and_then(Value::as_array)
         .into_iter()
@@ -383,21 +366,16 @@ fn absent_geometry(raw: &Value) -> BTreeSet<String> {
 /// The index of the first sketch holding a projected entity, builder.py's
 /// `proj_cap`.
 fn projection_cap(raw: &Value) -> Option<usize> {
-    raw.get("features")
-        .and_then(Value::as_array)?
-        .iter()
-        .position(|f| {
-            f.get("type").and_then(Value::as_str) == Some("sketch")
-                && f.get("entities")
-                    .and_then(Value::as_array)
-                    .is_some_and(|es| es.iter().any(|e| e.get("type").and_then(Value::as_str) == Some("projected")))
-        })
+    raw.get("features").and_then(Value::as_array)?.iter().position(|f| {
+        f.get("type").and_then(Value::as_str) == Some("sketch")
+            && f.get("entities")
+                .and_then(Value::as_array)
+                .is_some_and(|es| es.iter().any(|e| e.get("type").and_then(Value::as_str) == Some("projected")))
+    })
 }
 
-/// Frees `old` on a background thread. The snapshots of a big build hold every
-/// body after every feature, and freeing them took 0.6 s at 1,000 bodies, all of
-/// it in front of the reply of the next document's rebuild. OCCT handle counts
-/// are atomic, so a shape still shared with the kept ring is safe to release here.
+/// Frees `old` on a background thread: dropping a big build's snapshots took 0.6 s at 1,000 bodies, all in
+/// front of the next reply. OCCT handle counts are atomic, so shapes still shared with the ring are safe.
 fn reap<T: Send + 'static>(old: T) {
     type Garbage = Box<dyn Send>;
     static REAPER: OnceLock<Option<Mutex<mpsc::Sender<Garbage>>>> = OnceLock::new();

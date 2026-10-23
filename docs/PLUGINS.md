@@ -1073,6 +1073,18 @@ plugin than they have over MCP, where the server is a process on the machine and
 can open a file by naming it. One vocabulary that means two things is worse than
 one vocabulary with a gap in it.
 
+`doc_get` hands back the document as a save writes it: the geometry, its format
+`version`, the versions, and the project state beside them (stress study,
+environment, palette, materials, elements, body and face colours). So `doc_set`
+of what `doc_get` gave loses nothing, and `doc_get` then `file_write` is a whole
+save. `doc_set` is one undoable step that never changes the version history,
+which belongs to the file that is open: a document sent without versions, or
+with another file's, leaves them as they were, and a file brought in with
+`file_read` then `doc_set` keeps its own history on disk. The same goes for the
+section cut: it is the user's view, so `doc_set` ignores any `sectionView` it is
+sent. The cut on screen stays as it is, or goes off when the document sent
+shares no feature with the open one, as it does on Open.
+
 ### What is enforced where
 
 | | |
@@ -1116,6 +1128,25 @@ more than one id scheme here: the MCP server (`crates/fundacad-mcp/src/model.rs`
 (`bx1`, `ex1`) and the app names them `f1`, `f2`, counting from what it already
 has. Both are hosts for one op vocabulary and both are right. The lesson holds
 either way: **read the id `feature_add` returns, never predict it.**
+
+### Edits meant for a document the user closed
+
+A plugin run works on the document that was open when the run started. When the
+user opens, creates or discards a document while the run is still going, every
+later edit of that run (`doc_set`, `doc_new`, `param_set`, `param_remove`,
+`feature_add`, `feature_update`, `feature_remove`, `feature_move`) is refused
+with "the document this plugin run was working on was closed, nothing was
+applied", so work started for one document never lands in the next. Reads
+(`doc_get`) still answer with the open document, but they do not make it the
+run's own: the user picks the run's document by running the plugin. The run's
+own `doc_new` is the one way it moves on, and the document it starts is then the
+one it works on.
+
+`doc_set` is also refused while an import is still being read into the open
+document, since the import lands in whatever document is open when its read ends
+and the one a plugin sets may be another file. The other edits are not, as they
+change the document the import was started for. Try `doc_set` again once the
+import has landed.
 
 ### What appHost does not serve yet
 
@@ -1213,11 +1244,11 @@ grant would give them two chances to disagree about it.
 
 ## Tests
 
-`bundle.rs` carries the refusals and their controls. On Linux CI they run with
-everything else; on a Windows box the app's own test binary cannot start (it
-links the webview stack and dies with `STATUS_ENTRYPOINT_NOT_FOUND` before the
-first test), so `scripts/check-plugin-guards.sh` compiles that one file in a
-crate with no Tauri in it and runs the same tests. It then builds a real plugin
+`bundle.rs` carries the refusals, `src-tauri/tests/unit/plugins/bundle.rs` the
+tests of them and their controls. On Linux CI they run with everything else;
+`scripts/check-plugin-guards.sh` compiles `bundle.rs` and `handed.rs` with their
+tests in a crate with no Tauri in it, so they run on a Windows box without the
+webview stack. It then builds a real plugin
 bundle and unpacks it with the real extractor, which is the only test that
 covers the packaging script and the guard together.
 

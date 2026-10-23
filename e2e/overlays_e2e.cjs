@@ -28,18 +28,30 @@ const KINDS = ["edges", "highlight", "grid", "origin", "sketches", "sketchLabels
   try {
     const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
     page.on("pageerror", (e) => res.errors.push(e.message));
-    await page.addInitScript(([port]) => {
-      try { localStorage.removeItem("fundacad.render"); } catch { /* fresh profile */ }
-      const N = window.WebSocket;
-      window.WebSocket = class extends N {
-        constructor(u, p) { super(String(u).replace("127.0.0.1:8765", "127.0.0.1:" + port), p); }
-      };
-    }, [PORT]);
+    await page.addInitScript(
+      ([port]) => {
+        try {
+          localStorage.removeItem("fundacad.render");
+        } catch {
+          /* fresh profile */
+        }
+        const N = window.WebSocket;
+        window.WebSocket = class extends N {
+          constructor(u, p) {
+            super(String(u).replace("127.0.0.1:8765", "127.0.0.1:" + port), p);
+          }
+        };
+      },
+      [PORT],
+    );
     await page.goto(`http://localhost:${VITE}/?token=${TOKEN}`);
     await page.waitForFunction(() => !!window.store && !!window.viewport, null, { timeout: 90000 });
     await page.waitForTimeout(1500);
     const modal = await page.$(".modal-close");
-    if (modal) { await modal.click(); await page.waitForTimeout(300); }
+    if (modal) {
+      await modal.click();
+      await page.waitForTimeout(300);
+    }
 
     await page.evaluate(async () => {
       const s = window.store;
@@ -60,44 +72,69 @@ const KINDS = ["edges", "highlight", "grid", "origin", "sketches", "sketchLabels
     await page.evaluate(() => window.__fundacad.handleAction("fit"));
     await page.waitForTimeout(2500);
 
-    const frame = () => page.evaluate(async () => {
-      const vp = window.viewport, r = vp.scene.renderer;
-      const g = vp.scene.grid, t = vp.scene.triad;
-      let gu = 0, tu = 0;
-      const gOrig = g.update, tOrig = t.update;
-      g.update = function (...a) { gu++; return gOrig.apply(g, a); };
-      t.update = function (...a) { tu++; return tOrig.apply(t, a); };
-      await new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok)));
-      r.info.autoReset = false; r.info.reset();
-      gu = 0; tu = 0;
-      vp.requestRender();
-      await new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(ok))));
-      const out = { calls: r.info.render.calls, triangles: r.info.render.triangles, gridUpdates: gu, triadUpdates: tu, mask: vp.rig.active.layers.mask };
-      r.info.autoReset = true;
-      g.update = gOrig; t.update = tOrig;
-      return out;
-    });
+    const frame = () =>
+      page.evaluate(async () => {
+        const vp = window.viewport,
+          r = vp.scene.renderer;
+        const g = vp.scene.grid,
+          t = vp.scene.triad;
+        let gu = 0,
+          tu = 0;
+        const gOrig = g.update,
+          tOrig = t.update;
+        g.update = function (...a) {
+          gu++;
+          return gOrig.apply(g, a);
+        };
+        t.update = function (...a) {
+          tu++;
+          return tOrig.apply(t, a);
+        };
+        await new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok)));
+        r.info.autoReset = false;
+        r.info.reset();
+        gu = 0;
+        tu = 0;
+        vp.requestRender();
+        await new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(ok))));
+        const out = {
+          calls: r.info.render.calls,
+          triangles: r.info.render.triangles,
+          gridUpdates: gu,
+          triadUpdates: tu,
+          mask: vp.rig.active.layers.mask,
+        };
+        r.info.autoReset = true;
+        g.update = gOrig;
+        t.update = tOrig;
+        return out;
+      });
 
     // The middle of the first edge on screen, and a pick there.
-    const edgePick = () => page.evaluate(() => {
-      const vp = window.viewport, cam = vp.rig.active;
-      const rect = vp.domElement.getBoundingClientRect();
-      const ref = vp.visibleEdgeLines()[0];
-      if (!ref) return { edge: null, picked: null };
-      const a = ref.points[0], b = ref.points[ref.points.length - 1];
-      const m = new cam.position.constructor((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2).project(cam);
-      const x = rect.left + (m.x + 1) / 2 * rect.width, y = rect.top + (1 - m.y) / 2 * rect.height;
-      const hit = vp.pickEdgeAt(x, y);
-      return { edge: ref.id, picked: hit?.edge?.id ?? hit?.id ?? null };
-    });
+    const edgePick = () =>
+      page.evaluate(() => {
+        const vp = window.viewport,
+          cam = vp.rig.active;
+        const rect = vp.domElement.getBoundingClientRect();
+        const ref = vp.visibleEdgeLines()[0];
+        if (!ref) return { edge: null, picked: null };
+        const a = ref.points[0],
+          b = ref.points[ref.points.length - 1];
+        const m = new cam.position.constructor((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2).project(cam);
+        const x = rect.left + ((m.x + 1) / 2) * rect.width,
+          y = rect.top + ((1 - m.y) / 2) * rect.height;
+        const hit = vp.pickEdgeAt(x, y);
+        return { edge: ref.id, picked: hit?.edge?.id ?? hit?.id ?? null };
+      });
 
     // A real click on body1's middle, then what the viewport says is selected.
     const clickSelect = async () => {
       const at = await page.evaluate(() => {
-        const vp = window.viewport, cam = vp.rig.active;
+        const vp = window.viewport,
+          cam = vp.rig.active;
         const rect = vp.domElement.getBoundingClientRect();
         const m = new cam.position.constructor(0, 0, 0).project(cam);
-        return { x: rect.left + (m.x + 1) / 2 * rect.width, y: rect.top + (1 - m.y) / 2 * rect.height };
+        return { x: rect.left + ((m.x + 1) / 2) * rect.width, y: rect.top + ((1 - m.y) / 2) * rect.height };
       });
       await page.keyboard.press("Escape");
       await page.mouse.click(at.x, at.y);
@@ -165,10 +202,11 @@ const KINDS = ["edges", "highlight", "grid", "origin", "sketches", "sketchLabels
     // The gizmo a body selection raises by itself hides in Clean view; Move
     // asked for over it, like any running tool, keeps its gizmo.
     const ambient = await page.evaluate(async () => {
-      const vp = window.viewport, cam = vp.rig.active;
+      const vp = window.viewport,
+        cam = vp.rig.active;
       const rect = vp.domElement.getBoundingClientRect();
       const m = new cam.position.constructor(0, 0, 0).project(cam);
-      vp.selectBodyAt(rect.left + (m.x + 1) / 2 * rect.width, rect.top + (1 - m.y) / 2 * rect.height, false);
+      vp.selectBodyAt(rect.left + ((m.x + 1) / 2) * rect.width, rect.top + ((1 - m.y) / 2) * rect.height, false);
       await new Promise((r) => setTimeout(r, 500));
       // Every tool keeps its own value box; the Move one is the box on display.
       const row = [...document.querySelectorAll(".dim-input")].find((el) => el.style.display === "flex");
@@ -188,10 +226,12 @@ const KINDS = ["edges", "highlight", "grid", "origin", "sketches", "sketchLabels
     await page.evaluate(() => window.__fundacad.handleAction("sketch"));
     await page.waitForTimeout(500);
     const planes = await page.evaluate(() => {
-      const vp = window.viewport, cam = vp.rig.active;
+      const vp = window.viewport,
+        cam = vp.rig.active;
       const rect = vp.domElement.getBoundingClientRect();
-      const p = new cam.position.constructor(-30, 30, 0).project(cam);
-      const x = rect.left + (p.x + 1) / 2 * rect.width, y = rect.top + (1 - p.y) / 2 * rect.height;
+      const p = vp.scene.planes.XY.getWorldPosition(new cam.position.constructor()).project(cam);
+      const x = rect.left + ((p.x + 1) / 2) * rect.width,
+        y = rect.top + ((1 - p.y) / 2) * rect.height;
       return { drawn: vp.overlayDrawn("origin"), plane: vp.pickPlane(x, y), mask: cam.layers.mask };
     });
     await page.keyboard.press("Escape");
@@ -211,29 +251,83 @@ const KINDS = ["edges", "highlight", "grid", "origin", "sketches", "sketchLabels
     });
 
     const s = res.states;
-    check("grid off drops draw calls and grid updates", s.off_grid.frame.calls < base.frame.calls && s.off_grid.frame.gridUpdates === 0 && base.frame.gridUpdates > 0,
-      { base: base.frame, off: s.off_grid.frame });
-    check("origin off drops draw calls and triad updates", s.off_origin.frame.calls < base.frame.calls && s.off_origin.frame.triadUpdates === 0 && base.frame.triadUpdates > 0,
-      { base: base.frame, off: s.off_origin.frame });
-    check("edges off drops draw calls", s.off_edges.frame.calls < base.frame.calls, { base: base.frame.calls, off: s.off_edges.frame.calls });
-    check("edges off still picks the edge", !!s.off_edges.pick.picked && s.off_edges.pick.picked === s["00_all_on"].pick.picked,
-      { on: s["00_all_on"].pick, off: s.off_edges.pick });
-    check("edges off still selects by a click", s.off_edges.select.bodies.length + s.off_edges.select.faces.length > 0, s.off_edges.select);
-    check("highlight off still selects by a click", s.off_highlight.select.bodies.length + s.off_highlight.select.faces.length > 0, s.off_highlight.select);
-    check("every switch saved per workspace", KINDS.every((k) => s[`off_${k}`].prefs?.kinds?.[k] === false), KINDS.map((k) => s[`off_${k}`].prefs?.kinds?.[k]));
-    check("all back on draws what it drew", restored.frame.calls === base.frame.calls, { base: base.frame.calls, again: restored.frame.calls });
-    check("clean view draws only the model", clean.frame.mask === 1 && clean.frame.calls < base.frame.calls && clean.frame.gridUpdates === 0 && clean.frame.triadUpdates === 0,
-      clean.frame);
-    check("clean view still picks and selects", !!clean.pick.picked && clean.select.bodies.length + clean.select.faces.length > 0, { pick: clean.pick, select: clean.select });
-    check("clean view hides the gizmo a body selection raises", ambient.handlesDrawn === false && ambient.rowHidden, ambient);
-    check("clean view shows a running tool's gizmo", tool.handlesDrawn === true && tool.frame.calls > clean.frame.calls, { clean: clean.frame.calls, tool: tool.frame.calls });
-    check("clean view plane pick draws and picks the planes", planes.drawn && !!planes.plane && !afterPick, { ...planes, afterPick });
-    check("clean view off brings the set back", back.frame.calls === base.frame.calls && back.frame.mask === base.frame.mask, { base: base.frame, back: back.frame });
+    check(
+      "grid off drops draw calls and grid updates",
+      s.off_grid.frame.calls < base.frame.calls && s.off_grid.frame.gridUpdates === 0 && base.frame.gridUpdates > 0,
+      { base: base.frame, off: s.off_grid.frame },
+    );
+    check(
+      "origin off drops draw calls and triad updates",
+      s.off_origin.frame.calls < base.frame.calls &&
+        s.off_origin.frame.triadUpdates === 0 &&
+        base.frame.triadUpdates > 0,
+      { base: base.frame, off: s.off_origin.frame },
+    );
+    check("edges off drops draw calls", s.off_edges.frame.calls < base.frame.calls, {
+      base: base.frame.calls,
+      off: s.off_edges.frame.calls,
+    });
+    check(
+      "edges off still picks the edge",
+      !!s.off_edges.pick.picked && s.off_edges.pick.picked === s["00_all_on"].pick.picked,
+      { on: s["00_all_on"].pick, off: s.off_edges.pick },
+    );
+    check(
+      "edges off still selects by a click",
+      s.off_edges.select.bodies.length + s.off_edges.select.faces.length > 0,
+      s.off_edges.select,
+    );
+    check(
+      "highlight off still selects by a click",
+      s.off_highlight.select.bodies.length + s.off_highlight.select.faces.length > 0,
+      s.off_highlight.select,
+    );
+    check(
+      "every switch saved per workspace",
+      KINDS.every((k) => s[`off_${k}`].prefs?.kinds?.[k] === false),
+      KINDS.map((k) => s[`off_${k}`].prefs?.kinds?.[k]),
+    );
+    check("all back on draws what it drew", restored.frame.calls === base.frame.calls, {
+      base: base.frame.calls,
+      again: restored.frame.calls,
+    });
+    check(
+      "clean view draws only the model",
+      clean.frame.mask === 1 &&
+        clean.frame.calls < base.frame.calls &&
+        clean.frame.gridUpdates === 0 &&
+        clean.frame.triadUpdates === 0,
+      clean.frame,
+    );
+    check(
+      "clean view still picks and selects",
+      !!clean.pick.picked && clean.select.bodies.length + clean.select.faces.length > 0,
+      { pick: clean.pick, select: clean.select },
+    );
+    check(
+      "clean view hides the gizmo a body selection raises",
+      ambient.handlesDrawn === false && ambient.rowHidden,
+      ambient,
+    );
+    check(
+      "clean view shows a running tool's gizmo",
+      tool.handlesDrawn === true && tool.frame.calls > clean.frame.calls,
+      { clean: clean.frame.calls, tool: tool.frame.calls },
+    );
+    check("clean view plane pick draws and picks the planes", planes.drawn && planes.plane === "XY" && !afterPick, {
+      ...planes,
+      afterPick,
+    });
+    check(
+      "clean view off brings the set back",
+      back.frame.calls === base.frame.calls && back.frame.mask === base.frame.mask,
+      { base: base.frame, back: back.frame },
+    );
     check("a picture leaves the mask as the view had it", pic.before === pic.after && pic.bytes > 1000, pic);
     check("no page errors", res.errors.length === 0, res.errors.slice(0, 3));
   } catch (e) {
     failed++;
-    res.errors.push(String(e && e.stack || e));
+    res.errors.push(String((e && e.stack) || e));
     console.log("FAIL", e);
   } finally {
     fs.writeFileSync(path.join(OUT, "overlays.json"), JSON.stringify(res, null, 1));

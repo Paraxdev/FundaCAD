@@ -38,8 +38,7 @@ vi.mock("../../../src/plugins", async (importOriginal) => {
   };
 });
 
-const PluginsSection = (await import("../../../src/components/overlays/PluginsSection.vue"))
-  .default;
+const PluginsSection = (await import("../../../src/components/overlays/PluginsSection.vue")).default;
 const { candidateFrom } = await import("../../../src/plugins");
 const { errorNotice } = await import("../../../src/ui/errorNotice");
 
@@ -214,9 +213,7 @@ describe("agreeing to it", () => {
 describe("reading a bundle from a file", () => {
   it("asks for a file, then describes what was picked", async () => {
     pickBundle.mockResolvedValue("C:/Users/x/widgets.zip");
-    inspectFile.mockResolvedValue(
-      candidateFrom({ ...STRANGER, source: "C:/Users/x/widgets.zip" }, "file"),
-    );
+    inspectFile.mockResolvedValue(candidateFrom({ ...STRANGER, source: "C:/Users/x/widgets.zip" }, "file"));
     const w = await mounted();
     await addRow(w).findAll("button")[1]!.trigger("click");
     await flush();
@@ -254,9 +251,7 @@ describe("the list of what is installed", () => {
   it("says where a plugin came from when it is not ours", async () => {
     installedPlugins.mockResolvedValue([record({})]);
     const w = await mounted();
-    expect(w.get('[data-plugin="widgets"]').text()).toContain(
-      "Installed from plugins.example.com",
-    );
+    expect(w.get('[data-plugin="widgets"]').text()).toContain("Installed from plugins.example.com");
   });
 
   it("says nothing about origin when it is ours", async () => {
@@ -275,9 +270,7 @@ describe("the list of what is installed", () => {
   it("says so plainly for one installed off the disk", async () => {
     installedPlugins.mockResolvedValue([record({ source: "C:/Users/x/widgets.zip" })]);
     const w = await mounted();
-    expect(w.get('[data-plugin="widgets"]').text()).toContain(
-      "Installed from a file on this computer",
-    );
+    expect(w.get('[data-plugin="widgets"]').text()).toContain("Installed from a file on this computer");
   });
 
   it("does not describe one whose record it cannot read", async () => {

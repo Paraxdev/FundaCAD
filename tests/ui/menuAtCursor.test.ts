@@ -2,7 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import { RADIAL_DEADZONE_PX, RADIAL_SUBMENU_PX, RadialSession, pickRadial, radialSlot } from "../../src/ui/radialMenu";
 import type { CtxItem } from "../../src/stores/contextMenu";
 
-const eight = () => Array.from({ length: 8 }, (_, i) => ({ label: `item ${i}`, onClick: vi.fn(), onHover: vi.fn() })) as (CtxItem & { onClick: ReturnType<typeof vi.fn>; onHover: ReturnType<typeof vi.fn> })[];
+const eight = () =>
+  Array.from({ length: 8 }, (_, i) => ({ label: `item ${i}`, onClick: vi.fn(), onHover: vi.fn() })) as (CtxItem & {
+    onClick: ReturnType<typeof vi.fn>;
+    onHover: ReturnType<typeof vi.fn>;
+  })[];
 
 describe("pickRadial", () => {
   it("puts item 0 at the top and goes clockwise", () => {
@@ -52,7 +56,10 @@ describe("a press-drag-release ring", () => {
       s.move(400, 220);
       expect(items[0]!.onHover).toHaveBeenLastCalledWith(true);
       if (end === "escape") s.close();
-      else { s.move(401, 301); s.release(401, 301); }
+      else {
+        s.move(401, 301);
+        s.release(401, 301);
+      }
       expect(items.some((it) => it.onClick.mock.calls.length)).toBe(false);
       expect(items[0]!.onHover).toHaveBeenLastCalledWith(false);
       expect(states.at(-1)).toBe(null);
@@ -69,7 +76,10 @@ describe("a press-drag-release ring", () => {
 
   it("opens a submenu's ring when the drag goes on past it, and picks from that ring", () => {
     const deep = { label: "deep", onClick: vi.fn() };
-    const items: CtxItem[] = [{ label: "more", children: [{ label: "a", onClick: vi.fn() }, deep] }, { label: "b", onClick: vi.fn() }];
+    const items: CtxItem[] = [
+      { label: "more", children: [{ label: "a", onClick: vi.fn() }, deep] },
+      { label: "b", onClick: vi.fn() },
+    ];
     const { s } = open(items);
     s.move(400, 300 - RADIAL_SUBMENU_PX);
     expect(s.state.items.map((i) => i.label)).toEqual(["a", "deep"]);

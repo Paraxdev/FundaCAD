@@ -34,19 +34,28 @@ import type { GeometryBackend } from "../../src/geometry/client";
  *  state this host is in. */
 function store(): DocumentStore {
   const backend = {
-    async rebuild() { return { ok: true, result: { bodies: [] } }; },
+    async rebuild() {
+      return { ok: true, result: { bodies: [] } };
+    },
     async init() {},
-    onStatus() { return () => {}; },
-    onRebuildChunk() { return () => {}; },
-    onProgress() { return () => {}; },
-    async cancel() { return true; },
+    onStatus() {
+      return () => {};
+    },
+    onRebuildChunk() {
+      return () => {};
+    },
+    onProgress() {
+      return () => {};
+    },
+    async cancel() {
+      return true;
+    },
     connected: false,
   } as unknown as GeometryBackend;
   return new DocumentStore(backend, { parameters: {}, features: [] });
 }
 
-const broker = (host: BrokerHost) =>
-  createBroker({ plugin: "under-test", grants: allOpGrants(), host });
+const broker = (host: BrokerHost) => createBroker({ plugin: "under-test", grants: allOpGrants(), host });
 
 /** One script of ops, run through whichever host. */
 async function script(host: BrokerHost, steps: [string, unknown][]) {
@@ -114,7 +123,23 @@ describe("the app's host and the test double agree", () => {
 });
 
 describe("what this host cannot do yet, it refuses by name", () => {
-  const unserved = ["doc_open", "doc_import", "doc_save", "build", "inspect", "view", "export", "interference", "measure", "section", "stress", "printability", "sketch_merge", "sketch_tie", "edit"] as const;
+  const unserved = [
+    "doc_open",
+    "doc_import",
+    "doc_save",
+    "build",
+    "inspect",
+    "view",
+    "export",
+    "interference",
+    "measure",
+    "section",
+    "stress",
+    "printability",
+    "sketch_merge",
+    "sketch_tie",
+    "edit",
+  ] as const;
   // Served, but only by the desktop app. A host built without a bridge refuses
   // them for a different reason and has to say which reason it is: "you did not
   // ask for this", "the app cannot do this yet" and "this is not running in the
@@ -171,20 +196,17 @@ describe("what this host cannot do yet, it refuses by name", () => {
     };
     const b = broker(appHost({ store: store(), plugin: "A.One", native }));
 
-    expect(await b.callOrThrow("file_pick", { purpose: "pick one", extensions: ["step"] }))
-      .toMatchObject({ handle: "h1", name: "part.step" });
+    expect(await b.callOrThrow("file_pick", { purpose: "pick one", extensions: ["step"] })).toMatchObject({
+      handle: "h1",
+      name: "part.step",
+    });
     expect(await b.callOrThrow("file_read", { handle: "h1" })).toMatchObject({ text: "abc" });
-    expect(await b.callOrThrow("file_write", { suggested: "o.step", text: "z" }))
-      .toMatchObject({ name: "o.step" });
+    expect(await b.callOrThrow("file_write", { suggested: "o.step", text: "z" })).toMatchObject({ name: "o.step" });
     expect(await b.callOrThrow("app_info")).toMatchObject({ version: "1.2.3" });
 
     // The plugin id goes down with every file call, which is what makes one
     // plugin unable to read another's file on the far side.
-    expect(seen).toEqual([
-      "pick A.One pick one [step]",
-      "read A.One h1",
-      "write A.One o.step z",
-    ]);
+    expect(seen).toEqual(["pick A.One pick one [step]", "read A.One h1", "write A.One o.step z"]);
   });
 
   it("will not hand a file to a host that cannot say whose it is", async () => {
@@ -282,7 +304,10 @@ describe("HostRefused", () => {
 describe("settings_get", () => {
   it("answers with the calling plugin's own settings and takes no id from it", async () => {
     const { definePluginSettings } = await import("../../src/plugins/settings");
-    definePluginSettings("A.One", { version: 1, props: [{ key: "n", type: "number", label: "N", default: 3 }] }).set("n", 5);
+    definePluginSettings("A.One", { version: 1, props: [{ key: "n", type: "number", label: "N", default: 3 }] }).set(
+      "n",
+      5,
+    );
     definePluginSettings("A.Two", { version: 1, props: [{ key: "n", type: "number", label: "N", default: 7 }] });
 
     const b = broker(appHost({ store: store(), plugin: "A.One" }));

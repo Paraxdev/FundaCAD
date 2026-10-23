@@ -1,19 +1,5 @@
-// One LineSegments2 per body, one shared LineMaterial, per-edge colour written
-// into the instance colour buffer.
-//
-// Before this every B-rep edge was its own THREE.Line2 with its OWN
-// LineMaterial. On an imported assembly that is ~348,000 objects and ~348,000
-// materials: 12.2 GiB peak RSS (an OOM on a 16 GB machine, not merely a slow
-// frame) and 113-119 ms/frame of scene-graph traversal before a single draw
-// call. Measured in WebKitGTK, the webview Tauri actually uses on Linux, and
-// 2.2-2.6x worse than V8 at exactly that traversal. Merging per body measured
-// 348,844 -> 6,124 objects and 348,840 -> 3,061 materials, frame 1,385 -> 27-35 ms.
-// Hidden edges do NOT help: `visible = false` still costs the traversal, which
-// is why hiding is a geometry rebuild here rather than a per-object flag.
-//
-// The identity change that ripples outward: an edge is an EdgeRef, not a THREE
-// object. A ref is created once per body build and never replaced, so consumers
-// keep them in a Set exactly as they kept Line2s.
+// One LineSegments2 per body with one shared LineMaterial: a Line2 per edge measured 348k objects, 12.2 GiB and 113 ms
+// a frame of traversal in WebKitGTK. A hidden object still costs traversal, so hiding rebuilds the geometry instead.
 
 import * as THREE from "three";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
@@ -47,15 +33,12 @@ export const EDGE_IDLE_WIDTH = 1.6;
 const FAINT_TOWARD = new THREE.Color(0x76808a);
 const FAINT_MIX = 0.6;
 
-/** Every edge of ONE body, merged into a single LineSegments2. */
 export class BodyEdges {
   readonly object: LineSegments2;
   readonly material: LineMaterial;
   readonly refs: EdgeRef[] = [];
 
-  /** per edge: display-only hiding (flush seams). Hiding rebuilds the geometry
-   *  rather than flagging an object, because there is no object to flag, and
-   *  because a hidden-but-present segment would still cost traversal. */
+  /** per edge: display only hiding (flush seams), applied by a geometry rebuild */
   private hidden: Uint8Array;
   /** per edge: drawn faint, a tangent edge under the "faint" setting */
   private faint: Uint8Array;
@@ -68,9 +51,7 @@ export class BodyEdges {
   /** the live instance colour data, held by reference (LineSegmentsGeometry
    *  .setColors does not copy a Float32Array), so a recolour writes into it. */
   private colorBuf = new Float32Array(0);
-  /** segment index -> edge slot; this is the picking table, per body. Keeping
-   *  it body-indexed is deliberate: merging ACROSS bodies later only has to
-   *  concatenate these, not redesign the lookup. */
+  /** segment index -> edge slot, the picking table */
   private segOwner = new Int32Array(0);
   private liveSegments = 0;
   private bodyVisible = true;
@@ -93,16 +74,17 @@ export class BodyEdges {
       this.rgb[i * 3 + 2] = base.b;
     }
 
-    // ONE material for the whole body. Its own colour stays white; the per-edge
-    // colour arrives as an instance colour and is multiplied by it.
-    // An outline, not a body: kept out of what glass refracts.
-    this.material = overlayMaterial(new LineMaterial({
-      color: 0xffffff,
-      vertexColors: true,
-      linewidth: EDGE_IDLE_WIDTH,
-      worldUnits: false,
-      depthTest: true,
-    }));
+    // One material per body, kept white: the per edge colour arrives as an instance colour multiplied by it. An outline,
+    // so it stays out of what glass refracts.
+    this.material = overlayMaterial(
+      new LineMaterial({
+        color: 0xffffff,
+        vertexColors: true,
+        linewidth: EDGE_IDLE_WIDTH,
+        worldUnits: false,
+        depthTest: true,
+      }),
+    );
     this.material.resolution.copy(resolution);
     this.object = new LineSegments2(new LineSegmentsGeometry(), this.material);
     this.object.name = "edges";
@@ -121,9 +103,8 @@ export class BodyEdges {
     for (let i = 0; i < this.refs.length; i++) if (!this.hidden[i]) segs += this.segCount[i]!;
     this.liveSegments = segs;
 
-    // An empty body still gets a well-formed (degenerate) geometry rather than
-    // an attribute-less one: three's raycast and computeBoundingSphere both
-    // read instanceStart directly, and it is never drawn (visible is false).
+    // An empty body still gets a degenerate geometry, never drawn: three's raycast and computeBoundingSphere read
+    // instanceStart directly.
     const count = Math.max(segs, 1);
     const pos = new Float32Array(count * 6);
     const col = new Float32Array(count * 6);
@@ -131,17 +112,31 @@ export class BodyEdges {
 
     let s = 0;
     for (let i = 0; i < this.refs.length; i++) {
-      if (this.hidden[i]) { this.segStart[i] = -1; continue; }
+      if (this.hidden[i]) {
+        this.segStart[i] = -1;
+        continue;
+      }
       this.segStart[i] = s;
       const pts = this.refs[i]!.points;
-      const r = this.rgb[i * 3]!, g = this.rgb[i * 3 + 1]!, b = this.rgb[i * 3 + 2]!;
+      const r = this.rgb[i * 3]!,
+        g = this.rgb[i * 3 + 1]!,
+        b = this.rgb[i * 3 + 2]!;
       for (let k = 0; k + 1 < pts.length; k++, s++) {
-        const a = pts[k]!, c = pts[k + 1]!;
+        const a = pts[k]!,
+          c = pts[k + 1]!;
         const o = s * 6;
-        pos[o] = a[0]; pos[o + 1] = a[1]; pos[o + 2] = a[2];
-        pos[o + 3] = c[0]; pos[o + 4] = c[1]; pos[o + 5] = c[2];
-        col[o] = r; col[o + 1] = g; col[o + 2] = b;
-        col[o + 3] = r; col[o + 4] = g; col[o + 5] = b;
+        pos[o] = a[0];
+        pos[o + 1] = a[1];
+        pos[o + 2] = a[2];
+        pos[o + 3] = c[0];
+        pos[o + 4] = c[1];
+        pos[o + 5] = c[2];
+        col[o] = r;
+        col[o + 1] = g;
+        col[o + 2] = b;
+        col[o + 3] = r;
+        col[o + 4] = g;
+        col[o + 5] = b;
         owner[s] = i;
       }
     }
@@ -174,11 +169,14 @@ export class BodyEdges {
     if (start < 0 || n === 0) return; // hidden, the colour lands on the next flush
     for (let s = start; s < start + n; s++) {
       const o = s * 6;
-      this.colorBuf[o] = color.r; this.colorBuf[o + 1] = color.g; this.colorBuf[o + 2] = color.b;
-      this.colorBuf[o + 3] = color.r; this.colorBuf[o + 4] = color.g; this.colorBuf[o + 5] = color.b;
+      this.colorBuf[o] = color.r;
+      this.colorBuf[o + 1] = color.g;
+      this.colorBuf[o + 2] = color.b;
+      this.colorBuf[o + 3] = color.r;
+      this.colorBuf[o + 4] = color.g;
+      this.colorBuf[o + 5] = color.b;
     }
-    const attr = this.object.geometry.attributes.instanceColorStart as
-      THREE.InterleavedBufferAttribute | undefined;
+    const attr = this.object.geometry.attributes.instanceColorStart as THREE.InterleavedBufferAttribute | undefined;
     if (attr) {
       attr.data.addUpdateRange(start * 6, n * 6);
       attr.data.needsUpdate = true;
@@ -216,12 +214,15 @@ export class BodyEdges {
       if (start < 0) continue;
       for (let s = start; s < start + n; s++) {
         const o = s * 6;
-        this.colorBuf[o] = color.r; this.colorBuf[o + 1] = color.g; this.colorBuf[o + 2] = color.b;
-        this.colorBuf[o + 3] = color.r; this.colorBuf[o + 4] = color.g; this.colorBuf[o + 5] = color.b;
+        this.colorBuf[o] = color.r;
+        this.colorBuf[o + 1] = color.g;
+        this.colorBuf[o + 2] = color.b;
+        this.colorBuf[o + 3] = color.r;
+        this.colorBuf[o + 4] = color.g;
+        this.colorBuf[o + 5] = color.b;
       }
     }
-    const attr = this.object.geometry.attributes.instanceColorStart as
-      THREE.InterleavedBufferAttribute | undefined;
+    const attr = this.object.geometry.attributes.instanceColorStart as THREE.InterleavedBufferAttribute | undefined;
     if (attr) {
       attr.data.clearUpdateRanges(); // whole-buffer rewrite; drop queued sub-ranges
       attr.data.needsUpdate = true;
@@ -240,14 +241,14 @@ export class BodyEdges {
     return this.hidden[slot] === 1;
   }
 
-  /** Un-hide every edge. hideFlushSeams only ever HIDES, and a body reused
-   *  across a rebuild (etag unchanged) keeps this object, so without this its
-   *  seam-hiding from the previous model would accumulate and never come back.
-   *  The old one-Line2-per-edge code got this for free, by reassigning
-   *  `e.visible` on every edge each rebuild. */
+  /** hideFlushSeams only ever hides, and a body reused across a rebuild keeps this object, so its old seam hiding would
+   *  otherwise pile up. */
   showAll() {
     for (let i = 0; i < this.hidden.length; i++) {
-      if (this.hidden[i]) { this.hidden[i] = 0; this.dirty = true; }
+      if (this.hidden[i]) {
+        this.hidden[i] = 0;
+        this.dirty = true;
+      }
     }
   }
 
@@ -259,6 +260,11 @@ export class BodyEdges {
 
   private applyVisible() {
     this.object.visible = this.bodyVisible && this.liveSegments > 0;
+  }
+
+  /** Segments in the drawn geometry. */
+  get segments(): number {
+    return this.liveSegments;
   }
 
   /** Any edge currently drawn and pickable? (`object.visible` folds in both the
@@ -279,8 +285,7 @@ export class BodyEdges {
 
   /** Restore build-time appearance on a REUSED body (see resetBodyAppearance). */
   resetAppearance() {
-    // The whole pose, not only the position: the move ghost carries rotation
-    // and scale now (see render.resetBodyAppearance).
+    // The whole pose: the move ghost carries rotation and scale too (render.resetBodyAppearance).
     this.object.position.set(0, 0, 0);
     this.object.quaternion.identity();
     this.object.scale.set(1, 1, 1);

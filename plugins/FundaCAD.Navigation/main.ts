@@ -1,6 +1,5 @@
-// Mouse button presets, an opt-in radial menu and a shortcut rebinding panel.
-// Everything here goes through the core's binding table, keymap overrides and
-// menu at the cursor; removing the plugin puts the default mouse and keys back.
+// Everything goes through the core's binding table, keymap overrides and menu at the cursor, so removing the plugin
+// puts the default mouse and keys back.
 
 import { SHORTCUTS, allCommands, contribute, keyHint, openMenuAt, radialMenuOpen } from "fundacad";
 import type { Engine, PointerGesture, RadialTrigger } from "fundacad";
@@ -13,7 +12,10 @@ export async function activate(e: Engine): Promise<() => void> {
   let pointer = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
   let held: string | null = null;
 
-  const radialKey = () => keymapFor(navState.cfg).find((k) => k.action === RADIAL_ACTION)?.key.toLowerCase() ?? null;
+  const radialKey = () =>
+    keymapFor(navState.cfg)
+      .find((k) => k.action === RADIAL_ACTION)
+      ?.key.toLowerCase() ?? null;
   const onPointer = (ev: PointerEvent) => {
     pointer = { x: ev.clientX, y: ev.clientY };
   };
@@ -55,7 +57,11 @@ export async function activate(e: Engine): Promise<() => void> {
     listen(navState.cfg.radial);
     const { table, problem } = tableFor(navState.cfg);
     try {
-      remapOff = contribute(PLUGIN_ID, { pointerBindings: table, onPointerGesture: onGesture, keymap: keymapFor(navState.cfg) });
+      remapOff = contribute(PLUGIN_ID, {
+        pointerBindings: table,
+        onPointerGesture: onGesture,
+        keymap: keymapFor(navState.cfg),
+      });
       navState.problem = problem;
     } catch (err) {
       navState.problem = err instanceof Error ? err.message : String(err);

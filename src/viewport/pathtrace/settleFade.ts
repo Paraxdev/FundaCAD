@@ -1,5 +1,4 @@
-// The Realtime frame fading out over the first traced frames once the view
-// rests, so the switch between the two looks does not flash.
+// The Realtime frame fades out over the first traced frames once the view rests, so the switch does not flash.
 
 import { CROSSFADE_MS } from "./denoise";
 

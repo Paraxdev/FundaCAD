@@ -5,7 +5,15 @@
 // scripted stub backend (the engine side is covered by the Python engine's `test_refresh.py`).
 import { describe, it, expect, beforeEach } from "vitest";
 import { DocumentStore } from "../../src/document/store";
-import type { CadDocument, Feature, ProjectedCurve, ProjectionUpdate, RebuildReply, RebuildResult, SketchEntity } from "../../src/types";
+import type {
+  CadDocument,
+  Feature,
+  ProjectedCurve,
+  ProjectionUpdate,
+  RebuildReply,
+  RebuildResult,
+  SketchEntity,
+} from "../../src/types";
 import type { GeometryBackend } from "../../src/geometry/client";
 
 const CURVE0: ProjectedCurve = { kind: "line", x1: 0, y1: 0, x2: 10, y2: 0 };
@@ -31,7 +39,9 @@ function scriptedBackend(next: (n: number) => ProjectionUpdate[] | undefined, ca
     rebuild: reply,
     computeAll: reply,
     async init() {},
-    onStatus() { return () => {}; },
+    onStatus() {
+      return () => {};
+    },
     connected: true,
   } as unknown as GeometryBackend;
 }
@@ -40,31 +50,51 @@ const pdoc = (opts: { stale?: boolean; constraints?: boolean } = {}): CadDocumen
   parameters: {},
   features: [
     {
-      id: "s1", type: "sketch", plane: "XY", name: "Sketch1",
-      entities: [{
-        id: "p1", type: "projected",
-        source: { kind: "edge", body: "body1", sel: { kind: "edge", by: "match", fp: { mid: [0, 0, 0], dir: [1, 0, 0] } } },
-        curve: { ...CURVE0 },
-        ...(opts.stale ? { stale: true } : {}),
-      }],
+      id: "s1",
+      type: "sketch",
+      plane: "XY",
+      name: "Sketch1",
+      entities: [
+        {
+          id: "p1",
+          type: "projected",
+          source: {
+            kind: "edge",
+            body: "body1",
+            sel: { kind: "edge", by: "match", fp: { mid: [0, 0, 0], dir: [1, 0, 0] } },
+          },
+          curve: { ...CURVE0 },
+          ...(opts.stale ? { stale: true } : {}),
+        },
+      ],
       ...(opts.constraints ? { constraints: [{ type: "horizontal", line: "p1" }] } : {}),
     },
   ] as Feature[],
 });
 
-const updCurve = (curve: ProjectedCurve = CURVE1): ProjectionUpdate => ({ sketch: "s1", entity: "p1", curve: { ...curve }, stale: false });
+const updCurve = (curve: ProjectedCurve = CURVE1): ProjectionUpdate => ({
+  sketch: "s1",
+  entity: "p1",
+  curve: { ...curve },
+  stale: false,
+});
 const UPD_STALE: ProjectionUpdate = { sketch: "s1", entity: "p1", stale: true };
 
 // drain the whole async chain (rebuild -> paramChain -> commit -> rebuild -> ...)
-const settle = () => new Promise<void>((res) => {
-  let i = 0;
-  const tick = () => (++i > 30 ? res() : void setTimeout(tick, 0));
-  tick();
-});
+const settle = () =>
+  new Promise<void>((res) => {
+    let i = 0;
+    const tick = () => (++i > 30 ? res() : void setTimeout(tick, 0));
+    tick();
+  });
 
 const p1Of = (store: DocumentStore) => {
-  const sk = store.document.features.find((f): f is Extract<Feature, { type: "sketch" }> => f.type === "sketch" && f.id === "s1");
-  return sk?.entities.find((e): e is Extract<SketchEntity, { type: "projected" }> => e.type === "projected" && e.id === "p1");
+  const sk = store.document.features.find(
+    (f): f is Extract<Feature, { type: "sketch" }> => f.type === "sketch" && f.id === "s1",
+  );
+  return sk?.entities.find(
+    (e): e is Extract<SketchEntity, { type: "projected" }> => e.type === "projected" && e.id === "p1",
+  );
 };
 
 const edit = (store: DocumentStore, id = "x1") =>
@@ -113,7 +143,14 @@ describe("projection refresh (derived commit loop)", () => {
   });
 
   it("drops updates whose sketch/entity no longer exists", async () => {
-    const store = makeStore((n) => (n === 1 ? [{ sketch: "s1", entity: "gone", curve: CURVE1, stale: false }, { sketch: "nope", entity: "p1", curve: CURVE1, stale: false }] : undefined));
+    const store = makeStore((n) =>
+      n === 1
+        ? [
+            { sketch: "s1", entity: "gone", curve: CURVE1, stale: false },
+            { sketch: "nope", entity: "p1", curve: CURVE1, stale: false },
+          ]
+        : undefined,
+    );
     const before = store.toJSON();
     edit(store);
     await settle();
@@ -200,7 +237,9 @@ describe("projection refresh (derived commit loop)", () => {
   });
 
   it("a user edit re-arms a tripped valve (the toast's 'edit the model' path)", async () => {
-    const store = makeStore((n) => (n <= 6 ? [updCurve(n % 2 ? CURVE1 : CURVE0)] : n === 7 ? [updCurve(CURVE1)] : undefined));
+    const store = makeStore((n) =>
+      n <= 6 ? [updCurve(n % 2 ? CURVE1 : CURVE0)] : n === 7 ? [updCurve(CURVE1)] : undefined,
+    );
     edit(store);
     await settle();
     expect(calls.length).toBe(6); // tripped
@@ -212,7 +251,9 @@ describe("projection refresh (derived commit loop)", () => {
   });
 
   it("Compute All re-arms a tripped valve and applies the recomputed updates", async () => {
-    const store = makeStore((n) => (n <= 6 ? [updCurve(n % 2 ? CURVE1 : CURVE0)] : n === 7 ? [updCurve(CURVE1)] : undefined));
+    const store = makeStore((n) =>
+      n <= 6 ? [updCurve(n % 2 ? CURVE1 : CURVE0)] : n === 7 ? [updCurve(CURVE1)] : undefined,
+    );
     edit(store);
     await settle();
     expect(calls.length).toBe(6); // tripped
@@ -225,7 +266,9 @@ describe("projection refresh (derived commit loop)", () => {
   it("a quiet PREVIEW rebuild does not re-arm a tripped valve", async () => {
     // oscillate to a trip, then: preview rebuild = quiet, post-preview rebuild
     // claims changes again, the pause must hold (no reset from the preview)
-    const store = makeStore((n) => (n <= 6 ? [updCurve(n % 2 ? CURVE1 : CURVE0)] : n === 7 ? undefined : [updCurve(CURVE0)]));
+    const store = makeStore((n) =>
+      n <= 6 ? [updCurve(n % 2 ? CURVE1 : CURVE0)] : n === 7 ? undefined : [updCurve(CURVE0)],
+    );
     edit(store);
     await settle();
     expect(calls.length).toBe(6); // tripped

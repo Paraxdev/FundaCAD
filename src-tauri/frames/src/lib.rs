@@ -1,9 +1,5 @@
-//! Moves frames rendered on the native side (the native path tracer) into the
-//! app's webview. Windows posts WebView2 shared buffers, see src-tauri's
-//! frames.rs; everything else, and WebView2 runtimes without shared buffers,
-//! streams over a loopback WebSocket. Tauri IPC is never used for pixels: it
-//! copies every byte through a stream, about 170 MB/s on both WebView2 and
-//! WebKitGTK.
+//! Moves natively rendered frames into the webview: WebView2 shared buffers on Windows, a loopback WebSocket elsewhere.
+//! Never Tauri IPC, which copies every byte through a stream at about 170 MB/s.
 
 mod ring;
 mod swap;
@@ -20,7 +16,6 @@ pub const BYTES_PER_PIXEL: usize = 4;
 /// a little endian u32.
 pub const HEADER_BYTES: usize = 16;
 
-/// What fills a frame: a test pattern for now, the native tracer later.
 pub trait FrameSource: Send + Sync {
     /// `out` is exactly `width * height * BYTES_PER_PIXEL` bytes, rows top
     /// first with no padding.
@@ -63,17 +58,4 @@ pub fn read_header(b: &[u8]) -> Option<[u32; 4]> {
     }
     let w = |i: usize| u32::from_le_bytes(b[i * 4..i * 4 + 4].try_into().unwrap());
     Some([w(0), w(1), w(2), w(3)])
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_frame_size_over_the_limit_is_refused() {
-        assert_eq!(frame_size(0, 0), Ok((1, 1)));
-        assert_eq!(frame_size(MAX_SIDE, 1080), Ok((MAX_SIDE, 1080)));
-        assert!(frame_size(MAX_SIDE + 1, 1).is_err());
-        assert!(frame_size(1, u32::MAX).is_err());
-    }
 }

@@ -1,11 +1,5 @@
-//! An analysis of a body that is not closed solids facing outward: an
-//! inside-out solid, one with a face turned the wrong way, an edge on three
-//! faces, a hole in its skin, or no solid at all. The kernel's common of such
-//! a body comes back without an error and wrong, so each analysis either
-//! turns it over and answers, or says it could not judge it and why.
-//!
-//! The box beside the casing is the same cube moved 5 mm along each axis, so
-//! the two share the 5 mm cube at the corner.
+//! Analyses of a body that is not closed solids facing outward: the kernel's common of one comes back wrong without
+//! an error, so each analysis turns it over or says why it could not judge. The box beside it shares a 5 mm corner.
 
 mod unsound;
 
@@ -42,7 +36,6 @@ fn overlaps(reply: &Map<String, Value>) -> Vec<f64> {
     reply["pairs"].as_array().expect("pairs").iter().map(|p| p["volume"].as_f64().expect("volume")).collect()
 }
 
-/// Why the check did not judge body1.
 fn not_judged(reply: &Map<String, Value>) -> String {
     let rows = reply.get("unchecked").and_then(Value::as_array);
     let row = rows.and_then(|rows| rows.iter().find(|u| u["id"] == "body1"));
@@ -179,9 +172,6 @@ fn printability_says_a_body_is_not_a_sound_solid() {
     let JobResult::Json(reply) = printability_result(&m, &NoWatch) else { panic!("expected a JSON result") };
     assert!(reply.get("error").is_none(), "{reply:?}");
     let report = reply["report"].as_str().expect("report");
-    assert!(
-        report.contains("not a sound solid: it has faces that point the wrong way, at 4 of its edges"),
-        "{report}"
-    );
+    assert!(report.contains("not a sound solid: it has faces that point the wrong way, at 4 of its edges"), "{report}");
     assert!(reply["bodies"][0]["fault"].as_str().is_some_and(|f| f.contains("wrong way")), "{}", reply["bodies"][0]);
 }

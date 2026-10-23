@@ -10,6 +10,7 @@ import {
   sectionCentre,
   sectionFromPlaneDef,
 } from "../../src/features/sectionMath";
+import { SECTION_GHOSTS } from "../../src/document/sectionView";
 
 /** Signed distance of a point from a clip plane, positive is the kept side. */
 const side = (p: { normal: Vec3; constant: number }, x: Vec3) =>
@@ -93,5 +94,11 @@ describe("the ghost dial", () => {
     // meant to turn it up.
     expect(ghostAlpha(99)).toBe(GHOST_LEVELS[GHOST_LEVELS.length - 1]);
     expect(ghostAlpha(-3)).toBe(GHOST_LEVELS[0]);
+  });
+});
+
+describe("the saved ghost names", () => {
+  it("name the dial's rungs in order, so a saved cut and the dial never drift apart", () => {
+    expect(GHOST_LEVELS.map((_, i) => ghostLabel(i))).toEqual([...SECTION_GHOSTS]);
   });
 });

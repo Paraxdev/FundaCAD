@@ -1,7 +1,5 @@
-// Expand a sketch pattern DEFINITION into its derived entities (the copies). Kept
-// deliberately tiny and mirrored 1:1 by the Python port in builder.py (_expand_pattern)
-// so the frontend preview and the engine build agree. Derived ids are
-// "<pattern.id>#<n>", render/build-only, never targeted by constraints.
+// Expands a sketch pattern definition into its derived copies, mirrored 1:1 by builder.py _expand_pattern so the
+// preview and the build agree. Derived ids are `<pattern.id>#<n>`, render and build only, never constraint targets.
 
 import type { Num, Params, SketchPattern } from "../types";
 import { dimPlaceOf } from "../types";
@@ -12,8 +10,7 @@ import { rectCorners } from "./region";
 
 const rectAngle = (angle: number | undefined) => (angle ? { angle } : {});
 
-/** an entity translated by (dx,dy) as a fresh object, shared by pattern
- *  expansion (derived copies) and the select tool's whole-entity body drag */
+/** Shared by pattern expansion and the select tool's whole-entity body drag. */
 export function translated(e: ResolvedEntity, dx: number, dy: number, id: string): ResolvedEntity {
   const c = e.construction ? { construction: true as const } : {};
   // badge label placement is an offset from the dim's own anchor, so a pure
@@ -25,21 +22,67 @@ export function translated(e: ResolvedEntity, dx: number, dy: number, id: string
     case "line":
       return { type: "line", id, x1: e.x1 + dx, y1: e.y1 + dy, x2: e.x2 + dx, y2: e.y2 + dy, ...c, ...dp };
     case "rectangle":
-      return { type: "rectangle", id, width: e.width, height: e.height, x: e.x + dx, y: e.y + dy, ...rectAngle(e.angle), ...c, ...dp };
+      return {
+        type: "rectangle",
+        id,
+        width: e.width,
+        height: e.height,
+        x: e.x + dx,
+        y: e.y + dy,
+        ...rectAngle(e.angle),
+        ...c,
+        ...dp,
+      };
     case "circle":
       return { type: "circle", id, radius: e.radius, x: e.x + dx, y: e.y + dy, ...c, ...dp };
     case "arc":
-      return { type: "arc", id, x1: e.x1 + dx, y1: e.y1 + dy, x2: e.x2 + dx, y2: e.y2 + dy, mx: e.mx + dx, my: e.my + dy, ...c };
+      return {
+        type: "arc",
+        id,
+        x1: e.x1 + dx,
+        y1: e.y1 + dy,
+        x2: e.x2 + dx,
+        y2: e.y2 + dy,
+        mx: e.mx + dx,
+        my: e.my + dy,
+        ...c,
+      };
     case "spline":
       return { type: "spline", id, points: e.points.map((p) => ({ x: p.x + dx, y: p.y + dy })), ...c };
     case "bspline":
-      return { type: "bspline", id, poles: e.poles.map((p) => ({ x: p.x + dx, y: p.y + dy })), ...bsplineShape(e), ...c };
+      return {
+        type: "bspline",
+        id,
+        poles: e.poles.map((p) => ({ x: p.x + dx, y: p.y + dy })),
+        ...bsplineShape(e),
+        ...c,
+      };
     case "point":
       return { type: "point", id, x: e.x + dx, y: e.y + dy, ...c };
     case "polygon":
-      return { type: "polygon", id, x: e.x + dx, y: e.y + dy, radius: e.radius, sides: e.sides, angle: e.angle, ...c, ...dp };
+      return {
+        type: "polygon",
+        id,
+        x: e.x + dx,
+        y: e.y + dy,
+        radius: e.radius,
+        sides: e.sides,
+        angle: e.angle,
+        ...c,
+        ...dp,
+      };
     case "slot":
-      return { type: "slot", id, x1: e.x1 + dx, y1: e.y1 + dy, x2: e.x2 + dx, y2: e.y2 + dy, width: e.width, ...c, ...dp };
+      return {
+        type: "slot",
+        id,
+        x1: e.x1 + dx,
+        y1: e.y1 + dy,
+        x2: e.x2 + dx,
+        y2: e.y2 + dy,
+        width: e.width,
+        ...c,
+        ...dp,
+      };
     case "text":
       return { ...e, id, x: e.x + dx, y: e.y + dy };
     case "projected":
@@ -48,35 +91,82 @@ export function translated(e: ResolvedEntity, dx: number, dy: number, id: string
 }
 
 function rotPt(x: number, y: number, cx: number, cy: number, ang: number): [number, number] {
-  const co = Math.cos(ang), si = Math.sin(ang);
-  const dx = x - cx, dy = y - cy;
+  const co = Math.cos(ang),
+    si = Math.sin(ang);
+  const dx = x - cx,
+    dy = y - cy;
   return [cx + dx * co - dy * si, cy + dx * si + dy * co];
 }
 
-/** Uniformly scale an entity about (cx,cy) by factor `f`. Unlike rotation, a
- *  uniform scale keeps every type (a rectangle stays a rectangle). */
+/** Unlike rotation, a uniform scale keeps every type (a rectangle stays a rectangle). */
 export function scaled(e: ResolvedEntity, cx: number, cy: number, f: number, id: string): ResolvedEntity {
   const c = e.construction ? { construction: true as const } : {};
   const a = Math.abs(f); // radii/sizes stay positive
   const S = (x: number, y: number): [number, number] => [cx + (x - cx) * f, cy + (y - cy) * f];
   switch (e.type) {
-    case "line": { const [x1, y1] = S(e.x1, e.y1), [x2, y2] = S(e.x2, e.y2); return { type: "line", id, x1, y1, x2, y2, ...c }; }
-    case "circle": { const [x, y] = S(e.x, e.y); return { type: "circle", id, radius: e.radius * a, x, y, ...c }; }
-    case "rectangle": { const [x, y] = S(e.x, e.y); return { type: "rectangle", id, width: e.width * a, height: e.height * a, x, y, ...rectAngle(e.angle), ...c }; }
-    case "arc": { const [x1, y1] = S(e.x1, e.y1), [x2, y2] = S(e.x2, e.y2), [mx, my] = S(e.mx, e.my); return { type: "arc", id, x1, y1, x2, y2, mx, my, ...c }; }
-    case "spline": return { type: "spline", id, points: e.points.map((p) => { const [x, y] = S(p.x, p.y); return { x, y }; }), ...c };
-    case "bspline": return { type: "bspline", id, poles: e.poles.map((p) => { const [x, y] = S(p.x, p.y); return { x, y }; }), ...bsplineShape(e), ...c };
-    case "point": { const [x, y] = S(e.x, e.y); return { type: "point", id, x, y, ...c }; }
-    case "polygon": { const [x, y] = S(e.x, e.y); return { type: "polygon", id, x, y, radius: e.radius * a, sides: e.sides, angle: e.angle, ...c }; }
-    case "slot": { const [x1, y1] = S(e.x1, e.y1), [x2, y2] = S(e.x2, e.y2); return { type: "slot", id, x1, y1, x2, y2, width: e.width * a, ...c }; }
-    case "text": { const [x, y] = S(e.x, e.y); return { ...e, id, x, y, height: e.height * a }; }
-    case "projected": return e; // fixed reference geometry, never transformed
+    case "line": {
+      const [x1, y1] = S(e.x1, e.y1),
+        [x2, y2] = S(e.x2, e.y2);
+      return { type: "line", id, x1, y1, x2, y2, ...c };
+    }
+    case "circle": {
+      const [x, y] = S(e.x, e.y);
+      return { type: "circle", id, radius: e.radius * a, x, y, ...c };
+    }
+    case "rectangle": {
+      const [x, y] = S(e.x, e.y);
+      return { type: "rectangle", id, width: e.width * a, height: e.height * a, x, y, ...rectAngle(e.angle), ...c };
+    }
+    case "arc": {
+      const [x1, y1] = S(e.x1, e.y1),
+        [x2, y2] = S(e.x2, e.y2),
+        [mx, my] = S(e.mx, e.my);
+      return { type: "arc", id, x1, y1, x2, y2, mx, my, ...c };
+    }
+    case "spline":
+      return {
+        type: "spline",
+        id,
+        points: e.points.map((p) => {
+          const [x, y] = S(p.x, p.y);
+          return { x, y };
+        }),
+        ...c,
+      };
+    case "bspline":
+      return {
+        type: "bspline",
+        id,
+        poles: e.poles.map((p) => {
+          const [x, y] = S(p.x, p.y);
+          return { x, y };
+        }),
+        ...bsplineShape(e),
+        ...c,
+      };
+    case "point": {
+      const [x, y] = S(e.x, e.y);
+      return { type: "point", id, x, y, ...c };
+    }
+    case "polygon": {
+      const [x, y] = S(e.x, e.y);
+      return { type: "polygon", id, x, y, radius: e.radius * a, sides: e.sides, angle: e.angle, ...c };
+    }
+    case "slot": {
+      const [x1, y1] = S(e.x1, e.y1),
+        [x2, y2] = S(e.x2, e.y2);
+      return { type: "slot", id, x1, y1, x2, y2, width: e.width * a, ...c };
+    }
+    case "text": {
+      const [x, y] = S(e.x, e.y);
+      return { ...e, id, x, y, height: e.height * a };
+    }
+    case "projected":
+      return e; // fixed reference geometry, never transformed
   }
 }
 
-/** Size and angle of a rectangle reflected across a line along (dx,dy). A
- *  result that lands square to the axes carries no angle, so it stays a plain,
- *  dimensionable rectangle. */
+/** A result square to the axes carries no angle, so it stays a plain, dimensionable rectangle. */
 export function reflectedRect(
   e: { width: number; height: number; angle?: number },
   dx: number,
@@ -90,8 +180,7 @@ export function reflectedRect(
   return { width: e.width, height: e.height, angle: a };
 }
 
-/** Rotate an entity about (cx,cy) by `ang` radians. A rectangle becomes a
- *  4-line loop. */
+/** `ang` in radians; a rectangle becomes a 4-line loop. */
 export function rotated(e: ResolvedEntity, cx: number, cy: number, ang: number, id: string): ResolvedEntity[] {
   const c = e.construction ? { construction: true as const } : {};
   const R = (x: number, y: number) => rotPt(x, y, cx, cy, ang);
@@ -109,23 +198,50 @@ export function rotated(e: ResolvedEntity, cx: number, cy: number, ang: number, 
       return [{ ...e, id, x, y, angle: e.angle + (ang * 180) / Math.PI }];
     }
     case "line": {
-      const [x1, y1] = R(e.x1, e.y1), [x2, y2] = R(e.x2, e.y2);
+      const [x1, y1] = R(e.x1, e.y1),
+        [x2, y2] = R(e.x2, e.y2);
       return [{ type: "line", id, x1, y1, x2, y2, ...c }];
     }
     case "arc": {
-      const [x1, y1] = R(e.x1, e.y1), [x2, y2] = R(e.x2, e.y2), [mx, my] = R(e.mx, e.my);
+      const [x1, y1] = R(e.x1, e.y1),
+        [x2, y2] = R(e.x2, e.y2),
+        [mx, my] = R(e.mx, e.my);
       return [{ type: "arc", id, x1, y1, x2, y2, mx, my, ...c }];
     }
     case "spline":
-      return [{ type: "spline", id, points: e.points.map((p) => { const [x, y] = R(p.x, p.y); return { x, y }; }), ...c }];
+      return [
+        {
+          type: "spline",
+          id,
+          points: e.points.map((p) => {
+            const [x, y] = R(p.x, p.y);
+            return { x, y };
+          }),
+          ...c,
+        },
+      ];
     case "bspline":
-      return [{ type: "bspline", id, poles: e.poles.map((p) => { const [x, y] = R(p.x, p.y); return { x, y }; }), ...bsplineShape(e), ...c }];
+      return [
+        {
+          type: "bspline",
+          id,
+          poles: e.poles.map((p) => {
+            const [x, y] = R(p.x, p.y);
+            return { x, y };
+          }),
+          ...bsplineShape(e),
+          ...c,
+        },
+      ];
     case "polygon": {
       const [x, y] = R(e.x, e.y);
-      return [{ type: "polygon", id, x, y, radius: e.radius, sides: e.sides, angle: e.angle + (ang * 180) / Math.PI, ...c }];
+      return [
+        { type: "polygon", id, x, y, radius: e.radius, sides: e.sides, angle: e.angle + (ang * 180) / Math.PI, ...c },
+      ];
     }
     case "slot": {
-      const [x1, y1] = R(e.x1, e.y1), [x2, y2] = R(e.x2, e.y2);
+      const [x1, y1] = R(e.x1, e.y1),
+        [x2, y2] = R(e.x2, e.y2);
       return [{ type: "slot", id, x1, y1, x2, y2, width: e.width, ...c }];
     }
     case "rectangle": {
@@ -141,18 +257,13 @@ export function rotated(e: ResolvedEntity, cx: number, cy: number, ang: number, 
   }
 }
 
-export function expandPattern(
-  pat: SketchPattern,
-  byId: Map<string, ResolvedEntity>,
-  params: Params,
-): ResolvedEntity[] {
+export function expandPattern(pat: SketchPattern, byId: Map<string, ResolvedEntity>, params: Params): ResolvedEntity[] {
   const N = (x: Num) => resolveNum(x, params);
   const out: ResolvedEntity[] = [];
   let n = 0;
   const did = () => `${pat.id}#${n++}`;
-  // pattern sources: skip missing ids AND projected reference geometry, it is
-  // fixed/linked, never replicated (the UI strips it before the pattern flow;
-  // hand-authored docs degrade the same way instead of emitting duplicate ids)
+  // Skip missing ids and projected geometry, which is fixed and never replicated; hand-authored docs degrade the
+  // same way instead of emitting duplicate ids.
   const sources = (ids: string[]) =>
     ids.flatMap((id) => {
       const e = byId.get(id);
@@ -160,15 +271,19 @@ export function expandPattern(
     });
 
   if (pat.type === "patternRect") {
-    const cx = Math.max(1, Math.round(N(pat.countX))), cy = Math.max(1, Math.round(N(pat.countY)));
-    const sx = N(pat.spacingX), sy = N(pat.spacingY);
+    const cx = Math.max(1, Math.round(N(pat.countX))),
+      cy = Math.max(1, Math.round(N(pat.countY)));
+    const sx = N(pat.spacingX),
+      sy = N(pat.spacingY);
     const ang = (N(pat.angle ?? 0) * Math.PI) / 180;
-    const co = Math.cos(ang), si = Math.sin(ang);
+    const co = Math.cos(ang),
+      si = Math.sin(ang);
     const srcs = sources(pat.sources);
     for (let i = 0; i < cx; i++)
       for (let j = 0; j < cy; j++) {
         if (i === 0 && j === 0) continue; // the original stays as the real entity
-        const dx = i * sx, dy = j * sy;
+        const dx = i * sx,
+          dy = j * sy;
         // angle 0 skips the cos/sin, so every document without one keeps the
         // exact offsets it built before instead of picking up float noise
         const [ox, oy] = ang ? [dx * co - dy * si, dx * si + dy * co] : [dx, dy];
@@ -179,32 +294,53 @@ export function expandPattern(
     const total = N(pat.angle);
     const full = total !== 0 && Math.abs(Math.abs(total) - 360) < 1e-6;
     const step = ((full ? total / count : total / Math.max(1, count - 1)) * Math.PI) / 180;
-    const cx = N(pat.cx), cy = N(pat.cy);
+    const cx = N(pat.cx),
+      cy = N(pat.cy);
     const srcs = sources(pat.sources);
     for (let k = 1; k < count; k++) for (const s of srcs) out.push(...rotated(s, cx, cy, k * step, did()));
   } else if (pat.type === "boltCircle") {
     const count = Math.max(1, Math.round(N(pat.count)));
-    const r = N(pat.bcd) / 2, rad = N(pat.diameter) / 2, cx = N(pat.cx), cy = N(pat.cy);
+    const r = N(pat.bcd) / 2,
+      rad = N(pat.diameter) / 2,
+      cx = N(pat.cx),
+      cy = N(pat.cy);
     for (let k = 0; k < count; k++) {
       const a = (k / count) * 2 * Math.PI;
       out.push({ type: "circle", id: did(), radius: rad, x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) });
     }
   } else if (pat.type === "gridHoles") {
-    const cx0 = Math.max(1, Math.round(N(pat.countX))), cy0 = Math.max(1, Math.round(N(pat.countY)));
-    const sx = N(pat.spacingX), sy = N(pat.spacingY), rad = N(pat.diameter) / 2, cx = N(pat.cx), cy = N(pat.cy);
+    const cx0 = Math.max(1, Math.round(N(pat.countX))),
+      cy0 = Math.max(1, Math.round(N(pat.countY)));
+    const sx = N(pat.spacingX),
+      sy = N(pat.spacingY),
+      rad = N(pat.diameter) / 2,
+      cx = N(pat.cx),
+      cy = N(pat.cy);
     for (let i = 0; i < cx0; i++)
       for (let j = 0; j < cy0; j++)
-        out.push({ type: "circle", id: did(), radius: rad, x: cx + (i - (cx0 - 1) / 2) * sx, y: cy + (j - (cy0 - 1) / 2) * sy });
+        out.push({
+          type: "circle",
+          id: did(),
+          radius: rad,
+          x: cx + (i - (cx0 - 1) / 2) * sx,
+          y: cy + (j - (cy0 - 1) / 2) * sy,
+        });
   } else if (pat.type === "hexHoles") {
     const rings = Math.max(0, Math.round(N(pat.rings)));
-    const s = N(pat.spacing), rad = N(pat.diameter) / 2, cx = N(pat.cx), cy = N(pat.cy);
+    const s = N(pat.spacing),
+      rad = N(pat.diameter) / 2,
+      cx = N(pat.cx),
+      cy = N(pat.cy);
     const h = (s * Math.sqrt(3)) / 2;
     for (let q = -rings; q <= rings; q++)
       for (let r = Math.max(-rings, -q - rings); r <= Math.min(rings, -q + rings); r++)
         out.push({ type: "circle", id: did(), radius: rad, x: cx + s * (q + r / 2), y: cy + h * r });
   } else if (pat.type === "honeycomb") {
     const rings = Math.max(0, Math.round(N(pat.rings)));
-    const s = N(pat.spacing), R = N(pat.diameter) / 2, cx = N(pat.cx), cy = N(pat.cy);
+    const s = N(pat.spacing),
+      R = N(pat.diameter) / 2,
+      cx = N(pat.cx),
+      cy = N(pat.cy);
     const h = (s * Math.sqrt(3)) / 2;
     for (let q = -rings; q <= rings; q++)
       for (let r = Math.max(-rings, -q - rings); r <= Math.min(rings, -q + rings); r++)

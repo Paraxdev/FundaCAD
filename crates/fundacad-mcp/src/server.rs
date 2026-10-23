@@ -1,31 +1,5 @@
-//! FundaCAD over MCP: the tools another model uses to build, measure and look
-//! at a part. A port of the Python MCP server's `server.py`.
-//!
-//! The protocol is the official Rust MCP SDK over stdio. STDOUT IS THE
-//! PROTOCOL, as it was: nothing else may ever be written there, and everything
-//! diagnostic goes to stderr, which the host shows in its logs.
-//!
-//! What the tools are for, in the order they are meant to be used:
-//!
-//!   schema        what a feature looks like, read this before authoring one
-//!   param_set     the driving dimensions, named, so the model stays parametric
-//!   feature_*     the timeline
-//!   build         make it, and say what broke
-//!   inspect       exact measurements, and the SELECTORS that address each face
-//!                 and edge, which is what makes the next feature writable
-//!   measure       exact distances, walls, radii and angles between two of them
-//!   view          a picture, because "is the hole in the right place" is not a
-//!                 question numbers answer
-//!   doc_save      a .funda file the app opens
-//!
-//! There are two worlds, and `link::for_mode` picks between them at start-up.
-//! PRIVATE holds the document in this process and spawns its own engine; LIVE
-//! works on the document a running FundaCAD has open, reading it before every
-//! tool and offering the result back afterwards. Which one is in force is
-//! `State::live`, and nothing in the tools themselves knows: `call_live` wraps
-//! them, so a tool is written once and works either way. That is deliberate, a
-//! tool that had to remember which world it was in would eventually forget, and
-//! forgetting means editing the wrong document.
+//! FundaCAD over MCP. STDOUT IS THE PROTOCOL: nothing else may be written there, diagnostics go to stderr.
+//! PRIVATE or LIVE is `State::live`, and `call_live` wraps every tool so no tool can forget which document it edits.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -35,10 +9,9 @@ use std::time::{Duration, Instant};
 use base64::Engine as _;
 use rmcp::handler::server::tool::ToolCallContext;
 use rmcp::model::{
-    CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, Implementation,
-    JsonObject, ListResourcesResult, PaginatedRequestParams, ReadResourceRequestParams,
-    ReadResourceResponse, ReadResourceResult, Resource, ResourceContents, ServerCapabilities,
-    ServerConfig,
+    CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, Implementation, JsonObject,
+    ListResourcesResult, PaginatedRequestParams, ReadResourceRequestParams, ReadResourceResponse, ReadResourceResult,
+    Resource, ResourceContents, ServerCapabilities, ServerConfig,
 };
 use rmcp::service::RequestContext;
 use rmcp::{tool, tool_router, ErrorData as McpError, RoleServer, ServerHandler};
@@ -49,22 +22,18 @@ use crate::describe;
 use crate::docfile;
 use crate::link::{args as call_args, EngineLink, Mode};
 use crate::live::{LiveError, LiveLink};
-use crate::model::{self, Doc};
 use crate::mesh::MeshBody;
+use crate::model::{self, Doc};
 use crate::render::{self, ViewRequest};
 use crate::schema;
 use crate::scope::PathScope;
 use crate::upload::{self, Upload, ASK_FOR_A_PATH, IMPORT_FORMATS, PIECES_WORTH_IT};
 
-/// Renders are returned inline as base64 PNG, so the size is a context cost
-/// rather than a disk one. 640x480 is legible and about 25 kB of PNG on a
-/// typical part; the cap stops a caller asking for something no context can hold.
+/// Renders go back inline, so their size costs context: 640x480 is about 25 kB of PNG on a typical part.
 pub const MAX_IMAGE_PX: i64 = 1600;
 
-/// Tools that change the document. Anything here is offered to the app when a
-/// live session is on; anything not here only reads, and a reader that proposed
-/// would put a no-op edit and an undo step in front of the user every time an
-/// agent measured something.
+/// Offered to the app in a live session. A reader that proposed would put a no-op edit and an undo step
+/// in front of the user every time an agent measured something.
 pub const MUTATORS: &[&str] = &[
     "doc_new",
     "doc_open",
@@ -81,17 +50,12 @@ pub const MUTATORS: &[&str] = &[
     "sketch_tie",
 ];
 
-/// Tools that need no document at all, so they must not be made to wait for
-/// one. `schema` in particular is what an agent reads BEFORE anything exists.
-pub const NO_DOCUMENT: &[&str] = &["schema", "ui_open", "ui_do", "ui_read", "ui_shot", "ui_close"];
+/// They must not wait for a document: `schema` is what an agent reads BEFORE anything exists.
+pub const NO_DOCUMENT: &[&str] =
+    &["schema", "ui_open", "ui_do", "ui_read", "ui_shot", "ui_close", "guide_highlight", "guide_wait", "guide_clear"];
 
-/// What the host puts in front of the model before its first call.
-///
-/// Kept SHORT and in order of what a mistake costs, because hosts cut server
-/// instructions off: Claude Code keeps the first 2048 characters, and the
-/// full working order (`schema::how_to`) used to lose its rules from "Use
-/// `move` to place them" on. The whole of it is still in the `schema` tool,
-/// which this points at. `tests/schema.rs` holds both texts under the limit.
+/// Kept SHORT and ordered by what a mistake costs, since hosts cut server instructions (Claude Code keeps 2048
+/// characters). The full working order is in the `schema` tool; `tests/schema.rs` holds both under the limit.
 pub const INSTRUCTIONS: &str = "Rules that save most failed builds:
 - Z is up. A sketch on XY is a floor plan, on XZ a side elevation.
 - box, cylinder, cone, sphere and torus are CENTRED ON THE ORIGIN. Place them with `move`.
@@ -108,15 +72,11 @@ Working order: `param_set` the driving dimensions first, `feature_add` a few fea
 Call `schema` with a type before writing it for the first time: it has the fields, an example and the traps of every feature type, and the full working order.
 ";
 
-/// Prepended to `INSTRUCTIONS` when this server is driving the document a
-/// person has open. It is the one thing about this mode a model has to know,
-/// because it changes what a mistake costs: there is no private copy to throw
-/// away, and the person is watching.
+/// Prepended in live mode, since there is no private copy to throw away and the person is watching.
 pub const LIVE_INSTRUCTIONS: &str = "YOU ARE EDITING A DOCUMENT SOMEONE HAS OPEN IN FUNDACAD. Every edit appears in their window as you make it. Each tool re-reads their document first. An edit refused because they changed the model means read it again and decide again, not retry. `doc_new` and `doc_open` REPLACE what they have open: only call them when asked. Your work reaches them without `doc_save`.
 
 ";
 
-/// The instructions for this mode, live or private.
 pub fn instructions_for(live: bool) -> String {
     if live {
         format!("{LIVE_INSTRUCTIONS}{INSTRUCTIONS}")
@@ -125,10 +85,8 @@ pub fn instructions_for(live: bool) -> String {
     }
 }
 
-/// How long to leave between re-probes for a running app. The probe is a file
-/// read, and only dials a port when that file exists, so the usual cost is
-/// nothing at all. The interval is for the stale-file case, where the dial
-/// waits out its timeout and would otherwise do so on every single tool call.
+/// The probe reads a file and dials only when it exists; the interval is for a stale file,
+/// whose dial would otherwise wait out its timeout on every tool call.
 pub const REPROBE: Duration = Duration::from_secs(3);
 
 pub fn log(line: &str) {
@@ -157,23 +115,64 @@ fn is_error(result: &CallToolResult) -> bool {
     result.is_error.unwrap_or(false)
 }
 
-/// The feature failures in a job's reply, as the same "FEATURE FAILED (id):
-/// message" line wherever they show up: `rebuild`'s own `featureErrors`,
-/// `inspect`'s `errors`, or the entries `export`'s `warnings` carries a
-/// `feature_id` for. `build`, `inspect`, `export` and `view` (through
-/// `build`) all read a partial build through this one place, so it reads the
-/// same way everywhere instead of each tool re-deciding what counts.
+/// One "FEATURE FAILED (id): message" line per failure, from `featureErrors`, `inspect`'s `errors` or
+/// `export`'s `warnings`, so every tool reads a partial build the same way.
 fn feature_failure_lines(errors: &[Value]) -> Vec<String> {
     errors
         .iter()
         .filter_map(|e| {
             let m = e.get("message").and_then(Value::as_str)?;
             Some(format!(
-                "FEATURE FAILED ({}): {m}",
-                e.get("feature_id").and_then(Value::as_str).unwrap_or("None")
+                "FEATURE FAILED ({}): {m}{}",
+                e.get("feature_id").and_then(Value::as_str).unwrap_or("None"),
+                open_profile_hint(m)
             ))
         })
         .collect()
+}
+
+/// The engine's "no closed profile" is also what the app shows, and the app
+/// has no `sketch_tie`, so the way out is added here.
+fn open_profile_hint(message: &str) -> &'static str {
+    if message.contains("no closed profile") {
+        ". `inspect` with `sketch` lists the sketch's loose ends, and `sketch_tie` ties the ones that only touch."
+    } else {
+        ""
+    }
+}
+
+/// A `match` selector the engine found no longer matching where it was
+/// picked. It still took an edge, so the build never goes silent about which.
+fn stale_match_line(d: &Value) -> Option<String> {
+    if d.get("stale") != Some(&json!(true)) {
+        return None;
+    }
+    let mm = |x: f64| {
+        let r = (x * 1000.0).round() / 1000.0;
+        format!("{}", if r == 0.0 { 0.0 } else { r })
+    };
+    let pt = |v: &Value| {
+        let c: Vec<String> = v.as_array()?.iter().map(|x| x.as_f64().map(mm)).collect::<Option<_>>()?;
+        Some(format!("({})", c.join(", ")))
+    };
+    let picked = pt(d.get("picked")?)?;
+    let now = d.get("now")?;
+    let through = pt(now.get("mid")?)?;
+    let curve = now.get("curve").and_then(Value::as_str).unwrap_or("edge");
+    let off = d.get("off").and_then(Value::as_f64).map_or(String::new(), |o| format!(", {} mm from its pick", mm(o)));
+    if d.get("reason").and_then(Value::as_str).is_some_and(|r| r.starts_with("tie")) {
+        return Some(format!(
+            "its edge selector picked at {picked} no longer matches an edge there, it now resolves to the {curve} \
+             through {through}{off}, tied with another edge. Check it with inspect and re-pick it if that is the \
+             wrong edge."
+        ));
+    }
+    // One best match far from the pick is what a parameter moving the edge
+    // leaves, and also what the edge being gone leaves, so it is said either way.
+    Some(format!(
+        "its edge selector picked at {picked} now resolves to the {curve} through {through}{off}. That is right \
+         when a parameter moved the edge, otherwise check it with inspect and re-pick it."
+    ))
 }
 
 /// The engine's `skippedFeatures`: features of a type it does not know, which a
@@ -194,8 +193,6 @@ fn skipped_lines(result: &Value) -> Vec<String> {
         .collect()
 }
 
-/// What `rebuild` gave back, plus what every caller of it needs to keep
-/// working with the engine.
 struct Rebuilt {
     link: Arc<EngineLink>,
     document: Map<String, Value>,
@@ -204,36 +201,25 @@ struct Rebuilt {
     problems: Vec<String>,
 }
 
-/// What the user sees beside the indicator that an assistant is editing: the
-/// tool name plus the one argument that identifies what it touched, enough to
-/// recognise an edit in a list and short enough for a line of UI.
+/// Shown to the user beside the editing indicator: the tool plus the argument that says what it touched.
 fn edit_note(name: &str, args: &JsonObject) -> String {
     let subject = args
         .get("id")
         .and_then(Value::as_str)
         .or_else(|| args.get("name").and_then(Value::as_str))
-        .or_else(|| {
-            args.get("feature")
-                .and_then(|f| f.get("type"))
-                .and_then(Value::as_str)
-        });
+        .or_else(|| args.get("feature").and_then(|f| f.get("type")).and_then(Value::as_str));
     match subject {
         Some(s) => format!("{name}: {s}"),
         None => name.to_string(),
     }
 }
 
-/// A fingerprint of where a body's surface is: its mesh points rounded to a
-/// micron, sorted, so it does not depend on the order the faces come in (a
-/// timeline reordered to the same shape lists them differently). An
-/// unchanged body keeps its print, and a body that only moved does not.
+/// Mesh points rounded to a micron and sorted, so a reordered timeline gives the same print;
+/// a body that only moved gets a new one.
 fn shape_print(b: &MeshBody) -> u64 {
     use std::hash::{Hash, Hasher};
-    let mut points: Vec<[i64; 3]> = b
-        .positions
-        .chunks_exact(3)
-        .map(|p| [0, 1, 2].map(|k| ((p[k] as f64) * 1000.0).round() as i64))
-        .collect();
+    let mut points: Vec<[i64; 3]> =
+        b.positions.chunks_exact(3).map(|p| [0, 1, 2].map(|k| ((p[k] as f64) * 1000.0).round() as i64)).collect();
     points.sort_unstable();
     points.dedup();
     let mut h = std::collections::hash_map::DefaultHasher::new();
@@ -241,35 +227,25 @@ fn shape_print(b: &MeshBody) -> u64 {
     h.finish()
 }
 
-/// What the last build was of. Cheap and exact: if this string is unchanged,
-/// the cached mesh is still the answer.
+/// Cheap and exact: while this string is unchanged, the cached mesh is still the answer.
 fn signature(doc: &Doc) -> String {
     let mut m = Map::new();
     m.insert("f".into(), doc.get("features").cloned().unwrap_or(Value::Null));
-    m.insert(
-        "p".into(),
-        doc.get("parameters").cloned().unwrap_or(Value::Null),
-    );
+    m.insert("p".into(), doc.get("parameters").cloned().unwrap_or(Value::Null));
     canonical(&Value::Object(m))
 }
 
-/// JSON with every object's keys sorted, which is what `sort_keys=True` buys:
-/// two documents that differ only in key order are the same document.
+/// Keys sorted, as Python's `sort_keys=True`: documents that differ only in key order are the same.
 fn canonical(v: &Value) -> String {
     match v {
         Value::Object(o) => {
             let mut keys: Vec<&String> = o.keys().collect();
             keys.sort();
-            let body: Vec<String> = keys
-                .iter()
-                .map(|k| format!("{}:{}", Value::String((*k).clone()), canonical(&o[*k])))
-                .collect();
+            let body: Vec<String> =
+                keys.iter().map(|k| format!("{}:{}", Value::String((*k).clone()), canonical(&o[*k]))).collect();
             format!("{{{}}}", body.join(","))
         }
-        Value::Array(a) => format!(
-            "[{}]",
-            a.iter().map(canonical).collect::<Vec<_>>().join(",")
-        ),
+        Value::Array(a) => format!("[{}]", a.iter().map(canonical).collect::<Vec<_>>().join(",")),
         other => other.to_string(),
     }
 }
@@ -294,9 +270,8 @@ fn py_num(v: Option<&Value>) -> String {
     }
 }
 
-/// The file of the document being worked on: the app's when this is its
-/// live session, which shares its path as the title, else the one opened or
-/// saved here.
+/// The app's file when this is its live session, which shares its path as the title,
+/// else the one opened or saved here.
 fn doc_file(st: &State) -> Option<PathBuf> {
     match &st.live {
         Some(live) => live.title.as_deref().map(PathBuf::from).filter(|p| p.is_absolute()),
@@ -308,32 +283,27 @@ struct State {
     doc: Doc,
     path: Option<PathBuf>,
     link: Arc<EngineLink>,
-    /// Set when this server is working on the document a running app has open.
-    /// None means the document here is private, which is what every tool
-    /// assumed before there was another option.
+    /// Set while working on the document a running app has open; None means the document here is private.
     live: Option<LiveLink>,
-    /// True once a tool has changed the PRIVATE document. It is what stops the
-    /// re-probe from pulling the rug out from under work already done here.
+    /// True once a tool changed the PRIVATE document, which stops the re-probe pulling the rug out from under it.
     private_edits: bool,
-    /// Uploads still arriving, by id. Empty except between the first piece of a
-    /// file and its last.
+    /// By id, only between the first piece of a file and its last.
     uploads: HashMap<String, Upload>,
-    /// When the last re-probe ran, so a closed app costs one file stat per tool
-    /// rather than one connect timeout.
+    /// So a closed app costs one file stat per tool rather than one connect timeout.
     probed_at: Option<Instant>,
-    /// The last successful build's per-body mesh, which is what `view` draws.
-    /// Kept rather than re-requested: a render right after a build is the
-    /// common case and the mesh is the expensive part of the reply.
+    /// What `view` draws, kept because a render right after a build is common and the mesh is the costly part.
     mesh: Arc<Vec<MeshBody>>,
     /// The document signature `mesh` belongs to.
     built_for: Option<String>,
-    /// Each body's line from the last `build`, so the next one can say only
-    /// what changed. A 32-body assembly listed in full after every edit is
-    /// most of an agent's context gone on bodies it did not touch.
+    /// Each body's line from the last `build`, so the next one says only what changed:
+    /// a 32-body assembly listed in full after every edit eats an agent's context.
     reported: Option<HashMap<String, (String, u64)>>,
     /// The `build` FundaCAD's engine answered the last probe with, kept after
     /// the app goes so work moved to a private engine can be compared with it.
     app_build: Option<Value>,
+    /// Sections of the opened `.fundab` this build cannot read, which a JSON
+    /// save leaves out.
+    unread_sections: Vec<String>,
 }
 
 impl State {
@@ -342,17 +312,11 @@ impl State {
         self.built_for = None;
     }
 
-    /// The edit, how long the timeline is now, and anything that will fail a
-    /// build. Not the timeline itself: printed after every edit it grew with
-    /// the model, and at two hundred features it was most of every reply.
-    /// `doc_get` has it for whoever needs it.
+    /// Not the timeline itself, which at two hundred features was most of every reply; `doc_get` has it.
     fn state_line(&mut self, head: &str) -> String {
         let count = model::features(&self.doc).len();
         let problems = model::validate(&mut self.doc);
-        let mut out = format!(
-            "{head} {count} feature{} in the timeline.",
-            if count == 1 { "" } else { "s" }
-        );
+        let mut out = format!("{head} {count} feature{} in the timeline.", if count == 1 { "" } else { "s" });
         if !problems.is_empty() {
             out.push_str("\nproblems (these WILL fail a build):\n  ");
             out.push_str(&problems.join("\n  "));
@@ -374,12 +338,12 @@ pub struct FundaCad {
     /// Built once. `tool_router()` constructs the whole table every call, and
     /// `call_tool` consults it three times.
     router: Arc<rmcp::handler::server::router::tool::ToolRouter<FundaCad>>,
-    /// One tool at a time. MCP allows concurrency, but every tool here ends in
-    /// the engine, which serialises heavy work anyway, and an agent asking one
-    /// question at a time is the entire traffic pattern. It also makes the live
-    /// pull, the tool and the push one atomic edit.
+    /// One tool at a time: the engine serialises heavy work anyway, and it makes the live pull,
+    /// the tool and the push one atomic edit.
     turn: Arc<Mutex<()>>,
     pub(crate) ui: Arc<Mutex<Option<crate::ui::UiBridge>>>,
+    /// The user's guide Stop presses already reported, so each is said once.
+    pub(crate) guide_stops: Arc<std::sync::atomic::AtomicI64>,
     scope: Arc<PathScope>,
 }
 
@@ -399,12 +363,27 @@ impl FundaCad {
                 built_for: None,
                 reported: None,
                 app_build: None,
+                unread_sections: Vec::new(),
             })),
             turn: Arc::new(Mutex::new(())),
-            router: Arc::new(Self::tool_router()),
+            router: Arc::new(Self::base_router()),
             ui: Arc::new(Mutex::new(None)),
+            guide_stops: Arc::new(std::sync::atomic::AtomicI64::new(crate::guide::UNSEEN)),
             scope: Arc::new(PathScope::for_server(std::env::args_os()).0),
         }
+    }
+
+    /// Every mode's tools. Guide mode is listed everywhere and says why where it cannot work.
+    fn base_router() -> rmcp::handler::server::router::tool::ToolRouter<FundaCad> {
+        let mut router = Self::tool_router();
+        router.merge(Self::guide_router());
+        router
+    }
+
+    /// The link, the live guest's name when sharing the app's document, and whether a private copy was edited.
+    pub(crate) async fn guide_parts(&self) -> (Arc<EngineLink>, Option<String>, bool) {
+        let st = self.state.lock().await;
+        (st.link.clone(), st.live.as_ref().map(|l| l.name.clone()), st.private_edits)
     }
 
     /// `raw` absolute if the tools may touch it, else the refusal to answer with.
@@ -419,15 +398,13 @@ impl FundaCad {
 
     /// The ui tools as well, which standalone gets and nothing else does.
     pub fn with_ui(mut self) -> FundaCad {
-        let mut router = Self::tool_router();
+        let mut router = Self::base_router();
         router.merge(Self::ui_router());
         self.router = Arc::new(router);
         self
     }
 
-    /// Decide where the engine comes from, once, at start-up. Split out of the
-    /// constructor because it does IO, it reads the session file and dials the
-    /// port.
+    /// Once, at start-up, apart from the constructor because it reads the session file and dials the port.
     pub async fn attach(mode: Mode) -> Result<FundaCad, String> {
         let (link, app) = EngineLink::for_mode(mode, log).await?;
         let mut server = FundaCad::with_link(link);
@@ -461,14 +438,9 @@ impl FundaCad {
                     ));
                 }
                 Err(e) => {
-                    // The engine is the app's but the WINDOW is not sharing.
-                    // That is the live-editing setting being off, and it is a
-                    // state to stay in rather than fail on: the agent still
-                    // gets the app's engine, and every tool that needs the
-                    // document says why it cannot have it.
-                    log(&format!(
-                        "[mcp] attached to the engine, but not to a document: {e}"
-                    ));
+                    // The engine is the app's but the WINDOW is not sharing, a state to stay in:
+                    // every tool that needs the document says why it cannot have it.
+                    log(&format!("[mcp] attached to the engine, but not to a document: {e}"));
                 }
             }
             st.live = Some(live);
@@ -481,19 +453,15 @@ impl FundaCad {
         self.state.lock().await.doc.clone()
     }
 
-    /// Whether this server is working on a document a running app has open.
     pub async fn is_live(&self) -> bool {
         self.state.lock().await.live.is_some()
     }
 
-    /// The engine this server is talking to, by port.
     pub async fn engine_port(&self) -> u16 {
         self.state.lock().await.link.port
     }
 
-    /// Whether a tool has changed the PRIVATE document. It is what stops the
-    /// re-probe pulling the rug out from under work already done here, and it
-    /// is settable so a test can reach that branch without building anything.
+    /// Settable too, so a test can reach the re-probe branch without building anything.
     pub async fn private_edits(&self) -> bool {
         self.state.lock().await.private_edits
     }
@@ -517,13 +485,7 @@ impl FundaCad {
 
     /// The uploads still arriving, as (id, spool directory).
     pub async fn uploads(&self) -> Vec<(String, PathBuf)> {
-        self.state
-            .lock()
-            .await
-            .uploads
-            .iter()
-            .map(|(k, u)| (k.clone(), u.dir.clone()))
-            .collect()
+        self.state.lock().await.uploads.iter().map(|(k, u)| (k.clone(), u.dir.clone())).collect()
     }
 
     /// Move every open upload's last-touched time back, so a test can reach the
@@ -534,7 +496,6 @@ impl FundaCad {
         }
     }
 
-    /// Every tool this server offers, as the host sees them.
     pub fn tools(&self) -> Vec<rmcp::model::Tool> {
         self.router.list_all()
     }
@@ -545,18 +506,8 @@ impl FundaCad {
         instructions_for(self.state.lock().await.live.is_some())
     }
 
-    /// Attach to the app if it has appeared since start-up.
-    ///
-    /// `attach` runs once, at start-up, which is the wrong moment and the only
-    /// one available to it: an MCP host starts its servers when the HOST
-    /// starts, not when a conversation starts, so "is FundaCAD open?" gets
-    /// asked before the user had any reason to have opened it. Answering no
-    /// then meant a private engine for the rest of the host's session, which
-    /// reads exactly as the server refusing to use the app that is right there.
-    ///
-    /// So the question is asked again, while the answer can still change: only
-    /// while private, only when nothing has been built here that adopting would
-    /// discard, and no more often than REPROBE.
+    /// Attach to an app that appeared after start-up: hosts start servers with the HOST, before anyone opened FundaCAD.
+    /// Only while private, only when nothing built here would be discarded, and no more often than REPROBE.
     async fn adopt_running_app(&self) {
         {
             let st = self.state.lock().await;
@@ -575,9 +526,7 @@ impl FundaCad {
             st.probed_at = Some(Instant::now());
         }
 
-        let Some(app) =
-            crate::app_session::find_running_app(None, crate::app_session::PROBE_TIMEOUT).await
-        else {
+        let Some(app) = crate::app_session::find_running_app(None, crate::app_session::PROBE_TIMEOUT).await else {
             return;
         };
         self.state.lock().await.app_build = app.build.clone();
@@ -586,13 +535,9 @@ impl FundaCad {
         let doc = match live.pull(&link).await {
             Ok(doc) => doc,
             Err(e) => {
-                // Found the engine, but the window is not sharing, or it went
-                // away between the probe and the pull. Staying private is the
-                // honest outcome; saying why is what stops it looking like the
-                // connector is broken.
-                log(&format!(
-                    "[mcp] FundaCAD is open but not sharing a document: {e}"
-                ));
+                // Engine found, but the window is not sharing or went away. Staying private is honest,
+                // and saying why keeps the connector from looking broken.
+                log(&format!("[mcp] FundaCAD is open but not sharing a document: {e}"));
                 return;
             }
         };
@@ -613,21 +558,14 @@ impl FundaCad {
             st.reported = None;
             old
         };
-        // The private engine held a worker that nothing will ask for again.
-        // Dropped after the swap, never before: a failure above has to leave a
-        // working private session behind, not neither.
+        // Dropped after the swap, never before: a failure above must leave a working private session.
         old.stop().await;
     }
 
-    /// The app's engine went away under a live session: the window closed, or
-    /// the engine was restarted with a new token. Nothing reconnects a live
-    /// link, so without this every later call fails the same way until the host
-    /// restarts this server. Fall back to a private engine, keeping the last
-    /// document pulled, and let the re-probe find the app again.
-    async fn drop_lost_app(&self, why: &str) {
-        log(&format!(
-            "[mcp] lost FundaCAD's engine ({why}), working on a private copy until it is back"
-        ));
+    /// The app's engine went away under a live session and nothing reconnects a live link, so fall back
+    /// to a private engine with the last pulled document and let the re-probe find the app again.
+    pub(crate) async fn drop_lost_app(&self, why: &str) {
+        log(&format!("[mcp] lost FundaCAD's engine ({why}), working on a private copy until it is back"));
         let lost = {
             let mut st = self.state.lock().await;
             let lost = std::mem::replace(&mut st.link, Arc::new(EngineLink::private()));
@@ -639,9 +577,8 @@ impl FundaCad {
         lost.stop().await;
     }
 
-    /// Said while working on an engine this server started that is not the
-    /// build of the FundaCAD it last reached, which is how a document comes to
-    /// build differently here than in the app.
+    /// Said while on a private engine that is not the build of the app it last reached,
+    /// which is how a document comes to build differently here than in the app.
     async fn build_mismatch(&self) -> Option<String> {
         let (link, app) = {
             let st = self.state.lock().await;
@@ -657,17 +594,8 @@ impl FundaCad {
         self.state.lock().await.link.clone()
     }
 
-    /// One tool, against the document a running app has open.
-    ///
-    /// Mirror in, mirror out. The pull before makes the local document the
-    /// app's, so the tool sees what the user sees rather than whatever this
-    /// process last built; the push after offers the result, and does not
-    /// return until the app has taken it. The tools themselves know none of
-    /// this.
-    ///
-    /// A tool that fails leaves nothing to offer, which is why the push is
-    /// after the error check: proposing a half-applied document would put the
-    /// failure in front of the user as an edit.
+    /// One tool against the app's open document: pulled before, so the tool sees what the user sees, and pushed
+    /// after the error check, waiting for the app, since a half-applied document would reach the user as an edit.
     async fn call_live(
         &self,
         name: &str,
@@ -680,10 +608,8 @@ impl FundaCad {
             let Some(live) = st.live.as_mut() else {
                 return Err(LiveError::NoAppOpen("no live session".into()));
             };
-            // A window that is not sharing is a SETTING, not a lost engine:
-            // the answer the user can act on is "turn live editing on", and
-            // falling back to a private copy would hide it. Only the transport
-            // going away is worth reconnecting over.
+            // A window not sharing is a SETTING the user can turn on, not a lost engine;
+            // only a lost transport reconnects.
             let pulled = match live.pull(&link).await {
                 Ok(pulled) => pulled,
                 Err(e) if e.is_lost() => return Err(e),
@@ -691,12 +617,8 @@ impl FundaCad {
             };
             st.doc = pulled.unwrap_or_else(model::new_document);
             model::fill_defaults(&mut st.doc);
-            // No invalidate here, deliberately. `view` already asks whether the
-            // cached mesh belongs to the document in hand, and that check
-            // answers "the user changed it under us" as well as it answers "we
-            // changed it". Dropping the mesh on every pull would make the
-            // ordinary build then view pair rebuild twice, which in live mode
-            // is every single render.
+            // No invalidate: `view` checks the cached mesh against the document in hand anyway,
+            // and dropping it on every pull would make each live build then view rebuild twice.
             st.doc.clone()
         };
 
@@ -704,10 +626,8 @@ impl FundaCad {
         let Ok(CallToolResponse::Complete(result)) = out else {
             return Ok(out);
         };
-        // An `edit` or a `sketch_merge` that built and found a failing
-        // feature still made its change, and it is the user's to see: its
-        // isError is about the build. A refused one changes nothing, so the
-        // check below has nothing to offer for it anyway.
+        // An `edit` or `sketch_merge` that built a failing feature still made its change, the user's to see;
+        // its isError is about the build.
         if !MUTATORS.contains(&name) || (is_error(&result) && !matches!(name, "edit" | "sketch_merge")) {
             return Ok(Ok(CallToolResponse::Complete(result)));
         }
@@ -721,23 +641,18 @@ impl FundaCad {
         let pushed = {
             let mut st = self.state.lock().await;
             let live = st.live.as_mut().expect("live checked above");
-            live.push(&link, &document, &edit_note(name, args)).await
+            let replaces = matches!(name, "doc_new" | "doc_open" | "doc_set");
+            live.push(&link, &document, &edit_note(name, args), replaces).await
         };
         match pushed {
-            Ok(rev) => Ok(Ok(CallToolResponse::Complete(append(
-                result,
-                &format!("\n(applied in FundaCAD, revision {rev})"),
-            )))),
+            Ok(rev) => {
+                Ok(Ok(CallToolResponse::Complete(append(result, &format!("\n(applied in FundaCAD, revision {rev})")))))
+            }
             Err(e) => {
-                // The local document now holds an edit the app never took. Put
-                // it back, or the next tool would build on a change that does
-                // not exist anywhere else and the agent would have no way to
-                // notice. A lost engine is retried privately, and the retry
-                // has to start from the document as pulled, or it applies the
-                // same edit twice. The mesh cache needs no help: it is keyed
-                // on the document's signature, which this restores with it.
-                // The bodies a build inside the tool reported never reached
-                // the agent, so the next build lists them all again.
+                // The local document holds an edit the app never took, so put it back, or the next tool builds
+                // on a change nowhere else has. A lost engine retries privately from the pulled document so the
+                // edit is not applied twice; the mesh cache follows the restored signature, and the next build
+                // lists every body again.
                 let mut st = self.state.lock().await;
                 st.doc = before;
                 st.reported = None;
@@ -750,7 +665,7 @@ impl FundaCad {
     }
 }
 
-/// Python's `bool(x)` for a JSON value, which is what `doc_import` branched on.
+/// Python's `bool(x)` for a JSON value.
 fn truthy(v: Option<&Value>) -> bool {
     match v {
         None | Some(Value::Null) | Some(Value::Bool(false)) => false,
@@ -765,7 +680,7 @@ fn truthy(v: Option<&Value>) -> bool {
 fn require<'a>(args: &'a JsonObject, key: &str) -> Result<&'a Value, CallToolResult> {
     args.get(key)
         .filter(|v| !v.is_null())
-        .ok_or_else(|| failure(format!("KeyError: '{key}'")))
+        .ok_or_else(|| failure(format!("this call needs `{key}`, and it was not given")))
 }
 
 fn require_str(args: &JsonObject, key: &str) -> Result<String, CallToolResult> {
@@ -792,9 +707,7 @@ impl FundaCad {
         annotations(read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
     pub async fn t_schema(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
-        Ok(text(schema::schema_text(
-            args.get("type").and_then(Value::as_str),
-        )))
+        Ok(text(schema::schema_text(args.get("type").and_then(Value::as_str))))
     }
 
     #[tool(
@@ -807,6 +720,7 @@ impl FundaCad {
         let mut st = self.state.lock().await;
         st.doc = model::new_document();
         st.path = None;
+        st.unread_sections.clear();
         st.invalidate();
         st.reported = None;
         Ok(text("New empty document."))
@@ -819,10 +733,8 @@ impl FundaCad {
         annotations(read_only_hint = false, destructive_hint = true, idempotent_hint = true, open_world_hint = false)
     )]
     pub async fn t_doc_open(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
-        // Absolute from here down. A relative path resolves against the
-        // SERVER's working directory, which an MCP host chooses and which is
-        // rarely the one the caller has in mind, so echoing back what was typed
-        // says nothing about where the file actually is. Say where it is.
+        // Absolute from here down: a relative path resolves against the working directory the MCP host chose,
+        // so echoing what was typed says nothing about where the file is.
         let path = match require_str(&args, "path") {
             Ok(p) => match self.scoped(&p).await {
                 Ok(p) => p,
@@ -830,7 +742,7 @@ impl FundaCad {
             },
             Err(e) => return Ok(e),
         };
-        let (doc, blobs) = match docfile::read_document(&path) {
+        let (doc, blobs, unread) = match docfile::read_document_full(&path) {
             Ok(v) => v,
             Err(e) => return Ok(failure(e.to_string())),
         };
@@ -852,6 +764,7 @@ impl FundaCad {
         }
         let mut st = self.state.lock().await;
         st.doc = doc;
+        st.unread_sections = unread;
         model::fill_defaults(&mut st.doc);
         st.path = Some(path.clone());
         st.invalidate();
@@ -863,11 +776,7 @@ impl FundaCad {
         } else {
             format!(
                 "\nparameter problems: {}",
-                issues
-                    .iter()
-                    .map(|(k, v)| format!("{k}: {v}"))
-                    .collect::<Vec<_>>()
-                    .join("; ")
+                issues.iter().map(|(k, v)| format!("{k}: {v}")).collect::<Vec<_>>().join("; ")
             )
         };
         Ok(text(format!(
@@ -899,15 +808,9 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
     )]
     pub async fn t_doc_save(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         let mut st = self.state.lock().await;
-        let given = args
-            .get("path")
-            .and_then(Value::as_str)
-            .filter(|p| !p.is_empty())
-            .map(str::to_string);
+        let given = args.get("path").and_then(Value::as_str).filter(|p| !p.is_empty()).map(str::to_string);
         let Some(given) = given.or_else(|| st.path.as_ref().map(|p| p.to_string_lossy().into_owned())) else {
-            return Ok(failure(
-                "No path given and this document has never been saved.",
-            ));
+            return Ok(failure("No path given and this document has never been saved."));
         };
         let path = match self.scoped_in(&st, &given) {
             Ok(p) => p,
@@ -938,22 +841,29 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
                 }
             }
         }
-        let embedded = match docfile::write_with(&path, &st.doc, Some(&root), &fetched) {
+        let mut stamped = st.doc.clone();
+        model::stamp_for_save(&mut stamped);
+        let embedded = match docfile::write_with(&path, &stamped, Some(&root), &fetched) {
             Ok(n) => n,
             Err(e) => {
-                let why = asking_failed
-                    .map_or_else(String::new, |e| format!("\n{}", crate::blobs::engine_problem(&e)));
+                let why = asking_failed.map_or_else(String::new, |e| format!("\n{}", crate::blobs::engine_problem(&e)));
                 return Ok(failure(format!("{e}{why}")));
             }
         };
         st.path = Some(path.clone());
-        let geometry = if embedded > 0 {
-            format!(", with {embedded} imported bodies' geometry")
-        } else {
+        let left_out = if st.unread_sections.is_empty() {
             String::new()
+        } else {
+            format!(
+                "
+note: left out of the file, because this build cannot read them and a .funda has no place for them: {}. Open the original .fundab in FundaCAD and save as .fundab to keep them.",
+                std::mem::take(&mut st.unread_sections).join(", ")
+            )
         };
+        let geometry =
+            if embedded > 0 { format!(", with {embedded} imported bodies' geometry") } else { String::new() };
         Ok(text(format!(
-            "Saved {} features to {}{geometry}.",
+            "Saved {} features to {}{geometry}.{left_out}",
             model::features(&st.doc).len(),
             path.display()
         )))
@@ -968,23 +878,10 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
     pub async fn t_doc_get(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         let st = self.state.lock().await;
         let mut out = Map::new();
-        out.insert(
-            "features".into(),
-            st.doc.get("features").cloned().unwrap_or_else(|| json!([])),
-        );
-        if !args
-            .get("features_only")
-            .and_then(Value::as_bool)
-            .unwrap_or(false)
-        {
-            out.insert(
-                "parameters".into(),
-                st.doc.get("parameters").cloned().unwrap_or_else(|| json!({})),
-            );
-            out.insert(
-                "paramDefs".into(),
-                st.doc.get("paramDefs").cloned().unwrap_or_else(|| json!({})),
-            );
+        out.insert("features".into(), st.doc.get("features").cloned().unwrap_or_else(|| json!([])));
+        if !args.get("features_only").and_then(Value::as_bool).unwrap_or(false) {
+            out.insert("parameters".into(), st.doc.get("parameters").cloned().unwrap_or_else(|| json!({})));
+            out.insert("paramDefs".into(), st.doc.get("paramDefs").cloned().unwrap_or_else(|| json!({})));
             for key in ["bodyIds", "version"] {
                 if let Some(v) = st.doc.get(key) {
                     out.insert(key.into(), v.clone());
@@ -1005,9 +902,7 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
             Ok(d) => d,
             Err(e) => return Ok(e),
         };
-        let ok = doc
-            .as_object()
-            .is_some_and(|o| o.get("features").is_some_and(Value::is_array));
+        let ok = doc.as_object().is_some_and(|o| o.get("features").is_some_and(Value::is_array));
         if !ok {
             return Ok(failure("`document` needs a `features` list."));
         }
@@ -1029,9 +924,7 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
         st.doc = next;
         model::fill_defaults(&mut st.doc);
         fundacad_core::body_ids::ensure_map(&mut st.doc);
-        st.doc
-            .entry("version")
-            .or_insert_with(|| json!(model::FORMAT_VERSION));
+        st.doc.entry("version").or_insert_with(|| json!(model::FORMAT_VERSION));
         st.invalidate();
         st.reported = None;
         model::recompute_parameters(&mut st.doc);
@@ -1061,14 +954,8 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
             Err(e) => return Ok(doc_error(e)),
         };
         st.invalidate();
-        // Just this parameter. Printing the whole table on every call turned a
-        // twenty-parameter model into twenty pages of the same numbers; anything
-        // that wants the table can ask doc_get for it.
-        let count = st
-            .doc
-            .get("parameters")
-            .and_then(Value::as_object)
-            .map_or(0, Map::len);
+        // Just this parameter: the whole table on every call buried a twenty parameter model; doc_get has it.
+        let count = st.doc.get("parameters").and_then(Value::as_object).map_or(0, Map::len);
         Ok(text(format!(
             "{name} = {} -> {} {} ({count} parameters defined)",
             d.get("expr").and_then(Value::as_str).unwrap_or_default(),
@@ -1185,9 +1072,7 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
             return Ok(doc_error(e));
         }
         st.invalidate();
-        Ok(text(
-            st.state_line(&format!("Moved {id} to position {to}.")),
-        ))
+        Ok(text(st.state_line(&format!("Moved {id} to position {to}."))))
     }
 
     #[tool(
@@ -1323,18 +1208,10 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
                 return Ok(failure(format!("No such directory: {}", parent.display())));
             }
         }
-        // The engine writes as part of building, before this side even knows
-        // whether a feature failed, so it writes to a TEMPORARY sibling and
-        // only this side puts it at the requested path, and only once the
-        // export is accepted. A refusal then removes the temporary file
-        // alone: whatever was already at `path` (a previous good export) is
-        // never touched, let alone overwritten and then deleted.
+        // The engine writes while building, before a failure is known, so it writes to a TEMPORARY sibling that is
+        // moved into place only once the export is accepted; a refusal never touches what is already at `path`.
         let separate = truthy(args.get("separate"));
-        let wanted = args
-            .get("body")
-            .and_then(Value::as_str)
-            .filter(|b| !b.is_empty())
-            .map(str::to_string);
+        let wanted = args.get("body").and_then(Value::as_str).filter(|b| !b.is_empty()).map(str::to_string);
         if separate && wanted.is_some() {
             return Ok(failure(
                 "Give `body` or `separate`, not both: one body to one file, or every body to a \
@@ -1398,20 +1275,14 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
                 }
             }
         }
-        // A temporary folder beside `path`, holding a file of the same name:
-        // a refusal removes the folder and nothing that was already there,
-        // and the STEP's top assembly is named after the file, so the name
-        // inside has to be the real one. A separate export's folder of parts
-        // is made inside it too.
+        // A temporary folder beside `path` holding a file of the same name, since the STEP's top assembly
+        // is named after the file; a refusal removes only the folder.
         let tmp_root = temp_sibling(&path);
         if let Err(e) = std::fs::create_dir(&tmp_root) {
             return Ok(failure(format!("Could not write beside {}: {e}", path.display())));
         }
-        // A separate export's folder is the path less its extension, split
-        // the way the engine splits it. A path whose extension is not the
-        // format's ("parts", "bracket_v1.2") is the folder's whole name, and
-        // the engine is given it with the format's extension added, which is
-        // the one the parts then take.
+        // A separate export's folder is the path less its extension, split as the engine splits it. A path whose
+        // extension is not the format's is the whole folder name, and the parts take the format's extension.
         let file_name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
         let mut tmp_name = file_name.clone();
         let mut folder = path.clone();
@@ -1461,16 +1332,10 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
         let result = reply.get("result").cloned().unwrap_or_else(|| json!({}));
         if let Some(e) = result.get("error") {
             discard();
-            return Ok(failure(format!(
-                "Export failed: {}",
-                e.get("message").and_then(Value::as_str).unwrap_or("?")
-            )));
+            return Ok(failure(format!("Export failed: {}", e.get("message").and_then(Value::as_str).unwrap_or("?"))));
         }
-        // `warnings` mixes a feature failure in with an ordinary export
-        // advisory (like a plugin's displacement not surviving STEP); only
-        // the entries that carry a `feature_id` (even a null one, `wire`
-        // always writes the key) are a build failure, so filter on that
-        // rather than on wording.
+        // Only `warnings` entries carrying a `feature_id` key (`wire` always writes it, maybe null) are build
+        // failures; the rest are export advisories such as a displacement STEP cannot keep.
         let failed: Vec<Value> = result
             .get("warnings")
             .and_then(Value::as_array)
@@ -1515,13 +1380,8 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
     }
 }
 
-/// Every body the document builds, as `inspect` summarises it: id, name and
-/// box. `only` narrows it, and asks for every face as well.
-pub(crate) async fn engine_bodies(
-    link: &EngineLink,
-    doc: &Doc,
-    only: Option<&[String]>,
-) -> Result<Vec<Value>, String> {
+/// As `inspect` summarises them (id, name, box); `only` narrows it and asks for every face as well.
+pub(crate) async fn engine_bodies(link: &EngineLink, doc: &Doc, only: Option<&[String]>) -> Result<Vec<Value>, String> {
     let mut payload = Map::new();
     payload.insert("document".into(), Value::Object(doc.clone()));
     payload.insert("detail".into(), json!(only.is_some()));
@@ -1536,12 +1396,7 @@ pub(crate) async fn engine_bodies(
     if reply.get("ok") != Some(&json!(true)) {
         return Err(format!("Could not measure the bodies: {}", error_message(&reply)));
     }
-    Ok(reply
-        .get("result")
-        .and_then(|r| r.get("bodies"))
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default())
+    Ok(reply.get("result").and_then(|r| r.get("bodies")).and_then(Value::as_array).cloned().unwrap_or_default())
 }
 
 /// A body named by id or by name, as its id.
@@ -1568,8 +1423,7 @@ pub(crate) fn no_such_body(wanted: &str, built: &[Value]) -> String {
     format!("no body '{wanted}' in this build, have {}", have.join(", "))
 }
 
-/// Move a separate export's files from the temporary folder into `folder`,
-/// replacing files of the same name and leaving anything else there alone.
+/// Replaces files of the same name in `folder` and leaves anything else there alone.
 fn place_files(result: &Value, folder: &Path) -> Result<String, String> {
     let written: Vec<PathBuf> = result
         .get("paths")
@@ -1577,18 +1431,11 @@ fn place_files(result: &Value, folder: &Path) -> Result<String, String> {
         .map(|a| a.iter().filter_map(Value::as_str).map(PathBuf::from).collect())
         .unwrap_or_default();
     if folder.exists() && !folder.is_dir() {
-        return Err(format!(
-            "{} is a file, and a separate export writes a folder of that name.",
-            folder.display()
-        ));
+        return Err(format!("{} is a file, and a separate export writes a folder of that name.", folder.display()));
     }
     // Every part checked before the first is moved in, so a name that is
     // taken by a folder refuses the export with the old parts untouched.
-    if let Some(to) = written
-        .iter()
-        .filter_map(|from| Some(folder.join(from.file_name()?)))
-        .find(|to| to.is_dir())
-    {
+    if let Some(to) = written.iter().filter_map(|from| Some(folder.join(from.file_name()?))).find(|to| to.is_dir()) {
         return Err(format!("{} is a folder, so the part of that name cannot be written there.", to.display()));
     }
     std::fs::create_dir_all(folder).map_err(|e| format!("Could not make {}: {e}", folder.display()))?;
@@ -1628,7 +1475,6 @@ fn split_ext(name: &str) -> (&str, &str) {
     }
 }
 
-/// The extensions a file of this export format goes by.
 fn format_exts(format: &str) -> &'static [&'static str] {
     match format.to_ascii_lowercase().as_str() {
         "step" | "stp" => &["step", "stp"],
@@ -1640,10 +1486,8 @@ fn format_exts(format: &str) -> &'static [&'static str] {
     }
 }
 
-/// A temporary folder beside `path`, so moving the export out of it never
-/// crosses a filesystem, and a refusal that removes it never touches `path`
-/// itself. Includes this process's id, since two agents could target the same
-/// export path at once.
+/// Beside `path`, so moving out never crosses a filesystem and removing it never touches `path`;
+/// the pid in the name keeps two agents exporting to one path apart.
 fn temp_sibling(path: &Path) -> PathBuf {
     let pid = std::process::id();
     let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("export");
@@ -1654,17 +1498,10 @@ fn temp_sibling(path: &Path) -> PathBuf {
 }
 
 fn error_message(reply: &Value) -> String {
-    reply
-        .get("error")
-        .and_then(|e| e.get("message"))
-        .and_then(Value::as_str)
-        .unwrap_or("?")
-        .to_string()
+    reply.get("error").and_then(|e| e.get("message")).and_then(Value::as_str).unwrap_or("?").to_string()
 }
 
-/// What an update changed: the fields the patch named, with the values they
-/// have now. Not the whole feature, which for a sketch is pages of points the
-/// caller sent a moment ago.
+/// The fields the patch named with their values now, not the whole feature, which for a sketch is pages of points.
 fn updated_line(id: &str, feature: &Value, patch: &Value, replace: bool) -> String {
     let kind = feature.get("type").and_then(Value::as_str).unwrap_or("None");
     if replace {
@@ -1694,9 +1531,8 @@ fn clipped(s: &str, max: usize) -> String {
     format!("{cut}...")
 }
 
-/// `json.dumps(v)`: compact, but with a space after every colon and comma. The
-/// difference is only whitespace, and it is in the line an agent reads after
-/// every edit, so the two servers say it the same way while both exist.
+/// Python's `json.dumps(v)`, a space after every colon and comma, so both servers word the line
+/// an agent reads after every edit the same way.
 pub(crate) fn py_json(v: &Value) -> String {
     match v {
         Value::Object(o) => format!(
@@ -1706,10 +1542,7 @@ pub(crate) fn py_json(v: &Value) -> String {
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
-        Value::Array(a) => format!(
-            "[{}]",
-            a.iter().map(py_json).collect::<Vec<_>>().join(", ")
-        ),
+        Value::Array(a) => format!("[{}]", a.iter().map(py_json).collect::<Vec<_>>().join(", ")),
         other => other.to_string(),
     }
 }
@@ -1727,14 +1560,9 @@ fn pretty(v: &Value, indent: usize) -> String {
     String::from_utf8(buf).unwrap_or_else(|_| v.to_string())
 }
 
-// --- the tools that need more than a few lines --------------------------------
-
 impl FundaCad {
-    /// One call to the engine's `rebuild`, plus the state update every caller
-    /// needs (mesh, bodyIds, built_for). `Err` only for a total engine-level
-    /// failure (a document the engine could not even attempt), never for a
-    /// feature that failed mid-build: that is `ok:true` with `featureErrors`
-    /// in `result`, which callers read with `feature_failure_lines`.
+    /// `Err` only when the engine could not even attempt the document. A feature that failed mid-build is
+    /// `ok:true` with `featureErrors`, read by `feature_failure_lines`.
     async fn rebuild(&self) -> Result<Rebuilt, CallToolResult> {
         let (link, doc) = {
             let mut st = self.state.lock().await;
@@ -1763,12 +1591,9 @@ impl FundaCad {
                 .and_then(Value::as_str)
                 .map(|w| format!(" at {w}"))
                 .unwrap_or_default();
-            let err = reply
-                .get("error")
-                .and_then(|e| e.get("message"))
-                .and_then(Value::as_str)
-                .unwrap_or("unknown error");
-            return Err(failure(format!("Build failed{where_}: {err}")));
+            let err =
+                reply.get("error").and_then(|e| e.get("message")).and_then(Value::as_str).unwrap_or("unknown error");
+            return Err(failure(format!("Build failed{where_}: {err}{}", open_profile_hint(err))));
         }
         let result = reply.get("result").cloned().unwrap_or_else(|| json!({}));
         let mesh = Arc::new(if framed.is_empty() {
@@ -1801,22 +1626,11 @@ impl FundaCad {
             Ok(r) => r,
             Err(e) => return e,
         };
-        // Sizes come from a second call, not from the mesh bbox in this reply.
-        // The mesh bbox is over the triangulation plus the shape's own gap
-        // tolerance, and after an offset or a thicken that tolerance is large:
-        // measured 48.41 x 52.03 x 24.45 on a body whose exact box is 36.57 x
-        // 36.57 x 21.45. A number a third too big, on the line an agent reads
-        // after every single build, is worth one cache-warm rebuild.
+        // Sizes come from a second call: the mesh bbox includes the shape's gap tolerance, large after an offset or a
+        // thicken (48.41 x 52.03 x 24.45 measured on an exact 36.57 x 36.57 x 21.45 box).
         let mut exact: HashMap<String, Value> = HashMap::new();
-        if let Ok(deep) = link
-            .call(
-                "inspect",
-                call_args([
-                    ("document", Value::Object(document)),
-                    ("detail", json!(false)),
-                ]),
-            )
-            .await
+        if let Ok(deep) =
+            link.call("inspect", call_args([("document", Value::Object(document)), ("detail", json!(false))])).await
         {
             if deep.get("ok") == Some(&json!(true)) {
                 for b in deep
@@ -1845,11 +1659,7 @@ impl FundaCad {
                         (Some(lo), Some(hi)) => lo
                             .iter()
                             .zip(hi.iter())
-                            .map(|(a, b)| {
-                                json!(round3(
-                                    b.as_f64().unwrap_or(0.0) - a.as_f64().unwrap_or(0.0)
-                                ))
-                            })
+                            .map(|(a, b)| json!(round3(b.as_f64().unwrap_or(0.0) - a.as_f64().unwrap_or(0.0))))
                             .collect(),
                         _ => vec![json!(0.0), json!(0.0), json!(0.0)],
                     }
@@ -1860,43 +1670,39 @@ impl FundaCad {
                 None => String::new(),
             };
             let triangles = b.triangles();
-            bodies.push((id.to_string(), format!(
-                "{id} \"{}\": {} x {} x {} mm{vol}, {} faces, {triangles} triangles",
-                b.get("name")
-                    .and_then(Value::as_str)
-                    .map_or("None".into(), str::to_string),
-                py_num(size.first()),
-                py_num(size.get(1)),
-                py_num(size.get(2)),
-                py_num(b.get("faceCount"))
-            ), shape_print(b)));
+            bodies.push((
+                id.to_string(),
+                format!(
+                    "{id} \"{}\": {} x {} x {} mm{vol}, {} faces, {triangles} triangles",
+                    b.get("name").and_then(Value::as_str).map_or("None".into(), str::to_string),
+                    py_num(size.first()),
+                    py_num(size.get(1)),
+                    py_num(size.get(2)),
+                    py_num(b.get("faceCount"))
+                ),
+                shape_print(b),
+            ));
         }
         let mut lines = self.changed_bodies(&bodies, full).await;
-        // `featureErrors`, NOT `errors`. A feature that fails is recorded as a
-        // no-op and the rebuild carries on, so the reply is a successful one
-        // carrying the failures beside the geometry that did build. Reading the
-        // wrong key made a failed press/pull look like a press/pull that did
-        // nothing, which is the single most misleading thing this tool could say.
-        let failures = feature_failure_lines(
-            result.get("featureErrors").and_then(Value::as_array).map_or(&[][..], Vec::as_slice),
-        );
+        // `featureErrors`, NOT `errors`: a failed feature is a no-op and the rebuild succeeds around it,
+        // so the wrong key made a failed press/pull look like one that did nothing.
+        let failures =
+            feature_failure_lines(result.get("featureErrors").and_then(Value::as_array).map_or(&[][..], Vec::as_slice));
         let skips = skipped_lines(&result);
         // A skip makes the model incomplete, so it counts as a failure for isError.
         let any_feature_failed = !failures.is_empty() || !skips.is_empty();
         lines.extend(failures);
         lines.extend(skips);
-        for d in result
-            .get("diagnostics")
-            .and_then(Value::as_array)
-            .map_or(&[][..], Vec::as_slice)
-        {
+        for d in result.get("diagnostics").and_then(Value::as_array).map_or(&[][..], Vec::as_slice) {
             // The engine's advisories carry their text as `reason`, the lossy
             // entries are selector match notes an agent cannot act on.
             let advisory = d.get("lossy") == Some(&json!(false));
             let note = d
                 .get("message")
                 .or_else(|| d.get("reason").filter(|_| advisory))
-                .and_then(Value::as_str);
+                .and_then(Value::as_str)
+                .map(str::to_string)
+                .or_else(|| stale_match_line(d));
             if let Some(m) = note {
                 let at = d.get("feature_id").and_then(Value::as_str).map_or(String::new(), |id| format!(" ({id})"));
                 lines.push(format!("warning{at}: {m}"));
@@ -1912,10 +1718,7 @@ impl FundaCad {
             lines.push(format!("document problems: {}", problems.join("; ")));
         }
         lines.extend(self.build_mismatch().await);
-        // isError has to reflect a partial build, not just a total one: a body
-        // that built beside a feature that failed is still a wrong document, and
-        // an agent gating on isError alone must see that without string-matching
-        // "FEATURE FAILED" in the text.
+        // isError reflects a partial build too, so an agent gating on it need not string match "FEATURE FAILED".
         let full = lines.join("\n");
         if any_feature_failed {
             failure(full)
@@ -1924,15 +1727,11 @@ impl FundaCad {
         }
     }
 
-    /// The body lines worth printing: all of them the first time and when
-    /// asked, otherwise only the bodies that are new or changed since the last
-    /// build reported them, the ones that went away, and a count of the rest.
+    /// All of them the first time and when asked, else the new, changed and gone bodies and a count of the rest.
     async fn changed_bodies(&self, bodies: &[(String, String, u64)], full: bool) -> Vec<String> {
         let previous = {
             let mut st = self.state.lock().await;
-            st.reported.replace(
-                bodies.iter().map(|(id, line, print)| (id.clone(), (line.clone(), *print))).collect(),
-            )
+            st.reported.replace(bodies.iter().map(|(id, line, print)| (id.clone(), (line.clone(), *print))).collect())
         };
         let previous = match previous {
             Some(p) if !full => p,
@@ -1942,16 +1741,13 @@ impl FundaCad {
         for (id, line, print) in bodies {
             match previous.get(id) {
                 Some((was, p)) if was == line && p == print => {}
-                // Same size, volume and counts, different geometry: a part
-                // that moved or turned, or a hole that moved inside it. The
-                // line alone would read exactly as it did last time.
+                // Same size, volume and counts but different geometry: moved, turned, or a hole moved inside it.
                 Some((was, _)) if was == line => out.push(format!("{line} (moved or reshaped, same size)")),
                 _ => out.push(line.clone()),
             }
         }
         let shown = out.len();
-        let mut gone: Vec<&String> =
-            previous.keys().filter(|id| !bodies.iter().any(|(b, _, _)| b == *id)).collect();
+        let mut gone: Vec<&String> = previous.keys().filter(|id| !bodies.iter().any(|(b, _, _)| b == *id)).collect();
         gone.sort();
         if !gone.is_empty() {
             out.push(format!(
@@ -2011,12 +1807,19 @@ impl FundaCad {
             return failure(format!("Inspect failed: {}", error_message(&reply)));
         }
         let mut report = reply.get("result").cloned().unwrap_or_else(|| json!({}));
-        // `errors`, inspect's own name for the same thing `rebuild` calls
-        // `featureErrors`: a feature that failed mid-build, reported beside
-        // the bodies that did build rather than refusing the inspection.
-        let failures = feature_failure_lines(
-            report.get("errors").and_then(Value::as_array).map_or(&[][..], Vec::as_slice),
-        );
+        if let Some(wanted) =
+            report.get("unknown").and_then(Value::as_array).and_then(|u| u.first()).and_then(Value::as_str)
+        {
+            let have = report.get("have").and_then(Value::as_array).map_or(&[][..], Vec::as_slice);
+            return failure(if have.is_empty() {
+                format!("no body '{wanted}', this build made no bodies")
+            } else {
+                no_such_body(wanted, have)
+            });
+        }
+        // `errors` is inspect's name for `rebuild`'s `featureErrors`, reported beside the bodies that did build.
+        let failures =
+            feature_failure_lines(report.get("errors").and_then(Value::as_array).map_or(&[][..], Vec::as_slice));
         if want_faces.is_some() || want_edges.is_some() {
             if let Some(bodies) = report.get_mut("bodies").and_then(Value::as_array_mut) {
                 for b in bodies {
@@ -2032,11 +1835,7 @@ impl FundaCad {
         let mut out = describe::describe(&report, detail);
         if selectors {
             let mut sel = Map::new();
-            for b in report
-                .get("bodies")
-                .and_then(Value::as_array)
-                .map_or(&[][..], Vec::as_slice)
-            {
+            for b in report.get("bodies").and_then(Value::as_array).map_or(&[][..], Vec::as_slice) {
                 let mut faces = Map::new();
                 for f in b.get("faces").and_then(Value::as_array).map_or(&[][..], Vec::as_slice) {
                     faces.insert(
@@ -2052,10 +1851,7 @@ impl FundaCad {
                     );
                 }
                 sel.insert(
-                    b.get("id")
-                        .and_then(Value::as_str)
-                        .unwrap_or_default()
-                        .to_string(),
+                    b.get("id").and_then(Value::as_str).unwrap_or_default().to_string(),
                     json!({"faces": faces, "edges": edges}),
                 );
             }
@@ -2080,13 +1876,8 @@ impl FundaCad {
         };
         let mut build_failures = String::new();
         if stale {
-            // A total engine-level failure refuses here; a feature that
-            // failed mid-rebuild does not, `rebuild` still returns `Ok` with
-            // the failure named in `featureErrors`. Looking at what DID
-            // build is the main way an agent checks its work, so draw it and
-            // name what did not, rather than refusing the whole view over
-            // one failed feature (the empty-mesh case below still refuses
-            // when nothing built at all).
+            // Only a total engine failure refuses: after a feature failed mid-rebuild, what DID build is still drawn
+            // and the rest named, since looking is how an agent checks its work.
             let r = match self.rebuild().await {
                 Ok(r) => r,
                 Err(e) => return e,
@@ -2104,49 +1895,29 @@ impl FundaCad {
         if mesh.is_empty() {
             return failure("Nothing to render: the document produced no bodies.");
         }
-        let w = args
-            .get("width")
-            .and_then(Value::as_i64)
-            .filter(|n| *n != 0)
-            .unwrap_or(640)
-            .clamp(64, MAX_IMAGE_PX) as u32;
-        let h = args
-            .get("height")
-            .and_then(Value::as_i64)
-            .filter(|n| *n != 0)
-            .unwrap_or(480)
-            .clamp(64, MAX_IMAGE_PX) as u32;
+        let w =
+            args.get("width").and_then(Value::as_i64).filter(|n| *n != 0).unwrap_or(640).clamp(64, MAX_IMAGE_PX) as u32;
+        let h = args.get("height").and_then(Value::as_i64).filter(|n| *n != 0).unwrap_or(480).clamp(64, MAX_IMAGE_PX)
+            as u32;
         let highlight = match index_set(args.get("highlight_faces")) {
             Some(faces) if !faces.is_empty() => {
                 let body = args
                     .get("highlight_body")
                     .and_then(Value::as_str)
                     .map(str::to_string)
-                    .unwrap_or_else(|| {
-                        mesh[0]
-                            .get("id")
-                            .and_then(Value::as_str)
-                            .unwrap_or_default()
-                            .to_string()
-                    });
+                    .unwrap_or_else(|| mesh[0].get("id").and_then(Value::as_str).unwrap_or_default().to_string());
                 Some((body, faces))
             }
             _ => None,
         };
-        // Empty is absent, as it was: `bodies: []` draws everything and
-        // `section: {}` cuts nothing, and both have to READ that way too.
+        // Empty is absent: `bodies: []` draws everything and `section: {}` cuts nothing, and both must READ that way.
         let bodies = args
             .get("bodies")
             .and_then(Value::as_array)
             .filter(|a| !a.is_empty())
-            .map(|a| {
-                a.iter()
-                    .filter_map(|v| v.as_str().map(str::to_string))
-                    .collect::<Vec<_>>()
-            });
+            .map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect::<Vec<_>>());
         if let Some(list) = &bodies {
-            let known: Vec<&str> =
-                mesh.iter().map(MeshBody::id).collect();
+            let known: Vec<&str> = mesh.iter().map(MeshBody::id).collect();
             let unknown: Vec<&String> = list.iter().filter(|id| !known.contains(&id.as_str())).collect();
             if !unknown.is_empty() {
                 return failure(format!(
@@ -2156,11 +1927,7 @@ impl FundaCad {
                 ));
             }
         }
-        let section = args
-            .get("section")
-            .filter(|s| truthy(Some(s)))
-            .cloned()
-            .unwrap_or(Value::Null);
+        let section = args.get("section").filter(|s| truthy(Some(s))).cloned().unwrap_or(Value::Null);
         let request = ViewRequest {
             width: w,
             height: h,
@@ -2176,7 +1943,7 @@ impl FundaCad {
         };
         let canvas = match render::render(&mesh[..], &request) {
             Ok(c) => c,
-            Err(e) => return failure(format!("ValueError: {e}")),
+            Err(e) => return failure(e),
         };
         let png = match crate::png::encode(&canvas) {
             Ok(p) => p,
@@ -2191,34 +1958,17 @@ impl FundaCad {
             }
             None => camera.view.clone(),
         };
-        let shown: Vec<String> = bodies.unwrap_or_else(|| {
-            mesh.iter().map(|b| b.id().to_string()).collect()
-        });
+        let shown: Vec<String> = bodies.unwrap_or_else(|| mesh.iter().map(|b| b.id().to_string()).collect());
         let cut = if section.is_null() {
             String::new()
         } else {
-            // The side actually kept, resolved the way the renderer resolves
-            // it, not the word that was passed in: this line used to say
-            // "keeping max" over a picture that had kept the other half.
-            let keep = section
-                .get("keep")
-                .and_then(Value::as_str)
-                .unwrap_or("below")
-                .trim()
-                .to_ascii_lowercase();
-            let side = if render::keep_word(&keep).unwrap_or(false) {
-                "above"
-            } else {
-                "below"
-            };
+            // The side actually kept, resolved as the renderer resolves it, not the word passed in.
+            let keep = section.get("keep").and_then(Value::as_str).unwrap_or("below").trim().to_ascii_lowercase();
+            let side = if render::keep_word(&keep).unwrap_or(false) { "above" } else { "below" };
             format!(
                 ", cut on {} at {}, keeping {side}",
-                section
-                    .get("axis")
-                    .map_or("X".to_string(), |a| py_num(Some(a))),
-                section
-                    .get("at")
-                    .map_or("the middle".to_string(), |a| py_num(Some(a)))
+                section.get("axis").map_or("X".to_string(), |a| py_num(Some(a))),
+                section.get("at").map_or("the middle".to_string(), |a| py_num(Some(a)))
             )
         };
         let mut caption = format!("{where_} view of {}, {w}x{h}{cut}", shown.join(", "));
@@ -2228,16 +1978,12 @@ impl FundaCad {
         }
         CallToolResult::success(vec![
             ContentBlock::text(caption),
-            ContentBlock::image(
-                base64::engine::general_purpose::STANDARD.encode(&png),
-                "image/png",
-            ),
+            ContentBlock::image(base64::engine::general_purpose::STANDARD.encode(&png), "image/png"),
         ])
     }
 }
 
-/// An argument the tool has no use for is refused by name. Ignoring it is how
-/// `view {az: 180}` drew the default iso and looked like it had worked.
+/// Refused by name, since an ignored `view {az: 180}` drew the default iso and looked like it had worked.
 fn unknown_arguments(name: &str, tool: &rmcp::model::Tool, args: &JsonObject) -> Option<CallToolResult> {
     let known = tool.input_schema.get("properties").and_then(Value::as_object)?;
     let unknown: Vec<&String> = args.keys().filter(|k| !known.contains_key(k.as_str())).collect();
@@ -2260,10 +2006,8 @@ struct Camera {
     angles: Option<(f64, f64)>,
 }
 
-/// The camera `view` will actually use, or why the request cannot be drawn.
-/// `az` and `el` are taken as the short spellings they are; an angle that is
-/// not a number, or a view name nobody knows, is refused rather than quietly
-/// replaced by the default iso.
+/// `az` and `el` are taken as the short spellings they are. A non-numeric angle or an unknown view name
+/// is refused rather than quietly replaced by the default iso.
 fn view_camera(args: &JsonObject) -> Result<Camera, CallToolResult> {
     let angle = |long: &str, short: &str| -> Result<Option<f64>, CallToolResult> {
         let (key, v) = match (args.get(long), args.get(short)) {
@@ -2316,21 +2060,14 @@ fn tolerance_arg(args: &JsonObject) -> Result<Option<f64>, String> {
 }
 
 fn index_set(v: Option<&Value>) -> Option<Vec<i64>> {
-    v.and_then(Value::as_array)
-        .map(|a| a.iter().filter_map(Value::as_i64).collect())
+    v.and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_i64).collect())
 }
 
 fn keep_indices(body: &mut Value, key: &str, want: &[i64]) {
     if let Some(list) = body.get_mut(key).and_then(Value::as_array_mut) {
-        list.retain(|e| {
-            e.get("i")
-                .and_then(Value::as_i64)
-                .is_some_and(|i| want.contains(&i))
-        });
+        list.retain(|e| e.get("i").and_then(Value::as_i64).is_some_and(|i| want.contains(&i)));
     }
 }
-
-// --- edit and interference ---------------------------------------------------
 
 impl FundaCad {
     async fn edit(&self, args: &JsonObject) -> CallToolResult {
@@ -2347,9 +2084,7 @@ impl FundaCad {
             for (n, entry) in ops.iter().enumerate() {
                 match crate::edits::apply(&mut doc, entry, &mut notes) {
                     Ok(d) => done.push(d),
-                    Err(why) => {
-                        return failure(crate::edits::refused(n + 1, ops.len(), entry, &why))
-                    }
+                    Err(why) => return failure(crate::edits::refused(n + 1, ops.len(), entry, &why)),
                 }
             }
             st.doc = doc;
@@ -2395,13 +2130,18 @@ impl FundaCad {
         let payload = json!({"document": doc, "sketch": plan.sketch, "entities": plan.ids});
         let outline = match link.call("sketchOutline", payload).await {
             Err(e) => return engine_gone(&e),
-            Ok(r) if r.get("ok") != Some(&json!(true)) => return failure(format!("Could not merge: {}", error_message(&r))),
+            Ok(r) if r.get("ok") != Some(&json!(true)) => {
+                return failure(format!("Could not merge: {}", error_message(&r)))
+            }
             Ok(r) => r.get("result").cloned().unwrap_or_else(|| json!({})),
         };
         let head = {
             let mut st = self.state.lock().await;
             if model::find_feature(&st.doc, &plan.sketch).map(|(_, f)| f.clone()) != before {
-                return failure(format!("{} changed while it was being merged, so nothing was merged. Try again", plan.sketch));
+                return failure(format!(
+                    "{} changed while it was being merged, so nothing was merged. Try again",
+                    plan.sketch
+                ));
             }
             let merged = match crate::sketchmerge::apply(&mut st.doc, &plan, &outline) {
                 Ok(m) => m,
@@ -2431,7 +2171,11 @@ impl FundaCad {
             if !tied.added.is_empty() {
                 st.invalidate();
             }
-            let mut line = format!("tied {} loose end{} in {sketch}", tied.added.len(), if tied.added.len() == 1 { "" } else { "s" });
+            let mut line = format!(
+                "tied {} loose end{} in {sketch}",
+                tied.added.len(),
+                if tied.added.len() == 1 { "" } else { "s" }
+            );
             if !tied.skipped.is_empty() {
                 line.push_str(&format!(", could not move {}", tied.skipped.join(", ")));
             }
@@ -2556,9 +2300,8 @@ impl FundaCad {
         if built.is_empty() {
             return failure(report);
         }
-        // Missing at every step that built: no step checked what was asked.
-        // A body missing at only some steps (its feature failed there, or a
-        // join merged it away) is a note on those steps and in the summary.
+        // Missing at every step that built means no step checked what was asked. Missing at some (a failed feature,
+        // a join that merged it away) is a note on those steps and in the summary.
         let never: Vec<String> = crate::clash::missing(built[0], &bodies)
             .into_iter()
             .filter(|b| built.iter().all(|r| crate::clash::missing(r, &bodies).contains(b)))
@@ -2574,8 +2317,6 @@ impl FundaCad {
         text(report)
     }
 }
-
-// --- section -----------------------------------------------------------------
 
 impl FundaCad {
     async fn section(&self, args: &JsonObject) -> CallToolResult {
@@ -2616,10 +2357,8 @@ impl FundaCad {
         let result = reply.get("result").cloned().unwrap_or_else(|| json!({}));
         let bodies = meshed_bodies(&result, framed);
         let name_of = |b: &MeshBody| b.get("name").and_then(Value::as_str).unwrap_or_default().to_string();
-        let missing: Vec<&String> = wanted
-            .iter()
-            .filter(|w| !bodies.iter().any(|b| b.id() == w.as_str() || name_of(b) == **w))
-            .collect();
+        let missing: Vec<&String> =
+            wanted.iter().filter(|w| !bodies.iter().any(|b| b.id() == w.as_str() || name_of(b) == **w)).collect();
         if !missing.is_empty() {
             return failure(format!(
                 "no body {} in this build. Check the ids or names against `build`.",
@@ -2651,10 +2390,7 @@ impl FundaCad {
                 ));
             }
         }
-        let mut out = format!(
-            "Section on {}, in-plane axes {} and {}:",
-            plane.label, plane.axes.0, plane.axes.1
-        );
+        let mut out = format!("Section on {}, in-plane axes {} and {}:", plane.label, plane.axes.0, plane.axes.1);
         if parts.is_empty() {
             out.push_str("\nThe plane misses every body.");
         } else {
@@ -2664,9 +2400,8 @@ impl FundaCad {
         if !missed.is_empty() && !wanted.is_empty() {
             out.push_str(&format!("\nThe plane misses {}.", missed.join(", ")));
         }
-        let mut failures = feature_failure_lines(
-            result.get("featureErrors").and_then(Value::as_array).map_or(&[][..], Vec::as_slice),
-        );
+        let mut failures =
+            feature_failure_lines(result.get("featureErrors").and_then(Value::as_array).map_or(&[][..], Vec::as_slice));
         failures.extend(skipped_lines(&result));
         if !failures.is_empty() {
             out.push_str("\nSome features failed, so this cut what did build:\n");
@@ -2675,8 +2410,6 @@ impl FundaCad {
         text(out)
     }
 }
-
-// --- stress ------------------------------------------------------------------
 
 impl FundaCad {
     async fn measure(&self, args: &JsonObject) -> CallToolResult {
@@ -2711,11 +2444,7 @@ impl FundaCad {
             Err(e) => return e,
         };
         let side = |key: &str, default: i64| {
-            args.get(key)
-                .and_then(Value::as_i64)
-                .filter(|n| *n != 0)
-                .unwrap_or(default)
-                .clamp(64, MAX_IMAGE_PX) as u32
+            args.get(key).and_then(Value::as_i64).filter(|n| *n != 0).unwrap_or(default).clamp(64, MAX_IMAGE_PX) as u32
         };
         let (w, h) = (side("width", 640), side("height", 480));
         let wanted = request.payload.get("body").and_then(Value::as_str).unwrap_or_default().to_string();
@@ -2763,10 +2492,7 @@ impl FundaCad {
             color_bar: true,
             ..ViewRequest::default()
         };
-        let png = match render::render(std::slice::from_ref(&surface), &view)
-            .map_err(|e| format!("ValueError: {e}"))
-            .and_then(|c| crate::png::encode(&c))
-        {
+        let png = match render::render(std::slice::from_ref(&surface), &view).and_then(|c| crate::png::encode(&c)) {
             Ok(p) => p,
             Err(e) => return failure(format!("{out}\nThe picture could not be drawn: {e}")),
         };
@@ -2782,10 +2508,7 @@ impl FundaCad {
         out.push_str(&format!("\n{where_} view of {}, {w}x{h}. {}", surface.id, surface.scale()));
         CallToolResult::success(vec![
             ContentBlock::text(out),
-            ContentBlock::image(
-                base64::engine::general_purpose::STANDARD.encode(&png),
-                "image/png",
-            ),
+            ContentBlock::image(base64::engine::general_purpose::STANDARD.encode(&png), "image/png"),
         ])
     }
 
@@ -2823,9 +2546,7 @@ impl FundaCad {
 }
 
 impl FundaCad {
-    /// Of `ids`, the bodies that are not closed solids facing outward, each
-    /// with why in words that follow its name. Empty when the engine cannot
-    /// be asked: the caller's answer stands as it would have.
+    /// Of `ids`, the bodies that are not closed outward facing solids, with why; empty when the engine cannot be asked.
     async fn unsound(link: &EngineLink, doc: Doc, ids: &[String]) -> HashMap<String, String> {
         let mut out = HashMap::new();
         if ids.is_empty() {
@@ -2861,8 +2582,6 @@ fn meshed_bodies(result: &Value, framed: Vec<MeshBody>) -> Vec<MeshBody> {
         .map(MeshBody::from_value)
         .collect()
 }
-
-// --- printability ----------------------------------------------------------------
 
 impl FundaCad {
     /// The engine's `printability` op does the work, so the app's panel and
@@ -2908,26 +2627,11 @@ impl FundaCad {
     }
 }
 
-// --- doc_import ---------------------------------------------------------------
-
 impl FundaCad {
-    /// Read a geometry file into an `import` feature.
-    ///
-    /// Two steps, the same two the app's own import does: ask the engine to
-    /// read the file, then put the fields it hands back into the timeline. The
-    /// geometry itself never travels through here, `geom` is its content hash
-    /// in the engine's durable blob store, which is why this stays a small
-    /// reply for a file of any size and why that store has to be the one the
-    /// app reads.
-    ///
-    /// Everything before the last piece changes nothing: the document is
-    /// untouched, which is what keeps a half-arrived file from reaching the app
-    /// as an edit.
+    /// Asks the engine to read the file, as the app's import does, and adds the fields it hands back. `geom` is a
+    /// content hash in the engine's blob store, so the reply stays small. Pieces before the last change nothing.
     async fn doc_import(&self, args: &JsonObject) -> CallToolResult {
-        // Present and not empty, whatever type it arrived as. A `content` that
-        // is a number is content that was sent wrong, and it has to reach the
-        // spool to be told so by name; treating it as absent would answer with
-        // the message for a call that sent nothing at all.
+        // Present and not empty, whatever its type: a numeric `content` must reach the spool to be refused by name.
         let has_path = truthy(args.get("path"));
         let has_content = truthy(args.get("content"));
         if has_path && has_content {
@@ -2947,10 +2651,7 @@ impl FundaCad {
                 Err(e) => return e,
             };
             if !path.is_file() {
-                return failure(format!(
-                    "No such file: {}\n{ASK_FOR_A_PATH}",
-                    path.display()
-                ));
+                return failure(format!("No such file: {}\n{ASK_FOR_A_PATH}", path.display()));
             }
             let fmt = args
                 .get("format")
@@ -2958,10 +2659,7 @@ impl FundaCad {
                 .map(upload::format_told_as)
                 .unwrap_or_else(|| upload::import_format(&path.to_string_lossy()).to_string());
             if !IMPORT_FORMATS.contains(&fmt.as_str()) {
-                return failure(format!(
-                    "Cannot import '{fmt}' files. Formats: {}.",
-                    IMPORT_FORMATS.join(", ")
-                ));
+                return failure(format!("Cannot import '{fmt}' files. Formats: {}.", IMPORT_FORMATS.join(", ")));
             }
             let source = path.to_string_lossy().into_owned();
             (path, fmt, source)
@@ -2976,10 +2674,7 @@ impl FundaCad {
                 (up.got, up.parts, up.spooled(), up.name.clone())
             };
             if got < parts {
-                // The nudge goes on the FIRST piece or nowhere: that is while
-                // there is still something to decide. On the fifth it would
-                // only be telling an agent that the thing it is halfway through
-                // was a bad idea, which is worse than silence.
+                // The nudge goes on the FIRST piece or nowhere, while there is still something to decide.
                 let costly = if got == 1 && parts > PIECES_WORTH_IT {
                     format!("\nThis is one message of yours per piece. {ASK_FOR_A_PATH}")
                 } else {
@@ -3000,9 +2695,7 @@ impl FundaCad {
             match unpacked {
                 Ok((path, fmt, name)) => {
                     upload_id = Some(id);
-                    // Provenance, not a path. The temporary file is about to be
-                    // gone, and recording it would send whoever read the field
-                    // back to nothing.
+                    // Provenance, not a path: the temporary file is about to be gone.
                     (path, fmt, name)
                 }
                 Err(e) => {
@@ -3017,9 +2710,7 @@ impl FundaCad {
             import_args.push(("unit", json!(unit)));
         }
         let link = self.engine_link().await;
-        let reply = link
-            .call("import", call_args(import_args))
-            .await;
+        let reply = link.call("import", call_args(import_args)).await;
         if let Some(id) = &upload_id {
             self.state.lock().await.drop_upload(id);
         }
@@ -3028,14 +2719,9 @@ impl FundaCad {
             Err(e) => return engine_gone(&e),
         };
         if reply.get("ok") != Some(&json!(true)) {
-            // The engine refuses for reasons an agent can act on (too large,
-            // too many triangles, unreadable), so its message is the whole
-            // answer and is passed through rather than summarised.
-            let message = reply
-                .get("error")
-                .and_then(|e| e.get("message"))
-                .and_then(Value::as_str)
-                .unwrap_or("unreadable file");
+            // The engine refuses for reasons an agent can act on, so its message is passed through whole.
+            let message =
+                reply.get("error").and_then(|e| e.get("message")).and_then(Value::as_str).unwrap_or("unreadable file");
             return failure(format!("Import failed: {message}"));
         }
         let res = reply.get("result").cloned().unwrap_or_else(|| json!({}));
@@ -3099,10 +2785,7 @@ impl FundaCad {
         feature.insert("source".into(), json!(source));
         let solid = res.get("solid").and_then(Value::as_bool).unwrap_or(false);
         feature.insert("solid".into(), json!(solid));
-        // Spread, not defaulted, exactly as the app's import does: a file with
-        // no colour and no assembly tree must produce the feature it always
-        // did, and a null is a different thing from absent to everything
-        // downstream.
+        // Spread, not defaulted, as the app's import does: a null differs from absent to everything downstream.
         for key in ["color", "nodes", "parts", "notes", "unit"] {
             if let Some(v) = res.get(key).filter(|v| !v.is_null()) {
                 feature.insert(key.into(), v.clone());
@@ -3110,20 +2793,12 @@ impl FundaCad {
         }
 
         let mut st = self.state.lock().await;
-        let fid = match model::add_feature(
-            &mut st.doc,
-            &Value::Object(feature),
-            at,
-        ) {
+        let fid = match model::add_feature(&mut st.doc, &Value::Object(feature), at) {
             Ok(fid) => fid,
             Err(e) => return doc_error(e),
         };
         st.invalidate();
-        let kind = if solid {
-            "solid"
-        } else {
-            "surface body (not a solid)"
-        };
+        let kind = if solid { "solid" } else { "surface body (not a solid)" };
         let parts = match res.get("parts").and_then(Value::as_array) {
             Some(p) if !p.is_empty() => format!(", {} parts", p.len()),
             _ => String::new(),
@@ -3132,18 +2807,13 @@ impl FundaCad {
         let head = format!(
             "Imported {source} as {fid}: '{name}', {kind}, {} faces{parts}.{sketch_line}{notes}\nRun `build`, then \
              `inspect` for its sizes and the selectors that address its faces and edges.",
-            res.get("faces")
-                .map_or("?".to_string(), |f| py_num(Some(f)))
+            res.get("faces").map_or("?".to_string(), |f| py_num(Some(f)))
         );
         text(st.state_line(&head))
     }
 
-    /// Take one piece of an inline file and return the upload it belongs to.
-    ///
-    /// Order is required rather than reassembled. Buffering out-of-order pieces
-    /// would mean holding them until the gap filled, and a gap that never fills
-    /// is indistinguishable from one that has not filled yet; refusing by name
-    /// turns a lost piece into something the caller can act on immediately.
+    /// Order is required rather than reassembled: a gap that never fills looks like one not filled yet,
+    /// while a refusal by name turns a lost piece into something the caller can act on.
     async fn spool(&self, args: &JsonObject) -> Result<String, upload::UploadError> {
         let part = args.get("part").filter(|v| !v.is_null()).cloned();
         let parts = args.get("parts").filter(|v| !v.is_null()).cloned();
@@ -3158,12 +2828,10 @@ impl FundaCad {
             (None, None) => (1, 1),
             (Some(a), Some(b)) => {
                 for (label, v) in [("part", &a), ("parts", &b)] {
-                    let ok = matches!(v, Value::Number(n) if n.is_i64() || n.is_u64())
-                        && v.as_i64().is_some_and(|n| n >= 1);
+                    let ok =
+                        matches!(v, Value::Number(n) if n.is_i64() || n.is_u64()) && v.as_i64().is_some_and(|n| n >= 1);
                     if !ok {
-                        return Err(upload::UploadError(format!(
-                            "{label} must be a whole number from 1 up."
-                        )));
+                        return Err(upload::UploadError(format!("{label} must be a whole number from 1 up.")));
                     }
                 }
                 (a.as_i64().unwrap_or(0), b.as_i64().unwrap_or(0))
@@ -3196,11 +2864,7 @@ impl FundaCad {
             st.uploads.insert(id.clone(), up);
             id
         } else {
-            let id = args
-                .get("upload")
-                .and_then(Value::as_str)
-                .unwrap_or_default()
-                .to_string();
+            let id = args.get("upload").and_then(Value::as_str).unwrap_or_default().to_string();
             let Some(up) = st.uploads.get(&id) else {
                 return Err(upload::UploadError(format!(
                     "no upload is in progress under that id. Send part 1 again; every piece \
@@ -3244,24 +2908,16 @@ fn stem(source: &str) -> String {
     }
 }
 
-// --- the protocol -------------------------------------------------------------
-
 #[rmcp::tool_handler(router = self.router)]
 impl ServerHandler for FundaCad {
     fn get_info(&self) -> ServerConfig {
-        // `instructions` needs the lock and this does not get to await, so the
-        // working order goes out as it stands at start-up, which is when a host
-        // reads it. `call_live` is what keeps the live rules true afterwards.
+        // `instructions` cannot await the lock, so the working order goes out as at start-up, when a host reads it.
+        // `call_live` keeps the live rules true afterwards.
         let live = self.state.try_lock().map(|s| s.live.is_some()).unwrap_or(false);
         let instructions = instructions_for(live);
-        ServerConfig::new(
-            ServerCapabilities::builder()
-                .enable_tools()
-                .enable_resources()
-                .build(),
-        )
-        .with_server_info(Implementation::new("fundacad", "0.1.0"))
-        .with_instructions(instructions)
+        ServerConfig::new(ServerCapabilities::builder().enable_tools().enable_resources().build())
+            .with_server_info(Implementation::new("fundacad", "0.1.0"))
+            .with_instructions(instructions)
     }
 
     async fn list_resources(
@@ -3272,10 +2928,7 @@ impl ServerHandler for FundaCad {
         let mut resource = Resource::new("fundacad://schema", "FundaCAD document schema");
         resource.description = Some("Every feature type, its fields and its traps.".into());
         resource.mime_type = Some("text/plain".into());
-        Ok(ListResourcesResult {
-            resources: vec![resource],
-            ..Default::default()
-        })
+        Ok(ListResourcesResult { resources: vec![resource], ..Default::default() })
     }
 
     async fn read_resource(
@@ -3284,28 +2937,18 @@ impl ServerHandler for FundaCad {
         _context: RequestContext<RoleServer>,
     ) -> Result<ReadResourceResponse, McpError> {
         if request.uri != "fundacad://schema" {
-            return Err(McpError::invalid_params(
-                format!("no such resource: {}", request.uri),
-                None,
-            ));
+            return Err(McpError::invalid_params(format!("no such resource: {}", request.uri), None));
         }
-        Ok(ReadResourceResponse::Complete(ReadResourceResult::new(
-            vec![ResourceContents::TextResourceContents {
-                uri: request.uri,
-                mime_type: Some("text/plain".into()),
-                text: schema::schema_text(None),
-                meta: None,
-            }],
-        )))
+        Ok(ReadResourceResponse::Complete(ReadResourceResult::new(vec![ResourceContents::TextResourceContents {
+            uri: request.uri,
+            mime_type: Some("text/plain".into()),
+            text: schema::schema_text(None),
+            meta: None,
+        }])))
     }
 
-    /// A tool's own failure is a RESULT with isError, not a JSON-RPC error.
-    ///
-    /// The distinction matters: a JSON-RPC error means the call was malformed
-    /// and the model cannot learn anything from it, while isError puts the
-    /// message in front of the model as something to react to. Almost
-    /// everything that goes wrong here, a bad selector, an impossible fillet, a
-    /// sketch that does not close, is the second kind.
+    /// A tool's own failure is a RESULT with isError, which the model can react to,
+    /// not a JSON-RPC error, which only says the call was malformed.
     async fn call_tool(
         &self,
         request: CallToolRequestParams,
@@ -3314,17 +2957,9 @@ impl ServerHandler for FundaCad {
         let _turn = self.turn.lock().await;
         let name = request.name.to_string();
         if self.router.get(&name).is_none() {
-            let mut have: Vec<String> = self
-                .router
-                .list_all()
-                .iter()
-                .map(|t| t.name.to_string())
-                .collect();
+            let mut have: Vec<String> = self.router.list_all().iter().map(|t| t.name.to_string()).collect();
             have.sort();
-            return Ok(CallToolResponse::Complete(failure(format!(
-                "No tool '{name}'. Have: {}",
-                have.join(", ")
-            ))));
+            return Ok(CallToolResponse::Complete(failure(format!("No tool '{name}'. Have: {}", have.join(", ")))));
         }
         let args = request.arguments.clone().unwrap_or_default();
         if let Some(refusal) = self.router.get(&name).and_then(|t| unknown_arguments(&name, t, &args)) {
@@ -3376,18 +3011,12 @@ impl ServerHandler for FundaCad {
 }
 
 impl FundaCad {
-    /// Pieces of a file nobody finished sending, and the lease the app is
-    /// showing. Not a substitute for the sweep, which is what covers the case
-    /// that actually happens: a host kills its servers outright, and no
-    /// clean-up runs then.
+    /// Drops unfinished uploads and the app's lease. The sweep still covers the usual case,
+    /// a host killing its servers with no clean-up at all.
     pub async fn shutdown(&self) {
         let (link, live, ids) = {
             let st = self.state.lock().await;
-            (
-                st.link.clone(),
-                st.live.is_some(),
-                st.uploads.keys().cloned().collect::<Vec<_>>(),
-            )
+            (st.link.clone(), st.live.is_some(), st.uploads.keys().cloned().collect::<Vec<_>>())
         };
         self.stop_ui().await;
         {

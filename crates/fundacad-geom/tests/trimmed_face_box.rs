@@ -1,6 +1,5 @@
-//! The exact box of a body is the box of its faces as they are trimmed. A
-//! spline face cut off askew has surface left over beyond the cut, and the
-//! kernel boxed that as well, so cutting a body made its box grow.
+//! The exact box of a body is the box of its trimmed faces: a spline face cut off askew has surface left beyond the
+//! cut, and boxing that too made a cut body's box grow.
 
 use fundacad_core::CadDocument;
 use fundacad_geom::builder::{self, NoWatch, Rebuild};
@@ -115,9 +114,8 @@ fn an_untargeted_join_passes_a_body_it_stands_clear_of() {
     assert_eq!(solids, [1, 1], "bodies and their solids");
 }
 
-/// The vase flares to radius 9 above the cut. On the low side of the cut the
-/// flare is gone and the belly lower down is the widest point left, which is
-/// neither on an edge nor where the whole surface is widest.
+/// The vase flares to radius 9 above the cut, so below it the widest point left is the belly, neither on an edge
+/// nor where the whole surface is widest.
 #[test]
 fn a_face_cut_below_a_wider_part_of_its_surface_is_boxed_by_what_is_left() {
     let sections = [(0.0, 3.0), (10.0, 5.0), (20.0, 3.0), (26.0, 9.0)];

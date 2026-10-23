@@ -1,76 +1,28 @@
-// Where plugins come from, and the door to the side that installs them.
-//
-// THREE WAYS IN, and they differ only in where the manifest is read from.
-//
-//   1. The ones that ship in this repository, read straight out of
-//      plugins/<id>/manifest.json at build time. Their manifests are known
-//      before anything is fetched, so there is nothing to download in order to
-//      decide, and they are known from the SAME FILE that goes into the zip
-//      rather than from a copy of it kept here.
-//   2. A URL the user gives. The only account of what the bundle wants is
-//      inside the bundle, so it is fetched and unpacked to be read, and only
-//      then described on a screen.
-//   3. A zip the user already has, read the same way.
-//
-// There is no catalogue fetched from anywhere and there never will be. A
-// document whose only job is to be believed is a document that can lie, and a
-// manifest already in the checkout costs nothing to carry in the build.
-//
-// WHAT IS NOT DECIDED HERE: whether a plugin may do what it asks. That is
-// ./manifest.ts, and every one of the three routes goes through it. Our own
-// manifests are read as untrusted JSON by the same `parseManifest` that parses
-// a stranger's, so one of ours that could not be installed cannot be offered
-// either. The test that matters asserts exactly that.
-//
-// AND WHAT "OFFICIAL" MEANS: that we published it, and nothing else. It is a
-// label on a row, decided in Rust from the URL the bytes actually came from. It
-// buys a plugin no permission, skips no screen, and a bundle claiming it in its
-// own manifest is ignored, because a bundle claiming to be ours is precisely
-// the one that must not be believed for saying so.
+// Where plugins come from: this repository's manifests read at build time, a URL, or a zip, all through parseManifest.
+// "Official" only means we published it, decided in Rust from the source URL; it buys no permission, skips no screen.
 
-import {
-  parseManifest,
-  promiseOf,
-  sameId,
-  type PluginManifest,
-} from "./manifest";
+import { parseManifest, promiseOf, sameId, type PluginManifest } from "./manifest";
 import { bundleAsset, shippedPlugins } from "./shipped";
 import type { DocumentStore } from "../document/store";
 import { toast } from "../ui/toast";
 import type { RunOutcome } from "./runner/host";
 
-/** Where this project's own bundles are published. Mirrors BUNDLE_PREFIX in
- *  src-tauri/src/plugins/bundle.rs; this copy only builds the URLs, and that
- *  copy decides which of them get the label. */
+/** Mirrors BUNDLE_PREFIX in src-tauri/src/plugins/bundle.rs. This copy only builds URLs, that one decides the label. */
 const RELEASES = "https://github.com/Paraxdev/fundacad/releases/download/";
 
-/** The release the assets hang off, the one this build was published as:
- *  the rolling beta, the rolling development build, or a stable release's own
- *  tag, which the release build passes in VITE_FUNDACAD_RELEASE. Its bundles carry the geometry components
- *  the engine's plugin host runs, built from the same commit as the host. */
-export const RELEASE_TAG: string =
-  (import.meta.env.VITE_FUNDACAD_RELEASE as string | undefined) || "beta";
+/** beta, the rolling development build, or a stable tag passed in VITE_FUNDACAD_RELEASE. Its bundles carry geometry
+ *  components built from the same commit as the engine's plugin host. */
+export const RELEASE_TAG: string = (import.meta.env.VITE_FUNDACAD_RELEASE as string | undefined) || "beta";
 
 export interface OfficialPlugin {
   manifest: PluginManifest;
-  /** the release the asset hangs off, RELEASE_TAG */
   tag: string;
-  /** the asset's file name on that release */
   asset: string;
-  /** the URL the download will be attempted from */
   url: string;
 }
 
-/** The plugins this repository publishes, offered for install.
- *
- *  EVERY directory under plugins/, with no exception for `builtin`. There used
- *  to be one: a builtin's code was the app's code, there was no zip on any
- *  release, and offering to download one would have been offering a 404. That
- *  is no longer true of anything here, scripts/build-plugins.py packages all
- *  four and the release job publishes them, so the exception went with it.
- *
- *  The asset name comes from `bundleAsset`, which is also what the packager
- *  uses, so this cannot come to expect a file the release does not carry. */
+/** Every directory under plugins/, builtin included. The asset name comes from `bundleAsset`, as the packager's does,
+ *  so this never expects a file the release does not carry. */
 export function officialPlugins(tag: string = RELEASE_TAG): OfficialPlugin[] {
   return shippedPlugins().map(({ manifest }) => {
     const asset = bundleAsset(manifest.id);
@@ -83,12 +35,7 @@ export function officialPlugins(tag: string = RELEASE_TAG): OfficialPlugin[] {
   });
 }
 
-// ---------------------------------------------------------------------------
-// what is on disk
-// ---------------------------------------------------------------------------
-
-/** The Rust record, as it arrives. `consented` is what the bundle actually
- *  declared; `promise` is `promiseOf()` of what the screen showed. */
+/** The Rust record. `consented` is what the bundle declared, `promise` is `promiseOf()` of what the screen showed. */
 export interface InstalledPlugin {
   id: string;
   version: string;
@@ -111,9 +58,7 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
   return await invoke<T>(cmd, args);
 }
 
-/** Installed plugins, or none at all in a plain browser session. Nothing here
- *  can be installed outside the app, so an empty list is the honest answer
- *  rather than an error to render. */
+/** Empty in a plain browser session, where nothing can be installed. */
 export async function installedPlugins(): Promise<InstalledPlugin[]> {
   if (!isTauri()) return [];
   const list = await retire(await call<InstalledPlugin[]>("plugin_list"));
@@ -122,13 +67,8 @@ export async function installedPlugins(): Promise<InstalledPlugin[]> {
   return list;
 }
 
-/** Plugins whose job moved into the app itself, removed from disk on sight.
- *
- *  FundaCAD.MCP was the Python MCP server with a settings companion. The app
- *  ships `fundacad-mcp` and its own MCP section now, so an installed copy is a
- *  server for an engine this build does not have plus a second copy of a core
- *  setting. Removed rather than hidden, so a stale bundle cannot start its
- *  companion or linger in the app data directory. */
+/** Plugins whose job moved into the app, removed from disk on sight so a stale bundle cannot start its companion.
+ *  FundaCAD.MCP was the Python MCP server, and the app ships fundacad-mcp now. */
 export const RETIRED_PLUGINS: readonly { id: string; note: string }[] = [
   {
     id: "FundaCAD.MCP",
@@ -154,20 +94,8 @@ async function retire(list: InstalledPlugin[]): Promise<InstalledPlugin[]> {
   return kept;
 }
 
-// ---------------------------------------------------------------------------
-// which bundles are on disk, synchronously
-// ---------------------------------------------------------------------------
-//
-// `plugin_list` is a command and so a promise, and it is the honest source. But
-// a plugin's app-side companion has to be started and stopped as installs come
-// and go, and the thing that does that (./activate.ts) runs from a synchronous
-// state sync. So the answer is cached here, refreshed on the paths that change
-// it, and published with a listener set, the same shape ./registry.ts uses for
-// the built-in switches, and for the same reason.
-//
-// Empty until the first refresh, which is the right way round: a companion that
-// started before its plugin was known to be installed would be a companion for a
-// plugin that might not be.
+// `plugin_list` is async but ./activate.ts syncs synchronously, so the installed set is cached here with listeners,
+// like ./registry.ts. Empty until the first refresh, so no companion starts for a plugin not yet known to be installed.
 
 let installedIdSet: ReadonlySet<string> = new Set();
 let installedGrantMap = new Map<string, readonly string[]>();
@@ -195,39 +123,24 @@ function noteInstalled(ids: string[]) {
   for (const fn of installedListeners) fn();
 }
 
-/** An installed plugin's app-side module, or null when there is none to run.
- *
- *  Null in a plain browser session, where nothing can be installed; the empty
- *  string from the far side, which means "installed, with no app-side module",
- *  is also null here because the two are the same instruction to the caller.
- *
- *  Anything ELSE the far side refuses is thrown, and that is deliberate: "this
- *  bundle did not come from FundaCAD's own releases" is the sentence a person
- *  needs to see, and swallowing it into null would turn a refusal into a plugin
- *  that silently does nothing. */
+/** Null in a browser session and for a plugin installed without an app-side module. Any other refusal is thrown on
+ *  purpose, so "not from FundaCAD's own releases" reaches the person instead of a plugin that silently does nothing. */
 export async function pluginCode(id: string): Promise<string | null> {
   if (!isTauri()) return null;
   const code = await call<string>("plugin_code", { id });
   return code.length ? code : null;
 }
 
-/** Re-read what is on disk. Called at startup and after anything that installs
- *  or removes, so nothing has to remember to keep the cache in step. */
+/** Called at startup and after anything that installs or removes, so nothing has to keep the cache in step. */
 export async function refreshInstalled(): Promise<void> {
   try {
     await installedPlugins();
   } catch {
-    // Not fatal and not worth a toast: a companion that cannot start is a
-    // feature missing from a screen, and the screen itself reports the failure
-    // when the list is drawn.
+    // Not fatal: the plugins screen reports the failure when it draws the list.
   }
 }
 
-/** Download and install, having already shown what it asks for.
- *
- *  `promise` and the grant set are passed down so the far side can hold the
- *  bundle to them. They are not advice: an unpacked `manifest.json` that asks for
- *  more than this is refused there and never becomes installed. */
+/** `promise` and the grants go down so Rust holds the bundle to them: a manifest asking for more is refused there. */
 export async function installPlugin(plugin: OfficialPlugin): Promise<InstalledPlugin> {
   const { manifest } = plugin;
   return await call<InstalledPlugin>("plugin_install", {
@@ -244,22 +157,10 @@ export async function installPlugin(plugin: OfficialPlugin): Promise<InstalledPl
   });
 }
 
-/** A manifest to describe an installed plugin with, or null if the record does
- *  not parse into one.
- *
- *  What is recorded on disk is the PROMISE, not the presentation: the grants,
- *  the hosts, the kind and the version, because those are what was agreed to
- *  and what has to be checked again. A name and a one-line summary are not part
- *  of that and are not stored, so they come from our own copy of the manifest
- *  when the plugin is one of ours and from the id when it is not.
- *
- *  Null rather than a best guess when the record will not parse. A row that
- *  cannot be described accurately is a row that must not be described
- *  reassuringly, and the screen shows it plainly instead. */
+/** Disk holds only the promise (grants, hosts, kind, version). Name and summary come from our own manifest or the id.
+ *  Null rather than a best guess when the record will not parse, so the screen shows it plainly. */
 export function installedManifest(rec: InstalledPlugin): PluginManifest | null {
-  // `sameId`, not `===`. Two ids that differ only in case are one directory on
-  // Windows and macOS, so the row on screen and the record on disk can be
-  // spelled differently and still be the same install.
+  // `sameId`, not `===`: ids that differ only in case are one directory on Windows and macOS.
   const known = shippedPlugins().find((p) => sameId(p.manifest.id, rec.id))?.manifest;
   const parsed = parseManifest({
     id: rec.id,
@@ -273,23 +174,13 @@ export function installedManifest(rec: InstalledPlugin): PluginManifest | null {
   return parsed.ok ? parsed.manifest : null;
 }
 
-/** Read an installed plugin's entry point.
- *
- *  The far side decides the file name from what the plugin declared, so this
- *  is not a file reader with a plugin id attached to it. */
+/** Rust picks the file name from what the plugin declared, so this is not a file reader with an id attached. */
 export async function pluginEntry(id: string): Promise<string> {
   return await call<string>("plugin_entry", { id });
 }
 
-/** Run an installed compute plugin against the document that is open.
- *
- *  The pieces are deliberately assembled here and nowhere else: the code comes
- *  off disk, the grants come off the INSTALLED RECORD rather than from anything
- *  the plugin says now, and the host is the app. A caller cannot widen a plugin
- *  by calling this differently, because there is nothing to pass.
- *
- *  The sandbox arrives by dynamic import, so a build where nobody runs a plugin
- *  never loads a Worker runner. */
+/** The grants come off the installed record, never from the plugin, and a caller has nothing to pass that could widen
+ *  them. The sandbox is a dynamic import, so a build where nobody runs a plugin never loads a Worker runner. */
 export async function runComputePlugin(
   rec: InstalledPlugin,
   store: DocumentStore,
@@ -311,10 +202,7 @@ export async function runComputePlugin(
     grants: manifest.grants,
     host: appHost({
       store,
-      // The id goes down with the host because every file the person hands this
-      // plugin is recorded against it on the Rust side. Without it the file ops
-      // refuse, which is the right failure: a file recorded against nobody
-      // could be read by anybody.
+      // Files handed to this plugin are recorded against its id in Rust. Without it the file ops refuse.
       plugin: manifest.id,
       native: tauriNative(),
       ...(featureTypes ? { featureTypes } : {}),
@@ -327,26 +215,10 @@ export async function removePlugin(id: string): Promise<void> {
   await call<void>("plugin_remove", { id });
 }
 
-// ---------------------------------------------------------------------------
-// a bundle nobody has seen yet
-// ---------------------------------------------------------------------------
-
-/** A bundle that has been read but not installed.
- *
- *  This exists because of an ordering problem with only one honest answer. The
- *  screen has to say what a plugin asks for before it is installed, and for a
- *  bundle from a URL nobody has seen, the only account of what it asks for is
- *  inside it. So it is fetched, unpacked in a scratch directory, read, and
- *  thrown away again. Fetching is not running: nothing executes, nothing is
- *  left on disk, and nothing is recorded.
- *
- *  `sha256` is what came back from that read, and it is passed back in as a pin
- *  when the install actually happens. Without it the install would be a second
- *  fetch of something that could have changed in between, and the screen would
- *  have described one bundle while another was installed. */
+/** A bundle read but not installed: fetched, unpacked in a scratch directory, read and thrown away, never run, so the
+ *  screen can say what it asks for. `sha256` pins the install to the bytes that were described. */
 export interface Candidate {
   manifest: PluginManifest;
-  /** the digest of the bytes that were read, pinned for the install */
   sha256: string;
   /** the URL or the path, as given */
   source: string;
@@ -357,8 +229,7 @@ export interface Candidate {
   origin: string;
 }
 
-/** What `plugin_inspect_*` hands back. `manifest` is untrusted: it is the
- *  bundle's own file, verbatim. */
+/** What `plugin_inspect_*` hands back. `manifest` is untrusted, the bundle's own file verbatim. */
 export interface RawInspected {
   manifest: unknown;
   sha256: string;
@@ -366,34 +237,23 @@ export interface RawInspected {
   official: boolean;
 }
 
-/** The host, for a URL, or a plain phrase for a local file.
- *
- *  Shown on the screen that asks, so it is the answer to "who am I trusting"
- *  rather than a tidied-up URL. Rust has already refused anything whose
- *  authority does not mean what it reads, so the host here is the host that
- *  will answer. */
+/** Answers "who am I trusting" on the install screen. Rust already refused any authority that does not mean what it
+ *  reads. */
 export function originOf(source: string, from: "url" | "file"): string {
   if (from === "file") return "a file on this computer";
   try {
     return new URL(source).host;
   } catch {
-    // Unreachable in practice: Rust refused it long before this. A thrown
-    // exception while building a sentence about safety would be a poor way to
-    // find that out, so it degrades to the least reassuring true thing.
+    // Unreachable, Rust refused it first. Degrades to the least reassuring true thing rather than throwing.
     return "an unknown place";
   }
 }
 
-/** Turn what came back from a read into something the screen can describe, or
- *  refuse it. Exported and pure, because this is where a stranger's manifest
- *  meets this app's parser and that is the part worth testing without a Tauri
- *  window around it. */
+/** Pure and exported: this is where a stranger's manifest meets the parser, worth testing without a Tauri window. */
 export function candidateFrom(raw: RawInspected, from: "url" | "file"): Candidate {
   const parsed = parseManifest(raw.manifest);
   if (!parsed.ok) {
-    // Refused here rather than shown with the bad parts hidden. A manifest this
-    // app cannot fully read is one it cannot describe, and a screen that
-    // describes a plugin incompletely is worse than no screen.
+    // Refused rather than shown with the bad parts hidden: a manifest this app cannot fully read, it cannot describe.
     throw new Error(`that bundle is not installable: ${parsed.why}`);
   }
   return {
@@ -416,13 +276,8 @@ export async function inspectFile(path: string): Promise<Candidate> {
   return candidateFrom(await call<RawInspected>("plugin_inspect_file", { path }), "file");
 }
 
-/** Install what was read and agreed to.
- *
- *  The digest goes back down as a pin, so a bundle whose bytes moved between
- *  the screen and this call is refused rather than quietly installed under the
- *  old description. The grants go down as well, and are compared against the
- *  bundle's own manifest on the far side: this call is a statement of what was
- *  agreed, not an instruction to trust it. */
+/** The digest pins the bytes the screen described, and Rust compares the grants against the bundle's own manifest:
+ *  this states what was agreed, not an instruction to trust it. */
 export async function installCandidate(c: Candidate): Promise<InstalledPlugin> {
   const { manifest } = c;
   const args = {

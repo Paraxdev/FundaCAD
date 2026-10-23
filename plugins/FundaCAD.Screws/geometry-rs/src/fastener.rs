@@ -1,11 +1,5 @@
-//! scr_build.py: one fastener solid from a checked spec.
-//!
-//! A simplified thread is a plain cylinder at the NOMINAL (major) diameter, for
-//! screws and for the bores of nuts and inserts alike, so a screw in its nut
-//! shows no interference and a clearance hole checked against it is checked
-//! against the real outside of the thread. A modelled thread cuts the helix
-//! into that cylinder; a modelled internal thread bores at the minor diameter
-//! and cuts outward.
+//! Port of scr_build.py. A simplified thread is a plain cylinder at the nominal (major) diameter, for screws and bores
+//! alike, so a screw in its nut shows no interference. A modelled internal thread bores at the minor diameter.
 
 use std::f64::consts::PI;
 
@@ -16,10 +10,7 @@ use crate::{kernel, py_repr, Shape, P};
 fn single_solid(shape: &Shape, name: &str) -> R<Shape> {
     let solids = shape.solids();
     if solids.len() != 1 {
-        return Err(format!(
-            "Fastener: {name} came out as {} pieces instead of one solid",
-            solids.len()
-        ));
+        return Err(format!("Fastener: {name} came out as {} pieces instead of one solid", solids.len()));
     }
     Ok(solids.into_iter().next().expect("one solid"))
 }
@@ -130,10 +121,7 @@ fn screw(spec: &P) -> R<Shape> {
         }
     };
 
-    let room = head
-        .truthy_f("acrossFlats")
-        .or_else(|| head.truthy_f("diameter"))
-        .unwrap_or(d);
+    let room = head.truthy_f("acrossFlats").or_else(|| head.truthy_f("diameter")).unwrap_or(d);
     let tool = s::drive_tool(&drive, z_top, room)?;
     if let (Some(tl), Some(b)) = (&tool, &body) {
         if htype != "none" {
@@ -228,7 +216,6 @@ fn insert(spec: &P) -> R<Shape> {
     single_solid(&bore(body, spec, -length, 0.0)?, &spec.text("name"))
 }
 
-/// `build`: the checked spec's fastener.
 pub fn build(params: &serde_json::Value) -> R<Shape> {
     let checked = crate::spec::checked(params)?;
     let spec = P(checked);

@@ -1,25 +1,12 @@
-// Glass that measures itself. A glass material with auto thickness reads, per
-// pixel, the nearest back face of its own body from a small pre pass (world
-// normal and a body id in colour, depth beside it) and refracts at both
-// surfaces: entry with the front normal, exit with the back face normal. Where
-// that data is missing (a back facing fragment, a silhouette pixel, another
-// glass body in front, the swatch, a frame drawn outside SceneView.render) the
-// body's mean thickness 2V/A from the display mesh is used instead.
-//
-// Choices worth knowing: the background distance behind the exit point is
-// unknown (three keeps no depth of the opaque scene), so the exit bend is
-// carried for one thickness, as three already does for the entry bend. Total
-// internal reflection at the exit keeps the inside ray. Glass inside glass: the
-// outer body's front pixels see the inner body's back face, so they use the
-// outer body's mean thickness.
+// Auto thickness glass reads its body's nearest back face per pixel from a pre pass and refracts at both surfaces,
+// falling back to the mean thickness 2V/A where that data is missing.
 import * as THREE from "three";
 import { getPatch, removePatch, setPatch, type ShaderPatch } from "./shaderPatches";
 
 export const FALLBACK_THICKNESS = 3;
 
-/** Mean thickness of a closed mesh, 2 * volume / area, in its own units. Exact
- *  for a plate, a third of the edge for a cube. Open or flat meshes give the
- *  fallback. Cached on the geometry, a rebuilt body brings a new one. */
+/** 2 * volume / area in the mesh's units: exact for a plate, a third of the edge for a cube. Open or flat meshes give
+ *  the fallback. Cached on the geometry. */
 export function meanThickness(geo: THREE.BufferGeometry | undefined): number {
   if (!geo) return FALLBACK_THICKNESS;
   const cached = geo.userData["fcMeanThickness"];
@@ -28,8 +15,11 @@ export function meanThickness(geo: THREE.BufferGeometry | undefined): number {
   if (!pos) return FALLBACK_THICKNESS;
   const index = geo.getIndex();
   const count = index ? index.count : pos.count;
-  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
-  const n = new THREE.Vector3(), e = new THREE.Vector3();
+  const a = new THREE.Vector3(),
+    b = new THREE.Vector3(),
+    c = new THREE.Vector3();
+  const n = new THREE.Vector3(),
+    e = new THREE.Vector3();
   let six = 0;
   let twice = 0;
   for (let i = 0; i + 2 < count; i += 3) {
@@ -42,7 +32,7 @@ export function meanThickness(geo: THREE.BufferGeometry | undefined): number {
     twice += n.length();
   }
   // Volume six / 6 and area twice / 2, so 2V/A is (2/3) * six / twice.
-  const t = twice > 0 ? (2 / 3) * Math.abs(six) / twice : 0;
+  const t = twice > 0 ? ((2 / 3) * Math.abs(six)) / twice : 0;
   const out = Number.isFinite(t) && t > 1e-6 ? t : FALLBACK_THICKNESS;
   geo.userData["fcMeanThickness"] = out;
   return out;
@@ -55,7 +45,9 @@ const shared = {
   fcActive: { value: 0 },
 };
 
-const PARS = /* glsl */`
+// The exit bend is carried for one thickness, as three keeps no depth of the opaque scene behind the exit point.
+// Total internal reflection at the exit keeps the inside ray.
+const PARS = /* glsl */ `
 #ifdef USE_TRANSMISSION
 uniform sampler2D fcBackMap;
 uniform sampler2D fcBackDepth;
@@ -117,7 +109,9 @@ vec4 fcVolumeRefraction( const in vec3 n, const in vec3 v, const in float roughn
 #endif
 `;
 
-const FRAGMENT = /* glsl */`
+// No back face data on a back facing fragment, a silhouette pixel, another glass body in front, the swatch or a frame
+// drawn outside SceneView.render. Glass in glass: the outer body sees the inner back face, so it takes its own mean.
+const FRAGMENT = /* glsl */ `
 #ifdef USE_TRANSMISSION
 	material.transmission = transmission;
 	material.transmissionAlpha = 1.0;
@@ -176,7 +170,10 @@ function glassPatch(id: number): ShaderPatch {
 
 /** The transmission chunk, with the auto thickness copy swapped in. Exported for
  *  the tripwire test, which checks three still has the include this replaces. */
-export function patchGlassShader(shader: { vertexShader?: string; fragmentShader: string; uniforms: Record<string, THREE.IUniform> }, id: { value: number }): void {
+export function patchGlassShader(
+  shader: { vertexShader?: string; fragmentShader: string; uniforms: Record<string, THREE.IUniform> },
+  id: { value: number },
+): void {
   const m = new THREE.MeshPhysicalMaterial();
   setPatch(m, glassPatch(id.value));
   const s = { ...shader, vertexShader: shader.vertexShader ?? "" };
@@ -207,7 +204,7 @@ export function glassBodyCount(): number {
   return bodies.size;
 }
 
-const BACK_VERTEX = /* glsl */`
+const BACK_VERTEX = /* glsl */ `
 #include <common>
 #include <clipping_planes_pars_vertex>
 varying vec3 vFcNormal;
@@ -218,7 +215,7 @@ void main() {
 	vFcNormal = normalize( mat3( modelMatrix ) * normal );
 }
 `;
-const BACK_FRAGMENT = /* glsl */`
+const BACK_FRAGMENT = /* glsl */ `
 #include <clipping_planes_pars_fragment>
 uniform float uId;
 varying vec3 vFcNormal;
@@ -260,8 +257,11 @@ export class GlassBackPass {
       let entry = this.proxies.get(mesh);
       if (!entry) {
         const mat = new THREE.ShaderMaterial({
-          vertexShader: BACK_VERTEX, fragmentShader: BACK_FRAGMENT,
-          uniforms: { uId: { value: 0 } }, side: THREE.BackSide, clipping: true,
+          vertexShader: BACK_VERTEX,
+          fragmentShader: BACK_FRAGMENT,
+          uniforms: { uId: { value: 0 } },
+          side: THREE.BackSide,
+          clipping: true,
         });
         const proxy = new THREE.Mesh(mesh.geometry, mat);
         proxy.matrixAutoUpdate = false;
@@ -281,9 +281,8 @@ export class GlassBackPass {
       const list = Array.isArray(real) ? real : [real];
       const glassAt = list.findIndex((m) => isGlassAuto(m));
       mat.clippingPlanes = (glassAt >= 0 ? list[glassAt] : list[0])?.clippingPlanes ?? null;
-      proxy.material = slots && Array.isArray(real) && real.length === slots.length
-        ? slots.map((g) => (g ? mat : this.hidden))
-        : mat;
+      proxy.material =
+        slots && Array.isArray(real) && real.length === slots.length ? slots.map((g) => (g ? mat : this.hidden)) : mat;
     }
     for (const [mesh, { proxy, mat }] of this.proxies) {
       if (bodies.has(mesh)) continue;
@@ -296,12 +295,17 @@ export class GlassBackPass {
       return false;
     }
     renderer.getDrawingBufferSize(this.size);
-    const w = Math.max(1, Math.floor(this.size.x)), h = Math.max(1, Math.floor(this.size.y));
+    const w = Math.max(1, Math.floor(this.size.x)),
+      h = Math.max(1, Math.floor(this.size.y));
     if (!this.target) {
       const depth = new THREE.DepthTexture(w, h, THREE.FloatType);
       this.target = new THREE.WebGLRenderTarget(w, h, {
-        type: THREE.HalfFloatType, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter,
-        generateMipmaps: false, depthBuffer: true, depthTexture: depth,
+        type: THREE.HalfFloatType,
+        minFilter: THREE.NearestFilter,
+        magFilter: THREE.NearestFilter,
+        generateMipmaps: false,
+        depthBuffer: true,
+        depthTexture: depth,
       });
     } else if (this.target.width !== w || this.target.height !== h) {
       this.target.setSize(w, h);

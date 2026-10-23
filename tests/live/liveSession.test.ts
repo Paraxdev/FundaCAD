@@ -11,8 +11,10 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DocumentStore, EMPTY_DOCUMENT } from "../../src/document/store";
-import { LiveSessionHost } from "../../src/live/liveSession";
-import type { CadDocument } from "../../src/types";
+import { GUIDE_LINGER_MS, LiveSessionHost } from "../../src/live/liveSession";
+import { GuideSession } from "../../src/ui/guide/guideSession";
+import { emptySnapshot } from "../../src/ui/guide/wait";
+import type { CadDocument, SectionView } from "../../src/types";
 import type { GeometryBackend } from "../../src/geometry/client";
 
 /** A backend that records what the host published and replays a scripted reply.
@@ -47,9 +49,12 @@ function doc(n: number): CadDocument {
   } as unknown as CadDocument;
 }
 
-function proposal(id: string, features: number, note: string | null = null) {
-  return { id, name: "an assistant", note, document: doc(features) };
+function proposal(id: string, features: number, note: string | null = null, docId?: string) {
+  return { id, name: "an assistant", note, document: doc(features), ...(docId ? { doc: docId } : {}) };
 }
+
+const CUT_A: SectionView = { origin: [41.5, -12, 8.25], normal: [0.6, 0.8, 0], offset: 3.5, side: 1, ghost: "soft" };
+const CUT_B: SectionView = { origin: [-7, 22.5, 14], normal: [0, 0.6, -0.8], offset: -2.25, side: -1, ghost: "strong" };
 
 describe("the window's half of a live session", () => {
   let geo: GeometryBackend & StubBackend;
@@ -93,6 +98,133 @@ describe("the window's half of a live session", () => {
     expect(after, "a user's edit left the revision where it was").toBeGreaterThan(before);
   });
 
+  it("publishes its document session and never applies a proposal made for a document it closed", async () => {
+    const host = new LiveSessionHost(store, geo, () => true);
+    host.start();
+    await host.tick();
+    const docA = store.session.id;
+    const publishedA = geo.sent.at(-1)!.payload["doc"];
+
+    // Answered after New: the round trip began in A, so nothing it carries lands in B.
+    let answer!: (v: Record<string, unknown>) => void;
+    geo.session = async (op: string, payload: object = {}) => {
+      geo.sent.push({ op, payload: payload as Record<string, unknown> });
+      return new Promise((r) => (answer = r));
+    };
+    const inFlight = host.tick();
+    store.newDocument();
+    answer({ ok: true, guests: [], proposals: [proposal("p1", 3, null, docA)] });
+    await inFlight;
+    const afterNew = store.document.features.length;
+
+    // A proposal for A handed over in B's own round trip is refused too; one for B, or naming none, is taken.
+    geo.session = StubBackend.prototype.session.bind(geo);
+    const docB = store.session.id;
+    geo.reply = { ok: true, guests: [], proposals: [proposal("p2", 4, null, docA)] };
+    await host.tick();
+    const staleRefused = store.document.features.length;
+    geo.reply = { ok: true, guests: [], proposals: [proposal("p3", 2, null, docB)] };
+    await host.tick();
+    const forB = store.document.features.length;
+    geo.reply = { ok: true, guests: [], proposals: [proposal("p4", 1)] };
+    await host.tick();
+    const unnamed = store.document.features.length;
+
+    // Then a third document starts clean.
+    store.newDocument();
+    geo.reply = { ok: true, guests: [], proposals: [] };
+    await host.tick();
+    expect({
+      publishedA: publishedA === docA,
+      publishedB: geo.sent.filter((m) => m.op === "session_host").some((m) => m.payload["doc"] === docB),
+      afterNew,
+      staleRefused,
+      forB,
+      unnamed,
+      third: store.document.features.length,
+      lastDoc: geo.sent.at(-1)!.payload["doc"] === store.session.id,
+    }).toEqual({
+      publishedA: true,
+      publishedB: true,
+      afterNew: 0,
+      staleRefused: 0,
+      forB: 2,
+      unnamed: 1,
+      third: 0,
+      lastDoc: true,
+    });
+    await host.stop();
+  });
+
+  it("refuses a whole new document while an import is read into the open one, and says so by proposal id", async () => {
+    const host = new LiveSessionHost(store, geo, () => true);
+    host.start();
+    await host.tick();
+    store.loadDocument(doc(2));
+    let finish!: () => void;
+    const reading = store.runBusy(
+      "Importing sv08.step",
+      (onStarted) => {
+        onStarted("rq-import");
+        return new Promise<void>((r) => (finish = r));
+      },
+      { holdHistory: true },
+    );
+    const lastStatus = () =>
+      geo.sent.filter((m) => m.op === "session_host").at(-1)!.payload["status"] as {
+        applied: string[];
+        refused: { id: string; message: string }[];
+      };
+
+    // doc_new or doc_open of the assistant: the import would land in that other document.
+    geo.reply = { ok: true, guests: ["an assistant"], proposals: [{ ...proposal("p1", 0), replaces: true }] };
+    await host.tick();
+    const whileReading = store.document.features.length;
+    // An edit of the open document goes in, the import was started for it.
+    geo.reply = { ok: true, guests: ["an assistant"], proposals: [proposal("p2", 3)] };
+    await host.tick();
+    const edited = store.document.features.length;
+    geo.reply = { ok: true, guests: ["an assistant"], proposals: [] };
+    await host.tick();
+    const told = lastStatus();
+
+    finish();
+    await reading;
+    geo.reply = { ok: true, guests: ["an assistant"], proposals: [{ ...proposal("p3", 1), replaces: true }] };
+    await host.tick();
+    const afterImport = store.document.features.length;
+    geo.reply = { ok: true, guests: ["an assistant"], proposals: [] };
+    await host.tick();
+
+    store.newDocument();
+    await host.tick();
+    expect({
+      whileReading,
+      edited,
+      told: { applied: told.applied, refused: told.refused },
+      afterImport,
+      after: lastStatus().applied,
+      next: store.document.features.length,
+    }).toEqual({
+      whileReading: 2,
+      edited: 3,
+      told: {
+        applied: ["p2"],
+        refused: [
+          {
+            id: "p1",
+            message:
+              "an import is still being read into the open document, so it was not replaced, nothing was applied; wait for the import or cancel it in History",
+          },
+        ],
+      },
+      afterImport: 1,
+      after: ["p2", "p3"],
+      next: 0,
+    });
+    await host.stop();
+  });
+
   it("applies an assistant's edit through the document store, so it is one undo", async () => {
     const host = new LiveSessionHost(store, geo, () => true);
     host.start();
@@ -103,6 +235,64 @@ describe("the window's half of a live session", () => {
     expect(store.document.features).toHaveLength(3);
     store.undo();
     expect(store.document.features, "the edit was not undoable").toHaveLength(0);
+    await host.stop();
+  });
+
+  it("publishes no section cut, so an edit made against an older publish keeps the cut the user has now", async () => {
+    store.loadDocument(doc(2));
+    store.setSectionView(structuredClone(CUT_A));
+    const host = new LiveSessionHost(store, geo, () => true);
+    host.start();
+    await host.tick();
+    const published = geo.sent.filter((m) => m.op === "session_host").at(-1)!.payload["document"] as CadDocument;
+    expect("sectionView" in published).toBe(false);
+    expect(published.features.map((f) => f.id)).toEqual(["f0", "f1"]);
+
+    for (const [i, now] of [null, CUT_B].entries()) {
+      store.setSectionView(now && structuredClone(now));
+      const edited = { ...structuredClone(published), features: [...published.features, { id: `x${i}`, type: "box" }] };
+      geo.reply = {
+        ok: true,
+        guests: ["an assistant"],
+        proposals: [{ id: `p${i}`, name: "an assistant", note: null, document: edited }],
+      };
+      await host.tick();
+      expect(store.document.features.map((f) => f.id)).toEqual(["f0", "f1", `x${i}`]);
+      expect(store.sectionView).toEqual(now);
+    }
+    await host.stop();
+  });
+
+  it("keeps the cut the user has when an assistant's edit brings the one saved in a file, and turns it off for another document", async () => {
+    store.loadDocument({ ...doc(2), sectionView: CUT_A });
+    const host = new LiveSessionHost(store, geo, () => true);
+    host.start();
+    await host.tick();
+    const state = () => [
+      store.document.features.map((f) => f.id),
+      store.sectionView,
+      JSON.parse(store.toJSON()).sectionView ?? null,
+    ];
+    const offer = async (id: string, document: CadDocument) => {
+      geo.reply = {
+        ok: true,
+        guests: ["an assistant"],
+        proposals: [{ id, name: "an assistant", note: null, document }],
+      };
+      await host.tick();
+    };
+    for (const [i, now] of [CUT_B, null].entries()) {
+      store.setSectionView(now && structuredClone(now));
+      await offer(`p${i}`, { ...doc(3 + i), sectionView: CUT_A });
+      expect(state()).toEqual([["f0", "f1", "f2", "f3"].slice(0, 3 + i), now, now]);
+    }
+    store.setSectionView(structuredClone(CUT_B));
+    await offer("p9", {
+      parameters: {},
+      features: [{ id: "g0", type: "box" }],
+      sectionView: CUT_A,
+    } as unknown as CadDocument);
+    expect(state()).toEqual([["g0"], null, null]);
     await host.stop();
   });
 
@@ -215,5 +405,93 @@ describe("the window's half of a live session", () => {
     expect(seen.at(-1)).toEqual(["an assistant"]);
     await host.stop();
     expect(host.snapshot.guests, "a stopped session still showed a guest").toEqual([]);
+  });
+});
+
+describe("guide mode over the live session", () => {
+  class GuideBackend extends StubBackend {
+    commands: unknown[] = [];
+    override async session(op: string, payload: object = {}): Promise<Record<string, unknown> | null> {
+      this.sent.push({ op, payload: payload as Record<string, unknown> });
+      if (op !== "session_guide") return { ok: true, guests: ["an assistant"], proposals: [] };
+      const commands = this.commands;
+      this.commands = [];
+      return { ok: true, commands };
+    }
+  }
+
+  const rig = () => {
+    const geo = new GuideBackend() as unknown as GeometryBackend & GuideBackend;
+    const store = new DocumentStore(geo, EMPTY_DOCUMENT);
+    const guide = new GuideSession(() => ({ found: true }), emptySnapshot);
+    const host = new LiveSessionHost(store, geo, () => true);
+    host.attachGuide(guide);
+    return { geo, guide, host };
+  };
+
+  it("hands the commands of a session_guide reply to the guide", async () => {
+    const { geo, guide, host } = rig();
+    geo.commands = [
+      { kind: "highlight", seq: 4, target: { ui: "pick:fillet" }, caption: "Open Fillet", step: 1, of: 3 },
+    ];
+    host.start();
+    await host.tick();
+    await host.guideTick();
+    expect(guide.state.step?.caption).toBe("Open Fillet");
+    await host.stop();
+  });
+
+  it("sends the guide state in session_guide, never in session_host", async () => {
+    const { geo, guide, host } = rig();
+    geo.commands = [{ kind: "highlight", seq: 4, target: { ui: "x" } }];
+    host.start();
+    await host.tick();
+    await host.guideTick();
+    const hosts = geo.sent.filter((m) => m.op === "session_host");
+    const guides = geo.sent.filter((m) => m.op === "session_guide");
+    expect(hosts.every((m) => !("guide" in m.payload) && !("state" in m.payload))).toBe(true);
+    expect(guides.at(-1)!.payload["state"]).toMatchObject({ ack: 4 });
+    expect(guides.every((m) => !("document" in m.payload))).toBe(true);
+    expect(guide.state.ack).toBe(4);
+    await host.stop();
+  });
+
+  it("polls every 200 ms while a step is up and slows down after Stop", async () => {
+    vi.useFakeTimers();
+    try {
+      const { geo, guide, host } = rig();
+      geo.commands = [{ kind: "highlight", seq: 1, target: { ui: "x" }, step: 1, of: 2 }];
+      host.start();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(guide.active).toBe(true);
+      const count = () => geo.sent.filter((m) => m.op === "session_guide").length;
+      const before = count();
+      await vi.advanceTimersByTimeAsync(650);
+      expect(count() - before).toBeGreaterThanOrEqual(3);
+      guide.stop();
+      await vi.advanceTimersByTimeAsync(GUIDE_LINGER_MS + 1000);
+      const after = count();
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(count() - after).toBeLessThanOrEqual(3);
+      expect(
+        geo.sent
+          .filter((m) => m.op === "session_guide")
+          .some((m) => (m.payload["state"] as { stopped: unknown }).stopped),
+      ).toBe(true);
+      await host.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("drops the guide when the window stops sharing", async () => {
+    const { geo, guide, host } = rig();
+    geo.commands = [{ kind: "highlight", seq: 1, target: { ui: "x" } }];
+    host.start();
+    await host.tick();
+    await host.guideTick();
+    expect(guide.state.step).not.toBeNull();
+    await host.stop();
+    expect(guide.state.step).toBeNull();
   });
 });

@@ -8,7 +8,14 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { bodyOutline, edgeFaceSamples, facesAtPoint, resampleEdge } from "../../src/viewport/ghosts";
-import { ARC_SEGMENTS, TRIM_BUDGET, insideOutline, sectionOutline, sweepBlendGhost, type EdgeSample } from "../../src/features/blendGhost";
+import {
+  ARC_SEGMENTS,
+  TRIM_BUDGET,
+  insideOutline,
+  sectionOutline,
+  sweepBlendGhost,
+  type EdgeSample,
+} from "../../src/features/blendGhost";
 import { BodyEdges, type BodyMesh, type ModelView } from "../../src/viewport/render";
 import type { Pt3 } from "../../src/features/blendGhost";
 
@@ -58,20 +65,30 @@ function buildHinge(opts: { flip?: boolean; height?: number; gap?: [number, numb
   const skip = (z0: number) => !!gap && z0 >= gap[0] && z0 < gap[1];
   for (let iy = 0; iy < N; iy++) {
     for (let iz = 0; iz < NZ; iz++) {
-      const y0 = -10 + (iy * 10) / N, y1 = -10 + ((iy + 1) * 10) / N;
-      const z0 = iz * 2.5, z1 = (iz + 1) * 2.5;
+      const y0 = -10 + (iy * 10) / N,
+        y1 = -10 + ((iy + 1) * 10) / N;
+      const z0 = iz * 2.5,
+        z1 = (iz + 1) * 2.5;
       if (skip(z0)) continue;
-      const A: Pt3 = [0, y0, z0], B: Pt3 = [0, y1, z0], C: Pt3 = [0, y1, z1], D: Pt3 = [0, y0, z1];
+      const A: Pt3 = [0, y0, z0],
+        B: Pt3 = [0, y1, z0],
+        C: Pt3 = [0, y1, z1],
+        D: Pt3 = [0, y0, z1];
       tri(A, B, C, 0);
       tri(A, C, D, 0);
     }
   }
   for (let ix = 0; ix < N; ix++) {
     for (let iz = 0; iz < NZ; iz++) {
-      const x0 = -10 + (ix * 10) / N, x1 = -10 + ((ix + 1) * 10) / N;
-      const z0 = iz * 2.5, z1 = (iz + 1) * 2.5;
+      const x0 = -10 + (ix * 10) / N,
+        x1 = -10 + ((ix + 1) * 10) / N;
+      const z0 = iz * 2.5,
+        z1 = (iz + 1) * 2.5;
       if (skip(z0)) continue;
-      const A: Pt3 = [x0, 0, z0], B: Pt3 = [x0, 0, z1], C: Pt3 = [x1, 0, z1], D: Pt3 = [x1, 0, z0];
+      const A: Pt3 = [x0, 0, z0],
+        B: Pt3 = [x0, 0, z1],
+        C: Pt3 = [x1, 0, z1],
+        D: Pt3 = [x1, 0, z0];
       tri(A, B, C, 1);
       tri(A, C, D, 1);
     }
@@ -96,7 +113,8 @@ function buildCylinder(N: number, R: number, H: number): BodyMesh {
     faceIds.push(fid);
   };
   for (let k = 0; k < N; k++) {
-    const a0 = (2 * Math.PI * k) / N, a1 = (2 * Math.PI * (k + 1)) / N;
+    const a0 = (2 * Math.PI * k) / N,
+      a1 = (2 * Math.PI * (k + 1)) / N;
     const A: Pt3 = [R * Math.cos(a0), R * Math.sin(a0), 0];
     const B: Pt3 = [R * Math.cos(a1), R * Math.sin(a1), 0];
     const C: Pt3 = [R * Math.cos(a1), R * Math.sin(a1), H];
@@ -106,7 +124,8 @@ function buildCylinder(N: number, R: number, H: number): BodyMesh {
   }
   const center: Pt3 = [0, 0, H];
   for (let k = 0; k < N; k++) {
-    const a0 = (2 * Math.PI * k) / N, a1 = (2 * Math.PI * (k + 1)) / N;
+    const a0 = (2 * Math.PI * k) / N,
+      a1 = (2 * Math.PI * (k + 1)) / N;
     const p0: Pt3 = [R * Math.cos(a0), R * Math.sin(a0), H];
     const p1: Pt3 = [R * Math.cos(a1), R * Math.sin(a1), H];
     tri(center, p0, p1, CAP);
@@ -149,7 +168,10 @@ describe("edgeFaceSamples", () => {
   it("resolves a straight edge given only its two corner endpoints (never a mesh vertex)", () => {
     const body = buildHinge();
     const model = modelOf(body);
-    const points: Pt3[] = [[0, 0, 0], [0, 0, 10]];
+    const points: Pt3[] = [
+      [0, 0, 0],
+      [0, 0, 10],
+    ];
     const found = edgeFaceSamples(model, { body: "hinge", points });
     expect(found).not.toBeNull();
     expect(found!.closed).toBe(false);
@@ -168,11 +190,17 @@ describe("edgeFaceSamples", () => {
   });
 
   it("finds the same wedge whichever way the mesh's triangles wind", () => {
-    const points: Pt3[] = [[0, 0, 0], [0, 0, 10]];
+    const points: Pt3[] = [
+      [0, 0, 0],
+      [0, 0, 10],
+    ];
     const a = edgeFaceSamples(modelOf(buildHinge()), { body: "hinge", points: [...points] })!.samples;
     const b = edgeFaceSamples(modelOf(buildHinge({ flip: true })), { body: "hinge", points: [...points] })!.samples;
     const key = (s: (typeof a)[number]) =>
-      [s.into1, s.into2].map((d) => d.map((x) => Math.round(x * 1e6) / 1e6 + 0).join(",")).sort().join("|");
+      [s.into1, s.into2]
+        .map((d) => d.map((x) => Math.round(x * 1e6) / 1e6 + 0).join(","))
+        .sort()
+        .join("|");
     expect(b.map(key)).toEqual(a.map(key));
     // the hinge's planes both run off toward negative x and y
     for (const s of a) {
@@ -185,7 +213,10 @@ describe("edgeFaceSamples", () => {
     // tolerance reaches: the samples there fail, the rest don't.
     const body = buildHinge({ height: 60, gap: [10, 50] });
     const model = modelOf(body);
-    const points: Pt3[] = [[0, 0, 0], [0, 0, 60]];
+    const points: Pt3[] = [
+      [0, 0, 0],
+      [0, 0, 60],
+    ];
     const found = edgeFaceSamples(model, { body: "hinge", points });
     expect(found).not.toBeNull();
     const samples = found!.samples;
@@ -200,13 +231,18 @@ describe("edgeFaceSamples", () => {
   it("returns null when the body is missing or the edge has fewer than 2 points", () => {
     const body = buildHinge();
     const model = modelOf(body);
-    const points: Pt3[] = [[0, 0, 0], [0, 0, 10]];
+    const points: Pt3[] = [
+      [0, 0, 0],
+      [0, 0, 10],
+    ];
     expect(edgeFaceSamples(model, { body: "nope", points })).toBeNull();
     expect(edgeFaceSamples(model, { body: "hinge", points: [[0, 0, 0]] })).toBeNull();
   });
 
   it("resolves a cylinder rim sampled at a different phase/density than the mesh's own tessellation, without twisting", () => {
-    const N = 16, R = 5, H = 10;
+    const N = 16,
+      R = 5,
+      H = 10;
     const body = buildCylinder(N, R, H);
     const model = modelOf(body);
     const points = rimPolyline(40, R, H, Math.PI / N);
@@ -236,7 +272,10 @@ describe("edgeFaceSamples", () => {
 });
 
 describe("blend ghost on a cylinder's circular rim", () => {
-  const N = 48, R = 10, H = 10, r = 2;
+  const N = 48,
+    R = 10,
+    H = 10,
+    r = 2;
   const ghost = () => {
     const body = buildCylinder(N, R, H);
     const found = edgeFaceSamples(modelOf(body), { body: "cyl", points: rimPolyline(90, R, H, 0.013) })!;
@@ -268,7 +307,8 @@ describe("blend ghost on a cylinder's circular rim", () => {
 
   it("sits on the rim: it meets the cap r in from the edge and the wall r down", () => {
     const { geo } = ghost();
-    let onCap = 0, onWall = 0;
+    let onCap = 0,
+      onWall = 0;
     for (let i = 0; i < geo.positions.length; i += 3) {
       const rho = Math.hypot(geo.positions[i]!, geo.positions[i + 1]!);
       const z = geo.positions[i + 2]!;
@@ -285,7 +325,10 @@ describe("blend ghost on a cylinder's circular rim", () => {
  *  `R` about Z cut flat at x = `a`, `H` tall. The flat meets the round along
  *  the straight edge at (a, sqrt(R^2 - a^2)). */
 function buildDShaft(R: number, a: number, H: number, N: number): BodyMesh {
-  const positions: number[] = [], normals: number[] = [], indices: number[] = [], faceIds: number[] = [];
+  const positions: number[] = [],
+    normals: number[] = [],
+    indices: number[] = [],
+    faceIds: number[] = [];
   const tri = (p: Pt3[], n: Pt3[], fid: number) => {
     for (let k = 0; k < 3; k++) {
       indices.push(positions.length / 3);
@@ -301,29 +344,122 @@ function buildDShaft(R: number, a: number, H: number, N: number): BodyMesh {
     ring.push([R * Math.cos(t), R * Math.sin(t)]);
   }
   for (let i = 0; i < N; i++) {
-    const [x0, y0] = ring[i]!, [x1, y1] = ring[i + 1]!;
-    const n0: Pt3 = [x0 / R, y0 / R, 0], n1: Pt3 = [x1 / R, y1 / R, 0];
-    tri([[x0, y0, 0], [x1, y1, 0], [x1, y1, H]], [n0, n1, n1], 1);
-    tri([[x0, y0, 0], [x1, y1, H], [x0, y0, H]], [n0, n1, n0], 1);
-    tri([[0, 0, 0], [x1, y1, 0], [x0, y0, 0]], [[0, 0, -1], [0, 0, -1], [0, 0, -1]], 2);
-    tri([[0, 0, H], [x0, y0, H], [x1, y1, H]], [[0, 0, 1], [0, 0, 1], [0, 0, 1]], 3);
+    const [x0, y0] = ring[i]!,
+      [x1, y1] = ring[i + 1]!;
+    const n0: Pt3 = [x0 / R, y0 / R, 0],
+      n1: Pt3 = [x1 / R, y1 / R, 0];
+    tri(
+      [
+        [x0, y0, 0],
+        [x1, y1, 0],
+        [x1, y1, H],
+      ],
+      [n0, n1, n1],
+      1,
+    );
+    tri(
+      [
+        [x0, y0, 0],
+        [x1, y1, H],
+        [x0, y0, H],
+      ],
+      [n0, n1, n0],
+      1,
+    );
+    tri(
+      [
+        [0, 0, 0],
+        [x1, y1, 0],
+        [x0, y0, 0],
+      ],
+      [
+        [0, 0, -1],
+        [0, 0, -1],
+        [0, 0, -1],
+      ],
+      2,
+    );
+    tri(
+      [
+        [0, 0, H],
+        [x0, y0, H],
+        [x1, y1, H],
+      ],
+      [
+        [0, 0, 1],
+        [0, 0, 1],
+        [0, 0, 1],
+      ],
+      3,
+    );
   }
-  const [xe, ye] = ring[0]!, [xs, ys] = ring[N]!;
+  const [xe, ye] = ring[0]!,
+    [xs, ys] = ring[N]!;
   const fx: Pt3 = [1, 0, 0];
   for (let j = 0; j < 8; j++) {
-    const y0 = ys + ((ye - ys) * j) / 8, y1 = ys + ((ye - ys) * (j + 1)) / 8;
-    tri([[a, y0, 0], [a, y1, 0], [a, y1, H]], [fx, fx, fx], 0);
-    tri([[a, y0, 0], [a, y1, H], [a, y0, H]], [fx, fx, fx], 0);
+    const y0 = ys + ((ye - ys) * j) / 8,
+      y1 = ys + ((ye - ys) * (j + 1)) / 8;
+    tri(
+      [
+        [a, y0, 0],
+        [a, y1, 0],
+        [a, y1, H],
+      ],
+      [fx, fx, fx],
+      0,
+    );
+    tri(
+      [
+        [a, y0, 0],
+        [a, y1, H],
+        [a, y0, H],
+      ],
+      [fx, fx, fx],
+      0,
+    );
   }
-  tri([[0, 0, 0], [xe, ye, 0], [xs, ys, 0]], [[0, 0, -1], [0, 0, -1], [0, 0, -1]], 2);
-  tri([[0, 0, H], [xs, ys, H], [xe, ye, H]], [[0, 0, 1], [0, 0, 1], [0, 0, 1]], 3);
+  tri(
+    [
+      [0, 0, 0],
+      [xe, ye, 0],
+      [xs, ys, 0],
+    ],
+    [
+      [0, 0, -1],
+      [0, 0, -1],
+      [0, 0, -1],
+    ],
+    2,
+  );
+  tri(
+    [
+      [0, 0, H],
+      [xs, ys, H],
+      [xe, ye, H],
+    ],
+    [
+      [0, 0, 1],
+      [0, 0, 1],
+      [0, 0, 1],
+    ],
+    3,
+  );
   return makeBody("d", positions, indices, faceIds, normals);
 }
 
 describe("blend ghost against a curved face, read off the mesh", () => {
-  const R = 10, a = 6, H = 20;
+  const R = 10,
+    a = 6,
+    H = 20;
   const ye = Math.sqrt(R * R - a * a);
-  const found = () => edgeFaceSamples(modelOf(buildDShaft(R, a, H, 72)), { body: "d", points: [[a, ye, 0], [a, ye, H]] })!;
+  const found = () =>
+    edgeFaceSamples(modelOf(buildDShaft(R, a, H, 72)), {
+      body: "d",
+      points: [
+        [a, ye, 0],
+        [a, ye, H],
+      ],
+    })!;
 
   it("measures the round's curvature from the shipped normals", () => {
     const s = found().samples[5]!;
@@ -357,7 +493,9 @@ describe("blend ghost against a curved face, read off the mesh", () => {
 /** The walls of polygons `loops` in the XY plane extruded from z = 0 to
  *  `H` in `rows` bands, no caps: a plane across Z only ever cuts the walls. */
 function buildWalls(loops: [number, number][][], H: number, rows: number): BodyMesh {
-  const positions: number[] = [], indices: number[] = [], faceIds: number[] = [];
+  const positions: number[] = [],
+    indices: number[] = [],
+    faceIds: number[] = [];
   const tri = (p: Pt3[], fid: number) => {
     for (const v of p) {
       indices.push(positions.length / 3);
@@ -370,9 +508,24 @@ function buildWalls(loops: [number, number][][], H: number, rows: number): BodyM
     loop.forEach(([x0, y0], i) => {
       const [x1, y1] = loop[(i + 1) % loop.length]!;
       for (let r = 0; r < rows; r++) {
-        const z0 = (H * r) / rows, z1 = (H * (r + 1)) / rows;
-        tri([[x0, y0, z0], [x1, y1, z0], [x1, y1, z1]], fid);
-        tri([[x0, y0, z0], [x1, y1, z1], [x0, y0, z1]], fid);
+        const z0 = (H * r) / rows,
+          z1 = (H * (r + 1)) / rows;
+        tri(
+          [
+            [x0, y0, z0],
+            [x1, y1, z0],
+            [x1, y1, z1],
+          ],
+          fid,
+        );
+        tri(
+          [
+            [x0, y0, z0],
+            [x1, y1, z1],
+            [x0, y0, z1],
+          ],
+          fid,
+        );
       }
       fid++;
     });
@@ -380,11 +533,18 @@ function buildWalls(loops: [number, number][][], H: number, rows: number): BodyM
   return makeBody("walls", positions, indices, faceIds);
 }
 
-const sq = (x0: number, y0: number, x1: number, y1: number): [number, number][] => [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+const sq = (x0: number, y0: number, x1: number, y1: number): [number, number][] => [
+  [x0, y0],
+  [x1, y0],
+  [x1, y1],
+  [x0, y1],
+];
 
 /** The body's section at height z, in world x and y. */
 function sectionAt(body: BodyMesh, z: number): Float64Array {
-  const X = new THREE.Vector3(1, 0, 0), Y = new THREE.Vector3(0, 1, 0), Z = new THREE.Vector3(0, 0, 1);
+  const X = new THREE.Vector3(1, 0, 0),
+    Y = new THREE.Vector3(0, 1, 0),
+    Z = new THREE.Vector3(0, 0, 1);
   return bodyOutline(body, new THREE.Vector3(0, 0, z), Z, X, Y).slice();
 }
 
@@ -407,7 +567,14 @@ function expectClosedLoops(segs: Float64Array, perimeter: number) {
 }
 
 /** A square corner at the origin, standing along Z. */
-const cornerAt = (z: number): EdgeSample => ({ point: [0, 0, z], tangent: [0, 0, 1], into1: [1, 0, 0], into2: [0, 1, 0], reach1: 10, reach2: 10 });
+const cornerAt = (z: number): EdgeSample => ({
+  point: [0, 0, z],
+  tangent: [0, 0, 1],
+  into1: [1, 0, 0],
+  into2: [0, 1, 0],
+  reach1: 10,
+  reach2: 10,
+});
 
 describe("bodyOutline", () => {
   it("cuts a prism into its section", () => {
@@ -429,7 +596,13 @@ describe("bodyOutline", () => {
     const segs = sectionAt(buildWalls([sq(0, 0, 10, 10), sq(20, 0, 30, 10), sq(0, 20, 10, 30)], 10, 3), 5);
     expectClosedLoops(segs, 120);
     const o = sectionOutline(cornerAt(5), segs, segs.length / 4)!;
-    for (const [q, inside] of [[[5, 5], true], [[25, 5], true], [[5, 25], true], [[15, 5], false], [[25, 25], false]] as const) {
+    for (const [q, inside] of [
+      [[5, 5], true],
+      [[25, 5], true],
+      [[5, 25], true],
+      [[15, 5], false],
+      [[25, 25], false],
+    ] as const) {
       expect(insideOutline(o, [q[0], q[1]])).toBe(inside);
     }
   });
@@ -445,10 +618,18 @@ describe("bodyOutline", () => {
 });
 
 describe("blend ghost cost on a large body", () => {
-  const R = 10, a = 6, H = 20;
+  const R = 10,
+    a = 6,
+    H = 20;
   const ye = Math.sqrt(R * R - a * a);
   // Samples are cached by the identity of the points array, so a new one per body.
-  const edge = () => ({ body: "d", points: [[a, ye, 0], [a, ye, H]] as Pt3[] });
+  const edge = () => ({
+    body: "d",
+    points: [
+      [a, ye, 0],
+      [a, ye, H],
+    ] as Pt3[],
+  });
 
   it("trims against a dense section at a cost that does not grow with it", () => {
     const { samples } = edgeFaceSamples(modelOf(buildDShaft(R, a, H, 1500)), edge())!;
@@ -486,7 +667,10 @@ describe("blend ghost cost on a large body", () => {
 
 describe("resampleEdge", () => {
   it("insets from both ends and spaces points evenly by arc length", () => {
-    const points: Pt3[] = [[0, 0, 0], [0, 0, 10]];
+    const points: Pt3[] = [
+      [0, 0, 0],
+      [0, 0, 10],
+    ];
     const pts = resampleEdge(points, 5);
     expect(pts).not.toBeNull();
     expect(pts!.length).toBe(5);
@@ -497,7 +681,13 @@ describe("resampleEdge", () => {
   });
 
   it("walks a closed loop all the way round without repeating its start", () => {
-    const loop: Pt3[] = [[0, 0, 0], [10, 0, 0], [10, 10, 0], [0, 10, 0], [0, 0, 0]];
+    const loop: Pt3[] = [
+      [0, 0, 0],
+      [10, 0, 0],
+      [10, 10, 0],
+      [0, 10, 0],
+      [0, 0, 0],
+    ];
     const pts = resampleEdge(loop, 8, true)!;
     expect(pts.length).toBe(8);
     expect(pts[0]).toEqual([0, 0, 0]);
@@ -505,7 +695,10 @@ describe("resampleEdge", () => {
   });
 
   it("returns null for a degenerate (zero-length) polyline", () => {
-    const points: Pt3[] = [[1, 1, 1], [1, 1, 1]];
+    const points: Pt3[] = [
+      [1, 1, 1],
+      [1, 1, 1],
+    ];
     expect(resampleEdge(points, 5)).toBeNull();
   });
 });

@@ -32,7 +32,6 @@ use wit::{DisplaceOptions, Plugin, PluginPre, Registration};
 
 use super::kernel_ext as kx;
 
-/// A kernel shape held for a plugin.
 pub struct HostShape(pub Shape);
 
 // The store, and every shape in it, lives and dies on the job thread that made
@@ -71,10 +70,7 @@ unsafe impl Send for State {}
 
 impl WasiView for State {
     fn ctx(&mut self) -> WasiCtxView<'_> {
-        WasiCtxView {
-            ctx: &mut self.wasi,
-            table: &mut self.table,
-        }
+        WasiCtxView { ctx: &mut self.wasi, table: &mut self.table }
     }
 }
 
@@ -82,8 +78,7 @@ fn engine() -> &'static Engine {
     static ENGINE: OnceLock<Engine> = OnceLock::new();
     ENGINE.get_or_init(|| {
         let mut cfg = Config::new();
-        cfg.wasm_component_model(true)
-            .epoch_interruption(true);
+        cfg.wasm_component_model(true).epoch_interruption(true);
         Engine::new(&cfg).expect("the wasmtime configuration is valid")
     })
 }
@@ -155,9 +150,7 @@ impl Component {
             },
             files_read,
         };
-        c.registration = c.call(Scope::None, Duration::from_secs(10), None, |p, s| {
-            p.call_register(s)
-        })?;
+        c.registration = c.call(Scope::None, Duration::from_secs(10), None, |p, s| p.call_register(s))?;
         Ok(c)
     }
 
@@ -240,12 +233,7 @@ impl Component {
         }
     }
 
-    pub fn generate_shape(
-        &self,
-        name: &str,
-        params: &Value,
-        cancel: Option<CancelToken>,
-    ) -> Result<Shape, String> {
+    pub fn generate_shape(&self, name: &str, params: &Value, cancel: Option<CancelToken>) -> Result<Shape, String> {
         self.call(Scope::None, super::GENERATE_BUDGET, cancel, |p, s| {
             let r = p.call_generate_shape(&mut *s, name, &params.to_string())?;
             Ok(match r {
@@ -263,18 +251,13 @@ impl Component {
         path: &Path,
         cancel: Option<CancelToken>,
     ) -> Result<Option<Value>, String> {
-        let info = self.call(
-            Scope::Export(path.to_path_buf()),
-            super::EXPORT_BUDGET,
-            cancel,
-            |p, s| p.call_write_export(s, exporter, &bodies, &options.to_string()),
-        )??;
+        let info = self.call(Scope::Export(path.to_path_buf()), super::EXPORT_BUDGET, cancel, |p, s| {
+            p.call_write_export(s, exporter, &bodies, &options.to_string())
+        })??;
         if info.trim().is_empty() {
             return Ok(None);
         }
-        serde_json::from_str(&info)
-            .map(Some)
-            .map_err(|e| format!("the exporter's info is not JSON: {e}"))
+        serde_json::from_str(&info).map(Some).map_err(|e| format!("the exporter's info is not JSON: {e}"))
     }
 
     /// The faces one spec claims, each with the tag that goes back with it.
@@ -283,10 +266,7 @@ impl Component {
             let h = s.data_mut().table.push(HostShape(body.clone()))?;
             let r = p.call_resolve_pass(&mut *s, pass, h, &spec.to_string())?;
             Ok(match r {
-                Ok(hs) => hs
-                    .into_iter()
-                    .map(|c| take(s.data_mut(), c.face).map(|f| (f, c.tag)))
-                    .collect(),
+                Ok(hs) => hs.into_iter().map(|c| take(s.data_mut(), c.face).map(|f| (f, c.tag))).collect(),
                 Err(e) => Err(e),
             })
         })?
@@ -303,21 +283,14 @@ impl Component {
     ) -> Result<MeshData, String> {
         self.call(Scope::None, super::MESH_PASS_BUDGET, None, |p, s| {
             let h = s.data_mut().table.push(HostShape(face.clone()))?;
-            let options = DisplaceOptions {
-                density_cap,
-                split_creases,
-            };
+            let options = DisplaceOptions { density_cap, split_creases };
             p.call_displace(&mut *s, pass, h, &spec.to_string(), tag, options)
         })?
     }
 }
 
 fn take(state: &mut State, h: Resource<HostShape>) -> Result<Shape, String> {
-    state
-        .table
-        .delete(h)
-        .map(|s| s.0)
-        .map_err(|e| format!("the plugin returned a shape it does not hold: {e}"))
+    state.table.delete(h).map(|s| s.0).map_err(|e| format!("the plugin returned a shape it does not hold: {e}"))
 }
 
 impl State {
@@ -434,7 +407,12 @@ impl kernel::HostShape for State {
         Ok(k::normal_at(self.shape(&s)?, point))
     }
 
-    fn classify(&mut self, s: Resource<HostShape>, point: types::Vec3, tolerance: f64) -> wasmtime::Result<types::PointState> {
+    fn classify(
+        &mut self,
+        s: Resource<HostShape>,
+        point: types::Vec3,
+        tolerance: f64,
+    ) -> wasmtime::Result<types::PointState> {
         Ok(k::classify(self.shape(&s)?, point, tolerance))
     }
 
@@ -458,7 +436,11 @@ impl kernel::HostShape for State {
         Ok(k::is_same(self.shape(&s)?, self.shape(&other)?))
     }
 
-    fn faces_of_edge(&mut self, s: Resource<HostShape>, edge: Resource<HostShape>) -> wasmtime::Result<Vec<Resource<HostShape>>> {
+    fn faces_of_edge(
+        &mut self,
+        s: Resource<HostShape>,
+        edge: Resource<HostShape>,
+    ) -> wasmtime::Result<Vec<Resource<HostShape>>> {
         let v = k::faces_of_edge(self.shape(&s)?, self.shape(&edge)?);
         self.own_all(v)
     }
@@ -467,7 +449,11 @@ impl kernel::HostShape for State {
         Ok(crate::features::blend::ops::dihedral_deg(self.shape(&s)?, self.shape(&edge)?))
     }
 
-    fn triangulate(&mut self, s: Resource<HostShape>, deflection: f64) -> wasmtime::Result<Result<types::Mesh, String>> {
+    fn triangulate(
+        &mut self,
+        s: Resource<HostShape>,
+        deflection: f64,
+    ) -> wasmtime::Result<Result<types::Mesh, String>> {
         Ok(k::triangulate(self.shape(&s)?, deflection))
     }
 
@@ -483,7 +469,12 @@ impl kernel::HostShape for State {
         Ok(kx::surface_frame(self.shape(&s)?))
     }
 
-    fn surface_samples(&mut self, s: Resource<HostShape>, uvs: Vec<f64>, tolerance: f64) -> wasmtime::Result<Vec<types::SurfaceSample>> {
+    fn surface_samples(
+        &mut self,
+        s: Resource<HostShape>,
+        uvs: Vec<f64>,
+        tolerance: f64,
+    ) -> wasmtime::Result<Vec<types::SurfaceSample>> {
         Ok(kx::surface_samples(self.shape(&s)?, &uvs, tolerance))
     }
 
@@ -494,19 +485,40 @@ impl kernel::HostShape for State {
 }
 
 impl kernel::Host for State {
-    fn make_box(&mut self, corner: types::Vec3, size: types::Vec3) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
+    fn make_box(
+        &mut self,
+        corner: types::Vec3,
+        size: types::Vec3,
+    ) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
         self.made(k::make_box(corner, size))
     }
 
-    fn make_cylinder(&mut self, base: types::Vec3, axis: types::Vec3, radius: f64, height: f64) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
+    fn make_cylinder(
+        &mut self,
+        base: types::Vec3,
+        axis: types::Vec3,
+        radius: f64,
+        height: f64,
+    ) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
         self.made(k::make_cylinder(base, axis, radius, height))
     }
 
-    fn make_cone(&mut self, base: types::Vec3, axis: types::Vec3, r1: f64, r2: f64, height: f64) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
+    fn make_cone(
+        &mut self,
+        base: types::Vec3,
+        axis: types::Vec3,
+        r1: f64,
+        r2: f64,
+        height: f64,
+    ) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
         self.made(k::make_cone(base, axis, r1, r2, height))
     }
 
-    fn make_sphere(&mut self, center: types::Vec3, radius: f64) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
+    fn make_sphere(
+        &mut self,
+        center: types::Vec3,
+        radius: f64,
+    ) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
         self.made(k::make_sphere(center, radius))
     }
 
@@ -519,7 +531,11 @@ impl kernel::Host for State {
         self.made(r)
     }
 
-    fn sketch_faces(&mut self, plane: String, entities: String) -> wasmtime::Result<Result<Vec<Resource<HostShape>>, String>> {
+    fn sketch_faces(
+        &mut self,
+        plane: String,
+        entities: String,
+    ) -> wasmtime::Result<Result<Vec<Resource<HostShape>>, String>> {
         let made = match self.feature() {
             Ok((ctx, _, _)) => k::sketch_faces(Some(ctx), &plane, &entities),
             Err(_) => k::sketch_faces(None, &plane, &entities),
@@ -530,17 +546,32 @@ impl kernel::Host for State {
         })
     }
 
-    fn prism(&mut self, profile: Resource<HostShape>, direction: types::Vec3) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
+    fn prism(
+        &mut self,
+        profile: Resource<HostShape>,
+        direction: types::Vec3,
+    ) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
         let r = k::prism(self.shape(&profile)?, direction);
         self.made(r)
     }
 
-    fn revolve(&mut self, profile: Resource<HostShape>, origin: types::Vec3, axis: types::Vec3, degrees: f64) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
+    fn revolve(
+        &mut self,
+        profile: Resource<HostShape>,
+        origin: types::Vec3,
+        axis: types::Vec3,
+        degrees: f64,
+    ) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
         let r = k::revolve(self.shape(&profile)?, origin, axis, degrees);
         self.made(r)
     }
 
-    fn boolean(&mut self, op: types::BooleanOp, base: Resource<HostShape>, tools: Vec<Resource<HostShape>>) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
+    fn boolean(
+        &mut self,
+        op: types::BooleanOp,
+        base: Resource<HostShape>,
+        tools: Vec<Resource<HostShape>>,
+    ) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
         let ts: Vec<&Shape> = tools.iter().map(|t| self.shape(t)).collect::<wasmtime::Result<_>>()?;
         let r = k::boolean(op, self.shape(&base)?, &ts);
         self.made(r)
@@ -551,12 +582,21 @@ impl kernel::Host for State {
         self.own(r)
     }
 
-    fn translate(&mut self, s: Resource<HostShape>, offset: types::Vec3) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
+    fn translate(
+        &mut self,
+        s: Resource<HostShape>,
+        offset: types::Vec3,
+    ) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
         let r = k::translate(self.shape(&s)?, offset);
         self.made(r)
     }
 
-    fn place(&mut self, s: Resource<HostShape>, origin: types::Vec3, z_axis: types::Vec3) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
+    fn place(
+        &mut self,
+        s: Resource<HostShape>,
+        origin: types::Vec3,
+        z_axis: types::Vec3,
+    ) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
         let r = k::place(self.shape(&s)?, origin, z_axis);
         self.made(r)
     }
@@ -567,35 +607,71 @@ impl kernel::Host for State {
         self.own(c)
     }
 
-    fn rotate(&mut self, s: Resource<HostShape>, origin: types::Vec3, axis: types::Vec3, degrees: f64) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
+    fn rotate(
+        &mut self,
+        s: Resource<HostShape>,
+        origin: types::Vec3,
+        axis: types::Vec3,
+        degrees: f64,
+    ) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
         let r = kx::rotate(self.shape(&s)?, origin, axis, degrees);
         self.made(r)
     }
 
-    fn line_edge(&mut self, start: types::Vec3, end: types::Vec3) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
+    fn line_edge(
+        &mut self,
+        start: types::Vec3,
+        end: types::Vec3,
+    ) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
         self.made(kx::line_edge(start, end))
     }
 
-    fn arc_edge(&mut self, start: types::Vec3, middle: types::Vec3, end: types::Vec3) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
+    fn arc_edge(
+        &mut self,
+        start: types::Vec3,
+        middle: types::Vec3,
+        end: types::Vec3,
+    ) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
         self.made(kx::arc_edge(start, middle, end))
     }
 
-    fn circle_edge(&mut self, center: types::Vec3, normal: types::Vec3, radius: f64) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
+    fn circle_edge(
+        &mut self,
+        center: types::Vec3,
+        normal: types::Vec3,
+        radius: f64,
+    ) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
         self.made(kx::circle_edge(center, normal, radius))
     }
 
-    fn wire_from_edges(&mut self, edges: Vec<Resource<HostShape>>) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
+    fn wire_from_edges(
+        &mut self,
+        edges: Vec<Resource<HostShape>>,
+    ) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
         let es: Vec<&Shape> = edges.iter().map(|t| self.shape(t)).collect::<wasmtime::Result<_>>()?;
         let r = kx::wire_from_edges(&es);
         self.made(r)
     }
 
-    fn helical_sweep(&mut self, profile: Resource<HostShape>, origin: types::Vec3, axis: types::Vec3, degrees: f64, pitch: f64) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
+    fn helical_sweep(
+        &mut self,
+        profile: Resource<HostShape>,
+        origin: types::Vec3,
+        axis: types::Vec3,
+        degrees: f64,
+        pitch: f64,
+    ) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
         let r = kx::helical_sweep(self.shape(&profile)?, origin, axis, degrees, pitch);
         self.made(r)
     }
 
-    fn boolean_with(&mut self, op: types::BooleanOp, base: Resource<HostShape>, tools: Vec<Resource<HostShape>>, options: types::BooleanOptions) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
+    fn boolean_with(
+        &mut self,
+        op: types::BooleanOp,
+        base: Resource<HostShape>,
+        tools: Vec<Resource<HostShape>>,
+        options: types::BooleanOptions,
+    ) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
         let ts: Vec<&Shape> = tools.iter().map(|t| self.shape(t)).collect::<wasmtime::Result<_>>()?;
         let r = kx::boolean_with(op, self.shape(&base)?, &ts, &options);
         self.made(r)
@@ -605,7 +681,11 @@ impl kernel::Host for State {
         Ok(kx::delaunay_2d(&points))
     }
 
-    fn select_faces(&mut self, s: Resource<HostShape>, selectors: String) -> wasmtime::Result<Result<Vec<Resource<HostShape>>, String>> {
+    fn select_faces(
+        &mut self,
+        s: Resource<HostShape>,
+        selectors: String,
+    ) -> wasmtime::Result<Result<Vec<Resource<HostShape>>, String>> {
         let r = kx::select_faces(self.shape(&s)?, &selectors);
         Ok(match r {
             Ok(v) => Ok(self.own_all(v)?),
@@ -613,33 +693,68 @@ impl kernel::Host for State {
         })
     }
 
-    fn fillet(&mut self, s: Resource<HostShape>, edges: Vec<Resource<HostShape>>, radius: f64, one_by_one: bool) -> wasmtime::Result<Result<kernel::Blended, String>> {
+    fn fillet(
+        &mut self,
+        s: Resource<HostShape>,
+        edges: Vec<Resource<HostShape>>,
+        radius: f64,
+        one_by_one: bool,
+    ) -> wasmtime::Result<Result<kernel::Blended, String>> {
         let es: Vec<Shape> = edges.iter().map(|e| self.shape(e).cloned()).collect::<wasmtime::Result<_>>()?;
         let r = k::blend(self.shape(&s)?, &es, k::Blend::Fillet(radius), one_by_one);
         self.blended(r)
     }
 
-    fn chamfer(&mut self, s: Resource<HostShape>, edges: Vec<Resource<HostShape>>, d1: f64, d2: f64, one_by_one: bool) -> wasmtime::Result<Result<kernel::Blended, String>> {
+    fn chamfer(
+        &mut self,
+        s: Resource<HostShape>,
+        edges: Vec<Resource<HostShape>>,
+        d1: f64,
+        d2: f64,
+        one_by_one: bool,
+    ) -> wasmtime::Result<Result<kernel::Blended, String>> {
         let es: Vec<Shape> = edges.iter().map(|e| self.shape(e).cloned()).collect::<wasmtime::Result<_>>()?;
         let r = k::blend(self.shape(&s)?, &es, k::Blend::Chamfer(d1, d2), one_by_one);
         self.blended(r)
     }
 
-    fn ellipse_edge(&mut self, center: types::Vec3, normal: types::Vec3, x_dir: types::Vec3, rx: f64, ry: f64, start: f64) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
+    fn ellipse_edge(
+        &mut self,
+        center: types::Vec3,
+        normal: types::Vec3,
+        x_dir: types::Vec3,
+        rx: f64,
+        ry: f64,
+        start: f64,
+    ) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
         self.made(kx::ellipse_edge(center, normal, x_dir, rx, ry, start))
     }
 
-    fn loft(&mut self, sections: Vec<Resource<HostShape>>, start_point: Option<types::Vec3>, end_point: Option<types::Vec3>, options: kernel::LoftOptions) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
+    fn loft(
+        &mut self,
+        sections: Vec<Resource<HostShape>>,
+        start_point: Option<types::Vec3>,
+        end_point: Option<types::Vec3>,
+        options: kernel::LoftOptions,
+    ) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
         let ss: Vec<&Shape> = sections.iter().map(|t| self.shape(t)).collect::<wasmtime::Result<_>>()?;
         let r = kx::loft(&ss, start_point, end_point, &options);
         self.made(r)
     }
 
-    fn interpolate_edge(&mut self, points: Vec<types::Vec3>, closed: bool) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
+    fn interpolate_edge(
+        &mut self,
+        points: Vec<types::Vec3>,
+        closed: bool,
+    ) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
         self.made(kx::interpolate_edge(&points, closed))
     }
 
-    fn gtransform(&mut self, s: Resource<HostShape>, matrix: Vec<f64>) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
+    fn gtransform(
+        &mut self,
+        s: Resource<HostShape>,
+        matrix: Vec<f64>,
+    ) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
         let r = kx::gtransform(self.shape(&s)?, &matrix);
         self.made(r)
     }
@@ -665,10 +780,7 @@ impl State {
 
     fn blended(&mut self, r: Result<(Shape, u32), String>) -> wasmtime::Result<Result<kernel::Blended, String>> {
         Ok(match r {
-            Ok((shape, skipped)) => Ok(kernel::Blended {
-                shape: self.own(shape)?,
-                skipped,
-            }),
+            Ok((shape, skipped)) => Ok(kernel::Blended { shape: self.own(shape)?, skipped }),
             Err(e) => Err(e),
         })
     }
@@ -689,10 +801,7 @@ impl State {
         };
         let mut out = Vec::with_capacity(groups.len());
         for (body, items) in groups {
-            out.push(feature::Picked {
-                body,
-                items: self.own_all(items)?,
-            });
+            out.push(feature::Picked { body, items: self.own_all(items)? });
         }
         Ok(Ok(out))
     }
@@ -707,7 +816,7 @@ fn body_index(ctx: &Ctx, body: u32) -> Result<usize, String> {
     }
 }
 
-/// ptb_read.py `picked_faces`: selectors grouped by body, then resolved.
+/// Selectors grouped by body, then resolved.
 fn pick(
     ctx: &mut Ctx,
     raw: &Value,
@@ -725,20 +834,14 @@ fn pick(
     let typed: OneOrMany<Selector> =
         serde_json::from_value(sel.clone()).map_err(|e| Fail::msg(format!("{label}: {e}")))?;
     let groups = crate::select::group_by_body(ctx, &typed, label)?;
-    let groups: Vec<(usize, Value)> = groups
-        .into_iter()
-        .map(|(b, sels)| (b, serde_json::to_value(sels).unwrap_or(Value::Null)))
-        .collect();
+    let groups: Vec<(usize, Value)> =
+        groups.into_iter().map(|(b, sels)| (b, serde_json::to_value(sels).unwrap_or(Value::Null))).collect();
     let mut out = Vec::new();
     for (body, sels) in groups {
         let shape = ctx.bodies[body].shape().clone();
         let name = ctx.bodies[body].name.clone();
         let mut r = crate::select::Resolver::new(Some(&mut ctx.diagnostics), fid);
-        let items = if edges {
-            r.edges(&shape, &sels)
-        } else {
-            r.faces(&shape, &sels)
-        }?;
+        let items = if edges { r.edges(&shape, &sels) } else { r.faces(&shape, &sels) }?;
         if items.is_empty() {
             return Err(Fail::msg(format!("{label}: the picked {what} is gone from {name}")));
         }
@@ -763,8 +866,7 @@ impl feature::Host for State {
     fn number(&mut self, value: String) -> wasmtime::Result<Result<f64, String>> {
         Ok(self.feature().and_then(|(ctx, _, _)| {
             let v: Value = serde_json::from_str(&value).map_err(text)?;
-            let n: Num = serde_json::from_value(v.clone())
-                .map_err(|_| format!("could not convert {v} to a number"))?;
+            let n: Num = serde_json::from_value(v.clone()).map_err(|_| format!("could not convert {v} to a number"))?;
             ctx.val(&n).map_err(fail_text)
         }))
     }
@@ -798,16 +900,12 @@ impl feature::Host for State {
     }
 
     fn body_shape(&mut self, body: u32) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
-        let r = self
-            .feature()
-            .and_then(|(ctx, _, _)| body_index(ctx, body).map(|i| ctx.bodies[i].shape().clone()));
+        let r = self.feature().and_then(|(ctx, _, _)| body_index(ctx, body).map(|i| ctx.bodies[i].shape().clone()));
         self.made(r)
     }
 
     fn body_name(&mut self, body: u32) -> wasmtime::Result<Result<String, String>> {
-        Ok(self
-            .feature()
-            .and_then(|(ctx, _, _)| body_index(ctx, body).map(|i| ctx.bodies[i].name.clone())))
+        Ok(self.feature().and_then(|(ctx, _, _)| body_index(ctx, body).map(|i| ctx.bodies[i].name.clone())))
     }
 
     fn set_body_shape(&mut self, body: u32, s: Resource<HostShape>) -> wasmtime::Result<Result<(), String>> {
@@ -827,7 +925,13 @@ impl feature::Host for State {
         }
     }
 
-    fn combine(&mut self, solid: Resource<HostShape>, operation: String, targets: Vec<String>, name: Option<String>) -> wasmtime::Result<Result<(), String>> {
+    fn combine(
+        &mut self,
+        solid: Resource<HostShape>,
+        operation: String,
+        targets: Vec<String>,
+        name: Option<String>,
+    ) -> wasmtime::Result<Result<(), String>> {
         let shape = self.shape(&solid)?.clone();
         let op = fundacad_core::schema::Operation::from(operation.as_str());
         let r = self.feature().and_then(|(ctx, _, fid)| {
@@ -911,10 +1015,7 @@ impl files::Host for State {
         };
         Ok(Ok(rd
             .filter_map(|e| e.ok())
-            .map(|e| types::DirEntry {
-                name: e.file_name().to_string_lossy().into_owned(),
-                is_dir: e.path().is_dir(),
-            })
+            .map(|e| types::DirEntry { name: e.file_name().to_string_lossy().into_owned(), is_dir: e.path().is_dir() })
             .collect()))
     }
 
@@ -965,11 +1066,7 @@ impl output::Host for State {
             return Ok(Err("only an exporter can write a file".into()));
         };
         use std::io::Write;
-        let r = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(path)
-            .and_then(|mut f| f.write_all(&bytes));
+        let r = std::fs::OpenOptions::new().create(true).append(true).open(path).and_then(|mut f| f.write_all(&bytes));
         Ok(r.map_err(text))
     }
 }

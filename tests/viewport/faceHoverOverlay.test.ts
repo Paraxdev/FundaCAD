@@ -17,8 +17,14 @@ function view(): { view: ModelView; mesh: THREE.Mesh } {
   const faceTriangles = new Map<number, number[]>();
   faceIds.forEach((f, t) => faceTriangles.set(f, [...(faceTriangles.get(f) ?? []), t]));
   const body = {
-    id: "b1", name: "Body1", faceStart: 0, faceCount: 6, mesh, faceIds,
-    baseColors: new Float32Array(n * 3), faceTriangles,
+    id: "b1",
+    name: "Body1",
+    faceStart: 0,
+    faceCount: 6,
+    mesh,
+    faceIds,
+    baseColors: new Float32Array(n * 3),
+    faceTriangles,
   } as unknown as BodyMesh;
   return { view: { bodies: [body] } as unknown as ModelView, mesh };
 }
@@ -81,5 +87,36 @@ describe("face hover overlay lifetime", () => {
     expect(t.live.size).toBe(1);
     new Highlighter(v);
     expect(t.live.size).toBe(0);
+  });
+
+  it("hovers a face of 200k triangles on a selected body without throwing", () => {
+    const tris = 200_000;
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), 3));
+    geometry.setAttribute("color", new THREE.BufferAttribute(new Float32Array(9), 3));
+    geometry.setIndex(
+      new THREE.BufferAttribute(
+        new Uint32Array(tris * 3).map((_, i) => i % 3),
+        1,
+      ),
+    );
+    const mesh = new THREE.Mesh(geometry);
+    const faceTriangles = new Map<number, number[]>([[0, Array.from({ length: tris }, (_, t) => t)]]);
+    const body = {
+      id: "b1",
+      name: "Body1",
+      faceStart: 0,
+      faceCount: 1,
+      mesh,
+      faceIds: new Array(tris).fill(0),
+      baseColors: new Float32Array(9),
+      faceTriangles,
+    } as unknown as BodyMesh;
+    const h = new Highlighter({ bodies: [body] } as unknown as ModelView);
+    h.toggleSelectBody("b1");
+    expect(() => h.hoverFace(0)).not.toThrow();
+    const overlay = mesh.children.find((c) => c.name === "face-hover-overlay") as THREE.Mesh;
+    expect(overlay.geometry.getAttribute("position").count).toBe(tris * 3);
+    h.dispose();
   });
 });

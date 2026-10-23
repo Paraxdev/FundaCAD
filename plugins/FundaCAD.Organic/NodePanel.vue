@@ -1,8 +1,6 @@
 <script setup lang="ts">
-// The node body panel: the nodes, the picked node's numbers, the chains, the
-// blend and the operation. Mounted for the life of the plugin and drawn only
-// while the tool runs. Inline styles on host tokens, as a plugin .vue may not
-// carry a <style> block.
+// Mounted for the life of the plugin and drawn only while the tool runs. Inline styles on host tokens, as a plugin
+// .vue may not carry a <style> block.
 
 import { computed, ref, type CSSProperties } from "vue";
 import * as panel from "./panel";
@@ -64,7 +62,10 @@ function describe(n: NodeValues): string {
 }
 
 const root: CSSProperties = {
-  position: "fixed", top: "60px", right: "16px", zIndex: "50",
+  position: "fixed",
+  top: "60px",
+  right: "16px",
+  zIndex: "50",
   padding: "8px",
   background: "var(--panel, #20242c)",
   border: "1px solid var(--line-strong, #3a4150)",
@@ -72,39 +73,80 @@ const root: CSSProperties = {
   boxShadow: "var(--shadow-2, 0 6px 20px rgba(0,0,0,0.4))",
   font: "12px system-ui, sans-serif",
   color: "var(--text, #dce3ee)",
-  width: "280px", maxWidth: "calc(100vw - 24px)", boxSizing: "border-box",
-  maxHeight: "calc(100vh - 80px)", overflowY: "auto",
+  width: "280px",
+  maxWidth: "calc(100vw - 24px)",
+  boxSizing: "border-box",
+  maxHeight: "calc(100vh - 80px)",
+  overflowY: "auto",
 };
 const title: CSSProperties = { fontWeight: "600", marginBottom: "6px" };
 const muted: CSSProperties = { color: "var(--text-mute, #8b93a3)", marginBottom: "6px" };
 const errorStyle: CSSProperties = { color: "var(--error, #ff5c5c)", marginBottom: "6px" };
-const section: CSSProperties = { color: "var(--text-mute, #8b93a3)", margin: "8px 0 4px", textTransform: "uppercase", fontSize: "10px", letterSpacing: "0.06em" };
+const section: CSSProperties = {
+  color: "var(--text-mute, #8b93a3)",
+  margin: "8px 0 4px",
+  textTransform: "uppercase",
+  fontSize: "10px",
+  letterSpacing: "0.06em",
+};
 const row: CSSProperties = { display: "flex", gap: "6px", alignItems: "center", marginBottom: "4px" };
-const grid: CSSProperties = { display: "grid", gridTemplateColumns: "56px 1fr 1fr 1fr", gap: "4px 6px", alignItems: "center" };
+const grid: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "56px 1fr 1fr 1fr",
+  gap: "4px 6px",
+  alignItems: "center",
+};
 const axisHead: CSSProperties = { color: "var(--text-mute, #8b93a3)", textAlign: "center", fontSize: "10px" };
 const field: CSSProperties = {
-  background: "var(--panel-2, #161a20)", color: "var(--text, #dce3ee)",
-  border: "1px solid var(--line-strong, #3a4150)", borderRadius: "var(--r-sm, 3px)",
-  padding: "3px 4px", font: "inherit", width: "100%", boxSizing: "border-box", minWidth: "0",
+  background: "var(--panel-2, #161a20)",
+  color: "var(--text, #dce3ee)",
+  border: "1px solid var(--line-strong, #3a4150)",
+  borderRadius: "var(--r-sm, 3px)",
+  padding: "3px 4px",
+  font: "inherit",
+  width: "100%",
+  boxSizing: "border-box",
+  minWidth: "0",
 };
 const lockedField: CSSProperties = { ...field, color: "var(--accent, #3fb6a8)", fontStyle: "italic" };
 const listItem: CSSProperties = {
-  display: "flex", justifyContent: "space-between", alignItems: "center",
-  padding: "2px 6px", borderRadius: "var(--r-sm, 3px)", cursor: "pointer",
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  padding: "2px 6px",
+  borderRadius: "var(--r-sm, 3px)",
+  cursor: "pointer",
 };
 const listPicked: CSSProperties = { ...listItem, background: "var(--accent-dim, rgba(63,182,168,0.25))" };
 const x: CSSProperties = {
-  border: "none", background: "transparent", color: "var(--text-mute, #8b93a3)",
-  cursor: "pointer", font: "inherit", padding: "0 4px",
+  border: "none",
+  background: "transparent",
+  color: "var(--text-mute, #8b93a3)",
+  cursor: "pointer",
+  font: "inherit",
+  padding: "0 4px",
 };
-const btn: CSSProperties = { border: "none", borderRadius: "var(--r-sm, 4px)", padding: "4px 10px", cursor: "pointer", font: "inherit" };
+const btn: CSSProperties = {
+  border: "none",
+  borderRadius: "var(--r-sm, 4px)",
+  padding: "4px 10px",
+  cursor: "pointer",
+  font: "inherit",
+};
 const okBtn: CSSProperties = { ...btn, background: "var(--accent, #2b6)", color: "var(--on-accent, #fff)" };
 const noBtn: CSSProperties = { ...btn, background: "var(--raised, #555)", color: "var(--text, #fff)" };
 const tag: CSSProperties = {
-  position: "fixed", zIndex: "40", pointerEvents: "none", transform: "translate(14px, -50%)",
-  padding: "1px 6px", borderRadius: "var(--r-sm, 3px)",
-  background: "var(--panel, #20242c)", color: "var(--text, #dce3ee)",
-  border: "1px solid var(--line-strong, #3a4150)", font: "11px system-ui, sans-serif", whiteSpace: "nowrap",
+  position: "fixed",
+  zIndex: "40",
+  pointerEvents: "none",
+  transform: "translate(14px, -50%)",
+  padding: "1px 6px",
+  borderRadius: "var(--r-sm, 3px)",
+  background: "var(--panel, #20242c)",
+  color: "var(--text, #dce3ee)",
+  border: "1px solid var(--line-strong, #3a4150)",
+  font: "11px system-ui, sans-serif",
+  whiteSpace: "nowrap",
 };
 </script>
 
@@ -171,15 +213,25 @@ const tag: CSSProperties = {
         </select>
       </div>
       <label :style="row">
-        <input type="checkbox" :checked="v.linkNew" @change="panel.act()?.setLinkNew(($event.target as HTMLInputElement).checked)" />
+        <input
+          type="checkbox"
+          :checked="v.linkNew"
+          @change="panel.act()?.setLinkNew(($event.target as HTMLInputElement).checked)"
+        />
         Link new nodes to the picked one
       </label>
       <div :style="[row, { justifyContent: 'flex-end', marginTop: '6px' }]">
         <button :style="noBtn" data-action="cancel" @click="panel.act()?.cancel()">Cancel</button>
-        <button :style="okBtn" data-action="commit" @click="panel.act()?.commit()">{{ v.editing ? "Update" : "Add" }}</button>
+        <button :style="okBtn" data-action="commit" @click="panel.act()?.commit()">{{
+          v.editing ? "Update" : "Add"
+        }}</button>
       </div>
     </div>
-    <div v-if="panel.label.value" data-node-size :style="[tag, { left: `${panel.label.value.x}px`, top: `${panel.label.value.y}px` }]">
+    <div
+      v-if="panel.label.value"
+      data-node-size
+      :style="[tag, { left: `${panel.label.value.x}px`, top: `${panel.label.value.y}px` }]"
+    >
       {{ panel.label.value.text }}
     </div>
   </Teleport>

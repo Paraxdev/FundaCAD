@@ -1,6 +1,5 @@
-//! Node bodies as a FundaCAD plugin component. A node is a sized, turned
-//! ellipsoid at a point; a chain of nodes is a limb lofted smoothly through
-//! them; every limb and every node on no chain fuse into one solid.
+//! Node bodies as a FundaCAD plugin component: a node is a sized, turned ellipsoid at a point, a chain of nodes a
+//! limb lofted smoothly through them, and every limb and lone node fuse into one solid.
 
 wit_bindgen::generate!({
     world: "plugin",
@@ -26,11 +25,10 @@ fn ellipsoid(node: &nodes::Node) -> Result<Shape, String> {
     let ball = kernel::make_sphere((0.0, 0.0, 0.0), 1.0)?;
     let m = node.shape;
     let c = node.center;
-    kernel::gtransform(&ball, &[
-        m[0][0], m[0][1], m[0][2], c[0],
-        m[1][0], m[1][1], m[1][2], c[1],
-        m[2][0], m[2][1], m[2][2], c[2],
-    ])
+    kernel::gtransform(
+        &ball,
+        &[m[0][0], m[0][1], m[0][2], c[0], m[1][0], m[1][1], m[1][2], c[1], m[2][0], m[2][1], m[2][2], c[2]],
+    )
 }
 
 /// Every limb and every node on no chain, fused.
@@ -72,11 +70,8 @@ fn warn(reason: String) {
 /// The junctions rounded to `radius`, or the solid as it was with a warning
 /// when the kernel refuses every one of them.
 fn blended(solid: Shape, radius: f64) -> Shape {
-    let creases: Vec<Shape> = solid
-        .edges()
-        .into_iter()
-        .filter(|e| solid.dihedral_deg(e).is_some_and(|d| d > CREASE_DEG))
-        .collect();
+    let creases: Vec<Shape> =
+        solid.edges().into_iter().filter(|e| solid.dihedral_deg(e).is_some_and(|d| d > CREASE_DEG)).collect();
     if creases.is_empty() {
         return solid;
     }
@@ -84,7 +79,11 @@ fn blended(solid: Shape, radius: f64) -> Shape {
     match kernel::fillet(&solid, &refs, radius, true) {
         Ok(b) => {
             if b.skipped > 0 {
-                warn(format!("{} of {} junction edges could not be blended and were left sharp", b.skipped, creases.len()));
+                warn(format!(
+                    "{} of {} junction edges could not be blended and were left sharp",
+                    b.skipped,
+                    creases.len()
+                ));
             }
             b.shape
         }
@@ -138,7 +137,13 @@ impl Guest for Organic {
         Err(format!("no mesh pass {pass:?} here"))
     }
 
-    fn displace(pass: String, _face: &Shape, _spec: String, _tag: String, _options: DisplaceOptions) -> Result<Mesh, String> {
+    fn displace(
+        pass: String,
+        _face: &Shape,
+        _spec: String,
+        _tag: String,
+        _options: DisplaceOptions,
+    ) -> Result<Mesh, String> {
         Err(format!("no mesh pass {pass:?} here"))
     }
 

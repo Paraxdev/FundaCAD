@@ -1,18 +1,9 @@
-// Decides whether the viewport is too slow to be comfortable, so the chrome can
-// offer performance mode.
-//
-// A sample is the tick to tick period that followed a drawn frame, which is what
-// the draw cost the display. The gap BEFORE a drawn frame would be useless: after
-// an idle stretch it is minutes long. The verdict is a median over a few seconds
-// of drawing, so a single long frame (a shader compile, a mesh landing) never
-// trips it on its own.
+// A sample is the period AFTER a drawn frame, the gap before one spans idle time.
+// The verdict is a median over seconds of drawing, so one long frame never trips it.
 
-/** A median frame period above this is a stutter, about 22 fps. A laptop held
- *  to 30 fps by a power plan sits at 33 ms and must not be told it is slow. */
+/** About 22 fps. A laptop held to 30 fps by a power plan sits at 33 ms and must not be told it is slow. */
 export const STUTTER_MS = 45;
-/** A median back under this clears the verdict. Below STUTTER_MS so a view
- *  hovering around the line does not flicker the warning on and off, and above
- *  a 30 fps power plan so a machine that has recovered to it is cleared. */
+/** Below STUTTER_MS so the warning does not flicker, above 33 ms so a 30 fps power plan clears. */
 export const STUTTER_CLEAR_MS = 36;
 /** How much drawing a verdict needs behind it. */
 export const STUTTER_WINDOW_MS = 3000;
@@ -27,11 +18,8 @@ export class StutterWatch {
   /** Drawing time the median has spent under the clear line without a break. */
   private underMs = 0;
 
-  /** Record one frame period and report whether the view is stuttering: set by a
-   *  window over STUTTER_MS, cleared once the window has stayed under
-   *  STUTTER_CLEAR_MS for a whole window, held between. Cleared on a trimmed mean
-   *  rather than the median, because at 60 Hz periods come only as 33 or 50 ms
-   *  and a median of the two jumps straight across the band. */
+  /** Clears on a trimmed mean, not the median: at 60 Hz periods come only as 33 or
+   *  50 ms and a median of the two jumps straight across the band. */
   sample(ms: number): boolean {
     if (!(ms > 0) || ms > MAX_SAMPLE_MS) return this.slow;
     this.samples.push(ms);
@@ -61,8 +49,7 @@ function median(xs: readonly number[]): number {
   return s.length % 2 ? s[mid]! : (s[mid - 1]! + s[mid]!) / 2;
 }
 
-/** The mean of all but the slowest tenth: steady like a mean, but a shader
- *  compile or a mesh landing does not hold the warning up on its own. */
+/** Drops the slowest tenth so a shader compile or a mesh landing cannot hold the warning up. */
 function trimmedMean(xs: readonly number[]): number {
   const s = [...xs].sort((a, b) => a - b);
   const keep = s.slice(0, Math.max(1, Math.ceil(s.length * 0.9)));

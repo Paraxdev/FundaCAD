@@ -1,15 +1,8 @@
-//! Body patterns, the Python engine's `builder.py` `_handle_pattern_rect`,
-//! `_handle_pattern_linear`, `_handle_pattern_circular` and `_pattern_targets`
-//! over the Python engine's `solid_ops.py` `_pattern_*` and `_fuse_pattern_cells`. A pattern
-//! rewrites its target body in place, so it mints no body ids.
-//!
-//! With `features` a pattern repeats what those features did instead: the cut
-//! or join each one recorded is copied to every other place and applied to the
-//! same body again.
+//! Body patterns, the rect, linear and circular handlers of builder.py over `_pattern_*` of solid_ops.py. A pattern
+//! rewrites its target in place, minting no ids, and with `features` repeats those features' cuts and joins instead.
 
 use fundacad_core::schema::{
-    Axis3, AxisLine, Feature, OneOrMany, PatternAxis, PatternCircular, PatternLinear, PatternRect,
-    Real, Selector,
+    Axis3, AxisLine, Feature, OneOrMany, PatternAxis, PatternCircular, PatternLinear, PatternRect, Real, Selector,
 };
 use glam::DVec3;
 use opencascade::primitives::Shape;
@@ -93,10 +86,7 @@ pub fn pattern_rect_shape(shape: &Shape, nx: f64, ny: f64, dx: f64, dy: f64) -> 
     let mut cells = Vec::with_capacity(nx * ny);
     for i in 0..nx {
         for j in 0..ny {
-            cells.push(kernel::translated(
-                shape,
-                [i as f64 * dx, j as f64 * dy, 0.0],
-            )?);
+            cells.push(kernel::translated(shape, [i as f64 * dx, j as f64 * dy, 0.0])?);
         }
     }
     fuse_cells(cells)
@@ -129,9 +119,7 @@ fn circular_step(n: usize, total: f64) -> f64 {
 fn turned_cells(shape: &Shape, count: f64, total: f64, turn: &Turn) -> FResult<Shape> {
     let n = copies(count);
     let step = circular_step(n, total);
-    let cells = (0..n)
-        .map(|k| turn.place(k as f64 * step).apply(shape))
-        .collect::<Result<Vec<_>, _>>()?;
+    let cells = (0..n).map(|k| turn.place(k as f64 * step).apply(shape)).collect::<Result<Vec<_>, _>>()?;
     fuse_cells(cells)
 }
 
@@ -164,29 +152,33 @@ impl Turn {
 
 fn line(origin: DVec3, dir: DVec3) -> Option<Turn> {
     let d = dir.normalize_or_zero();
-    (d != DVec3::ZERO && origin.is_finite()).then(|| Turn::Line {
-        origin: origin.to_array(),
-        dir: d.to_array(),
-    })
+    (d != DVec3::ZERO && origin.is_finite()).then(|| Turn::Line { origin: origin.to_array(), dir: d.to_array() })
 }
 
-/// The direction of a line found on the model points the way its largest
-/// component is positive, so the same edge or face always turns the same way
-/// (src/features/patternAxis.ts `canonicalDir` is the same rule).
+/// A line found on the model points where its largest component is positive, so the same edge or face always
+/// turns the same way, the rule of `canonicalDir` in src/features/patternAxis.ts.
 pub(crate) fn canonical(d: DVec3) -> DVec3 {
     let a = d.abs();
-    let big = if a.x >= a.y && a.x >= a.z { d.x } else if a.y >= a.z { d.y } else { d.z };
-    if big < 0.0 { -d } else { d }
+    let big = if a.x >= a.y && a.x >= a.z {
+        d.x
+    } else if a.y >= a.z {
+        d.y
+    } else {
+        d.z
+    };
+    if big < 0.0 {
+        -d
+    } else {
+        d
+    }
 }
 
 fn found_line(origin: DVec3, dir: DVec3) -> Option<Turn> {
     line(origin, canonical(dir.normalize_or_zero()))
 }
 
-/// The axis `axisRef` names now: a straight edge's line, a round edge's
-/// centre line, a round face's axis, or a flat face's normal through the
-/// middle of its box. A body the selector names that is gone is a lost
-/// reference, never a search of whatever bodies are left.
+/// The axis `axisRef` names now: an edge's line or centre line, a round face's axis, or a flat face's normal
+/// through its box middle. A body the selector names that is gone is a lost reference, never a search of the rest.
 fn referenced_axis(ctx: &Ctx, id: &str, sel: &Selector) -> Option<Turn> {
     let pool: Vec<&Shape> = match sel.body() {
         Some(b) => vec![ctx.bodies[ctx.find_body(b)?].shape()],
@@ -245,7 +237,10 @@ pub(crate) fn face_axis(face: Shape) -> Option<Turn> {
 
 /// The `patternAxis` op: the line `ref` names on the built model, for the
 /// pattern tool's preview, `{axis: {origin, dir}}` or `{reason}`.
-pub fn pattern_axis_result(req: &serde_json::Map<String, serde_json::Value>, watch: &dyn crate::builder::Watch) -> fundacad_protocol::JobResult {
+pub fn pattern_axis_result(
+    req: &serde_json::Map<String, serde_json::Value>,
+    watch: &dyn crate::builder::Watch,
+) -> fundacad_protocol::JobResult {
     use serde_json::json;
     let (_, built) = match crate::inspect::rebuild_request(req, watch) {
         Ok(r) => r,
@@ -255,12 +250,8 @@ pub fn pattern_axis_result(req: &serde_json::Map<String, serde_json::Value>, wat
         return fundacad_engine::error_result("'ref'");
     };
     let wanted = sel.body().map(str::to_owned);
-    let pool: Vec<&Shape> = built
-        .bodies
-        .iter()
-        .filter(|b| wanted.as_deref().map_or(true, |w| b.id == w))
-        .map(|b| &b.shape)
-        .collect();
+    let pool: Vec<&Shape> =
+        built.bodies.iter().filter(|b| wanted.as_deref().map_or(true, |w| b.id == w)).map(|b| &b.shape).collect();
     let reply = match axis_on(&pool, "", &sel) {
         Some(Turn::Line { origin, dir }) => json!({"axis": {"origin": origin, "dir": dir}}),
         _ => json!({"reason": "an axis is a straight or round edge, or a flat, cylindrical or conical face"}),
@@ -282,10 +273,7 @@ fn datum_axis(ctx: &Ctx, own: &str, name: &str) -> FResult<Turn> {
         let a = x.as_array()?;
         Some(DVec3::new(a.first()?.as_f64()?, a.get(1)?.as_f64()?, a.get(2)?.as_f64()?))
     };
-    let followed = ctx
-        .datum_marks
-        .get(name)
-        .and_then(|m| Some((v(m.get("origin")?)?, v(m.get("dir")?)?)));
+    let followed = ctx.datum_marks.get(name).and_then(|m| Some((v(m.get("origin")?)?, v(m.get("dir")?)?)));
     let stored = step.line.map(|[o, d]| (DVec3::from_array(o), DVec3::from_array(d)));
     followed
         .or(stored)
@@ -344,9 +332,7 @@ pub fn pattern_rect(ctx: &mut Ctx, f: &PatternRect) -> FResult {
     require_positive("Pattern", &[("countX", cx), ("countY", cy)])?;
     for (name, n) in [("countX", cx), ("countY", cy)] {
         if n.round_ties_even() as usize > MAX_PATTERN_COUNT {
-            return Err(Fail::msg(format!(
-                "Pattern: {name} must be at most {MAX_PATTERN_COUNT} (got {n})"
-            )));
+            return Err(Fail::msg(format!("Pattern: {name} must be at most {MAX_PATTERN_COUNT} (got {n})")));
         }
     }
     let (dx, dy) = (ctx.val(&f.spacing_x)?, ctx.val(&f.spacing_y)?);
@@ -390,9 +376,7 @@ pub fn pattern_linear(ctx: &mut Ctx, f: &PatternLinear) -> FResult {
     let n = ctx.val(&f.count)?;
     require_positive("Pattern", &[("count", n)])?;
     if n.round_ties_even() as usize > MAX_PATTERN_COUNT {
-        return Err(Fail::msg(format!(
-            "Pattern: count must be at most {MAX_PATTERN_COUNT} (got {n})"
-        )));
+        return Err(Fail::msg(format!("Pattern: count must be at most {MAX_PATTERN_COUNT} (got {n})")));
     }
     let spacing = ctx.val(&f.spacing)?;
     if let Some(sources) = listed(f.features.as_ref()) {
@@ -421,9 +405,7 @@ pub fn pattern_circular(ctx: &mut Ctx, f: &PatternCircular) -> FResult {
     let n = ctx.val(&f.count)?;
     require_positive("Pattern", &[("count", n)])?;
     if n.round_ties_even() as usize > MAX_PATTERN_COUNT {
-        return Err(Fail::msg(format!(
-            "Pattern: count must be at most {MAX_PATTERN_COUNT} (got {n})"
-        )));
+        return Err(Fail::msg(format!("Pattern: count must be at most {MAX_PATTERN_COUNT} (got {n})")));
     }
     let angle = ctx.val(&f.angle)?;
     if let Some(sources) = listed(f.features.as_ref()) {
@@ -499,14 +481,12 @@ fn recorded(ctx: &Ctx, own: &str, src: &str) -> FResult<Vec<ToolRecord>> {
     // from a checkpoint keeps it while later features come and go.
     let above = at(src).filter(|&k| at(own).map_or(true, |me| k < me));
     let Some(k) = above else {
-        return Err(missing_reference(format!(
-            "Pattern: there is no feature called {src} to repeat."
-        )));
+        return Err(missing_reference(format!("Pattern: there is no feature called {src} to repeat.")));
     };
     let step = &ctx.timeline[k];
     let why = match step.kind.as_str() {
-        "hole" | "extrude" | "revolve" | "sweep" | "loft" | "press-pull" | "patternRect"
-        | "patternLinear" | "patternCircular" => format!(
+        "hole" | "extrude" | "revolve" | "sweep" | "loft" | "press-pull" | "patternRect" | "patternLinear"
+        | "patternCircular" => format!(
             "Pattern: {} has no cut or join to repeat, it made a new body, is switched off, or did not build.",
             step.label
         ),
@@ -515,9 +495,8 @@ fn recorded(ctx: &Ctx, own: &str, src: &str) -> FResult<Vec<ToolRecord>> {
     Err(Fail::msg(format!("{why} {PATTERNABLE}")))
 }
 
-/// Copies of each listed feature's tool at every place, applied to the body it
-/// changed in one boolean. A copy whose box misses that body is left out, and
-/// saying how many were is the note this returns.
+/// Copies of each listed feature's tool at every place, applied to the body it changed in one boolean. A copy
+/// whose box misses that body is left out, and the returned note says how many were.
 fn pattern_features(
     ctx: &mut Ctx,
     id: &str,
@@ -559,9 +538,7 @@ fn pattern_features(
             ctx.record_tool(id, rec.kind, vec![bid.clone()], kernel::compound(&tools));
         }
     }
-    Ok((missed > 0).then(|| {
-        format!("{missed} of {total} copies miss {} and change nothing", missed_bodies.join(", "))
-    }))
+    Ok((missed > 0).then(|| format!("{missed} of {total} copies miss {} and change nothing", missed_bodies.join(", "))))
 }
 
 fn boxes_meet(a: Option<[f64; 6]>, b: Option<[f64; 6]>) -> bool {
@@ -578,9 +555,8 @@ fn apply(body: &Shape, tools: &[Shape], kind: BoolKind) -> FResult<Shape> {
     let out = kernel::boolean_op(body, &refs, kind)?;
     match kind {
         BoolKind::Fuse if kernel::count(&out, Kind::Solid) > solids => {
-            // A copy whose box overlaps the body without touching it comes out
-            // as a separate lump, so each copy stays only when fusing it
-            // leaves the solid count alone.
+            // A copy whose box overlaps the body without touching it comes out as a separate lump, so each copy stays only
+            // when fusing it leaves the solid count alone.
             let mut out = body.clone();
             for tool in tools {
                 let next = kernel::boolean_op(&out, &[tool], kind)?;
@@ -591,9 +567,7 @@ fn apply(body: &Shape, tools: &[Shape], kind: BoolKind) -> FResult<Shape> {
             Ok(kernel::unify_body(&out))
         }
         BoolKind::Fuse => Ok(kernel::unify_body(&out)),
-        _ if kernel::count(&out, Kind::Solid) == 0 => Err(Fail::msg(
-            "Pattern: the copies would remove the whole body",
-        )),
+        _ if kernel::count(&out, Kind::Solid) == 0 => Err(Fail::msg("Pattern: the copies would remove the whole body")),
         _ => Ok(out),
     }
 }

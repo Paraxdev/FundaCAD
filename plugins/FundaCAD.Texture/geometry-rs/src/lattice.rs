@@ -1,14 +1,6 @@
-//! texture_mesh.py's refinement: getting a triangulation fine enough, and
-//! aligned enough, to carry a texture. A lattice lays its sample lines on the
-//! pattern's own creases, a cellular kind brings its own vertices, a planar or
-//! revolved face is re-triangulated in its mm chart, and anything else is
-//! subdivided on the true surface.
-//!
-//! The Delaunay triangulations come from the engine's `delaunay-planar`, the same
-//! Qhull scipy runs, called the same way. Anything else would break the ties
-//! inside co-circular cells differently and hand back its triangles in another
-//! order with another first vertex, and the median first edge the wavelength
-//! clamp reads and the order the crease flips are tried in both follow those.
+//! texture_mesh.py's refinement. The Delaunay comes from the engine's `delaunay-planar`, the same Qhull scipy runs:
+//! another would break co-circular ties and order triangles differently, and the median first edge the wavelength
+//! clamp reads and the order of the crease flips both follow that.
 
 use std::collections::HashMap;
 
@@ -144,11 +136,8 @@ pub fn cell_lattice_points(
         }
     }
     if let Some(turn) = wrap_u {
-        let folded = np::unique_rows(
-            pts.iter()
-                .map(|p| [np::round(np::fmod(p[0], turn), 9), np::round(p[1], 9)])
-                .collect(),
-        );
+        let folded =
+            np::unique_rows(pts.iter().map(|p| [np::round(np::fmod(p[0], turn), 9), np::round(p[1], 9)]).collect());
         let mut both = Vec::with_capacity(folded.len() * 3);
         for shift in [-turn, 0.0, turn] {
             both.extend(folded.iter().map(|p| [p[0] + shift, p[1]]));
@@ -333,9 +322,7 @@ pub fn flip_to_creases(
     for _ in 0..8 {
         let mut scored = err_of(&tris)?;
         for (ti, t) in tris.iter().enumerate() {
-            let excluded = t.iter().any(|&v| {
-                v < n_ring && !fixable_full.as_ref().is_some_and(|f| f[v])
-            });
+            let excluded = t.iter().any(|&v| v < n_ring && !fixable_full.as_ref().is_some_and(|f| f[v]));
             if excluded {
                 scored[ti] = 0.0;
             }
@@ -462,11 +449,8 @@ pub fn aligned_grid_triangulation(a: &LatticeArgs) -> Result<Refined, String> {
     let mut seam_vs: Option<Vec<f64>> = None;
     if let (true, Some(turn)) = (cells_mode, a.wrap_u) {
         let cp = a.cell_points.as_ref().expect("cells mode has points");
-        let on: Vec<f64> = cp
-            .iter()
-            .filter(|p| p[0].abs() < 1e-9 || (p[0] - turn).abs() < 1e-9)
-            .map(|p| p[1])
-            .collect();
+        let on: Vec<f64> =
+            cp.iter().filter(|p| p[0].abs() < 1e-9 || (p[0] - turn).abs() < 1e-9).map(|p| p[1]).collect();
         if !on.is_empty() {
             seam_vs = Some(np::unique(on));
         }
@@ -506,18 +490,12 @@ pub fn aligned_grid_triangulation(a: &LatticeArgs) -> Result<Refined, String> {
             .filter(|&x| x > 1e-12 && x < 1.0 - 1e-12)
             .collect();
         for &x in &t {
-            ring_mm.push([
-                p_mm[i0][0] + (p_mm[i1][0] - p_mm[i0][0]) * x,
-                p_mm[i0][1] + (p_mm[i1][1] - p_mm[i0][1]) * x,
-            ]);
+            ring_mm
+                .push([p_mm[i0][0] + (p_mm[i1][0] - p_mm[i0][0]) * x, p_mm[i0][1] + (p_mm[i1][1] - p_mm[i0][1]) * x]);
             let (ua, ub) = (a.base_uv[i0], a.base_uv[i1]);
             ring_uv.push([ua[0] + (ub[0] - ua[0]) * x, ua[1] + (ub[1] - ua[1]) * x]);
             let (xa, xb) = (a.base_pts[i0], a.base_pts[i1]);
-            ring_xyz.push([
-                xa[0] + (xb[0] - xa[0]) * x,
-                xa[1] + (xb[1] - xa[1]) * x,
-                xa[2] + (xb[2] - xa[2]) * x,
-            ]);
+            ring_xyz.push([xa[0] + (xb[0] - xa[0]) * x, xa[1] + (xb[1] - xa[1]) * x, xa[2] + (xb[2] - xa[2]) * x]);
         }
     }
 
@@ -534,10 +512,9 @@ pub fn aligned_grid_triangulation(a: &LatticeArgs) -> Result<Refined, String> {
         (g, Vec::new(), Vec::new())
     } else {
         let (gx, gy) = match (lattice, a.phases.as_ref()) {
-            (true, Some((pu, pv))) => (
-                axis_lines(pu.as_deref(), period, lo_u, hi_u),
-                axis_lines(pv.as_deref(), period, lo_v, hi_v),
-            ),
+            (true, Some((pu, pv))) => {
+                (axis_lines(pu.as_deref(), period, lo_u, hi_u), axis_lines(pv.as_deref(), period, lo_v, hi_v))
+            }
             _ => (np::arange(lo_u, hi_u, spacing), np::arange(lo_v, hi_v, spacing)),
         };
         if gx.len() < 2 || gy.len() < 2 {
@@ -569,22 +546,16 @@ pub fn aligned_grid_triangulation(a: &LatticeArgs) -> Result<Refined, String> {
     }
     let mut cull_ref: Vec<P2> = ring_mm.clone();
     if let (Some(_), Some(turn)) = (&seam_vs, a.wrap_u) {
-        let off: Vec<P2> = ring_mm
-            .iter()
-            .copied()
-            .filter(|p| !(p[0].abs() < 1e-6 || (p[0] - turn).abs() < 1e-6))
-            .collect();
+        let off: Vec<P2> =
+            ring_mm.iter().copied().filter(|p| !(p[0].abs() < 1e-6 || (p[0] - turn).abs() < 1e-6)).collect();
         if !off.is_empty() {
             cull_ref = off;
         }
     }
     let tree = Tree::new(cull_ref.iter().map(|p| vec![p[0], p[1]]).collect());
     let cull = if lattice { 0.15 } else { 0.6 };
-    let keep_pt: Vec<bool> = g_all
-        .iter()
-        .zip(&inside)
-        .map(|(g, &ins)| ins && tree.nearest(g) > cull * spacing)
-        .collect();
+    let keep_pt: Vec<bool> =
+        g_all.iter().zip(&inside).map(|(g, &ins)| ins && tree.nearest(g) > cull * spacing).collect();
     let n_ring = ring_mm.len();
     let mut kept = vec![false; ni * nj];
     let mut gidx = vec![usize::MAX; ni * nj];
@@ -677,9 +648,8 @@ pub fn aligned_grid_triangulation(a: &LatticeArgs) -> Result<Refined, String> {
             }
         }
         let field = a.field.ok_or("a lattice needs its field")?;
-        let fixable: Option<Vec<bool>> = a
-            .wrap_u
-            .map(|turn| ring_mm.iter().map(|p| p[0].abs() < 1e-6 || (p[0] - turn).abs() < 1e-6).collect());
+        let fixable: Option<Vec<bool>> =
+            a.wrap_u.map(|turn| ring_mm.iter().map(|p| p[0].abs() < 1e-6 || (p[0] - turn).abs() < 1e-6).collect());
         tris = flip_to_creases(tris, &vmm, field, n_ring, fixable.as_deref())?;
     } else {
         let mut interior: Vec<Tri> = Vec::new();
@@ -714,10 +684,8 @@ pub fn aligned_grid_triangulation(a: &LatticeArgs) -> Result<Refined, String> {
             }
         }
         let band_pts: Vec<P2> = band_ids.iter().map(|&k| vmm[k]).collect();
-        let band: Vec<Tri> = delaunay(&band_pts)?
-            .into_iter()
-            .map(|t| [band_ids[t[0]], band_ids[t[1]], band_ids[t[2]]])
-            .collect();
+        let band: Vec<Tri> =
+            delaunay(&band_pts)?.into_iter().map(|t| [band_ids[t[0]], band_ids[t[1]], band_ids[t[2]]]).collect();
         tris = interior;
         tris.extend(drop_outside(band, true));
     }
@@ -748,10 +716,7 @@ pub fn aligned_grid_triangulation(a: &LatticeArgs) -> Result<Refined, String> {
             }
             (
                 grid_pts.iter().map(|g| [fit(&coef[0], g), fit(&coef[1], g)]).collect(),
-                grid_pts
-                    .iter()
-                    .map(|g| [fit(&coef[2], g), fit(&coef[3], g), fit(&coef[4], g)])
-                    .collect(),
+                grid_pts.iter().map(|g| [fit(&coef[2], g), fit(&coef[3], g), fit(&coef[4], g)]).collect(),
             )
         }
         Some(unchart) => unchart(&grid_pts),
@@ -762,21 +727,14 @@ pub fn aligned_grid_triangulation(a: &LatticeArgs) -> Result<Refined, String> {
     pts_out.extend(grid_xyz);
 
     let t0 = a.base_tris[0];
-    let n_ref = v3::cross(
-        v3::sub(a.base_pts[t0[1]], a.base_pts[t0[0]]),
-        v3::sub(a.base_pts[t0[2]], a.base_pts[t0[0]]),
-    );
+    let n_ref = v3::cross(v3::sub(a.base_pts[t0[1]], a.base_pts[t0[0]]), v3::sub(a.base_pts[t0[2]], a.base_pts[t0[0]]));
     for t in tris.iter_mut() {
         let n_new = v3::cross(v3::sub(pts_out[t[1]], pts_out[t[0]]), v3::sub(pts_out[t[2]], pts_out[t[0]]));
         if v3::dot(n_new, n_ref) < 0.0 {
             *t = [t[0], t[2], t[1]];
         }
     }
-    Ok(Refined {
-        pts: pts_out,
-        uv: uv_out,
-        tris,
-    })
+    Ok(Refined { pts: pts_out, uv: uv_out, tris })
 }
 
 fn dist3(a: V, b: V) -> f64 {

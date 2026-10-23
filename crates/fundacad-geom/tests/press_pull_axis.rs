@@ -1,8 +1,5 @@
-//! Press/pull with `direction: "axis"` moves a hole's end along the hole, so
-//! the wall lengthens and the end keeps its shape.
-//!
-//! The spike is press_pull_split.rs's: a thin revolved spike with a 2 mm pin
-//! channel up its axis, capped by a 45 degree cone whose apex is at z 22.5.
+//! Press/pull with `direction: "axis"` moves a hole's end along the hole, so the wall lengthens and the end keeps
+//! its shape. The spike is press_pull_split.rs's, a 2 mm pin channel up its axis under a 45 degree cone, apex z 22.5.
 
 use std::f64::consts::PI;
 
@@ -22,9 +19,7 @@ fn line(id: &str, a: [f64; 2], b: [f64; 2]) -> Value {
 }
 
 fn polygon(pts: &[[f64; 2]]) -> Vec<Value> {
-    (0..pts.len())
-        .map(|i| line(&format!("l{i}"), pts[i], pts[(i + 1) % pts.len()]))
-        .collect()
+    (0..pts.len()).map(|i| line(&format!("l{i}"), pts[i], pts[(i + 1) % pts.len()])).collect()
 }
 
 /// A profile on XZ spun about Z, then `cut` spun and cut from it.
@@ -44,8 +39,16 @@ fn turned(outer: &[[f64; 2]], cut: &[[f64; 2]], push: Option<Value>) -> Value {
 
 fn spike(push: Option<Value>) -> Value {
     let flank = [
-        [18.0, 2.0], [15.6, 5.2], [12.3, 7.5], [9.2, 10.5], [6.8, 14.0], [5.0, 17.6],
-        [3.7, 21.2], [2.7, 24.8], [1.95, 27.9], [1.4038, 30.5],
+        [18.0, 2.0],
+        [15.6, 5.2],
+        [12.3, 7.5],
+        [9.2, 10.5],
+        [6.8, 14.0],
+        [5.0, 17.6],
+        [3.7, 21.2],
+        [2.7, 24.8],
+        [1.95, 27.9],
+        [1.4038, 30.5],
     ];
     let entities = vec![
         line("floor", [0.0, 0.0], [60.0, 0.0]),
@@ -153,10 +156,7 @@ fn an_axis_push_past_the_tip_says_it_broke_through() {
     let r = build(&spike(push(CEILING, json!(-12), Some("axis"))));
     assert!(r.errors.is_empty(), "{:?}", r.errors);
     let said = reasons(&r, "push");
-    assert!(
-        said.iter().any(|m| m == "the offset broke through the outside of Body1"),
-        "{said:?}"
-    );
+    assert!(said.iter().any(|m| m == "the offset broke through the outside of Body1"), "{said:?}");
 }
 
 #[test]
@@ -257,10 +257,7 @@ fn a_pocket_with_drafted_walls_has_no_axis_to_move_along() {
     ]});
     let shape = built(&raw);
     let floor = face_at(&shape, [0.0, 0.0, 4.0]);
-    assert_eq!(
-        hole_axis(&shape, &floor),
-        Err("the walls around the face do not all run along one axis")
-    );
+    assert_eq!(hole_axis(&shape, &floor), Err("the walls around the face do not all run along one axis"));
     let straight = json!({"parameters": {}, "features": [
         raw["features"][0], raw["features"][1],
         {"id": "pocket", "type": "extrude", "sketch": "sk", "distance": -6, "operation": "cut", "targets": ["body1"]},

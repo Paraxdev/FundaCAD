@@ -79,8 +79,8 @@ fn mesh_import_matches_python() {
                     continue;
                 }
             };
-            let shape = xcaf::from_bin(&store.get_bytes(reply.remove("geom").unwrap().as_str().unwrap()).unwrap())
-                .unwrap();
+            let shape =
+                xcaf::from_bin(&store.get_bytes(reply.remove("geom").unwrap().as_str().unwrap()).unwrap()).unwrap();
             let w = &want["reply"];
             if reply["solid"] != w["solid"] || reply.get("color") != w.get("color") {
                 failures.push(format!("{key}: {reply:?} want {w}"));

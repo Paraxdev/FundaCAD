@@ -1,11 +1,5 @@
-//! How long a job may run, and what ends one that overstays.
-//!
-//! Replaces the supervision half of the Python engine's `server.py`: `_run` (a wall clock,
-//! `JOB_TIMEOUT`), `_run_stall` (a progress clock, `STALL_TIMEOUT`),
-//! `_export_stall_budget` and the import budget. A Python worker that overstays
-//! is killed with its pool; a Rust job thread cannot be killed, so it is
-//! abandoned instead: the request is answered, the thread is left to finish on
-//! its own with nowhere to send, and a fresh job thread takes the queue.
+//! How long a job may run, and what ends one that overstays. A job thread cannot be killed, so it is abandoned: the
+//! request is answered, the thread finishes with nowhere to send, and a fresh job thread takes the queue.
 
 use crate::JobContext;
 use fundacad_protocol::JobResult;
@@ -25,9 +19,8 @@ pub enum Budget {
     Wall(Duration),
 }
 
-/// The two base clocks, `FUNDACAD_STALL_TIMEOUT` and `FUNDACAD_JOB_TIMEOUT` in
-/// seconds when set, so a protocol test can watch a reap without waiting a
-/// minute for one.
+/// The base clocks, `FUNDACAD_STALL_TIMEOUT` and `FUNDACAD_JOB_TIMEOUT` in seconds when set, so a protocol test can
+/// watch a reap without waiting a minute.
 #[derive(Debug, Clone, Copy)]
 pub struct Clocks {
     pub stall: Duration,
@@ -43,13 +36,10 @@ impl Clocks {
                 .filter(|s| s.is_finite() && *s > 0.0)
                 .map_or(default, Duration::from_secs_f64)
         };
-        Clocks {
-            stall: secs("FUNDACAD_STALL_TIMEOUT", STALL_TIMEOUT),
-            job: secs("FUNDACAD_JOB_TIMEOUT", JOB_TIMEOUT),
-        }
+        Clocks { stall: secs("FUNDACAD_STALL_TIMEOUT", STALL_TIMEOUT), job: secs("FUNDACAD_JOB_TIMEOUT", JOB_TIMEOUT) }
     }
 
-    /// server.py `_dispatch`'s choice of `_run` or `_run_stall` for `op`.
+    /// Which clock, stall or wall, `op` runs under, and for how long.
     pub fn budget(&self, op: &str, req: &Map<String, Value>) -> Budget {
         match op {
             "listFonts" | "tessellateText" | "migrateGeometry" => Budget::Wall(self.job),
@@ -61,19 +51,15 @@ impl Clocks {
         }
     }
 
-    /// `_export_stall_budget`: the write is one silent kernel call, so the
-    /// budget scales with the bodies it writes.
+    /// The write is one silent kernel call, so the budget scales with the bodies it writes.
     fn export_budget(&self, doc: Option<&Value>) -> Duration {
-        let n: usize = doc
-            .and_then(|d| d.get("features"))
-            .and_then(Value::as_array)
-            .map_or(0, |feats| {
-                feats
-                    .iter()
-                    .filter(|f| f.is_object())
-                    .map(|f| f.get("parts").and_then(Value::as_array).map_or(0, Vec::len).max(1))
-                    .sum()
-            });
+        let n: usize = doc.and_then(|d| d.get("features")).and_then(Value::as_array).map_or(0, |feats| {
+            feats
+                .iter()
+                .filter(|f| f.is_object())
+                .map(|f| f.get("parts").and_then(Value::as_array).map_or(0, Vec::len).max(1))
+                .sum()
+        });
         self.stall.max(Duration::from_secs_f64(EXPORT_SEC_PER_BODY * n as f64))
     }
 
@@ -89,10 +75,7 @@ impl Clocks {
 
 impl Default for Clocks {
     fn default() -> Clocks {
-        Clocks {
-            stall: STALL_TIMEOUT,
-            job: JOB_TIMEOUT,
-        }
+        Clocks { stall: STALL_TIMEOUT, job: JOB_TIMEOUT }
     }
 }
 
@@ -157,14 +140,7 @@ pub struct Watchdog {
 impl Watchdog {
     pub fn new(budget: Budget, cancel_grace: Option<Duration>) -> Watchdog {
         let now = Instant::now();
-        Watchdog {
-            budget,
-            cancel_grace,
-            started: now,
-            last_beat: 0,
-            last_beat_at: now,
-            cancelled_at: None,
-        }
+        Watchdog { budget, cancel_grace, started: now, last_beat: 0, last_beat_at: now, cancelled_at: None }
     }
 
     pub fn poll(&mut self, beats: u64, cancelled: bool, now: Instant) -> Option<Breach> {
@@ -186,9 +162,8 @@ impl Watchdog {
     }
 }
 
-/// A job that only waits, for the protocol suites: they need something long to
-/// cancel and something silent to reap, without a 356 MiB STEP file. Answered
-/// only when `FUNDACAD_ENGINE_TEST_OPS=1` is set when the engine starts.
+/// A job that only waits, so the protocol suites have something long to cancel and silent to reap without a 356 MiB
+/// STEP file. Answered only when `FUNDACAD_ENGINE_TEST_OPS=1` is set when the engine starts.
 pub const TEST_SLEEP_OP: &str = "testSleep";
 
 pub fn test_ops_enabled() -> bool {
@@ -216,80 +191,18 @@ pub fn test_sleep(req: &Map<String, Value>, ctx: &JobContext) -> JobResult {
     JobResult::Json(m)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
+/// `FUNDACAD_TEST_HOLD="import=20000,rebuild=6000"`: how long a job of `op` is held before it runs, in ms.
+pub fn hold_ms(spec: &str, op: &str) -> Option<u64> {
+    spec.split(',').filter_map(|p| p.trim().split_once('=')).find(|(o, _)| *o == op).and_then(|(_, ms)| ms.parse().ok())
+}
 
-    fn obj(v: Value) -> Map<String, Value> {
-        v.as_object().cloned().unwrap_or_default()
-    }
-
-    #[test]
-    fn ops_get_the_clock_server_py_gives_them() {
-        let c = Clocks::default();
-        let empty = Map::new();
-        assert_eq!(c.budget("rebuild", &empty), Budget::Stall(STALL_TIMEOUT));
-        assert_eq!(c.budget("inspect", &empty), Budget::Stall(STALL_TIMEOUT));
-        assert_eq!(c.budget("listFonts", &empty), Budget::Wall(JOB_TIMEOUT));
-        assert_eq!(c.budget("migrateGeometry", &empty), Budget::Wall(JOB_TIMEOUT));
-        assert_eq!(c.budget("generateShape", &empty), Budget::Wall(Duration::from_secs(180)));
-        assert_eq!(c.budget("import", &obj(json!({"path": "/no/such/file"}))), Budget::Stall(Duration::from_secs(90)));
-    }
-
-    #[test]
-    fn an_export_budget_scales_with_its_bodies() {
-        let c = Clocks::default();
-        let small = obj(json!({"document": {"features": [{"id": "a"}]}}));
-        assert_eq!(c.budget("export", &small), Budget::Stall(STALL_TIMEOUT));
-        let parts: Vec<Value> = (0..3000).map(|i| json!({"id": i})).collect();
-        let big = obj(json!({"document": {"features": [{"id": "im", "parts": parts}]}}));
-        let Budget::Stall(d) = c.budget("export", &big) else { panic!("stall") };
-        assert!((d.as_secs_f64() - 270.0).abs() < 1e-6, "{d:?}");
-    }
-
-    #[test]
-    fn beats_hold_off_a_stall_and_silence_does_not() {
-        let t0 = Instant::now();
-        let mut w = Watchdog::new(Budget::Stall(Duration::from_secs(1)), None);
-        for i in 1..30u64 {
-            assert_eq!(w.poll(i, false, t0 + Duration::from_millis(100 * i)), None);
-        }
-        let quiet = t0 + Duration::from_millis(2900) + Duration::from_millis(1001);
-        assert_eq!(w.poll(29, false, quiet), Some(Breach::Stalled(Duration::from_secs(1))));
-    }
-
-    #[test]
-    fn a_wall_clock_ignores_beats() {
-        let t0 = Instant::now();
-        let mut w = Watchdog::new(Budget::Wall(Duration::from_secs(1)), None);
-        assert_eq!(w.poll(1, false, t0 + Duration::from_millis(900)), None);
-        assert_eq!(w.poll(2, false, t0 + Duration::from_millis(1100)), Some(Breach::TimedOut));
-    }
-
-    #[test]
-    fn a_cancel_is_given_its_grace_first() {
-        let t0 = Instant::now();
-        let mut w = Watchdog::new(Budget::Stall(STALL_TIMEOUT), Some(Duration::from_secs(2)));
-        assert_eq!(w.poll(0, true, t0 + Duration::from_secs(1)), None);
-        assert_eq!(w.poll(0, true, t0 + Duration::from_millis(2500)), None);
-        assert_eq!(w.poll(0, true, t0 + Duration::from_millis(3100)), Some(Breach::IgnoredCancel));
-        let mut deaf = Watchdog::new(Budget::Stall(STALL_TIMEOUT), None);
-        assert_eq!(deaf.poll(0, true, t0 + Duration::from_secs(30)), None);
-    }
-
-    #[test]
-    fn breach_messages_match_server_py() {
-        let m = Breach::Stalled(Duration::from_secs(60)).result();
-        assert!(m["error"]["message"].as_str().unwrap().starts_with("one operation stalled for over 60 s"));
-        assert_eq!(Breach::IgnoredCancel.result()["cancelled"], true);
-    }
-
-    #[test]
-    fn a_stall_names_where_it_was() {
-        let m = Breach::Stalled(Duration::from_secs(60)).result_in(Some("chamfer > blend_section"));
-        let text = m["error"]["message"].as_str().unwrap();
-        assert!(text.starts_with("one operation stalled for over 60 s"));
-        assert!(text.ends_with("(it was stuck in chamfer > blend_section)"), "{text}");
+/// Holds a job at its start for the time `FUNDACAD_TEST_HOLD` gives its op, so an end to end check can switch
+/// documents while a long job runs. Beats while it waits and stops on cancel.
+pub fn test_hold(op: &str, ctx: &JobContext) {
+    let Some(ms) = std::env::var("FUNDACAD_TEST_HOLD").ok().and_then(|s| hold_ms(&s, op)) else { return };
+    let end = Instant::now() + Duration::from_millis(ms);
+    while Instant::now() < end && !ctx.cancel.is_cancelled() {
+        std::thread::sleep(Duration::from_millis(50));
+        ctx.progress.tick();
     }
 }

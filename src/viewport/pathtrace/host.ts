@@ -1,18 +1,27 @@
-// Runs the tracer from the viewport's own loop: starts it the first time Path
-// traced is drawn, keeps its canvas under the WebGL one, feeds it the mirror
-// scene and the camera, and traces only while traceState says so.
+// Starts the tracer the first time Path traced is drawn, keeps its canvas under the WebGL one, and
+// traces only while traceState says so.
 
 import type * as THREE from "three";
 import type { Denoise } from "../../ui/renderPrefs";
-import { SAMPLE_CAP, type TraceLook, type TracerBackend } from "./backend";
+import { TracerRefused, type TraceLook, type TracerBackend } from "./backend";
+import { experimentalPrefs } from "../../ui/experimentalPrefs";
 import { costProfile, FrameBudget, renderScaleFor, tracedPictureScale } from "./budget";
 import type { TraceLens } from "./camera";
+import type { FrameView } from "./frameCamera";
 import { armGuard, clearGuard } from "./guard";
 import { BlasCache, type BlasBuilder } from "./blasCache";
 import { createBlasBuilder } from "./blasPool";
 import {
-  colorSignature, collectAllBodies, collectBodies, countTriangles, countVertices, materialSignature, sceneSignature,
-  storageBytes, transformSignature, TRIANGLE_BUDGET, type SurfaceBaker,
+  colorSignature,
+  collectAllBodies,
+  collectBodies,
+  countTriangles,
+  countVertices,
+  materialSignature,
+  sceneSignature,
+  storageBytes,
+  transformSignature,
+  type SurfaceBaker,
 } from "./mirror";
 import { STILL_MS, TraceGeneration, traceState, type TraceInputs, type TraceState } from "./state";
 import { bloomKey, traceBloom } from "./tracePost";
@@ -50,13 +59,27 @@ export interface TraceFrame {
 }
 
 export function lookSignature(l: TraceLook): string {
-  const lights = l.lights.map((x) => [x.color.getHex(), x.intensity, ...x.position.toArray(), ...x.target.toArray()].join(","));
-  const rig = (l.rig?.lights ?? []).map((x) => [...x.direction, x.colour, x.intensity, x.angularRadius, x.realtimeOnly ? 1 : 0].join(","));
+  const lights = l.lights.map((x) =>
+    [x.color.getHex(), x.intensity, ...x.position.toArray(), ...x.target.toArray()].join(","),
+  );
+  const rig = (l.rig?.lights ?? []).map((x) =>
+    [...x.direction, x.colour, x.intensity, x.angularRadius, x.realtimeOnly ? 1 : 0].join(","),
+  );
   const g = l.rig?.ground;
   const ground = g ? [g.mode, g.z, ...g.centre, g.extent, g.albedo].join(",") : "";
   return [
-    lights.join(";"), rig.join(";"), ground, l.background.toArray().join(","), l.environment.uuid, l.environment.version, l.environmentBehind ? 1 : 0,
-    l.brightness, l.toneMapping, l.exposure,
+    lights.join(";"),
+    rig.join(";"),
+    ground,
+    l.background.toArray().join(","),
+    l.environment.uuid,
+    l.environment.version,
+    l.environmentBehind ? 1 : 0,
+    l.brightness,
+    l.toneMapping,
+    l.exposure,
+    l.bounces ?? "",
+    l.firefly ?? "",
   ].join("|");
 }
 
@@ -117,6 +140,7 @@ export class PathTraceHost {
   private sawSample = false;
   private size = { w: 0, h: 0, ratio: 0 };
   private refusedSig = "";
+  private faultText: string | null = null;
   private offSince = 0;
   /** At the cap the final denoise and its crossfade are drawn, then nothing. */
   private settled = false;
@@ -126,7 +150,7 @@ export class PathTraceHost {
   /** The pending arm write, so a clear always lands after it. */
   private guardWrite: Promise<void> | null = null;
   private power: Power = { discharging: false };
-  private cap = SAMPLE_CAP;
+  private cap = costProfile({ discharging: false }).cap;
   private renderScale = 0;
   private budget = new FrameBudget(Infinity);
   /** The last frame is still on the GPU; the next waits for it, so a slow GPU
@@ -154,6 +178,17 @@ export class PathTraceHost {
 
   get backendName(): string {
     return this.backend?.name ?? "";
+  }
+
+  /** With Realtime while moving off the trace on screen can be from an older
+   *  camera than the live one; the overlay is drawn from where it was traced. */
+  get frameView(): FrameView | null {
+    return this.shown && this.preview ? (this.backend?.shownView?.() ?? null) : null;
+  }
+
+  /** The newest fault this session, for the bug report. */
+  get lastFault(): string | null {
+    return this.faultText;
   }
 
   get denoised(): boolean {
@@ -221,8 +256,10 @@ export class PathTraceHost {
       this.settled = false;
     }
     this.syncBloom(b, f);
+    // Note: at the cap the held frames come back fast and would step the budget up, a
+    // change then lands on a finished trace that nothing polls again.
     if (this.measured !== null) {
-      if (this.budget.frame(this.measured, f.now)) b.setFrameBudget(this.budget.budget);
+      if (s === "trace" && this.budget.frame(this.measured, f.now)) b.setFrameBudget(this.budget.budget);
       this.measured = null;
     }
     if (s === "trace") {
@@ -279,6 +316,17 @@ export class PathTraceHost {
     this.backend?.setCap(this.cap);
     this.size = { w: 0, h: 0, ratio: 0 };
     this.cameraDirty = true;
+  }
+
+  /** A limit in Preferences, Experimental changed: the cap, the resolution, the look and the refusal are taken
+   *  again. */
+  refreshLimits() {
+    this.cap = costProfile(this.power).cap;
+    this.backend?.setCap(this.cap);
+    this.size = { w: 0, h: 0, ratio: 0 };
+    this.cameraDirty = true;
+    this.sceneDirty = true;
+    this.refusedSig = "";
   }
 
   /** The size a traced picture at `scale` comes out at, or null while none can be taken. */
@@ -351,7 +399,8 @@ export class PathTraceHost {
     const tris = countTriangles(bodies);
     const limit = this.backend?.maxStorageBytes ?? Infinity;
     const overDevice = storageBytes(tris, countVertices(bodies)) > limit;
-    if (tris <= TRIANGLE_BUDGET && !overDevice) return false;
+    const budget = experimentalPrefs().triangleBudget;
+    if (tris <= budget && !overDevice) return false;
     const sig = sceneSignature(bodies);
     if (sig === this.refusedSig) return true;
     this.refusedSig = sig;
@@ -359,7 +408,7 @@ export class PathTraceHost {
     const has = (tris / 1e6).toFixed(1);
     this.note = overDevice
       ? `Path tracing needs more GPU memory than this device allows for a model of ${has} million triangles`
-      : `Path tracing is limited to ${TRIANGLE_BUDGET / 1e6} million triangles for now, this model has ${has} million`;
+      : `Path tracing is limited to ${budget / 1e6} million triangles for now, this model has ${has} million`;
     this.samples = 0;
     this.traceSince = 0;
     this.disarm();
@@ -395,7 +444,10 @@ export class PathTraceHost {
         this.hasScene = false;
         this.size = { w: 0, h: 0, ratio: 0 };
       } catch (e) {
-        this.fault(`Path tracing could not start: ${e instanceof Error ? e.message : String(e)}`);
+        this.fault(
+          `Path tracing could not start: ${e instanceof Error ? e.message : String(e)}`,
+          !(e instanceof TracerRefused),
+        );
       } finally {
         this.starting = false;
       }
@@ -415,7 +467,11 @@ export class PathTraceHost {
     this.show(false);
     this.size = { w, h, ratio };
     b.setSize(Math.max(1, w), Math.max(1, h), ratio);
-    const scale = renderScaleFor({ cssHeight: h, dpr: globalThis.devicePixelRatio || 1, discharging: this.power.discharging });
+    const scale = renderScaleFor({
+      cssHeight: h,
+      dpr: globalThis.devicePixelRatio || 1,
+      discharging: this.power.discharging,
+    });
     if (scale !== this.renderScale) {
       this.renderScale = scale;
       b.setRenderScale(scale);
@@ -430,9 +486,8 @@ export class PathTraceHost {
     this.cameraDirty = true;
   }
 
-  /** False while the scene is refused or a tree is still building, so the
-   *  Realtime frame stays up. Each kind of change takes the cheapest tracer
-   *  call that covers it. */
+  /** False while the scene is refused or a tree is still building, so the Realtime frame stays up.
+   *  Each kind of change takes the cheapest tracer call that covers it. */
   private syncScene(b: TracerBackend, f: TraceFrame): boolean {
     const bodies = collectBodies(f.root);
     if (this.refuseIfOver(bodies)) return false;
@@ -506,11 +561,13 @@ export class PathTraceHost {
       return;
     }
     if (!this.traceSince) this.traceSince = now;
-    else if (now - this.traceSince > FIRST_SAMPLE_TIMEOUT_MS) this.fault("Path tracing gathered no sample in 10 seconds");
+    else if (now - this.traceSince > FIRST_SAMPLE_TIMEOUT_MS)
+      this.fault("Path tracing gathered no sample in 10 seconds");
   }
 
-  private fault(why: string) {
-    this.faults++;
+  private fault(why: string, counts = true) {
+    this.faultText = why;
+    if (counts) this.faults++;
     this.disabled = this.faults >= 2;
     const b = this.backend;
     this.backend = null;
@@ -520,7 +577,9 @@ export class PathTraceHost {
     this.show(false);
     try {
       b?.dispose();
-    } catch { /* already gone with the device */ }
+    } catch {
+      /* already gone with the device */
+    }
     this.disarm();
     this.onFault?.(why, this.disabled);
   }

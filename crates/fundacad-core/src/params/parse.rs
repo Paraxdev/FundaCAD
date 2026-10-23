@@ -1,14 +1,6 @@
-//! Tokenizer and parser for parameter expressions, a port of `src/params/parse.ts`
-//! (twinned in Python by the Python MCP server's expr.py).
-//!
-//! Grammar, loosest first:
-//! `or := and ('||' and)*`, `and := cmp ('&&' cmp)*`,
-//! `cmp := add (('<'|'<='|'>'|'>='|'=='|'!=') add)?` (does not chain),
-//! `add := mul (('+'|'-') mul)*`, `mul := unary (('*'|'/') unary)*`,
-//! `unary := '-' unary | '!' unary | pow`, `pow := primary ('^' unary)?`,
-//! `primary := NUMBER unit? | IDENT '(' expr (';' expr)* ')' | IDENT | '(' expr ')'`.
-//! So `^` is right associative and `-2^2` is `-(2^2)`. Arguments are separated
-//! by semicolons because a comma is a decimal separator in many locales.
+//! Tokenizer and parser for parameter expressions, a port of `src/params/parse.ts`. Loosest first: `||`, `&&`, one
+//! non-chaining comparison, `+ -`, `* /`, unary `- !`, then right associative `^`, so `-2^2` is `-(2^2)`.
+//! Arguments are separated by `;` because a comma is a decimal separator in many locales.
 
 use std::fmt;
 
@@ -22,10 +14,7 @@ pub struct ExprError {
 
 impl ExprError {
     pub(crate) fn new(message: impl Into<String>, pos: Option<usize>) -> Self {
-        ExprError {
-            message: message.into(),
-            pos,
-        }
+        ExprError { message: message.into(), pos }
     }
 }
 
@@ -45,10 +34,7 @@ pub const UNITS: &[(&str, f64, Dim)] = &[
 ];
 
 pub fn unit(name: &str) -> Option<(f64, Dim)> {
-    UNITS
-        .iter()
-        .find(|(n, _, _)| *n == name)
-        .map(|(_, f, d)| (*f, *d))
+    UNITS.iter().find(|(n, _, _)| *n == name).map(|(_, f, d)| (*f, *d))
 }
 
 /// Implemented functions and their arity, `None` meaning unbounded.
@@ -70,9 +56,7 @@ pub const FUNCTIONS: &[(&str, usize, Option<usize>)] = &[
 ];
 
 /// Names kept free for future functions, so no parameter can shadow one.
-pub const RESERVED_FUNCTIONS: &[&str] = &[
-    "pow", "ln", "log", "exp", "sign", "random", "sinh", "cosh", "tanh",
-];
+pub const RESERVED_FUNCTIONS: &[&str] = &["pow", "ln", "log", "exp", "sign", "random", "sinh", "cosh", "tanh"];
 
 pub const CONSTANTS: &[(&str, f64)] = &[("PI", std::f64::consts::PI)];
 
@@ -90,29 +74,15 @@ pub fn is_reserved_name(name: &str) -> bool {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
-    Num {
-        value: f64,
-        start: usize,
-        end: usize,
-    },
-    Ident {
-        name: String,
-        start: usize,
-        end: usize,
-    },
-    Op {
-        op: &'static str,
-        start: usize,
-        end: usize,
-    },
+    Num { value: f64, start: usize, end: usize },
+    Ident { name: String, start: usize, end: usize },
+    Op { op: &'static str, start: usize, end: usize },
 }
 
 impl Token {
     fn start(&self) -> usize {
         match self {
-            Token::Num { start, .. } | Token::Ident { start, .. } | Token::Op { start, .. } => {
-                *start
-            }
+            Token::Num { start, .. } | Token::Ident { start, .. } | Token::Op { start, .. } => *start,
         }
     }
 
@@ -184,17 +154,8 @@ pub fn tokenize(src: &str) -> Result<Vec<Token>, ExprError> {
             }
             let text: String = chars[start..i].iter().collect();
             match text.parse::<f64>() {
-                Ok(value) if value.is_finite() => out.push(Token::Num {
-                    value,
-                    start,
-                    end: i,
-                }),
-                _ => {
-                    return Err(ExprError::new(
-                        format!("invalid number \"{text}\""),
-                        Some(start),
-                    ))
-                }
+                Ok(value) if value.is_finite() => out.push(Token::Num { value, start, end: i }),
+                _ => return Err(ExprError::new(format!("invalid number \"{text}\""), Some(start))),
             }
             continue;
         }
@@ -204,42 +165,24 @@ pub fn tokenize(src: &str) -> Result<Vec<Token>, ExprError> {
                 i += 1;
             }
             if at(i) == Some('.') {
-                return Err(ExprError::new(
-                    "qualified names ('.') are not supported",
-                    Some(i),
-                ));
+                return Err(ExprError::new("qualified names ('.') are not supported", Some(i)));
             }
-            out.push(Token::Ident {
-                name: chars[start..i].iter().collect(),
-                start,
-                end: i,
-            });
+            out.push(Token::Ident { name: chars[start..i].iter().collect(), start, end: i });
             continue;
         }
         let two: String = chars[i..(i + 2).min(chars.len())].iter().collect();
         if let Some(op) = TWO_CHAR_OPS.iter().find(|o| **o == two) {
-            out.push(Token::Op {
-                op,
-                start: i,
-                end: i + 2,
-            });
+            out.push(Token::Op { op, start: i, end: i + 2 });
             i += 2;
             continue;
         }
         let one = ch.to_string();
         if let Some(op) = ONE_CHAR_OPS.iter().find(|o| **o == one) {
-            out.push(Token::Op {
-                op,
-                start: i,
-                end: i + 1,
-            });
+            out.push(Token::Op { op, start: i, end: i + 1 });
             i += 1;
             continue;
         }
-        return Err(ExprError::new(
-            format!("unexpected character \"{ch}\""),
-            Some(i),
-        ));
+        return Err(ExprError::new(format!("unexpected character \"{ch}\""), Some(i)));
     }
     Ok(out)
 }
@@ -263,10 +206,7 @@ pub enum BinOp {
 
 impl BinOp {
     pub fn is_truth(self) -> bool {
-        !matches!(
-            self,
-            BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Pow
-        )
+        !matches!(self, BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Pow)
     }
 }
 
@@ -291,14 +231,8 @@ pub enum Expr {
     Not(Box<Expr>),
 }
 
-const CMP_OPS: &[(&str, BinOp)] = &[
-    ("<=", BinOp::Le),
-    (">=", BinOp::Ge),
-    ("==", BinOp::Eq),
-    ("!=", BinOp::Ne),
-    ("<", BinOp::Lt),
-    (">", BinOp::Gt),
-];
+const CMP_OPS: &[(&str, BinOp)] =
+    &[("<=", BinOp::Le), (">=", BinOp::Ge), ("==", BinOp::Eq), ("!=", BinOp::Ne), ("<", BinOp::Lt), (">", BinOp::Gt)];
 
 struct Parser {
     toks: Vec<Token>,
@@ -324,20 +258,13 @@ impl Parser {
         }
         let node = self.or()?;
         if let Some(left) = self.peek() {
-            return Err(ExprError::new(
-                format!("unexpected \"{left}\""),
-                Some(left.start()),
-            ));
+            return Err(ExprError::new(format!("unexpected \"{left}\""), Some(left.start())));
         }
         Ok(node)
     }
 
     fn bin(op: BinOp, l: Expr, r: Expr) -> Expr {
-        Expr::Bin {
-            op,
-            l: Box::new(l),
-            r: Box::new(r),
-        }
+        Expr::Bin { op, l: Box::new(l), r: Box::new(r) }
     }
 
     fn or(&mut self) -> Result<Expr, ExprError> {
@@ -358,20 +285,13 @@ impl Parser {
 
     fn cmp(&mut self) -> Result<Expr, ExprError> {
         let l = self.add()?;
-        let Some(op) = CMP_OPS
-            .iter()
-            .find(|(text, _)| self.take_op(text))
-            .map(|(_, op)| *op)
-        else {
+        let Some(op) = CMP_OPS.iter().find(|(text, _)| self.take_op(text)).map(|(_, op)| *op) else {
             return Ok(l);
         };
         let node = Self::bin(op, l, self.add()?);
         if let Some(Token::Op { op, start, .. }) = self.peek() {
             if CMP_OPS.iter().any(|(text, _)| text == op) {
-                return Err(ExprError::new(
-                    "comparisons do not chain, join them with &&",
-                    Some(*start),
-                ));
+                return Err(ExprError::new("comparisons do not chain, join them with &&", Some(*start)));
             }
         }
         Ok(node)
@@ -431,16 +351,10 @@ impl Parser {
                 if let Some(Token::Ident { name, .. }) = self.peek() {
                     if let Some((text, factor, _)) = UNITS.iter().find(|(n, _, _)| n == name) {
                         self.i += 1;
-                        return Ok(Expr::Num {
-                            v: value * factor,
-                            unit: Some(text),
-                        });
+                        return Ok(Expr::Num { v: value * factor, unit: Some(text) });
                     }
                 }
-                Ok(Expr::Num {
-                    v: value,
-                    unit: None,
-                })
+                Ok(Expr::Num { v: value, unit: None })
             }
             Token::Ident { ref name, end, .. } => {
                 self.i += 1;
@@ -451,15 +365,9 @@ impl Parser {
                     }
                     if !self.take_op(")") {
                         let pos = self.peek().map_or(end, Token::start);
-                        return Err(ExprError::new(
-                            format!("missing \")\" in {name}(\u{2026})"),
-                            Some(pos),
-                        ));
+                        return Err(ExprError::new(format!("missing \")\" in {name}(\u{2026})"), Some(pos)));
                     }
-                    return Ok(Expr::Call {
-                        name: name.clone(),
-                        args,
-                    });
+                    return Ok(Expr::Call { name: name.clone(), args });
                 }
                 Ok(Expr::Ref(name.clone()))
             }
@@ -472,19 +380,13 @@ impl Parser {
                 }
                 Ok(inner)
             }
-            Token::Op { op, start, .. } => {
-                Err(ExprError::new(format!("unexpected \"{op}\""), Some(start)))
-            }
+            Token::Op { op, start, .. } => Err(ExprError::new(format!("unexpected \"{op}\""), Some(start))),
         }
     }
 }
 
 pub fn parse_expr(src: &str) -> Result<Expr, ExprError> {
-    Parser {
-        toks: tokenize(src)?,
-        i: 0,
-    }
-    .parse()
+    Parser { toks: tokenize(src)?, i: 0 }.parse()
 }
 
 /// Parameter names a parsed expression references, first use first, constants excluded.

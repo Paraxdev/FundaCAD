@@ -1,6 +1,5 @@
-//! The `printability` op as the app calls it: findings with their faces,
-//! the settings and bodies they were checked with, lay flat and the
-//! refusals.
+//! The `printability` op as the app calls it: findings with their faces, the settings and bodies they were checked
+//! with, lay flat and the refusals.
 
 use fundacad_geom::builder::NoWatch;
 use fundacad_geom::printcheck::op::printability_result;
@@ -8,9 +7,7 @@ use fundacad_protocol::JobResult;
 use serde_json::{json, Value};
 
 fn run(req: Value) -> Value {
-    let Value::Object(m) = req else {
-        panic!("a request is an object")
-    };
+    let Value::Object(m) = req else { panic!("a request is an object") };
     match printability_result(&m, &NoWatch) {
         JobResult::Json(m) => Value::Object(m),
         _ => panic!("expected a JSON result"),
@@ -35,7 +32,10 @@ fn block_and_fin() -> Value {
 fn a_thin_fin_is_one_wall_finding_with_both_its_faces() {
     let r = run(json!({"document": block_and_fin(), "op": "printability", "id": 7, "binary": true}));
     assert!(r.get("error").is_none(), "{r}");
-    assert_eq!(r["settings"], json!({"nozzle": 0.4, "layer": 0.2, "overhang": 45.0, "minGap": 0.2, "maxBridge": 10.0, "up": "+Z", "layFlat": false}));
+    assert_eq!(
+        r["settings"],
+        json!({"nozzle": 0.4, "layer": 0.2, "overhang": 45.0, "minGap": 0.2, "maxBridge": 10.0, "up": "+Z", "layFlat": false})
+    );
     assert_eq!(r["header"], "+Z up as modelled, bed at z = 0");
     let bodies = r["bodies"].as_array().unwrap();
     assert_eq!(bodies.len(), 2);

@@ -21,7 +21,8 @@ describe("Command and Option shortcuts", () => {
 
   afterEach(() => setMacForTest(null));
 
-  const press = (init: KeyboardEventInit) => window.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, ...init }));
+  const press = (init: KeyboardEventInit) =>
+    window.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, ...init }));
 
   it("toggles the items panel on Command+Option+S, whatever character Option makes", () => {
     setMacForTest(true);
@@ -49,11 +50,25 @@ describe("Command and Option shortcuts", () => {
     const shell = useShellStore();
     const before = shell.itemsShown;
     const hist = shell.historyShown;
-    const ev = new KeyboardEvent("keydown", { key: "ś", code: "KeyS", ctrlKey: true, altKey: true, bubbles: true, cancelable: true });
+    const ev = new KeyboardEvent("keydown", {
+      key: "ś",
+      code: "KeyS",
+      ctrlKey: true,
+      altKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
     window.dispatchEvent(ev);
     expect(shell.itemsShown).toBe(before);
     expect(ev.defaultPrevented).toBe(false);
-    const evH = new KeyboardEvent("keydown", { key: "ħ", code: "KeyH", ctrlKey: true, altKey: true, bubbles: true, cancelable: true });
+    const evH = new KeyboardEvent("keydown", {
+      key: "ħ",
+      code: "KeyH",
+      ctrlKey: true,
+      altKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
     window.dispatchEvent(evH);
     expect(shell.historyShown).toBe(hist);
     expect(evH.defaultPrevented).toBe(false);

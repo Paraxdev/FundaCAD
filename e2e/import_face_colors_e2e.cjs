@@ -25,10 +25,12 @@ const path = require("path");
 
 const TOKEN = process.env.SC_TOKEN || "";
 const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
-const STEP = process.env.SC_STEP
-  || path.resolve(__dirname, "../tests/fixtures/asm_face_colors.step");
+const STEP = process.env.SC_STEP || path.resolve(__dirname, "../tests/fixtures/asm_face_colors.step");
 const OUT = path.resolve(process.argv[2] || "face_color_shots");
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 let failures = 0;
 const check = (name, ok, detail) => {
   console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail ? `, ${detail}` : ""}`);
@@ -42,7 +44,10 @@ const check = (name, ok, detail) => {
     args: ["--use-angle=swiftshader", "--no-sandbox"],
   });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-  page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
+  page.on("pageerror", (e) => {
+    console.error("PAGE ERROR:", e.message);
+    failures++;
+  });
   await page.addInitScript((t) => {
     const N = window.WebSocket;
     class P extends N {
@@ -57,7 +62,10 @@ const check = (name, ok, detail) => {
   await page.goto("http://localhost:5173/");
   await page.waitForTimeout(3000);
   const modal = await page.$(".modal-close");
-  if (modal) { await modal.click(); await page.waitForTimeout(400); }
+  if (modal) {
+    await modal.click();
+    await page.waitForTimeout(400);
+  }
   await page.waitForFunction(() => !!window.store && !!window.viewport, null, { timeout: 60000 });
 
   // ---- import the file, the same way the File menu does ---------------------
@@ -67,28 +75,43 @@ const check = (name, ok, detail) => {
     const mod = await import("/src/io/files.ts");
     await mod.importPath(window.store, window.geometry, file);
     await window.store.rebuildNow();
+    // The default reads a solid's own style over its faces', this file is about the faces.
+    // The same two steps as the tree's "Imported colors > From faces".
+    const first = window.store.document.features.find((x) => x.type === "import");
+    window.store.setImportColorSource(first.id, "faces");
+    await mod.adoptImportedColors(window.store, first.id, first);
+    await window.store.rebuildNow();
     const f = window.store.document.features.find((x) => x.type === "import");
     return {
       parts: f?.parts?.length ?? 0,
       withColors: (f?.parts ?? []).filter((p) => p.faceColors).length,
       palettes: (f?.parts ?? []).map((p) => p.faceColors?.palette ?? []),
       bodies: (window.store.buildState.result?.bodies ?? []).map((b) => ({
-        id: b.id, name: b.name, faceStart: b.faceStart, faceCount: b.faceCount,
+        id: b.id,
+        name: b.name,
+        faceStart: b.faceStart,
+        faceCount: b.faceCount,
         faceColors: b.faceColors ?? null,
       })),
     };
   }, STEP);
-  console.log(`  imported in ${((Date.now() - t0) / 1000).toFixed(1)}s: `
-    + `${imported.parts} parts, ${imported.bodies.length} bodies`);
+  console.log(
+    `  imported in ${((Date.now() - t0) / 1000).toFixed(1)}s: ` +
+      `${imported.parts} parts, ${imported.bodies.length} bodies`,
+  );
 
-  check("the import feature carries per-face colours",
+  check(
+    "the import feature carries per-face colours",
     imported.withColors > 0,
-    `${imported.withColors} of ${imported.parts} parts, palettes ${JSON.stringify(imported.palettes)}`);
+    `${imported.withColors} of ${imported.parts} parts, palettes ${JSON.stringify(imported.palettes)}`,
+  );
 
   const coloured = imported.bodies.filter((b) => b.faceColors);
-  check("the colours reached the BODIES over the wire",
+  check(
+    "the colours reached the BODIES over the wire",
     coloured.length > 0,
-    `${coloured.length} of ${imported.bodies.length} bodies`);
+    `${coloured.length} of ${imported.bodies.length} bodies`,
+  );
 
   // ---- what the document decided the colours MEAN ---------------------------
   const decided = await page.evaluate(async () => {
@@ -96,8 +119,9 @@ const check = (name, ok, detail) => {
     const bodies = window.store.buildState.result?.bodies ?? [];
     const bodyPaint = window.store.materialPaint();
     const mats = await import("/src/document/materials.ts");
-    const palettes = (window.store.document.features.find((x) => x.type === "import")?.parts ?? [])
-      .flatMap((p) => p.faceColors?.palette ?? []);
+    const palettes = (window.store.document.features.find((x) => x.type === "import")?.parts ?? []).flatMap(
+      (p) => p.faceColors?.palette ?? [],
+    );
     const resolved = {};
     for (const hex of palettes) {
       resolved[hex.toLowerCase()] = mats.nearestMaterial(hex, window.store.materialLibrary)?.name ?? null;
@@ -114,12 +138,16 @@ const check = (name, ok, detail) => {
   // near-enough existing material before it mints a new one, deliberately, so
   // that re-importing a revision does not leave two libraries of near-identical
   // greys. #ffffff resolving to "Plastic, white" is that rule working.
-  check("every colour the file used resolves to a material",
+  check(
+    "every colour the file used resolves to a material",
     imported.palettes.flat().every((h) => decided.resolved[String(h).toLowerCase()]),
-    `resolved ${JSON.stringify(decided.resolved)}`);
-  check("a body wears the colour of its own FACES, not its product's",
+    `resolved ${JSON.stringify(decided.resolved)}`,
+  );
+  check(
+    "a body wears the colour of its own FACES, not its product's",
     decided.assigned.some(([, hex]) => hex !== null),
-    JSON.stringify(decided.assigned));
+    JSON.stringify(decided.assigned),
+  );
 
   const nFacePaint = Object.keys(decided.facePaint).length;
   const nFaces = imported.bodies.reduce((n, b) => n + b.faceCount, 0);
@@ -127,13 +155,17 @@ const check = (name, ok, detail) => {
   // faces may cost anything. This is the check that would have caught comparing
   // against the material instead of the dominant, which named every face of
   // every body because a near-match is not an exact one.
-  check("only the minority faces cost anything",
+  check(
+    "only the minority faces cost anything",
     nFacePaint > 0 && nFacePaint < nFaces / 10,
-    `${nFacePaint} face entries against ${nFaces} faces`);
+    `${nFacePaint} face entries against ${nFaces} faces`,
+  );
   const ranges = imported.bodies.map((b) => [b.faceStart, b.faceStart + b.faceCount]);
-  check("no face entry lands outside a body",
+  check(
+    "no face entry lands outside a body",
     Object.keys(decided.facePaint).every((k) => ranges.some(([a, z]) => +k >= a && +k < z)),
-    `${nFacePaint} entries against ${ranges.length} bodies`);
+    `${nFacePaint} entries against ${ranges.length} bodies`,
+  );
 
   // ---- and what is actually on screen --------------------------------------
   //
@@ -174,19 +206,23 @@ const check = (name, ok, detail) => {
   const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
   const near = (a, b) => rgb(a).reduce((d, v, i) => d + (v - rgb(b)[i]) ** 2, 0) <= 24 * 24 * 3;
   const lost = wanted.filter((h) => ![...drawn].some((d) => near(h, d)));
-  check("every colour the file painted is on screen, or within the match tolerance of it",
+  check(
+    "every colour the file painted is on screen, or within the match tolerance of it",
     lost.length === 0,
-    lost.length ? `lost ${lost.join(", ")}` : `${drawn.size} distinct colours drawn`);
+    lost.length ? `lost ${lost.join(", ")}` : `${drawn.size} distinct colours drawn`,
+  );
 
   const exact = wanted.filter((h) => drawn.has(h));
-  check("the minority colours are drawn exactly",
-    exact.length > 0, `${exact.length} of ${wanted.length} exact: ${exact.join(", ")}`);
+  check(
+    "the minority colours are drawn exactly",
+    exact.length > 0,
+    `${exact.length} of ${wanted.length} exact: ${exact.join(", ")}`,
+  );
 
   // CONTROL. A viewport that just painted everything one shade would satisfy
   // most of the above by accident, and the neutral shade an uncoloured model
   // gets is the state this whole path exists to replace.
-  check("the model is not drawn in one flat shade (control)",
-    drawn.size > 1, `${drawn.size} distinct vertex colours`);
+  check("the model is not drawn in one flat shade (control)", drawn.size > 1, `${drawn.size} distinct vertex colours`);
 
   // Nothing the file painted may arrive SEE-THROUGH. A colour carries no
   // transparency, and a body at quarter opacity because its shade resembled
@@ -195,7 +231,8 @@ const check = (name, ok, detail) => {
   const sheer = await page.evaluate(() =>
     window.viewport.bodyMeshes
       .filter((b) => (b.mesh.material.opacity ?? 1) < 1)
-      .map((b) => [b.id, b.mesh.material.opacity]));
+      .map((b) => [b.id, b.mesh.material.opacity]),
+  );
   check("no body arrives see-through", sheer.length === 0, JSON.stringify(sheer));
 
   await page.evaluate(() => window.__fundacad?.handleAction?.("iso"));

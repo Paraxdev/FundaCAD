@@ -29,8 +29,11 @@ const viewport = {
   forwardWheel,
 } as unknown as Viewport;
 
-const glyph = (cIndex: number, icon = "perpendicular"): ConstraintGlyph =>
-  ({ cIndex, icon, pos: new THREE.Vector2(cIndex, cIndex) });
+const glyph = (cIndex: number, icon = "perpendicular"): ConstraintGlyph => ({
+  cIndex,
+  icon,
+  pos: new THREE.Vector2(cIndex, cIndex),
+});
 
 const badges = () => document.querySelectorAll<HTMLElement>(".sketch-glyph");
 
@@ -50,12 +53,7 @@ describe("SketchGlyphLayer", () => {
 
   it("colours conflicting red and redundant amber, with conflict winning", async () => {
     mount(SketchGlyphLayer, { attachTo: document.body });
-    new SketchGlyphs(viewport).show(
-      [glyph(0), glyph(1), glyph(2)],
-      plane,
-      new Set([0, 2]),
-      new Set([1, 2]),
-    );
+    new SketchGlyphs(viewport).show([glyph(0), glyph(1), glyph(2)], plane, new Set([0, 2]), new Set([1, 2]));
     await nextTick();
     const cls = [...badges()].map((el) => el.className);
     expect(cls[0]).toBe("sketch-glyph conflict");

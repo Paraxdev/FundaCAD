@@ -25,7 +25,9 @@ function backend(rebuilds: CadDocument[], errorsFor: (doc: CadDocument) => Featu
       } as unknown as RebuildReply;
     },
     async init() {},
-    onStatus() { return () => {}; },
+    onStatus() {
+      return () => {};
+    },
     connected: true,
   } as unknown as GeometryBackend;
 }
@@ -39,21 +41,22 @@ const doc = (): CadDocument => ({
   ] as Feature[],
 });
 
-const box = (length: number): Feature =>
-  ({ id: "bx", type: "box", length, width: 20, height: 20 }) as Feature;
+const box = (length: number): Feature => ({ id: "bx", type: "box", length, width: 20, height: 20 }) as Feature;
 
 const lengthOf = (d: CadDocument) => (d.features.find((f) => f.id === "bx") as { length?: number } | undefined)?.length;
 
 /** The cut refuses a box longer than 50, sent or not, and `alwaysFails` refuses whatever it is given. */
-const refusals = (alwaysFails: string[] = []) => (d: CadDocument): FeatureErrors => {
-  const out: FeatureErrors = alwaysFails
-    .filter((id) => d.features.some((f) => f.id === id))
-    .map((id) => ({ feature_id: id, message: "was already broken" }));
-  if ((lengthOf(d) ?? 0) > 50) {
-    out.push({ feature_id: "cut", message: "the tool misses the target" });
-  }
-  return out;
-};
+const refusals =
+  (alwaysFails: string[] = []) =>
+  (d: CadDocument): FeatureErrors => {
+    const out: FeatureErrors = alwaysFails
+      .filter((id) => d.features.some((f) => f.id === id))
+      .map((id) => ({ feature_id: id, message: "was already broken" }));
+    if ((lengthOf(d) ?? 0) > 50) {
+      out.push({ feature_id: "cut", message: "the tool misses the target" });
+    }
+    return out;
+  };
 
 describe("edit preview in place", () => {
   let rebuilds: CadDocument[];
@@ -121,7 +124,10 @@ describe("edit preview in place", () => {
   it("reports the edited feature's own refusal even when a later one fails too", async () => {
     const own = (d: CadDocument): FeatureErrors =>
       lengthOf(d) === -1
-        ? [{ feature_id: "bx", message: "length must be positive" }, { feature_id: "cut", message: "no tool body" }]
+        ? [
+            { feature_id: "bx", message: "length must be positive" },
+            { feature_id: "cut", message: "no tool body" },
+          ]
         : [];
     const store = new DocumentStore(backend(rebuilds, own), doc());
     await store.rebuildNow();

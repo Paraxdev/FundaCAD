@@ -9,42 +9,20 @@ import type { Engine } from "./engine";
 import { setPreviewError } from "../ui/previewError";
 import { markDrawn } from "../diagnostics/rebuildTiming";
 
-/** Rebuild pipeline -> viewport. The one place a build result becomes pixels. */
+/** The one place a build result becomes pixels. */
 export function installRebuildBridge(e: Engine): void {
-  // Whether the camera still owes the model a frame. Cleared by whichever path
-  // performs the fit, a progressive load fits from the manifest's bbox on its
-  // FIRST frame, so the camera settles before any geometry exists and never moves
-  // again while chunks land.
+  // A progressive load fits from the manifest's bbox on its first frame, so the camera never moves while chunks land.
   let pendingFit = true;
+  // New homes the camera for a 20 mm part, so an import into an empty view is fitted too.
+  let viewEmpty = true;
+  e.store.onOpen(() => (viewEmpty = true));
+  const fitNow = () => pendingFit || (viewEmpty && e.store.document.features.some((f) => f.type === "import"));
 
-  // Colour a plugin has put on the model, asked for fresh at every point the
-  // model changes.
-  //
-  // This used to be two functions here that read the document's palette, walked
-  // each body's slot assignment and each body's per-face texture slots, and
-  // returned nothing at all when a capability was switched off. All of that
-  // knowledge, what a palette is, what a slot means, which capability decides
-  // whether any of it counts, was in the render bridge, which is the one place
-  // in the app whose job is turning a build result into pixels.
-  //
-  // What is left is the shape of the answer: a body id may have a colour, a
-  // global face index may have a colour, and whoever knows why says so. With
-  // nothing contributed both maps are empty, which is exactly what the model
-  // looked like with the capability off, arrived at by there being no answer
-  // rather than by a check that suppressed one.
-  //
-  // The document's own materials sit UNDER that: a material is what a body is
-  // made of, a contribution is what a capability has decided to paint on top,
-  // and the one capability that paints today is the filament palette, whose
-  // slots are a deliberate choice about a real print. A material is usually
-  // whatever an imported file said, so it loses.
+  // Plugin paint wins over the document's materials, which usually just repeat what an imported file said.
   const paint = () => {
     const c = contributedPaint();
     const bodies = { ...e.store.materialPaint(), ...c.bodies };
-    // The materials dropped on individual FACES, resolved against the model
-    // that is actually on screen: an assignment naming a body that is gone, or
-    // a face past the end of a body that got simpler, is dropped here rather
-    // than defended against in the renderer (see document/faceMaterials.ts).
+    // Resolved against the model on screen, so stale face assignments drop here rather than in the renderer.
     const onFaces = resolveFaceMaterials(
       e.store.faceMaterialEntries(),
       e.store.buildState.result?.bodies,
@@ -52,38 +30,23 @@ export function installRebuildBridge(e: Engine): void {
     );
     return {
       bodies,
-      // The finish half of those face materials. Colour goes in `faces` below
-      // with everything else that paints a face, because a face can only be one
-      // colour; a finish has nowhere else to come from, so it travels alone.
       faceFinish: faceMaterialFinishes(onFaces),
-      // A face can only be one colour, so the two sources of per-face colour are
-      // ordered rather than merged: a texture inlay is something the user put
-      // there in THIS document and is preferred over what an imported file said the
-      // face was. Import colours are sparse against `bodies` (see
-      // importedFacePaint), so an assembly whose parts are each one colour adds
-      // nothing here at all.
+      // Later spreads win: what the user chose in this document beats what an imported file said.
       faces: {
         ...importedFacePaint(
           e.store.buildState.result?.bodies,
           bodies,
-          importedBodyColors(
-            e.store.buildState.result?.bodies,
-            e.store.document.features,
-            (id) => e.store.importColorSource(id),
+          importedBodyColors(e.store.buildState.result?.bodies, e.store.document.features, (id) =>
+            e.store.importColorSource(id),
           ),
         ),
-        // A material somebody dropped on this face is preferred over what the file said it
-        // was, for the same reason a texture inlay does: it was chosen here.
         ...faceMaterialPaint(onFaces),
         ...c.faces,
       },
     };
   };
 
-  // Starting or stopping a capability has to repaint what is already on screen.
-  // Both setters are no-ops when the map has not changed, so this costs nothing
-  // when the change was somebody else's; without it the colours would hang about
-  // until the next rebuild, which on a finished model is never.
+  // Otherwise a capability's colours would linger until the next rebuild; the setters skip unchanged maps.
   onContribChange(() => {
     const p = paint();
     e.viewport.setBodyPaint(p.bodies);
@@ -93,38 +56,32 @@ export function installRebuildBridge(e: Engine): void {
     e.viewport.requestRender();
   });
 
-  // Failed-commit visibility: a feature that errors in the rebuild leaves the
-  // model looking UNCHANGED (its body keeps the old mesh), so without an active
-  // notification the only signal is the small status line, "nothing happened".
-  // Diff each completed build's failing-feature set against the previous one and
-  // toast every NEW failure; if it's the feature the user JUST committed from an
-  // interactive tool, select it immediately (red chip scrolls into view).
+  // A failed feature leaves the model looking unchanged, so every new failure toasts, and one just committed is selected.
   let prevErrorIds = new Set<string>();
-  // Failed fillet/chamfer edges (midpoints per feature id), survives engine
-  // cache-hit rebuilds that re-emit the error without its diagnostics.
+  let prevHiddenFaces = new Set<string>();
+  // Survives cache hit rebuilds that re-emit the error without its diagnostics.
   const failedEdgeMids = new Map<string, [number, number, number][]>();
   let lastCommittedId: string | null = null;
   e.noteCommitted = (id: string | null) => {
     if (id) lastCommittedId = id;
   };
+  // An example opens framed as a fresh window frames it, wherever the camera was in the document before.
+  e.frameNextModel = () => {
+    e.viewport.resetCamera(false);
+    pendingFit = true;
+  };
 
-  // --- progressive display -------------------------------------------------
-  // The ONLY subscriber to the chunk channel. A chunked reply reaches the viewport
-  // here and nowhere else: store.buildState.result keeps pointing at the PREVIOUS
-  // document for the whole stream, so export, the browser tree, and every feature
-  // that bakes body ids into the document are structurally unable to see a partial
-  // model. The completed build below is still what makes it official.
+  // The only chunk subscriber; buildState.result keeps the previous document for the whole stream, so nothing else
+  // can see a partial model.
   e.store.onBuildChunk((c) => {
     if (c.phase === "begin") {
       const hidden = c.manifest.filter((b) => !e.store.isBodyVisible(b.id)).map((b) => b.id);
-      // Push the colours BEFORE the first body lands, so streamed bodies arrive
-      // already wearing the one they were assigned instead of popping from grey
-      // when the build commits.
+      // Before the first body lands, so streamed bodies do not pop from grey on commit.
       e.viewport.setBodyPaint(paint().bodies);
       e.viewport.setBodyFinish(e.store.materialFinishes());
       e.viewport.setRelief(contributedRelief());
-      e.viewport.beginProgressiveModel(c.epoch, c.manifest, c.result, c.bbox, hidden, pendingFit);
-      pendingFit = false;
+      e.viewport.beginProgressiveModel(c.epoch, c.manifest, c.result, c.bbox, hidden, fitNow());
+      pendingFit = viewEmpty = false;
       return;
     }
     const hidden = c.bodies.filter((b) => !e.store.isBodyVisible(b.id)).map((b) => b.id);
@@ -133,66 +90,41 @@ export function installRebuildBridge(e: Engine): void {
   e.store.onBuildAbort(() => e.viewport.abortProgressiveModel());
 
   e.store.onBuild((s) => {
-    // Only render COMPLETED builds. A `building` tick carries the previous result
-    // (the new geometry isn't ready yet); re-rendering it would momentarily revert an
-    // in-progress ghost (a committed Move/Press-Pull) to the old placement until the
-    // real rebuild lands. Skipping it keeps the ghost on screen seamlessly.
+    // A `building` tick carries the previous result, and drawing it would snap a committed Move ghost back.
     if (s.result && !s.building) {
       if (s.result.mesh.positions.length > 0) {
-        // hide the faces AND wireframe of any body the user toggled off (filtered
-        // in the render, no engine rebuild, setBodyVisibility re-emits the build).
-        const hidden = (s.result.bodies ?? [])
-          .filter((b) => !e.store.isBodyVisible(b.id))
-          .map((b) => b.id);
-        e.viewport.setModel(s.result, pendingFit, hidden);
-        pendingFit = false;
+        const hidden = (s.result.bodies ?? []).filter((b) => !e.store.isBodyVisible(b.id)).map((b) => b.id);
+        e.viewport.setModel(s.result, fitNow(), hidden);
+        pendingFit = viewEmpty = false;
         const p = paint();
-        e.viewport.setBodyPaint(p.bodies); // per-body colours
-        e.viewport.setFacePaint(p.faces); // + per-face inlay colours
-        e.viewport.setFaceFinish(p.faceFinish); // + a material dropped on one face
-        e.viewport.setBodyFinish(e.store.materialFinishes()); // + how each is finished
+        e.viewport.setBodyPaint(p.bodies);
+        e.viewport.setFacePaint(p.faces);
+        e.viewport.setFaceFinish(p.faceFinish);
+        e.viewport.setBodyFinish(e.store.materialFinishes());
         e.viewport.setRelief(contributedRelief());
         // setModel dropped the Stress panel's face marks with the old face ids.
         e.ui.panels.refreshStressMarks();
       } else {
         e.viewport.clearModel();
-        // Nothing left to analyse: the panel says the body is gone and takes
-        // its arrows off the empty view.
+        viewEmpty = true;
         e.ui.panels.refreshStressMarks();
       }
-      markDrawn(); // the viewport just applied this reply, the round trip's last leg
-      // Re-split the committed profiles against the model that just landed.
-      //
-      // A profile drawn across the edge of its face picks as two areas, and the
-      // boundary between them comes from the model (sketch/faceFootprint.ts).
-      // The overlay is otherwise rebuilt from onDocChange, which fires BEFORE the
-      // build it triggered, so it split against the previous model, and on a
-      // freshly opened document against no model at all. Every profile there came
-      // out whole, which is the one state in which the split cannot be seen to be
-      // missing: it looks exactly like a profile that does not cross anything.
-      //
-      // Gated on there being regions to re-split, so a document with no sketch
-      // shown pays nothing; on the sketch editor being closed, which owns its own
-      // profiles while it is open; and on no tool running, because a tool holds
-      // the WorldRegion objects it was armed with and rebuilding them underneath
-      // it would leave it dragging a profile that no longer exists.
+      markDrawn();
+      // Profiles split along face edges of the model (sketch/faceFootprint.ts), and onDocChange fires before the build.
+      // Not while a tool runs: it holds the WorldRegion objects it was armed with.
       if (!e.sketch.active && !e.toolBusy() && e.overlay.regions.length) {
         e.overlay.update(e.store.document);
       }
-      // Failed-edge red paint (fillet/chamfer edgeOpFailed diagnostics). Runs for
-      // BOTH committed and preview builds (a just-toggled bad edge should turn
-      // red live), unlike the toast gate below. The engine's prefix cache
-      // re-emits errors but NOT diagnostics on cache-hit resumes, so failed mids
-      // are cached per feature here and dropped only when the feature's error
-      // clears from featureErrors (content-keyed caching guarantees the cached
-      // mids stay valid exactly as long as the failing feature is unchanged).
+      // Preview builds too, so a bad edge turns red live. Cache hits re-emit errors without diagnostics, so the mids
+      // are kept per feature until its error clears.
       {
-        const errIds = new Set(
-          (s.result.featureErrors ?? []).map((x) => x.feature_id).filter(Boolean) as string[],
-        );
+        const errIds = new Set((s.result.featureErrors ?? []).map((x) => x.feature_id).filter(Boolean) as string[]);
         for (const d of s.result.diagnostics ?? []) {
           if (d.kind === "edgeOpFailed" && d.feature_id && d.failed?.length) {
-            failedEdgeMids.set(d.feature_id, d.failed.map((x) => x.mid));
+            failedEdgeMids.set(
+              d.feature_id,
+              d.failed.map((x) => x.mid),
+            );
           }
         }
         for (const id of [...failedEdgeMids.keys()]) {
@@ -200,8 +132,7 @@ export function installRebuildBridge(e: Engine): void {
         }
         e.viewport.setErrorEdgeMids([...failedEdgeMids.values()].flat());
       }
-      // toast NEW feature errors (skip preview builds, they carry a transient
-      // un-committed feature whose failures resolve on commit/cancel)
+      // Not for preview builds, whose failures resolve on commit or cancel.
       if (!e.store.hasPreview) {
         const errs = s.result.featureErrors ?? [];
         const ids = new Set(errs.map((x) => x.feature_id).filter(Boolean) as string[]);
@@ -210,16 +141,14 @@ export function installRebuildBridge(e: Engine): void {
           const f = e.store.document.features.find((x) => x.id === err.feature_id);
           const label = f ? featureMeta(f).label : err.feature_id;
           const id = err.feature_id;
-          // An ambiguous saved reference is the one failure the user can actually
-          // fix from here, so offer the repair instead of a bare "Show". These are
-          // old files whose stored point identifies no single face, without this
-          // the toast is a dead end.
+          // An ambiguous saved reference is the one failure fixable from here, so offer the repair.
           const amb = repairableDiagFor(s.result?.diagnostics, id);
           const action = amb?.at
-            ? { label: amb.kind === "edge" ? "Re-pick edge" : "Re-pick face", onClick: () => e.starters.repickReference(id, amb.at!, amb.kind) }
+            ? {
+                label: amb.kind === "edge" ? "Re-pick edge" : "Re-pick face",
+                onClick: () => e.starters.repickReference(id, amb.at!, amb.kind),
+              }
             : { label: "Show", onClick: () => e.selectFeature(id) };
-          // A kernel refusal is usually about the geometry it was handed, so the
-          // console entry carries the whole report, not just the sentence.
           const detail = featureFailureReport({
             label,
             message: err.message,
@@ -229,25 +158,29 @@ export function installRebuildBridge(e: Engine): void {
             diagnostics: (s.result?.diagnostics ?? []).filter((d) => d.feature_id === id),
           });
           toast(`${label} failed: ${err.message}`, { kind: "error", action, detail, source: id });
-          if (id === lastCommittedId) e.selectFeature(id, false); // toast auto-select, not a user pick
+          if (id === lastCommittedId) e.selectFeature(id, false);
         }
         prevErrorIds = ids;
         lastCommittedId = null;
+        const hidden = new Set(e.store.hiddenFaceMaterials());
+        const lost = [...hidden].filter((id) => !prevHiddenFaces.has(id)).length;
+        prevHiddenFaces = hidden;
+        // A rolled back timeline hides later faces on purpose, so it says nothing.
+        if (lost && e.store.rollbackIndex >= e.store.document.features.length) {
+          toast(
+            lost === 1
+              ? "A face material lost its face in this rebuild, it shows again if the face comes back"
+              : `${lost} face materials lost their faces in this rebuild, they show again if the faces come back`,
+            { kind: "warning" },
+          );
+        }
       }
     }
     e.syncDatumPlanes();
-    // The one writer of the preview-refusal channel. It sits beside the toast
-    // gate above rather than inside it: that gate SUPPRESSES a preview's
-    // failures, deliberately, because a drag through a bad range would emit a
-    // toast a frame. Suppressing them left the user with nothing at all, which
-    // is what this carries to the box they are actually typing in.
+    // Preview failures skip the toast, so the refusal goes to the box being typed in and the model shows stale.
+    // A held refusal keeps the last value that built on screen.
     const refused = e.store.previewError;
     setPreviewError(refused);
-    // The other half of the same statement: the box says what is wrong, and the
-    // model stops presenting a shape nobody asked for as though it were the
-    // answer. Kept together so the two can never disagree about whether the
-    // value on screen builds. A held refusal is the exception: the model on
-    // screen is the last value that did build, which is what the tool keeps.
     e.viewport.setStaleModel(refused !== null && !s.heldRefusal);
   });
 }

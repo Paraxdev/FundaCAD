@@ -13,7 +13,7 @@ use opencascade::select_access::{self as sa, CurveType};
 use opencascade_sys::face_query as fq;
 use serde_json::{json, Map, Value};
 
-use crate::builder::{self, Ctx, Fail, FResult, Watch};
+use crate::builder::{self, Ctx, FResult, Fail, Watch};
 use crate::features::sketch::{frame_for_normal, local_curves};
 use crate::kernel::{self, Frame, Kind};
 use crate::select::Resolver;
@@ -34,8 +34,16 @@ pub fn is_flat_format(format: &str) -> bool {
 pub enum Seg {
     Line([f64; 2], [f64; 2]),
     /// Signed sweep in radians, counterclockwise positive.
-    Arc { c: [f64; 2], r: f64, a0: f64, sweep: f64 },
-    Circle { c: [f64; 2], r: f64 },
+    Arc {
+        c: [f64; 2],
+        r: f64,
+        a0: f64,
+        sweep: f64,
+    },
+    Circle {
+        c: [f64; 2],
+        r: f64,
+    },
     Poly(Vec<[f64; 2]>),
 }
 
@@ -119,7 +127,9 @@ pub fn chain(segs: Vec<Seg>) -> Vec<Path2> {
     for s in segs {
         match &s {
             Seg::Circle { .. } => out.push(Path2 { segs: vec![s], closed: true }),
-            Seg::Poly(p) if p.len() > 2 && near(p[0], p[p.len() - 1]) => out.push(Path2 { segs: vec![s], closed: true }),
+            Seg::Poly(p) if p.len() > 2 && near(p[0], p[p.len() - 1]) => {
+                out.push(Path2 { segs: vec![s], closed: true })
+            }
             _ => open.push(Some(s)),
         }
     }
@@ -187,7 +197,11 @@ fn on(frame: &Frame, p: [f64; 3]) -> [f64; 2] {
 
 fn turn(a: f64) -> f64 {
     let t = a.rem_euclid(TAU);
-    if t < 1e-12 { TAU } else { t }
+    if t < 1e-12 {
+        TAU
+    } else {
+        t
+    }
 }
 
 /// One edge in the frame's XY: exact for a line and for a circle around the
@@ -267,12 +281,17 @@ fn xy() -> Frame {
 pub fn sketch_layers(doc: &CadDocument, raw: &Value, sketch: &str, tol: f64) -> FResult<Vec<Layer>> {
     let by_name = || {
         raw.get("features")?.as_array()?.iter().find_map(|f| {
-            (f.get("type")?.as_str()? == "sketch" && f.get("name")?.as_str()? == sketch).then(|| f.get("id")?.as_str())?
+            (f.get("type")?.as_str()? == "sketch" && f.get("name")?.as_str()? == sketch)
+                .then(|| f.get("id")?.as_str())?
         })
     };
     let f = match doc.feature(sketch).or_else(|| by_name().and_then(|id| doc.feature(id))) {
         Some(Feature::Sketch(f)) => f,
-        Some(_) => return Err(Fail::msg(format!("'{sketch}' is not a sketch, pick a sketch or a flat face to export as DXF or SVG"))),
+        Some(_) => {
+            return Err(Fail::msg(format!(
+                "'{sketch}' is not a sketch, pick a sketch or a flat face to export as DXF or SVG"
+            )))
+        }
         None => return Err(Fail::msg(format!("no sketch '{sketch}' in the document"))),
     };
     let ctx = Ctx::with_params(doc);
@@ -313,13 +332,18 @@ fn face_frame(face: &Shape, plane: Option<&Value>) -> FResult<Frame> {
 
 pub fn face_layers(bodies: &[builder::BuiltBody], sel: &Value, plane: Option<&Value>, tol: f64) -> FResult<Vec<Layer>> {
     let body = match sel.get("body").and_then(Value::as_str) {
-        Some(id) => bodies.iter().find(|b| b.id == id).ok_or_else(|| Fail::msg(format!("body '{id}' not found to export")))?,
+        Some(id) => {
+            bodies.iter().find(|b| b.id == id).ok_or_else(|| Fail::msg(format!("body '{id}' not found to export")))?
+        }
         None if bodies.len() == 1 => &bodies[0],
         None => return Err(Fail::msg("the face selector needs its body, take it from inspect")),
     };
     let faces = Resolver::new(None, None).faces(&body.shape, sel)?;
     let [face] = faces.as_slice() else {
-        return Err(Fail::msg(format!("the face selector picks {} faces, a DXF or SVG export takes exactly one", faces.len())));
+        return Err(Fail::msg(format!(
+            "the face selector picks {} faces, a DXF or SVG export takes exactly one",
+            faces.len()
+        )));
     };
     if !kernel::face_is_planar(face) {
         return Err(Fail::msg("a DXF or SVG export needs a flat face"));
@@ -345,14 +369,29 @@ pub fn write_dxf(layers: &[Layer]) -> String {
         for s in &l.segs {
             match s {
                 Seg::Line(a, b) => {
-                    let _ = write!(t, "0\nLINE\n8\n{lay}\n10\n{}\n20\n{}\n30\n0\n11\n{}\n21\n{}\n31\n0\n", n(a[0]), n(a[1]), n(b[0]), n(b[1]));
+                    let _ = write!(
+                        t,
+                        "0\nLINE\n8\n{lay}\n10\n{}\n20\n{}\n30\n0\n11\n{}\n21\n{}\n31\n0\n",
+                        n(a[0]),
+                        n(a[1]),
+                        n(b[0]),
+                        n(b[1])
+                    );
                 }
                 Seg::Circle { c, r } => {
                     let _ = write!(t, "0\nCIRCLE\n8\n{lay}\n10\n{}\n20\n{}\n30\n0\n40\n{}\n", n(c[0]), n(c[1]), n(*r));
                 }
                 Seg::Arc { c, r, a0, sweep } => {
                     let (from, to) = if *sweep >= 0.0 { (*a0, a0 + sweep) } else { (a0 + sweep, *a0) };
-                    let _ = write!(t, "0\nARC\n8\n{lay}\n10\n{}\n20\n{}\n30\n0\n40\n{}\n50\n{}\n51\n{}\n", n(c[0]), n(c[1]), n(*r), n(deg(from)), n(deg(to)));
+                    let _ = write!(
+                        t,
+                        "0\nARC\n8\n{lay}\n10\n{}\n20\n{}\n30\n0\n40\n{}\n50\n{}\n51\n{}\n",
+                        n(c[0]),
+                        n(c[1]),
+                        n(*r),
+                        n(deg(from)),
+                        n(deg(to))
+                    );
                 }
                 Seg::Poly(p) => {
                     let closed = p.len() > 2 && near(p[0], p[p.len() - 1]);
@@ -382,7 +421,8 @@ fn path_data(paths: &[Path2]) -> String {
                 }
                 Seg::Circle { c, r } => {
                     let r_ = n(*r);
-                    let _ = write!(d, " A{r_} {r_} 0 0 0 {} A{r_} {r_} 0 0 0 {}", p([c[0] - r, c[1]]), p([c[0] + r, c[1]]));
+                    let _ =
+                        write!(d, " A{r_} {r_} 0 0 0 {} A{r_} {r_} 0 0 0 {}", p([c[0] - r, c[1]]), p([c[0] + r, c[1]]));
                 }
                 Seg::Arc { r, sweep, .. } => {
                     let large = u8::from(sweep.abs() > PI);
@@ -430,10 +470,15 @@ pub fn write_svg(layers: &[Layer], fill: bool) -> Option<String> {
         }
         t.push_str(pre);
         if !closed.is_empty() {
-            let _ = writeln!(t, "<path d=\"{}\" fill=\"{paint}\" fill-rule=\"evenodd\" stroke=\"#000\" stroke-width=\"0.1\"/>", path_data(&closed));
+            let _ = writeln!(
+                t,
+                "<path d=\"{}\" fill=\"{paint}\" fill-rule=\"evenodd\" stroke=\"#000\" stroke-width=\"0.1\"/>",
+                path_data(&closed)
+            );
         }
         if !open.is_empty() {
-            let _ = writeln!(t, "<path d=\"{}\" fill=\"none\" stroke=\"#000\" stroke-width=\"0.1\"/>", path_data(&open));
+            let _ =
+                writeln!(t, "<path d=\"{}\" fill=\"none\" stroke=\"#000\" stroke-width=\"0.1\"/>", path_data(&open));
         }
         t.push_str(post);
     }
@@ -450,11 +495,21 @@ fn fail_text(f: Fail) -> String {
 }
 
 pub fn tolerance(req: &Map<String, Value>) -> f64 {
-    req.get("tolerance").and_then(Value::as_f64).filter(|t| t.is_finite()).map_or(TOL_DEFAULT, |t| t.clamp(TOL_MIN, TOL_MAX))
+    req.get("tolerance")
+        .and_then(Value::as_f64)
+        .filter(|t| t.is_finite())
+        .map_or(TOL_DEFAULT, |t| t.clamp(TOL_MIN, TOL_MAX))
 }
 
 /// The DXF or SVG export of a sketch (`sketch`, no rebuild) or a flat face (`face`).
-pub fn export_flat(req: &Map<String, Value>, raw: &Value, doc: &CadDocument, format: &str, path: &str, watch: &dyn Watch) -> Map<String, Value> {
+pub fn export_flat(
+    req: &Map<String, Value>,
+    raw: &Value,
+    doc: &CadDocument,
+    format: &str,
+    path: &str,
+    watch: &dyn Watch,
+) -> Map<String, Value> {
     let tol = tolerance(req);
     let layers = if let Some(s) = req.get("sketch").and_then(Value::as_str).filter(|s| !s.is_empty()) {
         sketch_layers(doc, raw, s, tol).map_err(fail_text)
@@ -474,7 +529,9 @@ pub fn export_flat(req: &Map<String, Value>, raw: &Value, doc: &CadDocument, for
         Ok(if format == "dxf" { write_dxf(&l) } else { write_svg(&l, fill).unwrap_or_default() })
     });
     let mut m = Map::new();
-    match text.and_then(|t| write_atomic(Path::new(path), t.as_bytes()).map_err(|e| format!("could not write {path}: {e}"))) {
+    match text
+        .and_then(|t| write_atomic(Path::new(path), t.as_bytes()).map_err(|e| format!("could not write {path}: {e}")))
+    {
         Ok(()) => {
             m.insert("path".into(), json!(path));
         }

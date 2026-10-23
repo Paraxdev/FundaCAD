@@ -1,6 +1,5 @@
-// The camera-controls rig, kept for one release behind `?nav=legacy` while the
-// navigator (./navigator) replaces it. Perspective and orthographic cameras are
-// kept in parallel and the toggle preserves apparent zoom.
+// The camera-controls rig behind `?nav=legacy`, kept for one release while ./navigator replaces it. Perspective and
+// orthographic cameras run in parallel and the toggle preserves apparent zoom.
 
 import * as THREE from "three";
 import CameraControls from "camera-controls";
@@ -10,32 +9,29 @@ import { anchorDolly, groundAnchor, orthoZoomStep } from "./zoomAnchor";
 import { ease, flightSeconds, worthFlying } from "./viewFlight";
 import { cameraFlightsOn } from "../ui/motion";
 import type {
-  CameraRig, CameraState, FitOptions, NavEvent, NavLimits, NavScene, ProjectionMode, StandardView,
+  CameraRig,
+  CameraState,
+  FitOptions,
+  NavEvent,
+  NavLimits,
+  NavScene,
+  ProjectionMode,
+  StandardView,
 } from "./cameras";
-import {
-  MIN_PERSP_DIST, NEAR_AT_REST, maxViewHalfHeight, orthoDepth, perspFar, perspNear,
-} from "./clipPlanes";
+import { MIN_PERSP_DIST, NEAR_AT_REST, maxViewHalfHeight, orthoDepth, perspFar, perspNear } from "./clipPlanes";
 
 CameraControls.install({ THREE });
 
-/** The perspective field of view the app opens with, in degrees. A starting
- *  point now rather than a constant: the Render workspace can change it, and
- *  every piece of framing arithmetic below reads the camera's LIVE fov instead
- *  of this, or a wider lens would fit a part by the numbers of a narrower one
- *  and leave it half out of frame. */
+/** The starting fov only: the Render workspace can change it, so framing arithmetic reads the camera's live fov, or a
+ *  wider lens would fit a part by a narrower one's numbers. */
 const FOV = 45;
-/** Half-extent framed when there is nothing to frame (an empty document), in mm.
- *  Roughly a fist-sized part, so the ground grid lands at a legible scale rather
- *  than as one enormous cell or a haze of tiny ones. */
+/** Half extent framed for an empty document, in mm: about a fist sized part, so the grid lands at a legible scale. */
 const EMPTY_VIEW_MM = 50;
 
 /** Where a fresh window's camera sits, relative to what it looks at. */
 const HOME_EYE = new THREE.Vector3(80, -120, 90);
 
-export function createLegacyRig(
-  dom: HTMLElement,
-  aspect: number,
-): CameraRig & { controls: CameraControls } {
+export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & { controls: CameraControls } {
   const persp = new THREE.PerspectiveCamera(FOV, aspect, NEAR_AT_REST, 10000);
   persp.up.set(0, 0, 1); // Z-up
   persp.position.copy(HOME_EYE);
@@ -57,15 +53,17 @@ export function createLegacyRig(
   let mode: ProjectionMode = "auto";
   let rollAngle = 0; // persistent view bank (radians), re-applied each update()
   let orbitLocked = false; // sketch "lock to plane": disable mouse orbit
-  // The lookAtPlane flight, while one is in the air. Driven by update(), not by
-  // camera-controls: its own transitions abort on any input, and a sketch view
-  // stranded halfway is an oblique plane you then draw on. Ours holds input off
-  // and lands on the exact numbers a snap would have written.
+  // Driven by update(), not camera-controls, whose transitions abort on any input and can strand a sketch view on an
+  // oblique plane. Ours holds input off and lands on the exact numbers a snap would write.
   let flight: {
     t: number; // seconds elapsed
     dur: number;
-    eye0: THREE.Vector3; tgt0: THREE.Vector3; q0: THREE.Quaternion;
-    eye1: THREE.Vector3; tgt1: THREE.Vector3; q1: THREE.Quaternion;
+    eye0: THREE.Vector3;
+    tgt0: THREE.Vector3;
+    q0: THREE.Quaternion;
+    eye1: THREE.Vector3;
+    tgt1: THREE.Vector3;
+    q1: THREE.Quaternion;
     up1: THREE.Vector3;
     onArrive: (() => void) | null;
   } | null = null;
@@ -81,9 +79,8 @@ export function createLegacyRig(
   // ViewCube, standard views, and orbit all behave in CAD (Z-up) space.
   controls.updateCameraUp();
 
-  // mainstream MCAD mouse map. Wheel is handled explicitly by the viewport (rig.zoomBy)
-  // rather than camera-controls' built-in action: its perspective DOLLY wheel was
-  // unreliable in the WebKitGTK webview, and an absolute dolly/zoom is robust.
+  // Wheel is handled by the viewport (rig.zoomBy): camera-controls' perspective dolly wheel was unreliable in the
+  // WebKitGTK webview.
   const A = CameraControls.ACTION;
   controls.mouseButtons.left = A.NONE; // left reserved for selection
   controls.mouseButtons.middle = A.TRUCK;
@@ -102,11 +99,8 @@ export function createLegacyRig(
   controls.dollyToCursor = true;
   controls.setTarget(0, 0, 0, false);
 
-  // Swap the active camera between projections, preserving apparent zoom in BOTH
-  // directions. 'auto' mode swaps constantly (every axis-align / orbit-away), so
-  // any scale mismatch would pop visibly: persp→ortho bakes the scale into the
-  // frustum and clears residual ortho zoom; ortho→persp dollies to the distance
-  // that reproduces the ortho apparent height.
+  // Preserves apparent zoom both ways, since 'auto' swaps on every axis align and any mismatch would pop: persp to ortho
+  // bakes the scale into the frustum, ortho to persp dollies to the distance giving the same height.
   function swapProjection() {
     const from = active;
     const to = usingOrtho ? persp : ortho;
@@ -130,10 +124,7 @@ export function createLegacyRig(
     } else {
       // ortho -> persp: reproduce the ortho apparent height at the target
       const halfH = (ortho.top - ortho.bottom) / 2 / ortho.zoom;
-      const newDist = Math.max(
-        MIN_PERSP_DIST,
-        halfH / Math.tan((persp.fov * Math.PI) / 360),
-      );
+      const newDist = Math.max(MIN_PERSP_DIST, halfH / Math.tan((persp.fov * Math.PI) / 360));
       usingOrtho = false;
       active = to;
       controls.camera = to as THREE.PerspectiveCamera & THREE.OrthographicCamera;
@@ -142,9 +133,8 @@ export function createLegacyRig(
     }
   }
 
-  // 'auto' snaps to ortho when the view axis is within this of a world axis.
-  // 0.5°: standard-view transitions converge well inside it, while the smallest
-  // deliberate orbit nudge (~0.4°/px) leaves it after a couple of pixels.
+  // 'auto' snaps to ortho within 0.5 deg of a world axis: view transitions converge inside it, and a deliberate orbit
+  // nudge (~0.4 deg/px) leaves it within a couple of pixels.
   const AXIS_SNAP_COS = Math.cos((0.5 * Math.PI) / 180);
   const tmpTarget = new THREE.Vector3();
   const tmpPos = new THREE.Vector3();
@@ -163,29 +153,15 @@ export function createLegacyRig(
     return true;
   }
 
-  // The point a mouse orbit turns about, while one is in flight. Null the rest
-  // of the time, which is every path that is not a rotation: a pan, a zoom, a
-  // ViewCube transition and a SpaceMouse tumble all leave this alone and are
-  // unaffected by it.
+  // The point a mouse orbit turns about while one is in flight, null for every other motion.
   let orbitPivot: THREE.Vector3 | null = null;
   // The camera basis and target this correction last saw, so the rotation a drag
   // added between two frames can be measured.
   let lastView: THREE.Quaternion | null = null;
   const lastTarget = new THREE.Vector3();
 
-  /** Turn the rotation the drag has asked for, which camera-controls will apply
-   *  about its own target, into the same rotation about `orbitPivot`, by
-   *  shifting camera and target together. See viewport/orbitPivot.ts.
-   *
-   *  Measured on the GOAL, which is what getPosition/getTarget report by
-   *  default, not on the rendered camera. A drag writes its rotation straight
-   *  into the goal and damping walks the camera there over the following frames,
-   *  so sampling the rendered camera measures the damping rather than the drag,
-   *  and correcting THAT fights the interpolation. (Sampling it either side of
-   *  one controls.update() measures nothing at all: both reads return the same
-   *  goal, which is why the first attempt at this computed a zero shift on every
-   *  frame of a drag that was plainly rotating.) Shifting the goal leaves the
-   *  damping to carry the camera to a destination that is already right. */
+  /** Shifts camera and target together so the drag's rotation turns about `orbitPivot` (viewport/orbitPivot.ts). Measured
+   *  on the goal, not the rendered camera: sampling that measures the damping, and correcting it fights the interpolation. */
   function correctOrbitPivot() {
     const pos = controls.getPosition(new THREE.Vector3());
     const tgt = controls.getTarget(new THREE.Vector3());
@@ -193,13 +169,15 @@ export function createLegacyRig(
     if (!view) return;
     if (orbitPivot && lastView) {
       const d = pivotShift(frameRotation(lastView, view), orbitPivot, lastTarget);
-      // A pan or a zoom moves the goal without rotating it, so the shift comes
-      // out as zero and this costs one comparison. Only a rotation has anything
-      // to correct.
+      // A pan or zoom moves the goal without rotating it, so only a rotation has anything to correct.
       if (d.lengthSq() > 1e-18) {
         controls.setLookAt(
-          pos.x + d.x, pos.y + d.y, pos.z + d.z,
-          tgt.x + d.x, tgt.y + d.y, tgt.z + d.z,
+          pos.x + d.x,
+          pos.y + d.y,
+          pos.z + d.z,
+          tgt.x + d.x,
+          tgt.y + d.y,
+          tgt.z + d.z,
           true, // the goal only: damping still carries the rendered camera
         );
         tgt.add(d);
@@ -208,8 +186,6 @@ export function createLegacyRig(
     lastView = view;
     lastTarget.copy(tgt);
   }
-
-  // --- the lookAtPlane flight ------------------------------------------------
 
   const flightMat = new THREE.Matrix4();
   /** The camera orientation that looks from `eye` at `target` with this up. */
@@ -222,10 +198,7 @@ export function createLegacyRig(
   const flightEye = new THREE.Vector3();
   const flightTgt = new THREE.Vector3();
 
-  /** Put the camera exactly where the flight was going, hand input back, and
-   *  tell whoever asked. Called on the last frame AND by anything that has to
-   *  end a flight early, so "arrived" and "gave up" leave identical state,
-   *  there is no half-way pose the rest of the app can observe. */
+  /** Also ends a flight early, so arrived and gave up leave identical state with no half way pose to observe. */
   function landFlight() {
     const f = flight;
     if (!f) return;
@@ -249,10 +222,8 @@ export function createLegacyRig(
       return true;
     }
     const s = ease(f.t / f.dur);
-    // Orientation by slerp, position by lerp. Interpolating the up-vector
-    // directly would collapse on the 180° case, entering a sketch from the far
-    // side asks for exactly that, and the two ups are then antiparallel with no
-    // shortest arc between them. The quaternion has one.
+    // Orientation by slerp: lerping the up vector collapses when entering a sketch from the far side, where the two ups are
+    // antiparallel with no shortest arc.
     const q = f.q0.clone().slerp(f.q1, s);
     flightUp.set(0, 1, 0).applyQuaternion(q).normalize();
     flightEye.copy(f.eye0).lerp(f.eye1, s);
@@ -260,21 +231,20 @@ export function createLegacyRig(
     persp.up.copy(flightUp);
     ortho.up.copy(flightUp);
     controls.updateCameraUp();
-    controls.setLookAt(
-      flightEye.x, flightEye.y, flightEye.z,
-      flightTgt.x, flightTgt.y, flightTgt.z,
-      false,
-    );
+    controls.setLookAt(flightEye.x, flightEye.y, flightEye.z, flightTgt.x, flightTgt.y, flightTgt.z, false);
     return true;
   }
 
-  // --- the scene, input and events ------------------------------------------
-
   let navScene: NavScene | null = null;
   const listeners: Record<NavEvent, Set<() => void>> = {
-    inputstart: new Set(), inputend: new Set(), change: new Set(), rest: new Set(),
+    inputstart: new Set(),
+    inputend: new Set(),
+    change: new Set(),
+    rest: new Set(),
   };
-  const emit = (ev: NavEvent) => { for (const fn of listeners[ev]) fn(); };
+  const emit = (ev: NavEvent) => {
+    for (const fn of listeners[ev]) fn();
+  };
   controls.addEventListener("controlstart", () => emit("inputstart"));
   controls.addEventListener("controlend", () => emit("inputend"));
   controls.addEventListener("update", () => emit("change"));
@@ -296,9 +266,8 @@ export function createLegacyRig(
     return t === null ? null : ray.at(t, new THREE.Vector3());
   }
 
-  /** Zoom anchor: the model under the cursor, else the ground plane, else a point
-   *  at the target distance. Without the ground case, zooming over empty space
-   *  walked the camera through the grid. */
+  /** The model under the cursor, else the ground plane, else a point at the target distance; without the ground case a
+   *  zoom over empty space walked through the grid. */
   function cursorWorldPoint(clientX: number, clientY: number): THREE.Vector3 {
     const hit = surfaceAt(clientX, clientY);
     if (hit) return hit;
@@ -326,7 +295,9 @@ export function createLegacyRig(
   dom.addEventListener("pointerdown", (e) => {
     if (e.button === 2) rig.setOrbitPoint(rig.pivotAt(e.clientX, e.clientY));
   });
-  const endPivot = (e: PointerEvent) => { if (e.button === 2 || e.type === "pointercancel") rig.setOrbitPoint(null); };
+  const endPivot = (e: PointerEvent) => {
+    if (e.button === 2 || e.type === "pointercancel") rig.setOrbitPoint(null);
+  };
   window.addEventListener("pointerup", endPivot);
   window.addEventListener("pointercancel", endPivot);
 
@@ -354,10 +325,7 @@ export function createLegacyRig(
       r = EMPTY_VIEW_MM;
       c.set(0, 0, 0);
     }
-    const dir = controls
-      .getPosition(new THREE.Vector3())
-      .sub(controls.getTarget(new THREE.Vector3()))
-      .normalize();
+    const dir = controls.getPosition(new THREE.Vector3()).sub(controls.getTarget(new THREE.Vector3())).normalize();
     if (dir.lengthSq() < 1e-6) dir.set(1, -1, 0.8).normalize();
     let dist: number;
     if (usingOrtho) {
@@ -410,20 +378,15 @@ export function createLegacyRig(
     },
     update(dt: number) {
       pendingOrthoZoom = null; // camera.zoom is authoritative again after this update
-      // The flight writes the goal, then controls.update() below commits it in
-      // the same frame. Ahead of correctOrbitPivot because a flight is not a
-      // drag and has no pivot to correct, reading one would measure the
-      // flight's own rotation and shift the rig by it.
+      // Ahead of correctOrbitPivot, since a flight has no pivot and reading one would shift the rig by the flight's own
+      // rotation. controls.update() below commits the flight's goal in the same frame.
       const flew = stepFlight(dt);
       // BEFORE the update, so this frame damps toward the corrected goal rather
       // than toward one it will have to be pulled back from next frame.
       if (!flew) correctOrbitPivot();
       const moved = controls.update(dt) || flew;
-      // The near plane follows the camera in, so a deep zoom cannot push the
-      // surface being inspected behind it, and the far plane follows it out, so
-      // a zoom-out cannot push the ground grid (whose reach tracks the same
-      // zoom) behind it. See viewport/clipPlanes.ts; at every ordinary distance
-      // the near write-back is the number that was already there.
+      // Near follows the camera in and far follows it out with the grid (viewport/clipPlanes.ts); at ordinary distances the
+      // near write-back is the number already there.
       const near = perspNear(
         controls.distance,
         contentBox.isEmpty() ? 0 : contentBox.distanceToPoint(controls.getPosition(eyeScratch)),
@@ -434,9 +397,8 @@ export function createLegacyRig(
         persp.far = far;
         persp.updateProjectionMatrix();
       }
-      // Orthographic depth is linear and symmetric about the camera (it keeps a
-      // negative near so geometry behind the eye still draws), so one half-depth
-      // sets both ends.
+      // Orthographic depth is linear and symmetric about the camera (a negative near still draws geometry behind the eye),
+      // so one half depth sets both ends.
       const depth = orthoDepth(rig.viewScale());
       if (ortho.far !== depth) {
         ortho.near = -depth;
@@ -444,11 +406,8 @@ export function createLegacyRig(
         ortho.updateProjectionMatrix();
       }
       const swapped = applyAutoProjection();
-      // Apply the persistent roll AFTER camera-controls positions the camera.
-      // update() always rewrites the orientation from its own spherical state,
-      // so re-banking every frame is idempotent, no drift, no position change,
-      // and it never touches camera.up (so it can't fight the sketch-plane up
-      // handling or desync camera-controls, which the old updateCameraUp roll did).
+      // After camera-controls positions the camera: update() rewrites the orientation each frame, so re-banking is idempotent
+      // and never touches camera.up, which would fight the sketch plane up handling.
       if (rollAngle !== 0) {
         active.rotateZ(rollAngle); // camera local +Z is the view axis → banks in place
         active.updateMatrixWorld();
@@ -477,47 +436,29 @@ export function createLegacyRig(
       return controls.distance * Math.tan((persp.fov * Math.PI) / 360);
     },
     zoomBy(factor: number, pivot?: THREE.Vector3) {
-      // A wheel event during a flight would write a goal the flight overwrites
-      // on the next frame, a visible stutter for no effect. Input is off for a
-      // few hundred milliseconds; the wheel is part of the input.
+      // A wheel during a flight writes a goal the flight overwrites next frame, a visible stutter for nothing.
       if (flight) return;
       let f = Math.max(0.1, Math.min(10, factor));
       if (usingOrtho) {
-        // ortho.zoom only commits at the next controls.update(); fast wheels
-        // deliver several events per frame, so chain off the PENDING zoom or
-        // each same-frame step recomputes k against a stale value (over-trucks
-        // the cursor tracking and drops all but one step of zoom).
+        // ortho.zoom only commits at the next controls.update(), and fast wheels send several events a frame, so chain off the
+        // pending zoom or all but one step is lost.
         const curZoom = pendingOrthoZoom ?? ortho.zoom;
         // Capped at the current zoom so a view already past the ceiling (the
         // model shrank under it) holds still instead of jumping inward.
         const ceilingZoom = (ortho.top - ortho.bottom) / 2 / maxHalfH;
         const minZoom = Math.max(controls.minZoom, Math.min(ceilingZoom, curZoom));
-        // The zoom and the truck come from ONE call, against the controls' own
-        // limits, see orthoZoomStep for what happened when they came from two.
-        const { zoom: newZoom, truck: k } = orthoZoomStep(
-          curZoom, f, minZoom, controls.maxZoom,
-        );
+        // The zoom and the truck come from one call against the controls' own limits (see orthoZoomStep).
+        const { zoom: newZoom, truck: k } = orthoZoomStep(curZoom, f, minZoom, controls.maxZoom);
         pendingOrthoZoom = newZoom;
         if (pivot) {
-          // keep the cursor point fixed on screen: TRUCK camera and target together
-          // toward it as the frustum shrinks/grows (k = 1 − oldZoom/newZoom).
-          // Moving only the target re-aims the camera at it, a rotation that
-          // progressively tilted the locked sketch view ~3°/click. Translating
-          // both endpoints by the same delta keeps the view direction bit-exact.
+          // Truck camera and target together toward the cursor point (k = 1 - oldZoom/newZoom). Moving only the target re-aims
+          // the camera, which tilted a locked sketch view ~3 deg a click.
           const target = controls.getTarget(new THREE.Vector3());
           const pos = controls.getPosition(new THREE.Vector3());
           const dx = (pivot.x - target.x) * k;
           const dy = (pivot.y - target.y) * k;
           const dz = (pivot.z - target.z) * k;
-          controls.setLookAt(
-            pos.x + dx,
-            pos.y + dy,
-            pos.z + dz,
-            target.x + dx,
-            target.y + dy,
-            target.z + dz,
-            false,
-          );
+          controls.setLookAt(pos.x + dx, pos.y + dy, pos.z + dz, target.x + dx, target.y + dy, target.z + dz, false);
         }
         controls.zoomTo(newZoom, false);
         return;
@@ -528,11 +469,8 @@ export function createLegacyRig(
         if (!(f > 1)) return;
       }
       if (pivot) {
-        // Dolly TOWARD THE CURSOR, by scaling camera and target about the cursor
-        // point together. See zoomAnchor.ts for why that pins the point under the
-        // cursor, and why projecting it onto the view axis first, which is what
-        // this did until the point under the cursor was measured over a long
-        // zoom, loses it within a handful of notches.
+        // Dolly toward the cursor by scaling camera and target about the cursor point together; zoomAnchor.ts says why this pins
+        // it where projecting onto the view axis loses it.
         const next = anchorDolly(
           controls.getPosition(new THREE.Vector3()),
           controls.getTarget(new THREE.Vector3()),
@@ -600,10 +538,8 @@ export function createLegacyRig(
     },
     setViewDir(dir, up) {
       rollAngle = 0;
-      // orient to a free direction with a chosen up. The camera keeps using +Z
-      // up afterward for orbiting unless `up` differs; for the cube's axis views
-      // (up = +Z) this matches setStandardView, and for top/bottom (up = ±Y) it
-      // squares correctly. We set the camera up so the framing is upright.
+      // Orbiting keeps +Z up afterwards unless `up` differs: for the cube's axis views this matches setStandardView, and
+      // top/bottom (up = +-Y) square correctly.
       const d = Math.max(controls.distance, 50);
       const n = dir.clone().normalize();
       const u = up.clone().normalize();
@@ -611,21 +547,12 @@ export function createLegacyRig(
       ortho.up.copy(u);
       controls.updateCameraUp();
       const t = controls.getTarget(new THREE.Vector3());
-      controls.setLookAt(
-        t.x + n.x * d,
-        t.y + n.y * d,
-        t.z + n.z * d,
-        t.x,
-        t.y,
-        t.z,
-        true,
-      );
+      controls.setLookAt(t.x + n.x * d, t.y + n.y * d, t.z + n.z * d, t.x, t.y, t.z, true);
     },
     lookAtPlane(origin, normal, up, opts) {
       rollAngle = 0;
-      // A flight already in the air is abandoned where it stands, not landed:
-      // the destination it was carrying has just been superseded, and putting
-      // the camera there first would show a pose nobody asked for.
+      // A flight in the air is abandoned, not landed: its destination is superseded, and landing first would show a pose
+      // nobody asked for.
       flight = null;
       controls.enabled = true;
       // Square the camera to a sketch plane: up = sketch +Y, look down -normal.
@@ -650,16 +577,18 @@ export function createLegacyRig(
         land();
         return;
       }
-      // Input off for the duration. This is the whole reason the flight can be
-      // trusted where camera-controls' own transition could not: nothing can
-      // interrupt it, so it lands on the numbers `land()` would have written
-      // and the sketch plane is square to the pixel.
+      // Input off for the duration, which is why this flight can be trusted where camera-controls' transition could not: it
+      // lands on the numbers `land()` would write and the sketch plane is square to the pixel.
       controls.enabled = false;
       flight = {
         t: 0,
         dur: flightSeconds(turn, zoomRatio),
-        eye0: from, tgt0: fromTgt, q0,
-        eye1: eye, tgt1: origin.clone(), q1,
+        eye0: from,
+        tgt0: fromTgt,
+        q0,
+        eye1: eye,
+        tgt1: origin.clone(),
+        q1,
         up1: up.clone(),
         onArrive: opts?.onArrive ?? null,
       };
@@ -671,20 +600,11 @@ export function createLegacyRig(
       rollAngle = 0;
       flight = null;
       controls.enabled = true;
-      // Re-seat the orbit AFTER changing up: updateCameraUp() only rebuilds the
-      // internal up-basis, the stored spherical state still encodes the OLD
-      // basis, so without setPosition the same numbers decode to a different
-      // world position on the next tick (exiting a top-plane sketch snapped the
-      // camera to a side-on view, the flat sketch "disappeared" edge-on).
-      // Same getPosition→updateCameraUp→setPosition pattern as the library's
-      // own applyCameraUp().
+      // Re-seat after changing up: updateCameraUp() only rebuilds the up basis, so the stored spherical state would decode to
+      // another position next tick. Same pattern as the library's applyCameraUp().
       const pos = controls.getPosition(new THREE.Vector3());
-      // Z-up is the model default, but exiting a sketch on a Z-normal plane (XY,
-      // or a plane parallel to it) leaves the camera looking straight DOWN -Z,
-      // where world +Z is PARALLEL to the view axis. That is a degenerate orbit
-      // basis: the pole sits on the view direction, so orbit gimbal-locks and
-      // "moves a little, then jams" (SpaceMouse and mouse alike). Fall back to
-      // Y-up for a near-vertical view so the basis stays well-conditioned.
+      // Looking straight down -Z puts the pole on the view axis and the orbit gimbal locks, so a near vertical view falls back
+      // to Y up.
       const fwd = controls.getTarget(new THREE.Vector3()).sub(pos).normalize();
       const up = Math.abs(fwd.z) > 0.999 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(0, 0, 1);
       persp.up.copy(up);
@@ -698,14 +618,8 @@ export function createLegacyRig(
       rollAngle += angle;
     },
     tumble(az, pol) {
-      // Rotate the camera OFFSET and the orbit UP-VECTOR together about the
-      // screen axes (yaw about visual up, pitch about visual right), then
-      // re-seat camera-controls in the rotated up-space. Because offset and up
-      // rotate by the same quaternion, the polar angle camera-controls sees
-      // NEVER changes, the pole travels with the camera, so its per-frame
-      // (0, π) clamp (Spherical.makeSafe) has nothing to bite. Axis signs
-      // match controls.rotate(): +az orbits CCW seen from above, +pol tips
-      // the camera downward.
+      // Offset and orbit up rotate by one quaternion, so the polar angle camera-controls sees never changes and its (0, pi)
+      // clamp has nothing to bite. Signs match controls.rotate(): +az is CCW from above, +pol tips the camera down.
       const target = controls.getTarget(new THREE.Vector3());
       const offset = controls.getPosition(new THREE.Vector3()).sub(target);
       active.updateMatrixWorld();
@@ -794,9 +708,8 @@ export function createLegacyRig(
       if (contentBox.isEmpty()) return null;
       const hit = surfaceAt(clientX, clientY);
       if (hit) return hit;
-      // Pressed beside the model: the whole scene's centre can sit hundreds of mm
-      // off when zoomed in on one part, and a small drag then flings the view
-      // around it. The nearest surface on screen keeps the orbit local.
+      // Pressed beside the model: the scene's centre can sit hundreds of mm off when zoomed in, so the nearest surface on
+      // screen keeps the orbit local.
       for (const p of pivotProbes(clientX, clientY, dom.getBoundingClientRect(), 32)) {
         const near = surfaceAt(p.x, p.y);
         if (near) return near;
@@ -830,9 +743,20 @@ export function createLegacyRig(
     },
     lerpLookAt(eyeA, targetA, eyeB, targetB, t, animate = false) {
       controls.lerpLookAt(
-        eyeA.x, eyeA.y, eyeA.z, targetA.x, targetA.y, targetA.z,
-        eyeB.x, eyeB.y, eyeB.z, targetB.x, targetB.y, targetB.z,
-        t, animate,
+        eyeA.x,
+        eyeA.y,
+        eyeA.z,
+        targetA.x,
+        targetA.y,
+        targetA.z,
+        eyeB.x,
+        eyeB.y,
+        eyeB.z,
+        targetB.x,
+        targetB.y,
+        targetB.z,
+        t,
+        animate,
       );
     },
     setViewScale(scale, animate = false) {
@@ -845,17 +769,13 @@ export function createLegacyRig(
     },
     setOrbitLocked(locked) {
       orbitLocked = locked;
-      // right-drag pans while locked (no orbit); restore orbit on unlock. Middle
-      // is the pan either way, so a locked sketch simply has two pan buttons
-      // rather than one button that changed meaning.
+      // Locked, right-drag pans; middle pans either way, so a locked sketch has two pan buttons.
       controls.mouseButtons.right = locked ? A.TRUCK : A.ROTATE;
     },
     setOrbitPoint(p) {
       orbitPivot = p ? p.clone() : null;
-      // Drop the remembered basis with it: the gap between one gesture and the
-      // next holds every camera move that is not this drag (a ViewCube flight, a
-      // standard view, a fit), and reading a rotation across that gap would
-      // shift the rig by the whole of it on the drag's first frame.
+      // Drop the remembered basis too: the gap between gestures holds camera moves that are not this drag, and reading across
+      // it would shift the rig by all of them on the first frame.
       lastView = null;
     },
   };

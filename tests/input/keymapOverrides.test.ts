@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
-  checkShortcut, describeShortcutProblem, keyHint, resolveShortcut, setShortcutOverrides, shortcutConflicts,
+  checkShortcut,
+  describeShortcutProblem,
+  keyHint,
+  resolveShortcut,
+  setShortcutOverrides,
+  shortcutConflicts,
   shortcutHudGroups,
 } from "../../src/input/shortcuts";
 import { setPointerBindings } from "../../src/viewport/navigator/bindings";
@@ -11,7 +16,9 @@ afterEach(() => {
 });
 
 const row = (group: string, key: string) =>
-  shortcutHudGroups().find((g) => g.name === group)?.rows.find((r) => r.key === key);
+  shortcutHudGroups()
+    .find((g) => g.name === group)
+    ?.rows.find((r) => r.key === key);
 
 describe("moving a key", () => {
   it("rebinds fillet to G in the model and frees F", () => {
@@ -20,7 +27,7 @@ describe("moving a key", () => {
     expect(resolveShortcut("f", false, "model")).toBe(null);
     expect(resolveShortcut("g", false, "sketch")).toBe("tangent");
     expect(keyHint("fillet")).toBe("G");
-    expect(row("Model", "G")).toEqual({ key: "G", label: "Fillet", changed: true });
+    expect(row("Model", "G")).toMatchObject({ key: "G", label: "Fillet", changed: true });
   });
 
   it("binds a contributed action, globally unless told otherwise", () => {
@@ -59,7 +66,12 @@ describe("conflicts", () => {
   });
 
   it("allows a swap", () => {
-    expect(setShortcutOverrides([{ action: "fillet", key: "e" }, { action: "extrude", key: "f" }])).toEqual([]);
+    expect(
+      setShortcutOverrides([
+        { action: "fillet", key: "e" },
+        { action: "extrude", key: "f" },
+      ]),
+    ).toEqual([]);
     expect(resolveShortcut("e", false, "model")).toBe("fillet");
     expect(resolveShortcut("f", false, "model")).toBe("extrude");
   });
@@ -91,7 +103,10 @@ describe("the sheet's mouse rows", () => {
       { key: "Middle drag", label: "Pan" },
       { key: "Right click", label: "The context menu" },
     ]);
-    setPointerBindings([{ button: "middle", drag: "orbit" }, { button: "right", click: "menu" }]);
+    setPointerBindings([
+      { button: "middle", drag: "orbit" },
+      { button: "right", click: "menu" },
+    ]);
     expect(mouse()[0]).toEqual({ key: "Middle drag", label: "Orbit", changed: true });
   });
 });

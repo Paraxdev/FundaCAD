@@ -1,31 +1,30 @@
-// The Printability panel's controller: what would go wrong making the bodies
-// layer by layer. The settings are edited in the panel (PrintabilityPanel.vue);
-// this side picks the bodies, runs the engine's printability check with a
-// Cancel, and tints the faces it flagged on a face-mark layer of its own.
-//
-// Everything it needs is on the engine a builtin is handed: the store for the
-// document and the build, the viewport for the selection and the tints, the
-// geometry client for the check. The app has no idea the panel exists.
+// The Printability panel's controller: picks the bodies, runs the engine's check with a Cancel, and tints the flagged
+// faces on a face-mark layer of its own. The app has no idea the panel exists.
 
 import { shallowRef } from "vue";
 import type { DocumentStore, GeometryBackend, Viewport } from "fundacad";
 import {
-  buildPrintabilityRequest, findingMarks, findingView, formatPrintabilityResult, problemCount,
+  buildPrintabilityRequest,
+  findingMarks,
+  findingView,
+  formatPrintabilityResult,
+  problemCount,
 } from "./printability";
 import { createPrintabilityState } from "./printabilityState";
 
 /** Its own layer of face marks, so the app's Stress marks and these come and go apart. */
 export const PRINTABILITY_MARKS = "printability";
 
-/** The finding a row puts forward is drawn in the app's hover amber, the
- *  colour of the face under the pointer. Its own copy, as a plugin cannot
- *  import the viewport's (viewport/highlight.ts, EDGE_HOVER_COLOR); a test
- *  holds the two together. */
+/** The app's hover amber for the finding a row puts forward. A copy, as a plugin cannot import the viewport's
+ *  (viewport/highlight.ts, EDGE_HOVER_COLOR); a test holds the two together. */
 export const EMPHASIS_COLOR = 0xffd089;
 
 export interface PrintabilityDeps {
   store: Pick<DocumentStore, "buildState" | "builtDocument" | "isBodyVisible" | "onBuild" | "onDocChange" | "onOpen">;
-  viewport: Pick<Viewport, "frameAround" | "getSelectedBodies" | "onStressOverlayChange" | "setFaceMarks" | "stressOverlayBody">;
+  viewport: Pick<
+    Viewport,
+    "frameAround" | "getSelectedBodies" | "onStressOverlayChange" | "setFaceMarks" | "stressOverlayBody"
+  >;
   geometry: Pick<GeometryBackend, "cancel" | "printability">;
   hasBody: () => boolean;
   setStatus: (text: string, cls: "" | "connected" | "error") => void;
@@ -51,9 +50,8 @@ export function createPrintabilityPanel(deps: PrintabilityDeps) {
     return (store.buildState.result?.bodies ?? []).map((b) => ({ id: b.id, name: b.name }));
   }
 
-  /** What a Check covers: the selected bodies, or none named when none is
-   *  selected, so the engine checks every body of the document it is sent
-   *  rather than of a build that may be about to be replaced. */
+  /** What a Check covers: the selected bodies, or none named when none is selected, so the engine checks every body
+   *  of the document it is sent rather than of a build that may be about to be replaced. */
   function scope(): string[] {
     const all = builtBodies().map((b) => b.id);
     return viewport.getSelectedBodies().filter((id) => all.includes(id));
@@ -73,10 +71,8 @@ export function createPrintabilityPanel(deps: PrintabilityDeps) {
     setStatus("Printability: checks the selected bodies, or every body when none is selected", "");
   }
 
-  /** Tint the faces the last Check flagged, one colour per kind, and the
-   *  finding a row puts forward in the hover colour. Nothing once the model
-   *  has changed since, when the face ids may name other faces, nor on a body
-   *  the user has hidden or the stress colours are on. */
+  /** Tint the faces the last Check flagged. Nothing once the model has changed since, when the face ids may name
+   *  other faces, nor on a body the user has hidden or the stress colours are on. */
   function refreshMarks() {
     const d = data.value;
     if (d?.result && !d.stale && checkedEpoch !== docEpoch) state.setStale();
@@ -84,18 +80,28 @@ export function createPrintabilityPanel(deps: PrintabilityDeps) {
       viewport.setFaceMarks(null, PRINTABILITY_MARKS);
       return;
     }
-    // The engine numbers each body's faces from 0; the viewport numbers on
-    // from the body's faceStart. An index past the body's faces is left plain
-    // rather than tinted on the next body.
+    // The engine numbers each body's faces from 0, the viewport from the body's faceStart. An index past the body's
+    // faces is left plain rather than tinted on the next body.
     const built = new Map((store.buildState.result?.bodies ?? []).map((b) => [b.id, b]));
     // A body painted by stress shows its stress, not these.
     const stressed = viewport.stressOverlayBody();
     const faceOf = (body: string, face: number): number | null => {
       const b = built.get(body);
-      if (!b || body === stressed || !store.isBodyVisible(body) || !Number.isInteger(face) || face < 0 || face >= b.faceCount) return null;
+      if (
+        !b ||
+        body === stressed ||
+        !store.isBodyVisible(body) ||
+        !Number.isInteger(face) ||
+        face < 0 ||
+        face >= b.faceCount
+      )
+        return null;
       return b.faceStart + face;
     };
-    viewport.setFaceMarks(findingMarks(d.result.findings, d.hovered ?? d.picked, EMPHASIS_COLOR, faceOf), PRINTABILITY_MARKS);
+    viewport.setFaceMarks(
+      findingMarks(d.result.findings, d.hovered ?? d.picked, EMPHASIS_COLOR, faceOf),
+      PRINTABILITY_MARKS,
+    );
   }
 
   /** Put a finding forward while the pointer is over its row, null once it leaves. */
@@ -141,14 +147,20 @@ export function createPrintabilityPanel(deps: PrintabilityDeps) {
     if (seq !== checkSeq || !data.value) return;
     if (!res.ok) {
       state.finished(res.cancelled ? {} : { error: res.message });
-      setStatus(res.cancelled ? "Printability check cancelled" : `Printability check failed: ${res.message}`, res.cancelled ? "" : "error");
+      setStatus(
+        res.cancelled ? "Printability check cancelled" : `Printability check failed: ${res.message}`,
+        res.cancelled ? "" : "error",
+      );
       return;
     }
     const view = formatPrintabilityResult(res.result);
     checkedEpoch = epoch;
     state.finished({ result: view });
     const n = problemCount(view);
-    setStatus(n ? `Printability: ${n} thing${n === 1 ? "" : "s"} to look at` : "Printability: nothing found", n ? "" : "connected");
+    setStatus(
+      n ? `Printability: ${n} thing${n === 1 ? "" : "s"} to look at` : "Printability: nothing found",
+      n ? "" : "connected",
+    );
     refreshMarks();
     if (epoch !== docEpoch) setStatus("Printability: the model changed while it ran, check again to see the faces", "");
   }
@@ -169,15 +181,16 @@ export function createPrintabilityPanel(deps: PrintabilityDeps) {
   }
 
   const offs = [
-    store.onDocChange(() => { docEpoch++; }),
+    store.onDocChange(() => {
+      docEpoch++;
+    }),
     // Another document took this one's place: the result names its bodies.
-    store.onOpen(() => { if (data.value) close(); }),
-    // setModel drops every face mark with the old face ids, so tint again on
-    // each completed build. The app's rebuild bridge subscribed before any
-    // plugin was started (app/engine.ts mountUi installs it, then
-    // activatePlugins starts this one asynchronously), and the store calls its
-    // build listeners in the order they subscribed, so the new model is already
-    // drawn when this runs.
+    store.onOpen(() => {
+      if (data.value) close();
+    }),
+    // setModel drops every face mark, so tint again on each completed build. The rebuild bridge subscribed before any
+    // plugin started (mountUi installs it, then activatePlugins starts this one asynchronously) and build listeners
+    // run in subscription order, so the new model is already drawn when this runs.
     store.onBuild((s) => {
       bodies.value = builtBodies();
       if (s.result && !s.building) refreshMarks();

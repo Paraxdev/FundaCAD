@@ -1,6 +1,5 @@
-//! VRML 2.0 (.wrl) and X3D XML (.x3d) scenes: transforms, DEF and USE,
-//! shapes with a diffuse colour and indexed or plain triangle geometry. Each
-//! top level node is one body. Metres and Y up as in glTF.
+//! VRML 2.0 (.wrl) and X3D XML (.x3d) scenes, each top level node one body.
+//! Metres and Y up as in glTF.
 
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -61,8 +60,6 @@ impl Node {
 fn bad(what: &str, why: impl std::fmt::Display) -> String {
     format!("couldn't read this {what} file, {why}")
 }
-
-// --- VRML 2.0 text ---
 
 struct Tokens<'a> {
     s: &'a [u8],
@@ -150,7 +147,12 @@ impl Vrml<'_> {
             "NULL" => return Ok(None),
             "USE" => {
                 let name = self.t.next().ok_or_else(eof)?;
-                return self.defs.get(name).cloned().map(Some).ok_or_else(|| bad("VRML", format!("USE {name} has no DEF before it")));
+                return self
+                    .defs
+                    .get(name)
+                    .cloned()
+                    .map(Some)
+                    .ok_or_else(|| bad("VRML", format!("USE {name} has no DEF before it")));
             }
             _ => {}
         }
@@ -273,8 +275,6 @@ fn parse_vrml(text: &str) -> Result<(Vec<Rc<Node>>, Vec<String>), String> {
     Ok((top, p.skipped))
 }
 
-// --- X3D XML ---
-
 fn attr_val(v: &str) -> Val {
     match v.trim() {
         "true" | "TRUE" => return Val::Bool(true),
@@ -363,8 +363,6 @@ fn parse_x3d(xml: &str) -> Result<Vec<Rc<Node>>, String> {
     }
     scene.ok_or_else(|| bad("X3D", "it has no <Scene>"))
 }
-
-// --- the scene to triangles ---
 
 /// Row major 3x4 affine.
 type Affine = [[f64; 4]; 3];
@@ -471,7 +469,18 @@ impl Walk {
             .and_then(|a| a.child("material", &["Material"]))
             .and_then(|mat| mat.nums("diffuseColor").filter(|v| v.len() >= 3).map(|v| unit_color([v[0], v[1], v[2]])));
         const GEOMETRY: [&str; 4] = ["IndexedFaceSet", "IndexedTriangleSet", "TriangleSet", "Box"];
-        let all = ["IndexedFaceSet", "IndexedTriangleSet", "TriangleSet", "Box", "Sphere", "Cylinder", "Cone", "Extrusion", "ElevationGrid", "Text"];
+        let all = [
+            "IndexedFaceSet",
+            "IndexedTriangleSet",
+            "TriangleSet",
+            "Box",
+            "Sphere",
+            "Cylinder",
+            "Cone",
+            "Extrusion",
+            "ElevationGrid",
+            "Text",
+        ];
         let Some(g) = n.child("geometry", &all) else { return };
         if !GEOMETRY.contains(&g.kind.as_str()) {
             *self.skipped.entry(g.kind.clone()).or_insert(0) += 1;
@@ -488,7 +497,10 @@ impl Walk {
                         if k & 4 == 0 { -s[2] } else { s[2] },
                     ]);
                 }
-                let t = [0, 2, 1, 1, 2, 3, 4, 5, 6, 5, 7, 6, 0, 1, 4, 1, 5, 4, 2, 6, 3, 3, 6, 7, 0, 4, 2, 2, 4, 6, 1, 3, 5, 3, 7, 5];
+                let t = [
+                    0, 2, 1, 1, 2, 3, 4, 5, 6, 5, 7, 6, 0, 1, 4, 1, 5, 4, 2, 6, 3, 3, 6, 7, 0, 4, 2, 2, 4, 6, 1, 3, 5,
+                    3, 7, 5,
+                ];
                 (p, t.to_vec())
             }
             kind => {
@@ -540,9 +552,8 @@ impl Walk {
     }
 }
 
-/// Each top level node of the scene as one object, Y up turned Z up
-/// millimetres. `mm_per_unit` is the file's unit when the importer was told,
-/// else metres by the glTF rule.
+/// Y up turned Z up millimetres. `mm_per_unit` is the file's unit when the importer was
+/// told, else metres by the glTF rule.
 fn objects(top: Vec<Rc<Node>>, mut notes: Vec<String>, mm_per_unit: Option<f64>) -> (Vec<MeshObject>, Vec<String>) {
     let mut out = Vec::new();
     let mut skipped: HashMap<String, usize> = HashMap::new();
@@ -555,15 +566,27 @@ fn objects(top: Vec<Rc<Node>>, mut notes: Vec<String>, mm_per_unit: Option<f64>)
         if w.idx.is_empty() {
             continue;
         }
-        out.push(MeshObject { name: n.def.clone(), color: dominant_color(w.colors.into_iter()), pos: w.pos, idx: w.idx });
+        out.push(MeshObject {
+            name: n.def.clone(),
+            color: dominant_color(w.colors.into_iter()),
+            pos: w.pos,
+            idx: w.idx,
+        });
     }
     let mut kinds: Vec<_> = skipped.into_iter().collect();
     kinds.sort();
     for (k, n) in kinds {
-        notes.push(format!("{n} {k} node{} skipped, only triangle geometry and boxes are read", if n == 1 { " was" } else { "s were" }));
+        notes.push(format!(
+            "{n} {k} node{} skipped, only triangle geometry and boxes are read",
+            if n == 1 { " was" } else { "s were" }
+        ));
     }
     let all: Vec<f64> = out.iter().flat_map(|o| o.pos.iter().copied()).collect();
-    let scale = mm_per_unit.unwrap_or(if super::gltf::max_extent(&all) * 1000.0 > super::mesh::GLB_MM_AS_UNITS_ABOVE { 1.0 } else { 1000.0 });
+    let scale = mm_per_unit.unwrap_or(if super::gltf::max_extent(&all) * 1000.0 > super::mesh::GLB_MM_AS_UNITS_ABOVE {
+        1.0
+    } else {
+        1000.0
+    });
     for o in &mut out {
         o.pos = o.pos.chunks_exact(3).flat_map(|p| [p[0] * scale, -p[2] * scale, p[1] * scale]).collect();
     }
@@ -574,7 +597,11 @@ pub fn read_vrml(text: &str, mm_per_unit: Option<f64>) -> Result<(Vec<MeshObject
     let (top, skipped) = parse_vrml(text)?;
     let mut notes = Vec::new();
     if !skipped.is_empty() {
-        notes.push(format!("{} ROUTE or PROTO statement{} skipped", skipped.len(), if skipped.len() == 1 { " was" } else { "s were" }));
+        notes.push(format!(
+            "{} ROUTE or PROTO statement{} skipped",
+            skipped.len(),
+            if skipped.len() == 1 { " was" } else { "s were" }
+        ));
     }
     Ok(objects(top, notes, mm_per_unit))
 }

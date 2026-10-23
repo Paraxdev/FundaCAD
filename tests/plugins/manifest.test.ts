@@ -57,30 +57,22 @@ describe("what a manifest is allowed to say", () => {
   });
 
   it("refuses a permission asked for twice", () => {
-    expect(why({ ...base, grants: ["document.read", "document.read"] })).toContain(
-      "twice",
-    );
+    expect(why({ ...base, grants: ["document.read", "document.read"] })).toContain("twice");
   });
 
   it("refuses network with no hosts, and hosts with no network", () => {
     expect(why({ ...base, grants: ["network"] })).toContain("without naming any hosts");
-    expect(why({ ...base, grants: ["document.read"], hosts: ["example.com"] })).toContain(
-      "without asking for network",
-    );
+    expect(why({ ...base, grants: ["document.read"], hosts: ["example.com"] })).toContain("without asking for network");
     // Control: together they are fine, which is what makes the two refusals
     // above about the pairing rather than about either field alone.
-    expect(ok({ ...base, grants: ["network"], hosts: ["example.com"] }).hosts).toEqual([
-      "example.com",
-    ]);
+    expect(ok({ ...base, grants: ["network"], hosts: ["example.com"] }).hosts).toEqual(["example.com"]);
   });
 
   it("refuses a host that is not a host name", () => {
     for (const bad of ["https://example.com", "example.com/path", "*.example.com", "localhost"]) {
       expect(why({ ...base, grants: ["network"], hosts: [bad] })).toContain("not a host name");
     }
-    expect(ok({ ...base, grants: ["network"], hosts: [".example.com"] }).hosts).toEqual([
-      ".example.com",
-    ]);
+    expect(ok({ ...base, grants: ["network"], hosts: [".example.com"] }).hosts).toEqual([".example.com"]);
   });
 
   it("refuses an id that could name something other than itself", () => {
@@ -205,18 +197,14 @@ describe("the promise, as something that can be stored and compared", () => {
     const consented = ok({ ...base, grants: ["document.read", "document.write"] });
     expect(promiseCovers(consented, ok({ ...base, grants: ["document.read"] }))).toBe(true);
     expect(promiseCovers(consented, consented)).toBe(true);
-    expect(
-      promiseCovers(consented, ok({ ...base, grants: ["document.read", "process.spawn"] })),
-    ).toBe(false);
+    expect(promiseCovers(consented, ok({ ...base, grants: ["document.read", "process.spawn"] }))).toBe(false);
   });
 
   it("treats a change of kind as a change of promise", () => {
     // A panel becoming a process is the sandbox disappearing, whatever the
     // grant list says.
     const consented = ok({ ...base, kind: "panel", grants: ["ui.panel"] });
-    expect(promiseCovers(consented, ok({ ...base, kind: "process", grants: ["ui.panel"] }))).toBe(
-      false,
-    );
+    expect(promiseCovers(consented, ok({ ...base, kind: "process", grants: ["ui.panel"] }))).toBe(false);
   });
 
   it("counts a newly named host as more", () => {

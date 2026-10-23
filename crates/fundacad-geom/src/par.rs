@@ -1,16 +1,5 @@
-//! Deterministic data parallelism over OpenCASCADE shapes.
-//!
-//! The Python engine was one job per process with OCCT's own thread pool
-//! inside BRepMesh and BOPAlgo (the Python engine's `occt_smp.py`). Rust fans the passes
-//! above the kernel out too, under one rule: a parallel pass must produce the
-//! bytes the serial pass produces. So every helper here collects by index and
-//! returns results in the input order, and nothing here sums, hashes or
-//! inserts in completion order.
-//!
-//! OCCT is only safe to drive from several threads when no two threads touch
-//! the same `TShape`. Moving or duplicating a body shares its TShape (only the
-//! Location changes), so `share_groups` puts the bodies that share one on the
-//! same thread and lets the rest of the document run beside them.
+//! A parallel pass must give the serial pass's bytes, so results come back in input order. OCCT is
+//! safe across threads only while no two touch one TShape, and moved copies share theirs.
 
 use std::collections::HashMap;
 use std::sync::OnceLock;
@@ -19,12 +8,8 @@ use opencascade::primitives::Shape;
 use opencascade_sys::face_query as fq;
 use rayon::prelude::*;
 
-/// A value handed to worker threads.
-///
-/// OCCT's readers are const and its handle counters are atomic, and the one
-/// writer in these passes (BRepMesh, storing a triangulation) writes into the
-/// faces of the shape it is given. The callers below pass shapes that share no
-/// face, so no two threads reach the same TShape.
+/// OCCT readers are const and its handle counters atomic. The one writer, BRepMesh, writes into the
+/// faces it is given, and callers pass shapes that share no face, so no two threads reach one TShape.
 pub struct Shared<T>(pub T);
 
 unsafe impl<T> Send for Shared<T> {}
@@ -36,26 +21,21 @@ impl<T> Shared<T> {
     }
 }
 
-/// How many threads the engine may use, `FUNDACAD_THREADS` when set (the
-/// Python engine's `VERXA_THREADS`), else every logical processor.
+/// `FUNDACAD_THREADS` when set, else every logical processor.
 pub fn threads() -> usize {
     std::env::var("FUNDACAD_THREADS")
         .ok()
         .and_then(|v| v.parse::<usize>().ok())
         .filter(|&n| n > 0)
-        .unwrap_or_else(|| {
-            std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get)
-        })
+        .unwrap_or_else(|| std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get))
 }
 
-/// True when a pass over `n` items is worth handing to other threads.
 pub fn worth_it(n: usize) -> bool {
     n > 1 && pool().current_num_threads() > 1
 }
 
-/// The engine's rayon pool, sized by `threads()` so one variable caps the whole
-/// engine. Its own pool, not the global one, so a host that also uses rayon
-/// does not resize ours.
+/// The engine's own pool sized by `threads()`, not rayon's global one, so a host that also uses
+/// rayon does not resize ours.
 fn pool() -> &'static rayon::ThreadPool {
     static POOL: OnceLock<rayon::ThreadPool> = OnceLock::new();
     POOL.get_or_init(|| {
@@ -67,10 +47,8 @@ fn pool() -> &'static rayon::ThreadPool {
     })
 }
 
-/// Point OCCT's own thread pool at the same thread count and turn on the
-/// parallel defaults BRepMesh and BOPAlgo read, the Python engine's `occt_smp.py`. Once per
-/// process, before any job: the pool must not be resized while an algorithm
-/// holds threads from it. Returns the count OCCT took.
+/// Points OCCT's pool at the same thread count with BRepMesh and BOPAlgo parallel. Once per process
+/// before any job, as the pool must not resize while an algorithm holds its threads.
 pub fn configure_occt() -> usize {
     static DONE: OnceLock<usize> = OnceLock::new();
     *DONE.get_or_init(|| opencascade_sys::osd_smp::osd_smp_configure(threads() as i32).max(1) as usize)
@@ -86,20 +64,13 @@ pub fn map_indexed<R: Send>(n: usize, f: impl Fn(usize) -> R + Sync + Send) -> V
 }
 
 /// `f` over `0..n` in parallel, the results flattened in index order.
-pub fn flat_map_indexed<R: Send>(
-    n: usize,
-    f: impl Fn(usize) -> Vec<R> + Sync + Send,
-) -> Vec<R> {
+pub fn flat_map_indexed<R: Send>(n: usize, f: impl Fn(usize) -> Vec<R> + Sync + Send) -> Vec<R> {
     map_indexed(n, f).into_iter().flatten().collect()
 }
 
-/// `f` over every index the groups hold: groups run beside each other, a
-/// group's own members run in order on one thread, and the results come back
-/// sorted by index, which is the order a serial walk would have produced.
-pub fn map_grouped<R: Send>(
-    groups: &[Vec<usize>],
-    f: impl Fn(usize) -> R + Sync + Send,
-) -> Vec<(usize, R)> {
+/// Groups run beside each other, a group's members in order on one thread, and results come back
+/// sorted by index, the order a serial walk gives.
+pub fn map_grouped<R: Send>(groups: &[Vec<usize>], f: impl Fn(usize) -> R + Sync + Send) -> Vec<(usize, R)> {
     let work = Shared((&f, groups));
     let mut out: Vec<(usize, R)> = flat_map_indexed(groups.len(), move |g| {
         let (f, groups) = *work.get();
@@ -111,19 +82,11 @@ pub fn map_grouped<R: Send>(
 
 /// Each shape's face `TShape` addresses.
 pub fn face_tshapes(shape: &Shape) -> Vec<u64> {
-    crate::kernel::subshapes(shape, crate::kernel::Kind::Face)
-        .iter()
-        .map(|f| fq::FQ_tshape(f.raw()))
-        .collect()
+    crate::kernel::subshapes(shape, crate::kernel::Kind::Face).iter().map(|f| fq::FQ_tshape(f.raw())).collect()
 }
 
-/// The shapes split into groups that share no face with each other, each group
-/// in index order and the groups ordered by their first member.
-///
-/// An assembly places one product many times, and a placed copy keeps the
-/// product's TShape, so meshing two of them at once would have two threads
-/// writing one triangulation. Grouping puts those together, to be meshed in
-/// order on one thread, and lets the rest of the document run beside them.
+/// Groups that share no face, each in index order, ordered by first member. A placed copy keeps its
+/// product's TShape, so copies mesh in order on one thread while the rest run beside them.
 pub fn share_groups(shapes: &[&Shape]) -> Vec<Vec<usize>> {
     let mut parent: Vec<usize> = (0..shapes.len()).collect();
     fn find(parent: &mut [usize], mut i: usize) -> usize {

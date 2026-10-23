@@ -21,7 +21,9 @@ const props = withDefaults(
   { sub: "", keys: "", active: false, menu: false, disabled: false, labelled: true },
 );
 
-const title = computed(() => [props.label, props.sub, props.keys ? `(${fmtKeys(props.keys)})` : ""].filter(Boolean).join(" "));
+const title = computed(() =>
+  [props.label, props.sub, props.keys ? `(${fmtKeys(props.keys)})` : ""].filter(Boolean).join(" "),
+);
 </script>
 
 <template>

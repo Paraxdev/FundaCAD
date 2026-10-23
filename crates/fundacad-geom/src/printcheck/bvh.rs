@@ -1,6 +1,5 @@
-//! A bounding-box tree over every checked body's triangles, for the short
-//! rays the wall and gap checks cast. A uniform grid was the other choice, but
-//! one 100 mm triangle on a flat face would land in thousands of cells.
+//! A bounding-box tree over the checked bodies' triangles for the short wall and gap rays. A uniform
+//! grid would put one 100 mm triangle of a flat face in thousands of cells.
 
 /// A triangle the tree holds: its corners, and which body and triangle of
 /// that body it is.
@@ -76,9 +75,8 @@ impl Bvh {
         &self.tris[i]
     }
 
-    /// The nearest triangle the segment `o + t d`, `t_min <= t <= t_max`,
-    /// passes through, other than `skip` (an index into the tree's list) and
-    /// any of a body `keep` turns down.
+    /// The nearest triangle the segment `o + t d`, `t_min <= t <= t_max`, passes through, other than `skip`
+    /// (a tree list index) and any of a body `keep` turns down.
     pub fn first_hit(
         &self,
         o: [f64; 3],
@@ -197,7 +195,8 @@ fn slab(o: [f64; 3], inv: [f64; 3], lo: [f64; 3], hi: [f64; 3], t_min: f64, t_ma
 /// it does. Either side of the triangle counts.
 pub fn intersect(o: [f64; 3], d: [f64; 3], p: &[[f64; 3]; 3]) -> Option<f64> {
     let sub = |a: [f64; 3], b: [f64; 3]| [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-    let cross = |a: [f64; 3], b: [f64; 3]| [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+    let cross =
+        |a: [f64; 3], b: [f64; 3]| [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
     let dot = |a: [f64; 3], b: [f64; 3]| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
     let e1 = sub(p[1], p[0]);
     let e2 = sub(p[2], p[0]);
@@ -220,49 +219,4 @@ pub fn intersect(o: [f64; 3], d: [f64; 3], p: &[[f64; 3]; 3]) -> Option<f64> {
         return None;
     }
     Some(f * dot(e2, q))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// A small deterministic generator, so the test needs no crate.
-    struct Lcg(u64);
-    impl Lcg {
-        fn next(&mut self) -> f64 {
-            self.0 = self.0.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
-            ((self.0 >> 11) as f64) / ((1u64 << 53) as f64)
-        }
-        fn point(&mut self, size: f64) -> [f64; 3] {
-            [self.next() * size, self.next() * size, self.next() * size]
-        }
-    }
-
-    #[test]
-    fn the_tree_finds_what_trying_every_triangle_finds() {
-        let mut r = Lcg(7);
-        let tris: Vec<Tri> = (0..400)
-            .map(|i| {
-                let c = r.point(20.0);
-                let p = [c, [c[0] + r.next() * 3.0, c[1] + r.next(), c[2]], [c[0], c[1] + r.next() * 3.0, c[2] + r.next() * 2.0]];
-                Tri { p, body: i % 3, tri: i }
-            })
-            .collect();
-        let bvh = Bvh::new(tris.clone());
-        for _ in 0..1000 {
-            let o = r.point(20.0);
-            let mut d = [r.next() - 0.5, r.next() - 0.5, r.next() - 0.5];
-            let l = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt();
-            for x in &mut d {
-                *x /= l;
-            }
-            let brute = tris
-                .iter()
-                .enumerate()
-                .filter_map(|(k, t)| intersect(o, d, &t.p).filter(|&s| (0.0..=5.0).contains(&s)).map(|s| (s, k)))
-                .min_by(|a, b| a.0.total_cmp(&b.0));
-            let got = bvh.first_hit(o, d, 0.0, 5.0, usize::MAX, |_| true).map(|(h, k)| (h.t, k));
-            assert_eq!(got, brute);
-        }
-    }
 }

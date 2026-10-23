@@ -15,7 +15,6 @@ pub struct PlaneRecord {
     pub normal: [f64; 3],
 }
 
-/// A plane reference: a base plane or datum id, or a baked placement.
 pub enum PlaneRef<'a> {
     Name(&'a str),
     Def(&'a PlaneDef),
@@ -75,11 +74,7 @@ fn frame_of(origin: [f64; 3], xdir: [f64; 3], normal: [f64; 3]) -> FResult<Frame
     let x = len(xdir);
     let nz = [normal[0] / n, normal[1] / n, normal[2] / n];
     let nx = [xdir[0] / x, xdir[1] / x, xdir[2] / x];
-    let cross = [
-        nz[1] * nx[2] - nz[2] * nx[1],
-        nz[2] * nx[0] - nz[0] * nx[2],
-        nz[0] * nx[1] - nz[1] * nx[0],
-    ];
+    let cross = [nz[1] * nx[2] - nz[2] * nx[1], nz[2] * nx[0] - nz[0] * nx[2], nz[0] * nx[1] - nz[1] * nx[0]];
     if len(cross) < 1e-12 {
         return Err(Fail::Internal("Standard_ConstructionError".into()));
     }

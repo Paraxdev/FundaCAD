@@ -1,7 +1,5 @@
-//! Text on a face: embossed or engraved, wrapped onto round faces without
-//! stretching. A glyph of planar area A thickened by d on a surface of normal
-//! curvature k (across the text) adds A*d*(1 + d*k/2), negative k on the
-//! concave side, so the volumes below pin both the size and the side.
+//! Text on a face, embossed or engraved, wraps onto round faces unstretched. A glyph of area A thickened by d on
+//! normal curvature k across the text (negative when concave) adds A*d*(1 + d*k/2), so volumes pin size and side.
 
 use fundacad_core::CadDocument;
 use fundacad_geom::builder::{self, NoWatch};
@@ -58,7 +56,8 @@ fn text_at(point: [f64; 3], op: &str) -> Value {
 }
 
 fn plate(op: Option<&str>) -> builder::Rebuild {
-    let mut f = vec![square("sk"), json!({"id": "ex", "type": "extrude", "sketch": "sk", "distance": 10, "operation": "new"})];
+    let mut f =
+        vec![square("sk"), json!({"id": "ex", "type": "extrude", "sketch": "sk", "distance": 10, "operation": "new"})];
     f.extend(op.map(|op| text_at([0.0, 0.0, 10.0], op)));
     build(json!({}), f)
 }
@@ -116,7 +115,8 @@ fn text_wraps_onto_a_cylinder_without_stretching() {
 #[test]
 fn engraved_text_on_a_cylinder() {
     let Some(a) = glyph_area() else { return };
-    let dv = volume(&round(cylinder(), [20.0, 0.0, 0.0], None)) - volume(&round(cylinder(), [20.0, 0.0, 0.0], Some("cut")));
+    let dv =
+        volume(&round(cylinder(), [20.0, 0.0, 0.0], None)) - volume(&round(cylinder(), [20.0, 0.0, 0.0], Some("cut")));
     near(dv, a * (1.0 - 1.0 / 40.0), 0.005, "engraved volume on r20");
 }
 
@@ -127,7 +127,12 @@ fn text_on_a_cone_keeps_its_area() {
     let p = [15.0, 0.0, 0.0];
     let base = volume(&round(cone.clone(), p, None));
     let k = (10.0f64 / 40.0).atan().cos() / 15.0;
-    near(volume(&round(cone.clone(), p, Some("join"))) - base, a * (1.0 + k / 2.0), 0.01, "embossed volume on the cone");
+    near(
+        volume(&round(cone.clone(), p, Some("join"))) - base,
+        a * (1.0 + k / 2.0),
+        0.01,
+        "embossed volume on the cone",
+    );
     near(base - volume(&round(cone, p, Some("cut"))), a * (1.0 - k / 2.0), 0.01, "engraved volume on the cone");
 }
 
@@ -151,7 +156,10 @@ fn text_on_a_bore_embosses_into_the_hole() {
 fn text_follows_its_face_when_an_upstream_edit_moves_it() {
     let Some(a) = glyph_area() else { return };
     let at = |h: f64, with: bool| {
-        let mut f = vec![square("sk"), json!({"id": "ex", "type": "extrude", "sketch": "sk", "distance": "h", "operation": "new"})];
+        let mut f = vec![
+            square("sk"),
+            json!({"id": "ex", "type": "extrude", "sketch": "sk", "distance": "h", "operation": "new"}),
+        ];
         if with {
             f.push(text_at([0.0, 0.0, 10.0], "join"));
         }
@@ -170,7 +178,14 @@ fn a_lost_face_asks_for_a_repick() {
     }
     let mut t = text_at([0.0, 0.0, 10.0], "join");
     t["face"] = json!({"kind": "face", "by": "normal", "dir": [0.6, 0.0, 0.8], "body": "body1"});
-    let r = build(json!({}), vec![square("sk"), json!({"id": "ex", "type": "extrude", "sketch": "sk", "distance": 10, "operation": "new"}), t]);
+    let r = build(
+        json!({}),
+        vec![
+            square("sk"),
+            json!({"id": "ex", "type": "extrude", "sketch": "sk", "distance": 10, "operation": "new"}),
+            t,
+        ],
+    );
     let e = r.errors.iter().find(|e| e.feature_id.as_deref() == Some("t1")).expect("the text fails");
     assert_eq!(e.code.as_deref(), Some("referenceNotFound"), "{}", e.message);
     assert!(e.message.contains("re-pick"), "{}", e.message);
@@ -203,7 +218,10 @@ fn text_reads_left_to_right_seen_from_outside() {
     if glyph_area().is_none() {
         return;
     }
-    let top = added_ink(vec![square("sk"), json!({"id": "ex", "type": "extrude", "sketch": "sk", "distance": 10, "operation": "new"})], [0.0, 0.0, 10.0]);
+    let top = added_ink(
+        vec![square("sk"), json!({"id": "ex", "type": "extrude", "sketch": "sk", "distance": 10, "operation": "new"})],
+        [0.0, 0.0, 10.0],
+    );
     assert!(top[0] > -0.5 && top[3] > 10.0, "on a top face the text runs towards +X: {top:?}");
     let side = added_ink(vec![cylinder()], [20.0, 0.0, 0.0]);
     assert!(side[1] > -0.5 && side[4] > 10.0, "seen from +X the text runs towards +Y: {side:?}");
@@ -215,9 +233,11 @@ fn text_on_a_round_face_follows_a_radius_edit_by_match_and_fractions() {
     let cyl = |r: f64, text: Option<&Value>| {
         let mut f = vec![json!({"id": "cyl", "type": "cylinder", "radius": "r", "height": 40})];
         if let Some(fp) = text {
-            f.push(json!({"id": "t1", "type": "textOnFace", "text": TEXT, "height": 8, "depth": 1, "operation": "join",
+            f.push(
+                json!({"id": "t1", "type": "textOnFace", "text": TEXT, "height": 8, "depth": 1, "operation": "join",
                 "face": {"kind": "face", "by": "match", "fp": fp, "body": "body1"},
-                "point": [0.0, 20.0, 0.0], "at": [0.25, 0.5]}));
+                "point": [0.0, 20.0, 0.0], "at": [0.25, 0.5]}),
+            );
         }
         build(json!({"r": r}), f)
     };
@@ -230,7 +250,11 @@ fn text_on_a_round_face_follows_a_radius_edit_by_match_and_fractions() {
     let wide = cyl(25.0, Some(&round));
     near(volume(&wide) - volume(&cyl(25.0, None)), a * (1.0 + 1.0 / 50.0), 0.005, "embossed volume after r 20 to 25");
     let bb = kernel::bbox(&wide.bodies[0].shape).unwrap();
-    assert!(bb[4] > 25.9 && bb[4] <= 26.0 + 1e-3, "the letters stand 1 mm off the r25 face at a quarter turn, y max {:.4}", bb[4]);
+    assert!(
+        bb[4] > 25.9 && bb[4] <= 26.0 + 1e-3,
+        "the letters stand 1 mm off the r25 face at a quarter turn, y max {:.4}",
+        bb[4]
+    );
     assert!(bb[3] <= 25.0 + 1e-3, "no letter on the +X side, x max {:.4}", bb[3]);
 }
 
@@ -272,9 +296,11 @@ fn the_face_anchor_op_gives_what_a_round_face_text_stores() {
     let cyl = |r: f64, text: bool| {
         let mut f = vec![json!({"id": "cyl", "type": "cylinder", "radius": "r", "height": 40})];
         if text {
-            f.push(json!({"id": "t1", "type": "textOnFace", "text": TEXT, "height": 8, "depth": 1, "operation": "join",
+            f.push(
+                json!({"id": "t1", "type": "textOnFace", "text": TEXT, "height": 8, "depth": 1, "operation": "join",
                 "face": {"kind": "face", "by": "match", "fp": side["fp"], "body": "body1"},
-                "point": [0.0, 20.0, 0.0], "at": side["at"]}));
+                "point": [0.0, 20.0, 0.0], "at": side["at"]}),
+            );
         }
         build(json!({"r": r}), f)
     };

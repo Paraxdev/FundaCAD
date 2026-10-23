@@ -11,10 +11,16 @@ const read = (files: Record<string, string>) =>
   new Map(Object.entries(files).map(([path, text]) => [path.replace(/^(\.\.\/)+/, ""), text]));
 
 const vueFiles = read(
-  import.meta.glob("../../src/components/**/*.vue", { query: "?raw", import: "default", eager: true }) as Record<string, string>,
+  import.meta.glob("../../src/components/**/*.vue", { query: "?raw", import: "default", eager: true }) as Record<
+    string,
+    string
+  >,
 );
 const scssFiles = read(
-  import.meta.glob("../../src/styles/*.scss", { query: "?raw", import: "default", eager: true }) as Record<string, string>,
+  import.meta.glob("../../src/styles/*.scss", { query: "?raw", import: "default", eager: true }) as Record<
+    string,
+    string
+  >,
 );
 
 const tsFiles = read(
@@ -30,28 +36,22 @@ const GLASS = "src/styles/_glass.scss";
 const COLOUR_BASELINE: Record<string, number> = {
   "src/components/overlays/PluginSettingsForm.vue": 2,
   "src/components/overlays/RadialMenuHost.vue": 2,
-  "src/components/overlays/StressPanel.vue": 2,
   "src/components/shell/LiveSessionPill.vue": 4,
-  "src/components/shell/NormalToSketch.vue": 1,
   "src/components/shell/NumberBox.vue": 2,
-  "src/components/shell/RoundTripReadout.vue": 1,
-  "src/components/shell/SelectionReadout.vue": 1,
   "src/components/shell/SurfaceNodeEditor.vue": 12,
   "src/styles/_base.scss": 1,
-  "src/styles/_browser.scss": 18,
+  "src/styles/_browser.scss": 5,
   "src/styles/_console.scss": 4,
-  "src/styles/_float.scss": 10,
-  "src/styles/_glass.scss": 31,
+  "src/styles/_float.scss": 9,
+  "src/styles/_glass.scss": 30,
   "src/styles/_inspector.scss": 15,
-  "src/styles/_layout.scss": 6,
-  "src/styles/_modals.scss": 120,
+  "src/styles/_layout.scss": 5,
+  "src/styles/_modals.scss": 118,
   "src/styles/_notice.scss": 1,
-  "src/styles/_palette.scss": 4,
   "src/styles/_renderdock.scss": 5,
   "src/styles/_targetedit.scss": 2,
   "src/styles/_timeline.scss": 5,
-  "src/styles/_titlebar.scss": 1,
-  "src/styles/_utilities.scss": 13,
+  "src/styles/_utilities.scss": 11,
 };
 
 // Declarations, outside a hover, press, focus or selected rule, that fill with
@@ -61,7 +61,7 @@ const COLOUR_BASELINE: Record<string, number> = {
 // goes on the _glass.scss lists instead of raising a number here.
 const FLAT_BASELINE: Record<string, number> = {
   "src/components/overlays/FilletMembers.vue": 1,
-  "src/styles/_browser.scss": 5,
+  "src/styles/_browser.scss": 3,
   "src/styles/_console.scss": 2,
   "src/styles/_float.scss": 2,
   "src/styles/_glass.scss": 2,
@@ -74,16 +74,18 @@ const FLAT_BASELINE: Record<string, number> = {
   "src/styles/_renderdock.scss": 8,
   "src/styles/_targetedit.scss": 2,
   "src/styles/_timeline.scss": 7,
-  "src/styles/_titlebar.scss": 8,
+  "src/styles/_titlebar.scss": 6,
   "src/styles/_utilities.scss": 18,
 };
 
 // Blurs written by hand outside _glass.scss. Anything new uses var(--float-blur),
 // which html.no-glass-blur can switch off and the theme can tune in one place.
 const BLUR_ALLOWED: Record<string, { count: number; reason: string }> = {
-  "src/styles/_browser.scss": { count: 2, reason: "the small sketch dimension chip, a label on the model, not a panel" },
   "src/styles/_console.scss": { count: 2, reason: "base of .logcon, repainted by _glass.scss" },
-  "src/styles/_modals.scss": { count: 3, reason: "base of .choice-backdrop and .cmdk-backdrop, repainted by _glass.scss" },
+  "src/styles/_modals.scss": {
+    count: 3,
+    reason: "base of .choice-backdrop and .cmdk-backdrop, repainted by _glass.scss",
+  },
   "src/styles/_targetedit.scss": { count: 2, reason: "base of .tgt-panel, repainted by _glass.scss" },
   "src/styles/_utilities.scss": { count: 2, reason: "base of .prompt, repainted by #viewport .prompt in _glass.scss" },
 };
@@ -92,10 +94,22 @@ const BLUR_ALLOWED: Record<string, { count: number; reason: string }> = {
 // never grow it: --danger is --error, --fg is --text, --muted is --text-mute,
 // --border is --line, --panel-1 and --bg-panel are --panel, --panel-3 is --panel-2,
 // --fg-dim is --text-dim.
-const UNDEFINED_ALLOWED = ["--danger", "--fg", "--border", "--muted", "--bg-panel", "--bg-sunken", "--fg-dim", "--panel-1", "--panel-3"];
+const UNDEFINED_ALLOWED = [
+  "--danger",
+  "--fg",
+  "--border",
+  "--muted",
+  "--bg-panel",
+  "--bg-sunken",
+  "--fg-dim",
+  "--panel-1",
+  "--panel-3",
+];
 
 function styleOf(path: string, text: string): string {
-  const css = path.endsWith(".vue") ? [...text.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/g)].map((m) => m[1]).join("\n") : text;
+  const css = path.endsWith(".vue")
+    ? [...text.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/g)].map((m) => m[1]).join("\n")
+    : text;
   return css.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
 }
 
@@ -112,12 +126,14 @@ const NAMED = /(?<![\w-])(?:white|black|red|green|blue|gray|grey|orange|yellow|p
 
 function colourLiterals(path: string, text: string): number {
   return declarations(styleOf(path, text)).reduce(
-    (n, { value }) => n + (value.match(HEX)?.length ?? 0) + (value.match(COLOUR_FN)?.length ?? 0) + (value.match(NAMED)?.length ?? 0),
+    (n, { value }) =>
+      n + (value.match(HEX)?.length ?? 0) + (value.match(COLOUR_FN)?.length ?? 0) + (value.match(NAMED)?.length ?? 0),
     0,
   );
 }
 
-const STATE = /:hover|:active|:focus|:checked|:disabled|\.(?:active|on|selected|open|holding|disabled)(?![\w-])|\[aria-/;
+const STATE =
+  /:hover|:active|:focus|:checked|:disabled|\.(?:active|on|selected|open|holding|disabled)(?![\w-])|\[aria-/;
 const FLAT_FILL = /^var\(--(?:panel|panel-2|raised|raised-2)(?:\s*,[^)]*)?\)$/;
 const HARD_SHADOW = /var\(--shadow-[123](?![\w-])/;
 
@@ -127,9 +143,11 @@ function flatSurfaces(path: string, text: string): string[] {
     .filter(({ selector }) => !selector.startsWith("@") && !STATE.test(selector))
     .flatMap(({ selector, body }) =>
       declarations(`{${body}}`)
-        .filter(({ prop, value }) =>
-          ((prop === "background" || prop === "background-color") && FLAT_FILL.test(value.trim())) ||
-          (prop === "box-shadow" && HARD_SHADOW.test(value)))
+        .filter(
+          ({ prop, value }) =>
+            ((prop === "background" || prop === "background-color") && FLAT_FILL.test(value.trim())) ||
+            (prop === "box-shadow" && HARD_SHADOW.test(value)),
+        )
         .map(() => selector),
     );
 }
@@ -149,7 +167,12 @@ const sources = new Map([...vueFiles, ...scssFiles]);
 const tokens = names(scssFiles.get(TOKENS) ?? "", /(--[\w-]+)\s*:/g);
 // Set where it is used: an inline :style, a setProperty, a local declaration, in a template, a
 // stylesheet or a TypeScript module (homeBackground.ts sets --home-image).
-const local = new Set([...sources.values(), ...tsFiles.values()].flatMap((t) => [...names(t, /['"`](--[\w-]+)['"`]/g), ...names(t, /(?<![\w(-])(--[\w-]+)\s*:/g)]));
+const local = new Set(
+  [...sources.values(), ...tsFiles.values()].flatMap((t) => [
+    ...names(t, /['"`](--[\w-]+)['"`]/g),
+    ...names(t, /(?<![\w(-])(--[\w-]+)\s*:/g),
+  ]),
+);
 
 describe("design spec guard", () => {
   it("reads the sources", () => {
@@ -196,10 +219,24 @@ describe("design spec guard", () => {
   });
 
   it("finds what the check helpers are meant to find", () => {
-    expect(colourLiterals("x.vue", "<template/><style>.a { color: #fff; background: rgba(0,0,0,.5); border-color: white }</style>")).toBe(3);
+    expect(
+      colourLiterals(
+        "x.vue",
+        "<template/><style>.a { color: #fff; background: rgba(0,0,0,.5); border-color: white }</style>",
+      ),
+    ).toBe(3);
     expect(colourLiterals("x.scss", "#viewport .add, #fade { color: var(--text); }")).toBe(0);
-    expect(flatSurfaces("x.scss", ".a { background: var(--panel); } .a:hover { background: var(--raised); } .b { box-shadow: var(--shadow-2); }")).toEqual([".a", ".b"]);
-    expect(flatSurfaces("x.scss", ".a { background: var(--glass-sheen), var(--float-bg); color: var(--panel); }")).toEqual([]);
-    expect(handBlurs("x.scss", ".a { backdrop-filter: var(--float-blur); } .b { backdrop-filter: blur(8px); }")).toEqual(["blur(8px)"]);
+    expect(
+      flatSurfaces(
+        "x.scss",
+        ".a { background: var(--panel); } .a:hover { background: var(--raised); } .b { box-shadow: var(--shadow-2); }",
+      ),
+    ).toEqual([".a", ".b"]);
+    expect(
+      flatSurfaces("x.scss", ".a { background: var(--glass-sheen), var(--float-bg); color: var(--panel); }"),
+    ).toEqual([]);
+    expect(
+      handBlurs("x.scss", ".a { backdrop-filter: var(--float-blur); } .b { backdrop-filter: blur(8px); }"),
+    ).toEqual(["blur(8px)"]);
   });
 });

@@ -1,18 +1,17 @@
 <script setup lang="ts" generic="T extends string">
-// A themed stand-in for a native <select>: the browser draws that control's
-// OPEN popup itself (a separate OS-level surface on some platforms), so no
-// amount of CSS reaches the option list or its selected-row highlight, only
-// the closed box. This opens the same Popover/ChoiceList every other picker in
-// the app uses, so the list is themed like everything else that floats.
+// A themed stand-in for <select>: the browser draws the open popup itself, out of reach of CSS, so this opens the
+// shared Popover and ChoiceList instead.
 
 import { ref, useTemplateRef } from "vue";
 import Popover from "./Popover.vue";
 import ChoiceList from "./ChoiceList.vue";
 
+defineOptions({ inheritAttrs: false });
+
 const props = withDefaults(
   defineProps<{
     modelValue: T;
-    options: readonly { value: T; label: string; hint?: string }[];
+    options: readonly { value: T; label: string; hint?: string; disabled?: boolean }[];
     id?: string;
     testid?: string;
     disabled?: boolean;
@@ -45,6 +44,7 @@ function pick(v: T) {
 <template>
   <button
     ref="btn"
+    v-bind="$attrs"
     :id="id"
     type="button"
     class="sm-select select-trigger"
@@ -70,10 +70,6 @@ function pick(v: T) {
     :min-width="width"
     @close="open = false"
   >
-    <ChoiceList
-      :options="options"
-      :model-value="modelValue"
-      @update:model-value="pick"
-    />
+    <ChoiceList :options="options" :model-value="modelValue" @update:model-value="pick" />
   </Popover>
 </template>

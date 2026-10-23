@@ -1,8 +1,5 @@
-//! Text on a face, embossed or engraved. Glyph outlines go into the face's
-//! (u, v) through an isometry of its surface (a plane, a cylinder, a cone rolled
-//! out flat), so letters keep their size on a round face instead of being
-//! projected onto it. The face is found again at every build, so the text
-//! follows it through upstream edits.
+//! Text on a face, embossed or engraved. Glyphs go into the face's (u, v) through an isometry of its surface, so
+//! letters keep their size on a round face, and the face is found again every build so the text follows edits.
 
 use fundacad_core::schema::{Operation, TextOnFace};
 use glam::{DVec2, DVec3};
@@ -141,7 +138,10 @@ fn bezier(s: P, seg: &Seg, t: f64) -> DVec2 {
         Seg::Line(e) => a * m + DVec2::from(e) * t,
         Seg::Quad(c, e) => a * m * m + DVec2::from(c) * 2.0 * m * t + DVec2::from(e) * t * t,
         Seg::Cubic(c1, c2, e) => {
-            a * m * m * m + DVec2::from(c1) * 3.0 * m * m * t + DVec2::from(c2) * 3.0 * m * t * t + DVec2::from(e) * t * t * t
+            a * m * m * m
+                + DVec2::from(c1) * 3.0 * m * m * t
+                + DVec2::from(c2) * 3.0 * m * t * t
+                + DVec2::from(e) * t * t * t
         }
     }
 }
@@ -180,7 +180,10 @@ fn encode(c: &text::Contour, map: &Map, data: &mut Vec<f64>) {
 /// The laid out glyphs, ink centred on the anchor vertically, then turned.
 fn placed_glyphs(spec: &TextSpec, angle_deg: f64) -> Vec<Glyph> {
     let glyphs = text::glyphs(spec, None);
-    let ys = glyphs.iter().flat_map(|g| &g.contours).flat_map(|c| std::iter::once(c.start).chain(c.segs.iter().map(seg_end)));
+    let ys = glyphs
+        .iter()
+        .flat_map(|g| &g.contours)
+        .flat_map(|c| std::iter::once(c.start).chain(c.segs.iter().map(seg_end)));
     let (lo, hi) = ys.fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), p| (lo.min(p[1]), hi.max(p[1])));
     let mid = if lo.is_finite() { (lo + hi) / 2.0 } else { 0.0 };
     let (sin, cos) = angle_deg.to_radians().sin_cos();
@@ -221,11 +224,10 @@ pub fn handle(ctx: &mut Ctx, f: &TextOnFace) -> FResult {
     let sel = serde_json::to_value(&f.face).map_err(|_| Fail::Internal("TypeError".into()))?;
     let body = ctx.editable(pick_body(ctx, f, &sel)?, "Text on face")?;
     let shape = ctx.bodies[body].shape().clone();
-    let face = Resolver::new(Some(&mut ctx.diagnostics), Some(&f.id))
-        .faces(&shape, &sel)?
-        .into_iter()
-        .next()
-        .ok_or_else(|| missing_ref("Text on face: the face it sits on is no longer in the model, re-pick the face"))?;
+    let face =
+        Resolver::new(Some(&mut ctx.diagnostics), Some(&f.id)).faces(&shape, &sel)?.into_iter().next().ok_or_else(
+            || missing_ref("Text on face: the face it sits on is no longer in the model, re-pick the face"),
+        )?;
 
     if f.text.trim().is_empty() {
         return Err(bad("Text on face: the text is empty"));
@@ -241,7 +243,9 @@ pub fn handle(ctx: &mut Ctx, f: &TextOnFace) -> FResult {
     let cut = match &f.operation {
         None | Some(Operation::Join) => false,
         Some(Operation::Cut) => true,
-        Some(other) => return Err(bad(format!("Text on face: the operation must be join or cut, not {}", other.as_str()))),
+        Some(other) => {
+            return Err(bad(format!("Text on face: the operation must be join or cut, not {}", other.as_str())))
+        }
     };
     let angle = ctx.val_or(f.angle.as_ref(), 0.0)?;
 
@@ -276,7 +280,10 @@ pub fn handle(ctx: &mut Ctx, f: &TextOnFace) -> FResult {
 
     if surf.kind != PLANE {
         let r = surf.du.length();
-        let xs = glyphs.iter().flat_map(|g| &g.contours).flat_map(|c| std::iter::once(c.start).chain(c.segs.iter().map(seg_end)));
+        let xs = glyphs
+            .iter()
+            .flat_map(|g| &g.contours)
+            .flat_map(|c| std::iter::once(c.start).chain(c.segs.iter().map(seg_end)));
         let (lo, hi) = xs.fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), p| (lo.min(p[0]), hi.max(p[0])));
         if hi - lo > 0.98 * std::f64::consts::TAU * r {
             return Err(bad(format!(
@@ -286,7 +293,9 @@ pub fn handle(ctx: &mut Ctx, f: &TextOnFace) -> FResult {
             )));
         }
         if cut && surf.orient > 0.0 && depth >= r {
-            return Err(bad(format!("Text on face: an engraving {depth} mm deep goes past the axis of a {r:.2} mm radius face")));
+            return Err(bad(format!(
+                "Text on face: an engraving {depth} mm deep goes past the axis of a {r:.2} mm radius face"
+            )));
         }
     }
 
@@ -316,7 +325,11 @@ pub fn handle(ctx: &mut Ctx, f: &TextOnFace) -> FResult {
         return Err(bad("Text on face: no letter could be laid on the face"));
     }
     if dropped > 0 {
-        ctx.advise(&f.id, "textGlyphDropped", format!("Text on face: {dropped} letter outline(s) could not be laid on the face and were left out"));
+        ctx.advise(
+            &f.id,
+            "textGlyphDropped",
+            format!("Text on face: {dropped} letter outline(s) could not be laid on the face and were left out"),
+        );
     }
     let [umin, umax, vmin, vmax] = surf.bounds;
     let tol = 1e-6;
@@ -355,7 +368,10 @@ fn data_points<'a>(c: &'a text::Contour, map: &'a Map) -> impl Iterator<Item = D
 /// The `faceAnchor` op: where `point` sits on `face` of `body`, in the terms a
 /// `textOnFace` stores, `{surface, fp, at, point, normal}`. The app cannot
 /// work out OCCT's (u, v) origin or the exact fingerprint itself.
-pub fn face_anchor_result(req: &serde_json::Map<String, Value>, watch: &dyn crate::builder::Watch) -> fundacad_protocol::JobResult {
+pub fn face_anchor_result(
+    req: &serde_json::Map<String, Value>,
+    watch: &dyn crate::builder::Watch,
+) -> fundacad_protocol::JobResult {
     let (_, built) = match crate::inspect::rebuild_request(req, watch) {
         Ok(r) => r,
         Err(e) => return e,
@@ -363,7 +379,11 @@ pub fn face_anchor_result(req: &serde_json::Map<String, Value>, watch: &dyn crat
     let Some(sel) = req.get("face") else {
         return fundacad_engine::error_result("'face'");
     };
-    let point = match req.get("point").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_f64).collect::<Vec<_>>()) {
+    let point = match req
+        .get("point")
+        .and_then(Value::as_array)
+        .map(|a| a.iter().filter_map(Value::as_f64).collect::<Vec<_>>())
+    {
         Some(p) if p.len() == 3 => [p[0], p[1], p[2]],
         _ => return fundacad_engine::error_result("'point'"),
     };
@@ -386,7 +406,13 @@ pub fn face_anchor_result(req: &serde_json::Map<String, Value>, watch: &dyn crat
                     _ => "other",
                 };
                 let [umin, umax, vmin, vmax] = s.bounds;
-                let frac = |x: f64, lo: f64, hi: f64| if hi - lo > 1e-12 { ((x - lo) / (hi - lo)).clamp(0.0, 1.0) } else { 0.5 };
+                let frac = |x: f64, lo: f64, hi: f64| {
+                    if hi - lo > 1e-12 {
+                        ((x - lo) / (hi - lo)).clamp(0.0, 1.0)
+                    } else {
+                        0.5
+                    }
+                };
                 let n = s.outward();
                 let mut r = serde_json::json!({
                     "body": body.id,

@@ -1,15 +1,31 @@
 import type { SketchTool } from "../sketch/sketchMode";
 
-/** Ribbon/keymap actions that create sketch geometry. Inside a sketch they
- *  switch the active tool; outside one they start a sketch with that tool. */
+/** Inside a sketch these switch the tool; outside one they start a sketch with it. */
 export const SKETCH_TOOLS = new Set([
-  "line", "rectangle", "centerRectangle", "rectangle3", "circle", "circle2", "circle3",
-  "arc", "polygon", "slot", "spline", "bspline", "point", "text", "project",
-  "boltCircle", "hexHoles", "gridHoles", "patternRect", "patternCircular", "honeycomb",
+  "line",
+  "rectangle",
+  "centerRectangle",
+  "rectangle3",
+  "circle",
+  "circle2",
+  "circle3",
+  "arc",
+  "polygon",
+  "slot",
+  "spline",
+  "bspline",
+  "point",
+  "text",
+  "project",
+  "boltCircle",
+  "hexHoles",
+  "gridHoles",
+  "patternRect",
+  "patternCircular",
+  "honeycomb",
 ]);
 
-/** Sketch MODIFY tools (ribbon action -> sketch tool name). Only meaningful
- *  inside a sketch. */
+/** ribbon action → sketch tool, only inside a sketch */
 export const SKETCH_MODIFY: Record<string, SketchTool> = {
   trim: "trim",
   "fillet-sketch": "fillet",
@@ -37,20 +53,54 @@ export const SKETCH_MODIFY: Record<string, SketchTool> = {
   fix: "fix",
 };
 
-/** "Repeat <last command>" (Onshape-style): the empty-space menu re-runs the last
- *  real command. Navigation / view / file actions aren't commands you repeat, so
- *  they don't overwrite it. */
+/** Actions that do not overwrite the empty space menu's "Repeat <last command>". */
 export const NON_REPEATABLE = new Set([
-  "new", "open", "save", "saveas", "export", "import", "insert-document",
-  "welcome", "ta-publish",
-  "undo", "redo", "compute-all", "shortcut-help", "finish", "palette",
-  "fit", "reset-camera", "iso", "top", "front", "right", "persp",
-  "selmode", "selmode-auto", "selmode-faces", "selmode-bodies", "toggle-xray", "toggle-wireframe",
-  "viewmode-matcap", "viewmode-realtime", "viewmode-pathtraced", "viewmode-cycle", "viewmode-cycle-back",
-  "hide-selected", "show-all-bodies", "clean-view",
+  "new",
+  "open",
+  "save",
+  "saveas",
+  "export",
+  "import",
+  "insert-document",
+  "welcome",
+  "ta-publish",
+  "undo",
+  "redo",
+  "compute-all",
+  "shortcut-help",
+  "manual",
+  "report-problem",
+  "suggest-idea",
+  "finish",
+  "palette",
+  "construction",
+  "fit",
+  "reset-camera",
+  "iso",
+  "top",
+  "front",
+  "right",
+  "persp",
+  "selmode",
+  "selmode-auto",
+  "selmode-faces",
+  "selmode-bodies",
+  "toggle-xray",
+  "toggle-wireframe",
+  "viewmode-matcap",
+  "viewmode-realtime",
+  "viewmode-pathtraced",
+  "viewmode-cycle",
+  "viewmode-cycle-back",
+  "hide-selected",
+  "show-all-bodies",
+  "clean-view",
 ]);
 
-/** Per-tool instruction line shown in the viewport prompt while sketching. */
+/** Entity patterns word their own prompt as curves are picked and the pattern
+ *  is placed, so a state change must not reset it to a line of this table. */
+export const SELF_PROMPTING = new Set<SketchTool>(["patternRect", "patternCircular", "mirror"]);
+
 export const SKETCH_PROMPTS: Record<string, string> = {
   select: "Line (L) · Rectangle (R) · Circle (C) · Arc (A) · Trim (T)",
   line: "Click points · length Tab angle · Enter · Esc",
@@ -60,13 +110,19 @@ export const SKETCH_PROMPTS: Record<string, string> = {
   spline: "Click fit points · Enter to finish · Esc",
   bspline: "Click control points · click the first to close · Enter to finish · Esc",
   point: "Click to place a point · Esc",
+  text: "Click where the text goes, or drag a box for it · Esc",
+  project: "Click an edge or face of the model to project it into the sketch · Esc",
+  boltCircle: "Click the centre of the bolt circle, set the count, click again to place · Esc",
+  hexHoles: "Click the centre of the hex holes, set the rings, click again to place · Esc",
+  honeycomb: "Click the centre of the honeycomb, set the rings, click again to place · Esc",
+  gridHoles: "Click the centre of the grid, set the counts, click again to place · Esc",
   polygon: "Click the centre, then a vertex · Esc",
   slot: "Click the two arc centres, then the width · Esc",
   circle2: "Click two points on the diameter · Esc",
   circle3: "Click three points on the circle · Esc",
   centerRectangle: "Click the centre, then a corner · Esc",
   rectangle3: "Click both ends of one edge, then the thickness · Esc",
-  mirror: "Select entities, then click the mirror line · Esc",
+  mirror: "Click what to mirror, then the mirror line · Enter · Esc",
   dimension: "Click a line or circle, type a value · Enter · Esc",
   trim: "Click a curve to trim to its crossings · Esc",
   fillet: "Click two lines, type a radius · Enter · Esc",

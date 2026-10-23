@@ -1,9 +1,5 @@
-// Fasteners: a standards catalogue of screws, bolts, nuts, washers and inserts, and the ones a
-// person defines, previewed, specified and dropped into the model.
-//
-// A fastener arrives the way an imported STEP part does. Its solid is generated once
-// (geometry/register.py) and stored as an `import` feature's blob (insert.ts), so a document with
-// fasteners in it opens and builds where this plugin was never installed.
+// Fasteners from a standards catalogue or defined by the person. Each is stored as an `import` feature's blob
+// (insert.ts), so a document with fasteners builds where this plugin was never installed.
 
 import { contribute } from "fundacad";
 import type { Engine } from "fundacad";
@@ -64,32 +60,42 @@ export async function activate(e: Engine): Promise<() => void> {
         thread.start(threadDone);
       },
     },
-    tools: [{
-      id: "standardThread", label: "Standard Thread", iconName: "thread",
-      consumes: ["face"], source: "selection", busy: () => thread.active,
-      cancel: () => thread.cancel(),
-    }],
+    tools: [
+      {
+        id: "standardThread",
+        label: "Standard Thread",
+        iconName: "thread",
+        consumes: ["face"],
+        source: "selection",
+        busy: () => thread.active,
+        cancel: () => thread.cancel(),
+      },
+    ],
     features: [{ type: "thread", edit: (id, done) => thread.edit(id, done) }],
-    ribbon: [{
-      group: "INSERT",
-      items: [
-        { action: "fasteners", label: "Fasteners", iconName: "fasteners" },
-        { action: "standardThread", label: "Standard Thread", iconName: "thread" },
-      ],
-    }],
+    ribbon: [
+      {
+        group: "INSERT",
+        items: [
+          { action: "fasteners", label: "Fasteners", iconName: "fasteners" },
+          { action: "standardThread", label: "Standard Thread", iconName: "thread" },
+        ],
+      },
+    ],
     icons: { fasteners: FASTENER_ICON },
     overlays: [LibraryPanel, ThreadPanel],
     bodyMenu: (bodyId) => {
       const spec = specOfBody(e, bodyId);
       if (!spec) return [];
-      return [{
-        label: "Fastener Specs...",
-        onClick: () => {
-          selection.value = { source: "document", spec };
-          tab.value = "catalogue";
-          open.value = true;
+      return [
+        {
+          label: "Fastener Specs...",
+          onClick: () => {
+            selection.value = { source: "document", spec };
+            tab.value = "catalogue";
+            open.value = true;
+          },
         },
-      }];
+      ];
     },
   });
 

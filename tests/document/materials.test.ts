@@ -49,7 +49,8 @@ describe("finishOf", () => {
     expect(finishOf(undefined)).toEqual({ ...FINISH });
     expect(finishOf({ id: "a", name: "A", color: "#fff" })).toEqual({ ...FINISH });
     expect(finishOf({ id: "a", name: "A", color: "#fff", roughness: 0.1 })).toEqual({
-      ...FINISH, roughness: 0.1,
+      ...FINISH,
+      roughness: 0.1,
     });
   });
 
@@ -91,10 +92,18 @@ describe("the filament finish fields", () => {
   });
 
   it("reads a library with every field back byte identically", () => {
-    const lib: MaterialDef[] = [{
-      ...plain, emissive: 0.5, sheen: 0.4, anisotropy: 0.6, flakes: 0.25, flakeSize: 0.15, scatterDistance: 1.5,
-      castsLight: false,
-    }];
+    const lib: MaterialDef[] = [
+      {
+        ...plain,
+        emissive: 0.5,
+        sheen: 0.4,
+        anisotropy: 0.6,
+        flakes: 0.25,
+        flakeSize: 0.15,
+        scatterDistance: 1.5,
+        castsLight: false,
+      },
+    ];
     const json = serializeLibrary(lib);
     const { materials } = parseLibrary(json);
     expect(materials).toEqual(lib);
@@ -120,9 +129,19 @@ describe("isDefaultFinish", () => {
     expect(isDefaultFinish(finishOf(undefined))).toBe(true);
     const plain = { id: "a", name: "A", color: "#fff" };
     for (const extra of [
-      { clearcoat: 1 }, { ior: 1.33 }, { thickness: 9 }, { attenuationColor: "#00ff00" }, { attenuationDistance: 5 },
-      { dispersion: 1 }, { iridescence: 0.5 }, { specularColor: "#ff0000" },
-      { sheen: 0.4 }, { anisotropy: 0.6 }, { flakes: 0.2 }, { flakeSize: 0.3 }, { scatterDistance: 2 },
+      { clearcoat: 1 },
+      { ior: 1.33 },
+      { thickness: 9 },
+      { attenuationColor: "#00ff00" },
+      { attenuationDistance: 5 },
+      { dispersion: 1 },
+      { iridescence: 0.5 },
+      { specularColor: "#ff0000" },
+      { sheen: 0.4 },
+      { anisotropy: 0.6 },
+      { flakes: 0.2 },
+      { flakeSize: 0.3 },
+      { scatterDistance: 2 },
       { castsLight: false },
       { surface: { kind: "noise" as const, scale: 4, amount: 0.5 } },
       { surfaceGraph: { nodes: [{ id: "o", type: "output" as const }], output: "o" } },
@@ -145,7 +164,13 @@ describe("normalizeMaterial", () => {
   it("carries a field it does not know through untouched, and still repairs the ones it does", () => {
     const glint = { density: 0.3, tint: ["#fff", "#ccf"] };
     const out = normalizeMaterial({
-      id: "m-x", name: "X", color: "#112233", roughness: 5, glint, scatter: "#aa0000", metalness: "junk",
+      id: "m-x",
+      name: "X",
+      color: "#112233",
+      roughness: 5,
+      glint,
+      scatter: "#aa0000",
+      metalness: "junk",
     });
     expect(out).toEqual({ id: "m-x", name: "X", color: "#112233", roughness: 1, glint, scatter: "#aa0000" });
     expect(out).not.toHaveProperty("metalness");
@@ -153,7 +178,12 @@ describe("normalizeMaterial", () => {
 
   it("drops a known finish field of the wrong type instead of carrying it", () => {
     const out = normalizeMaterial({
-      id: "m-x", name: "X", color: "#112233", anisotropy: { amount: 0.2 }, flakes: {}, castsLight: "no",
+      id: "m-x",
+      name: "X",
+      color: "#112233",
+      anisotropy: { amount: 0.2 },
+      flakes: {},
+      castsLight: "no",
     });
     expect(out).toEqual({ id: "m-x", name: "X", color: "#112233" });
   });
@@ -177,8 +207,11 @@ describe("normalizeMaterial", () => {
 
   it("omits a finish field that equals the default, so a plain colour is three fields", () => {
     const m = normalizeMaterial({
-      name: "Plain", color: "#abcdef",
-      metalness: FINISH.metalness, roughness: FINISH.roughness, opacity: FINISH.opacity,
+      name: "Plain",
+      color: "#abcdef",
+      metalness: FINISH.metalness,
+      roughness: FINISH.roughness,
+      opacity: FINISH.opacity,
     })!;
     expect(Object.keys(m).sort()).toEqual(["color", "id", "name"]);
   });
@@ -197,19 +230,41 @@ describe("normalizeMaterial", () => {
 
   it("carries the glass and thin film fields, clamped to what they can mean", () => {
     const optics = {
-      ior: 2.42, thickness: 12, dispersion: 5, attenuationColor: "#2A8F6A", attenuationDistance: 20,
-      iridescence: 0.6, specularColor: "#ffd0a0",
+      ior: 2.42,
+      thickness: 12,
+      dispersion: 5,
+      attenuationColor: "#2A8F6A",
+      attenuationDistance: 20,
+      iridescence: 0.6,
+      specularColor: "#ffd0a0",
     };
     expect(normalizeMaterial({ id: "d", name: "D", color: "#ffffff", ...optics })).toEqual({
-      id: "d", name: "D", color: "#ffffff", ...optics, attenuationColor: "#2a8f6a",
+      id: "d",
+      name: "D",
+      color: "#ffffff",
+      ...optics,
+      attenuationColor: "#2a8f6a",
     });
     const wild = normalizeMaterial({
-      id: "w", name: "W", color: "#ffffff",
-      ior: 9, thickness: -4, dispersion: 40, attenuationDistance: 1e9, iridescence: 3,
-      attenuationColor: "green", specularColor: 7,
+      id: "w",
+      name: "W",
+      color: "#ffffff",
+      ior: 9,
+      thickness: -4,
+      dispersion: 40,
+      attenuationDistance: 1e9,
+      iridescence: 3,
+      attenuationColor: "green",
+      specularColor: 7,
     })!;
     expect(wild).toEqual({
-      id: "w", name: "W", color: "#ffffff", ior: 2.5, thickness: 0, dispersion: 10, attenuationDistance: 1000,
+      id: "w",
+      name: "W",
+      color: "#ffffff",
+      ior: 2.5,
+      thickness: 0,
+      dispersion: 10,
+      attenuationDistance: 1000,
       iridescence: 1,
     });
     expect(normalizeMaterial({ id: "l", name: "L", color: "#ffffff", ior: 0.5 })!.ior).toBe(1);
@@ -217,9 +272,15 @@ describe("normalizeMaterial", () => {
 
   it("omits every glass field at its default, so an old glass reads back as it was", () => {
     const old = { id: "m-glass", name: "Glass", color: "#cfe4ee", metalness: 0, roughness: 0.05, opacity: 0.25 };
-    expect(normalizeMaterial({
-      ...old, ior: 1.5, dispersion: 0, attenuationDistance: 0, iridescence: 0,
-    })).toEqual(old);
+    expect(
+      normalizeMaterial({
+        ...old,
+        ior: 1.5,
+        dispersion: 0,
+        attenuationDistance: 0,
+        iridescence: 0,
+      }),
+    ).toEqual(old);
     expect(normalizeMaterial(old)).toEqual(old);
   });
 
@@ -243,22 +304,47 @@ describe("normalizeMaterial", () => {
 
   it("carries a valid procedural surface and drops a broken one", () => {
     const m = normalizeMaterial({
-      name: "Scratched", color: "#888888",
+      name: "Scratched",
+      color: "#888888",
       surface: { kind: "scratches", scale: 8, amount: 0.6, bump: 0.5, color: "#111111", colorAmount: 0.4, angle: 1 },
     })!;
-    expect(m.surface).toEqual({ kind: "scratches", scale: 8, amount: 0.6, bump: 0.5, color: "#111111", colorAmount: 0.4, angle: 1 });
+    expect(m.surface).toEqual({
+      kind: "scratches",
+      scale: 8,
+      amount: 0.6,
+      bump: 0.5,
+      color: "#111111",
+      colorAmount: 0.4,
+      angle: 1,
+    });
     // a bad kind or a non-positive scale is not a surface
-    expect(normalizeMaterial({ name: "X", color: "#888888", surface: { kind: "sparkles", scale: 8, amount: 0.5 } })!.surface).toBeUndefined();
-    expect(normalizeMaterial({ name: "X", color: "#888888", surface: { kind: "noise", scale: 0, amount: 0.5 } })!.surface).toBeUndefined();
+    expect(
+      normalizeMaterial({ name: "X", color: "#888888", surface: { kind: "sparkles", scale: 8, amount: 0.5 } })!.surface,
+    ).toBeUndefined();
+    expect(
+      normalizeMaterial({ name: "X", color: "#888888", surface: { kind: "noise", scale: 0, amount: 0.5 } })!.surface,
+    ).toBeUndefined();
   });
 
   it("carries a shaped surface graph and drops a broken one", () => {
-    const g = { output: "out", nodes: [{ id: "n", type: "noise" }, { id: "out", type: "output", in: { roughness: "n" } }] };
+    const g = {
+      output: "out",
+      nodes: [
+        { id: "n", type: "noise" },
+        { id: "out", type: "output", in: { roughness: "n" } },
+      ],
+    };
     expect(normalizeGraph(g)).toEqual(g);
     // dropped: output names no node, nodes not an array, unknown node type filtered
     expect(normalizeGraph({ output: "missing", nodes: [{ id: "n", type: "noise" }] })).toBeUndefined();
     expect(normalizeGraph({ output: "out", nodes: "nope" })).toBeUndefined();
-    const filtered = normalizeGraph({ output: "out", nodes: [{ id: "bad", type: "sparkle" }, { id: "out", type: "output" }] });
+    const filtered = normalizeGraph({
+      output: "out",
+      nodes: [
+        { id: "bad", type: "sparkle" },
+        { id: "out", type: "output" },
+      ],
+    });
     expect(filtered!.nodes.map((n) => n.id)).toEqual(["out"]);
   });
 });
@@ -360,26 +446,21 @@ describe("nodeColors", () => {
 
   it("inherits from the nearest coloured ancestor", () => {
     expect(nodeColors(TREE)).toEqual([
-      undefined,   // the root says nothing
-      "#d23b30",   // its own
-      "#d23b30",   // inherited from Arm
-      "#2244cc",   // its own is preferred over the ancestor's
-      undefined,   // nothing above it either
+      undefined, // the root says nothing
+      "#d23b30", // its own
+      "#d23b30", // inherited from Arm
+      "#2244cc", // its own is preferred over the ancestor's
+      undefined, // nothing above it either
     ]);
   });
 
   it("terminates on a cycle in a hand-edited manifest", () => {
-    expect(nodeColors([
-      { parent: 1 },
-      { parent: 0, color: "#010203" },
-    ])).toEqual(["#010203", "#010203"]);
+    expect(nodeColors([{ parent: 1 }, { parent: 0, color: "#010203" }])).toEqual(["#010203", "#010203"]);
   });
 });
 
 describe("materialsForColors", () => {
-  const lib: MaterialDef[] = [
-    { id: "m-steel", name: "Steel", color: "#8f959b", metalness: 0.95 },
-  ];
+  const lib: MaterialDef[] = [{ id: "m-steel", name: "Steel", color: "#8f959b", metalness: 0.95 }];
 
   it("reuses a material the document already has for that colour", () => {
     const { add, byColor } = materialsForColors([{ color: "#909699" }], lib);
@@ -401,10 +482,7 @@ describe("materialsForColors", () => {
   it("does not mint two near-identical materials for one import", () => {
     // The case this exists for: an assembly whose parts are two shades of the
     // same grey would otherwise grow the library by one row per shade.
-    const { add } = materialsForColors(
-      [{ color: "#2244cc" }, { color: "#2345cd" }, { color: "#2244cc" }],
-      lib,
-    );
+    const { add } = materialsForColors([{ color: "#2244cc" }, { color: "#2345cd" }, { color: "#2244cc" }], lib);
     expect(add).toHaveLength(1);
     // the control: a colour that is genuinely different does get its own
     expect(materialsForColors([{ color: "#2244cc" }, { color: "#22cc44" }], lib).add).toHaveLength(2);
@@ -423,9 +501,7 @@ describe("materialsForColors", () => {
     // so all fifteen occurrences opened at a quarter opacity and the board could
     // be seen through. A colour says nothing about transparency, so a see-through
     // material is never the answer to one.
-    const glassy: MaterialDef[] = [
-      { id: "m-glass", name: "Glass", color: "#cfe4ee", opacity: 0.25 },
-    ];
+    const glassy: MaterialDef[] = [{ id: "m-glass", name: "Glass", color: "#cfe4ee", opacity: 0.25 }];
     const { add, byColor } = materialsForColors([{ color: "#cad1ee" }], glassy);
     expect(add).toHaveLength(1);
     expect(add[0]!.color).toBe("#cad1ee");
@@ -488,19 +564,31 @@ describe("glow", () => {
   it("survives a library file round trip, and is dropped when it is the default", () => {
     // Omit-when-default is what keeps a plain colour three fields on disk, and
     // the starter library in normal form.
-    expect(normalizeMaterial({ id: "m-led", name: "LED", color: "#42e07a", emissive: 0.8 }))
-      .toEqual({ id: "m-led", name: "LED", color: "#42e07a", emissive: 0.8 });
-    expect(normalizeMaterial({ id: "m", name: "M", color: "#808080", emissive: 0 }))
-      .toEqual({ id: "m", name: "M", color: "#808080" });
+    expect(normalizeMaterial({ id: "m-led", name: "LED", color: "#42e07a", emissive: 0.8 })).toEqual({
+      id: "m-led",
+      name: "LED",
+      color: "#42e07a",
+      emissive: 0.8,
+    });
+    expect(normalizeMaterial({ id: "m", name: "M", color: "#808080", emissive: 0 })).toEqual({
+      id: "m",
+      name: "M",
+      color: "#808080",
+    });
   });
 
   it("clamps a value from a file somebody else wrote", () => {
-    expect(normalizeMaterial({ id: "m", name: "M", color: "#808080", emissive: 40 })!.emissive)
-      .toBe(1);
-    expect(normalizeMaterial({ id: "m", name: "M", color: "#808080", emissive: -3 }))
-      .toEqual({ id: "m", name: "M", color: "#808080" });
-    expect(normalizeMaterial({ id: "m", name: "M", color: "#808080", emissive: "bright" }))
-      .toEqual({ id: "m", name: "M", color: "#808080" });
+    expect(normalizeMaterial({ id: "m", name: "M", color: "#808080", emissive: 40 })!.emissive).toBe(1);
+    expect(normalizeMaterial({ id: "m", name: "M", color: "#808080", emissive: -3 })).toEqual({
+      id: "m",
+      name: "M",
+      color: "#808080",
+    });
+    expect(normalizeMaterial({ id: "m", name: "M", color: "#808080", emissive: "bright" })).toEqual({
+      id: "m",
+      name: "M",
+      color: "#808080",
+    });
   });
 
   it("has exactly one entry in the starter library that glows", () => {
@@ -520,25 +608,39 @@ describe("finishLabel", () => {
   });
 
   it("adds what KIND of stuff it is, when it is worth saying", () => {
-    expect(finishLabel({ id: "a", name: "A", color: "#888", metalness: 0.9, roughness: 0.1 }))
-      .toBe("Glossy, metallic");
-    expect(finishLabel({ id: "a", name: "A", color: "#888", opacity: 0.3, roughness: 0.1 }))
-      .toBe("Glossy, transparent");
-    expect(finishLabel({ id: "a", name: "A", color: "#888", emissive: 0.5, roughness: 0.3 }))
-      .toBe("Satin, lit");
+    expect(finishLabel({ id: "a", name: "A", color: "#888", metalness: 0.9, roughness: 0.1 })).toBe("Glossy, metallic");
+    expect(finishLabel({ id: "a", name: "A", color: "#888", opacity: 0.3, roughness: 0.1 })).toBe(
+      "Glossy, transparent",
+    );
+    expect(finishLabel({ id: "a", name: "A", color: "#888", emissive: 0.5, roughness: 0.3 })).toBe("Satin, lit");
   });
 
   it("picks ONE kind, most-visible first, rather than listing three", () => {
     // Shiny and see-through and metallic on paper. A phrase saying all three is
     // read by nobody, and what changes the picture most is that you can see
     // through it.
-    expect(finishLabel({
-      id: "a", name: "A", color: "#888", metalness: 0.9, opacity: 0.3, roughness: 0.05,
-    })).toBe("Glossy, transparent");
+    expect(
+      finishLabel({
+        id: "a",
+        name: "A",
+        color: "#888",
+        metalness: 0.9,
+        opacity: 0.3,
+        roughness: 0.05,
+      }),
+    ).toBe("Glossy, transparent");
     // ...unless it is also giving off light, which is preferred over everything.
-    expect(finishLabel({
-      id: "a", name: "A", color: "#888", metalness: 0.9, opacity: 0.3, emissive: 1, roughness: 0.05,
-    })).toBe("Glossy, lit");
+    expect(
+      finishLabel({
+        id: "a",
+        name: "A",
+        color: "#888",
+        metalness: 0.9,
+        opacity: 0.3,
+        emissive: 1,
+        roughness: 0.05,
+      }),
+    ).toBe("Glossy, lit");
   });
 
   it("describes a material that says nothing about itself by the app default", () => {
@@ -557,4 +659,3 @@ describe("finishLabel", () => {
     }
   });
 });
-

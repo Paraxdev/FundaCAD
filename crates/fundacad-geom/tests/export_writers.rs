@@ -1,6 +1,5 @@
-//! The mesh export writers against the Python engine's, byte for byte on the
-//! same arrays (tests/export/gen.py on the legacy branch), and the export grade mesh against
-//! Python's by volume and area, since the kernels differ in version.
+//! The mesh export writers byte for byte against the Python engine's on the same arrays (tests/export/gen.py
+//! on the legacy branch), and the export grade mesh by volume and area, since the kernels differ in version.
 
 use blake2::digest::{Update, VariableOutput};
 use blake2::Blake2bVar;
@@ -32,10 +31,7 @@ fn arrays(name: &str) -> (Vec<f64>, Vec<u32>) {
     let raw = std::fs::read(dir().join(format!("export/{name}.mesh"))).unwrap();
     let nv = u32::from_le_bytes(raw[0..4].try_into().unwrap()) as usize;
     let nt = u32::from_le_bytes(raw[4..8].try_into().unwrap()) as usize;
-    let pos = raw[8..8 + nv * 24]
-        .chunks_exact(8)
-        .map(|c| f64::from_le_bytes(c.try_into().unwrap()))
-        .collect();
+    let pos = raw[8..8 + nv * 24].chunks_exact(8).map(|c| f64::from_le_bytes(c.try_into().unwrap())).collect();
     let idx = raw[8 + nv * 24..8 + nv * 24 + nt * 12]
         .chunks_exact(4)
         .map(|c| u32::from_le_bytes(c.try_into().unwrap()))
@@ -152,11 +148,8 @@ fn export_grade_mesh_matches_python_by_measure() {
             let bc = [b[1] * c[2] - b[2] * c[1], b[2] * c[0] - b[0] * c[2], b[0] * c[1] - b[1] * c[0]];
             vol += (a[0] * bc[0] + a[1] * bc[1] + a[2] * bc[2]) / 6.0;
         }
-        let (wv, wa, wt) = (
-            rec["volume"].as_f64().unwrap(),
-            rec["area"].as_f64().unwrap(),
-            rec["triangles"].as_f64().unwrap(),
-        );
+        let (wv, wa, wt) =
+            (rec["volume"].as_f64().unwrap(), rec["area"].as_f64().unwrap(), rec["triangles"].as_f64().unwrap());
         let tris = (idx.len() / 3) as f64;
         assert!((vol - wv).abs() <= 1e-3 * wv.abs(), "{name} volume {vol} vs {wv}");
         assert!((area - wa).abs() <= 1e-3 * wa, "{name} area {area} vs {wa}");

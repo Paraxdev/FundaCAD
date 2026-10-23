@@ -1,6 +1,5 @@
-//! FreeCAD documents (.FCStd): a zip of `Document.xml` and one OCCT BREP per
-//! object. Only the XML and the BREPs are read, never anything a document
-//! could run.
+//! FreeCAD documents (.FCStd): a zip of `Document.xml` and one OCCT BREP per object. Only the XML and the BREPs
+//! are read, never anything a document could run.
 
 use std::collections::{HashMap, HashSet};
 use std::io::Read;
@@ -266,13 +265,10 @@ pub fn read_fcstd(path: &Path) -> Result<Imported, String> {
             }
         }
         let shape = match place {
-            Some((r, shift)) => kernel::rigid_moved(
-                &shape,
-                [r[0][0], r[1][0], r[2][0]],
-                [r[0][2], r[1][2], r[2][2]],
-                shift,
-            )
-            .map_err(|e| format!("{label}: {e}"))?,
+            Some((r, shift)) => {
+                kernel::rigid_moved(&shape, [r[0][0], r[1][0], r[2][0]], [r[0][2], r[1][2], r[2][2]], shift)
+                    .map_err(|e| format!("{label}: {e}"))?
+            }
             None => shape,
         };
         picked.push((label, shape));

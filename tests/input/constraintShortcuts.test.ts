@@ -5,7 +5,9 @@ import { SHORTCUTS, formatShortcut, resolveShortcut, shortcutHudGroups } from ".
 import { CONSTRAINT_TOOLS } from "../../src/sketch/constraintTools";
 import { SKETCH_MODIFY } from "../../src/app/actionTables";
 
-const constraintActions = Object.entries(SKETCH_MODIFY).filter(([, tool]) => CONSTRAINT_TOOLS.has(tool)).map(([a]) => a);
+const constraintActions = Object.entries(SKETCH_MODIFY)
+  .filter(([, tool]) => CONSTRAINT_TOOLS.has(tool))
+  .map(([a]) => a);
 
 describe("constraint shortcuts", () => {
   it("covers every constraint tool", () => {
@@ -21,7 +23,7 @@ describe("constraint shortcuts", () => {
     const sketch = shortcutHudGroups().find((g) => g.name === "Sketch")!;
     for (const a of constraintActions) {
       const row = SHORTCUTS.find((s) => s.action === a && s.context === "sketch")!;
-      expect(sketch.rows).toContainEqual({ key: formatShortcut(row), label: row.label });
+      expect(sketch.rows).toContainEqual(expect.objectContaining({ key: formatShortcut(row), label: row.label }));
     }
   });
 

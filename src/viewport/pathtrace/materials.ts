@@ -1,14 +1,14 @@
-// What the tracer reads off a body's material. The tracer takes three's
-// physical fields as they are, so a finish reaches it by copying them; the
-// raster-only parts (the auto thickness pass, the procedural shader) are left
-// behind here, the procedural shader is baked by surfaceBake.ts.
+// The tracer takes three's physical fields as they are, so a finish reaches it by copying them. Raster only
+// parts are left behind, and the procedural shader is baked by surfaceBake.ts.
 
 import * as THREE from "three";
 
 type Physical = Partial<THREE.MeshPhysicalMaterial>;
 
 export function traceMaterialFrom(
-  src: THREE.Material, vertexColors: boolean, m = new THREE.MeshPhysicalMaterial(),
+  src: THREE.Material,
+  vertexColors: boolean,
+  m = new THREE.MeshPhysicalMaterial(),
 ): THREE.MeshPhysicalMaterial {
   const s = src as Physical;
   m.vertexColors = vertexColors;
@@ -50,10 +50,32 @@ const BLACK = new THREE.Color(0, 0, 0);
 export function traceMaterialKey(m: THREE.Material): string {
   const s = m as Physical;
   return [
-    m.uuid, m.version, s.color?.getHex(), s.emissive?.getHex(), s.emissiveIntensity, s.metalness, s.roughness,
-    s.transmission, s.ior, s.attenuationColor?.getHex(), s.attenuationDistance, s.dispersion,
-    s.iridescence, s.iridescenceIOR, s.iridescenceThicknessRange?.join("/"), s.specularColor?.getHex(),
-    s.specularIntensity, s.sheen, s.sheenColor?.getHex(), s.sheenRoughness, s.clearcoat, s.clearcoatRoughness,
-    m.opacity, m.transparent, m.side, m.userData.surfKey ?? "", m.userData.noLight === true,
+    m.uuid,
+    m.version,
+    s.color?.getHex(),
+    s.emissive?.getHex(),
+    s.emissiveIntensity,
+    s.metalness,
+    s.roughness,
+    s.transmission,
+    s.ior,
+    s.attenuationColor?.getHex(),
+    s.attenuationDistance,
+    s.dispersion,
+    s.iridescence,
+    s.iridescenceIOR,
+    s.iridescenceThicknessRange?.join("/"),
+    s.specularColor?.getHex(),
+    s.specularIntensity,
+    s.sheen,
+    s.sheenColor?.getHex(),
+    s.sheenRoughness,
+    s.clearcoat,
+    s.clearcoatRoughness,
+    m.opacity,
+    m.transparent,
+    m.side,
+    m.userData.surfKey ?? "",
+    m.userData.noLight === true,
   ].join(".");
 }

@@ -1,14 +1,11 @@
-// The navigator as a CameraRig: it owns the three.js cameras and writes the
-// pose into them the moment it changes, so every raycast and projection is
-// taken from the pose on screen.
+// Writes the pose into the three.js cameras the moment it changes, so every raycast
+// and projection is taken from the pose on screen.
 
 import * as THREE from "three";
-import type {
-  CameraRig, CameraState, FitOptions, NavLimits, ProjectionMode, StandardView,
-} from "../cameras";
+import type { CameraRig, CameraState, FitOptions, NavLimits, ProjectionMode, StandardView } from "../cameras";
 import { cameraFlightsOn } from "../../ui/motion";
 import { orthoClip, perspClip, NEAR_AT_REST } from "../clipPlanes";
-import { boxDepthRange } from "./anchor";
+import { boxDepthRange, visibleNearDepth } from "./anchor";
 import { bindInput } from "./input";
 import { Navigator, lookQuatUp } from "./navigator";
 import { clonePose, distanceOf, eyeOf, forwardOf, setOrientation } from "./pose";
@@ -47,6 +44,7 @@ export function createNavigatorRig(dom: HTMLElement, aspect: number): CameraRig 
   const eye = new THREE.Vector3();
   const upV = new THREE.Vector3();
   let written = -1;
+  let parts: readonly THREE.Box3[] = [];
   function write() {
     const p = nav.pose;
     if (written === nav.poseVersion()) return;
@@ -61,7 +59,10 @@ export function createNavigatorRig(dom: HTMLElement, aspect: number): CameraRig 
       cam.quaternion.copy(p.q);
       cam.up.copy(upV);
     }
-    const pc = perspClip(distanceOf(p), zmin, zmax);
+    // A big assembly's union box reaches the eye plane long before any part does (SV08 from above
+    // at 600mm: corner 39mm behind the eye, nearest part 19mm in front), so near goes by the parts.
+    const seen = parts.length ? visibleNearDepth(p, a, parts) : NaN;
+    const pc = perspClip(distanceOf(p), Number.isFinite(seen) ? seen : zmin, zmax);
     persp.fov = p.fov;
     persp.aspect = a;
     persp.near = pc.near;
@@ -158,7 +159,8 @@ export function createNavigatorRig(dom: HTMLElement, aspect: number): CameraRig 
     setScene(s) {
       nav.setScene(s);
     },
-    setContentBox(box) {
+    setContentBox(box, partBoxes) {
+      parts = partBoxes ?? [];
       nav.setContentBox(box);
       nav.touch();
     },
@@ -234,11 +236,15 @@ export function createNavigatorRig(dom: HTMLElement, aspect: number): CameraRig 
     },
     fit(box, opts) {
       const o = fitOpts(opts);
+      if (o.padding === undefined) {
+        nav.fitBox(box, { animate: animate(o.animate) });
+        return;
+      }
       const empty = box.isEmpty();
       const sphere = box.getBoundingSphere(new THREE.Sphere());
       nav.fitSphere(empty ? new THREE.Vector3() : sphere.center, empty ? -1 : sphere.radius, {
         animate: animate(o.animate),
-        ...(o.padding !== undefined ? { padding: o.padding } : {}),
+        padding: o.padding,
       });
     },
     fitSphere(sphere, opts) {
@@ -252,7 +258,7 @@ export function createNavigatorRig(dom: HTMLElement, aspect: number): CameraRig 
       if (!box || box.isEmpty()) nav.resetView(null, 0, cameraFlightsOn());
       else {
         const s = box.getBoundingSphere(new THREE.Sphere());
-        nav.resetView(s.center, s.radius, cameraFlightsOn());
+        nav.resetView(s.center, s.radius, cameraFlightsOn(), box);
       }
     },
     setStandardView(view) {

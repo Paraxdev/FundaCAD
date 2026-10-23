@@ -1,9 +1,5 @@
-// Expression evaluation against a name→value scope. Values and results are in
-// canonical units (mm / degrees / raw counts). Evaluation never throws on
-// arithmetic (÷0 → Infinity); callers gate on Number.isFinite (a non-finite
-// result keeps the previous cached value, never ships into geometry). It DOES
-// throw ExprError on structural problems: unknown parameter, unknown function,
-// wrong arity, those are reject-at-commit errors.
+// Expression evaluation in canonical units (mm, degrees, counts). Arithmetic never throws (x/0 is Infinity) and
+// callers gate on Number.isFinite; structural problems (unknown name or function, wrong arity) throw ExprError.
 
 import { CONSTANTS, ExprError, FUNCTIONS, RESERVED_FUNCTIONS, parseExpr } from "./parse";
 import type { BinOp, ExprNode } from "./parse";
@@ -28,7 +24,9 @@ export function evalNode(n: ExprNode, values: Record<string, number>): number {
       }
       const [lo, hi] = fn.arity;
       if (n.args.length < lo || n.args.length > hi) {
-        throw new ExprError(`${n.name}() takes ${hi === Infinity ? `at least ${lo}` : lo === hi ? lo : `${lo}, ${hi}`} argument${lo === 1 && hi === 1 ? "" : "s"}`);
+        throw new ExprError(
+          `${n.name}() takes ${hi === Infinity ? `at least ${lo}` : lo === hi ? lo : `${lo}, ${hi}`} argument${lo === 1 && hi === 1 ? "" : "s"}`,
+        );
       }
       return fn.apply(n.args.map((a) => evalNode(a, values)));
     }
@@ -39,19 +37,32 @@ export function evalNode(n: ExprNode, values: Record<string, number>): number {
       // a clean false and switches a feature off without anyone noticing.
       if (TRUTH_OPS.has(n.op) && (Number.isNaN(l) || Number.isNaN(r))) return NaN;
       switch (n.op) {
-        case "+": return l + r;
-        case "-": return l - r;
-        case "*": return l * r;
-        case "/": return l / r;
-        case "^": return Math.pow(l, r);
-        case "<": return l < r ? 1 : 0;
-        case "<=": return l <= r || nearlyEqual(l, r) ? 1 : 0;
-        case ">": return l > r ? 1 : 0;
-        case ">=": return l >= r || nearlyEqual(l, r) ? 1 : 0;
-        case "==": return nearlyEqual(l, r) ? 1 : 0;
-        case "!=": return nearlyEqual(l, r) ? 0 : 1;
-        case "&&": return l !== 0 && r !== 0 ? 1 : 0;
-        case "||": return l !== 0 || r !== 0 ? 1 : 0;
+        case "+":
+          return l + r;
+        case "-":
+          return l - r;
+        case "*":
+          return l * r;
+        case "/":
+          return l / r;
+        case "^":
+          return Math.pow(l, r);
+        case "<":
+          return l < r ? 1 : 0;
+        case "<=":
+          return l <= r || nearlyEqual(l, r) ? 1 : 0;
+        case ">":
+          return l > r ? 1 : 0;
+        case ">=":
+          return l >= r || nearlyEqual(l, r) ? 1 : 0;
+        case "==":
+          return nearlyEqual(l, r) ? 1 : 0;
+        case "!=":
+          return nearlyEqual(l, r) ? 0 : 1;
+        case "&&":
+          return l !== 0 && r !== 0 ? 1 : 0;
+        case "||":
+          return l !== 0 || r !== 0 ? 1 : 0;
       }
     }
     // eslint-disable-next-line no-fallthrough -- the inner switch returns on every op

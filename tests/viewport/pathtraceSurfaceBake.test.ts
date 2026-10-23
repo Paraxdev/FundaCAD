@@ -18,7 +18,10 @@ function body(mat: THREE.Material | THREE.Material[], base?: number): THREE.Mesh
   const g = new THREE.BoxGeometry(10, 10, 10);
   const m = new THREE.Mesh(g, mat);
   const n = g.getAttribute("position").count;
-  m.userData.owner = { id: "body1", ...(base === undefined ? {} : { baseColors: new Float32Array(n * 3).fill(base), baseVersion: 1 }) };
+  m.userData.owner = {
+    id: "body1",
+    ...(base === undefined ? {} : { baseColors: new Float32Array(n * 3).fill(base), baseVersion: 1 }),
+  };
   return m;
 }
 
@@ -27,7 +30,9 @@ function stubBaker(slotIndex: number, tint: [number, number, number], amount: nu
   return (src) => {
     const n = src.geometry.getAttribute("position").count;
     const slot = new Int16Array(n).fill(-1);
-    const groups = Array.isArray(src.material) ? src.geometry.groups : [{ start: 0, count: src.geometry.index!.count, materialIndex: 0 }];
+    const groups = Array.isArray(src.material)
+      ? src.geometry.groups
+      : [{ start: 0, count: src.geometry.index!.count, materialIndex: 0 }];
     for (const g of groups) {
       if (g.materialIndex !== slotIndex) continue;
       for (let i = g.start; i < g.start + g.count; i++) slot[src.geometry.index!.getX(i)] = slotIndex;

@@ -1,14 +1,7 @@
-//! Moving faces: press/pull and offset face, the Python engine's `solid_ops.py` `_press_pull`,
-//! `_offset_faces`, `_thicken_press_pull`, `_sweep_press_pull` and the
-//! handlers of the Python engine's `builder.py`.
-//!
-//! The Python engine runs the whole-body BRepOffset pass in offset_child.py
-//! because it has crashed its worker. Here it runs in process: the engine is
-//! itself a supervised worker, the freeform faces measured to crash are refused
-//! before any offset (`guard_offsetable`, the analytic-only dispatch below),
-//! and on OCCT 7.8.1 the chamfered cylinder offset_child.py documents refuses
-//! with an error instead of crashing. The BREP round trip the child did is kept,
-//! since it changes which offsets the kernel accepts.
+//! Moving faces: press/pull and offset face, `_press_pull` and friends of solid_ops.py. The BRepOffset pass
+//! runs in process, unlike offset_child.py: the engine is a supervised worker, faces measured to crash are refused
+//! first (`guard_offsetable`), and OCCT 7.8.1 refuses the chamfered cylinder rather than crashing. The child's
+//! BREP round trip is kept, since it changes which offsets the kernel accepts.
 
 use fundacad_core::schema::{OffsetFace, Operation, PressPull, Selector};
 use glam::{dvec3, DVec3};
@@ -21,14 +14,12 @@ use opencascade_sys as ffi;
 use serde_json::Value;
 
 use super::axis_push;
-use super::extent;
 use super::blend::ops as blend_ops;
 use super::boolean::combine;
+use super::extent;
 use super::extrude::prisms;
 use super::resize::{self, Bad, Resize};
-use super::solid_ops::{
-    faces_of, guard_offsetable, offsettable_curved, resolve_field, surface_type,
-};
+use super::solid_ops::{faces_of, guard_offsetable, offsettable_curved, resolve_field, surface_type};
 use crate::builder::{py_g, Ctx, FResult, Fail};
 use crate::kernel::{self, BoolKind, Kind};
 use crate::mesh::edges::SMOOTH_EDGE_DEG;
@@ -64,11 +55,7 @@ fn fused(part: &Shape, tool: &Shape, grow: bool) -> FResult<Shape> {
 }
 
 fn vertices(shape: &Shape) -> Vec<DVec3> {
-    kernel::subshapes(shape, Kind::Vertex)
-        .iter()
-        .filter_map(kernel::bbox)
-        .map(|b| dvec3(b[0], b[1], b[2]))
-        .collect()
+    kernel::subshapes(shape, Kind::Vertex).iter().filter_map(kernel::bbox).map(|b| dvec3(b[0], b[1], b[2])).collect()
 }
 
 /// `_clamp_planar`: an inward push stops at 90% of the body's extent along the normal.
@@ -78,10 +65,7 @@ fn clamp_planar(part: &Shape, face: &Shape, d: f64) -> f64 {
     }
     let n = normal(face);
     let proj: Vec<f64> = vertices(part).iter().map(|v| v.dot(n)).collect();
-    let (Some(hi), Some(lo)) = (
-        proj.iter().copied().reduce(f64::max),
-        proj.iter().copied().reduce(f64::min),
-    ) else {
+    let (Some(hi), Some(lo)) = (proj.iter().copied().reduce(f64::max), proj.iter().copied().reduce(f64::min)) else {
         return d;
     };
     let thickness = hi - lo;
@@ -93,10 +77,8 @@ fn clamp_planar(part: &Shape, face: &Shape, d: f64) -> f64 {
 }
 
 fn solid_from_shell(shell: &Shape) -> Option<Shape> {
-    let mut make =
-        ffi::b_rep_builder_api::BRepBuilderAPI_MakeSolid_new(ffi::topo_ds::Shell(shell.raw()));
-    make.IsDone()
-        .then(|| Shape::from_raw_ref(make.pin_mut().Shape()))
+    let mut make = ffi::b_rep_builder_api::BRepBuilderAPI_MakeSolid_new(ffi::topo_ds::Shell(shell.raw()));
+    make.IsDone().then(|| Shape::from_raw_ref(make.pin_mut().Shape()))
 }
 
 enum Refusal {
@@ -109,9 +91,8 @@ fn offset_pass(part: &Shape, faces: &[Shape], dists: &[f64]) -> Result<Shape, Re
     let detached = ProgressRange::detached();
     let mut bundle = vec![part.clone()];
     bundle.extend(faces.iter().cloned());
-    let text = kernel::compound(&bundle)
-        .to_brep_text(BrepWriteOptions::default(), &detached)
-        .map_err(|_| Refusal::Refused)?;
+    let text =
+        kernel::compound(&bundle).to_brep_text(BrepWriteOptions::default(), &detached).map_err(|_| Refusal::Refused)?;
     let read = Shape::from_brep_text(&text, &detached).map_err(|_| Refusal::Refused)?;
     let kids = kernel::children(&read);
     if kids.len() != dists.len() + 1 {
@@ -127,23 +108,15 @@ fn offset_pass(part: &Shape, faces: &[Shape], dists: &[f64]) -> Result<Shape, Re
         pairs.push((f.as_face().ok_or(Refusal::Refused)?, *d));
     }
     let pairs: Vec<_> = pairs.iter().map(|(f, d)| (f, *d)).collect();
-    let options = OffsetOptions {
-        tolerance: 1e-4,
-        join: OffsetJoin::Intersection,
-        ..Default::default()
-    };
-    let mut out = part
-        .offset_shape(0.0, &pairs, options, &detached)
-        .map_err(|_| Refusal::Refused)?;
+    let options = OffsetOptions { tolerance: 1e-4, join: OffsetJoin::Intersection, ..Default::default() };
+    let mut out = part.offset_shape(0.0, &pairs, options, &detached).map_err(|_| Refusal::Refused)?;
     if out.shape_type() == ShapeType::Shell {
         out = solid_from_shell(&out).ok_or(Refusal::Refused)?;
     }
     if !valid(&out) {
         return Err(Refusal::Invalid);
     }
-    let text = out
-        .to_brep_text(BrepWriteOptions::default(), &detached)
-        .map_err(|_| Refusal::Refused)?;
+    let text = out.to_brep_text(BrepWriteOptions::default(), &detached).map_err(|_| Refusal::Refused)?;
     Shape::from_brep_text(&text, &detached).map_err(|_| Refusal::Refused)
 }
 
@@ -156,13 +129,12 @@ fn offset_faces(part: &Shape, pairs: &[(Shape, f64)]) -> FResult<Shape> {
     let faces: Vec<Shape> = pairs.iter().map(|(f, _)| f.clone()).collect();
     let dists: Vec<f64> = pairs.iter().map(|(_, d)| *d).collect();
     // solid_ops.py waits on its offset child for _OFFSET_TIMEOUT, beating meanwhile.
-    crate::heartbeat::while_running(std::time::Duration::from_secs(180), || {
-        offset_pass(part, &faces, &dists)
-    })
-    .map_err(|r| match r {
-        Refusal::Invalid => Fail::msg(RAN_PAST),
-        Refusal::Refused => Fail::msg(CANT_OFFSET),
-    })
+    crate::heartbeat::while_running(std::time::Duration::from_secs(180), || offset_pass(part, &faces, &dists)).map_err(
+        |r| match r {
+            Refusal::Invalid => Fail::msg(RAN_PAST),
+            Refusal::Refused => Fail::msg(CANT_OFFSET),
+        },
+    )
 }
 
 const CLOSED_IN: &str = "the faces beside this one meet before it gets that far, try a smaller distance";
@@ -178,21 +150,14 @@ fn right_way(part: &Shape, out: &Shape, d: f64) -> bool {
 /// The face of `slab` lying `along` from `face`'s plane and facing `dir`.
 fn slab_face(slab: &Shape, face: &Shape, dir: DVec3, along: f64) -> Option<Shape> {
     let origin = centre(face);
-    faces_of(slab).into_iter().find(|f| {
-        normal(f).dot(dir) > 0.999 && ((centre(f) - origin).dot(dir) - along).abs() < 0.5 * along
-    })
+    faces_of(slab)
+        .into_iter()
+        .find(|f| normal(f).dot(dir) > 0.999 && ((centre(f) - origin).dot(dir) - along).abs() < 0.5 * along)
 }
 
-/// A flat face moved along its normal with each face around it carried along
-/// its own surface to meet it, so a sloped side keeps its slope and a curved
-/// one keeps its curve, instead of a straight wall rising off the old edge.
-///
-/// Offsetting the face in the body itself fails once it runs into another part
-/// of the body, so the offset only takes a first short step there. That step's
-/// slab is bounded by the face's own neighbours and nothing else, so pushed on
-/// alone it goes as far as asked unless its sides meet, and merging it with
-/// the body settles whatever it ran into. None where the face cannot follow its
-/// neighbours at all, and the caller extrudes it straight.
+/// A flat face moved along its normal with each neighbour carried along its own surface to meet it, so a slope
+/// stays a slope. Offsetting in the body fails once it hits another part, so only a short first step is offset
+/// there and its slab is pushed on alone, then merged. None when the face cannot follow its neighbours at all.
 fn follow_neighbours(part: &Shape, face: &Shape, d: f64) -> FResult<Option<Shape>> {
     // A round running into the face tangentially has no slope to carry on, so
     // the face sinks or rises inside it as a straight recess or boss.
@@ -226,20 +191,14 @@ fn follow_neighbours(part: &Shape, face: &Shape, d: f64) -> FResult<Option<Shape
         Some(g) => g,
         None => collapsed(&slab, &front, face, dir, d.abs()).ok_or_else(|| Fail::msg(CLOSED_IN))?,
     };
-    Ok(fused(part, &grown, d > 0.0)
-        .ok()
-        .filter(|out| right_way(part, out, d)))
+    Ok(fused(part, &grown, d > 0.0).ok().filter(|out| right_way(part, out, d)))
 }
 
-/// The slab with its front face gone and its sides carried on until they meet
-/// in a ridge or a point: a push past where the sides close in, which goes no
-/// further however far it is asked to.
+/// The slab with its front face gone and its sides carried on until they meet in a ridge or a point: a push past
+/// where the sides close in, which goes no further however far it is asked.
 fn collapsed(slab: &Shape, front: &Shape, face: &Shape, dir: DVec3, reach: f64) -> Option<Shape> {
     let front = front.as_face()?;
-    let out = slab
-        .remove_features(&[&front], true, &ProgressRange::detached())
-        .ok()?
-        .shape;
+    let out = slab.remove_features(&[&front], true, &ProgressRange::detached()).ok()?.shape;
     let closed = kernel::count(&out, Kind::Face) < kernel::count(slab, Kind::Face)
         && valid(&out)
         && kernel::volume(&out) > kernel::volume(slab);
@@ -249,21 +208,12 @@ fn collapsed(slab: &Shape, front: &Shape, face: &Shape, dir: DVec3, reach: f64) 
 
 /// `_thicken_press_pull`: one face grown into a slab and booleaned in.
 fn thicken_press_pull(part: &Shape, face: &Shape, d: f64) -> FResult<Shape> {
-    let options = OffsetOptions {
-        tolerance: 1e-4,
-        join: OffsetJoin::Intersection,
-        thickening: true,
-        ..Default::default()
-    };
-    let slab = face
-        .offset_thick_solid(d, &[], options, &ProgressRange::detached())
-        .map_err(|_| Fail::msg(CANT_OFFSET))?;
+    let options =
+        OffsetOptions { tolerance: 1e-4, join: OffsetJoin::Intersection, thickening: true, ..Default::default() };
+    let slab =
+        face.offset_thick_solid(d, &[], options, &ProgressRange::detached()).map_err(|_| Fail::msg(CANT_OFFSET))?;
     // OCCT hands the slab back inside out for one sign, and fusing that erases the body.
-    let slab = if kernel::volume(&slab) < 0.0 {
-        slab.reversed()
-    } else {
-        slab
-    };
+    let slab = if kernel::volume(&slab) < 0.0 { slab.reversed() } else { slab };
     let out = fused(part, &slab, d > 0.0)?;
     let (before, after) = (kernel::volume(part), kernel::volume(&out));
     if !valid(&out) || after <= 0.0 || (after > before) != (d > 0.0) {
@@ -300,9 +250,8 @@ fn built(r: Resize) -> FResult<Shape> {
     }
 }
 
-/// A cylinder, cone, sphere or torus face resized about its own axis or
-/// centre. Where that cannot be built, a face nothing runs smoothly into is
-/// offset by the kernel instead, as far as asked and checked the same way.
+/// A cylinder, cone, sphere or torus face resized about its own axis or centre. Where that cannot be built, a face
+/// nothing runs smoothly into is offset by the kernel instead, checked the same way.
 fn resize_round(part: &Shape, face: &Shape, d: f64, follow: bool) -> FResult<Shape> {
     let r = match resize::resize(part, std::slice::from_ref(face), d, follow) {
         // Adding material never cuts a body apart. A sphere fused with the
@@ -323,11 +272,9 @@ fn resize_round(part: &Shape, face: &Shape, d: f64, follow: bool) -> FResult<Sha
     }
 }
 
-/// The selected faces that together are every face of one closed tangent
-/// run, such as all four faces of a slot, each run to be resized once, and
-/// which of `faces` that leaves nothing to do for: the run's faces, and the
-/// faces on the same surface as a round face picked before them, which move
-/// with it.
+/// The selected faces that make up a whole closed tangent run, such as a slot's four, each run to be resized
+/// once, and which of `faces` that leaves nothing to do for: the run's faces, and the faces on the surface of a
+/// round face picked before them, which move with it.
 fn whole_runs(part: &Shape, faces: &[Shape]) -> (Vec<Vec<Shape>>, Vec<bool>) {
     let n = faces.len();
     let mut taken = vec![false; n];
@@ -340,9 +287,8 @@ fn whole_runs(part: &Shape, faces: &[Shape]) -> (Vec<Vec<Shape>>, Vec<bool>) {
             continue;
         }
         let Some(info) = resize::describe(part, &faces[i]) else { continue };
-        let on = |p: &DVec3| {
-            (0..n).find(|&j| kernel::distance_to_point(&faces[j], p.to_array()).is_some_and(|d| d < 1e-6))
-        };
+        let on =
+            |p: &DVec3| (0..n).find(|&j| kernel::distance_to_point(&faces[j], p.to_array()).is_some_and(|d| d < 1e-6));
         let hits: Vec<Option<usize>> = info.tangent.run.iter().map(on).collect();
         if info.tangent.faces == 0 {
             hits.into_iter().flatten().filter(|&j| j != i).for_each(|j| taken[j] = true);
@@ -378,11 +324,7 @@ fn press_pull_shape(part: &Shape, face: &Shape, d: f64, clamp: bool, taper: f64,
                 "can't press/pull this region, it's a single mesh facet, not a clean face (the imported body is faceted, not prismatic)",
             ));
         }
-        let dd = if clamp {
-            clamp_planar(part, face, d)
-        } else {
-            d
-        };
+        let dd = if clamp { clamp_planar(part, face, d) } else { d };
         if dd.abs() < 1e-9 {
             return Ok(part.clone());
         }
@@ -454,7 +396,12 @@ fn truthy(v: &Value) -> bool {
 
 /// The point an up to target passes through, and its normal; a point target
 /// has none and is measured along the push.
-fn up_to_target(ctx: &mut Ctx, f: &PressPull, act: usize, up: Option<&Value>) -> FResult<Option<(DVec3, Option<DVec3>)>> {
+fn up_to_target(
+    ctx: &mut Ctx,
+    f: &PressPull,
+    act: usize,
+    up: Option<&Value>,
+) -> FResult<Option<(DVec3, Option<DVec3>)>> {
     if up.is_some() {
         if let Some(sel) = &f.up_to {
             let face = extent::face(ctx, &f.id, "Press/Pull", sel, Some(act))
@@ -478,9 +425,7 @@ fn distance_to_target(c: DVec3, dir: DVec3, point: DVec3, n: Option<DVec3>) -> F
     let n = n.unwrap_or(dir);
     let denom = dir.dot(n);
     if denom.abs() < 1e-6 {
-        return Err(Fail::msg(
-            "Press/Pull: the face is parallel to the 'up to' surface, can't reach it",
-        ));
+        return Err(Fail::msg("Press/Pull: the face is parallel to the 'up to' surface, can't reach it"));
     }
     Ok((point - c).dot(n) / denom)
 }
@@ -508,19 +453,10 @@ pub fn press_pull(ctx: &mut Ctx, f: &PressPull) -> FResult {
     let dist = ctx.val(&f.distance)?;
     let taper = ctx.val_or(f.taper.as_ref(), 0.0)?;
     if taper != 0.0 && !(-89.0 < taper && taper < 89.0) {
-        return Err(Fail::msg(format!(
-            "Press/Pull: taper must be between -89 and 89 degrees (got {})",
-            py_g(taper)
-        )));
+        return Err(Fail::msg(format!("Press/Pull: taper must be between -89 and 89 degrees (got {})", py_g(taper))));
     }
     let taper = if target.is_some() { 0.0 } else { taper };
-    let mode = f
-        .mode
-        .as_ref()
-        .map(|m| m.as_str())
-        .filter(|m| !m.is_empty())
-        .unwrap_or("auto")
-        .to_owned();
+    let mode = f.mode.as_ref().map(|m| m.as_str()).filter(|m| !m.is_empty()).unwrap_or("auto").to_owned();
     let along_axis = f.direction.as_ref().is_some_and(|d| d.as_str() == "axis");
     let targets: Option<Vec<String>> = f.targets.clone();
     let follow = f.follow_tangent.unwrap_or(true);
@@ -531,7 +467,13 @@ pub fn press_pull(ctx: &mut Ctx, f: &PressPull) -> FResult {
         let mut quiet = Resolver::new(None, Some(&f.id));
         let start: Option<Vec<Shape>> = sels
             .iter()
-            .map(|sel| quiet.face_selectors(&act_shape, &fundacad_core::schema::OneOrMany::One(sel.clone())).ok()?.into_iter().next())
+            .map(|sel| {
+                quiet
+                    .face_selectors(&act_shape, &fundacad_core::schema::OneOrMany::One(sel.clone()))
+                    .ok()?
+                    .into_iter()
+                    .next()
+            })
             .collect();
         let (runs, taken) = start.map(|s| whole_runs(&act_shape, &s)).unwrap_or_default();
         if taken.len() == sels.len() {
@@ -556,12 +498,7 @@ pub fn press_pull(ctx: &mut Ctx, f: &PressPull) -> FResult {
                 act_shape = ctx.bodies[act].shape().clone();
             }
         }
-        let found = resolve_field(
-            ctx,
-            &f.id,
-            &act_shape,
-            &fundacad_core::schema::OneOrMany::One(sel.clone()),
-        )?;
+        let found = resolve_field(ctx, &f.id, &act_shape, &fundacad_core::schema::OneOrMany::One(sel.clone()))?;
         let Some(src) = found.into_iter().next() else {
             return Err(Fail::msg("no face found to press/pull"));
         };
@@ -574,7 +511,13 @@ pub fn press_pull(ctx: &mut Ctx, f: &PressPull) -> FResult {
             None => dist,
         };
         let d = if target.is_some() && reach_offset != 0.0 {
-            let toward = if d.abs() >= 1e-9 { d.signum() } else if dist < 0.0 { -1.0 } else { 1.0 };
+            let toward = if d.abs() >= 1e-9 {
+                d.signum()
+            } else if dist < 0.0 {
+                -1.0
+            } else {
+                1.0
+            };
             let pushed = d + toward * reach_offset;
             if pushed * toward < 1e-9 {
                 return Err(Fail::msg("Press/Pull: the 'up to' offset reaches back past the face"));
@@ -588,11 +531,8 @@ pub fn press_pull(ctx: &mut Ctx, f: &PressPull) -> FResult {
             if d.abs() < 1e-9 {
                 continue;
             }
-            let prism = if along_axis {
-                axis_push::axis_prism(&act_shape, &src, d)?
-            } else {
-                face_prism(&src, d, taper)?
-            };
+            let prism =
+                if along_axis { axis_push::axis_prism(&act_shape, &src, d)? } else { face_prism(&src, d, taper)? };
             let op = Operation::from(mode.as_str());
             // The body pushed from is named by the feature, so its eye does not
             // keep the prism off it.
@@ -613,10 +553,7 @@ pub fn press_pull(ctx: &mut Ctx, f: &PressPull) -> FResult {
             ctx.advise(&f.id, "brokeThrough", format!("the offset broke through the outside of {name}"));
         }
         if target.is_some() && kernel::subshapes(&out, Kind::Solid).is_empty() {
-            return Err(Fail::msg(format!(
-                "Press/Pull: the push leaves nothing of {}",
-                ctx.bodies[act].name
-            )));
+            return Err(Fail::msg(format!("Press/Pull: the push leaves nothing of {}", ctx.bodies[act].name)));
         }
         act_shape = out;
         ctx.set_shape(act, act_shape.clone());
@@ -645,11 +582,8 @@ fn inner_point(face: &Shape) -> Option<DVec3> {
     })
 }
 
-/// Did pushing `pushed` in eat into a face it does not touch? An offset curved
-/// face grows or shrinks as it moves, so it can run out through the far side
-/// of a thin wall. What it removed is bounded by the pushed face, its
-/// neighbours, which it legitimately trims, and the faces it made; any other
-/// face of the body on that boundary is where it broke out.
+/// Whether pushing `pushed` in ate into a face it does not touch: an offset curved face changes size as it moves
+/// and can break out through a thin wall. Only the pushed face, its neighbours and new faces may bound the removal.
 fn broke_through(before: &Shape, after: &Shape, pushed: &Shape) -> bool {
     const TOL: f64 = 1e-3;
     let Ok(removed) = kernel::boolean_op(before, &[after], BoolKind::Cut) else {
@@ -675,9 +609,7 @@ fn broke_through(before: &Shape, after: &Shape, pushed: &Shape) -> bool {
     }
     kernel::subshapes(&removed, Kind::Face).iter().filter_map(inner_point).any(|p| {
         let p = p.to_array();
-        others
-            .iter()
-            .any(|(fc, b)| near(p, *b) && kernel::distance_to_point(fc, p).is_some_and(|d| d < TOL))
+        others.iter().any(|(fc, b)| near(p, *b) && kernel::distance_to_point(fc, p).is_some_and(|d| d < TOL))
     })
 }
 
@@ -710,7 +642,9 @@ pub fn offset_face(ctx: &mut Ctx, f: &OffsetFace) -> FResult {
         let mut quiet = Resolver::new(None, Some(&f.id));
         let picked: Vec<Vec<Shape>> = sels
             .iter()
-            .map(|sel| quiet.face_selectors(&shape, &fundacad_core::schema::OneOrMany::One(sel.clone())).unwrap_or_default())
+            .map(|sel| {
+                quiet.face_selectors(&shape, &fundacad_core::schema::OneOrMany::One(sel.clone())).unwrap_or_default()
+            })
             .collect();
         let flat: Vec<Shape> = picked.iter().flatten().cloned().collect();
         let (runs, taken) = whole_runs(&shape, &flat);

@@ -1,6 +1,5 @@
-//! The `thread` feature: each profile family and hand on a shaft and in a bore,
-//! multi-start, print clearance, a ridge in a nominal bore, and a thread that
-//! follows its hole when the hole changes size.
+//! The `thread` feature: each profile family and hand on a shaft and in a bore, multi-start, print clearance, a ridge
+//! in a nominal bore, and a thread that follows its hole when the hole changes size.
 
 use fundacad_core::CadDocument;
 use fundacad_geom::builder::{self, NoWatch, Rebuild};
@@ -106,7 +105,15 @@ fn inside(s: &opencascade::primitives::Shape, theta_deg: f64, rad: f64, z: f64) 
 
 /// Centres of the runs along z, on the meridian at `theta`, where a point at
 /// radius `rad` is empty (a groove) when `empty` or filled (a ridge) otherwise.
-fn runs(s: &opencascade::primitives::Shape, theta: f64, rad: f64, z0: f64, z1: f64, step: f64, empty: bool) -> Vec<f64> {
+fn runs(
+    s: &opencascade::primitives::Shape,
+    theta: f64,
+    rad: f64,
+    z0: f64,
+    z1: f64,
+    step: f64,
+    empty: bool,
+) -> Vec<f64> {
     let mut out = Vec::new();
     let mut start: Option<f64> = None;
     let mut z = z0;
@@ -129,12 +136,23 @@ fn runs(s: &opencascade::primitives::Shape, theta: f64, rad: f64, z0: f64, z1: f
 
 fn wrap(x: f64, p: f64) -> f64 {
     let m = x.rem_euclid(p);
-    if m > p / 2.0 { m - p } else { m }
+    if m > p / 2.0 {
+        m - p
+    } else {
+        m
+    }
 }
 
 /// The groove spacing along one meridian is the pitch, and turning by 45/N
 /// degrees about +z moves it P/8 up for a right hand thread, down for a left.
-fn assert_pitch_and_hand(s: &opencascade::primitives::Shape, probe_r: f64, p: f64, starts: u32, left: bool, empty: bool) {
+fn assert_pitch_and_hand(
+    s: &opencascade::primitives::Shape,
+    probe_r: f64,
+    p: f64,
+    starts: u32,
+    left: bool,
+    empty: bool,
+) {
     let step = p / 400.0;
     let a = runs(s, 0.0, probe_r, -2.5 * p, 2.5 * p, step, empty);
     assert!(a.len() >= 3, "grooves along the meridian: {a:?}");
@@ -166,7 +184,10 @@ fn shaft_case(c: Case, r: f64, l: f64) {
     let hand = if c.left { "left" } else { "right" };
     let base = build(json!({}), vec![shaft(r, l)]);
     let before = kernel::volume_precise(&base.bodies[0].shape);
-    let res = build(json!({}), vec![shaft(r, l), thread(face_at(r), c.groove.profile(0.05 * c.p), c.p, c.starts, hand, json!({}))]);
+    let res = build(
+        json!({}),
+        vec![shaft(r, l), thread(face_at(r), c.groove.profile(0.05 * c.p), c.p, c.starts, hand, json!({}))],
+    );
     assert!(errors(&res).is_empty(), "{:?}", errors(&res));
     assert_eq!(res.bodies.len(), 1);
     assert_eq!(res.bodies[0].id, "body1");
@@ -250,7 +271,10 @@ fn right_hand_four_start_tr8x8_lead_screw() {
 #[test]
 fn print_clearance_moves_the_whole_thread_into_the_material() {
     let g = iso_external(1.0);
-    let res = build(json!({}), vec![shaft(3.0, 12.0), thread(face_at(3.0), g.profile(0.05), 1.0, 1, "right", json!({"clearance": 0.2}))]);
+    let res = build(
+        json!({}),
+        vec![shaft(3.0, 12.0), thread(face_at(3.0), g.profile(0.05), 1.0, 1, "right", json!({"clearance": 0.2}))],
+    );
     assert!(errors(&res).is_empty(), "{:?}", errors(&res));
     let s = &res.bodies[0].shape;
     assert_eq!(kernel::count(s, kernel::Kind::Solid), 1);
@@ -266,7 +290,8 @@ fn a_ridge_joined_into_a_nominal_bore_makes_the_iso_minor() {
     let h = 5.0 / 8.0 * 0.866_025_403_784_438_6 * p;
     let b = 0.15 * h;
     let at_major = 0.875 * p;
-    let tooth = json!([[b, -(at_major / 2.0 + b * TAN30)], [-h, -p / 8.0], [-h, p / 8.0], [b, at_major / 2.0 + b * TAN30]]);
+    let tooth =
+        json!([[b, -(at_major / 2.0 + b * TAN30)], [-h, -p / 8.0], [-h, p / 8.0], [b, at_major / 2.0 + b * TAN30]]);
     let mut f = bored_block(json!(3.0), 12.0);
     f.push(thread(face_at(3.0), tooth, p, 1, "right", json!({"operation": "join"})));
     let res = build(json!({}), f);
@@ -298,7 +323,8 @@ fn editing_the_hole_diameter_rethreads() {
 #[test]
 fn a_profile_wider_than_the_pitch_is_refused() {
     let g = iso_external(1.0);
-    let res = build(json!({}), vec![shaft(3.0, 12.0), thread(face_at(3.0), g.profile(0.05), 0.5, 1, "right", json!({}))]);
+    let res =
+        build(json!({}), vec![shaft(3.0, 12.0), thread(face_at(3.0), g.profile(0.05), 0.5, 1, "right", json!({}))]);
     assert!(errors(&res).iter().any(|e| e.contains("narrower than")), "{:?}", errors(&res));
 }
 

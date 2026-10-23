@@ -1,6 +1,5 @@
-//! glTF triangles, binary or text,, world placed, in Z up millimetres: what
-//! `mesh_import._read_glb` gets from `RWGltf_CafReader`, which the static
-//! kernel is built without (it needs RapidJSON).
+//! glTF triangles, binary or text, world placed, in Z up millimetres: what mesh_import's `_read_glb` gets from
+//! `RWGltf_CafReader`, which the static kernel is built without (it needs RapidJSON).
 
 use std::borrow::Cow;
 use std::path::{Component, Path, PathBuf};
@@ -48,10 +47,22 @@ fn local_matrix(node: &Value) -> Mat4 {
         1.0 - 2.0 * (x * x + y * y),
     ];
     [
-        r[0] * s[0], r[1] * s[0], r[2] * s[0], 0.0,
-        r[3] * s[1], r[4] * s[1], r[5] * s[1], 0.0,
-        r[6] * s[2], r[7] * s[2], r[8] * s[2], 0.0,
-        t[0], t[1], t[2], 1.0,
+        r[0] * s[0],
+        r[1] * s[0],
+        r[2] * s[0],
+        0.0,
+        r[3] * s[1],
+        r[4] * s[1],
+        r[5] * s[1],
+        0.0,
+        r[6] * s[2],
+        r[7] * s[2],
+        r[8] * s[2],
+        0.0,
+        t[0],
+        t[1],
+        t[2],
+        1.0,
     ]
 }
 
@@ -76,7 +87,10 @@ impl Doc<'_> {
         };
         let view = self.arr("bufferViews").get(view_index as usize).ok_or_else(bad)?;
         let buffer = view.get("buffer").and_then(Value::as_u64).unwrap_or(0) as usize;
-        let bin = self.buffers.get(buffer).ok_or_else(|| format!("this glTF refers to buffer {buffer}, which it does not carry"))?;
+        let bin = self
+            .buffers
+            .get(buffer)
+            .ok_or_else(|| format!("this glTF refers to buffer {buffer}, which it does not carry"))?;
         let size = match kind {
             5120 | 5121 => 1,
             5122 | 5123 => 2,
@@ -138,7 +152,8 @@ fn percent_decode(s: &str) -> String {
     let mut out = Vec::with_capacity(b.len());
     let mut i = 0;
     while i < b.len() {
-        let hex = b.get(i + 1..i + 3).and_then(|h| std::str::from_utf8(h).ok()).and_then(|h| u8::from_str_radix(h, 16).ok());
+        let hex =
+            b.get(i + 1..i + 3).and_then(|h| std::str::from_utf8(h).ok()).and_then(|h| u8::from_str_radix(h, 16).ok());
         match (b[i], hex) {
             (b'%', Some(v)) => {
                 out.push(v);
@@ -220,16 +235,26 @@ pub fn read_gltf(json: &Value, buffers: &[Cow<'_, [u8]>], mm_per_unit: f64) -> R
     let doc = Doc { json, buffers };
 
     let nodes = doc.arr("nodes");
-    let roots: Vec<usize> = match doc.arr("scenes").get(doc.json.get("scene").and_then(Value::as_u64).unwrap_or(0) as usize) {
-        Some(scene) => scene.get("nodes").and_then(Value::as_array).into_iter().flatten().filter_map(|n| n.as_u64()).map(|n| n as usize).collect(),
-        None => {
-            let children: std::collections::HashSet<u64> = nodes
-                .iter()
-                .flat_map(|n| n.get("children").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_u64))
-                .collect();
-            (0..nodes.len()).filter(|i| !children.contains(&(*i as u64))).collect()
-        }
-    };
+    let roots: Vec<usize> =
+        match doc.arr("scenes").get(doc.json.get("scene").and_then(Value::as_u64).unwrap_or(0) as usize) {
+            Some(scene) => scene
+                .get("nodes")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(|n| n.as_u64())
+                .map(|n| n as usize)
+                .collect(),
+            None => {
+                let children: std::collections::HashSet<u64> = nodes
+                    .iter()
+                    .flat_map(|n| {
+                        n.get("children").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_u64)
+                    })
+                    .collect();
+                (0..nodes.len()).filter(|i| !children.contains(&(*i as u64))).collect()
+            }
+        };
 
     let mut pos = Vec::new();
     let mut idx = Vec::new();

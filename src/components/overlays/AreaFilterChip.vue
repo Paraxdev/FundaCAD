@@ -1,19 +1,4 @@
 <script setup lang="ts">
-// What the box being dragged will take, said on the box, while it is still
-// being dragged.
-//
-// The filter has always existed and has always been cyclable with Tab, but the
-// only thing that ever said so was a sentence in the status prompt at the far
-// edge of the window, read once and then never again while the eyes are on the
-// model. So a box thrown over a filleted corner took the four faces when edges
-// were wanted, and the way to find out was to release it and look at what
-// happened. A mark on the box answers it where the question is being asked.
-//
-// It knows by LOOKING once a frame, the same way the selection toolbar does, and
-// for the same reason: onAreaDrag is a single-slot callback already owned by
-// app/viewportWiring.ts. The loop starts on a primary-button press and stops on
-// the first frame with no box, so it costs nothing except during a drag.
-
 import { computed, onMounted, onUnmounted, ref, shallowRef } from "vue";
 import Icon from "../shell/Icon.vue";
 import { useEngine } from "../../app/engineKey";
@@ -23,11 +8,8 @@ const engine = useEngine();
 
 /** Kept clear of the cursor, and of the box. */
 const GAP_PX = 18;
-/** The size to assume for the FIRST frame only, before the chip has been laid
- *  out: happy-dom has no layout, and neither does the frame a drag starts in.
- *  Every frame after that measures the real thing, because the width changes
- *  with the word in it and a chip clamped by a guess hangs off the edge of the
- *  screen exactly when the cursor is nearest it. */
+/** Assumed width for the first frame only, before layout (happy-dom and a drag's first frame have none). Later frames
+ *  measure, since the width changes with the word and a guessed clamp hangs off the screen edge. */
 const WIDTH_PX = 190;
 const HEIGHT_PX = 30;
 
@@ -36,16 +18,11 @@ const at = ref<{ x: number; y: number } | null>(null);
 const filter = shallowRef<AreaFilter>("all");
 const mode = shallowRef<AreaMode>("window");
 
-/** Reads as the object of the sentence the box is making: "taking EDGES". The
- *  prompt says the whole sentence; this says the word that changes. */
 const label = computed(() => {
   const f = filter.value;
   return f === "all" ? "Everything" : f === "faces" ? "Faces" : f === "edges" ? "Edges" : "Bodies";
 });
 
-/** Window or crossing, which the box already says in its own border, so this is
- *  the short form and it is there to be read together with the filter: what,
- *  and how much of it has to be inside. */
 const verdict = computed(() => (mode.value === "window" ? "fully inside" : "touched"));
 
 function refresh(): boolean {
@@ -56,8 +33,7 @@ function refresh(): boolean {
   }
   filter.value = engine.viewport.areaTakes;
   mode.value = drag.mode;
-  // On the far side of the cursor FROM the box, so it never covers the geometry
-  // the box is being drawn around, whichever of the four ways it was drawn.
+  // On the far side of the cursor from the box, so it never covers the geometry being boxed.
   const w = el.value?.offsetWidth || WIDTH_PX;
   const h = el.value?.offsetHeight || HEIGHT_PX;
   const right = drag.at.x >= drag.from.x;
@@ -72,35 +48,47 @@ function refresh(): boolean {
 }
 
 let raf = 0;
+let held = false;
 
+// Polled, because onAreaDrag is a single-slot callback owned by app/viewportWiring.ts. The loop outlives the press: a
+// drag starts frames after the button goes down, so stopping on the first empty frame would never show it.
 function tick() {
   raf = 0;
-  if (refresh()) raf = requestAnimationFrame(tick);
+  if (refresh() || held) raf = requestAnimationFrame(tick);
 }
 
 function wake() {
   if (!raf) raf = requestAnimationFrame(tick);
 }
 
-// A box can only begin with the primary button down, so that is the only thing
-// that has to wake the loop. Capture phase, because the viewport's own handler
-// may stop propagation, and passive because this never wants the event.
+// Only a primary press can start a box. Capture phase because the viewport may stop propagation, passive since it
+// never prevents the event.
 const onDown = (e: PointerEvent) => {
-  if (e.button === 0) wake();
+  if (e.button !== 0) return;
+  held = true;
+  wake();
+};
+const onUp = () => {
+  held = false;
 };
 
-onMounted(() => window.addEventListener("pointerdown", onDown, { capture: true, passive: true }));
+const OPTS = { capture: true, passive: true } as const;
+onMounted(() => {
+  window.addEventListener("pointerdown", onDown, OPTS);
+  window.addEventListener("pointerup", onUp, OPTS);
+  window.addEventListener("pointercancel", onUp, OPTS);
+});
 onUnmounted(() => {
-  window.removeEventListener("pointerdown", onDown, { capture: true });
+  window.removeEventListener("pointerdown", onDown, OPTS);
+  window.removeEventListener("pointerup", onUp, OPTS);
+  window.removeEventListener("pointercancel", onUp, OPTS);
   if (raf) cancelAnimationFrame(raf);
 });
 </script>
 
 <template>
   <Teleport to="body">
-    <!-- v-if, never a hidden element: this floats over the viewport during a
-         drag, and an element left in the DOM would take the pointerup that ends
-         the very box it is describing. -->
+    <!-- v-if, never hidden: an element left in the DOM would take the pointerup that ends the box. -->
     <div
       v-if="at"
       ref="el"

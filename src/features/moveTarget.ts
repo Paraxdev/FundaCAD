@@ -1,6 +1,5 @@
-// What the move gizmo acts on. The gizmo owns the handles, the stepping and the
-// pivot; a target owns where the selection is, how it previews, and what a
-// finished drag writes.
+// What the move gizmo acts on. The gizmo owns handles, stepping and pivot; a target owns the selection,
+// its preview, and what a finished drag writes.
 
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
@@ -10,14 +9,9 @@ import type { MoveValues } from "./transformGizmo";
 
 export type Frame = readonly [THREE.Vector3, THREE.Vector3, THREE.Vector3];
 
-export const WORLD_FRAME: Frame = [
-  new THREE.Vector3(1, 0, 0),
-  new THREE.Vector3(0, 1, 0),
-  new THREE.Vector3(0, 0, 1),
-];
+export const WORLD_FRAME: Frame = [new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 1)];
 
-/** Which handles to build, by frame axis index. A plane handle and a ring are
- *  indexed by their normal. */
+/** A plane handle and a ring are indexed by their normal. */
 export interface MoveHandleSet {
   axes: readonly number[];
   rings: readonly number[];
@@ -44,7 +38,6 @@ export interface MoveResult {
 }
 
 export interface MoveCommit {
-  /** the feature to report as committed, if any */
   id: string | null;
   /** a rebuild has to land before the target can be reopened */
   rebuild: boolean;
@@ -100,9 +93,8 @@ export function scaleFeature(id: string, s: THREE.Vector3, about: THREE.Vector3,
   };
 }
 
-/** The features a body move writes, resize first because that is the order
- *  the preview composed them in. A copy cannot carry a resize: `duplicate` has
- *  no scale and a `scale` would resize the originals. */
+/** Resize first, the order the preview composed them in. A copy cannot carry a resize: `duplicate` has no
+ *  scale and a `scale` would resize the originals. */
 export function bodyMoveFeatures(store: DocumentStore, r: MoveResult, bodies: string[]): Feature[] {
   const ids = freshIds(store, 2);
   const out: Feature[] = [];
@@ -111,8 +103,7 @@ export function bodyMoveFeatures(store: DocumentStore, r: MoveResult, bodies: st
   return out;
 }
 
-/** Note: store.nextId() only looks at features already in the document, so two
- *  calls before adding anything return the same id. */
+/** store.nextId() only sees features already in the document, so two calls before adding return the same id. */
 export function freshIds(store: DocumentStore, n: number): string[] {
   const taken = new Set(store.document.features.map((f) => f.id));
   const out: string[] = [];

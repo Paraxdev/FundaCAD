@@ -1,0 +1,47 @@
+# The app opens this form by its file name and fills the ids what, version and os, so keep both.
+name: Problem report
+description: Something in FundaCAD went wrong or did not do what you expected.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Help > Report a Problem in FundaCAD fills in most of this form and copies a report for the Report box.
+        A security problem goes to the private reporting in [SECURITY.md](https://github.com/Paraxdev/fundacad/blob/main/SECURITY.md), not here.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The clicks or keys that lead to it, if you know them.
+      placeholder: |
+        1. Open a new document
+        2. Sketch on XY
+        3. ...
+  - type: input
+    id: version
+    attributes:
+      label: FundaCAD version
+      description: Help > About FundaCAD shows it.
+  - type: input
+    id: os
+    attributes:
+      label: System
+      description: For example Windows 11, macOS 15 or Ubuntu 24.04.
+  - type: textarea
+    id: report
+    attributes:
+      label: Report from the app
+      description: Paste the report FundaCAD copied for you. It holds the recent steps, errors and the end of the app log.
+      render: text
+  - type: markdown
+    attributes:
+      value: |
+        A picture helps: drag the fundacad-report.png you saved, or any screenshot, into What happened or Steps to reproduce.
+        To share the document, put the .funda file in a .zip and drag it into the same box.

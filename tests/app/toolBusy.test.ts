@@ -20,14 +20,19 @@ beforeEach(() => setActivePinia(createPinia()));
 
 /** Just enough Engine for the predicates: they read `.active` flags and two
  *  fields, and nothing here constructs a tool. */
-function fakeEngine(over: {
-  move?: boolean;
-  extrude?: boolean;
-  sketch?: boolean;
-  pattern?: boolean;
-  datumPose?: boolean;
-  mode?: "faces" | "bodies";
-} = {}) {
+function fakeEngine(
+  over: {
+    move?: boolean;
+    extrude?: boolean;
+    sketch?: boolean;
+    pattern?: boolean;
+    mirror?: boolean;
+    datumPose?: boolean;
+    sectionOn?: boolean;
+    sectionAiming?: boolean;
+    mode?: "faces" | "bodies";
+  } = {},
+) {
   let cancelled = 0;
   const off = { active: false };
   const e = {
@@ -37,10 +42,31 @@ function fakeEngine(over: {
     store: { buildState: { result: null } },
     tools: {
       extrude: { active: over.extrude ?? false },
-      move: { active: over.move ?? false, cancel: () => { cancelled++; } },
-      edgeFeature: off, pressPull: off, faceOffset: off, draft: off, thread: off, textOnFace: off, hole: off,
-      loft: off, planeOffset: off, datumPose: { active: over.datumPose ?? false }, lightAim: off, pattern: off, measure: off, targetEdit: off,
-      revolvePitch: off, joint: off, mechanism: off, section: { picking: false },
+      move: {
+        active: over.move ?? false,
+        cancel: () => {
+          cancelled++;
+        },
+      },
+      edgeFeature: off,
+      pressPull: off,
+      faceOffset: off,
+      draft: off,
+      thread: off,
+      textOnFace: off,
+      hole: off,
+      loft: off,
+      planeOffset: off,
+      datumPose: { active: over.datumPose ?? false },
+      lightAim: off,
+      pattern: off,
+      mirror: { active: over.mirror ?? false },
+      measure: off,
+      targetEdit: off,
+      revolvePitch: off,
+      joint: off,
+      mechanism: off,
+      section: { picking: over.sectionAiming ?? false, editing: false, active: over.sectionOn ?? false },
     },
   } as unknown as Engine;
   return { e, cancels: () => cancelled };
@@ -62,7 +88,7 @@ describe("toolBusy versus toolOwnsScreen", () => {
     // CONTROL on the line above. If toolOwnsScreen ever answered false here,
     // the selection toolbar would draw itself over the middle of a live
     // Press/Pull and take the clicks meant for the drag.
-    for (const started of [{ extrude: true }, { sketch: true }]) {
+    for (const started of [{ extrude: true }, { sketch: true }, { mirror: true }]) {
       const t = createToolBusy(fakeEngine(started).e);
       expect(t.toolBusy()).toBe(true);
       expect(t.toolOwnsScreen()).toBe(true);
@@ -72,6 +98,15 @@ describe("toolBusy versus toolOwnsScreen", () => {
   it("still counts a Move that is up alongside another tool", () => {
     const t = createToolBusy(fakeEngine({ move: true, extrude: true }).e);
     expect(t.toolOwnsScreen()).toBe(true);
+  });
+});
+
+describe("a section", () => {
+  it("counts while aiming and not while its cut is on", () => {
+    const on = createToolBusy(fakeEngine({ sectionOn: true }).e);
+    expect([on.toolBusy(), on.toolOwnsScreen()]).toEqual([false, false]);
+    const aiming = createToolBusy(fakeEngine({ sectionAiming: true }).e);
+    expect([aiming.toolBusy(), aiming.toolOwnsScreen()]).toEqual([true, true]);
   });
 });
 
@@ -117,12 +152,22 @@ describe("restoreWhenIdle", () => {
     const stop = restoreWhenIdle({
       busy: () => s.busy,
       selection: () => s.sel,
-      onDocChange: (fn) => { docFns.add(fn); fn(); return () => docFns.delete(fn); },
-      raise: () => { s.raised++; },
+      onDocChange: (fn) => {
+        docFns.add(fn);
+        fn();
+        return () => docFns.delete(fn);
+      },
+      raise: () => {
+        s.raised++;
+      },
       frame: (fn) => frames.push(fn),
-      cancelFrame: (id) => { frames[id - 1] = () => {}; },
+      cancelFrame: (id) => {
+        frames[id - 1] = () => {};
+      },
     });
-    const step = (n = 1) => { for (let i = 0; i < n; i++) frames.shift()?.(); };
+    const step = (n = 1) => {
+      for (let i = 0; i < n; i++) frames.shift()?.();
+    };
     return { s, step, stop, frames, docChanged: () => [...docFns].forEach((fn) => fn()) };
   }
 

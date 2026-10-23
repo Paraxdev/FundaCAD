@@ -28,9 +28,7 @@ fn spot(at: [f64; 3], radius: f64) -> Value {
 }
 
 fn run(req: Value) -> Value {
-    let Value::Object(m) = req else {
-        panic!("a request is an object")
-    };
+    let Value::Object(m) = req else { panic!("a request is an object") };
     match stress_result(&m, &NoWatch) {
         JobResult::Json(m) => Value::Object(m),
         _ => panic!("expected a JSON result"),
@@ -46,10 +44,7 @@ fn vec3(v: &Value) -> [f64; 3] {
 }
 
 fn error_of(v: &Value) -> String {
-    v["error"]["message"]
-        .as_str()
-        .unwrap_or_else(|| panic!("expected an error: {v}"))
-        .to_string()
+    v["error"]["message"].as_str().unwrap_or_else(|| panic!("expected an error: {v}")).to_string()
 }
 
 fn balanced(r: &Value) {
@@ -58,10 +53,7 @@ fn balanced(r: &Value) {
     let reaction = vec3(&r["reaction"]);
     let size = applied.iter().map(|v| v * v).sum::<f64>().sqrt();
     for k in 0..3 {
-        assert!(
-            (applied[k] + reaction[k]).abs() < 1e-6 * size,
-            "{applied:?} vs {reaction:?}"
-        );
+        assert!((applied[k] + reaction[k]).abs() < 1e-6 * size, "{applied:?} vs {reaction:?}");
     }
 }
 
@@ -82,25 +74,14 @@ fn a_force_on_a_spot_bends_the_bar_like_one_on_its_end() {
     }));
     balanced(&on_spot);
     assert_eq!(vec3(&on_spot["applied"]), [0.0, 0.0, -100.0]);
-    let (end, at_spot) = (
-        num(&on_end["maxDisplacement"]["value"]),
-        num(&on_spot["maxDisplacement"]["value"]),
-    );
+    let (end, at_spot) = (num(&on_end["maxDisplacement"]["value"]), num(&on_spot["maxDisplacement"]["value"]));
     // A load at 95 of 100 mm bends the tip about (95 / 100)^2 (3 - 0.95) / 2 as far.
     let share = 0.95f64.powi(2) * (3.0 - 0.95) / 2.0;
-    assert!(
-        (at_spot / end - share).abs() < 0.08,
-        "{at_spot} mm on the spot, {end} mm on the end"
-    );
+    assert!((at_spot / end - share).abs() < 0.08, "{at_spot} mm on the spot, {end} mm on the end");
     assert!(num(&on_spot["maxDisplacement"]["vector"][2]) < 0.0);
     // The peak is named by a face of the body, never by a spot's own id.
     let faces = 6;
-    assert!(
-        on_spot["maxVonMises"]["face"]
-            .as_u64()
-            .is_some_and(|f| f < faces),
-        "{on_spot}"
-    );
+    assert!(on_spot["maxVonMises"]["face"].as_u64().is_some_and(|f| f < faces), "{on_spot}");
 }
 
 #[test]
@@ -119,10 +100,7 @@ fn a_fixed_spot_holds_the_bar() {
         "loads": [{"faces": [face([1.0, 0.0, 0.0])], "force": [0, 0, -10]}],
         "material": "aluminium", "size": 3,
     }));
-    assert!(
-        num(&r["maxDisplacement"]["value"]) > num(&whole["maxDisplacement"]["value"]),
-        "{r}"
-    );
+    assert!(num(&r["maxDisplacement"]["value"]) > num(&whole["maxDisplacement"]["value"]), "{r}");
     let w = r["warnings"].to_string();
     assert!(w.contains("where a fixed spot ends"), "{w}");
 }
@@ -140,14 +118,8 @@ fn a_spot_on_a_thin_plate_stays_on_its_side() {
     balanced(&r);
     let applied = vec3(&r["applied"]);
     let disc = std::f64::consts::PI * 36.0;
-    assert!(
-        applied[2] < -0.6 * disc && applied[2] > -1.4 * disc,
-        "{applied:?} for a disc of {disc} mm2"
-    );
-    assert!(
-        applied[0].abs() < 0.05 * disc && applied[1].abs() < 0.05 * disc,
-        "{applied:?}"
-    );
+    assert!(applied[2] < -0.6 * disc && applied[2] > -1.4 * disc, "{applied:?} for a disc of {disc} mm2");
+    assert!(applied[0].abs() < 0.05 * disc && applied[1].abs() < 0.05 * disc, "{applied:?}");
 }
 
 #[test]
@@ -178,10 +150,7 @@ fn a_spot_smaller_than_the_elements_is_warned_about() {
     }));
     balanced(&r);
     let w = r["warnings"].to_string();
-    assert!(
-        w.contains("spot 1 of load 1 (loads[0]) (radius 0.200 mm) is smaller than the elements"),
-        "{w}"
-    );
+    assert!(w.contains("spot 1 of load 1 (loads[0]) (radius 0.200 mm) is smaller than the elements"), "{w}");
 }
 
 #[test]
@@ -198,36 +167,24 @@ fn the_spot_refusals_say_why() {
         }
         error_of(&run(req))
     };
-    let off =
-        base(json!({"loads": [{"spots": [spot([50.0, 0.0, 40.0], 3.0)], "force": [0, 0, -1]}]}));
+    let off = base(json!({"loads": [{"spots": [spot([50.0, 0.0, 40.0], 3.0)], "force": [0, 0, -1]}]}));
     assert!(
-        off.contains("spot 1 of load 1 (loads[0]) is not on body1")
-            && off.contains("place it on the body again"),
+        off.contains("spot 1 of load 1 (loads[0]) is not on body1") && off.contains("place it on the body again"),
         "{off}"
     );
-    let slider = base(
-        json!({"supports": [{"type": "slider", "faces": face([0.0, 0.0, -1.0]),
-                                           "spots": [spot([0.0, 0.0, 0.0], 3.0)]}]}),
-    );
+    let slider = base(json!({"supports": [{"type": "slider", "faces": face([0.0, 0.0, -1.0]),
+                                           "spots": [spot([0.0, 0.0, 0.0], 3.0)]}]}));
+    assert!(slider.contains("support 1 (supports[0]) is slider and has spots"), "{slider}");
+    let radius = base(json!({"loads": [{"spots": [{"at": [95, 0, 5], "radius": 0}], "force": [0, 0, -1]}]}));
     assert!(
-        slider.contains("support 1 (supports[0]) is slider and has spots"),
-        "{slider}"
-    );
-    let radius =
-        base(json!({"loads": [{"spots": [{"at": [95, 0, 5], "radius": 0}], "force": [0, 0, -1]}]}));
-    assert!(
-        radius.contains(
-            "the radius of loads[0].spots[0] of load 1 (loads[0]) must be a number above 0"
-        ),
+        radius.contains("the radius of loads[0].spots[0] of load 1 (loads[0]) must be a number above 0"),
         "{radius}"
     );
     let shape = base(json!({"loads": [{"spots": [{"point": [95, 0, 5]}], "force": [0, 0, -1]}]}));
     assert!(shape.contains("must be {at, radius}"), "{shape}");
     let none = base(json!({"loads": [{"force": [0, 0, -1]}]}));
     assert!(
-        none.contains(
-            "load 1 (loads[0]) has no faces, give the faces it pushes on, or spots to push at"
-        ),
+        none.contains("load 1 (loads[0]) has no faces, give the faces it pushes on, or spots to push at"),
         "{none}"
     );
 }

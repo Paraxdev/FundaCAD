@@ -18,8 +18,20 @@ import type { ResolvedEntity } from "../../src/sketch/snap";
 import type { ProjectedCurve, SketchConstraint } from "../../src/types";
 
 const SRC = { kind: "sketchCurve", sketch: "s0", entity: "e0" } as const;
-const projected = (id: string, curve: ProjectedCurve): ResolvedEntity => ({ type: "projected", id, source: SRC, curve });
-const line = (id: string, x1: number, y1: number, x2: number, y2: number): ResolvedEntity => ({ type: "line", id, x1, y1, x2, y2 });
+const projected = (id: string, curve: ProjectedCurve): ResolvedEntity => ({
+  type: "projected",
+  id,
+  source: SRC,
+  curve,
+});
+const line = (id: string, x1: number, y1: number, x2: number, y2: number): ResolvedEntity => ({
+  type: "line",
+  id,
+  x1,
+  y1,
+  x2,
+  y2,
+});
 
 /** the projected entities of a pass, for asserting they never move */
 const projectedOf = (ents: ResolvedEntity[]) => ents.filter((e) => e.type === "projected");
@@ -96,10 +108,7 @@ describe("projected geometry compiles as fixed solver primitives", () => {
   });
 
   it("projected circle: center + radius pinned; a dimensioned user line moves instead", async () => {
-    const ents = [
-      projected("pc", { kind: "circle", x: 10, y: 10, r: 5 }),
-      line("u", 30, 10, 45, 10),
-    ];
+    const ents = [projected("pc", { kind: "circle", x: 10, y: 10, r: 5 }), line("u", 30, 10, 45, 10)];
     const constraints: SketchConstraint[] = [
       { type: "horizontal", line: "u" },
       { type: "distance", line: "u", value: 15 },
@@ -143,7 +152,15 @@ describe("projected geometry compiles as fixed solver primitives", () => {
   });
 
   it("projected poly: first/last samples anchor coincident geometry", async () => {
-    const poly: ProjectedCurve = { kind: "poly", pts: [[0, 0], [2, 1], [4, 1.5], [6, 1]] };
+    const poly: ProjectedCurve = {
+      kind: "poly",
+      pts: [
+        [0, 0],
+        [2, 1],
+        [4, 1.5],
+        [6, 1],
+      ],
+    };
     const constraints: SketchConstraint[] = [
       { type: "coincident", e1: "u", p1: 0, e2: "pp", p2: 1 },
       { type: "horizontal", line: "u" },
@@ -225,10 +242,16 @@ describe("Break Link, constraints survive the projected→native conversion", ()
   });
 
   it("a p2p dim to a broken closed poly (now C0-closed spline) still resolves at index 0", async () => {
-    const closed: ProjectedCurve = { kind: "poly", pts: [[0, 0], [4, 4], [8, 0], [0, 0]] };
-    const constraints: SketchConstraint[] = [
-      { type: "p2pDistance", e1: "u", p1: 0, e2: "pq", p2: 0, value: 10 },
-    ];
+    const closed: ProjectedCurve = {
+      kind: "poly",
+      pts: [
+        [0, 0],
+        [4, 4],
+        [8, 0],
+        [0, 0],
+      ],
+    };
+    const constraints: SketchConstraint[] = [{ type: "p2pDistance", e1: "u", p1: 0, e2: "pq", p2: 0, value: 10 }];
     const ents = [projected("pq", closed), line("u", 10, 0, 20, 0)];
     const r1 = await compileAndSolve(ents, constraints);
     expect(r1.ok).toBe(true);
@@ -254,15 +277,18 @@ describe("Break Link, constraints survive the projected→native conversion", ()
 // fixes: an offset copy carried no constraint at all, so it drifted off its
 // source on the next solve ("de-concentrified") and its distance wasn't editable.
 describe("offset constraint, the copy stays tied to its source", () => {
-  const circle = (id: string, x: number, y: number, r: number): ResolvedEntity =>
-    ({ type: "circle", id, x, y, radius: r });
+  const circle = (id: string, x: number, y: number, r: number): ResolvedEntity => ({
+    type: "circle",
+    id,
+    x,
+    y,
+    radius: r,
+  });
 
   it("pulls a drifted copy back to concentric at the right gap (the ring case)", async () => {
     // the copy starts off-centre and at the wrong radius, as if it had drifted
     const ents = [circle("c1", 0, 0, 5), circle("c2", 0.7, -0.4, 7.1)];
-    const cons: SketchConstraint[] = [
-      { type: "offset", pairs: [{ src: "c1", cpy: "c2" }], value: 3 },
-    ];
+    const cons: SketchConstraint[] = [{ type: "offset", pairs: [{ src: "c1", cpy: "c2" }], value: 3 }];
     const r = await compileAndSolve(ents, cons);
     expect(r.ok).toBe(true);
     expect(r.conflicts).toEqual([]);
@@ -312,8 +338,10 @@ describe("offset constraint, the copy stays tied to its source", () => {
     // the copy starts SLOPPY, 1.4mm on one side, 2.6 on another
     const ents = [...sq("s", 0), ...sq("c", 0), ...[]];
     const copy = [
-      line("c0", 1.4, 1.4, 8.7, 1.4), line("c1", 8.7, 1.4, 8.7, 8.6),
-      line("c2", 8.7, 8.6, 1.3, 8.6), line("c3", 1.3, 8.6, 1.4, 1.4),
+      line("c0", 1.4, 1.4, 8.7, 1.4),
+      line("c1", 8.7, 1.4, 8.7, 8.6),
+      line("c2", 8.7, 8.6, 1.3, 8.6),
+      line("c3", 1.3, 8.6, 1.4, 1.4),
     ];
     const all = [...ents.slice(0, 4), ...copy];
     const cons: SketchConstraint[] = [
@@ -333,7 +361,8 @@ describe("offset constraint, the copy stays tied to its source", () => {
       const s = r.entities.find((e) => e.id === `s${k}`);
       const c = r.entities.find((e) => e.id === `c${k}`);
       if (s?.type !== "line" || c?.type !== "line") throw new Error("chain lost");
-      const dx = s.x2 - s.x1, dy = s.y2 - s.y1;
+      const dx = s.x2 - s.x1,
+        dy = s.y2 - s.y1;
       const len = Math.hypot(dx, dy) || 1;
       const perp = Math.abs((c.x1 - s.x1) * dy - (c.y1 - s.y1) * dx) / len;
       expect(perp).toBeCloseTo(2, 4);
@@ -346,7 +375,14 @@ describe("offset constraint, the copy stays tied to its source", () => {
     // pruneConstraints drops the dead pair; the solver must accept what's left
     const ents = [circle("c1", 0, 0, 5), circle("c2", 0, 0, 8)];
     const cons: SketchConstraint[] = [
-      { type: "offset", value: 3, pairs: [{ src: "c1", cpy: "c2" }, { src: "gone", cpy: "alsogone" }] },
+      {
+        type: "offset",
+        value: 3,
+        pairs: [
+          { src: "c1", cpy: "c2" },
+          { src: "gone", cpy: "alsogone" },
+        ],
+      },
     ];
     const r = await compileAndSolve(ents, cons);
     expect(r.ok).toBe(true);
@@ -397,10 +433,13 @@ describe("a rotated rectangle survives the solver", () => {
     // the solver moves. Measured, dimensioning both edges spun a 37.5-degree
     // rectangle to 33.8. So the corners are pinned instead, as a polygon's are.
     const other = line("u", 0, 0, 10, 0);
-    const r = await compileAndSolve([rect(37.5), other], [
-      { type: "distance", id: "k0", line: "u", value: 25 },
-      { type: "vertical", line: "u" },
-    ]);
+    const r = await compileAndSolve(
+      [rect(37.5), other],
+      [
+        { type: "distance", id: "k0", line: "u", value: 25 },
+        { type: "vertical", line: "u" },
+      ],
+    );
     const out = r.entities[0] as { width: number; height: number; angle?: number };
     expect(out.angle).toBeCloseTo(37.5, 9);
     expect(out.width).toBeCloseTo(10, 9);
@@ -430,7 +469,13 @@ describe("SK-3: coincident reaches a circle centre and a rectangle corner", () =
   // silently dropped from the compiled solver input, added to the document
   // but never actually pulling anything. dimPoint (p2pDistance/fix) already
   // handled both; this mirrors that.
-  const circ = (id: string, x: number, y: number, r: number): ResolvedEntity => ({ type: "circle", id, x, y, radius: r });
+  const circ = (id: string, x: number, y: number, r: number): ResolvedEntity => ({
+    type: "circle",
+    id,
+    x,
+    y,
+    radius: r,
+  });
   const rect = (id: string, x: number, y: number, width: number, height: number): ResolvedEntity =>
     ({ type: "rectangle", id, x, y, width, height }) as ResolvedEntity;
   const arc = (id: string, x1: number, y1: number, x2: number, y2: number, mx: number, my: number): ResolvedEntity =>
@@ -493,7 +538,13 @@ describe("SK-6: a corner pinned to the Origin stays put under an unrelated dim",
   // else to land its DOF but that other entity.
   const rect = (id: string, x: number, y: number, width: number, height: number): ResolvedEntity =>
     ({ type: "rectangle", id, x, y, width, height }) as ResolvedEntity;
-  const circ = (id: string, x: number, y: number, r: number): ResolvedEntity => ({ type: "circle", id, x, y, radius: r });
+  const circ = (id: string, x: number, y: number, r: number): ResolvedEntity => ({
+    type: "circle",
+    id,
+    x,
+    y,
+    radius: r,
+  });
   const originPt: ResolvedEntity = { type: "point", id: "o", x: 0, y: 0, construction: true };
 
   it("moves the circle, not the rectangle, when a p2lDistance to the rectangle's edge is added", async () => {
@@ -549,7 +600,10 @@ describe("a rectangle's typed width and height hold its free corner (MO-1)", () 
   it("is fully defined with its corner still on the origin", async () => {
     const ents = pinned();
     const r1 = ents[0]!;
-    const cons = [fix, drivingDimFor(r1, "width", 42)!, drivingDimFor(r1, "height", 42)!].map((c, i) => ({ ...c, id: `k${i}` })) as SketchConstraint[];
+    const cons = [fix, drivingDimFor(r1, "width", 42)!, drivingDimFor(r1, "height", 42)!].map((c, i) => ({
+      ...c,
+      id: `k${i}`,
+    })) as SketchConstraint[];
     expect((await compileAndSolve(ents, [fix])).dof).toBe(2);
     const r = await compileAndSolve(ents, cons);
     expect(r.ok).toBe(true);
@@ -559,7 +613,12 @@ describe("a rectangle's typed width and height hold its free corner (MO-1)", () 
 });
 
 describe("FR-4: a typed line length keeps a rectangle drawn as four lines square", () => {
-  const frame = () => [line("e1", 0, 0, 20, 0), line("e2", 20, 0, 20, 40), line("e3", 20, 40, 0, 40), line("e4", 0, 40, 0, 0)];
+  const frame = () => [
+    line("e1", 0, 0, 20, 0),
+    line("e2", 20, 0, 20, 40),
+    line("e3", 20, 40, 0, 40),
+    line("e4", 0, 40, 0, 0),
+  ];
   const lengths = (ents: ResolvedEntity[]) =>
     ents.map((e) => (e.type === "line" ? Math.hypot(e.x2 - e.x1, e.y2 - e.y1) : NaN));
   const e2Length: SketchConstraint[] = [{ id: "d", type: "distance", line: "e2", value: 45 }];
@@ -586,14 +645,22 @@ describe("FR-4: a typed line length keeps a rectangle drawn as four lines square
 
   it("grows the same frame from the same corner whichever way it was drawn", async () => {
     const seg = (id: string, x1: number, y1: number, x2: number, y2: number) => line(id, x1, y1, x2, y2);
-    const ccw = [seg("a", 10, 10, 30, 10), seg("b", 30, 10, 30, 50), seg("c", 30, 50, 10, 50), seg("d", 10, 50, 10, 10)];
+    const ccw = [
+      seg("a", 10, 10, 30, 10),
+      seg("b", 30, 10, 30, 50),
+      seg("c", 30, 50, 10, 50),
+      seg("d", 10, 50, 10, 10),
+    ];
     const cw = [seg("a", 10, 10, 10, 50), seg("b", 10, 50, 30, 50), seg("c", 30, 50, 30, 10), seg("d", 30, 10, 10, 10)];
     const box = (ents: ResolvedEntity[]) => {
       const xs = ents.flatMap((e) => (e.type === "line" ? [e.x1, e.x2] : []));
       const ys = ents.flatMap((e) => (e.type === "line" ? [e.y1, e.y2] : []));
       return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)].map((v) => +v.toFixed(6));
     };
-    for (const [ents, right] of [[ccw, "b"], [cw, "c"]] as const) {
+    for (const [ents, right] of [
+      [ccw, "b"],
+      [cw, "c"],
+    ] as const) {
       const cs: SketchConstraint[] = [{ id: "d", type: "distance", line: right, value: 60 }];
       const r = await solveKeepingAxes(ents, cs, dimAnchor(ents, cs, cs[0]!));
       expect(r.conflicts).toEqual([]);
@@ -603,7 +670,10 @@ describe("FR-4: a typed line length keeps a rectangle drawn as four lines square
 
   it("falls back to the plain solve when a line has to turn", async () => {
     const two = [line("a", 0, 0, 10, 0), line("b", 20, 0, 20, 10)];
-    const cs: SketchConstraint[] = [{ type: "parallel", l1: "a", l2: "b" }, { id: "d", type: "distance", line: "a", value: 12 }];
+    const cs: SketchConstraint[] = [
+      { type: "parallel", l1: "a", l2: "b" },
+      { id: "d", type: "distance", line: "a", value: 12 },
+    ];
     const r = await solveKeepingAxes(two, cs, { x: 0, y: 0 });
     expect(r.ok).toBe(true);
     expect(r.conflicts).toEqual([]);
@@ -617,7 +687,12 @@ describe("a closed sketch's rotated rectangle through the headless solve", () =>
   it("keeps its angle, which the build reads to extrude it turned", async () => {
     const { solveSketchFeature } = await import("../../src/sketch/headlessSolve");
     const out = await solveSketchFeature(
-      { id: "s1", type: "sketch", plane: "XY", entities: [{ type: "rectangle", id: "r1", width: 10, height: 4, x: 3, y: -2, angle: 30 }] },
+      {
+        id: "s1",
+        type: "sketch",
+        plane: "XY",
+        entities: [{ type: "rectangle", id: "r1", width: 10, height: 4, x: 3, y: -2, angle: 30 }],
+      },
       {},
     );
     const r = out?.entities[0] as { angle?: number; width: number; height: number } | undefined;

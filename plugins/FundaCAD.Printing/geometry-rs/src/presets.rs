@@ -1,10 +1,5 @@
-//! print_presets.py: the person's active OrcaSlicer machine preset flattened
-//! (its `inherits` chain resolved the way Orca does) with a compatible process
-//! and filament, so a handed off project opens on their own machine. The
-//! palette still owns the colours.
-//!
-//! The slicer's files are read through the host's `files` interface, which the
-//! manifest's "files.read" grant opens.
+//! print_presets.py: the active OrcaSlicer machine preset flattened along its `inherits` chain as Orca does, with a
+//! compatible process and filament. The slicer's files are read through the host's `files` interface ("files.read").
 
 use serde_json::{Map, Value};
 
@@ -55,10 +50,7 @@ impl PPath {
     fn child(&self, part: &str) -> PPath {
         let mut rel = self.rel.clone();
         rel.push(part.to_string());
-        PPath {
-            full: join(&self.full, part),
-            rel,
-        }
+        PPath { full: join(&self.full, part), rel }
     }
 }
 
@@ -70,11 +62,7 @@ fn read_json(path: &str) -> Result<Value, String> {
 }
 
 fn sorted_names(dir: &str) -> Option<Vec<(String, bool)>> {
-    let mut names: Vec<(String, bool)> = files::list_dir(dir)
-        .ok()?
-        .into_iter()
-        .map(|e| (e.name, e.is_dir))
-        .collect();
+    let mut names: Vec<(String, bool)> = files::list_dir(dir).ok()?.into_iter().map(|e| (e.name, e.is_dir)).collect();
     names.sort();
     Some(names)
 }
@@ -209,21 +197,12 @@ fn pick_preset(idx: &Index, chain: &[String], hints: &[&str]) -> Option<String> 
 
 /// `project_settings`: the ACTIVE machine preset with a compatible process and
 /// filament, all flattened.
-pub fn project_settings(
-    datadir: Option<&Value>,
-    filament_count: Option<&Value>,
-) -> Result<Map<String, Value>, String> {
+pub fn project_settings(datadir: Option<&Value>, filament_count: Option<&Value>) -> Result<Map<String, Value>, String> {
     let dd_text = datadir.filter(|v| py::truthy(Some(v))).map(py::str_of);
     let Some(dd_text) = dd_text.filter(|d| files::is_dir(d)) else {
-        return Err(format!(
-            "Orca datadir not found: {}",
-            datadir.map_or_else(|| "None".to_string(), py::str_of)
-        ));
+        return Err(format!("Orca datadir not found: {}", datadir.map_or_else(|| "None".to_string(), py::str_of)));
     };
-    let dd = PPath {
-        full: dd_text,
-        rel: Vec::new(),
-    };
+    let dd = PPath { full: dd_text, rel: Vec::new() };
     let conf = read_json(&dd.child("OrcaSlicer.conf").full)?;
     let machine = conf
         .as_object()
@@ -271,10 +250,7 @@ pub fn project_settings(
                 };
                 cfg.insert(k, Value::Array(vec![one; n as usize]));
             }
-            cfg.insert(
-                "filament_settings_id".into(),
-                Value::Array(vec![Value::String(fil); n as usize]),
-            );
+            cfg.insert("filament_settings_id".into(), Value::Array(vec![Value::String(fil); n as usize]));
         }
     }
 

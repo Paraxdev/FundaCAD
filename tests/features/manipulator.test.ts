@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import * as THREE from "three";
 import {
   createDragHandle,
+  createRotationArc,
   HANDLE_CUT,
   HANDLE_HOT,
   HANDLE_IDLE,
@@ -59,10 +60,8 @@ function orbit(az: number, el: number): THREE.PerspectiveCamera {
   return cam;
 }
 const forwardOf = (cam: THREE.Camera) => cam.getWorldDirection(new THREE.Vector3());
-const rightOf = (cam: THREE.Camera) =>
-  new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 0).normalize();
-const upOf = (cam: THREE.Camera) =>
-  new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 1).normalize();
+const rightOf = (cam: THREE.Camera) => new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 0).normalize();
+const upOf = (cam: THREE.Camera) => new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 1).normalize();
 
 /** Every orbit position and axis the sweeps below cover. */
 function* orbits() {
@@ -149,8 +148,7 @@ describe("screenPlaneOrientation", () => {
 });
 
 describe("leanOutOfView", () => {
-  const screenShare = (v: THREE.Vector3, fwd: THREE.Vector3) =>
-    v.clone().projectOnPlane(fwd).length();
+  const screenShare = (v: THREE.Vector3, fwd: THREE.Vector3) => v.clone().projectOnPlane(fwd).length();
 
   it("leaves an axis with screen length of its own untouched", () => {
     // The common case by far, and the handle must not wobble in it: an edge
@@ -195,9 +193,7 @@ describe("leanOutOfView", () => {
     const flat = upOf(cam).clone().multiplyScalar(0.08);
     const axis = fwd.clone().add(flat).normalize();
     const leaned = leanOutOfView(axis, fwd, rightOf(cam));
-    expect(
-      leaned.clone().projectOnPlane(fwd).normalize().dot(flat.clone().normalize()),
-    ).toBeCloseTo(1, 6);
+    expect(leaned.clone().projectOnPlane(fwd).normalize().dot(flat.clone().normalize())).toBeCloseTo(1, 6);
   });
 
   it("guarantees the floor from every direction", () => {
@@ -257,13 +253,14 @@ describe("arrow handle grab volume", () => {
 
 describe("arrow handle paint", () => {
   const bodyOf = (g: THREE.Group) =>
-    g.children.find(
-      (c) => (c as THREE.Mesh).material instanceof THREE.MeshLambertMaterial,
-    ) as THREE.Mesh;
+    g.children.find((c) => {
+      const m = (c as THREE.Mesh).material as THREE.MeshBasicMaterial | undefined;
+      return m?.visible && m.side === THREE.FrontSide;
+    }) as THREE.Mesh;
 
   it("brightens on hover and returns to its tone", () => {
     const h = createDragHandle();
-    const m = bodyOf(h.group).material as THREE.MeshLambertMaterial;
+    const m = bodyOf(h.group).material as THREE.MeshBasicMaterial;
     expect(m.color.getHex()).toBe(HANDLE_IDLE);
     h.paint({ hot: true });
     expect(m.color.getHex()).toBe(HANDLE_HOT);
@@ -276,7 +273,7 @@ describe("arrow handle paint", () => {
     // press/pull flips this with the drag's sign; the colour is the only thing
     // that says which of the two things the same gesture is about to do.
     const h = createDragHandle();
-    const m = bodyOf(h.group).material as THREE.MeshLambertMaterial;
+    const m = bodyOf(h.group).material as THREE.MeshBasicMaterial;
     h.paint({ tone: "cut" });
     expect(m.color.getHex()).toBe(HANDLE_CUT);
     h.paint({ hot: true });
@@ -290,7 +287,7 @@ describe("arrow handle paint", () => {
     // The fillet drag holds the handle the whole time it is past the limit, so
     // hover cannot be allowed to paint over the refusal.
     const h = createDragHandle();
-    const m = bodyOf(h.group).material as THREE.MeshLambertMaterial;
+    const m = bodyOf(h.group).material as THREE.MeshBasicMaterial;
     h.paint({ hot: true, refused: true });
     expect(m.color.getHex()).toBe(HANDLE_CUT);
     h.paint({ refused: false });
@@ -298,14 +295,18 @@ describe("arrow handle paint", () => {
     h.dispose();
   });
 
-  it("keeps the emissive floor in step with the colour", () => {
-    // Unlit-from-behind is the common case for a handle standing off a face; if
-    // emissive lagged the colour the blob would read as the wrong tone there.
-    const h = createDragHandle();
-    const m = bodyOf(h.group).material as THREE.MeshLambertMaterial;
-    h.paint({ tone: "cut" });
-    expect(m.emissive.getHex()).toBe(m.color.getHex());
-    h.dispose();
+  it("draws every part unlit and untoned, so no light or tone curve can take its colour", () => {
+    // A lit blob went missing under the user's lights while its outline still drew, leaving a black arrow.
+    for (const make of [() => createDragHandle("cut"), () => createRotationArc("cut")]) {
+      const h = make();
+      const drawn = h.group.children.filter((c) => ((c as THREE.Mesh).material as THREE.Material).visible);
+      expect(drawn.length).toBeGreaterThan(0);
+      for (const c of drawn) {
+        const m = (c as THREE.Mesh).material as THREE.MeshBasicMaterial;
+        expect([m.isMeshBasicMaterial, m.toneMapped, "emissive" in m]).toEqual([true, false, false]);
+      }
+      h.dispose();
+    }
   });
 
   it("fades the outline faster than the body", () => {
@@ -391,7 +392,14 @@ describe("handleScale", () => {
     // scale.setScalar(0) collapses the glyph AND its invisible grab volumes, so
     // the handle would be invisible and unclickable at once, indistinguishable
     // from the tool being broken.
-    for (const [d, p] of [[0, 1], [-5, 1], [10, 0], [10, -1], [NaN, 1], [10, NaN]] as const) {
+    for (const [d, p] of [
+      [0, 1],
+      [-5, 1],
+      [10, 0],
+      [10, -1],
+      [NaN, 1],
+      [10, NaN],
+    ] as const) {
       const s = handleScale(d, p);
       expect(Number.isFinite(s)).toBe(true);
       expect(s).toBeGreaterThan(0);
@@ -441,7 +449,13 @@ describe("handleReachPx", () => {
     // A zero would put the bar on top of a handle that is still drawn: the
     // shrink is floored (MIN_HANDLE_SCALE) precisely so the thing stays a
     // target, and the clearance has to respect the same floor.
-    for (const [diag, k] of [[0, 0.1], [-1, 0.1], [400, 0], [NaN, 0.1], [400, NaN]] as const) {
+    for (const [diag, k] of [
+      [0, 0.1],
+      [-1, 0.1],
+      [400, 0],
+      [NaN, 0.1],
+      [400, NaN],
+    ] as const) {
       expect(handleReachPx(diag, k), `${diag}/${k}`).toBeGreaterThan(0);
     }
     expect(handleReachPx(1e-6, 1)).toBeGreaterThanOrEqual(HANDLE_LENGTH * MIN_HANDLE_SCALE);

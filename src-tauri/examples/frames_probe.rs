@@ -1,16 +1,5 @@
-//! The app's frame transport and the page's native tracer backend, measured in
-//! a real webview. Its own identifier, so it shares no data directory, no
-//! single instance lock and no session file with the app.
-//!
-//!   npx vite --port 5174 --strictPort
-//!   cargo run --example frames_probe
-//!
-//! PROBE_PAGE=e2e/tracer_switch_page.html runs Path traced through the host
-//! on each tracer backend instead.
-//! PROBE_PAGE=e2e/native_bloom_page.html checks the native tracer's bloom at
-//! the cap: a glow by the emitter, the background and the samples unchanged.
-//!
-//! Prints one line, PROBE {json}, and exits.
+//! Measures the frame transport and the native tracer in a real webview, under its own identifier so it shares no app
+//! data. Run `npx vite --port 5174 --strictPort`, then `cargo run --example frames_probe`; it prints `PROBE {json}`.
 
 #[tauri::command]
 fn probe_report(app: tauri::AppHandle, json: String) {
@@ -46,6 +35,8 @@ fn main() {
         ])
         .setup(|app| {
             use tauri::Manager;
+            // PROBE_PAGE=e2e/tracer_switch_page.html tries each tracer backend, e2e/native_bloom_page.html the native
+            // bloom at the cap.
             if let (Ok(page), Some(w)) = (std::env::var("PROBE_PAGE"), app.get_webview_window("main")) {
                 w.eval(format!("location.replace('/{page}')"))?;
             }

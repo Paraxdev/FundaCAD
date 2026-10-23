@@ -30,8 +30,13 @@ import { selectionOffers } from "../../src/ui/selectionTools";
 import { iconPaths } from "../../src/ui/icons";
 import { featureMeta } from "../../src/ui/featureMeta";
 import {
-  choiceFieldsFor, fieldApplies, fieldLabel, fileFieldsFor, fileValue,
-  hasOptionFields, toggleFieldsFor,
+  choiceFieldsFor,
+  fieldApplies,
+  fieldLabel,
+  fileFieldsFor,
+  fileValue,
+  hasOptionFields,
+  toggleFieldsFor,
 } from "../../src/document/optionFields";
 import type { Feature } from "../../src/types";
 import type { Engine } from "../../src/app/engine";
@@ -41,13 +46,21 @@ import type { Engine } from "../../src/app/engine";
 function fakeEngine() {
   const state = { faceIds: [] as number[], bodyIds: [] as string[], hasBody: true, status: "" };
   const viewport = {
-    get selecting() { return "faces"; },
+    get selecting() {
+      return "faces";
+    },
     setSelectionMode: () => {},
     getSelectedFaceIds: () => [...state.faceIds],
     getSelectedBodies: () => [...state.bodyIds],
-    selectFaces: (ids: number[]) => { state.faceIds = [...ids]; },
-    setSelectedBodies: (ids: string[]) => { state.bodyIds = [...ids]; },
-    clearSelection: () => { state.faceIds = []; },
+    selectFaces: (ids: number[]) => {
+      state.faceIds = [...ids];
+    },
+    setSelectedBodies: (ids: string[]) => {
+      state.bodyIds = [...ids];
+    },
+    clearSelection: () => {
+      state.faceIds = [];
+    },
     faceIdToBodyId: () => "body1",
     faceIdNear: () => null,
     selectedFacesForPressPull: () => null,
@@ -71,7 +84,9 @@ function fakeEngine() {
     store,
     toolBusy: () => false,
     hasBody: () => state.hasBody,
-    setStatus: (t: string) => { state.status = t; },
+    setStatus: (t: string) => {
+      state.status = t;
+    },
     noteCommitted: vi.fn(),
     selectFeature: vi.fn(),
   };
@@ -102,7 +117,10 @@ describe("the Texture plugin, switched on and off", () => {
   describe("the tool", () => {
     it("joins the inventory as a peer of the application's own", () => {
       expect(capabilityOf("texture")).toMatchObject({
-        label: "Texture", consumes: ["face", "body"], source: "selection", icon: "texture",
+        label: "Texture",
+        consumes: ["face", "body"],
+        source: "selection",
+        icon: "texture",
       });
       expect(applicableTools({ face: 1 })).toContain("texture");
       expect(applicableTools({ body: 1 })).toContain("texture");
@@ -118,7 +136,9 @@ describe("the Texture plugin, switched on and off", () => {
 
     it("claims the action the ribbon and the palette dispatch", () => {
       expect(contributedAction("texture")).toBeTypeOf("function");
-      const item = contributedRibbon().flatMap((g) => g.items).find((i) => i.action === "texture");
+      const item = contributedRibbon()
+        .flatMap((g) => g.items)
+        .find((i) => i.action === "texture");
       expect(item).toMatchObject({ label: "Texture", iconName: "texture" });
     });
 
@@ -215,7 +235,11 @@ describe("the Texture plugin, switched on and off", () => {
       expect(applicableTools({ face: 1 })).not.toContain("texture");
       expect(selectionOffers({ face: 1 }).some((o) => o.tool === "texture")).toBe(false);
       expect(contributedAction("texture")).toBeNull();
-      expect(contributedRibbon().flatMap((g) => g.items).some((i) => i.action === "texture")).toBe(false);
+      expect(
+        contributedRibbon()
+          .flatMap((g) => g.items)
+          .some((i) => i.action === "texture"),
+      ).toBe(false);
       expect(contributedOverlays()).toEqual([]);
       expect(iconPaths("texture")).toBe("");
       expect(featureMeta({ type: "texture" })).toEqual({ icon: "dot", label: "texture" });

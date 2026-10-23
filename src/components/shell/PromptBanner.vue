@@ -6,7 +6,7 @@ import { usePromptStore } from "../../stores/prompt";
 import { keyHint } from "../../input/shortcuts";
 import { sketchToolName } from "../../ui/railDefs";
 import { runningTool } from "../../ui/runningTool";
-import { promptInsets, type Box } from "../../ui/promptPlacement";
+import { LEFT_CARDS, RIGHT_CARDS, promptInsets, type Box } from "../../ui/promptPlacement";
 
 const prompt = usePromptStore();
 const engine = useEngine();
@@ -23,17 +23,11 @@ const title = computed<{ label: string; keys?: string } | null>(() => {
   return { label: running.label, ...(keys ? { keys } : {}) };
 });
 
-// The rail's buttons rather than the rail: its box runs the full height at the
-// width of its widest label, which sits at the top.
-const LEFT_CARDS = "#float-layer .float-left-stack > *, #float-layer .tool-rail .rail-btn, #float-layer .tool-rail .rail-group";
-const RIGHT_CARDS = "#float-layer .float-right > *";
 const MIN_WIDTH = 220;
 
 const rects = (sel: string): Box[] => [...document.querySelectorAll(sel)].map((o) => o.getBoundingClientRect());
 
-// The toast stack is fixed to the window's bottom centre, the same place this
-// banner sits, so it is told how far up the banner reaches (--prompt-clear) and
-// stacks above it.
+// The toast stack shares this bottom centre spot, so --prompt-clear tells it how far up the banner reaches.
 const root = document.documentElement;
 const clearToasts = () => root.style.removeProperty("--prompt-clear");
 
@@ -58,21 +52,38 @@ function place() {
 
 let frame = 0;
 const schedule = () => {
-  if (!frame) frame = requestAnimationFrame(() => { frame = 0; place(); });
+  if (!frame)
+    frame = requestAnimationFrame(() => {
+      frame = 0;
+      place();
+    });
 };
 let ro: ResizeObserver | null = null;
 onMounted(() => {
   ro = new ResizeObserver(schedule);
   const watchAll = () => {
     ro!.disconnect();
-    for (const n of [el.value, el.value?.parentElement, ...document.querySelectorAll("#float-layer .float-left, #float-layer .float-left-stack, #float-layer .tool-rail, #float-layer .float-right")]) {
+    for (const n of [
+      el.value,
+      el.value?.parentElement,
+      ...document.querySelectorAll(
+        "#float-layer .float-left, #float-layer .float-left-stack, #float-layer .tool-rail, #float-layer .float-right",
+      ),
+    ]) {
       if (n) ro!.observe(n);
     }
   };
   watchAll();
   // The columns' contents come and go (Items closed, History opened), and a
   // card swapped for another of the same size fires no resize.
-  watch(() => [prompt.text, title.value], () => nextTick(() => { watchAll(); place(); }));
+  watch(
+    () => [prompt.text, title.value],
+    () =>
+      nextTick(() => {
+        watchAll();
+        place();
+      }),
+  );
   schedule();
 });
 onUnmounted(() => {
@@ -83,9 +94,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <!-- `.hidden` rather than v-if: the element stays in the DOM so the CSS
-       transition on .prompt still runs, exactly as when ui/prompt.ts toggled
-       the class by hand. -->
+  <!-- `.hidden` rather than v-if, so the element stays and the CSS transition on .prompt still runs. -->
   <div ref="el" class="prompt" :class="{ hidden: !prompt.text, titled: !!title }">
     <span v-if="title" class="prompt-title" data-testid="prompt-title">
       {{ title.label }}<kbd v-if="title.keys" class="prompt-key">{{ fmtKeys(title.keys) }}</kbd>

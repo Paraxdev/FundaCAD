@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chooseTracer, type NativeProbe } from "../../src/viewport/pathtrace/choose";
+import { chooseTracer, waitsForNative, type NativeProbe } from "../../src/viewport/pathtrace/choose";
 
 const software: NativeProbe = { available: true, path: "software", denoise: true };
 const rayquery: NativeProbe = { available: true, path: "rayquery", denoise: true };
@@ -41,8 +41,25 @@ describe("native tracer probe", () => {
     expect((await probeNative()).available).toBe(false);
     const stuck = await probeNative(() => new Promise(() => {}), 10);
     expect(stuck).toEqual({ available: false, reason: "the probe did not answer" });
-    const refused = await probeNative(async () => { throw new Error("no adapter"); });
+    const refused = await probeNative(async () => {
+      throw new Error("no adapter");
+    });
     expect(refused.available).toBe(false);
     expect(await probeNative(async () => software)).toEqual(software);
+  });
+});
+
+describe("waiting for the native probe", () => {
+  it("waits while native is still checking and could be picked, so a boot into Path traced does not settle on WebGPU", () => {
+    expect(waitsForNative("native", true, null)).toBe(true);
+    expect(waitsForNative("auto", true, null)).toBe(true);
+    expect(waitsForNative("webgpu", false, null)).toBe(true);
+    expect(chooseTracer("native", { webgpu: true, native: { available: false } })).toBe("webgpu");
+  });
+
+  it("does not wait once native has answered, or when WebGPU is asked for and there", () => {
+    expect(waitsForNative("webgpu", true, null)).toBe(false);
+    expect(waitsForNative("native", true, rayquery)).toBe(false);
+    expect(waitsForNative("auto", true, none)).toBe(false);
   });
 });

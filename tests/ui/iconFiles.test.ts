@@ -16,6 +16,12 @@ const sources = import.meta.glob<string>("../../src/**/*.{ts,vue}", {
   eager: true,
 });
 
+const pluginSources = import.meta.glob<string>("../../plugins/**/*.{ts,vue}", {
+  query: "?raw",
+  import: "default",
+  eager: true,
+});
+
 describe("icon files", () => {
   it("finds the packs", () => {
     expect(Object.keys(FORGE_PACK.paths).length).toBeGreaterThan(100);
@@ -61,5 +67,20 @@ describe("icon files", () => {
     expect(named.size).toBeGreaterThan(50);
     const missing = [...named].filter((n) => !FORGE_PACK.paths[n]);
     expect(missing).toEqual([]);
+  });
+
+  // ViewportControls builds these as `view-${v.view}`, so no literal names them.
+  const BUILT_NAMES = /^view-(top|bottom|front|back|right|left)$/;
+
+  it("every icon file is drawn somewhere", () => {
+    const quoted = new Set<string>();
+    for (const src of [...Object.values(sources), ...Object.values(pluginSources)])
+      for (const m of src.matchAll(/["'`]([\w-]+)["'`]/g)) quoted.add(m[1]!);
+    const unused: string[] = [];
+    for (const [path] of Object.entries(files)) {
+      const name = /\/([^/]+)\.svg$/.exec(path)![1]!;
+      if (!quoted.has(name) && !BUILT_NAMES.test(name)) unused.push(path);
+    }
+    expect(unused).toEqual([]);
   });
 });

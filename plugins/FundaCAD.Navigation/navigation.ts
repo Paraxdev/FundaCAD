@@ -1,5 +1,4 @@
-// The presets, the radial menu's items and the moved keys, and how they are
-// kept. Pure apart from storage, so the tests can read every rule here.
+// Pure apart from storage, so the tests can read every rule here.
 
 import { readSetting, type CtxItem, type PointerBinding, type SettingsSchema, type ShortcutOverride } from "fundacad";
 
@@ -98,13 +97,36 @@ export const DEFAULT_CONFIG: NavConfig = {
 };
 
 export const ICONS: Record<string, string> = {
-  sketch: "sketch", extrude: "extrude", presspull: "presspull", measure: "measure", fit: "view-fit",
-  "reset-camera": "view-reset", "toggle-wireframe": "wireframe", "show-all-bodies": "visible",
-  fillet: "fillet", chamfer: "chamfer", move: "move", split: "split", "hide-selected": "hidden",
-  line: "line", rectangle: "rectangle", circle: "circle", arc: "arc", dimension: "dimension",
-  trim: "trim", offset: "offset", "boolean-union": "booleanUnion", "boolean-subtract": "booleanSubtract",
-  "boolean-intersect": "booleanIntersect", hole: "hole", shell: "shell", "fillet-sketch": "fillet",
-  project: "project", undo: "undo", redo: "redo", section: "section",
+  sketch: "sketch",
+  extrude: "extrude",
+  presspull: "presspull",
+  measure: "measure",
+  fit: "view-fit",
+  "reset-camera": "view-reset",
+  "toggle-wireframe": "wireframe",
+  "show-all-bodies": "visible",
+  fillet: "fillet",
+  chamfer: "chamfer",
+  move: "move",
+  split: "split",
+  "hide-selected": "hidden",
+  line: "line",
+  rectangle: "rectangle",
+  circle: "circle",
+  arc: "arc",
+  dimension: "dimension",
+  trim: "trim",
+  offset: "offset",
+  "boolean-union": "booleanUnion",
+  "boolean-subtract": "booleanSubtract",
+  "boolean-intersect": "booleanIntersect",
+  hole: "hole",
+  shell: "shell",
+  "fillet-sketch": "fillet",
+  project: "project",
+  undo: "undo",
+  redo: "redo",
+  section: "section",
 };
 
 const strings = (v: unknown): string[] | null =>
@@ -201,10 +223,15 @@ export function tableFor(cfg: NavConfig): { table: PointerBinding[]; problem: st
     return { table: [{ button: "right", alt: true, drag: "gesture", click: "menu" }, ...table], problem: null };
   }
   const button = cfg.radialDrag;
-  const plain = table.find((b) => b.button === button && b.shift === undefined && b.ctrl === undefined && b.alt === undefined);
+  const plain = table.find(
+    (b) => b.button === button && b.shift === undefined && b.ctrl === undefined && b.alt === undefined,
+  );
   if (plain?.drag) {
     const name = button === "right" ? "Right" : "Middle";
-    return { table, problem: `${name} drag already does ${plain.drag} in this preset, so the radial menu is on its key only` };
+    return {
+      table,
+      problem: `${name} drag already does ${plain.drag} in this preset, so the radial menu is on its key only`,
+    };
   }
   if (plain) plain.drag = "gesture";
   else table.push({ button, drag: "gesture" });
@@ -216,7 +243,10 @@ export function keymapFor(cfg: NavConfig): ShortcutOverride[] {
   const keys = cfg.keys.filter((k) => k.action !== RADIAL_ACTION);
   if (!cfg.radial) return keys;
   const mine = cfg.keys.find((k) => k.action === RADIAL_ACTION);
-  return [...keys, { ...(mine ?? { action: RADIAL_ACTION, key: RADIAL_KEY }), context: "global", label: "Radial menu" }];
+  return [
+    ...keys,
+    { ...(mine ?? { action: RADIAL_ACTION, key: RADIAL_KEY }), context: "global", label: "Radial menu" },
+  ];
 }
 
 export function contextOf(sketching: boolean, selected: number): RadialContext {

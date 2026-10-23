@@ -17,27 +17,55 @@ class FakeTracer implements TracerBackend {
   meshes: THREE.Mesh[] = [];
   async init() {}
   setSize() {}
-  setScene(s: { meshes: THREE.Mesh[] }) { this.meshes = s.meshes; this.calls.push("scene"); }
-  updateGeometry(meshes: THREE.Mesh[]) { this.meshes = meshes; this.calls.push("geometry"); }
-  updateTransforms() { this.calls.push("transforms"); }
-  updateMaterials() { this.calls.push("materials"); }
-  updateLook() { this.calls.push("look"); }
-  updateCamera() { this.calls.push("camera"); }
-  reset() { this.calls.push("reset"); }
-  renderSample() { return Promise.resolve(1); }
+  setScene(s: { meshes: THREE.Mesh[] }) {
+    this.meshes = s.meshes;
+    this.calls.push("scene");
+  }
+  updateGeometry(meshes: THREE.Mesh[]) {
+    this.meshes = meshes;
+    this.calls.push("geometry");
+  }
+  updateTransforms() {
+    this.calls.push("transforms");
+  }
+  updateMaterials() {
+    this.calls.push("materials");
+  }
+  updateLook() {
+    this.calls.push("look");
+  }
+  updateCamera() {
+    this.calls.push("camera");
+  }
+  reset() {
+    this.calls.push("reset");
+  }
+  renderSample() {
+    return Promise.resolve(1);
+  }
   readonly maxTextureSize = 8192;
   setFrameBudget() {}
   setRenderScale() {}
   setCap() {}
-  picture() { return Promise.resolve(""); }
+  picture() {
+    return Promise.resolve("");
+  }
   readonly denoised = false;
-  present() { return false; }
+  present() {
+    return false;
+  }
   setDenoise() {}
   setBloom() {}
-  samples() { return new Promise<number>(() => {}); }
-  dispose() { this.calls.push("dispose"); }
+  samples() {
+    return new Promise<number>(() => {});
+  }
+  dispose() {
+    this.calls.push("dispose");
+  }
   onFault() {}
-  work() { return this.calls.filter((c) => c !== "camera"); }
+  work() {
+    return this.calls.filter((c) => c !== "camera");
+  }
 }
 
 /** Holds every job until the test lets it finish, like a worker would. */
@@ -57,7 +85,14 @@ class HeldBuilder implements BlasBuilder {
 }
 
 const flush = () => new Promise((r) => setTimeout(r, 0));
-const glCanvas = { clientWidth: 800, clientHeight: 600, offsetLeft: 0, offsetTop: 0, style: {}, parentElement: null } as unknown as HTMLCanvasElement;
+const glCanvas = {
+  clientWidth: 800,
+  clientHeight: 600,
+  offsetLeft: 0,
+  offsetTop: 0,
+  style: {},
+  parentElement: null,
+} as unknown as HTMLCanvasElement;
 
 function body(id: string, etag: string, x: number): THREE.Mesh {
   const g = new THREE.SphereGeometry(1, 8, 6);
@@ -72,12 +107,28 @@ function body(id: string, etag: string, x: number): THREE.Mesh {
 function frame(root: THREE.Object3D, over: Partial<TraceFrame["inputs"]> = {}, changed = true, now = 1000): TraceFrame {
   return {
     now,
-    inputs: { mode: "pathtraced", visible: true, stillMs: 1000, sectioned: false, xray: false, wireframe: false, sketchOpen: false, ...over },
+    inputs: {
+      mode: "pathtraced",
+      visible: true,
+      stillMs: 1000,
+      sectioned: false,
+      xray: false,
+      wireframe: false,
+      sketchOpen: false,
+      ...over,
+    },
     camera: CAMERA,
     cameraChanged: false,
     sceneMaybeChanged: changed,
     root,
-    look: () => ({ lights: [], background: new THREE.Color(), environment: ENV, brightness: 1, toneMapping: THREE.NeutralToneMapping, exposure: 1 }),
+    look: () => ({
+      lights: [],
+      background: new THREE.Color(),
+      environment: ENV,
+      brightness: 1,
+      toneMapping: THREE.NeutralToneMapping,
+      exposure: 1,
+    }),
     lens: () => null,
   };
 }
@@ -240,14 +291,21 @@ describe("path tracer invalidation", () => {
     const t = new FakeTracer();
     t.maxStorageBytes = 1000;
     const notes: string[] = [];
-    const host = new PathTraceHost(glCanvas, async () => t, { arm: async () => {}, clear: () => {} }, new HeldBuilder());
+    const host = new PathTraceHost(
+      glCanvas,
+      async () => t,
+      { arm: async () => {}, clear: () => {} },
+      new HeldBuilder(),
+    );
     host.onRefuse = (why) => notes.push(why);
     host.tick(frame(root));
     await flush();
     await flush();
     host.tick(frame(root));
     host.tick(frame(root));
-    expect(notes).toEqual(["Path tracing needs more GPU memory than this device allows for a model of 0.0 million triangles"]);
+    expect(notes).toEqual([
+      "Path tracing needs more GPU memory than this device allows for a model of 0.0 million triangles",
+    ]);
     expect(t.work()).toEqual([]);
   });
 });

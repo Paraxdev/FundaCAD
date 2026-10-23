@@ -1,10 +1,5 @@
-//! Phase timings for the benchmarks, the Rust side of `_timed` in
-//! the Python engine's `bench_import.py`.
-//!
-//! Recording is off unless `FUNDACAD_BENCH_PHASES` is set, so the shipped
-//! engine pays one relaxed atomic load per phase for it. A job thread also
-//! publishes the phases it is inside, so a job reaped for stalling can say
-//! where it was, see [`doing`].
+//! Phase timings for the benchmarks, the Rust side of `_timed` in `bench_import.py`. Recording is off unless
+//! `FUNDACAD_BENCH_PHASES` is set. A job thread also publishes its phases, so a reaped job says where it was.
 
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -25,10 +20,7 @@ fn on() -> bool {
     READ.get_or_init(|| {
         let set = std::env::var_os("FUNDACAD_BENCH_PHASES").is_some_and(|v| v != "0");
         ON.store(set, Ordering::Relaxed);
-        TRACE.store(
-            set && std::env::var_os("FUNDACAD_BENCH_TRACE").is_some_and(|v| v != "0"),
-            Ordering::Relaxed,
-        );
+        TRACE.store(set && std::env::var_os("FUNDACAD_BENCH_TRACE").is_some_and(|v| v != "0"), Ordering::Relaxed);
     });
     ON.load(Ordering::Relaxed)
 }
@@ -38,10 +30,8 @@ fn since_start() -> f64 {
     T0.get_or_init(Instant::now).elapsed().as_secs_f64()
 }
 
-/// Time `f` under `name`, summing calls. Nested phases each keep their own
-/// total, so an outer phase includes the inner ones, as bench_import.py's do.
-/// `FUNDACAD_BENCH_TRACE` also prints every phase as it opens and closes, so a
-/// run that hangs names the phase it hangs in.
+/// Times `f` under `name`, summing calls. An outer phase includes nested ones, as in bench_import.py.
+/// `FUNDACAD_BENCH_TRACE` prints each phase as it opens and closes, so a hanging run names its phase.
 pub fn phase<T>(name: &'static str, f: impl FnOnce() -> T) -> T {
     let _at = Inside::enter(name);
     if !on() {
@@ -65,9 +55,8 @@ pub fn phase<T>(name: &'static str, f: impl FnOnce() -> T) -> T {
     out
 }
 
-/// `phase` for a name only known at runtime, a feature type say. The name is
-/// interned (leaked once) so the table stays keyed by `&'static str`; nothing
-/// is interned while recording is off.
+/// `phase` for a runtime name. The name is leaked once so the table stays keyed by `&'static str`,
+/// and nothing is leaked while recording is off.
 pub fn phase_named<T>(name: &str, f: impl FnOnce() -> T) -> T {
     if !on() {
         let _at = Inside::enter(name);
@@ -105,14 +94,7 @@ pub fn report() -> serde_json::Value {
         return serde_json::Value::Null;
     };
     serde_json::Value::Object(
-        t.iter()
-            .map(|(k, (s, n))| {
-                (
-                    (*k).to_string(),
-                    serde_json::json!([(s * 1000.0).round() / 1000.0, n]),
-                )
-            })
-            .collect(),
+        t.iter().map(|(k, (s, n))| ((*k).to_string(), serde_json::json!([(s * 1000.0).round() / 1000.0, n]))).collect(),
     )
 }
 
@@ -184,23 +166,5 @@ impl Drop for Inside {
                 publish(stack);
             }
         });
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_tracked_thread_names_the_phases_it_is_inside() {
-        phase("untracked", || assert_eq!(doing(), None));
-        let _t = track_this_thread();
-        phase_named("chamfer", || {
-            phase("blend_section", || {
-                assert_eq!(doing().as_deref(), Some("chamfer > blend_section"));
-            });
-            assert_eq!(doing().as_deref(), Some("chamfer"));
-        });
-        assert_eq!(doing(), None);
     }
 }

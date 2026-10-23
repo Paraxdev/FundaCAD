@@ -28,7 +28,9 @@ let watcher: IntersectionObserver | null = null;
 function ask(): void {
   const { path, editedAt, missing } = props.entry;
   if (!props.thumbs || missing || editedAt == null) return;
-  props.thumbs.request(path, editedAt, (url) => { pic.value = url; });
+  props.thumbs.request(path, editedAt, (url) => {
+    pic.value = url;
+  });
 }
 
 onMounted(() => {
@@ -46,7 +48,12 @@ onMounted(() => {
   );
   watcher.observe(root.value!);
 });
-watch(() => [props.entry.editedAt, props.entry.missing], () => { if (inView) ask(); });
+watch(
+  () => [props.entry.editedAt, props.entry.missing],
+  () => {
+    if (inView) ask();
+  },
+);
 onUnmounted(() => {
   watcher?.disconnect();
   props.thumbs?.cancel(props.entry.path);

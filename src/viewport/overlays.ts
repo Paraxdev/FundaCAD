@@ -1,17 +1,11 @@
-// Surface-analysis overlay helpers (display-only, no geometry backend):
-//   - a zebra-stripe material for visualizing surface continuity,
-//   - curvature combs along edges for visualizing how sharply curves bend,
-//   - the interference overlay (translucent overlap solids + clearance lines), and
-//   - a small center-of-mass marker.
-// All are toggled from the viewport; none touch the document or the kernel.
+// Display only analysis overlays, none touch the document or the kernel.
 
 import * as THREE from "three";
 import type { ModelView } from "./render";
 import { DISPLAY_COLOR_GLSL, displayColorUniforms, followComposer } from "./composerColor";
 
-/** A reflective zebra material: black/white bands follow the reflected view
- *  vector, so kinks/curvature discontinuities show as broken or bunched stripes.
- *  Uses three's built-in `cameraPosition` uniform, no per-frame updates needed. */
+/** Bands follow the reflected view vector, so curvature breaks show as broken or bunched stripes.
+ *  three's built in `cameraPosition` uniform means no per frame update. */
 export function makeZebraMaterial(frequency = 7): THREE.ShaderMaterial {
   const mat = new THREE.ShaderMaterial({
     uniforms: { uFreq: { value: frequency }, ...displayColorUniforms() },
@@ -29,7 +23,9 @@ export function makeZebraMaterial(frequency = 7): THREE.ShaderMaterial {
         vP = wp.xyz;
         gl_Position = projectionMatrix * viewMatrix * wp;
       }`,
-    fragmentShader: DISPLAY_COLOR_GLSL + /* glsl */ `
+    fragmentShader:
+      DISPLAY_COLOR_GLSL +
+      /* glsl */ `
       uniform float uFreq;
       varying vec3 vN;
       varying vec3 vP;
@@ -46,10 +42,8 @@ export function makeZebraMaterial(frequency = 7): THREE.ShaderMaterial {
   return mat;
 }
 
-/** Build a curvature-comb overlay for every edge of the model: at each interior
- *  polyline vertex, a "hair" points to the concave side with length proportional
- *  to the discrete (Menger) curvature, and the hair tips are joined into a comb
- *  envelope. Straight edges produce no hairs. Returns null if nothing is curved. */
+/** At each interior polyline vertex a hair points to the concave side, as long as the Menger
+ *  curvature, and the tips are joined into a comb. Null if nothing is curved. */
 export function buildCurvatureCombs(view: ModelView, box: THREE.Box3): THREE.LineSegments | null {
   type Hair = { base: THREE.Vector3; dir: THREE.Vector3; k: number };
   const hairsByEdge: Hair[][] = [];
@@ -66,7 +60,9 @@ export function buildCurvatureCombs(view: ModelView, box: THREE.Box3): THREE.Lin
     if (!pts || pts.length < 3) continue;
     const hairs: Hair[] = [];
     for (let i = 1; i < pts.length - 1; i++) {
-      const p0 = pts[i - 1], p1 = pts[i], p2 = pts[i + 1];
+      const p0 = pts[i - 1],
+        p1 = pts[i],
+        p2 = pts[i + 1];
       if (!p0 || !p1 || !p2) continue;
       a.set(...p0);
       b.set(...p1);
@@ -113,9 +109,7 @@ export function buildCurvatureCombs(view: ModelView, box: THREE.Box3): THREE.Lin
   return seg;
 }
 
-/** One overlap solid's mesh, red and translucent so it reads as "this volume
- *  clashes" while the parts around it stay visible. `depthWrite: false` is
- *  what keeps two overlapping overlays (or the overlay over the model) from
+/** `depthWrite: false` keeps two overlapping overlays, or the overlay over the model, from
  *  fighting the z-buffer into a flicker. */
 export function buildClashMesh(positions: number[], indices: number[]): THREE.Mesh {
   const geo = new THREE.BufferGeometry();
@@ -137,7 +131,11 @@ export function buildClashMesh(positions: number[], indices: number[]): THREE.Me
 /** The stress result's surface, one sRGB colour per vertex (`colors`, three
  *  per vertex). Lit and flat shaded, so the part keeps its shape under the
  *  colours; it stands in for the body, which the viewport hides meanwhile. */
-export function buildStressMesh(positions: number[], indices: number[], colors: Float32Array): THREE.Mesh {
+export function buildStressMesh(
+  positions: ArrayLike<number>,
+  indices: ArrayLike<number>,
+  colors: Float32Array,
+): THREE.Mesh {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
   // The ramp is authored in sRGB; vertex colours are read as linear.
@@ -150,7 +148,8 @@ export function buildStressMesh(positions: number[], indices: number[], colors: 
     lin[i + 2] = c.b;
   }
   geo.setAttribute("color", new THREE.BufferAttribute(lin, 3));
-  geo.setIndex(indices);
+  // Shared with the drawn surface, which nothing writes after it is made.
+  geo.setIndex(indices instanceof Uint32Array ? new THREE.BufferAttribute(indices, 1) : Array.from(indices));
   geo.computeVertexNormals();
   const mat = new THREE.MeshStandardMaterial({
     vertexColors: true,
@@ -185,7 +184,6 @@ export function buildFaceMarkMesh(positions: Float32Array, color: number): THREE
   return mesh;
 }
 
-/** The short marker line between a clearance pair's two nearest points. */
 export function buildClearanceLine(pointA: THREE.Vector3, pointB: THREE.Vector3): THREE.Line {
   const geo = new THREE.BufferGeometry().setFromPoints([pointA, pointB]);
   const mat = new THREE.LineBasicMaterial({ color: 0xffc24a, depthTest: false, transparent: true, opacity: 0.95 });
@@ -194,9 +192,7 @@ export function buildClearanceLine(pointA: THREE.Vector3, pointB: THREE.Vector3)
   return line;
 }
 
-/** A small sphere at a body's center of mass. Sized off the model diagonal so
- *  it reads at any part scale instead of vanishing on a tiny print or
- *  swallowing a huge one. */
+/** Sized off the model diagonal so it reads at any part scale. */
 export function buildComMarker(point: THREE.Vector3, modelDiag: number): THREE.Mesh {
   const r = Math.max(modelDiag * 0.012, 0.4);
   const geo = new THREE.SphereGeometry(r, 16, 12);
@@ -207,7 +203,6 @@ export function buildComMarker(point: THREE.Vector3, modelDiag: number): THREE.M
   return mesh;
 }
 
-/** Dispose + detach a list of overlay Object3Ds built by the helpers above. */
 export function clearOverlayObjects(objs: THREE.Object3D[]) {
   for (const o of objs) {
     o.removeFromParent();

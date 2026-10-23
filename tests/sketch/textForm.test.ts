@@ -26,8 +26,14 @@ describe("initialTextForm", () => {
   it("defaults an unset panel to 10mm regular left-aligned text", () => {
     const f = initialTextForm({});
     expect(f).toEqual({
-      text: "", font: "", height: "10", bold: false, italic: false,
-      align: "left", angle: "0", boxWidth: "",
+      text: "",
+      font: "",
+      height: "10",
+      bold: false,
+      italic: false,
+      align: "left",
+      angle: "0",
+      boxWidth: "",
     });
   });
 
@@ -37,7 +43,15 @@ describe("initialTextForm", () => {
   });
 
   it("round-trips an existing text object", () => {
-    const v = { text: "Hi", font: "Arial", height: 6, style: "italic", align: "right", angle: 45, boxWidth: 30 } as const;
+    const v = {
+      text: "Hi",
+      font: "Arial",
+      height: 6,
+      style: "italic",
+      align: "right",
+      angle: 45,
+      boxWidth: 30,
+    } as const;
     expect(toTextValues(initialTextForm(v))).toEqual(v);
   });
 });

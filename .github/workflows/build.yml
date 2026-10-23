@@ -59,12 +59,33 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      # Never cargo fmt --all: it follows path dependencies into third_party and
+      # rewrites vendored code. src-tauri and each plugin's geometry-rs are their
+      # own workspaces, and build_identity.rs is include!d by two build.rs files,
+      # so plain cargo fmt never reaches it.
+      - name: Code is formatted (Prettier, rustfmt)
+        run: |
+          npx prettier --check .
+          cargo fmt --check
+          (cd src-tauri && cargo fmt --check)
+          for p in Organic PrintToolbox Printing Screws Texture; do (cd plugins/FundaCAD.$p/geometry-rs && cargo fmt --check) || exit 1; done
+          rustfmt --edition 2021 --check crates/fundacad-engine/build_identity.rs
+
       - name: Frontend unit tests (vitest)
         run: npx vitest run
 
       # The driver the bundle legs start each package with, against a fake server.
       - name: Bundle smoke driver tests
         run: python3 tests/build/test_bundle_smoke.py
+
+      # The notes part of the release job's Publish step, against a stub gh.
+      - name: Release notes tests
+        run: python3 tests/build/test_release_notes.py
 
       # The plugin sandbox is a worker ENTRY, so Rollup treats its exports as
       # unreachable and drops them. That produced a chunk with none of the
@@ -90,6 +111,12 @@ jobs:
         env:
           CARGO_TARGET_DIR: ${{ runner.temp }}/spnav-target
         run: cargo test --manifest-path src-tauri/spnav/Cargo.toml -- --test-threads=4
+
+      # The app's log file, rotation and redirect, std only like the above.
+      - name: Linux log file tests
+        run: |
+          rustc --edition 2021 --test -D warnings src-tauri/tests/unit/log_file.rs -o "$RUNNER_TEMP/log_file_test"
+          "$RUNNER_TEMP/log_file_test"
 
   # What this run builds and where it goes (docs/ENGINE.md section 7). `config`
   # is empty on a ref that builds no installers. `gated` is false on dev, whose
@@ -211,6 +238,16 @@ jobs:
         with:
           targets: wasm32-wasip2
 
+      # A release exe is a GUI subsystem process with no std handles, so its log
+      # file is the only place its output lands. std only, so this takes seconds.
+      - name: Windows log file tests
+        if: matrix.platform == 'windows-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustc --edition 2021 --test -D warnings src-tauri/tests/unit/log_file.rs -o "$RUNNER_TEMP/log_file_test.exe"
+          "$RUNNER_TEMP/log_file_test.exe"
+
       # The root workspace too: fundacad-mcp is built there. A cache saved on
       # a tag is only ever read by that tag's re-runs, and the quota is shared.
       - name: Cache Cargo
@@ -320,6 +357,26 @@ jobs:
           if-no-files-found: error
           path: dist-plugins/plugin-*.zip
 
+      # The development build is its own product on Windows and macOS, FundaCAD
+      # Dev with its own identifier, binary, Start menu entry and install folder,
+      # so it installs beside the beta (tauri.dev-product.conf.json). Linux keeps
+      # the beta's names: its .deb, Flatpak and container checks are keyed on
+      # dev.fundacad.app and usr/bin/fundacad, and two .debs cannot both own the
+      # udev rule and the MIME file anyway. It shows dev-<run> there too.
+      - name: Pick the product the build is named as
+        shell: bash
+        run: |
+          set -euo pipefail
+          args="--config src-tauri/tauri.${{ needs.channel.outputs.config }}.conf.json"
+          bin=fundacad
+          product=$(node -p "require('./src-tauri/tauri.conf.json').productName")
+          if [ "${{ needs.channel.outputs.config }}" = dev ] && [ "$RUNNER_OS" != Linux ]; then
+            args="$args --config src-tauri/tauri.dev-product.conf.json"
+            bin=$(node -p "require('./src-tauri/tauri.dev-product.conf.json').mainBinaryName")
+            product=$(node -p "require('./src-tauri/tauri.dev-product.conf.json').productName")
+          fi
+          printf '%s=%s\n' TAURI_CONFIG_ARGS "$args" FUNDACAD_BIN "$bin" FUNDACAD_PRODUCT "$product" | tee -a "$GITHUB_ENV"
+
       # --- build + bundle. The app also exposes the MCP server through its
       #     --mcp mode. ---
       - name: Build + bundle Tauri app
@@ -334,7 +391,7 @@ jobs:
           NO_STRIP: true
           VITE_FUNDACAD_RELEASE: ${{ needs.channel.outputs.tag || 'beta' }}
         with:
-          args: --verbose --config src-tauri/tauri.${{ needs.channel.outputs.config }}.conf.json
+          args: --verbose ${{ env.TAURI_CONFIG_ARGS }}
 
       # Checked against the bytes rather than the arguments: `engine_attach` is
       # the IPC command the webview reaches the engine through
@@ -344,7 +401,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          bin=$(find src-tauri/target/release -maxdepth 1 -type f \( -name fundacad -o -name fundacad.exe \) | head -1)
+          bin=$(find src-tauri/target/release -maxdepth 1 -type f \( -name "$FUNDACAD_BIN" -o -name "$FUNDACAD_BIN.exe" \) | head -1)
           [ -n "$bin" ] || { echo "::error::no fundacad binary was produced"; exit 1; }
           node -e "
             const fs = require('fs');
@@ -441,7 +498,7 @@ jobs:
           trap 'kill -- -"$gui" 2>/dev/null || true' EXIT
           for _ in $(seq 120); do [ -f "$session" ] && break; sleep 1; done
           if [ ! -f "$session" ]; then
-            echo "::error::the app wrote no session file in 120 s"; tail -n 50 "$RUNNER_TEMP/gui.log"; exit 1
+            echo "::error::the app wrote no session file in 120 s"; tail -n 50 "$RUNNER_TEMP/gui.log" "$XDG_DATA_HOME/dev.fundacad.app/logs/fundacad.log" || true; exit 1
           fi
           FUNDACAD_MCP_MODE=attach FUNDACAD_SESSION_FILE="$session" \
             python3 scripts/bundle-smoke.py --work "$RUNNER_TEMP/smoke-gui" -- "$RUNNER_TEMP/deb-root/usr/bin/fundacad" --mcp
@@ -456,11 +513,43 @@ jobs:
         run: |
           set -euo pipefail
           case "$RUNNER_OS" in
-            Windows) bin=src-tauri/target/release/fundacad.exe py=python ;;
-            macOS) bin=$(find src-tauri/target/release/bundle/macos -ipath '*.app/Contents/MacOS/fundacad' | head -1) py=python3 ;;
+            Windows) bin=src-tauri/target/release/$FUNDACAD_BIN.exe py=python ;;
+            macOS) bin=$(find src-tauri/target/release/bundle/macos -ipath "*.app/Contents/MacOS/$FUNDACAD_BIN" | head -1) py=python3 ;;
           esac
           if [ -z "${bin:-}" ] || [ ! -f "$bin" ]; then echo "::error::no executable to start"; exit 1; fi
           "$py" scripts/bundle-smoke.py --work "$RUNNER_TEMP/smoke-exe" -- "$bin" --mcp
+
+      # The updater runs the installer as `/P /R /UPDATE`, and from the portable
+      # build that is the first install, which has to make the Start menu entry
+      # (src-tauri/windows/installer-hooks.nsh). An update over an install whose
+      # entry was removed leaves it removed. /R is left out, it would start the
+      # app. Not a gate until it has run green on the runner.
+      - name: Install as the updater does and find the Start menu entry
+        if: matrix.platform == 'windows-latest'
+        continue-on-error: true
+        timeout-minutes: 10
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $setup = Get-ChildItem src-tauri/target/release/bundle/nsis -Filter '*-setup.exe' | Select-Object -First 1
+          if (-not $setup) { throw 'no NSIS installer was produced' }
+          if (-not $setup.Name.StartsWith("$($env:FUNDACAD_PRODUCT)_")) { throw "$($setup.Name) is not named after $env:FUNDACAD_PRODUCT" }
+          $lnk = Join-Path ([Environment]::GetFolderPath('Programs')) "$($env:FUNDACAD_PRODUCT).lnk"
+          $exe = Join-Path $env:LOCALAPPDATA "$($env:FUNDACAD_PRODUCT)\$($env:FUNDACAD_BIN).exe"
+          if ((Test-Path $lnk) -or (Test-Path $exe)) { throw "$env:FUNDACAD_PRODUCT is already installed on this runner" }
+          $run = { (Start-Process $setup.FullName -ArgumentList '/P', '/UPDATE' -Wait -PassThru).ExitCode }
+          $code = & $run
+          if ($code -ne 0) { throw "the first install exited with $code" }
+          if (-not (Test-Path $exe)) { throw "the first install left no $exe" }
+          if (-not (Test-Path $lnk)) { throw "the first install in update mode made no Start menu entry at $lnk" }
+          $target = (New-Object -ComObject WScript.Shell).CreateShortcut($lnk).TargetPath
+          if ($target -ne $exe) { throw "the Start menu entry starts $target, not $exe" }
+          Write-Host "first install: $lnk -> $target"
+          Remove-Item $lnk
+          $code = & $run
+          if ($code -ne 0) { throw "the update exited with $code" }
+          if (Test-Path $lnk) { throw 'an update over an install brought back the Start menu entry its user removed' }
+          Write-Host 'update over the install: the removed entry stayed removed'
 
       # A week, the cap tests/build/artifactRetention.test.ts holds, so the
       # beta release can be republished from them by hand. A leg that failed
@@ -483,6 +572,7 @@ jobs:
             src-tauri/target/release/bundle/**/*.exe
             src-tauri/target/release/bundle/**/*.app.tar.gz
             src-tauri/target/release/fundacad.exe
+            src-tauri/target/release/fundacad-dev.exe
             src-tauri/target/release/bundle/**/*.sig
 
   # The Linux build as a Flatpak, repackaged from the .deb above. The GNOME
@@ -550,6 +640,54 @@ jobs:
           retention-days: 7
           if-no-files-found: error
           path: FundaCAD_*.flatpak
+
+  # The packages in clean distro containers. The bundle job runs on a runner
+  # with every library linux-deps installs, so a wrong Depends (WebKitGTK 4.1,
+  # GTK 3, libsoup 3) passes there; here apt has to resolve it from nothing,
+  # and the AppImage meets a Fedora that has only python3. Not in the
+  # release job's needs: for now a Depends break shows red but does not hold
+  # the beta. On dev it also leaves the run green.
+  deb-install:
+    needs: [channel, bundle]
+    if: >-
+      !cancelled() && (needs.bundle.result == 'success'
+        || (needs.channel.outputs.gated == 'false'
+            && (needs.bundle.result == 'failure' || needs.bundle.result == 'cancelled')))
+    continue-on-error: ${{ needs.channel.outputs.gated == 'false' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: ubuntu:22.04
+            kind: deb
+          - image: ubuntu:24.04
+            kind: deb
+          - image: debian:12
+            kind: deb
+          - image: fedora:40
+            kind: appimage
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: fundacad-bundle-ubuntu-22.04
+          path: linux
+
+      - name: Install ${{ matrix.kind }} in ${{ matrix.image }} and build a box
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir pkg
+          case "${{ matrix.kind }}" in
+            deb) find linux -name '*.deb' -exec cp {} pkg/ \; ;;
+            appimage) find linux -name '*.AppImage' -exec cp {} pkg/ \; ;;
+          esac
+          [ -n "$(ls pkg)" ] || { echo "::error::no package in the bundle artifact"; exit 1; }
+          docker run --rm -v "$PWD":/w -w /w ${{ matrix.image }} \
+            sh scripts/package-install-smoke.sh ${{ matrix.kind }} /w/pkg
 
   # The rolling "beta" pre-release from main, the rolling "development"
   # pre-release from dev, or a stable release from a tag.
@@ -638,7 +776,7 @@ jobs:
           put '*.flatpak'     FundaCAD-linux-x86_64.flatpak
           put '*setup.exe'    FundaCAD-windows-x64-setup.exe
           put '*.msi'         FundaCAD-windows-x64.msi
-          put 'fundacad.exe'  FundaCAD-windows-x64-portable.exe
+          put 'fundacad*.exe' FundaCAD-windows-x64-portable.exe
           put '*.dmg'         FundaCAD-macos-arm64.dmg
           put '*.app.tar.gz'  FundaCAD-macos-arm64.app.tar.gz
           find dist -type f -name 'plugin-*.zip' -exec cp {} release/ \;
@@ -705,10 +843,20 @@ jobs:
           R='${{ github.repository }}'
           MAX=25
 
-          # The warning section 6 calls not optional, and it comes first
-          # because a reader who stops after the first screen has to have read
-          # it.
-          cat > notes.md <<'WARN'
+          # Hand written notes kept in the repo go above the generated part
+          # and replace its commit list, so a promotion no longer overwrites
+          # them. Without the file the generated notes alone are published.
+          NOTES="docs/release-notes/$RELEASE.md"
+          if [ -s "$NOTES" ]; then
+            { cat "$NOTES"; printf '\n\n---\n\n'; } > notes.md
+          else
+            : > notes.md
+          fi
+
+          # The warning section 6 calls not optional. With hand written notes
+          # it follows them, otherwise it comes first because a reader who
+          # stops after the first screen has to have read it.
+          cat >> notes.md <<'WARN'
           > ### Read this first
           >
           > **This is FundaCAD 1.0 on the Rust geometry engine.** It replaces
@@ -748,53 +896,59 @@ jobs:
             prev="$SINCE"
             branch=main
           fi
-          if [ "$RELEASE" != stable ]; then
-            # The commit the rolling tag is on RIGHT NOW: the build this
-            # replaces. Read BEFORE the tag is moved, further down.
-            prev=$(gh api "repos/$R/git/ref/tags/$TAG" --jq .object.sha 2>/dev/null || true)
-          fi
-          commits=''
-          if [ -n "$prev" ] && [ "$prev" != "$SHA" ]; then
-            commits=$(gh api "repos/$R/compare/$prev...$SHA" \
-              --jq '[.commits[] | select((.parents | length) < 2)] | reverse' 2>/dev/null || true)
-          fi
-          span="since [\`${prev:0:7}\`](https://github.com/$R/compare/$prev...$SHA)"
-          if [ -z "$commits" ] || [ "$(jq 'length' <<<"$commits")" -eq 0 ]; then
-            commits=$(gh api "repos/$R/commits?sha=$SHA&per_page=$MAX" \
-              --jq '[.[] | select((.parents | length) < 2)]')
-            span="the newest on \`$branch\`"
-          fi
-          total=$(jq 'length' <<<"$commits")
-
-          {
-            printf '\n## Changes, %s\n\n' "$span"
-            jq -r --arg base "https://github.com/$R/commit/" --argjson max "$MAX" '
-              def clip($n): if (length) > $n then (.[0:$n] | sub("\\s+$"; "")) + "…" else . end;
-              .[0:$max][]
-              | .sha as $sha
-              | (.commit.message | split("\n")) as $l
-              | ($l[0] | gsub("[\\[\\]]"; "")) as $subject
-              | ($l[1:] | map(select(test("\\S"))) | join(" ")
-                        | gsub("\\s+"; " ") | gsub("[\\[\\]]"; "")) as $body
-              | (($subject | capture("^(?<t>[a-z]+)(\\([^)]*\\))?!?: (?<r>.+)$"))
-                  // {t: "commit", r: $subject}) as $c
-              | "- " + $c.t + "(`" + $sha[0:7] + "`): ["
-                + ($c.r | clip(90)) + "](" + $base + $sha + ")"
-                + (if ($body | length) == 0 then "" else " " + ($body | clip(160)) end)
-            ' <<<"$commits"
-            if [ "$total" -gt "$MAX" ]; then
-              printf '\nand %d more.\n' "$((total - MAX))"
+          if [ ! -s "$NOTES" ]; then
+            if [ "$RELEASE" != stable ]; then
+              # The commit the rolling tag is on RIGHT NOW: the build this
+              # replaces. Read BEFORE the tag is moved, further down.
+              prev=$(gh api "repos/$R/git/ref/tags/$TAG" --jq .object.sha 2>/dev/null || true)
             fi
-          } >> notes.md
+            commits=''
+            if [ -n "$prev" ] && [ "$prev" != "$SHA" ]; then
+              commits=$(gh api "repos/$R/compare/$prev...$SHA" \
+                --jq '[.commits[] | select((.parents | length) < 2)] | reverse' 2>/dev/null || true)
+            fi
+            span="since [\`${prev:0:7}\`](https://github.com/$R/compare/$prev...$SHA)"
+            if [ -z "$commits" ] || [ "$(jq 'length' <<<"$commits")" -eq 0 ]; then
+              commits=$(gh api "repos/$R/commits?sha=$SHA&per_page=$MAX" \
+                --jq '[.[] | select((.parents | length) < 2)]')
+              span="the newest on \`$branch\`"
+            fi
+            total=$(jq 'length' <<<"$commits")
 
-          printf '\n---\n\nUnsigned: Windows SmartScreen needs "More info", then "Run anyway"; macOS may call the app damaged, which `xattr -dr com.apple.quarantine /Applications/FundaCAD.app` clears. [Install notes](https://github.com/%s#install).\n' \
-            "$R" >> notes.md
+            {
+              printf '\n## Changes, %s\n\n' "$span"
+              jq -r --arg base "https://github.com/$R/commit/" --argjson max "$MAX" '
+                def clip($n): if (length) > $n then (.[0:$n] | sub("\\s+$"; "")) + "…" else . end;
+                .[0:$max][]
+                | .sha as $sha
+                | (.commit.message | split("\n")) as $l
+                | ($l[0] | gsub("[\\[\\]]"; "")) as $subject
+                | ($l[1:] | map(select(test("\\S"))) | join(" ")
+                          | gsub("\\s+"; " ") | gsub("[\\[\\]]"; "")) as $body
+                | (($subject | capture("^(?<t>[a-z]+)(\\([^)]*\\))?!?: (?<r>.+)$"))
+                    // {t: "commit", r: $subject}) as $c
+                | "- " + $c.t + "(`" + $sha[0:7] + "`): ["
+                  + ($c.r | clip(90)) + "](" + $base + $sha + ")"
+                  + (if ($body | length) == 0 then "" else " " + ($body | clip(160)) end)
+              ' <<<"$commits"
+              if [ "$total" -gt "$MAX" ]; then
+                printf '\nand %d more.\n' "$((total - MAX))"
+              fi
+            } >> notes.md
+          fi
+
+          app=FundaCAD
+          [ "$RELEASE" != development ] || app='FundaCAD Dev'
+          printf '\n---\n\nUnsigned: Windows SmartScreen needs "More info", then "Run anyway"; macOS may call the app damaged, which `xattr -dr com.apple.quarantine "/Applications/%s.app"` clears. [Install notes](https://github.com/%s#install).\n' \
+            "$app" "$R" >> notes.md
           printf '\nThis build carries no Python runtime, so it is a fraction of the size of the Python engine builds.\n' >> notes.md
           if [ -n "$partial" ]; then
             printf '\nNot rebuilt this time, so any copy here is from an earlier build: %s.\n' "$partial" >> notes.md
           fi
           if [ "$SELF_UPDATES" = yes ]; then
-            printf '\nInstalled copies update themselves from the newest %s release.\n' "$RELEASE" >> notes.md
+            # Betas installed before the signing key changed cannot verify
+            # the new key's updates, so hand written notes say who updates.
+            [ -s "$NOTES" ] || printf '\nCopies installed before the signing key changed need one manual install of this build, after that they update themselves from the newest %s release.\n' "$RELEASE" >> notes.md
           else
             printf '\nThis build does not update itself, so take a new installer from this page when you want a newer one.\n' >> notes.md
           fi
@@ -952,6 +1106,18 @@ jobs:
           SC_CHROME: /usr/bin/google-chrome
         run: node e2e/history_side_e2e.cjs
 
+      # Starts two engines of its own, so the one above is left alone.
+      - name: Browser save keeps imported geometry end-to-end
+        env:
+          SC_ENGINE: engine-bin/fundacad-engine
+          SC_CHROME: /usr/bin/google-chrome
+        run: node e2e/browser_save_geometry_e2e.cjs /tmp/browser_save_geometry_shots
+      - name: Shell never scrolls end-to-end
+        env:
+          SC_TOKEN: citoken
+          SC_CHROME: /usr/bin/google-chrome
+        run: node e2e/shell_no_shift_e2e.cjs
+
       # Builds only the small frames crate and tungstenite, no Tauri, no kernel.
       - name: Native frames over WebSocket end-to-end
         env:
@@ -1019,6 +1185,65 @@ jobs:
       - name: Engine log on failure
         if: failure()
         run: tail -50 /tmp/ci_engine.log /tmp/ci_vite.log || true
+
+  # The native tracer on Metal. A macOS app always traces natively, since its
+  # WKWebView has no WebGPU, and the macos-14 runner is an Apple Silicon VM
+  # with the same Apple Paravirtual device a Mac VM user has. Every image test
+  # passes by skipping when no adapter fits, so a skip fails the job here.
+  # continue-on-error until it has passed once.
+  tracer-macos:
+    runs-on: macos-14
+    timeout-minutes: 40
+    continue-on-error: true
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          save-if: ${{ github.ref_type != 'tag' }}
+
+      # log_file.rs has no dependencies, so its macOS redirect builds and runs
+      # alone, without the app and its OpenCASCADE.
+      - name: macOS log file tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustc --edition 2021 --test -D warnings src-tauri/tests/unit/log_file.rs -o "$RUNNER_TEMP/log_file_test"
+          "$RUNNER_TEMP/log_file_test"
+
+      - name: Native tracer tests on Metal
+        shell: bash
+        run: |
+          set -uo pipefail
+          status=0
+          cargo test --locked --manifest-path src-tauri/tracer/Cargo.toml -- --test-threads=4 --nocapture 2>&1 | tee "$RUNNER_TEMP/tracer.log" || status=$?
+          grep -E "^[A-Za-z]+ on .*\(" "$RUNNER_TEMP/tracer.log" | sort -u >> "$GITHUB_STEP_SUMMARY" || true
+          # Ray queries and the OIDN archive may be missing on this runner, so
+          # those skips are listed but do not fail the job.
+          if grep -E "skipped[,:] no ray quer|skipped, FUNDACAD_OIDN_ARCHIVE" "$RUNNER_TEMP/tracer.log" | sort -u | tee -a "$GITHUB_STEP_SUMMARY"; then
+            echo "::warning::some tracer tests skipped on this runner, see the job summary"
+          fi
+          if grep -E "skipped[,:] no (GPU )?adapter" "$RUNNER_TEMP/tracer.log"; then
+            echo "::error::the tracer tests found no Metal adapter and skipped"
+            exit 1
+          fi
+          exit "$status"
+
+      - name: Tracer log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tracer-macos-log
+          path: ${{ runner.temp }}/tracer.log
+          if-no-files-found: ignore
+          retention-days: 7
 
   # The geometry engine (crates/, docs/ENGINE.md) and the app shell around
   # it. It compiles OpenCASCADE 7.8.1 from source through the occt-sys crate,

@@ -76,7 +76,9 @@ export interface Setup {
 }
 
 /** A navigator looking at `boxes` from the home corner, framed, settled. */
-export function setup(opts: { boxes?: THREE.Box3[]; ground?: number | null; tau?: number; ortho?: boolean } = {}): Setup {
+export function setup(
+  opts: { boxes?: THREE.Box3[]; ground?: number | null; tau?: number; ortho?: boolean } = {},
+): Setup {
   const nav = new Navigator();
   nav.setFrame(W, H);
   const scene = new BoxScene(opts.boxes ?? [UNIT_BOX.clone()], opts.ground ?? null);
@@ -120,7 +122,9 @@ export function probePoints(box: THREE.Box3): THREE.Vector3[] {
   const c = box.getCenter(new THREE.Vector3());
   const pts = [c.clone()];
   for (let i = 0; i < 8; i++) {
-    pts.push(new THREE.Vector3(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z));
+    pts.push(
+      new THREE.Vector3(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z),
+    );
   }
   return pts;
 }

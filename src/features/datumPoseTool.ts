@@ -1,11 +1,5 @@
-// A datum plane's pose on the canvas: an arrow for the offset and a slim ring
-// for each tilt and the spin, all at the plane's pivot (features/datumRings.ts
-// draws them). Each handle drives exactly one field of the pose
-// (document/datumPose.ts), which is what keeps a tilted plane parametric:
-// dragging the tilt ring writes `tiltX`, never a baked normal.
-//
-// Used to create a datum (the pose is handed back on commit) and to edit one
-// (every release is handed back as its own step while the handles stay up).
+// A datum plane's pose handles: an arrow for the offset and a ring per tilt and the spin (drawn by datumRings.ts).
+// Each handle drives one field of document/datumPose.ts, so a tilted plane stays parametric, never a baked normal.
 
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
@@ -29,8 +23,7 @@ export function tiltStep(e: { shiftKey: boolean; altKey: boolean }): number {
   return e.altKey ? 0 : e.shiftKey ? TILT_FINE_DEG : TILT_STEP_DEG;
 }
 
-/** An angle folded into (-180, 180], so a tilt dragged past half a turn reads as
- *  the short way round. */
+/** Into (-180, 180], so a tilt dragged past half a turn reads the short way round. */
 export function foldDegrees(deg: number): number {
   let d = deg % 360;
   if (d > 180) d -= 360;
@@ -112,15 +105,25 @@ export class DatumPoseTool {
     this.viewport.addToScene(this.dialGroup);
     if (opts.ghost) this.buildGhost();
 
-    const fields: DimFieldDef[] = ([
-      { name: "offset", label: "Offset", kind: "length" },
-      { name: "tiltX", label: "Tilt X", kind: "angle" },
-      { name: "tiltY", label: "Tilt Y", kind: "angle" },
-      { name: "spin", label: "Spin", kind: "angle" },
-    ] as const).filter((f) => !this.isLocked(f.name)).map((f) => ({ ...f }));
-    this.dim.show(fields, () => this.finish(), () => this.cancel());
+    const fields: DimFieldDef[] = (
+      [
+        { name: "offset", label: "Offset", kind: "length" },
+        { name: "tiltX", label: "Tilt X", kind: "angle" },
+        { name: "tiltY", label: "Tilt Y", kind: "angle" },
+        { name: "spin", label: "Spin", kind: "angle" },
+      ] as const
+    )
+      .filter((f) => !this.isLocked(f.name))
+      .map((f) => ({ ...f }));
+    this.dim.show(
+      fields,
+      () => this.finish(),
+      () => this.cancel(),
+    );
     this.dim.updateFromCursor({ ...this.pose });
-    setPrompt("Drag the arrow to offset, a ring to tilt or spin · 5° steps, Shift 1°, Alt free · type exact values · Enter · Esc");
+    setPrompt(
+      "Drag the arrow to offset, a ring to tilt or spin · 5° steps, Shift 1°, Alt free · type exact values · Enter · Esc",
+    );
     this.refresh();
     this.gesture.frame();
   }
@@ -147,8 +150,6 @@ export class DatumPoseTool {
       grab: this.grab,
     };
   }
-
-  // --- pointer ---------------------------------------------------------------
 
   private onMove(e: PointerEvent) {
     const g = this.grab;
@@ -203,9 +204,8 @@ export class DatumPoseTool {
     this.grabValue = this.pose[h];
     this.grabAxis.copy(s.axes[h]).normalize();
     const frame = rotationFrame(this.grabAxis);
-    // Read off the same ray that found the ring: a finger's press may have
-    // taken it on one of probe's outer rays, and the exact one would miss the
-    // band and fall back to a made up starting angle.
+    // Read off the same ray that found the ring: a finger's press may have hit it on one of probe's outer rays,
+    // and the exact ray would miss the band and fall back to a made up starting angle.
     const handles = this.handles;
     const at =
       this.viewport.probe(e.clientX, e.clientY, (rc) => (handles.hit(rc) === h ? handles.grabbedAt(h, s, rc) : null)) ??
@@ -218,14 +218,16 @@ export class DatumPoseTool {
     if (this.grabAngle === null) {
       // Edge-on: the handle's circle is a line on screen, so read the drag along it.
       const p = s.pivot.clone().addScaledVector(at, RING_PX * s.k);
-      const tan = this.grabAxis.clone().cross(at).multiplyScalar(RING_PX * s.k);
+      const tan = this.grabAxis
+        .clone()
+        .cross(at)
+        .multiplyScalar(RING_PX * s.k);
       const a = this.viewport.projectToScreen(p);
       const b = this.viewport.projectToScreen(p.clone().add(tan));
       this.tangentPx.set(b.x - a.x, b.y - a.y);
       if (this.tangentPx.length() < 6) {
-        // The handle moves straight at the viewer (a tilt seen from above),
-        // where its picture only shortens towards the pivot: read a drag
-        // towards the pivot as towards the viewer.
+        // A tilt seen from above moves straight at the viewer and its picture only shortens toward the pivot,
+        // so a drag toward the pivot reads as toward the viewer.
         const o = this.viewport.projectToScreen(s.pivot);
         const view = this.viewport.camera.getWorldDirection(new THREE.Vector3());
         const inward = new THREE.Vector2(o.x - a.x, o.y - a.y);
@@ -256,7 +258,7 @@ export class DatumPoseTool {
     if (e.key === "Escape") this.cancel();
   }
 
-  /** The turn since the grab, in degrees. */
+  /** Degrees since the grab. */
   private dragTurn(x: number, y: number): number | null {
     if (this.grabAngle !== null) {
       const now = this.ringAngle(x, y);
@@ -285,8 +287,6 @@ export class DatumPoseTool {
     if (!handles) return null;
     return this.viewport.probe(x, y, (rc) => handles.hit(rc));
   }
-
-  // --- state -----------------------------------------------------------------
 
   private set(patch: Partial<DatumPose>) {
     this.pose = { ...this.pose, ...patch };
@@ -341,8 +341,6 @@ export class DatumPoseTool {
     this.opts?.onStep?.({ ...this.pose });
   }
 
-  // --- ghost -----------------------------------------------------------------
-
   private buildGhost() {
     const mat = new THREE.MeshBasicMaterial({
       color: 0xffd24a,
@@ -363,8 +361,6 @@ export class DatumPoseTool {
     this.ghostMesh.position.copy(p.origin);
     this.ghostMesh.quaternion.copy(p.orientation());
   }
-
-  // --- end -------------------------------------------------------------------
 
   /** Enter, the tick box, or a click off the handles. */
   private finish() {

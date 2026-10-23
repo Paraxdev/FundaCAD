@@ -1,20 +1,10 @@
-//! Whether a flat ceiling is a bridge, held up on two sides, or a ledge
-//! that hangs in the air and needs support.
-//!
-//! A flat ceiling prints as a bridge: filament strung between two walls.
-//! So the ceiling's outline is sorted into edges a wall comes down from
-//! (support) and edges where the part goes up or ends (no support), and from
-//! points across the ceiling rays go out in opposite pairs: the span at a
-//! point is the shortest pair that ends on support at both ends. A point with
-//! no such pair is not bridged at all. A ray that reaches an edge without
-//! support first has left the ceiling there: what it would find beyond, a
-//! wall past a step up or another body's top across the air, holds nothing.
+//! Whether a flat ceiling is a bridge held on two sides or a ledge needing support. A point's span is the
+//! shortest opposite ray pair ending on supported edges, a ray first meeting an unsupported edge has left the ceiling.
 
 use std::collections::HashMap;
 
 use super::{dot, sub_samples, Body, EdgeKey};
 
-/// What a ceiling is.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Span {
     /// Held up on two sides everywhere; the longest span across it, in mm.
@@ -30,15 +20,12 @@ const PAIRS: usize = 16;
 /// At most this many more, straight across the walls.
 const EXTRA: usize = 64;
 
-/// How far below a ceiling the part has to go from an edge for the edge to
-/// hold it, for each mm the points are from the origin: more than the noise
-/// of a mesh's single precision, and less than the first facet of a fine
-/// mesh's fillet drops, under a thousandth of a mm.
+/// Per mm from the origin, how far the part must drop below an edge for it to hold: above single precision
+/// noise, below a fine fillet's first facet drop, which is under a thousandth of a mm.
 const DROP: f64 = 8.0 * f32::EPSILON as f64;
 
-/// The span of the ceiling made of `tris` (one flat downward face of `b`).
-/// A point `rests` says sits on another body is held where it is, and the
-/// rims of other bodies' tops in `posts` hold it as its own walls do.
+/// `tris` is one flat downward face of `b`. A point `rests` puts on another body is held, and the rims
+/// of other bodies' tops in `posts` hold it as its own walls do.
 pub fn span(
     b: &Body,
     tris: &[usize],
@@ -73,19 +60,14 @@ pub fn span(
         }
         let (i, j, _) = uses[key];
         let height = dot(b.pts[i], up).max(dot(b.pts[j], up));
-        // The triangle across this edge, outside the ceiling: where its far
-        // corner is says whether the part goes down from here. Any drop
-        // counts: a small fillet into the wall drops under a thousandth of a
-        // mm in its first facet, and a step up or an open end never drops at all.
+        // Where the far corner of the triangle across this edge lies says whether the part goes down here. Any
+        // drop counts: a small fillet drops under a thousandth of a mm in its first facet, a step up never drops.
         let held = edges.get(key).into_iter().flatten().filter(|t| !in_face.contains(t)).any(|&t| {
-            b.tris[t]
-                .iter()
-                .filter(|&&q| b.key(q) != b.key(i) && b.key(q) != b.key(j))
-                .any(|&q| {
-                    let p = b.pts[q];
-                    let size = p.iter().fold(height.abs(), |m, c| m.max(c.abs()));
-                    height - dot(p, up) > DROP * (1.0 + size)
-                })
+            b.tris[t].iter().filter(|&&q| b.key(q) != b.key(i) && b.key(q) != b.key(j)).any(|&q| {
+                let p = b.pts[q];
+                let size = p.iter().fold(height.abs(), |m, c| m.max(c.abs()));
+                height - dot(p, up) > DROP * (1.0 + size)
+            })
         });
         if held {
             support.push((flat(b.pts[i]), flat(b.pts[j])));
@@ -96,9 +78,8 @@ pub fn span(
     support.extend(posts.iter().map(|(p, q)| (flat(*p), flat(*q))));
     let area: f64 = tris.iter().map(|&t| b.area[t]).sum();
     let spacing = 0.5f64.max((area / 2000.0).sqrt());
-    // Evenly spread, and straight across every wall: a ray a few degrees off
-    // straight across a short tunnel runs out of its open end before it
-    // reaches the far wall.
+    // Also straight across every wall: a ray a few degrees off across a short tunnel runs out of its open
+    // end before it reaches the far wall.
     let mut angles: Vec<f64> = (0..PAIRS).map(|k| std::f64::consts::PI * k as f64 / PAIRS as f64).collect();
     for (p, q) in &support {
         let a = (q[1] - p[1]).atan2(q[0] - p[0]) + std::f64::consts::FRAC_PI_2;
@@ -145,15 +126,17 @@ pub fn span(
     }
 }
 
-/// How far from `q` along `d` the nearest supported edge is, or infinity
-/// when the ray leaves the ceiling through a `free` edge before that. A tie
-/// is a corner, or a ceiling's edge right over another body's top: held.
+/// Infinity when the ray leaves the ceiling through a `free` edge first. A tie is a corner, or an edge
+/// right over another body's top: held.
 fn reach(q: [f64; 2], d: [f64; 2], support: &[([f64; 2], [f64; 2])], free: &[([f64; 2], [f64; 2])]) -> f64 {
     let held = nearest(q, d, support);
-    if held <= nearest(q, d, free) + 1e-6 { held } else { f64::INFINITY }
+    if held <= nearest(q, d, free) + 1e-6 {
+        held
+    } else {
+        f64::INFINITY
+    }
 }
 
-/// How far from `q` along `d` the nearest of `edges` is.
 fn nearest(q: [f64; 2], d: [f64; 2], edges: &[([f64; 2], [f64; 2])]) -> f64 {
     let mut best = f64::INFINITY;
     for (a, b) in edges {

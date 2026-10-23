@@ -4,16 +4,28 @@ import { repackInPlace, type SwappableBvhData } from "../../src/viewport/pathtra
 class Buf {
   disposed = false;
   constructor(readonly tag: string) {}
-  dispose() { this.disposed = true; }
+  dispose() {
+    this.disposed = true;
+  }
 }
 
 /** Like BVHComputeData's NodeProxyObject: a member reads back as a proxy that
  *  resolves to whatever node is assigned now, an assignment stores the node. */
 function proxied(init: Record<string, unknown>) {
-  return new Proxy({ ...init }, {
-    get: (t, k: string) => ({ get proxyNode() { return t[k] ?? null; } }),
-    set: (t, k: string, v) => { t[k] = v; return true; },
-  }) as Record<string, unknown>;
+  return new Proxy(
+    { ...init },
+    {
+      get: (t, k: string) => ({
+        get proxyNode() {
+          return t[k] ?? null;
+        },
+      }),
+      set: (t, k: string, v) => {
+        t[k] = v;
+        return true;
+      },
+    },
+  ) as Record<string, unknown>;
 }
 
 const rawOf = (p: unknown) => (p as { proxyNode: { value: Buf } }).proxyNode;

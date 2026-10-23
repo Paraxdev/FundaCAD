@@ -26,9 +26,8 @@ fn filleted(profile: f64) -> Value {
     ]})
 }
 
-/// Towards the sharp corner the volume can only grow. At 0.99 OCCT measured
-/// this blend 5000 mm3 lighter than the circular fillet, and a cut through it
-/// added material instead of removing it; 0.99 is now held at 0.95.
+/// Towards the sharp corner the volume can only grow. At 0.99 OCCT measured this blend 5000 mm3 lighter
+/// than the circular fillet and a cut through it added material, so 0.99 is held at 0.95.
 #[test]
 fn a_fuller_conic_profile_never_loses_volume() {
     let sharp = 50.0 * 50.0 * 29.691;

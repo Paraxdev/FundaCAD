@@ -1,6 +1,5 @@
-//! Longest facet edge cap, replaces the Python engine's `mesh_refine.py`. Every long edge
-//! is split at its midpoint on both of its triangles, so the mesh stays
-//! conforming.
+//! Longest facet edge cap, mesh_refine.py. Every long edge is split at its midpoint on both of its
+//! triangles, so the mesh stays conforming.
 
 use std::collections::HashMap;
 
@@ -8,12 +7,7 @@ const MAX_PASSES: usize = 10;
 
 /// `cap_edge_length`. A pass that would pass `budget` triangles is dropped,
 /// but its midpoints stay in `positions`, unreferenced, as in Python.
-pub fn cap_edge_length(
-    positions: &[f64],
-    indices: &[u32],
-    max_edge: f64,
-    budget: usize,
-) -> (Vec<f64>, Vec<u32>) {
+pub fn cap_edge_length(positions: &[f64], indices: &[u32], max_edge: f64, budget: usize) -> (Vec<f64>, Vec<u32>) {
     let mut pos = positions[..positions.len() / 3 * 3].to_vec();
     let mut tri = indices[..indices.len() / 3 * 3].to_vec();
     if max_edge <= 0.0 || tri.is_empty() {
@@ -45,11 +39,7 @@ pub fn cap_edge_length(
         let mut mid = HashMap::with_capacity(edges.len());
         for (i, &(u, v)) in edges.iter().enumerate() {
             let (a, b) = (u as usize * 3, v as usize * 3);
-            let m = [
-                (pos[a] + pos[b]) * 0.5,
-                (pos[a + 1] + pos[b + 1]) * 0.5,
-                (pos[a + 2] + pos[b + 2]) * 0.5,
-            ];
+            let m = [(pos[a] + pos[b]) * 0.5, (pos[a + 1] + pos[b + 1]) * 0.5, (pos[a + 2] + pos[b + 2]) * 0.5];
             mid.insert((u, v), base + i as u32);
             pos.extend_from_slice(&m);
         }

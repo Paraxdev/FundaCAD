@@ -72,7 +72,11 @@ describe("stress panel store", () => {
     p.addStressSupport("slider");
     p.removeStressSupport(1);
     p.addStressSupport();
-    expect(p.stress?.setup.supports.map((x) => [x.id, x.type])).toEqual([[2, "pinned"], [3, "slider"], [4, "fixed"]]);
+    expect(p.stress?.setup.supports.map((x) => [x.id, x.type])).toEqual([
+      [2, "pinned"],
+      [3, "slider"],
+      [4, "fixed"],
+    ]);
     p.setStressSupportFaces(3, someFaces);
     expect(p.stress?.setup.supports.map((x) => x.faces.faceIds.length)).toEqual([0, 1, 0]);
   });
@@ -80,7 +84,18 @@ describe("stress panel store", () => {
   it("puts a read-back setup in place and drops the result drawn from the old one", () => {
     const p = usePanelsStore();
     p.showStress("b1");
-    p.stressFinished({ result: { rows: [], warnings: [], legend: { min: 0, max: 1 }, yields: false } });
+    p.stressFinished({
+      result: {
+        rows: [],
+        details: [],
+        warnings: [],
+        legend: { min: 0, max: 1 },
+        yields: false,
+        verdict: { safetyFactor: null },
+        peakAt: null,
+        maxDeflection: null,
+      },
+    });
     p.setStressColours("shown");
     p.setStressDeform({ scale: 10, auto: 10, max: 40, animate: false });
     p.setStressProbe(true);
@@ -102,7 +117,10 @@ describe("stress panel store", () => {
     p.addStressPin({ tri: 1, weights: [0, 1, 0], label: "b" });
     p.removeStressPin(1);
     p.addStressPin({ tri: 2, weights: [0, 0, 1], label: "c" });
-    expect(p.stress?.pins.map((x) => [x.id, x.label])).toEqual([[2, "b"], [3, "c"]]);
+    expect(p.stress?.pins.map((x) => [x.id, x.label])).toEqual([
+      [2, "b"],
+      [3, "c"],
+    ]);
   });
 
   it("tracks a Run from start to result, and a cancel leaves the last result", () => {
@@ -115,7 +133,16 @@ describe("stress panel store", () => {
     expect(p.stress?.error).toBeNull();
     p.stressSent("req-1");
     expect(p.stress?.requestId).toBe("req-1");
-    const result = { rows: [{ k: "Peak von Mises", v: "3 MPa" }], warnings: [], legend: { min: 0, max: 3 }, yields: false };
+    const result = {
+      rows: [{ k: "Peak stress", v: "3 MPa" }],
+      details: [],
+      warnings: [],
+      legend: { min: 0, max: 3 },
+      yields: false,
+      verdict: { safetyFactor: null },
+      peakAt: null,
+      maxDeflection: null,
+    };
     p.stressFinished({ result });
     expect(p.stress?.running).toBe(false);
     expect(p.stress?.requestId).toBeNull();
@@ -124,6 +151,37 @@ describe("stress panel store", () => {
     p.stressFinished({});
     expect(p.stress?.result?.rows[0]?.v).toBe("3 MPa");
     expect(p.stress?.error).toBeNull();
+  });
+
+  it("keeps the setup a Run started with until another setup or panel takes its place", () => {
+    const p = usePanelsStore();
+    p.showStress("b1");
+    expect(p.stress?.ranSetup).toBeNull();
+    p.stress!.setup.loads[0]!.force = 42.5;
+    p.stressStarted();
+    const ran = JSON.parse(p.stress!.ranSetup!);
+    expect(ran).toEqual(JSON.parse(JSON.stringify(p.stress!.setup)));
+    p.stress!.setup.loads[0]!.force = 30;
+    p.stressFinished({
+      result: {
+        rows: [],
+        details: [],
+        warnings: [],
+        legend: { min: 0, max: 1 },
+        yields: false,
+        verdict: { safetyFactor: null },
+        peakAt: null,
+        maxDeflection: null,
+      },
+    });
+    expect(JSON.parse(p.stress!.ranSetup!).loads[0].force).toBe(42.5);
+    p.replaceStressSetup({ ...p.stress!.setup, body: "b9", material: "ABS" });
+    expect(p.stress?.ranSetup).toBeNull();
+    p.stressStarted();
+    expect(JSON.parse(p.stress!.ranSetup!).body).toBe("b9");
+    p.stress = null;
+    p.showStress("b2");
+    expect({ body: p.stress!.setup.body, ranSetup: p.stress!.ranSetup }).toEqual({ body: "b2", ranSetup: null });
   });
 
   it("ignores an id that arrives after the Run settled", () => {

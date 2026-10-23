@@ -1,11 +1,5 @@
-// The sketch Text tool's panel, minus the panel: the value shape, the mapping
-// between it and the eight form fields, and the on-screen clamp.
-//
-// Split out of textPanel.ts when that became a facade over
-// components/overlays/TextToolPanel.vue. Everything here is a pure function of
-// its inputs, which is the only part of a floating panel a headless test can
-// reach, happy-dom has no layout, so the panel's measured placement is not
-// testable, but the clamp that decides where it is ASKED to go is.
+// The sketch Text tool's panel minus the panel: value shape, form mapping and the on-screen clamp, all pure so a
+// headless test can reach them (happy-dom has no layout).
 
 import { fieldError, fieldNumber } from "../ui/measure";
 
@@ -23,8 +17,7 @@ export function styleOf(bold: boolean, italic: boolean): TextValues["style"] {
   return bold && italic ? "bolditalic" : bold ? "bold" : italic ? "italic" : "regular";
 }
 
-/** The panel's live form state, strings, because that is what the <input>s
- *  hold and half of them are legitimately mid-edit and unparseable. */
+/** Strings, because an input can legitimately hold unparseable mid-edit text. */
 export interface TextForm {
   text: string;
   font: string; // "" = the default font
@@ -37,8 +30,7 @@ export interface TextForm {
 }
 
 export function initialTextForm(initial: Partial<TextValues>): TextForm {
-  // `style` is one field on the value and two checkboxes on the form, and
-  // "bolditalic" has to light both, hence includes() rather than equality.
+  // `style` is two checkboxes on the form and "bolditalic" lights both, hence includes().
   const style = String(initial.style ?? "regular");
   return {
     text: initial.text ?? "",
@@ -52,7 +44,6 @@ export function initialTextForm(initial: Partial<TextValues>): TextForm {
   };
 }
 
-/** The message under each number box that holds text the shared parser rejects. */
 export function textFormErrors(f: TextForm): Partial<Record<"height" | "angle" | "boxWidth", string>> {
   const out: Partial<Record<"height" | "angle" | "boxWidth", string>> = {};
   for (const k of ["height", "angle", "boxWidth"] as const) {
@@ -67,8 +58,7 @@ export function toTextValues(f: TextForm): TextValues {
   return {
     text: f.text,
     ...(f.font ? { font: f.font } : {}),
-    // `|| 10` and `|| 0` are the empty-field fallbacks, not defaults: NaN would
-    // reach the engine as null and fail the build.
+    // `|| 10` and `|| 0` are empty-field fallbacks: NaN would reach the engine as null and fail the build.
     height: fieldNumber(f.height) || 10,
     style: styleOf(f.bold, f.italic),
     align: f.align,
@@ -77,9 +67,8 @@ export function toTextValues(f: TextForm): TextValues {
   };
 }
 
-/** The panel is 300px wide with a ~240px natural height and is anchored to the
- *  click, so near the right or bottom edge it has to be pulled back inside the
- *  window. 8px is the minimum inset on the other two edges. */
+/** The 300px by ~240px panel is anchored to the click, so near the right or bottom edge it is pulled back inside the
+ *  window, with an 8px minimum inset on the other two edges. */
 export function textPanelPos(
   screen: { x: number; y: number },
   win: { innerWidth: number; innerHeight: number },

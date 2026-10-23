@@ -12,7 +12,7 @@
 // same code path a real first frame takes, and the measured path is covered in
 // a browser by e2e/area_select_e2e.cjs.
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { enableAutoUnmount, mount } from "@vue/test-utils";
 import AreaFilterChip from "../../../src/components/overlays/AreaFilterChip.vue";
 import { ENGINE } from "../../../src/app/engineKey";
@@ -33,8 +33,12 @@ let takes: AreaFilter = "all";
 
 const engine = {
   viewport: {
-    get areaDragState() { return drag; },
-    get areaTakes() { return takes; },
+    get areaDragState() {
+      return drag;
+    },
+    get areaTakes() {
+      return takes;
+    },
   },
 } as unknown as Engine;
 
@@ -50,8 +54,12 @@ async function show(): Promise<HTMLElement | null> {
 
 const box = (from: [number, number], at: [number, number], mode: "window" | "crossing" = "window") => {
   drag = {
-    rect: { x0: Math.min(from[0], at[0]), y0: Math.min(from[1], at[1]),
-            x1: Math.max(from[0], at[0]), y1: Math.max(from[1], at[1]) },
+    rect: {
+      x0: Math.min(from[0], at[0]),
+      y0: Math.min(from[1], at[1]),
+      x1: Math.max(from[0], at[0]),
+      y1: Math.max(from[1], at[1]),
+    },
     mode,
     from: { x: from[0], y: from[1] },
     at: { x: at[0], y: at[1] },
@@ -74,7 +82,10 @@ describe("AreaFilterChip", () => {
 
   it("names the filter the viewport is running", async () => {
     for (const [f, word] of [
-      ["all", "Everything"], ["faces", "Faces"], ["edges", "Edges"], ["bodies", "Bodies"],
+      ["all", "Everything"],
+      ["faces", "Faces"],
+      ["edges", "Edges"],
+      ["bodies", "Bodies"],
     ] as const) {
       takes = f;
       box([100, 100], [300, 300]);
@@ -125,5 +136,54 @@ describe("AreaFilterChip", () => {
     expect(parseFloat(chip!.style.left)).toBeGreaterThanOrEqual(0);
     expect(parseFloat(chip!.style.top)).toBeLessThan(window.innerHeight);
     expect(parseFloat(chip!.style.top)).toBeGreaterThanOrEqual(0);
+  });
+});
+
+const frame = () => new Promise((r) => requestAnimationFrame(() => r(null)));
+
+describe("AreaFilterChip over a press that is held before it becomes a box", () => {
+  beforeEach(() => {
+    drag = null;
+    takes = "all";
+    document.body.innerHTML = "";
+    mount(AreaFilterChip, { global: { provide: { [ENGINE as symbol]: engine } } });
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  it("appears when the drag starts several frames after the press", async () => {
+    window.dispatchEvent(new PointerEvent("pointerdown", { button: 0 }));
+    for (let i = 0; i < 4; i++) await frame();
+    expect(document.querySelector(".areachip")).toBeNull();
+    takes = "edges";
+    box([137, 91], [412, 263]);
+    await frame();
+    await frame();
+    expect(document.querySelector<HTMLElement>(".areachip")?.dataset.filter).toBe("edges");
+  });
+
+  it("stops asking for frames once the button is up and the box is gone", async () => {
+    const ask = vi.spyOn(window, "requestAnimationFrame");
+    window.dispatchEvent(new PointerEvent("pointerdown", { button: 0 }));
+    await frame();
+    window.dispatchEvent(new PointerEvent("pointerup", { button: 0 }));
+    await frame();
+    await frame();
+    const asked = ask.mock.calls.length;
+    await frame();
+    await frame();
+    expect(ask.mock.calls.length - asked).toBe(2);
+  });
+
+  it("also stops when the browser cancels the pointer", async () => {
+    const ask = vi.spyOn(window, "requestAnimationFrame");
+    window.dispatchEvent(new PointerEvent("pointerdown", { button: 0 }));
+    await frame();
+    window.dispatchEvent(new PointerEvent("pointercancel", { button: 0 }));
+    await frame();
+    await frame();
+    const asked = ask.mock.calls.length;
+    await frame();
+    await frame();
+    expect(ask.mock.calls.length - asked).toBe(2);
   });
 });

@@ -20,7 +20,10 @@ const doc = (extra: Record<string, unknown> = {}): CadDocument =>
     parameters: {},
     features: [
       {
-        id: "s1", type: "sketch", plane: CACHED, ...extra,
+        id: "s1",
+        type: "sketch",
+        plane: CACHED,
+        ...extra,
         entities: [{ type: "rectangle", id: "a", x: 0, y: 0, width: 10, height: 10 }],
       },
     ],
@@ -35,9 +38,7 @@ const drawnZ = (o: SketchOverlay) => {
   const committed = (o as unknown as { committed: THREE.Object3D }).committed;
   committed.traverse((obj) => {
     const g = (obj as { geometry?: { getAttribute?: (n: string) => unknown } }).geometry;
-    const pos = g?.getAttribute?.("position") as
-      | { count: number; getZ: (i: number) => number }
-      | undefined;
+    const pos = g?.getAttribute?.("position") as { count: number; getZ: (i: number) => number } | undefined;
     if (!pos) return;
     for (let i = 0; i < pos.count; i++) zs.add(Math.round(pos.getZ(i) * 1e6) / 1e6);
   });

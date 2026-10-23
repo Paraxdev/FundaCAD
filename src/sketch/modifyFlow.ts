@@ -1,19 +1,5 @@
-// The sketch modify and transform tools: trim, extend, break, fillet, chamfer,
-// offset, and the selection transforms (move, copy, rotate, scale).
-//
-// Split out of sketchMode.ts, following the ConstraintTools / PatternFlow /
-// DimFlow / ProjectFlow precedent: ModifyHost below is a set of live accessors
-// into SketchMode, never a copy. The entity list is the one thing here that is
-// REPLACED rather than mutated (every op in ./modify returns a fresh array), so
-// the host carries a setter for it as well as a reader, an accessor alone
-// would have let a stale array survive a solve.
-//
-// The three pieces of in-progress state, the first line of a fillet/chamfer
-// pair, the base point of a move, and the offset's live pick, moved out of
-// SketchMode entirely and are this collaborator's own. They are cleared
-// together by reset(), which is what Escape, a tool change and an undo all
-// call; leaving any one of them set across those is how a modify tool ends up
-// acting on geometry that is no longer there.
+// The sketch modify and transform tools (trim, extend, break, fillet, chamfer, offset, move, copy, rotate, scale).
+// Every ./modify op returns a fresh array, so ModifyHost has a setter; reset() clears all in-progress state together.
 
 import * as THREE from "three";
 import type { SketchConstraint } from "../types";
@@ -24,8 +10,18 @@ import type { DimInput } from "./dimInput";
 import type { SketchTool } from "./sketchMode";
 import type { ResolvedEntity } from "./snap";
 import {
-  pickEntity, trimEntity, filletCorner, filletTangents, chamferCorner, offsetEntity, offsetChain,
-  signedOffsetAt, breakAt, extendLine, breakLink, PROJECTED_FIXED_MSG,
+  pickEntity,
+  trimEntity,
+  filletCorner,
+  filletTangents,
+  chamferCorner,
+  offsetEntity,
+  offsetChain,
+  signedOffsetAt,
+  breakAt,
+  extendLine,
+  breakLink,
+  PROJECTED_FIXED_MSG,
   type OffsetResult,
 } from "./modify";
 import { newEntityId } from "./id";
@@ -38,14 +34,11 @@ import { toast } from "../ui/toast";
 
 /** The slice of SketchMode these tools read/write, live accessors, not copies. */
 export interface ModifyHost {
-  /** live entity list */
   entities(): ResolvedEntity[];
   /** every modify op returns a NEW array; this is how it lands */
   setEntities(list: ResolvedEntity[]): void;
-  /** live selection (entity ids) */
   selected(): Set<string>;
   setSelected(ids: Set<string>): void;
-  /** the shared on-canvas value box (a fillet radius, a rotate angle…) */
   dim(): DimInput;
   overlay(): SketchOverlay;
   plane(): SketchPlane;
@@ -72,9 +65,8 @@ export interface ModelEdge {
   readonly points: readonly (readonly [number, number, number])[];
 }
 
-/** Projected geometry offsets like the native curve it stands for. The ids are
- *  kept, so the offset constraint's pairs name the projected source and the copy
- *  follows the model when the projection refreshes. */
+/** Projected geometry offsets like the native curve it stands for, ids kept, so the offset pairs name the projected
+ *  source and the copy follows the model when the projection refreshes. */
 function offsetable(ents: ResolvedEntity[]): ResolvedEntity[] {
   const ids = new Set(ents.filter((e) => e.type === "projected").map((e) => e.id));
   return ids.size ? breakLink(ents, ids) : ents;
@@ -91,13 +83,20 @@ export class ModifyFlow {
 
   constructor(private readonly host: ModifyHost) {}
 
-  /** is a fillet/chamfer waiting for its second line? */
-  get filletArmed(): boolean { return this.filletFirst != null; }
+  get filletArmed(): boolean {
+    return this.filletFirst != null;
+  }
   /** is an offset mid-placement? it owns the preview and the Escape stack */
-  get offsetting(): boolean { return this.offsetPick != null; }
+  get offsetting(): boolean {
+    return this.offsetPick != null;
+  }
   /** the armed line's index, for the hover preview and the constraint tools */
-  getFilletFirst(): number | null { return this.filletFirst; }
-  setFilletFirst(v: number | null) { this.filletFirst = v; }
+  getFilletFirst(): number | null {
+    return this.filletFirst;
+  }
+  setFilletFirst(v: number | null) {
+    this.filletFirst = v;
+  }
 
   /** drop every half-finished gesture: a tool change, Escape and undo all land
    *  here, and any one of these left set would act on geometry that has moved */
@@ -111,11 +110,12 @@ export class ModifyFlow {
 
   /** hover-highlight the entity under the cursor in red */
   modifyHover(e: PointerEvent) {
-    // An offset being placed owns the preview: this is the MODIFY_TOOLS hover
-    // branch and it runs on every move, so without this it would overwrite the
-    // offset's live preview with a plain hover highlight one frame later.
+    // An offset being placed owns the preview, or this hover branch would overwrite it one frame later.
     this.lastMove = e;
-    if (this.offsetPick) { this.offsetMove(e); return; }
+    if (this.offsetPick) {
+      this.offsetMove(e);
+      return;
+    }
     const p = this.host.planePoint(e);
     if (!p) return;
     const idx = pickEntity(this.host.entities(), p, this.host.pickTol());
@@ -148,38 +148,45 @@ export class ModifyFlow {
     return this.offsetChainMode ? planeEdgeChain(polys, k, EDGE_JOIN_TOL) : [k];
   }
 
-  /** Fusion's in-command marking menu for the Offset tool: the two things the
-   *  cursor alone can't say, whether to take the whole connected chain, and
-   *  which side to land on when the cursor is nowhere near the curve. */
+  /** Fusion's in-command marking menu for Offset: whether to take the whole chain, and which side to land on when
+   *  the cursor is nowhere near the curve. */
   openOffsetMenu(e: MouseEvent) {
     e.preventDefault();
     const pick = this.offsetPick;
     contextMenu(e.clientX, e.clientY, [
       {
-        label: "Chain Selection", checked: this.offsetChainMode,
+        label: "Chain Selection",
+        checked: this.offsetChainMode,
         onClick: () => {
           this.offsetChainMode = !this.offsetChainMode;
-          setPrompt(this.offsetChainMode
-            ? "Chain Selection on, the whole connected profile offsets as a unit"
-            : "Chain Selection off, only the clicked curve offsets");
+          setPrompt(
+            this.offsetChainMode
+              ? "Chain Selection on, the whole connected profile offsets as a unit"
+              : "Chain Selection off, only the clicked curve offsets",
+          );
         },
       },
       {
-        label: "Flip", disabled: !pick,
-        onClick: () => { if (pick) pick.side = -pick.side; },
+        label: "Flip",
+        disabled: !pick,
+        onClick: () => {
+          if (pick) pick.side = -pick.side;
+        },
       },
       { separator: true, label: "" },
-      { label: "OK", disabled: !pick, onClick: () => { if (pick) this.commitOffset(); } },
+      {
+        label: "OK",
+        disabled: !pick,
+        onClick: () => {
+          if (pick) this.commitOffset();
+        },
+      },
       { label: "Cancel", disabled: !pick, onClick: () => this.cancelOffset() },
     ]);
   }
 
-  /** Break Link (context menu): the selected projected entities become native
-   *  geometry with the SAME ids, attached constraints/dims stay valid, the
-   *  geometry unfreezes, and the associative refresh skips them from now on
-   *  (they are no longer type "projected"). Breaking one member of a
-   *  multi-curve group (a face boundary's siblings) breaks only that member,
-   *  the others stay linked (Fusion behavior). */
+  /** Break Link: selected projected entities become native with the SAME ids, so constraints stay valid and the
+   *  refresh skips them. Breaking one member of a multi-curve group breaks only that member (Fusion behavior). */
   breakSelectedLinks() {
     const ids = this.selectedProjectedIds();
     if (!ids.size) return;
@@ -203,9 +210,9 @@ export class ModifyFlow {
     if (idx === this.filletFirst) return;
     const second = idx;
     const first = this.filletFirst;
-    this.host.dim().show([{ name: "radius", label: "R", kind: "length", positive: true }], () =>
-      this.applyFillet(first, second),
-    );
+    this.host
+      .dim()
+      .show([{ name: "radius", label: "R", kind: "length", positive: true }], () => this.applyFillet(first, second));
   }
   private applyFillet(iA: number, iB: number) {
     const r = this.host.dim().getValue("radius") ?? 2;
@@ -230,9 +237,9 @@ export class ModifyFlow {
     if (idx === this.filletFirst) return;
     const second = idx;
     const first = this.filletFirst;
-    this.host.dim().show([{ name: "distance", label: "D", kind: "length", positive: true }], () =>
-      this.applyChamfer(first, second),
-    );
+    this.host
+      .dim()
+      .show([{ name: "distance", label: "D", kind: "length", positive: true }], () => this.applyChamfer(first, second));
   }
   private applyChamfer(iA: number, iB: number) {
     const d = this.host.dim().getValue("distance") ?? 2;
@@ -251,26 +258,23 @@ export class ModifyFlow {
     return true;
   }
 
-  /** ids of the currently-selected projected (linked reference) entities. */
   selectedProjectedIds(): Set<string> {
     return new Set(
-      this.host.entities().filter((e) => e.type === "projected" && this.host.selected().has(e.id)).map((e) => e.id),
+      this.host
+        .entities()
+        .filter((e) => e.type === "projected" && this.host.selected().has(e.id))
+        .map((e) => e.id),
     );
   }
 
-  /** The selected projected (linked reference) ids, toasting PROJECTED_FIXED_MSG
-   *  once when any exist, the shared seam for tools that transform the
-   *  selection. Each caller keeps its own retention semantics (deselect /
-   *  keep-selected / skip from copies). */
+  /** Toasts PROJECTED_FIXED_MSG once when any exist; each caller keeps its own retention (deselect, keep, skip). */
   warnSelectedProjected(): Set<string> {
     const ids = this.selectedProjectedIds();
     if (ids.size) toast(PROJECTED_FIXED_MSG);
     return ids;
   }
 
-  /** replace each selected entity with map(e) (flattened); others unchanged. Owns
-   *  the selection: it re-selects the transform's output, so a rotate that explodes
-   *  a rectangle into fresh-id lines leaves those lines selected (not a stale id). */
+  /** Re-selects the output, so a rotate that explodes a rectangle into fresh-id lines leaves those selected. */
   private transformSelection(map: (e: ResolvedEntity) => ResolvedEntity[]) {
     const next: ResolvedEntity[] = [];
     const sel = new Set<string>();
@@ -278,7 +282,10 @@ export class ModifyFlow {
     const projected = this.warnSelectedProjected();
     for (const e of this.host.entities()) {
       if (this.host.selected().has(e.id) && !projected.has(e.id)) {
-        for (const m of map(e)) { next.push(m); sel.add(m.id); }
+        for (const m of map(e)) {
+          next.push(m);
+          sel.add(m.id);
+        }
       } else {
         next.push(e);
         if (projected.has(e.id)) sel.add(e.id);
@@ -317,9 +324,17 @@ export class ModifyFlow {
   /** Move/Copy: click a base point, then a destination, translate the whole
    *  selection. Move mutates in place; Copy leaves the originals and selects the copies. */
   moveClick(p: THREE.Vector2) {
-    if (!this.host.selected().size) { toast("Select entities first, then Move/Copy"); return; }
-    if (!this.moveBase) { this.moveBase = p.clone(); toast("Click the destination point"); return; }
-    const dx = p.x - this.moveBase.x, dy = p.y - this.moveBase.y;
+    if (!this.host.selected().size) {
+      toast("Select entities first, then Move/Copy");
+      return;
+    }
+    if (!this.moveBase) {
+      this.moveBase = p.clone();
+      toast("Click the destination point");
+      return;
+    }
+    const dx = p.x - this.moveBase.x,
+      dy = p.y - this.moveBase.y;
     this.moveBase = null;
     if (this.host.tool() === "copy") {
       const copies: ResolvedEntity[] = [];
@@ -341,8 +356,12 @@ export class ModifyFlow {
 
   /** Rotate the selection about a clicked center by a typed angle (degrees). */
   rotateClick(p: THREE.Vector2) {
-    if (!this.host.selected().size) { toast("Select entities first, then Rotate"); return; }
-    const cx = p.x, cy = p.y;
+    if (!this.host.selected().size) {
+      toast("Select entities first, then Rotate");
+      return;
+    }
+    const cx = p.x,
+      cy = p.y;
     this.host.dim().show([{ name: "angle", label: "Angle", icon: "angle", kind: "angle" }], () => {
       const ang = ((this.host.dim().getValue("angle") ?? 0) * Math.PI) / 180;
       this.host.dim().hide();
@@ -353,8 +372,12 @@ export class ModifyFlow {
 
   /** Scale the selection about a clicked base point by a typed factor. */
   scaleClick(p: THREE.Vector2) {
-    if (!this.host.selected().size) { toast("Select entities first, then Scale"); return; }
-    const cx = p.x, cy = p.y;
+    if (!this.host.selected().size) {
+      toast("Select entities first, then Scale");
+      return;
+    }
+    const cx = p.x,
+      cy = p.y;
     this.host.dim().show([{ name: "factor", label: "Factor", icon: "scale", kind: "count", positive: true }], () => {
       const f = this.host.dim().getValue("factor") ?? 1;
       this.host.dim().hide();
@@ -362,13 +385,9 @@ export class ModifyFlow {
     });
     toast("Scale: type a factor (e.g. 2 or 0.5)");
   }
-  /** Offset (Fusion parity), two-phase: click a curve, then move the cursor to
-   *  choose the SIDE and distance, or type one, and click again (or Enter) to
-   *  apply. `side` and `mag` are kept apart on purpose: the box displays the
-   *  magnitude, so folding them into one signed number is how typing a value
-   *  silently flips an inward offset outward (the abs-display trap). */
-  /** `added` holds the projected entities a face-edge pick brought in, which
-   *  leave again if the offset is cancelled. */
+  /** Two-phase Offset (Fusion parity): click a curve, then the cursor or a typed value sets side and distance.
+   *  `side` and `mag` stay apart because the box shows the magnitude; one signed number flipped typed inward offsets.
+   *  `added` holds projected entities a face-edge pick brought in, which leave if the offset is cancelled. */
   private offsetPick: { idx: number; side: number; mag: number; added: string[] } | null = null;
   /** Fusion's in-command "Chain Selection" toggle, default ON: offset the whole
    *  connected chain rather than only the clicked curve. */
@@ -378,7 +397,10 @@ export class ModifyFlow {
   private lastMove: PointerEvent | null = null;
 
   offsetClick(p: THREE.Vector2) {
-    if (this.offsetPick) { this.commitOffset(); return; } // second click applies
+    if (this.offsetPick) {
+      this.commitOffset();
+      return;
+    } // second click applies
     if (this.edgePickPending) return;
     const idx = pickEntity(this.host.entities(), p, this.host.pickTol());
     if (idx < 0) {
@@ -390,8 +412,14 @@ export class ModifyFlow {
     if (!e) return;
     // Nothing may end in silence here: the user is mid-gesture, and a tool that
     // does nothing without saying why reads as broken.
-    if (e.type === "text") { toast("Offset doesn't apply to sketch text"); return; }
-    if (e.type === "point") { toast("Offset needs a curve, not a point"); return; }
+    if (e.type === "text") {
+      toast("Offset doesn't apply to sketch text");
+      return;
+    }
+    if (e.type === "point") {
+      toast("Offset needs a curve, not a point");
+      return;
+    }
     this.beginOffset(idx, []);
   }
 
@@ -405,9 +433,8 @@ export class ModifyFlow {
     setPrompt("Move to pick the side, or type a distance · Enter · Esc");
   }
 
-  /** A face edge clicked straight off the model: project it (and its loop) in,
-   *  then carry on exactly as if a projected curve had been clicked. The
-   *  clicked edge is chain[0]. */
+  /** Projects a face edge clicked off the model (and its loop) in, then carries on as for a projected curve.
+   *  The clicked edge is chain[0]. */
   private async offsetModelEdges(chain: number[]) {
     const all = this.host.planeEdges();
     const edges = chain.map((k) => all[k]!.edge);
@@ -442,9 +469,7 @@ export class ModifyFlow {
     if (this.offsetPick) this.removeEntities(this.offsetPick.added);
   }
 
-  /** The offset result for the current pick, honouring Chain Selection. Chain
-   *  first (a connected profile offsets as a unit), falling back to the single
-   *  curve, which is also what a lone curve or a junction lands on. */
+  /** Chain first when Chain Selection is on, falling back to the single curve for a lone curve or a junction. */
   private offsetResultFor(idx: number, dist: number): OffsetResult | null {
     if (Math.abs(dist) < 1e-6) return null;
     const ents = this.host.entities();
@@ -462,10 +487,8 @@ export class ModifyFlow {
     const signed = signedOffsetAt(offsetable([src])[0]!, p);
     const typed = this.host.dim().isUserDriven("offset") ? this.host.dim().getValue("offset") : null;
     if (typed !== null) {
-      // Once a value is typed, the SIGN the user wrote owns the side, that is
-      // what the minus is FOR, and the old tool worked that way. Previously the
-      // cursor always took precedence, so typing -1 silently offset outward and the minus
-      // looked ignored. Clear the field to hand the side back to the cursor.
+      // Once a value is typed its sign owns the side, that is what the minus is for; clear the field to hand the side
+      // back to the cursor.
       pick.mag = Math.abs(typed);
       if (typed !== 0) pick.side = typed < 0 ? -1 : 1;
     } else if (signed !== null) {
@@ -485,16 +508,21 @@ export class ModifyFlow {
   private commitOffset() {
     const pick = this.offsetPick;
     if (!pick) return;
-    // An empty box CANCELS. It used to fall back to `?? 1`, so pressing Enter on
-    // an untouched field silently produced a 1 mm offset nobody asked for.
+    // An empty box cancels rather than inventing an offset nobody asked for.
     if (this.host.dim().isUserDriven("offset")) {
       const typed = this.host.dim().getValue("offset");
-      if (typed === null) { toast("Offset: type a distance, or Esc to cancel"); return; }
+      if (typed === null) {
+        toast("Offset: type a distance, or Esc to cancel");
+        return;
+      }
       // same rule as the live preview: a typed sign is the side (see offsetMove)
       pick.mag = Math.abs(typed);
       if (typed !== 0) pick.side = typed < 0 ? -1 : 1;
     }
-    if (pick.mag < 1e-6) { toast("Offset: type a distance, or Esc to cancel"); return; }
+    if (pick.mag < 1e-6) {
+      toast("Offset: type a distance, or Esc to cancel");
+      return;
+    }
     const res = this.offsetResultFor(pick.idx, pick.side * pick.mag);
     if (!res) {
       toast("Offset: that distance collapses the geometry");

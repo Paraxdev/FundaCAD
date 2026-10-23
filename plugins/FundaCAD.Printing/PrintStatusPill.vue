@@ -30,6 +30,7 @@ const PILL = {
       :style="[PILL, print.onClick ? { cursor: 'pointer' } : {}]"
       :title="print.onClick ? 'Show camera' : undefined"
       @click="print.onClick?.()"
-    >{{ print.text }}</div>
+      >{{ print.text }}</div
+    >
   </Teleport>
 </template>

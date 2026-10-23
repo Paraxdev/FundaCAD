@@ -1,8 +1,5 @@
-// Where the drag handle stands on a selected EDGE, and what grabbing it does.
-//
-// The handle itself, its hover behaviour and its per-frame loop live in
-// features/selectionNudge.ts, shared with faces. This file is only the two
-// edge-specific answers: the placement, and the hand-off to EdgeFeatureTool.
+// Where the drag handle stands on a selected edge, and the hand-off to EdgeFeatureTool. The handle itself is
+// features/selectionNudge.ts, shared with faces.
 
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
@@ -13,14 +10,8 @@ import type { NudgePlacement } from "./selectionNudge";
 
 type Vec3 = [number, number, number];
 
-/** The placement for an edge selection, or null when there is nothing to stand
- *  on. Several edges get ONE handle, see handlePlacement for where it lands.
- *
- *  `onGrab` receives the handle's own tangent so the tool can adopt it rather
- *  than recompute it: the tool arms inside the SAME pointerdown, and an axis
- *  that differed by a hair would make the handle jump at the exact moment the
- *  user commits to the gesture. `centre` is what "outward" is measured against
- *  and must come from the same place the tool reads it, for the same reason. */
+/** Several edges get one handle (handlePlacement). `onGrab` gets the handle's own tangent and `centre` must match the
+ *  tool's, since the tool arms in the same pointerdown and a hair's difference makes the handle jump. */
 export function edgeNudgePlacement(
   edges: EdgeRef[],
   onGrab: (clientX: number, clientY: number, tangent: THREE.Vector3 | null, anchor: THREE.Vector3) => void,
@@ -41,18 +32,20 @@ export function edgeNudgePlacement(
   };
 }
 
-/** The point of an edge polyline nearest `at`, with the direction of the segment it
- *  lies on, so a handle on a curve lies across the curve where it stands rather
- *  than across its chord. Null for a polyline with no segment. */
+/** With the direction of the segment it lies on, so a handle on a curve lies across the curve rather than its chord.
+ *  Null for a polyline with no segment. */
 export function pointOnEdge(points: Vec3[], at: Vec3): { anchor: Vec3; tangent: Vec3 | null } | null {
   let best: { anchor: Vec3; tangent: Vec3 | null; d: number } | null = null;
   for (let i = 1; i < points.length; i++) {
-    const a = points[i - 1]!, b = points[i]!;
+    const a = points[i - 1]!,
+      b = points[i]!;
     const ab: Vec3 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
     const len2 = ab[0] * ab[0] + ab[1] * ab[1] + ab[2] * ab[2];
     if (len2 < 1e-18) continue;
-    const t = Math.max(0, Math.min(1,
-      ((at[0] - a[0]) * ab[0] + (at[1] - a[1]) * ab[1] + (at[2] - a[2]) * ab[2]) / len2));
+    const t = Math.max(
+      0,
+      Math.min(1, ((at[0] - a[0]) * ab[0] + (at[1] - a[1]) * ab[1] + (at[2] - a[2]) * ab[2]) / len2),
+    );
     const p: Vec3 = [a[0] + ab[0] * t, a[1] + ab[1] * t, a[2] + ab[2] * t];
     const d = Math.hypot(p[0] - at[0], p[1] - at[1], p[2] - at[2]);
     if (!best || d < best.d) {
@@ -63,24 +56,9 @@ export function pointOnEdge(points: Vec3[], at: Vec3): { anchor: Vec3; tangent: 
   return best && { anchor: best.anchor, tangent: best.tangent };
 }
 
-/** Where the handle stands and which way it lies, from the selected edges'
- *  polylines. Null when there is nothing to stand on.
- *
- *  Kept pure (plain tuples in, plain tuples out, no viewport, no camera, no
- *  scene) because it is the part of this file a headless test can hold: the
- *  hit-testing and the projection around it need a real canvas and a real
- *  camera, which vitest does not have.
- *
- *  The anchor is the mean of the ARC-LENGTH midpoints, matching where
- *  EdgeFeatureTool anchors the same selection, the handle must not shift when
- *  the tool takes over. The tangent comes from the FIRST usable edge: with
- *  several edges there is no single right perpendicular, and one that at least
- *  lies across a real member reads better than the camera-right fallback.
- *  A null tangent means "no usable direction" and leaves that fallback to the
- *  caller, which is the only party that knows where the camera is. */
-export function handlePlacement(
-  polylines: Vec3[][],
-): { anchor: Vec3; tangent: Vec3 | null } | null {
+/** The anchor is the mean of the arc length midpoints, where EdgeFeatureTool anchors the same selection. The tangent
+ *  comes from the first usable edge; null leaves the camera right fallback to the caller, which knows the camera. */
+export function handlePlacement(polylines: Vec3[][]): { anchor: Vec3; tangent: Vec3 | null } | null {
   const mids: Vec3[] = [];
   let tangent: Vec3 | null = null;
   for (const pts of polylines) {
@@ -102,11 +80,8 @@ export function handlePlacement(
   };
 }
 
-/** Unit direction first sample → last sample of an edge polyline, or null when
- *  there isn't one. Good enough for "which way is across this edge" even on a
- *  curve, where the chord and the true tangent at the midpoint diverge: the
- *  handle only has to stand clear of the edge, not measure it. A closed edge
- *  (a full circle: first sample === last) has no chord at all, hence null. */
+/** First sample to last, enough for which way is across the edge even on a curve. Null for a closed edge, which has
+ *  no chord. */
 function edgeTangent(points: Vec3[]): Vec3 | null {
   const a = points[0];
   const b = points[points.length - 1];

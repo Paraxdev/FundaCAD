@@ -1,6 +1,5 @@
-//! A .fundab whose geometry is written in segments, with the segment index
-//! beside it, reads with this reader as it is: the stream is one deflate stream
-//! and the index is a kind it skips.
+//! A .fundab with segmented geometry and a segment index reads as it is: the stream is one deflate stream
+//! and the index is a kind this reader skips.
 
 use std::path::Path;
 

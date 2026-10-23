@@ -1,22 +1,5 @@
-//! Does the geometry engine die with the server that started it? A port of
-//! the Python MCP server's `test_lifetime.py`.
-//!
-//! This is not housekeeping. Each session spawns an engine holding a loaded
-//! OpenCASCADE; an MCP host kills its servers with TerminateProcess, which runs
-//! no cleanup. Measured on the Python server before this was fixed: 53
-//! processes left behind, after which a fresh engine could not start and every
-//! build failed with an error about the machine, from a machine that had been
-//! fine an hour earlier.
-//!
-//! So the test kills the OWNER the way a host would, with no chance to clean
-//! up, and asks whether the engine is still there. The control is the same run
-//! with nothing holding the child, which must leave it alive, otherwise this
-//! would pass on a machine where something else happens to be reaping the
-//! process, and prove nothing.
-//!
-//! Windows only. The job object exists because Windows has neither
-//! PR_SET_PDEATHSIG nor a parent to poll for, and the app's own shell is the
-//! only other thing that supplies one.
+//! The engine must die with the server: hosts kill servers with TerminateProcess, and the Python server once
+//! left 53 engines behind until no new one could start. Windows only; the control run without the job must survive.
 
 mod common;
 
@@ -27,15 +10,8 @@ use std::time::{Duration, Instant};
 
 fn owner_binary() -> PathBuf {
     let exe = std::env::current_exe().expect("a test binary has a path");
-    let profile = exe
-        .parent()
-        .and_then(Path::parent)
-        .expect("target/<profile>/deps");
-    profile.join("examples").join(if cfg!(windows) {
-        "engine_owner.exe"
-    } else {
-        "engine_owner"
-    })
+    let profile = exe.parent().and_then(Path::parent).expect("target/<profile>/deps");
+    profile.join("examples").join(if cfg!(windows) { "engine_owner.exe" } else { "engine_owner" })
 }
 
 fn alive(pid: u32) -> bool {
@@ -58,11 +34,7 @@ fn kill(pid: u32, tree: bool) {
 /// Start an owner, kill it hard, and report whether the engine outlived it.
 fn run_case(job: bool) -> (u32, bool) {
     let owner = owner_binary();
-    assert!(
-        owner.is_file(),
-        "build the example first: {}",
-        owner.display()
-    );
+    assert!(owner.is_file(), "build the example first: {}", owner.display());
     let mut child = Command::new(&owner)
         .arg(if job { "job" } else { "nojob" })
         .stdout(Stdio::piped())
@@ -117,8 +89,5 @@ fn the_control_without_a_job_object_leaks() {
     }
     let (pid, left) = run_case(false);
     kill(pid, true);
-    assert!(
-        left,
-        "{pid} died even with nothing holding it, the test above is not measuring what it claims"
-    );
+    assert!(left, "{pid} died even with nothing holding it, the test above is not measuring what it claims");
 }

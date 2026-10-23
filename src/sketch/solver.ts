@@ -1,18 +1,26 @@
 // 2D constraint solver bridge over planegcs (FreeCAD's PlaneGCS, WASM).
-// Translates our point/line/circle + constraint model into planegcs primitives,
-// solves, and reads the solved point positions back. One wrapper is kept for the
-// app lifetime; clear_data() resets it between solves.
 
 import { init_planegcs_module, GcsWrapper, SolveStatus } from "@salusoft89/planegcs";
 import wasmUrl from "@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url";
 
 export type PointId = string;
-export interface SPoint { id: PointId; x: number; y: number; fixed?: boolean }
-export interface SLine { id: string; p1: PointId; p2: PointId }
-export interface SCircle { id: string; center: PointId; radius: number }
-// An arc references three points (center, start, end) plus radius + sweep
-// angles. arc_rules keeps the endpoints on the circle at those angles, so the
-// endpoints can be shared with lines (coincidence) and the arc stays circular.
+export interface SPoint {
+  id: PointId;
+  x: number;
+  y: number;
+  fixed?: boolean;
+}
+export interface SLine {
+  id: string;
+  p1: PointId;
+  p2: PointId;
+}
+export interface SCircle {
+  id: string;
+  center: PointId;
+  radius: number;
+}
+// arc_rules keeps the endpoints on the circle at the sweep angles, so lines can share them.
 export interface SArc {
   id: string;
   center: PointId;
@@ -51,19 +59,13 @@ export type SConstraint =
   | { id: string; type: "pointOnCircle"; p: PointId; circle: string }
   | { id: string; type: "pointOnArc"; p: PointId; arc: string }
   | { id: string; type: "symmetric"; a: PointId; b: PointId; line: string }
-  // --- edge-to-edge (rim) distances -----------------------------------------
-  // `round1`/`round2`/`round` name a CIRCLE OR ARC primitive: planegcs's Arc
-  // derives from Circle, so the same three constraints take either (verified
-  // against the installed wasm). See entityDims.rimGap / lineRimPoints /
-  // pointRimPoints for the exact measures, they are not all signed, and
-  // sketchSolve's solve guard re-checks the branch each one was created in.
+  // round1, round2 and round name a circle OR arc (planegcs's Arc derives from Circle). Not all are signed, see
+  // entityDims.rimGap, and sketchSolve's guard re-checks the branch each was created in.
   | { id: string; type: "rimGap"; round1: string; round2: string; value: number }
   | { id: string; type: "rimLine"; round: string; line: string; value: number }
   | { id: string; type: "rimPoint"; p: PointId; round: string; value: number }
-  // radiusDifference: `outer.radius - inner.radius = value`, SIGNED, touching
-  // only the two radius params (planegcs `difference` over ObjectParams). The
-  // concentric wall-thickness dim, c2cdistance's nested branch is unsigned and
-  // will happily converge to an inverted annulus, so it must NOT be used here.
+  // outer.radius - inner.radius = value, SIGNED. c2cdistance's nested branch is unsigned and converges to an inverted
+  // annulus, so it must not be used for wall thickness.
   | { id: string; type: "radiusDifference"; inner: string; outer: string; value: number };
 
 export interface SolveInput {
@@ -85,18 +87,33 @@ export interface SolveResult {
   partiallyRedundant: string[]; // constraints that partially duplicate others
 }
 
-let wrapperPromise: Promise<GcsWrapper> | null = null;
-function getWrapper(): Promise<GcsWrapper> {
+interface Solver {
+  w: GcsWrapper;
+  heap: Uint8Array;
+  pristine: Uint8Array;
+}
+
+// planegcs orders unknowns by heap address and DogLeg's answer on an under-constrained sketch follows that
+// order, so every solve restores the heap `new GcsSystem` left (a fixed 16 MB that never grows, 0.4 ms).
+function resetHeap(s: Solver): void {
+  s.heap.set(s.pristine);
+  s.heap.fill(0, s.pristine.length);
+}
+
+let wrapperPromise: Promise<Solver> | null = null;
+function getWrapper(): Promise<Solver> {
   if (!wrapperPromise) {
     wrapperPromise = (async () => {
       const mod = await init_planegcs_module({ locateFile: () => wasmUrl });
-      return new GcsWrapper(new mod.GcsSystem());
+      const w = new GcsWrapper(new mod.GcsSystem());
+      const heap: Uint8Array = mod.HEAPU8;
+      const words = new Uint32Array(heap.buffer, heap.byteOffset, heap.length >> 2);
+      let top = words.length;
+      while (top > 0 && words[top - 1] === 0) top--;
+      return { w, heap, pristine: heap.slice(0, top * 4) };
     })().catch((err) => {
-      // Do NOT keep a rejected promise in the cache. It would poison every
-      // later solve with the same stale failure and never retry, and a failure
-      // here can be transient (a fetch that did not land, an instantiate that
-      // raced startup), so a retry can legitimately succeed without restarting
-      // the app.
+      // A cached rejection would fail every later solve, and a failed fetch or instantiate at startup
+      // can be transient, so the next solve retries.
       wrapperPromise = null;
       throw new SolverUnavailable(err);
     });
@@ -104,48 +121,26 @@ function getWrapper(): Promise<GcsWrapper> {
   return wrapperPromise;
 }
 
-/** The constraint solver's WASM could not be instantiated.
- *
- *  This was misdiagnosed for a long time, so it is worth stating plainly.
- *  planegcs is an emscripten/embind module, and embind builds each invoker by
- *  handing SOURCE TEXT to the `Function` constructor. In the shipped 1.1.7 glue
- *  the minifier specialised that helper to `function qb(b){var a=Function; ...
- *  b=a.apply(c,b); ...}`. `'wasm-unsafe-eval'` permits WebAssembly COMPILATION
- *  only; it does not permit the `Function` constructor, which needs
- *  `'unsafe-eval'`.
- *
- *  So this was never about WebAssembly and never about the user's webview: it
- *  was our own Content-Security-Policy, in every packaged build. `tauri dev`
- *  serves from vite WITHOUT the CSP, which is why it never reproduced in
- *  development, and vitest runs in Node, which has no CSP, so no unit test can
- *  see it either. e2e/solver_csp.cjs is the one that can.
- *
- *  Keep the message blaming the build, not the machine. If this fires again it
- *  means the policy regressed, not that anyone needs a driver update. */
+/** planegcs's embind glue builds invokers with the `Function` constructor, which 'wasm-unsafe-eval' does not allow,
+ *  so this means our own CSP regressed, not the user's machine. tauri dev and vitest have no CSP, e2e/solver_csp.cjs
+ *  catches it. Keep the message blaming the build. */
 export class SolverUnavailable extends Error {
   constructor(readonly cause: unknown) {
     const detail = cause instanceof Error ? cause.message : String(cause);
     super(
       /content security policy|unsafe-eval|code generation/i.test(detail)
-        ? "The 2D constraint solver could not start: this build's security policy blocks the "
-          + "code it needs to initialise. That is a bug in FundaCAD, not a problem with your "
-          + "system, so updating your webview or graphics drivers will not help. Sketching "
-          + "still works, but without constraints, dimensions or point dragging."
+        ? "The 2D constraint solver could not start: this build's security policy blocks the " +
+            "code it needs to initialise. That is a bug in FundaCAD, not a problem with your " +
+            "system, so updating your webview or graphics drivers will not help. Sketching " +
+            "still works, but without constraints, dimensions or point dragging."
         : `The 2D constraint solver could not start: ${detail}`,
     );
     this.name = "SolverUnavailable";
   }
 }
 
-/** Warm up the WASM module ahead of first use (call at startup).
- *
- *  A warm-up is OPTIONAL by definition: the caller must not let a failure here
- *  reach the user as an app-level error. It used to be called as a bare
- *  `void initSolver()`, so when the solver could not start the rejection hit the
- *  global unhandledrejection net and greeted the user with "Something went
- *  wrong, check the console for details" at every startup, naming nothing.
- *  Resolves to false instead of rejecting; the real error is raised at the
- *  point of USE, where it can say what is actually unavailable. */
+/** Resolves to false instead of rejecting, a warm-up failure must not reach the global unhandledrejection net. The
+ *  real error is raised at the point of use. */
 export async function initSolver(): Promise<boolean> {
   try {
     await getWrapper();
@@ -156,22 +151,40 @@ export async function initSolver(): Promise<boolean> {
 }
 
 export async function solveSketch(input: SolveInput): Promise<SolveResult> {
-  const w = await getWrapper();
+  const solver = await getWrapper();
+  resetHeap(solver);
+  const w = solver.w;
   w.clear_data();
 
   const prims: any[] = [];
-  for (const p of input.points)
-    prims.push({ id: p.id, type: "point", x: p.x, y: p.y, fixed: !!p.fixed });
-  for (const l of input.lines)
-    prims.push({ id: l.id, type: "line", p1_id: l.p1, p2_id: l.p2 });
-  for (const c of input.circles)
-    prims.push({ id: c.id, type: "circle", c_id: c.center, radius: c.radius });
+  for (const p of input.points) prims.push({ id: p.id, type: "point", x: p.x, y: p.y, fixed: !!p.fixed });
+  for (const l of input.lines) prims.push({ id: l.id, type: "line", p1_id: l.p1, p2_id: l.p2 });
+  for (const c of input.circles) prims.push({ id: c.id, type: "circle", c_id: c.center, radius: c.radius });
+  const fixedIds = new Set(input.points.filter((p) => p.fixed).map((p) => p.id));
   for (const a of input.arcs ?? []) {
     prims.push({
-      id: a.id, type: "arc", c_id: a.center, start_id: a.start, end_id: a.end,
-      radius: a.radius, start_angle: a.startAngle, end_angle: a.endAngle,
+      id: a.id,
+      type: "arc",
+      c_id: a.center,
+      start_id: a.start,
+      end_id: a.end,
+      radius: a.radius,
+      start_angle: a.startAngle,
+      end_angle: a.endAngle,
     });
-    prims.push({ id: `${a.id}_rules`, type: "arc_rules", a_id: a.id });
+    // With all three points fixed, arc_rules puts 4 equations on the arc's 3 own params, which planegcs
+    // reports as redundant, and as a conflict once user geometry is tied to the arc, so pin the params instead.
+    if (fixedIds.has(a.center) && fixedIds.has(a.start) && fixedIds.has(a.end)) {
+      const pins = { start_angle: a.startAngle, end_angle: a.endAngle, radius: a.radius };
+      for (const [prop, value] of Object.entries(pins))
+        prims.push({
+          id: `${a.id}~${prop}`,
+          type: "difference",
+          param1: 0,
+          param2: { o_id: a.id, prop },
+          difference: value,
+        });
+    } else prims.push({ id: `${a.id}_rules`, type: "arc_rules", a_id: a.id });
   }
   for (const c of input.constraints) prims.push(toGcsConstraint(c));
   if (input.drag) {
@@ -237,7 +250,8 @@ function toGcsConstraint(c: SConstraint): any {
       return { id: c.id, type: "p2p_distance", p1_id: c.a, p2_id: c.b, distance: c.value };
     case "axisDistance":
       return {
-        id: c.id, type: "difference",
+        id: c.id,
+        type: "difference",
         param1: { o_id: c.a, prop: c.axis },
         param2: { o_id: c.b, prop: c.axis },
         difference: c.value,
@@ -287,7 +301,8 @@ function toGcsConstraint(c: SConstraint): any {
     case "radiusDifference":
       // param2 - param1 = difference (planegcs semantics)
       return {
-        id: c.id, type: "difference",
+        id: c.id,
+        type: "difference",
         param1: { o_id: c.inner, prop: "radius" },
         param2: { o_id: c.outer, prop: "radius" },
         difference: c.value,

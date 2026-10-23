@@ -16,9 +16,8 @@ use crate::select::Resolver;
 const EPS: f64 = 1e-9;
 const Z_REF_LIMIT: f64 = 0.9;
 
-/// Note: off to match the Python engine, whose cylinder arm calls a build123d
-/// `Face._geom_adaptor` that no longer exists, so a tangent datum always falls
-/// back to its cache there. Turn on together with that fix.
+/// Off to match the Python engine, whose cylinder arm calls a build123d `Face._geom_adaptor` that no longer
+/// exists, so a tangent datum always falls back to its cache there. Turn on together with that fix.
 const CYLINDER_ARM: bool = false;
 
 /// The `{origin, normal, xdir}` a followed plane resolves to.
@@ -31,11 +30,7 @@ pub struct Placement {
 
 impl Placement {
     pub fn record(&self) -> PlaneRecord {
-        PlaneRecord {
-            origin: self.origin,
-            xdir: self.xdir,
-            normal: self.normal,
-        }
+        PlaneRecord { origin: self.origin, xdir: self.xdir, normal: self.normal }
     }
 
     pub fn wire(&self) -> Value {
@@ -49,22 +44,14 @@ pub(crate) fn unit(v: DVec3) -> Option<DVec3> {
 }
 
 fn plane_x_dir(n: DVec3) -> Option<DVec3> {
-    let r = if n.z.abs() < Z_REF_LIMIT {
-        DVec3::Z
-    } else {
-        DVec3::X
-    };
+    let r = if n.z.abs() < Z_REF_LIMIT { DVec3::Z } else { DVec3::X };
     unit(r - n * r.dot(n))
 }
 
 pub(crate) fn plane_from_point_normal(point: DVec3, normal: DVec3) -> Option<Placement> {
     let n = unit(normal)?;
     let x = plane_x_dir(n)?;
-    Some(Placement {
-        origin: (n * n.dot(point)).to_array(),
-        normal: n.to_array(),
-        xdir: x.to_array(),
-    })
+    Some(Placement { origin: (n * n.dot(point)).to_array(), normal: n.to_array(), xdir: x.to_array() })
 }
 
 pub(crate) fn with_x_dir(p: Placement, hint: DVec3) -> Placement {
@@ -72,11 +59,7 @@ pub(crate) fn with_x_dir(p: Placement, hint: DVec3) -> Placement {
         return p;
     };
     match unit(hint - n * n.dot(hint)) {
-        Some(x) => Placement {
-            origin: p.origin,
-            normal: n.to_array(),
-            xdir: x.to_array(),
-        },
+        Some(x) => Placement { origin: p.origin, normal: n.to_array(), xdir: x.to_array() },
         None => p,
     }
 }
@@ -88,29 +71,16 @@ pub(crate) fn agree_with(p: Placement, reference: DVec3) -> Placement {
     if n.dot(r) >= 0.0 {
         return p;
     }
-    Placement {
-        origin: p.origin,
-        normal: (-n).to_array(),
-        xdir: p.xdir,
-    }
+    Placement { origin: p.origin, normal: (-n).to_array(), xdir: p.xdir }
 }
 
-fn tangent_plane_on_cylinder(
-    axis_point: DVec3,
-    axis_dir: DVec3,
-    radius: f64,
-    at: DVec3,
-) -> Option<Placement> {
+fn tangent_plane_on_cylinder(axis_point: DVec3, axis_dir: DVec3, radius: f64, at: DVec3) -> Option<Placement> {
     let ax = unit(axis_dir)?;
     let rel = at - axis_point;
     let along = rel.dot(ax);
     let radial = unit(rel - ax * along)?;
     let touch = axis_point + ax * along + radial * radius;
-    Some(Placement {
-        origin: touch.to_array(),
-        normal: radial.to_array(),
-        xdir: ax.to_array(),
-    })
+    Some(Placement { origin: touch.to_array(), normal: radial.to_array(), xdir: ax.to_array() })
 }
 
 fn v3(v: &Vec3) -> DVec3 {
@@ -118,12 +88,8 @@ fn v3(v: &Vec3) -> DVec3 {
 }
 
 fn nearest_cylinder_face(part: &Shape, sel: &Value) -> Option<Shape> {
-    let pt = sel
-        .as_object()
-        .and_then(|m| m.get("point"))
-        .and_then(Value::as_array)
-        .filter(|a| a.len() <= 3)
-        .and_then(|a| {
+    let pt =
+        sel.as_object().and_then(|m| m.get("point")).and_then(Value::as_array).filter(|a| a.len() <= 3).and_then(|a| {
             let mut out = [0.0; 3];
             for (slot, x) in out.iter_mut().zip(a) {
                 *slot = x.as_f64()?;
@@ -138,9 +104,7 @@ fn nearest_cylinder_face(part: &Shape, sel: &Value) -> Option<Shape> {
         if probe.surface != sa::SurfaceType::Cylinder {
             continue;
         }
-        let d = pt
-            .and_then(|p| kernel::distance_to_point(&face, p))
-            .unwrap_or(0.0);
+        let d = pt.and_then(|p| kernel::distance_to_point(&face, p)).unwrap_or(0.0);
         if best.as_ref().map_or(true, |(b, _)| d < *b) {
             best = Some((d, face));
         }
@@ -151,18 +115,13 @@ fn nearest_cylinder_face(part: &Shape, sel: &Value) -> Option<Shape> {
 pub(crate) fn cylinder_axis(face: &Shape) -> Option<(DVec3, DVec3, f64)> {
     let mut o = [0.0; 7];
     match ffi::sk_cylinder_axis(face.raw(), &mut o) {
-        Ok(true) => Some((
-            DVec3::new(o[0], o[1], o[2]),
-            DVec3::new(o[3], o[4], o[5]),
-            o[6],
-        )),
+        Ok(true) => Some((DVec3::new(o[0], o[1], o[2]), DVec3::new(o[3], o[4], o[5]), o[6])),
         _ => None,
     }
 }
 
-/// The plane of the face `face` names, re-resolved against the bodies now, or
-/// `None` to keep the cached `plane`. A face that stopped resolving is never an
-/// error, only a diagnostic.
+/// The plane of the face `face` names, re-resolved against the bodies now, or `None` to keep the cached `plane`.
+/// A face that stopped resolving is only a diagnostic, never an error.
 pub fn face_anchor_plane(
     ctx: &mut Ctx,
     id: &str,
@@ -183,25 +142,15 @@ pub fn face_anchor_plane(
     if shapes.is_empty() {
         return None;
     }
-    let part = if shapes.len() == 1 {
-        shapes[0].clone()
-    } else {
-        kernel::compound(shapes.iter().copied())
-    };
+    let part = if shapes.len() == 1 { shapes[0].clone() } else { kernel::compound(shapes.iter().copied()) };
     let cached_normal = v3(&cached.normal);
     let mut scratch = Vec::new();
-    let found = Resolver::new(Some(&mut scratch), Some(id)).face_on_plane(
-        Some(&part),
-        &sel,
-        cached_normal.to_array(),
-        label,
-    );
+    let found =
+        Resolver::new(Some(&mut scratch), Some(id)).face_on_plane(Some(&part), &sel, cached_normal.to_array(), label);
     if let Some(f) = found {
         let probe = sa::face_probe(&f);
         let centre = probe.and_then(|p| p.centre).map(DVec3::from_array)?;
-        let normal = probe
-            .and_then(|p| p.normal)
-            .map_or(DVec3::ZERO, DVec3::from_array);
+        let normal = probe.and_then(|p| p.normal).map_or(DVec3::ZERO, DVec3::from_array);
         let p = plane_from_point_normal(centre, normal)?;
         let p = with_x_dir(p, v3(&cached.xdir));
         return Some(agree_with(p, cached_normal));

@@ -1,27 +1,31 @@
 import { describe, it, expect } from "vitest";
-import {
-  constraintFace, dofSummary, entityLabel, impliedJoins, relationRows,
-} from "../../src/sketch/relations";
+import { constraintFace, dofSummary, entityLabel, impliedJoins, relationRows } from "../../src/sketch/relations";
 import { constraintGlyphs } from "../../src/sketch/glyphs";
 import type { ResolvedEntity } from "../../src/sketch/snap";
 import type { SketchConstraint } from "../../src/types";
 
-const line = (id: string, x1: number, y1: number, x2: number, y2: number): ResolvedEntity =>
-  ({ type: "line", id, x1, y1, x2, y2 });
+const line = (id: string, x1: number, y1: number, x2: number, y2: number): ResolvedEntity => ({
+  type: "line",
+  id,
+  x1,
+  y1,
+  x2,
+  y2,
+});
 
 // The thread profile from the bug report: three lines meeting at three corners,
 // and not one constraint recorded anywhere in the file.
-const TRIANGLE = [
-  line("e1", 20, 0, 26, 2),
-  line("e2", 26, 2, 20, 5),
-  line("e3", 20, 5, 20, 0),
-];
+const TRIANGLE = [line("e1", 20, 0, 26, 2), line("e2", 26, 2, 20, 5), line("e3", 20, 5, 20, 0)];
 
 const NONE = new Set<number>();
 
 describe("entityLabel", () => {
   it("names an entity by kind and position among its own kind", () => {
-    const ents = [line("a", 0, 0, 1, 0), { type: "circle", id: "c", radius: 2, x: 0, y: 0 } as ResolvedEntity, line("b", 0, 1, 1, 1)];
+    const ents = [
+      line("a", 0, 0, 1, 0),
+      { type: "circle", id: "c", radius: 2, x: 0, y: 0 } as ResolvedEntity,
+      line("b", 0, 1, 1, 1),
+    ];
     expect(entityLabel(ents, "a")).toBe("Line 1");
     expect(entityLabel(ents, "b")).toBe("Line 2"); // the circle in between does not count
     expect(entityLabel(ents, "c")).toBe("Circle 1");
@@ -95,11 +99,7 @@ describe("impliedJoins", () => {
   // join is gone, which is the point of using the solver's own key rather than
   // a tolerance of this file's own choosing.
   it("does not claim a join the solver would not make", () => {
-    const apart = [
-      line("e1", 20, 0, 26, 2),
-      line("e2", 26.01, 2, 20, 5),
-      line("e3", 20, 5, 20, 0),
-    ];
+    const apart = [line("e1", 20, 0, 26, 2), line("e2", 26.01, 2, 20, 5), line("e3", 20, 5, 20, 0)];
     expect(impliedJoins(apart)).toHaveLength(2);
   });
 

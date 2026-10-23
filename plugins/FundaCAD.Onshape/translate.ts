@@ -62,7 +62,10 @@ export async function studiosOf(client: OnshapeClient, link: OnshapeLink): Promi
   let wvm = link.wvm;
   let wvmid = link.wvmid;
   if (!wvm || !wvmid) {
-    const doc = await client.json<{ defaultWorkspace?: { id?: string } }>("GET", `${link.base}/api/documents/${link.did}`);
+    const doc = await client.json<{ defaultWorkspace?: { id?: string } }>(
+      "GET",
+      `${link.base}/api/documents/${link.did}`,
+    );
     wvmid = doc.defaultWorkspace?.id;
     wvm = "w";
     if (!wvmid) throw new OnshapeError("Onshape did not say which workspace the document opens in");
@@ -71,7 +74,14 @@ export async function studiosOf(client: OnshapeClient, link: OnshapeLink): Promi
     "GET",
     `${link.base}/api/documents/d/${link.did}/${wvm}/${wvmid}/elements`,
   );
-  const studio = (e: Element): Studio => ({ base: link.base, did: link.did, wvm: wvm!, wvmid: wvmid!, eid: e.id, name: e.name });
+  const studio = (e: Element): Studio => ({
+    base: link.base,
+    did: link.did,
+    wvm: wvm!,
+    wvmid: wvmid!,
+    eid: e.id,
+    name: e.name,
+  });
   if (link.eid) {
     const e = elements.find((x) => x.id === link.eid);
     if (!e) throw new OnshapeError("That tab is not in the document any more");
@@ -100,12 +110,22 @@ export function downloadName(name: string): string {
 /** Export one part studio as STEP and download it. Resolves to the local path. */
 export async function downloadStep(client: OnshapeClient, s: Studio, deps: PollDeps): Promise<string> {
   const { base, did, wvm, wvmid, eid } = s;
-  const first = await client.json<Translation>("POST", `${base}/api/partstudios/d/${did}/${wvm}/${wvmid}/e/${eid}/translations`, {
-    formatName: "STEP",
-    storeInDocument: false,
+  const first = await client.json<Translation>(
+    "POST",
+    `${base}/api/partstudios/d/${did}/${wvm}/${wvmid}/e/${eid}/translations`,
+    {
+      formatName: "STEP",
+      storeInDocument: false,
+    },
+  );
+  const xid = await pollTranslation(
+    (tid) => client.json<Translation>("GET", `${base}/api/translations/${tid}`),
+    first,
+    deps,
+  );
+  const res = await client.send("GET", `${base}/api/documents/d/${did}/externaldata/${xid}`, {
+    saveAs: downloadName(s.name),
   });
-  const xid = await pollTranslation((tid) => client.json<Translation>("GET", `${base}/api/translations/${tid}`), first, deps);
-  const res = await client.send("GET", `${base}/api/documents/d/${did}/externaldata/${xid}`, { saveAs: downloadName(s.name) });
   if (!res.path) throw new OnshapeError("Onshape sent the STEP file but it was not saved");
   return res.path;
 }

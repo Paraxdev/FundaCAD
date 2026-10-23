@@ -1,20 +1,8 @@
 import { onMounted, onUnmounted } from "vue";
 import { popModal, pushModal } from "../ui/choice";
 
-/** Count this component's lifetime in the app-wide modal-depth gate.
- *
- *  `depth` (stores/modals.ts) is what toolBusy() reads through isChoiceOpen(), so a
- *  global shortcut cannot fire underneath an open dialog. The imperative dialogs
- *  called pushModal()/popModal() by hand on every dismissal path: MISS one and depth
- *  never returns to zero, toolBusy() stays true forever, and every tool in the app
- *  is silently dead with no error message.
- *
- *  Mounting is the one path that cannot be missed, the dialog components are
- *  rendered with v-if, so mount == open and unmount == closed, once each, whatever
- *  route the user took.
- *
- *  Deliberately NOT baked into the shared modal chrome: two converted dialogs never
- *  gated shortcuts, and changing that is behaviour, not layout. */
+/** Holds the modal-depth gate for this component's lifetime, so global shortcuts stay off under a v-if dialog and no
+ *  dismiss path can leak a pushModal(). Not in the shared modal chrome, two dialogs never gated shortcuts. */
 export function useModalGate(): void {
   onMounted(pushModal);
   onUnmounted(popModal);

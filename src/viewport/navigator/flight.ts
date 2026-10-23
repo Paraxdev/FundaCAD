@@ -1,10 +1,5 @@
-// Whole-pose flights: the ViewCube, fit, reset, standard views, sketch entry.
-//
-// The pose is interpolated as a pose (orientation, target, log of the scale,
-// lens), never as an eye position, so the target stays on the view axis on
-// every frame. Between two level orientations the turn goes through level ones
-// (yaw and elevation interpolated), so a cube click never rolls the horizon on
-// the way.
+// Whole pose flights (ViewCube, fit, reset, standard views, sketch entry), interpolated as a pose, never an eye position,
+// so the target stays on the view axis. Between level orientations the turn stays level and never rolls the horizon.
 
 import * as THREE from "three";
 import { easeInOut, wrapAngle } from "./math";

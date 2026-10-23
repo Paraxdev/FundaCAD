@@ -1,12 +1,5 @@
 <script setup lang="ts">
-// The "measure-panel" floating popup shell: Properties, Interference, Overhang,
-// the Parameters dialog and plugins' own panels all wear it. Replaces the
-// FloatingPanel class, which existed to dedupe element creation + an optional
-// Esc listener + dismiss bookkeeping.
-//
-// The class's onClose hook is gone and not replaced: it existed so a panel with
-// live subscriptions (the camera poller) could be torn down on EVERY dismissal
-// path. onUnmounted is that hook, and it cannot be forgotten or fire twice.
+// The measure-panel popup shell worn by Properties, Interference, Overhang, Parameters and plugin panels.
 
 import { onUnmounted, watch } from "vue";
 
@@ -16,9 +9,7 @@ const props = withDefaults(defineProps<{ open: boolean; closeOnEsc?: boolean; pa
 });
 const emit = defineEmits<{ close: [] }>();
 
-// Capture phase, matching the original. Deliberately NOT stopPropagation: the
-// panels are non-modal, and Escape has always also reached the global handler
-// (clearing selection / cancelling a tool) while one was open.
+// Capture phase and no stopPropagation: the panels are non-modal, so Escape also reaches the global handler.
 function onEsc(e: KeyboardEvent) {
   if (e.key === "Escape") emit("close");
 }

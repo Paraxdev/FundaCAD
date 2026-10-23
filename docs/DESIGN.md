@@ -156,6 +156,7 @@ Status:
 | `--warn` | `#ffab2e` | Warnings, amber History steps, `.perf-warn` |
 | `--error` | `#ff5c5c` | Errors, destructive items, failed steps |
 | `--error-tint` | `rgba(255, 92, 92, 0.14)` | Error backgrounds and the error focus ring |
+| `--pick-line` | `#b48cff` | The second pick colour, apart from the accent: the Mirror line or plane, in the view and on its panel field |
 
 There is no info, success tint, warn tint, disabled or hover token. Derive them:
 
@@ -166,6 +167,7 @@ There is no info, success tint, warn tint, disabled or hover token. Derive them:
 | Accent border on hover | `color-mix(in srgb, var(--accent) 45%, transparent)` (buttons) or `55%` (cards, choice buttons) |
 | Field focus ring | `0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent)` |
 | Warn or error surface | `color-mix(in srgb, var(--warn) 9%, var(--float-bg-solid))` (`.perf-pop`), `color-mix(in srgb, var(--error) 22%, var(--float-bg-solid))` (`.toast-error`) |
+| Warn or error small text on glass or a panel | `color-mix(in srgb, var(--warn) 60%, var(--text))` or the same with `--error` (`.sketch-dim.conflict`, `.rel-row.over .rel-sym`); the bare `--warn` and `--error` fall under AA in Solarized Light, keep them for the border |
 
 ### 2.2 Shape and motion tokens
 
@@ -229,8 +231,7 @@ Scrims (`.modal-overlay`, `.cmdk-backdrop`, `.choice-backdrop`, final values in
 `_glass.scss`): `background: rgba(5, 4, 9, 0.35)` with
 `backdrop-filter: blur(6px) saturate(1.2)`. The workspace stays visible behind
 a dialog, blurred and dimmed. A new modal reuses `.modal-overlay` rather than
-writing its own scrim. `.shortcut-hud` still has its own flat
-`rgba(10, 11, 14, 0.6)` and no blur, see [14](#14-known-debt-do-not-copy).
+writing its own scrim.
 
 Stacking tokens: `--z-float` 20, `--z-popover` 200, `--z-menu` 3000,
 `--z-modal` 4000, `--z-toast` 5000. Most layers still use literals, so pick
@@ -245,7 +246,6 @@ your layer from what is actually on screen:
 | 2000 | `.menu-popup` |
 | 2450 | `.logcon` |
 | 2500 | `.toast-stack` |
-| 2600 | `.shortcut-hud` |
 | 3000 | `.context-menu` |
 | 4000 | `.choice-backdrop` |
 | 4001 | `.select-pop`, `calc(var(--z-modal) + 1)`, so a picker clears its dialog |
@@ -285,7 +285,7 @@ around the window). Hosts that are fixed or absolute in their own partial
 `.ne-overlay`) or `position: relative` there (`.rail-tile`) need nothing more;
 every other host is on the `position: relative` lists in `_glass.scss`
 (`.float-card`, `.float-group`, `.choice-card`, `.float-right .palette`,
-`.modal-panel`, `.cmdk-card`, `.tgt-panel`, `.shortcut-hud-card`, `.toast`,
+`.modal-panel`, `.cmdk-card`, `.tgt-panel`, `.toast`,
 `#renderdock`).
 
 ```scss
@@ -333,7 +333,7 @@ needs a larger radius to look the same size. Always pair a float radius with
 | `.float-group` | `ViewportControls.vue` | A column or row of `.icon-btn` |
 | `.float-popover` | `components/ui/Popover.vue` | Anything that opens from a button: options, pickers, `Select.vue`'s list |
 | `.context-menu` | `ContextMenuHost.vue` | Right click menus |
-| `.measure-panel` | `components/overlays/FloatingPanel.vue` | A small tool or readout panel. Worn by `MeasureReadout.vue`, `PropertiesPanel.vue`, `InterferencePanel.vue`, `OverhangPanel.vue`, `StressPanel.vue` and `ParamsDialog.vue`; check these before you build a new one. Contents and API in [7.13](#713-tool-and-readout-panels-measure-panel) |
+| `.measure-panel` | `components/overlays/FloatingPanel.vue` | A small tool or readout panel. Worn by `MeasureReadout.vue`, `PropertiesPanel.vue`, `InterferencePanel.vue`, `OverhangPanel.vue`, `StressPanel.vue`, `MirrorToolPanel.vue` and `ParamsDialog.vue`; check these before you build a new one. Contents and API in [7.13](#713-tool-and-readout-panels-measure-panel) |
 | `.modal-panel` | `components/overlays/ModalFrame.vue` | A dialog, on `.modal-overlay` |
 | `.choice-card` | `ModalHost.vue` chooser | A short question with a few answers |
 | `.cmdk-card` | `CommandPalette.vue` | The command palette |
@@ -342,6 +342,7 @@ needs a larger radius to look the same size. Always pair a float radius with
 | `.toast` | `ToastStack.vue` through `ui/toast.ts` | Short confirmations |
 | `.rail-tile`, `.rail-pill` | `components/ui/RailButton.vue` | Tool buttons on the rail |
 | `#viewport .prompt` | `PromptBanner.vue` | The tool prompt pill |
+| `.section-chip` | `SectionChip.vue`, in `#viewport .vp-top` | A state that stays on over the model, with its word buttons |
 
 ### 4.3 A new surface
 
@@ -539,7 +540,7 @@ one; a name that is not there renders nothing. The common actions:
 | Add, remove | `plus`, `minus` |
 | Search | `search` |
 | Show, hide | `visible`, `hidden` |
-| Expand, collapse | `caretRight`, `caretDown`, `caretUp` |
+| Expand, collapse | `caretRight`, `caretDown` |
 | Undo, redo | `undo`, `redo` |
 | Warning | `warning` |
 | Save, open, export, import | `save`, `open`, `export`, `import` |
@@ -702,6 +703,10 @@ and the whole row flips the switch.
 | `.rd-tab` (Render dock) | 11.5px, `--text-mute`, 2px transparent bottom border | `--raised`, `--text-dim` | `.active`: `--accent-hot` and an `--accent` bottom border (a bar, not a fill) | the shared ring |
 | `.prefs-nav-btn` | 14px | `--raised` | `.active`: `--accent-tint`, border `--accent-tint-2`, `--accent-hot`, 600 | `0 0 0 2px var(--accent)` |
 
+A tab that cannot be chosen yet (the Stress panel's Results before a Run) passes `disabled` and a `title` saying why
+to `Tabs.vue`: opacity 0.45, `cursor: default`, no hover. Keep it in the bar rather than hiding it, a bar of one tab
+reads as a title.
+
 ### 7.8 Chips and key caps
 
 | Class | Recipe |
@@ -710,6 +715,8 @@ and the whole row flips the switch.
 | `.rd-chip` | padding `3px var(--s-2)`, `--panel-2`, `--line`, chip radius, 11px `--text-dim`; hover `--raised`, `--text`; `.active` border `--accent`, fill `--accent-tint-2`, `--accent-hot`; disabled opacity 0.55 |
 | `#context-tab` | 10px, 700, uppercase, letter-spacing 0.8px, padding `var(--s-1) var(--s-3)`; `.sketch` turns it accent (`--accent-hot`, border `--accent`, fill `--accent-tint`) |
 | `.tree-count` | 10px, 600, `--text-mute`, `--panel-2` pill, hidden when empty |
+| `.section-chip` (`SectionChip.vue`) | glass A, chip radius, no rim, padding `var(--s-1) var(--s-1) var(--s-1) var(--s-3)`, gap `--s-2`, 600 12px `--text`, the section icon in `--accent`, `pop-in`; `role="toolbar"`; shown only while a cut is on, absent otherwise; under 560px, or when the top row is too narrow for them, the words hide and the icon's `title` says them |
+| `.section-chip-btn` | white ink of `.pop-wide`, chip radius, padding `var(--s-1) var(--s-3)`, 600 12px `--text-dim`; hover `--text`; `.active` (Edit while editing, `aria-pressed`) as `.dim-btn.dim-toggle.on`; `.disabled` with `aria-disabled` opacity 0.45, no hover; shared focus ring; a 40px hit area on touch |
 
 ### 7.9 Rows
 
@@ -736,6 +743,7 @@ currently uses hard coded reds; new destructive rows use `--error`.
 | `.measure-panel` | see [7.13](#713-tool-and-readout-panels-measure-panel) |
 | `.toast` | glass B, `--float-tile-radius`, padding `var(--s-3) var(--s-4)`, 12.5px, bottom centre in `.toast-stack`; `.toast-error` and `.toast-warning` tint the fill; `.toast-action` accent chip |
 | `#viewport .prompt` | glass A, pill, padding `var(--s-3) var(--s-5)`, 12px, a 6px accent dot with `0 0 8px var(--accent-glow)`, `prompt-in` entrance |
+| `#viewport .vp-top` | the top middle stack of the Section chip and Normal to Sketch: absolute, top `--s-4`, a column with gap `--s-2`, centred in the span the cards leave free (`useClearOfCards.ts` sets `--row-left` and `--row-right`, as PromptBanner does); when that span is too narrow it sets `data-narrow` (the chip drops its words), and when that is not enough it moves the stack down to the first row with room (`--row-top`), `z-index: calc(var(--z-float) - 4)`, pointer events only on its children |
 
 ![A context menu and the selection state of the shell](design/context-menu-dark.png)
 
@@ -812,13 +820,32 @@ second padded head doubles it. A minimal readout:
 </FloatingPanel>
 ```
 
+#### Pick fields
+
+A tool that collects more than one selection gives each its own row, as
+`MirrorToolPanel.vue` does (`.mirror-panel`, `.mirror-field` in `_modals.scss`):
+
+- a 28px `IconButton` toggle first, `active` on the field that takes the next
+  clicks, and the field name and value after it ("Nothing picked", "3 bodies",
+  "XY plane");
+- a `.float-card-close` clear button last, disabled while the field is empty;
+- `.mirror-field.active` wears the selected row look, so the live field reads
+  at a glance in both themes;
+- buttons take `@pointerdown.prevent`, so Enter after a click still goes to the
+  tool, and the tool leaves Tab and Enter alone while focus is in the panel;
+- no `closeOnEsc`: the tool owns Escape, and the prompt banner says why a pick
+  was refused.
+
 ### 7.14 Feedback: copy, toasts and errors
 
 `toast(message, opts)` (`src/ui/toast.ts`) takes
 `opts: { kind?: "info" | "warning" | "error"; action?: { label, onClick }; timeout?: number; detail?: unknown; source?: string }`.
 It returns the toast's id for `dismissToast`, or null for an error.
 
-- `info` (the default) and `warning` show a `.toast` (3.5s, a warning 6s).
+- `info` (the default) and `warning` show a `.toast` (3.5s, a warning 6s,
+  one with an action 9s so it can be read and its button reached).
+- The same message, kind and action label again restarts the toast already
+  showing, with the newer action, rather than stacking a copy.
 - `error` does not show a toast. It goes to the title bar notice
   (`showErrorNotice`) and the console log, with `detail` kept for the report.
 - Every toast is also a console entry and a bug report breadcrumb, so do not
@@ -831,6 +858,25 @@ Copy has two patterns, pick by the button:
   refuses, fail silently, the text stays selectable.
 - A text action that copies (McpSection's config): `toast("Copied.")`, and on
   failure `toast("Could not copy. Select the text and copy it.", { kind: "error" })`.
+
+### 7.15 Marks in the scene
+
+The origin triad and the origin plane tiles are drawn in the 3D scene, so the
+guard test cannot see them; hold them to these rules by hand.
+
+- Axis colours come from `AXIS_COLOR` (`src/viewport/originTriad.ts`) and are
+  never themed. A plane takes its normal axis colour: XY blue, XZ green, YZ red.
+- Neutral parts read tokens through `themeColor` and are read again on a theme
+  change.
+- Sizes are screen pixels, held through `gizmoScale.ts` at every zoom.
+- The tiles are 68px, 10px off the axes, one per quadrant facing the home view,
+  never below about 41px. Their 29px corner is the same squircle as `corner-shape:
+  squircle`, a rail tile's 17px on 40px scaled up (`TILE_CORNER_RADIUS_PX` and
+  `SQUIRCLE_EXPONENT` in `src/viewport/originTiles.ts` and `cornerProfile.ts`).
+- What a body hides draws faint, not gone.
+- A name in the scene is a camera facing sprite, `--ui` 700 at 11px, inked in
+  `--text` or `--viewport-bg`, whichever reads on the ground. It fades out when
+  what it names is seen edge on.
 
 ## 8. Motion
 
@@ -890,7 +936,7 @@ The product is spelled FundaCAD.
 | Error | What happened in plain words, then the way out, joined with a comma; lead with "Could not" | "Could not reach the clipboard, so the report was not copied." | "Error: clipboard write failed!" |
 | Rejection in a tool | Say what to do next | "That face is curved, a hole needs a flat face" | "Invalid selection" |
 | Success | Short, past tense or present state, full stop | "Copied.", "Bracket is installed." | "Success!!" |
-| Empty state | One sentence about what will appear, maybe the next step | "Your modeling history will appear here. Start with a Sketch." | "Nothing here :(" |
+| Empty state | One sentence about what will appear, maybe the next step | "Your modeling history will appear here. Start with a Sketch, or drop a STEP, STL or 3MF file." | "Nothing here :(" |
 | Tool prompt | Imperative, parts joined by " · ", ending with the key to leave | "Click a profile · Ctrl-click adds areas · Enter" | "Please select a profile to extrude." |
 | Tooltip | What the control does, sentence case, shortcut in brackets | "Reset camera (Shift+Home)" | "Camera" |
 | Setting | A noun label, then 1 to 3 sentences on the effect and the default | Animations: "Off makes every transition instant…" | "Enable animations?" |
@@ -932,8 +978,13 @@ What this means for you:
   which is intended. Do not add more white or black overlays of your own;
   reach for these tokens and lists.
 - A hard coded dark fill stays dark on a light theme. The viewport readouts
-  (`rebuild 68ms`, `render idle`) use `rgba(22, 24, 29, 0.55)` and show it in
-  the shot above. Do not copy that.
+  (`rebuild 68ms`, `render idle`) once used `rgba(22, 24, 29, 0.55)` and show it
+  in the shot above, unreadable at 1.45:1. They are glass chips now (group A in
+  `_glass.scss`), and `tests/ui/themeContrast.test.ts` rejects that fill anywhere.
+- A light theme's `--accent-hot` is darker than its `--accent`, not lighter: it
+  is text on an accent tint, and a lighter blue on a pale tint read at 1.75:1.
+  The same test holds chip text of every shipped theme to WCAG AA (4.5:1) on the
+  fill it sits on.
 - Check every screen in FundaCAD Noir **and** Solarized Light (Preferences,
   Appearance, Theme).
 
@@ -980,7 +1031,8 @@ Escape depends on what the surface is:
 | A menu, popover, the command palette (`MenuBar.vue`, `ui/menu.ts`, `ContextMenuHost.vue`, `Popover.vue`, `CommandPalette.vue`) | Closes the topmost one only. It calls `claimEscape()` (`ui/escapeClaim.ts`) while open, and tools check `escapeClaimed()` so the same key does not also cancel them |
 | A dialog (`ModalFrame.vue`, the chooser) | Closes it through its own handler and the modal gate (`composables/useModalGate.ts`) |
 | A non modal tool panel with nothing of its own to cancel (Properties, Interference, Parameters) | `close-on-esc` on `FloatingPanel`. It does not claim Escape, so the key also reaches the global handler; the hint says "Esc to close" |
-| A panel that belongs to a running tool or mode (Measure, Overhang, Stress) | No `close-on-esc`. Whatever owns the panel closes it: `MeasureTool` owns Escape for its whole run and drops the panel with its highlight ("Esc to exit"), Overhang goes with the Draft toggle ("toggle Draft to close"), Stress has a Close button |
+| A panel that belongs to a running tool or mode (Measure, Overhang) | No `close-on-esc`. Whatever owns the panel closes it: `MeasureTool` owns Escape for its whole run and drops the panel with its highlight ("Esc to exit"), Overhang goes with the Draft toggle ("toggle Draft to close") |
+| A tool panel with layers of its own to back out of (Stress) | No `close-on-esc`, its own bubble phase `keydown` in `StressPanel.vue`. One layer per press: a drag, placing a spot or Read a point first (`viewport/stressGlyphs.ts` takes them in capture and stops the key), then a focused field gives up focus, and only then the panel closes, keeping the setup and the last result as the Close button does |
 
 Never call `claimEscape()` from a tool panel: the tool would stop hearing its
 own Escape.
@@ -1057,19 +1109,17 @@ Run all of it. Paste the screenshots into the review.
   the anti reference caption in [1](#1-principles) and the Home bullet of
   [4.4](#44-what-glass-floats-over-and-what-breaks-it) change in the same commit.
 - Flat leftovers: `.timeline-props.floating`, the bare `.palette` (only
-  `.float-right .palette` is glass), `.dropchip`, `.profile-panel`, `.fps`.
+  `.float-right .palette` is glass), `.dropchip`, `.profile-panel`.
 - Flat base rules under glassed surfaces (`_modals.scss`, `_utilities.scss`,
   `_console.scss`, `_targetedit.scss`), including hand written blurs and a
   stale comment about a "flat, zero-blur elevation". `_glass.scss` overrides
   them; read the final result, not the base.
 - Off palette literals: `#3d4452` hovers, `#e24a3b` and `#ff7a66` danger,
   `#d2a83b` warning (`.toast-warning`), `#ff6b6b`, `#e0a020`, `#7fe08a`,
-  `rgba(74, 208, 125, …)` (`button.finish`), `rgba(22, 24, 29, …)`.
+  `rgba(74, 208, 125, …)` (`button.finish`).
 - Undefined tokens listed in [2](#2-tokens), and `--grid-minor` and
   `--grid-major`, read by `viewport/scene.ts` but never defined.
 - `--z-menu`, `--z-toast` and `--shadow-pill` are defined and unused.
-- `.shortcut-hud` paints its own flat scrim, `rgba(10, 11, 14, 0.6)` with no
-  blur, instead of the shared one.
 - Raw colours inside the measure panels: `OverhangPanel.vue` writes
   `color: #e24a3b`, and `PropertiesPanel.vue` and `InterferencePanel.vue` write
   `var(--accent-hot, #ff9a5c)` inline.

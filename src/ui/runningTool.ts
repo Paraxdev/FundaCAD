@@ -11,17 +11,23 @@ export interface RunningTool {
 }
 
 export function runningTool(t: EngineTools): RunningTool | null {
-  const entry = (label: string, icon: string, action: string, cancel: () => void): RunningTool =>
-    ({ label, icon, action, cancel });
+  const entry = (label: string, icon: string, action: string, cancel: () => void): RunningTool => ({
+    label,
+    icon,
+    action,
+    cancel,
+  });
   if (t.extrude.active) return entry("Extrude", "extrude", "extrude", () => t.extrude.cancel());
   if (t.edgeFeature.active) return entry("Fillet / Chamfer", "fillet", "fillet", () => t.edgeFeature.cancel());
   if (t.pressPull.active) return entry("Press/Pull", "presspull", "presspull", () => t.pressPull.cancel());
-  if (t.faceOffset.active) return entry(t.faceOffset.label, t.faceOffset.icon, t.faceOffset.action, () => t.faceOffset.cancel());
+  if (t.faceOffset.active)
+    return entry(t.faceOffset.label, t.faceOffset.icon, t.faceOffset.action, () => t.faceOffset.cancel());
   if (t.draft.active) return entry("Draft", "draft", "draft", () => t.draft.cancel());
   if (t.thread.active) return entry("Thread", "thread", "thread", () => t.thread.cancel());
   if (t.textOnFace.active) return entry("Text on Face", "text", "text-on-face", () => t.textOnFace.cancel());
   if (t.hole.active) return entry("Hole", "hole", "hole", () => t.hole.cancel());
   if (t.loft.active) return entry("Loft", "loft", "loft", () => t.loft.cancel());
   if (t.pattern.active) return entry("Pattern", "patternLinear", "pattern-linear", () => t.pattern.cancel());
+  if (t.mirror.active) return entry("Mirror", "mirror", "mirror", () => t.mirror.cancel());
   return null;
 }

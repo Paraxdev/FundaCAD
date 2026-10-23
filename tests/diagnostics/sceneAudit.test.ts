@@ -82,8 +82,7 @@ describe("auditScene", () => {
     const bs = [body("b0")];
     const combs = new THREE.LineSegments();
     const orphans = new THREE.LineSegments();
-    const a = auditScene([...sceneOf(bs), combs, orphans], model(bs),
-      { combs, orphanEdges: orphans });
+    const a = auditScene([...sceneOf(bs), combs, orphans], model(bs), { combs, orphanEdges: orphans });
     expect(auditIsClean(a)).toBe(true);
   });
 

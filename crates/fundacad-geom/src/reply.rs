@@ -1,5 +1,4 @@
-//! The meshed half of a rebuild reply: the builder's bodies handed to the
-//! viewport payload loop in `mesh`, with their face owners in face order.
+//! The meshed half of a rebuild reply, the builder's bodies with their face owners in face order.
 
 use fundacad_protocol::JobResult;
 use serde_json::{Map, Value};
@@ -24,17 +23,7 @@ pub fn mesh_body(b: &BuiltBody) -> MeshBody<'_> {
     }
 }
 
-pub fn mesh_result(
-    bodies: &[BuiltBody],
-    tolerance: f64,
-    known: &Map<String, Value>,
-    watch: &dyn Watch,
-) -> JobResult {
+pub fn mesh_result(bodies: &[BuiltBody], tolerance: f64, known: &Map<String, Value>, watch: &dyn Watch) -> JobResult {
     let bodies: Vec<MeshBody<'_>> = bodies.iter().map(mesh_body).collect();
-    JobResult::Mesh(mesh::mesh_result_watched(
-        &bodies,
-        tolerance,
-        known,
-        &mut |done, total| watch.meshing(done, total),
-    ))
+    JobResult::Mesh(mesh::mesh_result_watched(&bodies, tolerance, known, &mut |done, total| watch.meshing(done, total)))
 }

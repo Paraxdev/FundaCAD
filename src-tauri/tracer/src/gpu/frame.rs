@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 
 use crate::bloom::{self, Bloom, Chain};
 
-use super::{bytes, Estimator, FrameKey, GroundMode, Held, Tracer, MAX_LIGHTS};
+use super::{bytes, Estimator, FrameKey, GroundMode, Held, Tracer, MAX_LIGHTS, WAIT_LIMIT};
 
 /// What one dispatch aims for, short enough that the compositor and
 /// the WebGPU viewport keep their frames, long enough to amortise a submit.
@@ -20,11 +20,8 @@ pub(super) fn settle(polled: Result<wgpu::PollStatus, wgpu::PollError>, limit: D
     }
 }
 
-/// The next band after one of `rows` took `took`: scaled towards `target`,
-/// at most doubling per step so one fast band over the sky cannot jump to a
-/// full frame over the model, in multiples of the workgroup's 8 rows. Never
-/// under MIN_BAND_PATHS: on a GPU shared with another app a band's time is
-/// mostly waiting for its turn, and smaller bands only add submits.
+/// Scaled towards `target`, at most doubling per step so one fast band over the sky cannot jump to a full frame over
+/// the model, in multiples of 8 rows. Never under MIN_BAND_PATHS: on a shared GPU a band mostly waits its turn.
 pub fn adapt_rows(rows: u32, width: u32, height: u32, took: Duration, target: Duration) -> u32 {
     let ratio = (target.as_secs_f64() / took.as_secs_f64().max(1e-6)).clamp(0.25, 2.0);
     let want = (rows as f64 * ratio).round() as u32;
@@ -52,7 +49,9 @@ impl Tracer {
             let l = (a[0] * a[0] + a[1] * a[1] + a[2] * a[2]).sqrt().max(1e-20);
             [a[0] / l, a[1] / l, a[2] / l]
         };
-        let cross = |a: [f32; 3], b: [f32; 3]| [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+        let cross = |a: [f32; 3], b: [f32; 3]| {
+            [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
+        };
         let fwd = norm(sub(c.target, c.eye));
         let right = norm(cross(fwd, c.up));
         let up = cross(right, fwd);
@@ -64,7 +63,13 @@ impl Tracer {
                 // AOV stays small and positive for the denoiser's relative test.
                 let pull = self.bounds.map_or(0.0, |[lo, hi]| {
                     let near = (0..8)
-                        .map(|k| [if k & 1 == 0 { lo[0] } else { hi[0] }, if k & 2 == 0 { lo[1] } else { hi[1] }, if k & 4 == 0 { lo[2] } else { hi[2] }])
+                        .map(|k| {
+                            [
+                                if k & 1 == 0 { lo[0] } else { hi[0] },
+                                if k & 2 == 0 { lo[1] } else { hi[1] },
+                                if k & 4 == 0 { lo[2] } else { hi[2] },
+                            ]
+                        })
                         .map(|p| dot(sub(p, c.eye), fwd))
                         .fold(f32::INFINITY, f32::min);
                     (0.01 * dot(sub(hi, lo), sub(hi, lo)).sqrt() - near).max(0.0)
@@ -74,7 +79,9 @@ impl Tracer {
             None => ((c.fov.to_radians() * 0.5).tan(), 0.0, 0.0),
         };
         let (aperture, focus) = match c.lens {
-            Some(l) if c.ortho.is_none() && l.aperture_radius > 0.0 && l.focus_distance > 0.0 => (l.aperture_radius, l.focus_distance),
+            Some(l) if c.ortho.is_none() && l.aperture_radius > 0.0 && l.focus_distance > 0.0 => {
+                (l.aperture_radius, l.focus_distance)
+            }
             _ => (0.0, 0.0),
         };
         let l = &self.look;
@@ -95,7 +102,7 @@ impl Tracer {
             v4(up.map(|x| x * th), 0.0),
             v4(l.sky_top, l.env_intensity),
             v4(l.sky_bottom, 0.0),
-            [l.exposure, ortho, pull, 0.0],
+            [l.exposure, ortho, pull, if l.firefly > 0.0 { l.firefly } else { f32::MAX }],
         ] {
             data.extend(v);
         }
@@ -127,7 +134,13 @@ impl Tracer {
         // so with both an even split; a poor one costs noise, not bias.
         let em = &self.emitters;
         let others = !lights.is_empty() || p_env > 0.0;
-        let p_em: f32 = if em.count == 0 { 0.0 } else if others { 0.5 } else { 1.0 };
+        let p_em: f32 = if em.count == 0 {
+            0.0
+        } else if others {
+            0.5
+        } else {
+            1.0
+        };
         let em_base = self.env.tables.len() as u32;
         data.extend([em_base, em.count, p_em.to_bits(), em.total.to_bits()].map(f32::from_bits));
         let g = l.ground.filter(|g| g.mode == GroundMode::Shadow && g.extent > 0.0);
@@ -137,7 +150,8 @@ impl Tracer {
         // up is pi (5 top + bottom) / 6.
         let sky_mix = [0, 1, 2].map(|i| (5.0 * l.sky_top[i] + l.sky_bottom[i]) / 6.0);
         let sky_up = if env == 0 { (std::f32::consts::PI * power(sky_mix) * l.env_intensity).max(0.0) } else { 0.0 };
-        let up_light: f32 = lights.iter().map(|x| power(x.color) * norm(x.direction)[2].max(0.0)).sum::<f32>() + env_up + sky_up;
+        let up_light: f32 =
+            lights.iter().map(|x| power(x.color) * norm(x.direction)[2].max(0.0)).sum::<f32>() + env_up + sky_up;
         let ground_on = g.is_some() && up_light > 0.0;
         let g = g.unwrap_or_default();
         data.extend([g.centre[0], g.centre[1], g.z, g.extent * 0.5]);
@@ -188,11 +202,8 @@ impl Tracer {
         self.sample - before
     }
 
-    /// One frame for the transport: applies pending scene changes, traces for
-    /// `budget` and resolves. At the cap it hands out the held frame without
-    /// touching the GPU, and the denoised one once it lands; below it a
-    /// software band that ends mid sample still traces on, so the sample count
-    /// is no sign of a finished picture. Black once the device faulted.
+    /// Applies pending scene changes, traces for `budget` and resolves. At the cap it hands out the held frame, then
+    /// the denoised one; a software band can end mid sample, so the sample count is no sign of a finished picture.
     pub fn frame(&mut self, w: u32, h: u32, budget: Duration) -> Vec<u8> {
         if self.fault().is_some() {
             return vec![0; w.max(1) as usize * h.max(1) as usize * 4];
@@ -206,7 +217,8 @@ impl Tracer {
         }
         self.trace_for(budget);
         let pixels = self.resolve();
-        self.held = Some(Held { key: self.key(), pixels: pixels.clone(), denoised: false, bloom: self.bloom, denoise: None });
+        self.held =
+            Some(Held { key: self.key(), pixels: pixels.clone(), denoised: false, bloom: self.bloom, denoise: None });
         if self.done() {
             self.start_denoise();
         }
@@ -230,11 +242,15 @@ impl Tracer {
         }
     }
 
-    /// Waits for the submitted work, at most the wait limit. A timeout or a
-    /// lost device becomes the tracer's fault, so the frames after it are black.
+    /// Waits for the submitted work, at most WAIT_LIMIT. A timeout or a lost
+    /// device becomes the tracer's fault, so the frames after it are black.
     pub fn wait(&self) -> Result<(), String> {
-        let polled = self.device.poll(wgpu::PollType::Wait { submission_index: None, timeout: Some(self.wait_limit) });
-        settle(polled, self.wait_limit).inspect_err(|e| {
+        let polled = if self.stalled {
+            Err(wgpu::PollError::Timeout)
+        } else {
+            self.device.poll(wgpu::PollType::Wait { submission_index: None, timeout: Some(WAIT_LIMIT) })
+        };
+        settle(polled, WAIT_LIMIT).inspect_err(|e| {
             let mut f = self.fault.lock().unwrap_or_else(|p| p.into_inner());
             f.lost.get_or_insert_with(|| e.clone());
         })

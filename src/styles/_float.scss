@@ -1,7 +1,4 @@
-/* ============================================================================
-   FLOATING SHELL, the tool rail, the Items and History cards and the view
-   controls column, all floating over a full-bleed viewport.
-   ============================================================================ */
+/* The tool rail, Items, History and the view controls, floating over a full bleed viewport. */
 
 #stage {
   position: relative;
@@ -35,10 +32,8 @@
   left: var(--float-gap);
   align-items: stretch;
 }
-/* Items and the blend's edge list stacked in one column. The layer takes no
-   pointer events (the gaps pass clicks to the model); the cards inside re-arm
-   their own. Items grows to fill; the edge card is capped and sits at the
-   bottom, so it eats into Items rather than the reverse. */
+/* The layer takes no pointer events, the cards re-arm their own. The capped edge card at
+   the bottom eats into Items, not the reverse. */
 .float-left-stack {
   display: flex;
   flex-direction: column;
@@ -55,8 +50,6 @@
   align-items: flex-start;
 }
 
-/* ---- cards ------------------------------------------------------------------ */
-
 .float-card {
   pointer-events: auto;
   display: flex;
@@ -64,7 +57,7 @@
   min-height: 0;
   background: var(--float-bg);
   -webkit-backdrop-filter: var(--float-blur);
-          backdrop-filter: var(--float-blur);
+  backdrop-filter: var(--float-blur);
   border: 1px solid var(--float-line);
   border-radius: var(--float-radius);
   box-shadow: var(--float-shadow);
@@ -133,8 +126,6 @@
   flex: 1 1 auto;
 }
 
-/* ---- items ------------------------------------------------------------------ */
-
 #browser.float-card {
   width: 264px;
   padding: 0;
@@ -152,8 +143,6 @@
   background: var(--panel-2);
   color: var(--text);
 }
-
-/* ---- history ---------------------------------------------------------------- */
 
 #timeline.float-card {
   width: 288px;
@@ -176,11 +165,8 @@
   overflow-y: auto;
   white-space: normal;
   padding: 0 var(--s-2) var(--s-2);
-  // Scroll anchoring fights the properties panel opening under a clicked chip:
-  // the browser picks an anchor that shifts the whole list, so a real second
-  // click of a double-click lands on the newly moved row below, not the chip,
-  // and double-click-to-edit silently does nothing. The list never needs to
-  // hold a scroll position across a resize it caused itself.
+  // Scroll anchoring shifted the list when the properties panel opened under a clicked
+  // chip, so the second click of a double click landed on another row.
   overflow-anchor: none;
 }
 #timeline .timeline-track {
@@ -285,7 +271,7 @@
   margin: 0 var(--s-3) var(--s-2);
 }
 
-/* ---- the sketch palette takes the history's place --------------------------- */
+/* The sketch palette takes the history's place. */
 
 .float-right .palette {
   position: static;
@@ -294,13 +280,11 @@
   max-height: 100%;
   background: var(--float-bg);
   -webkit-backdrop-filter: var(--float-blur);
-          backdrop-filter: var(--float-blur);
+  backdrop-filter: var(--float-blur);
   border: 1px solid var(--float-line);
   border-radius: var(--float-radius);
   box-shadow: var(--float-shadow);
 }
-
-/* ---- tool rail -------------------------------------------------------------- */
 
 .tool-rail {
   display: flex;
@@ -309,8 +293,7 @@
   gap: var(--float-gap);
   min-height: 0;
   pointer-events: none;
-  /* Paint above the Items browser beside it: that card is `position: relative`,
-     so without this it stacks over the rail and swallows the left of an active
+  /* Above the Items card (position: relative), which would swallow the left of an active
      tile's glow. */
   position: relative;
   z-index: 1;
@@ -322,14 +305,8 @@
   gap: 6px;
   min-height: 0;
   overflow-y: auto;
-  /* overflow-y: auto clips to this box's edge unconditionally, even when the
-     list isn't actually scrolling, which flattens --float-shadow's ~26px bleed
-     against the first/last tile and both sides instead of letting it fade out
-     (overflow-y: auto also silently turns overflow-x auto too, the CSS rule
-     that a paired "visible" axis becomes "auto", so the sides need it as well).
-     Padding pushes the clip edge past the shadow on all four sides; the
-     negative margin cancels the padding back out so nothing shifts position or
-     changes how much the list can actually scroll. */
+  /* overflow-y: auto turns overflow-x auto too, so it clips all four sides even when not scrolling, cutting
+     the ~26px shadow. The padding moves the clip past it, the negative margin cancels the padding. */
   padding: 32px;
   margin: -32px;
   scrollbar-width: none;
@@ -357,8 +334,7 @@
 .tool-rail.compact .rail-label {
   font-size: 12px;
 }
-/* A list that scrolls clips 32px past its box, the room .rail-list keeps for
-   the shadows, which put its last tiles under the foot. Without the bottom
+/* A scrolling list clips 32px past its box (.rail-list's shadow room); without the bottom
    overhang the clip ends a gap above the foot. */
 .tool-rail.scrolls > .rail-list:first-child {
   margin-bottom: 0;
@@ -382,7 +358,10 @@
   text-align: left;
   font: inherit;
 }
-.rail-btn:hover {
+/* Outranks the generic button:hover and button.active (_layout.scss), whose
+   accent fill would otherwise paint a slab behind a lit tile and its pill. */
+.rail-btn:hover,
+.rail-btn.active {
   background: none;
   border-color: transparent;
 }
@@ -396,12 +375,15 @@
   height: var(--rail-tile);
   background: var(--float-bg);
   -webkit-backdrop-filter: var(--float-blur);
-          backdrop-filter: var(--float-blur);
+  backdrop-filter: var(--float-blur);
   border: 1px solid var(--float-line);
   border-radius: var(--float-tile-radius);
   box-shadow: var(--float-shadow);
   color: var(--text);
-  transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+  transition:
+    background var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
 }
 .rail-btn:hover .rail-tile {
   background: var(--raised);
@@ -412,8 +394,7 @@
   border-color: var(--accent);
   color: var(--accent-hot);
 }
-/* Lift the lit tile over its neighbours (the tile above it, the pills) so its
-   glow paints on top of them rather than being swallowed. */
+/* Lift the lit tile over its neighbours so its glow is not swallowed. */
 .rail-btn.active,
 .rail-btn.holding {
   position: relative;
@@ -440,7 +421,7 @@
   padding: 3px 8px;
   background: var(--float-bg);
   -webkit-backdrop-filter: var(--float-blur);
-          backdrop-filter: var(--float-blur);
+  backdrop-filter: var(--float-blur);
   border: 1px solid var(--float-line);
   border-radius: 6px;
   box-shadow: var(--float-shadow);
@@ -466,9 +447,8 @@
   color: var(--accent-hot);
 }
 
-/* A plugin's tool group: a caret tile + a name pill that folds its tools away.
-   The tools below it (.rail-child) are nudged in so the grouping reads without
-   a container box the floating tiles could not sit inside. */
+/* A plugin's tool group. Its .rail-child tools are nudged in, since the floating tiles
+   cannot sit inside a container box. */
 .rail-group {
   pointer-events: auto;
   display: flex;
@@ -541,11 +521,9 @@
   border: 0;
   box-shadow: none;
   -webkit-backdrop-filter: none;
-          backdrop-filter: none;
+  backdrop-filter: none;
   overflow: visible;
 }
-
-/* ---- popovers --------------------------------------------------------------- */
 
 .float-popover {
   position: fixed;
@@ -567,9 +545,7 @@
   min-width: 180px;
   max-height: min(60vh, 360px);
   padding: 6px;
-  /* These fields live inside dialogs (Export, Preferences), which sit at
-     --z-modal; a picker's list has to clear the dialog it belongs to, so it
-     ranks just above modals rather than at the popover layer below them. */
+  /* These fields live in dialogs at --z-modal, so the list must rank just above modals. */
   z-index: calc(var(--z-modal) + 1);
 }
 .pop-section {
@@ -592,8 +568,12 @@
   background-color: var(--float-line);
   background-size: cover;
   cursor: pointer;
-  &:hover { border-color: var(--float-line); }
-  &.active { border-color: var(--accent); }
+  &:hover {
+    border-color: var(--float-line);
+  }
+  &.active {
+    border-color: var(--accent);
+  }
 }
 .pop-rule {
   height: 1px;
@@ -763,11 +743,16 @@
   font-size: 12.5px;
   font-weight: 600;
 }
-.float-tab:hover {
+.float-tab:hover:not(:disabled) {
   background: none;
   color: var(--text);
 }
+.float-tab:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
 .float-tab.active {
+  background: none;
   color: var(--text);
 }
 .float-tab.active::after {
@@ -781,8 +766,6 @@
   background: var(--accent);
   box-shadow: 0 0 8px var(--accent-glow);
 }
-
-/* ---- versions ---------------------------------------------------------------- */
 
 .float-popover.versions-pop {
   width: 320px;
@@ -924,8 +907,6 @@
   margin-top: 0;
 }
 
-/* ---- view controls column --------------------------------------------------- */
-
 .float-column {
   display: flex;
   flex-direction: column;
@@ -940,7 +921,7 @@
   padding: 3px;
   background: var(--float-bg);
   -webkit-backdrop-filter: var(--float-blur);
-          backdrop-filter: var(--float-blur);
+  backdrop-filter: var(--float-blur);
   border: 1px solid var(--float-line);
   border-radius: var(--float-radius);
   box-shadow: var(--float-shadow);
@@ -1040,6 +1021,70 @@
   white-space: nowrap;
 }
 
+/* The Section chip and Normal to Sketch stack at the top middle, clear of the cards (useClearOfCards). */
+#viewport .vp-top {
+  position: absolute;
+  top: var(--row-top, var(--s-4));
+  left: var(--row-left, 0px);
+  right: var(--row-right, 0px);
+  margin-inline: auto;
+  width: max-content;
+  max-width: calc(100% - var(--row-left, 0px) - var(--row-right, 0px));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-2);
+  z-index: calc(var(--z-float) - 4);
+  pointer-events: none;
+}
+#viewport .vp-top > * {
+  pointer-events: auto;
+}
+.section-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-1) var(--s-1) var(--s-1) var(--s-3);
+  font: 600 12px/1.4 var(--ui);
+  color: var(--text);
+  white-space: nowrap;
+  animation: pop-in var(--t-fast) var(--ease);
+}
+.section-chip-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.section-chip svg {
+  flex: none;
+  color: var(--accent);
+}
+.section-chip-btn {
+  padding: var(--s-1) var(--s-3);
+  font: 600 12px/1.4 var(--ui);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition:
+    background var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
+}
+.section-chip-btn:hover:not(.disabled) {
+  color: var(--text);
+}
+.section-chip-btn.disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+#viewport .vp-top[data-narrow] .section-chip-text {
+  display: none;
+}
+@media (max-width: 560px) {
+  .section-chip-text {
+    display: none;
+  }
+}
+
 /* The prompt and the frame-rate readout sit along the bottom middle. */
 #viewport .prompt {
   top: auto;
@@ -1058,9 +1103,6 @@
   padding: 1px var(--s-2);
   font: 600 11px/1.5 var(--ui);
   color: var(--text);
-  background: rgba(22, 24, 29, 0.85);
-  border: 1px solid var(--line);
-  border-radius: var(--r-sm);
   pointer-events: none;
   white-space: nowrap;
 }

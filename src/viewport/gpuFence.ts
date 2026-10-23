@@ -1,9 +1,5 @@
-// Whether the GPU has finished the frames already sent, asked without waiting.
-//
-// Resizing the canvas makes the browser read a GL error back, which blocks the
-// main thread until every queued command has run: a third of a second under
-// SwiftShader with a frame or two in flight, a few milliseconds with none. So a
-// resize waits for this to say the queue is empty.
+// Whether the GPU finished the frames sent, asked without waiting. A canvas resize blocks on a GL error readback until
+// the queue drains (a third of a second under SwiftShader), so a resize waits for this.
 
 export class GpuFence {
   private sync: WebGLSync | null = null;
@@ -24,7 +20,7 @@ export class GpuFence {
     const gl = this.gl;
     const s = this.sync;
     if (!gl || !s) return true;
-    if (gl.getSyncParameter(s, gl.SYNC_STATUS) !== gl.SIGNALED) return false;
+    if (gl.getSyncParameter(s, gl.SYNC_STATUS) !== gl.SIGNALED && !gl.isContextLost()) return false;
     gl.deleteSync(s);
     this.sync = null;
     return true;

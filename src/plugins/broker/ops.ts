@@ -1,43 +1,10 @@
-// Every operation a plugin can ask the app to perform, and what it must hold to
-// ask. This is the whole vocabulary: a plugin reaches the app through exactly
-// these, or it does not reach the app.
-//
-// Most of the names are the MCP server's tool names, unchanged and on purpose.
-// That server already speaks a defined protocol over a token-gated socket,
-// already has a schema for each of these, and already works. Inventing a second
-// vocabulary here would mean a translation table, and a translation table is a
-// place for the two halves to disagree about what `feature_move` means. There
-// is one vocabulary and MCP is a transport for it.
-//
-// FOUR ARE NOT MCP'S: file_pick, file_read, file_write and app_info. They are
-// what a plugin uses to reach past the window, and they are here rather than in
-// a channel of their own because a second channel would be a second permission
-// system to keep in step with this one. MCP has no equivalent for a reason
-// worth knowing: an MCP server is a process on the machine and can open a file
-// by naming it, where a compute plugin cannot name anything. See ./native.ts.
-//
-// Three rules.
-//
-// FAIL CLOSED ON THE OP. An op not in this table is refused, exactly as an
-// unknown grant is refused at parse. A broker that passed through what it did
-// not recognise would be a broker with a hole shaped like every op added after
-// it was written.
-//
-// NEEDS IS EVERY GRANT, NOT THE MOST INTERESTING ONE. `doc_open` reads a file
-// AND replaces the open document; `export` reads the document, runs the kernel
-// and writes a file. An earlier sketch of this had one grant per op, which
-// reads well and is false: it would have let a plugin holding only
-// `geometry.build` call `build` and read the open document's body sizes back
-// out of the answer.
-//
-// EVERY ENTRY CARRIES ITS REASON, including the empty ones. A `needs: []` with
-// no argument for it is how an op quietly becomes free.
+// Every op a plugin can ask for and the grants it needs. The names are the MCP tool names on purpose, so there is one
+// vocabulary. Unknown ops are refused, `needs` is every grant an op touches, and each row argues for its `why`.
 
 import type { Grant } from "../manifest";
 
-/** The closed set. Adding a name here without adding it to OP_TABLE does not
- *  compile; adding it to neither is what `tests/plugins/broker.test.ts`
- *  catches, by asking the app's own op list rather than this one. */
+/** A name here missing from OP_TABLE does not compile. tests/plugins/broker.test.ts checks it against the app's op
+ *  list. */
 export const OPS = [
   "schema",
   "doc_new",
@@ -79,10 +46,8 @@ export interface OpSpec {
   needs: readonly Grant[];
   /** one line, for a reader deciding whether the row is right */
   why: string;
-  /** Whether it changes the open document. Not a permission, `document.write`
-   *  is the permission, but the transport needs it: a guest attached to a
-   *  running app proposes a replacement and waits for the app to adopt it,
-   *  where a read can be answered straight from the session. */
+  /** Not a permission: a guest attached to a running app proposes a write and waits for the app to adopt it,
+   *  while a read is answered straight from the session. */
   writes: boolean;
 }
 
@@ -247,21 +212,16 @@ export const OP_TABLE: Record<Op, OpSpec> = {
 
 const OP_SET: ReadonlySet<string> = new Set<string>(OPS);
 
-/** Whether a name off the wire is an op at all. Everything arriving from a
- *  plugin comes through here first. */
 export function isOp(v: unknown): v is Op {
   return typeof v === "string" && OP_SET.has(v);
 }
 
-/** What an op requires. Undefined for anything that is not an op, which the
- *  caller must treat as a refusal and not as "requires nothing". */
+/** Undefined for a name that is not an op, which a caller must treat as a refusal, not as "requires nothing". */
 export function requiredGrants(op: Op): readonly Grant[] {
   return OP_TABLE[op].needs;
 }
 
-/** The grants that would let a plugin call every op. Not a recommendation: it
- *  is what the Preferences screen would have to show for a plugin that asked
- *  for the lot, and it is useful in a test that wants an unrestricted door. */
+/** Not a recommendation: what Preferences would show for a plugin asking for everything, and an open door for tests. */
 export function allOpGrants(): Grant[] {
   const out = new Set<Grant>();
   for (const op of OPS) for (const g of OP_TABLE[op].needs) out.add(g);

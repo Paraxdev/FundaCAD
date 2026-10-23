@@ -1,11 +1,25 @@
 import { describe, it, expect } from "vitest";
 import * as THREE from "three";
-import { trimEntity, breakAt, extendLine, chamferCorner, offsetEntity, offsetChain, signedOffsetAt, breakLink } from "../../src/sketch/modify";
+import {
+  trimEntity,
+  breakAt,
+  extendLine,
+  chamferCorner,
+  offsetEntity,
+  offsetChain,
+  signedOffsetAt,
+  breakLink,
+} from "../../src/sketch/modify";
 import type { ResolvedEntity } from "../../src/sketch/snap";
 
 const v = (x: number, y: number) => new THREE.Vector2(x, y);
 const arcRadius = (a: any) => {
-  const ax = a.x1, ay = a.y1, bx = a.x2, by = a.y2, cx = a.mx, cy = a.my;
+  const ax = a.x1,
+    ay = a.y1,
+    bx = a.x2,
+    by = a.y2,
+    cx = a.mx,
+    cy = a.my;
   const d = 2 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
   const ux = ((ax * ax + ay * ay) * (by - cy) + (bx * bx + by * by) * (cy - ay) + (cx * cx + cy * cy) * (ay - by)) / d;
   const uy = ((ax * ax + ay * ay) * (cx - bx) + (bx * bx + by * by) * (ax - cx) + (cx * cx + cy * cy) * (bx - ax)) / d;
@@ -22,13 +36,19 @@ describe("chamferCorner", () => {
     expect(out).not.toBeNull();
     const lines = out.filter((e) => e.type === "line");
     expect(lines.length).toBe(3); // A, B, bevel
-    const A = out.find((e) => e.id === "A") as any, B = out.find((e) => e.id === "B") as any;
-    expect(A.x2).toBeCloseTo(8); expect(A.y2).toBeCloseTo(0);          // shortened to setback
-    expect(B.x1).toBeCloseTo(10); expect(B.y1).toBeCloseTo(2);          // its corner end, still its start
-    expect(B.x2).toBe(10); expect(B.y2).toBe(10);
+    const A = out.find((e) => e.id === "A") as any,
+      B = out.find((e) => e.id === "B") as any;
+    expect(A.x2).toBeCloseTo(8);
+    expect(A.y2).toBeCloseTo(0); // shortened to setback
+    expect(B.x1).toBeCloseTo(10);
+    expect(B.y1).toBeCloseTo(2); // its corner end, still its start
+    expect(B.x2).toBe(10);
+    expect(B.y2).toBe(10);
     const bevel = lines.find((e) => e.id !== "A" && e.id !== "B") as any;
-    expect(bevel.x1).toBeCloseTo(8); expect(bevel.y1).toBeCloseTo(0);
-    expect(bevel.x2).toBeCloseTo(10); expect(bevel.y2).toBeCloseTo(2);
+    expect(bevel.x1).toBeCloseTo(8);
+    expect(bevel.y1).toBeCloseTo(0);
+    expect(bevel.x2).toBeCloseTo(10);
+    expect(bevel.y2).toBeCloseTo(2);
   });
   it("returns null for parallel lines", () => {
     const ents: ResolvedEntity[] = [
@@ -140,16 +160,23 @@ describe("offsetEntity", () => {
 
   it("offsets projected face edges once they stand in as native curves, pairing the projected ids", () => {
     const side = (id: string, x1: number, y1: number, x2: number, y2: number): ResolvedEntity => ({
-      type: "projected", id,
+      type: "projected",
+      id,
       source: { kind: "edge", body: "b", sel: { kind: "edge", by: "nearest", point: [0, 0, 0] } },
       curve: { kind: "line", x1, y1, x2, y2 },
     });
-    const ents = [side("p0", 20, -15, 20, 15), side("p1", 20, 15, -20, 15), side("p2", -20, 15, -20, -15), side("p3", -20, -15, 20, -15)];
+    const ents = [
+      side("p0", 20, -15, 20, 15),
+      side("p1", 20, 15, -20, 15),
+      side("p2", -20, 15, -20, -15),
+      side("p3", -20, -15, 20, -15),
+    ];
     const work = breakLink(ents, new Set(ents.map((e) => e.id)));
     const out = offsetChain(work, 0, 4)!;
     expect(out.pairs.map((p) => p.src).sort()).toEqual(["p0", "p1", "p2", "p3"]);
     const lines = out.entities.slice(4) as Extract<ResolvedEntity, { type: "line" }>[];
-    const xs = lines.flatMap((l) => [l.x1, l.x2]), ys = lines.flatMap((l) => [l.y1, l.y2]);
+    const xs = lines.flatMap((l) => [l.x1, l.x2]),
+      ys = lines.flatMap((l) => [l.y1, l.y2]);
     expect(Math.max(...xs) - Math.min(...xs)).toBeCloseTo(32, 6);
     expect(Math.max(...ys) - Math.min(...ys)).toBeCloseTo(22, 6);
   });
@@ -175,7 +202,15 @@ describe("offsetEntity", () => {
   // typed a distance and pressed Enter
   it("offsets a spline by pushing its points along their normals", () => {
     const ents: ResolvedEntity[] = [
-      { type: "spline", id: "s", points: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 20, y: 0 }] },
+      {
+        type: "spline",
+        id: "s",
+        points: [
+          { x: 0, y: 0 },
+          { x: 10, y: 0 },
+          { x: 20, y: 0 },
+        ],
+      },
     ];
     const out = offsetEntity(ents, 0, 2)!;
     const cpy = out.entities[1] as any;
@@ -243,8 +278,12 @@ describe("signedOffsetAt, the cursor-side convention", () => {
 describe("offsetChain", () => {
   const round = (n: number) => Math.round(n * 100) / 100;
   const offsetEnds = (r: any, originalIds: string[]) =>
-    r.entities.filter((e: any) => e.type === "line" && !originalIds.includes(e.id))
-      .flatMap((e: any) => [[round(e.x1), round(e.y1)], [round(e.x2), round(e.y2)]]);
+    r.entities
+      .filter((e: any) => e.type === "line" && !originalIds.includes(e.id))
+      .flatMap((e: any) => [
+        [round(e.x1), round(e.y1)],
+        [round(e.x2), round(e.y2)],
+      ]);
 
   it("miters an open L-chain of two lines", () => {
     const ents: ResolvedEntity[] = [
@@ -271,7 +310,13 @@ describe("offsetChain", () => {
     const out = offsetChain(ents, 0, 2)!;
     expect(out.entities.length).toBe(8); // 4 originals + 4 offset
     const ends = offsetEnds(out, ["L0", "L1", "L2", "L3"]);
-    for (const corner of [[2, 2], [8, 2], [8, 8], [2, 8]]) expect(ends).toContainEqual(corner);
+    for (const corner of [
+      [2, 2],
+      [8, 2],
+      [8, 8],
+      [2, 8],
+    ])
+      expect(ends).toContainEqual(corner);
   });
 
   it("returns null for a lone line (caller falls back to single-entity offset)", () => {
@@ -382,18 +427,41 @@ describe("breakLink, projected → native, same id", () => {
   });
 
   it("poly → spline through the same points; closed poly keeps its closing point", () => {
-    const open: [number, number][] = [[0, 0], [5, 1], [10, 0]];
-    const closed: [number, number][] = [[0, 0], [5, 5], [10, 0], [0, 0]];
+    const open: [number, number][] = [
+      [0, 0],
+      [5, 1],
+      [10, 0],
+    ];
+    const closed: [number, number][] = [
+      [0, 0],
+      [5, 5],
+      [10, 0],
+      [0, 0],
+    ];
     const out = breakLink(
       [proj("P", { kind: "poly", pts: open }), proj("Q", { kind: "poly", pts: closed })],
       new Set(["P", "Q"]),
     );
-    expect(out[0]).toEqual({ type: "spline", id: "P", points: [{ x: 0, y: 0 }, { x: 5, y: 1 }, { x: 10, y: 0 }] });
+    expect(out[0]).toEqual({
+      type: "spline",
+      id: "P",
+      points: [
+        { x: 0, y: 0 },
+        { x: 5, y: 1 },
+        { x: 10, y: 0 },
+      ],
+    });
     // C0-closed spline: first == last point survives, so the closed poly's one
     // addressable endpoint (index 0, projEndSamples) still resolves
     expect(out[1]).toEqual({
-      type: "spline", id: "Q",
-      points: [{ x: 0, y: 0 }, { x: 5, y: 5 }, { x: 10, y: 0 }, { x: 0, y: 0 }],
+      type: "spline",
+      id: "Q",
+      points: [
+        { x: 0, y: 0 },
+        { x: 5, y: 5 },
+        { x: 10, y: 0 },
+        { x: 0, y: 0 },
+      ],
     });
   });
 

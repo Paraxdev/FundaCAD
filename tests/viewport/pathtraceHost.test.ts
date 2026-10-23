@@ -1,7 +1,12 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
-import type { TracerBackend } from "../../src/viewport/pathtrace/backend";
-import { FIRST_SAMPLE_TIMEOUT_MS, IDLE_DISPOSE_MS, PathTraceHost, type TraceFrame } from "../../src/viewport/pathtrace/host";
+import { TracerRefused, type TracerBackend } from "../../src/viewport/pathtrace/backend";
+import {
+  FIRST_SAMPLE_TIMEOUT_MS,
+  IDLE_DISPOSE_MS,
+  PathTraceHost,
+  type TraceFrame,
+} from "../../src/viewport/pathtrace/host";
 import { TRIANGLE_BUDGET } from "../../src/viewport/pathtrace/mirror";
 import { STILL_MS } from "../../src/viewport/pathtrace/state";
 
@@ -17,14 +22,30 @@ class FakeTracer implements TracerBackend {
   pending: ((n: number) => void)[] = [];
   faultCb: ((why: string) => void) | null = null;
   async init() {}
-  setSize() { this.calls.push("size"); }
-  setScene() { this.calls.push("scene"); }
-  updateGeometry() { this.calls.push("geometry"); }
-  updateTransforms() { this.calls.push("transforms"); }
-  updateMaterials() { this.calls.push("materials"); }
-  updateLook() { this.calls.push("look"); }
-  updateCamera() { this.calls.push("camera"); }
-  reset() { this.calls.push("reset"); }
+  setSize() {
+    this.calls.push("size");
+  }
+  setScene() {
+    this.calls.push("scene");
+  }
+  updateGeometry() {
+    this.calls.push("geometry");
+  }
+  updateTransforms() {
+    this.calls.push("transforms");
+  }
+  updateMaterials() {
+    this.calls.push("materials");
+  }
+  updateLook() {
+    this.calls.push("look");
+  }
+  updateCamera() {
+    this.calls.push("camera");
+  }
+  reset() {
+    this.calls.push("reset");
+  }
   readonly maxTextureSize = 8192;
   frameMs = 5;
   /** Set to hold renderSample's GPU time until `land()`. */
@@ -35,11 +56,21 @@ class FakeTracer implements TracerBackend {
     if (!this.holdFrames) return Promise.resolve(this.frameMs);
     return new Promise<number>((r) => this.held.push(r));
   }
-  land() { for (const r of this.held.splice(0)) r(this.frameMs); }
-  setFrameBudget(n: number) { this.calls.push(`budget:${n}`); }
-  setRenderScale(n: number) { this.calls.push(`scale:${n}`); }
-  setCap(n: number) { this.calls.push(`cap:${n}`); }
-  setMotionPreview(on: boolean) { this.calls.push(`preview:${on}`); }
+  land() {
+    for (const r of this.held.splice(0)) r(this.frameMs);
+  }
+  setFrameBudget(n: number) {
+    this.calls.push(`budget:${n}`);
+  }
+  setRenderScale(n: number) {
+    this.calls.push(`scale:${n}`);
+  }
+  setCap(n: number) {
+    this.calls.push(`cap:${n}`);
+  }
+  setMotionPreview(on: boolean) {
+    this.calls.push(`preview:${on}`);
+  }
   pictureDone: ((url: string) => void) | null = null;
   pictureSize = { width: 0, height: 0, samples: 0 };
   picture(o: { width: number; height: number; samples: number }) {
@@ -49,23 +80,49 @@ class FakeTracer implements TracerBackend {
   }
   more = true;
   denoised = false;
-  present() { this.calls.push("present"); return this.more; }
-  setDenoise(level: string) { this.calls.push(`denoise:${level}`); }
-  setBloom(b: { strength: number } | null) { this.calls.push(`bloom:${b ? b.strength.toFixed(3) : "off"}`); }
-  samples() { return new Promise<number>((r) => this.pending.push(r)); }
-  dispose() { this.calls.push("dispose"); }
-  onFault(cb: (why: string) => void) { this.faultCb = cb; }
-  answer(n: number) { for (const r of this.pending.splice(0)) r(n); }
+  present() {
+    this.calls.push("present");
+    return this.more;
+  }
+  setDenoise(level: string) {
+    this.calls.push(`denoise:${level}`);
+  }
+  setBloom(b: { strength: number } | null) {
+    this.calls.push(`bloom:${b ? b.strength.toFixed(3) : "off"}`);
+  }
+  samples() {
+    return new Promise<number>((r) => this.pending.push(r));
+  }
+  dispose() {
+    this.calls.push("dispose");
+  }
+  onFault(cb: (why: string) => void) {
+    this.faultCb = cb;
+  }
+  answer(n: number) {
+    for (const r of this.pending.splice(0)) r(n);
+  }
 }
 
 class FakeGuard {
   set = false;
-  async arm() { this.set = true; }
-  clear() { this.set = false; }
+  async arm() {
+    this.set = true;
+  }
+  clear() {
+    this.set = false;
+  }
 }
 
 const flush = () => new Promise((r) => setTimeout(r, 0));
-const glCanvas = { clientWidth: 800, clientHeight: 600, offsetLeft: 0, offsetTop: 0, style: {}, parentElement: null } as unknown as HTMLCanvasElement;
+const glCanvas = {
+  clientWidth: 800,
+  clientHeight: 600,
+  offsetLeft: 0,
+  offsetTop: 0,
+  style: {},
+  parentElement: null,
+} as unknown as HTMLCanvasElement;
 
 function scene(): THREE.Scene {
   const s = new THREE.Scene();
@@ -89,12 +146,28 @@ function bigScene(): THREE.Scene {
 function frame(over: Partial<TraceFrame["inputs"]> = {}, now = 1000, extra: Partial<TraceFrame> = {}): TraceFrame {
   return {
     now,
-    inputs: { mode: "pathtraced", visible: true, stillMs: 1000, sectioned: false, xray: false, wireframe: false, sketchOpen: false, ...over },
+    inputs: {
+      mode: "pathtraced",
+      visible: true,
+      stillMs: 1000,
+      sectioned: false,
+      xray: false,
+      wireframe: false,
+      sketchOpen: false,
+      ...over,
+    },
     camera: CAMERA,
     cameraChanged: false,
     sceneMaybeChanged: false,
     root: extra.root ?? scene(),
-    look: () => ({ lights: [], background: new THREE.Color(), environment: ENV, brightness: 1, toneMapping: THREE.NeutralToneMapping, exposure: 1 }),
+    look: () => ({
+      lights: [],
+      background: new THREE.Color(),
+      environment: ENV,
+      brightness: 1,
+      toneMapping: THREE.NeutralToneMapping,
+      exposure: 1,
+    }),
     lens: () => null,
     ...extra,
   };
@@ -103,7 +176,14 @@ function frame(over: Partial<TraceFrame["inputs"]> = {}, now = 1000, extra: Part
 async function started(): Promise<{ host: PathTraceHost; t: FakeTracer; created: () => number }> {
   const t = new FakeTracer();
   let n = 0;
-  const host = new PathTraceHost(glCanvas, async () => { n++; return t; }, new FakeGuard());
+  const host = new PathTraceHost(
+    glCanvas,
+    async () => {
+      n++;
+      return t;
+    },
+    new FakeGuard(),
+  );
   host.tick(frame());
   await flush();
   await flush();
@@ -113,7 +193,10 @@ async function started(): Promise<{ host: PathTraceHost; t: FakeTracer; created:
 describe("path trace host", () => {
   it("loads no tracer until Path traced is drawn", async () => {
     let n = 0;
-    const host = new PathTraceHost(glCanvas, async () => { n++; return new FakeTracer(); });
+    const host = new PathTraceHost(glCanvas, async () => {
+      n++;
+      return new FakeTracer();
+    });
     host.tick(frame({ mode: "realtime" }));
     host.tick(frame({ mode: "matcap" }));
     await flush();
@@ -220,7 +303,14 @@ describe("path trace host", () => {
 
   it("shows Realtime and spends nothing while moving or paused, by default", async () => {
     const { host, t } = await started();
-    for (const over of [{ stillMs: 10 }, { sectioned: true }, { xray: true }, { wireframe: true }, { sketchOpen: true }, { visible: false }]) {
+    for (const over of [
+      { stillMs: 10 },
+      { sectioned: true },
+      { xray: true },
+      { wireframe: true },
+      { sketchOpen: true },
+      { visible: false },
+    ]) {
       t.calls.length = 0;
       host.tick(frame(over));
       expect(t.calls).not.toContain("sample");
@@ -260,6 +350,22 @@ describe("path trace host", () => {
     expect(previews()).toEqual(["preview:true"]);
     host.tick(frame({}, 1030));
     expect(previews()).toEqual(["preview:true", "preview:false"]);
+  });
+
+  it("gives the overlay the traced frame's camera only with Realtime while moving off", async () => {
+    const { host, t } = await started();
+    const view = { matrices: new Float64Array(32), ortho: false };
+    (t as unknown as { shownView: () => typeof view }).shownView = () => view;
+    const off = { realtimeWhileMoving: false };
+    host.tick(frame(off));
+    t.answer(8);
+    await flush();
+    host.tick(frame(off, 1010));
+    expect(host.shown).toBe(true);
+    expect(host.frameView).toBe(view);
+    host.tick(frame({}, 1020));
+    expect(host.shown).toBe(true);
+    expect(host.frameView).toBeNull();
   });
 
   it("drops to Realtime on a resize with Realtime while moving off, the resized canvas is blank", async () => {
@@ -343,6 +449,31 @@ describe("path trace host", () => {
     expect(t.calls).toContain("sample");
   });
 
+  it("keeps adding samples while the view rests, at a fractional pixel ratio with Realtime while moving on and off", async () => {
+    const was = globalThis.devicePixelRatio;
+    globalThis.devicePixelRatio = 1.25;
+    try {
+      for (const realtimeWhileMoving of [true, false]) {
+        const { host, t } = await started();
+        const rest = { realtimeWhileMoving };
+        host.tick(frame(rest));
+        t.calls.length = 0;
+        let n = 0;
+        for (let i = 1; i <= 40; i++) {
+          t.answer(++n);
+          await flush();
+          host.tick(frame(rest, 1000 + i * 16));
+        }
+        expect(t.calls).not.toContain("reset");
+        expect(t.calls.filter((c) => c === "sample").length).toBeGreaterThanOrEqual(39);
+        expect(host.samples).toBeGreaterThan(16);
+        expect(host.shown).toBe(true);
+      }
+    } finally {
+      globalThis.devicePixelRatio = was;
+    }
+  });
+
   it("drops a sample count from before a camera move", async () => {
     const { host, t } = await started();
     host.tick(frame());
@@ -408,8 +539,10 @@ describe("path trace host", () => {
     host.tick(frame());
     await flush();
     await flush();
+    expect(host.lastFault).toBeNull();
     t.faultCb!("GPU device lost");
     expect(faults).toEqual([["GPU device lost", false]]);
+    expect(host.lastFault).toBe("GPU device lost");
     expect(t.calls).toContain("dispose");
     host.tick(frame());
     await flush();
@@ -432,7 +565,9 @@ describe("path trace host", () => {
 
   it("reports a failed start as a fault", async () => {
     const faults: string[] = [];
-    const host = new PathTraceHost(glCanvas, async () => { throw new Error("no adapter"); });
+    const host = new PathTraceHost(glCanvas, async () => {
+      throw new Error("no adapter");
+    });
     host.onFault = (why) => faults.push(why);
     host.tick(frame());
     await flush();
@@ -440,11 +575,39 @@ describe("path trace host", () => {
     expect(faults[0]).toMatch(/no adapter/);
   });
 
+  it("drops to Realtime on a backend that refuses the device, without counting it toward turning off", async () => {
+    const faults: [string, boolean][] = [];
+    const t = new FakeTracer();
+    let n = 0;
+    const host = new PathTraceHost(glCanvas, async () => {
+      if (n++ === 0) throw new TracerRefused("the native tracer drew its test scene wrong");
+      return t;
+    });
+    host.onFault = (why, off) => faults.push([why, off]);
+    host.tick(frame());
+    await flush();
+    await flush();
+    expect(faults).toEqual([["Path tracing could not start: the native tracer drew its test scene wrong", false]]);
+    host.tick(frame());
+    await flush();
+    await flush();
+    t.faultCb!("GPU device lost");
+    expect(faults[1]).toEqual(["GPU device lost", false]);
+    expect(host.disabled).toBe(false);
+  });
+
   it("refuses a model over the triangle budget with a note, never as a GPU fault", async () => {
     const faults: string[] = [];
     const notes: string[] = [];
     let n = 0;
-    const host = new PathTraceHost(glCanvas, async () => { n++; return new FakeTracer(); }, new FakeGuard());
+    const host = new PathTraceHost(
+      glCanvas,
+      async () => {
+        n++;
+        return new FakeTracer();
+      },
+      new FakeGuard(),
+    );
     host.onFault = (why) => faults.push(why);
     host.onRefuse = (why) => notes.push(why);
     const root = bigScene();
@@ -481,7 +644,14 @@ describe("path trace host", () => {
     const guard = new FakeGuard();
     const t = new FakeTracer();
     let n = 0;
-    const host = new PathTraceHost(glCanvas, async () => { n++; return t; }, guard);
+    const host = new PathTraceHost(
+      glCanvas,
+      async () => {
+        n++;
+        return t;
+      },
+      guard,
+    );
     host.tick(frame({ sketchOpen: true }));
     host.tick(frame({ visible: false }));
     await flush();
@@ -504,7 +674,15 @@ describe("path trace host", () => {
 
   it("frees the tracer a while after leaving Path traced and starts again on the next pick", async () => {
     const created: FakeTracer[] = [];
-    const host = new PathTraceHost(glCanvas, async () => { const t = new FakeTracer(); created.push(t); return t; }, new FakeGuard());
+    const host = new PathTraceHost(
+      glCanvas,
+      async () => {
+        const t = new FakeTracer();
+        created.push(t);
+        return t;
+      },
+      new FakeGuard(),
+    );
     host.tick(frame({}, 1000));
     await flush();
     await flush();
@@ -610,6 +788,40 @@ describe("path trace host", () => {
     const budgets = t.calls.filter((c) => c.startsWith("budget:")).map((c) => Number(c.slice(7)));
     expect(budgets[0]).toBe(262_144);
     expect(budgets.at(-1)).toBeLessThan(120_000);
+  });
+
+  it("hands the tracer no budget change once the cap is reached, the last frame's time is dropped", async () => {
+    const { host, t } = await started();
+    host.tick(frame());
+    t.answer(1);
+    await flush();
+    t.frameMs = 3;
+    let now = 1000;
+    for (let i = 0; i < 4; i++) {
+      now += 16;
+      host.tick(frame({}, now));
+      t.answer(2 + i);
+      await flush();
+    }
+    t.holdFrames = true;
+    now += 16;
+    host.tick(frame({}, now));
+    t.answer(256);
+    await flush();
+    now += 16;
+    host.tick(frame({}, now));
+    expect(host.state).toBe("done");
+    t.calls.length = 0;
+    // Fast enough to be the fifth quick frame a step up waits for.
+    t.land();
+    await flush();
+    for (let i = 0; i < 5; i++) {
+      now += 16;
+      host.tick(frame({}, now));
+      await flush();
+    }
+    expect(t.calls.filter((c) => c.startsWith("budget:"))).toEqual([]);
+    expect(host.state).toBe("done");
   });
 
   it("traces below the canvas size", async () => {

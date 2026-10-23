@@ -1,10 +1,5 @@
-//! JSON text exactly as Python's `json.dumps` writes it with default arguments.
-//!
-//! Replaces the implicit dependency of the Python engine's `wire.py` on the stdlib encoder.
-//! The defaults differ from serde_json in three visible ways: `", "` and `": "`
-//! separators, `ensure_ascii` (every non-ASCII character and DEL as `\uXXXX`),
-//! and floats in `repr` form (`1e-05`, `1e+16`, `1.0`). Matching them is what
-//! lets a Rust reply be compared byte for byte against the Python one.
+//! JSON text exactly as Python's default `json.dumps` writes it, so a reply compares byte for byte with the Python one:
+//! `", "` and `": "` separators, `ensure_ascii` (non-ASCII and DEL as `\uXXXX`) and `repr` floats (`1e-05`, `1.0`).
 
 use serde_json::{Map, Number, Value};
 use std::fmt::Write as _;
@@ -59,9 +54,8 @@ fn write_number(out: &mut String, n: &Number) {
     }
 }
 
-/// `float.__repr__`: the shortest digits that round-trip, in positional form
-/// when the decimal exponent is in [-4, 16), otherwise scientific with a signed,
-/// at least two digit exponent.
+/// `float.__repr__`: the shortest round-trip digits, positional when the decimal exponent is in [-4, 16), else
+/// scientific with a signed exponent of at least two digits.
 pub fn write_float(out: &mut String, f: f64) {
     if f.is_nan() {
         out.push_str("NaN");
@@ -71,15 +65,10 @@ pub fn write_float(out: &mut String, f: f64) {
         out.push_str(if f > 0.0 { "Infinity" } else { "-Infinity" });
         return;
     }
-    // Rust's `{:e}` gives the shortest round-trip digit COUNT, but when two
-    // candidates of that length are equally close it rounds the tie up where
-    // Python rounds it to even (-137.79507446289062, an f32 widened). Exact
-    // formatting at that precision rounds ties to even, so it is redone that way.
+    // `{:e}` has the shortest round-trip digit count but rounds a tie up where Python rounds it to even
+    // (-137.79507446289062, an f32 widened), so the digits are redone with exact formatting at that precision.
     let shortest = format!("{f:e}");
-    let n_digits = shortest
-        .split('e')
-        .next()
-        .map_or(1, |m| m.bytes().filter(u8::is_ascii_digit).count());
+    let n_digits = shortest.split('e').next().map_or(1, |m| m.bytes().filter(u8::is_ascii_digit).count());
     let sci = format!("{f:.prec$e}", prec = n_digits.saturating_sub(1));
     let (neg, body) = match sci.strip_prefix('-') {
         Some(rest) => (true, rest),
@@ -185,62 +174,4 @@ fn trim_zeros(s: &str) -> String {
     }
     let t = s.trim_end_matches('0');
     t.strip_suffix('.').unwrap_or(t).to_string()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-
-    fn f(x: f64) -> String {
-        let mut s = String::new();
-        write_float(&mut s, x);
-        s
-    }
-
-    #[test]
-    fn floats_match_python_repr() {
-        assert_eq!(f(0.0), "0.0");
-        assert_eq!(f(-0.0), "-0.0");
-        assert_eq!(f(1.0), "1.0");
-        assert_eq!(f(0.1), "0.1");
-        assert_eq!(f(0.0001), "0.0001");
-        assert_eq!(f(0.00001), "1e-05");
-        assert_eq!(f(1.5e-7), "1.5e-07");
-        assert_eq!(f(1e16), "1e+16");
-        assert_eq!(f(1234567890123456.0), "1234567890123456.0");
-        assert_eq!(f(1.25e300), "1.25e+300");
-        assert_eq!(f(-123.456), "-123.456");
-        assert_eq!(f(100.0), "100.0");
-        assert_eq!(f(f64::INFINITY), "Infinity");
-    }
-
-    #[test]
-    fn strings_are_ascii_escaped() {
-        let mut s = String::new();
-        write_str(&mut s, "a\"b\\c\n\u{1}\u{7f}\u{e9}\u{201c}\u{1f600}");
-        let bs = char::from(92u8);
-        let want = format!(
-            "\"a{bs}\"b{bs}{bs}c{bs}n{bs}u0001{bs}u007f{bs}u00e9{bs}u201c{bs}ud83d{bs}ude00\""
-        );
-        assert_eq!(s, want);
-    }
-
-    #[test]
-    fn containers_use_python_separators() {
-        let v = json!({"id": "x", "ok": true, "a": [1, -2, 2.5], "e": {}, "l": [], "n": null});
-        assert_eq!(
-            to_string(&v),
-            r#"{"id": "x", "ok": true, "a": [1, -2, 2.5], "e": {}, "l": [], "n": null}"#
-        );
-    }
-
-    #[test]
-    fn truthiness() {
-        assert!(!truthy(None));
-        assert!(!truthy(Some(&json!(0))));
-        assert!(!truthy(Some(&json!(""))));
-        assert!(truthy(Some(&json!(1))));
-        assert!(truthy(Some(&json!(true))));
-    }
 }

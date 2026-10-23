@@ -1,8 +1,4 @@
-// What a round face's size field reads, and the letters typed ahead of a number
-// that pick it: r2.5 a radius, ⌀5 or d5 a diameter, +0.5 or -0.5 an offset.
-//
-// Split from pressPullTool.ts on the house rule: the tool is pointer plumbing,
-// these are the functions that can be wrong in a way a user notices.
+// What a round face's size field reads, picked by a typed prefix: r2.5 a radius, ⌀5 or d5 a diameter, +0.5 an offset.
 
 import { deltaForDiameter, deltaForRadius, radialDrag } from "./radialDrag";
 
@@ -42,7 +38,13 @@ export function parseSizeText(raw: string): SizeText | null {
 }
 
 /** What the field shows for a radial drag of `delta` from `radius`. */
-export function sizeReadout(quantity: SizeQuantity, radius: number, delta: number, solidInside: boolean, full: boolean): number {
+export function sizeReadout(
+  quantity: SizeQuantity,
+  radius: number,
+  delta: number,
+  solidInside: boolean,
+  full: boolean,
+): number {
   if (quantity === "offset") return delta;
   const d = radialDrag(radius, delta, solidInside, full);
   return quantity === "diameter" ? d.diameter : d.radius;

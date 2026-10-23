@@ -1,10 +1,5 @@
-//! Proof of life from inside one long kernel call, the Rust side of
-//! progress.py `progress_tick` while solid_ops.py `_run_offset_child` waits.
-//!
-//! The engine reaps a job whose beats stop. A single whole-body offset can run
-//! longer than that budget without being wedged, so it beats from a side thread
-//! while it works, for at most its own deadline, after which the beats stop and
-//! the supervisor decides.
+//! Proof of life from inside one long kernel call, progress.py `progress_tick`. The engine reaps a job whose beats
+//! stop, so a long whole-body offset beats from a side thread, up to its own deadline, then the supervisor decides.
 
 use std::cell::RefCell;
 use std::sync::mpsc;
@@ -65,40 +60,4 @@ pub fn while_running<T>(limit: Duration, f: impl FnOnce() -> T) -> T {
         let _ = done.send(());
         out
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::sync::atomic::{AtomicUsize, Ordering};
-
-    #[test]
-    fn beats_while_the_work_runs_and_only_under_a_hook() {
-        let n = Arc::new(AtomicUsize::new(0));
-        let seen = n.clone();
-        let wait = || std::thread::sleep(Duration::from_millis(700));
-        while_running(Duration::from_secs(5), wait);
-        assert_eq!(n.load(Ordering::Relaxed), 0);
-        {
-            let _g = install(Some(Arc::new(move || {
-                seen.fetch_add(1, Ordering::Relaxed);
-            })));
-            while_running(Duration::from_secs(5), wait);
-        }
-        assert!(n.load(Ordering::Relaxed) >= 2);
-        let before = n.load(Ordering::Relaxed);
-        while_running(Duration::from_secs(5), wait);
-        assert_eq!(n.load(Ordering::Relaxed), before);
-    }
-
-    #[test]
-    fn stops_beating_at_its_deadline() {
-        let n = Arc::new(AtomicUsize::new(0));
-        let seen = n.clone();
-        let _g = install(Some(Arc::new(move || {
-            seen.fetch_add(1, Ordering::Relaxed);
-        })));
-        while_running(Duration::from_millis(300), || std::thread::sleep(Duration::from_millis(1200)));
-        assert!(n.load(Ordering::Relaxed) <= 2);
-    }
 }

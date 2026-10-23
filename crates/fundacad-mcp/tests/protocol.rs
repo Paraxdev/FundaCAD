@@ -1,16 +1,5 @@
-//! The server over a real pipe, spoken to by a real client. A port of
-//! the Python MCP server's `test_protocol.py`.
-//!
-//! Everything else here tests a function. This tests the PROTOCOL, which is
-//! where the failures nothing else can see live: a stray write to stdout
-//! corrupts the stream, a reply to a notification is a protocol error the host
-//! may hang up over, and a tool that fails instead of returning isError takes
-//! the whole session down instead of telling the model what went wrong.
-//!
-//! The last group builds real geometry, so it spawns the engine and is the
-//! slowest thing in this directory. It is here anyway: "can an agent go from an
-//! empty document to a solid" is the only question this whole server exists to
-//! answer.
+//! The server over a real pipe to a real client, since stray stdout writes, replies to notifications and tools
+//! that fail instead of returning isError only show at the protocol. The geometry group spawns the engine.
 
 mod common;
 
@@ -26,64 +15,36 @@ fn drive(steps: &[(&str, Value)]) -> Vec<ToolReply> {
 
 fn drive_in(cwd: &std::path::Path, steps: &[(&str, Value)]) -> Vec<ToolReply> {
     let mut mcp = Mcp::start(&BTreeMap::new(), cwd);
-    steps
-        .iter()
-        .map(|(name, args)| mcp.call(name, args.clone()))
-        .collect()
+    steps.iter().map(|(name, args)| mcp.call(name, args.clone())).collect()
 }
 
 fn one(name: &str, args: Value) -> ToolReply {
     drive(&[(name, args)]).remove(0)
 }
 
-// --- the handshake -----------------------------------------------------------
-
 #[test]
 fn the_server_initializes_and_lists_its_tools() {
     let mut mcp = Mcp::start(&BTreeMap::new(), &std::env::temp_dir());
     let tools = mcp.tools();
-    let names: Vec<&str> = tools
-        .iter()
-        .filter_map(|t| t.get("name").and_then(Value::as_str))
-        .collect();
-    for want in [
-        "schema",
-        "build",
-        "inspect",
-        "measure",
-        "view",
-        "feature_add",
-        "param_set",
-        "doc_save",
-    ] {
+    let names: Vec<&str> = tools.iter().filter_map(|t| t.get("name").and_then(Value::as_str)).collect();
+    for want in ["schema", "build", "inspect", "measure", "view", "feature_add", "param_set", "doc_save"] {
         assert!(names.contains(&want), "{want} is not offered: {names:?}");
     }
     for t in &tools {
         let name = t["name"].as_str().unwrap_or_default();
-        assert!(
-            t.get("description").and_then(Value::as_str).is_some_and(|d| !d.is_empty()),
-            "{name}"
-        );
+        assert!(t.get("description").and_then(Value::as_str).is_some_and(|d| !d.is_empty()), "{name}");
         assert_eq!(t["inputSchema"]["type"], json!("object"), "{name}");
-        for req in t["inputSchema"]["required"]
-            .as_array()
-            .map_or(&[][..], Vec::as_slice)
-        {
+        for req in t["inputSchema"]["required"].as_array().map_or(&[][..], Vec::as_slice) {
             let key = req.as_str().unwrap_or_default();
-            assert!(
-                t["inputSchema"]["properties"].get(key).is_some(),
-                "{name}: {key}"
-            );
+            assert!(t["inputSchema"]["properties"].get(key).is_some(), "{name}: {key}");
         }
     }
 }
 
 #[test]
 fn a_notification_gets_no_reply() {
-    // MCP notifications carry no id, and answering one desynchronises every
-    // reply after it: the client would match the next request against a stale
-    // message and hang. `Mcp::start` sends `initialized` and then the first
-    // tool call has to come back correctly, which is the assertion.
+    // Answering a notification desynchronises every reply after it. `Mcp::start` sends `initialized`,
+    // so the first tool call coming back right is the assertion.
     let r = one("schema", json!({"type": "box"}));
     assert!(!r.is_error && r.text.contains("box"));
 }
@@ -105,10 +66,7 @@ fn the_server_survives_a_failed_call_and_keeps_answering() {
     // The property that makes isError worth having: the session continues.
     let rs = drive(&[
         ("feature_add", json!({"feature": {}})),
-        (
-            "feature_add",
-            json!({"feature": {"type": "box", "length": 1, "width": 1, "height": 1}}),
-        ),
+        ("feature_add", json!({"feature": {"type": "box", "length": 1, "width": 1, "height": 1}})),
         ("doc_get", json!({})),
     ]);
     assert!(rs[0].is_error);
@@ -118,17 +76,12 @@ fn the_server_survives_a_failed_call_and_keeps_answering() {
 
 #[test]
 fn an_argument_the_tool_does_not_take_is_refused_by_name() {
-    let rs = drive(&[
-        ("doc_get", json!({"feature_only": true})),
-        ("doc_get", json!({"features_only": true})),
-    ]);
+    let rs = drive(&[("doc_get", json!({"feature_only": true})), ("doc_get", json!({"features_only": true}))]);
     assert!(rs[0].is_error, "{}", rs[0].text);
     assert!(rs[0].text.contains("'feature_only'"), "{}", rs[0].text);
     assert!(rs[0].text.contains("'features_only'"), "{}", rs[0].text);
     assert!(!rs[1].is_error, "{}", rs[1].text);
 }
-
-// --- documents ---------------------------------------------------------------
 
 #[test]
 fn a_document_round_trips_through_a_file() {
@@ -147,39 +100,21 @@ fn a_document_round_trips_through_a_file() {
     for r in &rs {
         assert!(!r.is_error, "{}", r.text);
     }
-    let doc: Value =
-        serde_json::from_str(&std::fs::read_to_string(&path).expect("it was saved")).expect("JSON");
-    assert_eq!(
-        doc["features"][0]["height"],
-        json!("h"),
-        "the parameter reference was flattened"
-    );
-    assert_eq!(
-        doc["parameters"]["h"],
-        json!(12.0),
-        "the derived cache the engine reads is missing"
-    );
+    let doc: Value = serde_json::from_str(&std::fs::read_to_string(&path).expect("it was saved")).expect("JSON");
+    assert_eq!(doc["features"][0]["height"], json!("h"), "the parameter reference was flattened");
+    assert_eq!(doc["parameters"]["h"], json!(12.0), "the derived cache the engine reads is missing");
     assert_eq!(doc["paramDefs"]["h"]["expr"], json!("12"));
 
-    let back = drive(&[
-        (
-            "doc_open",
-            json!({"path": path.to_string_lossy().replace('\\', "/")}),
-        ),
-        ("doc_get", json!({})),
-    ]);
+    let back =
+        drive(&[("doc_open", json!({"path": path.to_string_lossy().replace('\\', "/")})), ("doc_get", json!({}))]);
     assert!(!back[0].is_error, "{}", back[0].text);
     assert!(back[1].text.contains("bx1"));
 }
 
 #[test]
 fn a_relative_path_lands_where_the_caller_is_standing() {
-    // A relative path resolves against the SERVER process's working directory.
-    // An agent that ran the client from its own scratch directory and saved a
-    // part watched that directory stay empty while the file appeared inside the
-    // repository, which it had been told not to write to. Nothing said so: the
-    // reply echoed back the relative path it had been given, which is true from
-    // every directory and useful from none.
+    // A relative path resolves against the SERVER's working directory, so a part saved from an agent's scratch
+    // directory once landed in the repository while the reply echoed the relative path.
     let tmp = tempfile::tempdir().expect("a temp dir");
     let rs = drive_in(
         tmp.path(),
@@ -197,11 +132,7 @@ fn a_relative_path_lands_where_the_caller_is_standing() {
     let landed = tmp.path().join("part.funda");
     assert!(landed.exists(), "not in the caller's directory");
     // and the reply says WHERE, so a caller never has to go looking
-    assert!(
-        last.text.contains(&landed.to_string_lossy().into_owned()),
-        "{}",
-        last.text
-    );
+    assert!(last.text.contains(&landed.to_string_lossy().into_owned()), "{}", last.text);
 }
 
 #[test]
@@ -212,10 +143,7 @@ fn a_refused_edit_leaves_the_document_alone() {
             json!({"feature": {"id": "bx1", "type": "box", "length": 1, "width": 1,
                                "height": 1}}),
         ),
-        (
-            "feature_add",
-            json!({"feature": {"id": "bx1", "type": "sphere", "radius": 2}}),
-        ),
+        ("feature_add", json!({"feature": {"id": "bx1", "type": "sphere", "radius": 2}})),
         ("doc_get", json!({"features_only": true})),
     ]);
     assert!(rs[1].is_error, "{}", rs[1].text);
@@ -269,10 +197,7 @@ fn a_circular_pattern_axis_naming_no_datum_is_reported_before_a_build() {
             json!({"feature": {"id": "pc1", "type": "patternCircular", "count": 6, "angle": 360,
                                "axis": {"datum": "ax9"}}}),
         ),
-        (
-            "feature_add",
-            json!({"feature": {"id": "ax9", "type": "datumAxis", "origin": [0, 0, 0], "dir": [0, 0, 1]}}),
-        ),
+        ("feature_add", json!({"feature": {"id": "ax9", "type": "datumAxis", "origin": [0, 0, 0], "dir": [0, 0, 1]}})),
     ]);
     assert!(rs[0].text.contains("ax9") && rs[0].text.contains("names no datumAxis in the document"), "{}", rs[0].text);
     assert!(rs[1].text.contains("ax9") && rs[1].text.contains("comes AFTER it"), "{}", rs[1].text);
@@ -298,8 +223,6 @@ fn a_circular_pattern_axis_an_older_build_would_misread_is_reported() {
     assert!(rs[2].text.contains("with axisRef, axis must be the line"), "{}", rs[2].text);
 }
 
-// --- geometry (spawns the engine) --------------------------------------------
-
 /// A box drawn from its corner: turned about world Z most copies of its hole
 /// land off it, which the build says, and turned about a line through its
 /// middle every copy cuts.
@@ -311,8 +234,11 @@ fn a_circular_pattern_about_a_placed_axis_cuts_every_copy() {
             json!({"feature": {"id": "sk1", "type": "sketch", "plane": "XY", "entities": [
                 {"type": "rectangle", "width": 60, "height": 60, "x": 30, "y": 30, "angle": 0}]}}),
         ),
-        ("feature_add", json!({"feature": {"id": "ex1", "type": "extrude", "sketch": "sk1", "distance": 10,
-                                           "operation": "new"}})),
+        (
+            "feature_add",
+            json!({"feature": {"id": "ex1", "type": "extrude", "sketch": "sk1", "distance": 10,
+                                           "operation": "new"}}),
+        ),
         (
             "feature_add",
             json!({"feature": {"id": "hole1", "type": "hole", "diameter": 4, "extent": "through",
@@ -400,10 +326,7 @@ fn a_hole_patterned_by_feature_builds_six_holes() {
 fn a_hole_on_a_tracked_face_follows_it_through_a_parameter_change() {
     let rs = drive(&[
         ("param_set", json!({"name": "h", "expr": 10})),
-        (
-            "feature_add",
-            json!({"feature": {"id": "bx1", "type": "box", "length": 40, "width": 20, "height": "h"}}),
-        ),
+        ("feature_add", json!({"feature": {"id": "bx1", "type": "box", "length": 40, "width": 20, "height": "h"}})),
         (
             "feature_add",
             json!({"feature": {"id": "hole1", "type": "hole", "diameter": 4, "extent": "blind", "depth": 3,
@@ -439,17 +362,7 @@ fn an_empty_document_can_be_taken_all_the_way_to_a_solid() {
         ("inspect", json!({})),
         ("view", json!({"view": "front", "width": 160, "height": 120})),
     ]);
-    for (name, r) in [
-        "param_set",
-        "param_set",
-        "feature_add",
-        "build",
-        "inspect",
-        "view",
-    ]
-    .iter()
-    .zip(&rs)
-    {
+    for (name, r) in ["param_set", "param_set", "feature_add", "build", "inspect", "view"].iter().zip(&rs) {
         assert!(!r.is_error, "{name}: {}", r.text);
     }
     assert!(rs[3].text.contains("20.0 x 20.0 x 30.0"), "{}", rs[3].text);
@@ -461,15 +374,8 @@ fn an_empty_document_can_be_taken_all_the_way_to_a_solid() {
 
 #[test]
 fn a_failed_feature_is_reported_and_not_passed_off_as_a_no_op() {
-    // The one that bit hardest while this was being written: a rebuild whose
-    // feature fails carries the failure in `featureErrors` beside the geometry
-    // that did build, not under `errors`. Reading the wrong key made a refused
-    // press/pull look like a press/pull that did nothing at all.
-    //
-    // isError is also true here, on purpose: a body that built beside a
-    // feature that failed is still a wrong document, and an agent gating on
-    // isError alone (rather than string-matching "FEATURE FAILED") has to see
-    // that. The full text, bodies included, still comes back.
+    // A failed feature is in `featureErrors` beside the geometry that built, not under `errors`, and isError is
+    // true so an agent gating on it sees the wrong document; the full text still comes back.
     let rs = drive(&[
         (
             "feature_add",
@@ -503,10 +409,7 @@ fn a_feature_of_a_type_this_version_does_not_know_is_reported_as_skipped() {
         .to_string(),
     )
     .unwrap();
-    let rs = drive(&[
-        ("doc_open", json!({"path": path.to_string_lossy().replace('\\', "/")})),
-        ("build", json!({})),
-    ]);
+    let rs = drive(&[("doc_open", json!({"path": path.to_string_lossy().replace('\\', "/")})), ("build", json!({}))]);
     assert!(!rs[0].is_error, "{}", rs[0].text);
     assert!(rs[1].is_error, "the model built is not the whole document: {}", rs[1].text);
     assert!(
@@ -520,12 +423,8 @@ fn a_feature_of_a_type_this_version_does_not_know_is_reported_as_skipped() {
 
 #[test]
 fn view_still_draws_a_partial_build() {
-    // build's isError going true on a partial build (the test above) must not
-    // make `view` refuse the whole picture: looking at what DID build is the
-    // main way an agent checks its work, and a model whose fillet failed
-    // (the debowler's chute_blend, in the field) is exactly when a picture
-    // matters most. `view` triggers its own rebuild when stale, so this never
-    // calls `build` directly.
+    // A partial build's isError must not make `view` refuse: a picture of what DID build matters most when
+    // a fillet failed. `view` rebuilds by itself when stale, so `build` is never called.
     let rs = drive(&[
         (
             "feature_add",
@@ -579,10 +478,7 @@ fn view_draws_from_the_angle_it_was_given_and_says_which() {
         ("view", a)
     };
     let rs = drive(&[
-        (
-            "feature_add",
-            json!({"feature": {"type": "box", "length": 40, "width": 20, "height": 10}}),
-        ),
+        ("feature_add", json!({"feature": {"type": "box", "length": 40, "width": 20, "height": 10}})),
         with(json!({})),
         with(json!({"az": 180, "el": 80})),
         with(json!({"azimuth": 180, "elevation": 80})),
@@ -651,10 +547,7 @@ fn export_refuses_a_partial_build_unless_told_to_write_it_anyway() {
     assert!(!path.exists(), "a refused export left a file behind");
 
     let mut allowed = box_and_broken_fillet();
-    allowed.push((
-        "export",
-        json!({"path": path_text, "format": "step", "allowPartial": true}),
-    ));
+    allowed.push(("export", json!({"path": path_text, "format": "step", "allowPartial": true})));
     let rs2 = drive(&allowed);
     assert!(!rs2[2].is_error, "{}", rs2[2].text);
     assert!(rs2[2].text.contains("Wrote"), "{}", rs2[2].text);
@@ -739,10 +632,7 @@ fn a_fillet_patched_into_a_chamfer_builds_as_a_chamfer() {
             json!({"id": "chute_edges",
                    "patch": {"type": "chamfer", "distance": 0.8, "radius": null}}),
         ),
-        (
-            "feature_update",
-            json!({"id": "chute_edges", "patch": {"type": "fillet"}}),
-        ),
+        ("feature_update", json!({"id": "chute_edges", "patch": {"type": "fillet"}})),
         ("build", json!({})),
         ("doc_get", json!({"features_only": true})),
     ]);
@@ -775,18 +665,13 @@ fn a_cut_that_splits_a_body_is_reported() {
         ),
         ("build", json!({})),
     ]);
-    assert!(
-        rs[3].text.contains("warning (cut1): the cut split Box into 2 pieces"),
-        "{}",
-        rs[3].text
-    );
+    assert!(rs[3].text.contains("warning (cut1): the cut split Box into 2 pieces"), "{}", rs[3].text);
 }
 
 #[test]
 fn inspect_hands_back_a_selector_that_addresses_the_face_it_names() {
-    // The whole point of inspect: an agent that has never clicked on anything
-    // can still write the next feature. The proof is using one of the selectors
-    // it returns to press/pull that face, and getting a body that changed.
+    // The point of inspect: an agent that never clicked can write the next feature, proven by press/pulling
+    // a face through a returned selector.
     let rs = drive(&[
         (
             "feature_add",
@@ -797,10 +682,7 @@ fn inspect_hands_back_a_selector_that_addresses_the_face_it_names() {
         ("inspect", json!({"detail": true, "selectors": true})),
     ]);
     assert!(!rs[2].is_error, "{}", rs[2].text);
-    let (_, tail) = rs[2]
-        .text
-        .split_once("selectors:")
-        .unwrap_or_else(|| panic!("{}", rs[2].text));
+    let (_, tail) = rs[2].text.split_once("selectors:").unwrap_or_else(|| panic!("{}", rs[2].text));
     let body: Value = serde_json::from_str(tail.trim()).expect("the selectors are JSON");
     let top = body["body1"]["faces"]
         .as_object()
@@ -866,15 +748,147 @@ fn the_schema_is_also_a_resource() {
     // `fundacad://schema` is what a host reads without spending a tool call.
     let mut mcp = Mcp::start(&env(&[]), &std::env::temp_dir());
     let listed = mcp.rpc("resources/list", json!({}));
-    assert_eq!(
-        listed["result"]["resources"][0]["uri"],
-        json!("fundacad://schema")
-    );
+    assert_eq!(listed["result"]["resources"][0]["uri"], json!("fundacad://schema"));
     let read = mcp.rpc("resources/read", json!({"uri": "fundacad://schema"}));
-    let text = read["result"]["contents"][0]["text"]
-        .as_str()
-        .unwrap_or_default();
+    let text = read["result"]["contents"][0]["text"].as_str().unwrap_or_default();
     assert!(text.contains("FundaCAD document schema"), "{text:.120}");
     let missing = mcp.rpc("resources/read", json!({"uri": "fundacad://nope"}));
     assert!(missing.get("error").is_some(), "{missing}");
+}
+
+fn box_60_40_20() -> (&'static str, Value) {
+    ("feature_add", json!({"feature": {"id": "bx", "type": "box", "length": 60, "width": 40, "height": 20}}))
+}
+
+fn right_z_edge() -> Value {
+    json!({"kind": "edge", "by": "match", "body": "body1",
+           "fp": {"mid": [30, 20, 0], "dir": [0, 0, 1], "length": 20, "curve": "line"}})
+}
+
+#[test]
+fn a_match_whose_edge_a_chamfer_took_warns_which_edge_it_now_fillets() {
+    let rs = drive(&[
+        box_60_40_20(),
+        ("feature_add", json!({"feature": {"id": "ch", "type": "chamfer", "distance": 5, "edges": right_z_edge()}})),
+        ("feature_add", json!({"feature": {"id": "f", "type": "fillet", "radius": 3, "edges": right_z_edge()}})),
+        ("build", json!({})),
+    ]);
+    let t = &rs[3].text;
+    assert!(t.contains("warning (f):"), "{t}");
+    assert!(t.contains("(30, 20, 0)"), "{t}");
+    assert!(t.contains("(25, 20, 0)") || t.contains("(30, 15, 0)"), "{t}");
+    assert!(t.contains("inspect"), "{t}");
+}
+
+#[test]
+fn a_match_picked_where_no_edge_is_warns_instead_of_taking_one_quietly() {
+    let rs = drive(&[
+        box_60_40_20(),
+        (
+            "feature_add",
+            json!({"feature": {"id": "f", "type": "fillet", "radius": 2, "edges":
+            {"kind": "edge", "by": "match", "body": "body1", "fp": {"mid": [1, 2, 3], "dir": [0, 0, 1]}}}}),
+        ),
+        ("build", json!({})),
+    ]);
+    assert!(rs[2].text.contains("warning (f):") && rs[2].text.contains("(1, 2, 3)"), "{}", rs[2].text);
+}
+
+#[test]
+fn a_match_whose_edge_drifted_with_the_box_stays_quiet() {
+    let rs = drive(&[
+        ("feature_add", json!({"feature": {"id": "bx", "type": "box", "length": 59, "width": 40, "height": 20}})),
+        ("feature_add", json!({"feature": {"id": "f", "type": "fillet", "radius": 3, "edges": right_z_edge()}})),
+        ("build", json!({})),
+    ]);
+    assert!(!rs[2].is_error && !rs[2].text.contains("warning"), "{}", rs[2].text);
+}
+
+#[test]
+fn inspect_of_a_body_that_does_not_exist_names_the_ones_that_do() {
+    let rs = drive(&[box_60_40_20(), ("inspect", json!({"body": "body9"}))]);
+    let t = &rs[1].text;
+    assert!(rs[1].is_error, "{t}");
+    assert!(t.contains("body9") && t.contains("body1"), "{t}");
+    assert!(!t.contains("No bodies"), "{t}");
+}
+
+#[test]
+fn a_missing_argument_is_named_in_plain_words() {
+    let r = one("feature_remove", json!({}));
+    assert!(r.is_error, "{}", r.text);
+    assert!(!r.text.contains("KeyError") && r.text.contains("`id`"), "{}", r.text);
+}
+
+#[test]
+fn an_extrude_of_an_open_sketch_points_at_sketch_tie() {
+    let line = |id: &str, x1: f64, y1: f64, x2: f64, y2: f64| json!({"id": id, "type": "line", "x1": x1, "y1": y1, "x2": x2, "y2": y2});
+    let ents = [
+        line("o1", 0.0, 0.0, 30.0, 0.0),
+        line("o2", 30.001, 0.0, 30.0, 20.0),
+        line("o3", 30.0, 20.0, 0.0, 20.0),
+        line("o4", 0.0, 20.0, 0.0, 0.0),
+    ];
+    let rs = drive(&[
+        ("feature_add", json!({"feature": {"id": "sk", "type": "sketch", "plane": "XY", "entities": ents}})),
+        (
+            "feature_add",
+            json!({"feature": {"id": "ex", "type": "extrude", "sketch": "sk", "distance": 10,
+                                           "operation": "new"}}),
+        ),
+        ("build", json!({})),
+    ]);
+    let t = &rs[2].text;
+    assert!(rs[2].is_error && t.contains("no closed profile"), "{t}");
+    assert!(t.contains("sketch_tie") && t.contains("inspect"), "{t}");
+}
+
+#[test]
+fn a_fillet_too_large_for_its_neighbours_is_refused_with_the_size_that_fits() {
+    let rs = drive(&[
+        box_60_40_20(),
+        (
+            "feature_add",
+            json!({"feature": {"id": "f", "type": "fillet", "radius": 21,
+                                           "edges": {"kind": "edge", "by": "axis", "axis": "Z", "body": "body1"}}}),
+        ),
+        ("build", json!({})),
+    ]);
+    let t = &rs[2].text;
+    assert!(rs[2].is_error, "{t}");
+    assert!(t.contains("neighbouring edge") && t.contains("fits up to 20"), "{t}");
+}
+
+#[test]
+fn a_lone_fillet_larger_than_its_face_warns_in_the_build_reply() {
+    let rs = drive(&[
+        box_60_40_20(),
+        (
+            "feature_add",
+            json!({"feature": {"id": "f", "type": "fillet", "radius": 45, "edges":
+            {"kind": "edge", "by": "nearest", "point": [30, 20, 0], "body": "body1"}}}),
+        ),
+        ("build", json!({})),
+    ]);
+    let t = &rs[2].text;
+    assert!(t.contains("warning (f):") && t.contains("runs past") && t.contains("fits up to 39.99mm"), "{t}");
+}
+
+#[test]
+fn a_match_whose_edge_a_parameter_moved_far_says_that_can_be_right() {
+    let rs = drive(&[
+        ("feature_add", json!({"feature": {"id": "bx", "type": "box", "length": 100, "width": 40, "height": 20}})),
+        ("feature_add", json!({"feature": {"id": "f", "type": "fillet", "radius": 3, "edges": right_z_edge()}})),
+        ("build", json!({})),
+    ]);
+    let t = &rs[2].text;
+    assert!(t.contains("warning (f):") && t.contains("(50, 20, 0)"), "{t}");
+    assert!(t.contains("a parameter moved") && !t.contains("no longer matches"), "{t}");
+}
+
+#[test]
+fn a_view_with_a_wrong_section_side_answers_without_python_words() {
+    let rs = drive(&[box_60_40_20(), ("view", json!({"section": {"axis": "Y", "keep": "middle"}}))]);
+    assert!(rs[1].is_error && rs[1].text.contains("keep='middle'"), "{}", rs[1].text);
+    assert!(!rs[1].text.contains("ValueError"), "{}", rs[1].text);
 }

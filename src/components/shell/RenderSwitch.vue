@@ -6,11 +6,8 @@ const emit = defineEmits<{ (e: "update", value: boolean): void }>();
 
 <template>
   <div class="rd-chips" role="group" :aria-label="label">
-    <button
-      class="rd-chip"
-      :class="{ active: value }"
-      :aria-pressed="value"
-      @click="emit('update', !value)"
-    >{{ value ? "On" : "Off" }}</button>
+    <button class="rd-chip" :class="{ active: value }" :aria-pressed="value" @click="emit('update', !value)">{{
+      value ? "On" : "Off"
+    }}</button>
   </div>
 </template>

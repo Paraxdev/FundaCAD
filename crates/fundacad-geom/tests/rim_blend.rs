@@ -1,6 +1,5 @@
-//! A cup whose outer rim is already rounded, its inner rim filleted past the
-//! wall: the fillet is one revolved face that carves the rim, not a band of
-//! lofted sections that cuts the wall in two and takes half a minute.
+//! A cup with a rounded outer rim, its inner rim filleted past the wall: the fillet is one revolved face carving the
+//! rim, not a band of lofted sections that cuts the wall in two and takes half a minute.
 
 use fundacad_core::CadDocument;
 use fundacad_geom::builder::{self, NoWatch, Rebuild};
@@ -41,9 +40,8 @@ fn build(doc: &Value) -> (Rebuild, f64) {
     (r, t.elapsed().as_secs_f64())
 }
 
-/// The rim's section is the arc of a ball resting on the wall and on the
-/// rim's tangent plane, revolved: what is left is the base less the ring
-/// outside that ball's torus.
+/// The rim's section is the arc of a ball resting on the wall and the rim's tangent plane, revolved: what is left
+/// is the base less the ring outside that ball's torus.
 fn carved(base: &opencascade::primitives::Shape, r: f64) -> f64 {
     let (x0, x1) = (R - OUTER - 0.1, R - OUTER + r);
     let ring = kernel::polygon_face(&[[x0, 0.0, H - r], [x1, 0.0, H - r], [x1, 0.0, H + 1.0], [x0, 0.0, H + 1.0]])
@@ -63,17 +61,9 @@ fn a_rim_fillet_past_a_rounded_wall_is_one_face() {
     let (r, secs) = build(&cup(Some(INNER)));
     let out = &r.bodies[0].shape;
 
-    assert!(
-        !r.diagnostics.iter().any(|d| d["code"] == "bodySplit"),
-        "{:?}",
-        r.diagnostics
-    );
+    assert!(!r.diagnostics.iter().any(|d| d["code"] == "bodySplit"), "{:?}", r.diagnostics);
     assert_eq!(kernel::count(out, Kind::Solid), 1);
-    assert_eq!(
-        kernel::count(out, Kind::Face),
-        kernel::count(base, Kind::Face) + 1,
-        "the fillet is one face"
-    );
+    assert_eq!(kernel::count(out, Kind::Face), kernel::count(base, Kind::Face) + 1, "the fillet is one face");
     let want = carved(base, INNER);
     let got = kernel::volume(out);
     assert!((got - want).abs() < 1e-3 * want, "volume {got}, the carved rim holds {want}");

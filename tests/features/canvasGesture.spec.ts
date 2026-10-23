@@ -88,8 +88,12 @@ describe("CanvasGesture", () => {
     const el = makeEl();
     let passes = 0;
     const g = new CanvasGesture(el, {
-      move: () => {}, down: () => {}, key: () => {},
-      frame: () => { passes++; },
+      move: () => {},
+      down: () => {},
+      key: () => {},
+      frame: () => {
+        passes++;
+      },
     });
     g.frame();
     g.frame(); // already pending, must not queue a second
@@ -106,8 +110,13 @@ describe("CanvasGesture", () => {
     const el = makeEl();
     let passes = 0;
     const g: CanvasGesture = new CanvasGesture(el, {
-      move: () => {}, down: () => {}, key: () => {},
-      frame: () => { passes++; if (passes < 3) g.frame(); },
+      move: () => {},
+      down: () => {},
+      key: () => {},
+      frame: () => {
+        passes++;
+        if (passes < 3) g.frame();
+      },
     });
     g.frame();
     for (let i = 0; i < frames.length && i < 5; i++) frames[i]!();
@@ -119,8 +128,12 @@ describe("CanvasGesture", () => {
     const el = makeEl();
     let passes = 0;
     const g = new CanvasGesture(el, {
-      move: () => {}, down: () => {}, key: () => {},
-      frame: () => { passes++; },
+      move: () => {},
+      down: () => {},
+      key: () => {},
+      frame: () => {
+        passes++;
+      },
     });
     g.frame();
     g.detach();

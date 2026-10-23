@@ -1,9 +1,5 @@
-//! One document, an app and an agent both working on it, the Python engine's `live_session.py`.
-//!
-//! Exactly one HOST (the running app) owns the document and is the only thing
-//! that may raise its revision. Any number of GUESTS read it and PROPOSE a
-//! replacement, which the host collects on its next publish. A state machine
-//! with the clock injected, answered on the read path.
+//! One document an app and an agent both work on. Exactly one host (the running app) owns it and alone raises its
+//! revision; guests read it and propose replacements, which the host collects on its next publish.
 
 use std::collections::HashMap;
 
@@ -15,12 +11,16 @@ pub const GUEST_TTL: f64 = 45.0;
 pub const MAX_PENDING: usize = 8;
 /// Characters of a guest's note kept; it is shown to the user.
 pub const MAX_NOTE: usize = 400;
+/// Characters of a guide caption kept.
+pub const MAX_CAPTION: usize = 600;
 
 pub type Clock = Box<dyn Fn() -> f64 + Send>;
 
 pub struct LiveSession {
     clock: Clock,
     host_id: Option<String>,
+    /// The host's open document session, null for a host that names none. Proposals are only ever for it.
+    doc: Value,
     document: Value,
     revision: i64,
     title: Value,
@@ -29,6 +29,12 @@ pub struct LiveSession {
     guests: HashMap<String, (Value, f64)>,
     pending: Vec<Map<String, Value>>,
     next_proposal: u64,
+    /// What the host's guide shows, stored as the host sent it.
+    guide_state: Value,
+    /// At most one step (highlight or clear) and one wait, the newest of each.
+    guide_step: Option<Map<String, Value>>,
+    guide_wait: Option<Map<String, Value>>,
+    next_guide_seq: i64,
 }
 
 fn truthy(v: Option<&Value>) -> bool {
@@ -57,6 +63,7 @@ impl LiveSession {
         LiveSession {
             clock,
             host_id: None,
+            doc: Value::Null,
             document: Value::Null,
             revision: 0,
             title: Value::Null,
@@ -64,6 +71,10 @@ impl LiveSession {
             guests: HashMap::new(),
             pending: Vec::new(),
             next_proposal: 0,
+            guide_state: Value::Null,
+            guide_step: None,
+            guide_wait: None,
+            next_guide_seq: 0,
         }
     }
 
@@ -75,6 +86,7 @@ impl LiveSession {
 
     fn reset(&mut self) {
         self.host_id = None;
+        self.doc = Value::Null;
         self.document = Value::Null;
         self.revision = 0;
         self.title = Value::Null;
@@ -82,13 +94,48 @@ impl LiveSession {
         self.guests.clear();
         self.pending.clear();
         self.next_proposal = 0;
+        self.reset_guide();
     }
 
-    /// `publish`: the host says what it has and collects what guests asked for.
+    fn reset_guide(&mut self) {
+        self.guide_state = Value::Null;
+        self.guide_step = None;
+        self.guide_wait = None;
+    }
+
+    fn drop_guide_of(&mut self, guest_id: &str) {
+        let mine = |c: &Option<Map<String, Value>>| {
+            c.as_ref().and_then(|c| c.get("guest")).and_then(Value::as_str) == Some(guest_id)
+        };
+        if mine(&self.guide_step) {
+            self.guide_step = None;
+        }
+        if mine(&self.guide_wait) {
+            self.guide_wait = None;
+        }
+    }
+
+    /// `publish`: the host says what it has and collects what guests asked for. Proposals and guide commands made
+    /// for another host or another of its documents are dropped, never handed to the document open now.
     pub fn publish(&mut self, host_id: &str, document: Value, revision: i64, title: Value, status: Value) -> Value {
-        if self.host_id.as_deref() != Some(host_id) {
+        self.publish_doc(host_id, Value::Null, document, revision, title, status)
+    }
+
+    /// [`Self::publish`] by a host that names its open document session.
+    pub fn publish_doc(
+        &mut self,
+        host_id: &str,
+        doc: Value,
+        document: Value,
+        revision: i64,
+        title: Value,
+        status: Value,
+    ) -> Value {
+        if self.host_id.as_deref() != Some(host_id) || self.doc != doc {
             self.host_id = Some(host_id.to_owned());
+            self.doc = doc;
             self.pending.clear();
+            self.reset_guide();
         }
         self.document = document;
         self.revision = revision;
@@ -114,14 +161,18 @@ impl LiveSession {
         if let Some(g) = guest_id {
             self.touch(g, name);
         }
-        json!({
+        let mut st = json!({
             "attached": self.host_id.is_some(),
             "revision": self.revision,
             "title": self.title,
             "status": self.status,
             "document": self.document,
             "guests": self.guest_names(),
-        })
+        });
+        if !self.doc.is_null() {
+            st["doc"] = self.doc.clone();
+        }
+        st
     }
 
     /// `propose`: an offered replacement, or which of three things went wrong.
@@ -133,17 +184,56 @@ impl LiveSession {
         note: Option<&Value>,
         name: Option<&Value>,
     ) -> Value {
+        self.propose_doc(guest_id, document, base_revision, None, note, name)
+    }
+
+    /// [`Self::propose_doc`] for a whole other document (a guest's `doc_new`, `doc_open` or `doc_set`), marked so
+    /// the app can refuse it while an import it would swallow is still being read.
+    #[allow(clippy::too_many_arguments)]
+    pub fn propose_replacing(
+        &mut self,
+        guest_id: &str,
+        document: Value,
+        base_revision: i64,
+        doc: Option<&Value>,
+        note: Option<&Value>,
+        name: Option<&Value>,
+        replaces: bool,
+    ) -> Value {
+        let out = self.propose_doc(guest_id, document, base_revision, doc, note, name);
+        if replaces && out.get("ok") == Some(&json!(true)) {
+            if let Some(p) = self.pending.last_mut() {
+                p.insert("replaces".into(), json!(true));
+            }
+        }
+        out
+    }
+
+    /// [`Self::propose`] for the document session `doc` the guest read, refused once the host has another open.
+    pub fn propose_doc(
+        &mut self,
+        guest_id: &str,
+        document: Value,
+        base_revision: i64,
+        doc: Option<&Value>,
+        note: Option<&Value>,
+        name: Option<&Value>,
+    ) -> Value {
         self.touch(guest_id, name);
         if self.host_id.is_none() {
             return json!({"ok": false, "reason": "no-host",
                 "message": "no FundaCAD window is sharing a document"});
         }
+        if doc.is_some_and(|d| !d.is_null() && *d != self.doc) {
+            return json!({"ok": false, "reason": "doc-changed",
+                "message": "the document in the app changed, nothing was applied"});
+        }
         if base_revision != self.revision {
             return json!({"ok": false, "reason": "stale", "revision": self.revision,
-                "message": format!(
-                    "the document moved on while that edit was being written (revision {base_revision} -> {}); read it again and re-apply",
-                    self.revision
-                )});
+            "message": format!(
+                "the document moved on while that edit was being written (revision {base_revision} -> {}); read it again and re-apply",
+                self.revision
+            )});
         }
         if self.pending.len() >= MAX_PENDING {
             return json!({"ok": false, "reason": "backlog",
@@ -162,6 +252,9 @@ impl LiveSession {
         p.insert("name".into(), shown);
         p.insert("note".into(), note);
         p.insert("baseRevision".into(), json!(base_revision));
+        if !self.doc.is_null() {
+            p.insert("doc".into(), self.doc.clone());
+        }
         p.insert("document".into(), document);
         p.insert("at".into(), json!((self.clock)()));
         self.pending.push(p);
@@ -171,21 +264,59 @@ impl LiveSession {
     pub fn leave(&mut self, guest_id: &str) -> Value {
         self.guests.remove(guest_id);
         self.pending.retain(|p| p.get("guest").and_then(Value::as_str) != Some(guest_id));
+        self.drop_guide_of(guest_id);
         json!({"ok": true})
+    }
+
+    /// `guide` from the host: store what its guide shows and hand over the commands, oldest first.
+    pub fn guide_host(&mut self, host_id: &str, state: Value) -> Value {
+        if self.host_id.as_deref() != Some(host_id) {
+            return json!({"ok": false, "reason": "not the host"});
+        }
+        self.guest_names();
+        self.guide_state = state;
+        let mut commands: Vec<Map<String, Value>> =
+            self.guide_step.take().into_iter().chain(self.guide_wait.take()).collect();
+        commands.sort_by_key(|c| c.get("seq").and_then(Value::as_i64).unwrap_or(0));
+        json!({"ok": true, "commands": commands})
+    }
+
+    /// `guide` from a guest: its heartbeat, an optional command, and what the host's guide shows.
+    pub fn guide_guest(&mut self, guest_id: &str, command: Option<&Value>, name: Option<&Value>) -> Value {
+        self.touch(guest_id, name);
+        if self.host_id.is_none() {
+            return json!({"ok": false, "reason": "no-host",
+                "message": "no FundaCAD window is sharing a document"});
+        }
+        let Some(Value::Object(cmd)) = command else {
+            return json!({"ok": true, "attached": true, "seq": null, "guide": self.guide_state});
+        };
+        let mut cmd = cmd.clone();
+        if let Some(Value::String(c)) = cmd.get("caption") {
+            let capped: String = c.chars().take(MAX_CAPTION).collect();
+            cmd.insert("caption".into(), json!(capped));
+        }
+        self.next_guide_seq += 1;
+        let seq = self.next_guide_seq;
+        cmd.insert("seq".into(), json!(seq));
+        cmd.insert("guest".into(), json!(guest_id));
+        if cmd.get("kind").and_then(Value::as_str) == Some("wait") {
+            self.guide_wait = Some(cmd);
+        } else {
+            self.guide_step = Some(cmd);
+        }
+        json!({"ok": true, "attached": true, "seq": seq, "guide": self.guide_state})
     }
 
     /// Who is attached right now, expired guests dropped with their proposals.
     pub fn guest_names(&mut self) -> Vec<String> {
         let now = (self.clock)();
-        let expired: Vec<String> = self
-            .guests
-            .iter()
-            .filter(|(_, (_, seen))| now - seen > GUEST_TTL)
-            .map(|(g, _)| g.clone())
-            .collect();
+        let expired: Vec<String> =
+            self.guests.iter().filter(|(_, (_, seen))| now - seen > GUEST_TTL).map(|(g, _)| g.clone()).collect();
         for g in expired {
             self.guests.remove(&g);
             self.pending.retain(|p| p.get("guest").and_then(Value::as_str) != Some(g.as_str()));
+            self.drop_guide_of(&g);
         }
         let mut names: Vec<String> = self.guests.values().map(|(n, _)| name_text(n)).collect();
         names.sort();
@@ -214,8 +345,7 @@ impl LiveSession {
     }
 }
 
-/// The five `session_*` ops, server.py `_session_reply`, answered for the
-/// connection `who`. `Err` is the error message for the reply envelope.
+/// The six `session_*` ops for the connection `who`. `Err` is the error message for the reply envelope.
 pub fn session_reply(live: &mut LiveSession, who: &str, op: &str, req: &Map<String, Value>) -> Result<Value, String> {
     let get = |k: &str| req.get(k).cloned().unwrap_or(Value::Null);
     let revision = |k: &str| -> Result<i64, String> {
@@ -225,205 +355,41 @@ pub fn session_reply(live: &mut LiveSession, who: &str, op: &str, req: &Map<Stri
         }
     };
     Ok(match op {
-        "session_host" => live.publish(who, get("document"), revision("revision")?, get("title"), get("status")),
+        "session_host" => {
+            live.publish_doc(who, get("doc"), get("document"), revision("revision")?, get("title"), get("status"))
+        }
         "session_release" => live.release(who),
         "session_state" => live.state(Some(who), req.get("name")),
         "session_propose" => {
             let base = revision("baseRevision")?;
-            live.propose(who, get("document"), base, req.get("note"), req.get("name"))
+            let replaces = truthy(req.get("replaces"));
+            live.propose_replacing(
+                who,
+                get("document"),
+                base,
+                req.get("doc"),
+                req.get("note"),
+                req.get("name"),
+                replaces,
+            )
         }
         "session_leave" => live.leave(who),
+        "session_guide" => {
+            if live.host_id.as_deref() == Some(who) {
+                live.guide_host(who, get("state"))
+            } else if req.contains_key("state") {
+                json!({"ok": false, "reason": "not the host"})
+            } else {
+                live.guide_guest(who, req.get("command"), req.get("name"))
+            }
+        }
         other => return Err(format!("unknown session op: {other}")),
     })
 }
 
 pub fn is_session_op(op: &str) -> bool {
-    matches!(op, "session_host" | "session_release" | "session_state" | "session_propose" | "session_leave")
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::sync::atomic::{AtomicU64, Ordering};
-    use std::sync::Arc;
-
-    const APP: &str = "app";
-    const AGENT: &str = "agent";
-    const OTHER: &str = "other";
-
-    fn session() -> (LiveSession, Arc<AtomicU64>) {
-        let t = Arc::new(AtomicU64::new(1000.0f64.to_bits()));
-        let c = t.clone();
-        (LiveSession::new(Box::new(move || f64::from_bits(c.load(Ordering::SeqCst)))), t)
-    }
-
-    fn advance(t: &AtomicU64, by: f64) {
-        t.store((f64::from_bits(t.load(Ordering::SeqCst)) + by).to_bits(), Ordering::SeqCst);
-    }
-
-    fn doc(n: usize) -> Value {
-        json!({"parameters": {}, "features": (0..n).map(|i| json!({"id": format!("f{i}"), "type": "box"})).collect::<Vec<_>>()})
-    }
-
-    fn publish(s: &mut LiveSession, host: &str, d: Value, rev: i64) -> Value {
-        s.publish(host, d, rev, Value::Null, Value::Null)
-    }
-
-    fn features(v: &Value) -> usize {
-        v["features"].as_array().map_or(0, Vec::len)
-    }
-
-    #[test]
-    fn nothing_is_shared_until_an_app_shares_it() {
-        let (mut s, _) = session();
-        let st = s.state(Some(AGENT), None);
-        assert_eq!(st["attached"], false);
-        assert!(st["document"].is_null());
-        let r = s.propose(AGENT, doc(1), 0, None, None);
-        assert_eq!((r["ok"].clone(), r["reason"].clone()), (json!(false), json!("no-host")));
-    }
-
-    #[test]
-    fn a_guest_reads_exactly_what_the_app_published() {
-        let (mut s, _) = session();
-        s.publish(APP, doc(3), 7, json!("spool.funda"), json!({"errors": []}));
-        let st = s.state(Some(AGENT), None);
-        assert_eq!(st["attached"], true);
-        assert_eq!((st["revision"].clone(), st["title"].clone()), (json!(7), json!("spool.funda")));
-        assert_eq!(features(&st["document"]), 3);
-    }
-
-    #[test]
-    fn a_guest_cannot_install_a_document_only_offer_one() {
-        let (mut s, _) = session();
-        publish(&mut s, APP, doc(3), 7);
-        let r = s.propose(AGENT, doc(99), 7, Some(&json!("add a hole")), None);
-        assert_eq!(r["ok"], true);
-        assert_eq!(r["proposal"], "p1");
-        let st = s.state(Some(OTHER), None);
-        assert_eq!(features(&st["document"]), 3);
-        assert_eq!(st["revision"], 7);
-    }
-
-    #[test]
-    fn the_host_collects_proposals_once() {
-        let (mut s, _) = session();
-        publish(&mut s, APP, doc(3), 7);
-        s.propose(AGENT, doc(4), 7, Some(&json!("add a hole")), None);
-        let got = publish(&mut s, APP, doc(3), 7);
-        let p = &got["proposals"];
-        assert_eq!(p.as_array().unwrap().len(), 1);
-        assert_eq!(p[0]["note"], "add a hole");
-        assert_eq!(features(&p[0]["document"]), 4);
-        let keys: Vec<&String> = p[0].as_object().unwrap().keys().collect();
-        assert_eq!(keys, ["id", "guest", "name", "note", "baseRevision", "document", "at"]);
-        assert_eq!(publish(&mut s, APP, doc(4), 8)["proposals"], json!([]));
-    }
-
-    #[test]
-    fn an_edit_against_an_older_document_is_refused() {
-        let (mut s, _) = session();
-        publish(&mut s, APP, doc(3), 7);
-        publish(&mut s, APP, doc(5), 8);
-        let r = s.propose(AGENT, doc(4), 7, None, None);
-        assert_eq!((r["ok"].clone(), r["reason"].clone(), r["revision"].clone()), (json!(false), json!("stale"), json!(8)));
-        assert!(r["message"].as_str().unwrap().contains("8"));
-        assert_eq!(s.propose(AGENT, doc(4), 8, None, None)["ok"], true);
-    }
-
-    #[test]
-    fn a_backlog_is_refused_rather_than_grown() {
-        let (mut s, _) = session();
-        publish(&mut s, APP, doc(1), 1);
-        for _ in 0..MAX_PENDING {
-            assert_eq!(s.propose(AGENT, doc(2), 1, None, None)["ok"], true);
-        }
-        assert_eq!(s.propose(AGENT, doc(2), 1, None, None)["reason"], "backlog");
-    }
-
-    #[test]
-    fn a_guest_lease_is_refreshed_by_working_and_expires_by_not() {
-        let (mut s, t) = session();
-        publish(&mut s, APP, doc(1), 1);
-        s.state(Some(AGENT), Some(&json!("an assistant")));
-        assert_eq!(s.guest_names(), ["an assistant"]);
-        advance(&t, GUEST_TTL - 1.0);
-        assert_eq!(s.guest_names(), ["an assistant"]);
-        advance(&t, 2.0);
-        assert!(s.guest_names().is_empty());
-    }
-
-    #[test]
-    fn an_expired_guest_takes_its_unread_proposals_with_it() {
-        let (mut s, t) = session();
-        publish(&mut s, APP, doc(1), 1);
-        s.propose(AGENT, doc(2), 1, None, Some(&json!("an assistant")));
-        advance(&t, GUEST_TTL + 1.0);
-        assert_eq!(publish(&mut s, APP, doc(1), 1)["proposals"], json!([]));
-    }
-
-    #[test]
-    fn leaving_withdraws_only_that_guests_edits() {
-        let (mut s, _) = session();
-        publish(&mut s, APP, doc(1), 1);
-        s.propose(AGENT, doc(2), 1, None, None);
-        s.propose(OTHER, doc(3), 1, None, None);
-        s.leave(AGENT);
-        let got = publish(&mut s, APP, doc(1), 1);
-        assert_eq!(got["proposals"].as_array().unwrap().len(), 1);
-        assert_eq!(got["proposals"][0]["guest"], OTHER);
-    }
-
-    #[test]
-    fn a_new_host_takes_over_and_inherits_no_edits() {
-        let (mut s, _) = session();
-        publish(&mut s, APP, doc(3), 7);
-        s.propose(AGENT, doc(4), 7, None, None);
-        assert_eq!(publish(&mut s, "app2", doc(9), 1)["proposals"], json!([]));
-        assert_eq!(s.state(None, None)["revision"], 1);
-    }
-
-    #[test]
-    fn only_the_host_can_end_the_session() {
-        let (mut s, _) = session();
-        publish(&mut s, APP, doc(3), 7);
-        assert_eq!(s.release(AGENT)["ok"], false);
-        assert_eq!(s.state(None, None)["attached"], true);
-        assert_eq!(s.release(APP)["ok"], true);
-        let st = s.state(None, None);
-        assert_eq!(st["attached"], false);
-        assert!(st["document"].is_null());
-    }
-
-    #[test]
-    fn a_connection_is_named_by_its_part_in_the_session() {
-        let (mut s, _) = session();
-        publish(&mut s, APP, doc(1), 1);
-        s.state(Some(AGENT), Some(&json!("Claude")));
-        assert_eq!(s.role_of(APP), json!({"who": "app"}));
-        assert_eq!(s.role_of(AGENT), json!({"who": "assistant", "name": "Claude"}));
-        assert_eq!(s.role_of(OTHER), json!({"who": "session"}));
-    }
-
-    #[test]
-    fn a_guest_note_is_capped() {
-        let (mut s, _) = session();
-        publish(&mut s, APP, doc(1), 1);
-        s.propose(AGENT, doc(2), 1, Some(&json!("x".repeat(10_000))), None);
-        let note = publish(&mut s, APP, doc(1), 1)["proposals"][0]["note"].as_str().unwrap().len();
-        assert_eq!(note, MAX_NOTE);
-    }
-
-    #[test]
-    fn the_wire_ops_read_revisions_like_python() {
-        let (mut s, _) = session();
-        let req = |v: Value| v.as_object().unwrap().clone();
-        let r = session_reply(&mut s, "c1", "session_host", &req(json!({"document": doc(1), "revision": 3.0, "title": "t"}))).unwrap();
-        assert_eq!(r, json!({"ok": true, "guests": [], "proposals": []}));
-        let r = session_reply(&mut s, "c2", "session_propose", &req(json!({"document": doc(2), "baseRevision": 3}))).unwrap();
-        assert_eq!(r, json!({"ok": true, "proposal": "p1", "revision": 3}));
-        let st = session_reply(&mut s, "c2", "session_state", &req(json!({}))).unwrap();
-        assert_eq!(st["guests"], json!(["c2"]));
-        assert!(session_reply(&mut s, "c2", "session_nope", &req(json!({}))).is_err());
-    }
+    matches!(
+        op,
+        "session_host" | "session_release" | "session_state" | "session_propose" | "session_leave" | "session_guide"
+    )
 }

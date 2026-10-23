@@ -14,12 +14,7 @@ fn unread(r: &Rebuild) -> Vec<(String, String)> {
     r.diagnostics
         .iter()
         .filter(|d| d["kind"] == "unreadFields")
-        .map(|d| {
-            (
-                d["feature_id"].as_str().unwrap_or("").to_owned(),
-                d["reason"].as_str().unwrap_or("").to_owned(),
-            )
-        })
+        .map(|d| (d["feature_id"].as_str().unwrap_or("").to_owned(), d["reason"].as_str().unwrap_or("").to_owned()))
         .collect()
 }
 

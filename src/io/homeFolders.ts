@@ -15,7 +15,8 @@ export function getFolders(): HomeFolder[] {
     if (!Array.isArray(list)) return [];
     const seen = new Set<string>();
     return list.filter((r): r is HomeFolder => {
-      const ok = !!r && typeof r.path === "string" && r.path !== "" && typeof r.addedAt === "number" && !seen.has(r.path);
+      const ok =
+        !!r && typeof r.path === "string" && r.path !== "" && typeof r.addedAt === "number" && !seen.has(r.path);
       if (ok) seen.add(r.path);
       return ok;
     });

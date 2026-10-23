@@ -1,5 +1,4 @@
-//! Face-anchored sketch and datum planes, the Python engine's `geom_select.py`
-//! `resolve_face_on_plane` and its fallback prose.
+//! Face-anchored sketch and datum planes and their fallback prose.
 
 use glam::DVec3;
 use opencascade::primitives::Shape;
@@ -33,27 +32,12 @@ pub fn plane_fallback_reason(code: &str, label: &str, detail: Option<&str>) -> S
     format!("{label}: the face this {noun} sits on is gone, so the {stayed}")
 }
 
-/// `push_plane_fallback`: lossy stays false, no match was taken at all, and a
-/// lossy entry would make a projection refuse an unrelated source.
-fn push_plane_fallback(
-    r: &mut Resolver,
-    code: &'static str,
-    label: &str,
-    sel: &Value,
-    detail: Option<&str>,
-) {
+/// Lossy stays false: no match was taken at all, and a lossy entry would make a projection refuse an
+/// unrelated source.
+fn push_plane_fallback(r: &mut Resolver, code: &'static str, label: &str, sel: &Value, detail: Option<&str>) {
     let reason = plane_fallback_reason(code, label, detail);
     let at = sel.as_object().and_then(|m| m.get("point"));
-    r.push(
-        "face",
-        0,
-        0.0,
-        false,
-        Some(Value::from(reason)),
-        at,
-        None,
-        Some(code),
-    );
+    r.push("face", 0, 0.0, false, Some(Value::from(reason)), at, None, Some(code));
 }
 
 pub(super) fn resolve_face_on_plane(
@@ -67,10 +51,7 @@ pub(super) fn resolve_face_on_plane(
         Some(p) => faces_of(p).unwrap_or_default(),
         None => Vec::new(),
     };
-    let planar: Vec<FaceEnt> = faces
-        .into_iter()
-        .filter(|f| f.surface == SurfaceType::Plane)
-        .collect();
+    let planar: Vec<FaceEnt> = faces.into_iter().filter(|f| f.surface == SurfaceType::Plane).collect();
     if planar.is_empty() {
         push_plane_fallback(r, REFERENCE_NOT_FOUND, label, sel, None);
         return None;
@@ -85,15 +66,9 @@ pub(super) fn resolve_face_on_plane(
     let d = unit(DVec3::from_array(normal));
     // Same sign first: the body's far side is co-normal under abs and would
     // take the anchor whenever it is nearer the point.
-    let mut cands: Vec<&FaceEnt> = planar
-        .iter()
-        .filter(|f| f.normal().dot(d) >= 1.0 - PLANE_ANG_TOL)
-        .collect();
+    let mut cands: Vec<&FaceEnt> = planar.iter().filter(|f| f.normal().dot(d) >= 1.0 - PLANE_ANG_TOL).collect();
     if cands.is_empty() {
-        cands = planar
-            .iter()
-            .filter(|f| f.normal().dot(d).abs() >= 1.0 - PLANE_ANG_TOL)
-            .collect();
+        cands = planar.iter().filter(|f| f.normal().dot(d).abs() >= 1.0 - PLANE_ANG_TOL).collect();
     }
     if cands.is_empty() {
         push_plane_fallback(r, PLANE_TILTED, label, sel, None);
@@ -108,24 +83,15 @@ pub(super) fn resolve_face_on_plane(
         p - n * (n.dot(p) - n.dot(f.centroid()))
     };
     let travel = |f: &FaceEnt| (d.dot(f.centroid()) - d.dot(p)).abs();
-    let bounded: Option<Vec<f64>> = cands
-        .iter()
-        .map(|f| f.distance(flat(f)).map(|x| x.0))
-        .collect();
-    let dists = bounded.unwrap_or_else(|| {
-        cands
-            .iter()
-            .map(|f| (f.centroid() - flat(f)).length())
-            .collect()
-    });
+    let bounded: Option<Vec<f64>> = cands.iter().map(|f| f.distance(flat(f)).map(|x| x.0)).collect();
+    let dists = bounded.unwrap_or_else(|| cands.iter().map(|f| (f.centroid() - flat(f)).length()).collect());
 
     let mut scored: Vec<(f64, usize)> = dists.iter().copied().zip(0..).collect();
     super::stable_sort_by_cost(&mut scored);
     let (mut best_d, mut best_i) = scored[0];
 
-    // A pick that contains the point but left the saved plane is either the
-    // anchored face moved there or the floor of a cut under the point; an
-    // unmoved face nearer in-plane than that travel is the better story.
+    // A pick containing the point that left the saved plane is the anchored face moved there or a cut's
+    // floor under the point, so an unmoved face nearer in-plane than that travel is the better story.
     let win_travel = travel(cands[best_i]);
     if best_d <= PLANE_COPLANAR_TOL && win_travel > PLANE_COPLANAR_TOL {
         let stayed: Vec<(f64, usize)> = scored
@@ -145,28 +111,17 @@ pub(super) fn resolve_face_on_plane(
         return Some(cands[best_i].shape.clone());
     }
 
-    let mut tied: Vec<&FaceEnt> = scored
-        .iter()
-        .filter(|(dd, _)| (dd - best_d) / (runner + 1e-9) < band)
-        .map(|&(_, i)| cands[i])
-        .collect();
+    let mut tied: Vec<&FaceEnt> =
+        scored.iter().filter(|(dd, _)| (dd - best_d) / (runner + 1e-9) < band).map(|&(_, i)| cands[i]).collect();
     // A tie within one plane (a slot splitting the anchored face) has nothing
     // to be wrong about. Never a margin rule: that split is exact by construction.
     let off = d.dot(cands[best_i].centroid());
-    if tied
-        .iter()
-        .all(|f| (d.dot(f.centroid()) - off).abs() <= PLANE_COPLANAR_TOL)
-    {
+    if tied.iter().all(|f| (d.dot(f.centroid()) - off).abs() <= PLANE_COPLANAR_TOL) {
         return Some(cands[best_i].shape.clone());
     }
 
     tied.sort_by(|a, b| key_cmp(&a.canonical_key(), &b.canonical_key()));
-    let detail = tied
-        .iter()
-        .take(3)
-        .map(|f| f.describe().unwrap_or_default())
-        .collect::<Vec<_>>()
-        .join(" and ");
+    let detail = tied.iter().take(3).map(|f| f.describe().unwrap_or_default()).collect::<Vec<_>>().join(" and ");
     push_plane_fallback(r, AMBIGUOUS_REFERENCE, label, sel, Some(&detail));
     None
 }

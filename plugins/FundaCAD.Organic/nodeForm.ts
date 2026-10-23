@@ -1,10 +1,5 @@
-// The node body feature as the document stores it, and the rows the app draws
-// for it. Pure, so it is tested without a window.
-//
-// A node is a point with three radii and a turn; a chain is an ordered list of
-// node ids. Every number is a Num, so any of them may carry a parameter. The
-// rows address a node by its id (`nodes.n3.sx`), never by its place in the
-// list, so a binding follows the node through a reorder or a delete.
+// Rows address a node by its id (`nodes.n3.sx`), never its place in the list, so a binding follows the node through
+// a reorder or a delete. Pure, so it is tested without a window.
 
 import type { ChoiceField, FieldKind, TargetField } from "fundacad";
 
@@ -67,22 +62,30 @@ export function nodeNumFields(values: Record<string, unknown>): [string, string,
   return rows;
 }
 
-export const NODE_CHOICE_FIELDS: ChoiceField[] = [{
-  field: "operation",
-  label: "Operation",
-  options: [
-    { value: "new", label: "New body" },
-    { value: "join", label: "Join" },
-    { value: "cut", label: "Cut" },
-    { value: "intersect", label: "Intersect" },
-  ],
-  fallback: "new",
-}];
+export const NODE_CHOICE_FIELDS: ChoiceField[] = [
+  {
+    field: "operation",
+    label: "Operation",
+    options: [
+      { value: "new", label: "New body" },
+      { value: "join", label: "Join" },
+      { value: "cut", label: "Cut" },
+      { value: "intersect", label: "Intersect" },
+    ],
+    fallback: "new",
+  },
+];
 
-export const NODE_TARGETS: TargetField[] = [{
-  field: "targets", label: "Bodies", kind: "body", shape: "bodyId", arity: "many",
-  whenEmpty: "every body it reaches",
-}];
+export const NODE_TARGETS: TargetField[] = [
+  {
+    field: "targets",
+    label: "Bodies",
+    kind: "body",
+    shape: "bodyId",
+    arity: "many",
+    whenEmpty: "every body it reaches",
+  },
+];
 
 /** A number, or the value a parameter-bound field last resolved to. */
 export function numOf(v: Num | undefined, fallback: number): number {
@@ -166,7 +169,11 @@ export function rotationMatrix(rx: number, ry: number, rz: number): number[][] {
 export function halfExtent(n: NodeValues): [number, number, number] {
   const m = rotationMatrix(numOf(n.rx, 0), numOf(n.ry, 0), numOf(n.rz, 0));
   const s = [numOf(n.sx, 5), numOf(n.sy, 5), numOf(n.sz, 5)];
-  return [0, 1, 2].map((i) => Math.hypot(m[i]![0]! * s[0]!, m[i]![1]! * s[1]!, m[i]![2]! * s[2]!)) as [number, number, number];
+  return [0, 1, 2].map((i) => Math.hypot(m[i]![0]! * s[0]!, m[i]![1]! * s[1]!, m[i]![2]! * s[2]!)) as [
+    number,
+    number,
+    number,
+  ];
 }
 
 /** The world box around every node's ellipsoid, or null with no nodes. */

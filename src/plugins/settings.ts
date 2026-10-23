@@ -1,20 +1,5 @@
-// Settings a plugin declares, which the app renders, stores and hands back.
-//
-// The plugin says WHAT it wants to ask (a typed list of properties); the app
-// owns where it is shown (under the plugin's row in Preferences > Plugins) and
-// where it is kept (one localStorage key per plugin id). The id is trusted:
-// a builtin plugin runs in the app's process and could reach localStorage
-// anyway, so the wall between plugins is the sandbox, whose settings_get takes
-// no id. Vue free, so the headless suites import it.
-//
-// SYNCHRONOUS ON PURPOSE. Plugins read their options at module scope, before
-// anything asynchronous has run, and the value they start with decides what
-// they register. An async store would make every plugin start on its defaults
-// and then visibly change its mind.
-//
-// The old key names live in the plugin's own `legacy` hook, never in here:
-// scripts/check-no-plugin-code.mjs fails the build if a plugin's storage key
-// reaches the shipped app.
+// Settings a plugin declares, drawn under its row in Preferences > Plugins, stored under one localStorage key per id.
+// Synchronous on purpose: plugins read them at module scope, and an async store would start them all on defaults.
 
 export interface SettingBase {
   /** Stable within the plugin; the name the plugin reads the value by. */
@@ -76,8 +61,7 @@ export interface FileSetting extends SettingBase {
   extensions?: readonly string[];
 }
 
-/** A value the plugin's own component edits, kept and reset by the app like
- *  any other but never drawn as a row. */
+/** A value the plugin's own component edits, kept and reset by the app but never drawn as a row. */
 export interface DataSetting extends SettingBase {
   type: "data";
   default: unknown;
@@ -86,14 +70,7 @@ export interface DataSetting extends SettingBase {
 }
 
 export type SettingProp =
-  | BooleanSetting
-  | NumberSetting
-  | EnumSetting
-  | StringSetting
-  | ColourSetting
-  | KeySetting
-  | FileSetting
-  | DataSetting;
+  BooleanSetting | NumberSetting | EnumSetting | StringSetting | ColourSetting | KeySetting | FileSetting | DataSetting;
 
 export type SettingType = SettingProp["type"];
 
@@ -105,14 +82,12 @@ export interface SettingsSchema {
   props: readonly SettingProp[];
   /** Turns values stored under an older version into this one's. */
   migrate?: (old: SettingValues, fromVersion: number) => SettingValues;
-  /** Values kept somewhere else before this store existed, read once when the
-   *  store holds nothing for this plugin. */
+  /** Values kept elsewhere before this store existed, read once while it holds nothing for this plugin. Old key names
+   *  live only here: scripts/check-no-plugin-code.mjs fails the build if one reaches the shipped app. */
   legacy?: () => SettingValues | null;
 }
 
-const TYPES: ReadonlySet<string> = new Set([
-  "boolean", "number", "enum", "string", "colour", "key", "file", "data",
-]);
+const TYPES: ReadonlySet<string> = new Set(["boolean", "number", "enum", "string", "colour", "key", "file", "data"]);
 const KEY_RE = /^[A-Za-z][\w.-]*$/;
 const COLOUR_RE = /^#[0-9a-fA-F]{6}$/;
 
@@ -265,10 +240,8 @@ export function storedSettings(pluginId: string): SettingValues {
   return registry.get(pluginId)?.all() ?? clone(readStored(pluginId)?.values ?? {});
 }
 
-/** Forget everything stored for a plugin, for Remove with its data.
- *
- *  It leaves a marker rather than no key: with no key the next start would
- *  read the plugin's `legacy` keys again and bring the forgotten values back. */
+/** Leaves a marker rather than no key, or the next start would read the plugin's `legacy` keys again and bring the
+ *  forgotten values back. */
 export function removePluginSettings(pluginId: string) {
   // Reset first: it writes the defaults, and the marker has to come after.
   registry.get(pluginId)?.reset();
@@ -280,10 +253,8 @@ export function removePluginSettings(pluginId: string) {
   }
 }
 
-/** Declare a plugin's settings and get the handle it reads them through.
- *
- *  Called again for the same id (a hot reload, a plugin switched off and on)
- *  it replaces the earlier handle, reading what that one stored. */
+/** Calling it again for the same id (a hot reload, switched off and on) replaces the earlier handle, reading what it
+ *  stored. */
 export function definePluginSettings(pluginId: string, schema: SettingsSchema): PluginSettings {
   const problems = validateSchema(schema);
   if (problems.length) throw new Error(`${pluginId} settings: ${problems.join("; ")}`);

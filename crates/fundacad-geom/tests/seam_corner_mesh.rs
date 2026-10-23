@@ -1,9 +1,5 @@
-//! A cut whose corner lands a few 1e-5 mm beside the seam of a revolved tube
-//! leaves edges that short between the seam and the corner. The kernel's
-//! mesher folds such an edge into one node on the cylinder and keeps its
-//! points on the flat wall beside it, so the two faces must be brought to the
-//! same nodes or the viewport, an STL and the printability check all get a
-//! mesh with holes.
+//! A cut corner a few 1e-5 mm beside a revolved tube's seam leaves short edges that the kernel's mesher folds into
+//! one node on the cylinder but not on the flat wall, so both faces must share nodes or the mesh has holes.
 
 use fundacad_core::CadDocument;
 use fundacad_geom::builder::{self, NoWatch};
@@ -26,9 +22,8 @@ fn outline(points: [[f64; 2]; 4]) -> Vec<Value> {
     (0..4).map(|i| line(&format!("l{i}"), points[i], points[(i + 1) % 4])).collect()
 }
 
-/// A tube revolved about Z, its seam at azimuth 0, with a diamond cut through
-/// the wall whose top and bottom corners sit `offset` mm beside the seam, the
-/// whole part `s` times the size.
+/// A tube revolved about Z, seam at azimuth 0, with a diamond cut through the wall whose top and bottom corners sit
+/// `offset` mm beside the seam, the whole part `s` times the size.
 fn tube(offset: f64, patterned: bool, s: f64) -> Value {
     tube_cut_to(offset, patterned, s, 17.2)
 }
@@ -51,13 +46,15 @@ fn tube_cut_to(offset: f64, patterned: bool, s: f64, top: f64) -> Value {
         // the seam.
         features.push(json!({"id": "cutSk", "type": "sketch", "entities": diamond,
             "plane": {"origin": [0, -38.0 * s, 0], "normal": [0, -1, 0], "xdir": [1, 0, 0]}}));
-        features.push(json!({"id": "cut", "type": "extrude", "sketch": "cutSk", "distance": 9.0 * s, "operation": "cut"}));
+        features
+            .push(json!({"id": "cut", "type": "extrude", "sketch": "cutSk", "distance": 9.0 * s, "operation": "cut"}));
         features.push(json!({"id": "pat", "type": "patternCircular", "count": 4, "angle": 360, "axis": "Z",
             "features": ["cut"]}));
     } else {
         features.push(json!({"id": "cutSk", "type": "sketch", "entities": diamond,
             "plane": {"origin": [38.0 * s, 0, 0], "normal": [1, 0, 0], "xdir": [0, 1, 0]}}));
-        features.push(json!({"id": "cut", "type": "extrude", "sketch": "cutSk", "distance": 9.0 * s, "operation": "cut"}));
+        features
+            .push(json!({"id": "cut", "type": "extrude", "sketch": "cutSk", "distance": 9.0 * s, "operation": "cut"}));
     }
     json!({"parameters": {}, "features": features})
 }
@@ -97,9 +94,7 @@ fn side_tally<T: Copy + Into<f64>>(positions: &[T], indices: &[u32]) -> (usize, 
 fn mesh_holes(doc: &Value) -> Vec<Value> {
     let mut req = Map::new();
     req.insert("document".into(), doc.clone());
-    let JobResult::Json(r) = printability_result(&req, &NoWatch) else {
-        panic!("expected a JSON result")
-    };
+    let JobResult::Json(r) = printability_result(&req, &NoWatch) else { panic!("expected a JSON result") };
     assert!(r.get("error").is_none(), "{r:?}");
     r["findings"].as_array().unwrap().iter().filter(|f| f["kind"] == "meshHole").cloned().collect()
 }
@@ -128,12 +123,8 @@ fn assert_whole_doc(label: &str, raw: Value) {
     let bare = seen.iter().filter(|s| !**s).count();
     let stl = export::export_mesh(shape, &export::mesh_options(None));
     let stl32: Vec<f32> = stl.0.iter().map(|&v| v as f32).collect();
-    let got = (
-        bare,
-        unpaired_sides(&view.positions, &view.indices),
-        unpaired_sides(&stl32, &stl.1),
-        mesh_holes(&raw).len(),
-    );
+    let got =
+        (bare, unpaired_sides(&view.positions, &view.indices), unpaired_sides(&stl32, &stl.1), mesh_holes(&raw).len());
     assert_eq!(
         got,
         (0, 0, 0, 0),
@@ -167,9 +158,8 @@ fn a_cut_with_a_corner_on_the_seam_or_a_millionth_beside_it_meshes_closed() {
 
 #[test]
 fn a_body_is_still_valid_after_its_mesh_folded_a_short_edge() {
-    // BRepCheck also holds every stored edge polygon to the deflection it
-    // claims, so a fold the mesher left unrecorded turns the body invalid for
-    // the features that check their input in a live session.
+    // BRepCheck also holds every stored edge polygon to its claimed deflection, so a fold the mesher left unrecorded
+    // makes the body invalid for features that check their input in a live session.
     for (label, raw) in [
         ("direct cut, corner 1e-4 mm off the seam", tube(1e-4, false, 1.0)),
         ("pattern, corner at the rim 1.9e-5 mm off the seam", tube_cut_to(1.9e-5, true, 1.0, 30.0)),
@@ -187,11 +177,8 @@ fn a_body_is_still_valid_after_its_mesh_folded_a_short_edge() {
 
 #[test]
 fn a_cut_with_a_corner_at_the_rim_beside_the_seam_meshes_closed() {
-    // The corner leaves a triangle of the wall between the seam, the rim and
-    // the cut, as wide as the corner is off the seam. The mesher gives a face
-    // that small no triangles, or one where its outline needs five. The cut
-    // also meets the rim along one radial line, a side the top face and both
-    // walls of the cut share: that one belongs to the model and is no hole.
+    // The corner leaves a wall triangle as wide as its offset, which the mesher gives no triangles or too few. The
+    // cut's radial line on the rim is shared by the top face and both cut walls, so it belongs to the model.
     for (patterned, offset, cuts) in
         [(false, 1e-4, 1), (false, -1e-4, 1), (true, 1.9e-5, 4), (true, 1e-4, 4), (true, -1e-4, 4)]
     {
@@ -204,7 +191,8 @@ fn a_cut_with_a_corner_at_the_rim_beside_the_seam_meshes_closed() {
         let stl = export::export_mesh(shape, &export::mesh_options(None));
         let stl32: Vec<f32> = stl.0.iter().map(|&v| v as f32).collect();
         let got = (side_tally(&view.positions, &view.indices), side_tally(&stl32, &stl.1), mesh_holes(&raw).len());
-        let flat = (soup::flat_triangles(&view.positions, &view.indices).len(), soup::flat_triangles(&stl32, &stl.1).len());
+        let flat =
+            (soup::flat_triangles(&view.positions, &view.indices).len(), soup::flat_triangles(&stl32, &stl.1).len());
         assert_eq!(flat, (0, 0), "patterned {patterned}, corner {offset} mm off the seam: triangles without area in (the viewport mesh, the STL)");
         assert_eq!(
             got,

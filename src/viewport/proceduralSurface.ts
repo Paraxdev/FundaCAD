@@ -1,27 +1,16 @@
-// Procedural surface detail on a body's material: noise, scratches, brushed
-// streaks, cellular wear, computed in the fragment shader and driving roughness,
-// a bump (perturbed normal) and a colour tint. No texture, no UVs, everything is
-// sampled TRIPLANAR in world space, because a CAD tessellation carries positions
-// and normals but no texture coordinates to hang a map on.
-//
-// Injected as a shaderPatches patch rather than a whole custom material, so the body
-// keeps the physical PBR shader (metalness, clearcoat, the lights, the
-// environment) and this only edits roughness, normal and colour on the way
-// through. Off (spec null) leaves the shader byte-identical to the stock one.
-//
-// TWO ways in. `applySurface` takes ONE generator with live uniforms (the
-// material-editor picker, so a slider drag does not recompile). `applySurfaceGraph`
-// takes a NODE GRAPH, compiles it to GLSL with the params baked in (the node
-// editor), and recompiles when the graph changes. Both share the generator
-// functions below, so a graph's generator node and the picker draw the same
-// pattern.
+// Sampled triplanar in world space, since a CAD tessellation has no UVs. A shaderPatches patch, not a custom
+// material, so the body keeps the physical PBR shader; off leaves the shader byte identical to the stock one.
 
 import * as THREE from "three";
 import type { SurfaceGraph, SurfaceNode, SurfaceSpec } from "../document/materials";
 import { copyPatches, removePatch, setPatch, type ShaderPatch } from "./shaderPatches";
 
 const SURF_KIND: Record<SurfaceSpec["kind"], number> = {
-  noise: 0, scratches: 1, brushed: 2, voronoi: 3, wave: 4,
+  noise: 0,
+  scratches: 1,
+  brushed: 2,
+  voronoi: 3,
+  wave: 4,
 };
 
 export function surfaceKey(s: SurfaceSpec | undefined): string {
@@ -37,9 +26,8 @@ export function graphKey(g: SurfaceGraph | undefined): string {
   return "g:" + JSON.stringify({ output: g.output, nodes });
 }
 
-// --- shared GLSL: the generator functions, parameterised so the picker (via
-// uniforms) and the graph (via baked literals) both call the same code. -------
-const SURF_FUNCS = /* glsl */`
+// Parameterised so the picker (via uniforms) and the graph (via baked literals) call the same code.
+const SURF_FUNCS = /* glsl */ `
 float sHash(vec3 p){ p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
 float sNoise(vec3 x){
   vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
@@ -108,7 +96,7 @@ type Physical = THREE.MeshStandardMaterial & {
   userData: { surfKey?: string; surfUniforms?: Record<string, THREE.IUniform> };
 };
 
-const PICK_UNIFORMS = /* glsl */`
+const PICK_UNIFORMS = /* glsl */ `
 uniform int uSurfKind; uniform float uSurfScale; uniform float uSurfAmount; uniform float uSurfAngle;
 uniform float uSurfBump; uniform vec3 uSurfColor; uniform float uSurfColorAmt;
 float sPickHeight(vec3 wp, vec3 wn){ return sGen(wp, wn, uSurfKind, uSurfScale, uSurfAngle); }
@@ -120,8 +108,10 @@ const PICK_PATCH = {
   varyings: ["surfWorld"],
   after: {
     common: SURF_FUNCS + PICK_UNIFORMS,
-    color_fragment: "  float sH = sPickHeight(vSurfWPos, vSurfWNorm);\n  diffuseColor.rgb = mix(diffuseColor.rgb, uSurfColor, uSurfColorAmt * sH);",
-    roughnessmap_fragment: "  roughnessFactor = clamp(roughnessFactor + uSurfAmount * (sPickHeight(vSurfWPos, vSurfWNorm) - 0.5), 0.04, 1.0);",
+    color_fragment:
+      "  float sH = sPickHeight(vSurfWPos, vSurfWNorm);\n  diffuseColor.rgb = mix(diffuseColor.rgb, uSurfColor, uSurfColorAmt * sH);",
+    roughnessmap_fragment:
+      "  roughnessFactor = clamp(roughnessFactor + uSurfAmount * (sPickHeight(vSurfWPos, vSurfWNorm) - 0.5), 0.04, 1.0);",
     normal_fragment_begin: bumpGLSL("sPickHeight(P, wn)", "uSurfBump"),
   },
 } satisfies ShaderPatch;
@@ -133,7 +123,8 @@ function graphPatch(key: string, compiled: string): ShaderPatch {
     varyings: ["surfWorld"],
     after: {
       common: SURF_FUNCS + STRUCT_GLSL + compiled,
-      color_fragment: "  SurfOut sO = sGraph(vSurfWPos, vSurfWNorm);\n  diffuseColor.rgb = mix(diffuseColor.rgb, sO.tint, sO.tintAmt);",
+      color_fragment:
+        "  SurfOut sO = sGraph(vSurfWPos, vSurfWNorm);\n  diffuseColor.rgb = mix(diffuseColor.rgb, sO.tint, sO.tintAmt);",
       roughnessmap_fragment: "  roughnessFactor = clamp(roughnessFactor + sO.roughAmt * (sO.rough - 0.5), 0.04, 1.0);",
       normal_fragment_begin: bumpGLSL("sGraph(P, wn).bump", "sO.bumpAmt"),
     },
@@ -151,7 +142,7 @@ export function cloneWithoutSurface<T extends THREE.Material>(mat: T): T {
   return c;
 }
 
-// --- the picker path: one generator, live uniforms --------------------------
+// Live uniforms, so a slider drag in the material editor does not recompile.
 export function applySurface(mat: THREE.Material, spec: SurfaceSpec | undefined): void {
   const m = mat as Physical;
   const key = surfaceKey(spec);
@@ -167,16 +158,19 @@ export function applySurface(mat: THREE.Material, spec: SurfaceSpec | undefined)
     return;
   }
   const uniforms: Record<string, THREE.IUniform> = {
-    uSurfKind: { value: SURF_KIND[spec.kind] }, uSurfScale: { value: spec.scale },
-    uSurfAmount: { value: spec.amount }, uSurfAngle: { value: spec.angle ?? 0 },
-    uSurfBump: { value: spec.bump ?? 0 }, uSurfColor: { value: new THREE.Color(spec.color ?? "#000000") },
+    uSurfKind: { value: SURF_KIND[spec.kind] },
+    uSurfScale: { value: spec.scale },
+    uSurfAmount: { value: spec.amount },
+    uSurfAngle: { value: spec.angle ?? 0 },
+    uSurfBump: { value: spec.bump ?? 0 },
+    uSurfColor: { value: new THREE.Color(spec.color ?? "#000000") },
     uSurfColorAmt: { value: spec.colorAmount ?? 0 },
   };
   writeUniforms(uniforms, spec);
   m.userData.surfUniforms = setPatch(m, { ...PICK_PATCH, uniforms }).uniforms;
 }
 
-// --- the graph path: compile the node graph, bake the params ----------------
+// Params are baked into the GLSL, so the node graph recompiles when it changes.
 export function applySurfaceGraph(mat: THREE.Material, graph: SurfaceGraph | undefined): void {
   const m = mat as Physical;
   const key = graphKey(graph);
@@ -211,7 +205,11 @@ export function surfaceBakeShader(mat: THREE.Material): SurfaceBakeShader | null
     const graph = JSON.parse(key.slice(2)) as SurfaceGraph;
     return {
       key,
-      glsl: SURF_FUNCS + STRUCT_GLSL + compileGraph(graph) + "SurfOut surfBake(vec3 wp, vec3 wn){ return sGraph(wp, wn); }\n",
+      glsl:
+        SURF_FUNCS +
+        STRUCT_GLSL +
+        compileGraph(graph) +
+        "SurfOut surfBake(vec3 wp, vec3 wn){ return sGraph(wp, wn); }\n",
       uniforms: {},
     };
   }
@@ -219,7 +217,10 @@ export function surfaceBakeShader(mat: THREE.Material): SurfaceBakeShader | null
   if (!u) return null;
   return {
     key,
-    glsl: SURF_FUNCS + STRUCT_GLSL + /* glsl */`
+    glsl:
+      SURF_FUNCS +
+      STRUCT_GLSL +
+      /* glsl */ `
 uniform int uSurfKind; uniform float uSurfScale; uniform float uSurfAmount; uniform float uSurfAngle;
 uniform vec3 uSurfColor; uniform float uSurfColorAmt;
 SurfOut surfBake(vec3 wp, vec3 wn){
@@ -234,15 +235,13 @@ SurfOut surfBake(vec3 wp, vec3 wn){
   };
 }
 
-const STRUCT_GLSL = /* glsl */`
+const STRUCT_GLSL = /* glsl */ `
 struct SurfOut { float rough; float roughAmt; float bump; float bumpAmt; vec3 tint; float tintAmt; };
 `;
 
-// Perturb the (view-space) normal from a height gradient. `heightExpr` samples
-// the height at world point `P`; `amtExpr` is the strength. Shared shape, two
-// callers (the picker's single generator, the graph's bump port).
+// Perturbs the view space normal from a height gradient; `heightExpr` samples the height at world point `P`.
 function bumpGLSL(heightExpr: string, amtExpr: string): string {
-  return /* glsl */`
+  return /* glsl */ `
   {
     float bAmt = ${amtExpr};
     if (bAmt > 0.0001) {
@@ -270,13 +269,10 @@ function writeUniforms(u: Record<string, THREE.IUniform>, spec: SurfaceSpec): vo
   u["uSurfColorAmt"]!.value = spec.colorAmount ?? 0;
 }
 
-// --- the compiler -----------------------------------------------------------
 const GEN_KIND: Record<string, number> = { noise: 0, scratches: 1, brushed: 2, voronoi: 3, wave: 4 };
 
-/** A colorramp's stops live as a "pos:hex;pos:hex;..." string. Parse and sort
- *  them, then emit a piecewise-linear evaluation at `tExpr`: start at the first
- *  stop's colour and, for each later stop, mix toward it across its segment. A
- *  malformed or empty string falls back to a plain black-to-white ramp. */
+/** Stops live as "pos:hex;pos:hex;...", evaluated piecewise linear at `tExpr`. A malformed or empty
+ *  string falls back to a plain black to white ramp. */
 function colorRampGLSL(raw: unknown, tExpr: string): string {
   const glslCol = (hex: string) => {
     const c = new THREE.Color(hex);
@@ -286,7 +282,8 @@ function colorRampGLSL(raw: unknown, tExpr: string): string {
   const t = `clamp(${tExpr}, 0.0, 1.0)`;
   let expr = glslCol(stops[0]!.hex);
   for (let i = 1; i < stops.length; i++) {
-    const p0 = stops[i - 1]!.pos, p1 = stops[i]!.pos;
+    const p0 = stops[i - 1]!.pos,
+      p1 = stops[i]!.pos;
     const span = Math.max(p1 - p0, 1e-4);
     expr = `mix(${expr}, ${glslCol(stops[i]!.hex)}, clamp((${t} - ${p0.toFixed(4)}) / ${span.toFixed(4)}, 0.0, 1.0))`;
   }
@@ -305,14 +302,16 @@ export function parseStops(raw: unknown): { pos: number; hex: string }[] {
       if (Number.isFinite(pos) && /^#[0-9a-fA-F]{6}$/.test(hex)) out.push({ pos: Math.min(Math.max(pos, 0), 1), hex });
     }
   }
-  if (out.length < 2) return [{ pos: 0, hex: "#000000" }, { pos: 1, hex: "#ffffff" }];
+  if (out.length < 2)
+    return [
+      { pos: 0, hex: "#000000" },
+      { pos: 1, hex: "#ffffff" },
+    ];
   return out.sort((a, b) => a.pos - b.pos);
 }
 
-/** Walk the graph from its output, emit one GLSL statement per node in
- *  dependency order, and return the `SurfOut sGraph(vec3 wp, vec3 wn)` function.
- *  Params are baked as literals (so a graph change recompiles); a missing wire
- *  or param falls back to a default rather than failing to compile. */
+/** Params are baked as literals, so a graph change recompiles; a missing wire or param falls back to a
+ *  default rather than failing to compile. */
 export function compileGraph(graph: SurfaceGraph): string {
   const byId = new Map(graph.nodes.map((n) => [n.id, n]));
   const order: SurfaceNode[] = [];
@@ -343,19 +342,25 @@ export function compileGraph(graph: SurfaceGraph): string {
   for (const n of order) {
     const p = n.params ?? {};
     if (n.type === "noise") {
-      // The richer noise node: detail (octaves), roughness (per-octave falloff)
-      // and distortion, over the shared parameterised fBm. Sampled in world space
-      // and scaled the same way sGen does, so it lines up with the other
-      // generators. lacunarity is fixed at 2 (the usual doubling).
-      lines.push(`float ${varOf(n.id)} = sFbmP(wp / max(${flt(p["scale"], 6)}, 0.001), ${int(p["detail"], 4, 1, 8)}, ${flt(p["roughness"], 0.5)}, 2.0, ${flt(p["distortion"], 0)});`);
+      // Over the shared fBm, sampled in world space and scaled as sGen does so it lines up with the other
+      // generators. Lacunarity is fixed at 2.
+      lines.push(
+        `float ${varOf(n.id)} = sFbmP(wp / max(${flt(p["scale"], 6)}, 0.001), ${int(p["detail"], 4, 1, 8)}, ${flt(p["roughness"], 0.5)}, 2.0, ${flt(p["distortion"], 0)});`,
+      );
     } else if (n.type in GEN_KIND) {
-      lines.push(`float ${varOf(n.id)} = sGen(wp, wn, ${GEN_KIND[n.type]}, ${flt(p["scale"], 6)}, ${flt(p["angle"], 0)});`);
+      lines.push(
+        `float ${varOf(n.id)} = sGen(wp, wn, ${GEN_KIND[n.type]}, ${flt(p["scale"], 6)}, ${flt(p["angle"], 0)});`,
+      );
     } else if (n.type === "fresnel") {
       // rises toward 1 at grazing angles: 1 - (N . V), raised to a power. cameraPosition
       // is a built-in fragment uniform, wp/wn are the surface point and normal.
-      lines.push(`float ${varOf(n.id)} = pow(1.0 - clamp(dot(normalize(wn), normalize(cameraPosition - wp)), 0.0, 1.0), ${flt(p["power"], 3)});`);
+      lines.push(
+        `float ${varOf(n.id)} = pow(1.0 - clamp(dot(normalize(wn), normalize(cameraPosition - wp)), 0.0, 1.0), ${flt(p["power"], 3)});`,
+      );
     } else if (n.type === "ramp") {
-      lines.push(`vec3 ${varOf(n.id)} = mix(${vec(p["colorA"], "#000000")}, ${vec(p["colorB"], "#ffffff")}, clamp(${inFloat(n, "t", "0.0")}, 0.0, 1.0));`);
+      lines.push(
+        `vec3 ${varOf(n.id)} = mix(${vec(p["colorA"], "#000000")}, ${vec(p["colorB"], "#ffffff")}, clamp(${inFloat(n, "t", "0.0")}, 0.0, 1.0));`,
+      );
     } else if (n.type === "colorramp") {
       lines.push(`vec3 ${varOf(n.id)} = ${colorRampGLSL(p["stops"], inFloat(n, "t", "0.0"))};`);
     } else if (n.type === "mix") {
@@ -368,12 +373,17 @@ export function compileGraph(graph: SurfaceGraph): string {
       const b = n.in?.["b"] ? varOf(n.in["b"]!) : flt(p["b"], 0.5);
       const op = typeof p["op"] === "string" ? p["op"] : "multiply";
       const expr =
-        op === "add" ? `${a} + ${b}` :
-        op === "subtract" ? `${a} - ${b}` :
-        op === "min" ? `min(${a}, ${b})` :
-        op === "max" ? `max(${a}, ${b})` :
-        op === "pow" ? `pow(max(${a}, 0.0), ${b})` :
-        `${a} * ${b}`;
+        op === "add"
+          ? `${a} + ${b}`
+          : op === "subtract"
+            ? `${a} - ${b}`
+            : op === "min"
+              ? `min(${a}, ${b})`
+              : op === "max"
+                ? `max(${a}, ${b})`
+                : op === "pow"
+                  ? `pow(max(${a}, 0.0), ${b})`
+                  : `${a} * ${b}`;
       lines.push(`float ${varOf(n.id)} = clamp(${expr}, 0.0, 1.0);`);
     } else if (n.type === "output") {
       out = n;

@@ -18,16 +18,11 @@ function rowTitle(r: RelationRow): string {
 </script>
 
 <template>
-  <!-- `.hidden` rather than v-if, matching setVisible()'s classList.toggle: the
-       panel keeps its DOM (and so its CSS transition) between sketches. -->
+  <!-- `.hidden` rather than v-if, so the panel keeps its DOM and CSS transition between sketches. -->
   <aside id="palette" class="palette" :class="{ hidden: !palette.visible }">
     <div class="palette-title">SKETCH PALETTE</div>
     <div class="palette-section">Options</div>
-    <button
-      class="palette-btn"
-      title="Square the view to the sketch plane"
-      @click="palette.lookAt()"
-    >Look At</button>
+    <button class="palette-btn" title="Square the view to the sketch plane" @click="palette.lookAt()">Look At</button>
     <label v-for="t in PALETTE_TOGGLES" :key="t.key" class="palette-row">
       <span>{{ t.label }}</span>
       <input
@@ -38,16 +33,13 @@ function rowTitle(r: RelationRow): string {
       />
     </label>
 
-    <!-- RELATIONS. The canvas glyphs answer "what is holding this line"; the
-         list answers "what is holding this sketch", which is a different
-         question and the one people ask when a sketch will not move. It follows
-         Show Constraints, because it is the same information. -->
+    <!-- Relations answer what holds this sketch, the canvas glyphs what holds this line. It follows Show Constraints. -->
     <template v-if="rel.visible">
       <div class="palette-section palette-section-gap">Relations</div>
       <div class="rel-summary" :class="{ conflict: rel.conflict }">{{ rel.summary }}</div>
       <p v-if="!rel.rows.length" class="rel-empty">
-        Nothing is constrained yet. Draw with the grid on, or use the constraint
-        tools, and what holds the sketch appears here.
+        Nothing is constrained yet. Draw with the grid on, or use the constraint tools, and what holds the sketch
+        appears here.
       </p>
       <ul v-else class="rel-list" @pointerleave="rel.hover(null)">
         <li
@@ -61,22 +53,20 @@ function rowTitle(r: RelationRow): string {
         >
           <Icon class="rel-sym" :name="r.icon" :size="14" />
           <span class="rel-text">
-            <!-- Two elements rather than one with a space between them: Vue
-                 condenses whitespace in a template, so the space was being
-                 dropped and the row read "Length6.32 mm". The gap is the flex
-                 box's job, where nothing can remove it. -->
+            <!-- Two elements, not one with a space: Vue condenses template whitespace, which read "Length6.32 mm". -->
             <span class="rel-head">
               <span class="rel-name">{{ r.name }}</span>
               <span v-if="r.value" class="rel-value">{{ r.value }}</span>
             </span>
-            <span class="rel-detail">{{ r.implied ? r.detail + ' · implied' : r.detail }}</span>
+            <span class="rel-detail">{{ r.implied ? r.detail + " · implied" : r.detail }}</span>
           </span>
           <button
             v-if="r.index !== null"
             class="rel-del"
             title="Delete this constraint"
             @click.stop="rel.hooks?.del(r.index)"
-          ><Icon name="close" :size="12" /></button>
+            ><Icon name="close" :size="12"
+          /></button>
         </li>
       </ul>
     </template>

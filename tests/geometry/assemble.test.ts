@@ -36,9 +36,11 @@ function wireBody(id: string, faceIds: number[]) {
  *  pure function call on a fresh instance). */
 function assemble(bodies: ReturnType<typeof wireBody>[]): RebuildResult {
   const g = new Geometry();
-  const out = (
-    g as unknown as { assemble(r: unknown): RebuildResult | null }
-  ).assemble({ protocol: 2, bodies, bbox: { min: [0, 0, 0], max: [1, 1, 1] } });
+  const out = (g as unknown as { assemble(r: unknown): RebuildResult | null }).assemble({
+    protocol: 2,
+    bodies,
+    bbox: { min: [0, 0, 0], max: [1, 1, 1] },
+  });
   expect(out).not.toBeNull();
   return out as RebuildResult;
 }
@@ -108,13 +110,9 @@ describe("assemble (protocol v2, multi-body)", () => {
 // such luck: on an assembly rebuild almost every body arrives as a stub.
 describe("assemble (protocol v2, unchanged stubs)", () => {
   /** Prime the client's per-body mesh cache, then feed it a stub. */
-  function assembleWithCache(
-    first: ReturnType<typeof wireBody>[],
-    second: unknown[],
-  ): RebuildResult {
+  function assembleWithCache(first: ReturnType<typeof wireBody>[], second: unknown[]): RebuildResult {
     const g = new Geometry();
-    const call = (r: unknown) =>
-      (g as unknown as { assemble(r: unknown): RebuildResult | null }).assemble(r);
+    const call = (r: unknown) => (g as unknown as { assemble(r: unknown): RebuildResult | null }).assemble(r);
     const bbox = { min: [0, 0, 0], max: [1, 1, 1] };
     expect(call({ protocol: 2, bodies: first, bbox })).not.toBeNull();
     const out = call({ protocol: 2, bodies: second, bbox });
@@ -153,6 +151,6 @@ describe("assemble (protocol v2, unchanged stubs)", () => {
       [wireBody("bodyA", [0, 0, 1])],
       [{ id: "bodyA", name: "bodyA", etag: "etag-bodyA", unchanged: true }],
     );
-    expect("nodeRef" in ((r.bodies ?? [])[0]!)).toBe(false);
+    expect("nodeRef" in (r.bodies ?? [])[0]!).toBe(false);
   });
 });

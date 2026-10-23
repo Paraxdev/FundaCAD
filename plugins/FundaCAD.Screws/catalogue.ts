@@ -1,13 +1,20 @@
-// The standard catalogue: families read from catalogue/*.json and expanded into complete specs.
-//
-// Adding a family or a size is an edit to metric.json or inch.json: `fixed` sets the values every
-// member shares, `columns` maps a row's columns onto spec fields, `threadLength` says how long the
-// thread is, and `lengths` names a series in threads.json that each row's `L` range filters.
+// Families from catalogue/*.json expanded into complete specs. In metric.json and inch.json `fixed` holds what every
+// member shares, `columns` maps a row onto spec fields and `lengths` names a threads.json series the row's `L` filters.
 
 import METRIC from "./catalogue/metric.json";
 import INCH from "./catalogue/inch.json";
 import THREADS from "./catalogue/threads.json";
-import { KINDS, PARTS, PART_LABELS, getPath, setPath, type FastenerSpec, type Kind, type Part, type Units } from "./spec";
+import {
+  KINDS,
+  PARTS,
+  PART_LABELS,
+  getPath,
+  setPath,
+  type FastenerSpec,
+  type Kind,
+  type Part,
+  type Units,
+} from "./spec";
 
 export type ThreadTable = "metric" | "inch" | "tapping";
 
@@ -47,18 +54,39 @@ export interface Family {
   sizes: SizeRow[];
 }
 
-export interface ThreadSize { d: number; coarse?: number; fine?: number[]; unc?: number; unf?: number }
-export interface HoleSizes { close: number; medium?: number; free: number; tap: number }
+export interface ThreadSize {
+  d: number;
+  coarse?: number;
+  fine?: number[];
+  unc?: number;
+  unf?: number;
+}
+export interface HoleSizes {
+  close: number;
+  medium?: number;
+  free: number;
+  tap: number;
+}
 
-const TABLES = THREADS as unknown as Record<ThreadTable, { standard: string; units: Units; sizes: Record<string, ThreadSize> }>;
+const TABLES = THREADS as unknown as Record<
+  ThreadTable,
+  { standard: string; units: Units; sizes: Record<string, ThreadSize> }
+>;
 export const HOLES = THREADS.holes as Record<string, HoleSizes>;
 const SERIES = THREADS.lengthSeries as Record<string, number[]>;
 
 export const FAMILIES: Family[] = [...(METRIC as unknown as Family[]), ...(INCH as unknown as Family[])];
 
 export const CATEGORY_ORDER = [
-  "Socket screws", "Machine screws", "Bolts", "Set screws", "Special screws",
-  "Tapping and wood screws", "Nuts", "Washers", "Inserts",
+  "Socket screws",
+  "Machine screws",
+  "Bolts",
+  "Set screws",
+  "Special screws",
+  "Tapping and wood screws",
+  "Nuts",
+  "Washers",
+  "Inserts",
 ];
 
 export function familyById(id: string): Family | undefined {
@@ -103,7 +131,11 @@ export function lengthsFor(f: Family, row: SizeRow): number[] {
   return (SERIES[f.lengths] ?? []).filter((v) => v >= lo - 1e-9 && v <= hi + 1e-9);
 }
 
-export interface PitchChoice { pitch: number; label: string; fine: boolean }
+export interface PitchChoice {
+  pitch: number;
+  label: string;
+  fine: boolean;
+}
 
 /** Coarse first, then the fine pitches the thread standard defines for this size. */
 export function pitchesFor(f: Family, size: string): PitchChoice[] {
@@ -132,7 +164,10 @@ export function formatInch(v: number): string {
   if (num === 0) return String(whole);
   let a = num;
   let b = INCH_FRACTIONS;
-  while (a % 2 === 0) { a /= 2; b /= 2; }
+  while (a % 2 === 0) {
+    a /= 2;
+    b /= 2;
+  }
   return whole ? `${whole}-${a}/${b}` : `${a}/${b}`;
 }
 
@@ -150,7 +185,13 @@ export function threadDesignation(f: Family, size: string, pitch: number): strin
   return `${size}x${pitch}`;
 }
 
-export function threadLengthFor(rule: ThreadLengthRule | undefined, row: SizeRow, d: number, pitch: number, L: number): number {
+export function threadLengthFor(
+  rule: ThreadLengthRule | undefined,
+  row: SizeRow,
+  d: number,
+  pitch: number,
+  L: number,
+): number {
   if (!rule || rule.full) return L;
   if (rule.column) return Number(row[rule.column]);
   if (rule.fullUpTo !== undefined && L <= rule.fullUpTo + 1e-9) return L;
@@ -198,9 +239,10 @@ export function expand(choice: ItemChoice): FastenerSpec {
   if (drive) setPath(spec, "drive.type", drive);
 
   const pitches = pitchesFor(f, row.size);
-  const pitch = choice.pitch !== undefined && pitches.some((p) => Math.abs(p.pitch - choice.pitch!) < 1e-9)
-    ? choice.pitch
-    : pitches[0]!.pitch;
+  const pitch =
+    choice.pitch !== undefined && pitches.some((p) => Math.abs(p.pitch - choice.pitch!) < 1e-9)
+      ? choice.pitch
+      : pitches[0]!.pitch;
   const thread: Record<string, unknown> = {
     type: f.threads === "inch" ? "unified" : f.threads,
     diameter: ts.d,
@@ -214,9 +256,10 @@ export function expand(choice: ItemChoice): FastenerSpec {
   const lengths = lengthsFor(f, row);
   let length: number | undefined;
   if (lengths.length) {
-    length = choice.length !== undefined && lengths.some((l) => Math.abs(l - choice.length!) < 1e-9)
-      ? choice.length
-      : lengths[0]!;
+    length =
+      choice.length !== undefined && lengths.some((l) => Math.abs(l - choice.length!) < 1e-9)
+        ? choice.length
+        : lengths[0]!;
     if (f.lengthPath) setPath(spec, f.lengthPath, length);
     else spec["length"] = length;
   }
@@ -259,7 +302,10 @@ export function catalogueSize(): number {
   return FAMILIES.reduce((sum, f) => sum + itemsOf(f).length, 0);
 }
 
-export interface SpecRow { label: string; value: string }
+export interface SpecRow {
+  label: string;
+  value: string;
+}
 
 function num(v: unknown, units: Units): string {
   if (typeof v !== "number") return String(v ?? "");
@@ -285,7 +331,8 @@ export function specRows(spec: FastenerSpec, opts: { size?: string; volume?: num
     }
     rows.push({ label: PART_LABELS[partName], value: typeLabel });
     for (const [field, label] of def?.fields ?? []) rows.push({ label: `  ${label}`, value: num(part[field], u) });
-    if (partName === "head" && typeof part["angle"] === "number") rows.push({ label: "  Countersink angle", value: `${part["angle"]} deg` });
+    if (partName === "head" && typeof part["angle"] === "number")
+      rows.push({ label: "  Countersink angle", value: `${part["angle"]} deg` });
   }
   const t = spec.thread;
   if (t) {
@@ -297,7 +344,10 @@ export function specRows(spec: FastenerSpec, opts: { size?: string; volume?: num
     });
     if (typeof t.length === "number") rows.push({ label: "  Thread length", value: num(t.length, u) });
     rows.push({ label: "  Hand", value: t.hand === "left" ? "Left" : "Right" });
-    rows.push({ label: "  Modelled", value: t.modelled ? "Helical thread" : "Simplified, plain at the nominal diameter" });
+    rows.push({
+      label: "  Modelled",
+      value: t.modelled ? "Helical thread" : "Simplified, plain at the nominal diameter",
+    });
   }
   for (const [path, label] of kind?.fields ?? []) {
     if (path === "thread.length") continue;
@@ -311,12 +361,18 @@ export function specRows(spec: FastenerSpec, opts: { size?: string; volume?: num
   const head = spec.head;
   if (head && (head.type === "socketCap" || head.type === "lowHead")) {
     const extra = u === "in" ? 1 / 32 : 1;
-    rows.push({ label: "Counterbore", value: `${num(Number(head.diameter) + extra, u)} dia, ${num(Number(head.height) + extra / 2, u)} deep` });
+    rows.push({
+      label: "Counterbore",
+      value: `${num(Number(head.diameter) + extra, u)} dia, ${num(Number(head.height) + extra / 2, u)} deep`,
+    });
   }
   if (head?.type === "countersunk") rows.push({ label: "Countersink", value: `${num(Number(head.diameter), u)} dia` });
   if (spec.info?.["hole"] !== undefined) rows.push({ label: "Hole for printing", value: num(spec.info["hole"], u) });
   if (opts.volume !== undefined) {
-    rows.push({ label: "Mass (steel)", value: `${(opts.volume * 7.85e-3).toFixed(opts.volume * 7.85e-3 < 10 ? 2 : 1)} g` });
+    rows.push({
+      label: "Mass (steel)",
+      value: `${(opts.volume * 7.85e-3).toFixed(opts.volume * 7.85e-3 < 10 ? 2 : 1)} g`,
+    });
   }
   if (spec.notes) rows.push({ label: "Notes", value: spec.notes });
   return rows;

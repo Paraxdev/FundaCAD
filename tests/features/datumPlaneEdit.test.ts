@@ -13,13 +13,23 @@ function backend() {
   const be = {
     async rebuild(doc: CadDocument) {
       sent.push(doc);
-      const result: RebuildResult = { mesh: { positions: [], indices: [], faceIds: [] }, edges: [], bbox: { min: [0, 0, 0], max: [0, 0, 0] } };
+      const result: RebuildResult = {
+        mesh: { positions: [], indices: [], faceIds: [] },
+        edges: [],
+        bbox: { min: [0, 0, 0], max: [0, 0, 0] },
+      };
       return { ok: true as const, result };
     },
     async init() {},
-    onStatus() { return () => {}; },
-    onProgress() { return () => {}; },
-    async cancel() { return true; },
+    onStatus() {
+      return () => {};
+    },
+    onProgress() {
+      return () => {};
+    },
+    async cancel() {
+      return true;
+    },
   } as unknown as GeometryBackend;
   return { be, sent };
 }
@@ -29,7 +39,7 @@ const plane = (extra: Record<string, unknown> = {}) =>
 const sketch = { id: "s", type: "sketch", plane: "XY", planeId: "p", entities: [] } as unknown as Feature;
 const field = (store: DocumentStore, k: string) =>
   (store.document.features.find((f) => f.id === "p") as unknown as Record<string, unknown>)[k];
-const settle = (store: DocumentStore) => (store as unknown as { paramChain: Promise<void> }).paramChain;
+const settle = (store: DocumentStore) => (store as unknown as { st: { paramChain: Promise<void> } }).st.paramChain;
 
 describe("writing a datum pose", () => {
   it("writes only what changed, and leaves a zero angle out", () => {

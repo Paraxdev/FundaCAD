@@ -13,66 +13,72 @@ import { useSketchPaletteStore } from "../stores/sketchPalette";
 import type { Engine } from "./engine";
 import type { SketchTool } from "../sketch/sketchMode";
 import { isChoiceOpen } from "../ui/choice";
+import { openReportDialog } from "../ui/bugReporter";
+import { ideaUrl } from "../ui/reportText";
+import { MANUAL_URL, openExternal } from "../ui/welcome";
 import type { StandardView } from "../viewport/cameras";
 import type { FaceOffsetMode } from "../features/faceOffsetTool";
 
-/** View and display actions: they change how the model is looked at, not the
- *  model, so a pick still waiting survives them. */
+/** View actions leave the model alone, so a pick still waiting survives them. */
 const KEEPS_PICK = new Set([
-  "fit", "reset-camera", "iso", "top", "front", "right", "persp",
-  "selmode", "selmode-auto", "selmode-faces", "selmode-bodies",
-  "toggle-xray", "toggle-wireframe", "zebra", "curvature", "draft-analysis", "shortcut-help",
-  "viewmode-matcap", "viewmode-realtime", "viewmode-pathtraced", "viewmode-cycle", "viewmode-cycle-back",
+  "fit",
+  "reset-camera",
+  "iso",
+  "top",
+  "front",
+  "right",
+  "persp",
+  "selmode",
+  "selmode-auto",
+  "selmode-faces",
+  "selmode-bodies",
+  "toggle-xray",
+  "toggle-wireframe",
+  "zebra",
+  "curvature",
+  "draft-analysis",
+  "shortcut-help",
+  "viewmode-matcap",
+  "viewmode-realtime",
+  "viewmode-pathtraced",
+  "viewmode-cycle",
+  "viewmode-cycle-back",
   "clean-view",
 ]);
 
-/** Commands that act on a body selection. Picking a body raises the Move gizmo
- *  by itself and toolBusy() counts it, so without standing it down first these
- *  refused silently whenever a body was selected, see Engine.dropBodyGizmo. */
+/** A body selection raises Move, which toolBusy() counts, so these stand it down first or they refuse silently. */
 const BODY_VERBS = new Set(["mirror", "pattern-linear", "pattern-circular"]);
 
-/** The single dispatch point shared by the ribbon, the keymap, the command
- *  palette and every context menu. */
+/** The one dispatcher for the ribbon, the keymap, the command palette and every context menu. */
 export function createActions(e: Engine): (action: string) => void {
-  // The "persp" and "selmode" cases used to write projBtn.textContent and
-  // selBtn.textContent/classList directly. Those two buttons are
-  // components/shell/ViewportControls.vue now and render from this store, so the
-  // label can no longer drift out of sync with viewport.selecting.
   const ui = useUiStore();
   const palette = useSketchPaletteStore();
 
-  // Offset Face / Thicken: one interactive tool for both (pick face → scrub along
-  // its normal → commit), with a real engine preview since neither can be faked
-  // client-side.
   function startFaceOffset(mode: FaceOffsetMode) {
     if (e.toolBusy()) return;
     if (!e.hasBody()) {
       e.setStatus("Create or import a body first", "");
       return;
     }
-    e.tools.faceOffset.start(mode, (id) => { if (id) e.selectFeature(id, false); });
+    e.tools.faceOffset.start(mode, (id) => {
+      if (id) e.selectFeature(id, false);
+    });
   }
 
-  // Draft (swing a face over to a taper) and Thread (a climbing revolve cut into
-  // a round face) are the same shape of command as the two above: pick a face,
-  // size the result on the model, commit. They differ only in which tool runs,
-  // so they share the body/busy guard rather than repeating it.
   function startFaceTool(which: "draft" | "thread" | "hole" | "textOnFace") {
     if (e.toolBusy()) return;
     if (!e.hasBody()) {
       e.setStatus("Create or import a body first", "");
       return;
     }
-    e.tools[which].start((id) => { if (id) e.selectFeature(id, false); });
+    e.tools[which].start((id) => {
+      if (id) e.selectFeature(id, false);
+    });
   }
 
   return function handleAction(action: string) {
-    // for "Repeat <command>". A contributed action is never repeatable, and the
-    // default is that way round because the core cannot tell whether re-running
-    // somebody else's action is safe: a "Repeat" that quietly sends a second
-    // job to a machine is worse than a "Repeat" that is missing one entry.
+    // A contributed action is never repeated: the core cannot tell whether running it twice is safe.
     if (!NON_REPEATABLE.has(action) && !contributedAction(action)) e.lastAction = action;
-    // sketch CREATE tools: switch tool while sketching, else start a sketch with it
     if (SKETCH_TOOLS.has(action)) {
       if (e.sketch.active) e.sketch.setTool(action as SketchTool);
       else {
@@ -81,13 +87,11 @@ export function createActions(e: Engine): (action: string) => void {
       }
       return;
     }
-    // sketch MODIFY tools only make sense inside a sketch
     if (action in SKETCH_MODIFY) {
       const tool = SKETCH_MODIFY[action];
       if (e.sketch.active) {
         if (tool && !e.sketch.applySelectedConstraint(tool)) e.sketch.setTool(tool);
-      }
-      else e.setStatus("Enter a sketch to use modify tools", "");
+      } else e.setStatus("Enter a sketch to use modify tools", "");
       return;
     }
     if (action === "finish") return void e.sketch.finish(true);
@@ -96,7 +100,15 @@ export function createActions(e: Engine): (action: string) => void {
       else e.setStatus("Enter a sketch to tie its loose ends", "");
       return;
     }
+    if (action === "construction") {
+      if (!e.sketch.toggleSelectedConstruction()) palette.set("construction", !palette.state.construction);
+      return;
+    }
     if (action === "palette") return void (palette.visible = true);
+    // Before the sketch finish below, so a sketch open when the problem showed is reported open.
+    if (action === "report-problem") return openReportDialog();
+    if (action === "suggest-idea") return void openExternal(ideaUrl());
+    if (action === "manual") return void openExternal(MANUAL_URL);
     // The arrow keys turn the view and nothing else: they leave a sketch open,
     // and a tool that reads the arrows itself (the pattern count) keeps them.
     const step = /^view-step-(left|right|up|down)(-fine)?$/.exec(action);
@@ -105,21 +117,13 @@ export function createActions(e: Engine): (action: string) => void {
       e.viewport.stepView(step[1] as "left" | "right" | "up" | "down", !!step[2]);
       return;
     }
-    // Undo/redo must be handled BEFORE the finish-the-sketch line below. They are
-    // not 3D modeling commands: letting Ctrl+Z fall through would commit the sketch
-    // and THEN undo it as a whole, which is the exact bug in-sketch undo exists to
-    // fix, so routing it any later is silently a no-op.
+    // Before the finish below, or Ctrl+Z would commit the sketch and then undo it whole.
     if (action === "undo") return void e.doUndo();
     if (action === "redo") return void e.doRedo();
-    // a 3D modeling command finishes the active sketch first (mainstream MCAD behavior)
     if (e.sketch.active) e.sketch.finish(true);
-    // and replaces a pick still waiting, which a look around the model does not.
-    // Section pressed during its own aiming is its way out, see its case below.
+    // Section pressed during its own aiming is its way out.
     if (!KEEPS_PICK.has(action) && !(action === "section" && e.tools.section.picking)) endPickSession();
 
-    // The three booleans are one starter taking the operation as an argument, so
-    // they are dispatched from the inventory rather than as three switch arms
-    // that would differ only in a string (features/booleanOps.ts).
     const boolOp = booleanOpOfAction(action);
     if (boolOp || BODY_VERBS.has(action)) {
       e.dropBodyGizmo();
@@ -207,10 +211,6 @@ export function createActions(e: Engine): (action: string) => void {
         e.ui.home.open();
         break;
       case "materials":
-        // Not a dialog any more. Materials are edited in the Render workspace,
-        // beside the part they are being judged against, so the command that
-        // used to open a window over the model now opens the workspace the
-        // window's contents live in. See ui/workspace.ts.
         setWorkspace("render");
         break;
       case "revolve":
@@ -285,10 +285,7 @@ export function createActions(e: Engine): (action: string) => void {
         openParamsDialog();
         break;
       case "section":
-        // The button is the way OUT of the mode as well as in, including out of
-        // the aiming step, which would otherwise be a state you could only leave
-        // with Escape (pressing Section again during a pick did nothing at all,
-        // because start() refuses to re-enter).
+        // The button is the way out of every phase too, start() refuses to re-enter.
         if (e.tools.section.active || e.tools.section.picking) {
           e.tools.section.stop();
           break;
@@ -297,10 +294,12 @@ export function createActions(e: Engine): (action: string) => void {
           e.setStatus("Section: create or import a body first", "");
           break;
         }
-        // "Pick" leads, and is what the user's own words asked for: cut along a
-        // face or a datum plane they choose. The three world axes stay because
-        // they need no aiming at all, on a part with no face facing the way you
-        // want to look, Z is one click away and a pick is not.
+        // Its handle, box and keys would stay live beside the other tool's until that ends.
+        if (e.toolAtWork()) {
+          e.setStatus("Section: finish the active tool first (Esc cancels it)", "");
+          break;
+        }
+        // The world axes need no aiming, for a part with no face turned the way you want to look.
         void (async () => {
           const src = await choose<"pick" | "X" | "Y" | "Z">("Section, cut along what?", [
             { value: "pick", label: "Face or plane", hint: "click one" },
@@ -308,8 +307,9 @@ export function createActions(e: Engine): (action: string) => void {
             { value: "X", label: "X" },
             { value: "Y", label: "Y" },
           ]);
-          if (src === "pick") e.tools.section.start({ kind: "pick" });
-          else if (src) e.tools.section.start(src);
+          if (!src) return;
+          e.dropBodyGizmo();
+          e.tools.section.start(src === "pick" ? { kind: "pick" } : src);
         })();
         break;
       case "component-colors":
@@ -358,7 +358,6 @@ export function createActions(e: Engine): (action: string) => void {
       case "stress":
         e.ui.panels.showStress();
         break;
-      // --- global File / View commands (also reachable from the palette) ---
       case "new":
         void e.newDocument();
         break;
@@ -441,9 +440,7 @@ export function createActions(e: Engine): (action: string) => void {
         break;
       }
       case "show-all-bodies":
-        e.store.setBodiesVisibility(
-          new Map((e.store.buildState.result?.bodies ?? []).map((b) => [b.id, true])),
-        );
+        e.store.setBodiesVisibility(new Map((e.store.buildState.result?.bodies ?? []).map((b) => [b.id, true])));
         break;
       case "shortcut-help":
         toggleShortcutHUD();
@@ -452,18 +449,7 @@ export function createActions(e: Engine): (action: string) => void {
         e.setStatus("Compute All, rebuilding everything from scratch…", "");
         void e.store.computeAllNow();
         break;
-      // Anything this file does not know is offered to the running plugins.
-      //
-      // LAST, and never first. A plugin cannot take an action the app already
-      // has: the switch above is reached before this line, so a contribution
-      // that names "export" or "save" is inert rather than a way to replace what
-      // Ctrl+S does. That is not a check anywhere, it is the order of the code,
-      // which is the version of the rule that cannot be forgotten.
-      //
-      // One dispatcher rather than a second one beside it, because everything
-      // downstream, the ribbon, the keymap, the command palette, every context
-      // menu, sends an action id here and must not have to learn which ids are
-      // somebody else's.
+      // Plugins come last, so a contribution naming "save" or "export" cannot replace the app's own.
       default:
         contributedAction(action)?.();
         break;

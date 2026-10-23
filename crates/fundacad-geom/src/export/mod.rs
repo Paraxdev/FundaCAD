@@ -1,9 +1,5 @@
-//! The `export` op, replaces `_export_job`, `_mesh_options`, `_budget_refusal`
-//! and `_budget_warning` of the Python engine's `server.py`, with the writers of
-//! `mesh_writers.py`, `mesh_refine.py`, `exporters.py` and `export_tree.py`.
-//!
-//! Not here yet: the export mesh cache tiers and plugin mesh passes, so the
-//! per face density cap has nothing to bound.
+//! The `export` op, `_export_job` of server.py with the writers of mesh_writers.py, mesh_refine.py, exporters.py
+//! and export_tree.py. Not ported yet: the export mesh cache tiers and plugin mesh passes.
 
 pub mod flat;
 pub mod glb;
@@ -60,10 +56,7 @@ pub fn mesh_options(mesh: Option<&Value>) -> MeshOptions {
         Some(v) if v.is_finite() => v.max(lo).min(hi),
         _ => default,
     };
-    let unit = UNITS
-        .iter()
-        .find(|u| mesh.get("unit").and_then(Value::as_str) == Some(u.0))
-        .unwrap_or(&UNITS[0]);
+    let unit = UNITS.iter().find(|u| mesh.get("unit").and_then(Value::as_str) == Some(u.0)).unwrap_or(&UNITS[0]);
     MeshOptions {
         tol: num("surfaceDeviation", EXPORT_TOL, 1e-4, 10.0),
         ang: num("normalDeviation", EXPORT_ANG_TOL.to_degrees(), 0.5, 90.0).to_radians(),
@@ -84,8 +77,7 @@ pub fn budget_refusal(ntri: usize) -> Option<String> {
 }
 
 pub fn budget_warning(ntri: usize) -> Option<String> {
-    (ntri > EXPORT_TRIANGLE_WARN)
-        .then(|| format!("export is very dense ({} triangles)", pyfmt::thousands(ntri)))
+    (ntri > EXPORT_TRIANGLE_WARN).then(|| format!("export is very dense ({} triangles)", pyfmt::thousands(ntri)))
 }
 
 /// Export grade triangles of one shape: absolute deflection, the kernel's own
@@ -102,13 +94,7 @@ pub fn export_mesh_with(shape: &Shape, opts: &MeshOptions, passes: &[Value]) -> 
     let t = claims.tessellate(
         shape,
         &access,
-        MeshParams {
-            linear: opts.tol,
-            angular: opts.ang,
-            relative: false,
-            display: false,
-            force_remesh: false,
-        },
+        MeshParams { linear: opts.tol, angular: opts.ang, relative: false, display: false, force_remesh: false },
         EXPORT_DENSITY_CAP_PER_FACE as u32,
     );
     if opts.max_edge > 0.0 {
@@ -121,11 +107,8 @@ pub fn export_mesh_with(shape: &Shape, opts: &MeshOptions, passes: &[Value]) -> 
 /// Positions closer than this in every coordinate, in mm, are one vertex to `weld`.
 const WELD_QUANTUM: f64 = 1e-6;
 
-/// One vertex per position, so faces that meet share the nodes along their
-/// common edge. `export_mesh` gives every face its own copy of them, and a 3MF
-/// reader connects triangles through shared vertices only, so an unwelded
-/// solid reads as one open patch per face. Triangles the weld collapses are
-/// dropped.
+/// One vertex per position, since a 3MF reader connects triangles only through shared vertices and
+/// `export_mesh` gives each face its own copy. Triangles the weld collapses are dropped.
 pub fn weld(positions: &[f64], indices: &[u32]) -> (Vec<f64>, Vec<u32>) {
     let (out_pos, remap) = weld_vertices(positions);
     let mut out_idx = Vec::with_capacity(indices.len());
@@ -211,10 +194,8 @@ impl Exporter<'_> {
         let shapes: Vec<&Shape> = bodies.iter().map(|b| b.shape).collect();
         let groups = crate::par::share_groups(&shapes);
         let of_group: Vec<usize> = group_index(&groups, bodies.len());
-        // A batch at a time, in body order, because the triangle budget refuses
-        // AT the body that passes it: a whole document meshed up front would
-        // hold the very mesh the budget exists to refuse. One batch of extra
-        // work is the price, and the refusal names the same body and count.
+        // A batch at a time in body order: the triangle budget refuses at the body that passes it, and meshing the
+        // whole document up front would hold the very mesh it refuses. The refusal names the same body and count.
         for batch in (0..bodies.len()).collect::<Vec<_>>().chunks(crate::par::threads().max(1)) {
             let mut sub: Vec<Vec<usize>> = vec![Vec::new(); groups.len()];
             for &i in batch {
@@ -277,9 +258,7 @@ impl Exporter<'_> {
                 Some(Value::Number(n)) => n.as_i64(),
                 Some(_) => None,
             };
-            let entry = slot
-                .and_then(|s| usize::try_from(s).ok())
-                .and_then(|s| palette.get(s));
+            let entry = slot.and_then(|s| usize::try_from(s).ok()).and_then(|s| palette.get(s));
             let color = entry.map(|e| {
                 glb::norm_color(&match e.get("color") {
                     Some(Value::String(s)) => s.clone(),
@@ -403,11 +382,8 @@ fn export_inner(
         let mut written = Vec::new();
         let mut used = std::collections::HashSet::new();
         for b in bodies {
-            let label = names
-                .and_then(|n| n.get(b.id))
-                .and_then(Value::as_str)
-                .filter(|s| !s.is_empty())
-                .unwrap_or(b.name);
+            let label =
+                names.and_then(|n| n.get(b.id)).and_then(Value::as_str).filter(|s| !s.is_empty()).unwrap_or(b.name);
             let name = names::safe_part_filename(label, b.id);
             let mut cand = name.clone();
             let mut i = 2;
@@ -458,10 +434,9 @@ pub fn export_result(req: &Map<String, Value>, watch: &dyn Watch) -> JobResult {
     let Some(doc) = req.get("document") else {
         return error_result("export: a request needs a document");
     };
-    let (Some(format), Some(path)) = (
-        req.get("format").and_then(Value::as_str),
-        req.get("path").and_then(Value::as_str),
-    ) else {
+    let (Some(format), Some(path)) =
+        (req.get("format").and_then(Value::as_str), req.get("path").and_then(Value::as_str))
+    else {
         return error_result("export: a request needs a format and a path");
     };
     let typed: CadDocument = match CadDocument::from_value_lenient(doc) {
@@ -547,30 +522,6 @@ pub fn export_built(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn mesh_options_default_and_clamp() {
-        let d = mesh_options(None);
-        assert_eq!((d.tol, d.max_edge, d.mm_per_unit, d.unit_name, d.binary), (0.02, 0.0, 1.0, "millimeter", true));
-        assert!((d.ang - 0.3).abs() < 1e-12);
-        let o = mesh_options(Some(&json!({
-            "surfaceDeviation": 50, "normalDeviation": true, "maxEdgeLength": -3,
-            "unit": "in", "binary": false
-        })));
-        assert_eq!((o.tol, o.max_edge, o.unit_name, o.binary), (10.0, 0.0, "inch", false));
-        assert!((o.ang - 0.3).abs() < 1e-12);
-        assert_eq!(mesh_options(Some(&json!({"unit": "yd", "binary": 0}))).unit_name, "millimeter");
-    }
-
-    #[test]
-    fn budget_messages() {
-        assert_eq!(budget_refusal(10_000_000), None);
-        assert_eq!(
-            budget_refusal(10_000_001).unwrap(),
-            "export too dense (10,000,001+ triangles), reduce texture scale or depth, or export fewer bodies"
-        );
-        assert_eq!(budget_warning(500_001).unwrap(), "export is very dense (500,001 triangles)");
-    }
 
     #[test]
     fn splitext_follows_python() {

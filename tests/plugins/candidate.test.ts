@@ -47,24 +47,19 @@ describe("reading a stranger's bundle", () => {
     // The whole reason the same parser is used: an unknown grant means the
     // screen cannot say what the plugin wants, and the only safe reading of
     // that is no.
-    expect(() => candidateFrom(raw({ ...GOOD, grants: ["document.read", "gpu.direct"] }), "url"))
-      .toThrow(/gpu.direct/);
+    expect(() => candidateFrom(raw({ ...GOOD, grants: ["document.read", "gpu.direct"] }), "url")).toThrow(/gpu.direct/);
   });
 
   it("refuses one whose permissions and their scope disagree", () => {
-    expect(() => candidateFrom(raw({ ...GOOD, grants: ["network"] }), "url")).toThrow(
-      /without naming any hosts/,
+    expect(() => candidateFrom(raw({ ...GOOD, grants: ["network"] }), "url")).toThrow(/without naming any hosts/);
+    expect(() => candidateFrom(raw({ ...GOOD, hosts: ["api.example.com"] }), "url")).toThrow(
+      /without asking for network/,
     );
-    expect(() =>
-      candidateFrom(raw({ ...GOOD, hosts: ["api.example.com"] }), "url"),
-    ).toThrow(/without asking for network/);
   });
 
   it("refuses one that is barely a manifest at all", () => {
     for (const bad of [null, 42, "a string", [], {}, { ...GOOD, kind: "native" }]) {
-      expect(() => candidateFrom(raw(bad), "url"), JSON.stringify(bad)).toThrow(
-        /not installable/,
-      );
+      expect(() => candidateFrom(raw(bad), "url"), JSON.stringify(bad)).toThrow(/not installable/);
     }
   });
 
@@ -104,12 +99,8 @@ describe("official is a label", () => {
 describe("the origin shown on the screen", () => {
   it("is the host, which after the checks in Rust is the host that answers", () => {
     expect(originOf("https://plugins.example.com/a/b.zip", "url")).toBe("plugins.example.com");
-    expect(originOf("https://plugins.example.com:8443/b.zip", "url")).toBe(
-      "plugins.example.com:8443",
-    );
-    expect(originOf("https://github.com/Paraxdev/fundacad/releases/download/beta/x.zip", "url")).toBe(
-      "github.com",
-    );
+    expect(originOf("https://plugins.example.com:8443/b.zip", "url")).toBe("plugins.example.com:8443");
+    expect(originOf("https://github.com/Paraxdev/fundacad/releases/download/beta/x.zip", "url")).toBe("github.com");
   });
 
   it("says so plainly for a file", () => {

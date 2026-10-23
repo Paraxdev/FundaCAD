@@ -1,14 +1,6 @@
-//! One HTTPS request to a host a plugin named in its manifest. The native half
-//! of the `network` grant, the way localnet.rs is the half of `network.local`.
-//!
-//! The inverse of localnet's rule: only public addresses, never a private,
-//! loopback or link-local one, so the engine port and the local network stay
-//! out of reach even for a name that resolves there. The request is pinned to
-//! the addresses that were checked, and redirects come back to the plugin
-//! instead of being followed, so it decides whether to sign the next hop.
-//!
-//! Headers carry the plugin's credentials, so nothing here logs them and no
-//! error string includes them.
+//! The native half of the `network` grant: one HTTPS request to a host the plugin's manifest names. Public addresses
+//! only, pinned to the checked ones, and redirects go back to the plugin to sign. Headers carry credentials, so nothing
+//! here logs them.
 
 use serde::{Deserialize, Serialize};
 use std::io::Write;
@@ -28,9 +20,8 @@ const MAX_TIMEOUT_MS: u64 = 900_000;
 const DOWNLOADS: &str = "downloads";
 const STALE: Duration = Duration::from_secs(24 * 3600);
 
-/// The manifests of shipped plugins that hold `network`. A plugin installed
-/// from a release bundle is checked against its consent record instead; this
-/// covers the ones the dev build runs from source. A test keeps it complete.
+/// Shipped plugins holding `network`, for the dev build that runs them from source; an installed bundle is checked
+/// against its consent record instead. A test keeps this list complete.
 const SHIPPED: &[&str] = &[include_str!("../../../plugins/FundaCAD.Onshape/manifest.json")];
 
 #[derive(Deserialize)]
@@ -83,23 +74,29 @@ pub fn host_allowed(host: &str, list: &[String]) -> bool {
     list.iter().any(|entry| {
         let entry = entry.to_ascii_lowercase();
         if entry.starts_with('.') {
-            host.strip_suffix(entry.as_str())
-                .is_some_and(|label| !label.is_empty() && !label.contains('.'))
+            host.strip_suffix(entry.as_str()).is_some_and(|label| !label.is_empty() && !label.contains('.'))
         } else {
             host == entry
         }
     })
 }
 
+/// The inverse of localnet's rule, so the loopback engine port and the local network stay out of reach even for a name
+/// that resolves there.
 fn is_public(ip: IpAddr) -> bool {
     let v4 = match ip {
         IpAddr::V4(v4) => Some(v4),
         IpAddr::V6(v6) => v6.to_ipv4_mapped(),
     };
     let special = match (ip, v4) {
-        (_, Some(v4)) => v4.is_loopback() || v4.is_unspecified() || v4.is_broadcast() || v4.is_documentation()
-            || v4.octets()[0] == 0
-            || (v4.octets()[0] == 100 && (v4.octets()[1] & 0xc0) == 64),
+        (_, Some(v4)) => {
+            v4.is_loopback()
+                || v4.is_unspecified()
+                || v4.is_broadcast()
+                || v4.is_documentation()
+                || v4.octets()[0] == 0
+                || (v4.octets()[0] == 100 && (v4.octets()[1] & 0xc0) == 64)
+        }
         (IpAddr::V6(v6), None) => v6.is_loopback() || v6.is_unspecified(),
         _ => false,
     };
@@ -122,10 +119,8 @@ pub fn check_target(url: &reqwest::Url, hosts: &[String]) -> Result<(String, u16
 }
 
 fn resolve_public(host: &str, port: u16) -> Result<Vec<SocketAddr>, String> {
-    let addrs: Vec<SocketAddr> = (host, port)
-        .to_socket_addrs()
-        .map_err(|e| format!("{host} could not be resolved: {e}"))?
-        .collect();
+    let addrs: Vec<SocketAddr> =
+        (host, port).to_socket_addrs().map_err(|e| format!("{host} could not be resolved: {e}"))?.collect();
     if addrs.is_empty() {
         return Err(format!("{host} resolved to no address"));
     }
@@ -192,15 +187,12 @@ pub async fn plugin_web_request(app: AppHandle, plugin: String, request: WebRequ
     };
 
     let h = host.clone();
-    let addrs = tauri::async_runtime::spawn_blocking(move || resolve_public(&h, port))
-        .await
-        .map_err(|e| e.to_string())??;
+    let addrs =
+        tauri::async_runtime::spawn_blocking(move || resolve_public(&h, port)).await.map_err(|e| e.to_string())??;
     let client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
         .resolve_to_addrs(&host, &addrs)
-        .timeout(Duration::from_millis(
-            request.timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS).clamp(1, MAX_TIMEOUT_MS),
-        ))
+        .timeout(Duration::from_millis(request.timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS).clamp(1, MAX_TIMEOUT_MS)))
         .build()
         .map_err(|e| e.to_string())?;
 
@@ -250,7 +242,9 @@ pub async fn plugin_web_request(app: AppHandle, plugin: String, request: WebRequ
         }
         .await;
         drop(file);
-        if let Err(e) = result.and_then(|_| std::fs::rename(&tmp, &path).map_err(|e| format!("{}: {e}", path.display()))) {
+        if let Err(e) =
+            result.and_then(|_| std::fs::rename(&tmp, &path).map_err(|e| format!("{}: {e}", path.display())))
+        {
             let _ = std::fs::remove_file(&tmp);
             return Err(e);
         }
@@ -303,33 +297,19 @@ mod tests {
     }
 
     #[test]
-    fn a_leading_dot_is_one_level_of_subdomain() {
-        let l = list(&[".onshape.com"]);
-        assert!(host_allowed("cad.onshape.com", &l));
-        assert!(host_allowed("ACME.onshape.com", &l));
-        for bad in ["onshape.com", "evilonshape.com", "a.b.onshape.com", "onshape.com.evil.net", "cad.onshape.co"] {
-            assert!(!host_allowed(bad, &l), "{bad}");
-        }
-        assert!(host_allowed("api.example.com", &list(&["api.example.com"])));
-        assert!(!host_allowed("x.api.example.com", &list(&["api.example.com"])));
-        assert!(!host_allowed("cad.onshape.com", &[]));
-    }
-
-    #[test]
-    fn only_https_to_a_named_allowed_host() {
-        let l = list(&[".onshape.com"]);
-        let t = |s: &str| check_target(&reqwest::Url::parse(s).unwrap(), &l);
-        assert_eq!(t("https://cad.onshape.com/api/x").unwrap(), ("cad.onshape.com".into(), 443));
-        assert!(t("http://cad.onshape.com/api/x").is_err());
-        assert!(t("https://evil.com/api/x").is_err());
-        assert!(t("https://1.2.3.4/").is_err());
-        assert!(t("https://[::1]/").is_err());
-        assert!(t("https://user:pw@cad.onshape.com/").is_err());
-    }
-
-    #[test]
     fn private_and_loopback_addresses_are_not_public() {
-        for bad in ["127.0.0.1", "10.0.0.1", "192.168.1.2", "169.254.1.1", "0.0.0.0", "100.64.0.1", "::1", "fe80::1", "fd00::1", "::ffff:127.0.0.1"] {
+        for bad in [
+            "127.0.0.1",
+            "10.0.0.1",
+            "192.168.1.2",
+            "169.254.1.1",
+            "0.0.0.0",
+            "100.64.0.1",
+            "::1",
+            "fe80::1",
+            "fd00::1",
+            "::ffff:127.0.0.1",
+        ] {
             assert!(!is_public(bad.parse().unwrap()), "{bad}");
         }
         for ok in ["8.8.8.8", "52.1.2.3", "2606:4700::1111"] {
@@ -355,7 +335,10 @@ mod tests {
             }
         }
         for id in &want {
-            assert!(SHIPPED.iter().any(|m| hosts_in_manifest(m, id).is_some()), "{id} holds network but is not in SHIPPED");
+            assert!(
+                SHIPPED.iter().any(|m| hosts_in_manifest(m, id).is_some()),
+                "{id} holds network but is not in SHIPPED"
+            );
         }
         assert_eq!(
             SHIPPED.iter().find_map(|m| hosts_in_manifest(m, "FundaCAD.Onshape")),

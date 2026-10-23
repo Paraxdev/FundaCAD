@@ -7,7 +7,12 @@ import type { FeatureErrorDetail } from "../types";
 import { appVersion } from "./updates";
 
 let version = "unknown";
-void appVersion().then((v) => { version = v; }, () => {});
+void appVersion().then(
+  (v) => {
+    version = v;
+  },
+  () => {},
+);
 
 export interface FeatureFailure {
   label: string;

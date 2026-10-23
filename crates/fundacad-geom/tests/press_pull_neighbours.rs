@@ -1,7 +1,5 @@
-//! Press/pull on a flat face carries the faces around it along, the way an
-//! offset face does: each neighbour is extended along its own surface to meet
-//! the moved face, so a sloped side keeps its slope rather than a straight wall
-//! rising off the old edge.
+//! Press/pull on a flat face extends each neighbour along its own surface to meet it, as an offset face does,
+//! so a sloped side keeps its slope rather than a straight wall rising off the old edge.
 
 use std::f64::consts::PI;
 
@@ -125,9 +123,8 @@ fn a_step_pulled_past_its_neighbour_merges() {
 #[test]
 fn a_notch_floor_pulled_out_through_the_top_fills_it_and_rises_between_its_walls() {
     // 4 wide at the floor, 10 at the top, so 13 at 5 above it.
-    let notch = [
-        [0.0, 0.0], [40.0, 0.0], [40.0, 20.0], [25.0, 20.0], [22.0, 10.0], [18.0, 10.0], [15.0, 20.0], [0.0, 20.0],
-    ];
+    let notch =
+        [[0.0, 0.0], [40.0, 0.0], [40.0, 20.0], [25.0, 20.0], [22.0, 10.0], [18.0, 10.0], [15.0, 20.0], [0.0, 20.0]];
     let raw = push(block(&notch), [20.0, 0.0, 10.0], 15.0);
     let v = volume_after(&raw);
     let above = (10.0 + 13.0) / 2.0 * 5.0;

@@ -1,20 +1,5 @@
-//! The native tracer without the app, for browser scripts: the page's
-//! `?tracer=native-dev&port=P&token=T`, the e2e, and later the gap harness.
-//! Frames go over the same loopback WebSocket transport as in the app; the
-//! pt_* and frames_* commands the app takes through Tauri come over a second,
-//! command socket behind the same token and Origin rules as the engine's.
-//!
-//! Usage: tracer_serve <token> [--port N]. Prints `LISTENING <port>`, port 0
-//! (the default) picks a free one. Exits when its stdin closes, so a script
-//! that spawns it with a piped stdin never leaves it running. Started with
-//! stdin from /dev/null, under nohup or as a shell background job it exits at
-//! once: spawn it with a piped stdin, as e2e/pathtrace_bloom_e2e.cjs does.
-//!
-//! The command socket: a text message is `{"id","cmd","args"}`, a binary one
-//! (pt_mesh, pt_colors) is `[u32 LE id][u16 LE cmd length][cmd][raw body]`.
-//! Every request is answered by `{"id","ok":true,"value"}` or
-//! `{"id","ok":false,"error"}`. The commands mirror src-tauri/src/frames.rs
-//! and src-tauri/src/frames/tracer.rs, a new one there needs adding here.
+//! The native tracer without the app, for browser scripts and the e2e: frames over the app's WebSocket transport, and
+//! the pt_* and frames_* commands over a second socket behind the same token and Origin rules as the engine's.
 
 use std::io::{self, Read};
 use std::net::{SocketAddr, TcpListener, TcpStream};
@@ -26,8 +11,8 @@ use std::time::Duration;
 use fundacad_engine::ws::{appenv, mint_token, Gate};
 use fundacad_frames::{frame_size, Current, FrameSource, Notes, Reopen, Transport, WebSocketTransport};
 use fundacad_tracer::{
-    decode_colors, decode_env, decode_mesh, denoise, oidn, Bloom, BodyDesc, Camera, Denoiser, Look, Path, Quality, Tracer,
-    TracerOptions,
+    decode_colors, decode_env, decode_mesh, denoise, oidn, Bloom, BodyDesc, Camera, Denoiser, Look, Path, Quality,
+    Tracer, TracerOptions,
 };
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -48,11 +33,45 @@ struct State {
     fault: Option<String>,
 }
 
-struct TracerSource(Mutex<State>);
+/// As in the app: pt_camera leaves its camera for the next frame instead of
+/// waiting for the frame in progress.
+#[derive(Default)]
+struct Aim {
+    camera: Option<Camera>,
+    /// The seq of the last frame started, which pt_camera answers so the page
+    /// can tell which camera a frame was traced with.
+    drawn: u32,
+}
+
+struct TracerSource {
+    state: Mutex<State>,
+    aim: Mutex<Aim>,
+}
 
 impl TracerSource {
     fn lock(&self) -> MutexGuard<'_, State> {
-        self.0.lock().unwrap_or_else(|p| p.into_inner())
+        self.lock_for(None)
+    }
+
+    /// A frame marks itself started under the camera's lock, so pt_camera's
+    /// answer and the frames that see its camera agree.
+    fn lock_for(&self, frame: Option<u32>) -> MutexGuard<'_, State> {
+        let mut s = self.state.lock().unwrap_or_else(|p| p.into_inner());
+        let camera = {
+            let mut a = self.aim();
+            if let Some(seq) = frame {
+                a.drawn = seq;
+            }
+            a.camera.take()
+        };
+        if let Some(c) = camera {
+            s.tracer.set_camera(c);
+        }
+        s
+    }
+
+    fn aim(&self) -> MutexGuard<'_, Aim> {
+        self.aim.lock().unwrap_or_else(|p| p.into_inner())
     }
 
     fn name(&self) -> String {
@@ -66,8 +85,8 @@ impl TracerSource {
 }
 
 impl FrameSource for TracerSource {
-    fn render(&self, out: &mut [u8], width: u32, height: u32, _seq: u32) {
-        let mut s = self.lock();
+    fn render(&self, out: &mut [u8], width: u32, height: u32, seq: u32) {
+        let mut s = self.lock_for(Some(seq));
         if s.fault.is_some() {
             out.fill(0);
             return;
@@ -154,17 +173,23 @@ impl Dev {
                 return Err("the native tracer is off (FUNDACAD_TRACER=off)".into());
             }
             let opts = TracerOptions { software: mode == "software", ..Default::default() };
-            Tracer::new(opts).map(|tracer| TracerSource(Mutex::new(State { tracer, fault: None }))).map_err(|e| e.to_string())
+            Tracer::new(opts)
+                .map(|tracer| TracerSource { state: Mutex::new(State { tracer, fault: None }), aim: Mutex::default() })
+                .map_err(|e| e.to_string())
         })
     }
 
     fn with<T>(&self, f: impl FnOnce(&mut Tracer) -> T) -> Result<T, String> {
+        self.with_state(|s| f(&mut s.tracer))
+    }
+
+    fn with_state<T>(&self, f: impl FnOnce(&mut State) -> T) -> Result<T, String> {
         let t = self.tracer.current().ok_or("the native tracer is not open")?;
         let mut s = t.lock();
         if let Some(f) = &s.fault {
             return Err(format!("the native tracer stopped: {f}"));
         }
-        Ok(f(&mut s.tracer))
+        Ok(f(&mut *s))
     }
 
     fn dispatch(&self, cmd: &str, args: &Value, body: Option<&[u8]>) -> Result<Value, String> {
@@ -203,7 +228,10 @@ impl Dev {
             }
             "pt_camera" => {
                 let c: Camera = arg(args, "camera")?;
-                self.with(|t| t.set_camera(c)).map(|_| Value::Null)
+                let t = self.tracer.current().ok_or("the native tracer is not open")?;
+                let mut a = t.aim();
+                a.camera = Some(c);
+                Ok(Value::from(a.drawn))
             }
             "pt_look" => {
                 let l: Look = arg(args, "look")?;
@@ -245,6 +273,8 @@ impl Dev {
         let _life = self.life();
         drop(self.open.take());
         let src = self.tracer()?;
+        // A new transport counts its frames from 1.
+        src.aim().drawn = 0;
         let source = src.name();
         let token = mint_token().map_err(|e| e.to_string())?;
         let gate = Gate::new(token.clone(), &appenv("EXTRA_ORIGINS").unwrap_or_default());
@@ -254,7 +284,9 @@ impl Dev {
         let (generation, port) = (t.generation(), t.port());
         let (id, displaced) = self.open.replace(t);
         drop(displaced);
-        Ok(json!({ "id": id, "kind": "websocket", "generation": generation, "port": port, "token": token, "source": source }))
+        Ok(
+            json!({ "id": id, "kind": "websocket", "generation": generation, "port": port, "token": token, "source": source }),
+        )
     }
 
     /// A tracer made only to answer is released again.
@@ -273,7 +305,9 @@ impl Dev {
                     reason: None,
                 }
             }
-            Err(e) => Probe { available: false, path: None, adapter: None, denoise: false, denoiser: None, reason: Some(e) },
+            Err(e) => {
+                Probe { available: false, path: None, adapter: None, denoise: false, denoiser: None, reason: Some(e) }
+            }
         };
         if !was_open {
             drop(self.tracer.release());
@@ -299,13 +333,19 @@ impl Dev {
         })
     }
 
-    /// One request in, its reply out.
+    /// Text `{"id","cmd","args"}` or binary `[u32 LE id][u16 LE cmd length][cmd][raw body]`, answered by `reply`. The
+    /// commands mirror src-tauri/src/frames.rs and frames/tracer.rs.
     fn answer(&self, msg: &Message) -> Option<String> {
         let (id, cmd, args, body) = match msg {
             Message::Text(t) => match serde_json::from_str::<Value>(t.as_str()) {
                 Ok(v) => {
                     let cmd = v.get("cmd").and_then(Value::as_str).unwrap_or_default().to_string();
-                    (v.get("id").cloned().unwrap_or(Value::Null), cmd, v.get("args").cloned().unwrap_or(json!({})), None)
+                    (
+                        v.get("id").cloned().unwrap_or(Value::Null),
+                        cmd,
+                        v.get("args").cloned().unwrap_or(json!({})),
+                        None,
+                    )
                 }
                 Err(e) => return Some(reply(Value::Null, Err(format!("not a request: {e}")))),
             },
@@ -434,6 +474,8 @@ fn main() {
     });
     println!("LISTENING {}", server.port());
     std::thread::spawn(move || server.serve());
+    // Under /dev/null, nohup or a shell background job stdin closes at once, so spawn it with a piped stdin as
+    // e2e/pathtrace_bloom_e2e.cjs does.
     let _ = io::stdin().lock().read_to_end(&mut Vec::new());
     eprintln!("[tracer_serve] stdin closed, exiting (it needs a piped stdin to keep running)");
 }
@@ -534,6 +576,28 @@ mod tests {
                 return fundacad_frames::read_header(&b).unwrap();
             }
         }
+    }
+
+    #[test]
+    fn pt_camera_answers_the_seq_of_the_last_frame_drawn_before_it() {
+        let port = start();
+        let mut ws = connect(port, "tok", None).unwrap();
+        let p = call(&mut ws, 1, "pt_probe", json!({}));
+        if p["value"]["available"] != json!(true) {
+            eprintln!("skipped: no adapter ({})", p["value"]["reason"]);
+            return;
+        }
+        let o = call(&mut ws, 2, "frames_open", json!({ "width": 8, "height": 8, "prefer": "websocket" }));
+        let o = &o["value"];
+        let (fport, ftoken) = (o["port"].as_u64().unwrap(), o["token"].as_str().unwrap().to_string());
+        let cam = |x: f32| json!({ "camera": { "eye": [x, -6.0, 3.0], "target": [0.0, 0.0, 0.0], "up": [0.0, 0.0, 1.0], "fov": 50.0 } });
+        assert_eq!(call(&mut ws, 3, "pt_camera", cam(4.0))["value"], json!(0));
+        let [seq, ..] = frame_header(fport, &ftoken);
+        assert_eq!(call(&mut ws, 4, "pt_camera", cam(5.0))["value"], json!(seq));
+        let [seq2, ..] = frame_header(fport, &ftoken);
+        assert_eq!(seq2, seq + 1);
+        assert_eq!(call(&mut ws, 5, "pt_camera", cam(6.0))["value"], json!(seq2));
+        call(&mut ws, 6, "frames_close", json!({ "id": o["id"] }));
     }
 
     #[test]

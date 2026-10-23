@@ -14,14 +14,20 @@ function fakeEngine(gizmoUp: boolean, otherToolActive = false) {
   const e = {
     viewport: { highlightDatum: () => {} },
     toolBusy: () => state.gizmoUp || otherToolActive,
-    dropBodyGizmo: () => { state.gizmoUp = false; },
+    dropBodyGizmo: () => {
+      state.gizmoUp = false;
+    },
     store: {
       document: { features: [{ id: "sk", type: "sketch", plane: "XY", entities: [] }] },
       isSuppressed: () => false,
       rollbackIndex: 1,
       buildState: { result: null },
     },
-    sketch: { enter: () => { state.entered++; } },
+    sketch: {
+      enter: () => {
+        state.entered++;
+      },
+    },
   };
   return { e: e as unknown as Engine, state };
 }
@@ -60,7 +66,9 @@ function fakeFilletEngine(startEditResult: boolean) {
       rollbackIndex: 1,
       buildState: { result: null },
     },
-    setStatus: (msg: string) => { state.statusCalls.push(msg); },
+    setStatus: (msg: string) => {
+      state.statusCalls.push(msg);
+    },
     tools: {
       edgeFeature: {
         startEdit: (id: string) => {

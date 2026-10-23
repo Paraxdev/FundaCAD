@@ -11,11 +11,18 @@ import { useHomeStore } from "../../../src/stores/home";
 import { choose } from "../../../src/ui/choice";
 import type { HomeCallbacks } from "../../../src/ui/home";
 import type { OpenOutcome } from "../../../src/io/files";
-import { setLibrary, type DocumentLibrary, type DocSummary, type FileStat, type FolderListing } from "../../../src/io/library";
+import {
+  setLibrary,
+  type DocumentLibrary,
+  type DocSummary,
+  type FileStat,
+  type FolderListing,
+} from "../../../src/io/library";
 import { saveFolder, setSaveFolder } from "../../../src/io/saveFolder";
 import ContextMenuHost from "../../../src/components/overlays/ContextMenuHost.vue";
 import HomeScreen from "../../../src/components/home/HomeScreen.vue";
 import ModalHost from "../../../src/components/overlays/ModalHost.vue";
+import { MANUAL_URL } from "../../../src/ui/welcome";
 
 enableAutoUnmount(afterEach);
 
@@ -59,9 +66,12 @@ function fakeLibrary(
     }),
     pickFolder: vi.fn(async () => picks.shift() ?? null),
     stat: vi.fn(async (paths: string[]): Promise<FileStat[]> =>
-      paths.map((path) => missing.includes(path)
-        ? { path, exists: false, mtimeMs: null, size: null }
-        : { path, exists: true, mtimeMs: mtime || null, size: 1 })),
+      paths.map((path) =>
+        missing.includes(path)
+          ? { path, exists: false, mtimeMs: null, size: null }
+          : { path, exists: true, mtimeMs: mtime || null, size: 1 },
+      ),
+    ),
     thumbs: vi.fn(async (paths: string[]) => paths.map((p) => `data:image/jpeg;base64,${btoa(p)}`)),
     putThumb: vi.fn(async () => {}),
   };
@@ -173,14 +183,21 @@ describe("HomeScreen", () => {
 
   it("keeps a card that could not be read, with a badge", async () => {
     open(
-      [{ path: "C:/a.funda", openedAt: 2 }, { path: "C:/b.funda", openedAt: 1 }],
-      { openPath: vi.fn(async (p: string): Promise<OpenOutcome> => (p === "C:/a.funda" ? "unreadable" : "newerFormat")) },
+      [
+        { path: "C:/a.funda", openedAt: 2 },
+        { path: "C:/b.funda", openedAt: 1 },
+      ],
+      {
+        openPath: vi.fn(async (p: string): Promise<OpenOutcome> => (p === "C:/a.funda" ? "unreadable" : "newerFormat")),
+      },
     );
     for (const c of $$(".home-card")) c.click();
     await flushPromises();
     expect($$(".home-card")).toHaveLength(2);
     expect($$(".home-badge").map((b) => b.textContent)).toEqual(["Could not be read"]);
-    expect(JSON.parse(localStorage.getItem("fundacad.recentFiles") ?? localStorage.getItem("sindri.recentFiles")!)).toHaveLength(2);
+    expect(
+      JSON.parse(localStorage.getItem("fundacad.recentFiles") ?? localStorage.getItem("sindri.recentFiles")!),
+    ).toHaveLength(2);
   });
 
   it("starts a blank document and opens the file dialog", async () => {
@@ -204,9 +221,19 @@ describe("HomeScreen", () => {
 
   it("shows the last edit and marks a missing file", async () => {
     const now = Date.now();
-    open([{ path: "C:/a.funda", openedAt: 2 }, { path: "C:/gone.funda", openedAt: 1 }], {}, fakeLibrary(["C:/gone.funda"], now - 5 * 60_000));
+    open(
+      [
+        { path: "C:/a.funda", openedAt: 2 },
+        { path: "C:/gone.funda", openedAt: 1 },
+      ],
+      {},
+      fakeLibrary(["C:/gone.funda"], now - 5 * 60_000),
+    );
     await flushPromises();
-    expect($$(".home-card-time").map((t) => t.textContent)).toEqual(["Edited 5 min ago", expect.stringMatching(/^Opened /)]);
+    expect($$(".home-card-time").map((t) => t.textContent)).toEqual([
+      "Edited 5 min ago",
+      expect.stringMatching(/^Opened /),
+    ]);
     expect($$(".home-card.missing")).toHaveLength(1);
     expect($$(".home-badge").map((b) => b.textContent)).toEqual(["Not found"]);
   });
@@ -223,7 +250,9 @@ describe("HomeScreen", () => {
     expect($$(".home-card")).toHaveLength(1);
     $(".home-card")!.click();
     await flushPromises();
-    [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.includes("Remove from list"))!.click();
+    [...document.querySelectorAll<HTMLButtonElement>("button")]
+      .find((b) => b.textContent?.includes("Remove from list"))!
+      .click();
     await flushPromises();
     expect($$(".home-card")).toHaveLength(0);
     expect(cb.openPath).not.toHaveBeenCalled();
@@ -231,20 +260,30 @@ describe("HomeScreen", () => {
   });
 
   it("removes a card from its right click menu", async () => {
-    open([{ path: "C:/a.funda", openedAt: 2 }, { path: "C:/b.funda", openedAt: 1 }]);
+    open([
+      { path: "C:/a.funda", openedAt: 2 },
+      { path: "C:/b.funda", openedAt: 1 },
+    ]);
     mount(ContextMenuHost, { attachTo: document.body });
     await flushPromises();
-    $(".home-card")!.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 5, clientY: 5 }));
+    $(".home-card")!.dispatchEvent(
+      new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 5, clientY: 5 }),
+    );
     await nextTick();
     const rows = [...document.querySelectorAll<HTMLElement>(".ctx-menu button, .ctx-item")];
-    expect(rows.map((r) => r.textContent?.trim())).toEqual(expect.arrayContaining(["Open", "Remove from list", "Copy path"]));
+    expect(rows.map((r) => r.textContent?.trim())).toEqual(
+      expect.arrayContaining(["Open", "Remove from list", "Copy path"]),
+    );
     rows.find((r) => r.textContent?.trim() === "Remove from list")!.click();
     await flushPromises();
     expect($$(".home-card-name").map((n) => n.textContent)).toEqual(["b"]);
   });
 
   it("filters the cards as you type and says when nothing matches", async () => {
-    open([{ path: "C:/work/bracket.funda", openedAt: 2 }, { path: "C:/work/gear.funda", openedAt: 1 }]);
+    open([
+      { path: "C:/work/bracket.funda", openedAt: 2 },
+      { path: "C:/work/gear.funda", openedAt: 1 },
+    ]);
     await flushPromises();
     const field = document.querySelector<HTMLInputElement>(".home-search")!;
     field.value = "gea";
@@ -258,7 +297,10 @@ describe("HomeScreen", () => {
   });
 
   it("sorts and remembers the order", async () => {
-    open([{ path: "C:/b.funda", openedAt: 2 }, { path: "C:/a.funda", openedAt: 1 }]);
+    open([
+      { path: "C:/b.funda", openedAt: 2 },
+      { path: "C:/a.funda", openedAt: 1 },
+    ]);
     await flushPromises();
     const sort = document.querySelector<HTMLSelectElement>(".home-sort")!;
     sort.value = "name";
@@ -299,7 +341,10 @@ describe("HomeScreen", () => {
   });
 
   it("clears the search on Escape before it closes", async () => {
-    const { home } = open([{ path: "C:/a.funda", openedAt: 1 }, { path: "C:/b.funda", openedAt: 2 }]);
+    const { home } = open([
+      { path: "C:/a.funda", openedAt: 1 },
+      { path: "C:/b.funda", openedAt: 2 },
+    ]);
     const field = document.querySelector<HTMLInputElement>(".home-search")!;
     field.value = "a";
     field.dispatchEvent(new Event("input"));
@@ -328,21 +373,29 @@ describe("HomeScreen", () => {
     open([{ path: "C:/work/gear.funda", openedAt: 1 }]);
     expect($$(".home-new-card").map((c) => c.querySelector(".home-new-name")!.textContent)).toEqual(["Blank", "Open…"]);
     expect($(".home-new-template")).toBeNull();
-    expect($$(".home-example-name").map((n) => n.textContent)).toEqual(["Plate", "Wall bracket", "Pinned lever"]);
-    expect($$(".home-example-line").map((n) => n.textContent)).toEqual(["Example", "Example", "Example"]);
+    expect($$(".home-example-name").map((n) => n.textContent)).toEqual([
+      "Wall bracket",
+      "Box with a lid",
+      "Capsule holder",
+      "Plate",
+      "Pinned lever",
+    ]);
     expect($(".home-examples")!.closest(".home-scroll")).toBe($(".home-grid")!.closest(".home-scroll"));
     expect($(".home-section")!.textContent).toBe("Examples");
   });
 
   it("starts a document from an example card", async () => {
     const { cb } = open();
-    $$(".home-example")[1]!.click();
+    $$(".home-example")[3]!.click();
     await flushPromises();
-    expect(cb.newFromTemplate).toHaveBeenCalledWith("wall-bracket");
+    expect(cb.newFromTemplate).toHaveBeenCalledWith("plate");
   });
 
   it("finds an example by name, and says nothing matches only when no example does either", async () => {
-    open([{ path: "C:/work/bracket.funda", openedAt: 2 }, { path: "C:/work/gear.funda", openedAt: 1 }]);
+    open([
+      { path: "C:/work/bracket.funda", openedAt: 2 },
+      { path: "C:/work/gear.funda", openedAt: 1 },
+    ]);
     await flushPromises();
     const field = document.querySelector<HTMLInputElement>(".home-search")!;
     field.value = "LEVER";
@@ -363,23 +416,38 @@ describe("HomeScreen", () => {
     ["the browser build", null, "Recent documents appear here in the desktop app."],
   ] as const)("shows the examples with no recent documents in %s", (_where, lib, empty) => {
     open([], {}, lib);
-    expect($$(".home-example")).toHaveLength(3);
+    expect($$(".home-example")).toHaveLength(5);
     expect($(".home-empty")!.textContent).toBe(empty);
   });
 
   it("loads a card's picture only once the card is in view", async () => {
     const watched = new Map<Element, (e: { isIntersecting: boolean }[]) => void>();
     const roots = new Set<Element | Document | null>();
-    vi.stubGlobal("IntersectionObserver", class {
-      constructor(private cb: (e: { isIntersecting: boolean }[]) => void, opts?: IntersectionObserverInit) {
-        roots.add(opts?.root ?? null);
-      }
-      observe(el: Element) { watched.set(el, this.cb); }
-      disconnect() {}
-    });
+    vi.stubGlobal(
+      "IntersectionObserver",
+      class {
+        constructor(
+          private cb: (e: { isIntersecting: boolean }[]) => void,
+          opts?: IntersectionObserverInit,
+        ) {
+          roots.add(opts?.root ?? null);
+        }
+        observe(el: Element) {
+          watched.set(el, this.cb);
+        }
+        disconnect() {}
+      },
+    );
     try {
       const lib = fakeLibrary([], 5000);
-      open([{ path: "C:/w/a.funda", openedAt: 2 }, { path: "C:/w/b.funda", openedAt: 1 }], {}, lib);
+      open(
+        [
+          { path: "C:/w/a.funda", openedAt: 2 },
+          { path: "C:/w/b.funda", openedAt: 1 },
+        ],
+        {},
+        lib,
+      );
       await flushPromises();
       expect(lib.thumbs).not.toHaveBeenCalled();
       expect($(".home-card-pic img")).toBeNull();
@@ -449,7 +517,9 @@ describe("HomeScreen", () => {
       key("Escape");
       $(".home-folder-row")!.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
       await nextTick();
-      menuRows().find((r) => r.textContent?.trim() === "Remove from Home")!.click();
+      menuRows()
+        .find((r) => r.textContent?.trim() === "Remove from Home")!
+        .click();
       await flushPromises();
       expect(rows()).toEqual(["Recent", "Add folder…"]);
       expect($(".home-nav-row.active")!.textContent).toBe("Recent");
@@ -457,9 +527,13 @@ describe("HomeScreen", () => {
     });
 
     it("says when a folder holds more than it lists, or cannot be read", async () => {
-      localStorage.setItem("fundacad.home.folders", JSON.stringify([
-        { path: "D:/big", addedAt: 1 }, { path: "D:/gone", addedAt: 2 },
-      ]));
+      localStorage.setItem(
+        "fundacad.home.folders",
+        JSON.stringify([
+          { path: "D:/big", addedAt: 1 },
+          { path: "D:/gone", addedAt: 2 },
+        ]),
+      );
       open([], {}, fakeLibrary([], 0, { "D:/big": { files: proj.files, truncated: true } }));
       const [big, gone] = $$(".home-folder-row");
       big!.click();
@@ -474,9 +548,15 @@ describe("HomeScreen", () => {
     it("starts a new document from a folder view in that folder", async () => {
       localStorage.setItem("fundacad.home.folders", JSON.stringify([{ path: "D:/proj", addedAt: 1 }]));
       let refuse = true;
-      const { home } = open([], {
-        newDocument: vi.fn(async () => { if (!refuse) home.visible = false; }),
-      }, fakeLibrary([], 0, { "D:/proj": proj }));
+      const { home } = open(
+        [],
+        {
+          newDocument: vi.fn(async () => {
+            if (!refuse) home.visible = false;
+          }),
+        },
+        fakeLibrary([], 0, { "D:/proj": proj }),
+      );
       $(".home-folder-row")!.click();
       await flushPromises();
       $(".home-new-blank")!.click();
@@ -495,8 +575,13 @@ describe("HomeScreen", () => {
   });
 
   describe("versions drawer", () => {
-    const row = (id: string, parent: string | null, branch: string, time: number) =>
-      ({ id, parent, branch, message: `msg ${id}`, time });
+    const row = (id: string, parent: string | null, branch: string, time: number) => ({
+      id,
+      parent,
+      branch,
+      message: `msg ${id}`,
+      time,
+    });
     const hist: DocSummary = {
       format: "funda",
       versions: [row("v1", null, "main", 1), row("v2", "v1", "main", 2), row("v3", "v1", "wide", 3)],
@@ -533,10 +618,13 @@ describe("HomeScreen", () => {
     });
 
     it("passes the copy and branch actions through and stays up when they are refused", async () => {
-      const { cb, home } = await drawerFor({ [P]: hist }, {
-        openVersion: vi.fn(async () => false),
-        openBranch: vi.fn(async () => false),
-      });
+      const { cb, home } = await drawerFor(
+        { [P]: hist },
+        {
+          openVersion: vi.fn(async () => false),
+          openBranch: vi.fn(async () => false),
+        },
+      );
       $$(".home-version-copy")[1]!.click();
       await flushPromises();
       expect(cb.openVersion).toHaveBeenCalledWith(P, "v1", true);
@@ -570,20 +658,157 @@ describe("HomeScreen", () => {
 
     it("reads the open document's history live instead of the file", async () => {
       const lib = fakeLibrary([], 0, {}, [], { [P]: hist });
-      open([{ path: P, openedAt: 1 }], {
-        currentPath: () => P,
-        currentVersions: () => ({
-          objects: {},
-          versions: [{ id: "u1", parent: null, branch: "main", message: "unsaved", time: 9, tree: { features: [], rest: "" } }],
-          branches: { main: "u1" },
-          current: "main",
-        }),
-      }, lib);
+      open(
+        [{ path: P, openedAt: 1 }],
+        {
+          currentPath: () => P,
+          currentVersions: () => ({
+            objects: {},
+            versions: [
+              { id: "u1", parent: null, branch: "main", message: "unsaved", time: 9, tree: { features: [], rest: "" } },
+            ],
+            branches: { main: "u1" },
+            current: "main",
+          }),
+        },
+        lib,
+      );
       await flushPromises();
       $(".home-card-versions")!.click();
       await flushPromises();
       expect(lib.summary).not.toHaveBeenCalled();
       expect(texts(".home-version-msg")).toEqual(["unsaved"]);
     });
+  });
+});
+
+describe("Home on a first run", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    localStorage.clear();
+    document.body.innerHTML = "";
+    vi.restoreAllMocks();
+  });
+
+  const order = (...sels: string[]) => sels.map((sel) => $$(".home-scroll *").findIndex((el) => el.matches(sel)));
+
+  it("welcomes a maker with no recent documents and puts the examples first", () => {
+    open([], {}, fakeLibrary());
+    const welcome = $(".home-welcome")!;
+    expect(welcome.querySelector("h2")!.textContent).toBe("Welcome to FundaCAD");
+    const text = welcome.querySelector("p")!.textContent!;
+    expect(text).toContain("start with Blank");
+    expect(text).toContain("STEP, STL and 3MF");
+    expect(text.toLowerCase()).not.toContain("guide");
+    expect($(".home-section")!.textContent).toBe("Start here");
+    const [w, heading, grid, empty] = order(".home-welcome", ".home-section", ".home-examples", ".home-empty");
+    expect(w! < heading! && heading! < grid! && grid! < empty!).toBe(true);
+    expect($(".home-empty")!.textContent).toBe("Documents you open or save appear here.");
+  });
+
+  it("shows no welcome once there is a recent document, and lists the examples under them", async () => {
+    open([{ path: "E:/jigs/drill guide 2.funda", openedAt: 3 }], {}, fakeLibrary());
+    await flushPromises();
+    expect($(".home-welcome")).toBeNull();
+    expect($(".home-section")!.textContent).toBe("Examples");
+    const [cards, grid] = order(".home-card", ".home-examples");
+    expect(cards! < grid!).toBe(true);
+  });
+
+  it("shows no welcome over many recent documents", async () => {
+    open(
+      [
+        { path: "E:/jigs/a.funda", openedAt: 3 },
+        { path: "E:/jigs/b.funda", openedAt: 2 },
+        { path: "F:/old/c.funda", openedAt: 1 },
+      ],
+      {},
+      fakeLibrary(),
+    );
+    await flushPromises();
+    expect($(".home-welcome")).toBeNull();
+    expect($$(".home-section").map((h) => h.textContent)).toEqual(["Examples"]);
+  });
+
+  it("shows a folder's own empty line in a folder view, not the welcome", async () => {
+    localStorage.setItem("fundacad.home.folders", JSON.stringify([{ path: "D:/empty", addedAt: 1 }]));
+    open([], {}, fakeLibrary([], 0, { "D:/empty": { files: [], truncated: false } }));
+    $(".home-folder-row")!.click();
+    await flushPromises();
+    expect($(".home-welcome")).toBeNull();
+    expect($(".home-empty")!.textContent).toBe("No documents in this folder.");
+    expect($(".home-section")!.textContent).toBe("Examples");
+  });
+
+  it("hides the welcome while searching and filters the examples", async () => {
+    // With no recent documents the search row shows only once a folder is added.
+    localStorage.setItem("fundacad.home.folders", JSON.stringify([{ path: "D:/proj", addedAt: 1 }]));
+    open([], {}, fakeLibrary());
+    expect($(".home-welcome")).not.toBeNull();
+    const field = document.querySelector<HTMLInputElement>(".home-search")!;
+    field.value = "plat";
+    field.dispatchEvent(new Event("input"));
+    await nextTick();
+    expect($(".home-welcome")).toBeNull();
+    expect($$(".home-example-name").map((n) => n.textContent)).toEqual(["Plate"]);
+  });
+
+  it("says on each example what it shows, with its own icon", () => {
+    open([], {}, fakeLibrary());
+    expect(
+      $$(".home-example").map((c) => [
+        c.querySelector(".home-example-name")!.textContent,
+        c.querySelector(".home-example-line")!.textContent,
+        c.querySelector("svg")!.getAttribute("data-icon"),
+      ]),
+    ).toEqual([
+      ["Wall bracket", "Find where it bends", "stress"],
+      ["Box with a lid", "A lid that fits, ready to print", "shell"],
+      ["Capsule holder", "A cap that screws on, ready to print", "thread"],
+      ["Plate", "Change a size, the holes follow", "box"],
+      ["Pinned lever", "See the load on a pin", "rotate"],
+    ]);
+    expect($$(".home-example").map((c) => c.getAttribute("title"))).toEqual([
+      "An L bracket on a wall. Open the Stress panel and run it to see where it bends most",
+      "A box and a lid laid out for printing. Change innerWidth in Parameters and both parts follow",
+      "A tube and a screw-on cap laid out for printing. Change innerDiameter in Parameters and both threads follow, or set screwedOn to 1 to see the cap on the tube",
+      "A plate with four holes. Change width or depth in Parameters and the holes stay in their corners",
+      "A lever on a pin. Open the Stress panel and run it to see the load around the pin",
+    ]);
+  });
+
+  it("says what Open takes in a browser tab, documents only", () => {
+    open([], {}, fakeLibrary());
+    expect($(".home-open .home-new-line")!.textContent).toBe("FundaCAD documents");
+    expect($(".home-new-blank .home-new-line")).toBeNull();
+  });
+
+  it("says what Open takes in the desktop app, model files too", () => {
+    (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {};
+    try {
+      open([], {}, fakeLibrary());
+      expect($(".home-open .home-new-line")!.textContent).toBe("Documents, STEP, STL, 3MF");
+    } finally {
+      delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
+    }
+  });
+
+  it("hides the welcome for good once the maker hides it", async () => {
+    open([], {}, fakeLibrary());
+    $(".home-welcome-hide")!.click();
+    await flushPromises();
+    expect($(".home-welcome")).toBeNull();
+    expect(localStorage.getItem("fundacad.welcomeClosed")).toBe("true");
+    open([], {}, fakeLibrary());
+    expect($(".home-welcome")).toBeNull();
+    expect($(".home-examples")).not.toBeNull();
+  });
+
+  it("opens the manual from the welcome", async () => {
+    const opened = vi.spyOn(window, "open").mockReturnValue(null);
+    open([], {}, fakeLibrary());
+    $(".home-welcome-manual")!.click();
+    await flushPromises();
+    expect(opened.mock.calls).toEqual([[MANUAL_URL, "_blank", "noopener"]]);
   });
 });

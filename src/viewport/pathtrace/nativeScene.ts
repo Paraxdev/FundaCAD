@@ -1,7 +1,5 @@
-// Feeds the native tracer (src-tauri/src/frames/tracer.rs) the scene the
-// WebGPU tracer would get: the mirror meshes with their baked colours, face
-// slots and traceMaterialFrom materials. A mesh crosses once per blasKey, so a
-// move, a material or a look change sends JSON only.
+// Feeds the native tracer (src-tauri/src/frames/tracer.rs) what the WebGPU tracer would get. A mesh crosses
+// once per blasKey, so a move, a material or a look change sends JSON only.
 
 import type { Denoise } from "../../ui/renderPrefs";
 import * as THREE from "three";
@@ -117,7 +115,10 @@ export function meshFrame(key: string, m: THREE.Mesh): Uint8Array {
     colors: !!colors,
     groups,
   };
-  return frame(header, [pos, normals, index, colors].filter((p): p is Float32Array => !!p));
+  return frame(
+    header,
+    [pos, normals, index, colors].filter((p): p is Float32Array => !!p),
+  );
 }
 
 /** The most lights the native tracer takes, MAX_LIGHTS in tracer/src/gpu/mod.rs. */
@@ -132,7 +133,7 @@ export interface NativeLight {
 
 export function nativeLights(rig: LightRig): NativeLight[] {
   return rig.lights
-    .filter((l) => !l.realtimeOnly)
+    .filter((l) => !l.realtimeOnly && l.intensity > 0)
     .slice(0, NATIVE_LIGHTS)
     .map((l) => ({
       direction: [l.direction[0], l.direction[1], l.direction[2]],
@@ -141,10 +142,8 @@ export function nativeLights(rig: LightRig): NativeLight[] {
     }));
 }
 
-/** Look in tracer/src/gpu/mod.rs. The environment goes separately (envFrame);
- *  the sky gradient only lights a native side that has none. Lights come from
- *  the rig; the strongest scene light as the sun stays for a native side
- *  without `lights`. */
+/** Look in tracer/src/gpu/mod.rs. The environment goes separately (envFrame), and the sky gradient only lights
+ *  a native side that has none. The strongest light as the sun stays for a native side without `lights`. */
 export function nativeLook(look: TraceLook) {
   const bg = rgb(look.background);
   const sun = [...look.lights].sort((a, b) => b.intensity - a.intensity)[0];
@@ -158,6 +157,8 @@ export function nativeLook(look: TraceLook) {
     exposure: look.exposure,
     background: bg,
     environmentBehind: !!look.environmentBehind,
+    ...(look.bounces !== undefined ? { bounces: look.bounces } : {}),
+    ...(look.firefly !== undefined ? { firefly: look.firefly } : {}),
     ...(look.rig ? { lights: nativeLights(look.rig), ground: nativeGround(look.rig) } : {}),
   };
 }
@@ -168,9 +169,8 @@ export function nativeGround(rig: LightRig) {
   return { mode: g.mode, z: g.z, centre: [g.centre[0], g.centre[1]], extent: g.extent, albedo: g.albedo };
 }
 
-/** The pt_env body for `look`'s environment: an imported panorama's own pixels
- *  ("z" layout) when it is held, else the room equirect traceEnvironment read
- *  back ("y" layout, rows as read, bottom first). Built only when sent. */
+/** The pt_env body: an imported panorama's own pixels ("z" layout) when held, else the room equirect
+ *  traceEnvironment read back ("y" layout, bottom row first). Built only when sent. */
 export function envFrame(look: TraceLook): { key: string; bytes(): Uint8Array } | null {
   const hdr = look.hdr;
   const held = hdr ? heldHdr(hdr.hash) : null;
@@ -178,7 +178,10 @@ export function envFrame(look: TraceLook): { key: string; bytes(): Uint8Array } 
     const { width, height } = held.light;
     return {
       key: hdr.key,
-      bytes: () => frame({ key: hdr.key, width, height, up: "z" }, [hdrEnvironment(held.light, hdr.rotation, hdr.exposure, hdr.hemi)]),
+      bytes: () =>
+        frame({ key: hdr.key, width, height, up: "z" }, [
+          hdrEnvironment(held.light, hdr.rotation, hdr.exposure, hdr.hemi),
+        ]),
     };
   }
   const tex = look.environment as THREE.DataTexture;
@@ -189,9 +192,8 @@ export function envFrame(look: TraceLook): { key: string; bytes(): Uint8Array } 
   return { key, bytes: () => frame({ key, width, height, up: "y" }, [data]) };
 }
 
-/** The camera as the native tracer takes it: an orthographic one keeps its
- *  eye and sends the half height it frames, a perspective one its field of view
- *  and the lens, which an orthographic one never gets, as in the Realtime bokeh. */
+/** An orthographic camera keeps its eye and sends the half height it frames; only a perspective one
+ *  sends a field of view and the lens, as in the Realtime bokeh. */
 export function nativeCamera(camera: THREE.Camera, lens: TraceLens | null) {
   camera.updateMatrixWorld();
   const eye = new THREE.Vector3().setFromMatrixPosition(camera.matrixWorld);
@@ -224,8 +226,13 @@ export class NativeScene {
   private chain: Promise<unknown> = Promise.resolve();
   private pendingLook: { look: ReturnType<typeof nativeLook>; env: ReturnType<typeof envFrame> } | null = null;
   private lookJob: Promise<unknown> = Promise.resolve();
+  private pendingCamera: ReturnType<typeof nativeCamera> | null = null;
+  private cameraJob: Promise<unknown> = Promise.resolve();
 
-  constructor(private call: Call, private onError: (e: unknown) => void) {}
+  constructor(
+    private call: Call,
+    private onError: (e: unknown) => void,
+  ) {}
 
   /** Calls run one after another in the order they were made. */
   private queue(f: () => Promise<unknown>): Promise<unknown> {
@@ -268,10 +275,8 @@ export class NativeScene {
     return this.queue(() => this.call("pt_scene", { bodies }));
   }
 
-  /** pt_look answers the environment the native side holds, which a fresh
-   *  tracer has lost, so pt_env goes only when that is not this one. A look
-   *  made while an earlier one still waits in the queue replaces it, so a run
-   *  of HDR rotations sends one 4 MB pt_env per round trip, not one per step. */
+  /** pt_env goes only when pt_look answers another environment, since a fresh tracer has lost it. A newer
+   *  look replaces one still queued, so a run of HDR rotations sends one 4 MB pt_env per round trip. */
   look(look: TraceLook) {
     const waiting = this.pendingLook !== null;
     this.pendingLook = { look: nativeLook(look), env: envFrame(look) };
@@ -285,9 +290,18 @@ export class NativeScene {
     return this.lookJob;
   }
 
+  /** Like look, only the newest camera waits: the page moves the camera every
+   *  display frame, faster than a native side that answers between frames. */
   camera(camera: THREE.Camera, lens: TraceLens | null) {
-    const c = nativeCamera(camera, lens);
-    return this.queue(() => this.call("pt_camera", { camera: c }));
+    const waiting = this.pendingCamera !== null;
+    this.pendingCamera = nativeCamera(camera, lens);
+    if (waiting) return this.cameraJob;
+    this.cameraJob = this.queue(() => {
+      const c = this.pendingCamera!;
+      this.pendingCamera = null;
+      return this.call("pt_camera", { camera: c });
+    });
+    return this.cameraJob;
   }
 
   cap(samples: number) {

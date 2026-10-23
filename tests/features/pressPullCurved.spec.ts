@@ -92,6 +92,9 @@ function fakeStore(reply: FaceAxisReply | null) {
       listeners.add(fn);
       return () => listeners.delete(fn);
     },
+    onSessionBuild(fn: (s: RebuildState) => void) {
+      return this.onBuild(fn);
+    },
     faceAxis: async () => reply,
   };
   return { store: store as unknown as DocumentStore, previews, added };
@@ -103,7 +106,10 @@ function pointer(canvas: HTMLCanvasElement, type: string, y: number) {
 
 type ToolInternals = { value: number; axis: THREE.Vector3; anchor: THREE.Vector3; direction: string };
 const internals = (t: PressPullTool) => t as unknown as ToolInternals;
-const dirOf = (t: PressPullTool) => internals(t).axis.toArray().map((c) => Math.round(c * 1e9) / 1e9 + 0);
+const dirOf = (t: PressPullTool) =>
+  internals(t)
+    .axis.toArray()
+    .map((c) => Math.round(c * 1e9) / 1e9 + 0);
 
 function box() {
   const b = [...document.querySelectorAll<HTMLElement>(".dim-input")].find((x) => x.style.display !== "none");
@@ -118,9 +124,10 @@ function box() {
     names,
     value: b?.querySelector("input")?.value ?? null,
     toggle: toggle && toggle.style.display !== "none" ? toggle.textContent : null,
-    direction: b?.querySelector<HTMLElement>(".dim-direction")?.style.display !== "none"
-      ? b?.querySelector<HTMLElement>(".dim-direction")?.textContent ?? null
-      : null,
+    direction:
+      b?.querySelector<HTMLElement>(".dim-direction")?.style.display !== "none"
+        ? (b?.querySelector<HTMLElement>(".dim-direction")?.textContent ?? null)
+        : null,
   };
 }
 
@@ -162,7 +169,10 @@ describe("press/pull on a sphere, a cone or a torus", () => {
     setActivePinia(createPinia());
     frames = [];
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
-    vi.stubGlobal("requestAnimationFrame", (fn: () => void) => { frames.push(fn); return frames.length; });
+    vi.stubGlobal("requestAnimationFrame", (fn: () => void) => {
+      frames.push(fn);
+      return frames.length;
+    });
     vi.stubGlobal("cancelAnimationFrame", () => {});
   });
   afterEach(() => {
@@ -208,7 +218,13 @@ describe("press/pull on a sphere, a cone or a torus", () => {
   });
 
   describe("a countersink cone, its average normal along the axis", () => {
-    const cone = resize({ kind: "cone", size: 0, concave: true, full: true, axis: { origin: [0, 0, -5], dir: [0, 0, 1] } });
+    const cone = resize({
+      kind: "cone",
+      size: 0,
+      concave: true,
+      full: true,
+      axis: { origin: [0, 0, -5], dir: [0, 0, 1] },
+    });
     const countersink: FaceAxisReply = { ...NO_AXIS, resize: cone };
 
     it("reads an offset along the facet picked, with no taper, mode or up to", async () => {
@@ -220,7 +236,9 @@ describe("press/pull on a sphere, a cone or a torus", () => {
       expect(ghost).toHaveBeenLastCalledWith([7], -0.8, "normal");
       expect(previews.at(-1)).toMatchObject({ type: "press-pull", distance: -0.8, operation: "cut" });
       expect(usePromptStore().text).toMatch(/how far it moves, negative cuts/);
-      document.querySelector(".dim-input input")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      document
+        .querySelector(".dim-input input")!
+        .dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
       expect(added).toHaveLength(1);
       const f = added[0] as Record<string, unknown>;
       expect(f).toMatchObject({ type: "press-pull", distance: -0.8 });
@@ -263,8 +281,10 @@ describe("press/pull on a sphere, a cone or a torus", () => {
   });
 
   describe("a cylinder of radius 3 above the face, its axis along X", () => {
-    const hole = (full: boolean): FaceAxisReply =>
-      ({ ...NO_AXIS, resize: resize({ kind: "cylinder", size: 3, concave: true, full, axis: { origin: [0, 0, 3], dir: [1, 0, 0] } }) });
+    const hole = (full: boolean): FaceAxisReply => ({
+      ...NO_AXIS,
+      resize: resize({ kind: "cylinder", size: 3, concave: true, full, axis: { origin: [0, 0, 3], dir: [1, 0, 0] } }),
+    });
     const prompt = () => usePromptStore().text ?? "";
     const type = (text: string) => {
       const input = document.querySelector<HTMLInputElement>(".dim-input input")!;

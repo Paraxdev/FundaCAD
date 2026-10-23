@@ -1,6 +1,4 @@
-// The guides a round face resize draws on the model: a thin line down the
-// face's axis, and a dashed one from the axis out to the handle, across the
-// whole diameter on a full round, so the size being set reads on the model.
+// The axis line and dashed size line a round face resize draws, so the size being set reads on the model.
 
 import * as THREE from "three";
 import type { Vec3 } from "../types";
@@ -94,7 +92,9 @@ export class ResizeGuides {
     if (!this.axisLine || !this.sizeLine) {
       this.host = host;
       this.axisLine = segment(new THREE.LineBasicMaterial({ color: ink, opacity: 0.7, ...overlay }));
-      this.sizeLine = segment(new THREE.LineDashedMaterial({ color: ink, opacity: 0.95, dashSize: 1, gapSize: 1, ...overlay }));
+      this.sizeLine = segment(
+        new THREE.LineDashedMaterial({ color: ink, opacity: 0.95, dashSize: 1, gapSize: 1, ...overlay }),
+      );
       this.axisLine.name = "resize-axis";
       this.sizeLine.name = "resize-size";
       host.addToScene(this.axisLine);

@@ -3,7 +3,13 @@
 
 import { describe, expect, it } from "vitest";
 import {
-  PRINT_CLEARANCE, formatOffBy, nearestThread, threadChoices, threadFeature, threadProfile, trapezoidalAc,
+  PRINT_CLEARANCE,
+  formatOffBy,
+  nearestThread,
+  threadChoices,
+  threadFeature,
+  threadProfile,
+  trapezoidalAc,
 } from "../../plugins/FundaCAD.Screws/threadSpec";
 
 describe("nearest thread size", () => {
@@ -65,7 +71,11 @@ describe("thread profiles", () => {
 
   it("keeps every family's profile narrower than its pitch", () => {
     for (const c of threadChoices()) {
-      for (const [external, faceIs] of [[true, "nominal"], [false, "tap"], [false, "nominal"]] as const) {
+      for (const [external, faceIs] of [
+        [true, "nominal"],
+        [false, "tap"],
+        [false, "nominal"],
+      ] as const) {
         expect(width(threadProfile(c.system, c.pitch, external, faceIs).profile)).toBeLessThan(c.pitch);
       }
     }
@@ -83,13 +93,29 @@ describe("the thread feature", () => {
   it("writes a left hand two start Tr8x8 with a print clearance and keeps the choice", () => {
     const choice = threadChoices().find((c) => c.designation === "Tr8x2")!;
     const face = { kind: "face", by: "nearest", point: [4, 0, 0], body: "body1" };
-    const f = threadFeature({ id: "th", face, choice, faceIs: "nominal", external: true, starts: 4, hand: "left", clearance: PRINT_CLEARANCE });
+    const f = threadFeature({
+      id: "th",
+      face,
+      choice,
+      faceIs: "nominal",
+      external: true,
+      starts: 4,
+      hand: "left",
+      clearance: PRINT_CLEARANCE,
+    });
     expect(f).toMatchObject({ type: "thread", pitch: 2, starts: 4, hand: "left", operation: "cut", clearance: 0.2 });
     expect(f.spec).toMatchObject({ system: "tr", size: "Tr8", designation: "Tr8x2" });
   });
 });
 
-import { choicesFor, draftForFace, draftForFeature, featureOf, nearestIn, offByText } from "../../plugins/FundaCAD.Screws/threadTool";
+import {
+  choicesFor,
+  draftForFace,
+  draftForFeature,
+  featureOf,
+  nearestIn,
+  offByText,
+} from "../../plugins/FundaCAD.Screws/threadTool";
 
 describe("standard thread panel draft", () => {
   const face = { kind: "face", by: "nearest", point: [2.5, 0, 0], body: "body1" } as never;
@@ -115,11 +141,27 @@ describe("standard thread panel draft", () => {
   });
 
   it("writes hand, starts and the print clearance, and reopens on them", () => {
-    const d = { ...draftForFace(face, 8, true)!, system: "tr" as const, designation: "Tr8x2", hand: "left" as const, starts: 4, printFit: true, clearance: 0.3 };
+    const d = {
+      ...draftForFace(face, 8, true)!,
+      system: "tr" as const,
+      designation: "Tr8x2",
+      hand: "left" as const,
+      starts: 4,
+      printFit: true,
+      clearance: 0.3,
+    };
     const f = featureOf(d, "f9") as unknown as Record<string, unknown>;
     expect(f).toMatchObject({ type: "thread", pitch: 2, starts: 4, hand: "left", clearance: 0.3, operation: "cut" });
     const back = draftForFeature(f, null)!;
-    expect(back).toMatchObject({ editing: "f9", system: "tr", designation: "Tr8x2", hand: "left", starts: 4, printFit: true, clearance: 0.3 });
+    expect(back).toMatchObject({
+      editing: "f9",
+      system: "tr",
+      designation: "Tr8x2",
+      hand: "left",
+      starts: 4,
+      printFit: true,
+      clearance: 0.3,
+    });
   });
 
   it("leaves the clearance off without Print fit, and a nominal bore joins", () => {

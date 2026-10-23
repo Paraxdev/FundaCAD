@@ -1,9 +1,5 @@
-/* ============================================================================
-   GLASS, the finish on everything that floats over the viewport: squircle
-   corners, a blurred tinted fill with a sheen, a lit rim that catches the accent
-   at its far corner, and a neon core on whatever is switched on.
-   Loaded after the files that lay these surfaces out, so it only repaints them.
-   ============================================================================ */
+/* The glass finish on everything that floats over the viewport. Loaded after the files
+   that lay these surfaces out, so it only repaints them. */
 
 .float-card,
 .float-group,
@@ -25,11 +21,19 @@
 .home-card-versions,
 .home-badge,
 .home-section,
-.home-foot {
+.home-foot,
+.fps,
+.roundtrip,
+.sel-readout,
+.normal-to-sketch,
+.section-chip,
+.snap-tag,
+.sketch-dim,
+.sketch-glyph {
   corner-shape: squircle;
   background: var(--glass-sheen), var(--float-bg);
   -webkit-backdrop-filter: var(--float-blur);
-          backdrop-filter: var(--float-blur);
+  backdrop-filter: var(--float-blur);
   border: 1px solid var(--float-line);
   box-shadow: var(--glass-inset), var(--float-shadow);
 }
@@ -64,8 +68,21 @@
 .home-card-versions,
 .home-badge,
 .home-section,
-.home-foot {
+.home-foot,
+.fps,
+.roundtrip,
+.sel-readout,
+.normal-to-sketch,
+.section-chip,
+.snap-tag,
+.sketch-dim,
+.sketch-glyph {
   border-radius: var(--float-chip-radius);
+}
+/* A sketch label keeps its state in its border: accent, dashed when driven, red or amber when flagged. */
+.sketch-dim,
+.sketch-glyph {
+  border-color: var(--accent);
 }
 
 .float-card,
@@ -96,16 +113,18 @@
   border-radius: inherit;
   corner-shape: inherit;
   background: var(--glass-rim);
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
-          mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  mask:
+    linear-gradient(#000 0 0) content-box exclude,
+    linear-gradient(#000 0 0);
   pointer-events: none;
 }
 .float-group {
   position: relative;
 }
-
-/* ---- rail -------------------------------------------------------------------- */
 
 .rail-tile,
 .home-new-card,
@@ -140,13 +159,16 @@
 .rail-btn.holding .rail-tile,
 .icon-btn.active {
   background:
-    radial-gradient(120% 100% at 50% 0%, color-mix(in srgb, var(--accent) 44%, transparent), color-mix(in srgb, var(--accent) 8%, transparent) 72%),
+    radial-gradient(
+      120% 100% at 50% 0%,
+      color-mix(in srgb, var(--accent) 44%, transparent),
+      color-mix(in srgb, var(--accent) 8%, transparent) 72%
+    ),
     var(--float-bg);
   border-color: color-mix(in srgb, var(--accent) 55%, transparent);
   color: var(--accent-hot);
-  /* An even halo, not a downward drop: the rail tiles sit tight against their
-     neighbours, so a bloom offset to one side reads as a glow that has been
-     sliced off. Symmetric and modest keeps it a clean ring on every side. */
+  /* An even halo, not a drop: the rail tiles sit tight, so an offset bloom looks sliced
+     off. */
   box-shadow:
     var(--glass-inset),
     0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent),
@@ -179,8 +201,6 @@
   }
 }
 
-/* ---- controls and rows inside the glass ----------------------------------------- */
-
 .icon-btn,
 .float-card-close,
 .float-card-more,
@@ -190,6 +210,7 @@
 .ctx-item,
 .opt-row,
 .pop-wide,
+.section-chip-btn,
 .choice-btn,
 .choice-check,
 #browser .browser-filter,
@@ -222,7 +243,11 @@
 .opt-row.selected,
 .home-nav-row.active,
 .home-branch.shown {
-  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 22%, transparent), color-mix(in srgb, var(--accent) 6%, transparent));
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--accent) 22%, transparent),
+    color-mix(in srgb, var(--accent) 6%, transparent)
+  );
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent);
   color: var(--accent-hot);
 }
@@ -240,17 +265,22 @@
 
 .dim-field.typed {
   border-color: color-mix(in srgb, var(--accent) 70%, transparent);
-  box-shadow: var(--glass-inset), 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent), var(--float-shadow);
+  box-shadow:
+    var(--glass-inset),
+    0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent),
+    var(--float-shadow);
 }
 .dim-btn.dim-toggle.on,
-.dim-btn.dim-direction.on {
+.dim-btn.dim-direction.on,
+.section-chip-btn.active {
   /* Mixed into an opaque dark, not transparency: over a pale model a see-through
      tint washed the label out. */
-  background: color-mix(in srgb, var(--accent) 20%, rgb(22, 24, 29));
+  background: color-mix(in srgb, var(--accent) 20%, var(--panel));
 }
 
 .pop-wide,
-.palette-btn {
+.palette-btn,
+.section-chip-btn {
   corner-shape: squircle;
   border-radius: var(--float-chip-radius);
   background: rgba(255, 255, 255, 0.06);
@@ -258,7 +288,8 @@
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 .pop-wide:hover,
-.palette-btn:hover {
+.palette-btn:hover,
+.section-chip-btn:hover:not(.disabled) {
   background: rgba(255, 255, 255, 0.1);
   border-color: color-mix(in srgb, var(--accent) 45%, transparent);
 }
@@ -267,12 +298,10 @@
   box-shadow: none;
 }
 
-/* ---- the small chooser ------------------------------------------------------- */
-
 .choice-backdrop {
   background: rgba(5, 4, 9, 0.35);
   -webkit-backdrop-filter: blur(6px) saturate(1.2);
-          backdrop-filter: blur(6px) saturate(1.2);
+  backdrop-filter: blur(6px) saturate(1.2);
 }
 .choice-card {
   padding: 18px;
@@ -289,8 +318,6 @@
   border-color: color-mix(in srgb, var(--accent) 55%, transparent);
 }
 
-/* ---- every other surface: dialogs, menus, toasts, docks, panels ---------------- */
-
 .modal-panel,
 .cmdk-card,
 .menu-popup,
@@ -298,16 +325,18 @@
 .logcon,
 .measure-panel,
 .tgt-panel,
-.shortcut-hud-card,
 #renderdock,
 .ne-overlay,
 .areachip,
 .home-drawer,
+.home-news,
+.home-welcome,
+.guide-bubble,
 #safe-mode-banner {
   corner-shape: squircle;
   background: var(--glass-sheen), var(--float-bg-solid);
   -webkit-backdrop-filter: var(--float-blur);
-          backdrop-filter: var(--float-blur);
+  backdrop-filter: var(--float-blur);
   border: 1px solid var(--float-line);
 }
 .cmdk-card,
@@ -316,20 +345,18 @@
 .logcon,
 .measure-panel,
 .tgt-panel,
-.shortcut-hud-card,
 #renderdock,
 .ne-overlay,
 .areachip,
 .home-drawer,
+.home-news,
+.home-welcome,
+.guide-bubble,
 #safe-mode-banner {
   box-shadow: var(--glass-inset), var(--float-shadow);
 }
-/* Everything else in the list above floats directly over the viewport, where
-   --float-shadow's soft dark blur reads fine. .modal-panel instead sits on
-   .modal-overlay's full-screen dark scrim, so that same soft black shadow has
-   no contrast to show against and the panel just looks like it stops dead at
-   the edge. This rule loads after _modals.scss's --shadow-3 on purpose, or
-   this would still be silently overridden by the shared rule above. */
+/* .modal-panel sits on a dark scrim where the soft --float-shadow has no contrast. Loads
+   after the --shadow-3 in _modals.scss on purpose. */
 .modal-panel {
   box-shadow: var(--glass-inset), var(--shadow-3);
 }
@@ -338,10 +365,12 @@
 .logcon,
 .measure-panel,
 .tgt-panel,
-.shortcut-hud-card,
 #renderdock,
 .ne-overlay,
-.home-drawer {
+.home-drawer,
+.home-news,
+.home-welcome,
+.guide-bubble {
   border-radius: var(--float-radius);
 }
 .menu-popup,
@@ -352,15 +381,15 @@
 .areachip {
   border-radius: var(--float-chip-radius);
 }
-/* .cmdk-card, .tgt-panel and .shortcut-hud-card are static in their own
-   partials, and without this their ::after rim resolves against the full screen
-   backdrop and is drawn around the window. */
+/* Static in their own partials, so without this the ::after rim resolves against the
+   full screen and is drawn around the window. */
 .modal-panel,
 .cmdk-card,
 .tgt-panel,
-.shortcut-hud-card,
 .toast,
-#renderdock {
+#renderdock,
+.home-news,
+.home-welcome {
   position: relative;
 }
 .modal-panel::after,
@@ -370,10 +399,12 @@
 .logcon::after,
 .measure-panel::after,
 .tgt-panel::after,
-.shortcut-hud-card::after,
 #renderdock::after,
 .ne-overlay::after,
 .home-drawer::after,
+.home-news::after,
+.home-welcome::after,
+.guide-bubble::after,
 #safe-mode-banner::after {
   content: "";
   position: absolute;
@@ -382,9 +413,13 @@
   border-radius: inherit;
   corner-shape: inherit;
   background: var(--glass-rim);
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
-          mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  mask:
+    linear-gradient(#000 0 0) content-box exclude,
+    linear-gradient(#000 0 0);
   pointer-events: none;
 }
 
@@ -419,18 +454,16 @@
 .home.bg-workspace::before {
   background: rgba(5, 4, 9, 0.35);
   -webkit-backdrop-filter: blur(6px) saturate(1.2);
-          backdrop-filter: blur(6px) saturate(1.2);
+  backdrop-filter: blur(6px) saturate(1.2);
 }
 
-/* Home's paper: opaque, so the workspace stays out of sight, and static. The soft
-   lift and the accent hint are what the glass above catches; the grain is a
-   160px noise tile drawn once. */
+/* Home's paper, opaque so the workspace stays out of sight; the grain is a 160px noise
+   tile drawn once. */
 .home::before {
   background:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .5 0 0 0 .05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
     radial-gradient(70% 60% at 85% 0%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 70%),
-    radial-gradient(130% 100% at 35% 0%, color-mix(in srgb, var(--raised) 26%, transparent), transparent 80%),
-    var(--bg);
+    radial-gradient(130% 100% at 35% 0%, color-mix(in srgb, var(--raised) 26%, transparent), transparent 80%), var(--bg);
 }
 .home.bg-image::before {
   background:
@@ -438,8 +471,6 @@
     var(--home-image) center / cover no-repeat,
     var(--bg);
 }
-
-/* ---- controls in those surfaces ------------------------------------------------ */
 
 .btn,
 .sm-input,
@@ -498,7 +529,9 @@
 .btn-primary {
   background: var(--accent);
   border-color: var(--accent);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 8px 22px -10px var(--accent-glow);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 8px 22px -10px var(--accent-glow);
 }
 .btn-primary:hover:not(:disabled) {
   background: var(--accent-hot);
@@ -508,8 +541,11 @@
    specificity, so without this the ring never shows on them. */
 .btn:focus-visible,
 .pop-wide:focus-visible,
-.palette-btn:focus-visible {
-  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent-glow);
+.palette-btn:focus-visible,
+.section-chip-btn:focus-visible {
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 0 0 4px var(--accent-glow);
 }
 
 .sm-input,
@@ -539,18 +575,13 @@
   background: color-mix(in srgb, var(--accent) 16%, transparent);
 }
 
-/* ---- Home ------------------------------------------------------------------------ */
-
 /* The text keeps the theme's text colour: the accent on its own tint is too faint in light themes. */
 .home-nav-row.active {
   color: var(--text);
 }
 
-/* ---- no blur (ui/glassBlur.ts) ------------------------------------------------ */
-
-/* Potato mode or a software renderer: every repaint of a blurred panel re-blurs
-   the viewport behind it on the CPU, so the glass keeps its sheen, rim and
-   shadow but goes opaque. The `*` catches the hard-coded blurs in other files. */
+/* No blur (ui/glassBlur.ts): a software renderer re-blurs the viewport on the CPU every
+   repaint, so the glass goes opaque. The `*` catches hard coded blurs elsewhere. */
 html.no-glass-blur {
   --float-blur: none;
   --float-bg: var(--panel);
@@ -560,7 +591,7 @@ html.no-glass-blur *,
 html.no-glass-blur *::before,
 html.no-glass-blur *::after {
   -webkit-backdrop-filter: none !important;
-          backdrop-filter: none !important;
+  backdrop-filter: none !important;
 }
 /* Without the blur the scrim would show the float cards sharp through it. */
 html.no-glass-blur .home.bg-workspace::before {

@@ -22,7 +22,10 @@ const path = require("path");
 const TOKEN = process.env.SC_TOKEN || "";
 const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const OUT = path.resolve(process.argv[2] || "elements_shots");
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 let failures = 0;
 const check = (name, ok, detail) => {
   console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail ? `, ${detail}` : ""}`);
@@ -33,7 +36,10 @@ const check = (name, ok, detail) => {
   fs.mkdirSync(OUT, { recursive: true });
   const browser = await chromium.launch({ executablePath: EXE, args: ["--use-angle=swiftshader", "--no-sandbox"] });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-  page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
+  page.on("pageerror", (e) => {
+    console.error("PAGE ERROR:", e.message);
+    failures++;
+  });
   await page.addInitScript((t) => {
     const N = window.WebSocket;
     class P extends N {
@@ -48,15 +54,21 @@ const check = (name, ok, detail) => {
   await page.goto("http://localhost:5173/");
   await page.waitForTimeout(3000);
   const modal = await page.$(".modal-close");
-  if (modal) { await modal.click(); await page.waitForTimeout(400); }
+  if (modal) {
+    await modal.click();
+    await page.waitForTimeout(400);
+  }
   await page.waitForFunction(() => !!window.store, null, { timeout: 60000 });
 
   // Four bodies, so there is something to organise.
   const built = await page.evaluate(async () => {
     for (let i = 0; i < 4; i++) {
       window.store.addFeature({
-        id: window.store.nextId(), type: "box",
-        length: 10 + i * 4, width: 8, height: 6,
+        id: window.store.nextId(),
+        type: "box",
+        length: 10 + i * 4,
+        width: 8,
+        height: 6,
       });
     }
     const t0 = Date.now();
@@ -95,39 +107,53 @@ const check = (name, ok, detail) => {
   await page.locator("#browser").screenshot({ path: `${OUT}/2-elements.png` });
 
   const shown = await page.evaluate(() =>
-    [...document.querySelectorAll("#browser .tree-folder, #browser .feature-row")].map((el) => {
-      const l = el.querySelector(".tree-label");
-      const pad = getComputedStyle(el).paddingLeft;
-      return `${el.classList.contains("tree-folder") ? "[+] " : "    "}${pad.padStart(6)} ${l ? l.textContent : el.textContent.trim()}`;
-    }).join("\n"));
+    [...document.querySelectorAll("#browser .tree-folder, #browser .feature-row")]
+      .map((el) => {
+        const l = el.querySelector(".tree-label");
+        const pad = getComputedStyle(el).paddingLeft;
+        return `${el.classList.contains("tree-folder") ? "[+] " : "    "}${pad.padStart(6)} ${l ? l.textContent : el.textContent.trim()}`;
+      })
+      .join("\n"),
+  );
   console.log("\n--- the panel, as painted ---\n" + shown + "\n");
   check("Rig and Drive are folder heads", /\[\+\].*Rig/.test(shown) && /\[\+\].*Drive/.test(shown));
-  check("Drive is indented inside Rig",
+  check(
+    "Drive is indented inside Rig",
     (() => {
       const rows = shown.split("\n");
       const rig = rows.find((r) => r.includes("Rig"));
       const drive = rows.find((r) => r.includes("Drive"));
       return rig && drive && parseFloat(drive.match(/([\d.]+)px/)[1]) > parseFloat(rig.match(/([\d.]+)px/)[1]);
-    })(), "computed paddingLeft");
+    })(),
+    "computed paddingLeft",
+  );
 
   // --- drag the one unfiled body onto "Rig", then back onto "Bodies" -------
   const dragTo = async (rowLabel, headLabel) =>
-    page.evaluate(([rl, hl]) => {
-      const rowOf = (t) => [...document.querySelectorAll("#browser .feature-row")]
-        .find((el) => el.querySelector(".tree-label")?.textContent === t);
-      const headOf = (t) => [...document.querySelectorAll("#browser .tree-folder")]
-        .find((el) => el.querySelector(".tree-label")?.textContent === t);
-      const src = rowOf(rl), dst = headOf(hl);
-      if (!src || !dst) return `missing ${src ? "" : "row " + rl} ${dst ? "" : "head " + hl}`;
-      const dt = new DataTransfer();
-      const ev = (el, type) => el.dispatchEvent(
-        new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: dt }));
-      ev(src, "dragstart");
-      ev(dst, "dragenter");
-      ev(dst, "dragover");
-      window.__dnd = { dst, src };
-      return "held";
-    }, [rowLabel, headLabel]);
+    page.evaluate(
+      ([rl, hl]) => {
+        const rowOf = (t) =>
+          [...document.querySelectorAll("#browser .feature-row")].find(
+            (el) => el.querySelector(".tree-label")?.textContent === t,
+          );
+        const headOf = (t) =>
+          [...document.querySelectorAll("#browser .tree-folder")].find(
+            (el) => el.querySelector(".tree-label")?.textContent === t,
+          );
+        const src = rowOf(rl),
+          dst = headOf(hl);
+        if (!src || !dst) return `missing ${src ? "" : "row " + rl} ${dst ? "" : "head " + hl}`;
+        const dt = new DataTransfer();
+        const ev = (el, type) =>
+          el.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: dt }));
+        ev(src, "dragstart");
+        ev(dst, "dragenter");
+        ev(dst, "dragover");
+        window.__dnd = { dst, src };
+        return "held";
+      },
+      [rowLabel, headLabel],
+    );
 
   /** Finish a held drag: the ring is read AFTER a paint, it is a class Vue puts
    *  on in response to dragenter and there is nothing to see before it renders. */
@@ -137,8 +163,8 @@ const check = (name, ok, detail) => {
       const { dst, src } = window.__dnd;
       const ringed = dst.classList.contains("drop-into");
       const dt = new DataTransfer();
-      const ev = (el, type) => el.dispatchEvent(
-        new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: dt }));
+      const ev = (el, type) =>
+        el.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: dt }));
       ev(dst, "drop");
       ev(src, "dragend");
       return { ringed };
@@ -148,21 +174,28 @@ const check = (name, ok, detail) => {
   const loose = await page.evaluate((b) => ({ id: b, name: window.store.bodyName(b) }), ids.bodies[3]);
 
   const held = await dragTo(loose.name, "Rig");
-  if (held !== "held") { console.error("  drag did not start:", held); failures++; }
+  if (held !== "held") {
+    console.error("  drag did not start:", held);
+    failures++;
+  }
   const inRig = await finishDrag();
   await page.waitForTimeout(300);
-  check("dragging a body onto an element files it there",
+  check(
+    "dragging a body onto an element files it there",
     (await page.evaluate((b) => window.store.bodyElementOf(b), loose.id)) === ids.rig,
-    JSON.stringify(inRig));
+    JSON.stringify(inRig),
+  );
   check("the target folder lit up while the drag was over it", inRig && inRig.ringed === true);
   await page.locator("#browser").screenshot({ path: `${OUT}/3-dropped.png` });
 
   await dragTo(loose.name, "Bodies");
   const out = await finishDrag();
   await page.waitForTimeout(300);
-  check("dragging it back onto Bodies orphans it again",
+  check(
+    "dragging it back onto Bodies orphans it again",
     (await page.evaluate((b) => window.store.bodyElementOf(b), loose.id)) === undefined,
-    JSON.stringify(out));
+    JSON.stringify(out),
+  );
 
   // --- and the whole thing survives a save/load round trip -----------------
   const survived = await page.evaluate(async () => {
@@ -181,9 +214,11 @@ const check = (name, ok, detail) => {
     };
   });
   console.log("  saved elements:", JSON.stringify(survived.wrote));
-  check("elements round-trip through save and load",
-    JSON.stringify(survived.wrote) === JSON.stringify(survived.back)
-      && survived.held === ids.rig, JSON.stringify(survived));
+  check(
+    "elements round-trip through save and load",
+    JSON.stringify(survived.wrote) === JSON.stringify(survived.back) && survived.held === ids.rig,
+    JSON.stringify(survived),
+  );
 
   await browser.close();
   console.log(failures ? `\n${failures} FAILED` : "\nall checks passed");

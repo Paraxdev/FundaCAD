@@ -1,14 +1,5 @@
-//! The plugin host, replacing the Python engine's `plugin_geometry.py` and
-//! the Python engine's `shape_generate.py` (docs/ENGINE.md 2.3).
-//!
-//! A plugin bundle's geometry is a WebAssembly component (the world in
-//! `wit/plugin.wit`) named by the manifest's `geometryWasm`. Manifests are read
-//! for every plugin on disk, so a document can name the plugin it needs while
-//! that plugin is absent; a component is compiled the first time one of its
-//! declared names is used. Each call runs in a fresh instance under a time
-//! budget, a memory cap and a WASI context with no files, no network and no
-//! environment. Plugins installed, updated or removed while the engine runs are
-//! picked up at the next lookup, as the Python pool restarts on a new stamp.
+//! The plugin host. A bundle's geometry is a WebAssembly component (`wit/plugin.wit`), each call a fresh
+//! instance under a time budget, a memory cap and WASI with no files, network or environment.
 
 mod host;
 mod kernel_api;
@@ -34,9 +25,7 @@ pub const MANIFEST_TYPES: &str = "featureTypes";
 pub const MANIFEST_EXPORTERS: &str = "exporters";
 pub const MANIFEST_GENERATORS: &str = "shapeGenerators";
 
-/// A feature is supervised per feature in Python (STALL_TIMEOUT).
 pub const FEATURE_BUDGET: Duration = Duration::from_secs(60);
-/// server.py gives `generateShape` 180 s.
 pub const GENERATE_BUDGET: Duration = Duration::from_secs(180);
 pub const EXPORT_BUDGET: Duration = Duration::from_secs(600);
 pub const MESH_PASS_BUDGET: Duration = Duration::from_secs(60);
@@ -83,10 +72,8 @@ impl Registry {
         self.entries = found
             .into_iter()
             .map(|declared| {
-                let (loaded, identity) = old
-                    .iter()
-                    .position(|e| e.declared == declared)
-                    .map_or((Loaded::NotYet, None), |i| {
+                let (loaded, identity) =
+                    old.iter().position(|e| e.declared == declared).map_or((Loaded::NotYet, None), |i| {
                         let e = old.swap_remove(i);
                         (e.loaded, e.identity)
                     });
@@ -95,17 +82,15 @@ impl Registry {
             .collect();
     }
 
-    /// Read the plugin directories again when the last look is stale. Read once
-    /// at start, a plugin installed while the engine ran stayed "unknown
-    /// feature type" until the app was restarted.
+    /// Reads the plugin directories again when the last look is stale, so a plugin installed while the
+    /// engine runs is found without a restart.
     fn rescan(&mut self) {
         if !self.discovered || self.checked.is_some_and(|t| t.elapsed() < RESCAN_EVERY) {
             return;
         }
         self.checked = Some(Instant::now());
         let found = discover();
-        let same = found.len() == self.entries.len()
-            && found.iter().zip(&self.entries).all(|(a, b)| *a == b.declared);
+        let same = found.len() == self.entries.len() && found.iter().zip(&self.entries).all(|(a, b)| *a == b.declared);
         if !same {
             self.replace(found);
         }
@@ -114,9 +99,7 @@ impl Registry {
 
 fn registry() -> MutexGuard<'static, Registry> {
     static REG: OnceLock<Mutex<Registry>> = OnceLock::new();
-    REG.get_or_init(Mutex::default)
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
+    REG.get_or_init(Mutex::default).lock().unwrap_or_else(|e| e.into_inner())
 }
 
 /// The registry, having looked for plugins installed or removed since.
@@ -126,12 +109,8 @@ fn current() -> MutexGuard<'static, Registry> {
     reg
 }
 
-/// Read every installed plugin's manifest, `plugin_geometry.discover`.
-///
-/// Explicit, and only the server startup path calls it, exactly as the Python
-/// engine does: a bare `builder::rebuild` has no plugins at all and a feature
-/// type nothing built in owns is "unknown feature type", the same sentence the
-/// Python builder gives on its own. Idempotent.
+/// Only server startup calls it: a bare `builder::rebuild` has no plugins, and a type nothing built in
+/// owns is "unknown feature type". Idempotent.
 pub fn load() {
     let mut reg = registry();
     if reg.discovered {
@@ -151,7 +130,7 @@ pub fn reset_for_tests() {
     reg.checked = None;
 }
 
-/// `plugin_roots`: FUNDACAD_PLUGIN_DIR, then a checkout's own plugins/.
+/// FUNDACAD_PLUGIN_DIR, then a checkout's own plugins/.
 pub fn plugin_roots() -> Vec<PathBuf> {
     let mut out: Vec<PathBuf> = Vec::new();
     if let Some(dir) = std::env::var_os("FUNDACAD_PLUGIN_DIR").filter(|d| !d.is_empty()) {
@@ -201,9 +180,8 @@ fn discover_in(roots: &[PathBuf]) -> Vec<Declared> {
         let mut dirs: Vec<PathBuf> = rd.filter_map(|e| e.ok()).map(|e| e.path()).collect();
         dirs.sort();
         for dir in dirs.into_iter().filter(|d| d.is_dir()) {
-            let Some(man) = std::fs::read(dir.join("manifest.json"))
-                .ok()
-                .and_then(|b| serde_json::from_slice::<Value>(&b).ok())
+            let Some(man) =
+                std::fs::read(dir.join("manifest.json")).ok().and_then(|b| serde_json::from_slice::<Value>(&b).ok())
             else {
                 continue;
             };
@@ -253,11 +231,7 @@ fn declares(d: &Declared, claim: Claim, name: &str) -> bool {
 
 /// The loaded component that claims `name`, or why there is none.
 fn component_for(reg: &mut Registry, claim: Claim, name: &str) -> Result<usize, Missing> {
-    let Some(i) = reg
-        .entries
-        .iter()
-        .position(|e| declares(&e.declared, claim, name))
-    else {
+    let Some(i) = reg.entries.iter().position(|e| declares(&e.declared, claim, name)) else {
         return Err(Missing::Unknown);
     };
     let entry = &mut reg.entries[i];
@@ -324,24 +298,12 @@ fn compile(d: &Declared) -> Loaded {
                 .iter()
                 .filter(|t| !d.types.contains(t))
                 .chain(c.registration.exporters.iter().filter(|t| !d.exporters.contains(t)))
-                .chain(
-                    c.registration
-                        .shape_generators
-                        .iter()
-                        .filter(|t| !d.generators.contains(t)),
-                )
+                .chain(c.registration.shape_generators.iter().filter(|t| !d.generators.contains(t)))
                 .collect();
             if let Some(first) = undeclared.first() {
-                return Loaded::Broken(format!(
-                    "it registers {first:?}, which its manifest does not declare"
-                ));
+                return Loaded::Broken(format!("it registers {first:?}, which its manifest does not declare"));
             }
-            eprintln!(
-                "[plugin-geometry] {}: loaded {} in {} ms",
-                d.id,
-                path.display(),
-                started.elapsed().as_millis()
-            );
+            eprintln!("[plugin-geometry] {}: loaded {} in {} ms", d.id, path.display(), started.elapsed().as_millis());
             Loaded::Ready(Arc::new(c))
         }
         Err(e) => {
@@ -351,9 +313,8 @@ fn compile(d: &Declared) -> Loaded {
     }
 }
 
-/// `plugin_geometry.unregistered`'s sentences, for a feature type, a shape
-/// generator or an exporter. A plugin on disk that declares the name owns it
-/// whether or not its component loads, so the sentence names the plugin.
+/// For a feature type, a shape generator or an exporter. A plugin on disk that declares the name owns
+/// it whether or not its component loads, so the sentence names the plugin.
 fn missing(claim: Claim, name: &str, m: Missing) -> String {
     let subject = match claim {
         Claim::Feature => "this".to_owned(),
@@ -371,10 +332,7 @@ fn missing(claim: Claim, name: &str, m: Missing) -> String {
         Missing::Broken(owner, why) => (owner, why),
         Missing::NotRegistered(owner) => (owner, "its component does not register it".to_owned()),
     };
-    format!(
-        "{subject} needs the \"{}\" plugin, which is installed but would not load: {}",
-        why.0, why.1
-    )
+    format!("{subject} needs the \"{}\" plugin, which is installed but would not load: {}", why.0, why.1)
 }
 
 /// Whether a plugin on disk declares the feature type, running or not: exactly
@@ -390,12 +348,7 @@ pub fn declares_feature(type_name: &str) -> bool {
 
 /// The feature type's plugin handler, run against `ctx`. `None` when no
 /// plugin on disk declares the type.
-pub fn run_feature(
-    ctx: &mut Ctx,
-    type_name: &str,
-    raw: &Value,
-    cancel: Option<CancelToken>,
-) -> Option<FResult> {
+pub fn run_feature(ctx: &mut Ctx, type_name: &str, raw: &Value, cancel: Option<CancelToken>) -> Option<FResult> {
     let mut reg = current();
     let i = match lookup(&mut reg, Claim::Feature, type_name) {
         Ok(i) => i,
@@ -408,7 +361,6 @@ pub fn run_feature(
     Some(c.run_feature(ctx, type_name, raw, cancel).map_err(|(message, code)| Fail::Value { message, code }))
 }
 
-/// The `generateShape` op.
 pub fn generate_shape_result(req: &Map<String, Value>, cancel: Option<CancelToken>) -> JobResult {
     match generate_shape(req, cancel) {
         Ok(m) => JobResult::Json(m),
@@ -437,7 +389,6 @@ fn generate_shape(req: &Map<String, Value>, cancel: Option<CancelToken>) -> Resu
     kernel_api::generated_reply(&shape, output)
 }
 
-/// The `exportWith` op.
 pub fn export_with_result(
     req: &Map<String, Value>,
     watch: &dyn crate::builder::Watch,
@@ -461,16 +412,13 @@ fn exporter_call(
     let Loaded::Ready(c) = &reg.entries[i].loaded else {
         return Err(format!("no installed plugin provides the {} export", host::py_repr(exporter)));
     };
-    c.write_export(exporter, bodies, options, path, cancel)
-        .map_err(|e| format!("{exporter}: {e}"))
+    c.write_export(exporter, bodies, options, path, cancel).map_err(|e| format!("{exporter}: {e}"))
 }
 
 /// Whether an exporter is declared by any plugin on disk, before the rebuild.
 fn exporter_declared(exporter: &str) -> Result<(), String> {
     let mut reg = current();
-    lookup(&mut reg, Claim::Exporter, exporter)
-        .map(|_| ())
-        .map_err(|m| missing(Claim::Exporter, exporter, m))
+    lookup(&mut reg, Claim::Exporter, exporter).map(|_| ()).map_err(|m| missing(Claim::Exporter, exporter, m))
 }
 
 /// A bundle's identity for the rebuild caches: its manifest and component
@@ -481,19 +429,14 @@ fn identity(entry: &mut Entry) -> String {
     }
     let d = &entry.declared;
     let manifest = std::fs::read(d.dir.join("manifest.json")).unwrap_or_default();
-    let wasm = d
-        .wasm
-        .as_deref()
-        .and_then(|rel| std::fs::read(wasm_path(&d.dir, rel)).ok())
-        .unwrap_or_default();
+    let wasm = d.wasm.as_deref().and_then(|rel| std::fs::read(wasm_path(&d.dir, rel)).ok()).unwrap_or_default();
     let id = crate::cache::keys::hash_hex(&[d.id.as_bytes(), b"\0", &manifest, b"\0", &wasm]);
     entry.identity = Some(id.clone());
     id
 }
 
-/// Each feature type a plugin on disk declares, to the identity of the bundle
-/// that runs it, so a cached build of a plugin feature is keyed on the code
-/// that made it. A type no plugin declares is absent.
+/// Each declared feature type to its bundle's identity, so a cached build of a plugin feature is keyed
+/// on the code that made it.
 pub fn feature_identities() -> HashMap<String, String> {
     let mut reg = current();
     let mut out = HashMap::new();
@@ -509,9 +452,8 @@ pub fn feature_identities() -> HashMap<String, String> {
     out
 }
 
-/// `plugin_geometry.cache_key`: every pass on a body with its code version and
-/// its bundle's identity, `None` when it has none. A pass whose plugin is not
-/// loaded keys as -1.
+/// Every pass on a body with its code version and bundle identity, `None` when it has none. A pass
+/// whose plugin is not loaded keys as -1.
 pub fn pass_cache_key(specs: &[Value]) -> Option<String> {
     if specs.is_empty() {
         return None;
@@ -566,17 +508,12 @@ pub struct PassFailure {
 
 impl PassFailure {
     fn of(spec: &Value, message: String) -> PassFailure {
-        PassFailure {
-            feature_id: spec.get("feature_id").and_then(Value::as_str).map(str::to_owned),
-            message,
-        }
+        PassFailure { feature_id: spec.get("feature_id").and_then(Value::as_str).map(str::to_owned), message }
     }
 }
 
-/// `plugin_geometry.resolve` over every spec on a body, as face index in
-/// `faces` order to the claim on it, and the specs that failed to resolve.
-/// A later spec is preferred over a face an earlier one also claimed,
-/// timeline order whichever plugins the two come from.
+/// Face index in `faces` order to its claim, and the specs that failed to resolve. A later spec wins a
+/// face an earlier one also claimed, in timeline order whichever plugins they come from.
 pub fn claim_faces(
     shape: &opencascade::primitives::Shape,
     faces: &[opencascade::primitives::Shape],
@@ -597,13 +534,7 @@ pub fn claim_faces(
             Ok(hits) => {
                 for (hit, tag) in hits {
                     if let Some(k) = faces.iter().position(|f| kernel_api::is_same(f, &hit)) {
-                        out.insert(
-                            k,
-                            PassClaim {
-                                spec: spec.clone(),
-                                tag,
-                            },
-                        );
+                        out.insert(k, PassClaim { spec: spec.clone(), tag });
                     }
                 }
             }
@@ -616,9 +547,8 @@ pub fn claim_faces(
     (out, failed)
 }
 
-/// One claimed face displaced by the pass that claimed it, or why it could
-/// not be, which leaves the face as the kernel meshed it. The face must have
-/// just been meshed: the pass reads its stored triangulation.
+/// Or why it could not be, leaving the face as the kernel meshed it. The face must be freshly meshed,
+/// as the pass reads its stored triangulation.
 pub fn displace_face(
     face: &opencascade::primitives::Shape,
     claim: &PassClaim,
@@ -640,11 +570,7 @@ pub fn displace_face(
         loaded.ok_or_else(|| fail(format!("no loaded plugin serves the {name:?} mesh pass")))?
     };
     c.displace(name, face, &claim.spec, &claim.tag, density_cap, split_creases)
-        .map(|m| FaceMesh {
-            positions: m.positions,
-            indices: m.indices,
-            normals: m.normals,
-        })
+        .map(|m| FaceMesh { positions: m.positions, indices: m.indices, normals: m.normals })
         .map_err(fail)
 }
 

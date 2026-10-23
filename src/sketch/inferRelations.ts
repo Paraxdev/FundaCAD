@@ -1,6 +1,5 @@
-// What a line being drawn will be recorded with, worked out BEFORE the click so
-// the preview, the glyphs beside the cursor and the committed constraints are
-// the same answer. Pure: SketchMode feeds it the snap result and the sketch.
+// The relations a line being drawn will get, worked out BEFORE the click so preview, cursor glyphs and committed
+// constraints agree. Pure: SketchMode feeds it the snap result and the sketch.
 
 import * as THREE from "three";
 import type { SketchConstraint } from "../types";
@@ -23,8 +22,7 @@ export interface InferLineInput {
   /** Live grid lattice, 0 when grid snapping is off. */
   step: number;
   tolDeg: number;
-  /** How far, in mm, a line may be from the start or the cursor and still be
-   *  offered as a parallel or perpendicular reference. */
+  /** mm a line may be from the start or the cursor and still be offered as a parallel or perpendicular reference */
   nearMm: number;
   /** The Snap toggle: off leaves only the exact horizontal and vertical rules. */
   smart: boolean;
@@ -49,9 +47,12 @@ export const tagged = (c: SketchConstraint) => !(c.type === "coincident" && c.p1
 
 function glyphOf(c: SketchConstraint): string {
   switch (c.type) {
-    case "pointOnCurve": return "coincident";
-    case "tangent2": return "tangent";
-    default: return c.type;
+    case "pointOnCurve":
+      return "coincident";
+    case "tangent2":
+      return "tangent";
+    default:
+      return c.type;
   }
 }
 
@@ -65,7 +66,8 @@ export function leaveDirection(e: ResolvedEntity, at: number): THREE.Vector2 | n
     const r = asRound(e);
     if (!r) return null;
     const ccw = (e.mx - e.x1) * (e.y2 - e.my) - (e.my - e.y1) * (e.x2 - e.mx) > 0;
-    const px = at === 0 ? e.x1 : e.x2, py = at === 0 ? e.y1 : e.y2;
+    const px = at === 0 ? e.x1 : e.x2,
+      py = at === 0 ? e.y1 : e.y2;
     // travel direction a -> m -> b at that point
     const t = ccw ? new THREE.Vector2(-(py - r.y), px - r.x) : new THREE.Vector2(py - r.y, -(px - r.x));
     if (t.lengthSq() < 1e-18) return null;
@@ -86,7 +88,12 @@ function along(start: THREE.Vector2, dir: THREE.Vector2, q: THREE.Vector2): THRE
 }
 
 /** A point relation for an endpoint that snapped to a point, a midpoint or onto a curve. */
-export function pointRelation(id: string, p: number, ref: SnapRef | null | undefined, entities: readonly ResolvedEntity[]): SketchConstraint | null {
+export function pointRelation(
+  id: string,
+  p: number,
+  ref: SnapRef | null | undefined,
+  entities: readonly ResolvedEntity[],
+): SketchConstraint | null {
   if (!ref || ref.entity === id) return null;
   const target = entities.find((e) => e.id === ref.entity);
   if (!target) return null;
@@ -100,16 +107,19 @@ export function pointRelation(id: string, p: number, ref: SnapRef | null | undef
 
 /** The tangent continuation of a curve ending at `ref`, as a relation and the
  *  direction a new curve leaving that point has to take. */
-export function tangentFrom(id: string, ref: SnapRef | null | undefined, entities: readonly ResolvedEntity[]): { dir: THREE.Vector2; relation: SketchConstraint } | null {
+export function tangentFrom(
+  id: string,
+  ref: SnapRef | null | undefined,
+  entities: readonly ResolvedEntity[],
+): { dir: THREE.Vector2; relation: SketchConstraint } | null {
   if (!ref || typeof ref.at !== "number" || ref.at > 1 || ref.entity === id) return null;
   const prev = entities.find((e) => e.id === ref.entity);
   if (!prev || (prev.type !== "line" && prev.type !== "arc")) return null;
   const leave = leaveDirection(prev, ref.at);
   if (!leave) return null;
   // A line continuing a line is collinear: planegcs has no line-line tangent.
-  const relation: SketchConstraint = prev.type === "line"
-    ? { type: "collinear", l1: prev.id, l2: id }
-    : { type: "tangent2", a: id, b: prev.id };
+  const relation: SketchConstraint =
+    prev.type === "line" ? { type: "collinear", l1: prev.id, l2: id } : { type: "tangent2", a: id, b: prev.id };
   return { dir: leave.negate(), relation };
 }
 
@@ -125,7 +135,10 @@ function distToSegment(q: THREE.Vector2, a: THREE.Vector2, b: THREE.Vector2): nu
 
 /** Every straight edge a new line may be made parallel or perpendicular to, a
  *  rectangle's four as `<id>~<k>`, the operand the solver reads. */
-function* referenceLines(entities: readonly ResolvedEntity[], skip: string): Generator<{ lineId: string; a: THREE.Vector2; b: THREE.Vector2 }> {
+function* referenceLines(
+  entities: readonly ResolvedEntity[],
+  skip: string,
+): Generator<{ lineId: string; a: THREE.Vector2; b: THREE.Vector2 }> {
   for (const e of entities) {
     if (e.id === skip) continue;
     if (e.type === "line") yield { lineId: e.id, a: new THREE.Vector2(e.x1, e.y1), b: new THREE.Vector2(e.x2, e.y2) };
@@ -139,21 +152,40 @@ function* referenceLines(entities: readonly ResolvedEntity[], skip: string): Gen
 /** Tangent continuation of the curve the line starts on, else parallel or
  *  perpendicular to a line within `nearMm` of the start or the cursor. */
 function guessDirection(
-  id: string, start: THREE.Vector2, cursor: THREE.Vector2, draw: THREE.Vector2,
-  startRef: SnapRef | null | undefined, entities: readonly ResolvedEntity[], tol: number, nearMm: number,
+  id: string,
+  start: THREE.Vector2,
+  cursor: THREE.Vector2,
+  draw: THREE.Vector2,
+  startRef: SnapRef | null | undefined,
+  entities: readonly ResolvedEntity[],
+  tol: number,
+  nearMm: number,
 ): { dir: THREE.Vector2; relation: SketchConstraint; hint?: [THREE.Vector2, THREE.Vector2] } | null {
   const tan = tangentFrom(id, startRef, entities);
   if (tan && angleBetween(draw, tan.dir) <= tol) return tan;
-  let bestErr = tol, pick: { a: THREE.Vector2; b: THREE.Vector2; lineId: string; dir: THREE.Vector2; kind: "parallel" | "perpendicular" } | null = null;
+  let bestErr = tol,
+    pick: {
+      a: THREE.Vector2;
+      b: THREE.Vector2;
+      lineId: string;
+      dir: THREE.Vector2;
+      kind: "parallel" | "perpendicular";
+    } | null = null;
   for (const { lineId, a, b } of referenceLines(entities, id)) {
     if (Math.min(distToSegment(start, a, b), distToSegment(cursor, a, b)) > nearMm) continue;
     const d = b.clone().sub(a);
     if (d.lengthSq() < 1e-18) continue;
     d.normalize();
     const n = new THREE.Vector2(-d.y, d.x);
-    for (const [kind, dir] of [["parallel", d], ["perpendicular", n]] as const) {
+    for (const [kind, dir] of [
+      ["parallel", d],
+      ["perpendicular", n],
+    ] as const) {
       const err = Math.min(angleBetween(draw, dir), 180 - angleBetween(draw, dir));
-      if (err <= bestErr) { bestErr = err; pick = { a, b, lineId, dir, kind }; }
+      if (err <= bestErr) {
+        bestErr = err;
+        pick = { a, b, lineId, dir, kind };
+      }
     }
   }
   if (!pick) return null;
@@ -217,27 +249,34 @@ export function tangentArcMid(a: THREE.Vector2, dir: THREE.Vector2, b: THREE.Vec
   const c = a.clone().addScaledVector(n, k);
   const r = Math.abs(k);
   const tau = 2 * Math.PI;
-  const ta = Math.atan2(a.y - c.y, a.x - c.x), tb = Math.atan2(b.y - c.y, b.x - c.x);
+  const ta = Math.atan2(a.y - c.y, a.x - c.x),
+    tb = Math.atan2(b.y - c.y, b.x - c.x);
   // centre on the left of the travel direction turns counterclockwise
   const sweep = k > 0 ? (((tb - ta) % tau) + tau) % tau : -((((ta - tb) % tau) + tau) % tau);
   const tm = ta + sweep / 2;
   return new THREE.Vector2(c.x + r * Math.cos(tm), c.y + r * Math.sin(tm));
 }
 
-/** Relations for an arc a -> m -> b whose ends snapped to `refA`/`refB`: a point
- *  relation for a midpoint or on-curve end, and a tangent2 where the arc leaves
- *  an existing line or arc end within `tolDeg` of its direction. A tangent start
- *  bends the arc to be exactly tangent, so the first solve has nothing to move. */
+/** A point relation for a midpoint or on-curve end, and a tangent2 where the arc leaves a line or arc end within
+ *  `tolDeg`; a tangent start bends the arc exactly tangent so the first solve has nothing to move. */
 export function inferArcRelations(
-  id: string, arc: { x1: number; y1: number; x2: number; y2: number; mx: number; my: number },
-  refA: SnapRef | null | undefined, refB: SnapRef | null | undefined,
-  entities: readonly ResolvedEntity[], tolDeg: number, smart: boolean,
+  id: string,
+  arc: { x1: number; y1: number; x2: number; y2: number; mx: number; my: number },
+  refA: SnapRef | null | undefined,
+  refB: SnapRef | null | undefined,
+  entities: readonly ResolvedEntity[],
+  tolDeg: number,
+  smart: boolean,
 ): { mid: THREE.Vector2; relations: SketchConstraint[] } {
   const mid = new THREE.Vector2(arc.mx, arc.my);
   if (!smart) return { mid, relations: [] };
   const out: SketchConstraint[] = [];
-  const a = new THREE.Vector2(arc.x1, arc.y1), b = new THREE.Vector2(arc.x2, arc.y2);
-  for (const [at, ref] of [[0, refA], [1, refB]] as const) {
+  const a = new THREE.Vector2(arc.x1, arc.y1),
+    b = new THREE.Vector2(arc.x2, arc.y2);
+  for (const [at, ref] of [
+    [0, refA],
+    [1, refB],
+  ] as const) {
     const pr = pointRelation(id, at, ref, entities);
     if (pr) out.push(pr);
     if (pr && pr.type !== "coincident") continue;

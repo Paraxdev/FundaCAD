@@ -1,5 +1,4 @@
-// Resolve a sketch feature's entities (whose numeric fields may be parameter
-// names) into plain-number entities for rendering/snapping/region detection.
+// Sketch entities whose numeric fields may be parameter names, resolved to plain numbers.
 
 import type { Feature, Num, Params, SketchEntity } from "../types";
 import { dimPlaceOf } from "../types";
@@ -16,56 +15,55 @@ export function resolveNum(x: Num, params: Params): number {
   return Number.isNaN(n) ? 0 : n;
 }
 
-/** Resolve ONLY the sketch's real (persisted) entities, no pattern expansion.
- *  Use this wherever the result feeds back into edits/persistence (e.g. the
- *  sketch-editor session); see resolveEntities for the render/detect variant
- *  that also includes derived pattern copies. */
-export function resolveRealEntities(
-  sketch: Extract<Feature, { type: "sketch" }>,
-  params: Params,
-): ResolvedEntity[] {
-  // reserve every saved id first so generated ids for any id-less entities
-  // can't collide with persisted ones (or with later-drawn geometry)
+/** No pattern expansion: use this wherever the result feeds back into edits or persistence. */
+export function resolveRealEntities(sketch: Extract<Feature, { type: "sketch" }>, params: Params): ResolvedEntity[] {
+  // Reserve every saved id first so generated ids cannot collide with persisted or later-drawn ones.
   for (const e of sketch.entities) noteEntityId(e.id);
 
   const out: ResolvedEntity[] = [];
   for (const e of sketch.entities) {
     const c = e.construction ? { construction: true } : {};
-    // badge label placement: plain numbers already, so it rides along unresolved
-    // (omitted when absent, byte stability, like every persisted optional)
+    // Plain numbers already, omitted when absent for byte stability like every persisted optional.
     const place = dimPlaceOf(e);
     const dp = place ? { dimPlace: place } : {};
     const id = e.id ?? newEntityId();
     if (e.type === "rectangle") {
       out.push({
-        type: "rectangle", id,
+        type: "rectangle",
+        id,
         width: resolveNum(e.width, params),
         height: resolveNum(e.height, params),
         x: resolveNum(e.x ?? 0, params),
         y: resolveNum(e.y ?? 0, params),
         ...(e.angle !== undefined ? { angle: resolveNum(e.angle, params) } : {}),
-        ...c, ...dp,
+        ...c,
+        ...dp,
       });
     } else if (e.type === "circle") {
       out.push({
-        type: "circle", id,
+        type: "circle",
+        id,
         radius: resolveNum(e.radius, params),
         x: resolveNum(e.x ?? 0, params),
         y: resolveNum(e.y ?? 0, params),
-        ...c, ...dp,
+        ...c,
+        ...dp,
       });
     } else if (e.type === "line") {
       out.push({
-        type: "line", id,
+        type: "line",
+        id,
         x1: resolveNum(e.x1, params),
         y1: resolveNum(e.y1, params),
         x2: resolveNum(e.x2, params),
         y2: resolveNum(e.y2, params),
-        ...c, ...dp,
+        ...c,
+        ...dp,
       });
     } else if (e.type === "arc") {
       out.push({
-        type: "arc", id,
+        type: "arc",
+        id,
         x1: resolveNum(e.x1, params),
         y1: resolveNum(e.y1, params),
         x2: resolveNum(e.x2, params),
@@ -76,27 +74,31 @@ export function resolveRealEntities(
       });
     } else if (e.type === "spline") {
       out.push({
-        type: "spline", id,
+        type: "spline",
+        id,
         points: e.points.map((p) => ({ x: resolveNum(p.x, params), y: resolveNum(p.y, params) })),
         ...c,
       });
     } else if (e.type === "bspline") {
       out.push({
-        type: "bspline", id,
+        type: "bspline",
+        id,
         poles: e.poles.map((p) => ({ x: resolveNum(p.x, params), y: resolveNum(p.y, params) })),
         ...bsplineShape(e),
         ...c,
       });
     } else if (e.type === "point") {
       out.push({
-        type: "point", id,
+        type: "point",
+        id,
         x: resolveNum(e.x, params),
         y: resolveNum(e.y, params),
         ...c,
       });
     } else if (e.type === "text") {
       out.push({
-        type: "text", id,
+        type: "text",
+        id,
         text: e.text,
         x: resolveNum(e.x ?? 0, params),
         y: resolveNum(e.y ?? 0, params),
@@ -111,29 +113,47 @@ export function resolveRealEntities(
         ...c,
       });
     } else if (e.type === "polygon") {
-      out.push({ type: "polygon", id, x: resolveNum(e.x, params), y: resolveNum(e.y, params), radius: resolveNum(e.radius, params), sides: resolveNum(e.sides, params), angle: resolveNum(e.angle, params), ...c, ...dp });
+      out.push({
+        type: "polygon",
+        id,
+        x: resolveNum(e.x, params),
+        y: resolveNum(e.y, params),
+        radius: resolveNum(e.radius, params),
+        sides: resolveNum(e.sides, params),
+        angle: resolveNum(e.angle, params),
+        ...c,
+        ...dp,
+      });
     } else if (e.type === "slot") {
-      out.push({ type: "slot", id, x1: resolveNum(e.x1, params), y1: resolveNum(e.y1, params), x2: resolveNum(e.x2, params), y2: resolveNum(e.y2, params), width: resolveNum(e.width, params), ...c, ...dp });
+      out.push({
+        type: "slot",
+        id,
+        x1: resolveNum(e.x1, params),
+        y1: resolveNum(e.y1, params),
+        x2: resolveNum(e.x2, params),
+        y2: resolveNum(e.y2, params),
+        width: resolveNum(e.width, params),
+        ...c,
+        ...dp,
+      });
     } else if (e.type === "projected") {
-      // structural pass-through: the cached curve is plain numbers (no Num),
-      // and source/stale never resolve, they identify, not measure
-      out.push({ type: "projected", id, source: e.source, curve: e.curve, ...(e.stale ? { stale: true as const } : {}), ...c });
+      // The cached curve is plain numbers, and source and stale identify rather than measure.
+      out.push({
+        type: "projected",
+        id,
+        source: e.source,
+        curve: e.curve,
+        ...(e.stale ? { stale: true as const } : {}),
+        ...c,
+      });
     }
   }
   return out;
 }
 
-/** Resolve a sketch's real entities AND every pattern's derived copies, in one
- *  flat array, for callers that only render/inspect (never persist) the
- *  result: committed-sketch overlay rendering, region detection for those
- *  sketches, and the per-entity dimension list under a sketch. The copies are
- *  derived here, never stored as real entities, do NOT feed this back into
- *  `sketch.entities` (see resolveRealEntities for the editable, persist-safe
- *  subset; that's what the sketch-editor session uses). */
-export function resolveEntities(
-  sketch: Extract<Feature, { type: "sketch" }>,
-  params: Params,
-): ResolvedEntity[] {
+/** Real entities plus derived pattern copies, for render and inspect only: never feed this back into
+ *  `sketch.entities`, the copies are not stored. */
+export function resolveEntities(sketch: Extract<Feature, { type: "sketch" }>, params: Params): ResolvedEntity[] {
   const out = resolveRealEntities(sketch, params);
   if (sketch.patterns?.length) {
     const byId = new Map(out.map((e) => [e.id, e]));
@@ -142,32 +162,51 @@ export function resolveEntities(
   return out;
 }
 
-/** serialize a resolved (numeric) entity back to a document SketchEntity */
 export function toSketchEntity(e: ResolvedEntity): SketchEntity {
   const c = e.construction ? { construction: true } : {};
   const place = dimPlaceOf(e);
   const dp = place ? { dimPlace: place } : {};
   if (e.type === "rectangle")
     return {
-      type: "rectangle", id: e.id, width: e.width, height: e.height, x: e.x, y: e.y,
+      type: "rectangle",
+      id: e.id,
+      width: e.width,
+      height: e.height,
+      x: e.x,
+      y: e.y,
       ...(e.angle !== undefined ? { angle: e.angle } : {}),
-      ...c, ...dp,
+      ...c,
+      ...dp,
     };
   if (e.type === "circle") return { type: "circle", id: e.id, radius: e.radius, x: e.x, y: e.y, ...c, ...dp };
   if (e.type === "arc")
     return { type: "arc", id: e.id, x1: e.x1, y1: e.y1, x2: e.x2, y2: e.y2, mx: e.mx, my: e.my, ...c };
-  if (e.type === "spline")
-    return { type: "spline", id: e.id, points: e.points.map((p) => ({ x: p.x, y: p.y })), ...c };
+  if (e.type === "spline") return { type: "spline", id: e.id, points: e.points.map((p) => ({ x: p.x, y: p.y })), ...c };
   if (e.type === "bspline")
     return { type: "bspline", id: e.id, poles: e.poles.map((p) => ({ x: p.x, y: p.y })), ...bsplineShape(e), ...c };
   if (e.type === "point") return { type: "point", id: e.id, x: e.x, y: e.y, ...c };
-  if (e.type === "polygon") return { type: "polygon", id: e.id, x: e.x, y: e.y, radius: e.radius, sides: e.sides, angle: e.angle, ...c, ...dp };
-  if (e.type === "slot") return { type: "slot", id: e.id, x1: e.x1, y1: e.y1, x2: e.x2, y2: e.y2, width: e.width, ...c, ...dp };
+  if (e.type === "polygon")
+    return { type: "polygon", id: e.id, x: e.x, y: e.y, radius: e.radius, sides: e.sides, angle: e.angle, ...c, ...dp };
+  if (e.type === "slot")
+    return { type: "slot", id: e.id, x1: e.x1, y1: e.y1, x2: e.x2, y2: e.y2, width: e.width, ...c, ...dp };
   if (e.type === "projected")
-    return { type: "projected", id: e.id, source: e.source, curve: e.curve, ...(e.stale ? { stale: true as const } : {}), ...c };
+    return {
+      type: "projected",
+      id: e.id,
+      source: e.source,
+      curve: e.curve,
+      ...(e.stale ? { stale: true as const } : {}),
+      ...c,
+    };
   if (e.type === "text")
     return {
-      type: "text", id: e.id, text: e.text, x: e.x, y: e.y, height: e.height, angle: e.angle,
+      type: "text",
+      id: e.id,
+      text: e.text,
+      x: e.x,
+      y: e.y,
+      height: e.height,
+      angle: e.angle,
       ...(e.font !== undefined ? { font: e.font } : {}),
       ...(e.style !== undefined ? { style: e.style } : {}),
       ...(e.align !== undefined ? { align: e.align } : {}),

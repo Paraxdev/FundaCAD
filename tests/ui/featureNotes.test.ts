@@ -73,15 +73,23 @@ describe("featureFailures", () => {
   const held = { featureId: "p1" };
 
   it("leaves a held preview's refusal out of the badge", () => {
-    const state = { featureErrors: [], errorFeatureId: "p1", errorMessage: "too small for its walls", heldRefusal: held };
+    const state = {
+      featureErrors: [],
+      errorFeatureId: "p1",
+      errorMessage: "too small for its walls",
+      heldRefusal: held,
+    };
     expect(featureFailures(state).size).toBe(0);
   });
 
   it("still counts a committed feature that fails, held refusal or not", () => {
     const failed = { feature_id: "f3", message: "fillet is larger than the edge" };
-    expect([...featureFailures({ featureErrors: [failed], errorFeatureId: "p1", heldRefusal: held }).keys()]).toEqual(["f3"]);
-    expect(featureFailures({ errorFeatureId: "f3", errorMessage: "fillet is larger than the edge" }).get("f3"))
-      .toBe("fillet is larger than the edge");
+    expect([...featureFailures({ featureErrors: [failed], errorFeatureId: "p1", heldRefusal: held }).keys()]).toEqual([
+      "f3",
+    ]);
+    expect(featureFailures({ errorFeatureId: "f3", errorMessage: "fillet is larger than the edge" }).get("f3")).toBe(
+      "fillet is larger than the edge",
+    );
   });
 
   it("counts a preview that failed without asking to be held", () => {
@@ -97,7 +105,10 @@ describe("featurePlaceholders", () => {
         { feature_id: "w2", type: "fooBar" },
       ],
     });
-    expect([...p]).toEqual([["w1", "futureWidget"], ["w2", "fooBar"]]);
+    expect([...p]).toEqual([
+      ["w1", "futureWidget"],
+      ["w2", "fooBar"],
+    ]);
   });
 
   it("is empty for a build that skipped nothing", () => {

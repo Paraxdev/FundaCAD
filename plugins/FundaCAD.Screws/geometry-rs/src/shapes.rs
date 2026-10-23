@@ -1,12 +1,6 @@
-//! scr_shapes.py: solids for fastener parts, in millimetres, on the Z axis,
-//! through the engine's kernel with build123d's own boolean semantics
-//! (parallel, merged faces, a lone solid unwrapped).
-//!
-//! Screws hang from the XY plane: the head's bearing face is at z = 0 with the
-//! head above it, the shank runs down to z = -length. A countersunk head is
-//! the exception, its top is at z = 0 so the screw sits flush. Nuts and
-//! washers stand on z = 0. An insert's top is at z = 0 and it goes down into
-//! the part.
+//! Port of scr_shapes.py, millimetres on the Z axis, booleans with build123d's semantics (parallel, merged faces, a lone
+//! solid unwrapped). A screw's bearing face is at z = 0 with the shank down to -length, a countersunk head's top is at
+//! z = 0. Nuts and washers stand on z = 0, an insert's top is at z = 0 and it goes down into the part.
 
 use std::f64::consts::PI;
 
@@ -25,16 +19,7 @@ fn tan30() -> f64 {
 
 /// build123d's `+`, `-` and `&`.
 pub fn op(kind: BooleanOp, a: &Shape, b: &Shape) -> R<Shape> {
-    kernel::boolean_with(
-        kind,
-        a,
-        &[b],
-        BooleanOptions {
-            parallel: true,
-            fuzzy: Fuzzy::Exact,
-            clean: true,
-        },
-    )
+    kernel::boolean_with(kind, a, &[b], BooleanOptions { parallel: true, fuzzy: Fuzzy::Exact, clean: true })
 }
 
 /// A solid of revolution about Z from a closed (r, z) outline.
@@ -134,11 +119,8 @@ pub fn chamfered_hex(across_flats: f64, z0: f64, z1: f64, top: bool, bottom: boo
     intersect(&body, &revolve_rz(&pts)?)
 }
 
-// --- the axisymmetric outline of a screw -------------------------------------
-
-/// `head_outline`: (r, z) from the top of the axis outward and down to the
-/// shank at z = 0, or none when the head is not a solid of revolution; and the
-/// z of the head's top face, where a drive recess starts.
+/// (r, z) from the axis top outward and down to the shank at z = 0, None when the head is not a solid of revolution,
+/// and the z of the head's top face, where a drive recess starts.
 pub fn head_outline(head: &crate::P, shank_r: f64) -> (Option<Vec<(f64, f64)>>, f64) {
     let t = head.s("type");
     match t {
@@ -219,7 +201,7 @@ pub fn point_outline(point: &crate::P, r: f64, z_end: f64, pitch: f64, length: f
     }
 }
 
-// --- drive recesses, as tools to cut, from z_top downward ---------------------
+// Drive recesses are tools to cut, from z_top downward.
 
 fn cone_tip(r: f64, z_top_of_cone: f64) -> R<Shape> {
     let h = r / (118f64 / 2.0).to_radians().tan();
@@ -270,11 +252,7 @@ pub fn torx_prism(a: f64, z0: f64, height: f64) -> R<Shape> {
         let lobe = circle_face(dist * ang.cos(), dist * ang.sin(), ri)?;
         shape = op(BooleanOp::Cut, &shape, &lobe)?;
     }
-    let face = shape
-        .faces()
-        .into_iter()
-        .next()
-        .ok_or("Fastener: the hexalobular outline came out empty")?;
+    let face = shape.faces().into_iter().next().ok_or("Fastener: the hexalobular outline came out empty")?;
     let solid = kernel::prism(&face, (0.0, 0.0, height))?;
     kernel::translate(&solid, (0.0, 0.0, z0))
 }
@@ -294,12 +272,8 @@ pub fn cross_recess(m: f64, depth: f64, z_top: f64, above: f64, pozi: bool) -> R
         (0.0, z_top + above),
     ])?;
     let mut tool = intersect(&arms, &taper)?;
-    let centre = revolve_rz(&[
-        (0.0, z_top - depth),
-        (m * 0.24, z_top),
-        (m * 0.24, z_top + above),
-        (0.0, z_top + above),
-    ])?;
+    let centre =
+        revolve_rz(&[(0.0, z_top - depth), (m * 0.24, z_top), (m * 0.24, z_top + above), (0.0, z_top + above)])?;
     tool = fuse(&[tool, centre])?;
     if pozi {
         let tick = make_box(-half * 0.8, half * 0.8, -w * 0.18, w * 0.18, z_top - depth * 0.45, z_top + above)?;

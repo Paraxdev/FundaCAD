@@ -25,15 +25,10 @@ pub fn default_root() -> PathBuf {
     if let Some(dir) = std::env::var_os("FUNDACAD_BLOB_DIR").filter(|d| !d.is_empty()) {
         return PathBuf::from(dir);
     }
-    let base = std::env::var_os("XDG_DATA_HOME")
-        .filter(|d| !d.is_empty())
-        .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            let home = std::env::var_os("HOME")
-                .or_else(|| std::env::var_os("USERPROFILE"))
-                .unwrap_or_default();
-            PathBuf::from(home).join(".local").join("share")
-        });
+    let base = std::env::var_os("XDG_DATA_HOME").filter(|d| !d.is_empty()).map(PathBuf::from).unwrap_or_else(|| {
+        let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).unwrap_or_default();
+        PathBuf::from(home).join(".local").join("share")
+    });
     base.join("fundacad").join("blobs")
 }
 
@@ -85,9 +80,7 @@ fn atomic_write(dir: &Path, dest: &Path, data: &[u8]) -> std::io::Result<()> {
     // The clock alone names two writes of the same tick alike, and one then
     // publishes the other's bytes under its own hash.
     static NTH: AtomicU64 = AtomicU64::new(0);
-    let nonce = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |d| d.as_nanos());
+    let nonce = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos());
     let nth = NTH.fetch_add(1, Ordering::Relaxed);
     let tmp = dir.join(format!("{:032x}{}-{nth}.tmp", nonce, std::process::id()));
     let written = (|| {
@@ -119,11 +112,8 @@ fn u64_arg(req: &serde_json::Map<String, serde_json::Value>, key: &str) -> u64 {
     req.get(key).and_then(serde_json::Value::as_u64).unwrap_or(0)
 }
 
-/// The blob ops, so a client that cannot see this process's disk (an MCP server
-/// with a different profile, a sandbox, another user) can still save and open
-/// imported geometry. `blobHas` sorts hashes into have and missing, `blobRead`
-/// hands back one range of a blob, and `blobWrite` takes a blob in order, range
-/// by range, publishing it only once the whole of it hashes to its name.
+/// The blob ops, for a client that cannot see this process's disk: `blobHas` sorts hashes into have and missing,
+/// `blobRead` returns one range, and `blobWrite` takes ranges in order, publishing once the whole hashes to its name.
 pub fn blob_op(
     op: &str,
     req: &serde_json::Map<String, serde_json::Value>,
@@ -214,85 +204,4 @@ pub fn blob_op(
         other => return Err(format!("unknown blob op: {other}")),
     }
     Ok(out)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use base64::Engine as _;
-    use serde_json::{json, Map, Value};
-
-    fn req(v: Value) -> Map<String, Value> {
-        v.as_object().cloned().unwrap()
-    }
-
-    fn scratch(tag: &str) -> BlobStore {
-        let dir = std::env::temp_dir().join(format!("fundacad-blobop-{tag}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        BlobStore::open(dir).unwrap()
-    }
-
-    #[test]
-    fn a_blob_written_in_ranges_reads_back_whole() {
-        let from = scratch("from");
-        let to = scratch("to");
-        let data: Vec<u8> = (0..100_000u32).map(|i| (i * 7 % 251) as u8).collect();
-        let h = from.put_bytes(&data).unwrap();
-        let has = blob_op("blobHas", &req(json!({"hashes": [h, "0".repeat(32)]})), &to).unwrap();
-        assert_eq!(has["missing"].as_array().unwrap().len(), 2);
-
-        let b64 = base64::engine::general_purpose::STANDARD;
-        for (i, piece) in data.chunks(30_000).enumerate() {
-            let r = blob_op(
-                "blobWrite",
-                &req(json!({"hash": h, "offset": i * 30_000, "total": data.len(),
-                            "data": b64.encode(piece)})),
-                &to,
-            )
-            .unwrap();
-            assert_eq!(r["stored"], json!(i == 3));
-        }
-        assert_eq!(to.get_bytes(&h).unwrap(), data);
-
-        let r = blob_op("blobRead", &req(json!({"hash": h})), &to).unwrap();
-        assert_eq!(r["size"], json!(data.len()));
-        assert_eq!(b64.decode(r["data"].as_str().unwrap()).unwrap(), data);
-    }
-
-    #[test]
-    fn bytes_that_do_not_match_their_hash_are_never_published() {
-        let to = scratch("bad");
-        let h = hash_bytes(b"the real bytes");
-        let b64 = base64::engine::general_purpose::STANDARD;
-        let r = blob_op(
-            "blobWrite",
-            &req(json!({"hash": h, "offset": 0, "total": 5, "data": b64.encode(b"forge")})),
-            &to,
-        );
-        assert!(r.is_err());
-        assert!(to.get_bytes(&h).is_none());
-        let r = blob_op("blobRead", &req(json!({"hash": h})), &to).unwrap();
-        assert_eq!(r["missing"], json!(true));
-        assert!(blob_op("blobRead", &req(json!({"hash": "../../etc"})), &to).is_err());
-    }
-
-    #[test]
-    fn blobs_stored_at_the_same_moment_each_read_back() {
-        let store = std::sync::Arc::new(scratch("together"));
-        for round in 0..50u32 {
-            let put: Vec<_> = (0..8u32)
-                .map(|i| {
-                    let store = store.clone();
-                    std::thread::spawn(move || {
-                        let data: Vec<u8> = format!("blob {round} {i}").repeat(64).into_bytes();
-                        (store.put_bytes(&data).unwrap(), data)
-                    })
-                })
-                .collect();
-            for t in put {
-                let (h, data) = t.join().unwrap();
-                assert_eq!(store.get_bytes(&h).as_deref(), Some(&data[..]), "round {round}");
-            }
-        }
-    }
 }

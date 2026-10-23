@@ -33,11 +33,9 @@ fn sort_key(v: &Value, fields: &[&str]) -> String {
     fields
         .iter()
         .map(|f| match &v[*f] {
-            Value::Array(a) => a
-                .iter()
-                .map(|x| format!("{:.3}", x.as_f64().unwrap_or(0.0) + 0.0))
-                .collect::<Vec<_>>()
-                .join(","),
+            Value::Array(a) => {
+                a.iter().map(|x| format!("{:.3}", x.as_f64().unwrap_or(0.0) + 0.0)).collect::<Vec<_>>().join(",")
+            }
             Value::Number(n) => format!("{:.3}", n.as_f64().unwrap_or(0.0)),
             other => other.to_string(),
         })
@@ -251,7 +249,7 @@ fn both_ops_answer_over_the_protocol() {
         json!({"id": 4, "op": "rebuild", "document": doc, "revision": 2, "known": known}).to_string(),
     ));
     assert_eq!(result(4)["bodies"][0]["unchanged"], json!(true));
-    // server.py `_compute_all_job` never answers with a stub, whatever the client holds.
+    // `computeAll` never answers with a stub, whatever the client holds.
     engine.handle(Message::Text(
         json!({"id": 5, "op": "computeAll", "document": doc, "revision": 3, "known": known}).to_string(),
     ));
@@ -269,10 +267,8 @@ fn a_summary_counts_without_measuring_and_places_shared_shapes() {
     let turned = kernel::translated(&kernel::rotated(&cyl, [90.0, 0.0, 0.0]).unwrap(), [7.0, 3.0, 1.0]).unwrap();
     let tilted = kernel::rotated(&cyl, [30.0, 20.0, 0.0]).unwrap();
     let shapes = [&cyl, &turned, &tilted];
-    let bodies: Vec<inspect::InspectBody> = shapes
-        .iter()
-        .map(|s| inspect::InspectBody { id: json!("b"), name: json!("B"), shape: Some(*s) })
-        .collect();
+    let bodies: Vec<inspect::InspectBody> =
+        shapes.iter().map(|s| inspect::InspectBody { id: json!("b"), name: json!("B"), shape: Some(*s) }).collect();
     for _ in 0..2 {
         let rep = inspect::inspect_bodies_at(&bodies, inspect::Level::Summary, 400, 800).unwrap();
         for (r, s) in rep.iter().zip(shapes) {
@@ -290,10 +286,23 @@ fn a_summary_counts_without_measuring_and_places_shared_shapes() {
             assert_eq!(r["openEdges"], json!([]));
             assert!(r.get("faces").is_none());
         }
-        let com = |i: usize| rep[i]["centerOfMass"].as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect::<Vec<_>>();
-        let want = kernel::translated(&kernel::rotated(&kernel::make_cylinder(5.0, 10.0).unwrap(), [90.0, 0.0, 0.0]).unwrap(), [7.0, 3.0, 1.0]).unwrap();
-        let plain = inspect::inspect_bodies(&[inspect::InspectBody { id: json!("b"), name: json!("B"), shape: Some(&want) }], false, 400, 800).unwrap();
-        let expect: Vec<f64> = plain[0]["centerOfMass"].as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect();
+        let com = |i: usize| {
+            rep[i]["centerOfMass"].as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect::<Vec<_>>()
+        };
+        let want = kernel::translated(
+            &kernel::rotated(&kernel::make_cylinder(5.0, 10.0).unwrap(), [90.0, 0.0, 0.0]).unwrap(),
+            [7.0, 3.0, 1.0],
+        )
+        .unwrap();
+        let plain = inspect::inspect_bodies(
+            &[inspect::InspectBody { id: json!("b"), name: json!("B"), shape: Some(&want) }],
+            false,
+            400,
+            800,
+        )
+        .unwrap();
+        let expect: Vec<f64> =
+            plain[0]["centerOfMass"].as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect();
         for (g, w) in com(1).iter().zip(&expect) {
             assert!((g - w).abs() < 1e-6, "{:?} vs {expect:?}", com(1));
         }
@@ -338,4 +347,18 @@ fn the_volume_of_a_lofted_spline_body_is_the_precise_one() {
     .unwrap();
     let got = rep[0]["volume"].as_f64().unwrap().abs();
     assert!((got - precise).abs() < 1e-3, "inspect says {got}, the body holds {precise} (quick {quick})");
+}
+
+#[test]
+fn inspect_naming_a_body_that_does_not_exist_says_so_and_lists_the_ones_that_do() {
+    let req = json!({"document": {"parameters": {}, "features": [
+        {"id": "bx", "type": "box", "length": 10, "width": 10, "height": 10}]},
+        "bodies": ["body9"], "summary": true, "detail": false});
+    let r = json_of(inspect::inspect_result(req.as_object().unwrap(), &NoWatch));
+    assert_eq!(r["bodies"], json!([]), "{r}");
+    assert_eq!(r["unknown"], json!(["body9"]), "{r}");
+    assert_eq!(r["have"][0]["id"], json!("body1"), "{r}");
+    let named = json!({"document": req["document"], "bodies": ["body1"], "summary": true, "detail": false});
+    let r = json_of(inspect::inspect_result(named.as_object().unwrap(), &NoWatch));
+    assert!(r.get("unknown").is_none(), "{r}");
 }

@@ -29,7 +29,10 @@ fn each_path(f: impl Fn(&Tracer)) {
 fn the_check_passes_on_every_path() {
     each_path(|t| {
         let c = t.self_check().unwrap();
-        println!("{:?}: diff {:.3}, noise {:.3}, threshold {:.3}, {:.0} ms", c.path, c.diff, c.noise, c.threshold, c.ms);
+        println!(
+            "{:?}: diff {:.3}, noise {:.3}, threshold {:.3}, {:.0} ms",
+            c.path, c.diff, c.noise, c.threshold, c.ms
+        );
         assert_eq!(c.path, t.path());
         assert!(c.passed && c.diff <= c.threshold, "{:?} failed its own check: {c:?}", c.path);
     });
