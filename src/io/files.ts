@@ -83,7 +83,8 @@ async function writeContainer(store: DocumentStore, path: string): Promise<strin
 
 // The file holds the document as it was at `edits`: a change since is not in it, so it stays unsaved and its snapshot
 // stays the one that has it.
-function savedAs(store: DocumentStore, path: string, edits: number) {
+function savedAs(store: DocumentStore, path: string, edits: number, untitledLoads: number) {
+  if (store.untitledLoadCount !== untitledLoads) return;
   const whole = store.editCount === edits;
   store.markSaved(path, whole);
   noteRecent(path);
@@ -96,6 +97,7 @@ export async function saveDocument(store: DocumentStore) {
     const session = store.session;
     const path = store.filePath;
     const edits = store.editCount;
+    const untitledLoads = store.untitledLoadCount;
     const err = await writeContainer(store, path);
     if (err) {
       await reportError(`Couldn't save ${path}: ${err}`);
@@ -103,7 +105,7 @@ export async function saveDocument(store: DocumentStore) {
     }
     // The file holds the document as it was when the save began, so another document opened meanwhile is not saved.
     if (!session.alive) return;
-    savedAs(store, path, edits);
+    savedAs(store, path, edits, untitledLoads);
   } else {
     await saveDocumentAs(store);
   }
@@ -127,13 +129,14 @@ export async function saveDocumentAs(store: DocumentStore) {
     // A path picked for a document that was closed meanwhile is not where the next one goes.
     if (path && session.alive) {
       const edits = store.editCount;
+      const untitledLoads = store.untitledLoadCount;
       const err = await writeContainer(store, path);
       if (err) {
         await reportError(`Couldn't save ${path}: ${err}`);
         return;
       }
       if (!session.alive) return;
-      savedAs(store, path, edits);
+      savedAs(store, path, edits, untitledLoads);
     }
   } else {
     // Reuse the settled name so a second Save As downloads "Untitled.funda" again, not "Untitled.funda.funda".
