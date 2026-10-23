@@ -12,6 +12,7 @@ interface Seen {
   preview: THREE.Material;
   glow: THREE.Material;
   lights: boolean[];
+  cast: boolean[];
   autoUpdate: boolean;
 }
 
@@ -47,7 +48,9 @@ function rig() {
   const area = new THREE.RectAreaLight();
   const point = new THREE.PointLight();
   const key = new THREE.DirectionalLight();
-  scene.add(body, multi, preview, area, point, key);
+  const fill = new THREE.DirectionalLight();
+  fill.position.set(-3, 1.5, 2);
+  scene.add(body, multi, preview, area, point, key, fill);
 
   const seen: Seen[] = [];
   const shadowMap = { autoUpdate: true, enabled: true };
@@ -61,6 +64,7 @@ function rig() {
         preview: preview.material as THREE.Material,
         glow: glow.material as THREE.Material,
         lights: [area.visible, point.visible, key.visible],
+        cast: [key.castShadow, fill.castShadow],
         autoUpdate: shadowMap.autoUpdate,
       });
       if (fail) throw new Error("lost context");
@@ -77,6 +81,8 @@ function rig() {
     clip,
     area,
     point,
+    key,
+    fill,
     renderer,
     seen,
     shadowMap,
@@ -141,6 +147,35 @@ describe("MatcapDraw", () => {
     expect((r.multi.material as THREE.Material[])[0]).toBe(r.faces[0]);
     expect([r.area.visible, r.point.visible]).toEqual([true, true]);
     expect(r.shadowMap.autoUpdate).toBe(true);
+  });
+
+  // A caster three has not drawn a map for binds an RGBA fallback to its shadow sampler, and ANGLE drops the
+  // draw of every lit mesh left in the Matcap frame (the stress result, an extrude preview).
+  it("draws with no light casting that has no shadow map yet, and puts castShadow back", () => {
+    const r = rig();
+    r.key.castShadow = true;
+    r.fill.castShadow = true;
+    const draw = new MatcapDraw();
+    draw.render(r.renderer, r.scene, r.camera);
+    expect(r.seen.map((s) => s.cast)).toEqual([[false, false]]);
+    expect([r.key.castShadow, r.fill.castShadow]).toEqual([true, true]);
+    r.failNext();
+    expect(() => draw.render(r.renderer, r.scene, r.camera)).toThrow("lost context");
+    expect(r.seen.map((s) => s.cast)).toEqual([
+      [false, false],
+      [false, false],
+    ]);
+    expect([r.key.castShadow, r.fill.castShadow]).toEqual([true, true]);
+  });
+
+  it("keeps a caster whose shadow map exists, and leaves a light that casts nothing alone", () => {
+    const r = rig();
+    r.key.castShadow = true;
+    const map = new THREE.WebGLRenderTarget(512, 512);
+    r.key.shadow.map = map;
+    new MatcapDraw().render(r.renderer, r.scene, r.camera);
+    expect(r.seen.map((s) => s.cast)).toEqual([[true, false]]);
+    expect([r.key.castShadow, r.fill.castShadow, r.key.shadow.map]).toEqual([true, false, map]);
   });
 
   it("reuses one twin per source material and scales it by the brightness", () => {
