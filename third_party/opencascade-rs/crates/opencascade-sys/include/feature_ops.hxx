@@ -218,7 +218,7 @@ inline BoShape fo_axial_scale(const TopoDS_Shape &s, double factor, double dx, d
       g.SetVectorialPart(m);
       double off = -k * hold;
       g.SetTranslationPart(gp_XYZ(dx * off, dy * off, dz * off));
-      return bo_own(BRepBuilderAPI_GTransform(s, g, true).Shape());
+      return bo_own(bo_gtransform(s, g));
   };
   BO_GUARD(return run();)
 }
