@@ -65,6 +65,11 @@ describe("experimental limits", () => {
     expect(asExperimentalPrefs(null)).toEqual(DEFAULT_EXPERIMENTAL);
   });
 
+  it("keep the firefly clamp within a sensible ceiling, and 0 stays off", () => {
+    expect(asExperimentalPrefs({ firefly: 1e6 }).firefly).toBe(1000);
+    expect(asExperimentalPrefs({ firefly: 0 }).firefly).toBe(0);
+  });
+
   it("store only what differs from the defaults, and Reset clears it", () => {
     const store = new Map<string, string>();
     vi.stubGlobal("localStorage", {
