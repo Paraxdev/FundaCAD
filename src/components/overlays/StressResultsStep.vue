@@ -36,7 +36,7 @@ function onDeform(e: Event) {
 </script>
 
 <template>
-  <div class="stress-step stress-results" :class="{ stale: modelChanged || setupChanged }">
+  <div class="stress-step stress-results" data-panel-scroll :class="{ stale: modelChanged || setupChanged }">
     <div v-if="modelChanged || setupChanged" class="stress-stale">
       <span>{{ modelChanged ? "The model changed since this Run." : "The setup changed since this Run." }}</span>
       <button

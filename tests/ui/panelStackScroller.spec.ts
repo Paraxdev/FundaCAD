@@ -46,3 +46,35 @@ describe("the panel column with a panel that scrolls inside", () => {
     }
   });
 });
+
+describe("a folded panel in the column", () => {
+  function titled(natural: number, scrolls = false) {
+    const el = panel(natural, false);
+    const title = document.createElement("div");
+    const close = document.createElement("button");
+    const step = document.createElement("div");
+    title.append(close);
+    step.toggleAttribute("data-panel-scroll", scrolls);
+    el.append(title, step);
+    title.getBoundingClientRect = () => ({ top: 0, bottom: 40 }) as DOMRect;
+    return { el, title, close };
+  }
+
+  it("opens again when its header is clicked, folding the least recently used one instead", async () => {
+    const layer = document.createElement("div");
+    layer.id = "float-layer";
+    layer.getBoundingClientRect = () => ({ left: 0, right: 1440, top: 0, bottom: 700 }) as DOMRect;
+    document.body.append(layer);
+    const ps = [titled(326), titled(300), titled(320, true)];
+    ps.forEach((p, i) => panelStack.add(`p${i}`, p.el));
+    const folded = () => ps.map((p) => p.el.hasAttribute("data-folded"));
+    expect(folded()).toEqual([true, false, false]);
+    ps[0]!.close.click();
+    expect(folded()).toEqual([true, false, false]);
+    ps[0]!.title.click();
+    expect(folded()).toEqual([false, true, false]);
+    expect(ps[1]!.el.hasAttribute("data-capped")).toBe(false);
+    panelStack.remove("p1");
+    expect(ps[1]!.el.hasAttribute("data-folded")).toBe(false);
+  });
+});

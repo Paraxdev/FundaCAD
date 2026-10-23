@@ -687,6 +687,13 @@
 .measure-panel[data-capped] {
   overflow-y: auto;
 }
+.measure-panel[data-folded] {
+  overflow: hidden;
+  cursor: pointer;
+}
+.measure-panel[data-folded] > :not(:first-child) {
+  visibility: hidden;
+}
 .properties-panel {
   min-width: 260px;
 }
