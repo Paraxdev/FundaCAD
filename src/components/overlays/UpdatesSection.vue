@@ -47,12 +47,12 @@ function onPeriod(v: string) {
     </div>
     <template v-else-if="supported">
       <div class="pref-card">
-        <label class="pref-head">
-          <span class="pref-title">Check for updates automatically</span>
-          <span class="param-switch">
+        <label class="pref-head pref-check">
+          <span class="check">
             <input id="prefs-update-auto" type="checkbox" :checked="auto" @change="onAuto" />
-            <span class="track"><span class="knob"></span></span>
+            <span class="check-box"></span>
           </span>
+          <span class="pref-title">Check for updates automatically</span>
         </label>
         <p class="pref-hint">Off sends nothing until you use Help > Check for Updates.</p>
       </div>
