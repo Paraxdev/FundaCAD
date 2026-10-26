@@ -502,6 +502,13 @@ html.no-glass-blur *::after {
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
 }
+/* The blur is half of what sets a dialog apart from the app behind it, so the plain fill
+   alone has to be darker. */
+html.no-glass-blur .modal-overlay,
+html.no-glass-blur .choice-backdrop,
+html.no-glass-blur .cmdk-backdrop {
+  background: var(--scrim-flat);
+}
 /* Without the blur the scrim would show the float cards sharp through it. */
 html.no-glass-blur .home.bg-workspace::before {
   background: var(--viewport-bg);

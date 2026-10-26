@@ -76,6 +76,8 @@
   --float-tile-bg: color-mix(in srgb, #fff 5%, var(--float-bg));
   --float-chip-bg: color-mix(in srgb, #fff 10%, var(--float-bg));
   --field-bg: rgba(0, 0, 0, 0.3);
+  /* A dialog's scrim when the blur is off and the fill alone must set the app behind apart. */
+  --scrim-flat: rgba(5, 4, 9, 0.6);
   /* An empty checkbox, a deeper well than a field so the small box still reads on a card. */
   --check-off: rgba(0, 0, 0, 0.45);
   /* State is told by fill: a hover lifts it, on washes it with the accent. */
