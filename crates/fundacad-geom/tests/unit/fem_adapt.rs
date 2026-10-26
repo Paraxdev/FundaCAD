@@ -88,3 +88,16 @@ fn the_reach_is_the_most_a_split_tets_gap_passes_the_peak() {
     assert_eq!(reach(peak, &[], &[], &[]), 0.0);
     assert_eq!(reach(0.0, &[0.0], &[3.0], &[true]), 0.0);
 }
+
+#[test]
+fn a_pass_is_settled_only_below_a_reach_a_measured_pass_stayed_under() {
+    // The holed plate at 3 mm moved the peak 2.8% at 0.0976, the closest pass left skipped.
+    assert!(settled(0.0976));
+    assert!(settled(0.0999));
+    assert!(!settled(0.10));
+    assert!(!settled(0.1001));
+    // The 6.5 mm fin of the test block, and the deep round groove, whose pass moved the peak 10% at 0.189.
+    assert!(!settled(0.1176));
+    assert!(!settled(0.1892));
+    assert!(settled(0.0));
+}

@@ -765,8 +765,8 @@ fn refinement_off_gives_the_single_mesh_answer_of_before() {
 fn fine_refines_the_cantilever_and_stays_on_beam_theory_where_standard_sees_nothing_to_gain() {
     // The peak is on the fixed end's singular edge, which no pass refines.
     let std = run(cantilever(json!("aluminium"), 2.5));
-    assert_eq!(std["mesh"]["stop"], json!("settled"));
     assert_eq!(std["mesh"]["passes"], json!([{"elements": 9024, "maxVonMises": 61.599871}]));
+    assert_eq!(std["mesh"]["stop"], json!("settled"));
     let r = run(with(cantilever(json!("aluminium"), 2.5), json!({"refine": "fine"})));
     let passes = r["mesh"]["passes"].as_array().unwrap();
     // Four passes, or three when a loaded debug build reaches the minute.
@@ -800,6 +800,13 @@ fn plate_frame() -> (impl Fn([f64; 3]) -> [f64; 3] + Copy, impl Fn([f64; 3]) -> 
         [cz * q[0] + sz * q[1], -sz * q[0] + cz * q[1], q[2]]
     };
     (turn, unturn)
+}
+
+/// A Standard reply that skipped its refined pass: one pass on Off's mesh, stopped as settled.
+fn assert_one_pass_of(off: &Value, std: &Value) {
+    assert_eq!(std["mesh"]["passes"].as_array().map(Vec::len), Some(1), "{}", std["mesh"]);
+    assert_eq!(std["mesh"]["elements"], off["mesh"]["elements"]);
+    assert_eq!(std["mesh"]["stop"], json!("settled"));
 }
 
 /// A 120 x 40 x 10 plate with a centred 12 mm hole, pulled along its length, in `plate_frame`. Returns the request
@@ -843,9 +850,9 @@ fn fine_reads_the_hole_wall_peak_closer_than_one_mesh() {
     let off = run(req);
     let (req, _) = holed_plate("standard");
     let mut skipped = run(req);
-    assert_eq!(skipped["mesh"]["stop"], json!("settled"));
-    skipped["mesh"]["stop"] = json!("off");
+    let stop = std::mem::replace(&mut skipped["mesh"]["stop"], json!("off"));
     assert_eq!(skipped, off);
+    assert_eq!(stop, json!("settled"));
     let off = hole_wall_peak(&off, &unturn);
     let (req, unturn) = holed_plate("fine");
     let r = run(req);
@@ -875,6 +882,8 @@ fn refinement_leaves_the_fixed_end_edge_as_it_was_and_refines_elsewhere() {
     let std = run(with(req, json!({"size": h})));
     let (req, _) = holed_plate("off");
     let off = run(with(req, json!({"size": h})));
+    let (req, _) = holed_plate("standard");
+    assert_one_pass_of(&off, &run(with(req, json!({"size": h}))));
     assert_eq!(off["mesh"]["elements"], std["mesh"]["passes"][0]["elements"]);
     let at_end = |q: [f64; 3]| q[0] < -60.0 + 0.5 * h;
     let end = plate_vertices(&std, &unturn, at_end);
@@ -975,13 +984,17 @@ fn finned_block(fin: f64, refine: &str) -> Value {
 
 #[test]
 fn standard_starts_on_offs_mesh_so_it_meshes_every_wall_off_does() {
-    // A 3.6 mm fin is about one of Off's 3.69 mm elements thick: a coarser first pass refused it.
-    for fin in [3.6, 6.5] {
+    // A 3.6 mm fin is about one of Off's 3.69 mm elements thick: a coarser first pass refused it. Its pass could not
+    // move the peak (reach 0), the 6.5 mm fin's can (reach 0.118, past the 0.10 a pass is skipped under).
+    for (fin, passes_run, stop) in [(3.6, 1, "settled"), (6.5, 2, "passes")] {
         let off = run(finned_block(fin, "off"));
         let std = run(finned_block(fin, "standard"));
         let passes = std["mesh"]["passes"].as_array().unwrap_or_else(|| panic!("{std}"));
         assert_eq!(passes[0], off["mesh"]["passes"][0], "fin {fin}");
         assert_eq!(std["mesh"]["size"], off["mesh"]["size"], "fin {fin}");
+        assert_eq!(passes.len(), passes_run, "fin {fin}: {}", std["mesh"]);
+        assert_eq!(std["mesh"]["stop"], json!(stop), "fin {fin}");
+        assert_eq!(std["mesh"]["elements"], json!(passes[passes_run - 1]["elements"]), "fin {fin}");
     }
 }
 
@@ -1007,6 +1020,7 @@ fn a_refined_thin_plate_bends_as_its_first_mesh_and_still_warns_about_thickness(
     assert!(std["mesh"]["passes"].as_array().map(Vec::len) >= Some(2), "{}", std["mesh"]);
     let (a, b) = (num(&off["maxDisplacement"]["value"]), num(&std["maxDisplacement"]["value"]));
     assert!((b - a).abs() < 0.005 * a, "off {a}, standard {b}");
+    assert_one_pass_of(&off, &run(thin_plate("standard", 1.6)));
     for r in [&off, &std] {
         assert!(warnings_of(r).contains("larger than half the part's typical thickness"), "{}", warnings_of(r));
     }
@@ -1027,23 +1041,33 @@ fn wall_bracket(refine: &str) -> Value {
 }
 
 #[test]
-fn standard_skips_the_wall_bracket_pass_that_cannot_move_its_peak_and_answers_as_off() {
-    // The peak sits on the 5 mm gusset's tip fillet, inside the band kept as stuffed beside its sharp edges, so the
-    // pass refined around it and read 15.17 MPa against Off's 15.08 for twice the time.
+fn standard_reads_the_wall_bracket_peak_on_the_gusset_tip_no_lower_than_off() {
+    // The peak sits on the 5 mm gusset's tip fillet, inside the band kept as stuffed beside its sharp edges. Its pass
+    // reads 0.173, past the 0.10 a pass is skipped under, and moves the peak from 15.08 to 15.17 MPa.
     let off = run(wall_bracket("off"));
-    let mut std = run(wall_bracket("standard"));
-    assert_eq!((off["mesh"]["stop"].clone(), std["mesh"]["stop"].clone()), (json!("off"), json!("settled")));
-    std["mesh"]["stop"] = json!("off");
-    assert_eq!(std, off);
+    let std = run(wall_bracket("standard"));
+    let passes = std["mesh"]["passes"].as_array().unwrap_or_else(|| panic!("{std}"));
+    assert_eq!(passes.len(), 2, "{}", std["mesh"]);
+    assert_eq!(passes[0], off["mesh"]["passes"][0]);
+    assert!(num(&std["mesh"]["finest"]) < num(&std["mesh"]["size"]), "{}", std["mesh"]);
+    assert_eq!(std["maxVonMises"]["face"], off["maxVonMises"]["face"]);
     assert_eq!(off["maxVonMises"]["face"], json!(8));
+    let (a, b) = (num(&off["maxVonMises"]["value"]), num(&std["maxVonMises"]["value"]));
+    assert!(b >= a && b < 1.05 * a, "off {a}, standard {b}");
+    assert!(!warnings_of(&std).contains("moved by"), "{}", warnings_of(&std));
+    assert_eq!(std["mesh"]["stop"], json!("passes"));
 }
 
 /// A 20 mm bar 100 long with a 3 mm round groove round its middle, pulled along its axis, in `plate_frame`.
 fn grooved_bar(refine: &str) -> Value {
+    grooved_bar_of(refine, 3.0)
+}
+
+fn grooved_bar_of(refine: &str, depth: f64) -> Value {
     let (turn, _) = plate_frame();
     let doc = json!({"features": [
         {"id": "bar", "type": "cylinder", "radius": 10, "height": 100},
-        {"id": "ring", "type": "torus", "majorRadius": 10, "minorRadius": 3},
+        {"id": "ring", "type": "torus", "majorRadius": 10, "minorRadius": depth},
         {"id": "cut", "type": "boolean", "operation": "subtract", "target": "body1", "tools": ["body2"]},
         {"id": "z", "type": "move", "rz": 30, "bodies": ["body1"]},
         {"id": "x", "type": "move", "rx": 20, "dx": 17, "dy": -9, "dz": 31, "bodies": ["body1"]},
@@ -1063,10 +1087,24 @@ fn standard_still_refines_a_grooved_bar_and_finds_the_groove_peak_off_misses() {
     // on an axis aligned bar, the refined pass 35.1 and 35.9.
     let off = run(grooved_bar("off"));
     let std = run(grooved_bar("standard"));
-    assert_eq!(std["mesh"]["stop"], json!("passes"));
     let passes = std["mesh"]["passes"].as_array().unwrap();
     assert_eq!(passes.len(), 2, "{}", std["mesh"]);
     assert_eq!(passes[0], off["mesh"]["passes"][0]);
     let (a, b) = (num(&off["maxVonMises"]["value"]), num(&std["maxVonMises"]["value"]));
     assert!(b > 1.03 * a && b < 40.0, "off {a}, standard {b}");
+    assert_eq!(std["mesh"]["stop"], json!("passes"));
+}
+
+#[test]
+fn standard_refines_a_deep_round_groove_whose_pass_reads_under_the_old_threshold() {
+    // A 6 mm deep groove reads 0.172, past the 0.10 a pass is skipped under, and its pass moves the peak 5.5%. The
+    // axis aligned 5 mm groove moved 9.6% at 0.189, both under the 0.2 of before.
+    let off = run(grooved_bar_of("off", 6.0));
+    let std = run(grooved_bar_of("standard", 6.0));
+    let passes = std["mesh"]["passes"].as_array().unwrap();
+    assert_eq!(passes.len(), 2, "{}", std["mesh"]);
+    assert_eq!(passes[0], off["mesh"]["passes"][0]);
+    let (a, b) = (num(&off["maxVonMises"]["value"]), num(&std["maxVonMises"]["value"]));
+    assert!(b > 1.04 * a && b < 1.1 * a, "off {a}, standard {b}");
+    assert_eq!(std["mesh"]["stop"], json!("passes"));
 }

@@ -116,3 +116,11 @@ pub fn reach(peak: f64, top: &[f64], gap: &[f64], split: &[bool]) -> f64 {
         .fold(0.0, f64::max);
     most / peak
 }
+
+/// Standard skips a refined pass when no tet it split has a stress gap reaching this share past the peak. The gap
+/// bounds nothing: skipped passes moved the peak 2.8% at most, a deep round groove 10% at 0.189 (0.2 skipped it).
+pub const SETTLED_REACH: f64 = 0.10;
+
+pub fn settled(reach: f64) -> bool {
+    reach < SETTLED_REACH
+}

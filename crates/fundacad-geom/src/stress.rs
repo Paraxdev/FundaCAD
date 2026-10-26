@@ -38,10 +38,6 @@ const THETA: f64 = 1.0;
 const BISECTIONS: u8 = 3;
 /// A refined mesh with a flatter element than this is dropped and the pass before kept.
 const MIN_REFINED_DIHEDRAL: f64 = 5.0;
-/// A refined mesh is not solved when no tet it split has a stress gap reaching this share past the peak. On the Home
-/// examples, a holed plate and a grooved bar, 14 passes under 0.18 moved the peak by 2.7% at most, 6 at 0.24 or more
-/// by 3.5 to 26%, and the gap is no bound: the groove rose 36% where it read 26%.
-const SETTLED_REACH: f64 = 0.2;
 /// Refinement stops when the next pass is predicted to end past this many seconds of the run.
 const REFINE_SECONDS: f64 = 60.0;
 /// Tetrahedra per element size cubed of the mesher's lattice, with its allowance for the
@@ -1411,7 +1407,7 @@ fn analyse(
             break;
         }
         // Fine is chosen to look closer, so it solves every pass its budget allows.
-        if refine == Refine::Standard && split_reach(&cur, &r.mesh, setup.material.e) < SETTLED_REACH {
+        if refine == Refine::Standard && adapt::settled(split_reach(&cur, &r.mesh, setup.material.e)) {
             stop = "settled";
             break;
         }
