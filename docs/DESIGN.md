@@ -720,14 +720,16 @@ a tool panel or popover, where the change shows in the model as you flip it.
   sketch palette) use the shared `.check` class from `_checkbox.scss`. Never
   put `.ft-switch`, `.param-switch`, `ToggleRow` or `Toggle` in anything
   Preferences renders, the guard test fails on it.
-- **Live toggles** use `.ft-switch` in a `.float-toggle` row (`Toggle.vue`) or
-  `ToggleRow.vue`. The Export and Stress panels keep their switches.
+- **Live toggles** use `.ft-switch` in a `.float-toggle` row (`Toggle.vue`, in
+  the view controls) or `.param-switch` through `ToggleRow.vue` (feature
+  properties). The Export dialog and the Stress setup and results steps keep
+  their switches too.
 
 | Class | Idle | On | Disabled | Focus |
 |---|---|---|---|---|
 | `.check` (`<span class="check"><input type="checkbox" /><span class="check-box"></span></span>`) | 18 by 18, squircle, radius 6px, fill `--check-off`, no edge; hover `--hover-wash` over the fill. The native input is laid over the box, so ids, labels and change handlers stay native | fill `--accent`, a `--on-accent` tick | box opacity 0.5, `cursor: default` | `outline: 2px solid var(--accent)`, offset 2px |
 | `.ft-switch` in a `.float-toggle` row (`Toggle.vue`, `role="switch"`, `aria-checked`) | 36 by 20, track `--raised-2`, pill, knob 14px `--text`; row hover white 4% | `.on`: track `--accent`, knob `translateX(16px)` `--on-accent`, hover `--accent-hot` | row `.disabled` opacity 0.45 | the shared outline |
-| `.param-switch` (`ToggleRow.vue` in `FeatureProperties.vue`) | native checkbox over a 30 by 17 `.track`, `--panel-2`, no edge, knob `--text-dim` | track fill `--accent`, knob `translateX(13px)` and `#fff` | track opacity 0.55 | `input:focus-visible + .track` ([14](#14-known-debt-do-not-copy)) |
+| `.param-switch` (`ToggleRow.vue` in `FeatureProperties.vue`) | native checkbox over a 30 by 17 `.track`, `--panel-2`, no edge, knob `--text-dim` | track fill `--accent`, knob `translateX(13px)` and `#fff` | track opacity 0.55 | the shared outline round the track, offset 2px |
 | `.sm-slider` | native range, `accent-color: var(--accent)` | | | |
 
 `.float-toggle` also shows `.ft-state` ("On" or "Off", 11.5px `--text-mute`),
@@ -1190,7 +1192,6 @@ Run all of it. Paste the screenshots into the review.
   `color: #e24a3b`, and `PropertiesPanel.vue` and `InterferencePanel.vue` write
   `var(--accent-hot, #ff9a5c)` inline.
 - No base disabled state for `button`, no focus state on `.rd-search`.
-- `.param-switch input:focus-visible + .track` still draws a 3px `--accent-tint` ring shadow instead of the outline. New controls use the outline.
 - 12 components carry an SFC `<style>` block although `main.scss` says there
   are none; new styles go in `src/styles/`.
 
@@ -1218,11 +1219,16 @@ Run all of it. Paste the screenshots into the review.
 4. **Tokens exist.** Every `var(--name)` is defined in `_tokens.scss` or set
    locally (a declaration, an inline `:style`, a `setProperty`). The old
    undefined names are listed in `UNDEFINED_ALLOWED`; that list only shrinks.
-5. **No outline around a rounded surface.** A rule that rounds a surface may
-   not set a visible `border`, `border-color` or `outline`, or a 1px ring
-   `box-shadow`, outside focus rules. Signal borders (`--error`, `--warn`) and
-   the entries of `OUTLINE_ALLOWED` (sketch labels, drawn glyphs, swatches, the
-   guide ring) are exempt ([Depth without lines](#depth-without-lines)).
+5. **No outline around a rounded surface.** A rule that rounds a surface, by
+   its own declarations, by a class the templates give the same element or by a
+   parent selector, may not paint an edge: a visible `border`,
+   `border-color`, `border-style`, `border-image`, `outline`, `outline-color`,
+   a ring `box-shadow` (zero offset, a blur of 1px at most, a spread, however
+   it is spelled) or a masked `::after` ring. Only a real `:focus` or
+   `:focus-visible` state is exempt, not `:focus-within`. Signal borders
+   (`--error`, `--warn`) and the entries of `OUTLINE_ALLOWED` (sketch labels,
+   drawn glyphs, swatches, the guide ring) are exempt too
+   ([Depth without lines](#depth-without-lines)).
 6. **Retired tokens stay invisible.** `--float-line`, `--glass-sheen`,
    `--glass-inset`, `--glass-rim` and `--accent-glow` are defined as
    transparent in `_tokens.scss`, and no component or partial reads them.
@@ -1233,6 +1239,9 @@ Run all of it. Paste the screenshots into the review.
    `--accent` clears 4.5:1, and a card clears its viewport at above 1.15:1.
 9. **Settings use the checkbox.** Nothing Preferences renders contains a
    `.param-switch`, `.ft-switch`, `ToggleRow` or `Toggle`.
+10. **An error shows on a typed field.** Of the rules that name a dimension
+    field in a `.dim-bad` box, the winning background keeps `--error-tint`, so a
+    refused typed value does not look normal.
 
 It cannot see a screen. Whether a surface is glass, both themes and blur off
 are still yours to check with the [checklist](#13-checklist-before-ui-work-is-done).
