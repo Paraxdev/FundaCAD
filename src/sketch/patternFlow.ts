@@ -353,7 +353,11 @@ export class PatternFlow {
       pat.diameter = dim.getValue("diameter") ?? (pat.diameter as number);
     } else if (pat.type === "patternRect") {
       pat.countX = Math.max(1, dimN("countX", pat.countX as number));
-      if (this.host.tool() !== "patternLinear") pat.countY = Math.max(1, dimN("countY", pat.countY as number));
+      if (this.host.tool() !== "patternLinear") {
+        pat.countY = Math.max(1, dimN("countY", pat.countY as number));
+        // A row stores no Y gap, so a grid made from one needs a real one or its rows stack.
+        if (pat.countY > 1 && pat.spacingY === 0) pat.spacingY = pat.spacingX === 0 ? 15 : pat.spacingX;
+      }
     } else if (pat.type === "patternCircular") {
       pat.count = Math.max(1, dimN("count", pat.count as number));
       if (dim.isUserDriven("angle")) pat.angle = dim.getValue("angle") ?? (pat.angle as number);
@@ -399,7 +403,8 @@ export class PatternFlow {
     this.sweep = null; // the first drag sample re-seeds the accumulator from the cursor
     this.patternCenter = new THREE.Vector2("cx" in pat ? (pat.cx as number) : 0, "cy" in pat ? (pat.cy as number) : 0);
     this.centreDrag = false;
-    this.host.setActiveTool(pat.type);
+    // A single row is what Linear stores, so it reopens there, matching its glyph.
+    this.host.setActiveTool(pat.type === "patternRect" && pat.countY === 1 ? "patternLinear" : pat.type);
     this.showHud(pat);
     setPrompt("Drag or type to change · click to commit · Delete removes · Esc");
     this.syncDot();

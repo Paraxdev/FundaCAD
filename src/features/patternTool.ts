@@ -337,7 +337,6 @@ export class PatternTool {
       this.axis = hit;
       if (this.place === "picked") this.place = "centre";
       if (this.kind === "linear") this.value = this.span(this.axisDir()) || this.value;
-      if (this.kind === "rect") this.setDragged(this.span(this.axisDir()) || this.dragged());
       this.placeGizmo(); // a circular pattern's gizmo lives on the axis it turns about
       this.pushFields();
       this.updateGhosts();

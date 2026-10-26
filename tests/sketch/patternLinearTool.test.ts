@@ -9,8 +9,9 @@ import type { SketchPattern } from "../../src/types";
 
 beforeEach(() => setActivePinia(createPinia()));
 
-function rig(tool: SketchTool) {
-  const patterns: SketchPattern[] = [];
+function rig(start: SketchTool, existing: SketchPattern[] = []) {
+  let tool = start;
+  const patterns: SketchPattern[] = [...existing];
   const shown: { name: string }[][] = [];
   const dim = {
     show: (defs: { name: string }[]) => shown.push(defs),
@@ -22,7 +23,9 @@ function rig(tool: SketchTool) {
   };
   const host = {
     tool: () => tool,
-    setActiveTool: () => {},
+    setActiveTool: (t: SketchTool) => {
+      tool = t;
+    },
     setTool: () => {},
     selected: () => new Set(["c1"]),
     patterns: () => patterns,
@@ -34,7 +37,7 @@ function rig(tool: SketchTool) {
     refreshActive: () => {},
     onState: () => {},
   } as unknown as PatternHost;
-  return { flow: new PatternFlow(host), patterns, shown };
+  return { flow: new PatternFlow(host), patterns, shown, tool: () => tool };
 }
 
 describe("sketch Linear Pattern", () => {
@@ -66,5 +69,40 @@ describe("sketch Rectangular Pattern", () => {
     expect(shown[0]?.map((d) => d.name)).toEqual(["countX", "countY"]);
     flow.commit();
     expect(patterns[0]).toMatchObject({ type: "patternRect", countX: 3, countY: 3 });
+  });
+
+  it("opens a stored grid in the Rect tool with both counts", () => {
+    const grid: SketchPattern = {
+      id: "g",
+      type: "patternRect",
+      sources: ["c1"],
+      countX: 3,
+      countY: 2,
+      spacingX: 10,
+      spacingY: 8,
+    };
+    const { flow, shown, tool } = rig("select", [grid]);
+    flow.edit("g");
+    expect(tool()).toBe("patternRect");
+    expect(shown[0]?.map((d) => d.name)).toEqual(["countX", "countY"]);
+  });
+});
+
+describe("editing a one row pattern", () => {
+  const row: SketchPattern = {
+    id: "r",
+    type: "patternRect",
+    sources: ["c1"],
+    countX: 3,
+    countY: 1,
+    spacingX: 10,
+    spacingY: 0,
+  };
+
+  it("reopens in the Linear tool, which has no Ny to stack rows with", () => {
+    const { flow, shown, tool } = rig("select", [row]);
+    flow.edit("r");
+    expect(tool()).toBe("patternLinear");
+    expect(shown[0]?.map((d) => d.name)).toEqual(["countX"]);
   });
 });
