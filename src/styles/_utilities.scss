@@ -58,16 +58,19 @@ button.finish:hover {
 }
 
 /* Off the spacing scale like the sketch dimension labels in _browser.scss: placed from a
-   projected 3D point, so sized against the geometry, not the chrome. */
+   projected 3D point, so sized against the geometry, not the chrome. One chip, one row 32px
+   tall: every pixel of height is picking area given away. _glass.scss gives it the fill. */
 .dim-input {
   position: fixed;
   display: flex;
-  gap: var(--s-1);
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
   z-index: 200;
   pointer-events: auto;
 }
-/* A box placed in free space (the Hole box, about 560px) wraps its fields in a narrower
-   window instead of cutting the last off. */
+/* A box placed in free space wraps its fields in a narrower window instead of cutting the
+   last off. */
 .dim-input.fits-window {
   flex-wrap: wrap;
   max-width: calc(100vw - 2 * var(--s-3));
@@ -87,79 +90,76 @@ button.finish:hover {
   text-transform: none;
   color: var(--error);
   background: var(--panel);
-  border: 1px solid var(--error);
   border-radius: var(--r-sm);
   padding: var(--s-1) var(--s-2);
   box-shadow: var(--shadow-2);
 }
 /* Every field turns: the kernel refuses a feature, not a field, and the user picks which
    value to move. The error shows as a fill, _glass.scss repeats it for a typed field. */
+/* Above the cursor the line hangs over the box instead, so it never covers the point. */
+.dim-input.dim-above .dim-problem {
+  top: auto;
+  bottom: calc(100% + var(--s-1));
+}
 .dim-bad .dim-field {
   background: var(--error-tint);
 }
 .dim-bad .dim-field input {
   color: var(--error);
 }
-/* One row, NAME [value] UNIT: the box hangs over the model, and every pixel of height is
-   picking area given away. */
+/* NAME [value] unit, flat on the box's own fill. */
 .dim-field {
   display: flex;
   align-items: center;
-  gap: var(--s-1);
-  font-size: 9px;
+  gap: 3px;
+  height: 24px;
+  font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.4px;
-  text-transform: uppercase;
   color: var(--text-mute);
-  background: var(--panel);
-  border: 1px solid transparent;
-  border-radius: var(--r-sm);
-  padding: 3px var(--s-1);
-  box-shadow: var(--shadow-2);
-}
-/* Typing turns the readout into an input; until then the drag writes to it. */
-.dim-field.typed {
-  background: var(--panel-2);
+  border-radius: 7px;
+  padding: 0 3px 0 5px;
 }
 .dim-name {
   flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
 }
 .dim-field input {
-  /* Width is set inline from the content, so a formula never meets a box sized for three
-     digits. */
+  /* Width is set inline: a floor that holds a usual number, so typing never resizes the box,
+     and growth past it so a formula never meets a box sized for three digits. */
   min-width: 0;
+  height: 22px;
   border: none;
-  border-radius: 7px;
+  border-radius: 6px;
   background: var(--field-bg);
   color: var(--text);
   font-size: 12px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  letter-spacing: normal;
-  text-transform: none;
   /* Side padding keeps a leading minus off the focus ring, where it read as
      part of the ring and a typed -2 looked like 2. */
-  padding: 2px 3px;
+  padding: 0 4px;
 }
 .dim-field input:focus {
   outline: 1px solid var(--accent);
   outline-offset: 0;
 }
-/* A button that changes the shown unit without retyping; the border makes it read as
-   pressable at 9px. */
+/* A quiet word that changes the shown unit without retyping. */
 .dim-unit {
   flex: none;
-  border: 1px solid transparent;
-  background: var(--float-tile-bg);
-  border-radius: 7px;
-  color: var(--text-dim);
+  border: none;
+  background: none;
+  border-radius: 6px;
+  color: var(--text-mute);
   font: inherit;
-  padding: 1px 4px;
+  font-weight: 600;
+  padding: 2px 2px;
   cursor: pointer;
-  text-transform: none;
 }
 .dim-unit:hover {
   color: var(--accent-hot);
+  background: var(--hover-wash);
 }
 .dim-unit-menu {
   position: fixed;
@@ -168,7 +168,6 @@ button.finish:hover {
   flex-direction: column;
   min-width: 56px;
   background: var(--panel-2);
-  border: 1px solid transparent;
   box-shadow: var(--shadow-3);
   padding: var(--s-1);
 }
@@ -189,35 +188,86 @@ button.finish:hover {
 .dim-unit-item.active {
   color: var(--accent);
 }
+/* Options and the closing pair stand apart from the values by a space, not a line. */
+.dim-opts,
+.dim-seg {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.dim-opts,
+.dim-end {
+  margin-left: 4px;
+}
+.dim-seg + .dim-seg,
+.dim-seg + .dim-btn,
+.dim-btn + .dim-seg {
+  margin-left: 4px;
+}
+/* Every option is a 24px icon; its word stays for screen readers and the tooltip says it. */
 .dim-btn {
-  align-self: stretch;
-  width: 26px;
-  border-radius: var(--r-sm);
-  border: 1px solid transparent;
-  font-size: 13px;
-  font-weight: 700;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 7px;
+  background: none;
   cursor: pointer;
-  box-shadow: var(--shadow-2);
   /* A <button> does not inherit colour, and UA buttontext drew the currentColor svg
      marks as empty boxes on a dark surface. */
-  color: var(--text);
-}
-/* A mode, not a verb, so wider than the icon buttons and with a word. On is the accent,
-   readable at a glance beside the number. */
-.dim-btn.dim-toggle,
-.dim-btn.dim-direction {
-  width: auto;
-  padding: 0 var(--s-3);
-  font-size: 11px;
-  font-weight: 600;
   color: var(--text-dim);
 }
-.dim-btn.dim-toggle:hover,
-.dim-btn.dim-direction:hover {
+.dim-btn:hover {
   color: var(--text);
+  background: var(--hover-wash);
 }
-.dim-btn.dim-toggle.on,
-.dim-btn.dim-direction.on,
+.dim-btn:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 0;
+}
+/* A segment that names itself ("G1") beside a small glyph. */
+.dim-btn.dim-texted {
+  width: auto;
+  gap: 2px;
+  padding: 0 5px 0 4px;
+}
+.dim-seg-text {
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.dim-btn.disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.dim-btn.disabled:hover {
+  color: var(--text-dim);
+  background: none;
+}
+.dim-word {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+/* An option a tool gave no icon shows its word instead. */
+.dim-btn.dim-worded {
+  width: auto;
+  padding: 0 var(--s-2);
+  font-size: 11px;
+  font-weight: 600;
+}
+.dim-btn.dim-worded .dim-word {
+  position: static;
+  width: auto;
+  height: auto;
+  clip-path: none;
+}
+/* On is a wash, readable at a glance beside the number. */
+.dim-btn.on,
 .section-chip-btn.active {
   color: var(--accent-hot);
   background: var(--accent-tint);
@@ -228,18 +278,10 @@ button.finish:hover {
 .dim-btn.dim-no {
   color: var(--error);
 }
-.dim-ok {
-  color: #7fe08a;
-  border-color: #3f7a48;
+.dim-btn.dim-ok:hover {
+  background: color-mix(in srgb, var(--ok) 18%, transparent);
 }
-.dim-ok:hover {
-  background: rgba(66, 130, 78, 0.25);
-}
-.dim-no {
-  color: var(--error);
-  border-color: var(--error);
-}
-.dim-no:hover {
+.dim-btn.dim-no:hover {
   background: var(--error-tint);
 }
 

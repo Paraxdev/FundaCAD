@@ -130,19 +130,45 @@ export class PatternTool {
     this.dim.show(
       kind === "rect"
         ? [
-            { name: "spacingX", label: "Spacing X", kind: "length" },
-            { name: "spacingY", label: "Spacing Y", kind: "length" },
-            { name: "countX", label: "Copies X", kind: "count", ...featureValueRule("patternRect", "countX") },
-            { name: "countY", label: "Copies Y", kind: "count", ...featureValueRule("patternRect", "countY") },
+            { name: "spacingX", label: "Spacing X", icon: "distance", tag: "X", kind: "length" },
+            { name: "spacingY", label: "Spacing Y", icon: "distance", tag: "Y", kind: "length" },
+            {
+              name: "countX",
+              label: "Copies X",
+              icon: "items",
+              tag: "X",
+              kind: "count",
+              ...featureValueRule("patternRect", "countX"),
+            },
+            {
+              name: "countY",
+              label: "Copies Y",
+              icon: "items",
+              tag: "Y",
+              kind: "count",
+              ...featureValueRule("patternRect", "countY"),
+            },
           ]
         : kind === "linear"
           ? [
-              { name: "spacing", label: "Spacing", kind: "length" },
-              { name: "count", label: "Copies", kind: "count", ...featureValueRule("patternLinear", "count") },
+              { name: "spacing", label: "Spacing", icon: "distance", kind: "length" },
+              {
+                name: "count",
+                label: "Copies",
+                icon: "items",
+                kind: "count",
+                ...featureValueRule("patternLinear", "count"),
+              },
             ]
           : [
-              { name: "angle", label: "Angle", kind: "angle" },
-              { name: "count", label: "Copies", kind: "count", ...featureValueRule("patternCircular", "count") },
+              { name: "angle", label: "Angle", icon: "angle", kind: "angle" },
+              {
+                name: "count",
+                label: "Copies",
+                icon: "items",
+                kind: "count",
+                ...featureValueRule("patternCircular", "count"),
+              },
             ],
       () => this.commitSoon(),
       () => this.cancel(),

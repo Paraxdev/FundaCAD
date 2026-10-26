@@ -86,9 +86,7 @@ const check = (name, ok, detail) => {
     await page.mouse.click(at.x, at.y);
     await settle();
     if (g2) {
-      const t = await page.$(
-        ".dim-input:not([style*='display: none']) .dim-toggle input, .dim-input:not([style*='display: none']) .dim-toggle",
-      );
+      const t = await page.$(".dim-input:not([style*='display: none']) [data-option='continuity'] [data-id='G2']");
       if (t) await t.click();
       await settle();
     }
