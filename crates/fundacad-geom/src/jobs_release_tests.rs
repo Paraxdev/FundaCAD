@@ -24,11 +24,11 @@ fn fill(shapes: &[&opencascade::primitives::Shape]) {
     inspect_bodies(&bodies, false, 10, 10).unwrap();
 }
 
-// Another test's rebuild can hold the shared rebuild cache for a moment.
+// Another test's rebuild can hold the shared rebuild cache; on a loaded machine that took over 10 s.
 fn release_soon() {
     let t0 = std::time::Instant::now();
     while !GeomJobs.release() {
-        assert!(t0.elapsed() < std::time::Duration::from_secs(10), "the rebuild cache stayed held");
+        assert!(t0.elapsed() < std::time::Duration::from_secs(60), "the rebuild cache stayed held");
         std::thread::sleep(std::time::Duration::from_millis(5));
     }
 }
