@@ -21,6 +21,8 @@ export interface EdgeRef {
   readonly points: EdgePt[];
   /** the faces either side meet tangentially (a fillet's boundary) */
   readonly smooth: boolean;
+  /** the highest fillet continuity the engine builds here, when below 3 */
+  readonly reach?: number;
   /** the merged object that draws this edge, and this edge's slot in it */
   readonly draw: BodyEdges;
   readonly slot: number;
@@ -67,7 +69,15 @@ export class BodyEdges {
     const base = new THREE.Color(EDGE_IDLE_COLOR);
     for (let i = 0; i < n; i++) {
       const e = edges[i]!;
-      this.refs.push({ id: e.id, body: e.body, points: e.points, smooth: e.smooth === true, draw: this, slot: i });
+      this.refs.push({
+        id: e.id,
+        body: e.body,
+        points: e.points,
+        smooth: e.smooth === true,
+        ...(e.reach !== undefined ? { reach: e.reach } : {}),
+        draw: this,
+        slot: i,
+      });
       this.segCount[i] = Math.max(0, e.points.length - 1);
       this.rgb[i * 3] = base.r;
       this.rgb[i * 3 + 1] = base.g;

@@ -508,7 +508,7 @@ export type CoreFeature =
       radius: Num;
       profile?: Num;
       sizeType?: "radius" | "chord";
-      continuity?: "G1" | "G2";
+      continuity?: "G1" | "G2" | "G3";
       tangentEdges?: boolean;
       draft?: boolean;
     }
@@ -1167,7 +1167,8 @@ export interface TrackedFaceRecord {
 export interface RebuildResult {
   mesh: { positions: F32Wire; indices: U32Wire; faceIds: U32Wire; normals?: F32Wire };
   // `smooth`: the two faces meet tangentially here (a fillet's boundary), drawn per the tangent edges setting.
-  edges: { id: string; points: [number, number, number][]; body?: string; smooth?: boolean }[];
+  // `reach`: the highest fillet continuity the engine builds here, sent only below 3 (an edge along a curved face).
+  edges: { id: string; points: [number, number, number][]; body?: string; smooth?: boolean; reach?: number }[];
   bbox: { min: Vec3; max: Vec3 };
   // Each body's faceId range. No `etag` means always rebuild the body's mesh.
   bodies?: {

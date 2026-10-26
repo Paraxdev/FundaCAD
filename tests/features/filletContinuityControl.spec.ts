@@ -77,12 +77,12 @@ describe("fillet continuity control", () => {
     document.body.innerHTML = "";
   });
 
-  it("offers one icon segment per profile, G1 chosen, and no G3 yet", () => {
+  it("offers one icon segment per profile, G1 chosen", () => {
     const segs = [...control().querySelectorAll<HTMLElement>(".dim-segment")];
-    expect(segs.map((b) => b.dataset.id)).toEqual(["G1", "G2"]);
-    expect(segs.map((b) => !!b.querySelector("svg.icon") && b.title.length > 0)).toEqual([true, true]);
+    expect(segs.map((b) => b.dataset.id)).toEqual(["G1", "G2", "G3"]);
+    expect(segs.map((b) => !!b.querySelector("svg.icon") && b.title.length > 0)).toEqual([true, true, true]);
     expect(chosen()).toEqual(["G1"]);
-    expect(CONTINUITY_SEGMENTS.map((s) => s.key)).toEqual(["1", "2"]);
+    expect(CONTINUITY_SEGMENTS.map((s) => s.key)).toEqual(["1", "2", "3"]);
   });
 
   it("a click sets each value, and the stored feature carries it", () => {
@@ -104,8 +104,10 @@ describe("fillet continuity control", () => {
     expect(t.added).toEqual([{ id: "f1", type: "fillet", radius: 3, edges: EDGE }]);
   });
 
-  it("keys 1 and 2 pick the profile while the tool runs", () => {
+  it("keys 1, 2 and 3 pick the profile while the tool runs", () => {
     input().blur();
+    key(document.body, "3");
+    expect(chosen()).toEqual(["G3"]);
     key(document.body, "2");
     expect(chosen()).toEqual(["G2"]);
     key(document.body, "1");
