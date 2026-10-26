@@ -179,3 +179,72 @@ describe("a selected edge is measured against the faces beside it", () => {
     h.dispose();
   });
 });
+
+describe("a picked edge is drawn wide", () => {
+  it("selected wider than hovered, both wider than idle, and gone on clear", async () => {
+    const { BodyEdges, EDGE_IDLE_WIDTH } = await import("../../src/viewport/edgeLines");
+    const { view: v } = view();
+    const draw = new BodyEdges(
+      [
+        {
+          id: "e1",
+          body: "b1",
+          points: [
+            [0.5, 0.5, -0.5],
+            [0.5, 0.5, 0.5],
+          ],
+        },
+        {
+          id: "e2",
+          body: "b1",
+          points: [
+            [-0.5, 0.5, 0.5],
+            [0.5, 0.5, 0.5],
+          ],
+        },
+      ] as never,
+      new THREE.Vector2(800, 600),
+    );
+    const h = new Highlighter(v);
+    const lines = () =>
+      draw.object.children
+        .filter((c) => c.name === "edge-pick-line")
+        .map((c) => ((c as THREE.Mesh).material as THREE.Material & { linewidth: number }).linewidth)
+        .sort();
+    h.selectEdge(draw.refs[0]!);
+    h.hoverEdge(draw.refs[1]!);
+    await Promise.resolve();
+    const [hover, select] = lines();
+    expect(hover).toBeGreaterThan(EDGE_IDLE_WIDTH);
+    expect(select).toBeGreaterThan(hover!);
+    h.clearSelection();
+    h.hoverEdge(null);
+    await Promise.resolve();
+    expect(lines()).toEqual([]);
+    h.dispose();
+  });
+});
+
+describe("an edge beside a selected face", () => {
+  it("stands out from the face's pick colour, not only from its base", () => {
+    const { view: v } = view();
+    const painted: THREE.Color[] = [];
+    const edge = {
+      body: "b1",
+      slot: 0,
+      points: [
+        [0.5, 0.5, -0.5],
+        [0.5, 0.5, 0.5],
+      ],
+      draw: { setColor: (_s: number, c: THREE.Color) => painted.push(c.clone()), setIdleColor: () => {} },
+    } as unknown as EdgeRef;
+    const h = new Highlighter(v);
+    h.setBase(() => new THREE.Color(0x2a2d33));
+    h.selectEdge(edge);
+    const alone = painted.at(-1)!.getHex();
+    h.selectFace(0);
+    const beside = painted.at(-1)!.getHex();
+    expect(beside).not.toBe(alone);
+    h.dispose();
+  });
+});

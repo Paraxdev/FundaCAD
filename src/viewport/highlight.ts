@@ -4,7 +4,12 @@
 
 import * as THREE from "three";
 import { bodyOfFace, edgeObjects, type BodyMesh, type ModelView } from "./render";
-import type { EdgePt, EdgeRef } from "./edgeLines";
+import type { BodyEdges, EdgePt, EdgeRef } from "./edgeLines";
+import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
+import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
+import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
+import { segmentPositions } from "./edgeEmphasis";
+import { markOverlay } from "./overlayKinds";
 import {
   disposeFaceHoverOverlay,
   makeFaceHoverOverlay,
@@ -17,6 +22,41 @@ import { onThemeChange } from "../ui/theme";
 import { PICK_ALPHA, composite, pickColor, type PickKind } from "./pickColors";
 
 const EDGE_BASE = new THREE.Color(0x1b1f24);
+/** Px. An idle edge is 1.6 (edgeLines.ts EDGE_IDLE_WIDTH), so a pick stays thin enough to show which edge it is. */
+const EDGE_PICK_WIDTH: Record<PickKind, number> = { hover: 2.4, select: 3 };
+const EDGE_PICK_NAME = "edge-pick-line";
+const edgePickMaterials = new Map<PickKind, LineMaterial>();
+
+/** Shared and never disposed, as the glow materials are, so a hover crossing edges never relinks a program. */
+function edgePickMaterial(kind: PickKind, resolution: THREE.Vector2 | undefined): LineMaterial {
+  let m = edgePickMaterials.get(kind);
+  if (!m) {
+    m = new LineMaterial({
+      color: 0xffffff,
+      vertexColors: true,
+      linewidth: EDGE_PICK_WIDTH[kind],
+      worldUnits: false,
+      depthTest: true,
+      depthWrite: false,
+      transparent: true,
+    });
+    edgePickMaterials.set(kind, m);
+  }
+  // The edge's own material holds the viewport's live resolution, so share its vector rather than copy it.
+  if (resolution) m.uniforms.resolution!.value = resolution;
+  return m;
+}
+
+function removeEdgePickLines(draw: BodyEdges | undefined) {
+  const obj = draw?.object;
+  if (!obj) return;
+  for (let i = obj.children.length - 1; i >= 0; i--) {
+    const c = obj.children[i]!;
+    if (c.name !== EDGE_PICK_NAME) continue;
+    c.removeFromParent();
+    (c as LineSegments2).geometry.dispose();
+  }
+}
 const DEFAULT_ACCENT = 0x51d6a8;
 const DEFAULT_BODY = 0x9aa7b4;
 
@@ -98,7 +138,67 @@ export class Highlighter {
       removeSelectionGlows(b.mesh);
       if (tinted.delete(b)) this.stripTint(b);
     }
+    for (const draw of edgeObjects(view)) removeEdgePickLines(draw);
     this.offTheme = onThemeChange(() => this.refreshTheme());
+  }
+
+  private edgeLines: LineSegments2[] = [];
+  private edgeLinesQueued = false;
+
+  /** A box select adds edges one at a time, so the wide lines are rebuilt once after the batch. */
+  private queueEdgeLines() {
+    if (this.edgeLinesQueued) return;
+    this.edgeLinesQueued = true;
+    queueMicrotask(() => {
+      this.edgeLinesQueued = false;
+      if (!this.disposed) this.syncEdgeLines();
+    });
+  }
+
+  /** The picked edges drawn again wide over their own one, one line object per body that has any. */
+  private syncEdgeLines() {
+    for (const l of this.edgeLines) {
+      l.removeFromParent();
+      l.geometry.dispose();
+    }
+    this.edgeLines = [];
+    if (!this.paintShown) return;
+    const picks: [EdgeRef, PickKind][] = [];
+    for (const e of this.selectedEdges) if (!this.errorEdges.has(e)) picks.push([e, "select"]);
+    const h = this.hoveredEdge;
+    if (h && !this.selectedEdges.has(h) && !this.errorEdges.has(h)) picks.push([h, "hover"]);
+    const groups = new Map<string, { draw: BodyEdges; kind: PickKind; edges: EdgeRef[] }>();
+    for (const [e, kind] of picks) {
+      if (!e.draw?.object || (e.points?.length ?? 0) < 2) continue;
+      const key = `${e.draw.object.id}:${kind}`;
+      const g = groups.get(key) ?? { draw: e.draw, kind, edges: [] };
+      g.edges.push(e);
+      groups.set(key, g);
+    }
+    for (const { draw, kind, edges } of groups.values()) {
+      const parts = edges.map((e) => segmentPositions(e.points));
+      const pos = new Float32Array(parts.reduce((n, p) => n + p.length, 0));
+      const col = new Float32Array(pos.length);
+      let o = 0;
+      edges.forEach((e, i) => {
+        const c = this.edgeColour(e, kind);
+        const p = parts[i]!;
+        pos.set(p, o);
+        for (let k = 0; k < p.length; k += 3) col.set([c.r, c.g, c.b], o + k);
+        o += p.length;
+      });
+      const geo = new LineSegmentsGeometry();
+      geo.setPositions(pos);
+      geo.setColors(col);
+      const line = new LineSegments2(geo, edgePickMaterial(kind, draw.material?.uniforms.resolution?.value));
+      line.name = EDGE_PICK_NAME;
+      line.raycast = () => {};
+      line.renderOrder = draw.object.renderOrder + 1;
+      line.frustumCulled = false;
+      markOverlay(line, "edges");
+      draw.object.add(line);
+      this.edgeLines.push(line);
+    }
   }
 
   /** Re-read the accent and repaint every face, overlay and edge it coloured. */
@@ -150,7 +250,10 @@ export class Highlighter {
     const body = e.body ? this.bodyById(e.body) : undefined;
     if (!body) return this.pickColour(DEFAULT_BODY, kind, "edge");
     const faces = this.facesBeside(body, e);
-    const unders = faces.length ? faces.map((f) => this.faceUnder(body, f)) : [this.underAt(body, 0)];
+    // A selected face beside it shows its pick colour, which the edge has to stand out from too.
+    const shown = (f: number) =>
+      this.selectedFaces.has(f) && this.paintShown ? this.faceColour(f, "select").getHex() : this.faceUnder(body, f);
+    const unders = faces.length ? faces.map(shown) : [this.underAt(body, 0)];
     return this.pickColour(unders, kind, "edge");
   }
 
@@ -241,6 +344,7 @@ export class Highlighter {
     }
     this.errorEdges = next;
     for (const e of this.errorEdges) paint(e, ERROR);
+    this.queueEdgeLines();
   }
 
   hoverEdge(line: EdgeRef | null) {
@@ -252,6 +356,7 @@ export class Highlighter {
     if (line && !this.selectedEdges.has(line) && !this.errorEdges.has(line)) {
       this.tint(line, "hover");
     }
+    this.queueEdgeLines();
   }
 
   /** What hover has lit, to tell whether a pointer move changed the picture. */
@@ -368,6 +473,11 @@ export class Highlighter {
     this.disposed = true;
     this.offTheme();
     this.dropOverlays();
+    for (const l of this.edgeLines) {
+      l.removeFromParent();
+      l.geometry.dispose();
+    }
+    this.edgeLines = [];
   }
 
   private showOverlay(o: PickOverlay, on: boolean) {
@@ -391,6 +501,7 @@ export class Highlighter {
     if (this.selectedEdges.has(line)) {
       this.selectedEdges.delete(line);
       if (!this.errorEdges.has(line)) paintIdle(line, this.edgeBase);
+      this.queueEdgeLines();
     } else {
       this.selectedEdges.add(line);
       if (!this.errorEdges.has(line)) this.tint(line, "select");
@@ -408,6 +519,7 @@ export class Highlighter {
     }
     this.syncOverlay("hover");
     this.queueSelectOverlay();
+    this.retintEdges();
   }
 
   /** Adds without toggling, so the second sweep of a box over an overlap does not eat the first one's result. */
@@ -441,7 +553,9 @@ export class Highlighter {
     this.selectedEdges.clear();
     this.selectedFaces.clear();
     this.faceBodies = null;
+    this.retintEdges();
     this.syncOverlays();
+    this.queueEdgeLines();
   }
 
   toggleSelectBody(bodyId: string) {
@@ -530,9 +644,18 @@ export class Highlighter {
 
   private paintShown = true;
 
+  /** Picked edges again, after the colours beside them changed. */
+  private retintEdges() {
+    if (!this.paintShown) return;
+    for (const e of this.selectedEdges) if (!this.errorEdges.has(e)) this.tint(e, "select");
+    const h = this.hoveredEdge;
+    if (h && !this.selectedEdges.has(h) && !this.errorEdges.has(h)) this.tint(h, "hover");
+  }
+
   private tint(e: EdgeRef, kind: PickKind) {
     if (this.paintShown) paint(e, this.edgeColour(e, kind));
     else paintIdle(e, this.edgeBase);
+    this.queueEdgeLines();
   }
 
   /** Off, the sets keep following clicks so the tree and properties still do; a failing edge stays red either way. */
@@ -546,6 +669,7 @@ export class Highlighter {
       this.paintShown = false;
     }
     this.syncOverlays();
+    this.syncEdgeLines();
   }
 
   private stripSelection() {
@@ -574,10 +698,13 @@ export class Highlighter {
     for (const e of edges) paintIdle(e, this.edgeBase);
     const overlays = [this.overlays.hover, this.overlays.select].filter((o) => o?.shown) as PickOverlay[];
     for (const o of overlays) this.showOverlay(o, false);
+    const lines = this.edgeLines.filter((l) => l.visible);
+    for (const l of lines) l.visible = false;
     try {
       return fn();
     } finally {
       for (const o of overlays) this.showOverlay(o, true);
+      for (const l of lines) l.visible = true;
       for (const f of faces) this.paintFace(f, this.selectedFaces.has(f) ? "select" : "hover");
       for (const e of edges) {
         if (this.errorEdges.has(e)) paint(e, ERROR);
@@ -685,11 +812,7 @@ export class Highlighter {
       body.baseVersion = (body.baseVersion ?? 0) + 1;
     }
     // The pick colour is chosen against the base, so a new base recolours what is picked on it.
-    if (this.paintShown) {
-      for (const e of this.selectedEdges) if (!this.errorEdges.has(e)) this.tint(e, "select");
-      const h = this.hoveredEdge;
-      if (h && !this.selectedEdges.has(h) && !this.errorEdges.has(h)) this.tint(h, "hover");
-    }
+    this.retintEdges();
     if (this.selectedFaces.size || this.hoveredFaces.length) {
       for (const f of this.selectedFaces) this.paintFace(f, "select");
       // paintFace queues a sub-range, which would make three upload only that range of the rewritten buffer.
