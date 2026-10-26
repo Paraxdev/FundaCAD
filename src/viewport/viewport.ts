@@ -1360,13 +1360,20 @@ export class Viewport {
    *  dropped by anything that changes what is on screen. */
   private areaProj: AreaProjection | null = null;
 
+  private areaPreviewKey: string | null = null;
+
   private dropAreaProjection() {
     this.areaProj = null;
+    this.areaPreviewKey = null;
   }
 
   private projectForArea(): AreaProjection {
-    if (!this.model) return { bodies: [], edges: [] };
-    return projectForArea(this.model, this.rig.active, this.canvas.getBoundingClientRect(), this.seeThrough);
+    return projectForArea(
+      this.model ?? { bodies: [], edges: [] },
+      this.rig.active,
+      this.canvas.getBoundingClientRect(),
+      this.seeThrough,
+    );
   }
 
   /** Shared by the drag and by Tab, so the two never disagree about the box on screen. */
@@ -1500,6 +1507,11 @@ export class Viewport {
     const kind = areaSelectionMode(this.areaFilter, this.selectionMode);
     // On release only: switching to bodies raises the move gizmo mid-drag otherwise.
     if (announce && kind !== this.selectionMode) this.setSelectionMode(kind);
+    // Repainting a face of millions of triangles on every move took most of a drag's frame, so a preview that takes
+    // what the last one took leaves the paint alone.
+    const key = `${kind}|${this.areaFilter}|${got.faces.join()}|${got.edges.map((e) => e.id).join()}|${got.bodies.join()}`;
+    if (!announce && key === this.areaPreviewKey) return;
+    this.areaPreviewKey = announce ? null : key;
     // Both kinds are cleared every frame, Tab can change the filter mid drag.
     h.clearSelection();
     h.clearBodySelection();
