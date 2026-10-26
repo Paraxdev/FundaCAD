@@ -233,13 +233,13 @@ textarea,
     bottom: -6px;
   }
 
-  // On-canvas value boxes. The cluster wraps in a 4px gap, so the buttons grow
-  // up and down, sideways only into half the gap, and the last one outwards.
+  // On-canvas value boxes. The 24px buttons sit 2px apart in a 3px padded chip, so they
+  // grow up and down to 36px, sideways only into half the gap, and the last one outwards.
   .dim-btn::before {
-    inset: -5px -2px;
+    inset: -6px -1px;
   }
   .dim-btn.dim-no::before {
-    right: -8px;
+    right: -9px;
   }
   // About 27px tall; the 8px gap between them is split.
   .section-chip-btn::before {

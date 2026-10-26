@@ -200,10 +200,18 @@ export class MoveTool {
     if (this.gizmo) this.placeGizmo(this.gizmo);
     this.dim.show(
       [
-        { name: "move", label: "Move", kind: "length" },
-        { name: "turn", label: "Angle", kind: "angle" },
+        { name: "move", label: "Move", icon: "move", kind: "length" },
+        { name: "turn", label: "Angle", icon: "rotate", kind: "angle" },
         ...(target.handles.cubes.length
-          ? [{ name: "size", label: "Scale", kind: "count" as const, ...featureValueRule("scale", "factor") }]
+          ? [
+              {
+                name: "size",
+                label: "Scale",
+                icon: "scale",
+                kind: "count" as const,
+                ...featureValueRule("scale", "factor"),
+              },
+            ]
           : []),
       ],
       () => this.settleTyped(),
@@ -211,6 +219,7 @@ export class MoveTool {
       target.canCopy
         ? {
             label: "Copy",
+            icon: "copy",
             title: "Leave the original where it is and move a copy",
             initial: this.copy,
             onChange: (on) => {

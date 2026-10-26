@@ -10,8 +10,7 @@
 .choice-card,
 .float-right .palette,
 #viewport .prompt,
-.dim-field,
-.dim-btn,
+.dim-input,
 .dim-unit-menu,
 .home-side,
 .home-tools,
@@ -53,8 +52,7 @@
   background: var(--float-tile-bg);
 }
 .rail-pill,
-.dim-field,
-.dim-btn,
+.dim-input,
 .roundtrip,
 .sel-readout,
 .normal-to-sketch,
@@ -81,8 +79,7 @@
   border-radius: var(--float-tile-radius);
 }
 .rail-pill,
-.dim-field,
-.dim-btn,
+.dim-input,
 .dim-unit-menu,
 .home-card-versions,
 .home-badge,
@@ -232,16 +229,13 @@
 }
 
 .dim-field.typed {
-  border-color: transparent;
-  background: var(--float-chip-bg);
-  box-shadow: var(--float-shadow);
+  background: var(--hover-wash);
 }
 .dim-bad .dim-field,
 .dim-bad .dim-field.typed {
-  background: linear-gradient(var(--error-tint), var(--error-tint)), var(--float-chip-bg);
+  background: var(--error-tint);
 }
-.dim-btn.dim-toggle.on,
-.dim-btn.dim-direction.on,
+.dim-btn.on,
 .section-chip-btn.active {
   /* Mixed into an opaque dark, not transparency: over a pale model a see-through
      tint washed the label out. */

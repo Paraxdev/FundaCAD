@@ -14,6 +14,8 @@ export interface DimFieldDef extends ValueRule {
   /** a short word, or the tooltip when `icon` is given */
   label: string;
   icon?: string;
+  /** A letter shown after the icon, the axis of "Spacing X", or instead of a long label. */
+  tag?: string;
   kind?: "length" | "angle" | "count"; // default length; count = raw number, no unit
   /** The tool reads the raw text itself (a size name, a parameter expression), so the box does not judge it. */
   free?: boolean;
@@ -48,6 +50,44 @@ export interface DimToggleDef {
   title: string;
   initial: boolean;
   onChange: (on: boolean) => void;
+  /** Drawn as an icon switch whose label is its tooltip; without one the label is shown. */
+  icon?: string;
+}
+
+export interface DimSegment {
+  id: string;
+  label: string;
+  icon: string;
+  /** Picks it while the tool runs; inside a value field it takes Alt, there the bare key is part of the number. */
+  key?: string;
+}
+
+/** A choice of a few named values, each one click away. The tool owns the state, as with the toggle. */
+export interface DimSegmentedDef {
+  name: string;
+  title: string;
+  segments: DimSegment[];
+  chosen: string;
+  onChoose: (id: string) => void;
+}
+
+/** A one off verb beside the value, such as moving a hole to the face centre. */
+export interface DimActionDef {
+  name: string;
+  label: string;
+  icon: string;
+  onPress: () => void;
+}
+
+export type DimOption = DimToggleDef | DimSegmentedDef | DimActionDef;
+
+const isSegmented = (o: DimOption): o is DimSegmentedDef => "segments" in o;
+const isAction = (o: DimOption): o is DimActionDef => "onPress" in o;
+
+interface Segmented {
+  def: DimSegmentedDef;
+  el: HTMLElement;
+  chosen: string;
 }
 
 interface Field {
@@ -120,6 +160,10 @@ export interface ScreenRect {
 
 /** px */
 const PAST_GAP = 10;
+/** px, from the cursor to the box's near corner */
+const CURSOR_GAP = 16;
+/** Holds "-12.75" with room to spare, so typing a usual number never resizes the box. */
+const MIN_FIELD_CH = 7;
 
 /** Past the tip along the arrow, else beside the tip, else behind the base, whichever first fits in `bounds`,
  *  clamped when none does. `dir` runs from base to tip in px. */
@@ -266,7 +310,7 @@ export class DimInput {
     defs: DimFieldDef[],
     onCommit: (values: Record<string, number>) => void,
     onCancel?: () => void,
-    toggle?: DimToggleDef,
+    options?: DimOption | DimOption[],
     extra?: HTMLElement,
     onInput?: () => void,
   ) {
@@ -363,30 +407,20 @@ export class DimInput {
       return field;
     });
     if (extra) this.root.appendChild(extra);
-    // The tool's switch sits ahead of confirm and cancel: it changes what is about to be committed.
-    if (toggle) {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "dim-btn dim-toggle";
-      btn.title = toggle.title;
-      btn.textContent = toggle.label;
-      btn.classList.toggle("on", toggle.initial);
-      btn.addEventListener("pointerdown", (e) => {
-        e.preventDefault(); // never blur the input to press it
-        e.stopPropagation();
-        this.setToggle(!this.toggleOn);
-        toggle.onChange(this.toggleOn);
-      });
-      this.root.appendChild(btn);
-      this.toggleBtn = btn;
-      this.toggleOn = toggle.initial;
+    // The tool's options sit ahead of confirm and cancel: they change what is about to be committed.
+    const opts = options === undefined ? [] : Array.isArray(options) ? options : [options];
+    if (opts.length) {
+      const group = document.createElement("div");
+      group.className = "dim-opts";
+      for (const o of opts) group.appendChild(this.optionElement(o));
+      this.root.appendChild(group);
     }
     // Visible confirm and cancel for mouse-first work; pointerdown with preventDefault so they never blur the input.
     const ok = document.createElement("button");
-    ok.className = "dim-btn dim-ok";
+    ok.className = "dim-btn dim-ok dim-end";
     ok.title = "Confirm (Enter)";
     ok.setAttribute("aria-label", "Confirm");
-    ok.appendChild(iconElement("check", 13));
+    ok.appendChild(iconElement("check", 15));
     ok.addEventListener("pointerdown", (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -399,7 +433,7 @@ export class DimInput {
       no.className = "dim-btn dim-no";
       no.title = "Cancel (Esc)";
       no.setAttribute("aria-label", "Cancel");
-      no.appendChild(iconElement("close", 13));
+      no.appendChild(iconElement("close", 15));
       no.addEventListener("pointerdown", (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -415,6 +449,132 @@ export class DimInput {
     // Subscribed per showing, or a tool would inherit the last tool's refusal. onPreviewError fires at once, so a box
     // opening onto an already failing preview shows it.
     this.unsubscribeError = onPreviewError((m) => this.setProblem(m));
+    if (this.segmented.some((g) => g.def.segments.some((x) => x.key)))
+      window.addEventListener("keydown", this.boundSegmentKey, true);
+  }
+
+  private optionElement(o: DimOption): HTMLElement {
+    if (isSegmented(o)) {
+      const el = document.createElement("div");
+      el.className = "dim-seg";
+      el.dataset.option = o.name;
+      el.setAttribute("role", "radiogroup");
+      el.setAttribute("aria-label", o.title);
+      el.title = o.title;
+      const g: Segmented = { def: o, el, chosen: o.chosen };
+      for (const seg of o.segments) {
+        const b = this.optionButton(seg.icon, seg.label, seg.key ? `${seg.label} (${seg.key})` : seg.label);
+        b.classList.add("dim-segment");
+        b.dataset.id = seg.id;
+        b.setAttribute("role", "radio");
+        this.onPress(b, () => this.pickSegment(g, seg.id));
+        el.appendChild(b);
+      }
+      this.segmented.push(g);
+      this.paintSegmented(g);
+      return el;
+    }
+    if (isAction(o)) {
+      const b = this.optionButton(o.icon, o.label, o.label);
+      b.classList.add("dim-action");
+      b.dataset.option = o.name;
+      this.onPress(b, o.onPress);
+      return b;
+    }
+    const b = this.optionButton(o.icon, o.label, o.title);
+    b.classList.add("dim-toggle");
+    b.classList.toggle("on", o.initial);
+    b.setAttribute("aria-pressed", String(o.initial));
+    this.onPress(b, () => {
+      this.setToggle(!this.toggleOn);
+      o.onChange(this.toggleOn);
+    });
+    // The first switch is the one setToggle and its kin address.
+    if (!this.toggleBtn) {
+      this.toggleBtn = b;
+      this.toggleOn = o.initial;
+    }
+    return b;
+  }
+
+  /** The word stays in the button for screen readers and text checks; it shows only when there is no icon. */
+  private optionButton(icon: string | undefined, label: string, title: string): HTMLButtonElement {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "dim-btn dim-opt";
+    b.title = title;
+    b.tabIndex = -1;
+    if (icon) {
+      b.setAttribute("aria-label", label);
+      b.appendChild(iconElement(icon, 16));
+    } else b.classList.add("dim-worded");
+    const word = document.createElement("span");
+    word.className = "dim-word";
+    word.textContent = label;
+    b.appendChild(word);
+    return b;
+  }
+
+  private onPress(b: HTMLElement, act: () => void) {
+    b.addEventListener("pointerdown", (e) => {
+      e.preventDefault(); // never blur the input to press it
+      e.stopPropagation();
+      act();
+    });
+  }
+
+  private segmented: Segmented[] = [];
+
+  private paintSegmented(g: Segmented) {
+    for (const b of g.el.querySelectorAll<HTMLElement>(".dim-segment")) {
+      const on = b.dataset.id === g.chosen;
+      b.classList.toggle("on", on);
+      b.setAttribute("aria-checked", String(on));
+    }
+  }
+
+  private pickSegment(g: Segmented, id: string) {
+    if (g.chosen === id) return;
+    g.chosen = id;
+    this.paintSegmented(g);
+    g.def.onChoose(id);
+  }
+
+  /** Sets a segmented option without picking it. Does NOT call back, as with setToggle. */
+  setOption(name: string, id: string) {
+    const g = this.segmented.find((x) => x.def.name === name);
+    if (!g) return;
+    g.chosen = id;
+    this.paintSegmented(g);
+  }
+
+  optionOf(name: string): string | null {
+    return this.segmented.find((x) => x.def.name === name)?.chosen ?? null;
+  }
+
+  /** For an option that applies only to some picks, such as the direction on a hole's face. */
+  setOptionHidden(name: string, hidden: boolean) {
+    const el = this.root.querySelector<HTMLElement>(`[data-option="${name}"]`);
+    if (el) el.style.display = hidden ? "none" : "";
+  }
+
+  private boundSegmentKey = (e: KeyboardEvent) => this.onSegmentKey(e);
+
+  private onSegmentKey(e: KeyboardEvent) {
+    if (!this.active || e.ctrlKey || e.metaKey || e.repeat) return;
+    const t = e.target;
+    const typing = t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement;
+    if (typing ? !(e.altKey && this.ownsTarget(t)) : e.altKey) return;
+    // Alt turns e.key into another character on some layouts; the code still names the key.
+    const key = /^Digit\d$/.test(e.code) ? e.code.slice(5) : e.key;
+    for (const g of this.segmented) {
+      const seg = g.def.segments.find((x) => x.key === key);
+      if (!seg || g.el.style.display === "none") continue;
+      e.preventDefault();
+      e.stopPropagation();
+      this.pickSegment(g, seg.id);
+      return;
+    }
   }
 
   /** Judged only once the user has typed: a value the cursor wrote is the tool's own. */
@@ -474,11 +634,13 @@ export class DimInput {
   setToggle(on: boolean) {
     this.toggleOn = on;
     this.toggleBtn?.classList.toggle("on", on);
+    this.toggleBtn?.setAttribute("aria-pressed", String(on));
   }
 
   /** For a switch that steps through several states rather than two. */
   setToggleLabel(label: string) {
-    if (this.toggleBtn) this.toggleBtn.textContent = label;
+    const word = this.toggleBtn?.querySelector(".dim-word");
+    if (word) word.textContent = label;
   }
 
   /** For a switch that applies only once the tool learns more, such as an engine answer that lands later. */
@@ -512,11 +674,13 @@ export class DimInput {
     const tag = f.tag;
     tag.replaceChildren();
     if (f.def.icon) {
-      tag.appendChild(iconElement(f.def.icon, 12));
+      tag.appendChild(iconElement(f.def.icon, 14));
+      if (f.def.tag) tag.append(f.def.tag);
       tag.title = f.def.label;
     } else {
-      tag.textContent = f.def.label;
-      tag.removeAttribute("title");
+      tag.textContent = f.def.tag ?? f.def.label;
+      if (f.def.tag) tag.title = f.def.label;
+      else tag.removeAttribute("title");
     }
     if (f.def.choices) tag.appendChild(iconElement("caretDown", 10));
     f.input.setAttribute("aria-label", f.def.label);
@@ -566,7 +730,8 @@ export class DimInput {
       const problem = this.fieldProblem(field);
       if (problem) this.setTypedProblem(problem);
       const shown = this.fields.filter((f) => !f.hidden || f === field);
-      const next = shown[(shown.indexOf(field) + 1) % shown.length];
+      const step = e.shiftKey ? shown.length - 1 : 1;
+      const next = shown[(shown.indexOf(field) + step) % shown.length];
       if (next) {
         next.input.focus();
         next.input.select();
@@ -581,7 +746,7 @@ export class DimInput {
 
   /** Grows with its content so a formula fits; floored so it neither collapses empty nor twitches on short values. */
   private sizeToContent(f: Field) {
-    f.input.style.width = `${Math.max(5, f.input.value.length + 1)}ch`;
+    f.input.style.width = `${Math.max(MIN_FIELD_CH, f.input.value.length + 1)}ch`;
   }
 
   /** A unit in the text changes what the field shows: type "1 inch" into a mm field and the chip moves, the number
@@ -773,9 +938,16 @@ export class DimInput {
     return this.fields.find((x) => x.def.name === name)?.input.value ?? "";
   }
 
+  /** Below right of the point, flipped to its other side where the window ends, never over it. */
   position(screenX: number, screenY: number) {
-    this.root.style.left = `${screenX + 16}px`;
-    this.root.style.top = `${screenY + 16}px`;
+    const w = this.root.offsetWidth;
+    const h = this.root.offsetHeight;
+    const right = screenX + CURSOR_GAP;
+    const below = screenY + CURSOR_GAP;
+    const flipX = right + w > window.innerWidth && screenX - CURSOR_GAP - w >= 0;
+    const flipY = below + h > window.innerHeight && screenY - CURSOR_GAP - h >= 0;
+    this.root.style.left = `${Math.round(flipX ? screenX - CURSOR_GAP - w : right)}px`;
+    this.root.style.top = `${Math.round(flipY ? screenY - CURSOR_GAP - h : below)}px`;
   }
 
   /** `dir` is the arrow from base to tip on screen; the box is kept inside `bounds`. */
@@ -852,6 +1024,8 @@ export class DimInput {
     // so this drops the pointer, not the DOM.
     this.toggleBtn = null;
     this.toggleOn = false;
+    this.segmented = [];
+    window.removeEventListener("keydown", this.boundSegmentKey, true);
     this.active = false;
     shownBoxes.delete(this);
     this.closeMenu();
