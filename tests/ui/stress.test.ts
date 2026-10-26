@@ -315,6 +315,17 @@ describe("formatStressResult", () => {
     expect(rows.slice(-2).map((r) => r.k)).toEqual(["Mesh", "Refinement"]);
   });
 
+  it("tells a Fine result in Details that Standard can read a higher peak, and says nothing for Standard or Off", () => {
+    const rows = (refine?: "off" | "standard" | "fine") =>
+      formatStressResult(reply, "mm", [], refine).details.filter((d) => d.k === "Note");
+    expect(rows("fine")).toEqual([{ k: "Note", v: expect.stringContaining("check the safety factor with Standard") }]);
+    expect(rows("standard")).toEqual([]);
+    expect(rows("off")).toEqual([]);
+    expect(rows()).toEqual([]);
+    const v = formatStressResult({ ...reply, mesh: { ...reply.mesh, stop: "settled" } }, "mm", ["fixed"], "fine");
+    expect(v.details.slice(-3).map((d) => d.k)).toEqual(["Mesh", "Refinement", "Note"]);
+  });
+
   it("lists each of three supports' reactions and the weight in the details, none of them in the key rows", () => {
     const v = formatStressResult(
       {

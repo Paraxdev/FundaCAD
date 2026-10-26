@@ -542,6 +542,7 @@ export function formatStressResult(
   r: StressReply,
   unit: Unit,
   supports: readonly StressSupportType[] = [],
+  refine: StressRefine = "standard",
 ): StressResultView {
   const sf = r.safetyFactor;
   const rows: PanelRow[] = [
@@ -572,6 +573,9 @@ export function formatStressResult(
   details.push({ k: "Mesh", v: meshRow(r.mesh) });
   const refinement = refinementRow(r.mesh);
   if (refinement) details.push({ k: "Refinement", v: refinement });
+  // Fine starts on a finer mesh, so on some parts its peak reads lower than Standard's (Wall bracket 14.0 against
+  // 15.2 MPa, a deep round groove 5% lower) and on others higher.
+  if (refine === "fine") details.push({ k: "Note", v: FINE_NOTE });
   const warnings = [...(r.warnings ?? [])];
   for (const e of r.errors ?? []) warnings.push(e.feature_id ? `${e.feature_id}: ${e.message}` : e.message);
   const values = r.surface?.vonMises ?? [];
@@ -594,6 +598,9 @@ function meshRow(m: StressReply["mesh"]): string {
   if (passes < 2 || m.finest === undefined || !(m.finest < m.size)) return row;
   return `${row}, ${displayRound(m.finest)} mm where stress is high, ${passes} passes`;
 }
+
+const FINE_NOTE =
+  "Fine starts on a finer mesh than Standard and can read a lower peak, check the safety factor with Standard too";
 
 const REFINE_STOPS: Record<string, string> = {
   settled: "a finer mesh would barely move the peak",

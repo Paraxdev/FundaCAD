@@ -1087,6 +1087,7 @@ export function createPanels(deps: PanelsDeps) {
       r,
       getUnit(),
       (req.options.supports ?? []).map((x) => x.type),
+      req.options.refine,
     );
     panels.stressFinished({ result: view });
     const sf = r.safetyFactor;
