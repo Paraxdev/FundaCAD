@@ -2,7 +2,7 @@
 //! of its own. Meshes stay coarse so the debug build is quick.
 
 use fundacad_geom::builder::NoWatch;
-use fundacad_geom::stress::stress_result;
+use fundacad_geom::stress::{stress_result_with, StressLimits};
 use fundacad_protocol::JobResult;
 use serde_json::{json, Value};
 
@@ -29,7 +29,7 @@ fn spot(at: [f64; 3], radius: f64) -> Value {
 
 fn run(req: Value) -> Value {
     let Value::Object(m) = req else { panic!("a request is an object") };
-    match stress_result(&m, &NoWatch) {
+    match stress_result_with(&m, &NoWatch, &StressLimits { refine_seconds: f64::INFINITY }) {
         JobResult::Json(m) => Value::Object(m),
         _ => panic!("expected a JSON result"),
     }
