@@ -785,3 +785,59 @@ fn chamfers_where_a_curved_chamfer_meets_two_straight_ones_at_a_corner_are_refus
     ];
     assert_eq!(got, want);
 }
+
+/// The 20 high square pyramid on a 20 x 20 base, tilted 30 degrees about X and moved off the origin, `notch`
+/// cutting away the quadrant under one apex edge so the apex has three convex edges and a concave one.
+fn pyramid(notch: bool, blend: Value) -> Rebuild {
+    let solid = |id: &str, plane: &str, p: &[(f64, f64)], distance: f64, operation: &str| {
+        let n = p.len();
+        let lines: Vec<Value> = (0..n)
+            .map(|i| {
+                let (a, b) = (p[i], p[(i + 1) % n]);
+                json!({"type": "line", "x1": a.0, "y1": a.1, "x2": b.0, "y2": b.1})
+            })
+            .collect();
+        [
+            json!({"id": format!("s{id}"), "type": "sketch", "plane": plane, "entities": lines}),
+            json!({"id": format!("e{id}"), "type": "extrude", "sketch": format!("s{id}"), "distance": distance,
+                "symmetric": true, "operation": operation}),
+        ]
+    };
+    let tri = [(-10.0, 0.0), (10.0, 0.0), (0.0, 20.0)];
+    let mut features = vec![];
+    features.extend(solid("1", "XZ", &tri, 10.0, "new"));
+    features.extend(solid("2", "YZ", &tri, 10.0, "intersect"));
+    if notch {
+        features.extend(solid("3", "XY", &rect(-30.0, -30.0, 30.0, 30.0), 40.0, "cut"));
+    }
+    features.push(json!({"id": "m", "type": "move", "rx": 30, "dx": 13, "dy": -7, "dz": 4}));
+    features.push(blend);
+    build(&json!({"parameters": {}, "features": features}))
+}
+
+/// A point of the pyramid before it was tilted and moved.
+fn on_pyramid(x: f64, y: f64, z: f64) -> Value {
+    let (s, c) = (0.5, 0.75f64.sqrt());
+    json!({"kind": "edge", "by": "nearest", "body": "body1", "point": [x + 13.0, y * c - z * s - 7.0, y * s + z * c + 4.0]})
+}
+
+/// At 20 / sqrt(4.8) each side face's setback lines meet on its base edge, OCCT fails and the section build takes
+/// the apex, which has a corner patch only for exactly three convex chamfers: four built 666.67 and three with the
+/// notch's concave edge 705.99, no refusal. The other side, three ends at a square corner, builds in
+/// two_distance_chamfers_that_just_meet_at_three_edge_corners_cut_the_corner_triangle.
+#[test]
+fn chamfers_meeting_at_an_apex_of_four_edges_or_with_a_concave_one_are_refused() {
+    let dt = 20.0 / 4.8f64.sqrt();
+    let apex: Vec<Value> =
+        [(-5.0, -5.0), (5.0, -5.0), (5.0, 5.0), (-5.0, 5.0)].iter().map(|&(x, y)| on_pyramid(x, y, 10.0)).collect();
+    let notched = || json!([apex[1], apex[2], apex[3], on_pyramid(0.0, 0.0, 10.0)]);
+    let equal = |d: f64, edges: Value| json!({"id": "c", "type": "chamfer", "edges": edges, "distance": d});
+    let tip = |r: &Rebuild| messages(r).iter().any(|m| m.contains("through (13, -17, 21.321)"));
+    let run = |notch: bool, d: f64, edges: Value| {
+        let r = pyramid(notch, equal(d, edges));
+        (with_faces(&r), tip(&r))
+    };
+    let got = vec![run(false, dt, json!(apex)), run(true, dt, notched())];
+    let want = vec![((1, vec![], 2666.67, None, Some(5)), true), ((1, vec![], 2000.0, None, Some(7)), true)];
+    assert_eq!(got, want);
+}
