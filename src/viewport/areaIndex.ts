@@ -212,8 +212,13 @@ function* build(body: BodyMesh): Generator<void, BodyAreaIndex | null> {
     for (let c = 1; c < counts.length; c++) counts[c] = (counts[c] as number) + (counts[c - 1] as number);
     const seq = new Uint32Array(n);
     const fill = counts.slice(0, counts.length - 1);
-    for (let s = 0; s < n; s++) seq[fill[cellOf[s] as number]!++] = tris[s] as number;
-    yield;
+    for (let s = 0; s < n; s++) {
+      seq[fill[cellOf[s] as number]!++] = tris[s] as number;
+      if (++work > 16384) {
+        work = 0;
+        yield;
+      }
+    }
     for (let c = 0; c + 1 < counts.length; c++) {
       const a = counts[c] as number,
         b = counts[c + 1] as number;
