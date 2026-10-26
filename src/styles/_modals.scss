@@ -9,7 +9,7 @@
 }
 .modal-panel {
   background: var(--panel, #16181d);
-  border: 1px solid var(--line, #262a31);
+  border: 1px solid transparent;
   border-radius: var(--r-lg, 10px);
   /* The flat zero blur elevation of every overlay: a soft blur read as an odd halo against
      the dark backdrop. */
@@ -62,7 +62,7 @@
 .btn {
   background: var(--raised, #22262e);
   color: var(--text, #e6e8ec);
-  border: 1px solid var(--line-strong, #323843);
+  border: 1px solid transparent;
   border-radius: var(--r-sm, 6px);
   /* The same pair as the bare button rule in _layout: OK is the default button recoloured. */
   padding: var(--s-3) var(--s-4);
@@ -148,7 +148,7 @@
 .sm-test {
   width: 240px;
   height: 170px;
-  border: 1px solid var(--line, #262a31);
+  border: 1px solid transparent;
   border-radius: var(--r-md, 8px);
   background: var(--bg, #0e0f12);
 }
@@ -209,7 +209,7 @@
     5px 5px;
   background-repeat: no-repeat;
   color: var(--text, #e6e8ec);
-  border: 1px solid var(--line-strong, #323843);
+  border: 1px solid transparent;
   border-radius: var(--r-sm, 6px);
   /* The 26px clears the gradient caret above, placed from the right edge, like every other
      select. */
@@ -217,12 +217,9 @@
   font-size: 11px;
   cursor: pointer;
 }
-.sm-select:hover {
-  border-color: #3d4452;
-}
 .sm-select:focus {
-  outline: none;
-  border-color: var(--accent, #ff7a3c);
+  outline: 1px solid var(--accent);
+  outline-offset: 0;
 }
 /* WebKitGTK renders the native option popup light by default. */
 .sm-select option {
@@ -254,19 +251,16 @@
 .sm-input {
   background-color: var(--panel-2, #1c1f26);
   color: var(--text, #e6e8ec);
-  border: 1px solid var(--line-strong, #323843);
+  border: 1px solid transparent;
   border-radius: var(--r-sm, 6px);
   padding: var(--s-2) var(--s-3);
   font: inherit;
   font-size: 11px;
   min-width: 0;
 }
-.sm-input:hover {
-  border-color: #3d4452;
-}
 .sm-input:focus {
-  outline: none;
-  border-color: var(--accent, #ff7a3c);
+  outline: 1px solid var(--accent);
+  outline-offset: 0;
 }
 .sm-inv {
   font-size: 11px;
@@ -355,8 +349,12 @@
   margin-left: var(--s-2);
 }
 .plug-forget {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
   margin-left: var(--s-3);
   white-space: nowrap;
+  cursor: pointer;
 }
 /* flex: none, the .plug-url basis of 240px is a height in this column and made the box 240px tall. */
 .plug-url.plug-search {
@@ -384,7 +382,7 @@
   flex-direction: column;
   gap: var(--s-2);
   padding: var(--s-3);
-  border: 1px solid var(--line, #2a2f3a);
+  border: 1px solid transparent;
   border-radius: 6px;
   background: var(--panel-2, #1c1f26);
 }
@@ -428,7 +426,7 @@
   flex: 1 1 240px;
   min-width: 0;
   padding: var(--s-2);
-  border: 1px solid var(--line, #2a2f3a);
+  border: 1px solid transparent;
   border-radius: 6px;
   background: var(--panel-2, #1c1f26);
   color: var(--text, #e6e8ec);
@@ -460,7 +458,7 @@
   max-height: 200px;
   overflow: auto;
   padding: var(--s-2);
-  border: 1px solid var(--line, #2a2f3a);
+  border: 1px solid transparent;
   border-radius: 6px;
   background: var(--panel-2, #1c1f26);
   color: var(--text, #e6e8ec);
@@ -484,7 +482,7 @@
 }
 .choice-card {
   background: var(--panel-2, #1c1f26);
-  border: 1px solid var(--line-strong, #323843);
+  border: 1px solid transparent;
   border-radius: var(--r-lg, 10px);
   box-shadow: var(--shadow-3);
   padding: var(--s-5, 16px);
@@ -513,7 +511,7 @@
   /* Card padding: a tile with a stacked title and caption, not a control. */
   padding: var(--s-4);
   background: var(--raised, #22262e);
-  border: 1px solid var(--line, #262a31);
+  border: 1px solid transparent;
   border-radius: var(--r-md, 8px);
   color: var(--text, #e6e8ec);
   font-size: 12px;
@@ -524,21 +522,18 @@
 }
 .choice-btn:hover {
   background: var(--accent-tint, rgba(255, 122, 60, 0.14));
-  border-color: var(--accent, #ff7a3c);
 }
 .choice-btn small {
   color: var(--text-mute, #6b7280);
   font-size: 10px;
 }
 .choice-btn.choice-primary {
-  background: var(--accent, #ff7a3c);
-  border-color: var(--accent, #ff7a3c);
+  background: var(--accent);
   color: var(--on-accent, #160a04);
   font-weight: 600;
 }
 .choice-btn.choice-primary:hover:not(:disabled) {
-  background: var(--accent-hot, #ff9a5c);
-  border-color: var(--accent-hot, #ff9a5c);
+  background: var(--accent-hot);
 }
 .choice-btn.choice-primary small {
   color: color-mix(in srgb, var(--on-accent, #160a04) 70%, transparent);
@@ -613,7 +608,7 @@
   display: flex;
   flex-direction: column;
   background: var(--panel-2, #1b1f24);
-  border: 1px solid var(--line-strong, #3a4048);
+  border: 1px solid transparent;
   border-radius: var(--r-lg, 12px);
   box-shadow: var(--shadow-3, 0 16px 48px rgba(0, 0, 0, 0.5));
   overflow: hidden;
@@ -676,7 +671,7 @@
   z-index: 1500;
   min-width: 180px;
   background: var(--panel-2, #1b1f24);
-  border: 1px solid var(--line-strong, #3a4048);
+  border: 1px solid transparent;
   border-radius: var(--r-md, 8px);
   box-shadow: var(--shadow-3, 0 16px 48px rgba(0, 0, 0, 0.5));
   /* Same inset as .palette, the other small panel that floats over the model. */
@@ -706,7 +701,7 @@
   padding: 2px 6px;
   border-radius: var(--r-xs, 4px);
   background: var(--panel-2, #1b1f24);
-  border: 1px solid var(--line-strong, #3a4048);
+  border: 1px solid transparent;
   color: var(--text, #e6e9ee);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
@@ -779,9 +774,9 @@
 }
 .measure-select,
 .measure-number {
-  background: var(--bg);
+  background: var(--field-bg);
   color: var(--text, #e6e9ee);
-  border: 1px solid var(--line-strong, #3a4048);
+  border: 1px solid transparent;
   border-radius: var(--r-xs, 4px);
   font: inherit;
   font-variant-numeric: tabular-nums;
@@ -876,7 +871,7 @@
 }
 .mats-list {
   overflow: auto;
-  border: 1px solid var(--line, #262a31);
+  border: 1px solid transparent;
   border-radius: var(--r-sm, 6px);
   padding: var(--s-1);
 }
@@ -899,8 +894,7 @@
   background: var(--raised, #22262e);
 }
 .mats-row.is-selected {
-  background: var(--accent-tint);
-  border-color: var(--accent);
+  background: var(--accent-tint-2);
 }
 .mats-swatch {
   flex: 0 0 auto;
@@ -928,7 +922,7 @@
   height: 26px;
   padding: 0;
   background: var(--panel-2);
-  border: 1px solid var(--line, #262a31);
+  border: 1px solid transparent;
   border-radius: var(--r-sm, 6px);
   cursor: pointer;
 }

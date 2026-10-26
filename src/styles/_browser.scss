@@ -13,7 +13,7 @@
   appearance: none;
   -webkit-appearance: none;
   background: var(--panel-2);
-  border: 1px solid var(--line);
+  border: 1px solid transparent;
   border-radius: var(--r-sm);
   padding: 2px var(--s-2);
   color: var(--text-dim);
@@ -25,12 +25,11 @@
   cursor: pointer;
 }
 .browser-filter:hover {
-  border-color: var(--line-strong);
   color: var(--text);
 }
 .browser-filter:focus {
-  outline: none;
-  border-color: var(--accent);
+  outline: 1px solid var(--accent);
+  outline-offset: 0;
 }
 .browser-filter option {
   background: var(--panel-2);
@@ -59,8 +58,7 @@
    background would look like plain hover. */
 .tree-folder.drop-into,
 .feature-row.drop-into {
-  box-shadow: inset 0 0 0 1px var(--accent);
-  background: var(--accent-tint);
+  background: var(--accent-tint-2);
 }
 .tree-caret {
   width: 12px;
@@ -96,7 +94,7 @@
     color-mix(in srgb, var(--accent) 22%, transparent),
     color-mix(in srgb, var(--accent) 6%, transparent)
   );
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent);
+  box-shadow: none;
   color: var(--accent-hot);
 }
 .tree-label {

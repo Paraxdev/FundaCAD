@@ -81,16 +81,16 @@ const title = computed(() =>
   gap: 6px;
   max-width: 22rem;
   padding: 2px 8px;
-  border: 1px solid var(--accent, #4a8);
+  border: 1px solid transparent;
   border-radius: 999px;
-  background: transparent;
+  background: var(--accent-tint);
   color: var(--fg, inherit);
   font: inherit;
   font-size: 11px;
   cursor: pointer;
 }
 .live-pill.readonly {
-  border-color: var(--border, #666);
+  background: var(--float-chip-bg);
   opacity: 0.85;
 }
 .live-dot {

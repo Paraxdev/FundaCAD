@@ -12,7 +12,6 @@
   position: fixed;
   border: 2px solid var(--accent);
   border-radius: var(--float-chip-radius);
-  box-shadow: 0 0 0 4px var(--accent-glow);
   animation: guide-pulse 1.4s var(--ease) infinite;
 }
 .guide-ring.guide-region {
@@ -58,7 +57,6 @@
   stroke-width: 3;
   stroke-linecap: round;
   stroke-linejoin: round;
-  filter: drop-shadow(0 0 3px var(--accent-glow));
 }
 
 .guide-bubble {

@@ -186,14 +186,13 @@ const unresolvedCount = () => rows.value.filter((r) => !r.resolved).length;
   width: 100%;
   padding: 6px;
   background: var(--raised);
-  border: 1px solid var(--line);
+  border: 1px solid transparent;
   border-radius: 6px;
   color: var(--text);
   font: 12px var(--ui, system-ui, sans-serif);
   cursor: pointer;
 }
 .fm-add:hover {
-  border-color: var(--accent);
   color: var(--accent-hot);
 }
 </style>

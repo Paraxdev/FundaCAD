@@ -36,7 +36,6 @@
   gap: var(--s-2);
   margin-top: var(--s-2);
   padding-top: var(--s-2);
-  border-top: 1px solid var(--float-line);
 }
 .stress-foot .stress-run {
   flex: 1 1 auto;
@@ -51,7 +50,6 @@
 .stress-item + .stress-item {
   margin-top: var(--s-1);
   padding-top: var(--s-1);
-  border-top: 1px solid var(--float-line);
 }
 // A disclosure: a caret and a word that fold what most studies leave alone.
 .stress-more {
@@ -70,11 +68,6 @@
   background: none;
   color: var(--text);
 }
-.stress-more:focus-visible {
-  outline: none;
-  border-radius: var(--r-xs);
-  box-shadow: 0 0 0 2px var(--accent-glow);
-}
 .stress-fold {
   padding-left: var(--s-4);
 }
@@ -91,7 +84,6 @@
 // Pressed or armed (Place while placing, Read a point while reading): the accent mixed into an opaque dark, as the
 // section chip's buttons do, so it reads over a pale model too.
 .stress-panel .btn.active {
-  border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 20%, var(--panel));
   color: var(--text);
 }

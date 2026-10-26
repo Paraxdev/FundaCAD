@@ -40,11 +40,8 @@ body {
 }
 
 :focus-visible {
-  outline: none;
-  box-shadow:
-    0 0 0 2px var(--bg),
-    0 0 0 4px var(--accent-glow);
-  border-radius: var(--r-sm);
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 * {
@@ -65,7 +62,7 @@ body {
   border-radius: var(--r-pill);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #3d4452;
+  background: var(--text-mute);
   background-clip: padding-box;
 }
 ::-webkit-scrollbar-corner {

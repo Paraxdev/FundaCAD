@@ -165,7 +165,7 @@ export class AdaptiveGrid {
   applyTheme() {
     const minor = new THREE.Color(themeColor("--grid-minor", 0x3a414d));
     const major = new THREE.Color(themeColor("--grid-major", 0x5c6b7a));
-    const accent = new THREE.Color(themeColor("--accent", 0x4bf9bc));
+    const accent = new THREE.Color(themeColor("--accent", 0x51d6a8));
     (this.mat.uniforms.uMinor!.value as THREE.Color).copy(minor);
     (this.mat.uniforms.uMajorC!.value as THREE.Color).copy(major.lerp(accent, 0.4));
   }

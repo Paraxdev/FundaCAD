@@ -67,7 +67,7 @@
   align-items: center;
   gap: var(--s-0);
   padding: 1px var(--s-1);
-  border: 1px solid var(--line);
+  border: 1px solid transparent;
   border-radius: var(--r-sm);
   background: var(--panel-2);
   color: var(--text-dim);
@@ -88,7 +88,7 @@
   gap: var(--s-1);
   margin-bottom: var(--s-3);
   padding: 0 var(--s-2);
-  border: 1px solid var(--line);
+  border: 1px solid transparent;
   border-radius: var(--r-md);
   background: var(--panel-2);
   color: var(--text-mute);
@@ -122,8 +122,7 @@
   background: var(--raised);
 }
 .rd-used.is-selected {
-  border-color: var(--accent);
-  background: var(--accent-tint);
+  background: var(--accent-tint-2);
 }
 .rd-used-text {
   flex: 1 1 auto;
@@ -156,7 +155,7 @@
   align-items: stretch;
   gap: 2px;
   padding: var(--s-1);
-  border: 1px solid var(--line);
+  border: 1px solid transparent;
   border-radius: var(--r-md);
   background: var(--panel-2);
   color: var(--text);
@@ -166,21 +165,15 @@
   cursor: grab;
 }
 .rd-tile:hover {
-  border-color: var(--line-strong);
   background: var(--raised);
 }
-.rd-tile.is-selected {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent-tint-2);
-}
-/* Picked is a dashed outline, worn is solid with an "Applied" badge, so a
+/* Picked is a light wash, worn a stronger one with an "Applied" badge, so a
    single click, which applies nothing, never reads as applied. */
-.rd-tile.is-selected:not(.is-worn) {
-  border-style: dashed;
+.rd-tile.is-selected {
+  background: var(--accent-tint);
 }
 .rd-tile.is-worn {
-  border-color: var(--accent);
-  background: var(--accent-tint);
+  background: var(--accent-tint-2);
 }
 .rd-tile:active {
   cursor: grabbing;
@@ -247,7 +240,7 @@
 }
 .rd-chip {
   padding: 3px var(--s-2);
-  border: 1px solid var(--line);
+  border: 1px solid transparent;
   border-radius: var(--r-pill);
   background: var(--panel-2);
   color: var(--text-dim);
@@ -260,7 +253,6 @@
   color: var(--text);
 }
 .rd-chip.active {
-  border-color: var(--accent);
   background: var(--accent-tint-2);
   color: var(--accent-hot);
 }
@@ -333,7 +325,7 @@
   align-items: center;
   gap: var(--s-2);
   padding: var(--s-1) var(--s-2);
-  border: 1px solid var(--line-strong);
+  border: 1px solid transparent;
   border-radius: var(--r-md);
   background: var(--panel-2);
   box-shadow: var(--shadow-2);
@@ -346,7 +338,7 @@
   width: 10px;
   height: 10px;
   border-radius: var(--r-pill);
-  border: 1px solid var(--line);
+  border: 1px solid transparent;
 }
 .dropchip .scope {
   color: var(--accent-hot);
@@ -354,10 +346,10 @@
 }
 .dropchip kbd {
   padding: 0 var(--s-1);
-  border: 1px solid var(--line-strong);
+  border: 1px solid transparent;
   border-bottom-width: 2px;
   border-radius: var(--r-sm);
-  background: var(--bg);
+  background: var(--float-chip-bg);
   color: var(--text-mute);
   font: inherit;
   font-size: 10px;
@@ -400,7 +392,7 @@
 .rd-mini {
   flex: 1;
   padding: 1px var(--s-1);
-  border: 1px solid var(--line);
+  border: 1px solid transparent;
   border-radius: var(--r-sm);
   background: transparent;
   color: var(--text-mute);
@@ -409,13 +401,12 @@
 }
 .rd-mini:hover {
   color: var(--text);
-  border-color: var(--line-strong);
 }
 .rd-name {
   width: 100%;
   margin-top: var(--s-1);
   padding: 2px var(--s-1);
-  border: 1px solid var(--accent);
+  border: 1px solid transparent;
   border-radius: var(--r-sm);
   background: var(--panel-2);
   color: var(--text);

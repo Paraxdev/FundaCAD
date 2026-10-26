@@ -231,6 +231,26 @@ describe("addCustomTheme", () => {
     });
   });
 
+  it("loads an older theme that still sets the retired glow, without the glow", () => {
+    const res = addCustomTheme({
+      label: "Old mint",
+      mode: "light",
+      "--bg": "#fdf6e3",
+      "--accent": "#268bd2",
+      "--accent-glow": "rgba(38, 139, 210, 0.35)",
+    });
+
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.theme.palette).toStrictEqual({ "--bg": "#fdf6e3", "--accent": "#268bd2" });
+    expect(themeMode(res.theme.id)).toBe("light");
+  });
+
+  it("ships no theme that lights a glow", () => {
+    const glowing = themes().filter((t) => "palette" in t && "--accent-glow" in (t as ShippedTheme).palette);
+    expect(glowing.map((t) => t.id)).toEqual([]);
+  });
+
   it("rejects a value that tries to break out of a declaration", () => {
     // The value is set with setProperty (which cannot break out anyway), but the
     // grammar refuses it up front so a hostile file is a no-op, not a stored one.

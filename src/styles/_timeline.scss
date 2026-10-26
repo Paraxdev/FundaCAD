@@ -29,8 +29,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--panel-2);
-  border: 1px solid var(--line);
+  background: var(--float-chip-bg);
+  border: 1px solid transparent;
   border-radius: var(--r-sm);
   color: var(--text-dim);
   font-size: 12px;
@@ -234,7 +234,7 @@
   height: 30px;
   margin-right: var(--s-1);
   background: var(--panel-2);
-  border: 1px solid var(--line);
+  border: 1px solid transparent;
   border-radius: var(--r-sm);
   cursor: pointer;
   user-select: none;
@@ -248,17 +248,12 @@
 }
 .timeline-node:hover {
   background: var(--raised);
-  border-color: var(--line-strong);
   color: var(--text);
   transform: translateY(-1px);
 }
 .timeline-node.selected {
-  border-color: var(--accent);
   background: var(--accent-tint);
   color: var(--accent-hot);
-  box-shadow:
-    0 0 0 1px var(--accent),
-    0 4px 14px var(--accent-glow);
 }
 .timeline-node.error {
   border-color: var(--error);
@@ -282,7 +277,6 @@
 }
 .timeline-node.drop-target {
   border-left: 2px solid var(--accent);
-  box-shadow: -4px 0 12px -4px var(--accent-glow);
 }
 .timeline-node.building {
   width: auto;
@@ -300,8 +294,8 @@
 }
 .timeline-node .t-op-cancel {
   padding: 0 var(--s-2);
-  background: none;
-  border: 1px solid var(--line);
+  background: var(--float-chip-bg);
+  border: 1px solid transparent;
   border-radius: var(--r-sm);
   color: var(--text-dim);
   font-size: 10.5px;
@@ -349,7 +343,7 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   background: var(--panel-2);
-  border: 1px solid var(--line-strong);
+  border: 1px solid transparent;
   border-radius: var(--r-md);
   box-shadow: var(--shadow-3);
   padding: var(--s-3) var(--s-4) var(--s-4);
@@ -420,20 +414,13 @@
   border-radius: var(--r-xs);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
-.timeline-marker:hover::before,
-.timeline-marker.dragging::before {
-  box-shadow: 0 0 8px var(--accent-glow);
-}
-.timeline-marker:hover .marker-grip {
-  box-shadow: 0 0 8px var(--accent-glow);
-}
 
 .context-menu {
   position: fixed;
   z-index: 3000;
   min-width: 168px;
   background: var(--panel-2);
-  border: 1px solid var(--line-strong);
+  border: 1px solid transparent;
   border-radius: var(--r-md);
   box-shadow: var(--shadow-3);
   padding: var(--s-1);
@@ -501,8 +488,8 @@
 .timeline-related {
   flex: 0 0 auto;
   padding: var(--s-1) var(--s-2);
-  background: transparent;
-  border: 1px solid var(--line-strong);
+  background: var(--float-chip-bg);
+  border: 1px solid transparent;
   border-radius: var(--r-sm);
   color: var(--text-dim);
   font-size: 11px;
@@ -510,7 +497,6 @@
   cursor: pointer;
 }
 .timeline-related.on {
-  color: var(--accent);
-  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+  color: var(--accent-hot);
   background: var(--accent-tint);
 }
