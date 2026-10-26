@@ -241,6 +241,11 @@
      tint washed the label out. */
   background: color-mix(in srgb, var(--accent) 24%, var(--panel));
 }
+/* On paper the dark mix reads as grey: the accent tint with the accent ink instead, above 3:1 on the chip. */
+:root.theme-light .dim-btn.on {
+  background: var(--accent-tint-2);
+  color: var(--accent);
+}
 
 .pop-wide,
 .palette-btn,

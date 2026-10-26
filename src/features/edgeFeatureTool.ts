@@ -80,8 +80,8 @@ const PREVIEW_DEBOUNCE_MS = 150;
 export type Continuity = "G1" | "G2";
 /** One segment per profile, in order, so a later G3 is one more entry. */
 export const CONTINUITY_SEGMENTS: (DimSegment & { id: Continuity })[] = [
-  { id: "G1", label: "G1, circular round", icon: "continuityG1", key: "1" },
-  { id: "G2", label: "G2, curvature continuous", icon: "continuityG2", key: "2" },
+  { id: "G1", label: "G1, circular round", text: "G1", icon: "continuityG1", key: "1" },
+  { id: "G2", label: "G2, curvature continuous", text: "G2", icon: "continuityG2", key: "2" },
 ];
 
 /** Chain members toggle as one unit, recorded at add time since the preview may consume the edges and the chain could

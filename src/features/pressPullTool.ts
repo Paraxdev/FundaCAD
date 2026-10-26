@@ -104,7 +104,7 @@ const MODE_ICON: Record<PressPullMode, string> = {
   auto: "presspull",
   join: "booleanUnion",
   cut: "booleanSubtract",
-  new: "body",
+  new: "newBody",
   intersect: "booleanIntersect",
 };
 const MODE_LABEL: Record<PressPullMode, string> = {

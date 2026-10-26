@@ -238,6 +238,7 @@ textarea,
   .dim-btn::before {
     inset: -6px -1px;
   }
+  // A coarse pointer meets the 36px floor sideways too, see the media query below.
   .dim-btn.dim-no::before {
     right: -9px;
   }
@@ -277,5 +278,22 @@ textarea,
   }
   .profile-track:hover:not(.scrubbing) .profile-track-knob {
     transform: none;
+  }
+}
+
+// A finger gets bigger value box buttons with room between them: 30px apart by 6px reach 36px each way.
+// Keyed on the device, not the last pointer, so the box never changes size under a hand.
+@media (pointer: coarse) {
+  .dim-input,
+  .dim-opts,
+  .dim-seg {
+    gap: 6px;
+  }
+  .dim-btn {
+    min-width: 30px;
+    height: 30px;
+  }
+  :root[data-pointer="touch"] .dim-btn::before {
+    inset: -6px -3px;
   }
 }
