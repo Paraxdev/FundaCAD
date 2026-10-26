@@ -221,7 +221,7 @@ or a **full payload**, when the client's `known` etag for that body is stale or 
   "indices": [ /* flat triangle index array */ ],
   "faceIds": [ /* per-triangle face id, local to this body */ ],
   "faceOwners": [ /* per-face owner id or null, for feature highlighting */ ],
-  "edges": [ { "points": [...], "body": "b1", "smooth": true } ],  // "smooth" present only when the edge's two faces meet tangentially
+  "edges": [ { "points": [...], "body": "b1", "smooth": true, "reach": 1 } ],  // "smooth" present only when the edge's two faces meet tangentially; "reach" only when a fillet's highest continuity there is below 3 (1: an edge along a curved face, where G2 and G3 are refused)
   "faceCount": 12,
   "fault": "is not a closed solid, 4 of its edges bound only one face, so it has no inside"
 }
