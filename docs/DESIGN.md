@@ -907,6 +907,17 @@ Copy has two patterns, pick by the button:
 The origin triad and the origin plane tiles are drawn in the 3D scene, so the
 guard test cannot see them; hold them to these rules by hand.
 
+- Picks on the model follow `--accent` through one rule,
+  `pickColor` in `src/viewport/pickColors.ts`: keep the accent's hue, raise its
+  chroma to at least 0.12, and move its lightness away from the colour under
+  the pick until what is seen clears a WCAG contrast floor against it (select
+  3.0, hover 1.6). A selected face takes the pick as its shaded tint and is
+  drawn again as a 0.7 overlay, which is what Path traced, glass and an
+  untinted Matcap show. A hovered face is only a 0.4 overlay, a light wash, so
+  it never reads as a selection. A face is measured against its own colour, an
+  edge against its body and `--viewport-bg` (its silhouette), a sketch
+  selection against `--viewport-bg`. No glow and no outline is added. A theme
+  change repaints every pick live (`Highlighter.refreshTheme`).
 - Axis colours come from `AXIS_COLOR` (`src/viewport/originTriad.ts`) and are
   never themed. A plane takes its normal axis colour: XY blue, XZ green, YZ red.
 - Neutral parts read tokens through `themeColor` and are read again on a theme
