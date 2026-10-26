@@ -267,9 +267,9 @@ describe("formatStressResult", () => {
       { elements: 3100, maxVonMises: 29.5 },
       { elements: 4800, maxVonMises: 31.25 },
     ];
-    expect(mesh({ finest: 0.61, passes: two })).toBe("4800 elements, 2.54 mm, 0.61 mm where stress is high, 2 passes");
+    expect(mesh({ finest: 0.61, passes: two })).toBe("4800 elements, 2.54 mm, 0.61 mm at the peak, 2 passes");
     expect(mesh({ finest: 0.61, passes: [...two, { elements: 6000, maxVonMises: 31.4 }] })).toBe(
-      "4800 elements, 2.54 mm, 0.61 mm where stress is high, 3 passes",
+      "4800 elements, 2.54 mm, 0.61 mm at the peak, 3 passes",
     );
     expect(mesh({ finest: 2.54, passes: [two[1]!] })).toBe("4800 elements, 2.54 mm");
     expect(mesh({ finest: 2.54, passes: two })).toBe("4800 elements, 2.54 mm");

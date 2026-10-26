@@ -596,7 +596,7 @@ function meshRow(m: StressReply["mesh"]): string {
   const row = `${m.elements} elements, ${displayRound(m.size)} mm`;
   const passes = m.passes?.length ?? 1;
   if (passes < 2 || m.finest === undefined || !(m.finest < m.size)) return row;
-  return `${row}, ${displayRound(m.finest)} mm where stress is high, ${passes} passes`;
+  return `${row}, ${displayRound(m.finest)} mm at the peak, ${passes} passes`;
 }
 
 const FINE_NOTE =
