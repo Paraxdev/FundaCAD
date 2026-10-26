@@ -4,6 +4,8 @@
 import * as THREE from "three";
 import { disposeObject3D } from "../lib/disposer";
 import { overlayMaterial } from "../viewport/overlayMaterial";
+import { pickColor } from "../viewport/pickColors";
+import { themeColor } from "../viewport/themeColors";
 import { asFeature } from "../types";
 import type { CadDocument, PlaneDef, PlaneSpec } from "../types";
 import { planeOf } from "../document/planeOf";
@@ -42,7 +44,10 @@ export interface WorldRegion {
 
 export const CURVE_COLOR = 0x5b9bff; // under-constrained blue
 export const PREVIEW_COLOR = 0xffffff;
-export const SELECT_COLOR = 0xff9d3b; // selected sketch entity (orange)
+/** A selected sketch entity: the accent, made to read on the scene ground (viewport/pickColors.ts). */
+export function sketchSelectColor(): number {
+  return pickColor(themeColor("--accent", 0x51d6a8), themeColor("--viewport-bg", 0x0b0912), "select", "edge");
+}
 export const DIM_COLOR = 0x8fa4bd; // muted blue-gray for dimension annotations
 const FILL_COLOR = 0x3a7bd5;
 
@@ -119,7 +124,6 @@ const FILL_HOVER_MAT = new THREE.MeshBasicMaterial({
   ...FILL_OFFSET,
 });
 const FILL_SELECTED_MAT = new THREE.MeshBasicMaterial({
-  color: SELECT_COLOR,
   transparent: true,
   opacity: 0.34,
   side: THREE.DoubleSide,
@@ -297,7 +301,10 @@ export class SketchOverlay {
   }
 
   private fillMaterial(wr: WorldRegion): THREE.MeshBasicMaterial {
-    if (this.isRegionSelected(wr)) return FILL_SELECTED_MAT;
+    if (this.isRegionSelected(wr)) {
+      FILL_SELECTED_MAT.color.setHex(sketchSelectColor());
+      return FILL_SELECTED_MAT;
+    }
     if (this.isHovered(wr)) return FILL_HOVER_MAT;
     return wr.hole ? FILL_HOLE_MAT : FILL_MAT;
   }
@@ -681,7 +688,7 @@ export function controlPolygonObjects(
   if (a) {
     const dot = new THREE.Points(
       new THREE.BufferGeometry().setFromPoints([plane.to3D(a.x, a.y)]),
-      dotMat(SELECT_COLOR),
+      dotMat(sketchSelectColor()),
     );
     dot.renderOrder = 14;
     g.add(dot);

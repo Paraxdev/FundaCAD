@@ -3,7 +3,7 @@
 
 import * as THREE from "three";
 import { glyphWorldScale } from "./gizmoScale";
-import { EDGE_HOVER_COLOR } from "./highlight";
+import { edgeHoverColor } from "./highlight";
 import { themeColor } from "./themeColors";
 import type { Axis3 } from "../types";
 
@@ -122,8 +122,8 @@ export class OriginTriad {
       this.group.add(arm);
       this.arms.push(arm);
       this.repaint.push((hot) => {
-        solid.color.setHex(hot ? EDGE_HOVER_COLOR : color);
-        ghost.color.setHex(hot ? EDGE_HOVER_COLOR : color);
+        solid.color.setHex(hot ? edgeHoverColor() : color);
+        ghost.color.setHex(hot ? edgeHoverColor() : color);
         solid.opacity = hot ? 1 : TRIAD_OPACITY;
       });
     }

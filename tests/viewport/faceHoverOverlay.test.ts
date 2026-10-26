@@ -47,15 +47,40 @@ function tracker(mesh: THREE.Mesh) {
 }
 
 describe("face hover overlay lifetime", () => {
-  it("draws above the glow only while a face of a selected body is hovered", () => {
+  it("draws a hovered face again over the body, glowing or not, only while it is hovered", () => {
     const { view: v, mesh } = view();
     const h = new Highlighter(v);
+    const overlays = () => mesh.children.filter((c) => c.name === "face-hover-overlay");
     h.hoverFace(0);
-    expect(mesh.children.filter((c) => c.name === "face-hover-overlay")).toHaveLength(0);
+    expect(overlays()).toHaveLength(1);
     h.toggleSelectBody("b1");
-    expect(mesh.children.filter((c) => c.name === "face-hover-overlay")).toHaveLength(1);
+    expect(overlays()).toHaveLength(1);
     h.hoverFace(null);
-    expect(mesh.children.filter((c) => c.name === "face-hover-overlay")).toHaveLength(0);
+    expect(overlays()).toHaveLength(0);
+  });
+
+  it("a repaint of the base under a selected face uploads the whole buffer, not only the face's range", () => {
+    const { view: v, mesh } = view();
+    const h = new Highlighter(v);
+    h.selectFace(0);
+    h.setBase(() => new THREE.Color(0x2a2d33));
+    const attr = mesh.geometry.getAttribute("color") as THREE.BufferAttribute;
+    expect(attr.updateRanges).toHaveLength(0);
+    h.dispose();
+  });
+
+  it("draws the selected faces once a batch of picks is done, and takes them down on clear", async () => {
+    const { view: v, mesh } = view();
+    const h = new Highlighter(v);
+    const overlays = () => mesh.children.filter((c) => c.name === "face-select-overlay");
+    h.selectFace(0);
+    h.selectFace(1);
+    await Promise.resolve();
+    expect(overlays()).toHaveLength(1);
+    expect((overlays()[0] as THREE.Mesh).geometry.getAttribute("position").count).toBe(12);
+    h.clearSelection();
+    expect(overlays()).toHaveLength(0);
+    h.dispose();
   });
 
   it("does not leak a geometry per rebuild, shown or cached when the rebuild lands", () => {

@@ -1,8 +1,8 @@
 // Highlighting without post-processing: an edge recolours its span of its body's instance colour buffer, a face its own
-// vertex colour range (per-face tessellation keeps each face's vertices distinct).
+// vertex colour range (per-face tessellation keeps each face's vertices distinct) and is drawn again as a translucent
+// overlay, which is all a Path traced view, glass or an untinted Matcap shows of it.
 
 import * as THREE from "three";
-import { pushAll } from "../lib/pushAll";
 import { bodyOfFace, edgeObjects, type BodyMesh, type ModelView } from "./render";
 import type { EdgeRef } from "./edgeLines";
 import {
@@ -12,13 +12,22 @@ import {
   removeSelectionGlows,
   type GlowKind,
 } from "./selectionGlow";
+import { themeColor } from "./themeColors";
+import { onThemeChange } from "../ui/theme";
+import { PICK_ALPHA, composite, pickColor, type PickKind } from "./pickColors";
 
 const EDGE_BASE = new THREE.Color(0x1b1f24);
-const HOVER = new THREE.Color(0xffd089); // pale hot amber (under cursor)
-/** Shared with edgeEmphasis.ts so the emphasis line matches the tint it reinforces. */
-export const EDGE_HOVER_COLOR = HOVER.getHex();
-// Selected, the Forge accent, distinct from the paler hover.
-const SELECT = new THREE.Color(0xff7a3c);
+const DEFAULT_ACCENT = 0x51d6a8;
+const DEFAULT_BODY = 0x9aa7b4;
+
+const accent = () => themeColor("--accent", DEFAULT_ACCENT);
+const ground = () => themeColor("--viewport-bg", 0x0b0912);
+
+/** An edge in the hover tier over the default body: the emphasis line, a ghost edge and the origin axis hover. */
+export function edgeHoverColor(): number {
+  const pick = pickColor(accent(), [DEFAULT_BODY, ground()], "hover", "edge");
+  return composite(DEFAULT_BODY, pick, PICK_ALPHA.edge.hover);
+}
 // The edge a fillet or chamfer failed on. Highest precedence, or the signal vanishes once the user mouses over it.
 const ERROR = new THREE.Color(0xe23b3b);
 
@@ -30,6 +39,12 @@ function paint(e: EdgeRef, color: THREE.Color) {
 /** Back to idle, which for a faint tangent edge is lighter than `base`. */
 function paintIdle(e: EdgeRef, base: THREE.Color) {
   e.draw.setIdleColor(e.slot, base);
+}
+
+interface PickOverlay {
+  key: string;
+  meshes: THREE.Mesh[];
+  shown: boolean;
 }
 
 export interface HoverState {
@@ -67,11 +82,66 @@ export class Highlighter {
   // tint while the fillet/chamfer edge tool is active so you can SEE every edge.
   private edgeBase = EDGE_BASE.clone();
 
+  private accent = accent();
+  private ground = ground();
+  /** Pick colours by the colour under them, kind and part, emptied on a theme change. */
+  private colours = new Map<string, THREE.Color>();
+  private offTheme: () => void;
+
   constructor(private view: ModelView) {
     for (const b of view.bodies) {
       removeSelectionGlows(b.mesh);
       if (tinted.delete(b)) this.stripTint(b);
     }
+    this.offTheme = onThemeChange(() => this.refreshTheme());
+  }
+
+  /** Re-read the accent and repaint every face, overlay and edge it coloured. */
+  refreshTheme() {
+    const next = accent();
+    if (next === this.accent && ground() === this.ground) return;
+    this.accent = next;
+    this.ground = ground();
+    this.colours.clear();
+    this.dropOverlays();
+    if (this.paintShown) this.repaintSelection();
+    this.syncOverlays();
+  }
+
+  private pickColour(under: number, kind: PickKind, part: "face" | "edge"): THREE.Color {
+    const key = `${under}:${kind}:${part}`;
+    let c = this.colours.get(key);
+    if (!c) {
+      // An edge is also seen against the ground along a silhouette.
+      const pick = pickColor(this.accent, part === "edge" ? [under, this.ground] : under, kind, part);
+      c = new THREE.Color(part === "edge" ? composite(under, pick, PICK_ALPHA.edge[kind]) : pick);
+      this.colours.set(key, c);
+    }
+    return c;
+  }
+
+  /** The face's own base colour as sRGB hex, read off its first vertex. */
+  private faceUnder(body: BodyMesh, faceId: number): number {
+    const t = body.faceTriangles.get(faceId)?.[0];
+    const index = body.mesh.geometry.getIndex();
+    const v = t === undefined || !index ? 0 : index.getX(t * 3);
+    return this.underAt(body, v);
+  }
+
+  private underAt(body: BodyMesh, v: number): number {
+    const b = body.baseColors;
+    if (!b || b.length < v * 3 + 3) return DEFAULT_BODY;
+    return new THREE.Color(b[v * 3]!, b[v * 3 + 1]!, b[v * 3 + 2]!).getHex();
+  }
+
+  private faceColour(faceId: number, kind: PickKind): THREE.Color {
+    const body = bodyOfFace(this.view, faceId);
+    return this.pickColour(body ? this.faceUnder(body, faceId) : DEFAULT_BODY, kind, "face");
+  }
+
+  private edgeColour(e: EdgeRef, kind: PickKind): THREE.Color {
+    const body = e.body ? this.bodyById(e.body) : undefined;
+    return this.pickColour(body ? this.underAt(body, 0) : DEFAULT_BODY, kind, "edge");
   }
 
   /** A reused body keeps the tint its last highlighter painted, and the repaint that used to wipe it now skips it. */
@@ -91,7 +161,9 @@ export class Highlighter {
    *  goes with the model. */
   private bodyGlows = new Map<string, THREE.Mesh>();
   /** Kept by key once taken down, since every pointer move clears the hover and sets it again. */
-  private hoverOverlay: { key: string; meshes: THREE.Mesh[]; shown: boolean } | null = null;
+  private overlays: Record<PickKind, PickOverlay | null> = { hover: null, select: null };
+  private selectOverlayQueued = false;
+  private disposed = false;
 
   private bodyById(bodyId: string): BodyMesh | undefined {
     if (!this.byId) {
@@ -117,8 +189,8 @@ export class Highlighter {
     for (const e of this.errorEdges) {
       if (next.has(e)) continue;
       // no longer failing, restore whatever tier it belongs to now
-      if (this.selectedEdges.has(e)) this.tint(e, SELECT);
-      else if (e === this.hoveredEdge) this.tint(e, HOVER);
+      if (this.selectedEdges.has(e)) this.tint(e, "select");
+      else if (e === this.hoveredEdge) this.tint(e, "hover");
       else paintIdle(e, this.edgeBase);
     }
     this.errorEdges = next;
@@ -132,7 +204,7 @@ export class Highlighter {
     }
     this.hoveredEdge = line;
     if (line && !this.selectedEdges.has(line) && !this.errorEdges.has(line)) {
-      this.tint(line, HOVER);
+      this.tint(line, "hover");
     }
   }
 
@@ -158,74 +230,102 @@ export class Highlighter {
     this.hoveredFaces = faceIds;
     this.faceBodies = null;
     for (const f of faceIds) {
-      if (!before.has(f) && !this.selectedFaces.has(f)) this.paintFace(f, HOVER);
+      if (!before.has(f) && !this.selectedFaces.has(f)) this.paintFace(f, "hover");
     }
-    this.syncHoverOverlay();
+    this.syncOverlay("hover");
   }
 
-  private syncHoverOverlay() {
-    const faces = this.hoveredFaces.filter((f) => {
-      if (this.selectedFaces.has(f)) return false;
-      const body = bodyOfFace(this.view, f);
-      return !!body && this.bodyGlows.has(body.id);
+  private syncOverlays() {
+    this.syncOverlay("hover");
+    this.syncOverlay("select");
+  }
+
+  /** A box select adds faces one at a time, so the selected overlay is rebuilt once after the batch. */
+  private queueSelectOverlay() {
+    if (this.selectOverlayQueued) return;
+    this.selectOverlayQueued = true;
+    queueMicrotask(() => {
+      this.selectOverlayQueued = false;
+      if (!this.disposed) this.syncOverlay("select");
     });
+  }
+
+  private syncOverlay(kind: PickKind) {
+    const faces =
+      kind === "hover"
+        ? this.hoveredFaces.filter((f) => !this.selectedFaces.has(f))
+        : [...this.selectedFaces].sort((a, b) => a - b);
+    const cur = this.overlays[kind];
+    if (!faces.length || !this.paintShown) {
+      if (cur?.shown) this.showOverlay(cur, false);
+      return;
+    }
     const key = faces.join(",");
-    const cur = this.hoverOverlay;
-    if (!faces.length) {
-      if (cur?.shown) this.showOverlay(cur, faces);
-      return;
-    }
     if (cur && cur.key === key) {
-      if (!cur.shown) this.showOverlay(cur, faces);
+      if (!cur.shown) this.showOverlay(cur, true);
       return;
     }
-    if (cur) this.dropHoverOverlay();
-    if (!faces.length) return;
-    const next = { key, meshes: [] as THREE.Mesh[], shown: false };
+    if (cur) this.dropOverlay(kind);
+    const next: PickOverlay = { key, meshes: [], shown: false };
     const byBody = new Map<BodyMesh, number[]>();
     for (const f of faces) {
-      const body = bodyOfFace(this.view, f)!;
-      const tris = body.faceTriangles.get(f);
-      if (!tris) continue;
+      const body = bodyOfFace(this.view, f);
+      if (!body?.faceTriangles.has(f)) continue;
       const list = byBody.get(body) ?? [];
-      pushAll(list, tris);
+      list.push(f);
       byBody.set(body, list);
     }
-    for (const [body, tris] of byBody) {
+    for (const [body, fids] of byBody) {
       const pos = body.mesh.geometry.getAttribute("position");
       const index = body.mesh.geometry.getIndex();
       if (!pos || !index) continue;
-      const out = new Float32Array(tris.length * 9);
+      let n = 0;
+      for (const f of fids) n += body.faceTriangles.get(f)!.length;
+      const out = new Float32Array(n * 9);
+      const col = new Float32Array(n * 9);
       let o = 0;
-      for (const t of tris) {
-        for (let k = 0; k < 3; k++) {
-          const v = index.getX(t * 3 + k);
-          out[o++] = pos.getX(v);
-          out[o++] = pos.getY(v);
-          out[o++] = pos.getZ(v);
+      for (const f of fids) {
+        const c = this.faceColour(f, kind);
+        for (const t of body.faceTriangles.get(f)!) {
+          for (let k = 0; k < 3; k++) {
+            const v = index.getX(t * 3 + k);
+            col[o] = c.r;
+            col[o + 1] = c.g;
+            col[o + 2] = c.b;
+            out[o++] = pos.getX(v);
+            out[o++] = pos.getY(v);
+            out[o++] = pos.getZ(v);
+          }
         }
       }
-      const mesh = makeFaceHoverOverlay(out, HOVER);
+      const mesh = makeFaceHoverOverlay(out, col, kind);
       mesh.userData.body = body.id;
       next.meshes.push(mesh);
     }
-    this.hoverOverlay = next;
-    this.showOverlay(next, faces);
+    this.overlays[kind] = next;
+    this.showOverlay(next, true);
   }
 
-  private dropHoverOverlay() {
-    for (const m of this.hoverOverlay?.meshes ?? []) disposeFaceHoverOverlay(m);
-    this.hoverOverlay = null;
+  private dropOverlay(kind: PickKind) {
+    for (const m of this.overlays[kind]?.meshes ?? []) disposeFaceHoverOverlay(m);
+    this.overlays[kind] = null;
   }
 
-  /** Called before the viewport replaces the highlighter on a rebuild. The cached hover overlay is off every mesh while
-   *  hidden, so nothing else would reach it. */
+  private dropOverlays() {
+    this.dropOverlay("hover");
+    this.dropOverlay("select");
+  }
+
+  /** Called before the viewport replaces the highlighter on a rebuild. The cached overlays are off every mesh while
+   *  hidden, so nothing else would reach them. */
   dispose() {
-    this.dropHoverOverlay();
+    this.disposed = true;
+    this.offTheme();
+    this.dropOverlays();
   }
 
-  private showOverlay(o: { meshes: THREE.Mesh[]; shown: boolean }, faces: readonly number[]) {
-    if (!faces.length) {
+  private showOverlay(o: PickOverlay, on: boolean) {
+    if (!on) {
       for (const m of o.meshes) m.removeFromParent();
       o.shown = false;
       return;
@@ -247,7 +347,7 @@ export class Highlighter {
       if (!this.errorEdges.has(line)) paintIdle(line, this.edgeBase);
     } else {
       this.selectedEdges.add(line);
-      if (!this.errorEdges.has(line)) this.tint(line, SELECT);
+      if (!this.errorEdges.has(line)) this.tint(line, "select");
     }
   }
 
@@ -258,9 +358,10 @@ export class Highlighter {
       this.restoreFace(faceId);
     } else {
       this.selectedFaces.add(faceId);
-      this.paintFace(faceId, SELECT);
+      this.paintFace(faceId, "select");
     }
-    this.syncHoverOverlay();
+    this.syncOverlay("hover");
+    this.queueSelectOverlay();
   }
 
   /** Adds without toggling, so the second sweep of a box over an overlap does not eat the first one's result. */
@@ -294,7 +395,7 @@ export class Highlighter {
     this.selectedEdges.clear();
     this.selectedFaces.clear();
     this.faceBodies = null;
-    this.syncHoverOverlay();
+    this.syncOverlays();
   }
 
   toggleSelectBody(bodyId: string) {
@@ -370,7 +471,6 @@ export class Highlighter {
     const glow = makeSelectionGlow(body.mesh.geometry, kind);
     body.mesh.add(glow);
     this.bodyGlows.set(bodyId, glow);
-    this.syncHoverOverlay();
   }
 
   /** Remove a body's glow. Neither half is disposed: the geometry is the body's
@@ -380,13 +480,12 @@ export class Highlighter {
     if (!glow) return;
     glow.removeFromParent();
     this.bodyGlows.delete(bodyId);
-    this.syncHoverOverlay();
   }
 
   private paintShown = true;
 
-  private tint(e: EdgeRef, color: THREE.Color) {
-    if (this.paintShown) paint(e, color);
+  private tint(e: EdgeRef, kind: PickKind) {
+    if (this.paintShown) paint(e, this.edgeColour(e, kind));
     else paintIdle(e, this.edgeBase);
   }
 
@@ -400,6 +499,7 @@ export class Highlighter {
       this.stripSelection();
       this.paintShown = false;
     }
+    this.syncOverlays();
   }
 
   private stripSelection() {
@@ -411,11 +511,11 @@ export class Highlighter {
 
   private repaintSelection() {
     for (const f of new Set([...this.selectedFaces, ...this.hoveredFaces])) {
-      this.paintFace(f, this.selectedFaces.has(f) ? SELECT : HOVER);
+      this.paintFace(f, this.selectedFaces.has(f) ? "select" : "hover");
     }
-    for (const e of this.selectedEdges) if (!this.errorEdges.has(e)) this.tint(e, SELECT);
+    for (const e of this.selectedEdges) if (!this.errorEdges.has(e)) this.tint(e, "select");
     const h = this.hoveredEdge;
-    if (h && !this.selectedEdges.has(h) && !this.errorEdges.has(h)) this.tint(h, HOVER);
+    if (h && !this.selectedEdges.has(h) && !this.errorEdges.has(h)) this.tint(h, "hover");
   }
 
   /** Run `fn` with every selected, hovered and failing face and edge in its
@@ -426,20 +526,25 @@ export class Highlighter {
     if (this.hoveredEdge) edges.add(this.hoveredEdge);
     for (const f of faces) this.restoreFace(f);
     for (const e of edges) paintIdle(e, this.edgeBase);
+    const overlays = [this.overlays.hover, this.overlays.select].filter((o) => o?.shown) as PickOverlay[];
+    for (const o of overlays) this.showOverlay(o, false);
     try {
       return fn();
     } finally {
-      for (const f of faces) this.paintFace(f, this.selectedFaces.has(f) ? SELECT : HOVER);
+      for (const o of overlays) this.showOverlay(o, true);
+      for (const f of faces) this.paintFace(f, this.selectedFaces.has(f) ? "select" : "hover");
       for (const e of edges) {
         if (this.errorEdges.has(e)) paint(e, ERROR);
-        else if (this.selectedEdges.has(e)) this.tint(e, SELECT);
-        else this.tint(e, HOVER);
+        else if (this.selectedEdges.has(e)) this.tint(e, "select");
+        else this.tint(e, "hover");
       }
     }
   }
 
-  private paintFace(faceId: number, color: THREE.Color) {
-    if (!this.paintShown) return;
+  private paintFace(faceId: number, kind: PickKind) {
+    // A hover is only the overlay's light wash, so it never reads as the full tint of a selection.
+    if (!this.paintShown || kind === "hover") return;
+    const color = this.faceColour(faceId, kind);
     const body = bodyOfFace(this.view, faceId);
     const tris = body?.faceTriangles.get(faceId);
     if (!body || !tris) return;
@@ -532,6 +637,18 @@ export class Highlighter {
       colorAttr.clearUpdateRanges();
       colorAttr.needsUpdate = true;
       body.baseVersion = (body.baseVersion ?? 0) + 1;
+    }
+    // The pick colour is chosen against the base, so a new base recolours what is picked on it.
+    if (this.selectedFaces.size || this.hoveredFaces.length) {
+      for (const f of this.selectedFaces) this.paintFace(f, "select");
+      // paintFace queues a sub-range, which would make three upload only that range of the rewritten buffer.
+      for (const body of only ?? this.view.bodies) {
+        const colorAttr = body.mesh.geometry.getAttribute("color") as THREE.BufferAttribute | undefined;
+        colorAttr?.clearUpdateRanges();
+        if (colorAttr) colorAttr.needsUpdate = true;
+      }
+      this.dropOverlays();
+      this.syncOverlays();
     }
   }
 }

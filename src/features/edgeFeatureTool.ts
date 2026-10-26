@@ -58,7 +58,7 @@ import { pointOnEdge } from "./edgeNudge";
 import { blendClickTarget, missPrompt, screenPolylineDist } from "./blendPick";
 import { EDGE_GRAB_PX } from "../viewport/edgeBand";
 import { hitPx } from "../input/pointerKind";
-import { EDGE_HOVER_COLOR } from "../viewport/highlight";
+import { edgeHoverColor } from "../viewport/highlight";
 import { toast } from "../ui/toast";
 import { isEditableTarget } from "../ui/focus";
 
@@ -579,7 +579,7 @@ export class EdgeFeatureTool {
     const prev = this.hoveredGhost;
     this.hoveredGhost = g;
     if (prev && this.ghosts.includes(prev)) (prev.line.material as LineMaterial).color.set(prev.color);
-    if (g) (g.line.material as LineMaterial).color.set(EDGE_HOVER_COLOR);
+    if (g) (g.line.material as LineMaterial).color.set(edgeHoverColor());
     this.viewport.requestRender();
   }
 

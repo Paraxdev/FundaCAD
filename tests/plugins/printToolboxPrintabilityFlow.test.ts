@@ -5,7 +5,6 @@ import {
   type PrintabilityDeps,
 } from "../../plugins/FundaCAD.PrintToolbox/printabilityPanel";
 import { KIND_COLORS } from "../../plugins/FundaCAD.PrintToolbox/printability";
-import { EDGE_HOVER_COLOR } from "../../src/viewport/highlight";
 import type { CadDocument, PrintabilityOptions, PrintabilityReply, PrintabilityResult } from "fundacad";
 
 // The toolbox's Printability panel controller against a hand-made viewport,
@@ -251,11 +250,6 @@ describe("printability panel flow", () => {
     expect((r.tints() as { faceIds: number[] }[]).at(-1)).toEqual({ faceIds: [7, 2], color: EMPHASIS_COLOR });
     r.ui.pick(1);
     expect(r.frames.at(-1)).toEqual({ at: [0, 5, 5], size: 5 });
-  });
-
-  it("puts a finding forward in the app's own hover colour", () => {
-    // The plugin keeps its own copy of the colour, which this holds to the app's.
-    expect(EMPHASIS_COLOR).toBe(EDGE_HOVER_COLOR);
   });
 
   it("does not tint a hidden body, nor a face past its body's faces", async () => {
