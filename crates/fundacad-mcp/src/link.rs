@@ -6,6 +6,7 @@
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::sync::atomic::{AtomicU16, Ordering};
 use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
@@ -20,6 +21,11 @@ use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
 /// How long to wait for the spawned engine to print LISTENING.
 pub const START_TIMEOUT: Duration = Duration::from_secs(120);
+/// The engine's exit code when its port is taken (fundacad-engine `EXIT_PORT_IN_USE`).
+const ENGINE_EXIT_PORT_IN_USE: i32 = 3;
+/// A private engine's port is free when picked but released before the engine binds it,
+/// so another process can take it in between; the link then retries on a fresh one.
+const PORT_TRIES: usize = 5;
 
 /// A heavy rebuild is minutes at worst and the engine supervises stalls itself,
 /// so this only keeps a lost reply from wedging the agent.
@@ -282,7 +288,7 @@ fn closed(e: tokio_tungstenite::tungstenite::Error) -> io::Error {
 }
 
 pub struct EngineLink {
-    pub port: u16,
+    port: AtomicU16,
     pub token: String,
     /// True when this link joined somebody else's engine and starts nothing.
     pub attached: bool,
@@ -302,10 +308,14 @@ struct LinkState {
 }
 
 impl EngineLink {
+    pub fn port(&self) -> u16 {
+        self.port.load(Ordering::Relaxed)
+    }
+
     /// Nothing is spawned until the first call.
     pub fn private() -> EngineLink {
         EngineLink {
-            port: free_port().unwrap_or(0),
+            port: AtomicU16::new(free_port().unwrap_or(0)),
             token: mint_token(),
             attached: false,
             state: Mutex::new(LinkState::default()),
@@ -316,7 +326,7 @@ impl EngineLink {
 
     pub fn attach(port: u16, token: impl Into<String>) -> EngineLink {
         EngineLink {
-            port,
+            port: AtomicU16::new(port),
             token: token.into(),
             attached: true,
             state: Mutex::new(LinkState::default()),
@@ -387,6 +397,16 @@ impl EngineLink {
         if self.attached || state.child.is_some() {
             return Ok(());
         }
+        for _ in 1..PORT_TRIES {
+            match self.spawn(state).await {
+                Err(e) if e.kind() == io::ErrorKind::AddrInUse => self.port.store(free_port()?, Ordering::Relaxed),
+                done => return done,
+            }
+        }
+        self.spawn(state).await
+    }
+
+    async fn spawn(&self, state: &mut LinkState) -> io::Result<()> {
         let argv = engine_command();
         let mut cmd = Command::new(&argv[0]);
         cmd.args(&argv[1..]).arg("--ws");
@@ -402,7 +422,7 @@ impl EngineLink {
             cmd.env_remove(format!("{legacy}ENGINE_TOKEN"));
             cmd.env_remove(format!("{legacy}BLOB_DIR"));
         }
-        cmd.env("FUNDACAD_ENGINE_PORT", self.port.to_string());
+        cmd.env("FUNDACAD_ENGINE_PORT", self.port().to_string());
         cmd.env("FUNDACAD_ENGINE_TOKEN", &self.token);
         // The durable blob store, which the app's shell normally sets. An `import`'s `geom` is a hash INTO it,
         // so a default chosen here would save a document naming a blob the app never held.
@@ -462,7 +482,13 @@ impl EngineLink {
                 Ok(())
             }
             Ok(false) => {
+                // Its stdout closes as it exits, so the status follows shortly.
+                let code = tokio::time::timeout(Duration::from_secs(5), child.wait()).await.ok().and_then(Result::ok);
                 let _ = child.kill().await;
+                if code.and_then(|c| c.code()) == Some(ENGINE_EXIT_PORT_IN_USE) {
+                    let taken = format!("port {} was taken before the geometry engine bound it", self.port());
+                    return Err(io::Error::new(io::ErrorKind::AddrInUse, taken));
+                }
                 Err(io::Error::other("the geometry engine exited before it was ready"))
             }
             Err(_) => {
@@ -490,7 +516,7 @@ impl EngineLink {
         for attempt in 0..2 {
             if state.socket.is_none() {
                 self.start(&mut state).await?;
-                state.socket = Some(Socket::connect(self.port, &self.token).await?);
+                state.socket = Some(Socket::connect(self.port(), &self.token).await?);
             }
             let socket = state.socket.as_mut().expect("just connected");
             let sent = tokio::time::timeout(CALL_TIMEOUT, socket.request_meshed(&req_id, &request)).await;
