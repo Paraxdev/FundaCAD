@@ -915,8 +915,10 @@ guard test cannot see them; hold them to these rules by hand.
   drawn again as a 0.7 overlay, which is what Path traced, glass and an
   untinted Matcap show. A hovered face is only a 0.4 overlay, a light wash, so
   it never reads as a selection. A face is measured against its own colour, an
-  edge against its body and `--viewport-bg` (its silhouette), a sketch
-  selection against `--viewport-bg`. No glow and no outline is added. A theme
+  edge against the faces beside it (a selected one in its pick colour) and
+  `--viewport-bg` (its silhouette), a sketch selection against
+  `--viewport-bg`. A picked edge is drawn again wide, 3px selected and 2.4px
+  hovered over the 1.6px idle edge. No glow and no outline is added. A theme
   change repaints every pick live (`Highlighter.refreshTheme`).
 - Axis colours come from `AXIS_COLOR` (`src/viewport/originTriad.ts`) and are
   never themed. A plane takes its normal axis colour: XY blue, XZ green, YZ red.
