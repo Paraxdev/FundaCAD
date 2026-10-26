@@ -734,3 +734,54 @@ fn two_distance_chamfers_a_hair_past_meeting_at_three_edge_corners_are_refused_w
     });
     assert_eq!((r.errors.len(), offer, fits), (1, Some(3.99), Some((0, vec![], 1501.99, None, Some(26)))));
 }
+
+/// A 20 x 20 x 10 block whose side walls bulge 2 and 3 into arcs, turned by atan(3/4) and moved off the origin.
+fn d_block(blends: Vec<Value>) -> Rebuild {
+    let t = |(x, y): (f64, f64)| (7.0 + 0.8 * x - 0.6 * y, -3.0 + 0.6 * x + 0.8 * y);
+    let line = |a, b| {
+        let (a, b) = (t(a), t(b));
+        json!({"type": "line", "x1": a.0, "y1": a.1, "x2": b.0, "y2": b.1})
+    };
+    let arc = |a, b, m| {
+        let (a, b, m) = (t(a), t(b), t(m));
+        json!({"type": "arc", "x1": a.0, "y1": a.1, "x2": b.0, "y2": b.1, "mx": m.0, "my": m.1})
+    };
+    let entities = vec![
+        line((0.0, 0.0), (20.0, 0.0)),
+        arc((20.0, 0.0), (20.0, 20.0), (22.0, 10.0)),
+        line((20.0, 20.0), (0.0, 20.0)),
+        arc((0.0, 20.0), (0.0, 0.0), (-3.0, 10.0)),
+    ];
+    let mut features = vec![
+        json!({"id": "sk", "type": "sketch", "plane": "XY", "entities": entities}),
+        json!({"id": "ex", "type": "extrude", "sketch": "sk", "distance": 10, "operation": "new"}),
+    ];
+    features.extend(blends);
+    build(&json!({"parameters": {}, "features": features}))
+}
+
+/// Where a curved wall's chamfer met two straight ones the section build cut no corner patch: every edge at 5 built
+/// 2841.78 where OCCT's trend gives 2755.38, at 4/10 2103.55, no word said. The caps alone, two chosen edges a
+/// corner, need no patch: 2917.95 is OCCT's trend at 0.999, 0.9999 and 0.99999 of 5.
+#[test]
+fn chamfers_where_a_curved_chamfer_meets_two_straight_ones_at_a_corner_are_refused() {
+    let all = || json!({"kind": "edge", "by": "all", "body": "body1"});
+    let caps = json!([
+        {"kind": "edge", "by": "ofFace", "body": "body1", "face": {"kind": "face", "by": "normal", "dir": [0, 0, 1]}},
+        {"kind": "edge", "by": "ofFace", "body": "body1", "face": {"kind": "face", "by": "normal", "dir": [0, 0, -1]}},
+    ]);
+    let equal = |d: f64, edges: Value| json!({"id": "c", "type": "chamfer", "edges": edges, "distance": d});
+    let got = vec![
+        with_faces(&d_block(vec![two_distance("c", 4.0, 10.0, all(), json!({}))])),
+        with_faces(&d_block(vec![equal(5.0, all())])),
+        with_faces(&d_block(vec![equal(5.0, caps)])),
+        with_faces(&d_block(vec![equal(2.0, all())])),
+    ];
+    let want = vec![
+        (1, vec![], 4675.9, None, Some(6)),
+        (1, vec![], 4675.9, None, Some(6)),
+        (0, vec![], 2917.95, None, Some(10)),
+        (0, vec![], 4310.76, None, Some(26)),
+    ];
+    assert_eq!(got, want);
+}

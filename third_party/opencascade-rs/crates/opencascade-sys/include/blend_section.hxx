@@ -2360,6 +2360,28 @@ inline RoundTools round_tools(const TopoDS_Shape &shape, const std::vector<TopoD
         throw Unmitred(a.at);
       }
     }
+  // Only straight chamfers leave ends, so a corner of three convex chamfers with a curved one gets no patch above:
+  // a D shaped block at 4/10 built 2004.27 where OCCT, just short of it, builds 1770.88.
+  if (chamfer && !sizing())
+    for (const std::pair<TopoDS_Shape, double> &c : out.convex) {
+      TopoDS_Vertex vs[2];
+      TopExp::Vertices(TopoDS::Edge(c.first), vs[0], vs[1]);
+      for (const TopoDS_Vertex &v : vs) {
+        if (v.IsNull()) continue;
+        gp_Pnt p = BRep_Tool::Pnt(v);
+        int convex = 0, straight = 0;
+        for (const std::pair<TopoDS_Shape, double> &o : out.convex) {
+          TopoDS_Vertex o0, o1;
+          TopExp::Vertices(TopoDS::Edge(o.first), o0, o1);
+          if ((!o0.IsNull() && BRep_Tool::Pnt(o0).Distance(p) < by) ||
+              (!o1.IsNull() && BRep_Tool::Pnt(o1).Distance(p) < by))
+            ++convex;
+        }
+        for (const std::vector<ChamferEnd> &own : ends)
+          for (const ChamferEnd &b : own) straight += b.at.Distance(p) < by;
+        if (convex >= 3 && straight < convex) throw Unmitred(p);
+      }
+    }
   last_overrun() = first;
   return out;
 }
