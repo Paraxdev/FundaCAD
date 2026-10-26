@@ -460,3 +460,20 @@ fn the_pattern_axis_op_finds_a_cylinder_axis() {
     let JobResult::Json(got) = pattern_axis_result(req.as_object().unwrap(), &NoWatch) else { panic!("a json reply") };
     assert!(got.contains_key("reason"), "{got:?}");
 }
+
+/// A document written before Linear led the pattern tools still carries `patternRect`, and builds as it did.
+#[test]
+fn an_old_rect_pattern_document_builds_the_same_volume() {
+    let cell = 10.0 * 10.0 * 10.0;
+    let doc = |pattern: Value| {
+        json!({"features": [
+            {"id": "b", "type": "box", "length": 10, "width": 10, "height": 10},
+            pattern,
+        ]})
+    };
+    let rect = doc(json!({"id": "p", "type": "patternRect", "countX": 3, "countY": 2, "spacingX": 20, "spacingY": 20}));
+    close(volume_of(&rect), 6.0 * cell);
+    let row = doc(json!({"id": "p", "type": "patternRect", "countX": 3, "countY": 1, "spacingX": 20, "spacingY": 0}));
+    let linear = doc(json!({"id": "p", "type": "patternLinear", "count": 3, "spacing": 20, "axis": "X"}));
+    close(volume_of(&row), volume_of(&linear));
+}
