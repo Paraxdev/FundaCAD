@@ -105,6 +105,69 @@ describe("box selection on a curved mesh of many faces", () => {
   });
 });
 
+function sameAsBruteForce(model: ModelView, cam: THREE.Camera) {
+  for (const see of [false, true]) {
+    const proj = projectForArea(model, cam, VIEW, see);
+    for (const mode of ["window", "crossing"] as const)
+      for (const r of rects()) {
+        const got = collectInBox(proj, r, mode);
+        expect({ faces: got.faces, bodies: got.bodies }).toEqual(bruteForce(model, cam, see, r, mode));
+      }
+  }
+}
+
+describe("box selection with the camera at or inside the mesh", () => {
+  // One face of about 12k triangles, so it has many clusters, some behind the camera, some crossing its plane.
+  const sphere = () =>
+    ({ bodies: [fakeBody("ball", new THREE.SphereGeometry(30, 96, 64), () => 0)], edges: [] }) as unknown as ModelView;
+  const look = (at: [number, number, number], to: [number, number, number]) => {
+    const cam = new THREE.PerspectiveCamera(60, 1.5, 0.1, 2000);
+    cam.up.set(0, 0, 1);
+    cam.position.set(...at);
+    cam.lookAt(...to);
+    cam.updateMatrixWorld();
+    return cam;
+  };
+
+  it("takes what testing every triangle takes from inside, at the wall and just outside", () => {
+    const model = sphere();
+    sameAsBruteForce(model, look([0, 0, 0], [1, 0.3, 0.2]));
+    sameAsBruteForce(model, look([0, 0, 25], [0.2, 0.1, 40]));
+    sameAsBruteForce(model, look([29.95, 0, 0], [0, 0, 0]));
+    sameAsBruteForce(model, look([30.4, 0.5, 0], [0, 2, 1]));
+  });
+});
+
+describe("a stale index", () => {
+  it("is rebuilt after the geometry moves or the faces are split again", () => {
+    const geo = new THREE.SphereGeometry(20, 48, 32);
+    const body = fakeBody("ball", geo, () => 0);
+    const model = { bodies: [body], edges: [] } as unknown as ModelView;
+    const cam = cameras()[0]!.cam;
+    projectForArea(model, cam, VIEW, false);
+    expect(areaIndexReady(body)).toBe(true);
+
+    const pos = geo.getAttribute("position");
+    for (let i = 0; i < pos.count; i++) pos.setX(i, pos.getX(i) * 1.8 + 15);
+    pos.needsUpdate = true;
+    expect(areaIndexReady(body)).toBe(false);
+    let builds = areaIndexStats.syncBuilds;
+    sameAsBruteForce(model, cam);
+    expect(areaIndexStats.syncBuilds).toBe(builds + 1);
+
+    const all = [...body.faceTriangles.values()][0]!;
+    const first = [...body.faceTriangles.keys()][0]!;
+    body.faceTriangles = new Map([
+      [first, all.filter((t) => t % 3 !== 0)],
+      [first + 1, all.filter((t) => t % 3 === 0)],
+    ]);
+    expect(areaIndexReady(body)).toBe(false);
+    builds = areaIndexStats.syncBuilds;
+    sameAsBruteForce(model, cam);
+    expect(areaIndexStats.syncBuilds).toBe(builds + 1);
+  });
+});
+
 async function idle(done: () => boolean) {
   for (let i = 0; i < 2000 && !done(); i++) await new Promise((r) => setTimeout(r, 1));
 }

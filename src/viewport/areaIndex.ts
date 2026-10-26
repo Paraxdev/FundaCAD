@@ -26,6 +26,9 @@ export interface BodyAreaIndex {
   order: (Uint32Array | undefined)[];
 }
 
+/** The most grid cells a face's counting sort may use, 1 MB of counts. */
+export const MAX_CELLS = 1 << 18;
+
 /** Counters a test reads to prove where the work went. */
 export const areaIndexStats = { idleBuilds: 0, syncBuilds: 0 };
 
@@ -57,6 +60,9 @@ function* build(body: BodyMesh): Generator<void, BodyAreaIndex | null> {
   const pos = geometry.getAttribute("position");
   const index = geometry.getIndex();
   if (!pos || !index) return null;
+  // Read before the first yield, so a build paused across a geometry update records the versions it indexed.
+  const posVersion = versionOf(pos);
+  const indexVersion = index.version;
   const P = flatPositions(pos);
   const I = index.array;
   const faceTris = [...body.faceTriangles.values()];
@@ -190,10 +196,18 @@ function* build(body: BodyMesh): Generator<void, BodyAreaIndex | null> {
     const ex = Math.max(cx1 - cx0, big * 1e-3),
       ey = Math.max(cy1 - cy0, big * 1e-3),
       ez = Math.max(cz1 - cz0, big * 1e-3);
-    const cell = Math.cbrt((ex * ey * ez) / Math.max(1, n / CLUSTER_TRIS));
-    const gx = Math.min(256, Math.max(1, Math.ceil(ex / cell))),
-      gy = Math.min(256, Math.max(1, Math.ceil(ey / cell))),
-      gz = Math.min(256, Math.max(1, Math.ceil(ez / cell)));
+    let cell = Math.cbrt((ex * ey * ez) / Math.max(1, n / CLUSTER_TRIS));
+    let gx = 1,
+      gy = 1,
+      gz = 1;
+    // Coarser cells until the counts fit MAX_CELLS, a flat face would otherwise ask for a huge grid.
+    for (;;) {
+      gx = Math.max(1, Math.ceil(ex / cell));
+      gy = Math.max(1, Math.ceil(ey / cell));
+      gz = Math.max(1, Math.ceil(ez / cell));
+      if (gx * gy * gz <= MAX_CELLS) break;
+      cell *= 1.25;
+    }
     const cellOf = new Uint32Array(n);
     const counts = new Uint32Array(gx * gy * gz + 1);
     for (let s = 0; s < n; s++) {
@@ -237,8 +251,8 @@ function* build(body: BodyMesh): Generator<void, BodyAreaIndex | null> {
   firstCluster[faceTris.length] = starts.length;
   return {
     geometry,
-    posVersion: versionOf(pos),
-    indexVersion: index.version,
+    posVersion,
+    indexVersion,
     faceTris,
     firstCluster,
     clusterStart: Uint32Array.from(starts),
@@ -287,9 +301,19 @@ export function areaIndexReady(body: BodyMesh): boolean {
   return fresh(body, built.get(body));
 }
 
-function drain(hasTime: () => boolean) {
+/** Builds queued indexes until `hasTime` says stop, checked before each body and between slices of a big one. The
+ *  first slice always runs, so a forced callback with no time left still moves the queue on. A hidden body leaves
+ *  the queue and is built when it is shown, or by the drag that needs it. Exported for tests. */
+export function drainAreaIndex(hasTime: () => boolean) {
   scheduled = false;
+  let first = true;
   for (const [body, started] of pending) {
+    if (!body.mesh.visible) {
+      pending.delete(body);
+      continue;
+    }
+    if (!first && !hasTime()) break;
+    first = false;
     const it = started ?? build(body);
     let r = it.next();
     while (!r.done && hasTime()) r = it.next();
@@ -308,18 +332,18 @@ function schedule() {
   if (scheduled || !pending.size) return;
   scheduled = true;
   if (typeof globalThis.requestIdleCallback === "function") {
-    globalThis.requestIdleCallback((d) => drain(() => d.timeRemaining() > 1), { timeout: 1000 });
+    globalThis.requestIdleCallback((d) => drainAreaIndex(() => d.timeRemaining() > 1), { timeout: 1000 });
     return;
   }
   setTimeout(() => {
     const t0 = performance.now();
-    drain(() => performance.now() - t0 < 8);
+    drainAreaIndex(() => performance.now() - t0 < 8);
   }, 0);
 }
 
-/** Queue a body's index for idle time, after the frame that shows it. */
+/** Queue a visible body's index for idle time, after the frame that shows it. */
 export function scheduleAreaIndex(body: BodyMesh) {
-  if (fresh(body, built.get(body))) return;
+  if (!body.mesh.visible || fresh(body, built.get(body))) return;
   pending.set(body, null);
   schedule();
 }

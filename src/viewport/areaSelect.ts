@@ -202,3 +202,36 @@ export function faceInBox(tris: Iterable<readonly number[]>, r: ScreenRect, mode
   }
   return mode === "window" ? any : false;
 }
+
+/** Remembers what the last preview frame of a drag took. Repainting a face of millions of triangles on every move
+ *  took most of a drag's frame, so a frame that takes the same leaves the paint alone. */
+export class AreaPreviewGate {
+  private last: string | null = null;
+
+  /** False when this preview frame takes exactly what the last one did. A release always paints. */
+  paint(
+    kind: string,
+    filter: AreaFilter,
+    got: {
+      faces: readonly number[];
+      edges: readonly { id: string; body: string | undefined }[];
+      bodies: readonly string[];
+    },
+    announce: boolean,
+  ): boolean {
+    if (announce) {
+      this.last = null;
+      return true;
+    }
+    // Edge ids are per body, so the body goes in the key too.
+    const edges = got.edges.map((e) => `${e.body}:${e.id}`).join();
+    const key = `${kind}|${filter}|${got.faces.join()}|${edges}|${got.bodies.join()}`;
+    if (key === this.last) return false;
+    this.last = key;
+    return true;
+  }
+
+  reset() {
+    this.last = null;
+  }
+}

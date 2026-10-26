@@ -172,12 +172,14 @@ import {
   dragBox,
   isAreaDrag,
   areaSelectionMode,
+  AreaPreviewGate,
   nextAreaFilter,
   type AreaFilter,
   type AreaMode,
   type ScreenRect,
 } from "./areaSelect";
 import { collectInBox, projectForArea, type AreaProjection } from "./areaProjection";
+import { scheduleAreaIndex } from "./areaIndex";
 import { isEditableTarget } from "../ui/focus";
 import { hitScale } from "../input/pointerKind";
 import { setEmissionProgress } from "../ui/emissionProgress";
@@ -1360,11 +1362,11 @@ export class Viewport {
    *  dropped by anything that changes what is on screen. */
   private areaProj: AreaProjection | null = null;
 
-  private areaPreviewKey: string | null = null;
+  private areaPreview = new AreaPreviewGate();
 
   private dropAreaProjection() {
     this.areaProj = null;
-    this.areaPreviewKey = null;
+    this.areaPreview.reset();
   }
 
   private projectForArea(): AreaProjection {
@@ -1507,11 +1509,7 @@ export class Viewport {
     const kind = areaSelectionMode(this.areaFilter, this.selectionMode);
     // On release only: switching to bodies raises the move gizmo mid-drag otherwise.
     if (announce && kind !== this.selectionMode) this.setSelectionMode(kind);
-    // Repainting a face of millions of triangles on every move took most of a drag's frame, so a preview that takes
-    // what the last one took leaves the paint alone.
-    const key = `${kind}|${this.areaFilter}|${got.faces.join()}|${got.edges.map((e) => e.id).join()}|${got.bodies.join()}`;
-    if (!announce && key === this.areaPreviewKey) return;
-    this.areaPreviewKey = announce ? null : key;
+    if (!this.areaPreview.paint(kind, this.areaFilter, got, announce)) return;
     // Both kinds are cleared every frame, Tab can change the filter mid drag.
     h.clearSelection();
     h.clearBodySelection();
@@ -2702,6 +2700,7 @@ export class Viewport {
         if (b.mesh.visible !== vis) {
           b.mesh.visible = vis;
           b.edges.setBodyVisible(vis);
+          if (vis) scheduleAreaIndex(b);
           anyChanged = true;
         }
       }
