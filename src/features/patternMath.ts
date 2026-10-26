@@ -52,6 +52,10 @@ export function describePattern(kind: "linear" | "circular", count: number, valu
   return `${copies} over ${fmt(value)}° about ${axis}`;
 }
 
+export function describeRect(nx: number, ny: number, sx: number, sy: number): string {
+  return `${clampCount(nx)} by ${clampCount(ny)} copies, ${fmt(sx)} by ${fmt(sy)} mm apart`;
+}
+
 function fmt(v: number): string {
   if (!Number.isFinite(v)) return "0";
   const r = Math.round(v * 100) / 100;

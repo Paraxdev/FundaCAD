@@ -20,6 +20,7 @@ export const SKETCH_TOOLS = new Set([
   "boltCircle",
   "hexHoles",
   "gridHoles",
+  "patternLinear",
   "patternRect",
   "patternCircular",
   "honeycomb",
@@ -100,7 +101,7 @@ export const NON_REPEATABLE = new Set([
 
 /** Entity patterns word their own prompt as curves are picked and the pattern
  *  is placed, so a state change must not reset it to a line of this table. */
-export const SELF_PROMPTING = new Set<SketchTool>(["patternRect", "patternCircular", "mirror"]);
+export const SELF_PROMPTING = new Set<SketchTool>(["patternLinear", "patternRect", "patternCircular", "mirror"]);
 
 export const SKETCH_PROMPTS: Record<string, string> = {
   select: "Line (L) · Rectangle (R) · Circle (C) · Arc (A) · Trim (T)",

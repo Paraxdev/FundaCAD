@@ -12,7 +12,7 @@ import { isEditableTarget } from "../ui/focus";
 import { logError } from "../ui/logStore";
 import { snap } from "../ui/units";
 import { axisDragDistance } from "./manipulator";
-import { circularAngles, clampCount, describePattern, linearOffsets, MIN_COUNT } from "./patternMath";
+import { circularAngles, clampCount, describePattern, describeRect, linearOffsets, MIN_COUNT } from "./patternMath";
 import { facesOwnedByFeatures, featureLabel, spansBody } from "./patternSources";
 import {
   axisLine,
@@ -25,7 +25,7 @@ import {
 import { CanvasGesture } from "./canvasGesture";
 import { overlayMaterial } from "../viewport/overlayMaterial";
 
-export type PatternKind = "linear" | "circular";
+export type PatternKind = "linear" | "circular" | "rect";
 
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 const HOT = 0xffe9a8; // hovered / chosen arrow
@@ -40,6 +40,7 @@ const ARROW_GRAB_R = 6.5;
 /** How far an arrow reaches, root to tip, in gizmo units. */
 const ARROW_LENGTH = 45;
 const START_COUNT = 4;
+const START_GRID = 3;
 const START_ANGLE = 360;
 
 export class PatternTool {
@@ -60,7 +61,9 @@ export class PatternTool {
   private pending: Promise<void> | null = null; // the axis pick still waiting on the engine
   private axisLineObj: THREE.Line | null = null;
   private count = START_COUNT;
-  private value = 0; // mm between copies (linear) or degrees swept (circular)
+  private value = 0; // mm between copies (linear, and X of a rect) or degrees swept (circular)
+  private valueY = 0; // rect only: mm between rows
+  private countY = START_GRID; // rect only: rows
 
   private gizmo: THREE.Group | null = null;
   private arrows: { group: THREE.Group; mat: THREE.MeshBasicMaterial; axis: number }[] = [];
@@ -98,7 +101,8 @@ export class PatternTool {
     this.faceIds = this.features.length ? this.repeatedFaces() : [];
     this.promptPrefix = this.features.length ? `Pattern ${this.sourceLabels()}: ` : "";
     this.onDone = onDone;
-    this.count = START_COUNT;
+    this.count = kind === "rect" ? START_GRID : START_COUNT;
+    this.countY = START_GRID;
     this.centroid.copy(
       this.features.length ? this.viewport.facesCentroid(this.faceIds) : this.viewport.bodiesCentroid(bodies),
     );
@@ -108,10 +112,11 @@ export class PatternTool {
     this.place = defaultAxisPlace(this.features.length > 0);
     this.picked = null;
     this.pickNote = "";
-    if (kind === "linear") {
+    if (kind !== "circular") {
       this.axis = 0; // X
       // One span apart, so the opening state is a row of touching copies rather than a heap.
       this.value = this.span(AXES[0]!.dir) || 20;
+      if (kind === "rect") this.valueY = this.span(AXES[1]!.dir) || 20;
     } else {
       this.axis = 2; // Z
       this.value = START_ANGLE;
@@ -123,15 +128,22 @@ export class PatternTool {
 
     this.buildGizmo();
     this.dim.show(
-      kind === "linear"
+      kind === "rect"
         ? [
-            { name: "spacing", label: "Spacing", kind: "length" },
-            { name: "count", label: "Copies", kind: "count", ...featureValueRule("patternLinear", "count") },
+            { name: "spacingX", label: "Spacing X", kind: "length" },
+            { name: "spacingY", label: "Spacing Y", kind: "length" },
+            { name: "countX", label: "Copies X", kind: "count", ...featureValueRule("patternRect", "countX") },
+            { name: "countY", label: "Copies Y", kind: "count", ...featureValueRule("patternRect", "countY") },
           ]
-        : [
-            { name: "angle", label: "Angle", kind: "angle" },
-            { name: "count", label: "Copies", kind: "count", ...featureValueRule("patternCircular", "count") },
-          ],
+        : kind === "linear"
+          ? [
+              { name: "spacing", label: "Spacing", kind: "length" },
+              { name: "count", label: "Copies", kind: "count", ...featureValueRule("patternLinear", "count") },
+            ]
+          : [
+              { name: "angle", label: "Angle", kind: "angle" },
+              { name: "count", label: "Copies", kind: "count", ...featureValueRule("patternCircular", "count") },
+            ],
       () => this.commitSoon(),
       () => this.cancel(),
     );
@@ -194,7 +206,7 @@ export class PatternTool {
   /** A linear pattern's arrows sit on the bodies, a circular one's on its axis at the bodies' height, or the
    *  gizmo would point at a centre the copies do not orbit. */
   private placeGizmo() {
-    if (this.kind === "linear") {
+    if (this.kind !== "circular") {
       this.anchor.copy(this.centroid);
       return;
     }
@@ -220,6 +232,16 @@ export class PatternTool {
     this.axisLineObj.geometry.computeBoundingSphere();
   }
 
+  /** The spacing the grabbed arrow drives: X or Y of a rect, the one value otherwise. */
+  private dragged(): number {
+    return this.kind === "rect" && this.axis === 1 ? this.valueY : this.value;
+  }
+
+  private setDragged(v: number) {
+    if (this.kind === "rect" && this.axis === 1) this.valueY = v;
+    else this.value = v;
+  }
+
   private axisDir(): THREE.Vector3 {
     return AXES[this.axis]!.dir;
   }
@@ -231,6 +253,13 @@ export class PatternTool {
   /** Copy 0 is the original. Goes through patternMath so the ghosts and the kernel cannot disagree. */
   private transforms(): THREE.Matrix4[] {
     const dir = this.axisDir();
+    if (this.kind === "rect") {
+      const out: THREE.Matrix4[] = [];
+      for (const dx of linearOffsets(this.count, this.value))
+        for (const dy of linearOffsets(this.countY, this.valueY))
+          out.push(new THREE.Matrix4().makeTranslation(dx, dy, 0));
+      return out;
+    }
     if (this.kind === "linear") {
       return linearOffsets(this.count, this.value).map((d) =>
         new THREE.Matrix4().makeTranslation(dir.x * d, dir.y * d, dir.z * d),
@@ -257,11 +286,11 @@ export class PatternTool {
     if (this.grabbing) {
       const raw = this.grabValue + (this.dragAt(e) - this.grabRef);
       const stepped =
-        this.kind === "linear"
+        this.kind !== "circular"
           ? snap(raw, this.viewport.snapStep(this.anchor, e.shiftKey))
           : snap(raw, e.shiftKey ? 1 : 15); // sweeps land on the angles people mean
-      if (stepped === this.value) return;
-      this.value = stepped;
+      if (stepped === this.dragged()) return;
+      this.setDragged(stepped);
       this.pushFields();
       this.refreshPrompt();
       this.updateGhosts();
@@ -276,7 +305,7 @@ export class PatternTool {
 
   /** A distance along the axis or an angle about it, read from the same pointer so both are one gesture. */
   private dragAt(e: PointerEvent): number {
-    if (this.kind === "linear") {
+    if (this.kind !== "circular") {
       return axisDragDistance(this.viewport, e.clientX, e.clientY, this.anchor, this.axisDir());
     }
     const dir = this.axisDir();
@@ -313,7 +342,7 @@ export class PatternTool {
       this.updateGhosts();
     }
     this.grabbing = true;
-    this.grabValue = this.value;
+    this.grabValue = this.dragged();
     this.grabRef = this.dragAt(e);
     this.refreshPrompt();
     this.viewport.domElement.style.cursor = "grabbing";
@@ -410,8 +439,16 @@ export class PatternTool {
 
   /** Never stamps over a number the user is in the middle of typing. */
   private pushFields() {
-    const key = this.kind === "linear" ? "spacing" : "angle";
     const out: Record<string, number> = {};
+    if (this.kind === "rect") {
+      if (!this.dim.isUserDriven("spacingX") || this.grabbing) out["spacingX"] = this.value;
+      if (!this.dim.isUserDriven("spacingY") || this.grabbing) out["spacingY"] = this.valueY;
+      if (!this.dim.isUserDriven("countX")) out["countX"] = this.count;
+      if (!this.dim.isUserDriven("countY")) out["countY"] = this.countY;
+      this.dim.updateFromCursor(out);
+      return;
+    }
+    const key = this.kind === "linear" ? "spacing" : "angle";
     if (!this.dim.isUserDriven(key) || this.grabbing) out[key] = this.value;
     if (!this.dim.isUserDriven("count")) out["count"] = this.count;
     this.dim.updateFromCursor(out);
@@ -419,9 +456,16 @@ export class PatternTool {
 
   private promptKey = "";
   private refreshPrompt() {
-    const body = describePattern(this.kind, this.count, this.value, this.axisName());
+    const body =
+      this.kind === "rect"
+        ? describeRect(this.count, this.countY, this.value, this.valueY)
+        : describePattern(this.kind, this.count, this.value, this.axisName());
     if (body === this.promptKey) return;
     this.promptKey = body;
+    if (this.kind === "rect") {
+      setPrompt(`${this.promptPrefix}${body} · drag the X or Y arrow · [ ] X count · Enter or click to apply · Esc`);
+      return;
+    }
     if (this.kind === "linear") {
       setPrompt(
         `${this.promptPrefix}${body} · drag an arrow · [ and ] change the count · Enter or click to apply · Esc`,
@@ -442,7 +486,8 @@ export class PatternTool {
   private buildGizmo() {
     const g = new THREE.Group();
     this.gizmo = g;
-    for (let i = 0; i < AXES.length; i++) {
+    // A grid lies in the ground plane, so it has no Z arrow to offer.
+    for (let i = 0; i < (this.kind === "rect" ? 2 : AXES.length); i++) {
       const a = AXES[i]!;
       const mat = overlayMaterial(new THREE.MeshBasicMaterial({ color: a.color, depthTest: false }));
       const arrow = new THREE.Group();
@@ -509,6 +554,30 @@ export class PatternTool {
   private readFields() {
     if (this.grabbing) return;
     let changed = false;
+    if (this.kind === "rect") {
+      const read = (name: string, now: number, count: boolean) => {
+        if (!this.dim.isUserDriven(name)) return now;
+        const v = this.dim.getValue(name);
+        if (v == null) return now;
+        return count ? Math.max(MIN_COUNT, Math.round(v)) : v;
+      };
+      const next = {
+        value: read("spacingX", this.value, false),
+        valueY: read("spacingY", this.valueY, false),
+        count: read("countX", this.count, true),
+        countY: read("countY", this.countY, true),
+      };
+      changed =
+        Math.abs(next.value - this.value) > 1e-6 ||
+        Math.abs(next.valueY - this.valueY) > 1e-6 ||
+        next.count !== this.count ||
+        next.countY !== this.countY;
+      if (!changed) return;
+      Object.assign(this, next);
+      this.refreshPrompt();
+      this.updateGhosts();
+      return;
+    }
     const key = this.kind === "linear" ? "spacing" : "angle";
     if (this.dim.isUserDriven(key)) {
       const v = this.dim.getValue(key);
@@ -543,6 +612,8 @@ export class PatternTool {
     if (!this.active) return;
     this.readFields();
     const count = Math.max(MIN_COUNT, Math.round(this.count));
+    const countY = Math.max(MIN_COUNT, Math.round(this.countY));
+    const valueY = this.valueY;
     const axis = this.axisName();
     const m = this.middle;
     const placed = circularAxisFields(this.place, axis, [m.x, m.y, m.z], this.picked);
@@ -553,16 +624,18 @@ export class PatternTool {
     const done = this.onDone;
     this.cleanup();
     // A pattern of one copy would be a timeline feature that does nothing, so say so instead.
-    if (count < 2) {
+    if (kind === "rect" ? count * countY < 2 : count < 2) {
       setPrompt(null);
       done?.(null);
       return;
     }
     const id = this.store.nextId();
     this.store.addFeature(
-      kind === "linear"
-        ? ({ id, type: "patternLinear", count, spacing: value, axis, ...target } as Feature)
-        : ({ id, type: "patternCircular", count, angle: value, ...placed, ...target } as Feature),
+      kind === "rect"
+        ? ({ id, type: "patternRect", countX: count, countY, spacingX: value, spacingY: valueY, ...target } as Feature)
+        : kind === "linear"
+          ? ({ id, type: "patternLinear", count, spacing: value, axis, ...target } as Feature)
+          : ({ id, type: "patternCircular", count, angle: value, ...placed, ...target } as Feature),
     );
     done?.(id);
   }

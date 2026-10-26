@@ -113,7 +113,7 @@ const SKETCH_SLOTS: readonly SketchSlot[] = [
   {
     id: "pattern",
     label: "Pattern",
-    actions: ["patternRect", "patternCircular", "boltCircle", "hexHoles", "honeycomb", "gridHoles"],
+    actions: ["patternLinear", "patternCircular", "patternRect", "boltCircle", "hexHoles", "honeycomb", "gridHoles"],
   },
   "project",
   "text",

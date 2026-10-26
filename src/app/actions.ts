@@ -48,7 +48,7 @@ const KEEPS_PICK = new Set([
 ]);
 
 /** A body selection raises Move, which toolBusy() counts, so these stand it down first or they refuse silently. */
-const BODY_VERBS = new Set(["mirror", "pattern-linear", "pattern-circular"]);
+const BODY_VERBS = new Set(["mirror", "pattern-linear", "pattern-circular", "pattern-rect"]);
 
 /** The one dispatcher for the ribbon, the keymap, the command palette and every context menu. */
 export function createActions(e: Engine): (action: string) => void {
@@ -259,6 +259,9 @@ export function createActions(e: Engine): (action: string) => void {
         break;
       case "pattern-circular":
         e.starters.startPattern("circular");
+        break;
+      case "pattern-rect":
+        e.starters.startPattern("rect");
         break;
       case "simplify-mesh":
         e.starters.startSimplifyMesh();

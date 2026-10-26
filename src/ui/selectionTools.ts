@@ -69,6 +69,7 @@ const TOOL_ICON: Record<ToolId, string> = {
   move: "move",
   "pattern-linear": "patternLinear",
   "pattern-circular": "patternCircular",
+  "pattern-rect": "patternRect",
   mirror: "mirror",
   "boolean-union": "booleanUnion",
   "boolean-subtract": "booleanSubtract",
