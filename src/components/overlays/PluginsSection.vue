@@ -284,14 +284,14 @@ async function drop(id: string, name: string) {
           <Icon name="settings" :size="16" />
           Settings
         </button>
-        <span class="param-switch" :title="on[rec.id] === false ? 'Switched off' : 'Running'">
+        <span class="check" :title="on[rec.id] === false ? 'Switched off' : 'Running'">
           <input
             :id="`prefs-plugin-${rec.id}`"
             type="checkbox"
             :checked="on[rec.id] !== false"
             @change="toggle(rec.id, $event)"
           />
-          <span class="track"><span class="knob"></span></span>
+          <span class="check-box"></span>
         </span>
         <button class="btn" :disabled="busy === rec.id" @click="drop(rec.id, manifest ? manifest.name : rec.id)">
           {{ busy === rec.id ? "Removing…" : "Remove" }}
@@ -306,7 +306,8 @@ async function drop(id: string, name: string) {
         {{ showing === rec.id ? "Hide what it uses" : "What it uses" }}
       </button>
       <label v-if="sectionsOf(rec.id).length" class="plug-forget">
-        <input v-model="forget[rec.id]" type="checkbox" /> Remove forgets its settings
+        <span class="check"><input v-model="forget[rec.id]" type="checkbox" /><span class="check-box"></span></span>
+        Remove forgets its settings
       </label>
     </div>
 

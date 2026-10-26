@@ -315,6 +315,33 @@ function block(css: string, selector: string): Record<string, string> {
   );
 }
 
+// Everything the Preferences dialog renders: its own file and the components it imports, followed down.
+function renderedBy(root: string, files: Map<string, string>): string[] {
+  const seen = new Set<string>();
+  const walk = (path: string) => {
+    if (seen.has(path) || !files.has(path)) return;
+    seen.add(path);
+    const dir = path.slice(0, path.lastIndexOf("/"));
+    for (const m of (files.get(path) ?? "").matchAll(/^import\s+\w+\s+from\s+"(\.{1,2}\/[^"]+\.vue)";/gm)) {
+      const parts = `${dir}/${m[1]}`.split("/");
+      const out: string[] = [];
+      for (const part of parts) {
+        if (part === "..") out.pop();
+        else if (part !== ".") out.push(part);
+      }
+      walk(out.join("/"));
+    }
+  };
+  walk(root);
+  return [...seen];
+}
+
+// A settings page toggles with the checkbox (.check); a switch is for a live toggle in a tool panel.
+const switchesIn = (files: Map<string, string>, paths: string[]) =>
+  paths.filter((path) =>
+    /class="[^"]*\b(?:param-switch|ft-switch)\b|<ToggleRow\b|<Toggle\b/.test(files.get(path) ?? ""),
+  );
+
 describe("design spec guard", () => {
   it("reads the sources", () => {
     expect(vueFiles.size).toBeGreaterThan(50);
@@ -419,6 +446,17 @@ describe("design spec guard", () => {
     expect(contrastRatio(over(resolveColour("var(--float-bg)", vars), scene), scene)).toBeGreaterThan(1.15);
   });
 
+  it("toggles settings in Preferences with the checkbox, never a switch", () => {
+    const rendered = renderedBy("src/components/overlays/PreferencesDialog.vue", vueFiles);
+    expect(rendered).toEqual(
+      expect.arrayContaining([
+        "src/components/overlays/PluginsSection.vue",
+        "src/components/overlays/PluginSettingsForm.vue",
+      ]),
+    );
+    expect(switchesIn(vueFiles, rendered)).toEqual([]);
+  });
+
   it("finds what the check helpers are meant to find", () => {
     expect(
       colourLiterals(
@@ -464,6 +502,11 @@ describe("design spec guard", () => {
       ]),
     ).toEqual([]);
     expect(contrastRatio(parseColour("#839496"), parseColour("#fffdf8"))).toBeLessThan(4.5);
+    const fake = new Map([
+      ["a/Prefs.vue", 'import Row from "./b/Row.vue";\n<template><Row /></template>'],
+      ["a/b/Row.vue", '<template><span class="param-switch"><input type="checkbox" /></span></template>'],
+    ]);
+    expect(switchesIn(fake, renderedBy("a/Prefs.vue", fake))).toEqual(["a/b/Row.vue"]);
     expect(resolveColour("color-mix(in srgb, #ffffff 50%, transparent)", {})).toEqual([255, 255, 255, 0.5]);
   });
 });

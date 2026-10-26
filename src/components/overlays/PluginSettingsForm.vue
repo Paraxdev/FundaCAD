@@ -157,14 +157,14 @@ const isDefault = (p: SettingProp) => {
         <div class="pref-head">
           <label class="pref-title" :for="id(p)">{{ p.label }}</label>
           <div class="plugset-control">
-            <span v-if="p.type === 'boolean'" class="param-switch">
+            <span v-if="p.type === 'boolean'" class="check">
               <input
                 :id="id(p)"
                 type="checkbox"
                 :checked="values[p.key] === true"
                 @change="store(p, ($event.target as HTMLInputElement).checked)"
               />
-              <span class="track"><span class="knob"></span></span>
+              <span class="check-box"></span>
             </span>
 
             <template v-else-if="p.type === 'number'">
