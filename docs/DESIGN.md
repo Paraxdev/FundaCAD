@@ -941,19 +941,19 @@ The box beside the cursor or the gizmo while a sketch or feature tool runs. One 
 
 | Part | Recipe |
 |---|---|
-| Box | One glass chip on the `_glass.scss` lists (`--float-chip-bg`, chip radius, squircle, `--float-shadow`, `--float-blur`), padding 3px, gap 2px, one row 32px tall. Nothing inside has a fill or shadow of its own |
+| Box | One glass chip on the `_glass.scss` lists (`--float-chip-bg`, chip radius, squircle, `--float-shadow`, `--float-blur`), padding 3px, gap 2px, one row 32px tall (36px under a coarse pointer). Nothing inside has a fill or shadow of its own |
 | Field (`.dim-field`) | Name tag, input, unit, 24px tall, radius 7px. The tag is the field's icon at 14px with the name in its `title`, or a one or two letter word (W, H, L, R, N, D, X, Y) in 10px 700 `--text-mute`; `tag` adds an axis letter after an icon. Typed: `--hover-wash` |
 | Input | `--field-bg`, 22px tall, radius 6px, 12px 600 tabular numbers, at least 7ch wide and only wider past that, so typing a usual number never resizes the box; focus is the 1px `--accent` outline |
 | Unit (`.dim-unit`) | A 10px `--text-mute` word on no fill that opens the unit menu; hover `--accent-hot` on `--hover-wash` |
-| Option (`.dim-btn.dim-opt`) | 24 by 24, radius 7px, a 16px icon in `--text-dim`, hover `--text` on `--hover-wash`; the name in `title` and `aria-label`, its word kept in a hidden `.dim-word`. Out of the Tab order |
-| Switch (`.dim-toggle`) | An on or off mode (Symmetric, Copy, Total, Tangent faces follow). `.on`: `--accent` 24% into `--panel`, `--accent-hot` ink, `aria-pressed` |
-| Segmented (`.dim-seg`) | A choice of 2 to 5 named values (fillet continuity, press pull mode and direction, hole type): one icon segment each, built from a list, the chosen one `.on` like a switch, `role="radio"` and `aria-checked`. A segment may own a key: bare when no field has focus, Alt with it inside a field, where the digit belongs to the number. Fillet continuity is 1 and 2 |
+| Option (`.dim-btn.dim-opt`) | 24 by 24, radius 7px, a 16px icon in `--text-dim`, hover `--text` on `--hover-wash`; the name in `title` and `aria-label`, its word kept in a hidden `.dim-word`. Each option is one Tab stop after the fields, with the 1px `--accent` focus outline; Space or Enter presses a switch or an action |
+| Switch (`.dim-toggle`) | An on or off mode (Symmetric, Copy, Total, Tangent faces follow). `.on`: `--accent` 24% into `--panel`, `--accent-hot` ink, `aria-pressed`. In the light theme on is `--accent-tint-2` with `--accent` ink, above 3:1 on the paper chip |
+| Segmented (`.dim-seg`) | A choice of 2 to 5 named values (fillet continuity, press pull mode and direction, hole type): one icon segment each, built from a list, the chosen one `.on` like a switch, `role="radio"` and `aria-checked`. Values whose glyphs read alike show a short name beside a 12px glyph (`text`, G1 and G2). The group is one Tab stop (roving tabindex on the chosen segment); the arrow keys move and pick, Enter commits. A segment that cannot be picked now is `.disabled` at 0.45 with the reason in its tooltip (`disabled`, `setSegmentDisabled`). A segment may own a key: bare when no field has focus, Alt with it inside a field, where the digit belongs to the number. Fillet continuity is 1 and 2 |
 | Action (`.dim-action`) | A one off verb (Hole's Center), the option button with no on state |
 | Confirm and cancel | Last, 4px apart from the options, check in `--ok` and cross in `--error`, the hover a wash of the same colour |
 | Error (`.dim-bad`) | Every field `--error-tint` with `--error` text, the message in `.dim-problem` hung under the box |
-| Place | Beside the cursor 16px right of and below the point, flipped to the other side where the window ends, never over the point; beside a gizmo `pastTip` or `placeBeside` |
-| Touch | Buttons stay 24px; a `::before` grows each to 36px tall, sideways only into the gap, the last one outwards |
-| Keys | Tab and Shift+Tab walk the shown fields, Enter commits, Esc cancels (the tool's capture listener) |
+| Place | Beside the cursor 16px right of and below the point at its natural size, flipped to the other side where the window ends, clamped into a window too small for either; never over the point. Flipped above, the box takes `.dim-above` and its error line hangs over it. Beside a gizmo `pastTip` or `placeBeside` |
+| Touch | Buttons stay 24px under a mouse; a `::before` grows each to 36px tall. Under `@media (pointer: coarse)` they are 30px, 6px apart, so the hit area reaches 36px each way, the floor over the model |
+| Keys | Tab and Shift+Tab walk the shown fields, then each option, and wrap; Enter in a field commits, Esc cancels (the tool's capture listener) |
 
 A number the tool needs is a small field, never a chip that cycles. A new option goes through `DimOption`
 (`DimToggleDef` with an `icon`, `DimSegmentedDef` or `DimActionDef`), with an icon from `src/assets/icons/forge/`.

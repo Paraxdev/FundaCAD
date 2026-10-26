@@ -58,7 +58,7 @@ button.finish:hover {
 }
 
 /* Off the spacing scale like the sketch dimension labels in _browser.scss: placed from a
-   projected 3D point, so sized against the geometry, not the chrome. One chip, one row 30px
+   projected 3D point, so sized against the geometry, not the chrome. One chip, one row 32px
    tall: every pixel of height is picking area given away. _glass.scss gives it the fill. */
 .dim-input {
   position: fixed;
@@ -96,6 +96,11 @@ button.finish:hover {
 }
 /* Every field turns: the kernel refuses a feature, not a field, and the user picks which
    value to move. The error shows as a fill, _glass.scss repeats it for a typed field. */
+/* Above the cursor the line hangs over the box instead, so it never covers the point. */
+.dim-input.dim-above .dim-problem {
+  top: auto;
+  bottom: calc(100% + var(--s-1));
+}
 .dim-bad .dim-field {
   background: var(--error-tint);
 }
@@ -216,6 +221,29 @@ button.finish:hover {
 .dim-btn:hover {
   color: var(--text);
   background: var(--hover-wash);
+}
+.dim-btn:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 0;
+}
+/* A segment that names itself ("G1") beside a small glyph. */
+.dim-btn.dim-texted {
+  width: auto;
+  gap: 2px;
+  padding: 0 5px 0 4px;
+}
+.dim-seg-text {
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.dim-btn.disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.dim-btn.disabled:hover {
+  color: var(--text-dim);
+  background: none;
 }
 .dim-word {
   position: absolute;
