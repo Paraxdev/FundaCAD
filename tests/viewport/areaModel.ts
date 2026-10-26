@@ -29,7 +29,7 @@ export function fakeBody(id: string, geo: THREE.BufferGeometry, faceOf: (t: numb
     list.push(t);
   }
   nextFace += top;
-  return { id, name: id, mesh, faceTriangles } as unknown as BodyMesh;
+  return { id, name: id, mesh, faceTriangles, faceStart: base, faceCount: top } as unknown as BodyMesh;
 }
 
 export function fakeEdge(id: string, points: [number, number, number][]): EdgeRef {
