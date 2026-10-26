@@ -236,6 +236,10 @@
   background: var(--float-chip-bg);
   box-shadow: var(--float-shadow);
 }
+.dim-bad .dim-field,
+.dim-bad .dim-field.typed {
+  background: linear-gradient(var(--error-tint), var(--error-tint)), var(--float-chip-bg);
+}
 .dim-btn.dim-toggle.on,
 .dim-btn.dim-direction.on,
 .section-chip-btn.active {

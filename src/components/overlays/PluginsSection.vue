@@ -288,6 +288,7 @@ async function drop(id: string, name: string) {
           <input
             :id="`prefs-plugin-${rec.id}`"
             type="checkbox"
+            :aria-label="`Run ${manifest ? manifest.name : rec.id}`"
             :checked="on[rec.id] !== false"
             @change="toggle(rec.id, $event)"
           />

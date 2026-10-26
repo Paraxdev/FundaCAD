@@ -166,20 +166,19 @@
 .tgt-done {
   color: #fff;
   background: var(--accent);
-  border: 1px solid var(--accent);
+  border: 1px solid transparent;
 }
 .tgt-done:hover {
   background: var(--accent-hot);
-  border-color: var(--accent-hot);
 }
 .tgt-cancel {
   color: var(--text-dim);
-  background: none;
-  border: 1px solid var(--line-strong);
+  background: var(--float-chip-bg);
+  border: 1px solid transparent;
 }
 .tgt-cancel:hover {
   color: var(--text);
-  border-color: var(--text-dim);
+  background: linear-gradient(var(--hover-wash), var(--hover-wash)), var(--float-chip-bg);
 }
 .tgt-done:disabled {
   opacity: 0.45;

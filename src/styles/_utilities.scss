@@ -93,9 +93,8 @@ button.finish:hover {
   box-shadow: var(--shadow-2);
 }
 /* Every field turns: the kernel refuses a feature, not a field, and the user picks which
-   value to move. */
+   value to move. The error shows as a fill, _glass.scss repeats it for a typed field. */
 .dim-bad .dim-field {
-  border-color: var(--error);
   background: var(--error-tint);
 }
 .dim-bad .dim-field input {

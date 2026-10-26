@@ -54,11 +54,12 @@
 .tree-folder:hover {
   background: var(--raised);
 }
-/* An inset ring, not a background: during a drag the pointer is over the head, so a
-   background would look like plain hover. */
+/* A drop target is a stronger wash than a selected row (16%) with a 2px accent bar on its
+   leading edge, so it is not mistaken for plain hover or selection during a drag. */
 .tree-folder.drop-into,
 .feature-row.drop-into {
   background: var(--accent-tint-2);
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 .tree-caret {
   width: 12px;
@@ -257,8 +258,8 @@
   border-radius: var(--r-sm);
 }
 .sketch-dim input:focus {
-  outline: none;
-  border-color: var(--accent-hot);
+  outline: 1px solid var(--accent);
+  outline-offset: 0;
 }
 .sketch-glyph.pattern {
   height: 20px;

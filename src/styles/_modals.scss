@@ -368,9 +368,8 @@
   gap: 6px;
 }
 .plug-settings-btn.on {
-  background: var(--accent-tint);
-  border-color: var(--accent);
-  color: var(--accent);
+  background: linear-gradient(var(--accent-wash), var(--accent-wash)), var(--float-chip-bg);
+  color: var(--accent-hot);
 }
 /* A plugin's settings, set in under its row like an add-on's panel. */
 .plug-settings {
@@ -624,6 +623,10 @@
   /* Same inset as .modal-head, so both dialog shapes open at the same size. */
   padding: var(--s-5);
   border-bottom: 1px solid var(--line, #23272e);
+}
+.cmdk-input:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -3px;
 }
 .cmdk-list {
   overflow-y: auto;

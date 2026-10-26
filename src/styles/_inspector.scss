@@ -186,7 +186,8 @@
   opacity: 0.55;
 }
 .param-switch input:focus-visible + .track {
-  box-shadow: 0 0 0 3px var(--accent-tint);
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 /* A field driven by an expression (Fusion's fx: convention). */

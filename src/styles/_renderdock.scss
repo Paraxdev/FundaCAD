@@ -100,8 +100,9 @@
   background: transparent;
   padding: var(--s-1) 0;
 }
-.rd-search input:focus {
-  outline: none;
+.rd-search input:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .rd-used {
