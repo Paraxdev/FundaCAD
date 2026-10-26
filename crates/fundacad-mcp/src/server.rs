@@ -458,7 +458,7 @@ impl FundaCad {
     }
 
     pub async fn engine_port(&self) -> u16 {
-        self.state.lock().await.link.port
+        self.state.lock().await.link.port()
     }
 
     /// Settable too, so a test can reach the re-probe branch without building anything.
