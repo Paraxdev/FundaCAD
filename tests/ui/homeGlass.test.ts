@@ -146,3 +146,25 @@ describe("Home wears the app's glass", () => {
     expect(homeSrc).not.toMatch(/var\(--raised/);
   });
 });
+
+describe("Home's picture slot and the scrims without blur", () => {
+  it("fills a card's picture slot from the card, not the workspace colour that is near black in a dark theme", () => {
+    const bg = decls(".home-card-pic").background ?? "";
+    expect(bg).not.toMatch(/--viewport-bg/);
+    expect(bg).toMatch(/var\(--float-bg-solid\)/);
+  });
+
+  const alpha = (v: string | undefined) => {
+    const token = /^var\((--[\w-]+)\)$/.exec(v ?? "")?.[1];
+    const value = token ? (new RegExp(`${token}: *([^;]+);`).exec(scss.get("tokens") ?? "")?.[1] ?? "") : (v ?? "");
+    return Number(/rgba\([^)]*,\s*([\d.]+)\)/.exec(value)?.[1] ?? 0);
+  };
+  it.each([".modal-overlay", ".choice-backdrop", ".cmdk-backdrop"])(
+    "keeps %s dimming the app behind it, more than with blur, when blur is off",
+    (sel) => {
+      const off = decls(`html.no-glass-blur ${sel}`).background;
+      expect(alpha(off)).toBeGreaterThan(0);
+      expect(alpha(off)).toBeGreaterThan(alpha(decls(sel).background));
+    },
+  );
+});
