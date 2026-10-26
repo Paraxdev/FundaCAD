@@ -14,7 +14,7 @@ import type { Feature, ParamTarget, Selector } from "../types";
 import { midMatchTol, polylineMid, edgeSelectorFrom } from "../viewport/edgeMatch";
 import { pickScope, type PickScope } from "../viewport/pickScope";
 import { canConsume } from "./toolCapabilities";
-import { DimInput } from "../sketch/dimInput";
+import { DimInput, type DimSegment } from "../sketch/dimInput";
 import { setPrompt } from "../ui/prompt";
 import {
   createDragHandle,
@@ -76,6 +76,13 @@ const ghostColor = (g: { failed: boolean }) => (g.failed ? GHOST_ERROR : edgeSel
 /** Only delays the OCCT preview; the client side ghost (viewport.setBlendGhost) still redraws every frame, so a fast
  *  drag does not queue a rebuild per pixel. */
 const PREVIEW_DEBOUNCE_MS = 150;
+
+export type Continuity = "G1" | "G2";
+/** One segment per profile, in order, so a later G3 is one more entry. */
+export const CONTINUITY_SEGMENTS: (DimSegment & { id: Continuity })[] = [
+  { id: "G1", label: "G1, circular round", text: "G1", icon: "continuityG1", key: "1" },
+  { id: "G2", label: "G2, curvature continuous", text: "G2", icon: "continuityG2", key: "2" },
+];
 
 /** Chain members toggle as one unit, recorded at add time since the preview may consume the edges and the chain could
  *  not be recomputed from the displayed model. */
@@ -143,7 +150,7 @@ export class EdgeFeatureTool {
   /** Options the drag does not set, kept from the edited feature so a re-edit does not reset them. */
   private options: Record<string, unknown> = {};
   private optionsKind: Kind | null = null;
-  private continuity: "G1" | "G2" = "G1";
+  private continuity: Continuity = "G1";
   private hovering = false;
   private grabbing = false;
   /** The drag began on the passive selection handle, a one press gesture, so releasing commits (onUp). */
@@ -696,13 +703,12 @@ export class EdgeFeatureTool {
       () => this.cancel(),
       this.kind === "fillet"
         ? {
-            label: this.continuity,
-            title:
-              "Continuity: G1 is a circular round, G2 eases into the faces with no jump in curvature. Click to switch",
-            initial: this.continuity === "G2",
-            onChange: (on) => {
-              this.continuity = on ? "G2" : "G1";
-              this.dim.setToggleLabel(this.continuity);
+            name: "continuity",
+            title: "Continuity: G1 is a circular round, G2 eases into the faces with no jump in curvature",
+            segments: CONTINUITY_SEGMENTS,
+            chosen: this.continuity,
+            onChoose: (id) => {
+              this.continuity = id as Continuity;
               this.forgetBuildRange(); // G2 sets back further, so its limit is not G1's
               this.pushPreview();
             },

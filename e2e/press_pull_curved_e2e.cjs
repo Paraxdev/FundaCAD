@@ -153,7 +153,10 @@ const TORUS = [
           return n ? n.title || n.textContent : null;
         });
       const toggle = box?.querySelector(".dim-toggle");
-      const dirBtn = box?.querySelector(".dim-direction");
+      const chosen = (name) => {
+        const g = box?.querySelector(`[data-option="${name}"]`);
+        return g && g.style.display !== "none" ? (g.querySelector(".on")?.getAttribute("aria-label") ?? null) : null;
+      };
       const r = (v) => [v.x, v.y, v.z].map((c) => Math.round(c * 1000) / 1000);
       return {
         active: t.active,
@@ -162,8 +165,8 @@ const TORUS = [
         centre: t.round?.centre ?? null,
         labels,
         field: box?.querySelector("input")?.value ?? null,
-        toggle: toggle && toggle.style.display !== "none" ? toggle.textContent : null,
-        direction: dirBtn && dirBtn.style.display !== "none" ? dirBtn.textContent : null,
+        toggle: chosen("mode") ?? (toggle && toggle.style.display !== "none" ? toggle.textContent : null),
+        direction: chosen("direction"),
         axis: r(t.axis),
         anchor: r(t.anchor),
         problem: box?.querySelector(".dim-problem")?.textContent ?? null,

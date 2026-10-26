@@ -307,10 +307,7 @@ describe("a typed move", () => {
     el.dispatchEvent(new Event("input", { bubbles: true }));
     el.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
   };
-  const scaleField = () =>
-    [...document.querySelectorAll<HTMLInputElement>(".dim-input input")].find((i) =>
-      i.closest("label")?.textContent?.includes("Scale"),
-    )!;
+  const scaleField = () => document.querySelector<HTMLInputElement>('.dim-input .dim-field[data-field="size"] input')!;
   /** The Z cube stands past the arrow's tip, at SCALE_AT gizmo units. */
   const clickZCube = (canvas: HTMLCanvasElement) => {
     pointer(canvas, "pointerdown", 79);

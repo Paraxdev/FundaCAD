@@ -52,7 +52,7 @@ const COLOUR_BASELINE: Record<string, number> = {
   "src/styles/_renderdock.scss": 5,
   "src/styles/_targetedit.scss": 2,
   "src/styles/_timeline.scss": 5,
-  "src/styles/_utilities.scss": 8,
+  "src/styles/_utilities.scss": 5,
 };
 
 // Declarations, outside a hover, press, focus or selected rule, that fill with
@@ -76,7 +76,7 @@ const FLAT_BASELINE: Record<string, number> = {
   "src/styles/_targetedit.scss": 2,
   "src/styles/_timeline.scss": 6,
   "src/styles/_titlebar.scss": 6,
-  "src/styles/_utilities.scss": 16,
+  "src/styles/_utilities.scss": 12,
 };
 
 // Blurs written by hand outside _glass.scss. Anything new uses var(--float-blur),

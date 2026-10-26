@@ -314,6 +314,7 @@ export class FaceOffsetTool {
   private totalToggle(): DimToggleDef {
     return {
       label: "Total",
+      icon: "thicknessTotal",
       title: "Read and type the whole thickness to the opposite face instead of the change",
       initial: this.total,
       onChange: (on: boolean) => {
@@ -326,6 +327,7 @@ export class FaceOffsetTool {
   private followToggle(): DimToggleDef {
     return {
       label: "Tangent faces follow",
+      icon: "tangent",
       title:
         "On, the faces that run smoothly into this one move with it once it is too small or too big for them to meet it, so a slot narrows as one; off, that size is refused",
       initial: this.follow,

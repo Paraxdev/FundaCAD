@@ -6,7 +6,15 @@ import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore, RebuildState } from "../document/store";
 import type { FaceAxisReply } from "../geometry/client";
 import type { Feature, PressPullDirection, PressPullMode, Selector, Vec3 } from "../types";
-import { DimInput, type DimChoice, type DimChoices, type DimFieldDef, type DimToggleDef } from "../sketch/dimInput";
+import {
+  DimInput,
+  type DimChoice,
+  type DimChoices,
+  type DimFieldDef,
+  type DimOption,
+  type DimSegmentedDef,
+  type DimToggleDef,
+} from "../sketch/dimInput";
 import { setPrompt } from "../ui/prompt";
 import { fmtLength, snap } from "../ui/units";
 import {
@@ -92,6 +100,13 @@ const QUANTITIES: (DimChoice & { id: SizeQuantity })[] = [
 const CURVED = ["cylinder", "sphere", "cone", "torus"] as const;
 
 const MODES: PressPullMode[] = ["auto", "join", "cut", "new", "intersect"];
+const MODE_ICON: Record<PressPullMode, string> = {
+  auto: "presspull",
+  join: "booleanUnion",
+  cut: "booleanSubtract",
+  new: "newBody",
+  intersect: "booleanIntersect",
+};
 const MODE_LABEL: Record<PressPullMode, string> = {
   auto: "Auto",
   join: "Join",
@@ -135,7 +150,6 @@ export class PressPullTool {
   private direction: PressPullDirection = "normal";
   private holeAxis: HoleAxis | null = null;
   private axisAsk = 0; // bumped per question, so a late answer for another face is dropped
-  private directionBtn: HTMLButtonElement | null = null;
   // Where the arrow stands and points along the normal, restored on switching back.
   private faceAnchor = new THREE.Vector3();
   private faceNormal = new THREE.Vector3(0, 0, 1);
@@ -309,7 +323,7 @@ export class PressPullTool {
         this.holeAxis = null;
         this.curve = null;
         this.curveRound = null;
-        if (this.directionBtn) this.directionBtn.style.display = "none";
+        this.dim.setOptionHidden("direction", true);
         if (this.direction === "axis") this.setDirection("normal");
         if (curved || this.viewport.roundFaceAt(hit.faceId, hit.anchor)) this.resizing = true;
         if (this.round && !this.inTangentRun()) this.dropRound();
@@ -474,16 +488,19 @@ export class PressPullTool {
     ];
     if (!this.resizing) defs.push({ name: "taper", label: "Angle", icon: "angle", kind: "angle" });
     this.toggleKind = !this.resizing ? "mode" : this.round ? "follow" : null;
-    const toggle =
-      this.toggleKind === "mode" ? this.modeToggle() : this.toggleKind === "follow" ? this.followToggle() : undefined;
+    const options: DimOption[] = [
+      ...(this.toggleKind === "mode" ? [this.modeOption()] : this.toggleKind === "follow" ? [this.followToggle()] : []),
+      this.directionOption(),
+    ];
     this.dim.show(
       defs,
       () => this.commit(),
       () => this.cancel(),
-      toggle,
-      this.directionButton(),
+      options,
+      undefined,
       () => this.onTyped(),
     );
+    this.dim.setOptionHidden("direction", !this.holeAxis);
     this.syncToggle();
     // A round face opens at the size it already is, the number to edit; a flat face opens at 0, a travel.
     this.dim.updateFromCursor({ distance: this.readout(), ...(this.resizing ? {} : { taper: this.taper }) });
@@ -914,16 +931,15 @@ export class PressPullTool {
     this.taperArc = null;
   }
 
-  private modeToggle(): DimToggleDef {
+  private modeOption(): DimSegmentedDef {
     return {
-      label: MODE_LABEL[this.mode],
+      name: "mode",
       title:
         "Auto grows or shrinks the face; Join, Cut, New body and Intersect extrude it and combine with any body it reaches",
-      initial: this.mode !== "auto",
-      onChange: () => {
-        this.mode = MODES[(MODES.indexOf(this.mode) + 1) % MODES.length] ?? "auto";
-        this.dim.setToggle(this.mode !== "auto");
-        this.dim.setToggleLabel(MODE_LABEL[this.mode]);
+      segments: MODES.map((m) => ({ id: m, label: MODE_LABEL[m], icon: MODE_ICON[m] })),
+      chosen: this.mode,
+      onChoose: (id) => {
+        this.mode = id as PressPullMode;
         this.refreshPreview(true);
       },
     };
@@ -932,6 +948,7 @@ export class PressPullTool {
   private followToggle(): DimToggleDef {
     return {
       label: "Tangent faces follow",
+      icon: "tangent",
       title:
         "On, the faces that run smoothly into this one move with it once it is too small or too big for them to meet it, so a slot narrows as one; off, that size is refused",
       initial: this.follow,
@@ -981,22 +998,18 @@ export class PressPullTool {
   }
 
   /** Hidden until the engine says the face has an axis; a fresh one per showing of the box. */
-  private directionButton(): HTMLButtonElement {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "dim-btn dim-direction";
-    btn.title =
-      "Along axis slides the end of a hole down the hole, so the hole gets deeper and its end keeps its shape; Along normal offsets the face";
-    btn.textContent = DIRECTION_LABEL[this.direction];
-    btn.classList.toggle("on", this.direction === "axis");
-    btn.style.display = this.holeAxis ? "" : "none";
-    btn.addEventListener("pointerdown", (e) => {
-      e.preventDefault(); // never blur the input to press it
-      e.stopPropagation();
-      this.setDirection(this.direction === "axis" ? "normal" : "axis");
-    });
-    this.directionBtn = btn;
-    return btn;
+  private directionOption(): DimSegmentedDef {
+    return {
+      name: "direction",
+      title:
+        "Along axis slides the end of a hole down the hole, so the hole gets deeper and its end keeps its shape; Along normal offsets the face",
+      segments: [
+        { id: "normal", label: DIRECTION_LABEL.normal, icon: "offsetFace" },
+        { id: "axis", label: DIRECTION_LABEL.axis, icon: "datumAxis" },
+      ],
+      chosen: this.direction,
+      onChoose: (id) => this.setDirection(id as PressPullDirection),
+    };
   }
 
   private askAxis(face: Selector, bodyId: string | null) {
@@ -1010,7 +1023,7 @@ export class PressPullTool {
       if (this.round) return;
       this.holeAxis = offeredAxis(reply);
       if (!this.holeAxis) return;
-      if (this.directionBtn) this.directionBtn.style.display = "";
+      this.dim.setOptionHidden("direction", false);
       if (initialDirection(this.holeAxis) === "axis") this.setDirection("axis");
     });
   }
@@ -1046,7 +1059,7 @@ export class PressPullTool {
     if (!this.quantityPicked) this.quantity = defaultQuantity(r.full);
     // A round end of a hole still slides down it; a cylinder never did.
     this.holeAxis = r.kind === "cylinder" ? null : offeredAxis(reply);
-    if (this.directionBtn) this.directionBtn.style.display = this.holeAxis ? "" : "none";
+    this.dim.setOptionHidden("direction", !this.holeAxis);
     this.setDirection(initialDirection(this.holeAxis), was);
     return true;
   }
@@ -1085,10 +1098,7 @@ export class PressPullTool {
       this.value = 0;
       this.showBox();
     }
-    if (this.directionBtn) {
-      this.directionBtn.textContent = DIRECTION_LABEL[this.direction];
-      this.directionBtn.classList.toggle("on", this.direction === "axis");
-    }
+    this.dim.setOption("direction", this.direction);
     this.dim.setFieldHidden("taper", this.direction === "axis");
     if (this.direction === "axis" && axis) {
       const [x, y, z] = anchorOnAxis([this.faceAnchor.x, this.faceAnchor.y, this.faceAnchor.z], axis);
@@ -1273,7 +1283,6 @@ export class PressPullTool {
     this.axisAsk++;
     this.holeAxis = null;
     this.direction = "normal";
-    this.directionBtn = null;
     setPrompt(null);
   }
 

@@ -92,12 +92,15 @@ const check = (name, ok, detail) => {
   await page.waitForTimeout(500);
   await page.keyboard.type("15");
   await page.waitForTimeout(300);
-  const toggle = await page.$(".dim-input .dim-toggle");
-  check("the input box has an operation button", !!toggle);
-  const label0 = toggle ? await toggle.textContent() : null;
-  if (toggle) await toggle.dispatchEvent("pointerdown");
+  const modes = await page.$('.dim-input [data-option="mode"]');
+  check("the input box has the operation buttons", !!modes);
+  const chosen = () =>
+    page.evaluate(() => document.querySelector('[data-option="mode"] .on')?.getAttribute("aria-label") ?? null);
+  const label0 = await chosen();
+  const join = await page.$('.dim-input [data-option="mode"] [data-id="join"]');
+  if (join) await join.dispatchEvent("pointerdown");
   await page.waitForTimeout(300);
-  const label1 = toggle ? await toggle.textContent() : null;
+  const label1 = await chosen();
   check("it starts on Auto and steps to Join", label0 === "Auto" && label1 === "Join", [label0, label1]);
   await settle();
   await page.screenshot({ path: path.join(OUT, "01_join_preview.png") });

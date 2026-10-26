@@ -478,6 +478,7 @@ export class ExtrudeTool {
       () => this.cancel(),
       {
         label: "Symmetric",
+        icon: "symmetric",
         title: "Sweep both ways off the sketch plane, this depth each way (Alt+S)",
         initial: this.symmetric,
         onChange: (on) => this.setSymmetric(on),
