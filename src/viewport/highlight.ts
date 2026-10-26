@@ -4,7 +4,7 @@
 
 import * as THREE from "three";
 import { bodyOfFace, edgeObjects, type BodyMesh, type ModelView } from "./render";
-import type { EdgeRef } from "./edgeLines";
+import type { EdgePt, EdgeRef } from "./edgeLines";
 import {
   disposeFaceHoverOverlay,
   makeFaceHoverOverlay,
@@ -22,6 +22,11 @@ const DEFAULT_BODY = 0x9aa7b4;
 
 const accent = () => themeColor("--accent", DEFAULT_ACCENT);
 const ground = () => themeColor("--viewport-bg", 0x0b0912);
+
+/** A selected edge over the default body: a fillet or chamfer tool's ghost member lines. */
+export function edgeSelectColor(): number {
+  return pickColor(accent(), [DEFAULT_BODY, ground()], "select", "edge");
+}
 
 /** An edge in the hover tier over the default body: the emphasis line, a ghost edge and the origin axis hover. */
 export function edgeHoverColor(): number {
@@ -108,13 +113,14 @@ export class Highlighter {
     this.syncOverlays();
   }
 
-  private pickColour(under: number, kind: PickKind, part: "face" | "edge"): THREE.Color {
-    const key = `${under}:${kind}:${part}`;
+  private pickColour(under: number | number[], kind: PickKind, part: "face" | "edge"): THREE.Color {
+    const key = `${String(under)}:${kind}:${part}`;
     let c = this.colours.get(key);
     if (!c) {
+      const unders = typeof under === "number" ? [under] : under;
       // An edge is also seen against the ground along a silhouette.
-      const pick = pickColor(this.accent, part === "edge" ? [under, this.ground] : under, kind, part);
-      c = new THREE.Color(part === "edge" ? composite(under, pick, PICK_ALPHA.edge[kind]) : pick);
+      const pick = pickColor(this.accent, part === "edge" ? [...unders, this.ground] : unders, kind, part);
+      c = new THREE.Color(part === "edge" ? composite(unders[0]!, pick, PICK_ALPHA.edge[kind]) : pick);
       this.colours.set(key, c);
     }
     return c;
@@ -139,9 +145,49 @@ export class Highlighter {
     return this.pickColour(body ? this.faceUnder(body, faceId) : DEFAULT_BODY, kind, "face");
   }
 
+  /** Against every face beside it, so the harder of a light and a dark neighbour decides. */
   private edgeColour(e: EdgeRef, kind: PickKind): THREE.Color {
     const body = e.body ? this.bodyById(e.body) : undefined;
-    return this.pickColour(body ? this.underAt(body, 0) : DEFAULT_BODY, kind, "edge");
+    if (!body) return this.pickColour(DEFAULT_BODY, kind, "edge");
+    const faces = this.facesBeside(body, e);
+    const unders = faces.length ? faces.map((f) => this.faceUnder(body, f)) : [this.underAt(body, 0)];
+    return this.pickColour(unders, kind, "edge");
+  }
+
+  private edgeFaces = new Map<EdgeRef, number[]>();
+
+  /** The faces with a vertex at both ends of the edge's first segment, which per face tessellation shares. */
+  private facesBeside(body: BodyMesh, e: EdgeRef): number[] {
+    const hit = this.edgeFaces.get(e);
+    if (hit) return hit;
+    const geo = body.mesh.geometry;
+    const pos = geo.getAttribute("position");
+    const index = geo.getIndex();
+    const a = e.points?.[0];
+    const b = e.points?.[1] ?? a;
+    const out: number[] = [];
+    if (pos && index && a && b) {
+      if (!geo.boundingBox) geo.computeBoundingBox();
+      const size = geo.boundingBox!.getSize(new THREE.Vector3()).length();
+      const tol2 = (size * 1e-5 + 1e-9) ** 2;
+      const at = (v: number, p: EdgePt) =>
+        (pos.getX(v) - p[0]) ** 2 + (pos.getY(v) - p[1]) ** 2 + (pos.getZ(v) - p[2]) ** 2 <= tol2;
+      const atA = new Set<number>();
+      const atB = new Set<number>();
+      const tris = index.count / 3;
+      for (let t = 0; t < tris; t++) {
+        const f = body.faceIds[t];
+        if (f === undefined) continue;
+        for (let k = 0; k < 3; k++) {
+          const v = index.getX(t * 3 + k);
+          if (at(v, a)) atA.add(f);
+          if (at(v, b)) atB.add(f);
+        }
+      }
+      for (const f of atA) if (atB.has(f)) out.push(f);
+    }
+    this.edgeFaces.set(e, out);
+    return out;
   }
 
   /** A reused body keeps the tint its last highlighter painted, and the repaint that used to wipe it now skips it. */
@@ -639,6 +685,11 @@ export class Highlighter {
       body.baseVersion = (body.baseVersion ?? 0) + 1;
     }
     // The pick colour is chosen against the base, so a new base recolours what is picked on it.
+    if (this.paintShown) {
+      for (const e of this.selectedEdges) if (!this.errorEdges.has(e)) this.tint(e, "select");
+      const h = this.hoveredEdge;
+      if (h && !this.selectedEdges.has(h) && !this.errorEdges.has(h)) this.tint(h, "hover");
+    }
     if (this.selectedFaces.size || this.hoveredFaces.length) {
       for (const f of this.selectedFaces) this.paintFace(f, "select");
       // paintFace queues a sub-range, which would make three upload only that range of the rewritten buffer.

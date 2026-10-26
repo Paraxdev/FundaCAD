@@ -466,6 +466,7 @@ export class Viewport {
       this.scene.applyRenderPrefs();
       this.scene.originTiles.applyTheme(this.groundHex());
       this.cube.applyTheme();
+      this.emphasis?.setColor(edgeHoverColor());
       this.requestRender();
     });
     this.loop();

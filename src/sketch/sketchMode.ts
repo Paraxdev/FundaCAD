@@ -449,8 +449,6 @@ export class SketchMode {
       ]);
     };
     this.glyphs = new SketchGlyphs(viewport);
-    // The selected entity takes the accent, which only a redraw re-reads. Lives as long as the app, as this does.
-    onThemeChange(() => this.redraw());
     this.glyphs.onDelete = (i) => this.deleteConstraint(i);
     this.glyphs.onEditPattern = (id) => this.editPattern(id);
     this.glyphs.onOverlapPick = (e) => this.labelOverlapSelect(e);
@@ -683,6 +681,8 @@ export class SketchMode {
 
     this.session.dispose();
     const session = (this.session = new Disposer());
+    // The selected entity takes the accent, which only a redraw re-reads.
+    session.add(onThemeChange(() => this.redraw()));
     const el = this.viewport.domElement;
     session.listen(el, "pointerdown", this.boundDown);
     session.listen(el, "pointermove", this.boundMove);

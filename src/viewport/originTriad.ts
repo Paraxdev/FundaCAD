@@ -146,11 +146,15 @@ export class OriginTriad {
   applyTheme() {
     const c = themeColor("--text-mute", 0x7d7590);
     for (const m of this.dotMats) m.color.setHex(c);
+    if (this.hot) this.highlight(this.hot);
   }
+
+  private hot: Axis3 | null = null;
 
   /** Only Revolve's axis pick calls this, in the colour an edge takes under the cursor,
    *  since an arm and an edge are the two things that pick can take. */
   highlight(axis: Axis3 | null) {
+    this.hot = axis;
     this.arms.forEach((arm, i) => this.repaint[i]?.(arm.userData.axis === axis));
   }
 

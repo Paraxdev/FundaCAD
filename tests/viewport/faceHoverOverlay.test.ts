@@ -6,6 +6,8 @@ import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { Highlighter } from "../../src/viewport/highlight";
 import type { BodyMesh, ModelView } from "../../src/viewport/render";
+import type { EdgeRef } from "../../src/viewport/edgeLines";
+import { MIN_CONTRAST, contrastRatio } from "../../src/viewport/pickColors";
 
 function view(): { view: ModelView; mesh: THREE.Mesh } {
   const geometry = new THREE.BoxGeometry(1, 1, 1);
@@ -142,6 +144,38 @@ describe("face hover overlay lifetime", () => {
     expect(() => h.hoverFace(0)).not.toThrow();
     const overlay = mesh.children.find((c) => c.name === "face-hover-overlay") as THREE.Mesh;
     expect(overlay.geometry.getAttribute("position").count).toBe(tris * 3);
+    h.dispose();
+  });
+});
+
+describe("a selected edge is measured against the faces beside it", () => {
+  function edgeRig() {
+    const { view: v, mesh } = view();
+    const painted: THREE.Color[] = [];
+    // +x (face 0) and +y (face 2) of the box meet along x = y = 0.5
+    const edge = {
+      body: "b1",
+      slot: 0,
+      points: [
+        [0.5, 0.5, -0.5],
+        [0.5, 0.5, 0.5],
+      ],
+      draw: { setColor: (_s: number, c: THREE.Color) => painted.push(c.clone()), setIdleColor: () => {} },
+    } as unknown as EdgeRef;
+    return { v, mesh, edge, painted };
+  }
+
+  it("repaints a selected edge when the colours under it change", () => {
+    const { v, edge, painted } = edgeRig();
+    const h = new Highlighter(v);
+    h.setBase(() => new THREE.Color(0xeeeeee));
+    h.selectEdge(edge);
+    const onLight = painted.at(-1)!.getHex();
+    // an analysis colouring paints only the two faces beside the edge dark
+    h.setBase((f) => new THREE.Color(f === 0 || f === 2 ? 0x1a1a1a : 0xeeeeee));
+    const onDark = painted.at(-1)!.getHex();
+    expect(contrastRatio(onDark, 0x1a1a1a)).toBeGreaterThanOrEqual(MIN_CONTRAST.select);
+    expect(onDark).not.toBe(onLight);
     h.dispose();
   });
 });
