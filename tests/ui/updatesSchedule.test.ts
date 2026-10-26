@@ -135,9 +135,27 @@ describe("automatic update checks", () => {
     expect(await checksWithin(HOUR)).toBe(1);
   });
 
-  it("keep the 8 s launch delay at the first plan, never sooner", async () => {
-    await launch({ ...last(DAY + 1) });
+  it("keep the 8 s launch delay at the first plan when the check is due sooner", async () => {
+    await launch({ ...last(DAY - 2000) });
     expect([await checksWithin(7999), await checksWithin(1)]).toEqual([0, 1]);
+  });
+
+  it("ignore a failure time in the future after the clock is set back", async () => {
+    h.fail = true;
+    await launch({ ...last(2 * DAY) });
+    expect(await checksWithin(8000)).toBe(1);
+    vi.setSystemTime(T0 + 8000 - 2 * HOUR);
+    expect(await checksWithin(HOUR)).toBe(1);
+  });
+
+  it("retry a failed check after an hour with Every launch, and stop once the feed is reached", async () => {
+    h.fail = true;
+    await launch({ "fundacad.updates.period": "launch" });
+    expect(await checksWithin(8000)).toBe(1);
+    expect(await checksWithin(HOUR - 1)).toBe(0);
+    h.fail = false;
+    expect(await checksWithin(1)).toBe(1);
+    expect([await checksWithin(30 * DAY), vi.getTimerCount()]).toEqual([0, 0]);
   });
 
   it("cancel the pending timer when switched off, and plan again when switched on", async () => {

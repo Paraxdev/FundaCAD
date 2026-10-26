@@ -179,7 +179,7 @@ export function scheduleStartupUpdateCheck(beforeInstall: BeforeInstall): void {
   let failedAt: number | null = null;
 
   const nextDue = (): number => {
-    const retry = failedAt === null ? 0 : failedAt + RETRY_MS;
+    const retry = failedAt !== null && failedAt <= Date.now() ? failedAt + RETRY_MS : 0;
     if (updatePeriod() === "launch") return reached ? Infinity : retry;
     const stored = lastUpdateCheck();
     const next = stored !== null && stored <= Date.now() ? stored + PERIOD_MS[updatePeriod()] : 0;
