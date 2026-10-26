@@ -672,3 +672,172 @@ fn a_chamfer_past_an_inside_corner_too_sharp_to_mitre_is_refused_at_the_corner()
         vec![((0, vec![], 5870.35, None), false), ((1, vec![], 5885.7, None), true), ((1, vec![], 5885.7, None), true)];
     assert_eq!(got, want);
 }
+
+fn with_faces(r: &Rebuild) -> (usize, Vec<String>, f64, Option<f64>, Option<usize>) {
+    let (errors, warned, v, offer) = owned(r);
+    (errors, warned, v, offer, r.bodies.first().map(|b| kernel::count(&b.shape, Kind::Face)))
+}
+
+/// 10 + 10 just meets across the 20 x 20 top and bottom, so OCCT cannot build it and the section build cut every
+/// chamfer past its ends, leaving at each corner the pyramid under OCCT's corner triangle: 1645.71 for 1493.33
+/// (8 x 19.05), and with the top and Z edges 2422.86 for 2346.67, no word said. Both Z edges of one wall take 10
+/// there, closing it to a line, so 21 faces. A slanted corner is refused, OCCT's corner there is no plane.
+#[test]
+fn two_distance_chamfers_that_just_meet_at_three_edge_corners_cut_the_corner_triangle() {
+    let all = || json!({"kind": "edge", "by": "all", "body": "body1"});
+    let top = json!({"kind": "edge", "by": "ofFace", "body": "body1",
+        "face": {"kind": "face", "by": "normal", "dir": [0, 0, 1]}});
+    let turned: Vec<(f64, f64)> =
+        rect(0.0, 0.0, 20.0, 20.0).iter().map(|&(x, y)| (7.0 + 0.8 * x - 0.6 * y, -3.0 + 0.6 * x + 0.8 * y)).collect();
+    let block = |d: f64, d2: f64, edges: Value| {
+        with_faces(&prism_chamfer(&rect(13.0, -7.0, 20.0, 20.0), 10.0, d, d2, edges, json!({})))
+    };
+    let tilted = |d: f64, d2: f64| {
+        with_faces(&plate(
+            &[&rect(0.0, 0.0, 20.0, 20.0)],
+            TILTED,
+            [0.8, 0.6, 0.0],
+            10.0,
+            vec![two_distance("c", d, d2, all(), json!({}))],
+        ))
+    };
+    let top_and_z = json!([top.clone(), z_edges()]);
+    let got = vec![
+        block(4.0, 10.0, all()),
+        block(10.0, 4.0, all()),
+        tilted(4.0, 10.0),
+        with_faces(&prism_chamfer(&turned, 10.0, 4.0, 10.0, top_and_z, json!({}))),
+        block(3.9996, 9.999, all()),
+        block(4.0, 10.0, top),
+        with_faces(&prism_chamfer(&PARALLELOGRAM, 10.0, 3.0, 8.0, all(), json!({}))),
+    ];
+    let want = vec![
+        (0, vec![], 1493.33, None, Some(21)),
+        (0, vec![], 1493.33, None, Some(21)),
+        (0, vec![], 1493.33, None, Some(21)),
+        (0, vec![], 2346.67, None, Some(15)),
+        (0, vec![], 1493.69, None, Some(26)),
+        (0, vec![], 2933.33, None, Some(9)),
+        (1, vec![], 3520.0, None, Some(6)),
+    ];
+    assert_eq!(got, want);
+}
+
+/// A hair past meeting the setbacks cross on the top face, refused with a size whose chamfer OCCT builds exactly.
+#[test]
+fn two_distance_chamfers_a_hair_past_meeting_at_three_edge_corners_are_refused_with_a_size_that_builds() {
+    let all = || json!({"kind": "edge", "by": "all", "body": "body1"});
+    let r = prism_chamfer(&rect(13.0, -7.0, 20.0, 20.0), 10.0, 4.0, 10.001, all(), json!({}));
+    let offer = messages(&r).first().and_then(|m| offered(m));
+    let fits = offer.map(|s| {
+        with_faces(&prism_chamfer(&rect(13.0, -7.0, 20.0, 20.0), 10.0, s, 10.001 * s / 4.0, all(), json!({})))
+    });
+    assert_eq!((r.errors.len(), offer, fits), (1, Some(3.99), Some((0, vec![], 1501.99, None, Some(26)))));
+}
+
+/// A 20 x 20 x 10 block whose side walls bulge 2 and 3 into arcs, turned by atan(3/4) and moved off the origin.
+fn d_block(blends: Vec<Value>) -> Rebuild {
+    let t = |(x, y): (f64, f64)| (7.0 + 0.8 * x - 0.6 * y, -3.0 + 0.6 * x + 0.8 * y);
+    let line = |a, b| {
+        let (a, b) = (t(a), t(b));
+        json!({"type": "line", "x1": a.0, "y1": a.1, "x2": b.0, "y2": b.1})
+    };
+    let arc = |a, b, m| {
+        let (a, b, m) = (t(a), t(b), t(m));
+        json!({"type": "arc", "x1": a.0, "y1": a.1, "x2": b.0, "y2": b.1, "mx": m.0, "my": m.1})
+    };
+    let entities = vec![
+        line((0.0, 0.0), (20.0, 0.0)),
+        arc((20.0, 0.0), (20.0, 20.0), (22.0, 10.0)),
+        line((20.0, 20.0), (0.0, 20.0)),
+        arc((0.0, 20.0), (0.0, 0.0), (-3.0, 10.0)),
+    ];
+    let mut features = vec![
+        json!({"id": "sk", "type": "sketch", "plane": "XY", "entities": entities}),
+        json!({"id": "ex", "type": "extrude", "sketch": "sk", "distance": 10, "operation": "new"}),
+    ];
+    features.extend(blends);
+    build(&json!({"parameters": {}, "features": features}))
+}
+
+/// Where a curved wall's chamfer met two straight ones the section build cut no corner patch: every edge at 5 built
+/// 2841.78 where OCCT's trend gives 2755.38, at 4/10 2103.55, no word said. The caps alone, two chosen edges a
+/// corner, need no patch: 2917.95 is OCCT's trend at 0.999, 0.9999 and 0.99999 of 5.
+#[test]
+fn chamfers_where_a_curved_chamfer_meets_two_straight_ones_at_a_corner_are_refused() {
+    let all = || json!({"kind": "edge", "by": "all", "body": "body1"});
+    let caps = json!([
+        {"kind": "edge", "by": "ofFace", "body": "body1", "face": {"kind": "face", "by": "normal", "dir": [0, 0, 1]}},
+        {"kind": "edge", "by": "ofFace", "body": "body1", "face": {"kind": "face", "by": "normal", "dir": [0, 0, -1]}},
+    ]);
+    let equal = |d: f64, edges: Value| json!({"id": "c", "type": "chamfer", "edges": edges, "distance": d});
+    let got = vec![
+        with_faces(&d_block(vec![two_distance("c", 4.0, 10.0, all(), json!({}))])),
+        with_faces(&d_block(vec![equal(5.0, all())])),
+        with_faces(&d_block(vec![equal(5.0, caps)])),
+        with_faces(&d_block(vec![equal(2.0, all())])),
+    ];
+    let want = vec![
+        (1, vec![], 4675.9, None, Some(6)),
+        (1, vec![], 4675.9, None, Some(6)),
+        (0, vec![], 2917.95, None, Some(10)),
+        (0, vec![], 4310.76, None, Some(26)),
+    ];
+    assert_eq!(got, want);
+}
+
+/// The 20 high square pyramid on a 20 x 20 base, tilted 30 degrees about X and moved off the origin, `notch`
+/// cutting away the quadrant under one apex edge so the apex has three convex edges and a concave one.
+fn pyramid(notch: bool, blend: Value) -> Rebuild {
+    let solid = |id: &str, plane: &str, p: &[(f64, f64)], distance: f64, operation: &str| {
+        let n = p.len();
+        let lines: Vec<Value> = (0..n)
+            .map(|i| {
+                let (a, b) = (p[i], p[(i + 1) % n]);
+                json!({"type": "line", "x1": a.0, "y1": a.1, "x2": b.0, "y2": b.1})
+            })
+            .collect();
+        [
+            json!({"id": format!("s{id}"), "type": "sketch", "plane": plane, "entities": lines}),
+            json!({"id": format!("e{id}"), "type": "extrude", "sketch": format!("s{id}"), "distance": distance,
+                "symmetric": true, "operation": operation}),
+        ]
+    };
+    let tri = [(-10.0, 0.0), (10.0, 0.0), (0.0, 20.0)];
+    let mut features = vec![];
+    features.extend(solid("1", "XZ", &tri, 10.0, "new"));
+    features.extend(solid("2", "YZ", &tri, 10.0, "intersect"));
+    if notch {
+        features.extend(solid("3", "XY", &rect(-30.0, -30.0, 30.0, 30.0), 40.0, "cut"));
+    }
+    features.push(json!({"id": "m", "type": "move", "rx": 30, "dx": 13, "dy": -7, "dz": 4}));
+    features.push(blend);
+    build(&json!({"parameters": {}, "features": features}))
+}
+
+/// A point of the pyramid before it was tilted and moved.
+fn on_pyramid(x: f64, y: f64, z: f64) -> Value {
+    let (s, c) = (0.5, 0.75f64.sqrt());
+    json!({"kind": "edge", "by": "nearest", "body": "body1", "point": [x + 13.0, y * c - z * s - 7.0, y * s + z * c + 4.0]})
+}
+
+/// At 20 / sqrt(4.8) each side face's setback lines meet on its base edge, OCCT fails and the section build takes
+/// the apex, which has a corner patch only for exactly three convex chamfers: four built 666.67 and three with the
+/// notch's concave edge 705.99, no refusal. The other side, three ends at a square corner, builds in
+/// two_distance_chamfers_that_just_meet_at_three_edge_corners_cut_the_corner_triangle.
+#[test]
+fn chamfers_meeting_at_an_apex_of_four_edges_or_with_a_concave_one_are_refused() {
+    let dt = 20.0 / 4.8f64.sqrt();
+    let apex: Vec<Value> =
+        [(-5.0, -5.0), (5.0, -5.0), (5.0, 5.0), (-5.0, 5.0)].iter().map(|&(x, y)| on_pyramid(x, y, 10.0)).collect();
+    let notched = || json!([apex[1], apex[2], apex[3], on_pyramid(0.0, 0.0, 10.0)]);
+    let equal = |d: f64, edges: Value| json!({"id": "c", "type": "chamfer", "edges": edges, "distance": d});
+    let tip = |r: &Rebuild| messages(r).iter().any(|m| m.contains("through (13, -17, 21.321)"));
+    let run = |notch: bool, d: f64, edges: Value| {
+        let r = pyramid(notch, equal(d, edges));
+        (with_faces(&r), tip(&r))
+    };
+    let got = vec![run(false, dt, json!(apex)), run(true, dt, notched())];
+    let want = vec![((1, vec![], 2666.67, None, Some(5)), true), ((1, vec![], 2000.0, None, Some(7)), true)];
+    assert_eq!(got, want);
+}
