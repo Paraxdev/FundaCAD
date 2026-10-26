@@ -5,7 +5,7 @@ use base64::Engine;
 use fundacad_geom::builder::NoWatch;
 use fundacad_geom::jobs::GeomJobs;
 use fundacad_geom::kernel;
-use fundacad_geom::stress::stress_result;
+use fundacad_geom::stress::{stress_result, stress_result_with, StressLimits};
 use fundacad_protocol::JobResult;
 use serde_json::{json, Value};
 
@@ -28,9 +28,15 @@ fn face(dir: [f64; 3]) -> Value {
     json!({"kind": "face", "by": "normal", "dir": dir})
 }
 
+/// The product stops refining before a pass it expects to end past a minute, which an unoptimised build on a slow
+/// runner reaches after one pass, so these tests lift the limit to check refinement the same on every machine.
 fn run(req: Value) -> Value {
+    run_within(req, f64::INFINITY)
+}
+
+fn run_within(req: Value, refine_seconds: f64) -> Value {
     let Value::Object(m) = req else { panic!("a request is an object") };
-    json_of(stress_result(&m, &NoWatch))
+    json_of(stress_result_with(&m, &NoWatch, &StressLimits { refine_seconds }))
 }
 
 fn cantilever(material: Value, size: f64) -> Value {
@@ -956,6 +962,20 @@ fn refine_must_be_one_of_three_words() {
     }
     let r = run(with(cantilever(json!("PETG"), 3.0), json!({"refine": "fine"})));
     assert!(r["mesh"]["passes"].as_array().unwrap().len() >= 2, "{}", r["mesh"]);
+}
+
+#[test]
+fn a_refinement_past_its_time_limit_stops_with_time_and_says_why() {
+    let r = run_within(with(cantilever(json!("PETG"), 3.0), json!({"refine": "fine"})), 0.0);
+    assert_eq!(r["mesh"]["stop"], json!("time"), "{}", r["mesh"]);
+    assert_eq!(r["mesh"]["passes"].as_array().unwrap().len(), 1, "{}", r["mesh"]);
+    let warnings: Vec<&str> = r["warnings"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+    assert!(
+        warnings
+            .iter()
+            .any(|w| w.contains("the refinement stopped after 0 of its passes to stay within about a minute")),
+        "{warnings:?}"
+    );
 }
 
 /// A 60 x 40 x 30 block with a 40 x 30 fin of `fin` mm on top, turned and off the origin, held at its foot and

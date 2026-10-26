@@ -40,6 +40,19 @@ const BISECTIONS: u8 = 3;
 const MIN_REFINED_DIHEDRAL: f64 = 5.0;
 /// Refinement stops when the next pass is predicted to end past this many seconds of the run.
 const REFINE_SECONDS: f64 = 60.0;
+
+/// What bounds one analysis. Tests lift `refine_seconds` so a slow debug build refines as far as a fast one.
+#[derive(Clone, Copy, Debug)]
+pub struct StressLimits {
+    pub refine_seconds: f64,
+}
+
+impl Default for StressLimits {
+    fn default() -> Self {
+        StressLimits { refine_seconds: REFINE_SECONDS }
+    }
+}
+
 /// Tetrahedra per element size cubed of the mesher's lattice, with its allowance for the
 /// stencils that split boundary cells (`tetmesh` TETS_PER_CELL x BOUNDARY_ALLOWANCE).
 const TETS_PER_SIZE_CUBED: f64 = 12.0 * 1.15;
@@ -1151,6 +1164,10 @@ fn around(mesh: &TetMesh, sol: &Solution, node: u32) -> Vec<u32> {
 }
 
 pub fn stress_result(req: &Map<String, Value>, watch: &dyn Watch) -> JobResult {
+    stress_result_with(req, watch, &StressLimits::default())
+}
+
+pub fn stress_result_with(req: &Map<String, Value>, watch: &dyn Watch, limits: &StressLimits) -> JobResult {
     let _beat = crate::heartbeat::install(watch.heartbeat());
     let _cancel = crate::cancel::install(watch.cancel_token());
     let (_, r) = match crate::inspect::rebuild_request(req, watch) {
@@ -1174,7 +1191,7 @@ pub fn stress_result(req: &Map<String, Value>, watch: &dyn Watch) -> JobResult {
         let have: Vec<String> = r.bodies.iter().map(|b| format!("{} ({})", b.id, b.name)).collect();
         return refuse(&format!("there is no body '{wanted}', the bodies are {}", have.join(", ")), errors);
     };
-    match analyse(req, &body.id, &body.name, &body.shape, watch) {
+    match analyse(req, &body.id, &body.name, &body.shape, watch, limits) {
         Ok(mut m) => {
             if !errors.is_empty() {
                 m.insert("errors".into(), Value::Array(errors.iter().map(FeatureError::wire).collect()));
@@ -1191,6 +1208,7 @@ fn analyse(
     name: &str,
     live: &Shape,
     watch: &dyn Watch,
+    limits: &StressLimits,
 ) -> Result<Map<String, Value>, String> {
     let material = material_of(req.get("material"))?;
     let gravity = gravity_of(req.get("gravity"))?;
@@ -1383,7 +1401,8 @@ fn analyse(
             }
             break;
         };
-        if adapt::over_time(started.elapsed().as_secs_f64(), last_secs, cur.mesh.tets.len(), cap, REFINE_SECONDS) {
+        if adapt::over_time(started.elapsed().as_secs_f64(), last_secs, cur.mesh.tets.len(), cap, limits.refine_seconds)
+        {
             stopped = Some("to stay within about a minute");
             stop = "time";
             break;
