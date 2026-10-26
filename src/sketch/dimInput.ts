@@ -59,6 +59,8 @@ interface Field {
   tag: HTMLElement;
   choice: string | null;
   userDriven: boolean;
+  /** In mm. What the field falls back to while its text is no value: confirm and the preview keep this one. */
+  lastGood: number | null;
   /** Set only by a keystroke: an edit tool seeds and locks every field before the user touches any. */
   typed?: boolean;
   hidden?: boolean;
@@ -299,6 +301,7 @@ export class DimInput {
         tag,
         choice: def.choices?.chosen ?? null,
         userDriven: false,
+        lastGood: null,
       };
       this.paintName(field);
       if (def.choices) {
@@ -328,14 +331,29 @@ export class DimInput {
       this.root.appendChild(wrap);
 
       input.addEventListener("keydown", (e) => this.onKey(e, field));
+      // A value the tool wrote is replaced by typing, not appended to; the release of a click would drop the selection.
+      let keepSelection = false;
+      input.addEventListener("focus", () => {
+        if (field.userDriven) return;
+        input.select();
+        keepSelection = true;
+      });
+      input.addEventListener("mouseup", (e) => {
+        if (keepSelection) e.preventDefault();
+        keepSelection = false;
+      });
       input.addEventListener("input", () => {
         field.userDriven = true; // typing freezes the field from cursor tracking
         field.typed = true;
-        if (this.typedProblem) this.setTypedProblem(null);
         wrap.classList.add("typed");
         this.sizeToContent(field);
         this.adoptTypedUnit(field);
         this.adoptTypedChoice(field);
+        const v = this.parse(field);
+        if (v !== null && !this.rangeProblem(field.def, v)) field.lastGood = v;
+        this.setTypedProblem(
+          this.fieldProblem(field) ?? this.fields.map((x) => this.fieldProblem(x)).find(Boolean) ?? null,
+        );
         this.onInput?.();
       });
       this.sizeToContent(field);
@@ -400,7 +418,7 @@ export class DimInput {
   private fieldProblem(f: Field): string | null {
     if (f.hidden || !f.userDriven || f.def.free) return null;
     const raw = this.numberText(f).trim();
-    if (!raw) return null;
+    if (!raw) return f.lastGood === null ? null : `${f.def.label} needs a value`;
     const v = this.parse(f);
     if (v === null) {
       const err = measureError(raw, f.unit);
@@ -656,6 +674,7 @@ export class DimInput {
     for (const f of this.fields) {
       const v = values[f.def.name];
       if (!f.userDriven && v != null) {
+        f.lastGood = f.def.kind === "count" ? Math.round(v) : v;
         f.input.value = String(f.def.kind === "count" ? Math.round(v) : toUnit(v, f.unit));
         this.sizeToContent(f);
         // Keep the live value selected while it tracks the cursor, so typing replaces it instead of appending.
@@ -669,6 +688,7 @@ export class DimInput {
     const f = this.fields.find((x) => x.def.name === name);
     if (!f) return;
     f.input.value = String(f.def.kind === "count" ? Math.round(value) : toUnit(value, f.unit));
+    f.lastGood = f.def.kind === "count" ? Math.round(value) : value;
     f.userDriven = true;
     this.sizeToContent(f);
   }
@@ -727,13 +747,14 @@ export class DimInput {
     return !!f && f.userDriven;
   }
 
-  /** in MM (length fields converted from the display unit), or null when the text is no value or is refused */
+  /** in MM (length fields converted from the display unit). A typed text that is no value or is refused reads as the
+   *  field's last valid value, null when it never had one. */
   getValue(name: string): number | null {
     const f = this.fields.find((x) => x.def.name === name);
     if (!f) return null;
     const v = this.parse(f);
-    if (v === null || (f.userDriven && this.rangeProblem(f.def, v))) return null;
-    return v;
+    if (v !== null && !(f.userDriven && this.rangeProblem(f.def, v))) return v;
+    return f.userDriven && !f.def.free ? f.lastGood : null;
   }
 
   /** Null for a count. */
@@ -795,15 +816,20 @@ export class DimInput {
     return this.commit();
   }
 
+  /** A field whose text is no value commits its last valid value, still marked; with none to fall back on it refuses. */
   private commit(): boolean {
+    let marked: string | null = null;
     for (const f of this.fields) {
       const problem = this.fieldProblem(f);
       if (!problem) continue;
+      marked ??= problem;
+      if (f.lastGood !== null) continue;
       this.setTypedProblem(problem);
       f.input.focus();
       f.input.select();
       return false;
     }
+    if (marked) this.setTypedProblem(marked);
     const out: Record<string, number> = {};
     for (const f of this.fields) {
       const v = this.getValue(f.def.name); // already mm-converted

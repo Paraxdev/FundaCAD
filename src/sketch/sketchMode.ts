@@ -2142,7 +2142,7 @@ export class SketchMode {
           x: a.x,
           y: a.y,
           radius: a.distanceTo(vertex),
-          sides: Math.max(3, Math.round(this.polygonSides)),
+          sides: this.boxSides(),
           angle: (Math.atan2(vertex.y - a.y, vertex.x - a.x) * 180) / Math.PI,
         });
         dims = { radius: a.distanceTo(vertex) };
@@ -2247,7 +2247,15 @@ export class SketchMode {
                   : [{ name: "width", label: "W", positive: true }]
                 : null;
     if (!defs) return;
-    this.dim.show(defs, () => this.multiClickAt(this.lastCursor.clone()));
+    this.dim.show(
+      defs,
+      () => this.multiClickAt(this.lastCursor.clone()),
+      undefined,
+      undefined,
+      undefined,
+      () => this.previewAtCursor(),
+    );
+    if (t === "polygon") this.dim.updateFromCursor({ sides: this.polygonSides });
   }
 
   private multiClickAt(p: THREE.Vector2) {
@@ -2513,6 +2521,12 @@ export class SketchMode {
     this.patternFlow.edit(patId);
   }
 
+  /** The box's side count; text that is no count reads as the last one that was. */
+  private boxSides(): number {
+    const n = this.dim.getValue("sides");
+    return n != null && Number.isFinite(n) ? Math.max(3, Math.min(64, Math.round(n))) : this.polygonSides;
+  }
+
   private polygonClick(p: THREE.Vector2) {
     if (!this.clickPts.length) {
       this.clickPts = [p.clone()];
@@ -2523,9 +2537,7 @@ export class SketchMode {
     this.clickPts = [];
     this.overlay.setPreview([]);
     if (!center) return;
-    // honor a typed side count (N); blank/invalid keeps the current count
-    const rawN = this.dim.getValue("sides");
-    if (rawN != null && Number.isFinite(rawN)) this.polygonSides = Math.max(3, Math.min(64, Math.round(rawN)));
+    this.polygonSides = this.boxSides();
     const vertex = this.polygonVertex(center, p);
     this.dim.hide();
     this.commitPolygon(center, vertex);
@@ -2855,44 +2867,8 @@ export class SketchMode {
       return;
     }
 
-    if (this.base) {
-      const inferred = this.tool === "line" ? this.inferLine(hit.p) : null;
-      this.showInfer(inferred);
-      const geom = this.computeGeometry(this.base, inferred?.end ?? hit.p);
-      this.dim.updateFromCursor(geom.dims);
-      if (this.tool === "circle" && geom.entity?.type === "circle") {
-        // The diameter is drawn through the centre along the drag, and its field
-        // sits on that line where the eye already is.
-        const c = this.base,
-          r = geom.entity.radius;
-        const u = hit.p.clone().sub(c);
-        if (u.lengthSq() < 1e-12) u.set(1, 0);
-        u.normalize();
-        const diameter = curveObjects(
-          [
-            {
-              type: "line",
-              id: "__diameter__",
-              construction: true,
-              x1: c.x - u.x * r,
-              y1: c.y - u.y * r,
-              x2: c.x + u.x * r,
-              y2: c.y + u.y * r,
-            },
-          ],
-          this.plane,
-          PREVIEW_COLOR,
-        );
-        const at = this.viewport.projectToScreen(this.plane.to3D(c.x + (u.x * r) / 2, c.y + (u.y * r) / 2));
-        this.dim.positionCentred(at.x, at.y);
-        this.overlay.setPreview([geom.preview, ...diameter]);
-      } else {
-        this.dim.position(e.clientX, e.clientY);
-        this.overlay.setPreview([geom.preview]); // only the rubber-band redraws
-      }
-    } else {
-      this.overlay.setPreview([]);
-    }
+    if (this.base) this.basePreview(hit.p, e);
+    else this.overlay.setPreview([]);
   }
 
   private onKey(e: KeyboardEvent) {
@@ -3194,6 +3170,52 @@ export class SketchMode {
     }
   }
 
+  /** The drag tools' rubber band from `base`; without a pointer event the box stays where it is. */
+  private basePreview(cursor: THREE.Vector2, e?: PointerEvent) {
+    if (!this.base) return;
+    const inferred = this.tool === "line" ? this.inferLine(cursor) : null;
+    this.showInfer(inferred);
+    const geom = this.computeGeometry(this.base, inferred?.end ?? cursor);
+    this.dim.updateFromCursor(geom.dims);
+    if (this.tool === "circle" && geom.entity?.type === "circle") {
+      // The diameter is drawn through the centre along the drag, and its field
+      // sits on that line where the eye already is.
+      const c = this.base,
+        r = geom.entity.radius;
+      const u = cursor.clone().sub(c);
+      if (u.lengthSq() < 1e-12) u.set(1, 0);
+      u.normalize();
+      const diameter = curveObjects(
+        [
+          {
+            type: "line",
+            id: "__diameter__",
+            construction: true,
+            x1: c.x - u.x * r,
+            y1: c.y - u.y * r,
+            x2: c.x + u.x * r,
+            y2: c.y + u.y * r,
+          },
+        ],
+        this.plane,
+        PREVIEW_COLOR,
+      );
+      const at = this.viewport.projectToScreen(this.plane.to3D(c.x + (u.x * r) / 2, c.y + (u.y * r) / 2));
+      this.dim.positionCentred(at.x, at.y);
+      this.overlay.setPreview([geom.preview, ...diameter]);
+    } else {
+      if (e) this.dim.position(e.clientX, e.clientY);
+      this.overlay.setPreview([geom.preview]); // only the rubber-band redraws
+    }
+  }
+
+  /** A typed value reshapes the preview where the cursor already is, a pointer move need not come first. */
+  private previewAtCursor() {
+    if (this.base) this.basePreview(this.lastCursor.clone());
+    else this.multiClickPreview(this.lastCursor.clone());
+    this.viewport.requestRender();
+  }
+
   private showDimFields() {
     const defs =
       this.tool === "rectangle"
@@ -3207,7 +3229,14 @@ export class SketchMode {
               { name: "length", label: "L" },
               { name: "angle", label: "Angle", icon: "angle", kind: "angle" as const },
             ];
-    this.dim.show(defs, () => this.commitFromCursor(this.lastCursor));
+    this.dim.show(
+      defs,
+      () => this.commitFromCursor(this.lastCursor),
+      undefined,
+      undefined,
+      undefined,
+      () => this.previewAtCursor(),
+    );
   }
 
   private snapAt(clientX: number, clientY: number, noSnap = false) {
