@@ -67,6 +67,7 @@ export const MODEL: Group[] = [
           // Two entries: linear and circular are different gestures, so the choice belongs on the button.
           { action: "pattern-linear", label: "Linear Pattern", iconName: "patternLinear" },
           { action: "pattern-circular", label: "Circular Pattern", iconName: "patternCircular" },
+          { action: "pattern-rect", label: "Rect Pattern", iconName: "patternRect" },
         ],
       },
       // Split Body is not a boolean: it cuts one body with a plane, so it stands on its own.
@@ -243,8 +244,9 @@ export const SKETCH: Group[] = [
   {
     label: "PATTERN",
     items: [
-      { action: "patternRect", label: "Rect Pattern", iconName: "patternRect" },
+      { action: "patternLinear", label: "Linear Pattern", iconName: "patternLinear" },
       { action: "patternCircular", label: "Circular Pat.", iconName: "patternCircular" },
+      { action: "patternRect", label: "Rect Pattern", iconName: "patternRect" },
       { action: "boltCircle", label: "Bolt Circle", iconName: "boltCircle" },
       { action: "hexHoles", label: "Hex Holes", iconName: "hexHoles" },
       { action: "honeycomb", label: "Honeycomb", iconName: "honeycomb" },

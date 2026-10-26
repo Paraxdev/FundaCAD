@@ -197,6 +197,7 @@ export type SketchTool =
   | "midpoint"
   | "collinear"
   | "fix"
+  | "patternLinear"
   | "patternRect"
   | "patternCircular"
   | "hexHoles"

@@ -228,7 +228,12 @@ export function patternGlyphs(
       pos = { x: p.cx, y: p.cy };
     }
     if (!pos) continue;
-    const icon = p.type === "patternCircular" || p.type === "boltCircle" ? "patternCircular" : "patternRect";
+    const icon =
+      p.type === "patternCircular" || p.type === "boltCircle"
+        ? "patternCircular"
+        : p.type === "patternRect" && p.countY === 1
+          ? "patternLinear"
+          : "patternRect";
     out.push({ cIndex: -1, patternId: p.id, icon, pos: V(pos.x, pos.y) });
   }
   return out;

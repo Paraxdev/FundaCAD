@@ -13,7 +13,7 @@ import type { SketchTool } from "./sketchMode";
 // preset hole patterns: self-contained (click a center, no source selection)
 export const PRESET_PATTERNS = new Set<SketchTool>(["hexHoles", "honeycomb", "boltCircle", "gridHoles"]);
 // patterns that replicate the current selection (MCAD-style)
-export const ENTITY_PATTERNS = new Set<SketchTool>(["patternRect", "patternCircular"]);
+export const ENTITY_PATTERNS = new Set<SketchTool>(["patternLinear", "patternRect", "patternCircular"]);
 export const PATTERN_TOOLS = new Set<SketchTool>([...PRESET_PATTERNS, ...ENTITY_PATTERNS]);
 
 /** The slice of SketchMode this flow reads/writes, live accessors, not copies. */
@@ -165,12 +165,12 @@ export class PatternFlow {
   private showHud(pat: SketchPattern) {
     const cur: Record<string, number> = {};
     const vals = pat as unknown as Record<string, unknown>;
-    for (const d of this.patternDimDefs(pat.type)) {
+    for (const d of this.patternDimDefs(pat)) {
       const v = vals[d.name];
       if (typeof v === "number") cur[d.name] = v;
     }
     this.host.dim().show(
-      this.patternDimDefs(pat.type),
+      this.patternDimDefs(pat),
       () => this.commit(),
       undefined,
       undefined,
@@ -223,10 +223,17 @@ export class PatternFlow {
     if (tool === "honeycomb") return { id, type: "honeycomb", cx: c.x, cy: c.y, diameter: 12, spacing: 13, rings: 2 };
     if (tool === "patternCircular")
       return { id, type: "patternCircular", sources, cx: c.x, cy: c.y, count: 6, angle: 360 };
-    return { id, type: "patternRect", sources, countX: 3, countY: 1, spacingX: 15, spacingY: 15 }; // patternRect
+    // Linear is one row of the stored rect pattern, so old documents and the engine need nothing new.
+    if (tool === "patternLinear")
+      return { id, type: "patternRect", sources, countX: 3, countY: 1, spacingX: 15, spacingY: 0 };
+    return { id, type: "patternRect", sources, countX: 3, countY: 3, spacingX: 15, spacingY: 15 };
   }
 
-  private patternDimDefs(type: SketchPattern["type"]) {
+  private patternDimDefs(pat: SketchPattern) {
+    const type = pat.type;
+    if (type === "patternRect" && this.host.tool() === "patternLinear") {
+      return [{ name: "countX", label: "N", kind: "count" as const, integer: true, atLeast: 1 }];
+    }
     if (type === "boltCircle")
       return [
         { name: "count", label: "N", kind: "count" as const, integer: true, atLeast: 1 },
@@ -346,7 +353,7 @@ export class PatternFlow {
       pat.diameter = dim.getValue("diameter") ?? (pat.diameter as number);
     } else if (pat.type === "patternRect") {
       pat.countX = Math.max(1, dimN("countX", pat.countX as number));
-      pat.countY = Math.max(1, dimN("countY", pat.countY as number));
+      if (this.host.tool() !== "patternLinear") pat.countY = Math.max(1, dimN("countY", pat.countY as number));
     } else if (pat.type === "patternCircular") {
       pat.count = Math.max(1, dimN("count", pat.count as number));
       if (dim.isUserDriven("angle")) pat.angle = dim.getValue("angle") ?? (pat.angle as number);
