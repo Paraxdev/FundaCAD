@@ -14,6 +14,7 @@ import McpSection from "./McpSection.vue";
 import DenoiserRow from "../shell/DenoiserRow.vue";
 import PluginsSection from "./PluginsSection.vue";
 import ExperimentalSection from "./ExperimentalSection.vue";
+import UpdatesSection from "./UpdatesSection.vue";
 import {
   addCustomTheme,
   asThemeId,
@@ -155,6 +156,7 @@ const categories = computed(() => [
   { id: "viewport", label: "Viewport" },
   { id: "navigation", label: "Navigation" },
   { id: "access", label: "Accessibility" },
+  { id: "updates", label: "Updates" },
   { id: "mcp", label: "AI assistants" },
   { id: "plugins", label: "Plugins" },
   { id: "experimental", label: "Experimental" },
@@ -746,6 +748,10 @@ function onClassicCamera(ev: Event) {
               </p>
             </div>
           </div>
+        </section>
+
+        <section v-show="category === 'updates'" class="prefs-pane">
+          <UpdatesSection />
         </section>
 
         <section v-show="category === 'mcp'" class="prefs-pane prefs-pane-flow">

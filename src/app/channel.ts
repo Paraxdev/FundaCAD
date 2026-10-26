@@ -16,3 +16,9 @@ export function versionLabel(version: string, tag: string = release): string {
   const build = /^\d+\.\d+\.(\d+)$/.exec(version)?.[1];
   return build ? `dev-${build}` : version;
 }
+
+/** The SourceForge mirror copies every release into a folder per channel, the root holds the rest. */
+export function sourceforgeUrl(tag: string = release): string {
+  const base = "https://sourceforge.net/projects/fundacad/files/";
+  return tag === "beta" || tag === "development" ? `${base}${tag}/` : base;
+}

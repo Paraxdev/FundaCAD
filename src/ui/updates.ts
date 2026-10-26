@@ -1,14 +1,23 @@
 // In-app updates via tauri-plugin-updater from the rolling release's latest.json. The Rust `updates_supported` command
 // gates out deb, rpm, Flatpak and browser dev, where the updater cannot replace the install.
 
-import { PRODUCT_NAME, versionLabel } from "../app/channel";
+import { PRODUCT_NAME, sourceforgeUrl, versionLabel } from "../app/channel";
 import { choose } from "./choice";
 import { toast } from "./toast";
+import { openExternal } from "./welcome";
+import {
+  autoUpdateCheck,
+  lastUpdateCheck,
+  onUpdatePrefsChange,
+  PERIOD_MS,
+  recordUpdateCheck,
+  updatePeriod,
+} from "./updatePrefs";
 
 const isTauri = () => "__TAURI_INTERNALS__" in window;
 
 /** false outside Tauri, and on Linux unless running as an AppImage */
-async function updatesSupported(): Promise<boolean> {
+export async function updatesSupported(): Promise<boolean> {
   if (!isTauri()) return false;
   try {
     const { invoke } = await import("@tauri-apps/api/core");
@@ -86,21 +95,30 @@ export function updateAction(
   return run;
 }
 
+const MIRROR_ACTION = {
+  label: "Open SourceForge",
+  onClick: () => void openExternal(sourceforgeUrl()),
+};
+const MIRROR_TEXT = "GitHub could not be reached. Download the newest build from SourceForge instead.";
+
 function failed(err: unknown): void {
   console.error("[updates] install failed:", err);
   const why = err instanceof Error ? err.message : String(err);
-  toast(`Could not update. Download the newest build from the releases page. (${why})`, { kind: "error" });
+  toast(`${MIRROR_TEXT} (${why})`, { kind: "error", action: MIRROR_ACTION });
 }
 
 /** `interactive` is Help's check: it asks with a modal and reports up to date, not applicable and failures. The
- *  startup check offers a found update as a toast and is otherwise silent. */
-export async function checkForUpdates(interactive: boolean, beforeInstall: BeforeInstall): Promise<void> {
+ *  automatic check offers a found update as a toast and is otherwise silent. Resolves true when the feed was reached. */
+export async function checkForUpdates(interactive: boolean, beforeInstall: BeforeInstall): Promise<boolean> {
   if (!(await updatesSupported())) {
     if (interactive)
-      toast("This install does not update itself. Install the newer file from the releases page over it.", {
-        timeout: 8000,
-      });
-    return;
+      toast(
+        "This install does not update itself. Install the newer file from the GitHub releases page or the SourceForge mirror over it.",
+        {
+          timeout: 8000,
+        },
+      );
+    return false;
   }
   let update;
   try {
@@ -112,15 +130,13 @@ export async function checkForUpdates(interactive: boolean, beforeInstall: Befor
       // Most often a build published without a signing key has no latest.json, a 404 that reads as a network fault,
       // so the message says what to do instead of guessing from the error text.
       const why = err instanceof Error ? err.message : String(err);
-      toast(`Could not check for updates. Download the newest build from the releases page. (${why})`, {
-        kind: "error",
-      });
+      toast(`${MIRROR_TEXT} (${why})`, { kind: "error", action: MIRROR_ACTION });
     }
-    return;
+    return false;
   }
   if (!update) {
     if (interactive) toast(`${PRODUCT_NAME} ${await appVersion()} is up to date.`);
-    return;
+    return true;
   }
   const run = updateAction(update, beforeInstall);
   if (!interactive) {
@@ -128,17 +144,61 @@ export async function checkForUpdates(interactive: boolean, beforeInstall: Befor
       timeout: 30000,
       action: { label: RESTART_LABEL, onClick: () => void run() },
     });
-    return;
+    return true;
   }
   const pick = await choose(`Update ${versionLabel(update.version)} is available`, [
     { value: "install", label: RESTART_LABEL },
     { value: "later", label: "Later" },
   ]);
   if (pick === "install") await run();
+  return true;
 }
 
-/** Packaged builds only: dev builds carry version 0.1.0, which is always older than the rolling feed. */
+const LAUNCH_DELAY_MS = 8000;
+const MAX_TIMER_MS = 2 ** 31 - 1;
+
+/** Packaged builds only: dev builds carry version 0.1.0, which is always older than the rolling feed. Checks once
+ *  per period across launches, from one timer that every setting change replaces. */
 export function scheduleStartupUpdateCheck(beforeInstall: BeforeInstall): void {
   if (import.meta.env.DEV) return;
-  setTimeout(() => void checkForUpdates(false, beforeInstall), 8000);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let running = false;
+  // A failure records nothing, so this session's own attempt is what spaces its retry.
+  let attemptedAt: number | null = null;
+
+  const nextDue = (): number => {
+    if (updatePeriod() === "launch") return attemptedAt === null ? 0 : Infinity;
+    const span = PERIOD_MS[updatePeriod()];
+    const stored = lastUpdateCheck();
+    const from = [stored, attemptedAt].filter((t): t is number => t !== null && t <= Date.now());
+    return from.length ? Math.max(...from) + span : 0;
+  };
+
+  const plan = () => {
+    clearTimeout(timer);
+    timer = undefined;
+    if (!autoUpdateCheck() || running) return;
+    const wait = nextDue() - Date.now();
+    if (wait === Infinity) return;
+    timer = setTimeout(fire, Math.min(MAX_TIMER_MS, wait > 0 ? wait : LAUNCH_DELAY_MS));
+  };
+
+  const fire = async () => {
+    timer = undefined;
+    if (!autoUpdateCheck() || nextDue() > Date.now()) return plan();
+    running = true;
+    attemptedAt = Date.now();
+    try {
+      if (await checkForUpdates(false, beforeInstall)) recordUpdateCheck(Date.now());
+    } finally {
+      running = false;
+    }
+    plan();
+  };
+
+  void updatesSupported().then((ok) => {
+    if (!ok) return;
+    onUpdatePrefsChange(plan);
+    plan();
+  });
 }
