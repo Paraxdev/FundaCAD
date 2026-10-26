@@ -214,7 +214,11 @@ export interface StressOptions {
   material: StressMaterial;
   size?: number;
   maxElements?: number;
+  /** Absent is "standard". */
+  refine?: StressRefine;
 }
+
+export type StressRefine = "off" | "standard" | "fine";
 
 /** A linear static analysis of one body, display only. `surface` is the analysis mesh boundary with a value per
  *  vertex, `displacement` three numbers per vertex, `weight` the gravity force (null without gravity), and
@@ -223,7 +227,17 @@ export interface StressReply {
   body: string;
   name: string;
   material: { name: string; E: number; nu: number; yield: number; density?: number | null };
-  mesh: { nodes: number; elements: number; size: number; minDihedral: number };
+  /** `size` is the starting element size, `finest` the smallest after refinement, `stop` why refinement ended
+   *  (docs/PROTOCOL.md); older engines omit `finest`, `passes` and `stop`. */
+  mesh: {
+    nodes: number;
+    elements: number;
+    size: number;
+    minDihedral: number;
+    finest?: number;
+    passes?: { elements: number; maxVonMises: number }[];
+    stop?: string;
+  };
   /** `face` is null for a peak inside the body, away from every face. */
   maxVonMises: { value: number; at: Vec3; face?: number | null };
   maxDisplacement: { value: number; at: Vec3; vector: Vec3 };
@@ -234,7 +248,15 @@ export interface StressReply {
   weight?: Vec3 | null;
   reactions?: Vec3[];
   warnings?: string[];
-  surface?: { positions: number[]; indices: number[]; faceIds?: number[]; vonMises: number[]; displacement?: number[] };
+  /** `stress` is six numbers per vertex, xx yy zz xy yz zx in MPa, absent from older engines. */
+  surface?: {
+    positions: number[];
+    indices: number[];
+    faceIds?: number[];
+    vonMises: number[];
+    displacement?: number[];
+    stress?: number[];
+  };
   errors?: { feature_id?: string; message: string }[];
 }
 

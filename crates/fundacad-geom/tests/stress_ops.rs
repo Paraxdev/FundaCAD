@@ -107,6 +107,17 @@ fn a_cantilever_matches_timoshenko_and_balances() {
     assert_eq!(n % 3, 0);
     assert_eq!(s["vonMises"].as_array().unwrap().len(), n / 3);
     assert_eq!(s["displacement"].as_array().unwrap().len(), n);
+    // The stress tensor per vertex, whose von Mises is the vertex's value to the rounding; bending stretches the top.
+    let t: Vec<f64> = s["stress"].as_array().unwrap().iter().map(num).collect();
+    assert_eq!(t.len(), 2 * n);
+    let vm: Vec<f64> = s["vonMises"].as_array().unwrap().iter().map(num).collect();
+    for (v, c) in t.chunks(6).enumerate() {
+        let of = (0.5 * ((c[0] - c[1]).powi(2) + (c[1] - c[2]).powi(2) + (c[2] - c[0]).powi(2))
+            + 3.0 * (c[3] * c[3] + c[4] * c[4] + c[5] * c[5]))
+            .sqrt();
+        assert!((of - vm[v]).abs() < 1e-5, "vertex {v}: {of} from the tensor, {} sent", vm[v]);
+    }
+    assert!((0..n / 3).filter(|&v| num(&s["positions"][3 * v + 2]) > 4.99).all(|v| t[6 * v] > 0.0 || vm[v] < 1.0));
     let tris = s["indices"].as_array().unwrap().len();
     assert_eq!(tris % 3, 0);
     assert_eq!(s["faceIds"].as_array().unwrap().len(), tris / 3);
@@ -276,6 +287,9 @@ fn the_op_answers_over_the_protocol() {
     ] {
         assert!(keys.contains(&k), "{k} missing from {keys:?}");
     }
+    let passes = r["mesh"]["passes"].as_array().unwrap();
+    assert_eq!(passes.last().unwrap()["elements"], r["mesh"]["elements"], "{}", r["mesh"]);
+    assert!(num(&r["mesh"]["finest"]) <= num(&r["mesh"]["size"]), "{}", r["mesh"]);
 
     engine.handle(Message::Text(json!({"id": 2, "op": "stress", "document": bar(), "body": "body9"}).to_string()));
     // An error reply: {id, ok: false, error: {message}}, with no feature id as none failed.
@@ -712,4 +726,385 @@ fn a_peak_where_a_slider_face_ends_is_warned_about() {
         w.contains("the peak stress is where a slider face ends, stress at a sharp inside corner or where a support ends grows as the mesh is refined"),
         "{w}"
     );
+}
+
+fn with(mut req: Value, extra: Value) -> Value {
+    for (k, v) in extra.as_object().unwrap() {
+        req[k] = v.clone();
+    }
+    req
+}
+
+fn mesh_and_peaks(r: &Value) -> Value {
+    json!({
+        "elements": r["mesh"]["elements"], "nodes": r["mesh"]["nodes"], "size": r["mesh"]["size"],
+        "minDihedral": r["mesh"]["minDihedral"], "peak": r["maxVonMises"]["value"],
+        "deflection": r["maxDisplacement"]["value"],
+    })
+}
+
+#[test]
+fn refinement_off_gives_the_single_mesh_answer_of_before() {
+    // Pinned from the engine before refinement, one mesh at the size asked and at the default size.
+    let sized = run(with(cantilever(json!("aluminium"), 2.5), json!({"refine": "off"})));
+    assert_eq!(
+        mesh_and_peaks(&sized),
+        json!({"elements": 9024, "nodes": 15041, "size": 2.5, "minDihedral": 45.0, "peak": 61.599871, "deflection": 0.580854})
+    );
+    assert_eq!(sized["mesh"]["passes"], json!([{"elements": 9024, "maxVonMises": 61.599871}]));
+    let mut req = with(cantilever(json!("PLA"), 1.0), json!({"refine": "off", "maxElements": 8000}));
+    req.as_object_mut().unwrap().remove("size");
+    let by_default = run(req);
+    assert_eq!(
+        mesh_and_peaks(&by_default),
+        json!({"elements": 6222, "nodes": 10530, "size": 2.7036, "minDihedral": 44.0, "peak": 89.905419, "deflection": 13.064596})
+    );
+}
+
+#[test]
+fn fine_refines_the_cantilever_and_stays_on_beam_theory_where_standard_sees_nothing_to_gain() {
+    // The peak is on the fixed end's singular edge, which no pass refines.
+    let std = run(cantilever(json!("aluminium"), 2.5));
+    assert_eq!(std["mesh"]["passes"], json!([{"elements": 9024, "maxVonMises": 61.599871}]));
+    assert_eq!(std["mesh"]["stop"], json!("settled"));
+    let r = run(with(cantilever(json!("aluminium"), 2.5), json!({"refine": "fine"})));
+    let passes = r["mesh"]["passes"].as_array().unwrap();
+    // Four passes, or three when a loaded debug build reaches the minute.
+    assert!(passes.len() >= 3, "{}", r["mesh"]);
+    let counts: Vec<f64> = passes.iter().map(|p| num(&p["elements"])).collect();
+    assert_eq!(counts[0], 9024.0);
+    assert!(counts[1] > counts[0] * 1.1 && counts[1] <= 30_000.0, "{counts:?}");
+    assert_eq!(num(&r["mesh"]["elements"]), counts[counts.len() - 1]);
+    assert_eq!(num(&passes[passes.len() - 1]["maxVonMises"]), num(&r["maxVonMises"]["value"]));
+    assert!(num(&r["mesh"]["finest"]) < 2.5, "{}", r["mesh"]);
+    let (p, l, e, nu): (f64, f64, f64, f64) = (100.0, 100.0, 69000.0, 0.33);
+    let i = 10.0 * 10.0f64.powi(3) / 12.0;
+    let want = p * l.powi(3) / (3.0 * e * i) + p * l / (5.0 / 6.0 * e / (2.0 * (1.0 + nu)) * 100.0);
+    let got = num(&r["maxDisplacement"]["value"]);
+    assert!((got - want).abs() < 0.05 * want, "tip deflection {got} mm vs {want} mm");
+    assert_eq!(run(with(cantilever(json!("aluminium"), 2.5), json!({"refine": "fine"}))), r);
+}
+
+/// Off the origin, turned 30 degrees about z then 20 about x, and back.
+fn plate_frame() -> (impl Fn([f64; 3]) -> [f64; 3] + Copy, impl Fn([f64; 3]) -> [f64; 3] + Copy) {
+    let (cz, sz) = (30f64.to_radians().cos(), 30f64.to_radians().sin());
+    let (cx, sx) = (20f64.to_radians().cos(), 20f64.to_radians().sin());
+    let o = [17.0, -9.0, 31.0];
+    let turn = move |p: [f64; 3]| {
+        let q = [cz * p[0] - sz * p[1], sz * p[0] + cz * p[1], p[2]];
+        [q[0] + o[0], cx * q[1] - sx * q[2] + o[1], sx * q[1] + cx * q[2] + o[2]]
+    };
+    let unturn = move |p: [f64; 3]| {
+        let q = [p[0] - o[0], p[1] - o[1], p[2] - o[2]];
+        let q = [q[0], cx * q[1] + sx * q[2], -sx * q[1] + cx * q[2]];
+        [cz * q[0] + sz * q[1], -sz * q[0] + cz * q[1], q[2]]
+    };
+    (turn, unturn)
+}
+
+/// A Standard reply that skipped its refined pass: one pass on Off's mesh, stopped as settled.
+fn assert_one_pass_of(off: &Value, std: &Value) {
+    assert_eq!(std["mesh"]["passes"].as_array().map(Vec::len), Some(1), "{}", std["mesh"]);
+    assert_eq!(std["mesh"]["elements"], off["mesh"]["elements"]);
+    assert_eq!(std["mesh"]["stop"], json!("settled"));
+}
+
+/// A 120 x 40 x 10 plate with a centred 12 mm hole, pulled along its length, in `plate_frame`. Returns the request
+/// and the way back to the plate's own frame.
+fn holed_plate(refine: &str) -> (Value, impl Fn([f64; 3]) -> [f64; 3]) {
+    let (turn, unturn) = plate_frame();
+    let doc = json!({"features": [
+        {"id": "p", "type": "box", "length": 120, "width": 40, "height": 10},
+        {"id": "h", "type": "cylinder", "radius": 6, "height": 30},
+        {"id": "cut", "type": "boolean", "operation": "subtract", "target": "body1", "tools": ["body2"]},
+        {"id": "z", "type": "move", "rz": 30, "bodies": ["body1"]},
+        {"id": "x", "type": "move", "rx": 20, "dx": 17, "dy": -9, "dz": 31, "bodies": ["body1"]},
+    ]});
+    let (a, b) = (turn([0.0; 3]), turn([1400.0, 0.0, 0.0]));
+    let force = [0, 1, 2].map(|k| b[k] - a[k]);
+    let req = json!({
+        "document": doc, "body": "body1", "material": "aluminium", "refine": refine,
+        "fixed": [nearest(turn([-60.0, 3.0, 1.0]))],
+        "loads": [{"faces": [nearest(turn([60.0, -3.0, -1.0]))], "force": force}],
+    });
+    (req, unturn)
+}
+
+/// The largest von Mises of the reply's surface on the hole wall, read away from the fixed end's singular edge.
+fn hole_wall_peak(r: &Value, unturn: &impl Fn([f64; 3]) -> [f64; 3]) -> f64 {
+    let s = &r["surface"];
+    let p: Vec<f64> = s["positions"].as_array().unwrap().iter().map(num).collect();
+    let vm: Vec<f64> = s["vonMises"].as_array().unwrap().iter().map(num).collect();
+    (0..vm.len())
+        .filter(|&i| {
+            let q = unturn([p[3 * i], p[3 * i + 1], p[3 * i + 2]]);
+            ((q[0] * q[0] + q[1] * q[1]).sqrt() - 6.0).abs() < 0.3
+        })
+        .map(|i| vm[i])
+        .fold(0.0, f64::max)
+}
+
+#[test]
+fn fine_reads_the_hole_wall_peak_closer_than_one_mesh() {
+    let (req, unturn) = holed_plate("off");
+    let off = run(req);
+    let (req, _) = holed_plate("standard");
+    let mut skipped = run(req);
+    let stop = std::mem::replace(&mut skipped["mesh"]["stop"], json!("off"));
+    assert_eq!(skipped, off);
+    assert_eq!(stop, json!("settled"));
+    let off = hole_wall_peak(&off, &unturn);
+    let (req, unturn) = holed_plate("fine");
+    let r = run(req);
+    let std = hole_wall_peak(&r, &unturn);
+    // A uniform 2.4 mm mesh (Off, 46405 elements) reads 12.26 MPa on the wall, Off at its default 12.61, a Standard
+    // pass read 2.8% under that. The wall's middle is all a pass may refine, its rims are kept beside the sharp edges.
+    let want = 12.26;
+    assert!((std - want).abs() < (off - want).abs(), "standard {std}, off {off}, reference {want}");
+    assert!((std - want).abs() < 0.03 * want, "standard {std}, reference {want}");
+    let passes = r["mesh"]["passes"].as_array().unwrap();
+    assert_eq!(passes.len(), 2, "{}", r["mesh"]);
+    assert!(num(&r["mesh"]["finest"]) < num(&r["mesh"]["size"]), "{}", r["mesh"]);
+}
+
+/// The surface vertices of a reply, in the plate's own frame, that `keep` takes, sorted.
+fn plate_vertices(r: &Value, unturn: &impl Fn([f64; 3]) -> [f64; 3], keep: impl Fn([f64; 3]) -> bool) -> Vec<[f64; 3]> {
+    let p: Vec<f64> = r["surface"]["positions"].as_array().unwrap().iter().map(num).collect();
+    let mut out: Vec<[f64; 3]> = p.chunks(3).map(|c| unturn([c[0], c[1], c[2]])).filter(|&q| keep(q)).collect();
+    out.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    out
+}
+
+#[test]
+fn refinement_leaves_the_fixed_end_edge_as_it_was_and_refines_elsewhere() {
+    let h = 4.2;
+    let (req, unturn) = holed_plate("fine");
+    let std = run(with(req, json!({"size": h})));
+    let (req, _) = holed_plate("off");
+    let off = run(with(req, json!({"size": h})));
+    let (req, _) = holed_plate("standard");
+    assert_one_pass_of(&off, &run(with(req, json!({"size": h}))));
+    assert_eq!(off["mesh"]["elements"], std["mesh"]["passes"][0]["elements"]);
+    let at_end = |q: [f64; 3]| q[0] < -60.0 + 0.5 * h;
+    let end = plate_vertices(&std, &unturn, at_end);
+    assert!(end.len() > 20, "{}", end.len());
+    assert_eq!(end, plate_vertices(&off, &unturn, at_end));
+    let (a, b) = (num(&off["mesh"]["nodes"]), num(&std["mesh"]["nodes"]));
+    assert!(b > 1.5 * a, "nodes: off {a}, standard {b}");
+}
+
+#[test]
+fn standard_does_not_refine_beside_a_slider_faces_rim() {
+    // The top of a plate whose top edges are rounded, so the slider's rim meets the rounds smoothly and only the held
+    // edge rule keeps it: fixed at one end, held on the top by a slider and pushed up from below.
+    let (h, r) = (4.2, 4.0);
+    let (turn, unturn) = plate_frame();
+    let edges: Vec<Value> = [[0.0, 20.0, 5.0], [0.0, -20.0, 5.0], [60.0, 0.0, 5.0], [-60.0, 0.0, 5.0]]
+        .iter()
+        .map(|&p| json!({"kind": "edge", "by": "nearest", "point": p}))
+        .collect();
+    let doc = json!({"features": [
+        {"id": "p", "type": "box", "length": 120, "width": 40, "height": 10},
+        {"id": "round", "type": "fillet", "radius": r, "edges": edges},
+        {"id": "z", "type": "move", "rz": 30, "bodies": ["body1"]},
+        {"id": "x", "type": "move", "rx": 20, "dx": 17, "dy": -9, "dz": 31, "bodies": ["body1"]},
+    ]});
+    let req = |refine: &str| {
+        json!({
+            "document": doc, "body": "body1", "material": "aluminium", "refine": refine, "size": h,
+            "fixed": [nearest(turn([-60.0, 3.0, -1.0]))],
+            "supports": [{"type": "slider", "faces": [nearest(turn([10.0, 3.0, 5.0]))]}],
+            "loads": [{"faces": [nearest(turn([10.0, 3.0, -5.0]))], "pressure": 0.05}],
+        })
+    };
+    let std = run(req("standard"));
+    let off = run(req("off"));
+    assert_eq!(off["mesh"]["elements"], std["mesh"]["passes"][0]["elements"], "{std}");
+    // Beside the rim along the long sides, away from the sharp ends.
+    let rim = 20.0 - r;
+    let at_rim =
+        |q: [f64; 3]| q[0].abs() < 40.0 && ((q[1].abs() - rim).powi(2) + (q[2] - 5.0).powi(2)).sqrt() < 0.5 * h;
+    let was = plate_vertices(&off, &unturn, at_rim);
+    let now = plate_vertices(&std, &unturn, at_rim);
+    assert!(was.len() > 20, "{}", was.len());
+    assert!(was.iter().all(|v| now.contains(v)));
+    // A split propagating from a marked tet farther off may still halve an edge there.
+    let added = now.len() - was.len();
+    assert!(added <= was.len() / 10, "{added} added beside the rim to {}", was.len());
+    let (a, b) = (num(&off["mesh"]["nodes"]), num(&std["mesh"]["nodes"]));
+    assert!(b > 1.2 * a, "nodes: off {a}, standard {b}");
+}
+
+#[test]
+fn a_size_that_fills_the_element_ceiling_leaves_standard_one_pass() {
+    // The ceiling grows the size to 1.63 mm and 29584 elements, a pass would need 10% more than the ceiling.
+    let r = run(with(cantilever(json!("aluminium"), 1.6), json!({"maxElements": 31838})));
+    let passes = r["mesh"]["passes"].as_array().unwrap();
+    assert_eq!(passes.len(), 1, "{}", r["mesh"]);
+    let off = run(with(cantilever(json!("aluminium"), 1.6), json!({"maxElements": 31838, "refine": "off"})));
+    assert_eq!(r["mesh"]["stop"], json!("elements"));
+    let room = run(with(cantilever(json!("aluminium"), 1.6), json!({"maxElements": 40000})));
+    assert_eq!((room["mesh"]["passes"].as_array().map(Vec::len), &room["mesh"]["stop"]), (Some(1), &json!("settled")));
+    assert_eq!(mesh_and_peaks(&r), mesh_and_peaks(&off));
+}
+
+#[test]
+fn refine_must_be_one_of_three_words() {
+    for bad in [json!("x"), json!(3), json!("Fine ")] {
+        let e = error_of(&run(with(cantilever(json!("PETG"), 3.0), json!({"refine": bad}))));
+        assert!(e.contains("refine must be off, standard or fine"), "{e}");
+    }
+    let r = run(with(cantilever(json!("PETG"), 3.0), json!({"refine": "fine"})));
+    assert!(r["mesh"]["passes"].as_array().unwrap().len() >= 2, "{}", r["mesh"]);
+}
+
+/// A 60 x 40 x 30 block with a 40 x 30 fin of `fin` mm on top, turned and off the origin, held at its foot and
+/// pushed sideways on the fin's top.
+fn finned_block(fin: f64, refine: &str) -> Value {
+    let doc = json!({"features": [
+        {"id": "b", "type": "box", "length": 60, "width": 40, "height": 30},
+        {"id": "f", "type": "box", "length": 40, "width": fin, "height": 30},
+        {"id": "fm", "type": "move", "dz": 30, "dx": 3, "bodies": ["body2"]},
+        {"id": "u", "type": "boolean", "operation": "union", "target": "body1", "tools": ["body2"]},
+        {"id": "m", "type": "move", "rx": 15, "rz": 25, "dx": 11, "dy": -7, "dz": 19, "bodies": ["body1"]},
+    ]});
+    let (cx, sx) = (15f64.to_radians().cos(), 15f64.to_radians().sin());
+    let (cz, sz) = (25f64.to_radians().cos(), 25f64.to_radians().sin());
+    let turn = |p: [f64; 3]| {
+        let q = [p[0], cx * p[1] - sx * p[2], sx * p[1] + cx * p[2]];
+        [cz * q[0] - sz * q[1], sz * q[0] + cz * q[1], q[2]]
+    };
+    let (up, side) = (turn([0.0, 0.0, 1.0]), turn([0.0, 1.0, 0.0]));
+    json!({
+        "document": doc, "body": "body1", "material": "PLA", "refine": refine,
+        "fixed": [face(up.map(|x| -x))],
+        "loads": [{"faces": [face(up)], "force": side.map(|x| 5.0 * x)}],
+    })
+}
+
+#[test]
+fn standard_starts_on_offs_mesh_so_it_meshes_every_wall_off_does() {
+    // A 3.6 mm fin is about one of Off's 3.69 mm elements thick: a coarser first pass refused it. Its pass could not
+    // move the peak (reach 0), the 6.5 mm fin's can (reach 0.118, past the 0.10 a pass is skipped under).
+    for (fin, passes_run, stop) in [(3.6, 1, "settled"), (6.5, 2, "passes")] {
+        let off = run(finned_block(fin, "off"));
+        let std = run(finned_block(fin, "standard"));
+        let passes = std["mesh"]["passes"].as_array().unwrap_or_else(|| panic!("{std}"));
+        assert_eq!(passes[0], off["mesh"]["passes"][0], "fin {fin}");
+        assert_eq!(std["mesh"]["size"], off["mesh"]["size"], "fin {fin}");
+        assert_eq!(passes.len(), passes_run, "fin {fin}: {}", std["mesh"]);
+        assert_eq!(std["mesh"]["stop"], json!(stop), "fin {fin}");
+        assert_eq!(std["mesh"]["elements"], json!(passes[passes_run - 1]["elements"]), "fin {fin}");
+    }
+}
+
+/// An 80 x 30 x 2 plate turned 25 degrees about z and off the origin, one end held and 2 N down on the other.
+fn thin_plate(refine: &str, size: f64) -> Value {
+    let doc = json!({"features": [
+        {"id": "b", "type": "box", "length": 80, "width": 30, "height": 2},
+        {"id": "m", "type": "move", "rz": 25, "dx": 11, "dy": -7, "dz": 19, "bodies": ["body1"]},
+    ]});
+    let ex = [25f64.to_radians().cos(), 25f64.to_radians().sin(), 0.0];
+    json!({
+        "document": doc, "body": "body1", "material": "PLA", "refine": refine, "size": size,
+        "fixed": [face(ex.map(|x| -x))],
+        "loads": [{"faces": [face(ex)], "force": [0, 0, -2]}],
+    })
+}
+
+#[test]
+fn a_refined_thin_plate_bends_as_its_first_mesh_and_still_warns_about_thickness() {
+    // One element through the first pass bent a 2 mm plate 19.5% past Off's 0.94 mm mesh with no warning.
+    let off = run(thin_plate("off", 1.6));
+    let std = run(thin_plate("fine", 1.6));
+    assert!(std["mesh"]["passes"].as_array().map(Vec::len) >= Some(2), "{}", std["mesh"]);
+    let (a, b) = (num(&off["maxDisplacement"]["value"]), num(&std["maxDisplacement"]["value"]));
+    assert!((b - a).abs() < 0.005 * a, "off {a}, standard {b}");
+    assert_one_pass_of(&off, &run(thin_plate("standard", 1.6)));
+    for r in [&off, &std] {
+        assert!(warnings_of(r).contains("larger than half the part's typical thickness"), "{}", warnings_of(r));
+    }
+}
+
+/// The Home example's Wall bracket with its own study: fixed back plate, 30 N down on the arm's end, own weight.
+fn wall_bracket(refine: &str) -> Value {
+    let doc: Value = serde_json::from_str(include_str!("../../../src/templates/wall-bracket.funda")).unwrap();
+    let fp = |c: [f64; 3], n: [f64; 3], area: f64| {
+        json!({"kind": "face", "by": "match", "body": "body1",
+               "fp": {"centroid": c, "normal": n, "area": area, "surface": "plane"}})
+    };
+    json!({
+        "document": doc, "body": "body1", "material": "PLA", "refine": refine, "gravity": [0.0, 0.0, -9.81],
+        "supports": [{"type": "fixed", "faces": [fp([0.0, 0.0, 30.0], [-1.0, 0.0, 0.0], 1440.0)]}],
+        "loads": [{"faces": [fp([70.0, 0.0, 57.5], [1.0, 0.0, 0.0], 120.0)], "force": [0, 0, -30]}],
+    })
+}
+
+#[test]
+fn standard_reads_the_wall_bracket_peak_on_the_gusset_tip_no_lower_than_off() {
+    // The peak sits on the 5 mm gusset's tip fillet, inside the band kept as stuffed beside its sharp edges. Its pass
+    // reads 0.173, past the 0.10 a pass is skipped under, and moves the peak from 15.08 to 15.17 MPa.
+    let off = run(wall_bracket("off"));
+    let std = run(wall_bracket("standard"));
+    let passes = std["mesh"]["passes"].as_array().unwrap_or_else(|| panic!("{std}"));
+    assert_eq!(passes.len(), 2, "{}", std["mesh"]);
+    assert_eq!(passes[0], off["mesh"]["passes"][0]);
+    assert!(num(&std["mesh"]["finest"]) < num(&std["mesh"]["size"]), "{}", std["mesh"]);
+    assert_eq!(std["maxVonMises"]["face"], off["maxVonMises"]["face"]);
+    assert_eq!(off["maxVonMises"]["face"], json!(8));
+    let (a, b) = (num(&off["maxVonMises"]["value"]), num(&std["maxVonMises"]["value"]));
+    assert!(b >= a && b < 1.05 * a, "off {a}, standard {b}");
+    assert!(!warnings_of(&std).contains("moved by"), "{}", warnings_of(&std));
+    assert_eq!(std["mesh"]["stop"], json!("passes"));
+}
+
+/// A 20 mm bar 100 long with a 3 mm round groove round its middle, pulled along its axis, in `plate_frame`.
+fn grooved_bar(refine: &str) -> Value {
+    grooved_bar_of(refine, 3.0)
+}
+
+fn grooved_bar_of(refine: &str, depth: f64) -> Value {
+    let (turn, _) = plate_frame();
+    let doc = json!({"features": [
+        {"id": "bar", "type": "cylinder", "radius": 10, "height": 100},
+        {"id": "ring", "type": "torus", "majorRadius": 10, "minorRadius": depth},
+        {"id": "cut", "type": "boolean", "operation": "subtract", "target": "body1", "tools": ["body2"]},
+        {"id": "z", "type": "move", "rz": 30, "bodies": ["body1"]},
+        {"id": "x", "type": "move", "rx": 20, "dx": 17, "dy": -9, "dz": 31, "bodies": ["body1"]},
+    ]});
+    let (a, b) = (turn([0.0; 3]), turn([0.0, 0.0, 3000.0]));
+    let force = [0, 1, 2].map(|k| b[k] - a[k]);
+    json!({
+        "document": doc, "body": "body1", "material": "aluminium", "refine": refine,
+        "fixed": [nearest(turn([1.0, -2.0, -50.0]))],
+        "loads": [{"faces": [nearest(turn([-2.0, 1.5, 50.0]))], "force": force}],
+    })
+}
+
+#[test]
+fn standard_still_refines_a_grooved_bar_and_finds_the_groove_peak_off_misses() {
+    // 3000 N on the 14 mm root is 19.5 MPa, about 37 at a groove factor near 1.9. Off reads 33.8 MPa here and 28.5
+    // on an axis aligned bar, the refined pass 35.1 and 35.9.
+    let off = run(grooved_bar("off"));
+    let std = run(grooved_bar("standard"));
+    let passes = std["mesh"]["passes"].as_array().unwrap();
+    assert_eq!(passes.len(), 2, "{}", std["mesh"]);
+    assert_eq!(passes[0], off["mesh"]["passes"][0]);
+    let (a, b) = (num(&off["maxVonMises"]["value"]), num(&std["maxVonMises"]["value"]));
+    assert!(b > 1.03 * a && b < 40.0, "off {a}, standard {b}");
+    assert_eq!(std["mesh"]["stop"], json!("passes"));
+}
+
+#[test]
+fn standard_refines_a_deep_round_groove_whose_pass_reads_under_the_old_threshold() {
+    // A 6 mm deep groove reads 0.172, past the 0.10 a pass is skipped under, and its pass moves the peak 5.5%. The
+    // axis aligned 5 mm groove moved 9.6% at 0.189, both under the 0.2 of before.
+    let off = run(grooved_bar_of("off", 6.0));
+    let std = run(grooved_bar_of("standard", 6.0));
+    let passes = std["mesh"]["passes"].as_array().unwrap();
+    assert_eq!(passes.len(), 2, "{}", std["mesh"]);
+    assert_eq!(passes[0], off["mesh"]["passes"][0]);
+    let (a, b) = (num(&off["maxVonMises"]["value"]), num(&std["maxVonMises"]["value"]));
+    assert!(b > 1.04 * a && b < 1.1 * a, "off {a}, standard {b}");
+    assert_eq!(std["mesh"]["stop"], json!("passes"));
 }

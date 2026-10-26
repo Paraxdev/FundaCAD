@@ -15,7 +15,8 @@ import {
   type StressData,
   type StressProbePin,
 } from "../stores/panels";
-import { drawnCorner, engineHit, nearestVertex, refineLevel, refineSurface, type DrawnSurface } from "./stressSurface";
+import { drawnSurfaceInFrames, readAt, weakSpot as drawnWeakSpot, type DrawnSurface } from "./stressDrawn";
+import { locator, type Locator } from "./stressLocate";
 import { weakSpotLabel } from "./stressVerdict";
 import { sentence } from "./stressWarnings";
 import {
@@ -235,9 +236,9 @@ export function createPanels(deps: PanelsDeps) {
   // The build the face sets' display ids came from; on another build they are found again from their selector points.
   let facesFor: unknown = null;
   // The last result's colours, its document and probe surface, so "Show colours" restores them without a new Run.
-  type Colours = { overlay: StressOverlay; epoch: number; surface: ProbeSurface; drawn: DrawnSurface };
+  type Colours = { overlay: StressOverlay; epoch: number; surface: ProbeSurface; drawn: DrawnSurface; locate: Locator };
   let colours: Colours | null = null;
-  // The drawn corner nearest the engine's peak stress, pinned in the view while the colours show.
+  // The drawn point nearest the engine's peak stress, pinned in the view while the colours show.
   type WeakSpot = Pick<StressProbePin, "tri" | "weights" | "label">;
   let weakSpot: WeakSpot | null = null;
   // The study as last written to (or read from) the document, so an edit is
@@ -662,7 +663,7 @@ export function createPanels(deps: PanelsDeps) {
       l.force = was.force;
     },
     probeLabel(hit) {
-      const at = colours ? engineHit(colours.drawn, hit.tri, hit.weights) : null;
+      const at = colours ? readAt(colours.drawn, colours.locate, hit.tri, hit.weights) : null;
       const v = colours && at ? probeValues(colours.surface, at.tri, at.weights) : null;
       return v ? probeLabel(v, getUnit()) : null;
     },
@@ -1086,6 +1087,7 @@ export function createPanels(deps: PanelsDeps) {
       r,
       getUnit(),
       (req.options.supports ?? []).map((x) => x.type),
+      req.options.refine,
     );
     panels.stressFinished({ result: view });
     const sf = r.safetyFactor;
@@ -1101,8 +1103,14 @@ export function createPanels(deps: PanelsDeps) {
     if (r.surface) {
       const disp = r.surface.displacement;
       const moves = !!disp && disp.length === r.surface.positions.length;
-      // Drawn finer than the engine's mesh so the part bends smoothly; the numbers stay the engine's.
-      const drawn = refineSurface(r.surface, refineLevel(r.surface.indices.length / 3));
+      const locate = locator(r.surface);
+      const display = viewport.bodyDisplayMesh?.(r.body) ?? null;
+      const drawn = await drawnSurfaceInFrames(display, r.surface, locate, view.legend);
+      if (seq !== runSeq) return;
+      if (epoch !== docEpoch) {
+        setStatus("Stress: the model changed while it ran, run it again to see the colours", "");
+        return;
+      }
       colours = {
         overlay: {
           bodyId: r.body,
@@ -1115,10 +1123,10 @@ export function createPanels(deps: PanelsDeps) {
         epoch,
         surface: r.surface,
         drawn,
+        locate,
       };
-      const peak = nearestVertex(r.surface.positions, r.maxVonMises.at);
-      const corner = peak < 0 ? null : drawnCorner(drawn, peak);
-      weakSpot = corner && { ...corner, label: weakSpotLabel(r.safetyFactor) };
+      const spot = drawnWeakSpot(drawn, r.maxVonMises.at, r.maxVonMises.face ?? null);
+      weakSpot = spot && { ...spot, label: weakSpotLabel(r.safetyFactor) };
       if (moves) {
         const auto = autoDeformScale(r.surface.positions, disp!);
         panels.setStressDeform({ scale: auto, auto, max: deformSliderMax(auto), animate: false, shown: true });

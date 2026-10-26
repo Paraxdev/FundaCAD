@@ -2,7 +2,7 @@
 //! shares the live triangulation. Spots get face ids past the body's, so the solver takes them as faces.
 
 use std::collections::{HashMap, VecDeque};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use fundacad_engine::error_result;
 use fundacad_protocol::JobResult;
@@ -12,6 +12,8 @@ use serde_json::{json, Map, Value};
 
 use crate::builder::{Fail, FeatureError, Watch};
 use crate::export;
+use crate::fem::adapt::{self, Refine};
+use crate::fem::refine::{self, RefineOptions};
 use crate::fem::solve::{self, Axis, Hold, Load, LoadKind, Problem, SlideFace, Solution, SolveError, Support};
 use crate::fem::tetmesh::{self, MeshError};
 use crate::fem::{MeshOptions, MeshStats, SurfaceMesh, TetMesh};
@@ -28,6 +30,16 @@ pub const MAX_ELEMENTS: usize = 80_000;
 /// The default element size aims at this share of the element limit, so the mesh lands near
 /// it without the mesher having to coarsen.
 const DEFAULT_FILL: f64 = 0.7;
+/// Dorfler share of the squared error a refinement pass marks. All of it, so the pass's element cap is what stops
+/// it: at half, the cantilever's error sat in about 100 tets and a pass grew the mesh by 2%.
+const THETA: f64 = 1.0;
+/// Bisections of each marked tet a pass makes, three halve its edges. At one the Wall bracket's pass spent its cap
+/// on every tet once and the fillet peak kept nearly its first size.
+const BISECTIONS: u8 = 3;
+/// A refined mesh with a flatter element than this is dropped and the pass before kept.
+const MIN_REFINED_DIHEDRAL: f64 = 5.0;
+/// Refinement stops when the next pass is predicted to end past this many seconds of the run.
+const REFINE_SECONDS: f64 = 60.0;
 /// Tetrahedra per element size cubed of the mesher's lattice, with its allowance for the
 /// stencils that split boundary cells (`tetmesh` TETS_PER_CELL x BOUNDARY_ALLOWANCE).
 const TETS_PER_SIZE_CUBED: f64 = 12.0 * 1.15;
@@ -38,6 +50,10 @@ const SURFACE_ANGLE: f64 = 0.25;
 const SHARP_FOLD_DEG: f64 = 30.0;
 /// A peak this many element sizes from a sharp inside corner is at that corner.
 const CORNER_REACH: f64 = 1.5;
+/// Refinement leaves the tets around boundary nodes this many starting sizes from a sharp edge as stuffed: the
+/// kinked chords there read a notch stress once the elements beside them are small. Wall bracket gusset tip: 15.1 MPa
+/// unrefined, 17.2 refined at half a size, 15.2 at one, 12.3 to 14.3 on uniform meshes of 1.6 to 2 mm.
+const ROUNDED_REACH: f64 = 1.0;
 /// How long the factorisation may keep the job's heartbeat going. `FACTOR_MEMORY_CAP` bounds
 /// it to well under a minute, so this only stops beats for a call that is truly stuck.
 const FACTOR_BEATS: Duration = Duration::from_secs(600);
@@ -143,6 +159,16 @@ fn positive(req: &Map<String, Value>, key: &str) -> Result<Option<f64>, String> 
             Some(x) if x.is_finite() && x > 0.0 => Ok(Some(x)),
             _ => Err(format!("{key} must be a number above 0, got {v}")),
         },
+    }
+}
+
+fn refine_of(v: Option<&Value>) -> Result<Refine, String> {
+    match v {
+        None | Some(Value::Null) => Ok(Refine::Standard),
+        Some(Value::String(w)) if w == "off" => Ok(Refine::Off),
+        Some(Value::String(w)) if w == "standard" => Ok(Refine::Standard),
+        Some(Value::String(w)) if w == "fine" => Ok(Refine::Fine),
+        Some(other) => Err(format!("refine must be off, standard or fine, got {other}")),
     }
 }
 
@@ -731,6 +757,10 @@ fn peak_place(mesh: &TetMesh, sol: &Solution, node: u32, held: &[(u32, &'static 
 /// Read on the welded surface, which follows the exact faces, not the volume mesh, which rounds and
 /// kinks every edge within about an element.
 fn inside_corners(surface: &SurfaceMesh) -> Vec<[[f64; 3]; 2]> {
+    sharp_edges(surface, true)
+}
+
+fn sharp_edges(surface: &SurfaceMesh, inside: bool) -> Vec<[[f64; 3]; 2]> {
     let mut by_edge: HashMap<(u32, u32), Vec<usize>> = HashMap::new();
     for (i, t) in surface.triangles.iter().enumerate() {
         for k in 0..3 {
@@ -753,7 +783,7 @@ fn inside_corners(surface: &SurfaceMesh) -> Vec<[[f64; 3]; 2]> {
             continue;
         }
         let far = surface.triangles[t].into_iter().find(|&v| v != a && v != b).expect("a triangle has a third corner");
-        if dot(normal(s), sub(p(far), p(a))) > 0.0 {
+        if (dot(normal(s), sub(p(far), p(a))) > 0.0) == inside {
             out.push([p(a), p(b)]);
         }
     }
@@ -800,12 +830,14 @@ fn surface_of(mesh: &TetMesh, sol: &Solution) -> Value {
     let positions: Vec<f64> = used.iter().flat_map(|&v| mesh.nodes[v as usize].map(|x| py_round(x, 4) + 0.0)).collect();
     let von_mises: Vec<f64> = used.iter().map(|&v| round6(sol.von_mises[v as usize])).collect();
     let displacement: Vec<f64> = used.iter().flat_map(|&v| sol.displacement[v as usize].map(round6)).collect();
+    let stress: Vec<f64> = used.iter().flat_map(|&v| sol.stress[v as usize].map(round6)).collect();
     json!({
         "positions": positions,
         "indices": indices,
         "faceIds": mesh.boundary_face,
         "vonMises": von_mises,
         "displacement": displacement,
+        "stress": stress,
     })
 }
 
@@ -815,14 +847,14 @@ pub fn size_floor(volume: f64, max_elements: usize) -> f64 {
     (TETS_PER_SIZE_CUBED * volume / max_elements.max(1) as f64).cbrt()
 }
 
-/// The default element size: near `max_elements * DEFAULT_FILL` elements for the body's
-/// volume, and at least two elements through its typical thickness `2 V / A`.
-pub fn default_size(volume: f64, area: f64, max_elements: usize) -> f64 {
-    let target = (max_elements as f64 * DEFAULT_FILL).max(1.0);
+/// The default element size: near `max_elements * fill` elements for the body's volume, and at least `through`
+/// elements through its typical thickness `2 V / A`.
+pub fn default_size(volume: f64, area: f64, max_elements: usize, fill: f64, through: f64) -> f64 {
+    let target = (max_elements as f64 * fill).max(1.0);
     let by_count = (TETS_PER_SIZE_CUBED * volume / target).cbrt();
     let thickness = 2.0 * volume / area;
     if thickness.is_finite() && thickness > 0.0 {
-        by_count.min(thickness / 2.0)
+        by_count.min(thickness / through)
     } else {
         by_count
     }
@@ -916,6 +948,208 @@ fn mesh_error_text(e: &MeshError) -> String {
     }
 }
 
+/// What every pass builds its problem from, the request's lists as parsed, before any spot split a face.
+struct Setup<'a> {
+    id: &'a str,
+    surface: &'a SurfaceMesh,
+    planar: &'a [bool],
+    supports: &'a [SupportOf],
+    loads: &'a [(Load, Vec<Spot>)],
+    given_fixed: &'a [u32],
+    held: &'a [(u32, &'static str)],
+    spots: &'a [Spot],
+    labels: &'a [String],
+    material: solve::Material,
+    /// Density times gravity, N per cubic mm, before scaling to the real volume.
+    weight: Option<[f64; 3]>,
+    volume: f64,
+}
+
+/// One solve on `mesh` as stuffed or refined. `held` lists every face and spot a support holds, sorted by id.
+struct Pass {
+    mesh: TetMesh,
+    stats: MeshStats,
+    sol: Solution,
+    spotted: Option<Spotted>,
+    held: Vec<(u32, &'static str)>,
+}
+
+impl Pass {
+    fn solved(&self) -> &TetMesh {
+        self.spotted.as_ref().map_or(&self.mesh, |s| &s.mesh)
+    }
+}
+
+enum PassFail {
+    Text(String),
+    Solve(SolveError, usize),
+}
+
+impl PassFail {
+    fn text(self) -> String {
+        match self {
+            PassFail::Text(t) => t,
+            PassFail::Solve(e, elements) => solve_error_text(&e, elements),
+        }
+    }
+}
+
+fn solve_pass(
+    mesh: TetMesh,
+    stats: MeshStats,
+    size: f64,
+    s: &Setup,
+    tick: &mut dyn FnMut() -> bool,
+) -> Result<Pass, PassFail> {
+    let spotted = if s.spots.is_empty() {
+        None
+    } else {
+        Some(spotted(&mesh, s.spots, s.labels, s.id, size).map_err(PassFail::Text)?)
+    };
+    // The ids of the next `n` spots of the list, as one sorted set.
+    let mut next = 0;
+    let mut take = |n: usize| {
+        let ids = spotted.as_ref().map_or(Vec::new(), |s| {
+            let mut ids: Vec<u32> = s.of_spot[next..next + n].concat();
+            ids.sort_unstable();
+            ids.dedup();
+            ids
+        });
+        next += n;
+        ids
+    };
+    let mut held = s.held.to_vec();
+    let supports: Vec<Support> = s
+        .supports
+        .iter()
+        .map(|(kind, faces, list)| {
+            let at = take(list.len());
+            held.extend(at.iter().map(|&f| (f, "fixed spot")));
+            let mut faces = faces.clone();
+            faces.extend(at);
+            Support {
+                hold: match kind {
+                    SupportKind::Fixed => Hold::Fixed,
+                    SupportKind::Slider(surfaces) => Hold::Slider(surfaces.clone()),
+                    SupportKind::Pinned(axes) => Hold::Pinned(axes.clone()),
+                },
+                faces,
+            }
+        })
+        .collect();
+    let kinds: Vec<LoadKind> = s.loads.iter().map(|l| l.0.kind).collect();
+    let (mut loads, mut origin) =
+        exact_pressures(s.loads.iter().map(|l| l.0.clone()).collect(), s.surface, s.planar, &mesh);
+    if let Some(s) = &spotted {
+        // A face a spot took part of is loaded through what is left of it and the parts
+        // the spots took, and held the way it was through them all.
+        for load in &mut loads {
+            load.faces = load.faces.iter().flat_map(|&f| s.spread(f)).collect();
+        }
+        let split: Vec<(u32, &'static str)> = held
+            .iter()
+            .filter(|h| h.0 < s.first)
+            .flat_map(|&(f, word)| s.spread(f).into_iter().map(move |id| (id, word)))
+            .collect();
+        held.extend(split);
+    }
+    for (i, (_, list)) in s.loads.iter().enumerate() {
+        let at = take(list.len());
+        if at.is_empty() {
+            continue;
+        }
+        // A force is one total over its faces and spots together, a pressure pushes on
+        // each as it is.
+        match (kinds[i], origin.iter().position(|&o| o == i)) {
+            (LoadKind::Force(_), Some(k)) => loads[k].faces.extend(at),
+            (kind, _) => {
+                loads.push(Load { faces: at, kind });
+                origin.push(i);
+            }
+        }
+    }
+    // A fixed face or spot holds most, so it names the place whatever else holds it.
+    held.sort_by_key(|&(f, word)| (f, !word.starts_with("fixed")));
+    held.dedup_by_key(|h| h.0);
+    let problem = Problem {
+        mesh: spotted.as_ref().map_or(&mesh, |s| &s.mesh),
+        material: s.material,
+        fixed: s.given_fixed.to_vec(),
+        supports,
+        loads,
+        // Scaled by true volume over mesh volume, as the mesh rounds edges within about an element, so the
+        // weight is the real body's, as the pressures above are the real faces' loads.
+        body_force: s.weight.map(|w| {
+            let scale = if stats.volume > 0.0 { s.volume / stats.volume } else { 1.0 };
+            w.map(|c| c * scale)
+        }),
+    };
+    let sol = solve::solve_with(&problem, tick, &mut |f| crate::heartbeat::while_running(FACTOR_BEATS, f))
+        .map_err(|e| PassFail::Solve(renumber_load(e, &origin), mesh.tets.len()))?;
+    Ok(Pass { mesh, stats, sol, spotted, held })
+}
+
+/// Surface edges where a held face or spot meets free surface, on the mesh the pass solved. A slider's edge counts:
+/// the Pinned lever's peak at its slider face end read 10.9, 13.9 and 25.9 MPa as the mesh got finer.
+fn held_edges(mesh: &TetMesh, held: &[(u32, &'static str)]) -> Vec<[[f64; 3]; 2]> {
+    let is_held = |t: usize| held.binary_search_by_key(&mesh.boundary_face[t], |h| h.0).is_ok();
+    let mut by_edge: HashMap<(u32, u32), Vec<usize>> = HashMap::new();
+    for (i, t) in mesh.boundary.iter().enumerate() {
+        for k in 0..3 {
+            let (a, b) = (t[k], t[(k + 1) % 3]);
+            by_edge.entry((a.min(b), a.max(b))).or_default().push(i);
+        }
+    }
+    by_edge
+        .iter()
+        .filter(|(_, tris)| matches!(tris.as_slice(), &[s, t] if is_held(s) != is_held(t)))
+        .map(|(&(a, b), _)| [mesh.nodes[a as usize], mesh.nodes[b as usize]])
+        .collect()
+}
+
+/// Whether each tet's centroid lies farther than `reach` from every segment.
+fn far_from(mesh: &TetMesh, segments: &[[[f64; 3]; 2]], reach: f64) -> Vec<bool> {
+    mesh.tets
+        .iter()
+        .map(|t| {
+            let c = [0, 1, 2].map(|k| t.iter().map(|&n| mesh.nodes[n as usize][k]).sum::<f64>() / 4.0);
+            segments.iter().all(|s| segment_distance(c, s) > reach)
+        })
+        .collect()
+}
+
+/// The boundary nodes within `reach` of a sharp edge, where the stuffed boundary rounds the edge with kinked chords.
+fn rounded_nodes(mesh: &TetMesh, sharp: &[[[f64; 3]; 2]], reach: f64) -> Vec<bool> {
+    let mut keep = vec![false; mesh.nodes.len()];
+    for &n in mesh.boundary.iter().flatten() {
+        if !keep[n as usize] {
+            keep[n as usize] = sharp.iter().any(|s| segment_distance(mesh.nodes[n as usize], s) <= reach);
+        }
+    }
+    keep
+}
+
+/// The share of the peak `refined` could move it by, from the stress gaps of the tets of `cur` it split in place.
+fn split_reach(cur: &Pass, refined: &TetMesh, e: f64) -> f64 {
+    let vm = cur.sol.corner_von_mises();
+    let (mut top, mut gap, mut split) = (Vec::new(), Vec::new(), Vec::new());
+    for (i, (t, &eta)) in cur.mesh.tets.iter().zip(&cur.sol.element_error).enumerate() {
+        top.push(t.iter().map(|&n| vm[n as usize]).fold(0.0, f64::max));
+        let v = tetmesh::orient(&t.map(|n| cur.mesh.nodes[n as usize])).abs() / 6.0;
+        // The complementary energy of a uniaxial stress gap d is d^2 / E per unit volume.
+        gap.push(if v > 0.0 { (e * eta * eta / v).sqrt() } else { 0.0 });
+        split.push(refined.tets.get(i) != Some(t));
+    }
+    adapt::reach(cur.sol.max_von_mises, &top, &gap, &split)
+}
+
+/// The tets touching solution node `node`: a corner, or either end of the edge a mid-edge node halves.
+fn around(mesh: &TetMesh, sol: &Solution, node: u32) -> Vec<u32> {
+    let ends: Vec<u32> =
+        if (node as usize) < sol.corners { vec![node] } else { sol.edges[node as usize - sol.corners].to_vec() };
+    (0..mesh.tets.len() as u32).filter(|&t| mesh.tets[t as usize].iter().any(|n| ends.contains(n))).collect()
+}
+
 pub fn stress_result(req: &Map<String, Value>, watch: &dyn Watch) -> JobResult {
     let _beat = crate::heartbeat::install(watch.heartbeat());
     let _cancel = crate::cancel::install(watch.cancel_token());
@@ -970,6 +1204,8 @@ fn analyse(
         }
     };
     let size = positive(req, "size")?;
+    let refine = refine_of(req.get("refine"))?;
+    let started = Instant::now();
     let mut warnings: Vec<String> = Vec::new();
     let max_elements = match positive(req, "maxElements")? {
         None => DEFAULT_MAX_ELEMENTS,
@@ -1060,7 +1296,9 @@ fn analyse(
         ));
     }
 
-    let requested = size.unwrap_or_else(|| default_size(volume, area, max_elements));
+    // Every mode starts on Off's mesh, so refining only adds: a coarser start refused walls Off meshes and bent thin
+    // plates 15 to 20% too far.
+    let requested = size.unwrap_or_else(|| default_size(volume, area, max_elements, DEFAULT_FILL, 2.0));
     // The mesher grows a size below the floor anyway, and the surface is triangulated for the size used,
     // so a curved part tessellated far finer takes minutes and gigabytes for nothing.
     let effective = requested.max(size_floor(volume, max_elements));
@@ -1095,102 +1333,101 @@ fn analyse(
         crate::heartbeat::beat();
         !(watch.cancelled() || crate::cancel::requested())
     };
-    let (mesh, stats): (TetMesh, MeshStats) =
-        tetmesh::tetrahedralize(&surface, &MeshOptions { size: effective, max_tets: max_elements }, &mut tick)
-            .map_err(|e| mesh_error_text(&e))?;
+    let stuff = |size: f64, tick: &mut dyn FnMut() -> bool| {
+        tetmesh::tetrahedralize(&surface, &MeshOptions { size, max_tets: max_elements }, tick)
+    };
+    let (mesh, stats): (TetMesh, MeshStats) = stuff(effective, &mut tick).map_err(|e| mesh_error_text(&e))?;
 
     // Every spot in one list, the supports' first, each with its name for a refusal.
     let mut spots = Vec::new();
     let mut labels = Vec::new();
-    let support_spots: Vec<usize> = supports.iter().map(|s| s.2.len()).collect();
     for (i, (_, _, list)) in supports.iter().enumerate() {
         spots.extend(list);
         labels.extend((0..list.len()).map(|k| format!("spot {} of {}", k + 1, named("support", "supports", i))));
     }
-    let load_spots: Vec<usize> = loads.iter().map(|l| l.1.len()).collect();
     for (i, (_, list)) in loads.iter().enumerate() {
         spots.extend(list);
         labels.extend((0..list.len()).map(|k| format!("spot {} of {}", k + 1, named("load", "loads", i))));
     }
-    let spotted = if spots.is_empty() { None } else { Some(spotted(&mesh, &spots, &labels, id, stats.size)?) };
-    // The ids of the next `n` spots of the list, as one sorted set.
-    let mut next = 0;
-    let mut take = |n: usize| {
-        let ids = spotted.as_ref().map_or(Vec::new(), |s| {
-            let mut ids: Vec<u32> = s.of_spot[next..next + n].concat();
-            ids.sort_unstable();
-            ids.dedup();
-            ids
-        });
-        next += n;
-        ids
-    };
-    let supports: Vec<Support> = supports
-        .into_iter()
-        .zip(&support_spots)
-        .map(|((kind, mut faces, _), &n)| {
-            let at = take(n);
-            held.extend(at.iter().map(|&f| (f, "fixed spot")));
-            faces.extend(at);
-            Support {
-                hold: match kind {
-                    SupportKind::Fixed => Hold::Fixed,
-                    SupportKind::Slider(surfaces) => Hold::Slider(surfaces),
-                    SupportKind::Pinned(axes) => Hold::Pinned(axes),
-                },
-                faces,
-            }
-        })
-        .collect();
-    let kinds: Vec<LoadKind> = loads.iter().map(|l| l.0.kind).collect();
-    let (mut loads, mut origin) = exact_pressures(loads.into_iter().map(|l| l.0).collect(), &surface, &planar, &mesh);
-    if let Some(s) = &spotted {
-        // A face a spot took part of is loaded through what is left of it and the parts
-        // the spots took, and held the way it was through them all.
-        for load in &mut loads {
-            load.faces = load.faces.iter().flat_map(|&f| s.spread(f)).collect();
-        }
-        let split: Vec<(u32, &'static str)> = held
-            .iter()
-            .filter(|h| h.0 < s.first)
-            .flat_map(|&(f, word)| s.spread(f).into_iter().map(move |id| (id, word)))
-            .collect();
-        held.extend(split);
-    }
-    for (i, &n) in load_spots.iter().enumerate() {
-        let at = take(n);
-        if at.is_empty() {
-            continue;
-        }
-        // A force is one total over its faces and spots together, a pressure pushes on
-        // each as it is.
-        match (kinds[i], origin.iter().position(|&o| o == i)) {
-            (LoadKind::Force(_), Some(k)) => loads[k].faces.extend(at),
-            (kind, _) => {
-                loads.push(Load { faces: at, kind });
-                origin.push(i);
-            }
-        }
-    }
-    // A fixed face or spot holds most, so it names the place whatever else holds it.
-    held.sort_by_key(|&(f, word)| (f, !word.starts_with("fixed")));
-    held.dedup_by_key(|h| h.0);
-    let solved = spotted.as_ref().map_or(&mesh, |s| &s.mesh);
-    let problem = Problem {
-        mesh: solved,
+    let setup = Setup {
+        id,
+        surface: &surface,
+        planar: &planar,
+        supports: &supports,
+        loads: &loads,
+        given_fixed: &given_fixed,
+        held: &held,
+        spots: &spots,
+        labels: &labels,
         material: solve::Material { e: material.e, nu: material.nu },
-        fixed: given_fixed,
-        supports,
-        loads,
-        // Scaled by true volume over mesh volume, as the mesh rounds edges within about an element, so the
-        // weight is the real body's, as the pressures above are the real faces' loads.
-        body_force: gravity.zip(density).map(|(g, d)| {
-            let scale = if stats.volume > 0.0 { volume / stats.volume } else { 1.0 };
-            body_force(d, g).map(|c| c * scale)
-        }),
+        weight: gravity.zip(density).map(|(g, d)| body_force(d, g)),
+        volume,
     };
-    let sol = solve::solve_with(&problem, &mut tick, &mut |f| crate::heartbeat::while_running(FACTOR_BEATS, f))
-        .map_err(|e| solve_error_text(&renumber_load(e, &origin), mesh.tets.len()))?;
+    let h0 = stats.size;
+    let mut cur = solve_pass(mesh, stats, h0, &setup, &mut tick).map_err(PassFail::text)?;
+    let mut finest = refine::finest(&cur.mesh);
+    let mut passes = vec![(cur.mesh.tets.len(), cur.sol.max_von_mises)];
+    let mut last_secs = started.elapsed().as_secs_f64();
+    let plan = refine.plan();
+    let reference = cur.mesh.tets.len().max((max_elements as f64 * DEFAULT_FILL) as usize);
+    let corners = inside_corners(&surface);
+    let mut sharp = sharp_edges(&surface, false);
+    sharp.extend_from_slice(&corners);
+    let mut stopped = None;
+    let mut stop = if refine == Refine::Off { "off" } else { "passes" };
+    loop {
+        let counts: Vec<usize> = passes.iter().map(|p| p.0).collect();
+        let Some(cap) = adapt::next_cap(&plan, max_elements, &counts, reference) else {
+            if counts.len() <= plan.passes {
+                stop = "elements";
+            }
+            break;
+        };
+        if adapt::over_time(started.elapsed().as_secs_f64(), last_secs, cur.mesh.tets.len(), cap, REFINE_SECONDS) {
+            stopped = Some("to stay within about a minute");
+            stop = "time";
+            break;
+        }
+        let t = Instant::now();
+        let mut singular = held_edges(cur.solved(), &cur.held);
+        singular.extend_from_slice(&corners);
+        let eligible = far_from(&cur.mesh, &singular, CORNER_REACH * h0);
+        let first = around(&cur.mesh, &cur.sol, cur.sol.max_von_mises_node);
+        let marked = adapt::mark(&cur.sol.element_error, &eligible, &first, THETA);
+        if marked.is_empty() {
+            stop = "unrefinable";
+            break;
+        }
+        let keep = rounded_nodes(&cur.mesh, &sharp, ROUNDED_REACH * h0);
+        let opts =
+            RefineOptions { max_tets: cap, min_edge: plan.min_edge_share * h0, size: h0, keep, depth: BISECTIONS };
+        let r = refine::refine(&surface, &cur.mesh, &marked, &opts, &mut tick).map_err(|e| mesh_error_text(&e))?;
+        if r.split == 0 || r.stats.min_dihedral_deg < MIN_REFINED_DIHEDRAL {
+            stop = "unrefinable";
+            break;
+        }
+        // Fine is chosen to look closer, so it solves every pass its budget allows.
+        if refine == Refine::Standard && adapt::settled(split_reach(&cur, &r.mesh, setup.material.e)) {
+            stop = "settled";
+            break;
+        }
+        match solve_pass(r.mesh, r.stats, h0, &setup, &mut tick) {
+            Ok(next) => {
+                finest = r.finest;
+                passes.push((next.mesh.tets.len(), next.sol.max_von_mises));
+                cur = next;
+                last_secs = t.elapsed().as_secs_f64();
+            }
+            Err(PassFail::Solve(SolveError::TooLarge { .. }, _)) => {
+                stopped = Some("as a finer mesh needs more memory than the solver may use");
+                stop = "memory";
+                break;
+            }
+            Err(e) => return Err(e.text()),
+        }
+    }
+    let Pass { mesh, stats, sol, spotted, held } = cur;
+    let solved = spotted.as_ref().map_or(&mesh, |s| &s.mesh);
 
     // Warnings, most telling first.
     let bb = kernel::bbox(&shape).unwrap_or([0.0; 6]);
@@ -1207,9 +1444,9 @@ fn analyse(
     if let Some(s) = &spotted {
         place.face = place.face.map(|f| s.face(f));
     }
-    let at_inside_corner =
-        inside_corners(&surface).iter().any(|s| segment_distance(peak_at, s) <= CORNER_REACH * stats.size);
-    if peak > 0.0 && (at_inside_corner || place.support_edge.is_some()) {
+    let at_inside_corner = corners.iter().any(|s| segment_distance(peak_at, s) <= CORNER_REACH * h0);
+    let rough = peak > 0.0 && (at_inside_corner || place.support_edge.is_some());
+    if rough {
         let spot = match place.support_edge {
             Some("fixed spot") if !at_inside_corner => "where a fixed spot ends".to_string(),
             Some(word) if !at_inside_corner => format!("where a {word} face ends"),
@@ -1217,6 +1454,20 @@ fn analyse(
         };
         warnings.push(format!(
             "the peak stress is {spot}, stress at a sharp inside corner or where a support ends grows as the mesh is refined, look at the colour away from it"
+        ));
+    }
+    let peaks: Vec<f64> = passes.iter().map(|p| p.1).collect();
+    if let (false, Some(share)) = (rough, adapt::unsettled(&peaks)) {
+        let further = if refine == Refine::Fine { "allowing more elements" } else { "a fine refinement" };
+        warnings.push(format!(
+            "the peak stress moved by {:.0}% with the last refinement, so it may not have settled yet, {further} reads it more closely",
+            share * 100.0
+        ));
+    }
+    if let Some(why) = stopped {
+        warnings.push(format!(
+            "the refinement stopped after {} of its passes {why}, so the peak may read lower than it is",
+            passes.len() - 1
         ));
     }
     if stats.size > thickness / 2.0 * 1.0001 {
@@ -1267,7 +1518,10 @@ fn analyse(
             "nodes": sol.nodes.len(),
             "elements": sol.elements,
             "size": py_round(stats.size, 4),
+            "finest": py_round(finest, 4),
             "minDihedral": py_round(stats.min_dihedral_deg, 1),
+            "passes": passes.iter().map(|&(n, peak)| json!({"elements": n, "maxVonMises": r6(peak)})).collect::<Vec<_>>(),
+            "stop": stop,
         }),
     );
     out.insert("maxVonMises".into(), json!({"value": r6(peak), "at": r3(peak_at), "face": place.face}));

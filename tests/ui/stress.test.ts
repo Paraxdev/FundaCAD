@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   setupSummary,
   CUSTOM_MATERIAL,
+  FINE_MAX_ELEMENTS,
   STRESS_MATERIALS,
   buildStressRequest,
   forceVector,
@@ -175,6 +176,43 @@ describe("buildStressRequest", () => {
   });
 });
 
+describe("refinement", () => {
+  const base = {
+    supports: [{ type: "fixed", faces: [bottom] }],
+    loads: [{ faces: [top], force: [0, 0, -100] }],
+    material: "PLA",
+  };
+  const asFaces = (sel: Selector[]): StressFaceSet => ({ selectors: sel, faceIds: [], normalSum: [0, 0, 0], area: 0 });
+
+  it("sends refine only when it is not Standard, and a larger element limit with Fine", () => {
+    const s = ready();
+    expect(s.refine).toBe("standard");
+    expect(buildStressRequest(s)).toEqual({ ok: true, body: "b1", options: base });
+    s.refine = "fine";
+    expect(buildStressRequest(s)).toEqual({
+      ok: true,
+      body: "b1",
+      options: { ...base, refine: "fine", maxElements: FINE_MAX_ELEMENTS },
+    });
+    s.refine = "off";
+    s.size = 1.7;
+    expect(buildStressRequest(s)).toEqual({ ok: true, body: "b1", options: { ...base, size: 1.7, refine: "off" } });
+  });
+
+  it("saves refine only when it is not Standard and reads it back", () => {
+    const s = ready();
+    expect("refine" in studyFromSetup(s)).toBe(false);
+    for (const refine of ["fine", "off"] as const) {
+      s.refine = refine;
+      const study = studyFromSetup(s);
+      expect(study.refine).toBe(refine);
+      expect(setupFromStudy(study, asFaces).refine).toBe(refine);
+    }
+    const { refine: _, ...older } = studyFromSetup(s);
+    expect(setupFromStudy(older, asFaces).refine).toBe("standard");
+  });
+});
+
 describe("intoDirection", () => {
   it("is minus the mean outward normal", () => {
     expect(intoDirection(faces(top, [0, 0, 1]))).toEqual([0, 0, -1]);
@@ -220,6 +258,72 @@ describe("formatStressResult", () => {
       ],
       yields: false,
     });
+  });
+
+  it("shows the finest size and the passes of a refined mesh, and the plain row for one pass or an older reply", () => {
+    const mesh = (m: Partial<StressReply["mesh"]>) =>
+      formatStressResult({ ...reply, mesh: { ...reply.mesh, ...m } }, "mm").details.find((d) => d.k === "Mesh")!.v;
+    const two = [
+      { elements: 3100, maxVonMises: 29.5 },
+      { elements: 4800, maxVonMises: 31.25 },
+    ];
+    expect(mesh({ finest: 0.61, passes: two })).toBe("4800 elements, 2.54 mm, 0.61 mm at the peak, 2 passes");
+    expect(mesh({ finest: 0.61, passes: [...two, { elements: 6000, maxVonMises: 31.4 }] })).toBe(
+      "4800 elements, 2.54 mm, 0.61 mm at the peak, 3 passes",
+    );
+    expect(mesh({ finest: 2.54, passes: [two[1]!] })).toBe("4800 elements, 2.54 mm");
+    expect(mesh({ finest: 2.54, passes: two })).toBe("4800 elements, 2.54 mm");
+    expect(mesh({})).toBe("4800 elements, 2.54 mm");
+  });
+
+  it("says in Details whether refinement ran and why it stopped, and nothing for an older reply", () => {
+    const refinement = (m: Partial<StressReply["mesh"]>) =>
+      formatStressResult({ ...reply, mesh: { ...reply.mesh, ...m } }, "mm").details.find((d) => d.k === "Refinement")
+        ?.v ?? null;
+    const one = [{ elements: 4800, maxVonMises: 15.077 }];
+    const two = [{ elements: 3100, maxVonMises: 28.46 }, ...one];
+    const three = [...two, { elements: 6000, maxVonMises: 35.92 }];
+    expect({
+      older: refinement({ passes: two }),
+      off: refinement({ passes: one, stop: "off" }),
+      settled: refinement({ passes: one, stop: "settled" }),
+      settledLater: refinement({ passes: two, stop: "settled" }),
+      once: refinement({ passes: two, stop: "passes" }),
+      twice: refinement({ passes: three, stop: "passes" }),
+      noPasses: refinement({ stop: "elements" }),
+      time: refinement({ passes: one, stop: "time" }),
+      memory: refinement({ passes: two, stop: "memory" }),
+      unrefinable: refinement({ passes: one, stop: "unrefinable" }),
+      unknownAlone: refinement({ passes: one, stop: "later" }),
+      unknownRefined: refinement({ passes: two, stop: "later" }),
+    }).toEqual({
+      older: null,
+      off: "Off",
+      settled: "Not needed, a finer mesh would barely move the peak",
+      settledLater:
+        "Refined once, the peak went from 28.46 to 15.077 MPa, then a finer mesh would barely move the peak",
+      once: "Refined once, the peak went from 28.46 to 15.077 MPa",
+      twice: "Refined 2 times, the peak went from 28.46 to 35.92 MPa",
+      noPasses: "Stopped at the element limit",
+      time: "Stopped to stay within about a minute",
+      memory: "Refined once, the peak went from 28.46 to 15.077 MPa, then stopped as a finer mesh needs more memory",
+      unrefinable: "Nothing left to refine",
+      unknownAlone: null,
+      unknownRefined: "Refined once, the peak went from 28.46 to 15.077 MPa",
+    });
+    const rows = formatStressResult({ ...reply, mesh: { ...reply.mesh, passes: one, stop: "settled" } }, "mm").details;
+    expect(rows.slice(-2).map((r) => r.k)).toEqual(["Mesh", "Refinement"]);
+  });
+
+  it("tells a Fine result in Details that Standard can read a higher peak, and says nothing for Standard or Off", () => {
+    const rows = (refine?: "off" | "standard" | "fine") =>
+      formatStressResult(reply, "mm", [], refine).details.filter((d) => d.k === "Note");
+    expect(rows("fine")).toEqual([{ k: "Note", v: expect.stringContaining("check the safety factor with Standard") }]);
+    expect(rows("standard")).toEqual([]);
+    expect(rows("off")).toEqual([]);
+    expect(rows()).toEqual([]);
+    const v = formatStressResult({ ...reply, mesh: { ...reply.mesh, stop: "settled" } }, "mm", ["fixed"], "fine");
+    expect(v.details.slice(-3).map((d) => d.k)).toEqual(["Mesh", "Refinement", "Note"]);
   });
 
   it("lists each of three supports' reactions and the weight in the details, none of them in the key rows", () => {

@@ -3553,6 +3553,27 @@ export class Viewport {
     };
   }
 
+  /** A world space copy of the body's display mesh, null when the body is not on the model. */
+  bodyDisplayMesh(
+    bodyId: string,
+  ): { positions: Float32Array; indices: Uint32Array; faceIds: Int32Array; faceStart: number } | null {
+    const body = this.model?.bodies.find((b) => b.id === bodyId);
+    const index = body?.mesh.geometry.getIndex();
+    if (!body || !index) return null;
+    const pos = body.mesh.geometry.getAttribute("position");
+    body.mesh.updateMatrixWorld();
+    const p = new THREE.Vector3();
+    const positions = new Float32Array(pos.count * 3);
+    for (let v = 0; v < pos.count; v++) {
+      p.fromBufferAttribute(pos, v).applyMatrix4(body.mesh.matrixWorld);
+      positions.set([p.x, p.y, p.z], v * 3);
+    }
+    const tris = Math.min(body.faceIds.length, Math.floor(index.count / 3));
+    const indices = new Uint32Array(tris * 3);
+    for (let i = 0; i < tris * 3; i++) indices[i] = index.getX(i);
+    return { positions, indices, faceIds: Int32Array.from(body.faceIds.slice(0, tris)), faceStart: body.faceStart };
+  }
+
   /** A by:"nearest" face selector, the surface normal and the hit point under the cursor. */
   pickFaceForPressPull(
     clientX: number,

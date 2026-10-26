@@ -287,6 +287,13 @@ pub fn request_of(args: &Map<String, Value>) -> Result<Request, String> {
             _ => return Err(format!("`maxElements` is a whole number of elements above 0, got {v}")),
         }
     }
+    match args.get("refine") {
+        None | Some(Value::Null) => {}
+        Some(Value::String(w)) if matches!(w.as_str(), "off" | "standard" | "fine") => {
+            payload.insert("refine".into(), json!(w));
+        }
+        Some(v) => return Err(format!("`refine` is off, standard or fine, got {v}")),
+    }
     let image = match args.get("image") {
         None | Some(Value::Null) => true,
         Some(Value::Bool(b)) => *b,
@@ -399,6 +406,13 @@ pub fn report(r: &Value, supports: &[String]) -> String {
         count("nodes"),
         sig(f(mesh, "size").unwrap_or(0.0))
     );
+    let passes = mesh.get("passes").and_then(Value::as_array).map_or(0, Vec::len);
+    if let (true, Some(finest)) = (passes > 1, f(mesh, "finest")) {
+        line.push_str(&format!(", refined in {} passes down to {} mm", passes, sig(finest)));
+    }
+    if mesh.get("stop").and_then(Value::as_str) == Some("settled") {
+        line.push_str(", refined no further as a finer mesh would barely move the peak");
+    }
     if let Some(d) = f(mesh, "minDihedral") {
         line.push_str(&format!(", smallest dihedral angle {} deg", g_format(d)));
     }

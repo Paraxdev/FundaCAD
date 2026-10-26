@@ -15,6 +15,8 @@ mod features_datum_refs;
 mod features_import;
 mod features_joint;
 mod features_mechanism;
+mod fem_adapt;
+mod fem_refine;
 mod fem_solve;
 mod fem_tetmesh;
 mod heartbeat;

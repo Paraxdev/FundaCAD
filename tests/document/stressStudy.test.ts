@@ -110,6 +110,13 @@ describe("normalizeStressStudy", () => {
     });
   });
 
+  it("keeps refine fine or off, and reads an unknown or absent refine as Standard", () => {
+    expect(normalizeStressStudy({ ...study, refine: "fine" })).toEqual({ ...study, refine: "fine" });
+    expect(normalizeStressStudy({ ...study, refine: "off" })).toEqual({ ...study, refine: "off" });
+    for (const bad of ["standard", "Fine", 3, null])
+      expect(normalizeStressStudy({ ...study, refine: bad }), String(bad)).toEqual(study);
+  });
+
   it("renumbers rows whose ids repeat, so each can be addressed", () => {
     const twice = { ...study, supports: [study.supports[0], { ...study.supports[1], id: 1 }] };
     expect(normalizeStressStudy(twice)!.supports.map((s) => s.id)).toEqual([1, 2]);
@@ -147,6 +154,17 @@ describe("the store keeps the study with the document", () => {
     again.load(store.toJSON());
     expect(again.stressStudy).toEqual(study);
     expect(again.toJSON()).toBe(store.toJSON());
+  });
+
+  it("saves Fine with the study and loses it when a second document without it is loaded", () => {
+    const store = new DocumentStore(stubBackend(), base());
+    store.setStressStudy({ ...study, refine: "fine" });
+    expect(JSON.parse(store.toJSON()).stress).toEqual({ ...study, refine: "fine" });
+    const plain = new DocumentStore(stubBackend(), base());
+    plain.setStressStudy(study);
+    store.load(plain.toJSON());
+    expect(store.stressStudy).toEqual(study);
+    expect(JSON.parse(store.toJSON()).stress).toEqual(study);
   });
 
   it("opens a file with a damaged study as if it had none", () => {

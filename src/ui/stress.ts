@@ -2,12 +2,13 @@
 // rows, the colour map, and the arithmetic behind the force arrow, deformation and probe. Testable in node.
 
 import type { AxisDirection, Selector, StressSpot, StressStudy, StressSupportType, Vec3 } from "../types";
-import type { StressMaterial, StressOptions, StressReply, StressSpotArea } from "../geometry/client";
+import type { StressMaterial, StressOptions, StressRefine, StressReply, StressSpotArea } from "../geometry/client";
 import type { PanelRow } from "../stores/panels";
 import { STUDY_DEFAULTS } from "../document/stressStudy";
 import { cylinderFromFace } from "../features/planeMath";
 import { displayRound, toDisplay, type Unit } from "./units";
 import { peakPlaceOf, type VerdictInput } from "./stressVerdict";
+import { vonMisesAt } from "./stressLocate";
 
 /** E and yield in MPa, density in g/cm3. Mirrors the engine's presets: a preset goes over the wire by name, so these
  *  numbers are only what the panel shows. */
@@ -169,7 +170,17 @@ export interface StressSetup {
   /** Element size in mm whatever the display unit, as the engine's warnings
    *  quote it; null for the engine's automatic size. */
   size: number | null;
+  refine: StressRefine;
 }
+
+export const REFINE_CHOICES: readonly { value: StressRefine; label: string }[] = [
+  { value: "standard", label: "Standard" },
+  { value: "fine", label: "Fine" },
+  { value: "off", label: "Off" },
+];
+
+/** The element limit sent with Fine; the engine's default is about half. */
+export const FINE_MAX_ELEMENTS = 60_000;
 
 /** One row of the setup, by its id. */
 export type StressTarget = { support: number } | { load: number };
@@ -209,6 +220,7 @@ export function newSetup(body: string | null): StressSetup {
       density: STUDY_DEFAULTS.density,
     },
     size: null,
+    refine: "standard",
   };
 }
 
@@ -262,6 +274,7 @@ export function studyFromSetup(s: StressSetup, prev?: Readonly<StressStudy> | nu
       density: num(s.custom.density, pc?.density ?? d.density),
     },
     size: typeof s.size === "number" && Number.isFinite(s.size) && s.size > 0 ? s.size : null,
+    ...(s.refine === "fine" || s.refine === "off" ? { refine: s.refine } : {}),
   };
 }
 
@@ -296,6 +309,7 @@ export function setupFromStudy(study: StressStudy, faces: (selectors: Selector[]
     material: study.material,
     custom: { ...study.custom },
     size: study.size,
+    refine: study.refine ?? "standard",
   };
 }
 
@@ -471,6 +485,10 @@ export function buildStressRequest(s: StressSetup): StressRequest {
       return { ok: false, message: "the mesh size must be above 0, or blank for automatic" };
     options.size = s.size;
   }
+  if (s.refine === "fine") {
+    options.refine = "fine";
+    options.maxElements = FINE_MAX_ELEMENTS;
+  } else if (s.refine === "off") options.refine = "off";
   return { ok: true, body: s.body, options };
 }
 
@@ -524,6 +542,7 @@ export function formatStressResult(
   r: StressReply,
   unit: Unit,
   supports: readonly StressSupportType[] = [],
+  refine: StressRefine = "standard",
 ): StressResultView {
   const sf = r.safetyFactor;
   const rows: PanelRow[] = [
@@ -551,7 +570,12 @@ export function formatStressResult(
     }
   }
   // In mm like the element size box and the engine's warnings about it.
-  details.push({ k: "Mesh", v: `${r.mesh.elements} elements, ${displayRound(r.mesh.size)} mm` });
+  details.push({ k: "Mesh", v: meshRow(r.mesh) });
+  const refinement = refinementRow(r.mesh);
+  if (refinement) details.push({ k: "Refinement", v: refinement });
+  // Fine starts on a finer mesh, so on some parts its peak reads lower than Standard's (Wall bracket 14.0 against
+  // 15.2 MPa, a deep round groove 5% lower) and on others higher.
+  if (refine === "fine") details.push({ k: "Note", v: FINE_NOTE });
   const warnings = [...(r.warnings ?? [])];
   for (const e of r.errors ?? []) warnings.push(e.feature_id ? `${e.feature_id}: ${e.message}` : e.message);
   const values = r.surface?.vonMises ?? [];
@@ -566,6 +590,38 @@ export function formatStressResult(
     peakAt: r.maxVonMises.at,
     maxDeflection: r.maxDisplacement.value,
   };
+}
+
+function meshRow(m: StressReply["mesh"]): string {
+  const row = `${m.elements} elements, ${displayRound(m.size)} mm`;
+  const passes = m.passes?.length ?? 1;
+  if (passes < 2 || m.finest === undefined || !(m.finest < m.size)) return row;
+  return `${row}, ${displayRound(m.finest)} mm at the peak, ${passes} passes`;
+}
+
+const FINE_NOTE =
+  "Fine starts on a finer mesh than Standard and can read a lower peak, check the safety factor with Standard too";
+
+const REFINE_STOPS: Record<string, string> = {
+  settled: "a finer mesh would barely move the peak",
+  elements: "stopped at the element limit",
+  time: "stopped to stay within about a minute",
+  memory: "stopped as a finer mesh needs more memory",
+  unrefinable: "nothing left to refine",
+};
+
+function refinementRow(m: StressReply["mesh"]): string | null {
+  if (m.stop === undefined) return null;
+  const passes = m.passes ?? [];
+  const why = REFINE_STOPS[m.stop];
+  if (passes.length < 2) {
+    if (m.stop === "off") return "Off";
+    if (m.stop === "settled") return `Not needed, ${why}`;
+    return why ? why[0]!.toUpperCase() + why.slice(1) : null;
+  }
+  const n = passes.length - 1;
+  const moved = `${n === 1 ? "Refined once" : `Refined ${n} times`}, the peak went from ${displayRound(passes[0]!.maxVonMises)} to ${displayRound(passes[n]!.maxVonMises)} MPa`;
+  return why ? `${moved}, then ${why}` : moved;
 }
 
 /** The legend's end labels, MPa. A minimum under a thousandth of the peak is no colour of its own, so it reads 0. */
@@ -900,14 +956,18 @@ export function barycentric(a: Vec3, b: Vec3, c: Vec3, p: Vec3): Vec3 {
 /** Von Mises (MPa) and deflection (mm, its size and vector) interpolated at `weights` in surface triangle `tri`.
  *  Deflection is null without displacement data; null for a triangle the surface lacks. */
 export function probeValues(
-  surface: { indices: ArrayLike<number>; vonMises: ArrayLike<number>; displacement?: ArrayLike<number> },
+  surface: {
+    indices: ArrayLike<number>;
+    vonMises: ArrayLike<number>;
+    displacement?: ArrayLike<number> | undefined;
+    stress?: ArrayLike<number> | undefined;
+  },
   tri: number,
   weights: Vec3,
 ): { vonMises: number; deflection: number | null; vector: Vec3 | null } | null {
   if (!(tri >= 0) || tri * 3 + 2 >= surface.indices.length) return null;
   const ids = [surface.indices[tri * 3]!, surface.indices[tri * 3 + 1]!, surface.indices[tri * 3 + 2]!];
-  let vm = 0;
-  for (let k = 0; k < 3; k++) vm += weights[k]! * (surface.vonMises[ids[k]!] ?? 0);
+  const vm = vonMisesAt(surface, tri, weights);
   const d = surface.displacement;
   if (!d || !d.length) return { vonMises: vm, deflection: null, vector: null };
   const at = (k: number, j: number) => weights[k]! * (d[ids[k]! * 3 + j] ?? 0);

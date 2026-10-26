@@ -1130,6 +1130,8 @@ export interface StressStudy {
   custom: { E: number; nu: number; yield: number; density: number };
   /** mm, null for the engine's automatic size. */
   size: number | null;
+  /** Absent for Standard, so a default study saves as before. */
+  refine?: "fine" | "off";
 }
 
 // A non-fatal note from a rebuild: a low-confidence match, a skipped boolean, a sealed void.

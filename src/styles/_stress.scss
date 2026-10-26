@@ -261,6 +261,13 @@
 .stress-results.stale .stress-key-row {
   opacity: 0.55;
 }
+.stress-detail-row .measure-k {
+  flex: none;
+  white-space: nowrap;
+}
+.stress-detail-row .measure-v {
+  text-align: right;
+}
 .stress-view-row {
   display: flex;
   align-items: center;
