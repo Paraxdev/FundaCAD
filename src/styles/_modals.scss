@@ -74,7 +74,6 @@
 }
 .btn-primary {
   background: var(--accent, #ff7a3c);
-  border-color: var(--accent, #ff7a3c);
   color: var(--on-accent, #160a04);
   font-weight: 600;
 }
@@ -244,7 +243,7 @@
   cursor: default;
 }
 .select-trigger.open {
-  border-color: var(--accent, #ff7a3c);
+  background-color: color-mix(in srgb, var(--accent) 14%, var(--field-bg));
 }
 /* A text field: .sm-select without the caret, which would say the value is one of a fixed
    set. */
