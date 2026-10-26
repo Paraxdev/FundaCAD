@@ -12,7 +12,11 @@
     "updater:default",
     {
       "identifier": "opener:allow-open-url",
-      "allow": [{ "url": "https://github.com/Paraxdev/fundacad/*" }, { "url": "https://paraxdev.github.io/FundaCAD/*" }]
+      "allow": [
+        { "url": "https://github.com/Paraxdev/fundacad/*" },
+        { "url": "https://paraxdev.github.io/FundaCAD/*" },
+        { "url": "https://sourceforge.net/projects/fundacad/*" }
+      ]
     },
     "fs:allow-read-text-file",
     "fs:allow-write-text-file",

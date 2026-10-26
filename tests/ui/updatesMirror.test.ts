@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 type Action = { label: string; onClick: () => void };
 const h = vi.hoisted(() => ({
+  openFails: false,
   toasts: [] as { message: string; kind?: string | undefined; action?: Action | undefined }[],
   opened: [] as string[],
   checkFails: false,
@@ -26,15 +27,18 @@ vi.mock("../../src/ui/toast", () => ({
     void h.toasts.push({ message, kind: opts.kind, action: opts.action }),
 }));
 vi.mock("../../src/ui/choice", () => ({ choose: async () => "install" }));
-vi.mock("../../src/ui/welcome", () => ({ openExternal: async (url: string) => void h.opened.push(url) }));
+vi.mock("../../src/ui/welcome", () => ({
+  openExternal: async (url: string) => {
+    if (h.openFails) throw new Error("refused");
+    h.opened.push(url);
+  },
+}));
 
 import { sourceforgeUrl } from "../../src/app/channel";
 import { checkForUpdates } from "../../src/ui/updates";
 
-const MIRROR = "GitHub could not be reached. Download the newest build from SourceForge instead.";
-
 beforeEach(() => {
-  Object.assign(h, { toasts: [], opened: [], checkFails: false, downloadFails: false });
+  Object.assign(h, { toasts: [], opened: [], checkFails: false, downloadFails: false, openFails: false });
   vi.stubGlobal("window", { __TAURI_INTERNALS__: {} });
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
@@ -59,7 +63,11 @@ describe("a failed update", () => {
     h.checkFails = true;
     await checkForUpdates(true, async () => "go");
     expect(h.toasts.map((t) => [t.message, t.kind, t.action?.label])).toEqual([
-      [`${MIRROR} (offline)`, "error", "Open SourceForge"],
+      [
+        "Could not check for updates (offline). Download the newest build from GitHub or SourceForge.",
+        "error",
+        "Open SourceForge",
+      ],
     ]);
     h.toasts[0]!.action!.onClick();
     expect(h.opened).toEqual([sourceforgeUrl()]);
@@ -70,10 +78,20 @@ describe("a failed update", () => {
     await checkForUpdates(true, async () => "go");
     expect(h.toasts.map((t) => [t.message, t.kind, t.action?.label])).toEqual([
       ["Downloading the update…", undefined, undefined],
-      [`${MIRROR} (reset)`, "error", "Open SourceForge"],
+      ["Could not update (reset). Download the newest build from SourceForge.", "error", "Open SourceForge"],
     ]);
     h.toasts[1]!.action!.onClick();
     expect(h.opened).toEqual([sourceforgeUrl()]);
+  });
+
+  it("shows the folder as text when the system browser cannot be opened", async () => {
+    h.checkFails = true;
+    h.openFails = true;
+    await checkForUpdates(true, async () => "go");
+    h.toasts[0]!.action!.onClick();
+    await vi.waitFor(() =>
+      expect(h.toasts.map((t) => t.message).slice(1)).toEqual([`Open ${sourceforgeUrl()} in a browser.`]),
+    );
   });
 
   it("from the automatic check shows nothing", async () => {

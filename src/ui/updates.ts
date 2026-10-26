@@ -97,14 +97,19 @@ export function updateAction(
 
 const MIRROR_ACTION = {
   label: "Open SourceForge",
-  onClick: () => void openExternal(sourceforgeUrl()),
+  onClick: () => {
+    const url = sourceforgeUrl();
+    openExternal(url).catch(() => toast(`Open ${url} in a browser.`, { timeout: 30000 }));
+  },
 };
-const MIRROR_TEXT = "GitHub could not be reached. Download the newest build from SourceForge instead.";
 
 function failed(err: unknown): void {
   console.error("[updates] install failed:", err);
   const why = err instanceof Error ? err.message : String(err);
-  toast(`${MIRROR_TEXT} (${why})`, { kind: "error", action: MIRROR_ACTION });
+  toast(`Could not update (${why}). Download the newest build from SourceForge.`, {
+    kind: "error",
+    action: MIRROR_ACTION,
+  });
 }
 
 /** `interactive` is Help's check: it asks with a modal and reports up to date, not applicable and failures. The
@@ -130,7 +135,10 @@ export async function checkForUpdates(interactive: boolean, beforeInstall: Befor
       // Most often a build published without a signing key has no latest.json, a 404 that reads as a network fault,
       // so the message says what to do instead of guessing from the error text.
       const why = err instanceof Error ? err.message : String(err);
-      toast(`${MIRROR_TEXT} (${why})`, { kind: "error", action: MIRROR_ACTION });
+      toast(`Could not check for updates (${why}). Download the newest build from GitHub or SourceForge.`, {
+        kind: "error",
+        action: MIRROR_ACTION,
+      });
     }
     return false;
   }
@@ -155,7 +163,9 @@ export async function checkForUpdates(interactive: boolean, beforeInstall: Befor
 }
 
 const LAUNCH_DELAY_MS = 8000;
-const MAX_TIMER_MS = 2 ** 31 - 1;
+const RETRY_MS = 3600_000;
+// A timer counts awake time, so a sleeping laptop would reach a due check days late. Each wait is short and replans.
+const MAX_WAIT_MS = 3600_000;
 
 /** Packaged builds only: dev builds carry version 0.1.0, which is always older than the rolling feed. Checks once
  *  per period across launches, from one timer that every setting change replaces. */
@@ -163,15 +173,17 @@ export function scheduleStartupUpdateCheck(beforeInstall: BeforeInstall): void {
   if (import.meta.env.DEV) return;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let running = false;
-  // A failure records nothing, so this session's own attempt is what spaces its retry.
-  let attemptedAt: number | null = null;
+  let launching = true;
+  let reached = false;
+  // A failure records nothing as a success, so this session's own failure spaces its retry.
+  let failedAt: number | null = null;
 
   const nextDue = (): number => {
-    if (updatePeriod() === "launch") return attemptedAt === null ? 0 : Infinity;
-    const span = PERIOD_MS[updatePeriod()];
+    const retry = failedAt === null ? 0 : failedAt + RETRY_MS;
+    if (updatePeriod() === "launch") return reached ? Infinity : retry;
     const stored = lastUpdateCheck();
-    const from = [stored, attemptedAt].filter((t): t is number => t !== null && t <= Date.now());
-    return from.length ? Math.max(...from) + span : 0;
+    const next = stored !== null && stored <= Date.now() ? stored + PERIOD_MS[updatePeriod()] : 0;
+    return Math.max(next, retry);
   };
 
   const plan = () => {
@@ -180,16 +192,21 @@ export function scheduleStartupUpdateCheck(beforeInstall: BeforeInstall): void {
     if (!autoUpdateCheck() || running) return;
     const wait = nextDue() - Date.now();
     if (wait === Infinity) return;
-    timer = setTimeout(fire, Math.min(MAX_TIMER_MS, wait > 0 ? wait : LAUNCH_DELAY_MS));
+    const delay = wait > 0 && !launching ? wait : Math.max(wait, LAUNCH_DELAY_MS);
+    launching = false;
+    timer = setTimeout(fire, Math.min(MAX_WAIT_MS, delay));
   };
 
   const fire = async () => {
     timer = undefined;
     if (!autoUpdateCheck() || nextDue() > Date.now()) return plan();
     running = true;
-    attemptedAt = Date.now();
     try {
-      if (await checkForUpdates(false, beforeInstall)) recordUpdateCheck(Date.now());
+      if (await checkForUpdates(false, beforeInstall)) {
+        reached = true;
+        failedAt = null;
+        recordUpdateCheck(Date.now());
+      } else failedAt = Date.now();
     } finally {
       running = false;
     }

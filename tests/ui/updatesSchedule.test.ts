@@ -106,7 +106,7 @@ describe("automatic update checks", () => {
     ]);
   });
 
-  it("record nothing for a failed check and try again one period later", async () => {
+  it("record nothing for a failed check and try again an hour later, not a period later", async () => {
     h.fail = true;
     const { prefs } = await launch({ ...last(2 * DAY) });
     expect(await checksWithin(8000)).toBe(1);
@@ -114,10 +114,10 @@ describe("automatic update checks", () => {
       T0 - 2 * DAY,
       String(T0 - 2 * DAY),
     ]);
-    expect(await checksWithin(DAY - 1)).toBe(0);
+    expect(await checksWithin(HOUR - 1)).toBe(0);
     h.fail = false;
     expect(await checksWithin(1)).toBe(1);
-    expect(prefs.lastUpdateCheck()).toBe(T0 + 8000 + DAY);
+    expect(prefs.lastUpdateCheck()).toBe(T0 + 8000 + HOUR);
   });
 
   it("retry at the next launch after a failure", async () => {
@@ -127,6 +127,17 @@ describe("automatic update checks", () => {
     h.fail = false;
     await launch({ ...last(2 * DAY) });
     expect(await checksWithin(8000)).toBe(1);
+  });
+
+  it("check within an hour when the clock jumps past the period while the timer has not fired", async () => {
+    await launch({ ...last(3 * HOUR) });
+    vi.setSystemTime(T0 + 3 * DAY);
+    expect(await checksWithin(HOUR)).toBe(1);
+  });
+
+  it("keep the 8 s launch delay at the first plan, never sooner", async () => {
+    await launch({ ...last(DAY + 1) });
+    expect([await checksWithin(7999), await checksWithin(1)]).toEqual([0, 1]);
   });
 
   it("cancel the pending timer when switched off, and plan again when switched on", async () => {
