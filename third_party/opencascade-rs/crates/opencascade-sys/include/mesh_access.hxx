@@ -5,6 +5,7 @@
 // reported as a false return, Standard_Failure is not a std::exception.
 
 #include "rust/cxx.h"
+#include "edge_curvature.hxx"
 #include <BRepAdaptor_Curve.hxx>
 #include <BRepAdaptor_Curve2d.hxx>
 #include <BRepAdaptor_Surface.hxx>
@@ -622,6 +623,24 @@ inline int32_t mesh_access_edge_smooth(const MeshAccess &m, int32_t edge, double
       }
     }
     return 1;
+  } catch (...) {
+    return -1;
+  }
+}
+
+// The highest continuity a fillet's section build reaches on this edge: 3 when
+// both faces are flat across it (planes, or a cylinder or cone met at a rim),
+// else 1. -1 the query raised.
+inline int32_t mesh_access_edge_reach(const MeshAccess &m, int32_t edge) {
+  try {
+    const std::vector<TopoDS_Face> &anc = m.edgeAncestors.at(edge);
+    if (anc.size() < 2) return 1;
+    const TopoDS_Edge &e = mesh_access_edge(m, edge);
+    for (int k = 0; k < 2; ++k) {
+      double c = face_curvature_across(e, anc[k]);
+      if (c < 0 || c > FLAT_ACROSS_CURVATURE) return 1;
+    }
+    return 3;
   } catch (...) {
     return -1;
   }

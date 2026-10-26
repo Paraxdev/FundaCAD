@@ -45,6 +45,7 @@ fn body_from_json(m: &Map<String, Value>) -> WireBody {
                         })
                         .collect(),
                     smooth: pyjson::truthy(e.get("smooth")),
+                    reach: e.get("reach").and_then(Value::as_u64).map(|r| r as u8),
                 })
                 .collect()
         })

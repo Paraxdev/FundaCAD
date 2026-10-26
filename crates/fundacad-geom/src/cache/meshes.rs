@@ -177,7 +177,7 @@ pub fn encode(b: &FullBody) -> Vec<u8> {
     b.face_ids.iter().for_each(|v| out.extend_from_slice(&v.to_le_bytes()));
     put_u32(&mut out, b.edges.len());
     for e in &b.edges {
-        out.push(u8::from(e.smooth));
+        out.push(u8::from(e.smooth) | (e.reach.unwrap_or(0) << 1));
         put_u32(&mut out, e.points.len());
         e.points.iter().flatten().for_each(|v| out.extend_from_slice(&v.to_le_bytes()));
     }
@@ -235,10 +235,11 @@ pub fn decode(data: &[u8]) -> Option<FullBody> {
     let n = r.u32()?;
     let mut edges = Vec::with_capacity(n.min(1 << 20));
     for _ in 0..n {
-        let smooth = r.u8()? != 0;
+        let flags = r.u8()?;
+        let (smooth, reach) = (flags & 1 != 0, Some(flags >> 1).filter(|r| *r > 0));
         let k = r.u32()?;
         let flat = r.f32s(k.checked_mul(3)?)?;
-        edges.push(Edge { points: flat.chunks_exact(3).map(|p| [p[0], p[1], p[2]]).collect(), smooth });
+        edges.push(Edge { points: flat.chunks_exact(3).map(|p| [p[0], p[1], p[2]]).collect(), smooth, reach });
     }
     if !r.0.is_empty() {
         return None;

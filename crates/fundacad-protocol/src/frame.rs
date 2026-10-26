@@ -125,6 +125,10 @@ fn pack_edges<'a>(body: &'a FullBody, p: &mut Packer<'a>) -> Value {
     if !smooth.is_empty() {
         out.insert("smooth".into(), Value::Array(smooth));
     }
+    let reach: Vec<Value> = body.edges.iter().enumerate().filter_map(|(i, e)| e.reach.map(|r| json!([i, r]))).collect();
+    if !reach.is_empty() {
+        out.insert("reach".into(), Value::Array(reach));
+    }
     Value::Object(out)
 }
 
@@ -410,6 +414,13 @@ pub fn decode_frame(bytes: &[u8]) -> Result<Value, String> {
         let counts = packed.get("$counts").and_then(&mut take).unwrap_or_default();
         let smooth: std::collections::HashSet<u64> =
             packed.get("smooth").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_u64).collect();
+        let reach: std::collections::HashMap<u64, u64> = packed
+            .get("reach")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|p| Some((p.get(0)?.as_u64()?, p.get(1)?.as_u64()?)))
+            .collect();
         let owner = packed.get("body").cloned().unwrap_or(Value::Null);
         let mut next = pts.chunks_exact(3);
         let mut edges = Vec::with_capacity(counts.len());
@@ -421,6 +432,9 @@ pub fn decode_frame(bytes: &[u8]) -> Result<Value, String> {
             em.insert("body".into(), owner.clone());
             if smooth.contains(&(i as u64)) {
                 em.insert("smooth".into(), Value::Bool(true));
+            }
+            if let Some(r) = reach.get(&(i as u64)) {
+                em.insert("reach".into(), (*r).into());
             }
             edges.push(Value::Object(em));
         }

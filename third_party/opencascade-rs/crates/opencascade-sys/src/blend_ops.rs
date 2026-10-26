@@ -9,6 +9,7 @@ mod inner {
         include!("opencascade-sys/include/blend_ops.hxx");
         include!("opencascade-sys/include/blend_conic.hxx");
         include!("opencascade-sys/include/blend_section.hxx");
+        include!("opencascade-sys/include/blend_measure.hxx");
 
         type TopoDS_Shape = crate::topo_ds::TopoDS_Shape;
         type Message_ProgressRange = crate::message::Message_ProgressRange;
@@ -40,6 +41,7 @@ mod inner {
         ) -> f64;
         pub fn blend_face_triangles(faces: &TopoDS_Shape, deflection: f64) -> Result<Vec<f64>>;
         pub fn blend_is_valid(shape: &TopoDS_Shape) -> bool;
+        /// `continuity` 1, 2 or 3 is the section's continuity with the faces.
         /// Never throws: `status` 0 built, 1 the profile does not apply, 2 refused.
         pub fn blend_conic(
             sharp: &TopoDS_Shape,
@@ -61,7 +63,7 @@ mod inner {
             sizes: &[f64],
             size2: f64,
             unit: f64,
-            g2: bool,
+            continuity: i32,
             draft: bool,
             profile: f64,
             one_shot: bool,
@@ -69,5 +71,11 @@ mod inner {
             status: &mut i32,
             message: &mut String,
         ) -> UniquePtr<TopoDS_Shape>;
+        /// The highest continuity (1, 2 or 3) the section build reaches on `edge` of `shape`.
+        pub fn blend_reach(shape: &TopoDS_Shape, edge: &TopoDS_Shape) -> i32;
+        /// A test helper, see blend_measure.hxx: curvature and rate jumps across
+        /// the tangent contacts, the largest crease, the contact count, the
+        /// largest tolerance and 1 when the shape is valid.
+        pub fn blend_contact_jumps(shape: &TopoDS_Shape, radius: f64, reach: f64) -> Vec<f64>;
     }
 }

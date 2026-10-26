@@ -10,6 +10,8 @@ pub struct Edge {
     pub points: Vec<[f32; 3]>,
     /// The two faces meet tangentially.
     pub smooth: bool,
+    /// The highest continuity (1 or 2) a fillet reaches here, when below 3.
+    pub reach: Option<u8>,
 }
 
 /// A body the client does not hold, sent in full. `fields` keeps every non-array field in write order; the mesh keys
@@ -91,6 +93,9 @@ impl FullBody {
                 em.insert("body".into(), id.clone());
                 if e.smooth {
                     em.insert("smooth".into(), Value::Bool(true));
+                }
+                if let Some(r) = e.reach {
+                    em.insert("reach".into(), r.into());
                 }
                 Value::Object(em)
             })

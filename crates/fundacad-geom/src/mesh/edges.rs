@@ -28,6 +28,9 @@ pub const SLIVER_EDGE_MM: f64 = 1e-4;
 pub struct EdgeLine {
     pub points: Vec<[f64; 3]>,
     pub smooth: bool,
+    /// The highest continuity a fillet's section build reaches here: 3 where both faces are flat across the edge,
+    /// else 1. Read from face curvature, which the client does not have.
+    pub reach: u8,
 }
 
 /// In edge-to-face map order. Edges go to other threads, build their own adaptors and write nothing back,
@@ -71,7 +74,9 @@ fn one_edge(access: &MeshAccess, plane: &[Option<[f64; 3]>], cos_tol: f64, e: us
         && faces[0] != faces[1]
         && !(plane_of(faces[0]).is_some() && plane_of(faces[1]).is_some())
         && access.edge_smooth(e, SMOOTH_EDGE_DEG.to_radians().cos());
-    Some(EdgeLine { points, smooth })
+    let flat = faces.len() == 2 && plane_of(faces[0]).is_some() && plane_of(faces[1]).is_some();
+    let reach = if smooth || flat { 3 } else { access.edge_reach(e) };
+    Some(EdgeLine { points, smooth, reach })
 }
 
 /// A line is its two endpoints; any other curve is deviation bounded; an edge

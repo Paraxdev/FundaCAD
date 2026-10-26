@@ -155,13 +155,24 @@ pub fn clamp_profile(p: f64) -> f64 {
     }
 }
 
+/// A fillet's `continuity` as the section build takes it: "G2" and "G3" ease into the faces, anything else is a
+/// circular round.
+pub fn continuity_of(c: Option<&str>) -> i32 {
+    match c {
+        Some("G3") => 3,
+        Some("G2") => 2,
+        _ => 1,
+    }
+}
+
 pub fn fillet(ctx: &mut Ctx, f: &Fillet) -> FResult {
     let r = ctx.val(&f.radius)?;
     let p = match &f.profile {
         Some(n) => clamp_profile(ctx.val(n)?),
         None => 0.0,
     };
-    let g2 = f.continuity.as_deref() == Some("G2");
+    let cont = continuity_of(f.continuity.as_deref());
+    let smooth = cont > 1;
     let chord = f.size_type.as_deref() == Some("chord");
     let only_picked = f.tangent_edges == Some(false);
     let draft = f.draft == Some(true);
@@ -173,23 +184,23 @@ pub fn fillet(ctx: &mut Ctx, f: &Fillet) -> FResult {
     let section_at = move |profile: f64| {
         move |s: &Shape, es: &[Shape]| -> Result<Shape, SectionErr> {
             let sizes: Vec<f64> = es.iter().map(|e| if chord { chord_radius(s, e, r) } else { r }).collect();
-            ops::section(s, es, false, &sizes, None, r, g2, draft, profile)
+            ops::section(s, es, false, &sizes, None, r, cont, draft, profile)
         }
     };
     let section = section_at(p);
 
-    if g2 || only_picked || p.abs() < PROFILE_EPS {
+    if smooth || only_picked || p.abs() < PROFILE_EPS {
         return blend_edges(
             ctx,
             &f.id,
             &f.edges,
             "Fillet",
-            &format!("round {p} {g2} {chord}"),
+            &format!("round {p} {cont} {chord}"),
             &op,
             r,
             draft,
             Some(&section),
-            g2 || only_picked,
+            smooth || only_picked,
         );
     }
     let conic = move |s: &Shape, es: &[Shape], size: f64| -> Result<Shape, BlendErr> { ops::conic(s, es, size, p) };
@@ -227,7 +238,7 @@ pub fn fillet(ctx: &mut Ctx, f: &Fillet) -> FResult {
                         &f.id,
                         &f.edges,
                         "Fillet",
-                        &format!("round 0 false {chord}"),
+                        &format!("round 0 1 {chord}"),
                         &op,
                         r,
                         draft,
@@ -274,7 +285,7 @@ pub fn chamfer(ctx: &mut Ctx, f: &Chamfer) -> FResult {
         }
     };
     let section = move |s: &Shape, es: &[Shape]| -> Result<Shape, SectionErr> {
-        ops::section(s, es, true, &vec![d; es.len()], d2, d, false, draft, 0.0)
+        ops::section(s, es, true, &vec![d; es.len()], d2, d, 1, draft, 0.0)
     };
     blend_edges(
         ctx,

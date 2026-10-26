@@ -10,8 +10,8 @@ fn body() -> FullBody {
     b.indices = vec![0, 1, 2];
     b.face_ids = vec![0];
     b.edges = vec![
-        Edge { points: vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]], smooth: false },
-        Edge { points: vec![[1.0, 1.0, 1.0]], smooth: true },
+        Edge { points: vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]], smooth: false, reach: Some(1) },
+        Edge { points: vec![[1.0, 1.0, 1.0]], smooth: true, reach: None },
     ];
     b
 }
@@ -31,6 +31,7 @@ fn frame_layout_decodes() {
     assert_eq!(off, frame.len());
     let edges = &header["result"]["bodies"][0]["edges"];
     assert_eq!(edges["smooth"], json!([1]));
+    assert_eq!(edges["reach"], json!([[0, 1]]));
     assert_eq!(edges["body"], json!("b1"));
     assert!(header["result"]["bodies"][0].get("normals").is_none());
 }

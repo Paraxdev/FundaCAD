@@ -91,10 +91,15 @@
 #include <tuple>
 #include <vector>
 
+#include "edge_curvature.hxx"
+
 namespace secblend {
 
 const double G2_SETBACK = 1.55;
 const double G2_TENSION = 0.5;
+// The degree 7 G3 section's setback, about 1.4588: its midpoint sits as far
+// from the corner as the G2 section's, 3/8 of 1.55 against 51/128 of this.
+const double G3_SETBACK = G2_SETBACK * 3.0 / 8.0 * 128.0 / 51.0;
 const int SKIN_STEPS = 4;
 
 struct SectionError {
@@ -208,6 +213,26 @@ inline std::vector<gp_Vec> g2_poles(const gp_Vec &Qa, const gp_Vec &K, const gp_
                                     : std::vector<gp_Vec>{Qa, Qa, Qa, M, Qb, Qb, Qb};
   double w = std::abs(p);
   for (size_t i = 1; i + 1 < ps.size(); ++i) ps[i] = ps[i].Multiplied(1 - w) + limit[i].Multiplied(w);
+  return ps;
+}
+
+// `cont` is the continuity with the faces, 1, 2 or 3: how far each contact sits from the edge, in radii.
+inline double setback_of(int cont) { return cont >= 3 ? G3_SETBACK : cont == 2 ? G2_SETBACK : 1.0; }
+
+// A G3 section: degree 7, weights 1, four poles evenly spaced on each face's
+// tangent line, so curvature and its rate both meet the face at zero. The
+// profile slides the inner three of each four along their line, towards the
+// corner or back to the contact, so every one stays on it.
+inline std::vector<gp_Vec> g3_poles(const gp_Vec &Qa, const gp_Vec &K, const gp_Vec &Qb, double profile) {
+  double p = std::isnan(profile) ? 0.0 : std::max(-0.99, std::min(0.95, profile));
+  double w = std::abs(p);
+  std::vector<gp_Vec> ps(8);
+  for (int i = 0; i < 4; ++i) {
+    double f = i / 4.0;
+    if (i > 0) f = p > 0 ? f * (1 - w) + w : f * (1 - w);
+    ps[i] = Qa + (K - Qa).Multiplied(f);
+    ps[7 - i] = Qb + (K - Qb).Multiplied(f);
+  }
   return ps;
 }
 
@@ -448,7 +473,7 @@ struct Contacts {
 };
 
 inline Contacts contacts(const gp_Pnt &Pp, const gp_Vec &T, Sides &sides, int s, bool chamfer, double size,
-                         double size2, bool g2) {
+                         double size2, int cont) {
   gp_Vec n1 = sides[0]->normal_on_edge_cached, n2 = sides[1]->normal_on_edge_cached;
   Contacts out;
   if (chamfer) {
@@ -463,7 +488,7 @@ inline Contacts contacts(const gp_Pnt &Pp, const gp_Vec &T, Sides &sides, int s,
     out.normals[1] = n2;
     return out;
   }
-  double r = g2 ? size * G2_SETBACK : size;
+  double r = size * setback_of(cont);
   gp_Vec n0[2] = {n1, n2};
   Ball b = ball(Pp, T, sides, n0, s, r);
   out.Q[0] = P(b.feet[0]);
@@ -476,10 +501,10 @@ inline Contacts contacts(const gp_Pnt &Pp, const gp_Vec &T, Sides &sides, int s,
 }
 
 inline void face_limits(const gp_Pnt &Pp, const gp_Vec &T, Sides &sides, int s, bool chamfer, double size,
-                        double size2, bool g2) {
+                        double size2, int cont) {
   for (auto &side : sides) side->limit.reset();
   if (s > 0) return;
-  Contacts c = contacts(Pp, T, sides, s, chamfer, size, size2, g2);
+  Contacts c = contacts(Pp, T, sides, s, chamfer, size, size2, cont);
   double tol = 1e-6;
   for (int k = 0; k < 2; ++k) {
     Side &side = *sides[k];
@@ -529,12 +554,12 @@ struct Section {
 };
 
 inline Section section(const gp_Pnt &Pp, const gp_Vec &T, Sides &sides, int s, bool chamfer, double size,
-                       double size2, bool g2, double profile, const gp_Ax1 *axis, double margin) {
+                       double size2, int cont, double profile, const gp_Ax1 *axis, double margin) {
   gp_Vec n1 = sides[0]->normal_on_edge_cached, n2 = sides[1]->normal_on_edge_cached;
   double c = std::max(-1.0, std::min(1.0, n1.Dot(n2)));
   if (1 + c < 1e-3) throw err("the faces fold back on each other here");
   gp_Vec m = (n1 + n2).Multiplied(1.0 / (1 + c));
-  Contacts ct = contacts(Pp, T, sides, s, chamfer, size, size2, g2);
+  Contacts ct = contacts(Pp, T, sides, s, chamfer, size, size2, cont);
   gp_Pnt *Q = ct.Q;
   Handle(Geom_Curve) curve;
   if (chamfer) {
@@ -546,7 +571,12 @@ inline Section section(const gp_Pnt &Pp, const gp_Vec &T, Sides &sides, int s, b
     bool clamped = axis != nullptr && clamp_to_axis(Q, K, Pp, *axis);
     clamped = clamp_to_limits(Q, K, sides) || clamped;
     double k = conic_weight_scale(profile);
-    if (g2 && std::abs(profile) < 1e-12) {
+    if (cont >= 3) {
+      std::vector<gp_Vec> ps = g3_poles(V(Q[1]), V(K), V(Q[0]), profile);
+      TColgp_Array1OfPnt poles(1, static_cast<int>(ps.size()));
+      for (size_t j = 0; j < ps.size(); ++j) poles.SetValue(static_cast<int>(j) + 1, P(ps[j]));
+      curve = new Geom_BezierCurve(poles);
+    } else if (cont == 2 && std::abs(profile) < 1e-12) {
       TColgp_Array1OfPnt poles(1, 5);
       poles.SetValue(1, Q[1]);
       poles.SetValue(2, P(V(Q[1]) + (V(K) - V(Q[1])).Multiplied(1 - G2_TENSION)));
@@ -554,7 +584,7 @@ inline Section section(const gp_Pnt &Pp, const gp_Vec &T, Sides &sides, int s, b
       poles.SetValue(4, P(V(Q[0]) + (V(K) - V(Q[0])).Multiplied(1 - G2_TENSION)));
       poles.SetValue(5, Q[0]);
       curve = new Geom_BezierCurve(poles);
-    } else if (g2) {
+    } else if (cont == 2) {
       std::vector<gp_Vec> ps = g2_poles(V(Q[1]), V(K), V(Q[0]), profile);
       TColgp_Array1OfPnt poles(1, static_cast<int>(ps.size()));
       for (size_t j = 0; j < ps.size(); ++j) poles.SetValue(static_cast<int>(j) + 1, P(ps[j]));
@@ -1331,8 +1361,21 @@ struct ChamferEnd {
   TopoDS_Face faces[2];
 };
 
+// G2 and G3 sections meet each face with zero curvature, which only matches a
+// face that is flat across the edge: a plane, or a cylinder or cone met at a rim.
+inline bool flat_across(const TopoDS_Edge &edge, const TopoDS_Face &face, double size) {
+  double k = face_curvature_across(edge, face);
+  return k >= 0 && k * size < 1e-6;
+}
+
+inline std::string not_flat_message(int cont) {
+  std::string g = cont >= 3 ? "G3" : "G2";
+  return g + " needs both faces flat across the edge (planes, or a cylinder or cone met at a rim). This edge runs "
+             "along a curved face, use G1 here.";
+}
+
 inline std::pair<int, std::vector<TopoDS_Shape>> edge_tool(const TopoDS_Shape &shape, const TopoDS_Edge &edge,
-                                                           bool chamfer, double size, double size2, bool g2,
+                                                           bool chamfer, double size, double size2, int cont,
                                                            double tol, bool draft, double profile, double margin,
                                                            std::vector<Rest> *rests = nullptr,
                                                            Overrun *over = nullptr, bool d1_second = false,
@@ -1341,6 +1384,9 @@ inline std::pair<int, std::vector<TopoDS_Shape>> edge_tool(const TopoDS_Shape &s
   if (d1_second) std::swap(faces[0], faces[1]);
   Sides sides;
   for (const TopoDS_Face &f : faces) sides.emplace_back(new Side(f, edge));
+  if (cont >= 2 && !chamfer)
+    for (const TopoDS_Face &f : faces)
+      if (!flat_across(edge, f, size)) throw err(not_flat_message(cont));
   BRepAdaptor_Curve crv(edge);
   double t0 = crv.FirstParameter(), t1 = crv.LastParameter();
   bool straight = crv.GetType() == GeomAbs_Line && sides[0]->planar && sides[1]->planar;
@@ -1363,17 +1409,18 @@ inline std::pair<int, std::vector<TopoDS_Shape>> edge_tool(const TopoDS_Shape &s
   if (s > 0) margin = 1.0;
   sides[0]->normal_on_edge_cached = fm.n1;
   sides[1]->normal_on_edge_cached = fm.n2;
-  face_limits(fm.P, fm.T, sides, s, chamfer, size, size2, g2);
+  face_limits(fm.P, fm.T, sides, s, chamfer, size, size2, cont);
   // A convex edge gets no face limits, so a G2 section whose longer setback
   // leaves the face would be lofted anyway and cut the body into a shape
   // nobody asked for, or keep the boolean busy for minutes.
-  if (g2 && s > 0 && !chamfer) {
-    Contacts c = contacts(fm.P, fm.T, sides, s, chamfer, size, size2, g2);
+  if (cont >= 2 && s > 0 && !chamfer) {
+    Contacts c = contacts(fm.P, fm.T, sides, s, chamfer, size, size2, cont);
     for (int k = 0; k < 2; ++k)
       if (!sides[k]->contains(c.Q[k], std::max(tol * 10, 1e-5)))
-        throw err("at this size the G2 blend runs off the face, it sets back 1.55 times the radius");
+        throw err(cont >= 3 ? "at this size the G3 blend runs off the face, it sets back 1.46 times the radius"
+                            : "at this size the G2 blend runs off the face, it sets back 1.55 times the radius");
   }
-  double reach = size * (g2 ? G2_SETBACK : 1.0) + (std::isnan(size2) ? 0.0 : size2);
+  double reach = size * setback_of(cont) + (std::isnan(size2) ? 0.0 : size2);
   double fuzz = std::max(tol * 10, 1e-5);
 
   Opt<gp_Ax1> axis = closed ? common_axis(crv, faces, !chamfer) : Opt<gp_Ax1>();
@@ -1420,7 +1467,7 @@ inline std::pair<int, std::vector<TopoDS_Shape>> edge_tool(const TopoDS_Shape &s
       for (const Frame &f : probes) {
         if (sides[0]->planar && sides[1]->planar) break;
         set_frame(f);
-        Contacts c = contacts(f.P, f.T, sides, s, chamfer, sz, sz2, g2);
+        Contacts c = contacts(f.P, f.T, sides, s, chamfer, sz, sz2, cont);
         for (int j = 0; j < 2; ++j)
           if (!sides[j]->planar) (sides[j]->contains(c.Q[j], fuzz) ? on : off)[j] = true;
       }
@@ -1433,7 +1480,7 @@ inline std::pair<int, std::vector<TopoDS_Shape>> edge_tool(const TopoDS_Shape &s
     if (s < 0) return Misfit::None;
     for (const Frame &f : probes) {
       set_frame(f);
-      Contacts c = contacts(f.P, f.T, sides, s, chamfer, sz, sz2, g2);
+      Contacts c = contacts(f.P, f.T, sides, s, chamfer, sz, sz2, cont);
       bool on[2];
       for (int j = 0; j < 2; ++j) on[j] = sides[j]->contains(c.Q[j], fuzz);
       if (on[0] && on[1]) continue;
@@ -1471,7 +1518,7 @@ inline std::pair<int, std::vector<TopoDS_Shape>> edge_tool(const TopoDS_Shape &s
       double sz2 = std::isnan(size2) ? size2 : size2 * k;
       for (const Frame &f : probes) {
         set_frame(f);
-        Contacts c = contacts(f.P, f.T, sides, s, chamfer, size * k, sz2, g2);
+        Contacts c = contacts(f.P, f.T, sides, s, chamfer, size * k, sz2, cont);
         if (!sides[0]->contains(c.Q[0], fuzz) || !sides[1]->contains(c.Q[1], fuzz)) return false;
       }
       return true;
@@ -1496,7 +1543,7 @@ inline std::pair<int, std::vector<TopoDS_Shape>> edge_tool(const TopoDS_Shape &s
     std::vector<Frame> at = closed ? probes : std::vector<Frame>{frame(t0), fm, frame(t1)};
     for (const Frame &f : at) {
       set_frame(f);
-      Contacts c = contacts(f.P, f.T, sides, s, chamfer, size, size2, g2);
+      Contacts c = contacts(f.P, f.T, sides, s, chamfer, size, size2, cont);
       for (int j = 0; j < 2; ++j) {
         if (!sides[j]->contains(c.Q[j], fuzz)) continue;
         gp_Vec out = c.normals[j];
@@ -1513,7 +1560,7 @@ inline std::pair<int, std::vector<TopoDS_Shape>> edge_tool(const TopoDS_Shape &s
     Frame f0 = frame(t0);
     sides[0]->normal_on_edge_cached = f0.n1;
     sides[1]->normal_on_edge_cached = f0.n2;
-    Section sec = section(f0.P, f0.T, sides, s, chamfer, size, size2, g2, profile, &*axis, margin);
+    Section sec = section(f0.P, f0.T, sides, s, chamfer, size, size2, cont, profile, &*axis, margin);
     BRepBuilderAPI_MakeFace face(sec.wire, true);
     if (face.IsDone()) {
       BRepPrimAPI_MakeRevol rev(face.Face(), *axis);
@@ -1549,10 +1596,10 @@ inline std::pair<int, std::vector<TopoDS_Shape>> edge_tool(const TopoDS_Shape &s
         sides[k]->inward_cached = d.Normalized().Multiplied(sides[k]->inward_sign);
       }
     }
-    Section sec = section(f.P, f.T, sides, s, chamfer, size, size2, g2, profile, nullptr, margin);
+    Section sec = section(f.P, f.T, sides, s, chamfer, size, size2, cont, profile, nullptr, margin);
     if (wires.empty() && !cappable(sec.wire)) throw err("the blend sections would not close into a solid");
     if (ends && chamfer && straight && s > 0) {
-      Contacts c = contacts(f.P, f.T, sides, s, chamfer, size, size2, g2);
+      Contacts c = contacts(f.P, f.T, sides, s, chamfer, size, size2, cont);
       ends->push_back({f.P, t == t0 ? f.T : f.T.Reversed(), {c.Q[0], c.Q[1]}, {faces[0], faces[1]}});
     }
     if (have_prev && (sec.inner - prev_inner).Dot(prev_T) <= 1e-3 * f.P.Distance(prev_P))
@@ -1607,28 +1654,32 @@ inline std::pair<int, std::vector<TopoDS_Shape>> edge_tool(const TopoDS_Shape &s
 // --- corners -----------------------------------------------------------------
 
 inline std::pair<std::vector<gp_Vec>, std::vector<double>> section_poles(const gp_Vec &Qa, const gp_Vec &K,
-                                                                         const gp_Vec &Qb, bool g2, double k,
+                                                                         const gp_Vec &Qb, int cont, double k,
                                                                          double profile) {
-  if (g2 && std::abs(profile) < 1e-12) {
+  if (cont >= 3) {
+    std::vector<gp_Vec> ps = g3_poles(Qa, K, Qb, profile);
+    return {ps, std::vector<double>(ps.size(), 1.0)};
+  }
+  if (cont == 2 && std::abs(profile) < 1e-12) {
     double t = 1 - G2_TENSION;
     return {{Qa, Qa + (K - Qa).Multiplied(t), K, Qb + (K - Qb).Multiplied(t), Qb}, {1.0, 1.0, 1.0, 1.0, 1.0}};
   }
-  if (g2) {
+  if (cont == 2) {
     std::vector<gp_Vec> ps = g2_poles(Qa, K, Qb, profile);
     return {ps, std::vector<double>(ps.size(), 1.0)};
   }
   return {{Qa, K, Qb}, {1.0, std::sin(M_PI / 4) * k, 1.0}};
 }
 
-inline TopoDS_Shape patch_solid(const gp_Vec &A, const std::vector<gp_Vec> &ns, double d, bool g2, double k,
+inline TopoDS_Shape patch_solid(const gp_Vec &A, const std::vector<gp_Vec> &ns, double d, int cont, double k,
                                 double profile) {
   gp_Vec a = A, n1 = ns[0], n2 = ns[1], n3 = ns[2];
   gp_Vec up = n3.Multiplied(d);
   gp_Vec pole = a + up;
   auto ring =
-      section_poles(a + n1.Multiplied(d), a + n1.Multiplied(d) + n2.Multiplied(d), a + n2.Multiplied(d), g2, k, profile);
+      section_poles(a + n1.Multiplied(d), a + n1.Multiplied(d) + n2.Multiplied(d), a + n2.Multiplied(d), cont, k, profile);
   std::vector<std::pair<std::vector<gp_Vec>, std::vector<double>>> rows;
-  for (const gp_Vec &e : ring.first) rows.push_back(section_poles(pole, e + up, e, g2, k, profile));
+  for (const gp_Vec &e : ring.first) rows.push_back(section_poles(pole, e + up, e, cont, k, profile));
   int nu = static_cast<int>(ring.first.size()), nv = static_cast<int>(rows[0].first.size());
   TColgp_Array2OfPnt poles(1, nu, 1, nv);
   TColStd_Array2OfReal weights(1, nu, 1, nv);
@@ -1732,11 +1783,11 @@ inline std::vector<TopoDS_Shape> unique(const TopTools_ListOfShape &shapes, bool
 }
 
 inline std::vector<TopoDS_Shape> ball_corners(const TopoDS_Shape &shape,
-                                              const std::vector<std::pair<TopoDS_Shape, double>> &blended, bool g2,
+                                              const std::vector<std::pair<TopoDS_Shape, double>> &blended, int cont,
                                               double profile) {
   if (blended.size() < 3) return {};
   double weight = conic_weight_scale(profile);
-  bool is_ball = !g2 && std::abs(weight - 1.0) < 1e-9;
+  bool is_ball = cont < 2 && std::abs(weight - 1.0) < 1e-9;
   TopTools_IndexedDataMapOfShapeListOfShape vmap, fmap;
   TopExp::MapShapesAndAncestors(shape, TopAbs_VERTEX, TopAbs_EDGE, vmap);
   TopExp::MapShapesAndAncestors(shape, TopAbs_VERTEX, TopAbs_FACE, fmap);
@@ -1768,7 +1819,7 @@ inline std::vector<TopoDS_Shape> ball_corners(const TopoDS_Shape &shape,
       std::vector<TopoDS_Face> faces;
       for (const TopoDS_Shape &f : unique(fmap.FindFromIndex(fmap.FindIndex(v)))) faces.push_back(TopoDS::Face(f));
       if (faces.size() != 3) continue;
-      double setback = g2 ? r * G2_SETBACK : r;
+      double setback = r * setback_of(cont);
       bool planes = true;
       for (const TopoDS_Face &f : faces) planes = planes && BRepAdaptor_Surface(f).GetType() == GeomAbs_Plane;
       if (!planes) continue;
@@ -1792,7 +1843,7 @@ inline std::vector<TopoDS_Shape> ball_corners(const TopoDS_Shape &shape,
       TopoDS_Shape cell = BRepBuilderAPI_GTransform(BRepPrimAPI_MakeBox(1.0, 1.0, 1.0).Shape(), g, true).Shape();
       TopoDS_Shape cornerv;
       try {
-        TopoDS_Shape kept = is_ball ? BRepPrimAPI_MakeSphere(P(C), r).Shape() : patch_solid(C, ns, setback, g2, weight, profile);
+        TopoDS_Shape kept = is_ball ? BRepPrimAPI_MakeSphere(P(C), r).Shape() : patch_solid(C, ns, setback, cont, weight, profile);
         cornerv = boolean(Op::Cut, cell, {kept}, 1e-6);
       } catch (const SectionError &) {
         continue;
@@ -2275,7 +2326,7 @@ struct RoundTools {
 };
 
 inline RoundTools round_tools(const TopoDS_Shape &shape, const std::vector<TopoDS_Shape> &edges, bool chamfer,
-                              double size2, bool g2, const std::vector<double> &sizes, bool draft, double profile,
+                              double size2, int cont, const std::vector<double> &sizes, bool draft, double profile,
                               double tol) {
   RoundTools out;
   std::vector<Round> rounds;
@@ -2299,7 +2350,7 @@ inline RoundTools round_tools(const TopoDS_Shape &shape, const std::vector<TopoD
     r.edge = TopoDS::Edge(edges[k]);
     r.size = sizes[k];
     Overrun over;
-    auto got = edge_tool(shape, r.edge, chamfer, sizes[k], size2, g2, tol, draft, profile,
+    auto got = edge_tool(shape, r.edge, chamfer, sizes[k], size2, cont, tol, draft, profile,
                          1.0 + 0.11 * static_cast<double>(k), &r.rests, &over, second[k] != 0, &ends[k]);
     if (over.any && !first.any) first = over;
     auto &dst = got.first > 0 ? out.cut : out.fuse;
@@ -2393,20 +2444,23 @@ inline double edges_tol(const std::vector<TopoDS_Shape> &edges) {
 }
 
 inline TopoDS_Shape section_blend_once(const TopoDS_Shape &shape, const std::vector<TopoDS_Shape> &edges, bool chamfer,
-                                      double size2, bool g2, const std::vector<double> &sizes, bool draft,
+                                      double size2, int cont, const std::vector<double> &sizes, bool draft,
                                       double profile) {
   double tol = edges_tol(edges);
   last_overrun() = Overrun();
-  RoundTools rt = round_tools(shape, edges, chamfer, size2, g2, sizes, draft, profile, tol);
+  RoundTools rt = round_tools(shape, edges, chamfer, size2, cont, sizes, draft, profile, tol);
   std::vector<TopoDS_Shape> &cut = rt.cut, &fuse = rt.fuse;
   std::vector<std::pair<TopoDS_Shape, double>> &convex = rt.convex;
-  std::vector<TopoDS_Shape> corners = chamfer ? std::vector<TopoDS_Shape>() : ball_corners(shape, convex, g2, profile);
+  std::vector<TopoDS_Shape> corners = chamfer ? std::vector<TopoDS_Shape>() : ball_corners(shape, convex, cont, profile);
   TopoDS_Shape out;
   if (!corners.empty()) {
     try {
       std::vector<TopoDS_Shape> cut2, fuse2;
+      // With G3 sections the edge tools cut first left the corner tool an empty
+      // or invalid body at every fuzz tried, and the corner tool first did not.
+      if (cont >= 3) cut2 = corners;
       for (const TopoDS_Shape &t : cut) cut2.push_back(copy(t));
-      cut2.insert(cut2.end(), corners.begin(), corners.end());
+      if (cont < 3) cut2.insert(cut2.end(), corners.begin(), corners.end());
       for (const TopoDS_Shape &t : fuse) fuse2.push_back(copy(t));
       out = combine(copy(shape), cut2, fuse2, tol, draft);
     } catch (const DraftGaveUp &) {
@@ -2419,20 +2473,20 @@ inline TopoDS_Shape section_blend_once(const TopoDS_Shape &shape, const std::vec
 }
 
 inline TopoDS_Shape blend_scaled(const TopoDS_Shape &shape, const std::vector<TopoDS_Shape> &es, bool chamfer,
-                                 double size2, bool g2, const std::vector<double> &sz, bool draft, double profile,
+                                 double size2, int cont, const std::vector<double> &sz, bool draft, double profile,
                                  bool one_shot) {
   one_shot_memo() = {};
   one_shot_memo().never = !one_shot;
   if (draft && one_shot) {
     try {
-      return section_blend_once(shape, es, chamfer, size2, g2, sz, true, profile);
+      return section_blend_once(shape, es, chamfer, size2, cont, sz, true, profile);
     } catch (const DraftGaveUp &) {
       OneShotMemo &memo = one_shot_memo();
       memo.replay = !memo.thinned;
       memo.calls = 0;
     }
   }
-  return section_blend_once(shape, es, chamfer, size2, g2, sz, false, profile);
+  return section_blend_once(shape, es, chamfer, size2, cont, sz, false, profile);
 }
 
 // The sizes a refusal offers, by rank: thousandths of a mm below 1 mm and
@@ -2460,7 +2514,7 @@ struct PiecesOnly {
 // other show before any boolean, so for an `overlap` the largest size they
 // keep apart is found first from their tools alone, and builds start there.
 inline double split_limit(const TopoDS_Shape &shape, const std::vector<TopoDS_Shape> &es, bool chamfer, double size2,
-                          bool g2, const std::vector<double> &sz, double unit, bool draft, double profile,
+                          int cont, const std::vector<double> &sz, double unit, bool draft, double profile,
                           bool one_shot, double first_secs, bool overlap = false) {
   using clock = std::chrono::steady_clock;
   auto started = clock::now();
@@ -2477,7 +2531,7 @@ inline double split_limit(const TopoDS_Shape &shape, const std::vector<TopoDS_Sh
     std::vector<double> sk;
     for (double x : sz) sk.push_back(x / unit * v);
     try {
-      blend_scaled(cp.Shape(), ec, chamfer, std::isnan(size2) ? size2 : size2 / unit * v, g2, sk, draft, profile,
+      blend_scaled(cp.Shape(), ec, chamfer, std::isnan(size2) ? size2 : size2 / unit * v, cont, sk, draft, profile,
                    one_shot);
     } catch (const Cancelled &) {
       throw;
@@ -2539,7 +2593,7 @@ inline double split_limit(const TopoDS_Shape &shape, const std::vector<TopoDS_Sh
       std::vector<double> sk;
       for (double x : sz) sk.push_back(x / unit * v);
       try {
-        round_tools(cp.Shape(), ec, chamfer, std::isnan(size2) ? size2 : size2 / unit * v, g2, sk, draft, profile,
+        round_tools(cp.Shape(), ec, chamfer, std::isnan(size2) ? size2 : size2 / unit * v, cont, sk, draft, profile,
                     edges_tol(ec));
       } catch (const Cancelled &) {
         throw;
@@ -2597,7 +2651,8 @@ inline double split_limit(const TopoDS_Shape &shape, const std::vector<TopoDS_Sh
 
 } // namespace secblend
 
-// the Python engine's `section_blend.py` `section_blend`. size2 NaN for none. status 0 built,
+// the Python engine's `section_blend.py` `section_blend`. `cont` the continuity with the faces, 1, 2 or 3.
+// size2 NaN for none. status 0 built,
 // 1 SectionBlendError (message is its sentence), 2 any other exception (its class),
 // 3 cancelled through `progress`, 4 the blend does not fit an edge (message is
 // "why fits x y z": fits the largest size in mm of `unit` that does, -1 when
@@ -2606,7 +2661,7 @@ inline double split_limit(const TopoDS_Shape &shape, const std::vector<TopoDS_Sh
 // of its faces, and fits is the largest size at which it rests on both.
 // `unit` is the size asked for, which `sizes` and `size2` scale with.
 inline std::unique_ptr<TopoDS_Shape> blend_section(const TopoDS_Shape &shape, const TopoDS_Shape &edges, bool chamfer,
-                                                   rust::Slice<const double> sizes, double size2, double unit, bool g2,
+                                                   rust::Slice<const double> sizes, double size2, double unit, int32_t cont,
                                                    bool draft, double profile, bool one_shot,
                                                    const Message_ProgressRange &progress, int32_t &status,
                                                    rust::String &message) {
@@ -2619,6 +2674,7 @@ inline std::unique_ptr<TopoDS_Shape> blend_section(const TopoDS_Shape &shape, co
     for (double x : sz) bad = bad || !(x > 0);
     if (bad || !(unit > 0) || (!std::isnan(size2) && !(size2 > 0)))
       throw secblend::err("the size must be greater than 0");
+    if (cont < 1 || cont > 3) throw secblend::err("the continuity must be 1, 2 or 3");
     // Failed booleans raise tolerances in place, so the search starts from a copy.
     BRepBuilderAPI_Copy pristine(shape, false);
     std::vector<TopoDS_Shape> pristine_es;
@@ -2635,7 +2691,7 @@ inline std::unique_ptr<TopoDS_Shape> blend_section(const TopoDS_Shape &shape, co
     }
     auto started = std::chrono::steady_clock::now();
     try {
-      TopoDS_Shape out = secblend::blend_scaled(shape, es, chamfer, size2, g2, sz, draft, profile, one_shot);
+      TopoDS_Shape out = secblend::blend_scaled(shape, es, chamfer, size2, cont, sz, draft, profile, one_shot);
       status = 0;
       const secblend::Overrun &over = secblend::last_overrun();
       if (over.any) {
@@ -2654,7 +2710,7 @@ inline std::unique_ptr<TopoDS_Shape> blend_section(const TopoDS_Shape &shape, co
         BRepAdaptor_Curve crv(TopoDS::Edge(es.front()));
         e.at = crv.Value(0.5 * (crv.FirstParameter() + crv.LastParameter()));
       }
-      e.fits = secblend::split_limit(pristine.Shape(), pristine_es, chamfer, size2, g2, sz, unit, draft, profile,
+      e.fits = secblend::split_limit(pristine.Shape(), pristine_es, chamfer, size2, cont, sz, unit, draft, profile,
                                      one_shot, secs, e.why == secblend::Misfit::Overlap);
       throw;
     }
@@ -2681,4 +2737,21 @@ inline std::unique_ptr<TopoDS_Shape> blend_section(const TopoDS_Shape &shape, co
     message = "Standard_Failure";
   }
   return std::unique_ptr<TopoDS_Shape>(new TopoDS_Shape());
+}
+
+// The highest continuity the section build reaches on an edge of `shape`: 3
+// where both faces are flat across it (G2 and G3 share that gate), else 1.
+inline int32_t blend_reach(const TopoDS_Shape &shape, const TopoDS_Shape &edge) {
+  try {
+    const TopoDS_Edge &e = TopoDS::Edge(edge);
+    std::vector<TopoDS_Face> faces = secblend::faces_of(shape, e);
+    if (faces.size() != 2) return 1;
+    for (const TopoDS_Face &f : faces) {
+      double k = face_curvature_across(e, f);
+      if (k < 0 || k > FLAT_ACROSS_CURVATURE) return 1;
+    }
+    return 3;
+  } catch (...) {
+    return 1;
+  }
 }
