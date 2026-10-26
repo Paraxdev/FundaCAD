@@ -146,3 +146,11 @@ describe("Home wears the app's glass", () => {
     expect(homeSrc).not.toMatch(/var\(--raised/);
   });
 });
+
+describe("Home's picture slot", () => {
+  it("fills a card's picture slot from the card, not the workspace colour that is near black in a dark theme", () => {
+    const bg = decls(".home-card-pic").background ?? "";
+    expect(bg).not.toMatch(/--viewport-bg/);
+    expect(bg).toMatch(/var\(--float-bg-solid\)/);
+  });
+});
