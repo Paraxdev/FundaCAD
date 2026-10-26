@@ -17,6 +17,8 @@ export interface DimFieldDef extends ValueRule {
   kind?: "length" | "angle" | "count"; // default length; count = raw number, no unit
   /** The tool reads the raw text itself (a size name, a parameter expression), so the box does not judge it. */
   free?: boolean;
+  /** Words the tool reads itself besides a number ("through"): not judged, and getValue is null for them. */
+  words?: RegExp;
   /** What the field reads, picked from a menu on its name; `label` and `icon` are the chosen one's. */
   choices?: DimChoices;
 }
@@ -59,7 +61,7 @@ interface Field {
   tag: HTMLElement;
   choice: string | null;
   userDriven: boolean;
-  /** In mm. What the field falls back to while its text is no value: confirm and the preview keep this one. */
+  /** In mm, the last valid value TYPED, never a seed: text that is no value reads as this one. */
   lastGood: number | null;
   /** Set only by a keystroke: an edit tool seeds and locks every field before the user touches any. */
   typed?: boolean;
@@ -331,12 +333,13 @@ export class DimInput {
       this.root.appendChild(wrap);
 
       input.addEventListener("keydown", (e) => this.onKey(e, field));
-      // A value the tool wrote is replaced by typing, not appended to; the release of a click would drop the selection.
+      // A click into a value the tool wrote selects it, so typing replaces it; the release would drop the selection.
       let keepSelection = false;
+      input.addEventListener("pointerdown", () => {
+        keepSelection = !field.userDriven && document.activeElement !== input;
+      });
       input.addEventListener("focus", () => {
-        if (field.userDriven) return;
-        input.select();
-        keepSelection = true;
+        if (keepSelection) input.select();
       });
       input.addEventListener("mouseup", (e) => {
         if (keepSelection) e.preventDefault();
@@ -418,7 +421,7 @@ export class DimInput {
   private fieldProblem(f: Field): string | null {
     if (f.hidden || !f.userDriven || f.def.free) return null;
     const raw = this.numberText(f).trim();
-    if (!raw) return f.lastGood === null ? null : `${f.def.label} needs a value`;
+    if (!raw || f.def.words?.test(raw)) return null;
     const v = this.parse(f);
     if (v === null) {
       const err = measureError(raw, f.unit);
@@ -674,7 +677,6 @@ export class DimInput {
     for (const f of this.fields) {
       const v = values[f.def.name];
       if (!f.userDriven && v != null) {
-        f.lastGood = f.def.kind === "count" ? Math.round(v) : v;
         f.input.value = String(f.def.kind === "count" ? Math.round(v) : toUnit(v, f.unit));
         this.sizeToContent(f);
         // Keep the live value selected while it tracks the cursor, so typing replaces it instead of appending.
@@ -688,7 +690,7 @@ export class DimInput {
     const f = this.fields.find((x) => x.def.name === name);
     if (!f) return;
     f.input.value = String(f.def.kind === "count" ? Math.round(value) : toUnit(value, f.unit));
-    f.lastGood = f.def.kind === "count" ? Math.round(value) : value;
+    f.lastGood = null;
     f.userDriven = true;
     this.sizeToContent(f);
   }
@@ -698,6 +700,7 @@ export class DimInput {
     const f = this.fields.find((x) => x.def.name === name);
     if (!f) return;
     f.input.value = text;
+    f.lastGood = null;
     f.userDriven = true;
     this.sizeToContent(f);
   }
@@ -706,7 +709,9 @@ export class DimInput {
    *  recent, and otherwise the number beside the moving handle would go on reading the stale typed value. */
   takeOver(name: string) {
     const f = this.fields.find((x) => x.def.name === name);
-    if (f) f.userDriven = false;
+    if (!f) return;
+    f.userDriven = false;
+    f.lastGood = null;
   }
 
   /** Every field turns red, not one: the engine refuses a feature, not a field (pitch and angle together), and the
@@ -747,14 +752,14 @@ export class DimInput {
     return !!f && f.userDriven;
   }
 
-  /** in MM (length fields converted from the display unit). A typed text that is no value or is refused reads as the
-   *  field's last valid value, null when it never had one. */
+  /** in MM (length fields converted from the display unit). Null for an empty box or one of the field's words; typed
+   *  text that is no value reads as the last valid value typed, null when there is none. */
   getValue(name: string): number | null {
     const f = this.fields.find((x) => x.def.name === name);
     if (!f) return null;
     const v = this.parse(f);
     if (v !== null && !(f.userDriven && this.rangeProblem(f.def, v))) return v;
-    return f.userDriven && !f.def.free ? f.lastGood : null;
+    return this.fieldProblem(f) ? f.lastGood : null;
   }
 
   /** Null for a count. */
@@ -812,18 +817,20 @@ export class DimInput {
     return this.active && this.fields.some((f) => f.typed && !f.hidden);
   }
 
+  /** Not the user's confirm, so text that is no value refuses it even where Enter would fall back. */
   confirmTyped(): boolean {
-    return this.commit();
+    return this.commit(false);
   }
 
-  /** A field whose text is no value commits its last valid value, still marked; with none to fall back on it refuses. */
-  private commit(): boolean {
+  /** On Enter or the confirm button a field whose text is no value commits its last typed valid value, still marked;
+   *  with none, or on any other confirm, it refuses. */
+  private commit(explicit = true): boolean {
     let marked: string | null = null;
     for (const f of this.fields) {
       const problem = this.fieldProblem(f);
       if (!problem) continue;
       marked ??= problem;
-      if (f.lastGood !== null) continue;
+      if (explicit && f.lastGood !== null) continue;
       this.setTypedProblem(problem);
       f.input.focus();
       f.input.select();

@@ -293,7 +293,7 @@ export class HoleTool {
     this.dim.show(
       [
         { name: "size", label: "Size", kind: "count", free: true },
-        { name: "depth", label: "Depth", kind: "length", free: true },
+        { name: "depth", label: "Depth", kind: "length", positive: true, words: THROUGH },
         // Offset from the face centre (this.center) along its own xdir/ydir, so
         // a hole can be placed exactly without pixel-hunting for the click spot.
         { name: "x", label: "X", kind: "length" },
@@ -363,18 +363,14 @@ export class HoleTool {
     this.valueChanged();
   }
 
-  /** A size name and "through" are not numbers, so this tool reads them and must refuse what it could not read
-   *  rather than build the last value it could. */
+  /** A size name is not a number, so this tool reads it and must refuse what it could not read rather than build the
+   *  last size it could. The box judges a typed depth itself, except that an insert cannot go through. */
   private typedProblem(): string | null {
     if (this.dim.isUserDriven("size") && !parseHoleSize(this.dim.getRaw("size"))) {
       return badHoleSizeText(this.dim.getRaw("size"));
     }
     const depthText = this.dim.getRaw("depth");
-    if (this.dim.isUserDriven("depth") && !(THROUGH.test(depthText) && this.holeType !== "insert")) {
-      const v = this.dim.getValue("depth");
-      if (v == null) return `Depth: "${depthText.trim()}" is not a number`;
-      if (v <= 0) return "Depth must be more than 0";
-    }
+    if (this.holeType === "insert" && THROUGH.test(depthText)) return "Depth: an insert hole cannot go through";
     return null;
   }
 

@@ -96,7 +96,16 @@ describe("fillet radius box", () => {
     expect(t.added).toEqual(fillet(0.25));
   });
 
-  it.each(["0", "-2", "abc", ""])("%j keeps the last valid radius, marks the box, and confirm commits that", (bad) => {
+  it("an emptied box commits the tool's own radius, unmarked", () => {
+    const own = Number(input().value);
+    type("3.5");
+    type("");
+    expect(isBad()).toBe(false);
+    confirmButton();
+    expect(t.added).toEqual(fillet(own));
+  });
+
+  it.each(["0", "-2", "abc"])("%j keeps the last valid radius, marks the box, and confirm commits that", (bad) => {
     type("3.5");
     type(bad);
     expect(isBad()).toBe(true);

@@ -142,7 +142,24 @@ describe("polygon sides box", () => {
     expect(s.entities.map(withoutId)).toEqual([hexagonAt(3)]);
   });
 
-  for (const bad of ["2", "", "abc", "7.5"]) {
+  it("an emptied box hands back to the tool's own count, unmarked", () => {
+    const { s, lastPreview } = startPolygon();
+    type("sides", "9");
+    type("sides", "");
+    expect(lastPreview()!.map(withoutId)).toEqual([hexagonAt(6)]);
+    expect(isBad()).toBe(false);
+    confirmButton();
+    expect(s.entities.map(withoutId)).toEqual([hexagonAt(6)]);
+  });
+
+  it('"2" with no count typed before it is refused, marked', () => {
+    const { s } = startPolygon();
+    type("sides", "2");
+    confirmButton();
+    expect([s.entities, isBad()]).toEqual([[], true]);
+  });
+
+  for (const bad of ["2", "abc", "7.5"]) {
     it(`"${bad}" keeps the last valid count, marks the box, and confirm builds that count`, () => {
       const { s, lastPreview } = startPolygon();
       type("sides", "9");
