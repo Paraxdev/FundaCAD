@@ -1,9 +1,5 @@
-//! Research probe for G3 fillets (backlog nvc2hn0h), not a product test.
-//! Builds G1 and G2 fillets through the real builder and writes each body as a
-//! BREP text file for `g3_probe/measure.py`, which measures the curvature and
-//! its rate across the contact lines and builds the G3 candidates beside them.
-//! Run with FUNDACAD_DISK_CACHE=0 and FUNDACAD_G3_PROBE_OUT=<dir>:
-//! cargo test -p fundacad-geom --test g3_probe -- --ignored --nocapture
+//! Research probe for G3 fillets: writes G1 and G2 builds as BREP for g3_probe/measure.py.
+//! FUNDACAD_DISK_CACHE=0 FUNDACAD_G3_PROBE_OUT=<dir> cargo test -p fundacad-geom --test g3_probe -- --ignored
 
 use fundacad_core::CadDocument;
 use fundacad_geom::builder::{self, NoWatch};
