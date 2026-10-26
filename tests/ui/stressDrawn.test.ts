@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { DRAWN_BUDGET, drawnSurface, readAt, splitDisplay, weakSpot, type DisplayMesh } from "../../src/ui/stressDrawn";
+import {
+  drawnSurface,
+  drawnSurfaceInFrames,
+  readAt,
+  splitDisplay,
+  weakSpot,
+  type DisplayMesh,
+} from "../../src/ui/stressDrawn";
 import { closestWeights, FACE_REACH, locator, type EngineSurface } from "../../src/ui/stressLocate";
 import { probeValues } from "../../src/ui/stress";
 import type { Vec3 } from "../../src/types";
@@ -114,6 +121,28 @@ describe("closestWeights", () => {
 });
 
 describe("locator", () => {
+  it("finds the closest distance a brute force scan finds, near, on and far from the surface", () => {
+    const s = engineBox(7);
+    const at = locator(s);
+    let seed = 12345;
+    const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+    const tris = s.indices.length / 3;
+    for (let n = 0; n < 400; n++) {
+      const p = place(
+        [-30 + rnd() * 134, -30 + rnd() * 90, -30 + rnd() * 78].map((x, k) =>
+          n % 3 ? x : Math.min(Math.max(x, 0), SIZE[k]!),
+        ) as Vec3,
+      );
+      let best = Infinity;
+      for (let t = 0; t < tris; t++) {
+        const [a, b, c] = [0, 1, 2].map((k) => vertexOf(s.positions, s.indices[t * 3 + k]!)) as [Vec3, Vec3, Vec3];
+        const w = closestWeights(p, a, b, c);
+        best = Math.min(best, dist(p, [0, 1, 2].map((j) => w[0] * a[j]! + w[1] * b[j]! + w[2] * c[j]!) as Vec3));
+      }
+      expect(at.closest(p, -1)!.distance).toBeCloseTo(best, 9);
+    }
+  });
+
   it("prefers a triangle of the asked face to a closer one of another face, within reach", () => {
     const s = engineBox(12);
     const at = locator(s);
@@ -218,7 +247,30 @@ describe("splitDisplay", () => {
     const roomy = splitDisplay(displayBox(), () => 4, 20_000);
     const free = splitDisplay(displayBox(), () => 4);
     expect(roomy).toEqual(free);
-    expect(DRAWN_BUDGET).toBe(150_000);
+  });
+
+  it("draws a mesh at the budget as it is without looking at it, and looks at one triangle under it", () => {
+    const m = displayBox(20);
+    const tris = m.indices.length / 3;
+    let calls = 0;
+    const count = () => ((calls += 1), 0.5);
+    expect(splitDisplay(m, count, tris)).toEqual(m);
+    expect(calls).toBe(0);
+    splitDisplay(m, count, tris + 1);
+    expect(calls).toBeGreaterThan(0);
+  });
+
+  it("returns a display mesh far over the budget unsplit, at once", () => {
+    const s = engineBox();
+    const at = locator(s);
+    const big = displayBox(231);
+    expect(big.indices.length / 3).toBeGreaterThan(600_000);
+    let calls = 0;
+    const started = performance.now();
+    const m = splitDisplay(big, (p) => ((calls += 1), at.edgeAt(p)));
+    expect(performance.now() - started).toBeLessThan(500);
+    expect(m).toEqual(big);
+    expect(calls).toBe(0);
   });
 
   it("leaves an empty mesh empty and one short triangle whole", () => {
@@ -383,5 +435,46 @@ describe("readAt and weakSpot", () => {
     expect(d.faces[other.tri]).toBe(0);
     expect(d.faces[weakSpot(d, place([30, -0.01, 9]), null)!.tri]).toBe(2);
     expect(d.faces[weakSpot(d, place([30, -0.01, 9]), 99)!.tri]).toBe(2);
+  });
+});
+
+describe("drawnSurfaceInFrames", () => {
+  it("draws what drawnSurface does, split as splitDisplay does, pausing between slices", async () => {
+    const s = engineBox(9);
+    const at = locator(s);
+    const m = displayBox(2);
+    let pauses = 0;
+    let clock = 0;
+    const d = await drawnSurfaceInFrames(
+      m,
+      s,
+      at,
+      WIDE,
+      async () => void (pauses += 1),
+      () => (clock += 100),
+    );
+    expect(d).toEqual(drawnSurface(splitDisplay(m, at.edgeAt), s, at, WIDE));
+    expect(d.indices.length / 3).toBeGreaterThan(m.indices.length / 3);
+    expect(pauses).toBeGreaterThan(2);
+  });
+
+  it("keeps each slice of a body over the budget short and draws all of it", async () => {
+    const s = engineBox();
+    const at = locator(s);
+    const big = displayBox(231);
+    const stops: number[] = [performance.now()];
+    const d = await drawnSurfaceInFrames(big, s, at, WIDE, async () => void stops.push(performance.now()));
+    stops.push(performance.now());
+    const slices = stops.slice(1).map((t, i) => t - stops[i]!);
+    expect(d.indices.length).toBe(big.indices.length);
+    expect(d.values.length).toBe(big.positions.length / 3);
+    expect(slices.length).toBeGreaterThan(5);
+    expect(Math.max(...slices)).toBeLessThan(250);
+  }, 60_000);
+
+  it("draws the engine surface itself when there is no display mesh", async () => {
+    const s = engineBox(5);
+    const at = locator(s);
+    expect(await drawnSurfaceInFrames(null, s, at, WIDE)).toEqual(drawnSurface(null, s, at, WIDE));
   });
 });

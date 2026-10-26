@@ -179,27 +179,38 @@ export function locator(s: EngineSurface): Locator {
     if (!tris) return null;
     query++;
     const ids = s.faceIds;
-    const c = [0, 1, 2].map((k) => cellOf(p[k]!, k));
-    const beyond = Math.max(...c.map((x, k) => Math.max(-x, x - dims[k]! + 1, 0)));
+    const c0 = cellOf(p[0], 0),
+      c1 = cellOf(p[1], 1),
+      c2 = cellOf(p[2], 2);
+    const beyond = Math.max(-c0, c0 - nx + 1, -c1, c1 - ny + 1, -c2, c2 - nz + 1, 0);
     const span = Math.max(nx, ny, nz);
+    // The gaps from p to the faces of its own cell, shell r then reaches r cells further on every side.
+    const gap = Math.min(
+      p[0] - lo[0]! - c0 * cell,
+      lo[0]! + (c0 + 1) * cell - p[0],
+      p[1] - lo[1]! - c1 * cell,
+      lo[1]! + (c1 + 1) * cell - p[1],
+      p[2] - lo[2]! - c2 * cell,
+      lo[2]! + (c2 + 1) * cell - p[2],
+    );
     let best: Located | null = null;
     for (let r = 0; r <= span + beyond + 1; r++) {
-      // Every point within (r - 1) cells of p's cell has been covered once shell r - 1 is done.
-      const covered = (r - 1) * cell;
-      if (best && best.distance <= covered) break;
+      // Every point within `covered` of p lies in a cell of the shells already done.
+      const covered = (r - 1) * cell + gap;
+      if (best && best.distance < covered) break;
       if (covered > reach) break;
-      const i0 = Math.max(c[0]! - r, 0),
-        i1 = Math.min(c[0]! + r, nx - 1);
-      const j0 = Math.max(c[1]! - r, 0),
-        j1 = Math.min(c[1]! + r, ny - 1);
-      const k0 = Math.max(c[2]! - r, 0),
-        k1 = Math.min(c[2]! + r, nz - 1);
+      const i0 = Math.max(c0 - r, 0),
+        i1 = Math.min(c0 + r, nx - 1);
+      const j0 = Math.max(c1 - r, 0),
+        j1 = Math.min(c1 + r, ny - 1);
+      const k0 = Math.max(c2 - r, 0),
+        k1 = Math.min(c2 + r, nz - 1);
       for (let i = i0; i <= i1; i++)
         for (let j = j0; j <= j1; j++) {
-          const edge = Math.abs(i - c[0]!) === r || Math.abs(j - c[1]!) === r;
+          const edge = Math.abs(i - c0) === r || Math.abs(j - c1) === r;
           // Inside the shell's i and j only the two k faces lie on it.
           const step = edge ? 1 : Math.max(2 * r, 1);
-          for (let k = edge ? k0 : c[2]! - r; k <= k1; k += step) {
+          for (let k = edge ? k0 : c2 - r; k <= k1; k += step) {
             if (k < k0) continue;
             const cc = cellIndex(i, j, k);
             for (let n = start[cc]!; n < start[cc + 1]!; n++) {
@@ -211,14 +222,14 @@ export function locator(s: EngineSurface): Locator {
               const gx = Math.max(bounds[b]! - p[0], 0, p[0] - bounds[b + 3]!);
               const gy = Math.max(bounds[b + 1]! - p[1], 0, p[1] - bounds[b + 4]!);
               const gz = Math.max(bounds[b + 2]! - p[2], 0, p[2] - bounds[b + 5]!);
-              const gap = Math.hypot(gx, gy, gz);
+              const gap = Math.sqrt(gx * gx + gy * gy + gz * gz);
               if (gap > reach || (best && gap > best.distance)) continue;
               const o = t * 9;
               closestInto(w, p, P, o);
               const dx = p[0] - (w[0]! * P[o]! + w[1]! * P[o + 3]! + w[2]! * P[o + 6]!);
               const dy = p[1] - (w[0]! * P[o + 1]! + w[1]! * P[o + 4]! + w[2]! * P[o + 7]!);
               const dz = p[2] - (w[0]! * P[o + 2]! + w[1]! * P[o + 5]! + w[2]! * P[o + 8]!);
-              const d = Math.hypot(dx, dy, dz);
+              const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
               if (d <= reach && (!best || d < best.distance || (d === best.distance && t < best.tri)))
                 best = { tri: t, weights: [w[0]!, w[1]!, w[2]!], distance: d };
             }

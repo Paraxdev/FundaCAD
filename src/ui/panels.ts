@@ -15,7 +15,7 @@ import {
   type StressData,
   type StressProbePin,
 } from "../stores/panels";
-import { drawnSurface, readAt, splitDisplay, weakSpot as drawnWeakSpot, type DrawnSurface } from "./stressDrawn";
+import { drawnSurfaceInFrames, readAt, weakSpot as drawnWeakSpot, type DrawnSurface } from "./stressDrawn";
 import { locator, type Locator } from "./stressLocate";
 import { weakSpotLabel } from "./stressVerdict";
 import { sentence } from "./stressWarnings";
@@ -1105,7 +1105,12 @@ export function createPanels(deps: PanelsDeps) {
       const moves = !!disp && disp.length === r.surface.positions.length;
       const locate = locator(r.surface);
       const display = viewport.bodyDisplayMesh?.(r.body) ?? null;
-      const drawn = drawnSurface(display && splitDisplay(display, locate.edgeAt), r.surface, locate, view.legend);
+      const drawn = await drawnSurfaceInFrames(display, r.surface, locate, view.legend);
+      if (seq !== runSeq) return;
+      if (epoch !== docEpoch) {
+        setStatus("Stress: the model changed while it ran, run it again to see the colours", "");
+        return;
+      }
       colours = {
         overlay: {
           bodyId: r.body,

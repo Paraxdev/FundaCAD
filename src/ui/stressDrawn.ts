@@ -22,8 +22,11 @@ export interface DrawnSurface {
   faces: Int32Array;
 }
 
-// Splitting and sampling take about 9 us per drawn triangle (Wall bracket: 69000 in 0.7 s), so this caps it near 1.3 s.
+// A mesh at or over this many triangles is drawn as the display mesh has it, splitting only adds triangles.
 export const DRAWN_BUDGET = 150_000;
+// Work units (vertices, triangles) between two points where a long job may hand the thread back.
+const SLICE = 2048;
+const SLICE_MS = 12;
 // Halving splits leave triangles of about a fifth of an equilateral one's 0.433 L^2 (a box: 3.1 to 4.1 times
 // the equilateral count), so the budget predicts with this area per triangle.
 const TRIANGLE_AREA = 0.08;
@@ -33,11 +36,36 @@ const KEY = 2 ** 26;
 // The engine rounds positions to 4 places, so coincident vertices of two faces weld at that grid.
 const WELD = 1e4;
 
-function weldIds(positions: ArrayLike<number>): Uint32Array {
+type Steps<T> = Generator<void, T, void>;
+
+function finish<T>(job: Steps<T>): T {
+  for (;;) {
+    const step = job.next();
+    if (step.done) return step.value;
+  }
+}
+
+/** Runs a job in slices of about SLICE_MS, awaiting `pause` between them so the window keeps drawing. */
+async function inFrames<T>(job: Steps<T>, pause: () => Promise<void>, now: () => number): Promise<T> {
+  let since = now();
+  for (;;) {
+    const step = job.next();
+    if (step.done) return step.value;
+    if (now() - since >= SLICE_MS) {
+      await pause();
+      since = now();
+    }
+  }
+}
+
+const nextTask = () => new Promise<void>((done) => setTimeout(done, 0));
+
+function* weldSteps(positions: ArrayLike<number>): Steps<Uint32Array> {
   const n = Math.floor(positions.length / 3);
   const ids = new Uint32Array(n);
   const seen = new Map<string, number>();
   for (let v = 0; v < n; v++) {
+    if (v % SLICE === 0) yield;
     const key = [0, 1, 2].map((k) => Math.round(positions[v * 3 + k]! * WELD)).join(",");
     const id = seen.get(key);
     if (id === undefined) {
@@ -58,13 +86,20 @@ function distance(a: Vec3, b: Vec3): number {
 
 /** Splits edges at their midpoints until each is no longer than the engine edge length near it, longest first in
  *  passes of halving. An edge is decided by its welded ends, so both faces along a B-rep edge split it at the same
- *  point. When the predicted count passes `budget` every target grows by the square root of the excess. */
+ *  point. When the predicted count passes `budget` every target grows by the square root of the excess; a mesh
+ *  already at `budget` comes back as it is. */
 export function splitDisplay(m: DisplayMesh, edgeAt: (p: Vec3) => number, budget = DRAWN_BUDGET): DisplayMesh {
+  return finish(splitSteps(m, edgeAt, budget));
+}
+
+function* splitSteps(m: DisplayMesh, edgeAt: (p: Vec3) => number, budget: number): Steps<DisplayMesh> {
+  if (m.indices.length >= budget * 3) return m;
   const pos: number[] = Array.from(m.positions);
   let tris: number[] = Array.from(m.indices);
   let faces: number[] = Array.from(m.faceIds);
   let predicted = 0;
   for (let t = 0; t * 3 + 2 < tris.length; t++) {
+    if (t % SLICE === 0) yield;
     const [a, b, c] = [0, 1, 2].map((k) => at(pos, tris[t * 3 + k]!)) as [Vec3, Vec3, Vec3];
     const mid: Vec3 = [0, 1, 2].map((k) => (a[k]! + b[k]! + c[k]!) / 3) as Vec3;
     const l = edgeAt(mid);
@@ -72,7 +107,7 @@ export function splitDisplay(m: DisplayMesh, edgeAt: (p: Vec3) => number, budget
   }
   const grow = predicted > budget ? Math.sqrt(predicted / budget) : 1;
   const target = new Map<number, number>();
-  const weld: number[] = Array.from(weldIds(m.positions));
+  const weld: number[] = Array.from(yield* weldSteps(m.positions));
   const pair = (a: number, b: number) => (a < b ? a * KEY + b : b * KEY + a);
   for (let pass = 0; pass < MAX_PASSES; pass++) {
     // Midpoints by the edge's own vertices, which no other face shares, and the weld id each takes by its welded ends.
@@ -81,14 +116,22 @@ export function splitDisplay(m: DisplayMesh, edgeAt: (p: Vec3) => number, budget
     const edgeKey = (u: number, v: number) => pair(weld[u]!, weld[v]!);
     const wants = (u: number, v: number) => {
       const key = edgeKey(u, v);
-      const pu = at(pos, u);
-      const pv = at(pos, v);
+      const [x, y, z] = [
+        pos[u * 3]! - pos[v * 3]!,
+        pos[u * 3 + 1]! - pos[v * 3 + 1]!,
+        pos[u * 3 + 2]! - pos[v * 3 + 2]!,
+      ];
       let l = target.get(key);
       if (l === undefined) {
-        l = edgeAt([(pu[0] + pv[0]) / 2, (pu[1] + pv[1]) / 2, (pu[2] + pv[2]) / 2]) * grow;
+        const half: Vec3 = [
+          (pos[u * 3]! + pos[v * 3]!) / 2,
+          (pos[u * 3 + 1]! + pos[v * 3 + 1]!) / 2,
+          (pos[u * 3 + 2]! + pos[v * 3 + 2]!) / 2,
+        ];
+        l = edgeAt(half) * grow;
         target.set(key, l);
       }
-      return l > 0 && distance(pu, pv) > l;
+      return l > 0 && Math.sqrt(x * x + y * y + z * z) > l;
     };
     const mid = (u: number, v: number) => {
       const key = pair(u, v);
@@ -109,6 +152,7 @@ export function splitDisplay(m: DisplayMesh, edgeAt: (p: Vec3) => number, budget
     const nextFaces: number[] = [];
     let any = false;
     for (let t = 0; t * 3 + 2 < tris.length; t++) {
+      if (t % SLICE === 0) yield;
       const v = [tris[t * 3]!, tris[t * 3 + 1]!, tris[t * 3 + 2]!];
       const f = faces[t]!;
       const cut = [0, 1, 2].map((k) => wants(v[k]!, v[(k + 1) % 3]!));
@@ -165,6 +209,38 @@ export function drawnSurface(
   locate: Locator,
   range: { min: number; max: number },
 ): DrawnSurface {
+  return finish(drawnSteps(m, s, locate, range));
+}
+
+/** The split display mesh drawn as `drawnSurface` does, in slices that hand the thread back so a big body does not
+ *  freeze the window. `pause` and `now` are the test seams. */
+export function drawnSurfaceInFrames(
+  m: DisplayMesh | null,
+  s: EngineSurface,
+  locate: Locator,
+  range: { min: number; max: number },
+  pause: () => Promise<void> = nextTask,
+  now: () => number = () => performance.now(),
+): Promise<DrawnSurface> {
+  return inFrames(drawnWhole(m, s, locate, range), pause, now);
+}
+
+function* drawnWhole(
+  m: DisplayMesh | null,
+  s: EngineSurface,
+  locate: Locator,
+  range: { min: number; max: number },
+): Steps<DrawnSurface> {
+  const split = m && (yield* splitSteps(m, locate.edgeAt, DRAWN_BUDGET));
+  return yield* drawnSteps(split, s, locate, range);
+}
+
+function* drawnSteps(
+  m: DisplayMesh | null,
+  s: EngineSurface,
+  locate: Locator,
+  range: { min: number; max: number },
+): Steps<DrawnSurface> {
   const moves = !!s.displacement && s.displacement.length === s.positions.length;
   if (!m) {
     const n = Math.floor(s.positions.length / 3);
@@ -196,6 +272,7 @@ export function drawnSurface(
   const values = new Float32Array(n);
   const disp = moves ? new Float32Array(n * 3) : null;
   for (let v = 0; v < n; v++) {
+    if (v % SLICE === 0) yield;
     const hit = locate.closest(at(m.positions, v), vertexFace[v]!);
     if (!hit) continue;
     const ids = [0, 1, 2].map((k) => s.indices[hit.tri * 3 + k]!);
@@ -208,7 +285,7 @@ export function drawnSurface(
       }
   }
   if (disp) {
-    const weld = weldIds(m.positions);
+    const weld = yield* weldSteps(m.positions);
     const sum = new Float64Array(n * 3);
     const count = new Uint32Array(n);
     for (let v = 0; v < n; v++) {
