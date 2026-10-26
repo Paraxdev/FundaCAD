@@ -28,7 +28,7 @@ const EDGE_PICK_NAME = "edge-pick-line";
 const edgePickMaterials = new Map<PickKind, LineMaterial>();
 
 /** Shared and never disposed, as the glow materials are, so a hover crossing edges never relinks a program. */
-function edgePickMaterial(kind: PickKind, resolution: THREE.Vector2 | undefined): LineMaterial {
+function edgePickMaterial(kind: PickKind): LineMaterial {
   let m = edgePickMaterials.get(kind);
   if (!m) {
     m = new LineMaterial({
@@ -42,8 +42,6 @@ function edgePickMaterial(kind: PickKind, resolution: THREE.Vector2 | undefined)
     });
     edgePickMaterials.set(kind, m);
   }
-  // The edge's own material holds the viewport's live resolution, so share its vector rather than copy it.
-  if (resolution) m.uniforms.resolution!.value = resolution;
   return m;
 }
 
@@ -57,6 +55,99 @@ function removeEdgePickLines(draw: BodyEdges | undefined) {
     (c as LineSegments2).geometry.dispose();
   }
 }
+interface SelectLine {
+  line: LineSegments2;
+  edges: EdgeRef[];
+  /** Each edge's first float in `col`, plus the end. */
+  starts: number[];
+  hexes: number[];
+  /** Held by reference by the line geometry, so a recolour writes into it. */
+  col: Float32Array;
+}
+
+const pickLineFits = (e: EdgeRef) => !!e.draw?.object && (e.points?.length ?? 0) >= 2;
+
+function makePickLine(draw: BodyEdges, kind: PickKind, pos: Float32Array, col: Float32Array): LineSegments2 {
+  const geo = new LineSegmentsGeometry();
+  geo.setPositions(pos);
+  geo.setColors(col);
+  const mat = edgePickMaterial(kind);
+  const line = new LineSegments2(geo, mat);
+  line.name = EDGE_PICK_NAME;
+  line.raycast = () => {};
+  line.renderOrder = draw.object.renderOrder + 1;
+  line.frustumCulled = false;
+  // The material is shared, so the viewport's resolution is copied in per draw from the edge's own material.
+  line.onBeforeRender = () => {
+    const r = draw.material?.resolution;
+    if (r) mat.resolution.copy(r);
+  };
+  markOverlay(line, "edges");
+  draw.object.add(line);
+  return line;
+}
+
+function disposePickLine(line: LineSegments2) {
+  line.removeFromParent();
+  line.geometry.dispose();
+}
+
+/** Every vertex of a body by a grid cell of its position, with the face it belongs to. */
+interface VertexIndex {
+  pos: THREE.BufferAttribute | THREE.InterleavedBufferAttribute;
+  cell: number;
+  tol2: number;
+  face: Int32Array;
+  cells: Map<number, number[]>;
+}
+
+const cellKey = (x: number, y: number, z: number) =>
+  Math.imul(x, 73856093) ^ Math.imul(y, 19349663) ^ Math.imul(z, 83492791);
+
+function buildVertexIndex(body: BodyMesh): VertexIndex | null {
+  const geo = body.mesh.geometry;
+  const pos = geo.getAttribute("position");
+  const index = geo.getIndex();
+  if (!pos || !index) return null;
+  if (!geo.boundingBox) geo.computeBoundingBox();
+  const size = geo.boundingBox!.getSize(new THREE.Vector3()).length();
+  // A cell twice the match distance and more, so a point and a vertex it matches round to neighbouring cells at most.
+  const cell = size * 1e-4 + 1e-9;
+  const tol = size * 1e-5 + 1e-9;
+  const face = new Int32Array(pos.count).fill(-1);
+  const n = index.count;
+  for (let i = 0; i < n; i++) {
+    const f = body.faceIds[(i / 3) | 0];
+    if (f !== undefined) face[index.getX(i)] = f;
+  }
+  const cells = new Map<number, number[]>();
+  for (let v = 0; v < pos.count; v++) {
+    if (face[v]! < 0) continue;
+    const k = cellKey(Math.round(pos.getX(v) / cell), Math.round(pos.getY(v) / cell), Math.round(pos.getZ(v) / cell));
+    const list = cells.get(k);
+    if (list) list.push(v);
+    else cells.set(k, [v]);
+  }
+  return { pos, cell, tol2: tol * tol, face, cells };
+}
+
+function facesAt(idx: VertexIndex, p: EdgePt): Set<number> {
+  const out = new Set<number>();
+  const q = p.map((c) => c / idx.cell);
+  const xs = [...new Set([Math.floor(q[0]!), Math.ceil(q[0]!)])];
+  const ys = [...new Set([Math.floor(q[1]!), Math.ceil(q[1]!)])];
+  const zs = [...new Set([Math.floor(q[2]!), Math.ceil(q[2]!)])];
+  for (const x of xs)
+    for (const y of ys)
+      for (const z of zs) {
+        for (const v of idx.cells.get(cellKey(x, y, z)) ?? []) {
+          const d = (idx.pos.getX(v) - p[0]) ** 2 + (idx.pos.getY(v) - p[1]) ** 2 + (idx.pos.getZ(v) - p[2]) ** 2;
+          if (d <= idx.tol2) out.add(idx.face[v]!);
+        }
+      }
+  return out;
+}
+
 const DEFAULT_ACCENT = 0x51d6a8;
 const DEFAULT_BODY = 0x9aa7b4;
 
@@ -142,7 +233,11 @@ export class Highlighter {
     this.offTheme = onThemeChange(() => this.refreshTheme());
   }
 
-  private edgeLines: LineSegments2[] = [];
+  private hoverLine: { line: LineSegments2; edge: EdgeRef; hex: number } | null = null;
+  private selectLines = new Map<BodyEdges, SelectLine>();
+  /** The selected set changed, so the selected lines are rebuilt; otherwise only their colours are rewritten. */
+  private selectDirty = false;
+  private selectRecolour = false;
   private edgeLinesQueued = false;
 
   /** A box select adds edges one at a time, so the wide lines are rebuilt once after the batch. */
@@ -155,50 +250,95 @@ export class Highlighter {
     });
   }
 
-  /** The picked edges drawn again wide over their own one, one line object per body that has any. */
+  /** The picked edges drawn again wide over their own one. */
   private syncEdgeLines() {
-    for (const l of this.edgeLines) {
-      l.removeFromParent();
-      l.geometry.dispose();
-    }
-    this.edgeLines = [];
-    if (!this.paintShown) return;
-    const picks: [EdgeRef, PickKind][] = [];
-    for (const e of this.selectedEdges) if (!this.errorEdges.has(e)) picks.push([e, "select"]);
+    this.syncHoverLine();
+    if (this.selectDirty) this.rebuildSelectLines();
+    else if (this.selectRecolour) this.recolourSelectLines();
+    this.selectDirty = false;
+    this.selectRecolour = false;
+  }
+
+  private syncHoverLine() {
     const h = this.hoveredEdge;
-    if (h && !this.selectedEdges.has(h) && !this.errorEdges.has(h)) picks.push([h, "hover"]);
-    const groups = new Map<string, { draw: BodyEdges; kind: PickKind; edges: EdgeRef[] }>();
-    for (const [e, kind] of picks) {
-      if (!e.draw?.object || (e.points?.length ?? 0) < 2) continue;
-      const key = `${e.draw.object.id}:${kind}`;
-      const g = groups.get(key) ?? { draw: e.draw, kind, edges: [] };
-      g.edges.push(e);
-      groups.set(key, g);
+    const on =
+      h && this.paintShown && !this.selectedEdges.has(h) && !this.errorEdges.has(h) && pickLineFits(h) ? h : null;
+    const cur = this.hoverLine;
+    if (!on) {
+      if (cur) disposePickLine(cur.line);
+      this.hoverLine = null;
+      return;
     }
-    for (const { draw, kind, edges } of groups.values()) {
+    const c = this.edgeColour(on, "hover");
+    const hex = c.getHex();
+    if (cur && cur.edge === on && cur.hex === hex) return;
+    if (cur) disposePickLine(cur.line);
+    const pos = segmentPositions(on.points);
+    const col = new Float32Array(pos.length);
+    for (let k = 0; k < pos.length; k += 3) col.set([c.r, c.g, c.b], k);
+    this.hoverLine = { line: makePickLine(on.draw, "hover", pos, col), edge: on, hex };
+  }
+
+  private rebuildSelectLines() {
+    for (const g of this.selectLines.values()) disposePickLine(g.line);
+    this.selectLines.clear();
+    if (!this.paintShown) return;
+    const byDraw = new Map<BodyEdges, EdgeRef[]>();
+    for (const e of this.selectedEdges) {
+      if (this.errorEdges.has(e) || !pickLineFits(e)) continue;
+      const list = byDraw.get(e.draw) ?? [];
+      list.push(e);
+      byDraw.set(e.draw, list);
+    }
+    for (const [draw, edges] of byDraw) {
       const parts = edges.map((e) => segmentPositions(e.points));
       const pos = new Float32Array(parts.reduce((n, p) => n + p.length, 0));
       const col = new Float32Array(pos.length);
+      const starts: number[] = [];
+      const hexes: number[] = [];
       let o = 0;
       edges.forEach((e, i) => {
-        const c = this.edgeColour(e, kind);
+        const c = this.edgeColour(e, "select");
         const p = parts[i]!;
         pos.set(p, o);
         for (let k = 0; k < p.length; k += 3) col.set([c.r, c.g, c.b], o + k);
+        starts.push(o);
+        hexes.push(c.getHex());
         o += p.length;
       });
-      const geo = new LineSegmentsGeometry();
-      geo.setPositions(pos);
-      geo.setColors(col);
-      const line = new LineSegments2(geo, edgePickMaterial(kind, draw.material?.uniforms.resolution?.value));
-      line.name = EDGE_PICK_NAME;
-      line.raycast = () => {};
-      line.renderOrder = draw.object.renderOrder + 1;
-      line.frustumCulled = false;
-      markOverlay(line, "edges");
-      draw.object.add(line);
-      this.edgeLines.push(line);
+      starts.push(o);
+      this.selectLines.set(draw, { line: makePickLine(draw, "select", pos, col), edges, starts, hexes, col });
     }
+  }
+
+  /** Writes only the edges whose colour changed into the line's colour buffer, which three uploads again. */
+  private recolourSelectLines() {
+    for (const g of this.selectLines.values()) {
+      let changed = false;
+      g.edges.forEach((e, i) => {
+        const c = this.edgeColour(e, "select");
+        const hex = c.getHex();
+        if (hex === g.hexes[i]) return;
+        g.hexes[i] = hex;
+        for (let k = g.starts[i]!; k < g.starts[i + 1]!; k += 3) g.col.set([c.r, c.g, c.b], k);
+        changed = true;
+      });
+      if (!changed) continue;
+      const attr = g.line.geometry.getAttribute("instanceColorStart") as THREE.InterleavedBufferAttribute | undefined;
+      if (attr) attr.data.needsUpdate = true;
+    }
+  }
+
+  private pickLines(): LineSegments2[] {
+    const out = [...this.selectLines.values()].map((g) => g.line);
+    if (this.hoverLine) out.push(this.hoverLine.line);
+    return out;
+  }
+
+  private dropPickLines() {
+    for (const l of this.pickLines()) disposePickLine(l);
+    this.selectLines.clear();
+    this.hoverLine = null;
   }
 
   /** Re-read the accent and repaint every face, overlay and edge it coloured. */
@@ -258,36 +398,23 @@ export class Highlighter {
   }
 
   private edgeFaces = new Map<EdgeRef, number[]>();
+  private vertexIndexes = new Map<BodyMesh, VertexIndex | null>();
 
   /** The faces with a vertex at both ends of the edge's first segment, which per face tessellation shares. */
   private facesBeside(body: BodyMesh, e: EdgeRef): number[] {
     const hit = this.edgeFaces.get(e);
     if (hit) return hit;
-    const geo = body.mesh.geometry;
-    const pos = geo.getAttribute("position");
-    const index = geo.getIndex();
     const a = e.points?.[0];
     const b = e.points?.[1] ?? a;
+    let idx = this.vertexIndexes.get(body);
+    if (idx === undefined) {
+      idx = buildVertexIndex(body);
+      this.vertexIndexes.set(body, idx);
+    }
     const out: number[] = [];
-    if (pos && index && a && b) {
-      if (!geo.boundingBox) geo.computeBoundingBox();
-      const size = geo.boundingBox!.getSize(new THREE.Vector3()).length();
-      const tol2 = (size * 1e-5 + 1e-9) ** 2;
-      const at = (v: number, p: EdgePt) =>
-        (pos.getX(v) - p[0]) ** 2 + (pos.getY(v) - p[1]) ** 2 + (pos.getZ(v) - p[2]) ** 2 <= tol2;
-      const atA = new Set<number>();
-      const atB = new Set<number>();
-      const tris = index.count / 3;
-      for (let t = 0; t < tris; t++) {
-        const f = body.faceIds[t];
-        if (f === undefined) continue;
-        for (let k = 0; k < 3; k++) {
-          const v = index.getX(t * 3 + k);
-          if (at(v, a)) atA.add(f);
-          if (at(v, b)) atB.add(f);
-        }
-      }
-      for (const f of atA) if (atB.has(f)) out.push(f);
+    if (idx && a && b) {
+      const atB = facesAt(idx, b);
+      for (const f of facesAt(idx, a)) if (atB.has(f)) out.push(f);
     }
     this.edgeFaces.set(e, out);
     return out;
@@ -344,6 +471,7 @@ export class Highlighter {
     }
     this.errorEdges = next;
     for (const e of this.errorEdges) paint(e, ERROR);
+    this.selectDirty = true;
     this.queueEdgeLines();
   }
 
@@ -473,11 +601,9 @@ export class Highlighter {
     this.disposed = true;
     this.offTheme();
     this.dropOverlays();
-    for (const l of this.edgeLines) {
-      l.removeFromParent();
-      l.geometry.dispose();
-    }
-    this.edgeLines = [];
+    this.dropPickLines();
+    this.vertexIndexes.clear();
+    this.edgeFaces.clear();
   }
 
   private showOverlay(o: PickOverlay, on: boolean) {
@@ -501,11 +627,12 @@ export class Highlighter {
     if (this.selectedEdges.has(line)) {
       this.selectedEdges.delete(line);
       if (!this.errorEdges.has(line)) paintIdle(line, this.edgeBase);
-      this.queueEdgeLines();
     } else {
       this.selectedEdges.add(line);
       if (!this.errorEdges.has(line)) this.tint(line, "select");
     }
+    this.selectDirty = true;
+    this.queueEdgeLines();
   }
 
   toggleSelectFace(faceId: number) {
@@ -550,6 +677,7 @@ export class Highlighter {
       if (!this.errorEdges.has(e)) paintIdle(e, this.edgeBase);
     }
     for (const f of this.selectedFaces) this.restoreFace(f);
+    if (this.selectedEdges.size) this.selectDirty = true;
     this.selectedEdges.clear();
     this.selectedFaces.clear();
     this.faceBodies = null;
@@ -655,6 +783,7 @@ export class Highlighter {
   private tint(e: EdgeRef, kind: PickKind) {
     if (this.paintShown) paint(e, this.edgeColour(e, kind));
     else paintIdle(e, this.edgeBase);
+    if (kind === "select") this.selectRecolour = true;
     this.queueEdgeLines();
   }
 
@@ -669,6 +798,7 @@ export class Highlighter {
       this.paintShown = false;
     }
     this.syncOverlays();
+    this.selectDirty = true;
     this.syncEdgeLines();
   }
 
@@ -698,7 +828,7 @@ export class Highlighter {
     for (const e of edges) paintIdle(e, this.edgeBase);
     const overlays = [this.overlays.hover, this.overlays.select].filter((o) => o?.shown) as PickOverlay[];
     for (const o of overlays) this.showOverlay(o, false);
-    const lines = this.edgeLines.filter((l) => l.visible);
+    const lines = this.pickLines().filter((l) => l.visible);
     for (const l of lines) l.visible = false;
     try {
       return fn();
