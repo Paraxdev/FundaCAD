@@ -9,9 +9,14 @@ const held: (() => void)[] = [];
 const deliver = () => {
   for (const f of held.splice(0)) f();
 };
+let live: FakeWorker | null = null;
 class FakeWorker {
   onmessage: ((e: MessageEvent) => void) | null = null;
   onerror: ((e: unknown) => void) | null = null;
+  onmessageerror: ((e: unknown) => void) | null = null;
+  constructor() {
+    live = this;
+  }
   postMessage(data: { id: number; job: PickTreeJob }) {
     held.push(() => this.onmessage?.({ data: { id: data.id, tree: buildPickTree(data.job) } } as MessageEvent));
   }
@@ -72,5 +77,35 @@ describe("the pick tree of a big body", () => {
     expect(tree).toBeDefined();
     deliver();
     expect(g.boundsTree).toBe(tree);
+  });
+
+  it("keeps one copy in the worker at a time, however many big bodies wait", async () => {
+    const bodies = [big(), big(), big(), big(), big()];
+    const jobs = raycastIndexStats.workerJobs;
+    for (const g of bodies) scheduleRaycastIndex(g);
+    await settle(() => raycastIndexStats.workerJobs > jobs);
+    await new Promise((r) => setTimeout(r, 20));
+    let most = 0;
+    for (let i = 0; i < 10 && !bodies.every((g) => g.boundsTree); i++) {
+      most = Math.max(most, held.length);
+      held.shift()?.();
+    }
+    expect(bodies.every((g) => g.boundsTree)).toBe(true);
+    expect(most).toBe(1);
+    expect(raycastIndexStats.workerJobs - jobs).toBe(5);
+  });
+
+  // Last: a broken worker stays broken for the rest of the module.
+  it("builds on the main thread when a reply cannot be read", async () => {
+    const g = big();
+    const jobs = raycastIndexStats.workerJobs;
+    const main = raycastIndexStats.mainBuilds;
+    scheduleRaycastIndex(g);
+    await settle(() => raycastIndexStats.workerJobs > jobs);
+    held.splice(0);
+    live!.onmessageerror?.(new Event("messageerror"));
+    await settle(() => !!g.boundsTree);
+    expect(g.boundsTree).toBeDefined();
+    expect(raycastIndexStats.mainBuilds).toBe(main + 1);
   });
 });

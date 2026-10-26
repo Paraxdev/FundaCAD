@@ -21,14 +21,14 @@ export function buildRaycastIndex(geo: THREE.BufferGeometry) {
 /** Skipping this leaks the tree's typed arrays on every rebuild, which is every document change. */
 export function disposeRaycastIndex(geo: THREE.BufferGeometry) {
   pending.delete(geo); // never build a tree for geometry that is already gone
-  inFlight.delete(geo);
+  dropFromWorker(geo);
   if (geo.boundsTree) geo.disposeBoundsTree();
 }
 
 /** A detached model's trees are never needed, so its idle builds stop before its GPU dispose comes round. */
 export function forgetRaycastIndex(geo: THREE.BufferGeometry) {
   pending.delete(geo);
-  inFlight.delete(geo);
+  dropFromWorker(geo);
 }
 
 // Building every BVH inline in setModel took ~0.7 s of 2.26 s frozen (3,071 bodies), and a lazy build stalls the
@@ -39,7 +39,10 @@ let scheduled = false;
 function drain(hasTime: () => boolean) {
   for (const geo of pending) {
     pending.delete(geo);
-    if (!toWorker(geo)) buildRaycastIndex(geo);
+    if (forWorker(geo)) {
+      waiting.add(geo);
+      pump();
+    } else buildRaycastIndex(geo);
     if (!hasTime()) break;
   }
   scheduled = false;
@@ -49,7 +52,9 @@ function drain(hasTime: () => boolean) {
 // A tree over 3.5M triangles took about a second on the main thread, one long task, so a body this big builds its
 // tree in a worker from copies of its arrays. A pick before it lands builds it here instead (flushRaycastIndex).
 export const WORKER_TRIS = 100_000;
-const inFlight = new Map<THREE.BufferGeometry, number>();
+// One job at a time, copied only as it is posted: a queue of copies held about 1 GB for ten 100 MB bodies.
+const waiting = new Set<THREE.BufferGeometry>();
+let current: { geo: THREE.BufferGeometry | null; id: number } | null = null;
 let worker: Worker | null = null;
 let workerBroken = false;
 let nextJob = 0;
@@ -66,43 +71,67 @@ function pickWorker(): Worker | null {
     return null;
   }
   worker.onmessage = (e: MessageEvent<{ id: number; tree?: PickTree; error?: string }>) => {
-    for (const [geo, id] of inFlight) {
-      if (id !== e.data.id) continue;
-      inFlight.delete(geo);
-      if (geo.boundsTree) return;
+    if (!current || current.id !== e.data.id) return;
+    const geo = current.geo;
+    current = null;
+    if (geo && !geo.boundsTree) {
       if (e.data.tree) attachPickTree(geo, e.data.tree);
       else buildRaycastIndex(geo);
-      return;
     }
+    pump();
   };
-  worker.onerror = () => {
+  const broken = () => {
     workerBroken = true;
     worker?.terminate();
     worker = null;
-    // Whatever was on its way comes back to the idle queue.
-    for (const geo of inFlight.keys()) pending.add(geo);
-    inFlight.clear();
+    // Whatever was on its way comes back to the idle queue, to be built here.
+    if (current?.geo) pending.add(current.geo);
+    current = null;
+    for (const geo of waiting) pending.add(geo);
+    waiting.clear();
     schedule();
   };
+  worker.onerror = broken;
+  worker.onmessageerror = broken;
   return worker;
 }
 
-/** True when the worker took the job. */
-function toWorker(geo: THREE.BufferGeometry): boolean {
+function forWorker(geo: THREE.BufferGeometry): boolean {
   const index = geo.getIndex();
   const pos = geo.getAttribute("position");
   if (!index || !pos || index.count / 3 < WORKER_TRIS) return false;
   if ((pos as THREE.InterleavedBufferAttribute).isInterleavedBufferAttribute || pos.itemSize !== 3) return false;
   if (!(pos.array instanceof Float32Array)) return false;
   if (!(index.array instanceof Uint32Array || index.array instanceof Uint16Array)) return false;
+  return pickWorker() !== null;
+}
+
+/** Posts the next waiting body when the worker is free. */
+function pump() {
+  if (current) return;
   const w = pickWorker();
-  if (!w) return false;
-  const id = ++nextJob;
-  const job: PickTreeJob = { position: pos.array.slice(), index: index.array.slice() };
-  inFlight.set(geo, id);
-  raycastIndexStats.workerJobs++;
-  w.postMessage({ id, job }, [job.position.buffer, job.index.buffer]);
-  return true;
+  for (const geo of waiting) {
+    waiting.delete(geo);
+    if (geo.boundsTree) continue;
+    if (!w) {
+      buildRaycastIndex(geo);
+      continue;
+    }
+    const pos = geo.getAttribute("position") as THREE.BufferAttribute;
+    const job: PickTreeJob = {
+      position: (pos.array as Float32Array).slice(),
+      index: (geo.getIndex()!.array as Uint32Array | Uint16Array).slice(),
+    };
+    current = { geo, id: ++nextJob };
+    raycastIndexStats.workerJobs++;
+    w.postMessage({ id: current.id, job }, [job.position.buffer, job.index.buffer]);
+    return;
+  }
+}
+
+function dropFromWorker(geo: THREE.BufferGeometry) {
+  waiting.delete(geo);
+  if (current?.geo === geo) current.geo = null;
 }
 
 function schedule() {
@@ -123,7 +152,7 @@ function schedule() {
 
 /** Queue a body geometry's BVH to be built after the current frame paints. */
 export function scheduleRaycastIndex(geo: THREE.BufferGeometry) {
-  if (!geo.getIndex() || geo.boundsTree || inFlight.has(geo)) return;
+  if (!geo.getIndex() || geo.boundsTree || waiting.has(geo) || current?.geo === geo) return;
   pending.add(geo);
   if (scheduled) return;
   // One rAF first, so the model paints before any main thread goes to trees. Headless callers (vitest)
@@ -141,11 +170,10 @@ export function scheduleRaycastIndex(geo: THREE.BufferGeometry) {
 
 /** Called before a pick so an interaction never falls back to the brute force raycast. */
 export function flushRaycastIndex() {
-  // A tree still in the worker is built here too, the worker's copy is dropped when it lands.
-  for (const geo of inFlight.keys()) {
-    inFlight.delete(geo);
-    if (!geo.boundsTree) buildRaycastIndex(geo);
-  }
+  // A tree waiting for or in the worker is built here too, the worker's copy is dropped when it lands.
+  if (current?.geo && !current.geo.boundsTree) buildRaycastIndex(current.geo);
+  for (const geo of waiting) if (!geo.boundsTree) buildRaycastIndex(geo);
+  waiting.clear();
   for (const geo of pending) {
     pending.delete(geo);
     buildRaycastIndex(geo);
