@@ -16,8 +16,8 @@ import { createPrintabilityState } from "./printabilityState";
 /** Its own layer of face marks, so the app's Stress marks and these come and go apart. */
 export const PRINTABILITY_MARKS = "printability";
 
-/** The app's hover amber for the finding a row puts forward. A copy, as a plugin cannot import the viewport's
- *  (viewport/highlight.ts, EDGE_HOVER_COLOR); a test holds the two together. */
+/** Amber for the finding a row puts forward, apart from the accent the app's own picks take, so a finding never reads
+ *  as a selection. */
 export const EMPHASIS_COLOR = 0xffd089;
 
 export interface PrintabilityDeps {

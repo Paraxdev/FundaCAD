@@ -11,7 +11,7 @@ function scene() {
   const geometry = new THREE.BoxGeometry(1, 1, 1);
   const body = new THREE.Mesh(geometry);
   const glow = makeSelectionGlow(geometry, "select");
-  const hover = makeFaceHoverOverlay(new Float32Array(9), new THREE.Color(0xff0000));
+  const hover = makeFaceHoverOverlay(new Float32Array(9), new Float32Array(9), "hover");
   body.add(glow, hover);
   const edges = new THREE.Object3D();
   model.add(body, edges);

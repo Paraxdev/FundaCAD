@@ -134,7 +134,7 @@ const NO_WORK: ActiveWork = { tool: false, sketch: false, planes: false };
 const SKETCH_DIM_OPACITY = 0.55;
 const SKETCH_DIM_EDGE_OPACITY = 0.5;
 
-import { Highlighter, EDGE_HOVER_COLOR, sameHover } from "./highlight";
+import { Highlighter, edgeHoverColor, sameHover } from "./highlight";
 import { DRAFT_COLORS } from "./draftColors";
 import { ProgressiveModel } from "./progressive";
 import { nearestEdgeByMid, nearestEdgeByCurve, midMatchTol, edgeSelectorFrom, polylineMid } from "./edgeMatch";
@@ -466,6 +466,7 @@ export class Viewport {
       this.scene.applyRenderPrefs();
       this.scene.originTiles.applyTheme(this.groundHex());
       this.cube.applyTheme();
+      this.emphasis?.setColor(edgeHoverColor());
       this.requestRender();
     });
     this.loop();
@@ -3625,9 +3626,10 @@ export class Viewport {
       return;
     }
     if (!this.emphasis) {
-      this.emphasis = new EdgeEmphasis(this.resolution, EDGE_HOVER_COLOR);
+      this.emphasis = new EdgeEmphasis(this.resolution, edgeHoverColor());
       this.addToScene(this.emphasis.object, "highlight");
     }
+    this.emphasis.setColor(edgeHoverColor());
     this.emphasis.showAll(lines.map((l) => l.points));
     this.requestRender();
   }

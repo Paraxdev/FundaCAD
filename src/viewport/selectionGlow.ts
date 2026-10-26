@@ -5,6 +5,7 @@ import * as THREE from "three";
 import { themeColor } from "./themeColors";
 import { DISPLAY_COLOR_GLSL, displayColorUniforms, followComposer } from "./composerColor";
 import { markOverlay } from "./overlayKinds";
+import { PICK_ALPHA, type PickKind } from "./pickColors";
 
 // ShaderMaterial prepends cameraPosition, modelMatrix, normal and position. The view vector is per fragment: per
 // vertex it bent toward a large plate's far corners, so the plate read as grazing and the rim washed the screen.
@@ -61,7 +62,7 @@ let clipPlanes: THREE.Plane[] | null = null;
 export function clipSelectionOverlays(planes: THREE.Plane[] | null) {
   clipPlanes = planes;
   for (const mat of materials.values()) mat.clippingPlanes = planes;
-  if (faceHoverMaterial) faceHoverMaterial.clippingPlanes = planes;
+  for (const mat of faceMaterials.values()) mat.clippingPlanes = planes;
 }
 
 function glowMaterial(kind: GlowKind): THREE.ShaderMaterial {
@@ -95,7 +96,8 @@ function glowMaterial(kind: GlowKind): THREE.ShaderMaterial {
   return mat;
 }
 
-const FACE_HOVER_NAME = "face-hover-overlay";
+const FACE_OVERLAY_NAME: Record<PickKind, string> = { hover: "face-hover-overlay", select: "face-select-overlay" };
+const FACE_OVERLAY_NAMES = new Set(Object.values(FACE_OVERLAY_NAME));
 
 let warmup: THREE.Group | null = null;
 
@@ -118,34 +120,40 @@ export function removeSelectionGlows(mesh: THREE.Object3D) {
   for (let i = mesh.children.length - 1; i >= 0; i--) {
     const c = mesh.children[i]!;
     if (c.name === GLOW_NAME) c.removeFromParent();
-    else if (c.name === FACE_HOVER_NAME) disposeFaceHoverOverlay(c as THREE.Mesh);
+    else if (FACE_OVERLAY_NAMES.has(c.name)) disposeFaceHoverOverlay(c as THREE.Mesh);
   }
 }
 
-let faceHoverMaterial: THREE.MeshBasicMaterial | null = null;
+const faceMaterials = new Map<PickKind, THREE.MeshBasicMaterial>();
 
-/** A face hover on a glowing body is drawn again above the glow, since its vertex tint barely reads through.
- *  The overlay's geometry is its own copy of the triangles; the material is shared and stays. */
+/** The overlay's geometry is its own copy of the picked triangles; the material is shared and stays. */
 export function disposeFaceHoverOverlay(mesh: THREE.Mesh) {
   mesh.removeFromParent();
   mesh.geometry.dispose();
 }
 
-export function makeFaceHoverOverlay(positions: Float32Array, color: THREE.Color): THREE.Mesh {
-  faceHoverMaterial ??= new THREE.MeshBasicMaterial({
-    transparent: true,
-    opacity: 0.72,
-    depthWrite: false,
-    polygonOffset: true,
-    polygonOffsetFactor: -1,
-    polygonOffsetUnits: -1,
-    clippingPlanes: clipPlanes,
-  });
-  faceHoverMaterial.color.copy(color);
+/** The picked faces drawn again over the shaded body in their pick colours (pickColors.ts). Path traced draws bodies
+ *  as depth only and glass shows little of a vertex tint, so this is what makes a face pick read there. */
+export function makeFaceHoverOverlay(positions: Float32Array, colors: Float32Array, kind: PickKind): THREE.Mesh {
+  let mat = faceMaterials.get(kind);
+  if (!mat) {
+    mat = new THREE.MeshBasicMaterial({
+      vertexColors: true,
+      transparent: true,
+      opacity: PICK_ALPHA.face[kind],
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1,
+      clippingPlanes: clipPlanes,
+    });
+    faceMaterials.set(kind, mat);
+  }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-  const mesh = new THREE.Mesh(geo, faceHoverMaterial);
-  mesh.name = FACE_HOVER_NAME;
+  geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.name = FACE_OVERLAY_NAME[kind];
   mesh.raycast = () => {};
   mesh.castShadow = false;
   mesh.receiveShadow = false;

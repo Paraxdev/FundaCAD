@@ -58,7 +58,8 @@ import { pointOnEdge } from "./edgeNudge";
 import { blendClickTarget, missPrompt, screenPolylineDist } from "./blendPick";
 import { EDGE_GRAB_PX } from "../viewport/edgeBand";
 import { hitPx } from "../input/pointerKind";
-import { EDGE_HOVER_COLOR } from "../viewport/highlight";
+import { edgeHoverColor, edgeSelectColor } from "../viewport/highlight";
+import { onThemeChange } from "../ui/theme";
 import { toast } from "../ui/toast";
 import { isEditableTarget } from "../ui/focus";
 
@@ -67,10 +68,10 @@ type Kind = EdgeTreatment;
 type Vec3 = [number, number, number];
 
 const Y_AXIS = HANDLE_UP;
-// Ghost member lines drawn over the preview, where the members were consumed into rounded faces. The colours match
-// the Highlighter's SELECT and ERROR tiers.
-const GHOST_SELECT = 0xff7a3c;
+// Ghost member lines drawn over the preview, where the members were consumed into rounded faces, in the Highlighter's
+// selected edge colour, or its error red.
 const GHOST_ERROR = 0xe23b3b;
+const ghostColor = (g: { failed: boolean }) => (g.failed ? GHOST_ERROR : edgeSelectColor());
 
 /** Only delays the OCCT preview; the client side ghost (viewport.setBlendGhost) still redraws every frame, so a fast
  *  drag does not queue a rebuild per pixel. */
@@ -87,8 +88,8 @@ interface GhostEdge {
   points: Vec3[];
   line: Line2;
   chain: number;
-  /** its colour when not hovered, select or error */
-  color: number;
+  /** drawn in the error red when not hovered */
+  failed: boolean;
 }
 
 /** An unresolved row is a saved selector the current geometry no longer shows: still part of the feature and
@@ -124,6 +125,7 @@ export class EdgeFeatureTool {
   private editId: string | null = null; // committed feature id being edited
   private awaitingRollback = false; // waiting for the rolled-back model build
   private unsubBuild: (() => void) | null = null;
+  private unsubTheme: (() => void) | null = null;
   /** Set when the edited field is a bare reference to another parameter (store.bareParamRef): commit writes the drag's
    *  value into that parameter and the field stays bound. */
   private paramRef: string | null = null;
@@ -295,6 +297,7 @@ export class EdgeFeatureTool {
     this.viewport.suspendPicking = true; // we drive our own edge-only picking
     this.viewport.emphasizeEdges(true); // light up all edges so they're easy to target
     this.gesture.attach();
+    this.unsubTheme = onThemeChange(() => this.recolorGhosts());
 
     if (seed.length) {
       // A handle grab opens at 0, so the drag is the radius and the press point means no feature; a command opens on
@@ -456,7 +459,7 @@ export class EdgeFeatureTool {
     geo.setPositions(flat);
     const el = this.viewport.domElement;
     const mat = new LineMaterial({
-      color: GHOST_SELECT,
+      color: edgeSelectColor(),
       linewidth: 3.5,
       worldUnits: false,
       depthTest: false,
@@ -473,7 +476,7 @@ export class EdgeFeatureTool {
       points,
       line,
       chain: chain ?? ++this.chainCounter,
-      color: GHOST_SELECT,
+      failed: false,
     });
   }
 
@@ -578,8 +581,8 @@ export class EdgeFeatureTool {
     if (g === this.hoveredGhost) return;
     const prev = this.hoveredGhost;
     this.hoveredGhost = g;
-    if (prev && this.ghosts.includes(prev)) (prev.line.material as LineMaterial).color.set(prev.color);
-    if (g) (g.line.material as LineMaterial).color.set(EDGE_HOVER_COLOR);
+    if (prev && this.ghosts.includes(prev)) (prev.line.material as LineMaterial).color.set(ghostColor(prev));
+    if (g) (g.line.material as LineMaterial).color.set(edgeHoverColor());
     this.viewport.requestRender();
   }
 
@@ -881,8 +884,14 @@ export class EdgeFeatureTool {
       const failed = !!entry?.failed?.some(
         (e) => Math.hypot(e.mid[0] - g.mid[0], e.mid[1] - g.mid[1], e.mid[2] - g.mid[2]) <= tol,
       );
-      g.color = failed ? GHOST_ERROR : GHOST_SELECT;
-      if (g !== this.hoveredGhost) (g.line.material as LineMaterial).color.set(g.color);
+      g.failed = failed;
+    }
+    this.recolorGhosts();
+  }
+
+  private recolorGhosts() {
+    for (const g of this.ghosts) {
+      (g.line.material as LineMaterial).color.set(g === this.hoveredGhost ? edgeHoverColor() : ghostColor(g));
     }
     this.viewport.requestRender();
   }
@@ -1273,6 +1282,8 @@ export class EdgeFeatureTool {
     this.disposeGizmo();
     this.disposeGhosts();
     this.unsubBuild?.();
+    this.unsubTheme?.();
+    this.unsubTheme = null;
     this.unsubBuild = null;
     this.editId = null;
     this.paramRef = null;

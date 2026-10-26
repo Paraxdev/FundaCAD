@@ -5,7 +5,7 @@
 import { describe, it, expect } from "vitest";
 import * as THREE from "three";
 import { AXIS_COLOR, OriginTriad, TRIAD_OPACITY, mutedAxisColor } from "../../src/viewport/originTriad";
-import { EDGE_HOVER_COLOR } from "../../src/viewport/highlight";
+import { edgeHoverColor } from "../../src/viewport/highlight";
 
 /** Every material the arm paints with, drawn and occluded pass alike. */
 function armColors(arm: THREE.Object3D): number[] {
@@ -101,7 +101,7 @@ describe("OriginTriad", () => {
     const triad = new OriginTriad(new THREE.Scene());
     const base = triad.arms.map(armColors);
     triad.highlight("Y");
-    expect(armColors(triad.arms[1]!).every((c) => c === EDGE_HOVER_COLOR)).toBe(true);
+    expect(armColors(triad.arms[1]!).every((c) => c === edgeHoverColor())).toBe(true);
     expect(armColors(triad.arms[0]!)).toEqual(base[0]);
     expect(armColors(triad.arms[2]!)).toEqual(base[2]);
     triad.highlight(null);

@@ -26,7 +26,7 @@ import {
   mirrorMarkObjects,
   CURVE_COLOR,
   PREVIEW_COLOR,
-  SELECT_COLOR,
+  sketchSelectColor,
 } from "./overlay";
 import {
   constrainedPoles,
@@ -83,6 +83,7 @@ import { expandPattern, translated } from "./pattern";
 import { MirrorFlow, type MirrorHost } from "./mirrorFlow";
 import { showMirrorPanel } from "../features/mirrorPanel";
 import { mirrorLineColor, mirrorObjectsColor } from "../features/mirrorColors";
+import { onThemeChange } from "../ui/theme";
 import {
   candidatesFromEntities,
   curvesFromEntities,
@@ -680,6 +681,8 @@ export class SketchMode {
 
     this.session.dispose();
     const session = (this.session = new Disposer());
+    // The selected entity takes the accent, which only a redraw re-reads.
+    session.add(onThemeChange(() => this.redraw()));
     const el = this.viewport.domElement;
     session.listen(el, "pointerdown", this.boundDown);
     session.listen(el, "pointermove", this.boundMove);
@@ -3359,7 +3362,7 @@ export class SketchMode {
       const chosen = this.entities.filter((e) => this.selected.has(e.id) && !lit.has(e.id));
       const hovered = this.entities.filter((e) => lit.has(e.id));
       if (normal.length) objs.push(...curveObjects(normal, this.plane, this.activeColor()));
-      if (chosen.length) objs.push(...curveObjects(chosen, this.plane, SELECT_COLOR, true));
+      if (chosen.length) objs.push(...curveObjects(chosen, this.plane, sketchSelectColor(), true));
       if (hovered.length) objs.push(...curveObjects(hovered, this.plane, PREVIEW_COLOR, true));
     } else {
       objs.push(...curveObjects(this.entities, this.plane, this.activeColor()));
