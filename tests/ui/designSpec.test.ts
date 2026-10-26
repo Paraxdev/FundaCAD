@@ -47,7 +47,7 @@ const COLOUR_BASELINE: Record<string, number> = {
   "src/styles/_glass.scss": 3,
   "src/styles/_inspector.scss": 11,
   "src/styles/_layout.scss": 3,
-  "src/styles/_modals.scss": 92,
+  "src/styles/_modals.scss": 90,
   "src/styles/_notice.scss": 1,
   "src/styles/_renderdock.scss": 5,
   "src/styles/_targetedit.scss": 2,
@@ -225,22 +225,106 @@ const surfaceOf = (selector: string) =>
       .pop() ?? "",
   )?.[0] ?? "";
 
-function isOutline(prop: string, value: string): boolean {
-  if (prop === "border" || prop === "border-color" || prop === "outline") {
-    return !/(^|\s)(none|hidden|transparent)$|^none\b|^0(px)?(\s|$)/.test(value);
+const NO_PAINT = /(^|\s)(none|hidden|transparent)$|^none|^0(px)?(\s|$)/;
+
+// Splits a value on spaces that sit outside parentheses.
+function words(value: string): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let cur = "";
+  for (const c of value) {
+    if (c === "(") depth++;
+    if (c === ")") depth--;
+    if (c === " " && depth === 0) {
+      if (cur) out.push(cur);
+      cur = "";
+    } else cur += c;
   }
-  return prop === "box-shadow" && /(^|,)\s*(inset\s+)?0\s+0\s+0\s+[1-9]/.test(value);
+  if (cur) out.push(cur);
+  return out;
 }
 
-function outlinedSurfaces(files: Iterable<[string, string]>): string[] {
+const ZERO = /^[+-]?0*\.?0+(px|em|rem)?$/;
+const LENGTH = /^[+-]?(\d+\.?\d*|\.\d+)(px|em|rem)?$/;
+
+// A shadow that draws a line round the box: no offset, a blur of 1px at most, and a spread (a number or a
+// variable, which may hold one).
+function isRingShadow(shadow: string): boolean {
+  const w = words(shadow.trim()).filter((x) => x !== "inset");
+  const [x = "", y = "", blur = "", spread = ""] = w;
+  if (!ZERO.test(x) || !ZERO.test(y) || !spread) return false;
+  const thin = ZERO.test(blur) || (LENGTH.test(blur) && Number.parseFloat(blur) <= 1);
+  return thin && ((LENGTH.test(spread) && !ZERO.test(spread)) || /^var\(/.test(spread));
+}
+
+function isOutline(prop: string, value: string): boolean {
+  if (prop === "border" || prop === "border-color" || prop === "outline" || prop === "outline-color") {
+    return !NO_PAINT.test(value);
+  }
+  if (prop === "border-style") return !/^(none|hidden)$/.test(value);
+  if (prop === "border-image" || prop === "border-image-source") return !/^none/.test(value);
+  // A mask that cuts the middle out of an ::after paints a ring.
+  if (prop === "mask-composite" || prop === "-webkit-mask-composite") return /xor|exclude/.test(value);
+  return prop === "box-shadow" && splitSelectors(value).some(isRingShadow);
+}
+
+// Only a real :focus or :focus-visible state is exempt. :focus-within and :not(:focus) are not.
+const isFocusState = (selector: string) => /:focus(?:-visible)?(?![\w-])/.test(selector.replace(/:not\([^)]*\)/g, ""));
+
+const STATE_CLASSES = new Set(["on", "active", "selected", "open", "disabled", "holding", "typed", "shown", "busy"]);
+
+type Compound = { tag: string; ids: string[]; classes: string[] };
+function compoundOf(selector: string): Compound {
+  const last = (
+    selector
+      .replace(/::?(?:before|after)$/, "")
+      .split(/[\s>+~]+/)
+      .pop() ?? ""
+  ).replace(/\[[^\]]*\]|:[\w-]+(\([^)]*\))?/g, "");
+  return {
+    tag: /^[a-z][\w-]*/i.exec(last)?.[0] ?? "",
+    ids: [...last.matchAll(/#([\w-]+)/g)].map((m) => m[1] ?? ""),
+    classes: [...last.matchAll(/\.([\w-]+)/g)].map((m) => m[1] ?? ""),
+  };
+}
+
+// The static class lists the templates write, with the tag that carries them.
+function classGroups(templates: Iterable<string>): { tag: string; classes: Set<string> }[] {
+  return [...templates].flatMap((text) =>
+    [...text.matchAll(/<([\w-]+)\s[^>]*?(?<![:@\w-])class="([^"{}]*)"/g)].map((m) => ({
+      tag: m[1] ?? "",
+      classes: new Set((m[2] ?? "").split(/\s+/).filter(Boolean)),
+    })),
+  );
+}
+
+function outlinedSurfaces(files: Iterable<[string, string]>, templates: Iterable<string> = []): string[] {
   const rules = [...files].flatMap(([path, text]) => rulesOf(path, text).map((r) => ({ path, ...r })));
+  const groups = classGroups(templates);
   const rounds = (d: { prop: string; value: string }) =>
     (d.prop === "border-radius" && !/^0(px)?$/.test(d.value)) || d.prop === "corner-shape";
   const rounded = new Set(rules.filter((r) => r.decls.some(rounds)).flatMap((r) => r.selectors.map(surfaceOf)));
+  const rounders = rules.filter((r) => r.decls.some(rounds)).flatMap((r) => r.selectors.map(compoundOf));
+  // Whether a rule that rounds some element can land on the element this selector paints: the classes the
+  // templates give that element are taken from the lists that hold its own (non state) classes.
+  const roundedByOther = (selector: string) => {
+    const mine = compoundOf(selector);
+    const core = mine.classes.filter((c) => !STATE_CLASSES.has(c));
+    const own = groups.filter((g) => core.length > 0 && core.every((c) => g.classes.has(c)));
+    const classes = new Set([...mine.classes, ...own.flatMap((g) => [...g.classes])]);
+    const tags = new Set([mine.tag, ...own.map((g) => g.tag)].filter(Boolean));
+    return rounders.some(
+      (r) =>
+        (r.classes.length > 0 || r.ids.length > 0 || r.tag !== "") &&
+        r.ids.every((i) => mine.ids.includes(i)) &&
+        r.classes.every((c) => classes.has(c)) &&
+        (r.tag === "" || tags.has(r.tag)),
+    );
+  };
   return rules.flatMap(({ path, selectors, decls }) =>
     selectors
-      .filter((s) => !/:focus/.test(s) && !OUTLINE_ALLOWED.some((a) => a.selector.test(s)))
-      .filter((s) => rounded.has(surfaceOf(s)) || decls.some(rounds))
+      .filter((s) => !isFocusState(s) && !OUTLINE_ALLOWED.some((a) => a.selector.test(s)))
+      .filter((s) => rounded.has(surfaceOf(s)) || decls.some(rounds) || roundedByOther(s))
       .flatMap((s) =>
         decls
           .filter(({ prop, value }) => isOutline(prop, value) && !SIGNAL.test(value))
@@ -342,6 +426,30 @@ const switchesIn = (files: Map<string, string>, paths: string[]) =>
     /class="[^"]*\b(?:param-switch|ft-switch)\b|<ToggleRow\b|<Toggle\b/.test(files.get(path) ?? ""),
   );
 
+// The background a typed field inside a .dim-bad box ends up with: of the rules that name only those
+// classes, the most specific wins, and the later one on a tie.
+function errorFill(files: [string, string][]): string {
+  let best = { weight: -1, value: "" };
+  for (const [path, text] of files)
+    for (const { selectors, decls } of rulesOf(path, text))
+      for (const s of selectors) {
+        const parts = s.split(/\s+/);
+        const last = parts.pop() ?? "";
+        const classes = last.split(".").filter(Boolean);
+        if (
+          !/^(\.[\w-]+)+$/.test(last) ||
+          !classes.includes("dim-field") ||
+          classes.some((c) => c !== "dim-field" && c !== "typed")
+        )
+          continue;
+        if (parts.some((p) => p !== ".dim-bad")) continue;
+        const weight = classes.length + parts.length;
+        const fill = decls.filter(({ prop }) => prop === "background" || prop === "background-color").pop();
+        if (fill && weight >= best.weight) best = { weight, value: fill.value };
+      }
+  return best.value;
+}
+
 describe("design spec guard", () => {
   it("reads the sources", () => {
     expect(vueFiles.size).toBeGreaterThan(50);
@@ -389,7 +497,21 @@ describe("design spec guard", () => {
   it("puts no outline around a rounded surface", () => {
     // Tell a surface apart by its fill (--float-tile-bg, --float-chip-bg, --field-bg) and the shadow, and state by a
     // fill or wash, see docs/DESIGN.md, Depth without lines.
-    expect(outlinedSurfaces(sources)).toEqual([]);
+    expect(outlinedSurfaces(sources, vueFiles.values())).toEqual([]);
+  });
+
+  it("shows an error on a dimension field while it is typed in", () => {
+    const main = scssFiles.get("src/styles/main.scss") ?? "";
+    const order = [...main.matchAll(/@use "([\w-]+)"/g)].map((m) => `src/styles/_${m[1]}.scss`);
+    expect(order).toContain(GLASS);
+    expect(errorFill(order.map((path) => [path, scssFiles.get(path) ?? ""]))).toContain("--error-tint");
+    // A later rule that repaints the typed field loses the error.
+    expect(
+      errorFill([
+        ["a.scss", ".dim-bad .dim-field { background: var(--error-tint); }"],
+        ["b.scss", ".dim-field.typed { background: var(--float-chip-bg); }"],
+      ]),
+    ).not.toContain("--error-tint");
   });
 
   it("reads none of the retired glass tokens, and keeps each one invisible", () => {
@@ -501,6 +623,49 @@ describe("design spec guard", () => {
         ],
       ]),
     ).toEqual([]);
+    const out = (css: string, vue: string[] = []) => outlinedSurfaces([["x.scss", css]], vue);
+    const chip = ".chip { border-radius: 8px; }";
+    // Rounded by a co-class the template gives the same element.
+    expect(
+      out(`.btn { border-radius: 8px; } .plug-btn.on { border-color: var(--accent); }`, [
+        '<button class="btn plug-btn">x</button>',
+      ]),
+    ).toHaveLength(1);
+    expect(out(`.btn { border-radius: 8px; } .plug-btn.on { border-color: var(--accent); }`)).toEqual([]);
+    // Rounded by a parent selector that names only the tag.
+    expect(
+      out(`.row button { border-radius: 4px; } .done { border: 1px solid var(--accent); }`, [
+        '<div class="row"><button class="done">x</button></div>',
+      ]),
+    ).toHaveLength(1);
+    // Ring spellings.
+    for (const ring of [
+      "0px 0px 0px 1px var(--accent)",
+      "0 0 0 .5px var(--accent)",
+      "0 0 0 var(--w) var(--accent)",
+      "0 0 1px 1px var(--accent)",
+      "inset 0 0 0 1px red, 0 1px 3px black",
+    ])
+      expect(out(`${chip} .chip.on { box-shadow: ${ring}; }`), ring).toHaveLength(1);
+    expect(out(`${chip} .chip.on { box-shadow: 0 2px 5px rgba(0,0,0,.3), 0 16px 34px -14px black; }`)).toEqual([]);
+    expect(out(`${chip} .chip.on { box-shadow: inset 2px 0 0 var(--accent); }`)).toEqual([]);
+    // Other ways to paint an edge.
+    for (const decl of [
+      "outline-color: var(--accent)",
+      "border-style: solid",
+      "border-image: linear-gradient(red, blue) 1",
+      "border-image-source: linear-gradient(red, blue)",
+    ])
+      expect(out(`${chip} .chip.on { ${decl}; }`), decl).toHaveLength(1);
+    expect(out(`${chip} .chip::after { content: ""; -webkit-mask-composite: xor; }`)).toHaveLength(1);
+    expect(out(`${chip} .chip::after { content: ""; mask-composite: exclude; }`)).toHaveLength(1);
+    // Only a real focus state is exempt.
+    expect(out(`${chip} .chip:focus-within { outline: 1px solid red; }`)).toHaveLength(1);
+    expect(out(`${chip} .chip:not(:focus) { border-color: red; }`)).toHaveLength(1);
+    expect(
+      out(`${chip} .chip:focus { outline: 1px solid red; } .chip:focus-visible { outline: 2px solid red; }`),
+    ).toEqual([]);
+    expect(out(`${chip} .chip:not(:hover):focus-visible { outline: 2px solid red; }`)).toEqual([]);
     expect(contrastRatio(parseColour("#839496"), parseColour("#fffdf8"))).toBeLessThan(4.5);
     const fake = new Map([
       ["a/Prefs.vue", 'import Row from "./b/Row.vue";\n<template><Row /></template>'],
