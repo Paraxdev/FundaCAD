@@ -48,6 +48,15 @@
 #include <BRepTools_ReShape.hxx>
 #include <BRepTools_WireExplorer.hxx>
 #include <BRep_Builder.hxx>
+#include <BRep_CurveRepresentation.hxx>
+#include <BRep_ListIteratorOfListOfCurveRepresentation.hxx>
+#include <BRep_ListIteratorOfListOfPointRepresentation.hxx>
+#include <BRep_PointOnCurve.hxx>
+#include <BRep_PointOnCurveOnSurface.hxx>
+#include <BRep_PointOnSurface.hxx>
+#include <BRep_TEdge.hxx>
+#include <BRep_TFace.hxx>
+#include <BRep_TVertex.hxx>
 #include <BRep_Tool.hxx>
 #include <Bnd_Box.hxx>
 #include <ElCLib.hxx>
@@ -207,9 +216,82 @@ inline BoShape bo_copy(const TopoDS_Shape &s) {
   BO_GUARD(BRepBuilderAPI_Copy c(s); return bo_own(c.Shape());)
 }
 
-// New topology over the same curves, surfaces and meshes.
+// A new TShape with the same point, curves, surface, meshes and tolerances. The representations are copied, since
+// BRep_Builder updates a vertex parameter or an edge curve in place.
+inline Handle(TopoDS_TShape) bo_copy_tshape(const Handle(TopoDS_TShape) &t) {
+  if (Handle(BRep_TVertex) v = Handle(BRep_TVertex)::DownCast(t)) {
+    Handle(BRep_TVertex) c = new BRep_TVertex();
+    c->Pnt(v->Pnt());
+    c->Tolerance(v->Tolerance());
+    for (BRep_ListIteratorOfListOfPointRepresentation it(v->Points()); it.More(); it.Next()) {
+      const Handle(BRep_PointRepresentation) &p = it.Value();
+      if (p->IsPointOnCurve()) {
+        c->ChangePoints().Append(new BRep_PointOnCurve(p->Parameter(), p->Curve(), p->Location()));
+      } else if (p->IsPointOnCurveOnSurface()) {
+        c->ChangePoints().Append(
+            new BRep_PointOnCurveOnSurface(p->Parameter(), p->PCurve(), p->Surface(), p->Location()));
+      } else if (p->IsPointOnSurface()) {
+        c->ChangePoints().Append(
+            new BRep_PointOnSurface(p->Parameter(), p->Parameter2(), p->Surface(), p->Location()));
+      }
+    }
+    return c;
+  }
+  if (Handle(BRep_TEdge) e = Handle(BRep_TEdge)::DownCast(t)) {
+    Handle(BRep_TEdge) c = new BRep_TEdge();
+    c->Tolerance(e->Tolerance());
+    for (BRep_ListIteratorOfListOfCurveRepresentation it(e->Curves()); it.More(); it.Next()) {
+      c->ChangeCurves().Append(it.Value()->Copy());
+    }
+    c->Degenerated(e->Degenerated());
+    c->SameParameter(e->SameParameter());
+    c->SameRange(e->SameRange());
+    return c;
+  }
+  if (Handle(BRep_TFace) f = Handle(BRep_TFace)::DownCast(t)) {
+    Handle(BRep_TFace) c = new BRep_TFace();
+    c->Surface(f->Surface());
+    c->Location(f->Location());
+    c->Tolerance(f->Tolerance());
+    c->NaturalRestriction(f->NaturalRestriction());
+    c->Triangulations(f->Triangulations(), f->ActiveTriangulation());
+    return c;
+  }
+  return t->EmptyCopy();
+}
+
+using BoTShapeCopies = std::unordered_map<const TopoDS_TShape *, TopoDS_Shape>;
+
+inline TopoDS_Shape bo_copy_tree(const TopoDS_Shape &s, BoTShapeCopies &done) {
+  auto found = done.find(s.TShape().get());
+  TopoDS_Shape base;
+  if (found != done.end()) {
+    base = found->second;
+  } else {
+    base.TShape(bo_copy_tshape(s.TShape()));
+    BRep_Builder b;
+    for (TopoDS_Iterator it(s, false, false); it.More(); it.Next()) {
+      b.Add(base, bo_copy_tree(it.Value(), done));
+    }
+    base.Modified(s.Modified());
+    base.Checked(s.Checked());
+    base.Orientable(s.Orientable());
+    base.Closed(s.Closed());
+    base.Infinite(s.Infinite());
+    base.Convex(s.Convex());
+    done.emplace(s.TShape().get(), base);
+  }
+  TopoDS_Shape r = base;
+  r.Location(s.Location(), false);
+  r.Orientation(s.Orientation());
+  return r;
+}
+
+// New topology over the same curves, surfaces and meshes. BRepBuilderAPI_Copy bakes every location above a vertex
+// into its point and adds the inverse, so a later move would land a last bit away from the original's. This keeps
+// each sub-shape under its own location instead.
 inline BoShape bo_copy_topology(const TopoDS_Shape &s) {
-  BO_GUARD(BRepBuilderAPI_Copy c(s, false, true); return bo_own(c.Shape());)
+  BO_GUARD(if (s.IsNull()) return bo_own(s); BoTShapeCopies done; return bo_own(bo_copy_tree(s, done));)
 }
 
 // --- measurement ------------------------------------------------------------

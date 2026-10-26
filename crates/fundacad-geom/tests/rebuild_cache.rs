@@ -745,3 +745,38 @@ fn a_cancelled_mesh_pass_meshes_no_body_and_answers_none() {
     let none = stopped.mesh(&r, TOL, &Map::new(), &mut |_, _| ticks += 1);
     assert_eq!((none.bodies.len(), ticks, stopped.stats.meshed, stopped.holding()), (0, 0, 0, (0, 0)));
 }
+
+/// A plate with a hole, turned about z then x and moved off the origin, as stress_ops' holed plate.
+fn turned_plate() -> Value {
+    json!({"parameters": {}, "features": [
+        {"id": "p", "type": "box", "length": 120, "width": 40, "height": 10},
+        {"id": "h", "type": "cylinder", "radius": 6, "height": 30},
+        {"id": "cut", "type": "boolean", "operation": "subtract", "target": "body1", "tools": ["body2"]},
+        {"id": "z", "type": "move", "rz": 30, "bodies": ["body1"]},
+        {"id": "x", "type": "move", "rx": 20, "dx": 17, "dy": -9, "dz": 31, "bodies": ["body1"]},
+    ]})
+}
+
+fn surface_of(r: &Rebuild) -> Vec<f64> {
+    use fundacad_geom::mesh::{tessellate, MeshParams};
+    let shape = &r.bodies[0].shape;
+    let access = opencascade::mesh_access::MeshAccess::new(shape);
+    let params = MeshParams { linear: 0.05, angular: 0.25, relative: false, display: false, force_remesh: true };
+    tessellate(shape, &access, params).positions
+}
+
+// A stress study meshes the body it is given, and its mesher turns a last bit difference into a different mesh.
+#[test]
+fn a_ram_resume_at_any_feature_builds_the_cold_shape_to_the_last_bit() {
+    let raw = turned_plate();
+    let want = surface_of(&built(&raw));
+    for at in 1..raw["features"].as_array().unwrap().len() {
+        let mut prefix = raw.clone();
+        prefix["features"].as_array_mut().unwrap().truncate(at);
+        let mut cache = RebuildCache::new(None);
+        cache.rebuild(&typed(&prefix), &prefix, &NoWatch).unwrap_or_else(|_| panic!("cancelled"));
+        let r = cache.rebuild(&typed(&raw), &raw, &NoWatch).unwrap_or_else(|_| panic!("cancelled"));
+        assert_eq!((cache.stats.source, cache.stats.resumed_at), (Source::Ram, at));
+        assert!(surface_of(&r) == want, "resumed at {at}");
+    }
+}
