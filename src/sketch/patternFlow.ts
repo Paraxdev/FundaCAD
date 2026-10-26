@@ -169,7 +169,14 @@ export class PatternFlow {
       const v = vals[d.name];
       if (typeof v === "number") cur[d.name] = v;
     }
-    this.host.dim().show(this.patternDimDefs(pat.type), () => this.commit());
+    this.host.dim().show(
+      this.patternDimDefs(pat.type),
+      () => this.commit(),
+      undefined,
+      undefined,
+      undefined,
+      () => this.onTyped(),
+    );
     this.host.dim().updateFromCursor(cur);
   }
 
@@ -267,23 +274,14 @@ export class PatternFlow {
     const dx = p.x - this.patternCenter.x,
       dy = p.y - this.patternCenter.y;
     const r = Math.hypot(dx, dy);
-    const dimN = (name: string, fallback: number) => Math.round(dim.getValue(name) ?? fallback);
+    this.readFields(pat);
     if (pat.type === "boltCircle") {
       if (r > 1) pat.bcd = Math.round(2 * r * 10) / 10;
-      pat.count = Math.max(1, dimN("count", pat.count as number));
-      pat.diameter = dim.getValue("diameter") ?? (pat.diameter as number);
     } else if (pat.type === "gridHoles") {
       if (r > 1) pat.spacingX = pat.spacingY = Math.round((r / 1.5) * 10) / 10;
-      pat.countX = Math.max(1, dimN("countX", pat.countX as number));
-      pat.countY = Math.max(1, dimN("countY", pat.countY as number));
-      pat.diameter = dim.getValue("diameter") ?? (pat.diameter as number);
     } else if (pat.type === "hexHoles" || pat.type === "honeycomb") {
       if (r > 1) pat.spacing = Math.round((r / 2) * 10) / 10;
-      pat.rings = Math.max(0, dimN("rings", pat.rings as number));
-      pat.diameter = dim.getValue("diameter") ?? (pat.diameter as number);
     } else if (pat.type === "patternRect") {
-      pat.countX = Math.max(1, dimN("countX", pat.countX as number));
-      pat.countY = Math.max(1, dimN("countY", pat.countY as number));
       if (pat.countY === 1) {
         // A single row is a LINE, so it follows the cursor's direction too; a grid keeps axis-aligned steps as its two
         // directions are separate answers.
@@ -297,7 +295,6 @@ export class PatternFlow {
         if (Math.abs(dy) > 1) pat.spacingY = Math.round(dy * 10) / 10;
       }
     } else if (pat.type === "patternCircular") {
-      pat.count = Math.max(1, dimN("count", pat.count as number));
       const src = dim.isUserDriven("angle") ? null : this.firstSourcePoint(pat.sources);
       const swept = src
         ? patternSweepDeg({
@@ -333,8 +330,38 @@ export class PatternFlow {
     return null;
   }
 
+  /** The values the box holds, which a typed one always wins over the cursor for. */
+  private readFields(pat: SketchPattern) {
+    const dim = this.host.dim();
+    const dimN = (name: string, fallback: number) => Math.round(dim.getValue(name) ?? fallback);
+    if (pat.type === "boltCircle") {
+      pat.count = Math.max(1, dimN("count", pat.count as number));
+      pat.diameter = dim.getValue("diameter") ?? (pat.diameter as number);
+    } else if (pat.type === "gridHoles") {
+      pat.countX = Math.max(1, dimN("countX", pat.countX as number));
+      pat.countY = Math.max(1, dimN("countY", pat.countY as number));
+      pat.diameter = dim.getValue("diameter") ?? (pat.diameter as number);
+    } else if (pat.type === "hexHoles" || pat.type === "honeycomb") {
+      pat.rings = Math.max(0, dimN("rings", pat.rings as number));
+      pat.diameter = dim.getValue("diameter") ?? (pat.diameter as number);
+    } else if (pat.type === "patternRect") {
+      pat.countX = Math.max(1, dimN("countX", pat.countX as number));
+      pat.countY = Math.max(1, dimN("countY", pat.countY as number));
+    } else if (pat.type === "patternCircular") {
+      pat.count = Math.max(1, dimN("count", pat.count as number));
+      if (dim.isUserDriven("angle")) pat.angle = dim.getValue("angle") ?? (pat.angle as number);
+    }
+  }
+
+  private onTyped() {
+    if (!this.pendingPattern) return;
+    this.readFields(this.pendingPattern);
+    this.host.refreshActive();
+  }
+
   commit() {
     if (!this.pendingPattern) return;
+    this.readFields(this.pendingPattern);
     this.host.patterns().push(this.pendingPattern);
     this.host.requestSolve();
     this.pendingPattern = null;
