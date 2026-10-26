@@ -29,7 +29,7 @@
   letter-spacing: 0.8px;
   color: var(--text-dim);
   background: var(--panel-2);
-  border: 1px solid var(--line);
+  border: 1px solid transparent;
   border-radius: var(--r-sm);
   /* The app's badge size, shared by the timeline's error badge, cancel and busy readout. */
   padding: var(--s-1) var(--s-3);
@@ -41,9 +41,7 @@
 }
 .context-tab.sketch {
   color: var(--accent-hot);
-  border-color: var(--accent);
-  background: var(--accent-tint);
-  box-shadow: 0 0 0 1px var(--accent-tint-2);
+  background: var(--accent-tint-2);
 }
 
 .menubar {
@@ -85,7 +83,7 @@
   left: 0;
   min-width: 220px;
   background: var(--panel-2);
-  border: 1px solid var(--line-strong);
+  border: 1px solid transparent;
   border-radius: var(--r-md);
   box-shadow: var(--shadow-3);
   padding: var(--s-1);
@@ -155,7 +153,7 @@
   width: 26px;
   height: 24px;
   padding: 0;
-  border: 1px solid var(--line);
+  border: 1px solid transparent;
   border-radius: var(--r-sm);
   background: var(--panel-2);
   color: var(--text-dim);
@@ -204,7 +202,7 @@
 #workspace-toggle.segmented {
   display: flex;
   align-items: stretch;
-  border: 1px solid var(--line);
+  border: 1px solid transparent;
   border-radius: var(--r-md);
   background: var(--panel-2);
   overflow: hidden;

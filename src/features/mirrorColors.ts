@@ -1,5 +1,5 @@
 import { themeColor } from "../viewport/themeColors";
 
 // The Mirror panel's field stripes read the same two tokens, so a field and what it holds in the view match.
-export const mirrorObjectsColor = (): number => themeColor("--accent", 0x4bf9bc);
+export const mirrorObjectsColor = (): number => themeColor("--accent", 0x51d6a8);
 export const mirrorLineColor = (): number => themeColor("--pick-line", 0xb48cff);

@@ -41,8 +41,8 @@
   cursor: default;
 }
 .param-row input {
-  background: var(--panel-2);
-  border: 1px solid var(--line-strong);
+  background: var(--field-bg);
+  border: 1px solid transparent;
   color: var(--text);
   border-radius: var(--r-sm);
   /* The app's field size, every input and <select> resolves here. --s-2 vertical keeps
@@ -60,14 +60,9 @@
     background var(--t-fast) var(--ease),
     box-shadow var(--t-fast) var(--ease);
 }
-.param-row input:hover {
-  border-color: #3d4452;
-}
 .param-row input:focus {
-  outline: none;
-  border-color: var(--accent);
-  background: var(--bg);
-  box-shadow: 0 0 0 3px var(--accent-tint);
+  outline: 1px solid var(--accent);
+  outline-offset: 0;
 }
 /* A rejected expression stays in the field so the user can fix it. */
 .param-row input.input-error {
@@ -77,8 +72,8 @@
 /* Same box as .param-row input: they sit interleaved in one column and must read as one
    kind of control. */
 .param-select {
-  background: var(--panel-2);
-  border: 1px solid var(--line-strong);
+  background: var(--field-bg);
+  border: 1px solid transparent;
   color: var(--text);
   border-radius: var(--r-sm);
   padding: var(--s-2) var(--s-3);
@@ -92,14 +87,9 @@
     background var(--t-fast) var(--ease),
     box-shadow var(--t-fast) var(--ease);
 }
-.param-select:hover {
-  border-color: #3d4452;
-}
 .param-select:focus {
-  outline: none;
-  border-color: var(--accent);
-  background: var(--bg);
-  box-shadow: 0 0 0 3px var(--accent-tint);
+  outline: 1px solid var(--accent);
+  outline-offset: 0;
 }
 
 /* Same box as .param-select for the same reason. Only the file name shows, a path does
@@ -108,8 +98,8 @@
   min-width: 0;
 }
 .param-file .file-pick {
-  background: var(--panel-2);
-  border: 1px solid var(--line-strong);
+  background: var(--float-chip-bg);
+  border: 1px solid transparent;
   color: var(--text);
   border-radius: var(--r-sm);
   padding: var(--s-2) var(--s-3);
@@ -127,15 +117,6 @@
     background var(--t-fast) var(--ease),
     box-shadow var(--t-fast) var(--ease);
 }
-.param-file .file-pick:hover {
-  border-color: #3d4452;
-}
-.param-file .file-pick:focus-visible {
-  outline: none;
-  border-color: var(--accent);
-  background: var(--bg);
-  box-shadow: 0 0 0 3px var(--accent-tint);
-}
 /* Only present once there is something to clear, so it never takes width from the name. */
 .param-file .file-clear {
   flex: 0 0 auto;
@@ -151,7 +132,6 @@
 }
 .param-file .file-clear:hover {
   color: var(--error);
-  border-color: var(--line-strong);
 }
 
 /* The checkbox stays in the document, not display: none, so it keeps its keyboard
@@ -175,7 +155,7 @@
   height: 17px;
   border-radius: 999px;
   background: var(--panel-2);
-  border: 1px solid var(--line-strong);
+  border: 1px solid transparent;
   display: inline-flex;
   align-items: center;
   padding: 1px;
@@ -194,7 +174,6 @@
 }
 .param-switch input:checked + .track {
   background: var(--accent);
-  border-color: var(--accent);
 }
 .param-switch input:checked + .track .knob {
   transform: translateX(13px);
@@ -207,7 +186,8 @@
   opacity: 0.55;
 }
 .param-switch input:focus-visible + .track {
-  box-shadow: 0 0 0 3px var(--accent-tint);
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 /* A field driven by an expression (Fusion's fx: convention). */
@@ -221,7 +201,6 @@
    defined flag. */
 .param-stale input {
   border-color: #e0a020;
-  box-shadow: 0 0 0 3px rgba(224, 160, 32, 0.15);
 }
 
 .params-dialog {
@@ -255,8 +234,8 @@
 }
 .params-row input,
 .params-row select {
-  background-color: var(--panel-2);
-  border: 1px solid var(--line-strong);
+  background-color: var(--field-bg);
+  border: 1px solid transparent;
   color: var(--text);
   border-radius: var(--r-sm);
   /* The right 22px is not spacing but clearance for the select's background arrow
@@ -268,8 +247,8 @@
   font-variant-numeric: tabular-nums;
 }
 .params-row input:focus {
-  outline: none;
-  border-color: var(--accent);
+  outline: 1px solid var(--accent);
+  outline-offset: 0;
 }
 .params-row input.input-error {
   border-color: #ff6b6b;
@@ -299,8 +278,8 @@
   background: rgba(255, 107, 107, 0.12);
 }
 .params-add button {
-  background: var(--panel-2);
-  border: 1px solid var(--line-strong);
+  background: var(--float-chip-bg);
+  border: 1px solid transparent;
   color: var(--text);
   border-radius: var(--r-sm);
   /* Field size, not button size, to line up with the inputs above. */
@@ -308,9 +287,6 @@
   font: inherit;
   font-size: 12px;
   cursor: pointer;
-}
-.params-add button:hover {
-  border-color: var(--accent);
 }
 .params-add button.input-error {
   border-color: #ff6b6b;
@@ -364,8 +340,8 @@
   font: inherit;
   font-size: 11px;
   color: var(--text-dim);
-  background: none;
-  border: 1px solid var(--line-strong);
+  background: var(--float-chip-bg);
+  border: 1px solid transparent;
   border-radius: var(--r-sm);
   cursor: pointer;
   transition:
@@ -374,16 +350,9 @@
 }
 .target-edit:hover:not(:disabled) {
   color: var(--accent-hot);
-  border-color: var(--accent);
-}
-.target-edit:focus-visible {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-tint);
 }
 .target-edit:disabled {
   color: var(--accent);
-  border-color: var(--accent);
   cursor: default;
 }
 

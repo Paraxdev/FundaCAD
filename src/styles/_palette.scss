@@ -5,7 +5,7 @@
   right: var(--s-4);
   width: 204px;
   background: var(--panel);
-  border: 1px solid var(--line-strong);
+  border: 1px solid transparent;
   border-radius: var(--r-lg);
   box-shadow: var(--shadow-3);
   padding: var(--s-4);
@@ -38,7 +38,6 @@
      the status pill and prompt toast dots it must not be mistaken for. */
   border-radius: 2px;
   background: var(--accent);
-  box-shadow: 0 0 8px var(--accent-glow);
 }
 .palette-section {
   font-size: 10px;
@@ -67,12 +66,6 @@
 }
 .palette-row:hover {
   background: var(--raised);
-}
-.palette-switch {
-  accent-color: var(--accent);
-  width: 15px;
-  height: 15px;
-  cursor: pointer;
 }
 .palette-section-gap {
   margin-top: var(--s-4);

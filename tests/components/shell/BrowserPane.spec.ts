@@ -387,7 +387,7 @@ describe("BrowserPane", () => {
     await rowNamed(w, "Bracket").find(".tree-eye").trigger("click");
     await nextTick();
     expect(fake.store.isBodyVisible("body1")).toBe(false);
-    expect(rowNamed(w, "Bracket").find(".tree-label").attributes("style") ?? "").toContain("opacity");
+    expect(rowNamed(w, "Bracket").find(".tree-label").attributes("style") ?? "").toContain("--text-mute");
 
     // the control: a pointer's own click after its press does not toggle again
     await clickEye(rowNamed(w, "Bracket"));

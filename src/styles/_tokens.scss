@@ -23,11 +23,12 @@
   --text-mute: #7d7590;
 
   /* Also draws selected edges, dimensions and manipulator handles. */
-  --accent: #4bf9bc;
-  --accent-hot: #7dffd4;
-  --accent-tint: rgba(75, 249, 188, 0.14);
-  --accent-tint-2: rgba(75, 249, 188, 0.24);
-  --accent-glow: rgba(75, 249, 188, 0.35);
+  --accent: #51d6a8;
+  --accent-hot: #7ee7c2;
+  --accent-tint: rgba(81, 214, 168, 0.14);
+  --accent-tint-2: rgba(81, 214, 168, 0.24);
+  /* Retired, nothing glows. Kept transparent so plugin stylesheets that still read it draw nothing. */
+  --accent-glow: rgba(81, 214, 168, 0);
   --on-accent: #00140d;
 
   /* --ok is a step deeper than the accent so an ok badge and a selection differ. */
@@ -69,27 +70,31 @@
   --t-fast: 110ms;
   --t-med: 160ms;
 
-  /* Soft shadows: a hard offset over a lit model reads as a hole in the scene. */
+  /* Depth comes from fill and shadow, never from a line: each level up is a touch lighter. */
   --float-bg: color-mix(in srgb, var(--panel) 72%, transparent);
   --float-bg-solid: color-mix(in srgb, var(--panel) 92%, transparent);
-  --float-line: rgba(255, 255, 255, 0.09);
+  --float-tile-bg: color-mix(in srgb, #fff 5%, var(--float-bg));
+  --float-chip-bg: color-mix(in srgb, #fff 10%, var(--float-bg));
+  --field-bg: rgba(0, 0, 0, 0.3);
+  /* An empty checkbox, a deeper well than a field so the small box still reads on a card. */
+  --check-off: rgba(0, 0, 0, 0.45);
+  /* State is told by fill: a hover lifts it, on washes it with the accent. */
+  --hover-wash: rgba(255, 255, 255, 0.07);
+  --accent-wash: color-mix(in srgb, var(--accent) 20%, transparent);
   --float-radius: 16px;
   --float-tile-radius: 11px;
   --float-chip-radius: 8px;
-  --float-shadow: 0 18px 40px -14px rgba(0, 0, 0, 0.65), 0 3px 10px rgba(0, 0, 0, 0.3);
-  --float-blur: blur(24px) saturate(1.7);
+  /* A contact shadow under a soft drop: a hard offset over a lit model reads as a hole in the scene. */
+  --float-shadow: 0 2px 5px rgba(0, 0, 0, 0.32), 0 16px 34px -14px rgba(0, 0, 0, 0.62);
+  --float-blur: blur(24px) saturate(1.08);
   --float-gap: 12px;
   --rail-tile: 40px;
 
-  --glass-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0) 46%);
-  --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 0 -1px 0 rgba(0, 0, 0, 0.22);
-  --glass-rim: linear-gradient(
-    150deg,
-    rgba(255, 255, 255, 0.28),
-    rgba(255, 255, 255, 0.05) 34%,
-    rgba(255, 255, 255, 0) 62%,
-    color-mix(in srgb, var(--accent) 34%, transparent)
-  );
+  /* Retired with the outlined glass, transparent so plugin stylesheets that still read them draw nothing. */
+  --float-line: transparent;
+  --glass-sheen: linear-gradient(transparent, transparent);
+  --glass-inset: 0 0 transparent;
+  --glass-rim: linear-gradient(transparent, transparent);
 
   --z-float: 20;
   --z-popover: 200;
@@ -106,4 +111,27 @@
     --float-tile-radius: 17px;
     --float-chip-radius: 12px;
   }
+}
+
+/* A light palette (ui/theme.ts sets the class): paper cards near white that stand clear of a pale
+   viewport, chips a step darker than the card, fields a grey well, a shadow inked in the text colour. */
+:root.theme-light {
+  --float-bg-solid: color-mix(in srgb, var(--raised) 70%, var(--bg));
+  --float-bg: color-mix(in srgb, var(--float-bg-solid) 97%, transparent);
+  --float-tile-bg: color-mix(in srgb, var(--raised) 70%, var(--panel));
+  --float-chip-bg: color-mix(in srgb, var(--panel) 90%, var(--raised));
+  --field-bg: color-mix(in srgb, var(--text) 11%, var(--float-bg-solid));
+  --hover-wash: color-mix(in srgb, var(--text) 6%, transparent);
+  --check-off: color-mix(in srgb, var(--text) 24%, transparent);
+  --float-shadow:
+    0 1px 3px color-mix(in srgb, var(--text) 16%, transparent),
+    0 12px 28px -10px color-mix(in srgb, var(--text) 42%, transparent);
+  /* A black offset slab reads as a hole on paper, so the flat elevations go soft too. */
+  --shadow-2:
+    0 2px 6px color-mix(in srgb, var(--text) 16%, transparent),
+    0 14px 30px -12px color-mix(in srgb, var(--text) 40%, transparent);
+  --shadow-3:
+    0 2px 8px color-mix(in srgb, var(--text) 18%, transparent),
+    0 24px 48px -16px color-mix(in srgb, var(--text) 45%, transparent);
+  --shadow-pill: var(--shadow-2);
 }

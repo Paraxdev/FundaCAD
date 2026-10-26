@@ -22,33 +22,36 @@ those files, change this page in the same commit.
    stage, every piece of chrome floats over the model and leaves it visible
    around and through itself.
 2. **Glass, never a slab.** A surface over the model is translucent: a tinted
-   fill with `backdrop-filter: blur(24px) saturate(1.7)`, a faint top sheen, a
-   1px light edge with an inner top highlight, a soft two layer shadow and
-   squircle corners. Panels, cards, tiles, menus and dialogs also carry a lit
-   rim that catches the accent at its far corner; pills and chips on the model
-   (`.rail-pill`, the prompt, `.dim-field`, `.dim-btn`, `.areachip`) and the
-   rail flyout do not. The bodies behind smear into the panel. That smear is
-   the product's signature.
+   fill with `backdrop-filter: blur(24px) saturate(1.08)`, one soft shadow and
+   squircle corners. The bodies behind smear into the panel. That smear is the
+   product's signature.
 3. **Float with air.** Floating cards sit `--float-gap` (12px) from the stage
    edges and from each other. The layers that hold them pass pointer events
    through, so the model stays pickable in every gap.
-4. **Calm surfaces.** All glass shares one shadow. Depth between surfaces comes
-   from the fill strength (72% or 92%), the rim and stacking, not from bigger
-   shadows. The accent appears only on what is active, selected, focused or
-   primary, as a tint, a lit rim or a neon core, never as a large flat fill.
-   One exception is in every tool panel: `.measure-title` is `--accent-hot`,
-   so the readout reads as the tool's output ([7.13](#713-tool-and-readout-panels-measure-panel)).
-   Card and dialog titles stay `--text`.
-5. **Dense rows, generous shell.** Rows and labels are small (12 to 12.5px,
+4. **Depth without lines.** Depth comes from fill and shadow, never from an
+   outline around a rounded surface. Each level up is a touch lighter (card,
+   tile, chip) and a field sinks a touch darker. A hover, a selection or a
+   pressed state is a fill or a wash, never a border colour or a ring. Layout
+   dividers stay: the title bar edge, the lines between the head, body and foot
+   of a dialog, menu separators. The rules and the few exceptions are in
+   [Depth without lines](#depth-without-lines).
+5. **Calm accent.** The accent appears only on what is active, selected,
+   focused or primary, as a wash, a text colour, an underline or a small fill,
+   never as a large flat fill. There is no glow, sheen, rim or inner highlight
+   anywhere. One exception is in every tool panel: `.measure-title` is
+   `--accent-hot`, so the readout reads as the tool's output
+   ([7.13](#713-tool-and-readout-panels-measure-panel)). Card and dialog titles
+   stay `--text`.
+6. **Dense rows, generous shell.** Rows and labels are small (12 to 12.5px,
    34px rows, 40px tiles). The air lives at the shell level: gaps, card
    padding, big corner radii.
-6. **Tokens only.** Every colour, radius, gap, duration and shadow is a custom
+7. **Tokens only.** Every colour, radius, gap, duration and shadow is a custom
    property. Themes swap the colour tokens, and one shipped theme is light.
-7. **Degrade, never redesign.** Blur off (potato mode or a software renderer),
+8. **Degrade, never redesign.** Blur off (potato mode or a software renderer),
    animations off and touch input each have one shared switch. A new surface
    that uses the shared tokens and classes supports all three with no code of
    its own.
-8. **Reuse before you invent.** A new surface is an existing glass class, or a
+9. **Reuse before you invent.** A new surface is an existing glass class, or a
    selector added to the existing lists in `_glass.scss`. A new look is almost
    always a mistake.
 
@@ -57,7 +60,7 @@ Nothing is flat and opaque unless this spec names it. The legitimate exceptions:
 | Flat on purpose | Why |
 |---|---|
 | `#titlebar` (opaque `--panel`, `border-bottom: 1px solid var(--line)`) and what sits in it (`.tb-btn`, `.menu-btn`, `.seg-btn`, `#context-tab`) | The one full width strip that does not float; the stage starts below it |
-| Inset wells inside a glass dialog (`.pref-card`, `.prefs-pane-flow .prefs-row`, `.plug-consent`, `.mats-list`) | Groups inside the glass shell; they never blur |
+| Inset wells inside a glass dialog (`.pref-card`, `.prefs-pane-flow .prefs-row`, `.plug-consent`, `.mats-list`) | Groups inside the glass shell; they never blur, and they have no edge |
 | Tiny labels on the model (`.snap-tag`, `.areabox`, `.sketch-dim`, viewport readouts) | Labels, not panels |
 | Everything under `html.no-glass-blur` | A performance fallback, not a design ([4.5](#45-blur-off-and-potato-mode)) |
 
@@ -75,12 +78,11 @@ floats in `#float-layer` or wears `.measure-panel`.
 
 The first Home screen covered the stage with opaque `var(--panel)`, used
 `var(--raised)` tiles with `1px solid var(--line)` and `--r-md` corners, a
-one off `box-shadow: -8px 0 24px rgba(0, 0, 0, 0.3)`, no blur, no rim, no
-squircle and hex fallbacks from an old palette. It followed the flat base rules
-of its sibling partials, which are not what the user sees: `_glass.scss`
-repaints a fixed list of selectors, and Home was not on it. **If your screen
-would not look like the same product as the workspace shot above, it is
-wrong.**
+one off `box-shadow: -8px 0 24px rgba(0, 0, 0, 0.3)`, no blur, no squircle and
+hex fallbacks from an old palette. It followed the flat base rules of its
+sibling partials, which are not what the user sees: `_glass.scss` repaints a
+fixed list of selectors, and Home was not on it. **If your screen would not
+look like the same product as the workspace shot above, it is wrong.**
 
 ## 2. Tokens
 
@@ -97,9 +99,9 @@ Rules:
   and copying one spreads a value the theme cannot change.
 - Never write a raw colour (`#hex`, `rgb()`, `hsl()`, a named colour) in a
   component or partial. Derive tints with `color-mix` on a token:
-  `color-mix(in srgb, var(--accent) 16%, transparent)`. The one sanctioned set
-  of literals is the white ink and the scrims of the glass, which belong in
-  `_glass.scss` ([2.3](#23-the-white-ink-of-the-glass)).
+  `color-mix(in srgb, var(--accent) 16%, transparent)`. The few literals that
+  remain in `_glass.scss` are the scrims and the amber of `.toast-warning`
+  ([2.3](#23-the-fills-of-the-glass)).
 - Never invent a token name. These are read in the code but defined nowhere and
   must not spread: `--danger` (use `--error`), `--fg` (`--text`), `--muted`
   (`--text-mute`), `--border` (`--line`), `--bg-panel` and `--panel-1`
@@ -113,40 +115,58 @@ Surfaces, back to front:
 
 | Token | Noir | Use |
 |---|---|---|
-| `--bg` | `#050409` | Page background, focus ring gap, panel field focus fill |
+| `--bg` | `#050409` | Page background |
 | `--viewport-bg` | `#0b0912` | The scene background, read by the Three side (`viewport/themeColors.ts`), not by CSS |
 | `--panel` | `#1b1826` | Base of every glass fill (through `--float-bg`), the title bar, the no blur fill |
-| `--panel-2` | `#272233` | Inset wells and flat inner controls, native `option` background |
+| `--panel-2` | `#272233` | Flat inner controls, native `option` background |
 | `--raised` | `#322c42` | Hover fill of flat rows and icon buttons |
-| `--raised-2` | `#3d3651` | Off track of `.ft-switch`, hover of `.btn` before glass |
+| `--raised-2` | `#3d3651` | Off track of `.ft-switch` |
 
-Borders:
+Lines (layout dividers only, see [Depth without lines](#depth-without-lines)):
 
 | Token | Noir | Use |
 |---|---|---|
-| `--line` | `#322c42` | Hairline dividers between the parts of a dialog, menu or dock (`.modal-head`, `.modal-foot`, `.cmdk-input`, `.menu-sep`, `.ctx-sep`, `.rd-tabs`, `.prefs-nav`), wells and flat title bar controls |
-| `--line-strong` | `#5c5470` | Flat control borders, the scrollbar thumb. Decorative only (2.45:1 on `--panel`) |
-| `--float-line` | `rgba(255, 255, 255, 0.09)` | The 1px outer edge of every glass surface, and the dividers of cards and popovers (`.pop-rule`, `.float-card-foot`) |
+| `--line` | `#322c42` | Hairline dividers between the parts of a dialog, menu or dock (`.modal-head`, `.modal-foot`, `.menu-sep`, `.ctx-sep`, `.rd-tabs`, `.prefs-nav`) and the title bar edge |
+| `--line-strong` | `#5c5470` | The scrollbar thumb. Decorative only (2.45:1 on `--panel`) |
 
 Text:
 
 | Token | Noir | Use |
 |---|---|---|
 | `--text` | `#f6f0e4` | Primary text, titles, values |
-| `--text-dim` | `#aaa1b5` | Secondary labels, idle icons |
-| `--text-mute` | `#7d7590` | Hints, caps labels, idle close glyphs, metadata. Fails AA on panels, never for text a user needs |
+| `--text-dim` | `#aaa1b5` | Secondary labels, idle icons, a dimmed tree row |
+| `--text-mute` | `#7d7590` | Hints, caps labels, idle close glyphs, metadata, a hidden tree row. Fails AA on panels in Noir, never for text a user needs |
 
 Accent (also what selected edges, dimensions and manipulator handles are drawn in):
 
 | Token | Noir | Use |
 |---|---|---|
-| `--accent` | `#4bf9bc` | Primary button fill, focus borders, the tab underline and `.rd-tab` bar, switch on |
-| `--accent-hot` | `#7dffd4` | Text and icons of an active, selected or hovered row; primary hover |
-| `--accent-tint` | `rgba(75, 249, 188, 0.14)` | Light selected fill (`button.active`, `.prefs-nav-btn.active`, panel field ring) |
-| `--accent-tint-2` | `rgba(75, 249, 188, 0.24)` | Stronger selected fill (`.seg-btn.active`, `.rd-chip.active`, `.pref-seg .on`) |
-| `--accent-glow` | `rgba(75, 249, 188, 0.35)` | Halos: the focus ring, a lit tile, the primary button glow, the tab underline |
+| `--accent` | `#51d6a8` | Primary button fill, the focus outline, the tab underline, the `.rd-tab` bar, a checked checkbox, switch on |
+| `--accent-hot` | `#7ee7c2` | Text and icons of an active, selected or hovered row; primary hover |
+| `--accent-tint` | `rgba(81, 214, 168, 0.14)` | Light selected fill (`.prefs-nav-btn.active`) |
+| `--accent-tint-2` | `rgba(81, 214, 168, 0.24)` | Stronger selected fill (`.seg-btn.active`, `.rd-chip.active`, `.pref-seg .on`) |
+| `--accent-wash` | `color-mix(in srgb, var(--accent) 20%, transparent)` | The on state of a tile, laid over the tile fill as a gradient layer (`.rail-btn.active .rail-tile`, `.icon-btn.active`) |
 | `--on-accent` | `#00140d` | Text on an accent fill |
 | `--accent-blue` | `var(--accent)` | Legacy alias kept for old plugins and palettes (`theme.ts` writes it with the accent). Never read it in new code |
+
+Fills of depth ([3](#3-surfaces-and-elevation) puts them to use):
+
+| Token | Noir | Use |
+|---|---|---|
+| `--float-bg` | `color-mix(in srgb, var(--panel) 72%, transparent)` | A card over the model |
+| `--float-bg-solid` | `color-mix(in srgb, var(--panel) 92%, transparent)` | Menus, popovers, dialogs, anything text heavy |
+| `--float-tile-bg` | `color-mix(in srgb, #fff 5%, var(--float-bg))` | A tile on a card: rail tiles, Home cards, wells |
+| `--float-chip-bg` | `color-mix(in srgb, #fff 10%, var(--float-bg))` | A chip, pill, button or key cap on a card |
+| `--field-bg` | `rgba(0, 0, 0, 0.3)` | A text field or select, sunk below the surface it sits on |
+| `--check-off` | `rgba(0, 0, 0, 0.45)` | An empty checkbox, a deeper well than a field so the small box still reads |
+| `--hover-wash` | `rgba(255, 255, 255, 0.07)` | A hover, laid over the fill of the control |
+| `--float-shadow` | `0 2px 5px rgba(0, 0, 0, 0.32), 0 16px 34px -14px rgba(0, 0, 0, 0.62)` | The one shadow of all glass |
+
+Retired tokens: `--float-line`, `--glass-sheen`, `--glass-inset`,
+`--glass-rim` and `--accent-glow`. They stay defined and transparent so an old
+plugin stylesheet that still reads one draws nothing. No core rule reads them,
+the guard fails if one does, and a new rule never should. An uploaded palette
+that sets `--accent-glow` still loads, the token is simply ignored.
 
 Status:
 
@@ -155,17 +175,17 @@ Status:
 | `--ok` | `#17c99a` | A step deeper than the accent, so an ok mark and a selection differ |
 | `--warn` | `#ffab2e` | Warnings, amber History steps, `.perf-warn` |
 | `--error` | `#ff5c5c` | Errors, destructive items, failed steps |
-| `--error-tint` | `rgba(255, 92, 92, 0.14)` | Error backgrounds and the error focus ring |
+| `--error-tint` | `rgba(255, 92, 92, 0.14)` | Error backgrounds |
 | `--pick-line` | `#b48cff` | The second pick colour, apart from the accent: the Mirror line or plane, in the view and on its panel field |
 
-There is no info, success tint, warn tint, disabled or hover token. Derive them:
+There is no info, success tint, warn tint or disabled token. Derive them:
 
 | Need | Write |
 |---|---|
-| Menu or list row hover | `color-mix(in srgb, var(--accent) 16%, transparent)` |
-| Selected row | `linear-gradient(90deg, color-mix(in srgb, var(--accent) 22%, transparent), color-mix(in srgb, var(--accent) 6%, transparent))` plus `box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent)` |
-| Accent border on hover | `color-mix(in srgb, var(--accent) 45%, transparent)` (buttons) or `55%` (cards, choice buttons) |
-| Field focus ring | `0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent)` |
+| Hover of a control | `linear-gradient(var(--hover-wash), var(--hover-wash)), <the control's own fill>` |
+| Menu or list row hover, selected row | `color-mix(in srgb, var(--accent) 16%, transparent)`, text `--accent-hot`, no ring |
+| Tile on | `linear-gradient(var(--accent-wash), var(--accent-wash)), var(--float-tile-bg)` |
+| Field focus | `outline: 1px solid var(--accent)`, no ring and no border change |
 | Warn or error surface | `color-mix(in srgb, var(--warn) 9%, var(--float-bg-solid))` (`.perf-pop`), `color-mix(in srgb, var(--error) 22%, var(--float-bg-solid))` (`.toast-error`) |
 | Warn or error small text on glass or a panel | `color-mix(in srgb, var(--warn) 60%, var(--text))` or the same with `--error` (`.sketch-dim.conflict`, `.rel-row.over .rel-sym`); the bare `--warn` and `--error` fall under AA in Solarized Light, keep them for the border |
 
@@ -176,60 +196,92 @@ These are never themed. They are covered in their own sections:
 [spacing and radii](#6-spacing-radii-sizes-touch-and-breakpoints),
 [motion](#8-motion).
 
-### 2.3 The white ink of the glass
+### 2.3 The fills of the glass
 
-Controls on glass are not drawn in `--panel` tones. They are a thin white
-wash over the glass, so the blur still shows through them. These values are
-literals (the guard counts them), and a control gets them by being on a
-selector list in `_glass.scss`:
+A control on glass is not drawn in `--panel` tones. It takes the fill of its
+level, so the surface under it still shows through the translucent card. A
+control gets its fill by being on a selector list in `_glass.scss`:
 
-| Alpha | Where |
+| Fill | Where |
 |---|---|
-| `rgba(255, 255, 255, 0.04)` | Fill of `.sm-input`, `.sm-select`, `.choice-btn`; hover of `.float-toggle` (`_float.scss`) |
-| `rgba(255, 255, 255, 0.05)` | Hover of `.opt-row` (`_float.scss`) |
-| `rgba(255, 255, 255, 0.06)` | Fill of `.btn`, `.pop-wide`, `.palette-btn`, `.key-chip kbd` |
-| `rgba(255, 255, 255, 0.08)` | Inner top line of `.btn` and `.pop-wide` (`inset 0 1px 0`), border of `.choice-btn` |
-| `rgba(255, 255, 255, 0.1)` | Border of `.btn`, `.pop-wide`, `.sm-input`, `.sm-select`, `.key-chip kbd`; hover fill of `.btn`, `.pop-wide` |
-| `rgba(255, 255, 255, 0.14)` to `0.02` | Hover sheen of a rail tile |
-| `rgba(255, 255, 255, 0.16)` | Hover border of a rail pill |
-| `rgba(255, 255, 255, 0.28)` | Inner top line of `.btn-primary` |
+| `--float-tile-bg` | Rail tiles, Home cards, the wells of Preferences |
+| `--float-chip-bg` | `.btn`, `.pop-wide`, `.palette-btn`, `.choice-btn`, `.section-chip-btn`, `.key-chip kbd`, `.tl-btn`, pills and chips on the model |
+| `--field-bg` | `.sm-input`, `.sm-select`, `.param-row input`, Home search and sort, the Items filter |
+| `--hover-wash` | Laid over the fill of any of the above on hover |
+| `--accent-wash` | Laid over `--float-tile-bg` for a tile that is on |
 | `rgba(5, 4, 9, 0.35)` | The scrim of `.modal-overlay`, `.cmdk-backdrop`, `.choice-backdrop` |
 
-So a control on glass has a white ink border, not `--float-line` and not
-`--line`. To give a new control this look, reuse `.btn`, `.sm-input`,
-`.opt-row` or `.float-toggle`, or add its selector to the matching list in
-`_glass.scss`. Never copy the numbers into another file: the guard rejects a
-new literal anywhere, and on a light theme the ink fades on purpose
-([10](#10-light-and-dark-themes)).
+To give a new control this look, reuse `.btn`, `.sm-input`, `.opt-row` or
+`.float-toggle`, or add its selector to the matching list in `_glass.scss`.
+Never write a new fill with `rgba()` or a hex: the guard rejects a new literal
+anywhere. The light theme redefines these tokens
+([10](#10-light-and-dark-themes)), so a control that uses them follows.
 
 ## 3. Surfaces and elevation
 
 | Level | What | Fill | Shadow | Radius |
 |---|---|---|---|---|
 | 0 | The scene | `--viewport-bg` under the model, `--bg` under the canvas | none | none |
-| 1 | Glass over the model: cards, view control groups, rail tiles and pills, the sketch palette, the tool prompt, dimension fields | `var(--glass-sheen), var(--float-bg)` (72%) | `var(--glass-inset), var(--float-shadow)` | float, tile or chip |
-| 2 | Solid glass for menus and text: popovers, context and title bar menus, the chooser, toasts, the console, the command palette, measure panels, and the docked Render dock ([1](#1-principles)) | `var(--glass-sheen), var(--float-bg-solid)` (92%) | `var(--glass-inset), var(--float-shadow)` | float or tile |
-| 3 | A dialog on a scrim: `.modal-panel` | `var(--glass-sheen), var(--float-bg-solid)` | `var(--glass-inset), var(--shadow-3)` | float |
+| 1 | Glass over the model: cards, view control groups, the sketch palette, the tool prompt | `--float-bg` (72%) | `--float-shadow` | float |
+| 1 tile | Rail tiles, Home cards | `--float-tile-bg` | `--float-shadow` | tile |
+| 1 chip | Rail pills, dimension fields, the section and updating chips, viewport readouts | `--float-chip-bg` | `--float-shadow` | chip |
+| 2 | Solid glass for menus and text: popovers, context and title bar menus, the chooser, toasts, the console, the command palette, measure panels, and the docked Render dock ([1](#1-principles)) | `--float-bg-solid` (92%) | `--float-shadow` | float or tile |
+| 3 | A dialog on a scrim: `.modal-panel` | `--float-bg-solid` | `--shadow-3` | float |
 | Chrome | `#titlebar` | `var(--panel)`, opaque | none | none |
-| Well | Groups inside a dialog | `var(--panel-2)`, `1px solid var(--line)` | none | 8px (`.pref-card`, `.prefs-pane-flow .prefs-row`), 6px (`.plug-consent`), `--r-sm` (`.mats-list`) |
+| Field | Text fields and selects | `--field-bg`, a sunken well | none | chip |
+| Well | Groups inside a dialog | `--float-tile-bg` (`.pref-card`, `.prefs-pane-flow .prefs-row`), `--panel-2` (`.plug-consent`), none (`.mats-list`) | none | 8px, 8px, 6px, `--r-sm` |
 
 Shadows:
 
-- `--float-shadow` is `0 18px 40px -14px rgba(0, 0, 0, 0.65), 0 3px 10px rgba(0, 0, 0, 0.3)`,
-  a long lift plus a tight contact shadow. It is the one shadow of all glass.
-- `--shadow-3` (`6px 6px 0 rgba(0, 0, 0, 0.9)`) is used by glass in exactly one
-  place, `.modal-panel`, because a soft black shadow has no contrast on the dark
-  scrim. `--shadow-1`, `--shadow-2`, `--shadow-3` and `--shadow-pill` are the
-  older hard offset set. Never put them on anything over the model: "a hard
-  offset over a lit model reads as a hole in the scene" (`_tokens.scss`).
-- Never write a new `box-shadow` with its own offsets and colours. The only
-  extra shadows in the language are the lit halo
-  ([7.3](#73-rail-tile-rail-btn-rail-tile-rail-pill)), the primary glow
-  ([7.4](#74-buttons)) and the focus rings ([11](#11-accessibility)).
+- `--float-shadow` is a tight contact shadow under a soft drop,
+  `0 2px 5px rgba(0, 0, 0, 0.32), 0 16px 34px -14px rgba(0, 0, 0, 0.62)`. It is
+  the one shadow of all glass, and with the fill the only thing that lifts a
+  surface off the model.
+- `--shadow-3` is used by glass in exactly one place, `.modal-panel`, because a
+  soft black shadow has no contrast on the dark scrim. `--shadow-1`,
+  `--shadow-2`, `--shadow-3` and `--shadow-pill` are the older hard offset set
+  in Noir. Never put them on anything over the model: "a hard offset over a lit
+  model reads as a hole in the scene" (`_tokens.scss`). On a light theme they
+  are soft ([10](#10-light-and-dark-themes)).
+- Never write a new `box-shadow` with its own offsets and colours. There is no
+  halo, glow or ring shadow in the language. Focus is an outline
+  ([11](#11-accessibility)).
+
+### Depth without lines
+
+A rounded surface has no outline. It is told apart from what is behind it by
+its fill and its shadow alone.
+
+- **No edge.** A rounded surface (anything with a `border-radius` or
+  `corner-shape`) never sets a visible `border`, `border-color`, `outline` or a
+  1px `box-shadow` ring. Where the box needs a border for its geometry, write
+  `border: 1px solid transparent`, so every control keeps its size.
+- **Levels by fill.** Card, tile and chip each step a touch lighter than the
+  one below, and a field steps darker. Use `--float-bg`, `--float-tile-bg`,
+  `--float-chip-bg` and `--field-bg`, never a hand mixed white or black.
+- **State by fill.** A hover lays `--hover-wash` over the control's own fill. A
+  tile that is on lays `--accent-wash` over its fill. A row that is selected
+  takes `color-mix(in srgb, var(--accent) 16%, transparent)` and `--accent-hot`
+  text. A pressed control scales to 0.94. None of them changes a border or adds
+  a ring.
+- **Text steps, it does not fade.** A dimmed or hidden tree row steps to
+  `--text-dim` or `--text-mute` instead of lowering its opacity.
+- **What keeps a line.** Layout dividers, because they split the parts of one
+  surface and are not its edge: the title bar's bottom edge, the lines between
+  the head, body and foot of a dialog, menu separators, the segment dividers of
+  a control, the Render dock tab bar. Signal borders that flag an error or a
+  warning (`--error`, `--warn`). Sketch labels on the model, which tell their
+  state by an accent, dashed, red or amber border. Drawn glyphs, swatches,
+  material balls and screenshots, whose edge is the thing. The guide ring.
+- **Focus is the one outline.** Keyboard focus draws a crisp accent outline,
+  never a ring shadow ([11](#11-accessibility)).
+
+`tests/ui/designSpec.test.ts` fails on a new outline around a rounded surface,
+and on any rule that reads a retired token.
 
 Scrims (`.modal-overlay`, `.cmdk-backdrop`, `.choice-backdrop`, final values in
 `_glass.scss`): `background: rgba(5, 4, 9, 0.35)` with
-`backdrop-filter: blur(6px) saturate(1.2)`. The workspace stays visible behind
+`backdrop-filter: blur(6px) saturate(1.05)`. The workspace stays visible behind
 a dialog, blurred and dimmed. A new modal reuses `.modal-overlay` rather than
 writing its own scrim.
 
@@ -266,43 +318,20 @@ Group A, over the model (`_glass.scss`, first rule):
 
 ```scss
 corner-shape: squircle;
-background: var(--glass-sheen), var(--float-bg);
+background: var(--float-bg);
 -webkit-backdrop-filter: var(--float-blur);
         backdrop-filter: var(--float-blur);
-border: 1px solid var(--float-line);
-box-shadow: var(--glass-inset), var(--float-shadow);
+border: 1px solid transparent;
+box-shadow: var(--float-shadow);
 ```
 
-`.float-popover`, `.context-menu`, `.choice-card` and `.dim-unit-menu` take the
-solid fill, `var(--glass-sheen), var(--float-bg-solid)`. Group B (dialogs,
-menus, toasts, docks) is the same recipe with the solid fill throughout.
-
-The rim, on a positioned host. The `::after` is `position: absolute; inset: 0`,
-so it is drawn around the nearest positioned ancestor. If the host is static,
-the rim lands on whatever that ancestor is (a full screen backdrop draws it
-around the window). Hosts that are fixed or absolute in their own partial
-(`.float-popover`, `.context-menu`, `.menu-popup`, `.logcon`, `.measure-panel`,
-`.ne-overlay`) or `position: relative` there (`.rail-tile`) need nothing more;
-every other host is on the `position: relative` lists in `_glass.scss`
-(`.float-card`, `.float-group`, `.choice-card`, `.float-right .palette`,
-`.modal-panel`, `.cmdk-card`, `.tgt-panel`, `.toast`,
-`#renderdock`).
-
-```scss
-.your-surface::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  padding: 1px;
-  border-radius: inherit;
-  corner-shape: inherit;
-  background: var(--glass-rim);
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-          mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
-  pointer-events: none;
-}
-```
+The transparent border only keeps the box size. `.float-popover`,
+`.context-menu`, `.choice-card` and `.dim-unit-menu` take the solid fill,
+`var(--float-bg-solid)`. Tiles (`.rail-tile`, Home cards) take
+`--float-tile-bg`, and chips (`.rail-pill`, `.dim-field`, `.dim-btn`,
+`.section-chip`, `.updating-chip` and the other readouts) take
+`--float-chip-bg`. Group B (dialogs, menus, toasts, docks) is the same recipe
+with the solid fill throughout.
 
 The tokens, with their values:
 
@@ -310,11 +339,9 @@ The tokens, with their values:
 |---|---|---|
 | `--float-bg` | `color-mix(in srgb, var(--panel) 72%, transparent)` | Translucent fill over the model |
 | `--float-bg-solid` | `color-mix(in srgb, var(--panel) 92%, transparent)` | Fill for menus, popovers, dialogs, anything text heavy |
-| `--float-blur` | `blur(24px) saturate(1.7)` | The backdrop filter |
-| `--float-line` | `rgba(255, 255, 255, 0.09)` | The 1px edge |
-| `--glass-sheen` | `linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0) 46%)` | Light from the top |
-| `--glass-inset` | `inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 0 -1px 0 rgba(0, 0, 0, 0.22)` | Top highlight line, bottom shade line |
-| `--glass-rim` | `linear-gradient(150deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.05) 34%, rgba(255, 255, 255, 0) 62%, color-mix(in srgb, var(--accent) 34%, transparent))` | The lit edge, white at the top left, accent at the far corner |
+| `--float-tile-bg` | `color-mix(in srgb, #fff 5%, var(--float-bg))` | A tile, one step above the card |
+| `--float-chip-bg` | `color-mix(in srgb, #fff 10%, var(--float-bg))` | A chip, two steps above the card |
+| `--float-blur` | `blur(24px) saturate(1.08)` | The backdrop filter |
 | `--float-shadow` | see [3](#3-surfaces-and-elevation) | Depth |
 | `--float-radius` | 16px (26px with squircle) | Cards, groups, popovers, dialogs, docks |
 | `--float-tile-radius` | 11px (17px with squircle) | Rail tiles, context menus, title bar menus, toasts, `.rd-tile`, card close buttons |
@@ -351,12 +378,10 @@ needs a larger radius to look the same size. Always pair a float radius with
    to), loaded before `glass` in `main.scss`. Give it no background, border,
    shadow or radius there.
 2. Add its selector to the lists in `_glass.scss`: group A (over the model) or
-   group B (dialog, menu, toast, dock, text heavy), the matching radius list, the
-   `position: relative` list unless its own partial makes it fixed, absolute or
-   relative, and the `::after` rim list. Then open it in the browser and check
-   the rim hugs the surface, not the window ([4.1](#41-the-declarations)).
+   group B (dialog, menu, toast, dock, text heavy), the fill list of its level
+   (card, tile or chip) and the matching radius list.
 3. Add its controls to the control lists (squircle plus chip radius) and its
-   rows to the hover and selected lists.
+   rows to the hover and selected lists. Fields go on the `--field-bg` list.
 4. Check it with blur off ([4.5](#45-blur-off-and-potato-mode)) and in the light
    theme ([10](#10-light-and-dark-themes)).
 
@@ -387,8 +412,8 @@ glass inside it blurs nothing. So:
   `.home { background: var(--panel) }` itself ([14](#14-known-debt-do-not-copy)).
 - Animate opacity on the glass element itself (`pop-in`, `glass-in` do), never
   on its parent.
-- `.float-card` uses `overflow: hidden` to clip to the squircle, so an outer
-  glow belongs on an unclipped element.
+- `.float-card` uses `overflow: hidden` to clip to the squircle, so anything that
+  should spill out of a card belongs on an unclipped element.
 
 ### 4.5 Blur off and potato mode
 
@@ -409,11 +434,10 @@ html.no-glass-blur *, html.no-glass-blur *::before, html.no-glass-blur *::after 
 }
 ```
 
-The fills go opaque, while shape, sheen, rim, inset, shadow, spacing and accent
-use stay. This is the only legitimate opaque glass, and it must still look
-finished:
+The fills go opaque, while shape, shadow, spacing and accent use stay. This is
+the only legitimate opaque glass, and it must still look finished:
 
-![Blur off: opaque fills, same shapes, rims and shadows](design/workspace-blur-off.png)
+![Blur off: opaque fills, same shapes and shadows](design/workspace-blur-off.png)
 
 To support it, do nothing special: use `--float-bg`, `--float-bg-solid` and
 `--float-blur`. A hand written translucent `rgba()` fill would show the model
@@ -498,7 +522,7 @@ An inner radius is the outer radius minus the inset, as `.icon-btn` does with
 `--r-xs` 2px, `--r-sm` 3px, `--r-md` 4px, `--r-lg` 5px are the older square
 radii of flat controls (the title bar, panel fields). `--r-pill` 999px is for
 switch tracks, the scrollbar thumb and the prompt. Do not put `--r-*` on a
-floating surface. Borders are always 1px.
+floating surface. Dividers are always 1px.
 
 Controls inside glass that still bend this, so do not copy them: the History
 transport `.tl-btn` (`--r-sm`), `.float-toggle` (6px, no squircle), `.pref-seg`
@@ -594,7 +618,7 @@ says "none", that is a gap in the code, not permission.
 
 ### 7.1 Floating card (`.float-card`)
 
-Glass group A, `--float-radius`, `position: relative`, `overflow: hidden`.
+Glass group A, `--float-radius`, `overflow: hidden`.
 
 | Part | Recipe |
 |---|---|
@@ -602,7 +626,7 @@ Glass group A, `--float-radius`, `position: relative`, `overflow: hidden`.
 | `.float-card-title` | 13px, 600, `--text` |
 | `.float-card-close`, `.float-card-more` | The small icon button, see below |
 | `.float-card-body` | padding `var(--s-1) var(--s-2) var(--s-2)`, scrolls, `overscroll-behavior: contain` |
-| `.float-card-foot` | padding `4px 6px`, `border-top: 1px solid var(--float-line)` |
+| `.float-card-foot` | padding `4px 6px`, no divider line |
 | Section label (`.panel-title`) | 10px, 700, uppercase, letter-spacing 1px, `--text-mute` |
 
 The small icon button, `.float-card-close` (and `.float-card-more` for a menu
@@ -618,7 +642,7 @@ would miss the squircle and touch lists.
 | Hover `:hover:not(:disabled)` | fill `--raised`, colour `--text` |
 | Pressed `:active:not(:disabled)` | `transform: scale(0.94)` |
 | Disabled `:disabled` | opacity 0.45, `cursor: default`, no hover |
-| Focus visible | the shared ring |
+| Focus visible | the shared outline |
 | Transition | background, color, transform, each `var(--t-fast) var(--ease)` |
 | Touch | `inset: -6px` hit area (`_touch.scss`) |
 | Markup | `title` and `aria-label` with the same text, `<Icon>` inside |
@@ -631,41 +655,42 @@ Inside a `.float-group` (glass A, padding 3px, gap 2px).
 |---|---|
 | Idle | 40 by 40, no fill or border, radius `calc(var(--float-radius) - 4px)`, squircle, `--text-dim` |
 | Hover | fill `--raised`, colour `--text` |
-| Active (on) `.active`, `aria-pressed` | the neon core: `radial-gradient(120% 100% at 50% 0%, color-mix(in srgb, var(--accent) 44%, transparent), color-mix(in srgb, var(--accent) 8%, transparent) 72%), var(--float-bg)`, border accent 55%, colour `--accent-hot`, `box-shadow: var(--glass-inset), 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent), 0 0 16px 1px var(--accent-glow)` |
+| Active (on) `.active`, `aria-pressed` | `linear-gradient(var(--accent-wash), var(--accent-wash)), var(--float-tile-bg)`, colour `--accent-hot`, no shadow |
 | Disabled `.disabled` plus `aria-disabled` | opacity 0.38, no fill, `cursor: default` |
-| Focus visible | the shared ring |
+| Focus visible | the shared outline |
 | Warn `.perf-warn` | colour `--warn`, hover and active fill warn 16% |
-
-The halo is even on every side, never an offset bloom, because tiles sit tight.
 
 ### 7.3 Rail tile (`.rail-btn`, `.rail-tile`, `.rail-pill`)
 
 `RailButton.vue`. The tile is glass A at `--rail-tile`, `--float-tile-radius`,
-with the rim. The pill (label) is glass A, `--float-chip-radius`, padding
-`3px 9px`, label `.rail-label` 12.5px/600, sub label `.rail-sub` 10.5px
-`--text-mute`.
+filled with `--float-tile-bg`. The pill (label) is glass A, `--float-chip-radius`,
+filled with `--float-chip-bg`, padding `3px 9px`, label `.rail-label`
+12.5px/600, sub label `.rail-sub` 10.5px `--text-mute`.
 
 | State | Recipe |
 |---|---|
-| Hover | tile fill `linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.02) 62%), var(--float-bg)`, `translateY(-1px)`; pill border `rgba(255, 255, 255, 0.16)` |
+| Hover | tile fill `linear-gradient(var(--hover-wash), var(--hover-wash)), var(--float-tile-bg)`, `translateY(-1px)`; the pill does not change |
 | Pressed | `transform: scale(0.94)` |
-| Selected `.active`, held `.holding` | the neon core of 7.2; label `--accent-hot`; the wrapper gets `position: relative; z-index: 1` so the halo paints over neighbours |
+| Selected `.active`, held `.holding` | tile fill `linear-gradient(var(--accent-wash), var(--accent-wash)), var(--float-tile-bg)`, icon `--accent-hot`, label `--accent-hot`; no ring, no halo |
 | Disabled `.disabled` | opacity 0.45 |
+| Focus visible | the shared outline, on the `.rail-btn` button |
 | Transition | transform, background, border-color, box-shadow, color, each `var(--t-fast) var(--ease)` |
 
 ### 7.4 Buttons
 
-The fills and borders below are the white ink of [2.3](#23-the-white-ink-of-the-glass):
-a button gets them by wearing the class, never by restating them.
+The fills below are the tokens of [2.3](#23-the-fills-of-the-glass): a button
+gets them by wearing the class, never by restating them. A button has no visible
+border; its `1px solid transparent` only keeps its size.
 
 | Class | Idle | Hover (`:hover:not(:disabled)`) | Focus visible | Other states |
 |---|---|---|---|---|
-| `.btn` (secondary, in glass) | squircle, chip radius, fill `rgba(255, 255, 255, 0.06)`, border `rgba(255, 255, 255, 0.1)`, `box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08)`, padding `var(--s-3) var(--s-4)`, 12px | fill `rgba(255, 255, 255, 0.1)`, border accent 45% | the shared ring replaces the shadow (`.btn:focus-visible` in `_glass.scss`) | disabled: give it opacity 0.45 and `cursor: default`, the base has none |
-| `.btn-primary` (always with `.btn`) | fill and border `--accent`, text `--on-accent`, 600, `box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 8px 22px -10px var(--accent-glow)` | fill and border `--accent-hot` | as `.btn` | One primary per dialog |
-| `.pop-wide` (full width popover action), `.palette-btn` | as `.btn`, full width, gap `--s-2`, margin top `--s-2` | as `.btn` | as `.btn` | `.ghost`: no fill, no shadow, border `--float-line`; disabled opacity 0.45 (`.versions-save .pop-wide:disabled`) |
-| `.choice-btn` | min width 64px, fill `rgba(255, 255, 255, 0.04)`, border `rgba(255, 255, 255, 0.08)`, chip radius, caption `small` 10px `--text-mute` | fill accent 16%, border accent 55% | the shared ring | `.choice-primary`: accent fill, `--on-accent`; disabled opacity 0.4 |
-| `.modal-close` | transparent, `--text-dim`, close icon 15px, `aria-label` and `title` "Close" | fill `--raised`, colour `--text` | the shared ring | |
-| `.tb-btn`, `.tl-btn` (title bar, History transport) | 26 by 24 (or 26), `--panel-2`, `1px solid var(--line)`, `--text-dim` | `--raised`, `--text` | the shared ring | disabled opacity 0.3 |
+| `.btn` (secondary, in glass) | squircle, chip radius, fill `--float-chip-bg`, no shadow, padding `var(--s-3) var(--s-4)`, 12px | `--hover-wash` over the fill | the shared outline | disabled: give it opacity 0.45 and `cursor: default`, the base has none |
+| `.btn-primary` (always with `.btn`) | fill `--accent`, text `--on-accent`, 600, no shadow | fill `--accent-hot` | as `.btn` | One primary per dialog |
+| `.pop-wide` (full width popover action), `.palette-btn` | as `.btn`, full width, gap `--s-2`, margin top `--s-2` | as `.btn` | as `.btn` | `.ghost`: no fill; disabled opacity 0.45 (`.versions-save .pop-wide:disabled`) |
+| `.choice-btn` | min width 64px, fill `--float-chip-bg`, chip radius, caption `small` 10px `--text-mute` | fill accent 16% mixed into the chip fill | the shared outline | `.choice-primary`: accent fill, `--on-accent`; disabled opacity 0.4 |
+| `.modal-close` | transparent, `--text-dim`, close icon 15px, `aria-label` and `title` "Close" | fill `--raised`, colour `--text` | the shared outline | |
+| `.tb-btn` (title bar) | 26 by 24, `--panel-2`, `--text-dim` | `--raised`, `--text` | the shared outline | disabled opacity 0.3 |
+| `.tl-btn` (History transport) | 26 by 26, `--float-chip-bg`, `--r-sm`, `--text-dim` | `--raised`, `--text` | the shared outline | disabled opacity 0.3 |
 
 The bare `button` rule (`_layout.scss`) has **no disabled state**. Any new
 button defines `:disabled` itself (opacity 0.45, `cursor: default`, no hover).
@@ -673,22 +698,38 @@ Its base hover border is the off palette `#3d4452`; do not copy it.
 
 ### 7.5 Inputs and selects
 
+A field is a sunken well: `--field-bg`, darker than the surface it sits on, with
+no edge. Focus draws a 1px accent outline.
+
 | Class | Idle | Focus | Error or other |
 |---|---|---|---|
-| `.sm-input` (dialogs, the dock) | squircle, chip radius, fill `rgba(255, 255, 255, 0.04)`, border `rgba(255, 255, 255, 0.1)`, padding `var(--s-2) var(--s-3)`, 11px | border accent 60%, `box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent)` | |
-| `.sm-select.select-trigger` (`Select.vue`, preferred) | as `.sm-input` plus a drawn caret | as `.sm-input`; `.open` border `--accent` | `:disabled` opacity 0.5; opens a `.float-popover.select-pop` of `.opt-row`s |
-| `.param-row input` (feature values in cards) | `--panel-2`, `1px solid var(--line-strong)`, `--r-sm`, padding `var(--s-2) var(--s-3)`, 12px, tabular | border `--accent`, fill `--bg`, `box-shadow: 0 0 0 3px var(--accent-tint)` | `.input-error` and `.param-stale` use hard coded reds and ambers, use `--error` and `--warn` for new work |
-| `.dim-field` (on the model) | glass A, chip radius | `.typed`: border accent 70%, ring accent 14% | `.dim-bad`: border `--error`, fill `--error-tint` |
+| `.sm-input` (dialogs, the dock) | squircle, chip radius, fill `--field-bg`, padding `var(--s-2) var(--s-3)`, 11px | `outline: 1px solid var(--accent)`, no ring | |
+| `.sm-select.select-trigger` (`Select.vue`, preferred) | as `.sm-input` plus a drawn caret | as `.sm-input` | `:disabled` opacity 0.5; opens a `.float-popover.select-pop` of `.opt-row`s |
+| `.param-row input` (feature values in cards) | `--field-bg`, `--r-sm`, padding `var(--s-2) var(--s-3)`, 12px, tabular | `outline: 1px solid var(--accent)` | `.input-error` and `.param-stale` use hard coded reds and ambers, use `--error` and `--warn` for new work |
+| `.dim-field` (on the model) | glass A in `--float-chip-bg`, chip radius | `.typed`: the same fill with the shadow, no border | `.dim-bad`: border `--error`, fill `--error-tint` |
 
 Prefer `Select.vue` over a native `<select>`. Fields keep a visible focus;
 never `outline: none` without a replacement.
 
-### 7.6 Switches and sliders
+### 7.6 Checkboxes, switches and sliders
+
+A setting is toggled with the themed checkbox. A switch is for a live toggle in
+a tool panel or popover, where the change shows in the model as you flip it.
+
+- **Settings pages** (Preferences, plugin settings, the plugin list, the
+  sketch palette) use the shared `.check` class from `_checkbox.scss`. Never
+  put `.ft-switch`, `.param-switch`, `ToggleRow` or `Toggle` in anything
+  Preferences renders, the guard test fails on it.
+- **Live toggles** use `.ft-switch` in a `.float-toggle` row (`Toggle.vue`, in
+  the view controls) or `.param-switch` through `ToggleRow.vue` (feature
+  properties). The Export dialog and the Stress setup and results steps keep
+  their switches too.
 
 | Class | Idle | On | Disabled | Focus |
 |---|---|---|---|---|
-| `.ft-switch` in a `.float-toggle` row (`Toggle.vue`, `role="switch"`, `aria-checked`) | 36 by 20, track `--raised-2`, pill, knob 14px `--text`; row hover `rgba(255, 255, 255, 0.04)` | `.on`: track `--accent`, knob `translateX(16px)` `--on-accent`, hover `--accent-hot` | row `.disabled` opacity 0.45 | the shared ring |
-| `.param-switch` (`ToggleRow.vue` in `FeatureProperties.vue`; a hand written `label.param-switch` in Preferences, Export and plugin forms) | native checkbox over a 30 by 17 `.track`, `--panel-2`, `1px solid var(--line-strong)`, knob `--text-dim` | track fill and border `--accent`, knob `translateX(13px)` and `#fff` | track opacity 0.55 | `input:focus-visible + .track` gets `0 0 0 3px var(--accent-tint)` |
+| `.check` (`<span class="check"><input type="checkbox" /><span class="check-box"></span></span>`) | 18 by 18, squircle, radius 6px, fill `--check-off`, no edge; hover `--hover-wash` over the fill. The native input is laid over the box, so ids, labels and change handlers stay native | fill `--accent`, a `--on-accent` tick | box opacity 0.5, `cursor: default` | `outline: 2px solid var(--accent)`, offset 2px |
+| `.ft-switch` in a `.float-toggle` row (`Toggle.vue`, `role="switch"`, `aria-checked`) | 36 by 20, track `--raised-2`, pill, knob 14px `--text`; row hover white 4% | `.on`: track `--accent`, knob `translateX(16px)` `--on-accent`, hover `--accent-hot` | row `.disabled` opacity 0.45 | the shared outline |
+| `.param-switch` (`ToggleRow.vue` in `FeatureProperties.vue`) | native checkbox over a 30 by 17 `.track`, `--panel-2`, no edge, knob `--text-dim` | track fill `--accent`, knob `translateX(13px)` and `#fff` | track opacity 0.55 | the shared outline round the track, offset 2px |
 | `.sm-slider` | native range, `accent-color: var(--accent)` | | | |
 
 `.float-toggle` also shows `.ft-state` ("On" or "Off", 11.5px `--text-mute`),
@@ -698,11 +739,11 @@ and the whole row flips the switch.
 
 | Class | Idle | Hover | Selected | Focus |
 |---|---|---|---|---|
-| `.float-tabs > .float-tab` (`Tabs.vue`) | 12.5px, 600, `--text-dim` | `--text` | `.active`: `--text` and a 2px `--accent` underline from 25% to 75%, `box-shadow: 0 0 8px var(--accent-glow)` | `inset 0 0 0 2px var(--accent-glow)` |
-| `.pref-seg > button` | 30px tall, 13px, `--text-dim`, dividers `--line` | `--raised`, `--text` | `.on`: `--accent-tint-2`, `--accent-hot`, 600 | `inset 0 0 0 2px var(--accent)` |
-| `.seg-btn` (title bar Model or Render) | 11px, `--text-mute` | `--raised`, `--text-dim` | `.active`: `--accent-tint-2`, `--accent-hot` | the shared ring |
-| `.rd-tab` (Render dock) | 11.5px, `--text-mute`, 2px transparent bottom border | `--raised`, `--text-dim` | `.active`: `--accent-hot` and an `--accent` bottom border (a bar, not a fill) | the shared ring |
-| `.prefs-nav-btn` | 14px | `--raised` | `.active`: `--accent-tint`, border `--accent-tint-2`, `--accent-hot`, 600 | `0 0 0 2px var(--accent)` |
+| `.float-tabs > .float-tab` (`Tabs.vue`) | 12.5px, 600, `--text-dim` | `--text` | `.active`: `--text` and a 2px `--accent` underline from 25% to 75% | the shared outline, inset |
+| `.pref-seg > button` | 30px tall, 13px, `--text-dim`, fill `--panel`, dividers `--line` | `--raised`, `--text` | `.on`: `--accent-tint-2`, `--accent-hot`, 600 | the shared outline, inset |
+| `.seg-btn` (title bar Model or Render) | 11px, `--text-mute` | `--raised`, `--text-dim` | `.active`: `--accent-tint-2`, `--accent-hot` | the shared outline |
+| `.rd-tab` (Render dock) | 11.5px, `--text-mute`, 2px transparent bottom border | `--raised`, `--text-dim` | `.active`: `--accent-hot` and an `--accent` bottom bar (a bar, not a fill) | the shared outline |
+| `.prefs-nav-btn` | 14px | `--raised` | `.active`: `--accent-tint`, `--accent-hot`, 600 | the shared outline |
 
 A tab that cannot be chosen yet (the Stress panel's Results before a Run) passes `disabled` and a `title` saying why
 to `Tabs.vue`: opacity 0.45, `cursor: default`, no hover. Keep it in the bar rather than hiding it, a bar of one tab
@@ -712,23 +753,23 @@ reads as a title.
 
 | Class | Recipe |
 |---|---|
-| `.key-chip kbd` (`KeyChip.vue`) | mono 10px, `--text-dim`, padding `0 4px`, radius 6px, fill `rgba(255, 255, 255, 0.06)`, border `rgba(255, 255, 255, 0.1)` |
-| `.rd-chip` | padding `3px var(--s-2)`, `--panel-2`, `--line`, chip radius, 11px `--text-dim`; hover `--raised`, `--text`; `.active` border `--accent`, fill `--accent-tint-2`, `--accent-hot`; disabled opacity 0.55 |
-| `#context-tab` | 10px, 700, uppercase, letter-spacing 0.8px, padding `var(--s-1) var(--s-3)`; `.sketch` turns it accent (`--accent-hot`, border `--accent`, fill `--accent-tint`) |
+| `.key-chip kbd` (`KeyChip.vue`) | mono 10px, `--text-dim`, padding `0 4px`, radius 6px, fill `--float-chip-bg`, no edge |
+| `.rd-chip` | padding `3px var(--s-2)`, `--panel-2`, pill radius, 11px `--text-dim`; hover `--raised`, `--text`; `.active` fill `--accent-tint-2`, `--accent-hot`; disabled opacity 0.55 |
+| `#context-tab` | 10px, 700, uppercase, letter-spacing 0.8px, padding `var(--s-1) var(--s-3)`; `.sketch` turns it accent (`--accent-hot`, fill `--accent-tint-2`) |
 | `.tree-count` | 10px, 600, `--text-mute`, `--panel-2` pill, hidden when empty |
-| `.section-chip` (`SectionChip.vue`) | glass A, chip radius, no rim, padding `var(--s-1) var(--s-1) var(--s-1) var(--s-3)`, gap `--s-2`, 600 12px `--text`, the section icon in `--accent`, `pop-in`; `role="toolbar"`; shown only while a cut is on, absent otherwise; under 560px, or when the top row is too narrow for them, the words hide and the icon's `title` says them |
-| `.section-chip-btn` | white ink of `.pop-wide`, chip radius, padding `var(--s-1) var(--s-3)`, 600 12px `--text-dim`; hover `--text`; `.active` (Edit while editing, `aria-pressed`) as `.dim-btn.dim-toggle.on`; `.disabled` with `aria-disabled` opacity 0.45, no hover; shared focus ring; a 40px hit area on touch |
-| `.updating-chip` (`UpdatingChip.vue`) | glass A, chip radius, padding `var(--s-1) var(--s-3)`, gap `--s-2`, 500 11.5px `--text-dim`, `pop-in`, `role="status"`, `pointer-events: none` so a pick goes through to the model; a 10px ring spinner in `--accent` on a 25% accent track; shown while a rebuild other than a tool preview has run past `OUT_OF_DATE_GRACE_MS` (600 ms, `app/staleModel.ts`), gone when it lands, is cancelled or the document is replaced; it never ghosts the model |
+| `.section-chip` (`SectionChip.vue`) | glass A in `--float-chip-bg`, chip radius, padding `var(--s-1) var(--s-1) var(--s-1) var(--s-3)`, gap `--s-2`, 600 12px `--text`, the section icon in `--accent`, `pop-in`; `role="toolbar"`; shown only while a cut is on, absent otherwise; under 560px, or when the top row is too narrow for them, the words hide and the icon's `title` says them |
+| `.section-chip-btn` | chip fill of `.pop-wide`, chip radius, padding `var(--s-1) var(--s-3)`, 600 12px `--text-dim`; hover `--text`; `.active` (Edit while editing, `aria-pressed`) as `.dim-btn.dim-toggle.on`; `.disabled` with `aria-disabled` opacity 0.45, no hover; shared focus outline; a 40px hit area on touch |
+| `.updating-chip` (`UpdatingChip.vue`) | glass A in `--float-chip-bg`, chip radius, padding `var(--s-1) var(--s-3)`, gap `--s-2`, 500 11.5px `--text-dim`, `pop-in`, `role="status"`, `pointer-events: none` so a pick goes through to the model; a 10px ring spinner in `--accent` on a 25% accent track; shown while a rebuild other than a tool preview has run past `OUT_OF_DATE_GRACE_MS` (600 ms, `app/staleModel.ts`), gone when it lands, is cancelled or the document is replaced; it never ghosts the model |
 
 ### 7.9 Rows
 
 | Class | Idle | Hover | Selected | Disabled |
 |---|---|---|---|---|
-| `.opt-row` (`ChoiceList.vue`) | padding `7px var(--s-3)`, 12.5px, chip radius | `rgba(255, 255, 255, 0.05)` | `.selected`: the selected row gradient, inset accent 26% ring, `--accent-hot` | `.disabled` opacity 0.45, no hover |
+| `.opt-row` (`ChoiceList.vue`) | padding `7px var(--s-3)`, 12.5px, chip radius | white 5% wash | `.selected`: accent 16% fill, `--accent-hot` | `.disabled` opacity 0.45, no hover |
 | `.ctx-item` (context menu) | padding `var(--s-3) var(--s-4)`, 12.5px, chip radius, `.ctx-key` 11px `--text-dim` | accent 16%, `--accent-hot` | | `.disabled` opacity 0.45, `pointer-events: none` |
 | `.menu-item` (title bar menu) | padding `var(--s-3) var(--s-4)`, gap `--s-7`, `.menu-shortcut` 11px `--text-mute` | accent 16%, `--accent-hot` | `.menu-check` gutter in `--accent` | `[disabled]` `--text-mute`, `pointer-events: none` |
 | `.cmdk-item` | padding `var(--s-3) var(--s-4)`, gap `--s-3`, chip radius | `.active` (pointer or keys): accent 16%, `--accent-hot` | | |
-| `.tree-folder`, `.feature-row`, `#timeline .timeline-node` | padding `var(--s-2) var(--s-1)` on `.tree-folder`, `--s-2` on the others (History rows 34px tall), chip radius | `--raised` | `.selected`: the selected row gradient, inset ring, `--accent-hot` | |
+| `.tree-folder`, `.feature-row`, `#timeline .timeline-node` | padding `var(--s-2) var(--s-1)` on `.tree-folder`, `--s-2` on the others (History rows 34px tall), chip radius | `--raised` | `.selected`: accent 16% fill, `--accent-hot` | |
 
 A destructive row (`.ctx-item.danger`, Remove body) is red text only. It
 currently uses hard coded reds; new destructive rows use `--error`.
@@ -737,14 +778,14 @@ currently uses hard coded reds; new destructive rows use `--error`.
 
 | Surface | Recipe |
 |---|---|
-| `.float-popover` (`Popover.vue`) | glass solid, `--float-radius`, padding `--s-3`, min width 220px, `z-index: var(--z-popover)`, `glass-in` entrance. Content: `.pop-section` 12.5px/600, `.pop-rule` 1px `--float-line`, `.pop-note` 12px `--text-dim` line height 1.45 |
+| `.float-popover` (`Popover.vue`) | glass solid, `--float-radius`, padding `--s-3`, min width 220px, `z-index: var(--z-popover)`, `glass-in` entrance. Content: `.pop-section` 12.5px/600, `.pop-rule` a 10px gap with no line, `.pop-note` 12px `--text-dim` line height 1.45 |
 | `.context-menu` | glass solid, `--float-tile-radius`, padding 5px, separators `.ctx-sep` 1px |
 | `.menu-popup` | glass B, `--float-tile-radius`, padding `--s-1`, `pop-in` |
-| `.modal-panel` (`ModalFrame.vue`) | glass B with `--shadow-3`, `--float-radius`, on `.modal-overlay`. `.modal-head`, `.modal-body`, `.modal-foot` share padding `--s-5`; head and foot separated by `1px solid var(--line)`; `h2` 14px/600; foot buttons right aligned, gap `--s-3`, Cancel present, one primary. `role="dialog"`, `aria-modal`, `aria-labelledby` the `h2` |
+| `.modal-panel` (`ModalFrame.vue`) | glass B with `--shadow-3`, `--float-radius`, on `.modal-overlay`. `.modal-head`, `.modal-body`, `.modal-foot` share padding `--s-5`; head and foot are layout dividers, `1px solid var(--line)`; `h2` 14px/600; foot buttons right aligned, gap `--s-3`, Cancel present, one primary. `role="dialog"`, `aria-modal`, `aria-labelledby` the `h2` |
 | `.cmdk-card` | glass B, `--float-radius`, `min(560px, 92vw)`, on `.cmdk-backdrop` at `padding-top: 12vh`, `role="dialog"`, `aria-modal`, `aria-label="Command palette"` |
 | `.measure-panel` | see [7.13](#713-tool-and-readout-panels-measure-panel) |
 | `.toast` | glass B, `--float-tile-radius`, padding `var(--s-3) var(--s-4)`, 12.5px, bottom centre in `.toast-stack`; `.toast-error` and `.toast-warning` tint the fill; `.toast-action` accent chip |
-| `#viewport .prompt` | glass A, pill, padding `var(--s-3) var(--s-5)`, 12px, a 6px accent dot with `0 0 8px var(--accent-glow)`, `prompt-in` entrance |
+| `#viewport .prompt` | glass A, pill, padding `var(--s-3) var(--s-5)`, 12px, a 6px accent dot, `prompt-in` entrance |
 | `#viewport .vp-top` | the top middle stack of the Section chip and Normal to Sketch: absolute, top `--s-4`, a column with gap `--s-2`, centred in the span the cards leave free (`useClearOfCards.ts` sets `--row-left` and `--row-right`, as PromptBanner does); when that span is too narrow it sets `data-narrow` (the chip drops its words), and when that is not enough it moves the stack down to the first row with room (`--row-top`), `z-index: calc(var(--z-float) - 4)`, pointer events only on its children |
 
 ![A context menu and the selection state of the shell](design/context-menu-dark.png)
@@ -889,8 +930,8 @@ guard test cannot see them; hold them to these rules by hand.
 | `--t-med` | 160ms | Larger entrances: glass popovers, the chooser, the tool prompt |
 
 The standard transition is
-`transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);`.
-Transition only background, border-color, color, box-shadow, opacity and
+`transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);`.
+Transition only background, color, box-shadow, opacity and
 transform, never layout. The one layout property that moves is the `width` of
 a progress fill inside a fixed track (`.timeline-busy .busy-bar i` and
 `.timeline-node .t-bar i` at `0.4s var(--ease)`, `.rd-emitting-bar` at
@@ -958,35 +999,57 @@ lead; the full text is kept in the console.
 `<html>`, plus `color-scheme`. Only the tokens in `PALETTE_TOKENS` change, as
 hex or `rgb()`/`rgba()` values: `--bg --panel --panel-2 --raised --raised-2
 --viewport-bg --line --line-strong --text --text-dim --text-mute --accent
---accent-hot --accent-tint --accent-tint-2 --accent-glow --on-accent --ok
---warn --error --error-tint --accent-blue`. Shape, glass, motion and z tokens
-never change.
+--accent-hot --accent-tint --accent-tint-2 --on-accent --ok --warn --error
+--error-tint --pick-line --accent-blue`. Shape, glass, motion and z tokens
+never change from a palette. A palette that sets the retired `--accent-glow`
+still loads, the token is dropped.
 
 Shipped: FundaCAD Noir (built in, dark), Dracula, **Solarized Light** (the light
-one: `--bg #fdf6e3`, `--panel #eee8d5`, `--text #073642`, `--accent #268bd2`),
-Colour-Blind Safe, and the Noir Blue, Red and Orange tints. Users can upload
-their own palette.
+one: `--bg #fdf6e3`, `--panel #eee8d5`, `--raised #ffffff`, `--text #073642`,
+`--text-dim #3a4f55`, `--text-mute #4d6165`, `--accent #25669b`,
+`--accent-hot #173f5f`), Colour-Blind Safe, and the Noir Blue, Red and Orange
+tints. Users can upload their own palette.
 
 ![The same workspace in Solarized Light](design/workspace-light.png)
+
+### The light theme
+
+`apply()` in `theme.ts` toggles the class `html.theme-light` for every palette
+whose `mode` is `light`, shipped or uploaded. An uploaded light palette needs
+nothing more than `"mode": "light"`: the `:root.theme-light` block in
+`_tokens.scss` derives the paper cards from its `--raised`, `--bg`, `--panel`
+and `--text`, so the cards follow the palette.
+
+- **Paper cards.** The card is a near white sheet: `--float-bg-solid` mixes
+  `--raised` into `--bg`, and `--float-bg` is that at 97%. A tile is a step
+  darker than the card, a chip another step, and a field a grey well
+  (`--field-bg` mixes `--text` 11% into the card). `--hover-wash` and
+  `--check-off` are mixes of `--text`.
+- **Soft shadows.** `--float-shadow`, `--shadow-2`, `--shadow-3` and
+  `--shadow-pill` are inked in `--text` and soft. A black offset slab reads as a
+  hole on paper.
+- **Clear of the grid.** Floating chips, tiles and rails over the viewport
+  stand clear of the pale scene: a card against `--viewport-bg` must reach a
+  contrast above 1.15:1.
+- **Readable text.** Every text token (`--text`, `--text-dim`, `--text-mute`,
+  `--accent`, `--accent-hot`) reads at 4.5:1 or better on every fill it sits
+  on: the card, the solid card, a tile, a chip and a field. `--on-accent` on
+  `--accent` is held above 4.5:1 too. A light theme's `--accent-hot` is darker
+  than its `--accent`, not lighter, because it is text on an accent tint.
+
+`tests/ui/designSpec.test.ts` and `tests/ui/themeContrast.test.ts` hold these
+numbers for Solarized Light.
 
 What this means for you:
 
 - Build every fill from `--panel`, `--panel-2`, `--raised`, `--line*`,
-  `--text*`, `--accent*` or `color-mix` of them. The glass fill does
-  (`--float-bg` mixes `--panel`), so glass recolours itself.
-- `--float-line`, `--glass-sheen`, `--glass-inset` and the white stops of
-  `--glass-rim` are white and black on every theme, and so is the white ink of
-  [2.3](#23-the-white-ink-of-the-glass). On a light theme they read softer,
-  which is intended. Do not add more white or black overlays of your own;
-  reach for these tokens and lists.
-- A hard coded dark fill stays dark on a light theme. The viewport readouts
-  (`rebuild 68ms`, `render idle`) once used `rgba(22, 24, 29, 0.55)` and show it
-  in the shot above, unreadable at 1.45:1. They are glass chips now (group A in
-  `_glass.scss`), and `tests/ui/themeContrast.test.ts` rejects that fill anywhere.
-- A light theme's `--accent-hot` is darker than its `--accent`, not lighter: it
-  is text on an accent tint, and a lighter blue on a pale tint read at 1.75:1.
-  The same test holds chip text of every shipped theme to WCAG AA (4.5:1) on the
-  fill it sits on.
+  `--text*`, `--accent*`, the fill tokens of [2.1](#21-colours-by-role-fundacad-noir-values)
+  or `color-mix` of them. The glass fills mix `--panel`, so glass recolours
+  itself.
+- Do not add white or black overlays of your own. The fill tokens carry the
+  light variants. A hard coded dark fill stays dark on a light theme and
+  its text becomes unreadable, so viewport readouts are glass chips, and
+  `tests/ui/themeContrast.test.ts` rejects a hard coded dark readout fill.
 - Check every screen in FundaCAD Noir **and** Solarized Light (Preferences,
   Appearance, Theme).
 
@@ -994,24 +1057,24 @@ What this means for you:
 
 Focus:
 
-- The shared ring (`_base.scss`):
-  `:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent-glow); border-radius: var(--r-sm); }`.
-- Its specificity is that of one class. Any later rule that sets `box-shadow`
-  or `border-radius` on your element at that specificity replaces it. So a
-  control with its own `box-shadow` writes its own `:focus-visible` rule, as
-  `_glass.scss` does for the white ink buttons:
-  `.btn:focus-visible, .pop-wide:focus-visible, .palette-btn:focus-visible { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent-glow); }`.
-  The ring replaces the button's own shadow while it shows. On the rail the ring
-  is on the `.rail-btn` button, not on the `.rail-tile` inside it, so the
-  tile's shadow does not hide it.
-- Tabs and segments use an inset ring (`inset 0 0 0 2px`). Fields use `:focus`
-  with an accent border and a 3px accent 14% ring. Never `outline: none`
-  without a replacement.
+- The shared outline (`_base.scss`):
+  `:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }`.
+  It shows on keyboard focus only, never on a pointer click, and it is the one
+  outline on a rounded surface ([Depth without lines](#depth-without-lines)).
+- Fields (`.sm-input`, `.sm-select`, `.param-row input`, the Items filter) draw
+  a 1px accent outline with no offset while focused. The checkbox draws a 2px
+  outline at a 2px offset around its box.
+- Tabs and segments use an inset outline (`outline-offset: -2px`), so a clipped
+  row does not hide it. On the rail the outline is on the `.rail-btn` button,
+  not on the `.rail-tile` inside it.
+- Never use a ring `box-shadow` for focus, and never `outline: none` without a
+  replacement.
 
 Contrast (Noir): `--text` on `--panel` 15.35:1, `--text-dim` 7.03:1, `--accent`
-12.92:1, `--on-accent` on `--accent` 14.08:1, `--error` 5.76:1. `--text-mute` is
-4.00:1 on `--panel` and 3.06:1 on `--raised`: hints and metadata only.
-`--line-strong` is decorative.
+9.57:1, `--accent-hot` 11.70:1, `--on-accent` on `--accent` 10.43:1, `--error`
+5.76:1. `--text-mute` is 4.00:1 on `--panel` and 3.06:1 on `--raised`: hints and
+metadata only. `--line-strong` is decorative. On the light theme every text
+token reaches 4.5:1 ([10](#10-light-and-dark-themes)).
 
 Semantics: an icon only button has an `aria-label` (and the same `title`).
 Toggles use `aria-pressed`, switches `role="switch"` with `aria-checked`,
@@ -1022,7 +1085,7 @@ visible title (`ModalFrame.vue` and the chooser in `ModalHost.vue`, through
 `HomeScreen.vue`, `ConsolePanel.vue`, `TargetEditPanel.vue`). A modal one also
 has `aria-modal="true"`. Decorative icons get `aria-hidden`.
 
-Keyboard: every control is reachable and shows a ring. Single letter
+Keyboard: every control is reachable and shows the focus outline. Single letter
 shortcuts are ignored while typing (`isEditableTarget`, `ui/focus.ts`). Every
 confirm offers Cancel.
 
@@ -1050,15 +1113,18 @@ Not handled yet, so do not rely on them: `prefers-contrast`, `forced-colors`,
 | Do | Don't |
 |---|---|
 | Reuse a glass class, or add your selector to the lists in `_glass.scss` | Ship a flat opaque panel (`var(--panel)`, `var(--panel-2)` or `var(--raised)` as a surface fill) over or instead of the workspace |
-| Fill glass with `var(--glass-sheen), var(--float-bg)` or `--float-bg-solid` | Write a translucent `rgba()` fill or your own `backdrop-filter: blur(…)` |
-| Use colour tokens and `color-mix` on them; give controls the white ink by wearing a class on the `_glass.scss` lists | Write a hex, `rgb()`, `hsl()` or named colour, or a `var(--token, #hex)` fallback, or copy the white ink numbers into another file |
-| Use `var(--glass-inset), var(--float-shadow)` | Add a one off shadow, or a hard `--shadow-2`/`--shadow-3` on something over the model |
-| Edge a glass surface with `1px solid var(--float-line)` and the `::after` rim; divide its parts with `--line` (dialogs, menus, docks) or `--float-line` (cards, popovers) | Draw the outer border of a glass surface in `--line` or `--line-strong`, or leave out the rim on a panel |
+| Fill glass with `--float-bg` or `--float-bg-solid`, a tile with `--float-tile-bg`, a chip with `--float-chip-bg`, a field with `--field-bg` | Write a translucent `rgba()` fill or your own `backdrop-filter: blur(...)` |
+| Use colour tokens and `color-mix` on them; give controls their fill by wearing a class on the `_glass.scss` lists | Write a hex, `rgb()`, `hsl()` or named colour, or a `var(--token, #hex)` fallback |
+| Use `var(--float-shadow)` | Add a one off shadow, a glow or a halo, or a hard `--shadow-2`/`--shadow-3` on something over the model |
+| Tell a surface apart by its fill and shadow; write `border: 1px solid transparent` where the box needs a border | Draw an outline, a border colour or a 1px ring around a rounded surface |
+| Show hover with `--hover-wash`, on with `--accent-wash` or an accent 16% fill | Change a border colour or add a ring for a state |
+| Divide the parts of a dialog, menu or dock with `--line` | Draw the edge of a surface in `--line` or `--line-strong` |
 | Use `--float-radius`, `--float-tile-radius`, `--float-chip-radius` with `corner-shape: squircle` | Use `--r-*` or a px radius on a floating surface |
 | Keep 12px (`--float-gap`) around floating surfaces | Dock a new panel edge to edge (the Render dock is the one docked column) or cover the model with a sheet |
 | Keep the accent for active, selected, focused and primary, and for `.measure-title` | Fill a large area with the accent, or colour a card or dialog title |
+| Toggle a setting with the `.check` checkbox | Put a switch on a settings page; switches are for live toggles in tool panels |
 | Grow small targets to about 40px with a pseudo element under touch | Ship a 24px target, or change layout for touch |
-| Give every control a visible focus ring | Remove the outline and leave nothing, or let a later `box-shadow` eat the ring |
+| Give every control a visible focus outline | Remove the outline and leave nothing, or draw focus as a ring shadow |
 | Check FundaCAD Noir and Solarized Light | Test only the dark theme |
 | Check with blur off | Rely on blur to make text legible |
 | Use `--t-fast`, `--t-med` and `--ease` | Write `0.14s ease-out` |
@@ -1073,17 +1139,18 @@ Run all of it. Paste the screenshots into the review.
 
 1. **Reuse first.** Is the surface an existing class from [4.2](#42-use-an-existing-glass-class-first)
    or [7](#7-component-recipes)? If it is new, is its selector on the `_glass.scss`
-   lists (fill, radius, position, rim) and are its controls and rows on the
+   lists (fill, radius) and are its controls and rows on the
    control, hover and selected lists?
 2. **Tokens only.** No raw colour, no fallback, no invented token, no new
-   shadow, radius or duration literal. The white ink comes from the
-   `_glass.scss` lists. `npx vitest run tests/ui/designSpec.test.ts` passes.
+   shadow, radius or duration literal. Fills come from the `_glass.scss` lists. `npx vitest run tests/ui/designSpec.test.ts` passes.
 3. **Glass is live.** In the browser, the bodies smear through the panel, the
-   edge and rim catch the light (and the rim hugs the panel, not the window),
-   the shadow is soft, the corners are squircle, and there is a 12px gap to
-   the stage edges and neighbours.
+   surface has no outline and is told apart by its fill and one soft shadow,
+   the corners are squircle, and there is a 12px gap to the stage edges and
+   neighbours. Hover, selected and on states are fills, not borders or rings.
+
 4. **Both themes.** FundaCAD Noir and Solarized Light, nothing stays dark on
-   light or light on dark.
+   light or light on dark, the cards stand clear of the grid and every text
+   reads at 4.5:1 on its fill in the light theme.
 5. **Blur off.** Turn on potato mode (Preferences, Viewport), or run
    `document.documentElement.classList.add("no-glass-blur")`. The screen is
    opaque and still looks finished.
@@ -1091,8 +1158,7 @@ Run all of it. Paste the screenshots into the review.
    760px and 560px. Nothing overflows, nothing scrolls sideways.
 7. **Touch.** With `<html data-pointer="touch">`, every small target reaches
    about 40px and nothing moves.
-8. **Keyboard.** Tab through it: every control shows a ring (a control with
-   its own `box-shadow` has its own `:focus-visible`), Escape does what
+8. **Keyboard.** Tab through it: every control shows the accent outline, Escape does what
    [11](#11-accessibility) says for this kind of surface, Enter does the
    primary thing. A dialog has `role="dialog"` and a name.
 9. **Motion.** Entrances use `pop-in` or `glass-in`; with Animations off
@@ -1153,6 +1219,29 @@ Run all of it. Paste the screenshots into the review.
 4. **Tokens exist.** Every `var(--name)` is defined in `_tokens.scss` or set
    locally (a declaration, an inline `:style`, a `setProperty`). The old
    undefined names are listed in `UNDEFINED_ALLOWED`; that list only shrinks.
+5. **No outline around a rounded surface.** A rule that rounds a surface, by
+   its own declarations, by a class the templates give the same element or by a
+   parent selector, may not paint an edge: a visible `border`,
+   `border-color`, `border-style`, `border-image`, `outline`, `outline-color`,
+   a ring `box-shadow` (zero offset, a blur of 1px at most, a spread, however
+   it is spelled) or a masked `::after` ring. Only a real `:focus` or
+   `:focus-visible` state is exempt, not `:focus-within`. Signal borders
+   (`--error`, `--warn`) and the entries of `OUTLINE_ALLOWED` (sketch labels,
+   drawn glyphs, swatches, the guide ring) are exempt too
+   ([Depth without lines](#depth-without-lines)).
+6. **Retired tokens stay invisible.** `--float-line`, `--glass-sheen`,
+   `--glass-inset`, `--glass-rim` and `--accent-glow` are defined as
+   transparent in `_tokens.scss`, and no component or partial reads them.
+7. **The accent is calm.** `--float-blur` saturates only lightly (`saturate(1.0x)`) and
+   `--accent` is `#51d6a8`.
+8. **The light theme reads.** On Solarized Light every text token reaches
+   4.5:1 on the card, solid card, tile, chip and field, `--on-accent` on
+   `--accent` clears 4.5:1, and a card clears its viewport at above 1.15:1.
+9. **Settings use the checkbox.** Nothing Preferences renders contains a
+   `.param-switch`, `.ft-switch`, `ToggleRow` or `Toggle`.
+10. **An error shows on a typed field.** Of the rules that name a dimension
+    field in a `.dim-bad` box, the winning background keeps `--error-tint`, so a
+    refused typed value does not look normal.
 
 It cannot see a screen. Whether a surface is glass, both themes and blur off
 are still yours to check with the [checklist](#13-checklist-before-ui-work-is-done).

@@ -130,8 +130,7 @@
 .home-view-select {
   height: 28px;
   padding: 0 var(--s-3);
-  border-width: 1px;
-  border-style: solid;
+  border: 1px solid transparent;
   color: var(--text);
   font-size: 12px;
 }
@@ -512,8 +511,7 @@ $card-bleed-bottom: 44px;
 .home-drawer-act {
   height: 24px;
   padding: 0 var(--s-2);
-  border-width: 1px;
-  border-style: solid;
+  border: 1px solid transparent;
   color: var(--text);
   font-size: 11px;
   white-space: nowrap;

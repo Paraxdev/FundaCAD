@@ -25,12 +25,15 @@ function rowTitle(r: RelationRow): string {
     <button class="palette-btn" title="Square the view to the sketch plane" @click="palette.lookAt()">Look At</button>
     <label v-for="t in PALETTE_TOGGLES" :key="t.key" class="palette-row">
       <span>{{ t.label }}</span>
-      <input
-        type="checkbox"
-        class="palette-switch"
-        :checked="palette.state[t.key]"
-        @change="palette.set(t.key, ($event.target as HTMLInputElement).checked)"
-      />
+      <span class="check">
+        <input
+          type="checkbox"
+          class="palette-switch"
+          :checked="palette.state[t.key]"
+          @change="palette.set(t.key, ($event.target as HTMLInputElement).checked)"
+        />
+        <span class="check-box"></span>
+      </span>
     </label>
 
     <!-- Relations answer what holds this sketch, the canvas glyphs what holds this line. It follows Show Constraints. -->

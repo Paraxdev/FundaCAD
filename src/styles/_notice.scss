@@ -46,8 +46,8 @@
   background: color-mix(in srgb, var(--error) 20%, transparent);
 }
 .err-notice:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px var(--error-tint);
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 .err-tri {
   position: absolute;
@@ -143,7 +143,7 @@
   flex: none;
   height: 22px;
   padding: 0 var(--s-3);
-  border: 1px solid var(--line);
+  border: 1px solid transparent;
   border-radius: var(--r-sm);
   background: var(--panel-2);
   color: var(--text-dim);
@@ -154,7 +154,6 @@
 }
 .err-action:hover {
   color: var(--text);
-  border-color: var(--line-strong);
 }
 
 .logcon-row.is-revealed {

@@ -43,13 +43,8 @@
 }
 .prefs-nav-btn.active {
   background: var(--accent-tint);
-  border-color: var(--accent-tint-2);
   color: var(--accent-hot);
   font-weight: 600;
-}
-.prefs-nav-btn:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--accent);
 }
 
 .prefs-panes {
@@ -74,13 +69,9 @@
   flex-direction: column;
   gap: var(--s-2);
   padding: var(--s-4);
-  border: 1px solid var(--line);
+  border: 1px solid transparent;
   border-radius: 8px;
-  background: var(--panel-2);
-  transition: border-color var(--t-fast) var(--ease);
-}
-.pref-card:hover {
-  border-color: var(--line-strong);
+  background: var(--float-tile-bg);
 }
 .pref-card.wide {
   grid-column: 1 / -1;
@@ -94,6 +85,13 @@
 }
 label.pref-head {
   cursor: pointer;
+}
+label.pref-head:has(input:disabled) {
+  cursor: default;
+}
+/* A setting's checkbox leads its title, so the row reads as one sentence. */
+.pref-head.pref-check {
+  justify-content: flex-start;
 }
 .pref-head.pref-sub {
   margin-top: var(--s-1);
@@ -158,7 +156,7 @@ label.pref-head {
 .pref-seg {
   display: inline-flex;
   flex: none;
-  border: 1px solid var(--line-strong);
+  border: 1px solid transparent;
   border-radius: 6px;
   background: var(--panel);
   overflow: hidden;
@@ -190,8 +188,7 @@ label.pref-head {
   font-weight: 600;
 }
 .pref-seg > button:focus-visible {
-  outline: none;
-  box-shadow: inset 0 0 0 2px var(--accent);
+  outline-offset: -2px;
 }
 
 /* Sections with their own rows (assistants, plugins), sized like the cards around them. */
@@ -218,9 +215,9 @@ label.pref-head {
 .prefs-pane-flow .prefs-row {
   grid-template-columns: 140px 1fr;
   padding: var(--s-3) var(--s-4);
-  border: 1px solid var(--line);
+  border: 1px solid transparent;
   border-radius: 8px;
-  background: var(--panel-2);
+  background: var(--float-tile-bg);
 }
 .prefs-pane-flow .prefs-label {
   font-size: 14px;
@@ -264,10 +261,10 @@ label.pref-head {
 .sc-key {
   min-width: 64px;
   padding: var(--s-0) var(--s-2);
-  border: 1px solid var(--line-strong);
+  border: 1px solid transparent;
   border-bottom-width: 2px;
   border-radius: var(--r-sm);
-  background: var(--bg);
+  background: var(--float-chip-bg);
   color: var(--accent-hot);
   font: inherit;
   font-size: 12px;
@@ -283,20 +280,12 @@ label.pref-head {
   border: 0;
   background: transparent;
 }
-.sc-key:hover {
-  border-color: var(--accent);
-}
 .sc-key.unset {
   color: var(--text-mute);
 }
 .sc-key.capturing {
-  border-color: var(--accent);
-  background: var(--accent-tint);
+  background: var(--accent-tint-2);
   color: var(--accent-hot);
-}
-.sc-key:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--accent);
 }
 .sc-changed,
 .sc-fixed {

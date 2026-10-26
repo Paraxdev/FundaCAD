@@ -562,9 +562,8 @@ function onClassicCamera(ev: Event) {
               <DenoiserRow hint-class="pref-hint" button-class="btn" />
             </div>
             <div class="pref-card">
-              <label class="pref-head">
-                <span class="pref-title">Performance mode</span>
-                <span class="param-switch">
+              <label class="pref-head pref-check">
+                <span class="check">
                   <input
                     id="prefs-performance-mode"
                     type="checkbox"
@@ -572,19 +571,20 @@ function onClassicCamera(ev: Event) {
                     :disabled="render.potatoMode"
                     @change="onPerformanceMode"
                   />
-                  <span class="track"><span class="knob"></span></span>
+                  <span class="check-box"></span>
                 </span>
+                <span class="pref-title">Performance mode</span>
               </label>
               <p class="pref-hint">
                 Drops glass refraction, the high pixel ratio and the emitter shadows for a lighter render. Weak GPUs get
                 it automatically; turn it on if the viewport stutters or a laptop runs hot.
               </p>
-              <label class="pref-head pref-sub" title="Lowest quality, for slow or virtual machines">
-                <span class="pref-title">Potato mode</span>
-                <span class="param-switch">
+              <label class="pref-head pref-sub pref-check" title="Lowest quality, for slow or virtual machines">
+                <span class="check">
                   <input id="prefs-potato-mode" type="checkbox" :checked="render.potatoMode" @change="onPotatoMode" />
-                  <span class="track"><span class="knob"></span></span>
+                  <span class="check-box"></span>
                 </span>
+                <span class="pref-title">Potato mode</span>
               </label>
               <p class="pref-hint">
                 Lowest quality, for slow or virtual machines. Flat shading, thin edges, half resolution, no glass blur
@@ -640,12 +640,12 @@ function onClassicCamera(ev: Event) {
               </p>
             </div>
             <div class="pref-card">
-              <label class="pref-head">
-                <span class="pref-title">Orbit inertia</span>
-                <span class="param-switch">
+              <label class="pref-head pref-check">
+                <span class="check">
                   <input id="prefs-inertia" type="checkbox" :checked="nav.inertia" @change="onInertia" />
-                  <span class="track"><span class="knob"></span></span>
+                  <span class="check-box"></span>
                 </span>
+                <span class="pref-title">Orbit inertia</span>
               </label>
               <p class="pref-hint">
                 A flicked orbit keeps turning for a moment after the button comes up, about the same point.
@@ -696,12 +696,12 @@ function onClassicCamera(ev: Event) {
               </p>
             </div>
             <div class="pref-card">
-              <label class="pref-head">
-                <span class="pref-title">Classic camera</span>
-                <span class="param-switch">
+              <label class="pref-head pref-check">
+                <span class="check">
                   <input id="prefs-classic-camera" type="checkbox" :checked="classicCamera" @change="onClassicCamera" />
-                  <span class="track"><span class="knob"></span></span>
+                  <span class="check-box"></span>
                 </span>
+                <span class="pref-title">Classic camera</span>
               </label>
               <p class="pref-hint">
                 The camera from before this release, kept for one release in case the new one gets in your way. Takes
@@ -715,12 +715,12 @@ function onClassicCamera(ev: Event) {
           <h3 class="prefs-pane-title">Accessibility</h3>
           <div class="prefs-grid">
             <div class="pref-card">
-              <label class="pref-head">
-                <span class="pref-title">Animations</span>
-                <span class="param-switch">
+              <label class="pref-head pref-check">
+                <span class="check">
                   <input id="prefs-motion" type="checkbox" :checked="motion" @change="onMotion" />
-                  <span class="track"><span class="knob"></span></span>
+                  <span class="check-box"></span>
                 </span>
+                <span class="pref-title">Animations</span>
               </label>
               <p class="pref-hint">
                 Off makes every transition instant: menus, panels, the error notice and camera moves all jump straight

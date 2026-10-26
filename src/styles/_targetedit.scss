@@ -11,7 +11,7 @@
   gap: var(--s-2);
   padding: var(--s-3);
   border-radius: var(--float-tile-radius, var(--r-md));
-  border: 1px solid var(--line-strong);
+  border: 1px solid transparent;
   background: var(--panel-2);
   -webkit-backdrop-filter: blur(14px) saturate(1.3);
   backdrop-filter: blur(14px) saturate(1.3);
@@ -69,14 +69,13 @@
   font: inherit;
   font-size: 11px;
   color: var(--text-dim);
-  background: none;
-  border: 1px solid var(--line-strong);
+  background: var(--float-chip-bg);
+  border: 1px solid transparent;
   border-radius: var(--r-sm);
   cursor: pointer;
 }
 .tgt-clear:hover:not(:disabled) {
   color: var(--accent-hot);
-  border-color: var(--accent);
 }
 .tgt-clear:disabled {
   opacity: 0.4;
@@ -111,7 +110,6 @@
 .tgt-item:hover,
 .tgt-item.tgt-held {
   background: var(--accent-tint);
-  border-color: var(--accent);
 }
 .tgt-item {
   cursor: pointer;
@@ -168,20 +166,19 @@
 .tgt-done {
   color: #fff;
   background: var(--accent);
-  border: 1px solid var(--accent);
+  border: 1px solid transparent;
 }
 .tgt-done:hover {
   background: var(--accent-hot);
-  border-color: var(--accent-hot);
 }
 .tgt-cancel {
   color: var(--text-dim);
-  background: none;
-  border: 1px solid var(--line-strong);
+  background: var(--float-chip-bg);
+  border: 1px solid transparent;
 }
 .tgt-cancel:hover {
   color: var(--text);
-  border-color: var(--text-dim);
+  background: linear-gradient(var(--hover-wash), var(--hover-wash)), var(--float-chip-bg);
 }
 .tgt-done:disabled {
   opacity: 0.45;

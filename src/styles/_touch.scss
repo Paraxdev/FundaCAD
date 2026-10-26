@@ -196,7 +196,8 @@ textarea,
   }
   // The checkbox already lies over the drawn switch, so it just grows. A checkbox keeps its
   // own width when only its edges are given, hence the explicit size.
-  .param-switch input {
+  .param-switch input,
+  .check input {
     top: -9px;
     left: -5px;
     width: calc(100% + 10px);

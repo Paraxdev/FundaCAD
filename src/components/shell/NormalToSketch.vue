@@ -22,7 +22,4 @@ const palette = useSketchPaletteStore();
   color: var(--text);
   cursor: pointer;
 }
-.normal-to-sketch:hover {
-  border-color: var(--accent);
-}
 </style>

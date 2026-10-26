@@ -4,13 +4,11 @@
 
 button.finish {
   background: rgba(74, 208, 125, 0.16);
-  border-color: rgba(74, 208, 125, 0.5);
   color: #c5f6da;
   font-weight: 600;
 }
 button.finish:hover {
   background: rgba(74, 208, 125, 0.26);
-  border-color: rgba(74, 208, 125, 0.7);
 }
 
 .prompt {
@@ -27,7 +25,7 @@ button.finish:hover {
   gap: var(--s-3);
   -webkit-backdrop-filter: blur(14px) saturate(1.3);
   backdrop-filter: blur(14px) saturate(1.3);
-  border: 1px solid var(--line-strong);
+  border: 1px solid transparent;
   color: var(--text);
   /* Roomier than any other pill: it announces what the armed tool wants next. */
   padding: var(--s-3) var(--s-5);
@@ -47,7 +45,6 @@ button.finish:hover {
   flex: 0 0 auto;
   border-radius: 50%;
   background: var(--accent);
-  box-shadow: 0 0 8px var(--accent-glow);
 }
 @keyframes prompt-in {
   from {
@@ -96,9 +93,8 @@ button.finish:hover {
   box-shadow: var(--shadow-2);
 }
 /* Every field turns: the kernel refuses a feature, not a field, and the user picks which
-   value to move. */
+   value to move. The error shows as a fill, _glass.scss repeats it for a typed field. */
 .dim-bad .dim-field {
-  border-color: var(--error);
   background: var(--error-tint);
 }
 .dim-bad .dim-field input {
@@ -116,14 +112,13 @@ button.finish:hover {
   text-transform: uppercase;
   color: var(--text-mute);
   background: var(--panel);
-  border: 1px solid var(--line-strong);
+  border: 1px solid transparent;
   border-radius: var(--r-sm);
   padding: 3px var(--s-1);
   box-shadow: var(--shadow-2);
 }
 /* Typing turns the readout into an input; until then the drag writes to it. */
 .dim-field.typed {
-  border-color: var(--accent);
   background: var(--panel-2);
 }
 .dim-name {
@@ -134,7 +129,8 @@ button.finish:hover {
      digits. */
   min-width: 0;
   border: none;
-  background: none;
+  border-radius: 7px;
+  background: var(--field-bg);
   color: var(--text);
   font-size: 12px;
   font-weight: 600;
@@ -146,15 +142,16 @@ button.finish:hover {
   padding: 2px 3px;
 }
 .dim-field input:focus {
-  outline: none;
+  outline: 1px solid var(--accent);
+  outline-offset: 0;
 }
 /* A button that changes the shown unit without retyping; the border makes it read as
    pressable at 9px. */
 .dim-unit {
   flex: none;
-  border: 1px solid var(--line);
-  background: var(--panel-2);
-  border-radius: var(--r-xs);
+  border: 1px solid transparent;
+  background: var(--float-tile-bg);
+  border-radius: 7px;
   color: var(--text-dim);
   font: inherit;
   padding: 1px 4px;
@@ -162,7 +159,6 @@ button.finish:hover {
   text-transform: none;
 }
 .dim-unit:hover {
-  border-color: var(--accent);
   color: var(--accent-hot);
 }
 .dim-unit-menu {
@@ -172,7 +168,7 @@ button.finish:hover {
   flex-direction: column;
   min-width: 56px;
   background: var(--panel-2);
-  border: 1px solid var(--line-strong);
+  border: 1px solid transparent;
   box-shadow: var(--shadow-3);
   padding: var(--s-1);
 }
@@ -197,7 +193,7 @@ button.finish:hover {
   align-self: stretch;
   width: 26px;
   border-radius: var(--r-sm);
-  border: 1px solid var(--line-strong);
+  border: 1px solid transparent;
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
@@ -224,7 +220,6 @@ button.finish:hover {
 .dim-btn.dim-direction.on,
 .section-chip-btn.active {
   color: var(--accent-hot);
-  border-color: var(--accent);
   background: var(--accent-tint);
 }
 .dim-btn.dim-ok {
@@ -275,13 +270,12 @@ button.finish:hover {
 .dim-btn.profile-chip:hover,
 .dim-btn.profile-chip.open {
   color: var(--text);
-  border-color: var(--accent);
 }
 .dim-btn.profile-chip.on {
   color: var(--accent-hot);
 }
 .dim-btn.profile-chip.scrubbing {
-  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 24%, var(--panel));
 }
 .profile-chip-value {
   min-width: 38px;
@@ -321,7 +315,7 @@ button.finish:hover {
   gap: var(--s-2);
   padding: var(--s-2) var(--s-3) var(--s-3);
   background: var(--panel);
-  border: 1px solid var(--line-strong);
+  border: 1px solid transparent;
   border-radius: var(--r-md, 8px);
   box-shadow: var(--shadow-2);
   cursor: default;
@@ -382,11 +376,9 @@ button.finish:hover {
 }
 .profile-preset:hover {
   color: var(--text);
-  border-color: var(--line-strong);
 }
 .profile-preset.active {
   color: var(--accent-hot);
-  border-color: var(--accent);
   background: var(--accent-tint);
 }
 .profile-track {
@@ -467,7 +459,7 @@ button.finish:hover {
   padding: var(--s-3) var(--s-4);
   border-radius: var(--r-md);
   background: var(--panel-2);
-  border: 1px solid var(--line-strong);
+  border: 1px solid transparent;
   box-shadow: var(--shadow-3);
   font-size: 12.5px;
   color: var(--text);
@@ -491,7 +483,7 @@ button.finish:hover {
   /* Badge height so the toast does not grow, button width so Undo is easy to hit. */
   padding: var(--s-1) var(--s-4);
   border-radius: var(--r-sm);
-  border: 1px solid var(--accent);
+  border: 1px solid transparent;
   background: var(--accent-tint);
   color: var(--accent-hot);
   font-size: 11.5px;
@@ -541,9 +533,9 @@ button.finish:hover {
   color: var(--text-mute);
 }
 .units select {
-  background-color: var(--panel-2);
+  background-color: var(--field-bg);
   color: var(--text);
-  border: 1px solid var(--line-strong);
+  border: 1px solid transparent;
   border-radius: var(--r-sm);
   /* The same 22px arrow clearance as .params-row, tied to the background image. */
   padding: var(--s-2) 22px var(--s-2) var(--s-3);
@@ -553,13 +545,9 @@ button.finish:hover {
   cursor: pointer;
   transition: border-color var(--t-fast) var(--ease);
 }
-.units select:hover {
-  border-color: #3d4452;
-}
 .units select:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-tint);
+  outline: 1px solid var(--accent);
+  outline-offset: 0;
 }
 
 /* The angle a ring drag has turned, at the leading edge of the dial. */
@@ -571,7 +559,6 @@ button.finish:hover {
   border-radius: var(--r-pill);
   background: var(--panel);
   color: var(--text);
-  box-shadow: inset 0 0 0 1px var(--accent);
   font-size: 11px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -590,9 +577,10 @@ button.finish:hover {
   font-weight: 650;
 }
 .prompt-key {
+  background: var(--float-chip-bg);
   padding: 0 var(--s-1);
   font: 600 10px/1.5 var(--mono);
   color: var(--text-dim);
-  border: 1px solid var(--line-strong);
+  border: 1px solid transparent;
   border-radius: var(--r-sm);
 }

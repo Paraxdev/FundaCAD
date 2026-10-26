@@ -52,10 +52,13 @@ const labelEl = useTemplateRef<InstanceType<typeof InlineLabel>>("labelEl");
 
 const style = computed(() => ({
   ...(props.depth > 1 ? { paddingLeft: `${rowIndent(props.depth)}px` } : {}),
-  ...(props.dim ? { opacity: "0.7" } : {}),
+  // A dimmed or hidden row steps down a text colour rather than fading, so it keeps its contrast on a light card.
+  ...(props.dim ? { color: "var(--text-dim)" } : {}),
 }));
 
-const labelStyle = computed(() => (props.toggleVis && props.visible === false ? { opacity: ".45" } : undefined));
+const labelStyle = computed(() =>
+  props.toggleVis && props.visible === false ? { color: "var(--text-mute)" } : undefined,
+);
 
 const swatchStyle = {
   display: "inline-block",

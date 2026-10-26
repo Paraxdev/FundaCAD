@@ -82,15 +82,15 @@ const glass = [
 ];
 
 describe("Home wears the app's glass", () => {
-  it.each(glass)("%s has the floating panels' fill, blur, border and shadow", (sel) => {
+  it.each(glass)("%s has the floating panels' fill, blur, shadow and no edge", (sel) => {
     const d = decls(sel);
     expect(d["backdrop-filter"]).toBe("var(--float-blur)");
-    expect(d.background).toMatch(/^var\(--glass-sheen\), var\(--float-bg(-solid)?\)$/);
-    expect(d.border).toBe("1px solid var(--float-line)");
-    expect(d["box-shadow"]).toBe("var(--glass-inset), var(--float-shadow)");
+    expect(d.background).toMatch(/^var\(--float-(bg|bg-solid|tile-bg)\)$/);
+    expect(d.border).toBe("1px solid transparent");
+    expect(d["box-shadow"]).toBe("var(--float-shadow)");
     expect(d["border-radius"]).toMatch(/^var\(--float-(tile-)?radius\)$/);
     expect(d["corner-shape"]).toBe("squircle");
-    expect(decls(`${sel}::after`).background).toBe("var(--glass-rim)");
+    expect(decls(`${sel}::after`).background).toBeUndefined();
   });
 
   it("puts Home on an opaque paper by default, not the dimmed workspace", () => {

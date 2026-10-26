@@ -58,7 +58,7 @@
   background: var(--float-bg);
   -webkit-backdrop-filter: var(--float-blur);
   backdrop-filter: var(--float-blur);
-  border: 1px solid var(--float-line);
+  border: 1px solid transparent;
   border-radius: var(--float-radius);
   box-shadow: var(--float-shadow);
   overflow: hidden;
@@ -120,7 +120,6 @@
   display: flex;
   align-items: center;
   padding: 4px 6px;
-  border-top: 1px solid var(--float-line);
 }
 .float-card-spacer {
   flex: 1 1 auto;
@@ -129,7 +128,6 @@
 #browser.float-card {
   width: 264px;
   padding: 0;
-  border-right: 1px solid var(--float-line);
 }
 #browser .browser-title {
   flex: none;
@@ -148,7 +146,6 @@
   width: 288px;
   max-height: 100%;
   padding: 0;
-  border-top: 1px solid var(--float-line);
   gap: 0;
   align-items: stretch;
   justify-content: flex-start;
@@ -229,10 +226,14 @@
   font: inherit;
   font-size: 12.5px;
   color: var(--text);
-  background: rgba(0, 0, 0, 0.35);
-  border: 1px solid color-mix(in srgb, var(--accent) 60%, transparent);
+  background: var(--field-bg);
+  border: 1px solid transparent;
   border-radius: 6px;
   outline: none;
+}
+#timeline .timeline-node .t-rename:focus {
+  outline: 1px solid var(--accent);
+  outline-offset: 0;
 }
 #timeline .timeline-node .t-caret {
   flex: none;
@@ -281,7 +282,7 @@
   background: var(--float-bg);
   -webkit-backdrop-filter: var(--float-blur);
   backdrop-filter: var(--float-blur);
-  border: 1px solid var(--float-line);
+  border: 1px solid transparent;
   border-radius: var(--float-radius);
   box-shadow: var(--float-shadow);
 }
@@ -376,7 +377,7 @@
   background: var(--float-bg);
   -webkit-backdrop-filter: var(--float-blur);
   backdrop-filter: var(--float-blur);
-  border: 1px solid var(--float-line);
+  border: 1px solid transparent;
   border-radius: var(--float-tile-radius);
   box-shadow: var(--float-shadow);
   color: var(--text);
@@ -391,7 +392,6 @@
 .rail-btn.active .rail-tile,
 .rail-btn.holding .rail-tile {
   background: var(--accent-tint-2);
-  border-color: var(--accent);
   color: var(--accent-hot);
 }
 /* Lift the lit tile over its neighbours so its glow is not swallowed. */
@@ -422,7 +422,7 @@
   background: var(--float-bg);
   -webkit-backdrop-filter: var(--float-blur);
   backdrop-filter: var(--float-blur);
-  border: 1px solid var(--float-line);
+  border: 1px solid transparent;
   border-radius: 6px;
   box-shadow: var(--float-shadow);
 }
@@ -503,7 +503,7 @@
   font: 600 10px/16px var(--mono);
   color: var(--text-dim);
   background: rgba(0, 0, 0, 0.3);
-  border: 1px solid var(--float-line);
+  border: 1px solid transparent;
   border-radius: 4px;
 }
 
@@ -533,7 +533,7 @@
   overflow-y: auto;
   padding: var(--s-3);
   background: var(--float-bg-solid);
-  border: 1px solid var(--float-line);
+  border: 1px solid transparent;
   border-radius: var(--float-radius);
   box-shadow: var(--float-shadow);
   animation: pop-in var(--t-fast) var(--ease);
@@ -565,20 +565,16 @@
   padding: 0;
   border-radius: 50%;
   border: 2px solid transparent;
-  background-color: var(--float-line);
+  background-color: var(--float-chip-bg);
   background-size: cover;
   cursor: pointer;
-  &:hover {
-    border-color: var(--float-line);
-  }
-  &.active {
-    border-color: var(--accent);
-  }
+}
+.matcap-swatch.active {
+  border-color: var(--accent);
 }
 .pop-rule {
   height: 1px;
   margin: 10px 0;
-  background: var(--float-line);
 }
 .pop-note {
   margin: 0 var(--s-1);
@@ -597,7 +593,6 @@
 }
 .pop-wide.ghost {
   background: none;
-  border-color: var(--float-line);
 }
 .pop-key {
   margin-left: auto;
@@ -725,7 +720,7 @@
 
 .float-tab:focus-visible {
   border-radius: var(--float-chip-radius);
-  box-shadow: inset 0 0 0 2px var(--accent-glow);
+  outline-offset: -2px;
 }
 .float-tabs {
   display: flex;
@@ -764,7 +759,6 @@
   height: 2px;
   border-radius: var(--r-pill);
   background: var(--accent);
-  box-shadow: 0 0 8px var(--accent-glow);
 }
 
 .float-popover.versions-pop {
@@ -786,7 +780,7 @@
   font-size: 12px;
   color: var(--text);
   background: rgba(255, 255, 255, 0.06);
-  border: 1px solid var(--float-line);
+  border: 1px solid transparent;
   border-radius: var(--float-chip-radius);
 }
 .versions-branch-name {
@@ -809,12 +803,13 @@
   font-size: 12.5px;
   color: var(--text);
   background: rgba(0, 0, 0, 0.3);
-  border: 1px solid var(--float-line);
+  border: 1px solid transparent;
   border-radius: var(--float-chip-radius);
   outline: none;
 }
 .versions-input:focus {
-  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+  outline: 1px solid var(--accent);
+  outline-offset: 0;
 }
 .versions-save .pop-wide {
   width: auto;
@@ -863,7 +858,6 @@
 .versions-row.head .versions-dot {
   border-color: var(--accent);
   background: var(--accent);
-  box-shadow: 0 0 8px var(--accent-glow);
 }
 .versions-text {
   display: flex;
@@ -922,7 +916,7 @@
   background: var(--float-bg);
   -webkit-backdrop-filter: var(--float-blur);
   backdrop-filter: var(--float-blur);
-  border: 1px solid var(--float-line);
+  border: 1px solid transparent;
   border-radius: var(--float-radius);
   box-shadow: var(--float-shadow);
 }
