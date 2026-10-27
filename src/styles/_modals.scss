@@ -238,10 +238,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.select-trigger:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
 .select-trigger.open {
   background-color: color-mix(in srgb, var(--accent) 14%, var(--field-bg));
 }
