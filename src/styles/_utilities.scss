@@ -2,15 +2,6 @@
   display: none !important;
 }
 
-button.finish {
-  background: rgba(74, 208, 125, 0.16);
-  color: #c5f6da;
-  font-weight: 600;
-}
-button.finish:hover {
-  background: rgba(74, 208, 125, 0.26);
-}
-
 .prompt {
   position: absolute;
   top: var(--s-5);

@@ -141,12 +141,12 @@ Accent (also what selected edges, dimensions and manipulator handles are drawn i
 
 | Token | Noir | Use |
 |---|---|---|
-| `--accent` | `#51d6a8` | Primary button fill, the focus outline, the tab underline, the `.rd-tab` bar, a checked checkbox, switch on |
-| `--accent-hot` | `#7ee7c2` | Text and icons of an active, selected or hovered row; primary hover |
-| `--accent-tint` | `rgba(81, 214, 168, 0.14)` | Light selected fill (`.prefs-nav-btn.active`) |
-| `--accent-tint-2` | `rgba(81, 214, 168, 0.24)` | Stronger selected fill (`.seg-btn.active`, `.rd-chip.active`, `.pref-seg .on`) |
+| `--accent` | `#9a9ff0` | Primary button fill, the focus outline, the tab underline, the `.rd-tab` bar, a checked checkbox, switch on |
+| `--accent-hot` | `#bcc0f7` | Text and icons of an active, selected or hovered row; primary hover |
+| `--accent-tint` | `rgba(154, 159, 240, 0.14)` | Light selected fill (`.prefs-nav-btn.active`) |
+| `--accent-tint-2` | `rgba(154, 159, 240, 0.24)` | Stronger selected fill (`.seg-btn.active`, `.rd-chip.active`, `.pref-seg .on`) |
 | `--accent-wash` | `color-mix(in srgb, var(--accent) 20%, transparent)` | The on state of a tile, laid over the tile fill as a gradient layer (`.rail-btn.active .rail-tile`, `.icon-btn.active`) |
-| `--on-accent` | `#00140d` | Text on an accent fill |
+| `--on-accent` | `#0c0d26` | Text on an accent fill |
 | `--accent-blue` | `var(--accent)` | Legacy alias kept for old plugins and palettes (`theme.ts` writes it with the accent). Never read it in new code |
 
 Fills of depth ([3](#3-surfaces-and-elevation) puts them to use):
@@ -1108,7 +1108,7 @@ Focus:
   replacement.
 
 Contrast (Noir): `--text` on `--panel` 15.35:1, `--text-dim` 7.03:1, `--accent`
-9.57:1, `--accent-hot` 11.70:1, `--on-accent` on `--accent` 10.43:1, `--error`
+7.13:1, `--accent-hot` 9.97:1, `--on-accent` on `--accent` 7.80:1, `--error`
 5.76:1. `--text-mute` is 4.00:1 on `--panel` and 3.06:1 on `--raised`: hints and
 metadata only. `--line-strong` is decorative. On the light theme every text
 token reaches 4.5:1 ([10](#10-light-and-dark-themes)).
@@ -1270,7 +1270,7 @@ Run all of it. Paste the screenshots into the review.
    `--glass-inset`, `--glass-rim` and `--accent-glow` are defined as
    transparent in `_tokens.scss`, and no component or partial reads them.
 7. **The accent is calm.** `--float-blur` saturates only lightly (`saturate(1.0x)`) and
-   `--accent` is `#51d6a8`.
+   `--accent` is `#9a9ff0`, a periwinkle.
 8. **The light theme reads.** On Solarized Light every text token reaches
    4.5:1 on the card, solid card, tile, chip and field, `--on-accent` on
    `--accent` clears 4.5:1, and a card clears its viewport at above 1.15:1.

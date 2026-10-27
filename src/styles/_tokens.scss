@@ -23,15 +23,15 @@
   --text-mute: #7d7590;
 
   /* Also draws selected edges, dimensions and manipulator handles. */
-  --accent: #51d6a8;
-  --accent-hot: #7ee7c2;
-  --accent-tint: rgba(81, 214, 168, 0.14);
-  --accent-tint-2: rgba(81, 214, 168, 0.24);
+  --accent: #9a9ff0;
+  --accent-hot: #bcc0f7;
+  --accent-tint: rgba(154, 159, 240, 0.14);
+  --accent-tint-2: rgba(154, 159, 240, 0.24);
   /* Retired, nothing glows. Kept transparent so plugin stylesheets that still read it draw nothing. */
-  --accent-glow: rgba(81, 214, 168, 0);
-  --on-accent: #00140d;
+  --accent-glow: rgba(154, 159, 240, 0);
+  --on-accent: #0c0d26;
 
-  /* --ok is a step deeper than the accent so an ok badge and a selection differ. */
+  /* --ok stays green: it means done or fine, apart from the periwinkle accent. */
   --ok: #17c99a;
   --warn: #ffab2e;
   --error: #ff5c5c;

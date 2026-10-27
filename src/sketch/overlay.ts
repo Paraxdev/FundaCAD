@@ -46,7 +46,7 @@ export const CURVE_COLOR = 0x5b9bff; // under-constrained blue
 export const PREVIEW_COLOR = 0xffffff;
 /** A selected sketch entity: the accent, made to read on the scene ground (viewport/pickColors.ts). */
 export function sketchSelectColor(): number {
-  return pickColor(themeColor("--accent", 0x51d6a8), themeColor("--viewport-bg", 0x0b0912), "select", "edge");
+  return pickColor(themeColor("--accent", 0x9a9ff0), themeColor("--viewport-bg", 0x0b0912), "select", "edge");
 }
 export const DIM_COLOR = 0x8fa4bd; // muted blue-gray for dimension annotations
 const FILL_COLOR = 0x3a7bd5;

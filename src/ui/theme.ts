@@ -77,7 +77,7 @@ function noirTint(
 }
 
 /** A couple of well-known palettes, plus dark Noir variants that keep the
- *  built-in theme's shell but swap its mint-green accent for another hue. */
+ *  built-in theme's shell but swap its periwinkle accent for another hue. */
 const SHIPPED_THEMES: ShippedTheme[] = [
   {
     id: "dracula",
@@ -159,17 +159,17 @@ const SHIPPED_THEMES: ShippedTheme[] = [
       "--text": "#f5f7fa",
       "--text-dim": "#b5c0cc",
       "--text-mute": "#7e8b99",
-      "--accent": "#8f7fe8",
-      "--accent-hot": "#ab9cf2",
-      "--accent-tint": "rgba(143, 127, 232, 0.14)",
-      "--accent-tint-2": "rgba(143, 127, 232, 0.24)",
+      "--accent": "#9b6cff",
+      "--accent-hot": "#b89aff",
+      "--accent-tint": "rgba(155, 108, 255, 0.14)",
+      "--accent-tint-2": "rgba(155, 108, 255, 0.24)",
       "--on-accent": "#0d0a1f",
       "--ok": "#2ec4b6",
       "--warn": "#f4c542",
       "--error": "#ff5c5c",
       "--error-tint": "rgba(255, 92, 92, 0.16)",
       "--pick-line": "#ff8fc8",
-      "--accent-blue": "#8f7fe8",
+      "--accent-blue": "#9b6cff",
     },
   },
   noirTint("noir-blue", "Noir Blue", {

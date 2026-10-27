@@ -149,7 +149,7 @@ function facesAt(idx: VertexIndex, p: EdgePt): Set<number> {
   return out;
 }
 
-const DEFAULT_ACCENT = 0x51d6a8;
+const DEFAULT_ACCENT = 0x9a9ff0;
 const DEFAULT_BODY = 0x9aa7b4;
 
 const accent = () => themeColor("--accent", DEFAULT_ACCENT);

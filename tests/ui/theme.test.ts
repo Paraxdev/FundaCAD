@@ -13,6 +13,8 @@ import {
   themes,
   type ShippedTheme,
 } from "../../src/ui/theme";
+import { oklch } from "../../src/viewport/pickColors";
+import tokensScss from "../../src/styles/_tokens.scss?raw";
 
 // The module is a singleton with mutable state (the uploaded-theme library and
 // the active id), so every test that adds a palette clears it again, and the
@@ -118,6 +120,18 @@ describe("the theme roster", () => {
     const status = new Set([palette["--ok"], palette["--warn"], palette["--error"]]);
 
     expect(status.size).toBe(3);
+  });
+
+  it("gives the colour-blind safe theme an accent that reads apart from Noir's own", () => {
+    const hex = (c: string) => parseInt(c.slice(1), 16);
+    const lab = (c: string) => {
+      const [L, C, h] = oklch(hex(c));
+      return [L, C * Math.cos((h * Math.PI) / 180), C * Math.sin((h * Math.PI) / 180)];
+    };
+    const noir = lab(/--accent:\s*(#[0-9a-f]{6})/.exec(tokensScss)?.[1] ?? "");
+    const safe = lab((themes().find((t) => t.id === "colorblind-safe") as ShippedTheme).palette["--accent"] ?? "");
+
+    expect(Math.hypot(...noir.map((v, i) => v - (safe[i] ?? NaN)))).toBeGreaterThan(0.12);
   });
 
   it("cannot remove a shipped theme", () => {
