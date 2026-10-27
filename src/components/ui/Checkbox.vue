@@ -17,20 +17,21 @@ const emit = defineEmits<{ "update:modelValue": [boolean] }>();
 const d = useDisabled(props);
 const tipText = computed(() => (props.tip && props.keys ? `${props.tip} (${fmtKeys(props.keys)})` : props.tip));
 
+const next = () => (props.indeterminate ? true : !props.modelValue);
+
 // The box is controlled: the native toggle is put back until the parent hands the new value down.
 function onChange(e: Event) {
   const el = e.target as HTMLInputElement;
-  const next = el.checked;
   el.checked = props.modelValue;
   el.indeterminate = !!props.indeterminate;
-  if (!d.isDisabled.value) emit("update:modelValue", next);
+  if (!d.isDisabled.value) emit("update:modelValue", next());
 }
 
 // Space is handled here and its native toggle refused, so every engine flips once on keydown.
 function onKeydown(e: KeyboardEvent) {
   if (e.key !== " ") return;
   e.preventDefault();
-  if (!e.repeat && !d.isDisabled.value) emit("update:modelValue", props.indeterminate ? true : !props.modelValue);
+  if (!e.repeat && !d.isDisabled.value) emit("update:modelValue", next());
 }
 function onKeyup(e: KeyboardEvent) {
   if (e.key === " ") e.preventDefault();

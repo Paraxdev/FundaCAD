@@ -71,6 +71,13 @@ describe("Checkbox", () => {
     expect(emitted(w)).toEqual([[true]]);
   });
 
+  it("turns on from indeterminate for a click as for Space, whatever the value under it", async () => {
+    const w = await render({ modelValue: true, label: "All", indeterminate: true }, { follow: false });
+    await w.find("input").trigger("click");
+    press(input(w), " ");
+    expect([emitted(w), input(w).checked, input(w).indeterminate]).toEqual([[[true], [true]], true, true]);
+  });
+
   it("names a box with no label from its tip", async () => {
     const w = await render({ modelValue: false, tip: "Select all" });
     expect([input(w).getAttribute("aria-label"), w.attributes("title")]).toEqual(["Select all", "Select all"]);
