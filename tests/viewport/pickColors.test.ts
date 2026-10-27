@@ -11,7 +11,8 @@ import {
 
 const ACCENTS = {
   light: 0xece6ff,
-  lavender: 0x8f7fe8,
+  periwinkle: 0x9a9ff0,
+  violet: 0x9b6cff,
   mid: 0x51d6a8,
   dark: 0x140a2a,
   navy: 0x25669b,
@@ -73,7 +74,7 @@ describe("the pick colour rule", () => {
   });
 
   it("keeps the accent's hue", () => {
-    for (const accent of [ACCENTS.lavender, ACCENTS.mid, ACCENTS.navy, 0xff4d6d, 0xff8a3d]) {
+    for (const accent of [ACCENTS.periwinkle, ACCENTS.violet, ACCENTS.mid, ACCENTS.navy, 0xff4d6d, 0xff8a3d]) {
       for (const body of Object.values(BODIES)) {
         const h = oklch(pickColor(accent, body, "select", "face"))[2];
         const d = Math.abs(((h - oklch(accent)[2] + 540) % 360) - 180);
