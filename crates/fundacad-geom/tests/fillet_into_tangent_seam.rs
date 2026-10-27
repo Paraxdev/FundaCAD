@@ -137,7 +137,35 @@ fn smooth_build(base: &Shape, r: &Rebuild, size: f64) -> Result<(), String> {
     if !ops::is_valid(s) {
         return Err("built an invalid solid".into());
     }
+    meshes_to_its_area(s).map_err(|why| format!("built but torn: {why}"))?;
     ball_rests(base, s, size).map_err(|why| format!("built but not smooth: {why}"))
+}
+
+/// Each face's mesh covers its exact area, within half a square mm and 2 percent, so no face is torn, folded or
+/// left as a flap the resting ball never reaches.
+fn meshes_to_its_area(s: &Shape) -> Result<(), String> {
+    let faces = kernel::subshapes(s, Kind::Face);
+    let view = mesh::body_payload(s, "check", "check", 0.01, viewport_profile(1));
+    let at = |i: u32| DVec3::from_array([0, 1, 2].map(|c| view.positions[3 * i as usize + c] as f64));
+    let mut meshed = vec![0.0f64; faces.len()];
+    for (t, &f) in view.face_ids.iter().enumerate() {
+        let [a, b, c] = [0, 1, 2].map(|k| at(view.indices[3 * t + k]));
+        meshed[f as usize] += 0.5 * (b - a).cross(c - a).length();
+    }
+    let off: Vec<String> = faces
+        .iter()
+        .zip(&meshed)
+        .enumerate()
+        .filter_map(|(i, (f, &m))| {
+            let exact = kernel::face_area_centre(f).map_or(0.0, |a| a[0]);
+            ((m - exact).abs() > 0.5 + 0.02 * exact).then(|| format!("face {i} meshes to {m:.3} of {exact:.3} mm2"))
+        })
+        .collect();
+    if off.is_empty() {
+        Ok(())
+    } else {
+        Err(off.join(", "))
+    }
 }
 
 /// Built smooth, or refused with no claim it did not test and a size that does build smooth.
@@ -187,7 +215,8 @@ fn a_corner_round_whose_end_narrows_to_a_point_builds_smooth() {
     check(&[("G2", 5.0, 1.0, true), ("G2", 8.0, 3.0, true), ("G2", 8.0, 5.0, true)]);
 }
 
-/// The reported round on 8 mm G3 top rounds, which have room for it.
+/// The reported round on 8 mm G3 top rounds, which have room for it. The kernel built this same body before the
+/// seam gauge existed, its only area error on a cap of no area, so this guards the gauge against refusing it.
 #[test]
 fn the_reported_corner_round_on_g3_top_rounds_builds_smooth() {
     check(&[("G3", 8.0, 3.85, true)]);
