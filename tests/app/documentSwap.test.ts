@@ -59,7 +59,7 @@ function harness(browser?: { forgetDocumentFolders(): void }) {
       endDocument: () => calls.push("endDocument"),
     },
     browser: browser ?? { forgetDocumentFolders: () => calls.push("forgetDocumentFolders") },
-    selectFeature: () => {},
+    selectFeature: (id: string | null) => calls.push(`selectFeature:${id}`),
   });
   store.onBuild((s) => {
     if (!s.building) calls.push(`build:${s.result ? "old" : "none"}`);
@@ -86,6 +86,7 @@ describe("New and Open clear the view at once", () => {
         "endDocument",
       ]);
       expect(calls).not.toContain("build:old");
+      expect(calls.filter((c) => c.startsWith("selectFeature"))).toEqual(["selectFeature:null"]);
       // The second document's session owns the next swap, and it runs once.
       calls.length = 0;
       store.newDocument();

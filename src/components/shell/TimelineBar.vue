@@ -3,7 +3,7 @@ import { fmtKeys } from "../../input/platform";
 import { computed, nextTick, onMounted, onUnmounted, ref, useTemplateRef, watch } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { useDocValue, useBuildValue } from "../../app/useDoc";
-import { useSelectionStore } from "../../stores/selection";
+import { pickedFeatureCount, useSelectionStore } from "../../stores/selection";
 import { useTimelineStore } from "../../stores/timeline";
 import { useShellStore } from "../../stores/shell";
 import { featureMeta, stepName } from "../../ui/featureMeta";
@@ -96,7 +96,7 @@ const shownIds = computed(() =>
 );
 const picked = computed(() => new Set(selection.rows.keys));
 // Values show under the one chip the inspector follows, several picked chips have no single set of values.
-const several = computed(() => selection.rows.keys.length > 1);
+const several = computed(() => pickedFeatureCount(selection.rows, features.value) > 1);
 const isPicked = (id: string) => picked.value.has(id) || selection.featureId === id;
 
 const unit = ref(getUnit());
@@ -279,7 +279,7 @@ function finishRename(e: Event, save: boolean) {
   if (save) store.renameFeature(id, (e.target as HTMLInputElement).value);
 }
 function onRenameKey(e: KeyboardEvent) {
-  if (e.key !== "F2" || renamingId.value || !selection.featureId) return;
+  if (e.key !== "F2" || renamingId.value || !selection.featureId || several.value) return;
   const t = e.target as HTMLElement | null;
   if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
   if (!features.value.some((f) => f.id === selection.featureId)) return;

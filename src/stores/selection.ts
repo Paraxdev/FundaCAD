@@ -14,3 +14,12 @@ export const useSelectionStore = defineStore("selection", () => {
   const rows = shallowRef<RowSelection<string>>(EMPTY_SELECTION);
   return { featureId, featureExplicit, rows };
 });
+
+/** Origin plane rows are picked as "o:XY", they are not features. */
+export const isOriginKey = (k: string) => k.startsWith("o:");
+
+/** How many features the picked rows hold: origin planes and ids the document lost since do not count. */
+export function pickedFeatureCount(rows: RowSelection<string>, features: readonly { id: string }[]): number {
+  const have = new Set(features.map((f) => f.id));
+  return rows.keys.filter((k) => !isOriginKey(k) && have.has(k)).length;
+}

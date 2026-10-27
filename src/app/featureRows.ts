@@ -1,12 +1,9 @@
 // Picking several History or Items rows, and acting on them: the one place the three lists share.
 
 import type { DocumentStore } from "../document/store";
-import { useSelectionStore } from "../stores/selection";
+import { isOriginKey, pickedFeatureCount, useSelectionStore } from "../stores/selection";
 import { actOn, modsOf, selectRow } from "../ui/rowSelection";
 import type { Engine } from "./engine";
-
-/** Origin plane rows are picked as "o:XY", they are not features. */
-const isOriginKey = (k: string) => k.startsWith("o:");
 
 /** Click, Ctrl-click or Shift-click a row. `order` is the rows of that list as drawn, so a run never crosses into
  *  another list or a hidden row. The inspector follows the row just added, a Ctrl-click removing it hands that to the
@@ -54,6 +51,6 @@ export function deleteRows(e: Pick<Engine, "store" | "selectFeature">, ids: read
 }
 
 /** The selected feature for a tool that needs exactly one: none while several rows are picked. */
-export function soleSelectedFeature(e: Pick<Engine, "selectedFeature">): string | null {
-  return useSelectionStore().rows.keys.length > 1 ? null : e.selectedFeature;
+export function soleSelectedFeature(e: Pick<Engine, "selectedFeature" | "store">): string | null {
+  return pickedFeatureCount(useSelectionStore().rows, e.store.document.features) > 1 ? null : e.selectedFeature;
 }

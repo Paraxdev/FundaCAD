@@ -67,7 +67,8 @@ export function createSelection(
     const sel = useSelectionStore();
     sel.featureId = id;
     sel.featureExplicit = explicit;
-    sel.rows = id === null ? EMPTY_SELECTION : { keys: [id], anchor: id };
+    // An engine made pick is not a row the user chose, so a Ctrl-click beside it must not pick it too.
+    sel.rows = id === null || !explicit ? EMPTY_SELECTION : { keys: [id], anchor: id };
     e.viewport.highlightDatum(id);
   };
 
