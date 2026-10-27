@@ -1,9 +1,6 @@
-// Refuses raw buttons, inputs, selects and the like outside src/components/ui, past the counts in
-// scripts/ui-controls-allow.json. The scan is scripts/uiControls.mjs, which tests/ui/uiControls.test.ts runs too.
-//
-//   node scripts/check-ui-controls.mjs                  check
-//   node scripts/check-ui-controls.mjs --lower          lower the allowlist to what is found, then check
-//   node scripts/check-ui-controls.mjs --legacy-classes also refuse the old class names (on from wave 4)
+// Refuses raw controls outside src/components/ui past the counts in scripts/ui-controls-allow.json.
+//   --lower           lowers the allowlist to what is found, never raises it, then checks
+//   --legacy-classes  also refuses the old class names (on from wave 4)
 
 import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
