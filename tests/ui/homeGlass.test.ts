@@ -1,7 +1,8 @@
 import postcss, { type Rule } from "postcss";
-import * as sass from "sass";
 import { describe, expect, it } from "vitest";
 import { themes, type ShippedTheme } from "../../src/ui/theme";
+
+import { compileMainScss } from "./compileStyles";
 
 // Raw text through Vite, so the test needs no node types. Vitest would hand back
 // processed css for a plain .scss import, which is why the query is spelled out.
@@ -23,18 +24,7 @@ const scss = new Map(
 );
 const homeSrc = scss.get("home") ?? "";
 
-const compiled = sass.compileString(scss.get("main") ?? "", {
-  url: new URL("file:///styles/main.scss"),
-  importers: [
-    {
-      canonicalize: (url) => new URL(url, "file:///styles/"),
-      load: (canonical) => {
-        const contents = scss.get(canonical.pathname.split("/").pop()!);
-        return contents === undefined ? null : { contents, syntax: "scss" };
-      },
-    },
-  ],
-}).css;
+const compiled = compileMainScss();
 const css = postcss.parse(compiled);
 
 // The declarations a selector gets from the rules naming it exactly, later rules
