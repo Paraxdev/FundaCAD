@@ -33,7 +33,9 @@ const fill = computed(() => {
   const span = props.max - props.min;
   return span > 0 ? `${((Math.min(Math.max(shown.value, props.min), props.max) - props.min) / span) * 100}%` : "0%";
 });
-const readout = computed(() => (props.unit ? `${shown.value} ${props.unit}` : String(shown.value)));
+const readout = computed(() =>
+  !props.unit ? String(shown.value) : props.unit === "%" ? `${shown.value}%` : `${shown.value} ${props.unit}`,
+);
 
 const decimals = computed(() => (String(props.step).split(".")[1] ?? "").length);
 function snap(v: number) {

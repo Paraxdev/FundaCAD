@@ -111,6 +111,11 @@ describe("Slider", () => {
     expect([updates(w), commits(w), range(w).value]).toEqual([[], [], "4"]);
   });
 
+  it("writes a percent readout without the space a unit gets", async () => {
+    const w = await render({ modelValue: 40, showValue: true, unit: "%" });
+    expect(w.find(".ui-slider-value").text()).toBe("40%");
+  });
+
   it("renders the value slot in place of the readout", async () => {
     const w = mount(Slider, {
       props: { modelValue: 0.25, max: 1, step: 0.05 },
