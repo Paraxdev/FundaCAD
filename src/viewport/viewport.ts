@@ -143,20 +143,8 @@ import { clickTakes, DwellIntent, type SelectPolicy } from "./clickIntent";
 import { getHoverDwellMs, getNavPrefs } from "../ui/interactionPrefs";
 import { edgesOnFace, faceEdgeTol, faceSurface, type Tri } from "./faceEdges";
 import { remapSelection, remapStreamedSelection, shouldAnnounce } from "./selectionMemo";
-import {
-  arcSweep,
-  cylinderFromFace,
-  FULL_SWEEP,
-  isPlanarFace,
-  onRoundFace,
-  radialAt,
-  roundStand,
-  solidInsideCylinder,
-  sphereCentreFromFace,
-  unit,
-  type Cylinder,
-} from "../features/planeMath";
-import { facetNormalAt, type RoundFace } from "../features/radialDrag";
+import { radialAt, type Cylinder } from "../features/planeMath";
+import type { RoundFace } from "../features/radialDrag";
 import type { Plane3, PlaneDef, RebuildResult, Selector, Vec3 } from "../types";
 import { dragStep } from "./dragStep";
 import { faceSketchPlane } from "../sketch/sketchView";
@@ -172,12 +160,25 @@ import {
   dragBox,
   isAreaDrag,
   areaSelectionMode,
+  AreaPreviewGate,
   nextAreaFilter,
   type AreaFilter,
   type AreaMode,
   type ScreenRect,
 } from "./areaSelect";
 import { collectInBox, projectForArea, type AreaProjection } from "./areaProjection";
+import { scheduleAreaIndex } from "./areaIndex";
+import {
+  faceCentroidOf,
+  faceNormalOf,
+  faceTrianglesOf,
+  planeOfFace,
+  PressPullMemo,
+  roundFitOf,
+  roundFrom,
+  type PressPullFaces,
+  type RoundFit,
+} from "./faceAnalysis";
 import { isEditableTarget } from "../ui/focus";
 import { hitScale } from "../input/pointerKind";
 import { setEmissionProgress } from "../ui/emissionProgress";
@@ -1360,13 +1361,21 @@ export class Viewport {
    *  dropped by anything that changes what is on screen. */
   private areaProj: AreaProjection | null = null;
 
+  private areaPreview = new AreaPreviewGate();
+  private pressPull = new PressPullMemo();
+
   private dropAreaProjection() {
     this.areaProj = null;
+    this.areaPreview.reset();
   }
 
   private projectForArea(): AreaProjection {
-    if (!this.model) return { bodies: [], edges: [] };
-    return projectForArea(this.model, this.rig.active, this.canvas.getBoundingClientRect(), this.seeThrough);
+    return projectForArea(
+      this.model ?? { bodies: [], edges: [] },
+      this.rig.active,
+      this.canvas.getBoundingClientRect(),
+      this.seeThrough,
+    );
   }
 
   /** Shared by the drag and by Tab, so the two never disagree about the box on screen. */
@@ -1500,6 +1509,7 @@ export class Viewport {
     const kind = areaSelectionMode(this.areaFilter, this.selectionMode);
     // On release only: switching to bodies raises the move gizmo mid-drag otherwise.
     if (announce && kind !== this.selectionMode) this.setSelectionMode(kind);
+    if (!this.areaPreview.paint(kind, this.areaFilter, got, announce)) return;
     // Both kinds are cleared every frame, Tab can change the filter mid drag.
     h.clearSelection();
     h.clearBodySelection();
@@ -2350,63 +2360,9 @@ export class Viewport {
   /** A by:"nearest" selector per face plus the first face's normal and anchor. `round` marks a lone cylindrical
    *  face (a drag resizes), `lead` the first of several that run smoothly into it and resize as one. On a round
    *  face the anchor is on the surface and the normal is the outward one there. */
-  selectedFacesForPressPull(): {
-    selectors: Selector[];
-    faceIds: number[];
-    normal: THREE.Vector3;
-    anchor: THREE.Vector3;
-    bodyId: string | null;
-    round: RoundFace | null;
-    lead: RoundFace | null;
-  } | null {
+  selectedFacesForPressPull(): PressPullFaces | null {
     if (!this.highlighter || !this.model) return null;
-    const faces = this.highlighter.getSelectedFaces();
-    if (faces.length === 0) return null;
-    const selectors: Selector[] = faces.map((fid) => {
-      const c = this.faceCentroidWorld(fid);
-      return { kind: "face", by: "nearest", point: [c.x, c.y, c.z] };
-    });
-    const first = faces[0];
-    if (first === undefined) return null;
-    let anchor = this.faceCentroidWorld(first);
-    let normal = this.faceNormalWorld(first);
-    let round: RoundFace | null = null;
-    const fit = this.roundFit(first);
-    const stand =
-      fit && roundStand(fit.cylinder, fit.points, fit.full, this.faceClickOn(fit), [anchor.x, anchor.y, anchor.z]);
-    if (fit && stand) {
-      anchor = new THREE.Vector3(...stand.point);
-      round = this.roundFrom(fit, stand.radial);
-      normal = round.radial.clone().multiplyScalar(round.solidInside ? 1 : -1);
-    } else {
-      const tris = this.faceTriangles(first);
-      const normals = tris.map((t) => t.getNormal(new THREE.Vector3()).toArray() as Vec3);
-      // A sphere, cone or torus: the normal where the handle stands, as the tool uses, never the average,
-      // which on a closed face points along its axis or nowhere.
-      const curved = !isPlanarFace(normals);
-      // A sphere resizes about its centre, so its handle points out from there
-      // on a dimple too, where the face's own normal points in.
-      const centre = curved
-        ? sphereCentreFromFace(
-            tris.flatMap((t) => [t.a.toArray(), t.b.toArray(), t.c.toArray()] as Vec3[]),
-            normals,
-          )
-        : null;
-      const out = centre && unit([anchor.x - centre[0], anchor.y - centre[1], anchor.z - centre[2]]);
-      const at = out ? new THREE.Vector3(...out) : curved ? facetNormalAt(tris, anchor) : null;
-      if (at) normal = at;
-    }
-    return {
-      selectors,
-      faceIds: [...faces],
-      normal,
-      anchor,
-      bodyId: this.faceIdToBodyId(first),
-      // A multi-face press/pull shares a single distance along a single normal;
-      // a diameter is a property of one face and has no meaning spread across several.
-      round: faces.length === 1 ? round : null,
-      lead: faces.length > 1 ? round : null,
-    };
+    return this.pressPull.get(this.model, this.highlighter.getSelectedFaces(), this.faceClick);
   }
 
   /** The cylinder a face lies on, or null. Not from faceNormalWorld: a closed
@@ -2422,41 +2378,12 @@ export class Viewport {
     return this.roundFit(faceId)?.cylinder ?? null;
   }
 
-  private roundFit(faceId: number): { cylinder: Cylinder; solidInside: boolean; points: Vec3[]; full: boolean } | null {
-    const tris = this.faceTriangles(faceId);
-    if (tris.length < 3) return null;
-    const points: Vec3[] = [];
-    const normals: Vec3[] = [];
-    const n = new THREE.Vector3();
-    for (const t of tris) {
-      points.push([t.a.x, t.a.y, t.a.z], [t.b.x, t.b.y, t.b.z], [t.c.x, t.c.y, t.c.z]);
-      t.getNormal(n);
-      normals.push([n.x, n.y, n.z]);
-    }
-    const cylinder = cylinderFromFace(points, normals);
-    if (!cylinder) return null;
-    const solidInside = solidInsideCylinder(cylinder, points, normals);
-    if (solidInside === null) return null;
-    return { cylinder, solidInside, points, full: arcSweep(cylinder, points) > FULL_SWEEP };
+  private roundFit(faceId: number): RoundFit | null {
+    return roundFitOf(this.model, faceId);
   }
 
   private roundFrom(fit: { cylinder: Cylinder; solidInside: boolean; full: boolean }, radial: Vec3): RoundFace {
-    return {
-      cylinder: fit.cylinder,
-      radius: fit.cylinder.radius,
-      solidInside: fit.solidInside,
-      radial: new THREE.Vector3(radial[0], radial[1], radial[2]),
-      full: fit.full,
-      tangent: null,
-    };
-  }
-
-  /** Where the face selected by the last plain click was hit, when that point
-   *  lies on this round face. */
-  private faceClickOn(fit: { cylinder: Cylinder; points: Vec3[] }): Vec3 | null {
-    const at = this.faceClick;
-    if (!at) return null;
-    return onRoundFace(fit.cylinder, fit.points, at, Math.max(0.05 * fit.cylinder.radius, 1e-3)) ? at : null;
+    return roundFrom(fit, radial);
   }
 
   /** So "click a face, press S" skips the plane picker. Null for none or a curved face. The winding already
@@ -2469,18 +2396,12 @@ export class Viewport {
     if (!this.highlighter || !this.model) return null;
     const faceId = this.highlighter.getSelectedFaces()[0];
     if (faceId === undefined) return null;
-    const n = this.faceNormalWorld(faceId);
-    const c = this.faceCentroidWorld(faceId);
-    const tris = this.faceTriangles(faceId);
-    if (tris.length === 0) return null;
     // Every vertex on the plane through the centroid, with a model scaled tolerance as selectCoplanarFaces uses.
     const tol = 1e-3 * (this.model.box.getSize(new THREE.Vector3()).length() || 1) + 1e-4;
-    const d0 = n.dot(c);
-    for (const t of tris) {
-      for (const v of [t.a, t.b, t.c]) {
-        if (Math.abs(n.dot(v) - d0) > tol) return null;
-      }
-    }
+    const flat = planeOfFace(this.model, faceId, tol);
+    if (!flat) return null;
+    const n = flat.normal;
+    const c = flat.origin;
     return {
       plane: faceSketchPlane([n.x, n.y, n.z], [c.x, c.y, c.z]),
       faceId,
@@ -2501,18 +2422,8 @@ export class Viewport {
   /** The plane of a face, or null when the face is curved. */
   planarFace(faceId: number): { normal: THREE.Vector3; origin: THREE.Vector3 } | null {
     if (!this.model) return null;
-    const tris = this.faceTriangles(faceId);
-    if (tris.length === 0) return null;
-    const n = this.faceNormalWorld(faceId);
-    const c = this.faceCentroidWorld(faceId);
     const tol = 1e-3 * (this.model.box.getSize(new THREE.Vector3()).length() || 1) + 1e-4;
-    const d0 = n.dot(c);
-    for (const t of tris) {
-      for (const v of [t.a, t.b, t.c]) {
-        if (Math.abs(n.dot(v) - d0) > tol) return null;
-      }
-    }
-    return { normal: n, origin: c };
+    return planeOfFace(this.model, faceId, tol);
   }
 
   /** The flat face nearest `point` whose plane passes through it. Unlike
@@ -2690,6 +2601,7 @@ export class Viewport {
         if (b.mesh.visible !== vis) {
           b.mesh.visible = vis;
           b.edges.setBodyVisible(vis);
+          if (vis) scheduleAreaIndex(b);
           anyChanged = true;
         }
       }
@@ -3118,22 +3030,7 @@ export class Viewport {
 
   /** The Measure tool's raw material for a true shortest distance. */
   faceTriangles(faceId: number): THREE.Triangle[] {
-    const out: THREE.Triangle[] = [];
-    const body = this.model && bodyOfFace(this.model, faceId);
-    const tris = body?.faceTriangles.get(faceId);
-    if (!body || !tris) return out;
-    const pos = body.mesh.geometry.getAttribute("position");
-    const index = body.mesh.geometry.getIndex()!;
-    const mw = body.mesh.matrixWorld;
-    for (const t of tris) {
-      const tri = new THREE.Triangle(
-        new THREE.Vector3().fromBufferAttribute(pos, index.getX(t * 3)).applyMatrix4(mw),
-        new THREE.Vector3().fromBufferAttribute(pos, index.getX(t * 3 + 1)).applyMatrix4(mw),
-        new THREE.Vector3().fromBufferAttribute(pos, index.getX(t * 3 + 2)).applyMatrix4(mw),
-      );
-      out.push(tri);
-    }
-    return out;
+    return faceTrianglesOf(this.model, faceId);
   }
 
   /** Measure's aiming feedback. */
@@ -3686,39 +3583,7 @@ export class Viewport {
   /** A point on a face: the vertex mean snapped to the nearest triangle centroid. The
    *  mean alone lands on a cylinder's axis, where by:"nearest" finds the inner wall. */
   private faceCentroidWorld(faceId: number): THREE.Vector3 {
-    const acc = new THREE.Vector3();
-    const body = this.model && bodyOfFace(this.model, faceId);
-    const tris = body?.faceTriangles.get(faceId);
-    if (!body || !tris) return acc;
-    const pos = body.mesh.geometry.getAttribute("position");
-    const index = body.mesh.geometry.getIndex()!;
-    const tmp = new THREE.Vector3();
-    const seen = new Set<number>();
-    for (const t of tris) {
-      for (let k = 0; k < 3; k++) {
-        const vi = index.getX(t * 3 + k);
-        if (seen.has(vi)) continue;
-        seen.add(vi);
-        acc.add(tmp.fromBufferAttribute(pos, vi));
-      }
-    }
-    if (seen.size) acc.divideScalar(seen.size);
-
-    const cent = new THREE.Vector3();
-    const best = new THREE.Vector3();
-    let bestD = Infinity;
-    for (const t of tris) {
-      cent.set(0, 0, 0);
-      for (let k = 0; k < 3; k++) cent.add(tmp.fromBufferAttribute(pos, index.getX(t * 3 + k)));
-      cent.divideScalar(3);
-      const d = cent.distanceToSquared(acc);
-      if (d < bestD) {
-        bestD = d;
-        best.copy(cent);
-      }
-    }
-    if (bestD < Infinity) acc.copy(best);
-    return acc.applyMatrix4(body.mesh.matrixWorld);
+    return faceCentroidOf(this.model, faceId);
   }
 
   /** The geometric middle a person means by centre, seeding the Hole tool. faceCentroidWorld snaps to one
@@ -3745,28 +3610,7 @@ export class Viewport {
 
   /** Exact for a planar face, a representative outward direction for a curved one. */
   private faceNormalWorld(faceId: number): THREE.Vector3 {
-    const acc = new THREE.Vector3();
-    const body = this.model && bodyOfFace(this.model, faceId);
-    const tris = body?.faceTriangles.get(faceId);
-    if (!body || !tris) {
-      acc.set(0, 0, 1);
-      return acc;
-    }
-    const pos = body.mesh.geometry.getAttribute("position");
-    const index = body.mesh.geometry.getIndex()!;
-    const a = new THREE.Vector3();
-    const b = new THREE.Vector3();
-    const c = new THREE.Vector3();
-    const n = new THREE.Vector3();
-    for (const t of tris) {
-      a.fromBufferAttribute(pos, index.getX(t * 3));
-      b.fromBufferAttribute(pos, index.getX(t * 3 + 1));
-      c.fromBufferAttribute(pos, index.getX(t * 3 + 2));
-      n.copy(b.sub(a).cross(c.sub(a))); // length = 2× triangle area → area-weighted
-      acc.add(n);
-    }
-    if (acc.lengthSq() < 1e-12) acc.set(0, 0, 1);
-    return acc.normalize().transformDirection(body.mesh.matrixWorld).normalize();
+    return faceNormalOf(this.model, faceId);
   }
 
   private sharedRaycaster = new THREE.Raycaster();

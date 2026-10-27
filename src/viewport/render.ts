@@ -5,6 +5,7 @@ import * as THREE from "three";
 import type { RebuildResult } from "../types";
 import { disposeObject } from "./dispose";
 import { scheduleRaycastIndex } from "./raycastIndex";
+import { forgetAreaIndex, scheduleAreaIndex } from "./areaIndex";
 import { BodyEdges, EDGE_IDLE_COLOR, EDGE_IDLE_WIDTH, type EdgeRef } from "./edgeLines";
 import { type BodyFinish, FINISH } from "../document/materials";
 import { meanThickness, setGlassAuto } from "./glassThickness";
@@ -334,6 +335,7 @@ export function buildBodyMesh(
   };
   // Maps a raycast hit's object back to its BodyMesh, see faceIdOfHit().
   mesh.userData.owner = body;
+  scheduleAreaIndex(body);
   return body;
 }
 
@@ -603,6 +605,7 @@ export function applyFinishFields(
 }
 
 function disposeBody(body: BodyMesh) {
+  forgetAreaIndex(body);
   disposeObject(body.mesh);
   body.edges.dispose();
 }
