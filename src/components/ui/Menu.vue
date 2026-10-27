@@ -230,12 +230,12 @@ let releaseTree = () => {};
 
 onMounted(async () => {
   if (parent && el.value) releaseTree = parent.addTreeEl(el.value);
+  window.addEventListener("keydown", onEsc, true);
   await nextTick();
   place();
   placed.value = true;
   await nextTick();
   if (props.focus === "first") roving.focus(roving.stop.value);
-  window.addEventListener("keydown", onEsc, true);
   window.addEventListener("resize", place);
   if (!parent) document.addEventListener("pointerdown", onDown, true);
 });

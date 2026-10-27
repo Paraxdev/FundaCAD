@@ -68,6 +68,7 @@ const releaseEscape = claimEscape();
 const layer = escapeLayer();
 const back = focusReturn(() => props.anchor);
 onMounted(async () => {
+  window.addEventListener("keydown", onKey, true);
   await nextTick();
   place();
   if (props.focus === "first" && el.value) (focusables(el.value)[0] ?? el.value).focus();
@@ -75,7 +76,6 @@ onMounted(async () => {
   if (el.value) ro.observe(el.value);
   window.addEventListener("resize", place);
   document.addEventListener("pointerdown", onDown, true);
-  window.addEventListener("keydown", onKey, true);
 });
 onBeforeUnmount(() => {
   if (props.returnFocus) back.restore((n) => !!el.value?.contains(n));

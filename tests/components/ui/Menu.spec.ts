@@ -196,6 +196,17 @@ describe("Menu", () => {
     expect(menu!.querySelectorAll(".ui-menu-check").length).toBe(5);
   });
 
+  it("hears Escape as soon as it is mounted", async () => {
+    const closes = vi.fn();
+    mount(Menu, {
+      attachTo: document.body,
+      props: { onClose: closes },
+      slots: { default: () => h(MenuItem, { label: "Only" }) },
+    });
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    expect(closes).toHaveBeenCalledTimes(1);
+  });
+
   it("opens at a point when given at", async () => {
     const open = ref(true);
     mount(

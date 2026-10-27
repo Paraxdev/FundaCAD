@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { enableAutoUnmount, mount } from "@vue/test-utils";
 import { defineComponent, h, nextTick, ref } from "vue";
 
@@ -102,6 +102,17 @@ describe("Popover", () => {
     esc();
     await nextTick();
     expect(open.value).toBe(false);
+  });
+
+  it("hears Escape as soon as it is mounted", async () => {
+    const closes = vi.fn();
+    mount(Popover, {
+      attachTo: document.body,
+      props: { anchor: null, onClose: closes },
+      slots: { default: () => h("p", "Hi") },
+    });
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    expect(closes).toHaveBeenCalledTimes(1);
   });
 
   it("a press inside a menu opened from it does not close it", async () => {
