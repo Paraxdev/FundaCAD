@@ -110,7 +110,21 @@ function typeAhead(ch: string) {
 
 const typed = (e: KeyboardEvent) => e.key.length === 1 && !e.altKey && (e.key !== " " || buffer !== "");
 
+// Firefox clicks a button on the Space keyup, which would reopen a list that Space just picked from.
+let swallowSpaceUp = false;
+
 function onKeydown(e: KeyboardEvent) {
+  handleKey(e);
+  if (e.key === " ") swallowSpaceUp = e.defaultPrevented;
+}
+
+function onKeyup(e: KeyboardEvent) {
+  if (e.key !== " " || !swallowSpaceUp) return;
+  swallowSpaceUp = false;
+  e.preventDefault();
+}
+
+function handleKey(e: KeyboardEvent) {
   if (d.isDisabled.value || e.ctrlKey || e.metaKey || e.defaultPrevented) return;
   const k = e.key;
   if (!open.value) {
@@ -182,6 +196,7 @@ onBeforeUnmount(() => window.clearTimeout(bufferTimer));
     :aria-activedescendant="open && active >= 0 ? `${listId}-${active}` : undefined"
     @click="toggle"
     @keydown="onKeydown"
+    @keyup="onKeyup"
   >
     <span class="select-value">{{ shown }}</span>
   </button>

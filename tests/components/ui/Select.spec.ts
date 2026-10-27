@@ -110,6 +110,22 @@ describe("Select", () => {
     expect([picked(w), listbox()]).toEqual([[], null]);
   });
 
+  it("swallows the keyup of a Space it used, so an engine that clicks on keyup does not reopen the list", async () => {
+    const { el } = await render();
+    const send = (type: string, k: string) => {
+      const e = new KeyboardEvent(type, { key: k, cancelable: true, bubbles: true });
+      el.dispatchEvent(e);
+      return e.defaultPrevented;
+    };
+    send("keydown", " ");
+    const opening = send("keyup", " ");
+    send("keydown", "ArrowDown");
+    await flushPromises();
+    send("keydown", " ");
+    await flushPromises();
+    expect([opening, send("keyup", " "), listbox()]).toEqual([false, true, null]);
+  });
+
   it("closes on Escape without picking, claims that Escape, and returns focus to the trigger", async () => {
     const { w, trigger, el } = await render();
     await key(trigger, "ArrowDown");
