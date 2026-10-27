@@ -69,6 +69,12 @@ def found_by(target: str, hit: dict) -> str:
     return where
 
 
+def waited_on(e: Exception) -> str:
+    """The last check Playwright's click was stuck on, from its call log: not stable, not enabled, or not visible."""
+    steps = [ln.strip(" -") for ln in str(e).split("Call log:", 1)[-1].splitlines() if "element is" in ln]
+    return f", Playwright waited on: {steps[-1]}" if steps else ""
+
+
 def action(fn: Callable) -> Callable:
     @functools.wraps(fn)
     def run(self, *args, settle: bool = True, **kwargs):
@@ -149,7 +155,7 @@ class Actions:
                 raise
             if loc.evaluate(ON_TOP):
                 raise Occluded(f'{hit["ref"]} "{hit["label"]}" did not take the click in 5 s, nothing is over it,'
-                               " the page was busy, settle() and try again") from None
+                               f" the page was busy, settle() and try again{waited_on(e)}") from None
             raise Occluded(f'{hit["ref"]} "{hit["label"]}" did not take the click, something is over it') from None
         return hit
 

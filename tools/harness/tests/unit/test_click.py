@@ -125,3 +125,13 @@ def test_expand_asks_the_page_for_a_folder_and_click_for_any_control():
         s.close()
     assert asked == [{"target": "Robot", "folder": True}, {"target": "Robot"}]
     assert carets == [".tree-caret"]
+
+
+def test_a_stuck_click_names_the_check_playwright_waited_on():
+    from fundacad_harness.actions import waited_on
+
+    log = ("Locator.click: Timeout 5000ms exceeded.\nCall log:\n  - waiting for locator('[data-harness-target=\"m\"]')\n"
+           "  - attempting click action\n    2 x waiting for element to be visible, enabled and stable\n"
+           "      - element is visible and enabled\n      - element is not stable\n  - retrying click action\n")
+    assert waited_on(Exception(log)) == ", Playwright waited on: element is not stable"
+    assert waited_on(Exception("Timeout 5000ms exceeded.")) == ""
