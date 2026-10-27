@@ -231,7 +231,7 @@ describe("StressPanel", () => {
     const p = usePanelsStore();
     p.showStress("b1");
     await flushPromises();
-    expect(tab("results").disabled).toBe(true);
+    expect(tab("results").getAttribute("aria-disabled")).toBe("true");
     expect(tab("results").title).not.toBe("");
     tab("results").click();
     await flushPromises();
@@ -239,7 +239,7 @@ describe("StressPanel", () => {
     p.stressStarted();
     p.stressFinished({ result: view() });
     await flushPromises();
-    expect(tab("results").disabled).toBe(false);
+    expect(tab("results").getAttribute("aria-disabled")).toBeNull();
     expect(tab("results").getAttribute("aria-selected")).toBe("true");
     expect(q(".stress-set-support")).toBeNull();
     expect(q(".stress-run")).toBeNull();

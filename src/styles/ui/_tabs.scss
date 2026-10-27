@@ -1,1 +1,147 @@
 // Tabs: underline, bar and nav looks.
+
+.ui-tabs {
+  display: flex;
+}
+.ui-tabs-vertical {
+  flex-direction: column;
+}
+.ui-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  border: 0;
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
+}
+.ui-tab:focus-visible {
+  corner-shape: squircle;
+  border-radius: var(--float-chip-radius);
+  outline-offset: -2px;
+}
+.ui-tab.is-selected::after {
+  content: "";
+  position: absolute;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+}
+
+// A card's tabs: text with an accent underline.
+.ui-tabs-underline {
+  gap: var(--s-4);
+  margin: 0 var(--s-1) var(--s-2);
+}
+.ui-tabs-underline .ui-tab {
+  padding: var(--s-1) var(--s-2) 6px;
+  margin: 0 calc(-1 * var(--s-2));
+  border-radius: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.ui-tabs-underline .ui-tab:hover,
+.ui-tabs-underline .ui-tab.is-selected {
+  background: none;
+  color: var(--text);
+}
+.ui-tabs-underline .ui-tab:active {
+  color: var(--text-dim);
+}
+.ui-tabs-underline .ui-tab.is-selected::after {
+  left: 25%;
+  right: 25%;
+  bottom: 0;
+  height: 2px;
+}
+.ui-tabs-underline.ui-tabs-vertical .ui-tab.is-selected::after {
+  inset: 25% auto 25% 0;
+  width: 2px;
+  height: auto;
+}
+
+// A dock's tab bar: quiet chips, the selected one in accent with a bar under it.
+.ui-tabs-bar {
+  gap: 2px;
+}
+.ui-tabs-bar .ui-tab {
+  height: 32px;
+  padding: 0 var(--s-3);
+  corner-shape: squircle;
+  border-radius: var(--float-chip-radius);
+  color: var(--text-mute);
+  font-size: 11.5px;
+  font-weight: 500;
+}
+.ui-tabs-bar .ui-tab:hover {
+  background: var(--hover-wash);
+  color: var(--text-dim);
+}
+.ui-tabs-bar .ui-tab:active {
+  background: linear-gradient(var(--hover-wash), var(--hover-wash)), var(--hover-wash);
+}
+.ui-tabs-bar .ui-tab.is-selected {
+  color: var(--accent-hot);
+}
+.ui-tabs-bar .ui-tab.is-selected::after {
+  left: var(--s-3);
+  right: var(--s-3);
+  bottom: 2px;
+  height: 2px;
+}
+.ui-tabs-bar.ui-tabs-vertical .ui-tab.is-selected::after {
+  inset: var(--s-2) auto var(--s-2) 2px;
+  width: 2px;
+  height: auto;
+}
+
+// A settings page list: full width rows, the current page filled with the accent wash.
+.ui-tabs-nav {
+  gap: 2px;
+}
+.ui-tabs-nav .ui-tab {
+  justify-content: flex-start;
+  min-height: 32px;
+  padding: var(--s-2) var(--s-3);
+  corner-shape: squircle;
+  border-radius: var(--float-chip-radius);
+  font-size: 13px;
+  text-align: left;
+}
+.ui-tabs-nav.ui-tabs-vertical .ui-tab {
+  width: 100%;
+}
+.ui-tabs-nav .ui-tab:hover {
+  background: var(--hover-wash);
+  color: var(--text);
+}
+.ui-tabs-nav .ui-tab:active {
+  background: linear-gradient(var(--hover-wash), var(--hover-wash)), var(--hover-wash);
+}
+.ui-tabs-nav .ui-tab.is-selected {
+  background: var(--accent-wash);
+  color: var(--accent-hot);
+  font-weight: 600;
+}
+.ui-tabs-nav .ui-tab.is-selected::after {
+  content: none;
+}
+
+.ui-tab.is-disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.ui-tabs .ui-tab.is-disabled:hover,
+.ui-tabs .ui-tab.is-disabled:active {
+  background: none;
+  color: var(--text-dim);
+}
+.ui-tabs-bar .ui-tab.is-disabled:hover,
+.ui-tabs-bar .ui-tab.is-disabled:active {
+  color: var(--text-mute);
+}
