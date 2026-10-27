@@ -2,35 +2,70 @@
 //! pieces with a degenerated edge whose one vertex, 6.35 mm wide, stands in for both ends.
 
 use fundacad_core::CadDocument;
-use fundacad_geom::builder::{self, NoWatch};
+use fundacad_geom::builder::{self, NoWatch, Rebuild};
+use fundacad_geom::features::blend::ops;
 use fundacad_geom::kernel::{self, Kind};
 use fundacad_geom::mesh::{self, viewport_profile};
+use fundacad_geom::select::entity::edges_of;
 use opencascade::primitives::Shape;
-use serde_json::json;
+use serde_json::{json, Value};
 
-fn g2_then_corner() -> Shape {
+const MITRE: [f64; 3] = [15.68, -21.21, 9.92];
+
+fn rebuild(corner: Option<f64>) -> Rebuild {
     let (w, d, h) = (35.392, 46.453, 10.782);
-    let doc = json!({
-        "parameters": {},
-        "features": [
-            {"id": "f1", "type": "sketch", "plane": "XY", "entities": [
-                {"type": "rectangle", "id": "e0", "width": w, "height": d, "x": 0, "y": 0}]},
-            {"id": "f2", "type": "extrude", "sketch": "f1", "distance": h,
-             "operation": "new", "regions": [[0, 0, 0]]},
-            {"id": "f3", "type": "fillet", "radius": 4.7, "continuity": "G2", "edges": [
-                {"kind": "edge", "by": "nearest", "point": [-w / 2.0, 0, h], "body": "body1"},
-                {"kind": "edge", "by": "nearest", "point": [0, d / 2.0, h], "body": "body1"},
-                {"kind": "edge", "by": "nearest", "point": [w / 2.0, 0, h], "body": "body1"},
-                {"kind": "edge", "by": "nearest", "point": [0, -d / 2.0, h], "body": "body1"}]},
-            {"id": "f4", "type": "fillet", "radius": 4.5, "edges":
-                {"kind": "edge", "by": "nearest", "point": [15.68, -21.21, 9.92], "body": "body1"}}
-        ],
-        "bodyIds": {"f2:0": "body1"}
-    });
+    let mut features = vec![
+        json!({"id": "f1", "type": "sketch", "plane": "XY", "entities": [
+            {"type": "rectangle", "id": "e0", "width": w, "height": d, "x": 0, "y": 0}]}),
+        json!({"id": "f2", "type": "extrude", "sketch": "f1", "distance": h, "operation": "new", "regions": [[0, 0, 0]]}),
+        json!({"id": "f3", "type": "fillet", "radius": 4.7, "continuity": "G2", "edges": [
+            {"kind": "edge", "by": "nearest", "point": [-w / 2.0, 0, h], "body": "body1"},
+            {"kind": "edge", "by": "nearest", "point": [0, d / 2.0, h], "body": "body1"},
+            {"kind": "edge", "by": "nearest", "point": [w / 2.0, 0, h], "body": "body1"},
+            {"kind": "edge", "by": "nearest", "point": [0, -d / 2.0, h], "body": "body1"}]}),
+    ];
+    if let Some(r) = corner {
+        features.push(json!({"id": "f4", "type": "fillet", "radius": r, "edges":
+            {"kind": "edge", "by": "nearest", "point": MITRE, "body": "body1"}}));
+    }
+    let doc: Value = json!({"parameters": {}, "features": features, "bodyIds": {"f2:0": "body1"}});
     let typed: CadDocument = serde_json::from_value(doc.clone()).expect("document parses");
-    let r = builder::rebuild(&typed, &doc, &NoWatch).expect("not cancelled");
+    builder::rebuild(&typed, &doc, &NoWatch).expect("not cancelled")
+}
+
+/// The mitre rounded at 4.5 mm by the kernel itself, which the fillet feature refuses as rippled.
+fn g2_then_corner() -> Shape {
+    let r = rebuild(None);
     assert!(r.errors.is_empty(), "{:?}", r.errors.iter().map(|e| &e.message).collect::<Vec<_>>());
-    r.bodies[0].shape.clone()
+    let base = r.bodies[0].shape.clone();
+    let mitre = edges_of(&base)
+        .unwrap()
+        .into_iter()
+        .min_by(|a, b| {
+            let d = |e: &Shape| kernel::distance_to_point(e, MITRE).unwrap_or(f64::INFINITY);
+            d(&a.shape).total_cmp(&d(&b.shape))
+        })
+        .expect("the mitre")
+        .shape;
+    let (out, built) = ops::fillet(&base, &[mitre], &[4.5]).expect("the kernel runs");
+    assert!(matches!(built, ops::Built::Done), "{built:?}");
+    out
+}
+
+/// A G2 round of 4.7 mm curves tighter than a 4.5 mm ball near its middle (1.37 / 4.7 per mm), so no rolling ball
+/// round of that size rests on it.
+#[test]
+fn a_round_up_the_mitre_larger_than_the_g2_curve_is_refused_with_a_size_that_builds() {
+    let refused = rebuild(Some(4.5));
+    let message = refused.errors.iter().map(|e| e.message.clone()).collect::<Vec<_>>().join(" | ");
+    let fits = message
+        .strip_suffix("mm, so try that size.")
+        .and_then(|head| head.rsplit(' ').next())
+        .and_then(|v| v.parse::<f64>().ok())
+        .unwrap_or_else(|| panic!("refused with a size: {message}"));
+    assert!(message.starts_with("Fillet failed on Body1: at 4.5mm the fillet comes out rippled"), "{message}");
+    let built = rebuild(Some(fits));
+    assert!(built.errors.is_empty(), "{fits}: {:?}", built.errors.iter().map(|e| &e.message).collect::<Vec<_>>());
 }
 
 #[test]
