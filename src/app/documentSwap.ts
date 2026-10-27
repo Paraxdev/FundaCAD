@@ -17,6 +17,8 @@ export interface DocumentSwapTarget {
     endDocument(): void;
   };
   browser: { forgetDocumentFolders(): void };
+  /** Feature ids of the old document, which the next one may reuse for other things. */
+  selectFeature(id: null): void;
 }
 
 /** New and Open take the old document off screen while its session ends, in the same call that replaces it, not
@@ -35,6 +37,7 @@ export function wireDocumentSwap(store: Pick<DocumentStore, "sessions">, e: Docu
     // Last, the handlers above may still read the old model.
     e.viewport.endDocument();
     e.browser.forgetDocumentFolders();
+    e.selectFeature(null);
     // The workspace belongs to the sitting with a document, so the next one starts in Model like the first did.
     setWorkspace("model");
   };

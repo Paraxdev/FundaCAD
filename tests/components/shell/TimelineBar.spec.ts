@@ -15,7 +15,12 @@ import { DimInput } from "../../../src/sketch/dimInput";
 import { useTimelineStore } from "../../../src/stores/timeline";
 import { useSelectionStore } from "../../../src/stores/selection";
 import type { Engine } from "../../../src/app/engine";
+import { contextMenu, type CtxItem } from "../../../src/ui/menu";
 
+vi.mock("../../../src/ui/menu", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../src/ui/menu")>()),
+  contextMenu: vi.fn(),
+}));
 vi.mock("../../../src/composables/useSelectionOffers", () => ({
   useSelectionOffers: () => ({ counts: ref({}) }),
 }));
@@ -144,6 +149,8 @@ function mountBar(o: Opts = {}) {
       },
       onEditPreview: () => () => {},
       isSuppressed: (id: string) => !!o.suppressed?.includes(id),
+      setSuppressed: (ids: string[], on: boolean) => log.push(`suppress:${on}:${ids.join(",")}`),
+      removeFeatures: (ids: string[]) => log.push(`remove:${ids.join(",")}`),
       rollbackIndex: 6,
       buildState: { result: null, building: false, errorFeatureId: null },
       cancelRunningOp: (key: number) => {
@@ -168,7 +175,7 @@ function mountBar(o: Opts = {}) {
   const chip = (id: string) => w.get(`.timeline-node[data-id="${id}"]`);
   const dbl = (id: string) => chip(id).trigger("dblclick");
   const tool = (n: string) => tools[n] as Tool;
-  return { log, status, chip, dbl, tool, w };
+  return { log, status, chip, dbl, tool, w, e };
 }
 
 /** A heads-up box with `text` typed into its one field, as a tool shows it. */
@@ -360,5 +367,70 @@ describe("History's rows for running ops", () => {
       rows: m.w.findAll(".timeline-node.running").length,
       empty: m.w.find(".timeline-empty").exists(),
     }).toEqual({ rows: 0, empty: true });
+  });
+});
+
+describe("History rows picked together", () => {
+  const ids = ["sk", "ex1", "rv", "jt", "mc", "dp"];
+  const lit = (m: ReturnType<typeof mountBar>) => ids.map((id) => m.chip(id).classes("selected"));
+  const menu = async (m: ReturnType<typeof mountBar>, id: string) => {
+    await m.chip(id).trigger("contextmenu");
+    return vi.mocked(contextMenu).mock.calls.at(-1)![2] as CtxItem[];
+  };
+
+  it("a plain click picks one, Ctrl toggles, Shift takes a run", async () => {
+    const m = mountBar();
+    await m.chip("ex1").trigger("click");
+    await m.chip("jt").trigger("click", { ctrlKey: true });
+    expect(lit(m)).toEqual([false, true, false, true, false, false]);
+    await m.chip("ex1").trigger("click", { metaKey: true });
+    expect(lit(m)).toEqual([false, false, false, true, false, false]);
+    await m.chip("rv").trigger("click");
+    await m.chip("dp").trigger("click", { shiftKey: true });
+    expect(lit(m)).toEqual([false, false, true, true, true, true]);
+    await m.chip("sk").trigger("click");
+    expect(lit(m)).toEqual([true, false, false, false, false, false]);
+  });
+
+  it("shows the values under one picked chip only", async () => {
+    const m = mountBar();
+    await m.chip("ex1").trigger("click");
+    expect(m.w.findAll(".timeline-props")).toHaveLength(1);
+    await m.chip("rv").trigger("click", { shiftKey: true });
+    expect(m.w.findAll(".timeline-props")).toHaveLength(0);
+  });
+
+  it("suppresses and deletes the whole selection, and greys the single-feature items with a reason", async () => {
+    const m = mountBar();
+    await m.chip("ex1").trigger("click");
+    await m.chip("jt").trigger("click", { shiftKey: true });
+    const items = await menu(m, "rv");
+    expect(items.filter((i) => i.disabled).map((i) => i.label)).toEqual([
+      "Edit (select one feature)",
+      "Rename (select one feature)",
+      "Roll back before this (select one feature)",
+    ]);
+    items.find((i) => i.label === "Suppress these 3")!.onClick!();
+    items.find((i) => i.label === "Delete these 3")!.onClick!();
+    expect(m.log).toEqual(["suppress:true:ex1,rv,jt", "remove:ex1,rv,jt"]);
+    expect(useSelectionStore().rows.keys).toEqual([]);
+  });
+
+  it("a right-click outside the selection menus that feature alone", async () => {
+    const m = mountBar();
+    await m.chip("ex1").trigger("click");
+    await m.chip("jt").trigger("click", { ctrlKey: true });
+    const items = await menu(m, "mc");
+    expect(items.some((i) => i.label === "Edit" && !i.disabled)).toBe(true);
+  });
+
+  it("lights every picked step's datum in the view", async () => {
+    const m = mountBar();
+    const lit2: unknown[] = [];
+    (m.e as unknown as { viewport: { highlightDatum: (x: unknown) => void } }).viewport.highlightDatum = (x) =>
+      lit2.push(x);
+    await m.chip("dp").trigger("click");
+    await m.chip("ex1").trigger("click", { ctrlKey: true });
+    expect(lit2).toEqual(["dp", ["dp", "ex1"]]);
   });
 });

@@ -5,11 +5,13 @@
 // only on a feature the user explicitly picked.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { createPinia, setActivePinia } from "pinia";
 import { installKeyboard } from "../../src/app/keyboard";
 import type { Engine } from "../../src/app/engine";
 
 function fakeEngine(opts: { selectedFeature: string | null; explicit: boolean }) {
   const removeFeature = vi.fn();
+  const removeFeatures = vi.fn();
   const selectFeature = vi.fn();
   const e = {
     sketch: { active: false },
@@ -28,9 +30,9 @@ function fakeEngine(opts: { selectedFeature: string | null; explicit: boolean })
     selectedFeature: opts.selectedFeature,
     selectedFeatureExplicit: opts.explicit,
     selectFeature,
-    store: { removeFeature },
+    store: { removeFeature, removeFeatures, document: { features: [{ id: "f1" }] } },
   } as unknown as Engine;
-  return { e, removeFeature, selectFeature };
+  return { e, removeFeature: removeFeatures, selectFeature };
 }
 
 function pressDelete() {
@@ -39,6 +41,7 @@ function pressDelete() {
 
 describe("Delete key", () => {
   beforeEach(() => {
+    setActivePinia(createPinia());
     document.body.innerHTML = "";
   });
 
@@ -54,8 +57,18 @@ describe("Delete key", () => {
     const { e, removeFeature, selectFeature } = fakeEngine({ selectedFeature: "f1", explicit: true });
     installKeyboard(e);
     pressDelete();
-    expect(removeFeature).toHaveBeenCalledWith("f1");
+    expect(removeFeature).toHaveBeenCalledWith(["f1"]);
     expect(selectFeature).toHaveBeenCalledWith(null);
+  });
+
+  it("removes every picked row in one call", async () => {
+    const { e, removeFeature } = fakeEngine({ selectedFeature: "f2", explicit: true });
+    (e.store.document.features as { id: string }[]).push({ id: "f2" }, { id: "f3" });
+    const { useSelectionStore } = await import("../../src/stores/selection");
+    useSelectionStore().rows = { keys: ["f3", "f2"], anchor: "f2" };
+    installKeyboard(e);
+    pressDelete();
+    expect(removeFeature).toHaveBeenCalledWith(["f2", "f3"]);
   });
 
   it("does nothing when nothing is selected", () => {

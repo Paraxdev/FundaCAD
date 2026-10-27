@@ -59,6 +59,7 @@ function harness(browser?: { forgetDocumentFolders(): void }) {
       endDocument: () => calls.push("endDocument"),
     },
     browser: browser ?? { forgetDocumentFolders: () => calls.push("forgetDocumentFolders") },
+    selectFeature: () => {},
   });
   store.onBuild((s) => {
     if (!s.building) calls.push(`build:${s.result ? "old" : "none"}`);
