@@ -27,6 +27,8 @@ fn nearest(p: [f64; 3]) -> Value {
 
 #[test]
 fn a_study_run_again_after_the_cache_kept_only_its_first_feature_answers_the_same() {
+    // A slow machine checkpoints to disk, and a later run would start from that blob instead of the RAM snapshot.
+    std::env::set_var("FUNDACAD_DISK_CACHE", "0");
     let doc = json!({"features": [
         {"id": "p", "type": "box", "length": 120, "width": 40, "height": 10},
         {"id": "h", "type": "cylinder", "radius": 6, "height": 30},
