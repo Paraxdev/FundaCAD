@@ -410,7 +410,9 @@ export class EdgeFeatureTool {
         if (!s.previewBuilt) return;
         this.awaitingRollback = false;
         this.seedGhosts(rollbackSels);
-        this.opened = this.buildFeature();
+        // As stored, so a G2 or G3 the picked edges cannot take is dropped by pushPreview below, said after the
+        // phase prompt and written on commit.
+        this.opened = this.featureNow();
         this.enterEditUI();
         this.refreshGhost();
         this.pushPreview();
@@ -1215,6 +1217,10 @@ export class EdgeFeatureTool {
 
   private buildFeature(): Feature {
     this.refreshContinuityReach();
+    return this.featureNow();
+  }
+
+  private featureNow(): Feature {
     const v = this.size();
     const sels = this.currentSelectors();
     const edges = sels.length === 1 && sels[0] ? sels[0] : sels;

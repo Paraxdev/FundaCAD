@@ -104,6 +104,10 @@ function setupEdit(fillet: Record<string, unknown>, curvature: [number, number])
     },
     isParamBound: () => false,
     bareParamRef: () => null,
+    commitFeatureEdit: (id: string, f: unknown) => {
+      added.push([id, f]);
+      return null;
+    },
   });
   const tool = new EdgeFeatureTool(vp, store);
   expect(tool.startEdit("f1", () => {})).toBe(true);
@@ -215,6 +219,16 @@ describe("fillet continuity control", () => {
       t = setupEdit({ radius: 50, sizeType: "chord" }, [1e-8, 5e-8]);
       expect(segment("G2").classList.contains("disabled")).toBe(true);
       expect(segment("G3").classList.contains("disabled")).toBe(true);
+    });
+
+    it("opening a stored G2 its edge refuses says why, and Enter saves it as G1", () => {
+      t.tool.cancel();
+      document.body.innerHTML = "";
+      t = setupEdit({ radius: 2, continuity: "G2" }, [1 / 15, 1 / 15]);
+      expect(chosen()).toEqual(["G1"]);
+      expect(usePromptStore().text).toMatch(/^G2 needs both faces flat across the edge.*so the fillet is G1 now$/);
+      enter();
+      expect(t.added).toEqual([["f1", { id: "f1", type: "fillet", edges: EDGE, radius: 2 }]]);
     });
 
     it("a radius that makes the curve count drops a chosen G3 back to G1", () => {
