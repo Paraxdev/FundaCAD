@@ -798,10 +798,7 @@ export class SketchMode {
     this.viewport.hoverEntity(null); // drop any Project-tool 3D hover highlight
     this.modifyFlow.reset();
     this.mirrorFlow.reset();
-    this.overlay.setPreview([]);
-    this.overlay.setSnap(null);
     this.snapTag.hide();
-    this.overlay.setHandleDot(null);
     this.snapWorld = null;
     this.removeGrid();
     this.viewport.exitSketchView();
@@ -830,10 +827,9 @@ export class SketchMode {
     this.dimFlow.resetDimPicks();
     this.constraintTools.resetPending();
     this.tool = "select";
-    this.overlay.setActiveSketch([]); // clear in-progress curves (else they orphan on screen)
-    this.overlay.setActiveRegions([], this.plane); // drop active-sketch fills (committed ones re-render)
+    // Last, as the resets above may redraw; the guides, curves and fills a session drew otherwise outlive it.
+    this.overlay.clearTransient();
     this.looseNow = null;
-    this.overlay.setLooseEnds(this.plane, null);
     if (this.store) this.overlay.update(this.store.document);
     this.onState?.();
   }

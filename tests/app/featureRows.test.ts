@@ -130,7 +130,7 @@ describe("a second document", () => {
       cancelTools: () => {},
       sketch: { active: false, cancel: () => {} },
       dropBodyGizmo: () => {},
-      overlay: { clearRegionSelection: () => {} },
+      overlay: { clearRegionSelection: () => {}, clearTransient: () => {} },
       forgetLastCommit: () => {},
       viewport: { clearSelection: () => {}, setSelectedBodies: () => {}, endDocument: () => {} },
       browser: { forgetDocumentFolders: () => {} },

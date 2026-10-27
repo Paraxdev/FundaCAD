@@ -11,6 +11,8 @@ import type { EngineTools } from "../../src/app/engine";
 import { createPinia, setActivePinia } from "pinia";
 import { useBrowserStore } from "../../src/stores/browser";
 import { setWorkspace, workspace } from "../../src/ui/workspace";
+import { SketchOverlay } from "../../src/sketch/overlay";
+import * as THREE from "three";
 
 const RESULT: RebuildResult = {
   mesh: { positions: [0, 0, 0], indices: [0], faceIds: [0] },
@@ -51,7 +53,10 @@ function harness(browser?: { forgetDocumentFolders(): void }) {
     cancelTools: () => calls.push("cancelTools"),
     sketch,
     dropBodyGizmo: () => calls.push("dropBodyGizmo"),
-    overlay: { clearRegionSelection: () => calls.push("clearRegionSelection") },
+    overlay: {
+      clearRegionSelection: () => calls.push("clearRegionSelection"),
+      clearTransient: () => calls.push("clearTransient"),
+    },
     forgetLastCommit: () => calls.push("forgetLastCommit"),
     viewport: {
       clearSelection: () => calls.push("clearSelection"),
@@ -75,13 +80,14 @@ describe("New and Open clear the view at once", () => {
       calls.length = 0;
       if (how === "New") store.newDocument();
       else store.load(JSON.stringify({ parameters: {}, features: [] }));
-      expect(calls.slice(0, 8)).toEqual([
+      expect(calls.slice(0, 9)).toEqual([
         "cancelTools",
         "sketch.cancel",
         "dropBodyGizmo",
         "clearSelection",
         "setSelectedBodies",
         "clearRegionSelection",
+        "clearTransient",
         "forgetLastCommit",
         "endDocument",
       ]);
@@ -289,4 +295,37 @@ describe("New and Open start the next document in Model", () => {
     expect(workspace()).toBe("render");
     setWorkspace("model");
   });
+});
+
+// A pair of alignment guides a sketch left behind stayed over the grid through discards and other documents.
+describe("New and Open clear what an ended sketch left in the overlay", () => {
+  for (const how of ["New", "Open"] as const) {
+    it(`drops a leftover guide on ${how} with no sketch open`, () => {
+      const store = new DocumentStore(slowEngine(), DOC);
+      const overlay = new SketchOverlay();
+      const cancel = vi.fn();
+      wireDocumentSwap(store, {
+        cancelTools: () => {},
+        sketch: { active: false, cancel },
+        dropBodyGizmo: () => {},
+        overlay,
+        forgetLastCommit: () => {},
+        viewport: { clearSelection: () => {}, setSelectedBodies: () => {}, endDocument: () => {} },
+        browser: { forgetDocumentFolders: () => {} },
+        selectFeature: () => {},
+      });
+      overlay.setGuides([[new THREE.Vector2(0, 0), new THREE.Vector2(5, 0)]], overlay.planeFor("XY"));
+      const lines = () => {
+        let n = 0;
+        overlay.group.traverse((o) => {
+          if (o instanceof THREE.Line) n++;
+        });
+        return n;
+      };
+      expect(lines()).toBe(1);
+      if (how === "New") store.newDocument();
+      else store.load(JSON.stringify({ parameters: {}, features: [] }));
+      expect([lines(), cancel.mock.calls.length]).toEqual([0, 0]);
+    });
+  }
 });

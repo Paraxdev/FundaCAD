@@ -533,6 +533,20 @@ export class SketchOverlay {
     }
   }
 
+  /** Everything a sketch session draws. The overlay outlives every session and document, so whatever is left here
+   *  stays on screen until the next session redraws it. Committed sketches and the region selection are kept. */
+  clearTransient() {
+    this.clearGroup(this.previewGroup);
+    this.clearGroup(this.guideGroup);
+    this.clearGroup(this.activeSketch);
+    this.clearGroup(this.activeFills);
+    this.activeRegions = [];
+    this.clearGroup(this.looseEndsGroup);
+    this.looseEndCounts = { open: 0, untied: 0 };
+    this.setSnap(null);
+    this.setHandleDot(null);
+  }
+
   setSnap(world: THREE.Vector3 | null, _kind: SnapKind = "free", camera?: THREE.Camera) {
     if (!world) {
       this.snapMarker.visible = false;
