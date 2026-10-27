@@ -174,6 +174,13 @@ export class FaceOffsetTool {
         this.faceIds.push(hit.faceId);
         const wasRound = this.round !== null;
         if (this.round && !this.inTangentRun()) this.dropRound();
+        // The handle moves to the face just picked; a round run keeps its lead face, which it reads a size from.
+        if (!this.round) {
+          this.anchor.copy(hit.anchor);
+          this.faceNormal.copy(hit.normal).normalize();
+          this.axis.copy(this.faceNormal);
+          if (this.mode === "shell") this.axis.negate();
+        }
         if (wasRound !== (this.round !== null)) this.showBox();
         else this.syncToggle();
         this.refreshPreview(true);

@@ -314,7 +314,7 @@ export class PressPullTool {
         const curved = this.curve !== null;
         this.faces.push(hit.selector);
         this.faceIds.push(hit.faceId);
-        // The axis was the first face's; the faces share one arrow from here.
+        // The faces share one arrow from here, and the engine's answer about the first face's axis no longer applies.
         this.axisAsk++;
         this.holeAxis = null;
         this.curve = null;
@@ -326,6 +326,12 @@ export class PressPullTool {
         if (this.resizing) {
           this.mode = "auto";
           this.taper = 0;
+        } else {
+          // The arrow moves to the face just picked: the drag is measured along it, each face moves along its own.
+          this.anchor.copy(hit.anchor);
+          this.faceAnchor.copy(hit.anchor);
+          this.faceNormal.copy(hit.normal).normalize();
+          this.axis.copy(this.faceNormal);
         }
         if (was !== this.boxShape()) this.showBox();
         else this.syncToggle();

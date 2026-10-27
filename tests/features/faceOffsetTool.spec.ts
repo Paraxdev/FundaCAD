@@ -264,6 +264,31 @@ describe("FaceOffsetTool", () => {
     expect(t.active).toBe(true);
   });
 
+  it("Ctrl-click moves the handle onto the face just added, along its normal", () => {
+    const { vp, canvas } = fakeViewport();
+    Object.assign(vp, {
+      pickFaceForPressPull: () => ({
+        selector: { kind: "face", by: "nearest", point: [20, 0, -5] },
+        faceId: 8,
+        anchor: new THREE.Vector3(20, 0, -5),
+        normal: new THREE.Vector3(1, 0, 0),
+        bodyId: "b1",
+      }),
+    });
+    const s = fakeStore();
+    const t = new FaceOffsetTool(vp, s.store);
+    t.start("shell", () => {});
+    canvas.dispatchEvent(
+      new PointerEvent("pointerdown", { clientX: 0, clientY: 0, button: 0, ctrlKey: true, bubbles: true }),
+    );
+    const i = internals(t);
+    // Shell measures its wall inward, so its arrow points into the body.
+    expect({ anchor: i.anchor.toArray(), axis: i.axis.toArray().map((c) => c + 0) }).toEqual({
+      anchor: [20, 0, -5],
+      axis: [-1, 0, 0],
+    });
+  });
+
   it("the handle rides on the face as it moves", () => {
     const { vp, canvas } = fakeViewport();
     const s = fakeStore();

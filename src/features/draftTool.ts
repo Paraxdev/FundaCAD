@@ -116,6 +116,10 @@ export class DraftTool {
         e.stopImmediatePropagation();
         this.faces.push(hit.selector);
         this.faceIds.push(hit.faceId);
+        // The handle moves to the face just picked; the pull axis stays the draft's.
+        this.anchor.copy(hit.anchor);
+        this.axis.copy(hit.normal).normalize();
+        this.lever = this.leverFor(this.pull);
         this.pushPreview();
         this.prompt();
       }
