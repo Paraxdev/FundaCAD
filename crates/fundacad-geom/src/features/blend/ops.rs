@@ -247,11 +247,6 @@ fn section_with(
     }
 }
 
-/// The highest continuity (1, 2 or 3) the section build reaches on `edge` of `shape`.
-pub fn reach(shape: &Shape, edge: &Shape) -> u8 {
-    ffi::blend_reach(shape.raw(), edge.raw()).clamp(1, 3) as u8
-}
-
 /// How smoothly a blended body's faces meet, see blend_measure.hxx.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ContactJumps {
@@ -267,16 +262,19 @@ pub struct ContactJumps {
 }
 
 /// `reach` is about the blend's setback; the walks span 4 percent of it into each face.
-pub fn contact_jumps(shape: &Shape, radius: f64, reach: f64) -> ContactJumps {
+pub fn contact_jumps(shape: &Shape, radius: f64, reach: f64) -> Result<ContactJumps, String> {
     let v = ffi::blend_contact_jumps(shape.raw(), radius, reach);
-    ContactJumps {
+    if v.len() < 6 {
+        return Err("the contact measurement raised".into());
+    }
+    Ok(ContactJumps {
         curvature: v[0],
         rate: v[1],
         crease_deg: v[2],
         contacts: v[3] as usize,
         max_tolerance: v[4],
         valid: v[5] > 0.5,
-    }
+    })
 }
 
 pub fn is_valid(shape: &Shape) -> bool {

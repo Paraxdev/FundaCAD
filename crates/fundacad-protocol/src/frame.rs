@@ -125,9 +125,14 @@ fn pack_edges<'a>(body: &'a FullBody, p: &mut Packer<'a>) -> Value {
     if !smooth.is_empty() {
         out.insert("smooth".into(), Value::Array(smooth));
     }
-    let reach: Vec<Value> = body.edges.iter().enumerate().filter_map(|(i, e)| e.reach.map(|r| json!([i, r]))).collect();
-    if !reach.is_empty() {
-        out.insert("reach".into(), Value::Array(reach));
+    let curved: Vec<Value> = body
+        .edges
+        .iter()
+        .enumerate()
+        .filter_map(|(i, e)| e.curvature.map(|k| json!([i, crate::body::f32_value(k)])))
+        .collect();
+    if !curved.is_empty() {
+        out.insert("curvature".into(), Value::Array(curved));
     }
     Value::Object(out)
 }
@@ -414,12 +419,12 @@ pub fn decode_frame(bytes: &[u8]) -> Result<Value, String> {
         let counts = packed.get("$counts").and_then(&mut take).unwrap_or_default();
         let smooth: std::collections::HashSet<u64> =
             packed.get("smooth").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_u64).collect();
-        let reach: std::collections::HashMap<u64, u64> = packed
-            .get("reach")
+        let curved: std::collections::HashMap<u64, Value> = packed
+            .get("curvature")
             .and_then(Value::as_array)
             .into_iter()
             .flatten()
-            .filter_map(|p| Some((p.get(0)?.as_u64()?, p.get(1)?.as_u64()?)))
+            .filter_map(|p| Some((p.get(0)?.as_u64()?, p.get(1)?.clone())))
             .collect();
         let owner = packed.get("body").cloned().unwrap_or(Value::Null);
         let mut next = pts.chunks_exact(3);
@@ -433,8 +438,8 @@ pub fn decode_frame(bytes: &[u8]) -> Result<Value, String> {
             if smooth.contains(&(i as u64)) {
                 em.insert("smooth".into(), Value::Bool(true));
             }
-            if let Some(r) = reach.get(&(i as u64)) {
-                em.insert("reach".into(), (*r).into());
+            if let Some(k) = curved.get(&(i as u64)) {
+                em.insert("curvature".into(), k.clone());
             }
             edges.push(Value::Object(em));
         }

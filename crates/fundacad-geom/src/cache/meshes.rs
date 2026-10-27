@@ -177,7 +177,10 @@ pub fn encode(b: &FullBody) -> Vec<u8> {
     b.face_ids.iter().for_each(|v| out.extend_from_slice(&v.to_le_bytes()));
     put_u32(&mut out, b.edges.len());
     for e in &b.edges {
-        out.push(u8::from(e.smooth) | (e.reach.unwrap_or(0) << 1));
+        out.push(u8::from(e.smooth) | (u8::from(e.curvature.is_some()) << 1));
+        if let Some(k) = e.curvature {
+            out.extend_from_slice(&k.to_le_bytes());
+        }
         put_u32(&mut out, e.points.len());
         e.points.iter().flatten().for_each(|v| out.extend_from_slice(&v.to_le_bytes()));
     }
@@ -236,10 +239,11 @@ pub fn decode(data: &[u8]) -> Option<FullBody> {
     let mut edges = Vec::with_capacity(n.min(1 << 20));
     for _ in 0..n {
         let flags = r.u8()?;
-        let (smooth, reach) = (flags & 1 != 0, Some(flags >> 1).filter(|r| *r > 0));
+        let smooth = flags & 1 != 0;
+        let curvature = if flags & 2 != 0 { Some(r.f32s(1)?[0]) } else { None };
         let k = r.u32()?;
         let flat = r.f32s(k.checked_mul(3)?)?;
-        edges.push(Edge { points: flat.chunks_exact(3).map(|p| [p[0], p[1], p[2]]).collect(), smooth, reach });
+        edges.push(Edge { points: flat.chunks_exact(3).map(|p| [p[0], p[1], p[2]]).collect(), smooth, curvature });
     }
     if !r.0.is_empty() {
         return None;

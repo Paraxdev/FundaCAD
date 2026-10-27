@@ -15,9 +15,13 @@
 #include <algorithm>
 #include <cmath>
 
-// Per mm: a face whose curvature across an edge stays below this is flat there
-// for the reach a picked edge reports, whatever the radius.
-const double FLAT_ACROSS_CURVATURE = 1e-8;
+// A face is flat across an edge for a G2 or G3 fillet of radius R while its
+// curvature across the edge times R stays below this. The fillet tool applies
+// the same bound to the curvature a mesh edge reports (src/features/continuity.ts).
+const double FLAT_ACROSS = 1e-6;
+
+// The curvature an edge reports when it cannot be read, so every radius refuses.
+const double CURVATURE_UNKNOWN = 1e30;
 
 // The normal curvature of the surface in tangent direction `d`, signed
 // against the surface's own normal, NaN where it is not defined.

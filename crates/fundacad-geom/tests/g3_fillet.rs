@@ -96,7 +96,7 @@ fn g3(entities: Vec<Value>, height: f64, edges: &[[f64; 3]], radius: f64) -> Sha
 /// the intersection curve: the section meets the face to fourth order there, so the curve's end is ill conditioned
 /// (G2 leaves 2.15e-5 on the same 90 degree wedge). `tolerance` bounds that; a corner patch takes more, as G2's does.
 fn healthy_g3_within(s: &Shape, radius: f64, tolerance: f64) -> ops::ContactJumps {
-    let j = ops::contact_jumps(s, radius, radius * G3_SETBACK);
+    let j = ops::contact_jumps(s, radius, radius * G3_SETBACK).expect("measured");
     assert!(j.valid, "{j:?}");
     assert!(j.max_tolerance <= tolerance, "{j:?}");
     assert!(j.crease_deg < 0.01, "{j:?}");
@@ -128,11 +128,11 @@ fn g3_wedges_build_the_research_volumes_and_are_g3() {
 fn the_measure_sees_g1_and_g2_jumps() {
     let mut f = prism(wedge(90.0), 40.0, json!({}));
     f.push(fillet(&[[0.0, 0.0, 20.0]], 10.0, "G1"));
-    let j = ops::contact_jumps(&built(f), 10.0, 10.0);
+    let j = ops::contact_jumps(&built(f), 10.0, 10.0).expect("measured");
     assert!(j.curvature > 0.5, "{j:?}");
     let mut f = prism(wedge(90.0), 40.0, json!({}));
     f.push(fillet(&[[0.0, 0.0, 20.0]], 10.0, "G2"));
-    let j = ops::contact_jumps(&built(f), 10.0, 15.5);
+    let j = ops::contact_jumps(&built(f), 10.0, 15.5).expect("measured");
     assert!(j.curvature < 1e-4 && j.rate > 0.1, "{j:?}");
 }
 
@@ -231,22 +231,76 @@ fn g2_on_flat_edges_builds_as_before() {
     near(kernel::volume(&built(f)), 96817.3739, 1e-3);
 }
 
-/// The reach each mesh edge reports: the segment's edge along the cylinder reaches G1 only, its rims and plane
-/// edges G3.
+/// The curvature across each mesh edge, which the fillet tool weighs against its radius: the segment's edge along
+/// the cylinder curves at 1/15.37 per mm, its rims and plane edges are flat.
 #[test]
-fn mesh_edges_report_their_reach() {
+fn mesh_edges_report_their_cross_curvature() {
     let s = built(prism(segment(), 40.0, json!({})));
     let lines = edge_polylines(&MeshAccess::new(&s));
     let along = lines
         .iter()
         .find(|l| l.points.len() == 2 && l.points.iter().all(|q| q[0].abs() < 1e-6 && q[1].abs() < 1e-6))
         .expect("the vertical edge at the origin");
-    assert_eq!(along.reach, 1);
+    let r = (15.0f64.powi(2) + 12.0f64.powi(2)) / 24.0;
+    assert!((along.curvature - 1.0 / r).abs() < 1e-6, "{} vs {}", along.curvature, 1.0 / r);
     let chord = lines
         .iter()
         .find(|l| l.points.len() == 2 && l.points.iter().all(|q| q[1].abs() < 1e-6 && (q[2] - 40.0).abs() < 1e-6))
         .expect("the top chord edge");
-    assert_eq!(chord.reach, 3);
-    let rims: Vec<u8> = lines.iter().filter(|l| l.points.len() > 2).map(|l| l.reach).collect();
-    assert!(!rims.is_empty() && rims.iter().all(|r| *r == 3), "{rims:?}");
+    assert_eq!(chord.curvature, 0.0);
+    let rims: Vec<f64> = lines.iter().filter(|l| l.points.len() > 2).map(|l| l.curvature).collect();
+    assert!(!rims.is_empty() && rims.iter().all(|k| k.abs() < 1e-12), "{rims:?}");
+}
+
+/// The profile slides the inner poles along each leg, so a fuller or flatter section stays G2 or G3.
+#[test]
+fn g2_and_g3_keep_their_continuity_with_a_profile() {
+    for p in [-0.4, 0.4] {
+        for (c, setback) in [("G2", 1.55), ("G3", G3_SETBACK)] {
+            let mut f = prism(wedge(90.0), 40.0, json!({}));
+            let mut fl = fillet(&[[0.0, 0.0, 20.0]], 10.0, c);
+            fl["profile"] = json!(p);
+            f.push(fl);
+            let s = built(f);
+            let j = ops::contact_jumps(&s, 10.0, 10.0 * setback).expect("measured");
+            assert!(j.valid && j.crease_deg < 0.01 && j.contacts >= 2, "{c} {p}: {j:?}");
+            assert!(j.curvature < 1e-4, "{c} {p}: {j:?}");
+            if c == "G3" {
+                assert!(j.rate < 1e-2, "{c} {p}: {j:?}");
+            } else {
+                assert!(j.rate > 0.05, "{c} {p}: {j:?}");
+            }
+        }
+    }
+}
+
+/// A cone met at its rim is flat across the edge, so is a hole's rim, whose cylinder faces inward.
+#[test]
+fn g3_builds_on_a_cone_rim_and_a_hole_rim() {
+    let circle = vec![json!({"type": "circle", "id": "c", "x": 0, "y": 0, "radius": 20})];
+    let mut f = prism(circle, 30.0, json!({"taper": 10}));
+    let top = 20.0 - 30.0 * 10f64.to_radians().tan();
+    f.push(fillet(&[[top, 0.0, 30.0]], 2.0, "G3"));
+    healthy_g3(&built(f), 2.0);
+
+    let mut f = prism(square(), 40.0, json!({}));
+    f.push(json!({"id": "h", "type": "sketch", "plane": "XY",
+                  "entities": [{"type": "circle", "id": "c", "x": 0, "y": 0, "radius": 8}]}));
+    f.push(json!({"id": "x", "type": "extrude", "sketch": "h", "distance": 40, "operation": "cut"}));
+    f.push(fillet(&[[8.0, 0.0, 40.0]], 2.0, "G3"));
+    let s = built(f);
+    let v = kernel::volume(&s);
+    assert!(v < 50.0 * 50.0 * 40.0 - std::f64::consts::PI * 64.0 * 40.0, "{v}");
+    healthy_g3(&s, 2.0);
+}
+
+/// One curved edge in a pick refuses the whole fillet, a flat neighbour does not carry it.
+#[test]
+fn a_mixed_pick_of_flat_and_curved_edges_refuses_g2_and_g3() {
+    for c in ["G2", "G3"] {
+        let mut f = prism(segment(), 40.0, json!({}));
+        f.push(fillet(&[[-15.0, 0.0, 40.0], [0.0, 0.0, 20.0]], 1.0, c));
+        let msg = refusal(f);
+        assert!(msg.contains(&format!("{c} {NOT_FLAT}")), "{c}: {msg:?}");
+    }
 }

@@ -10,8 +10,9 @@ pub struct Edge {
     pub points: Vec<[f32; 3]>,
     /// The two faces meet tangentially.
     pub smooth: bool,
-    /// The highest continuity (1 or 2) a fillet reaches here, when below 3.
-    pub reach: Option<u8>,
+    /// The largest curvature across the edge of its faces, per mm, when a fillet radius could meet it: G2 and G3
+    /// apply while it times the radius stays below 1e-6.
+    pub curvature: Option<f32>,
 }
 
 /// A body the client does not hold, sent in full. `fields` keeps every non-array field in write order; the mesh keys
@@ -94,8 +95,8 @@ impl FullBody {
                 if e.smooth {
                     em.insert("smooth".into(), Value::Bool(true));
                 }
-                if let Some(r) = e.reach {
-                    em.insert("reach".into(), r.into());
+                if let Some(k) = e.curvature {
+                    em.insert("curvature".into(), f32_value(k));
                 }
                 Value::Object(em)
             })
@@ -105,7 +106,7 @@ impl FullBody {
     }
 }
 
-fn f32_value(x: f32) -> Value {
+pub(crate) fn f32_value(x: f32) -> Value {
     serde_json::Number::from_f64(f64::from(x)).map_or(Value::Null, Value::Number)
 }
 

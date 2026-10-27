@@ -103,7 +103,7 @@ inline bool walk(const TopoDS_Face &face, const TopoDS_Edge &edge, double t, dou
 // radius squared, largest crease in degrees among edges whose faces meet
 // within 5 degrees, edges measured as tangent contacts, largest tolerance,
 // 1 when BRepCheck passes]. The walks span 4 percent of `reach` into each face.
-inline rust::Vec<double> blend_contact_jumps(const TopoDS_Shape &shape, double radius, double reach) {
+inline rust::Vec<double> blend_contact_jumps_unguarded(const TopoDS_Shape &shape, double radius, double reach) {
   double dk = 0, drate = 0, crease = 0, contacts = 0, tol = 0;
   TopTools_IndexedDataMapOfShapeListOfShape map;
   TopExp::MapShapesAndAncestors(shape, TopAbs_EDGE, TopAbs_FACE, map);
@@ -150,4 +150,13 @@ inline rust::Vec<double> blend_contact_jumps(const TopoDS_Shape &shape, double r
   rust::Vec<double> out;
   for (double x : {dk, drate, crease, contacts, tol, BRepCheck_Analyzer(shape).IsValid() ? 1.0 : 0.0}) out.push_back(x);
   return out;
+}
+
+// Empty when the measurement raised.
+inline rust::Vec<double> blend_contact_jumps(const TopoDS_Shape &shape, double radius, double reach) {
+  try {
+    return blend_contact_jumps_unguarded(shape, radius, reach);
+  } catch (...) {
+    return rust::Vec<double>();
+  }
 }

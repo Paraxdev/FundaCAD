@@ -628,21 +628,28 @@ inline int32_t mesh_access_edge_smooth(const MeshAccess &m, int32_t edge, double
   }
 }
 
-// The highest continuity a fillet's section build reaches on this edge: 3 when
-// both faces are flat across it (planes, or a cylinder or cone met at a rim),
-// else 1. -1 the query raised.
-inline int32_t mesh_access_edge_reach(const MeshAccess &m, int32_t edge) {
+// The largest curvature across this edge of the faces either side, which a
+// fillet tool weighs against its radius to offer G2 and G3. An edge of three or
+// more faces, or one that cannot be read, reports CURVATURE_UNKNOWN.
+inline double mesh_access_edge_cross_curvature(const MeshAccess &m, int32_t edge) {
   try {
-    const std::vector<TopoDS_Face> &anc = m.edgeAncestors.at(edge);
-    if (anc.size() < 2) return 1;
-    const TopoDS_Edge &e = mesh_access_edge(m, edge);
-    for (int k = 0; k < 2; ++k) {
-      double c = face_curvature_across(e, anc[k]);
-      if (c < 0 || c > FLAT_ACROSS_CURVATURE) return 1;
+    std::vector<TopoDS_Face> faces;
+    for (const TopoDS_Face &f : m.edgeAncestors.at(edge)) {
+      bool seen = false;
+      for (const TopoDS_Face &g : faces) seen = seen || g.IsSame(f);
+      if (!seen) faces.push_back(f);
     }
-    return 3;
+    if (faces.size() > 2) return CURVATURE_UNKNOWN;
+    const TopoDS_Edge &e = mesh_access_edge(m, edge);
+    double worst = 0.0;
+    for (const TopoDS_Face &f : faces) {
+      double c = face_curvature_across(e, f);
+      if (c < 0) return CURVATURE_UNKNOWN;
+      worst = std::max(worst, c);
+    }
+    return worst;
   } catch (...) {
-    return -1;
+    return CURVATURE_UNKNOWN;
   }
 }
 

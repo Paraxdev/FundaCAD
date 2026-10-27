@@ -26,8 +26,7 @@ mod inner {
 
         pub fn mesh_access_face_count(m: &MeshAccess) -> i32;
         pub fn mesh_access_face_reversed(m: &MeshAccess, face: i32) -> bool;
-        pub fn mesh_access_face_plane_normal(m: &MeshAccess, face: i32, out: &mut Vec<f64>)
-            -> bool;
+        pub fn mesh_access_face_plane_normal(m: &MeshAccess, face: i32, out: &mut Vec<f64>) -> bool;
         pub fn mesh_access_face_triangulation(
             m: &MeshAccess,
             face: i32,
@@ -37,11 +36,7 @@ mod inner {
             normals: &mut Vec<f64>,
         ) -> bool;
 
-        pub fn mesh_access_edge_splits(
-            m: &MeshAccess,
-            out: &mut Vec<f64>,
-            uneven: &mut i32,
-        ) -> bool;
+        pub fn mesh_access_edge_splits(m: &MeshAccess, out: &mut Vec<f64>, uneven: &mut i32) -> bool;
         pub fn mesh_access_unfilled_faces(m: &MeshAccess, out: &mut Vec<f64>) -> bool;
         pub fn mesh_access_has_mesh(m: &MeshAccess) -> bool;
         pub fn mesh_access_edge_count(m: &MeshAccess) -> i32;
@@ -69,7 +64,7 @@ mod inner {
             params: &mut Vec<f64>,
         ) -> bool;
         pub fn mesh_access_edge_smooth(m: &MeshAccess, edge: i32, cos_tol: f64) -> i32;
-        pub fn mesh_access_edge_reach(m: &MeshAccess, edge: i32) -> i32;
+        pub fn mesh_access_edge_cross_curvature(m: &MeshAccess, edge: i32) -> f64;
         pub fn mesh_access_edge_brep_range(
             m: &MeshAccess,
             edge: i32,

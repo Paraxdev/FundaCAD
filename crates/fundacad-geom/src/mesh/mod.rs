@@ -21,6 +21,9 @@ use std::sync::Arc;
 /// Bump whenever the payload changes for the same input, it keys the mesh artifact cache.
 pub const CODE_VERSION: u32 = 12;
 
+/// An edge's cross curvature (per mm) is sent above this: below it no fillet radius reaches the G2 and G3 bound.
+const CURVATURE_SENT: f64 = 1e-12;
+
 #[derive(Default)]
 pub struct MeshBody<'a> {
     pub id: String,
@@ -157,7 +160,7 @@ fn body_payload_for(body: &MeshBody<'_>, shape: &Shape, tolerance: f64, profile:
             .map(|l| Edge {
                 points: l.points.iter().map(|p| [p[0] as f32, p[1] as f32, p[2] as f32]).collect(),
                 smooth: l.smooth,
-                reach: (l.reach < 3).then_some(l.reach),
+                curvature: (l.curvature > CURVATURE_SENT).then_some(l.curvature as f32),
             })
             .collect(),
         ..Default::default()
@@ -404,13 +407,13 @@ pub fn etag_with(body: &FullBody, passes: Option<&str>) -> String {
     section(b"faceIds", body.face_ids.len(), &mut body.face_ids.iter().map(|v| v.to_le_bytes()));
     for e in &body.edges {
         section(
-            match (e.smooth, e.reach) {
+            match (e.smooth, e.curvature) {
                 (true, _) => b"edge-smooth",
-                (false, Some(_)) => b"edge-reach1",
+                (false, Some(_)) => b"edge-curved",
                 (false, None) => b"edge",
             },
             e.points.len(),
-            &mut e.points.iter().flatten().map(|v| v.to_le_bytes()),
+            &mut e.points.iter().flatten().chain(e.curvature.iter()).map(|v| v.to_le_bytes()),
         );
     }
     let mut rest = body.fields.clone();

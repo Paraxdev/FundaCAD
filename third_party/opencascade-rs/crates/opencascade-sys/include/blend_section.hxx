@@ -1365,7 +1365,7 @@ struct ChamferEnd {
 // face that is flat across the edge: a plane, or a cylinder or cone met at a rim.
 inline bool flat_across(const TopoDS_Edge &edge, const TopoDS_Face &face, double size) {
   double k = face_curvature_across(edge, face);
-  return k >= 0 && k * size < 1e-6;
+  return k >= 0 && k * size < FLAT_ACROSS;
 }
 
 inline std::string not_flat_message(int cont) {
@@ -2739,19 +2739,3 @@ inline std::unique_ptr<TopoDS_Shape> blend_section(const TopoDS_Shape &shape, co
   return std::unique_ptr<TopoDS_Shape>(new TopoDS_Shape());
 }
 
-// The highest continuity the section build reaches on an edge of `shape`: 3
-// where both faces are flat across it (G2 and G3 share that gate), else 1.
-inline int32_t blend_reach(const TopoDS_Shape &shape, const TopoDS_Shape &edge) {
-  try {
-    const TopoDS_Edge &e = TopoDS::Edge(edge);
-    std::vector<TopoDS_Face> faces = secblend::faces_of(shape, e);
-    if (faces.size() != 2) return 1;
-    for (const TopoDS_Face &f : faces) {
-      double k = face_curvature_across(e, f);
-      if (k < 0 || k > FLAT_ACROSS_CURVATURE) return 1;
-    }
-    return 3;
-  } catch (...) {
-    return 1;
-  }
-}

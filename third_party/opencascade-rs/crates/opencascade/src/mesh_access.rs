@@ -124,8 +124,7 @@ impl MeshAccess {
     pub fn face_plane_normal(&self, face: usize) -> Option<[f64; 3]> {
         let (m, f) = self.face_ok(face)?;
         let mut v = Vec::new();
-        (ffi::mesh_access_face_plane_normal(m, f, &mut v) && v.len() == 3)
-            .then(|| [v[0], v[1], v[2]])
+        (ffi::mesh_access_face_plane_normal(m, f, &mut v) && v.len() == 3).then(|| [v[0], v[1], v[2]])
     }
 
     /// `None` for a face with no triangulation.
@@ -219,11 +218,7 @@ impl MeshAccess {
     }
 
     /// `GCPnts_QuasiUniformDeflection` points with their parameters.
-    pub fn edge_deflection(
-        &self,
-        edge: usize,
-        deflection: f64,
-    ) -> Option<(Vec<[f64; 3]>, Vec<f64>)> {
+    pub fn edge_deflection(&self, edge: usize, deflection: f64) -> Option<(Vec<[f64; 3]>, Vec<f64>)> {
         let (m, e) = self.edge_ok(edge)?;
         let (mut pts, mut params) = (Vec::new(), Vec::new());
         ffi::mesh_access_edge_deflection(m, e, deflection, &mut pts, &mut params)
@@ -247,16 +242,10 @@ impl MeshAccess {
         ffi::mesh_access_edge_smooth(m, e, cos_tol) == 1
     }
 
-    /// The highest continuity a fillet's section build reaches on the edge, 1 or 3.
-    pub fn edge_reach(&self, edge: usize) -> u8 {
-        let Some((m, e)) = self.edge_ok(edge) else {
-            return 1;
-        };
-        if ffi::mesh_access_edge_reach(m, e) == 3 {
-            3
-        } else {
-            1
-        }
+    /// The largest curvature across the edge of its faces, per mm: a fillet of radius R reaches G2 and G3 there
+    /// while it times R stays below 1e-6. 1e30 for an edge it cannot read or of three or more faces.
+    pub fn edge_cross_curvature(&self, edge: usize) -> f64 {
+        self.edge_ok(edge).map_or(1e30, |(m, e)| ffi::mesh_access_edge_cross_curvature(m, e))
     }
 
     /// The unnormalised `du x dv` of the `ancestor`-th face at edge parameter `t`.
