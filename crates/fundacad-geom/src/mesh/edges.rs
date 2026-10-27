@@ -83,7 +83,7 @@ fn one_edge(access: &MeshAccess, plane: &[Option<[f64; 3]>], cos_tol: f64, e: us
     let flat = faces.len() == 2 && plane_of(faces[0]).is_some() && plane_of(faces[1]).is_some();
     let smooth =
         faces.len() == 2 && faces[0] != faces[1] && !flat && access.edge_smooth(e, SMOOTH_EDGE_DEG.to_radians().cos());
-    let curvature = if smooth || flat { 0.0 } else { access.edge_cross_curvature(e) };
+    let curvature = if flat { 0.0 } else { access.edge_cross_curvature(e) };
     let chord_curvature =
         if curvature > 0.0 { curvature * radius_of_chord(access.edge_dihedral_deg(e), 1.0) } else { 0.0 };
     Some(EdgeLine { points, smooth, curvature, chord_curvature })

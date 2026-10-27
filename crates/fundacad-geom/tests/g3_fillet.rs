@@ -273,6 +273,32 @@ fn mesh_edges_report_their_curvature_per_mm_of_chord() {
     assert!((along.chord_curvature - want).abs() < 1e-9 * want, "{} vs {want}", along.chord_curvature);
 }
 
+/// A flat face running tangent into a cylinder meets it at a smooth edge, which still curves across: the mesh
+/// reports 1/10 there, per mm of radius and of chord, so the tool never offers G2 or G3 on an edge the gate refuses.
+/// The build refuses any blend on a fully tangent edge before it reaches the gate.
+#[test]
+fn a_smooth_edge_reports_its_cross_curvature() {
+    let slot = vec![
+        line("l0", [0.0, 0.0], [30.0, 0.0]),
+        json!({"type": "arc", "id": "a0", "x1": 30.0, "y1": 0.0, "x2": 30.0, "y2": 20.0, "mx": 40.0, "my": 10.0}),
+        line("l1", [30.0, 20.0], [0.0, 20.0]),
+        line("l2", [0.0, 20.0], [0.0, 0.0]),
+    ];
+    let s = built(prism(slot.clone(), 40.0, json!({})));
+    let lines = edge_polylines(&MeshAccess::new(&s));
+    let tangent = lines
+        .iter()
+        .find(|l| l.points.len() == 2 && l.points.iter().all(|q| (q[0] - 30.0).abs() < 1e-6 && q[1].abs() < 1e-6))
+        .expect("the vertical edge where the flat side runs into the round end");
+    assert!(tangent.smooth);
+    near(tangent.curvature, 0.1, 1e-9);
+    near(tangent.chord_curvature, 0.1, 1e-9);
+    let mut f = prism(slot, 40.0, json!({}));
+    f.push(fillet(&[[30.0, 0.0, 20.0]], 1.0, "G2"));
+    let msg = refusal(f);
+    assert!(msg.contains("that edge is already smooth"), "{msg:?}");
+}
+
 /// The profile slides the inner poles along each leg, so a fuller or flatter section stays G2 or G3.
 #[test]
 fn g2_and_g3_keep_their_continuity_with_a_profile() {
