@@ -4,6 +4,7 @@
 pub mod eval;
 pub mod ops;
 pub mod overlap;
+pub mod smooth;
 
 use fundacad_core::schema::{Chamfer, Fillet, OneOrMany, Selector};
 use glam::DVec3;
@@ -51,7 +52,8 @@ impl BlendErr {
 
 /// `(shape, edges, size)`: one kernel blend.
 type BlendOp<'a> = dyn Fn(&Shape, &[Shape], f64) -> Result<Shape, BlendErr> + 'a;
-type SectionOp<'a> = dyn Fn(&Shape, &[Shape]) -> Result<Shape, SectionErr> + 'a;
+/// `(shape, edges, size)`: the section build.
+type SectionOp<'a> = dyn Fn(&Shape, &[Shape], f64) -> Result<Shape, SectionErr> + 'a;
 
 /// Why the lofted section blend did not build.
 #[derive(Debug, Clone)]
@@ -182,9 +184,9 @@ pub fn fillet(ctx: &mut Ctx, f: &Fillet) -> FResult {
         native_fillet(s, es, &radii)
     };
     let section_at = move |profile: f64| {
-        move |s: &Shape, es: &[Shape]| -> Result<Shape, SectionErr> {
-            let sizes: Vec<f64> = es.iter().map(|e| if chord { chord_radius(s, e, r) } else { r }).collect();
-            ops::section(s, es, false, &sizes, None, r, cont, draft, profile)
+        move |s: &Shape, es: &[Shape], size: f64| -> Result<Shape, SectionErr> {
+            let sizes: Vec<f64> = es.iter().map(|e| if chord { chord_radius(s, e, size) } else { size }).collect();
+            ops::section(s, es, false, &sizes, None, size, cont, draft, profile)
         }
     };
     let section = section_at(p);
@@ -284,8 +286,8 @@ pub fn chamfer(ctx: &mut Ctx, f: &Chamfer) -> FResult {
             Some(d2) => native_two_distance_chamfer(s, es, size, d2 * size / d),
         }
     };
-    let section = move |s: &Shape, es: &[Shape]| -> Result<Shape, SectionErr> {
-        ops::section(s, es, true, &vec![d; es.len()], d2, d, 1, draft, 0.0)
+    let section = move |s: &Shape, es: &[Shape], size: f64| -> Result<Shape, SectionErr> {
+        ops::section(s, es, true, &vec![size; es.len()], d2.map(|d2| d2 * size / d), size, 1, draft, 0.0)
     };
     blend_edges(
         ctx,
@@ -769,6 +771,45 @@ fn report_edge_failures(diag: &mut Vec<Value>, fid: &str, edges: &[Shape], try_o
     }));
 }
 
+/// Sizes tried under a refused one, as shares of it: the kernel fails these edges at sizes in no order, so a
+/// bisection would trust a failure that a smaller size does not share.
+const SMOOTH_LADDER: [f64; 6] = [0.75, 0.5, 0.35, 0.25, 0.15, 0.1];
+
+/// The largest size on the ladder under `size` that builds smooth, on the grid a refusal offers sizes on.
+fn smooth_size(size: f64, builds: &dyn Fn(f64) -> bool) -> Option<f64> {
+    SMOOTH_LADDER
+        .iter()
+        .map(|k| {
+            let v = k * size;
+            let step = if v >= 1.0 { 100.0 } else { 1000.0 };
+            (v * step).floor() / step
+        })
+        .filter(|&v| v > 0.0)
+        .find(|&v| checkpoint().is_ok() && builds(v))
+}
+
+/// A blend over an edge whose faces turn tangent that came out rippled, or did not build. `found` is `None` when
+/// no smaller size was tried, and `Some(None)` when none tried built smooth.
+fn uneven_error(label: &str, body: &str, size: f64, rippled: bool, found: Option<Option<f64>>) -> Fail {
+    let what = label.to_lowercase();
+    let how = if rippled { "comes out rippled" } else { "does not fit" };
+    let head = format!(
+        "{label} failed on {body}: at {}mm the {what} {how} where the selected edges run up into a seam whose faces turn tangent",
+        py_g(size)
+    );
+    match found {
+        Some(Some(v)) => value_err(format!("{head}. It builds smooth at {}mm, so try that size.", py_g(v)), Some(BLEND_TOO_LARGE)),
+        Some(None) => value_err(
+            format!(
+                "{head}, and none of the smaller sizes tried, down to {}mm, did either. Leave out the edge that runs up into that seam.",
+                py_g(SMOOTH_LADDER[SMOOTH_LADDER.len() - 1] * size)
+            ),
+            Some(BLEND_HAS_NO_END),
+        ),
+        None => value_err(format!("{head}. Try a smaller value."), Some(BLEND_TOO_LARGE)),
+    }
+}
+
 fn fold_error(name: &str) -> Fail {
     value_err(
         format!("made surface that folds back over itself on {name}, at this size the blend runs past its own face and covers the model twice. Try a different size, or blend this edge before the one next to it."),
@@ -812,15 +853,27 @@ fn blend_edges(
         let edges = drop_slivers(edges, label)?;
         refuse_smooth_edges(&body_shape, &edges, label)?;
         let misfit: std::cell::Cell<Option<Fail>> = std::cell::Cell::new(None);
+        let fades = smooth::turns_tangent(&body_shape, &edges);
+        let gauge = fades.then(|| smooth::Gauge::new(&body_shape));
+        let rippled = std::cell::Cell::new(false);
+        let smooth_at = |out: &Shape, size: f64| {
+            let ok = gauge.as_ref().is_none_or(|g| g.lumps(out, size).smooth());
+            if !ok && size == blend_size {
+                rippled.set(true);
+            }
+            ok
+        };
         let note_overrun = || {
             if let Some(o) = ops::take_overrun() {
                 overruns.borrow_mut().push(overrun_note(label, &body_name, blend_size, o));
             }
         };
         let try_section = |shape: &Shape, es: &[Shape]| -> Option<Shape> {
-            match section?(shape, es) {
+            match section?(shape, es, blend_size) {
                 Ok(out) => {
-                    let kept = Some(out).filter(|out| still_sharp(out, es).is_empty() && keeps_voids(shape, out));
+                    let kept = Some(out).filter(|out| {
+                        still_sharp(out, es).is_empty() && keeps_voids(shape, out) && smooth_at(out, blend_size)
+                    });
                     if kept.is_some() {
                         note_overrun();
                     }
@@ -834,8 +887,11 @@ fn blend_edges(
             }
         };
         if section_only {
-            match section.map(|s| s(&body_shape, &edges)) {
+            match section.map(|s| s(&body_shape, &edges, blend_size)) {
                 Some(Ok(out)) => {
+                    if !smooth_at(&out, blend_size) {
+                        return Err(uneven_error(label, &body_name, blend_size, true, None));
+                    }
                     let sharp = still_sharp(&out, &edges);
                     if !sharp.is_empty() {
                         return Err(Fail::msg(format!(
@@ -869,6 +925,22 @@ fn blend_edges(
 
         let (work, work_edges) = ops::copy(&body_shape, &edges).unwrap_or((body_shape.clone(), edges.clone()));
         let one_edge_at = |s: &Shape, e: &Shape, size: f64| op(s, std::slice::from_ref(e), size);
+        // Whether a size really builds smooth, by the kernel or else the section build, each on a fresh copy.
+        let builds_smooth = |size: f64| {
+            let by_kernel = ops::copy(&body_shape, &edges).is_some_and(|(b, es)| {
+                op(&b, &es, size).is_ok_and(|out| !overlap::folds_over_itself(&b, &out, size) && smooth_at(&out, size))
+            });
+            by_kernel
+                || section.is_some_and(|sec| {
+                    sec(&body_shape, &edges, size).is_ok_and(|out| {
+                        still_sharp(&out, &edges).is_empty() && keeps_voids(&body_shape, &out) && smooth_at(&out, size)
+                    })
+                })
+        };
+        let uneven = || {
+            let found = (!draft).then(|| smooth_size(blend_size, &builds_smooth));
+            uneven_error(label, &body_name, blend_size, rippled.get(), found)
+        };
         let new_shape = match op(&work, &work_edges, blend_size) {
             Ok(out) => out,
             Err(BlendErr::Conic(msg)) => return Err(value_err(msg, Some(CONIC_NOT_APPLICABLE))),
@@ -895,6 +967,9 @@ fn blend_edges(
                     report_edge_failures(&mut ctx.diagnostics, fid, &unresolved, &|e| {
                         one_edge_at(&work, e, blend_size).is_ok()
                     });
+                    if fades {
+                        return Err(uneven());
+                    }
                     if let Some(fail) = misfit.take() {
                         return Err(fail);
                     }
@@ -907,7 +982,13 @@ fn blend_edges(
         let new_shape = if overlap::folds_over_itself(&work, &new_shape, blend_size) {
             match try_section(&body_shape, &edges) {
                 Some(built) => built,
+                None if fades => return Err(uneven()),
                 None => return Err(misfit.take().unwrap_or_else(|| fold_error(&body_name))),
+            }
+        } else if !smooth_at(&new_shape, blend_size) {
+            match try_section(&body_shape, &edges) {
+                Some(built) => built,
+                None => return Err(uneven()),
             }
         } else {
             new_shape

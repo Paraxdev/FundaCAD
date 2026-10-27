@@ -124,6 +124,12 @@ pub fn dihedral_deg(shape: &Shape, edge: &Shape) -> Option<f64> {
     (d >= 0.0).then_some(d)
 }
 
+/// The angle between the two faces of `edge` at its point nearest `p`.
+pub fn dihedral_at(shape: &Shape, edge: &Shape, p: glam::DVec3) -> Option<f64> {
+    let d = crate::bench::phase("blend_dihedral", || ffi::blend_dihedral_deg(shape.raw(), edge.raw(), p.x, p.y, p.z));
+    (d >= 0.0).then_some(d)
+}
+
 /// Per triangle `[face index, a, b, c]` flattened, see blend_overlap.py `_triangles`.
 pub fn face_triangles(faces: &[Shape], deflection: f64) -> Result<Vec<f64>, String> {
     let comp = kernel::compound(faces);
