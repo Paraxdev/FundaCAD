@@ -22,6 +22,7 @@
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepBuilderAPI_MakePolygon.hxx>
+#include <BRepBuilderAPI_MakeVertex.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
 #include <BRepBuilderAPI_Sewing.hxx>
 #include <BRepBuilderAPI_Transform.hxx>
@@ -52,6 +53,7 @@
 #include <Message_ProgressRange.hxx>
 #include <Message_ProgressScope.hxx>
 #include <OSD_Parallel.hxx>
+#include <Precision.hxx>
 #include <Geom_BezierCurve.hxx>
 #include <Geom_BezierSurface.hxx>
 #include <ShapeFix_Solid.hxx>
@@ -101,6 +103,8 @@ const double G2_TENSION = 0.5;
 // from the corner as the G2 section's, 3/8 of 1.55 against 51/128 of this.
 const double G3_SETBACK = G2_SETBACK * 3.0 / 8.0 * 128.0 / 51.0;
 const int SKIN_STEPS = 4;
+// Faces whose normals are closer than this, in degrees, are taken as tangent: a round between them has no size left.
+const double FADE_DEG = 0.5;
 
 struct SectionError {
   std::string msg;
@@ -282,6 +286,9 @@ struct Side {
   bool planar;
   BRepAdaptor_Curve2d pcurve;
   Opt<double> limit;
+  // Sections stand square to the path of the ball's centre rather than to the edge: on faces that turn along the
+  // edge as fast as the mitre between two rounds, no ball in the plane square to the edge rests on both.
+  bool follow_centres = false;
   int inward_sign = 1;
   gp_Vec inward_cached;
   gp_Vec normal_on_edge_cached;
@@ -361,8 +368,123 @@ struct Ball {
   gp_Vec normals[2];
 };
 
+inline bool solve4(double A[4][4], double b[4], double x[4]) {
+  int idx[4] = {0, 1, 2, 3};
+  for (int c = 0; c < 4; ++c) {
+    int piv = c;
+    for (int i = c + 1; i < 4; ++i)
+      if (std::abs(A[idx[i]][c]) > std::abs(A[idx[piv]][c])) piv = i;
+    std::swap(idx[c], idx[piv]);
+    double d = A[idx[c]][c];
+    if (std::abs(d) < 1e-14) return false;
+    for (int i = c + 1; i < 4; ++i) {
+      double f = A[idx[i]][c] / d;
+      for (int j = c; j < 4; ++j) A[idx[i]][j] -= f * A[idx[c]][j];
+      b[idx[i]] -= f * b[idx[c]];
+    }
+  }
+  for (int c = 3; c >= 0; --c) {
+    double acc = b[idx[c]];
+    for (int j = c + 1; j < 4; ++j) acc -= A[idx[c]][j] * x[j];
+    x[c] = acc / A[idx[c]][c];
+  }
+  return true;
+}
+
+// Solved on the faces' own parameters, grown from a small ball: a nearest point projection loses the contact
+// where a face curves tighter than the ball in some direction, as a G2 round does at its middle.
+inline Opt<Ball> ball_on_centres(const gp_Vec &Pv, const gp_Vec &T, Sides &sides, int s, double r) {
+  double x[4], span[4];
+  for (int k = 0; k < 2; ++k) {
+    GeomAPI_ProjectPointOnSurf proj(P(Pv), sides[k]->surf);
+    if (proj.NbPoints() == 0) return {};
+    proj.LowerDistanceParameters(x[2 * k], x[2 * k + 1]);
+    double u0, u1, v0, v1;
+    sides[k]->props.Bounds(u0, u1, v0, v1);
+    span[2 * k] = std::isfinite(u1 - u0) ? std::max(u1 - u0, 1e-6) : 1.0;
+    span[2 * k + 1] = std::isfinite(v1 - v0) ? std::max(v1 - v0, 1e-6) : 1.0;
+  }
+  Ball b;
+  auto eval = [&](const double at[4], double rad, Ball &out, double g[4]) {
+    gp_Vec c[2];
+    for (int k = 0; k < 2; ++k) {
+      gp_Pnt p;
+      gp_Vec n;
+      sides[k]->props.Normal(at[2 * k], at[2 * k + 1], p, n);
+      if (n.Magnitude() < 1e-12) return false;
+      n.Normalize();
+      out.feet[k] = V(p);
+      out.normals[k] = n;
+      c[k] = V(p) - n.Multiplied(s * rad);
+    }
+    gp_Vec a = out.normals[0].Crossed(out.normals[1]);
+    a = a.Magnitude() > 1e-3 ? a.Normalized().Multiplied(a.Dot(T) < 0 ? -1.0 : 1.0) : T;
+    out.C = (c[0] + c[1]).Multiplied(0.5);
+    gp_Vec d = c[0] - c[1];
+    g[0] = d.X();
+    g[1] = d.Y();
+    g[2] = d.Z();
+    g[3] = (out.C - Pv).Dot(a);
+    return true;
+  };
+  auto norm = [](const double g[4]) { return std::sqrt(g[0] * g[0] + g[1] * g[1] + g[2] * g[2] + g[3] * g[3]); };
+  auto newton = [&](double at[4], double rad, Ball &out) {
+    double g[4];
+    if (!eval(at, rad, out, g)) return false;
+    for (int it = 0; it < 30; ++it) {
+      if (norm(g) < 1e-10 * std::max(rad, 1.0)) return true;
+      double J[4][4], rhs[4] = {-g[0], -g[1], -g[2], -g[3]}, dx[4];
+      for (int j = 0; j < 4; ++j) {
+        double probe[4] = {at[0], at[1], at[2], at[3]}, gd[4];
+        double h = 1e-7 * span[j];
+        probe[j] += h;
+        Ball scratch;
+        if (!eval(probe, rad, scratch, gd)) return false;
+        for (int i = 0; i < 4; ++i) J[i][j] = (gd[i] - g[i]) / h;
+      }
+      if (!solve4(J, rhs, dx)) return false;
+      bool better = false;
+      for (double lam = 1.0; lam > 1e-3 && !better; lam /= 2) {
+        double next[4], gn[4];
+        for (int j = 0; j < 4; ++j) next[j] = at[j] + lam * dx[j];
+        Ball cand;
+        if (eval(next, rad, cand, gn) && norm(gn) < norm(g)) {
+          for (int j = 0; j < 4; ++j) {
+            at[j] = next[j];
+            g[j] = gn[j];
+          }
+          out = cand;
+          better = true;
+        }
+      }
+      if (!better) return false;
+    }
+    return false;
+  };
+  double done = 0.0, step = r / 8;
+  while (done < r && step > r * 1e-4) {
+    double trial[4] = {x[0], x[1], x[2], x[3]};
+    double rad = std::min(r, done + step);
+    Ball got;
+    if (newton(trial, rad, got)) {
+      for (int j = 0; j < 4; ++j) x[j] = trial[j];
+      b = got;
+      done = rad;
+      step *= 1.5;
+    } else {
+      step /= 2;
+    }
+  }
+  if (done < r) return {};
+  return b;
+}
+
 inline Ball ball(const gp_Pnt &Pp, const gp_Vec &T, Sides &sides, gp_Vec n0[2], int s, double r) {
   gp_Vec Pv = V(Pp);
+  if (sides[0]->follow_centres) {
+    auto b = ball_on_centres(Pv, T, sides, s, r);
+    if (b) return *b;
+  }
   Ball out;
   out.feet[0] = Pv;
   out.feet[1] = Pv;
@@ -397,7 +519,7 @@ inline Ball ball(const gp_Pnt &Pp, const gp_Vec &T, Sides &sides, gp_Vec n0[2], 
 inline TopoDS_Wire make_wire(const std::vector<gp_Pnt> &points, const Handle(Geom_Curve) & curve) {
   BRepBuilderAPI_MakeWire mk;
   for (size_t i = 0; i + 1 < points.size(); ++i) {
-    if (points[i].Distance(points[i + 1]) < 1e-9) continue;
+    if (points[i].Distance(points[i + 1]) < Precision::Confusion()) continue;
     // From the pointer: GCC will not apply OCCT's templated upcast operator
     // to this copy initialisation, which MSVC accepts.
     Handle(Geom_Curve) seg(GC_MakeSegment(points[i], points[i + 1]).Value().get());
@@ -611,6 +733,8 @@ inline Section section(const gp_Pnt &Pp, const gp_Vec &T, Sides &sides, int s, b
   run.insert(run.end(), sk1.begin() + 1, sk1.end());
   run.push_back(Q[1]);
   gp_Vec inner = chamfer ? (V(Q[0]) + V(Q[1])).Multiplied(0.5) : *ct.C;
+  // GC_Make* hand back a null curve in a release build of OCCT, where MakeEdge then reads through it.
+  if (curve.IsNull()) throw err("the blend section did not close");
   return {make_wire(run, curve), inner};
 }
 
@@ -623,7 +747,17 @@ inline int convexity(const gp_Pnt &Pp, const gp_Vec &T, Sides &sides, const gp_V
     if (d.Magnitude() < 1e-12) throw err("the edge runs along a face normal");
     d.Normalize();
     sides[k]->inward_sign = 1;
-    if (!sides[k]->contains(P(V(Pp) + d.Multiplied(step)), tol)) {
+    // The classifier takes `tol` in the face's parameters, where on a long B-spline face both steps can land ON
+    // the edge, so a step that tells nothing is taken again longer.
+    bool ahead = sides[k]->contains(P(V(Pp) + d.Multiplied(step)), tol);
+    for (double longer = step; longer <= 100 * step; longer *= 10) {
+      bool at = sides[k]->contains(P(V(Pp) + d.Multiplied(longer)), tol);
+      if (at != sides[k]->contains(P(V(Pp) - d.Multiplied(longer)), tol)) {
+        ahead = at;
+        break;
+      }
+    }
+    if (!ahead) {
       d.Reverse();
       sides[k]->inward_sign = -1;
     }
@@ -1407,6 +1541,30 @@ inline std::pair<int, std::vector<TopoDS_Shape>> edge_tool(const TopoDS_Shape &s
   Frame fm = frame(0.5 * (t0 + t1));
   int s = convexity(fm.P, fm.T, sides, fm.n1, fm.n2, tol);
   if (s > 0) margin = 1.0;
+  // Where the faces turn tangent at an end, like the mitre two rounds leave where they meet, no ball fits and the
+  // round shrinks to nothing: the sections stop short of that end and the loft closes on its point.
+  double ta = t0, tb = t1;
+  Opt<gp_Pnt> tips[2];
+  if (!closed && !straight) {
+    const double fade = std::cos(FADE_DEG * M_PI / 180);
+    auto tangent = [&](double t) {
+      Frame f = frame(t);
+      return f.n1.Dot(f.n2) > fade;
+    };
+    if (!tangent(0.5 * (t0 + t1)))
+      for (int k = 0; k < 2; ++k) {
+        double end = k == 0 ? t0 : t1;
+        if (!tangent(end)) continue;
+        double lo = 0.5 * (t0 + t1), hi = end;
+        for (int i = 0; i < 40; ++i) {
+          double m = 0.5 * (lo + hi);
+          (tangent(m) ? hi : lo) = m;
+        }
+        (k == 0 ? ta : tb) = lo;
+        tips[k] = crv.Value(end);
+        for (auto &sd : sides) sd->follow_centres = true;
+      }
+  }
   sides[0]->normal_on_edge_cached = fm.n1;
   sides[1]->normal_on_edge_cached = fm.n2;
   face_limits(fm.P, fm.T, sides, s, chamfer, size, size2, cont);
@@ -1540,7 +1698,7 @@ inline std::pair<int, std::vector<TopoDS_Shape>> edge_tool(const TopoDS_Shape &s
   // A neighbour that closes in on this edge may cross its round at an end only,
   // the middles still apart (the slanted sides of a trapezoid), so the ends rest too.
   if (rests && s > 0) {
-    std::vector<Frame> at = closed ? probes : std::vector<Frame>{frame(t0), fm, frame(t1)};
+    std::vector<Frame> at = closed ? probes : std::vector<Frame>{frame(ta), fm, frame(tb)};
     for (const Frame &f : at) {
       set_frame(f);
       Contacts c = contacts(f.P, f.T, sides, s, chamfer, size, size2, cont);
@@ -1577,7 +1735,7 @@ inline std::pair<int, std::vector<TopoDS_Shape>> edge_tool(const TopoDS_Shape &s
     ts = {t0, t1};
   } else {
     int n = closed ? 48 : 24;
-    for (int k = 0; k <= n; ++k) ts.push_back(t0 + (t1 - t0) * k / n);
+    for (int k = 0; k <= n; ++k) ts.push_back(ta + (tb - ta) * k / n);
   }
   std::vector<TopoDS_Wire> wires;
   bool have_prev = false;
@@ -1597,10 +1755,10 @@ inline std::pair<int, std::vector<TopoDS_Shape>> edge_tool(const TopoDS_Shape &s
       }
     }
     Section sec = section(f.P, f.T, sides, s, chamfer, size, size2, cont, profile, nullptr, margin);
-    if (wires.empty() && !cappable(sec.wire)) throw err("the blend sections would not close into a solid");
+    if (wires.empty() && !tips[0] && !cappable(sec.wire)) throw err("the blend sections would not close into a solid");
     if (ends && chamfer && straight && s > 0) {
       Contacts c = contacts(f.P, f.T, sides, s, chamfer, size, size2, cont);
-      ends->push_back({f.P, t == t0 ? f.T : f.T.Reversed(), {c.Q[0], c.Q[1]}, {faces[0], faces[1]}});
+      ends->push_back({f.P, t == ta ? f.T : f.T.Reversed(), {c.Q[0], c.Q[1]}, {faces[0], faces[1]}});
     }
     if (have_prev && (sec.inner - prev_inner).Dot(prev_T) <= 1e-3 * f.P.Distance(prev_P))
       throw err("at this size the blend is tighter than the edge's own curve");
@@ -1611,10 +1769,12 @@ inline std::pair<int, std::vector<TopoDS_Shape>> edge_tool(const TopoDS_Shape &s
     wires.push_back(sec.wire);
   }
 
-  auto loft = [](const std::vector<TopoDS_Wire> &ws) {
+  auto loft = [&tips](const std::vector<TopoDS_Wire> &ws) {
     BRepOffsetAPI_ThruSections mk(true, ws.size() == 2, LOFT_PLANE_TOL);
     mk.CheckCompatibility(false);
+    if (tips[0]) mk.AddVertex(BRepBuilderAPI_MakeVertex(*tips[0]).Vertex());
     for (const TopoDS_Wire &w : ws) mk.AddWire(w);
+    if (tips[1]) mk.AddVertex(BRepBuilderAPI_MakeVertex(*tips[1]).Vertex());
     check_cancel();
     mk.Build();
     if (!mk.IsDone()) throw err("the blend sections would not loft");
