@@ -200,7 +200,7 @@
 }
 /* The dimension the Delete key will remove. */
 .sketch-dim.is-selected {
-  outline: 2px solid var(--accent, #4a9eff);
+  outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
 /* Click through under other tools, so a label over a circle centre does not swallow the

@@ -52,7 +52,7 @@ function close() {
         v-for="(u, i) in panels.interference.unchecked"
         :key="'unchecked' + i"
         class="measure-hint"
-        style="color: var(--accent-hot, #ff9a5c)"
+        style="color: var(--accent-hot)"
       >
         Not checked: {{ u }}
       </div>
@@ -93,7 +93,7 @@ function close() {
         </div>
       </template>
 
-      <div v-if="panels.interference.truncatedMessage" class="measure-hint" style="color: var(--accent-hot, #ff9a5c)">
+      <div v-if="panels.interference.truncatedMessage" class="measure-hint" style="color: var(--accent-hot)">
         {{ panels.interference.truncatedMessage }}
       </div>
       <div class="measure-hint">
