@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { fmtKeys } from "../../input/platform";
 import { computed, onMounted, onUnmounted, ref, useTemplateRef } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { useBuildValue } from "../../app/useDoc";
@@ -239,7 +238,7 @@ async function screenshot() {
     <div v-if="ui.lowPerformance && !ui.lowPerformanceDismissed" class="float-group perf-warn-group">
       <IconButton
         icon="warning"
-        title="Low performance"
+        tip="Low performance"
         class="perf-warn"
         :active="isOpen('perf')"
         @click="open('perf', $event)"
@@ -248,22 +247,18 @@ async function screenshot() {
     <!-- On a narrow stage Items and History are drawers, and their switches
          go first, where a short column cannot scroll them out of sight. -->
     <div v-if="shell.narrow" class="float-group">
-      <IconButton
-        icon="items"
-        :title="fmtKeys('Items (Ctrl+Alt+S)')"
-        :active="shell.itemsShown"
-        @click="shell.toggleItems()"
-      />
+      <IconButton icon="items" tip="Items" keys="Ctrl+Alt+S" :active="shell.itemsShown" @click="shell.toggleItems()" />
       <IconButton
         icon="history"
-        :title="fmtKeys(ui.sketchActive ? 'Sketch options (Ctrl+Alt+H)' : 'History (Ctrl+Alt+H)')"
+        :tip="ui.sketchActive ? 'Sketch options' : 'History'"
+        keys="Ctrl+Alt+H"
         :active="shell.historyShown"
         :badge="errorCount || null"
         @click="shell.toggleHistory()"
       />
     </div>
     <div class="float-group">
-      <IconButton icon="magnet" title="Snapping" :active="isOpen('snap')" @click="open('snap', $event)" />
+      <IconButton icon="magnet" tip="Snapping" :active="isOpen('snap')" @click="open('snap', $event)" />
       <button
         type="button"
         class="icon-btn grid-btn"
@@ -272,15 +267,15 @@ async function screenshot() {
         @click="open('grid', $event)"
         >{{ gridLabelCompact }}</button
       >
-      <IconButton icon="views" title="Views" :active="isOpen('views')" @click="open('views', $event)" />
-      <IconButton icon="view-reset" title="Reset camera (Shift+Home)" @click="engine.handleAction('reset-camera')" />
+      <IconButton icon="views" tip="Views" :active="isOpen('views')" @click="open('views', $event)" />
+      <IconButton icon="view-reset" tip="Reset camera" keys="Shift+Home" @click="engine.handleAction('reset-camera')" />
     </div>
     <div class="float-group view-modes" role="group" aria-label="View mode">
       <IconButton
         v-for="v in viewModes"
         :key="v.id"
         :icon="v.icon"
-        :title="v.title"
+        :tip="v.title"
         :active="ui.viewMode === v.id"
         :disabled="v.disabled"
         :data-view-mode="v.id"
@@ -290,23 +285,24 @@ async function screenshot() {
     <div class="float-group">
       <IconButton
         icon="shaded"
-        title="Display"
+        tip="Display"
         :active="isOpen('display') || ui.xray || ui.wireframe"
         @click="open('display', $event)"
       />
-      <IconButton icon="camera" title="Screenshot" :active="saving" @click="screenshot()" />
-      <IconButton icon="versions" title="Versions" :active="isOpen('versions')" @click="open('versions', $event)" />
+      <IconButton icon="camera" tip="Screenshot" :active="saving" @click="screenshot()" />
+      <IconButton icon="versions" tip="Versions" :active="isOpen('versions')" @click="open('versions', $event)" />
       <IconButton
         v-if="!shell.narrow"
         icon="history"
-        :title="fmtKeys('History (Ctrl+Alt+H)')"
+        tip="History"
+        keys="Ctrl+Alt+H"
         :active="shell.historyOpen"
         :badge="errorCount || null"
         @click="shell.toggleHistory()"
       />
     </div>
     <div v-if="dialogs.bugDeps" class="float-group">
-      <IconButton icon="bug" title="Report a problem" @click="dialogs.bugReport = true" />
+      <IconButton icon="bug" tip="Report a problem" @click="dialogs.bugReport = true" />
     </div>
 
     <Popover

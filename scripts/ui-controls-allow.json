@@ -190,7 +190,6 @@
   { "path": "src/components/shell/VersionsPanel.vue", "kind": "button", "count": 5, "reason": "before the base set, migrates in lane Q (browser, history, palette, versions)" },
   { "path": "src/components/shell/VersionsPanel.vue", "kind": "input[type=text]", "count": 2, "reason": "before the base set, migrates in lane Q (browser, history, palette, versions)" },
   { "path": "src/components/shell/VersionsPanel.vue", "kind": "select", "count": 1, "reason": "before the base set, migrates in lane Q (browser, history, palette, versions)" },
-  { "path": "src/components/shell/ViewportControls.vue", "kind": "IconButton:no-tip", "count": 12, "reason": "before the base set, migrates in lane G (shell chrome)" },
   { "path": "src/components/shell/ViewportControls.vue", "kind": "button", "count": 9, "reason": "before the base set, migrates in lane G (shell chrome)" },
   { "path": "src/components/shell/WorkspaceToggle.vue", "kind": "button", "count": 1, "reason": "before the base set, migrates in lane G (shell chrome)" },
   { "path": "src/features/profileChip.ts", "kind": "createElement:button", "count": 2, "reason": "before the base set, migrates in lane L (TS tool boxes)" },

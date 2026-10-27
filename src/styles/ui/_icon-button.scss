@@ -1,1 +1,59 @@
 // IconButton: plain, tile and danger, sm 24, md 28 and lg 40, with its badge.
+// Tile at lg is the .icon-btn of _float.scss and _glass.scss, so only the other sizes and variants live here.
+
+.icon-btn.icon-btn-md {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--float-tile-radius);
+}
+.icon-btn.icon-btn-sm {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--float-chip-radius);
+}
+.icon-btn.icon-btn-sm,
+.icon-btn.icon-btn-md,
+.icon-btn.icon-btn-lg {
+  flex: none;
+  transition:
+    background var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease),
+    transform var(--t-fast) var(--ease);
+}
+.icon-btn.icon-btn-sm:active:not(.is-disabled),
+.icon-btn.icon-btn-md:active:not(.is-disabled),
+.icon-btn.icon-btn-lg:active:not(.is-disabled) {
+  transform: scale(0.94);
+}
+
+.icon-btn.icon-btn-plain,
+.icon-btn.icon-btn-danger {
+  color: var(--text-mute);
+}
+.icon-btn.icon-btn-plain:hover:not(.is-disabled) {
+  background: var(--hover-wash);
+  color: var(--text);
+}
+.icon-btn.icon-btn-danger:hover:not(.is-disabled) {
+  background: var(--error-tint);
+  color: var(--error);
+}
+
+.icon-btn.is-disabled:hover {
+  background: none;
+  color: var(--text-dim);
+}
+.icon-btn.icon-btn-plain.is-disabled:hover,
+.icon-btn.icon-btn-danger.is-disabled:hover {
+  color: var(--text-mute);
+}
+
+:root[data-pointer="touch"] .icon-btn.icon-btn-sm::before,
+:root[data-pointer="touch"] .icon-btn.icon-btn-md::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
+}
+:root[data-pointer="touch"] .icon-btn.icon-btn-sm::before {
+  inset: -8px;
+}
