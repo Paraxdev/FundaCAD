@@ -239,6 +239,10 @@ impl RebuildCache {
         // later ask of this document reads the checkpoint back again.
         let restored =
             (source == Source::Disk).then(|| resume.as_ref().map(|(at, snap)| (*at, snap.clone()))).flatten();
+        // A clone shares the TShapes the build writes pcurves and tolerances into, so the build gets copies.
+        if let (Some(_), Some((_, snap))) = (&restored, resume.as_mut()) {
+            snap.bodies = snap.bodies.iter().map(builder::Body::detached).collect();
+        }
 
         let began = Instant::now();
         let copy = began.duration_since(entered);
