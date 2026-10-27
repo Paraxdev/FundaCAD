@@ -203,6 +203,7 @@ pub fn fillet(ctx: &mut Ctx, f: &Fillet) -> FResult {
             draft,
             Some(&section),
             smooth || only_picked,
+            !smooth && !chord && p.abs() < PROFILE_EPS,
         );
     }
     let conic = move |s: &Shape, es: &[Shape], size: f64| -> Result<Shape, BlendErr> { ops::conic(s, es, size, p) };
@@ -216,6 +217,7 @@ pub fn fillet(ctx: &mut Ctx, f: &Fillet) -> FResult {
         r,
         draft,
         Some(&section),
+        false,
         false,
     ) {
         Err(Fail::Value { message, code: Some(CONIC_NOT_APPLICABLE) }) => {
@@ -231,6 +233,7 @@ pub fn fillet(ctx: &mut Ctx, f: &Fillet) -> FResult {
                 draft,
                 Some(&section),
                 true,
+                false,
             ) {
                 Ok(()) => Ok(()),
                 Err(_) => {
@@ -246,6 +249,7 @@ pub fn fillet(ctx: &mut Ctx, f: &Fillet) -> FResult {
                         draft,
                         Some(&section),
                         false,
+                        !chord,
                     )?;
                     note_profile_fallback(ctx, &f.id);
                     Ok(())
@@ -300,6 +304,7 @@ pub fn chamfer(ctx: &mut Ctx, f: &Chamfer) -> FResult {
         draft,
         Some(&section),
         f.tangent_edges == Some(false),
+        false,
     )
 }
 
@@ -832,6 +837,8 @@ fn blend_edges(
     draft: bool,
     section: Option<&SectionOp>,
     section_only: bool,
+    // Whether the blend is a rolling ball round, whose radius is its size.
+    ball: bool,
 ) -> FResult {
     if !(blend_size > 0.0) {
         return Err(Fail::msg(format!("{label}: size must be greater than 0 (got {})", py_g(blend_size))));
@@ -853,8 +860,9 @@ fn blend_edges(
         let edges = drop_slivers(edges, label)?;
         refuse_smooth_edges(&body_shape, &edges, label)?;
         let misfit: std::cell::Cell<Option<Fail>> = std::cell::Cell::new(None);
-        let fades = smooth::turns_tangent(&body_shape, &edges);
-        let gauge = fades.then(|| smooth::Gauge::new(&body_shape));
+        let ends = smooth::fade_ends(&body_shape, &edges);
+        let fades = !ends.is_empty();
+        let gauge = fades.then(|| smooth::Gauge::new(&body_shape, &edges, ends, ball, blend_size));
         let rippled = std::cell::Cell::new(false);
         let smooth_at = |out: &Shape, size: f64| {
             let ok = gauge.as_ref().is_none_or(|g| g.lumps(out, size).smooth());
