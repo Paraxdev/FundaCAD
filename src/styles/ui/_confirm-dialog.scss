@@ -1,1 +1,58 @@
 // ConfirmDialog: the message and choice row on top of Dialog.
+
+.ui-confirm-message {
+  margin: 0;
+  color: var(--text-dim);
+  line-height: 1.45;
+}
+.ui-confirm-message + .ui-confirm-checklist {
+  margin-top: var(--s-4);
+}
+
+.ui-confirm-choices {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--s-2);
+}
+.ui-confirm-choice {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+.ui-confirm-hint {
+  font-size: 10.5px;
+  color: var(--text-mute);
+}
+.ui-confirm-primary .ui-confirm-hint {
+  color: inherit;
+  opacity: 0.75;
+}
+
+.btn.ui-confirm-danger,
+.btn.ui-confirm-danger:hover {
+  background: var(--error-tint);
+  color: var(--error);
+}
+
+.ui-confirm-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ui-confirm-check {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-2) var(--s-3);
+  corner-shape: squircle;
+  border-radius: var(--float-chip-radius);
+  cursor: pointer;
+}
+.ui-confirm-check:hover {
+  background: var(--hover-wash);
+}
+.ui-confirm-check small {
+  margin-left: auto;
+}
