@@ -9,6 +9,7 @@ import { isMac } from "../input/platform";
 import { useShellStore } from "../stores/shell";
 import { useCommandPaletteStore } from "../stores/commandPalette";
 import type { Engine } from "./engine";
+import { pickedFeatureIds } from "./featureRows";
 
 /** The keymap plus window level handlers that bypass it, such as the file shortcuts that must work mid sketch. */
 export function installKeyboard(e: Engine): void {
@@ -53,7 +54,7 @@ export function installKeyboard(e: Engine): void {
     if (ev.key !== "Delete" && ev.key !== "Backspace") return;
     if (e.deleteSelectedFace()) return;
     if (e.selectedFeature && e.selectedFeatureExplicit) {
-      e.store.removeFeature(e.selectedFeature);
+      e.store.removeFeatures(pickedFeatureIds(e));
       e.selectFeature(null);
     }
   });

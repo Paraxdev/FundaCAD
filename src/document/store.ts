@@ -1705,6 +1705,23 @@ export class DocumentStore {
     );
   }
 
+  // One undo step for the lot, with the rollback marker staying on the feature it was on.
+  removeFeatures(ids: readonly string[]) {
+    const gone = new Set(ids);
+    const at = this.doc.features.flatMap((f, i) => (gone.has(f.id) ? [i] : []));
+    if (!at.length) return;
+    this.step(
+      (d) => {
+        d.features = d.features.filter((f) => !gone.has(f.id));
+      },
+      true,
+      () => {
+        if (this.rollback !== null) this.rollback -= at.filter((i) => i < this.rollback!).length;
+        for (const id of gone) this.suppressed.delete(id);
+      },
+    );
+  }
+
   // features[0..rollbackIndex-1] are built.
   get rollbackIndex(): number {
     return this.rollback ?? this.doc.features.length;
@@ -1729,6 +1746,25 @@ export class DocumentStore {
     };
     set(!was);
     this.pushOverlayUndo({ undo: () => set(was), redo: () => set(!was) });
+  }
+
+  // One undo step however many; a feature already in the asked state is left out of it, and an id the document does
+  // not hold is never recorded, since nextId would hand it to a later feature born suppressed.
+  setSuppressed(ids: readonly string[], on: boolean) {
+    const have = new Set(this.doc.features.map((f) => f.id));
+    const todo = ids.filter((id) => have.has(id) && this.suppressed.has(id) !== on);
+    if (!todo.length) return;
+    const set = (to: boolean) => {
+      for (const id of todo) {
+        if (to) this.suppressed.add(id);
+        else this.suppressed.delete(id);
+      }
+      this.markDirty();
+      this.emitDoc();
+      this.scheduleRebuild(true);
+    };
+    set(on);
+    this.pushOverlayUndo({ undo: () => set(!on), redo: () => set(on) });
   }
 
   // No undo, not dirty. `hold` keeps the last model that built on screen if the kernel refuses (see heldRefusal).
@@ -2033,6 +2069,26 @@ export class DocumentStore {
         this.markDirty();
       },
     });
+  }
+
+  // setPlaneVisibility for several, as one undo step.
+  setPlanesVisibility(changes: ReadonlyMap<string, boolean>) {
+    const prior = new Map<string, boolean | undefined>();
+    for (const [id, v] of changes) {
+      if ((this.planeVis.get(id) ?? true) === v) continue;
+      prior.set(id, this.planeVis.get(id));
+    }
+    if (!prior.size) return;
+    const put = (to: (id: string) => boolean | undefined) => {
+      for (const id of prior.keys()) {
+        const v = to(id);
+        if (v === undefined) this.planeVis.delete(id);
+        else this.planeVis.set(id, v);
+      }
+      this.markDirty();
+    };
+    put((id) => changes.get(id));
+    this.pushOverlayUndo({ undo: () => put((id) => prior.get(id)), redo: () => put((id) => changes.get(id)) });
   }
 
   // Undefined means use the rebuilt name.

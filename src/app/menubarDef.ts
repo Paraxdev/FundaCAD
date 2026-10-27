@@ -13,6 +13,7 @@ import { PRODUCT_NAME } from "./channel";
 import { allCommands } from "../ui/commands";
 import { analysisFlags } from "../ui/railActive";
 import type { Engine } from "./engine";
+import { pickedFeatureIds, toggleSuppressRows } from "./featureRows";
 
 const ISSUES_URL = `${REPO_URL}/issues`;
 
@@ -96,7 +97,7 @@ export function buildMenubar(e: Engine): MenuDef[] {
           onClick: () => {
             if (e.deleteSelectedFace()) return;
             if (e.selectedFeature) {
-              e.store.removeFeature(e.selectedFeature);
+              e.store.removeFeatures(pickedFeatureIds(e));
               e.selectFeature(null);
             }
           },
@@ -104,7 +105,7 @@ export function buildMenubar(e: Engine): MenuDef[] {
         {
           label: "Suppress / Unsuppress",
           disabled: () => !e.selectedFeature,
-          onClick: () => e.selectedFeature && e.store.toggleSuppress(e.selectedFeature),
+          onClick: () => e.selectedFeature && toggleSuppressRows(e.store, pickedFeatureIds(e)),
         },
         { separator: true, label: "" },
         // No ellipsis: it opens a workspace, not a window.

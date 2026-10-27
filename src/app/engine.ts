@@ -3,6 +3,8 @@
 import { setLeftButtonOwner } from "../viewport/navigator/bindings";
 import { Viewport } from "../viewport/viewport";
 import { onUnitChange } from "../ui/units";
+import { soleSelectedFeature } from "./featureRows";
+import type { RowSelection } from "../ui/rowSelection";
 import { asFeature } from "../types";
 import { isSessionEnded } from "../document/session";
 import { Geometry, type GeometryBackend } from "../geometry/client";
@@ -173,6 +175,8 @@ export interface Engine {
   /** Picked by the user rather than set by the engine (stores/selection.ts). */
   readonly selectedFeatureExplicit: boolean;
   selectFeature(id: string | null, explicit?: boolean): void;
+  /** Several rows picked at once, `primary` being the one the inspector follows. */
+  selectFeatureRows(next: RowSelection<string>, primary: string | null): void;
   editFeature(id: string): void;
   featureForFace(faceId: number): string | null;
   deleteSelectedFace(): boolean;
@@ -418,6 +422,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
     },
     viewport: e.viewport,
     browser: useBrowserStore(),
+    selectFeature: (id) => e.selectFeature(id),
   });
   watchOutOfDate(e.store, (on) => e.viewport.setModelOutOfDate(on));
   installEnvironmentSync(e.store);
@@ -484,7 +489,8 @@ export function mountUi(e: Engine): void {
     selectFeature: (id, explicit) => e.selectFeature(id, explicit),
     noteCommitted: (id) => e.noteCommitted(id),
     isSketchConsumed: (id) => e.isSketchConsumed(id),
-    getSelectedFeature: () => e.selectedFeature,
+    // Starters that need exactly one feature see none while several rows are picked, and ask for a pick as usual.
+    getSelectedFeature: () => soleSelectedFeature(e),
     getSelectedFeatureExplicit: () => e.selectedFeatureExplicit,
     setPlanePick: (v) => {
       e.planePick = v;

@@ -295,7 +295,7 @@ export class Viewport {
   // Datum points and axes, apart from datumQuads so a plane pick never resolves to one.
   private datumMarkers: THREE.Mesh[] = [];
   private hoveredDatum: string | null = null;
-  private selectedDatum: string | null = null;
+  private selectedDatum: ReadonlySet<string> = new Set();
   private dragMoved = false;
   private downPos = { x: 0, y: 0 };
   // "redefine cube side from a model face" pick mode (null = not active)
@@ -2091,7 +2091,7 @@ export class Viewport {
       this.datumGroup.add(m);
       this.datumQuads.push(m);
     }
-    this.highlightDatum(this.selectedDatum);
+    this.paintDatums();
   }
 
   /** Datum points and axes as pickable geometry, sized against the model. */
@@ -2141,21 +2141,25 @@ export class Viewport {
   }
 
   /** Brighten the selected construction plane; others stay faint. */
-  highlightDatum(id: string | null) {
-    this.selectedDatum = id;
+  highlightDatum(id: string | readonly string[] | null) {
+    this.selectedDatum = new Set(id === null ? [] : typeof id === "string" ? [id] : id);
     this.paintDatums();
   }
 
   private paintDatums() {
     for (const q of this.datumQuads) {
       const id = q.userData.datumId as string;
-      (q.material as THREE.MeshBasicMaterial).opacity =
-        id === this.selectedDatum ? 0.32 : id === this.hoveredDatum ? 0.24 : 0.12;
+      (q.material as THREE.MeshBasicMaterial).opacity = this.selectedDatum.has(id)
+        ? 0.32
+        : id === this.hoveredDatum
+          ? 0.24
+          : 0.12;
     }
     // A point or axis is a solid mark, so it brightens rather than fades and stays clearly visible otherwise.
     for (const m of this.datumMarkers) {
       const id = m.userData.datumId as string;
-      (m.material as THREE.MeshBasicMaterial).opacity = id === this.selectedDatum || id === this.hoveredDatum ? 1 : 0.7;
+      (m.material as THREE.MeshBasicMaterial).opacity =
+        this.selectedDatum.has(id) || id === this.hoveredDatum ? 1 : 0.7;
     }
     this.requestRender();
   }

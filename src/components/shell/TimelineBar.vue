@@ -3,7 +3,7 @@ import { fmtKeys } from "../../input/platform";
 import { computed, nextTick, onMounted, onUnmounted, ref, useTemplateRef, watch } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { useDocValue, useBuildValue } from "../../app/useDoc";
-import { useSelectionStore } from "../../stores/selection";
+import { pickedFeatureCount, useSelectionStore } from "../../stores/selection";
 import { useTimelineStore } from "../../stores/timeline";
 import { useShellStore } from "../../stores/shell";
 import { featureMeta, stepName } from "../../ui/featureMeta";
@@ -26,6 +26,7 @@ import { relatedFeatureIds } from "../../ui/relatedFeatures";
 import { routeTreeClick, treePickWaiting } from "../../ui/treePick";
 import { featurePick } from "../../app/featurePick";
 import { closeOpenEdit } from "../../app/selection";
+import { clickFeatureRow, deleteRows, rowTargets, toggleSuppressRows } from "../../app/featureRows";
 import type { Feature } from "../../types";
 
 const engine = useEngine();
@@ -88,6 +89,15 @@ const related = computed<Set<string> | null>(() => {
   return seeds.size ? relatedFeatureIds(store.document.features, seeds) : null;
 });
 const filtering = computed(() => relatedOn.value && related.value !== null);
+
+/** The chips as drawn, which a Shift-click run is measured over. */
+const shownIds = computed(() =>
+  features.value.filter((f) => !filtering.value || related.value?.has(f.id)).map((f) => f.id),
+);
+const picked = computed(() => new Set(selection.rows.keys));
+// Values show under the one chip the inspector follows, several picked chips have no single set of values.
+const several = computed(() => pickedFeatureCount(selection.rows, features.value) > 1);
+const isPicked = (id: string) => picked.value.has(id) || selection.featureId === id;
 
 const unit = ref(getUnit());
 const offUnit = onUnitChange(() => {
@@ -225,14 +235,19 @@ function busyElsewhere(): boolean {
   return engine.toolBusy() || engine.sketch.active;
 }
 // A tool waiting for a pick takes the chip the way it takes an Items row.
-function onChipClick(id: string) {
+function onChipClick(id: string, ev: MouseEvent) {
   const f = treePickWaiting() ? store.document.features.find((x) => x.id === id) : undefined;
   if (f) {
     routeTreeClick(featurePick(engine, f), { busyHint: () => null, hint: (t) => engine.setStatus(t, "") });
     return;
   }
   if (busyElsewhere()) return;
-  timeline.select(id);
+  if (ev.ctrlKey || ev.metaKey || ev.shiftKey) clickFeatureRow(engine, shownIds.value, id, ev);
+  else timeline.select(id);
+}
+/** A Shift-click takes a run of chips, so the browser's text selection across the labels is suppressed. */
+function onChipMouseDown(ev: MouseEvent) {
+  if (ev.shiftKey && !(ev.target as HTMLElement | null)?.closest?.("input")) ev.preventDefault();
 }
 function onChipDblclick(id: string) {
   if (treePickWaiting()) return;
@@ -264,7 +279,7 @@ function finishRename(e: Event, save: boolean) {
   if (save) store.renameFeature(id, (e.target as HTMLInputElement).value);
 }
 function onRenameKey(e: KeyboardEvent) {
-  if (e.key !== "F2" || renamingId.value || !selection.featureId) return;
+  if (e.key !== "F2" || renamingId.value || !selection.featureId || several.value) return;
   const t = e.target as HTMLElement | null;
   if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
   if (!features.value.some((f) => f.id === selection.featureId)) return;
@@ -387,6 +402,11 @@ function gapIndexAt(ev: PointerEvent): number {
 
 function openMenu(e: MouseEvent, id: string, i: number) {
   e.preventDefault();
+  const targets = rowTargets(id, features.value);
+  if (targets.length > 1) {
+    openMultiMenu(e, targets);
+    return;
+  }
   // Re-pick only when this feature's last build reported an ambiguous saved reference, offering it on a healthy one
   // invites overwriting working references.
   const repick = timeline.canRepick(id) ? [{ label: "Re-pick face…", onClick: () => timeline.repick(id) }] : [];
@@ -427,7 +447,21 @@ function openMenu(e: MouseEvent, id: string, i: number) {
     { label: "Roll back before this", onClick: () => store.setRollback(i) },
     { label: "Roll to here", onClick: () => store.setRollback(i + 1) },
     { separator: true, label: "" },
-    { label: "Delete", danger: true, onClick: () => store.removeFeature(id) },
+    { label: "Delete", danger: true, onClick: () => deleteRows(engine, [id]) },
+  ]);
+}
+
+/** Several chips picked: what makes sense on all of them, and the single-feature items shown off with the reason. */
+function openMultiMenu(e: MouseEvent, ids: string[]) {
+  const n = ids.length;
+  const allOff = ids.every((x) => suppressed.value.has(x));
+  contextMenu(e.clientX, e.clientY, [
+    { label: "Edit (select one feature)", disabled: true },
+    { label: "Rename (select one feature)", disabled: true },
+    { label: allOff ? `Unsuppress these ${n}` : `Suppress these ${n}`, onClick: () => toggleSuppressRows(store, ids) },
+    { label: "Roll back before this (select one feature)", disabled: true },
+    { separator: true, label: "" },
+    { label: `Delete these ${n}`, danger: true, onClick: () => deleteRows(engine, ids) },
   ]);
 }
 </script>
@@ -514,7 +548,7 @@ function openMenu(e: MouseEvent, id: string, i: number) {
                 class="timeline-node"
                 :data-id="f.id"
                 :class="{
-                  selected: selection.featureId === f.id,
+                  selected: isPicked(f.id),
                   error: errors.has(f.id),
                   // amber only where there is no red: the build SUCCEEDED, so
                   // the chip must not read as a failure. `notes` already drops
@@ -527,7 +561,8 @@ function openMenu(e: MouseEvent, id: string, i: number) {
                 }"
                 :title="chipTitle(f, i)"
                 draggable="true"
-                @click="onChipClick(f.id)"
+                @mousedown="onChipMouseDown"
+                @click="onChipClick(f.id, $event)"
                 @dblclick="onChipDblclick(f.id)"
                 @contextmenu="openMenu($event, f.id, i)"
                 @dragstart="onDragStart(f.id, $event)"
@@ -555,10 +590,14 @@ function openMenu(e: MouseEvent, id: string, i: number) {
                   @blur="finishRename($event, true)"
                 />
                 <span v-else class="t-name">{{ f.shown }}</span>
-                <Icon class="t-caret" :name="selection.featureId === f.id ? 'caretDown' : 'caretRight'" :size="12" />
+                <Icon
+                  class="t-caret"
+                  :name="selection.featureId === f.id && !several ? 'caretDown' : 'caretRight'"
+                  :size="12"
+                />
               </div>
               <!-- The values sit under the clicked chip, so the history already names the operation and the form need not. -->
-              <div v-if="selection.featureId === f.id" class="timeline-props">
+              <div v-if="selection.featureId === f.id && !several" class="timeline-props">
                 <FeatureProperties :feature-id="f.id" :unit="unit" />
               </div>
             </div>

@@ -586,12 +586,15 @@ export function sketchFlatSource(store: DocumentStore, sketchId: string): FlatSo
 
 /** File, Export: the selected bodies, or a selected sketch or flat face for DXF and SVG. */
 export async function exportSelection(store: DocumentStore, geometry: GeometryBackend, viewport: ExportViewport) {
-  const { useSelectionStore } = await import("../stores/selection");
+  const { useSelectionStore, pickedFeatureCount } = await import("../stores/selection");
+  const sel = useSelectionStore();
+  // Several picked rows have no one sketch to draw.
+  const several = pickedFeatureCount(sel.rows, store.document.features) > 1;
   return exportModel(
     store,
     geometry,
     viewport.selectionBodyIds(),
-    flatSourceOf(store, viewport, useSelectionStore().featureId),
+    several ? null : flatSourceOf(store, viewport, sel.featureId),
   );
 }
 
