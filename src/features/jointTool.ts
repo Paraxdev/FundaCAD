@@ -186,14 +186,16 @@ export class JointTool {
 
   private onUp(e: PointerEvent) {
     if (e.button !== 0) return;
+    const moved = Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
     if (this.grabbing || this.grabbingAngle) {
       this.grabbing = false;
       this.grabbingAngle = false;
       this.viewport.domElement.style.cursor = this.hovering || this.hoveringDial ? "grab" : "default";
-      this.commit();
+      // Letting go of a drag only ends it, Enter applies; a press that never travelled still applies as before.
+      if (moved) this.dim.focus();
+      else this.commit();
       return;
     }
-    const moved = Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
     if (!this.downOnGizmo && !moved) this.commit();
   }
 

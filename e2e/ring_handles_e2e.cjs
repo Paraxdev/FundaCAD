@@ -513,7 +513,7 @@ const check = (name, ok, detail) => {
     await page.mouse.up();
     check("the ring still turns the body, 90 about Z", deg === 90, String(deg));
   }
-  // A released drag commits and the gizmo comes back on the moved box; put the
+  // The released drag is still pending in the gizmo; drop it and put the
   // box back so the light shots are of the same scene.
   await settle();
   await page.evaluate(() => window.__fundacad.move.cancel());

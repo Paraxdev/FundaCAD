@@ -435,7 +435,10 @@ const note = (s) => {
     const up = await moveOn(P1);
     check("Move on the selected plane raises the gizmo on it", up);
     if (up) console.log(`    aimable: ${JSON.stringify(await aimable())}`);
-    if (up) await ringDrag(0, 30);
+    if (up) {
+      await ringDrag(0, 30);
+      await key("Enter");
+    }
     await settle();
     await page.waitForTimeout(300);
     await shot("1b-tilted");
@@ -474,11 +477,13 @@ const note = (s) => {
     const up = await page.evaluate(() => window.__fundacad.move.active);
     if (!up) await moveOn(P1);
     await ringDrag(0, 15);
+    await key("Enter");
     await settle();
   }
   await shot("2-tilt45");
   f1 = await feature(P1);
-  check("tiltX is exactly 45", f1?.tiltX === 45, `tiltX ${f1?.tiltX}`);
+  const tilt45 = VARIANT === "rings" ? await page.evaluate(() => window.__fundacad.datumPose.pose.tiltX) : f1?.tiltX;
+  check("tiltX is exactly 45", tilt45 === 45, `tiltX ${tilt45}`);
 
   // --- 3. spin 90 ---------------------------------------------------------------
   task = "3 spin 90";
@@ -489,6 +494,7 @@ const note = (s) => {
     await key("Enter");
   } else {
     await ringDrag(2, 90);
+    await key("Enter");
     await settle();
     await key("Escape");
   }
@@ -622,7 +628,7 @@ const note = (s) => {
     check("double-clicking P0 opens its handles", on);
     await drag(await arrowPath(15));
     await settle();
-    let off = (await feature("P0"))?.offset;
+    let off = await page.evaluate(() => window.__fundacad.datumPose.pose.offset);
     if (Math.abs(off - 25) > 1e-6) {
       note(`arrow drag landed on ${off}, typed 25`);
       await typeField("Offset", 25);
@@ -634,6 +640,7 @@ const note = (s) => {
     const up = await moveOn("P0");
     check("Move on P0 raises the gizmo on it", up);
     await drag(await moveArrowPath(2, 15));
+    await key("Enter");
     await settle();
     let off = (await feature("P0"))?.offset;
     if (Math.abs(off - 25) > 1e-6) {

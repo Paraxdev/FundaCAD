@@ -120,6 +120,7 @@ const check = (name, ok, detail) => {
     await page.mouse.move(from.x, from.y - dy, { steps: 6 });
     await page.waitForTimeout(150);
     await page.mouse.up();
+    await page.keyboard.press("Enter");
     await page.waitForTimeout(1200);
     await idle();
     await page.waitForTimeout(300);

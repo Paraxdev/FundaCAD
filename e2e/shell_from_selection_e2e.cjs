@@ -123,6 +123,7 @@ const check = (name, ok, detail) => {
   check("a wall thicker than the body is refused on screen", /refused/i.test(refused), JSON.stringify(refused));
   await page.screenshot({ path: path.join(OUT, "02_refused.png") });
   await page.mouse.up();
+  await page.keyboard.press("Enter");
   await page.waitForTimeout(800);
   await idle();
   const kept = Number(/keeping ([\d.]+)/.exec(refused)?.[1]);
@@ -154,6 +155,7 @@ const check = (name, ok, detail) => {
   const back = await prompt();
   check("dragging back to a wall that builds clears the refusal", !/refused/i.test(back), JSON.stringify(back));
   await page.mouse.up();
+  await page.keyboard.press("Enter");
   await page.waitForTimeout(1000);
   await idle();
   const got = await shells();

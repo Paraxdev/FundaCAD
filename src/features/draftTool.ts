@@ -144,8 +144,8 @@ export class DraftTool {
     if (this.grabbing) {
       this.grabbing = false;
       this.viewport.domElement.style.cursor = this.hovering ? "grab" : "default";
-      const moved = Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
-      if (moved && Math.abs(this.angle) >= 1e-3) this.commit();
+      // Letting go only ends the drag, Enter applies it.
+      this.dim.focus();
       return;
     }
     const moved = Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;

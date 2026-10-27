@@ -172,13 +172,15 @@ export class MechanismTool {
 
   private onUp(e: PointerEvent) {
     if (e.button !== 0) return;
+    const moved = Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
     if (this.grabbing) {
       this.grabbing = false;
       this.viewport.domElement.style.cursor = this.hovering ? "grab" : "default";
-      this.commit();
+      // Letting go of a drag only ends it, Enter applies; a press that never travelled still applies as before.
+      if (moved) this.dim.focus();
+      else this.commit();
       return;
     }
-    const moved = Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
     if (!this.downOnGizmo && !moved) this.commit();
   }
 

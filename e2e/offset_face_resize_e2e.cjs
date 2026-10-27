@@ -233,6 +233,7 @@ const HOLE_WALL = [0, 7.125 + 3.3690784184224394, 13.015];
 
   // --- 4. letting go commits what is on screen ---------------------------------
   await page.mouse.up();
+  await page.keyboard.press("Enter");
   await settle();
   await page.waitForTimeout(800);
   await settle();

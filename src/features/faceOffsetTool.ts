@@ -205,8 +205,8 @@ export class FaceOffsetTool {
       this.grabbing = false;
       this.viewport.domElement.style.cursor = this.hovering ? "grab" : "default";
       this.flushPreviewNow();
-      // A drag out and back can end within a few pixels of where it began.
-      if ((moved || this.value !== this.grabValue) && !this.neutral) this.commit();
+      // Letting go only ends the drag, Enter applies it.
+      this.dim.focus();
       return;
     }
     if (this.downOnGizmo || moved) return;

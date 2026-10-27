@@ -222,7 +222,10 @@ export function createDocumentActions(e: Engine): Pick<Engine, "newDocument" | "
     // re-open waiting on a drag's rebuild lands on the undone model (FI-2). Home closes so the change is seen.
     doUndo() {
       closeHome();
+      // A drag not yet entered is the last step, so undo takes back only that.
+      const pending = e.tools.move.pending;
       e.tools.move.cancel();
+      if (pending) return;
       if (!e.sketch.undoEdit()) e.store.undo();
     },
     doRedo() {

@@ -16,7 +16,6 @@ import {
   createDragHandle,
   nameHandle,
   createRotationArc,
-  fluentRelease,
   HANDLE_UP,
   type DragHandle,
 } from "./manipulator";
@@ -82,6 +81,8 @@ export class ExtrudeTool {
    *  hold. Null for every other entry, where the depth tracks the absolute projection. */
   private grabProj: number | null = null;
   private fluentGrab = false;
+  /** Set once a drag lets go, so moving the hand to the box does not drag the depth along. */
+  private depthHeld = false;
   private downPos = { x: 0, y: 0 };
 
   /** Degrees, positive narrows the far face. Zero is the plain straight prism. */
@@ -210,7 +211,7 @@ export class ExtrudeTool {
     const el = this.viewport.domElement;
     el.addEventListener("pointermove", this.boundMove);
     el.addEventListener("pointerdown", this.boundDown);
-    // Without pointerup an edit could never commit a taper or depth swung open by double-click by letting go.
+    // An edit needs pointerup too, or a taper or depth drag in it would never end.
     el.addEventListener("pointerup", this.boundUp);
     window.addEventListener("keydown", this.boundKey, true);
 
@@ -285,7 +286,7 @@ export class ExtrudeTool {
     const cur = this.viewport.domElement.style.cursor;
     if (this.hovering || this.taperHovering) this.viewport.domElement.style.cursor = "grab";
     else if (cur === "grab") this.viewport.domElement.style.cursor = "default";
-    if (!this.dim.isUserDriven("distance") && !this.hovering && !this.taperHovering) {
+    if (!this.dim.isUserDriven("distance") && !this.depthHeld && !this.hovering && !this.taperHovering) {
       // The depth tracks the cursor until it is over a handle; otherwise reaching for a handle moves it, and the
       // press commits instead of grabbing.
       const proj = axisDragDistance(this.viewport, e.clientX, e.clientY, anchor, plane.n);
@@ -390,40 +391,31 @@ export class ExtrudeTool {
     this.commit();
   }
 
-  /** Only the fluent gesture ends on a release; elsewhere a pointerup is the tail of the click onDown handled. */
+  /** A drag only ends on release, the depth it reached holds; a press on the depth arrow that never travelled
+   *  still accepts the depth the cursor set. */
   private onUp(e: PointerEvent) {
     if (e.button !== 0 || this.phase !== "drag") return;
     const moved = Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
     if (this.taperGrabbing) {
-      // A grab, drag and release is one whole gesture, so letting go of the taper finishes it. A press that never
-      // travelled stays put (double-click reopens to tune).
       this.taperGrabbing = false;
       this.viewport.domElement.style.cursor = this.taperHovering ? "grab" : "default";
-      if (moved) this.commit();
+      this.dim.focus();
       return;
     }
     if (this.grabbing) {
-      // Same for the depth handle: a click that never travelled commits too, it accepts the depth the cursor set.
       this.grabbing = false;
       this.viewport.domElement.style.cursor = this.hovering ? "grab" : "default";
-      this.commit();
+      if (!moved) return this.commit();
+      this.depthHeld = true;
+      this.dim.focus();
       return;
     }
     if (!this.fluentGrab) return;
-    const release = fluentRelease({
-      fluent: true,
-      moved: Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3,
-      // The same threshold commit() uses to ignore a zero extrude.
-      meaningful: Math.abs(this.distance) >= 1e-3,
-    });
-    // Cleared before dispatching: commit() can decline a zero depth and leave the tool alive, and a stale flag would
-    // re-run this on the next release.
     this.fluentGrab = false;
-    if (release === "commit") return this.commit();
-    if (release === "cancel") return this.cancel();
-    // Stayed armed: a press that never travelled opens the full tool, and the depth tracks relative to the grab,
-    // where the pointer still is.
     this.viewport.domElement.style.cursor = "default";
+    // A fluent press that never travelled opens the full tool with the depth still following the hand.
+    if (moved) this.depthHeld = true;
+    this.dim.focus();
   }
 
   private onKey(e: KeyboardEvent) {
@@ -463,6 +455,7 @@ export class ExtrudeTool {
 
   private beginDrag() {
     this.phase = "drag";
+    this.depthHeld = false;
     this.overlay.setHoverRegion(null);
     // One id per gesture, shared by the engine taper preview and the commit, so the preview replaces itself.
     this.previewId = this.editId ?? this.store.nextId();
@@ -971,6 +964,7 @@ export class ExtrudeTool {
     window.removeEventListener("keydown", this.boundKey, true);
     el.style.cursor = "default";
     this.fluentGrab = false;
+    this.depthHeld = false;
     this.grabProj = null;
     this.dim.hide();
     this.disposePreviewGeom();

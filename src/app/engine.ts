@@ -157,8 +157,8 @@ export interface Engine {
   toolOwnsScreen(): boolean;
   /** toolOwnsScreen() minus a modal (Home counts as one): a sketch or tool is at work on the document. */
   toolAtWork(): boolean;
-  /** A body verb calls this first, or its own toolBusy() check refuses it. The gizmo is always untouched, since a drag
-   *  commits on pointerup. */
+  /** A body verb calls this first, or its own toolBusy() check refuses it. A drag let go of but not yet entered is
+   *  written first, so the verb acts on where the bodies were left. */
   dropBodyGizmo(): void;
   raiseBodyGizmo(): void;
   /** Raises it again once the command dropBodyGizmo made way for is escaped, while the same bodies are selected. */
@@ -371,6 +371,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   e.sketch.gizmo = {
     start: (target, done) => move.startTarget(target, () => done()),
     cancel: () => move.cancel(),
+    settle: () => move.settle(),
     get active() {
       return move.active;
     },

@@ -36,7 +36,7 @@ export interface PoseToolOptions {
   pose: DatumPose;
   /** fields a parameter expression drives, which get no handle and no box */
   locked?: ReadonlySet<PoseField>;
-  /** set: each release is handed here and the handles stay up (editing) */
+  /** set: an edit of a placed datum, its pose is written here on Enter instead of handed to onDone */
   onStep?: (pose: DatumPose) => void;
   /** every change while dragging or typing, for a live preview */
   onLive?: (pose: DatumPose) => void;
@@ -73,7 +73,6 @@ export class DatumPoseTool {
   private grabDialStart = 0;
   private downPos = { x: 0, y: 0 };
   private downOnGizmo = false;
-  private moved = false;
 
   private dim = new DimInput();
   private onDone: ((pose: DatumPose | null) => void) | null = null;
@@ -159,7 +158,6 @@ export class DatumPoseTool {
       const raw = this.grabValue + (proj - this.grabProj);
       const v = snap(raw, this.viewport.snapStep(base, e.shiftKey));
       if (v === this.pose.offset) return;
-      this.moved = true;
       this.set({ offset: v });
       return;
     }
@@ -171,7 +169,6 @@ export class DatumPoseTool {
       this.dial?.update(this.grabDialStart, v - this.grabValue, step || 1);
       this.viewport.requestRender();
       if (Math.abs(v - this.pose[g]) < 1e-9) return;
-      this.moved = true;
       this.set({ [g]: v });
       return;
     }
@@ -191,7 +188,6 @@ export class DatumPoseTool {
     e.stopImmediatePropagation();
     this.dim.takeOver(h);
     this.grab = h;
-    this.moved = false;
     this.viewport.domElement.style.cursor = "grabbing";
     const s = this.scene();
     this.grabPivot.copy(s.pivot);
@@ -246,7 +242,7 @@ export class DatumPoseTool {
       this.grab = null;
       this.dropDial();
       this.viewport.domElement.style.cursor = this.hover ? "grab" : "default";
-      if (this.moved && this.opts?.onStep) this.step();
+      this.dim.focus();
       this.viewport.requestRender();
       return;
     }

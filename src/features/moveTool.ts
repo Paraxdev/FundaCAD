@@ -427,15 +427,18 @@ export class MoveTool {
 
   private onUp(e: PointerEvent) {
     if (e.button !== 0) return;
-    if (this.grab) {
+    const g = this.grab;
+    if (g) {
       this.grab = null;
       this.viewport.gizmoDragging = false;
       this.dropDial();
       this.stepLabel = "";
       setPrompt(idlePrompt(this.cubes.length > 0));
       this.viewport.domElement.style.cursor = this.hover ? "grab" : "default";
-      // Each drag is its own timeline row, so undo undoes the last nudge and the next drag starts from this pose.
-      this.settleDrag();
+      // Letting go only ends the drag: Enter writes every drag since the last one as one timeline row.
+      if (g.kind === "size") this.dim.focusField("size");
+      else if (g.kind === "ring") this.dim.focusField("turn");
+      else this.dim.focusField("move");
       return;
     }
     const moved = Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
@@ -449,17 +452,28 @@ export class MoveTool {
     }
   }
 
-  /** The re-open waits for the rebuild: the gizmo is placed from the model, and the old one would double the
-   *  next move. */
-  private settleDrag() {
-    this.commitAndReopen(true);
-  }
-
-  /** Re-opens like a drag once something was written, closes when nothing was. */
+  /** Re-opens once something was written, closes when nothing was. The re-open waits for the rebuild: the gizmo is
+   *  placed from the model, and the old one would double the next move. */
   private settleTyped() {
     const unplaced = this.typedWithoutHandle();
     if (unplaced) return this.dim.flag(unplaced);
-    this.commitAndReopen(false);
+    this.commitAndReopen();
+  }
+
+  /** Something dragged or typed that Enter would write. */
+  get pending(): boolean {
+    if (!this.active) return false;
+    const v = this.values();
+    return (
+      Math.hypot(v.dx, v.dy, v.dz) > 1e-9 || Math.abs(v.rx) + Math.abs(v.ry) + Math.abs(v.rz) > 1e-9 || this.resized()
+    );
+  }
+
+  /** For a command that needs the gizmo out of the way: what was dragged is written, as Enter would, and the
+   *  session ends. */
+  settle() {
+    this.dropPendingReopen();
+    this.commit();
   }
 
   /** A typed value only means something along a handle, so one typed before any handle was picked is refused. */
@@ -477,14 +491,14 @@ export class MoveTool {
     return null;
   }
 
-  private commitAndReopen(evenUnchanged: boolean) {
+  private commitAndReopen() {
     const target = this.target;
     const done = this.onDone;
     const through = this.onClickThrough;
     // The last grabbed handle outlives the re-open, so a click on an arrow still says where the next typed distance goes.
     const chosen = this.last;
     const res = this.commit();
-    if (!target || (!res && !evenUnchanged)) return;
+    if (!target || !res) return;
     // Asked only once the rebuild has landed, so an owner that has closed by then can answer null.
     const reopen = () => {
       this.pendingReopen = null;
@@ -497,8 +511,7 @@ export class MoveTool {
       if (chosen?.kind === "size") this.dim.focusField("size");
       else if (chosen?.kind === "ring") this.dim.focusField("turn");
     };
-    // A drag that ended where it started writes nothing, so there is no rebuild to wait for.
-    if (!res?.rebuild) return reopen();
+    if (!res.rebuild) return reopen();
     // Wait for the falling edge: onBuild replays the current state to a new subscriber before the round trip
     // is announced, and re-opening on that replay would count this drag twice.
     let started = false;
@@ -661,7 +674,7 @@ export class MoveTool {
     this.refreshPreview();
   }
 
-  /** Instant ghost, no engine round-trip; the real write happens on release. */
+  /** Instant ghost, no engine round-trip; the real write happens on Enter. */
   private refreshPreview() {
     this.target?.preview(this.transform(), this.copy);
   }
@@ -835,7 +848,7 @@ export class MoveTool {
       sized,
       copy: this.copy,
     });
-    this.copy = false; // one copy per drag, the next drag moves again
+    this.copy = false; // one copy per commit, the next one moves again
     const done = this.onDone;
     this.cleanup();
     done?.(res.id);

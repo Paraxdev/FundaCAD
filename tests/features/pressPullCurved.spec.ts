@@ -316,10 +316,10 @@ describe("press/pull on a sphere, a cone or a torus", () => {
       expect(prompt()).not.toMatch(/past/);
     });
 
-    it("a refused typed radius never says release to remove", async () => {
+    it("a refused typed radius never offers removal", async () => {
       const { t, canvas } = await started([0, 0, 1], [0, 0, 1], hole(true));
       dragTo(t, canvas, -2.9);
-      expect(prompt()).toMatch(/Release to remove this face/);
+      expect(prompt()).toMatch(/Enter removes this face/);
       type("r-2");
       expect(prompt()).not.toMatch(/remove/);
       expect(prompt()).toMatch(/A radius can't be negative · type another radius/);

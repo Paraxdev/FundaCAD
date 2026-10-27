@@ -104,4 +104,16 @@ describe("Undo and Redo", () => {
     a.doRedo();
     expect(calls).toEqual(["close", "undo", "close", "redo"]);
   });
+
+  it("with a Move drag not yet entered, Undo drops only that drag", () => {
+    const calls: string[] = [];
+    closeHome.mockReset();
+    const e = {
+      tools: { move: { pending: true, cancel: () => calls.push("drop drag") } },
+      sketch: { undoEdit: () => false, redoEdit: () => false },
+      store: { undo: () => calls.push("undo"), redo: () => calls.push("redo") },
+    } as unknown as Engine;
+    createDocumentActions(e).doUndo();
+    expect(calls).toEqual(["drop drag"]);
+  });
 });

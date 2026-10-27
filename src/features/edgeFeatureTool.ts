@@ -20,7 +20,6 @@ import {
   createDragHandle,
   nameHandle,
   edgeHandleAxis,
-  fluentRelease,
   HANDLE_UP,
   handleScale,
   leanOutOfView,
@@ -153,8 +152,6 @@ export class EdgeFeatureTool {
   private continuity: Continuity = "G1";
   private hovering = false;
   private grabbing = false;
-  /** The drag began on the passive selection handle, a one press gesture, so releasing commits (onUp). */
-  private fluentGrab = false;
   private grabSigned = 0; // signed offset at grab start (relative drag)
   private grabProj = 0; // axis projection at grab start
   private downPos = { x: 0, y: 0 };
@@ -224,7 +221,7 @@ export class EdgeFeatureTool {
   /** What the kernel said the last time it refused this question. */
   private refusal: { code: string | null; message: string } | null = null;
   /** Null when the screen shows no blend of ours. A refused size keeps the previous one on screen (store.setPreview's
-   *  hold), so a refused release commits this. */
+   *  hold), so a refused confirm commits this. */
   private shown: number | null = null;
   /** the refusal currently painted on the handle, box and prompt */
   private refusalShown: string | null = null;
@@ -335,7 +332,6 @@ export class EdgeFeatureTool {
   private grabHandle(clientX: number, clientY: number) {
     if (this.phase !== "drag") return;
     this.grabbing = true;
-    this.fluentGrab = true;
     this.downOnGizmo = true;
     this.downPos = { x: clientX, y: clientY };
     this.grabSigned = this.signed;
@@ -794,9 +790,7 @@ export class EdgeFeatureTool {
       return;
     }
     if (this.neutral) {
-      setPrompt(
-        `Drag out for a ${this.positiveKind}, back for a ${otherTreatment(this.positiveKind)} · release to cancel`,
-      );
+      setPrompt(`Drag out for a ${this.positiveKind}, back for a ${otherTreatment(this.positiveKind)} · Esc`);
       return;
     }
     if (this.refusalShown) {
@@ -999,19 +993,8 @@ export class EdgeFeatureTool {
     if (this.grabbing) {
       const moved = Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
       this.grabbing = false;
-      // Commit and cancel both want the kernel chasing the size the drag ended on, so skip the debounce.
+      // Letting go only ends the drag, the box options and Enter are still to come.
       this.flushPreviewNow();
-      // Shared with Press/Pull's handle over faces; fluentRelease says what each outcome guards against.
-      const release = fluentRelease({
-        fluent: this.fluentGrab,
-        moved,
-        meaningful: !this.neutral,
-      });
-      // Cleared before dispatching: commit() can decline and leave the tool alive, and a stale flag would re-run this
-      // on the next release.
-      this.fluentGrab = false;
-      if (release === "commit") return this.commit();
-      if (release === "cancel") return this.cancel();
       this.viewport.domElement.style.cursor = this.hovering ? "grab" : "default";
       this.dim.focus();
       if (!moved) {
@@ -1302,7 +1285,6 @@ export class EdgeFeatureTool {
     this.active = false;
     this.phase = "pick";
     this.grabbing = false;
-    this.fluentGrab = false;
     this.refusalShown = null;
     this.forgetBuildRange();
     this.hovering = false;

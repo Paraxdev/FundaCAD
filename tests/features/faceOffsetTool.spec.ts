@@ -1,5 +1,5 @@
 // Offset Face as the user drives it: the drag, the engine's answer for each
-// value it previews, and what a release or Enter then commits. The store is a
+// value it previews, and what Enter then commits; letting go only ends the drag. The store is a
 // fake that replies the way DocumentStore settles a held preview, so a
 // refusal arrives as heldRefusal with the last model that built kept.
 
@@ -120,6 +120,12 @@ function fakeStore(axisReply: FaceAxisReply | null = null) {
   return { store: store as unknown as DocumentStore, previews, added, verified, answer };
 }
 
+function pressEnter() {
+  document
+    .querySelector(".dim-input input")!
+    .dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+}
+
 function pointer(canvas: HTMLCanvasElement, type: string, y: number) {
   canvas.dispatchEvent(new PointerEvent(type, { clientX: 0, clientY: y, button: 0, bubbles: true }));
 }
@@ -188,7 +194,7 @@ describe("FaceOffsetTool", () => {
     expect(sent.every((p) => p.hold)).toBe(true);
   });
 
-  it("a release the kernel refuses commits the offset shown on screen", () => {
+  it("Enter after a release the kernel refuses commits the offset shown on screen", () => {
     const { vp, canvas } = fakeViewport();
     const s = fakeStore();
     const t = new FaceOffsetTool(vp, s.store);
@@ -199,6 +205,8 @@ describe("FaceOffsetTool", () => {
     const up = dragTo(t, canvas, 1, { release: false });
     s.answer();
     up();
+    expect(s.added).toHaveLength(0);
+    pressEnter();
     expect(s.added).toHaveLength(1);
     expect(s.added[0]).toMatchObject({ type: "offsetFace", distance: 1 });
     expect(done).toBe("p1");
@@ -214,11 +222,12 @@ describe("FaceOffsetTool", () => {
     expect(field().problem).toBe("can't change this face to that size, the result wouldn't be a valid solid");
     expect(usePromptStore().text).toMatch(/keeping 1/);
     up2();
+    pressEnter();
     expect(s.added).toHaveLength(2);
     expect(s.added[1]).toMatchObject({ type: "offsetFace", distance: 1 });
   });
 
-  it("a drag out and back that ends beside where it began still commits", () => {
+  it("a drag out and back that ends beside where it began keeps its value for Enter", () => {
     const { vp, canvas } = fakeViewport();
     const s = fakeStore();
     const t = new FaceOffsetTool(vp, s.store);
@@ -233,6 +242,8 @@ describe("FaceOffsetTool", () => {
     vi.advanceTimersByTime(500);
     s.answer("Offset face: no");
     pointer(canvas, "pointerup", from + 2);
+    expect(s.added).toHaveLength(0);
+    pressEnter();
     expect(s.added).toHaveLength(1);
     expect(s.added[0]).toMatchObject({ distance: 1 });
   });

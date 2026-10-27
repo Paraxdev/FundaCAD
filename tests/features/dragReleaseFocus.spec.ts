@@ -46,11 +46,12 @@ describe("Press/Pull release", () => {
     expect(r.focus).toHaveBeenCalledTimes(1);
   });
 
-  it("does not refocus when the release commits or cancels", () => {
+  // Letting go used to commit a fluent drag and cancel one dragged back to nothing; now it only ends the drag.
+  it("a fluent drag, even one back to nothing, stays open with focus and commits nothing", () => {
     const c = rig(true, false, { x: 160, y: 237 });
-    expect([c.commit.mock.calls.length, c.cancel.mock.calls.length, c.focus.mock.calls.length]).toEqual([1, 0, 0]);
+    expect([c.commit.mock.calls.length, c.cancel.mock.calls.length, c.focus.mock.calls.length]).toEqual([0, 0, 1]);
     const x = rig(true, true, { x: 160, y: 237 });
-    expect([x.commit.mock.calls.length, x.cancel.mock.calls.length, x.focus.mock.calls.length]).toEqual([0, 1, 0]);
+    expect([x.commit.mock.calls.length, x.cancel.mock.calls.length, x.focus.mock.calls.length]).toEqual([0, 0, 1]);
   });
 });
 
@@ -72,8 +73,8 @@ describe("Fillet and chamfer release", () => {
     expect(rig(false, { x: 170, y: 260 }).focus).toHaveBeenCalledTimes(1);
   });
 
-  it("does not refocus when the release commits", () => {
+  it("stays open with focus after a fluent drag instead of committing", () => {
     const r = rig(true, { x: 170, y: 260 });
-    expect([r.commit.mock.calls.length, r.focus.mock.calls.length]).toEqual([1, 0]);
+    expect([r.commit.mock.calls.length, r.focus.mock.calls.length]).toEqual([0, 1]);
   });
 });
