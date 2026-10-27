@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, useId } from "vue";
+import { computed, ref, useId, watch } from "vue";
 import { fmtKeys } from "../../input/platform";
 import { useDisabled } from "./useDisabled";
 
@@ -29,6 +29,11 @@ const id = useId();
 const tipText = computed(() => (props.tip && props.keys ? `${props.tip} (${fmtKeys(props.keys)})` : props.tip));
 const draft = ref<number | null>(null);
 const shown = computed(() => draft.value ?? props.modelValue);
+// A drag that ends where it began fires no change, so an outside update has to drop the draft.
+watch(
+  () => props.modelValue,
+  () => (draft.value = null),
+);
 const fill = computed(() => {
   const span = props.max - props.min;
   return span > 0 ? `${((Math.min(Math.max(shown.value, props.min), props.max) - props.min) / span) * 100}%` : "0%";

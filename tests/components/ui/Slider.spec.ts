@@ -81,6 +81,13 @@ describe("Slider", () => {
     expect([updates(w), commits(w), w.find(".ui-slider-value").text()]).toEqual([[8], [8], "8 mm"]);
   });
 
+  it("shows an outside change in commit end after a drag that came back to its start without a release", async () => {
+    const w = await render({ modelValue: 2, max: 10, commit: "end", showValue: true, unit: "mm" });
+    await drag(w, 6, 2);
+    await w.setProps({ modelValue: 5 });
+    expect([updates(w), commits(w), w.find(".ui-slider-value").text(), range(w).value]).toEqual([[], [], "5 mm", "5"]);
+  });
+
   it("steps with the arrows, Page keys, Home and End, clamped, committing each step", async () => {
     const w = await render({ modelValue: 9, min: 0, max: 10, step: 0.5 });
     expect(await press(w, "ArrowRight")).toBe(true);
