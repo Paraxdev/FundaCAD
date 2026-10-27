@@ -99,6 +99,20 @@ describe("Dialog", () => {
     expect(mid.defaultPrevented).toBe(false);
   });
 
+  it("leaves a control hidden by display:none out of the Tab wrap", async () => {
+    await render({}, () => [
+      h("input", { class: "first" }),
+      h("button", { class: "last" }),
+      h("div", { style: "display: none" }, [h("button", { class: "folded" })]),
+      h("button", { class: "gone", style: "display: none" }),
+    ]);
+    $(".last")!.focus();
+    const fwd = key("Tab");
+    expect([fwd.defaultPrevented, active()?.classList.contains("modal-close")]).toEqual([true, true]);
+    const back = key("Tab", { shiftKey: true });
+    expect([back.defaultPrevented, active()?.className]).toEqual([true, "last"]);
+  });
+
   it("Escape closes it through the modal gate, and focus returns to the opener", async () => {
     const { open } = await render();
     expect(useModalStore().depth).toBe(1);

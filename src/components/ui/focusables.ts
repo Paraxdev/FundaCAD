@@ -12,8 +12,14 @@ const FOCUSABLE = [
 export function focusables(root: Element | null | undefined): HTMLElement[] {
   if (!root) return [];
   return [...root.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
-    (el) => el.getAttribute("tabindex") !== "-1" && !el.closest("[hidden], [inert]"),
+    (el) => el.getAttribute("tabindex") !== "-1" && !el.closest("[hidden], [inert]") && shown(el),
   );
+}
+
+// Walks up for display:none instead of reading getClientRects, which happy-dom fills even for a hidden element.
+function shown(el: HTMLElement): boolean {
+  for (let n: Element | null = el; n; n = n.parentElement) if (getComputedStyle(n).display === "none") return false;
+  return getComputedStyle(el).visibility !== "hidden";
 }
 
 /** Remembers what holds focus now, for an overlay that gives it back on close. The returned `restore` refocuses it
