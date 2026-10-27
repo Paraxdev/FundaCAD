@@ -117,3 +117,31 @@ describe("Undo and Redo", () => {
     expect(calls).toEqual(["drop drag"]);
   });
 });
+
+describe("a Move drag let go of but not yet entered", () => {
+  it("counts as unsaved work, so New asks and Cancel keeps the drag", async () => {
+    const { e, calls } = fakeEngine(false, false);
+    (e as unknown as { tools: unknown }).tools = { move: { pending: true } };
+    choose.mockResolvedValue("cancel");
+    await createDocumentActions(e).newDocument();
+    expect({ unsaved: hasUnsavedWork(e), asked: choose.mock.calls.length, calls }).toEqual({
+      unsaved: true,
+      asked: 1,
+      calls: [],
+    });
+  });
+
+  it("is written by Redo, which then has nothing left to redo", () => {
+    const calls: string[] = [];
+    closeHome.mockReset();
+    const e = {
+      tools: {
+        move: { pending: true, cancel: () => calls.push("drop drag"), settle: () => calls.push("write drag") },
+      },
+      sketch: { undoEdit: () => false, redoEdit: () => calls.push("sketch redo") },
+      store: { undo: () => calls.push("undo"), redo: () => calls.push("redo") },
+    } as unknown as Engine;
+    createDocumentActions(e).doRedo();
+    expect(calls).toEqual(["write drag"]);
+  });
+});
