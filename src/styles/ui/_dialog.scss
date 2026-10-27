@@ -1,1 +1,20 @@
 // Dialog: the modal shell, sm, md and lg, with its title and right aligned footer.
+
+.ui-dialog-sm {
+  width: min(420px, 92vw);
+}
+.ui-dialog-md {
+  width: min(560px, 92vw);
+}
+.ui-dialog-lg {
+  width: min(720px, 92vw);
+}
+// The panel takes focus only as the fallback when it holds no control.
+.ui-dialog:focus:not(:focus-visible) {
+  outline: none;
+}
+// .modal-foot mutes its text for counters; a footer of buttons keeps the button ink.
+.ui-dialog-foot {
+  align-items: center;
+  color: var(--text);
+}

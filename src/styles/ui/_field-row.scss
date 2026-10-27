@@ -1,1 +1,41 @@
 // FieldRow: a label and its control, inline and stacked.
+
+.ui-field-row {
+  display: grid;
+  gap: var(--s-1) var(--s-3);
+  align-items: center;
+  margin-bottom: var(--s-2);
+}
+// The tracks start at 0, not min-content, so a long label ellipses instead of pushing past the panel.
+.ui-field-row-inline {
+  grid-template-columns: minmax(0, 1fr) minmax(0, auto);
+}
+.ui-field-row-inline .ui-field-control {
+  justify-self: end;
+}
+.ui-field-row-inline .ui-field-hint {
+  grid-column: 1 / -1;
+}
+.ui-field-row-stacked {
+  grid-template-columns: minmax(0, 1fr);
+}
+.ui-field-label {
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--text-dim);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ui-field-control {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.ui-field-hint {
+  font-size: 11px;
+  color: var(--text-mute);
+}
+.ui-field-row.is-error .ui-field-hint {
+  color: var(--error);
+}

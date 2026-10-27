@@ -1,1 +1,90 @@
 // Menu, MenuItem and MenuSeparator: popup and context menus.
+
+.ui-menu {
+  position: fixed;
+  z-index: var(--z-menu);
+  min-width: 168px;
+  max-height: calc(100vh - 8px);
+  overflow-y: auto;
+  padding: 5px;
+  corner-shape: squircle;
+  border: 1px solid transparent;
+  border-radius: var(--float-tile-radius);
+  background: var(--float-bg-solid);
+  -webkit-backdrop-filter: var(--float-blur);
+  backdrop-filter: var(--float-blur);
+  box-shadow: var(--float-shadow);
+  color: var(--text);
+  font-size: 12.5px;
+  animation: pop-in var(--t-fast) var(--ease);
+}
+
+.ui-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  corner-shape: squircle;
+  border-radius: var(--float-chip-radius);
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+  transition:
+    background var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
+}
+.ui-menu-item:hover,
+.ui-menu-item:focus-visible,
+.ui-menu-item.is-open {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent-hot);
+}
+.ui-menu-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.ui-menu-item:active {
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
+}
+.ui-menu-item.is-danger {
+  color: var(--error);
+}
+.ui-menu-item.is-danger:hover,
+.ui-menu-item.is-danger:focus-visible {
+  background: var(--error-tint);
+  color: var(--error);
+}
+.ui-menu-item.is-disabled {
+  opacity: 0.45;
+  cursor: default;
+  pointer-events: none;
+}
+
+.ui-menu-check {
+  flex: 0 0 12px;
+  display: inline-flex;
+}
+.ui-menu-icon,
+.ui-menu-caret {
+  flex: none;
+  color: var(--text-dim);
+}
+.ui-menu-item:hover .ui-menu-icon,
+.ui-menu-item:focus-visible .ui-menu-icon {
+  color: inherit;
+}
+.ui-menu-label {
+  flex: 1 1 auto;
+}
+.ui-menu-keys {
+  flex: none;
+  padding-left: var(--s-4);
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.ui-menu-sep {
+  height: 1px;
+  margin: var(--s-1) var(--s-2);
+  background: var(--line);
+}

@@ -1,1 +1,6 @@
 // Popover: the floating surface anchored to its opener.
+
+// With focus "first" and no control inside, the card itself takes focus; a pointer opening draws no outline on it.
+.float-popover:focus:not(:focus-visible) {
+  outline: none;
+}

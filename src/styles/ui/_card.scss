@@ -1,1 +1,28 @@
 // Card: a titled, optionally collapsible card inside a pane.
+
+.ui-card-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.ui-card-toggle:hover {
+  color: var(--accent-hot);
+}
+.ui-card-caret {
+  flex: none;
+  color: var(--text-dim);
+  transform: rotate(90deg);
+  transition: transform var(--t-fast) var(--ease);
+}
+.ui-card.is-collapsed .ui-card-caret {
+  transform: none;
+}

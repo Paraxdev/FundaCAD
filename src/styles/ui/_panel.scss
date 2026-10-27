@@ -1,1 +1,24 @@
 // Panel: the floating tool panel with its head actions and foot.
+
+.ui-panel-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin-bottom: var(--s-2);
+}
+.ui-panel-head .ui-panel-title {
+  flex: 1 1 auto;
+  margin-bottom: 0;
+}
+// Pulled into the panel's inset, so the glyph lines up with the content edge, not the button's box.
+.ui-panel-close {
+  width: 24px;
+  height: 24px;
+  margin: calc(-1 * var(--s-1)) calc(-1 * var(--s-1)) calc(-1 * var(--s-1)) auto;
+}
+.ui-panel-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--s-2);
+  margin-top: var(--s-3);
+}

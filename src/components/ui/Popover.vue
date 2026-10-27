@@ -2,9 +2,11 @@
 // A card anchored beside the element that opened it. Closes on a press outside
 // it and on Escape, and keeps itself inside the window as its content changes.
 
-import { nextTick, onMounted, onUnmounted, ref, useTemplateRef } from "vue";
+import { nextTick, onBeforeUnmount, onMounted, onUnmounted, ref, useTemplateRef } from "vue";
 import { placeBeside, type Side } from "../../ui/anchor";
 import { claimEscape } from "../../ui/escapeClaim";
+import { escapeLayer } from "./escapeLayer";
+import { focusables, focusReturn } from "./focusables";
 
 const props = withDefaults(
   defineProps<{
@@ -18,8 +20,12 @@ const props = withDefaults(
     clear?: HTMLElement | null;
     /** px floor, for a card that should not be narrower than what opened it (a picker under a full-width field) */
     minWidth?: number | null;
+    /** "first" moves focus to the card's first control on open, or to the card when it holds none. */
+    focus?: "first" | "none";
+    /** Gives focus back to what held it before, on close, while focus is still in the card. */
+    returnFocus?: boolean;
   }>(),
-  { side: "right", align: "start", gap: 8, kind: "", clear: null, minWidth: null },
+  { side: "right", align: "start", gap: 8, kind: "", clear: null, minWidth: null, focus: "none", returnFocus: false },
 );
 const emit = defineEmits<{ close: [] }>();
 
@@ -47,29 +53,36 @@ function onDown(e: PointerEvent) {
   if (el.value?.contains(t) || props.anchor?.contains(t)) return;
   // Note: a context menu opened from inside the card is teleported elsewhere,
   // and a press in it must not close the card underneath.
-  if ((t as Element).closest?.(".context-menu")) return;
+  if ((t as Element).closest?.(".context-menu, .ui-menu")) return;
   emit("close");
 }
 
 function onKey(e: KeyboardEvent) {
-  if (e.key !== "Escape") return;
+  if (e.key !== "Escape" || !layer.isTop()) return;
   e.stopImmediatePropagation();
   emit("close");
 }
 
 let ro: ResizeObserver | null = null;
 const releaseEscape = claimEscape();
+const layer = escapeLayer();
+const back = focusReturn(() => props.anchor);
 onMounted(async () => {
+  window.addEventListener("keydown", onKey, true);
   await nextTick();
   place();
+  if (props.focus === "first" && el.value) (focusables(el.value)[0] ?? el.value).focus();
   ro = new ResizeObserver(() => place());
   if (el.value) ro.observe(el.value);
   window.addEventListener("resize", place);
   document.addEventListener("pointerdown", onDown, true);
-  window.addEventListener("keydown", onKey, true);
+});
+onBeforeUnmount(() => {
+  if (props.returnFocus) back.restore((n) => !!el.value?.contains(n));
 });
 onUnmounted(() => {
   releaseEscape();
+  layer.release();
   ro?.disconnect();
   window.removeEventListener("resize", place);
   document.removeEventListener("pointerdown", onDown, true);
@@ -85,6 +98,7 @@ defineExpose({ place });
       ref="el"
       class="float-popover"
       :class="kind"
+      :tabindex="focus === 'first' ? -1 : undefined"
       :style="{ left: `${pos.left}px`, top: `${pos.top}px`, ...(minWidth ? { minWidth: `${minWidth}px` } : {}) }"
     >
       <slot />
