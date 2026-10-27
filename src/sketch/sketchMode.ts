@@ -256,6 +256,8 @@ export class SketchMode {
   gizmo: {
     start(target: MoveTarget, done: () => void): void;
     cancel(): void;
+    /** writes a drag let go of but not yet entered, then ends */
+    settle(): void;
     readonly active: boolean;
   } | null = null;
 
@@ -737,7 +739,10 @@ export class SketchMode {
 
   finish(commit = true) {
     if (!this.active) return;
-    if (this.gizmo?.active) this.gizmo.cancel();
+    if (this.gizmo?.active) {
+      if (commit) this.gizmo.settle();
+      else this.gizmo.cancel();
+    }
     const store = this.store!;
     this.modifyFlow.reset(); // an offset left mid-placement takes its face-edge projection with it
     this.patternFlow.flushOnFinish(); // may add patterns, must precede the snapshot
@@ -834,7 +839,7 @@ export class SketchMode {
   }
 
   setTool(t: SketchTool) {
-    if (this.gizmo?.active) this.gizmo.cancel();
+    if (this.gizmo?.active) this.gizmo.settle();
     // With something selected, move, rotate and scale are one gizmo on it; the
     // click flows below are what they fall back to with nothing selected.
     if ((t === "move" || t === "rotate" || t === "scale" || t === "mirror") && this.active && this.gizmo) {

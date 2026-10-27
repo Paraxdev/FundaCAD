@@ -327,7 +327,9 @@ export function clickOnRound(fit: { cylinder: Cylinder; points: Vec3[] }, click:
   return onRoundFace(fit.cylinder, fit.points, click, Math.max(0.05 * fit.cylinder.radius, 1e-3)) ? click : null;
 }
 
-/** The selected faces' selectors, the handle's anchor and direction, and the round face under it. */
+/** The selected faces' selectors, the handle's anchor and direction, and the round face under it. Several faces get
+ *  one handle on the most recently picked one, unless the first is round: that lead face is what a run of round faces
+ *  reads its size from. */
 export function pressPullOf(
   model: ModelView,
   faces: readonly number[],
@@ -338,45 +340,59 @@ export function pressPullOf(
   if (first === undefined) return null;
   const centres = faces.map((fid) => faceCentroidOf(model, fid));
   const selectors: Selector[] = centres.map((c) => ({ kind: "face", by: "nearest", point: [c.x, c.y, c.z] }));
-  let anchor = centres[0]!.clone();
-  let normal = faceNormalOf(model, first);
-  let round: RoundFace | null = null;
-  const tris = faceTrianglesOf(model, first, fitTris);
-  const fit = roundFitOf(model, first, tris);
+  const lead = standOn(model, first, centres[0]!, click, fitTris);
+  const last = faces.length - 1;
+  const at = last > 0 && !lead.round ? standOn(model, faces[last]!, centres[last]!, click, fitTris) : lead;
+  return {
+    selectors,
+    faceIds: [...faces],
+    normal: at.normal,
+    anchor: at.anchor,
+    bodyId: bodyOfFace(model, first)?.id ?? null,
+    // A multi-face press/pull shares a single distance along a single normal;
+    // a diameter is a property of one face and has no meaning spread across several.
+    round: faces.length === 1 ? lead.round : null,
+    lead: faces.length > 1 ? lead.round : null,
+  };
+}
+
+/** Where a handle stands on one face and which way it points: on a round face where it was clicked, out along the
+ *  radius, else at the centroid along the normal there. */
+function standOn(
+  model: ModelView,
+  face: number,
+  centre: THREE.Vector3,
+  click: Vec3 | null,
+  fitTris: number,
+): { anchor: THREE.Vector3; normal: THREE.Vector3; round: RoundFace | null } {
+  let anchor = centre.clone();
+  let normal = faceNormalOf(model, face);
+  const tris = faceTrianglesOf(model, face, fitTris);
+  const fit = roundFitOf(model, face, tris);
   const stand =
     fit && roundStand(fit.cylinder, fit.points, fit.full, clickOnRound(fit, click), [anchor.x, anchor.y, anchor.z]);
   if (fit && stand) {
     anchor = new THREE.Vector3(...stand.point);
-    round = roundFrom(fit, stand.radial);
+    const round = roundFrom(fit, stand.radial);
     normal = round.radial.clone().multiplyScalar(round.solidInside ? 1 : -1);
-  } else {
-    const normals = tris.map((t) => t.getNormal(new THREE.Vector3()).toArray() as Vec3);
-    // A sphere, cone or torus: the normal where the handle stands, as the tool uses, never the average,
-    // which on a closed face points along its axis or nowhere.
-    const curved = !isPlanarFace(normals);
-    // A sphere resizes about its centre, so its handle points out from there
-    // on a dimple too, where the face's own normal points in.
-    const centre = curved
-      ? sphereCentreFromFace(
-          tris.flatMap((t) => [t.a.toArray(), t.b.toArray(), t.c.toArray()] as Vec3[]),
-          normals,
-        )
-      : null;
-    const out = centre && unit([anchor.x - centre[0], anchor.y - centre[1], anchor.z - centre[2]]);
-    const at = out ? new THREE.Vector3(...out) : curved ? facetNormalAt(tris, anchor) : null;
-    if (at) normal = at;
+    return { anchor, normal, round };
   }
-  return {
-    selectors,
-    faceIds: [...faces],
-    normal,
-    anchor,
-    bodyId: bodyOfFace(model, first)?.id ?? null,
-    // A multi-face press/pull shares a single distance along a single normal;
-    // a diameter is a property of one face and has no meaning spread across several.
-    round: faces.length === 1 ? round : null,
-    lead: faces.length > 1 ? round : null,
-  };
+  const normals = tris.map((t) => t.getNormal(new THREE.Vector3()).toArray() as Vec3);
+  // A sphere, cone or torus: the normal where the handle stands, as the tool uses, never the average,
+  // which on a closed face points along its axis or nowhere.
+  const curved = !isPlanarFace(normals);
+  // A sphere resizes about its centre, so its handle points out from there
+  // on a dimple too, where the face's own normal points in.
+  const sphere = curved
+    ? sphereCentreFromFace(
+        tris.flatMap((t) => [t.a.toArray(), t.b.toArray(), t.c.toArray()] as Vec3[]),
+        normals,
+      )
+    : null;
+  const out = sphere && unit([anchor.x - sphere[0], anchor.y - sphere[1], anchor.z - sphere[2]]);
+  const along = out ? new THREE.Vector3(...out) : curved ? facetNormalAt(tris, anchor) : null;
+  if (along) normal = along;
+  return { anchor, normal, round: null };
 }
 
 function cloneRound(r: RoundFace | null): RoundFace | null {

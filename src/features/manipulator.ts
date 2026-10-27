@@ -123,15 +123,6 @@ export function leanOutOfView(
   return dir.multiplyScalar(minScreen).addScaledVector(fwd, depth).normalize();
 }
 
-export type FluentRelease = "commit" | "cancel" | "stay";
-
-/** A gesture begun on the passive handle ends done, one on the tool's gizmo keeps its explicit commit.
- *  A press that never moved stays armed (the way into the full tool), a drag back to zero cancels. */
-export function fluentRelease(opts: { fluent: boolean; moved: boolean; meaningful: boolean }): FluentRelease {
-  if (!opts.fluent || !opts.moved) return "stay";
-  return opts.meaningful ? "commit" : "cancel";
-}
-
 // Fallbacks for a headless context: each colour is read from its theme token at paint time
 // (viewport/themeColors.ts) so a theme change reaches a manipulator too.
 

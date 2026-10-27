@@ -21,7 +21,6 @@ import {
   createDragHandle,
   nameHandle,
   edgeHandleAxis,
-  fluentRelease,
   HANDLE_UP,
   handleScale,
   leanOutOfView,
@@ -121,6 +120,8 @@ export class EdgeFeatureTool {
   private axis = new THREE.Vector3(1, 0, 0);
   private quat = new THREE.Quaternion(); // Y -> axis, for orienting the handle
   private tangent: THREE.Vector3 | null = null; // edge direction (null = pre-selection fallback)
+  /** Where the most recently picked edge's middle was, so the handle stays on it as other members come and go. */
+  private lastPickMid: Vec3 | null = null;
   private value = 2; // radius / distance in mm, a MAGNITUDE, never negative
   /** Position on the drag axis: |signed| is `value`, and its sign picks between
    *  `positiveKind` and its opposite. 0 means "no feature here". */
@@ -157,8 +158,6 @@ export class EdgeFeatureTool {
   private continuity: Continuity = "G1";
   private hovering = false;
   private grabbing = false;
-  /** The drag began on the passive selection handle, a one press gesture, so releasing commits (onUp). */
-  private fluentGrab = false;
   private grabSigned = 0; // signed offset at grab start (relative drag)
   private grabProj = 0; // axis projection at grab start
   private downPos = { x: 0, y: 0 };
@@ -228,7 +227,7 @@ export class EdgeFeatureTool {
   /** What the kernel said the last time it refused this question. */
   private refusal: { code: string | null; message: string } | null = null;
   /** Null when the screen shows no blend of ours. A refused size keeps the previous one on screen (store.setPreview's
-   *  hold), so a refused release commits this. */
+   *  hold), so a refused confirm commits this. */
   private shown: number | null = null;
   /** the refusal currently painted on the handle, box and prompt */
   private refusalShown: string | null = null;
@@ -305,6 +304,7 @@ export class EdgeFeatureTool {
     this.phase = "pick";
     this.onDone = onDone;
     this.tangent = null;
+    this.lastPickMid = null;
     this.viewport.suspendPicking = true; // we drive our own edge-only picking
     this.viewport.emphasizeEdges(true); // light up all edges so they're easy to target
     this.gesture.attach();
@@ -313,7 +313,7 @@ export class EdgeFeatureTool {
     if (seed.length) {
       // A handle grab opens at 0, so the drag is the radius and the press point means no feature; a command opens on
       // the default. The handle's own anchor is kept, it may stand where the edge was clicked.
-      this.beginDrag(seed, opts?.anchor?.clone() ?? this.anchorFromSelectors(seed), opts?.tangent ?? null, undefined, {
+      this.beginDrag(seed, opts?.anchor?.clone() ?? null, opts?.tangent ?? null, undefined, {
         fromZero: !!opts?.grabAt,
         // A face's edges are the complete set asked for, chain expansion could only add edges off the face. An edge
         // pre-selection keeps the scope its own picks decided (pickScope.ts).
@@ -339,7 +339,6 @@ export class EdgeFeatureTool {
   private grabHandle(clientX: number, clientY: number) {
     if (this.phase !== "drag") return;
     this.grabbing = true;
-    this.fluentGrab = true;
     this.downOnGizmo = true;
     this.downPos = { x: clientX, y: clientY };
     this.grabSigned = this.signed;
@@ -448,6 +447,7 @@ export class EdgeFeatureTool {
   /** Unmatched selectors are kept for commit with no visual; the engine resolves them by nearest at build time. */
   private seedGhosts(sels: Selector[]) {
     for (const sel of sels) {
+      if ("point" in sel) this.lastPickMid = sel.point as Vec3;
       if (!("point" in sel)) {
         this.unmatchedSels.push(sel);
         continue;
@@ -653,6 +653,7 @@ export class EdgeFeatureTool {
    *  way, so it deselects as one unit. */
   private addPicked(line: EdgeRef, scope: PickScope) {
     const chainId = ++this.chainCounter;
+    this.lastPickMid = polylineMid(line.points as Vec3[]) ?? null;
     for (const l of scope === "single" ? [line] : this.tangentChain(line)) {
       const pts = l.points as Vec3[];
       const sel = edgeSelectorFrom({ points: pts, body: l.body });
@@ -806,9 +807,7 @@ export class EdgeFeatureTool {
       return;
     }
     if (this.neutral) {
-      setPrompt(
-        `Drag out for a ${this.positiveKind}, back for a ${otherTreatment(this.positiveKind)} · release to cancel`,
-      );
+      setPrompt(`Drag out for a ${this.positiveKind}, back for a ${otherTreatment(this.positiveKind)} · Esc`);
       return;
     }
     if (this.refusalShown) {
@@ -1029,19 +1028,8 @@ export class EdgeFeatureTool {
     if (this.grabbing) {
       const moved = Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
       this.grabbing = false;
-      // Commit and cancel both want the kernel chasing the size the drag ended on, so skip the debounce.
+      // Letting go only ends the drag, the box options and Enter are still to come.
       this.flushPreviewNow();
-      // Shared with Press/Pull's handle over faces; fluentRelease says what each outcome guards against.
-      const release = fluentRelease({
-        fluent: this.fluentGrab,
-        moved,
-        meaningful: !this.neutral,
-      });
-      // Cleared before dispatching: commit() can decline and leave the tool alive, and a stale flag would re-run this
-      // on the next release.
-      this.fluentGrab = false;
-      if (release === "commit") return this.commit();
-      if (release === "cancel") return this.cancel();
       this.viewport.domElement.style.cursor = this.hovering ? "grab" : "default";
       this.dim.focus();
       if (!moved) {
@@ -1087,9 +1075,10 @@ export class EdgeFeatureTool {
     }
   }
 
+  /** A null `anchor` stands the handle on the most recently picked edge. */
   private beginDrag(
     edges: Selector[],
-    anchor: THREE.Vector3,
+    anchor: THREE.Vector3 | null,
     tangent: THREE.Vector3 | null,
     chainSource?: EdgeRef,
     opts?: { fromZero?: boolean; scope?: PickScope },
@@ -1108,8 +1097,10 @@ export class EdgeFeatureTool {
         }
       }
     }
-    this.anchor.copy(anchor);
-    this.tangent = tangent;
+    if (anchor) {
+      this.anchor.copy(anchor);
+      this.tangent = tangent;
+    } else this.placeOnLastPick();
     this.phase = "drag";
     this.axis.copy(this.computeAxis());
     this.quat.setFromUnitVectors(Y_AXIS, this.axis);
@@ -1202,7 +1193,7 @@ export class EdgeFeatureTool {
     const sels = this.currentSelectors();
     if (sels.length) {
       if (this.editId) this.placeOnMembers();
-      else this.anchor.copy(this.anchorFromSelectors(sels));
+      else this.placeOnLastPick();
       this.axis.copy(this.computeAxis());
       this.quat.setFromUnitVectors(Y_AXIS, this.axis);
     }
@@ -1337,7 +1328,6 @@ export class EdgeFeatureTool {
     this.active = false;
     this.phase = "pick";
     this.grabbing = false;
-    this.fluentGrab = false;
     this.refusalShown = null;
     this.forgetBuildRange();
     this.hovering = false;
@@ -1370,22 +1360,36 @@ export class EdgeFeatureTool {
     this.tangent = place.tangent ? new THREE.Vector3(...place.tangent) : null;
   }
 
-  /** Averages the selector points (nearest selectors carry their edge midpoint), else the model's bbox centre. */
-  private anchorFromSelectors(sels: Selector[]): THREE.Vector3 {
-    const acc = new THREE.Vector3();
-    let n = 0;
-    for (const s of sels) {
-      if ("point" in s) {
-        acc.add(new THREE.Vector3(s.point[0], s.point[1], s.point[2]));
-        n++;
-      }
+  /** Create mode: the middle of the most recently picked edge, across it, as the passive handle stands
+   *  (edgeNudge.handlePlacement). An average of several edges lands in mid air. */
+  private placeOnLastPick() {
+    const at = this.lastPickMid;
+    const away = (g: GhostEdge) => (at ? Math.hypot(g.mid[0] - at[0], g.mid[1] - at[1], g.mid[2] - at[2]) : 0);
+    // Nearest rather than equal: a seeded selector's point and its matched edge's middle differ by rounding.
+    const g = at
+      ? this.ghosts.reduce<GhostEdge | null>((b, x) => (!b || away(x) < away(b) ? x : b), null)
+      : this.ghosts.at(-1);
+    const place = g ? pointOnEdge(g.points, g.mid) : null;
+    if (!place) {
+      this.anchor.copy(this.anchorFromSelectors(this.currentSelectors()));
+      this.tangent = null;
+      return;
     }
-    if (n > 0) return acc.multiplyScalar(1 / n);
+    this.anchor.set(...place.anchor);
+    this.tangent = place.tangent ? new THREE.Vector3(...place.tangent) : null;
+  }
+
+  /** The last selector's point (a nearest selector carries its edge midpoint), else the model's bbox centre. */
+  private anchorFromSelectors(sels: Selector[]): THREE.Vector3 {
+    for (let i = sels.length - 1; i >= 0; i--) {
+      const s = sels[i]!;
+      if ("point" in s) return new THREE.Vector3(s.point[0], s.point[1], s.point[2]);
+    }
     const bb = this.store.buildState.result?.bbox;
     if (bb) {
       return new THREE.Vector3((bb.min[0] + bb.max[0]) / 2, (bb.min[1] + bb.max[1]) / 2, (bb.min[2] + bb.max[2]) / 2);
     }
-    return acc;
+    return new THREE.Vector3();
   }
 }
 

@@ -116,6 +116,10 @@ export class DraftTool {
         e.stopImmediatePropagation();
         this.faces.push(hit.selector);
         this.faceIds.push(hit.faceId);
+        // The handle moves to the face just picked; the pull axis stays the draft's.
+        this.anchor.copy(hit.anchor);
+        this.axis.copy(hit.normal).normalize();
+        this.lever = this.leverFor(this.pull);
         this.pushPreview();
         this.prompt();
       }
@@ -144,8 +148,8 @@ export class DraftTool {
     if (this.grabbing) {
       this.grabbing = false;
       this.viewport.domElement.style.cursor = this.hovering ? "grab" : "default";
-      const moved = Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
-      if (moved && Math.abs(this.angle) >= 1e-3) this.commit();
+      // Letting go only ends the drag, Enter applies it.
+      this.dim.focus();
       return;
     }
     const moved = Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;

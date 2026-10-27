@@ -174,6 +174,13 @@ export class FaceOffsetTool {
         this.faceIds.push(hit.faceId);
         const wasRound = this.round !== null;
         if (this.round && !this.inTangentRun()) this.dropRound();
+        // The handle moves to the face just picked; a round run keeps its lead face, which it reads a size from.
+        if (!this.round) {
+          this.anchor.copy(hit.anchor);
+          this.faceNormal.copy(hit.normal).normalize();
+          this.axis.copy(this.faceNormal);
+          if (this.mode === "shell") this.axis.negate();
+        }
         if (wasRound !== (this.round !== null)) this.showBox();
         else this.syncToggle();
         this.refreshPreview(true);
@@ -205,8 +212,8 @@ export class FaceOffsetTool {
       this.grabbing = false;
       this.viewport.domElement.style.cursor = this.hovering ? "grab" : "default";
       this.flushPreviewNow();
-      // A drag out and back can end within a few pixels of where it began.
-      if ((moved || this.value !== this.grabValue) && !this.neutral) this.commit();
+      // Letting go only ends the drag, Enter applies it.
+      this.dim.focus();
       return;
     }
     if (this.downOnGizmo || moved) return;

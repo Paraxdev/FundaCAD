@@ -6,13 +6,15 @@ import { copyName } from "../ui/homeVersions";
 import { closeHome, homeIsOpen } from "../ui/home";
 import { displayName } from "../ui/homeList";
 
-/** An open sketch's edits reach the store only when the sketch is finished, so
+type WorkEngine = Pick<Engine, "store" | "sketch"> & Partial<Pick<Engine, "tools">>;
+
+/** An open sketch's edits, and a Move drag let go of but not entered, reach the store only later, so
  *  `store.dirty` alone misses them. */
-export function hasUnsavedWork(e: Pick<Engine, "store" | "sketch">): boolean {
-  return e.store.dirty || e.sketch.hasUncommittedEdits;
+export function hasUnsavedWork(e: WorkEngine): boolean {
+  return e.store.dirty || e.sketch.hasUncommittedEdits || !!e.tools?.move.pending;
 }
 
-export async function mayDiscard(e: Pick<Engine, "store" | "sketch">, question: string): Promise<boolean> {
+export async function mayDiscard(e: WorkEngine, question: string): Promise<boolean> {
   if (!hasUnsavedWork(e)) return true;
   const pick = await choose(question, [
     { value: "discard", label: "Discard", hint: "lose the unsaved changes" },
@@ -222,11 +224,16 @@ export function createDocumentActions(e: Engine): Pick<Engine, "newDocument" | "
     // re-open waiting on a drag's rebuild lands on the undone model (FI-2). Home closes so the change is seen.
     doUndo() {
       closeHome();
+      // A drag not yet entered is the last step, so undo takes back only that.
+      const pending = e.tools.move.pending;
       e.tools.move.cancel();
+      if (pending) return;
       if (!e.sketch.undoEdit()) e.store.undo();
     },
     doRedo() {
       closeHome();
+      // A drag not yet entered is a new step, which leaves nothing to redo.
+      if (e.tools.move.pending) return e.tools.move.settle();
       e.tools.move.cancel();
       if (!e.sketch.redoEdit()) e.store.redo();
     },

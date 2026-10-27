@@ -203,3 +203,41 @@ describe("the sample of a dense face tessellated in rings", () => {
     expect(pressPullOf(model, [face], null, FIT)).toEqual(pressPullOf(model, [face], null, FIT));
   });
 });
+
+describe("the handle for several picked faces", () => {
+  // A 40 x 20 x 10 box off the origin; BoxGeometry's faces run +X, -X, +Y, -Y, +Z, -Z, two triangles each.
+  const box = () =>
+    fakeBody("box", new THREE.BoxGeometry(40, 20, 10), (t) => Math.floor(t / 2), new THREE.Vector3(100, -50, 30));
+  const r = (v: THREE.Vector3) => v.toArray().map((c) => Math.round(c * 1e6) / 1e6 + 0);
+
+  it("stands on the most recently picked face, along its normal", () => {
+    const body = box();
+    const [px, , , , pz] = [...body.faceTriangles.keys()];
+    // On the face's own plane and inside its outline, whatever point of it the centroid picks.
+    const onFace = (a: THREE.Vector3, axis: "x" | "z") =>
+      axis === "x"
+        ? Math.abs(a.x - 120) < 1e-6 && Math.abs(a.y + 50) <= 10 && Math.abs(a.z - 30) <= 5
+        : Math.abs(a.z - 35) < 1e-6 && Math.abs(a.x - 100) <= 20 && Math.abs(a.y + 50) <= 10;
+    const topThenSide = pressPullOf(modelOf(body), [pz!, px!], null)!;
+    expect({ on: onFace(topThenSide.anchor, "x"), normal: r(topThenSide.normal) }).toEqual({
+      on: true,
+      normal: [1, 0, 0],
+    });
+    const sideThenTop = pressPullOf(modelOf(body), [px!, pz!], null)!;
+    expect({ on: onFace(sideThenTop.anchor, "z"), normal: r(sideThenTop.normal) }).toEqual({
+      on: true,
+      normal: [0, 0, 1],
+    });
+    expect(sideThenTop.selectors).toHaveLength(2);
+  });
+
+  it("keeps a round lead face, the one a run reads its size from", () => {
+    const g = new THREE.CylinderGeometry(8, 8, 30, 48, 2);
+    const sideTris = 48 * 2 * 2;
+    const body = fakeBody("cyl", g, (t) => (t < sideTris ? 0 : t < sideTris + 48 ? 1 : 2));
+    const [side, cap] = [...body.faceTriangles.keys()];
+    const got = pressPullOf(modelOf(body), [side!, cap!], null)!;
+    expect(got.lead?.radius).toBeCloseTo(8, 3);
+    expect(Math.hypot(got.anchor.x, got.anchor.z)).toBeCloseTo(8, 3);
+  });
+});

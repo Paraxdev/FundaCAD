@@ -130,7 +130,8 @@ function pointer(canvas: HTMLCanvasElement, type: string, y: number) {
   canvas.dispatchEvent(new PointerEvent(type, { clientX: 0, clientY: y, button: 0, bubbles: true }));
 }
 
-/** Drag the Z arrow from 40 to 60 units up it and let go. The frame places the
+/** Drag the Z arrow from 40 to 60 units up it, let go and press Enter, which is
+ *  what writes it now that letting go only ends the drag. The frame places the
  *  gizmo and the matrix update stands in for the render the raycast relies on. */
 function dragZ(canvas: HTMLCanvasElement, scene: THREE.Scene) {
   flushFrame();
@@ -138,6 +139,9 @@ function dragZ(canvas: HTMLCanvasElement, scene: THREE.Scene) {
   pointer(canvas, "pointerdown", 40);
   pointer(canvas, "pointermove", 60);
   pointer(canvas, "pointerup", 60);
+  document
+    .querySelector<HTMLInputElement>(".dim-input input")!
+    .dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
 }
 
 describe("move gizmo lifecycle", () => {
@@ -186,7 +190,7 @@ describe("move gizmo lifecycle", () => {
     expect(scene.children).toHaveLength(0);
   });
 
-  it("a drag settles and the gizmo comes straight back on the same target", () => {
+  it("an entered drag settles and the gizmo comes straight back on the same target", () => {
     const { vp, scene, canvas } = fakeViewport();
     const tool = new MoveTool(vp, fakeStore().store);
     const a = probe([0, 0, 0]);

@@ -22,7 +22,6 @@ import {
   createDragHandle,
   nameHandle,
   createRotationArc,
-  fluentRelease,
   HANDLE_LENGTH,
   HANDLE_UP,
   type DragHandle,
@@ -177,8 +176,6 @@ export class PressPullTool {
   private taperGrabInset = 0;
   /** true while our push is appended to the build as the live preview */
   private enginePreviewOn = false;
-  /** The drag began on the passive selection handle, a one-press gesture, so releasing finishes it. */
-  private fluentGrab = false;
   private grabValue = 0; // value at grab start (relative drag)
   private grabProj = 0; // axis projection at grab start
   private downPos = { x: 0, y: 0 };
@@ -233,7 +230,6 @@ export class PressPullTool {
   private grabHandle(clientX: number, clientY: number) {
     if (this.phase !== "drag") return;
     this.grabbing = true;
-    this.fluentGrab = true;
     this.downOnGizmo = true;
     this.downPos = { x: clientX, y: clientY };
     this.lastPointer = { x: clientX, y: clientY };
@@ -318,7 +314,7 @@ export class PressPullTool {
         const curved = this.curve !== null;
         this.faces.push(hit.selector);
         this.faceIds.push(hit.faceId);
-        // The axis was the first face's; the faces share one arrow from here.
+        // The faces share one arrow from here, and the engine's answer about the first face's axis no longer applies.
         this.axisAsk++;
         this.holeAxis = null;
         this.curve = null;
@@ -330,6 +326,12 @@ export class PressPullTool {
         if (this.resizing) {
           this.mode = "auto";
           this.taper = 0;
+        } else {
+          // The arrow moves to the face just picked: the drag is measured along it, each face moves along its own.
+          this.anchor.copy(hit.anchor);
+          this.faceAnchor.copy(hit.anchor);
+          this.faceNormal.copy(hit.normal).normalize();
+          this.axis.copy(this.faceNormal);
         }
         if (was !== this.boxShape()) this.showBox();
         else this.syncToggle();
@@ -364,29 +366,16 @@ export class PressPullTool {
   private onUp(e: PointerEvent) {
     if (e.button !== 0 || this.phase !== "drag") return;
     if (this.pickingTarget) return; // T-mode clicks are fully handled in onDown
+    // Letting go of a handle only ends the drag: the box options and Enter are still to come.
     if (this.taperGrabbing) {
-      // Releasing the arc finishes the gesture; a press that never travelled stays put.
       this.taperGrabbing = false;
-      const moved = Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
       this.viewport.domElement.style.cursor = this.taperHovering ? "grab" : "default";
-      if (moved) this.commit();
+      this.dim.focus();
       return;
     }
     if (this.grabbing) {
       this.grabbing = false;
-      // commit and cancel both want the kernel already chasing where the drag ended
       this.flushPreviewNow();
-      const release = fluentRelease({
-        fluent: this.fluentGrab,
-        moved: Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3,
-        // commit()'s own threshold, so a drag back to the face cancels rather than parking the user in a tool they never opened.
-        meaningful: !this.neutral,
-      });
-      // Cleared before dispatching: commit() can decline and leave the tool alive, and a stale flag would make the next
-      // release rerun this decision.
-      this.fluentGrab = false;
-      if (release === "commit") return this.commit();
-      if (release === "cancel") return this.cancel();
       this.viewport.domElement.style.cursor = this.hovering ? "grab" : "default";
       this.dim.focus();
       return;
@@ -789,7 +778,7 @@ export class PressPullTool {
         );
       }
       // Nothing to ghost once the drag asks for the face to go; the readout dropping to 0 and this line say so.
-      if (this.removing) return setPrompt("Release to remove this face · drag back to keep it · Esc");
+      if (this.removing) return setPrompt("Enter removes this face · drag back to keep it · Esc");
       const moves = this.followMoves();
       if (moves > 0) {
         return setPrompt(
@@ -1272,7 +1261,6 @@ export class PressPullTool {
     this.taperGrabbing = false;
     this.taperHovering = false;
     this.taper = 0;
-    this.fluentGrab = false;
     this.hovering = false;
     this.value = 0;
     this.round = null;

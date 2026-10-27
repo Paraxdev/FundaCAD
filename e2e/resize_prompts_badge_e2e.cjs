@@ -263,7 +263,7 @@ const HOLE_WALL = [0, 7.125 + 3.3690784184224394, 13.015];
   await typeValue("⌀0");
   await page.waitForTimeout(400);
   p = await prompt();
-  check("a diameter of 0 offers removal", /Release to remove this face/.test(p), p);
+  check("a diameter of 0 offers removal", /Enter removes this face/.test(p), p);
   await typeValue("r-2");
   await page.waitForTimeout(400);
   p = await prompt();
