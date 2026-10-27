@@ -215,7 +215,7 @@ describe("StressPanel", () => {
     p.showStress("b1");
     p.stressStarted();
     await flushPromises();
-    expect((q(".stress-body") as HTMLButtonElement).disabled).toBe(true);
+    expect(q(".stress-body")?.getAttribute("aria-disabled")).toBe("true");
     expect(q(".stress-run")).toBeNull();
     expect(q(".stress-foot")?.textContent).toContain("Analysing");
     q(".stress-cancel")!.click();

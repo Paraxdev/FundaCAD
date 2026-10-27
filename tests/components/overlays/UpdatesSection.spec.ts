@@ -32,9 +32,9 @@ describe("Updates in Preferences", () => {
   it("writes the switch and disables the period while it is off", async () => {
     const w = await open();
     await w.get("#prefs-update-auto").setValue(false);
-    expect([autoUpdateCheck(), w.get("#prefs-update-period").attributes("disabled")]).toEqual([false, ""]);
+    expect([autoUpdateCheck(), w.get("#prefs-update-period").attributes("aria-disabled")]).toEqual([false, "true"]);
     await w.get("#prefs-update-auto").setValue(true);
-    expect([autoUpdateCheck(), w.get("#prefs-update-period").attributes("disabled")]).toEqual([true, undefined]);
+    expect([autoUpdateCheck(), w.get("#prefs-update-period").attributes("aria-disabled")]).toEqual([true, undefined]);
   });
 
   it("follows a period set elsewhere", async () => {
