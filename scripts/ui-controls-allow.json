@@ -98,7 +98,6 @@
   { "path": "src/components/overlays/InterferencePanel.vue", "kind": "style:inline", "count": 2, "reason": "before the base set, migrates in lane I (feature rows and readouts)" },
   { "path": "src/components/overlays/McpSection.vue", "kind": "button", "count": 1, "reason": "before the base set, migrates in lane M (settings)" },
   { "path": "src/components/overlays/MirrorToolPanel.vue", "kind": "button", "count": 3, "reason": "before the base set, migrates in lane K (tool boxes)" },
-  { "path": "src/components/overlays/ModalFrame.vue", "kind": "button", "count": 1, "reason": "before the base set, migrates in lane D (surfaces, it moves into src/components/ui)" },
   { "path": "src/components/overlays/ModalHost.vue", "kind": "button", "count": 4, "reason": "before the base set, migrates in lane H (dialogs)" },
   { "path": "src/components/overlays/ModalHost.vue", "kind": "input[type=checkbox]", "count": 1, "reason": "before the base set, migrates in lane H (dialogs)" },
   { "path": "src/components/overlays/OverhangPanel.vue", "kind": "input[type=range]", "count": 1, "reason": "before the base set, migrates in lane I (feature rows and readouts)" },
