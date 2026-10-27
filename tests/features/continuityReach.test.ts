@@ -11,10 +11,12 @@ describe("fillet continuity reach", () => {
     expect(continuityOf(undefined)).toBe("G1");
   });
 
-  it("takes the lowest reach of the picked edges, absent counting as 3", () => {
-    expect(pickedReach([])).toBe(3);
-    expect(pickedReach([{}, { reach: 3 }])).toBe(3);
-    expect(pickedReach([{}, { reach: 1 }])).toBe(1);
+  it("weighs each picked edge's curvature against the radius, as the engine's gate does", () => {
+    expect(pickedReach([], 5)).toBe(3);
+    expect(pickedReach([{}, { curvature: 0 }], 5)).toBe(3);
+    expect(pickedReach([{}, { curvature: 1 / 15 }], 5)).toBe(1);
+    expect(pickedReach([{ curvature: 1e-8 }], 10)).toBe(3);
+    expect(pickedReach([{ curvature: 1e-8 }], 100)).toBe(1);
   });
 
   it("greys G2 and G3 out on an edge along a curved face, with the reason", () => {
@@ -33,10 +35,10 @@ describe("fillet continuity reach", () => {
     ]);
   });
 
-  it("unpacks each edge's reach from a binary frame", () => {
+  it("unpacks each edge's curvature from a binary frame", () => {
     const pts = new Float32Array([0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0]);
-    const edges = expandPackedEdges(pts, new Uint32Array([2, 2]), "b1", [], [[1, 1]]);
-    expect(edges[0]!.reach).toBeUndefined();
-    expect(edges[1]!.reach).toBe(1);
+    const edges = expandPackedEdges(pts, new Uint32Array([2, 2]), "b1", [], [[1, 0.0625]]);
+    expect(edges[0]!.curvature).toBeUndefined();
+    expect(edges[1]!.curvature).toBe(0.0625);
   });
 });

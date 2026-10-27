@@ -21,8 +21,8 @@ export interface EdgeRef {
   readonly points: EdgePt[];
   /** the faces either side meet tangentially (a fillet's boundary) */
   readonly smooth: boolean;
-  /** the highest fillet continuity the engine builds here, when below 3 */
-  readonly reach?: number;
+  /** the faces' largest curvature across the edge, per mm, when not flat */
+  readonly curvature?: number;
   /** the merged object that draws this edge, and this edge's slot in it */
   readonly draw: BodyEdges;
   readonly slot: number;
@@ -74,7 +74,7 @@ export class BodyEdges {
         body: e.body,
         points: e.points,
         smooth: e.smooth === true,
-        ...(e.reach !== undefined ? { reach: e.reach } : {}),
+        ...(e.curvature !== undefined ? { curvature: e.curvature } : {}),
         draw: this,
         slot: i,
       });

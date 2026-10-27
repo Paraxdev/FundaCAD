@@ -7,6 +7,7 @@ import * as THREE from "three";
 import { CONTINUITY_SEGMENTS, EdgeFeatureTool } from "../../src/features/edgeFeatureTool";
 import type { DocumentStore } from "../../src/document/store";
 import type { Viewport } from "../../src/viewport/viewport";
+import { usePromptStore } from "../../src/stores/prompt";
 
 function lenient<T extends object>(own: Record<string, unknown>): T {
   return new Proxy(own, {
@@ -16,7 +17,19 @@ function lenient<T extends object>(own: Record<string, unknown>): T {
 
 const EDGE = { kind: "edge", by: "nearest", point: [0, 0, 0], body: "b1" };
 
-function setup() {
+/** One picked edge per curvature, the engine's `curvature` across each (absent when flat). */
+function setup(curvatures: number[] = []) {
+  const picks = curvatures.map((_, i) => ({ ...EDGE, point: [i * 10, 0, 0] }));
+  const lines = curvatures.map((k, i) => ({
+    id: `e${i}`,
+    body: "b1",
+    points: [
+      [i * 10, -1, 0],
+      [i * 10, 1, 0],
+    ],
+    smooth: false,
+    ...(k ? { curvature: k } : {}),
+  }));
   const camera = new THREE.PerspectiveCamera();
   camera.position.set(0, -100, 0);
   camera.lookAt(0, 0, 0);
@@ -25,7 +38,8 @@ function setup() {
     domElement: document.createElement("canvas"),
     camera,
     suspendPicking: false,
-    selectedEdgeSelectors: () => [EDGE],
+    selectedEdgeSelectors: () => (picks.length ? picks : [EDGE]),
+    edgeLineForSelector: (p: number[]) => lines.find((l) => l.points[0]![0] === p[0]) ?? null,
     selectedEdgeScope: () => ({ scope: "single" }),
     pixelWorldSize: () => 0.1,
     projectToScreen: () => ({ x: 100, y: 100 }),
@@ -124,5 +138,35 @@ describe("fillet continuity control", () => {
     expect(chosen()).toEqual(["G1"]);
     key(input(), "2", true);
     expect(chosen()).toEqual(["G2"]);
+  });
+
+  describe("on an edge along a curved face", () => {
+    it("a mixed pick greys G2 and G3 with the reason, and their keys say why instead of picking", () => {
+      t.tool.cancel();
+      document.body.innerHTML = "";
+      t = setup([0, 1 / 15]);
+      for (const id of ["G2", "G3"]) {
+        expect(segment(id).classList.contains("disabled")).toBe(true);
+        expect(segment(id).getAttribute("aria-disabled")).toBe("true");
+        expect(segment(id).title).toMatch(/needs both faces flat across the edge/);
+      }
+      expect(segment("G1").classList.contains("disabled")).toBe(false);
+      input().blur();
+      key(document.body, "3");
+      expect(chosen()).toEqual(["G1"]);
+      expect(usePromptStore().text).toMatch(/^G3 needs both faces flat across the edge/);
+    });
+
+    it("a radius that makes the curve count drops a chosen G3 back to G1", () => {
+      t.tool.cancel();
+      document.body.innerHTML = "";
+      t = setup([1e-7]);
+      input().blur();
+      key(document.body, "3");
+      expect(chosen()).toEqual(["G3"]);
+      type("20");
+      enter();
+      expect(t.added).toEqual([{ id: "f1", type: "fillet", radius: 20, edges: { ...EDGE, point: [0, 0, 0] } }]);
+    });
   });
 });

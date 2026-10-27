@@ -97,8 +97,8 @@ interface GhostEdge {
   points: Vec3[];
   line: Line2;
   chain: number;
-  /** the highest continuity a fillet reaches on this edge, as the engine reports it */
-  reach: number;
+  /** the faces' largest curvature across this edge, per mm, as the engine reports it */
+  curvature: number;
   /** drawn in the error red when not hovered */
   failed: boolean;
 }
@@ -453,7 +453,7 @@ export class EdgeFeatureTool {
       const line = this.viewport.edgeLineForSelector(sel.point as Vec3, sel.body);
       const same = line && this.ghosts.find((g) => g.points === line.points);
       if (same) same.sels.push(sel);
-      else if (line) this.addGhost(sel, line.points as Vec3[], undefined, line.reach);
+      else if (line) this.addGhost(sel, line.points as Vec3[], undefined, line.curvature);
       else this.unmatchedSels.push(sel);
     }
   }
@@ -461,7 +461,7 @@ export class EdgeFeatureTool {
   private chainCounter = 0; // one id per add gesture (chain toggles as a unit)
   private memberSeq = 0; // one id per member, stable for the panel's row keys
 
-  private addGhost(sel: Selector, points: Vec3[], chain?: number, reach = 3) {
+  private addGhost(sel: Selector, points: Vec3[], chain?: number, curvature = 0) {
     const mid = polylineMid(points);
     if (!mid) return; // an edge always has points; nothing to ghost otherwise
     const geo = new LineGeometry();
@@ -487,7 +487,7 @@ export class EdgeFeatureTool {
       points,
       line,
       chain: chain ?? ++this.chainCounter,
-      reach,
+      curvature,
       failed: false,
     });
   }
@@ -657,7 +657,7 @@ export class EdgeFeatureTool {
       if (!sel) continue;
       const mid = sel.point;
       if (this.ghosts.some((g) => Math.hypot(g.mid[0] - mid[0], g.mid[1] - mid[1], g.mid[2] - mid[2]) < 1e-6)) continue;
-      this.addGhost(sel, pts, chainId, l.reach);
+      this.addGhost(sel, pts, chainId, l.curvature);
     }
   }
 
@@ -716,6 +716,7 @@ export class EdgeFeatureTool {
               return why ? { ...s, disabled: why } : s;
             }),
             chosen: this.continuity,
+            onBlocked: (_id, why) => setPrompt(why),
             onChoose: (id) => {
               this.continuity = id as Continuity;
               this.forgetBuildRange(); // G2 sets back further, so its limit is not G1's
@@ -829,13 +830,19 @@ export class EdgeFeatureTool {
   /** Edit mode replaces the committed feature in place, create mode appends. No members or a drag on the origin
    *  would build a blend OCCT refuses on every pointermove, so both drop back to the bare model. */
   private continuityBlocked(c: Continuity): string | null {
-    return continuityBlocked(c, pickedReach(this.ghosts));
+    return continuityBlocked(c, pickedReach(this.ghosts, this.value));
   }
 
   /** Greys out G2 and G3 while a picked edge runs along a curved face; the engine refuses them there too. */
   private refreshContinuityReach() {
     if (this.kind !== "fillet") return;
     for (const s of CONTINUITY_SEGMENTS) this.dim.setSegmentDisabled("continuity", s.id, this.continuityBlocked(s.id));
+    const why = this.continuityBlocked(this.continuity);
+    if (!why) return;
+    this.continuity = "G1";
+    this.dim.setOption("continuity", "G1");
+    this.forgetBuildRange();
+    setPrompt(`${why}, so the fillet is G1 now`);
   }
 
   private pushPreview() {
@@ -1206,6 +1213,7 @@ export class EdgeFeatureTool {
   }
 
   private buildFeature(): Feature {
+    this.refreshContinuityReach();
     const v = this.size();
     const sels = this.currentSelectors();
     const edges = sels.length === 1 && sels[0] ? sels[0] : sels;
