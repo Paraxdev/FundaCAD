@@ -120,6 +120,7 @@ const control = () => document.querySelector<HTMLElement>('.dim-seg[data-option=
 const segment = (id: string) => control().querySelector<HTMLElement>(`.dim-segment[data-id="${id}"]`)!;
 const chosen = () => [...control().querySelectorAll<HTMLElement>(".dim-segment.on")].map((b) => b.dataset.id);
 const click = (el: Element) => el.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+const press = (el: Element, k: string) => el.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true }));
 const key = (target: EventTarget, k: string, alt = false) =>
   target.dispatchEvent(new KeyboardEvent("keydown", { key: k, code: `Digit${k}`, altKey: alt, bubbles: true }));
 function type(text: string) {
@@ -192,6 +193,22 @@ describe("fillet continuity control", () => {
     expect(chosen()).toEqual(["G2"]);
   });
 
+  it("arrows walk the segments and pick, Space picks the focused one, Enter on one commits", () => {
+    segment("G1").focus();
+    press(segment("G1"), "ArrowRight");
+    expect(chosen()).toEqual(["G2"]);
+    expect(document.activeElement).toBe(segment("G2"));
+    press(segment("G2"), "ArrowLeft");
+    expect(chosen()).toEqual(["G1"]);
+    press(segment("G1"), "ArrowLeft");
+    expect(chosen()).toEqual(["G3"]);
+    press(segment("G2"), " ");
+    expect(chosen()).toEqual(["G2"]);
+    type("4");
+    press(segment("G2"), "Enter");
+    expect(t.added).toEqual([{ id: "f1", type: "fillet", radius: 4, edges: EDGE, continuity: "G2" }]);
+  });
+
   describe("on an edge along a curved face", () => {
     it("a mixed pick greys G2 and G3 with the reason, and their keys say why instead of picking", () => {
       t.tool.cancel();
@@ -205,6 +222,31 @@ describe("fillet continuity control", () => {
       expect(segment("G1").classList.contains("disabled")).toBe(false);
       input().blur();
       key(document.body, "3");
+      expect(chosen()).toEqual(["G1"]);
+      expect(usePromptStore().text).toMatch(/^G3 needs both faces flat across the edge/);
+    });
+
+    it("a click on a greyed segment says why and leaves G1 chosen", () => {
+      t.tool.cancel();
+      document.body.innerHTML = "";
+      t = setup([1 / 15]);
+      click(segment("G2"));
+      expect(chosen()).toEqual(["G1"]);
+      expect(usePromptStore().text).toMatch(/^G2 needs both faces flat across the edge/);
+      click(segment("G3"));
+      expect(chosen()).toEqual(["G1"]);
+      expect(usePromptStore().text).toMatch(/^G3 needs both faces flat across the edge/);
+    });
+
+    it("arrows skip greyed segments and Space on one says why", () => {
+      t.tool.cancel();
+      document.body.innerHTML = "";
+      t = setup([1 / 15]);
+      segment("G1").focus();
+      press(segment("G1"), "ArrowRight");
+      expect(chosen()).toEqual(["G1"]);
+      expect(document.activeElement).toBe(segment("G1"));
+      press(segment("G3"), " ");
       expect(chosen()).toEqual(["G1"]);
       expect(usePromptStore().text).toMatch(/^G3 needs both faces flat across the edge/);
     });
