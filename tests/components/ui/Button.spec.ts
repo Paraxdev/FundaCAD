@@ -8,9 +8,10 @@ afterEach(() => setMacForTest(null));
 
 type Props = InstanceType<typeof Button>["$props"];
 
-async function render(props: Props = {}, slot = "Save") {
+async function render(props: Props = {}, slot: string | null = "Save") {
   const onClick = vi.fn();
-  const w = mount(Button, { props, attrs: { onClick }, slots: { default: slot }, attachTo: document.body });
+  const slots = slot === null ? { icon: "<i></i>" } : { default: slot };
+  const w = mount(Button, { props, attrs: { onClick }, slots, attachTo: document.body });
   // Vue skips a listener for an event stamped in the same millisecond it was attached, once another listener ran.
   await new Promise((r) => setTimeout(r, 2));
   return { w, onClick };
@@ -79,7 +80,7 @@ describe("Button", () => {
 
   it("shows the disabled reason as the title while disabled", async () => {
     const { w } = await render({ disabled: true, tip: "Save", disabledReason: "Nothing changed" });
-    expect([w.attributes("title"), w.attributes("aria-label")]).toEqual(["Nothing changed", "Save"]);
+    expect([w.attributes("title"), w.attributes("aria-label")]).toEqual(["Nothing changed", undefined]);
     await w.setProps({ disabled: false });
     expect(w.attributes("title")).toBe("Save");
   });
@@ -101,13 +102,23 @@ describe("Button", () => {
     expect([w.attributes("aria-pressed"), w.classes("is-on")]).toEqual(["true", true]);
   });
 
-  it("writes the same title and aria-label from tip and keys through fmtKeys", async () => {
+  it("writes the same title and aria-label from tip and keys through fmtKeys on an icon only button", async () => {
     setMacForTest(true);
-    const mac = await render({ tip: "Save", keys: "Ctrl+S" });
+    const mac = await render({ tip: "Save", keys: "Ctrl+S" }, null);
     expect([mac.w.attributes("title"), mac.w.attributes("aria-label")]).toEqual(["Save (⌘+S)", "Save (⌘+S)"]);
     setMacForTest(false);
-    const pc = await render({ tip: "Save", keys: "Ctrl+S" });
+    const pc = await render({ tip: "Save", keys: "Ctrl+S" }, null);
     expect([pc.w.attributes("title"), pc.w.attributes("aria-label")]).toEqual(["Save (Ctrl+S)", "Save (Ctrl+S)"]);
+  });
+
+  it("writes the tip as title only when a visible label names the button", async () => {
+    setMacForTest(false);
+    const { w } = await render({ tip: "Save the file", keys: "Ctrl+S" });
+    expect([w.attributes("title"), w.attributes("aria-label"), w.text()]).toEqual([
+      "Save the file (Ctrl+S)",
+      undefined,
+      "Save",
+    ]);
   });
 
   it("writes no title or aria-label without a tip, so the label names it", async () => {
