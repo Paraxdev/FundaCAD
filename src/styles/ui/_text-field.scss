@@ -1,1 +1,61 @@
 // TextField: text, search and url fields, sm 24 and md 32, with leading and trailing slots.
+// .ui-field is the shared well, NumberField wears it too.
+
+.ui-field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  min-width: 0;
+  height: 32px;
+  padding: 0 var(--s-3);
+  background: var(--field-bg);
+  border-radius: var(--float-chip-radius);
+  corner-shape: squircle;
+  color: var(--text);
+  font-size: 12px;
+  cursor: text;
+  transition: background var(--t-fast) var(--ease);
+
+  > input {
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+    height: 100%;
+    padding: 0;
+    background: none;
+    border: 0;
+    color: inherit;
+    font: inherit;
+    cursor: inherit;
+  }
+  // The well draws the focus, so the input inside does not draw a second one.
+  > input:focus,
+  > input:focus-visible {
+    outline: none;
+  }
+  &:focus-within {
+    outline: 1px solid var(--accent);
+    outline-offset: 0;
+  }
+  > input::placeholder {
+    color: var(--text-mute);
+  }
+}
+
+.ui-field-sm {
+  height: 24px;
+  padding: 0 var(--s-2);
+  font-size: 11px;
+}
+
+.ui-field.is-error {
+  background: var(--error-tint);
+}
+.ui-field.is-error:focus-within {
+  outline-color: var(--error);
+}
+
+.ui-field.is-disabled {
+  opacity: 0.45;
+  cursor: default;
+}
