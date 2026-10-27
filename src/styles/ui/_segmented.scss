@@ -1,1 +1,137 @@
 // Segmented: a radiogroup of choices, sm and md, and the chips look of the dock.
+
+.ui-segmented {
+  display: inline-flex;
+  align-items: stretch;
+  max-width: 100%;
+}
+.ui-segment {
+  display: inline-flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-1);
+  min-width: 0;
+  padding: 0 var(--s-3);
+  border: 0;
+  corner-shape: squircle;
+  border-radius: var(--float-chip-radius);
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
+}
+.ui-segment-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ui-segment:hover {
+  background: var(--hover-wash);
+  color: var(--text);
+}
+.ui-segment:active {
+  background: linear-gradient(var(--hover-wash), var(--hover-wash)), var(--hover-wash);
+}
+.ui-segment:focus-visible {
+  outline-offset: -2px;
+}
+.ui-segment.is-selected {
+  background: var(--accent-wash);
+  color: var(--accent-hot);
+  font-weight: 600;
+}
+.ui-segment.is-disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.ui-segment.is-disabled:hover,
+.ui-segment.is-disabled:active {
+  background: none;
+  color: var(--text-dim);
+}
+
+.ui-segmented-md {
+  font-size: 12.5px;
+}
+.ui-segmented-md .ui-segment {
+  height: 32px;
+}
+.ui-segmented-sm {
+  font-size: 11.5px;
+}
+.ui-segmented-sm .ui-segment {
+  height: 24px;
+  padding: 0 var(--s-2);
+}
+.ui-segmented-icon .ui-segment {
+  flex: none;
+  padding: 0;
+}
+.ui-segmented-icon.ui-segmented-md .ui-segment {
+  width: 32px;
+}
+.ui-segmented-icon.ui-segmented-sm .ui-segment {
+  width: 24px;
+}
+
+// One sunken well with the choices inside it.
+.ui-segmented-bar {
+  gap: 2px;
+  padding: 2px;
+  corner-shape: squircle;
+  border-radius: var(--float-chip-radius);
+  background: var(--field-bg);
+}
+.ui-segmented-bar .ui-segment {
+  border-radius: calc(var(--float-chip-radius) - 2px);
+}
+.ui-segmented-bar.ui-segmented-md .ui-segment {
+  height: 28px;
+}
+.ui-segmented-bar.ui-segmented-sm .ui-segment {
+  height: 20px;
+}
+.ui-segmented-bar.ui-segmented-icon.ui-segmented-md .ui-segment {
+  width: 28px;
+}
+.ui-segmented-bar.ui-segmented-icon.ui-segmented-sm .ui-segment {
+  width: 20px;
+}
+
+// Separate raised chips, the Render dock look.
+.ui-segmented-chips {
+  flex-wrap: wrap;
+  gap: var(--s-1);
+}
+.ui-segmented-chips .ui-segment {
+  flex: none;
+  background: var(--float-chip-bg);
+}
+.ui-segmented-chips .ui-segment:hover {
+  background: linear-gradient(var(--hover-wash), var(--hover-wash)), var(--float-chip-bg);
+}
+.ui-segmented-chips .ui-segment.is-selected {
+  background: var(--accent-wash);
+}
+.ui-segmented-chips .ui-segment.is-disabled:hover {
+  background: var(--float-chip-bg);
+}
+
+.ui-segmented.is-disabled {
+  opacity: 0.45;
+}
+.ui-segmented.is-disabled .ui-segment {
+  cursor: default;
+}
+.ui-segmented.is-disabled .ui-segment:not(.is-selected):hover {
+  background: none;
+  color: var(--text-dim);
+}
+.ui-segmented-chips.is-disabled .ui-segment:not(.is-selected):hover {
+  background: var(--float-chip-bg);
+}
