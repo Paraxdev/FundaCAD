@@ -1,1 +1,14 @@
 // NumberField: a measured value field with its unit and the rejected text state.
+// The well, focus, error and disabled looks are .ui-field in _text-field.scss.
+
+.ui-number-field {
+  font-variant-numeric: tabular-nums;
+}
+.ui-number-field.has-ch > input {
+  flex: none;
+  width: calc(var(--field-ch) * 1ch);
+}
+// The chip sits inside the well, so the well's own right padding would double its gap.
+.ui-number-field:has(> .ui-unit-chip) {
+  padding-right: var(--s-1);
+}
