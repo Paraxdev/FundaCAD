@@ -55,7 +55,7 @@ export type WireEdgeList = {
   points: [number, number, number][];
   body?: string;
   smooth?: boolean;
-  curvature?: number;
+  curvature?: [number, number];
 }[];
 
 // The engine's raw rebuild result: a resync request, a protocol v2 per-body result, or the legacy single mesh.

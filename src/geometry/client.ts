@@ -489,8 +489,8 @@ interface WireEdgesPacked {
   body?: string;
   /** indices of the edges whose faces meet tangentially */
   smooth?: number[];
-  /** [index, curvature across the edge] of the edges whose faces curve across them */
-  curvature?: [number, number][];
+  /** [index, curvature across the edge per mm of radius, per mm of chord] of the edges whose faces curve across them */
+  curvature?: [number, number, number][];
 }
 
 /** Re-split packed edges (`counts` points per edge) into per-edge triples. Exported for its own test, since the
@@ -500,7 +500,7 @@ export function expandPackedEdges(
   counts: Uint32Array,
   body: string | undefined,
   smooth?: readonly number[],
-  curvature?: readonly (readonly [number, number])[],
+  curvature?: readonly (readonly [number, number, number])[],
 ): WireEdgeList {
   const list: WireEdgeList = [];
   let o = 0;
@@ -514,9 +514,9 @@ export function expandPackedEdges(
     const e = list[i];
     if (e) e.smooth = true;
   }
-  for (const [i, k] of curvature ?? []) {
+  for (const [i, k, c] of curvature ?? []) {
     const e = list[i];
-    if (e) e.curvature = k;
+    if (e) e.curvature = [k, c];
   }
   return list;
 }

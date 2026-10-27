@@ -21,8 +21,8 @@ export interface EdgeRef {
   readonly points: EdgePt[];
   /** the faces either side meet tangentially (a fillet's boundary) */
   readonly smooth: boolean;
-  /** the faces' largest curvature across the edge, per mm, when not flat */
-  readonly curvature?: number;
+  /** the faces' largest curvature across the edge, per mm of radius and of chord, when not flat */
+  readonly curvature?: readonly [number, number];
   /** the merged object that draws this edge, and this edge's slot in it */
   readonly draw: BodyEdges;
   readonly slot: number;

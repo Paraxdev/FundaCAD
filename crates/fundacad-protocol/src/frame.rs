@@ -129,7 +129,7 @@ fn pack_edges<'a>(body: &'a FullBody, p: &mut Packer<'a>) -> Value {
         .edges
         .iter()
         .enumerate()
-        .filter_map(|(i, e)| e.curvature.map(|k| json!([i, crate::body::f32_value(k)])))
+        .filter_map(|(i, e)| e.curvature.map(|[k, c]| json!([i, crate::body::f32_value(k), crate::body::f32_value(c)])))
         .collect();
     if !curved.is_empty() {
         out.insert("curvature".into(), Value::Array(curved));
@@ -424,7 +424,7 @@ pub fn decode_frame(bytes: &[u8]) -> Result<Value, String> {
             .and_then(Value::as_array)
             .into_iter()
             .flatten()
-            .filter_map(|p| Some((p.get(0)?.as_u64()?, p.get(1)?.clone())))
+            .filter_map(|p| Some((p.get(0)?.as_u64()?, json!([p.get(1)?, p.get(2)?]))))
             .collect();
         let owner = packed.get("body").cloned().unwrap_or(Value::Null);
         let mut next = pts.chunks_exact(3);

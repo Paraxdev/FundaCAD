@@ -3,9 +3,10 @@
 
 use fundacad_core::CadDocument;
 use fundacad_geom::builder::{self, NoWatch, Rebuild};
-use fundacad_geom::features::blend::ops;
-use fundacad_geom::kernel;
+use fundacad_geom::features::blend::{chord_radius, ops};
+use fundacad_geom::kernel::{self, Kind};
 use fundacad_geom::mesh::edges::edge_polylines;
+use fundacad_geom::select::entity::EdgeEnt;
 use opencascade::mesh_access::MeshAccess;
 use opencascade::primitives::Shape;
 use serde_json::{json, Value};
@@ -250,6 +251,26 @@ fn mesh_edges_report_their_cross_curvature() {
     assert_eq!(chord.curvature, 0.0);
     let rims: Vec<f64> = lines.iter().filter(|l| l.points.len() > 2).map(|l| l.curvature).collect();
     assert!(!rims.is_empty() && rims.iter().all(|k| k.abs() < 1e-12), "{rims:?}");
+}
+
+/// A chord sized fillet takes its radius from the angle between the faces, so each mesh edge also reports its
+/// curvature per mm of chord, the curvature times the radius the build makes of a 1 mm chord there.
+#[test]
+fn mesh_edges_report_their_curvature_per_mm_of_chord() {
+    let s = built(prism(segment(), 40.0, json!({})));
+    let lines = edge_polylines(&MeshAccess::new(&s));
+    let along = lines
+        .iter()
+        .find(|l| l.points.len() == 2 && l.points.iter().all(|q| q[0].abs() < 1e-6 && q[1].abs() < 1e-6))
+        .expect("the vertical edge at the origin");
+    let edge = kernel::subshapes(&s, Kind::Edge)
+        .into_iter()
+        .find(|e| EdgeEnt::new(e.clone()).is_ok_and(|x| x.mid.x.abs() < 1e-6 && x.mid.y.abs() < 1e-6))
+        .expect("the same edge in the shape");
+    let per_chord = chord_radius(&s, &edge, 1.0);
+    assert!((per_chord - 1.0).abs() > 0.05, "{per_chord}");
+    let want = along.curvature * per_chord;
+    assert!((along.chord_curvature - want).abs() < 1e-9 * want, "{} vs {want}", along.chord_curvature);
 }
 
 /// The profile slides the inner poles along each leg, so a fuller or flatter section stays G2 or G3.

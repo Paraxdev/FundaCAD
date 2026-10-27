@@ -17,7 +17,8 @@ function lenient<T extends object>(own: Record<string, unknown>): T {
 
 const EDGE = { kind: "edge", by: "nearest", point: [0, 0, 0], body: "b1" };
 
-/** One picked edge per curvature, the engine's `curvature` across each (absent when flat). */
+/** One picked edge per curvature, the engine's `curvature` across each, per mm of radius and of chord (absent when
+ *  flat). */
 function setup(curvatures: number[] = []) {
   const picks = curvatures.map((_, i) => ({ ...EDGE, point: [i * 10, 0, 0] }));
   const lines = curvatures.map((k, i) => ({
@@ -28,7 +29,7 @@ function setup(curvatures: number[] = []) {
       [i * 10, 1, 0],
     ],
     smooth: false,
-    ...(k ? { curvature: k } : {}),
+    ...(k ? { curvature: [k, k] } : {}),
   }));
   const camera = new THREE.PerspectiveCamera();
   camera.position.set(0, -100, 0);
@@ -60,6 +61,53 @@ function setup(curvatures: number[] = []) {
   });
   const tool = new EdgeFeatureTool(vp, store);
   tool.start("fillet", () => {});
+  return { tool, added };
+}
+
+/** Edits a stored fillet on one edge that curves across at `curvature` per mm of radius and of chord, once the
+ *  rollback build lands. */
+function setupEdit(fillet: Record<string, unknown>, curvature: [number, number]) {
+  const line = {
+    id: "e0",
+    body: "b1",
+    points: [
+      [0, -1, 0],
+      [0, 1, 0],
+    ],
+    smooth: false,
+    curvature,
+  };
+  const camera = new THREE.PerspectiveCamera();
+  camera.position.set(0, -100, 0);
+  camera.lookAt(0, 0, 0);
+  camera.updateMatrixWorld(true);
+  const vp = lenient<Viewport>({
+    domElement: document.createElement("canvas"),
+    camera,
+    suspendPicking: false,
+    edgeLineForSelector: () => line,
+    pixelWorldSize: () => 0.1,
+    projectToScreen: () => ({ x: 100, y: 100 }),
+    modelDiagonal: () => 100,
+    edgeLineByMid: () => null,
+    visibleEdgeLines: () => [],
+    rayFrom: () => new THREE.Raycaster(new THREE.Vector3(0, -100, 0), new THREE.Vector3(0, 1, 0)),
+  });
+  const feature = { id: "f1", type: "fillet", edges: EDGE, ...fillet };
+  const added: unknown[] = [];
+  let landed: ((s: unknown) => void) | null = null;
+  const store = lenient<DocumentStore>({
+    document: { features: [feature], parameters: {} },
+    onBuild: (cb: (s: unknown) => void) => {
+      landed = cb;
+      return () => {};
+    },
+    isParamBound: () => false,
+    bareParamRef: () => null,
+  });
+  const tool = new EdgeFeatureTool(vp, store);
+  expect(tool.startEdit("f1", () => {})).toBe(true);
+  landed!({ building: false, result: { bbox: { min: [0, 0, 0], max: [1, 1, 1] } }, previewBuilt: [] });
   return { tool, added };
 }
 
@@ -155,6 +203,18 @@ describe("fillet continuity control", () => {
       key(document.body, "3");
       expect(chosen()).toEqual(["G1"]);
       expect(usePromptStore().text).toMatch(/^G3 needs both faces flat across the edge/);
+    });
+
+    it("a chord sized fillet weighs the curvature per mm of chord, which a shallow edge makes larger", () => {
+      t.tool.cancel();
+      document.body.innerHTML = "";
+      t = setupEdit({ radius: 50 }, [1e-8, 5e-8]);
+      expect(segment("G2").classList.contains("disabled")).toBe(false);
+      t.tool.cancel();
+      document.body.innerHTML = "";
+      t = setupEdit({ radius: 50, sizeType: "chord" }, [1e-8, 5e-8]);
+      expect(segment("G2").classList.contains("disabled")).toBe(true);
+      expect(segment("G3").classList.contains("disabled")).toBe(true);
     });
 
     it("a radius that makes the curve count drops a chosen G3 back to G1", () => {

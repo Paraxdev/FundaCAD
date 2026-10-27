@@ -631,14 +631,19 @@ inline int32_t mesh_access_edge_smooth(const MeshAccess &m, int32_t edge, double
 // The largest curvature across this edge of the faces either side, which a
 // fillet tool weighs against its radius to offer G2 and G3. An edge of three or
 // more faces, or one that cannot be read, reports CURVATURE_UNKNOWN.
+inline std::vector<TopoDS_Face> mesh_access_unique_faces(const MeshAccess &m, int32_t edge) {
+  std::vector<TopoDS_Face> faces;
+  for (const TopoDS_Face &f : m.edgeAncestors.at(edge)) {
+    bool seen = false;
+    for (const TopoDS_Face &g : faces) seen = seen || g.IsSame(f);
+    if (!seen) faces.push_back(f);
+  }
+  return faces;
+}
+
 inline double mesh_access_edge_cross_curvature(const MeshAccess &m, int32_t edge) {
   try {
-    std::vector<TopoDS_Face> faces;
-    for (const TopoDS_Face &f : m.edgeAncestors.at(edge)) {
-      bool seen = false;
-      for (const TopoDS_Face &g : faces) seen = seen || g.IsSame(f);
-      if (!seen) faces.push_back(f);
-    }
+    std::vector<TopoDS_Face> faces = mesh_access_unique_faces(m, edge);
     if (faces.size() > 2) return CURVATURE_UNKNOWN;
     const TopoDS_Edge &e = mesh_access_edge(m, edge);
     double worst = 0.0;
@@ -650,6 +655,17 @@ inline double mesh_access_edge_cross_curvature(const MeshAccess &m, int32_t edge
     return worst;
   } catch (...) {
     return CURVATURE_UNKNOWN;
+  }
+}
+
+// The angle in degrees between the faces either side halfway along the edge, -1 unless it joins two faces.
+inline double mesh_access_edge_dihedral_deg(const MeshAccess &m, int32_t edge) {
+  try {
+    std::vector<TopoDS_Face> faces = mesh_access_unique_faces(m, edge);
+    if (faces.size() != 2) return -1.0;
+    return edge_dihedral_deg(mesh_access_edge(m, edge), faces[0], faces[1]);
+  } catch (...) {
+    return -1.0;
   }
 }
 

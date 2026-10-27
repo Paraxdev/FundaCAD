@@ -353,10 +353,7 @@ fn native_two_distance_chamfer(s: &Shape, es: &[Shape], d1: f64, d2: f64) -> Res
 
 /// blends.py `chord_radius`.
 pub fn chord_radius(shape: &Shape, edge: &Shape, chord: f64) -> f64 {
-    match ops::dihedral_deg(shape, edge) {
-        Some(ang) if ang >= SMOOTH_EDGE_DEG => chord / (2.0 * (ang.to_radians() / 2.0).sin()),
-        _ => chord,
-    }
+    crate::mesh::edges::radius_of_chord(ops::dihedral_deg(shape, edge), chord)
 }
 
 /// Seams out of the set. One an edge pick named is refused, since the kernel would skip it and call the blend

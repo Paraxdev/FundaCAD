@@ -4,6 +4,7 @@
 #include <BRepAdaptor_Curve2d.hxx>
 #include <BRepAdaptor_Surface.hxx>
 #include <BRepLProp_SLProps.hxx>
+#include <GCPnts_AbscissaPoint.hxx>
 #include <GeomAbs_SurfaceType.hxx>
 #include <TopoDS_Edge.hxx>
 #include <TopoDS_Face.hxx>
@@ -61,6 +62,29 @@ inline double face_curvature_across(const TopoDS_Edge &edge, const TopoDS_Face &
       worst = std::max(worst, std::abs(k));
     }
     return worst;
+  } catch (...) {
+    return -1.0;
+  }
+}
+
+// The angle in degrees between the normals of `a` and `b` halfway along the edge's length, the point where a chord
+// sized fillet takes its radius (blend_dihedral_deg at a pick's mid point); -1 where a normal is not defined.
+inline double edge_dihedral_deg(const TopoDS_Edge &edge, const TopoDS_Face &a, const TopoDS_Face &b) {
+  try {
+    BRepAdaptor_Curve crv(edge);
+    double t = GCPnts_AbscissaPoint(crv, GCPnts_AbscissaPoint::Length(crv) * 0.5, crv.FirstParameter()).Parameter();
+    gp_Vec n[2];
+    const TopoDS_Face *faces[2] = {&a, &b};
+    for (int k = 0; k < 2; ++k) {
+      gp_Pnt2d uv = BRepAdaptor_Curve2d(edge, *faces[k]).Value(t);
+      gp_Pnt p;
+      gp_Vec du, dv;
+      BRepAdaptor_Surface(*faces[k]).D1(uv.X(), uv.Y(), p, du, dv);
+      n[k] = du.Crossed(dv);
+      if (n[k].Magnitude() < 1e-12) return -1.0;
+      n[k].Normalize();
+    }
+    return std::acos(std::max(-1.0, std::min(1.0, n[0].Dot(n[1])))) * 180.0 / 3.14159265358979323846;
   } catch (...) {
     return -1.0;
   }

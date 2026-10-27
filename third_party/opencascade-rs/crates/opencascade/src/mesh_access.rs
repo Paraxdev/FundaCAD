@@ -248,6 +248,13 @@ impl MeshAccess {
         self.edge_ok(edge).map_or(1e30, |(m, e)| ffi::mesh_access_edge_cross_curvature(m, e))
     }
 
+    /// The angle in degrees between the edge's two faces halfway along it, None unless it joins two faces.
+    pub fn edge_dihedral_deg(&self, edge: usize) -> Option<f64> {
+        let (m, e) = self.edge_ok(edge)?;
+        let d = ffi::mesh_access_edge_dihedral_deg(m, e);
+        (d >= 0.0).then_some(d)
+    }
+
     /// The unnormalised `du x dv` of the `ancestor`-th face at edge parameter `t`.
     pub fn edge_face_normal(&self, edge: usize, ancestor: usize, t: f64) -> Option<[f64; 3]> {
         let (m, e) = self.edge_ok(edge)?;

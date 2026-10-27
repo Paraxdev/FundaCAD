@@ -19,7 +19,7 @@ use serde_json::{json, Map, Value};
 use std::sync::Arc;
 
 /// Bump whenever the payload changes for the same input, it keys the mesh artifact cache.
-pub const CODE_VERSION: u32 = 12;
+pub const CODE_VERSION: u32 = 13;
 
 /// An edge's cross curvature (per mm) is sent above this: below it no fillet radius reaches the G2 and G3 bound.
 const CURVATURE_SENT: f64 = 1e-12;
@@ -160,7 +160,7 @@ fn body_payload_for(body: &MeshBody<'_>, shape: &Shape, tolerance: f64, profile:
             .map(|l| Edge {
                 points: l.points.iter().map(|p| [p[0] as f32, p[1] as f32, p[2] as f32]).collect(),
                 smooth: l.smooth,
-                curvature: (l.curvature > CURVATURE_SENT).then_some(l.curvature as f32),
+                curvature: (l.curvature > CURVATURE_SENT).then_some([l.curvature as f32, l.chord_curvature as f32]),
             })
             .collect(),
         ..Default::default()
@@ -413,7 +413,7 @@ pub fn etag_with(body: &FullBody, passes: Option<&str>) -> String {
                 (false, None) => b"edge",
             },
             e.points.len(),
-            &mut e.points.iter().flatten().chain(e.curvature.iter()).map(|v| v.to_le_bytes()),
+            &mut e.points.iter().flatten().chain(e.curvature.iter().flatten()).map(|v| v.to_le_bytes()),
         );
     }
     let mut rest = body.fields.clone();

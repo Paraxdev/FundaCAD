@@ -97,8 +97,8 @@ interface GhostEdge {
   points: Vec3[];
   line: Line2;
   chain: number;
-  /** the faces' largest curvature across this edge, per mm, as the engine reports it */
-  curvature: number;
+  /** the faces' largest curvature across this edge, per mm of radius and of chord, as the engine reports it */
+  curvature?: readonly [number, number];
   /** drawn in the error red when not hovered */
   failed: boolean;
 }
@@ -461,7 +461,7 @@ export class EdgeFeatureTool {
   private chainCounter = 0; // one id per add gesture (chain toggles as a unit)
   private memberSeq = 0; // one id per member, stable for the panel's row keys
 
-  private addGhost(sel: Selector, points: Vec3[], chain?: number, curvature = 0) {
+  private addGhost(sel: Selector, points: Vec3[], chain?: number, curvature?: readonly [number, number]) {
     const mid = polylineMid(points);
     if (!mid) return; // an edge always has points; nothing to ghost otherwise
     const geo = new LineGeometry();
@@ -487,7 +487,7 @@ export class EdgeFeatureTool {
       points,
       line,
       chain: chain ?? ++this.chainCounter,
-      curvature,
+      ...(curvature ? { curvature } : {}),
       failed: false,
     });
   }
@@ -830,7 +830,8 @@ export class EdgeFeatureTool {
   /** Edit mode replaces the committed feature in place, create mode appends. No members or a drag on the origin
    *  would build a blend OCCT refuses on every pointermove, so both drop back to the bare model. */
   private continuityBlocked(c: Continuity): string | null {
-    return continuityBlocked(c, pickedReach(this.ghosts, this.value));
+    const chord = this.optionsKind === "fillet" && this.options.sizeType === "chord";
+    return continuityBlocked(c, pickedReach(this.ghosts, this.value, chord ? "chord" : "radius"));
   }
 
   /** Greys out G2 and G3 while a picked edge runs along a curved face; the engine refuses them there too. */
