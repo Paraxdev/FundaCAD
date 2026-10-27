@@ -942,13 +942,6 @@
   background: var(--accent-tint);
   color: var(--accent-hot);
 }
-.icon-btn.disabled,
-.icon-btn.disabled:hover {
-  background: none;
-  color: var(--text-dim);
-  opacity: 0.38;
-  cursor: default;
-}
 
 .perf-warn-group {
   border-color: color-mix(in srgb, var(--warn) 55%, transparent);

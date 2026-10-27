@@ -1,1 +1,101 @@
 // Chip: neutral, accent, warn and error badges and tags, xs, sm and md.
+
+.chip {
+  --chip-fill: var(--float-chip-bg);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  flex: none;
+  max-width: 100%;
+  padding: 0 var(--s-2);
+  font: 500 11px/20px var(--ui);
+  white-space: nowrap;
+  color: var(--text-dim);
+  background: var(--chip-fill);
+  border: 0;
+  border-radius: var(--float-chip-radius);
+  corner-shape: squircle;
+  transition:
+    background var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
+}
+.chip-md {
+  gap: var(--s-2);
+  padding: 0 var(--s-3);
+  font: 600 12px/26px var(--ui);
+  color: var(--text);
+}
+.chip-xs {
+  justify-content: center;
+  min-width: 14px;
+  padding: 0 3px;
+  font: 700 9px/14px var(--ui);
+  font-variant-numeric: tabular-nums;
+}
+
+.chip-accent {
+  --chip-fill: linear-gradient(var(--accent-wash), var(--accent-wash)), var(--float-chip-bg);
+  color: var(--accent-hot);
+}
+.chip-warn {
+  --chip-fill:
+    linear-gradient(color-mix(in srgb, var(--warn) 16%, transparent), color-mix(in srgb, var(--warn) 16%, transparent)),
+    var(--float-chip-bg);
+  color: color-mix(in srgb, var(--warn) 60%, var(--text));
+}
+.chip-error {
+  --chip-fill: linear-gradient(var(--error-tint), var(--error-tint)), var(--float-chip-bg);
+  color: var(--error);
+}
+// A count badge sits on an icon, so it is solid to stand out; --bg is the darkest ink in a dark theme and the
+// lightest in a light one, the opposite of the fill either way.
+.chip-xs.chip-accent {
+  --chip-fill: var(--accent);
+  color: var(--on-accent);
+}
+.chip-xs.chip-warn {
+  --chip-fill: var(--warn);
+  color: var(--bg);
+}
+.chip-xs.chip-error {
+  --chip-fill: var(--error);
+  color: var(--bg);
+}
+
+// The bare button rule in _layout.scss paints a fill and hover of its own, so a button chip restates its own.
+button.chip,
+.chip-body {
+  margin: 0;
+  cursor: pointer;
+}
+button.chip {
+  background: var(--chip-fill);
+  border: 0;
+  border-radius: var(--float-chip-radius);
+}
+button.chip:hover:not(.is-disabled),
+.chip:has(> .chip-body:hover):not(.is-disabled) {
+  background: linear-gradient(var(--hover-wash), var(--hover-wash)), var(--chip-fill);
+}
+button.chip.is-disabled:hover {
+  background: var(--chip-fill);
+}
+.chip-body,
+.chip-body:hover {
+  display: inline-flex;
+  align-items: center;
+  gap: inherit;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  border-radius: 0;
+}
+.chip .icon-btn.chip-remove {
+  width: 16px;
+  height: 16px;
+  margin-right: calc(var(--s-1) * -1);
+  border-radius: var(--float-chip-radius);
+  color: inherit;
+}

@@ -42,7 +42,7 @@ const title = computed(() =>
     <span v-if="labelled" class="rail-pill">
       <span class="rail-line">
         <span class="rail-label">{{ label }}</span>
-        <KeyChip v-if="keys" :keys="keys" />
+        <KeyChip v-if="keys" :keys="keys" in-title />
       </span>
       <span v-if="sub" class="rail-sub">{{ sub }}</span>
     </span>

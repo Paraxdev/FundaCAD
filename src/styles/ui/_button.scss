@@ -1,1 +1,68 @@
 // Button: primary, secondary, ghost and danger, sm 28px and md 32px.
+// The base fill, hover and disabled are the one .btn rule in _glass.scss, which paints --btn-fill and --btn-hover.
+
+.btn.btn-sm,
+.btn.btn-md {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  white-space: nowrap;
+}
+.btn.btn-sm {
+  min-height: 28px;
+  padding: var(--s-1) var(--s-3);
+  font-size: 12px;
+}
+.btn.btn-md {
+  min-height: 32px;
+  padding: var(--s-1) var(--s-4);
+  font-size: 12.5px;
+}
+.btn.btn-block {
+  display: flex;
+  width: 100%;
+}
+.btn.btn-sm:active:not(.is-disabled),
+.btn.btn-md:active:not(.is-disabled) {
+  transform: scale(0.97);
+}
+.btn-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.btn.btn-ghost {
+  --btn-fill: transparent;
+  --btn-hover: var(--hover-wash);
+  color: var(--text-dim);
+}
+.btn.btn-ghost:hover:not(:disabled, .is-disabled) {
+  color: var(--text);
+}
+.btn.btn-danger {
+  --btn-hover: linear-gradient(var(--error-tint), var(--error-tint)), var(--float-chip-bg);
+  color: var(--error);
+}
+.btn.is-on {
+  --btn-fill: linear-gradient(var(--accent-wash), var(--accent-wash)), var(--float-chip-bg);
+  --btn-hover:
+    linear-gradient(var(--accent-wash), var(--accent-wash)), linear-gradient(var(--hover-wash), var(--hover-wash)),
+    var(--float-chip-bg);
+  color: var(--accent-hot);
+}
+.btn.btn-primary.is-on {
+  --btn-fill: var(--accent-hot);
+  --btn-hover: var(--accent-hot);
+  color: var(--on-accent);
+}
+
+:root[data-pointer="touch"] .btn.btn-sm {
+  position: relative;
+}
+:root[data-pointer="touch"] .btn.btn-sm::before {
+  content: "";
+  position: absolute;
+  inset: -6px -2px;
+}

@@ -436,21 +436,45 @@
   border-radius: var(--float-tile-radius);
 }
 
-.btn,
+// The one .btn rule, also the base of Button.vue. A variant only sets --btn-fill and --btn-hover, so the hover and
+// disabled rules hold for each one, and the bare button:hover in _layout.scss cannot light a disabled .btn.
+.btn {
+  --btn-fill: var(--float-chip-bg);
+  --btn-hover: linear-gradient(var(--hover-wash), var(--hover-wash)), var(--float-chip-bg);
+  padding: var(--s-3) var(--s-4);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  background: var(--btn-fill);
+  border: 1px solid transparent;
+  box-shadow: none;
+  cursor: pointer;
+  transition:
+    background var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease),
+    transform var(--t-fast) var(--ease);
+}
+.btn-primary {
+  --btn-fill: var(--accent);
+  --btn-hover: var(--accent-hot);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+.btn:hover:not(:disabled, .is-disabled) {
+  background: var(--btn-hover);
+}
+.btn:is(:disabled, .is-disabled) {
+  background: var(--btn-fill);
+  opacity: 0.45;
+  cursor: default;
+}
 .home-drawer-act {
   background: var(--float-chip-bg);
   border-color: transparent;
   box-shadow: none;
 }
-.btn:hover:not(:disabled),
 .home-drawer-act:hover {
   background: linear-gradient(var(--hover-wash), var(--hover-wash)), var(--float-chip-bg);
-}
-.btn-primary {
-  background: var(--accent);
-}
-.btn-primary:hover:not(:disabled) {
-  background: var(--accent-hot);
 }
 
 /* Fields sink: a darker well than the surface they sit on, no edge. */
