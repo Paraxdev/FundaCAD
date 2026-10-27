@@ -4,6 +4,7 @@
 // shape fits look at an even sample of a dense face.
 import * as THREE from "three";
 import { bodyOfFace, type BodyMesh, type ModelView } from "./render";
+import { areaIndexOf, CLUSTER_TRIS } from "./areaIndex";
 import {
   arcSweep,
   cylinderFromFace,
@@ -43,7 +44,45 @@ export interface RoundFit {
   full: boolean;
 }
 
-/** The face's triangles in world space, every `stride`th when it has more than `max`. */
+/** About `max` triangles of a dense face as whole spatial patches, the box selection index's clusters, picked one
+ *  from each of equal runs at a hashed spot. An even every Nth triangle aliased with a mesh tessellated in rings
+ *  and took one generator line, and lone triangles have no inner corner, which the sphere fit asks for. */
+function samplePatches(body: BodyMesh, tris: number[], max: number): number[] {
+  const idx = areaIndexOf(body);
+  const f = idx ? idx.faceTris.indexOf(tris) : -1;
+  const out: number[] = [];
+  if (!idx || f < 0) {
+    const run = tris.length / max;
+    for (let k = 0; k < max; k++) {
+      const from = Math.floor(k * run);
+      out.push(tris[from + (sampleHash(k) % Math.max(1, Math.floor((k + 1) * run) - from))]!);
+    }
+    return out;
+  }
+  const seq = idx.order[f] ?? tris;
+  const first = idx.firstCluster[f]!;
+  const count = idx.firstCluster[f + 1]! - first;
+  const want = Math.min(count, Math.max(1, Math.ceil(max / CLUSTER_TRIS)));
+  const run = count / want;
+  for (let k = 0; k < want; k++) {
+    const from = Math.floor(k * run);
+    const c = first + from + (sampleHash(k) % Math.max(1, Math.floor((k + 1) * run) - from));
+    const end = c + 1 < first + count ? idx.clusterStart[c + 1]! : seq.length;
+    for (let s = idx.clusterStart[c]!; s < end; s++) out.push(seq[s]!);
+  }
+  return out;
+}
+
+/** A fixed integer hash, so the same face always gives the same sample. */
+function sampleHash(k: number): number {
+  let h = Math.imul(k ^ 0x9e3779b9, 0x85ebca6b);
+  h ^= h >>> 13;
+  h = Math.imul(h, 0xc2b2ae35);
+  h ^= h >>> 16;
+  return h >>> 0;
+}
+
+/** The face's triangles in world space; with more than `max`, a sample of whole patches (samplePatches). */
 export function faceTrianglesOf(model: ModelView | null, faceId: number, max = Infinity): THREE.Triangle[] {
   const out: THREE.Triangle[] = [];
   const body = model && bodyOfFace(model, faceId);
@@ -53,10 +92,7 @@ export function faceTrianglesOf(model: ModelView | null, faceId: number, max = I
   const pos = body.mesh.geometry.getAttribute("position");
   const index = body.mesh.geometry.getIndex()!;
   const mw = body.mesh.matrixWorld;
-  const stride = tris.length > max ? Math.ceil(tris.length / max) : 1;
-  faceWalks.triangles += Math.ceil(tris.length / stride);
-  for (let s = 0; s < tris.length; s += stride) {
-    const t = tris[s]!;
+  const take = (t: number) =>
     out.push(
       new THREE.Triangle(
         new THREE.Vector3().fromBufferAttribute(pos, index.getX(t * 3)).applyMatrix4(mw),
@@ -64,7 +100,14 @@ export function faceTrianglesOf(model: ModelView | null, faceId: number, max = I
         new THREE.Vector3().fromBufferAttribute(pos, index.getX(t * 3 + 2)).applyMatrix4(mw),
       ),
     );
+  if (tris.length <= max) {
+    faceWalks.triangles += tris.length;
+    for (const t of tris) take(t);
+    return out;
   }
+  const picked = samplePatches(body, tris, max);
+  faceWalks.triangles += picked.length;
+  for (const t of picked) take(t);
   return out;
 }
 
@@ -285,7 +328,12 @@ export function clickOnRound(fit: { cylinder: Cylinder; points: Vec3[] }, click:
 }
 
 /** The selected faces' selectors, the handle's anchor and direction, and the round face under it. */
-export function pressPullOf(model: ModelView, faces: readonly number[], click: Vec3 | null): PressPullFaces | null {
+export function pressPullOf(
+  model: ModelView,
+  faces: readonly number[],
+  click: Vec3 | null,
+  fitTris = FIT_TRIS,
+): PressPullFaces | null {
   const first = faces[0];
   if (first === undefined) return null;
   const centres = faces.map((fid) => faceCentroidOf(model, fid));
@@ -293,7 +341,7 @@ export function pressPullOf(model: ModelView, faces: readonly number[], click: V
   let anchor = centres[0]!.clone();
   let normal = faceNormalOf(model, first);
   let round: RoundFace | null = null;
-  const tris = faceTrianglesOf(model, first, FIT_TRIS);
+  const tris = faceTrianglesOf(model, first, fitTris);
   const fit = roundFitOf(model, first, tris);
   const stand =
     fit && roundStand(fit.cylinder, fit.points, fit.full, clickOnRound(fit, click), [anchor.x, anchor.y, anchor.z]);
@@ -364,16 +412,33 @@ export class PressPullMemo {
   }
 }
 
+// A face's triangle list by identity: a kept body whose face ids shift in place hands an id a different list.
+const listIds = new WeakMap<number[], number>();
+let nextListId = 0;
+function listId(tris: number[] | undefined): number {
+  if (!tris) return -1;
+  let id = listIds.get(tris);
+  if (id === undefined) listIds.set(tris, (id = ++nextListId));
+  return id;
+}
+
 function memoKey(model: ModelView, faces: readonly number[], click: Vec3 | null): string {
   const parts = [faces.join(), click ? click.join() : "-"];
   const seen = new Set<string>();
   for (const f of faces) {
     const b = bodyOfFace(model, f);
+    parts.push(String(listId(b?.faceTriangles.get(f))));
     if (!b || seen.has(b.id)) continue;
     seen.add(b.id);
     const geo = b.mesh.geometry;
     const pos = geo.getAttribute("position") as THREE.BufferAttribute | undefined;
-    parts.push(b.id, String(geo.id), String(pos?.version ?? -1), b.mesh.matrixWorld.elements.join());
+    parts.push(
+      b.id,
+      String(b.faceStart),
+      String(geo.id),
+      String(pos?.version ?? -1),
+      b.mesh.matrixWorld.elements.join(),
+    );
   }
   return parts.join("|");
 }
