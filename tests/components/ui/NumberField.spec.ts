@@ -186,6 +186,19 @@ describe("NumberField", () => {
     expect(previewEnd.mock.calls).toEqual([[false], [true], [false]]);
   });
 
+  it("ends a live preview as not committing when the commit is refused", async () => {
+    const preview = vi.fn();
+    const previewEnd = vi.fn();
+    const { w, input } = await render({ preview, previewEnd });
+    vi.useFakeTimers();
+    await input.setValue("5");
+    vi.advanceTimersByTime(200);
+    expect(preview.mock.calls).toEqual([[5]]);
+    await commit(input, "5x");
+    expect(emitted(w)).toEqual([]);
+    expect(previewEnd.mock.calls).toEqual([[false]]);
+  });
+
   it("never schedules a preview nobody asked for, and a blur with no preview ends nothing", async () => {
     const previewEnd = vi.fn();
     const { input } = await render({ previewEnd });

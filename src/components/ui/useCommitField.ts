@@ -77,8 +77,8 @@ export function useCommitField(o: {
 
   async function commitDraft() {
     if (!dirty) return;
-    endPreview(true);
     const err = o.apply(draft.value);
+    endPreview(!err);
     error.value = err;
     if (err) return;
     dirty = false;
