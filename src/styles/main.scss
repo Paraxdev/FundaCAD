@@ -26,6 +26,8 @@
 @use "prefs";
 @use "checkbox";
 @use "guide";
+// The base components, after the old control rules they replace and before _glass, which repaints their surfaces.
+@use "ui";
 // After every surface it repaints, so its finish is the one that shows.
 @use "glass";
 // After the layout and glass rules it bends below the two breakpoints.

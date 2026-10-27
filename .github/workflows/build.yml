@@ -50,6 +50,10 @@ jobs:
       - name: Repo hygiene
         run: sh scripts/check-repo-hygiene.sh
 
+      # No deps, so the runner's own node is enough this early.
+      - name: UI controls
+        run: node scripts/check-ui-controls.mjs
+
       - name: Install Node
         uses: actions/setup-node@v4
         with:
