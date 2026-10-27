@@ -1,9 +1,9 @@
 use std::path::{Path, PathBuf};
 
 use fundacad_lib::webkit::{
-    apply_gpu_workarounds, decide, machine_under, nvidia_driver_present_under, record_stall, stall_fallback_applies,
-    steam_deck_under, Decision, Machine, DMABUF, OPT_OUT, OPT_OUT_LEGACY, SKIP_ALREADY_SET, SKIP_NO_MATCH,
-    SKIP_OPT_OUT, STALL_MARKER, WHY_NVIDIA, WHY_STALLED, WHY_STEAM_DECK,
+    apply_gpu_workarounds, decide, forget_stall, machine_under, notice, nvidia_driver_present_under, on_stall,
+    record_stall, steam_deck_under, Decision, Machine, StallAction, DMABUF, OPT_OUT, OPT_OUT_LEGACY, SKIP_ALREADY_SET,
+    SKIP_NO_MATCH, SKIP_OPT_OUT, STALL_MARKER, WHY_NVIDIA, WHY_STALLED, WHY_STEAM_DECK,
 };
 
 fn dir(tag: &str) -> PathBuf {
@@ -91,11 +91,53 @@ fn a_recorded_stall_is_read_back_on_the_next_start() {
 }
 
 /// A start that stalls with DMA-BUF already off must not restart again, or a machine with another fault loops forever.
+/// That stall also shows DMA-BUF was not the cause, so a remembered one is dropped rather than kept for good.
 #[test]
-fn a_stall_only_restarts_when_that_would_change_the_renderer() {
-    assert!(stall_fallback_applies(false, false));
-    assert!(!stall_fallback_applies(true, false));
-    assert!(!stall_fallback_applies(false, true));
+fn a_stall_restarts_only_when_that_would_change_the_renderer() {
+    assert_eq!(on_stall(false, false), StallAction::Restart);
+    assert_eq!(on_stall(true, false), StallAction::Forget);
+    assert_eq!(on_stall(false, true), StallAction::GiveUp);
+    assert_eq!(on_stall(true, true), StallAction::GiveUp);
+}
+
+#[test]
+fn a_forgotten_stall_lets_the_next_start_try_dmabuf_again() {
+    let root = dir("forget-root");
+    let data = dir("forget-data");
+    record_stall(&data).unwrap();
+    forget_stall(&data).unwrap();
+    assert!(!machine_under(&root, &data).stalled_before);
+    forget_stall(&data).unwrap();
+}
+
+/// The remembered stall is the one cause a person can undo, so its line names the file.
+#[test]
+fn the_log_line_names_the_stall_marker_and_stays_quiet_on_no_match() {
+    let data = Path::new("/data/fundacad");
+    let marker = data.join(STALL_MARKER);
+    assert_eq!(
+        notice(&Decision::Disable(WHY_STALLED), data).as_deref(),
+        Some(
+            format!(
+                "[gpu] {WHY_STALLED}, disabling the WebKitGTK DMABUF renderer. Set {OPT_OUT}=1 to keep it, or delete {} to \
+                 try it again.",
+                marker.display()
+            )
+            .as_str()
+        )
+    );
+    assert_eq!(
+        notice(&Decision::Disable(WHY_STEAM_DECK), data).as_deref(),
+        Some(
+            format!("[gpu] {WHY_STEAM_DECK}, disabling the WebKitGTK DMABUF renderer. Set {OPT_OUT}=1 to keep it.")
+                .as_str()
+        )
+    );
+    assert_eq!(
+        notice(&Decision::Skip(SKIP_OPT_OUT), data).as_deref(),
+        Some(format!("[gpu] leaving the WebKitGTK renderer alone: {SKIP_OPT_OUT}").as_str())
+    );
+    assert_eq!(notice(&Decision::Skip(SKIP_NO_MATCH), data), None);
 }
 
 /// Through the real entry point: either opt out spelling leaves the environment untouched on any machine. One test,

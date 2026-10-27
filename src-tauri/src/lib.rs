@@ -170,8 +170,7 @@ fn frontend_ready(state: tauri::State<'_, FrontendReady>, safe: tauri::State<'_,
         return;
     }
     state.mounted.store(true, Relaxed);
-    // A safe session keeps the count, so closing it and starting again comes back safe instead of failing twice more.
-    if safe.reason.is_none() {
+    if safe_mode::clears_count(safe.reason) {
         safe_mode::cleared(&safe.dir);
     }
 }
@@ -180,19 +179,39 @@ fn frontend_ready(state: tauri::State<'_, FrontendReady>, safe: tauri::State<'_,
 /// Deck showed (webkit.rs). Remembers it for this machine and starts again with DMA-BUF off, once.
 #[tauri::command]
 fn frontend_stalled(app: tauri::AppHandle) {
-    let dmabuf_set = std::env::var_os(webkit::DMABUF).is_some();
-    if !cfg!(target_os = "linux") || !webkit::stall_fallback_applies(dmabuf_set, webkit::opted_out()) {
-        eprintln!("[gpu] the page runs but never painted, with no renderer fallback left to try");
+    if !cfg!(target_os = "linux") {
+        eprintln!("[frontend] the page runs but never painted");
         return;
     }
-    let dir = app.state::<SafeMode>().dir.clone();
+    let (dir, reason) = {
+        let safe = app.state::<SafeMode>();
+        (safe.dir.clone(), safe.reason)
+    };
+    match webkit::on_stall(std::env::var_os(webkit::DMABUF).is_some(), webkit::opted_out()) {
+        webkit::StallAction::Restart => {}
+        webkit::StallAction::Forget => {
+            if let Err(e) = webkit::forget_stall(&dir) {
+                eprintln!("[gpu] could not forget the stall in {}: {e}", dir.display());
+            }
+            eprintln!("[gpu] the page runs but never painted with the WebKitGTK DMABUF renderer off either");
+            return;
+        }
+        webkit::StallAction::GiveUp => {
+            eprintln!("[gpu] the page runs but never painted, with no renderer fallback left to try");
+            return;
+        }
+    }
     if let Err(e) = webkit::record_stall(&dir) {
         eprintln!("[gpu] could not remember the stall in {}: {e}", dir.display());
     }
     println!("[gpu] the page runs but never painted, starting again with the WebKitGTK DMABUF renderer off");
-    // The stalled start is not a failed one, or the restart would count towards safe mode.
-    safe_mode::cleared(&dir);
-    respawn(&app, |cmd| {
+    // The stalled start is not a failed one, or the restart would count towards safe mode. A safe session keeps its
+    // switch and count, so it comes back safe.
+    if safe_mode::clears_count(reason) {
+        safe_mode::cleared(&dir);
+    }
+    let args = app.env().args_os;
+    respawn(&app, args, |cmd| {
         cmd.env(webkit::DMABUF, "1");
     });
 }
@@ -232,7 +251,8 @@ fn safe_mode_exit(app: tauri::AppHandle) {
         (safe.dir.clone(), safe.set_compositing)
     };
     safe_mode::cleared(&dir);
-    respawn(&app, |cmd| {
+    let args = safe_mode::restart_args(app.env().args_os);
+    respawn(&app, args, |cmd| {
         cmd.env_remove(safe_mode::ENV);
         if set_compositing {
             cmd.env_remove(safe_mode::COMPOSITING);
@@ -240,16 +260,18 @@ fn safe_mode_exit(app: tauri::AppHandle) {
     });
 }
 
-/// Starts this binary again with the same arguments, minus the safe mode switch, and exits. Teardown as in
+/// Starts this binary again with `args` (the first is the program and is skipped) and exits. Teardown as in
 /// `restart_for_update`. A child spawned inside a Flatpak keeps the sandbox alive, so this works there too.
-fn respawn(app: &tauri::AppHandle, adjust: impl FnOnce(&mut std::process::Command)) -> ! {
+fn respawn(
+    app: &tauri::AppHandle,
+    args: Vec<std::ffi::OsString>,
+    adjust: impl FnOnce(&mut std::process::Command),
+) -> ! {
     if let Some(engine) = app.try_state::<engine::Engine>() {
         engine.stop();
     }
     tauri_plugin_single_instance::destroy(app);
-    let env = app.env();
-    let args = safe_mode::restart_args(env.args_os.clone());
-    match tauri::process::current_binary(&env) {
+    match tauri::process::current_binary(&app.env()) {
         Ok(exe) => {
             let mut cmd = std::process::Command::new(exe);
             cmd.args(args.iter().skip(1));

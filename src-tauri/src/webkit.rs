@@ -85,26 +85,63 @@ pub fn opted_out() -> bool {
     std::env::var_os(OPT_OUT).is_some() || std::env::var_os(OPT_OUT_LEGACY).is_some()
 }
 
+/// What the `[gpu]` log line says about a decision. A remembered stall may be a false one (a throttled window), so its
+/// line names the file that undoes it.
+pub fn notice(decision: &Decision, data_dir: &Path) -> Option<String> {
+    match *decision {
+        Decision::Disable(why) => {
+            let undo = if why == WHY_STALLED {
+                format!(", or delete {} to try it again", data_dir.join(STALL_MARKER).display())
+            } else {
+                String::new()
+            };
+            Some(format!("[gpu] {why}, disabling the WebKitGTK DMABUF renderer. Set {OPT_OUT}=1 to keep it{undo}."))
+        }
+        Decision::Skip(SKIP_NO_MATCH) => None,
+        Decision::Skip(reason) => Some(format!("[gpu] leaving the WebKitGTK renderer alone: {reason}")),
+    }
+}
+
 /// Must run before the webview is created: WebKit's web process inherits the environment as it stood when spawned.
 pub fn apply_gpu_workarounds(data_dir: &Path) -> Decision {
     let decision = decide(machine_under(Path::new("/"), data_dir), std::env::var_os(DMABUF).is_some(), opted_out());
-    match decision {
-        Decision::Disable(why) => {
-            std::env::set_var(DMABUF, "1");
-            println!("[gpu] {why}, disabling the WebKitGTK DMABUF renderer. Set {OPT_OUT}=1 to keep it.");
-        }
-        Decision::Skip(SKIP_NO_MATCH) => {}
-        Decision::Skip(reason) => println!("[gpu] leaving the WebKitGTK renderer alone: {reason}"),
+    if let Decision::Disable(_) = decision {
+        std::env::set_var(DMABUF, "1");
+    }
+    if let Some(line) = notice(&decision, data_dir) {
+        println!("{line}");
     }
     decision
 }
 
-/// Whether a stalled page is worth a restart with DMA-BUF off: not when it already was off, or the person opted out.
-pub fn stall_fallback_applies(dmabuf_set: bool, opted_out: bool) -> bool {
-    !dmabuf_set && !opted_out
+#[derive(Debug, PartialEq, Eq)]
+pub enum StallAction {
+    /// Remember the stall for this machine and start again with DMA-BUF off.
+    Restart,
+    /// DMA-BUF was already off, so it was not the cause and a remembered stall is dropped.
+    Forget,
+    GiveUp,
+}
+
+/// No restart when DMA-BUF already was off, or a machine with another fault would loop.
+pub fn on_stall(dmabuf_set: bool, opted_out: bool) -> StallAction {
+    if opted_out {
+        StallAction::GiveUp
+    } else if dmabuf_set {
+        StallAction::Forget
+    } else {
+        StallAction::Restart
+    }
 }
 
 pub fn record_stall(data_dir: &Path) -> std::io::Result<()> {
     std::fs::create_dir_all(data_dir)?;
     std::fs::write(data_dir.join(STALL_MARKER), "1")
+}
+
+pub fn forget_stall(data_dir: &Path) -> std::io::Result<()> {
+    match std::fs::remove_file(data_dir.join(STALL_MARKER)) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e),
+        _ => Ok(()),
+    }
 }
