@@ -82,9 +82,24 @@ describe("SwitchRow", () => {
     expect(w.find(".ui-switch-row-hint").text()).toBe("Flips it");
   });
 
-  it("keeps ui/Toggle.vue as the same component and the e2e classes on it", async () => {
-    expect(Toggle).toBe(SwitchRow);
-    const w = await render({ modelValue: true, label: "Grid" });
-    expect([w.classes("float-toggle"), w.find(".ft-switch").exists()]).toEqual([true, true]);
+  it("keeps ui/Toggle.vue as its own thin component over SwitchRow, with the attrs and e2e classes on the row", async () => {
+    expect(Toggle).not.toBe(SwitchRow);
+    const seen: boolean[] = [];
+    const update = (v: boolean) => (seen.push(v), w.setProps({ modelValue: v }));
+    const w = mount(Toggle, {
+      props: { modelValue: true, label: "Grid", "onUpdate:modelValue": update },
+      attrs: { "data-pt-moving": "", title: "Keeps the traced view" },
+      attachTo: document.body,
+    });
+    await new Promise((r) => setTimeout(r, 2));
+    const row = w.findComponent(SwitchRow);
+    expect([row.exists(), row.element === w.element, w.element.tagName]).toEqual([true, true, "LABEL"]);
+    expect([w.attributes("data-pt-moving"), w.attributes("title"), w.classes("float-toggle")]).toEqual([
+      "",
+      "Keeps the traced view",
+      true,
+    ]);
+    await w.find(".ft-switch").trigger("click");
+    expect([seen, w.find(".ft-switch").attributes("aria-checked")]).toEqual([[false], "false"]);
   });
 });
