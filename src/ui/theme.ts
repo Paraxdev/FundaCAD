@@ -77,7 +77,7 @@ function noirTint(
 }
 
 /** A couple of well-known palettes, plus dark Noir variants that keep the
- *  built-in theme's shell but swap its mint-green accent for another hue. */
+ *  built-in theme's shell but swap its periwinkle accent for another hue. */
 const SHIPPED_THEMES: ShippedTheme[] = [
   {
     id: "dracula",

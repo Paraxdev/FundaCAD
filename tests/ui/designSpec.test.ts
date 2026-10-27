@@ -52,7 +52,7 @@ const COLOUR_BASELINE: Record<string, number> = {
   "src/styles/_renderdock.scss": 5,
   "src/styles/_targetedit.scss": 2,
   "src/styles/_timeline.scss": 5,
-  "src/styles/_utilities.scss": 5,
+  "src/styles/_utilities.scss": 2,
 };
 
 // Declarations, outside a hover, press, focus or selected rule, that fill with
@@ -529,7 +529,7 @@ describe("design spec guard", () => {
   it("keeps the accent calm: no glow, a light saturate on the blur", () => {
     const root = block(styleOf(TOKENS, scssFiles.get(TOKENS) ?? ""), ":root");
     expect(root["--float-blur"]).toMatch(/saturate\(1(\.0\d+)?\)$/);
-    expect(root["--accent"]).toBe("#51d6a8");
+    expect(root["--accent"]).toBe("#9a9ff0");
   });
 
   it("reads every light theme text token at 4.5:1 or better on each fill it sits on", () => {
