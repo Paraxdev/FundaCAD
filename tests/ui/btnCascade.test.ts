@@ -52,7 +52,9 @@ function specificity(selector: string): [number, number, number] {
     const best = splitTop(inner)
       .map(specificity)
       .reduce((a, b) => (compare(a, b) >= 0 ? a : b));
-    spec.forEach((_, i) => (spec[i] += best[i]));
+    spec[0] += best[0];
+    spec[1] += best[1];
+    spec[2] += best[2];
     s = s.slice(0, m.index) + s.slice(end);
   }
   spec[0] += (s.match(/#[\w-]+/g) ?? []).length;
