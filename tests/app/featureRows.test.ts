@@ -50,7 +50,7 @@ describe("clickFeatureRow", () => {
     clickFeatureRow(e, ["o:XY", "o:XZ"], "o:XZ", { ...plain, ctrlKey: true });
     expect(useSelectionStore().rows.keys).toEqual(["o:XZ"]);
     expect(useSelectionStore().featureId).toBeNull();
-    expect(rowTargets("o:XZ")).toEqual([]);
+    expect(rowTargets("o:XZ", [])).toEqual([]);
   });
 
   it("a selection the engine made is not a picked row, so Ctrl on another row picks only that one", () => {
@@ -77,8 +77,16 @@ describe("what acts on the selection", () => {
     const { e } = fake();
     clickFeatureRow(e, ORDER, "a", plain);
     clickFeatureRow(e, ORDER, "b", { ...plain, ctrlKey: true });
-    expect(rowTargets("a")).toEqual(["a", "b"]);
-    expect(rowTargets("d")).toEqual(["d"]);
+    const features = ORDER.map((id) => ({ id }));
+    expect(rowTargets("a", features)).toEqual(["a", "b"]);
+    expect(rowTargets("d", features)).toEqual(["d"]);
+  });
+
+  it("rowTargets drops row ids the document lost, as after an undo", () => {
+    const { e } = fake();
+    clickFeatureRow(e, ORDER, "a", plain);
+    clickFeatureRow(e, ORDER, "b", { ...plain, ctrlKey: true });
+    expect(rowTargets("a", [{ id: "a" }])).toEqual(["a"]);
   });
 
   it("pickedFeatureIds is in document order and drops ids the document lacks", () => {

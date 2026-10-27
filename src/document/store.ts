@@ -1748,9 +1748,11 @@ export class DocumentStore {
     this.pushOverlayUndo({ undo: () => set(was), redo: () => set(!was) });
   }
 
-  // One undo step however many; a feature already in the asked state is left out of it.
+  // One undo step however many; a feature already in the asked state is left out of it, and an id the document does
+  // not hold is never recorded, since nextId would hand it to a later feature born suppressed.
   setSuppressed(ids: readonly string[], on: boolean) {
-    const todo = ids.filter((id) => this.suppressed.has(id) !== on);
+    const have = new Set(this.doc.features.map((f) => f.id));
+    const todo = ids.filter((id) => have.has(id) && this.suppressed.has(id) !== on);
     if (!todo.length) return;
     const set = (to: boolean) => {
       for (const id of todo) {

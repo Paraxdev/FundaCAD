@@ -23,9 +23,11 @@ export function clickFeatureRow(
   e.selectFeatureRows(next, primary);
 }
 
-/** The features a row action covers: the whole selection when the grabbed row is in it, else just that row. */
-export function rowTargets(id: string): string[] {
-  return actOn(useSelectionStore().rows.keys, id).filter((k) => !isOriginKey(k));
+/** The features a row action covers: the whole selection when the grabbed row is in it, else just that row. Ids the
+ *  document lost since (an undo, the MCP) are left out. */
+export function rowTargets(id: string, features: readonly { id: string }[]): string[] {
+  const have = new Set(features.map((f) => f.id));
+  return actOn(useSelectionStore().rows.keys, id).filter((k) => !isOriginKey(k) && have.has(k));
 }
 
 /** The features picked right now, in document order. A selection made by the engine alone still counts as one. */

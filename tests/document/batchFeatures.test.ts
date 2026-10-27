@@ -37,6 +37,15 @@ describe("batch feature actions", () => {
     expect(state(s).suppressed).toEqual(["a", "c"]);
   });
 
+  it("leaves an id the document does not hold out of the suppressed set, so a later feature is not born suppressed", () => {
+    const s = doc();
+    const before = state(s);
+    s.setSuppressed(["ghost"], true);
+    expect(state(s)).toEqual(before);
+    s.addFeature({ id: "ghost", type: "box", length: 1, width: 1, height: 1 });
+    expect(s.isSuppressed("ghost")).toBe(false);
+  });
+
   it("deletes several features in one undo step and keeps the rollback marker on its feature", () => {
     const s = doc();
     s.setRollback(4);

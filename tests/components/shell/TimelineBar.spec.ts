@@ -453,6 +453,14 @@ describe("History rows picked together", () => {
     expect(useSelectionStore().rows.keys).toEqual([]);
   });
 
+  it("a right-click on a row beside one the document lost menus that feature alone", async () => {
+    const m = mountBar();
+    m.e.selectFeatureRows({ keys: ["ex1", "gone"], anchor: "ex1" }, "ex1");
+    const items = await menu(m, "ex1");
+    expect(items.some((i) => i.label === "Edit" && !i.disabled)).toBe(true);
+    expect(items.some((i) => i.label.startsWith("Suppress these"))).toBe(false);
+  });
+
   it("a right-click outside the selection menus that feature alone", async () => {
     const m = mountBar();
     await m.chip("ex1").trigger("click");

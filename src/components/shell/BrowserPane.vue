@@ -354,7 +354,7 @@ function selectRowIn(order: readonly string[], id: string, e: MouseEvent) {
 /** The rows a menu or delete on `id` covers, kept to the one list: a mixed selection acts on each list separately. */
 function targetsIn(list: readonly { id: string }[], id: string): string[] {
   const here = new Set(list.map((f) => f.id));
-  return rowTargets(id).filter((t) => here.has(t));
+  return rowTargets(id, store.document.features).filter((t) => here.has(t));
 }
 
 /** The per-body list the panel renders: the rebuild's own bodies, or a single

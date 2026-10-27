@@ -402,7 +402,7 @@ function gapIndexAt(ev: PointerEvent): number {
 
 function openMenu(e: MouseEvent, id: string, i: number) {
   e.preventDefault();
-  const targets = rowTargets(id);
+  const targets = rowTargets(id, features.value);
   if (targets.length > 1) {
     openMultiMenu(e, targets);
     return;
