@@ -79,9 +79,11 @@ function openSub(entry: MenuEntry, focus: boolean) {
   openItem.value = entry;
 }
 
+// Focus goes back now, not at unmount: an item that opens a dialog must hand it the opener, not a row about to go.
 function closeAll() {
-  if (parent) parent.closeAll();
-  else emit("close");
+  if (parent) return parent.closeAll();
+  back.restore(inTree);
+  emit("close");
 }
 
 function activate(entry: MenuEntry) {

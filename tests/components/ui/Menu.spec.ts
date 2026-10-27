@@ -6,6 +6,8 @@ import Menu from "../../../src/components/ui/Menu.vue";
 import MenuItem from "../../../src/components/ui/MenuItem.vue";
 import MenuSeparator from "../../../src/components/ui/MenuSeparator.vue";
 import { escapeClaimed } from "../../../src/ui/escapeClaim";
+import Dialog from "../../../src/components/ui/Dialog.vue";
+import { createPinia, setActivePinia } from "pinia";
 
 enableAutoUnmount(afterEach);
 
@@ -205,6 +207,42 @@ describe("Menu", () => {
     });
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
     expect(closes).toHaveBeenCalledTimes(1);
+  });
+
+  it("an item that opens a dialog hands it the opener, so closing the dialog focuses the opener", async () => {
+    setActivePinia(createPinia());
+    const open = ref(false);
+    const dialog = ref(false);
+    // Mounted first, so its update runs before the menu's and the dialog mounts while the menu is still open.
+    const DialogHost = defineComponent({
+      setup: () => () =>
+        dialog.value ? h(Dialog, { title: "Export", onClose: () => (dialog.value = false) }, () => h("input")) : null,
+    });
+    const MenuHost = defineComponent({
+      setup() {
+        const opener = ref<HTMLButtonElement | null>(null);
+        return () => [
+          h("button", { ref: opener, class: "opener" }, "File"),
+          open.value
+            ? h(Menu, { anchor: opener.value, onClose: () => (open.value = false) }, () => [
+                h(MenuItem, { label: "Export", onSelect: () => (dialog.value = true) }),
+              ])
+            : null,
+        ];
+      },
+    });
+    mount(defineComponent({ setup: () => () => [h(DialogHost), h(MenuHost)] }), { attachTo: document.body });
+    (document.querySelector(".opener") as HTMLElement).focus();
+    open.value = true;
+    await nextTick();
+    await settle();
+    key("Enter");
+    await nextTick();
+    await settle();
+    expect([menus().length, document.activeElement?.tagName]).toEqual([0, "INPUT"]);
+    dialog.value = false;
+    await nextTick();
+    expect(document.activeElement?.className).toBe("opener");
   });
 
   it("opens at a point when given at", async () => {
