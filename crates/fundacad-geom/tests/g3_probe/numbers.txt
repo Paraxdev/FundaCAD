@@ -1,0 +1,138 @@
+G3 fillet probe numbers, 2026-10-26, OCCT 7.8.1 (Rust engine) and OCP (sidecar venv)
+
+== g3_probe.rs, product builds (FUNDACAD_DISK_CACHE=0, debug) ==
+wedge90_g1 volume 49141.5927 ms 11
+wedge90_g2 volume 49039.0000 ms 51
+wedge120_g1 volume 43086.2642 ms 7
+wedge120_g2 volume 43023.8534 ms 79
+wedge60_g1 volume 40561.8572 ms 7
+wedge60_g2 volume 40804.5190 ms 57
+plane_cyl_arc_g1 volume 10659.1244 ms 21
+corner3_g1 volume 97162.9786 ms 13
+plane_cyl_line_r1_g1 volume 10719.1148 ms 6
+plane_cyl_line_r2_g1 volume 10660.7505 ms 6
+plane_cyl_line_r3_g1 volume 10536.0164 ms 6
+plane_cyl_arc_g2 volume 10650.4963 ms 968
+corner3_g2 volume 96817.3739 ms 1935
+plane_cyl_line_r1_g2 volume 10720.9947 ms 118
+plane_cyl_line_r2_g2 refused: Fillet failed on Body1: at 2mm the fillet does not fit the edge through (0, -0, 20), it would cut the body in pieces. It fits up to 1.7mm, so try that or a smaller value.
+plane_cyl_line_r3_g2 refused: Fillet failed on Body1: the blend could not be trimmed where its face ends
+
+== measure.py <breps> ==
+== product bodies (g3_probe.rs) ==
+corner3_g1                 vol  97162.9786 faces  10 tol 1.0e-07 valid True  max jump kR 1.0000  dk/ds R^2 0.0000  crease 0.000 deg
+corner3_g2                 vol  96817.3739 faces  10 tol 2.3e+00 valid True  max jump kR 0.0000  dk/ds R^2 0.7174  crease 0.000 deg
+plane_cyl_arc_g1           vol  10659.1244 faces   5 tol 1.0e-07 valid True  max jump kR 1.0000  dk/ds R^2 0.0000  crease 0.000 deg
+plane_cyl_arc_g2           vol  10650.4963 faces   5 tol 4.6e-05 valid True  max jump kR 0.0000  dk/ds R^2 0.6243  crease 0.000 deg
+plane_cyl_line_g1          vol  10536.0164 faces   5 tol 1.0e-07 valid True  max jump kR 3.3333  dk/ds R^2 0.0000  crease 0.000 deg
+plane_cyl_line_r1_g1       vol  10719.1148 faces   5 tol 1.0e-07 valid True  max jump kR 1.0000  dk/ds R^2 0.0000  crease 0.000 deg
+plane_cyl_line_r1_g2       vol  10720.9947 faces   5 tol 5.0e-06 valid True  max jump kR 0.0000  dk/ds R^2 0.2769  crease 1.431 deg
+plane_cyl_line_r2_g1       vol  10660.7505 faces   5 tol 1.0e-07 valid True  max jump kR 1.0000  dk/ds R^2 0.0000  crease 0.000 deg
+plane_cyl_line_r3_g1       vol  10536.0164 faces   5 tol 1.0e-07 valid True  max jump kR 1.0000  dk/ds R^2 0.0000  crease 0.000 deg
+wedge120_g1                vol  43086.2642 faces   6 tol 1.0e-07 valid True  max jump kR 1.0000  dk/ds R^2 0.0000  crease 0.000 deg
+wedge120_g2                vol  43023.8534 faces   6 tol 1.0e-07 valid True  max jump kR 0.0000  dk/ds R^2 1.6218  crease 0.000 deg
+wedge60_g1                 vol  40561.8572 faces   6 tol 1.0e-07 valid True  max jump kR 1.0000  dk/ds R^2 0.0000  crease 0.000 deg
+wedge60_g2                 vol  40804.5190 faces   6 tol 1.0e-07 valid True  max jump kR 0.0000  dk/ds R^2 0.1802  crease 0.000 deg
+wedge90_g1                 vol  49141.5927 faces   6 tol 1.0e-07 valid True  max jump kR 1.0000  dk/ds R^2 0.0000  crease 0.000 deg
+wedge90_g2                 vol  49039.0000 faces   6 tol 1.0e-07 valid True  max jump kR 0.0000  dk/ds R^2 0.6243  crease 0.000 deg
+
+== profiles at 90 degrees, setback matched to the G2 midpoint depth ==
+G2 quartic (product)     setback 1.550 R   peak curvature 1.369 / R
+G3 sextic 1/3 2/3        setback 1.860 R   peak curvature 1.426 / R
+G3 sextic 1/2 3/4        setback 2.400 R   peak curvature 1.522 / R
+G3 sextic 0.4 0.7        setback 2.044 R   peak curvature 1.460 / R
+G3 septic 1/4 1/2 3/4    setback 1.459 R   peak curvature 1.206 / R
+G3 septic 0.4 0.7 0.9    setback 2.480 R   peak curvature 1.569 / R
+
+== straight edge section builds (Python replica of blend_section.hxx) ==
+wedge90   G2 quartic (product)     vol  49039.0000 faces   6 tol 1.0e-07 valid True boolean   13.0 ms  jump kR 6.71e-08  dk/ds R^2 6.24e-01
+wedge90   G3 sextic 1/3 2/3        vol  49011.5429 faces   6 tol 1.0e-07 valid True boolean   13.6 ms  jump kR 2.60e-08  dk/ds R^2 1.27e-05
+wedge90   G3 sextic 1/2 3/4        vol  48960.5195 faces   6 tol 1.0e-07 valid True boolean   21.8 ms  jump kR 4.04e-09  dk/ds R^2 2.08e-06
+wedge90   G3 sextic 0.4 0.7        vol  48993.9022 faces   6 tol 1.0e-07 valid True boolean   19.8 ms  jump kR 4.92e-09  dk/ds R^2 2.60e-06
+wedge90   G3 septic 1/4 1/2 3/4    vol  49088.1503 faces   6 tol 1.0e-07 valid True boolean   15.2 ms  jump kR 4.10e-07  dk/ds R^2 2.12e-04
+wedge90   G3 septic 0.4 0.7 0.9    vol  48940.0954 faces   6 tol 1.0e-07 valid True boolean   26.4 ms  jump kR 2.43e-09  dk/ds R^2 1.25e-06
+wedge120  G2 quartic (product)     vol  43023.8534 faces   6 tol 1.0e-07 valid True boolean   14.8 ms  jump kR 5.19e-07  dk/ds R^2 1.62e+00
+wedge120  G3 sextic 1/3 2/3        vol  43015.9272 faces   6 tol 1.0e-07 valid True boolean   15.9 ms  jump kR 3.05e-07  dk/ds R^2 1.51e-04
+wedge120  G3 sextic 1/2 3/4        vol  43001.1980 faces   6 tol 1.0e-07 valid True boolean   25.1 ms  jump kR 5.56e-08  dk/ds R^2 2.86e-05
+wedge120  G3 sextic 0.4 0.7        vol  43010.8348 faces   6 tol 1.0e-07 valid True boolean   27.2 ms  jump kR 8.25e-08  dk/ds R^2 4.26e-05
+wedge120  G3 septic 1/4 1/2 3/4    vol  43038.0418 faces   6 tol 1.0e-07 valid True boolean   15.4 ms  jump kR 1.06e-06  dk/ds R^2 6.71e-04
+wedge120  G3 septic 0.4 0.7 0.9    vol  42995.3021 faces   6 tol 1.0e-07 valid True boolean   27.2 ms  jump kR 3.36e-08  dk/ds R^2 1.72e-05
+wedge60   G2 quartic (product)     vol  40804.5190 faces   6 tol 1.0e-07 valid True boolean   14.5 ms  jump kR 5.59e-09  dk/ds R^2 1.80e-01
+wedge60   G3 sextic 1/3 2/3        vol  40733.1832 faces   6 tol 1.0e-07 valid True boolean   18.1 ms  jump kR 1.37e-09  dk/ds R^2 6.69e-07
+wedge60   G3 sextic 1/2 3/4        vol  40600.6206 faces   6 tol 1.0e-07 valid True boolean   32.3 ms  jump kR 2.20e-10  dk/ds R^2 1.14e-07
+wedge60   G3 sextic 0.4 0.7        vol  40687.3515 faces   6 tol 1.0e-07 valid True boolean   36.7 ms  jump kR 2.61e-10  dk/ds R^2 1.38e-07
+wedge60   G3 septic 1/4 1/2 3/4    vol  40932.2151 faces   6 tol 1.0e-07 valid True boolean   19.2 ms  jump kR 3.17e-08  dk/ds R^2 1.60e-05
+wedge60   G3 septic 0.4 0.7 0.9    vol  40547.5573 faces   6 tol 1.0e-07 valid True boolean   40.4 ms  jump kR 1.31e-10  dk/ds R^2 6.78e-08
+inside90  G2 quartic (product)     vol 300961.0000 faces  13 tol 1.0e-07 valid True boolean   27.3 ms  jump kR 6.71e-08  dk/ds R^2 6.24e-01
+inside90  G3 sextic 1/3 2/3        vol 300988.4571 faces  13 tol 1.0e-07 valid True boolean   13.5 ms  jump kR 2.60e-08  dk/ds R^2 1.27e-05
+inside90  G3 sextic 1/2 3/4        vol 301039.4805 faces  13 tol 1.0e-07 valid True boolean   21.9 ms  jump kR 4.04e-09  dk/ds R^2 2.08e-06
+inside90  G3 sextic 0.4 0.7        vol 301006.0978 faces  13 tol 1.0e-07 valid True boolean   20.7 ms  jump kR 4.92e-09  dk/ds R^2 2.60e-06
+inside90  G3 septic 1/4 1/2 3/4    vol 300911.8497 faces  13 tol 1.0e-07 valid True boolean   14.0 ms  jump kR 4.10e-07  dk/ds R^2 2.12e-04
+inside90  G3 septic 0.4 0.7 0.9    vol 301059.9046 faces  13 tol 1.0e-07 valid True boolean   25.8 ms  jump kR 2.43e-09  dk/ds R^2 1.25e-06
+
+== three edge corner, 50 x 50 x 40 block, R 10, corner tool then edge tools, one at a time ==
+G2 quartic (product)     vol  96817.3739 faces  10 tol 1.0e-07 valid True boolean  178.3 ms  jump kR 5.95e-07  dk/ds R^2 7.17e-01  crease 0.000 deg
+G3 sextic 1/3 2/3        vol  96722.1306 faces  10 tol 5.0e-06 valid True boolean  260.4 ms  jump kR 1.56e-07  dk/ds R^2 7.61e-05  crease 0.000 deg
+G3 sextic 1/2 3/4        vol  96550.4079 faces  10 tol 1.0e-07 valid True boolean  334.4 ms  jump kR 6.45e-09  dk/ds R^2 3.31e-06  crease 0.000 deg
+G3 sextic 0.4 0.7        vol  96662.3082 faces  10 tol 1.0e-07 valid True boolean  282.7 ms  jump kR 1.16e-08  dk/ds R^2 6.28e-06  crease 0.000 deg
+G3 septic 1/4 1/2 3/4    vol  96975.6919 faces  10 tol 1.0e-07 valid True boolean  307.2 ms  jump kR 4.16e-06  dk/ds R^2 2.17e-03  crease 0.000 deg
+G3 septic 0.4 0.7 0.9    vol  96484.7952 faces  10 tol 1.0e-07 valid True boolean  393.6 ms  jump kR 3.67e-09  dk/ds R^2 1.88e-06  crease 0.000 deg
+
+== rim arc, 90 degree plane and cylinder rc 15, R 3, 150 degrees: loft of 25 sections vs revolve ==
+G2 quartic (product)     loft    vol  8754.9962 faces   6 tol 6.4e-07 valid True boolean   73.3 ms  jump kR 6.71e-08  dk/ds R^2 6.24e-01
+G2 quartic (product)     revolve vol  8754.9962 faces   6 tol 1.0e-07 valid True boolean   30.7 ms  jump kR 6.71e-08  dk/ds R^2 6.24e-01
+G3 sextic 1/3 2/3        loft    vol  8752.8097 faces   6 tol 6.4e-07 valid True boolean   82.1 ms  jump kR 2.60e-08  dk/ds R^2 1.27e-05
+G3 sextic 1/3 2/3        revolve vol  8752.8097 faces   6 tol 1.0e-07 valid True boolean   33.0 ms  jump kR 2.60e-08  dk/ds R^2 1.27e-05
+G3 sextic 1/2 3/4        loft    vol  8748.7809 faces   6 tol 6.4e-07 valid True boolean  122.8 ms  jump kR 4.04e-09  dk/ds R^2 2.08e-06
+G3 sextic 1/2 3/4        revolve vol  8748.7809 faces   6 tol 1.0e-07 valid True boolean   48.6 ms  jump kR 4.04e-09  dk/ds R^2 2.08e-06
+G3 sextic 0.4 0.7        loft    vol  8751.4118 faces   6 tol 6.4e-07 valid True boolean  111.7 ms  jump kR 4.92e-09  dk/ds R^2 2.60e-06
+G3 sextic 0.4 0.7        revolve vol  8751.4118 faces   6 tol 1.0e-07 valid True boolean   46.0 ms  jump kR 4.92e-09  dk/ds R^2 2.60e-06
+G3 septic 1/4 1/2 3/4    loft    vol  8758.9576 faces   6 tol 6.4e-07 valid True boolean   88.9 ms  jump kR 4.10e-07  dk/ds R^2 2.12e-04
+G3 septic 1/4 1/2 3/4    revolve vol  8758.9576 faces   6 tol 1.0e-07 valid True boolean   30.1 ms  jump kR 4.10e-07  dk/ds R^2 2.12e-04
+G3 septic 0.4 0.7 0.9    loft    vol  8747.1700 faces   6 tol 6.4e-07 valid True boolean  115.4 ms  jump kR 2.43e-09  dk/ds R^2 1.25e-06
+G3 septic 0.4 0.7 0.9    revolve vol  8747.1700 faces   6 tol 1.0e-07 valid True boolean   48.2 ms  jump kR 2.43e-09  dk/ds R^2 1.25e-06
+edge samples skipped (no face side found): 16
+
+== measure.py --sweep ==
+angle  R    | G2 valid kL     dk/ds L^2  ms | G3 valid kL     dk/ds L^2  ms   (L = setback along the face)
+   30  0.5 | True  1.6e-07 7.5e-01   15 | True  3.3e-06 1.6e-03   16
+   30  5.0 | True  1.6e-07 7.5e-01   16 | True  3.3e-06 1.6e-03   17
+   45  0.5 | True  2.9e-07 1.1e+00   13 | True  4.2e-06 2.1e-03   14
+   45  5.0 | True  2.9e-07 1.1e+00   17 | True  4.2e-06 2.1e-03   18
+   45 10.0 | True  2.9e-07 1.1e+00   17 | True  4.2e-06 2.1e-03   18
+   60  0.5 | True  4.1e-07 1.3e+00   13 | True  4.3e-06 2.2e-03   23
+   60  5.0 | True  4.1e-07 1.3e+00   71 | True  4.3e-06 2.2e-03   31
+   60 10.0 | True  4.1e-07 1.3e+00   40 | True  4.3e-06 2.2e-03   26
+   90  0.5 | True  5.1e-07 1.5e+00   12 | True  2.8e-06 1.4e-03   41
+   90  5.0 | True  5.1e-07 1.5e+00   26 | True  2.8e-06 1.4e-03   28
+   90 10.0 | True  5.1e-07 1.5e+00   19 | True  2.8e-06 1.4e-03   24
+   90 20.0 | True  5.1e-07 1.5e+00   16 | True  2.8e-06 1.4e-03   14
+  120  0.5 | True  3.0e-07 1.3e+00   14 | True  5.5e-07 3.4e-04   16
+  120  5.0 | True  3.0e-07 1.3e+00   13 | True  5.5e-07 3.4e-04   17
+  120 10.0 | True  3.0e-07 1.3e+00   15 | True  5.5e-07 3.4e-04   16
+  120 20.0 | True  3.0e-07 1.3e+00   14 | True  5.5e-07 3.4e-04   16
+  120 40.0 | True  3.0e-07 1.3e+00   14 | True  5.5e-07 3.4e-04   20
+  150  0.5 | True  5.6e-08 7.5e-01   13 | True  4.6e-07 1.8e-04   15
+  150  5.0 | True  5.6e-08 7.5e-01   14 | True  4.6e-07 1.8e-04   18
+  150 10.0 | True  5.6e-08 7.5e-01   16 | True  4.6e-07 1.8e-04   17
+  150 20.0 | True  5.6e-08 7.5e-01   15 | True  4.6e-07 1.8e-04   20
+  150 40.0 | True  5.6e-08 7.5e-01   21 | True  4.6e-07 1.8e-04   19
+  170  0.5 | True  2.3e-09 2.6e-01   20 | True  2.5e-07 1.0e-04   21
+  170  5.0 | True  2.3e-09 2.6e-01   16 | True  2.5e-07 1.0e-04   21
+  170 10.0 | True  2.3e-09 2.6e-01   23 | True  2.5e-07 1.0e-04   24
+  170 20.0 | True  2.3e-09 2.6e-01   18 | True  2.5e-07 1.0e-04   21
+  170 40.0 | True  2.3e-09 2.6e-01   21 | True  2.5e-07 1.0e-04   25
+
+== measure.py --scan ==
+lowest peak curvature
+  peak 1.014/R  max rate 12.146/R^2  setback 1.054R  legs [0.1, 0.25, 0.65]
+  peak 1.027/R  max rate 4.524/R^2  setback 1.183R  legs [0.25, 0.3, 0.7]
+  peak 1.027/R  max rate 41.776/R^2  setback 1.014R  legs [0.05, 0.2, 0.65]
+  peak 1.031/R  max rate 8.695/R^2  setback 1.086R  legs [0.1, 0.3, 0.65]
+lowest peak curvature rate
+  peak 1.237/R  max rate 1.295/R^2  setback 1.521R  legs [0.3, 0.45, 0.8]
+  peak 1.259/R  max rate 1.316/R^2  setback 1.500R  legs [0.3, 0.35, 0.85]
+  peak 1.263/R  max rate 1.319/R^2  setback 1.590R  legs [0.35, 0.4, 0.85]
+  peak 1.261/R  max rate 1.321/R^2  setback 1.420R  legs [0.2, 0.4, 0.8]
+G2 quartic: peak 1.369/R  max rate 1.741/R^2  setback 1.5500R
+septic 1/4 1/2 3/4: peak 1.206/R  max rate 1.390/R^2  setback 1.4588R

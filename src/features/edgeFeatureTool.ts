@@ -15,6 +15,7 @@ import { midMatchTol, polylineMid, edgeSelectorFrom } from "../viewport/edgeMatc
 import { pickScope, type PickScope } from "../viewport/pickScope";
 import { canConsume } from "./toolCapabilities";
 import { DimInput, type DimSegment } from "../sketch/dimInput";
+import { type Continuity, continuityBlocked, continuityOf, pickedReach } from "./continuity";
 import { setPrompt } from "../ui/prompt";
 import {
   createDragHandle,
@@ -77,11 +78,12 @@ const ghostColor = (g: { failed: boolean }) => (g.failed ? GHOST_ERROR : edgeSel
  *  drag does not queue a rebuild per pixel. */
 const PREVIEW_DEBOUNCE_MS = 150;
 
-export type Continuity = "G1" | "G2";
+export type { Continuity };
 /** One segment per profile, in order, so a later G3 is one more entry. */
 export const CONTINUITY_SEGMENTS: (DimSegment & { id: Continuity })[] = [
   { id: "G1", label: "G1, circular round", text: "G1", icon: "continuityG1", key: "1" },
   { id: "G2", label: "G2, curvature continuous", text: "G2", icon: "continuityG2", key: "2" },
+  { id: "G3", label: "G3, curvature rate continuous", text: "G3", icon: "continuityG3", key: "3" },
 ];
 
 /** Chain members toggle as one unit, recorded at add time since the preview may consume the edges and the chain could
@@ -95,6 +97,8 @@ interface GhostEdge {
   points: Vec3[];
   line: Line2;
   chain: number;
+  /** the faces' largest curvature across this edge, per mm of radius and of chord, as the engine reports it */
+  curvature?: readonly [number, number];
   /** drawn in the error red when not hovered */
   failed: boolean;
 }
@@ -375,7 +379,7 @@ export class EdgeFeatureTool {
     this.value = value;
     this.signed = value;
     this.profile = f.type === "fillet" && typeof f.profile === "number" ? clampProfile(f.profile) : 0;
-    this.continuity = f.type === "fillet" && f.continuity === "G2" ? "G2" : "G1";
+    this.continuity = f.type === "fillet" ? continuityOf(f.continuity) : "G1";
     this.options =
       f.type === "fillet"
         ? { sizeType: f.sizeType, tangentEdges: f.tangentEdges }
@@ -406,7 +410,9 @@ export class EdgeFeatureTool {
         if (!s.previewBuilt) return;
         this.awaitingRollback = false;
         this.seedGhosts(rollbackSels);
-        this.opened = this.buildFeature();
+        // As stored, so a G2 or G3 the picked edges cannot take is dropped by pushPreview below, said after the
+        // phase prompt and written on commit.
+        this.opened = this.featureNow();
         this.enterEditUI();
         this.refreshGhost();
         this.pushPreview();
@@ -449,7 +455,7 @@ export class EdgeFeatureTool {
       const line = this.viewport.edgeLineForSelector(sel.point as Vec3, sel.body);
       const same = line && this.ghosts.find((g) => g.points === line.points);
       if (same) same.sels.push(sel);
-      else if (line) this.addGhost(sel, line.points as Vec3[]);
+      else if (line) this.addGhost(sel, line.points as Vec3[], undefined, line.curvature);
       else this.unmatchedSels.push(sel);
     }
   }
@@ -457,7 +463,7 @@ export class EdgeFeatureTool {
   private chainCounter = 0; // one id per add gesture (chain toggles as a unit)
   private memberSeq = 0; // one id per member, stable for the panel's row keys
 
-  private addGhost(sel: Selector, points: Vec3[], chain?: number) {
+  private addGhost(sel: Selector, points: Vec3[], chain?: number, curvature?: readonly [number, number]) {
     const mid = polylineMid(points);
     if (!mid) return; // an edge always has points; nothing to ghost otherwise
     const geo = new LineGeometry();
@@ -483,6 +489,7 @@ export class EdgeFeatureTool {
       points,
       line,
       chain: chain ?? ++this.chainCounter,
+      ...(curvature ? { curvature } : {}),
       failed: false,
     });
   }
@@ -652,7 +659,7 @@ export class EdgeFeatureTool {
       if (!sel) continue;
       const mid = sel.point;
       if (this.ghosts.some((g) => Math.hypot(g.mid[0] - mid[0], g.mid[1] - mid[1], g.mid[2] - mid[2]) < 1e-6)) continue;
-      this.addGhost(sel, pts, chainId);
+      this.addGhost(sel, pts, chainId, l.curvature);
     }
   }
 
@@ -704,9 +711,14 @@ export class EdgeFeatureTool {
       this.kind === "fillet"
         ? {
             name: "continuity",
-            title: "Continuity: G1 is a circular round, G2 eases into the faces with no jump in curvature",
-            segments: CONTINUITY_SEGMENTS,
+            title:
+              "Continuity: G1 is a circular round, G2 eases into the faces with no jump in curvature, G3 with no jump in its rate either",
+            segments: CONTINUITY_SEGMENTS.map((s) => {
+              const why = this.continuityBlocked(s.id);
+              return why ? { ...s, disabled: why } : s;
+            }),
             chosen: this.continuity,
+            onBlocked: (_id, why) => setPrompt(why),
             onChoose: (id) => {
               this.continuity = id as Continuity;
               this.forgetBuildRange(); // G2 sets back further, so its limit is not G1's
@@ -819,7 +831,25 @@ export class EdgeFeatureTool {
 
   /** Edit mode replaces the committed feature in place, create mode appends. No members or a drag on the origin
    *  would build a blend OCCT refuses on every pointermove, so both drop back to the bare model. */
+  private continuityBlocked(c: Continuity): string | null {
+    const chord = this.optionsKind === "fillet" && this.options.sizeType === "chord";
+    return continuityBlocked(c, pickedReach(this.ghosts, this.value, chord ? "chord" : "radius"));
+  }
+
+  /** Greys out G2 and G3 while a picked edge runs along a curved face; the engine refuses them there too. */
+  private refreshContinuityReach() {
+    if (this.kind !== "fillet") return;
+    for (const s of CONTINUITY_SEGMENTS) this.dim.setSegmentDisabled("continuity", s.id, this.continuityBlocked(s.id));
+    const why = this.continuityBlocked(this.continuity);
+    if (!why) return;
+    this.continuity = "G1";
+    this.dim.setOption("continuity", "G1");
+    this.forgetBuildRange();
+    setPrompt(`${why}, so the fillet is G1 now`);
+  }
+
   private pushPreview() {
+    this.refreshContinuityReach();
     if (this.neutral || !this.currentSelectors().length) {
       if (this.editId) this.store.setEditPreview(null);
       else this.store.setPreview(null);
@@ -1186,6 +1216,11 @@ export class EdgeFeatureTool {
   }
 
   private buildFeature(): Feature {
+    this.refreshContinuityReach();
+    return this.featureNow();
+  }
+
+  private featureNow(): Feature {
     const v = this.size();
     const sels = this.currentSelectors();
     const edges = sels.length === 1 && sels[0] ? sels[0] : sels;
@@ -1194,7 +1229,7 @@ export class EdgeFeatureTool {
         ? Object.fromEntries(Object.entries(this.options).filter(([, x]) => x !== undefined))
         : {};
     if (this.kind !== "fillet") return { id: this.previewId, type: "chamfer", edges, distance: v, ...kept };
-    const g2 = this.continuity === "G2" ? { continuity: "G2" as const } : {};
+    const g2 = this.continuity !== "G1" ? { continuity: this.continuity } : {};
     // Omitted at 0 so a plain fillet stays plain in the document and keeps routing to the kernel's own filleter
     // rather than the reweighting path.
     return isPlainProfile(this.profile)

@@ -22,9 +22,10 @@ describe("fillet and chamfer option rows", () => {
     expect(fieldApplies("chamfer", "distance2", { chamferType: "twoDistance" })).toBe(true);
   });
 
-  it("hides the conic profile on a G2 fillet, which ignores it", () => {
+  it("shows the profile for every continuity, the engine slides the G2 and G3 poles by it", () => {
     expect(fieldApplies("fillet", "profile", { continuity: "G1" })).toBe(true);
-    expect(fieldApplies("fillet", "profile", { continuity: "G2" })).toBe(false);
+    expect(fieldApplies("fillet", "profile", { continuity: "G2" })).toBe(true);
+    expect(fieldApplies("fillet", "profile", { continuity: "G3" })).toBe(true);
   });
 
   it("calls the size a chord length when that is what it is", () => {

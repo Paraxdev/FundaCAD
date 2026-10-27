@@ -20,6 +20,14 @@ pub const EDGE_FALLBACK_SEG: usize = 24;
 /// the boundary of a fillet rather than a corner.
 pub const SMOOTH_EDGE_DEG: f64 = 1.0;
 
+/// The radius a chord sized fillet makes of `chord` where the faces' normals meet at `dihedral_deg`.
+pub fn radius_of_chord(dihedral_deg: Option<f64>, chord: f64) -> f64 {
+    match dihedral_deg {
+        Some(ang) if ang >= SMOOTH_EDGE_DEG => chord / (2.0 * (ang.to_radians() / 2.0).sin()),
+        _ => chord,
+    }
+}
+
 /// An edge shorter than this is a sliver a boolean left where two vertices
 /// nearly met: too small to see, click or blend, so it is neither drawn nor blended.
 pub const SLIVER_EDGE_MM: f64 = 1e-4;
@@ -28,6 +36,11 @@ pub const SLIVER_EDGE_MM: f64 = 1e-4;
 pub struct EdgeLine {
     pub points: Vec<[f64; 3]>,
     pub smooth: bool,
+    /// The largest curvature across the edge of the faces either side, per mm, which the client cannot read: a
+    /// fillet of radius R offers G2 and G3 here while it times R stays below 1e-6. 0 between planes.
+    pub curvature: f64,
+    /// `curvature` times the radius a 1 mm chord sized fillet takes here, weighed against a typed chord.
+    pub chord_curvature: f64,
 }
 
 /// In edge-to-face map order. Edges go to other threads, build their own adaptors and write nothing back,
@@ -67,11 +80,13 @@ fn one_edge(access: &MeshAccess, plane: &[Option<[f64; 3]>], cos_tol: f64, e: us
     if length < SLIVER_EDGE_MM {
         return None;
     }
-    let smooth = faces.len() == 2
-        && faces[0] != faces[1]
-        && !(plane_of(faces[0]).is_some() && plane_of(faces[1]).is_some())
-        && access.edge_smooth(e, SMOOTH_EDGE_DEG.to_radians().cos());
-    Some(EdgeLine { points, smooth })
+    let flat = faces.len() == 2 && plane_of(faces[0]).is_some() && plane_of(faces[1]).is_some();
+    let smooth =
+        faces.len() == 2 && faces[0] != faces[1] && !flat && access.edge_smooth(e, SMOOTH_EDGE_DEG.to_radians().cos());
+    let curvature = if flat { 0.0 } else { access.edge_cross_curvature(e) };
+    let chord_curvature =
+        if curvature > 0.0 { curvature * radius_of_chord(access.edge_dihedral_deg(e), 1.0) } else { 0.0 };
+    Some(EdgeLine { points, smooth, curvature, chord_curvature })
 }
 
 /// A line is its two endpoints; any other curve is deviation bounded; an edge

@@ -489,6 +489,8 @@ interface WireEdgesPacked {
   body?: string;
   /** indices of the edges whose faces meet tangentially */
   smooth?: number[];
+  /** [index, curvature across the edge per mm of radius, per mm of chord] of the edges whose faces curve across them */
+  curvature?: [number, number, number][];
 }
 
 /** Re-split packed edges (`counts` points per edge) into per-edge triples. Exported for its own test, since the
@@ -498,6 +500,7 @@ export function expandPackedEdges(
   counts: Uint32Array,
   body: string | undefined,
   smooth?: readonly number[],
+  curvature?: readonly (readonly [number, number, number])[],
 ): WireEdgeList {
   const list: WireEdgeList = [];
   let o = 0;
@@ -510,6 +513,10 @@ export function expandPackedEdges(
   for (const i of smooth ?? []) {
     const e = list[i];
     if (e) e.smooth = true;
+  }
+  for (const [i, k, c] of curvature ?? []) {
+    const e = list[i];
+    if (e) e.curvature = [k, c];
   }
   return list;
 }
@@ -591,6 +598,7 @@ export function decodeBinaryFrame(buf: ArrayBuffer): BinaryHeader {
         resolveBuf(rawEdges.$counts) as Uint32Array,
         rawEdges.body,
         rawEdges.smooth,
+        rawEdges.curvature,
       );
     }
   }

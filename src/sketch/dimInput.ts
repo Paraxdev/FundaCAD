@@ -73,6 +73,8 @@ export interface DimSegmentedDef {
   segments: DimSegment[];
   chosen: string;
   onChoose: (id: string) => void;
+  /** A press or key on a disabled segment, with its reason, so the tool can say why nothing changed. */
+  onBlocked?: (id: string, reason: string) => void;
 }
 
 /** A one off verb beside the value, such as moving a hole to the face centre. */
@@ -573,7 +575,9 @@ export class DimInput {
   }
 
   private pickSegment(g: Segmented, id: string) {
-    if (g.chosen === id || g.disabled.has(id)) return;
+    const why = g.disabled.get(id);
+    if (why) g.def.onBlocked?.(id, why);
+    if (g.chosen === id || why) return;
     g.chosen = id;
     this.paintSegmented(g);
     g.def.onChoose(id);
