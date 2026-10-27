@@ -59,27 +59,6 @@
   padding: var(--s-5);
   border-top: 1px solid var(--line, #262a31);
 }
-.btn {
-  background: var(--raised, #22262e);
-  color: var(--text, #e6e8ec);
-  border: 1px solid transparent;
-  border-radius: var(--r-sm, 6px);
-  /* The same pair as the bare button rule in _layout: OK is the default button recoloured. */
-  padding: var(--s-3) var(--s-4);
-  font-size: 12px;
-  cursor: pointer;
-}
-.btn:hover {
-  background: var(--raised-2, #2a2f38);
-}
-.btn-primary {
-  background: var(--accent, #ff7a3c);
-  color: var(--on-accent, #160a04);
-  font-weight: 600;
-}
-.btn-primary:hover {
-  background: var(--accent-hot, #ff9a5c);
-}
 
 /* 3D mouse (sm) settings. */
 .sm-grid {
@@ -853,7 +832,6 @@
 .bug-report-card .bug-doc-big {
   margin: 0 0 var(--s-2);
 }
-.bug-report-card .btn:disabled,
 .bug-report-card .choice-btn:disabled {
   opacity: 0.45;
   cursor: default;

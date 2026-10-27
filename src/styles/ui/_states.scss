@@ -1,1 +1,7 @@
 // Shared .is-on, .is-selected, .is-open, .is-disabled and .is-error looks of PROPOSAL section 1.
+
+// Each component also drops its own hover while disabled, since only it knows which fill its hover changes.
+.is-disabled {
+  opacity: 0.45;
+  cursor: default;
+}
