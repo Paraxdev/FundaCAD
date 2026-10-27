@@ -92,7 +92,7 @@ function glowMaterial(kind: GlowKind): THREE.ShaderMaterial {
     followComposer(mat);
     materials.set(kind, mat);
   }
-  (mat.uniforms.uColor!.value as THREE.Color).set(themeColor("--accent", 0x51d6a8));
+  (mat.uniforms.uColor!.value as THREE.Color).set(themeColor("--accent", 0x9a9ff0));
   return mat;
 }
 

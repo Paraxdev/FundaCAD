@@ -120,7 +120,7 @@
   bottom: 0;
   left: 50%;
   width: 0;
-  background: var(--accent, #ff7a3c);
+  background: var(--accent);
   border-radius: var(--r-pill);
 }
 .sm-test {
@@ -144,7 +144,7 @@
 }
 .sm-row input[type="range"] {
   width: 100%;
-  accent-color: var(--accent, #ff7a3c);
+  accent-color: var(--accent);
 }
 .sm-slabel {
   font-size: 11px;
@@ -320,7 +320,7 @@
   border: 0;
   padding: 0;
   font: inherit;
-  color: var(--accent, #ff7a3c);
+  color: var(--accent);
   cursor: pointer;
 }
 .plug-link + .plug-link {
@@ -421,7 +421,7 @@
   color: var(--text-dim, #9aa3af);
 }
 .mcp-status.on {
-  color: var(--accent, #ff7a3c);
+  color: var(--accent);
 }
 .mcp-setup {
   display: flex;
@@ -498,7 +498,7 @@
     border-color var(--t-fast, 120ms) var(--ease);
 }
 .choice-btn:hover {
-  background: var(--accent-tint, rgba(255, 122, 60, 0.14));
+  background: var(--accent-tint);
 }
 .choice-btn small {
   color: var(--text-mute, #6b7280);
@@ -506,14 +506,14 @@
 }
 .choice-btn.choice-primary {
   background: var(--accent);
-  color: var(--on-accent, #160a04);
+  color: var(--on-accent);
   font-weight: 600;
 }
 .choice-btn.choice-primary:hover:not(:disabled) {
   background: var(--accent-hot);
 }
 .choice-btn.choice-primary small {
-  color: color-mix(in srgb, var(--on-accent, #160a04) 70%, transparent);
+  color: color-mix(in srgb, var(--on-accent) 70%, transparent);
 }
 .choice-btn.choice-primary:disabled {
   opacity: 0.4;
@@ -540,7 +540,7 @@
   cursor: pointer;
 }
 .choice-check:hover {
-  background: var(--accent-tint, rgba(255, 122, 60, 0.14));
+  background: var(--accent-tint);
 }
 .choice-check small {
   color: var(--text-mute, #6b7280);
@@ -622,8 +622,8 @@
   color: var(--text, #e6e9ee);
 }
 .cmdk-item.active {
-  background: var(--accent-tint, rgba(255, 122, 60, 0.14));
-  color: var(--accent-hot, #ff9a5c);
+  background: var(--accent-tint);
+  color: var(--accent-hot);
 }
 .cmdk-label {
   flex: 1;
@@ -697,7 +697,7 @@
 .measure-title {
   font-weight: 600;
   margin-bottom: var(--s-2);
-  color: var(--accent-hot, #ff9a5c);
+  color: var(--accent-hot);
 }
 .measure-row {
   display: flex;

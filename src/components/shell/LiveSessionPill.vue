@@ -94,7 +94,7 @@ const title = computed(() =>
   opacity: 0.85;
 }
 .live-dot {
-  color: var(--accent, #4a8);
+  color: var(--accent);
   flex: none;
 }
 .live-pill.readonly .live-dot {

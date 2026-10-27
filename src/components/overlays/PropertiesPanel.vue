@@ -60,9 +60,7 @@ function close() {
 
       <template v-if="panels.properties.faults.length">
         <div class="measure-divider" />
-        <div class="measure-hint" style="color: var(--accent-hot, #ff9a5c)"
-          >Not a sound solid, so no volume or mass:</div
-        >
+        <div class="measure-hint" style="color: var(--accent-hot)">Not a sound solid, so no volume or mass:</div>
         <div v-for="(why, i) in panels.properties.faults" :key="'fault' + i" class="measure-hint">{{ why }}</div>
       </template>
 

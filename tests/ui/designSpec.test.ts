@@ -38,21 +38,21 @@ const GLASS = "src/styles/_glass.scss";
 const COLOUR_BASELINE: Record<string, number> = {
   "src/components/overlays/PluginSettingsForm.vue": 2,
   "src/components/overlays/RadialMenuHost.vue": 2,
-  "src/components/shell/LiveSessionPill.vue": 2,
+  "src/components/shell/LiveSessionPill.vue": 1,
   "src/components/shell/NumberBox.vue": 2,
   "src/components/shell/SurfaceNodeEditor.vue": 11,
-  "src/styles/_browser.scss": 5,
+  "src/styles/_browser.scss": 4,
   "src/styles/_console.scss": 4,
   "src/styles/_float.scss": 8,
   "src/styles/_glass.scss": 3,
   "src/styles/_inspector.scss": 11,
   "src/styles/_layout.scss": 3,
-  "src/styles/_modals.scss": 84,
+  "src/styles/_modals.scss": 73,
   "src/styles/_notice.scss": 1,
   "src/styles/_renderdock.scss": 5,
   "src/styles/_targetedit.scss": 2,
   "src/styles/_timeline.scss": 5,
-  "src/styles/_utilities.scss": 5,
+  "src/styles/_utilities.scss": 2,
 };
 
 // Declarations, outside a hover, press, focus or selected rule, that fill with
@@ -529,7 +529,7 @@ describe("design spec guard", () => {
   it("keeps the accent calm: no glow, a light saturate on the blur", () => {
     const root = block(styleOf(TOKENS, scssFiles.get(TOKENS) ?? ""), ":root");
     expect(root["--float-blur"]).toMatch(/saturate\(1(\.0\d+)?\)$/);
-    expect(root["--accent"]).toBe("#51d6a8");
+    expect(root["--accent"]).toBe("#9a9ff0");
   });
 
   it("reads every light theme text token at 4.5:1 or better on each fill it sits on", () => {
