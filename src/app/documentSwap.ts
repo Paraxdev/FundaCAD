@@ -8,7 +8,7 @@ export interface DocumentSwapTarget {
   cancelTools(): void;
   sketch: { active: boolean; cancel(): void };
   dropBodyGizmo(): void;
-  overlay: { clearRegionSelection(): void };
+  overlay: { clearRegionSelection(): void; clearTransient(): void };
   /** The handle offered on the last extrude's top, matched by feature id alone. */
   forgetLastCommit(): void;
   viewport: {
@@ -33,6 +33,8 @@ export function wireDocumentSwap(store: Pick<DocumentStore, "sessions">, e: Docu
     e.viewport.setSelectedBodies([]);
     // A world point, so it would preselect a profile drawn in the same spot.
     e.overlay.clearRegionSelection();
+    // Even with no sketch open: a guide or rubber band a session left behind would sit over the next document.
+    e.overlay.clearTransient();
     e.forgetLastCommit();
     // Last, the handlers above may still read the old model.
     e.viewport.endDocument();
