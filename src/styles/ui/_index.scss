@@ -1,0 +1,23 @@
+// One partial per base component of src/components/ui. A lane fills its own partial and never edits this list.
+@forward "states";
+@forward "button";
+@forward "icon-button";
+@forward "chip";
+@forward "text-field";
+@forward "number-field";
+@forward "unit-chip";
+@forward "select";
+@forward "checkbox";
+@forward "switch";
+@forward "switch-row";
+@forward "segmented";
+@forward "slider";
+@forward "tabs";
+@forward "menu";
+@forward "popover";
+@forward "dialog";
+@forward "confirm-dialog";
+@forward "panel";
+@forward "card";
+@forward "field-row";
+@forward "list-row";
