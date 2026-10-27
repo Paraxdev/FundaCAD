@@ -20,8 +20,7 @@ pub mod settings_files;
 mod spacemouse;
 mod system_info;
 pub mod thumbs;
-#[cfg(target_os = "linux")]
-mod webkit;
+pub mod webkit;
 
 /// Kept in step with src/io/documentExt.ts.
 const DOC_EXT: &str = "funda";
@@ -146,8 +145,16 @@ fn updates_supported() -> bool {
 // A webview that never loads shows a blank window and says nothing (issue #3), so the frontend reports in and Rust logs
 // when it does not.
 
-/// Set by `frontend_ready`. The watchdog asks one yes or no question, so no channel.
-struct FrontendReady(std::sync::atomic::AtomicBool);
+/// Set by `frontend_ready`: `booted` when the document loads, `mounted` once the interface painted.
+#[derive(Default)]
+struct FrontendReady {
+    booted: std::sync::atomic::AtomicBool,
+    mounted: std::sync::atomic::AtomicBool,
+}
+
+fn frontend_mounted(app: &tauri::AppHandle) -> bool {
+    app.try_state::<FrontendReady>().is_some_and(|s| s.mounted.load(std::sync::atomic::Ordering::Relaxed))
+}
 
 /// Generous on purpose: a cold first launch on a slow disk parses the whole bundle, and crying wolf on a working app
 /// would teach people to ignore the message. So the watchdog only logs.
@@ -157,12 +164,37 @@ const FRONTEND_READY_TIMEOUT: std::time::Duration = std::time::Duration::from_se
 /// up, which is what counts as a finished start. The boot ping runs too early to prove that.
 #[tauri::command]
 fn frontend_ready(state: tauri::State<'_, FrontendReady>, safe: tauri::State<'_, SafeMode>, stage: Option<String>) {
-    state.0.store(true, std::sync::atomic::Ordering::Relaxed);
-    // A safe session keeps the count, so closing it and starting again comes
-    // back safe instead of failing twice more.
-    if stage.as_deref() == Some("mounted") && safe.reason.is_none() {
+    use std::sync::atomic::Ordering::Relaxed;
+    state.booted.store(true, Relaxed);
+    if stage.as_deref() != Some("mounted") {
+        return;
+    }
+    state.mounted.store(true, Relaxed);
+    // A safe session keeps the count, so closing it and starting again comes back safe instead of failing twice more.
+    if safe.reason.is_none() {
         safe_mode::cleared(&safe.dir);
     }
+}
+
+/// Sent by src/app/firstFrame.ts when scripts run but no frame ever paints, the WebKit compositor stall the Steam
+/// Deck showed (webkit.rs). Remembers it for this machine and starts again with DMA-BUF off, once.
+#[tauri::command]
+fn frontend_stalled(app: tauri::AppHandle) {
+    let dmabuf_set = std::env::var_os(webkit::DMABUF).is_some();
+    if !cfg!(target_os = "linux") || !webkit::stall_fallback_applies(dmabuf_set, webkit::opted_out()) {
+        eprintln!("[gpu] the page runs but never painted, with no renderer fallback left to try");
+        return;
+    }
+    let dir = app.state::<SafeMode>().dir.clone();
+    if let Err(e) = webkit::record_stall(&dir) {
+        eprintln!("[gpu] could not remember the stall in {}: {e}", dir.display());
+    }
+    println!("[gpu] the page runs but never painted, starting again with the WebKitGTK DMABUF renderer off");
+    // The stalled start is not a failed one, or the restart would count towards safe mode.
+    safe_mode::cleared(&dir);
+    respawn(&app, |cmd| {
+        cmd.env(webkit::DMABUF, "1");
+    });
 }
 
 /// What a bug report attaches of the log: the report reaches a GitHub issue
@@ -192,7 +224,7 @@ pub(crate) fn safe_mode_active(app: &tauri::AppHandle) -> bool {
 }
 
 /// The banner's "Restart normally": a new process without this session's safe mode switch, variable or compositing
-/// setting, and a cleared count. Teardown as in `restart_for_update`.
+/// setting, and a cleared count.
 #[tauri::command]
 fn safe_mode_exit(app: tauri::AppHandle) {
     let (dir, set_compositing) = {
@@ -200,24 +232,33 @@ fn safe_mode_exit(app: tauri::AppHandle) {
         (safe.dir.clone(), safe.set_compositing)
     };
     safe_mode::cleared(&dir);
+    respawn(&app, |cmd| {
+        cmd.env_remove(safe_mode::ENV);
+        if set_compositing {
+            cmd.env_remove(safe_mode::COMPOSITING);
+        }
+    });
+}
+
+/// Starts this binary again with the same arguments, minus the safe mode switch, and exits. Teardown as in
+/// `restart_for_update`. A child spawned inside a Flatpak keeps the sandbox alive, so this works there too.
+fn respawn(app: &tauri::AppHandle, adjust: impl FnOnce(&mut std::process::Command)) -> ! {
     if let Some(engine) = app.try_state::<engine::Engine>() {
         engine.stop();
     }
-    tauri_plugin_single_instance::destroy(&app);
+    tauri_plugin_single_instance::destroy(app);
     let env = app.env();
     let args = safe_mode::restart_args(env.args_os.clone());
     match tauri::process::current_binary(&env) {
         Ok(exe) => {
             let mut cmd = std::process::Command::new(exe);
-            cmd.args(args.iter().skip(1)).env_remove(safe_mode::ENV);
-            if set_compositing {
-                cmd.env_remove(safe_mode::COMPOSITING);
-            }
+            cmd.args(args.iter().skip(1));
+            adjust(&mut cmd);
             if let Err(e) = cmd.spawn() {
-                eprintln!("[safe-mode] could not start FundaCAD again: {e}");
+                eprintln!("[restart] could not start FundaCAD again: {e}");
             }
         }
-        Err(e) => eprintln!("[safe-mode] could not find the FundaCAD executable: {e}"),
+        Err(e) => eprintln!("[restart] could not find the FundaCAD executable: {e}"),
     }
     app.cleanup_before_exit();
     std::process::exit(0);
@@ -256,7 +297,7 @@ fn watch_frontend_load(app: tauri::AppHandle) {
         std::thread::sleep(FRONTEND_READY_TIMEOUT);
 
         let ready =
-            app.try_state::<FrontendReady>().map(|s| s.0.load(std::sync::atomic::Ordering::Relaxed)).unwrap_or(false);
+            app.try_state::<FrontendReady>().is_some_and(|s| s.booted.load(std::sync::atomic::Ordering::Relaxed));
         if ready {
             return;
         }
@@ -290,7 +331,7 @@ pub fn run() {
     // webkit.rs says what it changes and why (issue #6).
     let safe = safe_mode_decide();
     #[cfg(target_os = "linux")]
-    webkit::apply_gpu_workarounds();
+    webkit::apply_gpu_workarounds(&safe.dir);
 
     let builder = tauri::Builder::default()
         // Must be registered before every other plugin (Tauri's requirement). A second launch focuses the open window
@@ -307,7 +348,16 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_process::init());
+        .plugin(tauri_plugin_process::init())
+        // The page's close listener (unsavedGuard.ts) makes Tauri wait for the page to close the window, and a page
+        // that never mounted may never answer, so the window could not be closed. Nothing unsaved exists before mount.
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { .. } = event {
+                if !frontend_mounted(window.app_handle()) {
+                    let _ = window.destroy();
+                }
+            }
+        });
     let builder = match safe.reason {
         Some(reason) => builder.plugin(
             tauri::plugin::Builder::<tauri::Wry>::new("fundacad-safe-mode")
@@ -324,6 +374,7 @@ pub fn run() {
         restart_for_update,
         updates_supported,
         frontend_ready,
+        frontend_stalled,
         log_tail,
         log_line,
         system_info::system_info,
@@ -447,7 +498,7 @@ pub fn run() {
             // The 3D mouse reader is not started here: the frontend starts it with `spacemouse_start`, see there.
             // Started here rather than before the builder, so the clock runs from the window existing and the work
             // above, which the frontend waits for anyway, does not eat into the timeout.
-            app.manage(FrontendReady(std::sync::atomic::AtomicBool::new(false)));
+            app.manage(FrontendReady::default());
             watch_frontend_load(app.handle().clone());
             if let Some(w) = app.get_webview_window("main") {
                 drop_paths::install(&w);

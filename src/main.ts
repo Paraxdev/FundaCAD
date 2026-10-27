@@ -23,6 +23,7 @@ import { installDevGlobals } from "./app/devGlobals";
 import { invoke } from "@tauri-apps/api/core";
 import { harnessWanted } from "./harness/wanted";
 import { installGuidePressGuard } from "./ui/guide/pressGuard";
+import { watchFirstFrame } from "./app/firstFrame";
 
 // Before anything is constructed, so a failure inside createEngine still reaches the user.
 installGlobalErrorHandlers();
@@ -47,10 +48,9 @@ app.mount("#app");
 mountUi(engine);
 
 // safe_mode.rs counts the start as finished after the first painted frame, since the WebKit crashes of issue #6 came then.
-requestAnimationFrame(() =>
-  requestAnimationFrame(() => {
-    invoke("frontend_ready", { stage: "mounted" }).catch(() => {});
-  }),
+watchFirstFrame(
+  () => void invoke("frontend_ready", { stage: "mounted" }).catch(() => {}),
+  () => void invoke("frontend_stalled").catch(() => {}),
 );
 
 installDevGlobals(engine);
