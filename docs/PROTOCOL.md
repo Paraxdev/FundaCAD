@@ -221,7 +221,7 @@ or a **full payload**, when the client's `known` etag for that body is stale or 
   "indices": [ /* flat triangle index array */ ],
   "faceIds": [ /* per-triangle face id, local to this body */ ],
   "faceOwners": [ /* per-face owner id or null, for feature highlighting */ ],
-  "edges": [ { "points": [...], "body": "b1", "smooth": true, "reach": 1 } ],  // "smooth" present only when the edge's two faces meet tangentially; "reach" only when a fillet's highest continuity there is below 3 (1: an edge along a curved face, where G2 and G3 are refused)
+  "edges": [ { "points": [...], "body": "b1", "smooth": true, "curvature": 0.065 } ],  // "smooth" present only when the edge's two faces meet tangentially; "curvature" (per mm) only when a face curves across the edge: a G2 or G3 fillet of radius R is refused there once curvature times R reaches 1e-6, 1e30 when unreadable or the edge has three or more faces. A binary frame packs it as "curvature": [[edge index, value], ...]
   "faceCount": 12,
   "fault": "is not a closed solid, 4 of its edges bound only one face, so it has no inside"
 }
