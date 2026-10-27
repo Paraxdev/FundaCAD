@@ -110,4 +110,16 @@ describe("IconButton", () => {
     const { w } = await render({ tip: "History", badge: 2 });
     expect([w.attributes("title"), w.attributes("aria-label")]).toEqual(["History", "History, 2"]);
   });
+
+  it("looks disabled but still answers a click and Enter when clickable, as a soft blocked Path traced does", async () => {
+    const { w, onClick } = await render({ disabled: true, clickable: true });
+    await w.trigger("click");
+    const prevented = key(w.element, "Enter");
+    expect([w.attributes("aria-disabled"), w.classes("is-disabled"), onClick.mock.calls.length, prevented]).toEqual([
+      "true",
+      true,
+      1,
+      false,
+    ]);
+  });
 });

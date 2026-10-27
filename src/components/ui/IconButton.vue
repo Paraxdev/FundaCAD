@@ -19,6 +19,7 @@ const props = withDefaults(
     badge?: string | number | null;
     disabled?: boolean;
     disabledReason?: string | undefined;
+    clickable?: boolean;
   }>(),
   {
     keys: undefined,
@@ -29,6 +30,7 @@ const props = withDefaults(
     badge: null,
     disabled: false,
     disabledReason: undefined,
+    clickable: false,
   },
 );
 

@@ -278,6 +278,7 @@ async function screenshot() {
         :tip="v.title"
         :active="ui.viewMode === v.id"
         :disabled="v.disabled"
+        :clickable="v.softBlock"
         :data-view-mode="v.id"
         @click="pickViewMode(v.id)"
       />
