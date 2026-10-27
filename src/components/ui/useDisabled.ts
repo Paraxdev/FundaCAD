@@ -9,8 +9,8 @@ export interface DisabledProps {
 export type DisabledBind = {
   "aria-disabled": "true" | undefined;
   class: { "is-disabled": boolean };
-  onClickCapture: (e: MouseEvent) => void;
-  onKeydownCapture: (e: KeyboardEvent) => void;
+  onClickCapture?: (e: MouseEvent) => void;
+  onKeydownCapture?: (e: KeyboardEvent) => void;
 };
 
 /** Stops the activation of a disabled control: any click, and Enter or Space. Plain, so dom.ts shares it. */
@@ -36,11 +36,12 @@ export function useDisabled(props: DisabledProps): {
   const swallow = (e: Event) => {
     if (isDisabled.value) swallowDisabled(e);
   };
+  // Note: the capture listeners exist only while disabled. Vue drops an event at a second listener attached in the
+  // millisecond the event was stamped, so a standing capture listener ate a click that came right after mount.
   const bind = computed<DisabledBind>(() => ({
     "aria-disabled": isDisabled.value ? "true" : undefined,
     class: { "is-disabled": isDisabled.value },
-    onClickCapture: swallow,
-    onKeydownCapture: swallow,
+    ...(isDisabled.value ? { onClickCapture: swallow, onKeydownCapture: swallow } : {}),
   }));
   return {
     isDisabled,

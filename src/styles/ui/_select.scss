@@ -1,1 +1,31 @@
 // Select: the combobox trigger and its listbox.
+// The well and its caret are still .sm-select (_modals.scss, _glass.scss), the alias until wave 4 moves them here.
+
+.select-trigger.ui-select-sm {
+  min-height: 24px;
+  padding-top: var(--s-1);
+  padding-bottom: var(--s-1);
+}
+
+.select-trigger.is-open {
+  background-color: color-mix(in srgb, var(--accent) 14%, var(--field-bg));
+}
+
+// The bare button:hover paint is a background shorthand that also wipes the caret, so a disabled trigger redraws both.
+.select-trigger.is-disabled,
+.select-trigger.is-disabled:hover {
+  opacity: 0.45;
+  cursor: default;
+  background-color: var(--field-bg);
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--text-dim) 50%),
+    linear-gradient(135deg, var(--text-dim) 50%, transparent 50%);
+}
+
+// The row the keyboard is on, while focus stays on the trigger.
+.select-pop .opt-row.is-active {
+  background: var(--hover-wash);
+}
+.select-pop .opt-row.is-active.is-selected {
+  background: linear-gradient(var(--hover-wash), var(--hover-wash)), color-mix(in srgb, var(--accent) 16%, transparent);
+}

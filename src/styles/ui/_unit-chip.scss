@@ -1,1 +1,38 @@
 // UnitChip: the unit caption or unit picker beside a value.
+
+.ui-unit-chip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--s-1);
+  border: 0;
+  border-radius: calc(var(--float-chip-radius) - 3px);
+  corner-shape: squircle;
+  background: none;
+  color: var(--text-mute);
+  font: inherit;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ui-unit-chip.is-picker {
+  cursor: pointer;
+  transition:
+    background var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
+}
+.ui-unit-chip.is-picker:hover,
+.ui-unit-chip.is-picker.is-open {
+  color: var(--accent-hot);
+  background: var(--hover-wash);
+}
+.ui-unit-chip.is-picker:active {
+  background: var(--accent-wash);
+}
+.ui-unit-chip.is-picker.is-disabled,
+.ui-unit-chip.is-picker.is-disabled:hover {
+  opacity: 0.45;
+  cursor: default;
+  color: var(--text-mute);
+  background: none;
+}

@@ -1,0 +1,233 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { enableAutoUnmount, mount } from "@vue/test-utils";
+
+import NumberField from "../../../src/components/ui/NumberField.vue";
+import { measureError, unitById } from "../../../src/ui/measure";
+
+enableAutoUnmount(afterEach);
+afterEach(() => vi.useRealTimers());
+
+type Props = InstanceType<typeof NumberField>["$props"];
+
+async function render(props: Partial<Props> = {}) {
+  const w = mount(NumberField, { props: { modelValue: 5, ...props } as Props, attachTo: document.body });
+  // Vue skips a listener for an event stamped in the same millisecond it was attached, once another listener ran.
+  await new Promise((r) => setTimeout(r, 2));
+  const input = w.get("input");
+  const el = input.element as HTMLInputElement;
+  return { w, input, el };
+}
+
+const emitted = (w: Awaited<ReturnType<typeof render>>["w"]) => w.emitted<[number | null]>("update:modelValue") ?? [];
+
+async function commit(input: Awaited<ReturnType<typeof render>>["input"], text: string) {
+  await input.setValue(text);
+  await input.trigger("keydown", { key: "Enter" });
+}
+
+describe("NumberField", () => {
+  it("shows the model in its unit", async () => {
+    const { el } = await render({ modelValue: 25.4, unit: "in" });
+    expect(el.value).toBe("1");
+  });
+
+  it("emits nothing while typing and the parsed value on Enter and on blur", async () => {
+    const { w, input } = await render();
+    await input.setValue("7");
+    expect(emitted(w)).toEqual([]);
+    await input.trigger("keydown", { key: "Enter" });
+    await w.setProps({ modelValue: 7 });
+    await input.setValue("8");
+    await input.trigger("blur");
+    expect(emitted(w)).toEqual([[7], [8]]);
+  });
+
+  it.each([
+    ["1 in", "mm", 25.4],
+    ["1 1/2 in", "mm", 38.1],
+    ["2,5", "mm", 2.5],
+    ["2", "in", 50.8],
+    ["10+5", null, 15],
+    ["90 deg", "rad", 90],
+  ])("reads %j in a %s field as %d", async (text, unit, value) => {
+    const { w, input } = await render({ unit });
+    await commit(input, text);
+    expect(emitted(w)[0]![0]).toBeCloseTo(value, 9);
+  });
+
+  it("keeps rejected text with aria-invalid and the parse reason as title", async () => {
+    const { w, input, el } = await render({ tip: "Depth", unit: "mm" });
+    await commit(input, "2 +");
+    expect(emitted(w)).toEqual([]);
+    expect([el.value, input.attributes("aria-invalid"), input.attributes("title"), w.classes("is-error")]).toEqual([
+      "2 +",
+      "true",
+      measureError("2 +", unitById("mm")),
+      true,
+    ]);
+  });
+
+  it("refuses a typed value outside min and max, and a validate answer, with the reason", async () => {
+    const { w, input } = await render({
+      unit: "mm",
+      min: 0,
+      max: 100,
+      validate: (v: number) => (v === 13 ? "Not that one" : null),
+    });
+    await commit(input, "-1");
+    expect(input.attributes("title")).toBe("At least 0 mm");
+    await commit(input, "101");
+    expect(input.attributes("title")).toBe("At most 100 mm");
+    await commit(input, "13");
+    expect(input.attributes("title")).toBe("Not that one");
+    expect(emitted(w)).toEqual([]);
+  });
+
+  it("shows an outside problem until it is withdrawn", async () => {
+    const { w, input } = await render({ problem: "The kernel could not cut that deep" });
+    expect([input.attributes("aria-invalid"), input.attributes("title")]).toEqual([
+      "true",
+      "The kernel could not cut that deep",
+    ]);
+    await w.setProps({ problem: null });
+    expect(input.attributes("aria-invalid")).toBeUndefined();
+  });
+
+  it("restores the committed text on Escape", async () => {
+    const { w, input, el } = await render();
+    await input.setValue("9");
+    await input.trigger("keydown", { key: "Escape" });
+    expect(el.value).toBe("5");
+    await input.trigger("blur");
+    expect(emitted(w)).toEqual([]);
+  });
+
+  it("steps with ArrowUp and ArrowDown, ten times with Shift, clamped to min and max, committed on Enter", async () => {
+    const { w, input, el } = await render({ min: 0, max: 12, step: 0.5 });
+    await input.trigger("keydown", { key: "ArrowUp" });
+    expect(el.value).toBe("5.5");
+    expect(emitted(w)).toEqual([]);
+    await input.trigger("keydown", { key: "ArrowUp", shiftKey: true });
+    expect(el.value).toBe("10.5");
+    await input.trigger("keydown", { key: "ArrowUp", shiftKey: true });
+    expect(el.value).toBe("12");
+    await input.trigger("keydown", { key: "Enter" });
+    expect(emitted(w)).toEqual([[12]]);
+    await w.setProps({ modelValue: 12 });
+    for (let i = 0; i < 3; i++) await input.trigger("keydown", { key: "ArrowDown", shiftKey: true });
+    expect(el.value).toBe("0");
+  });
+
+  it("steps in the shown unit", async () => {
+    const { w, input, el } = await render({ modelValue: 25.4, unit: "in", step: 0.25, commit: "live" });
+    await input.trigger("keydown", { key: "ArrowUp" });
+    expect(el.value).toBe("1.25");
+    expect(emitted(w)[0]![0]).toBeCloseTo(31.75, 9);
+  });
+
+  it("in live mode emits on every input that parses", async () => {
+    const { w, input } = await render({ commit: "live" });
+    await input.setValue("1");
+    await input.setValue("1/");
+    await input.setValue("1/2");
+    expect(emitted(w)).toEqual([[1], [0.5]]);
+    expect(input.attributes("aria-invalid")).toBeUndefined();
+  });
+
+  it("emits null for a blank nullable field and restores a blank required one", async () => {
+    const a = await render({ nullable: true });
+    await commit(a.input, "");
+    expect(emitted(a.w)).toEqual([[null]]);
+    const b = await render({ modelValue: 3 });
+    await commit(b.input, " ");
+    await b.w.vm.$nextTick();
+    expect([emitted(b.w), b.el.value]).toEqual([[], "3"]);
+  });
+
+  it("shows null as blank", async () => {
+    const { el } = await render({ modelValue: null, nullable: true, placeholder: "auto" });
+    expect([el.value, el.placeholder]).toEqual(["", "auto"]);
+  });
+
+  it("keeps a focused draft when the value changes outside", async () => {
+    const { w, input, el } = await render();
+    el.focus();
+    await input.setValue("12");
+    await w.setProps({ modelValue: 99 });
+    expect(el.value).toBe("12");
+  });
+
+  it("previews on a debounce, ends it on Escape, on commit and on unmount", async () => {
+    const preview = vi.fn();
+    const previewEnd = vi.fn();
+    const { w, input } = await render({ preview, previewEnd });
+    vi.useFakeTimers();
+    await input.setValue("7");
+    await input.setValue("7 in");
+    vi.advanceTimersByTime(199);
+    expect(preview).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(preview.mock.calls.length).toBe(1);
+    expect(preview.mock.calls[0]![0]).toBeCloseTo(177.8, 9);
+    await input.trigger("keydown", { key: "Escape" });
+    expect(previewEnd.mock.calls).toEqual([[false]]);
+
+    await input.setValue("8");
+    vi.advanceTimersByTime(200);
+    await input.trigger("keydown", { key: "Enter" });
+    expect(previewEnd.mock.calls).toEqual([[false], [true]]);
+
+    await input.setValue("2 +");
+    vi.advanceTimersByTime(200);
+    expect(preview.mock.calls.length).toBe(2);
+    await input.setValue("9");
+    vi.advanceTimersByTime(200);
+    w.unmount();
+    expect(previewEnd.mock.calls).toEqual([[false], [true], [false]]);
+  });
+
+  it("ends a live preview as not committing when the commit is refused", async () => {
+    const preview = vi.fn();
+    const previewEnd = vi.fn();
+    const { w, input } = await render({ preview, previewEnd });
+    vi.useFakeTimers();
+    await input.setValue("5");
+    vi.advanceTimersByTime(200);
+    expect(preview.mock.calls).toEqual([[5]]);
+    await commit(input, "5x");
+    expect(emitted(w)).toEqual([]);
+    expect(previewEnd.mock.calls).toEqual([[false]]);
+  });
+
+  it("never schedules a preview nobody asked for, and a blur with no preview ends nothing", async () => {
+    const previewEnd = vi.fn();
+    const { input } = await render({ previewEnd });
+    await input.trigger("blur");
+    expect(previewEnd).not.toHaveBeenCalled();
+  });
+
+  it("draws the unit beside the value, and a picker when units are offered", async () => {
+    const a = await render({ unit: "mm" });
+    expect(a.w.get(".ui-unit-chip").text()).toBe("mm");
+    const b = await render({ unit: "mm", units: ["mm", "in"] });
+    expect(b.w.get(".ui-unit-chip").attributes("role")).toBe("combobox");
+  });
+
+  it("disabled: aria-disabled, read only, no step and no emit", async () => {
+    const { w, input, el } = await render({ disabled: true });
+    expect([input.attributes("aria-disabled"), input.attributes("readonly"), w.classes("is-disabled")]).toEqual([
+      "true",
+      "",
+      true,
+    ]);
+    await input.trigger("keydown", { key: "ArrowUp" });
+    expect(el.value).toBe("5");
+    await commit(input, "6");
+    expect(emitted(w)).toEqual([]);
+  });
+
+  it("sets its width in ch", async () => {
+    const { w } = await render({ widthCh: 6 });
+    expect(w.attributes("style")).toContain("--field-ch: 6");
+  });
+});
