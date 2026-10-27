@@ -1,7 +1,9 @@
 use std::ffi::OsString;
 use std::path::PathBuf;
 
-use fundacad_lib::safe_mode::{begin, cleared, decide, has_flag, init_script, misses, restart_args, Reason, MARKER};
+use fundacad_lib::safe_mode::{
+    begin, cleared, clears_count, decide, has_flag, init_script, misses, restart_args, Reason, MARKER,
+};
 
 fn dir(tag: &str) -> PathBuf {
     let d = std::env::temp_dir().join(format!("fundacad-safe-{tag}-{}", std::process::id()));
@@ -90,4 +92,13 @@ fn the_page_learns_the_reason_before_its_scripts() {
     assert!(s.starts_with("window.__FUNDACAD_SAFE_MODE__ = { reason: \"failedStarts\", failedStarts: 3 };"));
     assert!(s.contains("localStorage"));
     assert!(init_script(Reason::Env).contains("reason: \"env\", failedStarts: 0"));
+}
+
+/// Both the mount and a stall restart go through this, so a safe session comes back safe either way.
+#[test]
+fn only_a_normal_session_clears_the_count() {
+    assert!(clears_count(None));
+    for r in [Reason::FailedStarts(2), Reason::Flag, Reason::Env] {
+        assert!(!clears_count(Some(r)), "{r:?}");
+    }
 }
