@@ -20,6 +20,7 @@ import {
 import { themeColor } from "./themeColors";
 import { onThemeChange } from "../ui/theme";
 import { PICK_ALPHA, composite, pickColor, type PickKind } from "./pickColors";
+import { uploadSpan, uploadWhole } from "./gpuUpload";
 
 const EDGE_BASE = new THREE.Color(0x1b1f24);
 /** Px. An idle edge is 1.6 (edgeLines.ts EDGE_IDLE_WIDTH), so a pick stays thin enough to show which edge it is. */
@@ -425,8 +426,7 @@ export class Highlighter {
     const colorAttr = body.mesh.geometry.getAttribute("color") as THREE.BufferAttribute | undefined;
     if (!colorAttr) return;
     colorAttr.array.set(body.baseColors);
-    colorAttr.clearUpdateRanges();
-    colorAttr.needsUpdate = true;
+    uploadWhole(colorAttr);
   }
 
   /** Built once: a linear find per painted body scans thousands on an import. No invalidation needed, setModel() builds a
@@ -903,8 +903,7 @@ export class Highlighter {
   /** Scope the GPU upload of a color-attribute edit to the touched vertex span
    *  (in vertex indices, inclusive) instead of re-uploading the whole buffer. */
   private uploadRange(attr: THREE.BufferAttribute, [lo, hi]: [number, number]) {
-    attr.addUpdateRange(lo * 3, (hi - lo + 1) * 3);
-    attr.needsUpdate = true;
+    uploadSpan(attr, lo * 3, (hi - lo + 1) * 3);
   }
 
   /** The per-face base colour (component or draft analysis); `() => BASE_COLOR` clears it. Selected faces keep their tint
@@ -936,21 +935,13 @@ export class Highlighter {
           if (!selected) colorAttr.setXYZ(v, col.r, col.g, col.b);
         }
       }
-      // A full buffer rewrite, so drop partial ranges a prior paintFace queued, or the renderer replays a stale sub-range.
-      colorAttr.clearUpdateRanges();
-      colorAttr.needsUpdate = true;
+      uploadWhole(colorAttr);
       body.baseVersion = (body.baseVersion ?? 0) + 1;
     }
     // The pick colour is chosen against the base, so a new base recolours what is picked on it.
     this.retintEdges();
     if (this.selectedFaces.size || this.hoveredFaces.length) {
       for (const f of this.selectedFaces) this.paintFace(f, "select");
-      // paintFace queues a sub-range, which would make three upload only that range of the rewritten buffer.
-      for (const body of only ?? this.view.bodies) {
-        const colorAttr = body.mesh.geometry.getAttribute("color") as THREE.BufferAttribute | undefined;
-        colorAttr?.clearUpdateRanges();
-        if (colorAttr) colorAttr.needsUpdate = true;
-      }
       this.dropOverlays();
       this.syncOverlays();
     }

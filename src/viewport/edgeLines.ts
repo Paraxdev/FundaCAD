@@ -7,6 +7,7 @@ import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeome
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import { overlayMaterial } from "./overlayMaterial";
 import { markOverlay } from "./overlayKinds";
+import { uploadSpan, uploadWhole } from "./gpuUpload";
 import type { RebuildResult } from "../types";
 import type { TangentEdges } from "../ui/renderPrefs";
 
@@ -187,10 +188,7 @@ export class BodyEdges {
       this.colorBuf[o + 5] = color.b;
     }
     const attr = this.object.geometry.attributes.instanceColorStart as THREE.InterleavedBufferAttribute | undefined;
-    if (attr) {
-      attr.data.addUpdateRange(start * 6, n * 6);
-      attr.data.needsUpdate = true;
-    }
+    if (attr) uploadSpan(attr.data, start * 6, n * 6);
   }
 
   /** Repaint one edge in its IDLE colour: `base`, or lighter for a faint
@@ -233,10 +231,7 @@ export class BodyEdges {
       }
     }
     const attr = this.object.geometry.attributes.instanceColorStart as THREE.InterleavedBufferAttribute | undefined;
-    if (attr) {
-      attr.data.clearUpdateRanges(); // whole-buffer rewrite; drop queued sub-ranges
-      attr.data.needsUpdate = true;
-    }
+    if (attr) uploadWhole(attr.data);
   }
 
   /** Hide/show one edge (display only). Takes effect on the next flush(). */
