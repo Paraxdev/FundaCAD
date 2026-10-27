@@ -3,10 +3,10 @@
 //   1. Shell with a face selected opens straight on that face with a thickness
 //      handle, no second pick, and the rail steps back to that one tool.
 //   2. Dragging the wall thicker than the body can take is refused: the handle
-//      turns red, the prompt says which size it keeps, and letting go commits
-//      that size, not the refused one.
-//   3. Dragging back to a wall that builds and letting go commits one shell of
-//      that thickness on that face.
+//      turns red, the prompt says which size it keeps, and letting go then Enter
+//      commits that size, not the refused one.
+//   3. Dragging back to a wall that builds, letting go and Enter commits one
+//      shell of that thickness on that face.
 //
 // Usage (from the repo root, with vite + engine running):
 //   SC_TOKEN=<engine token> SC_CHROME=<chrome.exe> [SC_URL=http://localhost:5173/] node e2e/shell_from_selection_e2e.cjs [outDir]
@@ -129,7 +129,7 @@ const check = (name, ok, detail) => {
   const kept = Number(/keeping ([\d.]+)/.exec(refused)?.[1]);
   const held = await shells();
   check(
-    "letting go on a refused wall commits the size that was on screen",
+    "Enter after letting go on a refused wall commits the size that was on screen",
     held.length === 1 && Number.isFinite(kept) && Math.abs(held[0].thickness - kept) < 0.05 && held[0].thickness < 25,
     JSON.stringify({ kept, held }),
   );
@@ -160,7 +160,7 @@ const check = (name, ok, detail) => {
   await idle();
   const got = await shells();
   check(
-    "letting go on a wall that builds commits one shell",
+    "Enter after letting go on a wall that builds commits one shell",
     got.length === 1 && got[0].thickness > 0 && got[0].thickness < 25,
     JSON.stringify(got),
   );

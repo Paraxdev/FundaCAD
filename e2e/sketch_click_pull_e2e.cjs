@@ -4,7 +4,7 @@
 //      finishes the sketch and leaves that profile selected with its extrude
 //      handle offered. With a curve picked, the same click only swaps the
 //      selection to the profile and the sketch stays open.
-//   2. Pulling that handle and letting go commits an extrude, and the handle
+//   2. Pulling that handle, letting go and Enter commits an extrude, the handle
 //      stays on the far face. Pulling it again edits the SAME extrude rather
 //      than stacking a second one.
 //   3. A click on empty space puts the lingering handle away.
@@ -109,7 +109,7 @@ const check = (name, ok, detail) => {
     await page.screenshot({ path: path.join(OUT, "01_profile_clicked.png") });
   }
 
-  // --- 2. pull, release, handle stays, pull again edits the same feature ------
+  // --- 2. pull, release, Enter, handle stays, pull again edits the same feature
   await page.evaluate(() => window.__fundacad.handleAction("iso"));
   await page.waitForTimeout(1200);
   const drag = async (from, dy) => {
