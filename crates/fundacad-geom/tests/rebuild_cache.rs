@@ -745,3 +745,90 @@ fn a_cancelled_mesh_pass_meshes_no_body_and_answers_none() {
     let none = stopped.mesh(&r, TOL, &Map::new(), &mut |_, _| ticks += 1);
     assert_eq!((none.bodies.len(), ticks, stopped.stats.meshed, stopped.holding()), (0, 0, 0, (0, 0)));
 }
+
+/// A plate with a hole, turned about z then x and moved off the origin, as stress_ops' holed plate.
+fn turned_plate() -> Value {
+    json!({"parameters": {}, "features": [
+        {"id": "p", "type": "box", "length": 120, "width": 40, "height": 10},
+        {"id": "h", "type": "cylinder", "radius": 6, "height": 30},
+        {"id": "cut", "type": "boolean", "operation": "subtract", "target": "body1", "tools": ["body2"]},
+        {"id": "z", "type": "move", "rz": 30, "bodies": ["body1"]},
+        {"id": "x", "type": "move", "rx": 20, "dx": 17, "dy": -9, "dz": 31, "bodies": ["body1"]},
+    ]})
+}
+
+fn surface_of(r: &Rebuild) -> Vec<f64> {
+    use fundacad_geom::mesh::{tessellate, MeshParams};
+    let shape = &r.bodies[0].shape;
+    let access = opencascade::mesh_access::MeshAccess::new(shape);
+    let params = MeshParams { linear: 0.05, angular: 0.25, relative: false, display: false, force_remesh: true };
+    tessellate(shape, &access, params).positions
+}
+
+// A stress study meshes the body it is given, and its mesher turns a last bit difference into a different mesh.
+#[test]
+fn a_ram_resume_at_any_feature_builds_the_cold_shape_to_the_last_bit() {
+    let raw = turned_plate();
+    let want = surface_of(&built(&raw));
+    for at in 1..raw["features"].as_array().unwrap().len() {
+        let mut prefix = raw.clone();
+        prefix["features"].as_array_mut().unwrap().truncate(at);
+        let mut cache = RebuildCache::new(None);
+        cache.rebuild(&typed(&prefix), &prefix, &NoWatch).unwrap_or_else(|_| panic!("cancelled"));
+        let r = cache.rebuild(&typed(&raw), &raw, &NoWatch).unwrap_or_else(|_| panic!("cancelled"));
+        assert_eq!((cache.stats.source, cache.stats.resumed_at), (Source::Ram, at));
+        assert!(surface_of(&r) == want, "resumed at {at}");
+    }
+}
+
+/// The holed plate, then a second hole of `r` cut beside the first.
+fn plate_with_second_hole(r: f64) -> Value {
+    json!({"parameters": {}, "features": [
+        {"id": "p", "type": "box", "length": 120, "width": 40, "height": 10},
+        {"id": "h", "type": "cylinder", "radius": 6, "height": 30},
+        {"id": "cut", "type": "boolean", "operation": "subtract", "target": "body1", "tools": ["body2"]},
+        {"id": "h2", "type": "cylinder", "radius": r, "height": 30},
+        {"id": "m2", "type": "move", "dx": 7, "dy": 2, "bodies": ["body2"]},
+        {"id": "cut2", "type": "boolean", "operation": "subtract", "target": "body1", "tools": ["body2"]},
+    ]})
+}
+
+fn brep_text(r: &Rebuild, name: &str) -> String {
+    let path = scratch(name).with_extension("brep");
+    r.bodies[0].shape.write_brep_text(&path).unwrap();
+    let text = std::fs::read_to_string(&path).unwrap();
+    let _ = std::fs::remove_file(&path);
+    text
+}
+
+// The second cut overlaps the first hole, so it would write into the faces and edges the snapshot after the first cut
+// holds. A blob reads a zero back as -0 in places, so the RAM resume is held to a disk resume straight into the same
+// document, and to a cold build's surface.
+#[test]
+fn a_ram_resume_after_a_disk_resume_builds_what_a_cold_build_does() {
+    let root = scratch("disk-then-ram");
+    let (first, second) = (plate_with_second_hole(3.0), plate_with_second_hole(2.0));
+    {
+        let mut cache = RebuildCache::new(Some(GeomStore::open(&root).unwrap()));
+        cache.budget_ms = 0.0;
+        cache.tip_after = Duration::ZERO;
+        let mut prefix = first.clone();
+        prefix["features"].as_array_mut().unwrap().truncate(3);
+        cache.rebuild(&typed(&prefix), &prefix, &NoWatch).unwrap_or_else(|_| panic!("cancelled"));
+    }
+    let resumed = |cache: &mut RebuildCache, raw: &Value, source: Source| {
+        let r = cache.rebuild(&typed(raw), raw, &NoWatch).unwrap_or_else(|_| panic!("cancelled"));
+        assert_eq!((cache.stats.source, cache.stats.resumed_at), (source, 3));
+        r
+    };
+    let mut cache = RebuildCache::new(Some(GeomStore::open(&root).unwrap()));
+    let r = resumed(&mut cache, &first, Source::Disk);
+    assert!(surface_of(&r) == surface_of(&built(&first)));
+    let after_disk = resumed(&mut cache, &second, Source::Ram);
+    let straight = resumed(&mut RebuildCache::new(Some(GeomStore::open(&root).unwrap())), &second, Source::Disk);
+    assert!(
+        brep_text(&after_disk, "after-disk") == brep_text(&straight, "straight"),
+        "the first build wrote into the snapshot"
+    );
+    assert!(surface_of(&after_disk) == surface_of(&built(&second)));
+}
