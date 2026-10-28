@@ -1,5 +1,5 @@
 // The Preferences choices are Segmented groups: one Tab stop each, the arrows move and pick inside a group.
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import PreferencesDialog from "../../../src/components/overlays/PreferencesDialog.vue";
@@ -8,6 +8,12 @@ import { useDialogStore } from "../../../src/stores/dialogs";
 import { getUnit, setUnit } from "../../../src/ui/units";
 import { getNavPrefs, setNavPrefs } from "../../../src/ui/interactionPrefs";
 import { motionOn, setMotion } from "../../../src/ui/motion";
+import {
+  getHomeBackground,
+  memoryImageStore,
+  setHomeBackground,
+  useHomeImageStore,
+} from "../../../src/ui/homeBackground";
 
 enableAutoUnmount(afterEach);
 
@@ -39,6 +45,8 @@ beforeEach(() => {
   setUnit("mm");
   setNavPrefs({ orbitPivot: "auto", wheelDevice: "auto", touchpadScroll: "orbit", inertia: false });
   setMotion(true);
+  setHomeBackground("paper");
+  useHomeImageStore(memoryImageStore());
 });
 
 describe("Preferences choices", () => {
@@ -104,6 +112,28 @@ describe("Preferences choices", () => {
     await flushPromises();
     expect(getNavPrefs().touchpadScroll).toBe("pan");
     expect(radios("prefs-touchpad-scroll").map((r) => r.getAttribute("aria-checked"))).toEqual(["false", "true"]);
+  });
+
+  it("arrows onto Your own image without opening the file picker, a pointer pick still opens it", async () => {
+    await open();
+    const picker = vi.spyOn($("#prefs-home-image"), "click").mockImplementation(() => {});
+    radios("prefs-home-background")[1]!.focus();
+    await press("ArrowRight");
+    await press("End");
+    const chooser = () =>
+      [...$("#prefs-home-background").closest(".pref-card")!.querySelectorAll(".prefs-actions button")].map(label);
+    expect([picker.mock.calls.length, getHomeBackground(), label(document.activeElement), chooser()]).toEqual([
+      0,
+      "image",
+      "Your own image",
+      ["Choose image…"],
+    ]);
+    await press("Home");
+    const own = radios("prefs-home-background")[2]!;
+    own.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+    own.click();
+    await flushPromises();
+    expect([picker.mock.calls.length, getHomeBackground()]).toEqual([1, "paper"]);
   });
 });
 

@@ -245,9 +245,17 @@ function pickUnit(id: string) {
   if (v) setUnit(v);
 }
 
+// Segmented picks on the arrows too: only a pointer pick of the image opens the file picker, a key pick shows the
+// Choose image button instead, so the keyboard can pass through the group.
+let pointerPick = false;
+const notePointer = (on: boolean) => {
+  pointerPick = on;
+};
 async function pickHomeBackground(id: HomeBackground) {
+  const viaPointer = pointerPick;
+  pointerPick = false;
   homeImageError.value = "";
-  if (id === "image" && !(await loadHomeImage())) {
+  if (id === "image" && viaPointer && !(await loadHomeImage())) {
     homeImageInput.value?.click();
     return;
   }
@@ -404,6 +412,8 @@ function onClassicCamera(on: boolean) {
                   label="Home background"
                   :model-value="homeBg"
                   :options="HOME_BACKGROUND_OPTIONS"
+                  @pointerdown="notePointer(true)"
+                  @keydown.capture="notePointer(false)"
                   @update:model-value="pickHomeBackground"
                 />
               </div>
