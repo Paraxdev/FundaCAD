@@ -58,31 +58,11 @@
 .stress-fold {
   padding-left: var(--s-4);
 }
-.stress-panel .btn {
-  min-height: 28px;
-  padding: var(--s-1) var(--s-3);
-  overflow-wrap: normal;
-  white-space: nowrap;
-}
-.stress-panel .btn:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-// Pressed or armed (Place while placing, Read a point while reading): the accent mixed into an opaque dark, as the
-// section chip's buttons do, so it reads over a pale model too.
-.stress-panel .btn.active {
-  background: color-mix(in srgb, var(--accent) 20%, var(--panel));
-  color: var(--text);
-}
 .stress-panel .sm-select {
   height: 28px;
   padding-top: 0;
   padding-bottom: 0;
   font-size: 12px;
-}
-.stress-panel .float-card-close {
-  width: 24px;
-  height: 24px;
 }
 
 // A label at the left and its control or controls filling the rest of the line.
@@ -238,13 +218,9 @@
   align-items: center;
   gap: var(--s-2);
 }
+// Wide enough for Pause, so the slider does not shift when the word changes.
 .stress-animate {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s-1);
-  // Wide enough for Pause, so the slider does not shift when the word changes.
   min-width: 76px;
-  justify-content: center;
 }
 .stress-deform {
   flex: 1;

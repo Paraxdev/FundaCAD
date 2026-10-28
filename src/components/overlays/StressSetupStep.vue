@@ -115,7 +115,7 @@ function placing(target: StressTarget, as: "face" | "spot"): boolean {
             size="sm"
             class="stress-place-support"
             :pressed="placing({ support: x.id }, 'face')"
-            title="Click faces of the body to add each whole face"
+            tip="Click faces of the body to add each whole face"
             @click="engine.ui.panels.placeStressSpot({ support: x.id })"
             >{{ placing({ support: x.id }, "face") ? "Picking…" : "Click faces" }}</Button
           >
@@ -123,14 +123,14 @@ function placing(target: StressTarget, as: "face" | "spot"): boolean {
             size="sm"
             class="stress-spot-support"
             :pressed="placing({ support: x.id }, 'spot')"
-            title="Click the body to place a round spot, for a local support"
+            tip="Click the body to place a round spot, for a local support"
             @click="engine.ui.panels.placeStressSpot({ support: x.id }, 'spot')"
             >{{ placing({ support: x.id }, "spot") ? "Placing…" : "Spot" }}</Button
           >
           <Button
             size="sm"
             class="stress-set-support"
-            title="Use the faces selected in the view"
+            tip="Use the faces selected in the view"
             @click="engine.ui.panels.setStressFacesFromSelection({ support: x.id })"
             >Use selected faces</Button
           >
@@ -187,7 +187,7 @@ function placing(target: StressTarget, as: "face" | "spot"): boolean {
             size="sm"
             class="stress-place-load"
             :pressed="placing({ load: l.id }, 'face')"
-            title="Click faces of the body to add each whole face"
+            tip="Click faces of the body to add each whole face"
             @click="engine.ui.panels.placeStressSpot({ load: l.id })"
             >{{ placing({ load: l.id }, "face") ? "Picking…" : "Click faces" }}</Button
           >
@@ -195,14 +195,14 @@ function placing(target: StressTarget, as: "face" | "spot"): boolean {
             size="sm"
             class="stress-spot-load"
             :pressed="placing({ load: l.id }, 'spot')"
-            title="Click the body to place a round spot, for a local load"
+            tip="Click the body to place a round spot, for a local load"
             @click="engine.ui.panels.placeStressSpot({ load: l.id }, 'spot')"
             >{{ placing({ load: l.id }, "spot") ? "Placing…" : "Spot" }}</Button
           >
           <Button
             size="sm"
             class="stress-set-load"
-            title="Use the faces selected in the view"
+            tip="Use the faces selected in the view"
             @click="engine.ui.panels.setStressFacesFromSelection({ load: l.id })"
             >Use selected faces</Button
           >

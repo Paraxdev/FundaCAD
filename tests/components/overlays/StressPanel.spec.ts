@@ -122,6 +122,11 @@ describe("StressPanel", () => {
     const actions = () =>
       [".stress-place-support", ".stress-spot-support", ".stress-set-support"].map((c) => q(c)?.textContent);
     expect(actions()).toEqual(["Click faces", "Spot", "Use selected faces"]);
+    const place = q(".stress-place-support")!;
+    expect([place.title, place.getAttribute("aria-label")]).toEqual([
+      "Click faces of the body to add each whole face",
+      null,
+    ]);
     q(".stress-place-support")!.click();
     q(".stress-spot-load")!.click();
     expect(panels.placeStressSpot.mock.calls).toEqual([[{ support: 1 }], [{ load: 1 }, "spot"]]);
@@ -411,6 +416,11 @@ describe("StressPanel", () => {
     expect(q(".stress-deform")).toBeNull();
     q(".stress-rerun")!.click();
     expect(panels.runStress).toHaveBeenCalledOnce();
+    p.stress!.running = true;
+    await flushPromises();
+    expect(q(".stress-rerun")?.getAttribute("aria-disabled")).toBe("true");
+    q(".stress-rerun")!.click();
+    expect(panels.runStress, "no second Run while one is out").toHaveBeenCalledOnce();
   });
 
   it("puts the stale line above the verdict and dims the old reading under it", async () => {
@@ -436,20 +446,21 @@ describe("StressPanel", () => {
 
   it("has a Deformed shape switch beside Colours, the exaggeration only while the shape is drawn", async () => {
     const { p, panels } = await withResult({ maxDeflection: 0.47 });
-    const shape = () => q(".stress-shape") as HTMLInputElement | null;
+    const shape = () => q(".stress-shape");
+    const on = (el: Element | null) => el?.getAttribute("aria-checked") === "true";
     const bend = () => q(".stress-verdict-bend")?.textContent;
     expect(shape(), "no switch without a deformed shape").toBeNull();
     p.setStressDeform({ scale: 12.5, auto: 12.5, max: 50, animate: false, shown: true });
     await flushPromises();
     expect(shape()!.closest(".stress-view-row")).toBe(q(".stress-colours")!.closest(".stress-view-row"));
-    expect({ checked: shape()!.checked, slider: !!q(".stress-deform") }).toEqual({ checked: true, slider: true });
+    expect({ checked: on(shape()), slider: !!q(".stress-deform") }).toEqual({ checked: true, slider: true });
     expect(bend()).toContain("drawn 13x larger");
     p.setStressColours("hidden");
     await flushPromises();
-    expect({ checked: shape()!.checked, slider: !!q(".stress-deform") }).toEqual({ checked: true, slider: true });
+    expect({ checked: on(shape()), slider: !!q(".stress-deform") }).toEqual({ checked: true, slider: true });
     p.stress!.deform!.shown = false;
     await flushPromises();
-    expect({ checked: shape()!.checked, slider: !!q(".stress-deform") }).toEqual({ checked: false, slider: false });
+    expect({ checked: on(shape()), slider: !!q(".stress-deform") }).toEqual({ checked: false, slider: false });
     expect(bend()).toContain("not drawn");
     shape()!.click();
     expect(panels.setStressShape.mock.calls).toEqual([[true]]);
@@ -458,12 +469,21 @@ describe("StressPanel", () => {
     expect(shape(), "gone once the model changed").toBeNull();
   });
 
-  it("lets the exaggeration slider rest on any value, so True size sits at 1", async () => {
-    const { p } = await withResult();
+  it("steps the exaggeration slider in a power of ten that keeps True size on a step", async () => {
+    const { p, panels } = await withResult();
     p.setStressDeform({ scale: 1, auto: 12.5, max: 50, animate: false, shown: true });
     await flushPromises();
-    const slider = q(".stress-deform") as HTMLInputElement;
-    expect([slider.step, slider.value]).toEqual(["any", "1"]);
+    const slider = q(".stress-deform input") as HTMLInputElement;
+    expect([slider.step, slider.value, slider.getAttribute("aria-label")]).toEqual(["0.1", "1", "Exaggeration"]);
+    p.stress!.deform!.max = 4;
+    await flushPromises();
+    expect(slider.step).toBe("0.01");
+    p.stress!.deform!.max = 8000;
+    p.stress!.deform!.scale = 2000;
+    await flushPromises();
+    expect(slider.step).toBe("1");
+    slider.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    expect(panels.setStressDeformation).toHaveBeenLastCalledWith(2001);
   });
 
   it("keeps Details and More options open across a switch of tabs", async () => {
@@ -506,13 +526,13 @@ describe("StressPanel", () => {
 
   it("toggles the colours with a switch", async () => {
     const { p, panels } = await withResult();
-    const colours = q(".stress-colours") as HTMLInputElement;
-    expect(colours.checked).toBe(true);
+    const colours = q(".stress-colours")!;
+    expect(colours.getAttribute("aria-checked")).toBe("true");
     colours.click();
     expect(panels.setStressColours).toHaveBeenCalledWith(false);
     p.setStressColours("hidden");
     await flushPromises();
-    expect(colours.checked).toBe(false);
+    expect(colours.getAttribute("aria-checked")).toBe("false");
     colours.click();
     expect(panels.setStressColours).toHaveBeenLastCalledWith(true);
   });
@@ -544,6 +564,12 @@ describe("StressPanel", () => {
     on.click();
     await flushPromises();
     expect(p.stress!.setup.gravity.on).toBe(true);
+    expect(on.getAttribute("aria-label")).toBe("Own weight");
+    (q(".stress-weight .measure-k") as HTMLElement).click();
+    await flushPromises();
+    expect(p.stress!.setup.gravity.on, "the row's words are its label").toBe(false);
+    on.click();
+    await flushPromises();
     await pick(q(".stress-gravity-dir")!, "Back (+Y)");
     expect(p.stress!.setup.gravity).toEqual({ on: true, direction: "+Y" });
   });
@@ -554,7 +580,7 @@ describe("StressPanel", () => {
     p.addStressPin({ tri: 3, weights: [1, 0, 0], label: "12 MPa, 0.4 mm" });
     await flushPromises();
     expect(q(".stress-deform-label")?.textContent).toBe("120x");
-    const slider = q(".stress-deform") as HTMLInputElement;
+    const slider = q(".stress-deform input") as HTMLInputElement;
     expect(slider.max).toBe("480");
     slider.value = "60";
     slider.dispatchEvent(new Event("input"));
@@ -563,6 +589,7 @@ describe("StressPanel", () => {
     expect(panels.setStressDeformation).toHaveBeenLastCalledWith(1);
     q(".stress-probe")!.click();
     expect(panels.setStressProbe).toHaveBeenCalledWith(true);
+    expect(q(".stress-remove-pin")?.getAttribute("aria-label")).toBe("Remove point 1");
     expect(q(".stress-pin")?.textContent).toContain("12 MPa, 0.4 mm");
     q(".stress-remove-pin")!.click();
     expect(panels.removeStressProbe).toHaveBeenCalledWith(1);
@@ -775,11 +802,13 @@ describe("StressPanel", () => {
     p.setStressColours("none");
     await flushPromises();
     const probe = q(".stress-probe") as HTMLButtonElement;
-    expect(probe.disabled).toBe(true);
+    expect(probe.getAttribute("aria-disabled")).toBe("true");
+    probe.click();
+    expect(panels.setStressProbe, "a disabled button swallows the click").not.toHaveBeenCalled();
     p.setStressProbe(true);
     await flushPromises();
     expect(probe.getAttribute("aria-pressed")).toBe("true");
-    expect(probe.disabled).toBe(false);
+    expect(probe.getAttribute("aria-disabled")).toBeNull();
     probe.click();
     expect(panels.setStressProbe).toHaveBeenCalledWith(false);
   });
