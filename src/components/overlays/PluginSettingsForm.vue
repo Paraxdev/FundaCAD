@@ -66,7 +66,11 @@ const id = (p: SettingProp) => `plugset-${props.settings?.pluginId}-${p.key}`;
 
 const numbers = computed(
   () =>
-    new Map(visible.value.flatMap((p) => (p.type === "number" ? [[p.key, numberField(p, unit.value)] as const] : []))),
+    new Map(
+      visible.value.flatMap((p) =>
+        p.type === "number" ? [[p.key, numberField(p, unit.value, values.value[p.key] as number)] as const] : [],
+      ),
+    ),
 );
 const numberOf = (p: SettingProp) => numbers.value.get(p.key)!;
 

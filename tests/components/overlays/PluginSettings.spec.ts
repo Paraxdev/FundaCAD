@@ -179,6 +179,7 @@ describe("each kind of schema field", () => {
         { key: "free", type: "number", label: "Free", default: 3 },
         { key: "pitch", type: "number", label: "Pitch", unit: "length", default: 0, min: 0, max: 100, step: 5 },
         { key: "layer", type: "number", label: "Layer", unit: "length", default: 0.2, min: 0.02, max: 1, step: 0.05 },
+        { key: "span", type: "number", label: "Span", unit: "length", default: 200, step: 0.005 },
         { key: "on", type: "boolean", label: "Snap", default: false },
         { key: "name", type: "string", label: "Name", default: "a", placeholder: "Untitled", maxLength: 8 },
         { key: "tint", type: "colour", label: "Tint", default: "#ff8800" },
@@ -253,6 +254,23 @@ describe("each kind of schema field", () => {
     ).toEqual([35]);
     expect(await stepped("layer", 6, [{ key: "ArrowUp" }])).toEqual([0.25, 0.3, 0.35, 0.4, 0.45, 0.5]);
     expect(await stepped("layer", 2, [{ key: "ArrowDown", shiftKey: true }])).toEqual([0.02, 0.02]);
+  });
+
+  it("moves a length one shown digit where its step is finer than the field shows, still on the step", async () => {
+    const stepped = async (keys: string[]) => {
+      const input = (await field("span")).get("input");
+      const out: unknown[] = [];
+      for (const key of keys) {
+        await input.trigger("keydown", { key });
+        await input.trigger("keydown", { key: "Enter" });
+        out.push(k.get("span"));
+      }
+      return out;
+    };
+    setUnit("in");
+    expect(await stepped(["ArrowUp", "ArrowUp", "ArrowDown", "ArrowDown"])).toEqual([200.15, 200.405, 200.15, 199.9]);
+    setUnit("cm");
+    expect(await stepped(["ArrowUp", "ArrowDown", "ArrowDown"])).toEqual([200, 199.9, 199.8]);
   });
 
   it("stores typed text as it reads, and moves it by its step from there", async () => {
