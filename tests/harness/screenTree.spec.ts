@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { matchName, screenLines, walkControls } from "../../src/harness/screenTree";
 import { mount } from "@vue/test-utils";
+import Segmented from "../../src/components/ui/Segmented.vue";
 import Tabs from "../../src/components/ui/Tabs.vue";
 import { mountApp, rect } from "./fixture";
 
@@ -99,6 +100,27 @@ describe("walkControls", () => {
       .map((c) => c.ref);
     expect(views.sort()).toEqual(["tab:views", 'text:"Views"']);
     tabs.unmount();
+  });
+
+  it("flags the picked choice of a choice group as on", () => {
+    const group = mount(Segmented, {
+      props: {
+        options: [
+          { value: "mm", label: "Millimetres" },
+          { value: "in", label: "Inches" },
+        ],
+        modelValue: "in",
+      },
+      attachTo: document.body,
+    });
+    const flags = walkControls(document, { rect })
+      .controls.filter((c) => c.label === "Millimetres" || c.label === "Inches")
+      .map((c) => [c.label, c.flags]);
+    expect(flags).toEqual([
+      ["Millimetres", []],
+      ["Inches", ["on"]],
+    ]);
+    group.unmount();
   });
 
   it("counts rows scrolled out of their list", () => {

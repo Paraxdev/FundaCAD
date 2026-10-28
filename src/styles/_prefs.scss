@@ -86,9 +86,6 @@
 label.pref-head {
   cursor: pointer;
 }
-label.pref-head:has(input:disabled) {
-  cursor: default;
-}
 /* A setting's checkbox leads its title, so the row reads as one sentence. */
 .pref-head.pref-check {
   justify-content: flex-start;
@@ -133,12 +130,6 @@ label.pref-head:has(input:disabled) {
   align-items: center;
   gap: var(--s-2);
 }
-.pref-number .sm-input {
-  width: 96px;
-  height: 30px;
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
-}
 .pref-slider {
   width: 100%;
 }
@@ -153,42 +144,9 @@ label.pref-head:has(input:disabled) {
   font-size: 13px;
 }
 
-.pref-seg {
-  display: inline-flex;
+/* The choices keep their width and the title beside them wraps, so no choice is cut short. */
+.pref-head > .ui-segmented {
   flex: none;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  background: var(--panel);
-  overflow: hidden;
-}
-.pref-seg > button {
-  min-width: 40px;
-  height: 30px;
-  padding: 0 var(--s-3);
-  border: 0;
-  background: transparent;
-  color: var(--text-dim);
-  font: inherit;
-  font-size: 13px;
-  cursor: pointer;
-  transition:
-    background var(--t-fast) var(--ease),
-    color var(--t-fast) var(--ease);
-}
-.pref-seg > button + button {
-  border-left: 1px solid var(--line);
-}
-.pref-seg > button:hover {
-  background: var(--raised);
-  color: var(--text);
-}
-.pref-seg > button.on {
-  background: var(--accent-tint-2);
-  color: var(--accent-hot);
-  font-weight: 600;
-}
-.pref-seg > button:focus-visible {
-  outline-offset: -2px;
 }
 
 /* Sections with their own rows (assistants, plugins), sized like the cards around them. */

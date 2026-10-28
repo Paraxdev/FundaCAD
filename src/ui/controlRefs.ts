@@ -193,7 +193,12 @@ function flagsOf(el: HTMLElement, disabled: boolean): string[] {
   if (el.dataset.visible) return [el.dataset.visible === "false" ? "hidden" : "visible"];
   if (disabled) f.push("disabled");
   if (el.classList.contains("selected") || el.getAttribute("aria-selected") === "true") f.push("selected");
-  if (el.classList.contains("active") || el.classList.contains("on") || el.getAttribute("aria-pressed") === "true")
+  if (
+    el.classList.contains("active") ||
+    el.classList.contains("on") ||
+    el.getAttribute("aria-pressed") === "true" ||
+    el.getAttribute("aria-checked") === "true"
+  )
     f.push("on");
   if (el.classList.contains("error")) f.push("error");
   if (el.classList.contains("suppressed")) f.push("suppressed");

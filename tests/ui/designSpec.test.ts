@@ -76,7 +76,6 @@ const FLAT_BASELINE: Record<string, number> = {
   "src/styles/_layout.scss": 1,
   "src/styles/_modals.scss": 19,
   "src/styles/_palette.scss": 2,
-  "src/styles/_prefs.scss": 1,
   "src/styles/_renderdock.scss": 8,
   "src/styles/_targetedit.scss": 2,
   "src/styles/_timeline.scss": 6,

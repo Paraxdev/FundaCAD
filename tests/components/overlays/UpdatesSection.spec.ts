@@ -24,16 +24,16 @@ beforeEach(() => {
 describe("Updates in Preferences", () => {
   it("shows the switch on and the period Daily by default", async () => {
     const w = await open();
-    const sw = w.get("#prefs-update-auto").element as HTMLInputElement;
+    const sw = w.get("#prefs-update-auto input").element as HTMLInputElement;
     const period = w.get("#prefs-update-period");
     expect([sw.checked, period.text(), period.attributes("disabled")]).toEqual([true, "Daily", undefined]);
   });
 
   it("writes the switch and disables the period while it is off", async () => {
     const w = await open();
-    await w.get("#prefs-update-auto").setValue(false);
+    await w.get("#prefs-update-auto input").setValue(false);
     expect([autoUpdateCheck(), w.get("#prefs-update-period").attributes("aria-disabled")]).toEqual([false, "true"]);
-    await w.get("#prefs-update-auto").setValue(true);
+    await w.get("#prefs-update-auto input").setValue(true);
     expect([autoUpdateCheck(), w.get("#prefs-update-period").attributes("aria-disabled")]).toEqual([true, undefined]);
   });
 

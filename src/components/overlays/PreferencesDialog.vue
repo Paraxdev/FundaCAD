@@ -4,11 +4,11 @@
 
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useDialogStore } from "../../stores/dialogs";
-import { useModalStore } from "../../stores/modals";
-import { escapeClaimed } from "../../ui/escapeClaim";
 import { pluginFocus } from "../../plugins/settingsFocus";
-import { useModalGate } from "../../composables/useModalGate";
-import ModalFrame from "./ModalFrame.vue";
+import Button from "../ui/Button.vue";
+import Checkbox from "../ui/Checkbox.vue";
+import Dialog from "../ui/Dialog.vue";
+import Segmented from "../ui/Segmented.vue";
 import Select from "../ui/Select.vue";
 import McpSection from "./McpSection.vue";
 import DenoiserRow from "../shell/DenoiserRow.vue";
@@ -75,20 +75,6 @@ const close = () => {
   dialogs.preferences = false;
 };
 
-// Unlike the 3D-mouse dialog, this one DOES gate global shortcuts: it is full of
-// text-sized targets and single-letter tool keys would fire underneath it.
-useModalGate();
-
-const modals = useModalStore();
-let ownDepth = 0;
-// A choice raised over this dialog, or a popover inside it, takes its own Escape.
-function onKey(e: KeyboardEvent) {
-  if (e.key !== "Escape" || modals.current !== null || modals.depth !== ownDepth || escapeClaimed()) return;
-  e.preventDefault();
-  e.stopImmediatePropagation();
-  close();
-}
-
 const theme = ref(getTheme());
 // Uploading and removing a palette changes the roster, so it is mirrored and re-read when the library moves.
 const themeList = ref(themes());
@@ -112,8 +98,6 @@ const classicCamera = ref(navigatorChoice() === "legacy");
 
 const stops: (() => void)[] = [];
 onMounted(() => {
-  ownDepth = modals.depth;
-  window.addEventListener("keydown", onKey, true);
   stops.push(
     onThemeChange(() => {
       theme.value = getTheme();
@@ -146,7 +130,6 @@ onMounted(() => {
   );
 });
 onUnmounted(() => {
-  window.removeEventListener("keydown", onKey, true);
   for (const stop of stops) stop();
 });
 
@@ -167,41 +150,43 @@ watch(pluginFocus, (id) => {
 });
 
 const UNITS = [
-  { id: "mm", label: "mm" },
-  { id: "cm", label: "cm" },
-  { id: "in", label: "in" },
+  { value: "mm", label: "mm" },
+  { value: "cm", label: "cm" },
+  { value: "in", label: "in" },
 ];
 const BACKGROUNDS = [
-  { id: "theme", label: "Theme" },
-  { id: "dark", label: "Dark" },
-  { id: "grey", label: "Grey" },
-  { id: "light", label: "Light" },
+  { value: "theme", label: "Theme" },
+  { value: "dark", label: "Dark" },
+  { value: "grey", label: "Grey" },
+  { value: "light", label: "Light" },
 ];
 const TRACERS = [
-  { id: "auto", label: "Auto" },
-  { id: "native", label: "Native" },
-  { id: "webgpu", label: "WebGPU" },
+  { value: "auto", label: "Auto" },
+  { value: "native", label: "Native" },
+  { value: "webgpu", label: "WebGPU" },
 ];
 const TANGENT = [
-  { id: "show", label: "Show" },
-  { id: "faint", label: "Faint" },
-  { id: "hide", label: "Hide" },
+  { value: "show", label: "Show" },
+  { value: "faint", label: "Faint" },
+  { value: "hide", label: "Hide" },
 ];
 
 const WHEEL_DEVICES = [
-  { id: "auto", label: "Automatic" },
-  { id: "touchpad", label: "Touchpad" },
-  { id: "mouse", label: "Mouse" },
+  { value: "auto", label: "Automatic" },
+  { value: "touchpad", label: "Touchpad" },
+  { value: "mouse", label: "Mouse" },
 ];
 const ORBIT_PIVOTS = [
-  { id: "auto", label: "Under cursor" },
-  { id: "origin", label: "Origin" },
-  { id: "selection", label: "Selection" },
+  { value: "auto", label: "Under cursor" },
+  { value: "origin", label: "Origin" },
+  { value: "selection", label: "Selection" },
 ];
 const TOUCHPAD_SCROLL = [
-  { id: "orbit", label: "Orbits" },
-  { id: "pan", label: "Pans" },
+  { value: "orbit", label: "Orbits" },
+  { value: "pan", label: "Pans" },
 ];
+
+const HOME_BACKGROUND_OPTIONS = HOME_BACKGROUNDS.map((b) => ({ value: b.id, label: b.label }));
 
 const value = (ev: Event) => (ev.target as HTMLSelectElement).value;
 
@@ -260,9 +245,17 @@ function pickUnit(id: string) {
   if (v) setUnit(v);
 }
 
+// Segmented picks on the arrows too: only a pointer pick of the image opens the file picker, a key pick shows the
+// Choose image button instead, so the keyboard can pass through the group.
+let pointerPick = false;
+const notePointer = (on: boolean) => {
+  pointerPick = on;
+};
 async function pickHomeBackground(id: HomeBackground) {
+  const viaPointer = pointerPick;
+  pointerPick = false;
   homeImageError.value = "";
-  if (id === "image" && !(await loadHomeImage())) {
+  if (id === "image" && viaPointer && !(await loadHomeImage())) {
     homeImageInput.value?.click();
     return;
   }
@@ -308,18 +301,14 @@ function pickTangent(id: string) {
   const v = asTangentEdges(id);
   if (v) setRenderPref("tangentEdges", v);
 }
-function onPerformanceMode(ev: Event) {
-  setRenderPref("performanceMode", (ev.target as HTMLInputElement).checked);
+function onPerformanceMode(on: boolean) {
+  setRenderPref("performanceMode", on);
 }
-function onPotatoMode(ev: Event) {
-  setRenderPref("potatoMode", (ev.target as HTMLInputElement).checked);
+function onPotatoMode(on: boolean) {
+  setRenderPref("potatoMode", on);
 }
-function onMotion(ev: Event) {
-  setMotion((ev.target as HTMLInputElement).checked);
-}
-const checked = (ev: Event) => (ev.target as HTMLInputElement).checked;
-function onInertia(ev: Event) {
-  setNavPrefs({ inertia: checked(ev) });
+function onInertia(on: boolean) {
+  setNavPrefs({ inertia: on });
 }
 function pickWheelDevice(id: string) {
   const v = asWheelDevice(id);
@@ -336,16 +325,22 @@ function pickTouchpadScroll(id: string) {
 function onSmoothing(ev: Event) {
   setNavPrefs({ smoothTime: Number.parseFloat(value(ev)) });
 }
-function onClassicCamera(ev: Event) {
-  classicCamera.value = checked(ev);
+function onClassicCamera(on: boolean) {
+  classicCamera.value = on;
   setNavigatorChoice(classicCamera.value ? "legacy" : "v2");
 }
 </script>
 
 <template>
-  <ModalFrame panel-class="prefs-panel" @close="close()">
-    <template #title>Preferences</template>
-
+  <!-- Escape, the modal gate and focus are the frame's: it gates global shortcuts, since single letter tool keys would
+       fire under a screen full of text sized targets. -->
+  <Dialog
+    title="Preferences"
+    panel-class="prefs-panel"
+    :body="false"
+    initial-focus=".prefs-nav-btn.active"
+    @close="close()"
+  >
     <div class="modal-body prefs">
       <nav class="prefs-nav" aria-label="Preference categories">
         <button
@@ -385,8 +380,8 @@ function onClassicCamera(ev: Event) {
                   accept="application/json,.json"
                   @change="onUpload"
                 />
-                <button type="button" class="btn" @click="pickThemeFile">Upload theme…</button>
-                <button v-if="activeIsCustom" type="button" class="btn" @click="onRemoveTheme">Remove</button>
+                <Button @click="pickThemeFile">Upload theme…</Button>
+                <Button v-if="activeIsCustom" @click="onRemoveTheme">Remove</Button>
               </div>
               <p v-if="themeError" class="pref-hint prefs-theme-error">{{ themeError }}</p>
             </div>
@@ -399,40 +394,32 @@ function onClassicCamera(ev: Event) {
             <div class="pref-card">
               <div class="pref-head">
                 <span class="pref-title">Units</span>
-                <div id="prefs-unit" class="pref-seg" role="radiogroup" aria-label="Units">
-                  <button
-                    v-for="u in UNITS"
-                    :key="u.id"
-                    type="button"
-                    role="radio"
-                    :aria-checked="unit === u.id"
-                    :class="{ on: unit === u.id }"
-                    @click="pickUnit(u.id)"
-                    >{{ u.label }}</button
-                  >
-                </div>
+                <Segmented
+                  id="prefs-unit"
+                  label="Units"
+                  :model-value="unit"
+                  :options="UNITS"
+                  @update:model-value="pickUnit"
+                />
               </div>
               <p class="pref-hint">Geometry is always stored in millimetres, this is display only.</p>
             </div>
             <div class="pref-card wide">
               <div class="pref-head">
                 <span class="pref-title">Home background</span>
-                <div id="prefs-home-background" class="pref-seg" role="radiogroup" aria-label="Home background">
-                  <button
-                    v-for="b in HOME_BACKGROUNDS"
-                    :key="b.id"
-                    type="button"
-                    role="radio"
-                    :aria-checked="homeBg === b.id"
-                    :class="{ on: homeBg === b.id }"
-                    @click="pickHomeBackground(b.id)"
-                    >{{ b.label }}</button
-                  >
-                </div>
+                <Segmented
+                  id="prefs-home-background"
+                  label="Home background"
+                  :model-value="homeBg"
+                  :options="HOME_BACKGROUND_OPTIONS"
+                  @pointerdown="notePointer(true)"
+                  @keydown.capture="notePointer(false)"
+                  @update:model-value="pickHomeBackground"
+                />
               </div>
               <p class="pref-hint">What Home sits on. Workspace shows your model dimmed behind it.</p>
               <div v-if="homeBg === 'image'" class="prefs-actions">
-                <button type="button" class="btn" @click="homeImageInput?.click()">Choose image…</button>
+                <Button @click="homeImageInput?.click()">Choose image…</Button>
               </div>
               <input
                 ref="homeImageInput"
@@ -468,18 +455,13 @@ function onClassicCamera(ev: Event) {
             <div class="pref-card">
               <div class="pref-head">
                 <span class="pref-title">Background</span>
-                <div id="prefs-background" class="pref-seg" role="radiogroup" aria-label="Background">
-                  <button
-                    v-for="b in BACKGROUNDS"
-                    :key="b.id"
-                    type="button"
-                    role="radio"
-                    :aria-checked="render.background === b.id"
-                    :class="{ on: render.background === b.id }"
-                    @click="pickBackground(b.id)"
-                    >{{ b.label }}</button
-                  >
-                </div>
+                <Segmented
+                  id="prefs-background"
+                  label="Background"
+                  :model-value="render.background"
+                  :options="BACKGROUNDS"
+                  @update:model-value="pickBackground"
+                />
               </div>
             </div>
             <div class="pref-card">
@@ -503,18 +485,13 @@ function onClassicCamera(ev: Event) {
             <div class="pref-card">
               <div class="pref-head">
                 <span class="pref-title">Tangent edges</span>
-                <div id="prefs-tangent-edges" class="pref-seg" role="radiogroup" aria-label="Tangent edges">
-                  <button
-                    v-for="t in TANGENT"
-                    :key="t.id"
-                    type="button"
-                    role="radio"
-                    :aria-checked="render.tangentEdges === t.id"
-                    :class="{ on: render.tangentEdges === t.id }"
-                    @click="pickTangent(t.id)"
-                    >{{ t.label }}</button
-                  >
-                </div>
+                <Segmented
+                  id="prefs-tangent-edges"
+                  label="Tangent edges"
+                  :model-value="render.tangentEdges"
+                  :options="TANGENT"
+                  @update:model-value="pickTangent"
+                />
               </div>
               <p class="pref-hint">
                 Where two faces meet smoothly, like the borders of a fillet, there is no corner to see, only a line
@@ -542,50 +519,41 @@ function onClassicCamera(ev: Event) {
             <div class="pref-card">
               <div class="pref-head">
                 <span class="pref-title">Path tracer</span>
-                <div id="prefs-tracer" class="pref-seg" role="radiogroup" aria-label="Path tracer">
-                  <button
-                    v-for="t in TRACERS"
-                    :key="t.id"
-                    type="button"
-                    role="radio"
-                    :aria-checked="render.tracer === t.id"
-                    :class="{ on: render.tracer === t.id }"
-                    @click="pickTracer(t.id)"
-                    >{{ t.label }}</button
-                  >
-                </div>
+                <Segmented
+                  id="prefs-tracer"
+                  label="Path tracer"
+                  :model-value="render.tracer"
+                  :options="TRACERS"
+                  @update:model-value="pickTracer"
+                />
               </div>
               <p class="pref-hint">
                 Where Path traced runs. Native traces in the app itself, WebGPU in the viewport's web view; Auto picks
                 the faster one this computer has. If the one picked is missing, the other is used.
               </p>
-              <DenoiserRow hint-class="pref-hint" button-class="btn" />
+              <DenoiserRow hint-class="pref-hint" button-class="btn btn-md" />
             </div>
             <div class="pref-card">
-              <label class="pref-head pref-check">
-                <span class="check">
-                  <input
-                    id="prefs-performance-mode"
-                    type="checkbox"
-                    :checked="performanceModeOn(render)"
-                    :disabled="render.potatoMode"
-                    @change="onPerformanceMode"
-                  />
-                  <span class="check-box"></span>
-                </span>
-                <span class="pref-title">Performance mode</span>
-              </label>
+              <Checkbox
+                id="prefs-performance-mode"
+                class="pref-head pref-check"
+                :model-value="performanceModeOn(render)"
+                :disabled="render.potatoMode"
+                @update:model-value="onPerformanceMode"
+                ><span class="pref-title">Performance mode</span></Checkbox
+              >
               <p class="pref-hint">
                 Drops glass refraction, the high pixel ratio and the emitter shadows for a lighter render. Weak GPUs get
                 it automatically; turn it on if the viewport stutters or a laptop runs hot.
               </p>
-              <label class="pref-head pref-sub pref-check" title="Lowest quality, for slow or virtual machines">
-                <span class="check">
-                  <input id="prefs-potato-mode" type="checkbox" :checked="render.potatoMode" @change="onPotatoMode" />
-                  <span class="check-box"></span>
-                </span>
-                <span class="pref-title">Potato mode</span>
-              </label>
+              <Checkbox
+                id="prefs-potato-mode"
+                class="pref-head pref-sub pref-check"
+                tip="Lowest quality, for slow or virtual machines"
+                :model-value="render.potatoMode"
+                @update:model-value="onPotatoMode"
+                ><span class="pref-title">Potato mode</span></Checkbox
+              >
               <p class="pref-hint">
                 Lowest quality, for slow or virtual machines. Flat shading, thin edges, half resolution, no glass blur
                 and no effects or camera animations. Includes performance mode.
@@ -620,18 +588,13 @@ function onClassicCamera(ev: Event) {
             <div class="pref-card">
               <div class="pref-head">
                 <span class="pref-title">Orbit pivot</span>
-                <div id="prefs-orbit-pivot" class="pref-seg" role="radiogroup" aria-label="Orbit pivot">
-                  <button
-                    v-for="p in ORBIT_PIVOTS"
-                    :key="p.id"
-                    type="button"
-                    role="radio"
-                    :aria-checked="nav.orbitPivot === p.id"
-                    :class="{ on: nav.orbitPivot === p.id }"
-                    @click="pickOrbitPivot(p.id)"
-                    >{{ p.label }}</button
-                  >
-                </div>
+                <Segmented
+                  id="prefs-orbit-pivot"
+                  label="Orbit pivot"
+                  :model-value="nav.orbitPivot"
+                  :options="ORBIT_PIVOTS"
+                  @update:model-value="pickOrbitPivot"
+                />
               </div>
               <p class="pref-hint">
                 What a drag turns the view about. Under cursor takes the model point you press on, Origin always turns
@@ -640,13 +603,13 @@ function onClassicCamera(ev: Event) {
               </p>
             </div>
             <div class="pref-card">
-              <label class="pref-head pref-check">
-                <span class="check">
-                  <input id="prefs-inertia" type="checkbox" :checked="nav.inertia" @change="onInertia" />
-                  <span class="check-box"></span>
-                </span>
-                <span class="pref-title">Orbit inertia</span>
-              </label>
+              <Checkbox
+                id="prefs-inertia"
+                class="pref-head pref-check"
+                :model-value="nav.inertia"
+                @update:model-value="onInertia"
+                ><span class="pref-title">Orbit inertia</span></Checkbox
+              >
               <p class="pref-hint">
                 A flicked orbit keeps turning for a moment after the button comes up, about the same point.
               </p>
@@ -654,18 +617,13 @@ function onClassicCamera(ev: Event) {
             <div class="pref-card">
               <div class="pref-head">
                 <span class="pref-title">Scrolling</span>
-                <div id="prefs-wheel-device" class="pref-seg" role="radiogroup" aria-label="Scrolling">
-                  <button
-                    v-for="d in WHEEL_DEVICES"
-                    :key="d.id"
-                    type="button"
-                    role="radio"
-                    :aria-checked="nav.wheelDevice === d.id"
-                    :class="{ on: nav.wheelDevice === d.id }"
-                    @click="pickWheelDevice(d.id)"
-                    >{{ d.label }}</button
-                  >
-                </div>
+                <Segmented
+                  id="prefs-wheel-device"
+                  label="Scrolling"
+                  :model-value="nav.wheelDevice"
+                  :options="WHEEL_DEVICES"
+                  @update:model-value="pickWheelDevice"
+                />
               </div>
               <p class="pref-hint">
                 A mouse wheel zooms; a touchpad's two fingers turn or move the view and a pinch zooms. Automatic tells
@@ -677,18 +635,13 @@ function onClassicCamera(ev: Event) {
             <div class="pref-card">
               <div class="pref-head">
                 <span class="pref-title">Two-finger scroll</span>
-                <div id="prefs-touchpad-scroll" class="pref-seg" role="radiogroup" aria-label="Two-finger scroll">
-                  <button
-                    v-for="t in TOUCHPAD_SCROLL"
-                    :key="t.id"
-                    type="button"
-                    role="radio"
-                    :aria-checked="nav.touchpadScroll === t.id"
-                    :class="{ on: nav.touchpadScroll === t.id }"
-                    @click="pickTouchpadScroll(t.id)"
-                    >{{ t.label }}</button
-                  >
-                </div>
+                <Segmented
+                  id="prefs-touchpad-scroll"
+                  label="Two-finger scroll"
+                  :model-value="nav.touchpadScroll"
+                  :options="TOUCHPAD_SCROLL"
+                  @update:model-value="pickTouchpadScroll"
+                />
               </div>
               <p class="pref-hint">
                 On a touchpad, what two fingers scrolling do to the view. Shift with the scroll does the other, and a
@@ -696,13 +649,13 @@ function onClassicCamera(ev: Event) {
               </p>
             </div>
             <div class="pref-card">
-              <label class="pref-head pref-check">
-                <span class="check">
-                  <input id="prefs-classic-camera" type="checkbox" :checked="classicCamera" @change="onClassicCamera" />
-                  <span class="check-box"></span>
-                </span>
-                <span class="pref-title">Classic camera</span>
-              </label>
+              <Checkbox
+                id="prefs-classic-camera"
+                class="pref-head pref-check"
+                :model-value="classicCamera"
+                @update:model-value="onClassicCamera"
+                ><span class="pref-title">Classic camera</span></Checkbox
+              >
               <p class="pref-hint">
                 The camera from before this release, kept for one release in case the new one gets in your way. Takes
                 effect after a restart.
@@ -715,13 +668,13 @@ function onClassicCamera(ev: Event) {
           <h3 class="prefs-pane-title">Accessibility</h3>
           <div class="prefs-grid">
             <div class="pref-card">
-              <label class="pref-head pref-check">
-                <span class="check">
-                  <input id="prefs-motion" type="checkbox" :checked="motion" @change="onMotion" />
-                  <span class="check-box"></span>
-                </span>
-                <span class="pref-title">Animations</span>
-              </label>
+              <Checkbox
+                id="prefs-motion"
+                class="pref-head pref-check"
+                :model-value="motion"
+                @update:model-value="setMotion"
+                ><span class="pref-title">Animations</span></Checkbox
+              >
               <p class="pref-hint">
                 Off makes every transition instant: menus, panels, the error notice and camera moves all jump straight
                 to where they end. Follows the system's reduce motion setting until changed here.
@@ -768,8 +721,8 @@ function onClassicCamera(ev: Event) {
       </div>
     </div>
 
-    <div class="modal-foot">
-      <button class="btn btn-primary" @click="close()">Done</button>
-    </div>
-  </ModalFrame>
+    <template #footer>
+      <Button variant="primary" @click="close()">Done</Button>
+    </template>
+  </Dialog>
 </template>
