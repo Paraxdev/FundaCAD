@@ -270,15 +270,26 @@ fn push_note(fields: &mut Map<String, Value>, text: String) {
     }
 }
 
-/// The way through for a mesh past the size cap.
-fn too_large_hint(fmt: &str) -> &'static str {
-    match fmt {
-        "stl" => " Decimate the mesh in the app that made it and export it again.",
-        "3mf" | "obj" | "glb" | "gltf" | "ply" | "off" | "vrml" | "x3d" | "amf" | "fbx" | "3ds" => {
+/// The refusal of a file past its format's size cap, with the way through.
+pub fn too_large_message(fmt: &str, size: u64) -> String {
+    // Binary STL is about 50 bytes a triangle, smaller only than the text formats.
+    let hint = match fmt {
+        "obj" | "off" | "vrml" | "x3d" | "amf" => {
             " Export the model as binary STL, often several times smaller, or decimate the mesh first."
         }
+        "stl" | "3mf" | "glb" | "gltf" | "ply" | "fbx" | "3ds" => {
+            " Decimate the mesh in the app that made it and export it again."
+        }
+        "step" | "stp" | "stpz" | "iges" | "igs" | "brep" | "xbf" | "fcstd" => {
+            " Export the assembly as several smaller files, or export a binary STL of it and import that."
+        }
         _ => "",
-    }
+    };
+    format!(
+        "file is {:.0} MiB, too large to import (limit {} MiB).{hint}",
+        size as f64 / (1024.0 * 1024.0),
+        import_size_cap(fmt) / (1024 * 1024)
+    )
 }
 
 /// IGES, read like STEP with each free root a product.
@@ -393,12 +404,7 @@ pub fn import_geometry_in(
     let size = std::fs::metadata(p).map_or(0, |m| m.len());
     let cap = import_size_cap(&fmt);
     if size > cap {
-        return Err(format!(
-            "file is {:.0} MiB, too large to import (limit {} MiB).{}",
-            size as f64 / (1024.0 * 1024.0),
-            cap / (1024 * 1024),
-            too_large_hint(&fmt)
-        ));
+        return Err(too_large_message(&fmt, size));
     }
     fundacad_engine::sysmem::refuse_if_memory_is_short(size, None)?;
     stage::report(stage::READ, -1, -1);
