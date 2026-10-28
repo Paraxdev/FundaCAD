@@ -94,7 +94,7 @@ describe("menubar popups", () => {
     key("ArrowDown");
     await flushPromises();
     key("ArrowRight");
-    await flushPromises();
+    await vi.waitFor(() => expect(focused()).toBe("Fit"));
     key("Enter");
     await flushPromises();
     expect([run.mock.calls.length, popup(), document.activeElement]).toEqual([1, null, view]);
