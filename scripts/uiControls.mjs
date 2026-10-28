@@ -37,7 +37,9 @@ const USE_INSTEAD = {
   "role=menuitemradio": "MenuItem",
   "role=radio": "Segmented",
   "style:inline": "a class in src/styles that reads tokens only",
-  "IconButton:no-tip": "IconButton with tip (and keys), which writes title and aria-label",
+  "IconButton:no-name": "IconButton with tip (and keys), which writes title and aria-label",
+  "RailButton:no-name": "RailButton with label, which is its accessible name",
+  "Segmented:no-name": "a label or tip on every icon only Segmented option",
   "class:btn": "Button",
   "class:sm-input": "TextField or NumberField",
   "class:pref-seg": "Segmented",
@@ -235,13 +237,35 @@ function lineIndex(src) {
   };
 }
 
-function scanTemplate(text, hit, legacyClasses) {
+// A name a screen reader can read: one of `props` or aria-label/aria-labelledby, static and not blank, or bound to
+// anything but an empty literal. A v-bind spread may carry one, so it counts.
+function hasName(attrs, props) {
+  if (attrs.has("v-bind")) return true;
+  for (const p of [...props, "aria-label", "aria-labelledby"]) {
+    const plain = attrs.get(p);
+    if (typeof plain === "string" && plain.trim() !== "") return true;
+    const bound = attrs.get(`:${p}`) ?? attrs.get(`v-bind:${p}`);
+    if (typeof bound === "string" && bound.trim() !== "" && !/^\s*(["'`])\s*\1\s*$/.test(bound)) return true;
+  }
+  return false;
+}
+
+// Tag to [kind, the props that name it]. RailButton's tip is only its title, so its label has to be there.
+const ICON_CONTROLS = {
+  IconButton: ["IconButton:no-name", ["tip"]],
+  "icon-button": ["IconButton:no-name", ["tip"]],
+  RailButton: ["RailButton:no-name", ["label"]],
+  "rail-button": ["RailButton:no-name", ["label"]],
+};
+
+function scanTemplate(text, hit, legacyClasses, options) {
   for (const m of text.matchAll(/<([A-Za-z][\w-]*)(?=[\s>/])/g)) {
     const name = m[1];
     const isControl = CONTROL_TAGS.includes(name);
-    const isIconButton = name === "IconButton" || name === "icon-button";
+    const icon = ICON_CONTROLS[name];
+    const isSegmented = name === "Segmented" || name === "ui-segmented";
     const isPlain = /^[a-z][a-z0-9]*$/.test(name);
-    if (!isControl && !isIconButton && !isPlain) continue;
+    if (!isControl && !icon && !isSegmented && !isPlain) continue;
     const attrs = readAttrs(text, m.index + m[0].length);
     if (isControl && name === "input") {
       const type = attrs.get("type");
@@ -249,8 +273,10 @@ function scanTemplate(text, hit, legacyClasses) {
       hit(m.index, bound ? "input" : `input[type=${typeof type === "string" ? type : "text"}]`);
     } else if (isControl) {
       hit(m.index, name);
-    } else if (isIconButton) {
-      if (!["tip", ":tip", "v-bind:tip", "v-bind"].some((a) => attrs.has(a))) hit(m.index, "IconButton:no-tip");
+    } else if (icon) {
+      if (!hasName(attrs, icon[1])) hit(m.index, icon[0]);
+    } else if (isSegmented) {
+      for (let k = namelessSegments(attrs, options); k > 0; k--) hit(m.index, "Segmented:no-name");
     } else {
       const role = attrs.get("role");
       if (typeof role === "string" && CONTROL_ROLES.has(role)) hit(m.index, `role=${role}`);
@@ -293,16 +319,100 @@ function scanScript(text, hit) {
   }
 }
 
+// Where `id` is declared in lexed `code`: the initializer of a const, let or var up to its `;`, or a function's body.
+function declaration(lexed, id) {
+  const { code, inString } = lexed;
+  const re = new RegExp(String.raw`\b(?:(?:const|let|var)\s+${id}\b[^=;]*=|function\s+${id}\s*\()`, "g");
+  for (const m of code.matchAll(re)) {
+    if (inString[m.index]) continue;
+    const fn = m[0].startsWith("function");
+    let depth = fn ? 1 : 0;
+    for (let j = m.index + m[0].length; j < code.length; j++) {
+      if (inString[j]) continue;
+      const ch = code[j];
+      if ("([{".includes(ch)) depth++;
+      else if (")]}".includes(ch)) {
+        if (--depth === 0 && fn && ch === "}") return [m.index, j + 1];
+      } else if (ch === ";" && depth === 0 && !fn) return [m.index, j];
+    }
+    return [m.index, code.length];
+  }
+  return null;
+}
+
+// The top level keys of each object literal in [from, to) that has a `value` key, so is a Segmented option.
+function optionKeys(lexed, from, to) {
+  const { code, inString } = lexed;
+  const out = [];
+  for (let i = from; i < to; i++) {
+    if (code[i] !== "{" || inString[i]) continue;
+    const keys = new Set();
+    let depth = 0;
+    let part = "";
+    let j = i + 1;
+    const take = () => {
+      const k = /^\s*(\.\.\.|(["']?)([\w$-]+)\2\s*(?::|\(|$))/.exec(part);
+      if (k) keys.add(k[1] === "..." ? "..." : k[3]);
+      part = "";
+    };
+    for (; j < to; j++) {
+      const ch = code[j];
+      if (!inString[j] && depth === 0 && (ch === "," || ch === "}")) {
+        take();
+        if (ch === "}") break;
+        continue;
+      }
+      if (!inString[j] && "([{".includes(ch)) depth++;
+      else if (!inString[j] && ")]}".includes(ch)) depth--;
+      part += ch;
+    }
+    if (keys.has("value")) out.push({ keys, text: code.slice(i, j) });
+  }
+  return out;
+}
+
+// How many options of one Segmented show only an icon with nothing to name them. An options expression this cannot
+// follow to its declaration in the file, or to an export of another scanned file, is not counted.
+function namelessSegments(attrs, { script, exported }) {
+  const expr = attrs.get(":options") ?? attrs.get("v-bind:options");
+  if (typeof expr !== "string") return 0;
+  const iconOnly = ["icon-only", "iconOnly", ":icon-only", ":iconOnly"].some(
+    (a) => attrs.has(a) && attrs.get(a) !== "false",
+  );
+  const id = /^\s*([A-Za-z_$][\w$]*)\s*(?:\(\s*\)|\.value)?\s*$/.exec(expr)?.[1];
+  let lexed = id ? script : lexScript(expr);
+  let span = id ? declaration(script, id) : [0, expr.length];
+  if (id && !span) {
+    lexed = exported(id);
+    span = lexed && declaration(lexed, id);
+  }
+  if (!span) return 0;
+  return optionKeys(lexed, span[0], span[1]).filter(({ keys, text }) => {
+    if (keys.has("...") || keys.has("label") || keys.has("tip") || /aria-label/.test(text)) return false;
+    return iconOnly || keys.has("icon");
+  }).length;
+}
+
 /** Every raw control in `files` (path to source, paths relative to the repo root with forward slashes). */
 export function scanControls(files, { legacyClasses = false } = {}) {
   const found = [];
+  const lexedTs = new Map();
+  const exported = (id) => {
+    const re = new RegExp(String.raw`\bexport\s+(?:const|let|function)\s+${id}\b`);
+    for (const [path, src] of Object.entries(files)) {
+      if (!path.endsWith(".ts") || !re.test(src)) continue;
+      if (!lexedTs.has(path)) lexedTs.set(path, lexScript(src));
+      return lexedTs.get(path);
+    }
+    return null;
+  };
   for (const [path, src] of Object.entries(files)) {
     if (!isScanned(path)) continue;
     const lineAt = lineIndex(src);
     const hit = (at, kind) => found.push({ path, line: lineAt(at), kind, at });
     if (path.endsWith(".vue")) {
       const { template, script } = vueRegions(src);
-      scanTemplate(template, hit, legacyClasses);
+      scanTemplate(template, hit, legacyClasses, { script: lexScript(script), exported });
       scanScript(script, hit);
     } else {
       scanScript(src, hit);

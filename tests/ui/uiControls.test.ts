@@ -185,8 +185,8 @@ describe("inline styles", () => {
   });
 });
 
-describe("IconButton without tip", () => {
-  it("reports an IconButton with no tip", () => {
+describe("icon only controls without a name", () => {
+  it("reports an IconButton with no tip, aria-label or aria-labelledby", () => {
     const src = vue(
       [
         `<IconButton icon="x" title="Close" />`,
@@ -194,11 +194,62 @@ describe("IconButton without tip", () => {
         `<IconButton icon="x" :tip="t" />`,
         `<icon-button icon="x" />`,
         `<IconButton icon="x" v-bind="b" />`,
+        `<IconButton icon="x" tip="  " />`,
+        `<IconButton icon="x" :tip="''" />`,
+        `<IconButton icon="x" aria-label="Close" />`,
+        `<IconButton icon="x" :aria-labelledby="id" />`,
+        `<IconButton icon="x" tip />`,
       ].join("\n"),
     );
     expect(kinds({ "src/components/A.vue": src })).toEqual([
-      "src/components/A.vue:6 IconButton:no-tip",
-      "src/components/A.vue:9 IconButton:no-tip",
+      "src/components/A.vue:6 IconButton:no-name",
+      "src/components/A.vue:9 IconButton:no-name",
+      "src/components/A.vue:11 IconButton:no-name",
+      "src/components/A.vue:12 IconButton:no-name",
+      "src/components/A.vue:15 IconButton:no-name",
+    ]);
+  });
+
+  it("reports a RailButton with no label, since its tip is only a title", () => {
+    const src = vue(
+      [
+        `<RailButton icon="x" label="Sketch" />`,
+        `<RailButton icon="x" tip="Sketch" />`,
+        `<rail-button icon="x" :label="l" />`,
+        `<RailButton icon="x" :label="\`\`" />`,
+        `<RailButton icon="x" aria-labelledby="h" />`,
+      ].join("\n"),
+    );
+    expect(kinds({ "src/components/A.vue": src })).toEqual([
+      "src/components/A.vue:7 RailButton:no-name",
+      "src/components/A.vue:9 RailButton:no-name",
+    ]);
+  });
+
+  it("reports each Segmented option that shows only an icon with no label or tip", () => {
+    const script = [
+      `const plain = [{ value: "a", icon: "x" }, { value: "b", icon: "y", tip: "B" }, { value: "c", label: "C" }];`,
+      `const views = computed(() => modes.map((m) => ({ value: m, attrs: { "data-m": m } })));`,
+      `function named() { return [{ value: 1, icon: "x", attrs: { "aria-label": "One" } }, { ...base, value: 2 }]; }`,
+    ].join("\n");
+    const src = vue(
+      [
+        `<Segmented v-model="a" :options="plain" />`,
+        `<Segmented v-model="a" :options="views" icon-only />`,
+        `<Segmented v-model="a" :options="views" />`,
+        `<Segmented v-model="a" :options="named()" icon-only />`,
+        `<Segmented v-model="a" :options="[{ value: 'z', icon: 'z' }, { value: 'w', label: 'W' }]" icon-only />`,
+        `<Segmented v-model="a" :options="SHARED" />`,
+        `<Segmented v-model="a" :options="elsewhere" icon-only />`,
+      ].join("\n"),
+      script,
+    );
+    const shared = `export const SHARED = [{ value: "s", icon: "s" }, { value: "t", icon: "t", label: "T" }];\n`;
+    expect(kinds({ "src/components/A.vue": src, "src/ui/shared.ts": shared })).toEqual([
+      "src/components/A.vue:8 Segmented:no-name",
+      "src/components/A.vue:9 Segmented:no-name",
+      "src/components/A.vue:12 Segmented:no-name",
+      "src/components/A.vue:13 Segmented:no-name",
     ]);
   });
 });

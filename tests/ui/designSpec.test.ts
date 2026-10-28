@@ -8,6 +8,8 @@
 
 import { describe, expect, it } from "vitest";
 import { themes, type ShippedTheme } from "../../src/ui/theme";
+import { checkAllowlist, scanControls, type AllowEntry } from "../../scripts/uiControls.mjs";
+import allowText from "../../scripts/ui-controls-allow.json?raw";
 
 const read = (files: Record<string, string>) =>
   new Map(Object.entries(files).map(([path, text]) => [path.replace(/^(\.\.\/)+/, ""), text]));
@@ -441,6 +443,24 @@ function renderedBy(root: string, files: Map<string, string>): string[] {
   return [...seen];
 }
 
+const appFiles = read({
+  ...import.meta.glob("../../src/**/*.{vue,ts}", { query: "?raw", import: "default", eager: true }),
+  ...import.meta.glob("../../plugins/**/*.{vue,ts}", { query: "?raw", import: "default", eager: true }),
+} as Record<string, string>);
+
+// Icon only controls a screen reader would find nameless. The base components are scanned too, under a path the raw
+// control scan does not skip, since a nameless IconButton inside one reaches every caller.
+const NAMELESS = /:no-name$/;
+function namelessIconControls(files: Map<string, string>) {
+  const renamed = [...files].map(([path, text]) => [
+    path.replace(/^src\/components\/ui\//, "src/components/ui~/"),
+    text,
+  ]);
+  return scanControls(Object.fromEntries(renamed))
+    .filter((f) => NAMELESS.test(f.kind))
+    .map((f) => ({ ...f, path: f.path.replace("/ui~/", "/ui/") }));
+}
+
 // A settings page toggles with the Checkbox (.check); a switch is for a live toggle in a tool panel.
 const switchesIn = (files: Map<string, string>, paths: string[]) =>
   paths.filter((path) =>
@@ -609,7 +629,27 @@ describe("design spec guard", () => {
     expect(switchesIn(vueFiles, rendered)).toEqual([]);
   });
 
+  it("names every icon only control: IconButton, RailButton and each icon Segmented option", () => {
+    const allow = (JSON.parse(allowText) as AllowEntry[]).filter((e) => NAMELESS.test(e.kind));
+    expect(checkAllowlist(namelessIconControls(appFiles), allow)).toEqual([]);
+  });
+
   it("finds what the check helpers are meant to find", () => {
+    expect(
+      namelessIconControls(
+        new Map([
+          ["src/components/ui/Chip.vue", `<template>\n<IconButton icon="x" />\n</template>\n`],
+          [
+            "src/components/A.vue",
+            `<template>\n<RailButton icon="x" tip="t" />\n<Segmented :options="[{ value: 1, icon: 'x' }]" />\n</template>\n`,
+          ],
+        ]),
+      ).map((f) => `${f.path} ${f.kind}`),
+    ).toEqual([
+      "src/components/A.vue RailButton:no-name",
+      "src/components/A.vue Segmented:no-name",
+      "src/components/ui/Chip.vue IconButton:no-name",
+    ]);
     expect(
       colourLiterals(
         "x.vue",
