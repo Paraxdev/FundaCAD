@@ -60,7 +60,7 @@ function onEsc(e: KeyboardEvent) {
   panels.cancelText();
 }
 
-// SketchMode skips its Escape for a focused text field only, so a focused list, box or button here claims it instead.
+// The window's other Escape listeners skip a focused text field only, so a focused list, box or button here claims it.
 const root = useTemplateRef<HTMLElement>("root");
 let release: (() => void) | null = null;
 function onFocusIn() {

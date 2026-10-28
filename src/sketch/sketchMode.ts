@@ -2880,6 +2880,8 @@ export class SketchMode {
     // The dim box auto-focuses while drawing, so Esc in it must still cancel.
     const escInOwnDim = e.key === "Escape" && this.dim.isActive && this.dim.ownsTarget(e.target);
     if (!escInOwnDim && isEditableTarget(e.target)) return; // typing in a dim/text field, not a shortcut
+    // The Text panel's list, boxes and buttons are no text fields, yet a letter there must not switch the tool.
+    if (e.target instanceof Element && e.target.closest(".text-tool-panel")) return;
     // a pattern being placed/edited: Delete removes it, Esc keeps it as-is
     if (this.patternFlow.hasPending()) {
       if (e.key === "Delete" || e.key === "Backspace") {
