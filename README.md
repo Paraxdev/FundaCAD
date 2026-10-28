@@ -97,21 +97,30 @@ and takes about twenty minutes. The technical notes are in `docs/`.
 
 In the app, Help > Report a Problem… copies a full report and opens a prefilled issue on GitHub. New issue offers two forms: a Problem report and an Idea. The Problem report asks what happened, the steps and your system, and has a box for the report the app copies for you. A security problem goes to the private reporting in [SECURITY.md](SECURITY.md).
 
-## About the code / AI Disclosure
+## About the code / AI disclosure
 
-Most of the code and tests here are written by AI. I decide what gets built, steer it, and use the app actively.
+FundaCAD is built with AI. Most of the code, the tests and the documentation are written by AI coding agents. I decide what gets built and in what order, steer the work, check what lands and use the app actively.
 
-Im trying to apply real software engineering strategies and learnings to make sure the codebase and the features aren't a useless mess, and actively listening to any feedback that I get.
+I apply real software engineering practice so the codebase and the features do not turn into a mess:
 
+- Larger changes are built on their own branch and reviewed by a second AI agent whose job is to break them, then fixed until that review passes.
+- Nothing lands without the checks: over 8,000 unit and component tests, end to end checks that drive the app in a browser like a user, and golden geometry checks that compare the engine's output with known good results. CI builds every change on Windows, macOS and Linux, and installs the Linux builds on Ubuntu, Debian and Fedora.
+- The interface follows a written design spec ([docs/DESIGN.md](docs/DESIGN.md)), and tests check the interface against it.
+- Bugs come before new features.
 
-You may use AI for creating features and creating pull requests,
-for those you are responsible for the AI output and ensure that it serves a usable quality.
-you must write at least one test that, if the feature allows it, ensures it has one "known good" case
+AI does not decide what ships. Store submissions, such as the Flathub manifest and its review, are written and handled by me by hand.
 
-for creating issues and bug requests please read the AI output and ensure you can reproduce it, cheap incoherent bug reports may take a while to be understood and fixed.
+AI can write code that looks right and is wrong. If something misbehaves, Help > Report a Problem (see above) gives me what I need to fix it. Because of how this is built I am very open to issues and bug reports, and fixing them has the highest priority. The goal is a coherent program that holds up in daily use and is as flexible as an open source project can be.
 
-due to the nature of AI im very open to any issues and bug requests that may arrive, and take the highest priority of having em fixed. the goal is a coherent program that actually
-can show itself in daily use cases and be as flexible as an open source project can get.
+### Using AI to contribute
+
+You may use AI to write features and pull requests. You are responsible for what it produces:
+
+- read the change, understand it and make sure it works;
+- write at least one test that checks a known good case, where the feature allows it;
+- say in the pull request that AI wrote it.
+
+If you use AI to write an issue or a bug report, read it first and make sure you can reproduce what it says. A vague or incoherent report takes much longer to understand and fix.
 
 ## Licence
 
