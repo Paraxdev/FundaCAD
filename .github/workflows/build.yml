@@ -99,6 +99,11 @@ jobs:
       - name: AT-SPI dump tests
         run: python3 tests/build/test_atspi_dump.py
 
+      # The checks of the UI Automation walk the Windows bundle leg runs, against fake trees.
+      - name: UI Automation walk tests
+        shell: pwsh
+        run: ./tests/build/test_uia_walk.ps1
+
       # The plugin sandbox is a worker ENTRY, so Rollup treats its exports as
       # unreachable and drops them. That produced a chunk with none of the
       # sandbox in it, past every unit test, and would have failed at the first
@@ -556,6 +561,28 @@ jobs:
           esac
           if [ -z "${bin:-}" ] || [ ! -f "$bin" ]; then echo "::error::no executable to start"; exit 1; fi
           "$py" scripts/bundle-smoke.py --work "$RUNNER_TEMP/smoke-exe" -- "$bin" --mcp
+
+      # What NVDA and Narrator read: the exe's window walked over UI Automation,
+      # red on a nameless button or no web document. Windows PowerShell, whose
+      # .NET carries UIAutomationClient. Not a gate until wave 1 of the
+      # accessibility work has run green here.
+      - name: Walk the exe window over UI Automation
+        if: matrix.platform == 'windows-latest'
+        continue-on-error: true
+        timeout-minutes: 10
+        shell: powershell
+        run: |
+          & ./scripts/a11y/uia_walk.ps1 -Exe "src-tauri/target/release/$env:FUNDACAD_BIN.exe" -Out "$env:RUNNER_TEMP/uia/uia.txt"
+          exit $LASTEXITCODE
+
+      - name: Upload the UI Automation walk
+        if: always() && matrix.platform == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: uia-walk
+          path: ${{ runner.temp }}/uia/
+          if-no-files-found: ignore
+          retention-days: 7
 
       # The updater runs the installer as `/P /R /UPDATE`, and from the portable
       # build that is the first install, which has to make the Start menu entry
