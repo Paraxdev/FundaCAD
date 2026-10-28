@@ -228,6 +228,7 @@ const isDefault = (p: SettingProp) => {
               class="plugset-reset"
               :class="{ hidden: isDefault(p) }"
               icon="undo"
+              variant="plain"
               size="sm"
               :icon-size="14"
               :disabled="isDefault(p)"
