@@ -1010,6 +1010,25 @@ describe("FeatureProperties typed preview through the app's bridge", () => {
     expect(p.state()).toEqual({ doc: 20, field: "20", preview: null, built: 20, undo: false });
     p.close();
   });
+
+  it("commits nothing when a previewed value is typed or stepped back to the document's", async () => {
+    const p = open();
+    await p.type("30");
+    await p.type("20");
+    await p.key("Enter");
+    const typed = p.state();
+    p.close();
+    const q = open();
+    await q.key("ArrowUp");
+    await q.key("ArrowDown");
+    await q.key("Enter");
+    const stepped = q.state();
+    q.close();
+    expect([typed, stepped]).toEqual([
+      { doc: 20, field: "20", preview: null, built: 20, undo: false },
+      { doc: 20, field: "20", preview: null, built: 20, undo: false },
+    ]);
+  });
 });
 
 describe("FeatureProperties on a feature this version does not know", () => {

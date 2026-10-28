@@ -131,15 +131,15 @@ const field = useCommitField({
   el,
   live: () => props.commit === "live",
   apply(raw, from) {
+    const change = props.commit !== "live";
+    // Judged against the text, not the model, as a native change is: an owner may hand a preview as the model.
+    if (change && raw.trim() === from.trim()) return false;
     const c = check(raw);
     if (c.error) return c.error;
     if (c.expr) return props.expression?.(raw.trim()) ?? null;
     // A blank required field commits nothing, and the field reads the model back.
     if (c.value === null && !props.nullable) return false;
-    // Retyped text commits at the model's value, as a native change does, since an owner may hand a preview as the
-    // model.
-    const changed =
-      c.value !== props.modelValue || props.text != null || (props.commit !== "live" && raw.trim() !== from.trim());
+    const changed = change || c.value !== props.modelValue || props.text != null;
     if (changed) emit("update:modelValue", c.value);
     if (props.adoptUnit) adopt(raw);
     return changed ? null : false;

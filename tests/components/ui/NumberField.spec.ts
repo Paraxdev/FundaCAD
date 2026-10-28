@@ -391,4 +391,31 @@ describe("NumberField expressions", () => {
     await commit(input, "20");
     expect([emitted(w), previewEnd.mock.calls]).toEqual([[], [[false]]]);
   });
+
+  it("commits nothing when the text it showed comes back after its owner made a preview the model", async () => {
+    const owner: { w?: Awaited<ReturnType<typeof render>>["w"] } = {};
+    const preview = (v: number | null) => void owner.w!.setProps({ modelValue: v });
+    const previewEnd = vi.fn(() => void owner.w!.setProps({ modelValue: 20 }));
+    const { w, input, el } = await render({ modelValue: 20, preview, previewEnd });
+    owner.w = w;
+    el.focus();
+    vi.useFakeTimers();
+    await input.setValue("30");
+    await vi.advanceTimersByTimeAsync(200);
+    await commit(input, " 20 ");
+    await vi.advanceTimersByTimeAsync(0);
+    expect([emitted(w), previewEnd.mock.calls, el.value]).toEqual([[], [[false]], "20"]);
+  });
+
+  it("commits nothing when the expression it showed is typed back", async () => {
+    const parse = (raw: string) => (/^[a-z]/i.test(raw.trim()) ? null : Number(raw));
+    const seen: string[] = [];
+    const expression = (raw: string) => (seen.push(raw), null);
+    const { w, input, el } = await render({ parse, expression, modelValue: 10, text: "w/4" });
+    el.focus();
+    await input.setValue("w/");
+    await commit(input, "w/4 ");
+    await w.vm.$nextTick();
+    expect([seen, emitted(w), el.value]).toEqual([[], [], "w/4"]);
+  });
 });
