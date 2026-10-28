@@ -516,10 +516,13 @@ fn built_payloads(
     }
 
     let tick = std::sync::Mutex::new(on_body);
+    // The hook is thread local and the pool's threads would mesh a big body for minutes without a beat.
+    let beat = crate::heartbeat::current();
     let mesh_one = |k: usize| {
         if stopped() {
             return None;
         }
+        let _beat = crate::heartbeat::install(beat.clone());
         let i = misses[k];
         let body = &bodies[i];
         let shape = body.shape.expect("a miss has a shape");
