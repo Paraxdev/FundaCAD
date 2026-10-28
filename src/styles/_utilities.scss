@@ -511,26 +511,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.toast-action {
-  flex: 0 0 auto;
-  /* Badge height so the toast does not grow, button width so Undo is easy to hit. */
-  padding: var(--s-1) var(--s-4);
-  border-radius: var(--r-sm);
-  border: 1px solid transparent;
-  background: var(--accent-tint);
-  color: var(--accent-hot);
-  font-size: 11.5px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.toast-close {
-  flex: 0 0 auto;
-  border: none;
-  background: none;
-  color: var(--text-mute);
-  font-size: 12px;
-  cursor: pointer;
-}
 .toast-out {
   opacity: 0;
   transition: opacity 0.18s var(--ease);

@@ -46,7 +46,10 @@ describe("the safe mode banner", () => {
     await flushPromises();
     expect(invoke).toHaveBeenCalledTimes(1);
     expect(invoke).toHaveBeenCalledWith("safe_mode_exit");
-    expect(w.get("button").attributes("disabled")).toBeDefined();
+    expect(w.get("button").attributes("aria-disabled")).toBe("true");
+    (w.get("button").element as HTMLButtonElement).click();
+    await flushPromises();
+    expect(invoke).toHaveBeenCalledTimes(1);
   });
 
   it("says so and lets the button be pressed again when the restart fails", async () => {
@@ -56,7 +59,7 @@ describe("the safe mode banner", () => {
     await w.get("button").trigger("click");
     await flushPromises();
     expect(w.text()).toContain("Could not restart: no executable");
-    expect(w.get("button").attributes("disabled")).toBeUndefined();
+    expect(w.get("button").attributes("aria-disabled")).toBeUndefined();
   });
 
   it("opens the problem report from its second button", async () => {
