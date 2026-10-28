@@ -23,6 +23,11 @@ describe("InlineLabel rename", () => {
     expect(input.element.closest(".ui-text-field")).not.toBeNull();
   });
 
+  it("names the field Rename for a screen reader", async () => {
+    const { input } = await editing();
+    expect(input.attributes("aria-label")).toBe("Rename");
+  });
+
   it("saves the trimmed name on Enter and closes", async () => {
     const { w, rename, input } = await editing();
     await input.setValue("  Plate  ");

@@ -520,6 +520,11 @@ describe("History's rename field and controls", () => {
     expect(input.element.value).not.toBe("");
   });
 
+  it("names the field Rename for a screen reader", async () => {
+    const { input } = await renaming();
+    expect(input.attributes("aria-label")).toBe("Rename");
+  });
+
   it("saves on Enter once and closes", async () => {
     const { m, input } = await renaming();
     await input.setValue("Hinge");

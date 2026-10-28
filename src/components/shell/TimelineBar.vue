@@ -615,6 +615,7 @@ function openMultiMenu(e: MouseEvent, ids: string[]) {
                     size="sm"
                     commit="change"
                     select-on-focus
+                    aria-label="Rename"
                     :model-value="f.name || metaFor(f).label"
                     :placeholder="metaFor(f).label"
                     spellcheck="false"
