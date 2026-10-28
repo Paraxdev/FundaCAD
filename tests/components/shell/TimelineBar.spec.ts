@@ -65,6 +65,10 @@ interface Opts {
   busy?: "import" | "rebuild";
   /** every running op, oldest first, when more than the one `busy` names */
   ops?: ("import" | "rebuild")[];
+  /** sketches with a picked region, which seed Related to Selection */
+  regions?: string[];
+  /** features the last build failed */
+  failed?: string[];
 }
 
 function mountBar(o: Opts = {}) {
@@ -102,7 +106,7 @@ function mountBar(o: Opts = {}) {
   };
   const e = {
     viewport: { highlightDatum: () => {}, getSelectedFaceIds: () => [], getSelectedBodies: () => [] },
-    overlay: { selectedRegions: () => [] },
+    overlay: { selectedRegions: () => (o.regions ?? []).map((sketchId) => ({ sketchId })) },
     bridge: {
       docVersion: ref(0),
       buildVersion: ref(0),
@@ -152,7 +156,11 @@ function mountBar(o: Opts = {}) {
       setSuppressed: (ids: string[], on: boolean) => log.push(`suppress:${on}:${ids.join(",")}`),
       removeFeatures: (ids: string[]) => log.push(`remove:${ids.join(",")}`),
       rollbackIndex: 6,
-      buildState: { result: null, building: false, errorFeatureId: null },
+      buildState: {
+        result: o.failed ? { featureErrors: o.failed.map((id) => ({ feature_id: id, message: "failed" })) } : null,
+        building: false,
+        errorFeatureId: null,
+      },
       cancelRunningOp: (key: number) => {
         log.push(`cancelOp:${key}`);
         return Promise.resolve(true);
@@ -580,5 +588,74 @@ describe("History's rename field and controls", () => {
     expect(m.w.get(".timeline-cancel").classes()).toContain("btn");
     expect(m.w.get(".t-op-cancel").classes()).toContain("btn");
     expect(m.w.get(".t-op-cancel").attributes("title")).toBe("Stop Importing sv08.step");
+  });
+});
+
+describe("History's head toggles", () => {
+  const RELATED_KEY = "fundacad.historyRelated";
+  beforeEach(() => localStorage.removeItem(RELATED_KEY));
+
+  const relatedState = (m: ReturnType<typeof mountBar>) => {
+    const t = m.w.get('[data-testid="history-related"]');
+    return {
+      on: t.classes("on"),
+      pressed: t.attributes("aria-pressed"),
+      label: t.attributes("aria-label"),
+      text: t.text(),
+      saved: localStorage.getItem(RELATED_KEY),
+    };
+  };
+
+  it("Related to Selection shows only while something is picked", () => {
+    expect(mountBar().w.find('[data-testid="history-related"]').exists()).toBe(false);
+  });
+
+  it("Related to Selection turns off and on again from a click, and remembers it", async () => {
+    const m = mountBar({ regions: ["sk"] });
+    expect(relatedState(m)).toEqual({
+      on: true,
+      pressed: "true",
+      label: "Related to Selection, 3",
+      text: "Related to Selection · 3",
+      saved: null,
+    });
+    await m.w.get('[data-testid="history-related"]').trigger("click");
+    expect(relatedState(m)).toEqual({
+      on: false,
+      pressed: "false",
+      label: "Related to Selection, 3",
+      text: "Related to Selection · 3",
+      saved: "0",
+    });
+    await m.w.get('[data-testid="history-related"]').trigger("click");
+    expect([relatedState(m).on, relatedState(m).pressed, relatedState(m).saved]).toEqual([true, "true", "1"]);
+  });
+
+  it("the error badge hides with no failures", () => {
+    expect(mountBar().w.get(".timeline-errbadge").classes("hidden")).toBe(true);
+  });
+
+  it("the error badge counts the failures and each click jumps to the next one", async () => {
+    const scrolled: (string | null)[] = [];
+    const scroll = vi.spyOn(Element.prototype, "scrollIntoView").mockImplementation(function (this: Element) {
+      scrolled.push(this.getAttribute("data-id"));
+    });
+    try {
+      const m = mountBar({ failed: ["ex1", "rv"] });
+      const badge = m.w.get(".timeline-errbadge");
+      expect([badge.classes("hidden"), badge.text(), badge.attributes("aria-label")]).toEqual([
+        false,
+        "2",
+        "2 failing features, click to jump to the next one",
+      ]);
+      const picked: (string | null)[] = [];
+      for (let i = 0; i < 3; i++) {
+        await badge.trigger("click");
+        picked.push(useSelectionStore().featureId);
+      }
+      expect({ picked, scrolled }).toEqual({ picked: ["ex1", "rv", "ex1"], scrolled: ["ex1", "rv", "ex1"] });
+    } finally {
+      scroll.mockRestore();
+    }
   });
 });
