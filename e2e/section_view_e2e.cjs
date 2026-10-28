@@ -191,7 +191,7 @@ function modelDoc() {
       const f = await findFace();
       await tile.click();
       await page.waitForTimeout(400);
-      await page.locator(".choice-btn", { hasText: "Face or plane" }).click();
+      await page.locator(".ui-confirm-choice", { hasText: "Face or plane" }).click();
       await page.waitForTimeout(300);
       await page.mouse.click(f.x, f.y);
       await page.waitForTimeout(300);
@@ -204,7 +204,7 @@ function modelDoc() {
     console.log("\n[part 1: confirm keeps the cut on]");
     await tile.click();
     await page.waitForTimeout(400);
-    await page.locator(".choice-btn", { hasText: "Face or plane" }).click();
+    await page.locator(".ui-confirm-choice", { hasText: "Face or plane" }).click();
     await page.waitForTimeout(300);
     check("Section aims after Face or plane", (await state()).phase === "aiming");
     await page.mouse.click(face.x, face.y);

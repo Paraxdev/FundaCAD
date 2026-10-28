@@ -106,11 +106,13 @@ function stl(file) {
   }
 
   // The export ends on a summary with a Done button, which holds the keyboard.
-  const done = await page.$(".choice-btn.choice-primary");
+  const done = await page.$(".ui-confirm .btn-primary");
   if (done) {
     await done.click();
     await page.waitForTimeout(300);
   }
+  // Done hands focus back to the Move gizmo field that selecting body1 and body3 focused, and that field keeps Ctrl+E.
+  await page.evaluate(() => document.activeElement?.blur());
 
   await page.evaluate(() => window.viewport.setSelectedBodies(["body2"]));
   await page.keyboard.press("Control+e");

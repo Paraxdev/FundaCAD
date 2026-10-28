@@ -12,6 +12,8 @@ const props = withDefaults(
     /** `live` emits on every input, `change` on Enter or blur with Escape reverting. */
     commit?: "live" | "change";
     type?: "text" | "search" | "url";
+    /** A textarea: Enter types a new line, so `change` mode commits on blur only. Pass `rows` as an attribute. */
+    multiline?: boolean;
     placeholder?: string | undefined;
     /** A refusal from outside, shown as a refused commit is. */
     error?: string | null | undefined;
@@ -24,12 +26,12 @@ const props = withDefaults(
     disabled?: boolean | undefined;
     disabledReason?: string | undefined;
   }>(),
-  { commit: "live", type: "text", selectOnFocus: false, size: "md", disabled: false },
+  { commit: "live", type: "text", multiline: false, selectOnFocus: false, size: "md", disabled: false },
 );
 const emit = defineEmits<{ "update:modelValue": [string] }>();
 
 const attrs = useAttrs();
-const el = useTemplateRef<HTMLInputElement>("el");
+const el = useTemplateRef<HTMLInputElement | HTMLTextAreaElement>("el");
 const d = useDisabled(props);
 const field = useCommitField({
   source: () => props.modelValue,
@@ -51,6 +53,8 @@ watch(
   },
 );
 
+defineExpose({ focus: () => el.value?.focus() });
+
 const shownError = computed(() => field.error.value ?? props.error ?? null);
 const tipText = computed(() => (props.tip ? fmtKeys(props.keys ? `${props.tip} (${props.keys})` : props.tip) : null));
 
@@ -61,13 +65,13 @@ function inputAttrs() {
 }
 
 function onInput(e: Event) {
-  const input = e.target as HTMLInputElement;
+  const input = e.target as HTMLInputElement | HTMLTextAreaElement;
   if (d.isDisabled.value) input.value = draft.value;
   else field.input(input.value);
 }
 
 function onKeydown(e: KeyboardEvent) {
-  if (e.key === "Enter") field.commit();
+  if (e.key === "Enter" && !props.multiline) field.commit();
   else if (e.key === "Escape") field.revert();
 }
 </script>
@@ -75,16 +79,21 @@ function onKeydown(e: KeyboardEvent) {
 <template>
   <span
     class="ui-field ui-text-field"
-    :class="[`ui-field-${size}`, attrs.class, { 'is-error': !!shownError, 'is-disabled': d.isDisabled.value }]"
+    :class="[
+      `ui-field-${size}`,
+      attrs.class,
+      { 'is-error': !!shownError, 'is-disabled': d.isDisabled.value, 'is-multiline': multiline },
+    ]"
     :style="attrs.style as string | undefined"
     @mousedown.self.prevent="el?.focus()"
   >
     <slot name="leading" />
-    <input
+    <component
+      :is="multiline ? 'textarea' : 'input'"
       ref="el"
       v-bind="inputAttrs()"
       :value="draft"
-      :type="type"
+      :type="multiline ? undefined : type"
       :placeholder="placeholder"
       :readonly="d.isDisabled.value || undefined"
       :aria-invalid="shownError ? 'true' : undefined"

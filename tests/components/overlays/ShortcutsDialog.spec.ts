@@ -3,6 +3,9 @@ import { nextTick } from "vue";
 import { enableAutoUnmount, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import ShortcutsDialog from "../../../src/components/overlays/ShortcutsDialog.vue";
+import ModalHost from "../../../src/components/overlays/ModalHost.vue";
+import { choose } from "../../../src/ui/choice";
+import { useModalStore } from "../../../src/stores/modals";
 import { contribute, resetContributions, setGrantLookup } from "../../../src/plugins/contrib";
 import { useDialogStore } from "../../../src/stores/dialogs";
 import { resetUserShortcuts, resolveShortcut } from "../../../src/input/shortcuts";
@@ -140,5 +143,41 @@ describe("a plugin that contributes keys", () => {
     off();
     await nextTick();
     expect(tabs()).toEqual(["General"]);
+  });
+});
+
+describe("the shortcuts frame", () => {
+  const settle = () => new Promise((r) => setTimeout(r, 5));
+  const search = () => document.querySelector<HTMLInputElement>("[data-shortcut-search]")!;
+
+  it("opens on the search field, labelled, and holds the modal gate", async () => {
+    await settle();
+    const panel = document.querySelector(".shortcuts-panel")!;
+    expect(document.getElementById(panel.getAttribute("aria-labelledby")!)!.textContent).toBe("Keyboard shortcuts");
+    expect([document.activeElement, useModalStore().depth]).toEqual([search(), 1]);
+  });
+
+  it("wraps Tab inside the dialog", async () => {
+    await settle();
+    const done = [...document.querySelectorAll<HTMLElement>(".shortcuts-panel .btn-primary")].at(-1)!;
+    done.focus();
+    const e = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
+    done.dispatchEvent(e);
+    expect([e.defaultPrevented, document.activeElement]).toEqual([
+      true,
+      document.querySelector(".shortcuts-panel .modal-close"),
+    ]);
+  });
+
+  it("leaves Escape to a chooser over it", async () => {
+    mount(ModalHost, { attachTo: document.body });
+    useDialogStore().shortcuts = true;
+    const answer = choose("Which?", [{ value: "a", label: "A" }]);
+    await settle();
+    await press({ key: "Escape" });
+    expect(await answer).toBeNull();
+    expect(useDialogStore().shortcuts).toBe(true);
+    await press({ key: "Escape" });
+    expect(useDialogStore().shortcuts).toBe(false);
   });
 });

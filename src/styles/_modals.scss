@@ -587,20 +587,10 @@
   overflow: hidden;
   animation: pop-in var(--t-fast, 0.12s) var(--ease, ease);
 }
+/* The TextField well, inset like the rows under it. */
 .cmdk-input {
-  border: none;
-  outline: none;
-  background: transparent;
-  color: var(--text, #e6e9ee);
-  font: inherit;
-  font-size: 15px;
-  /* Same inset as .modal-head, so both dialog shapes open at the same size. */
-  padding: var(--s-5);
-  border-bottom: 1px solid var(--line, #23272e);
-}
-.cmdk-input:focus-visible {
-  outline: 1px solid var(--accent);
-  outline-offset: -3px;
+  flex: none;
+  margin: var(--s-3) var(--s-3) var(--s-1);
 }
 .cmdk-list {
   overflow-y: auto;
@@ -772,16 +762,12 @@
 }
 .bug-report-card .bug-desc {
   width: 100%;
-  box-sizing: border-box;
-  resize: vertical;
-  margin: var(--s-3) 0;
-  font-size: 12px;
+  margin: 0 0 var(--s-3);
 }
 .bug-report-card .bug-check {
-  display: block;
-  margin: var(--s-1) 0;
+  display: flex;
+  margin: var(--s-2) 0;
   font-size: 12px;
-  cursor: pointer;
 }
 .bug-report-card .bug-preview {
   margin: var(--s-3) 0;
@@ -827,10 +813,6 @@
 }
 .bug-report-card .bug-doc-big {
   margin: 0 0 var(--s-2);
-}
-.bug-report-card .choice-btn:disabled {
-  opacity: 0.45;
-  cursor: default;
 }
 
 /* Materials: library and editor side by side, since picking a material and dragging a

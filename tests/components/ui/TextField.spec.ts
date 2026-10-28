@@ -176,4 +176,31 @@ describe("TextField", () => {
     await input.trigger("keydown", { key: "Enter" });
     expect(emitted(w)).toEqual([]);
   });
+
+  it("multiline is a textarea that takes rows, types a new line on Enter and commits on blur", async () => {
+    const w = mount(TextField, {
+      props: { modelValue: "one", commit: "change", multiline: true },
+      attrs: { rows: "4" },
+      attachTo: document.body,
+    });
+    await new Promise((r) => setTimeout(r, 2));
+    const area = w.get("textarea");
+    expect([
+      w.find("input").exists(),
+      area.attributes("rows"),
+      area.attributes("type"),
+      w.classes("is-multiline"),
+    ]).toEqual([false, "4", undefined, true]);
+    await area.setValue("one\ntwo");
+    await area.trigger("keydown", { key: "Enter" });
+    expect(emitted(w)).toEqual([]);
+    await area.trigger("blur");
+    expect(emitted(w)).toEqual([["one\ntwo"]]);
+  });
+
+  it("focus() puts the caret in the field", async () => {
+    const { w, input } = await render();
+    (w.vm as unknown as { focus: () => void }).focus();
+    expect(document.activeElement).toBe(input.element);
+  });
 });

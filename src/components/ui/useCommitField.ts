@@ -26,7 +26,7 @@ export function useCommitField(o: {
   /** The committed value, spelled as the field shows it. */
   source: () => string;
   /** Owned by the caller so it stays type checked; vue-tsc cannot see a string `ref` inside a composable. */
-  el: Readonly<Ref<HTMLInputElement | null>>;
+  el: Readonly<Ref<HTMLInputElement | HTMLTextAreaElement | null>>;
   /** Commits the text, or returns why not. */
   apply: (raw: string) => string | null;
   live?: () => boolean;

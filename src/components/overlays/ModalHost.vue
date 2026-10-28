@@ -1,32 +1,12 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch, useId, useTemplateRef } from "vue";
+import { computed, onMounted, onUnmounted } from "vue";
 import { useModalStore } from "../../stores/modals";
+import Button from "../ui/Button.vue";
+import ConfirmDialog from "../ui/ConfirmDialog.vue";
+import Dialog from "../ui/Dialog.vue";
 
 const modals = useModalStore();
 const req = computed(() => modals.current);
-
-const card = useTemplateRef<HTMLDivElement>("card");
-const titleId = useId();
-/** chooseMulti: which options are ticked, by index. */
-const checked = ref<boolean[]>([]);
-
-const okDisabled = computed(() => {
-  const r = req.value;
-  if (r?.kind !== "multi") return false;
-  return checked.value.filter(Boolean).length < r.min;
-});
-
-// Keyboard first: focus the first control so Enter commits without a mouse.
-watch(
-  req,
-  async (r) => {
-    if (!r) return;
-    if (r.kind === "multi") checked.value = r.options.map(() => false);
-    await nextTick();
-    card.value?.querySelector<HTMLElement>("button, input")?.focus();
-  },
-  { immediate: true },
-);
 
 function finish(value: unknown) {
   const r = req.value;
@@ -41,21 +21,24 @@ function cancel() {
   finish(r.kind === "list" ? undefined : null);
 }
 
-function confirmMulti() {
-  const r = req.value;
-  if (r?.kind !== "multi" || okDisabled.value) return;
-  finish(r.options.filter((_, i) => checked.value[i]).map((o) => o.value));
+// The last one: a chooser is the topmost dialog, and ConfirmDialog has no other user.
+function panel(): HTMLElement | null {
+  const all = document.querySelectorAll<HTMLElement>(".ui-confirm");
+  return all[all.length - 1] ?? null;
 }
 
-function buttons(): HTMLButtonElement[] {
-  return [...(card.value?.querySelectorAll<HTMLButtonElement>(".choice-row button") ?? [])];
-}
+// What the dialog itself handles: Tab for its focus trap, Space for a box, the arrows, Home and End for the choices.
+const DIALOG_KEYS = new Set(["Tab", " ", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"]);
+let passed: KeyboardEvent | null = null;
 
-// Swallows every key it does not handle, so no global shortcut fires under an open modal. Esc uses
-// stopImmediatePropagation for the same reason.
+// Swallows every key it does not handle or pass to the dialog, so no global shortcut fires under an open modal. Esc
+// uses stopImmediatePropagation for the same reason.
 function onKeydown(e: KeyboardEvent) {
+  // A dialog that stopped the last passed key kept it from reaching onBubble, so it is dropped here.
+  passed = null;
   const r = req.value;
   if (!r) return;
+  const card = panel();
 
   if (e.key === "Escape") {
     e.preventDefault();
@@ -66,72 +49,72 @@ function onKeydown(e: KeyboardEvent) {
   if (e.key === "Enter") {
     e.preventDefault();
     e.stopImmediatePropagation();
-    if (r.kind === "multi") confirmMulti();
+    if (r.kind === "multi") card?.querySelector<HTMLElement>(".ui-confirm-ok")?.click();
     else if (r.kind === "list") cancel();
     else {
-      const bs = buttons();
-      const active = document.activeElement as HTMLButtonElement | null;
-      (active && bs.includes(active) ? active : bs[0])?.click();
+      const active = document.activeElement;
+      const own = active instanceof HTMLButtonElement && card?.contains(active) ? active : null;
+      (own ?? card?.querySelector<HTMLElement>(".ui-confirm-choice"))?.click();
     }
     return;
   }
-  if ((e.key === "ArrowRight" || e.key === "ArrowLeft") && r.kind === "choose") {
-    e.preventDefault();
-    const bs = buttons();
-    const i = bs.indexOf(document.activeElement as HTMLButtonElement);
-    const n = bs.length;
-    if (n) bs[i < 0 ? 0 : (i + (e.key === "ArrowRight" ? 1 : n - 1)) % n]?.focus();
+  if (DIALOG_KEYS.has(e.key) && card && e.target instanceof Node && card.contains(e.target)) {
+    passed = e;
     return;
   }
   e.preventDefault();
   e.stopPropagation();
 }
 
+// A passed key still stops short of the window's shortcut listeners, once the dialog has had it.
+function onBubble(e: KeyboardEvent) {
+  if (e !== passed) return;
+  passed = null;
+  e.stopPropagation();
+}
+
 // On window in the capture phase, not the backdrop: the trap must swallow keys wherever focus is, and a backdrop
 // click moves focus out of the card.
-onMounted(() => window.addEventListener("keydown", onKeydown, true));
-onUnmounted(() => window.removeEventListener("keydown", onKeydown, true));
+onMounted(() => {
+  window.addEventListener("keydown", onKeydown, true);
+  document.body.addEventListener("keydown", onBubble);
+});
+onUnmounted(() => {
+  passed = null;
+  window.removeEventListener("keydown", onKeydown, true);
+  document.body.removeEventListener("keydown", onBubble);
+});
 </script>
 
 <template>
-  <Teleport to="body">
-    <div v-if="req" class="choice-backdrop" @pointerdown.self="cancel()">
-      <div class="choice-card" ref="card" role="dialog" aria-modal="true" :aria-labelledby="titleId">
-        <div :id="titleId" class="choice-title">{{ req.title }}</div>
-
-        <div v-if="req.kind === 'choose'" class="choice-row">
-          <button v-for="opt in req.options" :key="opt.value" class="choice-btn" @click="finish(opt.value)">
-            <span>{{ opt.label }}</span>
-            <small v-if="opt.hint">{{ opt.hint }}</small>
-          </button>
-        </div>
-
-        <template v-else-if="req.kind === 'multi'">
-          <div class="choice-checklist">
-            <label v-for="(opt, i) in req.options" :key="opt.value" class="choice-check">
-              <input type="checkbox" :value="opt.value" v-model="checked[i]" />
-              <span>{{ opt.label }}</span>
-              <small v-if="opt.hint">{{ opt.hint }}</small>
-            </label>
-          </div>
-          <div class="choice-row">
-            <button class="choice-btn" @click="cancel()"><span>Cancel</span></button>
-            <button class="choice-btn choice-primary" :disabled="okDisabled" @click="confirmMulti()"
-              ><span>{{ req.confirmLabel }}</span></button
-            >
-          </div>
-        </template>
-
-        <!-- listModal(): read-only list + Done -->
-        <template v-else>
-          <ul class="choice-list">
-            <li v-for="(it, i) in req.items" :key="i" :title="it">{{ it }}</li>
-          </ul>
-          <div class="choice-row">
-            <button class="choice-btn choice-primary" @click="cancel()"><span>Done</span></button>
-          </div>
-        </template>
-      </div>
-    </div>
-  </Teleport>
+  <ConfirmDialog
+    v-if="req && req.kind !== 'list'"
+    :key="req.id"
+    :title="req.title"
+    :options="req.options"
+    :multi="req.kind === 'multi'"
+    :min="req.kind === 'multi' ? req.min : 1"
+    :confirm-label="req.kind === 'multi' ? req.confirmLabel : 'OK'"
+    @pick="finish"
+    @confirm="finish"
+    @cancel="cancel()"
+  />
+  <!-- listModal() leaves the modal depth alone, so its frame holds no gate. -->
+  <Dialog
+    v-else-if="req"
+    :key="req.id"
+    :title="req.title"
+    size="sm"
+    :gate="false"
+    :close-on-esc="false"
+    panel-class="ui-confirm"
+    @close="cancel()"
+  >
+    <ul class="choice-list">
+      <li v-for="(it, i) in req.items" :key="i" :title="it">{{ it }}</li>
+    </ul>
+    <template #footer>
+      <Button variant="primary" class="ui-confirm-ok" @click="cancel()">Done</Button>
+    </template>
+  </Dialog>
 </template>
