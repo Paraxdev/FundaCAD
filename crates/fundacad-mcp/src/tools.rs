@@ -253,8 +253,15 @@ pub fn printability() -> JsonObject {
 }
 
 pub fn interference() -> JsonObject {
+    paged(interference_fields(), "rows of each list (default 30, all with full)")
+}
+
+fn interference_fields() -> JsonObject {
     object(
         json!({
+            "full": {"type": "boolean",
+                     "description": "one row per pair with where it meets; by default a long \
+                                     list folds pairs alike in all but their ids into one row"},
             "bodies": {"type": "array", "items": {"type": "string"},
                        "description": "only check these bodies against each other, by id or \
                                        name; every body if omitted"},

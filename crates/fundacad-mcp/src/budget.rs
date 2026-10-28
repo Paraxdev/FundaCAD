@@ -180,6 +180,24 @@ pub fn ranges(items: &[&str], quote: bool) -> String {
     out.join(", ")
 }
 
+/// As `ranges`, cut to the most items whose ranges fit in `cap` characters, and how many were left out.
+pub fn ranges_capped(items: &[&str], quote: bool, cap: usize) -> (String, usize) {
+    let all = ranges(items, quote);
+    if all.len() <= cap {
+        return (all, 0);
+    }
+    let (mut lo, mut hi) = (1, items.len());
+    while lo < hi {
+        let mid = (lo + hi).div_ceil(2);
+        if ranges(&items[..mid], quote).len() <= cap {
+            lo = mid;
+        } else {
+            hi = mid - 1;
+        }
+    }
+    (ranges(&items[..lo], quote), items.len() - lo)
+}
+
 /// Every float in a selector rounded to a millionth, far finer than any fingerprint the matcher compares, so
 /// float noise such as 4.44e-16 or 2.9999999999999996 is no longer spelt out. A float stays a float: a client
 /// comparing JSON values strictly still finds 1.0 where it found 1.0.

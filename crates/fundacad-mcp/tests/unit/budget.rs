@@ -60,6 +60,18 @@ fn ranges_join_runs_of_numbered_ids() {
 }
 
 #[test]
+fn capped_ranges_stop_at_the_cap_and_count_the_rest() {
+    let ids: Vec<String> = (1..=40).map(|i| format!("body{}", i * 2)).collect();
+    let ids: Vec<&str> = ids.iter().map(String::as_str).collect();
+    let (said, left) = ranges_capped(&ids, false, 30);
+    assert_eq!(said, "body2, body4, body6, body8");
+    assert_eq!(left, 36);
+    assert_eq!(ranges_capped(&["body1", "body2", "body3"], false, 30), ("body1..body3".to_string(), 0));
+    // One id longer than the cap is still said, a row never lists none of its ids.
+    assert_eq!(ranges_capped(&["body100", "body200"], false, 3), ("body100".to_string(), 1));
+}
+
+#[test]
 fn ids_sort_the_way_a_person_counts() {
     let mut ids = vec!["body10", "body2", "body1", "sketch3"];
     ids.sort_by(|a, b| natural(a, b));

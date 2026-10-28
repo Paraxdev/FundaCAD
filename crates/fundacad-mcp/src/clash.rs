@@ -3,7 +3,16 @@
 
 use serde_json::Value;
 
+use crate::budget::{self, Page};
 use crate::describe::g_format;
+
+fn alike(full: bool) -> &'static str {
+    if full {
+        ""
+    } else {
+        ", alike pairs in one row"
+    }
+}
 
 /// Pairs closer than this are reported when the caller does not say.
 pub const DEFAULT_CLEARANCE: f64 = 1.0;
@@ -172,7 +181,114 @@ fn gaps(r: &Value) -> Vec<&Value> {
     g
 }
 
-pub fn report(r: &Value, clearance: f64) -> String {
+/// The ids a folded row spells out before it counts the rest.
+const IDS: usize = 240;
+
+/// A pair's row: two rows fold when `same` matches, which leaves out the ids, the copy numbers and the position.
+struct PairRow {
+    a: String,
+    b: String,
+    same: String,
+    text: String,
+}
+
+fn pair_row(p: &Value, same: String, text: String) -> PairRow {
+    let stems = format!("{}\n{}", budget::stem(s(p, "aName")), budget::stem(s(p, "bName")));
+    PairRow { a: s(p, "a").to_string(), b: s(p, "b").to_string(), same: format!("{stems}\n{same}"), text }
+}
+
+fn overlap_row(p: &Value) -> PairRow {
+    let bb = p.get("bbox");
+    let corner = |k: &str| -> Vec<f64> {
+        bb.and_then(|b| b.get(k))
+            .and_then(Value::as_array)
+            .map(|a| a.iter().map(|x| x.as_f64().unwrap_or(0.0)).collect())
+            .unwrap_or_default()
+    };
+    let size: Vec<String> = corner("min").iter().zip(corner("max")).map(|(lo, hi)| mm(hi - lo)).collect();
+    let volume = mm(f(p, "volume"));
+    let text = format!(
+        "  {}: {volume} mm3 overlap, from {} to {}",
+        pair(p),
+        point(bb.and_then(|b| b.get("min"))),
+        point(bb.and_then(|b| b.get("max")))
+    );
+    pair_row(p, format!("{volume} {}", size.join(" x ")), text)
+}
+
+fn gap_row(g: &Value) -> PairRow {
+    let d = f(g, "distance");
+    let gap = if d < 1e-6 { "touching".to_string() } else { format!("{} mm apart", mm(d)) };
+    let text = format!("  {}: {gap}, at {} and {}", pair(g), point(g.get("pointA")), point(g.get("pointB")));
+    pair_row(g, gap, text)
+}
+
+/// Pairs alike in all but their ids and where they meet become the first of them, with the others' ids.
+fn fold_pairs(rows: Vec<PairRow>) -> Vec<String> {
+    if rows.len() <= budget::FOLD_FROM {
+        return rows.into_iter().map(|r| r.text).collect();
+    }
+    let mut groups: Vec<(PairRow, Vec<PairRow>)> = Vec::new();
+    let mut at: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    for r in rows {
+        match at.get(&r.same) {
+            Some(&i) => groups[i].1.push(r),
+            None => {
+                at.insert(r.same.clone(), groups.len());
+                groups.push((r, Vec::new()));
+            }
+        }
+    }
+    groups.into_iter().map(|(first, rest)| folded_pair(first, &rest)).collect()
+}
+
+fn folded_pair(first: PairRow, rest: &[PairRow]) -> String {
+    if rest.is_empty() {
+        return first.text;
+    }
+    let one_a = rest.iter().all(|r| r.a == first.a);
+    let one_b = !one_a && rest.iter().all(|r| r.b == first.b);
+    let mut ids: Vec<String> = rest
+        .iter()
+        .map(|r| {
+            if one_a {
+                r.b.clone()
+            } else if one_b {
+                r.a.clone()
+            } else {
+                format!("{}/{}", r.a, r.b)
+            }
+        })
+        .collect();
+    ids.sort_by(|x, y| {
+        let (xa, xb) = x.split_once('/').unwrap_or((x, ""));
+        let (ya, yb) = y.split_once('/').unwrap_or((y, ""));
+        budget::natural(xa, ya).then_with(|| budget::natural(xb, yb))
+    });
+    let refs: Vec<&str> = ids.iter().map(String::as_str).collect();
+    let (said, left) = budget::ranges_capped(&refs, false, IDS);
+    let said = if one_a {
+        format!("{} / {said}", first.a)
+    } else if one_b {
+        format!("{said} / {}", first.b)
+    } else {
+        said
+    };
+    let left = if left > 0 { format!(" and {left} more, full true lists every pair") } else { String::new() };
+    format!("{} (and {} more alike: {said}{left})", first.text, rest.len())
+}
+
+/// The rows of one list, folded unless `full`, and the page of them asked for.
+fn listed(rows: Vec<PairRow>, page: Page, full: bool, noun: &str) -> Vec<String> {
+    let rows = if full { rows.into_iter().map(|r| r.text).collect() } else { fold_pairs(rows) };
+    let (mut shown, more) = page.cut(rows, noun);
+    shown.extend(more.map(|m| format!("  {m}")));
+    shown
+}
+
+/// One check's reply. A list longer than FOLD_FROM pairs says its sum first, folds alike pairs unless `full`,
+/// and shows `page` of its rows; a short one reads as it always did.
+pub fn report(r: &Value, clearance: f64, page: Page, full: bool) -> String {
     let pairs = list(r, "pairs");
     let near = gaps(r);
     let skipped = unjudged(r);
@@ -193,28 +309,28 @@ pub fn report(r: &Value, clearance: f64) -> String {
                 .to_string(),
         );
     } else {
-        out.push(format!("{} overlapping pair{}:", pairs.len(), if pairs.len() == 1 { "" } else { "s" }));
-        for p in pairs {
-            let bb = p.get("bbox");
-            out.push(format!(
-                "  {}: {} mm3 overlap, from {} to {}",
-                pair(p),
-                mm(f(p, "volume")),
-                point(bb.and_then(|b| b.get("min"))),
-                point(bb.and_then(|b| b.get("max")))
-            ));
+        let head = format!("{} overlapping pair{}:", pairs.len(), if pairs.len() == 1 { "" } else { "s" });
+        let mut sorted: Vec<&Value> = pairs.iter().collect();
+        if pairs.len() > budget::FOLD_FROM {
+            sorted.sort_by(|a, b| f(b, "volume").total_cmp(&f(a, "volume")));
+            let total: f64 = pairs.iter().map(|p| f(p, "volume")).sum();
+            out.push(format!("{head} {} mm3 overlap in all, largest first{}", mm(total), alike(full)));
+        } else {
+            out.push(head);
         }
+        out.extend(listed(sorted.into_iter().map(overlap_row).collect(), page, full, "overlap rows"));
     }
     if clearance > 0.0 {
         if near.is_empty() {
             out.push(format!("No other pair comes within {} mm.", mm(clearance)));
         } else {
-            out.push(format!("Within {} mm without overlapping:", mm(clearance)));
-            for g in near {
-                let d = f(g, "distance");
-                let gap = if d < 1e-6 { "touching".to_string() } else { format!("{} mm apart", mm(d)) };
-                out.push(format!("  {}: {gap}, at {} and {}", pair(g), point(g.get("pointA")), point(g.get("pointB"))));
+            let head = format!("Within {} mm without overlapping:", mm(clearance));
+            if near.len() > budget::FOLD_FROM {
+                out.push(format!("{head} {} pairs, nearest first{}", near.len(), alike(full)));
+            } else {
+                out.push(head);
             }
+            out.extend(listed(near.into_iter().map(gap_row).collect(), page, full, "near rows"));
         }
     }
     if let Some(m) = r.get("message").and_then(Value::as_str) {
