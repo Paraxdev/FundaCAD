@@ -2,7 +2,9 @@
 // must not swallow Ctrl+Z/Ctrl+Y or any other shortcut forever; a genuinely
 // live one still should, so ordinary typing is never hijacked.
 import { describe, expect, it, afterEach } from "vitest";
+import { mount } from "@vue/test-utils";
 import { installKeymap } from "../../src/input/keymap";
+import ChoiceRow from "../../src/components/shell/ChoiceRow.vue";
 
 function ctrlZ(target: EventTarget) {
   const e = new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true, cancelable: true });
@@ -55,5 +57,29 @@ describe("installKeymap", () => {
     input.remove();
     ctrlZ(input);
     expect(actions).toEqual(["undo"]);
+  });
+  it("a focused choice row's typed letters search its list and start no tool", async () => {
+    const actions: string[] = [];
+    installKeymap(
+      (a) => actions.push(a),
+      () => "model",
+    );
+    const w = mount(ChoiceRow, {
+      props: {
+        label: "Operation",
+        value: "join",
+        options: [
+          { value: "join", label: "Join" },
+          { value: "cut", label: "Cut" },
+        ],
+        commit: () => {},
+      },
+      attachTo: document.body,
+    });
+    const trigger = w.get("[role=combobox]");
+    (trigger.element as HTMLElement).focus();
+    for (const key of ["j", "e", "c", "f", "Delete"]) await trigger.trigger("keydown", { key });
+    expect([actions, trigger.attributes("aria-expanded")]).toEqual([[], "true"]);
+    w.unmount();
   });
 });

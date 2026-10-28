@@ -1,12 +1,17 @@
 // Inputs that take no typed text, so a focused one must not swallow the sketch keys.
 const NON_TEXT_INPUTS = new Set(["checkbox", "radio", "range", "button", "color", "submit", "reset"]);
 
-/** Text inputs, textareas, selects and contentEditable, so typing "T" in a field does not start the Text tool. */
+/** The base Select's button, whose typed letters search its list as a select's do. */
+const isSelectTrigger = (t: EventTarget | null) => t instanceof HTMLElement && t.getAttribute("role") === "combobox";
+
+/** Text inputs, textareas, selects, Select triggers and contentEditable, so typing "T" in a field does not start the
+ *  Text tool. */
 export function isEditableTarget(t: EventTarget | null): boolean {
   return (
     (t instanceof HTMLInputElement && !NON_TEXT_INPUTS.has(t.type)) ||
     t instanceof HTMLTextAreaElement ||
     t instanceof HTMLSelectElement ||
+    isSelectTrigger(t) ||
     (t instanceof HTMLElement && t.isContentEditable)
   );
 }
@@ -31,5 +36,5 @@ export function isHistoryKey(e: KeyboardEvent): boolean {
 export function isPageSelectAll(e: KeyboardEvent): boolean {
   if (!(e.ctrlKey || e.metaKey) || e.altKey) return false;
   if (e.key.toLowerCase() !== "a") return false;
-  return !isEditableTarget(e.target);
+  return !isEditableTarget(e.target) || isSelectTrigger(e.target);
 }
