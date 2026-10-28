@@ -210,8 +210,6 @@ describe("RenderMaterials Advanced fields", () => {
     for (const [field, value, want] of [
       ["sheen", "0.6", 0.6],
       ["anisotropy", "0.5", 0.5],
-      ["flakes", "0.2", 0.2],
-      ["flakeSize", "0.3", 0.3],
     ] as const) {
       const input = adv.get(`[data-field="${field}"]`);
       (input.element as HTMLInputElement).value = value;
@@ -219,6 +217,9 @@ describe("RenderMaterials Advanced fields", () => {
       expect(fake.store.updateMaterial).toHaveBeenLastCalledWith("m-lamp", { [field]: want });
     }
     expect(w.find('[data-field="scatterDistance"]').exists()).toBe(false);
+    // Nothing draws flakes yet, so the panel does not offer them.
+    expect(adv.find('[data-field="flakes"]').exists()).toBe(false);
+    expect(adv.find('[data-field="flakeSize"]').exists()).toBe(false);
     await tile("m-glass").trigger("click");
     await poll();
     const scatter = w.get('[data-field="scatterDistance"]');

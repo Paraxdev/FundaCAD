@@ -137,7 +137,7 @@
   { "path": "src/components/shell/RenderMaterials.vue", "kind": "button", "count": 17, "reason": "before the base set, migrates in lane O (render materials)" },
   { "path": "src/components/shell/RenderMaterials.vue", "kind": "input[type=checkbox]", "count": 1, "reason": "before the base set, migrates in lane O (render materials)" },
   { "path": "src/components/shell/RenderMaterials.vue", "kind": "input[type=color]", "count": 4, "reason": "native colour picker, no themed equivalent yet, lane O" },
-  { "path": "src/components/shell/RenderMaterials.vue", "kind": "input[type=range]", "count": 18, "reason": "before the base set, migrates in lane O (render materials)" },
+  { "path": "src/components/shell/RenderMaterials.vue", "kind": "input[type=range]", "count": 17, "reason": "before the base set, migrates in lane O (render materials)" },
   { "path": "src/components/shell/RenderMaterials.vue", "kind": "input[type=search]", "count": 1, "reason": "before the base set, migrates in lane O (render materials)" },
   { "path": "src/components/shell/RenderMaterials.vue", "kind": "input[type=text]", "count": 1, "reason": "before the base set, migrates in lane O (render materials)" },
   { "path": "src/components/shell/RenderSlider.vue", "kind": "input[type=range]", "count": 1, "reason": "before the base set, migrates in lane P (render dock)" },
