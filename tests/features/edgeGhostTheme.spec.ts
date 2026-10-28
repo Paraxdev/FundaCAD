@@ -3,7 +3,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import * as THREE from "three";
-import type { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import { EdgeFeatureTool } from "../../src/features/edgeFeatureTool";
 import { oklch } from "../../src/viewport/pickColors";
 import { DEFAULT_THEME_ID, setTheme } from "../../src/ui/theme";
@@ -76,7 +75,10 @@ describe("fillet ghost edges", () => {
     setTheme("noir-blue");
     const s = setup();
     tool = s.tool;
-    const colour = () => (s.ghost()!.material as LineMaterial).color.getHex();
+    const colour = () => {
+      const a = s.ghost()!.geometry.getAttribute("instanceColorStart") as THREE.InterleavedBufferAttribute;
+      return new THREE.Color(a.getX(0), a.getY(0), a.getZ(0)).getHex();
+    };
     expect(near(colour(), 0x3fa9f5)).toBe(true);
     setTheme("noir-red");
     expect(near(colour(), 0xff4d6d)).toBe(true);

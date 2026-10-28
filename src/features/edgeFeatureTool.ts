@@ -3,10 +3,7 @@
 
 import * as THREE from "three";
 import { asFeature } from "../types";
-import { Line2 } from "three/examples/jsm/lines/Line2.js";
 import type { EdgeRef } from "../viewport/edgeLines";
-import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
-import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore, RebuildState } from "../document/store";
 import { featureValueRule } from "../document/numFields";
@@ -16,6 +13,7 @@ import { pickScope, type PickScope } from "../viewport/pickScope";
 import { canConsume, TOOL_CAPABILITIES } from "./toolCapabilities";
 import { EDGE_CAP, confirmEdgeCount } from "./edgeCountGate";
 import { MidSet, TangentChains } from "./tangentChains";
+import { GhostLines, type GhostSlot } from "./ghostLines";
 import { DimInput, type DimSegment } from "../sketch/dimInput";
 import { type Continuity, continuityBlocked, continuityOf, pickedReach } from "./continuity";
 import { setPrompt } from "../ui/prompt";
@@ -96,7 +94,7 @@ interface GhostEdge {
   sels: Selector[];
   mid: Vec3;
   points: Vec3[];
-  line: Line2;
+  slot: GhostSlot;
   chain: number;
   /** the faces' largest curvature across this edge, per mm of radius and of chord, as the engine reports it */
   curvature?: readonly [number, number];
@@ -134,6 +132,7 @@ export class EdgeFeatureTool {
 
   // Every member is a ghost line drawn through the model (depthTest off), so hidden members stay visible and clickable.
   private ghosts: GhostEdge[] = []; // membership display + toggle targets
+  private ghostLines: GhostLines | null = null;
   private unmatchedSels: Selector[] = []; // saved selectors we couldn't visualize (kept for commit)
 
   private editId: string | null = null; // committed feature id being edited
@@ -472,6 +471,7 @@ export class EdgeFeatureTool {
         if (added?.points === line.points) byPoints.set(line.points, added);
       } else this.unmatchedSels.push(sel);
     });
+    this.ghostLines?.sync();
   }
 
   /** How many edges start() would seed, for the count gate (edgeCountGate.ts), without seeding them. */
@@ -508,28 +508,14 @@ export class EdgeFeatureTool {
   ) {
     const mid = polylineMid(points);
     if (!mid) return; // an edge always has points; nothing to ghost otherwise
-    const geo = new LineGeometry();
-    const flat: number[] = [];
-    for (const p of points) flat.push(p[0], p[1], p[2]);
-    geo.setPositions(flat);
-    const el = this.viewport.domElement;
-    const mat = new LineMaterial({
-      color,
-      linewidth: 3.5,
-      worldUnits: false,
-      depthTest: false,
-      transparent: true,
-    });
-    mat.resolution.set(el.clientWidth, el.clientHeight);
-    const line = new Line2(geo, mat);
-    line.renderOrder = 998;
-    this.viewport.addToScene(line);
+    this.ghostLines ??= new GhostLines(this.viewport);
+    const slot = this.ghostLines.add(points, color);
     this.ghosts.push({
       id: ++this.memberSeq,
       sels: [sel],
       mid,
       points,
-      line,
+      slot,
       chain: chain ?? ++this.chainCounter,
       ...(curvature ? { curvature } : {}),
       failed: false,
@@ -586,16 +572,11 @@ export class EdgeFeatureTool {
     setPrompt(`Click an edge in the view to add it to the ${this.kind}`);
   }
 
-  private removeGhost(g: GhostEdge) {
-    if (g === this.hoveredGhost) this.hoveredGhost = null;
-    this.ghosts = this.ghosts.filter((x) => x !== g);
-    this.viewport.removeFromScene(g.line);
-    g.line.geometry.dispose();
-    (g.line.material as LineMaterial).dispose();
-  }
-
   private disposeGhosts() {
-    for (const g of [...this.ghosts]) this.removeGhost(g);
+    this.hoveredGhost = null;
+    this.ghosts = [];
+    this.ghostLines?.dispose();
+    this.ghostLines = null;
     this.unmatchedSels = [];
   }
 
@@ -637,8 +618,8 @@ export class EdgeFeatureTool {
     if (g === this.hoveredGhost) return;
     const prev = this.hoveredGhost;
     this.hoveredGhost = g;
-    if (prev && this.ghosts.includes(prev)) (prev.line.material as LineMaterial).color.set(ghostColor(prev));
-    if (g) (g.line.material as LineMaterial).color.set(edgeHoverColor());
+    if (prev) this.ghostLines?.setColor(prev.slot, ghostColor(prev));
+    if (g) this.ghostLines?.setColor(g.slot, edgeHoverColor());
     this.viewport.requestRender();
   }
 
@@ -688,6 +669,7 @@ export class EdgeFeatureTool {
     const chainId = ++this.chainCounter;
     const color = edgeSelectColor();
     for (const { sel, l } of fresh) this.addGhost(sel, l.points as Vec3[], chainId, l.curvature, color);
+    this.ghostLines?.sync();
     return 0;
   }
 
@@ -702,9 +684,9 @@ export class EdgeFeatureTool {
 
   /** The chain id is recorded at add time, so this works after the preview consumed the chain's edges. */
   private removeWithChain(g: GhostEdge) {
-    for (const ghost of [...this.ghosts]) {
-      if (ghost.chain === g.chain) this.removeGhost(ghost);
-    }
+    if (this.hoveredGhost?.chain === g.chain) this.hoveredGhost = null;
+    this.ghosts = this.ghosts.filter((x) => x.chain !== g.chain || void this.ghostLines?.remove(x.slot));
+    this.ghostLines?.sync();
   }
 
   private enterEditUI() {
@@ -958,7 +940,7 @@ export class EdgeFeatureTool {
   private recolorGhosts() {
     const select = edgeSelectColor();
     for (const g of this.ghosts) {
-      (g.line.material as LineMaterial).color.set(g === this.hoveredGhost ? edgeHoverColor() : ghostColor(g, select));
+      this.ghostLines?.setColor(g.slot, g === this.hoveredGhost ? edgeHoverColor() : ghostColor(g, select));
     }
     this.viewport.requestRender();
   }

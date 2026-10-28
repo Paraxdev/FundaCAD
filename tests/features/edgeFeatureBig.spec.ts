@@ -43,7 +43,13 @@ function rig(n: number) {
   const edgeLineForSelector = vi.fn(() => null);
   const edgeLineByMid = vi.fn(() => null);
   const pre = seeds(n);
+  const scene: THREE.Object3D[] = [];
   const vp = lenient<Viewport>({
+    addToScene: (o: THREE.Object3D) => void scene.push(o),
+    removeFromScene: (o: THREE.Object3D) => {
+      const i = scene.indexOf(o);
+      if (i >= 0) scene.splice(i, 1);
+    },
     domElement: document.createElement("canvas"),
     camera,
     suspendPicking: false,
@@ -66,7 +72,7 @@ function rig(n: number) {
     isParamBound: () => false,
     bareParamRef: () => null,
   });
-  return { tool: new EdgeFeatureTool(vp, store), edgeLineForSelector, edgeLineByMid };
+  return { tool: new EdgeFeatureTool(vp, store), edgeLineForSelector, edgeLineByMid, scene };
 }
 
 describe("fillet on a big preselection", () => {
@@ -92,6 +98,22 @@ describe("fillet on a big preselection", () => {
     (tool as unknown as { recolorGhosts(): void }).recolorGhosts();
     expect(vi.mocked(edgeSelectColor).mock.calls.length).toBeLessThanOrEqual(1);
     tool.cancel();
+  });
+
+  // One Line2 per member made each SwiftShader frame of the preview twice as slow at 5,000 members.
+  it("draws 5,000 members as one line object and drops a removed member from it", () => {
+    const { tool, scene } = rig(5000);
+    tool.start("fillet", () => {});
+    const ghosts = () => scene.filter((o) => o.renderOrder === 998);
+    const segments = () => (ghosts()[0] as THREE.Mesh).geometry.getAttribute("instanceStart").count;
+    expect(ghosts().length).toBe(1);
+    expect(segments()).toBe(5000);
+    tool.removeMemberByKey(tool.memberRows()[0]!.key);
+    expect(tool.memberRows().length).toBe(4999);
+    expect(ghosts().length).toBe(1);
+    expect(segments()).toBe(4999);
+    tool.cancel();
+    expect(ghosts().length).toBe(0);
   });
 
   it("counts the preselection for the gate without seeding anything", () => {
