@@ -138,13 +138,7 @@ onUnmounted(() => {
 
 <template>
   <div ref="slot" class="notice-slot">
-    <div
-      v-if="shown && phase !== 'hidden'"
-      class="err-notice-wrap"
-      role="alert"
-      @mouseenter="onEnter"
-      @mouseleave="onLeave"
-    >
+    <div v-if="shown && phase !== 'hidden'" class="err-notice-wrap" @mouseenter="onEnter" @mouseleave="onLeave">
       <Chip
         id="error-notice"
         as="button"

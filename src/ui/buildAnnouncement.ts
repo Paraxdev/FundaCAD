@@ -12,6 +12,9 @@ type Settled = Pick<RebuildState, "building" | "errorFeatureId" | "errorMessage"
   result: { bodies?: readonly unknown[] } | null;
 };
 
+/** The announcer key of a step's failure, shared by the build line and the step's error notice so it is said once. */
+export const failureKey = (featureId: string) => `failed:${featureId}`;
+
 const failureOf = (s: Settled) => (s.errorFeatureId || s.errorMessage ? `${s.errorFeatureId}|${s.errorMessage}` : null);
 
 /** Null while building and for a tool's live preview, which the tool's own prompt reports. A failure is assertive the

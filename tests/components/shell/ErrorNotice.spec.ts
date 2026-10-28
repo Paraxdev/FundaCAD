@@ -41,6 +41,16 @@ describe("the title bar error notice", () => {
     expect(w.get("#error-notice").classes()).toContain("is-text");
   });
 
+  it("leaves speaking to the announcer, with no live role of its own that would say it twice", async () => {
+    setMotion(false);
+    const w = mount(ErrorNotice);
+    showErrorNotice("Shell failed", { logId: 1 });
+    await w.vm.$nextTick();
+    await w.vm.$nextTick();
+    expect(w.find("#error-notice").exists()).toBe(true);
+    expect(w.find('[role="alert"], [aria-live]').exists()).toBe(false);
+  });
+
   it("opens the console on the entry it was showing", async () => {
     setMotion(false);
     const w = mount(ErrorNotice);

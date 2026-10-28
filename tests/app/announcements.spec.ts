@@ -6,6 +6,7 @@ const announce = vi.fn();
 vi.mock("../../src/ui/announce", () => ({ announce: (...a: unknown[]) => announce(...a) }));
 
 import { BUSY_SPEAK_MS, installAnnouncements } from "../../src/app/announcements";
+import { failureKey } from "../../src/ui/buildAnnouncement";
 import { useUiStore } from "../../src/stores/ui";
 import { setWorkspace } from "../../src/ui/workspace";
 
@@ -58,10 +59,12 @@ describe("installAnnouncements", () => {
     expect(announce).toHaveBeenCalledWith("Built, 1 body", "polite", { key: "build" });
   });
 
-  it("names the failing step assertively", () => {
+  it("names the failing step assertively, keyed like that step's error notice so it is said once", () => {
     build({ building: true });
     build({ errorFeatureId: "f1", errorMessage: "Profile is open" });
-    expect(announce).toHaveBeenCalledWith("Build failed at Extrude 1: Profile is open", "assertive", { key: "build" });
+    expect(announce).toHaveBeenCalledWith("Build failed at Extrude 1: Profile is open", "assertive", {
+      key: failureKey("f1"),
+    });
   });
 
   it("keeps a tool's preview out of the last settled build, so a lasting failure stays polite", () => {

@@ -8,6 +8,8 @@ export interface ToastOptions {
   /** Kept with the console entry, for an error the full report. */
   detail?: unknown;
   source?: string;
+  /** An error's announcer key, see showErrorNotice. */
+  announceKey?: string;
 }
 
 import { crumb } from "../diagnostics/breadcrumbs";
@@ -23,7 +25,12 @@ export function toast(message: string, opts: ToastOptions = {}): number | null {
   const entry = log(kind, message, { source: opts.source ?? "ui", detail: opts.detail });
   // An error is the title bar notice instead, which opens this entry.
   if (kind === "error") {
-    showErrorNotice(message, { logId: entry.id, action: opts.action, holdMs: opts.timeout });
+    showErrorNotice(message, {
+      logId: entry.id,
+      action: opts.action,
+      holdMs: opts.timeout,
+      announceKey: opts.announceKey,
+    });
     return null;
   }
   return useToastStore().push(

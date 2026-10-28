@@ -5,7 +5,7 @@ import { watch } from "vue";
 import type { DocumentStore, RebuildState } from "../document/store";
 import { useUiStore } from "../stores/ui";
 import { announce } from "../ui/announce";
-import { buildLine } from "../ui/buildAnnouncement";
+import { buildLine, failureKey } from "../ui/buildAnnouncement";
 import { busyLine } from "../ui/buildProgress";
 import { stepName } from "../ui/featureMeta";
 import { onWorkspaceChange, WORKSPACES } from "../ui/workspace";
@@ -32,7 +32,9 @@ export function installAnnouncements(e: { store: DocumentStore }): () => void {
     building = false;
     const line = finished ? buildLine(s, lastSettled, nameOf) : null;
     if (!s.previewBuilt && !s.cancelled) lastSettled = s;
-    if (line) announce(line.text, line.priority, { key: "build" });
+    if (!line) return;
+    const failed = line.priority === "assertive" && s.errorFeatureId;
+    announce(line.text, line.priority, { key: failed ? failureKey(failed) : "build" });
   });
 
   let pending: { text: string; timer: ReturnType<typeof setTimeout> } | null = null;
