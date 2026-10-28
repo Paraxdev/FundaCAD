@@ -1041,22 +1041,16 @@
   flex: none;
   color: var(--accent);
 }
-.section-chip-btn {
-  padding: var(--s-1) var(--s-3);
-  font: 600 12px/1.4 var(--ui);
-  color: var(--text-dim);
-  cursor: pointer;
-  transition:
-    background var(--t-fast) var(--ease),
-    border-color var(--t-fast) var(--ease),
-    color var(--t-fast) var(--ease);
+// Pressed, Edit mixes into an opaque dark, not transparency: over a pale model a see-through tint washed it out.
+.section-chip .btn.is-on {
+  --btn-fill: color-mix(in srgb, var(--accent) 24%, var(--panel));
+  --btn-hover: color-mix(in srgb, var(--accent) 24%, var(--panel));
 }
-.section-chip-btn:hover:not(.disabled) {
-  color: var(--text);
-}
-.section-chip-btn.disabled {
-  opacity: 0.45;
-  cursor: default;
+// Normal to Sketch floats alone on the model, so its Button wears the glass chip's blur and shadow.
+.btn.normal-to-sketch {
+  -webkit-backdrop-filter: var(--float-blur);
+  backdrop-filter: var(--float-blur);
+  box-shadow: var(--float-shadow);
 }
 /* Never blocks a pick through it, the model under it is still the one to pick. */
 #viewport .vp-top > .updating-chip {
