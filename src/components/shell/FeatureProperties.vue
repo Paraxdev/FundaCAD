@@ -31,6 +31,7 @@ import {
   featureValueRule,
   featureWithTarget,
   readField,
+  targetFeatureId,
   valueProblem,
   type FieldKind,
   type ValueRule,
@@ -395,8 +396,12 @@ function rowProblem(key: string): string | null {
 function previewField(row: { key: string; target: ParamTarget }, v: number | null) {
   previewProblemRow.value = row.key;
   if (v === null) return;
-  const next = featureWithTarget(store.document, row.target, v);
-  if (!next) return; // unresolvable, or the same value it already holds
+  const id = targetFeatureId(row.target);
+  // The value the document already holds shows the document's own feature again while a preview of it is open.
+  const next =
+    featureWithTarget(store.document, row.target, v) ??
+    (previewOpenFor === id ? (store.document.features.find((f) => f.id === id) ?? null) : null);
+  if (!next) return;
   if (previewOpenFor === next.id) {
     store.setEditPreview(next);
   } else {

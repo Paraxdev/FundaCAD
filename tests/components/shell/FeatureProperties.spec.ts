@@ -1029,6 +1029,14 @@ describe("FeatureProperties typed preview through the app's bridge", () => {
       { doc: 20, field: "20", preview: null, built: 20, undo: false },
     ]);
   });
+
+  it("previews the document's own value when it is typed back while a preview is open", async () => {
+    const p = open();
+    await p.type("30");
+    await p.type("20");
+    expect(p.state()).toEqual({ doc: 20, field: "20", preview: "bx", built: 20, undo: false });
+    p.close();
+  });
 });
 
 describe("FeatureProperties on a feature this version does not know", () => {
