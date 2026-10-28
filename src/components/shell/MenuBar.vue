@@ -3,6 +3,7 @@ import { fmtKeys } from "../../input/platform";
 import { computed, onMounted, onUnmounted, ref, useTemplateRef, watch } from "vue";
 import { claimEscape } from "../../ui/escapeClaim";
 import Icon from "./Icon.vue";
+import Button from "../ui/Button.vue";
 import type { MenuDef, MenuItem } from "../../ui/menu";
 
 const props = defineProps<{ menus: MenuDef[] }>();
@@ -89,9 +90,15 @@ onUnmounted(() => {
 <template>
   <nav id="menubar" class="menubar" ref="root">
     <div v-for="(m, i) in menus" :key="m.label" class="menu">
-      <button class="menu-btn" :class="{ active: openIndex === i }" @click.stop="toggle(i)">
-        {{ m.label }}
-      </button>
+      <Button
+        variant="ghost"
+        size="sm"
+        class="menu-btn"
+        :class="{ 'is-open': openIndex === i }"
+        :aria-expanded="openIndex === i"
+        @click.stop="toggle(i)"
+        >{{ m.label }}</Button
+      >
       <div class="menu-popup" :class="{ hidden: openIndex !== i }" :style="{ maxHeight: popupMaxHeight }">
         <template v-for="(r, j) in rendered[i]" :key="j">
           <div v-if="r.item.separator" class="menu-sep"></div>

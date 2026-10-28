@@ -183,7 +183,7 @@ function sketchToolLabel(action: string | undefined): string | null {
 export function status(h: ReadHost, doc: Document = document, since = 0): Status {
   const rail = doc.querySelector<HTMLElement>("#toolrail");
   const running = doc.querySelector<HTMLElement>('[data-action="running-tool"]');
-  const ws = doc.querySelector<HTMLElement>('[data-workspace][aria-pressed="true"]');
+  const ws = doc.querySelector<HTMLElement>('[data-workspace][aria-checked="true"]');
   const docName = doc.querySelector("#docname");
   const promptEl = doc.querySelector("#prompt");
   const prompt = promptEl?.closest(".hidden") ? "" : text(doc, "#prompt");
