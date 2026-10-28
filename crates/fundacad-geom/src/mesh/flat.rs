@@ -88,6 +88,7 @@ pub(super) fn remove(out: &mut Tessellation) {
     // division adds ends up beside it, among its own face's triangles.
     let mut origin: Vec<usize> = (0..count).collect();
     for _ in 0..ROUNDS {
+        crate::heartbeat::beat();
         let mut changed = join_close_corners(out, &flat, limit);
         for &t in &flat {
             let p = corners(&out.positions, &out.indices[3 * t..3 * t + 3]);
