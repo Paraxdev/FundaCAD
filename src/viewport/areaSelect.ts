@@ -263,4 +263,11 @@ export class FrameCoalescer {
     if (this.queued !== null) this.cancelFrame(this.queued);
     this.queued = null;
   }
+
+  /** A move's own frame callback runs after the render loop's of that frame, so the loop runs it first. */
+  flush() {
+    if (this.queued === null) return;
+    this.cancel();
+    this.run();
+  }
 }

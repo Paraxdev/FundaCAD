@@ -135,4 +135,27 @@ describe("box preview coalescing", () => {
     c.queue();
     expect(pending).not.toBeNull();
   });
+
+  it("runs a pending preview on flush and drops its frame, so the render loop draws it in the frame of its move", () => {
+    let pending: (() => void) | null = null;
+    const cancel = vi.fn(() => (pending = null));
+    const run = vi.fn();
+    const c = new FrameCoalescer(
+      run,
+      (fn) => {
+        pending = fn;
+        return 3;
+      },
+      cancel,
+    );
+    c.flush();
+    expect(run).not.toHaveBeenCalled();
+    c.queue();
+    c.flush();
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(cancel).toHaveBeenCalledWith(3);
+    expect(pending).toBeNull();
+    c.queue();
+    expect(pending).not.toBeNull();
+  });
 });

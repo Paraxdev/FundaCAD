@@ -247,10 +247,13 @@ export class Highlighter {
   private queueEdgeLines() {
     if (this.edgeLinesQueued) return;
     this.edgeLinesQueued = true;
-    queueMicrotask(() => {
-      this.edgeLinesQueued = false;
-      if (!this.disposed) this.syncEdgeLines();
-    });
+    queueMicrotask(() => this.runEdgeLines());
+  }
+
+  private runEdgeLines() {
+    if (!this.edgeLinesQueued) return;
+    this.edgeLinesQueued = false;
+    if (!this.disposed) this.syncEdgeLines();
   }
 
   /** The picked edges drawn again wide over their own one. */
@@ -534,10 +537,19 @@ export class Highlighter {
   private queueSelectOverlay() {
     if (this.selectOverlayQueued) return;
     this.selectOverlayQueued = true;
-    queueMicrotask(() => {
-      this.selectOverlayQueued = false;
-      if (!this.disposed) this.syncOverlay("select");
-    });
+    queueMicrotask(() => this.runSelectOverlay());
+  }
+
+  private runSelectOverlay() {
+    if (!this.selectOverlayQueued) return;
+    this.selectOverlayQueued = false;
+    if (!this.disposed) this.syncOverlay("select");
+  }
+
+  /** Builds the overlay and wide lines queued in this task now, for a render loop about to draw the frame. */
+  settle() {
+    this.runSelectOverlay();
+    this.runEdgeLines();
   }
 
   private syncOverlay(kind: PickKind) {

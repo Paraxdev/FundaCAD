@@ -1,6 +1,6 @@
 // A box frame paints by the delta from the last one, so its colours, overlays, wide lines and selection order must
 // end where a clear and select of the same take would.
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { Highlighter } from "../../src/viewport/highlight";
 import type { EdgeRef } from "../../src/viewport/edgeLines";
 import { bodiesRig, painted, seeded, settle } from "./boxDeltaRig";
@@ -159,5 +159,25 @@ describe("box delta end state", () => {
     expect(own.selectLines.get(draws[0])).toBe(before.line0);
     expect(own.selectLines.get(draws[1])).not.toBe(before.line1);
     h.dispose();
+  });
+
+  it("builds the queued overlay and wide lines at once for a render loop about to draw the frame", async () => {
+    const a = bodiesRig(2, 12);
+    const b = bodiesRig(2, 12);
+    const ha = new Highlighter(a.view);
+    const hb = new Highlighter(b.view);
+    ha.setSelection(take([0, 1, 13], [a.refs[0]!, a.refs[12]!]));
+    ha.settle();
+    const now = painted(ha, a);
+    clearAndSelect(hb, take([0, 1, 13], [b.refs[0]!, b.refs[12]!]));
+    await settle();
+    expect(now).toEqual(painted(hb, b));
+    expect(now.selectOverlay).toHaveLength(2);
+    expect(now.lines).toHaveLength(2);
+    const again = vi.spyOn(ha as unknown as Record<string, () => void>, "syncOverlay");
+    await settle();
+    expect(again).not.toHaveBeenCalled();
+    ha.dispose();
+    hb.dispose();
   });
 });

@@ -1375,7 +1375,11 @@ export class Viewport {
    *  dropped by anything that changes what is on screen. */
   private areaProj: AreaProjection | null = null;
 
-  private areaFrame = new FrameCoalescer(() => this.showAreaBox());
+  /** Run by the render loop before it draws, so a move's preview lands in that frame, overlay and wide lines too. */
+  private areaFrame = new FrameCoalescer(() => {
+    this.showAreaBox();
+    this.highlighter?.settle();
+  });
   private pressPull = new PressPullMemo();
 
   private dropAreaProjection() {
@@ -4446,6 +4450,7 @@ export class Viewport {
       const resized = this.applyMotionScale(moved, now);
       this.edgeMotionTick(moved, now);
       if (resized === "changed" || (resized === "wait" && moved)) this.requestRender();
+      this.areaFrame.flush();
       this.syncOverlayMask();
       if (this.needsRender) syncOverlayLayers(this.scene.scene);
       this.trace.tick({
