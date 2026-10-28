@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
+import { claimEscape } from "../../ui/escapeClaim";
 import {
   DEFAULT_EXPERIMENTAL,
   ENV_WIDTHS,
@@ -25,7 +26,25 @@ onMounted(() => {
     prefs.value = { ...experimentalPrefs() };
   });
 });
-onUnmounted(() => off?.());
+// While the focused number holds a draft, its Escape reverts the draft and the dialog closes on the next Escape.
+let releaseEscape: (() => void) | null = null;
+function holdEscape(on: boolean) {
+  if (on) releaseEscape ??= claimEscape();
+  else {
+    releaseEscape?.();
+    releaseEscape = null;
+  }
+}
+const refused = (e: Event) => (e.target as HTMLElement).getAttribute("aria-invalid") === "true";
+function onNumberKey(e: KeyboardEvent) {
+  if (e.key === "ArrowUp" || e.key === "ArrowDown") holdEscape(true);
+  else if (e.key === "Escape") holdEscape(false);
+  else if (e.key === "Enter") void nextTick(() => holdEscape(refused(e)));
+}
+onUnmounted(() => {
+  off?.();
+  holdEscape(false);
+});
 
 const changed = computed(() =>
   (Object.keys(DEFAULT_EXPERIMENTAL) as (keyof ExperimentalPrefs)[]).some(
@@ -141,7 +160,13 @@ const max = (f: Field) => EXPERIMENTAL_RANGE[f.key][1] / f.scale;
     <div v-for="f in PATH" :key="f.key" class="pref-card">
       <div class="pref-head">
         <label class="pref-title" :for="`prefs-x-${f.key}`">{{ f.title }}</label>
-        <span class="pref-number">
+        <span
+          class="pref-number"
+          @input="holdEscape(true)"
+          @keydown="onNumberKey"
+          @focusin="holdEscape(refused($event))"
+          @focusout="holdEscape(false)"
+        >
           <NumberField
             :id="`prefs-x-${f.key}`"
             :model-value="boxValue(f)"

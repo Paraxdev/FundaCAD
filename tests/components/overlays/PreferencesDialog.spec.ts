@@ -14,6 +14,7 @@ import {
   setHomeBackground,
   useHomeImageStore,
 } from "../../../src/ui/homeBackground";
+import { experimentalPrefs, resetExperimentalPrefs } from "../../../src/ui/experimentalPrefs";
 
 enableAutoUnmount(afterEach);
 
@@ -47,6 +48,7 @@ beforeEach(() => {
   setMotion(true);
   setHomeBackground("paper");
   useHomeImageStore(memoryImageStore());
+  resetExperimentalPrefs();
 });
 
 describe("Preferences choices", () => {
@@ -154,6 +156,51 @@ describe("Preferences settings and frame", () => {
     await open();
     expect((document.activeElement as HTMLElement).dataset.category).toBe("appearance");
     [...document.querySelectorAll<HTMLElement>(".modal-foot button")].find((b) => label(b) === "Done")!.click();
+    expect(dialogs.preferences).toBe(false);
+  });
+
+  it("reverts a drafted Experimental number on Escape, the next Escape closes the dialog", async () => {
+    const dialogs = useDialogStore();
+    dialogs.preferences = true;
+    await open();
+    await category("experimental");
+    const box = $("#prefs-x-bounces") as HTMLInputElement;
+    const draft = async (text: string) => {
+      box.focus();
+      box.value = text;
+      box.dispatchEvent(new Event("input", { bubbles: true }));
+      await flushPromises();
+    };
+    const settle = () => new Promise((r) => setTimeout(r, 0));
+    await draft("999");
+    await press("Enter");
+    await press("Escape");
+    await settle();
+    await draft("12");
+    await press("Escape");
+    await settle();
+    expect([box.value, experimentalPrefs().bounces, dialogs.preferences]).toEqual(["6", 6, true]);
+    await press("ArrowUp");
+    await press("Escape");
+    await settle();
+    expect([box.value, dialogs.preferences]).toEqual(["6", true]);
+    await press("Escape");
+    expect(dialogs.preferences).toBe(false);
+  });
+
+  it("lets Escape close the dialog from a refused number once focus has left it", async () => {
+    const dialogs = useDialogStore();
+    dialogs.preferences = true;
+    await open();
+    await category("experimental");
+    const box = $("#prefs-x-bounces") as HTMLInputElement;
+    box.focus();
+    box.value = "999";
+    box.dispatchEvent(new Event("input", { bubbles: true }));
+    await press("Enter");
+    $("[data-experimental-reset]").focus();
+    await new Promise((r) => setTimeout(r, 0));
+    await press("Escape");
     expect(dialogs.preferences).toBe(false);
   });
 });
