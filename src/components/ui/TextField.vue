@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, mergeProps, useAttrs, useTemplateRef } from "vue";
+import { computed, mergeProps, useAttrs, useTemplateRef, watch } from "vue";
 import { useCommitField } from "./useCommitField";
 import { useDisabled } from "./useDisabled";
 import { fmtKeys } from "../../input/platform";
@@ -44,6 +44,15 @@ const field = useCommitField({
   },
 });
 const { draft } = field;
+
+// Live, the model is the text itself, so a model that differs from the draft was changed outside (a search cleared
+// by Escape) and shows even while focused.
+watch(
+  () => props.modelValue,
+  (v) => {
+    if (props.commit === "live" && v !== draft.value) field.revert();
+  },
+);
 
 defineExpose({ focus: () => el.value?.focus() });
 

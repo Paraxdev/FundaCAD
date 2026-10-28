@@ -91,6 +91,16 @@ describe("TextField", () => {
     expect(emitted(w)).toEqual([["o"], ["on"]]);
   });
 
+  it("in live mode shows an outside change even while focused, since the model is the text", async () => {
+    const { w, input } = await render();
+    (input.element as HTMLInputElement).focus();
+    await input.setValue("chamfer");
+    await w.setProps({ modelValue: "chamfer" });
+    expect((input.element as HTMLInputElement).value).toBe("chamfer");
+    await w.setProps({ modelValue: "" });
+    expect([(input.element as HTMLInputElement).value, document.activeElement]).toEqual(["", input.element]);
+  });
+
   it("keeps a focused draft when the value changes outside, and follows it once blurred", async () => {
     const { w, input } = await render({ commit: "change" });
     (input.element as HTMLInputElement).focus();
