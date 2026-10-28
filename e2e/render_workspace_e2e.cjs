@@ -104,10 +104,10 @@ async function dragMaterialTo(page, materialId, x, y, opts = {}) {
 
   // ---- 1. the workspace toggle --------------------------------------------
   console.log("\n1. [ Model | Render ]");
-  check("the toggle is in the title bar", (await page.locator("#workspace-toggle .seg-btn").count()) === 2);
+  check("the toggle is in the title bar", (await page.locator("#workspace-toggle [data-workspace]").count()) === 2);
   check(
     "Model is the one it opens in",
-    (await page.locator("#workspace-toggle .seg-btn.active").getAttribute("data-workspace")) === "model",
+    (await page.locator('#workspace-toggle [aria-checked="true"]').getAttribute("data-workspace")) === "model",
   );
   check("and the dock is not mounted at all (control)", (await page.locator("#renderdock").count()) === 0);
 

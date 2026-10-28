@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useEngine } from "../../app/engineKey";
 import type { SectionPhase } from "../../features/sectionTool";
 import Icon from "./Icon.vue";
+import Button from "../ui/Button.vue";
 
 const engine = useEngine();
 const section = engine.tools.section;
@@ -75,32 +76,12 @@ function onEdit() {
       <Icon name="section" :size="14" />
       <span class="section-chip-text">Section on</span>
     </span>
-    <button
-      type="button"
-      class="section-chip-btn"
-      :class="{ active: editing, disabled: blocked }"
-      :aria-pressed="editing ? 'true' : 'false'"
-      :aria-disabled="blocked ? 'true' : undefined"
-      :title="editTip"
-      data-testid="section-edit"
-      @click="onEdit"
-      >Edit</button
+    <Button size="sm" :pressed="editing" :disabled="blocked" :tip="editTip" data-testid="section-edit" @click="onEdit"
+      >Edit</Button
     >
-    <button
-      type="button"
-      class="section-chip-btn"
-      title="Keep the other side of the cut"
-      data-testid="section-flip"
-      @click="section.flip()"
-      >Flip</button
+    <Button size="sm" tip="Keep the other side of the cut" data-testid="section-flip" @click="section.flip()"
+      >Flip</Button
     >
-    <button
-      type="button"
-      class="section-chip-btn"
-      title="Turn the section off"
-      data-testid="section-off"
-      @click="section.stop()"
-      >Off</button
-    >
+    <Button size="sm" tip="Turn the section off" data-testid="section-off" @click="section.stop()">Off</Button>
   </div>
 </template>

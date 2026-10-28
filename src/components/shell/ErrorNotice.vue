@@ -6,6 +6,8 @@ import { nextTick, onMounted, onUnmounted, ref } from "vue";
 import { dismissErrorNotice, errorNotice, onErrorNotice, type ErrorNotice } from "../../ui/errorNotice";
 import { revealEntry } from "../../ui/logStore";
 import { motionOn } from "../../ui/motion";
+import Button from "../ui/Button.vue";
+import Chip from "../ui/Chip.vue";
 
 type Phase = "hidden" | "icon" | "grow" | "text" | "leave";
 
@@ -20,7 +22,7 @@ const LEAVE_MS = 260;
 const phase = ref<Phase>("hidden");
 const shown = ref<ErrorNotice | null>(null);
 const width = ref(ICON_W);
-const measure = ref<HTMLElement | null>(null);
+const measure = ref<InstanceType<typeof Chip> | null>(null);
 const slot = ref<HTMLElement | null>(null);
 
 let timers: number[] = [];
@@ -38,7 +40,7 @@ function clearTimers() {
 
 async function fitWidth(): Promise<number> {
   await nextTick();
-  const natural = measure.value?.offsetWidth ?? ICON_W;
+  const natural = (measure.value?.$el as HTMLElement | undefined)?.offsetWidth ?? ICON_W;
   const room = slot.value?.clientWidth ?? natural;
   return Math.max(ICON_W, Math.min(natural, room));
 }
@@ -143,9 +145,11 @@ onUnmounted(() => {
       @mouseenter="onEnter"
       @mouseleave="onLeave"
     >
-      <button
+      <Chip
         id="error-notice"
-        type="button"
+        as="button"
+        variant="error"
+        size="md"
         class="err-notice"
         :class="`is-${phase}`"
         :style="{ width: `${width}px` }"
@@ -157,16 +161,16 @@ onUnmounted(() => {
           <path class="err-tri-mark" d="M12 9v5M12 17.2v.1" />
         </svg>
         <span class="err-text">{{ shown.message }}</span>
-        <span v-if="shown.count > 1" class="err-count">{{ shown.count }}</span>
-      </button>
-      <button v-if="shown.action && phase === 'text'" type="button" class="err-action" @click="runAction">{{
+        <Chip v-if="shown.count > 1" size="xs" variant="error" class="err-count">{{ shown.count }}</Chip>
+      </Chip>
+      <Button v-if="shown.action && phase === 'text'" size="sm" class="err-action" @click="runAction">{{
         shown.action.label
-      }}</button>
+      }}</Button>
     </div>
     <!-- The chip's width at rest, measured so the grow has a target. -->
-    <span v-if="shown" ref="measure" class="err-notice err-measure" aria-hidden="true">
+    <Chip v-if="shown" ref="measure" variant="error" size="md" class="err-notice err-measure" aria-hidden="true">
       <span class="err-text">{{ shown.message }}</span>
-      <span v-if="shown.count > 1" class="err-count">{{ shown.count }}</span>
-    </span>
+      <Chip v-if="shown.count > 1" size="xs" variant="error" class="err-count">{{ shown.count }}</Chip>
+    </Chip>
   </div>
 </template>

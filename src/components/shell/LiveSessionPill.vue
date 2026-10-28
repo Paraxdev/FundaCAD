@@ -8,6 +8,7 @@ import { useDialogStore } from "../../stores/dialogs";
 import { liveEditsAllowed, onLiveEditingChange } from "../../ui/liveEditing";
 import type { LiveState } from "../../live/liveSession";
 import Icon from "./Icon.vue";
+import Chip from "../ui/Chip.vue";
 
 const engine = useEngine();
 const dialogs = useDialogStore();
@@ -60,9 +61,12 @@ const title = computed(() =>
 </script>
 
 <template>
-  <button
+  <!-- title, not tip: the tip would become the name, and the name is who is attached and what they did. -->
+  <Chip
     v-if="attached"
     id="live-pill"
+    as="button"
+    :variant="canEdit ? 'accent' : 'neutral'"
     class="live-pill"
     :class="{ readonly: !canEdit }"
     :title="title"
@@ -71,43 +75,5 @@ const title = computed(() =>
     <Icon name="dot" :size="8" class="live-dot" />
     <span class="live-who">{{ label }}</span>
     <span v-if="recent && state.lastEdit?.note" class="live-note">{{ state.lastEdit.note }}</span>
-  </button>
+  </Chip>
 </template>
-
-<style scoped>
-.live-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  max-width: 22rem;
-  padding: 2px 8px;
-  border: 1px solid transparent;
-  border-radius: 999px;
-  background: var(--accent-tint);
-  color: var(--fg, inherit);
-  font: inherit;
-  font-size: 11px;
-  cursor: pointer;
-}
-.live-pill.readonly {
-  background: var(--float-chip-bg);
-  opacity: 0.85;
-}
-.live-dot {
-  color: var(--accent);
-  flex: none;
-}
-.live-pill.readonly .live-dot {
-  color: var(--muted, #999);
-}
-.live-who {
-  white-space: nowrap;
-}
-/* The note may truncate: the assistant writes it, and the tooltip and timeline already say it whole. */
-.live-note {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  opacity: 0.7;
-}
-</style>

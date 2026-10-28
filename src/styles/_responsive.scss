@@ -51,10 +51,10 @@
     gap: var(--s-2);
     padding: 0 var(--s-2);
   }
-  .menu-btn {
+  .menubar .btn.menu-btn {
     padding: 0 var(--s-2);
   }
-  #workspace-toggle .seg-btn > span {
+  #workspace-toggle .ui-segment-label {
     display: none;
   }
 }

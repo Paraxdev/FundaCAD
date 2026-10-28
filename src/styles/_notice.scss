@@ -15,35 +15,25 @@
   min-width: 0;
   max-width: 100%;
 }
-.err-notice {
+// A button Chip, error variant, whose width ErrorNotice.vue animates; the chip's own metrics are restated here.
+.chip.err-notice {
   --err-soft: color-mix(in srgb, var(--error) 62%, #fff);
   position: relative;
   display: flex;
-  align-items: center;
+  gap: 0;
   height: 26px;
-  max-width: 100%;
   padding: 0;
-  border: 1px solid color-mix(in srgb, var(--error) 38%, transparent);
-  border-radius: 13px;
-  background: var(--error-tint);
-  color: var(--err-soft);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 500;
+  font: 500 12px/1 var(--ui);
   overflow: hidden;
   cursor: pointer;
-  transition-property: width, opacity, transform, border-color, background;
-  transition-duration: 720ms, 240ms, 240ms, var(--t-fast), var(--t-fast);
+  transition-property: width, opacity, transform, background;
+  transition-duration: 720ms, 240ms, 240ms, var(--t-fast);
   /* Grow curve: full speed, a steep brake, a short settle. The cubic-bezier is the
      fallback for an engine without linear(). */
-  transition-timing-function: cubic-bezier(0.3, 0.95, 0.35, 1), var(--ease), var(--ease), var(--ease), var(--ease);
+  transition-timing-function: cubic-bezier(0.3, 0.95, 0.35, 1), var(--ease), var(--ease), var(--ease);
   transition-timing-function:
     linear(0, 0.174 10%, 0.348 20%, 0.521 30%, 0.695 40%, 0.828 48%, 0.924 56%, 0.971 64%, 0.983 72%, 0.991 86%, 1),
-    var(--ease), var(--ease), var(--ease), var(--ease);
-}
-.err-notice:hover {
-  border-color: color-mix(in srgb, var(--error) 60%, transparent);
-  background: color-mix(in srgb, var(--error) 20%, transparent);
+    var(--ease), var(--ease), var(--ease);
 }
 .err-notice:focus-visible {
   outline: 2px solid var(--accent);
@@ -79,15 +69,7 @@
   transition: opacity 220ms var(--ease);
 }
 .err-count {
-  flex: none;
   margin-right: var(--s-2);
-  padding: 0 6px;
-  border-radius: var(--r-pill);
-  background: color-mix(in srgb, var(--error) 30%, transparent);
-  color: var(--text);
-  font-size: 10.5px;
-  font-variant-numeric: tabular-nums;
-  line-height: 16px;
 }
 .err-notice:not(.is-text) .err-count {
   opacity: 0;
@@ -97,8 +79,8 @@
   animation: err-pop 170ms cubic-bezier(0.3, 1.6, 0.5, 1);
 }
 /* The triangle on its own first, the chip fills in as it grows. */
-.err-notice.is-icon {
-  border-color: transparent;
+.chip.err-notice.is-icon,
+.chip.err-notice.is-icon:hover {
   background: transparent;
 }
 .err-notice.is-text .err-tri,
@@ -126,7 +108,7 @@
 }
 
 /* The resting width, never seen. */
-.err-measure {
+.chip.err-measure {
   position: absolute;
   left: 0;
   top: 0;
@@ -139,21 +121,9 @@
   opacity: 1;
 }
 
-.err-action {
+.btn.err-action {
   flex: none;
-  height: 22px;
-  padding: 0 var(--s-3);
-  border: 1px solid transparent;
-  border-radius: var(--r-sm);
-  background: var(--panel-2);
-  color: var(--text-dim);
-  font: inherit;
-  font-size: 11.5px;
-  cursor: pointer;
   animation: err-pop 200ms var(--ease);
-}
-.err-action:hover {
-  color: var(--text);
 }
 
 .logcon-row.is-revealed {

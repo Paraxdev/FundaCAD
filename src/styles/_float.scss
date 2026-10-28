@@ -449,42 +449,29 @@
 
 /* A plugin's tool group. Its .rail-child tools are nudged in, since the floating tiles
    cannot sit inside a container box. */
-.rail-group {
-  pointer-events: auto;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: max-content;
-  padding: 0;
+.rail-btn.rail-group {
   margin-top: 2px;
-  background: none;
-  border: 0;
   color: var(--text-dim);
-  text-align: left;
-  font: inherit;
-  cursor: pointer;
 }
-.rail-group-tile {
+.rail-group .rail-tile {
   color: var(--text-mute);
 }
-.rail-group:hover .rail-group-tile {
-  background: var(--raised);
+.rail-group:hover .rail-tile {
   color: var(--text);
 }
-.rail-group-pill {
+.rail-group .rail-pill {
   flex-direction: row;
   align-items: center;
   min-height: 24px;
 }
-.rail-group-name {
+.rail-group .rail-label {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--text-dim);
-  white-space: nowrap;
 }
-.rail-group:hover .rail-group-name {
+.rail-group:hover .rail-label {
   color: var(--text);
 }
 .rail-child {
@@ -554,23 +541,27 @@
   font-weight: 600;
   color: var(--text);
 }
-.matcap-swatches {
-  display: flex;
-  gap: 8px;
-  margin: 8px var(--s-1);
+// Segmented chips, each choice a sphere; the selected one sits in a solid accent halo, since a wash hides behind the image.
+.ui-segmented.matcap-swatches {
+  gap: var(--s-2);
+  margin: var(--s-2) var(--s-1);
 }
-.matcap-swatch {
+.vc-pop .matcap-swatches .ui-segment.matcap-swatch {
+  width: 42px;
+  height: 42px;
+  padding: 3px;
+  corner-shape: round;
+  border-radius: 50%;
+}
+.vc-pop .matcap-swatches .ui-segment.matcap-swatch.is-selected {
+  background: var(--accent);
+}
+.matcap-ball {
   width: 36px;
   height: 36px;
-  padding: 0;
   border-radius: 50%;
-  border: 2px solid transparent;
   background-color: var(--float-chip-bg);
   background-size: cover;
-  cursor: pointer;
-}
-.matcap-swatch.active {
-  border-color: var(--accent);
 }
 .pop-rule {
   height: 1px;
@@ -593,6 +584,9 @@
 }
 .pop-wide.ghost {
   background: none;
+}
+.vc-pop-btn {
+  margin-top: var(--s-2);
 }
 .pop-key {
   margin-left: auto;
@@ -974,19 +968,19 @@
   line-height: 1.45;
   color: var(--text);
 }
-.perf-pop-link {
+// A ghost Button read as a link inside the sentence; the fill tokens are cleared so no hover slab shows.
+.perf-pop-text .btn.perf-pop-link {
+  --btn-fill: transparent;
+  --btn-hover: transparent;
+  display: inline;
+  min-height: 0;
   padding: 0;
   font: inherit;
   color: var(--warn);
-  background: none;
-  border: 0;
-  border-radius: 0;
   text-decoration: underline;
   text-underline-offset: 3px;
-  cursor: pointer;
 }
-.perf-pop-link:hover {
-  background: none;
+.perf-pop .perf-pop-text .btn.perf-pop-link:hover {
   color: color-mix(in srgb, var(--warn) 70%, #fff);
 }
 .icon-btn-badge {
@@ -1001,14 +995,18 @@
   background: var(--error);
   border-radius: var(--r-pill);
 }
-.grid-btn {
-  width: auto;
+// A ghost Button sized and filled like the icon tiles around it.
+.float-group .btn.grid-btn:not(.is-on) {
+  --btn-hover: var(--raised);
+}
+.float-group .btn.grid-btn {
   min-width: 40px;
-  padding: 0 4px;
+  min-height: 0;
   height: 32px;
+  padding: 0 var(--s-1);
+  border-radius: calc(var(--float-radius) - 4px);
   font: 600 10.5px/1 var(--mono);
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
 }
 
 /* The Section chip and Normal to Sketch stack at the top middle, clear of the cards (useClearOfCards). */
@@ -1049,22 +1047,16 @@
   flex: none;
   color: var(--accent);
 }
-.section-chip-btn {
-  padding: var(--s-1) var(--s-3);
-  font: 600 12px/1.4 var(--ui);
-  color: var(--text-dim);
-  cursor: pointer;
-  transition:
-    background var(--t-fast) var(--ease),
-    border-color var(--t-fast) var(--ease),
-    color var(--t-fast) var(--ease);
+// Pressed, Edit mixes into an opaque dark, not transparency: over a pale model a see-through tint washed it out.
+.section-chip .btn.is-on {
+  --btn-fill: color-mix(in srgb, var(--accent) 24%, var(--panel));
+  --btn-hover: color-mix(in srgb, var(--accent) 24%, var(--panel));
 }
-.section-chip-btn:hover:not(.disabled) {
-  color: var(--text);
-}
-.section-chip-btn.disabled {
-  opacity: 0.45;
-  cursor: default;
+// Normal to Sketch floats alone on the model, so its Button wears the glass chip's blur and shadow.
+.btn.normal-to-sketch {
+  -webkit-backdrop-filter: var(--float-blur);
+  backdrop-filter: var(--float-blur);
+  box-shadow: var(--float-shadow);
 }
 /* Never blocks a pick through it, the model under it is still the one to pick. */
 #viewport .vp-top > .updating-chip {

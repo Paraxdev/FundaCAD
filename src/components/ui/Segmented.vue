@@ -12,6 +12,8 @@ export interface SegmentedOption<V> {
   tip?: string | undefined;
   keys?: string | undefined;
   disabled?: boolean | undefined;
+  /** Extra attributes on the option's button, such as a data hook for e2e. */
+  attrs?: Record<string, string> | undefined;
 }
 
 const props = withDefaults(
@@ -67,6 +69,7 @@ const tipOf = (o: SegmentedOption<T>) => {
     <button
       v-for="(o, i) in options"
       :key="String(o.value)"
+      v-bind="o.attrs"
       type="button"
       role="radio"
       data-roving

@@ -53,28 +53,17 @@
   position: relative;
   display: flex;
 }
-.menu-btn {
-  background: none;
-  border: none;
-  color: var(--text-dim);
-  font: inherit;
-  font-size: 12.5px;
+// Button ghost sm, stretched to the bar's height less the margin; .menubar outranks the sm size rule.
+.menubar .btn.menu-btn {
+  min-height: 0;
   padding: 0 var(--s-4);
   /* The 1px is not a spacing rung but the hairline that keeps adjacent hover fills apart;
      a rung would widen the menu bar at the notice slot's expense. */
   margin: var(--s-2) 1px;
-  cursor: pointer;
-  border-radius: var(--r-sm);
-  transition:
-    background var(--t-fast) var(--ease),
-    color var(--t-fast) var(--ease);
+  font-size: 12.5px;
 }
-.menu-btn:hover {
-  background: var(--raised);
-  color: var(--text);
-}
-.menu-btn.active {
-  background: var(--raised);
+.menubar .btn.menu-btn.is-open {
+  background: var(--btn-hover);
   color: var(--text);
 }
 .menu-popup {
@@ -149,29 +138,6 @@
   background: var(--line);
   margin: var(--s-1) var(--s-2);
 }
-.tb-btn {
-  width: 26px;
-  height: 24px;
-  padding: 0;
-  border: 1px solid transparent;
-  border-radius: var(--r-sm);
-  background: var(--panel-2);
-  color: var(--text-dim);
-  font-size: 14px;
-  line-height: 1;
-  cursor: pointer;
-  transition:
-    background var(--t-fast) var(--ease),
-    color var(--t-fast) var(--ease);
-}
-.tb-btn:hover:not(:disabled) {
-  background: var(--raised);
-  color: var(--text);
-}
-.tb-btn:disabled {
-  opacity: 0.3;
-  cursor: default;
-}
 .tb-rest {
   display: contents;
 }
@@ -182,12 +148,6 @@
   opacity: 0.38;
   filter: grayscale(1);
 }
-#home-btn.active {
-  border-color: var(--accent);
-  background: var(--accent-tint-2);
-  color: var(--accent-hot);
-}
-
 .docname {
   color: var(--text-mute);
   font-size: 12px;
@@ -197,40 +157,25 @@
   color: var(--text);
 }
 
-/* The border is on the group, one pill: two separately bordered buttons would read as
-   two tools. */
-#workspace-toggle.segmented {
-  display: flex;
-  align-items: stretch;
-  border: 1px solid transparent;
-  border-radius: var(--r-md);
-  background: var(--panel-2);
+// LiveSessionPill.vue, a button Chip beside the document name.
+.chip.live-pill {
+  max-width: 22rem;
   overflow: hidden;
 }
-#workspace-toggle .seg-btn {
-  display: flex;
-  align-items: center;
-  gap: var(--s-1);
-  padding: 3px var(--s-2);
-  border: 0;
-  background: transparent;
+.live-pill.readonly {
+  opacity: 0.85;
+}
+.live-dot {
+  flex: none;
+  color: var(--accent);
+}
+.live-pill.readonly .live-dot {
   color: var(--text-mute);
-  font: inherit;
-  font-size: 11px;
-  letter-spacing: 0.3px;
-  cursor: pointer;
-  transition:
-    background var(--t-fast) var(--ease),
-    color var(--t-fast) var(--ease);
 }
-#workspace-toggle .seg-btn + .seg-btn {
-  border-left: 1px solid var(--line);
-}
-#workspace-toggle .seg-btn:hover {
-  background: var(--raised);
-  color: var(--text-dim);
-}
-#workspace-toggle .seg-btn.active {
-  background: var(--accent-tint-2);
-  color: var(--accent-hot);
+// The note may truncate: the assistant writes it, and the tooltip and timeline already say it whole.
+.live-note {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.7;
 }
