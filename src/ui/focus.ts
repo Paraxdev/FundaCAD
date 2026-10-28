@@ -2,7 +2,8 @@
 const NON_TEXT_INPUTS = new Set(["checkbox", "radio", "range", "button", "color", "submit", "reset"]);
 
 /** The base Select's button, whose typed letters search its list as a select's do. */
-const isSelectTrigger = (t: EventTarget | null) => t instanceof HTMLElement && t.getAttribute("role") === "combobox";
+export const isSelectTrigger = (t: EventTarget | null) =>
+  t instanceof HTMLElement && t.getAttribute("role") === "combobox";
 
 /** Text inputs, textareas, selects, Select triggers and contentEditable, so typing "T" in a field does not start the
  *  Text tool. */

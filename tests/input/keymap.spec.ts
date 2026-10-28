@@ -6,8 +6,8 @@ import { mount } from "@vue/test-utils";
 import { installKeymap } from "../../src/input/keymap";
 import ChoiceRow from "../../src/components/shell/ChoiceRow.vue";
 
-function ctrlZ(target: EventTarget) {
-  const e = new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true, cancelable: true });
+function ctrlZ(target: EventTarget, key = "z") {
+  const e = new KeyboardEvent("keydown", { key, ctrlKey: true, bubbles: true, cancelable: true });
   Object.defineProperty(e, "target", { value: target });
   window.dispatchEvent(e);
 }
@@ -80,6 +80,23 @@ describe("installKeymap", () => {
     (trigger.element as HTMLElement).focus();
     for (const key of ["j", "e", "c", "f", "Delete"]) await trigger.trigger("keydown", { key });
     expect([actions, trigger.attributes("aria-expanded")]).toEqual([[], "true"]);
+    w.unmount();
+  });
+  it("a focused choice row lets Ctrl+Z and Ctrl+Y through, since it has no text of its own to undo", () => {
+    const actions: string[] = [];
+    installKeymap(
+      (a) => actions.push(a),
+      () => "model",
+    );
+    const w = mount(ChoiceRow, {
+      props: { label: "Operation", value: "join", options: [{ value: "join", label: "Join" }], commit: () => {} },
+      attachTo: document.body,
+    });
+    const trigger = w.get("[role=combobox]").element as HTMLElement;
+    trigger.focus();
+    ctrlZ(trigger);
+    ctrlZ(trigger, "y");
+    expect(actions).toEqual(["undo", "redo"]);
     w.unmount();
   });
 });
