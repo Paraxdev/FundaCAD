@@ -248,7 +248,7 @@ export const SKETCH: Group[] = [
       { action: "patternCircular", label: "Circular Pat.", iconName: "patternCircular" },
       { action: "patternRect", label: "Rect Pattern", iconName: "patternRect" },
       { action: "boltCircle", label: "Bolt Circle", iconName: "boltCircle" },
-      { action: "hexHoles", label: "Hex Holes", iconName: "hexHoles" },
+      { action: "hexHoles", label: "Staggered Holes", iconName: "hexHoles" },
       { action: "honeycomb", label: "Honeycomb", iconName: "honeycomb" },
       { action: "gridHoles", label: "Grid Holes", iconName: "gridHoles" },
     ],

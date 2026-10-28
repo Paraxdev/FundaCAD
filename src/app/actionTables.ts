@@ -115,7 +115,7 @@ export const SKETCH_PROMPTS: Record<string, string> = {
   text: "Click where the text goes, or drag a box for it · Esc",
   project: "Click an edge or face of the model to project it into the sketch · Esc",
   boltCircle: "Click the centre of the bolt circle, set the count, click again to place · Esc",
-  hexHoles: "Click the centre of the hex holes, set the rings, click again to place · Esc",
+  hexHoles: "Click the centre of the staggered holes, set the rings, click again to place · Esc",
   honeycomb: "Click the centre of the honeycomb, set the rings, click again to place · Esc",
   gridHoles: "Click the centre of the grid, set the counts, click again to place · Esc",
   polygon: "Click the centre, then a vertex · Esc",
