@@ -17,11 +17,14 @@ const props = withDefaults(
     disabled?: boolean;
     /** show the label pill beside the tile */
     labelled?: boolean;
+    /** A tooltip other than the name, such as a group's tool count. The accessible name stays the label. */
+    tip?: string | undefined;
+    iconSize?: number;
   }>(),
-  { sub: "", keys: "", active: false, menu: false, disabled: false, labelled: true },
+  { sub: "", keys: "", active: false, menu: false, disabled: false, labelled: true, tip: undefined, iconSize: 22 },
 );
 
-const title = computed(() =>
+const name = computed(() =>
   [props.label, props.sub, props.keys ? `(${fmtKeys(props.keys)})` : ""].filter(Boolean).join(" "),
 );
 </script>
@@ -32,11 +35,11 @@ const title = computed(() =>
     class="rail-btn"
     :class="{ active, disabled }"
     :disabled="disabled"
-    :title="title"
-    :aria-label="title"
+    :title="tip ?? name"
+    :aria-label="name"
   >
     <span class="rail-tile">
-      <Icon :name="icon" :size="22" />
+      <Icon :name="icon" :size="iconSize" />
       <span v-if="menu" class="rail-corner" aria-hidden="true"></span>
     </span>
     <span v-if="labelled" class="rail-pill">
