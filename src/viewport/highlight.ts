@@ -742,6 +742,10 @@ export class Highlighter {
       this.queueSelectOverlay();
     }
     for (const b of flipBodies) this.toggleSelectBody(b);
+    // The starters read the order, a Boolean targets the first body, so it is the take's and not the drag path's.
+    this.selectedFaces = new Set(want.faces);
+    this.selectedEdges = new Set(want.edges);
+    this.selectedBodies = new Set(want.bodies);
     this.queueEdgeLines();
     return true;
   }
