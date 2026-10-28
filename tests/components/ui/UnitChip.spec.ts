@@ -23,6 +23,11 @@ describe("UnitChip", () => {
     ]);
   });
 
+  it("titles the caption only with a tip given", async () => {
+    expect((await render({})).attributes("title")).toBeUndefined();
+    expect((await render({ tip: "In mm" })).attributes("title")).toBe("In mm");
+  });
+
   it("captions text that is not a measure unit as written", async () => {
     const w = await render({ unit: "%" });
     expect(w.text()).toBe("%");

@@ -9,12 +9,13 @@ const props = withDefaults(
     unit: string;
     /** Unit ids to pick from. Without them the chip is a caption. */
     options?: readonly string[] | undefined;
-    tip?: string;
+    /** The picker's name, and the caption's title. */
+    tip?: string | undefined;
     keys?: string | undefined;
     disabled?: boolean | undefined;
     disabledReason?: string | undefined;
   }>(),
-  { tip: "Unit", disabled: false },
+  { tip: undefined, disabled: false },
 );
 const emit = defineEmits<{ "update:unit": [string] }>();
 
@@ -29,11 +30,11 @@ const choices = computed(() => (props.options ?? []).map((id) => ({ value: id, l
     size="sm"
     :model-value="unit"
     :options="choices"
-    :tip="tip"
+    :tip="tip ?? 'Unit'"
     :keys="keys"
     :disabled="disabled"
     :disabled-reason="disabledReason"
     @update:model-value="emit('update:unit', $event)"
   />
-  <span v-else class="ui-unit-chip">{{ label(unit) }}</span>
+  <span v-else class="ui-unit-chip" :title="tip">{{ label(unit) }}</span>
 </template>
