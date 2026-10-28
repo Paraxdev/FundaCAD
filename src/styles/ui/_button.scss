@@ -40,7 +40,7 @@
   --btn-hover: var(--hover-wash);
   color: var(--text-dim);
 }
-.btn.btn-ghost:hover:not(:disabled, .is-disabled) {
+.btn.btn-ghost:hover:not(:disabled, .is-disabled, .is-on) {
   color: var(--text);
 }
 .btn.btn-danger {
