@@ -13,6 +13,10 @@
 .ui-dialog:focus:not(:focus-visible) {
   outline: none;
 }
+// focusReturn lands on the main landmark when the opener is gone; a landmark is no control, so it shows no ring.
+[data-focus-landing]:focus {
+  outline: none;
+}
 // .modal-foot mutes its text for counters; a footer of buttons keeps the button ink.
 .ui-dialog-foot {
   align-items: center;
