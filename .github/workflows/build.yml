@@ -1221,7 +1221,7 @@ jobs:
           TMPDIR: ${{ runner.temp }}/harness
         run: |
           mkdir -p "$TMPDIR"
-          python -m pytest tools/harness/tests -m smoke -q
+          python -m pytest tools/harness/tests -m "smoke and not a11y" -q
 
       - name: Agent harness logs on failure
         if: failure()
@@ -1231,6 +1231,30 @@ jobs:
           path: ${{ runner.temp }}/harness
           if-no-files-found: ignore
           retention-days: 7
+
+      # The axe baseline was seeded on Windows Chrome, so this stays
+      # continue-on-error until wave 1 of the accessibility epic has landed.
+      - name: Accessibility smoke (axe and aria snapshots)
+        continue-on-error: true
+        timeout-minutes: 10
+        env:
+          FUNDACAD_ENGINE_CMD: ${{ github.workspace }}/engine-bin/fundacad-engine
+          FUNDACAD_CHROME: /usr/bin/google-chrome
+          FUNDACAD_HARNESS_KEEP: "1"
+          FUNDACAD_A11Y_OUT: ${{ runner.temp }}/a11y/out
+          TMPDIR: ${{ runner.temp }}/a11y/harness
+        run: |
+          mkdir -p "$TMPDIR" "$FUNDACAD_A11Y_OUT"
+          python -m pytest tools/harness/tests -m a11y -q
+
+      - name: Accessibility smoke report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: a11y-smoke
+          path: ${{ runner.temp }}/a11y
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Engine log on failure
         if: failure()
