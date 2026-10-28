@@ -52,8 +52,9 @@ those files, change this page in the same commit.
    that uses the shared tokens and classes supports all three with no code of
    its own.
 9. **Reuse before you invent.** A new surface is an existing glass class, or a
-   selector added to the existing lists in `_glass.scss`. A new look is almost
-   always a mistake.
+   selector added to the existing lists in `_glass.scss`, and a new control is a
+   base component ([7](#7-component-recipes)). A new look is almost always a
+   mistake.
 
 Nothing is flat and opaque unless this spec names it. The legitimate exceptions:
 
@@ -120,7 +121,7 @@ Surfaces, back to front:
 | `--panel` | `#1b1826` | Base of every glass fill (through `--float-bg`), the title bar, the no blur fill |
 | `--panel-2` | `#272233` | Flat inner controls, native `option` background |
 | `--raised` | `#322c42` | Hover fill of flat rows and icon buttons |
-| `--raised-2` | `#3d3651` | Off track of `.ft-switch` |
+| `--raised-2` | `#3d3651` | Off track of `Switch` (`.ui-switch`, `.ft-switch`) |
 
 Lines (layout dividers only, see [Depth without lines](#depth-without-lines)):
 
@@ -205,14 +206,15 @@ control gets its fill by being on a selector list in `_glass.scss`:
 | Fill | Where |
 |---|---|
 | `--float-tile-bg` | Rail tiles, Home cards, the wells of Preferences |
-| `--float-chip-bg` | `.btn`, `.pop-wide`, `.palette-btn`, `.choice-btn`, `.section-chip-btn`, `.key-chip kbd`, `.tl-btn`, pills and chips on the model |
-| `--field-bg` | `.sm-input`, `.sm-select`, `.param-row input`, Home search and sort, the Items filter |
+| `--float-chip-bg` | `Button` (`.btn`), `Chip`, the `Segmented` chips, `.pop-wide`, `.palette-btn`, `.choice-btn`, `.section-chip-btn`, `.key-chip kbd`, `.tl-btn`, pills and chips on the model |
+| `--field-bg` | `TextField` and `NumberField` (`.ui-field`), `Select` (`.sm-select`), the `Segmented` bar, `.sm-input`, `.param-row input`, Home search and sort, the Items filter |
 | `--hover-wash` | Laid over the fill of any of the above on hover |
 | `--accent-wash` | Laid over `--float-tile-bg` for a tile that is on |
 | `rgba(5, 4, 9, 0.35)` | The scrim of `.modal-overlay`, `.cmdk-backdrop`, `.choice-backdrop` |
 
-To give a new control this look, reuse `.btn`, `.sm-input`, `.opt-row` or
-`.float-toggle`, or add its selector to the matching list in `_glass.scss`.
+To give a new control this look, use the base component that has it
+(`Button`, `TextField`, `ListRow`, `SwitchRow`, [7](#7-component-recipes)); a new
+surface's own selector goes on the matching list in `_glass.scss`.
 Never write a new fill with `rgba()` or a hex: the guard rejects a new literal
 anywhere. The light theme redefines these tokens
 ([10](#10-light-and-dark-themes)), so a control that uses them follows.
@@ -356,15 +358,15 @@ needs a larger radius to look the same size. Always pair a float radius with
 
 | Class | Component | Use it for |
 |---|---|---|
-| `.float-card` | Items (`#browser`), History (`#timeline`), Fillet members | A card over the model, with `.float-card-head`, `.float-card-title`, `.float-card-close`, `.float-card-more`, `.float-card-body`, `.float-card-foot` |
+| `.float-card` | `components/ui/Card.vue`; Items (`#browser`), History (`#timeline`), Fillet members | A card over the model, with `.float-card-head`, `.float-card-title`, `.float-card-close`, `.float-card-more`, `.float-card-body`, `.float-card-foot` |
 | `.float-group` | `ViewportControls.vue` | A column or row of `.icon-btn` |
 | `.float-popover` | `components/ui/Popover.vue` | Anything that opens from a button: options, pickers, `Select.vue`'s list |
 | `.context-menu` | `ContextMenuHost.vue` | Right click menus |
-| `.measure-panel` | `components/overlays/FloatingPanel.vue` | A small tool or readout panel. Worn by `MeasureReadout.vue`, `PropertiesPanel.vue`, `InterferencePanel.vue`, `OverhangPanel.vue`, `StressPanel.vue`, `MirrorToolPanel.vue` and `ParamsDialog.vue`; check these before you build a new one. Contents and API in [7.13](#713-tool-and-readout-panels-measure-panel) |
-| `.modal-panel` | `components/overlays/ModalFrame.vue` | A dialog, on `.modal-overlay` |
+| `.measure-panel` | `components/ui/Panel.vue` (old name `overlays/FloatingPanel.vue`) | A small tool or readout panel. Worn by `MeasureReadout.vue`, `PropertiesPanel.vue`, `InterferencePanel.vue`, `OverhangPanel.vue`, `StressPanel.vue`, `MirrorToolPanel.vue` and `ParamsDialog.vue`; check these before you build a new one. Contents and API in [7.13](#713-tool-and-readout-panels-measure-panel) |
+| `.modal-panel` | `components/ui/Dialog.vue` (old frame `overlays/ModalFrame.vue`) | A dialog, on `.modal-overlay` |
 | `.choice-card` | `ModalHost.vue` chooser | A short question with a few answers |
 | `.cmdk-card` | `CommandPalette.vue` | The command palette |
-| `.float-card-close` | any glass surface | A 28 by 28 icon button for close, copy or more, inside or outside a card ([7.1](#71-floating-card-float-card)) |
+| `IconButton` `md` `plain` (`.float-card-close`) | any glass surface | A 28 by 28 icon button for close, copy or more, inside or outside a card ([7.1](#71-floating-card-float-card)) |
 | `.menu-popup` | `MenuBar.vue` | Title bar menus |
 | `.toast` | `ToastStack.vue` through `ui/toast.ts` | Short confirmations |
 | `.rail-tile`, `.rail-pill` | `components/ui/RailButton.vue` | Tool buttons on the rail |
@@ -380,8 +382,8 @@ needs a larger radius to look the same size. Always pair a float radius with
 2. Add its selector to the lists in `_glass.scss`: group A (over the model) or
    group B (dialog, menu, toast, dock, text heavy), the fill list of its level
    (card, tile or chip) and the matching radius list.
-3. Add its controls to the control lists (squircle plus chip radius) and its
-   rows to the hover and selected lists. Fields go on the `--field-bg` list.
+3. Build its controls and rows from the base components ([7](#7-component-recipes)),
+   which bring their squircle, fills and states; a surface adds none of its own.
 4. Check it with blur off ([4.5](#45-blur-off-and-potato-mode)) and in the light
    theme ([10](#10-light-and-dark-themes)).
 
@@ -537,22 +539,25 @@ transport `.tl-btn` (`--r-sm`), `.float-toggle` (6px, no squircle), `.pref-seg`
 | `.icon-btn` | 40 by 40 inside a `.float-group` with 3px padding |
 | Card close and more | 28 by 28 |
 | History row | 34px |
-| Default button | padding `var(--s-3) var(--s-4)` at 12px, about 33px tall |
-| `.ft-switch` | 36 by 20, knob 14px |
+| `Button` | `md` 32px tall at 12.5px, `sm` 28px at 12px; a hand written `.btn` has padding `var(--s-3) var(--s-4)` at 12px, about 33px |
+| `Switch` | 36 by 20, knob 14px |
+| `Checkbox` | 18 by 18 |
+| Fields, `Segmented` | `md` 32px, `sm` 24px |
 | Card widths | Items 264px, History 288px, sketch palette 240px, Render dock 300px |
 | Popovers | min width 220px, max height `calc(100vh - 16px)` |
-| Dialog | `min(720px, 92vw)`, max height 88vh; Preferences `min(960px, 94vw)` |
+| Dialog | `min(720px, 92vw)` (`lg`, the default), `sm` 420px, `md` 560px, max height 88vh; Preferences `min(960px, 94vw)` |
 | Toast | max width 560px |
 
 ### 6.4 Icons
 
 Use `<Icon name="…" :size="N" />` (`components/shell/Icon.vue`), default 16, or
-`IconButton.vue` (default 20). Icons are SVG files in `src/assets/icons/forge/`
-(outline pack) and `src/assets/icons/anvil/` (solid pack, falls back to forge):
-24 by 24 viewBox, about 20 by 20 live area, `stroke-width` 1.4, round caps and
-joins, no fill, no hard colours (`tests/ui/iconFiles.test.ts`). Colour comes
-from `currentColor`: idle `--text-dim` or `--text-mute`, hover `--text`, active
-`--accent-hot`. Never use a Unicode glyph or emoji as an icon.
+`IconButton.vue` (20 at `lg`, 14 at `md` and `sm`). Icons are SVG files in
+`src/assets/icons/forge/` (outline pack) and `src/assets/icons/anvil/` (solid
+pack, falls back to forge): 24 by 24 viewBox, about 20 by 20 live area,
+`stroke-width` 1.4, round caps and joins, no fill, no hard colours
+(`tests/ui/iconFiles.test.ts`). Colour comes from `currentColor`: idle
+`--text-dim` or `--text-mute`, hover `--text`, active `--accent-hot`. Never use
+a Unicode glyph or emoji as an icon.
 
 Names are the file names, in camelCase. Look in the folder before you pick
 one; a name that is not there renders nothing. The common actions:
@@ -612,12 +617,121 @@ Nothing changes above the breakpoints. There are no container queries.
 
 ## 7. Component recipes
 
-Every interactive element needs all five states: hover, active (pressed),
-focus visible, disabled and selected (or on), where they apply. If a row below
-says "none", that is a gap in the code, not permission.
+Every control is a base component from `src/components/ui/`, the one set the app and plugins
+([7.12](#712-plugin-ui)) draw with. A base component owns its markup, keys, ARIA, disabled model and look, so a
+caller passes props and restates none of them. Every interactive part has all five states: hover, pressed, focus
+visible, disabled and selected (or on), where they apply. If a row below says "none", that is a gap in the code,
+not permission. Much of the app predates the set: the old classes each subsection names are what those screens
+still wear until they move, and [14](#14-known-debt-do-not-copy) counts them.
+
+Outside `src/components/ui/`, do not write a raw `<button>`, `<input>`, `<select>` or `<textarea>`, a control
+`role` on a plain element, or a `createElement` of one: [the controls guard](#the-controls-guard) refuses it. When
+nothing in the set fits, extend the closest base component, with a spec in `tests/components/ui/`; never fork it.
+
+### The base set
+
+The props beyond `tip`, `keys`, `disabled` and `disabledReason`, which every control takes.
+
+| Component | For | Props that matter | States |
+|---|---|---|---|
+| `Button` | Any action with a word: dialog footers, panel actions, popover actions | `variant`: `secondary` (default), `primary` (one per dialog), `ghost`, `danger`; `size`: `sm` 28px or `md` 32px; `block` spans the container; `pressed` makes it a toggle (`aria-pressed`); `icon`; `type`, always set, `button` by default | hover, pressed, focus, disabled, on |
+| `IconButton` | An action shown only as an icon: close, copy, more, a viewport tile | `icon`; `tip`, required, its only name; `size`: `sm` 24, `md` 28 (a card close), `lg` 40 (a tile, default); `variant`: `tile` (default), `plain`, `danger`; `active` makes it a toggle; `badge`, a count; `clickable` | hover, pressed, focus, disabled, on |
+| `Chip` | A tag, a state or a count badge | `variant`: `neutral`, `accent`, `warn`, `error`; `size`: `xs` (a count badge), `sm`, `md` (a chip on the model); `icon`; `label`; `removable` adds a "Remove X" button; `as`: `span` or `button` | a button chip: hover, focus, disabled |
+| `KeyChip` | A shortcut drawn as key caps | `keys`; `inTitle` hides it from a screen reader when the owner's `title` already says it | none, it is a label |
+| `TextField` | Typed text: a name, a search, a URL | `modelValue`; `commit`: `live` (default) or `change`; `type`: `text`, `search`, `url`; `validate`, `error`; `selectOnFocus`; `size`: `sm` 24 or `md` 32; `leading` and `trailing` slots | focus, error, disabled |
+| `NumberField` | Every number a person types | `modelValue: number \| null`; `commit`: `change` (default) or `live`; `unit` and `units` (the unit and its picker); `parse`, `ui/measure` by default, so units, fractions and a decimal comma read; `validate`; `problem`, a refusal from the kernel; `min`, `max`, `step`; `nullable`; `preview` and `previewEnd`; `widthCh` | focus, error with the rejected text kept, disabled |
+| `UnitChip` | The unit beside a value | `unit`; `options` makes it a picker, without them it is a caption | picker: hover, pressed, open, disabled |
+| `Select` | A choice from a list too long to show at once | `modelValue`; `options` (`value`, `label`, `hint`, `disabled`); `placeholder`; `size`; `variant`: `field` (a well) or `chip` (the `UnitChip` look) | hover, focus, open with an active row, disabled |
+| `Checkbox` | A setting, on any settings page | `modelValue`, `label`, `indeterminate` | hover, pressed, focus, disabled, on, mixed |
+| `Switch` | A live toggle, whose change shows in the model as it flips | `modelValue`; `label`, its name when there is no `tip` | hover, pressed, focus, disabled, on |
+| `SwitchRow` | A labelled row holding a `Switch`, in a tool panel, a popover or feature properties | `modelValue`, `label`, `icon`; `layout`: `float` (the view controls) or `param` (feature properties); a `hint` slot | the row's hover, the switch's states; disabled fades the row as a whole |
+| `Segmented` | A choice of 2 to 5 values, all shown | `modelValue`; `options` (`value`, `label`, `icon`, `tip`, `keys`, `disabled`); `label`, the group's name; `size`: `sm` 24 or `md` 32; `variant`: `bar` (one well) or `chips` (the Render dock); `iconOnly` | hover, pressed, focus, selected, a disabled segment, a disabled group |
+| `Slider` | A value along a range | `modelValue`, `min`, `max`, `step`, `label`, `showValue`, `unit`; `commit`: `live` or `end` (on release) | hover, pressed, focus, disabled |
+| `Tabs` | The pages of one surface | `tabs` (`value`, `label`, `icon`, `disabled`, `title`); `modelValue`; `variant`: `underline` (a card), `bar` (a dock), `nav` (a settings page list, `aria-current`); `orientation`; `label` | hover, pressed, focus, selected, disabled with its reason |
+| `Menu`, `MenuItem`, `MenuSeparator` | Popup and context menus | Menu: `anchor`, or `at` (a point) for a context menu, `side`, `align`, `focus`; MenuItem: `label`, `icon`, `keys`, `checked` (a `menuitemcheckbox`), `danger`, a nested `Menu` for a submenu | hover, keyboard focus, pressed, open, checked, danger, disabled |
+| `Popover` | A card that opens from a button: options, pickers | `anchor`, `side`, `align`; `kind`, a class for the card; `minWidth`; `focus`: `first` or `none`; `returnFocus` | open; it closes on Escape and on a press outside |
+| `Dialog` | A modal: a task that holds the rest of the app | `title` or the `title` slot; `size`: `sm`, `md`, `lg`; `closeOnEsc`; `initialFocus`; `returnFocus`; a `footer` slot | focus held inside, focus back on close |
+| `ConfirmDialog` | A short question with a few answers, or a checklist to confirm | `title`, `message`; `options` (`value`, `label`, `hint`, `primary`); `danger`; `multi` with `min`; `confirmLabel`, `cancelLabel` | as `Dialog`, and its buttons |
+| `Panel` | A small tool or readout panel ([7.13](#713-tool-and-readout-panels-measure-panel)) | `open`, `title`, `hint`, `closable`, `closeOnEsc`, `panelClass`; `head-actions` and `foot` slots | none of its own, its controls carry theirs |
+| `Card` | A titled card in a pane, as Items and History are ([7.1](#71-floating-card-float-card)) | `title`; `collapsible` with `v-model:collapsed`; `head-actions` and `foot` slots | a collapsible title: hover, focus |
+| `FieldRow` | A label and its control | `label`; `for`, or the id it hands its slot; `hint`; `error`; `layout`: `inline` or `stacked` | error |
+| `ListRow` | A selectable row in a list, or a row that is a button | `label`, `hint`, `icon`, `selected`; `as`: `option` (inside a listbox, whose owner moves focus) or `button` | hover, pressed, focus, selected, disabled |
+| `RailButton` | A tool on the rail ([7.3](#73-rail-tile-rail-btn-rail-tile-rail-pill)) | as today | as 7.3 |
+
+Each look is in the subsections below. Three composables sit under them, for a base component that needs one:
+`useDisabled` (below), `useRovingFocus` (one Tab stop, the arrows, Home and End, wrapping; `Segmented`, `Tabs`,
+`Menu`, the `Select` list and the `ConfirmDialog` answers) and `useCommitField` (the draft, commit on Enter or
+blur, revert on Escape, the rejected text kept, the preview debounce; under `TextField` and `NumberField`).
+
+### States and the one disabled model
+
+A base component marks its state with one class and the ARIA that goes with it. A few still write the old class
+beside it (`IconButton` `.active`, `Switch` `.on`, `Select` `.open`) so the rules of the markup they replace keep
+painting.
+
+| State | Class and ARIA | Look |
+|---|---|---|
+| Hover | `:hover:not(.is-disabled)` | `--hover-wash` over the fill, or the component's own, below |
+| Pressed | `:active:not(.is-disabled)` | a scale (0.97 on a button, 0.94 on an icon button or a tile) or a deeper wash |
+| Focus visible | `:focus-visible` | the shared outline ([11](#11-accessibility)); a field 1px accent on its well; a segment, tab, menu item or list row inset |
+| On | `.is-on`, `aria-pressed` or `aria-checked` | `--accent-wash` over the fill with `--accent-hot` ink, or an `--accent` fill on `Checkbox` and `Switch` |
+| Selected | `.is-selected`, `aria-selected` or `aria-checked` | accent 16% or `--accent-wash`, `--accent-hot` |
+| Open | `.is-open`, `aria-expanded` | the hover look, held while its menu or list is open |
+| Error | `.is-error`, `aria-invalid` | `--error-tint`, an `--error` outline while focused, the reason in `title` |
+| Disabled | `.is-disabled`, `aria-disabled="true"` | opacity 0.45, `cursor: default`, no hover and no press |
+
+Disabled is one model everywhere, `useDisabled` (`src/components/ui/useDisabled.ts`):
+
+- `disabled` renders `aria-disabled="true"` and `.is-disabled`, never the native attribute. The `title` stays live
+  (some webviews show no tooltip on a native disabled button), and the control stays focusable, so a keyboard
+  still reaches it and a screen reader hears that it is disabled.
+- The component swallows its own activation, a click and Enter or Space, in the capture phase, so the caller's
+  `@click` never runs. A field refuses typing, a slider refuses a drag, and the arrow keys skip a disabled segment,
+  tab or row.
+- `disabledReason` takes over the tooltip while disabled. Say why and what lifts it ("Run the study first").
+- `clickable` (on `IconButton`) is the soft block: greyed and `aria-disabled`, but the click comes through, for a
+  control whose press explains or lifts the block, like Path traced under the performance block. Use it only when
+  that click does something useful.
+
+### Where the styles live
+
+Each base component has one partial, `src/styles/ui/_<name>.scss`, forwarded once from `src/styles/ui/_index.scss`,
+which `main.scss` loads before `_glass.scss` (`tests/ui/uiStyles.test.ts`). The state looks every component shares
+are `_states.scss`. A base component carries no SFC `<style>` block. A partial reads tokens only: no colour literal,
+no `var()` fallback, no literal duration or easing, and a radius only from a radius token, or a `calc()` on one for
+an inner radius. The guard test fails on any of them ([15](#15-the-guard-test)).
+
+A few base components still wear the classes of the markup they replace, and their looks stay there until that
+markup is gone: `Button` is the one `.btn` rule in `_glass.scss` (a variant sets only `--btn-fill` and
+`--btn-hover`), `IconButton` at `lg` is `.icon-btn` in `_float.scss` and `_glass.scss`, the `Select` well is
+`.sm-select`, `Dialog` is `.modal-panel`, `Panel` is `.measure-panel`, `Card` is `.float-card` and `Popover` is
+`.float-popover`. Change those looks where they are, never by restating them in a partial or a caller.
+
+### The controls guard
+
+`node scripts/check-ui-controls.mjs` runs in CI right after the repo hygiene step, and `tests/ui/uiControls.test.ts`
+runs the same scan (`scanControls` in `scripts/uiControls.mjs`) in `npm test`. Outside `src/components/ui/` it
+counts, per file:
+
+| Kind | Where | Use instead |
+|---|---|---|
+| `button`, `input[type=…]`, `select`, `textarea` | `src/**/*.vue` and `plugins/**/*.vue` templates | the base component the message names: `Button`, `IconButton`, `TextField`, `NumberField`, `Checkbox`, `Slider`, `Select` |
+| `role=button`, `switch`, `tab`, `radio` and the `menuitem` roles on a plain element | the same templates | `Button`, `Switch`, `Tabs`, `Segmented`, `MenuItem` |
+| `createElement:button` and the other control tags, and those tags in a template string or `innerHTML` | `src/**/*.ts` and `plugins/**/*.ts` | the factories of `src/components/ui/dom.ts`, **prescribed, no code does this yet** |
+| `style:inline` | a `:style` or a style object with a colour, a border or `font` | a class in `src/styles/` that reads tokens |
+| `IconButton:no-tip` | an `IconButton` without `tip` | `tip`, which names it |
+| `class:btn`, `sm-input`, `pref-seg`, `ft-switch`, `param-switch`, `check` | the templates, only under `--legacy-classes`, which goes on once the old classes are gone | `Button`, `TextField` or `NumberField`, `Segmented`, `Switch`, `Checkbox` |
+
+`scripts/ui-controls-allow.json` is a ratchet like `COLOUR_BASELINE`: one entry per file and kind, with an exact
+`count` and a `reason`. A count above its entry is a new raw control and fails. A count below fails too, so a
+migration cannot leave room behind it: run `node scripts/check-ui-controls.mjs --lower`, which lowers each entry to
+what it finds, drops the spent ones and never raises one, and commit the lowered list with the migration. Never
+raise an entry by hand. A new one is only for a control with no base twin yet, like a native colour picker, and its
+reason has to convince the review.
 
 ### 7.1 Floating card (`.float-card`)
 
+`Card.vue` draws it: `<Card title="History">`, with `collapsible` and `v-model:collapsed` for a card that folds.
 Glass group A, `--float-radius`, `overflow: hidden`.
 
 | Part | Recipe |
@@ -629,36 +743,43 @@ Glass group A, `--float-radius`, `overflow: hidden`.
 | `.float-card-foot` | padding `4px 6px`, no divider line |
 | Section label (`.panel-title`) | 10px, 700, uppercase, letter-spacing 1px, `--text-mute` |
 
-The small icon button, `.float-card-close` (and `.float-card-more` for a menu
-button), is not tied to a card. Its base is in `_float.scss`, its squircle in
-the control list of `_glass.scss` and its touch hit area in `_touch.scss`, so
-it works in any glass surface: a card head, a `.measure-panel`, a popover. Use
-it for any 28px icon action (close, copy, more) instead of a new class, which
-would miss the squircle and touch lists.
+The small icon button is `IconButton` at `size="md"` with `variant="plain"`. It is not tied to a card: it works in
+any glass surface, a card head, a `Panel`, a popover. Use it for any 28px icon action (close, copy, more) instead of
+a new class.
 
 | State | Recipe |
 |---|---|
-| Idle | 28 by 28, no fill or border, `--float-tile-radius`, squircle, `--text-mute`, icon 12 to 14 |
-| Hover `:hover:not(:disabled)` | fill `--raised`, colour `--text` |
-| Pressed `:active:not(:disabled)` | `transform: scale(0.94)` |
-| Disabled `:disabled` | opacity 0.45, `cursor: default`, no hover |
+| Idle | 28 by 28, no fill or border, `--float-tile-radius`, squircle, `--text-mute`, icon 14 |
+| Hover | fill `--hover-wash`, colour `--text` |
+| Pressed | `transform: scale(0.94)` |
+| Disabled | the disabled model, no hover |
 | Focus visible | the shared outline |
 | Transition | background, color, transform, each `var(--t-fast) var(--ease)` |
-| Touch | `inset: -6px` hit area (`_touch.scss`) |
-| Markup | `title` and `aria-label` with the same text, `<Icon>` inside |
+| Touch | `inset: -6px` hit area |
+| Markup | `title` and `aria-label` from `tip`, `<Icon>` inside |
+
+The old markup for it, `.float-card-close` and `.float-card-more` (base in `_float.scss`, squircle in the control
+list of `_glass.scss`, hit area in `_touch.scss`), is the same button with a `--raised` hover. `Panel`'s close still
+wears it.
 
 ### 7.2 Icon button (`.icon-btn`, `IconButton.vue`)
 
-Inside a `.float-group` (glass A, padding 3px, gap 2px).
+`lg` with `variant="tile"` is the viewport tile, inside a `.float-group` (glass A, padding 3px, gap 2px).
+
+| Size and variant | Idle | Hover | On (`active`, `aria-pressed`) |
+|---|---|---|---|
+| `lg` `tile` (default) | 40 by 40, no fill or border, radius `calc(var(--float-radius) - 4px)`, squircle, `--text-dim`, icon 20 | fill `--raised`, colour `--text` | `linear-gradient(var(--accent-wash), var(--accent-wash)), var(--float-tile-bg)`, colour `--accent-hot`, no shadow |
+| `md` 28, `sm` 24, `plain` | `--float-tile-radius` at `md`, `--float-chip-radius` at `sm`, `--text-mute`, icon 14 | fill `--hover-wash`, colour `--text` | as `lg` |
+| `danger` | as `plain` | fill `--error-tint`, colour `--error` | as `lg` |
 
 | State | Recipe |
 |---|---|
-| Idle | 40 by 40, no fill or border, radius `calc(var(--float-radius) - 4px)`, squircle, `--text-dim` |
-| Hover | fill `--raised`, colour `--text` |
-| Active (on) `.active`, `aria-pressed` | `linear-gradient(var(--accent-wash), var(--accent-wash)), var(--float-tile-bg)`, colour `--accent-hot`, no shadow |
-| Disabled `.disabled` plus `aria-disabled` | opacity 0.38, no fill, `cursor: default` |
+| Pressed | `transform: scale(0.94)` |
+| Disabled | the disabled model, no hover |
 | Focus visible | the shared outline |
+| Badge | `badge` draws an `xs` `error` `Chip` on the corner, and the `aria-label` reads "Name, 3" |
 | Warn `.perf-warn` | colour `--warn`, hover and active fill warn 16% |
+| Touch | `sm` and `md` grow a hit area, 8px and 6px each way |
 
 ### 7.3 Rail tile (`.rail-btn`, `.rail-tile`, `.rail-pill`)
 
@@ -678,82 +799,106 @@ filled with `--float-chip-bg`, padding `3px 9px`, label `.rail-label`
 
 ### 7.4 Buttons
 
-The fills below are the tokens of [2.3](#23-the-fills-of-the-glass): a button
-gets them by wearing the class, never by restating them. A button has no visible
-border; its `1px solid transparent` only keeps its size.
+`Button.vue`. Its fills are the tokens of [2.3](#23-the-fills-of-the-glass), set by the one `.btn` rule, never
+restated. A button has no visible border; its `1px solid transparent` only keeps its size.
 
-| Class | Idle | Hover (`:hover:not(:disabled)`) | Focus visible | Other states |
-|---|---|---|---|---|
-| `.btn` (secondary, in glass) | squircle, chip radius, fill `--float-chip-bg`, no shadow, padding `var(--s-3) var(--s-4)`, 12px | `--hover-wash` over the fill | the shared outline | disabled: give it opacity 0.45 and `cursor: default`, the base has none |
-| `.btn-primary` (always with `.btn`) | fill `--accent`, text `--on-accent`, 600, no shadow | fill `--accent-hot` | as `.btn` | One primary per dialog |
-| `.pop-wide` (full width popover action), `.palette-btn` | as `.btn`, full width, gap `--s-2`, margin top `--s-2` | as `.btn` | as `.btn` | `.ghost`: no fill; disabled opacity 0.45 (`.versions-save .pop-wide:disabled`) |
-| `.choice-btn` | min width 64px, fill `--float-chip-bg`, chip radius, caption `small` 10px `--text-mute` | fill accent 16% mixed into the chip fill | the shared outline | `.choice-primary`: accent fill, `--on-accent`; disabled opacity 0.4 |
-| `.modal-close` | transparent, `--text-dim`, close icon 15px, `aria-label` and `title` "Close" | fill `--raised`, colour `--text` | the shared outline | |
-| `.tb-btn` (title bar) | 26 by 24, `--panel-2`, `--text-dim` | `--raised`, `--text` | the shared outline | disabled opacity 0.3 |
-| `.tl-btn` (History transport) | 26 by 26, `--float-chip-bg`, `--r-sm`, `--text-dim` | `--raised`, `--text` | the shared outline | disabled opacity 0.3 |
+| Variant | Idle | Hover (`:hover:not(.is-disabled)`) | Notes |
+|---|---|---|---|
+| `secondary` (default) | squircle, chip radius, fill `--float-chip-bg`, no shadow, 500 | `--hover-wash` over the fill | |
+| `primary` | fill `--accent`, text `--on-accent`, 600, no shadow | fill `--accent-hot` | One per dialog, last in its footer |
+| `ghost` | no fill, `--text-dim` | `--hover-wash`, `--text` | A quiet action beside a primary one |
+| `danger` | the chip fill, text `--error` | `--error-tint` over the fill | A destructive action, as Remove |
+| On (`pressed`) | `--accent-wash` over the fill, `--accent-hot` | the wash and `--hover-wash` together | A primary that is on fills `--accent-hot` |
 
-The bare `button` rule (`_layout.scss`) has **no disabled state**. Any new
-button defines `:disabled` itself (opacity 0.45, `cursor: default`, no hover).
-Its base hover border is the off palette `#3d4452`; do not copy it.
+| Size | Recipe |
+|---|---|
+| `sm` | min height 28px, padding `var(--s-1) var(--s-3)`, 12px; a hit area under touch |
+| `md` (default) | min height 32px, padding `var(--s-1) var(--s-4)`, 12.5px |
+| `block` | full width |
+
+Pressed is `transform: scale(0.97)`, focus the shared outline, disabled the disabled model with the fill kept.
+
+Markup that predates `Button` still wears the classes by hand: `.btn` and `.btn-primary` (the same rule),
+`.pop-wide` and `.palette-btn` (a full width `.btn`, which `block` gives), `.choice-btn` (the chooser in
+`ModalHost.vue`, which `ConfirmDialog` replaces), `.tb-btn` in the title bar (26 by 24, `--panel-2`, disabled 0.3)
+and `.tl-btn` in the History transport (26 by 26, `--float-chip-bg`, `--r-sm`, disabled 0.3). `.modal-close` is the
+close button `Dialog` draws (transparent, `--text-dim`, close icon 15px, "Close"); keep the class, the e2e scripts
+click it. The bare `button` rule (`_layout.scss`) still paints every raw button, with no disabled state; it goes
+with the last raw button.
 
 ### 7.5 Inputs and selects
 
-A field is a sunken well: `--field-bg`, darker than the surface it sits on, with
-no edge. Focus draws a 1px accent outline.
+A field is a sunken well: `--field-bg`, darker than the surface it sits on, with no edge. Focus draws a 1px accent
+outline on the well, not on the input inside it.
 
-| Class | Idle | Focus | Error or other |
+| Component | Idle | Focus | Error and other states |
 |---|---|---|---|
-| `.sm-input` (dialogs, the dock) | squircle, chip radius, fill `--field-bg`, padding `var(--s-2) var(--s-3)`, 11px | `outline: 1px solid var(--accent)`, no ring | |
-| `.sm-select.select-trigger` (`Select.vue`, preferred) | as `.sm-input` plus a drawn caret | as `.sm-input` | `:disabled` opacity 0.5; opens a `.float-popover.select-pop` of `.opt-row`s |
-| `.param-row input` (feature values in cards) | `--field-bg`, `--r-sm`, padding `var(--s-2) var(--s-3)`, 12px, tabular | `outline: 1px solid var(--accent)` | `.input-error` and `.param-stale` use hard coded reds and ambers, use `--error` and `--warn` for new work |
-| `.dim-field` (on the model) | glass A in `--float-chip-bg`, chip radius | `.typed`: the same fill with the shadow, no border | `.dim-bad`: border `--error`, fill `--error-tint` |
+| `TextField`, `NumberField` (`.ui-field`) | squircle, chip radius, fill `--field-bg`; `md` 32px, padding `0 var(--s-3)`, 12px; `sm` 24px, padding `0 var(--s-2)`, 11px; placeholder `--text-mute`; `NumberField` in tabular numbers | `outline: 1px solid var(--accent)` on `:focus-within`, no ring | `.is-error`: fill `--error-tint`, the outline `--error`; disabled, the disabled model |
+| `UnitChip` (`.ui-unit-chip`) | a 600 `--text-mute` word on no fill, inside the well | | picker: hover and open `--accent-hot` on `--hover-wash`, pressed `--accent-wash` |
+| `Select` (`.sm-select.select-trigger`) | as the field, plus a drawn caret; `sm` 24px | as the field | `.is-open`: accent 14% into the well, and a `.float-popover.select-pop` of `.opt-row`s whose keyboard row is `.is-active`, washed; disabled keeps its caret |
 
-Prefer `Select.vue` over a native `<select>`. Fields keep a visible focus;
-never `outline: none` without a replacement.
+Keys. `TextField` in `change` mode and `NumberField`: Enter commits, blur commits, Escape goes back to the last
+committed text and ends a preview; text that does not commit stays, with `aria-invalid` and the reason in its
+`title`. `NumberField` steps with ArrowUp and ArrowDown, ten times with Shift, inside `min` and `max`. `Select` is a
+`role="combobox"` trigger over a `role="listbox"`: ArrowDown or ArrowUp opens it and moves, Home and End, type ahead,
+Enter or Space picks, Escape closes and gives focus back to the trigger.
+
+Old fields that still paint: `.sm-input` (dialogs, the dock), `.param-row input` (feature values; `.input-error`
+and `.param-stale` use hard coded reds and ambers), native `<select>`s, and `.dim-field` in the value box
+([7.16](#716-floating-value-box-dim-input-diminput)). Fields keep a visible focus; never `outline: none` without a
+replacement.
 
 ### 7.6 Checkboxes, switches and sliders
 
-A setting is toggled with the themed checkbox. A switch is for a live toggle in
-a tool panel or popover, where the change shows in the model as you flip it.
+A setting is toggled with `Checkbox`. A switch is for a live toggle in a tool panel or popover, where the change
+shows in the model as you flip it.
 
-- **Settings pages** (Preferences, plugin settings, the plugin list, the
-  sketch palette) use the shared `.check` class from `_checkbox.scss`. Never
-  put `.ft-switch`, `.param-switch`, `ToggleRow` or `Toggle` in anything
-  Preferences renders, the guard test fails on it.
-- **Live toggles** use `.ft-switch` in a `.float-toggle` row (`Toggle.vue`, in
-  the view controls) or `.param-switch` through `ToggleRow.vue` (feature
-  properties). The Export dialog and the Stress setup and results steps keep
-  their switches too.
+- **Settings pages** (Preferences, plugin settings, the plugin list, the sketch palette) use `Checkbox`, or the
+  `.check` markup of `_checkbox.scss` it replaces. Never put `Switch`, `SwitchRow`, `.ft-switch`, `.param-switch`,
+  `ToggleRow` or `Toggle` in anything Preferences renders, the guard test fails on it.
+- **Live toggles** use `SwitchRow`: `layout="float"` in the view controls (the old `Toggle.vue`, which now draws it,
+  and its `.float-toggle` row), `layout="param"` in feature properties (the old `ToggleRow.vue` and its
+  `.param-switch`). The Export dialog and the Stress setup and results steps keep their switches too.
 
-| Class | Idle | On | Disabled | Focus |
+| Component | Idle | On | Disabled | Focus |
 |---|---|---|---|---|
-| `.check` (`<span class="check"><input type="checkbox" /><span class="check-box"></span></span>`) | 18 by 18, squircle, radius 6px, fill `--check-off`, no edge; hover `--hover-wash` over the fill. The native input is laid over the box, so ids, labels and change handlers stay native | fill `--accent`, a `--on-accent` tick | box opacity 0.5, `cursor: default` | `outline: 2px solid var(--accent)`, offset 2px |
-| `.ft-switch` in a `.float-toggle` row (`Toggle.vue`, `role="switch"`, `aria-checked`) | 36 by 20, track `--raised-2`, pill, knob 14px `--text`; row hover white 4% | `.on`: track `--accent`, knob `translateX(16px)` `--on-accent`, hover `--accent-hot` | row `.disabled` opacity 0.45 | the shared outline |
-| `.param-switch` (`ToggleRow.vue` in `FeatureProperties.vue`) | native checkbox over a 30 by 17 `.track`, `--panel-2`, no edge, knob `--text-dim` | track fill `--accent`, knob `translateX(13px)` and `#fff` | track opacity 0.55 | the shared outline round the track, offset 2px |
-| `.sm-slider` | native range, `accent-color: var(--accent)` | | | |
+| `Checkbox` (`.ui-checkbox`) | an 18 by 18 box, squircle, radius half the chip radius, fill `--check-off`, no edge; hover `--hover-wash` over it. The native input lies over the box, so ids, labels and change handlers stay native; Space flips it once | `.is-on`: fill `--accent`, a `--on-accent` tick, hover `--accent-hot`; `.is-mixed` (`indeterminate`) a bar instead of the tick | the box and label fade, no hover | `outline: 2px solid var(--accent)`, offset 2px, round the box |
+| `Switch` (`.ui-switch`, `role="switch"`, `aria-checked`) | 36 by 20, `--r-pill` track `--raised-2`, knob 14px `--text`; hover `--hover-wash` over the track; pressed, the knob stretches | `.is-on`: track `--accent`, hover `--accent-hot`, knob `translateX(16px)` in `--on-accent` | the disabled model | the shared outline |
+| `SwitchRow` (`.ui-switch-row`, a `<label>`) | `float`: padding `6px var(--s-1)`, squircle, chip radius, 12.5px, the state "On" or "Off" in 11.5px `--text-mute`, row hover `--hover-wash`; `param`: a 12px `--text-dim` label with the switch at the end | the switch's | the row fades as a whole, the switch inside does not fade again | the switch's |
+| `Slider` (`.ui-slider`) | label `--text-dim`, a 4px `--r-pill` track filled `--accent` up to the value over `--check-off`, a 14px `--text` thumb, the value in 11.5px tabular `--text-dim`; hover `scale(1.15)` on the thumb, pressed `scale(1.25)` and `--accent-hot` | | the disabled model | `outline: 2px solid var(--accent)`, offset 2px, round the thumb |
 
-`.float-toggle` also shows `.ft-state` ("On" or "Off", 11.5px `--text-mute`),
-and the whole row flips the switch.
+A click anywhere on a `SwitchRow` flips the switch once, since the row is the switch's label. The old `.sm-slider`
+is a native range with `accent-color: var(--accent)`.
 
 ### 7.7 Tabs and segmented controls
 
-| Class | Idle | Hover | Selected | Focus |
+| Component | Idle | Hover | Selected | Focus |
 |---|---|---|---|---|
-| `.float-tabs > .float-tab` (`Tabs.vue`) | 12.5px, 600, `--text-dim` | `--text` | `.active`: `--text` and a 2px `--accent` underline from 25% to 75% | the shared outline, inset |
-| `.pref-seg > button` | 30px tall, 13px, `--text-dim`, fill `--panel`, dividers `--line` | `--raised`, `--text` | `.on`: `--accent-tint-2`, `--accent-hot`, 600 | the shared outline, inset |
-| `.seg-btn` (title bar Model or Render) | 11px, `--text-mute` | `--raised`, `--text-dim` | `.active`: `--accent-tint-2`, `--accent-hot` | the shared outline |
-| `.rd-tab` (Render dock) | 11.5px, `--text-mute`, 2px transparent bottom border | `--raised`, `--text-dim` | `.active`: `--accent-hot` and an `--accent` bottom bar (a bar, not a fill) | the shared outline |
-| `.prefs-nav-btn` | 14px | `--raised` | `.active`: `--accent-tint`, `--accent-hot`, 600 | the shared outline |
+| `Segmented` `bar` (`.ui-segmented-bar`) | one well, `--field-bg`, padding 2px, squircle, chip radius; segments `calc(var(--float-chip-radius) - 2px)`, `--text-dim`, 500; `md` 12.5px, `sm` 11.5px | `--hover-wash`, `--text` | `.is-selected`: `--accent-wash`, `--accent-hot`, 600 | the shared outline, inset |
+| `Segmented` `chips` (the Render dock) | separate chips in `--float-chip-bg`, `md` 32px, `sm` 24px | `--hover-wash` over the chip | as `bar` | the shared outline, inset |
+| `Tabs` `underline` (a card, `.float-tabs`) | 12.5px, 600, `--text-dim` | `--text` | `.is-selected`: `--text` and a 2px `--accent` underline from 25% to 75% | the shared outline, inset |
+| `Tabs` `bar` (a dock) | 32px chips, 11.5px, 500, `--text-mute` | `--hover-wash`, `--text-dim` | `--accent-hot` and a 2px `--accent` bar under it (a bar, not a fill) | the shared outline, inset |
+| `Tabs` `nav` (a settings page list) | full width rows, min height 32px, 13px, padding `var(--s-2) var(--s-3)` | `--hover-wash`, `--text` | `--accent-wash`, `--accent-hot`, 600, `aria-current` | the shared outline, inset |
 
-A tab that cannot be chosen yet (the Stress panel's Results before a Run) passes `disabled` and a `title` saying why
-to `Tabs.vue`: opacity 0.45, `cursor: default`, no hover. Keep it in the bar rather than hiding it, a bar of one tab
-reads as a title.
+Both are one Tab stop: the arrow keys move and pick, Home and End go to the ends, and a disabled item is skipped.
+`Segmented` is a `radiogroup` of `radio`s, `Tabs` a `tablist` (ArrowUp and ArrowDown when vertical, `nav` is
+vertical by default).
+
+A tab that cannot be chosen yet (the Stress panel's Results before a Run) passes `disabled` and a `title` saying why:
+opacity 0.45, `cursor: default`, no hover. Keep it in the bar rather than hiding it, a bar of one tab reads as a
+title.
+
+The old markup: `.pref-seg > button` (Preferences, `.on` in `--accent-tint-2`), `.seg-btn` (the title bar Model or
+Render, `.active` in `--accent-tint-2`), `.rd-tab` (the Render dock, `.active` with an `--accent` bottom bar) and
+`.prefs-nav-btn` (`.active` in `--accent-tint`).
 
 ### 7.8 Chips and key caps
 
 | Class | Recipe |
 |---|---|
-| `.key-chip kbd` (`KeyChip.vue`) | mono 10px, `--text-dim`, padding `0 4px`, radius 6px, fill `--float-chip-bg`, no edge |
+| `Chip` (`.chip`) | squircle, chip radius, fill `--float-chip-bg`, no edge; `sm` 11px/20px, 500, `--text-dim`, padding `0 var(--s-2)`; `md` 12px/26px, 600, `--text`; `accent`: `--accent-wash` over the fill, `--accent-hot`; `warn`: warn 16% over the fill; `error`: `--error-tint`, `--error`. A button chip hovers `--hover-wash` over its fill; `removable` adds a 16px `IconButton` "Remove X" |
+| `Chip` `xs` (a count badge) | 9px/14px, 700, tabular, min width 14px; on an icon it is solid, `--accent` with `--on-accent`, `--warn` or `--error` with `--bg` |
+| `KeyChip` (`.key-chip kbd`) | mono 10px, `--text-dim`, padding `0 4px`, radius 6px, fill `--float-chip-bg`, no edge; `inTitle` hides it from a screen reader |
 | `.rd-chip` | padding `3px var(--s-2)`, `--panel-2`, pill radius, 11px `--text-dim`; hover `--raised`, `--text`; `.active` fill `--accent-tint-2`, `--accent-hot`; disabled opacity 0.55 |
 | `#context-tab` | 10px, 700, uppercase, letter-spacing 0.8px, padding `var(--s-1) var(--s-3)`; `.sketch` turns it accent (`--accent-hot`, fill `--accent-tint-2`) |
 | `.tree-count` | 10px, 600, `--text-mute`, `--panel-2` pill, hidden when empty |
@@ -761,32 +906,45 @@ reads as a title.
 | `.section-chip-btn` | chip fill of `.pop-wide`, chip radius, padding `var(--s-1) var(--s-3)`, 600 12px `--text-dim`; hover `--text`; `.active` (Edit while editing, `aria-pressed`) as `.dim-btn.on`; `.disabled` with `aria-disabled` opacity 0.45, no hover; shared focus outline; a 40px hit area on touch |
 | `.updating-chip` (`UpdatingChip.vue`) | glass A in `--float-chip-bg`, chip radius, padding `var(--s-1) var(--s-3)`, gap `--s-2`, 500 11.5px `--text-dim`, `pop-in`, `role="status"`, `pointer-events: none` so a pick goes through to the model; a 10px ring spinner in `--accent` on a 25% accent track; shown while a rebuild other than a tool preview has run past `OUT_OF_DATE_GRACE_MS` (600 ms, `app/staleModel.ts`), gone when it lands, is cancelled or the document is replaced; it never ghosts the model |
 
+The chips on the model and in the dock above keep their own markup until they wear `Chip`.
+
 ### 7.9 Rows
 
 | Class | Idle | Hover | Selected | Disabled |
 |---|---|---|---|---|
+| `ListRow` (`.ui-list-row`) | padding `7px var(--s-3)`, 12.5px, squircle, chip radius, icon `--text-dim`; pressed `--accent-wash`; focus the shared outline, inset | `--hover-wash`, icon `--accent-hot` | `.is-selected`: accent 16% fill, `--accent-hot` | the disabled model, no hover |
 | `.opt-row` (`ChoiceList.vue`) | padding `7px var(--s-3)`, 12.5px, chip radius | white 5% wash | `.selected`: accent 16% fill, `--accent-hot` | `.disabled` opacity 0.45, no hover |
 | `.ctx-item` (context menu) | padding `var(--s-3) var(--s-4)`, 12.5px, chip radius, `.ctx-key` 11px `--text-dim` | accent 16%, `--accent-hot` | | `.disabled` opacity 0.45, `pointer-events: none` |
 | `.menu-item` (title bar menu) | padding `var(--s-3) var(--s-4)`, gap `--s-7`, `.menu-shortcut` 11px `--text-mute` | accent 16%, `--accent-hot` | `.menu-check` gutter in `--accent` | `[disabled]` `--text-mute`, `pointer-events: none` |
 | `.cmdk-item` | padding `var(--s-3) var(--s-4)`, gap `--s-3`, chip radius | `.active` (pointer or keys): accent 16%, `--accent-hot` | | |
 | `.tree-folder`, `.feature-row`, `#timeline .timeline-node` | padding `var(--s-2) var(--s-1)` on `.tree-folder`, `--s-2` on the others (History rows 34px tall), chip radius | `--raised` | `.selected`: accent 16% fill, `--accent-hot` | |
 
-A destructive row (`.ctx-item.danger`, Remove body) is red text only. It
-currently uses hard coded reds; new destructive rows use `--error`.
+A destructive row is red text: `MenuItem` with `danger` is `--error`, hover `--error-tint`. The old
+`.ctx-item.danger` (Remove body) still uses hard coded reds. Tree rows (`TreeRow`, `TreeFolder`, `InlineLabel`) keep
+their own keys and drag; new rows of that kind wear the `ListRow` look.
 
 ### 7.10 Popovers, menus, dialogs, palette, toasts, prompt
 
 | Surface | Recipe |
 |---|---|
 | `.float-popover` (`Popover.vue`) | glass solid, `--float-radius`, padding `--s-3`, min width 220px, `z-index: var(--z-popover)`, `glass-in` entrance. Content: `.pop-section` 12.5px/600, `.pop-rule` a 10px gap with no line, `.pop-note` 12px `--text-dim` line height 1.45 |
-| `.context-menu` | glass solid, `--float-tile-radius`, padding 5px, separators `.ctx-sep` 1px |
-| `.menu-popup` | glass B, `--float-tile-radius`, padding `--s-1`, `pop-in` |
-| `.modal-panel` (`ModalFrame.vue`) | glass B with `--shadow-3`, `--float-radius`, on `.modal-overlay`. `.modal-head`, `.modal-body`, `.modal-foot` share padding `--s-5`; head and foot are layout dividers, `1px solid var(--line)`; `h2` 14px/600; foot buttons right aligned, gap `--s-3`, Cancel present, one primary. `role="dialog"`, `aria-modal`, `aria-labelledby` the `h2` |
+| `Menu` (`.ui-menu`) | `--float-bg-solid` through `--float-blur`, `--float-tile-radius`, squircle, padding 5px, `--float-shadow`, 12.5px, `pop-in`. `MenuItem` (`.ui-menu-item`): padding `var(--s-3) var(--s-4)`, chip radius; hover and keyboard focus accent 16% and `--accent-hot`, pressed accent 24%, keys `.ui-menu-keys` 11px `--text-dim`, a check gutter when any item has `checked`; `MenuSeparator` 1px `--line` |
+| `.context-menu`, `.menu-popup` | the right click and title bar menus that predate `Menu`: glass solid and glass B, `--float-tile-radius`, separators `.ctx-sep` 1px |
+| `Dialog` (`.modal-panel.ui-dialog`) | glass B with `--shadow-3`, `--float-radius`, on `.modal-overlay`; `sm` `min(420px, 92vw)`, `md` 560px, `lg` 720px, unset is the `.modal-panel` width. `.modal-head`, `.modal-body`, `.modal-foot` share padding `--s-5`; head and foot are layout dividers, `1px solid var(--line)`; `h2` 14px/600 and the `.modal-close` button in the head; the `footer` slot is right aligned, gap `--s-3`, Cancel present, one primary. `role="dialog"`, `aria-modal`, `aria-labelledby` the `h2` |
+| `ConfirmDialog` (`.ui-confirm`) | a `sm` `Dialog`: the message in `--text-dim`, then one button per answer, the `primary` one focused, or with `multi` a checklist with Cancel and a confirm; `danger` paints the primary `--error` on `--error-tint` |
 | `.cmdk-card` | glass B, `--float-radius`, `min(560px, 92vw)`, on `.cmdk-backdrop` at `padding-top: 12vh`, `role="dialog"`, `aria-modal`, `aria-label="Command palette"` |
 | `.measure-panel` | see [7.13](#713-tool-and-readout-panels-measure-panel) |
 | `.toast` | glass B, `--float-tile-radius`, padding `var(--s-3) var(--s-4)`, 12.5px, bottom centre in `.toast-stack`; `.toast-error` and `.toast-warning` tint the fill; `.toast-action` accent chip |
 | `#viewport .prompt` | glass A, pill, padding `var(--s-3) var(--s-5)`, 12px, a 6px accent dot, `prompt-in` entrance |
 | `#viewport .vp-top` | the top middle stack of the Section chip and Normal to Sketch: absolute, top `--s-4`, a column with gap `--s-2`, centred in the span the cards leave free (`useClearOfCards.ts` sets `--row-left` and `--row-right`, as PromptBanner does); when that span is too narrow it sets `data-narrow` (the chip drops its words), and when that is not enough it moves the stack down to the first row with room (`--row-top`), `z-index: calc(var(--z-float) - 4)`, pointer events only on its children |
+
+`Dialog` holds the modal gate (`composables/useModalGate.ts`) while open, keeps Tab inside, focuses the `[autofocus]`
+control or else the first control after the close button, and gives focus back to its opener on close. Escape closes
+the topmost dialog only. `ModalFrame.vue` is the old frame contract over it, with no Escape, no gate and no focus
+moves, for the dialogs that still do those themselves. `Menu` takes the arrows, Home and End, type ahead, Enter or
+Space to choose and close, ArrowRight and ArrowLeft into and out of a submenu, and Escape through `claimEscape`, and
+gives focus back to its opener. `Popover` with `focus="first"` moves focus into the card (or onto it, when it holds
+no control), and `returnFocus` gives it back on close.
 
 ![A context menu and the selection state of the shell](design/context-menu-dark.png)
 
@@ -796,40 +954,55 @@ currently uses hard coded reds; new destructive rows use `--error`.
 
 There is no tooltip component. Use the native `title` plus an `aria-label`
 with the same text, and put the shortcut in brackets, written as in
-[9](#9-voice-and-wording): `title="Reset camera (Shift+Home)"`. A text that
-names Ctrl or Alt goes through `fmtKeys()` (`src/input/platform.ts`), which
-writes the Command and Option glyphs on a Mac:
+[9](#9-voice-and-wording): `title="Reset camera (Shift+Home)"`. A base control
+writes both from `tip` and `keys`: `<IconButton icon="history" tip="History" keys="Ctrl+Alt+H" />`. A `Button`
+with a word keeps the word as its name and takes the tip as its `title` only, and while a control is disabled its
+`disabledReason` is the `title`. Anywhere else, a text that names Ctrl or Alt goes through `fmtKeys()`
+(`src/input/platform.ts`), which writes the Command and Option glyphs on a Mac:
 `:title="fmtKeys('History (Ctrl+Alt+H)')"`. Do not invent a tooltip popover.
 On the model, where a hand cannot spare a hover, show a real element instead.
 
 ### 7.12 Plugin UI
 
-A plugin cannot add selectors to `_glass.scss`, so it draws with what the host
-gives it. `fundacad/ui` exports `FloatingPanel` (a `.measure-panel`),
-`ModalFrame` (a `.modal-panel`), `Icon`, `InlineLabel` and the Render dock rows
-`RenderSection`, `RenderSlider`, `RenderSwitch`, `RenderChoices`. Inside them,
-use the app's classes (`.btn`, `.btn-primary`, `.sm-input`, `.opt-row`,
-`.float-toggle`, the `.measure-*` classes of [7.13](#713-tool-and-readout-panels-measure-panel),
-`.float-card-close`) and tokens. Never ship a plugin panel with its own
-background, blur or shadow.
+A plugin cannot add selectors to `_glass.scss`, so it draws with what the host gives it. `fundacad/ui`
+(`src/plugins/hostUi.ts`) exports the base set: `Button`, `IconButton`, `Chip`, `KeyChip`, `TextField`,
+`NumberField`, `UnitChip`, `Select`, `Checkbox`, `Switch`, `SwitchRow`, `Segmented`, `Slider`, `Tabs`, `Menu`,
+`MenuItem`, `MenuSeparator`, `Popover`, `Dialog`, `ConfirmDialog`, `Panel`, `Card`, `FieldRow` and `ListRow`, with
+the `SegmentedOption` and `TabItem` types, plus `Icon` and `InlineLabel`. They are the app's own components, not
+copies, so a plugin and the app cannot drift (`tests/components/plugins/hostUi.spec.ts`).
+
+The names it exported before stay: `FloatingPanel` and `ModalFrame` (the old contracts over `Panel` and `Dialog`),
+and the Render dock rows `RenderSection`, `RenderSlider`, `RenderSwitch` and `RenderChoices`. Inside them, use base
+components and tokens, and the `.measure-*` classes of [7.13](#713-tool-and-readout-panels-measure-panel) for a
+readout. The guard counts the raw controls in `plugins/` too. Never ship a plugin panel with its own background,
+blur or shadow.
 
 ### 7.13 Tool and readout panels (`.measure-panel`)
 
-`FloatingPanel.vue` is the shell; it draws the glass and nothing else.
+`Panel.vue` is the shell; it draws the glass, and on request a head and a hint. `FloatingPanel.vue` is its old name,
+taking only `open`, `closeOnEsc` and `panelClass`.
 
 ```ts
-defineProps<{ open: boolean; closeOnEsc?: boolean; panelClass?: string }>(); // closeOnEsc false, panelClass ""
+defineProps<{
+  open: boolean;
+  title?: string;
+  hint?: string;
+  closable?: boolean; // false
+  closeOnEsc?: boolean; // false
+  panelClass?: string; // ""
+}>(); // slots: default, head-actions, foot
 defineEmits<{ close: [] }>();
 ```
 
 - `open` is required. The root is a `<Teleport to="body">` holding
-  `<div v-if="open" class="measure-panel" :class="panelClass">`, so `class`,
-  `title` and other attributes on `<FloatingPanel>` are dropped. Size or move a
+  `<div v-if="open" class="measure-panel ui-panel" :class="panelClass">`, so `class`,
+  `title` and other attributes on `<Panel>` are dropped. Size or move a
   panel only through `panelClass` and a rule for that class in `_modals.scss`
   (`.properties-panel` min width 260px, `.stress-panel` 340px wide and
   scrolling).
-- It renders no head, title or close button. The content is yours, from the
-  classes below.
+- `title` draws the panel's name as its `.measure-title` and names the panel (`role="region"`, `aria-labelledby`);
+  `head-actions` sit beside it and `closable` adds the 28px Close button after them. `hint` is the last line, a
+  `.measure-hint`; the `foot` slot sits under the content. Without them the content is yours, from the classes below.
 - `closeOnEsc` adds a capture phase `keydown` listener on `window` that emits
   `close` and does not stop the event, so Escape also reaches the global
   handler (clearing the selection, leaving the tool). See
@@ -845,22 +1018,21 @@ defineEmits<{ close: [] }>();
 | `.measure-k` | the label, `--text-mute` |
 | `.measure-v` | the value, `font-variant-numeric: tabular-nums` |
 | `.measure-divider` | 1px `--line`, margin `var(--s-2) 0` |
-| `.measure-select`, `.measure-number` | small inline fields; `.measure-number` 60px, right aligned |
-| `.measure-hint` | 10px, `--text-mute`, `margin-top: var(--s-2)`. The last line, saying how the panel closes ("Esc to close", "Esc to exit", "Overhang again to close") |
-| Actions | `.btn`, or `.btn.btn-primary` for the one main action; a 28px icon action is `.float-card-close` ([7.1](#71-floating-card-float-card)) |
+| `.measure-select`, `.measure-number` | the old small inline fields; new work uses `Select` and `NumberField` at `sm` |
+| `.measure-hint` | 10px, `--text-mute`, `margin-top: var(--s-2)`. The last line, saying how the panel closes ("Esc to close", "Esc to exit", "Overhang again to close"); `hint` writes it |
+| Fields | `FieldRow` with its control, for a label and something to change; `.measure-row` is for a label and a value |
+| Actions | `Button`, or `Button variant="primary"` for the one main action; a 28px icon action is `IconButton size="md" variant="plain"` ([7.1](#71-floating-card-float-card)) |
 
 Do not add a head with its own padding: the shell padding is the inset, and a
 second padded head doubles it. A minimal readout:
 
 ```vue
-<FloatingPanel :open="!!panels.measure">
-  <div class="measure-title">Measure</div>
+<Panel :open="!!panels.measure" title="Measure" hint="Esc to exit">
   <div v-for="(r, i) in rows" :key="i" class="measure-row">
     <span class="measure-k">{{ r.k }}</span>
     <span class="measure-v">{{ r.v }}</span>
   </div>
-  <div class="measure-hint">Esc to exit</div>
-</FloatingPanel>
+</Panel>
 ```
 
 #### Pick fields
@@ -871,7 +1043,8 @@ A tool that collects more than one selection gives each its own row, as
 - a 28px `IconButton` toggle first, `active` on the field that takes the next
   clicks, and the field name and value after it ("Nothing picked", "3 bodies",
   "XY plane");
-- a `.float-card-close` clear button last, disabled while the field is empty;
+- a 28px clear button last (`IconButton size="md" variant="plain"`, today a `.float-card-close`), disabled while
+  the field is empty;
 - `.mirror-field.active` wears the selected row look, so the live field reads
   at a glance in both themes;
 - buttons take `@pointerdown.prevent`, so Enter after a click still goes to the
@@ -1098,12 +1271,13 @@ Focus:
   `:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }`.
   It shows on keyboard focus only, never on a pointer click, and it is the one
   outline on a rounded surface ([Depth without lines](#depth-without-lines)).
-- Fields (`.sm-input`, `.sm-select`, `.param-row input`, the Items filter) draw
-  a 1px accent outline with no offset while focused. The checkbox draws a 2px
-  outline at a 2px offset around its box.
-- Tabs and segments use an inset outline (`outline-offset: -2px`), so a clipped
-  row does not hide it. On the rail the outline is on the `.rail-btn` button,
-  not on the `.rail-tile` inside it.
+- Fields (`TextField`, `NumberField`, `Select`, and the old `.sm-input`,
+  `.param-row input` and Items filter) draw a 1px accent outline with no offset
+  while focused. `Checkbox` draws a 2px outline at a 2px offset around its box,
+  `Slider` around its thumb.
+- Tabs, segments, menu items and list rows use an inset outline
+  (`outline-offset: -2px`), so a clipped row does not hide it. On the rail the
+  outline is on the `.rail-btn` button, not on the `.rail-tile` inside it.
 - Never use a ring `box-shadow` for focus, and never `outline: none` without a
   replacement.
 
@@ -1115,12 +1289,13 @@ token reaches 4.5:1 ([10](#10-light-and-dark-themes)).
 
 Semantics: an icon only button has an `aria-label` (and the same `title`).
 Toggles use `aria-pressed`, switches `role="switch"` with `aria-checked`,
-option groups `role="radiogroup"` with `role="radio"`, tabs `aria-selected`.
-A dialog has `role="dialog"` and a name: `aria-labelledby` pointing at its
-visible title (`ModalFrame.vue` and the chooser in `ModalHost.vue`, through
-`useId()`), or an `aria-label` when it has no title (`CommandPalette.vue`,
-`HomeScreen.vue`, `ConsolePanel.vue`, `TargetEditPanel.vue`). A modal one also
-has `aria-modal="true"`. Decorative icons get `aria-hidden`.
+option groups `role="radiogroup"` with `role="radio"`, tabs `aria-selected`. A
+dialog has `role="dialog"` and a name: `aria-labelledby` pointing at its
+visible title (`Dialog.vue`, `ModalFrame.vue` over it and the chooser in
+`ModalHost.vue`, through `useId()`), or an `aria-label` when it has no title
+(`CommandPalette.vue`, `HomeScreen.vue`, `ConsolePanel.vue`,
+`TargetEditPanel.vue`). A modal one also has `aria-modal="true"`. Decorative
+icons get `aria-hidden`.
 
 Keyboard: every control is reachable and shows the focus outline. Single letter
 shortcuts are ignored while typing (`isEditableTarget`, `ui/focus.ts`). Every
@@ -1131,16 +1306,19 @@ Escape depends on what the surface is:
 | Surface | Escape |
 |---|---|
 | A menu, popover, the command palette (`MenuBar.vue`, `ui/menu.ts`, `ContextMenuHost.vue`, `Popover.vue`, `CommandPalette.vue`) | Closes the topmost one only. It calls `claimEscape()` (`ui/escapeClaim.ts`) while open, and tools check `escapeClaimed()` so the same key does not also cancel them |
-| A dialog (`ModalFrame.vue`, the chooser) | Closes it through its own handler and the modal gate (`composables/useModalGate.ts`) |
-| A non modal tool panel with nothing of its own to cancel (Properties, Interference, Parameters) | `close-on-esc` on `FloatingPanel`. It does not claim Escape, so the key also reaches the global handler; the hint says "Esc to close" |
+| A dialog (`Dialog.vue`, `ModalFrame.vue`, the chooser) | Closes the topmost one through the modal gate (`composables/useModalGate.ts`); `Dialog` does it itself, a `ModalFrame` dialog through its own handler |
+| A non modal tool panel with nothing of its own to cancel (Properties, Interference, Parameters) | `close-on-esc` on `Panel` (or `FloatingPanel`). It does not claim Escape, so the key also reaches the global handler; the hint says "Esc to close" |
 | A panel that belongs to a running tool or mode (Measure, Overhang) | No `close-on-esc`. Whatever owns the panel closes it: `MeasureTool` owns Escape for its whole run and drops the panel with its highlight ("Esc to exit"), Overhang goes with the Draft toggle ("toggle Draft to close") |
 | A tool panel with layers of its own to back out of (Stress) | No `close-on-esc`, its own bubble phase `keydown` in `StressPanel.vue`. One layer per press: a drag, placing a spot or Read a point first (`viewport/stressGlyphs.ts` takes them in capture and stops the key), then a focused field gives up focus, and only then the panel closes, keeping the setup and the last result as the Close button does |
 
 Never call `claimEscape()` from a tool panel: the tool would stop hearing its
 own Escape.
 
-Disabled is opacity 0.45 (the common value), `cursor: default`, and no hover;
-menu and context rows also take `pointer-events: none`.
+Disabled is the one model of [7](#states-and-the-one-disabled-model):
+`aria-disabled` rather than the native attribute, so the reason stays readable
+in the `title`, opacity 0.45, `cursor: default` and no hover; the control
+swallows its own click and Enter. The old menu and context rows take
+`pointer-events: none` instead.
 
 Not handled yet, so do not rely on them: `prefers-contrast`, `forced-colors`,
 `prefers-reduced-transparency`, a role on the toast stack.
@@ -1159,14 +1337,15 @@ Not handled yet, so do not rely on them: `prefers-contrast`, `forced-colors`,
 | Use `--float-radius`, `--float-tile-radius`, `--float-chip-radius` with `corner-shape: squircle` | Use `--r-*` or a px radius on a floating surface |
 | Keep 12px (`--float-gap`) around floating surfaces | Dock a new panel edge to edge (the Render dock is the one docked column) or cover the model with a sheet |
 | Keep the accent for active, selected, focused and primary, and for `.measure-title` | Fill a large area with the accent, or colour a card or dialog title |
-| Toggle a setting with the `.check` checkbox | Put a switch on a settings page; switches are for live toggles in tool panels |
+| Draw every control with a base component from `src/components/ui/` | Write a raw `<button>`, `<input>`, `<select>` or `<textarea>`, or raise an entry of `scripts/ui-controls-allow.json` |
+| Toggle a setting with `Checkbox` | Put a `Switch` on a settings page; switches are for live toggles in tool panels |
 | Grow small targets to about 40px with a pseudo element under touch | Ship a 24px target, or change layout for touch |
 | Give every control a visible focus outline | Remove the outline and leave nothing, or draw focus as a ring shadow |
 | Check FundaCAD Noir and Solarized Light | Test only the dark theme |
 | Check with blur off | Rely on blur to make text legible |
 | Use `--t-fast`, `--t-med` and `--ease` | Write `0.14s ease-out` |
 | Write `title` plus `aria-label`, shortcuts as Ctrl+Alt+H through `fmtKeys()` | Build a custom tooltip, or write "Ctrl Alt H" |
-| Build a readout from `FloatingPanel` and the `.measure-*` classes | Invent `.my-panel-head` and `.my-row` with their own padding |
+| Build a readout from `Panel` and the `.measure-*` classes | Invent `.my-panel-head` and `.my-row` with their own padding |
 | Leave Escape to the tool that owns the panel | Call `claimEscape()` from a tool panel |
 | Use `--error` | Use `--danger` or a hard coded red |
 
@@ -1175,11 +1354,11 @@ Not handled yet, so do not rely on them: `prefers-contrast`, `forced-colors`,
 Run all of it. Paste the screenshots into the review.
 
 1. **Reuse first.** Is the surface an existing class from [4.2](#42-use-an-existing-glass-class-first)
-   or [7](#7-component-recipes)? If it is new, is its selector on the `_glass.scss`
-   lists (fill, radius) and are its controls and rows on the
-   control, hover and selected lists?
+   or [7](#7-component-recipes), and is every control a base component? If the
+   surface is new, is its selector on the `_glass.scss` lists (fill, radius)?
 2. **Tokens only.** No raw colour, no fallback, no invented token, no new
-   shadow, radius or duration literal. Fills come from the `_glass.scss` lists. `npx vitest run tests/ui/designSpec.test.ts` passes.
+   shadow, radius or duration literal. Fills come from the `_glass.scss` lists. `npx vitest run tests/ui/designSpec.test.ts` passes,
+   and so does `node scripts/check-ui-controls.mjs` (after `--lower` when you removed raw controls).
 3. **Glass is live.** In the browser, the bodies smear through the panel, the
    surface has no outline and is told apart by its fill and one soft shadow,
    the corners are squircle, and there is a 12px gap to the stage edges and
@@ -1219,7 +1398,7 @@ Run all of it. Paste the screenshots into the review.
   `_console.scss`, `_targetedit.scss`), including hand written blurs and a
   stale comment about a "flat, zero-blur elevation". `_glass.scss` overrides
   them; read the final result, not the base.
-- Off palette literals: `#3d4452` hovers, `#e24a3b` and `#ff7a66` danger,
+- Off palette literals: `#e24a3b` and `#ff7a66` danger,
   `#d2a83b` warning (`.toast-warning`), `#ff6b6b`, `#e0a020`, `#7fe08a`,
   `rgba(74, 208, 125, …)` (`button.finish`).
 - Undefined tokens listed in [2](#2-tokens), and `--grid-minor` and
@@ -1228,14 +1407,21 @@ Run all of it. Paste the screenshots into the review.
 - Raw colours inside the measure panels: `OverhangPanel.vue` writes
   `color: #e24a3b`, and `PropertiesPanel.vue` and `InterferencePanel.vue` write
   `var(--accent-hot, #ff9a5c)` inline.
-- No base disabled state for `button`, no focus state on `.rd-search`.
+- Raw controls and the classes the base set replaces (`.sm-input`, `.pref-seg`,
+  `.ft-switch`, `.param-switch`, `.check`, `.opt-row` rows, hand written `.btn`
+  markup) still draw most of the app; `scripts/ui-controls-allow.json` counts
+  every raw one and only shrinks. The bare `button` rule (`_layout.scss`) has
+  no disabled state and paints every raw button until the last one goes.
+- No focus state on `.rd-search`.
 - 12 components carry an SFC `<style>` block although `main.scss` says there
   are none; new styles go in `src/styles/`.
 
 ## 15. The guard test
 
-`tests/ui/designSpec.test.ts` reads every `src/components/**/*.vue` and
-`src/styles/*.scss` through Vite and checks:
+`tests/ui/designSpec.test.ts` reads every `src/components/**/*.vue`,
+`src/styles/*.scss` and `src/styles/ui/*.scss` through Vite and checks (the
+partials of `src/styles/ui/` nest their selectors, so rules 1, 4 and 11 read
+them and the others do not):
 
 1. **Colour literals are a ratchet.** Each file holds exactly the raw colour
    literals (hex, colour functions, named colours) listed for it in
@@ -1275,10 +1461,15 @@ Run all of it. Paste the screenshots into the review.
    4.5:1 on the card, solid card, tile, chip and field, `--on-accent` on
    `--accent` clears 4.5:1, and a card clears its viewport at above 1.15:1.
 9. **Settings use the checkbox.** Nothing Preferences renders contains a
-   `.param-switch`, `.ft-switch`, `ToggleRow` or `Toggle`.
+   `Switch`, `SwitchRow`, `.ui-switch`, `.param-switch`, `.ft-switch`,
+   `ToggleRow` or `Toggle`.
 10. **An error shows on a typed field.** Of the rules that name a dimension
     field in a `.dim-bad` box, the winning background keeps `--error-tint`, so a
     refused typed value does not look normal.
+11. **Base partials read tokens only.** No partial in `src/styles/ui/` holds a
+    colour literal, a `var()` fallback, a literal duration or easing, or a radius
+    that is not a token (a `calc()` on one is fine), and none may appear in
+    `COLOUR_BASELINE`: the base set starts and stays at zero.
 
 It cannot see a screen. Whether a surface is glass, both themes and blur off
 are still yours to check with the [checklist](#13-checklist-before-ui-work-is-done).
