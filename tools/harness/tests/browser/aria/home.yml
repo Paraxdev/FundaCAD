@@ -1,0 +1,6 @@
+- dialog "Home":
+  - button "Blank"
+  - heading "Start here" [level=2]
+  - button /^Box with a lid/
+  - button /^Plate/
+  - checkbox "Show Home on startup"
