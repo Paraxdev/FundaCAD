@@ -516,7 +516,8 @@ describe("StressPanel", () => {
     p.setStressDeform({ scale: 1, auto: 12.5, max: 50, animate: false, shown: true });
     await flushPromises();
     const slider = q(".stress-deform input") as HTMLInputElement;
-    expect([slider.step, slider.value, slider.getAttribute("aria-label")]).toEqual(["0.1", "1", "Exaggeration"]);
+    const name = document.getElementById(slider.getAttribute("aria-labelledby")!)?.textContent;
+    expect([slider.step, slider.value, name]).toEqual(["0.1", "1", "Exaggeration"]);
     p.stress!.deform!.max = 4;
     await flushPromises();
     expect(slider.step).toBe("0.01");

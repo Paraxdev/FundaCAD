@@ -2,7 +2,7 @@
 // No Esc dismiss: it closes when Overhang is toggled off, and Esc must not leave the analysis running without
 // its controls. The settings live on the viewport, display only and not undoable.
 
-import { ref, watch } from "vue";
+import { ref, useId, watch } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { usePanelsStore } from "../../stores/panels";
 import Panel from "../ui/Panel.vue";
@@ -25,6 +25,7 @@ const panels = usePanelsStore();
 
 const dir = ref<BuildDir>("+Z");
 const threshold = ref(45);
+const thresholdId = useId();
 
 // Seed from the viewport each time it opens rather than once at mount: Overhang
 // Analysis can be toggled off and on, and the config may have moved meanwhile.
@@ -67,10 +68,11 @@ function apply() {
       />
     </div>
     <div class="measure-row">
-      <span class="measure-k">Threshold</span>
+      <span :id="thresholdId" class="measure-k">Threshold</span>
       <Slider
         v-model="threshold"
         class="overhang-threshold"
+        :labelledby="thresholdId"
         :min="0"
         :max="90"
         :step="1"

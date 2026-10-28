@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 
 import Slider from "../../../src/components/ui/Slider.vue";
@@ -11,6 +11,8 @@ type Props = {
   max?: number;
   step?: number;
   label?: string;
+  labelledby?: string;
+  tip?: string;
   showValue?: boolean;
   unit?: string;
   commit?: "live" | "end";
@@ -19,8 +21,9 @@ type Props = {
 };
 
 async function render(props: Props) {
+  const named = props.label || props.labelledby ? {} : { label: "Amount" };
   const w = mount(Slider, {
-    props: { ...props, "onUpdate:modelValue": (v: number) => w.setProps({ modelValue: v }) },
+    props: { ...named, ...props, "onUpdate:modelValue": (v: number) => w.setProps({ modelValue: v }) } as never,
     attachTo: document.body,
   });
   // Vue skips a listener for an event stamped in the same millisecond it was attached, once another listener ran.
@@ -63,6 +66,31 @@ describe("Slider", () => {
     ]);
     const id = range(w).getAttribute("aria-labelledby");
     expect(document.getElementById(id!)?.textContent).toBe("Exposure");
+  });
+
+  it("is named by the element labelledby points at, drawing no label of its own", async () => {
+    const w = await render({ modelValue: 4, labelledby: "row-name", tip: "Hint" });
+    expect([range(w).getAttribute("aria-labelledby"), range(w).hasAttribute("aria-label")]).toEqual([
+      "row-name",
+      false,
+    ]);
+    expect([w.find(".ui-slider-label").exists(), w.attributes("title")]).toEqual([false, "Hint"]);
+  });
+
+  it("keeps a plugin's aria-label on the range, off the wrapper", () => {
+    const w = mount(Slider, { props: { modelValue: 1 } as never, attrs: { "aria-label": "Gain", id: "gain" } });
+    expect([range(w).getAttribute("aria-label"), w.attributes("aria-label"), w.attributes("id")]).toEqual([
+      "Gain",
+      undefined,
+      "gain",
+    ]);
+  });
+
+  it("warns in a dev build when it has no name", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    mount(Slider, { props: { modelValue: 1, tip: "Only a tooltip" } as never });
+    expect(warn.mock.calls.some((c) => String(c[0]).includes("Slider has no name"))).toBe(true);
+    warn.mockRestore();
   });
 
   it("emits every value live while dragging and commit once on release", async () => {
@@ -125,7 +153,7 @@ describe("Slider", () => {
 
   it("renders the value slot in place of the readout", async () => {
     const w = mount(Slider, {
-      props: { modelValue: 0.25, max: 1, step: 0.05 },
+      props: { modelValue: 0.25, max: 1, step: 0.05, label: "Amount" },
       slots: { value: "<template #value='{ value }'>{{ Math.round(value * 100) }}%</template>" },
     });
     expect(w.find(".ui-slider-value").text()).toBe("25%");
