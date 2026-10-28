@@ -156,3 +156,26 @@
 .docname.dirty {
   color: var(--text);
 }
+
+// LiveSessionPill.vue, a button Chip beside the document name.
+.chip.live-pill {
+  max-width: 22rem;
+  overflow: hidden;
+}
+.live-pill.readonly {
+  opacity: 0.85;
+}
+.live-dot {
+  flex: none;
+  color: var(--accent);
+}
+.live-pill.readonly .live-dot {
+  color: var(--text-mute);
+}
+// The note may truncate: the assistant writes it, and the tooltip and timeline already say it whole.
+.live-note {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.7;
+}

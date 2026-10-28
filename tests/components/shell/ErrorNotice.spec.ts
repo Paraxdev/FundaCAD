@@ -53,4 +53,23 @@ describe("the title bar error notice", () => {
     expect(revealedEntry()).toBe(entry.id);
     expect(w.find("#error-notice").exists()).toBe(false);
   });
+
+  it("is a button chip named by its sentence, counts repeats, and its action runs once and closes it", async () => {
+    setMotion(false);
+    const w = mount(ErrorNotice);
+    const onClick = vi.fn();
+    showErrorNotice("Fillet failed", { logId: 1 });
+    showErrorNotice("Fillet failed", { logId: 2, action: { label: "Edit", onClick } });
+    await w.vm.$nextTick();
+    await w.vm.$nextTick();
+    const chip = w.get("#error-notice");
+    expect([chip.attributes("type"), chip.attributes("aria-label")]).toEqual(["button", undefined]);
+    expect(chip.classes()).toEqual(expect.arrayContaining(["chip", "chip-error", "err-notice", "is-text"]));
+    expect(chip.get(".err-count").text()).toBe("2");
+    const action = w.get(".err-action");
+    expect([action.attributes("type"), action.text()]).toEqual(["button", "Edit"]);
+    await action.trigger("click");
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(w.find("#error-notice").exists()).toBe(false);
+  });
 });
