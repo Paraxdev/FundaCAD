@@ -61,7 +61,7 @@ async function surfaces(page) {
   const home = await page.$(".modal-close");
   if (home) await home.click();
   await page.click('#workspace-toggle [data-workspace="render"]', { timeout: 5000 });
-  await page.click('.rd-tab[data-tab="environment"]');
+  await page.click('#renderdock [role=tab][data-tab="environment"]');
   const dock = await page.$$eval("#renderdock .rd-head", (els) => els.map((el) => (el.textContent || "").trim()));
   await page.click('#workspace-toggle [data-workspace="model"]');
   return { ...base, dock };

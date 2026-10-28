@@ -14,30 +14,18 @@
   flex: 0 0 auto;
   border-bottom: 1px solid var(--line);
 }
-.rd-tab {
+.rd-tabs .ui-tab {
   flex: 1 1 0;
-  display: flex;
-  align-items: center;
   justify-content: center;
-  gap: var(--s-1);
-  padding: var(--s-2) var(--s-1);
-  border: 0;
-  /* A bar, not a filled background: a filled tab would merge with the panel below. */
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  background: transparent;
-  color: var(--text-mute);
-  font: inherit;
-  font-size: 11.5px;
-  cursor: pointer;
 }
-.rd-tab:hover {
-  color: var(--text-dim);
-  background: var(--raised);
+/* An on/off row: the box and its label, not a strip as wide as the dock that toggles from its empty end. */
+.rd-check {
+  display: flex;
+  width: fit-content;
+  margin-bottom: var(--s-2);
 }
-.rd-tab.active {
-  color: var(--accent-hot);
-  border-bottom-color: var(--accent);
+.sm-hint + .rd-check {
+  margin-top: var(--s-2);
 }
 
 .rd-scroll {
@@ -296,13 +284,9 @@
   margin-bottom: 0;
 }
 
-.rd-value {
-  flex: 0 0 auto;
+/* Wider than the base 3ch, so a readout that shrinks mid drag ("-180°" to "0°") leaves the track where it was. */
+#renderdock .ui-slider-value {
   min-width: 34px;
-  text-align: right;
-  font-size: 11px;
-  color: var(--text-mute);
-  font-variant-numeric: tabular-nums;
 }
 
 .rd-edit {
@@ -406,11 +390,6 @@
 .rd-name {
   width: 100%;
   margin-top: var(--s-1);
-  padding: 2px var(--s-1);
-  border: 1px solid transparent;
-  border-radius: var(--r-sm);
-  background: var(--panel-2);
-  color: var(--text);
 }
 .rd-ball-hdr {
   background: linear-gradient(180deg, #8fb4e8 0%, #f4e7c8 48%, #6b5a45 52%, #2d261e 100%);

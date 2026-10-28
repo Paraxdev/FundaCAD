@@ -394,7 +394,7 @@ const check = (name, ok, detail) => {
     // The row in Render's Environment tab sets Render's ground only.
     await page.evaluate(() => window.__fundacad.handleAction("materials"));
     await page.waitForTimeout(600);
-    await page.click('.rd-tab[data-tab="environment"]');
+    await page.click('#renderdock [role=tab][data-tab="environment"]');
     await page.waitForTimeout(200);
     await page.click('[data-ground="shadow"]');
     await frames(6);
@@ -404,7 +404,7 @@ const check = (name, ok, detail) => {
         render: p.groundRender,
         model: p.groundModel,
         drawn: window.viewport.contactShadow.group.visible,
-        pressed: document.querySelector('[data-ground="shadow"]')?.getAttribute("aria-pressed"),
+        pressed: document.querySelector('[data-ground="shadow"]')?.getAttribute("aria-checked"),
       };
     });
     check(

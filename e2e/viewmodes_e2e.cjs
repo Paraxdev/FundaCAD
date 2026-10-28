@@ -301,11 +301,11 @@ function check(ok, what, detail) {
     await page.evaluate(async () => (await import("/src/ui/workspace.ts")).setWorkspace("render"));
     await page.click('[data-view-mode="pathtraced"]');
     await page.waitForFunction(() => !!window.viewport.tracedPictureSize(1), null, { timeout: 60000, polling: 200 });
-    await page.click('.rd-tab[data-tab="camera"]');
-    await page.click('.rd-chip[data-scale="1"]');
-    await page.click('.rd-chip[data-samples="64"]');
+    await page.click('#renderdock [role=tab][data-tab="camera"]');
+    await page.click('[data-scale="1"]');
+    await page.click('[data-samples="64"]');
     const offer = await page.evaluate(() => ({
-      traced: document.querySelector("#rd-traced")?.checked,
+      traced: document.querySelector("#rd-traced input")?.checked,
       size: window.viewport.tracedPictureSize(1),
     }));
     check(offer.traced === true, "the Camera tab offers a traced picture in Path traced", offer);
