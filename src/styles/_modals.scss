@@ -587,20 +587,10 @@
   overflow: hidden;
   animation: pop-in var(--t-fast, 0.12s) var(--ease, ease);
 }
+/* The TextField well, inset like the rows under it. */
 .cmdk-input {
-  border: none;
-  outline: none;
-  background: transparent;
-  color: var(--text, #e6e9ee);
-  font: inherit;
-  font-size: 15px;
-  /* Same inset as .modal-head, so both dialog shapes open at the same size. */
-  padding: var(--s-5);
-  border-bottom: 1px solid var(--line, #23272e);
-}
-.cmdk-input:focus-visible {
-  outline: 1px solid var(--accent);
-  outline-offset: -3px;
+  flex: none;
+  margin: var(--s-3) var(--s-3) var(--s-1);
 }
 .cmdk-list {
   overflow-y: auto;

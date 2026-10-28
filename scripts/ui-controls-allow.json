@@ -82,7 +82,6 @@
   { "path": "src/components/home/VersionsDrawer.vue", "kind": "button", "count": 5, "reason": "before the base set, migrates in lane F (Home)" },
   { "path": "src/components/home/WelcomeBlock.vue", "kind": "button", "count": 2, "reason": "before the base set, migrates in lane F (Home)" },
   { "path": "src/components/home/WhatsNewCard.vue", "kind": "button", "count": 2, "reason": "before the base set, migrates in lane F (Home)" },
-  { "path": "src/components/overlays/CommandPalette.vue", "kind": "input[type=text]", "count": 1, "reason": "before the base set, migrates in lane H (dialogs)" },
   { "path": "src/components/overlays/ConsolePanel.vue", "kind": "button", "count": 6, "reason": "before the base set, migrates in lane H (dialogs)" },
   { "path": "src/components/overlays/ExperimentalSection.vue", "kind": "button", "count": 2, "reason": "before the base set, migrates in lane M (settings)" },
   { "path": "src/components/overlays/ExperimentalSection.vue", "kind": "input[type=number]", "count": 1, "reason": "before the base set, migrates in lane M (settings)" },
