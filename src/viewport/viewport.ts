@@ -167,7 +167,7 @@ import {
   type AreaMode,
   type ScreenRect,
 } from "./areaSelect";
-import { collectInBox, projectForArea, type AreaProjection } from "./areaProjection";
+import { collectInBox, PREVIEW_REACH, projectForArea, type AreaProjection } from "./areaProjection";
 import { scheduleAreaIndex } from "./areaIndex";
 import {
   faceCentroidOf,
@@ -1527,7 +1527,8 @@ export class Viewport {
     this.onAreaProfiles?.(rect, mode, areaTakesProfiles(this.areaFilter, kind), from.additive, announce);
     const h = this.highlighter;
     if (!h || !this.model) return;
-    const got = collectInBox(this.areaProj ?? this.projectForArea(), rect, mode);
+    const got = collectInBox(this.areaProj ?? this.projectForArea(), rect, mode, announce ? Infinity : PREVIEW_REACH);
+    if (got.pending) this.areaFrame.queue();
     // On release only: switching to bodies raises the move gizmo mid-drag otherwise.
     if (announce && kind !== this.selectionMode) this.setSelectionMode(kind);
     const faces = new Set<number>();

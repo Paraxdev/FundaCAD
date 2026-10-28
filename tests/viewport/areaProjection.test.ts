@@ -290,6 +290,41 @@ describe("the first box over one of many bodies", () => {
     });
   });
 
+  it("reaches a budget's worth of new bodies and edge runs a call, and ends on the whole take", () => {
+    const all = { x0: 10, y0: 20, x1: 910, y1: 620 };
+    const take = (got: ReturnType<typeof collectInBox>) => ({ faces: got.faces, edges: ids(got), bodies: got.bodies });
+    const ids = (got: { edges: EdgeRef[] }) => got.edges.map((e) => e.id);
+    const whole = take(collectInBox(projectForArea(model, cam, VIEW, false), all, "window"));
+    // A body costs 8 screen points a cluster, a ball's run 4 rings of 13 points.
+    const budget = clustersOf(0) * 8 * 50;
+    const runsPerCall = Math.ceil(budget / 52);
+    const proj = projectForArea(model, cam, VIEW, false);
+    const calls = [];
+    let last = null;
+    for (let i = 0; i < 20 && !last; i++) {
+      areaWork.clusters = 0;
+      areaWork.edges = 0;
+      const got = collectInBox(proj, all, "window", budget);
+      calls.push({
+        bodies: got.bodies.length,
+        clusters: areaWork.clusters,
+        edges: areaWork.edges,
+        pending: got.pending,
+      });
+      if (!got.pending) last = take(got);
+    }
+    expect({ calls, last, wholeBodies: whole.bodies.length }).toEqual({
+      calls: Array.from({ length: 10 }, (_, i) => ({
+        bodies: 50 * (i + 1),
+        clusters: 50 * clustersOf(0),
+        edges: 4 * Math.max(0, Math.min(runsPerCall, 500 - i * runsPerCall)),
+        pending: i < 9,
+      })),
+      last: whole,
+      wholeBodies: 500,
+    });
+  });
+
   it("takes what testing every triangle takes", () => {
     const boxes = [around(212, 8), around(212, 3), around(0, 30), { x0: 10, y0: 20, x1: 910, y1: 620 }, rects()[5]!];
     for (const see of [false, true]) {

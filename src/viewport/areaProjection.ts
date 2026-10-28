@@ -20,6 +20,10 @@ import {
 /** Counters a test reads: triangles tested and vertices projected for a drag's verdicts. */
 export const areaWork = { triangles: 0, vertices: 0, clusters: 0, edges: 0 };
 
+/** Screen points a preview frame may project of bodies and of edge runs it has not reached yet, 8 a cluster for a
+ *  body, so a sweep over thousands of bodies lands over a few frames instead of stalling one. */
+export const PREVIEW_REACH = 80_000;
+
 // Cluster boxes are compared with this much slack, so rounding can only send a cluster to its triangles.
 const SLACK_PX = 1e-6;
 // A body box this far off the rect holds no triangle the rect touches, whatever the rounding.
@@ -230,12 +234,15 @@ function pointsBox(edges: readonly EdgeRef[]): Float64Array {
 
 // Edges are never culled by facing: a silhouette edge belongs to the face pointing away as much as to the one
 // pointing at you.
-function reachEdges(run: EdgeRun, proj: AreaProjection): (number[] | null)[] {
+/** The screen points it projected. */
+function reachEdges(run: EdgeRun, proj: AreaProjection): number {
   const { vp, view } = proj;
   const q = new THREE.Vector4();
   const all: (number[] | null)[] = [];
+  let points = 0;
   for (let i = run.from; i < run.to; i++) {
     const e = proj.edgeList[i]!;
+    points += e.points.length;
     let flat: number[] | null = [];
     for (const pt of e.points) {
       q.set(pt[0], pt[1], pt[2], 1).applyMatrix4(vp);
@@ -252,7 +259,8 @@ function reachEdges(run: EdgeRun, proj: AreaProjection): (number[] | null)[] {
     run.boxes.push(flat === null ? null : boxOf(flat));
   }
   areaWork.edges += run.to - run.from;
-  return (run.flat = all);
+  run.flat = all;
+  return points;
 }
 
 /** True when nothing inside the screen box `h` can meet the rect. */
@@ -433,21 +441,33 @@ function faceCrossing(b: BodyArea, f: number, r: ScreenRect, probe: TriProbe, se
 
 /** A window takes a body only when all of it is inside, a crossing as soon as
  *  one face is touched, so a window over an assembly leaves the plate behind. */
+/** Pending when `reachBudget` (screen points, as PREVIEW_REACH) ran out before every body and edge run the rect meets
+ *  was projected: the take then holds only what was, and a later call goes on from there. */
 export function collectInBox(
   proj: AreaProjection,
   rect: ScreenRect,
   mode: AreaMode,
+  reachBudget = Infinity,
 ): {
   faces: number[];
   edges: EdgeRef[];
   bodies: string[];
+  pending: boolean;
 } {
-  const out = { faces: [] as number[], edges: [] as EdgeRef[], bodies: [] as string[] };
+  const out = { faces: [] as number[], edges: [] as EdgeRef[], bodies: [] as string[], pending: false };
   const probe = new TriProbe(proj);
   const see = proj.seeThrough;
+  let spent = 0;
   for (const b of proj.bodies) {
     if (missed(b.hull, rect)) continue;
-    if (!b.reached) reach(b, proj);
+    if (!b.reached) {
+      if (spent >= reachBudget) {
+        out.pending = true;
+        continue;
+      }
+      reach(b, proj);
+      spent += b.idx.clusterStart.length * 8;
+    }
     let touched = false;
     let anyFacing = false;
     let anyFailed = false;
@@ -466,9 +486,18 @@ export function collectInBox(
     const whole = mode === "window" ? anyFacing && !anyFailed : touched;
     if (whole) out.bodies.push(b.id);
   }
+  // Edges get their own budget, so a long sweep over new bodies cannot starve them.
+  spent = 0;
   for (const run of proj.edges) {
     if (missed(run.hull, rect)) continue;
-    const flat = run.flat ?? reachEdges(run, proj);
+    if (!run.flat) {
+      if (spent >= reachBudget) {
+        out.pending = true;
+        continue;
+      }
+      spent += reachEdges(run, proj);
+    }
+    const flat = run.flat!;
     for (let i = 0; i < flat.length; i++) {
       const f = flat[i];
       if (!f) continue;

@@ -3,6 +3,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Viewport, type AreaDrag } from "../../src/viewport/viewport";
 import { dragBox, FrameCoalescer } from "../../src/viewport/areaSelect";
+import { PREVIEW_REACH } from "../../src/viewport/areaProjection";
+
+const hoisted = vi.hoisted(() => ({ collect: vi.fn() }));
+vi.mock("../../src/viewport/areaProjection", async (orig) => ({
+  ...(await orig<typeof import("../../src/viewport/areaProjection")>()),
+  collectInBox: hoisted.collect,
+}));
 
 type Handler = (e: Record<string, unknown>) => void;
 const fire = (list: Handler[] | undefined, e: Record<string, unknown>) => list?.forEach((fn) => fn(e));
@@ -128,5 +135,38 @@ describe("box drag wiring", () => {
       errors: [],
     });
     expect(r.selectInBox.mock.calls).toEqual([[rectOf(160, 140).rect, rectOf(160, 140).mode, r.down, false]]);
+  });
+
+  it("finishes a preview its reach budget cut short in the next frame, and takes the whole box on release", () => {
+    const r = rig();
+    delete r.vp.selectInBox;
+    const setSelection = vi.fn((_: { faces: Set<number> }) => true);
+    Object.assign(r.vp, {
+      model: {},
+      areaFilter: "all",
+      selectionMode: "faces",
+      onSelectionChange: vi.fn(),
+      highlighter: { settle: vi.fn(), setSelection },
+    });
+    const part = { faces: [1], edges: [], bodies: [], pending: true };
+    const full = { faces: [1, 2], edges: [], bodies: [], pending: false };
+    hoisted.collect.mockReturnValueOnce(part).mockReturnValueOnce(full).mockReturnValueOnce(full);
+    r.move(160, 140);
+    r.frame();
+    const queued = r.frames.size;
+    r.frame();
+    const after = r.frames.size;
+    r.up(160, 140);
+    expect({
+      budgets: hoisted.collect.mock.calls.map((c) => c[3]),
+      queued,
+      after,
+      takes: setSelection.mock.calls.map(([w]) => [...w.faces]),
+    }).toEqual({
+      budgets: [PREVIEW_REACH, PREVIEW_REACH, Infinity],
+      queued: 1,
+      after: 0,
+      takes: [[1], [1, 2], [1, 2]],
+    });
   });
 });
