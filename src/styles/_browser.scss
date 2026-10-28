@@ -61,13 +61,17 @@
   background: var(--accent-tint-2);
   box-shadow: inset 2px 0 0 var(--accent);
 }
-.tree-caret {
+/* The caret and the eye are sm IconButtons held to the label's height, at 24px they would grow every row. The
+   caret keeps the 12px the indents count on, so it shows no wash, the head's own hover is its cue. */
+.tree-caret.icon-btn.icon-btn-sm {
   width: 12px;
-  font-size: 9px;
+  height: 18px;
   color: var(--text-mute);
-  transition: color var(--t-fast) var(--ease);
 }
-.tree-folder:hover .tree-caret {
+.tree-caret.icon-btn.icon-btn-sm:hover:not(.is-disabled) {
+  background: none;
+}
+.tree-folder:hover .tree-caret.icon-btn.icon-btn-sm {
   color: var(--text-dim);
 }
 .tree-count {
@@ -115,22 +119,29 @@
   -webkit-user-select: text;
   user-select: text;
 }
-.tree-eye {
-  font-size: 12px;
-  color: var(--text-mute);
-  opacity: 0.35;
-  padding: 0 var(--s-2);
-  cursor: pointer;
+.tree-eye.icon-btn.icon-btn-sm {
+  width: calc(13px + 2 * var(--s-2));
+  height: 18px;
   transition:
+    background var(--t-fast) var(--ease),
     color var(--t-fast) var(--ease),
     opacity var(--t-fast) var(--ease);
 }
-.feature-row:hover .tree-eye {
+.tree-eye.icon-btn {
+  opacity: 0.35;
+}
+.feature-row:hover .tree-eye.icon-btn {
   opacity: 0.9;
 }
-.tree-eye:hover {
-  color: var(--accent-hot);
+.tree-eye.icon-btn:hover,
+.tree-eye.icon-btn:focus-visible {
   opacity: 1;
+}
+:root[data-pointer="touch"] .tree-caret.icon-btn.icon-btn-sm::before {
+  inset: -13px -14px;
+}
+:root[data-pointer="touch"] .tree-eye.icon-btn.icon-btn-sm::before {
+  inset: -13px -6px;
 }
 
 /* In-canvas sketch dimensions stay off the spacing scale on purpose: they are projected
