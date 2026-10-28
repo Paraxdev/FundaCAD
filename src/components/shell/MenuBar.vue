@@ -1,15 +1,18 @@
 <script setup lang="ts">
-import { fmtKeys } from "../../input/platform";
-import { computed, onMounted, onUnmounted, ref, useTemplateRef, watch } from "vue";
-import { claimEscape } from "../../ui/escapeClaim";
-import Icon from "./Icon.vue";
+import { computed, onMounted, onUnmounted, ref, useTemplateRef } from "vue";
 import Button from "../ui/Button.vue";
-import type { MenuDef, MenuItem } from "../../ui/menu";
+import Menu from "../ui/Menu.vue";
+import MenuItem from "../ui/MenuItem.vue";
+import MenuSeparator from "../ui/MenuSeparator.vue";
+import { guardMenuKeys, type MenuDef } from "../../ui/menu";
 
 const props = defineProps<{ menus: MenuDef[] }>();
 
 const root = useTemplateRef<HTMLElement>("root");
 const openIndex = ref<number | null>(null);
+const current = computed(() => (openIndex.value === null ? null : (props.menus[openIndex.value] ?? null)));
+// The popup hangs from the `.menu` cell, not its button: the button sits inside the bar's margin.
+const cells: HTMLElement[] = [];
 
 // The popup hangs 6px below the bar, and keeps this margin above the window's bottom edge.
 const POPUP_GAP = 6;
@@ -20,97 +23,81 @@ function capToWindow() {
   popupMaxHeight.value = `${Math.max(120, window.innerHeight - bottom - POPUP_GAP - WINDOW_MARGIN)}px`;
 }
 
-// `disabled` and `checked` are thunks re-evaluated on every open, which is how Undo greys out without pushed state.
-// Bumping this on open re-runs the computed below.
-const openTick = ref(0);
-
-interface RenderedItem {
-  item: MenuItem;
-  disabled: boolean;
-  /** undefined = this row is not a toggle at all, so it claims no gutter slot. */
-  checked: boolean | undefined;
-}
-
-const rendered = computed<RenderedItem[][]>(() => {
-  openTick.value; // dependency: re-evaluate the thunks on every open
-  return props.menus.map((m) =>
-    m.items.map((item) => ({
-      item,
-      disabled: !!item.disabled?.(),
-      checked: item.checked ? item.checked() : undefined,
-    })),
-  );
-});
-
-// One check gutter per menu, not per row, or a toggle shifts sideways against its neighbours as it turns on.
-const hasChecks = computed(() => props.menus.map((m) => m.items.some((it) => it.checked)));
-
-function toggle(i: number) {
-  if (openIndex.value === i) {
-    openIndex.value = null;
-    return;
-  }
-  openTick.value++;
+function open(i: number) {
   capToWindow();
   openIndex.value = i;
 }
 
-function run(r: RenderedItem) {
-  if (r.disabled) return;
-  openIndex.value = null;
-  r.item.onClick?.();
+function toggle(i: number) {
+  if (openIndex.value === i) openIndex.value = null;
+  else open(i);
 }
 
-// dismiss on outside click / Escape
-function onDown(e: PointerEvent) {
-  if (openIndex.value !== null && !root.value?.contains(e.target as Node)) openIndex.value = null;
+function onButtonKey(e: KeyboardEvent, i: number) {
+  if (e.key !== "ArrowDown" || e.ctrlKey || e.altKey || e.metaKey) return;
+  e.preventDefault();
+  e.stopPropagation();
+  open(i);
 }
-function onKey(e: KeyboardEvent) {
-  if (e.key === "Escape") openIndex.value = null;
+
+// ArrowLeft and ArrowRight on a row walk to the neighbouring menu. Its button takes focus first, so closing the new
+// menu hands focus back there and not to the button of the menu that was open.
+function onRowKey(e: KeyboardEvent) {
+  const at = openIndex.value;
+  if (at === null || e.ctrlKey || e.altKey || e.metaKey) return;
+  const step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+  if (!step) return;
+  e.preventDefault();
+  const n = props.menus.length;
+  const next = (at + step + n) % n;
+  cells[next]?.querySelector<HTMLElement>(".menu-btn")?.focus();
+  open(next);
 }
-let releaseEscape: (() => void) | null = null;
-watch(openIndex, (i) => {
-  if (i !== null) releaseEscape ??= claimEscape();
-  else {
-    releaseEscape?.();
-    releaseEscape = null;
-  }
-});
-onMounted(() => {
-  document.addEventListener("pointerdown", onDown);
-  document.addEventListener("keydown", onKey);
-});
-onUnmounted(() => {
-  releaseEscape?.();
-  document.removeEventListener("pointerdown", onDown);
-  document.removeEventListener("keydown", onKey);
-});
+
+let releaseKeys = () => {};
+onMounted(() => (releaseKeys = guardMenuKeys()));
+onUnmounted(() => releaseKeys());
 </script>
 
 <template>
   <nav id="menubar" class="menubar" ref="root">
-    <div v-for="(m, i) in menus" :key="m.label" class="menu">
+    <div v-for="(m, i) in menus" :key="m.label" :ref="(el) => (cells[i] = el as HTMLElement)" class="menu">
       <Button
         variant="ghost"
         size="sm"
         class="menu-btn"
         :class="{ 'is-open': openIndex === i }"
+        aria-haspopup="menu"
         :aria-expanded="openIndex === i"
         @click.stop="toggle(i)"
+        @keydown="onButtonKey($event, i)"
         >{{ m.label }}</Button
       >
-      <div class="menu-popup" :class="{ hidden: openIndex !== i }" :style="{ maxHeight: popupMaxHeight }">
-        <template v-for="(r, j) in rendered[i]" :key="j">
-          <div v-if="r.item.separator" class="menu-sep"></div>
-          <button v-else class="menu-item" :disabled="r.disabled" @click.stop="run(r)">
-            <span v-if="hasChecks[i]" class="menu-check">
-              <Icon v-if="r.checked" name="check" :size="12" />
-            </span>
-            <span class="menu-label">{{ r.item.label }}</span>
-            <span v-if="r.item.shortcut" class="menu-shortcut">{{ fmtKeys(r.item.shortcut) }}</span>
-          </button>
+    </div>
+    <!-- `disabled` and `checked` are thunks read as the menu mounts on each open, which is how Undo greys out. -->
+    <Menu
+      v-if="openIndex !== null && current"
+      :key="openIndex"
+      :anchor="cells[openIndex] ?? null"
+      :gap="POPUP_GAP"
+      :label="current.label"
+      @close="openIndex = null"
+    >
+      <div class="menubar-rows" role="none" :style="{ maxHeight: popupMaxHeight }">
+        <template v-for="(it, j) in current.items" :key="j">
+          <MenuSeparator v-if="it.separator" />
+          <MenuItem
+            v-else
+            class="menu-item"
+            :label="it.label"
+            :keys="it.shortcut"
+            :checked="it.checked ? it.checked() : undefined"
+            :disabled="!!it.disabled?.()"
+            @select="it.onClick?.()"
+            @keydown="onRowKey"
+          />
         </template>
       </div>
-    </div>
+    </Menu>
   </nav>
 </template>

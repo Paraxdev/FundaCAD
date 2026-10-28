@@ -5,6 +5,8 @@ import MenuBar from "../../../src/components/shell/MenuBar.vue";
 
 enableAutoUnmount(afterEach);
 
+// The popup is teleported to the body, so its rows are found there.
+const rows = () => document.body.querySelector<HTMLElement>(".menubar-rows")!;
 const items = Array.from({ length: 40 }, (_, i) => ({ label: `Item ${i}`, onClick: () => {} }));
 
 describe("menubar popup height", () => {
@@ -14,7 +16,7 @@ describe("menubar popup height", () => {
     vi.spyOn(w.element, "getBoundingClientRect").mockReturnValue({ bottom: 40 } as DOMRect);
     await w.get(".menu-btn").trigger("click");
     await nextTick();
-    expect(w.get(".menu-popup").attributes("style")).toContain("max-height: 838px");
+    expect(rows().getAttribute("style")).toContain("max-height: 838px");
     vi.unstubAllGlobals();
   });
 
@@ -24,7 +26,7 @@ describe("menubar popup height", () => {
     vi.stubGlobal("innerHeight", 500);
     await w.get(".menu-btn").trigger("click");
     await nextTick();
-    expect(w.get(".menu-popup").attributes("style")).toContain("max-height: 438px");
+    expect(rows().getAttribute("style")).toContain("max-height: 438px");
     vi.unstubAllGlobals();
   });
 });

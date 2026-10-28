@@ -178,7 +178,7 @@ const check = (label, ok, detail = "") => {
   await page.evaluate(() => window.sketch.setTool("select"));
   await page.mouse.click(box.cx + 40, box.cy + 40, { button: "right" });
   await page.waitForTimeout(400);
-  check("a right click opens the sketch menu in a middle orbit preset", !!(await page.$(".context-menu")));
+  check("a right click opens the sketch menu in a middle orbit preset", !!(await page.$(".ctx-item")));
   await page.keyboard.press("Escape");
   await page.waitForTimeout(300);
   await page.evaluate(() => window.sketch.cancel());
@@ -202,7 +202,7 @@ const check = (label, ok, detail = "") => {
   check("moving up lights the top item", hot !== null && hot.includes("Shortcut"), String(hot));
   check("releasing over it runs it once", !!(await page.$(".shortcuts-panel")));
   check("the ring closes on release", !(await page.$("[data-radial-menu]")));
-  check("no context menu after the radial drag", !(await page.$(".context-menu")));
+  check("no context menu after the radial drag", !(await page.$(".ctx-item")));
   await page.evaluate(() => window.__fundacad.handleAction("shortcut-help"));
   await page.waitForTimeout(300);
 

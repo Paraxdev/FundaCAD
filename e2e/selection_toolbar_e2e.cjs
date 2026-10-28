@@ -109,9 +109,7 @@ const check = (name, ok, detail) => {
     }));
 
   const menuRows = () =>
-    page.evaluate(() =>
-      [...document.querySelectorAll(".context-menu .ctx-item .ctx-label")].map((n) => n.textContent.trim()),
-    );
+    page.evaluate(() => [...document.querySelectorAll(".ctx-item .ui-menu-label")].map((n) => n.textContent.trim()));
 
   // --- 1. one body: the modelling verbs, the patterns now among them ---------
   await select([ids[0]]);
@@ -152,7 +150,7 @@ const check = (name, ok, detail) => {
   await page.screenshot({ path: `${OUT}/material-menu.png` });
 
   if (rows.includes("Copper")) {
-    await page.click(".context-menu .ctx-item:has(.ctx-label:text-is('Copper'))");
+    await page.click(".ctx-item:has(.ui-menu-label:text-is('Copper'))");
     await page.waitForTimeout(700);
     // Read the answer off the LIVE THREE material as well as the document: the
     // point of a material is what the renderer does with it.
@@ -299,7 +297,7 @@ const check = (name, ok, detail) => {
   await page.screenshot({ path: OUT + "/body-menu.png" });
 
   const before = await page.evaluate(() => window.store.document.features.length);
-  await page.click(".context-menu .ctx-item:has(.ctx-label:text-is('Union with…'))");
+  await page.click(".ctx-item:has(.ui-menu-label:text-is('Union with…'))");
   await page.waitForTimeout(1200);
   const after = await page.evaluate(() => ({
     features: window.store.document.features.length,

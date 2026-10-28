@@ -8,14 +8,16 @@ export const APP_HTML = `
   <button id="redo-btn" class="tb-btn" title="Redo (Ctrl+Y)" aria-label="Redo" disabled></button>
   <span id="docname" class="docname dirty"><!-- a dev build keeps comments -->Untitled<span class="dirty-mark">*</span></span>
   <nav id="menubar">
-    <div class="menu"><button class="menu-btn">File</button>
-      <div class="menu-popup hidden"><button class="menu-item"><span>Open...</span><span class="menu-shortcut">Ctrl+O</span></button></div>
-    </div>
-    <div class="menu"><button class="menu-btn">Edit</button>
-      <div class="menu-popup"><button class="menu-item"><span>Preferences...</span><span class="menu-shortcut">Ctrl+,</span></button></div>
-    </div>
+    <div class="menu"><button class="btn menu-btn" aria-expanded="false">File</button></div>
+    <div class="menu"><button class="btn menu-btn is-open" aria-expanded="true">Edit</button></div>
   </nav>
 </header>
+<div class="ui-menu" role="menu" aria-label="Edit"><div class="menubar-rows" role="none">
+  <div class="ui-menu-item menu-item" role="menuitem"><span class="ui-menu-label">Preferences...</span><span class="ui-menu-keys">Ctrl+,</span></div>
+</div></div>
+<div class="ui-menu" role="menu" aria-label="File" style="visibility:hidden">
+  <div class="ui-menu-item menu-item" role="menuitem"><span class="ui-menu-label">Open...</span><span class="ui-menu-keys">Ctrl+O</span></div>
+</div>
 <nav id="toolrail" data-mode="model">
   <button class="rail-btn" data-action="sketch" aria-label="Sketch (S)"></button>
   <button class="rail-btn" data-family="cat:CREATE" aria-label="Create"></button>
@@ -38,7 +40,7 @@ export const APP_HTML = `
   <div class="feature-row tree-child" data-id="body2" data-y="400"><span class="tree-label">Boss</span></div>
   <div class="feature-row tree-child" data-id="body3" data-y="500"><span class="tree-label">Rib</span></div>
 </div></aside>
-<div class="context-menu dynamic"><div class="ctx-item"><span class="ctx-label">Rename</span><span class="ctx-key">F2</span></div></div>
+<div class="ui-menu" role="menu"><div class="ui-menu-item ctx-item" role="menuitem"><span class="ui-menu-label">Rename</span><span class="ui-menu-keys">F2</span></div></div>
 <div class="prompt"><span id="prompt" class="prompt-text">Pick a face to draft</span></div>
 <button class="plain">Cancel</button>
 <button class="plain">Cancel</button>

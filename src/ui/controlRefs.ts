@@ -53,6 +53,7 @@ const CONTROL = [
   "[role=tab]",
   "[role=button]",
   "[role=menuitem]",
+  "[role=menuitemcheckbox]",
   "[role=switch]",
   "[role=radio]",
   ".ctx-item",
@@ -69,7 +70,7 @@ const CONTROL = [
 
 const TEXT_ONLY = "#docname, #prompt, [data-testid=selection-readout]";
 const LABEL_NOISE =
-  ".menu-shortcut, .ctx-key, .cmdk-key, .menu-check, .dirty-mark, .t-caret, .tree-count, .choice-btn > small, .ui-confirm-choice > .ui-confirm-hint";
+  ".menu-shortcut, .ctx-key, .ui-menu-keys, .cmdk-key, .menu-check, .ui-menu-check, .dirty-mark, .t-caret, .tree-count, .choice-btn > small, .ui-confirm-choice > .ui-confirm-hint";
 const MAX_LABEL = 60;
 
 const realRect = (el: Element): Box => el.getBoundingClientRect();
@@ -92,8 +93,10 @@ function clip(s: string): string {
 export function labelOf(el: HTMLElement): string {
   const row = el.matches(".tree-eye") ? el.closest<HTMLElement>(".feature-row, .tree-folder") : null;
   if (row) return labelOf(row);
-  const own = el.querySelector(":scope .t-name, :scope .tree-label, :scope .ctx-label, :scope .cmdk-label");
-  if (own && el.matches(".timeline-node, .feature-row, .tree-folder, .ctx-item, .cmdk-item"))
+  const own = el.querySelector(
+    ":scope .t-name, :scope .tree-label, :scope .ctx-label, :scope .ui-menu-label, :scope .cmdk-label",
+  );
+  if (own && el.matches(".timeline-node, .feature-row, .tree-folder, .ctx-item, .ui-menu-item, .cmdk-item"))
     return clip(visibleText(own));
   const aria = el.getAttribute("aria-label");
   if (aria) return clip(aria.trim());
@@ -121,8 +124,8 @@ export function matchName(label: string): string {
 const MODAL = ".home, .modal-overlay, .choice-backdrop, .cmdk-backdrop";
 
 export function regionOf(el: Element): string {
-  if (el.closest(".context-menu")) return "context";
-  if (el.closest(".menu-popup, #menubar")) return "menu";
+  if (el.closest(".context-menu, .ctx-item")) return "context";
+  if (el.closest(".menu-popup, #menubar, .menu-item")) return "menu";
   if (el.closest(`${MODAL}, [role=dialog]`)) return "dialog";
   if (el.closest("#toolrail, .rail-flyout")) return "toolrail";
   if (el.closest("#titlebar")) return "titlebar";
@@ -167,8 +170,9 @@ export function refOf(el: HTMLElement): string {
   const label = labelOf(el);
   if (el.matches(".menu-btn")) return `menu:${label}`;
   if (el.matches(".menu-item")) {
-    const parent = el.closest(".menu")?.querySelector(".menu-btn");
-    return `menu:${parent ? visibleText(parent) : "?"}/${label}`;
+    // The popup is teleported out of the bar, so the open menu names its button.
+    const top = el.closest("[role=menu]")?.getAttribute("aria-label");
+    return `menu:${top ?? "?"}/${label}`;
   }
   if (el.matches(".ctx-item")) return `ctx:${label}`;
   if (el.matches(".choice-btn, .ui-confirm .btn")) return `choice:${label}`;

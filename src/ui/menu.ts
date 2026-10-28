@@ -34,6 +34,29 @@ export function contextMenu(x: number, y: number, items: CtxItem[]): void {
   useContextMenuStore().show(x, y, items);
 }
 
+const MENU_KEYS = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "Enter", "Tab"]);
+
+// On document in the bubble phase, so the focused menu has had the key first. Escape is the menu's own, in capture.
+function keepMenuKeys(e: KeyboardEvent): void {
+  if (e.ctrlKey || e.altKey || e.metaKey) return;
+  if (!MENU_KEYS.has(e.key) && e.key.length !== 1) return;
+  if (e.target instanceof Element && e.target.closest(".ui-menu")) e.stopPropagation();
+}
+
+let keyGuards = 0;
+
+/** While a menu holds focus, the keys it moves and types ahead with stop short of the window's shortcuts, where an arrow
+ *  turns the view and a letter starts a tool. Ctrl, Alt and Meta combos, Delete and the F keys still pass. */
+export function guardMenuKeys(): () => void {
+  if (keyGuards++ === 0) document.addEventListener("keydown", keepMenuKeys);
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    if (--keyGuards === 0) document.removeEventListener("keydown", keepMenuKeys);
+  };
+}
+
 export interface MenuAtOptions {
   /** "list" is the right-click menu; "radial" a ring around the point. */
   style?: "list" | "radial";

@@ -115,9 +115,7 @@ const ITEM = "Select tangent faces";
       [target, along],
     );
   const menuLabels = () =>
-    page.evaluate(() =>
-      [...document.querySelectorAll(".context-menu .ctx-item .ctx-label")].map((n) => n.textContent.trim()),
-    );
+    page.evaluate(() => [...document.querySelectorAll(".ctx-item .ui-menu-label")].map((n) => n.textContent.trim()));
   // A first click takes the whole body; resting on it is what offers its faces.
   const rightClick = async (at) => {
     await page.mouse.move(at.x - 3, at.y);
@@ -127,7 +125,7 @@ const ITEM = "Select tangent faces";
     }
     await page.mouse.move(at.x, at.y);
     await page.mouse.click(at.x, at.y, { button: "right" });
-    await page.waitForSelector(".context-menu .ctx-item", { timeout: 5000 }).catch(() => {});
+    await page.waitForSelector(".ctx-item", { timeout: 5000 }).catch(() => {});
   };
   const closeMenu = async () => {
     await page.keyboard.press("Escape");
@@ -148,8 +146,7 @@ const ITEM = "Select tangent faces";
   await rightClick(end);
   await page
     .waitForFunction(
-      (item) =>
-        [...document.querySelectorAll(".context-menu .ctx-item .ctx-label")].some((n) => n.textContent.trim() === item),
+      (item) => [...document.querySelectorAll(".ctx-item .ui-menu-label")].some((n) => n.textContent.trim() === item),
       ITEM,
       { timeout: 30000 },
     )
@@ -164,7 +161,7 @@ const ITEM = "Select tangent faces";
   await shot("01_menu");
 
   // --- 2. choosing it selects the slot loop ---------------------------------------
-  await page.click(`.context-menu .ctx-item:has(.ctx-label:text-is('${ITEM}'))`, { timeout: 5000 }).catch(() => {});
+  await page.click(`.ctx-item:has(.ui-menu-label:text-is('${ITEM}'))`, { timeout: 5000 }).catch(() => {});
   await page.waitForTimeout(400);
   const sel = await page.evaluate((loop) => {
     const v = window.viewport;

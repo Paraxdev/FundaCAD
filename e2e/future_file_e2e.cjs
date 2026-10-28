@@ -132,7 +132,7 @@ const V99 = fs.readFileSync(path.join(__dirname, "../tests/fixtures/future/v99.f
   await page.click('.timeline-node[data-id="w1"]', { button: "right" });
   await page.waitForTimeout(200);
   const items = await page.evaluate(() =>
-    [...document.querySelectorAll(".context-menu .ctx-item")].map((e) => e.textContent?.trim() ?? ""),
+    [...document.querySelectorAll(".ctx-item")].map((e) => e.textContent?.trim() ?? ""),
   );
   await page.keyboard.press("Escape");
   check(
