@@ -331,4 +331,64 @@ describe("NumberField expressions", () => {
     const { w } = await render({ unit: "mm", unitTip: "Expressions are written in this unit" });
     expect(w.get(".ui-unit-chip").attributes("title")).toBe("Expressions are written in this unit");
   });
+
+  it("commits text that differs from what it showed even at the model's value, like a native change", async () => {
+    const { w, input, el } = await render({ modelValue: 20 });
+    el.focus();
+    await commit(input, "20.0");
+    await commit(input, "20");
+    await input.setValue("2 cm");
+    await input.trigger("blur");
+    expect(emitted(w)).toEqual([[20], [20]]);
+  });
+
+  it("commits a previewed value though its owner shows the preview as the model", async () => {
+    // The feature rows read the live feature, so an open preview is what the field is handed as its model.
+    const owner: { w?: Awaited<ReturnType<typeof render>>["w"] } = {};
+    const previewEnd = vi.fn();
+    const preview = (v: number | null) => void owner.w!.setProps({ modelValue: v });
+    const { w, input, el } = await render({ modelValue: 20, preview, previewEnd });
+    owner.w = w;
+    el.focus();
+    vi.useFakeTimers();
+    await input.setValue("30");
+    await vi.advanceTimersByTimeAsync(200);
+    expect(w.props("modelValue")).toBe(30);
+    await input.trigger("keydown", { key: "Enter" });
+    expect([emitted(w), previewEnd.mock.calls]).toEqual([[[30]], [[true]]]);
+
+    await w.setProps({ modelValue: 20 });
+    await input.setValue("21");
+    await vi.advanceTimersByTimeAsync(200);
+    await input.trigger("blur");
+    expect([emitted(w), previewEnd.mock.calls]).toEqual([
+      [[30], [21]],
+      [[true], [true]],
+    ]);
+  });
+
+  it("ends a preview as not committing when a blank required field commits nothing", async () => {
+    const preview = vi.fn();
+    const previewEnd = vi.fn();
+    const { w, input, el } = await render({ modelValue: 20, preview, previewEnd });
+    el.focus();
+    vi.useFakeTimers();
+    await input.setValue("30");
+    await vi.advanceTimersByTimeAsync(200);
+    await commit(input, "");
+    await w.vm.$nextTick();
+    expect([emitted(w), previewEnd.mock.calls, el.value]).toEqual([[], [[false]], "20"]);
+  });
+
+  it("ends a preview as not committing when the text it showed comes back unchanged", async () => {
+    const preview = vi.fn();
+    const previewEnd = vi.fn();
+    const { w, input, el } = await render({ modelValue: 20, preview, previewEnd });
+    el.focus();
+    vi.useFakeTimers();
+    await input.setValue("2");
+    await vi.advanceTimersByTimeAsync(200);
+    await commit(input, "20");
+    expect([emitted(w), previewEnd.mock.calls]).toEqual([[], [[false]]]);
+  });
 });
