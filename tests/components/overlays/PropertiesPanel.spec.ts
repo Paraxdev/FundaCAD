@@ -52,7 +52,7 @@ describe("PropertiesPanel", () => {
     expect(text()).not.toContain("Filament,");
   });
 
-  it("takes a wall thickness in any length unit and keeps it as mm", async () => {
+  it("takes a wall thickness in any length unit, estimates with it per keystroke and saves it as mm on change", async () => {
     await mounted();
     usePanelsStore().showProperties({
       title: "Casing",
@@ -61,10 +61,18 @@ describe("PropertiesPanel", () => {
       faults: [],
     });
     await flushPromises();
+    const mass = () =>
+      [...document.body.querySelectorAll(".properties-panel .measure-row")]
+        .find((r) => r.textContent?.includes("Mass, estimate"))
+        ?.querySelector(".measure-v")?.textContent;
+    const saved = printPrefs().wallThicknessMm;
+    const before = mass();
     const wall = document.body.querySelector<HTMLInputElement>('.properties-panel input[aria-label="Wall thickness"]')!;
     wall.value = "0.05 in";
     wall.dispatchEvent(new Event("input"));
     await flushPromises();
+    expect([printPrefs().wallThicknessMm, mass() === before]).toEqual([saved, false]);
+    wall.dispatchEvent(new Event("change"));
     expect(printPrefs().wallThicknessMm).toBeCloseTo(1.27, 9);
     expect(document.body.querySelector('.properties-panel input[type="number"]')).toBeNull();
   });

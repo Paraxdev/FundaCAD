@@ -21,11 +21,15 @@ import {
 const engine = useEngine();
 const panels = usePanelsStore();
 
-// A local copy so the controls respond instantly, each edit also persists through the app-wide setPrintPref.
+// A local copy so the controls respond instantly, each edit also persists through the app-wide setPrintPref: a pick at
+// once, a typed number on its field's change.
 const prefs = reactive({ ...printPrefs() });
 type Key = "materialId" | "customDensity" | "infillPct" | "wallThicknessMm";
 function commit<K extends Key>(key: K) {
   setPrintPref(key, prefs[key]);
+}
+function take<K extends Key>(key: K, v: (typeof prefs)[K] | null) {
+  if (v !== null) prefs[key] = v;
 }
 function set<K extends Key>(key: K, v: (typeof prefs)[K] | null) {
   if (v === null) return;
@@ -109,7 +113,8 @@ function close() {
             :step="0.01"
             tip="Density"
             :model-value="prefs.customDensity"
-            @update:model-value="set('customDensity', $event)"
+            @update:model-value="take('customDensity', $event)"
+            @change="commit('customDensity')"
           />
         </div>
         <div class="measure-row">
@@ -139,7 +144,8 @@ function close() {
             :step="0.1"
             tip="Wall thickness"
             :model-value="prefs.wallThicknessMm"
-            @update:model-value="set('wallThicknessMm', $event)"
+            @update:model-value="take('wallThicknessMm', $event)"
+            @change="commit('wallThicknessMm')"
           />
         </div>
 
