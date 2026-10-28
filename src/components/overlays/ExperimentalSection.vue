@@ -36,8 +36,13 @@ function holdEscape(on: boolean) {
   }
 }
 const refused = (e: Event) => (e.target as HTMLElement).getAttribute("aria-invalid") === "true";
-function onNumberKey(e: KeyboardEvent) {
-  if (e.key === "ArrowUp" || e.key === "ArrowDown") holdEscape(true);
+// A draft that reads back as the stored number leaves Escape nothing to revert, so the first Escape closes.
+function drafted(f: Field, e: Event) {
+  const text = (e.target as HTMLInputElement).value.trim();
+  holdEscape(text === "" ? boxValue(f) !== null : Number(text) !== boxValue(f));
+}
+function onNumberKey(f: Field, e: KeyboardEvent) {
+  if (e.key === "ArrowUp" || e.key === "ArrowDown") void nextTick(() => drafted(f, e));
   else if (e.key === "Escape") holdEscape(false);
   else if (e.key === "Enter") void nextTick(() => holdEscape(refused(e)));
 }
@@ -162,8 +167,8 @@ const max = (f: Field) => EXPERIMENTAL_RANGE[f.key][1] / f.scale;
         <label class="pref-title" :for="`prefs-x-${f.key}`">{{ f.title }}</label>
         <span
           class="pref-number"
-          @input="holdEscape(true)"
-          @keydown="onNumberKey"
+          @input="drafted(f, $event)"
+          @keydown="onNumberKey(f, $event)"
           @focusin="holdEscape(refused($event))"
           @focusout="holdEscape(false)"
         >

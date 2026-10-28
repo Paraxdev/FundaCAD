@@ -14,7 +14,7 @@ import {
   setHomeBackground,
   useHomeImageStore,
 } from "../../../src/ui/homeBackground";
-import { experimentalPrefs, resetExperimentalPrefs } from "../../../src/ui/experimentalPrefs";
+import { experimentalPrefs, resetExperimentalPrefs, setExperimentalPref } from "../../../src/ui/experimentalPrefs";
 
 enableAutoUnmount(afterEach);
 
@@ -186,6 +186,36 @@ describe("Preferences settings and frame", () => {
     expect([box.value, dialogs.preferences]).toEqual(["6", true]);
     await press("Escape");
     expect(dialogs.preferences).toBe(false);
+  });
+
+  it("closes on the first Escape once a draft is typed back to the stored number", async () => {
+    const dialogs = useDialogStore();
+    dialogs.preferences = true;
+    await open();
+    await category("experimental");
+    const box = $("#prefs-x-bounces") as HTMLInputElement;
+    box.focus();
+    for (const text of ["12", "6"]) {
+      box.value = text;
+      box.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    await new Promise((r) => setTimeout(r, 0));
+    await press("Escape");
+    expect([box.value, dialogs.preferences]).toEqual(["6", false]);
+  });
+
+  it("closes on the first Escape after an arrow that the end of the range held still", async () => {
+    setExperimentalPref("bounces", 64);
+    const dialogs = useDialogStore();
+    dialogs.preferences = true;
+    await open();
+    await category("experimental");
+    const box = $("#prefs-x-bounces") as HTMLInputElement;
+    box.focus();
+    await press("ArrowUp");
+    await new Promise((r) => setTimeout(r, 0));
+    await press("Escape");
+    expect([box.value, experimentalPrefs().bounces, dialogs.preferences]).toEqual(["64", 64, false]);
   });
 
   it("lets Escape close the dialog from a refused number once focus has left it", async () => {
