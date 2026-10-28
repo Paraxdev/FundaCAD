@@ -18,10 +18,57 @@ pub const VIEWPORT_DENSITY_CAP: usize = 80_000;
 /// coarser so its reply fits the frame cap.
 pub const VIEWPORT_SIZE_TIERS: [(usize, f64, f64); 2] = [(2200, 4.0, 0.35), (1200, 2.0, 0.26)];
 
-/// `(faces at or above, linear scale, angular)`: one body of that many faces
-/// meshes coarser so it fits the single body frame cap. A full quality body
-/// takes 1.7 to 10 KB a face, the 89,776 face Aventador STEP 379 MiB.
+/// `(faces at or above, linear scale, angular)`: where one body of that many
+/// faces starts meshing, a guess that spares the 89,776 face Aventador STEP a
+/// 379 MiB full quality pass. `fit` corrects it from the real payload.
 pub const VIEWPORT_FACE_TIERS: [(usize, f64, f64); 2] = [(50_000, 8.0, 0.5), (20_000, 4.0, 0.35)];
+
+/// `(linear scale, angular, the most one step finer grows the payload)`,
+/// coarsest last. On three slices of the Aventador STEP scale 4 to full grew
+/// up to 6x, 8 to 4 up to 1.6x and 16 to 8 up to 1.3x (`probe_mesh.log`).
+pub const VIEWPORT_FIT_RUNGS: [(f64, f64, f64); 3] = [(4.0, 0.35, 8.0), (8.0, 0.5, 2.0), (16.0, 0.6, 1.5)];
+
+/// Wire bytes one body may take, the frame cap less room for its header.
+pub const SINGLE_BODY_BUDGET: usize = fundacad_protocol::MAX_FRAME / 8 * 7;
+
+/// Meshes one body of `faces` faces with `mesh(profile, clean)`, which answers
+/// the payload and its wire size. It starts on the face tier, steps coarser
+/// while the payload is past `budget` and finer while the step surely fits,
+/// never finer than `reply`. When no rung fits it keeps the coarsest, so the
+/// frame cap still names the body.
+pub fn fit<T>(
+    reply: ViewportProfile,
+    faces: usize,
+    budget: usize,
+    stopped: &dyn Fn() -> bool,
+    mut mesh: impl FnMut(ViewportProfile, bool) -> (T, usize),
+) -> T {
+    let mut rungs = vec![(reply, 1.0)];
+    for &(size_scale, angular, grows) in &VIEWPORT_FIT_RUNGS {
+        if size_scale > reply.size_scale {
+            rungs.push((ViewportProfile { size_scale, angular: angular.max(reply.angular) }, grows));
+        }
+    }
+    let guess = reply.for_faces(faces);
+    let start = rungs.iter().position(|r| r.0 == guess).unwrap_or(0);
+    let mut at = start;
+    let mut made = mesh(rungs[at].0, false);
+    while made.1 > budget && at + 1 < rungs.len() && !stopped() {
+        at += 1;
+        drop(made);
+        made = mesh(rungs[at].0, true);
+    }
+    let climb = at == start;
+    while climb && at > 0 && made.1 as f64 * rungs[at].1 <= budget as f64 && !stopped() {
+        let finer = mesh(rungs[at - 1].0, true);
+        if finer.1 > budget {
+            break;
+        }
+        made = finer;
+        at -= 1;
+    }
+    made.0
+}
 
 /// How one reply's bodies are meshed, the same for every body in it but one
 /// past a face tier.

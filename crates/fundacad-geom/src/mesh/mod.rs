@@ -112,10 +112,17 @@ pub fn body_payload(shape: &Shape, id: &str, name: &str, tolerance: f64, profile
         shape,
         tolerance,
         profile,
+        false,
     )
 }
 
-fn body_payload_for(body: &MeshBody<'_>, shape: &Shape, tolerance: f64, profile: ViewportProfile) -> FullBody {
+fn body_payload_for(
+    body: &MeshBody<'_>,
+    shape: &Shape,
+    tolerance: f64,
+    profile: ViewportProfile,
+    clean: bool,
+) -> FullBody {
     let access = crate::bench::phase("mesh_access", || MeshAccess::new(shape));
     let claims = crate::bench::phase("resolve_passes", || PassClaims::resolve(shape, &body.mesh_passes));
     let tess = claims.tessellate(
@@ -128,7 +135,8 @@ fn body_payload_for(body: &MeshBody<'_>, shape: &Shape, tolerance: f64, profile:
             // A displaced face's shading lives in its normals, so a pass keeps
             // them even on the coarse large-document tiers.
             display: profile.display_normals() || !claims.is_empty(),
-            force_remesh: false,
+            // BRepMesh keeps a stored mesh finer than asked, so a coarser retry has to clear it.
+            force_remesh: clean,
         },
         VIEWPORT_DENSITY_CAP,
     );
@@ -494,10 +502,10 @@ fn built_payloads(
     let mut out: Vec<Option<Built>> = Vec::with_capacity(bodies.len());
     let mut misses: Vec<usize> = Vec::new();
     let ticked = std::sync::atomic::AtomicUsize::new(0);
-    let profiles: Vec<ViewportProfile> = bodies
-        .iter()
-        .map(|b| b.shape.map_or(profile, |s| profile.for_faces(crate::kernel::count(s, crate::kernel::Kind::Face))))
-        .collect();
+    let faces: Vec<usize> =
+        bodies.iter().map(|b| b.shape.map_or(0, |s| crate::kernel::count(s, crate::kernel::Kind::Face))).collect();
+    // A fitted payload is cached under its body's starting guess, the profile known before meshing.
+    let profiles: Vec<ViewportProfile> = faces.iter().map(|&n| profile.for_faces(n)).collect();
     for (i, body) in bodies.iter().enumerate() {
         let cached = body.shape.and_then(|_| cache.get(body, tolerance, profiles[i])).map(Built::Hit);
         if cached.is_none() && body.shape.is_some() {
@@ -527,7 +535,13 @@ fn built_payloads(
         let body = &bodies[i];
         let shape = body.shape.expect("a miss has a shape");
         let began = std::time::Instant::now();
-        let full = crate::bench::phase("body_payload", || body_payload_for(body, shape, tolerance, profiles[i]));
+        let full = crate::bench::phase("body_payload", || {
+            profile::fit(profile, faces[i], profile::SINGLE_BODY_BUDGET, &stopped, |p, clean| {
+                let b = body_payload_for(body, shape, tolerance, p, clean);
+                let size = b.wire_size();
+                (b, size)
+            })
+        });
         let done = ticked.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
         if let Ok(mut t) = tick.lock() {
             t(done, total);

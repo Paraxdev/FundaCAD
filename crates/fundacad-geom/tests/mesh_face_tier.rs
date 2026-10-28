@@ -1,5 +1,5 @@
-//! One body of tens of thousands of faces meshed at full quality is past the single body frame cap, so it meshes
-//! on a coarser tier than the small bodies beside it in the same reply.
+//! One body of tens of thousands of faces starts on a coarser tier, but one whose full quality payload surely fits
+//! the single body frame cap climbs back to full quality.
 
 use fundacad_geom::kernel;
 use fundacad_geom::mesh::{self, MeshBody};
@@ -8,7 +8,7 @@ use opencascade::primitives::Shape;
 use serde_json::Map;
 
 #[test]
-fn a_body_past_the_face_tier_meshes_coarser_than_its_neighbour() {
+fn a_body_past_the_face_tier_that_fits_keeps_full_quality_like_its_neighbour() {
     let boxes: Vec<Shape> = (0..3_334)
         .map(|i| Shape::box_with_dimensions(1.0, 1.0, 1.0).translated(DVec3::new(2.0 * i as f64, 0.0, 0.0)))
         .collect();
@@ -23,6 +23,6 @@ fn a_body_past_the_face_tier_meshes_coarser_than_its_neighbour() {
         fundacad_protocol::WireBody::Full(b) => b.normals.is_some(),
         _ => panic!("body {i} is not a full payload"),
     };
-    assert!(!normals(0), "the body of 20,004 faces kept the full quality normals");
+    assert!(normals(0), "the body of 20,004 small faces lost its full quality normals");
     assert!(normals(1), "the small body lost its full quality normals");
 }
