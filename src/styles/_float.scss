@@ -541,23 +541,23 @@
   font-weight: 600;
   color: var(--text);
 }
-.matcap-swatches {
-  display: flex;
-  gap: 8px;
-  margin: 8px var(--s-1);
+// Segmented chips, each choice a sphere; the selected one sits in an accent halo, the fill of a chosen segment.
+.ui-segmented.matcap-swatches {
+  gap: var(--s-2);
+  margin: var(--s-2) var(--s-1);
 }
-.matcap-swatch {
+.vc-pop .matcap-swatches .ui-segment.matcap-swatch {
+  width: 42px;
+  height: 42px;
+  padding: 3px;
+  border-radius: 50%;
+}
+.matcap-ball {
   width: 36px;
   height: 36px;
-  padding: 0;
   border-radius: 50%;
-  border: 2px solid transparent;
   background-color: var(--float-chip-bg);
   background-size: cover;
-  cursor: pointer;
-}
-.matcap-swatch.active {
-  border-color: var(--accent);
 }
 .pop-rule {
   height: 1px;
@@ -580,6 +580,9 @@
 }
 .pop-wide.ghost {
   background: none;
+}
+.vc-pop-btn {
+  margin-top: var(--s-2);
 }
 .pop-key {
   margin-left: auto;
@@ -961,19 +964,19 @@
   line-height: 1.45;
   color: var(--text);
 }
-.perf-pop-link {
+// A ghost Button read as a link inside the sentence; the fill tokens are cleared so no hover slab shows.
+.perf-pop-text .btn.perf-pop-link {
+  --btn-fill: transparent;
+  --btn-hover: transparent;
+  display: inline;
+  min-height: 0;
   padding: 0;
   font: inherit;
   color: var(--warn);
-  background: none;
-  border: 0;
-  border-radius: 0;
   text-decoration: underline;
   text-underline-offset: 3px;
-  cursor: pointer;
 }
-.perf-pop-link:hover {
-  background: none;
+.perf-pop .perf-pop-text .btn.perf-pop-link:hover {
   color: color-mix(in srgb, var(--warn) 70%, #fff);
 }
 .icon-btn-badge {
@@ -988,14 +991,16 @@
   background: var(--error);
   border-radius: var(--r-pill);
 }
-.grid-btn {
-  width: auto;
+// A ghost Button sized and filled like the icon tiles around it.
+.float-group .btn.grid-btn {
+  --btn-hover: var(--raised);
   min-width: 40px;
-  padding: 0 4px;
+  min-height: 0;
   height: 32px;
+  padding: 0 var(--s-1);
+  border-radius: calc(var(--float-radius) - 4px);
   font: 600 10.5px/1 var(--mono);
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
 }
 
 /* The Section chip and Normal to Sketch stack at the top middle, clear of the cards (useClearOfCards). */

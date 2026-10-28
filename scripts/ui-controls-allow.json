@@ -185,7 +185,6 @@
   { "path": "src/components/shell/VersionsPanel.vue", "kind": "button", "count": 5, "reason": "before the base set, migrates in lane Q (browser, history, palette, versions)" },
   { "path": "src/components/shell/VersionsPanel.vue", "kind": "input[type=text]", "count": 2, "reason": "before the base set, migrates in lane Q (browser, history, palette, versions)" },
   { "path": "src/components/shell/VersionsPanel.vue", "kind": "select", "count": 1, "reason": "before the base set, migrates in lane Q (browser, history, palette, versions)" },
-  { "path": "src/components/shell/ViewportControls.vue", "kind": "button", "count": 9, "reason": "before the base set, migrates in lane G (shell chrome)" },
   { "path": "src/features/profileChip.ts", "kind": "createElement:button", "count": 2, "reason": "before the base set, migrates in lane L (TS tool boxes)" },
   { "path": "src/io/files.ts", "kind": "createElement:input", "count": 2, "reason": "hidden file picker, never rendered, moves to dom.ts pickFile, lane L" },
   { "path": "src/sketch/dimInput.ts", "kind": "createElement:button", "count": 5, "reason": "before the base set, migrates in lane L (TS tool boxes)" },

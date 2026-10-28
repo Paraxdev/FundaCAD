@@ -8,7 +8,7 @@ import { useDialogStore } from "../../stores/dialogs";
 import { useSketchPaletteStore } from "../../stores/sketchPalette";
 import { fmtGridStep, fmtLengthCompact, getUnit, onUnitChange, setUnit, asUnit, type Unit } from "../../ui/units";
 import { saveRenderedImage } from "../../io/files";
-import { MATCAP_STYLES, onRenderPrefsChange, renderPrefs, setRenderPref, type MatcapStyle } from "../../ui/renderPrefs";
+import { MATCAP_STYLES, onRenderPrefsChange, renderPrefs, setRenderPref } from "../../ui/renderPrefs";
 import { matcapSwatchUrl } from "../../ui/matcapSwatch";
 import {
   VIEW_MODES,
@@ -26,6 +26,9 @@ import { toast } from "../../ui/toast";
 import { featureFailures } from "../../ui/featureNotes";
 import type { ProjectionMode } from "../../viewport/cameras";
 import IconButton from "../ui/IconButton.vue";
+import Button from "../ui/Button.vue";
+import ListRow from "../ui/ListRow.vue";
+import Segmented from "../ui/Segmented.vue";
 import Icon from "./Icon.vue";
 import VersionsPanel from "./VersionsPanel.vue";
 import Popover from "../ui/Popover.vue";
@@ -154,6 +157,11 @@ const tier = ref(engine.viewport.renderTier);
 const matcap = ref({ style: renderPrefs().matcapStyle, tint: renderPrefs().matcapTint });
 const overlays = ref(savedOverlays());
 const realtimeWhileMoving = ref(renderPrefs().realtimeWhileMoving);
+const matcapOptions = MATCAP_STYLES.map((m) => ({
+  value: m,
+  tip: m,
+  attrs: { class: "matcap-swatch", "data-matcap": m },
+}));
 const offTier = onRenderPrefsChange(() => {
   tier.value = engine.viewport.renderTier;
   matcap.value = { style: renderPrefs().matcapStyle, tint: renderPrefs().matcapTint };
@@ -259,13 +267,15 @@ async function screenshot() {
     </div>
     <div class="float-group">
       <IconButton icon="magnet" tip="Snapping" :active="isOpen('snap')" @click="open('snap', $event)" />
-      <button
-        type="button"
-        class="icon-btn grid-btn"
-        :class="{ active: isOpen('grid') }"
-        title="Grid and units"
+      <!-- A reading, not an icon, so a Button: its text is the name and the tip only the tooltip. -->
+      <Button
+        variant="ghost"
+        size="sm"
+        class="grid-btn"
+        tip="Grid and units"
+        :pressed="isOpen('grid')"
         @click="open('grid', $event)"
-        >{{ gridLabelCompact }}</button
+        >{{ gridLabelCompact }}</Button
       >
       <IconButton icon="views" tip="Views" :active="isOpen('views')" @click="open('views', $event)" />
       <IconButton icon="view-reset" tip="Reset camera" keys="Shift+Home" @click="engine.handleAction('reset-camera')" />
@@ -317,13 +327,15 @@ async function screenshot() {
       <p class="perf-pop-text">Detected stutters, your machine may have problems with displaying the models.</p>
       <p v-if="!isRenderLowPower()" class="perf-pop-text">
         Consider enabling
-        <button type="button" class="perf-pop-link" @click="enablePerformanceMode()">performance mode</button>
+        <Button variant="ghost" size="sm" class="perf-pop-link" @click="enablePerformanceMode()"
+          >performance mode</Button
+        >
       </p>
       <p class="perf-pop-text" title="Lowest quality, for slow or virtual machines">
         {{ isRenderLowPower() ? "Performance mode is on, consider enabling" : "or, on a slow or virtual machine," }}
-        <button type="button" class="perf-pop-link" @click="enablePotatoMode()">potato mode</button>
+        <Button variant="ghost" size="sm" class="perf-pop-link" @click="enablePotatoMode()">potato mode</Button>
       </p>
-      <button type="button" class="pop-wide ghost" @click="dismissPerformanceWarning()">Dismiss</button>
+      <Button variant="ghost" block class="vc-pop-btn" @click="dismissPerformanceWarning()">Dismiss</Button>
     </Popover>
 
     <Popover
@@ -382,21 +394,16 @@ async function screenshot() {
         ]"
       />
       <template v-if="viewTab === 'views'">
-        <button type="button" class="pop-wide" @click="engine.handleAction('iso')"
-          ><Icon name="view-iso" :size="16" />Default View</button
+        <Button block class="vc-pop-btn" @click="engine.handleAction('iso')"
+          ><template #icon><Icon name="view-iso" :size="16" /></template>Default View</Button
         >
-        <button type="button" class="pop-wide ghost" @click="engine.handleAction('fit')"
-          ><Icon name="view-fit" :size="16" />Fit to Model</button
+        <Button variant="ghost" block class="vc-pop-btn" @click="engine.handleAction('fit')"
+          ><template #icon><Icon name="view-fit" :size="16" /></template>Fit to Model</Button
         >
         <div class="pop-rule"></div>
-        <button
-          v-for="v in VIEWS"
-          :key="v.view"
-          type="button"
-          class="opt-row opt-row-icon"
-          @click="engine.viewport.setStandardView(v.view)"
-          ><Icon :name="`view-${v.view}`" :size="18" /><span class="opt-label">{{ v.label }}</span></button
-        >
+        <ListRow v-for="v in VIEWS" :key="v.view" :label="v.label" @click="engine.viewport.setStandardView(v.view)"
+          ><template #leading><Icon class="ui-list-row-icon" :name="`view-${v.view}`" :size="18" /></template
+        ></ListRow>
       </template>
       <template v-else>
         <div class="pop-section">Projection</div>
@@ -417,21 +424,19 @@ async function screenshot() {
       <div class="pop-section">Shading</div>
       <ChoiceList :options="viewModeChoices" :model-value="ui.viewMode" @update:model-value="pickViewMode" />
       <template v-if="ui.viewMode === 'matcap'">
-        <div class="matcap-swatches" role="group" aria-label="Matcap">
-          <button
-            v-for="m in MATCAP_STYLES"
-            :key="m"
-            type="button"
-            class="matcap-swatch"
-            :class="{ active: matcap.style === m }"
-            :title="m"
-            :aria-label="m"
-            :aria-pressed="matcap.style === m"
-            :data-matcap="m"
-            :style="{ backgroundImage: `url(${matcapSwatchUrl(m)})` }"
-            @click="setRenderPref('matcapStyle', m as MatcapStyle)"
-          ></button>
-        </div>
+        <Segmented
+          class="matcap-swatches"
+          variant="chips"
+          label="Matcap"
+          icon-only
+          :model-value="matcap.style"
+          :options="matcapOptions"
+          @update:model-value="setRenderPref('matcapStyle', $event)"
+        >
+          <template #option="{ option }"
+            ><span class="matcap-ball" :style="{ backgroundImage: `url(${matcapSwatchUrl(option.value)})` }"></span
+          ></template>
+        </Segmented>
         <Toggle
           :model-value="matcap.tint"
           label="Tint with body colors"
@@ -464,10 +469,17 @@ async function screenshot() {
         @update:model-value="setOverlay(k, $event)"
       />
       <p class="pop-note">A running tool still shows its gizmo, and a hidden outline still selects its edge.</p>
-      <button type="button" class="pop-wide ghost" data-action="clean-view" @click="engine.handleAction('clean-view')">
-        {{ overlays.on ? "Clean view" : "Bring overlays back"
-        }}<span v-if="cleanKey" class="pop-key">{{ cleanKey }}</span>
-      </button>
+      <Button
+        variant="ghost"
+        block
+        class="vc-pop-btn"
+        data-action="clean-view"
+        @click="engine.handleAction('clean-view')"
+        >{{ overlays.on ? "Clean view" : "Bring overlays back" }}
+        <template v-if="cleanKey" #trailing
+          ><span class="pop-key">{{ cleanKey }}</span></template
+        ></Button
+      >
       <div class="pop-rule"></div>
       <Toggle :model-value="ui.xray" label="X-Ray" @update:model-value="engine.handleAction('toggle-xray')" />
       <Toggle
