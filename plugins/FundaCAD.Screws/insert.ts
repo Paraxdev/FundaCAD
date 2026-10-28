@@ -68,9 +68,23 @@ export async function insertFastener(
   return id;
 }
 
+type Bodies = NonNullable<NonNullable<Engine["store"]["buildState"]["result"]>["bodies"]>;
+const bodyIndexes = new WeakMap<Bodies, Map<string, Bodies[number]>>();
+
+// The Browser pane asks every body row for its menu, so a scan of the bodies per row was quadratic.
+function bodyIndex(bodies: Bodies): Map<string, Bodies[number]> {
+  let index = bodyIndexes.get(bodies);
+  if (!index) {
+    index = new Map(bodies.map((b) => [b.id, b]));
+    bodyIndexes.set(bodies, index);
+  }
+  return index;
+}
+
 /** The spec a body was generated from by this plugin, when it was. */
 export function specOfBody(e: Engine, bodyId: string): FastenerSpec | null {
-  const body = e.store.buildState.result?.bodies?.find((b) => b.id === bodyId);
+  const bodies = e.store.buildState.result?.bodies;
+  const body = bodies && bodyIndex(bodies).get(bodyId);
   if (!body?.faceOwners?.length) return null;
   for (const owner of new Set(body.faceOwners)) {
     const f = e.store.document.features.find((x) => x.id === owner) as
