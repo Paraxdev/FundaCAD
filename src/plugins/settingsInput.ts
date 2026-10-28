@@ -1,4 +1,4 @@
-import { measureError, parseMeasure, toUnit, unitById, type UnitDef } from "../ui/measure";
+import { unitById, type UnitDef } from "../ui/measure";
 import { valueProblem, type NumberSetting } from "./settings";
 
 /** The unit a bare number in this field means, null for a plain number. */
@@ -8,44 +8,20 @@ export function fieldUnit(p: NumberSetting, lengthUnit: string): UnitDef | null 
   return null;
 }
 
-/** The stored number as the field shows it. */
-export function numberText(p: NumberSetting, v: number, lengthUnit: string): string {
-  return String(toUnit(v, fieldUnit(p, lengthUnit)));
-}
-
-export function unitLabel(p: NumberSetting, lengthUnit: string): string {
-  return fieldUnit(p, lengthUnit)?.label ?? p.unit ?? "";
-}
-
-/** Typed text read through the app's measure grammar, then the property's own
- *  limits, so "1 in" works in a length and "abc" says why it does not. */
-export function parseNumberField(
+/** How a number setting renders as a NumberField. A length or an angle is a unit the field converts, any other unit
+ *  text a caption beside a plain number. The schema's step is in the stored unit, the field's in the shown one. */
+export function numberField(
   p: NumberSetting,
-  raw: string,
   lengthUnit: string,
-): { value: number } | { error: string } {
+): { unit: string | null; caption: string | null; step: number | undefined; validate: (v: number) => string | null } {
   const unit = fieldUnit(p, lengthUnit);
-  const bad = raw.trim() === "" ? "type a value" : measureError(raw, unit);
-  if (bad) return { error: bad };
-  const value = parseMeasure(raw, unit).value;
-  const problem = valueProblem(p, value);
-  if (!problem) return { value };
-  const shown = (n: number) => `${toUnit(n, unit)}${unit ? ` ${unit.label}` : ""}`;
-  if (p.min !== undefined && value < p.min) return { error: `at least ${shown(p.min)}` };
-  if (p.max !== undefined && value > p.max) return { error: `at most ${shown(p.max)}` };
-  return { error: problem };
-}
-
-/** `times` steps of the declared step (1 for an integer without one), on the step grid and inside the limits.
- *  Null when the property declares nothing to step by. */
-export function stepNumber(p: NumberSetting, v: number, times: number): number | null {
   const step = p.step ?? (p.integer ? 1 : undefined);
-  if (!step || !(step > 0)) return null;
-  // Rounded to 1e-9 so 0.1 steps read back as 0.3, not 0.30000000000000004.
-  let next = Math.round((Math.round(v / step) + times) * step * 1e9) / 1e9;
-  if (p.min !== undefined) next = Math.max(p.min, next);
-  if (p.max !== undefined) next = Math.min(p.max, next);
-  return p.integer ? Math.round(next) : next;
+  return {
+    unit: unit?.id ?? null,
+    caption: unit ? null : p.unit || null,
+    step: step && step > 0 ? step / (unit?.factor ?? 1) : undefined,
+    validate: (v) => valueProblem(p, v),
+  };
 }
 
 const MODIFIER_KEYS = new Set(["Control", "Shift", "Alt", "Meta"]);

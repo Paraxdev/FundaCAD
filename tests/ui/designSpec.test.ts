@@ -45,7 +45,6 @@ const GLASS = "src/styles/_glass.scss";
 // The count must match exactly, so a cleanup lowers the number in the same commit
 // and the ratchet never leaves room for new literals.
 const COLOUR_BASELINE: Record<string, number> = {
-  "src/components/overlays/PluginSettingsForm.vue": 2,
   "src/components/overlays/RadialMenuHost.vue": 2,
   "src/components/shell/NumberBox.vue": 2,
   "src/components/shell/SurfaceNodeEditor.vue": 11,
