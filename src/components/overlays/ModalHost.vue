@@ -34,6 +34,8 @@ let passed: KeyboardEvent | null = null;
 // Swallows every key it does not handle or pass to the dialog, so no global shortcut fires under an open modal. Esc
 // uses stopImmediatePropagation for the same reason.
 function onKeydown(e: KeyboardEvent) {
+  // A dialog that stopped the last passed key kept it from reaching onBubble, so it is dropped here.
+  passed = null;
   const r = req.value;
   if (!r) return;
   const card = panel();
@@ -78,6 +80,7 @@ onMounted(() => {
   document.body.addEventListener("keydown", onBubble);
 });
 onUnmounted(() => {
+  passed = null;
   window.removeEventListener("keydown", onKeydown, true);
   document.body.removeEventListener("keydown", onBubble);
 });
