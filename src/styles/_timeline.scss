@@ -23,41 +23,27 @@
   /* Hairline: the three transport buttons are one control, like the view pill's segments. */
   gap: var(--s-0);
 }
-.tl-btn {
-  width: 26px;
-  height: 26px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+/* The transport keeps its chip fill through the disabled hover too, the four read as one control. */
+.timeline-transport .tl-btn.icon-btn.icon-btn-sm {
   background: var(--float-chip-bg);
-  border: 1px solid transparent;
-  border-radius: var(--r-sm);
   color: var(--text-dim);
-  font-size: 12px;
-  cursor: pointer;
-  transition:
-    background var(--t-fast) var(--ease),
-    color var(--t-fast) var(--ease);
 }
-.tl-btn:hover:not(:disabled) {
+.timeline-transport .tl-btn.icon-btn.icon-btn-sm:hover:not(.is-disabled) {
   background: var(--raised);
   color: var(--text);
 }
-.tl-btn:disabled {
-  opacity: 0.3;
-  cursor: default;
+/* The base sm touch inset would overlap the 2px gaps, so the transport keeps its own from _touch.scss. */
+:root[data-pointer="touch"] .timeline-transport .tl-btn.icon-btn.icon-btn-sm::before {
+  inset: -5px -1px;
+}
+:root[data-pointer="touch"] .timeline-transport .tl-btn.icon-btn.icon-btn-sm:first-child::before {
+  left: -7px;
+}
+:root[data-pointer="touch"] .timeline-transport .tl-btn.icon-btn.icon-btn-sm:last-child::before {
+  right: -7px;
 }
 .timeline-errbadge {
   flex: 0 0 auto;
-  /* Badge size, shared with .context-tab in the titlebar. */
-  padding: var(--s-1) var(--s-3);
-  background: var(--error-tint);
-  border: 1px solid var(--error);
-  border-radius: var(--r-sm);
-  color: var(--error);
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
 }
 .timeline-errbadge.hidden {
   display: none;
@@ -65,18 +51,6 @@
 /* A sibling of the track, never inside it: the track is wiped on every render. */
 .timeline-cancel {
   flex: 0 0 auto;
-  padding: var(--s-1) var(--s-3);
-  background: var(--error-tint);
-  border: 1px solid var(--error);
-  border-radius: var(--r-sm);
-  color: var(--error);
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.timeline-cancel:disabled {
-  opacity: 0.55;
-  cursor: default;
 }
 .timeline-cancel.hidden {
   display: none;
@@ -292,17 +266,13 @@
   padding: 0 var(--s-3);
   cursor: default;
 }
-.timeline-node .t-op-cancel {
+/* Held to the running row's height, the base sm button would grow it. */
+.timeline-node .t-op-cancel.btn.btn-sm {
+  min-height: 22px;
   padding: 0 var(--s-2);
-  background: var(--float-chip-bg);
-  border: 1px solid transparent;
-  border-radius: var(--r-sm);
-  color: var(--text-dim);
   font-size: 10.5px;
-  cursor: pointer;
 }
-.timeline-node .t-op-cancel:hover {
-  border-color: var(--error);
+.timeline-node .t-op-cancel.btn.btn-sm:hover:not(.is-disabled) {
   color: var(--error);
 }
 .timeline-node .t-build {
@@ -487,16 +457,4 @@
 /* Narrows the list to the features behind the selection. */
 .timeline-related {
   flex: 0 0 auto;
-  padding: var(--s-1) var(--s-2);
-  background: var(--float-chip-bg);
-  border: 1px solid transparent;
-  border-radius: var(--r-sm);
-  color: var(--text-dim);
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.timeline-related.on {
-  color: var(--accent-hot);
-  background: var(--accent-tint);
 }

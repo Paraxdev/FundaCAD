@@ -218,22 +218,13 @@
   white-space: nowrap;
   font-size: 12.5px;
 }
+#timeline .timeline-node .t-rename-hold {
+  display: contents;
+}
 #timeline .timeline-node .t-rename {
   flex: 1 1 auto;
   min-width: 0;
-  height: 24px;
-  padding: 0 6px;
-  font: inherit;
   font-size: 12.5px;
-  color: var(--text);
-  background: var(--field-bg);
-  border: 1px solid transparent;
-  border-radius: 6px;
-  outline: none;
-}
-#timeline .timeline-node .t-rename:focus {
-  outline: 1px solid var(--accent);
-  outline-offset: 0;
 }
 #timeline .timeline-node .t-caret {
   flex: none;
