@@ -25,6 +25,15 @@ const scssFiles = read(
   >,
 );
 
+// The base component partials. Their selectors nest in SCSS, which the selector rules below do not read, so they are
+// held to the colour, token and motion rules only.
+const uiScssFiles = read(
+  import.meta.glob("../../src/styles/ui/*.scss", { query: "?raw", import: "default", eager: true }) as Record<
+    string,
+    string
+  >,
+);
+
 const tsFiles = read(
   import.meta.glob("../../src/**/*.ts", { query: "?raw", import: "default", eager: true }) as Record<string, string>,
 );
@@ -124,12 +133,11 @@ const HEX = /#(?:[0-9a-f]{8}|[0-9a-f]{6}|[0-9a-f]{3,4})(?![\w-])/gi;
 const COLOUR_FN = /(?<![\w-])(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch)\(/gi;
 const NAMED = /(?<![\w-])(?:white|black|red|green|blue|gray|grey|orange|yellow|purple|pink)(?![\w-])/gi;
 
+const colours = (value: string) =>
+  (value.match(HEX)?.length ?? 0) + (value.match(COLOUR_FN)?.length ?? 0) + (value.match(NAMED)?.length ?? 0);
+
 function colourLiterals(path: string, text: string): number {
-  return declarations(styleOf(path, text)).reduce(
-    (n, { value }) =>
-      n + (value.match(HEX)?.length ?? 0) + (value.match(COLOUR_FN)?.length ?? 0) + (value.match(NAMED)?.length ?? 0),
-    0,
-  );
+  return declarations(styleOf(path, text)).reduce((n, { value }) => n + colours(value), 0);
 }
 
 const STATE =
@@ -159,16 +167,35 @@ function handBlurs(path: string, text: string): string[] {
     .filter((value) => value !== "var(--float-blur)" && value !== "none");
 }
 
+const FALLBACK = /var\(\s*--[\w-]+\s*,/;
+const LITERAL_TIME =
+  /(?<![\w.-])(?:\d*\.)?\d+m?s(?![\w-])|(?<![\w-])(?:ease(?:-in|-out|-in-out)?|linear|cubic-bezier\()(?![\w-])/;
+const LITERAL_RADIUS = /(?<![\w.-])(?:\d*\.)?[1-9]\d*(?:px|rem|em)(?![\w-])/;
+
+// What in a base partial is not read from a token: a colour, a fallback, a duration or easing, a radius of its own.
+function untokened(path: string, text: string): string[] {
+  return declarations(styleOf(path, text))
+    .filter(
+      ({ prop, value }) =>
+        colours(value) > 0 ||
+        FALLBACK.test(value) ||
+        (/^(transition|animation)(-duration|-delay|-timing-function)?$/.test(prop) && LITERAL_TIME.test(value)) ||
+        (/radius$/.test(prop) && LITERAL_RADIUS.test(value) && !value.includes("var(--")),
+    )
+    .map(({ prop, value }) => `${prop}: ${value.trim()}`);
+}
+
 function names(text: string, re: RegExp): Set<string> {
   return new Set([...text.matchAll(re)].map((m) => m[1] ?? ""));
 }
 
 const sources = new Map([...vueFiles, ...scssFiles]);
+const styled = new Map([...sources, ...uiScssFiles]);
 const tokens = names(scssFiles.get(TOKENS) ?? "", /(--[\w-]+)\s*:/g);
 // Set where it is used: an inline :style, a setProperty, a local declaration, in a template, a
 // stylesheet or a TypeScript module (homeBackground.ts sets --home-image).
 const local = new Set(
-  [...sources.values(), ...tsFiles.values()].flatMap((t) => [
+  [...styled.values(), ...tsFiles.values()].flatMap((t) => [
     ...names(t, /['"`](--[\w-]+)['"`]/g),
     ...names(t, /(?<![\w(-])(--[\w-]+)\s*:/g),
   ]),
@@ -420,10 +447,12 @@ function renderedBy(root: string, files: Map<string, string>): string[] {
   return [...seen];
 }
 
-// A settings page toggles with the checkbox (.check); a switch is for a live toggle in a tool panel.
+// A settings page toggles with the Checkbox (.check); a switch is for a live toggle in a tool panel.
 const switchesIn = (files: Map<string, string>, paths: string[]) =>
   paths.filter((path) =>
-    /class="[^"]*\b(?:param-switch|ft-switch)\b|<ToggleRow\b|<Toggle\b/.test(files.get(path) ?? ""),
+    /class="[^"]*\b(?:param-switch|ft-switch|ui-switch)\b|<(?:ToggleRow|Toggle|Switch|SwitchRow)\b/.test(
+      files.get(path) ?? "",
+    ),
   );
 
 // The background a typed field inside a .dim-bad box ends up with: of the rules that name only those
@@ -454,13 +483,14 @@ describe("design spec guard", () => {
   it("reads the sources", () => {
     expect(vueFiles.size).toBeGreaterThan(50);
     expect(scssFiles.size).toBeGreaterThan(15);
-    for (const [path, text] of sources) expect(text.length, path).toBeGreaterThan(0);
+    expect(uiScssFiles.size).toBeGreaterThan(15);
+    for (const [path, text] of styled) expect(text.length, path).toBeGreaterThan(0);
     expect(tokens.has("--float-blur")).toBe(true);
     expect(tokens.has("--accent")).toBe(true);
   });
 
   it("adds no raw colour literal to a component or stylesheet", () => {
-    const changed = [...sources]
+    const changed = [...styled]
       .filter(([path]) => path !== TOKENS)
       .map(([path, text]) => ({ path, count: colourLiterals(path, text), baseline: COLOUR_BASELINE[path] ?? 0 }))
       .filter(({ count, baseline }) => count !== baseline);
@@ -488,10 +518,16 @@ describe("design spec guard", () => {
   });
 
   it("reads only tokens that exist", () => {
-    const missing = [...vueFiles, ...scssFiles]
+    const missing = [...styled]
       .flatMap(([path, text]) => [...names(text, /var\(\s*(--[\w-]+)/g)].map((name) => ({ path, name })))
       .filter(({ name }) => !tokens.has(name) && !local.has(name) && !UNDEFINED_ALLOWED.includes(name));
     expect(missing).toEqual([]);
+  });
+
+  it("styles the base components with tokens only", () => {
+    // A base partial starts and stays at zero: the ratchet has no room for it.
+    expect(Object.keys(COLOUR_BASELINE).filter((path) => uiScssFiles.has(path))).toEqual([]);
+    expect([...uiScssFiles].flatMap(([path, text]) => untokened(path, text).map((d) => `${path} ${d}`))).toEqual([]);
   });
 
   it("puts no outline around a rounded surface", () => {
@@ -672,6 +708,22 @@ describe("design spec guard", () => {
       ["a/b/Row.vue", '<template><span class="param-switch"><input type="checkbox" /></span></template>'],
     ]);
     expect(switchesIn(fake, renderedBy("a/Prefs.vue", fake))).toEqual(["a/b/Row.vue"]);
+    const based = new Map([["a/Prefs.vue", '<template><SwitchRow v-model="on" label="Snap" /></template>']]);
+    expect(switchesIn(based, ["a/Prefs.vue"])).toEqual(["a/Prefs.vue"]);
     expect(resolveColour("color-mix(in srgb, #ffffff 50%, transparent)", {})).toEqual([255, 255, 255, 0.5]);
+    expect(
+      untokened(
+        "x.scss",
+        `.a { color: #fff; background: var(--panel, var(--raised)); transition: color 120ms ease-out;
+         border-radius: 8px; .b { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3); } }`,
+      ),
+    ).toHaveLength(5);
+    expect(
+      untokened(
+        "x.scss",
+        `.a { white-space: nowrap; transition: color var(--t-fast) var(--ease); border-radius: 0;
+         &:hover { background: var(--hover-wash); } .b { border-radius: var(--float-chip-radius); } }`,
+      ),
+    ).toEqual([]);
   });
 });
