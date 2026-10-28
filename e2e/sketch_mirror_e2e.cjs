@@ -110,7 +110,7 @@ function reflect(x, y) {
             .trim(),
           active: row.classList.contains("tgt-active"),
           pressed: String(row.classList.contains("tgt-active")),
-          clearable: !row.querySelector(".tgt-clear").disabled,
+          clearable: row.querySelector(".tgt-clear").getAttribute("aria-disabled") !== "true",
         };
       };
       const apply = panel && panel.querySelector(".tgt-done");
@@ -121,7 +121,7 @@ function reflect(x, y) {
         panel: !!panel,
         objects: field("objects"),
         line: field("line"),
-        ready: !!apply && !apply.disabled,
+        ready: !!apply && apply.getAttribute("aria-disabled") !== "true",
         preview: s.overlay.previewGroup.children.length,
         prompt: document.querySelector(".prompt-text")?.textContent?.trim() ?? "",
         dashed: s.overlay.previewGroup.children

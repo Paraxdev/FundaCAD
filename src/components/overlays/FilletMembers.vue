@@ -5,6 +5,9 @@
 import { onMounted, onUnmounted, shallowRef } from "vue";
 import { useEngine } from "../../app/engineKey";
 import Icon from "../shell/Icon.vue";
+import Button from "../ui/Button.vue";
+import Card from "../ui/Card.vue";
+import IconButton from "../ui/IconButton.vue";
 import type { EdgeMemberRow } from "../../features/edgeFeatureTool";
 
 const engine = useEngine();
@@ -67,132 +70,28 @@ const unresolvedCount = () => rows.value.filter((r) => !r.resolved).length;
 </script>
 
 <template>
-  <aside v-if="active && rows.length" class="float-card fm-card" role="group" aria-label="Blend edges">
-    <div class="float-card-head">
-      <span class="float-card-title">{{ kind === "fillet" ? "Fillet" : "Chamfer" }}</span>
+  <Card v-if="active && rows.length" class="fm-card" role="group" :title="kind === 'fillet' ? 'Fillet' : 'Chamfer'">
+    <template #head-actions>
       <span class="fm-count">{{ resolvedCount() }} edge{{ resolvedCount() === 1 ? "" : "s" }}</span>
       <span v-if="unresolvedCount()" class="fm-warn-count">{{ unresolvedCount() }} unresolved</span>
-    </div>
+    </template>
     <ul class="fm-list">
       <li v-for="r in rows" :key="r.key" class="fm-row" :class="{ unresolved: !r.resolved }">
         <Icon :name="r.resolved ? 'edge' : 'warning'" :size="15" class="fm-mark" />
         <span class="fm-label">{{ r.label }}</span>
-        <button
-          type="button"
+        <IconButton
           class="fm-x"
-          :title="`Remove ${r.label}`"
-          :aria-label="`Remove ${r.label}`"
+          icon="close"
+          :tip="`Remove ${r.label}`"
+          size="sm"
+          variant="danger"
+          :icon-size="13"
           @pointerdown.prevent.stop="remove(r.key)"
-        >
-          <Icon name="close" :size="13" />
-        </button>
+        />
       </li>
     </ul>
-    <div class="fm-foot">
-      <button type="button" class="fm-add" @pointerdown.prevent.stop="add()">
-        <Icon name="plus" :size="14" /> Add edge
-      </button>
-    </div>
-  </aside>
+    <template #foot>
+      <Button class="fm-add" icon="plus" size="sm" block @pointerdown.prevent.stop="add()">Add edge</Button>
+    </template>
+  </Card>
 </template>
-
-<style scoped>
-/* Docked at the bottom of the left column, capped so a long edge list scrolls instead of pushing out the Items browser. */
-.fm-card {
-  flex: 0 0 auto;
-  margin-top: auto;
-  /* Stretches to the column's width (the Items pane beside it), usable alone. */
-  min-width: 220px;
-  max-height: min(46vh, 360px);
-  pointer-events: auto;
-}
-.fm-count {
-  color: var(--text-dim);
-  font-size: 11px;
-  font-weight: 400;
-}
-.fm-warn-count {
-  margin-left: auto;
-  color: var(--warn);
-  font-size: 11px;
-  font-weight: 600;
-}
-.fm-list {
-  list-style: none;
-  margin: 0;
-  padding: 2px 8px;
-  overflow-y: auto;
-  min-height: 0;
-  font: 12px var(--ui, system-ui, sans-serif);
-  color: var(--text);
-}
-.fm-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px;
-  border-radius: 5px;
-}
-.fm-row + .fm-row {
-  margin-top: 2px;
-}
-.fm-row:hover {
-  background: var(--raised);
-}
-.fm-mark {
-  flex: none;
-  color: var(--accent);
-}
-.fm-row.unresolved .fm-mark {
-  color: var(--warn);
-}
-.fm-label {
-  flex: 1;
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.fm-row.unresolved .fm-label {
-  color: var(--warn);
-}
-.fm-x {
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  background: none;
-  border: 0;
-  border-radius: 4px;
-  color: var(--text-mute);
-  cursor: pointer;
-}
-.fm-x:hover {
-  background: var(--error-tint);
-  color: var(--error);
-}
-.fm-foot {
-  flex: none;
-  padding: 6px 8px 8px;
-}
-.fm-add {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  width: 100%;
-  padding: 6px;
-  background: var(--raised);
-  border: 1px solid transparent;
-  border-radius: 6px;
-  color: var(--text);
-  font: 12px var(--ui, system-ui, sans-serif);
-  cursor: pointer;
-}
-.fm-add:hover {
-  color: var(--accent-hot);
-}
-</style>

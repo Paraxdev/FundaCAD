@@ -32,6 +32,7 @@ function mountView(view: MirrorPanelView) {
 }
 
 const $ = (sel: string) => [...document.body.querySelectorAll<HTMLElement>(sel)];
+const disabled = (el: HTMLElement) => el.getAttribute("aria-disabled") === "true";
 
 describe("MirrorToolPanel", () => {
   it("lists a section per field with one row per pick, the active one marked", () => {
@@ -52,10 +53,13 @@ describe("MirrorToolPanel", () => {
   it("enables Clear all only on a filled list and passes its key", () => {
     const v = viewOf();
     mountView(v);
-    const clears = $(".tgt-clear") as HTMLButtonElement[];
-    expect(clears.map((b) => b.disabled)).toEqual([false, true]);
+    const clears = $(".tgt-clear");
+    expect(clears.map(disabled)).toEqual([false, true]);
     clears[0]!.click();
     expect(v.onClear).toHaveBeenCalledWith("objects");
+    // The empty list's Clear all refuses the click, and the press does not activate its section either.
+    clears[1]!.click();
+    expect(vi.mocked(v.onClear).mock.calls).toEqual([["objects"]]);
     expect(v.onActivate).not.toHaveBeenCalled();
   });
 
@@ -81,8 +85,10 @@ describe("MirrorToolPanel", () => {
     const w = mountView(waiting);
     const primary = () => $(".tgt-done")[0] as HTMLButtonElement;
     expect(primary().textContent!.trim()).toBe("Mirror");
-    expect(primary().disabled).toBe(true);
+    expect(disabled(primary())).toBe(true);
     expect(primary().title).toBe("Pick mirror line first");
+    primary().click();
+    expect(waiting.onCommit).not.toHaveBeenCalled();
     w.unmount();
     const [objects, line] = viewOf().fields;
     const empty = viewOf({
@@ -96,7 +102,7 @@ describe("MirrorToolPanel", () => {
     e.unmount();
     const ready = viewOf({ ready: true });
     mountView(ready);
-    expect(primary().disabled).toBe(false);
+    expect(disabled(primary())).toBe(false);
     expect(primary().hasAttribute("title")).toBe(false);
     primary().click();
     expect(ready.onCommit).toHaveBeenCalledTimes(1);
@@ -104,20 +110,49 @@ describe("MirrorToolPanel", () => {
     expect(ready.onCancel).toHaveBeenCalledTimes(1);
   });
 
-  it("shows no plane chips in a sketch, and the picked one pressed in 3D", () => {
+  it("shows no plane chips in a sketch, and the picked one checked in 3D", () => {
     const w = mountView(viewOf());
     expect($(".mirror-chips")).toEqual([]);
     w.unmount();
     const v = viewOf({ planes: ["XY", "XZ", "YZ"], plane: "XZ" });
     mountView(v);
-    const chips = $(".mirror-chips .rd-chip");
-    expect(chips.map((c) => [c.textContent!.trim(), c.getAttribute("aria-pressed")])).toEqual([
+    expect($('.mirror-chips [role="radiogroup"]')[0]!.getAttribute("aria-label")).toBe("Mirror plane");
+    const chips = $('.mirror-chips [role="radio"]');
+    expect(chips.map((c) => [c.textContent!.trim(), c.getAttribute("aria-checked")])).toEqual([
       ["XY", "false"],
       ["XZ", "true"],
       ["YZ", "false"],
     ]);
     chips[2]!.click();
     expect(v.onPlane).toHaveBeenCalledWith("YZ");
+  });
+
+  // Focus stays where it was (the canvas), so the tool's Enter and Tab still reach it after a click in the panel.
+  it("keeps a press in the panel from taking focus", () => {
+    mountView(viewOf({ ready: true, planes: ["XY", "XZ"], plane: "XY" }));
+    for (const sel of [".tgt-done", ".tgt-cancel", ".tgt-clear", ".tgt-remove", '.mirror-chips [role="radio"]']) {
+      const down = new PointerEvent("pointerdown", { bubbles: true, cancelable: true });
+      $(sel)[0]!.dispatchEvent(down);
+      expect(down.defaultPrevented, sel).toBe(true);
+    }
+  });
+
+  // The tool owns Escape, and leaves Enter to a panel button that has focus.
+  it("lets Escape through from a focused button, disabled or not, and Enter from an enabled one", () => {
+    mountView(viewOf());
+    const seen: string[] = [];
+    const onKey = (e: KeyboardEvent) => seen.push(`${e.key}:${e.defaultPrevented}`);
+    window.addEventListener("keydown", onKey);
+    const press = (sel: string, key: string) => {
+      const b = $(sel)[0]!;
+      b.focus();
+      b.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+    };
+    press(".tgt-done", "Escape");
+    press(".tgt-cancel", "Escape");
+    press(".tgt-cancel", "Enter");
+    window.removeEventListener("keydown", onKey);
+    expect(seen).toEqual(["Escape:false", "Escape:false", "Enter:false"]);
   });
 
   it("remounts for a new run and never calls the first run's handlers", async () => {

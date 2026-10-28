@@ -1,11 +1,23 @@
 <script setup lang="ts">
-// DimInput is numeric only, so the sketch Text tool gets its own panel. Its inline styles came over verbatim from
-// sketch/textPanel.ts, it has no stylesheet entry.
+// DimInput is numeric only, so the sketch Text tool gets its own panel.
 
-import { computed, onMounted, onUnmounted, reactive, useTemplateRef, type CSSProperties } from "vue";
-import Icon from "../shell/Icon.vue";
-import { initialTextForm, textFormErrors, textPanelPos, toTextValues } from "../../sketch/textForm";
+import { computed, onMounted, onUnmounted, reactive, useId, useTemplateRef } from "vue";
+import Button from "../ui/Button.vue";
+import Checkbox from "../ui/Checkbox.vue";
+import IconButton from "../ui/IconButton.vue";
+import Segmented from "../ui/Segmented.vue";
+import Select from "../ui/Select.vue";
+import TextField from "../ui/TextField.vue";
+import {
+  initialTextForm,
+  textFormErrors,
+  textPanelPos,
+  toTextValues,
+  type TextForm,
+  type TextValues,
+} from "../../sketch/textForm";
 import { useToolPanelStore, type TextReq } from "../../stores/toolPanels";
+import { claimEscape } from "../../ui/escapeClaim";
 
 const props = defineProps<{ req: TextReq }>();
 const panels = useToolPanelStore();
@@ -13,11 +25,25 @@ const panels = useToolPanelStore();
 // App.vue keys this on req.id, so a second show() remounts and rebuilds the form from the new `initial`.
 const form = reactive(initialTextForm(props.req.initial));
 const pos = textPanelPos(props.req.screen, window);
+const at = { left: `${pos.left}px`, top: `${pos.top}px` };
 
 const errors = computed(() => textFormErrors(form));
-const ta = useTemplateRef<HTMLTextAreaElement>("ta");
+const ta = useTemplateRef<InstanceType<typeof TextField>>("ta");
+const id = useId();
 
-function emitChange() {
+const fonts = computed(() => [
+  { value: "", label: "Default font" },
+  ...props.req.fonts.map((f) => ({ value: f, label: f })),
+]);
+const aligns: { value: TextValues["align"]; label: string }[] = [
+  { value: "left", label: "Left" },
+  { value: "center", label: "Center" },
+  { value: "right", label: "Right" },
+];
+
+// Every edit feeds the live preview.
+function set<K extends keyof TextForm>(key: K, value: TextForm[K]) {
+  form[key] = value;
   props.req.onChange(toTextValues(form));
 }
 
@@ -25,7 +51,8 @@ function commit() {
   panels.commitText(toTextValues(form));
 }
 
-// Capture phase: Escape must cancel the text tool before SketchMode's global handler cancels something else.
+// Capture phase: Escape must cancel the text tool before SketchMode's global handler cancels something else. An open
+// list inside the panel takes the Escape first, on the window, so it closes the list only.
 function onEsc(e: KeyboardEvent) {
   if (e.key !== "Escape") return;
   e.preventDefault();
@@ -33,139 +60,130 @@ function onEsc(e: KeyboardEvent) {
   panels.cancelText();
 }
 
+// SketchMode skips its Escape for a focused text field only, so a focused list, box or button here claims it instead.
+const root = useTemplateRef<HTMLElement>("root");
+let release: (() => void) | null = null;
+function onFocusIn() {
+  release ??= claimEscape();
+}
+function onFocusOut(e: FocusEvent) {
+  if (root.value?.contains(e.relatedTarget as Node | null)) return;
+  release?.();
+  release = null;
+}
+
+// The global keymap skips a focused text field only, so a key typed on the font list, a box or a button stops here
+// rather than starting a tool. Shortcuts with Ctrl or Cmd still pass.
+function onKeydown(e: KeyboardEvent) {
+  if (e.key !== "Escape" && !e.ctrlKey && !e.metaKey) e.stopPropagation();
+}
+
 onMounted(() => {
   document.addEventListener("keydown", onEsc, true);
   ta.value?.focus();
 });
-onUnmounted(() => document.removeEventListener("keydown", onEsc, true));
-
-const root: CSSProperties = {
-  position: "fixed",
-  zIndex: "50",
-  padding: "8px",
-  background: "#20242c",
-  border: "1px solid #3a4150",
-  borderRadius: "6px",
-  boxShadow: "0 6px 20px rgba(0,0,0,0.4)",
-  font: "12px system-ui, sans-serif",
-  color: "#dce3ee",
-  width: "300px",
-  maxWidth: "calc(100vw, 24px)",
-  boxSizing: "border-box",
-  colorScheme: "dark", // native <select> dropdown + number spinners render dark
-  left: `${pos.left}px`,
-  top: `${pos.top}px`,
-};
-const row: CSSProperties = { display: "flex", gap: "6px", alignItems: "center", marginBottom: "6px" };
-const field: CSSProperties = {
-  background: "#161a20",
-  color: "#dce3ee",
-  border: "1px solid #3a4150",
-  borderRadius: "3px",
-  padding: "3px 5px",
-  font: "inherit",
-};
-const lbl: CSSProperties = { whiteSpace: "nowrap", cursor: "pointer" };
-const textArea: CSSProperties = { ...field, width: "100%", resize: "vertical" };
-const fontSelect: CSSProperties = { ...field, flex: "1", minWidth: "0", maxWidth: "100%" };
-const num: CSSProperties = { ...field, width: "56px" };
-const wide: CSSProperties = { ...field, flex: "1", minWidth: "0" };
-const bad: CSSProperties = { borderColor: "var(--error, #f0564a)" };
-const problem: CSSProperties = { color: "var(--error, #f0564a)", fontSize: "11px", marginBottom: "6px" };
-const btnRow: CSSProperties = { ...row, marginBottom: "0", justifyContent: "flex-end" };
-const btn: CSSProperties = {
-  color: "#fff",
-  border: "none",
-  borderRadius: "4px",
-  padding: "4px 10px",
-  cursor: "pointer",
-  font: "inherit",
-};
-const okBtn: CSSProperties = { ...btn, background: "#2b6" };
-const noBtn: CSSProperties = { ...btn, background: "#555" };
+onUnmounted(() => {
+  document.removeEventListener("keydown", onEsc, true);
+  release?.();
+});
 </script>
 
 <template>
   <Teleport to="body">
-    <div :style="root">
-      <textarea
+    <div
+      ref="root"
+      class="float-card text-tool-panel"
+      :style="at"
+      @focusin="onFocusIn"
+      @focusout="onFocusOut"
+      @keydown="onKeydown"
+    >
+      <TextField
         ref="ta"
-        v-model="form.text"
+        class="text-tool-text"
+        :model-value="form.text"
+        multiline
         rows="2"
         placeholder="Text…"
-        :style="textArea"
-        @input="emitChange"
-        @change="emitChange"
+        aria-label="Text"
+        @update:model-value="set('text', $event)"
         @keydown.enter.ctrl.prevent="commit"
         @keydown.enter.meta.prevent="commit"
-      ></textarea>
-      <div style="height: 6px"></div>
+      />
 
-      <div :style="row">
-        <select v-model="form.font" :style="fontSelect" @input="emitChange" @change="emitChange">
-          <option value="">Default font</option>
-          <option v-for="f in req.fonts" :key="f" :value="f">{{ f }}</option>
-        </select>
-      </div>
+      <Select
+        :model-value="form.font"
+        :options="fonts"
+        size="sm"
+        tip="Font"
+        @update:model-value="set('font', $event)"
+      />
 
-      <div :style="row">
-        <label :style="lbl">Size</label>
-        <input
-          v-model="form.height"
-          type="text"
+      <div class="text-tool-row">
+        <label class="text-tool-label" :for="`${id}-height`">Size</label>
+        <TextField
+          :id="`${id}-height`"
+          class="text-tool-num"
+          :model-value="form.height"
+          size="sm"
           inputmode="decimal"
-          :title="errors.height"
-          :style="[num, errors.height ? bad : {}]"
-          @input="emitChange"
-          @change="emitChange"
+          :error="errors.height"
+          @update:model-value="set('height', $event)"
         />
-        <label :style="lbl">Angle°</label>
-        <input
-          v-model="form.angle"
-          type="text"
+        <label class="text-tool-label" :for="`${id}-angle`">Angle°</label>
+        <TextField
+          :id="`${id}-angle`"
+          class="text-tool-num"
+          :model-value="form.angle"
+          size="sm"
           inputmode="decimal"
-          :title="errors.angle"
-          :style="[num, errors.angle ? bad : {}]"
-          @input="emitChange"
-          @change="emitChange"
+          :error="errors.angle"
+          @update:model-value="set('angle', $event)"
         />
       </div>
 
-      <div :style="row">
-        <label :style="lbl">B</label>
-        <input v-model="form.bold" type="checkbox" @input="emitChange" @change="emitChange" />
-        <label :style="lbl">I</label>
-        <input v-model="form.italic" type="checkbox" @input="emitChange" @change="emitChange" />
-        <select v-model="form.align" :style="field" @input="emitChange" @change="emitChange">
-          <option value="left">left</option>
-          <option value="center">center</option>
-          <option value="right">right</option>
-        </select>
+      <div class="text-tool-row">
+        <Checkbox :model-value="form.bold" label="B" tip="Bold" @update:model-value="set('bold', $event)" />
+        <Checkbox :model-value="form.italic" label="I" tip="Italic" @update:model-value="set('italic', $event)" />
+        <Segmented
+          :model-value="form.align"
+          :options="aligns"
+          label="Alignment"
+          size="sm"
+          @update:model-value="set('align', $event)"
+        />
       </div>
 
-      <div :style="row">
-        <label :style="lbl">Box width (mm)</label>
-        <input
-          v-model="form.boxWidth"
-          type="text"
+      <div class="text-tool-row">
+        <label class="text-tool-label" :for="`${id}-box`">Box width (mm)</label>
+        <TextField
+          :id="`${id}-box`"
+          class="text-tool-wide"
+          :model-value="form.boxWidth"
+          size="sm"
           inputmode="decimal"
           placeholder="0 = no box"
-          :title="errors.boxWidth"
-          :style="[wide, errors.boxWidth ? bad : {}]"
-          @input="emitChange"
-          @change="emitChange"
+          :error="errors.boxWidth"
+          @update:model-value="set('boxWidth', $event)"
         />
       </div>
 
-      <div v-for="(msg, k) in errors" :key="k" :style="problem" data-testid="text-field-error">{{ msg }}</div>
+      <div v-for="(msg, k) in errors" :key="k" class="text-tool-problem" data-testid="text-field-error">{{ msg }}</div>
 
       <!-- pointerdown, not click: the buttons have to act before the field next
            to them can blur, or a commit loses the last keystroke. -->
-      <div :style="btnRow">
-        <button :style="okBtn" @pointerdown.prevent.stop="commit"><Icon name="check" :size="13" /> Add</button>
-        <button :style="noBtn" aria-label="Cancel" @pointerdown.prevent.stop="panels.cancelText()">
-          <Icon name="close" :size="13" />
-        </button>
+      <div class="text-tool-actions">
+        <Button class="text-tool-add" variant="primary" size="sm" icon="check" @pointerdown.prevent.stop="commit">
+          Add
+        </Button>
+        <IconButton
+          class="text-tool-cancel"
+          icon="close"
+          tip="Cancel"
+          size="md"
+          variant="plain"
+          @pointerdown.prevent.stop="panels.cancelText()"
+        />
       </div>
     </div>
   </Teleport>

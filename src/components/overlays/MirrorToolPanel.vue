@@ -4,6 +4,8 @@
 import { computed } from "vue";
 import type { MirrorPanelView } from "../../stores/toolPanels";
 import PickList from "./PickList.vue";
+import Button from "../ui/Button.vue";
+import Segmented from "../ui/Segmented.vue";
 
 const props = defineProps<{ view: MirrorPanelView }>();
 
@@ -41,24 +43,27 @@ const emptyText = (key: string) => (key === "objects" ? "Click geometry to add" 
     />
 
     <div v-if="view.planes.length" class="mirror-chips">
-      <button
-        v-for="p in view.planes"
-        :key="p"
-        type="button"
-        class="rd-chip"
-        :class="{ active: view.plane === p }"
-        :aria-pressed="view.plane === p"
-        @click="view.onPlane(p)"
-      >
-        {{ p }}
-      </button>
+      <Segmented
+        :model-value="view.plane ?? ''"
+        :options="view.planes.map((p) => ({ value: p, label: p }))"
+        label="Mirror plane"
+        variant="chips"
+        size="sm"
+        @update:model-value="view.onPlane($event)"
+      />
     </div>
 
     <div class="tgt-actions">
-      <button type="button" class="tgt-done" :disabled="!view.ready" :title="waitingFor" @click="view.onCommit()">
+      <Button
+        class="tgt-done"
+        variant="primary"
+        :disabled="!view.ready"
+        :disabled-reason="waitingFor"
+        @click="view.onCommit()"
+      >
         Mirror
-      </button>
-      <button type="button" class="tgt-cancel" @click="view.onCancel()">Cancel</button>
+      </Button>
+      <Button class="tgt-cancel" @click="view.onCancel()">Cancel</Button>
     </div>
     <div class="tgt-hint">Enter: next list, then apply · Shift adds to Objects · Esc cancels</div>
   </aside>

@@ -64,6 +64,20 @@ describe("ProjectFilterBar", () => {
     p.show(document.createElement("div"));
     expect(p.filter).toBe("silhouette");
   });
+
+  it("marks the chosen filter checked, and a press on a chip keeps focus where it was", async () => {
+    const p = new ProjectPanel();
+    p.show(document.createElement("div"));
+    mount(ProjectFilterBar, { attachTo: document.body });
+    const radios = () => [...document.querySelectorAll<HTMLElement>('[role="radiogroup"] [role="radio"]')];
+    expect(radios().map((r) => r.getAttribute("aria-checked"))).toEqual(["true", "false", "false"]);
+    const down = new PointerEvent("pointerdown", { bubbles: true, cancelable: true });
+    radios()[1]!.dispatchEvent(down);
+    expect(down.defaultPrevented).toBe(true);
+    radios()[1]!.click();
+    await nextTick();
+    expect(radios().map((r) => r.getAttribute("aria-checked"))).toEqual(["false", "true", "false"]);
+  });
 });
 
 describe("MeasureReadout", () => {

@@ -64,24 +64,6 @@
   text-transform: uppercase;
   color: var(--text-dim);
 }
-.tgt-clear {
-  padding: 2px var(--s-2);
-  font: inherit;
-  font-size: 11px;
-  color: var(--text-dim);
-  background: var(--float-chip-bg);
-  border: 1px solid transparent;
-  border-radius: var(--r-sm);
-  cursor: pointer;
-}
-.tgt-clear:hover:not(:disabled) {
-  color: var(--accent-hot);
-}
-.tgt-clear:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
 /* Scrolls, not grows: a face set on an imported mesh runs to dozens, and Done must stay
    on screen. */
 .tgt-list {
@@ -100,7 +82,7 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--s-2);
-  padding: var(--s-1) var(--s-2);
+  padding: 2px var(--s-1) 2px var(--s-2);
   border-radius: var(--r-sm);
   border: 1px solid transparent;
   font-size: 12px;
@@ -125,25 +107,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.tgt-remove {
-  flex: 0 0 auto;
-  display: grid;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  border: none;
-  border-radius: 50%;
-  background: none;
-  /* A <button> does not inherit colour, and UA buttontext draws the currentColor svg as
-     an empty box on a dark surface. */
-  color: var(--text-mute);
-  cursor: pointer;
-}
-.tgt-remove:hover {
-  color: var(--danger, #e5484d);
-}
-
 .tgt-none {
   padding: var(--s-2);
   font-size: 12px;
@@ -155,34 +118,8 @@
   display: flex;
   gap: var(--s-2);
 }
-.tgt-actions button {
+.tgt-actions > .btn {
   flex: 1 1 0;
-  padding: var(--s-2);
-  font: inherit;
-  font-size: 12px;
-  border-radius: var(--r-sm);
-  cursor: pointer;
-}
-.tgt-done {
-  color: #fff;
-  background: var(--accent);
-  border: 1px solid transparent;
-}
-.tgt-done:hover {
-  background: var(--accent-hot);
-}
-.tgt-cancel {
-  color: var(--text-dim);
-  background: var(--float-chip-bg);
-  border: 1px solid transparent;
-}
-.tgt-cancel:hover {
-  color: var(--text);
-  background: linear-gradient(var(--hover-wash), var(--hover-wash)), var(--float-chip-bg);
-}
-.tgt-done:disabled {
-  opacity: 0.45;
-  cursor: default;
 }
 /* Out of the panel's intrinsic width, so a long hint wraps instead of widening the column. */
 .tgt-hint {
@@ -190,4 +127,116 @@
   min-width: 100%;
   font-size: 10px;
   color: var(--text-mute);
+}
+
+/* The Fillet and Chamfer member list, a Card docked at the bottom of the left column, capped so a long edge list
+   scrolls instead of pushing out the Items browser. */
+.fm-card {
+  flex: 0 0 auto;
+  margin-top: auto;
+  min-width: 220px;
+  max-height: min(46vh, 360px);
+}
+.fm-count {
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 400;
+}
+.fm-warn-count {
+  margin-left: auto;
+  color: var(--warn);
+  font-size: 11px;
+  font-weight: 600;
+}
+.fm-card .float-card-body {
+  padding: 2px var(--s-2);
+}
+.fm-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 12px;
+  color: var(--text);
+}
+.fm-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 1px var(--s-1);
+  corner-shape: squircle;
+  border-radius: var(--float-chip-radius);
+}
+.fm-row + .fm-row {
+  margin-top: 2px;
+}
+.fm-row:hover {
+  background: var(--hover-wash);
+}
+.fm-mark {
+  flex: none;
+  color: var(--accent);
+}
+.fm-row.unresolved .fm-mark,
+.fm-row.unresolved .fm-label {
+  color: var(--warn);
+}
+.fm-label {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fm-card .float-card-foot {
+  padding: 6px var(--s-2) var(--s-2);
+}
+
+/* The sketch Text tool's panel, a card at the click. Doubled up to outrank the glass's relative .float-card. */
+.float-card.text-tool-panel {
+  position: fixed;
+  z-index: 50;
+  gap: 6px;
+  width: 300px;
+  max-width: calc(100vw - 24px);
+  padding: var(--s-2);
+  overflow: visible;
+  font-size: 12px;
+  color: var(--text);
+}
+.text-tool-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.text-tool-row > .ui-checkbox {
+  margin-right: var(--s-1);
+}
+.text-tool-label {
+  white-space: nowrap;
+  color: var(--text-dim);
+}
+.text-tool-num {
+  width: 56px;
+}
+.text-tool-wide {
+  flex: 1;
+}
+.text-tool-problem {
+  color: var(--error);
+  font-size: 11px;
+}
+.text-tool-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+/* The Project tool's filter chips, centred over the canvas by the component. */
+.float-card.project-filter-bar {
+  position: fixed;
+  z-index: 40;
+  flex-direction: row;
+  padding: 6px var(--s-2);
+  overflow: visible;
 }
