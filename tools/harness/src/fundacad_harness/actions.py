@@ -70,9 +70,14 @@ def found_by(target: str, hit: dict) -> str:
 
 
 def waited_on(e: Exception) -> str:
-    """The last check Playwright's click was stuck on, from its call log: not stable, not enabled, or not visible."""
-    steps = [ln.strip(" -") for ln in str(e).split("Call log:", 1)[-1].splitlines() if "element is" in ln]
-    return f", Playwright waited on: {steps[-1]}" if steps else ""
+    """The last check Playwright's click was stuck on, from its call log: not stable, not enabled, or not visible.
+    With no verdict logged, the check itself never came back, as when the page draws no frames."""
+    text = str(e)
+    if "Call log:" not in text:
+        return ""
+    lines = [ln.strip(" -") for ln in text.split("Call log:", 1)[1].splitlines() if ln.strip(" -")]
+    steps = [ln for ln in lines if "element is" in ln]
+    return f", Playwright waited on: {(steps or lines)[-1]}" if lines else ""
 
 
 def action(fn: Callable) -> Callable:
@@ -413,6 +418,9 @@ class Actions:
                     if not self._views_open():
                         self._click_control(button)
                 hits.append(self._click_control(label))
+            # A big model's camera flight can draw so few frames that the closing click never passes Playwright's
+            # stable check, so it lands first.
+            self.settle()
         except NotFound:
             self._close_views(button, field)
             raise NotFound(f'no view "{name}", the views are {", ".join([*VIEW_CLICKS, *sorted(SIDES)])} or a label in the Views popover') from None

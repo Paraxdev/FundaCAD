@@ -135,3 +135,6 @@ def test_a_stuck_click_names_the_check_playwright_waited_on():
            "      - element is visible and enabled\n      - element is not stable\n  - retrying click action\n")
     assert waited_on(Exception(log)) == ", Playwright waited on: element is not stable"
     assert waited_on(Exception("Timeout 5000ms exceeded.")) == ""
+    starved = ("Locator.click: Timeout 5000ms exceeded.\nCall log:\n  - waiting for locator('[data-harness-target=\"m\"]')\n"
+               "  - attempting click action\n    - waiting for element to be visible, enabled and stable\n")
+    assert waited_on(Exception(starved)) == ", Playwright waited on: waiting for element to be visible, enabled and stable"
