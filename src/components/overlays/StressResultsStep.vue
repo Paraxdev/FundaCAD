@@ -35,11 +35,12 @@ const ends = computed(() => legendEnds(props.result.legend));
 const detailsOpen = ref(false);
 
 // A power of ten at most 1, so True size (1) and the two figure automatic scale sit on a step.
-// Not below 1e-6, since Slider reads its decimals from String(step) and 1e-7 prints as an exponent.
+// Not below 1e-6, since Slider reads its decimals from String(step) and 1e-7 prints as an exponent. Parsed from "1e-4"
+// rather than 10 ** -4, which some V8 builds round to 0.00009999999999999999.
 const deformStep = computed(() => {
   const d = deform.value;
   const ref = Math.min(d?.max ?? 1, d?.auto ?? 1);
-  return Math.min(1, Math.max(1e-6, 10 ** Math.floor(Math.log10(ref / 100))));
+  return Math.min(1, Math.max(1e-6, Number(`1e${Math.floor(Math.log10(ref / 100))}`)));
 });
 </script>
 
