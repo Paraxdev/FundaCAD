@@ -80,7 +80,7 @@ export function lastFocus(exclude: (node: Node) => boolean = () => false): HTMLE
 }
 
 // A landmark is no control, so it takes focus by tabindex -1 and data-focus-landing drops the ring (_dialog.scss).
-function landmark(): HTMLElement | null {
+export function mainLandmark(): HTMLElement | null {
   const el = document.querySelector<HTMLElement>(LANDMARK);
   if (el && !el.hasAttribute("tabindex")) el.setAttribute("tabindex", "-1");
   el?.setAttribute("data-focus-landing", "");
@@ -101,7 +101,7 @@ export function focusReturn(fallback?: () => HTMLElement | null | undefined): {
       const now = document.activeElement;
       if (now && now !== document.body && !within(now)) return;
       if (take(opener) || take(fallback?.()) || !opener) return;
-      if (!take(lastFocus((n) => n === opener || within(n)))) take(landmark());
+      if (!take(lastFocus((n) => n === opener || within(n)))) take(mainLandmark());
     },
   };
 }

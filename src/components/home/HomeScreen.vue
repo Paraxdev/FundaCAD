@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, onUnmounted, ref, watch } from "vue";
 import { useHomeStore } from "../../stores/home";
 import { useModalStore } from "../../stores/modals";
-import { useModalGate } from "../../composables/useModalGate";
+import { inertOthers, useModalGate } from "../../composables/useModalGate";
+import { focusReturn, mainLandmark } from "../ui/focusables";
 import { welcomeClosed, welcomeOnStartup, setWelcomeOnStartup } from "../../ui/welcome";
 import { openReportDialog } from "../../ui/bugReporter";
 import { forgetRecent, getRecentFiles } from "../../io/recentFiles";
@@ -267,7 +268,8 @@ const welcomeHidden = ref(welcomeClosed());
 watch(showOnStartup, setWelcomeOnStartup);
 
 const root = ref<HTMLElement | null>(null);
-let focusBefore: Element | null = null;
+let back: ReturnType<typeof focusReturn> | null = null;
+let releaseInert: (() => void) | null = null;
 
 const background = ref(getHomeBackground());
 const imageUrl = ref<string | null>(null);
@@ -287,9 +289,16 @@ onMounted(() => {
   ownDepth = modals.depth;
   window.addEventListener("keydown", onKey, true);
   void refreshStats();
-  focusBefore = document.activeElement;
+  // With no opener, as at launch, closing Home lands on the workspace rather than the body.
+  back = focusReturn(mainLandmark);
+  // The title bar's Home toggle stays live, it is how Home closes again.
+  if (root.value) releaseInert = inertOthers(root.value, ["#home-btn"]);
   const first = searchInput() ?? root.value?.querySelector<HTMLElement>(".home-main button");
   first?.focus({ preventScroll: true });
+});
+onBeforeUnmount(() => {
+  releaseInert?.();
+  back?.restore((n) => !!root.value?.contains(n));
 });
 onUnmounted(() => {
   window.removeEventListener("keydown", onKey, true);
@@ -297,8 +306,6 @@ onUnmounted(() => {
   offBackground();
   imageLoad++;
   if (imageUrl.value) URL.revokeObjectURL(imageUrl.value);
-  const lost = !document.activeElement || document.activeElement === document.body;
-  if (lost && focusBefore instanceof HTMLElement && focusBefore.isConnected) focusBefore.focus({ preventScroll: true });
 });
 </script>
 
@@ -309,6 +316,7 @@ onUnmounted(() => {
     :class="homeBackgroundClass(background, imageUrl)"
     :style="homeBackgroundStyle(background, imageUrl)"
     role="dialog"
+    aria-modal="true"
     aria-label="Home"
   >
     <aside class="home-side">

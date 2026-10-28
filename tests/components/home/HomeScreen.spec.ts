@@ -161,6 +161,48 @@ describe("HomeScreen", () => {
     expect(useModalStore().depth).toBe(0);
   });
 
+  // The title bar and the workspace that Home covers, as App.vue lays them out.
+  function page() {
+    document.body.insertAdjacentHTML(
+      "afterbegin",
+      '<header id="titlebar"><button id="home-btn"></button><button id="undo-btn"></button></header>' +
+        '<div id="main"><button id="in-page"></button></div>',
+    );
+    return (sel: string) => document.querySelector<HTMLElement>(sel)!;
+  }
+  const inert = (el: Element) => !!el.closest("[inert]");
+
+  it("is a modal dialog that makes the page behind inert, all but the Home toggle, until it closes", async () => {
+    const at = page();
+    const { w } = open();
+    expect($(".home")!.getAttribute("aria-modal")).toBe("true");
+    expect([at("#undo-btn"), at("#in-page"), at("#home-btn"), $(".home")!].map(inert)).toEqual([
+      true,
+      true,
+      false,
+      false,
+    ]);
+    w.unmount();
+    await nextTick();
+    expect($$("[inert]")).toEqual([]);
+  });
+
+  it("gives focus back to its opener once the page is live again", async () => {
+    const at = page();
+    at("#in-page").focus();
+    const { w } = open();
+    expect(document.activeElement).not.toBe(at("#in-page"));
+    w.unmount();
+    expect(document.activeElement).toBe(at("#in-page"));
+  });
+
+  it("lands on the workspace when it closes with no opener, as after launch", () => {
+    const at = page();
+    const { w } = open();
+    w.unmount();
+    expect(document.activeElement).toBe(at("#main"));
+  });
+
   it("closes on Escape and on the close button", async () => {
     const { home } = open();
     key("Escape");
