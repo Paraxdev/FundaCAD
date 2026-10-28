@@ -16,6 +16,7 @@ pub mod ply;
 pub mod rhino;
 pub mod scan;
 pub mod stage;
+pub mod step_refs;
 pub mod svg;
 pub mod threeds;
 pub mod x3d;
@@ -225,12 +226,59 @@ pub fn assembly_payload(asm: &StepAssembly) -> Imported {
 }
 
 pub fn read_step(path: &Path) -> Result<Imported, String> {
+    let scan = crate::bench::phase("step_refs", || step_refs::scan(path)).unwrap_or_else(|e| {
+        eprintln!("[import] STEP vertex check skipped: {e}");
+        step_refs::Scan::default()
+    });
+    let source = scan.repaired.as_ref().map_or(path, |r| r.path());
     let progress = crate::cancel::progress_beating();
     let asm = crate::bench::phase("step_read", || {
-        stage::sampling_xcaf_read(&progress, || xcaf::read_step_assembly_with(path, &progress.start()))
+        stage::sampling_xcaf_read(&progress, || xcaf::read_step_assembly_with(source, &progress.start()))
     })
     .map_err(|e| occt_message(&e))?;
-    Ok(from_assembly(asm))
+    let mut imported = from_assembly(asm);
+    if let Some(note) = scan.note() {
+        push_note(&mut imported.fields, note);
+    }
+    if scan.faces > 0 && kernel::count(&imported.shape, Kind::Face) == 0 {
+        let cause = match scan.bad {
+            0 => String::new(),
+            n => format!(", {n} of its edges name another entity where a vertex belongs"),
+        };
+        return Err(format!(
+            "the STEP file was read but none of its {} faces could be built{cause}. It likely comes from a faulty exporter, export it again or import an STL or OBJ of the same model.",
+            scan.faces
+        ));
+    }
+    non_empty(imported)
+}
+
+/// A read that built nothing at all would otherwise land as an empty part.
+fn non_empty(imported: Imported) -> Result<Imported, String> {
+    if kernel::count(&imported.shape, Kind::Face) == 0 && kernel::count(&imported.shape, Kind::Edge) == 0 {
+        return Err(
+            "the file was read but held no shape FundaCAD could build, it may be empty or come from a faulty exporter."
+                .into(),
+        );
+    }
+    Ok(imported)
+}
+
+fn push_note(fields: &mut Map<String, Value>, text: String) {
+    if let Some(list) = fields.entry("notes").or_insert_with(|| json!([])).as_array_mut() {
+        list.push(json!(text));
+    }
+}
+
+/// The way through for a mesh past the size cap.
+fn too_large_hint(fmt: &str) -> &'static str {
+    match fmt {
+        "stl" => " Decimate the mesh in the app that made it and export it again.",
+        "3mf" | "obj" | "glb" | "gltf" | "ply" | "off" | "vrml" | "x3d" | "amf" | "fbx" | "3ds" => {
+            " Export the model as binary STL, often several times smaller, or decimate the mesh first."
+        }
+        _ => "",
+    }
 }
 
 /// IGES, read like STEP with each free root a product.
@@ -240,7 +288,7 @@ pub fn read_iges(path: &Path) -> Result<Imported, String> {
         stage::sampling_xcaf_read(&progress, || xcaf::read_iges_assembly_with(path, &progress.start()))
     })
     .map_err(|e| occt_message(&e))?;
-    Ok(from_assembly(asm))
+    non_empty(from_assembly(asm))
 }
 
 /// An OCCT binary XCAF document, read like STEP, in millimetres.
@@ -264,7 +312,7 @@ pub fn read_xbf(path: &Path) -> Result<Imported, String> {
             m => m,
         }
     })?;
-    Ok(from_assembly(asm))
+    non_empty(from_assembly(asm))
 }
 
 fn from_assembly(asm: StepAssembly) -> Imported {
@@ -346,9 +394,10 @@ pub fn import_geometry_in(
     let cap = import_size_cap(&fmt);
     if size > cap {
         return Err(format!(
-            "file is {:.0} MiB, too large to import (limit {} MiB).",
+            "file is {:.0} MiB, too large to import (limit {} MiB).{}",
             size as f64 / (1024.0 * 1024.0),
-            cap / (1024 * 1024)
+            cap / (1024 * 1024),
+            too_large_hint(&fmt)
         ));
     }
     fundacad_engine::sysmem::refuse_if_memory_is_short(size, None)?;
