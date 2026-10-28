@@ -19,6 +19,13 @@ const waitingFor = computed(() =>
 );
 
 const emptyText = (key: string) => (key === "objects" ? "Click geometry to add" : "Click to set");
+
+// Segmented ignores a pick of the value it holds, yet picking the plane again still hands the next click to Objects.
+// Capture phase, so the chip still reads as checked when its own click runs.
+function onChipClick(e: MouseEvent) {
+  const checked = (e.target as Element).closest('[role="radio"]')?.getAttribute("aria-checked") === "true";
+  if (checked && props.view.plane) props.view.onPlane(props.view.plane);
+}
 </script>
 
 <template>
@@ -42,7 +49,7 @@ const emptyText = (key: string) => (key === "objects" ? "Click geometry to add" 
       @remove="view.onRemove(f.key, $event)"
     />
 
-    <div v-if="view.planes.length" class="mirror-chips">
+    <div v-if="view.planes.length" class="mirror-chips" @click.capture="onChipClick">
       <Segmented
         :model-value="view.plane ?? ''"
         :options="view.planes.map((p) => ({ value: p, label: p }))"

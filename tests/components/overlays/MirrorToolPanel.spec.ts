@@ -127,6 +127,16 @@ describe("MirrorToolPanel", () => {
     expect(v.onPlane).toHaveBeenCalledWith("YZ");
   });
 
+  // Picking a plane hands the next canvas click back to Objects, the plane already set included.
+  it("picks the plane again on a click of the chip already checked, once per click", () => {
+    const v = viewOf({ planes: ["XY", "XZ", "YZ"], plane: "XY" });
+    mountView(v);
+    const chips = $('.mirror-chips [role="radio"]');
+    chips[0]!.click();
+    chips[1]!.click();
+    expect(v.onPlane.mock.calls).toEqual([["XY"], ["XZ"]]);
+  });
+
   // Focus stays where it was (the canvas), so the tool's Enter and Tab still reach it after a click in the panel.
   it("keeps a press in the panel from taking focus", () => {
     mountView(viewOf({ ready: true, planes: ["XY", "XZ"], plane: "XY" }));
