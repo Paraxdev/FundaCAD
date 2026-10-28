@@ -18,8 +18,11 @@ const menus = () => [...document.body.querySelectorAll<HTMLElement>(".ui-menu")]
 const menu = () => document.body.querySelector<HTMLElement>(".ui-menu:not(.ui-submenu)")!;
 const focused = () => document.activeElement?.querySelector(".ui-menu-label")?.textContent ?? null;
 
-// The claim on Escape is released a task after the close.
-const settle = () => new Promise((r) => setTimeout(r, 5));
+// The claim on Escape is released a task after the menu unmounts, so the unmount is flushed before the timer starts.
+const settle = async () => {
+  await flushPromises();
+  await new Promise((r) => setTimeout(r, 5));
+};
 
 function key(k: string): KeyboardEvent {
   const e = new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true });

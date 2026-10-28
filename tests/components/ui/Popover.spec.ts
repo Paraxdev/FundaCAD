@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { enableAutoUnmount, mount } from "@vue/test-utils";
+import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import { defineComponent, h, nextTick, ref } from "vue";
 
 import Popover from "../../../src/components/ui/Popover.vue";
@@ -9,7 +9,11 @@ import { escapeClaimed } from "../../../src/ui/escapeClaim";
 
 enableAutoUnmount(afterEach);
 
-const settle = () => new Promise((r) => setTimeout(r, 5));
+// The claim on Escape is released a task after the popover unmounts, so the unmount is flushed before the timer starts.
+const settle = async () => {
+  await flushPromises();
+  await new Promise((r) => setTimeout(r, 5));
+};
 const $ = (sel: string) => document.querySelector<HTMLElement>(sel);
 const active = () => document.activeElement as HTMLElement | null;
 
