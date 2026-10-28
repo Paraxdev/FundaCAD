@@ -128,3 +128,17 @@ fn a_mesh_past_the_size_cap_names_a_way_through() {
     assert!(err.contains("too large to import"), "{err}");
     assert!(err.contains("binary STL") && err.contains("decimate"), "{err}");
 }
+
+#[test]
+fn a_stray_apostrophe_in_a_name_stays_in_its_string() {
+    let stray = |t: &str| {
+        t.replace("PRODUCT('Bracket',", "PRODUCT('it's Bracket',")
+            .replace(BAD_EDGE, "#21 = EDGE_CURVE('Bob's edge',#22,#31,#26,.T.);")
+    };
+    let scan = step_refs::scan(&variant("stray_apostrophe_scan.step", stray)).unwrap();
+    assert_eq!((scan.faces, scan.bad), (9, 1));
+    let repaired = scan.repaired.expect("the bad vertex is repaired");
+    assert_eq!((repaired.fixed, repaired.unfixed), (1, 0));
+    let text = std::fs::read_to_string(repaired.path()).unwrap();
+    assert!(text.contains("#21 = EDGE_CURVE('Bob's edge',#22,#24,#26,.T.);"), "the name is kept");
+}

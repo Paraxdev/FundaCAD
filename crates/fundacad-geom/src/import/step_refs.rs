@@ -283,25 +283,47 @@ fn list(s: &[u8]) -> impl Iterator<Item = &[u8]> {
     s.split(|&b| b == b',')
 }
 
+/// Past this a quote never closed, so the scan gives up rather than hold the rest of the file.
+const MAX_RECORD: usize = 64 << 20;
+
 /// Every `;` ended record, a `;` inside a quoted string kept in its record.
 fn for_each_record(path: &Path, mut f: impl FnMut(&[u8]) -> Result<(), String>) -> Result<(), String> {
     let file = File::open(path).map_err(|e| e.to_string())?;
     let mut reader = BufReader::with_capacity(1 << 20, file);
     let mut rec: Vec<u8> = Vec::new();
-    let mut quotes = 0usize;
+    let mut quoted = false;
     loop {
-        let from = rec.len();
+        let mut i = rec.len();
         if reader.read_until(b';', &mut rec).map_err(|e| e.to_string())? == 0 {
             return if rec.is_empty() { Ok(()) } else { f(&rec) };
         }
-        quotes += rec[from..].iter().filter(|&&b| b == b'\'').count();
-        if quotes % 2 == 1 {
+        while i < rec.len() {
+            i += if rec[i] == b'\'' { quote_at(&rec, i, &mut quoted) } else { 1 };
+        }
+        if quoted {
+            if rec.len() > MAX_RECORD {
+                return Err(format!("a quoted string runs past {} MiB", MAX_RECORD >> 20));
+            }
             continue;
         }
         f(&rec)?;
         rec.clear();
-        quotes = 0;
     }
+}
+
+/// Steps over the `'` at `s[i]`, answering how many bytes it took. A quote inside a string closes it only before a
+/// `,`, `)` or `;`, so a stray apostrophe an exporter left in a name stays in its string.
+fn quote_at(s: &[u8], i: usize, quoted: &mut bool) -> usize {
+    if !*quoted {
+        *quoted = true;
+        return 1;
+    }
+    if s.get(i + 1) == Some(&b'\'') {
+        return 2;
+    }
+    let next = s[i + 1..].iter().find(|b| !b.is_ascii_whitespace());
+    *quoted = !matches!(next, None | Some(b',' | b')' | b';'));
+    1
 }
 
 /// `#12 = NAME(...)` as (12, NAME, `(...)`), NAME empty for a complex entity.
@@ -323,9 +345,14 @@ fn head(rec: &[u8]) -> Option<(Id, &[u8], &[u8])> {
 fn args(s: &[u8]) -> Vec<&[u8]> {
     let mut out = Vec::new();
     let (mut depth, mut quoted, mut from) = (0usize, false, 0usize);
-    for (i, &b) in s.iter().enumerate() {
+    let mut i = 0;
+    while i < s.len() {
+        let b = s[i];
+        if b == b'\'' {
+            i += quote_at(s, i, &mut quoted);
+            continue;
+        }
         match b {
-            b'\'' => quoted = !quoted,
             _ if quoted => {}
             b'(' => {
                 depth += 1;
@@ -346,6 +373,7 @@ fn args(s: &[u8]) -> Vec<&[u8]> {
             }
             _ => {}
         }
+        i += 1;
     }
     out
 }
