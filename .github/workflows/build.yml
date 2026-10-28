@@ -1254,7 +1254,7 @@ jobs:
           name: a11y-smoke
           path: ${{ runner.temp }}/a11y
           if-no-files-found: ignore
-          retention-days: 14
+          retention-days: 7
 
       - name: Engine log on failure
         if: failure()
