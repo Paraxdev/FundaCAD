@@ -25,6 +25,7 @@ const inspectFile = vi.fn();
 const pickBundle = vi.fn();
 const installCandidate = vi.fn();
 const installedPlugins = vi.fn();
+const removePlugin = vi.fn();
 
 vi.mock("../../../src/plugins", async (importOriginal) => {
   const real = await importOriginal<typeof import("../../../src/plugins")>();
@@ -35,6 +36,7 @@ vi.mock("../../../src/plugins", async (importOriginal) => {
     pickBundle: () => pickBundle(),
     installCandidate: (c: unknown) => installCandidate(c),
     installedPlugins: () => installedPlugins(),
+    removePlugin: (id: string) => removePlugin(id),
   };
 });
 
@@ -42,6 +44,8 @@ const PluginsSection = (await import("../../../src/components/overlays/PluginsSe
 const { candidateFrom } = await import("../../../src/plugins");
 const { errorNotice } = await import("../../../src/ui/errorNotice");
 const { pluginEnabled } = await import("../../../src/plugins/registry");
+const { definePluginSettings, storageKey } = await import("../../../src/plugins/settings");
+const { contribute, resetContributions } = await import("../../../src/plugins/contrib");
 
 enableAutoUnmount(afterEach);
 
@@ -88,7 +92,10 @@ beforeEach(() => {
   installedPlugins.mockResolvedValue([]);
   inspectUrl.mockResolvedValue(candidateFrom(STRANGER, "url"));
 });
-afterEach(() => localStorage.clear());
+afterEach(() => {
+  resetContributions();
+  localStorage.clear();
+});
 
 describe("reading a bundle from a link", () => {
   it("does not read anything until the button is pressed", async () => {
@@ -324,5 +331,39 @@ describe("the list of what is installed", () => {
     expect((input.element as HTMLInputElement).checked).toBe(false);
     await input.trigger("change");
     expect(pluginEnabled("widgets")).toBe(true);
+  });
+
+  it("forgets a removed plugin's settings only when its checkbox is ticked", async () => {
+    const settings = definePluginSettings("widgets", {
+      version: 1,
+      props: [{ key: "gap", type: "number", label: "Gap", default: 2 }],
+    });
+    contribute("widgets", { settings: [{ key: "s", settings }] });
+    installedPlugins.mockResolvedValue([record({})]);
+    removePlugin.mockResolvedValue(undefined);
+    const w = await mounted();
+    const row = () => w.get('[data-plugin="widgets"]');
+    const remove = () =>
+      row()
+        .findAll("button")
+        .find((b) => b.text() === "Remove")!;
+    settings.set("gap", 7);
+    expect(row().get(".plug-forget").text()).toBe("Remove forgets its settings");
+
+    await remove().trigger("click");
+    await flush();
+    expect(removePlugin.mock.calls).toEqual([["widgets"]]);
+    expect(settings.get("gap")).toBe(7);
+
+    await row().get(".plug-forget input").trigger("change");
+    await remove().trigger("click");
+    await flush();
+    expect(removePlugin.mock.calls).toEqual([["widgets"], ["widgets"]]);
+    expect(settings.get("gap")).toBe(2);
+    expect(JSON.parse(localStorage.getItem(storageKey("widgets"))!)).toEqual({
+      version: 0,
+      values: {},
+      forgotten: true,
+    });
   });
 });
