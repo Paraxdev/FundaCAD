@@ -12,10 +12,9 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ref } from "vue";
-import { mount, type VueWrapper } from "@vue/test-utils";
+import { mount, type DOMWrapper, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import FeatureProperties from "../../../src/components/shell/FeatureProperties.vue";
-import Select from "../../../src/components/ui/Select.vue";
 import { ENGINE } from "../../../src/app/engineKey";
 import { contribute, resetContributions } from "../../../src/plugins/contrib";
 import {
@@ -158,10 +157,14 @@ const rows = (w: VueWrapper) =>
 /** Just the labels, in the order the panel puts them. */
 const labels = (w: VueWrapper) => w.findAll(".param-row label").map((l) => l.text());
 
+/** The Select inside `row`, the value's or its unit chip's. */
+const selectIn = (w: VueWrapper, row: DOMWrapper<Element>) =>
+  w.findAllComponents({ name: "Select" }).find((c) => row.element.contains(c.find("[role=combobox]").element))!;
+
 /** Pick `value` in the Select of the row labelled `label`. Select's own keys are its spec's business. */
 async function choose(w: VueWrapper, label: string, value: string) {
   const row = w.findAll(".param-row").find((r) => r.find("label").text() === label)!;
-  const sel = row.findComponent(Select);
+  const sel = selectIn(w, row);
   sel.vm.$emit("update:modelValue", value);
   await sel.vm.$nextTick();
 }
@@ -758,7 +761,7 @@ describe("FeatureProperties expressions through NumberField", () => {
     const fake = makeEngine({ parameters: {}, features: [EXTRUDE] });
     const w = render(fake, "e1");
     const row = field(w, "Distance");
-    const chip = row.findComponent(Select);
+    const chip = selectIn(w, row);
     chip.vm.$emit("update:modelValue", "in");
     await w.vm.$nextTick();
     expect(field(w, "Distance").find(".ui-unit-chip").text()).toBe("in");
