@@ -214,7 +214,7 @@ const check = (name, ok, detail) => {
   const featuresBefore = await page.evaluate(() => window.store.document.features.length);
   await page.evaluate(() => window.__fundacad.handleAction("print-bed-fit-check"));
   await page.waitForTimeout(500);
-  const option = await page.$(".choice-btn");
+  const option = await page.$(".ui-confirm-choice");
   check("bed fit check offers a preset to choose", !!option);
   if (option) await option.click();
   await page.waitForTimeout(600);

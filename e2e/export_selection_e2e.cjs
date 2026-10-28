@@ -106,7 +106,7 @@ function stl(file) {
   }
 
   // The export ends on a summary with a Done button, which holds the keyboard.
-  const done = await page.$(".choice-btn.choice-primary");
+  const done = await page.$(".ui-confirm .btn-primary");
   if (done) {
     await done.click();
     await page.waitForTimeout(300);

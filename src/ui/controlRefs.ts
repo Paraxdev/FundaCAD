@@ -69,7 +69,7 @@ const CONTROL = [
 
 const TEXT_ONLY = "#docname, #prompt, [data-testid=selection-readout]";
 const LABEL_NOISE =
-  ".menu-shortcut, .ctx-key, .cmdk-key, .menu-check, .dirty-mark, .t-caret, .tree-count, .choice-btn > small";
+  ".menu-shortcut, .ctx-key, .cmdk-key, .menu-check, .dirty-mark, .t-caret, .tree-count, .choice-btn > small, .ui-confirm-choice > .ui-confirm-hint";
 const MAX_LABEL = 60;
 
 const realRect = (el: Element): Box => el.getBoundingClientRect();
@@ -171,7 +171,7 @@ export function refOf(el: HTMLElement): string {
     return `menu:${parent ? visibleText(parent) : "?"}/${label}`;
   }
   if (el.matches(".ctx-item")) return `ctx:${label}`;
-  if (el.matches(".choice-btn")) return `choice:${label}`;
+  if (el.matches(".choice-btn, .ui-confirm .btn")) return `choice:${label}`;
   if (el.matches(".opt-row")) return `opt:${label}`;
   return `text:"${label}"`;
 }

@@ -68,6 +68,20 @@ describe("walkControls", () => {
     expect([box.ref, box.label]).toEqual(["choice:Box", "Box"]);
   });
 
+  it("names a ConfirmDialog choice and its footer buttons as choices too", () => {
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      '<div class="modal-overlay"><div class="modal-panel ui-confirm" role="dialog">' +
+        '<button class="btn ui-confirm-choice"><span>Box</span><small class="ui-confirm-hint">l×w×h</small></button>' +
+        '<button class="btn ui-confirm-ok">Done</button></div></div>',
+    );
+    const choices = walkControls(document, { rect }).controls.filter((c) => c.ref.startsWith("choice:"));
+    expect(choices.map((c) => [c.ref, c.label])).toEqual([
+      ["choice:Box", "Box"],
+      ["choice:Done", "Done"],
+    ]);
+  });
+
   it("names a tab by its value, so a tab and a button with one label stay apart", () => {
     const tabs = mount(Tabs, {
       props: {
