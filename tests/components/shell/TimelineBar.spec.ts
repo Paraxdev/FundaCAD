@@ -640,6 +640,14 @@ describe("History's head toggles", () => {
     expect(mountBar().w.get(".timeline-errbadge").classes("hidden")).toBe(true);
   });
 
+  it("the error badge names a single failure in the singular", () => {
+    const badge = mountBar({ failed: ["ex1"] }).w.get(".timeline-errbadge");
+    expect([badge.text(), badge.attributes("aria-label")]).toEqual([
+      "1",
+      "1 failing feature, click to jump to the next one",
+    ]);
+  });
+
   it("the error badge counts the failures and each click jumps to the next one", async () => {
     const scrolled: (string | null)[] = [];
     const scroll = vi.spyOn(Element.prototype, "scrollIntoView").mockImplementation(function (this: Element) {

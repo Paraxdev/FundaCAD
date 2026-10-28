@@ -505,7 +505,7 @@ function openMultiMenu(e: MouseEvent, ids: string[]) {
         class="timeline-errbadge"
         :class="{ hidden: errors.size === 0 }"
         tip="Failing features, click to jump to the next one"
-        :aria-label="`${errors.size} failing features, click to jump to the next one`"
+        :aria-label="`${errors.size} failing feature${errors.size === 1 ? '' : 's'}, click to jump to the next one`"
         @click="jumpToNextError()"
         >{{ errors.size }}</Chip
       >
