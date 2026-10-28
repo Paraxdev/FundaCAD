@@ -174,7 +174,7 @@ async function takePicture() {
         <template #value="{ value }">{{ value === 0 ? "off" : value.toFixed(2) }}</template>
       </Slider>
       <div class="prefs-row">
-        <span class="prefs-label">Aperture</span>
+        <label class="prefs-label" for="rd-aperture">Aperture</label>
         <Select
           id="rd-aperture"
           size="sm"

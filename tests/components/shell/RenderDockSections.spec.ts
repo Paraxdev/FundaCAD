@@ -158,6 +158,10 @@ describe("Render dock rows on the base controls", () => {
       expect(w.get("#rd-blur .ui-slider-value").text()).toBe("0.40");
     });
 
+    it("ties the Aperture text to its control, so a click on it reaches the select", () => {
+      expect(w.get('label[for="rd-aperture"]').text()).toBe("Aperture");
+    });
+
     it("picks the picture size from radio chips that keep their data hooks", async () => {
       const one = w.get('[data-scale="1"]');
       expect(one.attributes("role")).toBe("radio");
