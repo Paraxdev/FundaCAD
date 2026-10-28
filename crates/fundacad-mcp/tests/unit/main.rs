@@ -1,3 +1,4 @@
+mod budget;
 mod clash;
 mod edits;
 mod layflat;

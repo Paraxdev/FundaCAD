@@ -18,6 +18,7 @@ use rmcp::{tool, tool_router, ErrorData as McpError, RoleServer, ServerHandler};
 use serde_json::{json, Map, Value};
 use tokio::sync::Mutex;
 
+use crate::budget::{self, Page};
 use crate::describe;
 use crate::docfile;
 use crate::link::{args as call_args, EngineLink, Mode};
@@ -1154,7 +1155,11 @@ note: left out of the file, because this build cannot read them and a .funda has
         annotations(read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
     pub async fn t_build(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
-        Ok(self.build(truthy(args.get("full"))).await)
+        let full = truthy(args.get("full"));
+        match Page::of(&args, if full { 0 } else { budget::ROWS }) {
+            Ok(page) => Ok(self.build(full, page).await),
+            Err(why) => Ok(failure(why)),
+        }
     }
 
     #[tool(
@@ -1623,7 +1628,7 @@ impl FundaCad {
         Ok(Rebuilt { link, document, result, mesh, problems })
     }
 
-    async fn build(&self, full: bool) -> CallToolResult {
+    async fn build(&self, full: bool, page: Page) -> CallToolResult {
         let Rebuilt { link, document, result, mesh, problems } = match self.rebuild().await {
             Ok(r) => r,
             Err(e) => return e,
@@ -1648,6 +1653,7 @@ impl FundaCad {
             }
         }
         let mut bodies: Vec<(String, String, u64)> = Vec::new();
+        let mut names: HashMap<String, String> = HashMap::new();
         for b in mesh.iter() {
             let id = b.id();
             let e = exact.get(id).cloned().unwrap_or_else(|| json!({}));
@@ -1672,6 +1678,7 @@ impl FundaCad {
                 None => String::new(),
             };
             let triangles = b.triangles();
+            names.insert(id.to_string(), b.get("name").and_then(Value::as_str).map_or("None".into(), str::to_string));
             bodies.push((
                 id.to_string(),
                 format!(
@@ -1685,7 +1692,27 @@ impl FundaCad {
                 shape_print(b),
             ));
         }
-        let mut lines = self.changed_bodies(&bodies, full).await;
+        let (rows, tail) = self.changed_bodies(&bodies, full).await;
+        let listed = rows.len();
+        let rows = budget::fold(
+            rows.into_iter()
+                .map(|(id, line)| {
+                    let name = names.get(&id).cloned().unwrap_or_default();
+                    budget::Row::of_line(id, name, line)
+                })
+                .collect(),
+        );
+        let (shown, more) = page.cut_asking(rows, "rows", if full { "" } else { "full true and " });
+        let mut lines = Vec::new();
+        if listed > budget::FOLD_FROM {
+            lines.push(format!(
+                "{listed} bodies{}, alike ones in one row:",
+                if listed < bodies.len() { " changed" } else { "" }
+            ));
+        }
+        lines.extend(shown);
+        lines.extend(more);
+        lines.extend(tail);
         // `featureErrors`, NOT `errors`: a failed feature is a no-op and the rebuild succeeds around it,
         // so the wrong key made a failed press/pull look like one that did nothing.
         let failures =
@@ -1730,31 +1757,38 @@ impl FundaCad {
     }
 
     /// All of them the first time and when asked, else the new, changed and gone bodies and a count of the rest.
-    async fn changed_bodies(&self, bodies: &[(String, String, u64)], full: bool) -> Vec<String> {
+    async fn changed_bodies(
+        &self,
+        bodies: &[(String, String, u64)],
+        full: bool,
+    ) -> (Vec<(String, String)>, Vec<String>) {
         let previous = {
             let mut st = self.state.lock().await;
             st.reported.replace(bodies.iter().map(|(id, line, print)| (id.clone(), (line.clone(), *print))).collect())
         };
         let previous = match previous {
             Some(p) if !full => p,
-            _ => return bodies.iter().map(|(_, line, _)| line.clone()).collect(),
+            _ => return (bodies.iter().map(|(id, line, _)| (id.clone(), line.clone())).collect(), Vec::new()),
         };
-        let mut out: Vec<String> = Vec::new();
+        let mut rows: Vec<(String, String)> = Vec::new();
         for (id, line, print) in bodies {
             match previous.get(id) {
                 Some((was, p)) if was == line && p == print => {}
                 // Same size, volume and counts but different geometry: moved, turned, or a hole moved inside it.
-                Some((was, _)) if was == line => out.push(format!("{line} (moved or reshaped, same size)")),
-                _ => out.push(line.clone()),
+                Some((was, _)) if was == line => {
+                    rows.push((id.clone(), format!("{line} (moved or reshaped, same size)")))
+                }
+                _ => rows.push((id.clone(), line.clone())),
             }
         }
-        let shown = out.len();
+        let shown = rows.len();
+        let mut out: Vec<String> = Vec::new();
         let mut gone: Vec<&String> = previous.keys().filter(|id| !bodies.iter().any(|(b, _, _)| b == *id)).collect();
-        gone.sort();
+        gone.sort_by(|a, b| budget::natural(a, b));
         if !gone.is_empty() {
             out.push(format!(
                 "gone since the last build: {}",
-                gone.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")
+                budget::ranges(&gone.iter().map(|s| s.as_str()).collect::<Vec<_>>(), false)
             ));
         }
         let same = bodies.len() - shown;
@@ -1766,7 +1800,7 @@ impl FundaCad {
                 if shown == 0 { format!(" ({same})") } else { String::new() }
             ));
         }
-        out
+        (rows, out)
     }
 
     async fn inspect(&self, args: &JsonObject) -> CallToolResult {
@@ -1792,16 +1826,55 @@ impl FundaCad {
         let detail = args.get("detail").and_then(Value::as_bool).unwrap_or(false)
             || want_faces.is_some()
             || want_edges.is_some();
-        let mut payload = Map::new();
-        payload.insert("document".into(), Value::Object(doc));
-        // The summary is counts and flags the engine keeps per body, where
-        // detail measures and fingerprints every face and edge of every body.
-        payload.insert("detail".into(), json!(detail || selectors));
-        payload.insert("summary".into(), json!(true));
+        let deep = detail || selectors;
+        let page = match Page::of(args, if deep { budget::DETAIL_BODIES } else { budget::ROWS }) {
+            Ok(p) => p,
+            Err(why) => return failure(why),
+        };
+        let mut wanted: Vec<String> = args
+            .get("bodies")
+            .and_then(Value::as_array)
+            .map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect())
+            .unwrap_or_default();
         if let Some(body) = args.get("body").and_then(Value::as_str) {
-            payload.insert("bodies".into(), json!([body]));
+            wanted.push(body.to_string());
         }
-        let reply = match link.call("inspect", Value::Object(payload)).await {
+        let call = |detail: bool, bodies: &[String]| {
+            let mut payload = Map::new();
+            payload.insert("document".into(), Value::Object(doc.clone()));
+            // The summary is counts and flags the engine keeps per body, where
+            // detail measures and fingerprints every face and edge of every body.
+            payload.insert("detail".into(), json!(detail));
+            payload.insert("summary".into(), json!(true));
+            if !bodies.is_empty() {
+                payload.insert("bodies".into(), json!(bodies));
+            }
+            Value::Object(payload)
+        };
+        // Every face of three thousand bodies is megabytes, so detail is measured for one page of them.
+        let mut paged = None;
+        if deep && wanted.is_empty() {
+            let ids: Vec<String> = match link.call("inspect", call(false, &[])).await {
+                Ok(r) => r
+                    .get("result")
+                    .and_then(|r| r.get("bodies"))
+                    .and_then(Value::as_array)
+                    .map_or(&[][..], Vec::as_slice)
+                    .iter()
+                    .filter_map(|b| b.get("id").and_then(Value::as_str).map(str::to_string))
+                    .collect(),
+                Err(e) => return engine_gone(&e),
+            };
+            let (ids, line) = page.cut(ids, "bodies");
+            if let Some(line) = line {
+                if ids.is_empty() {
+                    return text(line);
+                }
+                paged = Some(format!("{line}, or name one with `body`"));
+                wanted = ids;
+            }
+        }
+        let reply = match link.call("inspect", call(deep, &wanted)).await {
             Ok(r) => r,
             Err(e) => return engine_gone(&e),
         };
@@ -1834,7 +1907,21 @@ impl FundaCad {
                 }
             }
         }
-        let mut out = describe::describe(&report, detail);
+        let (rows, errors) = describe::rows(&report, detail);
+        let listed = rows.len();
+        let rows = if deep { rows.into_iter().map(|r| r.text).collect() } else { budget::fold(rows) };
+        let (rows, more) = if deep { (rows, paged) } else { page.cut(rows, "rows") };
+        let mut lines = Vec::new();
+        if listed > budget::FOLD_FROM && !deep {
+            lines.push(format!("{listed} bodies, alike ones in one row:"));
+        }
+        lines.extend(rows);
+        if listed == 0 {
+            lines.push(describe::NO_BODIES.into());
+        }
+        lines.extend(errors);
+        lines.extend(more);
+        let mut out = lines.join("\n");
         if selectors {
             let mut sel = Map::new();
             for b in report.get("bodies").and_then(Value::as_array).map_or(&[][..], Vec::as_slice) {
@@ -1858,7 +1945,7 @@ impl FundaCad {
                 );
             }
             out.push_str("\n\nselectors:\n");
-            out.push_str(&pretty(&Value::Object(sel), 1));
+            out.push_str(&budget::selector_json(&sel));
         }
         if !failures.is_empty() {
             out.push('\n');
@@ -1973,7 +2060,12 @@ impl FundaCad {
                 section.get("at").map_or("the middle".to_string(), |a| py_num(Some(a)))
             )
         };
-        let mut caption = format!("{where_} view of {}, {w}x{h}{cut}", shown.join(", "));
+        let who = if shown.len() > budget::FOLD_FROM {
+            budget::ranges(&shown.iter().map(String::as_str).collect::<Vec<_>>(), false)
+        } else {
+            shown.join(", ")
+        };
+        let mut caption = format!("{where_} view of {who}, {w}x{h}{cut}");
         if !build_failures.is_empty() {
             caption.push('\n');
             caption.push_str(&build_failures);
@@ -2101,7 +2193,7 @@ impl FundaCad {
         if !truthy(args.get("build")) {
             return text(head);
         }
-        let built = self.build(false).await;
+        let built = self.build(false, Page { offset: 0, limit: budget::ROWS }).await;
         let body = built
             .content
             .iter()

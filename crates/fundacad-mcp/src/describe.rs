@@ -198,13 +198,23 @@ pub fn edge_line(e: &Value) -> String {
 
 /// `detail` adds the per-face and per-edge lines, for once a caller knows which body it cares about.
 pub fn describe(report: &Value, detail: bool) -> String {
-    let mut lines: Vec<String> = Vec::new();
-    let bodies = list_of(report, "bodies");
-    if bodies.is_empty() {
-        lines.push("No bodies. The document built nothing.".into());
+    let (rows, errors) = rows(report, detail);
+    let mut lines: Vec<String> = rows.into_iter().map(|r| r.text).collect();
+    if lines.is_empty() {
+        lines.push(NO_BODIES.into());
     }
-    for b in bodies {
-        lines.push(body_line(b));
+    lines.extend(errors);
+    lines.join("\n")
+}
+
+pub const NO_BODIES: &str = "No bodies. The document built nothing.";
+
+/// One row per body, its warnings and with `detail` its faces and edges on the lines under it, and the
+/// report's error lines.
+pub fn rows(report: &Value, detail: bool) -> (Vec<crate::budget::Row>, Vec<String>) {
+    let mut rows = Vec::new();
+    for b in list_of(report, "bodies") {
+        let mut lines = vec![body_line(b)];
         for w in warnings_for(b) {
             lines.push(format!("  ! {w}"));
         }
@@ -214,13 +224,15 @@ pub fn describe(report: &Value, detail: bool) -> String {
             lines.push("  edges:".into());
             lines.extend(list_of(b, "edges").iter().map(edge_line));
         }
+        rows.push(crate::budget::Row::of_line(s(b, "id"), s(b, "name"), lines.join("\n")));
     }
+    let mut errors = Vec::new();
     for e in list_of(report, "errors") {
         let where_ = match e.get("feature_id").and_then(Value::as_str) {
             Some(id) if !id.is_empty() => format!(" (feature {id})"),
             _ => String::new(),
         };
-        lines.push(format!("ERROR{where_}: {}", s(e, "message")));
+        errors.push(format!("ERROR{where_}: {}", s(e, "message")));
     }
-    lines.join("\n")
+    (rows, errors)
 }

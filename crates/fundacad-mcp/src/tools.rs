@@ -6,6 +6,22 @@ use serde_json::{json, Value};
 
 use crate::upload::IMPORT_FORMATS;
 
+/// `limit` and `offset` beside a tool's own fields, for a list that shows a page of `rows` at a time.
+fn paged(mut schema: JsonObject, rows: &str) -> JsonObject {
+    if let Some(p) = schema.get_mut("properties").and_then(Value::as_object_mut) {
+        p.insert(
+            "limit".into(),
+            json!({"type": "integer", "minimum": 0,
+                   "description": format!("how many {rows} to show, 0 for all; a longer list ends in a line saying how to ask for the rest")}),
+        );
+        p.insert(
+            "offset".into(),
+            json!({"type": "integer", "minimum": 0, "description": format!("skip this many {rows}, for the next page")}),
+        );
+    }
+    schema
+}
+
 fn object(properties: Value, required: &[&str]) -> JsonObject {
     let mut schema = serde_json::Map::new();
     schema.insert("type".into(), json!("object"));
@@ -126,6 +142,10 @@ pub fn feature_move() -> JsonObject {
 }
 
 pub fn build() -> JsonObject {
+    paged(build_fields(), "rows (default 30, all with full)")
+}
+
+fn build_fields() -> JsonObject {
     object(
         json!({"full": {"type": "boolean",
                         "description": "list every body, not only the ones that changed since \
@@ -370,9 +390,14 @@ pub fn stress() -> JsonObject {
 }
 
 pub fn inspect() -> JsonObject {
+    paged(inspect_fields(), "rows (default 30, with detail 5 bodies)")
+}
+
+fn inspect_fields() -> JsonObject {
     object(
         json!({
             "body": {"type": "string", "description": "one body id; all of them if omitted"},
+            "bodies": {"type": "array", "items": {"type": "string"}, "description": "only these body ids"},
             "sketch": {"type": "string",
                        "description": "a sketch's feature id: report its loose ends instead of the bodies"},
             "tolerance": {"type": "number",

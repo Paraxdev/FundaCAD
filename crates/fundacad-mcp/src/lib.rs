@@ -3,6 +3,7 @@
 
 pub mod app_session;
 pub mod blobs;
+pub mod budget;
 pub mod clash;
 pub mod describe;
 pub mod docfile;
