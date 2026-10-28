@@ -224,8 +224,16 @@ pub fn sketch_tie() -> JsonObject {
 }
 
 pub fn printability() -> JsonObject {
+    paged(printability_fields(), "body rows (default 30, all with full)")
+}
+
+fn printability_fields() -> JsonObject {
     object(
         json!({
+            "full": {"type": "boolean",
+                     "description": "one block per body with its own focus; by default a long report \
+                                     counts its findings first and folds bodies alike in all but their ids \
+                                     and position into one row"},
             "bodies": {"type": "array", "items": {"type": "string"},
                        "description": "only these bodies, by id or name; every body if omitted"},
             "nozzle": {"type": "number", "description": "nozzle width in mm (default 0.4)"},

@@ -17,6 +17,7 @@ pub mod measure;
 pub mod mesh;
 pub mod model;
 pub mod png;
+pub mod printrep;
 pub mod render;
 pub mod schema;
 pub mod scope;

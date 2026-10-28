@@ -2688,17 +2688,40 @@ impl FundaCad {
     async fn printability(&self, args: &JsonObject) -> CallToolResult {
         // The engine passes over keys it does not know, as every op does, so
         // a misspelt setting is caught here rather than quietly defaulted.
-        const KNOWN: [&str; 10] =
-            ["bodies", "nozzle", "layer", "overhang", "minGap", "maxBridge", "checks", "up", "layFlat", "all"];
+        const KNOWN: [&str; 13] = [
+            "bodies",
+            "nozzle",
+            "layer",
+            "overhang",
+            "minGap",
+            "maxBridge",
+            "checks",
+            "up",
+            "layFlat",
+            "all",
+            "full",
+            "limit",
+            "offset",
+        ];
         if let Some(k) = args.keys().find(|k| !KNOWN.contains(&k.as_str())) {
             return failure(format!("printability takes no '{k}', it takes {}", KNOWN.join(", ")));
         }
+        let full = truthy(args.get("full"));
+        let page = match Page::of(args, if full { 0 } else { budget::ROWS }) {
+            Ok(p) => p,
+            Err(why) => return failure(why),
+        };
+        let topology =
+            args.get("checks").and_then(Value::as_array).is_none_or(|c| c.iter().any(|k| k.as_str() == Some("open")));
         let (link, doc) = {
             let mut st = self.state.lock().await;
             model::recompute_parameters(&mut st.doc);
             (st.link.clone(), st.doc.clone())
         };
         let mut payload = args.clone();
+        for k in ["full", "limit", "offset"] {
+            payload.remove(k);
+        }
         payload.insert("document".into(), Value::Object(doc));
         let reply = match link.call("printability", Value::Object(payload)).await {
             Ok(r) => r,
@@ -2708,7 +2731,7 @@ impl FundaCad {
             return failure(error_message(&reply));
         }
         let r = reply.get("result").cloned().unwrap_or_else(|| json!({}));
-        let mut out = r.get("report").and_then(Value::as_str).unwrap_or_default().to_string();
+        let mut out = crate::printrep::condensed(&r, page, full, topology);
         let failed = crate::clash::failures(&r);
         let nothing = r.get("bodies").and_then(Value::as_array).is_none_or(Vec::is_empty);
         if nothing {

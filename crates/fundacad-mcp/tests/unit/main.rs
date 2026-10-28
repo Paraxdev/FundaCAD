@@ -4,6 +4,7 @@ mod edits;
 mod layflat;
 mod looseends;
 mod mesh;
+mod printrep;
 mod scope;
 mod section;
 mod shortcuts;

@@ -107,6 +107,11 @@ pub fn stem(name: &str) -> &str {
 /// the others' ids appended. Order is kept, by each group's first row. Lists of FOLD_FROM rows or fewer
 /// come back as they were.
 pub fn fold(rows: Vec<Row>) -> Vec<String> {
+    fold_capped(rows, usize::MAX, "")
+}
+
+/// As `fold`, each row's ids cut to `cap` characters, ending in " and K more, " then `more`.
+pub fn fold_capped(rows: Vec<Row>, cap: usize, more: &str) -> Vec<String> {
     if rows.len() <= FOLD_FROM {
         return rows.into_iter().map(|r| r.text).collect();
     }
@@ -122,15 +127,19 @@ pub fn fold(rows: Vec<Row>) -> Vec<String> {
             }
         }
     }
-    groups.into_iter().map(|(first, rest)| folded(first, &rest)).collect()
+    groups.into_iter().map(|(first, rest)| folded(first, &rest, cap, more)).collect()
 }
 
-fn folded(first: Row, rest: &[Row]) -> String {
+fn folded(first: Row, rest: &[Row], cap: usize, more: &str) -> String {
     if rest.is_empty() {
         return first.text;
     }
     let ids: Vec<&str> = rest.iter().map(|r| r.id.as_str()).collect();
-    let mut tail = format!(" (and {} more alike: {}", rest.len(), ranges(&ids, false));
+    let (said, left) = ranges_capped(&ids, false, cap);
+    let mut tail = format!(" (and {} more alike: {said}", rest.len());
+    if left > 0 {
+        tail.push_str(&format!(" and {left} more, {more}"));
+    }
     let names: Vec<&str> = rest.iter().map(|r| r.name.as_str()).filter(|n| !n.is_empty()).collect();
     if names.iter().any(|n| *n != first.name) {
         let said = ranges(&names, true);
