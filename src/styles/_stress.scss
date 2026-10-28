@@ -17,7 +17,7 @@
   justify-content: space-between;
   gap: var(--s-2);
 }
-.stress-head .float-card-close {
+.stress-head .stress-close {
   margin: -4px -4px 0 0;
 }
 .stress-step {
@@ -53,58 +53,16 @@
 }
 // A disclosure: a caret and a word that fold what most studies leave alone.
 .stress-more {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s-1);
   margin-top: var(--s-3);
-  padding: var(--s-1) 0;
-  background: none;
-  border: 0;
-  color: var(--text-dim);
-  font: inherit;
-  cursor: pointer;
-}
-.stress-more:hover {
-  background: none;
-  color: var(--text);
 }
 .stress-fold {
   padding-left: var(--s-4);
 }
-.stress-panel .btn {
-  min-height: 28px;
-  padding: var(--s-1) var(--s-3);
-  overflow-wrap: normal;
-  white-space: nowrap;
-}
-.stress-panel .btn:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-// Pressed or armed (Place while placing, Read a point while reading): the accent mixed into an opaque dark, as the
-// section chip's buttons do, so it reads over a pale model too.
-.stress-panel .btn.active {
-  background: color-mix(in srgb, var(--accent) 20%, var(--panel));
-  color: var(--text);
-}
-.stress-foot .btn {
-  min-height: 32px;
-}
-.stress-panel .sm-select,
-.stress-panel .sm-input {
+.stress-panel .sm-select {
   height: 28px;
   padding-top: 0;
   padding-bottom: 0;
   font-size: 12px;
-}
-.stress-panel .sm-input {
-  width: 72px;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-.stress-panel .float-card-close {
-  width: 24px;
-  height: 24px;
 }
 
 // A label at the left and its control or controls filling the rest of the line.
@@ -121,12 +79,6 @@
 .stress-field .select-trigger {
   flex: 1 1 0;
   min-width: 0;
-}
-.stress-number {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s-1);
-  color: var(--text-mute);
 }
 
 .stress-item-head {
@@ -168,21 +120,14 @@
   flex: none;
   gap: var(--s-1);
 }
-.stress-spot .stress-number {
-  flex: 1 1 auto;
+.stress-spot .stress-remove-spot {
+  margin-left: auto;
 }
 .stress-xyz-row {
   display: flex;
   gap: var(--s-1);
 }
-// Wide enough for what a drag writes, a sign and three decimals.
-.stress-panel .stress-xyz {
-  width: 64px;
-}
 .stress-add {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s-1);
   margin-top: var(--s-1);
 }
 .stress-gravity {
@@ -273,13 +218,9 @@
   align-items: center;
   gap: var(--s-2);
 }
+// Wide enough for Pause, so the slider does not shift when the word changes.
 .stress-animate {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s-1);
-  // Wide enough for Pause, so the slider does not shift when the word changes.
   min-width: 76px;
-  justify-content: center;
 }
 .stress-deform {
   flex: 1;
