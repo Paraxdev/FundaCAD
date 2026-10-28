@@ -93,6 +93,15 @@ describe("keys a focused menu row owns", () => {
     expect(seen).toEqual(["Delete", "Enter"]);
   });
 
+  it("let a keydown with no key through to the tool", () => {
+    const seen: string[] = [];
+    const g = new CanvasGesture(other, { move() {}, down() {}, key: (e) => seen.push(e.type) });
+    g.attach();
+    off.push(() => g.detach());
+    row.dispatchEvent(new Event("keydown", { bubbles: true }));
+    expect(seen).toEqual(["keydown"]);
+  });
+
   it("leave Enter to the row in extrude, loft and target edit", () => {
     const calls: string[] = [];
     const extrude = Object.create(ExtrudeTool.prototype) as { onKey: KeyFn };

@@ -16,9 +16,9 @@ const MENU_KEYS = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "H
 /** A key a focused menu row moves, runs or types ahead with. Window capture listeners hear it before the menu does,
  *  so a tool asks here and leaves it, the way it asks escapeClaimed() for Escape. */
 export function isMenuKey(e: KeyboardEvent): boolean {
+  if (typeof Element === "undefined" || !(e.target instanceof Element && e.target.closest(".ui-menu"))) return false;
   if (e.ctrlKey || e.altKey || e.metaKey) return false;
-  if (!MENU_KEYS.has(e.key) && e.key.length !== 1) return false;
-  return e.target instanceof Element && !!e.target.closest(".ui-menu");
+  return MENU_KEYS.has(e.key) || (typeof e.key === "string" && e.key.length === 1);
 }
 
 /** False for a field removed, hidden, or put away by a key handler while the key was still on its way to the window
