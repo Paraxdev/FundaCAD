@@ -13,7 +13,9 @@ import { featureValueRule } from "../document/numFields";
 import type { Feature, ParamTarget, Selector } from "../types";
 import { midMatchTol, polylineMid, edgeSelectorFrom } from "../viewport/edgeMatch";
 import { pickScope, type PickScope } from "../viewport/pickScope";
-import { canConsume } from "./toolCapabilities";
+import { canConsume, TOOL_CAPABILITIES } from "./toolCapabilities";
+import { EDGE_CAP, confirmEdgeCount } from "./edgeCountGate";
+import { MidSet, TangentChains } from "./tangentChains";
 import { DimInput, type DimSegment } from "../sketch/dimInput";
 import { type Continuity, continuityBlocked, continuityOf, pickedReach } from "./continuity";
 import { setPrompt } from "../ui/prompt";
@@ -317,14 +319,14 @@ export class EdgeFeatureTool {
     if (seed.length) {
       // A handle grab opens at 0, so the drag is the radius and the press point means no feature; a command opens on
       // the default. The handle's own anchor is kept, it may stand where the edge was clicked.
-      this.beginDrag(seed, opts?.anchor?.clone() ?? null, opts?.tangent ?? null, undefined, {
+      const began = this.beginDrag(seed, opts?.anchor?.clone() ?? null, opts?.tangent ?? null, undefined, {
         fromZero: !!opts?.grabAt,
         // A face's edges are the complete set asked for, chain expansion could only add edges off the face. An edge
         // pre-selection keeps the scope its own picks decided (pickScope.ts).
         scope: pre.length ? this.viewport.selectedEdgeScope().scope : "single",
         ...(pre.length ? { lines: preSeeds.map((s) => s.line) } : {}),
       });
-      if (opts?.grabAt) this.grabHandle(opts.grabAt.x, opts.grabAt.y);
+      if (began && opts?.grabAt) this.grabHandle(opts.grabAt.x, opts.grabAt.y);
     } else {
       setPrompt(`Click an edge to ${kind} · Ctrl-click a chain · Shift-click one · or pick a face`);
     }
@@ -475,8 +477,23 @@ export class EdgeFeatureTool {
   /** How many edges start() would seed, for the count gate (edgeCountGate.ts), without seeding them. */
   seedCount(kind: Kind): number {
     const n = this.viewport.selectedEdgeCount();
-    if (n) return n;
-    return canConsume(kind, "face") ? this.faceEdgeSelectors().length : 0;
+    if (!n) return canConsume(kind, "face") ? this.faceEdgeSelectors().length : 0;
+    if (this.viewport.selectedEdgeScope().scope !== "chain") return n;
+    const chains = this.chains();
+    const seen = new MidSet();
+    let count = 0;
+    for (const { line } of this.viewport.selectedEdgeSeeds()) {
+      const mid = edgeSelectorFrom({ points: line.points as Vec3[], body: line.body })?.point;
+      if (!mid || seen.has(mid)) continue;
+      for (const l of chains.chain(line)) {
+        const m = edgeSelectorFrom({ points: l.points as Vec3[], body: l.body })?.point;
+        if (m && !seen.has(m)) {
+          seen.add(m);
+          count++;
+        }
+      }
+    }
+    return Math.max(n, count);
   }
 
   private chainCounter = 0; // one id per add gesture (chain toggles as a unit)
@@ -628,66 +645,54 @@ export class EdgeFeatureTool {
   // A blend cannot end mid tangency (OCCT cannot stop it at the joint), so every pick expands across tangent
   // continuous edges and deselection removes the same chain.
 
-  /** Breadth first across shared endpoints whose end tangents are colinear, `start` included. */
-  private tangentChain(start: EdgeRef): EdgeRef[] {
-    const all = this.viewport.visibleEdgeLines();
+  /** Built per gesture: the visible edges change with every rebuild and visibility toggle. */
+  private chains(): TangentChains {
     const bb = this.store.buildState.result?.bbox;
     const diag = bb ? Math.hypot(bb.max[0] - bb.min[0], bb.max[1] - bb.min[1], bb.max[2] - bb.min[2]) : 100;
-    const joinTol = Math.max(1e-4, 1e-5 * diag); // endpoint coincidence
-    const G1_COS = Math.cos((10 * Math.PI) / 180); // tangents within 10°
+    return new TangentChains(this.viewport.visibleEdgeLines(), Math.max(1e-4, 1e-5 * diag));
+  }
 
-    type End = { p: Vec3; t: THREE.Vector3 }; // endpoint + unit tangent there
-    const endsOf = (l: EdgeRef): End[] => {
-      const pts = l.points as Vec3[];
-      const first = pts[0];
-      const second = pts[1];
-      const last = pts[pts.length - 1];
-      const prev = pts[pts.length - 2];
-      if (!first || !second || !last || !prev) return [];
-      const tHead = new THREE.Vector3(second[0] - first[0], second[1] - first[1], second[2] - first[2]).normalize();
-      const tTail = new THREE.Vector3(last[0] - prev[0], last[1] - prev[1], last[2] - prev[2]).normalize();
-      return [
-        { p: first, t: tHead },
-        { p: last, t: tTail },
-      ];
-    };
-
-    const chain = new Set<EdgeRef>([start]);
-    const queue: EdgeRef[] = [start];
-    while (queue.length) {
-      const cur = queue.pop();
-      if (!cur) break;
-      for (const ce of endsOf(cur)) {
-        for (const cand of all) {
-          if (chain.has(cand)) continue;
-          for (const oe of endsOf(cand)) {
-            const d = Math.hypot(ce.p[0] - oe.p[0], ce.p[1] - oe.p[1], ce.p[2] - oe.p[2]);
-            if (d > joinTol) continue;
-            if (Math.abs(ce.t.dot(oe.t)) < G1_COS) continue;
-            chain.add(cand);
-            queue.push(cand);
-            break;
-          }
-        }
-      }
-    }
-    return [...chain];
+  private memberMids(): MidSet {
+    const mids = new MidSet();
+    for (const g of this.ghosts) mids.add(g.mid);
+    return mids;
   }
 
   /** Takes the tangent chain along or not by `scope` (viewport/pickScope.ts). The gesture shares one chain id either
    *  way, so it deselects as one unit. */
-  private addPicked(line: EdgeRef, scope: PickScope) {
+  /** Adds nothing once the members would pass EDGE_CAP and returns the member count the picks would have made, 0
+   *  while they fit. One `ctx` serves a whole seed, `chained` collects the mids of every chain walked so far. */
+  private addPicked(
+    line: EdgeRef,
+    scope: PickScope,
+    ctx: { chains?: TangentChains; mids: MidSet; chained?: MidSet; pending: number } = {
+      mids: this.memberMids(),
+      pending: 0,
+    },
+  ): number {
+    this.lastPickMid = polylineMid(line.points as Vec3[]) ?? null;
+    const fresh: { sel: Selector & { point: Vec3 }; l: EdgeRef }[] = [];
+    for (const l of scope === "single" ? [line] : (ctx.chains ?? this.chains()).chain(line)) {
+      const sel = edgeSelectorFrom({ points: l.points as Vec3[], body: l.body });
+      if (!sel) continue;
+      ctx.chained?.add(sel.point);
+      if (ctx.mids.has(sel.point)) continue;
+      ctx.mids.add(sel.point);
+      fresh.push({ sel, l });
+    }
+    // Past the cap the rest is only counted, so the refusal names the whole count.
+    if (ctx.pending || this.memberCount() + fresh.length > EDGE_CAP) {
+      ctx.pending += fresh.length;
+      return this.memberCount() + ctx.pending;
+    }
     const chainId = ++this.chainCounter;
     const color = edgeSelectColor();
-    this.lastPickMid = polylineMid(line.points as Vec3[]) ?? null;
-    for (const l of scope === "single" ? [line] : this.tangentChain(line)) {
-      const pts = l.points as Vec3[];
-      const sel = edgeSelectorFrom({ points: pts, body: l.body });
-      if (!sel) continue;
-      const mid = sel.point;
-      if (this.ghosts.some((g) => Math.hypot(g.mid[0] - mid[0], g.mid[1] - mid[1], g.mid[2] - mid[2]) < 1e-6)) continue;
-      this.addGhost(sel, pts, chainId, l.curvature, color);
-    }
+    for (const { sel, l } of fresh) this.addGhost(sel, l.points as Vec3[], chainId, l.curvature, color);
+    return 0;
+  }
+
+  private refuseOverCap(count: number) {
+    void confirmEdgeCount(TOOL_CAPABILITIES[this.kind].label, count);
   }
 
   /** Same rule as the picks that armed the tool (viewport/pickScope.ts), so adding mid gesture behaves the same. */
@@ -1042,7 +1047,10 @@ export class EdgeFeatureTool {
       this.hoverGhost(null);
       this.hoverModelEdge(null);
       if (t.kind === "member") this.removeWithChain(t.g);
-      else this.addPicked(t.hit.edge, this.scopeFor(e, t.hit.edge));
+      else {
+        const over = this.addPicked(t.hit.edge, this.scopeFor(e, t.hit.edge));
+        if (over) this.refuseOverCap(over);
+      }
       this.afterMembershipChange();
       this.downOnGizmo = true;
       return;
@@ -1102,27 +1110,37 @@ export class EdgeFeatureTool {
     }
   }
 
-  /** A null `anchor` stands the handle on the most recently picked edge. */
+  /** A null `anchor` stands the handle on the most recently picked edge. False when the members passed EDGE_CAP, the
+   *  tool is then closed. */
   private beginDrag(
     edges: Selector[],
     anchor: THREE.Vector3 | null,
     tangent: THREE.Vector3 | null,
     chainSource?: EdgeRef,
     opts?: { fromZero?: boolean; scope?: PickScope; lines?: readonly (EdgeRef | undefined)[] },
-  ) {
+  ): boolean {
     // Each member's tangent chain is expanded unless the gesture is single scoped; unmatched selectors still commit,
     // just without a visual.
     const scope = opts?.scope ?? "chain";
+    let over = 0;
     if (chainSource) {
-      this.addPicked(chainSource, scope);
+      over = this.addPicked(chainSource, scope);
     } else {
       this.seedGhosts(edges, opts?.lines);
       if (scope === "chain") {
+        // A member on a chain already walked adds nothing, so each chain is walked once.
+        const ctx = { chains: this.chains(), mids: this.memberMids(), chained: new MidSet(), pending: 0 };
         for (const g of [...this.ghosts]) {
+          if (ctx.chained.has(g.mid)) continue;
           const line = this.viewport.edgeLineByMid(g.mid);
-          if (line) this.addPicked(line, "chain");
+          if (line) over = this.addPicked(line, "chain", ctx) || over;
         }
       }
+    }
+    if (over) {
+      this.cancel();
+      this.refuseOverCap(over);
+      return false;
     }
     if (anchor) {
       this.anchor.copy(anchor);
@@ -1147,6 +1165,7 @@ export class EdgeFeatureTool {
     this.pushPreview();
     if (!this.unsubBuild) this.watchBuilds(null); // create mode: failure feedback only
     this.gesture.frame();
+    return true;
   }
 
   /** Reconciled per frame rather than at the six places a fillet's members or application can change. */
