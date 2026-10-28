@@ -13,13 +13,14 @@ export function fieldUnit(p: NumberSetting, lengthUnit: string): UnitDef | null 
 export function numberField(
   p: NumberSetting,
   lengthUnit: string,
-): { unit: string | null; caption: string | null; step: number | undefined; validate: (v: number) => string | null } {
+): { unit: string | null; caption: string | null; step: number; validate: (v: number) => string | null } {
   const unit = fieldUnit(p, lengthUnit);
   const step = p.step ?? (p.integer ? 1 : undefined);
   return {
     unit: unit?.id ?? null,
     caption: unit ? null : p.unit || null,
-    step: step && step > 0 ? step / (unit?.factor ?? 1) : undefined,
+    // Without a declared step the field's own default, one shown unit.
+    step: step && step > 0 ? step / (unit?.factor ?? 1) : 1,
     validate: (v) => valueProblem(p, v),
   };
 }

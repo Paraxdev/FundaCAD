@@ -176,6 +176,7 @@ describe("each kind of schema field", () => {
         { key: "gap", type: "number", label: "Gap", unit: "length", default: 25.4, step: 2.54 },
         { key: "tilt", type: "number", label: "Tilt", unit: "angle", default: 10, step: 5 },
         { key: "count", type: "number", label: "Count", unit: "in", default: 4, integer: true, min: 1 },
+        { key: "free", type: "number", label: "Free", default: 3 },
         { key: "on", type: "boolean", label: "Snap", default: false },
         { key: "name", type: "string", label: "Name", default: "a", placeholder: "Untitled", maxLength: 8 },
         { key: "tint", type: "colour", label: "Tint", default: "#ff8800" },
@@ -230,6 +231,13 @@ describe("each kind of schema field", () => {
     await input.setValue("0");
     await input.trigger("keydown", { key: "Enter" });
     expect(row.get("[role=alert]").text()).toMatch(/at least 1/i);
+  });
+
+  it("steps a number that declares no step by one", async () => {
+    const input = (await field("free")).get("input");
+    await input.trigger("keydown", { key: "ArrowUp" });
+    await input.trigger("keydown", { key: "Enter" });
+    expect(k.get("free")).toBe(4);
   });
 
   it("toggles a boolean with its checkbox, and once from its title", async () => {
