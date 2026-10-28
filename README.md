@@ -104,7 +104,7 @@ FundaCAD is built with AI. Most of the code, the tests and the documentation are
 I apply real software engineering practice so the codebase and the features do not turn into a mess:
 
 - Larger changes are built on their own branch and reviewed by a second AI agent whose job is to break them, then fixed until that review passes.
-- Nothing lands without the checks: over 8,000 unit and component tests, end to end checks that drive the app in a browser like a user, and golden geometry checks that compare the engine's output with known good results. CI builds every change on Windows, macOS and Linux, and installs the Linux builds on Ubuntu, Debian and Fedora.
+- Every change runs the checks: over 8,000 unit and component tests, end to end checks that drive the app in a browser like a user, and golden geometry checks that compare the engine's output with known good results. CI builds every change on Windows, macOS and Linux, and installs the Linux builds on Ubuntu, Debian and Fedora. The beta only publishes once they are all green.
 - The interface follows a written design spec ([docs/DESIGN.md](docs/DESIGN.md)), and tests check the interface against it.
 - Bugs come before new features.
 
