@@ -29,6 +29,7 @@ import {
 import type { Engine } from "../../../src/app/engine";
 import { valueProblem } from "../../../src/document/numFields";
 import { DocumentStore } from "../../../src/document/store";
+import { createDocBridge } from "../../../src/app/docBridge";
 import type { GeometryBackend } from "../../../src/geometry/client";
 import type { CadDocument, Feature, RebuildReply } from "../../../src/types";
 
@@ -242,6 +243,16 @@ describe("FeatureProperties", () => {
     expect(fake.updates).toHaveLength(1);
     const ents = fake.updates[0]!.patch["entities"] as { radius: number }[];
     expect(ents[0]!.radius).toBeCloseTo(10, 9);
+  });
+
+  it("pins a sketch dimension retyped at its current value in another spelling, as a native change did", async () => {
+    const fake = makeEngine({ parameters: {}, features: [CIRCLE(6)] });
+    const w = render(fake, "s1");
+    await commit(w, "Diameter", "12");
+    expect(fake.updates).toEqual([]);
+    await commit(w, "Diameter", "12.0");
+    const drives = (fake.updates[0]?.patch["constraints"] ?? []) as { type: string; value?: number }[];
+    expect([fake.updates.length, drives.map((c) => [c.type, c.value])]).toEqual([1, [["diameter", 12]]]);
   });
 
   it("takes a unit the field is not showing", async () => {
@@ -890,6 +901,114 @@ describe("FeatureProperties typed preview", () => {
     expect(store.editPreviewId).toBe("bx");
     w.unmount();
     expect(store.editPreviewId).toBeNull();
+  });
+});
+
+describe("FeatureProperties typed preview through the app's bridge", () => {
+  // The bridge moves with the preview, so from the first preview tick the row's model is the previewed value, as it
+  // is in the app. A static bridge never shows that.
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.useFakeTimers();
+  });
+  afterEach(() => void vi.useRealTimers());
+
+  function open() {
+    const built: number[] = [];
+    const backend = {
+      async rebuild(doc: CadDocument): Promise<RebuildReply> {
+        built.push((doc.features.find((f) => f.id === "bx") as unknown as { height: number }).height);
+        return {
+          ok: true,
+          result: { mesh: { positions: [], indices: [], faceIds: [] }, edges: [], bbox: null, bodies: [] },
+        } as unknown as RebuildReply;
+      },
+      async init() {},
+      onStatus() {
+        return () => {};
+      },
+      connected: true,
+    } as unknown as GeometryBackend;
+    const store = new DocumentStore(backend, {
+      parameters: {},
+      features: [{ id: "bx", type: "box", length: 20, width: 20, height: 20 }] as Feature[],
+    });
+    const bridge = createDocBridge(store);
+    const engine = {
+      store,
+      bridge,
+      tools: { targetEdit: { active: false, editingId: null, field: null, start: () => true } },
+      toolBusy: () => false,
+    } as unknown as Engine;
+    const w = mount(FeatureProperties, {
+      props: { featureId: "bx", unit: "mm" },
+      global: { provide: { [ENGINE as symbol]: engine } },
+      attachTo: document.body,
+    });
+    const input = () =>
+      w
+        .findAll(".param-row")
+        .find((r) => r.find("label").text().startsWith("Height"))!
+        .find("input");
+    (input().element as HTMLInputElement).focus();
+    const settle = () => vi.advanceTimersByTimeAsync(1000);
+    return {
+      type: async (text: string) => {
+        input().element.value = text;
+        await input().trigger("input");
+        await vi.advanceTimersByTimeAsync(300);
+      },
+      key: async (key: string) => {
+        await input().trigger("keydown", { key });
+        await settle();
+      },
+      blur: async () => {
+        await input().trigger("blur");
+        await settle();
+      },
+      state: () => ({
+        doc: (store.document.features[0] as unknown as { height: number }).height,
+        field: (input().element as HTMLInputElement).value,
+        preview: store.editPreviewId,
+        built: built.at(-1),
+        undo: store.canUndo,
+      }),
+      close: () => {
+        w.unmount();
+        bridge.dispose();
+      },
+    };
+  }
+
+  it("commits a value typed after its preview opened, on Enter and on blur", async () => {
+    const p = open();
+    await p.type("30");
+    expect(p.state()).toEqual({ doc: 20, field: "30", preview: "bx", built: 30, undo: false });
+    await p.key("Enter");
+    expect(p.state()).toEqual({ doc: 30, field: "30", preview: null, built: 30, undo: true });
+    await p.type("40");
+    await p.type("50");
+    await p.blur();
+    expect(p.state()).toEqual({ doc: 50, field: "50", preview: null, built: 50, undo: true });
+    p.close();
+  });
+
+  it("previews a step from ArrowUp and commits it on Enter", async () => {
+    const p = open();
+    await p.key("ArrowUp");
+    expect(p.state()).toEqual({ doc: 20, field: "21", preview: "bx", built: 21, undo: false });
+    await p.key("Enter");
+    expect(p.state()).toEqual({ doc: 21, field: "21", preview: null, built: 21, undo: true });
+    p.close();
+  });
+
+  it("rebuilds the document value when a previewed field is cleared and Enter restores it", async () => {
+    const p = open();
+    await p.type("30");
+    await p.type("");
+    await p.key("Enter");
+    expect(p.state()).toEqual({ doc: 20, field: "20", preview: null, built: 20, undo: false });
+    p.close();
   });
 });
 
