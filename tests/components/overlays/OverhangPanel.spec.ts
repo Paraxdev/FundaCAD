@@ -34,9 +34,9 @@ describe("OverhangPanel", () => {
     expect(q(".overhang-panel select")).toBeNull();
     expect(q(".overhang-panel .select-trigger")?.getAttribute("data-value")).toBe("-Y");
     const slider = q(".overhang-panel input[type=range]") as HTMLInputElement;
-    expect(slider.classList.contains("sm-slider")).toBe(true);
-    expect(slider.getAttribute("style")).toBeNull();
-    expect(slider.value).toBe("38");
+    expect(slider.classList.contains("ui-slider-input")).toBe(true);
+    expect([slider.value, slider.getAttribute("aria-label")]).toEqual(["38", "Overhang threshold"]);
+    expect(q(".overhang-panel .ui-slider-value")?.textContent).toBe("38°");
   });
 
   it("keys every colour the viewport paints", async () => {

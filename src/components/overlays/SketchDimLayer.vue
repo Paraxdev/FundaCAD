@@ -4,6 +4,7 @@
 
 import * as THREE from "three";
 import { nextTick, onUnmounted, ref, watch } from "vue";
+import TextField from "../ui/TextField.vue";
 import { screenTransform } from "../../sketch/annotationFormat";
 import { useSketchAnnotationStore } from "../../stores/sketchAnnotations";
 import type { DimItem } from "../../sketch/sketchDimensions";
@@ -343,12 +344,15 @@ function onWheel(e: WheelEvent) {
         @click="onClick($event, i, l)"
         @dblclick="onDblClick($event, i, l)"
       >
-        <input
+        <!-- Live, so the keys and the commit stay this layer's: Enter commits, Escape and a blur revert. The empty
+        title keeps the badge's tooltip off the field. -->
+        <TextField
           v-if="editing === i"
           v-model="editText"
-          type="text"
-          :class="{ 'input-error': !!editError }"
-          :title="editError ?? ''"
+          class="sketch-dim-field"
+          size="sm"
+          :error="editError"
+          title=""
           @input="editError = null"
           @keydown="onEditKey($event, l)"
           @blur="onEditBlur"

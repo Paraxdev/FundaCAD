@@ -1,7 +1,9 @@
 <script setup lang="ts">
 // One titled list of picked items with Clear all and a remove button per row, worn by the target editor and Mirror.
+// A row stays a plain item rather than a ListRow: it holds its own remove button, which may not nest in a button.
 
-import Icon from "../shell/Icon.vue";
+import Button from "../ui/Button.vue";
+import IconButton from "../ui/IconButton.vue";
 
 defineProps<{
   label: string;
@@ -24,15 +26,15 @@ defineEmits<{
   <section class="tgt-section" :class="{ 'tgt-active': active }">
     <div class="tgt-fieldrow">
       <span class="tgt-field">{{ label }}</span>
-      <button
-        type="button"
+      <Button
         class="tgt-clear"
+        size="sm"
+        tip="Remove every entry"
         :disabled="rows.length === 0"
-        title="Remove every entry"
         @click.stop="$emit('clear')"
       >
         Clear all
-      </button>
+      </Button>
     </div>
 
     <!-- Scrolls rather than grows: a face set on an imported mesh can be dozens, and a taller panel loses Done. -->
@@ -47,15 +49,14 @@ defineEmits<{
         @click="$emit('pick', i)"
       >
         <span class="tgt-label">{{ r.label }}</span>
-        <button
-          type="button"
+        <IconButton
           class="tgt-remove"
-          title="Remove this one"
-          :aria-label="`Remove ${r.label}`"
+          icon="minus"
+          :tip="`Remove ${r.label}`"
+          size="sm"
+          variant="danger"
           @click.stop="$emit('remove', i)"
-        >
-          <Icon name="minus" :size="14" />
-        </button>
+        />
       </li>
       <!-- Not an empty box: several targets mean something specific with
            nothing in them, and the row above already says which. -->

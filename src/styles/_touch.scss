@@ -49,7 +49,6 @@ textarea,
   .params-del,
   .target-edit,
   .rel-del,
-  .fm-x,
   .timeline-errbadge,
   .timeline-cancel,
   .timeline-related,
@@ -73,7 +72,6 @@ textarea,
   .params-del::before,
   .target-edit::before,
   .rel-del::before,
-  .fm-x::before,
   .timeline-errbadge::before,
   .timeline-cancel::before,
   .timeline-related::before,
@@ -225,10 +223,7 @@ textarea,
     bottom: -6px;
   }
 
-  // The blend's edge list. Same reasoning for the last row.
-  .fm-x::before {
-    inset: -9px;
-  }
+  // The blend's edge list, an IconButton with its own target. Same reasoning for the last row.
   .fm-row:last-child .fm-x::before {
     bottom: -6px;
   }

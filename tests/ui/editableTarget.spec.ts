@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isEditableTarget } from "../../src/ui/focus";
+import { isEditableTarget, isPageSelectAll } from "../../src/ui/focus";
 
 const input = (type: string) => {
   const el = document.createElement("input");
@@ -28,5 +28,19 @@ describe("isEditableTarget", () => {
     expect(isEditableTarget(div)).toBe(true);
     expect(isEditableTarget(document.createElement("div"))).toBe(false);
     expect(isEditableTarget(null)).toBe(false);
+  });
+
+  it("covers a Select trigger like the select it stands in for, since its typed letters search the list", () => {
+    const trigger = document.createElement("button");
+    trigger.setAttribute("role", "combobox");
+    expect([isEditableTarget(trigger), isEditableTarget(document.createElement("button"))]).toEqual([true, false]);
+  });
+
+  it("keeps Ctrl+A on a Select trigger from selecting the whole page", () => {
+    const trigger = document.createElement("button");
+    trigger.setAttribute("role", "combobox");
+    const e = new KeyboardEvent("keydown", { key: "a", ctrlKey: true });
+    Object.defineProperty(e, "target", { value: trigger });
+    expect(isPageSelectAll(e)).toBe(true);
   });
 });

@@ -4,6 +4,7 @@
 
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import PickList from "./PickList.vue";
+import Button from "../ui/Button.vue";
 import { useEngine } from "../../app/engineKey";
 import { featureMeta } from "../../ui/featureMeta";
 import { describeTarget } from "../../features/selectionTargets";
@@ -94,8 +95,8 @@ const summary = computed(() => {
     />
 
     <div class="tgt-actions">
-      <button type="button" class="tgt-done" @click="tool.commit()">Done</button>
-      <button type="button" class="tgt-cancel" @click="tool.cancel()">Cancel</button>
+      <Button class="tgt-done" variant="primary" @click="tool.commit()">Done</Button>
+      <Button class="tgt-cancel" @click="tool.cancel()">Cancel</Button>
     </div>
   </aside>
 </template>

@@ -2,7 +2,8 @@
 // The button, not a text field, is the control: the value column is 120px and typing invites paths that do not exist.
 // Clear matters too, a moved or deleted heightmap fails every rebuild.
 
-import Icon from "./Icon.vue";
+import Button from "../ui/Button.vue";
+import IconButton from "../ui/IconButton.vue";
 import { openDialog } from "../../plugins/host";
 import { toast } from "../../ui/toast";
 
@@ -36,12 +37,17 @@ async function browse() {
   <div class="param-row" :title="value || rowTitle">
     <label>{{ label }}</label>
     <div class="param-value param-file">
-      <button type="button" class="file-pick" @click="browse">
-        {{ value ? basename(value) : "Choose…" }}
-      </button>
-      <button v-if="value" type="button" class="file-clear" title="Clear the file" @click="commit('')"
-        ><Icon name="close" :size="12"
-      /></button>
+      <Button class="file-pick" @click="browse">{{ value ? basename(value) : "Choose…" }}</Button>
+      <IconButton
+        v-if="value"
+        class="file-clear"
+        icon="close"
+        tip="Clear the file"
+        size="sm"
+        variant="plain"
+        :icon-size="12"
+        @click="commit('')"
+      />
     </div>
   </div>
 </template>

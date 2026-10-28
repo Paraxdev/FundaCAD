@@ -231,3 +231,191 @@ describe("NumberField", () => {
     expect(w.attributes("style")).toContain("--field-ch: 6");
   });
 });
+
+describe("NumberField expressions", () => {
+  // A feature row: a plain number is in the row's unit, anything the grammar leaves to the parameter engine is text.
+  const parse = (raw: string, unit: Parameters<NonNullable<Props["parse"]>>[1]) => {
+    const n = Number(raw);
+    if (raw.trim() !== "" && Number.isFinite(n)) return n * (unit?.factor ?? 1);
+    if (/^[a-z]/i.test(raw.trim())) return null;
+    throw new Error("not a value");
+  };
+
+  it("hands text the parse returns null for to expression, trimmed, and keeps its refusal", async () => {
+    const seen: string[] = [];
+    const expression = (raw: string) => (seen.push(raw), raw === "nope" ? "unknown parameter" : null);
+    const { w, input, el } = await render({ parse, expression, unit: "mm" });
+    await commit(input, " width/2 ");
+    expect([seen, emitted(w)]).toEqual([["width/2"], []]);
+    await commit(input, "nope");
+    expect([el.value, input.attributes("aria-invalid"), input.attributes("title")]).toEqual([
+      "nope",
+      "true",
+      "unknown parameter",
+    ]);
+  });
+
+  it("without expression, a null parse is refused as not a number", async () => {
+    const { w, input } = await render({ parse });
+    await commit(input, "width");
+    expect([emitted(w), input.attributes("aria-invalid")]).toEqual([[], "true"]);
+  });
+
+  it("never previews an expression", async () => {
+    const preview = vi.fn();
+    const { input } = await render({ parse, expression: () => null, preview });
+    vi.useFakeTimers();
+    await input.setValue("width");
+    vi.advanceTimersByTime(300);
+    expect(preview).not.toHaveBeenCalled();
+    await input.setValue("4");
+    vi.advanceTimersByTime(300);
+    expect(preview.mock.calls).toEqual([[4]]);
+  });
+
+  it("shows text in place of the model, does not step it, and commits a number equal to the model", async () => {
+    const { w, input, el } = await render({ parse, expression: () => null, modelValue: 10, text: "w/4" });
+    expect(el.value).toBe("w/4");
+    const up = new KeyboardEvent("keydown", { key: "ArrowUp", cancelable: true });
+    el.dispatchEvent(up);
+    expect([el.value, up.defaultPrevented]).toEqual(["w/4", false]);
+    await commit(input, "10");
+    expect(emitted(w)).toEqual([[10]]);
+  });
+
+  it("follows an expression that lands after the commit while still focused", async () => {
+    // A parameter commit resolves on a promise chain frames after Enter.
+    const { w, input, el } = await render({ parse, expression: () => null, modelValue: 10 });
+    el.focus();
+    await commit(input, "w/4");
+    await w.setProps({ text: "w/4", modelValue: null });
+    expect([el.value, document.activeElement]).toEqual(["w/4", el]);
+  });
+
+  it("shows a refused value, then the rebuilt one once the owner answers", async () => {
+    const { w, input, el } = await render({
+      parse,
+      expression: () => null,
+      validate: (v) => (v < 0 ? "too small" : null),
+    });
+    el.focus();
+    await commit(input, "-2");
+    expect([el.value, input.attributes("title")]).toEqual(["-2", "too small"]);
+    await commit(input, "6");
+    await w.setProps({ modelValue: 6.5 });
+    expect([el.value, input.attributes("aria-invalid")]).toEqual(["6.5", undefined]);
+  });
+
+  it("emits the reason it refuses its text, and null once it no longer does", async () => {
+    const { w, input } = await render({ parse });
+    await commit(input, "2 +");
+    await input.setValue("3");
+    expect(w.emitted("error")).toEqual([["not a value"], [null]]);
+  });
+
+  it("adopts a unit written in the committed text, and only of its own kind", async () => {
+    const a = await render({ unit: "mm", adoptUnit: true });
+    await commit(a.input, "2 in");
+    expect([emitted(a.w)[0]![0], a.w.emitted("update:unit")]).toEqual([50.8, [["in"]]]);
+    await commit(a.input, "3");
+    expect(a.w.emitted("update:unit")).toHaveLength(1);
+    const b = await render({ unit: "deg", adoptUnit: true });
+    await commit(b.input, "5 in");
+    expect(b.w.emitted("update:unit")).toBeUndefined();
+    const c = await render({ unit: "mm" });
+    await commit(c.input, "2 in");
+    expect(c.w.emitted("update:unit")).toBeUndefined();
+  });
+
+  it("gives the unit chip its title", async () => {
+    const { w } = await render({ unit: "mm", unitTip: "Expressions are written in this unit" });
+    expect(w.get(".ui-unit-chip").attributes("title")).toBe("Expressions are written in this unit");
+  });
+
+  it("commits text that differs from what it showed even at the model's value, like a native change", async () => {
+    const { w, input, el } = await render({ modelValue: 20 });
+    el.focus();
+    await commit(input, "20.0");
+    await commit(input, "20");
+    await input.setValue("2 cm");
+    await input.trigger("blur");
+    expect(emitted(w)).toEqual([[20], [20]]);
+  });
+
+  it("commits a previewed value though its owner shows the preview as the model", async () => {
+    // The feature rows read the live feature, so an open preview is what the field is handed as its model.
+    const owner: { w?: Awaited<ReturnType<typeof render>>["w"] } = {};
+    const previewEnd = vi.fn();
+    const preview = (v: number | null) => void owner.w!.setProps({ modelValue: v });
+    const { w, input, el } = await render({ modelValue: 20, preview, previewEnd });
+    owner.w = w;
+    el.focus();
+    vi.useFakeTimers();
+    await input.setValue("30");
+    await vi.advanceTimersByTimeAsync(200);
+    expect(w.props("modelValue")).toBe(30);
+    await input.trigger("keydown", { key: "Enter" });
+    expect([emitted(w), previewEnd.mock.calls]).toEqual([[[30]], [[true]]]);
+
+    await w.setProps({ modelValue: 20 });
+    await input.setValue("21");
+    await vi.advanceTimersByTimeAsync(200);
+    await input.trigger("blur");
+    expect([emitted(w), previewEnd.mock.calls]).toEqual([
+      [[30], [21]],
+      [[true], [true]],
+    ]);
+  });
+
+  it("ends a preview as not committing when a blank required field commits nothing", async () => {
+    const preview = vi.fn();
+    const previewEnd = vi.fn();
+    const { w, input, el } = await render({ modelValue: 20, preview, previewEnd });
+    el.focus();
+    vi.useFakeTimers();
+    await input.setValue("30");
+    await vi.advanceTimersByTimeAsync(200);
+    await commit(input, "");
+    await w.vm.$nextTick();
+    expect([emitted(w), previewEnd.mock.calls, el.value]).toEqual([[], [[false]], "20"]);
+  });
+
+  it("ends a preview as not committing when the text it showed comes back unchanged", async () => {
+    const preview = vi.fn();
+    const previewEnd = vi.fn();
+    const { w, input, el } = await render({ modelValue: 20, preview, previewEnd });
+    el.focus();
+    vi.useFakeTimers();
+    await input.setValue("2");
+    await vi.advanceTimersByTimeAsync(200);
+    await commit(input, "20");
+    expect([emitted(w), previewEnd.mock.calls]).toEqual([[], [[false]]]);
+  });
+
+  it("commits nothing when the text it showed comes back after its owner made a preview the model", async () => {
+    const owner: { w?: Awaited<ReturnType<typeof render>>["w"] } = {};
+    const preview = (v: number | null) => void owner.w!.setProps({ modelValue: v });
+    const previewEnd = vi.fn(() => void owner.w!.setProps({ modelValue: 20 }));
+    const { w, input, el } = await render({ modelValue: 20, preview, previewEnd });
+    owner.w = w;
+    el.focus();
+    vi.useFakeTimers();
+    await input.setValue("30");
+    await vi.advanceTimersByTimeAsync(200);
+    await commit(input, " 20 ");
+    await vi.advanceTimersByTimeAsync(0);
+    expect([emitted(w), previewEnd.mock.calls, el.value]).toEqual([[], [[false]], "20"]);
+  });
+
+  it("commits nothing when the expression it showed is typed back", async () => {
+    const parse = (raw: string) => (/^[a-z]/i.test(raw.trim()) ? null : Number(raw));
+    const seen: string[] = [];
+    const expression = (raw: string) => (seen.push(raw), null);
+    const { w, input, el } = await render({ parse, expression, modelValue: 10, text: "w/4" });
+    el.focus();
+    await input.setValue("w/");
+    await commit(input, "w/4 ");
+    await w.vm.$nextTick();
+    expect([seen, emitted(w), el.value]).toEqual([[], [], "w/4"]);
+  });
+});

@@ -1,10 +1,18 @@
 <script setup lang="ts">
-import { computed, mergeProps, useAttrs, useTemplateRef } from "vue";
+import { computed, mergeProps, useAttrs, useTemplateRef, watch } from "vue";
 import UnitChip from "./UnitChip.vue";
 import { useCommitField } from "./useCommitField";
 import { useDisabled } from "./useDisabled";
 import { fmtKeys } from "../../input/platform";
-import { formatMeasure, parseMeasure, roundForDisplay, toUnit, unitById, type UnitDef } from "../../ui/measure";
+import {
+  formatMeasure,
+  parseMeasure,
+  roundForDisplay,
+  toUnit,
+  tryParseMeasure,
+  unitById,
+  type UnitDef,
+} from "../../ui/measure";
 
 defineOptions({ inheritAttrs: false });
 
@@ -19,8 +27,19 @@ const props = withDefaults(
     unit?: string | null | undefined;
     /** Unit ids the chip offers; picking one emits `update:unit`. */
     units?: readonly string[] | undefined;
-    /** Reads typed text into the model's number, throwing an Error whose message is the reason. Default ui/measure. */
-    parse?: ((raw: string, unit: UnitDef | null) => number) | undefined;
+    /** The chip's title. */
+    unitTip?: string | undefined;
+    /** A unit written in committed text becomes the shown unit, through `update:unit`. */
+    adoptUnit?: boolean;
+    /** Reads typed text into the model's number, throwing an Error whose message is the reason. Default ui/measure.
+     *  Null hands the text to `expression`. */
+    parse?: ((raw: string, unit: UnitDef | null) => number | null) | undefined;
+    /** Commits, trimmed, the text `parse` returned null for (a parameter name, an expression), returning the refusal
+     *  or null. It never previews. */
+    expression?: ((raw: string) => string | null) | undefined;
+    /** Shown in place of the model, such as the expression that drives it. Its arrows move the caret, not the value,
+     *  and a typed number commits even when it equals the model. */
+    text?: string | null | undefined;
     /** The reason a read value cannot commit, or null. */
     validate?: ((value: number) => string | null) | undefined;
     /** A refusal from outside: the kernel could not build what the value says. Only the caller withdraws it. */
@@ -45,9 +64,22 @@ const props = withDefaults(
     disabled?: boolean | undefined;
     disabledReason?: string | undefined;
   }>(),
-  { commit: "change", step: 1, nullable: false, selectOnFocus: false, size: "md", disabled: false },
+  {
+    commit: "change",
+    adoptUnit: false,
+    step: 1,
+    nullable: false,
+    selectOnFocus: false,
+    size: "md",
+    disabled: false,
+  },
 );
-const emit = defineEmits<{ "update:modelValue": [number | null]; "update:unit": [string] }>();
+const emit = defineEmits<{
+  "update:modelValue": [number | null];
+  "update:unit": [string];
+  /** The reason the field refuses its text, and null once it does not, for a row that prints it. */
+  error: [string | null];
+}>();
 
 const attrs = useAttrs();
 const el = useTemplateRef<HTMLInputElement>("el");
@@ -58,21 +90,27 @@ const spell = (v: number | null) => (v === null ? "" : String(toUnit(v, unitDef.
 const caption = (v: number) =>
   unitDef.value ? formatMeasure(v, unitDef.value) : `${roundForDisplay(v)}${props.unit ? ` ${props.unit}` : ""}`;
 
-function read(raw: string): number {
+/** Null for an expression. */
+function read(raw: string): number | null {
   const v = props.parse ? props.parse(raw, unitDef.value) : parseMeasure(raw, unitDef.value).value;
+  if (v === null) {
+    if (props.expression) return null;
+    throw new Error("Not a number");
+  }
   if (!Number.isFinite(v)) throw new Error("Not a number");
   return v;
 }
 
-/** Null for blank text. */
-function check(raw: string): { value: number | null; error: string | null } {
+/** A null value is blank text, or an expression when `expr` says so. */
+function check(raw: string): { value: number | null; error: string | null; expr?: true } {
   if (raw.trim() === "") return { value: null, error: null };
-  let v: number;
+  let v: number | null;
   try {
     v = read(raw);
   } catch (e) {
     return { value: null, error: e instanceof Error && e.message ? e.message : "Not a value" };
   }
+  if (v === null) return { value: null, error: null, expr: true };
   if (props.min !== undefined && v < props.min) return { value: v, error: `At least ${caption(props.min)}` };
   if (props.max !== undefined && v > props.max) return { value: v, error: `At most ${caption(props.max)}` };
   return { value: v, error: props.validate?.(v) ?? null };
@@ -80,25 +118,37 @@ function check(raw: string): { value: number | null; error: string | null } {
 
 function previewDraft(raw: string) {
   const c = check(raw);
-  if (!c.error && (c.value !== null || props.nullable)) props.preview?.(c.value);
+  if (!c.error && !c.expr && (c.value !== null || props.nullable)) props.preview?.(c.value);
+}
+
+function adopt(raw: string) {
+  const u = tryParseMeasure(raw, unitDef.value)?.unit;
+  if (u && u.id !== unitDef.value?.id && (!unitDef.value || u.dim === unitDef.value.dim)) emit("update:unit", u.id);
 }
 
 const field = useCommitField({
-  source: () => spell(props.modelValue),
+  source: () => props.text ?? spell(props.modelValue),
   el,
   live: () => props.commit === "live",
-  apply(raw) {
+  apply(raw, from) {
+    const change = props.commit !== "live";
+    // Judged against the text, not the model, as a native change is: an owner may hand a preview as the model.
+    if (change && raw.trim() === from.trim()) return false;
     const c = check(raw);
     if (c.error) return c.error;
+    if (c.expr) return props.expression?.(raw.trim()) ?? null;
     // A blank required field commits nothing, and the field reads the model back.
-    if (c.value === null && !props.nullable) return null;
-    if (c.value !== props.modelValue) emit("update:modelValue", c.value);
-    return null;
+    if (c.value === null && !props.nullable) return false;
+    const changed = change || c.value !== props.modelValue || props.text != null;
+    if (changed) emit("update:modelValue", c.value);
+    if (props.adoptUnit) adopt(raw);
+    return changed ? null : false;
   },
   preview: () => (props.preview ? previewDraft : undefined),
   previewEnd: () => props.previewEnd,
 });
 const { draft } = field;
+watch(field.error, (e) => emit("error", e));
 
 const shownError = computed(() => field.error.value ?? props.problem ?? null);
 const tipText = computed(() => (props.tip ? fmtKeys(props.keys ? `${props.tip} (${props.keys})` : props.tip) : null));
@@ -118,7 +168,7 @@ function stepBy(dir: 1 | -1, big: boolean) {
   const factor = unitDef.value?.factor ?? 1;
   let base = props.modelValue ?? props.min ?? 0;
   try {
-    if (draft.value.trim() !== "") base = read(draft.value);
+    if (draft.value.trim() !== "") base = read(draft.value) ?? base;
   } catch {
     // Unreadable text steps from the model.
   }
@@ -131,7 +181,13 @@ function stepBy(dir: 1 | -1, big: boolean) {
 function onKeydown(e: KeyboardEvent) {
   if (e.key === "Enter") field.commit();
   else if (e.key === "Escape") field.revert();
-  else if ((e.key === "ArrowUp" || e.key === "ArrowDown") && !e.altKey && !e.ctrlKey && !e.metaKey) {
+  else if (
+    (e.key === "ArrowUp" || e.key === "ArrowDown") &&
+    !e.altKey &&
+    !e.ctrlKey &&
+    !e.metaKey &&
+    props.text == null
+  ) {
     e.preventDefault();
     if (!d.isDisabled.value) stepBy(e.key === "ArrowUp" ? 1 : -1, e.shiftKey);
   }
@@ -171,6 +227,7 @@ function onKeydown(e: KeyboardEvent) {
       v-if="unit"
       :unit="unit"
       :options="units"
+      :tip="unitTip"
       :disabled="disabled"
       @update:unit="emit('update:unit', $event)"
     />

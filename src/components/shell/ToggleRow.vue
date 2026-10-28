@@ -1,5 +1,7 @@
 <script setup lang="ts">
-// A switch reads as on at a glance down a column, and a real checkbox underneath keeps keyboard, label and focus ring.
+// A switch reads as on at a glance down a column. The label names it by id, so a click on the label flips it.
+
+import Switch from "../ui/Switch.vue";
 
 defineProps<{
   label: string;
@@ -13,15 +15,7 @@ defineProps<{
   <div class="param-row" :title="rowTitle">
     <label :for="`tg-${label}`">{{ label }}</label>
     <div class="param-value">
-      <label class="param-switch">
-        <input
-          :id="`tg-${label}`"
-          type="checkbox"
-          :checked="value"
-          @change="commit(($event.target as HTMLInputElement).checked)"
-        />
-        <span class="track"><span class="knob"></span></span>
-      </label>
+      <Switch :id="`tg-${label}`" :model-value="value" :label="label" @update:model-value="commit" />
     </div>
   </div>
 </template>

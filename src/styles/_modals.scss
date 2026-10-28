@@ -658,6 +658,12 @@
 }
 .properties-panel {
   min-width: 260px;
+  .measure-row {
+    align-items: center;
+  }
+  .select-trigger {
+    width: auto;
+  }
 }
 /* Stress labels in the view: the value by the cursor while dragging or probing, and each
    pinned probe's readout. */
@@ -709,12 +715,7 @@
   }
 }
 .overhang-threshold {
-  display: flex;
-  align-items: center;
-  gap: var(--s-2);
-  .sm-slider {
-    width: 96px;
-  }
+  width: 136px;
 }
 .overhang-key {
   display: inline-block;
