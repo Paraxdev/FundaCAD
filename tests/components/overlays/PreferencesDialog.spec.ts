@@ -36,6 +36,25 @@ async function press(key: string, init: KeyboardEventInit = {}) {
   await flushPromises();
 }
 
+// happy-dom moves no focus on Tab, so the step a browser takes when the dialog lets the key through is taken here.
+async function tab(shift = false) {
+  const from = document.activeElement as HTMLElement;
+  const e = new KeyboardEvent("keydown", { key: "Tab", shiftKey: shift, bubbles: true, cancelable: true });
+  from.dispatchEvent(e);
+  if (!e.defaultPrevented) {
+    const stops = focusables(document.body);
+    stops[stops.indexOf(from) + (shift ? -1 : 1)]?.focus();
+  }
+  await flushPromises();
+}
+
+const stopName = (el: Element | null): string => {
+  const h = el as HTMLElement;
+  const group = h.closest("[role=radiogroup]");
+  if (group) return `${group.id}:${label(h)}`;
+  return h.dataset.category ?? (h.closest("label[id]")?.id || h.id || label(h) || h.getAttribute("aria-label") || "");
+};
+
 async function category(id: string) {
   $(`.prefs-nav-btn[data-category="${id}"]`).click();
   await flushPromises();
@@ -91,6 +110,41 @@ describe("Preferences choices", () => {
       );
   });
 
+  it("steps Tab and Shift+Tab once per group through the dialog, wrapping at both ends", async () => {
+    await open();
+    await category("navigation");
+    const start = $(".prefs-nav-btn.active");
+    start.focus();
+    const walk = async (shift: boolean) => {
+      const seen: string[] = [];
+      do {
+        seen.push(stopName(document.activeElement));
+        await tab(shift);
+      } while (document.activeElement !== start && seen.length < 40);
+      return seen;
+    };
+    const forward = [
+      "navigation",
+      "access",
+      "updates",
+      "mcp",
+      "plugins",
+      "experimental",
+      "prefs-smoothing",
+      "prefs-orbit-pivot:Under cursor",
+      "prefs-inertia",
+      "prefs-wheel-device:Automatic",
+      "prefs-touchpad-scroll:Orbits",
+      "prefs-classic-camera",
+      "Done",
+      "Close",
+      "appearance",
+      "viewport",
+    ];
+    expect(await walk(false)).toEqual(forward);
+    expect(await walk(true)).toEqual([forward[0], ...forward.slice(1).reverse()]);
+  });
+
   it("moves and picks with the arrows, Home and End, wrapping at the ends", async () => {
     await open();
     radios("prefs-unit")[0]!.focus();
@@ -136,6 +190,23 @@ describe("Preferences choices", () => {
     own.click();
     await flushPromises();
     expect([picker.mock.calls.length, getHomeBackground()]).toEqual([1, "paper"]);
+  });
+
+  it("picks a stored Your own image without the file picker, by arrow and by pointer", async () => {
+    const store = memoryImageStore();
+    await store.put(new Blob([new Uint8Array([137, 80, 78, 71])], { type: "image/png" }));
+    useHomeImageStore(store);
+    await open();
+    const picker = vi.spyOn($("#prefs-home-image"), "click").mockImplementation(() => {});
+    radios("prefs-home-background")[1]!.focus();
+    await press("ArrowRight");
+    const picked = [getHomeBackground(), label(document.activeElement)];
+    await press("Home");
+    const own = radios("prefs-home-background")[2]!;
+    own.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+    own.click();
+    await flushPromises();
+    expect([picker.mock.calls.length, picked, getHomeBackground()]).toEqual([0, ["image", "Your own image"], "image"]);
   });
 });
 
