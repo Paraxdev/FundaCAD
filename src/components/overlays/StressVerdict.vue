@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, watch } from "vue";
+import { announce } from "../../ui/announce";
 import { deflectionNote, verdictView, type VerdictInput } from "../../ui/stressVerdict";
 import type { Unit } from "../../ui/units";
 
@@ -14,6 +15,13 @@ const props = defineProps<{
 const view = computed(() => verdictView(props.input, undefined, props.marked));
 const bend = computed(() =>
   props.scale === null ? null : deflectionNote(props.maxDeflection, props.unit, props.scale),
+);
+
+// Mounted with the result, so the first verdict is spoken as it appears.
+watch(
+  () => [view.value.headline, view.value.detail].filter(Boolean).join(". "),
+  (text) => announce(text, "polite", { key: "stress" }),
+  { immediate: true },
 );
 </script>
 

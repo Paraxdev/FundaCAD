@@ -1,10 +1,17 @@
 <script setup lang="ts">
 // features/measureTool.ts does the picking and the distance search and pushes these rows into the store.
 
+import { watch } from "vue";
 import { useToolPanelStore } from "../../stores/toolPanels";
+import { announce } from "../../ui/announce";
 import Panel from "../ui/Panel.vue";
 
 const panels = useToolPanelStore();
+
+watch(
+  () => panels.measure?.map((r) => `${r.k} ${r.v}`).join(", "),
+  (rows) => rows && announce(rows, "polite", { key: "measure", delay: 150 }),
+);
 </script>
 
 <template>

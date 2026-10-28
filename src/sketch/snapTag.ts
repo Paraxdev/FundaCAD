@@ -1,11 +1,18 @@
 // The small name beside a snap marker, so a snap says what it caught ("Face Center").
 
+import { announce, cancelAnnouncement } from "../ui/announce";
 import { iconElement } from "../ui/icons";
 
 export class SnapTag {
   private el: HTMLDivElement | null = null;
+  private said = "";
 
   show(text: string, at: { x: number; y: number }) {
+    // Every pointer move lands here, so only a new snap that holds for a moment is spoken.
+    if (text !== this.said) {
+      this.said = text;
+      announce(text, "polite", { key: "snap", delay: 300 });
+    }
     if (!this.el) {
       this.el = document.createElement("div");
       this.el.className = "snap-tag";
@@ -19,6 +26,8 @@ export class SnapTag {
   }
 
   hide() {
+    if (this.said) cancelAnnouncement("snap");
+    this.said = "";
     if (this.el) this.el.hidden = true;
   }
 }
