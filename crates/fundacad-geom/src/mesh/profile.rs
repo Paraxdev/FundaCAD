@@ -18,7 +18,13 @@ pub const VIEWPORT_DENSITY_CAP: usize = 80_000;
 /// coarser so its reply fits the frame cap.
 pub const VIEWPORT_SIZE_TIERS: [(usize, f64, f64); 2] = [(2200, 4.0, 0.35), (1200, 2.0, 0.26)];
 
-/// How one reply's bodies are meshed, the same for every body in it.
+/// `(faces at or above, linear scale, angular)`: one body of that many faces
+/// meshes coarser so it fits the single body frame cap. A full quality body
+/// takes 1.7 to 10 KB a face, the 89,776 face Aventador STEP 379 MiB.
+pub const VIEWPORT_FACE_TIERS: [(usize, f64, f64); 2] = [(50_000, 8.0, 0.5), (20_000, 4.0, 0.35)];
+
+/// How one reply's bodies are meshed, the same for every body in it but one
+/// past a face tier.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ViewportProfile {
     /// Multiplies the linear deflection; 1.0 is shipping quality.
@@ -37,6 +43,16 @@ impl ViewportProfile {
     /// payload; the coarse tiers exist to fit the frame cap.
     pub fn display_normals(&self) -> bool {
         self.size_scale == 1.0
+    }
+
+    /// The profile of one body of `faces` faces, never finer than the reply's.
+    pub fn for_faces(self, faces: usize) -> ViewportProfile {
+        match VIEWPORT_FACE_TIERS.iter().find(|t| faces >= t.0) {
+            Some(&(_, size_scale, angular)) if size_scale > self.size_scale => {
+                ViewportProfile { size_scale, angular: angular.max(self.angular) }
+            }
+            _ => self,
+        }
     }
 }
 

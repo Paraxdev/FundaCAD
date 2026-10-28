@@ -494,8 +494,12 @@ fn built_payloads(
     let mut out: Vec<Option<Built>> = Vec::with_capacity(bodies.len());
     let mut misses: Vec<usize> = Vec::new();
     let ticked = std::sync::atomic::AtomicUsize::new(0);
+    let profiles: Vec<ViewportProfile> = bodies
+        .iter()
+        .map(|b| b.shape.map_or(profile, |s| profile.for_faces(crate::kernel::count(s, crate::kernel::Kind::Face))))
+        .collect();
     for (i, body) in bodies.iter().enumerate() {
-        let cached = body.shape.and_then(|_| cache.get(body, tolerance, profile)).map(Built::Hit);
+        let cached = body.shape.and_then(|_| cache.get(body, tolerance, profiles[i])).map(Built::Hit);
         if cached.is_none() && body.shape.is_some() {
             misses.push(i);
         } else {
@@ -520,7 +524,7 @@ fn built_payloads(
         let body = &bodies[i];
         let shape = body.shape.expect("a miss has a shape");
         let began = std::time::Instant::now();
-        let full = crate::bench::phase("body_payload", || body_payload_for(body, shape, tolerance, profile));
+        let full = crate::bench::phase("body_payload", || body_payload_for(body, shape, tolerance, profiles[i]));
         let done = ticked.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
         if let Ok(mut t) = tick.lock() {
             t(done, total);
@@ -540,7 +544,7 @@ fn built_payloads(
     for (k, (full, took)) in made.into_iter().filter_map(|(k, m)| Some((k, m?))) {
         let i = misses[k];
         let tag = full.fields.get("etag").and_then(Value::as_str).unwrap_or_default();
-        cache.put(&bodies[i], tolerance, profile, strip_envelope(&full), tag, took);
+        cache.put(&bodies[i], tolerance, profiles[i], strip_envelope(&full), tag, took);
         out[i] = Some(Built::Fresh(full));
     }
     // A pass stopped part way answers no body rather than some of them.
