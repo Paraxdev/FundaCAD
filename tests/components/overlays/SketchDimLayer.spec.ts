@@ -321,8 +321,54 @@ describe("SketchDimLayer", () => {
     input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
     await nextTick();
     const live = labels()[0]!.querySelector("input")!;
-    expect(live.className).toContain("input-error");
+    expect(live.getAttribute("aria-invalid")).toBe("true");
+    expect(live.closest(".ui-field")!.classList.contains("is-error")).toBe(true);
+    expect(live.value).toBe("nope");
     expect(live.title).toBe("no such parameter");
+    // the next keystroke clears the flag, and a blur then drops the edit
+    live.value = "nop";
+    live.dispatchEvent(new Event("input"));
+    await nextTick();
+    expect(live.hasAttribute("aria-invalid")).toBe(false);
+    live.dispatchEvent(new FocusEvent("blur"));
+    await nextTick();
+    expect(labels()[0]!.querySelector("input")).toBeNull();
+  });
+
+  it("focuses and selects the value it opens, with no tooltip of its own", async () => {
+    const input = await openEditor();
+    await nextTick();
+    expect(document.activeElement).toBe(input);
+    expect(input.title).toBe("");
+    expect(input.hasAttribute("title")).toBe(true);
+  });
+
+  it("reverts on blur without committing, unlike a change mode field", async () => {
+    const commit = vi.fn();
+    const input = await openEditor({ commit });
+    input.value = "55";
+    input.dispatchEvent(new Event("input"));
+    input.dispatchEvent(new FocusEvent("blur"));
+    await nextTick();
+    expect(commit).not.toHaveBeenCalled();
+    expect(labels()[0]!.querySelector("input")).toBeNull();
+    expect(labels()[0]!.textContent).toBe("40 mm");
+  });
+
+  it("commits an untouched value on Enter, as before", async () => {
+    const commit = vi.fn();
+    const input = await openEditor({ commit });
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+    expect(commit).toHaveBeenCalledWith(40);
+  });
+
+  it("keeps Enter in the field out of the global keymap", async () => {
+    const onGlobalKey = vi.fn();
+    document.addEventListener("keydown", onGlobalKey);
+    const input = await openEditor();
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    expect(onGlobalKey).not.toHaveBeenCalled();
+    document.removeEventListener("keydown", onGlobalKey);
   });
 
   it("rejects a non-positive length and reverts", async () => {
