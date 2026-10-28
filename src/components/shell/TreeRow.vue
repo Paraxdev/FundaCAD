@@ -3,6 +3,7 @@
 
 import { computed, nextTick, ref, useTemplateRef, watch } from "vue";
 import Icon from "./Icon.vue";
+import IconButton from "../ui/IconButton.vue";
 import { fmtKeys } from "../../input/platform";
 import InlineLabel from "./InlineLabel.vue";
 import { rowIndent } from "../../ui/browserTree";
@@ -88,7 +89,8 @@ watch(
   { immediate: true },
 );
 
-function onDblClick() {
+function onDblClick(e: MouseEvent) {
+  if (inRenameField(e)) return;
   if (props.edit) props.edit();
   else startRename();
 }
@@ -128,9 +130,12 @@ function onDragStart(e: DragEvent) {
 }
 
 /** Shift-click takes a run of rows, so the browser's text selection across the labels is suppressed, except inside a
- *  label being renamed. */
+ *  label being renamed. A double click in that field selects a word and must not edit the row. */
 function onMouseDown(e: MouseEvent) {
-  if (e.shiftKey && !(e.target as HTMLElement | null)?.closest?.("[contenteditable='true']")) e.preventDefault();
+  if (e.shiftKey && !inRenameField(e)) e.preventDefault();
+}
+function inRenameField(e: Event) {
+  return !!(e.target as HTMLElement | null)?.closest?.(".tree-label.renaming");
 }
 
 // Drop target: a body dropped onto this body groups them. Counter and store reasoning as in TreeFolder.
@@ -183,16 +188,18 @@ function onDrop(e: DragEvent) {
     <InlineLabel ref="labelEl" :text="label" :rename="rename" :label-style="labelStyle" />
     <span style="flex: 1"></span>
     <!-- .stop so the eye neither selects nor edits the row it sits in -->
-    <span
+    <IconButton
       v-if="toggleVis || eyeDown"
       class="tree-eye"
-      :title="fmtKeys('Show/hide · drag across eyes to show or hide many · Alt+click to show only this')"
+      variant="plain"
+      size="sm"
+      :icon="visible === false ? 'hidden' : 'visible'"
+      :icon-size="13"
+      :tip="fmtKeys('Show/hide · drag across eyes to show or hide many · Alt+click to show only this')"
       :data-visible="visible !== false"
       @pointerdown.stop="onEyeDown"
       @click.stop="onEyeClick"
       @dblclick.stop
-    >
-      <Icon :name="visible === false ? 'hidden' : 'visible'" :size="13" />
-    </span>
+    />
   </div>
 </template>

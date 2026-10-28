@@ -8,6 +8,10 @@ import { useTimelineStore } from "../../stores/timeline";
 import { useShellStore } from "../../stores/shell";
 import { featureMeta, stepName } from "../../ui/featureMeta";
 import Icon from "./Icon.vue";
+import Button from "../ui/Button.vue";
+import Chip from "../ui/Chip.vue";
+import IconButton from "../ui/IconButton.vue";
+import TextField from "../ui/TextField.vue";
 import { contextMenu } from "../../ui/menu";
 import {
   buildProgress,
@@ -266,19 +270,24 @@ function linkedPath(id: string): string | null {
 function hasOwnName(id: string): boolean {
   return !!(store.document.features.find((f) => f.id === id) as { name?: string } | undefined)?.name;
 }
+// One save per edit, as in InlineLabel: the blur of a field that is closing commits again and falls out here.
+let renameOpenId: string | null = null;
 function startRename(id: string) {
   renamingId.value = id;
-  void nextTick(() => {
-    const el = track.value?.querySelector<HTMLInputElement>(".t-rename");
-    el?.focus();
-    el?.select();
-  });
+  renameOpenId = id;
+  void nextTick(() => track.value?.querySelector<HTMLInputElement>(".t-rename input")?.focus());
 }
-function finishRename(e: Event, save: boolean) {
-  const id = renamingId.value;
-  if (!id) return;
+// The field commits on Enter and blur and reverts on Escape before these run, they only close it.
+function saveRename(name: string) {
+  const id = renameOpenId;
+  renameOpenId = null;
+  if (id) store.renameFeature(id, name);
+}
+function onRenameFieldKey(e: KeyboardEvent) {
+  if (e.key !== "Enter" && e.key !== "Escape") return;
+  e.preventDefault();
+  renameOpenId = null;
   renamingId.value = null;
-  if (save) store.renameFeature(id, (e.target as HTMLInputElement).value);
 }
 function onRenameKey(e: KeyboardEvent) {
   if (e.key !== "F2" || renamingId.value || !selection.featureId || several.value) return;
@@ -472,63 +481,82 @@ function openMultiMenu(e: MouseEvent, ids: string[]) {
   <section id="timeline" class="timeline-shell float-card" aria-label="History">
     <div class="float-card-head">
       <span class="float-card-title">History</span>
-      <button
+      <Chip
         v-if="related"
+        as="button"
         class="timeline-related"
         :class="{ on: relatedOn }"
+        :variant="relatedOn ? 'accent' : 'neutral'"
         data-testid="history-related"
-        :title="
+        :tip="
           relatedOn
             ? 'Showing what relates to the selection, click to show everything'
             : 'Show only what relates to the selection'
         "
+        :aria-label="`Related to Selection, ${related.size}`"
+        :aria-pressed="relatedOn"
         @click="toggleRelated()"
-        >Related to Selection · {{ related.size }}</button
+        >Related to Selection · {{ related.size }}</Chip
       >
-      <button
+      <Chip
+        as="button"
+        variant="error"
+        icon="warning"
         class="timeline-errbadge"
         :class="{ hidden: errors.size === 0 }"
-        title="Failing features, click to jump to the next one"
+        tip="Failing features, click to jump to the next one"
+        :aria-label="`${errors.size} failing feature${errors.size === 1 ? '' : 's'}, click to jump to the next one`"
         @click="jumpToNextError()"
-        ><Icon name="warning" :size="14" /> {{ errors.size }}</button
+        >{{ errors.size }}</Chip
       >
-      <button
+      <IconButton
         class="float-card-close"
-        :title="fmtKeys('Hide the history (Ctrl+Alt+H)')"
+        icon="close"
+        size="md"
+        variant="plain"
+        :icon-size="14"
+        :tip="fmtKeys('Hide the history (Ctrl+Alt+H)')"
         @click="shellStore.setHistory(false)"
-        ><Icon name="close" :size="14"
-      /></button>
+      />
     </div>
     <!-- Transport moves the saved marker and stands down during an edit, the drawn marker is on the edited step then. -->
     <div class="timeline-transport">
-      <button
+      <IconButton
         class="tl-btn"
-        title="Roll back to the start"
+        icon="skipStart"
+        size="sm"
+        variant="plain"
+        tip="Roll back to the start"
         :disabled="editing || docRollback <= 0"
         @click="store.setRollback(0)"
-        ><Icon name="skipStart"
-      /></button>
-      <button
+      />
+      <IconButton
         class="tl-btn"
-        title="Step one feature back"
+        icon="stepBack"
+        size="sm"
+        variant="plain"
+        tip="Step one feature back"
         :disabled="editing || docRollback <= 0"
         @click="store.setRollback(Math.max(0, docRollback - 1))"
-        ><Icon name="stepBack"
-      /></button>
-      <button
+      />
+      <IconButton
         class="tl-btn"
-        title="Step one feature forward"
+        icon="stepForward"
+        size="sm"
+        variant="plain"
+        tip="Step one feature forward"
         :disabled="editing || docRollback >= features.length"
         @click="store.setRollback(Math.min(features.length, docRollback + 1))"
-        ><Icon name="stepForward"
-      /></button>
-      <button
+      />
+      <IconButton
         class="tl-btn"
-        title="Roll forward to the end"
+        icon="skipEnd"
+        size="sm"
+        variant="plain"
+        tip="Roll forward to the end"
         :disabled="editing || docRollback >= features.length"
         @click="store.setRollback(features.length)"
-        ><Icon name="skipEnd"
-      /></button>
+      />
     </div>
 
     <div ref="scroller" class="timeline-scroll" @dragover="onDragOverScroller">
@@ -573,24 +601,28 @@ function openMultiMenu(e: MouseEvent, ids: string[]) {
                 @drop="onDrop(f.id, i, $event)"
               >
                 <span class="glyph"><Icon :name="metaFor(f).icon" :size="18" /></span>
-                <input
+                <!-- display: contents, so a press on the well's padding stays out of the chip as one on the text does -->
+                <span
                   v-if="renamingId === f.id"
-                  class="t-rename"
-                  :value="f.name || metaFor(f).label"
-                  :placeholder="metaFor(f).label"
-                  spellcheck="false"
+                  class="t-rename-hold"
                   @click.stop
                   @dblclick.stop
                   @pointerdown.stop
-                  @keydown.stop="
-                    $event.key === 'Enter'
-                      ? finishRename($event, true)
-                      : $event.key === 'Escape'
-                        ? finishRename($event, false)
-                        : undefined
-                  "
-                  @blur="finishRename($event, true)"
-                />
+                  @keydown.stop="onRenameFieldKey"
+                >
+                  <TextField
+                    class="t-rename"
+                    size="sm"
+                    commit="change"
+                    select-on-focus
+                    aria-label="Rename"
+                    :model-value="f.name || metaFor(f).label"
+                    :placeholder="metaFor(f).label"
+                    spellcheck="false"
+                    @update:model-value="saveRename"
+                    @blur="renamingId = null"
+                  />
+                </span>
                 <span v-else class="t-name">{{ f.shown }}</span>
                 <Icon
                   class="t-caret"
@@ -615,8 +647,13 @@ function openMultiMenu(e: MouseEvent, ids: string[]) {
           <!-- An import shows here from the moment it starts, not only once its file is read. -->
           <div v-for="op in rows" :key="op.key" class="timeline-node running" :data-op="op.key">
             <span class="t-build" :title="op.label">{{ op.stage ? `${op.label}, ${op.stage}` : op.label }}</span>
-            <button class="t-op-cancel" :title="`Stop ${op.label}`" @click="store.cancelRunningOp(op.key)"
-              >Cancel</button
+            <Button
+              class="t-op-cancel"
+              variant="ghost"
+              size="sm"
+              :tip="`Stop ${op.label}`"
+              @click="store.cancelRunningOp(op.key)"
+              >Cancel</Button
             >
           </div>
           <div v-if="building" class="timeline-node building">
@@ -644,17 +681,19 @@ function openMultiMenu(e: MouseEvent, ids: string[]) {
         ></span>
       </template>
     </div>
-    <button
+    <Button
       class="timeline-cancel"
       :class="{ hidden: !showCancel }"
+      variant="danger"
+      size="sm"
       :disabled="cancelling"
-      :title="
+      :tip="
         busy.waiting
           ? 'Withdraw this request, the job it waits on carries on'
           : busy.label || 'Stop the running operation'
       "
       @click="cancelBusy()"
-      >Cancel</button
+      >Cancel</Button
     >
   </section>
 </template>

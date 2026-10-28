@@ -37,7 +37,7 @@ function mountPanel(store: ReturnType<typeof freshStore>) {
 }
 
 async function restoreRow(w: ReturnType<typeof mountPanel>, message: string) {
-  const row = w.findAll(".versions-row").find((r) => r.find(".versions-msg").text() === message)!;
+  const row = w.findAll(".versions-row").find((r) => r.find(".versions-main .ui-list-row-label").text() === message)!;
   await row.find(".versions-main").trigger("click");
   await row.findAll(".versions-actions button")[0]!.trigger("click");
 }
@@ -50,7 +50,7 @@ describe("Restore in the Versions panel", () => {
       replace: true,
     });
     const w = mountPanel(store);
-    expect(w.findAll(".versions-row .versions-msg").map((m) => m.text())).toEqual(["two", "one"]);
+    expect(w.findAll(".versions-row .versions-main .ui-list-row-label").map((m) => m.text())).toEqual(["two", "one"]);
     expect(w.find(".pop-note").text()).toMatch(/^1 change .*"two"/);
     await restoreRow(w, "one");
     expect(store.document.features).toEqual([box("f1", 10.5)]);

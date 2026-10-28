@@ -65,6 +65,10 @@ interface Opts {
   busy?: "import" | "rebuild";
   /** every running op, oldest first, when more than the one `busy` names */
   ops?: ("import" | "rebuild")[];
+  /** sketches with a picked region, which seed Related to Selection */
+  regions?: string[];
+  /** features the last build failed */
+  failed?: string[];
 }
 
 function mountBar(o: Opts = {}) {
@@ -102,7 +106,7 @@ function mountBar(o: Opts = {}) {
   };
   const e = {
     viewport: { highlightDatum: () => {}, getSelectedFaceIds: () => [], getSelectedBodies: () => [] },
-    overlay: { selectedRegions: () => [] },
+    overlay: { selectedRegions: () => (o.regions ?? []).map((sketchId) => ({ sketchId })) },
     bridge: {
       docVersion: ref(0),
       buildVersion: ref(0),
@@ -152,11 +156,17 @@ function mountBar(o: Opts = {}) {
       setSuppressed: (ids: string[], on: boolean) => log.push(`suppress:${on}:${ids.join(",")}`),
       removeFeatures: (ids: string[]) => log.push(`remove:${ids.join(",")}`),
       rollbackIndex: 6,
-      buildState: { result: null, building: false, errorFeatureId: null },
+      buildState: {
+        result: o.failed ? { featureErrors: o.failed.map((id) => ({ feature_id: id, message: "failed" })) } : null,
+        building: false,
+        errorFeatureId: null,
+      },
       cancelRunningOp: (key: number) => {
         log.push(`cancelOp:${key}`);
         return Promise.resolve(true);
       },
+      renameFeature: (id: string, name: string) => log.push(`rename:${id}:${name}`),
+      setRollback: (i: number) => log.push(`rollback:${i}`),
     },
   } as unknown as Engine;
   const sel = createSelection(e);
@@ -489,5 +499,176 @@ describe("History rows picked together", () => {
     await m.chip("dp").trigger("click");
     await m.chip("ex1").trigger("click", { ctrlKey: true });
     expect(lit2).toEqual(["dp", ["dp", "ex1"]]);
+  });
+});
+
+describe("History's rename field and controls", () => {
+  const jt = [{ id: "jt", type: "joint" }];
+  async function renaming() {
+    const m = mountBar({ features: jt });
+    await m.chip("jt").trigger("click");
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "F2" }));
+    await m.w.vm.$nextTick();
+    const input = m.w.get<HTMLInputElement>(".t-rename input");
+    return { m, input };
+  }
+
+  it("opens a base text field on the chip, holding the shown name", async () => {
+    const { m, input } = await renaming();
+    expect(m.w.get(".t-rename").classes()).toContain("ui-text-field");
+    expect(input.element.closest(".timeline-node")?.getAttribute("data-id")).toBe("jt");
+    expect(input.element.value).not.toBe("");
+  });
+
+  it("names the field Rename for a screen reader", async () => {
+    const { input } = await renaming();
+    expect(input.attributes("aria-label")).toBe("Rename");
+  });
+
+  it("saves on Enter once and closes", async () => {
+    const { m, input } = await renaming();
+    await input.setValue("Hinge");
+    await input.trigger("keydown", { key: "Enter" });
+    await input.trigger("blur");
+    await m.w.vm.$nextTick();
+    expect(m.log.filter((l) => l.startsWith("rename:"))).toEqual(["rename:jt:Hinge"]);
+    expect(m.w.find(".t-rename").exists()).toBe(false);
+  });
+
+  it("cancels on Escape without saving", async () => {
+    const { m, input } = await renaming();
+    await input.setValue("Hinge");
+    await input.trigger("keydown", { key: "Escape" });
+    await input.trigger("blur");
+    await m.w.vm.$nextTick();
+    expect(m.log.filter((l) => l.startsWith("rename:"))).toEqual([]);
+    expect(m.w.find(".t-rename").exists()).toBe(false);
+  });
+
+  it("saves on blur and closes", async () => {
+    const { m, input } = await renaming();
+    await input.setValue("Hinge");
+    await input.trigger("blur");
+    await m.w.vm.$nextTick();
+    expect(m.log.filter((l) => l.startsWith("rename:"))).toEqual(["rename:jt:Hinge"]);
+    expect(m.w.find(".t-rename").exists()).toBe(false);
+  });
+
+  it("keeps a click and a double click in the field out of the chip", async () => {
+    const { m, input } = await renaming();
+    const before = [...m.log];
+    await input.trigger("click");
+    await input.trigger("dblclick");
+    await m.w.get(".t-rename").trigger("dblclick");
+    expect(m.log).toEqual(before);
+    expect(m.w.find(".t-rename").exists()).toBe(true);
+  });
+
+  it("the transport is base icon buttons that keep their titles and stand down at the ends", async () => {
+    const m = mountBar({ features: jt });
+    const btns = m.w.findAll(".timeline-transport .tl-btn");
+    expect(btns.map((b) => [b.classes("icon-btn"), b.attributes("title")])).toEqual([
+      [true, "Roll back to the start"],
+      [true, "Step one feature back"],
+      [true, "Step one feature forward"],
+      [true, "Roll forward to the end"],
+    ]);
+    await btns[0]!.trigger("click");
+    expect(m.log).toContain("rollback:0");
+    expect(btns[2]!.attributes("aria-disabled")).toBe("true");
+    await btns[2]!.trigger("click");
+    expect(m.log.filter((l) => l.startsWith("rollback:"))).toEqual(["rollback:0"]);
+  });
+
+  it("the head's close, error badge and Cancel are base controls", () => {
+    const m = mountBar({ features: jt, busy: "import" });
+    expect(m.w.get("#timeline .float-card-close").classes()).toContain("icon-btn");
+    expect(m.w.get("#timeline .float-card-close").attributes("title")).toContain("Hide the history");
+    const badge = m.w.get(".timeline-errbadge");
+    expect([badge.element.tagName, badge.classes("chip"), badge.attributes("title")]).toEqual([
+      "BUTTON",
+      true,
+      "Failing features, click to jump to the next one",
+    ]);
+    expect(m.w.get(".timeline-cancel").classes()).toContain("btn");
+    expect(m.w.get(".t-op-cancel").classes()).toContain("btn");
+    expect(m.w.get(".t-op-cancel").attributes("title")).toBe("Stop Importing sv08.step");
+  });
+});
+
+describe("History's head toggles", () => {
+  const RELATED_KEY = "fundacad.historyRelated";
+  beforeEach(() => localStorage.removeItem(RELATED_KEY));
+
+  const relatedState = (m: ReturnType<typeof mountBar>) => {
+    const t = m.w.get('[data-testid="history-related"]');
+    return {
+      on: t.classes("on"),
+      pressed: t.attributes("aria-pressed"),
+      label: t.attributes("aria-label"),
+      text: t.text(),
+      saved: localStorage.getItem(RELATED_KEY),
+    };
+  };
+
+  it("Related to Selection shows only while something is picked", () => {
+    expect(mountBar().w.find('[data-testid="history-related"]').exists()).toBe(false);
+  });
+
+  it("Related to Selection turns off and on again from a click, and remembers it", async () => {
+    const m = mountBar({ regions: ["sk"] });
+    expect(relatedState(m)).toEqual({
+      on: true,
+      pressed: "true",
+      label: "Related to Selection, 3",
+      text: "Related to Selection · 3",
+      saved: null,
+    });
+    await m.w.get('[data-testid="history-related"]').trigger("click");
+    expect(relatedState(m)).toEqual({
+      on: false,
+      pressed: "false",
+      label: "Related to Selection, 3",
+      text: "Related to Selection · 3",
+      saved: "0",
+    });
+    await m.w.get('[data-testid="history-related"]').trigger("click");
+    expect([relatedState(m).on, relatedState(m).pressed, relatedState(m).saved]).toEqual([true, "true", "1"]);
+  });
+
+  it("the error badge hides with no failures", () => {
+    expect(mountBar().w.get(".timeline-errbadge").classes("hidden")).toBe(true);
+  });
+
+  it("the error badge names a single failure in the singular", () => {
+    const badge = mountBar({ failed: ["ex1"] }).w.get(".timeline-errbadge");
+    expect([badge.text(), badge.attributes("aria-label")]).toEqual([
+      "1",
+      "1 failing feature, click to jump to the next one",
+    ]);
+  });
+
+  it("the error badge counts the failures and each click jumps to the next one", async () => {
+    const scrolled: (string | null)[] = [];
+    const scroll = vi.spyOn(Element.prototype, "scrollIntoView").mockImplementation(function (this: Element) {
+      scrolled.push(this.getAttribute("data-id"));
+    });
+    try {
+      const m = mountBar({ failed: ["ex1", "rv"] });
+      const badge = m.w.get(".timeline-errbadge");
+      expect([badge.classes("hidden"), badge.text(), badge.attributes("aria-label")]).toEqual([
+        false,
+        "2",
+        "2 failing features, click to jump to the next one",
+      ]);
+      const picked: (string | null)[] = [];
+      for (let i = 0; i < 3; i++) {
+        await badge.trigger("click");
+        picked.push(useSelectionStore().featureId);
+      }
+      expect({ picked, scrolled }).toEqual({ picked: ["ex1", "rv", "ex1"], scrolled: ["ex1", "rv", "ex1"] });
+    } finally {
+      scroll.mockRestore();
+    }
   });
 });
