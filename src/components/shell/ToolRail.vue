@@ -27,7 +27,6 @@ import { runningTool } from "../../ui/runningTool";
 import { railActive } from "../../ui/railActive";
 import RailButton from "../ui/RailButton.vue";
 import Popover from "../ui/Popover.vue";
-import Icon from "./Icon.vue";
 
 const engine = useEngine();
 const ribbon = useRibbonStore();
@@ -452,22 +451,17 @@ function toggleIsolate() {
 
       <!-- A plugin's tools, folded under its own name (selection mode only). -->
       <template v-for="g in mode === 'selection' ? sel.pluginGroups.value : []" :key="`grp:${g.pluginId}`">
-        <button
-          type="button"
+        <RailButton
           class="rail-group"
           :class="{ collapsed: isCollapsed(g.pluginId) }"
-          :title="`${g.name} · ${g.offers.length} tool${g.offers.length === 1 ? '' : 's'}`"
+          :icon="isCollapsed(g.pluginId) ? 'caretRight' : 'caretDown'"
+          :icon-size="18"
+          :label="g.name"
+          :tip="`${g.name} · ${g.offers.length} tool${g.offers.length === 1 ? '' : 's'}`"
           :aria-expanded="!isCollapsed(g.pluginId)"
           :data-group="g.pluginId"
           @click="toggleGroup(g.pluginId)"
-        >
-          <span class="rail-tile rail-group-tile">
-            <Icon :name="isCollapsed(g.pluginId) ? 'caretRight' : 'caretDown'" :size="18" />
-          </span>
-          <span class="rail-pill rail-group-pill">
-            <span class="rail-group-name">{{ g.name }}</span>
-          </span>
-        </button>
+        />
         <RailButton
           v-for="o in isCollapsed(g.pluginId) ? [] : g.offers"
           :key="`offer:${o.tool}`"

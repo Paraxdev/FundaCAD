@@ -449,42 +449,29 @@
 
 /* A plugin's tool group. Its .rail-child tools are nudged in, since the floating tiles
    cannot sit inside a container box. */
-.rail-group {
-  pointer-events: auto;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: max-content;
-  padding: 0;
+.rail-btn.rail-group {
   margin-top: 2px;
-  background: none;
-  border: 0;
   color: var(--text-dim);
-  text-align: left;
-  font: inherit;
-  cursor: pointer;
 }
-.rail-group-tile {
+.rail-group .rail-tile {
   color: var(--text-mute);
 }
-.rail-group:hover .rail-group-tile {
-  background: var(--raised);
+.rail-group:hover .rail-tile {
   color: var(--text);
 }
-.rail-group-pill {
+.rail-group .rail-pill {
   flex-direction: row;
   align-items: center;
   min-height: 24px;
 }
-.rail-group-name {
+.rail-group .rail-label {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--text-dim);
-  white-space: nowrap;
 }
-.rail-group:hover .rail-group-name {
+.rail-group:hover .rail-label {
   color: var(--text);
 }
 .rail-child {
