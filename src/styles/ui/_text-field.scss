@@ -16,7 +16,8 @@
   cursor: text;
   transition: background var(--t-fast) var(--ease);
 
-  > input {
+  > input,
+  > textarea {
     flex: 1 1 auto;
     width: 100%;
     min-width: 0;
@@ -30,15 +31,30 @@
   }
   // The well draws the focus, so the input inside does not draw a second one.
   > input:focus,
-  > input:focus-visible {
+  > input:focus-visible,
+  > textarea:focus,
+  > textarea:focus-visible {
     outline: none;
   }
   &:focus-within {
     outline: 1px solid var(--accent);
     outline-offset: 0;
   }
-  > input::placeholder {
+  > input::placeholder,
+  > textarea::placeholder {
     color: var(--text-mute);
+  }
+}
+
+// A textarea grows with its rows, and only vertically.
+.ui-field.is-multiline {
+  align-items: stretch;
+  height: auto;
+  padding: var(--s-2) var(--s-3);
+
+  > textarea {
+    resize: vertical;
+    line-height: 1.45;
   }
 }
 
