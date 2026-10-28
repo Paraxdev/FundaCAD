@@ -50,8 +50,9 @@ class VersionRelease(unittest.TestCase):
         cwd = tempfile.mkdtemp(prefix="verrel-")
         self.addCleanup(shutil.rmtree, cwd, True)
         os.makedirs(os.path.join(cwd, "release"))
-        for name in ("FundaCAD-windows-x64-setup.exe", "plugin-screws.zip"):
-            open(os.path.join(cwd, "release", name), "w").close()
+        for name, body in (("FundaCAD-windows-x64-setup.exe", b"MZ installer"), ("plugin-screws.zip", b"")):
+            with open(os.path.join(cwd, "release", name), "wb") as f:
+                f.write(body)
         with open(os.path.join(cwd, "notes.md"), "w", newline="\n") as f:
             f.write(NOTES)
         env = {**os.environ, "VERSION": "1.0.412", "SHA": SHA, "STABLE": stable, "EXISTS": exists, "REFUSE": refuse}
@@ -61,6 +62,8 @@ class VersionRelease(unittest.TestCase):
             calls = [c for c in f.read().splitlines() if not c.startswith(("release list", "release view"))]
         with open(os.path.join(cwd, "version-notes.md")) as f:
             notes = f.read()
+        sums = os.path.join(cwd, "SHA256SUMS.txt")
+        self.sums = open(sums).read().splitlines() if os.path.exists(sums) else None
         return calls, notes, out.stdout
 
     def test_a_new_version_is_a_draft_until_its_files_are_up_then_the_latest_release(self):
@@ -69,13 +72,20 @@ class VersionRelease(unittest.TestCase):
             calls,
             [
                 f"release create v1.0.412 --repo o/r --target {SHA} --draft --latest=false --title FundaCAD 1.0.412 beta --notes-file version-notes.md",
-                "release upload v1.0.412 --repo o/r --clobber release/FundaCAD-windows-x64-setup.exe release/plugin-screws.zip",
+                "release upload v1.0.412 --repo o/r --clobber release/FundaCAD-windows-x64-setup.exe release/plugin-screws.zip SHA256SUMS.txt",
                 "release edit v1.0.412 --repo o/r --draft=false --prerelease=false --latest=true",
             ],
         )
         self.assertIn("\nFundaCAD 1.0 beta (1.0.412), Rust engine", notes)
         self.assertNotIn("Rolling FundaCAD", notes)
         self.assertTrue(notes.endswith("The [rolling beta](https://github.com/o/r/releases/tag/beta) always has the newest build.\n"))
+        self.assertEqual(
+            self.sums,
+            [
+                "9bddb44627973bc5a5e0b20bf4a44cf2449f8b6ca1e8dfee0525b528ad80e020  FundaCAD-windows-x64-setup.exe",
+                "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  plugin-screws.zip",
+            ],
+        )
 
     def test_a_stable_release_keeps_the_latest_badge(self):
         calls, _, _ = self.run_step(stable="v1.2.0\nv1.1.3\n")

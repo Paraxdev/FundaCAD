@@ -326,7 +326,7 @@ the bundle:
   here.
 - Every beta also stays on as a normal release of its own, `v1.0.<run
   number>`, titled `FundaCAD 1.0.<run number> beta`, with the same installers
-  and plugin bundles but no `latest.json`, so a version can be linked and
+  and plugin bundles plus a `SHA256SUMS.txt`, but no `latest.json`, so a version can be linked and
   packaged after the rolling beta moves on while installed betas keep their
   feed. It starts as a draft until its files are up, and is the repository's
   latest release only while no stable release is published (stable installs
