@@ -38,7 +38,6 @@ const GLASS = "src/styles/_glass.scss";
 const COLOUR_BASELINE: Record<string, number> = {
   "src/components/overlays/PluginSettingsForm.vue": 2,
   "src/components/overlays/RadialMenuHost.vue": 2,
-  "src/components/shell/LiveSessionPill.vue": 1,
   "src/components/shell/NumberBox.vue": 2,
   "src/components/shell/SurfaceNodeEditor.vue": 11,
   "src/styles/_browser.scss": 4,
@@ -69,13 +68,12 @@ const FLAT_BASELINE: Record<string, number> = {
   "src/styles/_inspector.scss": 1,
   "src/styles/_layout.scss": 1,
   "src/styles/_modals.scss": 19,
-  "src/styles/_notice.scss": 1,
   "src/styles/_palette.scss": 2,
   "src/styles/_prefs.scss": 1,
   "src/styles/_renderdock.scss": 8,
   "src/styles/_targetedit.scss": 2,
   "src/styles/_timeline.scss": 6,
-  "src/styles/_titlebar.scss": 6,
+  "src/styles/_titlebar.scss": 4,
   "src/styles/_utilities.scss": 12,
 };
 
