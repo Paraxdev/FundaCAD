@@ -1,7 +1,7 @@
 // A stress load placed on a hook with one click, in a real browser against a
 // real engine: no face is split for it.
 //
-//   1. Place on the load row arms the row, and an orb follows the cursor.
+//   1. Spot on the load row arms the row, and an orb follows the cursor.
 //   2. A click on the hook's arm puts a spot there, selects nothing, and
 //      disarms the row.
 //   3. A drag of the orb's rim sizes it, and the panel's field follows.
@@ -30,7 +30,7 @@ const check = (name, ok, detail) => {
 
 (async () => {
   const browser = await chromium.launch({ executablePath: EXE, args: ["--use-angle=swiftshader", "--no-sandbox"] });
-  const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+  const page = await browser.newPage({ viewport: { width: 1800, height: 900 } });
   page.on("pageerror", (e) => {
     console.error("PAGE ERROR:", e.message);
     failures++;
@@ -86,7 +86,7 @@ const check = (name, ok, detail) => {
       return {
         faces: window.viewport.getSelectedFaceIds().length,
         bodies: window.viewport.getSelectedBodies().length,
-        label: document.querySelector(".stress-place-load")?.textContent?.trim() ?? "",
+        label: document.querySelector(".stress-spot-load")?.textContent?.trim() ?? "",
         count: [...document.querySelectorAll(".stress-count")].map((e) => e.textContent.trim()),
         radius: document.querySelector(".stress-spot-radius input")?.value ?? null,
         cursor: window.viewport.domElement.style.cursor,
@@ -94,11 +94,15 @@ const check = (name, ok, detail) => {
       };
     });
 
-  await page.click(".stress-place-load");
+  await page.click(".stress-spot-load");
   await page.waitForTimeout(200);
   const armed = await state();
-  check("Place arms the load row", armed.label === "Placing…", JSON.stringify(armed.label));
+  check("Spot arms the load row", armed.label === "Placing…", JSON.stringify(armed.label));
   const at = await screen([12, 0, -24]);
+  check(
+    "CONTROL: no panel covers the arm",
+    await page.evaluate((p) => document.elementFromPoint(p.x, p.y) === window.viewport.domElement, at),
+  );
   await page.mouse.move(at.x - 30, at.y);
   await page.mouse.move(at.x, at.y, { steps: 4 });
   await page.waitForTimeout(300);
@@ -121,7 +125,7 @@ const check = (name, ok, detail) => {
     placed.faces === 0 && placed.bodies === 0,
     `${placed.faces} faces, ${placed.bodies} bodies`,
   );
-  check("the row is disarmed after one spot", placed.label === "Click on body", JSON.stringify(placed.label));
+  check("the row is disarmed after one spot", placed.label === "Spot", JSON.stringify(placed.label));
   check("the row counts it", placed.count[1] === "1 spot", JSON.stringify(placed.count));
   await shot("2-placed");
 
