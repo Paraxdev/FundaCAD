@@ -6,6 +6,7 @@ import type { Engine } from "../../../src/app/engine";
 import { useEnvLibrary } from "../../../src/ui/environmentImport";
 import type { EnvEntry, EnvLibrary } from "../../../src/ui/environmentLibrary";
 import { DEFAULT_RENDER, renderPrefs, setRenderPref } from "../../../src/ui/renderPrefs";
+import { denoiserState } from "../../../src/viewport/pathtrace/denoiser";
 
 const entry = (id: string, name: string): EnvEntry => ({
   id,
@@ -149,6 +150,15 @@ describe("RenderEnvironment rows", () => {
     expect(row.attributes("title") ?? box.attributes("title")).toBe("Potato mode includes performance mode");
     await box.trigger("change");
     expect(renderPrefs().performanceMode).toBe(false);
+    w.unmount();
+  });
+
+  it("offers the high quality denoise download as a small button beside the dock's other actions", async () => {
+    denoiserState.info = { active: "filter", version: "", offered: true, bytes: 40_000_000 };
+    const w = mountEnv();
+    await flushPromises();
+    expect(w.get("[data-denoiser-download]").classes()).toEqual(["btn", "btn-secondary", "btn-sm"]);
+    denoiserState.info = null;
     w.unmount();
   });
 

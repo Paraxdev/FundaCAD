@@ -9,8 +9,8 @@ import {
   sizeLabel,
 } from "../../viewport/pathtrace/denoiser";
 
-// buttonClass is still accepted from the callers, the button wears the base Button look in both.
-defineProps<{ hintClass: string; buttonClass?: string }>();
+// buttonClass is declared only so Preferences' button-class does not fall through onto the row.
+withDefaults(defineProps<{ hintClass: string; buttonClass?: string; size?: "sm" | "md" }>(), { size: "md" });
 onMounted(() => {
   void refreshDenoiser();
 });
@@ -21,7 +21,7 @@ onMounted(() => {
     <p :class="hintClass">{{ describeDenoiser(s) }}</p>
     <Button
       v-if="s.info.active !== 'oidn' && s.info.offered"
-      size="sm"
+      :size="size"
       data-denoiser-download
       :disabled="s.downloading"
       @click="downloadDenoiser()"

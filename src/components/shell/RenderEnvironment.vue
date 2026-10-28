@@ -490,7 +490,7 @@ const qualityChoices = computed(() =>
       <div class="sm-hint">
         Path traced cleans the grain out of the finished picture. High quality takes a few seconds longer.
       </div>
-      <DenoiserRow hint-class="sm-hint" />
+      <DenoiserRow hint-class="sm-hint" size="sm" />
     </section>
 
     <section class="rd-section">
