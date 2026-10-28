@@ -7,6 +7,7 @@ import type { SketchOverlay, WorldRegion } from "../sketch/overlay";
 import type { DocumentStore } from "../document/store";
 import type { Feature } from "../types";
 import { pointInRegion } from "../sketch/region";
+import { escapeClaimed } from "../ui/escapeClaim";
 import { isMenuKey } from "../ui/focus";
 import { setPrompt } from "../ui/prompt";
 
@@ -78,7 +79,7 @@ export class LoftTool {
   }
 
   private onKey(e: KeyboardEvent) {
-    if (isMenuKey(e)) return;
+    if (isMenuKey(e) || (e.key === "Escape" && escapeClaimed())) return;
     if (e.key === "Escape") {
       e.preventDefault();
       this.cancel();

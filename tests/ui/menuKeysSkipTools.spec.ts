@@ -8,6 +8,7 @@ import { CanvasGesture } from "../../src/features/canvasGesture";
 import { ExtrudeTool } from "../../src/features/extrudeTool";
 import { LoftTool } from "../../src/features/loftTool";
 import { TargetEditTool } from "../../src/features/targetEditTool";
+import { claimEscape } from "../../src/ui/escapeClaim";
 
 vi.mock("../../src/sketch/solver", () => ({
   SolverUnavailable: class extends Error {},
@@ -119,6 +120,28 @@ describe("keys a focused menu row owns", () => {
     press(row, "Enter");
     expect(calls).toEqual([]);
     press(other, "Enter");
+    expect(calls).toEqual(["extrude", "loft", "target"]);
+  });
+
+  it("leave Escape to an open menu over extrude, loft and target edit, then cancel them once it is gone", async () => {
+    const calls: string[] = [];
+    const field = document.createElement("input");
+    document.body.append(field);
+    const extrude = Object.create(ExtrudeTool.prototype) as { onKey: KeyFn };
+    Object.assign(extrude, { phase: "drag", dim: { isActive: true }, cancel: () => calls.push("extrude") });
+    const loft = Object.create(LoftTool.prototype) as { onKey: KeyFn };
+    Object.assign(loft, { cancel: () => calls.push("loft") });
+    const target = Object.create(TargetEditTool.prototype) as { onKey: KeyFn };
+    Object.assign(target, { active: true, cancel: () => calls.push("target") });
+    for (const t of [extrude, loft, target]) onWindow((e) => t.onKey(e));
+    const release = claimEscape();
+    press(row, "Escape");
+    press(field, "Escape");
+    release();
+    press(other, "Escape");
+    expect(calls).toEqual([]);
+    await new Promise((r) => setTimeout(r, 0));
+    press(field, "Escape");
     expect(calls).toEqual(["extrude", "loft", "target"]);
   });
 

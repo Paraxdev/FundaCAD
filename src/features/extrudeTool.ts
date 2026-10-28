@@ -9,6 +9,7 @@ import type { DocumentStore } from "../document/store";
 import type { Feature } from "../types";
 import { pointInRegion } from "../sketch/region";
 import { DimInput } from "../sketch/dimInput";
+import { escapeClaimed } from "../ui/escapeClaim";
 import { isMenuKey } from "../ui/focus";
 import { setPrompt } from "../ui/prompt";
 import { snap } from "../ui/units";
@@ -436,7 +437,7 @@ export class ExtrudeTool {
       this.updatePreview();
       return;
     }
-    if (isMenuKey(e)) return;
+    if (isMenuKey(e) || (e.key === "Escape" && escapeClaimed())) return;
     if (this.dim.isActive && e.target instanceof HTMLInputElement) {
       if (e.key === "Escape") this.cancel();
       return;
