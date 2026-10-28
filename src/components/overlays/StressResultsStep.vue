@@ -34,8 +34,13 @@ const keyRows = computed(() => props.result.rows);
 const ends = computed(() => legendEnds(props.result.legend));
 const detailsOpen = ref(false);
 
-// A power of ten at most 1, so True size (1) always sits on a step, fine enough that a drag reads as continuous.
-const deformStep = computed(() => Math.min(1, 10 ** Math.floor(Math.log10((deform.value?.max ?? 1) / 100))));
+// A power of ten at most 1, so True size (1) and the two figure automatic scale sit on a step.
+// Not below 1e-6, since Slider reads its decimals from String(step) and 1e-7 prints as an exponent.
+const deformStep = computed(() => {
+  const d = deform.value;
+  const ref = Math.min(d?.max ?? 1, d?.auto ?? 1);
+  return Math.min(1, Math.max(1e-6, 10 ** Math.floor(Math.log10(ref / 100))));
+});
 </script>
 
 <template>

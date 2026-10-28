@@ -478,12 +478,26 @@ describe("StressPanel", () => {
     p.stress!.deform!.max = 4;
     await flushPromises();
     expect(slider.step).toBe("0.01");
-    p.stress!.deform!.max = 8000;
-    p.stress!.deform!.scale = 2000;
+    p.setStressDeform({ scale: 2000, auto: 2000, max: 8000, animate: false, shown: true });
     await flushPromises();
     expect(slider.step).toBe("1");
     slider.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
     expect(panels.setStressDeformation).toHaveBeenLastCalledWith(2001);
+  });
+
+  it("keeps a small automatic exaggeration on a step, and the values below 0.01 reachable", async () => {
+    const { p, panels } = await withResult();
+    p.setStressDeform({ scale: 0.037, auto: 0.037, max: 1, animate: false, shown: true });
+    await flushPromises();
+    const slider = q(".stress-deform input") as HTMLInputElement;
+    expect([slider.step, slider.value, q(".stress-deform-label")?.textContent]).toEqual(["0.0001", "0.037", "0.037x"]);
+    p.setStressDeform({ scale: 0.0012, auto: 0.037, max: 1, animate: false, shown: true });
+    await flushPromises();
+    slider.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+    expect(panels.setStressDeformation).toHaveBeenLastCalledWith(0.0011);
+    p.setStressDeform({ scale: 2e-9, auto: 2e-9, max: 1, animate: false, shown: true });
+    await flushPromises();
+    expect(slider.step).toBe("0.000001");
   });
 
   it("keeps Details and More options open across a switch of tabs", async () => {
