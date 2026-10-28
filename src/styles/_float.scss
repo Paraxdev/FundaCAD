@@ -996,8 +996,10 @@
   border-radius: var(--r-pill);
 }
 // A ghost Button sized and filled like the icon tiles around it.
-.float-group .btn.grid-btn {
+.float-group .btn.grid-btn:not(.is-on) {
   --btn-hover: var(--raised);
+}
+.float-group .btn.grid-btn {
   min-width: 40px;
   min-height: 0;
   height: 32px;
