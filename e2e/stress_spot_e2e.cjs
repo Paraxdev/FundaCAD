@@ -88,7 +88,7 @@ const check = (name, ok, detail) => {
         bodies: window.viewport.getSelectedBodies().length,
         label: document.querySelector(".stress-place-load")?.textContent?.trim() ?? "",
         count: [...document.querySelectorAll(".stress-count")].map((e) => e.textContent.trim()),
-        radius: document.querySelector(".stress-spot-radius")?.value ?? null,
+        radius: document.querySelector(".stress-spot-radius input")?.value ?? null,
         cursor: window.viewport.domElement.style.cursor,
         spots: study?.loads?.[0]?.spots ?? null,
       };
@@ -152,13 +152,13 @@ const check = (name, ok, detail) => {
     `${rim.radius} to ${sized.spots?.[0]?.radius}`,
   );
   check("and the panel's field follows", Number(sized.radius) === sized.spots?.[0]?.radius, String(sized.radius));
-  await page.fill(".stress-spot-radius", "3");
+  await page.fill(".stress-spot-radius input", "3");
   await page.waitForTimeout(200);
   check("the field sets it back", (await state()).spots?.[0]?.radius === 3);
 
   await page.click(".stress-direction");
   await page.click('.select-pop .opt-row:has(.opt-label:text-is("Down (-Z)"))');
-  await page.fill(".stress-force", "40");
+  await page.fill(".stress-force input", "40");
   await page.click(".stress-run");
   await page.waitForFunction(() => !!document.querySelector(".stress-key-row, .stress-error"), null, {
     timeout: 180000,

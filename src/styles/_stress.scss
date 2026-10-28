@@ -53,20 +53,7 @@
 }
 // A disclosure: a caret and a word that fold what most studies leave alone.
 .stress-more {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s-1);
   margin-top: var(--s-3);
-  padding: var(--s-1) 0;
-  background: none;
-  border: 0;
-  color: var(--text-dim);
-  font: inherit;
-  cursor: pointer;
-}
-.stress-more:hover {
-  background: none;
-  color: var(--text);
 }
 .stress-fold {
   padding-left: var(--s-4);
@@ -87,17 +74,11 @@
   background: color-mix(in srgb, var(--accent) 20%, var(--panel));
   color: var(--text);
 }
-.stress-panel .sm-select,
-.stress-panel .sm-input {
+.stress-panel .sm-select {
   height: 28px;
   padding-top: 0;
   padding-bottom: 0;
   font-size: 12px;
-}
-.stress-panel .sm-input {
-  width: 72px;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
 }
 .stress-panel .float-card-close {
   width: 24px;
@@ -118,12 +99,6 @@
 .stress-field .select-trigger {
   flex: 1 1 0;
   min-width: 0;
-}
-.stress-number {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s-1);
-  color: var(--text-mute);
 }
 
 .stress-item-head {
@@ -165,21 +140,14 @@
   flex: none;
   gap: var(--s-1);
 }
-.stress-spot .stress-number {
-  flex: 1 1 auto;
+.stress-spot .stress-remove-spot {
+  margin-left: auto;
 }
 .stress-xyz-row {
   display: flex;
   gap: var(--s-1);
 }
-// Wide enough for what a drag writes, a sign and three decimals.
-.stress-panel .stress-xyz {
-  width: 64px;
-}
 .stress-add {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s-1);
   margin-top: var(--s-1);
 }
 .stress-gravity {

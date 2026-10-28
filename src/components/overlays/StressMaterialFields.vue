@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import NumberBox from "../shell/NumberBox.vue";
+import NumberField from "../ui/NumberField.vue";
 import Select from "../ui/Select.vue";
 import { CUSTOM_MATERIAL, STRESS_MATERIALS, type StressSetup } from "../../ui/stress";
 import { displayRound } from "../../ui/units";
@@ -29,21 +29,26 @@ function fmt(v: number): string {
   <template v-else>
     <div class="stress-field">
       <span class="measure-k">E</span>
-      <span class="stress-number"><NumberBox v-model="setup.custom.E" class="sm-input stress-e" /> MPa</span>
+      <NumberField v-model="setup.custom.E" commit="live" unit="MPa" :width-ch="7" class="stress-e" />
     </div>
     <div class="stress-field">
       <span class="measure-k">Poisson's ratio</span>
-      <span class="stress-number"><NumberBox v-model="setup.custom.nu" class="sm-input stress-nu" /></span>
+      <NumberField v-model="setup.custom.nu" commit="live" :step="0.01" :width-ch="7" class="stress-nu" />
     </div>
     <div class="stress-field">
       <span class="measure-k">Yield</span>
-      <span class="stress-number"><NumberBox v-model="setup.custom.yield" class="sm-input stress-yield" /> MPa</span>
+      <NumberField v-model="setup.custom.yield" commit="live" unit="MPa" :width-ch="7" class="stress-yield" />
     </div>
     <div class="stress-field">
       <span class="measure-k">Density</span>
-      <span class="stress-number"
-        ><NumberBox v-model="setup.custom.density" class="sm-input stress-density" /> g/cm³</span
-      >
+      <NumberField
+        v-model="setup.custom.density"
+        commit="live"
+        unit="g/cm³"
+        :step="0.1"
+        :width-ch="7"
+        class="stress-density"
+      />
     </div>
   </template>
 </template>
