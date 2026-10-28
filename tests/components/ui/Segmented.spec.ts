@@ -116,4 +116,23 @@ describe("Segmented", () => {
     await radios(w)[2]!.trigger("click");
     expect([focused(), emitted(w)]).toEqual(["mm", []]);
   });
+
+  it("puts an option's attrs on its button, under the group's own role and state", () => {
+    const w = mount(Segmented<V>, {
+      props: {
+        modelValue: "mm",
+        options: [
+          { value: "mm", label: "mm", attrs: { "data-unit": "mm", role: "button" } },
+          { value: "cm", label: "cm" },
+        ],
+      },
+    });
+    const [mm, cm] = radios(w);
+    expect([mm!.attributes("data-unit"), mm!.attributes("role"), mm!.attributes("aria-checked")]).toEqual([
+      "mm",
+      "radio",
+      "true",
+    ]);
+    expect(cm!.attributes("data-unit")).toBeUndefined();
+  });
 });
