@@ -536,8 +536,7 @@ const check = (name, ok, detail) => {
   if (
     !(await page.evaluate(
       () =>
-        window.__fundacad.lightAim.angles &&
-        document.querySelector('[data-shadows="mode"]')?.getAttribute("aria-pressed") === "true",
+        window.__fundacad.lightAim.angles && document.querySelector('[data-shadows="mode"] input')?.checked === true,
     ))
   ) {
     await page.click('[data-shadows="mode"]');

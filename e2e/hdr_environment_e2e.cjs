@@ -313,9 +313,9 @@ function startTracerServe() {
     check("the panel shows the imported tile", !!(await page.$('[data-environment="hdr"]')));
 
     await page.evaluate(() => {
-      const el = document.querySelector("#rd-env-rotation");
+      const el = document.querySelector("#rd-env-rotation input");
       el.value = "90";
-      el.dispatchEvent(new Event("change"));
+      el.dispatchEvent(new Event("input"));
     });
     await settle(2000);
     const rtTurn = await measure(await shot("rt-hdr-rot90.png"));

@@ -404,7 +404,7 @@ const check = (name, ok, detail) => {
         render: p.groundRender,
         model: p.groundModel,
         drawn: window.viewport.contactShadow.group.visible,
-        pressed: document.querySelector('[data-ground="shadow"]')?.getAttribute("aria-pressed"),
+        pressed: document.querySelector('[data-ground="shadow"]')?.getAttribute("aria-checked"),
       };
     });
     check(
