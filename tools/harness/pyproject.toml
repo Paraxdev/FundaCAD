@@ -26,4 +26,5 @@ testpaths = ["tests"]
 markers = [
   "browser: needs an engine, node and Chrome",
   "smoke: the small set CI runs",
+  "a11y: the axe and aria snapshot checks, a CI step of their own",
 ]

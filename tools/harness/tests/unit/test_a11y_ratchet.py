@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from fundacad_harness import a11y
@@ -70,3 +72,11 @@ def test_baseline_round_trips_sorted(tmp_path):
     assert path.read_text(encoding="utf-8").index('"a"') < path.read_text(encoding="utf-8").index('"b"')
     assert a11y.read_baseline(path) == {"z": {"a": 2, "b": 1}}
     assert a11y.read_baseline(tmp_path / "missing.json") == {}
+
+
+def test_the_checked_in_baseline_holds_only_positive_counts():
+    baseline = a11y.read_baseline(Path(__file__).parent.parent / "browser" / "axe_baseline.json")
+    assert baseline
+    for screen, rules in baseline.items():
+        assert rules, screen
+        assert all(type(n) is int and n > 0 for n in rules.values()), screen
