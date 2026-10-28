@@ -238,7 +238,9 @@ export class Highlighter {
   private selectLines = new Map<BodyEdges, SelectLine>();
   /** The selected set changed, so the selected lines are rebuilt; otherwise only their colours are rewritten. */
   private selectDirty = false;
-  private selectRecolour = false;
+  /** Lines of the draws whose selected edges or their colours changed, redone alone unless `selectDirty`. */
+  private rebuildDraws = new Set<BodyEdges>();
+  private recolourDraws = new Set<BodyEdges>();
   private edgeLinesQueued = false;
 
   /** A box select adds edges one at a time, so the wide lines are rebuilt once after the batch. */
@@ -255,9 +257,13 @@ export class Highlighter {
   private syncEdgeLines() {
     this.syncHoverLine();
     if (this.selectDirty) this.rebuildSelectLines();
-    else if (this.selectRecolour) this.recolourSelectLines();
+    else {
+      if (this.rebuildDraws.size) this.rebuildSelectLines(this.rebuildDraws);
+      if (this.recolourDraws.size) this.recolourSelectLines(this.recolourDraws, this.rebuildDraws);
+    }
     this.selectDirty = false;
-    this.selectRecolour = false;
+    this.rebuildDraws.clear();
+    this.recolourDraws.clear();
   }
 
   private syncHoverLine() {
@@ -280,12 +286,16 @@ export class Highlighter {
     this.hoverLine = { line: makePickLine(on.draw, "hover", pos, col), edge: on, hex };
   }
 
-  private rebuildSelectLines() {
-    for (const g of this.selectLines.values()) disposePickLine(g.line);
-    this.selectLines.clear();
+  private rebuildSelectLines(only?: ReadonlySet<BodyEdges>) {
+    for (const [draw, g] of this.selectLines) {
+      if (only && !only.has(draw)) continue;
+      disposePickLine(g.line);
+      this.selectLines.delete(draw);
+    }
     if (!this.paintShown) return;
     const byDraw = new Map<BodyEdges, EdgeRef[]>();
     for (const e of this.selectedEdges) {
+      if (only && !only.has(e.draw)) continue;
       if (this.errorEdges.has(e) || !pickLineFits(e)) continue;
       const list = byDraw.get(e.draw) ?? [];
       list.push(e);
@@ -313,8 +323,9 @@ export class Highlighter {
   }
 
   /** Writes only the edges whose colour changed into the line's colour buffer, which three uploads again. */
-  private recolourSelectLines() {
-    for (const g of this.selectLines.values()) {
+  private recolourSelectLines(only: ReadonlySet<BodyEdges>, rebuilt: ReadonlySet<BodyEdges>) {
+    for (const [draw, g] of this.selectLines) {
+      if (!only.has(draw) || rebuilt.has(draw)) continue;
       let changed = false;
       g.edges.forEach((e, i) => {
         const c = this.edgeColour(e, "select");
@@ -544,7 +555,9 @@ export class Highlighter {
       if (!cur.shown) this.showOverlay(cur, true);
       return;
     }
-    if (cur) this.dropOverlay(kind);
+    // A box frame moves a few bodies' faces, the meshes of the others are kept.
+    const old = new Map<string, THREE.Mesh>();
+    for (const m of cur?.meshes ?? []) old.set(m.userData.body as string, m);
     const next: PickOverlay = { key, meshes: [], shown: false };
     const byBody = new Map<BodyMesh, number[]>();
     for (const f of faces) {
@@ -555,6 +568,13 @@ export class Highlighter {
       byBody.set(body, list);
     }
     for (const [body, fids] of byBody) {
+      const bodyKey = fids.join(",");
+      const kept = old.get(body.id);
+      if (kept?.userData.key === bodyKey) {
+        next.meshes.push(kept);
+        old.delete(body.id);
+        continue;
+      }
       const pos = body.mesh.geometry.getAttribute("position");
       const index = body.mesh.geometry.getIndex();
       if (!pos || !index) continue;
@@ -579,8 +599,10 @@ export class Highlighter {
       }
       const mesh = makeFaceHoverOverlay(out, col, kind);
       mesh.userData.body = body.id;
+      mesh.userData.key = bodyKey;
       next.meshes.push(mesh);
     }
+    for (const m of old.values()) disposeFaceHoverOverlay(m);
     this.overlays[kind] = next;
     this.showOverlay(next, true);
   }
@@ -631,7 +653,7 @@ export class Highlighter {
       this.selectedEdges.add(line);
       if (!this.errorEdges.has(line)) this.tint(line, "select");
     }
-    this.selectDirty = true;
+    this.rebuildDraws.add(line.draw);
     this.queueEdgeLines();
   }
 
@@ -660,6 +682,68 @@ export class Highlighter {
 
   selectBody(bodyId: string) {
     if (!this.selectedBodies.has(bodyId)) this.toggleSelectBody(bodyId);
+  }
+
+  /** Moves the selection to exactly `want`, painting only what changed, so a box preview frame costs its delta and an
+   *  unchanged one nothing. False when nothing changed. */
+  setSelection(want: {
+    faces: ReadonlySet<number>;
+    edges: ReadonlySet<EdgeRef>;
+    bodies: ReadonlySet<string>;
+  }): boolean {
+    const dropFaces = [...this.selectedFaces].filter((f) => !want.faces.has(f));
+    const addFaces = [...want.faces].filter((f) => !this.selectedFaces.has(f));
+    const dropEdges = [...this.selectedEdges].filter((e) => !want.edges.has(e));
+    const addEdges = [...want.edges].filter((e) => !this.selectedEdges.has(e));
+    const flipBodies = [...this.selectedBodies].filter((b) => !want.bodies.has(b));
+    for (const b of want.bodies) if (!this.selectedBodies.has(b)) flipBodies.push(b);
+    if (!dropFaces.length && !addFaces.length && !dropEdges.length && !addEdges.length && !flipBodies.length) {
+      return false;
+    }
+    const hov = this.hoveredEdge;
+    const hovWas = hov !== null && this.selectedEdges.has(hov);
+    for (const f of dropFaces) {
+      this.selectedFaces.delete(f);
+      this.restoreFace(f);
+    }
+    for (const f of addFaces) {
+      this.selectedFaces.add(f);
+      this.paintFace(f, "select");
+    }
+    for (const e of dropEdges) {
+      this.selectedEdges.delete(e);
+      if (!this.errorEdges.has(e)) paintIdle(e, this.edgeBase);
+      this.rebuildDraws.add(e.draw);
+    }
+    for (const e of addEdges) {
+      this.selectedEdges.add(e);
+      this.rebuildDraws.add(e.draw);
+    }
+    const fresh = new Set(addEdges);
+    const moved = new Set([...dropFaces, ...addFaces]);
+    const movedBodies = new Set<string>();
+    for (const f of moved) {
+      const b = bodyOfFace(this.view, f);
+      if (b) movedBodies.add(b.id);
+    }
+    // An edge's pick colour stands out from the faces beside it, so only the edges beside a moved face change colour.
+    const beside = (e: EdgeRef) => {
+      const body = e.body && movedBodies.has(e.body) ? this.bodyById(e.body) : undefined;
+      return body !== undefined && this.facesBeside(body, e).some((f) => moved.has(f));
+    };
+    const scan = moved.size ? this.selectedEdges : fresh;
+    for (const e of scan) if (!this.errorEdges.has(e) && (fresh.has(e) || beside(e))) this.tint(e, "select");
+    if (hov && !this.selectedEdges.has(hov) && !this.errorEdges.has(hov) && (hovWas || (moved.size && beside(hov)))) {
+      this.tint(hov, "hover");
+    }
+    if (moved.size) {
+      this.faceBodies = null;
+      this.syncOverlay("hover");
+      this.queueSelectOverlay();
+    }
+    for (const b of flipBodies) this.toggleSelectBody(b);
+    this.queueEdgeLines();
+    return true;
   }
 
   /** the currently selected edge lines (for pre-selected fillet/chamfer). */
@@ -783,7 +867,7 @@ export class Highlighter {
   private tint(e: EdgeRef, kind: PickKind) {
     if (this.paintShown) paint(e, this.edgeColour(e, kind));
     else paintIdle(e, this.edgeBase);
-    if (kind === "select") this.selectRecolour = true;
+    if (kind === "select") this.recolourDraws.add(e.draw);
     this.queueEdgeLines();
   }
 

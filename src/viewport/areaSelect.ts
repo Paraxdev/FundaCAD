@@ -240,35 +240,27 @@ export function faceInBox(tris: Iterable<readonly number[]>, r: ScreenRect, mode
   return mode === "window" ? any : false;
 }
 
-/** Remembers what the last preview frame of a drag took. Repainting a face of millions of triangles on every move
- *  took most of a drag's frame, so a frame that takes the same leaves the paint alone. */
-export class AreaPreviewGate {
-  private last: string | null = null;
+/** Runs a box preview at most once an animation frame. A burst of pointer moves inside one frame repainted the take
+ *  once per event on a big model, the viewport keeps the latest point itself. */
+export class FrameCoalescer {
+  private queued: number | null = null;
 
-  /** False when this preview frame takes exactly what the last one did. A release always paints. */
-  paint(
-    kind: string,
-    filter: AreaFilter,
-    got: {
-      faces: readonly number[];
-      edges: readonly { id: string; body: string | undefined }[];
-      bodies: readonly string[];
-    },
-    announce: boolean,
-  ): boolean {
-    if (announce) {
-      this.last = null;
-      return true;
-    }
-    // Edge ids are per body, so the body goes in the key too.
-    const edges = got.edges.map((e) => `${e.body}:${e.id}`).join();
-    const key = `${kind}|${filter}|${got.faces.join()}|${edges}|${got.bodies.join()}`;
-    if (key === this.last) return false;
-    this.last = key;
-    return true;
+  constructor(
+    private run: () => void,
+    private frame: (fn: () => void) => number = (fn) => requestAnimationFrame(fn),
+    private cancelFrame: (id: number) => void = (id) => cancelAnimationFrame(id),
+  ) {}
+
+  queue() {
+    if (this.queued !== null) return;
+    this.queued = this.frame(() => {
+      this.queued = null;
+      this.run();
+    });
   }
 
-  reset() {
-    this.last = null;
+  cancel() {
+    if (this.queued !== null) this.cancelFrame(this.queued);
+    this.queued = null;
   }
 }
