@@ -66,3 +66,28 @@
   position: absolute;
   inset: -6px -2px;
 }
+
+// A tile is a card to click: a column of picture and text, sized by its grid, padded by --tile-pad.
+// Set at no specificity, so a caller's own class sets it whatever the stylesheet order.
+:where(.btn-tile) {
+  --tile-pad: 0;
+}
+.btn.btn-tile {
+  --btn-fill: var(--float-tile-bg);
+  --btn-hover: linear-gradient(var(--hover-wash), var(--hover-wash)), var(--float-tile-bg);
+  display: flex;
+  flex-direction: column;
+  padding: var(--tile-pad);
+  corner-shape: squircle;
+  border-radius: var(--float-tile-radius);
+  box-shadow: var(--float-shadow);
+}
+.btn.btn-tile:hover:not(.is-disabled) {
+  transform: translateY(-1px);
+}
+.btn.btn-tile:active:not(.is-disabled) {
+  transform: scale(0.98);
+}
+.btn-tile > .btn-label {
+  display: contents;
+}

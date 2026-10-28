@@ -6,7 +6,8 @@ import { useDisabled } from "./useDisabled";
 
 const props = withDefaults(
   defineProps<{
-    variant?: "primary" | "secondary" | "ghost" | "danger";
+    /** `tile` is a large card that lays its own content out in a column, as on Home; it takes no size. */
+    variant?: "primary" | "secondary" | "ghost" | "danger" | "tile";
     size?: "sm" | "md";
     /** Spans the width of its container. */
     block?: boolean;
@@ -45,7 +46,7 @@ const ariaLabel = computed(() => (slots.default ? undefined : label.value));
     v-bind="d.bind.value"
     :type="type"
     class="btn"
-    :class="[`btn-${variant}`, `btn-${size}`, { 'btn-block': block, 'is-on': pressed }]"
+    :class="[`btn-${variant}`, variant === 'tile' ? null : `btn-${size}`, { 'btn-block': block, 'is-on': pressed }]"
     :title="d.title(label)"
     :aria-label="ariaLabel"
     :aria-pressed="pressed"
