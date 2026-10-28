@@ -175,8 +175,16 @@ pub fn edit() -> JsonObject {
 }
 
 pub fn section() -> JsonObject {
+    paged(section_fields(), "body rows (default 30, 5 with outline, all with full)")
+}
+
+fn section_fields() -> JsonObject {
     object(
         json!({
+            "full": {"type": "boolean",
+                     "description": "one block per body with its outline; by default a long list \
+                                     counts its bodies first and folds bodies with the same section about \
+                                     their own centroid into one row"},
             "axis": {"type": "string", "enum": ["X", "Y", "Z"],
                      "description": "cut across this axis, at `at`"},
             "at": {"type": "number", "description": "where along the axis, in mm"},
@@ -187,7 +195,8 @@ pub fn section() -> JsonObject {
                        "description": "only these bodies, by id or name; every body the \
                                        plane crosses if omitted"},
             "outline": {"type": "boolean",
-                        "description": "include each loop's points (default true)"}
+                        "description": "include each loop's points (default true, false over 10 \
+                                        bodies)"}
         }),
         &[],
     )

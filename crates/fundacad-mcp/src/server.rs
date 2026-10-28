@@ -2428,7 +2428,13 @@ impl FundaCad {
             .and_then(Value::as_array)
             .map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect())
             .unwrap_or_default();
-        let outline = args.get("outline").and_then(Value::as_bool).unwrap_or(true);
+        let full = truthy(args.get("full"));
+        let page = match Page::of(args, 0) {
+            Ok(p) => p,
+            Err(e) => return failure(e),
+        };
+        let limit_given = args.get("limit").is_some_and(|v| !v.is_null());
+        let asked_outline = args.get("outline").and_then(Value::as_bool);
         let (link, doc) = {
             let mut st = self.state.lock().await;
             model::recompute_parameters(&mut st.doc);
@@ -2464,9 +2470,8 @@ impl FundaCad {
                 missing.iter().map(|m| format!("'{m}'")).collect::<Vec<_>>().join(", ")
             ));
         }
-        let mut parts = Vec::new();
+        let mut cuts = Vec::new();
         let mut missed = Vec::new();
-        let mut cut_ids = Vec::new();
         for b in &bodies {
             if !wanted.is_empty() && !wanted.iter().any(|w| w == b.id() || *w == name_of(b)) {
                 continue;
@@ -2476,25 +2481,41 @@ impl FundaCad {
                 missed.push(b.id().to_string());
                 continue;
             }
-            parts.push(crate::section::report(b.id(), &name_of(b), &plane, &cut, outline));
-            cut_ids.push(b.id().to_string());
+            cuts.push((b, cut));
         }
+        let long = cuts.len() > budget::FOLD_FROM;
+        let outline = asked_outline.unwrap_or(full || !long);
+        let page = if limit_given || full {
+            page
+        } else {
+            Page { limit: if outline && long { budget::DETAIL_BODIES } else { budget::ROWS }, ..page }
+        };
+        let cut_ids: Vec<String> = cuts.iter().map(|(b, _)| b.id().to_string()).collect();
         // A section is read off the mesh, which draws a body that is not a
         // closed solid as readily as one that is: only the exact shape knows.
         let unsound = Self::unsound(&link, doc, &cut_ids).await;
-        for (part, id) in parts.iter_mut().zip(&cut_ids) {
+        let mut area = 0.0;
+        let mut rows = Vec::new();
+        for (b, cut) in &cuts {
+            let id = b.id();
+            area += crate::section::properties(&cut.loops).area;
+            let mut text = crate::section::report(id, &name_of(b), &plane, cut, outline);
+            let mut same = if full || !long { String::new() } else { crate::section::alike(&plane, cut, outline) };
             if let Some(why) = unsound.get(id) {
-                part.push_str(&format!(
+                text.push_str(&format!(
                     "\n  NOT A SOUND SOLID: {id} {why}. This section can miss material or count a hole as material"
                 ));
+                same.push_str(&format!("\nunsound: {why}"));
             }
+            rows.push(budget::Row { id: id.to_string(), name: name_of(b), same, text });
         }
         let mut out = format!("Section on {}, in-plane axes {} and {}:", plane.label, plane.axes.0, plane.axes.1);
-        if parts.is_empty() {
+        if rows.is_empty() {
             out.push_str("\nThe plane misses every body.");
         } else {
+            let left_out = long && !outline && asked_outline.is_none();
             out.push('\n');
-            out.push_str(&parts.join("\n"));
+            out.push_str(&crate::section::listing(rows, area, page, full, left_out).join("\n"));
         }
         if !missed.is_empty() && !wanted.is_empty() {
             out.push_str(&format!("\nThe plane misses {}.", missed.join(", ")));
