@@ -1,11 +1,16 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, shallowRef, watch, type Component } from "vue";
-import { settingMatches, type NumberSetting, type PluginSettings, type SettingProp } from "../../plugins/settings";
+import { settingMatches, type PluginSettings, type SettingProp } from "../../plugins/settings";
 import { fmtKeys } from "../../input/platform";
-import { keyCombo, numberText, parseNumberField, stepNumber, unitLabel } from "../../plugins/settingsInput";
+import { keyCombo, numberField } from "../../plugins/settingsInput";
 import { getUnit, onUnitChange } from "../../ui/units";
+import Button from "../ui/Button.vue";
+import Checkbox from "../ui/Checkbox.vue";
+import IconButton from "../ui/IconButton.vue";
+import NumberField from "../ui/NumberField.vue";
 import Select from "../ui/Select.vue";
-import Icon from "../shell/Icon.vue";
+import TextField from "../ui/TextField.vue";
+import UnitChip from "../ui/UnitChip.vue";
 
 const props = defineProps<{
   settings?: PluginSettings | undefined;
@@ -16,8 +21,7 @@ const props = defineProps<{
 
 const values = shallowRef<Record<string, unknown>>(props.settings?.all() ?? {});
 const unit = ref(getUnit());
-/** typed text not yet stored, and why, per key */
-const drafts = ref<Record<string, string>>({});
+/** why typed text was not stored, per key */
 const errors = ref<Record<string, string>>({});
 const capturing = ref("");
 
@@ -60,6 +64,16 @@ const groups = computed(() => {
 
 const id = (p: SettingProp) => `plugset-${props.settings?.pluginId}-${p.key}`;
 
+const numbers = computed(
+  () =>
+    new Map(
+      visible.value.flatMap((p) =>
+        p.type === "number" ? [[p.key, numberField(p, unit.value, values.value[p.key] as number)] as const] : [],
+      ),
+    ),
+);
+const numberOf = (p: SettingProp) => numbers.value.get(p.key)!;
+
 function store(p: SettingProp, v: unknown) {
   const problem = props.settings!.set(p.key, v);
   const next = { ...errors.value };
@@ -68,33 +82,8 @@ function store(p: SettingProp, v: unknown) {
   errors.value = next;
 }
 
-const shownNumber = (p: NumberSetting) =>
-  drafts.value[p.key] ?? numberText(p, values.value[p.key] as number, unit.value);
-
-function typeNumber(p: NumberSetting, raw: string) {
-  drafts.value = { ...drafts.value, [p.key]: raw };
-  const r = parseNumberField(p, raw, unit.value);
-  errors.value = "error" in r ? { ...errors.value, [p.key]: r.error } : withoutKey(errors.value, p.key);
-}
-
-function commitNumber(p: NumberSetting) {
-  const raw = drafts.value[p.key];
-  if (raw === undefined) return;
-  const r = parseNumberField(p, raw, unit.value);
-  if ("error" in r) return;
-  drafts.value = withoutKey(drafts.value, p.key);
-  store(p, r.value);
-}
-
-function arrowNumber(p: NumberSetting, ev: KeyboardEvent) {
-  const draft = drafts.value[p.key];
-  const typed = draft === undefined ? null : parseNumberField(p, draft, unit.value);
-  const from = typed && "value" in typed ? typed.value : (values.value[p.key] as number);
-  const next = stepNumber(p, from, (ev.key === "ArrowUp" ? 1 : -1) * (ev.shiftKey ? 10 : 1));
-  if (next === null) return;
-  ev.preventDefault();
-  drafts.value = withoutKey(drafts.value, p.key);
-  store(p, next);
+function setError(p: SettingProp, e: string | null) {
+  errors.value = e ? { ...errors.value, [p.key]: e } : withoutKey(errors.value, p.key);
 }
 
 function withoutKey<T>(o: Record<string, T>, k: string): Record<string, T> {
@@ -137,7 +126,6 @@ async function pickFile(p: SettingProp & { extensions?: readonly string[] }) {
 }
 
 function reset(p: SettingProp) {
-  drafts.value = withoutKey(drafts.value, p.key);
   errors.value = withoutKey(errors.value, p.key);
   props.settings!.reset(p.key);
 }
@@ -155,36 +143,39 @@ const isDefault = (p: SettingProp) => {
       <div v-if="group" class="plugset-group">{{ group }}</div>
       <div v-for="p in list" :key="p.key" class="pref-card plugset-row" :data-setting="p.key">
         <div class="pref-head">
-          <label class="pref-title" :for="id(p)">{{ p.label }}</label>
+          <label
+            class="pref-title"
+            :for="p.type === 'boolean' ? undefined : id(p)"
+            @click="p.type === 'boolean' && store(p, values[p.key] !== true)"
+            >{{ p.label }}</label
+          >
           <div class="plugset-control">
-            <span v-if="p.type === 'boolean'" class="check">
-              <input
-                :id="id(p)"
-                type="checkbox"
-                :checked="values[p.key] === true"
-                @change="store(p, ($event.target as HTMLInputElement).checked)"
-              />
-              <span class="check-box"></span>
-            </span>
+            <Checkbox
+              v-if="p.type === 'boolean'"
+              :id="id(p)"
+              :model-value="values[p.key] === true"
+              :tip="p.label"
+              @update:model-value="store(p, $event)"
+            />
 
-            <template v-else-if="p.type === 'number'">
-              <input
-                :id="id(p)"
-                class="sm-input plugset-num"
-                :class="{ invalid: errors[p.key] }"
-                type="text"
-                inputmode="decimal"
-                spellcheck="false"
-                :value="shownNumber(p)"
-                :aria-invalid="!!errors[p.key]"
-                @input="typeNumber(p, ($event.target as HTMLInputElement).value)"
-                @change="commitNumber(p)"
-                @keydown.enter="commitNumber(p)"
-                @keydown.up="arrowNumber(p, $event)"
-                @keydown.down="arrowNumber(p, $event)"
-              />
-              <span v-if="unitLabel(p, unit)" class="plugset-unit">{{ unitLabel(p, unit) }}</span>
-            </template>
+            <NumberField
+              v-else-if="p.type === 'number'"
+              :id="id(p)"
+              class="plugset-num"
+              :model-value="values[p.key] as number"
+              :unit="numberOf(p).unit"
+              :step="numberOf(p).step"
+              :min="p.min"
+              :max="p.max"
+              :parse="numberOf(p).parse"
+              :validate="numberOf(p).validate"
+              @update:model-value="store(p, $event)"
+              @error="setError(p, $event)"
+            >
+              <template v-if="numberOf(p).caption" #trailing>
+                <UnitChip :unit="numberOf(p).caption!" />
+              </template>
+            </NumberField>
 
             <Select
               v-else-if="p.type === 'enum'"
@@ -195,16 +186,16 @@ const isDefault = (p: SettingProp) => {
               @update:model-value="store(p, $event)"
             />
 
-            <input
+            <TextField
               v-else-if="p.type === 'string'"
               :id="id(p)"
-              class="sm-input plugset-text"
-              type="text"
+              class="plugset-text"
+              commit="change"
               spellcheck="false"
+              :model-value="String(values[p.key] ?? '')"
               :maxlength="p.maxLength"
               :placeholder="p.placeholder"
-              :value="values[p.key]"
-              @change="store(p, ($event.target as HTMLInputElement).value)"
+              @update:model-value="store(p, $event)"
             />
 
             <input
@@ -215,42 +206,42 @@ const isDefault = (p: SettingProp) => {
               @change="store(p, ($event.target as HTMLInputElement).value)"
             />
 
-            <button
+            <Button
               v-else-if="p.type === 'key'"
               :id="id(p)"
-              type="button"
-              class="btn plugset-key"
+              class="plugset-key"
               @focus="capturing = p.key"
               @blur="capturing = ''"
               @keydown="onKey(p, $event)"
             >
               {{ capturing === p.key ? "Press a key…" : fmtKeys((values[p.key] as string) || "None") }}
-            </button>
+            </Button>
 
             <template v-else-if="p.type === 'file'">
-              <input
+              <TextField
                 :id="id(p)"
-                class="sm-input plugset-text"
-                type="text"
+                class="plugset-text"
+                commit="change"
                 spellcheck="false"
-                :value="values[p.key]"
-                @change="store(p, ($event.target as HTMLInputElement).value)"
+                :model-value="String(values[p.key] ?? '')"
+                @update:model-value="store(p, $event)"
               />
-              <button v-if="isTauri()" type="button" class="btn" @click="pickFile(p)">Choose</button>
+              <Button v-if="isTauri()" @click="pickFile(p)">Choose</Button>
             </template>
 
-            <button
-              type="button"
+            <IconButton
               class="plugset-reset"
               :class="{ hidden: isDefault(p) }"
+              icon="undo"
+              variant="plain"
+              size="sm"
+              :icon-size="14"
               :disabled="isDefault(p)"
-              :title="`Reset ${p.label} to its default`"
+              :tip="`Reset ${p.label} to its default`"
               :aria-label="`Reset ${p.label}`"
               data-setting-reset
               @click="reset(p)"
-            >
-              <Icon name="undo" :size="14" />
-            </button>
+            />
           </div>
         </div>
         <p v-if="errors[p.key]" class="plugset-error" role="alert">{{ errors[p.key] }}</p>
@@ -279,11 +270,7 @@ const isDefault = (p: SettingProp) => {
   gap: 6px;
 }
 .plugset-num {
-  width: 7em;
-  text-align: right;
-}
-.plugset-num.invalid {
-  outline: 1px solid var(--danger, #d33);
+  width: 9em;
 }
 .plugset :deep(.plugset-select) {
   width: 18em;
@@ -292,23 +279,11 @@ const isDefault = (p: SettingProp) => {
 .plugset-text {
   width: 14em;
 }
-.plugset-unit {
-  opacity: 0.7;
-  min-width: 2em;
-}
-.plugset-reset {
-  border: none;
-  background: none;
-  cursor: pointer;
-  color: inherit;
-  opacity: 0.8;
-  width: 1.6em;
-}
 .plugset-reset.hidden {
   visibility: hidden;
 }
 .plugset-error {
-  color: var(--danger, #d33);
+  color: var(--error);
   margin: 2px 0 0;
   font-size: 0.9em;
 }

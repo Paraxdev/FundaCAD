@@ -58,7 +58,7 @@ const check = (label, ok, detail = "") => {
 
   await page.click(`${nav} [data-plugin-settings-toggle]`);
   await page.click(`${pad} [data-plugin-settings-toggle]`);
-  await page.waitForSelector(`${nav} [data-setting="preset"] select`);
+  await page.waitForSelector(`${nav} [data-setting="preset"] .select-trigger`);
   await page.waitForSelector(`${pad} [data-setting="deadzone"] input`);
   await page.screenshot({ path: path.join(OUT, "expanded.png"), fullPage: true });
 
@@ -69,7 +69,8 @@ const check = (label, ok, detail = "") => {
   const stored = (id) =>
     page.evaluate((k) => JSON.parse(localStorage.getItem(`fundacad.pluginSettings.${k}`) || "null"), id);
 
-  await page.selectOption(`${nav} [data-setting="preset"] select`, "alt-left");
+  await page.click(`${nav} [data-setting="preset"] .select-trigger`);
+  await page.click('.select-pop .opt-row:has-text("Alt+left orbits")');
   await page.waitForTimeout(300);
   const t = await table();
   check(
@@ -84,6 +85,7 @@ const check = (label, ok, detail = "") => {
 
   const dz = page.locator(`${pad} [data-setting="deadzone"] input`);
   await dz.fill("abc");
+  await dz.press("Enter");
   const err = await page.textContent(`${pad} [data-setting="deadzone"] [role=alert]`).catch(() => "");
   check("text that is not a number says why", !!err && err.length > 0, err);
   await dz.fill("0.3");

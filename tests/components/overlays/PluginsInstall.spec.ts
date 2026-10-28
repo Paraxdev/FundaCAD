@@ -25,6 +25,7 @@ const inspectFile = vi.fn();
 const pickBundle = vi.fn();
 const installCandidate = vi.fn();
 const installedPlugins = vi.fn();
+const removePlugin = vi.fn();
 
 vi.mock("../../../src/plugins", async (importOriginal) => {
   const real = await importOriginal<typeof import("../../../src/plugins")>();
@@ -35,12 +36,16 @@ vi.mock("../../../src/plugins", async (importOriginal) => {
     pickBundle: () => pickBundle(),
     installCandidate: (c: unknown) => installCandidate(c),
     installedPlugins: () => installedPlugins(),
+    removePlugin: (id: string) => removePlugin(id),
   };
 });
 
 const PluginsSection = (await import("../../../src/components/overlays/PluginsSection.vue")).default;
 const { candidateFrom } = await import("../../../src/plugins");
 const { errorNotice } = await import("../../../src/ui/errorNotice");
+const { pluginEnabled } = await import("../../../src/plugins/registry");
+const { definePluginSettings, storageKey } = await import("../../../src/plugins/settings");
+const { contribute, resetContributions } = await import("../../../src/plugins/contrib");
 
 enableAutoUnmount(afterEach);
 
@@ -71,7 +76,7 @@ const candidateRow = (w: ReturnType<typeof mount>) => w.find("[data-plugin-candi
 
 /** Type a URL and press the button that reads it. */
 async function readUrl(w: ReturnType<typeof mount>, url: string) {
-  const field = addRow(w).get("input.plug-url");
+  const field = addRow(w).get(".plug-address input");
   await field.setValue(url);
   await addRow(w).findAll("button")[0]!.trigger("click");
   await flush();
@@ -87,7 +92,10 @@ beforeEach(() => {
   installedPlugins.mockResolvedValue([]);
   inspectUrl.mockResolvedValue(candidateFrom(STRANGER, "url"));
 });
-afterEach(() => localStorage.clear());
+afterEach(() => {
+  resetContributions();
+  localStorage.clear();
+});
 
 describe("reading a bundle from a link", () => {
   it("does not read anything until the button is pressed", async () => {
@@ -95,7 +103,22 @@ describe("reading a bundle from a link", () => {
     expect(inspectUrl).not.toHaveBeenCalled();
     expect(candidateRow(w).exists()).toBe(false);
     // And the button will not act on an empty field.
-    expect(addRow(w).findAll("button")[0]!.attributes("disabled")).toBeDefined();
+    expect(addRow(w).findAll("button")[0]!.attributes("aria-disabled")).toBe("true");
+  });
+
+  it("reads on Enter in the link field, which holds still while it reads", async () => {
+    let done: (v: unknown) => void = () => {};
+    inspectUrl.mockReturnValue(new Promise((r) => (done = r)));
+    const w = await mounted();
+    const field = addRow(w).get(".plug-address input");
+    await field.setValue("https://plugins.example.com/widgets.zip");
+    await field.trigger("keydown", { key: "Enter" });
+    expect(inspectUrl).toHaveBeenCalledWith("https://plugins.example.com/widgets.zip");
+    expect(field.attributes("readonly")).toBeDefined();
+    expect(addRow(w).findAll("button")[0]!.text()).toBe("Reading…");
+    done(candidateFrom(STRANGER, "url"));
+    await flush();
+    expect(field.attributes("readonly")).toBeUndefined();
   });
 
   it("describes it, and installs nothing by doing so", async () => {
@@ -292,5 +315,68 @@ describe("the list of what is installed", () => {
     // plugin, and a screen showing both offers to install what is installed.
     expect(w.findAll('[data-plugin="FundaCAD.Screws"]').length).toBe(1);
     expect(w.get('[data-plugin="FundaCAD.Screws"]').text()).toContain("Remove");
+  });
+
+  it("runs and stops an installed plugin with its checkbox, named for it and titled with its state", async () => {
+    installedPlugins.mockResolvedValue([record({})]);
+    const w = await mounted();
+    const box = () => w.get('[data-plugin="widgets"] .plug-controls .ui-checkbox');
+    const input = box().get("input");
+    expect(box().attributes("id")).toBe("prefs-plugin-widgets");
+    expect(input.attributes("aria-label")).toMatch(/^Run /);
+    expect(box().attributes("title")).toBe("Running");
+    await input.trigger("keydown", { key: " " });
+    expect(pluginEnabled("widgets")).toBe(false);
+    expect(box().attributes("title")).toBe("Switched off");
+    expect((input.element as HTMLInputElement).checked).toBe(false);
+    await input.trigger("change");
+    expect(pluginEnabled("widgets")).toBe(true);
+  });
+
+  it("opens an installed plugin's settings from a Settings button carrying the base button icon", async () => {
+    const settings = definePluginSettings("widgets", {
+      version: 1,
+      props: [{ key: "gap", type: "number", label: "Gap", default: 2 }],
+    });
+    contribute("widgets", { settings: [{ key: "s", settings }] });
+    installedPlugins.mockResolvedValue([record({})]);
+    const w = await mounted();
+    const toggle = w.get('[data-plugin="widgets"] [data-plugin-settings-toggle]');
+    expect(toggle.text()).toBe("Settings");
+    expect(toggle.findAll("svg").map((s) => [s.attributes("width"), s.attributes("height")])).toEqual([["14", "14"]]);
+  });
+
+  it("forgets a removed plugin's settings only when its checkbox is ticked", async () => {
+    const settings = definePluginSettings("widgets", {
+      version: 1,
+      props: [{ key: "gap", type: "number", label: "Gap", default: 2 }],
+    });
+    contribute("widgets", { settings: [{ key: "s", settings }] });
+    installedPlugins.mockResolvedValue([record({})]);
+    removePlugin.mockResolvedValue(undefined);
+    const w = await mounted();
+    const row = () => w.get('[data-plugin="widgets"]');
+    const remove = () =>
+      row()
+        .findAll("button")
+        .find((b) => b.text() === "Remove")!;
+    settings.set("gap", 7);
+    expect(row().get(".plug-forget").text()).toBe("Remove forgets its settings");
+
+    await remove().trigger("click");
+    await flush();
+    expect(removePlugin.mock.calls).toEqual([["widgets"]]);
+    expect(settings.get("gap")).toBe(7);
+
+    await row().get(".plug-forget input").trigger("change");
+    await remove().trigger("click");
+    await flush();
+    expect(removePlugin.mock.calls).toEqual([["widgets"], ["widgets"]]);
+    expect(settings.get("gap")).toBe(2);
+    expect(JSON.parse(localStorage.getItem(storageKey("widgets"))!)).toEqual({
+      version: 0,
+      values: {},
+      forgotten: true,
+    });
   });
 });
