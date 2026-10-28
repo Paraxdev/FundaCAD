@@ -117,8 +117,8 @@ async function dragMaterialTo(page, materialId, x, y, opts = {}) {
   check("Render opens the dock", (await page.locator("#renderdock").count()) === 1);
   check(
     "with three tabs",
-    (await page.locator(".rd-tab").count()) === 3,
-    (await page.locator(".rd-tab").allTextContents()).join(" | "),
+    (await page.locator("#renderdock [role=tab]").count()) === 3,
+    (await page.locator("#renderdock [role=tab]").allTextContents()).join(" | "),
   );
   const viewportAfter = await page.locator("#viewport").boundingBox();
   // The dock floats clear of the window edge, so what the viewport gives up is
@@ -251,7 +251,7 @@ async function dragMaterialTo(page, materialId, x, y, opts = {}) {
 
   // ---- 6. environments -----------------------------------------------------
   console.log("\n6. the room");
-  await page.click('.rd-tab[data-tab="environment"]');
+  await page.click('#renderdock [role=tab][data-tab="environment"]');
   await page.waitForTimeout(300);
   check("six rooms on offer", (await page.locator("#renderdock [data-environment]").count()) === 6);
   await page.locator("#renderdock").screenshot({ path: path.join(OUT, "8-environment-tab.png") });
@@ -289,11 +289,11 @@ async function dragMaterialTo(page, materialId, x, y, opts = {}) {
 
   // ---- 7. the lens ---------------------------------------------------------
   console.log("\n7. the lens");
-  await page.click('.rd-tab[data-tab="camera"]');
+  await page.click('#renderdock [role=tab][data-tab="camera"]');
   await page.waitForTimeout(300);
   await page.locator("#renderdock").screenshot({ path: path.join(OUT, "9-camera-tab.png") });
   const fov0 = await page.evaluate(() => window.viewport.rig.fov());
-  await page.locator("#rd-fov").fill("22");
+  await page.locator("#rd-fov input").fill("22");
   await page.waitForTimeout(500);
   const fov1 = await page.evaluate(() => ({
     rig: window.viewport.rig.fov(),
@@ -305,7 +305,7 @@ async function dragMaterialTo(page, materialId, x, y, opts = {}) {
     `${fov0} -> ${JSON.stringify(fov1)}`,
   );
   await page.locator("#viewport").screenshot({ path: path.join(OUT, "4-fov-22.png") });
-  await page.locator("#rd-fov").fill("65");
+  await page.locator("#rd-fov input").fill("65");
   await page.waitForTimeout(500);
   await page.locator("#viewport").screenshot({ path: path.join(OUT, "5-fov-65.png") });
   const md5 = (n) =>
@@ -314,11 +314,11 @@ async function dragMaterialTo(page, materialId, x, y, opts = {}) {
       .update(fs.readFileSync(path.join(OUT, `${n}.png`)))
       .digest("hex");
   check("and a wider lens is visibly a different picture", md5("4-fov-22") !== md5("5-fov-65"));
-  await page.locator("#rd-fov").fill("45");
+  await page.locator("#rd-fov input").fill("45");
 
   // depth of field
   const dofOff = await page.evaluate(() => window.viewport.scene.post.bokehOn ?? null);
-  await page.locator("#rd-blur").fill("0.6");
+  await page.locator("#rd-blur input").fill("0.6");
   await page.waitForTimeout(1400);
   const dof = await page.evaluate(() => {
     const post = window.viewport.scene.post;
@@ -327,7 +327,7 @@ async function dragMaterialTo(page, materialId, x, y, opts = {}) {
   check("blur switches the depth-of-field pass on", dof.on === true, JSON.stringify(dof));
   check("focused on what the view is centred on", dof.focus > 1, `${dof.focus} mm from the camera`);
   await page.locator("#viewport").screenshot({ path: path.join(OUT, "6-dof.png") });
-  await page.locator("#rd-blur").fill("0");
+  await page.locator("#rd-blur input").fill("0");
   await page.waitForTimeout(600);
   check(
     "and zero turns it off again, so an ordinary viewport pays nothing (control)",

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted } from "vue";
+import Button from "../ui/Button.vue";
 import {
   denoiserState as s,
   describeDenoiser,
@@ -8,7 +9,8 @@ import {
   sizeLabel,
 } from "../../viewport/pathtrace/denoiser";
 
-defineProps<{ hintClass: string; buttonClass: string }>();
+// buttonClass is still accepted from the callers, the button wears the base Button look in both.
+defineProps<{ hintClass: string; buttonClass?: string }>();
 onMounted(() => {
   void refreshDenoiser();
 });
@@ -17,14 +19,13 @@ onMounted(() => {
 <template>
   <div v-if="s.info" class="denoiser-row" :data-denoiser="s.info.active">
     <p :class="hintClass">{{ describeDenoiser(s) }}</p>
-    <button
+    <Button
       v-if="s.info.active !== 'oidn' && s.info.offered"
-      type="button"
-      :class="buttonClass"
+      size="sm"
       data-denoiser-download
       :disabled="s.downloading"
       @click="downloadDenoiser()"
-      >High quality denoise ({{ sizeLabel(s.info.bytes) }})</button
+      >High quality denoise ({{ sizeLabel(s.info.bytes) }})</Button
     >
   </div>
 </template>

@@ -67,7 +67,7 @@ const check = (name, ok, detail) => {
     if (QUALITY) {
       await page.click('#workspace-toggle [data-workspace="render"]');
       await page.waitForTimeout(500);
-      await page.click('.rd-tab[data-tab="environment"]');
+      await page.click('#renderdock [role=tab][data-tab="environment"]');
       await page.click(`[data-realtime-quality="${QUALITY}"]`);
       await page.waitForTimeout(2500);
       const now = await page.evaluate(() => window.viewport.scene.post.realtimeQuality);

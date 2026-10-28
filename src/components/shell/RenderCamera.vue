@@ -1,5 +1,10 @@
 <script setup lang="ts">
 import RenderSections from "./RenderSections.vue";
+import Button from "../ui/Button.vue";
+import Checkbox from "../ui/Checkbox.vue";
+import Segmented from "../ui/Segmented.vue";
+import Select from "../ui/Select.vue";
+import Slider from "../ui/Slider.vue";
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { useUiStore } from "../../stores/ui";
@@ -76,9 +81,9 @@ const buttonText = computed(() => {
   return tracing.value ? `Cancel, ${progress.value} of ${samples.value} samples` : "Rendering…";
 });
 
-const onFov = (e: Event) => setRenderPref("fov", Number.parseFloat((e.target as HTMLInputElement).value));
-const onBlur = (e: Event) => setRenderPref("focusBlur", Number.parseFloat((e.target as HTMLInputElement).value));
-const onAperture = (e: Event) => setRenderPref("aperture", Number.parseFloat((e.target as HTMLSelectElement).value));
+const APERTURES = APERTURE_STOPS.map((f) => ({ value: String(f), label: `f/${f}` }));
+const SCALE_CHOICES = SCALES.map((n) => ({ value: n, label: `${n}×`, attrs: { "data-scale": String(n) } }));
+const SAMPLE_CHOICES = SAMPLES.map((n) => ({ value: n, label: String(n), attrs: { "data-samples": String(n) } }));
 
 async function render(): Promise<string | null> {
   if (traced.value) {
@@ -135,20 +140,18 @@ async function takePicture() {
   <div class="rd-scroll">
     <section class="rd-section">
       <h3 class="rd-head">Lens</h3>
-      <label class="prefs-row">
-        <span class="prefs-label">Field of view</span>
-        <input
-          id="rd-fov"
-          class="sm-slider"
-          type="range"
-          :min="MIN_FOV"
-          :max="MAX_FOV"
-          step="1"
-          :value="prefs.fov"
-          @input="onFov"
-        />
-        <span class="rd-value">{{ Math.round(prefs.fov) }}°</span>
-      </label>
+      <Slider
+        id="rd-fov"
+        class="prefs-row"
+        label="Field of view"
+        :min="MIN_FOV"
+        :max="MAX_FOV"
+        :step="1"
+        :model-value="prefs.fov"
+        @update:model-value="setRenderPref('fov', $event)"
+      >
+        <template #value="{ value }">{{ Math.round(value) }}°</template>
+      </Slider>
       <div class="sm-hint">
         A long lens (low numbers) keeps a part's edges nearly parallel, which is the honest look for an engineering
         drawing. A wide one throws the near corner at you, which flatters a product shot. Straight-on views are drawn
@@ -158,32 +161,31 @@ async function takePicture() {
 
     <section class="rd-section">
       <h3 class="rd-head">Depth of field</h3>
-      <label class="prefs-row">
-        <span class="prefs-label">Blur</span>
-        <input
-          id="rd-blur"
-          class="sm-slider"
-          type="range"
-          min="0"
-          max="1"
-          step="0.02"
-          :value="prefs.focusBlur"
-          @input="onBlur"
-        />
-        <span class="rd-value">{{ prefs.focusBlur === 0 ? "off" : prefs.focusBlur.toFixed(2) }}</span>
-      </label>
-      <label class="prefs-row">
+      <Slider
+        id="rd-blur"
+        class="prefs-row"
+        label="Blur"
+        :min="0"
+        :max="1"
+        :step="0.02"
+        :model-value="prefs.focusBlur"
+        @update:model-value="setRenderPref('focusBlur', $event)"
+      >
+        <template #value="{ value }">{{ value === 0 ? "off" : value.toFixed(2) }}</template>
+      </Slider>
+      <div class="prefs-row">
         <span class="prefs-label">Aperture</span>
-        <select
+        <Select
           id="rd-aperture"
-          class="sm-select"
+          size="sm"
+          tip="Aperture"
+          :options="APERTURES"
           :disabled="prefs.focusBlur === 0"
-          :value="String(prefs.aperture)"
-          @change="onAperture"
-        >
-          <option v-for="f in APERTURE_STOPS" :key="f" :value="String(f)">f/{{ f }}</option>
-        </select>
-      </label>
+          disabled-reason="Turn Blur up from zero to pick an aperture"
+          :model-value="String(prefs.aperture)"
+          @update:model-value="setRenderPref('aperture', Number.parseFloat($event))"
+        />
+      </div>
       <div class="sm-hint">
         Whatever the view is centred on stays sharp, so the way to move the focus is to aim at what you want in focus.
         Off at zero, and off entirely on a straight-on view: a parallel projection has no lens, so it can have no depth
@@ -193,47 +195,39 @@ async function takePicture() {
 
     <section class="rd-section">
       <h3 class="rd-head">Picture</h3>
-      <div class="rd-chips" role="group" aria-label="Render size">
-        <button
-          v-for="s in SCALES"
-          :key="s"
-          class="rd-chip"
-          :class="{ active: scale === s }"
-          :data-scale="s"
-          @click="scale = s"
-          >{{ s }}×</button
-        >
-      </div>
+      <Segmented
+        v-model="scale"
+        class="rd-chips"
+        variant="chips"
+        size="sm"
+        label="Render size"
+        :options="SCALE_CHOICES"
+      />
       <div class="sm-hint">{{ shotSize }} pixels, the view as it is framed now.</div>
       <template v-if="tracedSize">
-        <label class="prefs-row">
-          <span class="prefs-label">Path traced</span>
-          <input id="rd-traced" type="checkbox" :checked="tracedWanted" @change="tracedWanted = !tracedWanted" />
-        </label>
-        <div v-if="traced" class="rd-chips" role="group" aria-label="Samples">
-          <button
-            v-for="n in SAMPLES"
-            :key="n"
-            class="rd-chip"
-            :class="{ active: samples === n }"
-            :data-samples="n"
-            @click="samples = n"
-            >{{ n }}</button
-          >
-        </div>
+        <Checkbox id="rd-traced" v-model="tracedWanted" class="rd-check" label="Path traced" />
+        <Segmented
+          v-if="traced"
+          v-model="samples"
+          class="rd-chips"
+          variant="chips"
+          size="sm"
+          label="Samples"
+          :options="SAMPLE_CHOICES"
+        />
       </template>
-      <label v-if="!traced" class="prefs-row">
-        <span class="prefs-label">Edge lines</span>
-        <input id="rd-edges" type="checkbox" :checked="edges" @change="edges = !edges" />
-      </label>
-      <label v-if="!traced && hasReferences" class="prefs-row">
-        <span class="prefs-label">Reference images</span>
-        <input id="rd-references" type="checkbox" :checked="references" @change="references = !references" />
-      </label>
+      <Checkbox v-if="!traced" id="rd-edges" v-model="edges" class="rd-check" label="Edge lines" />
+      <Checkbox
+        v-if="!traced && hasReferences"
+        id="rd-references"
+        v-model="references"
+        class="rd-check"
+        label="Reference images"
+      />
       <div class="mats-actions">
-        <button id="rd-take-picture" class="btn btn-primary" :disabled="saving && !tracing" @click="takePicture()">{{
+        <Button id="rd-take-picture" variant="primary" :disabled="saving && !tracing" @click="takePicture()">{{
           buttonText
-        }}</button>
+        }}</Button>
       </div>
       <div v-if="traced" class="sm-hint">
         Traced to the samples picked, then cleaned with the high quality denoise. More samples take longer and keep

@@ -531,7 +531,7 @@ const check = (name, ok, detail) => {
   console.log("\n[light]");
   await page.evaluate(() => window.__fundacad.handleAction("materials"));
   await page.waitForTimeout(600);
-  await page.click('.rd-tab[data-tab="environment"]');
+  await page.click('#renderdock [role=tab][data-tab="environment"]');
   await page.waitForTimeout(200);
   if (
     !(await page.evaluate(

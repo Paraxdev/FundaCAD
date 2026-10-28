@@ -39,6 +39,16 @@
   color: var(--accent-hot);
   border-bottom-color: var(--accent);
 }
+.rd-tabs .ui-tab {
+  flex: 1 1 0;
+  justify-content: center;
+}
+/* An on/off row: the box and its label, not a strip as wide as the dock that toggles from its empty end. */
+.rd-check {
+  display: flex;
+  width: fit-content;
+  margin-bottom: var(--s-2);
+}
 
 .rd-scroll {
   flex: 1 1 auto;
