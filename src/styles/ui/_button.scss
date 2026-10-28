@@ -1,8 +1,10 @@
 // Button: primary, secondary, ghost and danger, sm 28px and md 32px.
 // The base fill, hover and disabled are the one .btn rule in _glass.scss, which paints --btn-fill and --btn-hover.
 
+// A button does not inherit the page's font by default, so without this the label falls back to the system face.
 .btn.btn-sm,
 .btn.btn-md {
+  font-family: inherit;
   display: inline-flex;
   align-items: center;
   justify-content: center;
