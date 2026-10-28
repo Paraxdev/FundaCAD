@@ -181,3 +181,21 @@ describe("GuideLayer frame loop", () => {
     });
   }
 });
+
+describe("GuideLayer bubble", () => {
+  it("offers Stop and Next as Buttons under the ids the harness clicks", async () => {
+    const g = setup();
+    g.guide.apply([{ kind: "highlight", seq: 1, target: { ui: "guide-spec-target" }, caption: "Here" }]);
+    await tick();
+    const next = document.getElementById("guide-next")!;
+    const stop = document.getElementById("guide-stop")!;
+    expect([next.getAttribute("type"), next.classList.contains("btn-primary"), stop.textContent!.trim()]).toEqual([
+      "button",
+      true,
+      "Stop",
+    ]);
+    next.click();
+    await tick();
+    expect(document.querySelector(".guide-bubble")).toBeNull();
+  });
+});

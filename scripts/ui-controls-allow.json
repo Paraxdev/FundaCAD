@@ -85,7 +85,6 @@
   { "path": "src/components/overlays/ExperimentalSection.vue", "kind": "button", "count": 2, "reason": "before the base set, migrates in lane M (settings)" },
   { "path": "src/components/overlays/ExperimentalSection.vue", "kind": "input[type=number]", "count": 1, "reason": "before the base set, migrates in lane M (settings)" },
   { "path": "src/components/overlays/FilletMembers.vue", "kind": "button", "count": 2, "reason": "before the base set, migrates in lane K (tool boxes)" },
-  { "path": "src/components/overlays/GuideLayer.vue", "kind": "button", "count": 2, "reason": "before the base set, migrates in lane H (dialogs)" },
   { "path": "src/components/overlays/InterferencePanel.vue", "kind": "input[type=checkbox]", "count": 1, "reason": "before the base set, migrates in lane I (feature rows and readouts)" },
   { "path": "src/components/overlays/InterferencePanel.vue", "kind": "input[type=number]", "count": 1, "reason": "before the base set, migrates in lane I (feature rows and readouts)" },
   { "path": "src/components/overlays/McpSection.vue", "kind": "button", "count": 1, "reason": "before the base set, migrates in lane M (settings)" },
