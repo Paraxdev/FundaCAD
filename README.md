@@ -10,7 +10,7 @@ turn it into a solid and export a file for your slicer. Windows, macOS and Linux
 <p align="center">
   <a href="https://github.com/Paraxdev/fundacad/releases/tag/beta"><img alt="Download the beta" src="https://img.shields.io/badge/download-beta-2f6fed"></a>
   <a href="https://github.com/Paraxdev/fundacad/releases/tag/development"><img alt="Download the development build" src="https://img.shields.io/badge/bleeding%20edge-development-8a8a8a"></a>
-  <a href="https://paraxdev.github.io/FundaCAD/"><img alt="Read the manual" src="https://img.shields.io/badge/docs-manual-2f6fed"></a>
+  <a href="https://fundacad.dev/"><img alt="Read the manual" src="https://img.shields.io/badge/docs-manual-2f6fed"></a>
   <a href="LICENSE"><img alt="Licence AGPL-3.0" src="https://img.shields.io/badge/licence-AGPL--3.0-blue"></a>
   <img alt="Windows, macOS and Linux" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey">
 </p>
@@ -27,7 +27,7 @@ the day it lands can take the [development build](https://github.com/Paraxdev/fu
 instead. It is the bleeding edge and can be broken.
 An install only ever updates to a newer build of the same kind, and on Linux only the AppImage updates itself. There is no account and no cloud, and your files stay on your disk. The builds are not code
 signed, so Windows and macOS will warn you on the first start. The
-[install page](https://paraxdev.github.io/FundaCAD/start/install/) shows how to get past that.
+[install page](https://fundacad.dev/start/install/) shows how to get past that.
 
 ## Build from source
 
@@ -76,7 +76,7 @@ npm run tauri build
 
 ## Documentation
 
-The manual is at [paraxdev.github.io/FundaCAD](https://paraxdev.github.io/FundaCAD/). It starts
+The manual is at [fundacad.dev](https://fundacad.dev/). It starts
 with a first part from sketch to exported file.
 
 ## For developers

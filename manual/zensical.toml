@@ -1,6 +1,6 @@
 [project]
 site_name = "FundaCAD"
-site_url = "https://paraxdev.github.io/FundaCAD/"
+site_url = "https://fundacad.dev/"
 site_description = "The FundaCAD user manual"
 docs_dir = "docs"
 repo_url = "https://github.com/Paraxdev/fundacad"
