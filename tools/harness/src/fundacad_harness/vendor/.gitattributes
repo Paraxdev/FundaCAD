@@ -1,0 +1,2 @@
+# The sha256 pin in a11y.py covers these exact bytes, so git must never rewrite their line endings.
+*.js -text

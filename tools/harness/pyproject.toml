@@ -18,6 +18,9 @@ fundacad-harness = "fundacad_harness.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+fundacad_harness = ["vendor/*.js"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [
