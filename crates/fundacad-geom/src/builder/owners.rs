@@ -112,6 +112,7 @@ pub fn update(ctx: &mut Ctx, f: &Feature, fid: &str, pre: &[(u64, u64)], pre_own
         raws[b][f] = Some(raw);
     }
 
+    let mut latest: Option<HashMap<&str, &String>> = None;
     let mut updates: Vec<(usize, Owners, Vec<Option<String>>)> = Vec::new();
     let mut measured: Vec<(u64, Vec<(Shape, Option<[f64; 4]>)>)> = Vec::new();
     for ((&index, fs), rs) in changed.iter().zip(faces).zip(raws) {
@@ -153,11 +154,13 @@ pub fn update(ctx: &mut Ctx, f: &Feature, fid: &str, pre: &[(u64, u64)], pre_own
                 continue;
             };
             let fp = key(raw[0], [raw[1], raw[2], raw[3]]);
-            let owner = same
-                .or_else(|| prior.get(&fp))
-                .or_else(|| all.iter().rev().find_map(|o| o.get(&fp)))
-                .cloned()
-                .unwrap_or_else(|| fid.to_owned());
+            let owner = match same.or_else(|| prior.get(&fp)) {
+                Some(o) => o.clone(),
+                None => latest
+                    .get_or_insert_with(|| latest_owners(&all))
+                    .get(fp.as_str())
+                    .map_or_else(|| fid.to_owned(), |o| (*o).clone()),
+            };
             owners.insert(fp.clone(), owner);
             keys.push(Some(fp));
         }
@@ -178,6 +181,18 @@ pub fn update(ctx: &mut Ctx, f: &Feature, fid: &str, pre: &[(u64, u64)], pre_own
     }
 }
 
+/// The owner the latest body in `all` holds for each fingerprint, built once so the new faces of a big fillet over
+/// thousands of bodies are not each looked up in every body's map.
+pub(crate) fn latest_owners<'a>(all: &[&'a Owners]) -> HashMap<&'a str, &'a String> {
+    let mut out = HashMap::with_capacity(all.iter().map(|o| o.len()).sum());
+    for o in all {
+        for (k, v) in o.iter() {
+            out.insert(k.as_str(), v);
+        }
+    }
+    out
+}
+
 /// `_move_fp`: the rounded centre moved, the area kept as it was.
 fn moved_key(k: &str, r: [f64; 3], d: [f64; 3]) -> Option<String> {
     let mut parts = k.split('|');
@@ -189,3 +204,7 @@ fn moved_key(k: &str, r: [f64; 3], d: [f64; 3]) -> Option<String> {
     let p = kernel::euler_point(r, d, [c[0], c[1], c[2]]);
     Some(format!("{area}|{}|{}|{}", round_key(p[0], 1), round_key(p[1], 1), round_key(p[2], 1)))
 }
+
+#[cfg(test)]
+#[path = "owners_tests.rs"]
+mod tests;
