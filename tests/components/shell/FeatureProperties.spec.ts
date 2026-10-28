@@ -12,7 +12,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ref } from "vue";
-import { mount, type VueWrapper } from "@vue/test-utils";
+import { mount, type DOMWrapper, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import FeatureProperties from "../../../src/components/shell/FeatureProperties.vue";
 import { ENGINE } from "../../../src/app/engineKey";
@@ -29,6 +29,7 @@ import {
 import type { Engine } from "../../../src/app/engine";
 import { valueProblem } from "../../../src/document/numFields";
 import { DocumentStore } from "../../../src/document/store";
+import { createDocBridge } from "../../../src/app/docBridge";
 import type { GeometryBackend } from "../../../src/geometry/client";
 import type { CadDocument, Feature, RebuildReply } from "../../../src/types";
 
@@ -130,39 +131,49 @@ function render(fake: ReturnType<typeof makeEngine>, featureId: string): VueWrap
  *  NOT part of the label: a label is a name, and "Radius mm | 5in" reads as a
  *  contradiction.
  *
- *  A row is not always a text box, a fixed choice is a <select>, a switch is a
- *  checkbox, a FILE is a button carrying the name of what was chosen, and a
+ *  A row is not always a text box, a fixed choice is a Select, a switch is a
+ *  Switch, a FILE is a button carrying the name of what was chosen, and a
  *  SELECTION row has no control at all, only the summary of what the feature
  *  acts on and a button that opens the editor. This reads whichever the row has.
  *  A row with none of them is a row that renders nothing, which is worth failing
  *  on rather than skipping. */
 const rows = (w: VueWrapper) =>
   w.findAll(".param-row").map((r) => {
-    const sel = r.find("select");
-    const box = r.find("input[type=checkbox]");
+    const sel = r.find("[role=combobox]:not(.ui-unit-chip)");
+    const box = r.find("[role=switch]");
     const count = r.find(".target-count");
     const file = r.find("button.file-pick");
     const value = sel.exists()
-      ? (sel.element as HTMLSelectElement).value
+      ? sel.attributes("data-value")
       : box.exists()
-        ? String((box.element as HTMLInputElement).checked)
+        ? box.attributes("aria-checked")
         : count.exists()
           ? count.text()
           : file.exists()
             ? file.text()
             : (r.find("input").element as HTMLInputElement).value;
-    return [r.find("label").text(), r.find(".dim-unit").exists() ? r.find(".dim-unit").text() : "", value];
+    return [r.find("label").text(), r.find(".ui-unit-chip").exists() ? r.find(".ui-unit-chip").text() : "", value];
   });
 
 /** Just the labels, in the order the panel puts them. */
 const labels = (w: VueWrapper) => w.findAll(".param-row label").map((l) => l.text());
 
-/** Pick `value` in the <select> of the row labelled `label`. */
+/** The Select inside `row`, the value's or its unit chip's. */
+const selectIn = (w: VueWrapper, row: DOMWrapper<Element>) =>
+  w.findAllComponents({ name: "Select" }).find((c) => row.element.contains(c.find("[role=combobox]").element))!;
+
+/** Pick `value` in the Select of the row labelled `label`. Select's own keys are its spec's business. */
 async function choose(w: VueWrapper, label: string, value: string) {
   const row = w.findAll(".param-row").find((r) => r.find("label").text() === label)!;
-  const sel = row.find("select");
-  (sel.element as HTMLSelectElement).value = value;
-  await sel.trigger("change");
+  const sel = selectIn(w, row);
+  sel.vm.$emit("update:modelValue", value);
+  await sel.vm.$nextTick();
+}
+
+/** Flip the switch of the row labelled `label`. */
+async function flip(w: VueWrapper, label: string) {
+  const row = w.findAll(".param-row").find((r) => r.find("label").text() === label)!;
+  await row.find("[role=switch]").trigger("click");
 }
 
 /** Commit `text` into the row whose label starts with `label`. */
@@ -171,7 +182,7 @@ async function commit(w: VueWrapper, label: string, text: string) {
   const input = row.find("input");
   input.element.value = text;
   await input.trigger("input");
-  await input.trigger("change"); // change is the commit, not input
+  await input.trigger("keydown", { key: "Enter" }); // Enter is the commit, not input
 }
 
 const CIRCLE = (r: number): Feature =>
@@ -234,6 +245,16 @@ describe("FeatureProperties", () => {
     expect(ents[0]!.radius).toBeCloseTo(10, 9);
   });
 
+  it("pins a sketch dimension retyped at its current value in another spelling, as a native change did", async () => {
+    const fake = makeEngine({ parameters: {}, features: [CIRCLE(6)] });
+    const w = render(fake, "s1");
+    await commit(w, "Diameter", "12");
+    expect(fake.updates).toEqual([]);
+    await commit(w, "Diameter", "12.0");
+    const drives = (fake.updates[0]?.patch["constraints"] ?? []) as { type: string; value?: number }[];
+    expect([fake.updates.length, drives.map((c) => [c.type, c.value])]).toEqual([1, [["diameter", 12]]]);
+  });
+
   it("takes a unit the field is not showing", async () => {
     // The whole point of routing every value surface through ui/measure: this
     // row says mm, and "1 inch" has to mean 25.4mm rather than 1. parseFloat
@@ -259,7 +280,7 @@ describe("FeatureProperties", () => {
     // The input goes red and KEEPS the rejected text, so the value can be
     // fixed rather than retyped, and the tooltip says what was wrong.
     const input = w.find("input");
-    expect(input.classes()).toContain("input-error");
+    expect(input.attributes("aria-invalid")).toBe("true");
     expect(input.element.value).toBe("banana");
     expect(input.attributes("title")).toBeTruthy();
   });
@@ -286,7 +307,7 @@ describe("FeatureProperties", () => {
     // The row adopts a unit the user wrote, the way the heads-up dimension box
     // does. Converting it straight back to mm would answer a request with the
     // thing that was being corrected.
-    expect(w.find(".param-row .dim-unit").text()).toBe("in");
+    expect(w.find(".param-row .ui-unit-chip").text()).toBe("in");
   });
 
   it("leaves a bare expression to the parameter engine, in canonical units", async () => {
@@ -310,7 +331,7 @@ describe("FeatureProperties", () => {
     // makes it an angle, and 5 degrees is a guess at what was meant.
     expect(fake.values).toEqual([]);
     expect(fake.exprs).toEqual([]);
-    expect(w.find("input").classes()).toContain("input-error");
+    expect(w.find("input").attributes("aria-invalid")).toBe("true");
   });
 
   // A value the field cannot take is refused in the row, in the words the
@@ -386,6 +407,36 @@ describe("FeatureProperties", () => {
       ],
     });
     expect(rows(render(fake, "f1"))).toContainEqual(["Edges", "", "2 edges"]);
+  });
+
+  it("opens the selection editor from Edit, and refuses a second one while it is open on this row", async () => {
+    const fake = makeEngine({ parameters: {}, features: [FILLET_ROW()] });
+    const started: string[] = [];
+    const targetEdit = (fake.engine.tools as unknown as { targetEdit: Record<string, unknown> }).targetEdit;
+    targetEdit.start = (id: string) => (started.push(id), true);
+    const w = render(fake, "f1");
+    const edit = () =>
+      w
+        .findAll(".param-row")
+        .find((r) => r.find("label").text() === "Edges")!
+        .find(".target-edit");
+    expect([edit().attributes("aria-disabled"), edit().attributes("title")]).toEqual([
+      undefined,
+      "Change which edges this acts on",
+    ]);
+    await edit().trigger("click");
+    expect(started).toEqual(["f1"]);
+    w.unmount();
+
+    Object.assign(targetEdit, { active: true, editingId: "f1", field: { field: "edges" } });
+    const v = render(fake, "f1");
+    const busy = v
+      .findAll(".param-row")
+      .find((r) => r.find("label").text() === "Edges")!
+      .find(".target-edit");
+    expect([busy.attributes("aria-disabled"), busy.attributes("title")]).toEqual(["true", "Editing this selection"]);
+    await busy.trigger("click");
+    expect(started).toEqual(["f1"]);
   });
 
   it("says what an empty selection MEANS where empty means something", () => {
@@ -493,12 +544,7 @@ describe("FeatureProperties", () => {
     });
     const w = render(fake, "t1");
     expect(rows(w)).toContainEqual(["Invert heights", "", "false"]);
-    const box = w
-      .findAll(".param-row")
-      .find((r) => r.find("label").text() === "Invert heights")!
-      .find("input[type=checkbox]");
-    (box.element as HTMLInputElement).checked = true;
-    await box.trigger("change");
+    await flip(w, "Invert heights");
     expect(fake.updates).toEqual([{ id: "t1", patch: { invert: true } }]);
   });
 
@@ -596,12 +642,7 @@ describe("FeatureProperties", () => {
     });
     const w = render(fake, "e1");
     expect(rows(w)).toContainEqual(["Symmetric", "", "false"]);
-    const box = w
-      .findAll(".param-row")
-      .find((r) => r.find("label").text() === "Symmetric")!
-      .find("input[type=checkbox]");
-    (box.element as HTMLInputElement).checked = true;
-    await box.trigger("change");
+    await flip(w, "Symmetric");
     expect(fake.updates).toEqual([{ id: "e1", patch: { symmetric: true } }]);
   });
 
@@ -641,6 +682,123 @@ describe("FeatureProperties", () => {
     expect(labels(render(round, "t1"))).toContain("Sharp");
   });
 });
+
+describe("FeatureProperties expressions through NumberField", () => {
+  beforeEach(() => setActivePinia(createPinia()));
+  afterEach(() => resetContributions());
+
+  /** The engine of makeEngine, with the store's expression answers under the test's control. */
+  type FakeStore = {
+    boundExpr: (t: { field: string }) => { name: string; expr: string; value: number } | null;
+    isParamBound: (t: { field: string }) => boolean;
+    setTargetExpr: (t: { field: string }, raw: string) => string | null;
+  };
+  const storeOf = (fake: ReturnType<typeof makeEngine>) => fake.engine.store as unknown as FakeStore;
+  const field = (w: VueWrapper, label: string) =>
+    w.findAll(".param-row").find((r) => r.find("label").text().startsWith(label))!;
+
+  it.each([["width"], ["width/2"], ["20+5"], ["d=20"], ["w * 2 + 1"]])(
+    "hands %j to the parameter engine as typed",
+    async (raw) => {
+      const fake = makeEngine({ parameters: {}, features: [EXTRUDE] });
+      await commit(render(fake, "e1"), "Distance", raw);
+      expect(fake.exprs).toEqual([{ field: "distance", raw }]);
+      expect(fake.values).toEqual([]);
+    },
+  );
+
+  it("keeps an expression the parameter engine refuses, and says why under the row", async () => {
+    const fake = makeEngine({ parameters: {}, features: [EXTRUDE] });
+    storeOf(fake).setTargetExpr = () => 'unknown parameter "widht"';
+    const w = render(fake, "e1");
+    await commit(w, "Distance", "widht/2");
+    const input = field(w, "Distance").find("input");
+    expect([(input.element as HTMLInputElement).value, input.attributes("aria-invalid")]).toEqual(["widht/2", "true"]);
+    expect(field(w, "Distance").find(".param-problem").text()).toBe('unknown parameter "widht"');
+  });
+
+  it("follows the expression once the queued commit lands, though the field is still focused", async () => {
+    // A parameter commit resolves on a promise chain frames after Enter.
+    const fake = makeEngine({ parameters: {}, features: [EXTRUDE] });
+    const w = mount(FeatureProperties, {
+      props: { featureId: "e1", unit: "mm" },
+      global: { provide: { [ENGINE as symbol]: fake.engine } },
+      attachTo: document.body,
+    });
+    const input = field(w, "Distance").find("input");
+    (input.element as HTMLInputElement).focus();
+    await commit(w, "Distance", "width/2");
+    storeOf(fake).boundExpr = () => ({ name: "d1", expr: "width/2", value: 20 });
+    storeOf(fake).isParamBound = () => true;
+    fake.engine.bridge.docVersion.value++;
+    await w.vm.$nextTick();
+    expect([(input.element as HTMLInputElement).value, document.activeElement]).toEqual(["width/2", input.element]);
+    expect(field(w, "Distance").classes()).toContain("fx-row");
+    w.unmount();
+  });
+
+  it("shows a bound field's expression with a caption chip, and a typed number replaces it", async () => {
+    const fake = makeEngine({ parameters: {}, features: [EXTRUDE] });
+    storeOf(fake).boundExpr = () => ({ name: "d1", expr: "w/4", value: 10 });
+    storeOf(fake).isParamBound = () => true;
+    const w = render(fake, "e1");
+    const row = field(w, "Distance");
+    expect(row.classes()).toContain("fx-row");
+    expect((row.find("input").element as HTMLInputElement).value).toBe("w/4");
+    const chip = row.find(".ui-unit-chip");
+    expect([chip.text(), chip.attributes("role"), chip.attributes("title")]).toEqual([
+      "mm",
+      undefined,
+      "Expressions are written in this unit",
+    ]);
+    // The same number the expression yields still replaces the expression: the user typed a literal.
+    await commit(w, "Distance", "10");
+    expect(fake.values).toEqual([{ field: "distance", value: 10 }]);
+  });
+
+  it("reads a fraction in the row's unit, as one value and not arithmetic", async () => {
+    const fake = makeEngine({ parameters: {}, features: [EXTRUDE] });
+    const w = mount(FeatureProperties, {
+      props: { featureId: "e1", unit: "in" },
+      global: { provide: { [ENGINE as symbol]: fake.engine } },
+    });
+    await commit(w, "Distance", "1/2");
+    await commit(w, "Distance", "1 1/2");
+    expect(fake.values.map((v) => Math.round(v.value * 1e9) / 1e9)).toEqual([12.7, 38.1]);
+    expect(fake.exprs).toEqual([]);
+  });
+
+  it("changes a row's unit from the chip and shows the value in it", async () => {
+    const fake = makeEngine({ parameters: {}, features: [EXTRUDE] });
+    const w = render(fake, "e1");
+    const row = field(w, "Distance");
+    const chip = selectIn(w, row);
+    chip.vm.$emit("update:modelValue", "in");
+    await w.vm.$nextTick();
+    expect(field(w, "Distance").find(".ui-unit-chip").text()).toBe("in");
+    expect((field(w, "Distance").find("input").element as HTMLInputElement).value).toBe("0.394");
+  });
+
+  it("offers the units the field's kind can take, by chip", () => {
+    const fake = makeEngine({ parameters: {}, features: [EXTRUDE] });
+    const chip = field(render(fake, "e1"), "Distance").find(".ui-unit-chip");
+    expect([chip.attributes("role"), chip.attributes("title")]).toEqual(["combobox", "Change unit"]);
+  });
+
+  it("puts a refused row's text back on Escape, and its error goes with it", async () => {
+    const fake = makeEngine({ parameters: {}, features: [FILLET_ROW()] });
+    const w = render(fake, "f1");
+    await commit(w, "Radius", "-2");
+    const input = field(w, "Radius").find("input");
+    await input.trigger("keydown", { key: "Escape" });
+    expect([(input.element as HTMLInputElement).value, field(w, "Radius").find(".param-problem").exists()]).toEqual([
+      "2",
+      false,
+    ]);
+  });
+});
+
+const FILLET_ROW = (): Feature => ({ id: "f1", type: "fillet", radius: 2 }) as unknown as Feature;
 
 describe("FeatureProperties typed preview", () => {
   beforeEach(() => {
@@ -693,6 +851,191 @@ describe("FeatureProperties typed preview", () => {
     expect(built.map((f) => f.id)).toEqual(["bx", "mv", "cut"]);
     expect((built[0] as { height: number }).height).toBe(120);
     w.unmount();
+  });
+
+  it("ends the preview on Escape and on unmount, and previews no expression", async () => {
+    const backend = {
+      async rebuild(): Promise<RebuildReply> {
+        return {
+          ok: true,
+          result: { mesh: { positions: [], indices: [], faceIds: [] }, edges: [], bbox: null, bodies: [] },
+        } as unknown as RebuildReply;
+      },
+      async init() {},
+      onStatus() {
+        return () => {};
+      },
+      connected: true,
+    } as unknown as GeometryBackend;
+    const store = new DocumentStore(backend, {
+      parameters: {},
+      features: [{ id: "bx", type: "box", length: 20, width: 20, height: 20 }] as Feature[],
+    });
+    const engine = {
+      store,
+      bridge: { docVersion: ref(0), buildVersion: ref(0), editPreviewVersion: ref(0) },
+      tools: { targetEdit: { active: false, editingId: null, field: null, start: () => true } },
+      toolBusy: () => false,
+    } as unknown as Engine;
+    const w = mount(FeatureProperties, {
+      props: { featureId: "bx", unit: "mm" },
+      global: { provide: { [ENGINE as symbol]: engine } },
+    });
+    const input = () =>
+      w
+        .findAll(".param-row")
+        .find((r) => r.find("label").text().startsWith("Height"))!
+        .find("input");
+    const type = async (text: string) => {
+      input().element.value = text;
+      await input().trigger("input");
+      await vi.advanceTimersByTimeAsync(300);
+    };
+    await type("width");
+    expect(store.editPreviewId).toBeNull();
+    await type("30");
+    expect(store.editPreviewId).toBe("bx");
+    await input().trigger("keydown", { key: "Escape" });
+    expect([store.editPreviewId, input().element.value]).toEqual([null, "20"]);
+    await type("40");
+    expect(store.editPreviewId).toBe("bx");
+    w.unmount();
+    expect(store.editPreviewId).toBeNull();
+  });
+});
+
+describe("FeatureProperties typed preview through the app's bridge", () => {
+  // The bridge moves with the preview, so from the first preview tick the row's model is the previewed value, as it
+  // is in the app. A static bridge never shows that.
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.useFakeTimers();
+  });
+  afterEach(() => void vi.useRealTimers());
+
+  function open() {
+    const built: number[] = [];
+    const backend = {
+      async rebuild(doc: CadDocument): Promise<RebuildReply> {
+        built.push((doc.features.find((f) => f.id === "bx") as unknown as { height: number }).height);
+        return {
+          ok: true,
+          result: { mesh: { positions: [], indices: [], faceIds: [] }, edges: [], bbox: null, bodies: [] },
+        } as unknown as RebuildReply;
+      },
+      async init() {},
+      onStatus() {
+        return () => {};
+      },
+      connected: true,
+    } as unknown as GeometryBackend;
+    const store = new DocumentStore(backend, {
+      parameters: {},
+      features: [{ id: "bx", type: "box", length: 20, width: 20, height: 20 }] as Feature[],
+    });
+    const bridge = createDocBridge(store);
+    const engine = {
+      store,
+      bridge,
+      tools: { targetEdit: { active: false, editingId: null, field: null, start: () => true } },
+      toolBusy: () => false,
+    } as unknown as Engine;
+    const w = mount(FeatureProperties, {
+      props: { featureId: "bx", unit: "mm" },
+      global: { provide: { [ENGINE as symbol]: engine } },
+      attachTo: document.body,
+    });
+    const input = () =>
+      w
+        .findAll(".param-row")
+        .find((r) => r.find("label").text().startsWith("Height"))!
+        .find("input");
+    (input().element as HTMLInputElement).focus();
+    const settle = () => vi.advanceTimersByTimeAsync(1000);
+    return {
+      type: async (text: string) => {
+        input().element.value = text;
+        await input().trigger("input");
+        await vi.advanceTimersByTimeAsync(300);
+      },
+      key: async (key: string) => {
+        await input().trigger("keydown", { key });
+        await settle();
+      },
+      blur: async () => {
+        await input().trigger("blur");
+        await settle();
+      },
+      state: () => ({
+        doc: (store.document.features[0] as unknown as { height: number }).height,
+        field: (input().element as HTMLInputElement).value,
+        preview: store.editPreviewId,
+        built: built.at(-1),
+        undo: store.canUndo,
+      }),
+      close: () => {
+        w.unmount();
+        bridge.dispose();
+      },
+    };
+  }
+
+  it("commits a value typed after its preview opened, on Enter and on blur", async () => {
+    const p = open();
+    await p.type("30");
+    expect(p.state()).toEqual({ doc: 20, field: "30", preview: "bx", built: 30, undo: false });
+    await p.key("Enter");
+    expect(p.state()).toEqual({ doc: 30, field: "30", preview: null, built: 30, undo: true });
+    await p.type("40");
+    await p.type("50");
+    await p.blur();
+    expect(p.state()).toEqual({ doc: 50, field: "50", preview: null, built: 50, undo: true });
+    p.close();
+  });
+
+  it("previews a step from ArrowUp and commits it on Enter", async () => {
+    const p = open();
+    await p.key("ArrowUp");
+    expect(p.state()).toEqual({ doc: 20, field: "21", preview: "bx", built: 21, undo: false });
+    await p.key("Enter");
+    expect(p.state()).toEqual({ doc: 21, field: "21", preview: null, built: 21, undo: true });
+    p.close();
+  });
+
+  it("rebuilds the document value when a previewed field is cleared and Enter restores it", async () => {
+    const p = open();
+    await p.type("30");
+    await p.type("");
+    await p.key("Enter");
+    expect(p.state()).toEqual({ doc: 20, field: "20", preview: null, built: 20, undo: false });
+    p.close();
+  });
+
+  it("commits nothing when a previewed value is typed or stepped back to the document's", async () => {
+    const p = open();
+    await p.type("30");
+    await p.type("20");
+    await p.key("Enter");
+    const typed = p.state();
+    p.close();
+    const q = open();
+    await q.key("ArrowUp");
+    await q.key("ArrowDown");
+    await q.key("Enter");
+    const stepped = q.state();
+    q.close();
+    expect([typed, stepped]).toEqual([
+      { doc: 20, field: "20", preview: null, built: 20, undo: false },
+      { doc: 20, field: "20", preview: null, built: 20, undo: false },
+    ]);
+  });
+
+  it("previews the document's own value when it is typed back while a preview is open", async () => {
+    const p = open();
+    await p.type("30");
+    await p.type("20");
+    expect(p.state()).toEqual({ doc: 20, field: "20", preview: "bx", built: 20, undo: false });
+    p.close();
   });
 });
 

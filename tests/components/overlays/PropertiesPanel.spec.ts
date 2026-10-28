@@ -8,6 +8,7 @@ import PropertiesPanel from "../../../src/components/overlays/PropertiesPanel.vu
 import { ENGINE } from "../../../src/app/engineKey";
 import type { Engine } from "../../../src/app/engine";
 import { usePanelsStore } from "../../../src/stores/panels";
+import { printPrefs } from "../../../src/ui/printPrefs";
 
 enableAutoUnmount(afterEach);
 beforeEach(() => setActivePinia(createPinia()));
@@ -49,5 +50,30 @@ describe("PropertiesPanel", () => {
     expect(text()).toContain(OPEN);
     expect(text()).not.toContain("Mass, estimate");
     expect(text()).not.toContain("Filament,");
+  });
+
+  it("takes a wall thickness in any length unit, estimates with it per keystroke and saves it as mm on change", async () => {
+    await mounted();
+    usePanelsStore().showProperties({
+      title: "Casing",
+      rows: [],
+      raw: { volumeMm3: 1000, areaMm2: 600 },
+      faults: [],
+    });
+    await flushPromises();
+    const mass = () =>
+      [...document.body.querySelectorAll(".properties-panel .measure-row")]
+        .find((r) => r.textContent?.includes("Mass, estimate"))
+        ?.querySelector(".measure-v")?.textContent;
+    const saved = printPrefs().wallThicknessMm;
+    const before = mass();
+    const wall = document.body.querySelector<HTMLInputElement>('.properties-panel input[aria-label="Wall thickness"]')!;
+    wall.value = "0.05 in";
+    wall.dispatchEvent(new Event("input"));
+    await flushPromises();
+    expect([printPrefs().wallThicknessMm, mass() === before]).toEqual([saved, false]);
+    wall.dispatchEvent(new Event("change"));
+    expect(printPrefs().wallThicknessMm).toBeCloseTo(1.27, 9);
+    expect(document.body.querySelector('.properties-panel input[type="number"]')).toBeNull();
   });
 });

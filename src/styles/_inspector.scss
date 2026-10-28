@@ -40,34 +40,12 @@
   background: none;
   cursor: default;
 }
-.param-row input {
-  background: var(--field-bg);
-  border: 1px solid transparent;
-  color: var(--text);
-  border-radius: var(--r-sm);
-  /* The app's field size, every input and <select> resolves here. --s-2 vertical keeps
-     a field shorter than a button beside it. */
-  padding: var(--s-2) var(--s-3);
-  /* Not width: 100%, which leaves the unit chip no room. The 0 minimum lets a long value
-     scroll inside the field instead of widening the panel. */
+/* The field, the select and the file button fill the value column; the 0 minimum lets a
+   long value scroll inside instead of widening the panel. */
+.param-value > .ui-field,
+.param-value > .select-trigger {
   flex: 1 1 auto;
   min-width: 0;
-  font: inherit;
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  transition:
-    border-color var(--t-fast) var(--ease),
-    background var(--t-fast) var(--ease),
-    box-shadow var(--t-fast) var(--ease);
-}
-.param-row input:focus {
-  outline: 1px solid var(--accent);
-  outline-offset: 0;
-}
-/* A rejected expression stays in the field so the user can fix it. */
-.param-row input.input-error {
-  border-color: #ff6b6b;
-  box-shadow: 0 0 0 3px rgba(255, 107, 107, 0.18);
 }
 /* Same box as .param-row input: they sit interleaved in one column and must read as one
    kind of control. */
@@ -98,40 +76,9 @@
   min-width: 0;
 }
 .param-file .file-pick {
-  background: var(--float-chip-bg);
-  border: 1px solid transparent;
-  color: var(--text);
-  border-radius: var(--r-sm);
-  padding: var(--s-2) var(--s-3);
   flex: 1 1 auto;
   min-width: 0;
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-  text-align: left;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  transition:
-    border-color var(--t-fast) var(--ease),
-    background var(--t-fast) var(--ease),
-    box-shadow var(--t-fast) var(--ease);
-}
-/* Only present once there is something to clear, so it never takes width from the name. */
-.param-file .file-clear {
-  flex: 0 0 auto;
-  background: none;
-  border: 1px solid transparent;
-  color: var(--text-dim);
-  border-radius: var(--r-sm);
-  padding: 0 var(--s-2);
-  font: inherit;
-  font-size: 14px;
-  line-height: 1.4;
-  cursor: pointer;
-}
-.param-file .file-clear:hover {
-  color: var(--error);
+  justify-content: flex-start;
 }
 
 /* The checkbox stays in the document, not display: none, so it keeps its keyboard
@@ -199,8 +146,8 @@
 }
 /* A stale cached value (cycle, missing ref, non finite), the amber of the solver's over
    defined flag. */
-.param-stale input {
-  border-color: #e0a020;
+.param-stale .ui-field {
+  color: var(--warn);
 }
 
 .params-dialog {
@@ -232,27 +179,10 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
-.params-row input,
-.params-row select {
-  background-color: var(--field-bg);
-  border: 1px solid transparent;
-  color: var(--text);
-  border-radius: var(--r-sm);
-  /* The right 22px is not spacing but clearance for the select's background arrow
-     (right 7px, 9px wide). */
-  padding: var(--s-2) 22px var(--s-2) var(--s-3);
+.params-row > .ui-field,
+.params-row > .select-trigger {
   width: 100%;
-  font: inherit;
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-}
-.params-row input:focus {
-  outline: 1px solid var(--accent);
-  outline-offset: 0;
-}
-.params-row input.input-error {
-  border-color: #ff6b6b;
-  box-shadow: 0 0 0 3px rgba(255, 107, 107, 0.18);
+  min-width: 0;
 }
 .params-value,
 .params-drives {
@@ -263,33 +193,9 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.params-del {
-  background: none;
-  border: none;
-  color: var(--text-dim);
-  font-size: 15px;
-  cursor: pointer;
-  border-radius: var(--r-sm);
-  line-height: 1;
-  padding: var(--s-0) var(--s-2);
-}
-.params-del:hover {
-  color: #ff6b6b;
-  background: rgba(255, 107, 107, 0.12);
-}
-.params-add button {
-  background: var(--float-chip-bg);
-  border: 1px solid transparent;
-  color: var(--text);
-  border-radius: var(--r-sm);
-  /* Field size, not button size, to line up with the inputs above. */
-  padding: var(--s-2) var(--s-3);
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-}
-.params-add button.input-error {
-  border-color: #ff6b6b;
+/* A delete that was refused keeps saying so until the next try. */
+.params-del.is-error {
+  color: var(--error);
 }
 /* In the dialog a stale row badges the whole row, not just its inputs. */
 .params-row.param-stale .params-value {
@@ -333,27 +239,6 @@
 }
 .target-edit {
   flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px var(--s-2) 2px 5px;
-  font: inherit;
-  font-size: 11px;
-  color: var(--text-dim);
-  background: var(--float-chip-bg);
-  border: 1px solid transparent;
-  border-radius: var(--r-sm);
-  cursor: pointer;
-  transition:
-    color var(--t-fast) var(--ease),
-    border-color var(--t-fast) var(--ease);
-}
-.target-edit:hover:not(:disabled) {
-  color: var(--accent-hot);
-}
-.target-edit:disabled {
-  color: var(--accent);
-  cursor: default;
 }
 
 /* The kernel's refusal of a previewed value, only while typing. Full row width: the
@@ -364,12 +249,4 @@
   font-size: 11px;
   line-height: 1.35;
   color: var(--error);
-}
-
-/* A value the kernel refused, not the parser (.input-error): the number itself is wrong,
-   so the number turns, where a parse error only marks the border. */
-.param-row input.input-problem {
-  border-color: var(--error);
-  color: var(--error);
-  box-shadow: 0 0 0 3px var(--error-tint);
 }

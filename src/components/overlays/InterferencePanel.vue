@@ -4,7 +4,9 @@
 import { ref } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { usePanelsStore } from "../../stores/panels";
-import FloatingPanel from "./FloatingPanel.vue";
+import Panel from "../ui/Panel.vue";
+import Checkbox from "../ui/Checkbox.vue";
+import NumberField from "../ui/NumberField.vue";
 import type { ClashRow, ClearanceRow } from "../../stores/panels";
 
 const engine = useEngine();
@@ -18,6 +20,12 @@ function highlight(c: ClashRow | ClearanceRow) {
   engine.ui.panels.highlightInterference(c.a, c.b);
 }
 
+function setThreshold(v: number | null) {
+  if (v === null) return;
+  threshold.value = v;
+  recheck();
+}
+
 function recheck() {
   void engine.ui.panels.showInterference(clearanceOn.value ? threshold.value : undefined);
 }
@@ -28,9 +36,8 @@ function close() {
 </script>
 
 <template>
-  <FloatingPanel :open="!!panels.interference" close-on-esc @close="close">
+  <Panel :open="!!panels.interference" :title="panels.interference?.title" close-on-esc @close="close">
     <template v-if="panels.interference">
-      <div class="measure-title">{{ panels.interference.title }}</div>
       <div
         v-for="(c, i) in panels.interference.clashes"
         :key="'clash' + i"
@@ -59,22 +66,20 @@ function close() {
 
       <div class="measure-divider" />
       <div class="measure-row">
-        <label class="measure-k" style="display: flex; align-items: center; gap: 6px; cursor: pointer">
-          <input type="checkbox" v-model="clearanceOn" @change="recheck" />
-          Clearance mode
-        </label>
-        <span class="measure-v" v-if="clearanceOn">
-          <input
-            class="measure-number"
-            type="number"
-            min="0.01"
-            max="50"
-            step="0.01"
-            v-model.number="threshold"
-            @change="recheck"
-          />
-          mm
-        </span>
+        <Checkbox v-model="clearanceOn" class="measure-k" label="Clearance mode" @update:model-value="recheck" />
+        <NumberField
+          v-if="clearanceOn"
+          class="measure-v"
+          size="sm"
+          unit="mm"
+          :width-ch="6"
+          :min="0.01"
+          :max="50"
+          :step="0.01"
+          tip="Clearance"
+          :model-value="threshold"
+          @update:model-value="setThreshold"
+        />
       </div>
 
       <template v-if="clearanceOn">
@@ -104,5 +109,5 @@ function close() {
         }}
       </div>
     </template>
-  </FloatingPanel>
+  </Panel>
 </template>

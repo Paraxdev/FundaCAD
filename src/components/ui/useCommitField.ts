@@ -27,8 +27,9 @@ export function useCommitField(o: {
   source: () => string;
   /** Owned by the caller so it stays type checked; vue-tsc cannot see a string `ref` inside a composable. */
   el: Readonly<Ref<HTMLInputElement | HTMLTextAreaElement | null>>;
-  /** Commits the text, or returns why not. */
-  apply: (raw: string) => string | null;
+  /** Commits the text, or returns why not. `from` is what the field showed before this edit's first keystroke. False
+   *  means there was nothing to commit, so a preview ends as on Escape. */
+  apply: (raw: string, from: string) => string | null | false;
   live?: () => boolean;
   /** Runs `PREVIEW_MS` after the last keystroke in `change` mode, with the draft. */
   preview?: () => ((raw: string) => void) | undefined;
@@ -39,6 +40,7 @@ export function useCommitField(o: {
   const error = ref<string | null>(null);
   /** Keystrokes the source has not seen. Refused text stays dirty, so it survives an outside change while focused. */
   let dirty = false;
+  let from = draft.value;
   const live = () => o.live?.() ?? false;
   const focused = () => !!o.el.value && document.activeElement === o.el.value;
 
@@ -77,8 +79,9 @@ export function useCommitField(o: {
 
   async function commitDraft() {
     if (!dirty) return;
-    const err = o.apply(draft.value);
-    endPreview(!err);
+    const res = o.apply(draft.value, from);
+    const err = typeof res === "string" ? res : null;
+    endPreview(res === null);
     error.value = err;
     if (err) return;
     dirty = false;
@@ -92,12 +95,14 @@ export function useCommitField(o: {
     draft,
     error,
     input(text) {
+      if (!dirty) from = draft.value;
       draft.value = text;
       dirty = true;
       error.value = null;
       if (!live()) return schedulePreview();
       // Live keeps the typed text while focused: echoing the model back would eat a trailing "1." mid number.
-      error.value = o.apply(text);
+      const res = o.apply(text, from);
+      error.value = typeof res === "string" ? res : null;
     },
     commit() {
       if (!live()) void commitDraft();
