@@ -50,6 +50,75 @@ describe("RenderEnvironment rename", () => {
   });
 });
 
+describe("RenderEnvironment naming", () => {
+  const mountLibrary = async () => {
+    const calls: string[] = [];
+    const lib = {
+      list: async () => [entry("a", "Alpha")],
+      save: async (name: string) => {
+        calls.push(`save ${name}`);
+        return entry("n", name);
+      },
+      rename: async (id: string, name: string) => {
+        calls.push(`rename ${id} ${name}`);
+        return entry(id, name);
+      },
+    } as unknown as EnvLibrary;
+    useEnvLibrary(lib);
+    const engine = {
+      store: null,
+      viewport: { qualityTier: () => "high", onRenderTierChange: () => () => {} },
+    } as unknown as Engine;
+    const w = mount(RenderEnvironment, {
+      attachTo: document.body,
+      global: { provide: { [ENGINE as symbol]: engine } },
+    });
+    await flushPromises();
+    return { w, calls };
+  };
+  const type = async (w: Awaited<ReturnType<typeof mountLibrary>>["w"], text: string) => {
+    const input = w.get<HTMLInputElement>(".rd-name input");
+    input.element.value = text;
+    await input.trigger("input");
+    return input;
+  };
+
+  it("saves under the typed name on Enter and puts the field away", async () => {
+    const { w, calls } = await mountLibrary();
+    await w.get("[data-env-save]").trigger("click");
+    await flushPromises();
+    const input = await type(w, "Dusk");
+    expect(calls).toEqual([]);
+    await input.trigger("keydown", { key: "Enter" });
+    await flushPromises();
+    expect({ calls, field: w.find(".rd-name").exists() }).toEqual({ calls: ["save Dusk"], field: false });
+    w.unmount();
+  });
+
+  it("drops the name on Escape and saves nothing, not even on the blur that follows", async () => {
+    const { w, calls } = await mountLibrary();
+    await w.get("[data-env-save]").trigger("click");
+    await flushPromises();
+    const input = await type(w, "Dusk");
+    await input.trigger("keydown", { key: "Escape" });
+    await input.trigger("blur");
+    await flushPromises();
+    expect({ calls, field: w.find(".rd-name").exists() }).toEqual({ calls: [], field: false });
+    w.unmount();
+  });
+
+  it("renames on blur, once", async () => {
+    const { w, calls } = await mountLibrary();
+    await w.get('[data-rename="Alpha"]').trigger("click");
+    await flushPromises();
+    const input = await type(w, "Bravo");
+    await input.trigger("blur");
+    await flushPromises();
+    expect({ calls, field: w.find(".rd-name").exists() }).toEqual({ calls: ["rename a Bravo"], field: false });
+    w.unmount();
+  });
+});
+
 describe("RenderEnvironment rows", () => {
   afterEach(() => {
     for (const k of ["shadows", "potatoMode", "performanceMode", "brightness", "realtimeQuality", "denoise"] as const)
