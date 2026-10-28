@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { enableAutoUnmount, mount } from "@vue/test-utils";
 
 import TextField from "../../../src/components/ui/TextField.vue";
@@ -7,11 +7,9 @@ import { setMacForTest } from "../../../src/input/platform";
 enableAutoUnmount(afterEach);
 afterEach(() => setMacForTest(null));
 
-type Props = InstanceType<typeof TextField>["$props"];
-
-async function render(props: Partial<Props> = {}, slots: Record<string, string> = {}) {
+async function render(props: Record<string, unknown> = {}, slots: Record<string, string> = {}) {
   const w = mount(TextField, {
-    props: { modelValue: "one", ...props } as Props,
+    props: { modelValue: "one", label: "Name", ...props } as never,
     slots,
     attachTo: document.body,
   });
@@ -123,10 +121,22 @@ describe("TextField", () => {
     expect((input.element as HTMLInputElement).value).toBe("later");
   });
 
-  it("writes tip and keys into title and aria-label through fmtKeys", async () => {
+  it("writes tip and keys into the title through fmtKeys, and names the field by its label alone", async () => {
     setMacForTest(true);
-    const { input } = await render({ tip: "Rename", keys: "Ctrl+R" });
-    expect([input.attributes("title"), input.attributes("aria-label")]).toEqual(["Rename (⌘+R)", "Rename (⌘+R)"]);
+    const { input } = await render({ label: "Rename", tip: "Rename", keys: "Ctrl+R" });
+    expect([input.attributes("title"), input.attributes("aria-label")]).toEqual(["Rename (⌘+R)", "Rename"]);
+  });
+
+  it("names the field by labelledby alone when given one", async () => {
+    const { input } = await render({ label: undefined, labelledby: "name-label" });
+    expect([input.attributes("aria-label"), input.attributes("aria-labelledby")]).toEqual([undefined, "name-label"]);
+  });
+
+  it("warns in a dev build when it has no name", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    mount(TextField, { props: { modelValue: "" } as never });
+    expect(warn.mock.calls.some((c) => String(c[0]).includes("TextField has no name"))).toBe(true);
+    warn.mockRestore();
   });
 
   it("renders the type, placeholder, size and slots", async () => {
@@ -144,7 +154,7 @@ describe("TextField", () => {
 
   it("puts id and test attributes on the input and class on the well", async () => {
     const w = mount(TextField, {
-      props: { modelValue: "" },
+      props: { modelValue: "", label: "Rename" },
       attrs: { id: "rename", "data-testid": "rn", class: "grow" },
     });
     const input = w.get("input");
@@ -179,7 +189,7 @@ describe("TextField", () => {
 
   it("multiline is a textarea that takes rows, types a new line on Enter and commits on blur", async () => {
     const w = mount(TextField, {
-      props: { modelValue: "one", commit: "change", multiline: true },
+      props: { modelValue: "one", label: "Notes", commit: "change", multiline: true },
       attrs: { rows: "4" },
       attachTo: document.body,
     });
@@ -193,9 +203,9 @@ describe("TextField", () => {
     ]).toEqual([false, "4", undefined, true]);
     await area.setValue("one\ntwo");
     await area.trigger("keydown", { key: "Enter" });
-    expect(emitted(w)).toEqual([]);
+    expect(w.emitted("update:modelValue")).toBeUndefined();
     await area.trigger("blur");
-    expect(emitted(w)).toEqual([["one\ntwo"]]);
+    expect(w.emitted("update:modelValue")).toEqual([["one\ntwo"]]);
   });
 
   it("focus() puts the caret in the field", async () => {

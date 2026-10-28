@@ -352,6 +352,7 @@ function onWheel(e: WheelEvent) {
           class="sketch-dim-field"
           size="sm"
           :error="editError"
+          label="Dimension value"
           title=""
           @input="editError = null"
           @keydown="onEditKey($event, l)"

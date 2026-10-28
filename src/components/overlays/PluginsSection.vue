@@ -255,7 +255,7 @@ async function drop(id: string, name: string) {
     type="search"
     spellcheck="false"
     placeholder="Search plugin settings"
-    aria-label="Search plugin settings"
+    label="Search plugin settings"
     data-plugin-settings-search
   />
 
@@ -424,6 +424,7 @@ async function drop(id: string, name: string) {
         type="url"
         spellcheck="false"
         placeholder="https://…"
+        label="Plugin address"
         :disabled="reading"
         @keydown.enter="readUrl()"
       />

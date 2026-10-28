@@ -103,7 +103,7 @@ function onKey(e: KeyboardEvent) {
           v-model="query"
           class="cmdk-input"
           placeholder="Search commands…"
-          aria-label="Search commands"
+          label="Search commands"
           spellcheck="false"
           @keydown="onKey"
         />

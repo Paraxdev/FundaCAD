@@ -105,7 +105,7 @@ onUnmounted(() => {
         multiline
         rows="2"
         placeholder="Text…"
-        aria-label="Text"
+        label="Text"
         @update:model-value="set('text', $event)"
         @keydown.enter.ctrl.prevent="commit"
         @keydown.enter.meta.prevent="commit"
@@ -121,9 +121,10 @@ onUnmounted(() => {
       />
 
       <div class="text-tool-row">
-        <label class="text-tool-label" :for="`${id}-height`">Size</label>
+        <label :id="`${id}-height-label`" class="text-tool-label" :for="`${id}-height`">Size</label>
         <TextField
           :id="`${id}-height`"
+          :labelledby="`${id}-height-label`"
           class="text-tool-num"
           :model-value="form.height"
           size="sm"
@@ -131,9 +132,10 @@ onUnmounted(() => {
           :error="errors.height"
           @update:model-value="set('height', $event)"
         />
-        <label class="text-tool-label" :for="`${id}-angle`">Angle°</label>
+        <label :id="`${id}-angle-label`" class="text-tool-label" :for="`${id}-angle`">Angle°</label>
         <TextField
           :id="`${id}-angle`"
+          :labelledby="`${id}-angle-label`"
           class="text-tool-num"
           :model-value="form.angle"
           size="sm"
@@ -156,9 +158,10 @@ onUnmounted(() => {
       </div>
 
       <div class="text-tool-row">
-        <label class="text-tool-label" :for="`${id}-box`">Box width (mm)</label>
+        <label :id="`${id}-box-label`" class="text-tool-label" :for="`${id}-box`">Box width (mm)</label>
         <TextField
           :id="`${id}-box`"
+          :labelledby="`${id}-box-label`"
           class="text-tool-wide"
           :model-value="form.boxWidth"
           size="sm"

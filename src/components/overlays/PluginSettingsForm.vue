@@ -190,6 +190,7 @@ const isDefault = (p: SettingProp) => {
             <TextField
               v-else-if="p.type === 'string'"
               :id="id(p)"
+              :label="p.label ?? p.key"
               class="plugset-text"
               commit="change"
               spellcheck="false"
@@ -221,6 +222,7 @@ const isDefault = (p: SettingProp) => {
             <template v-else-if="p.type === 'file'">
               <TextField
                 :id="id(p)"
+                :label="p.label ?? p.key"
                 class="plugset-text"
                 commit="change"
                 spellcheck="false"

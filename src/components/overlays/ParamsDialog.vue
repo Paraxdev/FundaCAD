@@ -119,17 +119,20 @@ function add() {
       >
         <TextField
           commit="change"
+          :label="`Name of ${r.name}`"
           :model-value="r.name"
           :validate="commitWith((raw) => (raw === r.name ? null : store.renameParam(r.name, raw)))"
         />
         <TextField
           commit="change"
+          :label="`Expression of ${r.name}`"
           :model-value="r.def.expr"
           :validate="commitWith((raw) => store.setParamExpr(r.name, raw))"
         />
         <span class="params-value">{{ r.value }}</span>
         <TextField
           commit="change"
+          :label="`Comment on ${r.name}`"
           :model-value="r.def.comment ?? ''"
           :validate="commitWith((raw) => (store.setParamComment(r.name, raw), null))"
         />
@@ -145,8 +148,8 @@ function add() {
       </div>
 
       <div class="params-row params-add">
-        <TextField v-model="newName" placeholder="name" />
-        <TextField v-model="newExpr" placeholder="expression" @keydown.enter="add()" />
+        <TextField v-model="newName" placeholder="name" label="New parameter name" />
+        <TextField v-model="newExpr" placeholder="expression" label="New parameter expression" @keydown.enter="add()" />
         <Select v-model="newUnit" :options="UNITS" label="New parameter unit" />
         <Button :variant="addError ? 'danger' : 'secondary'" :tip="addError || undefined" @click="add()">+ Add</Button>
       </div>
@@ -165,11 +168,13 @@ function add() {
         >
           <TextField
             commit="change"
+            :label="`Name of ${r.name}`"
             :model-value="r.name"
             :validate="commitWith((raw) => (raw === r.name ? null : store.renameParam(r.name, raw)))"
           />
           <TextField
             commit="change"
+            :label="`Expression of ${r.name}`"
             :model-value="r.def.expr"
             :validate="commitWith((raw) => store.setParamExpr(r.name, raw))"
           />

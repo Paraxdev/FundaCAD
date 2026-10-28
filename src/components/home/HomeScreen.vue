@@ -351,7 +351,7 @@ onUnmounted(() => {
           class="home-search"
           type="search"
           placeholder="Search documents"
-          aria-label="Search documents"
+          label="Search documents"
           spellcheck="false"
         />
         <Select v-model="shownSort" class="home-sort" :options="sorts" label="Sort by" />

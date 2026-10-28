@@ -290,7 +290,7 @@ const qualityChoices = computed(() =>
             class="rd-name"
             size="sm"
             select-on-focus
-            aria-label="Environment name"
+            label="Environment name"
             maxlength="60"
             @keydown.enter.prevent="finishNaming"
             @keydown.escape.prevent="naming = null"
@@ -314,7 +314,7 @@ const qualityChoices = computed(() =>
         class="rd-name"
         size="sm"
         select-on-focus
-        aria-label="Name for this environment"
+        label="Name for this environment"
         maxlength="60"
         data-env-name
         @keydown.enter.prevent="finishNaming"
