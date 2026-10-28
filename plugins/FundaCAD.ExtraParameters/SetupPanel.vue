@@ -312,6 +312,7 @@ const iconBtn = { background: "none", border: "none", color: "inherit", cursor: 
               :size="13"
               :style="{ color: c.result?.ok ? '#3ba55d' : c.check.level === 'error' ? '#e24a3b' : '#d2a83b' }"
               :title="c.result?.error ?? (c.result?.ok ? 'holds' : 'does not hold')"
+              :label="c.result?.error ?? (c.result?.ok ? 'holds' : 'does not hold')"
             />
             <input :style="input" :value="c.check.expr" @change="editCheck(c.check.id, { expr: val($event).trim() })" />
             <input
