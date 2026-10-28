@@ -75,7 +75,7 @@ function check(name, ok, detail = "") {
     };
     const menu = async (top, item) => {
       await page.click(`.menu-btn:has-text("${top}")`);
-      await page.click(`.menu-popup:not(.hidden) .menu-item:has-text("${item}")`);
+      await page.click(`.ui-menu .menu-item:has-text("${item}")`);
     };
 
     console.log("1. startup");
@@ -138,7 +138,7 @@ function check(name, ok, detail = "") {
     await page.mouse.click(bar.x, bar.y);
     await page.waitForTimeout(200);
     const afterClick = await page.evaluate(() => ({
-      menu: !!document.querySelector(".menu-popup:not(.hidden)"),
+      menu: !!document.querySelector(".ui-menu .menu-item"),
       home: !!document.querySelector("#stage .home"),
     }));
     check(

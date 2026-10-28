@@ -4,6 +4,7 @@ import { useContextMenuStore, type CtxItem } from "../stores/contextMenu";
 import { useRadialMenuStore } from "../stores/radialMenu";
 import { RadialSession, pickRadial, type RadialTrigger } from "./radialMenu";
 import { claimEscape } from "./escapeClaim";
+import { isMenuKey } from "./focus";
 
 export interface MenuItem {
   label: string;
@@ -32,6 +33,25 @@ export function dismissContextMenu(): void {
  *  whatever was open. */
 export function contextMenu(x: number, y: number, items: CtxItem[]): void {
   useContextMenuStore().show(x, y, items);
+}
+
+// On document in the bubble phase, so the focused menu has had the key first. Escape is the menu's own, in capture.
+function keepMenuKeys(e: KeyboardEvent): void {
+  if (isMenuKey(e)) e.stopPropagation();
+}
+
+let keyGuards = 0;
+
+/** While a menu holds focus, the keys it moves and types ahead with stop short of the window's shortcuts, where an arrow
+ *  turns the view and a letter starts a tool. Ctrl, Alt and Meta combos, Delete and the F keys still pass. */
+export function guardMenuKeys(): () => void {
+  if (keyGuards++ === 0) document.addEventListener("keydown", keepMenuKeys);
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    if (--keyGuards === 0) document.removeEventListener("keydown", keepMenuKeys);
+  };
 }
 
 export interface MenuAtOptions {

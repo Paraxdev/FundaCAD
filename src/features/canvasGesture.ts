@@ -2,6 +2,7 @@
 // Extrude does not use this: its uncaptured pointerdown lets the viewport pick change the profile first.
 
 import { escapeClaimed } from "../ui/escapeClaim";
+import { isMenuKey } from "../ui/focus";
 
 export interface GestureHandlers {
   move(e: PointerEvent): void;
@@ -28,6 +29,7 @@ export class CanvasGesture {
     this.down = (e) => handlers.down(e);
     this.up = (e) => handlers.up?.(e);
     this.key = (e) => {
+      if (isMenuKey(e)) return;
       if (e.key !== "Escape" || !escapeClaimed()) handlers.key(e);
     };
     // raf is cleared before the pass runs, so a re-arm from inside it takes

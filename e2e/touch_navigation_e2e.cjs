@@ -342,10 +342,10 @@ const check = (name, ok, detail) => {
   await reset();
   await touch("touchStart", [[cx, cy]]);
   await page.waitForTimeout(800);
-  const menu = await page.evaluate(() => document.querySelectorAll(".context-menu .ctx-item").length);
+  const menu = await page.evaluate(() => document.querySelectorAll(".ctx-item").length);
   await touch("touchEnd", []);
   await page.waitForTimeout(300);
-  const stillOpen = await page.evaluate(() => document.querySelectorAll(".context-menu .ctx-item").length);
+  const stillOpen = await page.evaluate(() => document.querySelectorAll(".ctx-item").length);
   check("touch: a long press opens the viewport menu", menu > 0, { items: menu });
   check("touch: lifting the finger leaves the menu open", stillOpen > 0, { items: stillOpen });
   await shot("09_touch_long_press.png");
@@ -395,10 +395,10 @@ const check = (name, ok, detail) => {
     check("touch: a pinch over the panels does not zoom the page", Math.abs(zoom - 1) < 1e-6, { scale: zoom });
     await touch("touchStart", [[row.x, row.y]]);
     await page.waitForTimeout(800);
-    const rowMenu = await page.evaluate(() => document.querySelectorAll(".context-menu .ctx-item").length);
+    const rowMenu = await page.evaluate(() => document.querySelectorAll(".ctx-item").length);
     await touch("touchEnd", []);
     await page.waitForTimeout(300);
-    const rowOpen = await page.evaluate(() => document.querySelectorAll(".context-menu .ctx-item").length);
+    const rowOpen = await page.evaluate(() => document.querySelectorAll(".ctx-item").length);
     check("touch: a long press on a tree row opens its menu", rowMenu > 0, { items: rowMenu });
     check("touch: and the release does not close it", rowOpen > 0, { items: rowOpen });
     await shot("10_tree_long_press.png");

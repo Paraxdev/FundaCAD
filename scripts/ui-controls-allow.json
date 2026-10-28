@@ -91,7 +91,6 @@
   { "path": "src/components/overlays/StressSetupStep.vue", "kind": "button", "count": 13, "reason": "before the base set, migrates in lane J (stress)" },
   { "path": "src/components/overlays/StressSetupStep.vue", "kind": "input[type=checkbox]", "count": 1, "reason": "before the base set, migrates in lane J (stress)" },
   { "path": "src/components/shell/DenoiserRow.vue", "kind": "button", "count": 1, "reason": "before the base set, migrates in lane P (render dock)" },
-  { "path": "src/components/shell/MenuBar.vue", "kind": "button", "count": 1, "reason": "before the base set, migrates in lane G (shell chrome)" },
   { "path": "src/components/shell/NumberBox.vue", "kind": "input[type=text]", "count": 1, "reason": "before the base set, migrates in lane I (feature rows and readouts)" },
   { "path": "src/components/shell/RenderCamera.vue", "kind": "button", "count": 3, "reason": "before the base set, migrates in lane P (render dock)" },
   { "path": "src/components/shell/RenderCamera.vue", "kind": "input[type=checkbox]", "count": 3, "reason": "before the base set, migrates in lane P (render dock)" },

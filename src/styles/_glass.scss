@@ -223,7 +223,6 @@
 .context-menu {
   padding: 5px;
 }
-.ctx-item:hover,
 .home-nav-row:hover:not(.active) {
   background: color-mix(in srgb, var(--accent) 16%, transparent);
 }
@@ -502,7 +501,6 @@
   background: var(--panel-2);
 }
 
-.menu-item:hover,
 .cmdk-item.active {
   background: color-mix(in srgb, var(--accent) 16%, transparent);
 }

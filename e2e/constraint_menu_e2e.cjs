@@ -155,13 +155,13 @@ const check = (name, ok, detail) => {
     await page.mouse.click(s.x, s.y, { button: "right" });
     await page.waitForTimeout(250);
     return page.evaluate(() =>
-      [...document.querySelectorAll(".context-menu .ctx-item .ctx-label")].map((el) => el.textContent.trim()),
+      [...document.querySelectorAll(".ctx-item .ui-menu-label")].map((el) => el.textContent.trim()),
     );
   };
   const choose = async (label) => {
     const row = page
-      .locator(".context-menu .ctx-item")
-      .filter({ has: page.locator(".ctx-label", { hasText: new RegExp(`^${label}$`) }) })
+      .locator(".ctx-item")
+      .filter({ has: page.locator(".ui-menu-label", { hasText: new RegExp(`^${label}$`) }) })
       .first();
     await row.click();
     await page.waitForTimeout(400);
