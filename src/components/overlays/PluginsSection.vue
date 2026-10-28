@@ -303,7 +303,7 @@ async function drop(id: string, name: string) {
     <div class="plug-state">
       Version {{ rec.version }}.
       <span v-if="whereFrom(rec)"> {{ whereFrom(rec) }}</span>
-      <Button variant="ghost" size="sm" class="plug-uses" @click="showing = showing === rec.id ? '' : rec.id">
+      <Button variant="ghost" size="sm" @click="showing = showing === rec.id ? '' : rec.id">
         {{ showing === rec.id ? "Hide what it uses" : "What it uses" }}
       </Button>
       <Checkbox
