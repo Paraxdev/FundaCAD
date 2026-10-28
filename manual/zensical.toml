@@ -1,7 +1,7 @@
 [project]
 site_name = "FundaCAD"
-site_url = "https://paraxdev.github.io/FundaCAD/"
-site_description = "The FundaCAD user manual"
+site_url = "https://fundacad.dev/"
+site_description = "FundaCAD is free, open source parametric CAD for 3D printing on Windows, macOS and Linux. This manual covers installing it, sketching, modelling and exporting for your slicer."
 docs_dir = "docs"
 repo_url = "https://github.com/Paraxdev/fundacad"
 repo_name = "Paraxdev/fundacad"
@@ -58,6 +58,7 @@ nav = [
 ]
 
 [project.theme]
+custom_dir = "overrides"
 features = [
   "navigation.tabs",
   "navigation.sections",
