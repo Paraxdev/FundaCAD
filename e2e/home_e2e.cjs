@@ -62,6 +62,17 @@ function check(name, ok, detail = "") {
       });
     };
     const homeUp = () => page.evaluate(() => !!document.querySelector("#stage .home"));
+    // Select.vue is a combobox over a listbox, not a native <select>.
+    const pick = async (trigger, label) => {
+      await page.click(trigger);
+      await page.click(`.select-pop [role="option"]:has(.opt-label:text-is("${label}"))`);
+    };
+    const optionsOf = async (trigger) => {
+      await page.click(trigger);
+      const labels = await page.$$eval('.select-pop [role="option"]', (els) => els.map((e) => e.textContent.trim()));
+      await page.keyboard.press("Escape");
+      return labels.join(",");
+    };
     const menu = async (top, item) => {
       await page.click(`.menu-btn:has-text("${top}")`);
       await page.click(`.menu-popup:not(.hidden) .menu-item:has-text("${item}")`);
@@ -261,19 +272,19 @@ function check(name, ok, detail = "") {
     await page.waitForTimeout(300);
     const names = () => page.$$eval(".home-card-name", (els) => els.map((el) => el.textContent).join(","));
     await page.keyboard.press("Control+f");
-    const focused = await page.evaluate(() => document.activeElement?.classList.contains("home-search"));
+    const focused = await page.evaluate(() => !!document.activeElement?.closest(".home-search"));
     check("Ctrl+F focuses the search field", focused);
     const palette = await page.evaluate(() => !!document.querySelector(".cmdk-card"));
     check("and does not open the palette", !palette);
     await page.keyboard.type("misc");
     await page.waitForTimeout(100);
     check("search filters by folder", (await names()) === "gear,axle", await names());
-    await page.fill(".home-search", "");
-    await page.selectOption(".home-sort", "name");
+    await page.fill(".home-search input", "");
+    await pick(".home-sort", "Name");
     check("Name sorts by name", (await names()) === "axle,bracket,gear", await names());
-    await page.selectOption(".home-sort", "edited");
+    await pick(".home-sort", "Last edited");
     check("Last edited sorts by the file time", (await names()) === "gear,axle,bracket", await names());
-    await page.selectOption(".home-sort", "opened");
+    await pick(".home-sort", "Last opened");
 
     console.log("8. templates");
     const bodyCounts = { Plate: 1, "Wall bracket": 1, "Pinned lever": 1, "Box with a lid": 2 };
@@ -375,28 +386,28 @@ function check(name, ok, detail = "") {
     });
     await menu("File", "Home");
     await page.click(".home-add-folder");
-    await page.waitForSelector(".home-folder-row.active", { timeout: 3000 }).catch(() => {});
+    await page.waitForSelector(".home-folder-row.is-selected", { timeout: 3000 }).catch(() => {});
     const folderCards = await page.$$eval(".home-card-name", (els) => els.map((e) => e.textContent).join(","));
     check(
       "the added folder is listed",
       (await page.textContent(".home-folder-row").catch(() => ""))?.trim() === "proj",
     );
     check("its documents and those of its subfolders show", folderCards === "gearbox,shaft", folderCards);
-    const sorts = await page.$$eval(".home-sort option", (els) => els.map((e) => e.textContent).join(","));
+    const sorts = await optionsOf(".home-sort");
     check("a folder sorts by edit time or name", sorts === "Last edited,Name", sorts);
     await page.setViewportSize({ width: 700, height: 900 });
     await page.waitForTimeout(300);
     const narrow = await page.evaluate(() => ({
       side: getComputedStyle(document.querySelector(".home-side")).display,
       select: getComputedStyle(document.querySelector(".home-view-select")).display,
-      options: [...document.querySelectorAll(".home-view-select option")].map((o) => o.textContent).join(","),
     }));
+    narrow.options = await optionsOf(".home-view-select");
     check(
       "a narrow window picks the folder from a Select",
       narrow.side === "none" && narrow.select !== "none" && narrow.options === "Recent,proj,Add folder…",
       JSON.stringify(narrow),
     );
-    await page.selectOption(".home-view-select", "recent");
+    await pick(".home-view-select", "Recent");
     await page.waitForTimeout(200);
     check("the Select goes back to Recent", (await page.$$(".home-card")).length === 0);
     await page.setViewportSize({ width: 1400, height: 900 });
