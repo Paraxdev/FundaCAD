@@ -30,6 +30,7 @@ const choices = computed(() => (props.options ?? []).map((id) => ({ value: id, l
     size="sm"
     :model-value="unit"
     :options="choices"
+    :label="tip ?? 'Unit'"
     :tip="tip ?? 'Unit'"
     :keys="keys"
     :disabled="disabled"

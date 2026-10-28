@@ -180,6 +180,7 @@ const isDefault = (p: SettingProp) => {
             <Select
               v-else-if="p.type === 'enum'"
               :id="id(p)"
+              :label="p.label ?? p.key"
               class="plugset-select"
               :model-value="String(values[p.key])"
               :options="p.options.map((o) => ({ value: o.id, label: o.label }))"

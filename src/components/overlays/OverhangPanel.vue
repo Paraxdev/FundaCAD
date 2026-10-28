@@ -58,7 +58,13 @@ function apply() {
   >
     <div class="measure-row">
       <span class="measure-k">Build direction</span>
-      <Select :model-value="dir" :options="DIR_OPTIONS" testid="overhang-dir" @update:model-value="setDir" />
+      <Select
+        :model-value="dir"
+        :options="DIR_OPTIONS"
+        label="Build direction"
+        testid="overhang-dir"
+        @update:model-value="setDir"
+      />
     </div>
     <div class="measure-row">
       <span class="measure-k">Threshold</span>

@@ -7,32 +7,36 @@ import Popover from "./Popover.vue";
 import ChoiceList from "./ChoiceList.vue";
 import { rovingIndex, rovingStop } from "./useRovingFocus";
 import { useDisabled } from "./useDisabled";
+import { useName, type Named } from "./useName";
 import { fmtKeys } from "../../input/platform";
 
 defineOptions({ inheritAttrs: false });
 
 const props = withDefaults(
-  defineProps<{
-    modelValue: T;
-    options: readonly { value: T; label: string; hint?: string | undefined; disabled?: boolean | undefined }[];
-    id?: string | undefined;
-    testid?: string | undefined;
-    disabled?: boolean | undefined;
-    disabledReason?: string | undefined;
-    /** Shown when no option holds the value. */
-    placeholder?: string | undefined;
-    size?: "sm" | "md";
-    /** `chip` draws the trigger as a UnitChip picker, a quiet word beside a value instead of a well. */
-    variant?: "field" | "chip";
-    tip?: string | undefined;
-    keys?: string | undefined;
-  }>(),
+  defineProps<
+    {
+      modelValue: T;
+      options: readonly { value: T; label: string; hint?: string | undefined; disabled?: boolean | undefined }[];
+      id?: string | undefined;
+      testid?: string | undefined;
+      disabled?: boolean | undefined;
+      disabledReason?: string | undefined;
+      /** Shown when no option holds the value. */
+      placeholder?: string | undefined;
+      size?: "sm" | "md";
+      /** `chip` draws the trigger as a UnitChip picker, a quiet word beside a value instead of a well. */
+      variant?: "field" | "chip";
+      tip?: string | undefined;
+      keys?: string | undefined;
+    } & Named
+  >(),
   { disabled: false, size: "md", variant: "field" },
 );
 
 const emit = defineEmits<{ "update:modelValue": [T] }>();
 
 const d = useDisabled(props);
+const name = useName(props, "Select");
 const open = ref(false);
 const active = ref(-1);
 const btn = useTemplateRef<HTMLButtonElement>("btn");
@@ -177,7 +181,7 @@ onBeforeUnmount(() => window.clearTimeout(bufferTimer));
 <template>
   <button
     ref="btn"
-    v-bind="mergeProps($attrs, d.bind.value)"
+    v-bind="mergeProps($attrs, d.bind.value, name)"
     :id="id"
     type="button"
     role="combobox"
@@ -187,7 +191,6 @@ onBeforeUnmount(() => window.clearTimeout(bufferTimer));
       { open, 'is-open': open },
     ]"
     :title="d.title(tipText ?? ($attrs.title as string | undefined))"
-    :aria-label="tipText ?? ($attrs['aria-label'] as string | undefined)"
     :data-testid="testid"
     :data-value="modelValue"
     aria-haspopup="listbox"

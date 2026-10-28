@@ -115,7 +115,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
     <div class="modal-body prefs export-body">
       <label class="prefs-row">
         <span class="prefs-label">Type</span>
-        <Select v-model="settings.format" :options="formatOptions" testid="export-format" />
+        <Select v-model="settings.format" :options="formatOptions" label="Type" testid="export-format" />
       </label>
       <template v-if="flatShown && flat">
         <div class="prefs-row">
@@ -143,20 +143,21 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
       </template>
       <label v-if="bodies.length > 1 && !flatShown" class="prefs-row">
         <span class="prefs-label">Bodies</span>
-        <Select v-model="scope" :options="scopeOptions" testid="export-scope" />
+        <Select v-model="scope" :options="scopeOptions" label="Bodies" testid="export-scope" />
       </label>
 
       <template v-if="mesh">
         <div class="sm-section">Output</div>
         <label v-if="unitShown" class="prefs-row">
           <span class="prefs-label">Unit</span>
-          <Select v-model="settings.unit" :options="UNITS" testid="export-unit" />
+          <Select v-model="settings.unit" :options="UNITS" label="Unit" testid="export-unit" />
         </label>
         <label v-if="settings.format === 'stl'" class="prefs-row">
           <span class="prefs-label">Format</span>
           <Select
             :model-value="settings.binary ? 'binary' : 'ascii'"
             :options="BINARY_OPTIONS"
+            label="Format"
             testid="export-binary"
             @update:model-value="settings.binary = $event === 'binary'"
           />
@@ -166,6 +167,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
           <Select
             :model-value="settings.refinement"
             :options="REFINEMENT_OPTIONS"
+            label="Refinement"
             testid="export-refinement"
             @update:model-value="onRefinement"
           />

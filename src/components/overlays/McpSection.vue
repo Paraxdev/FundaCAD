@@ -82,7 +82,13 @@ async function copy(text: string) {
   <div class="sm-section">AI assistants (MCP)</div>
   <label class="prefs-row">
     <span class="prefs-label">Live document</span>
-    <Select id="prefs-live" :model-value="live" :options="LIVE_OPTIONS" @update:model-value="onLive" />
+    <Select
+      id="prefs-live"
+      label="Live document"
+      :model-value="live"
+      :options="LIVE_OPTIONS"
+      @update:model-value="onLive"
+    />
   </label>
   <div class="sm-hint">
     An assistant works on the open document rather than on a copy. Each edit is one undo, and the title bar says who is
@@ -100,7 +106,13 @@ async function copy(text: string) {
   <template v-else-if="setup">
     <label class="prefs-row">
       <span class="prefs-label">Assistant</span>
-      <Select id="prefs-mcp-host" :model-value="host" :options="hostOptions" @update:model-value="onHost" />
+      <Select
+        id="prefs-mcp-host"
+        label="Assistant"
+        :model-value="host"
+        :options="hostOptions"
+        @update:model-value="onHost"
+      />
     </label>
     <div class="mcp-setup">
       <div class="sm-hint">{{ setup.hint }}</div>

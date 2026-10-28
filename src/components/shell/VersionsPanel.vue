@@ -150,6 +150,7 @@ function changedNames(v: Version): { kind: string; name: string }[] {
         v-if="branches.length > 1"
         class="versions-branch"
         size="sm"
+        label="Branch"
         tip="Branch"
         :model-value="branch"
         :options="branches.map((b) => ({ value: b, label: b }))"

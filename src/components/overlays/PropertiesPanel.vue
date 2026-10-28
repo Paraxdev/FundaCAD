@@ -96,7 +96,7 @@ function close() {
             :model-value="prefs.materialId"
             :options="MATERIALS"
             size="sm"
-            aria-label="Material"
+            label="Material"
             @update:model-value="set('materialId', $event)"
           />
         </div>

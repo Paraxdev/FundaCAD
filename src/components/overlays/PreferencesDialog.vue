@@ -364,7 +364,13 @@ function onClassicCamera(on: boolean) {
             <div class="pref-card wide">
               <div class="pref-head">
                 <label class="pref-title" for="prefs-theme">Theme</label>
-                <Select id="prefs-theme" :model-value="theme" :options="themeOptions" @update:model-value="onTheme" />
+                <Select
+                  id="prefs-theme"
+                  label="Theme"
+                  :model-value="theme"
+                  :options="themeOptions"
+                  @update:model-value="onTheme"
+                />
               </div>
               <p class="pref-hint">
                 FundaCAD Noir, Dracula, Solarized Light and the Noir Blue/Red/Orange tints ship with FundaCAD. Upload a
@@ -388,7 +394,13 @@ function onClassicCamera(on: boolean) {
             <div class="pref-card">
               <div class="pref-head">
                 <label class="pref-title" for="prefs-iconpack">Icons</label>
-                <Select id="prefs-iconpack" :model-value="pack" :options="packOptions" @update:model-value="onPack" />
+                <Select
+                  id="prefs-iconpack"
+                  label="Icons"
+                  :model-value="pack"
+                  :options="packOptions"
+                  @update:model-value="onPack"
+                />
               </div>
             </div>
             <div class="pref-card">
@@ -442,6 +454,7 @@ function onClassicCamera(on: boolean) {
                 <label class="pref-title" for="prefs-environment">Reflections</label>
                 <Select
                   id="prefs-environment"
+                  label="Reflections"
                   :model-value="render.environment"
                   :options="environmentOptions"
                   @update:model-value="onEnvironment"

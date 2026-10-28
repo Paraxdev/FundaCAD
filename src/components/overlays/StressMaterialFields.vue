@@ -21,7 +21,7 @@ function fmt(v: number): string {
 <template>
   <label class="stress-field">
     <span class="measure-k">Material</span>
-    <Select v-model="setup.material" :options="options" class="stress-material" />
+    <Select v-model="setup.material" :options="options" label="Material" class="stress-material" />
   </label>
   <div v-if="preset" class="measure-k stress-material-line">
     E {{ fmt(preset.E) }} MPa, ν {{ preset.nu }}, yield {{ fmt(preset.yield) }} MPa, {{ fmt(preset.density) }} g/cm³

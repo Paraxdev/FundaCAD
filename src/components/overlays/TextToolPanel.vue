@@ -115,6 +115,7 @@ onUnmounted(() => {
         :model-value="form.font"
         :options="fonts"
         size="sm"
+        label="Font"
         tip="Font"
         @update:model-value="set('font', $event)"
       />

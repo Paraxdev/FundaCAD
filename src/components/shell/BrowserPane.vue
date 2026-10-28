@@ -917,6 +917,7 @@ onUnmounted(() => root.value?.removeEventListener("wheel", onWheel));
       <Select
         id="browser-filter"
         class="browser-filter"
+        label="Show only one kind of item"
         tip="Show only one kind of item"
         :model-value="filter"
         :options="filterOptions"

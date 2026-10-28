@@ -147,7 +147,7 @@ function add() {
       <div class="params-row params-add">
         <TextField v-model="newName" placeholder="name" />
         <TextField v-model="newExpr" placeholder="expression" @keydown.enter="add()" />
-        <Select v-model="newUnit" :options="UNITS" />
+        <Select v-model="newUnit" :options="UNITS" label="New parameter unit" />
         <Button :variant="addError ? 'danger' : 'secondary'" :tip="addError || undefined" @click="add()">+ Add</Button>
       </div>
 

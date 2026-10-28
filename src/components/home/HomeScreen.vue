@@ -343,7 +343,7 @@ onUnmounted(() => {
           class="home-view-select"
           :model-value="view"
           :options="viewOptions"
-          aria-label="Show"
+          label="Show"
           @update:model-value="onViewSelect"
         />
         <TextField
@@ -354,7 +354,7 @@ onUnmounted(() => {
           aria-label="Search documents"
           spellcheck="false"
         />
-        <Select v-model="shownSort" class="home-sort" :options="sorts" aria-label="Sort by" />
+        <Select v-model="shownSort" class="home-sort" :options="sorts" label="Sort by" />
       </div>
 
       <p v-if="listing && !(listing instanceof Error) && listing.truncated" class="home-note">

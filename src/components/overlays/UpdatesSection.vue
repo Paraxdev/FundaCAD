@@ -59,6 +59,7 @@ function onPeriod(v: string) {
           <label class="pref-title" for="prefs-update-period">Check</label>
           <Select
             id="prefs-update-period"
+            label="Check"
             :model-value="period"
             :options="options"
             :disabled="!auto"

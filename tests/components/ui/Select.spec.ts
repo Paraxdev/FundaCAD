@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 
 import Select from "../../../src/components/ui/Select.vue";
@@ -17,7 +17,7 @@ const OPTIONS: { value: V; label: string; disabled?: boolean }[] = [
 
 async function render(props: Record<string, unknown> = {}) {
   const w = mount(Select<V>, {
-    props: { modelValue: "banana", options: OPTIONS, ...props },
+    props: { modelValue: "banana", options: OPTIONS, label: "Fruit", ...props },
     attachTo: document.body,
   });
   // Vue skips a listener for an event stamped in the same millisecond it was attached, once another listener ran.
@@ -190,7 +190,10 @@ describe("Select", () => {
   });
 
   it("opens on a click that lands in the same millisecond as its mount", async () => {
-    const w = mount(Select<V>, { props: { modelValue: "banana", options: OPTIONS }, attachTo: document.body });
+    const w = mount(Select<V>, {
+      props: { modelValue: "banana", options: OPTIONS, label: "Fruit" },
+      attachTo: document.body,
+    });
     (w.get("button").element as HTMLElement).click();
     await flushPromises();
     expect(listbox()).not.toBeNull();
@@ -222,6 +225,23 @@ describe("Select", () => {
   it("shows the placeholder when no option holds the value", async () => {
     const { el } = await render({ modelValue: "fig", placeholder: "Pick a fruit" });
     expect(el.textContent?.trim()).toBe("Pick a fruit");
+  });
+
+  it("names the trigger by its label, not by the tooltip and its key chord", async () => {
+    const { el } = await render({ label: "Fruit", tip: "Pick a fruit", keys: "Ctrl+F" });
+    expect([el.getAttribute("aria-label"), el.getAttribute("aria-labelledby")]).toEqual(["Fruit", null]);
+  });
+
+  it("names the trigger by labelledby alone when given one", async () => {
+    const { el } = await render({ label: undefined, labelledby: "fruit-label" });
+    expect([el.getAttribute("aria-label"), el.getAttribute("aria-labelledby")]).toEqual([null, "fruit-label"]);
+  });
+
+  it("warns in a dev build when it has no name", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    mount(Select<V>, { props: { modelValue: "banana", options: OPTIONS } as never });
+    expect(warn.mock.calls.some((c) => String(c[0]).includes("Select has no name"))).toBe(true);
+    warn.mockRestore();
   });
 
   it("keeps the attributes callers and e2e scripts rely on", async () => {
