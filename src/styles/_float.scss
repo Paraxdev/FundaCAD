@@ -541,7 +541,7 @@
   font-weight: 600;
   color: var(--text);
 }
-// Segmented chips, each choice a sphere; the selected one sits in an accent halo, the fill of a chosen segment.
+// Segmented chips, each choice a sphere; the selected one sits in a solid accent halo, since a wash hides behind the image.
 .ui-segmented.matcap-swatches {
   gap: var(--s-2);
   margin: var(--s-2) var(--s-1);
@@ -550,7 +550,11 @@
   width: 42px;
   height: 42px;
   padding: 3px;
+  corner-shape: round;
   border-radius: 50%;
+}
+.vc-pop .matcap-swatches .ui-segment.matcap-swatch.is-selected {
+  background: var(--accent);
 }
 .matcap-ball {
   width: 36px;

@@ -53,8 +53,8 @@
   position: relative;
   display: flex;
 }
-// Button ghost sm, stretched to the bar's height less the margin.
-.btn.menu-btn {
+// Button ghost sm, stretched to the bar's height less the margin; .menubar outranks the sm size rule.
+.menubar .btn.menu-btn {
   min-height: 0;
   padding: 0 var(--s-4);
   /* The 1px is not a spacing rung but the hairline that keeps adjacent hover fills apart;
@@ -62,7 +62,7 @@
   margin: var(--s-2) 1px;
   font-size: 12.5px;
 }
-.btn.menu-btn.is-open {
+.menubar .btn.menu-btn.is-open {
   background: var(--btn-hover);
   color: var(--text);
 }
