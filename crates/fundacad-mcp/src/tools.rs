@@ -86,7 +86,12 @@ pub fn doc_save() -> JsonObject {
 pub fn doc_get() -> JsonObject {
     object(
         json!({"features_only": {"type": "boolean",
-                                 "description": "omit the parameter table"}}),
+                                 "description": "omit the parameter table"},
+               "full": {"type": "boolean",
+                        "description": "the document as stored, pretty printed: every bodyIds entry and every \
+                                        import's nodes and parts. By default runs of bodyIds read as one \
+                                        \"sep1:0..sep1:9\": \"body4..body13\" entry and an import's lists \
+                                        over 30 entries are left out; doc_set reads both back"}}),
         &[],
     )
 }
@@ -473,7 +478,7 @@ pub fn view() -> JsonObject {
 }
 
 pub fn export() -> JsonObject {
-    object(
+    let schema = object(
         json!({
             "path": {"type": "string"},
             "format": {"type": "string", "enum": ["step", "stl", "3mf", "dxf", "svg"],
@@ -500,10 +505,14 @@ pub fn export() -> JsonObject {
                         "anyOf": [{"type": "boolean"}, {"type": "object"}]},
             "allowPartial": {"type": "boolean",
                              "description": "write the file even if a feature failed to build \
-                                             (default: refuse and name the failures)"}
+                                             (default: refuse and name the failures)"},
+            "full": {"type": "boolean",
+                     "description": "separate: one line per file written; by default a long list folds the \
+                                     files of one name and size into one line"}
         }),
         &["path", "format"],
-    )
+    );
+    paged(schema, "file rows of a separate export (default 30, all with full)")
 }
 
 // The ui tools, standalone only.

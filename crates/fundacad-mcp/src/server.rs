@@ -21,6 +21,7 @@ use tokio::sync::Mutex;
 use crate::budget::{self, Page};
 use crate::describe;
 use crate::docfile;
+use crate::docget;
 use crate::link::{args as call_args, EngineLink, Mode};
 use crate::live::{LiveError, LiveLink};
 use crate::mesh::MeshBody;
@@ -878,19 +879,26 @@ note: left out of the file, because this build cannot read them and a .funda has
         annotations(read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
     pub async fn t_doc_get(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
+        let full = truthy(args.get("full"));
         let st = self.state.lock().await;
         let mut out = Map::new();
-        out.insert("features".into(), st.doc.get("features").cloned().unwrap_or_else(|| json!([])));
+        let features = st.doc.get("features").cloned().unwrap_or_else(|| json!([]));
+        out.insert("features".into(), if full { features } else { docget::leave_out_lists(&features) });
         if !args.get("features_only").and_then(Value::as_bool).unwrap_or(false) {
             out.insert("parameters".into(), st.doc.get("parameters").cloned().unwrap_or_else(|| json!({})));
             out.insert("paramDefs".into(), st.doc.get("paramDefs").cloned().unwrap_or_else(|| json!({})));
             for key in ["bodyIds", "version"] {
                 if let Some(v) = st.doc.get(key) {
-                    out.insert(key.into(), v.clone());
+                    let v = match v.as_object() {
+                        Some(ids) if !full => Value::Object(docget::fold_body_ids(ids)),
+                        _ => v.clone(),
+                    };
+                    out.insert(key.into(), v);
                 }
             }
         }
-        Ok(text(pretty(&Value::Object(out), 1)))
+        let printed = pretty(&Value::Object(out.clone()), 1);
+        Ok(text(if full || printed.len() <= docget::LINES_FROM { printed } else { docget::lines(&out) }))
     }
 
     #[tool(
@@ -921,7 +929,16 @@ note: left out of the file, because this build cannot read them and a .funda has
                 }
             }
         }
+        if let Some(ids) = next.get("bodyIds").and_then(Value::as_object) {
+            match docget::unfold_body_ids(ids) {
+                Ok(ids) => next.insert("bodyIds".into(), Value::Object(ids)),
+                Err(why) => return Ok(failure(why)),
+            };
+        }
         let mut st = self.state.lock().await;
+        if let Err(why) = docget::take_back_lists(&st.doc, &mut next) {
+            return Ok(failure(why));
+        }
         model::forget_stale_joins(&st.doc, &mut next);
         model::keep_unnamed_keys(&st.doc, &mut next);
         st.doc = next;
@@ -1210,6 +1227,11 @@ note: left out of the file, because this build cannot read them and a .funda has
             Ok(f) => f,
             Err(e) => return Ok(e),
         };
+        let full = truthy(args.get("full"));
+        let page = match Page::of(&args, if full { 0 } else { budget::ROWS }) {
+            Ok(p) => p,
+            Err(why) => return Ok(failure(why)),
+        };
         if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
             if !parent.is_dir() {
                 return Ok(failure(format!("No such directory: {}", parent.display())));
@@ -1359,7 +1381,7 @@ note: left out of the file, because this build cannot read them and a .funda has
             )));
         }
         let mut out = if separate {
-            match place_files(&result, &folder) {
+            match place_files(&result, &folder, page, full) {
                 Ok(written) => written,
                 Err(e) => {
                     discard();
@@ -1431,7 +1453,7 @@ pub(crate) fn no_such_body(wanted: &str, built: &[Value]) -> String {
 }
 
 /// Replaces files of the same name in `folder` and leaves anything else there alone.
-fn place_files(result: &Value, folder: &Path) -> Result<String, String> {
+fn place_files(result: &Value, folder: &Path, page: Page, full: bool) -> Result<String, String> {
     let written: Vec<PathBuf> = result
         .get("paths")
         .and_then(Value::as_array)
@@ -1446,7 +1468,7 @@ fn place_files(result: &Value, folder: &Path) -> Result<String, String> {
         return Err(format!("{} is a folder, so the part of that name cannot be written there.", to.display()));
     }
     std::fs::create_dir_all(folder).map_err(|e| format!("Could not make {}: {e}", folder.display()))?;
-    let mut lines = Vec::new();
+    let (mut lines, mut sizes) = (Vec::new(), Vec::new());
     for from in &written {
         let Some(name) = from.file_name() else { continue };
         let to = folder.join(name);
@@ -1462,13 +1484,16 @@ fn place_files(result: &Value, folder: &Path) -> Result<String, String> {
         }
         let size = std::fs::metadata(&to).map_or(0, |m| m.len());
         lines.push(format!("  {} ({size} bytes)", name.to_string_lossy()));
+        sizes.push((name.to_string_lossy().into_owned(), size));
     }
+    let (mut rows, more) = page.cut(budget::files(&sizes, !full), "file rows");
+    rows.extend(more.map(|m| format!("  {m}")));
     Ok(format!(
         "Wrote {} file{} to {}:\n{}",
         lines.len(),
         if lines.len() == 1 { "" } else { "s" },
         folder.display(),
-        lines.join("\n")
+        rows.join("\n")
     ))
 }
 

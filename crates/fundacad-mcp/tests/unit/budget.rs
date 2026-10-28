@@ -143,3 +143,36 @@ fn selectors_print_one_to_a_line_and_parse_back() {
     assert_eq!(back, rounded(&sel));
     assert_eq!(selector_json(&Map::new()), "{}");
 }
+
+#[test]
+fn a_long_separate_export_folds_the_files_of_one_name_and_size() {
+    let mut written: Vec<(String, u64)> = vec![("Pin.stl".into(), 684), ("Hub.stl".into(), 14084)];
+    written.extend((2..=3000).map(|i| (format!("Pin_{i}.stl"), 684)));
+    written.push(("Pin_3001.stl".into(), 700));
+    let rows = files(&written, true);
+    assert_eq!(rows.len(), 3, "{rows:?}");
+    assert_eq!(rows[0], "  Pin.stl (684 bytes) (and 2999 more alike: Pin_2..Pin_3000)");
+    assert_eq!(rows[1], "  Hub.stl (14084 bytes)");
+    assert_eq!(rows[2], "  Pin_3001.stl (700 bytes)", "a file of another size is a row of its own");
+
+    let every = files(&written, false);
+    assert_eq!(every.len(), written.len());
+    assert_eq!(every[2], "  Pin_2.stl (684 bytes)");
+}
+
+#[test]
+fn a_short_separate_export_lists_every_file() {
+    let written: Vec<(String, u64)> = (1..=FOLD_FROM).map(|i| (format!("Pin_{i}.stl"), 684)).collect();
+    let rows = files(&written, true);
+    assert_eq!(rows.len(), FOLD_FROM);
+    assert_eq!(rows[0], "  Pin_1.stl (684 bytes)");
+}
+
+#[test]
+fn folded_files_cap_their_ids_and_say_how_to_list_them() {
+    let written: Vec<(String, u64)> = (1..=400).map(|i| (format!("Pin_{}.stl", i * 2), 684)).collect();
+    let rows = files(&written, true);
+    assert_eq!(rows.len(), 1);
+    assert!(rows[0].ends_with("more, full true lists every file)"), "{}", rows[0]);
+    assert!(rows[0].len() < 400, "{}", rows[0]);
+}

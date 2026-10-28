@@ -7,6 +7,7 @@ pub mod budget;
 pub mod clash;
 pub mod describe;
 pub mod docfile;
+pub mod docget;
 pub mod edits;
 pub mod guide;
 pub mod layflat;

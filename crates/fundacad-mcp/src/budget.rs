@@ -154,7 +154,34 @@ fn folded(first: Row, rest: &[Row], cap: usize, more: &str) -> String {
     }
 }
 
-fn numbered(s: &str) -> Option<(&str, u64)> {
+/// The files a separate export wrote, as "  Pin_2.stl (684 bytes)" lines. With `fold` a list over FOLD_FROM
+/// files puts the files of one name, less its copy number, extension and size on one line, ids capped.
+pub fn files(written: &[(String, u64)], fold: bool) -> Vec<String> {
+    let rows: Vec<Row> = written
+        .iter()
+        .map(|(name, size)| {
+            let (stem, ext) = match name.rfind('.').filter(|&dot| dot > 0) {
+                Some(dot) => name.split_at(dot),
+                None => (name.as_str(), ""),
+            };
+            let bare = stem.trim_end_matches(|c: char| c.is_ascii_digit());
+            let base = if bare.len() < stem.len() { bare.strip_suffix(['_', ' ']).unwrap_or(bare) } else { stem };
+            Row {
+                id: stem.to_string(),
+                name: String::new(),
+                same: format!("{base}\u{0}{ext}\u{0}{size}"),
+                text: format!("  {name} ({size} bytes)"),
+            }
+        })
+        .collect();
+    if fold {
+        fold_capped(rows, 240, "full true lists every file")
+    } else {
+        rows.into_iter().map(|r| r.text).collect()
+    }
+}
+
+pub(crate) fn numbered(s: &str) -> Option<(&str, u64)> {
     let digits = s.len() - s.trim_end_matches(|c: char| c.is_ascii_digit()).len();
     if digits == 0 || digits > 18 {
         return None;
