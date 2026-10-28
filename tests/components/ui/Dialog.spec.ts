@@ -226,28 +226,36 @@ describe("Dialog", () => {
   });
 });
 
-describe("ModalFrame keeps its old contract over Dialog", () => {
+describe("ModalFrame is a Dialog for plugins", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     document.body.innerHTML = "";
   });
 
-  async function frame() {
+  async function frame(props: Record<string, unknown> = {}) {
+    const open = ref(true);
     const closes = ref(0);
     const w = mount(
       defineComponent({
-        setup: () => () =>
-          h(
-            ModalFrame,
-            { panelClass: "export-dialog", onClose: () => closes.value++ },
-            { title: () => "Export", default: () => h("div", { class: "modal-body" }, [h("input")]) },
-          ),
+        setup: () => () => [
+          h("button", { class: "opener" }, "Open"),
+          open.value
+            ? h(
+                ModalFrame,
+                { panelClass: "export-dialog", onClose: () => closes.value++, ...props },
+                {
+                  title: () => "Export",
+                  default: () => h("div", { class: "modal-body" }, [h("input", { class: "field" })]),
+                },
+              )
+            : null,
+        ],
       }),
       { attachTo: document.body },
     );
     await nextTick();
     await settle();
-    return { w, closes };
+    return { w, open, closes };
   }
 
   it("keeps .modal-close, the panel class and the caller's own body", async () => {
@@ -257,13 +265,29 @@ describe("ModalFrame keeps its old contract over Dialog", () => {
     expect($(".modal-close")!.getAttribute("aria-label")).toBe("Close");
   });
 
-  it("neither gates, nor handles Escape, nor moves focus: the dialogs wearing it do that themselves", async () => {
-    const before = active();
-    const { closes } = await frame();
+  it("takes focus, closes on Escape and gives focus back, without the modal depth gate", async () => {
+    const { open, closes } = await frame();
+    open.value = false;
+    await nextTick();
+    $(".opener")!.focus();
+    open.value = true;
+    await nextTick();
+    await settle();
     expect(useModalStore().depth).toBe(0);
-    expect(active()).toBe(before);
-    key("Escape", {}, window);
-    expect(closes.value).toBe(0);
+    expect(active()?.className).toBe("field");
+    expect($(".opener")!.parentElement!.hasAttribute("inert")).toBe(true);
+    const e = key("Escape", {}, window);
+    expect([closes.value, e.defaultPrevented]).toEqual([1, true]);
+    open.value = false;
+    await nextTick();
+    expect(active()?.className).toBe("opener");
+  });
+
+  it("leaves Escape and focus to a plugin that opts out", async () => {
+    const { closes } = await frame({ closeOnEsc: false, initialFocus: "none", returnFocus: false });
+    expect(active()).toBe(document.body);
+    const e = key("Escape", {}, window);
+    expect([closes.value, e.defaultPrevented]).toEqual([0, false]);
     $(".modal-close")!.click();
     $(".modal-overlay")!.dispatchEvent(new Event("pointerdown", { bubbles: true }));
     expect(closes.value).toBe(2);

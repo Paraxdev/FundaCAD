@@ -941,8 +941,8 @@ their own keys and drag; new rows of that kind wear the `ListRow` look.
 
 `Dialog` holds the modal gate (`composables/useModalGate.ts`) while open, keeps Tab inside, focuses the `[autofocus]`
 control or else the first control after the close button, and gives focus back to its opener on close. Escape closes
-the topmost dialog only. `ModalFrame.vue` is the old frame contract over it, with no Escape, no gate and no focus
-moves, for the dialogs that still do those themselves. `Menu` takes the arrows, Home and End, type ahead, Enter or
+the topmost dialog only. `ModalFrame.vue` is the frame plugins import over it: the same Escape and focus moves but
+no gate, and props to opt out of Escape and focus for a plugin that still does those itself. `Menu` takes the arrows, Home and End, type ahead, Enter or
 Space to choose and close, ArrowRight and ArrowLeft into and out of a submenu, and Escape through `claimEscape`, and
 gives focus back to its opener. `Popover` with `focus="first"` moves focus into the card (or onto it, when it holds
 no control), and `returnFocus` gives it back on close.
