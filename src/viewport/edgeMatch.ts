@@ -64,6 +64,72 @@ export function nearestEdgeByMid(edges: { points: Vec3[] }[], mid: Vec3, tol: nu
   return best >= 0 ? best : null;
 }
 
+/** nearestEdgeByMid over a fixed edge list, built once in O(E): every mid in a hash of `tol` sized cells, a lookup reads
+ *  the 27 cells around it. Drop it on any model change, it would match the edges of the previous model. */
+export class EdgeMidIndex {
+  private readonly cells = new Map<number, number[]>();
+  private readonly mids: (Vec3 | undefined)[] = [];
+  private readonly cell: number;
+
+  constructor(
+    edges: readonly { points: Vec3[] }[],
+    private readonly tol: number,
+  ) {
+    this.cell = tol > 0 && Number.isFinite(tol) ? tol : 1;
+    for (let i = 0; i < edges.length; i++) {
+      const pts = edges[i]?.points ?? [];
+      const a = polylineMid(pts),
+        b = legacyPolylineMid(pts);
+      this.mids.push(a, b);
+      if (a) this.put(a, i);
+      if (b) this.put(b, i);
+    }
+  }
+
+  private coord(v: number): number {
+    return Math.floor(v / this.cell);
+  }
+
+  private hash(x: number, y: number, z: number): number {
+    return Math.imul(x | 0, 73856093) ^ Math.imul(y | 0, 19349663) ^ Math.imul(z | 0, 83492791);
+  }
+
+  private put(p: Vec3, i: number) {
+    const k = this.hash(this.coord(p[0]), this.coord(p[1]), this.coord(p[2]));
+    const list = this.cells.get(k);
+    if (!list) this.cells.set(k, [i]);
+    else if (list[list.length - 1] !== i) list.push(i);
+  }
+
+  nearest(mid: Vec3): number | null {
+    let best = -1;
+    let bestD = this.tol * this.tol;
+    if (!(bestD > 0)) return null;
+    const cx = this.coord(mid[0]),
+      cy = this.coord(mid[1]),
+      cz = this.coord(mid[2]);
+    for (let dx = -1; dx <= 1; dx++)
+      for (let dy = -1; dy <= 1; dy++)
+        for (let dz = -1; dz <= 1; dz++) {
+          const list = this.cells.get(this.hash(cx + dx, cy + dy, cz + dz));
+          if (!list) continue;
+          for (const i of list) {
+            for (let k = 2 * i; k <= 2 * i + 1; k++) {
+              const m = this.mids[k];
+              if (!m) continue;
+              const dd = d2(m, mid);
+              // The scan keeps the first edge on a tie, the cells hold edges out of order.
+              if (dd < bestD || (dd === bestD && best >= 0 && i < best)) {
+                bestD = dd;
+                best = i;
+              }
+            }
+          }
+        }
+    return best >= 0 ? best : null;
+  }
+}
+
 /** The engine's `by:"nearest"` rule, the fallback for a selector point that is not a midpoint (hand written, MCP, a
  *  loop). Null unless clear: within a quarter of the edge's length (at most `cap`) and half as far as the next edge. */
 export function nearestEdgeByCurve(edges: { points: Vec3[] }[], point: Vec3, cap: number): number | null {

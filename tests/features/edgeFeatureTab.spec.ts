@@ -28,7 +28,7 @@ function setup() {
     domElement: document.createElement("canvas"),
     camera,
     suspendPicking: false,
-    selectedEdgeSelectors: () => [EDGE],
+    selectedEdgeSeeds: () => [{ sel: EDGE }],
     selectedEdgeScope: () => ({ scope: "single" }),
     pixelWorldSize: () => 0.1,
     projectToScreen: () => ({ x: 100, y: 100 }),

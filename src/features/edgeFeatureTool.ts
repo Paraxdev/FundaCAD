@@ -203,7 +203,10 @@ export class EdgeFeatureTool {
     // Picked edges are matched by geometry, not model edge ids, which the preview renumbers; localClearance already
     // drops chain mates sharing a vertex as inside the touch tolerance.
     const selected = this.ghosts.map((g, i) => ({ id: `pick:${i}`, points: g.points }));
-    this.clearanceLimitMm = clearanceLimit(localClearance({ selected, all, modelScale: this.modelDiagonal() ?? 0 }));
+    const near = [this.anchor.x, this.anchor.y, this.anchor.z] as const;
+    this.clearanceLimitMm = clearanceLimit(
+      localClearance({ selected, all, modelScale: this.modelDiagonal() ?? 0, near }),
+    );
   }
 
   /** mm from the picked edge, signed by the cursor's side (features/edgeSwipe.ts). Directions are projected from a
@@ -294,7 +297,8 @@ export class EdgeFeatureTool {
     if (this.active) return;
     // The direct entry needs the selection its handle was drawn for. If a rebuild landed between paint and press,
     // refuse before installing anything rather than arm an unasked pick phase that holds toolBusy().
-    const pre = this.viewport.selectedEdgeSelectors();
+    const preSeeds = this.viewport.selectedEdgeSeeds();
+    const pre = preSeeds.map((s) => s.sel);
     if (opts?.grabAt && !pre.length) return;
     // A selected face stands for every edge around it. Asking toolCapabilities.ts here keeps the table and the
     // behaviour in step, and opens the face route from every entry point at once.
@@ -318,6 +322,7 @@ export class EdgeFeatureTool {
         // A face's edges are the complete set asked for, chain expansion could only add edges off the face. An edge
         // pre-selection keeps the scope its own picks decided (pickScope.ts).
         scope: pre.length ? this.viewport.selectedEdgeScope().scope : "single",
+        ...(pre.length ? { lines: preSeeds.map((s) => s.line) } : {}),
       });
       if (opts?.grabAt) this.grabHandle(opts.grabAt.x, opts.grabAt.y);
     } else {
@@ -445,19 +450,31 @@ export class EdgeFeatureTool {
   }
 
   /** Unmatched selectors are kept for commit with no visual; the engine resolves them by nearest at build time. */
-  private seedGhosts(sels: Selector[]) {
-    for (const sel of sels) {
+  /** `lines[i]`, when given, is the edge `sels[i]` was made from, so it is not matched back by geometry. */
+  private seedGhosts(sels: Selector[], lines?: readonly (EdgeRef | undefined)[]) {
+    const byPoints = new Map<unknown, (typeof this.ghosts)[number]>(this.ghosts.map((g) => [g.points, g]));
+    sels.forEach((sel, i) => {
       if ("point" in sel) this.lastPickMid = sel.point as Vec3;
       if (!("point" in sel)) {
         this.unmatchedSels.push(sel);
-        continue;
+        return;
       }
-      const line = this.viewport.edgeLineForSelector(sel.point as Vec3, sel.body);
-      const same = line && this.ghosts.find((g) => g.points === line.points);
+      const line = lines?.[i] ?? this.viewport.edgeLineForSelector(sel.point as Vec3, sel.body);
+      const same = line && byPoints.get(line.points);
       if (same) same.sels.push(sel);
-      else if (line) this.addGhost(sel, line.points as Vec3[], undefined, line.curvature);
-      else this.unmatchedSels.push(sel);
-    }
+      else if (line) {
+        this.addGhost(sel, line.points as Vec3[], undefined, line.curvature);
+        const added = this.ghosts[this.ghosts.length - 1];
+        if (added?.points === line.points) byPoints.set(line.points, added);
+      } else this.unmatchedSels.push(sel);
+    });
+  }
+
+  /** How many edges start() would seed, for the count gate (edgeCountGate.ts), without seeding them. */
+  seedCount(kind: Kind): number {
+    const n = this.viewport.selectedEdgeCount();
+    if (n) return n;
+    return canConsume(kind, "face") ? this.faceEdgeSelectors().length : 0;
   }
 
   private chainCounter = 0; // one id per add gesture (chain toggles as a unit)
@@ -1081,7 +1098,7 @@ export class EdgeFeatureTool {
     anchor: THREE.Vector3 | null,
     tangent: THREE.Vector3 | null,
     chainSource?: EdgeRef,
-    opts?: { fromZero?: boolean; scope?: PickScope },
+    opts?: { fromZero?: boolean; scope?: PickScope; lines?: readonly (EdgeRef | undefined)[] },
   ) {
     // Each member's tangent chain is expanded unless the gesture is single scoped; unmatched selectors still commit,
     // just without a visual.
@@ -1089,7 +1106,7 @@ export class EdgeFeatureTool {
     if (chainSource) {
       this.addPicked(chainSource, scope);
     } else {
-      this.seedGhosts(edges);
+      this.seedGhosts(edges, opts?.lines);
       if (scope === "chain") {
         for (const g of [...this.ghosts]) {
           const line = this.viewport.edgeLineByMid(g.mid);

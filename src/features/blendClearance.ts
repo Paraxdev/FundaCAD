@@ -13,6 +13,23 @@ export interface ClearanceEdge {
  *  rim fillet. */
 export const CLEARANCE_SHARE = 0.5;
 
+/** Above this many picks only the ones nearest `near` are measured: the cost is picks times model edges. */
+export const CLEARANCE_SAMPLE = 128;
+
+function nearestPicks(selected: readonly ClearanceEdge[], near: Pt3): readonly ClearanceEdge[] {
+  const dist = (e: ClearanceEdge) => {
+    let best = Infinity;
+    for (const p of e.points)
+      best = Math.min(best, (p[0] - near[0]) ** 2 + (p[1] - near[1]) ** 2 + (p[2] - near[2]) ** 2);
+    return best;
+  };
+  return selected
+    .map((e) => ({ e, d: dist(e) }))
+    .sort((a, b) => a.d - b.d)
+    .slice(0, CLEARANCE_SAMPLE)
+    .map((x) => x.e);
+}
+
 /** Edges sharing a vertex are at distance 0 but are what the blend runs across, not a constraint. Scaled to the
  *  model, with a floor for a document with no geometry. */
 export function touchTolerance(modelScale: number): number {
@@ -152,22 +169,25 @@ export interface ClearanceRequest {
   all: readonly ClearanceEdge[];
   /** the model's bounding box diagonal */
   modelScale: number;
+  /** where the arrow stands, for the CLEARANCE_SAMPLE cut */
+  near?: Pt3;
 }
 
 /** mm, or null rather than Infinity when nothing qualifies, so "could not measure" never passes as a measurement.
  *  Edge to edge, live; the engine's face check (tools/gen_fillet_corpus.py) is a round trip and reads larger. */
 export function localClearance(req: ClearanceRequest): number | null {
-  const { selected, all, modelScale } = req;
+  const { selected, all, modelScale, near } = req;
   if (selected.length === 0 || all.length === 0) return null;
 
   const tol = touchTolerance(modelScale);
   const tolSq = tol * tol;
   const picked = new Set(selected.map((e) => e.id));
+  const measured = near && selected.length > CLEARANCE_SAMPLE ? nearestPicks(selected, near) : selected;
 
   const targets: { pts: readonly Pt3[]; box: Aabb }[] = [];
   // A closed pick's own turning radius bounds the answer, and on a lone cylinder it is the only bound.
   let cap = Infinity;
-  for (const e of selected) {
+  for (const e of measured) {
     const box = polylineBox(e.points);
     if (box && e.points.length >= 2) targets.push({ pts: e.points, box });
     const loop = closedLoopRadius(e.points);

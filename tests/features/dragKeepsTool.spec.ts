@@ -236,7 +236,7 @@ describe("Fillet", () => {
   const EDGE = { kind: "edge", by: "nearest", point: [0, 0, 0], body: "b1" };
   function setup(grab: boolean) {
     const vp = fakeViewport({
-      selectedEdgeSelectors: () => [EDGE],
+      selectedEdgeSeeds: () => [{ sel: EDGE }],
       selectedEdgeScope: () => ({ scope: "single" }),
       edgeLineByMid: () => null,
       visibleEdgeLines: () => [],

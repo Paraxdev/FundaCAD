@@ -137,7 +137,7 @@ const SKETCH_DIM_EDGE_OPACITY = 0.5;
 import { Highlighter, edgeHoverColor, sameHover } from "./highlight";
 import { DRAFT_COLORS } from "./draftColors";
 import { ProgressiveModel } from "./progressive";
-import { nearestEdgeByMid, nearestEdgeByCurve, midMatchTol, edgeSelectorFrom, polylineMid } from "./edgeMatch";
+import { EdgeMidIndex, nearestEdgeByCurve, midMatchTol, edgeSelectorFrom, polylineMid } from "./edgeMatch";
 import { mergeScope, pickScope, type ScopeDecision, type ScopeView } from "./pickScope";
 import { clickTakes, DwellIntent, type SelectPolicy } from "./clickIntent";
 import { getHoverDwellMs, getNavPrefs } from "../ui/interactionPrefs";
@@ -2281,19 +2281,35 @@ export class Viewport {
 
   /** Selectors for the currently selected edges (for pre-selected fillet/chamfer). */
   selectedEdgeSelectors(): Selector[] {
+    return this.selectedEdgeSeeds().map((s) => s.sel);
+  }
+
+  /** selectedEdgeSelectors with the edge each one came from, so a tool seeds from it instead of matching it back. */
+  selectedEdgeSeeds(): { sel: Selector; line: EdgeRef }[] {
     if (!this.highlighter) return [];
-    return this.highlighter.getSelectedEdges().flatMap((line): Selector[] => {
+    return this.highlighter.getSelectedEdges().flatMap((line) => {
       const sel = edgeSelectorFrom({ points: line.points, body: line.body });
-      return sel ? [sel] : [];
+      return sel ? [{ sel, line }] : [];
     });
   }
+
+  selectedEdgeCount(): number {
+    return this.highlighter?.getSelectedEdges().length ?? 0;
+  }
+
+  private midIndex: { edges: readonly EdgeRef[]; count: number; tol: number; index: EdgeMidIndex } | null = null;
 
   /** Model scaled tolerance. The rebuild stable way to find the edge a saved selector or diagnostic means. */
   edgeLineByMid(mid: [number, number, number]): EdgeRef | null {
     if (!this.model) return null;
-    const edges = this.model.edges.map((e) => ({ points: e.points }));
-    const i = nearestEdgeByMid(edges, mid, midMatchTol(this.model.box.getSize(this.projScratch).length()));
-    return i == null ? null : (this.model.edges[i] ?? null);
+    const edges = this.model.edges;
+    const tol = midMatchTol(this.model.box.getSize(this.projScratch).length());
+    let c = this.midIndex;
+    if (!c || c.edges !== edges || c.count !== edges.length || c.tol !== tol) {
+      c = this.midIndex = { edges, count: edges.length, tol, index: new EdgeMidIndex(edges, tol) };
+    }
+    const i = c.index.nearest(mid);
+    return i == null ? null : (edges[i] ?? null);
   }
 
   /** The rendered edge a saved `by:"nearest"` selector resolves to: its own

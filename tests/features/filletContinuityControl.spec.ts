@@ -39,7 +39,7 @@ function setup(curvatures: number[] = []) {
     domElement: document.createElement("canvas"),
     camera,
     suspendPicking: false,
-    selectedEdgeSelectors: () => (picks.length ? picks : [EDGE]),
+    selectedEdgeSeeds: () => (picks.length ? picks : [EDGE]).map((sel) => ({ sel })),
     edgeLineForSelector: (p: number[]) => lines.find((l) => l.points[0]![0] === p[0]) ?? null,
     selectedEdgeScope: () => ({ scope: "single" }),
     pixelWorldSize: () => 0.1,
