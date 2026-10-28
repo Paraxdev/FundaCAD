@@ -5,6 +5,7 @@ import type { EdgeRef } from "../viewport/edgeLines";
 import type { DocumentStore } from "../document/store";
 import type { Selector } from "../types";
 import { bodyLabels } from "../ui/bodyLabels";
+import { isMenuKey } from "../ui/focus";
 import { setPrompt } from "../ui/prompt";
 import { trackedFace } from "./holeFace";
 import { pointOf, readTarget, sameEntry, writeTarget, type TargetEntry, type TargetField } from "./selectionTargets";
@@ -302,7 +303,7 @@ export class TargetEditTool {
   }
 
   private onKey(e: KeyboardEvent) {
-    if (!this.active) return;
+    if (!this.active || isMenuKey(e)) return;
     if (e.key === "Escape") {
       e.preventDefault();
       e.stopPropagation();

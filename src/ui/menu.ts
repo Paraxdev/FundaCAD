@@ -4,6 +4,7 @@ import { useContextMenuStore, type CtxItem } from "../stores/contextMenu";
 import { useRadialMenuStore } from "../stores/radialMenu";
 import { RadialSession, pickRadial, type RadialTrigger } from "./radialMenu";
 import { claimEscape } from "./escapeClaim";
+import { isMenuKey } from "./focus";
 
 export interface MenuItem {
   label: string;
@@ -34,13 +35,9 @@ export function contextMenu(x: number, y: number, items: CtxItem[]): void {
   useContextMenuStore().show(x, y, items);
 }
 
-const MENU_KEYS = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "Enter", "Tab"]);
-
 // On document in the bubble phase, so the focused menu has had the key first. Escape is the menu's own, in capture.
 function keepMenuKeys(e: KeyboardEvent): void {
-  if (e.ctrlKey || e.altKey || e.metaKey) return;
-  if (!MENU_KEYS.has(e.key) && e.key.length !== 1) return;
-  if (e.target instanceof Element && e.target.closest(".ui-menu")) e.stopPropagation();
+  if (isMenuKey(e)) e.stopPropagation();
 }
 
 let keyGuards = 0;

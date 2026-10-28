@@ -7,6 +7,7 @@ import type { SketchOverlay, WorldRegion } from "../sketch/overlay";
 import type { DocumentStore } from "../document/store";
 import type { Feature } from "../types";
 import { pointInRegion } from "../sketch/region";
+import { isMenuKey } from "../ui/focus";
 import { setPrompt } from "../ui/prompt";
 
 interface Profile {
@@ -77,6 +78,7 @@ export class LoftTool {
   }
 
   private onKey(e: KeyboardEvent) {
+    if (isMenuKey(e)) return;
     if (e.key === "Escape") {
       e.preventDefault();
       this.cancel();

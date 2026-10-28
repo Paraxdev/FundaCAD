@@ -42,7 +42,7 @@ import { DimInput } from "./dimInput";
 import { TextPanel } from "./textPanel";
 import type { TextValues } from "./textPanel";
 import { fetchFonts } from "./textCache";
-import { isEditableTarget } from "../ui/focus";
+import { isEditableTarget, isMenuKey } from "../ui/focus";
 import { SketchDimensions, type ExtraDim } from "./sketchDimensions";
 import { SketchGlyphs } from "./sketchGlyphs";
 import { RelationsPanel } from "./relationsPanel";
@@ -2877,6 +2877,7 @@ export class SketchMode {
   }
 
   private onKey(e: KeyboardEvent) {
+    if (isMenuKey(e)) return;
     // The dim box auto-focuses while drawing, so Esc in it must still cancel.
     const escInOwnDim = e.key === "Escape" && this.dim.isActive && this.dim.ownsTarget(e.target);
     if (!escInOwnDim && isEditableTarget(e.target)) return; // typing in a dim/text field, not a shortcut

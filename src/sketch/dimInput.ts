@@ -2,7 +2,7 @@
 // Values cross this boundary in MILLIMETRES; length fields show and parse the display unit, angles are degrees.
 
 import { iconElement } from "../ui/icons";
-import { isHistoryKey } from "../ui/focus";
+import { isHistoryKey, isMenuKey } from "../ui/focus";
 import { onPreviewError } from "../ui/previewError";
 import { getUnit, parseField } from "../ui/units";
 import { commonUnits, measureError, toUnit, tryParseMeasure, unitById, type UnitDef } from "../ui/measure";
@@ -604,7 +604,7 @@ export class DimInput {
   private boundSegmentKey = (e: KeyboardEvent) => this.onSegmentKey(e);
 
   private onSegmentKey(e: KeyboardEvent) {
-    if (!this.active || e.ctrlKey || e.metaKey || e.repeat) return;
+    if (!this.active || e.ctrlKey || e.metaKey || e.repeat || isMenuKey(e)) return;
     const t = e.target;
     const typing = t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement;
     if (typing ? !(e.altKey && this.ownsTarget(t)) : e.altKey) return;

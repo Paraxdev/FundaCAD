@@ -11,6 +11,16 @@ export function isEditableTarget(t: EventTarget | null): boolean {
   );
 }
 
+const MENU_KEYS = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "Enter", "Tab"]);
+
+/** A key a focused menu row moves, runs or types ahead with. Window capture listeners hear it before the menu does,
+ *  so a tool asks here and leaves it, the way it asks escapeClaimed() for Escape. */
+export function isMenuKey(e: KeyboardEvent): boolean {
+  if (e.ctrlKey || e.altKey || e.metaKey) return false;
+  if (!MENU_KEYS.has(e.key) && e.key.length !== 1) return false;
+  return e.target instanceof Element && !!e.target.closest(".ui-menu");
+}
+
 /** False for a field removed, hidden, or put away by a key handler while the key was still on its way to the window
  *  (sketch/dimInput.ts does for undo and redo); the keymap lets the shortcut through then. */
 export function isLiveFocusTarget(el: Element): boolean {
