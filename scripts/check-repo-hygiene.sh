@@ -53,7 +53,7 @@ done
 # Allowed: the synthetic bench fixture the perf harness needs, the generated
 # assembly-tree fixtures (boxes emitted by tools/gen_asm_fixtures.py — no real
 # geometry, reproducible from source), the loose face fixtures written by
-# crates/fundacad-geom/tests/step/gen_loose_faces.py (and sbsm_bad_vertex_ref.step cut from one), the inside out boxes
+# crates/fundacad-geom/tests/step/gen_loose_faces.py (and sbsm_bad_vertex_ref.step, a copy of one edited by hand to mistype a vertex ref), the inside out boxes
 # written by crates/fundacad-geom/tests/step/gen_inside_out.py, the block with an
 # edge off its faces written by crates/fundacad-geom/tests/step/gen_heal_edge_off.py,
 # the compressed STEP copies and XBF documents written by
