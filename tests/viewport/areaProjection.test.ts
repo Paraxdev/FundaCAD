@@ -5,11 +5,11 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { areaWork, collectInBox, projectForArea } from "../../src/viewport/areaProjection";
-import { areaIndexReady, areaIndexStats, scheduleAreaIndex } from "../../src/viewport/areaIndex";
+import { areaIndexOf, areaIndexReady, areaIndexStats, scheduleAreaIndex } from "../../src/viewport/areaIndex";
 import expected from "./fixtures/areaSelectExpected.json";
-import { cameras, fakeBody, rects, smallModel, VIEW } from "./areaModel";
-import type { ModelView } from "../../src/viewport/render";
-import { allInsideRect, faceInBox, type AreaMode, type ScreenRect } from "../../src/viewport/areaSelect";
+import { cameras, fakeBody, fakeEdge, rects, smallModel, VIEW } from "./areaModel";
+import type { EdgeRef, ModelView } from "../../src/viewport/render";
+import { allInsideRect, faceInBox, polylineInBox, type AreaMode, type ScreenRect } from "../../src/viewport/areaSelect";
 
 describe("box selection on a small model", () => {
   it("takes exactly what the per triangle projection took", () => {
@@ -219,3 +219,96 @@ describe("the first box on a big mesh", () => {
     expect(all.bodies).toEqual(["mesh"]);
   });
 });
+
+describe("the first box over one of many bodies", () => {
+  // 500 balls on a grid seen from above, 28 px apart and under 5 px in radius, so each screen box stands alone.
+  const bodies = Array.from({ length: 500 }, (_, i) =>
+    fakeBody(
+      `ball${i}`,
+      new THREE.SphereGeometry(1, 16, 10),
+      (t) => (t < 144 ? 0 : 1),
+      new THREE.Vector3((i % 25) * 6 - 72, Math.floor(i / 25) * 6 - 57, 0),
+    ),
+  );
+  // Four rings round each ball, drawn by one object per ball as a body's edges are.
+  const edges = bodies.flatMap((b, i) => {
+    const draw = { object: { visible: true }, refs: [] as EdgeRef[] };
+    for (let k = 0; k < 4; k++) {
+      const pts: [number, number, number][] = [];
+      for (let s = 0; s <= 12; s++) {
+        const a = (s / 12) * Math.PI * 2;
+        const c = b.mesh.position;
+        pts.push([c.x + Math.cos(a) * (1 + k * 0.1), c.y + Math.sin(a) * (1 + k * 0.1), c.z + k * 0.2 - 0.3]);
+      }
+      draw.refs.push({ ...fakeEdge(`ring${i}.${k}`, pts), draw } as unknown as EdgeRef);
+    }
+    return draw.refs;
+  });
+  const model = { bodies, edges } as unknown as ModelView;
+  const cam = new THREE.OrthographicCamera(-96, 96, 64, -64, 0.1, 500);
+  cam.position.set(0, 0, 100);
+  cam.lookAt(0, 0, 0);
+  cam.updateMatrixWorld();
+  const around = (i: number, half: number): ScreenRect => {
+    const c = bodies[i]!.mesh.position.clone().project(cam);
+    const x = VIEW.left + (c.x * 0.5 + 0.5) * VIEW.width;
+    const y = VIEW.top + (-c.y * 0.5 + 0.5) * VIEW.height;
+    return { x0: x - half, y0: y - half, x1: x + half, y1: y + half };
+  };
+  const clustersOf = (i: number) => areaIndexOf(bodies[i]!)!.clusterStart.length;
+
+  it("projects the clusters of the bodies the box reaches, once each", () => {
+    for (const b of bodies) areaIndexOf(b);
+    areaWork.clusters = 0;
+    areaWork.edges = 0;
+    const proj = projectForArea(model, cam, VIEW, false);
+    const first = collectInBox(proj, around(212, 8), "crossing");
+    const firstClusters = areaWork.clusters;
+    const firstEdges = areaWork.edges;
+    const again = collectInBox(proj, around(212, 10), "window");
+    const againClusters = areaWork.clusters;
+    const next = collectInBox(proj, around(37, 8), "crossing");
+    const ids = (got: { edges: EdgeRef[] }) => got.edges.map((e) => e.id);
+    expect({
+      first: [first.bodies, ids(first)],
+      firstClusters,
+      firstEdges,
+      again: [again.bodies, ids(again)],
+      againClusters,
+      next: [next.bodies, ids(next)],
+      nextClusters: areaWork.clusters,
+      nextEdges: areaWork.edges,
+    }).toEqual({
+      first: [["ball212"], ["ring212.0", "ring212.1", "ring212.2", "ring212.3"]],
+      firstClusters: clustersOf(212),
+      firstEdges: 4,
+      again: [["ball212"], ["ring212.0", "ring212.1", "ring212.2", "ring212.3"]],
+      againClusters: clustersOf(212),
+      next: [["ball37"], ["ring37.0", "ring37.1", "ring37.2", "ring37.3"]],
+      nextClusters: clustersOf(212) + clustersOf(37),
+      nextEdges: 8,
+    });
+  });
+
+  it("takes what testing every triangle takes", () => {
+    const boxes = [around(212, 8), around(212, 3), around(0, 30), { x0: 10, y0: 20, x1: 910, y1: 620 }, rects()[5]!];
+    for (const see of [false, true]) {
+      const proj = projectForArea(model, cam, VIEW, see);
+      for (const mode of ["window", "crossing"] as const)
+        for (const r of boxes) {
+          const got = collectInBox(proj, r, mode);
+          expect({ faces: got.faces, bodies: got.bodies, edges: got.edges }).toEqual({
+            ...bruteForce(model, cam, see, r, mode),
+            edges: edges.filter((e) => polylineInBox(onScreen(e, cam), r, mode)),
+          });
+        }
+    }
+  });
+});
+
+function onScreen(e: EdgeRef, cam: THREE.Camera): number[] {
+  return e.points.flatMap((p) => {
+    const q = new THREE.Vector3(p[0], p[1], p[2]).project(cam);
+    return [VIEW.left + (q.x * 0.5 + 0.5) * VIEW.width, VIEW.top + (-q.y * 0.5 + 0.5) * VIEW.height];
+  });
+}

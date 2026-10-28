@@ -19,6 +19,8 @@ export interface BodyAreaIndex {
   clusterStart: Uint32Array;
   /** Local space min x, y, z then max x, y, z, six per cluster. */
   clusterBox: Float64Array;
+  /** The union of the cluster boxes, the same six numbers. */
+  box: Float64Array;
   /** Each cluster's normal cone in local space, axis x, y, z then the cosine of its half angle, which is -2 when the
    *  cluster has a sliver or a spread too wide for the cone to say anything. */
   clusterCone: Float64Array;
@@ -257,9 +259,20 @@ function* build(body: BodyMesh): Generator<void, BodyAreaIndex | null> {
     firstCluster,
     clusterStart: Uint32Array.from(starts),
     clusterBox: Float64Array.from(boxes),
+    box: unionOf(boxes),
     clusterCone: Float64Array.from(cones),
     order,
   };
+}
+
+function unionOf(boxes: number[]): Float64Array {
+  const u = Float64Array.of(Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity);
+  for (let o = 0; o < boxes.length; o += 6)
+    for (let k = 0; k < 3; k++) {
+      u[k] = Math.min(u[k]!, boxes[o + k]!);
+      u[k + 3] = Math.max(u[k + 3]!, boxes[o + k + 3]!);
+    }
+  return u;
 }
 
 function fresh(body: BodyMesh, idx: BodyAreaIndex | undefined): idx is BodyAreaIndex {

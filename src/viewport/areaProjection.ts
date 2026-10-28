@@ -1,9 +1,10 @@
-// What a box drag needs of the model, taken once per drag. Faces are tested by their clusters' screen boxes
-// (areaIndex.ts) and only the triangles of clusters the box's edges cut are projected, so a drag never pays for the
-// whole mesh. Each triangle verdict is the one a full projection gave.
+// What a box drag needs of the model, taken once per drag. Each body's box is projected up front, its clusters
+// (areaIndex.ts) the first time the rect reaches that box, and only the triangles of clusters the rect's edges cut,
+// so a drag never pays for the whole model. Each triangle verdict is the one a full projection gave.
 
 import * as THREE from "three";
 import type { EdgeRef, ModelView } from "./render";
+import type { BodyEdges } from "./edgeLines";
 import { areaIndexOf, type BodyAreaIndex } from "./areaIndex";
 import {
   allInsideRect,
@@ -17,10 +18,14 @@ import {
 } from "./areaSelect";
 
 /** Counters a test reads: triangles tested and vertices projected for a drag's verdicts. */
-export const areaWork = { triangles: 0, vertices: 0 };
+export const areaWork = { triangles: 0, vertices: 0, clusters: 0, edges: 0 };
 
 // Cluster boxes are compared with this much slack, so rounding can only send a cluster to its triangles.
 const SLACK_PX = 1e-6;
+// A body box this far off the rect holds no triangle the rect touches, whatever the rounding.
+const REACH_PX = 0.5;
+const NOT_YET = new Float64Array(0);
+const NOT_YET_FACING = new Int8Array(0);
 
 interface BodyArea {
   id: string;
@@ -28,6 +33,11 @@ interface BodyArea {
   P: ArrayLike<number>;
   I: ArrayLike<number>;
   mw: THREE.Matrix4;
+  faces: Map<number, number[]>;
+  /** x0, y0, x1, y1 of the whole body, NaN in x0 when a corner is behind the camera. */
+  hull: Float64Array;
+  /** Filled with `screen` and `facing` the first time the rect reaches `hull`. */
+  reached: boolean;
   faceIds: number[];
   /** x0, y0, x1, y1 per cluster, NaN in x0 when a corner is behind the camera. */
   screen: Float64Array;
@@ -35,9 +45,22 @@ interface BodyArea {
   facing: Int8Array;
 }
 
+/** The model's edges from `from` up to `to`, drawn by one object, a body's edges. */
+interface EdgeRun {
+  draw: EdgeRef["draw"];
+  from: number;
+  to: number;
+  /** x0, y0, x1, y1 of every point the run's object draws, NaN in x0 when a corner is behind the camera. */
+  hull: Float64Array;
+  /** Each edge's screen points, null when one is behind the camera, filled the first time the rect reaches `hull`. */
+  flat: (number[] | null)[] | null;
+  boxes: ScreenBox[];
+}
+
 export interface AreaProjection {
   bodies: BodyArea[];
-  edges: { ref: EdgeRef; flat: number[] | null; box: ScreenBox }[];
+  edgeList: readonly EdgeRef[];
+  edges: EdgeRun[];
   vp: THREE.Matrix4;
   view: DOMRect;
   seeThrough: boolean;
@@ -69,6 +92,7 @@ export function projectForArea(
   const vp = new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
   const out: AreaProjection = {
     bodies: [],
+    edgeList: model.edges,
     edges: [],
     vp,
     view,
@@ -77,6 +101,7 @@ export function projectForArea(
     camDir: cam.getWorldDirection(new THREE.Vector3()),
     camPos: cam.position.clone(),
   };
+  const clip = new THREE.Matrix4();
   for (const body of model.bodies) {
     if (!body.mesh.visible) continue;
     const geom = body.mesh.geometry;
@@ -85,82 +110,137 @@ export function projectForArea(
     if (!pos || !index) continue;
     const idx = areaIndexOf(body);
     if (!idx) continue;
-    const mw = body.mesh.matrixWorld;
-    const n = idx.clusterStart.length;
-    const screen = new Float64Array(n * 4);
-    const B = idx.clusterBox;
-    // A box's corners are its first corner plus the clip space images of its three edges.
-    const m = new THREE.Matrix4().multiplyMatrices(vp, mw).elements;
-    const cx = [0, 0, 0, 0, 0, 0, 0, 0],
-      cy = [0, 0, 0, 0, 0, 0, 0, 0],
-      cw = [0, 0, 0, 0, 0, 0, 0, 0];
-    for (let c = 0; c < n; c++) {
-      const o = c * 6;
-      const bx = B[o]!,
-        by = B[o + 1]!,
-        bz = B[o + 2]!;
-      const ex = B[o + 3]! - bx,
-        ey = B[o + 4]! - by,
-        ez = B[o + 5]! - bz;
-      cx[0] = m[0]! * bx + m[4]! * by + m[8]! * bz + m[12]!;
-      cy[0] = m[1]! * bx + m[5]! * by + m[9]! * bz + m[13]!;
-      cw[0] = m[3]! * bx + m[7]! * by + m[11]! * bz + m[15]!;
-      for (let k = 1; k < 8; k++) {
-        const j = k & (k - 1) ? k & (k - 1) : 0;
-        const bit = k ^ j;
-        const ax = bit === 1 ? 0 : bit === 2 ? 4 : 8;
-        const len = bit === 1 ? ex : bit === 2 ? ey : ez;
-        cx[k] = cx[j]! + m[ax]! * len;
-        cy[k] = cy[j]! + m[ax + 1]! * len;
-        cw[k] = cw[j]! + m[ax + 3]! * len;
-      }
-      let x0 = Infinity,
-        y0 = Infinity,
-        x1 = -Infinity,
-        y1 = -Infinity;
-      for (let k = 0; k < 8; k++) {
-        const w = cw[k]!;
-        if (!(w > 0)) {
-          x0 = NaN;
-          break;
-        }
-        const sx = view.left + ((cx[k]! / w) * 0.5 + 0.5) * view.width;
-        const sy = view.top + ((-cy[k]! / w) * 0.5 + 0.5) * view.height;
-        if (sx < x0) x0 = sx;
-        if (sy < y0) y0 = sy;
-        if (sx > x1) x1 = sx;
-        if (sy > y1) y1 = sy;
-      }
-      screen[c * 4] = Number.isFinite(x0 + y0 + x1 + y1) ? x0 : NaN;
-      screen[c * 4 + 1] = y0;
-      screen[c * 4 + 2] = x1;
-      screen[c * 4 + 3] = y1;
-    }
-    const facing = new Int8Array(n);
-    if (!seeThrough) coneFacing(idx, mw, out, facing);
+    // A copy, so clusters reached later in the drag are placed where the body was when it began.
+    const mw = body.mesh.matrixWorld.clone();
+    const hull = new Float64Array(4);
+    screenBoxes(clip.multiplyMatrices(vp, mw).elements, idx.box, 1, view, hull);
     out.bodies.push({
       id: body.id,
       idx,
       P: flatXyz(pos),
       I: index.array,
       mw,
-      faceIds: [...body.faceTriangles.keys()],
-      screen,
-      facing,
+      faces: body.faceTriangles,
+      hull,
+      reached: false,
+      faceIds: [],
+      screen: NOT_YET,
+      facing: NOT_YET_FACING,
     });
   }
 
-  // Edges are never culled by facing: a silhouette edge belongs to the face
-  // pointing away as much as to the one pointing at you.
+  const list = model.edges;
+  for (let i = 0; i < list.length;) {
+    const draw = list[i]!.draw;
+    let j = i + 1;
+    while (j < list.length && list[j]!.draw === draw) j++;
+    if (draw.object.visible) {
+      const run: EdgeRun = { draw, from: i, to: j, hull: new Float64Array(4), flat: null, boxes: [] };
+      screenBoxes(vp.elements, worldBoxOf(run, list), 1, view, run.hull);
+      out.edges.push(run);
+    }
+    i = j;
+  }
+  return out;
+}
+
+/** Writes x0, y0, x1, y1 of each of `n` boxes (six numbers each in `B`) under the clip matrix `m`, NaN in x0 when a
+ *  corner is behind the camera. A box's corners are its first corner plus the clip space images of its three edges. */
+const cx = new Float64Array(8),
+  cy = new Float64Array(8),
+  cw = new Float64Array(8);
+
+function screenBoxes(m: ArrayLike<number>, B: ArrayLike<number>, n: number, view: DOMRect, screen: Float64Array) {
+  for (let c = 0; c < n; c++) {
+    const o = c * 6;
+    const bx = B[o]!,
+      by = B[o + 1]!,
+      bz = B[o + 2]!;
+    const ex = B[o + 3]! - bx,
+      ey = B[o + 4]! - by,
+      ez = B[o + 5]! - bz;
+    cx[0] = m[0]! * bx + m[4]! * by + m[8]! * bz + m[12]!;
+    cy[0] = m[1]! * bx + m[5]! * by + m[9]! * bz + m[13]!;
+    cw[0] = m[3]! * bx + m[7]! * by + m[11]! * bz + m[15]!;
+    for (let k = 1; k < 8; k++) {
+      const j = k & (k - 1) ? k & (k - 1) : 0;
+      const bit = k ^ j;
+      const ax = bit === 1 ? 0 : bit === 2 ? 4 : 8;
+      const len = bit === 1 ? ex : bit === 2 ? ey : ez;
+      cx[k] = cx[j]! + m[ax]! * len;
+      cy[k] = cy[j]! + m[ax + 1]! * len;
+      cw[k] = cw[j]! + m[ax + 3]! * len;
+    }
+    let x0 = Infinity,
+      y0 = Infinity,
+      x1 = -Infinity,
+      y1 = -Infinity;
+    for (let k = 0; k < 8; k++) {
+      const w = cw[k]!;
+      if (!(w > 0)) {
+        x0 = NaN;
+        break;
+      }
+      const sx = view.left + ((cx[k]! / w) * 0.5 + 0.5) * view.width;
+      const sy = view.top + ((-cy[k]! / w) * 0.5 + 0.5) * view.height;
+      if (sx < x0) x0 = sx;
+      if (sy < y0) y0 = sy;
+      if (sx > x1) x1 = sx;
+      if (sy > y1) y1 = sy;
+    }
+    screen[c * 4] = Number.isFinite(x0 + y0 + x1 + y1) ? x0 : NaN;
+    screen[c * 4 + 1] = y0;
+    screen[c * 4 + 2] = x1;
+    screen[c * 4 + 3] = y1;
+  }
+}
+
+function reach(b: BodyArea, proj: AreaProjection) {
+  const n = b.idx.clusterStart.length;
+  b.screen = new Float64Array(n * 4);
+  screenBoxes(new THREE.Matrix4().multiplyMatrices(proj.vp, b.mw).elements, b.idx.clusterBox, n, proj.view, b.screen);
+  areaWork.clusters += n;
+  b.facing = new Int8Array(n);
+  if (!proj.seeThrough) coneFacing(b.idx, b.mw, proj, b.facing);
+  b.faceIds = [...b.faces.keys()];
+  b.reached = true;
+}
+
+const drawBoxes = new WeakMap<object, Float64Array>();
+
+/** A BodyEdges object never changes its refs, so the box of all of them is kept per object. */
+function worldBoxOf(run: EdgeRun, list: readonly EdgeRef[]): Float64Array {
+  const all = (run.draw as Partial<BodyEdges>).refs;
+  if (!all) return pointsBox(list.slice(run.from, run.to));
+  let box = drawBoxes.get(run.draw);
+  if (!box) drawBoxes.set(run.draw, (box = pointsBox(all)));
+  return box;
+}
+
+function pointsBox(edges: readonly EdgeRef[]): Float64Array {
+  const u = Float64Array.of(Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity);
+  for (const e of edges)
+    for (const p of e.points)
+      for (let k = 0; k < 3; k++) {
+        if (p[k]! < u[k]!) u[k] = p[k]!;
+        if (p[k]! > u[k + 3]!) u[k + 3] = p[k]!;
+      }
+  return u;
+}
+
+// Edges are never culled by facing: a silhouette edge belongs to the face pointing away as much as to the one
+// pointing at you.
+function reachEdges(run: EdgeRun, proj: AreaProjection): (number[] | null)[] {
+  const { vp, view } = proj;
   const q = new THREE.Vector4();
-  for (const e of model.edges) {
-    if (!e.draw.object.visible) continue;
-    const flat: number[] = [];
-    let usable = true;
+  const all: (number[] | null)[] = [];
+  for (let i = run.from; i < run.to; i++) {
+    const e = proj.edgeList[i]!;
+    let flat: number[] | null = [];
     for (const pt of e.points) {
       q.set(pt[0], pt[1], pt[2], 1).applyMatrix4(vp);
       if (!(q.w > 0)) {
-        usable = false;
+        flat = null;
         break;
       }
       flat.push(
@@ -168,9 +248,18 @@ export function projectForArea(
         view.top + ((-q.y / q.w) * 0.5 + 0.5) * view.height,
       );
     }
-    out.edges.push(usable ? { ref: e, flat, box: boxOf(flat) } : { ref: e, flat: null, box: null });
+    all.push(flat);
+    run.boxes.push(flat === null ? null : boxOf(flat));
   }
-  return out;
+  areaWork.edges += run.to - run.from;
+  return (run.flat = all);
+}
+
+/** True when nothing inside the screen box `h` can meet the rect. */
+function missed(h: Float64Array, r: ScreenRect): boolean {
+  const x0 = h[0] as number;
+  if (Number.isNaN(x0)) return false;
+  return x0 > r.x1 + REACH_PX || h[2]! < r.x0 - REACH_PX || h[1]! > r.y1 + REACH_PX || h[3]! < r.y0 - REACH_PX;
 }
 
 /** Settles the clusters whose normal cone faces wholly toward or away from the camera, the rest are probed when
@@ -357,6 +446,8 @@ export function collectInBox(
   const probe = new TriProbe(proj);
   const see = proj.seeThrough;
   for (const b of proj.bodies) {
+    if (missed(b.hull, rect)) continue;
+    if (!b.reached) reach(b, proj);
     let touched = false;
     let anyFacing = false;
     let anyFailed = false;
@@ -375,10 +466,15 @@ export function collectInBox(
     const whole = mode === "window" ? anyFacing && !anyFailed : touched;
     if (whole) out.bodies.push(b.id);
   }
-  for (const e of proj.edges) {
-    if (e.flat === null) continue;
-    const quick = boxVerdict(e.box, rect, mode);
-    if (quick === "look" ? polylineInBox(e.flat, rect, mode) : quick) out.edges.push(e.ref);
+  for (const run of proj.edges) {
+    if (missed(run.hull, rect)) continue;
+    const flat = run.flat ?? reachEdges(run, proj);
+    for (let i = 0; i < flat.length; i++) {
+      const f = flat[i];
+      if (!f) continue;
+      const quick = boxVerdict(run.boxes[i]!, rect, mode);
+      if (quick === "look" ? polylineInBox(f, rect, mode) : quick) out.edges.push(proj.edgeList[run.from + i]!);
+    }
   }
   return out;
 }
