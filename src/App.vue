@@ -36,6 +36,7 @@ import MirrorToolPanel from "./components/overlays/MirrorToolPanel.vue";
 import FilletMembers from "./components/overlays/FilletMembers.vue";
 import ProjectFilterBar from "./components/overlays/ProjectFilterBar.vue";
 import MeasureReadout from "./components/overlays/MeasureReadout.vue";
+import Announcer from "./components/ui/Announcer.vue";
 import { onMounted, onUnmounted, ref, shallowRef, useTemplateRef, watch } from "vue";
 import { useEngine } from "./app/engineKey";
 import { isNarrowStage } from "./ui/layoutBreakpoints";
@@ -90,6 +91,8 @@ watch(
 </script>
 
 <template>
+  <!-- First, so its live regions exist before anything has a message to speak. -->
+  <Announcer />
   <!-- src/styles/_layout.scss and the e2e suite select on these element ids and class names. -->
   <TitleBar />
   <SafeModeBanner />

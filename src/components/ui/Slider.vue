@@ -2,6 +2,7 @@
 import { computed, ref, useId, watch } from "vue";
 import { fmtKeys } from "../../input/platform";
 import { useDisabled } from "./useDisabled";
+import { announce } from "../../ui/announce";
 
 const props = withDefaults(
   defineProps<{
@@ -38,9 +39,8 @@ const fill = computed(() => {
   const span = props.max - props.min;
   return span > 0 ? `${((Math.min(Math.max(shown.value, props.min), props.max) - props.min) / span) * 100}%` : "0%";
 });
-const readout = computed(() =>
-  !props.unit ? String(shown.value) : props.unit === "%" ? `${shown.value}%` : `${shown.value} ${props.unit}`,
-);
+const readoutOf = (v: number) => (!props.unit ? String(v) : props.unit === "%" ? `${v}%` : `${v} ${props.unit}`);
+const readout = computed(() => readoutOf(shown.value));
 
 const decimals = computed(() => (String(props.step).split(".")[1] ?? "").length);
 function snap(v: number) {
@@ -59,8 +59,13 @@ function onInput(e: Event) {
   if (props.commit === "live") emit("update:modelValue", v);
   else draft.value = v;
 }
+// A focused range speaks its own value for keys and a screen reader's own steps, so only a pointer drag is announced.
+let dragged = false;
+const onPointerdown = () => (dragged = true);
 function onChange(e: Event) {
   const el = e.target as HTMLInputElement;
+  const wasDrag = dragged;
+  dragged = false;
   if (d.isDisabled.value) {
     el.value = String(props.modelValue);
     return;
@@ -69,6 +74,7 @@ function onChange(e: Event) {
   draft.value = null;
   if (props.commit === "end" && v !== props.modelValue) emit("update:modelValue", v);
   emit("commit", v);
+  if (wasDrag) announce([props.label ?? tipText.value, readoutOf(v)].filter(Boolean).join(" "), "polite", { key: id });
 }
 
 // The keys are stepped here, not natively, so a key press is one update and one commit in every engine.
@@ -111,11 +117,12 @@ function onKeydown(e: KeyboardEvent) {
       :aria-label="label ? undefined : tipText"
       :aria-valuetext="unit ? readout : undefined"
       :aria-disabled="disabled ? 'true' : undefined"
+      @pointerdown="onPointerdown"
       @input="onInput"
       @change="onChange"
       @keydown="onKeydown"
     />
-    <output v-if="showValue || $slots.value" class="ui-slider-value"
+    <output v-if="showValue || $slots.value" class="ui-slider-value" aria-live="off"
       ><slot name="value" :value="shown">{{ readout }}</slot></output
     >
   </div>
