@@ -57,6 +57,12 @@ async function expand(w: ReturnType<typeof mount>, id: string) {
 }
 
 describe("settings under a plugin's row", () => {
+  it("opens from a Settings button carrying the base button icon", () => {
+    const toggle = rowOf(mount(PluginsSection), "Test.Alpha").get("[data-plugin-settings-toggle]");
+    expect(toggle.text()).toBe("Settings");
+    expect(toggle.findAll("svg").map((s) => [s.attributes("width"), s.attributes("height")])).toEqual([["14", "14"]]);
+  });
+
   it("are hidden until the row is expanded, then drawn from the schema with the plugin's own part below", async () => {
     const w = mount(PluginsSection);
     expect(rowOf(w, "Test.Alpha").find("[data-plugin-settings]").exists()).toBe(false);

@@ -8,7 +8,6 @@ import { contributedSettings, onContribChange } from "../../plugins/contrib";
 import { removePluginSettings, settingMatches } from "../../plugins/settings";
 import { pluginFocus } from "../../plugins/settingsFocus";
 import PluginSettingsForm from "./PluginSettingsForm.vue";
-import Icon from "../shell/Icon.vue";
 import Button from "../ui/Button.vue";
 import Checkbox from "../ui/Checkbox.vue";
 import TextField from "../ui/TextField.vue";
@@ -281,10 +280,10 @@ async function drop(id: string, name: string) {
           class="plug-settings-btn"
           :class="{ on: settingsOpen(rec.id) }"
           :aria-expanded="settingsOpen(rec.id)"
+          icon="settings"
           data-plugin-settings-toggle
           @click="toggleSettings(rec.id)"
         >
-          <template #icon><Icon name="settings" :size="16" /></template>
           Settings
         </Button>
         <Checkbox
@@ -390,10 +389,10 @@ async function drop(id: string, name: string) {
           class="plug-settings-btn"
           :class="{ on: settingsOpen(id) }"
           :aria-expanded="settingsOpen(id)"
+          icon="settings"
           data-plugin-settings-toggle
           @click="toggleSettings(id)"
         >
-          <template #icon><Icon name="settings" :size="16" /></template>
           Settings
         </Button>
       </div>

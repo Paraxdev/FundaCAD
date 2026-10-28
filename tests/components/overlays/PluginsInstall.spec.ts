@@ -333,6 +333,19 @@ describe("the list of what is installed", () => {
     expect(pluginEnabled("widgets")).toBe(true);
   });
 
+  it("opens an installed plugin's settings from a Settings button carrying the base button icon", async () => {
+    const settings = definePluginSettings("widgets", {
+      version: 1,
+      props: [{ key: "gap", type: "number", label: "Gap", default: 2 }],
+    });
+    contribute("widgets", { settings: [{ key: "s", settings }] });
+    installedPlugins.mockResolvedValue([record({})]);
+    const w = await mounted();
+    const toggle = w.get('[data-plugin="widgets"] [data-plugin-settings-toggle]');
+    expect(toggle.text()).toBe("Settings");
+    expect(toggle.findAll("svg").map((s) => [s.attributes("width"), s.attributes("height")])).toEqual([["14", "14"]]);
+  });
+
   it("forgets a removed plugin's settings only when its checkbox is ticked", async () => {
     const settings = definePluginSettings("widgets", {
       version: 1,
