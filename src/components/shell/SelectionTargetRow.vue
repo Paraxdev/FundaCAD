@@ -3,7 +3,7 @@
 // the wording. Edit hands off to features/targetEditTool, a profile area opens its feature's own tool instead.
 
 import { computed } from "vue";
-import Icon from "./Icon.vue";
+import Button from "../ui/Button.vue";
 import { useEngine } from "../../app/engineKey";
 import { useDocValue } from "../../app/useDoc";
 import { describeTarget, readTarget, type TargetField } from "../../features/selectionTargets";
@@ -45,16 +45,16 @@ function edit() {
     <label>{{ target.label }}</label>
     <div class="param-value target-value">
       <span class="target-count" :class="{ 'target-empty': count === 0 }">{{ summary }}</span>
-      <button
-        type="button"
+      <Button
         class="target-edit"
+        size="sm"
+        icon="pen"
+        :tip="`Change which ${target.kind}s this acts on`"
         :disabled="editing"
-        :title="editing ? 'Editing this selection' : `Change which ${target.kind}s this acts on`"
+        disabled-reason="Editing this selection"
         @click="edit"
+        >Edit</Button
       >
-        <Icon name="pen" :size="12" />
-        Edit
-      </button>
     </div>
   </div>
 </template>

@@ -2,7 +2,7 @@
 // One feature's editable values, the write path shared by the history and the Parameters panel. Every row kind is
 // declared in document/numFields.ts and document/optionFields.ts, never here.
 
-import { onUnmounted, ref, watch } from "vue";
+import { onUnmounted, ref } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { useBuildValue, useDocValue } from "../../app/useDoc";
 import { featureNotes, featurePlaceholders, placeholderNote } from "../../ui/featureNotes";
@@ -14,15 +14,14 @@ import SelectionTargetRow from "./SelectionTargetRow.vue";
 import { displayRound, plainNumber } from "../../ui/units";
 import { onPreviewError } from "../../ui/previewError";
 import {
+  canonicalTyping,
   commonUnits,
-  toUnit,
   tryParseMeasure,
   unitById,
   type Dim,
   type Measured,
   type UnitDef,
 } from "../../ui/measure";
-import { contextMenu } from "../../ui/menu";
 import { resolveEntities, resolveRealEntities, toSketchEntity } from "../../sketch/resolve";
 import { entityDims } from "../../sketch/entityDims";
 import { applyDrivingDimsDirect, dimAnchor, upsertDrivingDim } from "../../sketch/directDims";
@@ -129,18 +128,10 @@ function adopt(key: string, u: UnitDef | null) {
   if (u) shownUnit.value = { ...shownUnit.value, [key]: u.id };
 }
 
-function pickUnit(key: string, kind: FieldKind, x: number, y: number) {
-  const cur = unitOf(key, kind);
-  if (!cur) return;
-  contextMenu(
-    x,
-    y,
-    commonUnits(cur.dim).map((u) => ({
-      label: u.label,
-      checked: u.id === cur.id,
-      onClick: () => adopt(key, u),
-    })),
-  );
+/** What the chip offers, the shown unit included when it is not a common one (a typed µm). */
+function unitChoices(u: UnitDef): string[] {
+  const ids = commonUnits(u.dim).map((x) => x.id);
+  return ids.includes(u.id) ? ids : [...ids, u.id];
 }
 
 /** Typed text as a measurement of `dim`, with no parameter scope (those belong to the expression engine). Null when it
@@ -181,7 +172,15 @@ const sketchRows = useDocValue((doc) => {
   resolved.forEach((e, i) => {
     if (dimsOf[i]!.length) perType.set(e.type, (perType.get(e.type) ?? 0) + 1);
   });
-  const out: { key: string; label: string; unit: string; value: string; index: number; field: string }[] = [];
+  const out: {
+    key: string;
+    label: string;
+    unit: string | null;
+    units: string[] | undefined;
+    value: number;
+    index: number;
+    field: string;
+  }[] = [];
   const seen = new Map<string, number>();
   resolved.forEach((e, i) => {
     const dims = dimsOf[i]!;
@@ -196,8 +195,9 @@ const sketchRows = useDocValue((doc) => {
       out.push({
         key,
         label: `${prefix}${d.label}`,
-        unit: u?.label ?? "",
-        value: String(toUnit(d.valueMm, u)),
+        unit: u?.id ?? null,
+        units: u ? unitChoices(u) : undefined,
+        value: d.valueMm,
         index: i,
         field: d.field,
       });
@@ -206,19 +206,23 @@ const sketchRows = useDocValue((doc) => {
   return out;
 });
 
-function commitSketchDim(row: { key: string; index: number; field: string }, raw: string): string | null {
-  const m = measure(raw, unitOf(row.key, "length"), "length");
-  if (typeof m === "string") return m;
-  if (!m) return "not a value";
+/** Any measurement, a bare number in the shown unit. */
+function parseSketchDim(key: string, raw: string): number {
+  const m = measure(raw, unitOf(key, "length"), "length");
+  if (typeof m === "string") throw new Error(m);
+  if (!m) throw new Error("not a value");
+  return m.value;
+}
+
+function commitSketchDim(row: { index: number; field: string }, value: number) {
   const f = asFeature(feature.value, "sketch");
-  if (!f) return null;
+  if (!f) return;
   const resolved = resolveEntities(f, store.document.parameters);
   const copy = resolved[row.index];
-  if (!copy) return null;
-  adopt(row.key, m.unit);
+  if (!copy) return;
   // Lengths, diameters and rectangle sizes go through the solver like SketchMode.editDimension, so whatever is pinned to
   // the entity stays intact. Slots and polygons have no such constraint and stay direct coordinate writes.
-  const driven = upsertDrivingDim(f.constraints ?? [], copy, row.field as DimField, m.value);
+  const driven = upsertDrivingDim(f.constraints ?? [], copy, row.field as DimField, value);
   if (driven) {
     const solve = store.headlessSolve;
     if (!solve) {
@@ -227,7 +231,7 @@ function commitSketchDim(row: { key: string; index: number; field: string }, raw
       const all = resolveRealEntities(f, store.document.parameters);
       applyDrivingDimsDirect(all, driven);
       store.updateFeature(f.id, { entities: all.map(toSketchEntity), constraints: driven } as Partial<Feature>);
-      return null;
+      return;
     }
     void (async () => {
       const solved = await solve(
@@ -241,14 +245,13 @@ function commitSketchDim(row: { key: string; index: number; field: string }, raw
       }
       store.updateFeature(f.id, { entities: solved.entities, constraints: driven } as Partial<Feature>);
     })();
-    return null;
+    return;
   }
   entityDims(copy)
     .find((x) => x.field === row.field)
-    ?.write(m.value);
+    ?.write(value);
   const entities = f.entities.map((ent, j) => (j === row.index ? toSketchEntity(copy) : ent));
   store.updateFeature(f.id, { entities } as Partial<Feature>);
-  return null;
 }
 
 // Rows show the feature as the model on screen has it, the tool's live version while a tool edits it.
@@ -334,13 +337,9 @@ const featureRows = useDocValue(() => {
       const target: ParamTarget = { kind: "feature", feature: f.id, field };
       const bound = store.boundExpr(target);
       const u = unitOf(field, kind);
-      // a bound field edits its EXPRESSION (canonical units); a plain field shows
-      // its number in the unit the row is showing (counts are unitless and raw)
-      const shown = bound
-        ? bound.expr
-        : typeof cur === "number"
-          ? String(u ? toUnit(cur, u) : displayRound(cur))
-          : (cur ?? "");
+      // A bound field edits its EXPRESSION (canonical units); a plain field shows its number in the unit the row is
+      // showing, and a count is unitless.
+      const plain = !bound && typeof cur === "number";
       const fx = bound && store.isParamBound(target);
       return {
         key: field,
@@ -349,9 +348,10 @@ const featureRows = useDocValue(() => {
         label: fieldLabel(f.type, field, values)?.text ?? label,
         rule: featureValueRule(f.type, field),
         // Expressions are in canonical units so a file evaluates the same everywhere, so the chip states it and is no picker.
-        unit: bound ? (dimOf(kind) === "angle" ? "°" : dimOf(kind) ? "mm" : "") : (u?.label ?? ""),
-        pickable: !bound && !!u,
-        value: String(shown),
+        unit: bound ? (dimOf(kind) === "angle" ? "deg" : dimOf(kind) ? "mm" : null) : (u?.id ?? null),
+        units: !bound && u ? unitChoices(u) : undefined,
+        value: plain ? (cur as number) : null,
+        text: bound ? bound.expr : plain || cur === undefined ? null : String(cur),
         target,
         kind,
         rowClass: fx ? "fx-row" : undefined,
@@ -360,41 +360,41 @@ const featureRows = useDocValue(() => {
     });
 });
 
-/** The canonical number `raw` names, or null. commitField's reading minus the expression engine, which commits on a
- *  promise chain and can create parameters, so an expression field has no live preview. */
-function previewNumber(row: { key: string; kind: FieldKind }, raw: string): number | null {
+/** A whole fraction is one value ("1 1/2"), so it reads in the row's unit like a plain number, not as arithmetic. */
+const WHOLE_FRACTION = /^[+-]?\s*(\d+\s+)?\d+\s*\/\s*\d+$/;
+
+function isFraction(raw: string): boolean {
+  try {
+    return WHOLE_FRACTION.test(canonicalTyping(raw));
+  } catch {
+    return false;
+  }
+}
+
+/** A plain number or a fraction is in the row's unit, a literal naming a unit ("5in", "2mm+3cm") is a measurement in
+ *  it, anything else is an expression in canonical mm and deg (plan decision R4), so a file evaluates the same on
+ *  every machine. Null hands the text to the parameter engine. */
+function parseField(row: { key: string; kind: FieldKind }, raw: string): number | null {
   const u = unitOf(row.key, row.kind);
   const plain = plainNumber(raw);
   if (plain !== null) return plain * (u?.factor ?? 1);
+  const frac = isFraction(raw) ? tryParseMeasure(raw, u, {}) : null;
+  if (frac) return frac.value;
   const m = u ? measure(raw, u, u.dim) : null;
-  return m && typeof m !== "string" && m.unit ? m.value : null;
+  if (typeof m === "string") throw new Error(m);
+  // Only a literal that NAMED a unit is claimed here. A measurement that did not name one is a bare expression.
+  return m?.unit ? m.value : null;
 }
 
-/** The row's own refusal of what was typed, the heads-up box's rule and words
- *  for the same field. Shown under the row from Enter until the next edit. */
-const typedProblem = ref<{ row: string; message: string } | null>(null);
-watch(
-  () => props.featureId,
-  () => {
-    typedProblem.value = null;
-  },
-);
-
 function rowProblem(key: string): string | null {
-  if (typedProblem.value?.row === key) return typedProblem.value.message;
   return previewProblemRow.value === key ? previewProblem.value : null;
 }
 
 /** Shows what the typed number would build through the store's edit preview: the real feature rebuilt in place, not an
  *  approximation. Not an undo step, Enter still commits, and half-typed nonsense is ignored. */
-function previewField(
-  row: { key: string; label: string; target: ParamTarget; kind: FieldKind; rule: ValueRule },
-  raw: string,
-) {
+function previewField(row: { key: string; target: ParamTarget }, v: number | null) {
   previewProblemRow.value = row.key;
-  if (typedProblem.value?.row === row.key) typedProblem.value = null;
-  const v = previewNumber(row, raw);
-  if (v === null || valueProblem(row.label, row.rule, v)) return;
+  if (v === null) return;
   const next = featureWithTarget(store.document, row.target, v);
   if (!next) return; // unresolvable, or the same value it already holds
   if (previewOpenFor === next.id) {
@@ -432,40 +432,8 @@ function endPreview(committing: boolean) {
   store.endEditPreview(!committing);
 }
 
-/** A plain number is in the row's unit, a literal naming a unit ("5in", "2mm+3cm") is a measurement in it, anything
- *  else is an expression in canonical mm and deg (plan decision R4), so a file evaluates the same on every machine. */
-function commitField(
-  row: { key: string; label: string; target: ParamTarget; kind: FieldKind; rule: ValueRule },
-  raw: string,
-): string | null {
-  const { key, target, kind } = row;
-  const u = unitOf(key, kind);
-  const refuse = (v: number) => {
-    const message = valueProblem(row.label, row.rule, v);
-    typedProblem.value = message ? { row: key, message } : null;
-    return message;
-  };
-  const plain = plainNumber(raw);
-  if (plain !== null) {
-    const v = plain * (u?.factor ?? 1);
-    const no = refuse(v);
-    if (no) return no;
-    store.setTargetValue(target, v, kind);
-    return null;
-  }
-  const m = u ? measure(raw, u, u.dim) : null;
-  if (typeof m === "string") return m;
-  // Only a literal that NAMED a unit is claimed here. A measurement that did
-  // not name one is a bare expression, and R4 says those are canonical.
-  if (m?.unit) {
-    const no = refuse(m.value);
-    if (no) return no;
-    store.setTargetValue(target, m.value, kind);
-    adopt(key, m.unit);
-    return null;
-  }
-  typedProblem.value = null;
-  return store.setTargetExpr(target, raw, kind);
+function validateField(row: { label: string; rule: ValueRule }, v: number): string | null {
+  return valueProblem(row.label, row.rule, v);
 }
 </script>
 
@@ -509,9 +477,11 @@ function commitField(
       :label="r.label"
       :value="r.value"
       :unit="r.unit"
-      :pick-unit="(x, y) => pickUnit(r.key, 'length', x, y)"
+      :units="r.units"
       hint='a value with any unit (2mm, 1 inch, 1/2")'
-      :commit="(raw) => commitSketchDim(r, raw)"
+      :parse="(raw) => parseSketchDim(r.key, raw)"
+      @commit="(v) => commitSketchDim(r, v)"
+      @update:unit="(id) => adopt(r.key, unitById(id))"
     />
     <ValidatedRow
       v-for="r in featureRows"
@@ -519,15 +489,20 @@ function commitField(
       :field="r.key"
       :label="r.label"
       :value="r.value"
+      :text="r.text"
       :unit="r.unit"
-      :pick-unit="r.pickable ? (x, y) => pickUnit(r.key, r.kind, x, y) : undefined"
+      :units="r.units"
       :row-class="r.rowClass"
       :row-title="r.rowTitle"
       hint='a value with any unit (2mm, 1 inch, 1/2"), a parameter, or an expression'
-      :commit="(raw) => commitField(r, raw)"
-      :preview="(raw) => previewField(r, raw)"
+      :parse="(raw) => parseField(r, raw)"
+      :validate="(v) => validateField(r, v)"
+      :expression="(raw) => store.setTargetExpr(r.target, raw, r.kind)"
+      :preview="(v) => previewField(r, v)"
       :preview-end="endPreview"
       :problem="rowProblem(r.key)"
+      @commit="(v) => store.setTargetValue(r.target, v, r.kind)"
+      @update:unit="(id) => adopt(r.key, unitById(id))"
     />
   </template>
 </template>

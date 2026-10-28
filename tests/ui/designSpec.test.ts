@@ -53,7 +53,7 @@ const COLOUR_BASELINE: Record<string, number> = {
   "src/styles/_console.scss": 2,
   "src/styles/_float.scss": 8,
   "src/styles/_glass.scss": 3,
-  "src/styles/_inspector.scss": 11,
+  "src/styles/_inspector.scss": 3,
   "src/styles/_layout.scss": 3,
   "src/styles/_modals.scss": 71,
   "src/styles/_notice.scss": 1,
