@@ -1523,24 +1523,22 @@ export class Viewport {
     // On release only: switching to bodies raises the move gizmo mid-drag otherwise.
     if (announce && kind !== this.selectionMode) this.setSelectionMode(kind);
     if (!this.areaPreview.paint(kind, this.areaFilter, got, announce)) return;
-    // Both kinds are cleared every frame, Tab can change the filter mid drag.
-    h.clearSelection();
+    // Both kinds are replaced every frame, Tab can change the filter mid drag.
     h.clearBodySelection();
     if (kind === "bodies") {
+      h.clearSelection();
       if (from.additive) for (const id of from.bodies) h.selectBody(id);
       for (const id of got.bodies) h.selectBody(id);
       if (announce) this.onBodySelectionChange?.();
     } else {
-      if (from.additive) {
-        for (const f of from.faces) h.selectFace(f);
-        for (const e of from.edges) h.selectEdge(e);
-      } else {
-        this.edgeScope = { scope: "chain", reason: "tangent" };
-      }
+      if (!from.additive) this.edgeScope = { scope: "chain", reason: "tangent" };
       const faces = this.areaFilter === "all" || this.areaFilter === "faces";
       const edges = this.areaFilter === "all" || this.areaFilter === "edges";
-      if (faces) for (const f of got.faces) h.selectFace(f);
-      if (edges) for (const e of got.edges) h.selectEdge(e);
+      // A diff, so a frame over 50,000 selected edges repaints only what crossed the box.
+      h.replaceSelection(
+        [...(from.additive ? from.faces : []), ...(faces ? got.faces : [])],
+        [...(from.additive ? from.edges : []), ...(edges ? got.edges : [])],
+      );
       // A box states its extent, so a later fillet must not widen it to tangent chains.
       if (got.edges.length && edges) {
         this.edgeScope = { scope: "single", reason: "shift" };

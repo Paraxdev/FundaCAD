@@ -66,6 +66,9 @@ interface SelectLine {
   col: Float32Array;
 }
 
+const SELECT_CHUNK = 1024;
+const chunkOf = (e: EdgeRef) => Math.floor(e.slot / SELECT_CHUNK);
+
 const pickLineFits = (e: EdgeRef) => !!e.draw?.object && (e.points?.length ?? 0) >= 2;
 
 function makePickLine(draw: BodyEdges, kind: PickKind, pos: Float32Array, col: Float32Array): LineSegments2 {
@@ -235,9 +238,13 @@ export class Highlighter {
   }
 
   private hoverLine: { line: LineSegments2; edge: EdgeRef; hex: number } | null = null;
-  private selectLines = new Map<BodyEdges, SelectLine>();
+  /** Each draw's selected edges in stretches of slots, so a change rebuilds one stretch, not the whole body. */
+  private selectLines = new Map<BodyEdges, Map<number, SelectLine>>();
   /** The selected set changed, so the selected lines are rebuilt; otherwise only their colours are rewritten. */
-  private selectDirty = false;
+  private selectDirtyAll = false;
+  /** A click or a box frame touches a few bodies, so only their lines are rebuilt. */
+  private selectDirtyDraws = new Map<BodyEdges, Set<number>>();
+  private segments = new WeakMap<EdgeRef, Float32Array>();
   private selectRecolour = false;
   private edgeLinesQueued = false;
 
@@ -254,10 +261,30 @@ export class Highlighter {
   /** The picked edges drawn again wide over their own one. */
   private syncEdgeLines() {
     this.syncHoverLine();
-    if (this.selectDirty) this.rebuildSelectLines();
-    else if (this.selectRecolour) this.recolourSelectLines();
-    this.selectDirty = false;
+    if (this.selectDirtyAll) this.rebuildSelectLines(null);
+    else {
+      if (this.selectDirtyDraws.size) this.rebuildSelectLines(this.selectDirtyDraws);
+      if (this.selectRecolour) this.recolourSelectLines();
+    }
+    this.selectDirtyAll = false;
+    this.selectDirtyDraws.clear();
     this.selectRecolour = false;
+  }
+
+  private markSelectDirty(e?: EdgeRef) {
+    if (!e) {
+      this.selectDirtyAll = true;
+      return;
+    }
+    let chunks = this.selectDirtyDraws.get(e.draw);
+    if (!chunks) this.selectDirtyDraws.set(e.draw, (chunks = new Set()));
+    chunks.add(chunkOf(e));
+  }
+
+  private segmentsOf(e: EdgeRef): Float32Array {
+    let p = this.segments.get(e);
+    if (!p) this.segments.set(e, (p = segmentPositions(e.points)));
+    return p;
   }
 
   private syncHoverLine() {
@@ -280,41 +307,58 @@ export class Highlighter {
     this.hoverLine = { line: makePickLine(on.draw, "hover", pos, col), edge: on, hex };
   }
 
-  private rebuildSelectLines() {
-    for (const g of this.selectLines.values()) disposePickLine(g.line);
-    this.selectLines.clear();
+  /** `only` null rebuilds every line. */
+  private rebuildSelectLines(only: ReadonlyMap<BodyEdges, ReadonlySet<number>> | null) {
+    const stale = (draw: BodyEdges, chunk: number) => !only || !!only.get(draw)?.has(chunk);
+    for (const [draw, chunks] of this.selectLines) {
+      for (const [k, g] of chunks) {
+        if (!stale(draw, k)) continue;
+        disposePickLine(g.line);
+        chunks.delete(k);
+      }
+      if (!chunks.size) this.selectLines.delete(draw);
+    }
     if (!this.paintShown) return;
-    const byDraw = new Map<BodyEdges, EdgeRef[]>();
+    const groups = new Map<BodyEdges, Map<number, EdgeRef[]>>();
     for (const e of this.selectedEdges) {
-      if (this.errorEdges.has(e) || !pickLineFits(e)) continue;
-      const list = byDraw.get(e.draw) ?? [];
-      list.push(e);
-      byDraw.set(e.draw, list);
+      const k = chunkOf(e);
+      if (!stale(e.draw, k) || this.errorEdges.has(e) || !pickLineFits(e)) continue;
+      let byChunk = groups.get(e.draw);
+      if (!byChunk) groups.set(e.draw, (byChunk = new Map()));
+      const list = byChunk.get(k);
+      if (list) list.push(e);
+      else byChunk.set(k, [e]);
     }
-    for (const [draw, edges] of byDraw) {
-      const parts = edges.map((e) => segmentPositions(e.points));
-      const pos = new Float32Array(parts.reduce((n, p) => n + p.length, 0));
-      const col = new Float32Array(pos.length);
-      const starts: number[] = [];
-      const hexes: number[] = [];
-      let o = 0;
-      edges.forEach((e, i) => {
-        const c = this.edgeColour(e, "select");
-        const p = parts[i]!;
-        pos.set(p, o);
-        for (let k = 0; k < p.length; k += 3) col.set([c.r, c.g, c.b], o + k);
-        starts.push(o);
-        hexes.push(c.getHex());
-        o += p.length;
-      });
+    for (const [draw, byChunk] of groups) {
+      let lines = this.selectLines.get(draw);
+      if (!lines) this.selectLines.set(draw, (lines = new Map()));
+      for (const [k, edges] of byChunk) lines.set(k, this.buildSelectLine(draw, edges));
+    }
+  }
+
+  private buildSelectLine(draw: BodyEdges, edges: EdgeRef[]): SelectLine {
+    const parts = edges.map((e) => this.segmentsOf(e));
+    const pos = new Float32Array(parts.reduce((n, p) => n + p.length, 0));
+    const col = new Float32Array(pos.length);
+    const starts: number[] = [];
+    const hexes: number[] = [];
+    let o = 0;
+    edges.forEach((e, i) => {
+      const c = this.edgeColour(e, "select");
+      const p = parts[i]!;
+      pos.set(p, o);
+      for (let k = 0; k < p.length; k += 3) col.set([c.r, c.g, c.b], o + k);
       starts.push(o);
-      this.selectLines.set(draw, { line: makePickLine(draw, "select", pos, col), edges, starts, hexes, col });
-    }
+      hexes.push(c.getHex());
+      o += p.length;
+    });
+    starts.push(o);
+    return { line: makePickLine(draw, "select", pos, col), edges, starts, hexes, col };
   }
 
   /** Writes only the edges whose colour changed into the line's colour buffer, which three uploads again. */
   private recolourSelectLines() {
-    for (const g of this.selectLines.values()) {
+    for (const g of [...this.selectLines.values()].flatMap((m) => [...m.values()])) {
       let changed = false;
       g.edges.forEach((e, i) => {
         const c = this.edgeColour(e, "select");
@@ -331,7 +375,7 @@ export class Highlighter {
   }
 
   private pickLines(): LineSegments2[] {
-    const out = [...this.selectLines.values()].map((g) => g.line);
+    const out = [...this.selectLines.values()].flatMap((m) => [...m.values()].map((g) => g.line));
     if (this.hoverLine) out.push(this.hoverLine.line);
     return out;
   }
@@ -471,7 +515,7 @@ export class Highlighter {
     }
     this.errorEdges = next;
     for (const e of this.errorEdges) paint(e, ERROR);
-    this.selectDirty = true;
+    this.markSelectDirty();
     this.queueEdgeLines();
   }
 
@@ -629,9 +673,9 @@ export class Highlighter {
       if (!this.errorEdges.has(line)) paintIdle(line, this.edgeBase);
     } else {
       this.selectedEdges.add(line);
-      if (!this.errorEdges.has(line)) this.tint(line, "select");
+      if (!this.errorEdges.has(line)) this.paintEdge(line, "select");
     }
-    this.selectDirty = true;
+    this.markSelectDirty(line);
     this.queueEdgeLines();
   }
 
@@ -647,6 +691,46 @@ export class Highlighter {
     this.syncOverlay("hover");
     this.queueSelectOverlay();
     this.retintEdges();
+  }
+
+  /** A box drag frame: only what entered or left the box is painted, and faces go first so edges retint once. */
+  replaceSelection(faces: Iterable<number>, edges: Iterable<EdgeRef>) {
+    const nextFaces = new Set(faces);
+    const nextEdges = new Set(edges);
+    let facesChanged = false;
+    for (const f of this.selectedFaces) {
+      if (nextFaces.has(f)) continue;
+      this.selectedFaces.delete(f);
+      this.restoreFace(f);
+      facesChanged = true;
+    }
+    for (const f of nextFaces) {
+      if (this.selectedFaces.has(f)) continue;
+      this.selectedFaces.add(f);
+      this.paintFace(f, "select");
+      facesChanged = true;
+    }
+    for (const e of this.selectedEdges) {
+      if (nextEdges.has(e)) continue;
+      this.selectedEdges.delete(e);
+      this.markSelectDirty(e);
+      if (this.errorEdges.has(e)) continue;
+      if (e === this.hoveredEdge) this.paintEdge(e, "hover");
+      else paintIdle(e, this.edgeBase);
+    }
+    for (const e of nextEdges) {
+      if (this.selectedEdges.has(e)) continue;
+      this.selectedEdges.add(e);
+      this.markSelectDirty(e);
+      if (!facesChanged && !this.errorEdges.has(e)) this.paintEdge(e, "select");
+    }
+    if (facesChanged) {
+      this.faceBodies = null;
+      this.syncOverlay("hover");
+      this.queueSelectOverlay();
+      this.retintEdges();
+    }
+    this.queueEdgeLines();
   }
 
   /** Adds without toggling, so the second sweep of a box over an overlap does not eat the first one's result. */
@@ -677,7 +761,7 @@ export class Highlighter {
       if (!this.errorEdges.has(e)) paintIdle(e, this.edgeBase);
     }
     for (const f of this.selectedFaces) this.restoreFace(f);
-    if (this.selectedEdges.size) this.selectDirty = true;
+    if (this.selectedEdges.size) this.markSelectDirty();
     this.selectedEdges.clear();
     this.selectedFaces.clear();
     this.faceBodies = null;
@@ -781,10 +865,15 @@ export class Highlighter {
   }
 
   private tint(e: EdgeRef, kind: PickKind) {
-    if (this.paintShown) paint(e, this.edgeColour(e, kind));
-    else paintIdle(e, this.edgeBase);
+    this.paintEdge(e, kind);
     if (kind === "select") this.selectRecolour = true;
     this.queueEdgeLines();
+  }
+
+  /** No recolour of the other lines: the caller marks this edge's draw dirty, which rebuilds its line. */
+  private paintEdge(e: EdgeRef, kind: PickKind) {
+    if (this.paintShown) paint(e, this.edgeColour(e, kind));
+    else paintIdle(e, this.edgeBase);
   }
 
   /** Off, the sets keep following clicks so the tree and properties still do; a failing edge stays red either way. */
@@ -798,7 +887,7 @@ export class Highlighter {
       this.paintShown = false;
     }
     this.syncOverlays();
-    this.selectDirty = true;
+    this.markSelectDirty();
     this.syncEdgeLines();
   }
 
