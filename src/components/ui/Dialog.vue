@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, onUnmounted, useId, useTemplateRef } from "vue";
 import Icon from "../shell/Icon.vue";
-import { useModalGate } from "../../composables/useModalGate";
+import { inertOthers, useModalGate } from "../../composables/useModalGate";
 import { useModalStore } from "../../stores/modals";
 import { escapeClaimed } from "../../ui/escapeClaim";
 import { focusables, focusReturn } from "./focusables";
@@ -20,6 +20,10 @@ const props = withDefaults(
     /** Wraps the default slot in .modal-body. */
     body?: boolean;
     panelClass?: string | undefined;
+    /** "alertdialog" for a choice that interrupts, so a screen reader speaks the message with the title. */
+    role?: "dialog" | "alertdialog";
+    /** Id of the element that describes the dialog, usually its message. */
+    describedBy?: string | undefined;
   }>(),
   {
     title: undefined,
@@ -30,12 +34,15 @@ const props = withDefaults(
     gate: true,
     body: true,
     panelClass: undefined,
+    role: "dialog",
+    describedBy: undefined,
   },
 );
 const emit = defineEmits<{ close: [] }>();
 
 const titleId = useId();
 const panel = useTemplateRef<HTMLElement>("panel");
+const overlay = useTemplateRef<HTMLElement>("overlay");
 
 if (props.gate) useModalGate();
 
@@ -79,7 +86,9 @@ function initialTarget(root: HTMLElement): HTMLElement | null {
 }
 
 const back = focusReturn();
+let release: (() => void) | null = null;
 onMounted(async () => {
+  if (overlay.value) release = inertOthers(overlay.value);
   if (props.closeOnEsc) {
     modals = useModalStore();
     ownDepth = modals.depth;
@@ -89,6 +98,8 @@ onMounted(async () => {
   if (panel.value) initialTarget(panel.value)?.focus();
 });
 onBeforeUnmount(() => {
+  // Before the focus return: an inert opener cannot take focus.
+  release?.();
   if (props.returnFocus) back.restore((n) => !!panel.value?.contains(n));
 });
 onUnmounted(() => window.removeEventListener("keydown", onKey, true));
@@ -97,14 +108,15 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
 <template>
   <!-- Teleported: the overlay is position:fixed and must not inherit a stacking context from #app. -->
   <Teleport to="body">
-    <div class="modal-overlay" @pointerdown.self="emit('close')">
+    <div ref="overlay" class="modal-overlay" @pointerdown.self="emit('close')">
       <div
         ref="panel"
         class="modal-panel ui-dialog"
         :class="[size && `ui-dialog-${size}`, panelClass]"
-        role="dialog"
+        :role="role"
         aria-modal="true"
         :aria-labelledby="titleId"
+        :aria-describedby="describedBy"
         tabindex="-1"
         @keydown="onTab"
       >

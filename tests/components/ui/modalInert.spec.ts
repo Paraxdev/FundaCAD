@@ -18,6 +18,7 @@ beforeEach(() => {
       <div id="main"><div id="stage"><div id="viewport"></div><div id="home"><button>Open</button></div></div></div>
     </div>
     <div id="toasts"></div>
+    <div class="toast-stack"><button>Undo</button></div>
     <div id="a11y-announcer"><div role="status"></div></div>
     <script id="boot"></script>
     <div id="dlg-a" class="overlay"><div class="panel"><button>A</button></div></div>
@@ -39,6 +40,12 @@ describe("inertOthers", () => {
     expect(inert("#a11y-announcer")).toBe(false);
     expect(inert("#boot")).toBe(false);
     expect(inertDepth()).toBe(1);
+  });
+
+  it("keeps the toast stack live, since it paints above the overlay", () => {
+    hold($("#dlg-a .panel"));
+    expect(inert(".toast-stack")).toBe(false);
+    expect($(".toast-stack").hasAttribute("aria-hidden")).toBe(false);
   });
 
   it("walks into the app for a modal inside it, so only its siblings at each level go inert", () => {

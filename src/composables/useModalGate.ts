@@ -8,8 +8,9 @@ export function useModalGate(): void {
   onUnmounted(popModal);
 }
 
-// Live under every modal, so its regions keep speaking (lane a2's Announcer, Teleported to body).
-const ANNOUNCER = "a11y-announcer";
+// Live under every modal: the Announcer (Teleported to body) keeps speaking, and toasts paint above the overlay
+// (z-index 2500 over 1000), so their action buttons stay clickable.
+const ALWAYS_LIVE = ["#a11y-announcer", ".toast-stack"];
 
 type Layer = { el: HTMLElement; keep: string[] };
 const layers: Layer[] = [];
@@ -48,9 +49,7 @@ function applyInert(): void {
   for (let i = layers.length - 1; i >= 0 && !top; i--) if (layers[i]?.el.isConnected) top = layers[i];
   if (!top) return;
   const live = new Set<Element>([top.el]);
-  const announcer = document.getElementById(ANNOUNCER);
-  if (announcer) live.add(announcer);
-  for (const sel of top.keep) for (const n of document.querySelectorAll(sel)) live.add(n);
+  for (const sel of [...ALWAYS_LIVE, ...top.keep]) for (const n of document.querySelectorAll(sel)) live.add(n);
   const path = new Set<Element>();
   for (const n of live) for (let p: Element | null = n; p && p !== document.body; p = p.parentElement) path.add(p);
   hideBesides(document.body, live, path);

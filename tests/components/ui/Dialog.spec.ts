@@ -7,6 +7,7 @@ import Dialog from "../../../src/components/ui/Dialog.vue";
 import ModalFrame from "../../../src/components/overlays/ModalFrame.vue";
 import Popover from "../../../src/components/ui/Popover.vue";
 import { useModalStore } from "../../../src/stores/modals";
+import { inertDepth } from "../../../src/composables/useModalGate";
 
 enableAutoUnmount(afterEach);
 
@@ -70,6 +71,54 @@ describe("Dialog", () => {
     expect([panel.getAttribute("role"), panel.getAttribute("aria-modal")]).toEqual(["dialog", "true"]);
     const title = document.getElementById(panel.getAttribute("aria-labelledby")!);
     expect(title?.textContent).toBe("Export");
+  });
+
+  it("is described only when given an id, and wears alertdialog when asked", async () => {
+    await render();
+    expect($(".ui-dialog")!.hasAttribute("aria-describedby")).toBe(false);
+    document.body.innerHTML = "";
+    await render({ role: "alertdialog", describedBy: "msg" });
+    const panel = $(".ui-dialog")!;
+    expect([panel.getAttribute("role"), panel.getAttribute("aria-describedby")]).toEqual(["alertdialog", "msg"]);
+  });
+
+  it("makes the page behind it inert while open, and hands it back before focus returns", async () => {
+    const { open } = await render();
+    const page = $(".opener")!.parentElement!;
+    expect([page.hasAttribute("inert"), page.getAttribute("aria-hidden")]).toEqual([true, "true"]);
+    expect($(".modal-overlay")!.hasAttribute("inert")).toBe(false);
+    expect(inertDepth()).toBe(1);
+    key("Escape");
+    await nextTick();
+    expect([open.value, page.hasAttribute("inert"), page.hasAttribute("aria-hidden"), inertDepth()]).toEqual([
+      false,
+      false,
+      false,
+      0,
+    ]);
+    expect(active()?.className).toBe("opener");
+  });
+
+  it("hides the page even when it holds no gate", async () => {
+    await render({ gate: false });
+    expect([useModalStore().depth, $(".opener")!.parentElement!.hasAttribute("inert")]).toEqual([0, true]);
+  });
+
+  it("a dialog over a dialog hides the one under it, and closing it hands that one back", async () => {
+    const inner = ref(false);
+    await render({}, () => [h("button", { class: "first" }), inner.value ? h(Dialog, { title: "Inner" }) : null]);
+    inner.value = true;
+    await nextTick();
+    await settle();
+    const [outer, top] = [...document.querySelectorAll<HTMLElement>(".modal-overlay")];
+    expect([outer!.hasAttribute("inert"), top!.hasAttribute("inert"), inertDepth()]).toEqual([true, false, 2]);
+    inner.value = false;
+    await nextTick();
+    expect([outer!.hasAttribute("inert"), $(".opener")!.parentElement!.hasAttribute("inert"), inertDepth()]).toEqual([
+      false,
+      true,
+      1,
+    ]);
   });
 
   it("wears the size class it is given", async () => {
