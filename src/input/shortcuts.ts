@@ -457,7 +457,7 @@ export function shortcutHudGroups(skip: ReadonlySet<string> = new Set()): HudGro
             "Box select: dragging to the right takes what is fully inside, dragging to the left takes what it touches",
         },
         { key: "Shift+Drag", label: "Box select, adding to what is selected" },
-        { key: "Tab", label: "While boxing: take everything / faces / edges" },
+        { key: "Tab", label: "While boxing: take everything / faces / sketch profiles / edges / bodies" },
       ],
     },
   ];

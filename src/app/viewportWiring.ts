@@ -6,7 +6,7 @@ import { contextMenu, dismissContextMenu } from "../ui/menu";
 import { featureMeta } from "../ui/featureMeta";
 import { bodyRowLabel, distinguish, dominantOwner, edgeChoiceLabel } from "../ui/edgeChoice";
 import { TIE_BAND_PX, ambiguousCandidates } from "../viewport/edgeTies";
-import { areaFilterLabel } from "../viewport/areaSelect";
+import { areaFilterLabel, outlineInBox } from "../viewport/areaSelect";
 import { useBrowserStore } from "../stores/browser";
 import { useRibbonStore } from "../stores/ribbon";
 import { analysisFlags } from "../ui/railActive";
@@ -16,6 +16,7 @@ import { regionNudgePlacement } from "../features/regionNudge";
 import type { NudgePlacement } from "../features/selectionNudge";
 import { regionBeatsSurface } from "../sketch/regionOverSurface";
 import { regionArea } from "../sketch/region";
+import type { WorldRegion } from "../sketch/overlay";
 import type { Engine } from "./engine";
 import type { Selector } from "../types";
 import { hitPx } from "../input/pointerKind";
@@ -108,7 +109,32 @@ export function installViewportWiring(e: Engine): void {
   // toolOwnsScreen, or one box over bodies would block every later box; the gizmo's handles stop their own press.
   e.viewport.canAreaSelect = () => !e.toolOwnsScreen() && !e.sketch.active;
   // The box replaces the selection that raised the gizmo, which would point at the old centroid.
-  e.viewport.onAreaBegin = () => e.dropBodyGizmo();
+  let boxFrom: [number, number, number][] = [];
+  // The camera cannot move during a box, so each area is projected once per drag.
+  const outlines = new Map<WorldRegion, number[]>();
+  e.viewport.onAreaBegin = () => {
+    e.dropBodyGizmo();
+    boxFrom = e.overlay.regionSelectionPoints();
+    outlines.clear();
+  };
+  const outlineOf = (wr: WorldRegion) => {
+    let pts = outlines.get(wr);
+    if (!pts) {
+      const w = new THREE.Vector3();
+      pts = wr.region.loop.flatMap((q) => {
+        const s = e.viewport.projectToScreen(wr.plane.to3D(q.x, q.y, w), true);
+        return [s.x, s.y];
+      });
+      outlines.set(wr, pts);
+    }
+    return pts;
+  };
+  e.viewport.onAreaProfiles = (rect, mode, take, additive, announce) => {
+    const from = additive ? boxFrom : [];
+    const changed = e.overlay.selectRegionsInBox(from, (wr) => take && outlineInBox(outlineOf(wr), rect, mode));
+    if (changed) e.viewport.requestRender();
+    if (announce) refreshNudge();
+  };
   // The drag direction decides what the box takes, so say so while dragging.
   e.viewport.onAreaDrag = (mode) => {
     if (mode === null) {

@@ -160,6 +160,7 @@ import {
   dragBox,
   isAreaDrag,
   areaSelectionMode,
+  areaTakesProfiles,
   AreaPreviewGate,
   nextAreaFilter,
   type AreaFilter,
@@ -832,7 +833,10 @@ export class Viewport {
     if (this.selectPolicy === "auto" && this.model && this.highlighter) {
       const bodyId = this.autoBodyAt(hit, clientX, clientY, ctrl || shift);
       if (bodyId) {
-        if (this.regionPickAt?.(clientX, clientY, ctrl || shift)) return;
+        if (this.regionPickAt?.(clientX, clientY, ctrl || shift)) {
+          this.requestRender();
+          return;
+        }
         this.setSelectionMode("bodies");
         if (ctrl || shift) this.highlighter.toggleSelectBody(bodyId);
         else this.highlighter.selectOnlyBody(bodyId);
@@ -846,7 +850,11 @@ export class Viewport {
     const e = { clientX, clientY, ctrlKey: ctrl, metaKey: false, shiftKey: shift };
     // A visible sketch's area is preferred over the face it lies on (with the exceptions in
     // sketch/regionOverSurface.ts); an edge is still preferred over both.
-    if (hit?.kind !== "edge" && this.regionPickAt?.(e.clientX, e.clientY, e.ctrlKey || e.metaKey || e.shiftKey)) return;
+    if (hit?.kind !== "edge" && this.regionPickAt?.(e.clientX, e.clientY, e.ctrlKey || e.metaKey || e.shiftKey)) {
+      // Hover draws only on a move, so a pick under a still cursor asks for its own frame.
+      this.requestRender();
+      return;
+    }
     // Reference geometry not overlapping the body. Markers and quads are raycast together so the nearest wins
     // by depth.
     if (!hit && (this.datumQuads.length || this.datumMarkers.length)) {
@@ -973,6 +981,9 @@ export class Viewport {
   /** Fires once a press has travelled far enough to be a box, so the app can stand down what is up only
    *  because something is selected. */
   onAreaBegin: (() => void) | null = null;
+  /** The box over the visible sketches' areas: `take` false leaves only what an additive box started from. */
+  onAreaProfiles:
+    ((rect: ScreenRect, mode: AreaMode, take: boolean, additive: boolean, announce: boolean) => void) | null = null;
   private areaAt: { x: number; y: number } | null = null;
   private areaDown: AreaDrag | null = null;
   private areaBox = new AreaBox();
@@ -1502,11 +1513,13 @@ export class Viewport {
   /** Take what the box covers, starting from the selection at drag start. `announce`
    *  is false for preview frames, so listeners hear only the finished selection. */
   selectInBox(rect: ScreenRect, mode: AreaMode, from: AreaDrag, announce: boolean) {
+    // The filter decides the kind of selection, "all" follows the mode.
+    const kind = areaSelectionMode(this.areaFilter, this.selectionMode);
+    // A sketch's areas live in the overlay, and a sketch alone has no model.
+    this.onAreaProfiles?.(rect, mode, areaTakesProfiles(this.areaFilter, kind), from.additive, announce);
     const h = this.highlighter;
     if (!h || !this.model) return;
     const got = collectInBox(this.areaProj ?? this.projectForArea(), rect, mode);
-    // The filter decides the kind of selection, "all" follows the mode.
-    const kind = areaSelectionMode(this.areaFilter, this.selectionMode);
     // On release only: switching to bodies raises the move gizmo mid-drag otherwise.
     if (announce && kind !== this.selectionMode) this.setSelectionMode(kind);
     if (!this.areaPreview.paint(kind, this.areaFilter, got, announce)) return;
@@ -1524,10 +1537,12 @@ export class Viewport {
       } else {
         this.edgeScope = { scope: "chain", reason: "tangent" };
       }
-      if (this.areaFilter !== "edges") for (const f of got.faces) h.selectFace(f);
-      if (this.areaFilter !== "faces") for (const e of got.edges) h.selectEdge(e);
+      const faces = this.areaFilter === "all" || this.areaFilter === "faces";
+      const edges = this.areaFilter === "all" || this.areaFilter === "edges";
+      if (faces) for (const f of got.faces) h.selectFace(f);
+      if (edges) for (const e of got.edges) h.selectEdge(e);
       // A box states its extent, so a later fillet must not widen it to tangent chains.
-      if (got.edges.length && this.areaFilter !== "faces") {
+      if (got.edges.length && edges) {
         this.edgeScope = { scope: "single", reason: "shift" };
       }
       if (announce) this.onSelectionChange?.();
@@ -3853,9 +3868,11 @@ export class Viewport {
 
   private projScratch = new THREE.Vector3();
   /** Client coords. */
-  projectToScreen(world: THREE.Vector3): { x: number; y: number } {
+  /** `clip` makes a point behind the camera or past the far plane NaN, where the plain projection would mirror it. */
+  projectToScreen(world: THREE.Vector3, clip = false): { x: number; y: number } {
     const rect = this.canvas.getBoundingClientRect();
     const v = this.projScratch.copy(world).project(this.rig.active);
+    if (clip && (v.z < -1 || v.z > 1)) return { x: NaN, y: NaN };
     return {
       x: (v.x * 0.5 + 0.5) * rect.width + rect.left,
       y: (-v.y * 0.5 + 0.5) * rect.height + rect.top,

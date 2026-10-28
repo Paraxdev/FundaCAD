@@ -8,11 +8,12 @@ export const AREA_DRAG_MIN_PX = 4;
  *  already adds to the selection. */
 export type AreaMode = "window" | "crossing";
 
-/** `bodies` takes whole bodies whatever the viewport is picking; `all` follows the current selection mode. */
-export type AreaFilter = "all" | "faces" | "edges" | "bodies";
+/** `bodies` takes whole bodies whatever the viewport is picking; `all` follows the current selection mode; `profiles`
+ *  takes only the areas of visible sketches. */
+export type AreaFilter = "all" | "faces" | "profiles" | "edges" | "bodies";
 
 /** The order Tab cycles through, shared by the chip on the box, the key and the prompt. */
-export const AREA_FILTERS: readonly AreaFilter[] = ["all", "faces", "edges", "bodies"];
+export const AREA_FILTERS: readonly AreaFilter[] = ["all", "faces", "profiles", "edges", "bodies"];
 
 export function nextAreaFilter(f: AreaFilter): AreaFilter {
   const i = AREA_FILTERS.indexOf(f);
@@ -21,12 +22,20 @@ export function nextAreaFilter(f: AreaFilter): AreaFilter {
 
 /** Reads as the object of a sentence: "taking EDGES fully inside the box". */
 export function areaFilterLabel(f: AreaFilter): string {
-  return f === "all" ? "everything" : f;
+  return f === "all" ? "everything" : f === "profiles" ? "sketch profiles" : f;
 }
 
 /** An icons.ts name, shown on the chip on the box. */
 export function areaFilterIcon(f: AreaFilter): string {
-  return f === "faces" ? "face" : f === "edges" ? "edge" : f === "bodies" ? "body" : "select-all";
+  return f === "faces"
+    ? "face"
+    : f === "profiles"
+      ? "sketch"
+      : f === "edges"
+        ? "edge"
+        : f === "bodies"
+          ? "body"
+          : "select-all";
 }
 
 /** A selection is bodies or faces and edges, never both (viewport.selectionMode); `all` keeps the current one. */
@@ -34,6 +43,34 @@ export function areaSelectionMode(f: AreaFilter, current: "faces" | "bodies"): "
   if (f === "bodies") return "bodies";
   if (f === "all") return current;
   return "faces";
+}
+
+/** A sketch's areas count as faces: Faces and a faces mode Everything take them beside the model's own. */
+export function areaTakesProfiles(f: AreaFilter, kind: "faces" | "bodies"): boolean {
+  return f === "profiles" || (kind === "faces" && (f === "faces" || f === "all"));
+}
+
+/** Even-odd over a closed outline of flat x,y pairs. */
+function pointInOutline(x: number, y: number, pts: readonly number[]): boolean {
+  let inside = false;
+  const n = pts.length >> 1;
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const xi = pts[i * 2] as number;
+    const yi = pts[i * 2 + 1] as number;
+    const xj = pts[j * 2] as number;
+    const yj = pts[j * 2 + 1] as number;
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+/** A sketch area by its outer outline on screen. A crossing also takes an area the box lies wholly inside. */
+export function outlineInBox(pts: readonly number[], r: ScreenRect, mode: AreaMode): boolean {
+  if (pts.length < 6) return false;
+  if (mode === "window") return allInsideRect(pts, r);
+  if (!pts.every(Number.isFinite)) return false;
+  const closed = [...pts, pts[0] as number, pts[1] as number];
+  return polylineInBox(closed, r, "crossing") || pointInOutline(r.x0, r.y0, pts);
 }
 
 /** CSS pixels, normalised so x0 <= x1 and y0 <= y1. */

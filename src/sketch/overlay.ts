@@ -353,6 +353,27 @@ export class SketchOverlay {
     }
     this.recolorFills();
   }
+  /** The anchors of the picked areas, which an additive box starts from. */
+  regionSelectionPoints(): [number, number, number][] {
+    return this.selectedRegionPoints.map((p) => [p[0], p[1], p[2]]);
+  }
+  /** A box's pick: `from` plus every area `taken` holds, a text's glyphs as one unit. False when nothing changed. */
+  selectRegionsInBox(from: [number, number, number][], taken: (wr: WorldRegion) => boolean): boolean {
+    const pts = from.map((p) => [p[0], p[1], p[2]] as [number, number, number]);
+    const seen = new Set<WorldRegion>();
+    for (const wr of this.regions) {
+      if (wr.hole || seen.has(wr) || !taken(wr)) continue;
+      for (const r of this.regionGroup(wr)) {
+        seen.add(r);
+        pts.push([r.interior3D.x, r.interior3D.y, r.interior3D.z]);
+      }
+    }
+    const key = (list: [number, number, number][]) => list.map((p) => p.join()).join("|");
+    if (key(pts) === key(this.selectedRegionPoints)) return false;
+    this.selectedRegionPoints = pts;
+    this.recolorFills();
+    return true;
+  }
   clearRegionSelection() {
     if (!this.selectedRegionPoints.length) return;
     this.selectedRegionPoints = [];
