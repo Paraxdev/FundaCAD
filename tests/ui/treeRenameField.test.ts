@@ -35,6 +35,12 @@ describe("tree rename field", () => {
     expect(cascaded("height", renameField)).toBe("1lh");
   });
 
+  it("falls back to its content height where the lh unit is missing, as on older WebKitGTK", () => {
+    const heights: string[] = [];
+    css.walkRules(".tree-label.renaming", (rule) => rule.walkDecls("height", (d) => void heights.push(d.value)));
+    expect(heights).toEqual(["auto", "1lh"]);
+  });
+
   it("sees the sm field height it has to beat", () => {
     expect(cascaded("height", ["ui-field", "ui-text-field", "ui-field-sm"])).toBe("24px");
   });
