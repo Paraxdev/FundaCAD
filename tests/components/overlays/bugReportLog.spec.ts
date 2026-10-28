@@ -59,7 +59,7 @@ function tick(sel: string, on: boolean) {
 }
 
 async function copy(): Promise<string[]> {
-  const desc = $<HTMLTextAreaElement>(".bug-desc")!;
+  const desc = $<HTMLTextAreaElement>(".bug-desc textarea")!;
   desc.value = "the bracket drew twice";
   desc.dispatchEvent(new Event("input"));
   $(".bug-send")!.dispatchEvent(new Event("click", { bubbles: true }));
@@ -91,10 +91,10 @@ describe("the bug report's app log", () => {
     invoke.mockResolvedValue(TAIL_A);
     await open();
     expect(invoke.mock.calls).toEqual([["log_tail"]]);
-    expect($<HTMLInputElement>(".bug-log")!.checked).toBe(true);
+    expect($<HTMLInputElement>(".bug-log input")!.checked).toBe(true);
     expect(preview()).toContain(`app log (the end, user names hidden):\n${TAIL_A}`);
 
-    tick(".bug-doc", true);
+    tick(".bug-doc input", true);
     const ticked = await copy();
     expect(ticked.at(-2)!.split("\n").slice(1).join("\n")).toEqual(TAIL_A);
     expect(ticked.at(-2)).toMatch(/^app log/);
@@ -106,7 +106,7 @@ describe("the bug report's app log", () => {
       "webview: WebKitGTK 2.46.3",
     ]);
 
-    tick(".bug-log", false);
+    tick(".bug-log input", false);
     const unticked = await copy();
     expect(unticked).toEqual([...ticked.slice(0, -2), ticked.at(-1)]);
   });

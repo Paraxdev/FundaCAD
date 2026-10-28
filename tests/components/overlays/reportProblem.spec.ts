@@ -7,6 +7,8 @@ import { clearLog, logEntries, logError, logInfo, logWarning } from "../../../sr
 import { issueUrl, recentErrors } from "../../../src/ui/reportText";
 import type { BugReportDeps } from "../../../src/ui/bugReporter";
 import BugReportDialog from "../../../src/components/overlays/BugReportDialog.vue";
+import ModalHost from "../../../src/components/overlays/ModalHost.vue";
+import { choose } from "../../../src/ui/choice";
 
 const SYSTEM = "linux x86_64 · Ubuntu 24.04.1 LTS · AppImage";
 const TAIL = "[log] FundaCAD 1.0.7 started\n[engine] ready\n[frames] 2 dropped";
@@ -87,7 +89,7 @@ async function open(doc = SMALL_DOC): Promise<void> {
 }
 
 async function type(text: string) {
-  const desc = $<HTMLTextAreaElement>(".bug-desc")!;
+  const desc = $<HTMLTextAreaElement>(".bug-desc textarea")!;
   desc.value = text;
   desc.dispatchEvent(new Event("input"));
   await flushPromises();
@@ -137,7 +139,7 @@ describe("Report a problem", () => {
 
   it("is titled Report a problem and sends nothing without a description", async () => {
     await open();
-    expect($("#bug-report-title")!.textContent).toBe("Report a problem");
+    expect($(".bug-report-card h2")!.textContent).toBe("Report a problem");
     expect($(".bug-need-text")).toBeNull();
     for (const [empty, button] of [
       ["", ".bug-github"],
@@ -147,7 +149,7 @@ describe("Report a problem", () => {
       $<HTMLButtonElement>(".bug-shot")!.focus();
       click(button);
       await flushPromises();
-      expect(document.activeElement).toBe($(".bug-desc"));
+      expect(document.activeElement).toBe($(".bug-desc textarea"));
       expect($(".bug-need-text")?.getAttribute("role")).toBe("alert");
     }
     expect([h.order, h.toasts, shown()]).toEqual([[], [], true]);
@@ -158,6 +160,37 @@ describe("Report a problem", () => {
     click(".bug-github");
     await flushPromises();
     expect([h.order, shown()]).toEqual([["clipboard", "open"], false]);
+  });
+
+  it("opens on the description, keeps Tab inside, and gives focus back on Cancel", async () => {
+    const opener = document.createElement("button");
+    document.body.append(opener);
+    opener.focus();
+    await open();
+    const panel = $("[role=dialog]")!;
+    expect([panel.getAttribute("aria-modal"), document.activeElement]).toEqual(["true", $(".bug-desc textarea")]);
+    $(".modal-close")!.focus();
+    const back = new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true });
+    document.activeElement!.dispatchEvent(back);
+    expect([back.defaultPrevented, document.activeElement]).toEqual([true, $(".bug-github")]);
+    click(".bug-cancel");
+    await flushPromises();
+    expect([shown(), document.activeElement]).toEqual([false, opener]);
+  });
+
+  it("leaves Escape to a chooser over it, then closes on the next one", async () => {
+    mount(ModalHost, { attachTo: document.body });
+    await open();
+    const answer = choose("Which?", [{ value: "a", label: "A" }]);
+    await flushPromises();
+    const esc = () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    esc();
+    expect(await answer).toBeNull();
+    await flushPromises();
+    expect(shown()).toBe(true);
+    esc();
+    await flushPromises();
+    expect(shown()).toBe(false);
   });
 
   it("copies the whole report before anything else, then opens the prefilled issue", async () => {
@@ -265,18 +298,18 @@ describe("Report a problem", () => {
 
   it("disables the document box for a document too big for an issue", async () => {
     await open(BIG_DOC);
-    expect($<HTMLInputElement>(".bug-doc")!.disabled).toBe(true);
+    expect($(".bug-doc input")!.getAttribute("aria-disabled")).toBe("true");
     expect($(".bug-doc-big")!.textContent).toContain("(60 KB)");
     expect(preview()).not.toContain("document:");
   });
 
   it("adds a small document only when ticked, shown in the preview as its size", async () => {
     await open();
-    expect([$<HTMLInputElement>(".bug-doc")!.disabled, $(".bug-doc-big")]).toEqual([false, null]);
+    expect([$(".bug-doc input")!.getAttribute("aria-disabled") === "true", $(".bug-doc-big")]).toEqual([false, null]);
     await type(DESCRIPTION);
     expect(preview()).not.toContain("document:");
 
-    await tick(".bug-doc", true);
+    await tick(".bug-doc input", true);
     expect(preview().endsWith(`document:\n(the current document, ${SMALL_DOC.length} bytes)`)).toBe(true);
     const shownText = preview();
     click(".bug-send");

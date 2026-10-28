@@ -772,16 +772,12 @@
 }
 .bug-report-card .bug-desc {
   width: 100%;
-  box-sizing: border-box;
-  resize: vertical;
-  margin: var(--s-3) 0;
-  font-size: 12px;
+  margin: 0 0 var(--s-3);
 }
 .bug-report-card .bug-check {
-  display: block;
-  margin: var(--s-1) 0;
+  display: flex;
+  margin: var(--s-2) 0;
   font-size: 12px;
-  cursor: pointer;
 }
 .bug-report-card .bug-preview {
   margin: var(--s-3) 0;
@@ -827,10 +823,6 @@
 }
 .bug-report-card .bug-doc-big {
   margin: 0 0 var(--s-2);
-}
-.bug-report-card .choice-btn:disabled {
-  opacity: 0.45;
-  cursor: default;
 }
 
 /* Materials: library and editor side by side, since picking a material and dragging a
