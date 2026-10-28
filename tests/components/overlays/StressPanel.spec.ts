@@ -268,8 +268,8 @@ describe("StressPanel", () => {
         el.getAttribute("aria-label"),
       );
     expect(names()).toEqual([
-      "Radius",
-      "Radius",
+      "Spot 1 radius",
+      "Spot 1 radius",
       "Force",
       "X",
       "Y",
@@ -291,7 +291,7 @@ describe("StressPanel", () => {
     expect(
       [radius.getAttribute("aria-invalid"), radius.getAttribute("aria-label")],
       "an error swaps only the title",
-    ).toEqual(["true", "Radius"]);
+    ).toEqual(["true", "Spot 1 radius"]);
   });
 
   it("follows a value set from the view, and steps Poisson's ratio and density in their own sizes", async () => {

@@ -148,7 +148,7 @@ function placing(target: StressTarget, as: "face" | "spot"): boolean {
           :width-ch="7"
           class="stress-spot-radius"
           title="Radius"
-          aria-label="Radius"
+          :label="`Spot ${k + 1} radius`"
         />
         <IconButton
           class="stress-remove-spot"
@@ -221,7 +221,7 @@ function placing(target: StressTarget, as: "face" | "spot"): boolean {
           :width-ch="7"
           class="stress-spot-radius"
           title="Radius"
-          aria-label="Radius"
+          :label="`Spot ${k + 1} radius`"
         />
         <IconButton
           class="stress-remove-spot"
@@ -236,7 +236,7 @@ function placing(target: StressTarget, as: "face" | "spot"): boolean {
       <template v-if="l.kind === 'force'">
         <div class="stress-field">
           <span class="measure-k">Force</span>
-          <NumberField v-model="l.force" commit="live" unit="N" :width-ch="7" class="stress-force" aria-label="Force" />
+          <NumberField v-model="l.force" commit="live" unit="N" :width-ch="7" class="stress-force" label="Force" />
           <Select
             v-model="l.direction"
             :options="FORCE_DIRECTIONS"
@@ -258,7 +258,7 @@ function placing(target: StressTarget, as: "face" | "spot"): boolean {
               :width-ch="6"
               class="stress-xyz"
               :title="String(l.custom[i])"
-              :aria-label="AXIS_NAMES[i]"
+              :label="AXIS_NAMES[i]"
             />
           </span>
         </div>
@@ -271,7 +271,7 @@ function placing(target: StressTarget, as: "face" | "spot"): boolean {
           unit="MPa"
           :width-ch="7"
           class="stress-pressure"
-          aria-label="Pressure"
+          label="Pressure"
         />
       </div>
     </div>
@@ -312,7 +312,7 @@ function placing(target: StressTarget, as: "face" | "spot"): boolean {
           :width-ch="7"
           class="stress-size"
           placeholder="auto"
-          aria-label="Mesh size"
+          label="Mesh size"
         />
       </div>
       <div class="sm-hint">Smaller is finer and slower.</div>

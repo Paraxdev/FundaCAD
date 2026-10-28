@@ -174,6 +174,7 @@ const max = (f: Field) => EXPERIMENTAL_RANGE[f.key][1] / f.scale;
         >
           <NumberField
             :id="`prefs-x-${f.key}`"
+            :label="f.title"
             :model-value="boxValue(f)"
             :min="min(f)"
             :max="max(f)"

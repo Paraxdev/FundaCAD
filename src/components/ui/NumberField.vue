@@ -3,6 +3,7 @@ import { computed, mergeProps, useAttrs, useTemplateRef, watch } from "vue";
 import UnitChip from "./UnitChip.vue";
 import { useCommitField } from "./useCommitField";
 import { useDisabled } from "./useDisabled";
+import { useName, type Named } from "./useName";
 import { fmtKeys } from "../../input/platform";
 import {
   formatMeasure,
@@ -16,8 +17,9 @@ import {
 
 defineOptions({ inheritAttrs: false });
 
-const props = withDefaults(
-  defineProps<{
+// No withDefaults: over the Named union it collapses the type check to any props.
+const props = defineProps<
+  {
     /** Canonical when `unit` is a ui/measure unit: mm for a length, degrees for an angle. */
     modelValue: number | null;
     /** `change` commits on Enter or blur with Escape reverting, `live` on every input that reads. */
@@ -63,17 +65,8 @@ const props = withDefaults(
     keys?: string | undefined;
     disabled?: boolean | undefined;
     disabledReason?: string | undefined;
-  }>(),
-  {
-    commit: "change",
-    adoptUnit: false,
-    step: 1,
-    nullable: false,
-    selectOnFocus: false,
-    size: "md",
-    disabled: false,
-  },
-);
+  } & Named
+>();
 const emit = defineEmits<{
   "update:modelValue": [number | null];
   "update:unit": [string];
@@ -84,6 +77,7 @@ const emit = defineEmits<{
 const attrs = useAttrs();
 const el = useTemplateRef<HTMLInputElement>("el");
 const d = useDisabled(props);
+const name = useName(props, "NumberField");
 const unitDef = computed(() => unitById(props.unit));
 
 const spell = (v: number | null) => (v === null ? "" : String(toUnit(v, unitDef.value)));
@@ -155,7 +149,7 @@ const tipText = computed(() => (props.tip ? fmtKeys(props.keys ? `${props.tip} (
 
 function inputAttrs() {
   const { class: _c, style: _s, ...rest } = attrs;
-  return mergeProps(rest, d.bind.value);
+  return mergeProps(rest, d.bind.value, name.value);
 }
 
 function onInput(e: Event) {
@@ -172,7 +166,7 @@ function stepBy(dir: 1 | -1, big: boolean) {
   } catch {
     // Unreadable text steps from the model.
   }
-  let next = roundForDisplay(base / factor + dir * props.step * (big ? 10 : 1)) * factor;
+  let next = roundForDisplay(base / factor + dir * (props.step ?? 1) * (big ? 10 : 1)) * factor;
   if (props.min !== undefined) next = Math.max(props.min, next);
   if (props.max !== undefined) next = Math.min(props.max, next);
   field.input(spell(next));
@@ -198,7 +192,7 @@ function onKeydown(e: KeyboardEvent) {
   <span
     class="ui-field ui-number-field"
     :class="[
-      `ui-field-${size}`,
+      `ui-field-${size ?? 'md'}`,
       attrs.class,
       { 'is-error': !!shownError, 'is-disabled': d.isDisabled.value, 'has-ch': widthCh !== undefined },
     ]"
@@ -217,7 +211,6 @@ function onKeydown(e: KeyboardEvent) {
       :readonly="d.isDisabled.value || undefined"
       :aria-invalid="shownError ? 'true' : undefined"
       :title="d.title(shownError ?? tipText ?? (attrs.title as string | undefined))"
-      :aria-label="tipText ?? (attrs['aria-label'] as string | undefined)"
       @input="onInput"
       @keydown="onKeydown"
       @blur="field.blur()"

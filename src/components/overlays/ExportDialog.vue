@@ -125,6 +125,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
         <label class="prefs-row">
           <span class="prefs-label">Tolerance</span>
           <NumberField
+            label="Tolerance"
             commit="live"
             unit="mm"
             data-testid="export-tolerance"
@@ -183,6 +184,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
             <NumberField
               commit="live"
               unit="mm"
+              label="Surface deviation"
               data-testid="export-surface-deviation"
               :model-value="settings.faceting.surfaceDeviation"
               @update:model-value="setFacet('surfaceDeviation', $event)"
@@ -194,6 +196,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
             <NumberField
               commit="live"
               unit="deg"
+              label="Normal deviation"
               data-testid="export-normal-deviation"
               :model-value="settings.faceting.normalDeviation"
               @update:model-value="setFacet('normalDeviation', $event)"
@@ -205,6 +208,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
             <NumberField
               commit="live"
               unit="mm"
+              label="Maximum cell size"
               data-testid="export-max-edge"
               :model-value="settings.faceting.maxEdgeLength"
               @update:model-value="setFacet('maxEdgeLength', $event)"

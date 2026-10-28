@@ -161,6 +161,7 @@ const isDefault = (p: SettingProp) => {
             <NumberField
               v-else-if="p.type === 'number'"
               :id="id(p)"
+              :label="p.label ?? p.key"
               class="plugset-num"
               :model-value="values[p.key] as number"
               :unit="numberOf(p).unit"
