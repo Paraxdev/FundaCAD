@@ -142,3 +142,44 @@ fn a_stray_apostrophe_in_a_name_stays_in_its_string() {
     let text = std::fs::read_to_string(repaired.path()).unwrap();
     assert!(text.contains("#21 = EDGE_CURVE('Bob's edge',#22,#24,#26,.T.);"), "the name is kept");
 }
+
+/// `missing_vertex` with the other edge at the missing vertex on a B-spline too, starting at `start`.
+fn two_splines(t: &str, start: &str) -> String {
+    missing_vertex(t)
+        .replace(
+            "#48 = LINE('',#49,#50);",
+            "#48 = B_SPLINE_CURVE_WITH_KNOTS('',1,(#49,#41),.UNSPECIFIED.,.F.,.F.,(2,2),(0.,8.),.UNSPECIFIED.);",
+        )
+        .replace("#49 = CARTESIAN_POINT('',(18.,-4.440892098501E-16,0.));", start)
+}
+
+#[test]
+fn a_vertex_is_not_made_on_a_curve_end_its_edge_does_not_run_to() {
+    let file = variant("trimmed_spline.step", |t| {
+        missing_vertex(t).replace("#27 = CARTESIAN_POINT('',(0.,0.,0.));", "#27 = CARTESIAN_POINT('',(-18.,0.,0.));")
+    });
+    let scan = step_refs::scan(&file).unwrap();
+    assert_eq!(scan.repaired.as_ref().map_or(0, |r| r.fixed), 0);
+    assert_eq!(
+        scan.note().unwrap(),
+        "2 edges of this STEP file named another entity where a vertex belongs, an exporter fault that hides every \
+         face of the shell model around it. 2 could not be repaired, so that shell model is still left out with all \
+         its faces."
+    );
+}
+
+#[test]
+fn a_vertex_is_not_made_where_the_curves_at_it_end_apart() {
+    let file = variant("splines_apart.step", |t| two_splines(t, "#49 = CARTESIAN_POINT('',(20.,0.,0.));"));
+    let scan = step_refs::scan(&file).unwrap();
+    assert_eq!((scan.bad, scan.repaired.as_ref().map_or(0, |r| r.fixed)), (2, 0));
+}
+
+#[test]
+fn a_vertex_is_made_where_the_curves_at_it_end_together() {
+    let file = variant("splines_together.step", |t| two_splines(t, "#49 = CARTESIAN_POINT('',(18.,0.,0.));"));
+    let repaired = step_refs::scan(&file).unwrap().repaired.expect("the missing vertex is made");
+    assert_eq!((repaired.fixed, repaired.unfixed), (2, 0));
+    let text = std::fs::read_to_string(repaired.path()).unwrap();
+    assert!(text.contains("=VERTEX_POINT('',#25);"), "the new vertex sits on the first edge's curve end");
+}

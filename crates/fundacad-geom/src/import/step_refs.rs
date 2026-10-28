@@ -3,7 +3,7 @@
 //! vertex is taken back from the edge next to it in the face's loop, or made at the end of the edge's curve, and the
 //! file is read from a repaired copy.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::Path;
@@ -61,7 +61,7 @@ impl Scan {
         }
         if fixed < self.bad {
             text.push_str(&format!(
-                " {} could not be repaired, the faces that use them may be missing.",
+                " {} could not be repaired, so that shell model is still left out with all its faces.",
                 self.bad - fixed
             ));
         }
@@ -75,6 +75,7 @@ pub fn repair(path: &Path) -> Result<Option<Repaired>, String> {
 
 pub fn scan(path: &Path) -> Result<Scan, String> {
     let mut vertices: HashSet<Id> = HashSet::new();
+    let mut vertex_at: HashMap<Id, Id> = HashMap::new();
     let mut edges: HashMap<Id, Edge> = HashMap::new();
     let (mut faces, mut last_id) = (0usize, 0);
     for_each_record(path, |rec| {
@@ -83,6 +84,9 @@ pub fn scan(path: &Path) -> Result<Scan, String> {
         match kind {
             b"VERTEX_POINT" => {
                 vertices.insert(id);
+                if let Some(p) = args(rest).get(1).and_then(|r| reference(r)) {
+                    vertex_at.insert(id, p);
+                }
             }
             b"EDGE_CURVE" => {
                 let a = args(rest);
@@ -166,28 +170,47 @@ pub fn scan(path: &Path) -> Result<Scan, String> {
     }
 
     // A vertex id the file never defines as a vertex (SolidWorks gave it to an edge) gets a new VERTEX_POINT on the
-    // end control point of a clamped B-spline edge that uses it.
+    // end control point of a clamped B-spline edge that uses it, only where every such edge at it ends at one place
+    // and runs from there to its other vertex, so an edge on part of a curve is left alone.
     let missing: HashSet<Id> = ends.values().flat_map(|&(s, e)| [s, e]).filter(|v| !is_vertex(v)).collect();
     let mut point_of: HashMap<Id, Id> = HashMap::new();
     if !missing.is_empty() {
-        let mut uses: Vec<(Id, Id, bool)> = Vec::new();
+        let mut uses: Vec<(Id, Id, bool, Id)> = Vec::new();
         for (id, &(s, e)) in &ends {
             let edge = edges[id];
             if missing.contains(&s) {
-                uses.push((s, edge.curve, edge.sense));
+                uses.push((s, edge.curve, edge.sense, e));
             }
             if missing.contains(&e) {
-                uses.push((e, edge.curve, !edge.sense));
+                uses.push((e, edge.curve, !edge.sense, s));
             }
         }
-        uses.sort_unstable();
         let curves = curve_ends(path, uses.iter().map(|u| u.1).collect())?;
+        let mut wanted: HashSet<Id> = HashSet::new();
+        for (_, curve, _, other) in &uses {
+            if let Some(&(first, last)) = curves.get(curve) {
+                wanted.extend([first, last]);
+                wanted.extend(vertex_at.get(other));
+            }
+        }
+        let at = points(path, wanted)?;
+        let same = |a: Id, b: Id| a == b || at.get(&a).zip(at.get(&b)).is_some_and(|(p, q)| close(p, q));
+        let mut place: BTreeMap<Id, Option<Id>> = BTreeMap::new();
+        for &(v, curve, at_start, other) in &uses {
+            let Some(&(first, last)) = curves.get(&curve) else { continue };
+            let (here, there) = if at_start { (first, last) } else { (last, first) };
+            let whole = vertex_at.get(&other).is_none_or(|&p| same(p, there));
+            let slot = place.entry(v).or_insert(Some(here));
+            if !whole || !slot.is_some_and(|p| same(p, here)) {
+                *slot = None;
+            }
+        }
         let mut made: HashMap<Id, Id> = HashMap::new();
-        for (v, curve, at_start) in uses {
-            if let (false, Some(&(first, last))) = (made.contains_key(&v), curves.get(&curve)) {
+        for (v, point) in place {
+            if let Some(point) = point {
                 last_id += 1;
                 made.insert(v, last_id);
-                point_of.insert(last_id, if at_start { first } else { last });
+                point_of.insert(last_id, point);
             }
         }
         for (s, e) in ends.values_mut() {
@@ -274,6 +297,34 @@ fn curve_ends(path: &Path, mut look: HashSet<Id>) -> Result<HashMap<Id, (Id, Id)
         }
     }
     Ok(found)
+}
+
+/// The coordinates of each CARTESIAN_POINT asked for, a 2D point at z 0.
+fn points(path: &Path, look: HashSet<Id>) -> Result<HashMap<Id, [f64; 3]>, String> {
+    let mut found: HashMap<Id, [f64; 3]> = HashMap::new();
+    if look.is_empty() {
+        return Ok(found);
+    }
+    for_each_record(path, |rec| {
+        let Some((id, b"CARTESIAN_POINT", rest)) = head(rec).filter(|h| look.contains(&h.0)) else { return Ok(()) };
+        let a = args(rest);
+        let xyz: Vec<f64> = a
+            .get(1)
+            .map(|l| list(l).filter_map(|n| std::str::from_utf8(trim(n)).ok()?.parse().ok()).collect())
+            .unwrap_or_default();
+        if (2..=3).contains(&xyz.len()) {
+            found.insert(id, [xyz[0], xyz[1], xyz.get(2).copied().unwrap_or(0.0)]);
+        }
+        Ok(())
+    })?;
+    Ok(found)
+}
+
+/// Within a millionth of the model's reach, whatever its length unit.
+fn close(p: &[f64; 3], q: &[f64; 3]) -> bool {
+    let reach = p.iter().chain(q).fold(1.0f64, |m, c| m.max(c.abs()));
+    let d = (0..3).map(|i| (p[i] - q[i]).powi(2)).sum::<f64>().sqrt();
+    d <= 1e-6 * reach
 }
 
 /// The items of `(a,b,c)`.
