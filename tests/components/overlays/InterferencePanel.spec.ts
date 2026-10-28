@@ -50,4 +50,33 @@ describe("InterferencePanel", () => {
     ]);
     expect(viewportCalls).toEqual([]);
   });
+
+  it("rechecks with clearance on, and with a typed threshold only once it commits", async () => {
+    const checks: (number | undefined)[] = [];
+    const engine = {
+      ui: {
+        panels: {
+          highlightInterference: () => {},
+          closeInterference: () => {},
+          showInterference: async (t?: number) => void checks.push(t),
+        },
+      },
+    } as unknown as Engine;
+    mount(InterferencePanel, { global: { provide: { [ENGINE as symbol]: engine } }, attachTo: document.body });
+    usePanelsStore().showInterference({ title: "Interference", clashes: [], clearances: [], unchecked: [] });
+    await flushPromises();
+    const box = document.body.querySelector<HTMLInputElement>(".ui-checkbox input")!;
+    box.click();
+    await flushPromises();
+    expect(checks).toEqual([0.2]);
+    const field = document.body.querySelector<HTMLInputElement>(".ui-number-field input")!;
+    field.value = "0,5";
+    field.dispatchEvent(new Event("input"));
+    await flushPromises();
+    expect(checks).toEqual([0.2]);
+    field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+    await flushPromises();
+    expect(checks).toEqual([0.2, 0.5]);
+    expect(document.body.textContent).toContain("No pairs closer than 0.5 mm");
+  });
 });

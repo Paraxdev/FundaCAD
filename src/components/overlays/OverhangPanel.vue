@@ -5,8 +5,9 @@
 import { ref, watch } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { usePanelsStore } from "../../stores/panels";
-import FloatingPanel from "./FloatingPanel.vue";
+import Panel from "../ui/Panel.vue";
 import Select from "../ui/Select.vue";
+import Slider from "../ui/Slider.vue";
 import { cssHex } from "../../ui/stress";
 import { DRAFT_COLORS } from "../../viewport/draftColors";
 
@@ -49,32 +50,33 @@ function apply() {
 </script>
 
 <template>
-  <FloatingPanel :open="panels.overhang" panel-class="overhang-panel">
-    <div class="measure-title">Overhang analysis</div>
+  <Panel
+    :open="panels.overhang"
+    title="Overhang analysis"
+    hint="Downward faces flatter than the threshold need support · Overhang again to close"
+    panel-class="overhang-panel"
+  >
     <div class="measure-row">
       <span class="measure-k">Build direction</span>
       <Select :model-value="dir" :options="DIR_OPTIONS" testid="overhang-dir" @update:model-value="setDir" />
     </div>
     <div class="measure-row">
       <span class="measure-k">Threshold</span>
-      <span class="overhang-threshold">
-        <input
-          v-model.number="threshold"
-          class="sm-slider"
-          type="range"
-          min="0"
-          max="90"
-          step="1"
-          aria-label="Overhang threshold"
-          @input="apply()"
-        />
-        <span class="measure-v">{{ threshold }}°</span>
-      </span>
+      <Slider
+        v-model="threshold"
+        class="overhang-threshold"
+        :min="0"
+        :max="90"
+        :step="1"
+        tip="Overhang threshold"
+        @update:model-value="apply()"
+      >
+        <template #value="{ value }">{{ value }}°</template>
+      </Slider>
     </div>
     <div class="measure-divider" />
     <div v-for="k in LEGEND" :key="k.label" class="measure-row overhang-legend">
       <span class="measure-v"><span class="overhang-key" :style="{ '--key': cssHex(k.color) }" />{{ k.label }}</span>
     </div>
-    <div class="measure-hint">Downward faces flatter than the threshold need support · Overhang again to close</div>
-  </FloatingPanel>
+  </Panel>
 </template>

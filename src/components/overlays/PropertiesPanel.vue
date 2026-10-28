@@ -4,7 +4,10 @@
 import { computed, reactive } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { usePanelsStore } from "../../stores/panels";
-import FloatingPanel from "./FloatingPanel.vue";
+import Panel from "../ui/Panel.vue";
+import Select from "../ui/Select.vue";
+import NumberField from "../ui/NumberField.vue";
+import Slider from "../ui/Slider.vue";
 import { displayRound } from "../../ui/units";
 import { printPrefs, setPrintPref } from "../../ui/printPrefs";
 import {
@@ -20,9 +23,20 @@ const panels = usePanelsStore();
 
 // A local copy so the controls respond instantly, each edit also persists through the app-wide setPrintPref.
 const prefs = reactive({ ...printPrefs() });
-function commit<K extends "materialId" | "customDensity" | "infillPct" | "wallThicknessMm">(key: K) {
+type Key = "materialId" | "customDensity" | "infillPct" | "wallThicknessMm";
+function commit<K extends Key>(key: K) {
   setPrintPref(key, prefs[key]);
 }
+function set<K extends Key>(key: K, v: (typeof prefs)[K] | null) {
+  if (v === null) return;
+  prefs[key] = v;
+  commit(key);
+}
+
+const MATERIALS = [
+  ...MATERIAL_PRESETS.map((m) => ({ value: m.id, label: `${m.label} (${m.density} g/cm³)` })),
+  { value: CUSTOM_MATERIAL_ID, label: "Custom…" },
+];
 
 const density = computed(() => densityFor(prefs.materialId, prefs.customDensity));
 
@@ -50,9 +64,14 @@ function close() {
 </script>
 
 <template>
-  <FloatingPanel :open="!!panels.properties" close-on-esc panel-class="properties-panel" @close="close">
+  <Panel
+    :open="!!panels.properties"
+    :title="panels.properties ? `Properties, ${panels.properties.title}` : undefined"
+    close-on-esc
+    panel-class="properties-panel"
+    @close="close"
+  >
     <template v-if="panels.properties">
-      <div class="measure-title">Properties, {{ panels.properties.title }}</div>
       <div v-for="r in panels.properties.rows" :key="r.k" class="measure-row">
         <span class="measure-k">{{ r.k }}</span>
         <span class="measure-v">{{ r.v }}</span>
@@ -69,56 +88,59 @@ function close() {
 
         <div class="measure-row">
           <span class="measure-k">Material</span>
-          <select class="measure-select" v-model="prefs.materialId" @change="commit('materialId')">
-            <option v-for="m in MATERIAL_PRESETS" :key="m.id" :value="m.id"
-              >{{ m.label }} ({{ m.density }} g/cm³)</option
-            >
-            <option :value="CUSTOM_MATERIAL_ID">Custom…</option>
-          </select>
+          <Select
+            :model-value="prefs.materialId"
+            :options="MATERIALS"
+            size="sm"
+            aria-label="Material"
+            @update:model-value="set('materialId', $event)"
+          />
         </div>
         <div v-if="prefs.materialId === CUSTOM_MATERIAL_ID" class="measure-row">
           <span class="measure-k">Density</span>
-          <span class="measure-v">
-            <input
-              class="measure-number"
-              type="number"
-              min="0.1"
-              max="30"
-              step="0.01"
-              v-model.number="prefs.customDensity"
-              @change="commit('customDensity')"
-            />
-            g/cm³
-          </span>
+          <NumberField
+            class="measure-v"
+            commit="live"
+            size="sm"
+            unit="g/cm³"
+            :width-ch="6"
+            :min="0.1"
+            :max="30"
+            :step="0.01"
+            tip="Density"
+            :model-value="prefs.customDensity"
+            @update:model-value="set('customDensity', $event)"
+          />
         </div>
         <div class="measure-row">
           <span class="measure-k">Infill</span>
-          <span class="measure-v">
-            <input
-              type="range"
-              min="0"
-              max="100"
-              step="5"
-              v-model.number="prefs.infillPct"
-              @change="commit('infillPct')"
-              style="vertical-align: middle; margin-right: 6px"
-            />{{ prefs.infillPct }}%
-          </span>
+          <Slider
+            v-model="prefs.infillPct"
+            class="measure-v"
+            :min="0"
+            :max="100"
+            :step="5"
+            unit="%"
+            show-value
+            tip="Infill"
+            @commit="commit('infillPct')"
+          />
         </div>
         <div class="measure-row">
           <span class="measure-k">Wall thickness</span>
-          <span class="measure-v">
-            <input
-              class="measure-number"
-              type="number"
-              min="0"
-              max="20"
-              step="0.1"
-              v-model.number="prefs.wallThicknessMm"
-              @change="commit('wallThicknessMm')"
-            />
-            mm
-          </span>
+          <NumberField
+            class="measure-v"
+            commit="live"
+            size="sm"
+            unit="mm"
+            :width-ch="6"
+            :min="0"
+            :max="20"
+            :step="0.1"
+            tip="Wall thickness"
+            :model-value="prefs.wallThicknessMm"
+            @update:model-value="set('wallThicknessMm', $event)"
+          />
         </div>
 
         <template v-if="estimates && massG !== null">
@@ -139,5 +161,5 @@ function close() {
         </div>
       </template>
     </template>
-  </FloatingPanel>
+  </Panel>
 </template>
