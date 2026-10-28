@@ -6,7 +6,6 @@ import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useDialogStore } from "../../stores/dialogs";
 import { useModalStore } from "../../stores/modals";
 import { escapeClaimed } from "../../ui/escapeClaim";
-import { useModalGate } from "../../composables/useModalGate";
 import { fmtKeys } from "../../input/platform";
 import {
   SHORTCUTS,
@@ -23,14 +22,14 @@ import {
 import { contributedKeymaps, onContribChange } from "../../plugins/contrib";
 import { shippedPlugins } from "../../plugins/shipped";
 import { sameId } from "../../plugins/manifest";
-import ModalFrame from "./ModalFrame.vue";
+import Button from "../ui/Button.vue";
+import Dialog from "../ui/Dialog.vue";
+import TextField from "../ui/TextField.vue";
 
 const dialogs = useDialogStore();
 const close = () => {
   dialogs.shortcuts = false;
 };
-
-useModalGate();
 
 const modals = useModalStore();
 let ownDepth = 0;
@@ -165,9 +164,15 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <ModalFrame panel-class="prefs-panel shortcuts-panel" @close="close()">
-    <template #title>Keyboard shortcuts</template>
-
+  <!-- Escape is this dialog's own layered handler above; the frame holds the modal gate, focus and its return. -->
+  <Dialog
+    title="Keyboard shortcuts"
+    panel-class="prefs-panel shortcuts-panel"
+    :close-on-esc="false"
+    :body="false"
+    initial-focus="[data-shortcut-search]"
+    @close="close()"
+  >
     <div class="modal-body prefs">
       <nav class="prefs-nav" aria-label="Shortcut pages">
         <button
@@ -187,9 +192,9 @@ onUnmounted(() => {
       </nav>
 
       <div class="prefs-panes">
-        <input
+        <TextField
           v-model="query"
-          class="plug-url plug-search"
+          class="sc-search"
           type="search"
           spellcheck="false"
           placeholder="Search shortcuts"
@@ -201,12 +206,8 @@ onUnmounted(() => {
         <section v-for="p in shown" :key="p.id" class="prefs-pane" :data-page="p.id">
           <div class="sc-head">
             <h3 class="prefs-pane-title">{{ p.label }}</h3>
-            <button
-              v-if="!query.trim() && resettable.length"
-              type="button"
-              class="btn sc-reset-all"
-              @click="reset(resettable)"
-              >Reset all</button
+            <Button v-if="!query.trim() && resettable.length" size="sm" class="sc-reset-all" @click="reset(resettable)"
+              >Reset all</Button
             >
           </div>
           <div class="prefs-grid">
@@ -244,10 +245,10 @@ onUnmounted(() => {
                 </template>
                 <div v-if="pending && pending.id === r.id" class="sc-problem" role="alert">
                   <span>{{ problemText(pending) }}</span>
-                  <button v-if="'conflict' in pending.problem" type="button" class="btn btn-primary" @click="replace()"
-                    >Replace</button
+                  <Button v-if="'conflict' in pending.problem" size="sm" variant="primary" @click="replace()"
+                    >Replace</Button
                   >
-                  <button type="button" class="btn" @click="pending = null">Cancel</button>
+                  <Button size="sm" @click="pending = null">Cancel</Button>
                 </div>
               </div>
             </div>
@@ -256,8 +257,8 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <div class="modal-foot">
-      <button class="btn btn-primary" @click="close()">Done</button>
-    </div>
-  </ModalFrame>
+    <template #footer>
+      <Button variant="primary" @click="close()">Done</Button>
+    </template>
+  </Dialog>
 </template>

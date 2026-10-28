@@ -230,6 +230,10 @@ label.pref-head:has(input:disabled) {
 }
 
 /* ShortcutsDialog.vue, on the Preferences page layout. */
+.sc-search {
+  width: 100%;
+  margin: var(--s-2) 0;
+}
 .sc-head {
   display: flex;
   align-items: baseline;
@@ -238,11 +242,6 @@ label.pref-head:has(input:disabled) {
 }
 .sc-head .prefs-pane-title {
   margin-bottom: var(--s-3);
-}
-.sc-head .btn {
-  height: 28px;
-  padding: 0 var(--s-3);
-  font-size: 13px;
 }
 .sc-row {
   display: flex;
@@ -321,11 +320,6 @@ label.pref-head:has(input:disabled) {
 }
 .sc-problem span {
   flex: 1;
-}
-.sc-problem .btn {
-  height: 26px;
-  padding: 0 var(--s-3);
-  font-size: 12px;
 }
 
 @media (max-width: 640px) {
