@@ -9,16 +9,18 @@
   margin-top: var(--s-4);
 }
 
+// The choices fill the footer in even columns, so two answers are two equal buttons and a long list wraps on the grid.
 .ui-confirm-choices {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
   gap: var(--s-2);
 }
 .ui-confirm-choice {
   display: inline-flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 1px;
 }
 .ui-confirm-hint {
