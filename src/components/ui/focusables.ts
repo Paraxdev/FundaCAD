@@ -109,6 +109,7 @@ export function focusReturn(fallback?: () => HTMLElement | null | undefined): {
 /** Runs `fn`, a native dialog or anything else that takes focus out of the webview, and hands focus back to the
  *  control that called it when the engine leaves it on the body. */
 export async function withFocusReturn<T>(fn: () => Promise<T> | T): Promise<T> {
+  if (typeof document === "undefined") return await fn();
   const back = focusReturn();
   try {
     return await fn();

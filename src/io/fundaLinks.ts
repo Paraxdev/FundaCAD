@@ -6,6 +6,7 @@ import type { GeometryBackend } from "../geometry/client";
 import { asFeature, type Feature } from "../types";
 import { BINARY_DOC_EXT, DOC_EXT, LEGACY_DOC_EXTS } from "./documentExt";
 import { baseName, insertFundaDocument, staleLinks, updateFundaLink, type FundaInsertMode } from "./fundaInsert";
+import { nativeDialog } from "./nativeDialog";
 
 const isTauri = () => "__TAURI_INTERNALS__" in window;
 
@@ -39,7 +40,7 @@ export async function insertDocumentFromDialog(store: DocumentStore, geometry: G
   }
   // Every wait goes through the document's session, so a file picked for a document closed meanwhile is never put in.
   const s = store.session;
-  const { open } = await s.step(import("@tauri-apps/plugin-dialog"));
+  const { open } = await s.step(nativeDialog());
   const path = await s.step(
     open({
       multiple: false,

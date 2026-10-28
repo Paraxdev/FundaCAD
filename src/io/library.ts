@@ -1,3 +1,5 @@
+import { nativeDialog } from "./nativeDialog";
+
 export interface FileStat {
   path: string;
   exists: boolean;
@@ -57,7 +59,7 @@ export const tauriLibrary: DocumentLibrary = {
     return invoke<DocSummary | null>("doc_summary", { path });
   },
   async pickFolder() {
-    const { open } = await import("@tauri-apps/plugin-dialog");
+    const { open } = await nativeDialog();
     const picked = await open({ directory: true, multiple: false, title: "Add folder to Home" });
     return typeof picked === "string" ? picked : null;
   },
