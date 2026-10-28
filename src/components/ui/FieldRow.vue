@@ -13,19 +13,22 @@ const props = withDefaults(
   }>(),
   { for: undefined, hint: undefined, layout: "inline", error: undefined },
 );
-defineSlots<{ default(props: { id: string; describedby: string | undefined; invalid: boolean }): unknown }>();
+defineSlots<{
+  default(props: { id: string; labelId: string; describedby: string | undefined; invalid: boolean }): unknown;
+}>();
 
 const ownId = useId();
 const hintId = useId();
+const labelId = useId();
 const controlId = computed(() => props.for ?? ownId);
 const note = computed(() => props.error || props.hint);
 </script>
 
 <template>
   <div class="ui-field-row" :class="[`ui-field-row-${layout}`, { 'is-error': !!error }]">
-    <label class="ui-field-label" :for="controlId">{{ label }}</label>
+    <label :id="labelId" class="ui-field-label" :for="controlId">{{ label }}</label>
     <div class="ui-field-control">
-      <slot :id="controlId" :describedby="note ? hintId : undefined" :invalid="!!error" />
+      <slot :id="controlId" :label-id="labelId" :describedby="note ? hintId : undefined" :invalid="!!error" />
     </div>
     <div v-if="note" :id="hintId" class="ui-field-hint">{{ note }}</div>
   </div>

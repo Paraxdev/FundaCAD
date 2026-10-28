@@ -6,7 +6,7 @@ import FieldRow from "../../../src/components/ui/FieldRow.vue";
 
 enableAutoUnmount(afterEach);
 
-type Slot = { id: string; describedby: string | undefined; invalid: boolean };
+type Slot = { id: string; labelId: string; describedby: string | undefined; invalid: boolean };
 
 function render(props: Record<string, unknown>) {
   return mount(FieldRow, {
@@ -25,6 +25,16 @@ describe("FieldRow", () => {
     expect(id).toBeTruthy();
     expect(w.find("label").attributes("for")).toBe(id);
     expect(w.find("label").text()).toBe("Radius");
+  });
+
+  it("hands the slot its label's id, for a control named by aria-labelledby", () => {
+    const w = mount(FieldRow, {
+      props: { label: "Kind" },
+      slots: { default: (s: Slot) => h("button", { "aria-labelledby": s.labelId }) },
+    });
+    const id = w.find("label").attributes("id");
+    expect(id).toBeTruthy();
+    expect(w.find("button").attributes("aria-labelledby")).toBe(id);
   });
 
   it("takes the caller's id through for", () => {
