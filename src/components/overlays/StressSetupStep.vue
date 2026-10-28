@@ -146,6 +146,7 @@ function placing(target: StressTarget, as: "face" | "spot"): boolean {
           :width-ch="7"
           class="stress-spot-radius"
           title="Radius"
+          aria-label="Radius"
         />
         <IconButton
           class="stress-remove-spot"
@@ -218,6 +219,7 @@ function placing(target: StressTarget, as: "face" | "spot"): boolean {
           :width-ch="7"
           class="stress-spot-radius"
           title="Radius"
+          aria-label="Radius"
         />
         <IconButton
           class="stress-remove-spot"

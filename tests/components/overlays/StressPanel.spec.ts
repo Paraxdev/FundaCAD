@@ -259,14 +259,16 @@ describe("StressPanel", () => {
     p.stress!.setup.loads[0]!.direction = "custom";
     p.stress!.setup.material = "Custom";
     p.stress!.setup.supports[0]!.spots = [{ at: [0, 0, 0], radius: 2 }];
+    p.stress!.setup.loads[0]!.spots = [{ at: [0, 0, 0], radius: 2 }];
     await flushPromises();
     q(".stress-more")!.click();
     await flushPromises();
     const names = () =>
-      [...document.querySelectorAll<HTMLInputElement>(".stress-panel .stress-field input:not([role])")].map(
-        (el) => el.getAttribute("aria-label") ?? el.getAttribute("title"),
+      [...document.querySelectorAll<HTMLInputElement>(".stress-panel .stress-field input:not([role])")].map((el) =>
+        el.getAttribute("aria-label"),
       );
     expect(names()).toEqual([
+      "Radius",
       "Radius",
       "Force",
       "X",
@@ -281,6 +283,15 @@ describe("StressPanel", () => {
     p.stress!.setup.loads[0]!.kind = "pressure";
     await flushPromises();
     expect(names()).toContain("Pressure");
+    const radius = q(".stress-spot-radius input") as HTMLInputElement;
+    radius.focus();
+    radius.value = "2*";
+    radius.dispatchEvent(new Event("input"));
+    await flushPromises();
+    expect(
+      [radius.getAttribute("aria-invalid"), radius.getAttribute("aria-label")],
+      "an error swaps only the title",
+    ).toEqual(["true", "Radius"]);
   });
 
   it("follows a value set from the view, and steps Poisson's ratio and density in their own sizes", async () => {
