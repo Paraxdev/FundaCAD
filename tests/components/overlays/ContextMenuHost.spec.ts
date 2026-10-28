@@ -148,4 +148,102 @@ describe("ContextMenuHost keyboard", () => {
     await open([row("Cut"), row("Paste")]);
     expect(document.activeElement).toBe(field);
   });
+
+  it("a press on a row over a text field keeps focus in the field, elsewhere it does not", async () => {
+    const field = document.createElement("input");
+    document.body.append(field);
+    field.focus();
+    await open([row("Cut"), row("Paste")]);
+    const press = () => {
+      const e = new MouseEvent("mousedown", { bubbles: true, cancelable: true });
+      rowNamed("Paste").dispatchEvent(e);
+      return e.defaultPrevented;
+    };
+    expect([press(), document.activeElement]).toEqual([true, field]);
+    useContextMenuStore().close();
+    field.blur();
+    useContextMenuStore().show(40, 100, [row("Cut"), row("Paste")]);
+    await flushPromises();
+    expect(press()).toBe(false);
+  });
+});
+
+const rowNamed = (label: string) =>
+  [...document.body.querySelectorAll<HTMLElement>(".ctx-item")].find(
+    (r) => r.querySelector(".ui-menu-label")?.textContent === label,
+  )!;
+
+describe("ContextMenuHost pointer and hover", () => {
+  function lit(log: string[], label: string): Partial<CtxItem> {
+    return { onHover: (on) => log.push(`${label} ${on}`), onClick: () => log.push(`${label} click`) };
+  }
+
+  it("lights a row as the pointer enters and puts it out as it leaves", async () => {
+    const log: string[] = [];
+    await open([row("Body 1", lit(log, "Body 1")), row("Body 2", lit(log, "Body 2"))]);
+    rowNamed("Body 1").dispatchEvent(new Event("pointerenter"));
+    rowNamed("Body 1").dispatchEvent(new Event("pointerleave"));
+    rowNamed("Body 2").dispatchEvent(new Event("pointerenter"));
+    expect(log).toEqual(["Body 1 true", "Body 1 false", "Body 2 true"]);
+  });
+
+  it("puts the lit row out before its click runs and when the menu closes under the pointer", async () => {
+    const log: string[] = [];
+    const s = await open([row("Body 1", lit(log, "Body 1"))]);
+    rowNamed("Body 1").dispatchEvent(new Event("pointerenter"));
+    rowNamed("Body 1").click();
+    await flushPromises();
+    expect([log, s.open]).toEqual([["Body 1 true", "Body 1 false", "Body 1 click"], false]);
+
+    log.length = 0;
+    s.show(40, 100, [row("Body 1", lit(log, "Body 1"))]);
+    await flushPromises();
+    rowNamed("Body 1").dispatchEvent(new Event("pointerenter"));
+    key("Escape");
+    await flushPromises();
+    expect([log, s.open]).toEqual([["Body 1 true", "Body 1 false"], false]);
+  });
+
+  it("Enter on a lit row puts it out before it runs, and a blur puts a lit row out", async () => {
+    const log: string[] = [];
+    const s = await open([row("Body 1", lit(log, "Body 1")), row("Body 2", lit(log, "Body 2"))]);
+    rowNamed("Body 1").dispatchEvent(new Event("pointerenter"));
+    rowNamed("Body 1").dispatchEvent(new FocusEvent("blur"));
+    expect(log).toEqual(["Body 1 true", "Body 1 false"]);
+
+    log.length = 0;
+    rowNamed("Body 1").dispatchEvent(new Event("pointerenter"));
+    key("Enter");
+    await flushPromises();
+    expect([log, s.open]).toEqual([["Body 1 true", "Body 1 false", "Body 1 click"], false]);
+  });
+
+  it("a disabled row neither lights nor runs, and the menu stays open", async () => {
+    const log: string[] = [];
+    const s = await open([row("Paste", { ...lit(log, "Paste"), disabled: true }), row("Cut")]);
+    rowNamed("Paste").dispatchEvent(new Event("pointerenter"));
+    rowNamed("Paste").click();
+    await flushPromises();
+    expect([log, s.open, rowNamed("Paste").getAttribute("aria-disabled")]).toEqual([[], true, "true"]);
+  });
+
+  it("a colour row carries its swatch on the row, a plain row none", async () => {
+    await open([row("Red", { swatch: "#ff0000" }), row("Default")]);
+    const red = rowNamed("Red");
+    const plain = rowNamed("Default");
+    expect([red.classList.contains("has-swatch"), red.style.getPropertyValue("--swatch")]).toEqual([true, "#ff0000"]);
+    expect([plain.classList.contains("has-swatch"), plain.getAttribute("style")]).toEqual([false, null]);
+  });
+
+  it("the pointer opens a submenu without taking focus, and a child lights and runs", async () => {
+    const log: string[] = [];
+    const s = await open([row("Colour", { children: [row("Red", lit(log, "Red")), row("Blue")] })]);
+    rowNamed("Colour").dispatchEvent(new Event("pointerenter"));
+    await flushPromises();
+    expect([menus().length, focused()]).toEqual([2, "Colour"]);
+    rowNamed("Red").dispatchEvent(new Event("pointerenter"));
+    rowNamed("Red").click();
+    await flushPromises();
+    expect([log, s.open, menus().length]).toEqual([["Red true", "Red false", "Red click"], false, 0]);
+  });
 });

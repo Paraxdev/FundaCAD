@@ -86,6 +86,20 @@ describe("menubar popups", () => {
     expect(popup()?.getAttribute("aria-label")).toBe("File");
   });
 
+  it("Enter in the menu walked to runs its row and hands focus to that menu's button", async () => {
+    run.mockClear();
+    const w = mount(MenuBar, { props: { menus: keyed }, attachTo: document.body });
+    const [file, view] = w.findAll<HTMLElement>(".menu-btn").map((b) => b.element);
+    file!.focus();
+    key("ArrowDown");
+    await flushPromises();
+    key("ArrowRight");
+    await flushPromises();
+    key("Enter");
+    await flushPromises();
+    expect([run.mock.calls.length, popup(), document.activeElement]).toEqual([1, null, view]);
+  });
+
   it("Escape closes the menu, hands focus back to its button and claims the key until then", async () => {
     const w = mount(MenuBar, { props: { menus: keyed }, attachTo: document.body });
     const view = w.findAll<HTMLElement>(".menu-btn")[1]!;
