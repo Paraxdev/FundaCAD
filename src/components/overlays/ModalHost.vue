@@ -91,6 +91,7 @@ onUnmounted(() => {
     v-if="req && req.kind !== 'list'"
     :key="req.id"
     :title="req.title"
+    :message="req.kind === 'choose' ? req.message : undefined"
     :options="req.options"
     :multi="req.kind === 'multi'"
     :min="req.kind === 'multi' ? req.min : 1"

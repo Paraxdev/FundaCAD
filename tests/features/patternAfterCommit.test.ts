@@ -33,6 +33,7 @@ function rig() {
     },
     viewport: { getSelectedBodies: () => [], getSelectedFaceIds: () => [] },
     edgeFeature: {
+      seedCount: () => 1,
       start: (_k: string, done: Done) => {
         state.done = done;
       },

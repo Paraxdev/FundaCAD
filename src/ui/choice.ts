@@ -24,6 +24,7 @@ export function choose<T extends string>(
   title: string,
   options: ChoiceOption<T>[],
   signal?: AbortSignal,
+  message?: string,
 ): Promise<T | null> {
   const m = useModalStore();
   if (signal?.aborted) return Promise.resolve(null);
@@ -34,7 +35,13 @@ export function choose<T extends string>(
       m.depth = Math.max(0, m.depth - 1);
       resolve(v as T | null);
     };
-    const id = m.enqueue({ kind: "choose", title, options: options as ChoiceOption[], resolve: answer });
+    const id = m.enqueue({
+      kind: "choose",
+      title,
+      ...(message ? { message } : {}),
+      options: options as ChoiceOption[],
+      resolve: answer,
+    });
     const withdraw = () => {
       if (m.withdraw(id)) answer(null);
     };

@@ -34,6 +34,8 @@ import { placeDatum, poseFields, ZERO_POSE, type DatumPose } from "../document/d
 import { pickPlaneTarget, planeSpecOf, type FacePlanePick } from "./facePlanePick";
 import { bodyLabels } from "../ui/bodyLabels";
 import { choose } from "../ui/choice";
+import { confirmEdgeCount, edgeGate } from "./edgeCountGate";
+import { TOOL_CAPABILITIES } from "./toolCapabilities";
 import { pointInRegion } from "../sketch/region";
 import { setPrompt } from "../ui/prompt";
 import type {
@@ -126,21 +128,26 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     if (id) selectFeature(id, false);
   };
 
-  const startFillet = () => {
+  /** A big selection asks first (edgeCountGate.ts). The tool waits for the answer, so a handle grab that had to ask
+   *  opens without scrubbing: the pointer that pressed it is long gone. */
+  const startEdgeFeature = (kind: "fillet" | "chamfer", opts?: Parameters<EdgeFeatureTool["start"]>[2]) => {
     if (toolBusy()) return;
-    edgeFeature.start("fillet", committed);
+    const count = edgeFeature.seedCount(kind);
+    if (edgeGate(count) === "go") {
+      edgeFeature.start(kind, committed, opts);
+      return;
+    }
+    void confirmEdgeCount(TOOL_CAPABILITIES[kind].label, count).then((ok) => {
+      if (ok && !toolBusy()) edgeFeature.start(kind, committed);
+    });
   };
-  const startChamfer = () => {
-    if (toolBusy()) return;
-    edgeFeature.start("chamfer", committed);
-  };
+  const startFillet = () => startEdgeFeature("fillet");
+  const startChamfer = () => startEdgeFeature("chamfer");
   /** The edge selection handle was pressed (features/edgeNudge.ts): arm the same tool already holding the arrow. It
    *  opens on fillet, the arrow's own direction, since asking first would put a decision before the gesture; a
    *  chamfer is one drag back through zero, or one Tab, away. */
-  const grabEdgeHandle = (x: number, y: number, tangent: THREE.Vector3 | null, anchor?: THREE.Vector3) => {
-    if (toolBusy()) return;
-    edgeFeature.start("fillet", committed, { tangent, grabAt: { x, y }, ...(anchor ? { anchor } : {}) });
-  };
+  const grabEdgeHandle = (x: number, y: number, tangent: THREE.Vector3 | null, anchor?: THREE.Vector3) =>
+    startEdgeFeature("fillet", { tangent, grabAt: { x, y }, ...(anchor ? { anchor } : {}) });
   const startPressPull = () => {
     if (toolBusy()) return;
     pressPull.start(committed);
