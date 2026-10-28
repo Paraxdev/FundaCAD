@@ -177,6 +177,8 @@ describe("each kind of schema field", () => {
         { key: "tilt", type: "number", label: "Tilt", unit: "angle", default: 10, step: 5 },
         { key: "count", type: "number", label: "Count", unit: "in", default: 4, integer: true, min: 1 },
         { key: "free", type: "number", label: "Free", default: 3 },
+        { key: "pitch", type: "number", label: "Pitch", unit: "length", default: 0, min: 0, max: 100, step: 5 },
+        { key: "layer", type: "number", label: "Layer", unit: "length", default: 0.2, min: 0.02, max: 1, step: 0.05 },
         { key: "on", type: "boolean", label: "Snap", default: false },
         { key: "name", type: "string", label: "Name", default: "a", placeholder: "Untitled", maxLength: 8 },
         { key: "tint", type: "colour", label: "Tint", default: "#ff8800" },
@@ -233,11 +235,66 @@ describe("each kind of schema field", () => {
     expect(row.get("[role=alert]").text()).toMatch(/at least 1/i);
   });
 
-  it("steps a number that declares no step by one", async () => {
-    const input = (await field("free")).get("input");
+  it("lands each inch step of a length exactly on its declared step in mm", async () => {
+    setUnit("in");
+    const stepped = async (key: string, times: number, keys: { key: string; shiftKey?: boolean }[]) => {
+      const input = (await field(key)).get("input");
+      const out: unknown[] = [];
+      for (let i = 0; i < times; i++) {
+        for (const ev of keys) await input.trigger("keydown", ev);
+        await input.trigger("keydown", { key: "Enter" });
+        out.push(k.get(key));
+      }
+      return out;
+    };
+    expect(await stepped("pitch", 3, [{ key: "ArrowUp" }])).toEqual([5, 10, 15]);
+    expect(
+      await stepped("pitch", 1, [{ key: "ArrowUp" }, { key: "ArrowUp" }, { key: "ArrowUp" }, { key: "ArrowUp" }]),
+    ).toEqual([35]);
+    expect(await stepped("layer", 6, [{ key: "ArrowUp" }])).toEqual([0.25, 0.3, 0.35, 0.4, 0.45, 0.5]);
+    expect(await stepped("layer", 2, [{ key: "ArrowDown", shiftKey: true }])).toEqual([0.02, 0.02]);
+  });
+
+  it("stores typed text as it reads, and moves it by its step from there", async () => {
+    const input = (await field("layer")).get("input");
+    await input.setValue("0.33");
+    await input.trigger("keydown", { key: "Enter" });
+    expect(k.get("layer")).toBe(0.33);
     await input.trigger("keydown", { key: "ArrowUp" });
     await input.trigger("keydown", { key: "Enter" });
-    expect(k.get("free")).toBe(4);
+    expect(k.get("layer")).toBe(0.38);
+  });
+
+  it("reaches the limit of a length shown in inches without refusing it", async () => {
+    setUnit("in");
+    const row = await field("pitch");
+    const input = row.get("input");
+    await input.trigger("keydown", { key: "ArrowUp", shiftKey: true });
+    await input.trigger("keydown", { key: "ArrowUp", shiftKey: true });
+    await input.trigger("keydown", { key: "ArrowUp", shiftKey: true });
+    await input.trigger("keydown", { key: "Enter" });
+    expect(k.get("pitch")).toBe(100);
+    expect(row.find("[role=alert]").exists()).toBe(false);
+  });
+
+  it("leaves a number that declares no step alone on the arrow keys, as before", async () => {
+    const input = (await field("free")).get("input");
+    await input.trigger("keydown", { key: "ArrowUp" });
+    expect((input.element as HTMLInputElement).value).toBe("3");
+    await input.trigger("keydown", { key: "Enter" });
+    await input.trigger("keydown", { key: "ArrowDown", shiftKey: true });
+    await input.trigger("blur");
+    expect(k.get("free")).toBe(3);
+  });
+
+  it("stores nothing for a cleared number and reads the stored value back", async () => {
+    const row = await field("free");
+    const input = row.get("input");
+    await input.setValue("");
+    await input.trigger("keydown", { key: "Enter" });
+    await nextTick();
+    expect(k.get("free")).toBe(3);
+    expect((input.element as HTMLInputElement).value).toBe("3");
   });
 
   it("toggles a boolean with its checkbox, and once from its title", async () => {

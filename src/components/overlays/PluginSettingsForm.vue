@@ -163,6 +163,7 @@ const isDefault = (p: SettingProp) => {
               :step="numberOf(p).step"
               :min="p.min"
               :max="p.max"
+              :parse="numberOf(p).parse"
               :validate="numberOf(p).validate"
               @update:model-value="store(p, $event)"
               @error="setError(p, $event)"

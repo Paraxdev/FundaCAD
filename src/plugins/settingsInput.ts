@@ -1,4 +1,4 @@
-import { unitById, type UnitDef } from "../ui/measure";
+import { parseMeasure, toUnit, unitById, type UnitDef } from "../ui/measure";
 import { valueProblem, type NumberSetting } from "./settings";
 
 /** The unit a bare number in this field means, null for a plain number. */
@@ -13,14 +13,29 @@ export function fieldUnit(p: NumberSetting, lengthUnit: string): UnitDef | null 
 export function numberField(
   p: NumberSetting,
   lengthUnit: string,
-): { unit: string | null; caption: string | null; step: number; validate: (v: number) => string | null } {
+): {
+  unit: string | null;
+  caption: string | null;
+  step: number;
+  parse: (raw: string, unit: UnitDef | null) => number;
+  validate: (v: number) => string | null;
+} {
   const unit = fieldUnit(p, lengthUnit);
-  const step = p.step ?? (p.integer ? 1 : undefined);
+  const declared = p.step ?? (p.integer ? 1 : undefined);
+  const step = declared && declared > 0 ? declared : null;
+  const shown = (v: number, u: UnitDef | null) => String(toUnit(v, u));
   return {
     unit: unit?.id ?? null,
     caption: unit ? null : p.unit || null,
-    // Without a declared step the field's own default, one shown unit.
-    step: step && step > 0 ? step / (unit?.factor ?? 1) : 1,
+    // Zero keeps the arrow keys off a number with nothing to step by, as they always were.
+    step: step ? step / (unit?.factor ?? 1) : 0,
+    // The field steps and spells in the shown unit, rounded, so its own text for a step or a limit is read as that
+    // exact value. Otherwise 5 mm stepped in inches would store 5.0038 and the max would refuse itself.
+    parse: (raw, u) => {
+      const v = parseMeasure(raw, u).value;
+      const onStep = step ? Math.round(Math.round(v / step) * step * 1e9) / 1e9 : undefined;
+      return [onStep, p.min, p.max].find((c) => c !== undefined && shown(c, u) === raw.trim()) ?? v;
+    },
     validate: (v) => valueProblem(p, v),
   };
 }
