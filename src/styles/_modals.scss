@@ -11,9 +11,8 @@
   background: var(--panel, #16181d);
   border: 1px solid transparent;
   border-radius: var(--r-lg, 10px);
-  /* The flat zero blur elevation of every overlay: a soft blur read as an odd halo against
-     the dark backdrop. */
-  box-shadow: var(--shadow-3);
+  /* The one glass shadow: the hard offset slab made a centred dialog look shifted. */
+  box-shadow: var(--float-shadow);
   width: min(720px, 92vw);
   max-height: 88vh;
   display: flex;

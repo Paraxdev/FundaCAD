@@ -228,7 +228,7 @@ anywhere. The light theme redefines these tokens
 | 1 tile | Rail tiles, Home cards | `--float-tile-bg` | `--float-shadow` | tile |
 | 1 chip | Rail pills, dimension fields, the section and updating chips, viewport readouts | `--float-chip-bg` | `--float-shadow` | chip |
 | 2 | Solid glass for menus and text: popovers, context and title bar menus, the chooser, toasts, the console, the command palette, measure panels, and the docked Render dock ([1](#1-principles)) | `--float-bg-solid` (92%) | `--float-shadow` | float or tile |
-| 3 | A dialog on a scrim: `.modal-panel` | `--float-bg-solid` | `--shadow-3` | float |
+| 3 | A dialog on a scrim: `.modal-panel` | `--float-bg-solid` | `--float-shadow` | float |
 | Chrome | `#titlebar` | `var(--panel)`, opaque | none | none |
 | Field | Text fields and selects | `--field-bg`, a sunken well | none | chip |
 | Well | Groups inside a dialog | `--float-tile-bg` (`.pref-card`, `.prefs-pane-flow .prefs-row`), `--panel-2` (`.plug-consent`), none (`.mats-list`) | none | 8px, 8px, 6px, `--r-sm` |
@@ -239,8 +239,8 @@ Shadows:
   `0 2px 5px rgba(0, 0, 0, 0.32), 0 16px 34px -14px rgba(0, 0, 0, 0.62)`. It is
   the one shadow of all glass, and with the fill the only thing that lifts a
   surface off the model.
-- `--shadow-3` is used by glass in exactly one place, `.modal-panel`, because a
-  soft black shadow has no contrast on the dark scrim. `--shadow-1`,
+- A dialog wears `--float-shadow` too: its fill lifts it off the scrim, and a
+  hard offset slab made a centred dialog look shifted. `--shadow-1`,
   `--shadow-2`, `--shadow-3` and `--shadow-pill` are the older hard offset set
   in Noir. Never put them on anything over the model: "a hard offset over a lit
   model reads as a hole in the scene" (`_tokens.scss`). On a light theme they
@@ -930,7 +930,7 @@ their own keys and drag; new rows of that kind wear the `ListRow` look.
 | `.float-popover` (`Popover.vue`) | glass solid, `--float-radius`, padding `--s-3`, min width 220px, `z-index: var(--z-popover)`, `glass-in` entrance. Content: `.pop-section` 12.5px/600, `.pop-rule` a 10px gap with no line, `.pop-note` 12px `--text-dim` line height 1.45 |
 | `Menu` (`.ui-menu`) | `--float-bg-solid` through `--float-blur`, `--float-tile-radius`, squircle, padding 5px, `--float-shadow`, 12.5px, `pop-in`. `MenuItem` (`.ui-menu-item`): padding `var(--s-3) var(--s-4)`, chip radius; hover and keyboard focus accent 16% and `--accent-hot`, pressed accent 24%, keys `.ui-menu-keys` 11px `--text-dim`, a check gutter when any item has `checked`; `MenuSeparator` 1px `--line` |
 | `.context-menu`, `.menu-popup` | the right click and title bar menus that predate `Menu`: glass solid and glass B, `--float-tile-radius`, separators `.ctx-sep` 1px |
-| `Dialog` (`.modal-panel.ui-dialog`) | glass B with `--shadow-3`, `--float-radius`, on `.modal-overlay`; `sm` `min(420px, 92vw)`, `md` 560px, `lg` 720px, unset is the `.modal-panel` width. `.modal-head`, `.modal-body`, `.modal-foot` share padding `--s-5`; head and foot are layout dividers, `1px solid var(--line)`; `h2` 14px/600 and the `.modal-close` button in the head; the `footer` slot is right aligned, gap `--s-3`, Cancel present, one primary. `role="dialog"`, `aria-modal`, `aria-labelledby` the `h2` |
+| `Dialog` (`.modal-panel.ui-dialog`) | glass B with `--float-shadow`, `--float-radius`, on `.modal-overlay`; `sm` `min(420px, 92vw)`, `md` 560px, `lg` 720px, unset is the `.modal-panel` width. `.modal-head`, `.modal-body`, `.modal-foot` share padding `--s-5`; head and foot are layout dividers, `1px solid var(--line)`; `h2` 14px/600 and the `.modal-close` button in the head; the `footer` slot is right aligned, gap `--s-3`, Cancel present, one primary. `role="dialog"`, `aria-modal`, `aria-labelledby` the `h2` |
 | `ConfirmDialog` (`.ui-confirm`) | a `sm` `Dialog`: the message in `--text-dim`, then one button per answer, the `primary` one focused, or with `multi` a checklist with Cancel and a confirm; `danger` paints the primary `--error` on `--error-tint` |
 | `.cmdk-card` | glass B, `--float-radius`, `min(560px, 92vw)`, on `.cmdk-backdrop` at `padding-top: 12vh`, `role="dialog"`, `aria-modal`, `aria-label="Command palette"` |
 | `.measure-panel` | see [7.13](#713-tool-and-readout-panels-measure-panel) |
