@@ -134,7 +134,7 @@ describe("MirrorToolPanel", () => {
     const chips = $('.mirror-chips [role="radio"]');
     chips[0]!.click();
     chips[1]!.click();
-    expect(v.onPlane.mock.calls).toEqual([["XY"], ["XZ"]]);
+    expect(vi.mocked(v.onPlane).mock.calls).toEqual([["XY"], ["XZ"]]);
   });
 
   // Focus stays where it was (the canvas), so the tool's Enter and Tab still reach it after a click in the panel.
