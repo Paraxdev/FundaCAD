@@ -39,6 +39,7 @@ const LOAD_KINDS = [
   { value: "pressure", label: "Pressure" },
 ] as const;
 const AXES = [0, 1, 2] as const;
+const AXIS_NAMES = ["X", "Y", "Z"] as const;
 const gravityOptions = GRAVITY_DIRECTIONS.map((d) => ({ value: d, label: AXIS_LABELS[d] }));
 
 // The analysed body when the current model does not have it (the timeline rolled back before it), so the list can
@@ -231,7 +232,7 @@ function placing(target: StressTarget, as: "face" | "spot"): boolean {
       <template v-if="l.kind === 'force'">
         <div class="stress-field">
           <span class="measure-k">Force</span>
-          <NumberField v-model="l.force" commit="live" unit="N" :width-ch="7" class="stress-force" />
+          <NumberField v-model="l.force" commit="live" unit="N" :width-ch="7" class="stress-force" aria-label="Force" />
           <Select v-model="l.direction" :options="FORCE_DIRECTIONS" class="stress-direction" title="Direction" />
         </div>
         <div v-if="l.direction === 'custom'" class="stress-field">
@@ -247,13 +248,21 @@ function placing(target: StressTarget, as: "face" | "spot"): boolean {
               :width-ch="6"
               class="stress-xyz"
               :title="String(l.custom[i])"
+              :aria-label="AXIS_NAMES[i]"
             />
           </span>
         </div>
       </template>
       <div v-else class="stress-field">
         <span class="measure-k">Pressure</span>
-        <NumberField v-model="l.pressure" commit="live" unit="MPa" :width-ch="7" class="stress-pressure" />
+        <NumberField
+          v-model="l.pressure"
+          commit="live"
+          unit="MPa"
+          :width-ch="7"
+          class="stress-pressure"
+          aria-label="Pressure"
+        />
       </div>
     </div>
     <Button size="sm" icon="plus" class="stress-add stress-add-load" @click="engine.ui.panels.addStressLoad()"
@@ -292,6 +301,7 @@ function placing(target: StressTarget, as: "face" | "spot"): boolean {
           :width-ch="7"
           class="stress-size"
           placeholder="auto"
+          aria-label="Mesh size"
         />
       </div>
       <div class="sm-hint">Smaller is finer and slower.</div>

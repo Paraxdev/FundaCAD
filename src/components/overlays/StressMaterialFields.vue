@@ -29,15 +29,29 @@ function fmt(v: number): string {
   <template v-else>
     <div class="stress-field">
       <span class="measure-k">E</span>
-      <NumberField v-model="setup.custom.E" commit="live" unit="MPa" :width-ch="7" class="stress-e" />
+      <NumberField v-model="setup.custom.E" commit="live" unit="MPa" :width-ch="7" class="stress-e" aria-label="E" />
     </div>
     <div class="stress-field">
       <span class="measure-k">Poisson's ratio</span>
-      <NumberField v-model="setup.custom.nu" commit="live" :step="0.01" :width-ch="7" class="stress-nu" />
+      <NumberField
+        v-model="setup.custom.nu"
+        commit="live"
+        :step="0.01"
+        :width-ch="7"
+        class="stress-nu"
+        aria-label="Poisson's ratio"
+      />
     </div>
     <div class="stress-field">
       <span class="measure-k">Yield</span>
-      <NumberField v-model="setup.custom.yield" commit="live" unit="MPa" :width-ch="7" class="stress-yield" />
+      <NumberField
+        v-model="setup.custom.yield"
+        commit="live"
+        unit="MPa"
+        :width-ch="7"
+        class="stress-yield"
+        aria-label="Yield"
+      />
     </div>
     <div class="stress-field">
       <span class="measure-k">Density</span>
@@ -48,6 +62,7 @@ function fmt(v: number): string {
         :step="0.1"
         :width-ch="7"
         class="stress-density"
+        aria-label="Density"
       />
     </div>
   </template>

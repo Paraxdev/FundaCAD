@@ -252,6 +252,37 @@ describe("StressPanel", () => {
     expect(s.loads[0]!.pressure).toBe(0.25);
   });
 
+  it("names every number field after its row", async () => {
+    await mounted();
+    const p = usePanelsStore();
+    p.showStress("b1");
+    p.stress!.setup.loads[0]!.direction = "custom";
+    p.stress!.setup.material = "Custom";
+    p.stress!.setup.supports[0]!.spots = [{ at: [0, 0, 0], radius: 2 }];
+    await flushPromises();
+    q(".stress-more")!.click();
+    await flushPromises();
+    const names = () =>
+      [...document.querySelectorAll<HTMLInputElement>(".stress-panel .stress-field input:not([role])")].map(
+        (el) => el.getAttribute("aria-label") ?? el.getAttribute("title"),
+      );
+    expect(names()).toEqual([
+      "Radius",
+      "Force",
+      "X",
+      "Y",
+      "Z",
+      "E",
+      "Poisson's ratio",
+      "Yield",
+      "Density",
+      "Mesh size",
+    ]);
+    p.stress!.setup.loads[0]!.kind = "pressure";
+    await flushPromises();
+    expect(names()).toContain("Pressure");
+  });
+
   it("follows a value set from the view, and steps Poisson's ratio and density in their own sizes", async () => {
     await mounted();
     const p = usePanelsStore();
