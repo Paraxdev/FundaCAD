@@ -385,7 +385,7 @@ function modelDoc() {
     });
     await page.waitForTimeout(200);
     const hits = await page.evaluate(() =>
-      [...document.querySelectorAll(".section-chip-btn")].map((b) => {
+      [...document.querySelectorAll(".section-chip .btn")].map((b) => {
         const r = b.getBoundingClientRect();
         const before = getComputedStyle(b, "::before");
         return Math.round(r.height - parseFloat(before.top) - parseFloat(before.bottom));
@@ -423,7 +423,7 @@ function modelDoc() {
         (r) => r.left < c.box.right && r.right > c.box.left && r.top < c.box.bottom && r.bottom > c.box.top,
       );
       const covered = await page.evaluate(() =>
-        [...document.querySelectorAll(".section-chip-btn")]
+        [...document.querySelectorAll(".section-chip .btn")]
           .filter((b) => {
             const r = b.getBoundingClientRect();
             return !b.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
