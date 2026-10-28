@@ -5,6 +5,7 @@ import type { LiveState } from "../../live/liveSession";
 import { asMcpHost, MCP_HOSTS, mcpServerPath, mcpSetupFor, type McpHost } from "../../live/mcpConnect";
 import { asLiveEditingMode, liveEditingMode, onLiveEditingChange, setLiveEditingMode } from "../../ui/liveEditing";
 import { toast } from "../../ui/toast";
+import Button from "../ui/Button.vue";
 import Select from "../ui/Select.vue";
 
 // Injected rather than useEngine(): the section still has to render its
@@ -104,7 +105,7 @@ async function copy(text: string) {
     <div class="mcp-setup">
       <div class="sm-hint">{{ setup.hint }}</div>
       <pre id="prefs-mcp-config" class="mcp-config">{{ setup.text }}</pre>
-      <button id="prefs-mcp-copy" type="button" class="btn" @click="copy(setup.text)">Copy</button>
+      <Button id="prefs-mcp-copy" @click="copy(setup.text)">Copy</Button>
     </div>
     <div id="prefs-mcp-scope" class="sm-hint">
       It reads and writes files in your folders, never in hidden folders, in your home folder itself or at a drive root.

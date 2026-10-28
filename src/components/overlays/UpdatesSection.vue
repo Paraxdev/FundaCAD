@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from "vue";
+import Checkbox from "../ui/Checkbox.vue";
 import Select from "../ui/Select.vue";
 import { updatesSupported } from "../../ui/updates";
 import {
@@ -28,9 +29,6 @@ onMounted(() => {
 });
 onUnmounted(() => stop());
 
-function onAuto(ev: Event) {
-  setAutoUpdateCheck((ev.target as HTMLInputElement).checked);
-}
 function onPeriod(v: string) {
   const p = asUpdatePeriod(v);
   if (p) setUpdatePeriod(p);
@@ -47,13 +45,13 @@ function onPeriod(v: string) {
     </div>
     <template v-else-if="supported">
       <div class="pref-card">
-        <label class="pref-head pref-check">
-          <span class="check">
-            <input id="prefs-update-auto" type="checkbox" :checked="auto" @change="onAuto" />
-            <span class="check-box"></span>
-          </span>
-          <span class="pref-title">Check for updates automatically</span>
-        </label>
+        <Checkbox
+          id="prefs-update-auto"
+          class="pref-head pref-check"
+          :model-value="auto"
+          @update:model-value="setAutoUpdateCheck"
+          ><span class="pref-title">Check for updates automatically</span></Checkbox
+        >
         <p class="pref-hint">Off sends nothing until you use Help > Check for Updates.</p>
       </div>
       <div class="pref-card">
