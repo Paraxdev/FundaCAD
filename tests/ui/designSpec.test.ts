@@ -58,7 +58,6 @@ const COLOUR_BASELINE: Record<string, number> = {
   "src/styles/_modals.scss": 71,
   "src/styles/_notice.scss": 1,
   "src/styles/_renderdock.scss": 5,
-  "src/styles/_targetedit.scss": 2,
   "src/styles/_timeline.scss": 5,
   "src/styles/_utilities.scss": 2,
 };
@@ -69,7 +68,6 @@ const COLOUR_BASELINE: Record<string, number> = {
 // inset wells or title bar chrome. Exact counts, as above: a new floating surface
 // goes on the _glass.scss lists instead of raising a number here.
 const FLAT_BASELINE: Record<string, number> = {
-  "src/components/overlays/FilletMembers.vue": 1,
   "src/styles/_browser.scss": 3,
   "src/styles/_console.scss": 2,
   "src/styles/_float.scss": 2,

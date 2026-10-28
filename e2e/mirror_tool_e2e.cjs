@@ -106,7 +106,7 @@ const near = (a, b, tol) => Number.isFinite(a) && Math.abs(a - b) <= tol;
             .join(" ")
             .trim(),
           active: row.classList.contains("tgt-active"),
-          clearable: !row.querySelector(".tgt-clear").disabled,
+          clearable: row.querySelector(".tgt-clear").getAttribute("aria-disabled") !== "true",
         };
       };
       const apply = panel && panel.querySelector(".tgt-done");
@@ -116,8 +116,10 @@ const near = (a, b, tol) => Number.isFinite(a) && Math.abs(a - b) <= tol;
         panel: !!panel,
         objects: field("objects"),
         plane: field("line"),
-        chips: panel ? [...panel.querySelectorAll(".rd-chip")].map((c) => c.textContent.trim()) : [],
-        ready: !!apply && !apply.disabled,
+        chips: panel
+          ? [...panel.querySelectorAll('.mirror-chips [role="radio"]')].map((c) => c.textContent.trim())
+          : [],
+        ready: !!apply && apply.getAttribute("aria-disabled") !== "true",
         ghost: g ? { copies: g.copies.length, m: g.copies.map((c) => Array.from(c.matrix.elements)) } : null,
         prompt: document.querySelector(".prompt-text")?.textContent?.trim() ?? "",
         faceMarks: (window.viewport.faceMarkMeshes.get("mirror") || []).length,
@@ -150,7 +152,7 @@ const near = (a, b, tol) => Number.isFinite(a) && Math.abs(a - b) <= tol;
   );
 
   // 1: YZ chip, ghost, Enter, symmetric result, one undo
-  await page.click(".mirror-panel .rd-chip:nth-child(3)");
+  await page.click('.mirror-panel .mirror-chips [role="radio"]:nth-child(3)');
   await page.waitForTimeout(400);
   st = await state();
   check("the YZ chip sets the plane", st.plane.clearable && /YZ/.test(st.plane.value) && st.ready, st.plane.value);
@@ -239,8 +241,8 @@ const near = (a, b, tol) => Number.isFinite(a) && Math.abs(a - b) <= tol;
   // Esc in a third run changes nothing and gives the selection back
   await clickAt(await scr(30, 7, 8));
   await page.click("#toolrail [data-action='offer:mirror']").catch(() => {});
-  await page.waitForSelector(".mirror-panel .rd-chip", { timeout: 10000 });
-  await page.click(".mirror-panel .rd-chip:nth-child(1)");
+  await page.waitForSelector('.mirror-panel .mirror-chips [role="radio"]', { timeout: 10000 });
+  await page.click('.mirror-panel .mirror-chips [role="radio"]:nth-child(1)');
   await page.waitForTimeout(300);
   await clickAt(await scr(-25, 18, 5));
   st = await state();

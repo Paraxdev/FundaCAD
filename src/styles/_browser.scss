@@ -247,19 +247,11 @@
   pointer-events: none;
   cursor: default;
 }
-.sketch-dim input {
+.sketch-dim .sketch-dim-field {
   width: 52px;
-  border: 1px solid var(--line-strong);
-  background: var(--bg);
-  color: var(--text);
-  font-size: 11px;
+  height: 19px;
+  padding: 0 var(--s-1);
   font-variant-numeric: tabular-nums;
-  padding: 1px 4px;
-  border-radius: var(--r-sm);
-}
-.sketch-dim input:focus {
-  outline: 1px solid var(--accent);
-  outline-offset: 0;
 }
 .sketch-glyph.pattern {
   height: 20px;
