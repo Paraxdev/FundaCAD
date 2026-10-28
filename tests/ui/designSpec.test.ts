@@ -252,7 +252,7 @@ const surfaceOf = (selector: string) =>
       .pop() ?? "",
   )?.[0] ?? "";
 
-const NO_PAINT = /(^|\s)(none|hidden|transparent)$|^none|^0(px)?(\s|$)/;
+const NO_PAINT = /(^|\s)(none|hidden|transparent)$|^none\b|^0(px)?(\s|$)/;
 
 // Splits a value on spaces that sit outside parentheses.
 function words(value: string): string[] {
@@ -289,7 +289,7 @@ function isOutline(prop: string, value: string): boolean {
     return !NO_PAINT.test(value);
   }
   if (prop === "border-style") return !/^(none|hidden)$/.test(value);
-  if (prop === "border-image" || prop === "border-image-source") return !/^none/.test(value);
+  if (prop === "border-image" || prop === "border-image-source") return !/^none\b/.test(value);
   // A mask that cuts the middle out of an ::after paints a ring.
   if (prop === "mask-composite" || prop === "-webkit-mask-composite") return /xor|exclude/.test(value);
   return prop === "box-shadow" && splitSelectors(value).some(isRingShadow);
@@ -695,6 +695,7 @@ describe("design spec guard", () => {
       expect(out(`${chip} .chip.on { ${decl}; }`), decl).toHaveLength(1);
     expect(out(`${chip} .chip::after { content: ""; -webkit-mask-composite: xor; }`)).toHaveLength(1);
     expect(out(`${chip} .chip::after { content: ""; mask-composite: exclude; }`)).toHaveLength(1);
+    expect(out(`${chip} .chip.on { border-image: none; border: none 0; }`)).toEqual([]);
     // Only a real focus state is exempt.
     expect(out(`${chip} .chip:focus-within { outline: 1px solid red; }`)).toHaveLength(1);
     expect(out(`${chip} .chip:not(:focus) { border-color: red; }`)).toHaveLength(1);
