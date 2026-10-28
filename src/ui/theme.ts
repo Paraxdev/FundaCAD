@@ -142,7 +142,8 @@ const SHIPPED_THEMES: ShippedTheme[] = [
   {
     // Simulation checked so no two signal colours collapse under protanopia, deuteranopia or tritanopia (closest pair
     // ΔE ~29), with lightness steps for monochromacy. Violet accent, as blue merged with the teal ok in tritanopia;
-    // error clears ~6:1 contrast as it is drawn as text.
+    // error clears ~6:1 contrast as it is drawn as text. The axes trade green for yellow, stepped dark, light and
+    // mid: closest pair ΔE2000 23 in deuteranopia and 13 in greyscale, where Noir's red and green give 8 and 1.
     id: "colorblind-safe",
     label: "Colour-Blind Safe",
     mode: "dark",
@@ -170,6 +171,9 @@ const SHIPPED_THEMES: ShippedTheme[] = [
       "--error-tint": "rgba(255, 92, 92, 0.16)",
       "--pick-line": "#ff8fc8",
       "--accent-blue": "#9b6cff",
+      "--axis-x": "#e5483a",
+      "--axis-y": "#eedf6b",
+      "--axis-z": "#6aaef0",
     },
   },
   noirTint("noir-blue", "Noir Blue", {
@@ -218,6 +222,9 @@ const PALETTE_TOKENS = new Set<string>([
   "--error-tint",
   "--pick-line",
   "--accent-blue",
+  "--axis-x",
+  "--axis-y",
+  "--axis-z",
 ]);
 
 /** Hex or rgb()/rgba() only: viewport/themeColors.parseCssColor understands

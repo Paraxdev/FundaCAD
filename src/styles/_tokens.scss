@@ -38,6 +38,10 @@
   --error-tint: rgba(255, 92, 92, 0.14);
   /* A second pick colour, apart from the accent: the Mirror line or plane in the viewport. */
   --pick-line: #b48cff;
+  /* X, Y and Z in the viewport: the origin triad and plane tiles, and the Move, Pattern and datum gizmos. */
+  --axis-x: #ff5a5a;
+  --axis-y: #46d97a;
+  --axis-z: #4d8dff;
 
   /* legacy alias */
   --accent-blue: var(--accent);
