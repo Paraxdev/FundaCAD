@@ -324,6 +324,16 @@ the bundle:
   then the warning, which is not optional: this is the Funda Engine and the sidecar is retired, anything that builds differently from the sidecar is worth a report, plugin
   geometry runs as WebAssembly components, and the sidecar's documents open
   here.
+- Every beta also stays on as a normal release of its own, `v1.0.<run
+  number>`, titled `FundaCAD 1.0.<run number> beta`, with the same installers
+  and plugin bundles but no `latest.json`, so a version can be linked and
+  packaged after the rolling beta moves on while installed betas keep their
+  feed. It starts as a draft until its files are up, and is the repository's
+  latest release only while no stable release is published (stable installs
+  find their feed through `releases/latest`). Its tag is made on the build's
+  commit by the job's token, which GitHub refuses on a commit that changes a
+  workflow file, so such a build warns and has only the rolling beta.
+  `tests/build/test_version_release.py` runs the step against a stub `gh`.
 
 ### 6.1 The updater endpoint
 
