@@ -22,6 +22,8 @@ import { nextTick, ref } from "vue";
 import { mount, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import BrowserPane from "../../../src/components/shell/BrowserPane.vue";
+import Select from "../../../src/components/ui/Select.vue";
+import { useShellStore } from "../../../src/stores/shell";
 import { ENGINE } from "../../../src/app/engineKey";
 import { createSelection } from "../../../src/app/selection";
 import { contribute, resetContributions } from "../../../src/plugins/contrib";
@@ -658,7 +660,7 @@ describe("BrowserPane", () => {
         .map((r) => r.text);
     expect(heads()).toEqual(["Origin", "Planes", "Bodies", "Sketches"]);
 
-    const select = w.get("#browser-filter");
+    const select = w.getComponent(Select);
     await select.setValue("sketches");
     expect(heads()).toEqual(["Sketches"]);
     // The Bodies folder's own empty state must go with it, under "Sketches" a
@@ -710,11 +712,11 @@ describe("BrowserPane", () => {
     await nextTick();
     expect(w.find(".marker").exists()).toBe(true);
 
-    await w.get("#browser-filter").setValue("sketches");
+    await w.getComponent(Select).setValue("sketches");
     expect(w.find(".marker").exists()).toBe(false);
 
     // ...and back, with the bodies it rides alongside.
-    await w.get("#browser-filter").setValue("bodies");
+    await w.getComponent(Select).setValue("bodies");
     expect(w.find(".marker").exists()).toBe(true);
   });
 
@@ -729,7 +731,7 @@ describe("BrowserPane", () => {
     });
     const w = render(fake);
     await nextTick();
-    await w.get("#browser-filter").setValue("sketches");
+    await w.getComponent(Select).setValue("sketches");
     expect(w.find(".marker").exists()).toBe(true);
   });
 
@@ -1173,5 +1175,40 @@ describe("a row double click while another edit is open", () => {
     await nextTick();
     await rowNamed(w, "Sketch1").trigger("dblclick");
     expect(log).toEqual(["cancel:revolvePitch", "edit:s1"]);
+  });
+});
+
+describe("Items head and foot controls", () => {
+  it("the kind filter is a base Select that picks from its own list", async () => {
+    const fake = makeEngine({ parameters: {}, features: [sketch("s1")] }, [{ id: "b1", name: "Body1" }]);
+    const w = mount(BrowserPane, { global: { provide: { [ENGINE as symbol]: fake.engine } }, attachTo: document.body });
+    const trigger = w.get("#browser-filter");
+    expect([trigger.attributes("role"), trigger.attributes("title")]).toEqual([
+      "combobox",
+      "Show only one kind of item",
+    ]);
+    await trigger.trigger("click");
+    await nextTick();
+    const opt = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
+      (o) => o.textContent?.trim() === "Sketches",
+    );
+    opt!.click();
+    await nextTick();
+    const heads = w.findAll(".tree-folder .tree-label").map((l) => l.text());
+    expect(heads).toEqual(["Sketches"]);
+    w.unmount();
+  });
+
+  it("More and the close are base icon buttons, More opens its menu by the button", async () => {
+    const w = render(makeEngine({ parameters: {}, features: [] }, []));
+    const more = w.get(".float-card-more");
+    expect([more.classes("icon-btn"), more.attributes("aria-label")]).toEqual([true, "More"]);
+    vi.mocked(contextMenu).mockClear();
+    await more.trigger("click");
+    expect(vi.mocked(contextMenu)).toHaveBeenCalledTimes(1);
+    const close = w.get("#browser .float-card-close");
+    expect(close.attributes("title")).toContain("Hide the items");
+    await close.trigger("click");
+    expect(useShellStore().itemsOpen).toBe(false);
   });
 });

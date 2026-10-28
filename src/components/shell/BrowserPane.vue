@@ -10,7 +10,8 @@ import { useSelectionStore } from "../../stores/selection";
 import { useBrowserStore } from "../../stores/browser";
 import TreeFolder from "./TreeFolder.vue";
 import TreeRow from "./TreeRow.vue";
-import Icon from "./Icon.vue";
+import IconButton from "../ui/IconButton.vue";
+import Select from "../ui/Select.vue";
 import { useShellStore } from "../../stores/shell";
 import { contextMenu } from "../../ui/menu";
 import {
@@ -29,7 +30,6 @@ import { adoptImportedColors, exportModel, sketchFlatSource } from "../../io/fil
 import { ancestryOf } from "../../document/elements";
 import {
   BROWSER_FILTERS,
-  asBrowserFilter,
   getBrowserFilter,
   isBrowserSection,
   onBrowserFilterChange,
@@ -85,10 +85,7 @@ const offFilter = onBrowserFilterChange(() => {
 });
 onUnmounted(offFilter);
 
-function onFilterInput(ev: Event) {
-  const id = asBrowserFilter((ev.target as HTMLSelectElement).value);
-  if (id) setBrowserFilter(id);
-}
+const filterOptions = BROWSER_FILTERS.map((f) => ({ value: f.id, label: f.label }));
 
 /** The lists whose eyes paint together: a drag started on a sketch's eye shows
  *  or hides sketches and nothing else. Element and assembly heads are bodies. */
@@ -906,20 +903,25 @@ onUnmounted(() => root.value?.removeEventListener("wheel", onWheel));
   <aside id="browser" class="float-card">
     <div class="float-card-head">
       <span class="float-card-title">Items</span>
-      <button class="float-card-close" :title="fmtKeys('Hide the items (Ctrl+Alt+S)')" @click="shell.setItems(false)"
-        ><Icon name="close" :size="14"
-      /></button>
+      <IconButton
+        class="float-card-close"
+        icon="close"
+        size="md"
+        variant="plain"
+        :icon-size="14"
+        :tip="fmtKeys('Hide the items (Ctrl+Alt+S)')"
+        @click="shell.setItems(false)"
+      />
     </div>
     <div class="browser-title">
-      <select
+      <Select
         id="browser-filter"
         class="browser-filter"
-        title="Show only one kind of item"
-        :value="filter"
-        @change="onFilterInput"
-      >
-        <option v-for="f in BROWSER_FILTERS" :key="f.id" :value="f.id">{{ f.label }}</option>
-      </select>
+        tip="Show only one kind of item"
+        :model-value="filter"
+        :options="filterOptions"
+        @update:model-value="setBrowserFilter"
+      />
     </div>
     <div ref="root" class="float-card-body">
       <template v-for="n in nodes" :key="n.k">
@@ -979,9 +981,15 @@ onUnmounted(() => root.value?.removeEventListener("wheel", onWheel));
     </div>
     <div class="float-card-foot">
       <span class="float-card-spacer"></span>
-      <button class="float-card-more" title="More" aria-label="More" @click="openMore($event)"
-        ><Icon name="more" :size="18"
-      /></button>
+      <IconButton
+        class="float-card-more"
+        icon="more"
+        size="md"
+        variant="plain"
+        :icon-size="18"
+        tip="More"
+        @click="openMore($event)"
+      />
     </div>
   </aside>
 </template>

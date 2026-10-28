@@ -133,13 +133,8 @@
   flex: none;
   padding: 0 var(--s-3) var(--s-2);
 }
-#browser .browser-filter {
-  height: 30px;
-  padding: 0 var(--s-3);
-  font-size: 12px;
-  border-radius: var(--float-tile-radius);
-  background: var(--panel-2);
-  color: var(--text);
+#browser .browser-filter.select-trigger {
+  min-height: 30px;
 }
 
 #timeline.float-card {

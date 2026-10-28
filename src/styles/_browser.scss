@@ -5,35 +5,11 @@
   align-items: center;
   gap: var(--s-2);
 }
-.browser-filter {
-  /* Labels are long ("Planes and axes") in a fixed 232px panel, so this shrinks instead
-     of pushing the heading out. */
+/* Labels are long ("Planes and axes") in a fixed 232px panel, so the base Select shrinks instead of pushing the
+   heading out. */
+.browser-filter.select-trigger {
   flex: 1 1 auto;
   min-width: 0;
-  appearance: none;
-  -webkit-appearance: none;
-  background: var(--panel-2);
-  border: 1px solid transparent;
-  border-radius: var(--r-sm);
-  padding: 2px var(--s-2);
-  color: var(--text-dim);
-  /* Not .panel-title's uppercase tracking: this is a value the user picked, not a heading. */
-  font: inherit;
-  font-size: 11px;
-  letter-spacing: normal;
-  text-transform: none;
-  cursor: pointer;
-}
-.browser-filter:hover {
-  color: var(--text);
-}
-.browser-filter:focus {
-  outline: 1px solid var(--accent);
-  outline-offset: 0;
-}
-.browser-filter option {
-  background: var(--panel-2);
-  color: var(--text);
 }
 
 .tree-folder {

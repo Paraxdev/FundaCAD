@@ -117,8 +117,6 @@
   { "path": "src/components/overlays/TextToolPanel.vue", "kind": "style:inline", "count": 7, "reason": "before the base set, migrates in lane K (tool boxes)" },
   { "path": "src/components/overlays/TextToolPanel.vue", "kind": "textarea", "count": 1, "reason": "before the base set, migrates in lane K (tool boxes)" },
   { "path": "src/components/overlays/UpdatesSection.vue", "kind": "input[type=checkbox]", "count": 1, "reason": "before the base set, migrates in lane M (settings)" },
-  { "path": "src/components/shell/BrowserPane.vue", "kind": "button", "count": 2, "reason": "before the base set, migrates in lane Q (browser, history, palette, versions)" },
-  { "path": "src/components/shell/BrowserPane.vue", "kind": "select", "count": 1, "reason": "before the base set, migrates in lane Q (browser, history, palette, versions)" },
   { "path": "src/components/shell/ChoiceRow.vue", "kind": "select", "count": 1, "reason": "before the base set, migrates in lane I (feature rows and readouts)" },
   { "path": "src/components/shell/DenoiserRow.vue", "kind": "button", "count": 1, "reason": "before the base set, migrates in lane P (render dock)" },
   { "path": "src/components/shell/FileRow.vue", "kind": "button", "count": 2, "reason": "before the base set, migrates in lane I (feature rows and readouts)" },
