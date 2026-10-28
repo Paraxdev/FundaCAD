@@ -1,6 +1,6 @@
-// A box drag shows its rectangle on every move, previews the take once a frame at the latest point, and on release
-// drops a pending preview and announces the final take once.
-import { describe, expect, it, vi } from "vitest";
+// A box drag shows its rectangle on every move, previews the take once a frame at the latest point, in the render
+// frame before it draws, and on release drops a pending preview and announces the final take once.
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { Viewport, type AreaDrag } from "../../src/viewport/viewport";
 import { dragBox, FrameCoalescer } from "../../src/viewport/areaSelect";
 
@@ -13,7 +13,8 @@ function rig() {
   let id = 0;
   const vp = Object.create(Viewport.prototype) as Record<string, unknown>;
   const box = { visible: false, show: vi.fn(() => (box.visible = true)), hide: vi.fn(() => (box.visible = false)) };
-  const highlighter = { settle: vi.fn() };
+  const order: string[] = [];
+  const highlighter = { settle: vi.fn(() => order.push("settle")) };
   Object.assign(vp, {
     canvas: { addEventListener: (type: string, fn: Handler) => (handlers[type] ??= []).push(fn) },
     areaBox: box,
@@ -24,12 +25,9 @@ function rig() {
     queueHover: vi.fn(),
     onAreaDrag: vi.fn(),
     onAreaBegin: vi.fn(),
-    selectInBox: vi.fn(),
+    selectInBox: vi.fn(() => order.push("preview")),
     areaFrame: new FrameCoalescer(
-      () => {
-        (vp.showAreaBox as () => void).call(vp);
-        highlighter.settle();
-      },
+      () => (vp.previewAreaFrame as () => void).call(vp),
       (fn) => (frames.set(++id, fn), id),
       (n) => frames.delete(n),
     ),
@@ -43,6 +41,7 @@ function rig() {
     box,
     down,
     frames,
+    order,
     move: (x: number, y: number) => fire(handlers.pointermove, at(x, y)),
     up: (x: number, y: number) => fire(handlers.pointerup, { ...at(x, y), buttons: 0 }),
     frame: () => {
@@ -85,5 +84,49 @@ describe("box drag wiring", () => {
     ]);
     expect(r.box.hide).toHaveBeenCalledTimes(1);
     expect(r.vp.areaProj).toBeNull();
+  });
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("previews and settles a move in the render frame that follows it, before that frame draws", () => {
+    const r = rig();
+    // Anything the frame reads beyond the box is a no-op that answers to every call and property.
+    const anything: unknown = new Proxy(() => {}, { get: () => anything, apply: () => anything });
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.stubGlobal("document", { visibilityState: "visible" });
+    Object.assign(r.vp, {
+      watchStutter: anything,
+      timer: anything,
+      rig: anything,
+      applyMotionScale: anything,
+      edgeMotionTick: anything,
+      syncOverlayMask: anything,
+      trace: anything,
+      power: anything,
+      traceBaker: anything,
+      freeze: anything,
+      overlayDrawn: () => false,
+      contactShadow: anything,
+      shadowWatch: anything,
+      cube: anything,
+      fenceRef: anything,
+      fps: anything,
+      glowLinked: true,
+      peek: new Set(),
+      scene: {
+        scene: anything,
+        renderer: anything,
+        post: { render: vi.fn(() => r.order.push("draw")) },
+      },
+    });
+    r.move(160, 140);
+    expect(r.order).toEqual([]);
+    (r.vp.renderFrame as () => void).call(r.vp);
+    expect({ order: r.order, pending: r.frames.size, errors: error.mock.calls }).toEqual({
+      order: ["preview", "settle", "draw"],
+      pending: 0,
+      errors: [],
+    });
+    expect(r.selectInBox.mock.calls).toEqual([[rectOf(160, 140).rect, rectOf(160, 140).mode, r.down, false]]);
   });
 });

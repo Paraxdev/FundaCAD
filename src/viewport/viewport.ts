@@ -551,7 +551,6 @@ export class Viewport {
       const down = this.areaDown;
       this.areaDown = null;
       this.areaAt = null;
-      this.areaFrame.cancel();
       if (this.areaBox.visible) {
         this.areaBox.hide();
         this.onAreaDrag?.(null);
@@ -1375,11 +1374,13 @@ export class Viewport {
    *  dropped by anything that changes what is on screen. */
   private areaProj: AreaProjection | null = null;
 
+  private areaFrame = new FrameCoalescer(() => this.previewAreaFrame());
+
   /** Run by the render loop before it draws, so a move's preview lands in that frame, overlay and wide lines too. */
-  private areaFrame = new FrameCoalescer(() => {
+  private previewAreaFrame() {
     this.showAreaBox();
     this.highlighter?.settle();
-  });
+  }
   private pressPull = new PressPullMemo();
 
   private dropAreaProjection() {
@@ -4439,6 +4440,11 @@ export class Viewport {
   }
 
   private loop = () => {
+    this.renderFrame();
+    requestAnimationFrame(this.loop);
+  };
+
+  private renderFrame() {
     // One bad frame must not kill the loop, a throw is logged and scheduling goes on.
     try {
       const now = performance.now();
@@ -4541,6 +4547,5 @@ export class Viewport {
     } catch (e) {
       console.error("[viewport] render loop frame error (continuing):", e);
     }
-    requestAnimationFrame(this.loop);
-  };
+  }
 }
