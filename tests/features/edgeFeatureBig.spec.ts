@@ -7,6 +7,12 @@ import * as THREE from "three";
 import { EdgeFeatureTool } from "../../src/features/edgeFeatureTool";
 import type { DocumentStore } from "../../src/document/store";
 import type { Viewport } from "../../src/viewport/viewport";
+import { edgeSelectColor } from "../../src/viewport/highlight";
+
+vi.mock("../../src/viewport/highlight", async (orig) => {
+  const real = await orig<typeof import("../../src/viewport/highlight")>();
+  return { ...real, edgeSelectColor: vi.fn(real.edgeSelectColor), edgeHoverColor: vi.fn(real.edgeHoverColor) };
+});
 
 function lenient<T extends object>(own: Record<string, unknown>): T {
   return new Proxy(own, {
@@ -73,6 +79,18 @@ describe("fillet on a big preselection", () => {
     expect(tool.memberRows().length).toBe(5000);
     expect(edgeLineForSelector).not.toHaveBeenCalled();
     expect(edgeLineByMid).not.toHaveBeenCalled();
+    tool.cancel();
+  });
+
+  // Each colour reads the theme and converts through OKLCH, 0.16 ms a call, 3 s at 20,000 members.
+  it("reads the member colour once for the whole seed and recolor, not once per member", () => {
+    const { tool } = rig(5000);
+    vi.mocked(edgeSelectColor).mockClear();
+    tool.start("fillet", () => {});
+    expect(vi.mocked(edgeSelectColor).mock.calls.length).toBeLessThanOrEqual(2);
+    vi.mocked(edgeSelectColor).mockClear();
+    (tool as unknown as { recolorGhosts(): void }).recolorGhosts();
+    expect(vi.mocked(edgeSelectColor).mock.calls.length).toBeLessThanOrEqual(1);
     tool.cancel();
   });
 

@@ -71,7 +71,7 @@ const Y_AXIS = HANDLE_UP;
 // Ghost member lines drawn over the preview, where the members were consumed into rounded faces, in the Highlighter's
 // selected edge colour, or its error red.
 const GHOST_ERROR = 0xe23b3b;
-const ghostColor = (g: { failed: boolean }) => (g.failed ? GHOST_ERROR : edgeSelectColor());
+const ghostColor = (g: { failed: boolean }, select = edgeSelectColor()) => (g.failed ? GHOST_ERROR : select);
 
 /** Only delays the OCCT preview; the client side ghost (viewport.setBlendGhost) still redraws every frame, so a fast
  *  drag does not queue a rebuild per pixel. */
@@ -453,6 +453,7 @@ export class EdgeFeatureTool {
   /** `lines[i]`, when given, is the edge `sels[i]` was made from, so it is not matched back by geometry. */
   private seedGhosts(sels: Selector[], lines?: readonly (EdgeRef | undefined)[]) {
     const byPoints = new Map<unknown, (typeof this.ghosts)[number]>(this.ghosts.map((g) => [g.points, g]));
+    let color: number | undefined;
     sels.forEach((sel, i) => {
       if ("point" in sel) this.lastPickMid = sel.point as Vec3;
       if (!("point" in sel)) {
@@ -463,7 +464,8 @@ export class EdgeFeatureTool {
       const same = line && byPoints.get(line.points);
       if (same) same.sels.push(sel);
       else if (line) {
-        this.addGhost(sel, line.points as Vec3[], undefined, line.curvature);
+        color ??= edgeSelectColor();
+        this.addGhost(sel, line.points as Vec3[], undefined, line.curvature, color);
         const added = this.ghosts[this.ghosts.length - 1];
         if (added?.points === line.points) byPoints.set(line.points, added);
       } else this.unmatchedSels.push(sel);
@@ -480,7 +482,13 @@ export class EdgeFeatureTool {
   private chainCounter = 0; // one id per add gesture (chain toggles as a unit)
   private memberSeq = 0; // one id per member, stable for the panel's row keys
 
-  private addGhost(sel: Selector, points: Vec3[], chain?: number, curvature?: readonly [number, number]) {
+  private addGhost(
+    sel: Selector,
+    points: Vec3[],
+    chain?: number,
+    curvature?: readonly [number, number],
+    color = edgeSelectColor(),
+  ) {
     const mid = polylineMid(points);
     if (!mid) return; // an edge always has points; nothing to ghost otherwise
     const geo = new LineGeometry();
@@ -489,7 +497,7 @@ export class EdgeFeatureTool {
     geo.setPositions(flat);
     const el = this.viewport.domElement;
     const mat = new LineMaterial({
-      color: edgeSelectColor(),
+      color,
       linewidth: 3.5,
       worldUnits: false,
       depthTest: false,
@@ -670,6 +678,7 @@ export class EdgeFeatureTool {
    *  way, so it deselects as one unit. */
   private addPicked(line: EdgeRef, scope: PickScope) {
     const chainId = ++this.chainCounter;
+    const color = edgeSelectColor();
     this.lastPickMid = polylineMid(line.points as Vec3[]) ?? null;
     for (const l of scope === "single" ? [line] : this.tangentChain(line)) {
       const pts = l.points as Vec3[];
@@ -677,7 +686,7 @@ export class EdgeFeatureTool {
       if (!sel) continue;
       const mid = sel.point;
       if (this.ghosts.some((g) => Math.hypot(g.mid[0] - mid[0], g.mid[1] - mid[1], g.mid[2] - mid[2]) < 1e-6)) continue;
-      this.addGhost(sel, pts, chainId, l.curvature);
+      this.addGhost(sel, pts, chainId, l.curvature, color);
     }
   }
 
@@ -942,8 +951,9 @@ export class EdgeFeatureTool {
   }
 
   private recolorGhosts() {
+    const select = edgeSelectColor();
     for (const g of this.ghosts) {
-      (g.line.material as LineMaterial).color.set(g === this.hoveredGhost ? edgeHoverColor() : ghostColor(g));
+      (g.line.material as LineMaterial).color.set(g === this.hoveredGhost ? edgeHoverColor() : ghostColor(g, select));
     }
     this.viewport.requestRender();
   }
