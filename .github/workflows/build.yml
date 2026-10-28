@@ -95,6 +95,10 @@ jobs:
       - name: Version release tests
         run: python3 tests/build/test_version_release.py
 
+      # The checks of the AT-SPI dump the bundle leg runs, against fake trees.
+      - name: AT-SPI dump tests
+        run: python3 tests/build/test_atspi_dump.py
+
       # The plugin sandbox is a worker ENTRY, so Rollup treats its exports as
       # unreachable and drops them. That produced a chunk with none of the
       # sandbox in it, past every unit test, and would have failed at the first
@@ -510,6 +514,32 @@ jobs:
           fi
           FUNDACAD_MCP_MODE=attach FUNDACAD_SESSION_FILE="$session" \
             python3 scripts/bundle-smoke.py --work "$RUNNER_TEMP/smoke-gui" -- "$RUNNER_TEMP/deb-root/usr/bin/fundacad" --mcp
+
+      # What Orca reads: the AppImage on its own accessibility bus, its AT-SPI
+      # tree dumped and red on a nameless button or no web document. Not a gate
+      # until wave 1 of the accessibility work has run green here.
+      - name: Dump the AppImage accessibility tree over AT-SPI
+        if: matrix.platform == 'ubuntu-22.04'
+        continue-on-error: true
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo timeout -k 10 300 apt-get install -y -qq xvfb at-spi2-core gir1.2-atspi-2.0 python3-gi libglib2.0-bin
+          img=$(find src-tauri/target/release/bundle/appimage -maxdepth 1 -name '*.AppImage' | head -1)
+          if [ -z "$img" ]; then echo "::error::no AppImage to start"; exit 1; fi
+          dbus-run-session -- bash scripts/a11y/atspi-run.sh "$img" "$RUNNER_TEMP/atspi"
+
+      - name: Upload the AT-SPI dump
+        if: always() && matrix.platform == 'ubuntu-22.04'
+        uses: actions/upload-artifact@v4
+        with:
+          name: atspi-dump
+          path: |
+            ${{ runner.temp }}/atspi/*.txt
+            ${{ runner.temp }}/atspi/*.log
+          if-no-files-found: ignore
+          retention-days: 7
 
       # The portable exe the release uploads, and the macOS app's binary, which
       # Tauri names after the binary or the product depending on its version.
