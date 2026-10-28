@@ -41,6 +41,7 @@ vi.mock("../../../src/plugins", async (importOriginal) => {
 const PluginsSection = (await import("../../../src/components/overlays/PluginsSection.vue")).default;
 const { candidateFrom } = await import("../../../src/plugins");
 const { errorNotice } = await import("../../../src/ui/errorNotice");
+const { pluginEnabled } = await import("../../../src/plugins/registry");
 
 enableAutoUnmount(afterEach);
 
@@ -71,7 +72,7 @@ const candidateRow = (w: ReturnType<typeof mount>) => w.find("[data-plugin-candi
 
 /** Type a URL and press the button that reads it. */
 async function readUrl(w: ReturnType<typeof mount>, url: string) {
-  const field = addRow(w).get("input.plug-url");
+  const field = addRow(w).get(".plug-address input");
   await field.setValue(url);
   await addRow(w).findAll("button")[0]!.trigger("click");
   await flush();
@@ -95,7 +96,22 @@ describe("reading a bundle from a link", () => {
     expect(inspectUrl).not.toHaveBeenCalled();
     expect(candidateRow(w).exists()).toBe(false);
     // And the button will not act on an empty field.
-    expect(addRow(w).findAll("button")[0]!.attributes("disabled")).toBeDefined();
+    expect(addRow(w).findAll("button")[0]!.attributes("aria-disabled")).toBe("true");
+  });
+
+  it("reads on Enter in the link field, which holds still while it reads", async () => {
+    let done: (v: unknown) => void = () => {};
+    inspectUrl.mockReturnValue(new Promise((r) => (done = r)));
+    const w = await mounted();
+    const field = addRow(w).get(".plug-address input");
+    await field.setValue("https://plugins.example.com/widgets.zip");
+    await field.trigger("keydown", { key: "Enter" });
+    expect(inspectUrl).toHaveBeenCalledWith("https://plugins.example.com/widgets.zip");
+    expect(field.attributes("readonly")).toBeDefined();
+    expect(addRow(w).findAll("button")[0]!.text()).toBe("Reading…");
+    done(candidateFrom(STRANGER, "url"));
+    await flush();
+    expect(field.attributes("readonly")).toBeUndefined();
   });
 
   it("describes it, and installs nothing by doing so", async () => {
@@ -292,5 +308,21 @@ describe("the list of what is installed", () => {
     // plugin, and a screen showing both offers to install what is installed.
     expect(w.findAll('[data-plugin="FundaCAD.Screws"]').length).toBe(1);
     expect(w.get('[data-plugin="FundaCAD.Screws"]').text()).toContain("Remove");
+  });
+
+  it("runs and stops an installed plugin with its checkbox, named for it and titled with its state", async () => {
+    installedPlugins.mockResolvedValue([record({})]);
+    const w = await mounted();
+    const box = () => w.get('[data-plugin="widgets"] .plug-controls .ui-checkbox');
+    const input = box().get("input");
+    expect(box().attributes("id")).toBe("prefs-plugin-widgets");
+    expect(input.attributes("aria-label")).toMatch(/^Run /);
+    expect(box().attributes("title")).toBe("Running");
+    await input.trigger("keydown", { key: " " });
+    expect(pluginEnabled("widgets")).toBe(false);
+    expect(box().attributes("title")).toBe("Switched off");
+    expect((input.element as HTMLInputElement).checked).toBe(false);
+    await input.trigger("change");
+    expect(pluginEnabled("widgets")).toBe(true);
   });
 });

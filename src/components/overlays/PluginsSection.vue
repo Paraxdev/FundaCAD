@@ -9,6 +9,9 @@ import { removePluginSettings, settingMatches } from "../../plugins/settings";
 import { pluginFocus } from "../../plugins/settingsFocus";
 import PluginSettingsForm from "./PluginSettingsForm.vue";
 import Icon from "../shell/Icon.vue";
+import Button from "../ui/Button.vue";
+import Checkbox from "../ui/Checkbox.vue";
+import TextField from "../ui/TextField.vue";
 import {
   inspectFile,
   inspectUrl,
@@ -56,8 +59,8 @@ onMounted(() => {
 });
 onUnmounted(() => offPlugins?.());
 
-function toggle(id: string, ev: Event) {
-  setPluginEnabled(id, (ev.target as HTMLInputElement).checked);
+function toggle(id: string, run: boolean) {
+  setPluginEnabled(id, run);
   readState();
 }
 
@@ -246,10 +249,10 @@ async function drop(id: string, name: string) {
   <div class="sm-section">Installed plugins</div>
   <div class="sm-hint"> Each gets what it asked for and nothing else. Off stops one without removing it. </div>
 
-  <input
+  <TextField
     v-if="sections.length"
     v-model="query"
-    class="plug-url plug-search"
+    class="plug-search"
     type="search"
     spellcheck="false"
     placeholder="Search plugin settings"
@@ -273,43 +276,43 @@ async function drop(id: string, name: string) {
         <div class="plug-summary">{{ manifest ? manifest.summary : "" }}</div>
       </div>
       <div class="plug-controls">
-        <button
+        <Button
           v-if="sectionsOf(rec.id).length"
-          class="btn plug-settings-btn"
+          class="plug-settings-btn"
           :class="{ on: settingsOpen(rec.id) }"
           :aria-expanded="settingsOpen(rec.id)"
           data-plugin-settings-toggle
           @click="toggleSettings(rec.id)"
         >
-          <Icon name="settings" :size="16" />
+          <template #icon><Icon name="settings" :size="16" /></template>
           Settings
-        </button>
-        <span class="check" :title="on[rec.id] === false ? 'Switched off' : 'Running'">
-          <input
-            :id="`prefs-plugin-${rec.id}`"
-            type="checkbox"
-            :aria-label="`Run ${manifest ? manifest.name : rec.id}`"
-            :checked="on[rec.id] !== false"
-            @change="toggle(rec.id, $event)"
-          />
-          <span class="check-box"></span>
-        </span>
-        <button class="btn" :disabled="busy === rec.id" @click="drop(rec.id, manifest ? manifest.name : rec.id)">
+        </Button>
+        <Checkbox
+          :id="`prefs-plugin-${rec.id}`"
+          :model-value="on[rec.id] !== false"
+          :tip="`Run ${manifest ? manifest.name : rec.id}`"
+          :title="on[rec.id] === false ? 'Switched off' : 'Running'"
+          @update:model-value="toggle(rec.id, $event)"
+        />
+        <Button :disabled="busy === rec.id" @click="drop(rec.id, manifest ? manifest.name : rec.id)">
           {{ busy === rec.id ? "Removing…" : "Remove" }}
-        </button>
+        </Button>
       </div>
     </div>
 
     <div class="plug-state">
       Version {{ rec.version }}.
       <span v-if="whereFrom(rec)"> {{ whereFrom(rec) }}</span>
-      <button class="plug-link" @click="showing = showing === rec.id ? '' : rec.id">
+      <Button variant="ghost" size="sm" class="plug-uses" @click="showing = showing === rec.id ? '' : rec.id">
         {{ showing === rec.id ? "Hide what it uses" : "What it uses" }}
-      </button>
-      <label v-if="sectionsOf(rec.id).length" class="plug-forget">
-        <span class="check"><input v-model="forget[rec.id]" type="checkbox" /><span class="check-box"></span></span>
-        Remove forgets its settings
-      </label>
+      </Button>
+      <Checkbox
+        v-if="sectionsOf(rec.id).length"
+        :model-value="!!forget[rec.id]"
+        class="plug-forget"
+        label="Remove forgets its settings"
+        @update:model-value="forget[rec.id] = $event"
+      />
     </div>
 
     <div v-if="settingsOpen(rec.id)" class="plug-settings" :data-plugin-settings="rec.id">
@@ -322,20 +325,15 @@ async function drop(id: string, name: string) {
         :query="query"
       />
       <div v-if="hasDeclared(rec.id) && !query.trim()" class="plug-actions">
-        <button class="btn" data-plugin-settings-reset @click="resetAll(rec.id)">Reset to defaults</button>
+        <Button data-plugin-settings-reset @click="resetAll(rec.id)">Reset to defaults</Button>
       </div>
     </div>
 
     <div v-if="u" class="plug-update" data-plugin-update>
       <span>{{ u.reason }}</span>
-      <button
-        v-if="showing !== `update:${rec.id}`"
-        class="btn btn-primary"
-        :disabled="busy === rec.id"
-        @click="update(u)"
-      >
+      <Button v-if="showing !== `update:${rec.id}`" variant="primary" :disabled="busy === rec.id" @click="update(u)">
         {{ busy === rec.id ? "Updating…" : "Update" }}
-      </button>
+      </Button>
     </div>
 
     <div v-if="u && showing === `update:${rec.id}`" class="plug-consent">
@@ -353,10 +351,10 @@ async function drop(id: string, name: string) {
       </div>
       <div class="sm-hint">{{ sandboxNote(u.offer.manifest.kind) }}</div>
       <div class="plug-actions">
-        <button class="btn" :disabled="busy === rec.id" @click="showing = ''">Cancel</button>
-        <button class="btn btn-primary" :disabled="busy === rec.id" @click="accept(u.offer, 'updated')">
+        <Button :disabled="busy === rec.id" @click="showing = ''">Cancel</Button>
+        <Button variant="primary" :disabled="busy === rec.id" @click="accept(u.offer, 'updated')">
           {{ busy === rec.id ? "Updating…" : "Update" }}
-        </button>
+        </Button>
       </div>
     </div>
 
@@ -388,16 +386,16 @@ async function drop(id: string, name: string) {
         <div class="plug-summary">{{ manifest ? manifest.summary : "" }}</div>
       </div>
       <div class="plug-controls">
-        <button
-          class="btn plug-settings-btn"
+        <Button
+          class="plug-settings-btn"
           :class="{ on: settingsOpen(id) }"
           :aria-expanded="settingsOpen(id)"
           data-plugin-settings-toggle
           @click="toggleSettings(id)"
         >
-          <Icon name="settings" :size="16" />
+          <template #icon><Icon name="settings" :size="16" /></template>
           Settings
-        </button>
+        </Button>
       </div>
     </div>
     <div class="plug-state">Running from source, not installed.</div>
@@ -411,7 +409,7 @@ async function drop(id: string, name: string) {
         :query="query"
       />
       <div v-if="hasDeclared(id) && !query.trim()" class="plug-actions">
-        <button class="btn" data-plugin-settings-reset @click="resetAll(id)">Reset to defaults</button>
+        <Button data-plugin-settings-reset @click="resetAll(id)">Reset to defaults</Button>
       </div>
     </div>
   </div>
@@ -421,19 +419,19 @@ async function drop(id: string, name: string) {
 
   <div class="plug-row" data-plugin-add>
     <div class="plug-add">
-      <input
+      <TextField
         v-model="url"
-        class="plug-url"
+        class="plug-address"
         type="url"
         spellcheck="false"
         placeholder="https://…"
         :disabled="reading"
         @keydown.enter="readUrl()"
       />
-      <button class="btn" :disabled="reading || !url.trim()" @click="readUrl()">
+      <Button :disabled="reading || !url.trim()" @click="readUrl()">
         {{ reading ? "Reading…" : "Read it" }}
-      </button>
-      <button class="btn" :disabled="reading" @click="readFile()">Choose a file</button>
+      </Button>
+      <Button :disabled="reading" @click="readFile()">Choose a file</Button>
     </div>
   </div>
 
@@ -465,10 +463,10 @@ async function drop(id: string, name: string) {
       </div>
       <div class="sm-hint">{{ sandboxNote(candidate.manifest.kind) }}</div>
       <div class="plug-actions">
-        <button class="btn" :disabled="busy === candidate.manifest.id" @click="candidate = null"> Cancel </button>
-        <button class="btn btn-primary" :disabled="busy === candidate.manifest.id" @click="acceptCandidate(candidate)">
+        <Button :disabled="busy === candidate.manifest.id" @click="candidate = null">Cancel</Button>
+        <Button variant="primary" :disabled="busy === candidate.manifest.id" @click="acceptCandidate(candidate)">
           {{ busy === candidate.manifest.id ? "Installing…" : "Install" }}
-        </button>
+        </Button>
       </div>
     </div>
   </div>
@@ -481,9 +479,7 @@ async function drop(id: string, name: string) {
         <div class="plug-name">{{ p.manifest.name }}</div>
         <div class="plug-summary">{{ p.manifest.summary }}</div>
       </div>
-      <button v-if="showing !== p.manifest.id" class="btn btn-primary" @click="showing = p.manifest.id">
-        Install
-      </button>
+      <Button v-if="showing !== p.manifest.id" variant="primary" @click="showing = p.manifest.id">Install</Button>
     </div>
 
     <div v-if="showing === p.manifest.id" class="plug-consent">
@@ -501,11 +497,21 @@ async function drop(id: string, name: string) {
       </div>
       <div class="sm-hint">{{ sandboxNote(p.manifest.kind) }}</div>
       <div class="plug-actions">
-        <button class="btn" :disabled="busy === p.manifest.id" @click="showing = ''"> Cancel </button>
-        <button class="btn btn-primary" :disabled="busy === p.manifest.id" @click="accept(p)">
+        <Button :disabled="busy === p.manifest.id" @click="showing = ''">Cancel</Button>
+        <Button variant="primary" :disabled="busy === p.manifest.id" @click="accept(p)">
           {{ busy === p.manifest.id ? "Installing…" : "Install" }}
-        </button>
+        </Button>
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+.plug-search {
+  width: 100%;
+  margin: var(--s-2) 0;
+}
+.plug-address {
+  flex: 1 1 240px;
+}
+</style>
