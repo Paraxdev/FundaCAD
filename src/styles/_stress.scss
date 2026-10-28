@@ -17,7 +17,7 @@
   justify-content: space-between;
   gap: var(--s-2);
 }
-.stress-head .float-card-close {
+.stress-head .stress-close {
   margin: -4px -4px 0 0;
 }
 .stress-step {
@@ -86,9 +86,6 @@
 .stress-panel .btn.active {
   background: color-mix(in srgb, var(--accent) 20%, var(--panel));
   color: var(--text);
-}
-.stress-foot .btn {
-  min-height: 32px;
 }
 .stress-panel .sm-select,
 .stress-panel .sm-input {

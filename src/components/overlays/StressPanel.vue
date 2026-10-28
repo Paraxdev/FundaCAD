@@ -8,7 +8,8 @@ import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { usePanelsStore } from "../../stores/panels";
 import FloatingPanel from "./FloatingPanel.vue";
-import Icon from "../shell/Icon.vue";
+import Button from "../ui/Button.vue";
+import IconButton from "../ui/IconButton.vue";
 import Tabs from "../ui/Tabs.vue";
 import StressSetupStep from "./StressSetupStep.vue";
 import StressResultsStep from "./StressResultsStep.vue";
@@ -98,15 +99,15 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
     <template v-if="panels.stress && setup">
       <div class="stress-head">
         <div class="measure-title">Stress</div>
-        <button
-          type="button"
-          class="float-card-close stress-close"
-          title="Close Stress"
-          aria-label="Close Stress"
+        <IconButton
+          class="stress-close"
+          icon="close"
+          tip="Close Stress"
+          size="sm"
+          variant="plain"
+          :icon-size="14"
           @click="close"
-        >
-          <Icon name="close" :size="14" />
-        </button>
+        />
       </div>
       <Tabs v-model="step" :tabs="tabs" />
 
@@ -131,11 +132,9 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
       <div v-if="step === 'setup'" class="stress-foot">
         <template v-if="panels.stress.running">
           <span class="stress-busy">Analysing…</span>
-          <button type="button" class="btn stress-cancel" @click="engine.ui.panels.cancelStress()">Cancel</button>
+          <Button class="stress-cancel" @click="engine.ui.panels.cancelStress()">Cancel</Button>
         </template>
-        <button v-else type="button" class="btn btn-primary stress-run" @click="engine.ui.panels.runStress()"
-          >Run</button
-        >
+        <Button v-else variant="primary" class="stress-run" @click="engine.ui.panels.runStress()">Run</Button>
       </div>
     </template>
   </FloatingPanel>
