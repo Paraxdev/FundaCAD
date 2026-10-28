@@ -6,7 +6,7 @@ import { usePromptStore } from "../../stores/prompt";
 import { keyHint } from "../../input/shortcuts";
 import { sketchToolName } from "../../ui/railDefs";
 import { runningTool } from "../../ui/runningTool";
-import { LEFT_CARDS, RIGHT_CARDS, promptInsets, type Box } from "../../ui/promptPlacement";
+import { LEFT_CARDS, RIGHT_CARDS, centreShift, promptInsets, type Box } from "../../ui/promptPlacement";
 
 const prompt = usePromptStore();
 const engine = useEngine();
@@ -36,15 +36,12 @@ function place() {
   const area = me?.parentElement;
   if (!me || !area || !prompt.text) return clearToasts();
   const gap = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--float-gap")) || 12;
-  const { left, right } = promptInsets(
-    area.getBoundingClientRect(),
-    me.getBoundingClientRect(),
-    { left: rects(LEFT_CARDS), right: rects(RIGHT_CARDS) },
-    gap,
-    MIN_WIDTH,
-  );
-  me.style.setProperty("--prompt-left", `${left}px`);
-  me.style.setProperty("--prompt-right", `${right}px`);
+  const box = area.getBoundingClientRect();
+  const mine = me.getBoundingClientRect();
+  const insets = promptInsets(box, mine, { left: rects(LEFT_CARDS), right: rects(RIGHT_CARDS) }, gap, MIN_WIDTH);
+  me.style.setProperty("--prompt-left", `${insets.left}px`);
+  me.style.setProperty("--prompt-right", `${insets.right}px`);
+  me.style.setProperty("--prompt-shift", `${centreShift(box.width, insets, mine.width)}px`);
   // offsetTop rather than the box: the entry animation slides the banner in.
   const top = (me.offsetParent ?? area).getBoundingClientRect().top + me.offsetTop;
   root.style.setProperty("--prompt-clear", `${Math.max(0, Math.round(window.innerHeight - top + gap))}px`);

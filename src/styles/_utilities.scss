@@ -5,11 +5,13 @@
 .prompt {
   position: absolute;
   top: var(--s-5);
-  /* Centred in the span the floating cards leave free on its row, which
-     PromptBanner measures (ui/promptPlacement.ts). */
+  /* Laid out in the span the floating cards leave free on its row, then slid
+     back to the middle of the view as far as that span allows, so it lines up
+     with the readouts under it (ui/promptPlacement.ts). */
   left: var(--prompt-left, 0px);
   right: var(--prompt-right, 0px);
   margin-inline: auto;
+  translate: var(--prompt-shift, 0px) 0;
   width: max-content;
   display: flex;
   align-items: center;

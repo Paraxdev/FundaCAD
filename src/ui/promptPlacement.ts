@@ -38,6 +38,17 @@ export function promptInsets(
   return { left: Math.round(left), right: Math.round(right) };
 }
 
+/** How far to slide a box of `width` that `insets` centre in their free span so it sits on the middle of the area, as
+ *  the readouts under the prompt do, stopping where a card begins. */
+export function centreShift(areaWidth: number, insets: Insets, width: number): number {
+  const lo = insets.left;
+  const hi = areaWidth - insets.right;
+  if (width >= hi - lo) return 0;
+  const inSpan = lo + (hi - lo - width) / 2;
+  const centred = Math.min(Math.max((areaWidth - width) / 2, lo), hi - width);
+  return Math.round(centred - inSpan);
+}
+
 export interface Row extends Insets {
   top: number;
 }

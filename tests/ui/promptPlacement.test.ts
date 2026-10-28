@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { clearRow, promptInsets, type Box } from "../../src/ui/promptPlacement";
+import { centreShift, clearRow, promptInsets, type Box } from "../../src/ui/promptPlacement";
 
 const box = (left: number, top: number, right: number, bottom: number): Box => ({ left, top, right, bottom });
 const AREA = box(0, 0, 1000, 800);
@@ -95,5 +95,22 @@ describe("clearRow", () => {
       left: 12,
       right: 12,
     });
+  });
+});
+
+describe("centreShift", () => {
+  it("slides a prompt the left column pushed right back to the middle of the view", () => {
+    // Span 300..988 centres a 400 wide prompt at 444, the view's middle puts it at 300.
+    expect(centreShift(1000, { left: 300, right: 12 }, 400)).toBe(-144);
+  });
+
+  it("stops where the card begins when the middle would put it under one", () => {
+    // The middle would start it at 200, inside the 0..300 card.
+    expect(centreShift(1000, { left: 300, right: 12 }, 600)).toBe(-44);
+  });
+
+  it("leaves a prompt alone with no card, or one that fills its span", () => {
+    expect(centreShift(1000, { left: 12, right: 12 }, 400)).toBe(0);
+    expect(centreShift(1000, { left: 300, right: 12 }, 700)).toBe(0);
   });
 });
