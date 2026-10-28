@@ -41,7 +41,7 @@
    caret keeps the 12px the indents count on, so it shows no wash, the head's own hover is its cue. */
 .tree-caret.icon-btn.icon-btn-sm {
   width: 12px;
-  height: 18px;
+  height: 16px;
   color: var(--text-mute);
 }
 .tree-caret.icon-btn.icon-btn-sm:hover:not(.is-disabled) {
@@ -97,7 +97,7 @@
 }
 .tree-eye.icon-btn.icon-btn-sm {
   width: calc(13px + 2 * var(--s-2));
-  height: 18px;
+  height: 16px;
   transition:
     background var(--t-fast) var(--ease),
     color var(--t-fast) var(--ease),
