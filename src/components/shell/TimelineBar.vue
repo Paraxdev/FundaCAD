@@ -243,6 +243,8 @@ function onChipClick(id: string, ev: MouseEvent) {
   }
   if (busyElsewhere()) return;
   if (ev.ctrlKey || ev.metaKey || ev.shiftKey) clickFeatureRow(engine, shownIds.value, id, ev);
+  // A plain click on the open chip folds it, but not the second click of a double-click, which goes on to edit.
+  else if (ev.detail < 2 && selection.featureId === id && !several.value) timeline.select(null);
   else timeline.select(id);
 }
 /** A Shift-click takes a run of chips, so the browser's text selection across the labels is suppressed. */

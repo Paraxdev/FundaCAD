@@ -3,7 +3,7 @@ import { defineStore } from "pinia";
 /** Handlers rather than state, since each needs the live engine. canRepick reads the latest build's diagnostics on
  *  every menu open, so a feature repaired since stops offering the repair. */
 export interface TimelineHandlers {
-  onSelect: (id: string) => void;
+  onSelect: (id: string | null) => void;
   onEdit: (id: string) => void;
   /** Offer "Re-pick face…" for this feature? (an ambiguous reference was reported) */
   canRepick: (id: string) => boolean;
@@ -17,7 +17,7 @@ export const useTimelineStore = defineStore("timeline", () => {
   }
   return {
     bind,
-    select: (id: string) => handlers?.onSelect(id),
+    select: (id: string | null) => handlers?.onSelect(id),
     edit: (id: string) => handlers?.onEdit(id),
     canRepick: (id: string) => handlers?.canRepick(id) ?? false,
     repick: (id: string) => handlers?.onRepick(id),

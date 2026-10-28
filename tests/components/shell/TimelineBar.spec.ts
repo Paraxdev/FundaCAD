@@ -400,6 +400,18 @@ describe("History rows picked together", () => {
     expect(m.w.findAll(".timeline-props")).toHaveLength(0);
   });
 
+  it("folds the open chip on a second plain click, but not on the second click of a double-click", async () => {
+    const m = mountBar();
+    await m.chip("ex1").trigger("click", { detail: 1 });
+    expect(m.w.findAll(".timeline-props")).toHaveLength(1);
+    await m.chip("ex1").trigger("click", { detail: 1 });
+    expect(m.w.findAll(".timeline-props")).toHaveLength(0);
+    expect(lit(m)).toEqual([false, false, false, false, false, false]);
+    await m.chip("ex1").trigger("click", { detail: 1 });
+    await m.chip("ex1").trigger("click", { detail: 2 });
+    expect(m.w.findAll(".timeline-props")).toHaveLength(1);
+  });
+
   it("still shows the values of the one feature picked beside an origin plane or a row the document lost", async () => {
     const m = mountBar();
     m.e.selectFeatureRows({ keys: ["o:XY", "ex1"], anchor: "ex1" }, "ex1");
@@ -429,8 +441,8 @@ describe("History rows picked together", () => {
         { id: "b", type: "joint" },
       ],
     });
-    await n.chip("a").trigger("click");
-    await n.chip("b").trigger("click", { ctrlKey: true });
+    await n.chip("b").trigger("click");
+    await n.chip("a").trigger("click", { ctrlKey: true });
     f2();
     await n.w.vm.$nextTick();
     expect(n.w.find(".t-rename").exists()).toBe(false);
