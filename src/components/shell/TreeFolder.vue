@@ -59,6 +59,11 @@ function onClick(e: MouseEvent) {
   else emit("toggle");
 }
 
+// A caret left focused by a mouse click would fold the folder again on a later Enter or Space.
+function onCaretClick(e: MouseEvent) {
+  if (e.detail > 0) (e.currentTarget as HTMLElement | null)?.blur();
+}
+
 function onDblClick(e: MouseEvent) {
   if (!props.activate || (e.target as HTMLElement | null)?.closest?.(".tree-caret, .tree-label.renaming")) return;
   emit("toggle");
@@ -170,6 +175,7 @@ function onDrop(e: DragEvent) {
       :icon-size="11"
       :tip="collapsed ? 'Expand' : 'Collapse'"
       :aria-expanded="!collapsed"
+      @click="onCaretClick"
     />
     <span class="feature-icon"><Icon :name="icon" :size="14" /></span>
     <InlineLabel ref="labelEl" :text="label" :rename="rename" />

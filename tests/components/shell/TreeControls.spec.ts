@@ -71,6 +71,21 @@ describe("tree folder caret and eye", () => {
     expect(w.get(".tree-folder").attributes("aria-expanded")).toBe("true");
   });
 
+  it("a pointer click on the caret drops its focus, so Enter or Space cannot fold again, a keyboard click keeps it", async () => {
+    const w = folder();
+    const caret = w.get<HTMLButtonElement>(".tree-caret");
+    caret.element.focus();
+    await caret.trigger("click", { detail: 1 });
+    const keptAfterPointer = document.activeElement === caret.element;
+    caret.element.focus();
+    await caret.trigger("click", { detail: 0 });
+    expect([keptAfterPointer, document.activeElement === caret.element, w.emitted("toggle")?.length]).toEqual([
+      false,
+      true,
+      2,
+    ]);
+  });
+
   it("a click on the head selects instead of toggling when the folder selects", async () => {
     const activate = vi.fn();
     const w = folder({ activate });
