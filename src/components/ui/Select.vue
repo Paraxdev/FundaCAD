@@ -37,6 +37,12 @@ const emit = defineEmits<{ "update:modelValue": [T] }>();
 
 const d = useDisabled(props);
 const name = useName(props, "Select");
+// The open list carries the trigger's own name: labelledby the trigger would read its value when the trigger is
+// itself labelledby another element.
+const listName = computed<Named>(() => {
+  const by = name.value["aria-labelledby"];
+  return by ? { labelledby: by } : { label: name.value["aria-label"] ?? "" };
+});
 const open = ref(false);
 const active = ref(-1);
 const btn = useTemplateRef<HTMLButtonElement>("btn");
@@ -214,6 +220,7 @@ onBeforeUnmount(() => window.clearTimeout(bufferTimer));
     @close="onPopoverClose"
   >
     <ChoiceList
+      v-bind="listName"
       :id="listId"
       :options="options"
       :model-value="modelValue"

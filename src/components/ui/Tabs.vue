@@ -3,6 +3,7 @@ import { computed, ref } from "vue";
 import Icon from "../shell/Icon.vue";
 import { fmtKeys } from "../../input/platform";
 import { useRovingFocus } from "./useRovingFocus";
+import { useName, type Named } from "./useName";
 
 export interface TabItem<V> {
   value: V;
@@ -16,21 +17,22 @@ export interface TabItem<V> {
 }
 
 const props = withDefaults(
-  defineProps<{
-    tabs: readonly TabItem<T>[];
-    modelValue: T;
-    /** `underline` for a card, `bar` for a dock, `nav` for a settings page list (aria-current, not tabs). */
-    variant?: "underline" | "bar" | "nav";
-    /** Defaults to vertical for `nav`, else horizontal. */
-    orientation?: "horizontal" | "vertical" | undefined;
-    /** The accessible name of the bar. */
-    label?: string | undefined;
-  }>(),
+  defineProps<
+    {
+      tabs: readonly TabItem<T>[];
+      modelValue: T;
+      /** `underline` for a card, `bar` for a dock, `nav` for a settings page list (aria-current, not tabs). */
+      variant?: "underline" | "bar" | "nav";
+      /** Defaults to vertical for `nav`, else horizontal. */
+      orientation?: "horizontal" | "vertical" | undefined;
+    } & Named
+  >(),
   { variant: "underline", orientation: undefined },
 );
 const emit = defineEmits<{ "update:modelValue": [T] }>();
 defineSlots<{ tab?(p: { tab: TabItem<T>; selected: boolean }): unknown }>();
 
+const name = useName(props, "Tabs");
 const root = ref<HTMLElement | null>(null);
 const nav = computed(() => props.variant === "nav");
 const vertical = computed(() => (props.orientation ?? (nav.value ? "vertical" : "horizontal")) === "vertical");
@@ -64,7 +66,7 @@ const tipOf = (t: TabItem<T>) => {
     :class="[`ui-tabs-${variant}`, { 'float-tabs': variant === 'underline', 'ui-tabs-vertical': vertical }]"
     :role="nav ? undefined : 'tablist'"
     :aria-orientation="!nav && vertical ? 'vertical' : undefined"
-    :aria-label="label"
+    v-bind="name"
     @keydown="r.onKeydown"
   >
     <button

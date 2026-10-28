@@ -237,6 +237,22 @@ describe("Select", () => {
     expect([el.getAttribute("aria-label"), el.getAttribute("aria-labelledby")]).toEqual([null, "fruit-label"]);
   });
 
+  it("gives the open list the trigger's own name", async () => {
+    const a = await render({ label: "Fruit" });
+    await key(a.trigger, "ArrowDown");
+    expect([listbox()!.getAttribute("aria-label"), listbox()!.getAttribute("aria-labelledby")]).toEqual([
+      "Fruit",
+      null,
+    ]);
+    a.w.unmount();
+    const b = await render({ label: undefined, labelledby: "fruit-label" });
+    await key(b.trigger, "ArrowDown");
+    expect([listbox()!.getAttribute("aria-label"), listbox()!.getAttribute("aria-labelledby")]).toEqual([
+      null,
+      "fruit-label",
+    ]);
+  });
+
   it("warns in a dev build when it has no name", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     mount(Select<V>, { props: { modelValue: "banana", options: OPTIONS } as never });

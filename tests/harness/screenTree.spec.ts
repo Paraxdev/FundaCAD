@@ -91,6 +91,7 @@ describe("walkControls", () => {
           { value: "appearance", label: "Appearance" },
         ],
         modelValue: "views",
+        label: "Views",
       },
       attachTo: document.body,
     });

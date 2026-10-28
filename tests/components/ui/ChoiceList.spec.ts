@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { enableAutoUnmount, mount } from "@vue/test-utils";
 
 import ChoiceList from "../../../src/components/ui/ChoiceList.vue";
@@ -14,7 +14,10 @@ const OPTIONS: { value: V; label: string; disabled?: boolean; clickable?: boolea
 ];
 
 async function render(props: Record<string, unknown> = {}) {
-  const w = mount(ChoiceList<V>, { props: { options: OPTIONS, modelValue: "c", ...props }, attachTo: document.body });
+  const w = mount(ChoiceList<V>, {
+    props: { options: OPTIONS, modelValue: "c", label: "Fruit", ...props },
+    attachTo: document.body,
+  });
   // Vue skips a listener for an event stamped in the same millisecond it was attached, once another listener ran.
   await new Promise((r) => setTimeout(r, 2));
   return { w, rows: w.findAll(".opt-row") };
@@ -64,5 +67,19 @@ describe("ChoiceList", () => {
     ]);
     await rows[0]!.trigger("pointermove");
     expect(w.emitted("update:active")).toEqual([[0]]);
+  });
+
+  it("names the listbox by its label, or by labelledby alone", async () => {
+    const { w } = await render();
+    expect([w.attributes("aria-label"), w.attributes("aria-labelledby")]).toEqual(["Fruit", undefined]);
+    const by = (await render({ label: undefined, labelledby: "fruit-head" })).w;
+    expect([by.attributes("aria-label"), by.attributes("aria-labelledby")]).toEqual([undefined, "fruit-head"]);
+  });
+
+  it("warns in a dev build when it has no name", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    mount(ChoiceList<V>, { props: { options: OPTIONS, modelValue: "c" } as never });
+    expect(warn.mock.calls.some((c) => String(c[0]).includes("ChoiceList has no name"))).toBe(true);
+    warn.mockRestore();
   });
 });

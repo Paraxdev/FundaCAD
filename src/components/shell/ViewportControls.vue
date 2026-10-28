@@ -376,7 +376,7 @@ async function screenshot() {
 
     <Popover v-if="isOpen('grid')" :anchor="anchorOf('grid')" side="left" kind="vc-pop" @close="shell.closePopover()">
       <div class="pop-section">Units</div>
-      <ChoiceList :options="UNITS" :model-value="unit" @update:model-value="pickUnit" />
+      <ChoiceList label="Units" :options="UNITS" :model-value="unit" @update:model-value="pickUnit" />
       <div class="pop-rule"></div>
       <div class="pop-section">Grid</div>
       <p class="pop-note"
@@ -388,6 +388,7 @@ async function screenshot() {
     <Popover v-if="isOpen('views')" :anchor="anchorOf('views')" side="left" kind="vc-pop" @close="shell.closePopover()">
       <Tabs
         v-model="viewTab"
+        label="Views"
         :tabs="[
           { value: 'views', label: 'Views' },
           { value: 'appearance', label: 'Appearance' },
@@ -407,10 +408,20 @@ async function screenshot() {
       </template>
       <template v-else>
         <div class="pop-section">Projection</div>
-        <ChoiceList :options="PROJECTIONS" :model-value="projection" @update:model-value="pickProjection" />
+        <ChoiceList
+          label="Projection"
+          :options="PROJECTIONS"
+          :model-value="projection"
+          @update:model-value="pickProjection"
+        />
         <div class="pop-rule"></div>
         <div class="pop-section">Select</div>
-        <ChoiceList :options="SELECT_MODES" :model-value="ui.selMode" @update:model-value="pickSelectMode" />
+        <ChoiceList
+          label="Select mode"
+          :options="SELECT_MODES"
+          :model-value="ui.selMode"
+          @update:model-value="pickSelectMode"
+        />
       </template>
     </Popover>
 
@@ -422,7 +433,12 @@ async function screenshot() {
       @close="shell.closePopover()"
     >
       <div class="pop-section">Shading</div>
-      <ChoiceList :options="viewModeChoices" :model-value="ui.viewMode" @update:model-value="pickViewMode" />
+      <ChoiceList
+        label="Shading"
+        :options="viewModeChoices"
+        :model-value="ui.viewMode"
+        @update:model-value="pickViewMode"
+      />
       <template v-if="ui.viewMode === 'matcap'">
         <Segmented
           class="matcap-swatches"

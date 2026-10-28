@@ -109,7 +109,7 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
           @click="close"
         />
       </div>
-      <Tabs v-model="step" :tabs="tabs" />
+      <Tabs v-model="step" label="Stress steps" :tabs="tabs" />
 
       <KeepAlive>
         <StressResultsStep v-if="step === 'results' && result" :result="result" />
