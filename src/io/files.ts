@@ -29,6 +29,7 @@ import { blake2b128Hex } from "../document/blake2b";
 import { UnreadableDocumentError } from "../document/documentShape";
 import { noteRecent } from "./recentFiles";
 import { closeHome } from "../ui/home";
+import { announce } from "../ui/announce";
 import { captureAfterOpen, captureThumbnail, storeThumbnail } from "./thumbnails";
 import { BINARY_DOC_EXT, DOC_EXT, LEGACY_DOC_EXTS, isDocumentExt, leftOutSectionsNotice } from "./documentExt";
 import { announceImportedBody } from "../plugins/contrib";
@@ -88,6 +89,7 @@ function savedAs(store: DocumentStore, path: string, edits: number, swaps: numbe
   if (store.untitledSwapCount !== swaps) return;
   const whole = store.editCount === edits;
   store.markSaved(path, whole);
+  announce(`Saved ${fileName(path)}`);
   noteRecent(path);
   if (whole) void clearRecovery(path);
 }
@@ -150,7 +152,10 @@ export async function saveDocumentAs(store: DocumentStore) {
     if (!session.alive) return;
     downloadText(name, built.text);
     // No real path, but without this the title bar read "Untitled*" forever, as if the save had failed.
-    if (store.untitledSwapCount === swaps) store.markSaved(name);
+    if (store.untitledSwapCount === swaps) {
+      store.markSaved(name);
+      announce(`Saved ${name}`);
+    }
   }
 }
 
@@ -315,6 +320,7 @@ export async function openDocumentText(
   }
   // No real path, but the name lets the title bar show what is open and drop the unsaved marker.
   store.markSaved(name);
+  if (!unpublished) announce(`Opened ${name}`);
   await warnAboutOpen(store);
   if (unpublished)
     await reportError(
@@ -540,6 +546,7 @@ async function finishOpen(
     return "unreadable";
   }
   store.carriedSections = carried;
+  announce(`Opened ${base}`);
   // freshly opened == clean
   if (path) {
     store.markSaved(path);
@@ -716,6 +723,7 @@ export async function exportModel(
     const title = res.warnings?.length
       ? `Exported ${written.length} file${written.length === 1 ? "" : "s"}, with warnings`
       : `Exported ${written.length} file${written.length === 1 ? "" : "s"}`;
+    announce(title);
     await listModal(title, lines);
   }
 }
