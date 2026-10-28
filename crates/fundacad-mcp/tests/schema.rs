@@ -214,3 +214,35 @@ fn the_server_instructions_survive_a_host_that_keeps_2048_characters() {
     }
     assert!(instructions_for(true).starts_with("YOU ARE EDITING A DOCUMENT SOMEONE HAS OPEN"));
 }
+
+#[test]
+fn a_type_quotes_a_shared_note_by_its_first_line_and_the_lines_naming_it() {
+    let operation = s::common()["operation"].as_str().expect("a shared note");
+    let first = operation.lines().next().expect("a first line");
+    let one = s::schema_text(Some("box"));
+    assert!(one.contains(first) && !one.contains(operation), "{one}");
+    assert!(one.contains("The rest of `operation` is under Shared types in `schema` with no type"), "{one}");
+    assert!(!one.contains("bounding boxes"), "a line that only says boxes was kept for box: {one}");
+    let extrude = s::schema_text(Some("extrude"));
+    assert!(extrude.contains("On extrude and sweep `operation` is REQUIRED"), "{extrude}");
+    let overview = s::schema_text(None);
+    assert!(overview.contains(operation) && overview.contains(s::common()["targets"].as_str().expect("shared")));
+    assert!(one.len() < 1100, "schema box is {} bytes", one.len());
+}
+
+#[test]
+fn the_tool_list_has_no_space_runs_no_empty_required_and_stays_small() {
+    let tools = fundacad_mcp::server::FundaCad::with_link(fundacad_mcp::link::EngineLink::private()).with_ui().tools();
+    let mut total = 0;
+    for tool in &tools {
+        let json = serde_json::to_string(tool).expect("a tool serialises");
+        total += json.len();
+        assert!(!json.contains("      "), "{}: a run of spaces, a lost line continuation", tool.name);
+        let required = tool.input_schema.get("required");
+        assert!(required.is_none_or(|r| r.as_array().is_some_and(|a| !a.is_empty())), "{}", tool.name);
+        if tool.name == "stress" {
+            assert!(json.len() < 6300, "stress is {} bytes", json.len());
+        }
+    }
+    assert!(total < 42000, "tools/list is {total} bytes");
+}

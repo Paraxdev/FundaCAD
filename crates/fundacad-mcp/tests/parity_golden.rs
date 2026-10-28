@@ -103,12 +103,20 @@ fn the_parity_script_answers_as_the_python_server_did() {
             " `measure` gives an exact\n   distance, wall, clearance, radius or angle between two of them, rather than\n   working it out from inspect's numbers.",
             "",
         );
+        // Nor did it quote a shared note by its first line in a type's schema.
+        let mut want_text = want["text"].as_str().unwrap_or("").to_string();
+        if let (true, Some(kind)) = (tool == "schema", args["type"].as_str()) {
+            for (field, note) in fundacad_mcp::schema::common() {
+                let note = note.as_str().unwrap_or_default();
+                let short = fundacad_mcp::schema::field_text(kind, field, note);
+                want_text = want_text.replace(&format!("\n  {field}: {note}"), &format!("\n  {field}: {short}"));
+            }
+        }
         let is_error = result["isError"].as_bool().unwrap_or(false);
-        if text != want["text"].as_str().unwrap_or("") || Some(is_error) != want["isError"].as_bool() {
+        if text != want_text || Some(is_error) != want["isError"].as_bool() {
             differences.push(format!(
-                "call {i} {tool}{}:\n  python: {:?}\n  rust:   {text:?}",
-                if Some(is_error) != want["isError"].as_bool() { " (isError differs)" } else { "" },
-                want["text"].as_str().unwrap_or("")
+                "call {i} {tool}{}:\n  python: {want_text:?}\n  rust:   {text:?}",
+                if Some(is_error) != want["isError"].as_bool() { " (isError differs)" } else { "" }
             ));
         }
     }

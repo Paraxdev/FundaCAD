@@ -49,13 +49,26 @@ fn text_of(v: Option<&Value>) -> String {
     v.and_then(Value::as_str).unwrap_or_default().to_string()
 }
 
+/// A field worded exactly as a shared entry keeps its first line and any line naming this type, and points to the
+/// overview for the rest, so each type's reply does not repeat the shared notes in full.
+pub fn field_text(kind: &str, field: &str, text: &str) -> String {
+    if common().get(field).and_then(Value::as_str) != Some(text) || !text.contains('\n') {
+        return text.to_string();
+    }
+    let names_kind = |line: &str| line.split(|c: char| !c.is_alphanumeric()).any(|w| w == kind);
+    let mut lines = text.lines();
+    let mut kept: Vec<&str> = lines.next().into_iter().collect();
+    kept.extend(lines.filter(|l| names_kind(l)));
+    format!("{} The rest of `{field}` is under Shared types in `schema` with no type.", kept.join("\n"))
+}
+
 /// Text rather than JSON: a language model reads it, and the notes are what save it a failed build.
 pub fn schema_text(kind: Option<&str>) -> String {
     if let Some(kind) = kind.filter(|k| !k.is_empty()) {
         if let Some(e) = features().get(kind) {
             let mut out = vec![format!("## {kind}\n{}\n", text_of(e.get("summary"))), "Fields:".to_string()];
             for (k, v) in e.get("fields").and_then(Value::as_object).into_iter().flatten() {
-                out.push(format!("  {k}: {}", text_of(Some(v))));
+                out.push(format!("  {k}: {}", field_text(kind, k, &text_of(Some(v)))));
             }
             if let Some(example) = e.get("example").filter(|v| !v.is_null()) {
                 out.push(format!("\nExample:\n{}", serde_json::to_string_pretty(example).unwrap_or_default()));
