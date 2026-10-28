@@ -51,7 +51,7 @@ const COLOUR_BASELINE: Record<string, number> = {
   "src/components/shell/SurfaceNodeEditor.vue": 11,
   "src/styles/_browser.scss": 4,
   "src/styles/_console.scss": 2,
-  "src/styles/_float.scss": 8,
+  "src/styles/_float.scss": 5,
   "src/styles/_glass.scss": 3,
   "src/styles/_inspector.scss": 11,
   "src/styles/_layout.scss": 3,

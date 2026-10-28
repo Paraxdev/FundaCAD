@@ -10,6 +10,10 @@ import { featureMeta } from "../../ui/featureMeta";
 import { toast } from "../../ui/toast";
 import { ago } from "../../ui/timeAgo";
 import Icon from "./Icon.vue";
+import Button from "../ui/Button.vue";
+import ListRow from "../ui/ListRow.vue";
+import Select from "../ui/Select.vue";
+import TextField from "../ui/TextField.vue";
 
 const engine = useEngine();
 const store = engine.store;
@@ -142,15 +146,15 @@ function changedNames(v: Version): { kind: string; name: string }[] {
   <div class="versions">
     <div class="versions-head">
       <span class="pop-section">Versions</span>
-      <select
+      <Select
         v-if="branches.length > 1"
         class="versions-branch"
-        :value="branch"
-        title="Branch"
-        @change="switchTo(($event.target as HTMLSelectElement).value)"
-      >
-        <option v-for="b in branches" :key="b" :value="b">{{ b }}</option>
-      </select>
+        size="sm"
+        tip="Branch"
+        :model-value="branch"
+        :options="branches.map((b) => ({ value: b, label: b }))"
+        @update:model-value="switchTo"
+      />
       <span v-else-if="branches.length" class="versions-branch-name"
         ><Icon name="versions" :size="12" />{{ branch }}</span
       >
@@ -168,11 +172,10 @@ function changedNames(v: Version): { kind: string; name: string }[] {
       <template v-else>Nothing changed since "{{ history[0]!.message }}"</template>
     </p>
 
-    <form class="versions-save" @submit.prevent="save()">
-      <input v-model="message" class="versions-input" placeholder="What changed" spellcheck="false" @keydown.stop />
-      <button type="submit" class="pop-wide versions-save-btn" :disabled="!canSave">
-        <Icon name="commit" :size="14" /> Save version
-      </button>
+    <!-- The guards stand in for a disabled submit button, which used to refuse Enter in the field too. -->
+    <form class="versions-save" @submit.prevent="canSave && save()">
+      <TextField v-model="message" class="versions-input" placeholder="What changed" spellcheck="false" @keydown.stop />
+      <Button type="submit" class="versions-save-btn" icon="commit" :disabled="!canSave">Save version</Button>
     </form>
 
     <div v-if="history.length" class="pop-rule"></div>
@@ -184,30 +187,32 @@ function changedNames(v: Version): { kind: string; name: string }[] {
         class="versions-row"
         :class="{ open: expanded === v.id, head: i === 0 }"
       >
-        <button type="button" class="versions-main" @click="expanded = expanded === v.id ? null : v.id">
-          <span class="versions-dot"></span>
-          <span class="versions-text">
-            <span class="versions-msg">{{ v.message }}</span>
-            <span class="versions-meta">{{ ago(v.time) }} · {{ summary(diffOf(v)) }}</span>
-          </span>
-        </button>
+        <ListRow
+          class="versions-main"
+          :label="v.message"
+          :hint="`${ago(v.time)} · ${summary(diffOf(v))}`"
+          :aria-expanded="expanded === v.id"
+          @click="expanded = expanded === v.id ? null : v.id"
+        >
+          <template #leading><span class="versions-dot"></span></template>
+        </ListRow>
         <div v-if="expanded === v.id" class="versions-detail">
           <ul class="versions-changes">
             <li v-for="(c, k) in changedNames(v)" :key="k" :class="c.kind">{{ c.kind }} {{ c.name }}</li>
           </ul>
           <div class="versions-actions">
-            <button type="button" class="pop-wide ghost" @click="restore(v)">Restore</button>
-            <button type="button" class="pop-wide ghost" @click="startBranch(v)">Branch from here</button>
+            <Button variant="ghost" @click="restore(v)">Restore</Button>
+            <Button variant="ghost" @click="startBranch(v)">Branch from here</Button>
           </div>
-          <form v-if="branching === v.id" class="versions-save" @submit.prevent="makeBranch()">
-            <input
+          <form v-if="branching === v.id" class="versions-save" @submit.prevent="branchName.trim() && makeBranch()">
+            <TextField
               v-model="branchName"
               class="versions-input"
               placeholder="Branch name"
               spellcheck="false"
               @keydown.stop
             />
-            <button type="submit" class="pop-wide" :disabled="!branchName.trim()">Create</button>
+            <Button type="submit" :disabled="!branchName.trim()">Create</Button>
           </form>
         </div>
       </li>

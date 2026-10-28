@@ -67,6 +67,11 @@
 .palette-row:hover {
   background: var(--raised);
 }
+/* A base Checkbox wears the row, its label reads first and the box sits at the end. */
+.palette-row.ui-checkbox {
+  display: flex;
+  flex-direction: row-reverse;
+}
 .palette-section-gap {
   margin-top: var(--s-4);
 }
@@ -175,23 +180,10 @@
 /* Out of the flow until hover: a column of crosses would turn the list into a control
    panel. */
 .rel-del {
-  flex: none;
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  border: none;
-  background: none;
-  color: var(--text-mute);
-  font-size: 14px;
-  line-height: 1;
-  cursor: pointer;
   visibility: hidden;
 }
 .rel-row:hover .rel-del {
   visibility: visible;
-}
-.rel-del:hover {
-  color: var(--error);
 }
 
 .palette-btn {

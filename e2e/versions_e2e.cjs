@@ -58,7 +58,7 @@ const check = (name, ok, detail) => {
   };
   const saveVersion = async (msg) => {
     await openPanel();
-    await page.fill(".versions-pop .versions-save .versions-input", msg);
+    await page.fill(".versions-pop .versions-save .versions-input input", msg);
     await page.click(".versions-pop .versions-save-btn");
     await page.waitForTimeout(300);
   };
@@ -82,7 +82,9 @@ const check = (name, ok, detail) => {
 
   console.log("\n  2. two versions");
   await saveVersion("Add a peg");
-  const rows = await page.$$eval(".versions-pop .versions-msg", (els) => els.map((e) => e.textContent.trim()));
+  const rows = await page.$$eval(".versions-pop .versions-main .ui-list-row-label", (els) =>
+    els.map((e) => e.textContent.trim()),
+  );
   check(
     "listed newest first",
     JSON.stringify(rows) === JSON.stringify(["Add a peg", "Base block"]),
@@ -123,7 +125,7 @@ const check = (name, ok, detail) => {
   const first = page.locator(".versions-pop .versions-row").nth(1);
   if (!(await first.evaluate((el) => el.classList.contains("open")))) await first.locator(".versions-main").click();
   await first.getByText("Branch from here").click();
-  await page.fill(".versions-pop .versions-detail .versions-input", "wide variant");
+  await page.fill(".versions-pop .versions-detail .versions-input input", "wide variant");
   await page.locator(".versions-pop .versions-detail").getByText("Create").click();
   await page.waitForTimeout(500);
   const onBranch = await page.evaluate(() => window.store.versionRepo.current);
@@ -136,7 +138,8 @@ const check = (name, ok, detail) => {
   await page.evaluate(() => window.store.updateFeature("b1", { width: 60 }));
   await saveVersion("Wider");
   await openPanel();
-  await page.selectOption(".versions-pop .versions-branch", "main");
+  await page.click(".versions-pop .versions-branch");
+  await page.getByRole("option", { name: "main", exact: true }).click();
   await page.waitForTimeout(500);
   check(
     "switching to main brings main's newest version back",

@@ -103,9 +103,15 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* WebKit inherits -webkit-user-select, and a contenteditable that inherited none can
-   refuse the caret. */
+/* WebKit inherits -webkit-user-select, and a field that inherited none can refuse the
+   caret. */
 .tree-label.renaming {
+  flex: 1 1 auto;
+  font-size: inherit;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.tree-label.renaming > input {
   -webkit-user-select: text;
   user-select: text;
 }

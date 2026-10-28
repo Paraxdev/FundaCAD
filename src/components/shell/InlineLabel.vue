@@ -1,8 +1,8 @@
 <script setup lang="ts">
-// The editing label is a separate v-if branch from the display label, so a prop change mid-edit never patches its text
-// node and moves the caret. start() writes the text by hand for the same reason.
+// The editing field is a separate v-if branch from the display label, so a prop change mid-edit never touches its draft.
 
 import { nextTick, ref, useTemplateRef } from "vue";
+import TextField from "../ui/TextField.vue";
 
 const props = defineProps<{
   text: string;
@@ -15,56 +15,49 @@ const props = defineProps<{
 }>();
 
 const renaming = ref(false);
-const editEl = useTemplateRef<HTMLElement>("editEl");
+const field = useTemplateRef<InstanceType<typeof TextField>>("field");
+// One save per edit: a blur that arrives as the closed field unmounts commits again and falls out here.
+let open = false;
 
 function start() {
   if (!props.rename || renaming.value) return;
   renaming.value = true;
-  void nextTick(() => {
-    const el = editEl.value;
-    if (!el) return;
-    el.textContent = props.text;
-    el.focus();
-    const range = document.createRange();
-    range.selectNodeContents(el);
-    const sel = window.getSelection();
-    sel?.removeAllRanges();
-    sel?.addRange(range);
-  });
+  open = true;
+  void nextTick(() => field.value?.focus());
 }
 
-/** Clearing `renaming` first makes this idempotent: Enter unmounts the editor, whose blur then arrives and falls out. */
-function finish(save: boolean) {
-  if (!renaming.value) return;
-  const name = (editEl.value?.textContent ?? "").trim();
-  renaming.value = false;
-  if (save && name && name !== props.text) props.rename?.(name);
+// The field itself commits on Enter and blur and reverts on Escape, these handlers only close it.
+function save(name: string) {
+  const n = name.trim();
+  if (!open) return;
+  open = false;
+  if (n && n !== props.text) props.rename?.(n);
 }
-
 function onKeydown(e: KeyboardEvent) {
-  if (e.key === "Enter") {
-    e.preventDefault();
-    finish(true);
-  } else if (e.key === "Escape") {
-    e.preventDefault();
-    finish(false);
-  }
+  if (e.key !== "Enter" && e.key !== "Escape") return;
+  e.preventDefault();
+  if (e.key === "Escape") open = false;
+  renaming.value = false;
 }
 
 defineExpose({ start });
 </script>
 
 <template>
-  <!-- @keydown.stop keeps every keystroke out of the global keymap while
-       editing, without it, typing a name made of tool shortcuts starts tools. -->
-  <span
+  <!-- @keydown.stop keeps every keystroke out of the tree and the global keymap while editing, without it, typing a
+       name made of tool shortcuts starts tools. -->
+  <TextField
     v-if="renaming"
-    ref="editEl"
+    ref="field"
     class="tree-label renaming"
-    contenteditable="true"
+    size="sm"
+    commit="change"
+    select-on-focus
+    :model-value="text"
+    @update:model-value="save"
     @keydown.stop="onKeydown"
-    @blur="finish(true)"
-  ></span>
+    @blur="renaming = false"
+  />
   <span v-else class="tree-label" :style="labelStyle" @dblclick="renameOnDblclick ? start() : undefined">{{
     text
   }}</span>

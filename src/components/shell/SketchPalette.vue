@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import Icon from "./Icon.vue";
+import Button from "../ui/Button.vue";
+import Checkbox from "../ui/Checkbox.vue";
+import IconButton from "../ui/IconButton.vue";
 import { useSketchPaletteStore, PALETTE_TOGGLES } from "../../stores/sketchPalette";
 import { useSketchRelationsStore } from "../../stores/sketchRelations";
 import type { RelationRow } from "../../sketch/relations";
@@ -22,19 +25,17 @@ function rowTitle(r: RelationRow): string {
   <aside id="palette" class="palette" :class="{ hidden: !palette.visible }">
     <div class="palette-title">SKETCH PALETTE</div>
     <div class="palette-section">Options</div>
-    <button class="palette-btn" title="Square the view to the sketch plane" @click="palette.lookAt()">Look At</button>
-    <label v-for="t in PALETTE_TOGGLES" :key="t.key" class="palette-row">
-      <span>{{ t.label }}</span>
-      <span class="check">
-        <input
-          type="checkbox"
-          class="palette-switch"
-          :checked="palette.state[t.key]"
-          @change="palette.set(t.key, ($event.target as HTMLInputElement).checked)"
-        />
-        <span class="check-box"></span>
-      </span>
-    </label>
+    <Button block class="palette-btn" tip="Square the view to the sketch plane" @click="palette.lookAt()"
+      >Look At</Button
+    >
+    <Checkbox
+      v-for="t in PALETTE_TOGGLES"
+      :key="t.key"
+      class="palette-row"
+      :label="t.label"
+      :model-value="palette.state[t.key]"
+      @update:model-value="(on: boolean) => palette.set(t.key, on)"
+    />
 
     <!-- Relations answer what holds this sketch, the canvas glyphs what holds this line. It follows Show Constraints. -->
     <template v-if="rel.visible">
@@ -63,13 +64,16 @@ function rowTitle(r: RelationRow): string {
             </span>
             <span class="rel-detail">{{ r.implied ? r.detail + " · implied" : r.detail }}</span>
           </span>
-          <button
+          <IconButton
             v-if="r.index !== null"
             class="rel-del"
-            title="Delete this constraint"
+            variant="danger"
+            size="sm"
+            icon="close"
+            :icon-size="12"
+            tip="Delete this constraint"
             @click.stop="rel.hooks?.del(r.index)"
-            ><Icon name="close" :size="12"
-          /></button>
+          />
         </li>
       </ul>
     </template>
