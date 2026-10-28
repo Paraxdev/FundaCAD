@@ -46,6 +46,16 @@ describe("Button", () => {
     expect(w.classes()).toEqual(classes);
   });
 
+  it("renders a tile without a size, its content laid out by the caller", async () => {
+    const w = mount(Button, {
+      props: { variant: "tile", size: "sm" },
+      slots: { default: "<span class='pic'></span><span class='name'>Plate</span>" },
+    });
+    expect(w.classes()).toEqual(["btn", "btn-tile"]);
+    expect(w.attributes("type")).toBe("button");
+    expect(w.find(".btn-label > .pic + .name").text()).toBe("Plate");
+  });
+
   it("spans its container with block", async () => {
     const { w } = await render({ block: true });
     expect(w.classes()).toContain("btn-block");

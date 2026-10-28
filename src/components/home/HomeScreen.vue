@@ -35,7 +35,11 @@ import {
   loadHomeImage,
   onHomeBackgroundChange,
 } from "../../ui/homeBackground";
-import Icon from "../shell/Icon.vue";
+import Button from "../ui/Button.vue";
+import Checkbox from "../ui/Checkbox.vue";
+import IconButton from "../ui/IconButton.vue";
+import Select from "../ui/Select.vue";
+import TextField from "../ui/TextField.vue";
 import DocCard from "./DocCard.vue";
 import ExampleCard from "./ExampleCard.vue";
 import HomeSidebar from "./HomeSidebar.vue";
@@ -71,7 +75,7 @@ function onKey(e: KeyboardEvent): void {
     e.preventDefault();
     e.stopImmediatePropagation();
     if (drawer.value) drawer.value = null;
-    else if (e.target === searchField.value && query.value) query.value = "";
+    else if (e.target === searchInput() && query.value) query.value = "";
     else close();
     return;
   }
@@ -79,8 +83,8 @@ function onKey(e: KeyboardEvent): void {
   if (mod && !e.shiftKey && e.key.toLowerCase() === "f") {
     e.preventDefault();
     e.stopImmediatePropagation();
-    searchField.value?.focus();
-    searchField.value?.select();
+    searchInput()?.focus();
+    searchInput()?.select();
     return;
   }
   const inField = e.target instanceof HTMLInputElement && e.target.type !== "checkbox";
@@ -113,7 +117,7 @@ watch(sort, (v) => {
     /* blocked storage keeps the default */
   }
 });
-const searchField = ref<HTMLInputElement | null>(null);
+const searchInput = () => root.value?.querySelector<HTMLInputElement>(".home-search input") ?? null;
 
 const folders = ref(getFolders());
 /** "recent" or the path of a folder. */
@@ -247,14 +251,15 @@ function entryMenu(entry: HomeEntry, ev: MouseEvent): void {
   ]);
 }
 
-function onViewSelect(el: HTMLSelectElement): void {
-  if (el.value === "add") {
-    // A cancelled dialog changes no view, so nothing would re-render the select.
-    el.value = view.value;
-    void pickFolder();
-    return;
-  }
-  void showView(el.value);
+const viewOptions = computed(() => [
+  { value: "recent", label: "Recent" },
+  ...folders.value.map((f) => ({ value: f.path, label: folderName(f.path) })),
+  { value: "add", label: "Add folder…" },
+]);
+
+function onViewSelect(next: string): void {
+  if (next === "add") void pickFolder();
+  else void showView(next);
 }
 
 const showOnStartup = ref(welcomeOnStartup());
@@ -283,7 +288,7 @@ onMounted(() => {
   window.addEventListener("keydown", onKey, true);
   void refreshStats();
   focusBefore = document.activeElement;
-  const first = searchField.value ?? root.value?.querySelector<HTMLElement>(".home-main button");
+  const first = searchInput() ?? root.value?.querySelector<HTMLElement>(".home-main button");
   first?.focus({ preventScroll: true });
 });
 onUnmounted(() => {
@@ -322,24 +327,26 @@ onUnmounted(() => {
     <div class="home-main">
       <div class="home-head">
         <NewStrip @blank="startNew(() => cb.newDocument())" @open="cb.openDoc()" />
-        <button class="modal-close" aria-label="Back to the document" title="Back to the document" @click="close()">
-          <Icon name="close" :size="15" />
-        </button>
+        <IconButton
+          class="modal-close"
+          icon="close"
+          tip="Back to the document"
+          size="md"
+          variant="plain"
+          :icon-size="15"
+          @click="close()"
+        />
       </div>
 
       <div v-if="lib && (all.length || folders.length)" class="home-tools">
-        <select
+        <Select
           class="home-view-select"
-          :value="view"
+          :model-value="view"
+          :options="viewOptions"
           aria-label="Show"
-          @change="onViewSelect($event.target as HTMLSelectElement)"
-        >
-          <option value="recent">Recent</option>
-          <option v-for="f in folders" :key="f.path" :value="f.path">{{ folderName(f.path) }}</option>
-          <option value="add">Add folder…</option>
-        </select>
-        <input
-          ref="searchField"
+          @update:model-value="onViewSelect"
+        />
+        <TextField
           v-model="query"
           class="home-search"
           type="search"
@@ -347,9 +354,7 @@ onUnmounted(() => {
           aria-label="Search documents"
           spellcheck="false"
         />
-        <select v-model="shownSort" class="home-sort" aria-label="Sort by">
-          <option v-for="s in sorts" :key="s.value" :value="s.value">{{ s.label }}</option>
-        </select>
+        <Select v-model="shownSort" class="home-sort" :options="sorts" aria-label="Sort by" />
       </div>
 
       <p v-if="listing && !(listing instanceof Error) && listing.truncated" class="home-note">
@@ -415,11 +420,8 @@ onUnmounted(() => {
       />
 
       <div class="home-foot">
-        <label class="home-startup">
-          <input v-model="showOnStartup" type="checkbox" />
-          Show Home on startup
-        </label>
-        <button type="button" class="home-report" @click="openReportDialog()">Report a problem</button>
+        <Checkbox v-model="showOnStartup" class="home-startup" label="Show Home on startup" />
+        <Button variant="ghost" size="sm" class="home-report" @click="openReportDialog()">Report a problem</Button>
       </div>
     </div>
   </div>

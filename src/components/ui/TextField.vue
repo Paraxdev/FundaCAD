@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, mergeProps, useAttrs, useTemplateRef } from "vue";
+import { computed, mergeProps, useAttrs, useTemplateRef, watch } from "vue";
 import { useCommitField } from "./useCommitField";
 import { useDisabled } from "./useDisabled";
 import { fmtKeys } from "../../input/platform";
@@ -42,6 +42,14 @@ const field = useCommitField({
   },
 });
 const { draft } = field;
+// Live mode emits each keystroke, so a value unlike the draft came from the owner (a search cleared on Escape) and
+// shows even mid edit; only refused text holds.
+watch(
+  () => props.modelValue,
+  (v) => {
+    if (props.commit === "live" && v !== draft.value && !field.error.value) field.revert();
+  },
+);
 
 const shownError = computed(() => field.error.value ?? props.error ?? null);
 const tipText = computed(() => (props.tip ? fmtKeys(props.keys ? `${props.tip} (${props.keys})` : props.tip) : null));

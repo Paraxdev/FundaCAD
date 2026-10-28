@@ -46,26 +46,6 @@
   text-transform: uppercase;
   color: var(--text-dim);
 }
-.home-nav-row {
-  display: flex;
-  align-items: center;
-  gap: var(--s-2);
-  width: 100%;
-  min-width: 0;
-  padding: var(--s-2) var(--s-3);
-  background: transparent;
-  border: none;
-  color: var(--text);
-  font-size: 12px;
-  text-align: left;
-  cursor: pointer;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.home-nav-row.active {
-  font-weight: 600;
-}
 .home-main {
   display: flex;
   flex-direction: column;
@@ -93,9 +73,8 @@
   gap: var(--s-2);
   width: 90px;
   flex: none;
-  padding: var(--s-2) var(--s-3);
+  --tile-pad: var(--s-2) var(--s-3);
   color: var(--text);
-  cursor: pointer;
 }
 .home-new-pic {
   display: grid;
@@ -125,14 +104,10 @@
   min-width: 0;
   max-width: 360px;
 }
-.home-search,
 .home-sort,
 .home-view-select {
-  height: 28px;
-  padding: 0 var(--s-3);
-  border: 1px solid transparent;
-  color: var(--text);
-  font-size: 12px;
+  flex: none;
+  width: auto;
 }
 .home-scroll {
   flex: 1;
@@ -251,10 +226,9 @@ $card-bleed-bottom: 44px;
   align-items: stretch;
   gap: var(--s-0);
   min-width: 0;
-  padding: 0 0 var(--s-3);
+  --tile-pad: 0 0 var(--s-3);
   color: var(--text);
   text-align: left;
-  cursor: pointer;
   width: 100%;
   height: 100%;
   overflow: hidden;
@@ -326,27 +300,6 @@ $card-bleed-bottom: 44px;
   margin: var(--s-2) var(--s-5) var(--s-4);
   padding: var(--s-2) var(--s-3);
 }
-.home-startup {
-  display: flex;
-  align-items: center;
-  gap: var(--s-2);
-  font-size: 12px;
-  color: var(--text-dim);
-  cursor: pointer;
-}
-.home-report {
-  padding: 0;
-  background: transparent;
-  border: none;
-  color: var(--text-dim);
-  font-size: 12px;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-.home-report:hover {
-  background: transparent;
-  color: var(--text);
-}
 #stage.narrow .home {
   grid-template-columns: minmax(0, 1fr);
 }
@@ -364,11 +317,6 @@ $card-bleed-bottom: 44px;
   flex: 1 1 100%;
   max-width: none;
 }
-.home-nav-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 .home-folder-row[aria-busy="true"] {
   color: var(--text-dim);
 }
@@ -382,19 +330,14 @@ $card-bleed-bottom: 44px;
   display: none;
 }
 #stage.narrow .home-view-select {
-  display: block;
+  display: flex;
 }
-.home-card-versions {
+// Over .icon-btn, which places itself relative.
+.home-cell > .home-card-versions {
   position: absolute;
   top: calc(#{$card-bleed-top} + var(--s-2));
   right: calc(#{$card-bleed-side} + var(--s-2));
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  padding: 0;
   color: var(--text);
-  cursor: pointer;
   opacity: 0.5;
 }
 .home-cell:hover .home-card-versions,
@@ -434,17 +377,6 @@ $card-bleed-bottom: 44px;
   font-size: 13px;
   font-weight: 600;
 }
-.home-drawer-close {
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  background: transparent;
-  border: none;
-  color: var(--text-dim);
-  cursor: pointer;
-}
 .home-drawer-note {
   margin: 0;
   font-size: 12px;
@@ -470,23 +402,12 @@ $card-bleed-bottom: 44px;
   gap: var(--s-2);
   padding: var(--s-1) var(--s-2);
 }
+.home-branch {
+  padding: 0;
+}
 .home-branch-name {
   flex: 1;
   min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: var(--s-2);
-  padding: 0;
-  background: transparent;
-  border: none;
-  color: var(--text);
-  font-size: 12px;
-  text-align: left;
-  cursor: pointer;
-}
-.home-branch-current {
-  font-size: 10px;
-  color: var(--text-dim);
 }
 .home-version-text {
   flex: 1;
@@ -507,13 +428,4 @@ $card-bleed-bottom: 44px;
 .home-version-acts {
   display: flex;
   gap: var(--s-1);
-}
-.home-drawer-act {
-  height: 24px;
-  padding: 0 var(--s-2);
-  border: 1px solid transparent;
-  color: var(--text);
-  font-size: 11px;
-  white-space: nowrap;
-  cursor: pointer;
 }
