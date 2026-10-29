@@ -1,4 +1,4 @@
-// The origin planes as three small tiles with a corner on the origin: shown only while a
+// The origin planes as three small tiles a small gap off the triad's arrows: shown only while a
 // tool asks for a plane, a constant size on screen, each picking its own plane by
 // its tile or its name with a 44 px target at any angle, in Noir and
 // Solarized Light. SC_VARIANTS=1 also writes the corner comparison
@@ -12,9 +12,9 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 
-// TILE_SIZE_PX, TILE_GAP_PX + TILE_SIZE_PX and the MIN_TILE_SCALE floor in src/viewport/originTiles.ts.
+// TILE_SIZE_PX, TILE_GAP_PX and the MIN_TILE_SCALE floor in src/viewport/originTiles.ts.
 const SIZE = 64;
-const EXTENT = 74;
+const GAP = 10;
 const FLOOR = 0.65 * SIZE;
 
 const TOKEN = process.env.SC_TOKEN || "";
@@ -217,17 +217,27 @@ const PLANES = ["XY", "XZ", "YZ"];
     PLANES.every((k) => Math.hypot(t[k].x - o.x, t[k].y - o.y) > 15),
     JSON.stringify({ o, t }),
   );
-  const corners = await page.evaluate((o) => {
+  const clear = await page.evaluate((o) => {
     const v = window.viewport;
     const drawn = v.scene.originTiles.onScreen({ camera: v.rig.active, rect: v.domElement.getBoundingClientRect() });
-    return Object.fromEntries(
-      drawn.map((d) => [d.plane, Math.min(...d.outline.map((p) => Math.hypot(p.x - o.x, p.y - o.y)))]),
-    );
+    const toSide = (a, b) => {
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const s = Math.max(0, Math.min(1, ((o.x - a.x) * dx + (o.y - a.y) * dy) / (dx * dx + dy * dy || 1)));
+      return Math.hypot(a.x + s * dx - o.x, a.y + s * dy - o.y);
+    };
+    const hit = v.pickConstructionAt(o.x, o.y);
+    return {
+      ...Object.fromEntries(
+        drawn.map((d) => [d.plane, Math.min(...d.outline.map((p, i, r) => toSide(p, r[(i + 1) % r.length])))]),
+      ),
+      pick: hit?.kind === "base" ? hit.plane : null,
+    };
   }, o);
   check(
-    "every tile has its corner on the origin",
-    PLANES.every((k) => corners[k] < 0.5),
-    JSON.stringify(corners),
+    "every tile stands a gap off the origin, 7 px or more, and a press on the origin picks no plane",
+    PLANES.every((k) => clear[k] >= 7) && clear.pick === null,
+    JSON.stringify(clear),
   );
   const homeTargets = await targets();
   check(
@@ -404,8 +414,8 @@ const PLANES = ["XY", "XZ", "YZ"];
   await home([0, 0, 0], 60);
   // A cube a little larger than the tiles, so part of each tile is inside it and part outside.
   const cube = await page.evaluate(
-    (extent) => 1.2 * extent * window.viewport.pixelWorldSize(new window.viewport.camera.position.constructor(0, 0, 0)),
-    EXTENT,
+    (reach) => 1.2 * reach * window.viewport.pixelWorldSize(new window.viewport.camera.position.constructor(0, 0, 0)),
+    GAP + SIZE,
   );
   await page.evaluate(
     async (s) => {
@@ -524,7 +534,7 @@ const PLANES = ["XY", "XZ", "YZ"];
         window.viewport.scene.originTiles.reshape(s);
         window.viewport.requestRender();
       }, shape);
-    const DEFAULT = { sizePx: SIZE, gapPx: EXTENT - SIZE, radiusPx: 27, exponent: 4, octant: { x: 1, y: 1, z: 1 } };
+    const DEFAULT = { sizePx: SIZE, gapPx: GAP, radiusPx: 27, exponent: 4, octant: { x: 1, y: 1, z: 1 } };
     const BIG = { sizePx: 240, radiusPx: 102, gapPx: 36 };
     for (const theme of ["noir", "solarized"]) {
       await page.evaluate((th) => {
@@ -598,9 +608,9 @@ const PLANES = ["XY", "XZ", "YZ"];
       await settle();
       await home([0, 0, 0], 60);
       const side = await page.evaluate(
-        (extent) =>
-          1.2 * extent * window.viewport.pixelWorldSize(new window.viewport.camera.position.constructor(0, 0, 0)),
-        EXTENT,
+        (reach) =>
+          1.2 * reach * window.viewport.pixelWorldSize(new window.viewport.camera.position.constructor(0, 0, 0)),
+        GAP + SIZE,
       );
       await page.evaluate(
         async (s) => {
