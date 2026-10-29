@@ -84,9 +84,11 @@ function chordMatches(chord: string, e: KeyInit): boolean {
   const key = parts.pop()!;
   const has = (m: string) => parts.includes(m);
   if (has("Control") ? !e.ctrlKey || e.metaKey : has("Ctrl") !== !!(e.ctrlKey || e.metaKey)) return false;
-  if (has("Shift") !== !!e.shiftKey || has("Alt") !== !!e.altKey) return false;
-  if (/^\d$/.test(key)) return e.code === `Digit${key}`;
+  if (has("Alt") !== !!e.altKey) return false;
+  // Shift is free on the backtick, which some layouts only type with Shift.
   if (key === "`") return e.key === "`" || e.code === "Backquote";
+  if (has("Shift") !== !!e.shiftKey) return false;
+  if (/^\d$/.test(key)) return e.code === `Digit${key}`;
   return latinKey(e) === key.toLowerCase();
 }
 

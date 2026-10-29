@@ -37,6 +37,17 @@ describe("platform chords on Windows and Linux", () => {
     expect(chordHint("console")).toBe("Ctrl+`");
   });
 
+  it("opens the console with Shift held too, and leaves the backtick AltGr types on AZERTY to the text", () => {
+    setMacForTest(false);
+    expect(matchChord({ key: "~", code: "Backquote", ctrlKey: true, shiftKey: true })).toBe("console");
+    expect(matchChord({ key: "`", code: "Digit7", ctrlKey: true, altKey: true })).toBeNull();
+    expect(matchChord({ key: "~", code: "Backquote", ctrlKey: true, shiftKey: true, altKey: true })).toBeNull();
+    setMacForTest(true);
+    expect(matchChord({ key: "~", code: "Backquote", ctrlKey: true, shiftKey: true })).toBe("console");
+    expect(matchChord({ key: "~", code: "Backquote", metaKey: true, shiftKey: true })).toBeNull();
+    expect(checkRow("undo", { key: "`", ctrl: true, shift: true })).toEqual({ reserved: "Console" });
+  });
+
   it("leaves AltGr letters, bare digits and Ctrl+1 alone", () => {
     setMacForTest(false);
     expect(matchChord({ key: "ś", code: "KeyS", ctrlKey: true, altKey: true })).toBeNull();

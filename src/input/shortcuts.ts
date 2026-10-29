@@ -163,6 +163,7 @@ const RESERVED: Record<string, string> = {
   "Ctrl+Shift+1": "Items",
   "Ctrl+Shift+2": "History",
   "Ctrl+`": "Console",
+  "Ctrl+Shift+`": "Console",
   Escape: "Cancel",
   Tab: "Box select filter",
   Delete: "Delete",
