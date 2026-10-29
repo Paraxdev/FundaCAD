@@ -44,6 +44,17 @@ fn is_hash(s: &str) -> bool {
     s.len() == 32 && s.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 
+/// The stored meshes for `keys`. An absent mesh is a cache miss, never an error.
+pub fn mesh_sources(dir: &std::path::Path, keys: Vec<String>) -> BTreeMap<String, PathBuf> {
+    keys.into_iter()
+        .filter(|k| is_safe_key(k))
+        .filter_map(|k| {
+            let p = dir.join(format!("{k}.bin"));
+            p.exists().then_some((k, p))
+        })
+        .collect()
+}
+
 /// `container_save` without the app handle.
 #[allow(clippy::too_many_arguments)]
 pub fn save_document(
@@ -89,13 +100,7 @@ pub fn save_document(
         }
     }
 
-    let mut meshes = BTreeMap::new();
-    for k in mesh_keys {
-        let p = stores.meshes.join(format!("{k}.bin"));
-        if p.exists() {
-            meshes.insert(k, p); // absent meshes are a cache miss, never an error
-        }
-    }
+    let meshes = mesh_sources(&stores.meshes, mesh_keys);
 
     let carried: Vec<_> = carried
         .into_iter()

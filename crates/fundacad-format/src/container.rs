@@ -87,7 +87,7 @@ fn looks_like_zip(path: &Path) -> bool {
     File::open(path).and_then(|mut f| f.read_exact(&mut buf)).map(|_| &buf == b"PK").unwrap_or(false)
 }
 
-fn is_safe_key(key: &str) -> bool {
+pub fn is_safe_key(key: &str) -> bool {
     !key.is_empty()
         && !key.contains("..")
         && key.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.')

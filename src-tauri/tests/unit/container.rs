@@ -1,4 +1,5 @@
-use fundacad_lib::container::{save_document, Stores};
+use fundacad_lib::container::{mesh_sources, save_document, Stores};
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 fn tmpdir(tag: &str) -> PathBuf {
@@ -30,5 +31,18 @@ fn a_save_refuses_an_import_geometry_id_that_is_not_a_digest() {
         assert!(err.contains("previous file is unchanged"), "{name}: {err}");
         assert!(!dest.exists(), "{name}");
     }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_save_takes_a_mesh_only_by_a_plain_key_inside_the_store() {
+    let dir = tmpdir("mesh_key");
+    let meshes = dir.join("meshes");
+    std::fs::create_dir_all(&meshes).unwrap();
+    std::fs::write(meshes.join("good.bin"), b"m").unwrap();
+    std::fs::write(dir.join("outside.bin"), b"o").unwrap();
+    let outside = dir.join("outside").to_string_lossy().into_owned();
+    let got = mesh_sources(&meshes, vec!["good".into(), outside, "../outside".into(), "gone".into()]);
+    assert_eq!(got, BTreeMap::from([("good".to_string(), meshes.join("good.bin"))]));
     let _ = std::fs::remove_dir_all(&dir);
 }
