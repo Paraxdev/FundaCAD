@@ -11,6 +11,7 @@
 *[Safe mode]: A start with plugins, saved preferences and work recovery off, to get past a problem.
 *[safe mode]: A start with plugins, saved preferences and work recovery off, to get past a problem.
 *[Versions]: Checkpoints saved inside a document, that you can go back to.
+*[Refinement]: How finely curves are cut into triangles when a part is exported as a mesh.
 *[Body]: One solid shape in your model.
 *[Bodies]: One solid shape in your model.
 *[body]: One solid shape in your model.
