@@ -1080,7 +1080,7 @@ describe("Datum plane pose edit", () => {
       settleHeldEdit(saving(t.tool));
       expect(t.onStep.mock.calls).toEqual([[{ ...ZERO, offset: 2 }]]);
       expect(t.tool.active).toBe(false);
-      expect(t.done).toHaveBeenCalledWith(null);
+      expect(t.done.mock.calls).toEqual([[null, true]]);
       expect(needsSave(saving(t.tool))).toBe(false);
     });
 
@@ -1123,7 +1123,7 @@ describe("Datum plane pose edit", () => {
       expect(seen).not.toHaveBeenCalled();
     });
 
-    it("on a new plane, a save hands the pose to its caller once, as Enter would", () => {
+    it("on a new plane, a save hands the pose to its caller once, marked as a save", () => {
       const vp = fakeViewport();
       const tool = track(new DatumPoseTool(vp));
       handleUnder(tool, "hit", () => "offset");
@@ -1134,7 +1134,7 @@ describe("Datum plane pose edit", () => {
       dragHandle(vp.domElement, 0, 20);
       settleHeldEdit(saving(tool));
       settleHeldEdit(saving(tool));
-      expect(done.mock.calls).toEqual([[{ ...ZERO, offset: 2 }]]);
+      expect(done.mock.calls).toEqual([[{ ...ZERO, offset: 2 }, true]]);
       expect(tool.active).toBe(false);
     });
   });

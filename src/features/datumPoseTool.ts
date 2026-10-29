@@ -45,6 +45,9 @@ export interface PoseToolOptions {
   ghost: boolean;
 }
 
+/** `bySave` is set when a save entered the pose, so the caller adds the datum and skips what follows it. */
+export type PoseDone = (pose: DatumPose | null, bySave?: boolean) => void;
+
 export class DatumPoseTool {
   active = false;
   private opts: PoseToolOptions | null = null;
@@ -76,7 +79,7 @@ export class DatumPoseTool {
   private downOnGizmo = false;
 
   private dim = new DimInput();
-  private onDone: ((pose: DatumPose | null) => void) | null = null;
+  private onDone: PoseDone | null = null;
   private readonly gesture: CanvasGesture;
   private readonly held = new HeldSignal();
 
@@ -90,7 +93,7 @@ export class DatumPoseTool {
     });
   }
 
-  start(opts: PoseToolOptions, onDone: (pose: DatumPose | null) => void) {
+  start(opts: PoseToolOptions, onDone: PoseDone) {
     if (this.active) return;
     this.active = true;
     this.opts = opts;
@@ -361,8 +364,8 @@ export class DatumPoseTool {
     this.ghostMesh.quaternion.copy(p.orientation());
   }
 
-  /** Enter, the tick box, or a click off the handles. */
-  private finish() {
+  /** Enter, the tick box, a click off the handles, or a save. */
+  private finish(bySave = false) {
     if (!this.active) return;
     this.readTyped();
     const pose = { ...this.pose };
@@ -370,7 +373,7 @@ export class DatumPoseTool {
     if (editing) this.step();
     const done = this.onDone;
     this.cleanup();
-    done?.(editing ? null : pose);
+    done?.(editing ? null : pose, bySave);
   }
 
   /** A pose dragged or typed that Enter would write or hand out. */
@@ -389,7 +392,7 @@ export class DatumPoseTool {
 
   /** For a save: the pose is written as Enter writes it. A drag still under the hand is left alone. */
   confirmHeld() {
-    if (this.pending && !this.dragging) this.finish();
+    if (this.pending && !this.dragging) this.finish(true);
   }
 
   cancel() {

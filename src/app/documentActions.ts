@@ -34,8 +34,7 @@ export function heldEdits(tools: Engine["tools"] | undefined): HeldEdit[] {
 }
 
 const anyHeld = (e: Partial<Pick<Engine, "tools">>) => heldEdits(e.tools).some((h) => h.pending);
-const anySavableHeld = (e: Partial<Pick<Engine, "tools">>) =>
-  heldEdits(e.tools).some((h) => h.pending && !h.inSketch);
+const anySavableHeld = (e: Partial<Pick<Engine, "tools">>) => heldEdits(e.tools).some((h) => h.pending && !h.inSketch);
 
 /** An open sketch's edits, and a drag let go of but not entered, reach the store only later, so
  *  `store.dirty` alone misses them. */

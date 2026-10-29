@@ -6,8 +6,7 @@ import { DocumentStore } from "../../src/document/store";
 import { MoveTool } from "../../src/features/moveTool";
 import { bodyMoveTarget } from "../../src/features/moveTarget";
 import { DatumPoseTool } from "../../src/features/datumPoseTool";
-import { ZERO_POSE } from "../../src/document/datumPose";
-import type { Feature } from "../../src/types";
+import { createFeatureStarters, type FeatureStartersDeps } from "../../src/features/featureStarters";
 import type { Engine } from "../../src/app/engine";
 import type { Viewport } from "../../src/viewport/viewport";
 import { box, stubBackend } from "../document/storeKit";
@@ -353,29 +352,58 @@ describe("a held Move drag and closing the window", () => {
   });
 });
 
-describe("a new datum plane let go of but not entered", () => {
-  it("is in the file Ctrl+S writes, added the way Enter adds it", async () => {
+describe("a new Offset Plane let go of but not entered", () => {
+  /** Offset Plane from a selected face, through the real starter, so its follow-up is the real sketch.enter. */
+  function offsetPlaneHeld() {
+    tool.cancel();
     const vp = fakeViewport(new THREE.Scene());
     const datum = new DatumPoseTool(vp);
     Object.assign(datum, { hit: () => "offset" });
-    // Stands in for placeNewDatum in featureStarters, which adds the plane when the tool hands it the pose.
-    datum.start({ src: "XY", pose: { ...ZERO_POSE }, ghost: true }, (pose) => {
-      if (pose)
-        store.addFeature({ id: store.nextId(), type: "datumPlane", plane: "XY", offset: pose.offset } as Feature);
-    });
+    const entered: string[] = [];
+    const deps = {
+      store,
+      toolBusy: () => false,
+      datumPose: datum,
+      sketch: { enter: (_def: unknown, _store: unknown, _tool: unknown, id: string) => entered.push(id) },
+      viewport: {
+        selectedFaceSketchPlane: () => ({ plane: "XY", anchor: { selector: { kind: "face", index: 3 } } }),
+        clearSelection() {},
+      },
+    } as unknown as FeatureStartersDeps;
+    createFeatureStarters(deps).offsetPlane();
     engine.tools = idleTools({ move: tool, datumPose: datum });
     flushFrame();
     pointer(vp.domElement, "pointerdown", 40);
     pointer(vp.domElement, "pointermove", 50);
     pointer(vp.domElement, "pointermove", 60);
     pointer(vp.domElement, "pointerup", 60);
+    return { datum, entered };
+  }
+  const planes = (features: { type?: unknown }[]) => features.filter((f) => f.type === "datumPlane");
+
+  it("is in the file Ctrl+S writes, added without entering a sketch on it", async () => {
+    const { datum, entered } = offsetPlaneHeld();
     expect(datum.pending).toBe(true);
     key();
     await vi.waitFor(() => expect(host.saved).toHaveLength(1));
-    expect(lastSaved().features.filter((f) => f.type === "datumPlane")).toEqual([
-      expect.objectContaining({ plane: "XY", offset: 20 }),
-    ]);
-    expect(datum.active).toBe(false);
-    expect(store.dirty).toBe(false);
+    expect({
+      file: planes(lastSaved().features),
+      entered,
+      open: datum.active,
+      dirty: store.dirty,
+    }).toEqual({
+      file: [expect.objectContaining({ plane: "XY", offset: 20, face: { kind: "face", index: 3 } })],
+      entered: [],
+      open: false,
+      dirty: false,
+    });
+  });
+
+  it("is added by Enter, which still opens a sketch on the new plane", () => {
+    const { entered } = offsetPlaneHeld();
+    const box = [...document.querySelectorAll<HTMLElement>(".dim-input")].find((b) => b.style.display !== "none")!;
+    box.querySelector("input")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    const added = planes(store.document.features).map((f) => (f as { id: string }).id);
+    expect({ added: added.length, entered }).toEqual({ added: 1, entered: added });
   });
 });
