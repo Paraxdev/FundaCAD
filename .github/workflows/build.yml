@@ -426,6 +426,16 @@ jobs:
         with:
           args: --verbose ${{ env.TAURI_CONFIG_ARGS }}
 
+      # The kernel's bounded char read is a C++20 library behaviour, so it holds
+      # only where the platform's standard library implements it. The test job
+      # proves it on Linux; this runs the same crafted-geometry refusals against
+      # the kernel this platform just built, so macOS and Windows get the signal
+      # too. The kernel is already in target/OCCT from the build above.
+      - name: Crafted geometry is refused on this platform
+        if: matrix.platform != 'ubuntu-22.04'
+        shell: bash
+        run: cargo test -p fundacad-geom --test import_crafted_geometry -- --test-threads=4
+
       # Checked against the bytes rather than the arguments: `engine_attach` is
       # the IPC command the webview reaches the engine through
       # (src-tauri/src/lib.rs), and it is also what fundacad-mcp looks for to
