@@ -1071,10 +1071,12 @@ export class EdgeFeatureTool {
       this.commit();
       return;
     }
-    // Tab in the field or on the canvas is the flip, captured before DimInput's own Tab; each treatment shows one
-    // field, so nothing is lost. The box's other stops walk as usual, and Shift+Tab from the field reaches them.
+    // Tab in the field or on the canvas (which takes no focus, so the body) is the flip, captured before DimInput's
+    // own Tab. Every other control keeps Tab, so Shift+Tab from the field walks the box and Tab off Cancel moves on.
     if (e.key === "Tab" && this.phase === "drag") {
-      if (this.dim.ownsTarget(e.target) && !this.dim.ownsField(e.target)) return;
+      const t = e.target;
+      const onCanvas = t === document.body || t === document.documentElement || t === this.viewport.domElement;
+      if (!onCanvas && !this.dim.ownsField(t)) return;
       e.preventDefault();
       e.stopImmediatePropagation();
       if (e.shiftKey && this.dim.ownsField(e.target)) this.dim.focusLastStop();

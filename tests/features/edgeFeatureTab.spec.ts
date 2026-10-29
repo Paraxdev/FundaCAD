@@ -144,6 +144,22 @@ describe("Tab in the fillet box", () => {
     });
   });
 
+  it("Tab on a control past the box moves on, Tab with nothing focused still flips", () => {
+    const outside = document.createElement("button");
+    const field = document.createElement("input");
+    document.body.append(outside, field);
+    const tabOn = (el: HTMLElement) => {
+      const ev = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
+      el.dispatchEvent(ev);
+      return { blocked: ev.defaultPrevented, kind: tool.blendKind() };
+    };
+    expect([tabOn(outside), tabOn(field), tabOn(document.body)]).toEqual([
+      { blocked: false, kind: "fillet" },
+      { blocked: false, kind: "fillet" },
+      { blocked: true, kind: "chamfer" },
+    ]);
+  });
+
   it("Enter on the focused profile chip opens its panel and does not apply the fillet", () => {
     const chip = document.querySelector<HTMLElement>(".profile-chip")!;
     chip.focus();
