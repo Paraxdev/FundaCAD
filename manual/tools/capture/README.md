@@ -61,7 +61,7 @@ Each entry starts from a new document in its theme unless its first step opens s
 
 A step is a table whose first key is the action, the other keys are its options.
 
-- `{ open = "example:Wall bracket" }`, also `fixture:block.json` (from `tools/harness/fixtures`), `file:<path>`, `new` or `home`.
+- `{ open = "example:Wall bracket" }`, also `fixture:sketch-extrude.json` (from `fixtures/` here, then `tools/harness/fixtures`), `file:<path>`, `new` or `home`.
 - Any harness action with its arguments: `{ tool = "Extrude" }`, `{ pick_face = "..." }`, `{ type = ["Depth", "12"], enter = true }`, `{ drag_handle = "Distance", mm = 10 }`, `{ menu = "File/Export" }`, `{ panel = "history" }`, `{ view = "iso" }`, `{ press = "Escape" }`.
 - `{ theme = "dracula" }`, `{ param = "width", value = "40" }`, `{ wait = 300 }`, `{ evaluate = "() => ..." }`.
 - `{ click_css = ".selector" }`, `{ hover = ".selector" }` or `{ hover = [x, y], space = "world" }`.

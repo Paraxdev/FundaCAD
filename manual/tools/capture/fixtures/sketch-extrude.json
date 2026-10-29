@@ -1,0 +1,9 @@
+{
+  "version": 9,
+  "parameters": {},
+  "features": [
+    { "id": "s", "type": "sketch", "plane": "XY",
+      "entities": [{ "type": "rectangle", "id": "r1", "width": 40, "height": 30, "x": 0, "y": 0 }] },
+    { "id": "e", "type": "extrude", "sketch": "s", "distance": 20, "operation": "new", "regions": [[1, 1, 0]] }
+  ]
+}

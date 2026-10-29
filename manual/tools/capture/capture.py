@@ -16,7 +16,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
 MANIFESTS = HERE / "manifests"
-FIXTURES = REPO / "tools" / "harness" / "fixtures"
+FIXTURES = (HERE / "fixtures", REPO / "tools" / "harness" / "fixtures")
 AREAS = ("start-files", "model", "sketch", "inspect", "render", "ai-plugins-reference", "readme-design")
 DEFAULT_VIEWPORT = (1440, 900)
 DEFAULT_PAUSE = 400
@@ -106,7 +106,10 @@ def do_open(s, what: str):
     if kind == "example":
         open_example(s, arg)
     elif kind == "fixture":
-        s.open_file(FIXTURES / arg)
+        found = [d / arg for d in FIXTURES if (d / arg).exists()]
+        if not found:
+            raise ShotError(f"no fixture {arg} in {' or '.join(str(d.relative_to(REPO)) for d in FIXTURES)}")
+        s.open_file(found[0])
     elif kind == "file":
         s.open_file(REPO / arg)
     elif kind == "new":

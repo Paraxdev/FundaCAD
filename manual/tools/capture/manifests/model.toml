@@ -206,10 +206,17 @@ uses = ["manual/docs/model/shell.md:5"]
 
 [[shot]]
 file = "manual/docs/img/history-card.png"
-size = [300, 389]
+size = [300, 520]
 theme = "fundacad"
 crop = "panel"
-stub = true
+target = "#timeline"
+pad = 6
+park = [900, 700]
+steps = [
+  { open = "fixture:sketch-extrude.json" },
+  { panel = "history" },
+  { click_css = '.timeline-node[data-id="e"]' },
+]
 show = "The History card with the Extrude step open and its rows."
 alt = "The History card with the Extrude step open"
 uses = ["manual/docs/model/timeline.md:5"]
