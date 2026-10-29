@@ -45,7 +45,7 @@ const DOC = {
 
 (async () => {
   const browser = await chromium.launch({ executablePath: EXE, args: ["--use-angle=swiftshader", "--no-sandbox"] });
-  const page = await browser.newPage({ viewport: { width: 1200, height: 800 } });
+  const page = await browser.newPage({ colorScheme: "dark", viewport: { width: 1200, height: 800 } });
   page.on("pageerror", (e) => {
     console.error("PAGE ERROR:", e.message);
     failures++;

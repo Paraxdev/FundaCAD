@@ -43,7 +43,7 @@ const PLANES = ["XY", "XZ", "YZ"];
     ? ["--enable-gpu", "--ignore-gpu-blocklist", "--use-angle=d3d11", "--no-sandbox"]
     : ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--no-sandbox"];
   const browser = await chromium.launch({ executablePath: EXE, args });
-  const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+  const page = await browser.newPage({ colorScheme: "dark", viewport: { width: 1400, height: 900 } });
   page.on("pageerror", (e) => {
     console.error("PAGE ERROR:", e.message);
     failures++;
@@ -486,7 +486,7 @@ const PLANES = ["XY", "XZ", "YZ"];
   await shot("tiles-hover-xz-solarized", around(lo, 170));
   await page.mouse.move(1390, 890);
   await escape();
-  await page.evaluate(() => localStorage.removeItem("fundacad.theme"));
+  await page.evaluate(() => localStorage.setItem("fundacad.theme", "fundacad"));
 
   if (VARIANTS) await renders();
 
@@ -506,7 +506,7 @@ const PLANES = ["XY", "XZ", "YZ"];
     for (const theme of ["noir", "solarized"]) {
       await page.evaluate((th) => {
         if (th === "solarized") localStorage.setItem("fundacad.theme", "solarized-light");
-        else localStorage.removeItem("fundacad.theme");
+        else localStorage.setItem("fundacad.theme", "fundacad");
       }, theme);
       await boot();
       await page.evaluate(async () => {
@@ -592,7 +592,7 @@ const PLANES = ["XY", "XZ", "YZ"];
       await shot(`depth-box-${theme}`, around(await origin(), 170));
       await escape();
     }
-    await page.evaluate(() => localStorage.removeItem("fundacad.theme"));
+    await page.evaluate(() => localStorage.setItem("fundacad.theme", "fundacad"));
   }
 })().catch((e) => {
   console.error(e);

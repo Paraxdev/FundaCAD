@@ -476,7 +476,8 @@ function onClassicCamera(on: boolean) {
                 />
               </div>
               <p id="prefs-theme-hint" class="pref-hint">
-                Shipped with FundaCAD: FundaCAD Noir, FundaCAD Light, High Contrast Dark, High Contrast Light,
+                System follows your OS: FundaCAD Noir or FundaCAD Light, and High Contrast when the OS asks for more
+                contrast. Shipped with FundaCAD: FundaCAD Noir, FundaCAD Light, High Contrast Dark, High Contrast Light,
                 Colour-Blind Safe, Dracula, Solarized Light, Noir Blue, Noir Red and Noir Orange. Upload a JSON palette
                 to add your own, it is stored in this browser's preferences. Keys are colour tokens like
                 <code>--bg</code> and <code>--accent</code>, values are hex or rgb().

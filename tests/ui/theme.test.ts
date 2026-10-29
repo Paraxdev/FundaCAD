@@ -32,9 +32,10 @@ afterEach(() => {
 });
 
 describe("asThemeId", () => {
-  it("accepts the built-in theme", () => {
+  it("accepts the built-in theme and System, the default", () => {
     expect(asThemeId(BUILTIN_THEME.id)).toBe(BUILTIN_THEME.id);
-    expect(DEFAULT_THEME_ID).toBe(BUILTIN_THEME.id);
+    expect(DEFAULT_THEME_ID).toBe("system");
+    expect(asThemeId(DEFAULT_THEME_ID)).toBe("system");
   });
 
   it("accepts an uploaded theme once it exists, and not before", () => {
@@ -65,10 +66,11 @@ describe("asThemeId", () => {
 });
 
 describe("the theme roster", () => {
-  it("leads with the built-in theme and labels every entry", () => {
+  it("leads with System, then the built-in theme, and labels every entry", () => {
     const list = themes();
 
-    expect(list[0]).toStrictEqual(BUILTIN_THEME);
+    expect(list[0]?.id).toBe("system");
+    expect(list[1]).toStrictEqual(BUILTIN_THEME);
 
     for (const t of list) {
       expect(t.label.trim().length).toBeGreaterThan(0);
@@ -402,10 +404,10 @@ describe("removeCustomTheme", () => {
   it("cannot remove the built-in theme", () => {
     removeCustomTheme(BUILTIN_THEME.id);
 
-    expect(themes()[0]).toStrictEqual(BUILTIN_THEME);
+    expect(themes()[1]).toStrictEqual(BUILTIN_THEME);
   });
 
-  it("falls back to the built-in theme when the active one is removed", () => {
+  it("falls back to System when the active one is removed", () => {
     const res = addCustomTheme({
       label: "Temp",
       "--bg": "#123456",

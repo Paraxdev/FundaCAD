@@ -45,6 +45,8 @@ export default defineConfig({
           name: "components",
           include: ["tests/**/*.spec.ts"],
           environment: "happy-dom",
+          // happy-dom reports a light OS, and the specs were written against Noir, the System theme on a dark one.
+          environmentOptions: { happyDOM: { settings: { device: { prefersColorScheme: "dark" } } } },
           globals: false,
           testTimeout: 20_000,
         },

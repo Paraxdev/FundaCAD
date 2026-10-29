@@ -22,7 +22,7 @@ if (!TOKEN) {
 (async () => {
   fs.mkdirSync(OUT, { recursive: true });
   const browser = await chromium.launch({ executablePath: EXE, args: ["--use-angle=swiftshader", "--no-sandbox"] });
-  const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+  const page = await browser.newPage({ colorScheme: "dark", viewport: { width: 1400, height: 900 } });
   let failures = 0;
   page.on("pageerror", (e) => {
     console.error("PAGE ERROR:", e.message);

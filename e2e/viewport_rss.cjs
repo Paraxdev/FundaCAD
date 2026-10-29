@@ -81,7 +81,7 @@ function rssMiB(pids) {
   // Chromium exposes no pid on this playwright build, so identify OUR processes
   // by subtracting the ones that already existed before launch.
   const ours = () => new Set([...pidsMatching(CHROME_MATCH)].filter((p) => !preExisting.has(p)));
-  const page = await browser.newPage();
+  const page = await browser.newPage({ colorScheme: "dark" });
   page.on("pageerror", (e) => console.error("PAGE ERROR:", e.message));
 
   await page.addInitScript((t) => {
