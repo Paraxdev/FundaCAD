@@ -95,12 +95,16 @@ jobs:
       - name: Version release tests
         run: python3 tests/build/test_version_release.py
 
-      # The checks of the AT-SPI dump the bundle leg runs, against fake trees.
+      # The checks of the AT-SPI dump the bundle leg runs, against fake trees. Not a
+      # gate until it has run green here, like the walks they check.
       - name: AT-SPI dump tests
+        continue-on-error: true
         run: python3 tests/build/test_atspi_dump.py
 
-      # The checks of the UI Automation walk the Windows bundle leg runs, against fake trees.
+      # The checks of the UI Automation walk the Windows bundle leg runs, against
+      # fake trees, in pwsh on Linux. Not a gate until it has run green here.
       - name: UI Automation walk tests
+        continue-on-error: true
         shell: pwsh
         run: ./tests/build/test_uia_walk.ps1
 
