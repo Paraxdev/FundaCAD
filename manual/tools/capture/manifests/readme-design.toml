@@ -154,7 +154,7 @@ file = "manual/docs/img/social-card.jpg"
 size = [1200, 630]
 theme = "fundacad"
 crop = "keep"
-show = "The link preview card of the manual site (1200x630 JPEG, og:image). Not a screenshot entry, keep unless it shows an old look."
+show = "The link preview card of the manual site (1200x630 JPEG, og:image). Not a screenshot entry: after ui-overview.png is retaken, crop that picture to the box 8,84 to 1592,916, scale it to 1200x630 and save it as JPEG quality 88."
 uses = ["manual/overrides/main.html:26", "manual/overrides/main.html:33"]
 
 [[shot]]
