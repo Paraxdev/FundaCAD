@@ -1,9 +1,8 @@
 // The viewport meta must let the page scale: maximum-scale and user-scalable=no lock low vision users out of
 // zoom (SR-39, SCAN-14). Pinch on the canvas is stopped by touch-action in _touch.scss, not here.
 
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import indexHtml from "../../index.html?raw";
 
 function viewportOf(html: string): Map<string, string> | null {
   const tag = html.match(/<meta\s+[^>]*name=["']viewport["'][^>]*>/i)?.[0];
@@ -12,9 +11,11 @@ function viewportOf(html: string): Map<string, string> | null {
   return new Map(
     content
       .split(",")
-      .map((part) => part.split("=").map((s) => s.trim().toLowerCase()))
-      .filter(([key]) => key)
-      .map(([key, value = ""]) => [key, value]),
+      .map((part): [string, string] => {
+        const [key = "", value = ""] = part.split("=").map((s) => s.trim().toLowerCase());
+        return [key, value];
+      })
+      .filter(([key]) => key),
   );
 }
 
@@ -27,8 +28,6 @@ function scalingLocks(html: string): string[] {
   if (["no", "0"].includes(meta.get("user-scalable") ?? "")) locks.push("user-scalable");
   return locks;
 }
-
-const indexHtml = readFileSync(resolve(__dirname, "../../index.html"), "utf8");
 
 describe("the viewport meta in index.html", () => {
   it("fits the device width at scale 1", () => {
