@@ -3,10 +3,18 @@
 
 [[shot]]
 file = "manual/docs/img/ai-live-document.png"
-size = [980, 330]
+size = [980, 360]
 theme = "fundacad"
-crop = "panel"
-stub = true
+crop = "region"
+at = [228, 88]
+park = [1300, 860]
+steps = [
+  { open = "new" },
+  { panel = "preferences" },
+  { click_css = '.prefs-nav-btn[data-category="mcp"]' },
+  { click_css = "#prefs-live" },
+  { wait = 300 },
+]
 show = "Preferences, AI assistants page, the Live document setting with its three choices Do not share, Share read only and Share and allow edits. Check the labels in src."
 alt = "Live document setting open, offering Do not share, Share read only and Share and allow edits"
 uses = ["manual/docs/ai/sharing.md:5"]
@@ -76,7 +84,16 @@ file = "manual/docs/img/prefs-appearance.png"
 size = [972, 692]
 theme = "fundacad"
 crop = "panel"
-stub = true
+target = ".modal-panel.prefs-panel"
+pad = 6
+park = [1300, 860]
+steps = [
+  { open = "new" },
+  { panel = "preferences" },
+  { click_css = '.prefs-nav-btn[data-category="appearance"]' },
+  { click_css = "#prefs-theme" },
+  { wait = 300 },
+]
 show = "Preferences on its Appearance page, the page list showing the pages of today (Accessibility and Updates are recent) and the theme choice with Colour-Blind Safe."
 alt = "Appearance page of Preferences"
 uses = ["manual/docs/reference/preferences.md:5"]
