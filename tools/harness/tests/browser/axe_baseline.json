@@ -25,10 +25,8 @@
     "meta-viewport": 1
   },
   "palette": {
-    "aria-allowed-attr": 3,
-    "color-contrast": 16,
-    "meta-viewport": 1,
-    "scrollable-region-focusable": 1
+    "color-contrast": 4,
+    "meta-viewport": 1
   },
   "render": {
     "aria-allowed-attr": 3,
