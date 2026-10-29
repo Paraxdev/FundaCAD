@@ -399,10 +399,12 @@ worker reached over Tauri IPC, so the webview never opens a socket.
   only, not the build tree beside it) under the same key as `rust-geom`'s; the
   Linux leg installs `cmake`, which `.github/actions/linux-deps` deliberately
   leaves out.
-- The updater is still off everywhere. `tauri.conf.json` carries upstream's
-  minisign pubkey, so `release` withholds `latest.json` and says so in
-  the notes, on every channel. Generating a keypair turns the feed
-  on.
+- The updater is on for every channel. Since run 386 `tauri.conf.json` carries
+  this project's own minisign pubkey (`57D9422..`), and `release` signs each
+  installer with `TAURI_SIGNING_PRIVATE_KEY` and writes a signed `latest.json`.
+  It still withholds the feed, with a warning, if the pubkey is upstream's
+  again or nothing was signed. Installs from before 1.0.386 carry upstream's
+  key, so they cannot verify an update and need a new installer.
 - Plugin bundles ARE published to this release, packed by `bundle` with
   their geometry components and nothing else, and the app installs from it
   (`RELEASE_TAG` in `src/plugins/index.ts`). A development or stable build
