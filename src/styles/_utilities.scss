@@ -159,6 +159,10 @@
 .dim-field .dim-unit {
   position: relative;
   min-width: 16px;
+  /* Over .ui-unit-chip, which the chip also wears and which loads later. */
+  justify-content: center;
+  padding: 2px 2px;
+  border-radius: 6px;
 }
 .dim-field .dim-unit::before {
   content: "";

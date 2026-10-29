@@ -647,6 +647,73 @@ describe("DimInput names", () => {
     }
   });
 
+  it("builds each input as NumberField's, in the box's own row with no well", () => {
+    dim.show(
+      [
+        { name: "w", label: "Width" },
+        { name: "n", label: "Count", kind: "count" },
+      ],
+      () => {},
+    );
+    const [w, n] = [...root().querySelectorAll<HTMLInputElement>(".dim-field input")];
+    for (const i of [w!, n!]) {
+      expect(i.type).toBe("text");
+      expect(i.getAttribute("inputmode")).toBe("text");
+      expect(i.getAttribute("autocomplete")).toBe("off");
+      expect(i.getAttribute("spellcheck")).toBe("false");
+      expect(i.hasAttribute("title")).toBe(false);
+    }
+    const width = root().querySelector<HTMLElement>(".dim-field[data-field='w']")!;
+    expect([...width.children].map((c) => c.tagName)).toEqual(["SPAN", "INPUT", "BUTTON"]);
+    expect(root().querySelector(".ui-field, .ui-number-field")).toBeNull();
+    expect(root().querySelector(".dim-field[data-field='n'] .dim-unit")).toBeNull();
+    expect(n!.hasAttribute("aria-describedby")).toBe(false);
+  });
+
+  it("describes each input by its unit chip, which names the unit it shows", () => {
+    dim.show(
+      [
+        { name: "w", label: "Width" },
+        { name: "a", label: "Angle", kind: "angle" },
+      ],
+      () => {},
+    );
+    const chips = [...root().querySelectorAll<HTMLElement>(".dim-field .dim-unit")];
+    const inputs = [...root().querySelectorAll<HTMLInputElement>(".dim-field input")];
+    expect(chips.map((c) => c.getAttribute("aria-label"))).toEqual(["Unit, mm", "Unit, °"]);
+    expect(chips.map((c) => c.textContent)).toEqual(["mm", "°"]);
+    expect(inputs.map((i) => document.getElementById(i.getAttribute("aria-describedby")!))).toEqual(chips);
+    expect(new Set(chips.map((c) => c.id)).size).toBe(2);
+    const chip = chips[0]!;
+    expect(chip.classList.contains("ui-unit-chip")).toBe(true);
+    expect([chip.getAttribute("role"), chip.getAttribute("aria-haspopup"), chip.title]).toEqual([
+      "combobox",
+      "listbox",
+      "Change unit",
+    ]);
+    expect(chip.tabIndex).toBe(-1);
+    inputs[0]!.value = "2 in";
+    inputs[0]!.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(chip.getAttribute("aria-label")).toBe("Unit, in");
+    expect(chip.dataset.value).toBe("in");
+  });
+
+  it("marks the unit chip open while its menu is up, and names the menu it opened", () => {
+    dim.show([{ name: "w", label: "Width" }], () => {});
+    const chip = root().querySelector<HTMLElement>(".dim-field .dim-unit")!;
+    expect(chip.getAttribute("aria-expanded")).toBe("false");
+    press("pointerdown", chip);
+    const menu = document.querySelector<HTMLElement>(".dim-unit-menu")!;
+    expect(chip.getAttribute("aria-expanded")).toBe("true");
+    expect(chip.getAttribute("aria-controls")).toBe(menu.id);
+    const cm = [...menu.querySelectorAll<HTMLElement>(".dim-unit-item")].find((r) => r.textContent === "cm")!;
+    press("pointerdown", cm);
+    expect(document.querySelector(".dim-unit-menu")).toBeNull();
+    expect(chip.getAttribute("aria-expanded")).toBe("false");
+    expect(chip.hasAttribute("aria-controls")).toBe(false);
+    expect(chip.getAttribute("aria-label")).toBe("Unit, cm");
+  });
+
   it("gives each box its own help id", () => {
     const other = new DimInput();
     try {

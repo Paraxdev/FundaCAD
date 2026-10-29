@@ -1,7 +1,7 @@
 // On-canvas heads-up dimension input: tracking fields follow the cursor, typing holds, Tab locks, Enter commits.
 // Values cross this boundary in MILLIMETRES; length fields show and parse the display unit, angles are degrees.
 
-import { onActivate } from "../components/ui/dom";
+import { onActivate, setChipUnit, setExpanded, uiNumberInput } from "../components/ui/dom";
 import { iconElement } from "../ui/icons";
 import { isHistoryKey, isMenuKey } from "../ui/focus";
 import { onPreviewError } from "../ui/previewError";
@@ -105,7 +105,7 @@ interface Field {
    *  Per field, so a value entered in inches goes on reading in inches without changing the rest of the app. */
   unit: UnitDef | null;
   /** the clickable unit chip, or null for a count (which has no unit) */
-  chip: HTMLButtonElement | null;
+  chip: HTMLElement | null;
   tag: HTMLElement;
   choice: string | null;
   userDriven: boolean;
@@ -118,6 +118,7 @@ interface Field {
 
 const shownBoxes = new Set<DimInput>();
 let boxCount = 0;
+let chipCount = 0;
 const BOX_HELP = "Enter applies, Escape cancels, Tab moves on";
 
 /** The box holding a typed value not yet entered, or null. `confirm` enters it as Enter would, false when refused. */
@@ -129,6 +130,12 @@ export function typedDimBox(): { confirm(): boolean } | null {
 function initialUnit(kind: DimFieldDef["kind"]): UnitDef | null {
   if (kind === "count") return null;
   return unitById(kind === "angle" ? "deg" : getUnit());
+}
+
+/** The chip's name carries the unit, and the field's input is described by it, so a reader hears name, value, unit. */
+function paintChip(chip: HTMLElement, unit: UnitDef) {
+  setChipUnit(chip, unit.id);
+  chip.setAttribute("aria-label", `Unit, ${unit.label}`);
 }
 
 /** Confirm and cancel act on the press and the box goes with it, so the release landed on the canvas and selected
@@ -248,7 +255,8 @@ export class DimInput {
   private external: string | null = null;
   private typedProblem: string | null = null;
   private focusName: string | null = null;
-  private helpId = `dim-help-${++boxCount}`;
+  private boxNo = ++boxCount;
+  private helpId = `dim-help-${this.boxNo}`;
 
   constructor() {
     this.root = document.createElement("div");
@@ -349,20 +357,27 @@ export class DimInput {
       if (tag instanceof HTMLButtonElement) {
         tag.type = "button";
         tag.tabIndex = -1;
+        tag.setAttribute("aria-expanded", "false");
       }
       wrap.appendChild(tag);
-      const input = document.createElement("input");
-      input.type = "text";
-      // NOT inputMode "decimal": that asks a touch keyboard for digits only, and
-      // this field takes "1 1/2 in" and "width/2".
-      input.inputMode = "text";
-      input.autocomplete = "off";
+      const unit = initialUnit(def.kind);
+      const num = uiNumberInput({
+        size: "sm",
+        // NOT inputMode "decimal": that asks a touch keyboard for digits only, and
+        // this field takes "1 1/2 in" and "width/2".
+        inputMode: "text",
+        unit: unit?.id,
+        units: unit ? commonUnits(unit.dim).map((u) => u.id) : undefined,
+        unitTip: "Change unit",
+      });
+      // NumberField's input and chip sit in the box's own flat row, the .ui-field well would repaint it.
+      const input = num.input;
       wrap.appendChild(input);
 
       const field: Field = {
         def,
         input,
-        unit: initialUnit(def.kind),
+        unit,
         chip: null,
         tag,
         choice: def.choices?.chosen ?? null,
@@ -378,14 +393,14 @@ export class DimInput {
         });
       }
 
-      if (field.unit) {
+      if (field.unit && num.chip) {
         // The unit is a button: clicking it changes what the field shows without retyping the number.
-        const chip = document.createElement("button");
-        chip.type = "button";
-        chip.className = "dim-unit";
+        const chip = num.chip;
+        chip.classList.add("dim-unit");
+        chip.id = `dim-unit-${++chipCount}`;
         chip.tabIndex = -1;
-        chip.title = "Change unit";
-        chip.textContent = field.unit.label;
+        paintChip(chip, field.unit);
+        input.setAttribute("aria-describedby", chip.id);
         chip.addEventListener("pointerdown", (e) => {
           e.preventDefault(); // never blur the input to open the menu
           e.stopPropagation();
@@ -877,7 +892,7 @@ export class DimInput {
     const m = tryParseMeasure(this.numberText(f), f.unit);
     if (!m?.unit || m.unit === f.unit) return;
     f.unit = m.unit;
-    if (f.chip) f.chip.textContent = m.unit.label;
+    if (f.chip) paintChip(f.chip, m.unit);
   }
 
   private adoptTypedChoice(f: Field) {
@@ -896,7 +911,7 @@ export class DimInput {
         pick: () => {
           const current = tryParseMeasure(this.numberText(f), f.unit);
           f.unit = u;
-          if (f.chip) f.chip.textContent = u.label;
+          if (f.chip) paintChip(f.chip, u);
           if (current) f.input.value = String(toUnit(current.value, u));
           this.sizeToContent(f);
           f.input.focus();
@@ -926,6 +941,7 @@ export class DimInput {
 
   private openMenu(anchor: HTMLElement, rows: { label: string; active: boolean; pick: () => void }[]) {
     this.closeMenu();
+    this.menuAnchor = anchor;
     const menu = document.createElement("div");
     menu.className = "dim-unit-menu";
     for (const r of rows) {
@@ -944,18 +960,23 @@ export class DimInput {
     const at = anchor.getBoundingClientRect();
     menu.style.left = `${at.left}px`;
     menu.style.top = `${at.bottom + 2}px`;
+    menu.id = `dim-menu-${this.boxNo}`;
     document.body.appendChild(menu);
     this.menu = menu;
+    setExpanded(anchor, true, menu.id);
     // One dismissal path, on the next press anywhere else.
     setTimeout(() => window.addEventListener("pointerdown", this.boundCloseMenu, { once: true, capture: true }), 0);
   }
 
   private menu: HTMLDivElement | null = null;
+  private menuAnchor: HTMLElement | null = null;
   private boundCloseMenu = () => this.closeMenu();
 
   private closeMenu() {
     this.menu?.remove();
     this.menu = null;
+    if (this.menuAnchor) setExpanded(this.menuAnchor, false);
+    this.menuAnchor = null;
   }
 
   /** values in MM; only tracking fields accept them */
