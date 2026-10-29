@@ -4,6 +4,7 @@
 
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 /// A cap rather than an expiry, like plugins::handed::MAX_HELD: it bounds the set without taking away a recent choice.
 pub const MAX_VOUCHED: usize = 256;
@@ -83,10 +84,37 @@ pub fn refuse_unvouched(raw: &str, vouched: &Vouched) -> Result<(), String> {
 /// The provenance check, then a regular file, so a device node or a pipe is never opened.
 pub fn check_open(raw: &str, vouched: &Vouched) -> Result<PathBuf, String> {
     refuse_unvouched(raw, vouched)?;
+    require_file(raw)
+}
+
+pub fn require_file(raw: &str) -> Result<PathBuf, String> {
     let path = Path::new(raw);
     match std::fs::metadata(path) {
         Ok(meta) if meta.is_file() => Ok(path.to_path_buf()),
         Ok(_) => Err(format!("{raw} is not a file")),
         Err(e) => Err(format!("{raw}: {e}")),
+    }
+}
+
+/// The app state the open commands consult. The lock covers the string check only, so a slow network stat never
+/// holds up another command.
+#[derive(Default)]
+pub struct Provenance(Mutex<Vouched>);
+
+impl Provenance {
+    pub fn vouch_all<'a>(&self, paths: impl IntoIterator<Item = &'a str>) {
+        let mut held = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        for p in paths {
+            held.vouch(p);
+        }
+    }
+
+    pub fn refuse_unvouched(&self, raw: &str) -> Result<(), String> {
+        refuse_unvouched(raw, &self.0.lock().unwrap_or_else(|e| e.into_inner()))
+    }
+
+    pub fn check_open(&self, raw: &str) -> Result<PathBuf, String> {
+        self.refuse_unvouched(raw)?;
+        require_file(raw)
     }
 }

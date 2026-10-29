@@ -1,4 +1,4 @@
-use fundacad_lib::doc_paths::{check_open, is_remote_or_device, refuse_unvouched, Vouched, MAX_VOUCHED};
+use fundacad_lib::doc_paths::{check_open, is_remote_or_device, refuse_unvouched, Provenance, Vouched, MAX_VOUCHED};
 
 fn temp_dir(name: &str) -> std::path::PathBuf {
     let dir = std::env::temp_dir().join(format!("fundacad-doc-paths-{name}-{}", std::process::id()));
@@ -92,4 +92,26 @@ fn a_plain_file_passes() {
 #[test]
 fn a_device_node_is_refused() {
     assert!(check_open("/dev/zero", &Vouched::default()).is_err());
+}
+
+#[test]
+fn the_app_state_opens_only_what_was_handed_over() {
+    let held = Provenance::default();
+    let dropped = String::from("//host/share/dropped.funda");
+    assert!(held.refuse_unvouched(&dropped).is_err());
+    held.vouch_all([dropped.as_str(), "C:/local/a.funda"]);
+    assert!(held.refuse_unvouched(&dropped).is_ok());
+    assert!(held.refuse_unvouched("//host/share/other.funda").is_err());
+    assert!(held.check_open("//host/share/other.funda").unwrap_err().contains("network or device"));
+}
+
+#[test]
+fn the_app_state_still_requires_a_file() {
+    let dir = temp_dir("state");
+    let held = Provenance::default();
+    assert!(held.check_open(dir.to_str().unwrap()).unwrap_err().contains("not a file"));
+    let file = dir.join("a.funda");
+    std::fs::write(&file, "{}").unwrap();
+    assert_eq!(held.check_open(file.to_str().unwrap()).unwrap(), file);
+    let _ = std::fs::remove_dir_all(&dir);
 }

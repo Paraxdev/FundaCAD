@@ -136,10 +136,15 @@ pub async fn container_save(
 
 /// Opens a binary or JSON document. Its blobs land in the store before this returns, so the rebuild on load finds them.
 #[tauri::command]
-pub async fn container_open(app: tauri::AppHandle, path: String) -> Result<String, String> {
+pub async fn container_open(
+    app: tauri::AppHandle,
+    held: tauri::State<'_, crate::doc_paths::Provenance>,
+    path: String,
+) -> Result<String, String> {
+    let path = held.check_open(&path)?;
     let blobs = blob_dir(&app)?;
     let meshes = mesh_dir(&app)?;
-    open_document_checked(std::path::Path::new(&path), &blobs, Some(&meshes)).map(|(doc, _)| doc)
+    open_document_checked(&path, &blobs, Some(&meshes)).map(|(doc, _)| doc)
 }
 
 #[derive(serde::Serialize)]
@@ -154,11 +159,16 @@ pub struct OpenedDocument {
 /// `container_open`, plus what the error correction had to repair. A file that
 /// needed repair opens normally; saving it writes a clean copy.
 #[tauri::command]
-pub async fn container_open_checked(app: tauri::AppHandle, path: String) -> Result<OpenedDocument, String> {
+pub async fn container_open_checked(
+    app: tauri::AppHandle,
+    held: tauri::State<'_, crate::doc_paths::Provenance>,
+    path: String,
+) -> Result<OpenedDocument, String> {
+    let path = held.check_open(&path)?;
     let blobs = blob_dir(&app)?;
     let meshes = mesh_dir(&app)?;
     let sections = section_dir(&app)?;
-    let o = open_document_full(std::path::Path::new(&path), &blobs, Some(&meshes), Some(&sections))?;
+    let o = open_document_full(&path, &blobs, Some(&meshes), Some(&sections))?;
     Ok(OpenedDocument {
         document: o.document,
         repaired_shards: o.report.repaired_shards,
@@ -208,6 +218,6 @@ pub async fn container_verify(path: String) -> Result<fundacad_format::fnda::Rep
 
 /// True if `path` is a container rather than a legacy plain-JSON document.
 #[tauri::command]
-pub fn container_is_container(path: String) -> bool {
-    looks_like_container(std::path::Path::new(&path))
+pub fn container_is_container(held: tauri::State<'_, crate::doc_paths::Provenance>, path: String) -> bool {
+    held.check_open(&path).is_ok_and(|p| looks_like_container(&p))
 }
