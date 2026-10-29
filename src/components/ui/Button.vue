@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, useSlots } from "vue";
+import { ariaKeys } from "../../input/platform";
 import Icon from "../shell/Icon.vue";
 import { tipText } from "./tip";
 import { useDisabled } from "./useDisabled";
@@ -41,9 +42,9 @@ const props = withDefaults(
 
 const d = useDisabled(props);
 const slots = useSlots();
-const label = computed(() => tipText(props.tip, props.keys));
+const title = computed(() => tipText(props.tip, props.keys));
 // A visible label must stay the accessible name (WCAG 2.5.3), so the tip names only an icon only button.
-const ariaLabel = computed(() => (slots.default ? undefined : label.value));
+const ariaLabel = computed(() => (slots.default ? undefined : props.tip));
 </script>
 
 <template>
@@ -52,8 +53,9 @@ const ariaLabel = computed(() => (slots.default ? undefined : label.value));
     :type="type"
     class="btn"
     :class="[`btn-${variant}`, variant === 'tile' ? null : `btn-${size}`, { 'btn-block': block, 'is-on': pressed }]"
-    :title="d.title(label)"
+    :title="d.title(title)"
     :aria-label="ariaLabel"
+    :aria-keyshortcuts="ariaKeys(keys)"
     :aria-pressed="popup ? undefined : pressed"
     :aria-haspopup="popup || undefined"
     :aria-expanded="popup ? expanded : undefined"

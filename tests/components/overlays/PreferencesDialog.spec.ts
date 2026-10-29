@@ -454,6 +454,43 @@ describe("Preferences Accessibility", () => {
     expect(input.getAttribute("aria-valuetext")).toBe("850 ms");
   });
 
+  it("turns Single key shortcuts on and off with a themed checkbox that says what stays", async () => {
+    await open();
+    await category("access");
+    const box = $("#prefs-single-keys input[type=checkbox]") as HTMLInputElement;
+    expect([box.checked, $("#prefs-single-keys").closest("[role=group]")?.getAttribute("aria-labelledby")]).toEqual([
+      true,
+      "prefs-a11y-input",
+    ]);
+    expect(box.getAttribute("aria-describedby")).toBe("prefs-single-keys-hint");
+    const hint = $("#prefs-single-keys-hint").textContent ?? "";
+    for (const kept of ["Ctrl or Cmd", "Escape", "Delete", "F keys", "arrows", "command palette", "voice control"])
+      expect(hint).toContain(kept);
+    box.click();
+    await flushPromises();
+    expect([a11yPrefs().singleKeys, box.checked]).toEqual([false, false]);
+    expect($("[data-a11y-reset]").getAttribute("aria-disabled")).toBeNull();
+    box.click();
+    await flushPromises();
+    expect([a11yPrefs().singleKeys, box.checked]).toEqual([true, true]);
+  });
+
+  it("the Screen reader preset unticks Single key shortcuts and Reset to defaults ticks it again", async () => {
+    await open();
+    await category("access");
+    const box = $("#prefs-single-keys input[type=checkbox]") as HTMLInputElement;
+    expect($("#prefs-a11y-actions-hint").textContent).toContain("turns Single key shortcuts off");
+    $("[data-a11y-preset]").click();
+    await flushPromises();
+    expect([a11yPrefs().singleKeys, box.checked]).toEqual([false, false]);
+    expect($("#prefs-a11y-preset-status").textContent).toBe(
+      "Announcements set to Verbose and Single key shortcuts turned off.",
+    );
+    $("[data-a11y-reset]").click();
+    await flushPromises();
+    expect([a11yPrefs().singleKeys, box.checked]).toEqual([true, true]);
+  });
+
   it("applies the Screen reader preset, and Reset to defaults clears every choice, Hover delay too", async () => {
     await open();
     await category("access");
@@ -480,14 +517,14 @@ describe("Preferences Accessibility", () => {
     expect([status.getAttribute("role"), status.textContent]).toEqual(["status", ""]);
     $("[data-a11y-preset]").click();
     await flushPromises();
-    expect(status.textContent).toBe("Announcements set to Verbose.");
+    expect(status.textContent).toBe("Announcements set to Verbose and Single key shortcuts turned off.");
     const seen: string[] = [];
     const watcher = new MutationObserver(() => seen.push(status.textContent ?? ""));
     watcher.observe(status, { childList: true, characterData: true, subtree: true });
     $("[data-a11y-preset]").click();
     await flushPromises();
     watcher.disconnect();
-    expect(seen).toEqual(["", "Announcements set to Verbose."]);
+    expect(seen).toEqual(["", "Announcements set to Verbose and Single key shortcuts turned off."]);
     await pick("prefs-verbosity", "Normal");
     expect(status.textContent).toBe("");
   });

@@ -1,12 +1,12 @@
 import { installKeymap } from "../input/keymap";
-import { isEditableTarget, isPageSelectAll } from "../ui/focus";
+import { isEditableTarget, isPageSelectAll, widgetOwnsKey } from "../ui/focus";
 import { exportSelection } from "../io/files";
 import { saveWork, saveWorkAs } from "./documentActions";
 import { SKETCH_TOOLS } from "./actionTables";
 import { logError, toggleConsole } from "../ui/logStore";
 import { isSessionEnded } from "../document/session";
 import { useDialogStore } from "../stores/dialogs";
-import { isMac } from "../input/platform";
+import { latinKey, matchChord } from "../input/platform";
 import { useShellStore } from "../stores/shell";
 import { useCommandPaletteStore } from "../stores/commandPalette";
 import type { Engine } from "./engine";
@@ -42,7 +42,7 @@ export function installKeyboard(e: Engine): void {
 
   // Tab cycles an open area box's filter; not in the keymap, since otherwise Tab must stay the browser's focus key.
   window.addEventListener("keydown", (ev) => {
-    if (ev.key !== "Tab" || ev.ctrlKey || ev.metaKey || ev.altKey) return;
+    if (ev.key !== "Tab" || ev.ctrlKey || ev.metaKey || ev.altKey || widgetOwnsKey(ev)) return;
     if (!e.viewport.cycleAreaFilter()) return;
     ev.preventDefault();
   });
@@ -50,7 +50,7 @@ export function installKeyboard(e: Engine): void {
   // A selected face is removed and healed; otherwise only a feature the user picked is deleted, never the profile
   // that exiting a sketch auto selects.
   window.addEventListener("keydown", (ev) => {
-    if (isEditableTarget(ev.target)) return;
+    if (isEditableTarget(ev.target) || widgetOwnsKey(ev)) return;
     if (e.toolBusy()) return;
     if (ev.key !== "Delete" && ev.key !== "Backspace") return;
     if (e.deleteSelectedFace()) return;
@@ -62,14 +62,6 @@ export function installKeyboard(e: Engine): void {
 
   window.addEventListener("keydown", (ev) => {
     if (isPageSelectAll(ev)) ev.preventDefault();
-  });
-
-  // Ctrl+` works inside text fields too: the full error text is most wanted while typing into the box that refused it.
-  window.addEventListener("keydown", (ev) => {
-    if (!(ev.ctrlKey || ev.metaKey)) return;
-    if (ev.key !== "`" && ev.code !== "Backquote") return;
-    ev.preventDefault();
-    toggleConsole();
   });
 
   // Failures with no toast of their own would otherwise exist only in devtools, where a user reporting a bug never looks.
@@ -84,24 +76,21 @@ export function installKeyboard(e: Engine): void {
     logError(ev.reason, { source: "promise" });
   });
 
-  // file shortcuts, which work even mid sketch
+  // File shortcuts and the platform chords work even mid sketch, and inside text fields: the console's full error text
+  // is most wanted while typing into the box that refused it.
   window.addEventListener("keydown", (ev) => {
     if (!(ev.ctrlKey || ev.metaKey)) return;
-    const k = ev.key.toLowerCase();
-    if (ev.altKey) {
-      // Ctrl+Alt first, or Ctrl+Alt+S would also save. macOS Option types another character, so the physical key counts
-      // there; elsewhere only the typed letter, since AltGr reports Ctrl+Alt on Windows.
-      const mac = isMac();
-      const is = (letter: string) => k === letter || (mac && ev.code === `Key${letter.toUpperCase()}`);
-      if (is("s")) {
-        ev.preventDefault();
-        useShellStore().toggleItems();
-      } else if (is("h")) {
-        ev.preventDefault();
-        useShellStore().toggleHistory();
-      }
+    // Chords first, or Ctrl+Alt+S would also save. AltGr reports Ctrl+Alt on Windows, so its letters never match.
+    const chord = matchChord(ev);
+    if (chord) {
+      ev.preventDefault();
+      if (chord === "items") useShellStore().toggleItems();
+      else if (chord === "history") useShellStore().toggleHistory();
+      else toggleConsole();
       return;
     }
+    if (ev.altKey) return;
+    const k = latinKey(ev);
     if (k === "f" && !ev.shiftKey) {
       ev.preventDefault();
       useCommandPaletteStore().toggle(e.sketch.active ? "sketch" : "model");

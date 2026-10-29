@@ -20,6 +20,7 @@ import {
 } from "../../ui/viewMode";
 import { onWorkspaceChange } from "../../ui/workspace";
 import { keyHint } from "../../input/shortcuts";
+import { chordsOf } from "../../input/platform";
 import { OVERLAY_KINDS, OVERLAY_LABELS } from "../../viewport/overlayKinds";
 import { isRenderLowPower } from "../../viewport/render";
 import { toast } from "../../ui/toast";
@@ -274,11 +275,17 @@ async function screenshot() {
     <!-- On a narrow stage Items and History are drawers, and their switches
          go first, where a short column cannot scroll them out of sight. -->
     <div v-if="shell.narrow" class="float-group">
-      <IconButton icon="items" tip="Items" keys="Ctrl+Alt+S" :active="shell.itemsShown" @click="shell.toggleItems()" />
+      <IconButton
+        icon="items"
+        tip="Items"
+        :keys="chordsOf('items')"
+        :active="shell.itemsShown"
+        @click="shell.toggleItems()"
+      />
       <IconButton
         icon="history"
         :tip="ui.sketchActive ? 'Sketch options' : 'History'"
-        keys="Ctrl+Alt+H"
+        :keys="chordsOf('history')"
         :active="shell.historyShown"
         :badge="errorCount || null"
         @click="shell.toggleHistory()"
@@ -351,7 +358,7 @@ async function screenshot() {
         v-if="!shell.narrow"
         icon="history"
         tip="History"
-        keys="Ctrl+Alt+H"
+        :keys="chordsOf('history')"
         :active="shell.historyOpen"
         :badge="errorCount || null"
         @click="shell.toggleHistory()"

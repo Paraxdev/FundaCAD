@@ -656,6 +656,7 @@ given nothing else (a plain JS plugin skips the type check), without its key cho
 | `IconButton` | An action shown only as an icon: close, copy, more, a viewport tile | `icon`; `tip`, required, its only name; `size`: `sm` 24, `md` 28 (a card close), `lg` 40 (a tile, default); `variant`: `tile` (default), `plain`, `danger`; `active` makes it a toggle; `badge`, a count; `clickable` | hover, pressed, focus, disabled, on |
 | `Chip` | A tag, a state or a count badge | `variant`: `neutral`, `accent`, `warn`, `error`; `size`: `xs` (a count badge), `sm`, `md` (a chip on the model); `icon`; `label`; `removable` adds a "Remove X" button; `as`: `span` or `button` | a button chip: hover, focus, disabled |
 | `KeyChip` | A shortcut drawn as key caps | `keys`; `inTitle` hides it from a screen reader when the owner's `title` already says it | none, it is a label |
+| `KeyCapture` | A shortcut setting: a button that opens a capture dialog, never armed on focus | `action`, the start of its name; `keys`, in the table's form, empty shows Not set; `problem`, the owner's refusal, spoken in place of the new keys; `clearable` adds Clear; emits `capture` (`key`, `code`, `ctrl`, `shift`, `alt`) and `clear` | as `Button`; the dialog's region shows when it listens |
 | `TextField` | Typed text: a name, a search, a URL | `modelValue`; `commit`: `live` (default) or `change`; `type`: `text`, `search`, `url`; `validate`, `error`; `selectOnFocus`; `size`: `sm` 24 or `md` 32; `leading` and `trailing` slots | focus, error, disabled |
 | `NumberField` | Every number a person types | `modelValue: number \| null`; `commit`: `change` (default) or `live`; `unit` and `units` (the unit and its picker); `parse`, `ui/measure` by default, so units, fractions and a decimal comma read; `validate`; `problem`, a refusal from the kernel; `min`, `max`, `step`; `nullable`; `preview` and `previewEnd`; `widthCh` | focus, error with the rejected text kept, disabled |
 | `UnitChip` | The unit beside a value | `unit`; `options` makes it a picker, without them it is a caption | picker: hover, pressed, open, disabled |
@@ -977,11 +978,13 @@ VoiceOver and Orca mostly skip it, and a keyboard, touch or switch user never se
 only name, a state or an error. An icon only control takes an `aria-label` with the same text as its `title`, and
 the shortcut goes in brackets, written as in
 [9](#9-voice-and-wording): `title="Reset camera (Shift+Home)"`. A base control
-writes both from `tip` and `keys`: `<IconButton icon="history" tip="History" keys="Ctrl+Alt+H" />`. A `Button`
+writes both from `tip` and `keys`: `<IconButton icon="history" tip="History" :keys="chordKeys('history')" />`, where
+a window chord that differs per platform (Items, History, the console) comes from `chordKeys()` or `chordHint()` in
+`src/input/platform.ts`, never a literal. A `Button`
 with a word keeps the word as its name and takes the tip as its `title` only, and while a control is disabled its
 `disabledReason` is the `title`. Anywhere else, a text that names Ctrl or Alt goes through `fmtKeys()`
 (`src/input/platform.ts`), which writes the Command and Option glyphs on a Mac:
-`:title="fmtKeys('History (Ctrl+Alt+H)')"`. Do not invent a tooltip popover.
+`:title="fmtKeys('Redo (Ctrl+Shift+Z)')"`. Do not invent a tooltip popover.
 On the model, where a hand cannot spare a hover, show a real element instead.
 
 State goes where every reader gets it: in the name, in `aria-describedby` pointing at text, or in a `.sr-only` span
@@ -1241,9 +1244,10 @@ The product is spelled FundaCAD.
 UI names are proper nouns mid sentence: History, Items, Home, Preferences.
 Tool names are Title Case (Linear Pattern, Press/Pull). Keys are joined with
 a plus, as in the menus, the command palette and the hint tables: Ctrl+S,
-Ctrl+Alt+H, Shift+Home, Esc, Enter. Write Ctrl and Alt, never the Mac names,
+Ctrl+Shift+Z, Shift+Home, Esc, Enter. Write Ctrl and Alt, never the Mac names,
 and show any text that names them through `fmtKeys()` (`src/input/platform.ts`),
-which turns them into the Command and Option glyphs on a Mac. Use "No X yet" for lists that will fill and
+which turns them into the Command and Option glyphs on a Mac; Control+ names the literal Mac Control key and shows as
+its caret glyph. Use "No X yet" for lists that will fill and
 "X appear here" for passive sources. Technical engine text goes after a plain
 lead; the full text is kept in the console.
 
@@ -1390,7 +1394,7 @@ Not handled yet, so do not rely on them: `prefers-contrast`, `forced-colors`,
 | Check FundaCAD Noir and Solarized Light | Test only the dark theme |
 | Check with blur off | Rely on blur to make text legible |
 | Use `--t-fast`, `--t-med` and `--ease` | Write `0.14s ease-out` |
-| Write `title` plus `aria-label`, shortcuts as Ctrl+Alt+H through `fmtKeys()` | Build a custom tooltip, or write "Ctrl Alt H" |
+| Write `title` plus `aria-label`, shortcuts as Ctrl+Shift+Z through `fmtKeys()` | Build a custom tooltip, or write "Ctrl Alt H" |
 | Name every base control with `label` or `labelledby`, and put a state in the name, `aria-describedby` or a `.sr-only` span | Leave a state, an error or the only name in a `title`, or label an `Icon` inside a named control |
 | Build a readout from `Panel` and the `.measure-*` classes | Invent `.my-panel-head` and `.my-row` with their own padding |
 | Leave Escape to the tool that owns the panel | Call `claimEscape()` from a tool panel |

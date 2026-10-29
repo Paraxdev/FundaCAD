@@ -12,6 +12,7 @@ import type { Viewport } from "../../src/viewport/viewport";
 import type { Feature, Selector, Vec3 } from "../../src/types";
 import type { FaceAxisReply, FaceResize } from "../../src/geometry/client";
 import { usePromptStore } from "../../src/stores/prompt";
+import { setA11yPref } from "../../src/ui/a11yPrefs";
 
 let frames: (() => void)[] = [];
 const flushFrame = () => {
@@ -326,5 +327,39 @@ describe("press/pull on a sphere, a cone or a torus", () => {
       type("r");
       expect(prompt()).not.toMatch(/remove/);
     });
+  });
+});
+
+describe("press/pull's T key", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    frames = [];
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    vi.stubGlobal("requestAnimationFrame", (fn: () => void) => {
+      frames.push(fn);
+      return frames.length;
+    });
+    vi.stubGlobal("cancelAnimationFrame", () => {});
+  });
+  afterEach(() => {
+    setA11yPref("singleKeys", true);
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    document.body.innerHTML = "";
+  });
+
+  const picking = (t: PressPullTool) => (t as unknown as { pickingTarget: boolean }).pickingTarget;
+
+  it("asks for a face to stop at by the physical key on a Cyrillic layout", async () => {
+    const { t } = await started([0, 0, 1], [0, 0, 1], NO_AXIS);
+    t["onKey"](new KeyboardEvent("keydown", { key: "е", code: "KeyT" }));
+    expect(picking(t)).toBe(true);
+  });
+
+  it("does nothing with Single key shortcuts off", async () => {
+    setA11yPref("singleKeys", false);
+    const { t } = await started([0, 0, 1], [0, 0, 1], NO_AXIS);
+    t["onKey"](new KeyboardEvent("keydown", { key: "t", code: "KeyT" }));
+    expect(picking(t)).toBe(false);
   });
 });

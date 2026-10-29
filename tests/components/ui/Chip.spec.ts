@@ -39,14 +39,10 @@ describe("Chip", () => {
     expect([w.find("svg").attributes("data-icon"), w.text()]).toEqual(["dot", "Live"]);
   });
 
-  it("as a button is type=button and writes title and aria-label from tip and keys", async () => {
+  it("as a button is type=button, named by the tip, with the keys in title and aria-keyshortcuts", async () => {
     const { w, onClick } = await render({ as: "button", tip: "Filter", keys: "F" });
-    expect([w.element.tagName, w.attributes("type"), w.attributes("title"), w.attributes("aria-label")]).toEqual([
-      "BUTTON",
-      "button",
-      "Filter (F)",
-      "Filter (F)",
-    ]);
+    const attrs = ["type", "title", "aria-label", "aria-keyshortcuts"].map((a) => w.attributes(a));
+    expect([w.element.tagName, ...attrs]).toEqual(["BUTTON", "button", "Filter (F)", "Filter", "F"]);
     await w.trigger("click");
     expect(onClick).toHaveBeenCalledTimes(1);
   });

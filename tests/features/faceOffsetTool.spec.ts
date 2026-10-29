@@ -13,6 +13,7 @@ import type { Feature, Selector } from "../../src/types";
 import type { RoundFace } from "../../src/features/radialDrag";
 import type { FaceAxisReply } from "../../src/geometry/client";
 import { usePromptStore } from "../../src/stores/prompt";
+import { setA11yPref } from "../../src/ui/a11yPrefs";
 
 let frames: (() => void)[] = [];
 const flushFrame = () => {
@@ -383,5 +384,49 @@ describe("FaceOffsetTool", () => {
       expect(field().label).toBe("Diameter");
       expect(Number(field().value)).toBeCloseTo(4, 6);
     });
+  });
+});
+
+describe("Thicken's S key", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    frames = [];
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    vi.stubGlobal("requestAnimationFrame", (fn: () => void) => {
+      frames.push(fn);
+      return frames.length;
+    });
+    vi.stubGlobal("cancelAnimationFrame", () => {});
+  });
+  afterEach(() => {
+    setA11yPref("singleKeys", true);
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    document.body.innerHTML = "";
+  });
+
+  function dragging() {
+    const { vp, canvas } = fakeViewport();
+    const t = new FaceOffsetTool(vp, fakeStore().store);
+    t.start("thicken", () => {});
+    dragTo(t, canvas, 2, { release: false });
+    return t;
+  }
+  const symmetric = (t: FaceOffsetTool) => (t as unknown as { symmetric: boolean }).symmetric;
+  const press = (key: string, code: string) => window.dispatchEvent(new KeyboardEvent("keydown", { key, code }));
+
+  it("grows the wall both ways by the physical key on a Cyrillic layout", () => {
+    const t = dragging();
+    press("ы", "KeyS");
+    expect(symmetric(t)).toBe(true);
+    t.cancel();
+  });
+
+  it("does nothing with Single key shortcuts off", () => {
+    setA11yPref("singleKeys", false);
+    const t = dragging();
+    press("s", "KeyS");
+    expect(symmetric(t)).toBe(false);
+    t.cancel();
   });
 });

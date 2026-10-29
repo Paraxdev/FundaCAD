@@ -28,6 +28,7 @@ import { RotateDial } from "../viewport/rotateDial";
 import { themedAxis } from "../viewport/originTriad";
 import { overlayMaterial } from "../viewport/overlayMaterial";
 import { resolveShortcut } from "../input/shortcuts";
+import { latinKey } from "../input/platform";
 import { createSlimRing, ringLook, type SlimRing } from "./slimRing";
 
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
@@ -579,7 +580,7 @@ export class MoveTool {
 
   private onKey(e: KeyboardEvent) {
     // The raised gizmo's field already has focus, so the tool's own key would otherwise be typed into it.
-    if (this.ambient && resolveShortcut(e.key.toLowerCase(), e.shiftKey, "model", e.ctrlKey || e.metaKey) === "move") {
+    if (this.ambient && resolveShortcut(latinKey(e), e.shiftKey, "model", e.ctrlKey || e.metaKey) === "move") {
       e.preventDefault();
       e.stopImmediatePropagation();
       this.claim();

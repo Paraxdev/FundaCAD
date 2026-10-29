@@ -135,22 +135,24 @@ describe("Button", () => {
     ]);
   });
 
-  it("writes the same title and aria-label from tip and keys through fmtKeys on an icon only button", async () => {
+  it("names an icon only button by the tip alone and hands the keys to the title and aria-keyshortcuts", async () => {
     setMacForTest(true);
     const mac = await render({ tip: "Save", keys: "Ctrl+S" }, null);
-    expect([mac.w.attributes("title"), mac.w.attributes("aria-label")]).toEqual(["Save (⌘+S)", "Save (⌘+S)"]);
+    const attrs = (w: typeof mac.w) => ["title", "aria-label", "aria-keyshortcuts"].map((a) => w.attributes(a));
+    expect(attrs(mac.w)).toEqual(["Save (⌘+S)", "Save", "Meta+S"]);
     setMacForTest(false);
     const pc = await render({ tip: "Save", keys: "Ctrl+S" }, null);
-    expect([pc.w.attributes("title"), pc.w.attributes("aria-label")]).toEqual(["Save (Ctrl+S)", "Save (Ctrl+S)"]);
+    expect(attrs(pc.w)).toEqual(["Save (Ctrl+S)", "Save", "Control+S"]);
   });
 
   it("writes the tip as title only when a visible label names the button", async () => {
     setMacForTest(false);
     const { w } = await render({ tip: "Save the file", keys: "Ctrl+S" });
-    expect([w.attributes("title"), w.attributes("aria-label"), w.text()]).toEqual([
+    expect([w.attributes("title"), w.attributes("aria-label"), w.text(), w.attributes("aria-keyshortcuts")]).toEqual([
       "Save the file (Ctrl+S)",
       undefined,
       "Save",
+      "Control+S",
     ]);
   });
 

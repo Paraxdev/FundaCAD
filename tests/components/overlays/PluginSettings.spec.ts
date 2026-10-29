@@ -5,6 +5,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { defineComponent, h, nextTick } from "vue";
 import { enableAutoUnmount, mount } from "@vue/test-utils";
+import { createPinia, setActivePinia } from "pinia";
 import PluginsSection from "../../../src/components/overlays/PluginsSection.vue";
 import { contribute, resetContributions } from "../../../src/plugins/contrib";
 import { definePluginSettings, type PluginSettings } from "../../../src/plugins/settings";
@@ -359,16 +360,37 @@ describe("each kind of schema field", () => {
     expect(k.get("tint")).toBe("#00ff00");
   });
 
-  it("captures a key combination, and clears it with Backspace", async () => {
+  it("captures a key combination in a dialog the button opens, never on focus, and Clear empties it", async () => {
+    setActivePinia(createPinia());
+    const settle = () => new Promise((r) => setTimeout(r, 5));
+    const pad = () => document.querySelector<HTMLElement>(".key-capture-pad");
     const row = await field("hotkey");
     const key = row.get("button.plugset-key");
+    const press = async (init: KeyboardEventInit) => {
+      pad()!.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...init }));
+      await settle();
+    };
+    const open = async () => {
+      await key.trigger("click");
+      await settle();
+    };
     expect(row.get(".pref-title").attributes("for")).toBe(key.attributes("id"));
     await key.trigger("focus");
-    expect(key.text()).toBe("Press a key…");
-    await key.trigger("keydown", { key: "j", ctrlKey: true, shiftKey: true });
-    expect(k.get("hotkey")).toBe("Ctrl+Shift+J");
-    await key.trigger("keydown", { key: "Backspace" });
-    expect(k.get("hotkey")).toBe("");
+    await key.trigger("keydown", { key: "j" });
+    expect([pad(), k.get("hotkey")]).toEqual([null, "Ctrl+K"]);
+    await open();
+    await press({ key: "j", code: "KeyJ", ctrlKey: true, shiftKey: true });
+    expect([pad(), k.get("hotkey")]).toEqual([null, "Ctrl+Shift+J"]);
+    await open();
+    await press({ key: "ArrowUp", code: "ArrowUp", altKey: true });
+    expect(k.get("hotkey")).toBe("Alt+Up");
+    await open();
+    await press({ key: "\u043e", code: "KeyJ" });
+    expect(k.get("hotkey")).toBe("J");
+    await open();
+    (document.querySelector(".ui-dialog .btn-ghost") as HTMLElement).click();
+    await settle();
+    expect([pad(), k.get("hotkey")]).toEqual([null, ""]);
   });
 
   it("commits a typed file path", async () => {

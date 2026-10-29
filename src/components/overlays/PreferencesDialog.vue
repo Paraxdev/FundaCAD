@@ -133,7 +133,7 @@ onMounted(() => {
     onA11yPrefsChange(() => {
       a11y.value = a11yPrefs();
       reducesMotion.value = systemReducesMotion();
-      if (a11y.value.verbosity !== "verbose") presetNote.value = "";
+      if (a11y.value.verbosity !== "verbose" || a11y.value.singleKeys) presetNote.value = "";
     }),
     onNavPrefsChange(() => {
       nav.value = getNavPrefs();
@@ -213,6 +213,7 @@ const a11yChanged = computed(
   () =>
     a11y.value.animations !== DEFAULT_A11Y.animations ||
     a11y.value.verbosity !== DEFAULT_A11Y.verbosity ||
+    a11y.value.singleKeys !== DEFAULT_A11Y.singleKeys ||
     dwell.value !== DEFAULT_DWELL_MS,
 );
 function pickAnimations(id: string) {
@@ -229,7 +230,7 @@ async function screenReaderPreset() {
   // Emptied for a tick first, so a second press changes the live region and is spoken again.
   presetNote.value = "";
   await nextTick();
-  presetNote.value = "Announcements set to Verbose.";
+  presetNote.value = "Announcements set to Verbose and Single key shortcuts turned off.";
 }
 
 // Note: Slider puts fallthrough attributes on its wrapper and repeats aria-valuetext in its output,
@@ -238,6 +239,12 @@ const vRangeHint: Directive<HTMLElement, string> = {
   mounted(el, { value }) {
     el.querySelector("input[type=range]")?.setAttribute("aria-describedby", value);
     el.querySelector("output")?.setAttribute("aria-hidden", "true");
+  },
+};
+// Checkbox puts fallthrough attributes on its label, so the box itself takes the hint here.
+const vCheckHint: Directive<HTMLElement, string> = {
+  mounted(el, { value }) {
+    el.querySelector("input[type=checkbox]")?.setAttribute("aria-describedby", value);
   },
 };
 
@@ -793,8 +800,9 @@ function onClassicCamera(on: boolean) {
             >
             <span id="prefs-a11y-preset-status" class="prefs-a11y-status" role="status">{{ presetNote }}</span>
             <p id="prefs-a11y-actions-hint" class="pref-hint">
-              Screen reader preset sets Announcements to Verbose, the setup that suits NVDA, VoiceOver and other screen
-              readers. Reset to defaults clears every choice below, so Animations follows the system again.
+              Screen reader preset sets Announcements to Verbose and turns Single key shortcuts off, the setup that
+              suits NVDA, VoiceOver and other screen readers. Reset to defaults clears every choice below, so Animations
+              follows the system again.
             </p>
           </div>
 
@@ -858,6 +866,21 @@ function onClassicCamera(on: boolean) {
                 <p id="prefs-hover-dwell-hint" class="pref-hint">
                   How long the pointer rests on a part before its face is highlighted instead of the whole part. A click
                   selects whatever is highlighted, so a longer delay makes it easier to select whole parts.
+                </p>
+              </div>
+              <div class="pref-card">
+                <Checkbox
+                  id="prefs-single-keys"
+                  v-check-hint="'prefs-single-keys-hint'"
+                  class="pref-head pref-check"
+                  :model-value="a11y.singleKeys"
+                  @update:model-value="(on: boolean) => setA11yPref('singleKeys', on)"
+                  ><span class="pref-title">Single key shortcuts</span></Checkbox
+                >
+                <p id="prefs-single-keys-hint" class="pref-hint">
+                  Letter, digit and symbol keys on their own start tools and views, such as E for Extrude. Turn this off
+                  when voice control or screen reader browse mode types letters. Ctrl or Cmd chords, Escape, Delete, the
+                  F keys, the arrows and the command palette keep working.
                 </p>
               </div>
             </div>

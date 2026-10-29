@@ -9,6 +9,7 @@ import type { DocumentStore } from "../../src/document/store";
 import type { Viewport } from "../../src/viewport/viewport";
 import type { Feature, Selector } from "../../src/types";
 import { usePromptStore } from "../../src/stores/prompt";
+import { setA11yPref } from "../../src/ui/a11yPrefs";
 
 let frames: (() => void)[] = [];
 const flushFrame = () => {
@@ -227,5 +228,48 @@ describe("DraftTool Enter", () => {
     expect(s.added).toHaveLength(0);
     expect(t.active).toBe(true);
     expect(usePromptStore().text).toMatch(/Draft refused: Draft: the face would fold over itself/);
+  });
+});
+
+describe("DraftTool X key", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    frames = [];
+    vi.stubGlobal("requestAnimationFrame", (fn: () => void) => {
+      frames.push(fn);
+      return frames.length;
+    });
+    vi.stubGlobal("cancelAnimationFrame", () => {});
+  });
+  afterEach(() => {
+    setA11yPref("singleKeys", true);
+    vi.unstubAllGlobals();
+    document.body.innerHTML = "";
+  });
+
+  function started() {
+    const t = new DraftTool(fakeViewport(), fakeStore().store);
+    t.start(() => {});
+    return t;
+  }
+  const press = (key: string, code: string) => window.dispatchEvent(new KeyboardEvent("keydown", { key, code }));
+
+  it("cycles the pull axis by the physical key on a Cyrillic layout", () => {
+    const t = started();
+    const axis = () => /pull along ([XYZ]), X cycles/.exec(usePromptStore().text ?? "")?.[1];
+    const was = axis()!;
+    press("ч", "KeyX");
+    expect(axis()).toBe({ X: "Y", Y: "Z", Z: "X" }[was]);
+    t.cancel();
+  });
+
+  it("with Single key shortcuts off, X does nothing and the prompt drops it", () => {
+    setA11yPref("singleKeys", false);
+    const t = started();
+    const before = usePromptStore().text;
+    press("x", "KeyX");
+    expect(usePromptStore().text).toBe(before);
+    expect(before).toMatch(/· pull along [XYZ] · click to commit · Esc$/);
+    t.cancel();
   });
 });

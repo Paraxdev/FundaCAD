@@ -9,6 +9,7 @@ import { PATH_TRACING_OFF, resetPathTracedOverride, type RenderTier } from "../.
 import { renderPrefs, setRenderPref } from "../../../src/ui/renderPrefs";
 import { useUiStore } from "../../../src/stores/ui";
 import { setInputModalityForTest } from "../../../src/ui/inputModality";
+import { setMacForTest } from "../../../src/input/platform";
 
 enableAutoUnmount(afterEach);
 
@@ -264,7 +265,7 @@ describe("ViewportControls View mode and toolbar", () => {
     ]);
     const own = bar.findAll("button").filter((b) => !b.element.closest('[role="radiogroup"]'));
     expect(own.map((b) => b.attributes("tabindex")).filter((t) => t === "0")).toEqual(["0"]);
-    (w.get('[aria-label="Reset camera (Shift+Home)"]').element as HTMLElement).focus();
+    (w.get('[aria-label="Reset camera"]').element as HTMLElement).focus();
     await press("ArrowDown");
     expect(focusedName()).toBe("Realtime (Z)");
     await press("ArrowDown");
@@ -272,5 +273,19 @@ describe("ViewportControls View mode and toolbar", () => {
     expect(focusedName()).toBe("Display");
     await press("ArrowUp");
     expect(focusedName()).toBe("Realtime (Z)");
+  });
+});
+
+describe("ViewportControls History button", () => {
+  afterEach(() => setMacForTest(null));
+
+  it.each([
+    [false, "History (Ctrl+Alt+H)", "Control+Alt+H Control+Shift+2"],
+    [true, "History (⌘+Shift+2)", "Meta+Shift+2"],
+  ])("on macOS %s is named History and announces every chord of the platform", async (mac, title, keys) => {
+    setMacForTest(mac);
+    const { w } = await render(TIER);
+    const btn = w.get('button[aria-label="History"]');
+    expect([btn.attributes("title"), btn.attributes("aria-keyshortcuts")]).toEqual([title, keys]);
   });
 });

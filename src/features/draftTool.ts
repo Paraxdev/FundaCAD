@@ -13,6 +13,8 @@ import { MAX_DRAFT_DEG, draftAngle, draftDelta, draftLever, pullAxisFor, type Ax
 import { CanvasGesture } from "./canvasGesture";
 import { previewVerdict } from "./previewVerdict";
 import { HeldSignal } from "./heldEdit";
+import { toolChar } from "../input/shortcuts";
+import { singleKeysOn } from "../ui/a11yPrefs";
 
 type Phase = "pick" | "drag";
 
@@ -165,7 +167,7 @@ export class DraftTool {
       return;
     }
     // The pull axis is a guess from the normal, a coin toss on a face at 45 degrees to two axes, so X cycles it.
-    if ((e.key === "x" || e.key === "X") && this.phase === "drag") {
+    if (toolChar(e) === "x" && this.phase === "drag") {
       this.pull = this.pull === "X" ? "Y" : this.pull === "Y" ? "Z" : "X";
       this.lever = this.leverFor(this.pull);
       this.pushPreview();
@@ -176,7 +178,7 @@ export class DraftTool {
   private prompt() {
     const n = this.faces.length > 1 ? `${this.faces.length} faces, ` : "";
     setPrompt(
-      `${n}drag or type an angle (max ${MAX_DRAFT_DEG}°) · pull along ${this.pull}, X cycles · click to commit · Esc`,
+      `${n}drag or type an angle (max ${MAX_DRAFT_DEG}°) · pull along ${this.pull}${singleKeysOn() ? ", X cycles" : ""} · click to commit · Esc`,
     );
   }
 

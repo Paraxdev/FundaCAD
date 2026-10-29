@@ -1,10 +1,13 @@
 // The MCAD-style keymap, dispatching from the table in shortcuts.ts. File shortcuts are handled in main.ts.
 
 import { resolveShortcut } from "./shortcuts";
-import { isEditableTarget, isLiveFocusTarget, isSelectTrigger } from "../ui/focus";
+import { comboKey, latinKey } from "./platform";
+import { isEditableTarget, isLiveFocusTarget, isSelectTrigger, widgetOwnsKey } from "../ui/focus";
 
-export function installKeymap(onAction: (a: string) => void, context: () => "model" | "sketch") {
-  window.addEventListener("keydown", (e) => {
+/** Returns the uninstall. */
+export function installKeymap(onAction: (a: string) => void, context: () => "model" | "sketch"): () => void {
+  const onKey = (e: KeyboardEvent) => {
+    if (widgetOwnsKey(e)) return;
     // A Select trigger holds no text to undo, so its Ctrl combos reach the keymap as a button's do.
     const selectCombo = (e.ctrlKey || e.metaKey) && isSelectTrigger(e.target);
     if (isEditableTarget(e.target) && !selectCombo) {
@@ -12,7 +15,7 @@ export function installKeymap(onAction: (a: string) => void, context: () => "mod
       if (e.target instanceof HTMLElement && !isLiveFocusTarget(e.target)) e.target.blur();
       else return;
     }
-    const k = e.key.toLowerCase();
+    const k = e.ctrlKey || e.metaKey ? comboKey(e) : latinKey(e);
 
     if (e.ctrlKey || e.metaKey) {
       if (k === "z" && !e.shiftKey) return (onAction("undo"), e.preventDefault());
@@ -40,5 +43,7 @@ export function installKeymap(onAction: (a: string) => void, context: () => "mod
       e.preventDefault();
       onAction(action);
     }
-  });
+  };
+  window.addEventListener("keydown", onKey);
+  return () => window.removeEventListener("keydown", onKey);
 }
