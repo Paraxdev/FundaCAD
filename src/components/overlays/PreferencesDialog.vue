@@ -778,8 +778,8 @@ function onClassicCamera(on: boolean) {
           <div class="prefs-group" role="group" aria-labelledby="prefs-a11y-speech">
             <h4 id="prefs-a11y-speech" class="prefs-group-title">Speech</h4>
             <div class="prefs-grid">
-              <div class="pref-card">
-                <div class="pref-head">
+              <div class="pref-card wide">
+                <div class="pref-head pref-wrap">
                   <span class="pref-title">Announcements</span>
                   <Segmented
                     id="prefs-verbosity"

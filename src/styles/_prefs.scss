@@ -167,6 +167,10 @@ label.pref-head {
 .pref-head > .ui-segmented {
   flex: none;
 }
+/* Four segments do not fit beside a title in one column, so they drop under it instead of leaving the card. */
+.pref-head.pref-wrap {
+  flex-wrap: wrap;
+}
 
 /* A card's slider keeps the card look: title and value on the head row, the track full width below. */
 .pref-card > .ui-slider {
