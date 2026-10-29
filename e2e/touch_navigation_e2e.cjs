@@ -37,7 +37,11 @@ const check = (name, ok, detail) => {
 (async () => {
   fs.mkdirSync(OUT, { recursive: true });
   const browser = await chromium.launch({ executablePath: EXE, args: ["--use-angle=swiftshader", "--no-sandbox"] });
-  const context = await browser.newContext({ viewport: { width: 1400, height: 900 }, hasTouch: true });
+  const context = await browser.newContext({
+    colorScheme: "dark",
+    viewport: { width: 1400, height: 900 },
+    hasTouch: true,
+  });
   const page = await context.newPage();
   page.on("pageerror", (e) => {
     console.error("PAGE ERROR:", e.message);

@@ -5,9 +5,20 @@
 file = "assets/readme/ui-overview.png"
 size = [1600, 1000]
 theme = "fundacad"
-crop = "copy"
-from = "manual/docs/img/ui-overview.png"
-show = "Copy of manual/docs/img/ui-overview.png, also a Flathub screenshot. Copy it after that one is retaken."
+crop = "window"
+park = [1450, 960]
+pause = 1600
+steps = [
+  { open = "fixture:readme-gearbox.json", name = "Planetary gearbox.funda" },
+  { wait = 1500 },
+  { panel = "items" },
+  { panel = "history" },
+  { press = "Escape" },
+  { evaluate = "() => document.documentElement.classList.remove('no-glass-blur')" },
+  { evaluate = "() => { document.activeElement?.blur(); const el = document.elementFromPoint(845, 600); el.dispatchEvent(new WheelEvent('wheel', { deltaY: -300, clientX: 845, clientY: 600, bubbles: true, cancelable: true })); }" },
+  { wait = 800 },
+]
+show = "The whole window at 1600x1000 with an exploded planetary gearbox, the Items card, the tool rail and the History card. Same file as the manual copy of ui-overview.png. Also a Flathub screenshot."
 alt = "FundaCAD main window with an exploded planetary gearbox, the Items card, the tool rail and the History"
 uses = ["README.md"]
 
@@ -16,7 +27,18 @@ file = "docs/design/workspace-dark.png"
 size = [1200, 736]
 theme = "fundacad"
 crop = "window"
-stub = true
+park = [1060, 700]
+pause = 1200
+steps = [
+  { open = "example:Wall bracket" },
+  { wait = 1200 },
+  { panel = "items" },
+  { panel = "history" },
+  { press = "Escape" },
+  { evaluate = "() => { const el = document.elementFromPoint(655, 350); el.dispatchEvent(new WheelEvent('wheel', { deltaY: -150, clientX: 655, clientY: 350, bubbles: true, cancelable: true })); }" },
+  { wait = 800 },
+  { evaluate = "() => { document.activeElement?.blur(); document.documentElement.classList.remove('no-glass-blur'); }" },
+]
 show = "The workspace in FundaCAD Noir, every panel floating over the model as glass."
 alt = "The workspace in FundaCAD Noir: every panel floats over the model as glass"
 uses = ["docs/DESIGN.md"]
@@ -35,8 +57,19 @@ file = "docs/design/workspace-blur-off.png"
 size = [1200, 736]
 theme = "fundacad"
 crop = "window"
-stub = true
-show = "The same workspace with blur off: opaque fills, same shapes and shadows."
+park = [1060, 700]
+pause = 1200
+steps = [
+  { open = "example:Wall bracket" },
+  { wait = 1200 },
+  { panel = "items" },
+  { panel = "history" },
+  { press = "Escape" },
+  { evaluate = "() => { const el = document.elementFromPoint(655, 350); el.dispatchEvent(new WheelEvent('wheel', { deltaY: -150, clientX: 655, clientY: 350, bubbles: true, cancelable: true })); }" },
+  { wait = 800 },
+  { evaluate = "() => { document.activeElement?.blur(); document.documentElement.classList.add('no-glass-blur'); }" },
+]
+show = "The same workspace as workspace-dark.png with blur off: opaque fills, same shapes and shadows."
 alt = "Blur off: opaque fills, same shapes and shadows"
 uses = ["docs/DESIGN.md"]
 
@@ -45,7 +78,20 @@ file = "docs/design/context-menu-dark.png"
 size = [1200, 736]
 theme = "fundacad"
 crop = "window"
-stub = true
+pause = 1200
+steps = [
+  { open = "example:Wall bracket" },
+  { wait = 1200 },
+  { panel = "items" },
+  { press = "Escape" },
+  { mouse = "down", at = [640, 620], button = "middle" },
+  { mouse = "move", by = [-150, 0], steps = 12 },
+  { mouse = "up", button = "middle" },
+  { evaluate = "() => { document.activeElement?.blur(); document.documentElement.classList.remove('no-glass-blur'); }" },
+  { mouse = "down", at = [625, 300], button = "right" },
+  { mouse = "up", button = "right" },
+  { wait = 600 },
+]
 show = "A context menu open in the workspace and the selection state of the shell, FundaCAD Noir."
 alt = "A context menu and the selection state of the shell"
 uses = ["docs/DESIGN.md"]
@@ -55,7 +101,19 @@ file = "docs/design/preferences-dark.png"
 size = [1200, 736]
 theme = "fundacad"
 crop = "window"
-stub = true
+park = [1180, 720]
+pause = 1200
+steps = [
+  { open = "example:Wall bracket" },
+  { wait = 1200 },
+  { panel = "items" },
+  { panel = "history" },
+  { press = "Escape" },
+  { evaluate = "() => { document.activeElement?.blur(); document.documentElement.classList.remove('no-glass-blur'); }" },
+  { panel = "preferences" },
+  { wait = 600 },
+  { evaluate = "() => document.activeElement?.blur()" },
+]
 show = "Preferences as a glass dialog with inset wells and one primary button, FundaCAD Noir."
 alt = "Preferences: a glass dialog with inset wells and one primary button"
 uses = ["docs/DESIGN.md"]
@@ -65,7 +123,18 @@ file = "docs/design/workspace-light.png"
 size = [1200, 736]
 theme = "solarized-light"
 crop = "window"
-stub = true
+park = [1060, 700]
+pause = 1200
+steps = [
+  { open = "example:Wall bracket" },
+  { wait = 1200 },
+  { panel = "items" },
+  { panel = "history" },
+  { press = "Escape" },
+  { evaluate = "() => { const el = document.elementFromPoint(655, 350); el.dispatchEvent(new WheelEvent('wheel', { deltaY: -150, clientX: 655, clientY: 350, bubbles: true, cancelable: true })); }" },
+  { wait = 800 },
+  { evaluate = "() => { document.activeElement?.blur(); document.documentElement.classList.remove('no-glass-blur'); }" },
+]
 show = "The same workspace as workspace-dark.png in Solarized Light."
 alt = "The same workspace in Solarized Light"
 uses = ["docs/DESIGN.md"]
@@ -74,9 +143,9 @@ uses = ["docs/DESIGN.md"]
 file = "manual/docs/img/ui-overview.png"
 size = [1600, 1000]
 theme = "fundacad"
-crop = "window"
-stub = true
-show = "The whole window at 1600x1000 with an exploded planetary gearbox, the Items card, the tool rail and the History card. The README and Flathub copy is taken from it."
+crop = "copy"
+from = "assets/readme/ui-overview.png"
+show = "Same picture as assets/readme/ui-overview.png: a gearbox open, the Items card, the tool rail and the History card."
 alt = "FundaCAD with a gearbox open, showing the Items card, the tool rail and the History card"
 uses = ["manual/docs/index.md"]
 
@@ -85,7 +154,7 @@ file = "manual/docs/img/social-card.jpg"
 size = [1200, 630]
 theme = "fundacad"
 crop = "keep"
-show = "The link preview card of the manual site (1200x630 JPEG, og:image). Not a screenshot entry, keep unless it shows an old look."
+show = "The link preview card of the manual site (1200x630 JPEG, og:image). Not a screenshot entry: after ui-overview.png is retaken, crop that picture to the box 8,84 to 1592,916, scale it to 1200x630 and save it as JPEG quality 88."
 uses = ["manual/overrides/main.html"]
 
 [[shot]]

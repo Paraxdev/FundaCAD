@@ -3,9 +3,9 @@ import { flushPromises, mount } from "@vue/test-utils";
 import RenderEnvironment from "../../../src/components/shell/RenderEnvironment.vue";
 import { ENGINE } from "../../../src/app/engineKey";
 import type { Engine } from "../../../src/app/engine";
-import { useEnvLibrary } from "../../../src/ui/environmentImport";
+import { chooseBuiltInEnvironment, useEnvLibrary } from "../../../src/ui/environmentImport";
 import type { EnvEntry, EnvLibrary } from "../../../src/ui/environmentLibrary";
-import { DEFAULT_RENDER, renderPrefs, setRenderPref } from "../../../src/ui/renderPrefs";
+import { DEFAULT_RENDER, ENVIRONMENTS_LIST, renderPrefs, setRenderPref } from "../../../src/ui/renderPrefs";
 import { denoiserState } from "../../../src/viewport/pathtrace/denoiser";
 
 const entry = (id: string, name: string): EnvEntry => ({
@@ -16,7 +16,10 @@ const entry = (id: string, name: string): EnvEntry => ({
   created: 0,
 });
 
-afterEach(() => useEnvLibrary(null));
+afterEach(() => {
+  chooseBuiltInEnvironment(null, "studio");
+  useEnvLibrary(null);
+});
 
 const mountEnv = (tier: object = {}) => {
   useEnvLibrary({ list: async () => [] } as unknown as EnvLibrary);
@@ -43,6 +46,8 @@ describe("RenderEnvironment rename", () => {
     });
     await flushPromises();
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    await w.get('[data-saved-environment="Beta"]').trigger("click");
+    await flushPromises();
     await w.get('[data-rename="Beta"]').trigger("click");
     await flushPromises();
     expect(err).not.toHaveBeenCalled();
@@ -110,12 +115,110 @@ describe("RenderEnvironment naming", () => {
 
   it("renames on blur, once", async () => {
     const { w, calls } = await mountLibrary();
+    await w.get('[data-saved-environment="Alpha"]').trigger("click");
+    await flushPromises();
     await w.get('[data-rename="Alpha"]').trigger("click");
     await flushPromises();
     const input = await type(w, "Bravo");
     await input.trigger("blur");
     await flushPromises();
     expect({ calls, field: w.find(".rd-name").exists() }).toEqual({ calls: ["rename a Bravo"], field: false });
+    w.unmount();
+  });
+});
+
+describe("RenderEnvironment tiles", () => {
+  const key = async (el: Element, k: string) => {
+    el.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true }));
+    await flushPromises();
+  };
+  const mountSaved = async () => {
+    const calls: string[] = [];
+    useEnvLibrary({
+      list: async () => [entry("a", "Alpha"), entry("b", "Beta")],
+      rename: async (id: string, name: string) => {
+        calls.push(`rename ${id} ${name}`);
+        return entry(id, name);
+      },
+      remove: async (id: string) => {
+        calls.push(`remove ${id}`);
+      },
+    } as unknown as EnvLibrary);
+    const engine = {
+      store: null,
+      viewport: { qualityTier: () => "high", onRenderTierChange: () => () => {} },
+    } as unknown as Engine;
+    const w = mount(RenderEnvironment, {
+      attachTo: document.body,
+      global: { provide: { [ENGINE as symbol]: engine } },
+    });
+    await flushPromises();
+    return { w, calls };
+  };
+
+  it("holds the Studio tiles on one Tab stop, the arrows only move focus and Space or Enter picks", async () => {
+    const w = mountEnv();
+    await flushPromises();
+    const grid = w.get('[role="listbox"][aria-label="Environment"]');
+    const tiles = grid.findAll<HTMLElement>("[data-environment]");
+    expect(tiles.map((t) => t.attributes("role"))).toEqual(ENVIRONMENTS_LIST.map(() => "option"));
+    expect(tiles.filter((t) => t.attributes("tabindex") === "0").map((t) => t.attributes("data-environment"))).toEqual([
+      "studio",
+    ]);
+    tiles[0]!.element.focus();
+    await key(tiles[0]!.element, "ArrowRight");
+    expect(document.activeElement).toBe(tiles[1]!.element);
+    expect(renderPrefs().environment).toBe("studio");
+    await key(tiles[1]!.element, " ");
+    expect(renderPrefs().environment).toBe(ENVIRONMENTS_LIST[1]!.id);
+    expect(tiles[1]!.attributes("aria-selected")).toBe("true");
+    await key(tiles[1]!.element, "ArrowRight");
+    await key(tiles[2]!.element, "Enter");
+    expect(renderPrefs().environment).toBe(ENVIRONMENTS_LIST[2]!.id);
+    w.unmount();
+  });
+
+  it("renames the focused saved tile on F2 and gives focus back to it on Escape", async () => {
+    const { w, calls } = await mountSaved();
+    const tiles = w.findAll<HTMLElement>("[data-saved-environment]");
+    expect(w.get('[role="listbox"][aria-label="Saved environments"]').findAll('[role="option"]')).toHaveLength(2);
+    tiles[0]!.element.focus();
+    await key(tiles[0]!.element, "ArrowRight");
+    await key(tiles[1]!.element, "F2");
+    const input = w.get<HTMLInputElement>(".rd-name input");
+    expect({ focused: document.activeElement === input.element, text: input.element.value }).toEqual({
+      focused: true,
+      text: "Beta",
+    });
+    await input.trigger("keydown", { key: "Escape" });
+    await flushPromises();
+    expect({ calls, back: document.activeElement === tiles[1]!.element }).toEqual({ calls: [], back: true });
+    w.unmount();
+  });
+
+  it("deletes the focused saved tile on Delete without the window's own Delete seeing it", async () => {
+    const { w, calls } = await mountSaved();
+    const windowKeys: string[] = [];
+    const spy = (e: KeyboardEvent) => windowKeys.push(e.key);
+    window.addEventListener("keydown", spy);
+    const beta = w.get<HTMLElement>('[data-saved-environment="Beta"]');
+    beta.element.focus();
+    await key(beta.element, "Delete");
+    window.removeEventListener("keydown", spy);
+    expect({ calls, windowKeys }).toEqual({ calls: ["remove b"], windowKeys: [] });
+    w.unmount();
+  });
+
+  it("offers Rename and Delete in the button row only for the saved environment in use", async () => {
+    const { w, calls } = await mountSaved();
+    expect(w.find("[data-rename]").exists()).toBe(false);
+    await w.get('[data-saved-environment="Beta"]').trigger("click");
+    await flushPromises();
+    expect(w.get('[data-saved-environment="Beta"]').attributes("aria-selected")).toBe("true");
+    expect(w.get('[role="group"][aria-label="Your environments"]').find('[data-delete="Beta"]').exists()).toBe(true);
+    await w.get('[data-delete="Beta"]').trigger("click");
+    await flushPromises();
+    expect(calls).toEqual(["remove b"]);
     w.unmount();
   });
 });

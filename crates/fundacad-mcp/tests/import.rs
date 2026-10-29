@@ -530,8 +530,7 @@ fn a_zip(entries: &[(&str, &[u8])]) -> Vec<u8> {
     let mut buf = std::io::Cursor::new(Vec::new());
     {
         let mut z = zip::ZipWriter::new(&mut buf);
-        let options: zip::write::FileOptions<'_, ()> =
-            zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+        let options = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
         for (name, data) in entries {
             z.start_file(*name, options).expect("in memory");
             z.write_all(data).expect("in memory");

@@ -12,6 +12,8 @@ const props = defineProps<
       disabled?: boolean | undefined;
       /** Greyed but still answers a click. */ clickable?: boolean | undefined;
       title?: string | undefined;
+      /** The option's own shortcut in aria-keyshortcuts form, such as "Control+Shift+F". */
+      keyshortcuts?: string | undefined;
     }[];
     modelValue: T | null;
     /** Set by a combobox that keeps focus itself (Select): the highlighted row, and no row takes focus. Left out, the
@@ -19,6 +21,8 @@ const props = defineProps<
     active?: number | undefined;
     /** Names each option `${id}-${index}`, for `aria-activedescendant`. */
     id?: string | undefined;
+    /** Added to every option row, for a caller that draws its own row look. */
+    optionClass?: string | undefined;
   } & Named
 >();
 const emit = defineEmits<{ "update:modelValue": [T]; "update:active": [number] }>();
@@ -55,24 +59,30 @@ function hover(i: number) {
       role="option"
       data-roving
       class="opt-row"
-      :class="{
-        selected: o.value === modelValue,
-        'is-selected': o.value === modelValue,
-        disabled: o.disabled,
-        'is-disabled': o.disabled,
-        'is-active': driven && i === active,
-      }"
+      :class="[
+        optionClass,
+        {
+          selected: o.value === modelValue,
+          'is-selected': o.value === modelValue,
+          disabled: o.disabled,
+          'is-disabled': o.disabled,
+          'is-active': driven && i === active,
+        },
+      ]"
       :tabindex="driven ? -1 : roving.tabindex(i)"
       :aria-selected="o.value === modelValue"
       :aria-disabled="o.disabled || undefined"
+      :aria-keyshortcuts="o.keyshortcuts"
       :title="o.title"
       @focus="roving.onFocus(i)"
       @pointermove="hover(i)"
       @mousedown="driven && $event.preventDefault()"
       @click="pick(o)"
     >
-      <span class="opt-label">{{ o.label }}</span>
-      <span v-if="o.hint" class="opt-hint">{{ o.hint }}</span>
+      <slot :option="o" :index="i" :selected="o.value === modelValue" :active="driven && i === active">
+        <span class="opt-label">{{ o.label }}</span>
+        <span v-if="o.hint" class="opt-hint">{{ o.hint }}</span>
+      </slot>
     </button>
   </div>
 </template>

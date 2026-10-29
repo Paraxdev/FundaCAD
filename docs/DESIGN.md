@@ -128,15 +128,16 @@ Lines (layout dividers only, see [Depth without lines](#depth-without-lines)):
 | Token | Noir | Use |
 |---|---|---|
 | `--line` | `#322c42` | Hairline dividers between the parts of a dialog, menu or dock (`.modal-head`, `.modal-foot`, `.menu-sep`, `.ctx-sep`, `.rd-tabs`, `.prefs-nav`) and the title bar edge |
-| `--line-strong` | `#5c5470` | The scrollbar thumb. Decorative only (2.45:1 on `--panel`) |
+| `--line-strong` | `#847c9a` | The scrollbar thumb and any line that marks a boundary: 3:1 on `--panel` and `--raised` in every shipped theme (`tests/ui/themeContrast.test.ts`) |
 
 Text:
 
 | Token | Noir | Use |
 |---|---|---|
 | `--text` | `#f6f0e4` | Primary text, titles, values |
-| `--text-dim` | `#aaa1b5` | Secondary labels, idle icons, a dimmed tree row |
-| `--text-mute` | `#7d7590` | Hints, caps labels, idle close glyphs, metadata, a hidden tree row. Fails AA on panels in Noir, never for text a user needs |
+| `--text-dim` | `#c4bcd0` | Secondary labels, idle icons, a dimmed tree row |
+| `--text-mute` | `#a9a2ba` | Hints, caps labels, idle close glyphs, metadata, a hidden tree row. 4.5:1 on `--panel`, `--panel-2`, `--raised`, `--raised-2` and the rail pill glass in every shipped theme, like `--text` and `--text-dim` |
+| `--text-faint` | `--text-mute` 70% into `--panel` | Decoration only (a rule, an idle glyph stroke), never text: it sits under 4.5:1 by design |
 
 Accent (also what selected edges, dimensions and manipulator handles are drawn in):
 
@@ -160,6 +161,7 @@ Fills of depth ([3](#3-surfaces-and-elevation) puts them to use):
 | `--float-chip-bg` | `color-mix(in srgb, #fff 10%, var(--float-bg))` | A chip, pill, button or key cap on a card |
 | `--field-bg` | `rgba(0, 0, 0, 0.3)` | A text field or select, sunk below the surface it sits on |
 | `--check-off` | `rgba(0, 0, 0, 0.45)` | An empty checkbox, a deeper well than a field so the small box still reads |
+| `--control-edge` | `--text` 50% over the control (68% in a light theme) | The inset 1px edge of every field like control, 3:1 on the panel around it and on its own fill (`src/ui/contrast.ts`) |
 | `--hover-wash` | `rgba(255, 255, 255, 0.07)` | A hover, laid over the fill of the control |
 | `--float-shadow` | `0 2px 5px rgba(0, 0, 0, 0.32), 0 16px 34px -14px rgba(0, 0, 0, 0.62)` | The one shadow of all glass |
 
@@ -178,7 +180,7 @@ Status:
 | `--error` | `#ff5c5c` | Errors, destructive items, failed steps |
 | `--error-tint` | `rgba(255, 92, 92, 0.14)` | Error backgrounds |
 | `--pick-line` | `#b48cff` | The second pick colour, apart from the accent: the Mirror line or plane, in the view and on its panel field |
-| `--axis-x`, `--axis-y`, `--axis-z` | `#ff5a5a`, `#46d97a`, `#4d8dff` | X, Y and Z in the view: the origin triad and plane tiles, the Move, Pattern and datum gizmos. Colour-Blind Safe trades them for `#e5483a`, `#eedf6b`, `#6aaef0` |
+| `--axis-x`, `--axis-y`, `--axis-z` | `#ff5a5a`, `#46d97a`, `#4d8dff` | X, Y and Z in the view: the origin triad and plane tiles, the Move, Pattern and datum gizmos. Colour-Blind Safe trades them for `#e5483a`, `#eedf6b`, `#6aaef0`. Every palette keeps them at 3:1 on `--viewport-bg`, so the light themes set darker ones |
 
 There is no info, success tint, warn tint or disabled token. Derive them:
 
@@ -187,9 +189,9 @@ There is no info, success tint, warn tint or disabled token. Derive them:
 | Hover of a control | `linear-gradient(var(--hover-wash), var(--hover-wash)), <the control's own fill>` |
 | Menu or list row hover, selected row | `color-mix(in srgb, var(--accent) 16%, transparent)`, text `--accent-hot`, no ring |
 | Tile on | `linear-gradient(var(--accent-wash), var(--accent-wash)), var(--float-tile-bg)` |
-| Field focus | `outline: 1px solid var(--accent)`, no ring and no border change |
+| Field focus | `outline: var(--focus-ring-width) solid var(--accent)`, offset 1px, no ring and no border change |
 | Warn or error surface | `color-mix(in srgb, var(--warn) 9%, var(--float-bg-solid))` (`.perf-pop`), `color-mix(in srgb, var(--error) 22%, var(--float-bg-solid))` (`.toast-error`) |
-| Warn or error small text on glass or a panel | `color-mix(in srgb, var(--warn) 60%, var(--text))` or the same with `--error` (`.sketch-dim.conflict`, `.rel-row.over .rel-sym`); the bare `--warn` and `--error` fall under AA in Solarized Light, keep them for the border |
+| Warn or error small text on glass or a panel | `color-mix(in srgb, var(--warn) 60%, var(--text))` or the same with `--error` (`.sketch-dim.conflict`, `.rel-row.over .rel-sym`); the bare `--warn` and `--error` pass on the panels, keep them for borders and panel text |
 
 ### 2.2 Shape and motion tokens
 
@@ -365,7 +367,7 @@ needs a larger radius to look the same size. Always pair a float radius with
 
 | Class | Component | Use it for |
 |---|---|---|
-| `.float-card` | `components/ui/Card.vue`; Items (`#browser`), History (`#timeline`), Fillet members | A card over the model, with `.float-card-head`, `.float-card-title`, `.float-card-close`, `.float-card-more`, `.float-card-body`, `.float-card-foot` |
+| `.float-card` | `components/ui/Card.vue`; Items (`#browser`), History (`#timeline`), Fillet members | A card over the model, with `.float-card-head`, `.float-card-title` (a heading, h2 unless `level` says otherwise, holding the toggle when collapsible), `.float-card-close`, `.float-card-more`, `.float-card-body`, `.float-card-foot` |
 | `.float-group` | `ViewportControls.vue` | A column or row of `.icon-btn` |
 | `.float-popover` | `components/ui/Popover.vue` | Anything that opens from a button: options, pickers, `Select.vue`'s list |
 | `.context-menu` | `ContextMenuHost.vue` | Right click menus |
@@ -443,8 +445,13 @@ html.no-glass-blur *, html.no-glass-blur *::before, html.no-glass-blur *::after 
 }
 ```
 
-The fills go opaque, while shape, shadow, spacing and accent use stay. This is
-the only legitimate opaque glass, and it must still look finished:
+The fills go opaque, while shape, shadow, spacing and accent use stay. The
+Solid panels setting (Settings, Accessibility) sets the class too, and so do
+More and Maximum contrast, so text over a white or busy model keeps 4.5:1. It
+also adds `solid-panels`, whose rule in `_glass.scss` makes `--float-bg` the
+opaque `--float-bg-solid` in light themes as well, where the plain
+`no-glass-blur` override loses to `:root.theme-light`. These are the only
+legitimate opaque glass, and they must still look finished:
 
 ![Blur off: opaque fills, same shapes and shadows](design/workspace-blur-off.png)
 
@@ -653,12 +660,15 @@ nothing in the set fits, extend the closest base component, with a spec in `test
 
 The props beyond `tip`, `keys`, `disabled` and `disabledReason`, which every control takes.
 
-`Select`, `ChoiceList`, `TextField`, `NumberField`, `Slider`, `Checkbox`, `Segmented` and `Tabs` each need a name:
+`Select`, `ChoiceList`, `Combobox`, `Listbox`, `TextField`, `NumberField`, `Slider`, `Checkbox`, `Segmented` and
+`Tabs` each need a name:
 `label`, the words, or `labelledby`, the id of a visible label (inside a `FieldRow`, the `labelId` its slot hands
 over), never both. Their props take the `Named` union of `components/ui/useName.ts`, so `vue-tsc` refuses a call with
 neither, and in dev a control given neither, nor an `aria-label` or `aria-labelledby` attribute, warns
 "<Kind> has no name". A `Checkbox` may take its slot text instead. `tip` is the tooltip, and only names a control
 given nothing else (a plain JS plugin skips the type check), without its key chord, so a release build still says it.
+A `Select` trigger's name carries its value ("Theme, Dark", or the `labelledby` text then the value), since VoiceOver
+and Orca read only the name of a combobox named by `aria-label`; its open list is named by the label alone.
 
 | Component | For | Props that matter | States |
 |---|---|---|---|
@@ -666,18 +676,21 @@ given nothing else (a plain JS plugin skips the type check), without its key cho
 | `IconButton` | An action shown only as an icon: close, copy, more, a viewport tile | `icon`; `tip`, required, its only name; `size`: `sm` 24, `md` 28 (a card close), `lg` 40 (a tile, default); `variant`: `tile` (default), `plain`, `danger`; `active` makes it a toggle; `badge`, a count; `clickable` | hover, pressed, focus, disabled, on |
 | `Chip` | A tag, a state or a count badge | `variant`: `neutral`, `accent`, `warn`, `error`; `size`: `xs` (a count badge), `sm`, `md` (a chip on the model); `icon`; `label`; `removable` adds a "Remove X" button; `as`: `span` or `button` | a button chip: hover, focus, disabled |
 | `KeyChip` | A shortcut drawn as key caps | `keys`; `inTitle` hides it from a screen reader when the owner's `title` already says it | none, it is a label |
+| `KeyCapture` | A shortcut setting: a button that opens a capture dialog, never armed on focus | `action`, the start of its name; `keys`, in the table's form, empty shows Not set; `problem`, the owner's refusal, spoken in place of the new keys; `clearable` adds Clear; emits `capture` (`key`, `code`, `ctrl`, `shift`, `alt`) and `clear` | as `Button`; the dialog's region shows when it listens |
 | `TextField` | Typed text: a name, a search, a URL | `modelValue`; `commit`: `live` (default) or `change`; `type`: `text`, `search`, `url`; `validate`, `error`; `selectOnFocus`; `size`: `sm` 24 or `md` 32; `leading` and `trailing` slots | focus, error, disabled |
 | `NumberField` | Every number a person types | `modelValue: number \| null`; `commit`: `change` (default) or `live`; `unit` and `units` (the unit and its picker); `parse`, `ui/measure` by default, so units, fractions and a decimal comma read; `validate`; `problem`, a refusal from the kernel; `min`, `max`, `step`; `nullable`; `preview` and `previewEnd`; `widthCh` | focus, error with the rejected text kept, disabled |
 | `UnitChip` | The unit beside a value | `unit`; `options` makes it a picker, without them it is a caption | picker: hover, pressed, open, disabled |
 | `Select` | A choice from a list too long to show at once | `modelValue`; `options` (`value`, `label`, `hint`, `disabled`); `placeholder`; `size`; `variant`: `field` (a well) or `chip` (the `UnitChip` look) | hover, focus, open with an active row, disabled |
+| `Combobox` | A search field over the list of its matches, as the command palette is | `modelValue`, the query; `options` (`value`, `label`, `hint`, `disabled`, `keyshortcuts`); `active` with `v-model:active`, -1 for none; `listClass`, `optionClass`; `pick` emits the chosen value; a `default` slot per option, an `empty` slot | focus, the active row `.is-active`, a disabled option |
+| `Listbox` | A group of picks drawn as the caller's own elements: tiles, swatches, cards | `items` (`value`, `label`, `disabled`); `modelValue`; `multiple` makes it an array, with `v-model:anchor`; the `option` slot hands `attrs` to bind on the caller's element; `apply` on Enter | focus, selected, a disabled option |
 | `Checkbox` | A setting, on any settings page | `modelValue`, `label`, `indeterminate` | hover, pressed, focus, disabled, on, mixed |
 | `Switch` | A live toggle, whose change shows in the model as it flips | `modelValue`; `label`, its name when there is no `tip` | hover, pressed, focus, disabled, on |
 | `SwitchRow` | A labelled row holding a `Switch`, in a tool panel, a popover or feature properties | `modelValue`, `label`, `icon`; `layout`: `float` (the view controls) or `param` (feature properties); a `hint` slot | the row's hover, the switch's states; disabled fades the row as a whole |
 | `Segmented` | A choice of 2 to 5 values, all shown | `modelValue`; `options` (`value`, `label`, `icon`, `tip`, `keys`, `disabled`); `label`, the group's name; `size`: `sm` 24 or `md` 32; `variant`: `bar` (one well) or `chips` (the Render dock); `iconOnly` | hover, pressed, focus, selected, a disabled segment, a disabled group |
 | `Slider` | A value along a range | `modelValue`, `min`, `max`, `step`, `label`, `showValue`, `unit`; `commit`: `live` or `end` (on release) | hover, pressed, focus, disabled |
-| `Tabs` | The pages of one surface | `tabs` (`value`, `label`, `icon`, `disabled`, `title`); `modelValue`; `variant`: `underline` (a card), `bar` (a dock), `nav` (a settings page list, `aria-current`); `orientation`; `label` | hover, pressed, focus, selected, disabled with its reason |
+| `Tabs` | The pages of one surface | `tabs` (`value`, `label`, `icon`, `disabled`, `title`); `modelValue`; `variant`: `underline` (a card), `bar` (a dock), `nav` (a settings page list, `aria-current`); `orientation`; `label`; `panels`, an id base (`useId`) shared with a `TabPanel` around each page, which gives the selected tab `aria-controls` | hover, pressed, focus, selected, disabled with its reason |
 | `Menu`, `MenuItem`, `MenuSeparator` | Popup and context menus | Menu: `anchor`, or `at` (a point) for a context menu, `side`, `align`, `focus`; MenuItem: `label`, `icon`, `keys`, `checked` (a `menuitemcheckbox`), `danger`, a nested `Menu` for a submenu | hover, keyboard focus, pressed, open, checked, danger, disabled |
-| `Popover` | A card that opens from a button: options, pickers | `anchor`, `side`, `align`; `kind`, a class for the card; `minWidth`; `focus`: `first` or `none`; `returnFocus` | open; it closes on Escape and on a press outside |
+| `Popover` | A card that opens from a button: options, pickers | `anchor`, `side`, `align`; `kind`, a class for the card; `minWidth`; `label` or `labelledby` makes it a `dialog` that takes focus to its first control when a key opened it (`focus`: `keyboard`) and gives it back to the opener on close (`returnFocus`); `role="none"` for a card that is part of its opener, like the `Select` list, which then needs no name; `focus`: `first`, `keyboard` or `none` | open; it closes on Escape and on a press outside |
 | `Dialog` | A modal: a task that holds the rest of the app | `title` or the `title` slot; `size`: `sm`, `md`, `lg`; `closeOnEsc`; `initialFocus`; `returnFocus`; a `footer` slot | focus held inside, focus back on close |
 | `ConfirmDialog` | A short question with a few answers, or a checklist to confirm | `title`, `message`; `options` (`value`, `label`, `hint`, `primary`); `danger`; `multi` with `min`; `confirmLabel`, `cancelLabel` | as `Dialog`, and its buttons |
 | `Panel` | A small tool or readout panel ([7.13](#713-tool-and-readout-panels-measure-panel)) | `open`, `title`, `hint`, `closable`, `closeOnEsc`, `panelClass`; `head-actions` and `foot` slots | none of its own, its controls carry theirs |
@@ -685,11 +698,13 @@ given nothing else (a plain JS plugin skips the type check), without its key cho
 | `FieldRow` | A label and its control | `label`; `for`, or the id it hands its slot; `hint`; `error`; `layout`: `inline` or `stacked` | error |
 | `ListRow` | A selectable row in a list, or a row that is a button | `label`, `hint`, `icon`, `selected`; `as`: `option` (inside a listbox, whose owner moves focus) or `button` | hover, pressed, focus, selected, disabled |
 | `RailButton` | A tool on the rail ([7.3](#73-rail-tile-rail-btn-rail-tile-rail-pill)) | as today | as 7.3 |
+| `Toolbar` | A row or column of controls that is one Tab stop: the rail, the view controls, a panel's actions | `label` or `labelledby`; `orientation`: `horizontal` (default), `vertical` or `both`; `wrap`; `tag`. Its buttons are found in the slot, the arrows, Home and End move among them, a nested `Segmented` keeps its own stop and keys, a text field keeps its arrows | none of its own, its controls carry theirs |
 
 Each look is in the subsections below. Three composables sit under them, for a base component that needs one:
 `useDisabled` (below), `useRovingFocus` (one Tab stop, the arrows, Home and End, wrapping; `Segmented`, `Tabs`,
-`Menu`, the `Select` list and the `ConfirmDialog` answers) and `useCommitField` (the draft, commit on Enter or
-blur, revert on Escape, the rejected text kept, the preview debounce; under `TextField` and `NumberField`).
+`Menu`, the `Select` list, the `ConfirmDialog` answers and `Listbox`, which adds the grid arrows and type ahead
+itself; `Toolbar` reuses its `rovingIndex` over the buttons it finds) and `useCommitField` (the draft, commit on
+Enter or blur, revert on Escape, the rejected text kept, the preview debounce; under `TextField` and `NumberField`).
 
 ### States and the one disabled model
 
@@ -701,11 +716,11 @@ painting.
 |---|---|---|
 | Hover | `:hover:not(.is-disabled)` | `--hover-wash` over the fill, or the component's own, below |
 | Pressed | `:active:not(.is-disabled)` | a scale (0.97 on a button, 0.94 on an icon button or a tile) or a deeper wash |
-| Focus visible | `:focus-visible` | the shared outline ([11](#11-accessibility)); a field 1px accent on its well; a segment, tab, menu item or list row inset |
+| Focus visible | `:focus-visible` | the shared outline ([11](#11-accessibility)); a field the same ring on its well, offset 1px; a segment, tab, menu item or list row inset by the ring width |
 | On | `.is-on`, `aria-pressed` or `aria-checked` | `--accent-wash` over the fill with `--accent-hot` ink, or an `--accent` fill on `Checkbox` and `Switch` |
 | Selected | `.is-selected`, `aria-selected` or `aria-checked` | accent 16% or `--accent-wash`, `--accent-hot` |
 | Open | `.is-open`, `aria-expanded` | the hover look, held while its menu or list is open |
-| Error | `.is-error`, `aria-invalid` | `--error-tint`, an `--error` outline while focused, the reason in `title` |
+| Error | `.is-error`, `aria-invalid` | `--error-tint`, the accent ring kept while focused, the reason in `title` |
 | Disabled | `.is-disabled`, `aria-disabled="true"` | opacity 0.45, `cursor: default`, no hover and no press |
 
 Disabled is one model everywhere, `useDisabled` (`src/components/ui/useDisabled.ts`):
@@ -856,20 +871,30 @@ with the last raw button.
 
 ### 7.5 Inputs and selects
 
-A field is a sunken well: `--field-bg`, darker than the surface it sits on, with no edge. Focus draws a 1px accent
-outline on the well, not on the input inside it.
+A field is a sunken well: `--field-bg`, darker than the surface it sits on, ringed by the inset 1px `--control-edge`
+(`box-shadow: inset 0 0 0 1px`, never a border or outline). Focus draws the shared ring on the well, offset 1px, not on
+the input inside it, and the error state keeps it.
 
 | Component | Idle | Focus | Error and other states |
 |---|---|---|---|
-| `TextField`, `NumberField` (`.ui-field`) | squircle, chip radius, fill `--field-bg`; `md` 32px, padding `0 var(--s-3)`, `--fs-small`; `sm` 24px, padding `0 var(--s-2)`, `--fs-micro`; placeholder `--text-mute`; `NumberField` in tabular numbers | `outline: 1px solid var(--accent)` on `:focus-within`, no ring | `.is-error`: fill `--error-tint`, the outline `--error`; disabled, the disabled model |
+| `TextField`, `NumberField` (`.ui-field`) | squircle, chip radius, fill `--field-bg`, the inset `--control-edge`; `md` 32px, padding `0 var(--s-3)`, `--fs-small`; `sm` 24px, padding `0 var(--s-2)`, `--fs-micro`; placeholder `--text-mute`; `NumberField` in tabular numbers | `outline: var(--focus-ring-width) solid var(--accent)` on `:focus-within`, offset 1px, no ring | `.is-error`: fill `--error-tint`, the accent ring kept, the reason tells the error; disabled, the disabled model |
 | `UnitChip` (`.ui-unit-chip`) | a 600 `--text-mute` word on no fill, inside the well | | picker: hover and open `--accent-hot` on `--hover-wash`, pressed `--accent-wash` |
-| `Select` (`.sm-select.select-trigger`) | as the field, plus a drawn caret; `sm` 24px | as the field | `.is-open`: accent 14% into the well, and a `.float-popover.select-pop` of `.opt-row`s whose keyboard row is `.is-active`, washed; disabled keeps its caret |
+| `Select` (`.sm-select.select-trigger`) | as the field, plus a `.select-caret`, a 10px `caretRight` Icon in `--text-dim` centred in the 26px right padding, never a background layer; `sm` 24px; the chip variant has none | as the field, the edge kept | `.is-open`: accent 14% into the well, the caret turns 90deg about its centre to point down (`--t-fast`), and a `.float-popover.select-pop` of `.opt-row`s whose keyboard row is `.is-active`, washed; hover never moves the caret; disabled keeps its caret; in forced colours it draws in the mapped text colour |
 
 Keys. `TextField` in `change` mode and `NumberField`: Enter commits, blur commits, Escape goes back to the last
 committed text and ends a preview; text that does not commit stays, with `aria-invalid` and the reason in its
 `title`. `NumberField` steps with ArrowUp and ArrowDown, ten times with Shift, inside `min` and `max`. `Select` is a
 `role="combobox"` trigger over a `role="listbox"`: ArrowDown or ArrowUp opens it and moves, Home and End, type ahead,
 Enter or Space picks, Escape closes and gives focus back to the trigger.
+
+`Combobox` keeps focus in its input (`role="combobox"`) over a `ChoiceList` in driven mode: ArrowDown and ArrowUp
+move the `aria-activedescendant` row, without wrapping and skipping a disabled one, Enter picks it, and every other
+key edits the query. `Listbox` is one Tab stop: Left and Right step one option, Up and Down one row of the grid (its
+columns measured from where the options sit), Home and End, type ahead on the label, no wrapping, a disabled one
+skipped. Moving focus never selects, since a pick may start a render: Space selects, and Enter emits `apply`. With
+`multiple` (`aria-multiselectable`) Space toggles, Shift with Space or an arrow takes the run from the anchor, and
+Cmd+A on macOS or Ctrl+A elsewhere takes every enabled option. It stops the keys it uses from reaching the window
+shortcuts, so an arrow in a grid does not also turn the view.
 
 Old fields that still paint: `.sm-input` (dialogs, the dock), `.param-row input` (feature values; `.input-error`
 and `.param-stale` use hard coded reds and ambers), native `<select>`s, and `.dim-field` in the value box
@@ -890,10 +915,10 @@ shows in the model as you flip it.
 
 | Component | Idle | On | Disabled | Focus |
 |---|---|---|---|---|
-| `Checkbox` (`.ui-checkbox`) | an 18 by 18 box, squircle, radius half the chip radius, fill `--check-off`, no edge; hover `--hover-wash` over it. The native input lies over the box, so ids, labels and change handlers stay native; Space flips it once | `.is-on`: fill `--accent`, a `--on-accent` tick, hover `--accent-hot`; `.is-mixed` (`indeterminate`) a bar instead of the tick | the box and label fade, no hover | `outline: 2px solid var(--accent)`, offset 2px, round the box |
-| `Switch` (`.ui-switch`, `role="switch"`, `aria-checked`) | 36 by 20, `--r-pill` track `--raised-2`, knob 14px `--text`; hover `--hover-wash` over the track; pressed, the knob stretches | `.is-on`: track `--accent`, hover `--accent-hot`, knob `translateX(16px)` in `--on-accent` | the disabled model | the shared outline |
+| `Checkbox` (`.ui-checkbox`) | an 18 by 18 box, squircle, radius half the chip radius, fill `--check-off`, the inset `--control-edge`; hover `--hover-wash` over it. The native input lies over the box, so ids, labels and change handlers stay native; Space flips it once | `.is-on`: fill `--accent` and no edge, a `--on-accent` tick, hover `--accent-hot`; `.is-mixed` (`indeterminate`) a bar instead of the tick | the box and label fade, no hover | the ring width, offset 2px, round the box |
+| `Switch` (`.ui-switch`, `role="switch"`, `aria-checked`) | 36 by 20, `--r-pill` track `--raised-2` with the inset `--control-edge`, knob 14px `--text`; hover `--hover-wash` over the track; pressed, the knob stretches | `.is-on`: track `--accent` and no edge, hover `--accent-hot`, knob `translateX(16px)` in `--on-accent` | the disabled model | the shared outline |
 | `SwitchRow` (`.ui-switch-row`, a `<label>`) | `float`: padding `6px var(--s-1)`, squircle, chip radius, `--fs-body`, the state "On" or "Off" in `--fs-small` `--text-mute`, row hover `--hover-wash`; `param`: a `--fs-small` `--text-dim` label with the switch at the end | the switch's | the row fades as a whole, the switch inside does not fade again | the switch's |
-| `Slider` (`.ui-slider`) | label `--text-dim`, a 4px `--r-pill` track filled `--accent` up to the value over `--check-off`, a 14px `--text` thumb, the value in `--fs-small` tabular `--text-dim`; hover `scale(1.15)` on the thumb, pressed `scale(1.25)` and `--accent-hot` | | the disabled model | `outline: 2px solid var(--accent)`, offset 2px, round the thumb |
+| `Slider` (`.ui-slider`) | label `--text-dim`, a 4px `--r-pill` track filled `--accent` up to the value, past it `--control-edge` over `--check-off` (a 4px rail takes the edge colour whole, not as a rim; `.profile-slider` too), a 14px `--text` thumb, the value in `--fs-small` tabular `--text-dim`; hover `scale(1.15)` on the thumb, pressed `scale(1.25)` and `--accent-hot` | | the disabled model | the ring round the whole `.ui-slider` row, chip radius, through `:has(.ui-slider-input:focus-visible)`; round the thumb, offset 2px, only where `:has` is missing, as WebKit paints no outline on the thumb |
 
 A click anywhere on a `SwitchRow` flips the switch once, since the row is the switch's label. The old `.sm-slider`
 is a native range with `accent-color: var(--accent)`.
@@ -902,7 +927,7 @@ is a native range with `accent-color: var(--accent)`.
 
 | Component | Idle | Hover | Selected | Focus |
 |---|---|---|---|---|
-| `Segmented` `bar` (`.ui-segmented-bar`) | one well, `--field-bg`, padding 2px, squircle, chip radius; segments `calc(var(--float-chip-radius) - 2px)`, `--text-dim`, 500; `md` `--fs-body`, `sm` `--fs-small` | `--hover-wash`, `--text` | `.is-selected`: `--accent-wash`, `--accent-hot`, 600 | the shared outline, inset |
+| `Segmented` `bar` (`.ui-segmented-bar`) | one well, `--field-bg` with the inset `--control-edge`, padding 2px, squircle, chip radius; segments `calc(var(--float-chip-radius) - 2px)`, `--text-dim`, 500; `md` `--fs-body`, `sm` `--fs-small` | `--hover-wash`, `--text` | `.is-selected`: `--accent-wash`, `--accent-hot`, 600 | the shared outline, inset |
 | `Segmented` `chips` (the Render dock) | separate chips in `--float-chip-bg`, `md` 32px, `sm` 24px | `--hover-wash` over the chip | as `bar` | the shared outline, inset |
 | `Tabs` `underline` (a card, `.float-tabs`) | `--fs-body`, 600, `--text-dim` | `--text` | `.is-selected`: `--text` and a 2px `--accent` underline from 25% to 75% | the shared outline, inset |
 | `Tabs` `bar` (a dock) | 32px chips, `--fs-small`, 500, `--text-mute` | `--hover-wash`, `--text-dim` | `--accent-hot` and a 2px `--accent` bar under it (a bar, not a fill) | the shared outline, inset |
@@ -910,7 +935,8 @@ is a native range with `accent-color: var(--accent)`.
 
 Both are one Tab stop: the arrow keys move and pick, Home and End go to the ends, and a disabled item is skipped.
 `Segmented` is a `radiogroup` of `radio`s, `Tabs` a `tablist` (ArrowUp and ArrowDown when vertical, `nav` is
-vertical by default).
+vertical by default). Each page sits in a `TabPanel` (`panels`, `value`), a `tabpanel` labelled by its tab;
+the `nav` look has no tab panels.
 
 A tab that cannot be chosen yet (the Stress panel's Results before a Run) passes `disabled` and a `title` saying why:
 opacity 0.45, `cursor: default`, no hover. Keep it in the bar rather than hiding it, a bar of one tab reads as a
@@ -941,10 +967,10 @@ The chips on the model and in the dock above keep their own markup until they we
 | Class | Idle | Hover | Selected | Disabled |
 |---|---|---|---|---|
 | `ListRow` (`.ui-list-row`) | padding `7px var(--s-3)`, `--fs-body`, squircle, chip radius, icon `--text-dim`; pressed `--accent-wash`; focus the shared outline, inset | `--hover-wash`, icon `--accent-hot` | `.is-selected`: accent 16% fill, `--accent-hot` | the disabled model, no hover |
-| `.opt-row` (`ChoiceList.vue`) | padding `7px var(--s-3)`, `--fs-body`, chip radius | white 5% wash | `.selected`: accent 16% fill, `--accent-hot` | `.disabled` opacity 0.45, no hover |
+| `.opt-row` (`ChoiceList.vue`) | padding `7px var(--s-3)`, `--fs-body`, chip radius | white 5% wash | `.selected`: accent 16% fill, `--accent-hot`; in a `Combobox` the active row is also `.is-active` | `.disabled` opacity 0.45, no hover |
 | `.ctx-item` (context menu) | padding `var(--s-3) var(--s-4)`, `--fs-body`, chip radius, `.ctx-key` `--fs-micro` `--text-dim` | accent 16%, `--accent-hot` | | `.disabled` opacity 0.45, `pointer-events: none` |
 | `.menu-item` (title bar menu) | padding `var(--s-3) var(--s-4)`, gap `--s-7`, `.menu-shortcut` `--fs-micro` `--text-mute` | accent 16%, `--accent-hot` | `.menu-check` gutter in `--accent` | `[disabled]` `--text-mute`, `pointer-events: none` |
-| `.cmdk-item` | padding `var(--s-3) var(--s-4)`, gap `--s-3`, chip radius | `.active` (pointer or keys): accent 16%, `--accent-hot` | | |
+| `.cmdk-item` | a Combobox option (`role="option"`), padding `var(--s-3) var(--s-4)`, gap `--s-3`, chip radius | `.is-active` (pointer or keys, the `aria-activedescendant` row): accent 16%, `--accent-hot` | | |
 | `.tree-folder`, `.feature-row`, `#timeline .timeline-node` | padding `var(--s-2) var(--s-1)` on `.tree-folder`, `--s-2` on the others (History rows 34px tall), chip radius | `--raised` | `.selected`: accent 16% fill, `--accent-hot` | |
 
 A destructive row is red text: `MenuItem` with `danger` is `--error`, hover `--error-tint`. The old
@@ -985,11 +1011,13 @@ VoiceOver and Orca mostly skip it, and a keyboard, touch or switch user never se
 only name, a state or an error. An icon only control takes an `aria-label` with the same text as its `title`, and
 the shortcut goes in brackets, written as in
 [9](#9-voice-and-wording): `title="Reset camera (Shift+Home)"`. A base control
-writes both from `tip` and `keys`: `<IconButton icon="history" tip="History" keys="Ctrl+Alt+H" />`. A `Button`
+writes both from `tip` and `keys`: `<IconButton icon="history" tip="History" :keys="chordKeys('history')" />`, where
+a window chord that differs per platform (Items, History, the console) comes from `chordKeys()` or `chordHint()` in
+`src/input/platform.ts`, never a literal. A `Button`
 with a word keeps the word as its name and takes the tip as its `title` only, and while a control is disabled its
 `disabledReason` is the `title`. Anywhere else, a text that names Ctrl or Alt goes through `fmtKeys()`
 (`src/input/platform.ts`), which writes the Command and Option glyphs on a Mac:
-`:title="fmtKeys('History (Ctrl+Alt+H)')"`. Do not invent a tooltip popover.
+`:title="fmtKeys('Redo (Ctrl+Shift+Z)')"`. Do not invent a tooltip popover.
 On the model, where a hand cannot spare a hover, show a real element instead.
 
 State goes where every reader gets it: in the name, in `aria-describedby` pointing at text, or in a `.sr-only` span
@@ -1004,9 +1032,9 @@ such as a home card's full path, goes in `aria-describedby` on a `hidden` span, 
 A plugin cannot add selectors to `_glass.scss`, so it draws with what the host gives it. `fundacad/ui`
 (`src/plugins/hostUi.ts`) exports the base set: `Button`, `IconButton`, `Chip`, `KeyChip`, `TextField`,
 `NumberField`, `UnitChip`, `Select`, `Checkbox`, `Switch`, `SwitchRow`, `Segmented`, `Slider`, `Tabs`, `Menu`,
-`MenuItem`, `MenuSeparator`, `Popover`, `Dialog`, `ConfirmDialog`, `Panel`, `Card`, `FieldRow` and `ListRow`, with
-the `SegmentedOption` and `TabItem` types, plus `Icon` and `InlineLabel`. They are the app's own components, not
-copies, so a plugin and the app cannot drift (`tests/components/plugins/hostUi.spec.ts`).
+`MenuItem`, `MenuSeparator`, `Popover`, `Dialog`, `ConfirmDialog`, `Panel`, `Card`, `FieldRow`, `ListRow` and
+`Toolbar`, with the `SegmentedOption` and `TabItem` types, plus `Icon` and `InlineLabel`. They are the app's own
+components, not copies, so a plugin and the app cannot drift (`tests/components/plugins/hostUi.spec.ts`).
 
 The names it exported before stay: `FloatingPanel` and `ModalFrame` (the old contracts over `Panel` and `Dialog`),
 and the Render dock rows `RenderSection`, `RenderSlider`, `RenderSwitch` and `RenderChoices`. Inside them, use base
@@ -1017,13 +1045,15 @@ blur or shadow.
 ### 7.13 Tool and readout panels (`.measure-panel`)
 
 `Panel.vue` is the shell; it draws the glass, and on request a head and a hint. `FloatingPanel.vue` is its old name,
-taking only `open`, `closeOnEsc` and `panelClass`.
+taking only `open`, a required `title`, `closeOnEsc` and `panelClass`; it passes `titleHidden`, so its content draws
+the visible head and marks that copy `aria-hidden="true"`.
 
 ```ts
 defineProps<{
   open: boolean;
   title?: string;
   hint?: string;
+  titleHidden?: boolean; // false
   closable?: boolean; // false
   closeOnEsc?: boolean; // false
   panelClass?: string; // ""
@@ -1037,7 +1067,9 @@ defineEmits<{ close: [] }>();
   panel only through `panelClass` and a rule for that class in `_modals.scss`
   (`.properties-panel` min width 260px, `.stress-panel` 340px wide and
   scrolling).
-- `title` draws the panel's name as its `.measure-title` and names the panel (`role="region"`, `aria-labelledby`);
+- `title` draws the panel's name as its `.measure-title`, an `h2`, and names the panel (`role="region"`,
+  `aria-labelledby`), so heading keys and the rotor reach it. `titleHidden` keeps that `h2` for screen readers only.
+  A panel given no title (a plain JS plugin) is still a region, named by a hidden `h2` that reads Panel;
   `head-actions` sit beside it and `closable` adds the 28px Close button after them. `hint` is the last line, a
   `.measure-hint`; the `foot` slot sits under the content. Without them the content is yours, from the classes below.
 - `closeOnEsc` adds a capture phase `keydown` listener on `window` that emits
@@ -1146,10 +1178,25 @@ guard test cannot see them; hold them to these rules by hand.
 - Neutral parts read tokens through `themeColor` and are read again on a theme
   change.
 - Sizes are screen pixels, held through `gizmoScale.ts` at every zoom.
-- The tiles are 68px, 10px off the axes, one per quadrant facing the home view,
-  never below about 41px. Their 29px corner is the same squircle as `corner-shape:
-  squircle`, a rail tile's 17px on 40px scaled up (`TILE_CORNER_RADIUS_PX` and
-  `SQUIRCLE_EXPONENT` in `src/viewport/originTiles.ts` and `cornerProfile.ts`).
+- Each tile has its corner on the origin and spans the positive side of its two
+  axes, so two of its edges run along the axis arrows. A tile is as long as an
+  arrow, 64px, and while the tiles show both share one floor, so a tile edge and
+  an arrow stay equal at every zoom and never fall below about 41px (hidden, the
+  arrows may shrink to their own floor, `triadMinScale`). Only the far corner is
+  rounded, 27px, the same squircle as `corner-shape: squircle`, a rail tile's 17px
+  on 40px scaled up (`TILE_CORNER_RADIUS_PX` and `SQUIRCLE_EXPONENT` in
+  `src/viewport/originTiles.ts` and `cornerProfile.ts`). While the tiles show,
+  the arrows draw over their rims and under their names (`OriginTriad.drawOver`),
+  so the edges along the axes keep the axis colours.
+- A tile's name sits at its centre. Where the tiles overlap, the tile drawn in
+  front keeps its name there and a name that would cover another name or sit on
+  that tile walks toward its own far corner. A tile seen edge on has its name
+  beside it, on the side away from the other tiles. A press on a name, or in the
+  44px box around it (48px under a coarse pointer), takes its plane, so a plane
+  mostly hidden behind another keeps a full target. The names keep those boxes
+  apart, moving off their walk when they must. Elsewhere, where tiles overlap, a
+  press goes to the one drawn in front (`placeLabels` and `pickPlaneOnScreen` in
+  `src/viewport/planeHit.ts`).
 - What a body hides draws faint, not gone.
 - A name in the scene is a camera facing sprite, `--ui` 700 at 15px times the Viewport label size, inked in
   `--text` or `--viewport-bg`, whichever reads on the ground. It fades out when
@@ -1245,9 +1292,10 @@ The product is spelled FundaCAD.
 UI names are proper nouns mid sentence: History, Items, Home, Preferences.
 Tool names are Title Case (Linear Pattern, Press/Pull). Keys are joined with
 a plus, as in the menus, the command palette and the hint tables: Ctrl+S,
-Ctrl+Alt+H, Shift+Home, Esc, Enter. Write Ctrl and Alt, never the Mac names,
+Ctrl+Shift+Z, Shift+Home, Esc, Enter. Write Ctrl and Alt, never the Mac names,
 and show any text that names them through `fmtKeys()` (`src/input/platform.ts`),
-which turns them into the Command and Option glyphs on a Mac. Use "No X yet" for lists that will fill and
+which turns them into the Command and Option glyphs on a Mac; Control+ names the literal Mac Control key and shows as
+its caret glyph. Use "No X yet" for lists that will fill and
 "X appear here" for passive sources. Technical engine text goes after a plain
 lead; the full text is kept in the console.
 
@@ -1265,8 +1313,16 @@ still loads, the token is dropped.
 Shipped: FundaCAD Noir (built in, dark), Dracula, **Solarized Light** (the light
 one: `--bg #fdf6e3`, `--panel #eee8d5`, `--raised #ffffff`, `--text #073642`,
 `--text-dim #3a4f55`, `--text-mute #4d6165`, `--accent #25669b`,
-`--accent-hot #173f5f`), Colour-Blind Safe, and the Noir Blue, Red and Orange
+`--accent-hot #173f5f`), **FundaCAD Light** (Noir's violet on paper, `--bg #f5f3f9`,
+`--panel #ebe8f2`, `--text #1b1826`, `--accent #4a4fb5`), **High Contrast Dark** and
+**High Contrast Light**, Colour-Blind Safe, and the Noir Blue, Red and Orange
 tints. Users can upload their own palette.
+
+The High Contrast pair keeps a higher bar than the rest: every text token at 7:1
+on every surface and on the panel glass, and `--line-strong`, `--control-edge`,
+the signals and the focus ring (`--accent`) at 4.5:1. Their surfaces are near
+black or near white and set `--control-edge` outright. The dark one uses a cyan
+accent, as yellow is `--warn`.
 
 ![The same workspace in Solarized Light](design/workspace-light.png)
 
@@ -1294,9 +1350,16 @@ and `--text`, so the cards follow the palette.
   on: the card, the solid card, a tile, a chip and a field. `--on-accent` on
   `--accent` is held above 4.5:1 too. A light theme's `--accent-hot` is darker
   than its `--accent`, not lighter, because it is text on an accent tint.
+- **Signals stay apart.** `--ok`, `--warn` and `--error` read at 4.5:1 as text
+  on `--panel` and `--panel-2`, and `--pick-line` at 3:1 on `--viewport-bg`.
+  Two signals that a protanope, deuteranope or tritanope sees within ΔE2000 15
+  of each other differ by at least 10 L*, so lightness tells them apart where
+  hue does not (`deltaE2000` in `src/ui/contrast.ts`).
 
 `tests/ui/designSpec.test.ts` and `tests/ui/themeContrast.test.ts` hold these
-numbers for Solarized Light.
+numbers for every shipped light theme (Solarized Light, FundaCAD Light and High
+Contrast Light). In every theme the focus ring reads at 3:1 on each surface and
+the axes at 3:1 on `--viewport-bg`.
 
 What this means for you:
 
@@ -1316,24 +1379,58 @@ What this means for you:
 Focus:
 
 - The shared outline (`_base.scss`):
-  `:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }`.
+  `:focus-visible { outline: var(--focus-ring-width) solid var(--accent); outline-offset: 1px; }`.
+  `--focus-ring-width` is 2px, and every focus outline reads it (`tests/ui/focusRing.test.ts`).
   It shows on keyboard focus only, never on a pointer click, and it is the one
   outline on a rounded surface ([Depth without lines](#depth-without-lines)).
 - Fields (`TextField`, `NumberField`, `Select`, and the old `.sm-input`,
-  `.param-row input` and Items filter) draw a 1px accent outline with no offset
-  while focused. `Checkbox` draws a 2px outline at a 2px offset around its box,
-  `Slider` around its thumb.
+  `.param-row input` and Items filter) draw the same ring at a 1px offset
+  while focused, and an error keeps it. `Checkbox` draws it at a 2px offset
+  around its box. `Slider` draws it round its whole row through `:has`, since
+  WebKit paints no outline on the thumb, and round the thumb only where `:has`
+  is missing.
 - Tabs, segments, menu items and list rows use an inset outline
-  (`outline-offset: -2px`), so a clipped row does not hide it. On the rail the
+  (`outline-offset: calc(-1 * var(--focus-ring-width))`), so a clipped row
+  does not hide it. On the rail the
   outline is on the `.rail-btn` button, not on the `.rail-tile` inside it.
 - Never use a ring `box-shadow` for focus, and never `outline: none` without a
   replacement.
 
-Contrast (Noir): `--text` on `--panel` 15.35:1, `--text-dim` 7.03:1, `--accent`
-7.13:1, `--accent-hot` 9.97:1, `--on-accent` on `--accent` 7.80:1, `--error`
-5.76:1. `--text-mute` is 4.00:1 on `--panel` and 3.06:1 on `--raised`: hints and
-metadata only. `--line-strong` is decorative. On the light theme every text
-token reaches 4.5:1 ([10](#10-light-and-dark-themes)).
+Contrast (Noir): `--text` on `--panel` 15.35:1, `--text-dim` 9.50:1,
+`--text-mute` 7.11:1 (4.64:1 on `--raised-2`, the lowest), `--accent` 7.13:1,
+`--accent-hot` 9.97:1, `--on-accent` on `--accent` 7.80:1, `--error` 5.76:1,
+`--line-strong` 4.42:1 (3.39:1 on `--raised`) and `--control-edge` 4.72:1.
+`--text-faint` is the one token under 4.5:1, so it never carries text.
+`src/ui/contrast.ts` holds the pairs and `tests/ui/themeContrast.test.ts` runs
+them over every shipped theme:
+
+| Pair | Standard | High Contrast pair |
+|---|---|---|
+| `--text`, `--text-dim`, `--text-mute` on `--panel`, `--panel-2`, `--raised`, `--raised-2`, the panel glass and a solid panel over a white model; `--on-accent` on `--accent` | 4.5:1 | 7:1 |
+| `--line-strong` on `--panel` and `--raised` | 3:1 | 4.5:1 |
+| `--control-edge` on the field well, the empty checkbox, the slider rail and the switch track, and against the panel round them | 3:1 | 4.5:1 |
+| `--ok`, `--warn`, `--error` as text on `--panel` and `--panel-2` | 4.5:1 | 4.5:1 |
+| Two signals a protan, deutan or tritan view merges (dE2000 under 15) | 10 L* apart | 10 L* apart |
+| The focus ring (`--accent`) on every surface and the glass | 3:1 | 4.5:1 |
+| `--axis-x`, `--axis-y`, `--axis-z` and `--pick-line` on `--viewport-bg` | 3:1 | 3:1 |
+
+An uploaded palette is checked against the same pairs at the standard bar: it
+still loads, and the Appearance pane lists the pairs it fails in a status line
+under the picker.
+
+The Contrast setting (Settings, Accessibility: Follow system, Standard, More,
+Maximum) writes `html[data-contrast]`, and `_contrast.scss` swaps tokens over
+any theme: More draws `--text-mute` and `--control-edge` as `--text-dim`,
+Maximum draws `--text-dim`, `--text-mute`, `--line-strong` and
+`--control-edge` as `--text`, and both set `--focus-ring-width` to 3px and turn
+Solid panels on. Follow system gives More when the OS asks for contrast. Solid
+panels (`html.solid-panels`, also in the Screen reader preset) turns the glass
+off and fills panels, tiles and chips with `--float-bg-solid`, so text keeps
+4.5:1 over a white model.
+
+The System theme, the first run default, follows the OS: dark gives FundaCAD
+Noir, light gives FundaCAD Light, and an OS that asks for contrast gives High
+Contrast Dark or Light. A theme the user picked always wins over it.
 
 Semantics: an icon only button has an `aria-label` (and the same `title`).
 Toggles use `aria-pressed`, switches `role="switch"` with `aria-checked`,
@@ -1370,8 +1467,19 @@ in the `title`, opacity 0.45, `cursor: default` and no hover; the control
 swallows its own click and Enter. The old menu and context rows take
 `pointer-events: none` instead.
 
-Not handled yet, so do not rely on them: `prefers-contrast`, `forced-colors`,
-`prefers-reduced-transparency`, a role on the toast stack.
+`prefers-contrast` and `forced-colors` only steer the System theme to High
+Contrast and Follow system contrast to More (`ui/osTheme.ts`), together with the Rust `os_a11y_prefs` command,
+which asks Windows, the desktop portal or gsettings on Linux and macOS
+Increase contrast, as WebKitGTK reports no `prefers-contrast` at all. It is
+asked at startup and again each time the window regains focus or changes
+theme, and gives up on a tool that has not answered within two seconds, which
+keeps the last answer rather than turning contrast off. Under
+`forced-colors` (a Windows contrast theme) `_forced.scss` redraws what the
+browser erases: control edges as an inset 1px ButtonText outline, selected and
+pressed states in Highlight and HighlightText (with `forced-color-adjust: none`,
+as Chromium otherwise draws a Canvas backplate behind their text), the focus
+ring in Highlight and the slider rail in system colours. Not handled yet: `prefers-reduced-transparency`, a
+role on the toast stack.
 
 ## 12. Do and don't
 
@@ -1394,7 +1502,7 @@ Not handled yet, so do not rely on them: `prefers-contrast`, `forced-colors`,
 | Check FundaCAD Noir and Solarized Light | Test only the dark theme |
 | Check with blur off | Rely on blur to make text legible |
 | Use `--t-fast`, `--t-med` and `--ease` | Write `0.14s ease-out` |
-| Write `title` plus `aria-label`, shortcuts as Ctrl+Alt+H through `fmtKeys()` | Build a custom tooltip, or write "Ctrl Alt H" |
+| Write `title` plus `aria-label`, shortcuts as Ctrl+Shift+Z through `fmtKeys()` | Build a custom tooltip, or write "Ctrl Alt H" |
 | Name every base control with `label` or `labelledby`, and put a state in the name, `aria-describedby` or a `.sr-only` span | Leave a state, an error or the only name in a `title`, or label an `Icon` inside a named control |
 | Build a readout from `Panel` and the `.measure-*` classes | Invent `.my-panel-head` and `.my-row` with their own padding |
 | Leave Escape to the tool that owns the panel | Call `claimEscape()` from a tool panel |

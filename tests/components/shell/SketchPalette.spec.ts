@@ -20,6 +20,14 @@ const row = (index: number | null): RelationRow => ({
 });
 
 describe("Sketch palette", () => {
+  it("is a complementary region named by its heading", () => {
+    const w = mount(SketchPalette);
+    const aside = w.get("aside#palette");
+    const h = w.get("h2.palette-title");
+    expect(h.text()).toBe("Sketch palette");
+    expect(aside.attributes("aria-labelledby")).toBe(h.attributes("id"));
+  });
+
   it("squares the view from a base button", async () => {
     const palette = useSketchPaletteStore();
     const lookAt = vi.spyOn(palette, "lookAt").mockImplementation(() => {});

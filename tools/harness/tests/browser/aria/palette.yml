@@ -1,0 +1,5 @@
+- dialog "Command palette":
+  - combobox "Search commands" [expanded]
+  - listbox "Search commands":
+    - option /^Fillet\W+(Modify|MODIFY)\W+F$/
+    - option [selected]

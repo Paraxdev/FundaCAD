@@ -45,7 +45,7 @@ function check(ok, what, detail) {
     ),
   });
   try {
-    const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+    const page = await browser.newPage({ colorScheme: "dark", viewport: { width: 1400, height: 900 } });
     page.on("pageerror", (e) => console.error("PAGE ERROR:", e.message));
     await page.addInitScript((ws) => {
       const W = window.WebSocket;
@@ -155,7 +155,7 @@ function check(ok, what, detail) {
       page.evaluate(() => {
         const v = window.viewport;
         const pressed = [...document.querySelectorAll("[data-view-mode]")]
-          .filter((b) => b.getAttribute("aria-pressed") === "true")
+          .filter((b) => b.getAttribute("aria-checked") === "true")
           .map((b) => b.dataset.viewMode);
         const pt = document.querySelector('[data-view-mode="pathtraced"]');
         return {

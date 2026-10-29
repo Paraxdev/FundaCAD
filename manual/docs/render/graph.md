@@ -16,8 +16,8 @@ The node list has Noise, Scratches, Brushed, Wear and Bands for patterns, Fresne
 
 ## Find your way around
 
-- A dot's colour says whether it carries a value or a colour, and only the same kind connect.
-- Click a wired input to unplug it. The cross on a node removes it.
-- Drag the background to pan and scroll to zoom. Fit brings every node into view.
-- Clear starts over with only the Output node.
-- Drag the top edge of the editor to make it taller.
+1. A dot's colour says whether it carries a value or a colour, and only the same kind connect.
+2. Click a wired input to unplug it. The cross on a node removes it.
+3. Drag the background to pan and scroll to zoom. Fit brings every node into view.
+4. Clear starts over with only the Output node.
+5. Drag the top edge of the editor to make it taller.

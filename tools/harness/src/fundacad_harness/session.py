@@ -159,8 +159,11 @@ class Session(Actions):
         self._browser = self._pw.chromium.launch(
             executable_path=self.chrome, headless=not self.headed, args=chrome_args(self.gpu)
         )
+        # A dark OS, so the System theme the app starts in is Noir, as every shot and check before it.
         ctx = self._browser.new_context(
-            viewport={"width": self.viewport[0], "height": self.viewport[1]}, device_scale_factor=self.scale
+            viewport={"width": self.viewport[0], "height": self.viewport[1]},
+            device_scale_factor=self.scale,
+            color_scheme="dark",
         )
         self.page = ctx.new_page()
         self._page_log = open(self.work / "page.log", "w", encoding="utf-8", errors="replace")

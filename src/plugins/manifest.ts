@@ -202,7 +202,9 @@ export function describeGrants(manifest: PluginManifest): { can: string[]; canno
   for (const g of GRANTS) {
     const copy = COPY[g];
     if (held.has(g)) {
-      can.push(g === "network" ? `Connect to ${manifest.hosts.join(", ")}` : copy.can);
+      if (g === "network") can.push(`Connect to ${manifest.hosts.join(", ")}`);
+      else if (g === "files.read" && engineReadsAnyFile(manifest)) can.push(ANY_FILE);
+      else can.push(copy.can);
     } else if (copy.cannot) {
       cannot.push(copy.cannot);
     }
@@ -210,9 +212,22 @@ export function describeGrants(manifest: PluginManifest): { can: string[]; canno
   return { can, cannot };
 }
 
+const ANY_FILE = "Read any file you can open on this computer";
+
+// The window side reads only picked file handles, the engine's wasm host takes the paths a document's feature fields
+// name, so a geometry component with files.read reaches every file the person can.
+function engineReadsAnyFile(manifest: Pick<PluginManifest, "grants" | "geometryWasm">): boolean {
+  return manifest.geometryWasm !== "" && manifest.grants.includes("files.read");
+}
+
 /** Until each platform's sandbox is wired up, a process plugin's grants describe only what it reaches through FundaCAD,
  *  and the install screen must say so. */
-export function sandboxNote(kind: PluginKind): string {
+export function sandboxNote(manifest: Pick<PluginManifest, "kind" | "grants" | "geometryWasm">): string {
+  const kind = manifest.kind;
+  if ((kind === "panel" || kind === "compute") && engineReadsAnyFile(manifest)) {
+    const where = kind === "panel" ? "Runs inside the window" : "Runs as an isolated calculation";
+    return `${where} with no network, but its geometry can read any file you can open on this computer, so install it only if you trust where it came from.`;
+  }
   switch (kind) {
     case "builtin":
       // The bluntest of the four on purpose: for a built-in the list is a description, not a permission.

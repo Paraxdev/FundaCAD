@@ -87,7 +87,7 @@ fn looks_like_zip(path: &Path) -> bool {
     File::open(path).and_then(|mut f| f.read_exact(&mut buf)).map(|_| &buf == b"PK").unwrap_or(false)
 }
 
-fn is_safe_key(key: &str) -> bool {
+pub fn is_safe_key(key: &str) -> bool {
     !key.is_empty()
         && !key.contains("..")
         && key.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.')
@@ -359,8 +359,13 @@ fn copy_into<W: Write + Seek>(z: &mut zip::ZipWriter<W>, src: &Path) -> Result<(
 }
 
 fn open_archive(path: &Path) -> Result<zip::ZipArchive<File>, String> {
+    let damaged = |_| "This document is damaged and cannot be opened.".to_string();
     let f = File::open(path).map_err(|e| e.to_string())?;
-    zip::ZipArchive::new(f).map_err(|_| "This document is damaged and cannot be opened.".to_string())
+    let mut z = zip::ZipArchive::new(f).map_err(damaged)?;
+    // Local headers that disagree with the central directory, duplicate names or overlapping entries let another
+    // reader see a different document in the same file.
+    z.validate_header_consistency().map_err(damaged)?;
+    Ok(z)
 }
 
 /// Refuse a bomb BEFORE inflating anything.
@@ -428,6 +433,9 @@ pub fn read_container_checked(
 
 fn read_zip_container(path: &Path, blob_dir: &Path, mesh_dir: Option<&Path>) -> Result<(String, Manifest), String> {
     let manifest = read_manifest(path)?;
+    if !manifest.blobs.iter().all(|row| crate::json_doc::is_hash(&row.hash)) {
+        return Err("This document is damaged and cannot be opened.".to_string());
+    }
     std::fs::create_dir_all(blob_dir).map_err(|e| e.to_string())?;
     if let Some(d) = mesh_dir {
         std::fs::create_dir_all(d).map_err(|e| e.to_string())?;

@@ -3,11 +3,26 @@
 // the defaults in _tokens.scss.
 
 import { describe, expect, it } from "vitest";
+import {
+  CONTRAST_TOKENS,
+  CONTROL_EDGE_SHARE,
+  type Rgba,
+  atContrast,
+  contrastFailures,
+  contrastRatio as contrast,
+  deltaE2000,
+  glassFill,
+  lightness,
+  mix,
+  over,
+  paletteContrast,
+  parseColor as parse,
+} from "../../src/ui/contrast";
 import { themes } from "../../src/ui/theme";
 
 const sources = Object.fromEntries(
   Object.entries(
-    import.meta.glob(["../../src/styles/*.scss", "../../src/components/**/*.vue"], {
+    import.meta.glob(["../../src/styles/**/*.scss", "../../src/components/**/*.vue"], {
       query: "?raw",
       import: "default",
       eager: true,
@@ -15,51 +30,20 @@ const sources = Object.fromEntries(
   ).map(([path, text]) => [path.replace(/^(\.\.\/)+/, ""), text]),
 );
 
-type Rgba = [number, number, number, number];
-
-function parse(value: string): Rgba {
-  const v = value.trim();
-  const hex = /^#([0-9a-f]{6})$/i.exec(v);
-  if (hex) {
-    const n = parseInt(hex[1] ?? "", 16);
-    return [(n >> 16) & 255, (n >> 8) & 255, n & 255, 1];
-  }
-  const fn = /^rgba?\(([^)]+)\)$/i.exec(v);
-  if (fn) {
-    const [r = NaN, g = NaN, b = NaN, a = 1] = (fn[1] ?? "").split(",").map(Number);
-    return [r, g, b, a];
-  }
-  throw new Error(`not a colour: ${value}`);
-}
-
-const over = (top: Rgba, under: Rgba): Rgba => {
-  const a = top[3];
-  return [top[0] * a + under[0] * (1 - a), top[1] * a + under[1] * (1 - a), top[2] * a + under[2] * (1 - a), 1];
-};
-const mix = (a: Rgba, pct: number, b: Rgba): Rgba => over([a[0], a[1], a[2], pct], b);
-
-function luminance([r, g, b]: Rgba): number {
-  const lin = (c: number) => {
-    const s = c / 255;
-    return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-  };
-  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
-}
-function contrast(fg: Rgba, bg: Rgba): number {
-  const [a, b] = [luminance(fg), luminance(bg)];
-  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
-}
-
 const NOIR = Object.fromEntries(
   [...(sources["src/styles/_tokens.scss"] ?? "").matchAll(/^\s*(--[\w-]+):\s*(#[0-9a-f]{6}|rgba?\([^)]*\));/gim)].map(
     (m) => [m[1], m[2]],
   ),
 );
 
+const HIGH_CONTRAST = new Set(["high-contrast-dark", "high-contrast-light"]);
+
 const shipped = themes()
   .filter((t) => !t.custom)
   .map((t) => ({
+    id: t.id,
     label: t.label,
+    mode: t.mode,
     palette: { ...NOIR, ...("palette" in t ? (t.palette as Record<string, string>) : {}) },
   }));
 
@@ -89,6 +73,136 @@ describe("theme contrast", () => {
   it("covers Noir and the light theme", () => {
     expect(shipped.map((t) => t.label)).toEqual(expect.arrayContaining(["FundaCAD Noir", "Solarized Light"]));
   });
+
+  it("ships FundaCAD Light and a dark and a light high contrast theme", () => {
+    expect(shipped.map((t) => [t.id, t.label, t.mode])).toEqual(
+      expect.arrayContaining([
+        ["fundacad-light", "FundaCAD Light", "light"],
+        ["high-contrast-dark", "High Contrast Dark", "dark"],
+        ["high-contrast-light", "High Contrast Light", "light"],
+      ]),
+    );
+  });
+
+  it("checks the focus ring on every surface, the axes on the scene and text on the accent fill", () => {
+    const names = paletteContrast(shipped[0]!.palette, "dark").map((r) => r.what);
+    for (const bg of ["--panel", "--panel-2", "--raised", "--raised-2", "the panel glass"]) {
+      expect(names).toContain(`the focus ring on ${bg}`);
+    }
+    for (const axis of ["--axis-x", "--axis-y", "--axis-z"]) expect(names).toContain(`${axis} on --viewport-bg`);
+    expect(names).toContain("--on-accent on --accent");
+  });
+
+  it("holds a high contrast palette to 7:1 text and 4.5:1 lines, edges, signals and the focus ring", () => {
+    const p = shipped[0]!.palette;
+    expect(contrastFailures(p, "dark")).toEqual([]);
+    const high = contrastFailures(p, "dark", "high");
+    expect(high.map((r) => r.what)).toEqual(
+      expect.arrayContaining(["--text-mute on --raised-2", "--line-strong on --raised"]),
+    );
+    expect(high.find((r) => r.what === "--text-mute on --raised-2")?.min).toBe(7);
+    expect(high.find((r) => r.what === "--line-strong on --raised")?.min).toBe(4.5);
+  });
+
+  it("checks every text token on every surface and the strong line on panel and raised", () => {
+    const names = paletteContrast(shipped[0]!.palette, "dark").map((r) => r.what);
+    for (const fg of ["--text", "--text-dim", "--text-mute"]) {
+      for (const bg of ["--panel", "--panel-2", "--raised", "--raised-2", "the rail pill glass"]) {
+        expect(names).toContain(`${fg} on ${bg}`);
+      }
+    }
+    expect(names).toEqual(expect.arrayContaining(["--line-strong on --panel", "--line-strong on --raised"]));
+  });
+
+  it("checks every signal colour as text on the panels and the pick line on the scene", () => {
+    const names = paletteContrast(shipped[0]!.palette, "dark").map((r) => r.what);
+    for (const fg of ["--ok", "--warn", "--error"]) {
+      for (const bg of ["--panel", "--panel-2"]) expect(names).toContain(`${fg} on ${bg}`);
+    }
+    expect(names).toContain("--pick-line on --viewport-bg");
+  });
+
+  it("checks the control edge against the surface around each field like control and against its own fill", () => {
+    const names = paletteContrast(shipped[0]!.palette, "dark").map((r) => r.what);
+    for (const fill of ["the field well", "the empty checkbox and slider rail", "the switch track"]) {
+      for (const on of ["--panel", "--panel-2", "the panel glass"]) {
+        expect(names).toContain(`--control-edge on ${fill} against ${on}`);
+        expect(names).toContain(`--control-edge on ${fill} on ${on}, against the fill`);
+      }
+    }
+  });
+
+  it("fails a control edge that fades into the panel", () => {
+    const faint = { ...shipped[0]!.palette, "--control-edge": "rgba(246, 240, 228, 0.12)" };
+    expect(contrastFailures(faint, "dark").map((r) => r.what)).toContain(
+      "--control-edge on the field well against --panel",
+    );
+  });
+
+  it("_tokens.scss mixes the control edge from the text colour at the share the maths assumes", () => {
+    const tokens = sources["src/styles/_tokens.scss"] ?? "";
+    const pct = (mode: "dark" | "light") => Math.round(CONTROL_EDGE_SHARE[mode] * 100);
+    const root = tokens.slice(tokens.indexOf(":root {"), tokens.indexOf("}", tokens.indexOf(":root {")));
+    const light = tokens.slice(tokens.indexOf(":root.theme-light {"));
+    expect(root).toContain(`--control-edge: color-mix(in srgb, var(--text) ${pct("dark")}%, transparent);`);
+    expect(light.slice(0, light.indexOf("}"))).toContain(
+      `--control-edge: color-mix(in srgb, var(--text) ${pct("light")}%, transparent);`,
+    );
+  });
+
+  // An inset edge, never an outline or border: look H keeps lines off rounded surfaces.
+  const EDGED: [string, string][] = [
+    ["src/styles/ui/_text-field.scss", ".ui-field {"],
+    ["src/styles/ui/_select.scss", ".select-trigger.sm-select,"],
+    ["src/styles/ui/_checkbox.scss", ".ui-checkbox-mark {"],
+    ["src/styles/ui/_switch.scss", ".ui-switch {"],
+    ["src/styles/ui/_segmented.scss", ".ui-segmented-bar {"],
+  ];
+  for (const [path, selector] of EDGED) {
+    it(`${selector.replace(/[\s{,]+$/, "")} draws the control edge inset`, () => {
+      const text = sources[path] ?? "";
+      const at = text.indexOf(selector);
+      expect(at, `${selector} in ${path}`).toBeGreaterThanOrEqual(0);
+      expect(text.slice(at, text.indexOf("}", at))).toContain("box-shadow: inset 0 0 0 1px var(--control-edge);");
+    });
+  }
+
+  it("the slider paints its empty rail in the control edge over the empty well, the range slider too", () => {
+    const slider = sources["src/styles/ui/_slider.scss"] ?? "";
+    const track = slider.slice(slider.indexOf("@mixin track {"), slider.indexOf("}", slider.indexOf("@mixin track {")));
+    expect(track).toContain("linear-gradient(var(--control-edge), var(--control-edge)) var(--check-off)");
+    const utilities = sources["src/styles/_utilities.scss"] ?? "";
+    for (const pseudo of ["-webkit-slider-runnable-track", "-moz-range-track"]) {
+      const at = utilities.indexOf(`.profile-slider .ui-slider-input::${pseudo} {`);
+      expect(utilities.slice(at, utilities.indexOf("}", at))).toContain(
+        "linear-gradient(var(--control-edge), var(--control-edge)) var(--check-off)",
+      );
+    }
+  });
+
+  it("flags two signal colours a colour vision deficiency merges and lightness does not split", () => {
+    const apart = (r: { what: string }) => r.what.endsWith("apart in lightness");
+    const merged = { ...shipped[0]!.palette, "--ok": "#17c99a", "--warn": "#7bbf3a" };
+    expect(contrastFailures(merged, "dark").map((r) => r.what)).toContain("--ok and --warn apart in lightness");
+    const split = { ...merged, "--ok": "#1c6b65", "--warn": "#7a5d00", "--error": "#8a1f1d" };
+    const paper = { ...split, "--panel": "#eee8d5", "--panel-2": "#e3ddc7" };
+    expect(contrastFailures(paper, "light").filter(apart)).toEqual([]);
+  });
+
+  it("measures signal separation as CIE lightness and simulated colour difference", () => {
+    expect(lightness(parse("#ffffff"))).toBeCloseTo(100, 1);
+    expect(lightness(parse("#777777"))).toBeCloseTo(50.03, 1);
+    expect(deltaE2000(parse("#859900"), parse("#b58900"), "deuteranopia")).toBeLessThan(15);
+    expect(deltaE2000(parse("#1c6b65"), parse("#7a5d00"), "deuteranopia")).toBeGreaterThan(15);
+  });
+
+  for (const theme of shipped) {
+    const level = HIGH_CONTRAST.has(theme.id) ? "high" : "standard";
+    const bar = level === "high" ? "text 7:1, the rest 4.5:1" : "text and signals 4.5:1, lines and edges 3:1";
+    it(`${theme.label} passes ${bar}, and its signals stay apart`, () => {
+      expect(contrastFailures(theme.palette, theme.mode, level)).toEqual([]);
+    });
+  }
 
   for (const theme of shipped) {
     it(`${theme.label} chip text reaches WCAG AA`, () => {
@@ -140,11 +254,157 @@ describe("theme contrast", () => {
     });
   }
 
+  // A History step's state marks are drawn shapes, so WCAG 1.4.11 asks 3:1 against every fill under them: the strip
+  // chip, the bar its corner glyph overhangs, and the side panel row. A suppressed chip fades and greys, mark and all.
+  // A list of selectors is a cascade: the first rule that sets the property wins.
+  function ruleValue(path: string, selectors: string | string[], prop: string): string {
+    const text = sources[path] ?? "";
+    for (const selector of [selectors].flat()) {
+      const at = text.indexOf(`${selector} {`);
+      const body = at < 0 ? "" : text.slice(at, text.indexOf("}", at));
+      const value = new RegExp(`(?:^|[\\s;{])${prop}:\\s*([^;]+);`).exec(body)?.[1]?.trim();
+      if (value) return value;
+    }
+    return `no ${prop} in ${[selectors].flat().join(", ")}`;
+  }
+  type Under = (t: (v: string) => Rgba) => Rgba;
+  const glassOf: Under = (t) => mix(t("var(--panel)"), 0.72, t("var(--viewport-bg)"));
+  const grey = ([r, g, b, a]: Rgba): Rgba => {
+    const y = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    return [y, y, y, a];
+  };
+  const MARKS: { selector: string | string[]; prop: string; under: Under[]; behind?: Under[]; faded?: boolean }[] = [
+    {
+      selector: ".timeline-node.error .t-flag",
+      prop: "color",
+      under: [(t) => over(t("var(--error-tint)"), t("var(--panel)")), (t) => t("var(--panel)"), glassOf],
+    },
+    {
+      selector: ".timeline-node.warn .t-flag",
+      prop: "color",
+      under: [(t) => t("var(--panel-2)"), (t) => t("var(--panel)"), glassOf],
+    },
+    {
+      selector: ".timeline-node.selected::after",
+      prop: "background",
+      under: [(t) => over(t("var(--accent-tint)"), t("var(--panel)")), (t) => t("var(--raised)")],
+    },
+    {
+      selector: ".timeline-node.suppressed .glyph::after",
+      prop: "background",
+      under: [(t) => t("var(--panel-2)"), glassOf],
+      faded: true,
+    },
+    {
+      selector: [".timeline-node.suppressed.selected::after", ".timeline-node.selected::after"],
+      prop: "background",
+      under: [(t) => over(t("var(--accent-tint)"), t("var(--panel)")), (t) => t("var(--raised)")],
+      behind: [(t) => t("var(--panel)"), glassOf],
+      faded: true,
+    },
+  ];
+
+  for (const theme of shipped) {
+    it(`${theme.label} History error, warning, selected and suppressed marks reach 3:1`, () => {
+      const p = theme.palette;
+      const t = (v: string) => resolve(v, p);
+      const tl = "src/styles/_timeline.scss";
+      const alpha = Number(ruleValue(tl, ".timeline-node.suppressed", "opacity"));
+      expect(alpha).toBeGreaterThan(0);
+      expect(ruleValue(tl, ".timeline-node.suppressed", "filter")).toBe("grayscale(1)");
+      const failing = MARKS.flatMap(({ selector, prop, under, behind: behinds, faded }) =>
+        under.map((u, i) => {
+          let [fg, bg] = [t(ruleValue(tl, selector, prop)), u(t)];
+          // The faded chip shows the bar through it, or the glass in the side panel, which is its own fill there.
+          const behind = behinds?.[i]?.(t) ?? (i === 0 ? t("var(--panel)") : bg);
+          if (faded) [fg, bg] = [mix(grey(fg), alpha, behind), mix(grey(bg), alpha, behind)];
+          return { selector: [selector].flat()[0], under: i, ratio: Math.round(contrast(fg, bg) * 100) / 100 };
+        }),
+      ).filter((r) => r.ratio < 3);
+      expect(failing).toEqual([]);
+    });
+  }
+
   it("no chip keeps a hard coded dark fill that stays dark on a light theme", () => {
     const dark = /rgba?\(\s*(?:22,\s*24,\s*29|18,\s*20,\s*25)\b/;
     const offenders = Object.entries(sources)
       .filter(([, text]) => dark.test(text))
       .map(([path]) => path);
     expect(offenders).toEqual([]);
+  });
+});
+
+describe("More and Maximum contrast", () => {
+  const scss = sources["src/styles/_contrast.scss"] ?? "";
+
+  function block(level: string): string {
+    const at = scss.indexOf(`[data-contrast="${level}"]`);
+    return at < 0 ? "" : scss.slice(at, scss.indexOf("}", at));
+  }
+
+  it("_contrast.scss swaps the tokens the maths assumes, over the inline palette", () => {
+    for (const [level, swaps] of Object.entries(CONTRAST_TOKENS)) {
+      const rules = [...block(level).matchAll(/(--[\w-]+):\s*var\((--[\w-]+)\)\s*!important;/g)];
+      expect(Object.fromEntries(rules.map((m) => [m[1], m[2]]))).toEqual(swaps);
+      expect(block(level)).toMatch(/--focus-ring-width:\s*3px;/);
+    }
+  });
+
+  it("main.scss loads _contrast.scss after the tokens it replaces", () => {
+    const main = sources["src/styles/main.scss"] ?? "";
+    expect(main.indexOf('@use "contrast"')).toBeGreaterThan(main.indexOf('@use "tokens"'));
+  });
+
+  it("atContrast replaces a token by the palette value of its stronger twin", () => {
+    const p = { "--text": "#ffffff", "--text-dim": "#cccccc", "--text-mute": "#999999", "--line-strong": "#777777" };
+    expect(atContrast(p, "more")).toMatchObject({ "--text-mute": "#cccccc", "--control-edge": "#cccccc" });
+    expect(atContrast(p, "maximum")).toMatchObject({
+      "--text-dim": "#ffffff",
+      "--text-mute": "#ffffff",
+      "--line-strong": "#ffffff",
+      "--control-edge": "#ffffff",
+    });
+    expect(p["--text-mute"]).toBe("#999999");
+  });
+
+  for (const theme of shipped) {
+    const level = HIGH_CONTRAST.has(theme.id) ? "high" : "standard";
+    for (const setting of ["more", "maximum"] as const) {
+      it(`${theme.label} keeps every pair at least as strong under ${setting}`, () => {
+        const before = new Map(paletteContrast(theme.palette, theme.mode, level).map((r) => [r.what, r.ratio]));
+        const weaker = paletteContrast(atContrast(theme.palette, setting), theme.mode, level)
+          .filter((r) => r.ratio < (before.get(r.what) ?? 0) - 0.01)
+          .map((r) => `${r.what} ${before.get(r.what)} to ${r.ratio}`);
+        expect(weaker).toEqual([]);
+      });
+    }
+  }
+});
+
+describe("Solid panels over a white model", () => {
+  const WHITE = parse("#ffffff");
+  const SOLID_ROW = "on a solid panel over a white model";
+
+  it("the glass alone lets a white model wash out Noir muted text, a solid panel does not", () => {
+    const mute = parse(NOIR["--text-mute"] ?? "missing");
+    expect(contrast(mute, glassFill(NOIR, "dark", { under: WHITE }))).toBeLessThan(4.5);
+    expect(contrast(mute, glassFill(NOIR, "dark", { under: WHITE, solid: true }))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  for (const theme of shipped) {
+    const level = HIGH_CONTRAST.has(theme.id) ? "high" : "standard";
+    it(`${theme.label} keeps every text token readable on a solid panel over a white model`, () => {
+      const rows = paletteContrast(theme.palette, theme.mode, level).filter((r) => r.what.endsWith(SOLID_ROW));
+      expect(rows.map((r) => r.what).sort()).toEqual(
+        ["--text", "--text-dim", "--text-mute"].map((t) => `${t} ${SOLID_ROW}`),
+      );
+      expect(rows.filter((r) => r.ratio < r.min)).toEqual([]);
+    });
+  }
+
+  it("_glass.scss makes the float fills opaque under html.solid-panels in dark and light themes", () => {
+    const scss = sources["src/styles/_glass.scss"] ?? "";
+    expect(scss).toMatch(/html:root\.solid-panels\s*\{[^}]*--float-bg:\s*var\(--float-bg-solid\);/);
+    expect(scss).toMatch(/html:root\.solid-panels:not\(\.theme-light\)\s*\{[^}]*--float-bg-solid:\s*var\(--panel\);/);
   });
 });

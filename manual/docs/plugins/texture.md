@@ -1,9 +1,23 @@
 # Surface Texture
 
-Surface Texture puts a pattern on a face or body as real shape, so your slicer receives what you see. It is on by default, under Modify on the rail.
+Surface Texture puts a pattern on a face or a body as real shape, so your slicer receives what you see. It is on by default, under Modify on the rail.
 
 ![A cylinder with a knurled surface and the Texture step's settings in the History card](../img/texture-knurl.png)
 
-Select the face around a knob and pick Texture. Choose Faces or Whole Body, open Kind and pick Knurl, set a small Depth, and press Add. Double-click the step later to reopen it, or delete it to get the smooth surface back.
+## Adding a texture
 
-Kind offers patterns such as Hex, Waves, Ribs, Voronoi and Leather, and Heightmap turns a picture into height. Depth and Scale set the size. A heavy texture can slow the model, and Mesh mm under Advanced makes it coarser.
+1. Pick Texture.
+2. Click the faces to texture, for example the side of a knob, or press Whole Body and click the body.
+3. Open Kind and pick a pattern, for example Knurl, and set a small Depth.
+4. Press Add.
+
+Double-click the step in the History to change it later. Delete the step to get the smooth surface back.
+
+## Settings
+
+1. **Kind** (Pattern in the History): patterns such as Knurl, Hex, Waves, Ribs, Brick, Carbon fibre, Voronoi, Perlin noise, Leather and Grip. Heightmap turns a picture into height, light is high.
+2. **Depth** and **Scale**: the size of the pattern, 0.4 mm and 2 mm to start.
+3. **Direction**: Out (emboss), In (deboss) or Both, called Emboss, Deboss and Symmetric in the History.
+4. **Print color**: gives the pattern its own colour from the [palette](multicolor.md), for multicolour prints.
+
+A heavy texture can slow the model. Mesh mm under Advanced makes it coarser.

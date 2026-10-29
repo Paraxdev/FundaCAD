@@ -23,13 +23,20 @@ struct Dropped {
 pub struct Held(Mutex<Vec<String>>);
 
 #[tauri::command]
-pub fn drop_paths_take(app: tauri::AppHandle, held: tauri::State<'_, Held>, id: String) {
+pub fn drop_paths_take(
+    app: tauri::AppHandle,
+    held: tauri::State<'_, Held>,
+    vouched: tauri::State<'_, crate::doc_paths::Provenance>,
+    id: String,
+) {
     let paths = std::mem::take(&mut *held.0.lock().unwrap_or_else(|e| e.into_inner()));
+    vouched.vouch_all(paths.iter().map(String::as_str));
     let _ = app.emit("files-dropped", Dropped { id, paths: paths.into_iter().map(Some).collect() });
 }
 
 #[cfg(windows)]
 pub fn install<R: Runtime>(window: &WebviewWindow<R>) {
+    use tauri::Manager;
     use webview2_com::Microsoft::Web::WebView2::Win32::{
         ICoreWebView2File, ICoreWebView2ObjectCollectionView, ICoreWebView2WebMessageReceivedEventArgs2,
     };
@@ -69,6 +76,7 @@ pub fn install<R: Runtime>(window: &WebviewWindow<R>) {
                 .and_then(|a| a.AdditionalObjects().ok())
                 .map(|list| file_paths(&list))
                 .unwrap_or_default();
+            emitter.state::<crate::doc_paths::Provenance>().vouch_all(paths.iter().flatten().map(String::as_str));
             let _ = emitter.emit("files-dropped", Dropped { id: id.to_string(), paths });
             Ok(())
         }));

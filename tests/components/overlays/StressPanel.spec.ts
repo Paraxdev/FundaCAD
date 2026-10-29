@@ -112,6 +112,16 @@ describe("StressPanel", () => {
     expect(q(".stress-panel")).toBeNull();
   });
 
+  it("is a region headed Stress, the drawn title hidden from screen readers so it is read once", async () => {
+    await mounted();
+    usePanelsStore().showStress("b1");
+    await flushPromises();
+    const el = q(".stress-panel")!;
+    const head = document.getElementById(el.getAttribute("aria-labelledby")!)!;
+    expect([el.getAttribute("role"), head.tagName, head.textContent]).toEqual(["region", "H2", "Stress"]);
+    expect(q(".stress-head .measure-title")!.getAttribute("aria-hidden")).toBe("true");
+  });
+
   it("shows the setup and hands the face buttons, Run and Close to the facade", async () => {
     const { panels } = await mounted();
     usePanelsStore().showStress("b1");
@@ -385,6 +395,23 @@ describe("StressPanel", () => {
     await flushPromises();
     expect(q(".stress-set-support")).toBeNull();
     expect(q(".stress-legend")).not.toBeNull();
+  });
+
+  it("ties the selected step tab to the step it shows, which that tab names", async () => {
+    await withResult();
+    for (const [t, step] of [
+      ["setup", ".stress-setup"],
+      ["results", ".stress-results"],
+    ] as const) {
+      tab(t).click();
+      await flushPromises();
+      const page = document.getElementById(tab(t).getAttribute("aria-controls") ?? "");
+      expect([page?.matches(step), page?.getAttribute("role"), page?.getAttribute("aria-labelledby")]).toEqual([
+        true,
+        "tabpanel",
+        tab(t).id,
+      ]);
+    }
   });
 
   it("shows the setup again when the result goes, a Run is refused, or the panel reopens", async () => {

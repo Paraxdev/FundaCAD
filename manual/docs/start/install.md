@@ -30,9 +30,9 @@ flatpak run dev.fundacad.app
 
 The other files:
 
-- Ubuntu 22.04, Debian 12 and newer: `sudo apt install ./FundaCAD-linux-x86_64.deb`
-- Fedora: `sudo dnf install ./FundaCAD-linux-x86_64.rpm`
-- Any system with WebKitGTK 4.1: the AppImage runs without installing, after `chmod +x FundaCAD-linux-x86_64.AppImage`.
+1. Ubuntu 22.04, Debian 12 and newer: `sudo apt install ./FundaCAD-linux-x86_64.deb`
+2. Fedora: `sudo dnf install ./FundaCAD-linux-x86_64.rpm`
+3. Any system with WebKitGTK 4.1: the AppImage runs without installing, after `chmod +x FundaCAD-linux-x86_64.AppImage`.
 
 To remove FundaCAD, run `flatpak uninstall dev.fundacad.app`, `sudo apt remove funda-cad` or `sudo dnf remove funda-cad`, or delete the AppImage.
 
@@ -48,8 +48,8 @@ When a new build is out, a message at the bottom of the window says so. Restart 
 
 Preferences > Updates sets when FundaCAD looks:
 
-- **Check for updates automatically** is on to start with. Off, nothing is sent until you choose Help > Check for Updates….
-- **Check** picks Every launch, Daily or Weekly. Daily is the default.
+1. **Check for updates automatically** is on to start with. Off, nothing is sent until you choose Help > Check for Updates….
+2. **Check** picks Every launch, Daily or Weekly. Daily is the default.
 
 On Linux only the AppImage updates itself. For the other files, install the newer one over the old one.
 

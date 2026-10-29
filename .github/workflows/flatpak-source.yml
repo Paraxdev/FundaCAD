@@ -1,0 +1,133 @@
+# CI check only, it gates nothing: builds FundaCAD from source in the GNOME SDK
+# with no network (packaging/flatpak/source-check), which a Flathub build needs.
+# The release Flatpak still repackages the .deb (build-flatpak in build.yml).
+name: flatpak-source
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "manual/**"
+  schedule:
+    - cron: "23 4 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flatpak-source-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  BUILDER_TOOLS_COMMIT: 9d86d336a39b9af38b86f114b6ce5820fe260f91
+  CHECK_DIR: packaging/flatpak/source-check
+  MANIFEST: packaging/flatpak/source-check/fundacad-source-check.yml
+
+jobs:
+  source-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Install flatpak-builder
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/ci-apt-update.sh -qq
+          sudo timeout -k 10 900 apt-get install -y -qq flatpak flatpak-builder
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak-builder --version
+
+      - name: Generate the cargo and npm sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          tools="$RUNNER_TEMP/flatpak-builder-tools"
+          git init -q "$tools"
+          git -C "$tools" fetch -q --depth 1 https://github.com/flatpak/flatpak-builder-tools "$BUILDER_TOOLS_COMMIT"
+          git -C "$tools" checkout -q FETCH_HEAD
+          python3.12 -m venv "$RUNNER_TEMP/gen"
+          "$RUNNER_TEMP/gen/bin/pip" install -q --require-hashes -r "$CHECK_DIR/generator-requirements.txt"
+
+          # The node generator runs from the tools checkout, installing it would build it with an unpinned poetry-core.
+          py="$RUNNER_TEMP/gen/bin/python"
+          "$py" "$tools/cargo/flatpak-cargo-generator.py" src-tauri/Cargo.lock -o "$CHECK_DIR/cargo-sources-app.json"
+          "$py" "$tools/cargo/flatpak-cargo-generator.py" Cargo.lock -o "$CHECK_DIR/cargo-sources-root.json"
+          PYTHONPATH="$tools/node" "$py" -m flatpak_node_generator npm package-lock.json -o "$CHECK_DIR/node-sources.json"
+          for f in "$CHECK_DIR"/*-sources*.json; do
+            echo "$f: $(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))))' "$f") sources"
+          done
+
+      # Only the downloads are cached, every build starts from nothing.
+      - name: Restore the downloaded sources
+        id: downloads
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ${{ runner.temp }}/fb-state/downloads
+          key: flatpak-source-downloads-${{ hashFiles('Cargo.lock', 'src-tauri/Cargo.lock', 'package-lock.json', 'packaging/flatpak/source-check/fundacad-source-check.yml') }}
+          restore-keys: flatpak-source-downloads-
+
+      # The state and build dirs stay outside the checkout, which the app
+      # module copies in whole as a dir source.
+      - name: Install the SDK and download every source
+        shell: bash
+        run: |
+          set -euo pipefail
+          flatpak-builder --user --install-deps-from=flathub --install-deps-only \
+            --state-dir="$RUNNER_TEMP/fb-state" "$RUNNER_TEMP/fb-build" "$MANIFEST"
+          flatpak-builder --download-only \
+            --state-dir="$RUNNER_TEMP/fb-state" "$RUNNER_TEMP/fb-build" "$MANIFEST"
+          flatpak --user list --runtime
+          du -sh "$RUNNER_TEMP/fb-state/downloads"
+
+      - name: Save the downloaded sources
+        if: steps.downloads.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ${{ runner.temp }}/fb-state/downloads
+          key: ${{ steps.downloads.outputs.cache-primary-key }}
+
+      # The manifest has no --share=network in build-args, so any build step
+      # that reaches for the network fails here.
+      - name: Build from source with no network
+        shell: bash
+        run: |
+          set -euo pipefail
+          flatpak-builder --user --install --disable-download --disable-updates \
+            --disable-rofiles-fuse --force-clean \
+            --state-dir="$RUNNER_TEMP/fb-state" "$RUNNER_TEMP/fb-build" "$MANIFEST" \
+            2>&1 | tee "$RUNNER_TEMP/flatpak-builder.log"
+          df -h /
+
+      - name: Check the libraries come from the runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          flatpak run --command=ldd dev.fundacad.app /app/bin/fundacad > "$RUNNER_TEMP/ldd.txt"
+          if grep 'not found' "$RUNNER_TEMP/ldd.txt" ; then
+            echo "::error::the runtime lacks a library the binary needs"; exit 1
+          fi
+          flatpak run --command=ls dev.fundacad.app -lh /app/bin/fundacad
+
+      - name: Start the Flatpak and build a box
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          python3 scripts/bundle-smoke.py --work "$RUNNER_TEMP/smoke-flatpak" -- \
+            flatpak run --env=FUNDACAD_MCP_MODE=standalone dev.fundacad.app --mcp
+
+      - name: Upload the flatpak-builder log
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: flatpak-source-log
+          retention-days: 7
+          if-no-files-found: ignore
+          path: |
+            ${{ runner.temp }}/flatpak-builder.log
+            ${{ runner.temp }}/ldd.txt
+            ${{ runner.temp }}/smoke-flatpak

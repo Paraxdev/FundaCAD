@@ -33,7 +33,7 @@ const LAYERS = ["Plate", "Cam", "Mirror", "Curves", "Spline", "Knots", "Double",
 (async () => {
   const dxf = fs.readFileSync(path.join(__dirname, "..", "tests", "fixtures", "dxf_shapes.dxf")).toString("base64");
   const browser = await chromium.launch({ executablePath: EXE, args: ["--use-angle=swiftshader", "--no-sandbox"] });
-  const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+  const page = await browser.newPage({ colorScheme: "dark", viewport: { width: 1400, height: 900 } });
   page.on("pageerror", (e) => {
     console.error("PAGE ERROR:", e.message);
     failures++;

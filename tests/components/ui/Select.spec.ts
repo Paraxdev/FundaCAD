@@ -33,6 +33,15 @@ const activeLabel = (el: HTMLElement) => {
   const id = el.getAttribute("aria-activedescendant");
   return id ? document.getElementById(id)?.querySelector(".opt-label")?.textContent : null;
 };
+/** The name a labelledby list gives: each referenced element's text, joined by a space, as accname does. */
+const nameOf = (el: Element) => {
+  const by = el.getAttribute("aria-labelledby");
+  if (!by) return el.getAttribute("aria-label");
+  return by
+    .split(/\s+/)
+    .map((id) => document.getElementById(id)?.textContent?.trim() ?? "?")
+    .join(" ");
+};
 const picked = (w: Awaited<ReturnType<typeof render>>["w"]) => w.emitted<[V]>("update:modelValue") ?? [];
 
 async function key(trigger: Awaited<ReturnType<typeof render>>["trigger"], k: string, init: KeyboardEventInit = {}) {
@@ -189,6 +198,24 @@ describe("Select", () => {
     expect([picked(w), listbox()]).toEqual([[["cherry"]], null]);
   });
 
+  it("draws one hidden caret that stays in the trigger while the list opens and closes", async () => {
+    const { trigger, el } = await render();
+    const carets = () => [...el.querySelectorAll(".select-caret")];
+    const state = () => [el.classList.contains("is-open"), carets().length, carets()[0]?.getAttribute("aria-hidden")];
+    expect(state()).toEqual([false, 1, "true"]);
+    await trigger.trigger("click");
+    await flushPromises();
+    expect(state()).toEqual([true, 1, "true"]);
+    await trigger.trigger("click");
+    await flushPromises();
+    expect([...state(), el.textContent?.trim()]).toEqual([false, 1, "true", "Banana"]);
+  });
+
+  it("draws no caret on the chip variant, a quiet word", async () => {
+    const { el } = await render({ variant: "chip" });
+    expect(el.querySelector(".select-caret")).toBeNull();
+  });
+
   it("opens on a click that lands in the same millisecond as its mount", async () => {
     const w = mount(Select<V>, {
       props: { modelValue: "banana", options: OPTIONS, label: "Fruit" },
@@ -227,14 +254,32 @@ describe("Select", () => {
     expect(el.textContent?.trim()).toBe("Pick a fruit");
   });
 
-  it("names the trigger by its label, not by the tooltip and its key chord", async () => {
-    const { el } = await render({ label: "Fruit", tip: "Pick a fruit", keys: "Ctrl+F" });
-    expect([el.getAttribute("aria-label"), el.getAttribute("aria-labelledby")]).toEqual(["Fruit", null]);
+  it("names the trigger by its label and its value, not by the tooltip and its key chord", async () => {
+    const { w, el } = await render({ label: "Fruit", tip: "Pick a fruit", keys: "Ctrl+F" });
+    expect([nameOf(el), el.getAttribute("aria-labelledby"), el.textContent?.trim()]).toEqual([
+      "Fruit, Banana",
+      null,
+      "Banana",
+    ]);
+    await w.setProps({ modelValue: "cherry" });
+    expect(nameOf(el)).toBe("Fruit, Cherry");
   });
 
-  it("names the trigger by labelledby alone when given one", async () => {
+  it("names the trigger by labelledby and its own value when given one", async () => {
+    const label = document.body.appendChild(Object.assign(document.createElement("span"), { id: "fruit-label" }));
+    label.textContent = "Favourite fruit";
     const { el } = await render({ label: undefined, labelledby: "fruit-label" });
-    expect([el.getAttribute("aria-label"), el.getAttribute("aria-labelledby")]).toEqual([null, "fruit-label"]);
+    expect([el.getAttribute("aria-label"), el.getAttribute("aria-labelledby")?.split(" ")[0], nameOf(el)]).toEqual([
+      null,
+      "fruit-label",
+      "Favourite fruit Banana",
+    ]);
+    label.remove();
+  });
+
+  it("names the trigger by an aria-label attribute and its value, for a plugin without the type check", async () => {
+    const { el } = await render({ label: undefined, "aria-label": "Fruit" });
+    expect(nameOf(el)).toBe("Fruit, Banana");
   });
 
   it("gives the open list the trigger's own name", async () => {

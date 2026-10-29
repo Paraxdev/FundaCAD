@@ -50,6 +50,7 @@ green-select.png
 !tests/fixtures/versions/*.funda
 !tests/fixtures/versions/*.fundab
 !tests/fixtures/future/*.funda
+!tests/fixtures/containers/*.funda
 !src/templates/*.funda
 !tests/fixtures/asm_*.step
 !third_party/opencascade-rs/crates/viewer/models/*.step
@@ -100,6 +101,7 @@ src-tauri/binaries/
 
 # Flatpak build (packaging/flatpak), the .deb it repackages and its output
 packaging/flatpak/fundacad.deb
+packaging/flatpak/source-check/*-sources*.json
 .flatpak-builder/
 /build/
 /repo/

@@ -13,6 +13,7 @@ import {
 } from "../../src/harness/picks";
 import { HarnessError } from "../../src/harness/locate";
 import { OriginTiles } from "../../src/viewport/originTiles";
+import { HIT_MIN_PX } from "../../src/viewport/planeHit";
 
 type V = [number, number, number];
 
@@ -292,9 +293,9 @@ describe("planes and free points", () => {
     const { h } = rig();
     const tiles = new OriginTiles(new THREE.Scene());
     tiles.setShown(true);
-    tiles.group.scale.setScalar(33 / 109);
-    // Tile centres (44, -44, 0), (44, 0, 44) and (0, -44, 44) px, through the rig's projection.
-    const centres = { XY: [215.5, 566], XZ: [265, 335], YZ: [50.5, 401] } as const;
+    tiles.group.scale.setScalar(5 / 16);
+    // Tile centres (10, 10, 0), (10, 0, 10) and (0, 10, 10), through the rig's projection.
+    const centres = { XY: [230, 460], XZ: [200, 400], YZ: [130, 360] } as const;
     const vp = h.viewport as unknown as Record<string, unknown>;
     vp.scene = { scene: new THREE.Scene(), planes: tiles.planes };
     vp.pickConstructionAt = (x: number, y: number) => {
@@ -304,13 +305,47 @@ describe("planes and free points", () => {
       return null;
     };
     expect(["XY", "XZ", "YZ"].map((k) => planePoint(h, k, all))).toEqual([
-      { x: 215.5, y: 566, what: "plane XY" },
-      { x: 265, y: 335, what: "plane XZ" },
-      { x: 50.5, y: 401, what: "plane YZ" },
+      { x: 230, y: 460, what: "plane XY" },
+      { x: 200, y: 400, what: "plane XZ" },
+      { x: 130, y: 360, what: "plane YZ" },
     ]);
     tiles.setShown(false);
     expect(err(() => planePoint(h, "XZ", all)).kind).toBe("Occluded");
     tiles.dispose();
+  });
+
+  it("finds every origin plane through the app's own tile pick where the tiles overlap", () => {
+    const rect = { left: 0, top: 0, width: 800, height: 600 };
+    for (const eye of [
+      [80, -120, 90],
+      [-80, 120, 90],
+    ] as V[]) {
+      const camera = new THREE.OrthographicCamera(-400, 400, 300, -300, 1, 5000);
+      camera.up.set(0, 0, 1);
+      camera.position.copy(new THREE.Vector3(...eye).normalize().multiplyScalar(1000));
+      camera.lookAt(0, 0, 0);
+      camera.updateMatrixWorld(true);
+      const frame = { camera, rect };
+      const tiles = new OriginTiles(new THREE.Scene());
+      tiles.setShown(true);
+      tiles.update(1, null, camera, rect);
+      const { h } = rig();
+      const vp = h.viewport as unknown as Record<string, unknown>;
+      vp.scene = { scene: new THREE.Scene(), planes: tiles.planes };
+      vp.projectToScreen = (w: THREE.Vector3) => {
+        const p = w.clone().project(camera);
+        return { x: ((p.x + 1) / 2) * rect.width, y: ((1 - p.y) / 2) * rect.height };
+      };
+      vp.pickConstructionAt = (x: number, y: number) => {
+        const hit = tiles.pick(x, y, frame, HIT_MIN_PX);
+        return hit ? { kind: "base", plane: hit.plane } : null;
+      };
+      for (const k of ["XY", "XZ", "YZ"]) {
+        const p = planePoint(h, k, all);
+        expect(tiles.pick(p.x, p.y, frame, HIT_MIN_PX)?.plane, `${eye} ${k}`).toBe(k);
+      }
+      tiles.dispose();
+    }
   });
 
   it("says how a hidden plane is shown", () => {

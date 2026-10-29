@@ -39,6 +39,9 @@
     gap: var(--s-2);
     padding: 0 var(--s-2);
   }
+  #titlebar .tb-history {
+    gap: var(--s-2);
+  }
   .menubar .btn.menu-btn {
     padding: 0 var(--s-2);
   }
@@ -58,8 +61,8 @@
     display: none;
   }
 
-  .tool-rail > .rail-list > .rail-btn > .rail-pill,
-  .tool-rail > .rail-list > .rail-group > .rail-pill {
+  .tool-rail > .rail-bar > .rail-list > .rail-btn > .rail-pill,
+  .tool-rail > .rail-bar > .rail-list > .rail-group > .rail-pill {
     display: none;
   }
   .tool-rail .rail-child {

@@ -61,3 +61,29 @@ describe("TitleBar undo and redo", () => {
     expect(engine.doUndo).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("TitleBar undo and redo toolbar", () => {
+  const press = (key: string) =>
+    document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+
+  it("puts both buttons in one named toolbar with one Tab stop, even while both are disabled", async () => {
+    const w = mountBar();
+    await nextTick();
+    const bar = w.get("[role=toolbar]");
+    expect(bar.attributes("aria-label")).toBe("Undo and redo");
+    expect(bar.find("#undo-btn").exists() && bar.find("#redo-btn").exists()).toBe(true);
+    expect([w.get("#undo-btn").attributes("tabindex"), w.get("#redo-btn").attributes("tabindex")]).toEqual(["0", "-1"]);
+  });
+
+  it("walks Undo and Redo with the arrows and moves the Tab stop along", async () => {
+    const w = mountBar();
+    useUiStore().canRedo = true;
+    await nextTick();
+    (w.get("#undo-btn").element as HTMLElement).focus();
+    press("ArrowRight");
+    expect(document.activeElement?.id).toBe("redo-btn");
+    expect([w.get("#undo-btn").attributes("tabindex"), w.get("#redo-btn").attributes("tabindex")]).toEqual(["-1", "0"]);
+    press("ArrowLeft");
+    expect(document.activeElement?.id).toBe("undo-btn");
+  });
+});

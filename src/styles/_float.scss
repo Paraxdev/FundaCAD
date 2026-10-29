@@ -72,6 +72,7 @@
 }
 .float-card-title {
   flex: 1 1 auto;
+  margin: 0;
   font-size: var(--fs-body);
   font-weight: 600;
   color: var(--text);
@@ -204,6 +205,26 @@
 #timeline .timeline-node.warn {
   color: var(--warn);
 }
+/* The strip's state marks laid out for a row: the bar stands at the left, the glyph sits before the caret. */
+#timeline .timeline-node.selected::after {
+  left: 0;
+  right: auto;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  height: auto;
+}
+#timeline .timeline-node .t-flag {
+  position: static;
+  flex: none;
+}
+#timeline .timeline-node .t-flag .icon {
+  width: 14px;
+  height: 14px;
+}
+#timeline .timeline-node.suppressed .t-name {
+  text-decoration: line-through;
+}
 #timeline .timeline-node .t-name {
   display: block;
   flex: 1 1 auto;
@@ -285,6 +306,16 @@
   position: relative;
   z-index: 1;
 }
+/* The toolbar between the nav and its two lists lays them out as the rail did. */
+.rail-bar {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--float-gap);
+  min-height: 0;
+  pointer-events: none;
+}
 .rail-list {
   display: flex;
   flex-direction: column;
@@ -323,7 +354,7 @@
 }
 /* A scrolling list clips at its box: no bottom overhang ends the clip a gap above the foot, no top one keeps scrolled
    tiles out of the title bar, and the scroll padding keeps a focused tile clear of the More tools cues. */
-.tool-rail.scrolls > .rail-list:first-child {
+.tool-rail.scrolls > .rail-bar > .rail-list:first-child {
   margin-top: 0;
   padding-top: 0;
   margin-bottom: 0;
@@ -730,7 +761,7 @@
 
 .float-tab:focus-visible {
   border-radius: var(--float-chip-radius);
-  outline-offset: -2px;
+  outline-offset: calc(-1 * var(--focus-ring-width));
 }
 .float-tabs {
   display: flex;

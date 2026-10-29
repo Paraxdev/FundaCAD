@@ -4,6 +4,7 @@ import Icon from "../shell/Icon.vue";
 import { fmtKeys } from "../../input/platform";
 import { useRovingFocus } from "./useRovingFocus";
 import { useName, type Named } from "./useName";
+import { panelId, tabId } from "./tabIds";
 
 export interface TabItem<V> {
   value: V;
@@ -25,9 +26,11 @@ const props = withDefaults(
       variant?: "underline" | "bar" | "nav";
       /** Defaults to vertical for `nav`, else horizontal. */
       orientation?: "horizontal" | "vertical" | undefined;
+      /** An id base (useId) shared with the TabPanels, which ties each tab to its panel. */
+      panels?: string | undefined;
     } & Named
   >(),
-  { variant: "underline", orientation: undefined },
+  { variant: "underline", orientation: undefined, panels: undefined },
 );
 const emit = defineEmits<{ "update:modelValue": [T] }>();
 defineSlots<{ tab?(p: { tab: TabItem<T>; selected: boolean }): unknown }>();
@@ -37,6 +40,7 @@ const root = ref<HTMLElement | null>(null);
 const nav = computed(() => props.variant === "nav");
 const vertical = computed(() => (props.orientation ?? (nav.value ? "vertical" : "horizontal")) === "vertical");
 const selected = computed(() => props.tabs.findIndex((t) => t.value === props.modelValue));
+const ids = computed(() => (nav.value ? undefined : props.panels));
 
 function pick(i: number) {
   const t = props.tabs[i];
@@ -76,6 +80,8 @@ const tipOf = (t: TabItem<T>) => {
       :role="nav ? undefined : 'tab'"
       data-roving
       :data-tab="t.value"
+      :id="ids && tabId(ids, t.value)"
+      :aria-controls="ids && i === selected ? panelId(ids, t.value) : undefined"
       class="ui-tab"
       :class="{
         'float-tab': variant === 'underline',

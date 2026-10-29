@@ -219,7 +219,7 @@ describe("ValidatedRow", () => {
 
   it("names the unit picker after its row, so each chip says which field it belongs to", () => {
     const chip = mountRow({ value: 5, unit: "mm", units: ["mm", "in"] }).get(".ui-unit-chip");
-    expect(chip.attributes("aria-label")).toBe("Width unit");
+    expect(chip.attributes("aria-label")).toBe("Width unit, mm");
   });
 
   it("adopts a unit the user wrote", async () => {

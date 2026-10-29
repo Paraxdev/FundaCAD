@@ -6,6 +6,7 @@ import { useHomeStore } from "../../stores/home";
 import { buildMenubar } from "../../app/menubarDef";
 import { onContribChange } from "../../plugins/contrib";
 import IconButton from "../ui/IconButton.vue";
+import Toolbar from "../ui/Toolbar.vue";
 import WorkspaceToggle from "./WorkspaceToggle.vue";
 import TitleFold from "./TitleFold.vue";
 import MenuBar from "./MenuBar.vue";
@@ -62,31 +63,33 @@ onUnmounted(() => {
       <MenuBar :menus="menus">
         <template #head="{ menu }"><TitleFold v-if="folded && menu === 'File'" /></template>
       </MenuBar>
-      <!-- The name leaves the keys out, they are in the tooltip and a screen reader need not say them. -->
-      <IconButton
-        id="undo-btn"
-        icon="undo"
-        tip="Undo"
-        keys="Ctrl+Z"
-        aria-label="Undo"
-        size="sm"
-        variant="plain"
-        :icon-size="15"
-        :disabled="!ui.canUndo"
-        @click="engine.doUndo()"
-      />
-      <IconButton
-        id="redo-btn"
-        icon="redo"
-        tip="Redo"
-        keys="Ctrl+Y"
-        aria-label="Redo"
-        size="sm"
-        variant="plain"
-        :icon-size="15"
-        :disabled="!ui.canRedo"
-        @click="engine.doRedo()"
-      />
+      <Toolbar class="tb-history" label="Undo and redo">
+        <!-- The name leaves the keys out, they are in the tooltip and a screen reader need not say them. -->
+        <IconButton
+          id="undo-btn"
+          icon="undo"
+          tip="Undo"
+          keys="Ctrl+Z"
+          aria-label="Undo"
+          size="sm"
+          variant="plain"
+          :icon-size="15"
+          :disabled="!ui.canUndo"
+          @click="engine.doUndo()"
+        />
+        <IconButton
+          id="redo-btn"
+          icon="redo"
+          tip="Redo"
+          keys="Ctrl+Y"
+          aria-label="Redo"
+          size="sm"
+          variant="plain"
+          :icon-size="15"
+          :disabled="!ui.canRedo"
+          @click="engine.doRedo()"
+        />
+      </Toolbar>
       <span id="context-tab" class="context-tab" :class="{ sketch: ui.sketchActive }">
         {{ ui.sketchActive ? "SKETCH" : "SOLID" }}
       </span>

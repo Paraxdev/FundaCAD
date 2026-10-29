@@ -5,7 +5,15 @@ import type { DocumentStore } from "../document/store";
 import type { GeometryBackend } from "../geometry/client";
 import { asFeature, type Feature } from "../types";
 import { BINARY_DOC_EXT, DOC_EXT, LEGACY_DOC_EXTS } from "./documentExt";
-import { baseName, insertFundaDocument, staleLinks, updateFundaLink, type FundaInsertMode } from "./fundaInsert";
+import {
+  baseName,
+  insertFundaDocument,
+  staleLinks,
+  updateFundaLink,
+  type FileStat,
+  type FundaInsertMode,
+  type LinkStat,
+} from "./fundaInsert";
 import { nativeDialog } from "./nativeDialog";
 
 const isTauri = () => "__TAURI_INTERNALS__" in window;
@@ -21,6 +29,20 @@ export async function readDocumentText(path: string): Promise<string | null> {
     return null;
   }
 }
+
+/** A file's size and time without opening it: missing when it is gone, unknown when the native side refused the
+ *  path or could not tell. */
+export async function statDocument(path: string): Promise<LinkStat> {
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return (await invoke<FileStat | null>("container_stat", { path })) ?? "missing";
+  } catch {
+    return "unknown";
+  }
+}
+
+// A stat taken before the read, so a change made during the read still shows as stale on the next open.
+const statOf = (stat: LinkStat) => (typeof stat === "object" ? { stat } : {});
 
 async function tempStepPath(): Promise<string> {
   const { tempDir, join } = await import("@tauri-apps/api/path");
@@ -60,13 +82,14 @@ export async function insertDocumentFromDialog(store: DocumentStore, geometry: G
     ]),
   );
   if (!mode) return;
+  const stat = mode === "link" ? await s.step(statDocument(path)) : "unknown";
   const text = await s.step(readDocumentText(path));
   if (text === null) {
     await say(`Couldn't read ${baseName(path)}`, "error");
     return;
   }
   const temp = await s.step(tempStepPath());
-  const res = await insertFundaDocument(store, geometry, { path, text }, mode, temp);
+  const res = await insertFundaDocument(store, geometry, { path, text, ...statOf(stat) }, mode, temp);
   if (!res.ok) {
     if (!res.cancelled) await say(`Couldn't insert ${baseName(path)}: ${res.message}`, "error");
     return;
@@ -82,13 +105,14 @@ export async function refreshLink(store: DocumentStore, geometry: GeometryBacken
   );
   if (!f?.link) return;
   const s = store.session;
+  const stat = await s.step(statDocument(f.link.path));
   const text = await s.step(readDocumentText(f.link.path));
   if (text === null) {
     await say(`Couldn't read ${f.link.path}, it may have moved`, "error");
     return;
   }
   const temp = await s.step(tempStepPath());
-  const res = await updateFundaLink(store, geometry, featureId, { path: f.link.path, text }, temp);
+  const res = await updateFundaLink(store, geometry, featureId, { path: f.link.path, text, ...statOf(stat) }, temp);
   if (!res.ok && !res.cancelled) await say(`Couldn't update ${baseName(f.link.path)}: ${res.message}`, "error");
 }
 
@@ -97,22 +121,26 @@ export function unlink(store: DocumentStore, featureId: string) {
   store.updateFeature(featureId, { link: undefined } as Partial<Feature>);
 }
 
-/** After a document opens: say which linked files changed or went missing. */
+/** After a document opens: say which linked files changed, may have changed or went missing, from their size and
+ *  time alone. Only Update reads a file. */
 export async function checkLinks(store: DocumentStore, geometry: GeometryBackend) {
   if (!isTauri()) return;
   const s = store.session;
-  const { changed, missing } = await s.step(staleLinks(store.document.features, readDocumentText));
-  if (changed.length) {
-    const names = changed.map((id) => nameOf(store, id)).join(", ");
-    await say(`${names} changed since ${changed.length === 1 ? "it was" : "they were"} linked`, "info", {
+  const { changed, missing, unknown } = await s.step(staleLinks(store.document.features, statDocument));
+  const offerUpdate = async (ids: string[], verb: string) => {
+    if (!ids.length) return;
+    const names = ids.map((id) => nameOf(store, id)).join(", ");
+    await say(`${names} ${verb} since ${ids.length === 1 ? "it was" : "they were"} linked`, "info", {
       label: "Update",
       // The ids are this document's; an Update clicked after another document opened has nothing to refresh.
       onClick: () =>
         void (async () => {
-          for (const id of changed) if (s.alive) await refreshLink(store, geometry, id);
+          for (const id of ids) if (s.alive) await refreshLink(store, geometry, id);
         })(),
     });
-  }
+  };
+  await offerUpdate(changed, "changed");
+  await offerUpdate(unknown, "may have changed");
   if (missing.length) {
     await say(`Couldn't find the linked file for ${missing.map((id) => nameOf(store, id)).join(", ")}`, "error");
   }

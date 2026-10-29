@@ -108,9 +108,14 @@ describe("Checkbox", () => {
     ]);
   });
 
-  it("puts aria-describedby on the box, where a screen reader reads the hint, not on the label", async () => {
-    const w = await render({ modelValue: false, label: "Comfortable text" }, { attrs: { "aria-describedby": "hint" } });
-    expect([input(w).getAttribute("aria-describedby"), w.attributes("aria-describedby")]).toEqual(["hint", undefined]);
+  it("puts aria-describedby on the box, not on the label, and keeps it through a change", async () => {
+    const w = await render({ modelValue: false, label: "Snap" }, { attrs: { "aria-describedby": "snap-hint" } });
+    await w.find("label").trigger("click");
+    expect([input(w).checked, input(w).getAttribute("aria-describedby"), w.attributes("aria-describedby")]).toEqual([
+      true,
+      "snap-hint",
+      undefined,
+    ]);
   });
 
   it("warns in a dev build when it has no label, labelledby or slot, and not when the slot names it", () => {

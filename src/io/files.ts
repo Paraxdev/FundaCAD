@@ -32,7 +32,15 @@ import { noteRecent } from "./recentFiles";
 import { closeHome } from "../ui/home";
 import { announce } from "../ui/announce";
 import { captureAfterOpen, captureThumbnail, storeThumbnail } from "./thumbnails";
-import { BINARY_DOC_EXT, DOC_EXT, LEGACY_DOC_EXTS, isDocumentExt, leftOutSectionsNotice } from "./documentExt";
+import {
+  BINARY_DOC_EXT,
+  DOC_EXT,
+  LEGACY_DOC_EXTS,
+  isDocumentExt,
+  isSaveExt,
+  leftOutSectionsNotice,
+  savableName,
+} from "./documentExt";
 import { announceImportedBody } from "../plugins/contrib";
 import { askImportUnit, asksForUnit, type ImportUnit } from "./importUnit";
 import { importFeatures } from "./importSketches";
@@ -99,7 +107,7 @@ function savedAs(store: DocumentStore, path: string, edits: number, swaps: numbe
 /** Save: write to the current path if known, else behave like Save As. `beforeWrite` runs once the path is known,
  *  so a cancelled dialog runs nothing. */
 export async function saveDocument(store: DocumentStore, beforeWrite?: () => void) {
-  if (isTauri() && store.filePath) {
+  if (isTauri() && store.filePath && isSaveExt(store.filePath.split(".").pop())) {
     const session = store.session;
     const path = store.filePath;
     beforeWrite?.();
@@ -129,10 +137,7 @@ export async function saveDocumentAs(store: DocumentStore, beforeWrite?: () => v
         { name: "FundaCAD Document (JSON)", extensions: [DOC_EXT, ...LEGACY_DOC_EXTS] },
         { name: "FundaCAD Binary Document (smaller)", extensions: [BINARY_DOC_EXT] },
       ],
-      defaultPath: suggestedSavePath(
-        store.filePath,
-        isDocumentExt(store.fileName.split(".").pop()?.toLowerCase()) ? store.fileName : `${store.fileName}.${DOC_EXT}`,
-      ),
+      defaultPath: suggestedSavePath(store.filePath && savableName(store.filePath), savableName(store.fileName)),
     });
     // A path picked for a document that was closed or swapped for an assistant's meanwhile is not where the next one goes.
     if (path && session.alive && store.untitledSwapCount === swaps) {

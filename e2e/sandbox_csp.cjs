@@ -174,7 +174,7 @@ async function attempt(csp, browser) {
   await new Promise((r) => server.listen(0, "127.0.0.1", r));
   const port = server.address().port;
 
-  const page = await browser.newPage();
+  const page = await browser.newPage({ colorScheme: "dark" });
   const refusals = [];
   page.on("console", (m) => {
     if (/Content Security Policy/i.test(m.text())) refusals.push(m.text());

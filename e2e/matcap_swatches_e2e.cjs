@@ -33,7 +33,7 @@ function check(ok, what, detail) {
     args: ["--no-sandbox", "--enable-gpu", "--ignore-gpu-blocklist"],
   });
   try {
-    const page = await browser.newPage({ viewport: { width: 1200, height: 800 } });
+    const page = await browser.newPage({ colorScheme: "dark", viewport: { width: 1200, height: 800 } });
     page.on("pageerror", (e) => console.error("PAGE ERROR:", e.message));
     await page.addInitScript((ws) => {
       const W = window.WebSocket;

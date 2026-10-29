@@ -2,6 +2,8 @@
 // the `?` HUD renders it, so they cannot disagree.
 
 import { useDialogStore } from "../stores/dialogs";
+import { singleKeysOn } from "../ui/a11yPrefs";
+import { latinKey } from "./platform";
 import { readSetting } from "../ui/storedSetting";
 import { DEFAULT_BINDINGS, bindingRows, pointerBindings } from "../viewport/navigator/bindings";
 
@@ -71,7 +73,13 @@ export const SHORTCUTS: Shortcut[] = [
   { key: "p", action: "project", context: "model", label: "Sketch: Project" },
   { key: "home", action: "fit", context: "global", label: "Fit view" },
   { key: "home", shift: true, action: "reset-camera", context: "global", label: "Reset camera" },
-  { key: "f6", action: "fit", context: "global", label: "Fit view" },
+  {
+    key: "f6",
+    action: "region-next",
+    context: "global",
+    label: "Next region (menu bar, tools, Items, model, panels, History)",
+  },
+  { key: "f6", shift: true, action: "region-prev", context: "global", label: "Previous region" },
   { key: "arrowleft", action: "view-step-left", context: "global", label: "Turn the view left 15°" },
   { key: "arrowright", action: "view-step-right", context: "global", label: "Turn the view right 15°" },
   { key: "arrowup", action: "view-step-up", context: "global", label: "Tilt the view up 15°" },
@@ -116,12 +124,21 @@ export function keyHint(action: string): string | undefined {
  *  while sketching; model keys otherwise; global always). */
 export function resolveShortcut(key: string, shift: boolean, context: "model" | "sketch", ctrl = false): string | null {
   const k = key.toLowerCase();
+  // Single key shortcuts off: a character key without Ctrl or Cmd, Shift held or not, binds nothing (WCAG 2.1.4).
+  if (!ctrl && k.length === 1 && !singleKeysOn()) return null;
   for (const s of activeShortcuts()) {
     // Every flag is compared, absent ones too: bare B (Chamfer) and Ctrl+B (Subtract) are different commands.
     if (s.key !== k || !!s.shift !== shift || !!s.ctrl !== ctrl) continue;
     if (s.context === "global" || s.context === context) return s.action;
   }
   return null;
+}
+
+/** A running tool's own character key (Section's F, Pattern's ] or +) by latinKey, or "" for a named key, and with
+ *  Single key shortcuts off unless Ctrl or Cmd is held. Each tool still applies its own modifier rule. */
+export function toolChar(e: { key: string; code?: string; ctrlKey: boolean; metaKey: boolean; altKey: boolean }) {
+  const k = latinKey(e);
+  return k.length === 1 && (singleKeysOn() || e.ctrlKey || e.metaKey) ? k : "";
 }
 
 // Overrides: a plugin holding input.remap may move a key.
@@ -156,6 +173,11 @@ const RESERVED: Record<string, string> = {
   "Ctrl+F": "Find",
   "Ctrl+K": "Command palette",
   "Ctrl+,": "Preferences",
+  // The platform chords of platform.ts without Alt, which the remap refuses anyway.
+  "Ctrl+Shift+1": "Items",
+  "Ctrl+Shift+2": "History",
+  "Ctrl+`": "Console",
+  "Ctrl+Shift+`": "Console",
   "Ctrl+=": "Interface size",
   "Ctrl++": "Interface size",
   "Ctrl+Shift+=": "Interface size",

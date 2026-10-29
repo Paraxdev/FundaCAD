@@ -27,20 +27,20 @@ A document lit by an HDR carries it, so it opens with the same light on another 
 
 ## Brightness, backdrop and floor
 
-- Environment brightness: Amount sets how strongly the room lights the model and shows in its reflections, from 0.40x to 2.00x.
-- Backdrop: the colour behind the model, Theme, Dark, Mid grey or Light.
-- Floor: None, or Shadow catcher for an invisible floor that shows only the model's shadow. The Model and Render workspaces each keep their own floor, None by default. Performance mode has no floor.
+1. Environment brightness: Amount sets how strongly the room lights the model and shows in its reflections, from 0.40x to 2.00x.
+2. Backdrop: the colour behind the model, Theme, Dark, Mid grey or Light.
+3. Floor: None, or Shadow catcher for an invisible floor that shows only the model's shadow. The Model and Render workspaces each keep their own floor, None by default. Performance mode has no floor.
 
 ## Key light, bloom and shadows
 
-- Key light: press Aim and drag the sun on the model to swing the light that casts the shadows, or type an Azimuth and Elevation. Enter keeps it, Esc puts it back. Reset returns to the default.
-- Bloom: Amount spills light off faces with Emission turned up, none at zero. In the Path traced view bright highlights spill too.
-- Shadows: Cast shadows adds a real shadow from the key light, off by default. It stays off in Performance mode and with an HDR.
+1. Key light: press Aim and drag the sun on the model to swing the light that casts the shadows, or type an Azimuth and Elevation. Enter keeps it, Esc puts it back. Reset returns to the default.
+2. Bloom: Amount spills light off faces with Emission turned up, none at zero. In the Path traced view bright highlights spill too.
+3. Shadows: Cast shadows adds a real shadow from the key light, off by default. It stays off in Performance mode and with an HDR.
 
 ## For a slow computer
 
-- Performance mode drops the heavy effects, glass refraction, a high pixel ratio and the extra lights from glowing parts. It turns on by itself on a weak GPU.
-- Potato mode is the lowest quality, for slow or virtual machines, and includes Performance mode.
+1. Performance mode drops the heavy effects, glass refraction, a high pixel ratio and the extra lights from glowing parts. It turns on by itself on a weak GPU.
+2. Potato mode is the lowest quality, for slow or virtual machines, and includes Performance mode.
 
 Denoise and Tracer on this tab set up Path traced, see [View modes](view-modes.md).
 
@@ -48,8 +48,8 @@ Denoise and Tracer on this tab set up Path traced, see [View modes](view-modes.m
 
 ![The Camera tab of the Render workspace with the Field of view slider](../img/render-camera-tab.png)
 
-- Field of view runs from 15° to 70°, 45° by default. A low value keeps edges nearly parallel, like a technical drawing, a high one throws the near corner at you, like a product shot.
-- Depth of field: Blur is off at zero. Turn it up, then pick an Aperture from f/1.4 to f/22. What the view is centred on stays sharp, so aim at what you want in focus.
+1. Field of view runs from 15° to 70°, 45° by default. A low value keeps edges nearly parallel, like a technical drawing, a high one throws the near corner at you, like a product shot.
+2. Depth of field: Blur is off at zero. Turn it up, then pick an Aperture from f/1.4 to f/22. What the view is centred on stays sharp, so aim at what you want in focus.
 
 A straight-on view has no lens, so neither setting does anything there.
 

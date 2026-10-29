@@ -1,14 +1,17 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, useTemplateRef } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, useTemplateRef } from "vue";
 import Button from "../ui/Button.vue";
 import Menu from "../ui/Menu.vue";
 import MenuItem from "../ui/MenuItem.vue";
 import MenuSeparator from "../ui/MenuSeparator.vue";
+import Toolbar from "../ui/Toolbar.vue";
 import { guardMenuKeys, type MenuDef } from "../../ui/menu";
+import { inertDepth } from "../../composables/useModalGate";
 
 const props = defineProps<{ menus: MenuDef[] }>();
 
 const root = useTemplateRef<HTMLElement>("root");
+const bar = useTemplateRef<{ focus: () => void }>("bar");
 const openIndex = ref<number | null>(null);
 const current = computed(() => (openIndex.value === null ? null : (props.menus[openIndex.value] ?? null)));
 // The popup hangs from the `.menu` cell, not its button: the button sits inside the bar's margin.
@@ -54,26 +57,72 @@ function onRowKey(e: KeyboardEvent) {
   open(next);
 }
 
+// F10 reaches the menu bar as on Windows and Linux, and a second press goes back to where it came from.
+let cameFrom: HTMLElement | null = null;
+async function onF10(e: KeyboardEvent) {
+  if (e.key !== "F10" || e.shiftKey || e.ctrlKey || e.altKey || e.metaKey || e.defaultPrevented) return;
+  const nav = root.value;
+  if (!nav || inertDepth() > 0 || nav.closest("[inert]")) return;
+  e.preventDefault();
+  const at = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  const was = openIndex.value;
+  if (was !== null) {
+    openIndex.value = null;
+    await nextTick();
+    cells[was]?.querySelector<HTMLElement>(".menu-btn")?.focus();
+    return;
+  }
+  if (at && nav.contains(at)) {
+    const back = cameFrom;
+    cameFrom = null;
+    if (back?.isConnected) back.focus();
+    return;
+  }
+  cameFrom = at && at !== document.body ? at : null;
+  bar.value?.focus();
+}
+// An open menu's rows sit outside the nav, so only focus moving on while no menu is open forgets the way back.
+const onFocusin = (e: FocusEvent) => {
+  if (openIndex.value === null && !root.value?.contains(e.target as Node | null)) cameFrom = null;
+};
+
 let releaseKeys = () => {};
-onMounted(() => (releaseKeys = guardMenuKeys()));
-onUnmounted(() => releaseKeys());
+onMounted(() => {
+  releaseKeys = guardMenuKeys();
+  window.addEventListener("keydown", onF10);
+  document.addEventListener("focusin", onFocusin);
+});
+onUnmounted(() => {
+  releaseKeys();
+  window.removeEventListener("keydown", onF10);
+  document.removeEventListener("focusin", onFocusin);
+});
 </script>
 
 <template>
-  <nav id="menubar" class="menubar" ref="root">
-    <div v-for="(m, i) in menus" :key="m.label" :ref="(el) => (cells[i] = el as HTMLElement)" class="menu">
-      <Button
-        variant="ghost"
-        size="sm"
-        class="menu-btn"
-        :class="{ 'is-open': openIndex === i }"
-        aria-haspopup="menu"
-        :aria-expanded="openIndex === i"
-        @click.stop="toggle(i)"
-        @keydown="onButtonKey($event, i)"
-        >{{ m.label }}</Button
+  <nav id="menubar" class="menubar" ref="root" aria-label="Menu">
+    <Toolbar ref="bar" role="menubar" label="Menu" class="menubar-bar">
+      <div
+        v-for="(m, i) in menus"
+        :key="m.label"
+        :ref="(el) => (cells[i] = el as HTMLElement)"
+        class="menu"
+        role="none"
       >
-    </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          class="menu-btn"
+          :class="{ 'is-open': openIndex === i }"
+          role="menuitem"
+          popup="menu"
+          :expanded="openIndex === i"
+          @click.stop="toggle(i)"
+          @keydown="onButtonKey($event, i)"
+          >{{ m.label }}</Button
+        >
+      </div>
+    </Toolbar>
     <!-- `disabled` and `checked` are thunks read as the menu mounts on each open, which is how Undo greys out. -->
     <Menu
       v-if="openIndex !== null && current"

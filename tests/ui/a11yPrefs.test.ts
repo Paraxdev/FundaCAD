@@ -64,11 +64,16 @@ describe("defaults", () => {
     expect(m.a11yPrefs()).toEqual({
       animations: "system",
       verbosity: "normal",
+      singleKeys: true,
+      contrast: "system",
+      solidPanels: false,
+      targets: "default",
       interfaceSize: 100,
       comfortableText: false,
       viewportLabels: "m",
     });
     expect(m.getVerbosity()).toBe("normal");
+    expect(m.singleKeysOn()).toBe(true);
     expect(m.motionOn()).toBe(true);
   });
 
@@ -99,7 +104,7 @@ describe("stored values", () => {
   });
 
   it("fall back to the default for a value they do not know", async () => {
-    boot({ "fundacad.animations": "sideways", "fundacad.a11y.verbosity": "shout" });
+    boot({ "fundacad.animations": "sideways", "fundacad.a11y.verbosity": "shout", "fundacad.a11y.singleKeys": "no" });
     const m = await load();
     expect(m.a11yPrefs()).toEqual(m.DEFAULT_A11Y);
   });
@@ -114,6 +119,34 @@ describe("stored values", () => {
     expect(calls).toBe(1);
     expect(m.getVerbosity()).toBe("errors");
     expect(stored.get("fundacad.a11y.verbosity")).toBe("errors");
+  });
+
+  it("store Single key shortcuts as on or off and read it back", async () => {
+    let m = await load();
+    m.setA11yPref("singleKeys", false);
+    expect(m.singleKeysOn()).toBe(false);
+    expect(stored.get("fundacad.a11y.singleKeys")).toBe("off");
+    m.setA11yPref("singleKeys", "maybe" as never);
+    expect(m.singleKeysOn()).toBe(false);
+    boot({ "fundacad.a11y.singleKeys": "off" });
+    m = await load();
+    expect(m.a11yPrefs().singleKeys).toBe(false);
+    m.setA11yPref("singleKeys", true);
+    expect(stored.get("fundacad.a11y.singleKeys")).toBe("on");
+  });
+
+  it("read Solid panels as true or false and refuse anything else", async () => {
+    boot({ "fundacad.a11y.solidPanels": "true" });
+    let m = await load();
+    expect(m.a11yPrefs().solidPanels).toBe(true);
+    boot({ "fundacad.a11y.solidPanels": "yes" });
+    m = await load();
+    expect(m.a11yPrefs().solidPanels).toBe(false);
+    m.setA11yPref("solidPanels", true);
+    expect(stored.get("fundacad.a11y.solidPanels")).toBe("true");
+    m.setA11yPref("solidPanels", false);
+    expect(stored.get("fundacad.a11y.solidPanels")).toBe("false");
+    expect(m.a11yPrefs().solidPanels).toBe(false);
   });
 
   it("still change for this run when the store refuses the write", async () => {
@@ -174,18 +207,29 @@ describe("the OS preference while the app runs", () => {
 describe("reset and the screen reader preset", () => {
   it("reset drops every stored choice, Hover delay included, and follows the OS again", async () => {
     const os = new FakeQuery(true);
-    boot({ "fundacad.animations": "on", "fundacad.a11y.verbosity": "off" }, os);
+    boot(
+      {
+        "fundacad.animations": "on",
+        "fundacad.a11y.verbosity": "off",
+        "fundacad.a11y.singleKeys": "off",
+        "fundacad.a11y.solidPanels": "true",
+      },
+      os,
+    );
     const m = await load();
     m.setHoverDwellMs(1500);
     m.resetA11yPrefs();
     expect(m.a11yPrefs()).toEqual(m.DEFAULT_A11Y);
+    expect(m.singleKeysOn()).toBe(true);
     expect(m.getHoverDwellMs()).toBe(m.DEFAULT_DWELL_MS);
     expect(stored.has("fundacad.animations")).toBe(false);
     expect(stored.has("fundacad.a11y.verbosity")).toBe(false);
+    expect(stored.has("fundacad.a11y.singleKeys")).toBe(false);
+    expect(stored.has("fundacad.a11y.solidPanels")).toBe(false);
     expect(m.motionOn()).toBe(false);
   });
 
-  it("the preset sets Announcements to Verbose, stores it and leaves the rest", async () => {
+  it("the preset sets Announcements to Verbose, Single key shortcuts off and Solid panels on, stores them and leaves the rest", async () => {
     boot({ "fundacad.animations": "off" });
     const m = await load();
     let calls = 0;
@@ -194,11 +238,41 @@ describe("reset and the screen reader preset", () => {
     expect(m.a11yPrefs()).toEqual({
       animations: "off",
       verbosity: "verbose",
+      singleKeys: false,
+      contrast: "system",
+      solidPanels: true,
+      targets: "default",
       interfaceSize: 100,
       comfortableText: false,
       viewportLabels: "m",
     });
     expect(stored.get("fundacad.a11y.verbosity")).toBe("verbose");
+    expect(stored.get("fundacad.a11y.singleKeys")).toBe("off");
+    expect(stored.get("fundacad.a11y.solidPanels")).toBe("true");
     expect(calls).toBe(1);
+  });
+});
+
+describe("Larger click targets", () => {
+  it("reads a stored choice and refuses one it does not know", async () => {
+    boot({ "fundacad.a11y.targets": "large" });
+    let m = await load();
+    expect(m.a11yPrefs().targets).toBe("large");
+    boot({ "fundacad.a11y.targets": "huge" });
+    m = await load();
+    expect(m.a11yPrefs().targets).toBe("default");
+    m.setA11yPref("targets", "huge" as never);
+    expect(m.a11yPrefs().targets).toBe("default");
+    expect(stored.get("fundacad.a11y.targets")).toBe("huge");
+  });
+
+  it("is dropped by reset and left alone by the screen reader preset", async () => {
+    boot({ "fundacad.a11y.targets": "large" });
+    const m = await load();
+    m.applyScreenReaderPreset();
+    expect(m.a11yPrefs().targets).toBe("large");
+    m.resetA11yPrefs();
+    expect(m.a11yPrefs().targets).toBe("default");
+    expect(stored.has("fundacad.a11y.targets")).toBe(false);
   });
 });

@@ -18,11 +18,11 @@ For a laser cutter, export a sketch or a flat face as DXF or SVG, see below.
 
 ## Settings
 
-- **Bodies**: with several bodies, All in one file or Each body as its own file. With bodies selected, you can export only those.
-- **Unit**: for STL and 3MF. Leave it on Millimeter, since a slicer reads the numbers as they are.
-- **Format**: for STL, Binary or ASCII.
-- **Refinement**: how finely curves are cut into triangles. Medium suits most prints, High suits large smooth curves, Low suits quick tests.
-- **Advanced**: sets the triangles by hand, and turns Refinement to Custom.
+1. **Bodies**: with several bodies, All in one file or Each body as its own file. With bodies selected, you can export only those.
+2. **Unit**: for STL and 3MF. Leave it on Millimeter, since a slicer reads the numbers as they are.
+3. **Format**: for STL, Binary or ASCII.
+4. **Refinement**: how finely curves are cut into triangles. Medium suits most prints, High suits large smooth curves, Low suits quick tests.
+5. **Advanced**: sets the triangles by hand, and turns Refinement to Custom.
 
 Press Export… and pick where the file goes. If a step failed, a warning names it, because its shape is missing from the file.
 

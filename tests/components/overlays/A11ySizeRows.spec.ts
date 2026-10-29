@@ -18,13 +18,13 @@ beforeEach(() => resetA11yPrefs());
 afterEach(() => setMacForTest(null));
 
 describe("Interface size", () => {
-  it("is a combobox named by its label and described by the hint that names the keys", () => {
+  it("is a combobox named by its label and its value, described by the hint that names the keys", () => {
     setMacForTest(false);
     open();
     const hint = $("#prefs-interface-size-hint");
     expect([trigger().getAttribute("role"), trigger().getAttribute("aria-label")]).toEqual([
       "combobox",
-      "Interface size",
+      "Interface size, 100%",
     ]);
     expect($("label[for=prefs-interface-size]").textContent).toBe("Interface size");
     expect(trigger().getAttribute("aria-describedby")).toBe("prefs-interface-size-hint");

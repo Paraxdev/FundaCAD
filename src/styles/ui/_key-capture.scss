@@ -1,0 +1,38 @@
+// KeyCapture: a shortcut setting's button and the capture dialog it opens.
+
+.key-capture.is-unset {
+  color: var(--text-mute);
+}
+.key-capture-pad {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: var(--s-2);
+  min-height: 96px;
+  padding: var(--s-4);
+  background: var(--field-bg);
+  border-radius: var(--float-chip-radius);
+  corner-shape: squircle;
+  color: var(--text-dim);
+  font-size: var(--fs-body);
+  text-align: center;
+  cursor: default;
+  transition: background var(--t-fast) var(--ease);
+
+  &:focus {
+    background: var(--accent-tint-2);
+    color: var(--accent-hot);
+  }
+}
+.key-capture-now {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  color: var(--text-mute);
+  font-size: var(--fs-small);
+}
+.key-capture-hint {
+  margin: var(--s-3) 0 0;
+  color: var(--text-mute);
+  font-size: var(--fs-small);
+}

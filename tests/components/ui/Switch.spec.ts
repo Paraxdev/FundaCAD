@@ -80,9 +80,13 @@ describe("Switch", () => {
     expect(emitted(w)).toEqual([]);
   });
 
-  it("writes the tip and its keys through fmtKeys into title and aria-label", async () => {
+  it("names itself by the tip alone and hands the keys to the title and aria-keyshortcuts", async () => {
     setMacForTest(true);
     const w = await render({ modelValue: false, tip: "Snap", keys: "Ctrl+G" });
-    expect([w.attributes("title"), w.attributes("aria-label")]).toEqual(["Snap (⌘+G)", "Snap (⌘+G)"]);
+    expect([w.attributes("title"), w.attributes("aria-label"), w.attributes("aria-keyshortcuts")]).toEqual([
+      "Snap (⌘+G)",
+      "Snap",
+      "Meta+G",
+    ]);
   });
 });

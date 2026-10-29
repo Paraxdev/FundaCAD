@@ -186,8 +186,14 @@ const iconBtn = { background: "none", border: "none", color: "inherit", cursor: 
 </script>
 
 <template>
-  <FloatingPanel :open="setupOpen" close-on-esc panel-class="xp-setup-panel" @close="setupOpen = false">
-    <div class="measure-title">Parameter Setup</div>
+  <FloatingPanel
+    :open="setupOpen"
+    title="Parameter Setup"
+    close-on-esc
+    panel-class="xp-setup-panel"
+    @close="setupOpen = false"
+  >
+    <div class="measure-title" aria-hidden="true">Parameter Setup</div>
     <div style="max-height: 70vh; overflow: auto; padding-right: 4px; min-width: 560px">
       <div v-if="empty" class="measure-hint">Add a user parameter first (Modify, Parameters).</div>
 

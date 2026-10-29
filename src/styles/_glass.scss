@@ -536,7 +536,7 @@
   background: var(--panel-2);
 }
 
-.cmdk-item.active {
+.cmdk-list .cmdk-item.is-active {
   background: color-mix(in srgb, var(--accent) 16%, transparent);
 }
 
@@ -568,4 +568,13 @@ html.no-glass-blur .cmdk-backdrop {
 /* Without the blur the scrim would show the float cards sharp through it. */
 html.no-glass-blur .home.bg-workspace::before {
   background: var(--viewport-bg);
+}
+
+/* Solid panels (ui/glassBlur.ts), with no-glass-blur beside it: no model colour shows through a card, pill or
+   chip. html:root outranks :root.theme-light, whose --float-bg keeps 3% of the scene. */
+html:root.solid-panels {
+  --float-bg: var(--float-bg-solid);
+}
+html:root.solid-panels:not(.theme-light) {
+  --float-bg-solid: var(--panel);
 }

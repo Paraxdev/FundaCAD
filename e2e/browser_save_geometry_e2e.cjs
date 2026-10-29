@@ -123,7 +123,11 @@ const bodies = (page) =>
     first = await startEngine("a");
     const portA = await first.port;
     browser = await chromium.launch({ executablePath: EXE, args: ["--use-angle=swiftshader", "--no-sandbox"] });
-    const context = await browser.newContext({ viewport: { width: 1400, height: 900 }, acceptDownloads: true });
+    const context = await browser.newContext({
+      colorScheme: "dark",
+      viewport: { width: 1400, height: 900 },
+      acceptDownloads: true,
+    });
     const page = await context.newPage();
     page.on("pageerror", (e) => {
       console.error("PAGE ERROR:", e.message);

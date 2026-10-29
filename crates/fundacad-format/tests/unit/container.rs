@@ -58,7 +58,7 @@ fn roundtrip_preserves_bytes_exactly() {
     // decompressor just to learn the format version.
     {
         let mut z = zip::ZipArchive::new(File::open(&dest).unwrap()).unwrap();
-        assert_eq!(z.by_index(0).unwrap().name(), "manifest.json");
+        assert_eq!(z.by_index(0).unwrap().name().unwrap(), "manifest.json");
         assert_eq!(z.by_name("manifest.json").unwrap().compression(), zip::CompressionMethod::Stored);
         assert!(
             z.by_name(&format!("geom/{hb}.bbrep")).unwrap().compressed_size() < 500_000,
@@ -110,7 +110,7 @@ fn tampered_geometry_is_refused_and_nothing_is_published() {
         let opts = SimpleFileOptions::default();
         for i in 0..zin.len() {
             let mut e = zin.by_index(i).unwrap();
-            let name = e.name().to_string();
+            let name = e.name().unwrap().to_string();
             let mut payload = Vec::new();
             e.read_to_end(&mut payload).unwrap();
             if name.starts_with("geom/") {
@@ -271,5 +271,45 @@ fn a_section_this_version_does_not_read_survives_a_save_as_fundab_only() {
     assert_eq!(again.carried, opened.carried);
     assert_eq!(std::fs::read(dir.join("sections2").join(format!("{}.bin", again.carried[0].hash))).unwrap(), payload);
     assert!(open_document_full(&json, &dir.join("blobs"), None, Some(&carry)).unwrap().carried.is_empty());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A manifest hash becomes a file name in the blob store, so a row whose hash is not a digest refuses the open.
+#[test]
+fn a_manifest_hash_that_is_not_a_digest_refuses_the_open() {
+    let dir = tmpdir("hash_row");
+    let outside = blob(&dir, "outside.bbrep", b"kept as it was");
+    let data = b"payload".repeat(10);
+    let src = dir.join("legacy.funda");
+    {
+        let mut z = zip::ZipWriter::new(File::create(&src).unwrap());
+        let opts = SimpleFileOptions::default();
+        let manifest = Manifest {
+            container: 1,
+            hash_alg: HASH_ALG.to_string(),
+            app: String::new(),
+            blobs: vec![BlobRow { entry: "b0".into(), hash: "../outside".into(), bytes: data.len() as u64 }],
+            meshes: vec![],
+        };
+        z.start_file("manifest.json", opts).unwrap();
+        z.write_all(serde_json::to_string(&manifest).unwrap().as_bytes()).unwrap();
+        z.start_file("document.json", opts).unwrap();
+        z.write_all(br#"{"version":5}"#).unwrap();
+        z.start_file("b0", opts).unwrap();
+        z.write_all(&data).unwrap();
+        z.finish().unwrap();
+    }
+
+    let store = dir.join("blobs");
+    let err = read_container(&src, &store, None).unwrap_err();
+    assert!(err.contains("damaged"), "{err}");
+    assert_eq!(std::fs::read(&outside).unwrap(), b"kept as it was");
+    let mut names: Vec<_> = std::fs::read_dir(&dir)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .filter(|n| n != "blobs")
+        .collect();
+    names.sort();
+    assert_eq!(names, ["legacy.funda", "outside.bbrep"], "nothing new beside the store");
     let _ = std::fs::remove_dir_all(&dir);
 }

@@ -1,0 +1,8 @@
+version: 2
+updates:
+  # The composite actions in .github/actions call no other action, so the workflows directory covers every pin.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    target-branch: "dev"
+    schedule:
+      interval: "weekly"

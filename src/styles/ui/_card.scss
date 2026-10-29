@@ -1,7 +1,8 @@
 // Card: a titled, optionally collapsible card inside a pane.
 
 .ui-card-toggle {
-  display: inline-flex;
+  display: flex;
+  width: 100%;
   align-items: center;
   gap: var(--s-2);
   padding: 0;

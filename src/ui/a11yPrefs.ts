@@ -6,6 +6,8 @@ import { readSetting } from "./storedSetting";
 
 export type Animations = "system" | "on" | "off";
 export type Verbosity = "off" | "errors" | "normal" | "verbose";
+/** "system" is More when the OS asks for contrast, else Standard; contrastSetting.ts resolves and applies it. */
+export type Contrast = "system" | "standard" | "more" | "maximum";
 
 // The size settings, one block spread into the shared tables below.
 /** The browser's zoom steps, in percent. */
@@ -54,23 +56,47 @@ export interface A11yPrefs extends SizePrefs {
   animations: Animations;
   /** How much the announcer speaks: nothing, errors only, prompts and results, or every change too. */
   verbosity: Verbosity;
+  /** Letter, digit and symbol shortcuts without Ctrl or Cmd (WCAG 2.1.4). Voice control dictation and screen
+   *  reader browse mode type those keys, so they can be turned off; chords, F keys and arrows stay. */
+  singleKeys: boolean;
+  contrast: Contrast;
+  /** Opaque cards and pills instead of glass, so no model colour shows through; More and Maximum contrast imply it. */
+  solidPanels: boolean;
+  /** Larger click targets: every hit area grows from 24 to about 32 px, see targets.ts. */
+  targets: Targets;
 }
 
-export const DEFAULT_A11Y: Readonly<A11yPrefs> = { animations: "system", verbosity: "normal", ...SIZE_DEFAULTS };
+export const DEFAULT_A11Y: Readonly<A11yPrefs> = {
+  animations: "system",
+  verbosity: "normal",
+  singleKeys: true,
+  contrast: "system",
+  solidPanels: false,
+  targets: "default",
+  ...SIZE_DEFAULTS,
+};
 
-/** One click for screen reader users. Later settings join it: Single key shortcuts off, Solid panels on and
- *  Notification time Until dismissed. */
-export const SCREEN_READER_PRESET: Readonly<Partial<A11yPrefs>> = { verbosity: "verbose" };
+/** One click for screen reader users. Later settings join it: Notification time Until dismissed. */
+export const SCREEN_READER_PRESET: Readonly<Partial<A11yPrefs>> = {
+  verbosity: "verbose",
+  singleKeys: false,
+  solidPanels: true,
+};
 
 // fundacad.animations predates this module and held "on" or "off", absent meaning follow the OS; both still read.
 const KEYS: Record<keyof A11yPrefs, string> = {
   animations: "fundacad.animations",
   verbosity: "fundacad.a11y.verbosity",
+  singleKeys: "fundacad.a11y.singleKeys",
+  contrast: "fundacad.a11y.contrast",
+  solidPanels: "fundacad.a11y.solidPanels",
+  targets: "fundacad.a11y.targets",
   ...SIZE_KEYS,
 };
 
 const ANIMATIONS: readonly Animations[] = ["system", "on", "off"];
 const VERBOSITY: readonly Verbosity[] = ["off", "errors", "normal", "verbose"];
+const CONTRAST: readonly Contrast[] = ["system", "standard", "more", "maximum"];
 
 export function asAnimations(v: unknown): Animations | null {
   return ANIMATIONS.includes(v as Animations) ? (v as Animations) : null;
@@ -78,10 +104,34 @@ export function asAnimations(v: unknown): Animations | null {
 export function asVerbosity(v: unknown): Verbosity | null {
   return VERBOSITY.includes(v as Verbosity) ? (v as Verbosity) : null;
 }
+/** A boolean setting is stored as "on" or "off". */
+export function asOnOff(v: unknown): boolean | null {
+  if (v === true || v === "on") return true;
+  if (v === false || v === "off") return false;
+  return null;
+}
+export function asContrast(v: unknown): Contrast | null {
+  return CONTRAST.includes(v as Contrast) ? (v as Contrast) : null;
+}
+export function asFlag(v: unknown): boolean | null {
+  if (v === true || v === "true") return true;
+  if (v === false || v === "false") return false;
+  return null;
+}
+
+export type Targets = "default" | "large";
+const TARGETS: readonly Targets[] = ["default", "large"];
+export function asTargets(v: unknown): Targets | null {
+  return TARGETS.includes(v as Targets) ? (v as Targets) : null;
+}
 
 const GATES: { [K in keyof A11yPrefs]: (v: unknown) => A11yPrefs[K] | null } = {
   animations: asAnimations,
   verbosity: asVerbosity,
+  singleKeys: asOnOff,
+  contrast: asContrast,
+  solidPanels: asFlag,
+  targets: asTargets,
   ...SIZE_GATES,
 };
 
@@ -124,10 +174,16 @@ export function getVerbosity(): Verbosity {
   return current.verbosity;
 }
 
+/** Read by resolveShortcut and the sketch tool letters on every key. */
+export function singleKeysOn(): boolean {
+  return current.singleKeys;
+}
+
+// singleKeys is stored as "on" or "off", solidPanels as "true" or "false".
 function store(k: keyof A11yPrefs, v: A11yPrefs[keyof A11yPrefs] | null) {
   try {
     if (v === null) localStorage.removeItem(KEYS[k]);
-    else localStorage.setItem(KEYS[k], String(v));
+    else localStorage.setItem(KEYS[k], typeof v === "boolean" && k === "singleKeys" ? (v ? "on" : "off") : String(v));
   } catch {
     /* ignore */
   }

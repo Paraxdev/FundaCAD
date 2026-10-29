@@ -6,10 +6,10 @@ Properties shows the size and weight of your bodies. Open it from the Analyze me
 
 It measures the selected bodies, or all bodies when nothing is selected. It lists:
 
-- Volume
-- Surface area
-- Center of mass, also marked in the view
-- Bounding box, as width × depth × height
+1. Volume
+2. Surface area
+3. Center of mass, also marked in the view
+4. Bounding box, as width × depth × height
 
 Press Esc to close it.
 

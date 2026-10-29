@@ -2,10 +2,10 @@
 
 With no tool running, clicks select and drag what you drew.
 
-- Click a shape to select it. Shift or Ctrl click adds more.
-- Drag across empty space for a box. Left to right takes what lies wholly inside, right to left also takes what it touches.
-- Drag a point or a line to move it.
-- Press Delete to remove the selection, or right-click it and pick Delete.
+1. Click a shape to select it. Shift or Ctrl click adds more.
+2. Drag across empty space for a box. Left to right takes what lies wholly inside, right to left also takes what it touches.
+3. Drag a point or a line to move it.
+4. Press Delete to remove the selection, or right-click it and pick Delete.
 
 ## Edit tools
 
@@ -38,6 +38,6 @@ Copy, Rotate and Scale are in the command palette (Ctrl+K).
 
 With nothing selected, Mirror starts on Objects. Click shapes, or inside a closed shape to take its whole outline, then press Enter to move on to Mirror line.
 
-- Shift or Ctrl click always adds to Objects.
-- Click a list, or press Tab, to choose which one your clicks fill.
-- Esc cancels and gives back the selection you had.
+1. Shift or Ctrl click always adds to Objects.
+2. Click a list, or press Tab, to choose which one your clicks fill.
+3. Esc cancels and gives back the selection you had.

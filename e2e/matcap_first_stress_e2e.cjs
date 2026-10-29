@@ -32,7 +32,7 @@ const check = (name, ok, detail) => {
   if (ANGLE !== "swiftshader") args.push("--enable-gpu", "--ignore-gpu-blocklist");
   const browser = await chromium.launch({ executablePath: EXE, args });
   try {
-    const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+    const page = await browser.newPage({ colorScheme: "dark", viewport: { width: 1400, height: 900 } });
     let mismatches = 0;
     page.on("console", (m) => {
       if (/GL_INVALID_OPERATION/.test(m.text())) mismatches++;

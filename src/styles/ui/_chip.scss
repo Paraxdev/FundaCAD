@@ -1,5 +1,7 @@
 // Chip: neutral, accent, warn and error badges and tags, xs, sm and md.
 
+@use "../hit";
+
 .chip {
   --chip-fill: var(--float-chip-bg);
   display: inline-flex;
@@ -67,6 +69,7 @@ button.chip,
 .chip-body {
   margin: 0;
   cursor: pointer;
+  @include hit.area;
 }
 button.chip {
   background: var(--chip-fill);

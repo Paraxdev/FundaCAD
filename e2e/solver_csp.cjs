@@ -74,7 +74,7 @@ function serve(csp) {
 async function run(browser, csp) {
   const { server, port } = await serve(csp);
   try {
-    const page = await browser.newPage();
+    const page = await browser.newPage({ colorScheme: "dark" });
     await page.goto(`http://localhost:${port}/`, { waitUntil: "networkidle" });
     await page.waitForFunction(() => window.__result !== undefined, null, { timeout: 30000 }).catch(() => {});
     const result = await page.evaluate(() => window.__result ?? "(never resolved)");

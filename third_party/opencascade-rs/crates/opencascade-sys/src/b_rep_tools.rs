@@ -16,6 +16,6 @@ mod inner {
         #[cxx_name = "write_brep_text"]
         pub fn write(shape: &TopoDS_Shape, path: String) -> bool;
         #[cxx_name = "read_brep_text"]
-        pub fn read(path: String) -> UniquePtr<TopoDS_Shape>;
+        pub fn read(path: String) -> Result<UniquePtr<TopoDS_Shape>>;
     }
 }

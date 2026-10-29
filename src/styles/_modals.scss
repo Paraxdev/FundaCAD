@@ -1,3 +1,5 @@
+@use "hit";
+
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -43,6 +45,7 @@
   cursor: pointer;
   padding: var(--s-1) var(--s-3);
   border-radius: var(--r-sm, 6px);
+  @include hit.area;
 }
 .modal-close:hover {
   background: var(--raised, #22262e);
@@ -175,29 +178,17 @@
   appearance: none;
   -webkit-appearance: none;
   background-color: var(--panel-2, #1c1f26);
-  /* A caret in place of the native one. */
-  background-image:
-    linear-gradient(45deg, transparent 50%, var(--text-dim, #9aa3af) 50%),
-    linear-gradient(135deg, var(--text-dim, #9aa3af) 50%, transparent 50%);
-  background-position:
-    calc(100% - 14px) 50%,
-    calc(100% - 9px) 50%;
-  background-size:
-    5px 5px,
-    5px 5px;
-  background-repeat: no-repeat;
   color: var(--text, #e6e8ec);
   border: 1px solid transparent;
   border-radius: var(--r-sm, 6px);
-  /* The 26px clears the gradient caret above, placed from the right edge, like every other
-     select. */
+  /* The 26px clears the .select-caret element (ui/_select.scss), placed from the right edge. */
   padding: var(--s-2) 26px var(--s-2) var(--s-3);
   font-size: var(--fs-micro);
   cursor: pointer;
 }
 .sm-select:focus {
-  outline: 1px solid var(--accent);
-  outline-offset: 0;
+  outline: var(--focus-ring-width) solid var(--accent);
+  outline-offset: 1px;
 }
 /* WebKitGTK renders the native option popup light by default. */
 .sm-select option {
@@ -233,8 +224,8 @@
   min-width: 0;
 }
 .sm-input:focus {
-  outline: 1px solid var(--accent);
-  outline-offset: 0;
+  outline: var(--focus-ring-width) solid var(--accent);
+  outline-offset: 1px;
 }
 .sm-inv {
   font-size: var(--fs-micro);
@@ -597,17 +588,21 @@
   /* The same 4px popup padding as .menu-popup, .context-menu and the ribbon overflow. */
   padding: var(--s-1);
 }
-.cmdk-item {
-  display: flex;
+.cmdk-list .opt-list {
+  gap: 0;
+}
+/* The rows are ChoiceList options, so these beat the later .opt-row rules in _float.scss. */
+.cmdk-list .cmdk-item {
+  flex-direction: row;
   align-items: center;
   gap: var(--s-3);
   /* Shared popup-row size, see .ribbon-overflow-item. */
   padding: var(--s-3) var(--s-4);
-  border-radius: var(--r-sm, 6px);
   cursor: pointer;
   color: var(--text, #e6e9ee);
+  font-size: inherit;
 }
-.cmdk-item.active {
+.cmdk-list .cmdk-item.is-active {
   background: var(--accent-tint);
   color: var(--accent-hot);
 }
@@ -687,8 +682,9 @@
   font-weight: 700;
 }
 .measure-title {
+  margin: 0 0 var(--s-2);
+  font-size: inherit;
   font-weight: 600;
-  margin-bottom: var(--s-2);
   color: var(--accent-hot);
 }
 .measure-row {

@@ -48,15 +48,25 @@ describe("IconButton", () => {
     expect(w.find("svg").attributes("width")).toBe("12");
   });
 
-  it("writes the same title and aria-label from tip and keys through fmtKeys", async () => {
+  it("names itself by the tip alone and hands the keys to the title and aria-keyshortcuts", async () => {
     setMacForTest(true);
     const mac = await render({ tip: "Items", keys: "Ctrl+Alt+S" });
-    expect([mac.w.attributes("title"), mac.w.attributes("aria-label")]).toEqual(["Items (⌘+⌥+S)", "Items (⌘+⌥+S)"]);
+    const attrs = (w: typeof mac.w) => ["title", "aria-label", "aria-keyshortcuts"].map((a) => w.attributes(a));
+    expect(attrs(mac.w)).toEqual(["Items (⌘+⌥+S)", "Items", "Meta+Alt+S"]);
     setMacForTest(false);
     const pc = await render({ tip: "Items", keys: "Ctrl+Alt+S" });
-    expect([pc.w.attributes("title"), pc.w.attributes("aria-label")]).toEqual([
+    expect(attrs(pc.w)).toEqual(["Items (Ctrl+Alt+S)", "Items", "Control+Alt+S"]);
+    const none = await render({ tip: "Items" });
+    expect(attrs(none.w)).toEqual(["Items", "Items", undefined]);
+  });
+
+  it("shows the first of a list of keys and announces them all", async () => {
+    setMacForTest(false);
+    const { w } = await render({ tip: "Items", keys: ["Ctrl+Alt+S", "Ctrl+Shift+1"], badge: 2 });
+    expect([w.attributes("title"), w.attributes("aria-label"), w.attributes("aria-keyshortcuts")]).toEqual([
       "Items (Ctrl+Alt+S)",
-      "Items (Ctrl+Alt+S)",
+      "Items, 2",
+      "Control+Alt+S Control+Shift+1",
     ]);
   });
 
@@ -67,6 +77,29 @@ describe("IconButton", () => {
     expect(w.attributes("aria-pressed")).toBe("false");
     await w.setProps({ active: true });
     expect([w.attributes("aria-pressed"), w.classes("active"), w.classes("is-on")]).toEqual(["true", true, true]);
+  });
+
+  it("says popup and expanded instead of pressed when popup is set, keeping the active look", async () => {
+    const { w } = await render({ popup: "dialog", active: true });
+    expect([w.attributes("aria-haspopup"), w.attributes("aria-expanded"), w.attributes("aria-pressed")]).toEqual([
+      "dialog",
+      "false",
+      undefined,
+    ]);
+    expect([w.classes("active"), w.classes("is-on")]).toEqual([true, true]);
+    await w.setProps({ expanded: true });
+    expect(w.attributes("aria-expanded")).toBe("true");
+    await w.setProps({ popup: "menu" });
+    expect(w.attributes("aria-haspopup")).toBe("menu");
+  });
+
+  it("writes no popup state without popup, even when expanded is passed", async () => {
+    const { w } = await render({ expanded: true, active: false });
+    expect([w.attributes("aria-haspopup"), w.attributes("aria-expanded"), w.attributes("aria-pressed")]).toEqual([
+      undefined,
+      undefined,
+      "false",
+    ]);
   });
 
   it("renders disabled as aria-disabled and .is-disabled, never native, and keeps the title live", async () => {

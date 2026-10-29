@@ -5,6 +5,11 @@ import { afterEach, describe, expect, it } from "vitest";
 import { DimInput } from "../../src/sketch/dimInput";
 import { installKeymap } from "../../src/input/keymap";
 
+// One keymap at a time, as the app has: an earlier test's keymap would take the key first.
+const installed: (() => void)[] = [];
+const install = (...args: Parameters<typeof installKeymap>) => installed.push(installKeymap(...args));
+afterEach(() => installed.splice(0).forEach((off) => off()));
+
 const FIELDS = [{ name: "move", label: "Move", kind: "length" as const }];
 
 function press(target: EventTarget, key: string, mods: KeyboardEventInit = {}) {
@@ -19,7 +24,7 @@ describe("undo and redo from a tool's value box", () => {
 
   it("Ctrl+Z cancels the tool and undoes the document, and Ctrl+Y then redoes", () => {
     const actions: string[] = [];
-    installKeymap(
+    install(
       (a) => actions.push(a),
       () => "model",
     );
@@ -47,7 +52,7 @@ describe("undo and redo from a tool's value box", () => {
 
   it("reaches the document from a box with no cancel of its own", () => {
     const actions: string[] = [];
-    installKeymap(
+    install(
       (a) => actions.push(a),
       () => "model",
     );
@@ -62,7 +67,7 @@ describe("undo and redo from a tool's value box", () => {
 
   it("still keeps ordinary typing for the box", () => {
     const actions: string[] = [];
-    installKeymap(
+    install(
       (a) => actions.push(a),
       () => "model",
     );

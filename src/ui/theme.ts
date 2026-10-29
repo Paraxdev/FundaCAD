@@ -1,6 +1,9 @@
 // The active theme: the built-in palette in styles/_tokens.scss or an uploaded JSON palette, colour tokens only so a
 // theme never relayouts. Uploads are inline custom properties on <html>, so the built-in theme is just their absence.
+// System, the first run choice, stands for a shipped palette picked from the OS appearance (osTheme.ts).
 
+import { contrastFailures, parseColor, type PairResult } from "./contrast";
+import { onOsAppearanceChange, osAppearance, type OsAppearance } from "./osTheme";
 import { readSetting } from "./storedSetting";
 
 export interface Theme {
@@ -27,7 +30,11 @@ export interface ShippedTheme extends Theme {
 
 export const BUILTIN_THEME: Theme = { id: "fundacad", label: "FundaCAD Noir", mode: "dark", custom: false };
 
-export const DEFAULT_THEME_ID = BUILTIN_THEME.id;
+/** Not a palette: it stands for the shipped palette the OS appearance calls for, see systemThemeFor. */
+export const SYSTEM_THEME_ID = "system";
+
+/** What a first run gets, and what removing the active upload falls back to. */
+export const DEFAULT_THEME_ID = SYSTEM_THEME_ID;
 
 /** Noir's surfaces, shared by the Noir variants below, which change only the accent. */
 const NOIR_SURFACE = {
@@ -38,15 +45,30 @@ const NOIR_SURFACE = {
   "--raised-2": "#3d3651",
   "--viewport-bg": "#0b0912",
   "--line": "#322c42",
-  "--line-strong": "#5c5470",
+  "--line-strong": "#847c9a",
   "--text": "#f6f0e4",
-  "--text-dim": "#aaa1b5",
-  "--text-mute": "#7d7590",
+  "--text-dim": "#c4bcd0",
+  "--text-mute": "#a9a2ba",
   "--ok": "#17c99a",
   "--warn": "#ffab2e",
   "--error": "#ff5c5c",
   "--error-tint": "rgba(255, 92, 92, 0.14)",
   "--pick-line": "#b48cff",
+};
+
+/** The :root values in _tokens.scss the contrast pairs read, which an uploaded palette falls back to. */
+export const NOIR_PALETTE: Readonly<Record<string, string>> = {
+  ...NOIR_SURFACE,
+  "--accent": "#9a9ff0",
+  "--accent-hot": "#bcc0f7",
+  "--accent-tint": "rgba(154, 159, 240, 0.14)",
+  "--accent-tint-2": "rgba(154, 159, 240, 0.24)",
+  "--on-accent": "#0c0d26",
+  "--axis-x": "#ff5a5a",
+  "--axis-y": "#46d97a",
+  "--axis-z": "#4d8dff",
+  "--field-bg": "rgba(0, 0, 0, 0.3)",
+  "--check-off": "rgba(0, 0, 0, 0.45)",
 };
 
 function noirTint(
@@ -76,9 +98,112 @@ function noirTint(
   };
 }
 
-/** A couple of well-known palettes, plus dark Noir variants that keep the
- *  built-in theme's shell but swap its periwinkle accent for another hue. */
+/** Noir on paper, a high contrast pair, a couple of well-known palettes, plus dark Noir
+ *  variants that keep the built-in theme's shell but swap its periwinkle accent for another hue. */
 const SHIPPED_THEMES: ShippedTheme[] = [
+  {
+    // Noir's violet on paper: the same accent hue, deepened until it reads as text and as a ring on white.
+    id: "fundacad-light",
+    label: "FundaCAD Light",
+    mode: "light",
+    custom: false,
+    palette: {
+      "--bg": "#f5f3f9",
+      "--panel": "#ebe8f2",
+      "--panel-2": "#e0dcea",
+      "--raised": "#ffffff",
+      "--raised-2": "#f2f0f7",
+      "--viewport-bg": "#e8e5ef",
+      "--line": "#d0cadd",
+      "--line-strong": "#7a7390",
+      "--text": "#1b1826",
+      "--text-dim": "#3d3651",
+      "--text-mute": "#585170",
+      "--accent": "#4a4fb5",
+      "--accent-hot": "#30348a",
+      "--accent-tint": "rgba(74, 79, 181, 0.14)",
+      "--accent-tint-2": "rgba(74, 79, 181, 0.24)",
+      "--on-accent": "#ffffff",
+      "--ok": "#0a6b55",
+      "--warn": "#80560a",
+      "--error": "#841714",
+      "--error-tint": "rgba(132, 23, 20, 0.12)",
+      "--pick-line": "#7b3fe0",
+      "--accent-blue": "#4a4fb5",
+      "--axis-x": "#c4302b",
+      "--axis-y": "#23803d",
+      "--axis-z": "#2b5fd0",
+    },
+  },
+  {
+    // 7:1 text on every surface, 4.5:1 lines, control edges, signals and focus ring. Cyan accent, as yellow is warn.
+    id: "high-contrast-dark",
+    label: "High Contrast Dark",
+    mode: "dark",
+    custom: false,
+    palette: {
+      "--bg": "#000000",
+      "--panel": "#0a0a0a",
+      "--panel-2": "#161616",
+      "--raised": "#202020",
+      "--raised-2": "#2a2a2a",
+      "--viewport-bg": "#000000",
+      "--line": "#5c5c5c",
+      "--line-strong": "#a6a6a6",
+      "--text": "#ffffff",
+      "--text-dim": "#ebebeb",
+      "--text-mute": "#d4d4d4",
+      "--control-edge": "#c2c2c2",
+      "--accent": "#5cd6ff",
+      "--accent-hot": "#a8ebff",
+      "--accent-tint": "rgba(92, 214, 255, 0.16)",
+      "--accent-tint-2": "rgba(92, 214, 255, 0.28)",
+      "--on-accent": "#000000",
+      "--ok": "#38d985",
+      "--warn": "#ffe066",
+      "--error": "#ff6a6a",
+      "--error-tint": "rgba(255, 106, 106, 0.18)",
+      "--pick-line": "#ff7ae0",
+      "--accent-blue": "#5cd6ff",
+      "--axis-x": "#ff6b6b",
+      "--axis-y": "#5ef08f",
+      "--axis-z": "#6ba6ff",
+    },
+  },
+  {
+    id: "high-contrast-light",
+    label: "High Contrast Light",
+    mode: "light",
+    custom: false,
+    palette: {
+      "--bg": "#ffffff",
+      "--panel": "#f4f4f4",
+      "--panel-2": "#e9e9e9",
+      "--raised": "#ffffff",
+      "--raised-2": "#f0f0f0",
+      "--viewport-bg": "#e0e0e0",
+      "--line": "#8c8c8c",
+      "--line-strong": "#4a4a4a",
+      "--text": "#000000",
+      "--text-dim": "#1a1a1a",
+      "--text-mute": "#333333",
+      "--control-edge": "#333333",
+      "--accent": "#0b3fb8",
+      "--accent-hot": "#082d85",
+      "--accent-tint": "rgba(11, 63, 184, 0.12)",
+      "--accent-tint-2": "rgba(11, 63, 184, 0.22)",
+      "--on-accent": "#ffffff",
+      "--ok": "#00664f",
+      "--warn": "#7a5500",
+      "--error": "#7a000e",
+      "--error-tint": "rgba(122, 0, 14, 0.1)",
+      "--pick-line": "#a3007d",
+      "--accent-blue": "#0b3fb8",
+      "--axis-x": "#c41a1a",
+      "--axis-y": "#1d7a2e",
+      "--axis-z": "#1f4fd6",
+    },
+  },
   {
     id: "dracula",
     label: "Dracula",
@@ -92,18 +217,18 @@ const SHIPPED_THEMES: ShippedTheme[] = [
       "--raised-2": "#454858",
       "--viewport-bg": "#1e1f29",
       "--line": "#44475a",
-      "--line-strong": "#6272a4",
+      "--line-strong": "#808db5",
       "--text": "#f8f8f2",
-      "--text-dim": "#c9c7cc",
-      "--text-mute": "#9aa0b0",
+      "--text-dim": "#d6d4da",
+      "--text-mute": "#b5bac7",
       "--accent": "#bd93f9",
       "--accent-hot": "#d6acff",
       "--accent-tint": "rgba(189, 147, 249, 0.14)",
       "--accent-tint-2": "rgba(189, 147, 249, 0.24)",
       "--on-accent": "#1b0f2e",
       "--ok": "#50fa7b",
-      "--warn": "#ffb86c",
-      "--error": "#ff5555",
+      "--warn": "#f6b168",
+      "--error": "#ff7676",
       "--error-tint": "rgba(255, 85, 85, 0.14)",
       "--pick-line": "#ff79c6",
       "--accent-blue": "#8be9fd",
@@ -122,7 +247,7 @@ const SHIPPED_THEMES: ShippedTheme[] = [
       "--raised-2": "#f5efdc",
       "--viewport-bg": "#eee8d5",
       "--line": "#d6cfb4",
-      "--line-strong": "#93a1a1",
+      "--line-strong": "#657b83",
       "--text": "#073642",
       "--text-dim": "#3a4f55",
       "--text-mute": "#4d6165",
@@ -131,12 +256,15 @@ const SHIPPED_THEMES: ShippedTheme[] = [
       "--accent-tint": "rgba(37, 102, 155, 0.14)",
       "--accent-tint-2": "rgba(37, 102, 155, 0.24)",
       "--on-accent": "#fdf6e3",
-      "--ok": "#859900",
-      "--warn": "#b58900",
-      "--error": "#dc322f",
+      "--ok": "#1c6b65",
+      "--warn": "#7a5d00",
+      "--error": "#8a1f1d",
       "--error-tint": "rgba(220, 50, 47, 0.14)",
       "--pick-line": "#d33682",
       "--accent-blue": "#268bd2",
+      "--axis-x": "#dc322f",
+      "--axis-y": "#738400",
+      "--axis-z": "#2381c4",
     },
   },
   {
@@ -156,10 +284,10 @@ const SHIPPED_THEMES: ShippedTheme[] = [
       "--raised-2": "#2b3542",
       "--viewport-bg": "#0b0e13",
       "--line": "#2b3542",
-      "--line-strong": "#58697a",
+      "--line-strong": "#687887",
       "--text": "#f5f7fa",
       "--text-dim": "#b5c0cc",
-      "--text-mute": "#7e8b99",
+      "--text-mute": "#97a2ae",
       "--accent": "#9b6cff",
       "--accent-hot": "#b89aff",
       "--accent-tint": "rgba(155, 108, 255, 0.14)",
@@ -211,6 +339,8 @@ const PALETTE_TOKENS = new Set<string>([
   "--text",
   "--text-dim",
   "--text-mute",
+  "--text-faint",
+  "--control-edge",
   "--accent",
   "--accent-hot",
   "--accent-tint",
@@ -252,7 +382,7 @@ function readLibrary(): CustomTheme[] {
   if (!Array.isArray(parsed)) return [];
   // Stored entries are as untrusted as an upload: other builds and hand edits write here.
   const out: CustomTheme[] = [];
-  const seen = new Set<string>([BUILTIN_THEME.id, ...SHIPPED_THEMES.map((t) => t.id)]);
+  const seen = new Set<string>([SYSTEM_THEME_ID, BUILTIN_THEME.id, ...SHIPPED_THEMES.map((t) => t.id)]);
   for (const entry of parsed) {
     const t = coerceStored(entry);
     if (t && !seen.has(t.id)) {
@@ -272,8 +402,24 @@ function writeLibrary(list: CustomTheme[]) {
 
 let library: CustomTheme[] = readLibrary();
 
+/** The shipped palette System stands for under an OS appearance. */
+export function systemThemeFor(os: OsAppearance): string {
+  if (os.contrast) return os.dark ? "high-contrast-dark" : "high-contrast-light";
+  return os.dark ? BUILTIN_THEME.id : "fundacad-light";
+}
+
+function resolve(id: string): string {
+  return id === SYSTEM_THEME_ID ? systemThemeFor(osAppearance()) : id;
+}
+
+/** Grouped with the palette it stands for right now. */
+function systemEntry(): Theme {
+  const mode = findTheme(systemThemeFor(osAppearance()))?.mode ?? "dark";
+  return { id: SYSTEM_THEME_ID, label: "System", mode, custom: false };
+}
+
 export function themes(): Theme[] {
-  return [BUILTIN_THEME, ...SHIPPED_THEMES, ...library];
+  return [systemEntry(), BUILTIN_THEME, ...SHIPPED_THEMES, ...library];
 }
 
 export function customThemes(): CustomTheme[] {
@@ -281,6 +427,7 @@ export function customThemes(): CustomTheme[] {
 }
 
 function findTheme(id: string): Theme | undefined {
+  if (id === SYSTEM_THEME_ID) return systemEntry();
   if (id === BUILTIN_THEME.id) return BUILTIN_THEME;
   return SHIPPED_THEMES.find((t) => t.id === id) ?? library.find((t) => t.id === id);
 }
@@ -290,23 +437,33 @@ export function asThemeId(v: unknown): string | null {
   return typeof v === "string" && findTheme(v) !== undefined ? v : null;
 }
 
+/** Nothing stored means System; a stored id is only ever replaced by the user picking another. */
 function readStored(): string {
   return asThemeId(readSetting(KEY, ...LEGACY_KEYS)) ?? DEFAULT_THEME_ID;
 }
 
 let activeId = readStored();
+let resolvedId = resolve(activeId);
 const listeners = new Set<() => void>();
 let appliedProps: string[] = [];
+let unwatchOs: (() => void) | null = null;
 
+/** The choice, which may be System. */
 export function getTheme(): string {
   return activeId;
 }
 
+/** The palette on the document: the choice, with System resolved against the OS. */
+export function resolvedTheme(): string {
+  return resolvedId;
+}
+
 export function themeMode(id: string = activeId): "dark" | "light" {
-  return findTheme(id)?.mode ?? "dark";
+  return findTheme(resolve(id))?.mode ?? "dark";
 }
 
 function apply(id: string) {
+  resolvedId = id;
   if (typeof document === "undefined") return;
   const root = document.documentElement;
   for (const prop of appliedProps) root.style.removeProperty(prop);
@@ -326,17 +483,29 @@ function apply(id: string) {
   root.style.setProperty("color-scheme", theme.mode);
 }
 
+function notify() {
+  for (const fn of listeners) fn();
+}
+
 export function setTheme(id: string) {
   const next = asThemeId(id);
   if (!next || next === activeId) return;
   activeId = next;
-  apply(next);
+  apply(resolve(next));
   try {
     localStorage.setItem(KEY, next);
   } catch {
     /* no storage: the choice lasts for the session */
   }
-  for (const fn of listeners) fn();
+  notify();
+}
+
+function followOs() {
+  if (activeId !== SYSTEM_THEME_ID) return;
+  const next = resolve(activeId);
+  if (next === resolvedId) return;
+  apply(next);
+  notify();
 }
 
 /** For the Three.js viewport, whose materials hold resolved colours, not custom properties. */
@@ -345,9 +514,10 @@ export function onThemeChange(fn: () => void): () => void {
   return () => listeners.delete(fn);
 }
 
-/** Put the stored theme on the document. Call once at startup. */
+/** Put the stored theme on the document and follow the OS while System is chosen. Call once at startup. */
 export function initTheme() {
-  apply(activeId);
+  apply(resolve(activeId));
+  unwatchOs ??= onOsAppearanceChange(followOs);
 }
 
 function slug(label: string): string {
@@ -378,11 +548,21 @@ function extractPalette(source: Record<string, unknown>): Record<string, string>
   const out: Record<string, string> = {};
   for (const [key, value] of Object.entries(raw)) {
     const token = key.toLowerCase();
-    if (PALETTE_TOKENS.has(token) && typeof value === "string" && COLOR_RE.test(value.trim())) {
+    if (PALETTE_TOKENS.has(token) && typeof value === "string" && isColour(value.trim())) {
       out[token] = value.trim();
     }
   }
   return out;
+}
+
+function isColour(value: string): boolean {
+  if (!COLOR_RE.test(value)) return false;
+  try {
+    parseColor(value);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function coerceStored(entry: unknown): CustomTheme | null {
@@ -396,9 +576,10 @@ function coerceStored(entry: unknown): CustomTheme | null {
   return { id, label, mode: asMode(e.mode), custom: true, palette };
 }
 
-export type UploadResult = { ok: true; theme: CustomTheme } | { ok: false; error: string };
+/** `failing` holds the contrast pairs the palette misses, worst first, as Noir fills the tokens it leaves out. */
+export type UploadResult = { ok: true; theme: CustomTheme; failing: PairResult[] } | { ok: false; error: string };
 
-/** Validate a parsed palette file and add it to the library without switching to it.
+/** Validate a parsed palette file and add it to the library without switching to it, even when it fails contrast.
  *  `fallbackLabel` is the file name, used when the file names no label. */
 export function addCustomTheme(source: unknown, fallbackLabel = "Custom theme"): UploadResult {
   if (!source || typeof source !== "object") {
@@ -429,7 +610,7 @@ export function addCustomTheme(source: unknown, fallbackLabel = "Custom theme"):
   };
   library = [...library, theme];
   writeLibrary(library);
-  return { ok: true, theme };
+  return { ok: true, theme, failing: contrastFailures({ ...NOIR_PALETTE, ...palette }, theme.mode) };
 }
 
 /** Remove an uploaded palette, falling back to the built-in one if it was active. */
@@ -441,12 +622,12 @@ export function removeCustomTheme(id: string) {
   writeLibrary(library);
   if (activeId === id) {
     activeId = DEFAULT_THEME_ID;
-    apply(activeId);
+    apply(resolve(activeId));
     try {
       localStorage.setItem(KEY, activeId);
     } catch {
       /* no storage: the revert lasts for the session */
     }
-    for (const fn of listeners) fn();
+    notify();
   }
 }

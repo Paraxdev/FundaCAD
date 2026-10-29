@@ -16,6 +16,7 @@ const d = computed(() => threadDraft.value);
 const choices = computed(() => (d.value ? choicesFor(d.value.system) : []));
 const choice = computed(() => (d.value ? choiceOf(d.value) : null));
 const offBy = computed(() => (d.value ? offByText(d.value) : ""));
+const threadTitle = computed(() => `Standard Thread, ${d.value?.external ? "shaft" : "bore"}`);
 const lead = computed(() => (choice.value && d.value ? +(choice.value.pitch * d.value.starts).toFixed(4) : 0));
 
 function set(patch: Partial<ThreadDraft>) {
@@ -44,9 +45,9 @@ function num(ev: Event): number {
 </script>
 
 <template>
-  <FloatingPanel :open="!!d" close-on-esc @close="threadTool?.cancel()">
+  <FloatingPanel :open="!!d" :title="threadTitle" close-on-esc @close="threadTool?.cancel()">
     <div v-if="d" :style="PANEL" data-testid="thread-panel">
-      <div class="measure-title">Standard Thread, {{ d.external ? "shaft" : "bore" }}</div>
+      <div class="measure-title" aria-hidden="true">{{ threadTitle }}</div>
       <label :style="ROW"
         >System
         <select

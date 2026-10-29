@@ -21,6 +21,18 @@ const KEY = "fundacad.plugins";
 const ID = "FundaCAD.Printing";
 const OTHER = "FundaCAD.SpaceMouse";
 
+const host = vi.hoisted(() => ({
+  invoked: [] as { cmd: string; args: unknown }[],
+  fail: "" as string | ((ids: string[]) => string),
+}));
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: async (cmd: string, args: { ids: string[] }) => {
+    host.invoked.push({ cmd, args });
+    const why = typeof host.fail === "function" ? host.fail(args.ids) : host.fail;
+    if (why) throw new Error(why);
+  },
+}));
+
 async function load(stored?: Record<string, string>) {
   localStorage.clear();
   for (const [k, v] of Object.entries(stored ?? {})) localStorage.setItem(k, v);
@@ -149,5 +161,65 @@ describe("asDisabledSet", () => {
     expect([...asDisabledSet(42)]).toEqual([]);
     // The control: it is not simply returning empty for everything.
     expect(asDisabledSet([ID]).has(ID)).toBe(true);
+  });
+});
+
+describe("what the engine is told", () => {
+  // The engine runs outside this window and cannot read its storage, so without a copy on disk a plugin switched
+  // off here would still build its features there.
+  const win = window as unknown as Record<string, unknown>;
+  beforeEach(() => {
+    host.invoked = [];
+    host.fail = "";
+  });
+  afterEach(() => {
+    delete win.__TAURI_INTERNALS__;
+  });
+
+  it("gets the off set at startup and after every change, in order", async () => {
+    win.__TAURI_INTERNALS__ = {};
+    const m = await load({ [KEY]: JSON.stringify([OTHER]) });
+    m.setPluginEnabled(ID, false);
+    m.setPluginEnabled(ID, false);
+    m.setPluginEnabled(OTHER, true);
+    await vi.waitFor(() => expect(host.invoked).toHaveLength(3));
+    expect(host.invoked).toEqual([
+      { cmd: "plugin_set_disabled", args: { ids: [OTHER] } },
+      { cmd: "plugin_set_disabled", args: { ids: [ID, OTHER] } },
+      { cmd: "plugin_set_disabled", args: { ids: [ID] } },
+    ]);
+  });
+
+  it("undoes a switch the engine was not told about, so the window and the engine run the same plugins", async () => {
+    win.__TAURI_INTERNALS__ = {};
+    const m = await load();
+    const seen: boolean[] = [];
+    m.onPluginChange(() => seen.push(m.pluginEnabled(ID)));
+    host.fail = "disk full";
+    await expect(m.setPluginEnabled(ID, false)).rejects.toThrow("disk full");
+    expect([m.pluginEnabled(ID), localStorage.getItem(KEY), seen]).toEqual([true, "[]", [false, true]]);
+    host.fail = "";
+    await expect(m.setPluginEnabled(OTHER, false)).resolves.toBeUndefined();
+    expect(host.invoked.at(-1)).toEqual({ cmd: "plugin_set_disabled", args: { ids: [OTHER] } });
+  });
+
+  it("goes back to the last set the engine took when two switches are in flight", async () => {
+    win.__TAURI_INTERNALS__ = {};
+    const after = async (failing: number) => {
+      const m = await load();
+      host.fail = (ids) => (ids.length === failing ? "disk full" : "");
+      const sent = [m.setPluginEnabled(ID, false), m.setPluginEnabled(OTHER, false)];
+      const settled = await Promise.allSettled(sent);
+      return [settled.map((r) => r.status), m.pluginEnabled(ID), m.pluginEnabled(OTHER)];
+    };
+    expect(await after(1)).toEqual([["rejected", "fulfilled"], false, false]);
+    expect(await after(2)).toEqual([["fulfilled", "rejected"], false, true]);
+  });
+
+  it("is not called in a plain browser session, which has no engine of its own", async () => {
+    const m = await load();
+    m.setPluginEnabled(ID, false);
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+    expect(host.invoked).toEqual([]);
   });
 });

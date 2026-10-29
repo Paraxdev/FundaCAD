@@ -62,7 +62,7 @@ def test_typing_into_the_value_box_shows_the_value_and_enter_commits(plate):
 
 def test_menu_opens_preferences_and_panel_closes_it(s):
     s.menu("Edit/Preferences...")
-    assert "category:appearance" in s.screen(region="dialog")
+    assert "tab:appearance" in s.screen(region="dialog")
     assert str(s.panel("preferences")).startswith("preferences already open")
     s.panel("preferences", open=False)
     assert s.screen(region="dialog") == "nothing on screen"

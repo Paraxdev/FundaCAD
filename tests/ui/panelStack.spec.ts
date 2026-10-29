@@ -13,7 +13,9 @@ class RO {
 const state = reactive({ a: false, b: false, c: false });
 const Host = defineComponent({
   render: () =>
-    ["a", "b", "c"].map((k) => h(FloatingPanel, { open: state[k as "a"], panelClass: `p-${k}` }, () => h("span", k))),
+    ["a", "b", "c"].map((k) =>
+      h(FloatingPanel, { open: state[k as "a"], title: k, panelClass: `p-${k}` }, () => h("span", k)),
+    ),
 });
 let app: ReturnType<typeof createApp> | null = null;
 afterEach(() => {

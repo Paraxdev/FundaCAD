@@ -1,5 +1,6 @@
 // The Home screen's startup switch and the system browser opener.
 
+import { manualUrl } from "../app/channel";
 import { readSetting } from "./storedSetting";
 
 const SHOW_KEY = "fundacad.welcomeOnStartup";
@@ -30,7 +31,7 @@ export function closeWelcome(): void {
   }
 }
 
-export const MANUAL_URL = "https://fundacad.dev/";
+export const MANUAL_URL = manualUrl();
 
 const isTauri = () => "__TAURI_INTERNALS__" in window;
 

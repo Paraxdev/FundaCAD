@@ -1,10 +1,11 @@
-// The origin planes as small tiles, one per quadrant so they never cross. A press is matched
+// The origin planes as small tiles, each in the positive quadrant of its two axes with its corner on
+// the origin, so its edges lie on the triad's arrows and the tiles meet without crossing. A press is matched
 // on screen by planeHit.ts, so a tile seen edge on is still found by its pad or its name box.
 
 import * as THREE from "three";
 import { glyphScale, glyphWorldScale } from "./gizmoScale";
-import { axisColor, type AxisKey } from "./originTriad";
-import { SQUIRCLE_EXPONENT, roundedSquare, type Vec2 } from "./cornerProfile";
+import { MIN_TRIAD_SCALE, TRIAD_LENGTH_PX, axisColor, type AxisKey } from "./originTriad";
+import { SQUIRCLE_EXPONENT, roundedSquareCorners, type Vec2 } from "./cornerProfile";
 import { themeColor } from "./themeColors";
 import { pickPlaneOnScreen, placeLabels, type P2, type PlaneHit, type PlaneOnScreen } from "./planeHit";
 import type { Plane3 } from "../types";
@@ -34,16 +35,20 @@ export interface TilePose {
   normal: Vec3;
 }
 
-// The app's own squircle tiles scaled up from a 40 px rail tile with its 17 px corner and 6 px gap.
-export const TILE_SIZE_PX = 85;
-export const TILE_GAP_PX = 12;
-export const TILE_CORNER_RADIUS_PX = 36;
-/** The octant the home view looks into, so no tile hides another from there.
- *  { x: -1, y: 1, z: -1 } is the same corner seen from outside. */
-export const TILE_OCTANT: Octant = { x: 1, y: -1, z: 1 };
+// As long as an axis arrow, rounded like a 40 px rail tile with its 17 px corner.
+export const TILE_SIZE_PX = TRIAD_LENGTH_PX;
+export const TILE_GAP_PX = 0;
+/** Only the corner away from the origin is rounded, the other three sit on the arrows. */
+export const TILE_CORNER_RADIUS_PX = 27;
+export const TILE_OCTANT: Octant = { x: 1, y: 1, z: 1 };
 export const TILE_EXTENT_PX = TILE_GAP_PX + TILE_SIZE_PX;
-/** The tiles are click targets, so they stop shrinking at 41 px, about a rail tile. */
-export const MIN_TILE_SCALE = 0.48;
+/** The tiles are click targets, so they stop shrinking at about 41 px, a rail tile. */
+export const MIN_TILE_SCALE = 0.65;
+
+/** While the tiles show, the arrows share their floor, so a tile edge stays as long as an arrow at every zoom. */
+export function triadMinScale(tilesShown: boolean): number {
+  return tilesShown ? MIN_TILE_SCALE : MIN_TRIAD_SCALE;
+}
 export const CORNER_SEGMENTS = 24;
 export const RIM_PX = 1.5;
 export const RIM_INK_MIX = 0.4;
@@ -150,17 +155,28 @@ function shapeOf(pts: Vec2[]): THREE.Shape {
   return new THREE.Shape(pts.map(([x, y]) => new THREE.Vector2(x, y)));
 }
 
-function outline(shape: TileShape, inset = 0): Vec2[] {
-  return roundedSquare(shape.sizePx - 2 * inset, shape.radiusPx - inset, shape.exponent, CORNER_SEGMENTS);
+/** A tile's outline in its own frame, local x and y along the plane's two axes as `tilePose` turns it. */
+export function tileOutline(plane: Plane3, shape: TileShape, segments = CORNER_SEGMENTS, inset = 0): Vec2[] {
+  const [a, b] = SPAN[plane];
+  const corners: Vec2[] = [
+    [1, -1],
+    [1, 1],
+    [-1, 1],
+    [-1, -1],
+  ];
+  const far = ([x, y]: Vec2) => x === shape.octant[a] && y === shape.octant[b];
+  const legs = corners.map((c) => (far(c) ? shape.radiusPx - inset : 0)) as [number, number, number, number];
+  return roundedSquareCorners(shape.sizePx - 2 * inset, legs, shape.exponent, segments);
 }
 
-function fillGeometry(shape: TileShape): THREE.BufferGeometry {
-  return new THREE.ShapeGeometry(shapeOf(outline(shape)));
+function fillGeometry(plane: Plane3, shape: TileShape): THREE.BufferGeometry {
+  return new THREE.ShapeGeometry(shapeOf(tileOutline(plane, shape)));
 }
 
-function rimGeometry(shape: TileShape): THREE.BufferGeometry {
-  const ring = shapeOf(outline(shape));
-  ring.holes.push(new THREE.Path(outline(shape, RIM_PX).map(([x, y]) => new THREE.Vector2(x, y))));
+function rimGeometry(plane: Plane3, shape: TileShape): THREE.BufferGeometry {
+  const ring = shapeOf(tileOutline(plane, shape));
+  const hole = tileOutline(plane, shape, CORNER_SEGMENTS, RIM_PX);
+  ring.holes.push(new THREE.Path(hole.map(([x, y]) => new THREE.Vector2(x, y))));
   return new THREE.ShapeGeometry(ring);
 }
 
@@ -195,7 +211,7 @@ export class OriginTiles {
   constructor(scene: THREE.Scene, shape: Partial<TileShape> = {}) {
     this.shape = { ...TILE_SHAPE, ...shape };
     const make = (k: Plane3): Tile => {
-      const fill = new THREE.Mesh(fillGeometry(this.shape), tileMaterial(true));
+      const fill = new THREE.Mesh(fillGeometry(k, this.shape), tileMaterial(true));
       fill.userData.plane = k;
       fill.renderOrder = TILE_ORDER.fill;
       fill.visible = false;
@@ -203,7 +219,7 @@ export class OriginTiles {
       const ghost = new THREE.Mesh(fill.geometry, tileMaterial(false));
       ghost.userData.role = "ghost";
       ghost.renderOrder = TILE_ORDER.ghost;
-      const rim = new THREE.Mesh(rimGeometry(this.shape), tileMaterial(true));
+      const rim = new THREE.Mesh(rimGeometry(k, this.shape), tileMaterial(true));
       rim.userData.role = "rim";
       rim.renderOrder = TILE_ORDER.rim;
       const label = new THREE.Sprite(
@@ -236,9 +252,9 @@ export class OriginTiles {
       const t = this.tiles[k];
       t.fill.geometry.dispose();
       t.rim.geometry.dispose();
-      t.fill.geometry = fillGeometry(this.shape);
+      t.fill.geometry = fillGeometry(k, this.shape);
       t.ghost.geometry = t.fill.geometry;
-      t.rim.geometry = rimGeometry(this.shape);
+      t.rim.geometry = rimGeometry(k, this.shape);
     }
     this.pose();
   }
@@ -278,7 +294,6 @@ export class OriginTiles {
     const ortho = (cam as THREE.OrthographicCamera).isOrthographicCamera === true;
     const eyeDir = cam.getWorldDirection(new THREE.Vector3()).negate();
     const eye = cam.getWorldPosition(new THREE.Vector3());
-    const ring = roundedSquare(this.shape.sizePx, this.shape.radiusPx, this.shape.exponent, PICK_SEGMENTS);
     const h = this.shape.sizePx / 2;
     return PLANES.map((plane) => {
       const m = this.tiles[plane].fill.matrixWorld;
@@ -289,20 +304,24 @@ export class OriginTiles {
       const v = at(0, h);
       const normal = new THREE.Vector3(...tilePose(plane, this.shape).normal);
       const toEye = ortho ? eyeDir : eye.clone().sub(centreW).normalize();
+      const n = "xyz".indexOf(NORMAL_AXIS[plane]);
+      // Every tile shares the origin corner and spans the octant, so the eye on the far side of one sees it on top.
+      const side = (ortho ? eyeDir : eye).getComponent(n) * this.shape.octant[NORMAL_AXIS[plane]];
       return {
         plane,
         centre,
-        outline: ring.map(([x, y]) => at(x, y)),
+        outline: tileOutline(plane, this.shape, PICK_SEGMENTS).map(([x, y]) => at(x, y)),
         su: { x: u.x - centre.x, y: u.y - centre.y },
         sv: { x: v.x - centre.x, y: v.y - centre.y },
         facing: Math.abs(toEye.dot(normal)),
+        front: side < -1e-9,
       };
     });
   }
 
   /** Where each name is drawn, in client pixels. */
   labelsOnScreen(frame: ScreenFrame, tiles = this.onScreen(frame)): Record<string, P2> {
-    return placeLabels(tiles);
+    return placeLabels(tiles, LABEL_BOX_PX);
   }
 
   /** The plane a press at client (`x`, `y`) takes, null while the tiles are hidden. */

@@ -15,6 +15,7 @@ import { useContextMenuStore } from "../../stores/contextMenu";
 import { choose } from "../../ui/choice";
 import { contextMenu } from "../../ui/menu";
 import { escapeClaimed } from "../../ui/escapeClaim";
+import { latinKey } from "../../input/platform";
 import {
   buildEntries,
   filterEntries,
@@ -83,7 +84,7 @@ function onKey(e: KeyboardEvent): void {
     return;
   }
   const mod = e.ctrlKey || e.metaKey;
-  if (mod && !e.shiftKey && e.key.toLowerCase() === "f") {
+  if (mod && !e.shiftKey && latinKey(e) === "f") {
     e.preventDefault();
     e.stopImmediatePropagation();
     searchInput()?.focus();
@@ -91,7 +92,7 @@ function onKey(e: KeyboardEvent): void {
     return;
   }
   const inField = e.target instanceof HTMLInputElement && e.target.type !== "checkbox";
-  if (mod && UNDO_KEYS.has(e.key.toLowerCase()) && !inField) {
+  if (mod && UNDO_KEYS.has(latinKey(e)) && !inField) {
     e.preventDefault();
     e.stopImmediatePropagation();
   }
@@ -213,6 +214,7 @@ async function openEntry(entry: HomeEntry): Promise<void> {
     if (pick === "remove") forget(entry.path);
     return;
   }
+  await vouch(entry.path);
   const outcome = await cb.openPath(entry.path);
   if (outcome === "ok") close();
   else if (outcome === "unreadable") unreadable.value = new Set(unreadable.value).add(entry.path);
@@ -237,8 +239,14 @@ function versionsButton(path: string) {
   };
 }
 
-async function versionAction(act: Promise<boolean>): Promise<void> {
-  if (await act) {
+// The app opens a network path only once the user picked it. A failed vouch is ignored, the open then reports the refusal.
+async function vouch(path: string): Promise<void> {
+  await lib?.vouch(path).catch(() => {});
+}
+
+async function versionAction(path: string, act: (path: string) => Promise<boolean>): Promise<void> {
+  await vouch(path);
+  if (await act(path)) {
     drawer.value = null;
     close();
   }
@@ -439,9 +447,9 @@ onUnmounted(() => {
         :load="loadVersions(drawer)"
         :return-to="versionsButton(drawer.path)"
         @close="drawer = null"
-        @restore="(id) => versionAction(cb.openVersion(drawer!.path, id, false))"
-        @copy="(id) => versionAction(cb.openVersion(drawer!.path, id, true))"
-        @branch="(name) => versionAction(cb.openBranch(drawer!.path, name))"
+        @restore="(id) => versionAction(drawer!.path, (p) => cb.openVersion(p, id, false))"
+        @copy="(id) => versionAction(drawer!.path, (p) => cb.openVersion(p, id, true))"
+        @branch="(name) => versionAction(drawer!.path, (p) => cb.openBranch(p, name))"
       />
 
       <div class="home-foot">

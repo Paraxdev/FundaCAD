@@ -4,7 +4,24 @@ Node Bodies makes soft, rounded shapes such as a handle, a grip or a toy limb. Y
 
 <!-- shot: node-body-limb | bent limb of four nodes with gizmo -->
 
-A node is a point with three radii, so it can be a ball or a stretched egg. A chain of nodes becomes a limb with a rounded cap.
+A node is a point with three radii, Radius X, Y and Z, so it can be a ball or a stretched egg. A chain of nodes becomes a limb with a rounded cap.
 
-Pick Node Body and click in the view to place a node. With Link new nodes to the picked one ticked, each click extends the chain. Click a node to move, turn or resize it with the gizmo. Enter adds the body and Esc leaves without it.
+## Making a node body
 
+1. Pick Node Body and click in the view to place the first node.
+2. Click again to add nodes. With Link new nodes to the picked one ticked, each click extends the chain.
+3. Click a node to move, turn or resize it with the gizmo.
+4. Press Enter or Add to add the body. Esc leaves without it.
+
+While the tool is open:
+
+1. Alt-drag a node to pull a linked one out of it.
+2. Shift-click a node to link it to the picked one.
+3. Del removes the picked node.
+
+## Settings
+
+1. **Blend**: above 0, rounds the joints where limbs meet.
+2. **Operation**: New body, or Join, Cut or Intersect with a body you have.
+
+Each position, radius and turn is a value in the History card, so a parameter can drive it.

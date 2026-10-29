@@ -17,7 +17,7 @@ serde_json = "1"
 # Open Image Denoise is loaded at runtime from a checked download (src/oidn.rs).
 libloading = "0.8"
 sha2 = "0.10"
-zip = { version = "4", default-features = false, features = ["deflate-flate2"] }
+zip = { version = "9", default-features = false, features = ["deflate-flate2"] }
 flate2 = "1"
 tar = "0.4"
 png = "0.17"

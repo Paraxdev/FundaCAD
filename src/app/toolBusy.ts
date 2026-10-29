@@ -1,5 +1,6 @@
 import { isChoiceOpen } from "../ui/choice";
 import { anyToolBusy, cancelContributedTools } from "../plugins/contrib";
+import { keepTreeKeyFocus } from "../components/ui/treeContext";
 import type { Engine, EngineTools } from "./engine";
 
 /** The tools that hold the screen while `active` and stand down with cancel().
@@ -75,13 +76,14 @@ export function createToolBusy(
       anyToolBusy()
     );
   };
-  const raiseBodyGizmo = () => {
-    e.tools.move.onClickThrough = (x, y, additive) => {
-      e.viewport.clickThrough(x, y, additive);
-    };
-    e.starters.startMove();
-    e.tools.move.markAmbient();
-  };
+  const raiseBodyGizmo = () =>
+    keepTreeKeyFocus(() => {
+      e.tools.move.onClickThrough = (x, y, additive) => {
+        e.viewport.clickThrough(x, y, additive);
+      };
+      e.starters.startMove();
+      e.tools.move.markAmbient();
+    });
   let stopRestore: (() => void) | null = null;
   return {
     toolBusy: () => busy(true),

@@ -1,43 +1,11 @@
 {
-  "confirm": {
-    "aria-allowed-attr": 3,
-    "color-contrast": 4
-  },
-  "empty_workspace": {
-    "aria-allowed-attr": 3,
-    "color-contrast": 5
-  },
   "example": {
-    "aria-allowed-attr": 4,
-    "color-contrast": 3,
-    "label": 8
+    "aria-allowed-attr": 1
   },
   "extrude": {
-    "aria-allowed-attr": 3,
-    "color-contrast": 6,
-    "target-size": 2
-  },
-  "palette": {
-    "aria-allowed-attr": 3,
-    "color-contrast": 16,
-    "scrollable-region-focusable": 1
-  },
-  "render": {
-    "aria-allowed-attr": 3,
-    "color-contrast": 4
-  },
-  "settings": {
-    "aria-allowed-attr": 3,
-    "color-contrast": 4
+    "target-size": 1
   },
   "sketch": {
-    "aria-allowed-attr": 4,
-    "color-contrast": 3,
-    "label": 8
-  },
-  "stress": {
-    "aria-allowed-attr": 3,
-    "button-name": 1,
-    "color-contrast": 15
+    "aria-allowed-attr": 1
   }
 }

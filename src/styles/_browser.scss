@@ -1,3 +1,5 @@
+@use "hit";
+
 /* Type and margins come from .panel-title in _timeline.scss; this adds the row layout
    for the kind filter. */
 .browser-title {
@@ -115,11 +117,17 @@
 .tree-eye.icon-btn:focus-visible {
   opacity: 1;
 }
-:root[data-pointer="touch"] .tree-caret.icon-btn.icon-btn-sm::before {
+:root[data-pointer="touch"] .tree-caret.icon-btn.icon-btn-sm::before,
+:root[data-targets="large"] .tree-caret.icon-btn.icon-btn-sm::before {
   inset: -13px -14px;
 }
-:root[data-pointer="touch"] .tree-eye.icon-btn.icon-btn-sm::before {
+:root[data-pointer="touch"] .tree-eye.icon-btn.icon-btn-sm::before,
+:root[data-targets="large"] .tree-eye.icon-btn.icon-btn-sm::before {
   inset: -13px -6px;
+}
+/* The Extra Parameters plugin draws its setup button with inline styles, so its hit area is set here. */
+.xp-setup {
+  @include hit.area;
 }
 
 /* In-canvas sketch dimensions stay off the spacing scale on purpose: they are projected
@@ -226,6 +234,9 @@
   line-height: 1;
   cursor: pointer;
   pointer-events: auto;
+}
+.sketch-glyph {
+  @include hit.area($position: null);
 }
 .sketch-glyph:hover {
   border-color: var(--accent-hot);

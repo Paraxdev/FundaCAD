@@ -92,7 +92,7 @@ async function view(page) {
 
 (async () => {
   const browser = await chromium.launch({ executablePath: CHROME, headless: true });
-  const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+  const page = await browser.newPage({ colorScheme: "dark", viewport: { width: 1400, height: 900 } });
   const failures = [];
   page.on("pageerror", (e) => failures.push(`page error: ${e.message}`));
   const check = (label, ok) => {

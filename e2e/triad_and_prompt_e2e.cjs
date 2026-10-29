@@ -32,7 +32,7 @@ const check = (name, ok, detail) => {
 (async () => {
   fs.mkdirSync(OUT, { recursive: true });
   const browser = await chromium.launch({ executablePath: EXE, args: ["--use-angle=swiftshader", "--no-sandbox"] });
-  const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+  const page = await browser.newPage({ colorScheme: "dark", viewport: { width: 1400, height: 900 } });
   page.on("pageerror", (e) => {
     console.error("PAGE ERROR:", e.message);
     failures++;
@@ -225,7 +225,7 @@ const check = (name, ok, detail) => {
   await iso([0, 0, 0], 60);
   await page.mouse.move(1380, 600);
   await shot("triad_alone_light", around(await origin(), 140));
-  await page.evaluate(() => localStorage.removeItem("fundacad.theme"));
+  await page.evaluate(() => localStorage.setItem("fundacad.theme", "fundacad"));
 
   await browser.close();
   console.log(failures ? `\n${failures} FAILED` : "\nall checks passed");

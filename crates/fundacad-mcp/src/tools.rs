@@ -6,6 +6,8 @@ use serde_json::{json, Value};
 
 use crate::upload::IMPORT_FORMATS;
 
+pub const EXPORT_FORMATS: &[&str] = &["step", "stl", "3mf", "dxf", "svg"];
+
 /// `limit` and `offset` beside a tool's own fields, for a list that shows a page of `rows` at a time.
 fn paged(mut schema: JsonObject, rows: &str) -> JsonObject {
     if let Some(p) = schema.get_mut("properties").and_then(Value::as_object_mut) {
@@ -82,7 +84,11 @@ pub fn doc_import() -> JsonObject {
 }
 
 pub fn doc_save() -> JsonObject {
-    object(json!({"path": {"type": "string"}}), &[])
+    object(
+        json!({"path": {"type": "string"},
+               "overwrite": {"type": "boolean", "description": "replace a file there that is not a .funda"}}),
+        &[],
+    )
 }
 
 pub fn doc_get() -> JsonObject {
@@ -476,7 +482,7 @@ pub fn export() -> JsonObject {
     let schema = object(
         json!({
             "path": {"type": "string"},
-            "format": {"type": "string", "enum": ["step", "stl", "3mf", "dxf", "svg"],
+            "format": {"type": "string", "enum": EXPORT_FORMATS,
                        "description": "dxf (R12) and svg draw one sketch or one flat face at true size \
                                        in mm, give `sketch` or `face`"},
             "sketch": {"type": "string",
@@ -506,7 +512,9 @@ pub fn export() -> JsonObject {
                              "description": "write the file even if a feature failed to build \
                                              (default: refuse and name the failures)"},
             "full": {"type": "boolean",
-                     "description": "separate: one line per file written, nothing folded"}
+                     "description": "separate: one line per file written, nothing folded"},
+            "overwrite": {"type": "boolean",
+                          "description": "replace a file there, or a separate part, of another kind"}
         }),
         &["path", "format"],
     );

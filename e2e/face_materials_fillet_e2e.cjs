@@ -32,7 +32,7 @@ const check = (name, ok, detail) => {
     executablePath: EXE,
     args: ["--use-angle=swiftshader", "--no-sandbox", "--enable-unsafe-swiftshader"],
   });
-  const page = await browser.newPage({ viewport: { width: 1200, height: 800 } });
+  const page = await browser.newPage({ colorScheme: "dark", viewport: { width: 1200, height: 800 } });
   page.on("pageerror", (e) => {
     console.error("PAGE ERROR:", e.message);
     failures++;

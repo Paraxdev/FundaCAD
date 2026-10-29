@@ -16,6 +16,19 @@ export const LEGACY_DOC_EXTS: readonly string[] = ["neocad", "sindri"];
  *  document is plain JSON and some are still called that. */
 export const DOC_EXTS: readonly string[] = [DOC_EXT, BINARY_DOC_EXT, ...LEGACY_DOC_EXTS, "json"];
 
+/** What a save may write: a `json` document opens, then saves through Save As. Kept in step with check_save in
+ *  src-tauri/src/doc_paths.rs. */
+export const SAVE_EXTS: readonly string[] = [DOC_EXT, BINARY_DOC_EXT, ...LEGACY_DOC_EXTS];
+
+export function isSaveExt(ext: string | undefined | null): boolean {
+  return typeof ext === "string" && SAVE_EXTS.includes(ext.toLowerCase());
+}
+
+/** `name` as a save writes it: kept when a save may write it, else with `.json` swapped for (or `.funda` added). */
+export function savableName(name: string): string {
+  return isSaveExt(name.split(".").pop()) ? name : `${name.replace(/[.]json$/i, "")}.${DOC_EXT}`;
+}
+
 /** Is this extension one of ours? Case-insensitive, and tolerant of the
  *  `undefined` that `split(".").pop()` yields for a name with no dot. */
 export function isDocumentExt(ext: string | undefined | null): boolean {

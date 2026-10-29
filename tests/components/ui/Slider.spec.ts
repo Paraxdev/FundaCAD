@@ -18,6 +18,7 @@ type Props = {
   commit?: "live" | "end";
   disabled?: boolean;
   disabledReason?: string;
+  valueText?: string | ((v: number) => string);
 };
 
 async function render(props: Props) {
@@ -144,6 +145,21 @@ describe("Slider", () => {
     await release(w);
     expect(await press(w, "ArrowRight")).toBe(true);
     expect([updates(w), commits(w), range(w).value]).toEqual([[], [], "4"]);
+  });
+
+  it("speaks valueText for its value over the unit readout, following each step", async () => {
+    const w = await render({ modelValue: 3, max: 9, unit: "mm", showValue: true, valueText: (v) => `step ${v} of 9` });
+    expect(range(w).getAttribute("aria-valuetext")).toBe("step 3 of 9");
+    await press(w, "ArrowRight");
+    expect(range(w).getAttribute("aria-valuetext")).toBe("step 4 of 9");
+    expect(w.find(".ui-slider-value").text()).toBe("4 mm");
+    await w.setProps({ valueText: "at the start" } as never);
+    expect(range(w).getAttribute("aria-valuetext")).toBe("at the start");
+  });
+
+  it("leaves aria-valuetext off without a unit or valueText", async () => {
+    const w = await render({ modelValue: 3 });
+    expect(range(w).hasAttribute("aria-valuetext")).toBe(false);
   });
 
   it("writes a percent readout without the space a unit gets", async () => {

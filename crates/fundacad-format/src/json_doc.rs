@@ -4,7 +4,7 @@
 
 use std::collections::BTreeMap;
 use std::fs::File;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 use base64::Engine;
@@ -19,6 +19,8 @@ pub const BINARY_DOC_EXT: &str = "fundab";
 pub const EMBEDDED_GEOMETRY_KEY: &str = "geometry";
 
 const MAX_TOTAL: u64 = 8 << 30;
+/// Opening parses the whole text, so this bounds the memory an open needs. A bigger model saves as a binary document.
+pub const MAX_DOC_TEXT: u64 = 1 << 30;
 
 const DAMAGED: &str = "This document's embedded geometry is damaged and cannot be opened.";
 
@@ -28,7 +30,7 @@ pub fn is_binary_doc_path(path: &Path) -> bool {
     path.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case(BINARY_DOC_EXT))
 }
 
-fn is_hash(s: &str) -> bool {
+pub(crate) fn is_hash(s: &str) -> bool {
     s.len() == 32 && s.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 
@@ -65,14 +67,22 @@ pub fn write_json_document(
     if obj.contains_key(EMBEDDED_GEOMETRY_KEY) {
         return Err(format!("the document already has a `{EMBEDDED_GEOMETRY_KEY}` field"));
     }
+    let trimmed = document_json.trim_end();
+    let body = trimmed[..trimmed.len() - 1].trim_end();
+    let mut text_len = body.len() as u64 + 64;
     for (hash, src) in blob_paths {
         if !is_hash(hash) {
             return Err(format!("not a geometry hash: {hash}"));
         }
-        std::fs::metadata(src).map_err(|e| format!("could not read geometry {}: {e}", src.display()))?;
+        let meta = std::fs::metadata(src).map_err(|e| format!("could not read geometry {}: {e}", src.display()))?;
+        text_len = text_len.saturating_add(meta.len().div_ceil(3) * 4 + 64);
     }
-    let trimmed = document_json.trim_end();
-    let body = trimmed[..trimmed.len() - 1].trim_end();
+    if text_len > MAX_DOC_TEXT {
+        return Err(format!(
+            "This document is larger than the {} MiB a .funda file can hold. Save it as a .{BINARY_DOC_EXT} file instead.",
+            MAX_DOC_TEXT >> 20
+        ));
+    }
 
     if let Some(parent) = dest.parent() {
         if !parent.as_os_str().is_empty() {
@@ -120,10 +130,30 @@ pub fn write_json_document(
     Ok(())
 }
 
+pub fn read_text_capped(path: &Path, cap: u64) -> Result<String, String> {
+    let file = File::open(path).map_err(|e| e.to_string())?;
+    let len = file.metadata().map_err(|e| e.to_string())?.len();
+    read_text_within(file, len, cap)
+}
+
+/// `len` is the size the file system reports. The read is capped too, as a file can grow after the check.
+pub fn read_text_within(src: impl Read, len: u64, cap: u64) -> Result<String, String> {
+    let too_big = || format!("This document is larger than {} MiB and was refused.", cap >> 20);
+    if len > cap {
+        return Err(too_big());
+    }
+    let mut bytes = Vec::new();
+    src.take(cap.saturating_add(1)).read_to_end(&mut bytes).map_err(|e| e.to_string())?;
+    if bytes.len() as u64 > cap {
+        return Err(too_big());
+    }
+    String::from_utf8(bytes).map_err(|_| "This document is not valid UTF-8 text.".to_string())
+}
+
 /// Open a JSON document: publish its geometry into `blob_dir`, each blob verified against its hash, and return the
 /// document without the map. Text that is not a JSON object comes back untouched for the frontend to report.
 pub fn read_json_document(path: &Path, blob_dir: &Path) -> Result<String, String> {
-    let text = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+    let text = read_text_capped(path, MAX_DOC_TEXT)?;
     if !text.contains(&format!("\"{EMBEDDED_GEOMETRY_KEY}\"")) {
         return Ok(text);
     }

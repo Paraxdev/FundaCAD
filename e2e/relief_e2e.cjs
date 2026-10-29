@@ -43,7 +43,7 @@ const PITCH = 0.3;
     ),
   });
   try {
-    const page = await browser.newPage({ viewport: { width: 1000, height: 800 } });
+    const page = await browser.newPage({ colorScheme: "dark", viewport: { width: 1000, height: 800 } });
     const shaderErrors = [];
     // three warns a Program Info Log for a program that linked, where D3D11 puts HLSL warnings such as X4122.
     page.on("console", (m) => {

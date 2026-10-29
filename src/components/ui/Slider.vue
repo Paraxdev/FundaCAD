@@ -16,6 +16,8 @@ const props = defineProps<
     step?: number;
     showValue?: boolean;
     unit?: string | undefined;
+    /** What a screen reader says for the value, in place of the unit readout. */
+    valueText?: string | ((v: number) => string) | undefined;
     /** `end` holds update:modelValue back until the drag is released. */
     commit?: "live" | "end";
     tip?: string | undefined;
@@ -54,6 +56,9 @@ const fill = computed(() => {
 });
 const readoutOf = (v: number) => (!props.unit ? String(v) : props.unit === "%" ? `${v}%` : `${v} ${props.unit}`);
 const readout = computed(() => readoutOf(shown.value));
+const spokenOf = (v: number) =>
+  typeof props.valueText === "function" ? props.valueText(v) : (props.valueText ?? readoutOf(v));
+const valueText = computed(() => (props.valueText !== undefined || props.unit ? spokenOf(shown.value) : undefined));
 
 const decimals = computed(() => (String(inc.value).split(".")[1] ?? "").length);
 function snap(v: number) {
@@ -109,7 +114,7 @@ function onChange(e: Event) {
   if (props.commit === "end" && v !== props.modelValue) emit("update:modelValue", v);
   emit("commit", v);
   if (wasDrag)
-    announce([props.label ?? name.value["aria-label"], readoutOf(v)].filter(Boolean).join(" "), "polite", { key: id });
+    announce([props.label ?? name.value["aria-label"], spokenOf(v)].filter(Boolean).join(" "), "polite", { key: id });
 }
 
 // The keys are stepped here, not natively, so a key press is one update and one commit in every engine.
@@ -149,7 +154,7 @@ function onKeydown(e: KeyboardEvent) {
       :value="shown"
       :style="{ '--ui-slider-fill': fill }"
       v-bind="inputName"
-      :aria-valuetext="unit ? readout : undefined"
+      :aria-valuetext="valueText"
       :aria-disabled="disabled ? 'true' : undefined"
       @pointerdown="onPointerdown"
       @blur="endDrag"

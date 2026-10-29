@@ -91,7 +91,11 @@ let serve = null;
     args: ["--no-sandbox", "--enable-gpu", "--ignore-gpu-blocklist", "--enable-unsafe-webgpu"],
   });
   try {
-    const page = await browser.newPage({ viewport: { width: VW, height: VH }, deviceScaleFactor: DPR });
+    const page = await browser.newPage({
+      colorScheme: "dark",
+      viewport: { width: VW, height: VH },
+      deviceScaleFactor: DPR,
+    });
     page.on("pageerror", (e) => {
       console.error("PAGE ERROR:", e.message);
       failures++;

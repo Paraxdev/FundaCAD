@@ -194,7 +194,8 @@ label.pref-head {
 }
 
 /* An empty upload error stays in the tree, so its alert role is live before the text lands, but out of the card's gap. */
-.pref-card > .prefs-theme-error:empty {
+.pref-card > .prefs-theme-error:empty,
+.pref-card > .prefs-theme-warning:empty {
   position: absolute;
 }
 
@@ -312,10 +313,6 @@ label.pref-head {
 }
 .sc-key.unset {
   color: var(--text-mute);
-}
-.sc-key.capturing {
-  background: var(--accent-tint-2);
-  color: var(--accent-hot);
 }
 .sc-changed,
 .sc-fixed {

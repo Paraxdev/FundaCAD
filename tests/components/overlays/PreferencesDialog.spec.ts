@@ -8,6 +8,7 @@ import { useDialogStore } from "../../../src/stores/dialogs";
 import { getUnit, setUnit } from "../../../src/ui/units";
 import { getHoverDwellMs, getNavPrefs, setHoverDwellMs, setNavPrefs } from "../../../src/ui/interactionPrefs";
 import { a11yPrefs, getVerbosity, resetA11yPrefs, setA11yPref } from "../../../src/ui/a11yPrefs";
+import { contrastSetting } from "../../../src/ui/contrastSetting";
 import { motionOn, setMotion } from "../../../src/ui/motion";
 import {
   getHomeBackground,
@@ -17,6 +18,7 @@ import {
 } from "../../../src/ui/homeBackground";
 import { experimentalPrefs, resetExperimentalPrefs, setExperimentalPref } from "../../../src/ui/experimentalPrefs";
 import { renderPrefs, setRenderPref } from "../../../src/ui/renderPrefs";
+import { customThemes, DEFAULT_THEME_ID, getTheme, removeCustomTheme, setTheme, themes } from "../../../src/ui/theme";
 
 enableAutoUnmount(afterEach);
 
@@ -92,6 +94,7 @@ describe("Preferences choices", () => {
       ["prefs-orbit-pivot", "Orbit pivot", "Under cursor|Origin|Selection"],
       ["prefs-wheel-device", "Scrolling", "Automatic|Touchpad|Mouse"],
       ["prefs-touchpad-scroll", "Two-finger scroll", "Orbits|Pans"],
+      ["prefs-contrast", "Contrast", "Follow system|Standard|More|Maximum"],
       ["prefs-viewport-labels", "Viewport labels", "Small|Medium|Large|Extra large"],
       ["prefs-verbosity", "Announcements", "Off|Errors|Normal|Verbose"],
       ["prefs-motion", "Animations", "Follow system|On|Off"],
@@ -236,7 +239,10 @@ describe("Preferences categories", () => {
       tabs().map((_, i) => (i === 0 ? ["true", 0] : ["false", -1])),
     );
     expect(document.querySelectorAll("[role=tabpanel]").length).toBe(8);
-    expect(shown().map((p) => p.getAttribute("aria-label"))).toEqual(["Appearance"]);
+    const first = tabs()[0]!;
+    expect(shown().map((p) => [p.dataset.pane, p.id, p.getAttribute("aria-labelledby")])).toEqual([
+      ["appearance", first.getAttribute("aria-controls"), first.id],
+    ]);
   });
 
   it("moves through the categories with the arrows and keeps focus on the tabs", async () => {
@@ -255,7 +261,7 @@ describe("Preferences categories", () => {
     await category("updates");
     expect([document.activeElement?.tagName, label(document.activeElement)]).toEqual(["H3", "Updates"]);
     await category("mcp");
-    expect(document.activeElement).toBe($("#prefs-pane-mcp"));
+    expect(document.activeElement).toBe($('[data-pane="mcp"]'));
   });
 
   it("opens on the category it was asked for, and on Appearance for one it does not have", async () => {
@@ -404,6 +410,7 @@ describe("Preferences settings and frame", () => {
 
 describe("Preferences Accessibility", () => {
   beforeEach(() => resetA11yPrefs());
+  const solidBox = () => $("#prefs-solid-panels input[type=checkbox]") as HTMLInputElement;
   const groupName = (g: Element) => $(`#${g.getAttribute("aria-labelledby")}`).textContent?.trim();
   const pick = async (group: string, choice: string) => {
     radios(group)
@@ -452,6 +459,43 @@ describe("Preferences Accessibility", () => {
     expect(input.getAttribute("aria-valuetext")).toBe("850 ms");
   });
 
+  it("turns Single key shortcuts on and off with a themed checkbox that says what stays", async () => {
+    await open();
+    await category("access");
+    const box = $("#prefs-single-keys input[type=checkbox]") as HTMLInputElement;
+    expect([box.checked, $("#prefs-single-keys").closest("[role=group]")?.getAttribute("aria-labelledby")]).toEqual([
+      true,
+      "prefs-a11y-input",
+    ]);
+    expect(box.getAttribute("aria-describedby")).toBe("prefs-single-keys-hint");
+    const hint = $("#prefs-single-keys-hint").textContent ?? "";
+    for (const kept of ["Ctrl or Cmd", "Escape", "Delete", "F keys", "arrows", "command palette", "voice control"])
+      expect(hint).toContain(kept);
+    box.click();
+    await flushPromises();
+    expect([a11yPrefs().singleKeys, box.checked]).toEqual([false, false]);
+    expect($("[data-a11y-reset]").getAttribute("aria-disabled")).toBeNull();
+    box.click();
+    await flushPromises();
+    expect([a11yPrefs().singleKeys, box.checked]).toEqual([true, true]);
+  });
+
+  it("the Screen reader preset unticks Single key shortcuts and Reset to defaults ticks it again", async () => {
+    await open();
+    await category("access");
+    const box = $("#prefs-single-keys input[type=checkbox]") as HTMLInputElement;
+    expect($("#prefs-a11y-actions-hint").textContent).toContain("turns Single key shortcuts off");
+    $("[data-a11y-preset]").click();
+    await flushPromises();
+    expect([a11yPrefs().singleKeys, box.checked]).toEqual([false, false]);
+    expect($("#prefs-a11y-preset-status").textContent).toBe(
+      "Announcements set to Verbose, Single key shortcuts turned off and Solid panels on.",
+    );
+    $("[data-a11y-reset]").click();
+    await flushPromises();
+    expect([a11yPrefs().singleKeys, box.checked]).toEqual([true, true]);
+  });
+
   it("applies the Screen reader preset, and Reset to defaults clears every choice, Hover delay too", async () => {
     await open();
     await category("access");
@@ -461,6 +505,7 @@ describe("Preferences Accessibility", () => {
     await flushPromises();
     expect(getVerbosity()).toBe("verbose");
     expect(label(radios("prefs-verbosity").find((r) => r.getAttribute("aria-checked") === "true")!)).toBe("Verbose");
+    expect(solidBox().checked).toBe(true);
     setA11yPref("animations", "off");
     setHoverDwellMs(1200);
     await flushPromises();
@@ -468,6 +513,7 @@ describe("Preferences Accessibility", () => {
     reset.click();
     await flushPromises();
     expect([a11yPrefs().animations, getVerbosity(), getHoverDwellMs()]).toEqual(["system", "normal", 800]);
+    expect([a11yPrefs().solidPanels, solidBox().checked]).toEqual([false, false]);
     expect(reset.getAttribute("aria-disabled")).toBe("true");
   });
 
@@ -500,22 +546,83 @@ describe("Preferences Accessibility", () => {
     expect(reset.getAttribute("aria-disabled")).toBe("true");
   });
 
-  it("says the Screen reader preset took in a status line, again on a second press, gone once Announcements moves", async () => {
+  it("counts a Contrast or Solid panels choice as a change Reset to defaults clears", async () => {
+    await open();
+    await category("access");
+    const reset = $("[data-a11y-reset]");
+    for (const set of [() => setA11yPref("contrast", "standard"), () => setA11yPref("solidPanels", true)]) {
+      set();
+      await flushPromises();
+      expect(reset.getAttribute("aria-disabled")).toBeNull();
+      reset.click();
+      await flushPromises();
+      expect([a11yPrefs().contrast, a11yPrefs().solidPanels]).toEqual(["system", false]);
+      expect(reset.getAttribute("aria-disabled")).toBe("true");
+    }
+  });
+
+  it("picks Contrast from Follow system, Standard, More and Maximum, and says what the system asks for", async () => {
+    await open();
+    await category("access");
+    expect($("#prefs-contrast").getAttribute("aria-describedby")).toBe("prefs-contrast-hint");
+    expect($("#prefs-contrast-hint").textContent).toContain("Right now the system asks for standard contrast.");
+    await pick("prefs-contrast", "Maximum");
+    expect([a11yPrefs().contrast, contrastSetting()]).toEqual(["maximum", "maximum"]);
+    expect($("#prefs-contrast-hint").textContent).not.toContain("Right now");
+    await pick("prefs-contrast", "More");
+    expect(contrastSetting()).toBe("more");
+    await pick("prefs-contrast", "Follow system");
+    expect([a11yPrefs().contrast, contrastSetting()]).toEqual(["system", "standard"]);
+  });
+
+  it("turns Solid panels on and off, and shows it on and locked while More or Maximum contrast implies it", async () => {
+    await open();
+    await category("access");
+    const box = solidBox();
+    const locked = () => box.getAttribute("aria-disabled") === "true";
+    expect([box.checked, locked(), box.getAttribute("aria-describedby")]).toEqual([
+      false,
+      false,
+      "prefs-solid-panels-hint",
+    ]);
+    box.click();
+    await flushPromises();
+    expect(a11yPrefs().solidPanels).toBe(true);
+    box.click();
+    await flushPromises();
+    expect(a11yPrefs().solidPanels).toBe(false);
+    await pick("prefs-contrast", "More");
+    expect([box.checked, locked()]).toEqual([true, true]);
+    box.click();
+    await flushPromises();
+    expect([box.checked, a11yPrefs().solidPanels]).toEqual([true, false]);
+    await pick("prefs-contrast", "Standard");
+    expect([box.checked, locked()]).toEqual([false, false]);
+  });
+
+  it("says the Screen reader preset took in a status line, again on a second press, gone once a choice it made moves", async () => {
     await open();
     await category("access");
     const status = $("#prefs-a11y-preset-status");
     expect([status.getAttribute("role"), status.textContent]).toEqual(["status", ""]);
     $("[data-a11y-preset]").click();
     await flushPromises();
-    expect(status.textContent).toBe("Announcements set to Verbose.");
+    expect(status.textContent).toBe(
+      "Announcements set to Verbose, Single key shortcuts turned off and Solid panels on.",
+    );
     const seen: string[] = [];
     const watcher = new MutationObserver(() => seen.push(status.textContent ?? ""));
     watcher.observe(status, { childList: true, characterData: true, subtree: true });
     $("[data-a11y-preset]").click();
     await flushPromises();
     watcher.disconnect();
-    expect(seen).toEqual(["", "Announcements set to Verbose."]);
+    expect(seen).toEqual(["", "Announcements set to Verbose, Single key shortcuts turned off and Solid panels on."]);
     await pick("prefs-verbosity", "Normal");
+    expect(status.textContent).toBe("");
+    $("[data-a11y-preset]").click();
+    await flushPromises();
+    solidBox().click();
+    await flushPromises();
     expect(status.textContent).toBe("");
   });
 
@@ -588,6 +695,16 @@ describe("Preferences sliders, hints and upload errors", () => {
     for (const ref of refs) expect(document.getElementById(ref)?.textContent?.trim(), ref).toBeTruthy();
   });
 
+  it("names every theme FundaCAD ships in the theme hint, and the vision themes in the Accessibility one", async () => {
+    await open();
+    const text = (id: string) => $(`#${id}`).textContent!.replace(/\s+/g, " ");
+    const shipped = themes().filter((t) => !t.custom);
+    expect(shipped.filter((t) => !text("prefs-theme-hint").includes(t.label)).map((t) => t.label)).toEqual([]);
+    for (const label of ["High Contrast Dark", "High Contrast Light", "Colour-Blind Safe", "FundaCAD Light"]) {
+      expect(text("prefs-a11y-theme-hint")).toContain(label);
+    }
+  });
+
   it("keeps both upload errors as empty alerts until a refused file fills them", async () => {
     await open();
     const errors = ["prefs-theme-error", "prefs-home-image-error"].map((id) => $(`#${id}`));
@@ -599,6 +716,26 @@ describe("Preferences sliders, hints and upload errors", () => {
     await vi.waitFor(() => expect(errors[0]!.textContent).toBe("That file is not valid JSON."));
     await pickFile("prefs-home-image", new File(["text"], "notes.txt", { type: "text/plain" }));
     await vi.waitFor(() => expect(errors[1]!.textContent).toBe("Pick a PNG or JPEG picture."));
+  });
+
+  it("lists the pairs an uploaded palette fails in a status line, and leaves it empty for one that passes", async () => {
+    const json = (o: object, name: string) => new File([JSON.stringify(o)], name, { type: "application/json" });
+    try {
+      await open();
+      const warning = $("#prefs-theme-warning");
+      expect([warning.getAttribute("role"), warning.textContent]).toEqual(["status", ""]);
+      await pickFile("prefs-theme-file", json({ label: "Murk", "--text-mute": "#4a4458" }, "murk.json"));
+      await vi.waitFor(() => expect(warning.textContent).toMatch(/^Murk is added, but \d+ colour pairs? fall/));
+      expect(warning.textContent).toContain("--text-mute on --panel at ");
+      expect(getTheme()).toBe(customThemes().find((t) => t.label === "Murk")?.id);
+      await pickFile("prefs-theme-file", json({ label: "Fine", "--accent": "#9a9ff0" }, "fine.json"));
+      await vi.waitFor(() => expect(getTheme()).toBe(customThemes().find((t) => t.label === "Fine")?.id));
+      await flushPromises();
+      expect(warning.textContent).toBe("");
+    } finally {
+      setTheme(DEFAULT_THEME_ID);
+      for (const t of customThemes()) removeCustomTheme(t.id);
+    }
   });
 });
 

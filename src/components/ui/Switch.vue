@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { fmtKeys } from "../../input/platform";
+import { ariaKeys, fmtKeys } from "../../input/platform";
 import { useDisabled } from "./useDisabled";
 
 const props = defineProps<{
@@ -37,7 +37,8 @@ function onKeyup(e: KeyboardEvent) {
     :class="{ 'is-on': modelValue, on: modelValue }"
     v-bind="d.bind.value"
     :aria-checked="modelValue ? 'true' : 'false'"
-    :aria-label="tipText || label"
+    :aria-label="tip || label"
+    :aria-keyshortcuts="ariaKeys(keys)"
     :title="d.title(tipText)"
     @click="flip"
     @keydown="onKeydown"
