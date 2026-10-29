@@ -24,9 +24,20 @@ uses = ["manual/docs/inspect/bed-fit.md:5"]
 [[shot]]
 file = "manual/docs/img/interference-list.png"
 size = [750, 640]
+viewport = [1920, 1080]
 theme = "fundacad"
 crop = "region"
-stub = true
+at = [810, 170]
+park = [1900, 1060]
+steps = [
+  { open = "fixture:box-cylinder.json" },
+  { evaluate = "() => { const r = window.viewport.rig; r.zoomBy(1.45); r.panScreen(-0.355, 0.18); window.viewport.requestRender(); }" },
+  { wait = 700 },
+  { tool = "Interference" },
+  { wait = 1500 },
+  { evaluate = "() => document.querySelectorAll('.toast-close').forEach((b) => b.click())" },
+  { wait = 500 },
+]
 show = "The Interference panel naming one clash between a box and a cylinder with its overlap volume."
 alt = "Interference panel naming one clash between a box and a cylinder with its overlap volume"
 uses = ["manual/docs/inspect/interference.md:5"]
@@ -34,9 +45,20 @@ uses = ["manual/docs/inspect/interference.md:5"]
 [[shot]]
 file = "manual/docs/img/measure-two-holes.png"
 size = [790, 640]
+viewport = [1920, 1080]
 theme = "fundacad"
 crop = "region"
-stub = true
+at = [770, 170]
+park = [1900, 1060]
+steps = [
+  { open = "example:Plate" },
+  { evaluate = "() => { const r = window.viewport.rig; r.zoomBy(1.2); r.panScreen(-0.318, 0.107); window.viewport.requestRender(); }" },
+  { wait = 700 },
+  { tool = "Measure" },
+  { click = "edge:near=-29.5,-17,6" },
+  { click = "edge:near=29.5,-17,6" },
+  { wait = 500 },
+]
 show = "The Measure panel showing the distance and angle between two hole edges."
 alt = "Measure panel showing the distance and angle between two hole edges"
 uses = ["manual/docs/inspect/measure.md:5"]

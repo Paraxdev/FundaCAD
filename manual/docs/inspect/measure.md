@@ -9,7 +9,7 @@ Measure tells you how long, how far apart or at what angle things are, from what
 3. Click a second face or edge. The panel shows:
     - Distance, the shortest gap between the two
     - ΔX ΔY ΔZ, that gap split along the axes
-    - Centers, the distance between their centres
+    - Centers, the distance between the middle of each
     - Angle, the angle between them
 4. A third click starts over, and Esc closes Measure.
 
