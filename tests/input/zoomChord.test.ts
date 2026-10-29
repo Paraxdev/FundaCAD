@@ -2,7 +2,7 @@
 // against remaps, and the palette commands that do the same.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { setMacForTest, zoomChord } from "../../src/input/platform";
+import { comboKey, setMacForTest, zoomChord } from "../../src/input/platform";
 import { SHORTCUTS, checkRow, checkShortcut, shortcutHudGroups, type Shortcut } from "../../src/input/shortcuts";
 
 const announce = vi.hoisted(() => vi.fn());
@@ -45,6 +45,17 @@ describe("zoomChord", () => {
     expect(zoomChord(ev("-", { ctrlKey: true }, "NumpadSubtract"))).toBe("down");
     expect(zoomChord(ev("0", { ctrlKey: true }, "Numpad0"))).toBe("reset");
     expect(zoomChord(ev("à", { ctrlKey: true }, "Digit0"))).toBe("reset");
+  });
+
+  it("reads the 0 key as every Ctrl chord reads a digit row key, so no letter chord is lost under it", () => {
+    setMacForTest(false);
+    for (const key of ["à", "é", "]"]) {
+      const press = ev(key, { ctrlKey: true }, "Digit0");
+      expect([zoomChord(press), comboKey(press)]).toEqual(["reset", "0"]);
+      expect(checkShortcut({ action: "fit", key: comboKey(press), ctrl: true })).toEqual({
+        reserved: "Interface size",
+      });
+    }
   });
 
   it("leaves Ctrl+Insert on the numpad 0 to copy", () => {
