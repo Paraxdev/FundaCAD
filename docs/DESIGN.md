@@ -1175,7 +1175,9 @@ guard test cannot see them; hold them to these rules by hand.
   arrows may shrink to their own floor, `triadMinScale`). Only the far corner is
   rounded, 27px, the same squircle as `corner-shape: squircle`, a rail tile's 17px
   on 40px scaled up (`TILE_CORNER_RADIUS_PX` and `SQUIRCLE_EXPONENT` in
-  `src/viewport/originTiles.ts` and `cornerProfile.ts`).
+  `src/viewport/originTiles.ts` and `cornerProfile.ts`). While the tiles show,
+  the arrows draw over their rims and under their names (`OriginTriad.drawOver`),
+  so the edges along the axes keep the axis colours.
 - A tile's name sits at its centre. Where the tiles overlap, the tile drawn in
   front keeps its name there and a name that would cover another name or sit on
   that tile walks toward its own far corner. A tile seen edge on has its name
