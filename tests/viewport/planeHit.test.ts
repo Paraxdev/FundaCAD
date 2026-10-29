@@ -30,6 +30,8 @@ function orthoFrom(dir: [number, number, number]): THREE.OrthographicCamera {
 const TOP: [number, number, number] = [0, 0, 1];
 // The user's view: the YZ tile foreshortened to about two thirds, the XZ tile almost edge on.
 const OBLIQUE: [number, number, number] = [0.66, -0.07, 0.75];
+const HOME: [number, number, number] = [80, -120, 90];
+const BACK: [number, number, number] = [-80, 120, 90];
 
 function tilesAt(dir: [number, number, number]) {
   const t = new OriginTiles(new THREE.Scene());
@@ -107,8 +109,7 @@ describe("planeHitMinPx", () => {
 });
 
 describe("hit area on screen", () => {
-  // Note: skipped while the 64 px tiles crowd their names at this view (XY 42, YZ 39), STEPS.md step 4 restores it.
-  it.skip("gives every plane at least a 44 px square at the oblique view, the near edge on tile included", () => {
+  it("gives every plane at least a 44 px square at the oblique view, the near edge on tile included", () => {
     const { t, frame, screen, labels } = tilesAt(OBLIQUE);
     const xz = screen.find((s) => s.plane === "XZ")!;
     expect(narrowWidth(xz)).toBeLessThan(12);
@@ -117,8 +118,7 @@ describe("hit area on screen", () => {
     t.dispose();
   });
 
-  // Note: skipped while the names of the two edge on tiles crowd the shared corner, STEPS.md step 4 restores it.
-  it.skip("gives the two tiles seen exactly edge on from the top a full size target", () => {
+  it("gives the two tiles seen exactly edge on from the top a full size target", () => {
     const { t, frame, screen, labels } = tilesAt(TOP);
     expect(PLANES.map((k) => Math.round(narrowWidth(screen.find((s) => s.plane === k)!)))).toEqual([
       TILE_SIZE_PX,
@@ -130,8 +130,7 @@ describe("hit area on screen", () => {
     t.dispose();
   });
 
-  // Note: skipped with the test above, for the same reason.
-  it.skip("grows to 48 px for a coarse pointer", () => {
+  it("grows to 48 px for a coarse pointer", () => {
     for (const dir of [TOP, OBLIQUE]) {
       const { t, frame, screen, labels } = tilesAt(dir);
       const sq = largestSquare(screen, labels, originOf(frame), HIT_MIN_COARSE_PX);
@@ -162,14 +161,17 @@ describe("hit area on screen", () => {
     expect(at(34.1, 0, 44)).toBe(null);
   });
 
-  it("picks the tile facing the camera most at the origin, where every tile has its corner, and nothing far away", () => {
+  it("picks the tile drawn in front, else the one facing the camera most, at the origin and nothing far away", () => {
     for (const [dir, want] of [
       [TOP, "XY"],
       [[1, -1.5, 1.1], "XZ"],
     ] as const) {
       const { t, frame, screen, labels } = tilesAt(dir as [number, number, number]);
       const o = originOf(frame);
-      expect(pickPlaneOnScreen(screen, labels, o, HIT_MIN_PX, LABEL_BOX_PX)).toMatchObject({ plane: want, distance: 0 });
+      expect(pickPlaneOnScreen(screen, labels, o, HIT_MIN_PX, LABEL_BOX_PX)).toMatchObject({
+        plane: want,
+        distance: 0,
+      });
       expect(pickPlaneOnScreen(screen, labels, { x: o.x + 250, y: o.y + 250 }, HIT_MIN_PX, LABEL_BOX_PX)).toBe(null);
       t.dispose();
     }
@@ -239,24 +241,103 @@ describe("overlapping targets", () => {
   });
 });
 
+/** Points around a name box, `n` along each side, `inset` px in from its edge. */
+function boxPoints(c: P2, inset = 0, n = 3): P2[] {
+  const w = LABEL_BOX_PX.w / 2 - inset;
+  const h = LABEL_BOX_PX.h / 2 - inset;
+  const out: P2[] = [];
+  for (let i = 0; i < n; i++)
+    for (let j = 0; j < n; j++)
+      if (n < 4 || i === 0 || j === 0 || i === n - 1 || j === n - 1)
+        out.push({ x: c.x - w + (2 * w * i) / (n - 1), y: c.y - h + (2 * h * j) / (n - 1) });
+  return out;
+}
+
+describe("names where the tiles overlap", () => {
+  it("keep inside their own tile and clear of each other at the home view and from behind", () => {
+    for (const dir of [HOME, BACK]) {
+      const { t, screen, labels } = tilesAt(dir);
+      for (const s of screen) expect(polygonDistance(labels[s.plane]!, s.outline)).toBe(0);
+      PLANES.forEach((a, i) => {
+        for (const b of PLANES.slice(i + 1)) {
+          const dx = Math.abs(labels[a]!.x - labels[b]!.x);
+          const dy = Math.abs(labels[a]!.y - labels[b]!.y);
+          expect(dx >= LABEL_BOX_PX.w - 1e-6 || dy >= LABEL_BOX_PX.h - 1e-6, `${a} ${b}`).toBe(true);
+        }
+      });
+      t.dispose();
+    }
+  });
+
+  it("move off a tile drawn in front of their own", () => {
+    for (const [dir, front] of [
+      [HOME, "XZ"],
+      [BACK, "YZ"],
+    ] as const) {
+      const { t, screen, labels } = tilesAt(dir);
+      expect(screen.filter((s) => s.front).map((s) => s.plane)).toEqual([front]);
+      const over = screen.find((s) => s.plane === front)!;
+      for (const k of PLANES) if (k !== front) expect(polygonDistance(labels[k]!, over.outline)).toBeGreaterThan(0);
+      t.dispose();
+    }
+  });
+
+  it("take their own plane wherever they cross another tile", () => {
+    for (const dir of [HOME, BACK, TOP, OBLIQUE]) {
+      const { t, frame, labels } = tilesAt(dir);
+      for (const k of PLANES)
+        for (const p of boxPoints(labels[k]!, 1))
+          expect(t.pick(p.x, p.y, frame, HIT_MIN_PX), `${dir} ${k}`).toMatchObject({ plane: k, part: "label" });
+      t.dispose();
+    }
+  });
+
+  it("leave every part of a tile that no tile in front and no other name covers to that tile", () => {
+    for (const dir of [HOME, BACK]) {
+      const { t, frame, screen, labels } = tilesAt(dir);
+      for (const s of screen) {
+        const xs = s.outline.map((p) => p.x);
+        const ys = s.outline.map((p) => p.y);
+        let n = 0;
+        for (let x = Math.min(...xs); x <= Math.max(...xs); x += 2)
+          for (let y = Math.min(...ys); y <= Math.max(...ys); y += 2) {
+            const p = { x, y };
+            if (polygonDistance(p, s.outline) > 0) continue;
+            if (screen.some((o) => o !== s && o.front && polygonDistance(p, o.outline) === 0)) continue;
+            const nearName = (k: Plane3) =>
+              Math.abs(x - labels[k]!.x) <= HIT_MIN_PX / 2 && Math.abs(y - labels[k]!.y) <= HIT_MIN_PX / 2;
+            if (PLANES.some((k) => k !== s.plane && nearName(k))) continue;
+            expect(t.pick(x, y, frame, HIT_MIN_PX)?.plane, `${dir} ${s.plane} ${x} ${y}`).toBe(s.plane);
+            n++;
+          }
+        expect(n, `${dir} ${s.plane}`).toBeGreaterThan(20);
+      }
+      t.dispose();
+    }
+  });
+});
+
 describe("names", () => {
-  it("sit in the middle of their tile", () => {
-    const { t, screen, labels } = tilesAt([1, -1.5, 1.1]);
-    for (const s of screen) {
+  it("sit in the middle of their tile while nothing crowds them", () => {
+    const { t, screen, labels } = tilesAt(OBLIQUE);
+    for (const s of screen.filter((x) => narrowWidth(x) > 30)) {
       expect(labels[s.plane]!.x).toBeCloseTo(s.centre.x, 9);
       expect(labels[s.plane]!.y).toBeCloseTo(s.centre.y, 9);
     }
     t.dispose();
   });
 
-  it("stay at the centre of an edge on tile", () => {
+  it("sit beside an edge on tile, clear of the other tiles", () => {
     for (const dir of [TOP, OBLIQUE]) {
       const { t, screen, labels } = tilesAt(dir);
       const thin = screen.filter((s) => narrowWidth(s) < 12);
       expect(thin.length).toBeGreaterThan(0);
       for (const s of thin) {
-        expect(labels[s.plane]!.x).toBeCloseTo(s.centre.x, 9);
-        expect(labels[s.plane]!.y).toBeCloseTo(s.centre.y, 9);
+        const edge = boxPoints(labels[s.plane]!, 0, 8);
+        expect(Math.min(...edge.map((p) => polygonDistance(p, s.outline)))).toBeLessThan(3);
+        for (const o of screen.filter((x) => x !== s))
+          for (const p of edge)
+            expect(polygonDistance(p, o.outline), `${dir} ${s.plane} ${o.plane} ${p.x} ${p.y}`).toBeGreaterThan(0);
       }
       t.dispose();
     }

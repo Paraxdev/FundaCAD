@@ -17,6 +17,8 @@ export interface PlaneOnScreen {
   sv: P2;
   /** |normal . to eye|, 1 square on, 0 edge on. */
   facing: number;
+  /** Seen from the side away from the other tiles, so it is drawn over them where they overlap. */
+  front?: boolean;
 }
 
 export interface LabelSize {
@@ -91,16 +93,67 @@ function rectDistance(p: P2, c: P2, size: LabelSize): number {
   return Math.hypot(dx, dy);
 }
 
-/** Each name sits at the projected centre of its own tile, at every angle. */
-export function placeLabels(planes: PlaneOnScreen[]): Record<string, P2> {
+/** +1 or -1 along `across` for the side of `t` away from the other tiles, 0 with none. */
+function awaySide(t: PlaneOnScreen, planes: PlaneOnScreen[], across: P2): number {
+  let s = 0;
+  for (const o of planes) if (o !== t) s += dot(sub(t.centre, o.centre), across);
+  return Math.abs(s) < 1e-9 ? 0 : Math.sign(s);
+}
+
+function boxOverlap(a: P2, b: P2, size: LabelSize): number {
+  return Math.max(0, size.w - Math.abs(a.x - b.x)) * Math.max(0, size.h - Math.abs(a.y - b.y));
+}
+
+const NAME_GAP_PX = 2;
+const NAME_STEPS = 15;
+/** How far a crowded name may walk from its tile's centre toward the far corner, in centre to corner lengths. */
+const NAME_REACH = 0.6;
+
+/** Each name sits at its tile's centre. A tile too thin to hold it has it beside its line, away from the other
+ *  tiles. A name that would cover another name or sit on a tile drawn in front of its own walks toward its far
+ *  corner. Tiles in front, then those facing the camera most, keep their place first. */
+export function placeLabels(planes: PlaneOnScreen[], size: LabelSize): Record<string, P2> {
   const out: Record<string, P2> = {};
-  for (const t of planes) out[t.plane] = { ...t.centre };
+  const placed: P2[] = [];
+  const order = [...planes].sort((a, b) => Number(!!b.front) - Number(!!a.front) || b.facing - a.facing);
+  for (const t of order) {
+    const { across, halfAcross } = tileAxes(t);
+    const reach = Math.abs(across.x) * (size.w / 2) + Math.abs(across.y) * (size.h / 2);
+    const thin = 2 * halfAcross < size.h;
+    const shift = thin ? (reach + NAME_GAP_PX + halfAcross) * awaySide(t, planes, across) : 0;
+    const start = { x: t.centre.x + shift * across.x, y: t.centre.y + shift * across.y };
+    const toFar = { x: t.su.x + t.sv.x, y: t.su.y + t.sv.y };
+    const fronts = t.front ? [] : planes.filter((o) => o !== t && o.front);
+    let best = start;
+    let bestScore = Infinity;
+    for (let i = 0; i <= NAME_STEPS; i++) {
+      const k = (NAME_REACH * i) / NAME_STEPS;
+      const c = { x: start.x + k * toFar.x, y: start.y + k * toFar.y };
+      let score = 0;
+      for (const q of placed) score += 1000 * boxOverlap(c, q, size);
+      if (!thin && polygonDistance(c, t.outline) > 0) score += 10;
+      for (const f of fronts) {
+        if (polygonDistance(c, f.outline) === 0) score += 10;
+        for (const dx of [-1, 0, 1])
+          for (const dy of [-1, 0, 1])
+            if (polygonDistance({ x: c.x + (dx * size.w) / 2, y: c.y + (dy * size.h) / 2 }, f.outline) === 0) score++;
+      }
+      if (score < bestScore) {
+        best = c;
+        bestScore = score;
+      }
+      if (score === 0) break;
+    }
+    out[t.plane] = best;
+    placed.push(best);
+  }
   return out;
 }
 
-/** The plane a press at `p` takes. Each tile is hit inside its drawn outline or inside a box along its own axes at
- *  least `minPx` across, and each name inside a box at least `minPx` square. Where targets overlap the plane whose
- *  drawn tile or name is nearest wins, then the one facing the camera most. */
+/** The plane a press at `p` takes. Each tile is hit inside its drawn outline or inside a box along its own axes wide
+ *  enough to hold a `minPx` square, grown on the side away from the other tiles, and each name inside a box at
+ *  least `minPx` square. A press on a name takes its plane. Otherwise where targets overlap the plane whose drawn
+ *  tile or name is nearest wins, then the one drawn in front, then the one facing the camera most. */
 export function pickPlaneOnScreen(
   planes: PlaneOnScreen[],
   labels: Record<string, P2>,
@@ -108,16 +161,20 @@ export function pickPlaneOnScreen(
   minPx: number,
   size: LabelSize,
 ): PlaneHit | null {
-  let best: (PlaneHit & { facing: number; rank: number }) | null = null;
+  let best: (PlaneHit & { facing: number; front: boolean; rank: number }) | null = null;
   for (const t of planes) {
     const { long, across, halfLong, halfAcross } = tileAxes(t);
     const d = sub(p, t.centre);
     const tileD = polygonDistance(p, t.outline);
     const label = labels[t.plane];
     const labelD = label ? rectDistance(p, label, size) : Infinity;
+    // A band at a slant holds a screen square only when it is wider than the square.
+    const wide = minPx * (Math.abs(long.x) + Math.abs(long.y));
+    const side = 2 * halfAcross < wide ? awaySide(t, planes, across) : 0;
+    const lo = side > 0 ? -halfAcross : side < 0 ? halfAcross - wide : -Math.max(halfAcross, wide / 2);
+    const a = dot(d, across);
     const inPad =
-      Math.abs(dot(d, long)) <= Math.max(halfLong, minPx / 2) &&
-      Math.abs(dot(d, across)) <= Math.max(halfAcross, minPx / 2);
+      Math.abs(dot(d, long)) <= Math.max(halfLong, wide / 2) && a >= lo && a <= lo + Math.max(2 * halfAcross, wide);
     const inLabelPad =
       !!label &&
       Math.abs(p.x - label.x) <= Math.max(size.w, minPx) / 2 &&
@@ -126,13 +183,16 @@ export function pickPlaneOnScreen(
     const distance = Math.min(tileD, labelD);
     const part: PlaneHitPart = labelD === 0 ? "label" : tileD === 0 ? "tile" : "pad";
     // A name too thin a tile to hold it keeps its full box ahead of a neighbour's drawn tile.
-    const rank = inLabelPad && 2 * halfAcross < minPx / 2 ? 1 : 0;
-    const hit = { plane: t.plane, distance, part, facing: t.facing, rank };
+    const rank = labelD === 0 || (inLabelPad && 2 * halfAcross < minPx / 2) ? 1 : 0;
+    const front = !!t.front;
+    const hit = { plane: t.plane, distance, part, facing: t.facing, front, rank };
+    const tie = !!best && rank === best.rank && Math.abs(distance - best.distance) <= 1e-9;
     if (
       !best ||
       rank > best.rank ||
       (rank === best.rank && distance < best.distance - 1e-9) ||
-      (rank === best.rank && Math.abs(distance - best.distance) <= 1e-9 && t.facing > best.facing)
+      (tie && front && !best.front) ||
+      (tie && front === best.front && t.facing > best.facing)
     )
       best = hit;
   }

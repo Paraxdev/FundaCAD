@@ -302,6 +302,9 @@ export class OriginTiles {
       const v = at(0, h);
       const normal = new THREE.Vector3(...tilePose(plane, this.shape).normal);
       const toEye = ortho ? eyeDir : eye.clone().sub(centreW).normalize();
+      const n = "xyz".indexOf(NORMAL_AXIS[plane]);
+      // Every tile shares the origin corner and spans the octant, so the eye on the far side of one sees it on top.
+      const side = (ortho ? eyeDir : eye).getComponent(n) * this.shape.octant[NORMAL_AXIS[plane]];
       return {
         plane,
         centre,
@@ -309,13 +312,14 @@ export class OriginTiles {
         su: { x: u.x - centre.x, y: u.y - centre.y },
         sv: { x: v.x - centre.x, y: v.y - centre.y },
         facing: Math.abs(toEye.dot(normal)),
+        front: side < -1e-9,
       };
     });
   }
 
   /** Where each name is drawn, in client pixels. */
   labelsOnScreen(frame: ScreenFrame, tiles = this.onScreen(frame)): Record<string, P2> {
-    return placeLabels(tiles);
+    return placeLabels(tiles, LABEL_BOX_PX);
   }
 
   /** The plane a press at client (`x`, `y`) takes, null while the tiles are hidden. */

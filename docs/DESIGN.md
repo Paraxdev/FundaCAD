@@ -1176,6 +1176,12 @@ guard test cannot see them; hold them to these rules by hand.
   rounded, 27px, the same squircle as `corner-shape: squircle`, a rail tile's 17px
   on 40px scaled up (`TILE_CORNER_RADIUS_PX` and `SQUIRCLE_EXPONENT` in
   `src/viewport/originTiles.ts` and `cornerProfile.ts`).
+- A tile's name sits at its centre. Where the tiles overlap, the tile drawn in
+  front keeps its name there and a name that would cover another name or sit on
+  that tile walks toward its own far corner. A tile seen edge on has its name
+  beside it, on the side away from the other tiles. A press on a name takes its
+  plane, and where tiles overlap a press goes to the one drawn in front
+  (`placeLabels` and `pickPlaneOnScreen` in `src/viewport/planeHit.ts`).
 - What a body hides draws faint, not gone.
 - A name in the scene is a camera facing sprite, `--ui` 700 at 11px, inked in
   `--text` or `--viewport-bg`, whichever reads on the ground. It fades out when
