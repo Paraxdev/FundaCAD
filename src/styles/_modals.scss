@@ -178,22 +178,10 @@
   appearance: none;
   -webkit-appearance: none;
   background-color: var(--panel-2, #1c1f26);
-  /* A caret in place of the native one. */
-  background-image:
-    linear-gradient(45deg, transparent 50%, var(--text-dim, #9aa3af) 50%),
-    linear-gradient(135deg, var(--text-dim, #9aa3af) 50%, transparent 50%);
-  background-position:
-    calc(100% - 14px) 50%,
-    calc(100% - 9px) 50%;
-  background-size:
-    5px 5px,
-    5px 5px;
-  background-repeat: no-repeat;
   color: var(--text, #e6e8ec);
   border: 1px solid transparent;
   border-radius: var(--r-sm, 6px);
-  /* The 26px clears the gradient caret above, placed from the right edge, like every other
-     select. */
+  /* The 26px clears the .select-caret element (ui/_select.scss), placed from the right edge. */
   padding: var(--s-2) 26px var(--s-2) var(--s-3);
   font-size: 11px;
   cursor: pointer;

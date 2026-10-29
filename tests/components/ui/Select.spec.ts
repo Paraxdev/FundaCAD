@@ -198,6 +198,24 @@ describe("Select", () => {
     expect([picked(w), listbox()]).toEqual([[["cherry"]], null]);
   });
 
+  it("draws one hidden caret that stays in the trigger while the list opens and closes", async () => {
+    const { trigger, el } = await render();
+    const carets = () => [...el.querySelectorAll(".select-caret")];
+    const state = () => [el.classList.contains("is-open"), carets().length, carets()[0]?.getAttribute("aria-hidden")];
+    expect(state()).toEqual([false, 1, "true"]);
+    await trigger.trigger("click");
+    await flushPromises();
+    expect(state()).toEqual([true, 1, "true"]);
+    await trigger.trigger("click");
+    await flushPromises();
+    expect([...state(), el.textContent?.trim()]).toEqual([false, 1, "true", "Banana"]);
+  });
+
+  it("draws no caret on the chip variant, a quiet word", async () => {
+    const { el } = await render({ variant: "chip" });
+    expect(el.querySelector(".select-caret")).toBeNull();
+  });
+
   it("opens on a click that lands in the same millisecond as its mount", async () => {
     const w = mount(Select<V>, {
       props: { modelValue: "banana", options: OPTIONS, label: "Fruit" },
