@@ -107,6 +107,18 @@ describe("Tab in an area box", () => {
   });
 });
 
+describe("File shortcuts on a non Latin layout", () => {
+  beforeEach(() => setActivePinia(createPinia()));
+
+  it("Ctrl plus Cyrillic a on KeyF opens the command palette", async () => {
+    const { useCommandPaletteStore } = await import("../../src/stores/commandPalette");
+    const toggle = vi.spyOn(useCommandPaletteStore(), "toggle");
+    installKeyboard(fakeEngine({ selectedFeature: null, explicit: false }).e);
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "а", code: "KeyF", ctrlKey: true, cancelable: true }));
+    expect(toggle).toHaveBeenCalledWith("model");
+  });
+});
+
 // PH-2: Ctrl+A outside a field selected the text of the whole app.
 describe("Ctrl+A", () => {
   const selectAll = (target: EventTarget, init: KeyboardEventInit = { ctrlKey: true }) => {

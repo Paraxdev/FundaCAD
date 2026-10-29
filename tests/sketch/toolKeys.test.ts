@@ -18,6 +18,11 @@ describe("sketchToolKey", () => {
     expect(sketchToolKey(press("a"), "arc")).toBe("tangent-arc");
   });
 
+  it("reads the physical key on a Cyrillic layout", () => {
+    expect(sketchToolKey({ ...press("д"), code: "KeyL" }, "select")).toBe("line");
+    expect(sketchToolKey({ ...press("с"), code: "KeyC" }, "select")).toBe("circle");
+  });
+
   it("arms nothing while Single key shortcuts is off", () => {
     setA11yPref("singleKeys", false);
     expect(sketchToolKey(press("l"), "select")).toBeNull();

@@ -105,3 +105,33 @@ describe("installKeymap", () => {
     w.unmount();
   });
 });
+
+describe("installKeymap on a non Latin layout", () => {
+  const press = (init: KeyboardEventInit) => {
+    const ev = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...init });
+    window.dispatchEvent(ev);
+    return ev.defaultPrevented;
+  };
+
+  it("matches the physical key, so Cyrillic u on KeyE extrudes and Ctrl plus ya on KeyZ undoes", () => {
+    const actions: string[] = [];
+    install(
+      (a) => actions.push(a),
+      () => "model",
+    );
+    expect(press({ key: "у", code: "KeyE" })).toBe(true);
+    expect(press({ key: "я", code: "KeyZ", ctrlKey: true })).toBe(true);
+    expect(actions).toEqual(["extrude", "undo"]);
+  });
+
+  it("keeps the typed letter on AZERTY, where a sits on KeyQ", () => {
+    const actions: string[] = [];
+    install(
+      (a) => actions.push(a),
+      () => "model",
+    );
+    press({ key: "a", code: "KeyQ" });
+    press({ key: "z", code: "KeyW", ctrlKey: true });
+    expect(actions).toEqual(["arc", "undo"]);
+  });
+});

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { fmtKeys, isMac, setMacForTest } from "../../src/input/platform";
+import { fmtKeys, isMac, latinKey, setMacForTest } from "../../src/input/platform";
 
 afterEach(() => setMacForTest(null));
 
@@ -42,5 +42,39 @@ describe("isMac", () => {
     withNav({ platform: "MacIntel" }, () => expect(isMac()).toBe(true));
     withNav({ platform: "Win32" }, () => expect(isMac()).toBe(false));
     withNav({ userAgentData: { platform: "Windows" }, platform: "MacIntel" }, () => expect(isMac()).toBe(false));
+  });
+});
+
+describe("latinKey", () => {
+  const k = (key: string, code: string, altKey = false) => latinKey({ key, code, altKey });
+
+  it("reads the physical key under a non Latin letter", () => {
+    expect(k("у", "KeyE")).toBe("e");
+    expect(k("Я", "KeyZ")).toBe("z");
+    expect(k("ε", "KeyE")).toBe("e");
+    expect(k("ק", "KeyE")).toBe("e");
+    expect(k("ث", "KeyE")).toBe("e");
+    expect(k("б", "Comma")).toBe(",");
+    expect(k("ё", "Backquote")).toBe("`");
+    expect(k("۱", "Digit1")).toBe("1");
+  });
+
+  it("keeps the typed character on Latin layouts", () => {
+    expect(k("a", "KeyQ")).toBe("a");
+    expect(k("E", "KeyE")).toBe("e");
+    expect(k("&", "Digit1")).toBe("&");
+    expect(k("é", "Digit2")).toBe("é");
+    expect(k("?", "Slash")).toBe("?");
+    expect(k("Escape", "Escape")).toBe("escape");
+  });
+
+  it("leaves Alt and AltGr letters unmatched", () => {
+    expect(k("ś", "KeyS", true)).toBe("ś");
+    expect(k("ж", "KeyS", true)).toBe("ж");
+  });
+
+  it("keeps a non Latin key with no Latin twin", () => {
+    expect(k("ж", "IntlBackslash")).toBe("ж");
+    expect(latinKey({ key: "у" })).toBe("у");
   });
 });

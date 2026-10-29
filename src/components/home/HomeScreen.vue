@@ -15,6 +15,7 @@ import { useContextMenuStore } from "../../stores/contextMenu";
 import { choose } from "../../ui/choice";
 import { contextMenu } from "../../ui/menu";
 import { escapeClaimed } from "../../ui/escapeClaim";
+import { latinKey } from "../../input/platform";
 import {
   buildEntries,
   filterEntries,
@@ -83,7 +84,7 @@ function onKey(e: KeyboardEvent): void {
     return;
   }
   const mod = e.ctrlKey || e.metaKey;
-  if (mod && !e.shiftKey && e.key.toLowerCase() === "f") {
+  if (mod && !e.shiftKey && latinKey(e) === "f") {
     e.preventDefault();
     e.stopImmediatePropagation();
     searchInput()?.focus();
@@ -91,7 +92,7 @@ function onKey(e: KeyboardEvent): void {
     return;
   }
   const inField = e.target instanceof HTMLInputElement && e.target.type !== "checkbox";
-  if (mod && UNDO_KEYS.has(e.key.toLowerCase()) && !inField) {
+  if (mod && UNDO_KEYS.has(latinKey(e)) && !inField) {
     e.preventDefault();
     e.stopImmediatePropagation();
   }

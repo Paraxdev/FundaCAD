@@ -21,3 +21,29 @@ export function fmtKeys(text: string): string {
   if (!isMac()) return text;
   return text.replace(/\bCtrl\b/g, COMMAND).replace(/\bAlt\b/g, OPTION);
 }
+
+const PUNCTUATION: Record<string, string> = {
+  Comma: ",",
+  Period: ".",
+  Slash: "/",
+  Semicolon: ";",
+  Quote: "'",
+  BracketLeft: "[",
+  BracketRight: "]",
+  Backquote: "`",
+  Minus: "-",
+  Equal: "=",
+  Backslash: "\\",
+};
+
+/** The key a shortcut matches, lower case. A letter of a non Latin script (Cyrillic, Greek, Hebrew, Arabic) or a non
+ *  ASCII digit gives way to the US key under it, so E and Ctrl+Z work on a Russian layout. Latin layouts keep what
+ *  they type (AZERTY a stays a), and so do Alt and AltGr, whose letters are meant (Polish AltGr+S is s acute). */
+export function latinKey(e: { key: string; code?: string; altKey?: boolean }): string {
+  const k = e.key.toLowerCase();
+  const foreign = (/^\p{L}$/u.test(k) && !/\p{Script=Latin}/u.test(k)) || (/^\p{Nd}$/u.test(k) && !/^\d$/.test(k));
+  if (e.altKey || !e.code || !foreign) return k;
+  const m = /^(?:Key([A-Z])|Digit(\d))$/.exec(e.code);
+  if (m) return (m[1] ?? m[2] ?? "").toLowerCase();
+  return PUNCTUATION[e.code] ?? k;
+}

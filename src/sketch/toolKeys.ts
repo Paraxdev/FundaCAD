@@ -1,8 +1,10 @@
 import type { SketchTool } from "./sketchMode";
 import { singleKeysOn } from "../ui/a11yPrefs";
+import { latinKey } from "../input/platform";
 
 export interface ToolKey {
   key: string;
+  code?: string;
   shiftKey: boolean;
   ctrlKey: boolean;
   metaKey: boolean;
@@ -12,7 +14,7 @@ export interface ToolKey {
 /** A key with a modifier is left to the global keymap, where Shift+P, Shift+L and Shift+C are constraints. */
 export function sketchToolKey(e: ToolKey, tool: SketchTool): SketchTool | "tangent-arc" | null {
   if (e.shiftKey || e.ctrlKey || e.metaKey || e.altKey || !singleKeysOn()) return null;
-  switch (e.key.toLowerCase()) {
+  switch (latinKey(e)) {
     case "l":
       return "line";
     case "r":

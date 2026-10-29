@@ -6,7 +6,7 @@ import { SKETCH_TOOLS } from "./actionTables";
 import { logError, toggleConsole } from "../ui/logStore";
 import { isSessionEnded } from "../document/session";
 import { useDialogStore } from "../stores/dialogs";
-import { isMac } from "../input/platform";
+import { isMac, latinKey } from "../input/platform";
 import { useShellStore } from "../stores/shell";
 import { useCommandPaletteStore } from "../stores/commandPalette";
 import type { Engine } from "./engine";
@@ -87,7 +87,7 @@ export function installKeyboard(e: Engine): void {
   // file shortcuts, which work even mid sketch
   window.addEventListener("keydown", (ev) => {
     if (!(ev.ctrlKey || ev.metaKey)) return;
-    const k = ev.key.toLowerCase();
+    const k = latinKey(ev);
     if (ev.altKey) {
       // Ctrl+Alt first, or Ctrl+Alt+S would also save. macOS Option types another character, so the physical key counts
       // there; elsewhere only the typed letter, since AltGr reports Ctrl+Alt on Windows.

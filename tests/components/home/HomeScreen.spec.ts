@@ -436,6 +436,13 @@ describe("HomeScreen", () => {
     expect(document.activeElement).toBe($(".home-search input"));
   });
 
+  it("takes Ctrl+F on a Cyrillic layout, where KeyF types a", () => {
+    open([{ path: "C:/a.funda", openedAt: 1 }]);
+    ($(".home-search input") as HTMLInputElement).blur();
+    key("а", { code: "KeyF", ctrlKey: true });
+    expect(document.activeElement).toBe($(".home-search input"));
+  });
+
   it("puts the focus in its search field", () => {
     open([{ path: "C:/a.funda", openedAt: 1 }]);
     expect(document.activeElement).toBe($(".home-search input"));
