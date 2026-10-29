@@ -61,7 +61,7 @@ afterEach(() => vi.unstubAllGlobals());
 describe("defaults", () => {
   it("follow the system and speak at the normal level when nothing is stored", async () => {
     const m = await load();
-    expect(m.a11yPrefs()).toEqual({ animations: "system", verbosity: "normal" });
+    expect(m.a11yPrefs()).toEqual({ animations: "system", verbosity: "normal", targets: "default" });
     expect(m.getVerbosity()).toBe("normal");
     expect(m.motionOn()).toBe(true);
   });
@@ -185,8 +185,32 @@ describe("reset and the screen reader preset", () => {
     let calls = 0;
     m.onA11yPrefsChange(() => calls++);
     m.applyScreenReaderPreset();
-    expect(m.a11yPrefs()).toEqual({ animations: "off", verbosity: "verbose" });
+    expect(m.a11yPrefs()).toEqual({ animations: "off", verbosity: "verbose", targets: "default" });
     expect(stored.get("fundacad.a11y.verbosity")).toBe("verbose");
     expect(calls).toBe(1);
+  });
+});
+
+describe("Larger click targets", () => {
+  it("reads a stored choice and refuses one it does not know", async () => {
+    boot({ "fundacad.a11y.targets": "large" });
+    let m = await load();
+    expect(m.a11yPrefs().targets).toBe("large");
+    boot({ "fundacad.a11y.targets": "huge" });
+    m = await load();
+    expect(m.a11yPrefs().targets).toBe("default");
+    m.setA11yPref("targets", "huge" as never);
+    expect(m.a11yPrefs().targets).toBe("default");
+    expect(stored.get("fundacad.a11y.targets")).toBe("huge");
+  });
+
+  it("is dropped by reset and left alone by the screen reader preset", async () => {
+    boot({ "fundacad.a11y.targets": "large" });
+    const m = await load();
+    m.applyScreenReaderPreset();
+    expect(m.a11yPrefs().targets).toBe("large");
+    m.resetA11yPrefs();
+    expect(m.a11yPrefs().targets).toBe("default");
+    expect(stored.has("fundacad.a11y.targets")).toBe(false);
   });
 });

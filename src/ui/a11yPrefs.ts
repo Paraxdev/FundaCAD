@@ -11,9 +11,11 @@ export interface A11yPrefs {
   animations: Animations;
   /** How much the announcer speaks: nothing, errors only, prompts and results, or every change too. */
   verbosity: Verbosity;
+  /** Larger click targets: every hit area grows from 24 to about 32 px, see targets.ts. */
+  targets: Targets;
 }
 
-export const DEFAULT_A11Y: Readonly<A11yPrefs> = { animations: "system", verbosity: "normal" };
+export const DEFAULT_A11Y: Readonly<A11yPrefs> = { animations: "system", verbosity: "normal", targets: "default" };
 
 /** One click for screen reader users. Later settings join it: Single key shortcuts off, Solid panels on and
  *  Notification time Until dismissed. */
@@ -23,6 +25,7 @@ export const SCREEN_READER_PRESET: Readonly<Partial<A11yPrefs>> = { verbosity: "
 const KEYS: Record<keyof A11yPrefs, string> = {
   animations: "fundacad.animations",
   verbosity: "fundacad.a11y.verbosity",
+  targets: "fundacad.a11y.targets",
 };
 
 const ANIMATIONS: readonly Animations[] = ["system", "on", "off"];
@@ -35,9 +38,16 @@ export function asVerbosity(v: unknown): Verbosity | null {
   return VERBOSITY.includes(v as Verbosity) ? (v as Verbosity) : null;
 }
 
+export type Targets = "default" | "large";
+const TARGETS: readonly Targets[] = ["default", "large"];
+export function asTargets(v: unknown): Targets | null {
+  return TARGETS.includes(v as Targets) ? (v as Targets) : null;
+}
+
 const GATES: { [K in keyof A11yPrefs]: (v: unknown) => A11yPrefs[K] | null } = {
   animations: asAnimations,
   verbosity: asVerbosity,
+  targets: asTargets,
 };
 
 function readStored(): A11yPrefs {
