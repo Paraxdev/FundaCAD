@@ -14,9 +14,11 @@ Hover over an underlined word anywhere in the manual to see its meaning from thi
 
 **GLB.** A binary 3D file for viewers and web pages.
 
-**Linked document.** A document inserted in link mode, so you can update it when the original changes.
+**Linked document.** A document inserted with Link, so you can update it when the original file changes.
 
 **Mesh.** A surface made of many small triangles, as in STL, 3MF and GLB files.
+
+**Slicer.** The program that cuts a part into layers and printer moves.
 
 **STEP.** A file format that stores the exact solid, for handing parts to other CAD programs.
 
@@ -58,6 +60,8 @@ Hover over an underlined word anywhere in the manual to see its meaning from thi
 
 **Chamfer.** A flat bevel cut along an edge.
 
+**Continuity.** How smoothly a fillet meets its faces. G1 is a circular round, G2 and G3 ease in with no jump in curvature.
+
 **Draft.** A small tilt added to a face.
 
 **Edge.** The line where two faces meet.
@@ -72,7 +76,7 @@ Hover over an underlined word anywhere in the manual to see its meaning from thi
 
 **Mirror.** A copy of a body reflected across a plane.
 
-**Pattern.** Repeated copies in a line or around an axis.
+**Pattern.** Repeated copies in a line, a grid or around an axis.
 
 **Press/Pull.** Moving a face in or out.
 
@@ -90,7 +94,7 @@ Hover over an underlined word anywhere in the manual to see its meaning from thi
 
 **Joint.** A rule that places one body against another.
 
-**Mechanism.** A set of joints with one body held fixed.
+**Mechanism.** A set of joints with one ground body that holds still.
 
 **Overhang.** A face that leans too far to print without support.
 
@@ -100,19 +104,21 @@ Hover over an underlined word anywhere in the manual to see its meaning from thi
 
 ## Render and plugins
 
-**Bloom.** A soft halo around faces with Emission turned up that does not light other objects. The path traced view also spills bright highlights.
+**Bloom.** A soft glow spilling off faces with Emission turned up. In the path traced view bright highlights spill too.
 
-**Emission.** A material setting that makes a body give off light. It is a heavy effect on a large model.
+**Emission.** A material setting that makes a body give off light. It can slow the view on a large model.
+
+**Knurl.** A grip pattern of small diamond ridges, one of the Surface Texture kinds.
 
 **Material.** The finish of a body in the Render workspace.
 
-**Node editor.** The graph where you build a surface finish from connected patterns.
-
-**Workspace.** One of the two window modes, Model and Render.
-
 **MCP.** The connection that lets an AI assistant build and check parts.
 
+**Node editor.** The graph where you build a surface finish from connected patterns.
+
 **Plugin.** An optional add-on that brings extra tools.
+
+**Workspace.** One of the two window modes, Model and Render.
 
 ## Viewport
 
@@ -122,4 +128,4 @@ Hover over an underlined word anywhere in the manual to see its meaning from thi
 
 **Wireframe.** Showing only the edges of the model.
 
-**X-ray.** Seeing through the model to select what is behind.
+**X-Ray.** Seeing through the model to select what is behind.
