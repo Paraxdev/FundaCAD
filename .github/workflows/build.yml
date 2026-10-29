@@ -221,7 +221,7 @@ jobs:
   bundle:
     needs: [channel, test, rust-geom]
     permissions:
-      contents: write # tauri-action may attach artifacts to a draft release
+      contents: read # tauri-action gets no tagName or releaseId, the release job publishes
     if: >-
       !cancelled() && needs.channel.outputs.config != ''
       && (needs.channel.outputs.gated == 'false'

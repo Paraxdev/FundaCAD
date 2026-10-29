@@ -71,3 +71,43 @@ describe("pinned actions stay current", () => {
     expect(text).toMatch(/^\s+target-branch:\s*"?dev"?\s*$/m);
   });
 });
+
+/** Every permission a workflow grants, as `file job key: level`, with `top` for the workflow wide block. */
+function grants(): string[] {
+  return Object.entries(files)
+    .filter(([path]) => path.includes("/workflows/"))
+    .flatMap(([path, text]) => {
+      const file = path.split("/").pop();
+      const lines = text.split(/\r?\n/);
+      let job = "top";
+      let inJobs = false;
+      const out: string[] = [];
+      lines.forEach((line, i) => {
+        if (/^jobs:\s*$/.test(line)) inJobs = true;
+        const name = /^ {2}([\w-]+):\s*$/.exec(line);
+        if (inJobs && name) job = name[1];
+        const block = /^(\s*)permissions:\s*(\S*)/.exec(line);
+        if (!block) return;
+        if (block[2] && !block[2].startsWith("#")) out.push(`${file} ${job} ${block[2]}`);
+        for (let j = i + 1; j < lines.length && (!lines[j].trim() || indentOf(lines[j]) > block[1].length); j++) {
+          const grant = lines[j].replace(/#.*/, "").trim();
+          if (grant) out.push(`${file} ${job} ${grant.replace(/:\s*/, ": ")}`);
+        }
+      });
+      return out;
+    });
+}
+
+describe("job permissions", () => {
+  it("lets the bundle job read the repository and nothing more", () => {
+    expect(grants().filter((g) => g.startsWith("build.yml bundle "))).toEqual(["build.yml bundle contents: read"]);
+  });
+
+  it("grants write access only to the release job and the Pages deploy", () => {
+    expect(grants().filter((g) => !g.endsWith(": read"))).toEqual([
+      "build.yml release contents: write",
+      "manual.yml top pages: write",
+      "manual.yml top id-token: write",
+    ]);
+  });
+});
