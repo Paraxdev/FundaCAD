@@ -5,6 +5,7 @@ import {
   HIT_MIN_COARSE_PX,
   HIT_MIN_PX,
   pickPlaneOnScreen,
+  placeLabels,
   planeHitMinPx,
   polygonDistance,
   type P2,
@@ -32,6 +33,14 @@ const TOP: [number, number, number] = [0, 0, 1];
 const OBLIQUE: [number, number, number] = [0.66, -0.07, 0.75];
 const HOME: [number, number, number] = [80, -120, 90];
 const BACK: [number, number, number] = [-80, 120, 90];
+/** Views all round, low to high, from inside and outside the octant the tiles span. */
+const AROUND: [number, number, number][] = [HOME, BACK];
+for (let az = 15; az < 360; az += 45)
+  for (const el of [10, 35, 60, 80]) {
+    const a = (az * Math.PI) / 180;
+    const e = (el * Math.PI) / 180;
+    AROUND.push([Math.cos(e) * Math.cos(a), Math.cos(e) * Math.sin(a), Math.sin(e)]);
+  }
 
 function tilesAt(dir: [number, number, number]) {
   const t = new OriginTiles(new THREE.Scene());
@@ -118,6 +127,15 @@ describe("hit area on screen", () => {
     t.dispose();
   });
 
+  it("gives every plane at least a 44 px square from every side, where a tile stands in front of another too", () => {
+    for (const dir of AROUND) {
+      const { t, frame, screen, labels } = tilesAt(dir);
+      const sq = largestSquare(screen, labels, originOf(frame), HIT_MIN_PX);
+      for (const k of PLANES) expect(sq[k], `${dir} ${k}`).toBeGreaterThanOrEqual(HIT_MIN_PX);
+      t.dispose();
+    }
+  });
+
   it("gives the two tiles seen exactly edge on from the top a full size target", () => {
     const { t, frame, screen, labels } = tilesAt(TOP);
     expect(PLANES.map((k) => Math.round(narrowWidth(screen.find((s) => s.plane === k)!)))).toEqual([
@@ -131,7 +149,7 @@ describe("hit area on screen", () => {
   });
 
   it("grows to 48 px for a coarse pointer", () => {
-    for (const dir of [TOP, OBLIQUE]) {
+    for (const dir of [TOP, OBLIQUE, HOME, BACK]) {
       const { t, frame, screen, labels } = tilesAt(dir);
       const sq = largestSquare(screen, labels, originOf(frame), HIT_MIN_COARSE_PX);
       for (const k of PLANES) expect(sq[k]).toBeGreaterThanOrEqual(HIT_MIN_COARSE_PX);
@@ -269,6 +287,19 @@ describe("names where the tiles overlap", () => {
     }
   });
 
+  it("keep a coarse pointer's target clear of each other from every side", () => {
+    for (const dir of [TOP, OBLIQUE, ...AROUND]) {
+      const { t, labels } = tilesAt(dir);
+      PLANES.forEach((a, i) => {
+        for (const b of PLANES.slice(i + 1)) {
+          const apart = Math.max(Math.abs(labels[a]!.x - labels[b]!.x), Math.abs(labels[a]!.y - labels[b]!.y));
+          expect(apart, `${dir} ${a} ${b}`).toBeGreaterThan(HIT_MIN_COARSE_PX - 0.05);
+        }
+      });
+      t.dispose();
+    }
+  });
+
   it("move off a tile drawn in front of their own", () => {
     for (const [dir, front] of [
       [HOME, "XZ"],
@@ -319,11 +350,24 @@ describe("names where the tiles overlap", () => {
 
 describe("names", () => {
   it("sit in the middle of their tile while nothing crowds them", () => {
-    const { t, screen, labels } = tilesAt(OBLIQUE);
-    for (const s of screen.filter((x) => narrowWidth(x) > 30)) {
-      expect(labels[s.plane]!.x).toBeCloseTo(s.centre.x, 9);
-      expect(labels[s.plane]!.y).toBeCloseTo(s.centre.y, 9);
-    }
+    const tile = (plane: Plane3, cx: number, facing: number): PlaneOnScreen => ({
+      plane,
+      centre: { x: cx, y: 0 },
+      outline: [
+        { x: cx - 32, y: -32 },
+        { x: cx + 32, y: -32 },
+        { x: cx + 32, y: 32 },
+        { x: cx - 32, y: 32 },
+      ],
+      su: { x: 32, y: 0 },
+      sv: { x: 0, y: 32 },
+      facing,
+    });
+    const tiles = [tile("XY", 0, 0.9), tile("XZ", 80, 0.5), tile("YZ", 160, 0.7)];
+    expect(placeLabels(tiles, LABEL_BOX_PX)).toEqual({ XY: { x: 0, y: 0 }, XZ: { x: 80, y: 0 }, YZ: { x: 160, y: 0 } });
+    const { t, screen, labels } = tilesAt(HOME);
+    const front = screen.find((s) => s.front)!;
+    expect(labels[front.plane]).toEqual(front.centre);
     t.dispose();
   });
 
