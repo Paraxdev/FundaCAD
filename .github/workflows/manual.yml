@@ -44,7 +44,9 @@ jobs:
     steps:
       - uses: actions/configure-pages@v6
       - uses: actions/checkout@v7
+      # A dev checkout or build that fails only leaves dev out with a warning, beta still publishes.
       - uses: actions/checkout@v7
+        continue-on-error: true
         with:
           ref: dev
           path: versions/dev

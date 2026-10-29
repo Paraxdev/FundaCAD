@@ -3,7 +3,10 @@
     python3 tests/manual/test_versions.py
 """
 
+import contextlib
+import io
 import json
+import shutil
 import sys
 import tempfile
 import tomllib
@@ -88,6 +91,12 @@ class RootFiles(unittest.TestCase):
         self.assertIn('["beta", "dev"]', head)
         self.assertIn('base + "beta/" + rest', head)
 
+    def test_the_404_page_sends_a_version_that_did_not_build_to_the_same_page_of_the_default(self):
+        html = bv.redirect_404("<html><head></head><body></body></html>", SITE, ["beta"], "beta", ["dev"])
+        head = html.split("</head>")[0]
+        self.assertIn('names = ["beta"], gone = ["dev"]', head)
+        self.assertIn("if (gone.indexOf(first) !== -1) rest = rest.slice(first.length + 1);", head)
+
     def test_a_404_page_without_a_head_fails(self):
         with self.assertRaises(ValueError):
             bv.redirect_404("<html><body></body></html>", SITE, ["beta", "dev"], "beta")
@@ -112,6 +121,14 @@ class WriteRoot(unittest.TestCase):
         self.assertIn(f"{SITE}beta/sitemap.xml", (out / "sitemap.xml").read_text(encoding="utf-8"))
         self.assertTrue((out / "robots.txt").is_file())
 
+    def test_a_version_that_did_not_build_is_left_out_of_the_switch(self):
+        out = self.tree(["", "start/install/"])
+        shutil.rmtree(out / "dev")
+        bv.write_root(out, SITE, ["beta"], "beta", ["dev"])
+        self.assertEqual(json.loads((out / "versions.json").read_text(encoding="utf-8")), [{"version": "beta", "title": "Beta", "aliases": []}])
+        self.assertIn('gone = ["dev"]', (out / "404.html").read_text(encoding="utf-8"))
+        self.assertFalse((out / "dev").exists())
+
     def test_a_page_outside_its_version_url_fails(self):
         out = self.tree(["start/install/"])
         (out / "beta" / "sitemap.xml").write_text(sitemap([f"{SITE}start/install/"]), encoding="utf-8")
@@ -122,6 +139,38 @@ class WriteRoot(unittest.TestCase):
         out = self.tree(["dev/notes/"])
         with self.assertRaises(ValueError):
             bv.write_root(out, SITE, ["beta", "dev"], "beta")
+
+
+class BuildAll(unittest.TestCase):
+    def run_builds(self, broken):
+        def build_one(name):
+            if name in broken:
+                raise broken[name]
+            return [f"{name} warning"]
+
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            result = bv.build_all(["beta", "dev"], "beta", build_one)
+        return result, out.getvalue()
+
+    def test_every_version_that_builds_is_kept_with_its_warnings(self):
+        self.assertEqual(self.run_builds({}), (({"beta": ["beta warning"], "dev": ["dev warning"]}, []), ""))
+
+    def test_a_version_that_fails_is_left_out_with_a_warning_and_the_default_still_publishes(self):
+        for error in (bv.BuildFailed("zensical failed with exit code 1"), FileNotFoundError("no zensical.toml"), ValueError("bad site_url")):
+            with self.subTest(error=error):
+                self.assertEqual(
+                    self.run_builds({"dev": error}),
+                    (
+                        ({"beta": ["beta warning"]}, ["dev"]),
+                        f"::warning::The dev manual did not build ({error}), it is left out and its pages open the beta manual\n",
+                    ),
+                )
+
+    def test_a_default_version_that_fails_stops_the_publish(self):
+        with self.assertRaises(SystemExit) as stop:
+            self.run_builds({"beta": bv.BuildFailed("zensical failed with exit code 1")})
+        self.assertEqual(stop.exception.code, "[beta] zensical failed with exit code 1")
 
 
 class DevBanner(unittest.TestCase):

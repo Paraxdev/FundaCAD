@@ -167,7 +167,8 @@ The manual lives in `manual/` and is built with [Zensical](https://zensical.org)
 it, run `pip install zensical` and then `zensical serve` inside `manual/`. It is published to
 GitHub Pages in two versions on one site: Beta at `/beta/`, built from `main`, and Dev at
 `/dev/`, built from `dev`. A push to either branch that touches `manual/` publishes both, and
-visitors land on Beta. An old link without a version opens the same page in Beta.
+visitors land on Beta. An old link without a version opens the same page in Beta. When Dev
+fails to build, Beta still publishes alone, the run shows a warning and `/dev/` links open Beta.
 
 To build both versions the way the workflow does, check out the other branch's `manual/`
 somewhere and run this from the repo root:

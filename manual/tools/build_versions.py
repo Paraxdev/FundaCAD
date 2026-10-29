@@ -4,7 +4,8 @@
 
 Each version is a manual folder (a checkout of one branch) built into <out>/<name>/. The root gets
 versions.json for the switch, a redirect stub at the old path of every default version page, a 404 page
-that sends other old paths to the default version, robots.txt and a sitemap index.
+that sends other old paths to the default version, robots.txt and a sitemap index. A version other than the
+default that fails to build is left out with a warning, and its paths open the same page of the default.
 """
 import argparse
 import html
@@ -21,6 +22,10 @@ from urllib.parse import urlparse
 PATCHED = "zensical.versioned.toml"
 STATUS = re.compile(r"^(Build started|No issues found|Build finished)")
 SITEMAP_NS = "{http://www.sitemaps.org/schemas/sitemap/0.9}"
+
+
+class BuildFailed(Exception):
+    pass
 
 
 def version_url(site: str, name: str) -> str:
@@ -80,15 +85,17 @@ def sitemap_index(site: str, default: str) -> str:
     )
 
 
-def redirect_404(page: str, site: str, names: list[str], default: str) -> str:
+def redirect_404(page: str, site: str, names: list[str], default: str, gone: list[str] = ()) -> str:
     if "</head>" not in page:
         raise ValueError("the 404 page has no </head>")
     script = (
         "<script>(function () {\n"
-        f"  var base = {json.dumps(urlparse(site).path)}, names = {json.dumps(names)}, p = location.pathname;\n"
+        f"  var base = {json.dumps(urlparse(site).path)}, names = {json.dumps(names)}, gone = {json.dumps(list(gone))};\n"
+        "  var p = location.pathname;\n"
         "  if (p.indexOf(base) !== 0) return;\n"
-        "  var rest = p.slice(base.length);\n"
-        '  if (names.indexOf(rest.split("/")[0]) !== -1) return;\n'
+        '  var rest = p.slice(base.length), first = rest.split("/")[0];\n'
+        "  if (gone.indexOf(first) !== -1) rest = rest.slice(first.length + 1);\n"
+        "  else if (names.indexOf(first) !== -1) return;\n"
         f"  location.replace(base + {json.dumps(default + '/')} + rest + location.search + location.hash);\n"
         "})();</script>\n"
     )
@@ -105,16 +112,16 @@ def page_paths(tree: Path, url: str) -> list[str]:
     return paths
 
 
-def write_root(out: Path, site: str, names: list[str], default: str) -> None:
+def write_root(out: Path, site: str, names: list[str], default: str, gone: list[str] = ()) -> None:
     for path in page_paths(out / default, version_url(site, default)):
-        if path.split("/")[0] in names:
+        if path.split("/")[0] in [*names, *gone]:
             raise ValueError(f"the old path of {path} is a version folder")
         stub = out / path / "index.html"
         stub.parent.mkdir(parents=True, exist_ok=True)
         stub.write_text(stub_html(path, site, default), encoding="utf-8")
     (out / "versions.json").write_text(versions_json(names), encoding="utf-8")
     page = (out / default / "404.html").read_text(encoding="utf-8")
-    (out / "404.html").write_text(redirect_404(page, site, names, default), encoding="utf-8")
+    (out / "404.html").write_text(redirect_404(page, site, names, default, gone), encoding="utf-8")
     (out / "robots.txt").write_text(robots_txt(site, names, default), encoding="utf-8")
     (out / "sitemap.xml").write_text(sitemap_index(site, default), encoding="utf-8")
 
@@ -134,9 +141,23 @@ def build(name: str, manual: Path, site: str, default: str, zensical: str, out: 
     for line in lines:
         print(f"[{name}] {line}")
     if run.returncode != 0:
-        raise SystemExit(f"[{name}] zensical failed with exit code {run.returncode}")
+        raise BuildFailed(f"zensical failed with exit code {run.returncode}")
     shutil.move(str(manual / "site" / f"versioned-{name}"), str(out / name))
     return [line for line in lines if line.strip() and not STATUS.match(line)]
+
+
+def build_all(names: list[str], default: str, build_one) -> tuple[dict[str, list[str]], list[str]]:
+    built, failed = {}, []
+    for name in names:
+        try:
+            built[name] = build_one(name)
+        except (BuildFailed, OSError, ValueError) as error:
+            if name == default:
+                raise SystemExit(f"[{name}] {error}")
+            # A GitHub Actions annotation, so a broken dev manual shows on the run while beta still publishes.
+            print(f"::warning::The {name} manual did not build ({error}), it is left out and its pages open the {default} manual")
+            failed.append(name)
+    return built, failed
 
 
 def main() -> None:
@@ -169,8 +190,8 @@ def main() -> None:
         shutil.rmtree(out)
     out.mkdir(parents=True, exist_ok=True)
 
-    warnings = {name: build(name, folder, site, args.default, args.zensical, out) for name, folder in versions.items()}
-    write_root(out, site, names, args.default)
+    warnings, failed = build_all(names, args.default, lambda name: build(name, versions[name], site, args.default, args.zensical, out))
+    write_root(out, site, list(warnings), args.default, failed)
     for name, lines in warnings.items():
         print(f"{name}: {len(lines)} warning lines")
 
