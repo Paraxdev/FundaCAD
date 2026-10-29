@@ -1,88 +1,26 @@
 import json
-import os
-import tempfile
-from pathlib import Path
 
 import pytest
 
 from fundacad_harness import Session
 from fundacad_harness.a11y import fresh_page
-from fundacad_harness.errors import Occluded
 from fundacad_harness.layout import clipped_controls
+from fundacad_harness.screens import (
+    THEMES,
+    close_settings,
+    open_example,
+    open_settings,
+    out_dir,
+    pick,
+    set_theme,
+    settled,
+    show_home,
+)
 
 pytestmark = [pytest.mark.browser, pytest.mark.smoke]
 
-THEMES = {"dark": "FundaCAD Noir", "light": "Solarized Light"}
 SIZES = (100, 150)
 WINDOW = (1366, 768)
-
-
-def out_dir() -> Path:
-    out = Path(os.environ.get("FUNDACAD_SIZE_OUT") or Path(tempfile.gettempdir()) / "fundacad-size")
-    out.mkdir(parents=True, exist_ok=True)
-    return out
-
-
-def _settled(s: Session) -> None:
-    s.page.wait_for_timeout(400)
-
-
-def pick(s: Session, field: str, option: str) -> None:
-    s.page.click(field)
-    s.page.get_by_role("option", name=option, exact=True).click()
-
-
-def again(s: Session, step) -> None:
-    try:
-        step()
-    except Occluded:
-        # On a loaded machine a menu can stay unstable past the 5 s click wait, once settled it takes the click.
-        s.page.keyboard.press("Escape")
-        s.settle()
-        s.page.wait_for_timeout(1000)
-        step()
-
-
-def open_settings(s: Session, category: str) -> None:
-    again(s, lambda: s.panel("settings"))
-    s.page.get_by_role("dialog", name="Preferences").wait_for()
-    s.page.get_by_role("tab", name=category, exact=True).click()
-
-
-def set_theme(s: Session, theme: str) -> None:
-    """Picks the theme through Settings and leaves it open on the Accessibility pane."""
-    open_settings(s, "Appearance")
-    pick(s, "#prefs-theme", THEMES[theme])
-    s.page.get_by_role("tab", name="Accessibility", exact=True).click()
-    _settled(s)
-
-
-def close_settings(s: Session) -> None:
-    # Escape, as the Close button can stay unstable past the click wait while an example rebuilds in SwiftShader.
-    s.page.keyboard.press("Escape")
-    s.page.get_by_role("dialog", name="Preferences").wait_for(state="hidden")
-    s.settle()
-    _settled(s)
-
-
-def show_home(s: Session) -> None:
-    again(s, lambda: s.menu("File/Home"))
-    s.page.locator('.home-example:has-text("Box with a lid")').wait_for()
-    _settled(s)
-
-
-def open_example(s: Session) -> None:
-    show_home(s)
-    s.page.evaluate(
-        "() => { window.__sizeOpened = false;"
-        " const off = window.store.onOpen(() => { window.__sizeOpened = true; off(); }); }"
-    )
-    s.page.click('.home-example:has-text("Box with a lid")')
-    s.page.wait_for_function(
-        "() => window.__sizeOpened && window.store.document.features.length > 0", timeout=60000, polling=100
-    )
-    s.settle()
-    _settled(s)
 
 
 def setting_path(s: Session) -> dict:
@@ -101,7 +39,7 @@ def setting_path(s: Session) -> dict:
     seen["zoom"] = s.page.evaluate("() => document.documentElement.style.zoom")
     fresh_page(s, lambda _s: None)
     s.settle()
-    _settled(s)
+    settled(s)
     seen["zoom_after_reload"] = s.page.evaluate("() => document.documentElement.style.zoom")
     s.page.keyboard.press("Control+0")
     seen["zoom_after_reset"] = s.page.evaluate("() => document.documentElement.style.zoom")

@@ -240,6 +240,19 @@ STEP dropped on a blank document, its import, first frame and orbit times printe
 `tests/browser/test_examples.py` runs them in the smoke set. The fixtures they
 open are described in `tools/harness/fixtures/README.md`.
 
+## Layout checks
+
+`fundacad_harness.layout` finds controls a person cannot reach at a large Interface size:
+`clipped_controls(page)` lists every rendered control off screen or cut by an ancestor that clips (a
+scroll container counts as reachable), `tab_walk(page)` presses Tab (or the key given) until focus
+comes back to its first stop and says for each stop whether it is whole and on top, and
+`cueless_scrollers(page)` lists every scroller with a hidden scrollbar and no visible "... above" or
+"... below" cue. `fundacad_harness.screens` gets a page to Settings, Home and an example through the
+UI. `tests/browser/test_size.py` checks 100 and 150 percent in a 1366 by 768 window and
+`tests/browser/test_reach.py` walks 200 percent in 1280 by 800 and 800 by 600 (640 by 400 and 400 by
+300 CSS px), both in the smoke set, with shots and results in `FUNDACAD_SIZE_OUT` (default the temp
+folder's `fundacad-size`).
+
 ## serve
 
 `fundacad-harness serve` (or `python -m fundacad_harness serve`) holds one session and answers
