@@ -753,8 +753,8 @@ export class Highlighter {
   }
 
   /** Moves the selection to exactly `want`, painting only what changed, so a box preview frame costs its delta and an
-   *  unchanged one nothing. False when nothing changed. */
-  /** With a `budget` (PREVIEW_PAINT) the bodies past it keep their picks for a later call, and `pending` says so. */
+   *  unchanged one nothing. False when nothing changed. With a `budget` (PREVIEW_PAINT) the bodies past it keep
+   *  their picks for a later call, and `pending` says so. */
   setSelection(
     want: {
       faces: ReadonlySet<number>;

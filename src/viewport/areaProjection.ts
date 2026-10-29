@@ -440,8 +440,8 @@ function faceCrossing(b: BodyArea, f: number, r: ScreenRect, probe: TriProbe, se
 }
 
 /** A window takes a body only when all of it is inside, a crossing as soon as
- *  one face is touched, so a window over an assembly leaves the plate behind. */
-/** Pending when `reachBudget` (screen points, as PREVIEW_REACH) ran out before every body and edge run the rect meets
+ *  one face is touched, so a window over an assembly leaves the plate behind.
+ *  Pending when `reachBudget` (screen points, as PREVIEW_REACH) ran out before every body and edge run the rect meets
  *  was projected: the take then holds only what was, and a later call goes on from there. */
 export function collectInBox(
   proj: AreaProjection,
