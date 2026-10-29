@@ -42,6 +42,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
 
       # Cheapest gate first: refuse agent/editor session artifacts and hardcoded
       # developer paths before spending 18 minutes on installers. This is a public
@@ -175,6 +177,7 @@ jobs:
         with:
           fetch-depth: 0
           filter: tree:0
+          persist-credentials: false
 
       - id: pick
         shell: bash
@@ -240,6 +243,8 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         # third_party/opencascade-rs is vendored in-repo (no submodules), and
         # this build DOES compile it, so a plain checkout is still enough.
+        with:
+          persist-credentials: false
 
       - name: Install Linux system dependencies
         if: matrix.platform == 'ubuntu-22.04'
@@ -673,6 +678,8 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
 
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
@@ -753,6 +760,8 @@ jobs:
             kind: appimage
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
 
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
@@ -826,6 +835,8 @@ jobs:
       # Before download-artifact: actions/checkout cleans the workspace by
       # default and would delete dist/.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
 
       # By pattern, so only this build's installers and bundles reach dist/.
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -1185,6 +1196,8 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
 
       - name: Install Linux system dependencies
         uses: ./.github/actions/linux-deps
@@ -1362,6 +1375,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
@@ -1437,6 +1452,7 @@ jobs:
         with:
           # A clean checkout would delete the warm target dir.
           clean: ${{ env.SELF_HOSTED != 'true' }}
+          persist-credentials: false
 
       - name: Free disk space
         if: env.SELF_HOSTED != 'true'

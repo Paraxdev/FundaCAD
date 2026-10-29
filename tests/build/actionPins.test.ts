@@ -111,3 +111,12 @@ describe("job permissions", () => {
     ]);
   });
 });
+
+describe("checkout credentials", () => {
+  it("leaves no repository token in the git config of any checkout", () => {
+    const steps = usesLines().filter((u) => u.ref.startsWith("actions/checkout@"));
+    expect(steps.length).toBeGreaterThan(0);
+    const kept = steps.filter((u) => !u.step.some((l) => /^\s+persist-credentials:\s*false\s*$/.test(l))).map((u) => u.where);
+    expect(kept).toEqual([]);
+  });
+});
