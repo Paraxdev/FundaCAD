@@ -11,7 +11,10 @@
   .btn-label,
   .ui-segment-label,
   .ui-field-label,
-  .ui-list-row-label {
+  .ui-list-row-label,
+  .home-example-name,
+  .home-example-line,
+  .param-row label {
     overflow: visible;
     white-space: normal;
     text-overflow: clip;
@@ -21,6 +24,10 @@
   .ui-segment {
     height: auto;
     white-space: normal;
+  }
+  // A row of tabs too wide for its dock starts a second row, a tab past the edge could not be read or clicked.
+  .ui-tabs:not(.ui-tabs-vertical) {
+    flex-wrap: wrap;
   }
   .ui-segmented-md .ui-segment,
   .ui-tabs-bar .ui-tab {

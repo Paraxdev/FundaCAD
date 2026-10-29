@@ -4,7 +4,7 @@ import pytest
 
 from fundacad_harness import Session
 from fundacad_harness.a11y import fresh_page
-from fundacad_harness.layout import clipped_controls
+from fundacad_harness.layout import clipped_controls, cut_labels
 from fundacad_harness.screens import (
     THEMES,
     close_settings,
@@ -55,7 +55,7 @@ def walk():
     state: dict = {}
 
     def check(s: Session, name: str) -> None:
-        found[name] = clipped_controls(s.page)
+        found[name] = clipped_controls(s.page) + cut_labels(s.page)
         try:
             s.screenshot(out / f"{name.replace(' ', '_')}.png")
         except Exception as e:

@@ -74,7 +74,8 @@ const sizeKeys = fmtKeys("Ctrl+Plus and Ctrl+Minus step it from anywhere in the 
       Buttons and labels grow to fit.
     </p>
   </div>
-  <div class="pref-card" data-a11y-size="labels">
+  <!-- Wide: four worded sizes cut each other short in a 290 px card once the Interface size passes 125 percent. -->
+  <div class="pref-card wide" data-a11y-size="labels">
     <div class="pref-head">
       <span class="pref-title">Viewport labels</span>
     </div>

@@ -247,11 +247,14 @@ open are described in `tools/harness/fixtures/README.md`.
 scroll container counts as reachable), `tab_walk(page)` presses Tab (or the key given) until focus
 comes back to its first stop and says for each stop whether it is whole and on top, and
 `cueless_scrollers(page)` lists every scroller with a hidden scrollbar and no visible "... above" or
-"... below" cue. `fundacad_harness.screens` gets a page to Settings, Home and an example through the
-UI. `tests/browser/test_size.py` checks 100 and 150 percent in a 1366 by 768 window and
-`tests/browser/test_reach.py` walks 200 percent in 1280 by 800 and 800 by 600 (640 by 400 and 400 by
-300 CSS px), both in the smoke set, with shots and results in `FUNDACAD_SIZE_OUT` (default the temp
-folder's `fundacad-size`).
+"... below" cue. `small_text(page)` lists every element whose rendered text is under the 11 px floor
+(SVG text at its drawn size) and `cut_labels(page)` every box in a base control that cuts its own
+text, by an ellipsis or a fixed size. `fundacad_harness.screens` gets a page to Settings, Home and an
+example through the UI. `tests/browser/test_size.py` checks 100 and 150 percent in a 1366 by 768
+window, `tests/browser/test_reach.py` walks 200 percent in 1280 by 800 and 800 by 600 (640 by 400 and
+400 by 300 CSS px) and `tests/browser/test_text_size.py` walks the axe screens with Comfortable text
+on, all in the smoke set, with shots and results in `FUNDACAD_SIZE_OUT` (default the temp folder's
+`fundacad-size`).
 
 ## serve
 

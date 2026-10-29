@@ -11,6 +11,13 @@ CONTROLS = (
     ' [tabindex]:not([tabindex="-1"])'
 )
 
+# The roots of the base components in src/components/ui, the controls Comfortable text must never cut.
+BASE = (
+    ".btn, .icon-btn, .chip, .key-chip, .ui-checkbox, .opt-row, .ui-field-row, .ui-field, .ui-list-row,"
+    " .ui-menu-item, .rail-btn, .ui-segment, .select-value, .ui-slider, .ui-switch-row, .ui-tab, .ui-unit-chip,"
+    " .float-card-head, .ui-panel-head"
+)
+
 # Only the ancestors on the containing block chain clip a box, so an absolute or fixed popover escapes the overflow
 # of the panel it sits in. A scrolling ancestor can bring a box into view, so the box moves into its scrollport.
 _WHY = r"""
@@ -149,3 +156,60 @@ def tab_walk(page: Any, limit: int = 200, key: str = "Tab") -> list[dict]:
 def cueless_scrollers(page: Any) -> list[str]:
     """Every rendered scroller with a hidden scrollbar and content past an edge that no visible cue names."""
     return page.evaluate(_CUELESS)
+
+
+# SVG text is drawn at its font size times the scale of its user space.
+_SMALL = (
+    "(floor) => {" + _WHY + r"""
+  const out = [];
+  const seen = new Set();
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    const el = n.parentElement;
+    if (!el || seen.has(el) || !n.data.trim()) continue;
+    seen.add(el);
+    const er = el.getBoundingClientRect();
+    if (er.width < 2 || er.height < 2 || el.closest('.sr-only, script, style, noscript, [hidden]')) continue;
+    if (!el.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
+    const range = document.createRange();
+    range.selectNodeContents(n);
+    const r = range.getBoundingClientRect();
+    if (r.width < 1 || r.height < 1 || r.right < 0 || r.bottom < 0 || r.left > innerWidth || r.top > innerHeight) continue;
+    let px = parseFloat(getComputedStyle(el).fontSize);
+    const m = el instanceof SVGGraphicsElement ? el.getScreenCTM() : null;
+    if (m) px *= Math.hypot(m.a, m.b);
+    if (px < floor - 0.01) out.push(`${name(el)}: ${+px.toFixed(2)}px`);
+  }
+  return out;
+}"""
+)
+
+_CUT = (
+    "(base) => {" + _WHY + r"""
+  const out = [];
+  for (const root of document.querySelectorAll(base)) {
+    if (!rendered(root) || !root.checkVisibility({ opacityProperty: true })) continue;
+    for (const el of [root, ...root.querySelectorAll('*')]) {
+      if (!el.textContent.trim() || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) continue;
+      // A visually hidden word is a 1 px box by design.
+      const r = el.getBoundingClientRect();
+      if (r.width < 2 || r.height < 2) continue;
+      const cs = getComputedStyle(el);
+      const x = cs.overflowX !== 'visible' && el.scrollWidth > el.clientWidth + 1;
+      const y = cs.overflowY !== 'visible' && el.scrollHeight > el.clientHeight + 1;
+      if (x || y) out.push(`${name(el)}: cuts its text in ${[x && 'x', y && 'y'].filter(Boolean).join(' and ')}`);
+    }
+  }
+  return [...new Set(out)];
+}"""
+)
+
+
+def small_text(page: Any, floor: float = 11) -> list[str]:
+    """Every element whose rendered text in the viewport is under `floor` CSS px, one line each."""
+    return page.evaluate(_SMALL, floor)
+
+
+def cut_labels(page: Any, base: str = BASE) -> list[str]:
+    """Every box in a rendered base control that cuts its own text, by an ellipsis or a fixed size."""
+    return page.evaluate(_CUT, base)
