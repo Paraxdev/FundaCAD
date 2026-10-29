@@ -31,6 +31,7 @@ pub mod stress;
 pub mod tools;
 pub mod ui;
 pub mod upload;
+pub mod write_target;
 
 /// For both the standalone binary and the desktop executable's `--mcp` mode.
 pub fn run_stdio() -> Result<(), ()> {

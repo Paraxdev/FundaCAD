@@ -63,11 +63,29 @@ path is reached except:
   and `.config` stay out of reach;
 - UNC paths, `\\.\` and `\\?\` device and verbatim paths, `C:name`, a colon
   in a name (an NTFS alternate data stream) and device names such as `NUL` or
-  `COM1`, refused on every platform.
+  `COM1`, refused on every platform;
+- the app's data folder (`<app data>`, which holds its plugins and their
+  approvals) and the per user folders whose files run at login: the Windows
+  Startup folders (`Microsoft\Windows\Start Menu\Programs\Startup` under
+  `%APPDATA%` and `%ProgramData%`), `~/.config/autostart` and
+  `~/.config/systemd/user` (under `XDG_CONFIG_HOME` when it is set) and
+  `~/Library/LaunchAgents`. These stay out in strict mode too, even inside a
+  given folder.
 
 The app's own folders (the system temp folder, `<app data>/recovery` and the
-blob dir, `FUNDACAD_BLOB_DIR`) are reached in full, as tempfile names its
-folders `.tmpXXXX`.
+blob dir, `FUNDACAD_BLOB_DIR`) are reached in full, inside the app's data
+folder too, as tempfile names its folders `.tmpXXXX`.
+
+`doc_save` writes only a `.funda` file (a `.fundab` path is told to use Save
+As in the app), and `export` without `separate` only a file with its format's
+extension (`.step` or `.stp`, `.stl`, `.3mf`, `.dxf`, `.svg`), any case. The
+name and the file a link points at are both checked. Neither replaces an
+existing file that does not look like the kind it writes (a FundaCAD file, or
+a file of the export format; an empty file is fine) unless the call passes
+`overwrite: true`. A `separate` export checks every file it would replace
+before it moves the first one. `export` refuses any format but STEP, STL,
+3MF, DXF and SVG, and `doc_save` refuses the app's recovery folder, since the
+app offers each file there back at launch.
 
 Strict mode keeps the server to a folder list. It is on when a folder is
 given with `--allow-path <folder>` (repeatable, after `--mcp` for
@@ -88,7 +106,7 @@ strict refusal names the folder that would let it through and how to give it.
 
 The check is made when the tool is called, so a folder swapped for a link
 after that, or a hard link, is not caught. In the default mode a write goes
-wherever the person's account can write, as it did before the check, so the
+wherever the person's account can write outside the places above, so the
 host's approval of `doc_save` and `export` (`destructiveHint`) is the guard.
 
 ```json
@@ -279,7 +297,7 @@ which a fresh engine could no longer start one and every build failed.
 | `measure` | exact measurements on the B-rep. One thing (`a`): a face's surface, area, outward normal, radius and axis; an edge's length, direction, circle and arc; a body's volume, area and size. Two (`a`, `b`): the minimum distance with both closest points, the gap between parallel planar faces (a wall), centre to centre or axis to axis distance (a hole pitch), and the angle between planes, straight edges and axes. A thing is a face or edge selector from `inspect` with its `body`, `{body, face: n}` or `{body, edge: n}` (inspect's F and E numbers, for the current build only), a body id or name, or `{point: [x, y, z]}`; `want` narrows it to `distance`, `angle` or `centres`. Text in mm and degrees to 3 places, then a `raw:` line with the unrounded reply. Changes nothing |
 | `view` | a PNG: orthographic, flat-shaded, with sections, body filtering and zoom |
 | `doc_import` | read a STEP, STL, 3MF, OBJ, BREP or GLB file in as a body to model against, by `path` or as inline `content`, compressed and in pieces if it is large |
-| `export` | STEP, STL, 3MF, OBJ, BREP. `separate` writes a file per body named after it, `body` one body, `layFlat` turns each part onto a flat face for printing |
+| `export` | STEP, STL, 3MF, DXF, SVG, to a path with that format's extension. `separate` writes a file per body named after it, `body` one body, `layFlat` turns each part onto a flat face for printing |
 | `guide_highlight` / `guide_wait` / `guide_clear` | guide mode, below: show the user a step in their own window and wait for them |
 
 `schema` is also served as an MCP resource at `fundacad://schema`.
