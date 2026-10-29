@@ -178,8 +178,9 @@ export class GhostLayer {
     let unsure = false;
     // One budget for the whole update, however many edges are picked.
     const budget = { left: TRIM_BUDGET, failed: false };
+    const sampling = sampleBudget();
     for (const edge of edges) {
-      const found = edgeFaceSamples(model, edge);
+      const found = edgeFaceSamples(model, edge, sampling);
       if (!found) continue; // can't tell the two faces apart here, skip THIS edge
       const geo = sweepBlendGhost(found.samples, size, kind, found.closed, budget);
       if (!geo) continue;
@@ -829,6 +830,30 @@ const OUTLINE_KEEP = 1e5;
 /** Triangle tests one edge may spend measuring how far its faces run; a face
  *  bigger than that is measured at every few samples only. */
 const REACH_BUDGET = 5e5;
+/** Triangle tests one ghost update spends on outlines and reaches over all its edges, however many are picked. An
+ *  edge past them goes bare, or measures its reach at fewer samples. */
+const UPDATE_OUTLINE_TESTS = 1e7;
+const UPDATE_REACH_TESTS = 5e6;
+
+/** The share of an update's budget that measures again the edges an earlier update cut short, so a big pick's drag
+ *  keeps its frame rate while they fill in over the next updates. */
+const RETRY_SHARE = 0.1;
+const RETRY_OUTLINE_TESTS = UPDATE_OUTLINE_TESTS * RETRY_SHARE;
+const RETRY_REACH_TESTS = UPDATE_REACH_TESTS * RETRY_SHARE;
+
+export interface SampleBudget {
+  outline: number;
+  reach: number;
+  /** What this update may spend on the edges an earlier one cut short. Without it they read back as cached. */
+  retry?: SampleBudget;
+  /** Set on `retry` once an edge came out short of it, so the rest wait for the next update. */
+  starved?: boolean;
+}
+export const sampleBudget = (): SampleBudget => ({
+  outline: UPDATE_OUTLINE_TESTS,
+  reach: UPDATE_REACH_TESTS,
+  retry: { outline: RETRY_OUTLINE_TESTS, reach: RETRY_REACH_TESTS },
+});
 
 let outlineScratch = new Float64Array(4096);
 
@@ -1020,6 +1045,9 @@ export interface EdgeGhostSamples {
 /** Keyed by the edge's `points` identity. Resolved once against the gesture's starting model, since the first preview
  *  already lacks the sharp corner this ghost sweeps. */
 const edgeSampleCache = new WeakMap<readonly Pt3[], EdgeGhostSamples>();
+/** Samples an update's spent budget cut short, with the model they were made on: a later update measures them again
+ *  there, not on a preview that has landed since. */
+const partialSamples = new WeakMap<EdgeGhostSamples, ModelView>();
 
 /** `from` turned by the rotation that takes tangent `t0` to `t1`, what carries
  *  an inset sample's wedge out to the edge's true end. */
@@ -1042,9 +1070,45 @@ function endSample(point: Pt3, t1: THREE.Vector3 | null, s: EdgeSample): EdgeSam
 
 /** Face 1 pinned to the same faceId throughout. Null when the body is gone, the edge has fewer than 2 points or too few
  *  samples find their faces; a single unresolved sample (a seam, a T-junction) is skipped. */
-function edgeFaceSamples(model: ModelView, edge: BlendGhostEdge): EdgeGhostSamples | null {
+function edgeFaceSamples(
+  model: ModelView,
+  edge: BlendGhostEdge,
+  budget: SampleBudget = sampleBudget(),
+): EdgeGhostSamples | null {
   const cached = edgeSampleCache.get(edge.points);
-  if (cached) return cached;
+  if (cached) return budget.retry ? sampledAgain(edge, cached, budget.retry) : cached;
+  const fresh = budget.outline >= UPDATE_OUTLINE_TESTS && budget.reach >= UPDATE_REACH_TESTS;
+  const made = measureEdge(model, edge, budget);
+  if (!made) return null;
+  edgeSampleCache.set(edge.points, made.samples);
+  // With the whole budget in hand a cut short edge is as good as it gets, so only a starved one is measured again.
+  if (made.short && !fresh) partialSamples.set(made.samples, model);
+  return made.samples;
+}
+
+/** A retry is kept only when it comes out whole. One short of a whole slice will not do better in a later update
+ *  either, so that edge keeps what it has. */
+function sampledAgain(edge: BlendGhostEdge, cached: EdgeGhostSamples, retry: SampleBudget): EdgeGhostSamples {
+  const model = partialSamples.get(cached);
+  if (!model || retry.starved) return cached;
+  const whole = retry.outline >= RETRY_OUTLINE_TESTS && retry.reach >= RETRY_REACH_TESTS;
+  const again = measureEdge(model, edge, retry);
+  if (again && !again.short) {
+    edgeSampleCache.set(edge.points, again.samples);
+    return again.samples;
+  }
+  retry.starved = true;
+  if (whole || !again) partialSamples.delete(cached);
+  return cached;
+}
+
+/** `short` when the budget, not the edge's own limits, cut its outline or reach. */
+function measureEdge(
+  model: ModelView,
+  edge: BlendGhostEdge,
+  budget: SampleBudget,
+): { samples: EdgeGhostSamples; short: boolean } | null {
+  let short = false;
   const body = model.bodies.find((b) => b.id === edge.body);
   if (!body || edge.points.length < 2) return null;
   const closed = isClosedPolyline(edge.points);
@@ -1116,27 +1180,35 @@ function edgeFaceSamples(model: ModelView, edge: BlendGhostEdge): EdgeGhostSampl
 
   const m = wedges.length;
   const straight = !closed && wedges.every((w) => w.tangent.dot(wedges[0]!.tangent) > 1 - 1e-12);
-  const lineCuts = straight
+  const scan = straight && grid.count < budget.outline;
+  const cutCap = Math.min(OUTLINE_CUTS, budget.outline - grid.count);
+  if (straight && (!scan || cutCap < OUTLINE_CUTS)) short = true;
+  const lineCuts = scan
     ? cutsAlongLine(
         grid,
         wedges[0]!.tangent,
         wedges.map((w) => w.pv),
-        OUTLINE_CUTS,
+        cutCap,
       )
     : null;
+  if (scan) budget.outline -= grid.count + (lineCuts?.reduce((sum, l) => sum + l.length, 0) ?? 0);
   const reaches = ([0, 1] as const).map((slot) => {
     const face = (j: number) => wedges[j]!.faces[slot];
-    const size = (j: number) => faceTris(grid, face(j)).length;
     const out = new Array<number>(m).fill(NaN);
     for (let j = 0; j < m; j++) {
       const w = wedges[j]!;
-      if (lineCuts) {
-        out[j] = faceReach(grid, face(j), lineCuts[j]!, w.pv, wedges[0]!.tangent, slot ? w.d2 : w.d1, grid.tolerance);
+      const tris = lineCuts ? lineCuts[j]! : faceTris(grid, face(j));
+      const stride = lineCuts ? 1 : Math.ceil((m * tris.length) / Math.max(1, Math.min(REACH_BUDGET, budget.reach)));
+      if (!lineCuts && stride > Math.ceil((m * tris.length) / REACH_BUDGET)) short = true;
+      if (stride > 1 && j % stride && j < m - 1 && face(j - 1) === face(j) && face(j + 1) === face(j)) continue;
+      if (tris.length > budget.reach) {
+        short = true;
+        out[j] = Infinity;
         continue;
       }
-      const stride = Math.ceil((m * size(j)) / REACH_BUDGET);
-      if (stride > 1 && j % stride && j < m - 1 && face(j - 1) === face(j) && face(j + 1) === face(j)) continue;
-      out[j] = faceReach(grid, face(j), faceTris(grid, face(j)), w.pv, w.tangent, slot ? w.d2 : w.d1, grid.tolerance);
+      budget.reach -= tris.length;
+      const tangent = lineCuts ? wedges[0]!.tangent : w.tangent;
+      out[j] = faceReach(grid, face(j), tris, w.pv, tangent, slot ? w.d2 : w.d1, grid.tolerance);
     }
     // In between, the nearer end of the face measured on either side.
     for (let j = 0, last = -1; j < m; j++) {
@@ -1151,7 +1223,9 @@ function edgeFaceSamples(model: ModelView, edge: BlendGhostEdge): EdgeGhostSampl
     return out;
   });
 
-  let sectioned = !!lineCuts || (!straight && grid.count * m <= OUTLINE_TESTS);
+  let sectioned = !!lineCuts || (!straight && grid.count * m <= Math.min(OUTLINE_TESTS, budget.outline));
+  if (sectioned && !lineCuts) budget.outline -= grid.count * m;
+  if (!straight && !sectioned && grid.count * m <= OUTLINE_TESTS) short = true;
   let cuts = 0;
   const samples: EdgeSample[] = wedges.map((w, j) => {
     const sample: EdgeSample = {
@@ -1190,9 +1264,7 @@ function edgeFaceSamples(model: ModelView, edge: BlendGhostEdge): EdgeGhostSampl
     if (head) samples.unshift(head);
     if (tail) samples.push(tail);
   }
-  const out = { samples, closed };
-  edgeSampleCache.set(edge.points, out);
-  return out;
+  return { samples: { samples, closed }, short };
 }
 
 export { resampleEdge, facesAtPoint, edgeFaceSamples, bodyOutline };

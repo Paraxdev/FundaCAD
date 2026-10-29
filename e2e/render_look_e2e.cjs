@@ -176,7 +176,8 @@ const check = (name, ok, detail) => {
     await page.keyboard.press("Control+Comma");
     await page.click('[data-category="viewport"]');
     await page.waitForSelector("#prefs-bloom", { state: "visible", timeout: 5000 });
-    await page.fill("#prefs-bloom", String(level));
+    // The base Slider puts the id on its wrapper and speaks percent, so the range input inside takes 0 to 100.
+    await page.fill("#prefs-bloom input[type=range]", String(Math.round(level * 100)));
     await page.waitForTimeout(200);
     // The close BUTTON, not Escape: the focus is in the slider that was just
     // used, which swallows it, and a dialog left standing over the viewport

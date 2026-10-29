@@ -17,6 +17,7 @@ import {
   type DragHandle,
 } from "./manipulator";
 import { CanvasGesture } from "./canvasGesture";
+import { HeldSignal } from "./heldEdit";
 import { commitDecision } from "./edgeDragMath";
 import { deltaForDiameter, deltaForRadius, radialDrag, type RoundFace } from "./radialDrag";
 import { offeredResize, resizeAxis, type OfferedResize, type ResizeAxis } from "./pressPullAxis";
@@ -77,6 +78,7 @@ export class FaceOffsetTool {
   private grabProj = 0;
   private downPos = { x: 0, y: 0 };
   private downOnGizmo = false;
+  private readonly heldSignal = new HeldSignal();
 
   private previewTimer: number | null = null;
   private unsubBuild: (() => void) | null = null;
@@ -576,6 +578,7 @@ export class FaceOffsetTool {
   }
 
   private refreshPreview(now = false) {
+    this.heldSignal.sync(this.pending);
     this.refreshRefusal();
     this.prompt();
     this.clearPreviewTimer();
@@ -707,6 +710,26 @@ export class FaceOffsetTool {
     this.onDone?.(null);
   }
 
+  /** An offset dragged or typed that Enter would write. */
+  get pending(): boolean {
+    return this.active && this.phase === "drag" && !this.neutral;
+  }
+
+  get dragging(): boolean {
+    return this.grabbing;
+  }
+
+  /** Told when `pending` turns on or off, for the unsaved mark and the close guard. */
+  onHeldChange(fn: () => void): () => void {
+    return this.heldSignal.on(fn);
+  }
+
+  /** For a save: the offset is written as Enter writes it, which may decline and keep the tool open. A drag still
+   *  under the hand is left alone. */
+  confirmHeld() {
+    if (this.pending && !this.dragging) this.commit();
+  }
+
   private cleanup() {
     const el = this.viewport.domElement;
     this.gesture.detach();
@@ -733,6 +756,7 @@ export class FaceOffsetTool {
     this.axisAsk++;
     this.toggleKind = null;
     setPrompt(null);
+    this.heldSignal.sync(this.pending);
   }
 
   private disposeGizmo() {

@@ -82,6 +82,7 @@ import { installSketchStateBridge } from "./sketchStateBridge";
 import { createActions } from "./actions";
 import { installKeyboard } from "./keyboard";
 import { installTitlebar } from "./titlebar";
+import { installAnnouncements } from "./announcements";
 import { beforeUpdate, installUnsavedGuard } from "./unsavedGuard";
 import { installContextMenuGuard } from "../ui/contextMenuGuard";
 import { installPointerKind } from "../input/pointerKind";
@@ -543,6 +544,7 @@ export function mountUi(e: Engine): void {
   scheduleStartupUpdateCheck(beforeUpdate(e));
 
   installTitlebar(e);
+  installAnnouncements(e);
   installUnsavedGuard(e);
   installContextMenuGuard();
   installPointerKind();

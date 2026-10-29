@@ -2,6 +2,19 @@
   display: none !important;
 }
 
+// Read by screen readers, never seen. Not display:none or visibility:hidden, which drop it from the tree.
+.sr-only {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
 .prompt {
   position: absolute;
   top: var(--s-5);
@@ -154,6 +167,20 @@
   color: var(--accent-hot);
   background: var(--hover-wash);
 }
+/* The element itself is the 24px target, so a bounding box scan reads it; the hover wash stays chip sized inside. */
+.dim-field .dim-unit {
+  min-width: 24px;
+  min-height: 24px;
+  /* Over .ui-unit-chip, which the chip also wears and which loads later. */
+  justify-content: center;
+  padding: 3px 2px;
+  background-clip: content-box;
+  border-radius: 8px;
+}
+/* The picker's own wash rules use the background shorthand, which resets the clip. */
+.dim-field .dim-unit.is-picker:is(:hover, :active, .is-open) {
+  background-clip: content-box;
+}
 .dim-unit-menu {
   position: fixed;
   z-index: 3200;
@@ -174,7 +201,8 @@
   padding: var(--s-2) var(--s-3);
   cursor: pointer;
 }
-.dim-unit-item:hover {
+.dim-unit-item:hover,
+.dim-unit-item.is-active {
   background: var(--accent-tint);
   color: var(--accent-hot);
 }
@@ -286,10 +314,13 @@
 .profile-chip-wrap[hidden] {
   display: none;
 }
-.dim-btn.profile-chip {
+/* The chip is Button sm ghost held to the box's 24px row; .btn rules load later, so these outrank them. */
+.dim-btn.profile-chip.btn {
   width: auto;
+  min-height: 0;
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: var(--s-1);
   padding: 0 var(--s-2) 0 var(--s-1);
   font-size: 11px;
@@ -297,22 +328,19 @@
   font-variant-numeric: tabular-nums;
   color: var(--text-dim);
   cursor: ew-resize;
-  transition:
-    border-color 0.12s,
-    background 0.12s,
-    color 0.12s;
 }
-.dim-btn.profile-chip:hover,
-.dim-btn.profile-chip.open {
+.dim-btn.profile-chip.btn:hover,
+.dim-btn.profile-chip.btn.open {
   color: var(--text);
 }
-.dim-btn.profile-chip.on {
+.dim-btn.profile-chip.btn.on,
+.dim-btn.profile-chip.btn.on:hover {
   color: var(--accent-hot);
 }
-.dim-btn.profile-chip.scrubbing {
+.dim-btn.profile-chip.btn.scrubbing {
   background: color-mix(in srgb, var(--accent) 24%, var(--panel));
 }
-.profile-chip-value {
+.profile-chip .profile-chip-value {
   min-width: 38px;
   text-align: left;
 }
@@ -368,16 +396,19 @@
 }
 .profile-panel-head {
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: var(--s-3);
+  align-items: center;
+  gap: var(--s-2);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.4px;
   text-transform: uppercase;
   color: var(--text-mute);
 }
+.profile-panel-title {
+  margin-right: auto;
+}
 .profile-panel-value {
+  min-width: 52px;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: normal;
@@ -389,82 +420,57 @@
   display: flex;
   gap: var(--s-1);
 }
-.profile-preset {
+/* Presets are Button tiles; the panel keeps their small dim label, .is-on lights the chosen one. */
+.profile-presets .profile-preset {
+  --tile-pad: var(--s-1) 0 3px;
   flex: 1;
-  display: flex;
-  flex-direction: column;
   align-items: center;
   gap: 2px;
-  padding: var(--s-1) 0 3px;
   min-width: 36px;
-  border: 1px solid transparent;
-  border-radius: var(--r-sm);
-  background: var(--panel-2);
   color: var(--text-dim);
   font-size: 10px;
   font-weight: 600;
-  cursor: pointer;
-  transition:
-    border-color 0.12s,
-    background 0.12s,
-    color 0.12s;
 }
-.profile-preset:hover {
+.profile-presets .profile-preset:hover:not(.is-on) {
   color: var(--text);
 }
-.profile-preset.active {
-  color: var(--accent-hot);
-  background: var(--accent-tint);
-}
-.profile-track {
+/* The base Slider, filled from the circular fillet out to the value, with a notch there. */
+.profile-panel .profile-slider {
   position: relative;
-  height: 18px;
+  display: flex;
   margin: 2px auto 0;
-  cursor: ew-resize;
-  touch-action: none;
 }
-.profile-track::before {
+.profile-slider::before {
   content: "";
   position: absolute;
-  left: 0;
-  right: 0;
-  top: 7px;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--line-strong);
-}
-.profile-track-fill {
-  position: absolute;
-  top: 7px;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--accent);
-}
-.profile-track-notch {
-  position: absolute;
   left: 50%;
-  top: 3px;
+  top: 50%;
   width: 2px;
   height: 12px;
-  margin-left: -1px;
+  margin: -6px 0 0 -1px;
   border-radius: 1px;
   background: var(--text-mute);
 }
-.profile-track-knob {
-  position: absolute;
-  top: 3px;
-  width: 12px;
-  height: 12px;
-  margin-left: -6px;
-  border-radius: 50%;
-  background: var(--accent);
-  border: 2px solid var(--panel);
-  box-shadow: 0 0 0 1px var(--accent);
-  transition: transform 0.1s;
+.profile-slider .ui-slider-input {
+  position: relative;
 }
-.profile-track:hover .profile-track-knob,
-.profile-track.scrubbing .profile-track-knob {
-  transform: scale(1.2);
+.profile-slider .ui-slider-input::-webkit-slider-runnable-track {
+  background: linear-gradient(
+    to right,
+    var(--check-off) var(--profile-from),
+    var(--accent) var(--profile-from),
+    var(--accent) var(--profile-to),
+    var(--check-off) var(--profile-to)
+  );
+}
+.profile-slider .ui-slider-input::-moz-range-track {
+  background: linear-gradient(
+    to right,
+    var(--check-off) var(--profile-from),
+    var(--accent) var(--profile-from),
+    var(--accent) var(--profile-to),
+    var(--check-off) var(--profile-to)
+  );
 }
 .profile-track-ends {
   display: flex;

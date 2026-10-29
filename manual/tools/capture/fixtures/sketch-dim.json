@@ -1,0 +1,12 @@
+{
+  "version": 10,
+  "parameters": {},
+  "features": [
+    { "id": "s", "type": "sketch", "plane": "XY", "name": "Plate",
+      "entities": [
+        { "type": "rectangle", "id": "r1", "width": 40, "height": 20, "x": 20, "y": 10 },
+        { "type": "circle", "id": "c1", "radius": 4, "x": 12, "y": 10 }
+      ],
+      "constraints": [{ "type": "fix", "e": "r1", "p": 0 }] }
+  ]
+}

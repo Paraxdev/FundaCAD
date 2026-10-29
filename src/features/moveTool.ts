@@ -23,6 +23,7 @@ import {
   MIN_SCALE,
 } from "./transformGizmo";
 import { CanvasGesture } from "./canvasGesture";
+import { HeldSignal } from "./heldEdit";
 import { RotateDial } from "../viewport/rotateDial";
 import { themedAxis } from "../viewport/originTriad";
 import { overlayMaterial } from "../viewport/overlayMaterial";
@@ -134,6 +135,7 @@ export class MoveTool {
   /** Raised by a body selection, so it draws only with the handles overlay on. Kept over a drag's re-open. */
   ambient = false;
   private unwatchOverlays: (() => void) | null = null;
+  private readonly held = new HeldSignal();
 
   private readonly gesture: CanvasGesture;
 
@@ -470,11 +472,31 @@ export class MoveTool {
     );
   }
 
+  get dragging(): boolean {
+    return !!this.grab;
+  }
+
+  get inSketch(): boolean {
+    return !!this.target?.inSketch;
+  }
+
+  /** Told when `pending` turns on or off, for the unsaved mark and the close guard. */
+  onHeldChange(fn: () => void): () => void {
+    return this.held.on(fn);
+  }
+
   /** For a command that needs the gizmo out of the way: what was dragged is written, as Enter would, and the
    *  session ends. */
   settle() {
     this.dropPendingReopen();
     this.commit();
+  }
+
+  /** For a save: what was dragged or typed is written as Enter writes it, and the gizmo comes back. A drag still
+   *  under the hand, or a value Enter would refuse, is left alone. */
+  confirmHeld() {
+    if (this.grab || !this.pending || this.inSketch || this.typedWithoutHandle()) return;
+    this.commitAndReopen();
   }
 
   /** A typed value only means something along a handle, so one typed before any handle was picked is refused. */
@@ -612,6 +634,7 @@ export class MoveTool {
       this.dial.placeLabel((w) => this.viewport.projectToScreen(w));
     }
     this.applyTyped();
+    this.held.sync(this.pending);
     this.gesture.frame();
   }
 
@@ -921,5 +944,6 @@ export class MoveTool {
     this.scl.set(1, 1, 1);
     this.pivotSnapped = false;
     setPrompt(null);
+    this.held.sync(this.pending);
   }
 }

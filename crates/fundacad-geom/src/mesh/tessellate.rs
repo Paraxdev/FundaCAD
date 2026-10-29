@@ -70,6 +70,7 @@ pub fn tessellate_with(
     let mut out = Tessellation::default();
     let mut normals: Option<Vec<f64>> = None;
     for fid in 0..access.face_count() {
+        crate::heartbeat::beat();
         let Some(mut tri) = access.face_triangulation(fid, params.display) else {
             continue;
         };

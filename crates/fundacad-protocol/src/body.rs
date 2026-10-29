@@ -55,6 +55,17 @@ pub(crate) const F32: &str = "f32";
 pub(crate) const U32: &str = "u32";
 
 impl FullBody {
+    /// About what this body takes on the wire, its buffers and owner keys.
+    pub fn wire_size(&self) -> usize {
+        let mut n =
+            self.positions.len() + self.indices.len() + self.face_ids.len() + self.normals.as_ref().map_or(0, Vec::len);
+        for e in &self.edges {
+            n += 3 * e.points.len() + 1;
+        }
+        let owners = self.fields.get("faceOwners").and_then(Value::as_array).map_or(0, Vec::len);
+        4 * n + 24 * owners + 256
+    }
+
     pub fn new(id: impl Into<Value>, name: impl Into<Value>, etag: impl Into<Value>) -> Self {
         let mut fields = Map::new();
         fields.insert("id".into(), id.into());
@@ -138,15 +149,7 @@ impl WireBody {
     pub fn wire_size(&self) -> usize {
         match self {
             WireBody::Stub(_) => 128,
-            WireBody::Full(b) => {
-                let mut n =
-                    b.positions.len() + b.indices.len() + b.face_ids.len() + b.normals.as_ref().map_or(0, Vec::len);
-                for e in &b.edges {
-                    n += 3 * e.points.len() + 1;
-                }
-                let owners = b.fields.get("faceOwners").and_then(Value::as_array).map_or(0, Vec::len);
-                4 * n + 24 * owners + 256
-            }
+            WireBody::Full(b) => b.wire_size(),
         }
     }
 

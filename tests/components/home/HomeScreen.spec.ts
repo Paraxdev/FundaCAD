@@ -8,6 +8,7 @@ import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { useModalStore } from "../../../src/stores/modals";
 import { useHomeStore } from "../../../src/stores/home";
+import { useDialogStore } from "../../../src/stores/dialogs";
 import { choose } from "../../../src/ui/choice";
 import type { HomeCallbacks } from "../../../src/ui/home";
 import type { OpenOutcome } from "../../../src/io/files";
@@ -23,6 +24,7 @@ import ContextMenuHost from "../../../src/components/overlays/ContextMenuHost.vu
 import HomeScreen from "../../../src/components/home/HomeScreen.vue";
 import ModalHost from "../../../src/components/overlays/ModalHost.vue";
 import { MANUAL_URL } from "../../../src/ui/welcome";
+import { ago } from "../../../src/ui/timeAgo";
 
 enableAutoUnmount(afterEach);
 
@@ -131,6 +133,19 @@ describe("HomeScreen", () => {
     expect($(".modal-close")?.getAttribute("type")).toBe("button");
   });
 
+  it("the header's Accessibility button opens Preferences on Accessibility and leaves Home under it", () => {
+    const { home } = open();
+    const btn = $(".home-head .home-a11y")!;
+    expect([btn.tagName, btn.getAttribute("type"), btn.textContent?.trim()]).toEqual([
+      "BUTTON",
+      "button",
+      "Accessibility",
+    ]);
+    btn.click();
+    const d = useDialogStore();
+    expect([d.preferences, d.prefsCategory, home.visible]).toEqual([true, "access", true]);
+  });
+
   it("shows a card per recent document, the name escaped once", () => {
     open([
       { path: "C:/work/Bracket & Plate.sindri", openedAt: 2 },
@@ -140,6 +155,15 @@ describe("HomeScreen", () => {
     expect(names.map((n) => n.textContent)).toEqual(["Bracket & Plate", "gear"]);
     expect(names[0]!.innerHTML).not.toContain("&amp;amp;");
     expect($(".home-card")!.getAttribute("title")).toBe("C:/work/Bracket & Plate.sindri");
+  });
+
+  it("describes a card by its full path, so a screen reader that skips the title still hears it", () => {
+    open([{ path: "C:/work/gear.funda", openedAt: 1 }]);
+    const card = $(".home-card")!;
+    const desc = document.getElementById(card.getAttribute("aria-describedby") ?? "");
+    expect(desc?.textContent).toBe("C:/work/gear.funda");
+    expect(desc?.hidden).toBe(true);
+    expect(card.contains(desc)).toBe(false);
   });
 
   it("says where recent documents are in the browser build", () => {
@@ -159,6 +183,48 @@ describe("HomeScreen", () => {
     w.unmount();
     await nextTick();
     expect(useModalStore().depth).toBe(0);
+  });
+
+  // The title bar and the workspace that Home covers, as App.vue lays them out.
+  function page() {
+    document.body.insertAdjacentHTML(
+      "afterbegin",
+      '<header id="titlebar"><button id="home-btn"></button><button id="undo-btn"></button></header>' +
+        '<div id="main"><button id="in-page"></button></div>',
+    );
+    return (sel: string) => document.querySelector<HTMLElement>(sel)!;
+  }
+  const inert = (el: Element) => !!el.closest("[inert]");
+
+  it("is a modal dialog that makes the page behind inert, all but the Home toggle, until it closes", async () => {
+    const at = page();
+    const { w } = open();
+    expect($(".home")!.getAttribute("aria-modal")).toBe("true");
+    expect([at("#undo-btn"), at("#in-page"), at("#home-btn"), $(".home")!].map(inert)).toEqual([
+      true,
+      true,
+      false,
+      false,
+    ]);
+    w.unmount();
+    await nextTick();
+    expect($$("[inert]")).toEqual([]);
+  });
+
+  it("gives focus back to its opener once the page is live again", async () => {
+    const at = page();
+    at("#in-page").focus();
+    const { w } = open();
+    expect(document.activeElement).not.toBe(at("#in-page"));
+    w.unmount();
+    expect(document.activeElement).toBe(at("#in-page"));
+  });
+
+  it("lands on the workspace when it closes with no opener, as after launch", () => {
+    const at = page();
+    const { w } = open();
+    w.unmount();
+    expect(document.activeElement).toBe(at("#main"));
   });
 
   it("closes on Escape and on the close button", async () => {
@@ -695,6 +761,74 @@ describe("HomeScreen", () => {
       expect(home.visible).toBe(true);
       key("Escape");
       expect(home.visible).toBe(false);
+    });
+
+    it("takes focus on its heading and gives it to the card's Versions button on close", async () => {
+      await drawerFor({ [P]: hist });
+      const heading = $(".home-drawer-title")!;
+      expect(heading.tagName).toBe("H2");
+      expect(document.activeElement).toBe(heading);
+      $(".home-drawer-close")!.click();
+      await nextTick();
+      expect($(".home-drawer")).toBeNull();
+      expect(document.activeElement).toBe($(".home-card-versions"));
+    });
+
+    it("gives focus to the card even when the click left focus elsewhere, as WebKit does", async () => {
+      await drawerFor({ [P]: hist });
+      key("Escape");
+      await nextTick();
+      $(".home-search input")?.focus();
+      $(".home-card-versions")!.click();
+      await flushPromises();
+      expect(document.activeElement).toBe($(".home-drawer-title"));
+      $$(".home-version-copy")[0]!.focus();
+      key("Escape");
+      await nextTick();
+      expect(document.activeElement).toBe($(".home-card-versions"));
+    });
+
+    it("leaves focus alone when it moved out of the drawer before it closed", async () => {
+      await drawerFor({ [P]: hist });
+      const other = $(".home-report")!;
+      other.focus();
+      key("Escape");
+      await nextTick();
+      expect($(".home-drawer")).toBeNull();
+      expect(document.activeElement).toBe(other);
+    });
+
+    it("names each version action after its version and time", async () => {
+      await drawerFor({ [P]: hist });
+      const names = (sel: string) => $$(sel).map((b) => b.getAttribute("aria-label"));
+      expect(names(".home-version-restore")).toEqual([`Restore msg v3, ${ago(3)}`, `Restore msg v1, ${ago(1)}`]);
+      expect(names(".home-version-copy")).toEqual([`Open copy of msg v3, ${ago(3)}`, `Open copy of msg v1, ${ago(1)}`]);
+      expect(names(".home-branch-open")).toEqual(["Open the document on wide", "Open the document on main"]);
+    });
+
+    it("tells apart versions that share a message and a time by their place in the list", async () => {
+      const saved = (id: string, parent: string | null) => ({
+        ...row(id, parent, "main", 5),
+        message: "Saved version",
+      });
+      const same: DocSummary = {
+        format: "funda",
+        versions: [saved("s1", null), { ...row("s2", "s1", "main", 5) }, saved("s3", "s2")],
+        branches: { main: "s3" },
+        current: "main",
+      };
+      await drawerFor({ [P]: same });
+      const names = (sel: string) => $$(sel).map((b) => b.getAttribute("aria-label"));
+      expect(names(".home-version-restore")).toEqual([
+        `Restore Saved version, ${ago(5)}, 1 of 3`,
+        `Restore msg s2, ${ago(5)}`,
+        `Restore Saved version, ${ago(5)}, 3 of 3`,
+      ]);
+      expect(names(".home-version-copy")).toEqual([
+        `Open copy of Saved version, ${ago(5)}, 1 of 3`,
+        `Open copy of msg s2, ${ago(5)}`,
+        `Open copy of Saved version, ${ago(5)}, 3 of 3`,
+      ]);
     });
 
     it("says when there is no history, the file is too old, or it cannot be read", async () => {

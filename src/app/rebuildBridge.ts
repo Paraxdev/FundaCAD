@@ -1,5 +1,6 @@
 import { toast } from "../ui/toast";
 import { featureFailureReport } from "../ui/errorReport";
+import { failureKey } from "../ui/buildAnnouncement";
 import { featureMeta } from "../ui/featureMeta";
 import { repairableDiagFor } from "../features/repickReference";
 import { contributedPaint, contributedRelief, onContribChange } from "../plugins/contrib";
@@ -161,7 +162,13 @@ export function installRebuildBridge(e: Engine): void {
             detail: err.detail,
             diagnostics: (s.result?.diagnostics ?? []).filter((d) => d.feature_id === id),
           });
-          toast(`${label} failed: ${err.message}`, { kind: "error", action, detail, source: id });
+          toast(`${label} failed: ${err.message}`, {
+            kind: "error",
+            action,
+            detail,
+            source: id,
+            announceKey: failureKey(id),
+          });
           if (id === lastCommittedId) e.selectFeature(id, false);
         }
         prevErrorIds = ids;

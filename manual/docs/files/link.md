@@ -2,8 +2,17 @@
 
 Insert Document puts one FundaCAD document into another, for a part that has to fit around something you modelled earlier.
 
-<!-- shot: insert-document | Append or Link choice -->
+1. Choose Insert Document under Insert on the rail.
+2. Pick a FundaCAD file.
+3. Choose Append to copy the shape in once, or Link to also remember the file.
 
-Append copies the shape in once. Link copies it too, but remembers the file, so you can update it when the original changes. What arrives is a finished body without its steps.
+![Insert Document asking Append or Link](../img/insert-document.png)
 
-If the original has changed, opening the document shows an Update button. Unlink keeps the shape and cuts the connection.
+The shape arrives as a body, without the steps that made it.
+
+## Keep a link up to date
+
+When a linked file has changed, opening the document says so and offers Update. You can also right click the step in the History:
+
+- **Update from linked file** reads the file again.
+- **Unlink** keeps the shape and forgets the file.

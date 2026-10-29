@@ -76,6 +76,7 @@ function close() {
           :min="0.01"
           :max="50"
           :step="0.01"
+          label="Clearance"
           tip="Clearance"
           :model-value="threshold"
           @update:model-value="setThreshold"

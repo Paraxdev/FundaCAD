@@ -97,6 +97,18 @@ describe("the Parameters section", () => {
     expect(w.findAll(".xp-check")).toHaveLength(0); // the check holds
   });
 
+  it("names every control by its parameter, so a screen reader does not read a bare value", async () => {
+    const { w } = await render();
+    const named = w
+      .findAll(".xp-row input, .xp-row select")
+      .map((c) => [c.element.closest(".xp-row")?.getAttribute("data-param"), c.attributes("aria-label")]);
+    expect(named).toEqual([
+      ["gap", "gap"],
+      ["solidCore", "solidCore"],
+      ["joinedRings", "joinedRings"],
+    ]);
+  });
+
   it("a toggle writes 0, a typed number is clamped by its control, and a failing check shows", async () => {
     const { w, store } = await render();
     await w.find('[data-param="solidCore"] input[type="checkbox"]').setValue(false);

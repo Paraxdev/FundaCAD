@@ -37,6 +37,7 @@ import {
   type SizeQuantity,
 } from "./sizeQuantity";
 import { CanvasGesture } from "./canvasGesture";
+import { HeldSignal } from "./heldEdit";
 import { trackedFace } from "./holeFace";
 import { commitDecision } from "./edgeDragMath";
 import {
@@ -188,6 +189,7 @@ export class PressPullTool {
 
   private dim = new DimInput();
   private onDone: ((id: string | null) => void) | null = null;
+  private readonly held = new HeldSignal();
 
   private readonly gesture: CanvasGesture;
 
@@ -371,6 +373,7 @@ export class PressPullTool {
       this.taperGrabbing = false;
       this.viewport.domElement.style.cursor = this.taperHovering ? "grab" : "default";
       this.dim.focus();
+      this.held.sync(this.pending);
       return;
     }
     if (this.grabbing) {
@@ -378,6 +381,7 @@ export class PressPullTool {
       this.flushPreviewNow();
       this.viewport.domElement.style.cursor = this.hovering ? "grab" : "default";
       this.dim.focus();
+      this.held.sync(this.pending);
       return;
     }
     const moved = Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
@@ -619,6 +623,7 @@ export class PressPullTool {
           }
         }
       }
+      this.held.sync(this.pending);
       this.gesture.frame();
     }
   }
@@ -1232,6 +1237,26 @@ export class PressPullTool {
     this.onDone?.(null);
   }
 
+  /** A push dragged or typed that Enter would write. */
+  get pending(): boolean {
+    return this.active && this.phase === "drag" && !this.pickingTarget && !this.neutral;
+  }
+
+  get dragging(): boolean {
+    return this.grabbing || this.taperGrabbing;
+  }
+
+  /** Told when `pending` turns on or off, for the unsaved mark and the close guard. */
+  onHeldChange(fn: () => void): () => void {
+    return this.held.on(fn);
+  }
+
+  /** For a save: the push is written as Enter writes it, which may decline and keep the tool open. A drag still
+   *  under the hand is left alone. */
+  confirmHeld() {
+    if (this.pending && !this.dragging) this.commit();
+  }
+
   private cleanup() {
     const el = this.viewport.domElement;
     this.gesture.detach();
@@ -1272,6 +1297,7 @@ export class PressPullTool {
     this.holeAxis = null;
     this.direction = "normal";
     setPrompt(null);
+    this.held.sync(this.pending);
   }
 
   private disposeGizmo() {

@@ -1,9 +1,18 @@
 # Measure
 
-Measure answers how long, how far apart or what angle, from things you click.
+Measure tells you how long, how far apart or at what angle things are, from what you click.
 
-![Measure panel showing the distance and angle between two hole edges](../img/measure-two-holes.png)
+![Measure panel showing the distance, centers and angle between two edges of a plate](../img/measure-two-holes.png)
 
-Press I and click a face or edge to see its area or length. A second click shows the shortest distance, that distance split into X, Y and Z, the distance between centres and the angle between them. A third click starts over.
+1. Press I, or pick Measure under Inspect.
+2. Click a face or edge. The panel shows its Area or Length, and the point it measured from.
+3. Click a second face or edge. The panel shows:
+    - Distance, the shortest gap between the two
+    - ΔX ΔY ΔZ, that gap split along the axes
+    - Centers, the distance between the middle of each
+    - Angle, the angle between them, for flat faces and straight edges
+4. A third click starts over, and Esc closes Measure.
 
-The numbers follow your unit preference. On curved faces they come from the displayed mesh, so they can be off by a tiny amount.
+You can also right-click a face or edge and pick Measure from here.
+
+The numbers follow the Units setting. On curved faces they come from the shape as drawn on screen, so they can be off by a tiny amount.

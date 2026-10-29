@@ -2,12 +2,14 @@
 import { computed, mergeProps, useAttrs, useTemplateRef, watch } from "vue";
 import { useCommitField } from "./useCommitField";
 import { useDisabled } from "./useDisabled";
+import { useName, type Named } from "./useName";
 import { fmtKeys } from "../../input/platform";
 
 defineOptions({ inheritAttrs: false });
 
-const props = withDefaults(
-  defineProps<{
+// No withDefaults: over the Named union it collapses the type check to any props.
+const props = defineProps<
+  {
     modelValue: string;
     /** `live` emits on every input, `change` on Enter or blur with Escape reverting. */
     commit?: "live" | "change";
@@ -25,18 +27,18 @@ const props = withDefaults(
     keys?: string | undefined;
     disabled?: boolean | undefined;
     disabledReason?: string | undefined;
-  }>(),
-  { commit: "live", type: "text", multiline: false, selectOnFocus: false, size: "md", disabled: false },
-);
+  } & Named
+>();
 const emit = defineEmits<{ "update:modelValue": [string] }>();
 
 const attrs = useAttrs();
 const el = useTemplateRef<HTMLInputElement | HTMLTextAreaElement>("el");
 const d = useDisabled(props);
+const name = useName(props, "TextField");
 const field = useCommitField({
   source: () => props.modelValue,
   el,
-  live: () => props.commit === "live",
+  live: () => props.commit !== "change",
   apply(raw) {
     const err = props.validate?.(raw) ?? null;
     if (!err && raw !== props.modelValue) emit("update:modelValue", raw);
@@ -49,7 +51,7 @@ const { draft } = field;
 watch(
   () => props.modelValue,
   (v) => {
-    if (props.commit === "live" && v !== draft.value && !field.error.value) field.revert();
+    if (props.commit !== "change" && v !== draft.value && !field.error.value) field.revert();
   },
 );
 
@@ -61,7 +63,7 @@ const tipText = computed(() => (props.tip ? fmtKeys(props.keys ? `${props.tip} (
 /** Everything a caller passes lands on the input, except the layout of the well. */
 function inputAttrs() {
   const { class: _c, style: _s, ...rest } = attrs;
-  return mergeProps(rest, d.bind.value);
+  return mergeProps(rest, d.bind.value, name.value);
 }
 
 function onInput(e: Event) {
@@ -80,7 +82,7 @@ function onKeydown(e: KeyboardEvent) {
   <span
     class="ui-field ui-text-field"
     :class="[
-      `ui-field-${size}`,
+      `ui-field-${size ?? 'md'}`,
       attrs.class,
       { 'is-error': !!shownError, 'is-disabled': d.isDisabled.value, 'is-multiline': multiline },
     ]"
@@ -93,12 +95,11 @@ function onKeydown(e: KeyboardEvent) {
       ref="el"
       v-bind="inputAttrs()"
       :value="draft"
-      :type="multiline ? undefined : type"
+      :type="multiline ? undefined : (type ?? 'text')"
       :placeholder="placeholder"
       :readonly="d.isDisabled.value || undefined"
       :aria-invalid="shownError ? 'true' : undefined"
       :title="d.title(shownError ?? tipText ?? (attrs.title as string | undefined))"
-      :aria-label="tipText ?? (attrs['aria-label'] as string | undefined)"
       @input="onInput"
       @keydown="onKeydown"
       @blur="field.blur()"

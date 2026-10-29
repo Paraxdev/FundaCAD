@@ -27,6 +27,14 @@ export function isMenuKey(e: KeyboardEvent): boolean {
   return MENU_KEYS.has(e.key) || (typeof e.key === "string" && e.key.length === 1);
 }
 
+/** Enter or Space on a value box button (Confirm, Cancel, an option, a tool's extra control). Window capture
+ *  listeners hear it before the button's own click, so a tool leaves it, the way it leaves isMenuKey. */
+export function isBoxButtonKey(e: KeyboardEvent): boolean {
+  if (e.key !== "Enter" && e.key !== " ") return false;
+  if (typeof HTMLButtonElement === "undefined" || !(e.target instanceof HTMLButtonElement)) return false;
+  return e.target.closest(".dim-input") !== null;
+}
+
 /** False for a field removed, hidden, or put away by a key handler while the key was still on its way to the window
  *  (sketch/dimInput.ts does for undo and redo); the keymap lets the shortcut through then. */
 export function isLiveFocusTarget(el: Element): boolean {

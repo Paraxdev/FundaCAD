@@ -429,6 +429,7 @@ def main(argv=None) -> int:
     areas = AREAS if args.area == "all" else (args.area,)
     shots = [shot for a in areas if args.area != "all" or (MANIFESTS / f"{a}.toml").exists() for shot in load(a)]
     wanted = {n for item in args.only for n in item.split(",") if n}
+    missing = set()
     if wanted:
         shots = [x for x in shots if name_of(x) in wanted or Path(x["file"]).name in wanted]
         missing = wanted - {name_of(x) for x in shots} - {Path(x["file"]).name for x in shots}
@@ -439,23 +440,43 @@ def main(argv=None) -> int:
         return 0
 
     frames_root = args.frames or Path(tempfile.gettempdir()) / "fundacad-capture"
-    live = []
+    live, copies, stubs, kept = [], [], [], []
     for shot in shots:
         kind = shot.get("crop", "window")
-        out = target_path(shot, args.out)
         if shot.get("stub"):
+            stubs.append(shot)
             print(f"skip {shot['file']}: stub, {shot.get('show', '')[:100]}")
         elif kind == "keep":
+            kept.append(shot)
             print(f"keep {shot['file']}")
         elif kind == "copy":
-            out.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(REPO / shot["from"], out)
-            print(f"copied {shot['from']} to {out}")
+            copies.append(shot)
         else:
             live.append(shot)
-    if not live:
-        return 0
+    taken = take_live(live, args, frames_root) if live else []
+    for shot in copies:
+        copy_shot(shot, taken, args.out)
 
+    failed = len(live) - len(taken)
+    print(f"{len(taken)} taken, {failed} failed, {len(stubs)} still a stub, {len(kept)} kept, {len(copies)} copied")
+    return 1 if failed or missing or (wanted and stubs) else 0
+
+
+def copy_shot(shot: dict, taken: list, out_dir: Path | None):
+    source = next((x for x in taken if x["file"] == shot["from"]), None)
+    src = target_path(source, out_dir) if source else REPO / shot["from"]
+    out = target_path(shot, out_dir)
+    # In --out a copy and its picture can share a file name, the one file then stands for both.
+    if out.resolve() == src.resolve():
+        print(f"copy {shot['file']} is {out}")
+        return
+    out.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(src, out)
+    print(f"copied {src} to {out}")
+
+
+def take_live(live, args, frames_root: Path) -> list:
+    """Retakes `live` in harness sessions on a vite of its own, and returns the entries it took."""
     sys.path.insert(0, str(REPO / "tools" / "harness" / "src"))
     sys.path.insert(0, str(HERE))
     from fundacad_harness import Session
@@ -476,11 +497,11 @@ def main(argv=None) -> int:
         failed = shoot(live, args, frames_root, CaptureSession, vite_url)
     finally:
         vite.stop()
-    return 1 if failed else 0
+    return [x for x in live if not any(x is y for y in failed)]
 
 
-def shoot(live, args, frames_root: Path, CaptureSession, vite_url: str) -> int:
-    failed = 0
+def shoot(live, args, frames_root: Path, CaptureSession, vite_url: str) -> list:
+    failed = []
     for gpu in (False, True):
         batch = [x for x in live if bool(x.get("gpu")) == gpu]
         # With other SwiftShader pages running on the PC, a page sometimes stops drawing for good, and only a new
@@ -491,7 +512,7 @@ def shoot(live, args, frames_root: Path, CaptureSession, vite_url: str) -> int:
             if attempt:
                 print(f"taking {len(batch)} again in a new session")
             batch = run_batch(batch, gpu, args, frames_root, CaptureSession, vite_url)
-        failed += len(batch)
+        failed += batch
     return failed
 
 

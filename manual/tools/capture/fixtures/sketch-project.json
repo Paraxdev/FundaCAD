@@ -1,0 +1,14 @@
+{
+  "version": 10,
+  "parameters": {},
+  "features": [
+    { "id": "s", "type": "sketch", "plane": "XY", "name": "Plate",
+      "entities": [{ "type": "rectangle", "id": "r1", "width": 60, "height": 40, "x": 0, "y": 0 }],
+      "constraints": [] },
+    { "id": "e", "type": "extrude", "sketch": "s", "distance": 12, "operation": "new" },
+    { "id": "h", "type": "sketch", "plane": "XY", "name": "Hole",
+      "entities": [{ "type": "circle", "id": "c1", "radius": 8, "x": 12, "y": 0 }],
+      "constraints": [] },
+    { "id": "cut", "type": "extrude", "sketch": "h", "distance": 12, "operation": "cut" }
+  ]
+}

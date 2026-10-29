@@ -146,6 +146,7 @@ export function sketchEntityTarget(host: SketchGizmoHost): MoveTarget | null {
     uniformScale: true,
     canCopy: true,
     ownsEscape: true,
+    inSketch: true,
     centroid: () => boxOfPoints(points())?.getCenter(new THREE.Vector3()) ?? plane.origin.clone(),
     box: () => boxOfPoints(points()),
     begin: () => {},

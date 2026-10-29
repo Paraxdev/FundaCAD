@@ -46,6 +46,13 @@ describe("UnitChip", () => {
     expect(w.emitted("update:unit")).toEqual([["um"]]);
   });
 
+  it("names the picker by its label over its tip, and keeps the tip as the tooltip", async () => {
+    const chip = (await render({ options: ["mm", "in"], label: "Width unit", tip: "Change unit" })).get(
+      ".ui-unit-chip",
+    );
+    expect([chip.attributes("aria-label"), chip.attributes("title")]).toEqual(["Width unit", "Change unit"]);
+  });
+
   it("disabled refuses to open", async () => {
     const w = await render({ options: ["mm", "in"], disabled: true });
     const chip = w.get(".ui-unit-chip");

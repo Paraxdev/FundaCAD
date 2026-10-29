@@ -7,32 +7,42 @@ import Popover from "./Popover.vue";
 import ChoiceList from "./ChoiceList.vue";
 import { rovingIndex, rovingStop } from "./useRovingFocus";
 import { useDisabled } from "./useDisabled";
+import { useName, type Named } from "./useName";
 import { fmtKeys } from "../../input/platform";
 
 defineOptions({ inheritAttrs: false });
 
 const props = withDefaults(
-  defineProps<{
-    modelValue: T;
-    options: readonly { value: T; label: string; hint?: string | undefined; disabled?: boolean | undefined }[];
-    id?: string | undefined;
-    testid?: string | undefined;
-    disabled?: boolean | undefined;
-    disabledReason?: string | undefined;
-    /** Shown when no option holds the value. */
-    placeholder?: string | undefined;
-    size?: "sm" | "md";
-    /** `chip` draws the trigger as a UnitChip picker, a quiet word beside a value instead of a well. */
-    variant?: "field" | "chip";
-    tip?: string | undefined;
-    keys?: string | undefined;
-  }>(),
+  defineProps<
+    {
+      modelValue: T;
+      options: readonly { value: T; label: string; hint?: string | undefined; disabled?: boolean | undefined }[];
+      id?: string | undefined;
+      testid?: string | undefined;
+      disabled?: boolean | undefined;
+      disabledReason?: string | undefined;
+      /** Shown when no option holds the value. */
+      placeholder?: string | undefined;
+      size?: "sm" | "md";
+      /** `chip` draws the trigger as a UnitChip picker, a quiet word beside a value instead of a well. */
+      variant?: "field" | "chip";
+      tip?: string | undefined;
+      keys?: string | undefined;
+    } & Named
+  >(),
   { disabled: false, size: "md", variant: "field" },
 );
 
 const emit = defineEmits<{ "update:modelValue": [T] }>();
 
 const d = useDisabled(props);
+const name = useName(props, "Select");
+// The open list carries the trigger's own name: labelledby the trigger would read its value when the trigger is
+// itself labelledby another element.
+const listName = computed<Named>(() => {
+  const by = name.value["aria-labelledby"];
+  return by ? { labelledby: by } : { label: name.value["aria-label"] ?? "" };
+});
 const open = ref(false);
 const active = ref(-1);
 const btn = useTemplateRef<HTMLButtonElement>("btn");
@@ -177,7 +187,7 @@ onBeforeUnmount(() => window.clearTimeout(bufferTimer));
 <template>
   <button
     ref="btn"
-    v-bind="mergeProps($attrs, d.bind.value)"
+    v-bind="mergeProps($attrs, d.bind.value, name)"
     :id="id"
     type="button"
     role="combobox"
@@ -187,7 +197,6 @@ onBeforeUnmount(() => window.clearTimeout(bufferTimer));
       { open, 'is-open': open },
     ]"
     :title="d.title(tipText ?? ($attrs.title as string | undefined))"
-    :aria-label="tipText ?? ($attrs['aria-label'] as string | undefined)"
     :data-testid="testid"
     :data-value="modelValue"
     aria-haspopup="listbox"
@@ -211,6 +220,7 @@ onBeforeUnmount(() => window.clearTimeout(bufferTimer));
     @close="onPopoverClose"
   >
     <ChoiceList
+      v-bind="listName"
       :id="listId"
       :options="options"
       :model-value="modelValue"

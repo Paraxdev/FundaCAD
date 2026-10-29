@@ -1,20 +1,28 @@
 <script setup lang="ts">
-// The old frame contract over ui/Dialog: no Escape, no modal depth gate and no focus moves, since the dialogs wearing
-// it differ on all three (useModalGate.ts). The e2e scripts click `.modal-close`, which Home wears too.
+// Dialog for plugins, without the modal depth gate; a plugin still running its own Escape or focus opts out by prop.
+// The e2e scripts click `.modal-close`.
 
 import Dialog from "../ui/Dialog.vue";
 
-defineProps<{ panelClass?: string }>();
+withDefaults(
+  defineProps<{
+    panelClass?: string | undefined;
+    closeOnEsc?: boolean;
+    initialFocus?: string;
+    returnFocus?: boolean;
+  }>(),
+  { panelClass: undefined, closeOnEsc: true, initialFocus: "first", returnFocus: true },
+);
 const emit = defineEmits<{ close: [] }>();
 </script>
 
 <template>
   <Dialog
     :panel-class="panelClass"
-    :close-on-esc="false"
+    :close-on-esc="closeOnEsc"
     :gate="false"
-    initial-focus="none"
-    :return-focus="false"
+    :initial-focus="initialFocus"
+    :return-focus="returnFocus"
     :body="false"
     @close="emit('close')"
   >

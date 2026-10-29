@@ -1,9 +1,32 @@
 # Properties
 
-Properties shows the volume, surface area, centre of mass and bounding box of the selected bodies, or of every body when nothing is selected.
+Properties shows the size and weight of your bodies. Open it from the Analyze menu on the rail, or right-click a body and pick Properties.
 
 ![The Properties panel with the PLA print estimate](../img/properties-panel.png)
 
-Below those is a print estimate. Pick a material, an infill percentage and a wall thickness to get a mass in grams and the filament length.
+It measures the selected bodies, or all bodies when nothing is selected. It lists:
 
-A body that is not a closed solid, an open shell, a solid inside out or one whose faces disagree about which side is inside, has no inside to measure. Properties then says what is wrong with it in place of the volume, the centre of mass and the estimate.
+- Volume
+- Surface area
+- Center of mass, also marked in the view
+- Bounding box, as width × depth × height
+
+Press Esc to close it.
+
+## Print estimate
+
+Below those is an estimate for printing. Your choices are kept for next time.
+
+| Setting | At first | Options |
+|---|---|---|
+| Material | PLA | PLA, PETG, ABS, ASA, TPU, Nylon, or Custom… with a Density of your own |
+| Infill | 20 % | 0 to 100 % in steps of 5 |
+| Wall thickness | 0.8 mm | the outer shell, counted as solid |
+
+It gives Mass, estimate in grams and the filament length in metres for 1.75 mm and 2.85 mm spools.
+
+## A body that is not solid
+
+A body with an open shell, or with faces that point the wrong way, has no inside to measure. Properties then says it is not a sound solid and names what is wrong with each body.
+
+Its Volume, Center of mass and print estimate are left out. Surface area and Bounding box still show.

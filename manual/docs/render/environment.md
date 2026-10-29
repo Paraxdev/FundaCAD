@@ -1,13 +1,64 @@
 # Environment and camera
 
-The Environment tab sets the room the part sits in, and the Camera tab sets the lens.
+The Environment tab of the Render workspace sets the room and the light around the part. The Camera tab sets the lens and saves a picture.
+
+## Pick a room
+
+The Studio section of the Environment tab has six built in rooms. A metal is almost all reflection, so the room changes it the most.
+
+| Room | Look |
+| --- | --- |
+| Studio | Neutral room, even light, the default |
+| Soft box | One big light, product shot |
+| Warm key | Warm light, cool shade |
+| Dusk | Dark, with a bright rim |
+| Bright room | High key, white walls |
+| Flat | No reflections, easiest to read |
+
+## Light the part with your own HDR
+
+1. Under Your environments, press Import HDR... and pick an .hdr or .exr panorama. You can also drop the file on the window.
+2. Turn Rotation to swing the panorama round the part.
+3. Use Exposure to even out how bright the file itself is, in stops.
+4. Press Backdrop colour behind to show the panorama behind the model instead.
+5. Press Save as... and type a name to keep the whole look. Saved rooms have Rename and Delete.
+
+A document lit by an HDR carries it, so it opens with the same light on another computer. An HDR lights the scene alone, with no key light.
+
+## Brightness, backdrop and floor
+
+- Environment brightness: Amount sets how strongly the room lights the model and shows in its reflections, from 0.40x to 2.00x.
+- Backdrop: the colour behind the model, Theme, Dark, Mid grey or Light.
+- Floor: None, or Shadow catcher for an invisible floor that shows only the model's shadow. The Model and Render workspaces each keep their own floor, None by default. Performance mode has no floor.
+
+## Key light, bloom and shadows
+
+- Key light: press Aim and drag the sun on the model to swing the light that casts the shadows, or type an Azimuth and Elevation. Enter keeps it, Esc puts it back. Reset returns to the default.
+- Bloom: Amount spills light off faces with Emission turned up, none at zero. In the Path traced view bright highlights spill too.
+- Shadows: Cast shadows adds a real shadow from the key light, off by default. It stays off in Performance mode and with an HDR.
+
+## For a slow computer
+
+- Performance mode drops the heavy effects, glass refraction, a high pixel ratio and the extra lights from glowing parts. It turns on by itself on a weak GPU.
+- Potato mode is the lowest quality, for slow or virtual machines, and includes Performance mode.
+
+Denoise and Tracer on this tab set up Path traced, see [View modes](view-modes.md).
+
+## Set the lens
 
 ![The Camera tab of the Render workspace with the Field of view slider](../img/render-camera-tab.png)
 
-Studio offers six lighting setups. A metal part reflects its room, so with none it looks nearly black, and Flat shows the shape most clearly. Bloom lets light spill off faces with Emission turned up, and Shadows switches cast shadows.
+- Field of view runs from 15° to 70°, 45° by default. A low value keeps edges nearly parallel, like a technical drawing, a high one throws the near corner at you, like a product shot.
+- Depth of field: Blur is off at zero. Turn it up, then pick an Aperture from f/1.4 to f/22. What the view is centred on stays sharp, so aim at what you want in focus.
 
-Environment brightness sets how strongly the room, or an imported HDR, lights the model and shows in its reflections. An imported HDR lights the scene on its own, so the Key light is not added while one is chosen.
+A straight-on view has no lens, so neither setting does anything there.
 
-Under Backdrop and floor, Backdrop is the colour behind the model, and Floor set to Shadow catcher puts an invisible floor under the model that shows only its soft shadow, set apart for the Model and the Render workspace. It is off by default and is not drawn on the lightweight render. Path traced shows the floor's shadow too.
+## Save a picture
 
-A low Field of view looks like a technical drawing, and a high one looks wider. To make an image, pick a size from 1x to 4x under Picture and press Save picture.
+1. Frame the view as you want it.
+2. Under Picture, pick a size from 1× to 4× the view. The line below gives the size in pixels.
+3. For a traced picture, switch the view to Path traced (Z), see [View modes](view-modes.md). Once the picture starts clearing, Path traced and Samples show under Picture. Leave Path traced on and pick Samples: 64, 256 or 1024.
+4. For a plain picture, stay in Realtime or Matcap, or turn Path traced off. Edge lines adds the outlines, and Reference images keeps your reference images in, when the model has some.
+5. Press Save picture… and choose where the file goes.
+
+While it traces, the button counts the samples, press it again to cancel. The grid, the origin arrows and the sketch planes are always left out.

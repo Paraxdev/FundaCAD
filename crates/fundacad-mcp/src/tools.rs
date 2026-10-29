@@ -6,11 +6,29 @@ use serde_json::{json, Value};
 
 use crate::upload::IMPORT_FORMATS;
 
+/// `limit` and `offset` beside a tool's own fields, for a list that shows a page of `rows` at a time.
+fn paged(mut schema: JsonObject, rows: &str) -> JsonObject {
+    if let Some(p) = schema.get_mut("properties").and_then(Value::as_object_mut) {
+        p.insert(
+            "limit".into(),
+            json!({"type": "integer", "minimum": 0,
+                   "description": format!("how many {rows} to show, 0 for all")}),
+        );
+        p.insert(
+            "offset".into(),
+            json!({"type": "integer", "minimum": 0, "description": format!("skip this many {rows}, for the next page")}),
+        );
+    }
+    schema
+}
+
 fn object(properties: Value, required: &[&str]) -> JsonObject {
     let mut schema = serde_json::Map::new();
     schema.insert("type".into(), json!("object"));
     schema.insert("properties".into(), properties);
-    schema.insert("required".into(), json!(required));
+    if !required.is_empty() {
+        schema.insert("required".into(), json!(required));
+    }
     schema
 }
 
@@ -70,7 +88,11 @@ pub fn doc_save() -> JsonObject {
 pub fn doc_get() -> JsonObject {
     object(
         json!({"features_only": {"type": "boolean",
-                                 "description": "omit the parameter table"}}),
+                                 "description": "omit the parameter table"},
+               "full": {"type": "boolean",
+                        "description": "the document as stored, pretty printed, where by default a run of bodyIds \
+                                        reads as one \"sep1:0..sep1:9\": \"body4..body13\" entry and an \
+                                        import's lists over 30 entries are left out"}}),
         &[],
     )
 }
@@ -126,6 +148,10 @@ pub fn feature_move() -> JsonObject {
 }
 
 pub fn build() -> JsonObject {
+    paged(build_fields(), "rows (default 30, all with full)")
+}
+
+fn build_fields() -> JsonObject {
     object(
         json!({"full": {"type": "boolean",
                         "description": "list every body, not only the ones that changed since \
@@ -155,8 +181,14 @@ pub fn edit() -> JsonObject {
 }
 
 pub fn section() -> JsonObject {
+    paged(section_fields(), "body rows (default 30, 5 with outline, all with full)")
+}
+
+fn section_fields() -> JsonObject {
     object(
         json!({
+            "full": {"type": "boolean",
+                     "description": "one block per body with its outline, nothing folded"},
             "axis": {"type": "string", "enum": ["X", "Y", "Z"],
                      "description": "cut across this axis, at `at`"},
             "at": {"type": "number", "description": "where along the axis, in mm"},
@@ -167,7 +199,8 @@ pub fn section() -> JsonObject {
                        "description": "only these bodies, by id or name; every body the \
                                        plane crosses if omitted"},
             "outline": {"type": "boolean",
-                        "description": "include each loop's points (default true)"}
+                        "description": "include each loop's points (default true, false over 10 \
+                                        bodies)"}
         }),
         &[],
     )
@@ -204,8 +237,14 @@ pub fn sketch_tie() -> JsonObject {
 }
 
 pub fn printability() -> JsonObject {
+    paged(printability_fields(), "body rows (default 30, all with full)")
+}
+
+fn printability_fields() -> JsonObject {
     object(
         json!({
+            "full": {"type": "boolean",
+                     "description": "one block per body with its own focus, nothing folded"},
             "bodies": {"type": "array", "items": {"type": "string"},
                        "description": "only these bodies, by id or name; every body if omitted"},
             "nozzle": {"type": "number", "description": "nozzle width in mm (default 0.4)"},
@@ -233,8 +272,14 @@ pub fn printability() -> JsonObject {
 }
 
 pub fn interference() -> JsonObject {
+    paged(interference_fields(), "rows of each list (default 30, pairs per sweep step 10, all with full)")
+}
+
+fn interference_fields() -> JsonObject {
     object(
         json!({
+            "full": {"type": "boolean",
+                     "description": "one row per pair with where it meets, nothing folded"},
             "bodies": {"type": "array", "items": {"type": "string"},
                        "description": "only check these bodies against each other, by id or \
                                        name; every body if omitted"},
@@ -251,30 +296,25 @@ pub fn interference() -> JsonObject {
 }
 
 pub fn measure() -> JsonObject {
-    let thing = |which: &str| {
-        json!({"anyOf": [{"type": "object"}, {"type": "string"}],
-               "description": format!(
-                   "{which}: a face or edge selector copied from `inspect` (detail:true,                     selectors:true), body included; or {{body, face: n}} / {{body, edge: n}}                     with the F or E number inspect prints, valid for the current build only;                     or a body id or name for the whole body; or {{point: [x, y, z]}} in mm")})
-    };
+    let thing = |what: &str| json!({"anyOf": [{"type": "object"}, {"type": "string"}], "description": what});
     object(
         json!({
-            "a": thing("the thing to measure"),
-            "b": thing("a second thing, to measure between the two"),
+            "a": thing("the thing to measure: a face or edge selector copied from `inspect` (detail:true, \
+                        selectors:true), body included; or {body, face: n} / {body, edge: n} with the F or E \
+                        number inspect prints, valid for the current build only; or a body id or name for the \
+                        whole body; or {point: [x, y, z]} in mm"),
+            "b": thing("a second thing in any form `a` takes, to measure between the two"),
             "want": {"type": "string", "enum": ["distance", "angle", "centres"],
-                     "description": "only this measure between a and b, and an error when it                                      does not apply; every one that applies if omitted"}
+                     "description": "only this measure between a and b, and an error when it does not \
+                                     apply; every one that applies if omitted"}
         }),
         &["a"],
     )
 }
 
 pub fn stress() -> JsonObject {
-    let faces = |what: &str| {
-        json!({"anyOf": [{"type": "array", "items": {"type": "object"}}, {"type": "object"}],
-               "description": format!(
-                   "{what}, as face selectors. Copy each from the face's `selector` in \
-                    `inspect` (detail:true, selectors:true), body included. One selector \
-                    without a list is taken too. A face index is not a selector")})
-    };
+    // The long wording is said once, on `fixed` and on a load's `spots`, and the others point back to it.
+    let faces = |what: &str| json!({"anyOf": [{"type": "array", "items": {"type": "object"}}, {"type": "object"}], "description": what});
     let spots = |what: &str| {
         json!({"type": "array",
                "items": {"type": "object", "properties": {
@@ -282,12 +322,14 @@ pub fn stress() -> JsonObject {
                           "description": "[x, y, z] in mm, a point on the body's surface"},
                    "radius": {"type": "number", "description": "in mm, above 0"}},
                    "required": ["at", "radius"]},
-               "description": format!(
-                   "{what}, in place of faces or beside them: each {{at, radius}} is the                     part of the body's surface within `radius` of the point `at`, as far as                     it stays connected to the point, so it does not reach through a thin                     wall. Needs no face of its own, e.g. the crook of a hook. Keep the                     radius above the element size")})
+               "description": what})
     };
     let load = json!({"type": "object", "properties": {
-        "faces": faces("the faces this load pushes on"),
-        "spots": spots("places this load pushes on"),
+        "faces": faces("the faces this load pushes on, face selectors as in `fixed`"),
+        "spots": spots("places this load pushes on, in place of faces or beside them: each {at, radius} is the \
+                        part of the body's surface within `radius` of the point `at`, as far as it stays \
+                        connected to the point, so it does not reach through a thin wall. Needs no face of \
+                        its own, e.g. the crook of a hook. Keep the radius above the element size"),
         "force": {"type": "array", "items": {"type": "number"},
                   "description": "[x, y, z] in N, the TOTAL force, spread over the faces by \
                                   area: [0, 0, -20] is 20 N (about 2 kg) pushing down"},
@@ -300,8 +342,10 @@ pub fn stress() -> JsonObject {
             "body": {"type": "string",
                      "description": "the body to analyse, by id or name, as `build` lists \
                                      it. One closed solid"},
-            "fixed": faces("the faces held still in every direction, e.g. the face bolted to \
-                            the wall. Give `fixed`, `supports` or both"),
+            "fixed": faces("the faces held still in every direction, e.g. the face bolted to the wall. \
+                            Give `fixed`, `supports` or both, as face selectors. Copy each from the face's \
+                            `selector` in `inspect` (detail:true, selectors:true), body included. One \
+                            selector without a list is taken too. A face index is not a selector"),
             "supports": {"type": "array",
                          "items": {"type": "object", "properties": {
                              "type": {"type": "string", "enum": ["fixed", "pinned", "slider"],
@@ -311,9 +355,9 @@ pub fn stress() -> JsonObject {
                                                       turn about it. slider: held across the \
                                                       face only, free to slide along it \
                                                       (frictionless)"},
-                             "faces": faces("the faces this support holds"),
-                             "spots": spots("places a fixed support holds, e.g. under a \
-                                             screw head")}},
+                             "faces": faces("the faces this support holds, face selectors as in `fixed`"),
+                             "spots": spots("places a fixed support holds, e.g. under a screw head, \
+                                             each {at, radius} as in a load's `spots`")}},
                          "description": "ways the part is held besides `fixed`, each {type, \
                                          faces} or, fixed only, {type, spots}. Together they \
                                          must stop every slide and turn: \
@@ -324,7 +368,7 @@ pub fn stress() -> JsonObject {
                         "description": "the body's own weight: true is 9.81 m/s2 along -Z, or \
                                         [gx, gy, gz] in m/s2 (default off). Needs the \
                                         material's density, which the presets have"},
-            "loads": {"anyOf": [{"type": "array", "items": load.clone()}, load],
+            "loads": {"anyOf": [{"type": "array", "items": load}, {"type": "object"}],
                       "description": "what pushes on the part, each {faces, force} or {faces, \
                                       pressure}, never both, with `spots` in place of `faces` \
                                       for a place with no face of its own. One load without a \
@@ -370,9 +414,14 @@ pub fn stress() -> JsonObject {
 }
 
 pub fn inspect() -> JsonObject {
+    paged(inspect_fields(), "rows (default 30, with detail 5 bodies)")
+}
+
+fn inspect_fields() -> JsonObject {
     object(
         json!({
             "body": {"type": "string", "description": "one body id; all of them if omitted"},
+            "bodies": {"type": "array", "items": {"type": "string"}, "description": "only these body ids"},
             "sketch": {"type": "string",
                        "description": "a sketch's feature id: report its loose ends instead of the bodies"},
             "tolerance": {"type": "number",
@@ -424,19 +473,23 @@ pub fn view() -> JsonObject {
 }
 
 pub fn export() -> JsonObject {
-    object(
+    let schema = object(
         json!({
             "path": {"type": "string"},
             "format": {"type": "string", "enum": ["step", "stl", "3mf", "dxf", "svg"],
-                       "description": "dxf (R12) and svg draw one sketch or one flat face at true                                        size in mm, give `sketch` or `face`"},
+                       "description": "dxf (R12) and svg draw one sketch or one flat face at true size \
+                                       in mm, give `sketch` or `face`"},
             "sketch": {"type": "string",
                        "description": "dxf or svg: the sketch to draw, by id or name"},
             "face": {"type": "object",
-                     "description": "dxf or svg: one flat face to draw with its holes, a face                                      selector from inspect, set its body"},
+                     "description": "dxf or svg: one flat face to draw with its holes, a face selector \
+                                     from inspect, set its body"},
             "tolerance": {"type": "number",
-                          "description": "dxf or svg: how far in mm a curve that is not a line,                                           arc or circle may stray when drawn as a polyline                                           (default 0.01)"},
+                          "description": "dxf or svg: how far in mm a curve that is not a line, arc or \
+                                          circle may stray when drawn as a polyline (default 0.01)"},
             "svg": {"type": "object",
-                    "description": "svg: {fill: true} fills the closed outlines (default strokes                                     only, as a laser cutter reads them)"},
+                    "description": "svg: {fill: true} fills the closed outlines (default strokes only, \
+                                    as a laser cutter reads them)"},
             "separate": {"type": "boolean",
                          "description": "one file per body, named after the body, in a folder \
                                          named after `path` (parts.stl writes parts/<name>.stl)"},
@@ -451,10 +504,13 @@ pub fn export() -> JsonObject {
                         "anyOf": [{"type": "boolean"}, {"type": "object"}]},
             "allowPartial": {"type": "boolean",
                              "description": "write the file even if a feature failed to build \
-                                             (default: refuse and name the failures)"}
+                                             (default: refuse and name the failures)"},
+            "full": {"type": "boolean",
+                     "description": "separate: one line per file written, nothing folded"}
         }),
         &["path", "format"],
-    )
+    );
+    paged(schema, "file rows of a separate export (default 30, all with full)")
 }
 
 // The ui tools, standalone only.

@@ -2,6 +2,8 @@
 // time: a newer error replaces the text and counts, so a burst is one notice
 // saying how many, not a stack. Clicking it opens the console on the entry.
 
+import { announce } from "./announce";
+
 export interface NoticeAction {
   label: string;
   onClick: () => void;
@@ -31,7 +33,13 @@ export function errorNotice(): ErrorNotice | null {
 
 export function showErrorNotice(
   message: string,
-  opts: { logId: number; action?: NoticeAction | undefined; holdMs?: number | undefined },
+  opts: {
+    logId: number;
+    action?: NoticeAction | undefined;
+    holdMs?: number | undefined;
+    /** Shared with another line about the same failure (a build result), so a reader hears it once. */
+    announceKey?: string | undefined;
+  },
 ) {
   current = {
     seq: ++seq,
@@ -42,6 +50,8 @@ export function showErrorNotice(
     holdMs: opts.holdMs ?? DEFAULT_HOLD_MS,
   };
   for (const fn of listeners) fn();
+  // Spoken here rather than by the notice's own role, which WebKit readers miss when the notice is inserted.
+  announce(message, "assertive", opts.announceKey === undefined ? {} : { key: opts.announceKey });
 }
 
 export function dismissErrorNotice() {

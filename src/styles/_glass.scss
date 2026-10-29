@@ -234,14 +234,49 @@
 .dim-bad .dim-field.typed {
   background: var(--error-tint);
 }
+/* The value box's buttons are IconButton sm plain; past the base look they keep the box's brighter ink, coloured
+   ends, wide texted segments and greyed segments, and an on switch stays on under the pointer. */
+.dim-btn.icon-btn {
+  color: var(--text-dim);
+}
+.dim-btn.icon-btn.dim-texted {
+  width: auto;
+}
+.dim-btn.dim-ok.icon-btn {
+  color: var(--ok);
+}
+.dim-btn.dim-no.icon-btn {
+  color: var(--error);
+}
+.dim-btn.dim-ok.icon-btn:hover:not(.is-disabled) {
+  color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 18%, transparent);
+}
+.dim-btn.dim-no.icon-btn:hover:not(.is-disabled) {
+  color: var(--error);
+  background: var(--error-tint);
+}
+.dim-btn.disabled.icon-btn:hover:not(.is-disabled) {
+  color: var(--text-dim);
+  background: none;
+}
+.dim-btn.disabled.icon-btn:active {
+  transform: none;
+}
 .dim-btn.on,
+.dim-btn.on.icon-btn:hover:not(.is-disabled),
 .section-chip-btn.active {
   /* Mixed into an opaque dark, not transparency: over a pale model a see-through
      tint washed the label out. */
   background: color-mix(in srgb, var(--accent) 24%, var(--panel));
 }
+.dim-btn.on.icon-btn,
+.dim-btn.on.icon-btn:hover:not(.is-disabled) {
+  color: var(--accent-hot);
+}
 /* On paper the dark mix reads as grey: the accent tint with the accent ink instead, above 3:1 on the chip. */
-:root.theme-light .dim-btn.on {
+:root.theme-light .dim-btn.on,
+:root.theme-light .dim-btn.on.icon-btn:hover:not(.is-disabled) {
   background: var(--accent-tint-2);
   color: var(--accent);
 }

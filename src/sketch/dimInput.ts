@@ -1,8 +1,19 @@
 // On-canvas heads-up dimension input: tracking fields follow the cursor, typing holds, Tab locks, Enter commits.
 // Values cross this boundary in MILLIMETRES; length fields show and parse the display unit, angles are degrees.
 
+import {
+  onActivate,
+  setChipUnit,
+  setExpanded,
+  uiButton,
+  uiIconButton,
+  uiNumberInput,
+  uiOption,
+  type UiIconButtonOptions,
+} from "../components/ui/dom";
 import { iconElement } from "../ui/icons";
 import { isHistoryKey, isMenuKey } from "../ui/focus";
+import { claimEscape } from "../ui/escapeClaim";
 import { onPreviewError } from "../ui/previewError";
 import { getUnit, parseField } from "../ui/units";
 import { commonUnits, measureError, toUnit, tryParseMeasure, unitById, type UnitDef } from "../ui/measure";
@@ -104,7 +115,7 @@ interface Field {
    *  Per field, so a value entered in inches goes on reading in inches without changing the rest of the app. */
   unit: UnitDef | null;
   /** the clickable unit chip, or null for a count (which has no unit) */
-  chip: HTMLButtonElement | null;
+  chip: HTMLElement | null;
   tag: HTMLElement;
   choice: string | null;
   userDriven: boolean;
@@ -116,6 +127,10 @@ interface Field {
 }
 
 const shownBoxes = new Set<DimInput>();
+let boxCount = 0;
+let chipCount = 0;
+const BOX_HELP = "Enter applies, Escape cancels, Tab moves on";
+const LIST_HELP = "Alt+Down opens the field's list";
 
 /** The box holding a typed value not yet entered, or null. `confirm` enters it as Enter would, false when refused. */
 export function typedDimBox(): { confirm(): boolean } | null {
@@ -126,6 +141,20 @@ export function typedDimBox(): { confirm(): boolean } | null {
 function initialUnit(kind: DimFieldDef["kind"]): UnitDef | null {
   if (kind === "count") return null;
   return unitById(kind === "angle" ? "deg" : getUnit());
+}
+
+/** The chip's name carries the unit, and the field's input is described by it, so a reader hears name, value, unit. */
+function paintChip(chip: HTMLElement, unit: UnitDef) {
+  setChipUnit(chip, unit.id);
+  chip.setAttribute("aria-label", `Unit, ${unit.label}`);
+}
+
+/** IconButton sm plain under the box's own .dim-btn look, named by the bare word: the tooltip carries the key. */
+function boxIconButton(o: Omit<UiIconButtonOptions, "size" | "variant">, name: string): HTMLButtonElement {
+  const b = uiIconButton({ ...o, size: "sm", variant: "plain" });
+  b.classList.add("dim-btn");
+  b.setAttribute("aria-label", name);
+  return b;
 }
 
 /** Confirm and cancel act on the press and the box goes with it, so the release landed on the canvas and selected
@@ -243,13 +272,20 @@ export class DimInput {
   private unsubscribeError: (() => void) | null = null;
   /** The kernel's or tool's complaint; the box's own about typed text is shown first, the user can act on it. */
   private external: string | null = null;
+  /** A tool's own control beside the fields, such as the fillet's profile chip. */
+  private extra: HTMLElement | null = null;
   private typedProblem: string | null = null;
   private focusName: string | null = null;
+  private boxNo = ++boxCount;
+  private helpId = `dim-help-${this.boxNo}`;
 
   constructor() {
     this.root = document.createElement("div");
     this.root.className = "dim-input";
     this.root.style.display = "none";
+    this.root.setAttribute("role", "group");
+    // #prompt is the tool's banner line, so entering the box reads what the tool asks for, then the keys.
+    this.root.setAttribute("aria-describedby", `prompt ${this.helpId}`);
     document.body.appendChild(this.root);
     // Field inputs stop their own keys, so this hears only the option buttons.
     this.root.addEventListener("keydown", (e) => this.onOptionKey(e));
@@ -303,6 +339,16 @@ export class DimInput {
     return el instanceof Node && this.root.contains(el);
   }
 
+  ownsField(el: EventTarget | null): boolean {
+    return this.fields.some((f) => f.input === el);
+  }
+
+  /** For a tool whose Tab means something else (the fillet flip): Shift+Tab from a field steps back onto Cancel. */
+  focusLastStop() {
+    const from = document.activeElement instanceof HTMLElement ? document.activeElement : this.root;
+    this.tabStops(from).at(-1)?.focus();
+  }
+
   /** While a tool decides where to drop something, a click aimed at the canvas must pass through the box rather than
    *  hit confirm. Keystrokes are unaffected. Turn it off after the placing click, or confirm and cancel go dead. */
   setClickThrough(on: boolean) {
@@ -338,20 +384,33 @@ export class DimInput {
       wrap.dataset.field = def.name;
       const tag = document.createElement(def.choices ? "button" : "span");
       tag.className = def.choices ? "dim-name dim-unit dim-choice" : "dim-name";
-      if (tag instanceof HTMLButtonElement) tag.type = "button";
+      // Out of the Tab order like the unit chip, or Shift+Tab off the first field would land here, not leave the box.
+      if (tag instanceof HTMLButtonElement) {
+        tag.type = "button";
+        tag.tabIndex = -1;
+        tag.setAttribute("role", "combobox");
+        tag.setAttribute("aria-haspopup", "listbox");
+        tag.setAttribute("aria-expanded", "false");
+      }
       wrap.appendChild(tag);
-      const input = document.createElement("input");
-      input.type = "text";
-      // NOT inputMode "decimal": that asks a touch keyboard for digits only, and
-      // this field takes "1 1/2 in" and "width/2".
-      input.inputMode = "text";
-      input.autocomplete = "off";
+      const unit = initialUnit(def.kind);
+      const num = uiNumberInput({
+        size: "sm",
+        // NOT inputMode "decimal": that asks a touch keyboard for digits only, and
+        // this field takes "1 1/2 in" and "width/2".
+        inputMode: "text",
+        unit: unit?.id,
+        units: unit ? commonUnits(unit.dim).map((u) => u.id) : undefined,
+        unitTip: "Change unit",
+      });
+      // NumberField's input and chip sit in the box's own flat row, the .ui-field well would repaint it.
+      const input = num.input;
       wrap.appendChild(input);
 
       const field: Field = {
         def,
         input,
-        unit: initialUnit(def.kind),
+        unit,
         chip: null,
         tag,
         choice: def.choices?.chosen ?? null,
@@ -359,26 +418,17 @@ export class DimInput {
         lastGood: null,
       };
       this.paintName(field);
-      if (def.choices) {
-        tag.addEventListener("pointerdown", (e) => {
-          e.preventDefault(); // never blur the input to open the menu
-          e.stopPropagation();
-          this.openChoiceMenu(field);
-        });
-      }
+      if (def.choices) this.wireAnchor(tag, field, (keys) => this.openChoiceMenu(field, keys));
 
-      if (field.unit) {
+      if (field.unit && num.chip) {
         // The unit is a button: clicking it changes what the field shows without retyping the number.
-        const chip = document.createElement("button");
-        chip.type = "button";
-        chip.className = "dim-unit";
-        chip.title = "Change unit";
-        chip.textContent = field.unit.label;
-        chip.addEventListener("pointerdown", (e) => {
-          e.preventDefault(); // never blur the input to open the menu
-          e.stopPropagation();
-          this.openUnitMenu(field);
-        });
+        const chip = num.chip;
+        chip.classList.add("dim-unit");
+        chip.id = `dim-unit-${++chipCount}`;
+        chip.tabIndex = -1;
+        paintChip(chip, field.unit);
+        input.setAttribute("aria-describedby", chip.id);
+        this.wireAnchor(chip, field, (keys) => this.openUnitMenu(field, keys));
         wrap.appendChild(chip);
         field.chip = chip;
       }
@@ -415,6 +465,7 @@ export class DimInput {
       this.sizeToContent(field);
       return field;
     });
+    this.extra = extra ?? null;
     if (extra) this.root.appendChild(extra);
     // The tool's options sit ahead of confirm and cancel: they change what is about to be committed.
     const opts = options === undefined ? [] : Array.isArray(options) ? options : [options];
@@ -424,33 +475,23 @@ export class DimInput {
       for (const o of opts) group.appendChild(this.optionElement(o));
       this.root.appendChild(group);
     }
-    // Visible confirm and cancel for mouse-first work; pointerdown with preventDefault so they never blur the input.
-    const ok = document.createElement("button");
-    ok.className = "dim-btn dim-ok dim-end";
-    ok.title = "Confirm (Enter)";
-    ok.setAttribute("aria-label", "Confirm");
-    ok.appendChild(iconElement("check", 15));
-    ok.addEventListener("pointerdown", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      swallowRelease(e.pointerId);
-      this.commit();
-    });
+    const ok = boxIconButton({ icon: "check", tip: "Confirm", keys: "Enter", iconSize: 15 }, "Confirm");
+    ok.classList.add("dim-ok", "dim-end");
+    this.onEndPress(ok, () => this.commit());
     this.root.appendChild(ok);
     if (this.onCancel) {
-      const no = document.createElement("button");
-      no.className = "dim-btn dim-no";
-      no.title = "Cancel (Esc)";
-      no.setAttribute("aria-label", "Cancel");
-      no.appendChild(iconElement("close", 15));
-      no.addEventListener("pointerdown", (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        swallowRelease(e.pointerId);
-        this.onCancel?.();
-      });
+      const no = boxIconButton({ icon: "close", tip: "Cancel", keys: "Esc", iconSize: 15 }, "Cancel");
+      no.classList.add("dim-no");
+      this.onEndPress(no, () => this.onCancel?.());
       this.root.appendChild(no);
     }
+    // Hidden, yet read: an element aria-describedby points at directly is described even when hidden.
+    const help = document.createElement("span");
+    help.id = this.helpId;
+    help.hidden = true;
+    help.textContent = this.fields.some((f) => f.chip || f.def.choices) ? `${BOX_HELP}, ${LIST_HELP}` : BOX_HELP;
+    this.root.appendChild(help);
+    this.nameGroup();
     // show() is often called from a pointerdown, and the browser moves focus to the click target after it returns,
     // so focus again next frame too or typing and Tab go nowhere.
     this.focus();
@@ -460,6 +501,16 @@ export class DimInput {
     this.unsubscribeError = onPreviewError((m) => this.setProblem(m));
     if (this.segmented.some((g) => g.def.segments.some((x) => x.key)))
       window.addEventListener("keydown", this.boundSegmentKey, true);
+  }
+
+  /** Confirm and Cancel act on the press, which never blurs the field, and on the click Enter, Space or a screen
+   *  reader sends. The box often goes with the press, so its release must not land on the canvas behind. */
+  private onEndPress(b: HTMLButtonElement, act: () => void) {
+    onActivate(b, (e) => {
+      if (e.type === "pointerdown") swallowRelease((e as PointerEvent).pointerId);
+      act();
+    });
+    b.addEventListener("pointerdown", (e) => e.stopPropagation());
   }
 
   private optionElement(o: DimOption): HTMLElement {
@@ -512,15 +563,16 @@ export class DimInput {
 
   /** The word stays in the button for screen readers and text checks; it shows only when there is no icon. */
   private optionButton(icon: string | undefined, label: string, title: string, text?: string): HTMLButtonElement {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.className = "dim-btn dim-opt";
-    b.title = title;
-    if (icon) {
-      b.setAttribute("aria-label", label);
-      b.appendChild(iconElement(icon, text ? 12 : 16));
-    } else b.classList.add("dim-worded");
-    if (icon && text) {
+    if (!icon) {
+      // clickable: the box keeps its own disabled model, a greyed segment still takes the arrows and Enter.
+      const b = uiButton({ label, variant: "ghost", size: "sm", tip: title || undefined, clickable: true });
+      b.classList.add("dim-btn", "dim-opt", "dim-worded");
+      b.querySelector(".btn-label")!.classList.add("dim-word");
+      return b;
+    }
+    const b = boxIconButton({ icon, tip: title || label, iconSize: text ? 12 : 16, clickable: true }, label);
+    b.classList.add("dim-opt");
+    if (text) {
       b.classList.add("dim-texted");
       const t = document.createElement("span");
       t.className = "dim-seg-text";
@@ -535,11 +587,13 @@ export class DimInput {
     return b;
   }
 
+  /** Acts on the press, never blurring the field, and on a screen reader's click. Space and Enter act on their
+   *  keydown in onOptionKey, which cancels Enter's click; some engines still click on a handled Space's release. */
   private onPress(b: HTMLElement, act: () => void) {
-    b.addEventListener("pointerdown", (e) => {
-      e.preventDefault(); // never blur the input to press it
-      e.stopPropagation();
-      act();
+    onActivate(b, () => act());
+    b.addEventListener("pointerdown", (e) => e.stopPropagation());
+    b.addEventListener("keyup", (e) => {
+      if (e.key === " ") e.preventDefault();
     });
   }
 
@@ -698,6 +752,12 @@ export class DimInput {
     const { icon: _old, ...rest } = f.def;
     f.def = icon ? { ...rest, label, icon } : { ...rest, label };
     this.paintName(f);
+    this.nameGroup();
+  }
+
+  private nameGroup() {
+    const labels = this.fields.filter((f) => !f.hidden).map((f) => f.def.label);
+    this.root.setAttribute("aria-label", labels.join(", ") || "Values");
   }
 
   /** Sets a field's choice without picking it. Does NOT call back, as with setToggle. */
@@ -725,7 +785,11 @@ export class DimInput {
       if (f.def.tag) tag.title = f.def.label;
       else tag.removeAttribute("title");
     }
-    if (f.def.choices) tag.appendChild(iconElement("caretDown", 10));
+    if (f.def.choices) {
+      tag.appendChild(iconElement("caretDown", 10));
+      const word = f.def.choices.options.find((o) => o.id === f.choice)?.word ?? f.def.label;
+      tag.setAttribute("aria-label", `Measure, ${word}`);
+    }
     f.input.setAttribute("aria-label", f.def.label);
   }
 
@@ -742,6 +806,7 @@ export class DimInput {
     f.hidden = hidden;
     const wrap = f.input.closest("label");
     if (wrap) wrap.style.display = hidden ? "none" : "";
+    this.nameGroup();
   }
 
   /** show() calls it; a tool that keeps clicking the canvas with the box open must call it after each click,
@@ -768,22 +833,33 @@ export class DimInput {
       return;
     }
     if (e.key === "Tab") {
-      e.preventDefault();
       field.userDriven = true; // Tab locks the current field
       const problem = this.fieldProblem(field);
       if (problem) this.setTypedProblem(problem);
-      this.moveFocus(field.input, e.shiftKey);
+      if (this.moveFocus(field.input, e.shiftKey)) e.preventDefault();
     } else if (e.key === "Enter") {
       e.preventDefault();
       this.commit();
+    } else if (e.key === "Escape" && this.menu) {
+      // The open list claimed this Escape, so the tool left it.
+      e.preventDefault();
+      this.closeMenu();
+    } else if (e.key === "ArrowDown" && e.altKey && (field.chip || field.def.choices)) {
+      e.preventDefault();
+      if (field.chip) this.openUnitMenu(field, true);
+      else this.openChoiceMenu(field, true);
     }
-    // Escape is handled by the owning tool's capture-phase keydown listener.
+    // Escape is otherwise handled by the owning tool's capture-phase keydown listener.
     e.stopPropagation(); // never let drawing shortcuts fire while typing
   }
 
-  /** The shown fields in order, then one stop per shown option: the chosen segment of a group, or the button. */
+  /** The shown fields in order, the tool's extra controls, one stop per shown option (the chosen segment of a group,
+   *  or the button), then Confirm and Cancel. */
   private tabStops(current: HTMLElement): HTMLElement[] {
     const fields = this.fields.filter((f) => !f.hidden || f.input === current).map((f) => f.input);
+    const extra = [...(this.extra?.querySelectorAll<HTMLElement>("button, input") ?? [])].filter(
+      (el) => el.tabIndex >= 0 && !el.closest("[hidden]"),
+    );
     const options: HTMLElement[] = [];
     for (const el of this.root.querySelectorAll<HTMLElement>(".dim-opts > *")) {
       if (el.style.display === "none") continue;
@@ -793,25 +869,39 @@ export class DimInput {
         if (stop) options.push(stop);
       }
     }
-    return [...fields, ...options];
+    const ends = [...this.root.querySelectorAll<HTMLElement>(".dim-ok, .dim-no")];
+    return [...fields, ...extra, ...options, ...ends];
   }
 
-  private moveFocus(from: HTMLElement, back: boolean) {
+  /** False off either end: there Tab stays the browser's and leaves the box, which never traps the keyboard. */
+  private moveFocus(from: HTMLElement, back: boolean): boolean {
     const stops = this.tabStops(from);
-    const at = stops.indexOf(from);
-    const next = stops[(at + (back ? stops.length - 1 : 1)) % stops.length];
-    if (!next) return;
+    const next = stops[stops.indexOf(from) + (back ? -1 : 1)];
+    if (!next) return false;
     next.focus();
     if (next instanceof HTMLInputElement) next.select();
+    return true;
   }
 
   private onOptionKey(e: KeyboardEvent) {
     const b = e.target;
+    if (b instanceof HTMLElement && this.extra?.contains(b)) {
+      // The extra control answers its own keys; the box only walks Tab through it.
+      if (e.key === "Tab" && this.moveFocus(b, e.shiftKey)) {
+        e.preventDefault();
+        e.stopPropagation();
+      } else if (b instanceof HTMLButtonElement && (e.key === "Enter" || e.key === " ")) e.stopPropagation();
+      return;
+    }
     if (!(b instanceof HTMLButtonElement) || !this.root.contains(b)) return;
     const group = b.classList.contains("dim-segment") ? this.segmented.find((g) => g.el.contains(b)) : undefined;
     const arrows: Record<string, number> = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 };
     if (e.key === "Tab") {
-      this.moveFocus(b, e.shiftKey);
+      if (!this.moveFocus(b, e.shiftKey)) return;
+    } else if (b.classList.contains("dim-ok") || b.classList.contains("dim-no")) {
+      // Their own click acts on Enter and Space. This stops the bubble listeners; capture ones ask isBoxButtonKey.
+      if (e.key === "Enter" || e.key === " ") e.stopPropagation();
+      return;
     } else if (group && e.key in arrows) {
       const segs = [...group.el.querySelectorAll<HTMLElement>(".dim-segment")].filter(
         (x) => !group.disabled.has(x.dataset.id!),
@@ -844,7 +934,7 @@ export class DimInput {
     const m = tryParseMeasure(this.numberText(f), f.unit);
     if (!m?.unit || m.unit === f.unit) return;
     f.unit = m.unit;
-    if (f.chip) f.chip.textContent = m.unit.label;
+    if (f.chip) paintChip(f.chip, m.unit);
   }
 
   private adoptTypedChoice(f: Field) {
@@ -853,17 +943,19 @@ export class DimInput {
   }
 
   /** A unit picked from the chip CONVERTS the value: 10 mm shown as inches is 0.3937 in, not 10 in. */
-  private openUnitMenu(f: Field) {
+  private openUnitMenu(f: Field, keys: boolean) {
     if (!f.unit || !f.chip) return;
     this.openMenu(
       f.chip,
+      "Unit",
+      keys,
       commonUnits(f.unit.dim).map((u) => ({
         label: u.label,
         active: u.id === f.unit?.id,
         pick: () => {
           const current = tryParseMeasure(this.numberText(f), f.unit);
           f.unit = u;
-          if (f.chip) f.chip.textContent = u.label;
+          if (f.chip) paintChip(f.chip, u);
           if (current) f.input.value = String(toUnit(current.value, u));
           this.sizeToContent(f);
           f.input.focus();
@@ -873,11 +965,13 @@ export class DimInput {
   }
 
   /** The tool rewrites the value in the new terms. */
-  private openChoiceMenu(f: Field) {
+  private openChoiceMenu(f: Field, keys: boolean) {
     const choices = f.def.choices;
     if (!choices) return;
     this.openMenu(
       f.tag,
+      "Measure",
+      keys,
       choices.options.map((c) => ({
         label: c.word,
         active: c.id === f.choice,
@@ -891,38 +985,149 @@ export class DimInput {
     );
   }
 
-  private openMenu(anchor: HTMLElement, rows: { label: string; active: boolean; pick: () => void }[]) {
+  /** The unit chip and the choice tag. A press opens the list and leaves the field focused; a click (Enter, Space,
+   *  a screen reader) or a key opens it with the focus on the anchor, which drives it by aria-activedescendant. */
+  private wireAnchor(anchor: HTMLElement, f: Field, open: (keys: boolean) => void) {
+    let spaceAt = -Infinity;
+    const afterSpace = () => performance.now() - spaceAt < 500;
+    onActivate(anchor, (e) => {
+      e.stopPropagation();
+      if (e.type !== "click") return open(false);
+      // Some engines still click a button on the release of a Space its keydown already handled.
+      if (afterSpace()) return;
+      if (this.menuAnchor === anchor) this.closeMenu();
+      else open(true);
+    });
+    anchor.addEventListener("keydown", (e) => {
+      if (this.onAnchorKey(e, f, anchor) && e.key === " ") spaceAt = performance.now();
+    });
+    anchor.addEventListener("keyup", (e) => {
+      if (e.key === " " && afterSpace()) e.preventDefault();
+    });
+  }
+
+  private onAnchorKey(e: KeyboardEvent, f: Field, anchor: HTMLElement): boolean {
+    const k = e.key;
+    const chip = anchor === f.chip;
+    const open = () => (chip ? this.openUnitMenu(f, true) : this.openChoiceMenu(f, true));
+    if (k === "Tab") {
+      this.closeMenu();
+      // Neither is a stop: the tag sits before its input and the chip after it.
+      if (chip === e.shiftKey) {
+        f.input.focus();
+        f.input.select();
+        e.preventDefault();
+      } else if (this.moveFocus(f.input, e.shiftKey)) e.preventDefault();
+      e.stopPropagation();
+      return true;
+    }
+    if (e.ctrlKey || e.metaKey) return false;
+    if (this.menuAnchor !== anchor) {
+      if (k !== "Enter" && k !== " " && k !== "ArrowDown" && k !== "ArrowUp") return false;
+      open();
+    } else if (k === "Escape") {
+      this.closeMenu();
+      f.input.focus();
+    } else if (k === "Enter" || k === " " || (k === "ArrowUp" && e.altKey)) {
+      this.menuRows[this.menuActive]?.pick();
+    } else if (k === "ArrowDown" || k === "ArrowUp") {
+      this.setMenuActive(this.menuActive + (k === "ArrowDown" ? 1 : -1));
+    } else if (k === "Home" || k === "End") {
+      this.setMenuActive(k === "Home" ? 0 : this.menuRows.length - 1);
+    } else if (k === (chip ? "ArrowLeft" : "ArrowRight") && (chip ? f.def.choices : f.chip)) {
+      // Left and Right step between the field's two lists, the tag's on the left and the unit's on the right.
+      if (chip) this.openChoiceMenu(f, true);
+      else this.openUnitMenu(f, true);
+    } else return false;
+    e.preventDefault();
+    e.stopPropagation();
+    return true;
+  }
+
+  private openMenu(
+    anchor: HTMLElement,
+    label: string,
+    keys: boolean,
+    rows: { label: string; active: boolean; pick: () => void }[],
+  ) {
     this.closeMenu();
+    this.menuAnchor = anchor;
     const menu = document.createElement("div");
     menu.className = "dim-unit-menu";
-    for (const r of rows) {
-      const row = document.createElement("button");
-      row.type = "button";
-      row.className = "dim-unit-item" + (r.active ? " active" : "");
-      row.textContent = r.label;
-      row.addEventListener("pointerdown", (e) => {
-        e.preventDefault();
-        e.stopPropagation();
+    menu.id = `dim-menu-${this.boxNo}`;
+    menu.setAttribute("role", "listbox");
+    menu.setAttribute("aria-label", label);
+    this.menuRows = rows.map((r, i) => {
+      const row = uiOption({ id: `${menu.id}-${i}`, label: r.label, selected: r.active, bare: true });
+      row.classList.add("dim-unit-item");
+      row.classList.toggle("active", r.active);
+      const pick = () => {
         this.closeMenu();
         r.pick();
+      };
+      onActivate(row, (e) => {
+        e.stopPropagation();
+        pick();
       });
       menu.appendChild(row);
-    }
+      return { el: row, pick };
+    });
     const at = anchor.getBoundingClientRect();
     menu.style.left = `${at.left}px`;
     menu.style.top = `${at.bottom + 2}px`;
     document.body.appendChild(menu);
     this.menu = menu;
+    setExpanded(anchor, true, menu.id);
+    // Tools that ask escapeClaimed() leave the next Escape to the list, which closes back to the field.
+    this.releaseEscape = claimEscape();
+    if (keys) {
+      anchor.focus();
+      this.setMenuActive(
+        Math.max(
+          0,
+          rows.findIndex((r) => r.active),
+        ),
+      );
+    }
     // One dismissal path, on the next press anywhere else.
-    setTimeout(() => window.addEventListener("pointerdown", this.boundCloseMenu, { once: true, capture: true }), 0);
+    this.menuTimer = setTimeout(
+      () => window.addEventListener("pointerdown", this.boundCloseMenu, { once: true, capture: true }),
+      0,
+    );
   }
 
   private menu: HTMLDivElement | null = null;
+  private menuAnchor: HTMLElement | null = null;
+  private menuRows: { el: HTMLElement; pick: () => void }[] = [];
+  private menuActive = -1;
+  private menuTimer: ReturnType<typeof setTimeout> | undefined;
+  private releaseEscape: (() => void) | null = null;
   private boundCloseMenu = () => this.closeMenu();
 
+  private setMenuActive(i: number) {
+    const anchor = this.menuAnchor;
+    if (!anchor || !this.menuRows.length) return;
+    this.menuActive = Math.min(this.menuRows.length - 1, Math.max(0, i));
+    this.menuRows.forEach((r, k) => r.el.classList.toggle("is-active", k === this.menuActive));
+    const row = this.menuRows[this.menuActive]!.el;
+    anchor.setAttribute("aria-activedescendant", row.id);
+    row.scrollIntoView?.({ block: "nearest" });
+  }
+
   private closeMenu() {
+    clearTimeout(this.menuTimer);
+    window.removeEventListener("pointerdown", this.boundCloseMenu, true);
     this.menu?.remove();
     this.menu = null;
+    this.menuRows = [];
+    this.menuActive = -1;
+    if (this.menuAnchor) {
+      setExpanded(this.menuAnchor, false);
+      this.menuAnchor.removeAttribute("aria-activedescendant");
+    }
+    this.menuAnchor = null;
+    this.releaseEscape?.();
+    this.releaseEscape = null;
   }
 
   /** values in MM; only tracking fields accept them */
@@ -982,15 +1187,36 @@ export class DimInput {
       this.problem?.remove();
       this.problem = null;
       this.root.classList.remove("dim-bad");
+      this.markInvalid([]);
       return;
     }
     this.root.classList.add("dim-bad");
     if (!this.problem) {
       this.problem = document.createElement("div");
       this.problem.className = "dim-problem";
+      this.problem.id = `dim-problem-${this.boxNo}`;
       this.root.appendChild(this.problem);
     }
     this.problem.textContent = message;
+    const shown = this.fields.filter((f) => !f.hidden);
+    const typed = this.typedProblem ? shown.filter((f) => this.fieldProblem(f)) : [];
+    this.markInvalid(typed.length ? typed : shown);
+  }
+
+  private markInvalid(bad: Field[]) {
+    for (const f of this.fields) {
+      const on = bad.includes(f) && this.problem;
+      const describedBy = [f.chip?.id, on ? this.problem!.id : ""].filter(Boolean).join(" ");
+      if (describedBy) f.input.setAttribute("aria-describedby", describedBy);
+      else f.input.removeAttribute("aria-describedby");
+      if (on) {
+        f.input.setAttribute("aria-invalid", "true");
+        f.input.setAttribute("aria-errormessage", this.problem!.id);
+      } else {
+        f.input.removeAttribute("aria-invalid");
+        f.input.removeAttribute("aria-errormessage");
+      }
+    }
   }
 
   /** For a tool that judges its own values: the preview channel only hears about values sent to the kernel. */
@@ -1130,6 +1356,7 @@ export class DimInput {
     this.unsubscribeError?.();
     this.unsubscribeError = null;
     this.problem = null; // innerHTML below takes the element with it
+    this.extra = null;
     this.external = null;
     this.typedProblem = null;
     this.root.classList.remove("dim-bad");

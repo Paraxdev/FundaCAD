@@ -7,6 +7,7 @@ import Dialog from "../../../src/components/ui/Dialog.vue";
 import ModalFrame from "../../../src/components/overlays/ModalFrame.vue";
 import Popover from "../../../src/components/ui/Popover.vue";
 import { useModalStore } from "../../../src/stores/modals";
+import { inertDepth } from "../../../src/composables/useModalGate";
 
 enableAutoUnmount(afterEach);
 
@@ -70,6 +71,54 @@ describe("Dialog", () => {
     expect([panel.getAttribute("role"), panel.getAttribute("aria-modal")]).toEqual(["dialog", "true"]);
     const title = document.getElementById(panel.getAttribute("aria-labelledby")!);
     expect(title?.textContent).toBe("Export");
+  });
+
+  it("is described only when given an id, and wears alertdialog when asked", async () => {
+    await render();
+    expect($(".ui-dialog")!.hasAttribute("aria-describedby")).toBe(false);
+    document.body.innerHTML = "";
+    await render({ role: "alertdialog", describedBy: "msg" });
+    const panel = $(".ui-dialog")!;
+    expect([panel.getAttribute("role"), panel.getAttribute("aria-describedby")]).toEqual(["alertdialog", "msg"]);
+  });
+
+  it("makes the page behind it inert while open, and hands it back before focus returns", async () => {
+    const { open } = await render();
+    const page = $(".opener")!.parentElement!;
+    expect([page.hasAttribute("inert"), page.getAttribute("aria-hidden")]).toEqual([true, "true"]);
+    expect($(".modal-overlay")!.hasAttribute("inert")).toBe(false);
+    expect(inertDepth()).toBe(1);
+    key("Escape");
+    await nextTick();
+    expect([open.value, page.hasAttribute("inert"), page.hasAttribute("aria-hidden"), inertDepth()]).toEqual([
+      false,
+      false,
+      false,
+      0,
+    ]);
+    expect(active()?.className).toBe("opener");
+  });
+
+  it("hides the page even when it holds no gate", async () => {
+    await render({ gate: false });
+    expect([useModalStore().depth, $(".opener")!.parentElement!.hasAttribute("inert")]).toEqual([0, true]);
+  });
+
+  it("a dialog over a dialog hides the one under it, and closing it hands that one back", async () => {
+    const inner = ref(false);
+    await render({}, () => [h("button", { class: "first" }), inner.value ? h(Dialog, { title: "Inner" }) : null]);
+    inner.value = true;
+    await nextTick();
+    await settle();
+    const [outer, top] = [...document.querySelectorAll<HTMLElement>(".modal-overlay")];
+    expect([outer!.hasAttribute("inert"), top!.hasAttribute("inert"), inertDepth()]).toEqual([true, false, 2]);
+    inner.value = false;
+    await nextTick();
+    expect([outer!.hasAttribute("inert"), $(".opener")!.parentElement!.hasAttribute("inert"), inertDepth()]).toEqual([
+      false,
+      true,
+      1,
+    ]);
   });
 
   it("wears the size class it is given", async () => {
@@ -177,28 +226,36 @@ describe("Dialog", () => {
   });
 });
 
-describe("ModalFrame keeps its old contract over Dialog", () => {
+describe("ModalFrame is a Dialog for plugins", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     document.body.innerHTML = "";
   });
 
-  async function frame() {
+  async function frame(props: Record<string, unknown> = {}) {
+    const open = ref(true);
     const closes = ref(0);
     const w = mount(
       defineComponent({
-        setup: () => () =>
-          h(
-            ModalFrame,
-            { panelClass: "export-dialog", onClose: () => closes.value++ },
-            { title: () => "Export", default: () => h("div", { class: "modal-body" }, [h("input")]) },
-          ),
+        setup: () => () => [
+          h("button", { class: "opener" }, "Open"),
+          open.value
+            ? h(
+                ModalFrame,
+                { panelClass: "export-dialog", onClose: () => closes.value++, ...props },
+                {
+                  title: () => "Export",
+                  default: () => h("div", { class: "modal-body" }, [h("input", { class: "field" })]),
+                },
+              )
+            : null,
+        ],
       }),
       { attachTo: document.body },
     );
     await nextTick();
     await settle();
-    return { w, closes };
+    return { w, open, closes };
   }
 
   it("keeps .modal-close, the panel class and the caller's own body", async () => {
@@ -208,13 +265,29 @@ describe("ModalFrame keeps its old contract over Dialog", () => {
     expect($(".modal-close")!.getAttribute("aria-label")).toBe("Close");
   });
 
-  it("neither gates, nor handles Escape, nor moves focus: the dialogs wearing it do that themselves", async () => {
-    const before = active();
-    const { closes } = await frame();
+  it("takes focus, closes on Escape and gives focus back, without the modal depth gate", async () => {
+    const { open, closes } = await frame();
+    open.value = false;
+    await nextTick();
+    $(".opener")!.focus();
+    open.value = true;
+    await nextTick();
+    await settle();
     expect(useModalStore().depth).toBe(0);
-    expect(active()).toBe(before);
-    key("Escape", {}, window);
-    expect(closes.value).toBe(0);
+    expect(active()?.className).toBe("field");
+    expect($(".opener")!.parentElement!.hasAttribute("inert")).toBe(true);
+    const e = key("Escape", {}, window);
+    expect([closes.value, e.defaultPrevented]).toEqual([1, true]);
+    open.value = false;
+    await nextTick();
+    expect(active()?.className).toBe("opener");
+  });
+
+  it("leaves Escape and focus to a plugin that opts out", async () => {
+    const { closes } = await frame({ closeOnEsc: false, initialFocus: "none", returnFocus: false });
+    expect(active()).toBe(document.body);
+    const e = key("Escape", {}, window);
+    expect([closes.value, e.defaultPrevented]).toEqual([0, false]);
     $(".modal-close")!.click();
     $(".modal-overlay")!.dispatchEvent(new Event("pointerdown", { bubbles: true }));
     expect(closes.value).toBe(2);

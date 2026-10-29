@@ -260,11 +260,15 @@ describe("boxVerdict", () => {
     }
   });
 
-  it("only ever rules OUT for a crossing", () => {
+  it("rules a crossing out when the boxes miss and in when the shape's box is wholly inside", () => {
     // Two boxes overlapping does not mean the shapes do, so an overlap can only
     // ask for a closer look.
-    expect(boxVerdict(boxOf(tri(300, 300, 340, 300, 320, 340)), R, "crossing")).toBe(false);
-    expect(boxVerdict(boxOf(clipping), R, "crossing")).toBe("look");
+    expect([
+      boxVerdict(boxOf(outside), R, "crossing"),
+      boxVerdict(boxOf(clipping), R, "crossing"),
+      boxVerdict(boxOf(inside), R, "crossing"),
+      polylineInBox(inside, R, "crossing"),
+    ]).toEqual([false, "look", true, true]);
   });
 
   it("refuses a window for anything behind the camera, and looks closer for a crossing", () => {

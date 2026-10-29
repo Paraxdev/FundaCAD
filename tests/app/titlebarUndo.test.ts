@@ -29,7 +29,7 @@ describe("the title bar Undo and Redo buttons", () => {
     vi.useFakeTimers();
     setActivePinia(createPinia());
     store = new DocumentStore(backend, doc());
-    installTitlebar({ store } as unknown as Engine);
+    installTitlebar({ store, tools: { move: { onHeldChange: () => () => {} } } } as unknown as Engine);
   });
 
   it("follow a material change and its undo, which change no feature", async () => {
