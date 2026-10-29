@@ -76,7 +76,13 @@ file = "manual/docs/img/sketch-overview.png"
 size = [1440, 900]
 theme = "fundacad"
 crop = "window"
-stub = true
+steps = [
+  { open = "fixture:sketch-block.json", name = "Block.funda" },
+  { pick_face = "top" },
+  { press = "s" },
+  { tool = "Rectangle" },
+  { hover = "#toolrail" },
+]
 show = "An open sketch on the top face of a block, with the tool rail and the sketch palette."
 alt = "An open sketch on a block's top face, with the tool rail and the sketch palette"
 uses = ["manual/docs/sketch/start.md:5"]

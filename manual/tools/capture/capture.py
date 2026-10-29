@@ -12,6 +12,7 @@ import tempfile
 import time
 import tomllib
 from pathlib import Path
+from urllib.parse import unquote
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
@@ -31,6 +32,17 @@ WATCH_OPEN = """() => {
 OPENED = "() => window.__captureOpened && window.store.document.features.length > 0"
 SET_THEME = "(id) => import('/src/ui/theme.ts').then((m) => m.setTheme(id))"
 SET_PARAM = "([n, e]) => window.store.setParamExpr(n, e)"
+# The frame and rebuild timings differ on every run, so a retake would change for no reason. readouts = true keeps them.
+HIDE_READOUTS = """(hide) => {
+  let el = document.getElementById('capture-hide-readouts');
+  if (!el) {
+    el = document.createElement('style');
+    el.id = 'capture-hide-readouts';
+    el.textContent = '#fps, .roundtrip { visibility: hidden !important; }';
+    document.head.append(el);
+  }
+  el.disabled = !hide;
+}"""
 # The browser decodes a screenshot to raw RGBA much faster than Python can unfilter a PNG.
 DECODE = """async (b64) => {
   const bin = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
@@ -47,6 +59,25 @@ DECODE = """async (b64) => {
 
 class ShotError(Exception):
     pass
+
+
+def serve_fonts(page):
+    """In a worktree whose node_modules is a junction, vite sees the fonts at their real path, outside the folders it
+    may serve, and answers 403, so the app falls back to a system font. The page reads them from disk instead."""
+    modules = (REPO / "node_modules").resolve()
+    if modules == REPO / "node_modules":
+        return
+
+    def fulfill(route):
+        rel = unquote(route.request.url.split("/@fs/", 1)[1].split("?", 1)[0])
+        f = Path(rel).resolve()
+        if f.is_relative_to(modules) and f.is_file():
+            route.fulfill(body=f.read_bytes(), content_type=f"font/{f.suffix[1:]}")
+        else:
+            route.fallback()
+
+    page.route("**/@fs/**/*.woff2*", fulfill)
+    page.route("**/@fs/**/*.woff", fulfill)
 
 
 def load(area: str) -> list[dict]:
@@ -101,7 +132,7 @@ def open_example(s, name: str):
     s.settle()
 
 
-def do_open(s, what: str):
+def do_open(s, what: str, name: str | None = None):
     kind, _, arg = what.partition(":")
     if kind == "example":
         open_example(s, arg)
@@ -109,7 +140,13 @@ def do_open(s, what: str):
         found = [d / arg for d in FIXTURES if (d / arg).exists()]
         if not found:
             raise ShotError(f"no fixture {arg} in {' or '.join(str(d.relative_to(REPO)) for d in FIXTURES)}")
-        s.open_file(found[0])
+        src = found[0]
+        if name:
+            # The title bar shows the file name, and .funda files may not be committed outside a few folders.
+            named = Path(tempfile.gettempdir()) / "fundacad-capture" / "open" / name
+            named.parent.mkdir(parents=True, exist_ok=True)
+            src = shutil.copyfile(src, named)
+        s.open_file(src)
     elif kind == "file":
         s.open_file(REPO / arg)
     elif kind == "new":
@@ -138,7 +175,7 @@ def run_step(s, step):
     opts = dict(list(step.items())[1:])
     page = s.page
     if action == "open":
-        do_open(s, value)
+        do_open(s, value, opts.get("name"))
     elif action == "theme":
         page.evaluate(SET_THEME, THEME_ALIASES.get(value, value))
     elif action == "evaluate":
@@ -239,6 +276,7 @@ def crop_rect(s, shot: dict) -> dict | None:
 
 
 def prepare(s, shot: dict):
+    s.page.evaluate("document.fonts.ready.then(() => true)")
     for _ in range(2):
         s.page.keyboard.press("Escape")
     s.panel("preferences", open=False)
@@ -246,6 +284,7 @@ def prepare(s, shot: dict):
     if s.page.viewport_size != {"width": w, "height": h}:
         s.page.set_viewport_size({"width": w, "height": h})
     s.page.evaluate(SET_THEME, theme_id(shot))
+    s.page.evaluate(HIDE_READOUTS, not shot.get("readouts", False))
     steps = shot.get("steps", [])
     first = steps[0] if steps else None
     if not (isinstance(first, dict) and next(iter(first)) == "open"):
@@ -365,11 +404,16 @@ def main(argv=None) -> int:
     sys.path.insert(0, str(HERE))
     from fundacad_harness import Session
 
+    class CaptureSession(Session):
+        def _launch_browser(self):
+            super()._launch_browser()
+            serve_fonts(self.page)
+
     for gpu in (False, True):
         batch = [x for x in live if bool(x.get("gpu")) == gpu]
         if not batch:
             continue
-        with Session(engine=args.engine, viewport=viewport_of(batch[0]), gpu=gpu,
+        with CaptureSession(engine=args.engine, viewport=viewport_of(batch[0]), gpu=gpu,
                      settle_timeout=args.settle_timeout, repo=REPO) as s:
             for shot in batch:
                 out = target_path(shot, args.out)
