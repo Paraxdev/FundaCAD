@@ -2,9 +2,11 @@
 //! in this session, through a dialog, a launch argument, a drop or the recent list. Tauri free so the unit tests can
 //! drive it.
 
+use serde::Serialize;
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
+use std::time::UNIX_EPOCH;
 
 /// A cap rather than an expiry, like plugins::handed::MAX_HELD: it bounds the set without taking away a recent choice.
 pub const MAX_VOUCHED: usize = 256;
@@ -96,6 +98,31 @@ pub fn require_file(raw: &str) -> Result<PathBuf, String> {
     }
 }
 
+/// What a link compares on open instead of the linked file's content.
+#[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DocStat {
+    pub size: u64,
+    pub mtime_ms: u64,
+}
+
+/// Metadata only, the file is never opened. None when nothing is there.
+pub fn stat_path(raw: &str) -> Result<Option<DocStat>, String> {
+    match std::fs::metadata(raw) {
+        Ok(meta) if meta.is_file() => {
+            let mtime_ms = meta
+                .modified()
+                .ok()
+                .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+                .map_or(0, |d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX));
+            Ok(Some(DocStat { size: meta.len(), mtime_ms }))
+        }
+        Ok(_) => Err(format!("{raw} is not a file")),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(format!("{raw}: {e}")),
+    }
+}
+
 /// Only an absolute path with a document extension, so a save never writes any other kind of file.
 pub fn check_save(raw: &str) -> Result<PathBuf, String> {
     let path = Path::new(raw);
@@ -133,5 +160,10 @@ impl Provenance {
     pub fn check_open(&self, raw: &str) -> Result<PathBuf, String> {
         self.refuse_unvouched(raw)?;
         require_file(raw)
+    }
+
+    pub fn stat(&self, raw: &str) -> Result<Option<DocStat>, String> {
+        self.refuse_unvouched(raw)?;
+        stat_path(raw)
     }
 }

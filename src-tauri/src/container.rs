@@ -228,6 +228,16 @@ pub fn container_is_container(held: tauri::State<'_, crate::doc_paths::Provenanc
     held.check_open(&path).is_ok_and(|p| looks_like_container(&p))
 }
 
+/// A linked document's size and modified time, or null when it is gone. Async so a slow network stat never holds the
+/// main thread.
+#[tauri::command]
+pub async fn container_stat(
+    held: tauri::State<'_, crate::doc_paths::Provenance>,
+    path: String,
+) -> Result<Option<crate::doc_paths::DocStat>, String> {
+    held.stat(&path)
+}
+
 /// The user picked `path` on Home's recent list or a Home folder, so it may be opened this session.
 #[tauri::command]
 pub fn paths_note_recent(held: tauri::State<'_, crate::doc_paths::Provenance>, path: String) {

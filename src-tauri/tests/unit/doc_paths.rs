@@ -1,5 +1,5 @@
 use fundacad_lib::doc_paths::{
-    check_open, check_save, is_remote_or_device, refuse_unvouched, Provenance, Vouched, MAX_VOUCHED,
+    check_open, check_save, is_remote_or_device, refuse_unvouched, stat_path, DocStat, Provenance, Vouched, MAX_VOUCHED,
 };
 
 fn temp_dir(name: &str) -> std::path::PathBuf {
@@ -116,6 +116,43 @@ fn the_app_state_still_requires_a_file() {
     std::fs::write(&file, "{}").unwrap();
     assert_eq!(held.check_open(file.to_str().unwrap()).unwrap(), file);
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_stat_gives_size_and_modified_time_of_a_file() {
+    let dir = temp_dir("stat");
+    let file = dir.join("linked.funda");
+    std::fs::write(&file, "{\"a\":1}").unwrap();
+    let raw = file.to_str().unwrap();
+    let got = stat_path(raw).unwrap().expect("the file is there");
+    assert_eq!(got.size, 7);
+    assert!(got.mtime_ms > 1_600_000_000_000, "{got:?}");
+    std::fs::write(&file, "{\"a\":12}").unwrap();
+    assert_eq!(stat_path(raw).unwrap().unwrap().size, 8);
+    assert_eq!(Provenance::default().stat(raw).unwrap().unwrap().size, 8);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_stat_of_nothing_is_none_and_of_a_folder_is_refused() {
+    let dir = temp_dir("stat-none");
+    assert_eq!(stat_path(dir.join("gone.funda").to_str().unwrap()).unwrap(), None);
+    assert!(stat_path(dir.to_str().unwrap()).unwrap_err().contains("not a file"));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_stat_of_an_unvouched_network_path_is_refused() {
+    let held = Provenance::default();
+    for raw in [r"\\host\share\linked.funda", "//host/share/linked.funda", r"\\?\UNC\host\share\linked.funda"] {
+        assert!(held.stat(raw).unwrap_err().contains("network or device"), "{raw}");
+    }
+}
+
+#[test]
+fn a_stat_serializes_for_the_window() {
+    let got = serde_json::to_value(DocStat { size: 3, mtime_ms: 4 }).unwrap();
+    assert_eq!(got, serde_json::json!({ "size": 3, "mtimeMs": 4 }));
 }
 
 #[test]

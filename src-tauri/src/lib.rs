@@ -426,6 +426,7 @@ pub fn run() {
         container::container_open_bytes,
         container::container_verify,
         container::container_is_container,
+        container::container_stat,
         container::paths_note_recent,
         home_commands::library_stat,
         home_commands::library_list,
