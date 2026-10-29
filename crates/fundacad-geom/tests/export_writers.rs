@@ -46,7 +46,7 @@ fn model_digests(bytes: Vec<u8>) -> Value {
         let mut f = z.by_index(i).unwrap();
         let mut data = Vec::new();
         f.read_to_end(&mut data).unwrap();
-        m.insert(f.name().to_string(), Value::String(digest(&data)));
+        m.insert(f.name().unwrap().into_owned(), Value::String(digest(&data)));
     }
     Value::Object(m)
 }

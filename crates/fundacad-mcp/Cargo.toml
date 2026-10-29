@@ -23,7 +23,7 @@ fundacad-core = { path = "../fundacad-core" }
 fundacad-protocol = { path = "../fundacad-protocol" }
 base64 = "0.22"
 flate2 = "1"
-zip = { version = "4", default-features = false, features = ["deflate-flate2"] }
+zip = { version = "9", default-features = false, features = ["deflate-flate2"] }
 png = "0.17"
 blake2 = "0.10"
 getrandom = { version = "0.3", features = ["std"] }

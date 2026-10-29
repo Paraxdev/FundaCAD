@@ -50,6 +50,7 @@ green-select.png
 !tests/fixtures/versions/*.funda
 !tests/fixtures/versions/*.fundab
 !tests/fixtures/future/*.funda
+!tests/fixtures/containers/*.funda
 !src/templates/*.funda
 !tests/fixtures/asm_*.step
 !third_party/opencascade-rs/crates/viewer/models/*.step

@@ -148,6 +148,9 @@ jobs:
       - name: Capture tool tests
         run: python tests/manual/test_capture.py
 
+      - name: Manual glossary tests
+        run: python tests/manual/test_glossary.py
+
   # What this run builds and where it goes (docs/ENGINE.md section 7). `config`
   # is empty on a ref that builds no installers. `gated` is false on dev, whose
   # installers still start after `test` and `rust-geom` finish but do not need

@@ -6,7 +6,27 @@ file = "manual/docs/img/combine-subtract.png"
 size = [660, 620]
 theme = "fundacad"
 crop = "region"
-stub = true
+park = [1300, 860]
+pause = 1600
+steps = [
+  { open = "fixture:sketch-block.json" },
+  { panel = "items", open = false },
+  { panel = "history" },
+  { tool = "Primitive" },
+  { click = "Cylinder" },
+  { wait = 600 },
+  { evaluate = "() => [...document.querySelectorAll('.timeline-node')].at(-1).click()" },
+  { wait = 400 },
+  { type = ["prop:radius", "10"], enter = true },
+  { type = ["prop:height", "40"], enter = true },
+  { evaluate = "() => document.activeElement && document.activeElement.blur()" },
+  { panel = "history", open = false },
+  { tool = "Subtract" },
+  { click_at = true, world = [25, 15, 10] },
+  { click_at = true, world = [0, 0, 20] },
+  { wait = 800 },
+  { press = "Escape" },
+]
 show = "A block with a round hole left where a cylinder was subtracted."
 alt = "A block with a round hole where a cylinder was subtracted"
 uses = ["manual/docs/model/combine.md"]
@@ -16,7 +36,24 @@ file = "manual/docs/img/construct-planes.png"
 size = [660, 620]
 theme = "fundacad"
 crop = "region"
-stub = true
+around = "world:0,0,15"
+park = [1300, 860]
+pause = 1600
+steps = [
+  { open = "fixture:sketch-block.json" },
+  { panel = "items", open = false },
+  { panel = "history", open = false },
+  { tool = "Datum Plane" },
+  { click_at = true, world = [0, 0, 10] },
+  { type = ["Offset", "25"], enter = true },
+  { press = "Escape" },
+  { tool = "Axis on Edge" },
+  { pick_edge = "near=30,-20,0", via = "edge" },
+  { press = "Escape" },
+  { mouse = "down", at = [1250, 250], button = "right" },
+  { mouse = "move", by = [0, -30], steps = 6 },
+  { mouse = "up", button = "right" },
+]
 show = "A block with an offset plane above it and a vertical datum axis."
 alt = "A block with an offset plane above it and a vertical datum axis"
 uses = ["manual/docs/model/construct.md"]
@@ -25,10 +62,29 @@ uses = ["manual/docs/model/construct.md"]
 file = "manual/docs/img/expression-value.png"
 size = [480, 240]
 theme = "fundacad"
-crop = "control"
-stub = true
-show = "The Extrude distance value box holding the expression rib = width / 4, with the current value box options."
-alt = "The Extrude distance box holding rib = width / 4"
+crop = "region"
+around = "sketch:5,11"
+park = [1300, 860]
+steps = [
+  { open = "fixture:sketch-dim.json" },
+  { evaluate = "() => window.store.addParam('width', '40')" },
+  { wait = 400 },
+  { panel = "history" },
+  { click = "feature:s", double = true },
+  { panel = "items", open = false },
+  { panel = "history", open = false },
+  { evaluate = "() => window.viewport.frameAround([14, 10, 0], 110)" },
+  { wait = 900 },
+  { tool = "Dimension" },
+  { click_at = true, sketch = [16, 10] },
+  { hover = [26, 17], space = "sketch" },
+  { click_at = true, sketch = [26, 17] },
+  { wait = 400 },
+  { evaluate = "() => { const i = document.querySelector('.dim-field input'); i.focus(); i.value = 'hole = width / 5'; i.dispatchEvent(new Event('input', { bubbles: true })); }" },
+  { wait = 400 },
+]
+show = "A sketch dimension's value box holding the expression hole = width / 5."
+alt = "A sketch dimension's value box holding hole = width / 5"
 uses = ["manual/docs/model/expressions.md"]
 
 [[shot]]
@@ -36,7 +92,26 @@ file = "manual/docs/img/extrude-taper.png"
 size = [960, 800]
 theme = "fundacad"
 crop = "region"
-stub = true
+at = [285, 52]
+park = [1300, 700]
+steps = [
+  { panel = "items" },
+  { panel = "history", open = false },
+  { tool = "Sketch" },
+  { pick_plane = "XY" },
+  { tool = "Rectangle" },
+  { click_at = true, sketch = [-30, -20] },
+  { click_at = true, sketch = [30, 20] },
+  { press = "Escape" },
+  { press = "Escape" },
+  { tool = "Extrude" },
+  { click_at = true, world = [0, 0, 0] },
+  { type = ["D", "25"] },
+  { type = ["Angle", "12"] },
+  { mouse = "down", at = [760, 180], button = "middle" },
+  { mouse = "move", by = [-140, -50], steps = 6 },
+  { mouse = "up", button = "middle" },
+]
 show = "An extrude preview with a 12 degree taper, the distance and angle boxes below it, as the value box looks now."
 alt = "An extrude preview with a 12 degree taper, the distance and angle boxes below it"
 uses = ["manual/docs/model/extrude.md"]
@@ -46,9 +121,38 @@ file = "manual/docs/img/rectangle-extrude.gif"
 size = [800, 655]
 theme = "fundacad"
 crop = "region"
+at = [300, 198]
 gif = { delay = 100, loop = 0 }
-stub = true
-show = "Drawing a rectangle and extruding it into a block (about 29 frames, 800 wide)."
+steps = [
+  { open = "fixture:sketch-block.json" },
+  { open = "new" },
+  { panel = "history", open = false },
+  { panel = "items", open = false },
+  { tool = "Sketch" },
+  { pick_plane = "XY" },
+  { tool = "Rectangle" },
+  { mouse = "move", at = [-20, -15], space = "sketch", steps = 4 },
+]
+frames = [
+  { hold = 700 },
+  { steps = [{ mouse = "down" }, { mouse = "up" }], hold = 200 },
+  { steps = [{ mouse = "move", at = [-15, -11.25], space = "sketch", steps = 3 }], hold = 90, settle = false },
+  { steps = [{ mouse = "move", at = [-10, -7.5], space = "sketch", steps = 3 }], hold = 90, settle = false },
+  { steps = [{ mouse = "move", at = [-5, -3.75], space = "sketch", steps = 3 }], hold = 90, settle = false },
+  { steps = [{ mouse = "move", at = [0, 0], space = "sketch", steps = 3 }], hold = 90, settle = false },
+  { steps = [{ mouse = "move", at = [5, 3.75], space = "sketch", steps = 3 }], hold = 90, settle = false },
+  { steps = [{ mouse = "move", at = [10, 7.5], space = "sketch", steps = 3 }], hold = 90, settle = false },
+  { steps = [{ mouse = "move", at = [15, 11.25], space = "sketch", steps = 3 }], hold = 90, settle = false },
+  { steps = [{ mouse = "move", at = [20, 15], space = "sketch", steps = 3 }], hold = 90, settle = false },
+  { steps = [{ mouse = "down" }, { mouse = "up" }], hold = 600 },
+  { steps = [{ press = "Escape" }, { press = "Escape" }], hold = 700 },
+  { steps = [{ wait = 600 }, { tool = "Extrude" }, { click_at = true, world = [0, 0, 0] }], hold = 700 },
+  { steps = [{ mouse = "down", at = [0, 0, 12], space = "world" }], hold = 100 },
+  { steps = [{ mouse = "move", by = [0, -10], steps = 2 }], repeat = 8, hold = 90, settle = false },
+  { steps = [{ mouse = "up" }], hold = 300 },
+  { steps = [{ press = "Enter" }, { press = "Escape" }], hold = 1800 },
+]
+show = "Drawing a rectangle and extruding it into a block (24 frames, 800 wide)."
 alt = "Drawing a rectangle and extruding it into a block"
 uses = ["manual/docs/model/extrude.md"]
 
@@ -57,8 +161,31 @@ file = "manual/docs/img/extrude-thin.png"
 size = [640, 520]
 theme = "fundacad"
 crop = "region"
-stub = true
-show = "A thin extrude of an open L of two lines, a 2 mm wall with a mitred corner, the Thin switch on."
+around = "world:2.5,2.5,10"
+offset = [-70, 0]
+park = [1420, 880]
+steps = [
+  { open = "fixture:sketch-block.json" },
+  { open = "new" },
+  { panel = "items" },
+  { panel = "history" },
+  { tool = "Sketch" },
+  { pick_plane = "XY" },
+  { tool = "Line" },
+  { click_at = true, sketch = [-30, 25] },
+  { click_at = true, sketch = [-30, -20] },
+  { click_at = true, sketch = [35, -20] },
+  { press = "Escape" },
+  { press = "Escape" },
+  { press = "Escape" },
+  { click = "Sketch1" },
+  { press = "e" },
+  { type = ["prop:distance", "20"], enter = true },
+  { panel = "history", open = false },
+  { press = "Escape" },
+  { panel = "items", open = false },
+]
+show = "A thin extrude of an open L of two lines, a 2 mm wall with a mitred corner."
 alt = "A thin extrude of an L of two lines, a 2 mm wall with a mitred corner"
 uses = ["manual/docs/model/extrude.md"]
 
@@ -67,7 +194,17 @@ file = "manual/docs/img/fillet-edge.png"
 size = [860, 640]
 theme = "fundacad"
 crop = "region"
-stub = true
+at = [360, 165]
+park = [1300, 700]
+steps = [
+  { open = "fixture:sketch-block.json" },
+  { panel = "items", open = false },
+  { panel = "history", open = false },
+  { view = "fit" },
+  { tool = "Fillet" },
+  { click = "edge:between top front" },
+  { type = ["R", "6"] },
+]
 show = "A block edge being rounded, the radius box beside it, with the continuity options of today (G3 fillets are recent)."
 alt = "A block edge being rounded, the radius box beside it"
 uses = ["manual/docs/model/fillet-chamfer.md"]
@@ -77,8 +214,23 @@ file = "manual/docs/img/fillet-drag.gif"
 size = [800, 558]
 theme = "fundacad"
 crop = "region"
+at = [380, 245]
 gif = { delay = 100, loop = 0 }
-stub = true
+steps = [
+  { open = "fixture:sketch-block.json" },
+  { panel = "items", open = false },
+  { panel = "history", open = false },
+  { view = "fit" },
+  { tool = "Fillet" },
+  { click = "edge:between top front" },
+  { mouse = "move", at = [1300, 700] },
+]
+frames = [
+  { hold = 900 },
+  { steps = [{ drag_handle = "size", mm = 0.75 }], repeat = 10, hold = 120 },
+  { steps = [{ mouse = "move", at = [1300, 700] }], hold = 900 },
+  { steps = [{ press = "Enter" }], hold = 1800 },
+]
 show = "A fillet radius growing on a block edge as the arrow is dragged (about 12 frames, 800 wide). Show the continuity choice if the box shows it (G3 is recent)."
 alt = "A fillet radius growing on an edge"
 uses = ["manual/docs/model/fillet-chamfer.md"]
@@ -88,7 +240,22 @@ file = "manual/docs/img/hole-dialog.png"
 size = [960, 700]
 theme = "fundacad"
 crop = "region"
-stub = true
+at = [240, 85]
+park = [1300, 860]
+pause = 1600
+steps = [
+  { open = "fixture:sketch-block.json" },
+  { panel = "items", open = false },
+  { panel = "history", open = false },
+  { view = "fit" },
+  { evaluate = "() => document.querySelector('canvas').dispatchEvent(new WheelEvent('wheel', { deltaY: 100, clientX: 760, clientY: 450, bubbles: true, cancelable: true }))" },
+  { wait = 600 },
+  { tool = "Hole" },
+  { pick_face = "top" },
+  { type = ["X", "-12"] },
+  { type = ["Y", "8"] },
+  { wait = 800 },
+]
 show = "The Hole box with size M3 and a through depth over a block."
 alt = "The Hole box with size M3 and a through depth over a block"
 uses = ["manual/docs/model/hole.md"]
@@ -98,9 +265,19 @@ file = "manual/docs/img/items-list.png"
 size = [276, 852]
 theme = "fundacad"
 crop = "panel"
-stub = true
-show = "The Items card with a Hardware folder holding two bodies, one of them hidden."
-alt = "The Items card with a Hardware folder holding two bodies, one of them hidden"
+target = "#browser"
+fit = "size"
+park = [1300, 860]
+steps = [
+  { open = "fixture:items-hardware.json" },
+  { panel = "history", open = false },
+  { panel = "items" },
+  { evaluate = "() => document.querySelectorAll('#browser .tree-folder[aria-expanded=\"false\"] .tree-caret').forEach((b) => b.click())" },
+  { wait = 300 },
+  { press = "Escape" },
+]
+show = "The Items card with a Hardware element holding two bodies, one of them hidden."
+alt = "The Items card with a Hardware element holding two bodies, one of them hidden"
 uses = ["manual/docs/model/items.md"]
 
 [[shot]]
@@ -108,7 +285,42 @@ file = "manual/docs/img/loft-adapter.png"
 size = [660, 620]
 theme = "fundacad"
 crop = "region"
-stub = true
+around = "world:0,0,15"
+park = [1300, 860]
+pause = 1600
+steps = [
+  { open = "fixture:sketch-block.json" },
+  { open = "new" },
+  { panel = "items", open = false },
+  { panel = "history", open = false },
+  { tool = "Sketch" },
+  { pick_plane = "XY" },
+  { tool = "Circle" },
+  { click_at = true, sketch = [0, 0] },
+  { click_at = true, sketch = [16, 0] },
+  { press = "Escape" },
+  { press = "Escape" },
+  { press = "Escape" },
+  { press = "o" },
+  { pick_plane = "XY" },
+  { type = ["Offset", "30"], enter = true },
+  { tool = "Rectangle" },
+  { click_at = true, sketch = [-15, -15] },
+  { click_at = true, sketch = [15, 15] },
+  { press = "Escape" },
+  { press = "Escape" },
+  { press = "Escape" },
+  { tool = "Loft" },
+  { click_at = true, world = [9, -12, 0] },
+  { click_at = true, world = [0, 0, 30] },
+  { press = "Enter" },
+  { wait = 800 },
+  { panel = "items" },
+  { evaluate = "() => [...document.querySelectorAll('.feature-row')].find((r) => r.textContent.includes('Plane1')).querySelector('.tree-eye').click()" },
+  { panel = "items", open = false },
+  { evaluate = "() => document.querySelector('canvas').dispatchEvent(new WheelEvent('wheel', { deltaY: -100, clientX: 720, clientY: 540, bubbles: true, cancelable: true }))" },
+  { wait = 600 },
+]
 show = "A circle at the bottom lofted into a square at the top."
 alt = "A circle at the bottom lofted into a square at the top"
 uses = ["manual/docs/model/loft-sweep.md"]
@@ -118,7 +330,21 @@ file = "manual/docs/img/move-gizmo.png"
 size = [900, 580]
 theme = "fundacad"
 crop = "region"
-stub = true
+at = [400, 150]
+park = [1300, 860]
+pause = 1600
+steps = [
+  { open = "fixture:sketch-block.json" },
+  { panel = "items", open = false },
+  { panel = "history", open = false },
+  { view = "fit" },
+  { evaluate = "() => document.querySelector('canvas').dispatchEvent(new WheelEvent('wheel', { deltaY: 100, clientX: 760, clientY: 450, bubbles: true, cancelable: true }))" },
+  { wait = 600 },
+  { evaluate = "() => document.querySelector('canvas').dispatchEvent(new WheelEvent('wheel', { deltaY: 100, clientX: 760, clientY: 450, bubbles: true, cancelable: true }))" },
+  { wait = 600 },
+  { tool = "Move" },
+  { wait = 800 },
+]
 show = "The move gizmo with arrows, squares and rings in the axis colours, and its value bar."
 alt = "The move gizmo with arrows, squares and rings, and its value bar"
 uses = ["manual/docs/model/move.md"]
@@ -128,7 +354,17 @@ file = "manual/docs/img/parameters-dialog.png"
 size = [694, 306]
 theme = "fundacad"
 crop = "panel"
-stub = true
+target = ".params-dialog"
+pad = 10
+fit = "size"
+park = [1300, 860]
+steps = [
+  { evaluate = "() => { window.store.addParam('width', '40'); window.store.addParam('depth', '30'); window.store.addParam('holes', '4', 'count'); }" },
+  { wait = 400 },
+  { evaluate = "() => { window.store.setParamComment('width', 'Plate width'); window.store.setParamComment('holes', 'Holes along the edge'); }" },
+  { wait = 400 },
+  { tool = "Parameters" },
+]
 show = "The Parameters dialog listing width, depth and holes."
 alt = "The Parameters dialog listing width, depth and holes"
 uses = ["manual/docs/model/parameters.md"]
@@ -138,7 +374,41 @@ file = "manual/docs/img/pattern-holes.png"
 size = [660, 620]
 theme = "fundacad"
 crop = "region"
-stub = true
+park = [1300, 860]
+pause = 1600
+steps = [
+  { open = "fixture:sketch-block.json" },
+  { open = "new" },
+  { panel = "items", open = false },
+  { panel = "history" },
+  { tool = "Primitive" },
+  { click = "Box" },
+  { wait = 600 },
+  { click_css = ".timeline-node" },
+  { type = ["prop:length", "100"], enter = true },
+  { type = ["prop:width", "30"], enter = true },
+  { type = ["prop:height", "6"], enter = true },
+  { evaluate = "() => document.activeElement && document.activeElement.blur()" },
+  { panel = "history", open = false },
+  { tool = "Hole" },
+  { pick_face = "top" },
+  { type = ["Size", "M8"] },
+  { type = ["X", "-40"] },
+  { type = ["Y", "0"], enter = true },
+  { wait = 800 },
+  { press = "Escape" },
+  { panel = "history" },
+  { evaluate = "() => [...document.querySelectorAll('.timeline-node')].at(-1).click()" },
+  { wait = 400 },
+  { tool = "Linear Pattern" },
+  { type = ["Spacing", "20"] },
+  { type = ["Copies", "5"], enter = true },
+  { wait = 800 },
+  { press = "Escape" },
+  { panel = "history", open = false },
+  { evaluate = "() => document.querySelector('canvas').dispatchEvent(new WheelEvent('wheel', { deltaY: 100, clientX: 720, clientY: 450, bubbles: true, cancelable: true }))" },
+  { wait = 600 },
+]
 show = "A plate with a row of five holes made with Linear Pattern."
 alt = "A plate with a row of five holes"
 uses = ["manual/docs/model/pattern.md"]
@@ -148,7 +418,20 @@ file = "manual/docs/img/presspull-face.png"
 size = [840, 740]
 theme = "fundacad"
 crop = "region"
-stub = true
+at = [367, 115]
+park = [1300, 700]
+steps = [
+  { open = "fixture:sketch-block.json" },
+  { panel = "items", open = false },
+  { panel = "history", open = false },
+  { view = "fit" },
+  { evaluate = "() => document.querySelector('canvas').dispatchEvent(new WheelEvent('wheel', { deltaY: 100, clientX: 760, clientY: 450, bubbles: true, cancelable: true }))" },
+  { wait = 600 },
+  { tool = "Press/Pull" },
+  { pick_face = "top" },
+  { type = ["D", "9"] },
+  { wait = 800 },
+]
 show = "A selected top face being pulled out by Press/Pull, the value box above it."
 alt = "A selected top face being pulled out by Press/Pull, the value box above it"
 uses = ["manual/docs/model/press-pull.md"]
@@ -158,9 +441,26 @@ file = "manual/docs/img/presspull.gif"
 size = [800, 705]
 theme = "fundacad"
 crop = "region"
+at = [387, 95]
 gif = { delay = 100, loop = 0 }
-stub = true
-show = "A face being pulled out with Press/Pull (about 26 frames, 800 wide)."
+steps = [
+  { open = "fixture:sketch-block.json" },
+  { panel = "items", open = false },
+  { panel = "history", open = false },
+  { view = "fit" },
+  { evaluate = "() => document.querySelector('canvas').dispatchEvent(new WheelEvent('wheel', { deltaY: 100, clientX: 760, clientY: 450, bubbles: true, cancelable: true }))" },
+  { wait = 600 },
+  { tool = "Press/Pull" },
+  { pick_face = "top" },
+  { mouse = "move", at = [1300, 700] },
+]
+frames = [
+  { hold = 900 },
+  { steps = [{ drag_handle = "push", mm = 1 }], repeat = 10, hold = 120 },
+  { steps = [{ mouse = "move", at = [1300, 700] }], hold = 900 },
+  { steps = [{ press = "Enter" }], hold = 1800 },
+]
+show = "A top face pulled out 1 mm a frame to 10 mm with the push arrow, the value box following it, then Enter."
 alt = "A face being pulled out with Press/Pull"
 uses = ["manual/docs/model/press-pull.md"]
 
@@ -169,7 +469,24 @@ file = "manual/docs/img/primitive-cylinder.png"
 size = [890, 720]
 theme = "fundacad"
 crop = "region"
-stub = true
+at = [550, 38]
+park = [1300, 860]
+pause = 1600
+steps = [
+  { open = "fixture:sketch-block.json" },
+  { open = "new" },
+  { panel = "items", open = false },
+  { panel = "history" },
+  { tool = "Primitive" },
+  { click = "Cylinder" },
+  { wait = 600 },
+  { click_css = ".timeline-node" },
+  { type = ["prop:radius", "12"], enter = true },
+  { type = ["prop:height", "30"], enter = true },
+  { evaluate = "() => document.activeElement && document.activeElement.blur()" },
+  { evaluate = "() => document.querySelector('canvas').dispatchEvent(new WheelEvent('wheel', { deltaY: -100, clientX: 600, clientY: 470, bubbles: true, cancelable: true }))" },
+  { wait = 600 },
+]
 show = "A cylinder on the origin and its Radius and Height rows in the History card."
 alt = "A cylinder on the origin and its Radius and Height rows in the History card"
 uses = ["manual/docs/model/primitives.md"]
@@ -179,7 +496,36 @@ file = "manual/docs/img/revolve-profile.png"
 size = [660, 620]
 theme = "fundacad"
 crop = "region"
-stub = true
+around = "world:0,0,22"
+offset = [0, 14]
+park = [1300, 860]
+pause = 1600
+steps = [
+  { open = "fixture:sketch-block.json" },
+  { open = "new" },
+  { panel = "items", open = false },
+  { panel = "history", open = false },
+  { tool = "Sketch" },
+  { pick_plane = "XZ" },
+  { tool = "Line" },
+  { click_at = true, sketch = [0, 0] },
+  { click_at = true, sketch = [10, 0] },
+  { click_at = true, sketch = [17, 16] },
+  { click_at = true, sketch = [10, 32] },
+  { click_at = true, sketch = [7, 37] },
+  { click_at = true, sketch = [10, 44] },
+  { click_at = true, sketch = [0, 44] },
+  { click_at = true, sketch = [0, 0] },
+  { press = "Escape" },
+  { press = "Escape" },
+  { press = "Escape" },
+  { tool = "Revolve" },
+  { wait = 400 },
+  { click_at = true, world = [0, 0, 6] },
+  { wait = 800 },
+  { evaluate = "() => document.querySelector('canvas').dispatchEvent(new WheelEvent('wheel', { deltaY: -100, clientX: 720, clientY: 360, bubbles: true, cancelable: true }))" },
+  { wait = 600 },
+]
 show = "A vase made by revolving a half outline."
 alt = "A vase made by revolving a half outline"
 uses = ["manual/docs/model/revolve.md"]
@@ -189,7 +535,42 @@ file = "manual/docs/img/mirror-half.png"
 size = [660, 620]
 theme = "fundacad"
 crop = "region"
-stub = true
+around = "world:0,-15,18"
+offset = [0, 20]
+park = [1300, 860]
+pause = 1600
+steps = [
+  { open = "fixture:sketch-block.json" },
+  { open = "new" },
+  { panel = "items", open = false },
+  { panel = "history", open = false },
+  { tool = "Sketch" },
+  { pick_plane = "XZ" },
+  { tool = "Line" },
+  { click_at = true, sketch = [0, 0] },
+  { click_at = true, sketch = [40, 0] },
+  { click_at = true, sketch = [40, 36] },
+  { click_at = true, sketch = [30, 36] },
+  { click_at = true, sketch = [30, 10] },
+  { click_at = true, sketch = [0, 10] },
+  { click_at = true, sketch = [0, 0] },
+  { press = "Escape" },
+  { press = "Escape" },
+  { press = "Escape" },
+  { tool = "Extrude" },
+  { click_at = true, world = [15, 0, 5] },
+  { type = ["D", "30"] },
+  { press = "Enter" },
+  { wait = 800 },
+  { evaluate = "() => document.querySelector('canvas').dispatchEvent(new WheelEvent('wheel', { deltaY: 100, clientX: 720, clientY: 450, bubbles: true, cancelable: true }))" },
+  { wait = 600 },
+  { evaluate = "() => document.querySelector('canvas').dispatchEvent(new WheelEvent('wheel', { deltaY: 100, clientX: 720, clientY: 450, bubbles: true, cancelable: true }))" },
+  { wait = 600 },
+  { tool = "Mirror" },
+  { wait = 400 },
+  { evaluate = "() => [...document.querySelectorAll('.mirror-chips button')].find((b) => b.textContent.trim() === 'YZ').click()" },
+  { wait = 800 },
+]
 show = "One half of a bracket beside its mirrored copy."
 alt = "One half of a bracket beside its mirrored copy"
 uses = ["manual/docs/model/scale-mirror.md"]
@@ -199,7 +580,29 @@ file = "manual/docs/img/shell-mug.png"
 size = [660, 620]
 theme = "fundacad"
 crop = "region"
-stub = true
+park = [1300, 860]
+pause = 1600
+steps = [
+  { open = "fixture:sketch-block.json" },
+  { open = "new" },
+  { panel = "items", open = false },
+  { panel = "history" },
+  { tool = "Primitive" },
+  { click = "Cylinder" },
+  { wait = 600 },
+  { click_css = ".timeline-node" },
+  { type = ["prop:radius", "20"], enter = true },
+  { type = ["prop:height", "40"], enter = true },
+  { evaluate = "() => document.activeElement && document.activeElement.blur()" },
+  { panel = "history", open = false },
+  { tool = "Shell" },
+  { pick_face = "top" },
+  { type = ["T", "2"], enter = true },
+  { wait = 800 },
+  { press = "Escape" },
+  { evaluate = "() => document.querySelector('canvas').dispatchEvent(new WheelEvent('wheel', { deltaY: -100, clientX: 720, clientY: 470, bubbles: true, cancelable: true }))" },
+  { wait = 600 },
+]
 show = "A cylinder hollowed into an open mug."
 alt = "A cylinder hollowed into an open mug"
 uses = ["manual/docs/model/shell.md"]
