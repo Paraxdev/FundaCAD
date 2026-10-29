@@ -1138,7 +1138,7 @@ note: left out of the file, because this build cannot read them and a .funda has
 
     #[tool(
         name = "printability",
-        description = "Check the built parts for FDM printing before they are printed: overhangs past the angle that prints unsupported (45 deg), walls under two nozzle widths, floors under two layers, gaps narrow enough to fuse, flat ceilings bridged further than 10 mm, and shells that are not closed solids. Each finding names the face (F index, for `inspect` and `view` highlight_faces) and ends in a `view` focus. As modelled with +Z up, or `layFlat` as `export` would lay the parts. Measured on a fine mesh, the triangles an STL export holds. A flat ceiling counts as a bridge when walls hold it on two opposite sides, otherwise it is an overhang. Changes nothing. A long report counts its findings first, folds bodies alike in all but their ids and position into one row and shows 30 rows: `offset` pages on, `limit` 0 shows every row, `bodies` checks some, `full` gives each body its own block, `all` every finding.",
+        description = "Check the built parts for FDM printing before they are printed: overhangs past the angle that prints unsupported (45 deg), walls under two nozzle widths, floors under two layers, gaps narrow enough to fuse, flat ceilings bridged further than 10 mm, and shells that are not closed solids. Each finding names the face (F index, for `inspect` and `view` highlight_faces) and ends in a `view` focus. As modelled with +Z up, or `layFlat` as `export` would lay the parts. Measured on a fine mesh, the triangles an STL export holds. A flat ceiling counts as a bridge when walls hold it on two opposite sides, otherwise it is an overhang. Changes nothing. A long report counts its findings first, folds bodies alike in all but their ids and position into one row and shows 30 rows: `offset` pages on, `limit` 0 shows every row, `bodies` checks some as if printed alone, `full` gives each body its own block and focus, `all` every finding.",
         input_schema = crate::tools::printability(),
         annotations(read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
@@ -1896,7 +1896,7 @@ impl FundaCad {
                 if ids.is_empty() {
                     return text(line);
                 }
-                paged = Some(format!("{line}, or name one with `body`"));
+                paged = Some(if line.contains(": pass ") { format!("{line}, or name one with `body`") } else { line });
                 wanted = ids;
             }
         }

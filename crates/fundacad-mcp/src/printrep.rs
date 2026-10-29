@@ -133,7 +133,7 @@ fn summary(r: &Value, flagged: usize, topology: bool, full: bool) -> String {
         }
     }
     let alike =
-        if full { "" } else { "; alike bodies in one row with the first one's focus, bodies [id] shows one alone" };
+        if full { "" } else { "; alike bodies in one row with the first one's focus, full true gives each its own" };
     format!("{flagged} of {} bodies have findings: {}{alike}", bodies.len(), counts.join(", "))
 }
 

@@ -80,7 +80,7 @@ fn alike_pins_fold_into_one_row_after_the_counts() {
     let lines: Vec<&str> = out.lines().collect();
     assert_eq!(lines[0], HEAD);
     assert!(lines[1].starts_with("41 of 42 bodies have findings: 41 overhangs; alike bodies in one row"), "{out}");
-    assert!(lines[1].contains("bodies [id] shows one alone"), "{out}");
+    assert!(lines[1].contains("first one's focus, full true gives each its own"), "{out}");
     assert_eq!(lines[2], "body1 \"Pin\": 1 overhang (and 39 more alike: body4..body42, named \"Pin 2\"..\"Pin 40\")");
     assert_eq!(lines[3], overhang(4, 0.0), "the first pin keeps its focus");
     assert!(lines[4].starts_with("body2 \"Hub\": 1 overhang"), "{out}");
