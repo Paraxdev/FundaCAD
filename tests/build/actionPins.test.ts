@@ -155,11 +155,12 @@ describe("job permissions", () => {
     expect(grants(files).filter((g) => g.startsWith("build.yml bundle "))).toEqual(["build.yml bundle contents: read"]);
   });
 
-  it("grants write access only to the release job and the Pages deploy", () => {
+  it("grants write access only to the release job, the manual hand-over and the Pages deploy", () => {
     expect(grants(files).filter((g) => !g.endsWith(": read"))).toEqual([
       "build.yml release contents: write",
-      "manual.yml top pages: write",
-      "manual.yml top id-token: write",
+      "manual.yml hand-over actions: write",
+      "manual.yml deploy pages: write",
+      "manual.yml deploy id-token: write",
     ]);
   });
 });
