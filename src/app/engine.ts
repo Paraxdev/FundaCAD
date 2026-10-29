@@ -67,6 +67,7 @@ import { HoleTool } from "../features/holeTool";
 import { cancelActiveTools, createToolBusy } from "./toolBusy";
 import {
   createDocumentActions,
+  heldEdits,
   newFromTemplate,
   openAtVersion,
   openOnBranch,
@@ -372,7 +373,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   };
 
   const move = e.tools.move;
-  autosave.watchHeld(move);
+  for (const h of heldEdits(e.tools)) autosave.watchHeld(h);
   e.sketch.gizmo = {
     start: (target, done) => move.startTarget(target, () => done()),
     cancel: () => move.cancel(),

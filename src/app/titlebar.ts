@@ -2,7 +2,7 @@ import { repairableDiagFor } from "../features/repickReference";
 import { useUiStore } from "../stores/ui";
 import { useTimelineStore } from "../stores/timeline";
 import type { Engine } from "./engine";
-import { needsSave } from "./documentActions";
+import { heldEdits, needsSave } from "./documentActions";
 
 /** The half of the titlebar that subscribes to the store; the rest is components/shell/TitleBar.vue. */
 export function installTitlebar(e: Engine): void {
@@ -23,7 +23,7 @@ export function installTitlebar(e: Engine): void {
     ui.dirty = needsSave(e);
   };
   e.store.onMeta(syncMeta);
-  e.tools.move.onHeldChange(syncMeta);
+  for (const h of heldEdits(e.tools)) h.onHeldChange(syncMeta);
 
   useTimelineStore().bind({
     onSelect: (id) => e.selectFeature(id),

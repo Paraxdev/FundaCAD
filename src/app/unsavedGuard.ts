@@ -3,7 +3,7 @@ import { choose } from "../ui/choice";
 import { PRODUCT_NAME } from "./channel";
 import type { BeforeInstall } from "../ui/updates";
 import type { Engine } from "./engine";
-import { needsSave, saveWork, type SaveEngine } from "./documentActions";
+import { heldEdits, needsSave, saveWork, type SaveEngine } from "./documentActions";
 
 const isTauri = () => "__TAURI_INTERNALS__" in window;
 
@@ -38,7 +38,7 @@ export function beforeUpdate(e: Pick<Engine, "store" | "sketch"> & SaveEngine): 
   };
 }
 
-/** The window title follows the document, a held Move drag included, and closing a window with unsaved
+/** The window title follows the document, a held drag included, and closing a window with unsaved
  *  changes asks whether to save them first. */
 export function installUnsavedGuard(e: Engine): void {
   let shown = "";
@@ -54,7 +54,7 @@ export function installUnsavedGuard(e: Engine): void {
     }
   };
   e.store.onMeta(applyTitle);
-  e.tools.move.onHeldChange(applyTitle);
+  for (const h of heldEdits(e.tools)) h.onHeldChange(applyTitle);
   applyTitle();
 
   if (!isTauri()) {

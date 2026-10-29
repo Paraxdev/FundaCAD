@@ -49,13 +49,14 @@ export interface HeldEdit {
 }
 
 export interface Autosave {
-  /** A held edit counts as unsaved work, and a snapshot enters it first, so the copy holds what the user sees. */
+  /** A held edit counts as unsaved work, and a snapshot enters it first, so the copy holds what the user sees.
+   *  Called once per tool that can hold one. */
   watchHeld(edit: HeldEdit): void;
 }
 
 export function installAutosave(store: DocumentStore): Autosave {
   if (!isTauri()) return { watchHeld() {} };
-  let heldEdit: HeldEdit | null = null;
+  const heldEdits: HeldEdit[] = [];
   let idleTimer: (() => void) | null = null;
   let oldestEdit: number | null = null;
   let writing = false;
@@ -119,12 +120,12 @@ export function installAutosave(store: DocumentStore): Autosave {
   };
 
   const write = () => {
-    heldEdit?.confirmHeld();
+    for (const h of heldEdits) h.confirmHeld();
     idleTimer?.();
     idleTimer = null;
     oldestEdit = null;
     // Entered once it has been let go and left alone for another quiet period.
-    if (heldEdit?.dragging) schedule();
+    if (heldEdits.some((h) => h.dragging)) schedule();
     if (!store.dirty) return;
     if (writing) {
       rerun = true;
@@ -135,7 +136,7 @@ export function installAutosave(store: DocumentStore): Autosave {
   };
 
   const schedule = () => {
-    if (!store.dirty && !heldEdit?.pending) return;
+    if (!store.dirty && !heldEdits.some((h) => h.pending)) return;
     const now = Date.now();
     if (oldestEdit == null) oldestEdit = now;
     idleTimer?.();
@@ -182,7 +183,7 @@ export function installAutosave(store: DocumentStore): Autosave {
 
   return {
     watchHeld(edit) {
-      heldEdit = edit;
+      heldEdits.push(edit);
       edit.onHeldChange(schedule);
     },
   };

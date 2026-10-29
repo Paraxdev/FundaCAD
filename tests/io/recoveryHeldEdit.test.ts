@@ -36,7 +36,7 @@ const onDisk = () =>
   );
 
 // Mirrors MoveTool: Enter appends the move, a drag under the hand is left alone.
-function heldMove(store: DocumentStore) {
+function heldMove(store: DocumentStore, id = "move1") {
   const watchers = new Set<() => void>();
   const set = (on: boolean) => {
     edit.pending = on;
@@ -53,7 +53,7 @@ function heldMove(store: DocumentStore) {
     confirmHeld() {
       if (edit.dragging || !edit.pending) return;
       edit.entered++;
-      store.addFeature(box("move1", 12.5));
+      store.addFeature(box(id, 12.5));
       set(false);
     },
     letGo() {
@@ -72,7 +72,7 @@ function savedPlate() {
   store.markSaved(PATH);
   const move = heldMove(store);
   autosave.watchHeld(move);
-  return { store, move };
+  return { store, move, autosave };
 }
 
 describe("autosave and a Move drag let go of but not entered", () => {
@@ -122,6 +122,20 @@ describe("autosave and a Move drag let go of but not entered", () => {
       entered: 0,
       dirty: false,
       disk: {},
+    });
+  });
+
+  it("enters the held drag of every watched tool, not only the first or the last", async () => {
+    const { store, move, autosave } = savedPlate();
+    const push = heldMove(store, "push1");
+    autosave.watchHeld(push);
+    move.letGo();
+    push.letGo();
+    await idle();
+    expect({ move: move.entered, push: push.entered, disk: onDisk() }).toEqual({
+      move: 1,
+      push: 1,
+      disk: { [slotFor(PATH)]: ["plate", "move1", "push1"] },
     });
   });
 

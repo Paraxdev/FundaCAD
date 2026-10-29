@@ -8,6 +8,7 @@ import {
 } from "../io/files";
 import { choose } from "../ui/choice";
 import type { Engine } from "./engine";
+import type { HeldEdit } from "../io/recovery";
 import { TEMPLATES, templateText } from "../templates";
 import { copyName } from "../ui/homeVersions";
 import { closeHome, homeIsOpen } from "../ui/home";
@@ -15,22 +16,30 @@ import { displayName } from "../ui/homeList";
 
 type WorkEngine = Pick<Engine, "store" | "sketch"> & Partial<Pick<Engine, "tools">>;
 
-/** An open sketch's edits, and a Move drag let go of but not entered, reach the store only later, so
- *  `store.dirty` alone misses them. */
-export function hasUnsavedWork(e: WorkEngine): boolean {
-  return e.store.dirty || e.sketch.hasUncommittedEdits || !!e.tools?.move.pending;
+/** The tools whose drag, let go of but not entered, is unsaved work. Missing ones are skipped for partial fakes. */
+export function heldEdits(tools: Engine["tools"] | undefined): HeldEdit[] {
+  if (!tools) return [];
+  return [tools.move].filter((t): t is NonNullable<typeof t> => !!t);
 }
 
-/** A save writes what the user sees, so a Move drag let go of but not entered is written first, as Enter would. */
+const anyHeld = (e: Partial<Pick<Engine, "tools">>) => heldEdits(e.tools).some((h) => h.pending);
+
+/** An open sketch's edits, and a drag let go of but not entered, reach the store only later, so
+ *  `store.dirty` alone misses them. */
+export function hasUnsavedWork(e: WorkEngine): boolean {
+  return e.store.dirty || e.sketch.hasUncommittedEdits || anyHeld(e);
+}
+
+/** A save writes what the user sees, so a drag let go of but not entered is written first, as Enter would. */
 export function settleHeldEdit(e: Partial<Pick<Engine, "tools">>): void {
-  e.tools?.move.confirmHeld();
+  for (const h of heldEdits(e.tools)) h.confirmHeld();
 }
 
 export type SaveEngine = Pick<Engine, "store"> & Partial<Pick<Engine, "tools">>;
 
-/** What a save would write: the store's changes, or a Move drag let go of but not entered. */
+/** What a save would write: the store's changes, or a drag let go of but not entered. */
 export function needsSave(e: SaveEngine): boolean {
-  return e.store.dirty || !!e.tools?.move.pending;
+  return e.store.dirty || anyHeld(e);
 }
 
 export async function saveWork(e: SaveEngine): Promise<void> {
