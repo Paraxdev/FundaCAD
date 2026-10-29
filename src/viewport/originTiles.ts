@@ -3,7 +3,7 @@
 
 import * as THREE from "three";
 import { glyphScale, glyphWorldScale } from "./gizmoScale";
-import { AXIS_COLOR } from "./originTriad";
+import { axisColor, type AxisKey } from "./originTriad";
 import { SQUIRCLE_EXPONENT, roundedSquare, type Vec2 } from "./cornerProfile";
 import { themeColor } from "./themeColors";
 import { pickPlaneOnScreen, placeLabels, type P2, type PlaneHit, type PlaneOnScreen } from "./planeHit";
@@ -75,7 +75,7 @@ const PLANES: Plane3[] = ["XY", "XZ", "YZ"];
 const SPAN: Record<Plane3, [Axis, Axis]> = { XY: ["x", "y"], XZ: ["x", "z"], YZ: ["y", "z"] };
 const UNIT: Record<Axis, Vec3> = { x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1] };
 /** A plane takes the colour of its normal axis, as the triad reads. */
-const TILE_COLOR: Record<Plane3, number> = { XY: AXIS_COLOR.z, XZ: AXIS_COLOR.y, YZ: AXIS_COLOR.x };
+const NORMAL_AXIS: Record<Plane3, AxisKey> = { XY: "z", XZ: "y", YZ: "x" };
 const NOIR_TEXT = 0xf6f0e4;
 const NOIR_GROUND = 0x0b0912;
 
@@ -170,9 +170,8 @@ interface Tile {
   label: THREE.Sprite;
 }
 
-function tileMaterial(color: number, depthTest: boolean): THREE.MeshBasicMaterial {
+function tileMaterial(depthTest: boolean): THREE.MeshBasicMaterial {
   return new THREE.MeshBasicMaterial({
-    color,
     transparent: true,
     side: THREE.DoubleSide,
     depthTest,
@@ -195,15 +194,15 @@ export class OriginTiles {
   constructor(scene: THREE.Scene, shape: Partial<TileShape> = {}) {
     this.shape = { ...TILE_SHAPE, ...shape };
     const make = (k: Plane3): Tile => {
-      const fill = new THREE.Mesh(fillGeometry(this.shape), tileMaterial(TILE_COLOR[k], true));
+      const fill = new THREE.Mesh(fillGeometry(this.shape), tileMaterial(true));
       fill.userData.plane = k;
       fill.renderOrder = TILE_ORDER.fill;
       fill.visible = false;
       // Drawn through whatever is in front, so a tile inside or behind a part is still found.
-      const ghost = new THREE.Mesh(fill.geometry, tileMaterial(TILE_COLOR[k], false));
+      const ghost = new THREE.Mesh(fill.geometry, tileMaterial(false));
       ghost.userData.role = "ghost";
       ghost.renderOrder = TILE_ORDER.ghost;
-      const rim = new THREE.Mesh(rimGeometry(this.shape), tileMaterial(TILE_COLOR[k], true));
+      const rim = new THREE.Mesh(rimGeometry(this.shape), tileMaterial(true));
       rim.userData.role = "rim";
       rim.renderOrder = TILE_ORDER.rim;
       const label = new THREE.Sprite(
@@ -331,7 +330,13 @@ export class OriginTiles {
   /** `ground` is the colour actually drawn behind the tiles. */
   applyTheme(ground: number) {
     this.ink = labelInk(ground, themeColor("--text", NOIR_TEXT), themeColor("--viewport-bg", NOIR_GROUND));
-    for (const k of PLANES) this.tiles[k].rim.material.color.setHex(mixHex(TILE_COLOR[k], this.ink, RIM_INK_MIX));
+    for (const k of PLANES) {
+      const t = this.tiles[k];
+      const c = axisColor(NORMAL_AXIS[k]);
+      t.fill.material.color.setHex(c);
+      t.ghost.material.color.setHex(c);
+      t.rim.material.color.setHex(mixHex(c, this.ink, RIM_INK_MIX));
+    }
     this.paintLook();
   }
 

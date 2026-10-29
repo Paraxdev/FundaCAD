@@ -32,8 +32,12 @@ function key(k: string): void {
 }
 const focused = () => document.activeElement?.querySelector(".ui-menu-label")?.textContent ?? null;
 const popup = () => document.body.querySelector<HTMLElement>(".ui-menu");
-// The claim on Escape is released a task after the close.
-const settle = () => new Promise((r) => setTimeout(r, 5));
+// The claim on Escape is released a task after the menu unmounts, so flush the unmount first: a fixed timer started
+// before it raced the release on a loaded runner.
+const settle = async () => {
+  await flushPromises();
+  await new Promise((r) => setTimeout(r, 0));
+};
 
 describe("menubar popups", () => {
   const run = vi.fn();

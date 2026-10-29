@@ -178,6 +178,7 @@ Status:
 | `--error` | `#ff5c5c` | Errors, destructive items, failed steps |
 | `--error-tint` | `rgba(255, 92, 92, 0.14)` | Error backgrounds |
 | `--pick-line` | `#b48cff` | The second pick colour, apart from the accent: the Mirror line or plane, in the view and on its panel field |
+| `--axis-x`, `--axis-y`, `--axis-z` | `#ff5a5a`, `#46d97a`, `#4d8dff` | X, Y and Z in the view: the origin triad and plane tiles, the Move, Pattern and datum gizmos. Colour-Blind Safe trades them for `#e5483a`, `#eedf6b`, `#6aaef0` |
 
 There is no info, success tint, warn tint or disabled token. Derive them:
 
@@ -1093,8 +1094,9 @@ guard test cannot see them; hold them to these rules by hand.
   `--viewport-bg`. A picked edge is drawn again wide, 3px selected and 2.4px
   hovered over the 1.6px idle edge. No glow and no outline is added. A theme
   change repaints every pick live (`Highlighter.refreshTheme`).
-- Axis colours come from `AXIS_COLOR` (`src/viewport/originTriad.ts`) and are
-  never themed. A plane takes its normal axis colour: XY blue, XZ green, YZ red.
+- Axis colours are the `--axis-x/y/z` tokens, read through `axisColor`
+  (`src/viewport/originTriad.ts`), whose `AXIS_COLOR` holds Noir's red, green and
+  blue. A plane takes its normal axis colour: XY blue, XZ green, YZ red in Noir.
 - Neutral parts read tokens through `themeColor` and are read again on a theme
   change.
 - Sizes are screen pixels, held through `gizmoScale.ts` at every zoom.
@@ -1210,8 +1212,8 @@ lead; the full text is kept in the console.
 hex or `rgb()`/`rgba()` values: `--bg --panel --panel-2 --raised --raised-2
 --viewport-bg --line --line-strong --text --text-dim --text-mute --accent
 --accent-hot --accent-tint --accent-tint-2 --on-accent --ok --warn --error
---error-tint --pick-line --accent-blue`. Shape, glass, motion and z tokens
-never change from a palette. A palette that sets the retired `--accent-glow`
+--error-tint --pick-line --accent-blue --axis-x --axis-y --axis-z`. Shape,
+glass, motion and z tokens never change from a palette. A palette that sets the retired `--accent-glow`
 still loads, the token is dropped.
 
 Shipped: FundaCAD Noir (built in, dark), Dracula, **Solarized Light** (the light

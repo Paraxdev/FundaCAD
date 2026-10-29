@@ -14,7 +14,7 @@
       "identifier": "opener:allow-open-url",
       "allow": [
         { "url": "https://github.com/Paraxdev/fundacad/*" },
-        { "url": "https://paraxdev.github.io/FundaCAD/*" },
+        { "url": "https://fundacad.dev/*" },
         { "url": "https://sourceforge.net/projects/fundacad/*" }
       ]
     },

@@ -14,6 +14,7 @@ import {
   type ShippedTheme,
 } from "../../src/ui/theme";
 import { oklch } from "../../src/viewport/pickColors";
+import { AXIS_COLOR } from "../../src/viewport/originTriad";
 import tokensScss from "../../src/styles/_tokens.scss?raw";
 
 // The module is a singleton with mutable state (the uploaded-theme library and
@@ -132,6 +133,27 @@ describe("the theme roster", () => {
     const safe = lab((themes().find((t) => t.id === "colorblind-safe") as ShippedTheme).palette["--accent"] ?? "");
 
     expect(Math.hypot(...noir.map((v, i) => v - (safe[i] ?? NaN)))).toBeGreaterThan(0.12);
+  });
+
+  it("steps the colour-blind safe axes apart in lightness, which every kind of colour blindness still sees", () => {
+    const palette = (themes().find((t) => t.id === "colorblind-safe") as ShippedTheme).palette;
+    const L = ["--axis-x", "--axis-y", "--axis-z"].map((k) => oklch(parseInt((palette[k] ?? "").slice(1), 16))[0]);
+
+    for (const [a, b] of [
+      [0, 1],
+      [1, 2],
+      [0, 2],
+    ] as const) {
+      expect(Math.abs(L[a]! - L[b]!)).toBeGreaterThan(0.08);
+    }
+  });
+
+  it("keeps Noir's axis tokens in step with the viewport's fallbacks", () => {
+    for (const [axis, hex] of Object.entries(AXIS_COLOR)) {
+      const token = new RegExp(`--axis-${axis}:\\s*#([0-9a-f]{6});`).exec(tokensScss)?.[1];
+
+      expect(parseInt(token ?? "", 16)).toBe(hex);
+    }
   });
 
   it("cannot remove a shipped theme", () => {

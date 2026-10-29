@@ -24,6 +24,7 @@ import {
 } from "./transformGizmo";
 import { CanvasGesture } from "./canvasGesture";
 import { RotateDial } from "../viewport/rotateDial";
+import { themedAxis } from "../viewport/originTriad";
 import { overlayMaterial } from "../viewport/overlayMaterial";
 import { resolveShortcut } from "../input/shortcuts";
 import { createSlimRing, ringLook, type SlimRing } from "./slimRing";
@@ -32,9 +33,9 @@ const Y_AXIS = new THREE.Vector3(0, 1, 0);
 const HOT = 0xffe9a8; // hovered / grabbed handle
 const AXIS_NAME = ["x", "y", "z"];
 const AXES = [
-  { dir: new THREE.Vector3(1, 0, 0), color: 0xff5a5a }, // X red
-  { dir: new THREE.Vector3(0, 1, 0), color: 0x5ad15a }, // Y green
-  { dir: new THREE.Vector3(0, 0, 1), color: 0x5a9bff }, // Z blue
+  themedAxis("x", { dir: new THREE.Vector3(1, 0, 0) }),
+  themedAxis("y", { dir: new THREE.Vector3(0, 1, 0) }),
+  themedAxis("z", { dir: new THREE.Vector3(0, 0, 1) }),
 ];
 
 // Gizmo units are screen pixels: the group is scaled by pixelWorldSize every frame. The arrows reach past

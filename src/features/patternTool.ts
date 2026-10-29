@@ -24,15 +24,16 @@ import {
 } from "./patternAxis";
 import { CanvasGesture } from "./canvasGesture";
 import { overlayMaterial } from "../viewport/overlayMaterial";
+import { themedAxis } from "../viewport/originTriad";
 
 export type PatternKind = "linear" | "circular" | "rect";
 
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 const HOT = 0xffe9a8; // hovered / chosen arrow
-const AXES: { name: Axis3; dir: THREE.Vector3; color: number }[] = [
-  { name: "X", dir: new THREE.Vector3(1, 0, 0), color: 0xff5a5a },
-  { name: "Y", dir: new THREE.Vector3(0, 1, 0), color: 0x5ad15a },
-  { name: "Z", dir: new THREE.Vector3(0, 0, 1), color: 0x5a9bff },
+const AXES: { name: Axis3; dir: THREE.Vector3; readonly color: number }[] = [
+  themedAxis("x", { name: "X", dir: new THREE.Vector3(1, 0, 0) }),
+  themedAxis("y", { name: "Y", dir: new THREE.Vector3(0, 1, 0) }),
+  themedAxis("z", { name: "Z", dir: new THREE.Vector3(0, 0, 1) }),
 ];
 
 /** Gizmo units, the same as the move tool's arrows: the drawn shaft is a hairline and the cone a point. */

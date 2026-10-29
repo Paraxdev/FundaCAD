@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { enableAutoUnmount, mount } from "@vue/test-utils";
+import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import { defineComponent, h, nextTick, ref } from "vue";
 
 import Menu from "../../../src/components/ui/Menu.vue";
@@ -11,8 +11,12 @@ import { createPinia, setActivePinia } from "pinia";
 
 enableAutoUnmount(afterEach);
 
-// Vue skips a listener for an event stamped in the same millisecond it was attached, and the claim releases a tick late.
-const settle = () => new Promise((r) => setTimeout(r, 5));
+// Vue skips a listener for an event stamped in the same millisecond it was attached, and the claim releases a task
+// after the unmount, so the unmount is flushed before the timer starts.
+const settle = async () => {
+  await flushPromises();
+  await new Promise((r) => setTimeout(r, 5));
+};
 
 function key(k: string, opts: KeyboardEventInit = {}): KeyboardEvent {
   const e = new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true, ...opts });

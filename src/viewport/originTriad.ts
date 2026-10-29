@@ -7,8 +7,22 @@ import { edgeHoverColor } from "./highlight";
 import { themeColor } from "./themeColors";
 import type { Axis3 } from "../types";
 
-/** RGB for XYZ is the convention every CAD package draws, so it is hard coded rather than themed. */
+/** RGB for XYZ, the convention every CAD package draws, as Noir's `--axis-x/y/z`. A theme may set its own,
+ *  since red and green are the pair a colour-blind eye loses. */
 export const AXIS_COLOR = { x: 0xff5a5a, y: 0x46d97a, z: 0x4d8dff } as const;
+
+export type AxisKey = keyof typeof AXIS_COLOR;
+
+export function axisColor(axis: AxisKey): number {
+  return themeColor(`--axis-${axis}`, AXIS_COLOR[axis]);
+}
+
+/** `fields` with a `color` read from the theme on every access, for a gizmo that repaints each frame. */
+export function themedAxis<T extends object>(axis: AxisKey, fields: T): T & { readonly color: number } {
+  return Object.defineProperty(fields, "color", { get: () => axisColor(axis), enumerable: true }) as T & {
+    readonly color: number;
+  };
+}
 
 /** Arm length in screen pixels, scaled by the world size of a pixel every frame
  *  like every manipulator in features/. */
@@ -74,10 +88,10 @@ export class OriginTriad {
 
   constructor(scene: THREE.Scene) {
     const len = TRIAD_LENGTH_PX;
-    const dirs: [THREE.Vector3, number, Axis3][] = [
-      [new THREE.Vector3(1, 0, 0), AXIS_COLOR.x, "X"],
-      [new THREE.Vector3(0, 1, 0), AXIS_COLOR.y, "Y"],
-      [new THREE.Vector3(0, 0, 1), AXIS_COLOR.z, "Z"],
+    const dirs: [THREE.Vector3, AxisKey, Axis3][] = [
+      [new THREE.Vector3(1, 0, 0), "x", "X"],
+      [new THREE.Vector3(0, 1, 0), "y", "Y"],
+      [new THREE.Vector3(0, 0, 1), "z", "Z"],
     ];
     const lineGeo = fadingLine(len);
     const sleeveGeo = new THREE.CylinderGeometry(SLEEVE_RADIUS_PX, SLEEVE_RADIUS_PX, len, 8);
@@ -87,17 +101,14 @@ export class OriginTriad {
     // the raycast, which `object.visible` would not.
     const sleeveMat = new THREE.MeshBasicMaterial({ visible: false });
     this.materials.push(sleeveMat);
-    for (const [dir, axisColor, axis] of dirs) {
-      const color = mutedAxisColor(axisColor);
+    for (const [dir, key, axis] of dirs) {
       const solid = new THREE.MeshBasicMaterial({
-        color,
         vertexColors: true,
         transparent: true,
         opacity: TRIAD_OPACITY,
         depthWrite: false,
       });
       const ghost = new THREE.MeshBasicMaterial({
-        color,
         vertexColors: true,
         transparent: true,
         opacity: TRIAD_OCCLUDED_OPACITY,
@@ -122,8 +133,9 @@ export class OriginTriad {
       this.group.add(arm);
       this.arms.push(arm);
       this.repaint.push((hot) => {
-        solid.color.setHex(hot ? edgeHoverColor() : color);
-        ghost.color.setHex(hot ? edgeHoverColor() : color);
+        const color = hot ? edgeHoverColor() : mutedAxisColor(axisColor(key));
+        solid.color.setHex(color);
+        ghost.color.setHex(color);
         solid.opacity = hot ? 1 : TRIAD_OPACITY;
       });
     }
@@ -142,11 +154,10 @@ export class OriginTriad {
     scene.add(this.group);
   }
 
-  /** The dot is the one themed part, the axis colours are fixed on purpose. */
   applyTheme() {
     const c = themeColor("--text-mute", 0x7d7590);
     for (const m of this.dotMats) m.color.setHex(c);
-    if (this.hot) this.highlight(this.hot);
+    this.highlight(this.hot);
   }
 
   private hot: Axis3 | null = null;
