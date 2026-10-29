@@ -12,7 +12,8 @@ import TreeFolder from "./TreeFolder.vue";
 import TreeRow from "./TreeRow.vue";
 import Tree from "../ui/Tree.vue";
 import TreeItem from "../ui/TreeItem.vue";
-import { itemsTreeMeta, sectionName } from "../../ui/itemsTree";
+import { itemsMove, itemsTreeMeta, sectionName } from "../../ui/itemsTree";
+import { announce } from "../../ui/announce";
 import IconButton from "../ui/IconButton.vue";
 import Select from "../ui/Select.vue";
 import { useShellStore } from "../../stores/shell";
@@ -871,6 +872,27 @@ const nodes = useDocValue((doc): TreeNode[] => {
 });
 
 const treeItems = computed(() => itemsTreeMeta(nodes.value));
+
+function reorderRow(key: string, delta: -1 | 1) {
+  const list = nodes.value;
+  const n = list.find((x) => x.k === key);
+  if (!n || (n.kind !== "row" && n.kind !== "folder")) return;
+  const m = itemsMove(list, key, delta);
+  if (m.kind === "fixed") return announce(`${n.label} keeps its place, only timeline features move`);
+  if (m.kind === "end") {
+    const head = list
+      .slice(0, list.indexOf(n))
+      .reverse()
+      .find((x): x is FolderNode => x.kind === "folder");
+    return announce(`${n.label} is already ${delta < 0 ? "first" : "last"} in ${head?.label ?? "Items"}`);
+  }
+  store.moveFeature(
+    m.id,
+    store.document.features.findIndex((f) => f.id === m.sibling),
+  );
+  announce(`Moved ${n.label} ${delta < 0 ? "above" : "below"} ${m.label}`);
+}
+
 /** The Tab stop rests on the first selected row, so Tab into the tree lands where the user was. */
 const activeKey = computed(
   () => nodes.value.find((n) => (n.kind === "row" || n.kind === "folder") && n.selected)?.k ?? null,
@@ -942,7 +964,7 @@ onUnmounted(() => root.value?.removeEventListener("wheel", onWheel));
       />
     </div>
     <div ref="root" class="float-card-body">
-      <Tree label="Items" multiselectable :items="treeItems" :active-key="activeKey">
+      <Tree label="Items" multiselectable :items="treeItems" :active-key="activeKey" @reorder="reorderRow">
         <template v-for="n in nodes" :key="n.k">
           <TreeFolder
             v-if="n.kind === 'folder'"

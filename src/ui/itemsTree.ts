@@ -22,6 +22,29 @@ export function itemsTreeMeta(nodes: readonly ItemsNode[]): TreeMeta[] {
   return out;
 }
 
+export type ItemsMove =
+  { kind: "past"; id: string; sibling: string; label: string } | { kind: "end" } | { kind: "fixed" };
+
+// Planes, datums, joints, mechanisms and sketches are timeline features. Origin planes, bodies and heads keep the order
+// the model or the panel gives them.
+const FEATURE_ROW = /^[pdjms]:(.+)$/;
+
+/** Where Alt+Up (-1) or Alt+Down (1) takes a row: past its neighbour at the same level under the same head. */
+export function itemsMove(nodes: readonly ItemsNode[], key: string, delta: -1 | 1): ItemsMove {
+  const i = nodes.findIndex((n) => n.k === key);
+  const n = nodes[i];
+  const id = n?.kind === "row" ? FEATURE_ROW.exec(n.k)?.[1] : undefined;
+  if (!n || n.kind !== "row" || id === undefined) return { kind: "fixed" };
+  for (let j = i + delta; j >= 0 && j < nodes.length; j += delta) {
+    const m = nodes[j]!;
+    if (m.kind !== "row" || m.depth < n.depth) break;
+    if (m.depth > n.depth) continue;
+    const sibling = FEATURE_ROW.exec(m.k)?.[1];
+    return sibling === undefined ? { kind: "end" } : { kind: "past", id, sibling, label: m.label };
+  }
+  return { kind: "end" };
+}
+
 /** A plugin section's key as words: "referenceImages" reads "Reference images". */
 export function sectionName(key: string): string {
   const words = key

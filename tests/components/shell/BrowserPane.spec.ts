@@ -29,6 +29,7 @@ import { createSelection } from "../../../src/app/selection";
 import { contribute, resetContributions } from "../../../src/plugins/contrib";
 import { setBrowserFilter } from "../../../src/ui/browserFilter";
 import { contextMenu, type CtxItem } from "../../../src/ui/menu";
+import { announce } from "../../../src/ui/announce";
 import { useBrowserStore } from "../../../src/stores/browser";
 import { awaitTreePick, resetTreePicks, treePickWaiting, type TreePick } from "../../../src/ui/treePick";
 import {
@@ -46,6 +47,11 @@ import type { CadDocument, Feature } from "../../../src/types";
 vi.mock("../../../src/ui/menu", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../src/ui/menu")>()),
   contextMenu: vi.fn(),
+}));
+
+vi.mock("../../../src/ui/announce", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../src/ui/announce")>()),
+  announce: vi.fn(),
 }));
 
 const DATUM_DEF = { origin: [0, 0, 5], normal: [0, 0, 1], xdir: [1, 0, 0] } as const;
@@ -157,6 +163,12 @@ function makeEngine(doc: CadDocument, bodies: { id: string; name: string; nodeRe
       bodyWrites.push(new Map(vis));
       for (const [id, v] of vis) v ? hidden.delete(id) : hidden.add(id);
       buildVersion.value++;
+    },
+    moveFeature: (id: string, to: number) => {
+      const f = doc.features.find((x) => x.id === id)!;
+      doc.features.splice(doc.features.indexOf(f), 1);
+      doc.features.splice(to, 0, f);
+      docVersion.value++;
     },
     removeFeatures: (ids: string[]) => {
       removed.push([...ids]);
@@ -1235,6 +1247,9 @@ describe("Items head and foot controls", () => {
 });
 
 describe("Items tree by keys", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+  });
   // Vue skips a handler attached in the same ms an event was first seen, see TreeControls.spec.ts.
   async function open(fake: ReturnType<typeof makeEngine>) {
     const w = mount(BrowserPane, { global: { provide: { [ENGINE as symbol]: fake.engine } }, attachTo: document.body });
@@ -1341,6 +1356,50 @@ describe("Items tree by keys", () => {
     expect(stops.map((r) => r.attributes("aria-label"))).toEqual(["Sketch2"]);
     const s2 = rowNamed(w, "Sketch2");
     expect(w.get(`#${s2.attributes("aria-describedby")}`).text()).toBe("suppressed");
+    w.unmount();
+  });
+
+  it("moves a sketch past its neighbour on Alt+Up and Alt+Down, keeps it focused and says where it went", async () => {
+    const e1 = { id: "e1", type: "extrude", sketch: "s1" } as unknown as Feature;
+    const fake = makeEngine({ parameters: {}, features: [sketch("s1", "Base"), e1, sketch("s2", "Lid")] }, []);
+    const w = await open(fake);
+    vi.mocked(announce).mockClear();
+    focusOn(rowNamed(w, "Lid"));
+    expect(press("ArrowUp", { altKey: true }).defaultPrevented).toBe(true);
+    await nextTick();
+    await nextTick();
+    expect(fake.engine.store.document.features.map((f) => f.id)).toEqual(["s2", "s1", "e1"]);
+    expect(focusedLabel()).toBe("Lid");
+    press("ArrowDown", { altKey: true });
+    await nextTick();
+    expect(fake.engine.store.document.features.map((f) => f.id)).toEqual(["s1", "s2", "e1"]);
+    expect(vi.mocked(announce).mock.calls.map((c) => c[0])).toEqual(["Moved Lid above Base", "Moved Lid below Base"]);
+    w.unmount();
+  });
+
+  it("says a row at the end of its section or a body cannot move, and moves nothing", async () => {
+    const fake = makeEngine({ parameters: {}, features: [sketch("s1"), sketch("s2")] }, [{ id: "b1", name: "Body1" }]);
+    const w = await open(fake);
+    vi.mocked(announce).mockClear();
+    focusOn(rowNamed(w, "Sketch1"));
+    press("ArrowUp", { altKey: true });
+    focusOn(rowNamed(w, "Body1"));
+    press("ArrowDown", { altKey: true });
+    expect(fake.engine.store.document.features.map((f) => f.id)).toEqual(["s1", "s2"]);
+    expect(vi.mocked(announce).mock.calls.map((c) => c[0])).toEqual([
+      "Sketch1 is already first in Sketches",
+      "Body1 keeps its place, only timeline features move",
+    ]);
+    w.unmount();
+  });
+
+  it("lets Alt+Up on an empty note pass without a word", async () => {
+    const fake = makeEngine({ parameters: {}, features: [] }, []);
+    const w = await open(fake);
+    vi.mocked(announce).mockClear();
+    focusOn(w.get(".empty-state"));
+    press("ArrowUp", { altKey: true });
+    expect(announce).not.toHaveBeenCalled();
     w.unmount();
   });
 });

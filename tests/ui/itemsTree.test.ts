@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { itemsTreeMeta, sectionName } from "../../src/ui/itemsTree";
+import { itemsMove, itemsTreeMeta, sectionName, type ItemsNode } from "../../src/ui/itemsTree";
 import { treeSlots } from "../../src/components/ui/treeContext";
 
 describe("itemsTreeMeta", () => {
@@ -40,5 +40,39 @@ describe("sectionName", () => {
       "Palette",
       "My section",
     ]);
+  });
+});
+
+describe("itemsMove", () => {
+  const nodes: ItemsNode[] = [
+    { kind: "folder", k: "f:Origin", depth: 0, collapsed: false, label: "Origin" },
+    { kind: "row", k: "o:XY", depth: 1, label: "XY plane" },
+    { kind: "folder", k: "f:Bodies", depth: 0, collapsed: false, label: "Bodies" },
+    { kind: "folder", k: "e1", depth: 1, collapsed: false, label: "Frame" },
+    { kind: "row", k: "b:b1", depth: 2, label: "Body 1" },
+    { kind: "row", k: "b:b2", depth: 1, label: "Body 2" },
+    { kind: "folder", k: "f:Sketches", depth: 0, collapsed: false, label: "Sketches" },
+    { kind: "row", k: "s:s1", depth: 1, label: "Sketch1" },
+    { kind: "row", k: "s:s2", depth: 1, label: "Sketch2" },
+    { kind: "plugin", k: "x:p:refs" },
+    { kind: "folder", k: "f:Planes", depth: 0, collapsed: false, label: "Planes" },
+    { kind: "row", k: "p:d1", depth: 1, label: "Plane1" },
+  ];
+
+  it("takes a feature row past its neighbour under the same head", () => {
+    expect(itemsMove(nodes, "s:s2", -1)).toEqual({ kind: "past", id: "s2", sibling: "s1", label: "Sketch1" });
+    expect(itemsMove(nodes, "s:s1", 1)).toEqual({ kind: "past", id: "s1", sibling: "s2", label: "Sketch2" });
+  });
+
+  it("stops at the ends of its section, whatever sits beyond the head", () => {
+    expect(itemsMove(nodes, "s:s1", -1)).toEqual({ kind: "end" });
+    expect(itemsMove(nodes, "s:s2", 1)).toEqual({ kind: "end" });
+    expect(itemsMove(nodes, "p:d1", -1)).toEqual({ kind: "end" });
+  });
+
+  it("leaves rows that are not timeline features, and every head, where they are", () => {
+    expect(
+      ["o:XY", "b:b1", "b:b2", "f:Sketches", "e1", "x:p:refs", "nope"].map((k) => itemsMove(nodes, k, -1)),
+    ).toEqual(Array(7).fill({ kind: "fixed" }));
   });
 });
