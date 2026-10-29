@@ -1,3 +1,4 @@
+- link "Skip to model"
 - banner:
   - button "Home"
   - navigation:
@@ -10,14 +11,16 @@
   - radiogroup "Workspace":
     - radio "Model" [checked]
     - radio "Render"
-- complementary:
-  - text: Items
-- navigation "Tools":
-  - button /^Search/
-  - button /^Sketch/
-  - button "Create"
-  - button "Modify"
-  - button "Construct"
-  - button "Inspect"
-- group "View mode"
-- region "History"
+- main "Model":
+  - heading [level=1]
+  - complementary:
+    - text: Items
+  - navigation "Tools":
+    - button /^Search/
+    - button /^Sketch/
+    - button "Create"
+    - button "Modify"
+    - button "Construct"
+    - button "Inspect"
+  - group "View mode"
+  - region "History"

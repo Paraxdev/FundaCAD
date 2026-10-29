@@ -15,6 +15,26 @@
   border: 0;
 }
 
+// Off screen until Tab reaches it, then a chip over the title bar.
+.skip-link {
+  position: fixed;
+  top: var(--s-1);
+  left: var(--s-1);
+  z-index: var(--z-toast);
+  padding: var(--s-1) var(--s-3);
+  border-radius: var(--float-chip-radius);
+  background: var(--float-bg-solid);
+  box-shadow: var(--float-shadow);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  transform: translateY(calc(-100% - var(--s-3)));
+}
+.skip-link:focus {
+  transform: none;
+}
+
 .prompt {
   position: absolute;
   top: var(--s-5);
