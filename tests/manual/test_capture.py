@@ -98,6 +98,10 @@ class Manifests(unittest.TestCase):
         }
         self.assertEqual(wrong, {})
 
+    def test_no_two_retaken_entries_share_a_file_name_for_out(self):
+        names = [Path(shot["file"]).name for _, shot in entries() if shot.get("crop") != "copy"]
+        self.assertEqual(sorted(n for n in set(names) if names.count(n) > 1), [])
+
     def test_a_copy_is_taken_from_another_entry(self):
         files = {shot["file"] for _, shot in entries()}
         copies = {shot["file"]: shot["from"] in files for _, shot in entries() if shot.get("crop") == "copy"}
