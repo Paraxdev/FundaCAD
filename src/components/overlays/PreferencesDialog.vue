@@ -27,6 +27,7 @@ import {
   setTheme,
   themes,
 } from "../../ui/theme";
+import { describeFailures } from "../../ui/contrast";
 import { asIconPackId, getIconPack, iconPacks, onIconPackChange, setIconPack } from "../../ui/icons";
 import { asUnit, getUnit, onUnitChange, setUnit } from "../../ui/units";
 import {
@@ -93,6 +94,8 @@ const theme = ref(getTheme());
 const themeList = ref(themes());
 // The last upload's rejection reason, empty when it was fine.
 const themeError = ref("");
+// The contrast pairs the last accepted upload misses.
+const themeWarning = ref("");
 const fileInput = ref<HTMLInputElement | null>(null);
 const homeBg = ref(getHomeBackground());
 const homeImageInput = ref<HTMLInputElement | null>(null);
@@ -294,6 +297,7 @@ function onTheme(id: string) {
 // A real button opens the native picker, a bare file input reads as a mystery control on a settings screen.
 function pickThemeFile() {
   themeError.value = "";
+  themeWarning.value = "";
   fileInput.value?.click();
 }
 
@@ -304,6 +308,7 @@ async function onUpload(ev: Event) {
   input.value = "";
   if (!file) return;
   themeError.value = "";
+  themeWarning.value = "";
   let parsed: unknown;
   try {
     parsed = JSON.parse(await file.text());
@@ -320,10 +325,16 @@ async function onUpload(ev: Event) {
   themeList.value = themes();
   // Adding a palette does not switch to it, and a user who just uploaded one wants to see it.
   setTheme(res.theme.id);
+  const shortfall = describeFailures(res.failing);
+  if (!shortfall) return;
+  // The status line empties for a tick first, so the same file uploaded again is spoken again.
+  await nextTick();
+  themeWarning.value = `${res.theme.label} is added, but ${shortfall}`;
 }
 
 function onRemoveTheme() {
   themeError.value = "";
+  themeWarning.value = "";
   // Removing the active palette falls back to the built-in one in the module, whose onThemeChange refreshes both refs.
   if (activeIsCustom.value) removeCustomTheme(theme.value);
 }
@@ -483,6 +494,7 @@ function onClassicCamera(on: boolean) {
                 <Button v-if="activeIsCustom" @click="onRemoveTheme">Remove</Button>
               </div>
               <p id="prefs-theme-error" class="pref-hint prefs-theme-error" role="alert">{{ themeError }}</p>
+              <p id="prefs-theme-warning" class="pref-hint prefs-theme-warning" role="status">{{ themeWarning }}</p>
             </div>
             <div class="pref-card">
               <div class="pref-head">

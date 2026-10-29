@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { contrastRatio, lightness, mix, parseColor } from "../../src/ui/contrast";
+import { contrastRatio, describeFailures, lightness, mix, parseColor } from "../../src/ui/contrast";
 
 describe("contrast maths", () => {
   it("parses every colour form a palette accepts", () => {
@@ -24,5 +24,30 @@ describe("contrast maths", () => {
     expect(lightness(parseColor("#fff"))).toBeCloseTo(100, 3);
     expect(lightness(parseColor("#000"))).toBe(0);
     expect(lightness(parseColor("#777"))).toBeCloseTo(50, 0);
+  });
+});
+
+describe("describeFailures", () => {
+  const pair = (what: string, ratio: number, min: number) => ({ what, ratio, min });
+
+  it("says nothing when every pair passes", () => {
+    expect(describeFailures([])).toBe("");
+  });
+
+  it("names one pair with its ratio and the bar it misses, and a lightness gap without a ratio sign", () => {
+    expect(describeFailures([pair("--text-mute on --panel", 2.61, 4.5)])).toBe(
+      "1 colour pair falls short of contrast: --text-mute on --panel at 2.61:1, needs 4.5:1.",
+    );
+    expect(describeFailures([pair("--ok and --warn apart in lightness", 6.2, 10)])).toBe(
+      "1 colour pair falls short of contrast: --ok and --warn apart in lightness by 6.2, needs 10.",
+    );
+  });
+
+  it("names the worst few in order and counts the rest", () => {
+    const failing = Array.from({ length: 7 }, (_, i) => pair(`--t${i} on --panel`, 1 + i / 10, 4.5));
+    expect(describeFailures(failing, 2)).toBe(
+      "7 colour pairs fall short of contrast, worst first: --t0 on --panel at 1:1, needs 4.5:1; " +
+        "--t1 on --panel at 1.1:1, needs 4.5:1; and 5 more.",
+    );
   });
 });

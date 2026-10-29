@@ -7,6 +7,7 @@ import {
   customThemes,
   DEFAULT_THEME_ID,
   getTheme,
+  NOIR_PALETTE,
   removeCustomTheme,
   setTheme,
   themeMode,
@@ -315,6 +316,53 @@ describe("addCustomTheme", () => {
     expect(res.ok && res.theme.palette).toStrictEqual({
       "--panel": "#222",
     });
+  });
+
+  it("drops a value shaped like rgb() that names no colour, so the contrast check never throws", () => {
+    const res = addCustomTheme({ "--bg": "#111111", "--panel": "rgb(1, 2)" });
+
+    expect(res.ok && res.theme.palette).toStrictEqual({ "--bg": "#111111" });
+  });
+
+  it("lists the pairs a low contrast upload fails, worst first, with the bar each misses", () => {
+    const res = addCustomTheme({ label: "Murk", "--text-mute": "#4a4458", "--line-strong": "#3a3448" });
+
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const failing = res.failing.map((r) => r.what);
+    expect(failing).toEqual(expect.arrayContaining(["--text-mute on --panel", "--line-strong on --raised"]));
+    expect(res.failing.every((r) => r.ratio < r.min)).toBe(true);
+    const share = res.failing.map((r) => r.ratio / r.min);
+    expect(share).toEqual([...share].sort((a, b) => a - b));
+    expect(res.failing.find((r) => r.what === "--text-mute on --panel")?.min).toBe(4.5);
+  });
+
+  it("lists no pair for an upload of any palette FundaCAD ships", () => {
+    const shipped = themes().filter((t): t is ShippedTheme => "palette" in t && !t.custom);
+    const flagged = shipped.flatMap((t) => {
+      const res = addCustomTheme({ label: t.label, mode: t.mode, ...t.palette });
+      return res.ok ? res.failing.map((r) => `${t.label}: ${r.what}`) : [`${t.label}: refused`];
+    });
+
+    expect(flagged).toEqual([]);
+  });
+
+  it("checks an upload against Noir's own value for every token it leaves out", () => {
+    const root = tokensScss.slice(0, tokensScss.indexOf(":root.theme-light"));
+    const drifted = Object.entries(NOIR_PALETTE).filter(([token, value]) => !root.includes(`${token}: ${value};`));
+
+    expect(drifted).toEqual([]);
+    expect(Object.keys(NOIR_PALETTE)).toEqual(
+      expect.arrayContaining([
+        "--panel",
+        "--text-mute",
+        "--accent",
+        "--on-accent",
+        "--field-bg",
+        "--check-off",
+        "--axis-z",
+      ]),
+    );
   });
 
   it("names a theme from its label, then name, then filename", () => {

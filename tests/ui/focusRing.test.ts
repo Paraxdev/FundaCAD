@@ -71,7 +71,7 @@ const vueStyles = Object.entries(
     string,
     string
   >,
-).map(([path, text]) => [
+).map(([path, text]): [string, string] => [
   path,
   [...text.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/g)]
     .map((m) => m[1] ?? "")

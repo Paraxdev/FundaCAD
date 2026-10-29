@@ -17,7 +17,7 @@ import {
 } from "../../../src/ui/homeBackground";
 import { experimentalPrefs, resetExperimentalPrefs, setExperimentalPref } from "../../../src/ui/experimentalPrefs";
 import { renderPrefs, setRenderPref } from "../../../src/ui/renderPrefs";
-import { themes } from "../../../src/ui/theme";
+import { customThemes, DEFAULT_THEME_ID, getTheme, removeCustomTheme, setTheme, themes } from "../../../src/ui/theme";
 
 enableAutoUnmount(afterEach);
 
@@ -580,6 +580,26 @@ describe("Preferences sliders, hints and upload errors", () => {
     await vi.waitFor(() => expect(errors[0]!.textContent).toBe("That file is not valid JSON."));
     await pickFile("prefs-home-image", new File(["text"], "notes.txt", { type: "text/plain" }));
     await vi.waitFor(() => expect(errors[1]!.textContent).toBe("Pick a PNG or JPEG picture."));
+  });
+
+  it("lists the pairs an uploaded palette fails in a status line, and leaves it empty for one that passes", async () => {
+    const json = (o: object, name: string) => new File([JSON.stringify(o)], name, { type: "application/json" });
+    try {
+      await open();
+      const warning = $("#prefs-theme-warning");
+      expect([warning.getAttribute("role"), warning.textContent]).toEqual(["status", ""]);
+      await pickFile("prefs-theme-file", json({ label: "Murk", "--text-mute": "#4a4458" }, "murk.json"));
+      await vi.waitFor(() => expect(warning.textContent).toMatch(/^Murk is added, but \d+ colour pairs? fall/));
+      expect(warning.textContent).toContain("--text-mute on --panel at ");
+      expect(getTheme()).toBe(customThemes().find((t) => t.label === "Murk")?.id);
+      await pickFile("prefs-theme-file", json({ label: "Fine", "--accent": "#9a9ff0" }, "fine.json"));
+      await vi.waitFor(() => expect(getTheme()).toBe(customThemes().find((t) => t.label === "Fine")?.id));
+      await flushPromises();
+      expect(warning.textContent).toBe("");
+    } finally {
+      setTheme(DEFAULT_THEME_ID);
+      for (const t of customThemes()) removeCustomTheme(t.id);
+    }
   });
 });
 

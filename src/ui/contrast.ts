@@ -222,3 +222,19 @@ export function contrastFailures(
 ): PairResult[] {
   return paletteContrast(p, mode, level).filter((r) => r.ratio < r.min);
 }
+
+function describePair({ what, ratio, min }: PairResult): string {
+  return what.endsWith("apart in lightness")
+    ? `${what} by ${ratio}, needs ${min}`
+    : `${what} at ${ratio}:1, needs ${min}:1`;
+}
+
+/** One sentence naming the worst `shown` failing pairs, empty when nothing fails. */
+export function describeFailures(failing: PairResult[], shown = 5): string {
+  if (failing.length === 0) return "";
+  if (failing.length === 1) return `1 colour pair falls short of contrast: ${describePair(failing[0]!)}.`;
+  const named = failing.slice(0, shown).map(describePair);
+  const rest = failing.length - named.length;
+  const tail = rest > 0 ? `; and ${rest} more` : "";
+  return `${failing.length} colour pairs fall short of contrast, worst first: ${named.join("; ")}${tail}.`;
+}

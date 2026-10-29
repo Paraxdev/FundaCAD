@@ -1,6 +1,7 @@
 // The active theme: the built-in palette in styles/_tokens.scss or an uploaded JSON palette, colour tokens only so a
 // theme never relayouts. Uploads are inline custom properties on <html>, so the built-in theme is just their absence.
 
+import { contrastFailures, parseColor, type PairResult } from "./contrast";
 import { readSetting } from "./storedSetting";
 
 export interface Theme {
@@ -47,6 +48,21 @@ const NOIR_SURFACE = {
   "--error": "#ff5c5c",
   "--error-tint": "rgba(255, 92, 92, 0.14)",
   "--pick-line": "#b48cff",
+};
+
+/** The :root values in _tokens.scss the contrast pairs read, which an uploaded palette falls back to. */
+export const NOIR_PALETTE: Readonly<Record<string, string>> = {
+  ...NOIR_SURFACE,
+  "--accent": "#9a9ff0",
+  "--accent-hot": "#bcc0f7",
+  "--accent-tint": "rgba(154, 159, 240, 0.14)",
+  "--accent-tint-2": "rgba(154, 159, 240, 0.24)",
+  "--on-accent": "#0c0d26",
+  "--axis-x": "#ff5a5a",
+  "--axis-y": "#46d97a",
+  "--axis-z": "#4d8dff",
+  "--field-bg": "rgba(0, 0, 0, 0.3)",
+  "--check-off": "rgba(0, 0, 0, 0.45)",
 };
 
 function noirTint(
@@ -486,11 +502,21 @@ function extractPalette(source: Record<string, unknown>): Record<string, string>
   const out: Record<string, string> = {};
   for (const [key, value] of Object.entries(raw)) {
     const token = key.toLowerCase();
-    if (PALETTE_TOKENS.has(token) && typeof value === "string" && COLOR_RE.test(value.trim())) {
+    if (PALETTE_TOKENS.has(token) && typeof value === "string" && isColour(value.trim())) {
       out[token] = value.trim();
     }
   }
   return out;
+}
+
+function isColour(value: string): boolean {
+  if (!COLOR_RE.test(value)) return false;
+  try {
+    parseColor(value);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function coerceStored(entry: unknown): CustomTheme | null {
@@ -504,9 +530,10 @@ function coerceStored(entry: unknown): CustomTheme | null {
   return { id, label, mode: asMode(e.mode), custom: true, palette };
 }
 
-export type UploadResult = { ok: true; theme: CustomTheme } | { ok: false; error: string };
+/** `failing` holds the contrast pairs the palette misses, worst first, as Noir fills the tokens it leaves out. */
+export type UploadResult = { ok: true; theme: CustomTheme; failing: PairResult[] } | { ok: false; error: string };
 
-/** Validate a parsed palette file and add it to the library without switching to it.
+/** Validate a parsed palette file and add it to the library without switching to it, even when it fails contrast.
  *  `fallbackLabel` is the file name, used when the file names no label. */
 export function addCustomTheme(source: unknown, fallbackLabel = "Custom theme"): UploadResult {
   if (!source || typeof source !== "object") {
@@ -537,7 +564,7 @@ export function addCustomTheme(source: unknown, fallbackLabel = "Custom theme"):
   };
   library = [...library, theme];
   writeLibrary(library);
-  return { ok: true, theme };
+  return { ok: true, theme, failing: contrastFailures({ ...NOIR_PALETTE, ...palette }, theme.mode) };
 }
 
 /** Remove an uploaded palette, falling back to the built-in one if it was active. */
