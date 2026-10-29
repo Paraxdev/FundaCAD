@@ -267,6 +267,10 @@
   background: var(--accent-hot);
   pointer-events: none;
 }
+/* A suppressed chip greys its bar anyway, and the accent faded with it falls under 3:1. */
+.timeline-node.suppressed.selected::after {
+  background: var(--text);
+}
 .timeline-node .t-flag {
   position: absolute;
   top: -2px;
