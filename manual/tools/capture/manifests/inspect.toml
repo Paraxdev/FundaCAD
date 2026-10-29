@@ -126,9 +126,24 @@ uses = ["manual/docs/inspect/properties.md:5"]
 [[shot]]
 file = "manual/docs/img/section-handle.png"
 size = [880, 740]
+viewport = [1920, 1080]
 theme = "fundacad"
 crop = "region"
-stub = true
+at = [555, 35]
+park = [1900, 1060]
+steps = [
+  { open = "example:Wall bracket" },
+  { evaluate = "() => { window.viewport.rig.zoomBy(1.08); window.viewport.requestRender(); }" },
+  { wait = 700 },
+  { tool = "Section View" },
+  { wait = 400 },
+  { evaluate = "() => [...document.querySelectorAll('.ui-confirm-choice')].find((b) => b.textContent.trim().startsWith('Z')).click()" },
+  { wait = 800 },
+  # The value box has focus, so F would be typed into it, the chip's Flip keeps the lower half instead.
+  { click_css = "[data-testid=\"section-flip\"]" },
+  { type = ["Offset", "8"] },
+  { wait = 600 },
+]
 show = "A bracket cut along Z with the offset handle and value box."
 alt = "A bracket cut along Z with the offset handle and value box"
 uses = ["manual/docs/inspect/section.md:5"]
@@ -136,9 +151,25 @@ uses = ["manual/docs/inspect/section.md:5"]
 [[shot]]
 file = "manual/docs/img/section-chip.png"
 size = [880, 740]
+viewport = [1920, 1080]
 theme = "fundacad"
 crop = "region"
-stub = true
+at = [555, 35]
+park = [1900, 1060]
+steps = [
+  { open = "example:Wall bracket" },
+  { evaluate = "() => { window.viewport.rig.zoomBy(1.08); window.viewport.requestRender(); }" },
+  { wait = 700 },
+  { tool = "Section View" },
+  { wait = 400 },
+  { evaluate = "() => [...document.querySelectorAll('.ui-confirm-choice')].find((b) => b.textContent.trim().startsWith('Z')).click()" },
+  { wait = 800 },
+  { click_css = "[data-testid=\"section-flip\"]" },
+  { type = ["Offset", "8"] },
+  { wait = 600 },
+  { press = "Enter" },
+  { wait = 600 },
+]
 show = "The cut bracket with the Section on chip and its Edit, Flip and Off buttons."
 alt = "The cut bracket with the Section on chip and its Edit, Flip and Off buttons"
 uses = ["manual/docs/inspect/section.md:26"]

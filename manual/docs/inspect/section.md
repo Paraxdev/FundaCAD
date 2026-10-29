@@ -8,7 +8,7 @@ Section cuts the model open with a plane so you can see inside.
 
 1. Pick Section under Inspect.
 2. Choose what to cut along: Face or plane, then click one, or the Z, X or Y axis. Z gives a horizontal cut.
-3. Drag the handle, or type an Offset in the value box.
+3. Drag the handle, or type an offset in the value box.
 4. Press Enter, the check or Esc to keep the cut.
 
 While the handle shows, two keys change the cut:
