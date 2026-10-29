@@ -7,8 +7,6 @@ With no tool running, clicks select and drag what you drew.
 - Drag a point or a line to move it.
 - Press Delete to remove the selection, or right-click it and pick Delete.
 
-<!-- shot: sketch-trim | a corner being trimmed -->
-
 ## Edit tools
 
 | Tool | What it does | What you click |

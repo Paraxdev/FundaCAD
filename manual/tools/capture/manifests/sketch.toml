@@ -33,7 +33,7 @@ steps = [
 ]
 show = "Amber dots on the corners of an outline drawn without snapping, and red dots on a line whose ends touch nothing."
 alt = "Amber dots on the corners of an outline drawn without snapping, and red dots on a line whose ends touch nothing"
-uses = ["manual/docs/sketch/constraints.md:17"]
+uses = ["manual/docs/sketch/constraints.md:59"]
 
 [[shot]]
 file = "manual/docs/img/sketch-dimension.png"
@@ -43,19 +43,20 @@ crop = "region"
 around = "sketch:15,13.5"
 park = [1000, 760]
 steps = [
-  { open = "fixture:sketch-dim.json", name = "Plate.funda" },
+  { open = "fixture:sketch-dim.json", name = "Bar.funda" },
   { click = "feature:s", double = true },
   { evaluate = "() => window.viewport.frameAround([6, 13, 0], 130)" },
   { wait = 900 },
   { tool = "Dimension" },
-  { click_at = true, sketch = [20.3, 19.7] },
-  { hover = [20, 23], space = "sketch" },
-  { click_at = true, sketch = [20, 23] },
+  { click_at = true, sketch = [16, 10] },
+  { click_at = true, sketch = [0, 15] },
+  { hover = [6, 4], space = "sketch" },
+  { click_at = true, sketch = [6, 4] },
   { wait = 400 },
 ]
-show = "The Dimension tool on a rectangle edge with its value box."
-alt = "The Dimension tool on a rectangle edge with its value box"
-uses = ["manual/docs/sketch/dimensions.md:5"]
+show = "The Dimension tool placing the distance from a hole to the edge of a rectangle, with its value box."
+alt = "The Dimension tool placing the distance from a hole to a rectangle's edge, with its value box"
+uses = ["manual/docs/sketch/dimensions.md:7"]
 
 [[shot]]
 file = "manual/docs/img/sketch-typed-size.png"
@@ -117,7 +118,7 @@ steps = [
 ]
 show = "The sketch palette with Snap, Construction and the other options."
 alt = "The sketch palette with Snap, Construction and the other options"
-uses = ["manual/docs/sketch/snapping.md:5"]
+uses = ["manual/docs/sketch/snapping.md:7"]
 
 [[shot]]
 file = "manual/docs/img/sketch-overview.png"
@@ -134,6 +135,71 @@ steps = [
 show = "An open sketch on the top face of a block, with the tool rail and the sketch palette."
 alt = "An open sketch on a block's top face, with the tool rail and the sketch palette"
 uses = ["manual/docs/sketch/start.md:5"]
+
+[[shot]]
+file = "manual/docs/img/sketch-pattern-rect.png"
+size = [560, 460]
+theme = "fundacad"
+crop = "region"
+around = "sketch:14,14"
+park = [300, 860]
+steps = [
+  { open = "fixture:sketch-tile.json", name = "Tile.funda" },
+  { click = "feature:s", double = true },
+  { evaluate = "() => window.viewport.frameAround([14, 14, 0], 110)" },
+  { wait = 900 },
+  { tool = "Rect Pattern" },
+  { click_at = true, sketch = [0, 0] },
+  { wait = 400 },
+  { click_at = true, sketch = [0, 0] },
+  { hover = [14, 14], space = "sketch" },
+  { wait = 400 },
+]
+show = "A square repeated three by three with Rect Pattern, with the Nx and Ny boxes."
+alt = "A square repeated three by three with Rect Pattern, with the Nx and Ny boxes"
+uses = ["manual/docs/sketch/patterns.md:5"]
+
+[[shot]]
+file = "manual/docs/img/sketch-project.png"
+size = [560, 400]
+theme = "fundacad"
+crop = "region"
+around = "world:0,0,12"
+park = [300, 860]
+steps = [
+  { open = "fixture:sketch-project.json", name = "Base.funda" },
+  { pick_face = "top" },
+  { press = "s" },
+  { wait = 600 },
+  { tool = "Project" },
+  { click_at = true, world = [-15, 12, 12] },
+  { wait = 400 },
+  { press = "Escape" },
+  { evaluate = "() => window.viewport.frameAround([0, 0, 12], 140)" },
+  { wait = 900 },
+]
+show = "The outline of a plate's top face and its hole projected into a sketch on that face, in purple."
+alt = "The outline of a plate's top face and its hole projected into a sketch, in purple"
+uses = ["manual/docs/sketch/project.md:5"]
+
+[[shot]]
+file = "manual/docs/img/reference-image.png"
+size = [600, 420]
+theme = "fundacad"
+crop = "region"
+around = "world:0,0,0"
+park = [300, 860]
+steps = [
+  { open = "fixture:sketch-refimage.json", name = "Bracket.funda" },
+  { wait = 1500 },
+  { evaluate = "() => window.viewport.setStandardView('top')" },
+  { wait = 900 },
+  { evaluate = "() => window.viewport.frameAround([0, 0, 0], 230)" },
+  { wait = 900 },
+]
+show = "A picture of a bracket on a cutting mat, scaled to its real size on XY, with its outline and one hole sketched over it."
+alt = "A picture of a bracket on a cutting mat with its outline sketched over it"
+uses = ["manual/docs/sketch/reference-image.md:13"]
 
 # Last: it turns Show Dimensions and Show Constraints off, and the palette keeps them for the rest of the session.
 [[shot]]

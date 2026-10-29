@@ -2,7 +2,7 @@
 
 Project (P) copies existing geometry into the sketch, so you can draw against it.
 
-<!-- shot: sketch-project | purple projected edges from a block -->
+![The outline of a plate's top face and its hole projected into a sketch, in purple](../img/sketch-project.png)
 
 A bar of three choices opens with the tool, it sets what a click picks:
 

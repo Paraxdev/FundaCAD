@@ -2,7 +2,7 @@
 
 The Pattern button on the rail repeats shapes you drew. The copies stay tied to the original, so they follow when it changes.
 
-<!-- shot: sketch-pattern-rect | rectangle pattern with Nx and Ny boxes -->
+![A square repeated three by three with Rect Pattern, with the Nx and Ny boxes](../img/sketch-pattern-rect.png)
 
 | Tool | Lays copies out | Boxes | Starts at |
 | --- | --- | --- | --- |
