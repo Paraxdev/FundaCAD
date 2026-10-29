@@ -92,11 +92,13 @@ function savedAs(store: DocumentStore, path: string, edits: number, swaps: numbe
   if (whole) void clearRecovery(path);
 }
 
-/** Save: write to the current path if known, else behave like Save As. */
-export async function saveDocument(store: DocumentStore) {
+/** Save: write to the current path if known, else behave like Save As. `beforeWrite` runs once the path is known,
+ *  so a cancelled dialog runs nothing. */
+export async function saveDocument(store: DocumentStore, beforeWrite?: () => void) {
   if (isTauri() && store.filePath) {
     const session = store.session;
     const path = store.filePath;
+    beforeWrite?.();
     const edits = store.editCount;
     const swaps = store.untitledSwapCount;
     const err = await writeContainer(store, path);
@@ -108,12 +110,12 @@ export async function saveDocument(store: DocumentStore) {
     if (!session.alive) return;
     savedAs(store, path, edits, swaps);
   } else {
-    await saveDocumentAs(store);
+    await saveDocumentAs(store, beforeWrite);
   }
 }
 
 /** Save As: always prompt for a path (or download in a plain browser). */
-export async function saveDocumentAs(store: DocumentStore) {
+export async function saveDocumentAs(store: DocumentStore, beforeWrite?: () => void) {
   const session = store.session;
   const swaps = store.untitledSwapCount;
   if (isTauri()) {
@@ -130,6 +132,7 @@ export async function saveDocumentAs(store: DocumentStore) {
     });
     // A path picked for a document that was closed or swapped for an assistant's meanwhile is not where the next one goes.
     if (path && session.alive && store.untitledSwapCount === swaps) {
+      beforeWrite?.();
       const edits = store.editCount;
       const err = await writeContainer(store, path);
       if (err) {
@@ -142,6 +145,7 @@ export async function saveDocumentAs(store: DocumentStore) {
   } else {
     // Reuse the settled name so a second Save As downloads "Untitled.funda" again, not "Untitled.funda.funda".
     const name = store.filePath ? store.fileName : `${store.fileName}.${DOC_EXT}`;
+    beforeWrite?.();
     const built = await browserDocumentText(store);
     if ("refused" in built) {
       await reportError(built.refused);

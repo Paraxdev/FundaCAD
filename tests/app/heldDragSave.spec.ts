@@ -15,6 +15,7 @@ const host = vi.hoisted(() => ({
   saved: [] as string[],
   recovery: [] as string[],
   pick: "D:/parts/as.funda" as string | null,
+  dialogs: 0,
 }));
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: async (cmd: string, args: Record<string, unknown>) => {
@@ -23,7 +24,13 @@ vi.mock("@tauri-apps/api/core", () => ({
     return undefined;
   },
 }));
-vi.mock("@tauri-apps/plugin-dialog", () => ({ message: async () => {}, save: async () => host.pick }));
+vi.mock("@tauri-apps/plugin-dialog", () => ({
+  message: async () => {},
+  save: async () => {
+    host.dialogs++;
+    return host.pick;
+  },
+}));
 const said = vi.hoisted(() => [] as string[]);
 vi.mock("../../src/ui/toast", () => ({
   toast: (message: string) => {
@@ -152,6 +159,7 @@ beforeEach(() => {
   host.recovery = [];
   said.length = 0;
   host.pick = "D:/parts/as.funda";
+  host.dialogs = 0;
   win.asked = [];
   frames = [];
   vi.stubGlobal("requestAnimationFrame", (fn: () => void) => {
@@ -192,6 +200,33 @@ describe("a Move drag let go of but not entered", () => {
     expect(moves()[0]).toMatchObject({ bodies: ["body1"], dx: 0, dy: 0, dz: 20 });
     expect(tool.pending).toBe(false);
     expect(store.dirty).toBe(false);
+  });
+
+  const cancelled: [string, () => void][] = [
+    ["Save As", () => key(true)],
+    ["Save on a document with no path", () => (store.markOpenedWithoutPath("a.funda"), key())],
+  ];
+  it.each(cancelled)("stays held when %s's dialog is cancelled, so Escape still cancels it", async (_name, save) => {
+    host.pick = null;
+    dragAndLetGo();
+    save();
+    await vi.waitFor(() => expect(host.dialogs).toBe(1));
+    await settle();
+    const held = { pending: tool.pending, features: store.document.features.map((f) => f.type), dirty: store.dirty };
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect({
+      held,
+      saved: host.saved.length,
+      said: [...said],
+      after: tool.pending,
+      features: store.document.features.length,
+    }).toEqual({
+      held: { pending: true, features: ["box"], dirty: false },
+      saved: 0,
+      said: [],
+      after: false,
+      features: 1,
+    });
   });
 
   it("is left alone by a save made while the handle is still under the hand", async () => {
@@ -287,6 +322,26 @@ describe("a held Move drag and closing the window", () => {
     expect(await closeWindow("save")).toBe(false);
     expect(moves()[0]).toMatchObject({ bodies: ["body1"], dz: 20 });
     expect(store.dirty).toBe(false);
+  });
+
+  it("keeps the window and the held drag when Save's dialog is cancelled on a document with no path", async () => {
+    store.markOpenedWithoutPath("a.funda");
+    host.pick = null;
+    dragAndLetGo();
+    const prevented = await closeWindow("save");
+    expect({
+      prevented,
+      dialogs: host.dialogs,
+      saved: host.saved.length,
+      held: tool.pending,
+      dirty: store.dirty,
+    }).toEqual({
+      prevented: true,
+      dialogs: 1,
+      saved: 0,
+      held: true,
+      dirty: false,
+    });
   });
 
   it("keeps the window open after Save when the held drag could not be entered, and says so", async () => {

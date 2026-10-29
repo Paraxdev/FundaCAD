@@ -60,14 +60,13 @@ function settleForSave(e: SaveEngine): void {
   if (anySavableHeld(e)) toast("The held drag could not be entered, so the save left it out", { kind: "warning" });
 }
 
+// Settled once the path is chosen, so a cancelled Save As dialog leaves the drag held and Escape still cancels it.
 export async function saveWork(e: SaveEngine): Promise<void> {
-  settleForSave(e);
-  await saveDocument(e.store);
+  await saveDocument(e.store, () => settleForSave(e));
 }
 
 export async function saveWorkAs(e: SaveEngine): Promise<void> {
-  settleForSave(e);
-  await saveDocumentAs(e.store);
+  await saveDocumentAs(e.store, () => settleForSave(e));
 }
 
 export async function mayDiscard(e: WorkEngine, question: string): Promise<boolean> {
