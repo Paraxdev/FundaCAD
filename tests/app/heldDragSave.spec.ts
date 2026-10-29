@@ -4,7 +4,8 @@ import { createPinia, setActivePinia } from "pinia";
 import * as THREE from "three";
 import { DocumentStore } from "../../src/document/store";
 import { MoveTool } from "../../src/features/moveTool";
-import { bodyMoveTarget } from "../../src/features/moveTarget";
+import { sketchEntityTarget } from "../../src/features/sketchMoveTarget";
+import { SketchPlane } from "../../src/sketch/plane";
 import { DatumPoseTool } from "../../src/features/datumPoseTool";
 import { createFeatureStarters, type FeatureStartersDeps } from "../../src/features/featureStarters";
 import type { Engine } from "../../src/app/engine";
@@ -359,16 +360,13 @@ describe("a held Move drag and closing the window", () => {
 
   it("on an open sketch's gizmo is not unsaved work, so the title stays clean, close does not ask, Save leaves it", async () => {
     const intoSketch: unknown[] = [];
-    // Stands in for sketchEntityTarget, whose commit writes into the open sketch and not the store.
-    tool.startTarget(
-      {
-        ...bodyMoveTarget(engine.viewport as Viewport, store, ["body1"]),
-        inSketch: true,
-        commit: (r) => (intoSketch.push(r), { id: null, rebuild: false }),
-        reopen: () => null,
-      },
-      () => {},
-    );
+    const sketchGizmo = sketchEntityTarget({
+      plane: () => new SketchPlane("XZ"),
+      selection: () => [{ type: "line", id: "l", x1: -5, y1: -5, x2: 5, y2: 5 }],
+      showPreview: () => {},
+      apply: (map) => intoSketch.push(map),
+    });
+    tool.startTarget(sketchGizmo!, () => {});
     flushFrame();
     scene.updateMatrixWorld(true);
     dragAndLetGo();
