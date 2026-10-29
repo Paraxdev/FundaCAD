@@ -2,8 +2,8 @@ use std::io::Write;
 use std::path::PathBuf;
 
 use fundacad_lib::plugins::bundle::{
-    allowed_bundle_url, extract_into, grants_match, is_official_url, now_secs, safe_entry, safe_id, sha256_hex,
-    Consented,
+    allowed_bundle_url, extract_into, grants_match, is_official_url, now_secs, official_url, safe_entry, safe_id,
+    sha256_hex, Consented, BUNDLE_PREFIX,
 };
 
 /// An id becomes a directory under the plugins root, so every refusal below is a path guard.
@@ -166,6 +166,70 @@ fn official_is_a_label_and_not_a_permission() {
     let third_party = "https://plugins.example.com/x.zip";
     assert!(allowed_bundle_url(third_party));
     assert!(!is_official_url(third_party));
+}
+
+#[test]
+fn official_holds_only_for_a_tag_and_asset_the_parser_leaves_as_written() {
+    for ours in [
+        "https://github.com/Paraxdev/fundacad/releases/download/beta/plugin-mcp.zip",
+        "https://github.com/Paraxdev/fundacad/releases/download/v1.0.493/plugin-FundaCAD.Screws.zip",
+    ] {
+        assert!(is_official_url(ours), "ours but refused: {ours}");
+        assert_eq!(official_url(ours).map(|u| u.as_str().to_string()).as_deref(), Some(ours));
+    }
+    assert!(is_official_url(&format!("{BUNDLE_PREFIX}beta/x.zip")));
+
+    let base = "https://github.com/Paraxdev/fundacad/releases/download/";
+    let tails = [
+        "%2e%2e/%2e%2e/%2e%2e/someone/else/releases/download/beta/x.zip",
+        "%2E%2E/%2E%2E/%2E%2E/someone/else/releases/download/beta/x.zip",
+        "%2e%2E/%2E%2e/%2e%2E/someone/else/releases/download/beta/x.zip",
+        ".%2e/.%2E/.%2e/someone/else/releases/download/beta/x.zip",
+        "%2e./%2E./%2e./someone/else/releases/download/beta/x.zip",
+        "%2e/beta/x.zip",
+        "%2E/beta/x.zip",
+        "./beta/x.zip",
+        "beta/./x.zip",
+        "beta/%2e",
+        "beta/x%2ezip",
+        "beta/x.zip?x",
+        "beta/x.zip?",
+        "beta/x.zip#x",
+        "beta/x.zip#",
+        "beta/x.zip/",
+        "beta/sub/x.zip",
+        "beta",
+        "beta/",
+        "/x.zip",
+        "beta//x.zip",
+        "beta/x\t.zip",
+    ];
+    for tail in tails {
+        let url = format!("{base}{tail}");
+        assert!(!is_official_url(&url), "wrongly ours: {url}");
+        assert!(official_url(&url).is_none(), "parsed as ours: {url}");
+    }
+
+    let tail = "beta/x.zip";
+    for prefix in [
+        "https://github.com:443/Paraxdev/fundacad/releases/download/",
+        "https://github.com:8443/Paraxdev/fundacad/releases/download/",
+        "https://GitHub.com/Paraxdev/fundacad/releases/download/",
+        "https://GITHUB.COM/Paraxdev/fundacad/releases/download/",
+        "https://github.com./Paraxdev/fundacad/releases/download/",
+        "https://user@github.com/Paraxdev/fundacad/releases/download/",
+        "https://user:pw@github.com/Paraxdev/fundacad/releases/download/",
+        "https://:pw@github.com/Paraxdev/fundacad/releases/download/",
+        "HTTPS://github.com/Paraxdev/fundacad/releases/download/",
+        "https:github.com/Paraxdev/fundacad/releases/download/",
+        "https://github.com\\Paraxdev/fundacad/releases/download/",
+        "https://github.com/paraxdev/fundacad/releases/download/",
+        "https://github.com/Paraxdev/fundacad/releases/download/../download/",
+        " https://github.com/Paraxdev/fundacad/releases/download/",
+    ] {
+        let url = format!("{prefix}{tail}");
+        assert!(!is_official_url(&url), "wrongly ours: {url}");
+    }
 }
 
 #[test]
