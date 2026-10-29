@@ -121,6 +121,15 @@
   }
 }
 
+/* The smallest hit area of a control (WCAG 2.5.8), grown by the area mixin of _hit.scss without a visual change. */
+:root {
+  --hit-min: 24px;
+}
+/* Larger click targets in Settings, Accessibility. */
+:root[data-targets="large"] {
+  --hit-min: 32px;
+}
+
 /* A light palette (ui/theme.ts sets the class): paper cards near white that stand clear of a pale
    viewport, chips a step darker than the card, fields a grey well, a shadow inked in the text colour. */
 :root.theme-light {

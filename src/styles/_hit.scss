@@ -1,0 +1,11 @@
+// A hit area of at least --hit-min each way without a visual or layout change: an empty pseudo centred on the
+// host, the insets 0 on a host already that big. $position: null keeps a host that is already positioned.
+@mixin area($pseudo: before, $position: relative) {
+  position: $position;
+
+  &::#{$pseudo} {
+    content: "";
+    position: absolute;
+    inset: min(0px, (100% - var(--hit-min)) / 2);
+  }
+}
