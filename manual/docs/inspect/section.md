@@ -13,22 +13,22 @@ Section cuts the model open with a plane so you can see inside.
 
 While the handle shows, and before you type an offset, two keys change the cut:
 
-- F flips which half is kept.
-- G changes how the cut half shows: hidden, faint, soft or strong. It starts at soft.
+1. F flips which half is kept.
+2. G changes how the cut half shows: hidden, faint, soft or strong. It starts at soft.
 
 ## While the cut is on
 
 The handle goes away and the cut stays while you orbit, select, measure and use other tools.
 
-- A click only reaches what the cut keeps. A box select still takes both halves.
-- A click on the hatched cut surface selects its body, as there is no face there to pick.
+1. A click only reaches what the cut keeps. A box select still takes both halves.
+2. A click on the hatched cut surface selects its body, as there is no face there to pick.
 
 ![The cut bracket with the Section on chip and its Edit, Flip and Off buttons](../img/section-chip.png)
 
 A chip at the top of the view says Section on:
 
-- Edit brings the handle back.
-- Flip keeps the other half.
-- Off removes the cut. Section View on the rail does the same.
+1. Edit brings the handle back.
+2. Flip keeps the other half.
+3. Off removes the cut. Section View on the rail does the same.
 
 The cut is saved with the document and is back when you open it. Undo leaves it alone, as the cut is a view and not part of the model.
