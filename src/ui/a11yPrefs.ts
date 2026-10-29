@@ -19,6 +19,8 @@ export interface A11yPrefs {
   contrast: Contrast;
   /** Opaque cards and pills instead of glass, so no model colour shows through; More and Maximum contrast imply it. */
   solidPanels: boolean;
+  /** Larger click targets: every hit area grows from 24 to about 32 px, see targets.ts. */
+  targets: Targets;
 }
 
 export const DEFAULT_A11Y: Readonly<A11yPrefs> = {
@@ -27,6 +29,7 @@ export const DEFAULT_A11Y: Readonly<A11yPrefs> = {
   singleKeys: true,
   contrast: "system",
   solidPanels: false,
+  targets: "default",
 };
 
 /** One click for screen reader users. Later settings join it: Notification time Until dismissed. */
@@ -43,6 +46,7 @@ const KEYS: Record<keyof A11yPrefs, string> = {
   singleKeys: "fundacad.a11y.singleKeys",
   contrast: "fundacad.a11y.contrast",
   solidPanels: "fundacad.a11y.solidPanels",
+  targets: "fundacad.a11y.targets",
 };
 
 const ANIMATIONS: readonly Animations[] = ["system", "on", "off"];
@@ -70,12 +74,19 @@ export function asFlag(v: unknown): boolean | null {
   return null;
 }
 
+export type Targets = "default" | "large";
+const TARGETS: readonly Targets[] = ["default", "large"];
+export function asTargets(v: unknown): Targets | null {
+  return TARGETS.includes(v as Targets) ? (v as Targets) : null;
+}
+
 const GATES: { [K in keyof A11yPrefs]: (v: unknown) => A11yPrefs[K] | null } = {
   animations: asAnimations,
   verbosity: asVerbosity,
   singleKeys: asOnOff,
   contrast: asContrast,
   solidPanels: asFlag,
+  targets: asTargets,
 };
 
 function readStored(): A11yPrefs {

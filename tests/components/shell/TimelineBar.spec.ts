@@ -1071,3 +1071,19 @@ describe("History's rollback slider", () => {
     expect(m.w.find(".tl-rollback").exists()).toBe(false);
   });
 });
+
+describe("the rollback marker over filtered out rows", () => {
+  const isEnd = (m: ReturnType<typeof mountBar>) => m.w.get(".timeline-marker").classes("is-end");
+
+  it("is the visual end of the list when Related to Selection hides every row after it", () => {
+    expect(isEnd(mountBar({ regions: ["sk"], rollback: 3 }))).toBe(true);
+  });
+
+  it("is not while a row after it shows, or with nothing filtered", async () => {
+    expect(isEnd(mountBar({ regions: ["sk"], rollback: 1 }))).toBe(false);
+    expect(isEnd(mountBar({ rollback: 3 }))).toBe(false);
+    const m = mountBar({ regions: ["sk"], rollback: 3 });
+    await m.w.get('[data-testid="history-related"]').trigger("click");
+    expect(isEnd(m)).toBe(false);
+  });
+});

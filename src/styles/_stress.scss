@@ -55,6 +55,15 @@
 .stress-more {
   margin-top: var(--s-3);
 }
+// The step scrolls, so the grown areas at its bottom and right edges stay inside it.
+:root[data-pointer="touch"] .stress-setup > .stress-more.btn.btn-sm::before,
+:root[data-targets="large"] .stress-setup > .stress-more.btn.btn-sm::before {
+  bottom: 0;
+}
+:root[data-pointer="touch"] .stress-item-head > .stress-remove-load.icon-btn.icon-btn-sm::before,
+:root[data-targets="large"] .stress-item-head > .stress-remove-load.icon-btn.icon-btn-sm::before {
+  right: -4px;
+}
 .stress-fold {
   padding-left: var(--s-4);
 }

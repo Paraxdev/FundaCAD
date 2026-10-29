@@ -15,6 +15,7 @@ import Tabs from "../ui/Tabs.vue";
 import { tabPanelAttrs } from "../ui/tabIds";
 import McpSection from "./McpSection.vue";
 import DenoiserRow from "../shell/DenoiserRow.vue";
+import LargerTargetsRow from "./LargerTargetsRow.vue";
 import PluginsSection from "./PluginsSection.vue";
 import ExperimentalSection from "./ExperimentalSection.vue";
 import UpdatesSection from "./UpdatesSection.vue";
@@ -220,6 +221,7 @@ const a11yChanged = computed(
     a11y.value.animations !== DEFAULT_A11Y.animations ||
     a11y.value.verbosity !== DEFAULT_A11Y.verbosity ||
     a11y.value.singleKeys !== DEFAULT_A11Y.singleKeys ||
+    a11y.value.targets !== DEFAULT_A11Y.targets ||
     dwell.value !== DEFAULT_DWELL_MS,
 );
 function pickAnimations(id: string) {
@@ -902,6 +904,7 @@ function onClassicCamera(on: boolean) {
                   F keys, the arrows and the command palette keep working.
                 </p>
               </div>
+              <LargerTargetsRow />
             </div>
           </div>
 

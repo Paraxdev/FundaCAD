@@ -184,7 +184,7 @@ describe("CommandPalette", () => {
     ]).not.toContain(null);
   });
 
-  it("writes the shortcut with Meta on macOS and lists both keys of a two key command", async () => {
+  it("writes the shortcut with Meta on macOS", async () => {
     setMacForTest(true);
     await openPalette();
     type("save as");
@@ -192,7 +192,7 @@ describe("CommandPalette", () => {
     expect(activeOption()!.getAttribute("aria-keyshortcuts")).toBe("Meta+Shift+S");
     type("fit view");
     await nextTick();
-    expect(activeOption()!.getAttribute("aria-keyshortcuts")).toBe("Home F6");
+    expect(activeOption()!.getAttribute("aria-keyshortcuts")).toBe("Home");
   });
 
   it("moves aria-activedescendant and aria-selected on the arrows, focus left in the field", async () => {

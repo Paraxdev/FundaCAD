@@ -31,7 +31,7 @@ const results = computed(() => {
     .map((x) => x.c);
 });
 
-// aria-keyshortcuts spells out the modifier and lists alternatives with a space: "Home / F6" is "Home F6".
+// aria-keyshortcuts spells out the modifier and lists alternatives with a space: "Ctrl+Z / Ctrl+Y" is "Control+Z Control+Y".
 function ariaShortcut(hint: string): string {
   const ctrl = isMac() ? "Meta" : "Control";
   return hint

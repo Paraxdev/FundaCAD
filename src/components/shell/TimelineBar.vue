@@ -738,6 +738,7 @@ function openMultiMenu(e: MouseEvent, ids: string[]) {
               v-if="i === rollback"
               class="timeline-marker"
               aria-hidden="true"
+              :class="{ 'is-end': filtering && features.slice(i).every((g) => !related?.has(g.id)) }"
               title="Drag to roll the model back / forward"
               @pointerdown="onMarkerDown"
               ><span class="marker-grip"></span

@@ -1,6 +1,8 @@
 // IconButton: plain, tile and danger, sm 24, md 28 and lg 40, with its badge.
 // Tile at lg is the .icon-btn of _float.scss and _glass.scss, so only the other sizes and variants live here.
 
+@use "../hit";
+
 .icon-btn.icon-btn-md {
   width: 28px;
   height: 28px;
@@ -19,6 +21,12 @@
     background var(--t-fast) var(--ease),
     color var(--t-fast) var(--ease),
     transform var(--t-fast) var(--ease);
+}
+// Every size, since a host often holds one under 24px (the tree caret and eye, the value box buttons).
+.icon-btn.icon-btn-sm,
+.icon-btn.icon-btn-md,
+.icon-btn.icon-btn-lg {
+  @include hit.area($position: null);
 }
 .icon-btn.icon-btn-sm:active:not(.is-disabled),
 .icon-btn.icon-btn-md:active:not(.is-disabled),
@@ -49,11 +57,14 @@
 }
 
 :root[data-pointer="touch"] .icon-btn.icon-btn-sm::before,
-:root[data-pointer="touch"] .icon-btn.icon-btn-md::before {
+:root[data-pointer="touch"] .icon-btn.icon-btn-md::before,
+:root[data-targets="large"] .icon-btn.icon-btn-sm::before,
+:root[data-targets="large"] .icon-btn.icon-btn-md::before {
   content: "";
   position: absolute;
   inset: -6px;
 }
-:root[data-pointer="touch"] .icon-btn.icon-btn-sm::before {
+:root[data-pointer="touch"] .icon-btn.icon-btn-sm::before,
+:root[data-targets="large"] .icon-btn.icon-btn-sm::before {
   inset: -8px;
 }

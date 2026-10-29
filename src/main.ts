@@ -15,6 +15,7 @@ initTheme();
 initContrast();
 installGlassBlurSwitch();
 import "./diagnostics/breadcrumbs"; // installs window error listeners (bug-report trail)
+import "./ui/targets"; // sets data-targets on <html> before the first paint
 import { createApp, markRaw } from "vue";
 import { createPinia, setActivePinia } from "pinia";
 import App from "./App.vue";

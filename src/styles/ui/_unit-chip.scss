@@ -1,5 +1,7 @@
 // UnitChip: the unit caption or unit picker beside a value.
 
+@use "../hit";
+
 .ui-unit-chip {
   flex: none;
   display: inline-flex;
@@ -20,6 +22,7 @@
   transition:
     background var(--t-fast) var(--ease),
     color var(--t-fast) var(--ease);
+  @include hit.area;
 }
 .ui-unit-chip.is-picker:hover,
 .ui-unit-chip.is-picker.is-open {

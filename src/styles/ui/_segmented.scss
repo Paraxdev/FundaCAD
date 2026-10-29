@@ -1,5 +1,7 @@
 // Segmented: a radiogroup of choices, sm and md, and the chips look of the dock.
 
+@use "../hit";
+
 .ui-segmented {
   display: inline-flex;
   align-items: stretch;
@@ -25,6 +27,7 @@
   transition:
     background var(--t-fast) var(--ease),
     color var(--t-fast) var(--ease);
+  @include hit.area;
 }
 .ui-segment-label {
   overflow: hidden;

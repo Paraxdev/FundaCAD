@@ -1,3 +1,5 @@
+@use "hit";
+
 /* Wider than the browser tree (232px) on purpose, so the material library is two
    columns of spheres and not a one column list. */
 #renderdock {
@@ -68,6 +70,9 @@
 .rd-mini:hover {
   background: var(--raised);
   color: var(--text);
+}
+.rd-mini {
+  @include hit.area;
 }
 
 .rd-search {

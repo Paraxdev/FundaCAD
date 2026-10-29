@@ -27,9 +27,11 @@ const d = useDisabled(props);
 const name = useName(props, "Checkbox", () => !!slots.default);
 const tipText = computed(() => (props.tip && props.keys ? `${props.tip} (${fmtKeys(props.keys)})` : props.tip));
 const rootAttrs = computed(() => {
-  const { "aria-label": _l, "aria-labelledby": _b, ...rest } = attrs;
+  const { "aria-label": _l, "aria-labelledby": _b, "aria-describedby": _d, ...rest } = attrs;
   return mergeProps(d.bind.value, { title: d.title(tipText.value) }, rest);
 });
+// Read in render, since attrs is not reactive and a computed would keep the first hint.
+const describedBy = () => attrs["aria-describedby"] as string | undefined;
 // Drawn text names the box through the wrapping label; otherwise labelledby or a plugin's aria attribute does.
 const inputName = computed(() => (props.label || slots.default ? {} : name.value));
 
@@ -63,6 +65,7 @@ function onKeyup(e: KeyboardEvent) {
         :checked="modelValue"
         :indeterminate="!!indeterminate"
         :aria-disabled="disabled ? 'true' : undefined"
+        :aria-describedby="describedBy()"
         v-bind="inputName"
         @change="onChange"
         @keydown="onKeydown"
