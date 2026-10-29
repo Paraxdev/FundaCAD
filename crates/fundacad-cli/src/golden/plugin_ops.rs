@@ -235,8 +235,9 @@ fn compare_export(ctx: &Ctx, py: &Value, path: &Path, reply: &Value) -> (Vec<Str
         Ok(z) => z,
         Err(e) => return (vec![format!("not a zip: {e}")], notes),
     };
-    let names: Vec<String> =
-        (0..zip.len()).filter_map(|i| zip.by_index(i).ok().and_then(|f| f.name().ok().map(|n| n.into_owned()))).collect();
+    let names: Vec<String> = (0..zip.len())
+        .filter_map(|i| zip.by_index(i).ok().and_then(|f| f.name().ok().map(|n| n.into_owned())))
+        .collect();
     let entries = py["entries"].as_array().cloned().unwrap_or_default();
     let want: Vec<&str> = entries.iter().map(|e| e["name"].as_str().unwrap_or("")).collect();
     if names != want {
