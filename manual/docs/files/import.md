@@ -43,5 +43,5 @@ To work on it as a solid, reduce the mesh below 150,000 triangles in a mesh prog
 
 ## DXF and SVG
 
-- A DXF layer will not extrude while the ends of its lines do not meet. The import says how many ends are open.
-- Text, dimensions and hatches in a DXF are left out, and so are the text, images and gradients of an SVG. The import counts what it skipped.
+1. A DXF layer will not extrude while the ends of its lines do not meet. The import says how many ends are open.
+2. Text, dimensions and hatches in a DXF are left out, and so are the text, images and gradients of an SVG. The import counts what it skipped.

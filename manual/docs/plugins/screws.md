@@ -30,8 +30,8 @@ Standard Thread, also under Insert, threads a round face to a standard size.
 
 The panel also has:
 
-- **Bore drawn at**: Tap drill cuts the thread into the bore, Nominal adds it inside a bore drawn at the nominal size.
-- **Hand** and **Starts**: Left and up to 4 starts, for lead screws.
-- **Print fit**: opens the thread by Clearance, 0.2 mm all round, so a printed screw turns in its nut.
+1. **Bore drawn at**: Tap drill cuts the thread into the bore, Nominal adds it inside a bore drawn at the nominal size.
+2. **Hand** and **Starts**: Left and up to 4 starts, for lead screws.
+3. **Print fit**: opens the thread by Clearance, 0.2 mm all round, so a printed screw turns in its nut.
 
 Double-click the thread in the History to open the panel again.
