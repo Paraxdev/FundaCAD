@@ -3,6 +3,7 @@
 
 import { describe, expect, it } from "vitest";
 
+import workflowRaw from "../../.github/workflows/build.yml?raw";
 import engineLockRaw from "../../Cargo.lock?raw";
 import appLockRaw from "../../src-tauri/Cargo.lock?raw";
 import betaRaw from "../../src-tauri/tauri.beta.conf.json?raw";
@@ -63,5 +64,23 @@ describe("dependency advisories", () => {
       (raw) => (JSON.parse(raw) as { bundle: { createUpdaterArtifacts: unknown } }).bundle.createUpdaterArtifacts,
     );
     expect(made).toEqual([true, true, true]);
+  });
+
+  // Without the zip feature the Linux updater writes the downloaded bytes over the AppImage as they are, so a v1
+  // .AppImage.tar.gz in latest.json would leave a gzip file where the app was. Windows refuses a .zip outright.
+  it("latest.json offers every platform a bundle the updater installs without its zip feature", () => {
+    const published = new Map(
+      [...workflowRaw.matchAll(/^\s*put '([^']+)'\s+(\S+)$/gm)].map(([, glob, name]) => [name, glob] as const),
+    );
+    const offered = [...workflowRaw.matchAll(/^\s*add (\S+)\s+release\/(\S+)/gm)].map(([, platform, name]) => [
+      platform,
+      name,
+      published.get(name),
+    ]);
+    expect(offered).toEqual([
+      ["linux-x86_64", "FundaCAD-linux-x86_64.AppImage", "*.AppImage"],
+      ["windows-x86_64", "FundaCAD-windows-x64-setup.exe", "*setup.exe"],
+      ["darwin-aarch64", "FundaCAD-macos-arm64.app.tar.gz", "*.app.tar.gz"],
+    ]);
   });
 });
