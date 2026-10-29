@@ -19,7 +19,7 @@ beforeEach(() => {
   setInputModalityForTest("pointer");
 });
 
-async function render(renderTier: RenderTier) {
+async function render(renderTier: RenderTier, viewportExtra: Record<string, unknown> = {}) {
   const handleAction = vi.fn();
   const setStandardView = vi.fn();
   const engine = {
@@ -31,6 +31,7 @@ async function render(renderTier: RenderTier) {
       onRenderTierChange: () => () => {},
       setViewCubeInset: () => {},
       setStandardView,
+      ...viewportExtra,
     },
     store: { buildState: {}, fileName: "Untitled", dirty: false, document: {} },
     bridge: { buildVersion: ref(0), metaVersion: ref(0), docVersion: ref(0) },
@@ -41,7 +42,7 @@ async function render(renderTier: RenderTier) {
   });
   // Vue skips a listener for an event stamped in the same millisecond it was attached, once another listener ran.
   await new Promise((r) => setTimeout(r, 2));
-  return { w, handleAction, setStandardView };
+  return { w, handleAction, setStandardView, engine };
 }
 
 const TIER: RenderTier = { lowPower: false, auto: false, webgpu: true };
@@ -287,5 +288,56 @@ describe("ViewportControls History button", () => {
     const { w } = await render(TIER);
     const btn = w.get('button[aria-label="History"]');
     expect([btn.attributes("title"), btn.attributes("aria-keyshortcuts")]).toEqual([title, keys]);
+  });
+});
+
+describe("ViewportControls zebra options", () => {
+  const zebraControls = () => [
+    document.querySelector('.vc-pop [data-testid="zebra-direction"]'),
+    document.querySelector('.vc-pop [data-testid="zebra-width"]'),
+  ];
+
+  it("shows the stripe direction and width only while Zebra is on", async () => {
+    const { w, handleAction, engine } = await render(TIER, { zebraOn: false });
+    handleAction.mockImplementation((a: string) => {
+      if (a === "zebra") (engine.viewport as { zebraOn: boolean }).zebraOn = true;
+    });
+    await w.get('[aria-label="Display"]').trigger("click");
+    expect(zebraControls()).toEqual([null, null]);
+    document.querySelector<HTMLElement>('.vc-pop [role="switch"][aria-label="Zebra"]')!.click();
+    await nextTick();
+    expect(handleAction).toHaveBeenCalledWith("zebra");
+    expect(zebraControls().every((el) => el !== null)).toBe(true);
+  });
+
+  it("reads and writes the remembered direction and width", async () => {
+    setRenderPref("zebraDirection", "horizontal");
+    setRenderPref("zebraWidth", 3);
+    const { w } = await render(TIER, { zebraOn: true });
+    await w.get('[aria-label="Display"]').trigger("click");
+    const group = document.querySelector<HTMLElement>('.vc-pop [data-testid="zebra-direction"]')!;
+    const radios = [...group.querySelectorAll<HTMLElement>('[role="radio"]')];
+    expect([group.getAttribute("role"), group.getAttribute("aria-label")]).toEqual(["radiogroup", "Stripe direction"]);
+    expect(radios.map((b) => [b.textContent?.trim(), b.getAttribute("aria-checked")])).toEqual([
+      ["Horizontal", "true"],
+      ["Vertical", "false"],
+    ]);
+    radios[1]!.click();
+    expect(renderPrefs().zebraDirection).toBe("vertical");
+
+    const range = document.querySelector<HTMLInputElement>('.vc-pop [data-testid="zebra-width"] input[type=range]')!;
+    const name = document.getElementById(range.getAttribute("aria-labelledby")!)?.textContent;
+    expect([range.min, range.max, range.step, range.value, name]).toEqual(["1", "5", "1", "3", "Stripe width"]);
+    range.value = "5";
+    range.dispatchEvent(new Event("input", { bubbles: true }));
+    range.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(renderPrefs().zebraWidth).toBe(5);
+
+    setRenderPref("zebraWidth", 2);
+    setRenderPref("zebraDirection", "horizontal");
+    await nextTick();
+    expect(range.value).toBe("2");
+    expect(radios.map((b) => b.getAttribute("aria-checked"))).toEqual(["true", "false"]);
+    setRenderPref("zebraWidth", 3);
   });
 });

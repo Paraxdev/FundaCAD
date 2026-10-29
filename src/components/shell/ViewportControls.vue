@@ -26,10 +26,12 @@ import { isRenderLowPower } from "../../viewport/render";
 import { toast } from "../../ui/toast";
 import { featureFailures } from "../../ui/featureNotes";
 import type { ProjectionMode } from "../../viewport/cameras";
+import { ZEBRA_WIDTH_MAX, ZEBRA_WIDTH_MIN, type ZebraDirection } from "../../viewport/zebraStripes";
 import IconButton from "../ui/IconButton.vue";
 import Button from "../ui/Button.vue";
 import ListRow from "../ui/ListRow.vue";
 import Segmented, { type SegmentedOption } from "../ui/Segmented.vue";
+import Slider from "../ui/Slider.vue";
 import Toolbar from "../ui/Toolbar.vue";
 import Icon from "./Icon.vue";
 import VersionsPanel from "./VersionsPanel.vue";
@@ -162,6 +164,12 @@ const tier = ref(engine.viewport.renderTier);
 const matcap = ref({ style: renderPrefs().matcapStyle, tint: renderPrefs().matcapTint });
 const overlays = ref(savedOverlays());
 const realtimeWhileMoving = ref(renderPrefs().realtimeWhileMoving);
+const zebraOf = () => ({ direction: renderPrefs().zebraDirection, width: renderPrefs().zebraWidth });
+const zebra = ref(zebraOf());
+const zebraDirectionOptions: SegmentedOption<ZebraDirection>[] = [
+  { value: "horizontal", label: "Horizontal" },
+  { value: "vertical", label: "Vertical" },
+];
 const matcapOptions = MATCAP_STYLES.map((m) => ({
   value: m,
   tip: m,
@@ -171,6 +179,7 @@ const offTier = onRenderPrefsChange(() => {
   tier.value = engine.viewport.renderTier;
   matcap.value = { style: renderPrefs().matcapStyle, tint: renderPrefs().matcapTint };
   realtimeWhileMoving.value = renderPrefs().realtimeWhileMoving;
+  zebra.value = zebraOf();
   overlays.value = savedOverlays();
 });
 onUnmounted(offTier);
@@ -583,6 +592,26 @@ async function screenshot() {
       <div class="pop-rule"></div>
       <div class="pop-section">Surface analysis</div>
       <Toggle :model-value="analysis.zebra" label="Zebra" @update:model-value="runAndRefresh('zebra')" />
+      <div v-if="analysis.zebra" class="zebra-opts">
+        <Segmented
+          size="sm"
+          label="Stripe direction"
+          data-testid="zebra-direction"
+          :options="zebraDirectionOptions"
+          :model-value="zebra.direction"
+          @update:model-value="setRenderPref('zebraDirection', $event)"
+        />
+        <Slider
+          label="Stripe width"
+          data-testid="zebra-width"
+          :min="ZEBRA_WIDTH_MIN"
+          :max="ZEBRA_WIDTH_MAX"
+          :step="1"
+          show-value
+          :model-value="zebra.width"
+          @update:model-value="setRenderPref('zebraWidth', $event)"
+        />
+      </div>
       <Toggle
         :model-value="analysis.curvature"
         label="Curvature combs"
