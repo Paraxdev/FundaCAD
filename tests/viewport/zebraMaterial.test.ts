@@ -143,29 +143,77 @@ describe("fitZebraMaterial", () => {
   });
 });
 
-// The fragment shader's stripe lines run as JS with GLSL's vector helpers, so they must give
-// zebraStripeCoord's value for the same point, normal and frame.
+// The fragment shader's lines run as JS with GLSL's helpers, so they must give zebraStripeCoord's value
+// for the same point, normal and frame, and a band that box filters the stripes over fwidth.
 const glsl = {
   vec3: (x: number, y = x, z = x) => [x, y, z],
   dot: (a: number[], b: number[]) => a[0]! * b[0]! + a[1]! * b[1]! + a[2]! * b[2]!,
   length: (a: number[]) => Math.hypot(a[0]!, a[1]!, a[2]!),
   normalize: (a: number[]) => a.map((x) => x / Math.hypot(a[0]!, a[1]!, a[2]!)),
   reflect: (i: number[], n: number[]) => i.map((x, j) => x - 2 * glsl.dot(n, i) * n[j]!),
+  floor: Math.floor,
+  fract: (x: number) => x - Math.floor(x),
+  max: Math.max,
+  mix: (x: number, y: number, t: number) => x * (1 - t) + y * t,
+  smoothstep: (e0: number, e1: number, x: number) => {
+    const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0)));
+    return t * t * (3 - 2 * t);
+  },
 };
 
-function shaderStripeCoord(mat: THREE.ShaderMaterial) {
+interface FragmentInputs {
+  vD: Vec3;
+  vN: Vec3;
+  uReach: number;
+  uDirection: ZebraDirection;
+  uPeriod?: number;
+  fwidth?: number;
+}
+
+function shaderLines(mat: THREE.ShaderMaterial, end: string, result: string) {
   const src = mat.fragmentShader;
-  const start = src.lastIndexOf("void main() {") + "void main() {".length;
-  const body = src.slice(start, src.indexOf("float s =", start)).replace(/\b(?:vec3|float)\s+(\w+)\s*=/g, "const $1 =");
-  const run = new Function(...Object.keys(glsl), "vD", "vN", "uReach", "uDirection", `${body}\nreturn u;`) as (
+  const main = src.lastIndexOf("void main() {");
+  const helpers = src
+    .slice(src.indexOf("\n", src.lastIndexOf("varying ")), main)
+    .replace(/\bfloat\s+(\w+)\(float\s+(\w+)\)\s*\{/g, "function $1($2) {");
+  const body = src
+    .slice(main + "void main() {".length, src.indexOf(end, main))
+    .replace(/\b(?:vec3|float)\s+(\w+)\s*=/g, "let $1 =");
+  const args = ["fwidth", "vD", "vN", "uReach", "uDirection", "uPeriod"];
+  const run = new Function(...Object.keys(glsl), ...args, `${helpers}${body}\nreturn ${result};`) as (
     ...args: unknown[]
   ) => number;
-  return (d: Vec3, n: Vec3, reach: number, direction: ZebraDirection) =>
-    run(...Object.values(glsl), d, n, reach, direction === "vertical" ? 1 : 0);
+  return (i: FragmentInputs) =>
+    run(
+      ...Object.values(glsl),
+      () => i.fwidth ?? 0,
+      i.vD,
+      i.vN,
+      i.uReach,
+      i.uDirection === "vertical" ? 1 : 0,
+      i.uPeriod ?? 1,
+    );
+}
+
+/** The share of [s - w / 2, s + w / 2] in the light half of a stripe, by brute force. */
+function lightShare(s: number, w: number): number {
+  const n = 100000;
+  let lit = 0;
+  for (let i = 0; i < n; i++) {
+    const x = s - w / 2 + ((i + 0.5) * w) / n;
+    if (x - Math.floor(x) >= 0.5) lit++;
+  }
+  return lit / n;
 }
 
 describe("the zebra fragment shader", () => {
-  const shader = shaderStripeCoord(makeZebraMaterial());
+  const coord = shaderLines(makeZebraMaterial(), "float s =", "u");
+  const shader = (vD: Vec3, vN: Vec3, uReach: number, uDirection: ZebraDirection) =>
+    coord({ vD, vN, uReach, uDirection });
+  // A face square to the view with the stripe coordinate s, its stripes w wide on screen.
+  const bandOf = shaderLines(makeZebraMaterial(), "vec3 col =", "band");
+  const band = (s: number, w: number, vN: Vec3 = [0, 0, 1]) =>
+    bandOf({ vD: [0, s, 0], vN, uReach: 18, uDirection: "horizontal", fwidth: w });
 
   it("computes the same stripe coordinate as zebraStripeCoord", () => {
     const cv: Vec3 = [3, -2, -40];
@@ -186,6 +234,24 @@ describe("the zebra fragment shader", () => {
   it("stays finite on a zero normal, as zebraStripeCoord does", () => {
     const u = shader([4, -3, 2], [0, 0, 0], 18, "horizontal");
     expect(u).toBe(zebraStripeCoord([4, -3, 2], [0, 0, 0], [0, 0, 0], "horizontal", 18));
+  });
+
+  it("box filters the stripes over a pixel, a still flat face as sharp as 1e-4 of a period", () => {
+    const at = [0.25, 0.5, 0.52, 0.75, 1, -0.25, 3.49, 7.98];
+    for (const w of [0, 0.05, 0.1, 0.2])
+      for (const s of at) expect(band(s, w)).toBeCloseTo(lightShare(s, Math.max(w, 1e-4)), 4);
+  });
+
+  it("fades stripes under about 2 px to the mean grey instead of aliasing", () => {
+    const fading = [0.2, 0.25, 0.3, 0.35, 0.4].map((w) => band(0.75, w));
+    expect(fading[0]).toBeCloseTo(1, 12);
+    for (let i = 1; i < fading.length; i++) expect(fading[i]! < fading[i - 1]! && fading[i]! > 0.5).toBe(true);
+    expect([0.45, 0.6, 1, 4].map((w) => band(0.75, w))).toEqual([0.5, 0.5, 0.5, 0.5]);
+  });
+
+  it("keeps the band whole on a zero normal and at a grazing one", () => {
+    const bands = [band(0.75, 0, [0, 0, 0]), band(0.25, 0, [0, 0, 0]), band(0.75, 0, [1, 0, 1e-12])];
+    expect(bands.map((b) => Math.round(b * 1e9) / 1e9)).toEqual([1, 0, 1]);
   });
 });
 
