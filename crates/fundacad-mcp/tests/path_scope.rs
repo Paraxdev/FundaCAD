@@ -1,11 +1,12 @@
-//! Over stdio: by default the file tools reach any plain folder, and a server
-//! given folders keeps to them.
+//! Over stdio: by default the file tools reach any plain folder but the app's data
+//! folder and the login folders, and a server given folders keeps to them.
 
 mod common;
 
 use std::path::{Path, PathBuf};
 
 use common::{env, Mcp};
+use fundacad_mcp::app_session::APP_IDENTIFIER;
 use serde_json::json;
 
 /// A server whose temp, blob dir and working folder are all inside `own`, so
@@ -65,9 +66,25 @@ fn by_default_the_tools_reach_any_plain_folder() {
     let (own, work, folder) = dirs();
     let home = work.path().join("me");
     let documents = home.join("Documents");
-    std::fs::create_dir_all(&documents).unwrap();
-    let h = home.to_string_lossy().into_owned();
-    let mut mcp = server_in(own.path(), &folder, &[("USERPROFILE", &h), ("HOME", &h)], &[]);
+    let roaming = home.join("AppData").join("Roaming");
+    let data = if cfg!(windows) {
+        roaming.clone()
+    } else if cfg!(target_os = "macos") {
+        home.join("Library").join("Application Support")
+    } else {
+        home.join("data")
+    }
+    .join(APP_IDENTIFIER);
+    let startup = roaming.join("Microsoft").join("Windows").join("Start Menu").join("Programs").join("Startup");
+    let autostart = home.join("config").join("autostart");
+    for d in [&documents, &data.join("recovery"), &startup, &autostart] {
+        std::fs::create_dir_all(d).unwrap();
+    }
+    let s = |p: &Path| p.to_string_lossy().into_owned();
+    let (h, r, x, c) = (s(&home), s(&roaming), s(&home.join("data")), s(&home.join("config")));
+    let vars = [("USERPROFILE", &h), ("HOME", &h), ("APPDATA", &r), ("XDG_DATA_HOME", &x), ("XDG_CONFIG_HOME", &c)];
+    let vars: Vec<(&str, &str)> = vars.iter().map(|(k, v)| (*k, v.as_str())).collect();
+    let mut mcp = server_in(own.path(), &folder, &vars, &[]);
     let file = folder.join("a.funda");
     let r = mcp.call("doc_save", json!({"path": slash(&file)}));
     assert!(!r.is_error, "{}", r.text);
@@ -87,6 +104,22 @@ fn by_default_the_tools_reach_any_plain_folder() {
     let r = mcp.call("doc_save", json!({"path": slash(&home.join("a.funda"))}));
     assert!(r.is_error && r.text.contains("home folder itself"), "{}", r.text);
     assert!(!home.join("a.funda").exists());
+    for (p, why) in [
+        (data.join("a.funda"), "the app's own data folder"),
+        (startup.join("a.funda"), "run at login"),
+        (autostart.join("a.funda"), "run at login"),
+    ] {
+        let r = mcp.call("doc_save", json!({"path": slash(&p)}));
+        assert!(r.is_error && r.text.contains(why), "{}: {}", p.display(), r.text);
+        assert!(!p.exists());
+    }
+    let r = mcp.call("export", json!({"path": slash(&startup.join("a.stl")), "format": "stl"}));
+    assert!(r.is_error && r.text.contains("run at login"), "{}", r.text);
+    let r = mcp.call("doc_save", json!({"path": slash(&folder.join("a.txt"))}));
+    assert!(r.is_error && r.text.contains(".funda"), "{}", r.text);
+    assert!(!folder.join("a.txt").exists());
+    let r = mcp.call("doc_save", json!({"path": slash(&data.join("recovery").join("r.funda"))}));
+    assert!(!r.is_error, "the recovery folder is the app's own: {}", r.text);
 }
 
 #[test]

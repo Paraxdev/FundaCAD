@@ -1,7 +1,7 @@
 //! Which files the tools may touch, judged on the absolute path with `..` folded and symlinks resolved.
 //! The app's folders are reached in full, since tempfile names its folders `.tmpXXXX`. By default so is any
-//! path but home, a drive root, a folder holding home or a hidden part; strict mode (`--allow-path`,
-//! FUNDACAD_MCP_ALLOW_PATHS, FUNDACAD_MCP_STRICT=1) keeps to the given folders and the document's.
+//! path but home, a drive root, a folder holding home, a hidden part, the app data or a login folder; strict
+//! mode (`--allow-path`, FUNDACAD_MCP_ALLOW_PATHS, FUNDACAD_MCP_STRICT=1) keeps to given folders and the document's.
 //! Checked at the tool's entry, so a symlink swapped in before the write, or a hard link, is not caught.
 
 use std::ffi::OsString;
@@ -26,6 +26,8 @@ pub struct PathScope {
     strict: bool,
     /// Folders that were given but not used, said again in every refusal.
     dropped: Vec<String>,
+    /// Kept out in either mode unless an app folder holds the path, each with what it is.
+    places: Vec<(PathBuf, &'static str)>,
 }
 
 pub const ALLOW_ENV: &str = "FUNDACAD_MCP_ALLOW_PATHS";
@@ -41,13 +43,20 @@ impl PathScope {
             .filter(|h| !h.is_empty())
             .map(PathBuf::from);
         let allowed = allowed_paths(args, env);
+        let places = kept_out_places(home.as_deref());
         // Decided before any folder is dropped, so `--allow-path ~` alone
         // still keeps to the app's folders and the refusal says why.
-        if strict(&allowed, crate::link::appenv("MCP_STRICT")) {
+        let (scope, refused) = if strict(&allowed, crate::link::appenv("MCP_STRICT")) {
             PathScope::new(app, allowed, home)
         } else {
             PathScope::open(app, home)
-        }
+        };
+        (scope.refusing(places), refused)
+    }
+
+    pub fn refusing(mut self, places: Vec<(PathBuf, &'static str)>) -> PathScope {
+        self.places = places;
+        self
     }
 
     /// Strict: the app's folders, `allowed` and the open document's folder.
@@ -70,7 +79,7 @@ impl PathScope {
         home: Option<PathBuf>,
         strict: bool,
     ) -> (PathScope, Vec<String>) {
-        let mut scope = PathScope { roots: Vec::new(), home, strict, dropped: Vec::new() };
+        let mut scope = PathScope { roots: Vec::new(), home, strict, dropped: Vec::new(), places: Vec::new() };
         let mut refused = Vec::new();
         let picked = app.into_iter().map(|p| (p, Reach::Full)).chain(allowed.into_iter().map(|p| (p, Reach::Visible)));
         for (path, reach) in picked {
@@ -106,6 +115,27 @@ impl PathScope {
         let Some(target) = canonical(&lexical) else {
             return Err(format!("{} is refused: it is a link whose target does not exist.", lexical.display()));
         };
+        let in_app = self
+            .roots
+            .iter()
+            .filter(|r| r.reach == Reach::Full)
+            .any(|r| canonical(&r.path).is_some_and(|root| target.starts_with(root)));
+        if in_app {
+            return Ok(lexical);
+        }
+        if let Some((place, what)) = self
+            .places
+            .iter()
+            .find(|(p, _)| within(&lexical, &normalise(p)) || canonical(p).is_some_and(|c| within(&target, &c)))
+        {
+            return Err(format!(
+                "{} is refused: it is inside {what}, {}, which this server does not reach. \
+                 Use a folder of your own, such as one under Documents.{}",
+                lexical.display(),
+                place.display(),
+                self.dropped_note()
+            ));
+        }
         if !self.strict {
             return self.check_open(lexical, &target);
         }
@@ -137,14 +167,6 @@ impl PathScope {
     }
 
     fn check_open(&self, lexical: PathBuf, target: &Path) -> Result<PathBuf, String> {
-        let in_app = self
-            .roots
-            .iter()
-            .filter(|r| r.reach == Reach::Full)
-            .any(|r| canonical(&r.path).is_some_and(|root| target.starts_with(root)));
-        if in_app {
-            return Ok(lexical);
-        }
         let folder = target.parent().unwrap_or(target);
         if let Some(why) = self.root_refusal(folder) {
             return Err(format!(
@@ -220,6 +242,26 @@ impl PathScope {
             None
         }
     }
+}
+
+/// The app's data folder (its recovery and blob folders are app folders, so still reached) and the
+/// per user folders whose files run at login, for every platform, since the env says where each is.
+pub fn kept_out_places(home: Option<&Path>) -> Vec<(PathBuf, &'static str)> {
+    const DATA: &str = "the app's own data folder";
+    const LOGIN: &str = "a folder whose files run at login";
+    let env = |k: &str| std::env::var_os(k).filter(|v| !v.is_empty()).map(PathBuf::from);
+    let startup: PathBuf = ["Microsoft", "Windows", "Start Menu", "Programs", "Startup"].iter().collect();
+    let roaming = env("APPDATA").or_else(|| home.map(|h| h.join("AppData").join("Roaming")));
+    let config = env("XDG_CONFIG_HOME").or_else(|| home.map(|h| h.join(".config")));
+    let mut out = vec![(crate::app_session::app_data_dir(), DATA)];
+    out.extend(roaming.map(|r| (r.join(&startup), LOGIN)));
+    out.extend(env("ProgramData").map(|p| (p.join(&startup), LOGIN)));
+    if let Some(c) = config {
+        out.push((c.join("autostart"), LOGIN));
+        out.push((c.join("systemd").join("user"), LOGIN));
+    }
+    out.extend(home.map(|h| (h.join("Library").join("LaunchAgents"), LOGIN)));
+    out
 }
 
 /// A folder was given, or `FUNDACAD_MCP_STRICT` is on.
@@ -300,6 +342,16 @@ fn dot_name(c: Component<'_>) -> Option<String> {
     match c {
         Component::Normal(n) if n.to_string_lossy().starts_with('.') => Some(n.to_string_lossy().into_owned()),
         _ => None,
+    }
+}
+
+/// Windows and macOS file names ignore case, so a place spelled in another case is the same place.
+fn within(path: &Path, place: &Path) -> bool {
+    if cfg!(any(windows, target_os = "macos")) {
+        let fold = |p: &Path| PathBuf::from(p.to_string_lossy().to_lowercase());
+        fold(path).starts_with(fold(place))
+    } else {
+        path.starts_with(place)
     }
 }
 
