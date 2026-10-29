@@ -1,9 +1,20 @@
 # Versions
 
-Saving overwrites the last file, while versions are checkpoints you can return to.
+A version is a checkpoint saved inside the document, so you can go back to it after later saves.
 
 ![Versions panel listing two saved versions with their notes](../img/versions-panel.png)
 
-Open the Versions button at the edge of the viewport, type a note such as "thicker walls", and press Save version. Click a version to see what changed.
+## Save a version
 
-Restore takes the document back, and Ctrl+Z undoes that. Branch from here starts a separate line of work for a risky idea. Versions travel inside the file. Versions on a card in [Home](home.md) lists them without opening the document.
+1. Open Versions in the view controls, on the right of the view.
+2. Type what changed, such as "thicker walls".
+3. Press Save version. It stays off while nothing has changed.
+
+## Go back
+
+Click a row to list the steps it changed.
+
+- **Restore** takes the document back to that version. Undo brings back what you had.
+- **Branch from here** starts a separate line of work. Name the branch and press Create.
+
+With more than one branch, a list at the top of the panel switches between them. The Versions button on a card in [Home](home.md) lists the versions without opening the document.

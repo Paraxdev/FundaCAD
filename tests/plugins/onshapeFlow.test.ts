@@ -103,7 +103,9 @@ describe("importing from an Onshape link", () => {
     const { store, aborts } = fakeStore();
     const done = importFromOnshape(store, {} as never);
     const polls = () => h.seen.filter((r) => r.url.includes("/api/translations/")).length;
-    await vi.waitFor(() => expect(polls()).toBeGreaterThan(1), { timeout: 5000 });
+    // Each request is signed through WebCrypto, which settles in real time, so every check waits 250 ms of real time
+    // and moves the fake clock as far. A 50 ms check timed out on a loaded runner before the second poll.
+    await vi.waitFor(() => expect(polls()).toBeGreaterThan(1), { timeout: 15_000, interval: 250 });
     const abort = aborts.at(-1);
     expect(abort).toBeInstanceOf(AbortController);
     abort!.abort();

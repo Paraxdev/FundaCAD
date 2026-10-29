@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, useId } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { usePanelsStore } from "../../stores/panels";
 import Icon from "../shell/Icon.vue";
@@ -19,6 +19,7 @@ const panels = usePanelsStore();
 
 const stress = computed(() => panels.stress!);
 const deform = computed(() => stress.value.deform);
+const exaggerationId = useId();
 const gradient = legendGradient();
 const unit = computed(() => getUnit());
 
@@ -69,7 +70,7 @@ const deformStep = computed(() => {
 
     <template v-if="deform?.shown && !modelChanged">
       <div class="measure-row">
-        <span class="measure-k">Exaggeration</span>
+        <span :id="exaggerationId" class="measure-k">Exaggeration</span>
         <span class="measure-v stress-deform-label">{{ deformLabel(deform.scale) }}</span>
       </div>
       <div class="measure-row stress-deform-row">
@@ -84,6 +85,7 @@ const deformStep = computed(() => {
         >
         <Slider
           class="stress-deform"
+          :labelledby="exaggerationId"
           :model-value="deform.scale"
           :min="0"
           :max="deform.max"

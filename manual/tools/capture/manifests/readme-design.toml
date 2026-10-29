@@ -5,11 +5,11 @@
 file = "assets/readme/ui-overview.png"
 size = [1600, 1000]
 theme = "fundacad"
-crop = "window"
-stub = true
-show = "The whole window at 1600x1000 with an exploded planetary gearbox, the Items card, the tool rail and the History card. Same file as the manual copy of ui-overview.png. Also a Flathub screenshot."
+crop = "copy"
+from = "manual/docs/img/ui-overview.png"
+show = "Copy of manual/docs/img/ui-overview.png, also a Flathub screenshot. Copy it after that one is retaken."
 alt = "FundaCAD main window with an exploded planetary gearbox, the Items card, the tool rail and the History"
-uses = ["README.md:19"]
+uses = ["README.md"]
 
 [[shot]]
 file = "docs/design/workspace-dark.png"
@@ -19,7 +19,7 @@ crop = "window"
 stub = true
 show = "The workspace in FundaCAD Noir, every panel floating over the model as glass."
 alt = "The workspace in FundaCAD Noir: every panel floats over the model as glass"
-uses = ["docs/DESIGN.md:16"]
+uses = ["docs/DESIGN.md"]
 
 [[shot]]
 file = "docs/design/dont-flat-home.png"
@@ -28,7 +28,7 @@ theme = "fundacad"
 crop = "keep"
 show = "Anti reference of the first, flat Home screen. Historical, it cannot be retaken from the app of today, keep it."
 alt = "Anti reference: the first Home screen, flat opaque panels and tiles"
-uses = ["docs/DESIGN.md:78"]
+uses = ["docs/DESIGN.md"]
 
 [[shot]]
 file = "docs/design/workspace-blur-off.png"
@@ -38,7 +38,7 @@ crop = "window"
 stub = true
 show = "The same workspace with blur off: opaque fills, same shapes and shadows."
 alt = "Blur off: opaque fills, same shapes and shadows"
-uses = ["docs/DESIGN.md:443"]
+uses = ["docs/DESIGN.md"]
 
 [[shot]]
 file = "docs/design/context-menu-dark.png"
@@ -48,7 +48,7 @@ crop = "window"
 stub = true
 show = "A context menu open in the workspace and the selection state of the shell, FundaCAD Noir."
 alt = "A context menu and the selection state of the shell"
-uses = ["docs/DESIGN.md:950"]
+uses = ["docs/DESIGN.md"]
 
 [[shot]]
 file = "docs/design/preferences-dark.png"
@@ -58,7 +58,7 @@ crop = "window"
 stub = true
 show = "Preferences as a glass dialog with inset wells and one primary button, FundaCAD Noir."
 alt = "Preferences: a glass dialog with inset wells and one primary button"
-uses = ["docs/DESIGN.md:952"]
+uses = ["docs/DESIGN.md"]
 
 [[shot]]
 file = "docs/design/workspace-light.png"
@@ -68,7 +68,7 @@ crop = "window"
 stub = true
 show = "The same workspace as workspace-dark.png in Solarized Light."
 alt = "The same workspace in Solarized Light"
-uses = ["docs/DESIGN.md:1225"]
+uses = ["docs/DESIGN.md"]
 
 [[shot]]
 file = "manual/docs/img/ui-overview.png"
@@ -76,9 +76,9 @@ size = [1600, 1000]
 theme = "fundacad"
 crop = "window"
 stub = true
-show = "Same picture as assets/readme/ui-overview.png: a gearbox open, the Items card, the tool rail and the History card."
+show = "The whole window at 1600x1000 with an exploded planetary gearbox, the Items card, the tool rail and the History card. The README and Flathub copy is taken from it."
 alt = "FundaCAD with a gearbox open, showing the Items card, the tool rail and the History card"
-uses = ["manual/docs/index.md:5"]
+uses = ["manual/docs/index.md"]
 
 [[shot]]
 file = "manual/docs/img/social-card.jpg"
@@ -86,7 +86,7 @@ size = [1200, 630]
 theme = "fundacad"
 crop = "keep"
 show = "The link preview card of the manual site (1200x630 JPEG, og:image). Not a screenshot entry, keep unless it shows an old look."
-uses = ["manual/overrides/main.html:26", "manual/overrides/main.html:33"]
+uses = ["manual/overrides/main.html"]
 
 [[shot]]
 file = "assets/readme/render-materials.png"

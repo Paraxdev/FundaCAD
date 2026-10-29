@@ -51,6 +51,8 @@ export interface MoveTarget {
   readonly canCopy: boolean;
   /** Escape stops at the gizmo instead of also reaching the mode underneath */
   readonly ownsEscape: boolean;
+  /** commits into an open sketch's edits, which Save cannot write */
+  readonly inSketch?: boolean;
   centroid(): THREE.Vector3;
   /** world box of the selection, what rotate and resize steps measure against */
   box(): THREE.Box3 | null;

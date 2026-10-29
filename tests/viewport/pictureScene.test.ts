@@ -76,8 +76,11 @@ describe("selection paint stays out of a picture", () => {
     const draw = {
       setColor: (_s: number, c: THREE.Color) => colours.push(c.getHex()),
       setIdleColor: (_s: number, c: THREE.Color) => colours.push(c.getHex()),
+      refs: [] as EdgeRef[],
     };
-    return { e: { draw, slot: 0 } as unknown as EdgeRef, last: () => colours.at(-1) };
+    const e = { draw, slot: 0 } as unknown as EdgeRef;
+    draw.refs.push(e);
+    return { e, last: () => colours.at(-1) };
   }
   const faceColour = (attr: THREE.BufferAttribute, f: number, index: THREE.BufferAttribute) => [
     attr.getX(index.getX(f * 6)),

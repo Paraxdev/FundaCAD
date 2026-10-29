@@ -18,8 +18,10 @@ use rmcp::{tool, tool_router, ErrorData as McpError, RoleServer, ServerHandler};
 use serde_json::{json, Map, Value};
 use tokio::sync::Mutex;
 
+use crate::budget::{self, Page};
 use crate::describe;
 use crate::docfile;
+use crate::docget;
 use crate::link::{args as call_args, EngineLink, Mode};
 use crate::live::{LiveError, LiveLink};
 use crate::mesh::MeshBody;
@@ -66,6 +68,7 @@ pub const INSTRUCTIONS: &str = "Rules that save most failed builds:
 - Never guess a selector: take it from `inspect`, and always set its `body`.
 - To fit something to a part in a file, `doc_import` the file. Never model against a stand-in you made up; if you cannot reach the file, ask for its path.
 - Files: `doc_save`, `export`, `doc_open` and `doc_import` take a local path in any ordinary folder, not home itself, a drive root, a hidden (dot) folder or a network path; a server started with --allow-path keeps to those folders, and a refusal says which.
+- Long replies come summary first with alike rows folded: `offset` pages on, `limit` 0 shows all, `body` or `bodies` narrows, `detail` or `outline` adds rows, `full` lists everything.
 
 Working order: `param_set` the driving dimensions first, `feature_add` a few features, `build` often, `inspect`, `view`, then `doc_save` to a .funda file the app opens.
 
@@ -872,24 +875,31 @@ note: left out of the file, because this build cannot read them and a .funda has
 
     #[tool(
         name = "doc_get",
-        description = "The document's geometry as JSON: parameters, the feature timeline in order, and `bodyIds`, the record that keeps every body's id. Pass all of it back to `doc_set` and the same ids come out; the parts it leaves out (stress study, environment, materials and the like) stay in the document.",
+        description = "The document's geometry as JSON: parameters, the feature timeline in order, and `bodyIds`, the record that keeps every body's id. Pass all of it back to `doc_set` and the same ids come out; the parts it leaves out (stress study, environment, materials and the like) stay in the document. By default runs of bodyIds read as one range entry and an import's long node and part lists are left out, which `doc_set` reads back; `full` gives the document as stored.",
         input_schema = crate::tools::doc_get(),
         annotations(read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
     pub async fn t_doc_get(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
+        let full = truthy(args.get("full"));
         let st = self.state.lock().await;
         let mut out = Map::new();
-        out.insert("features".into(), st.doc.get("features").cloned().unwrap_or_else(|| json!([])));
+        let features = st.doc.get("features").cloned().unwrap_or_else(|| json!([]));
+        out.insert("features".into(), if full { features } else { docget::leave_out_lists(&features) });
         if !args.get("features_only").and_then(Value::as_bool).unwrap_or(false) {
             out.insert("parameters".into(), st.doc.get("parameters").cloned().unwrap_or_else(|| json!({})));
             out.insert("paramDefs".into(), st.doc.get("paramDefs").cloned().unwrap_or_else(|| json!({})));
             for key in ["bodyIds", "version"] {
                 if let Some(v) = st.doc.get(key) {
-                    out.insert(key.into(), v.clone());
+                    let v = match v.as_object() {
+                        Some(ids) if !full => Value::Object(docget::fold_body_ids(ids)),
+                        _ => v.clone(),
+                    };
+                    out.insert(key.into(), v);
                 }
             }
         }
-        Ok(text(pretty(&Value::Object(out), 1)))
+        let printed = pretty(&Value::Object(out.clone()), 1);
+        Ok(text(if full || printed.len() <= docget::LINES_FROM { printed } else { docget::lines(&out) }))
     }
 
     #[tool(
@@ -920,7 +930,16 @@ note: left out of the file, because this build cannot read them and a .funda has
                 }
             }
         }
+        if let Some(ids) = next.get("bodyIds").and_then(Value::as_object) {
+            match docget::unfold_body_ids(ids) {
+                Ok(ids) => next.insert("bodyIds".into(), Value::Object(ids)),
+                Err(why) => return Ok(failure(why)),
+            };
+        }
         let mut st = self.state.lock().await;
+        if let Err(why) = docget::take_back_lists(&st.doc, &mut next) {
+            return Ok(failure(why));
+        }
         model::forget_stale_joins(&st.doc, &mut next);
         model::keep_unnamed_keys(&st.doc, &mut next);
         st.doc = next;
@@ -1089,7 +1108,7 @@ note: left out of the file, because this build cannot read them and a .funda has
 
     #[tool(
         name = "interference",
-        description = "Which bodies overlap, and by how much, without changing the document. Reports every overlapping pair with the overlap's volume and box, and pairs closer than `clearance` (default 1 mm) with their gap. `sweep` repeats the check at each value of a parameter, for a mechanism: {param:\"press\", from:0, to:12, steps:13} gives the clashes and the smallest gap at every step. A body that is not a closed solid (a surface, an open or badly joined shell, as some imports are) cannot be judged: it is listed under NOT CHECKED with why, and no pair with it is called clear. Use this, not an intersect feature, to check fits and clearances.",
+        description = "Which bodies overlap, and by how much, without changing the document. Reports every overlapping pair with the overlap's volume and box, and pairs closer than `clearance` (default 1 mm) with their gap. A long list gives its total first, largest overlap first, folds pairs alike in all but their ids into one row and shows 30 rows: `offset` pages on, `limit` 0 shows every row, `full` lists each pair with where it meets. `sweep` repeats the check at each value of a parameter, for a mechanism: {param:\"press\", from:0, to:12, steps:13} gives the clashes and the smallest gap at every step. A sweep step with more than 10 clashing pairs gives their total and its 10 largest: `offset` and `limit` page every step's pairs, `full` lists them all. A body that is not a closed solid (a surface, an open or badly joined shell, as some imports are) cannot be judged: it is listed under NOT CHECKED with why, and no pair with it is called clear. Use this, not an intersect feature, to check fits and clearances.",
         input_schema = crate::tools::interference(),
         annotations(read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
@@ -1099,7 +1118,7 @@ note: left out of the file, because this build cannot read them and a .funda has
 
     #[tool(
         name = "section",
-        description = "Cut the built bodies with a plane and get, per body, the outline in the plane as closed loops of points and the section properties: area, centroid, second moments of area about the centroid (and principal ones when they differ), furthest fibre, section modulus and polar moment. For quick beam and spring checks. `axis` and `at` cut across X, Y or Z; `origin` and `normal` cut at any angle. Changes nothing.",
+        description = "Cut the built bodies with a plane and get, per body, the outline in the plane as closed loops of points and the section properties: area, centroid, second moments of area about the centroid (and principal ones when they differ), furthest fibre, section modulus and polar moment. For quick beam and spring checks. `axis` and `at` cut across X, Y or Z; `origin` and `normal` cut at any angle. Changes nothing. Over 10 bodies it counts them first, folds bodies with the same section into one row, leaves the loop points out (`outline` true shows them, 5 bodies a page) and shows 30 rows: `offset` pages on, `limit` 0 shows every row, `bodies` picks some, `full` gives every body with its outline.",
         input_schema = crate::tools::section(),
         annotations(read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
@@ -1119,7 +1138,7 @@ note: left out of the file, because this build cannot read them and a .funda has
 
     #[tool(
         name = "printability",
-        description = "Check the built parts for FDM printing before they are printed: overhangs past the angle that prints unsupported (45 deg), walls under two nozzle widths, floors under two layers, gaps narrow enough to fuse, flat ceilings bridged further than 10 mm, and shells that are not closed solids. Each finding names the face (F index, for `inspect` and `view` highlight_faces) and ends in a `view` focus. As modelled with +Z up, or `layFlat` as `export` would lay the parts. Measured on a fine mesh, the triangles an STL export holds. A flat ceiling counts as a bridge when walls hold it on two opposite sides, otherwise it is an overhang. Changes nothing.",
+        description = "Check the built parts for FDM printing before they are printed: overhangs past the angle that prints unsupported (45 deg), walls under two nozzle widths, floors under two layers, gaps narrow enough to fuse, flat ceilings bridged further than 10 mm, and shells that are not closed solids. Each finding names the face (F index, for `inspect` and `view` highlight_faces) and ends in a `view` focus. As modelled with +Z up, or `layFlat` as `export` would lay the parts. Measured on a fine mesh, the triangles an STL export holds. A flat ceiling counts as a bridge when walls hold it on two opposite sides, otherwise it is an overhang. Changes nothing. A long report counts its findings first, folds bodies alike in all but their ids and position into one row and shows 30 rows: `offset` pages on, `limit` 0 shows every row, `bodies` checks some as if printed alone, `full` gives each body its own block and focus, `all` every finding.",
         input_schema = crate::tools::printability(),
         annotations(read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
@@ -1149,17 +1168,21 @@ note: left out of the file, because this build cannot read them and a .funda has
 
     #[tool(
         name = "build",
-        description = "Rebuild the document and report what came out: the bodies, their sizes, and any feature that failed. Build often, an error names the feature that caused it. isError is true if ANY feature failed, even when other features still produced bodies; the text still lists everything that did build, so check isError rather than scanning for \"FEATURE FAILED\".",
+        description = "Rebuild the document and report what came out: the bodies, their sizes, and any feature that failed. Build often, an error names the feature that caused it. isError is true if ANY feature failed, even when other features still produced bodies; the text still lists everything that did build, so check isError rather than scanning for \"FEATURE FAILED\". Over 10 bodies, bodies alike in all but their ids share one row and 30 rows show: `offset` pages on, `limit` 0 shows every row, `full` lists every body, not only the changed ones, and `inspect` with `body` gives one.",
         input_schema = crate::tools::build(),
         annotations(read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
     pub async fn t_build(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
-        Ok(self.build(truthy(args.get("full"))).await)
+        let full = truthy(args.get("full"));
+        match Page::of(&args, if full { 0 } else { budget::ROWS }) {
+            Ok(page) => Ok(self.build(full, page).await),
+            Err(why) => Ok(failure(why)),
+        }
     }
 
     #[tool(
         name = "inspect",
-        description = "Exact measurements of the built bodies. A bare call returns a one-line summary per body (volume, area, bounding box); pass detail:true and selectors:true to also list every face and edge with a ready-made SELECTOR you can paste into the next feature. Also flags seam edges and wrapping faces, which are what fillet and press/pull refuse. With `sketch` it reports that sketch's loose ends instead, the usual reason a sketch shows no closed profile: looseEnds { open: [{entity, p, at}], untied: [{entity, p, at, touches, gap, tieable}] } in sketch mm; `sketch_tie` ties the untied ones.",
+        description = "Exact measurements of the built bodies. A bare call returns a one-line summary per body (volume, area, bounding box); pass detail:true and selectors:true to also list every face and edge with a ready-made SELECTOR you can paste into the next feature. Also flags seam edges and wrapping faces, which are what fillet and press/pull refuse. With `sketch` it reports that sketch's loose ends instead, the usual reason a sketch shows no closed profile: looseEnds { open: [{entity, p, at}], untied: [{entity, p, at, touches, gap, tieable}] } in sketch mm; `sketch_tie` ties the untied ones. Over 10 bodies alike ones share one row and 30 rows show, with detail or selectors 5 bodies: `offset` pages on, `limit` 0 shows all, `body` or `bodies` picks the ones you need.",
         input_schema = crate::tools::inspect(),
         annotations(read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
@@ -1189,7 +1212,7 @@ note: left out of the file, because this build cannot read them and a .funda has
 
     #[tool(
         name = "export",
-        description = "Write the model to STEP, STL or 3MF, or one sketch (`sketch`) or flat face (`face`) to DXF or SVG at true size in mm. `separate` writes one file per body, named after the body; `body` writes one body, `bodies` a list of them, merged or with `separate`; `layFlat` turns the parts for printing. Refused if a feature failed to build, naming which, unless allowPartial:true is passed, in which case it writes the file anyway and still names the failures.",
+        description = "Write the model to STEP, STL or 3MF, or one sketch (`sketch`) or flat face (`face`) to DXF or SVG at true size in mm. `separate` writes one file per body, named after the body; `body` writes one body, `bodies` a list of them, merged or with `separate`; `layFlat` turns the parts for printing. Refused if a feature failed to build, naming which, unless allowPartial:true is passed, in which case it writes the file anyway and still names the failures. A long `separate` list folds files of one name and size into one line and shows 30 rows: `offset` pages on, `limit` 0 shows every row, `full` lists every file.",
         input_schema = crate::tools::export(),
         annotations(read_only_hint = false, destructive_hint = true, idempotent_hint = true, open_world_hint = false)
     )]
@@ -1204,6 +1227,11 @@ note: left out of the file, because this build cannot read them and a .funda has
         let format = match require_str(&args, "format") {
             Ok(f) => f,
             Err(e) => return Ok(e),
+        };
+        let full = truthy(args.get("full"));
+        let page = match Page::of(&args, if full { 0 } else { budget::ROWS }) {
+            Ok(p) => p,
+            Err(why) => return Ok(failure(why)),
         };
         if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
             if !parent.is_dir() {
@@ -1354,7 +1382,7 @@ note: left out of the file, because this build cannot read them and a .funda has
             )));
         }
         let mut out = if separate {
-            match place_files(&result, &folder) {
+            match place_files(&result, &folder, page, full) {
                 Ok(written) => written,
                 Err(e) => {
                     discard();
@@ -1426,7 +1454,7 @@ pub(crate) fn no_such_body(wanted: &str, built: &[Value]) -> String {
 }
 
 /// Replaces files of the same name in `folder` and leaves anything else there alone.
-fn place_files(result: &Value, folder: &Path) -> Result<String, String> {
+fn place_files(result: &Value, folder: &Path, page: Page, full: bool) -> Result<String, String> {
     let written: Vec<PathBuf> = result
         .get("paths")
         .and_then(Value::as_array)
@@ -1441,7 +1469,7 @@ fn place_files(result: &Value, folder: &Path) -> Result<String, String> {
         return Err(format!("{} is a folder, so the part of that name cannot be written there.", to.display()));
     }
     std::fs::create_dir_all(folder).map_err(|e| format!("Could not make {}: {e}", folder.display()))?;
-    let mut lines = Vec::new();
+    let (mut lines, mut sizes) = (Vec::new(), Vec::new());
     for from in &written {
         let Some(name) = from.file_name() else { continue };
         let to = folder.join(name);
@@ -1457,13 +1485,16 @@ fn place_files(result: &Value, folder: &Path) -> Result<String, String> {
         }
         let size = std::fs::metadata(&to).map_or(0, |m| m.len());
         lines.push(format!("  {} ({size} bytes)", name.to_string_lossy()));
+        sizes.push((name.to_string_lossy().into_owned(), size));
     }
+    let (mut rows, more) = page.cut(budget::files(&sizes, !full), "file rows");
+    rows.extend(more.map(|m| format!("  {m}")));
     Ok(format!(
         "Wrote {} file{} to {}:\n{}",
         lines.len(),
         if lines.len() == 1 { "" } else { "s" },
         folder.display(),
-        lines.join("\n")
+        rows.join("\n")
     ))
 }
 
@@ -1623,7 +1654,7 @@ impl FundaCad {
         Ok(Rebuilt { link, document, result, mesh, problems })
     }
 
-    async fn build(&self, full: bool) -> CallToolResult {
+    async fn build(&self, full: bool, page: Page) -> CallToolResult {
         let Rebuilt { link, document, result, mesh, problems } = match self.rebuild().await {
             Ok(r) => r,
             Err(e) => return e,
@@ -1648,6 +1679,7 @@ impl FundaCad {
             }
         }
         let mut bodies: Vec<(String, String, u64)> = Vec::new();
+        let mut names: HashMap<String, String> = HashMap::new();
         for b in mesh.iter() {
             let id = b.id();
             let e = exact.get(id).cloned().unwrap_or_else(|| json!({}));
@@ -1672,6 +1704,7 @@ impl FundaCad {
                 None => String::new(),
             };
             let triangles = b.triangles();
+            names.insert(id.to_string(), b.get("name").and_then(Value::as_str).map_or("None".into(), str::to_string));
             bodies.push((
                 id.to_string(),
                 format!(
@@ -1685,7 +1718,31 @@ impl FundaCad {
                 shape_print(b),
             ));
         }
-        let mut lines = self.changed_bodies(&bodies, full).await;
+        let (rows, tail) = self.changed_bodies(&bodies, full).await;
+        let listed = rows.len();
+        let rows = if full {
+            rows.into_iter().map(|(_, line)| line).collect()
+        } else {
+            budget::fold(
+                rows.into_iter()
+                    .map(|(id, line)| {
+                        let name = names.get(&id).cloned().unwrap_or_default();
+                        budget::Row::of_line(id, name, line)
+                    })
+                    .collect(),
+            )
+        };
+        let (shown, more) = page.cut_asking(rows, "rows", if full { "" } else { "full true and " });
+        let mut lines = Vec::new();
+        if listed > budget::FOLD_FROM && !full {
+            lines.push(format!(
+                "{listed} bodies{}, alike ones in one row:",
+                if listed < bodies.len() { " changed" } else { "" }
+            ));
+        }
+        lines.extend(shown);
+        lines.extend(more);
+        lines.extend(tail);
         // `featureErrors`, NOT `errors`: a failed feature is a no-op and the rebuild succeeds around it,
         // so the wrong key made a failed press/pull look like one that did nothing.
         let failures =
@@ -1730,32 +1787,38 @@ impl FundaCad {
     }
 
     /// All of them the first time and when asked, else the new, changed and gone bodies and a count of the rest.
-    async fn changed_bodies(&self, bodies: &[(String, String, u64)], full: bool) -> Vec<String> {
+    async fn changed_bodies(
+        &self,
+        bodies: &[(String, String, u64)],
+        full: bool,
+    ) -> (Vec<(String, String)>, Vec<String>) {
         let previous = {
             let mut st = self.state.lock().await;
             st.reported.replace(bodies.iter().map(|(id, line, print)| (id.clone(), (line.clone(), *print))).collect())
         };
         let previous = match previous {
             Some(p) if !full => p,
-            _ => return bodies.iter().map(|(_, line, _)| line.clone()).collect(),
+            _ => return (bodies.iter().map(|(id, line, _)| (id.clone(), line.clone())).collect(), Vec::new()),
         };
-        let mut out: Vec<String> = Vec::new();
+        let mut rows: Vec<(String, String)> = Vec::new();
         for (id, line, print) in bodies {
             match previous.get(id) {
                 Some((was, p)) if was == line && p == print => {}
                 // Same size, volume and counts but different geometry: moved, turned, or a hole moved inside it.
-                Some((was, _)) if was == line => out.push(format!("{line} (moved or reshaped, same size)")),
-                _ => out.push(line.clone()),
+                Some((was, _)) if was == line => {
+                    rows.push((id.clone(), format!("{line} (moved or reshaped, same size)")))
+                }
+                _ => rows.push((id.clone(), line.clone())),
             }
         }
-        let shown = out.len();
+        let shown = rows.len();
+        let mut out: Vec<String> = Vec::new();
         let mut gone: Vec<&String> = previous.keys().filter(|id| !bodies.iter().any(|(b, _, _)| b == *id)).collect();
-        gone.sort();
+        gone.sort_by(|a, b| budget::natural(a, b));
         if !gone.is_empty() {
-            out.push(format!(
-                "gone since the last build: {}",
-                gone.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")
-            ));
+            let gone: Vec<&str> = gone.iter().map(|s| s.as_str()).collect();
+            let said = if gone.len() > budget::FOLD_FROM { budget::ranges(&gone, false) } else { gone.join(", ") };
+            out.push(format!("gone since the last build: {said}"));
         }
         let same = bodies.len() - shown;
         if same > 0 {
@@ -1766,7 +1829,7 @@ impl FundaCad {
                 if shown == 0 { format!(" ({same})") } else { String::new() }
             ));
         }
-        out
+        (rows, out)
     }
 
     async fn inspect(&self, args: &JsonObject) -> CallToolResult {
@@ -1792,16 +1855,56 @@ impl FundaCad {
         let detail = args.get("detail").and_then(Value::as_bool).unwrap_or(false)
             || want_faces.is_some()
             || want_edges.is_some();
-        let mut payload = Map::new();
-        payload.insert("document".into(), Value::Object(doc));
-        // The summary is counts and flags the engine keeps per body, where
-        // detail measures and fingerprints every face and edge of every body.
-        payload.insert("detail".into(), json!(detail || selectors));
-        payload.insert("summary".into(), json!(true));
+        let deep = detail || selectors;
+        let page = match Page::of(args, if deep { budget::DETAIL_BODIES } else { budget::ROWS }) {
+            Ok(p) => p,
+            Err(why) => return failure(why),
+        };
+        let mut wanted: Vec<String> = args
+            .get("bodies")
+            .and_then(Value::as_array)
+            .map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect())
+            .unwrap_or_default();
         if let Some(body) = args.get("body").and_then(Value::as_str) {
-            payload.insert("bodies".into(), json!([body]));
+            wanted.push(body.to_string());
         }
-        let reply = match link.call("inspect", Value::Object(payload)).await {
+        let call = |detail: bool, bodies: &[String]| {
+            let mut payload = Map::new();
+            payload.insert("document".into(), Value::Object(doc.clone()));
+            // The summary is counts and flags the engine keeps per body, where
+            // detail measures and fingerprints every face and edge of every body.
+            payload.insert("detail".into(), json!(detail));
+            payload.insert("summary".into(), json!(true));
+            if !bodies.is_empty() {
+                payload.insert("bodies".into(), json!(bodies));
+            }
+            Value::Object(payload)
+        };
+        // Every face of three thousand bodies is megabytes, so detail is measured for one page of them.
+        let mut paged = None;
+        if deep && wanted.is_empty() {
+            let ids: Vec<String> = match link.call("inspect", call(false, &[])).await {
+                Ok(r) => r
+                    .get("result")
+                    .and_then(|r| r.get("bodies"))
+                    .and_then(Value::as_array)
+                    .map_or(&[][..], Vec::as_slice)
+                    .iter()
+                    .filter_map(|b| b.get("id").and_then(Value::as_str).map(str::to_string))
+                    .collect(),
+                Err(e) => return engine_gone(&e),
+            };
+            let few = ids.len() <= budget::FOLD_FROM && args.get("limit").is_none_or(Value::is_null);
+            let (ids, line) = if few { Page { limit: 0, ..page } } else { page }.cut(ids, "bodies");
+            if let Some(line) = line {
+                if ids.is_empty() {
+                    return text(line);
+                }
+                paged = Some(if line.contains(": pass ") { format!("{line}, or name one with `body`") } else { line });
+                wanted = ids;
+            }
+        }
+        let reply = match link.call("inspect", call(deep, &wanted)).await {
             Ok(r) => r,
             Err(e) => return engine_gone(&e),
         };
@@ -1834,7 +1937,21 @@ impl FundaCad {
                 }
             }
         }
-        let mut out = describe::describe(&report, detail);
+        let (rows, errors) = describe::rows(&report, detail);
+        let listed = rows.len();
+        let rows = if deep { rows.into_iter().map(|r| r.text).collect() } else { budget::fold(rows) };
+        let (rows, more) = if deep { (rows, paged) } else { page.cut(rows, "rows") };
+        let mut lines = Vec::new();
+        if listed > budget::FOLD_FROM && !deep {
+            lines.push(format!("{listed} bodies, alike ones in one row:"));
+        }
+        lines.extend(rows);
+        if listed == 0 {
+            lines.push(describe::NO_BODIES.into());
+        }
+        lines.extend(errors);
+        lines.extend(more);
+        let mut out = lines.join("\n");
         if selectors {
             let mut sel = Map::new();
             for b in report.get("bodies").and_then(Value::as_array).map_or(&[][..], Vec::as_slice) {
@@ -1858,7 +1975,7 @@ impl FundaCad {
                 );
             }
             out.push_str("\n\nselectors:\n");
-            out.push_str(&pretty(&Value::Object(sel), 1));
+            out.push_str(&budget::selector_json(&sel));
         }
         if !failures.is_empty() {
             out.push('\n');
@@ -1973,7 +2090,12 @@ impl FundaCad {
                 section.get("at").map_or("the middle".to_string(), |a| py_num(Some(a)))
             )
         };
-        let mut caption = format!("{where_} view of {}, {w}x{h}{cut}", shown.join(", "));
+        let who = if shown.len() > budget::FOLD_FROM {
+            budget::ranges(&shown.iter().map(String::as_str).collect::<Vec<_>>(), false)
+        } else {
+            shown.join(", ")
+        };
+        let mut caption = format!("{where_} view of {who}, {w}x{h}{cut}");
         if !build_failures.is_empty() {
             caption.push('\n');
             caption.push_str(&build_failures);
@@ -2101,7 +2223,7 @@ impl FundaCad {
         if !truthy(args.get("build")) {
             return text(head);
         }
-        let built = self.build(false).await;
+        let built = self.build(false, Page { offset: 0, limit: budget::ROWS }).await;
         let body = built
             .content
             .iter()
@@ -2208,6 +2330,13 @@ impl FundaCad {
                 Err(e) => return failure(e),
             },
         };
+        let full = truthy(args.get("full"));
+        // A sweep repeats its pair list at every step, so a step shows fewer of them.
+        let rows = if sweep.is_some() { budget::FOLD_FROM } else { budget::ROWS };
+        let page = match Page::of(args, if full { 0 } else { rows }) {
+            Ok(p) => p,
+            Err(why) => return failure(why),
+        };
         let (link, doc) = {
             let mut st = self.state.lock().await;
             model::recompute_parameters(&mut st.doc);
@@ -2268,7 +2397,7 @@ impl FundaCad {
             if let Some(refusal) = unknown(&r) {
                 return refusal;
             }
-            let mut out = crate::clash::report(&r, clearance);
+            let mut out = crate::clash::report(&r, clearance, page, full);
             let failed = crate::clash::failures(&r);
             if !failed.is_empty() {
                 out.push_str("\nSome features failed, so this checked what did build:\n");
@@ -2297,7 +2426,7 @@ impl FundaCad {
             };
             steps.push(crate::clash::Step { value: *value, reply });
         }
-        let report = crate::clash::sweep_report(&sweep.param, &unit, &steps, clearance, &bodies);
+        let report = crate::clash::sweep_paged(&sweep.param, &unit, &steps, clearance, &bodies, page, full);
         let built: Vec<&Value> = steps.iter().filter_map(|s| s.reply.as_ref().ok()).collect();
         if built.is_empty() {
             return failure(report);
@@ -2331,7 +2460,13 @@ impl FundaCad {
             .and_then(Value::as_array)
             .map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect())
             .unwrap_or_default();
-        let outline = args.get("outline").and_then(Value::as_bool).unwrap_or(true);
+        let full = truthy(args.get("full"));
+        let page = match Page::of(args, 0) {
+            Ok(p) => p,
+            Err(e) => return failure(e),
+        };
+        let limit_given = args.get("limit").is_some_and(|v| !v.is_null());
+        let asked_outline = args.get("outline").and_then(Value::as_bool);
         let (link, doc) = {
             let mut st = self.state.lock().await;
             model::recompute_parameters(&mut st.doc);
@@ -2367,9 +2502,8 @@ impl FundaCad {
                 missing.iter().map(|m| format!("'{m}'")).collect::<Vec<_>>().join(", ")
             ));
         }
-        let mut parts = Vec::new();
+        let mut cuts = Vec::new();
         let mut missed = Vec::new();
-        let mut cut_ids = Vec::new();
         for b in &bodies {
             if !wanted.is_empty() && !wanted.iter().any(|w| w == b.id() || *w == name_of(b)) {
                 continue;
@@ -2379,25 +2513,41 @@ impl FundaCad {
                 missed.push(b.id().to_string());
                 continue;
             }
-            parts.push(crate::section::report(b.id(), &name_of(b), &plane, &cut, outline));
-            cut_ids.push(b.id().to_string());
+            cuts.push((b, cut));
         }
+        let long = cuts.len() > budget::FOLD_FROM;
+        let outline = asked_outline.unwrap_or(full || !long);
+        let page = if limit_given || full {
+            page
+        } else {
+            Page { limit: if outline && long { budget::DETAIL_BODIES } else { budget::ROWS }, ..page }
+        };
+        let cut_ids: Vec<String> = cuts.iter().map(|(b, _)| b.id().to_string()).collect();
         // A section is read off the mesh, which draws a body that is not a
         // closed solid as readily as one that is: only the exact shape knows.
         let unsound = Self::unsound(&link, doc, &cut_ids).await;
-        for (part, id) in parts.iter_mut().zip(&cut_ids) {
+        let mut area = 0.0;
+        let mut rows = Vec::new();
+        for (b, cut) in &cuts {
+            let id = b.id();
+            area += crate::section::properties(&cut.loops).area;
+            let mut text = crate::section::report(id, &name_of(b), &plane, cut, outline);
+            let mut same = if full || !long { String::new() } else { crate::section::alike(&plane, cut, outline) };
             if let Some(why) = unsound.get(id) {
-                part.push_str(&format!(
+                text.push_str(&format!(
                     "\n  NOT A SOUND SOLID: {id} {why}. This section can miss material or count a hole as material"
                 ));
+                same.push_str(&format!("\nunsound: {why}"));
             }
+            rows.push(budget::Row { id: id.to_string(), name: name_of(b), same, text });
         }
         let mut out = format!("Section on {}, in-plane axes {} and {}:", plane.label, plane.axes.0, plane.axes.1);
-        if parts.is_empty() {
+        if rows.is_empty() {
             out.push_str("\nThe plane misses every body.");
         } else {
+            let left_out = long && !outline && asked_outline.is_none();
             out.push('\n');
-            out.push_str(&parts.join("\n"));
+            out.push_str(&crate::section::listing(rows, area, page, full, left_out).join("\n"));
         }
         if !missed.is_empty() && !wanted.is_empty() {
             out.push_str(&format!("\nThe plane misses {}.", missed.join(", ")));
@@ -2591,17 +2741,40 @@ impl FundaCad {
     async fn printability(&self, args: &JsonObject) -> CallToolResult {
         // The engine passes over keys it does not know, as every op does, so
         // a misspelt setting is caught here rather than quietly defaulted.
-        const KNOWN: [&str; 10] =
-            ["bodies", "nozzle", "layer", "overhang", "minGap", "maxBridge", "checks", "up", "layFlat", "all"];
+        const KNOWN: [&str; 13] = [
+            "bodies",
+            "nozzle",
+            "layer",
+            "overhang",
+            "minGap",
+            "maxBridge",
+            "checks",
+            "up",
+            "layFlat",
+            "all",
+            "full",
+            "limit",
+            "offset",
+        ];
         if let Some(k) = args.keys().find(|k| !KNOWN.contains(&k.as_str())) {
             return failure(format!("printability takes no '{k}', it takes {}", KNOWN.join(", ")));
         }
+        let full = truthy(args.get("full"));
+        let page = match Page::of(args, if full { 0 } else { budget::ROWS }) {
+            Ok(p) => p,
+            Err(why) => return failure(why),
+        };
+        let topology =
+            args.get("checks").and_then(Value::as_array).is_none_or(|c| c.iter().any(|k| k.as_str() == Some("open")));
         let (link, doc) = {
             let mut st = self.state.lock().await;
             model::recompute_parameters(&mut st.doc);
             (st.link.clone(), st.doc.clone())
         };
         let mut payload = args.clone();
+        for k in ["full", "limit", "offset"] {
+            payload.remove(k);
+        }
         payload.insert("document".into(), Value::Object(doc));
         let reply = match link.call("printability", Value::Object(payload)).await {
             Ok(r) => r,
@@ -2611,7 +2784,7 @@ impl FundaCad {
             return failure(error_message(&reply));
         }
         let r = reply.get("result").cloned().unwrap_or_else(|| json!({}));
-        let mut out = r.get("report").and_then(Value::as_str).unwrap_or_default().to_string();
+        let mut out = crate::printrep::condensed(&r, page, full, topology);
         let failed = crate::clash::failures(&r);
         let nothing = r.get("bodies").and_then(Value::as_array).is_none_or(Vec::is_empty);
         if nothing {

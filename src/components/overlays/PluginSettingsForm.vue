@@ -11,6 +11,7 @@ import NumberField from "../ui/NumberField.vue";
 import Select from "../ui/Select.vue";
 import TextField from "../ui/TextField.vue";
 import UnitChip from "../ui/UnitChip.vue";
+import { nativeDialog } from "../../io/nativeDialog";
 
 const props = defineProps<{
   settings?: PluginSettings | undefined;
@@ -116,7 +117,7 @@ function onKey(p: SettingProp, ev: KeyboardEvent) {
 const isTauri = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 async function pickFile(p: SettingProp & { extensions?: readonly string[] }) {
-  const { open } = await import("@tauri-apps/plugin-dialog");
+  const { open } = await nativeDialog();
   const exts = p.extensions ? [...p.extensions] : undefined;
   const picked = await open({
     multiple: false,
@@ -144,6 +145,7 @@ const isDefault = (p: SettingProp) => {
       <div v-for="p in list" :key="p.key" class="pref-card plugset-row" :data-setting="p.key">
         <div class="pref-head">
           <label
+            :id="`${id(p)}-title`"
             class="pref-title"
             :for="p.type === 'boolean' ? undefined : id(p)"
             @click="p.type === 'boolean' && store(p, values[p.key] !== true)"
@@ -154,6 +156,7 @@ const isDefault = (p: SettingProp) => {
               v-if="p.type === 'boolean'"
               :id="id(p)"
               :model-value="values[p.key] === true"
+              :labelledby="`${id(p)}-title`"
               :tip="p.label"
               @update:model-value="store(p, $event)"
             />
@@ -161,6 +164,7 @@ const isDefault = (p: SettingProp) => {
             <NumberField
               v-else-if="p.type === 'number'"
               :id="id(p)"
+              :label="p.label ?? p.key"
               class="plugset-num"
               :model-value="values[p.key] as number"
               :unit="numberOf(p).unit"
@@ -180,6 +184,7 @@ const isDefault = (p: SettingProp) => {
             <Select
               v-else-if="p.type === 'enum'"
               :id="id(p)"
+              :label="p.label ?? p.key"
               class="plugset-select"
               :model-value="String(values[p.key])"
               :options="p.options.map((o) => ({ value: o.id, label: o.label }))"
@@ -189,6 +194,7 @@ const isDefault = (p: SettingProp) => {
             <TextField
               v-else-if="p.type === 'string'"
               :id="id(p)"
+              :label="p.label ?? p.key"
               class="plugset-text"
               commit="change"
               spellcheck="false"
@@ -220,6 +226,7 @@ const isDefault = (p: SettingProp) => {
             <template v-else-if="p.type === 'file'">
               <TextField
                 :id="id(p)"
+                :label="p.label ?? p.key"
                 class="plugset-text"
                 commit="change"
                 spellcheck="false"

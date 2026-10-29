@@ -6,6 +6,7 @@ import { bundleAsset, shippedPlugins } from "./shipped";
 import type { DocumentStore } from "../document/store";
 import { toast } from "../ui/toast";
 import type { RunOutcome } from "./runner/host";
+import { nativeDialog } from "../io/nativeDialog";
 
 /** Mirrors BUNDLE_PREFIX in src-tauri/src/plugins/bundle.rs. This copy only builds URLs, that one decides the label. */
 const RELEASES = "https://github.com/Paraxdev/fundacad/releases/download/";
@@ -301,7 +302,7 @@ export async function installCandidate(c: Candidate): Promise<InstalledPlugin> {
 
 /** Ask for a bundle on disk. Resolves to null if the picker was dismissed. */
 export async function pickBundle(): Promise<string | null> {
-  const { open } = await import("@tauri-apps/plugin-dialog");
+  const { open } = await nativeDialog();
   const picked = await open({
     multiple: false,
     directory: false,

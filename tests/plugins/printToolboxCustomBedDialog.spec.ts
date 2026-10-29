@@ -2,13 +2,15 @@
 // exits (OK, Cancel, Escape). Mounted directly rather than through the host,
 // same call CustomBedHost.vue makes once there is a request to answer.
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { enableAutoUnmount, mount } from "@vue/test-utils";
 import { nextTick } from "vue";
+import { createPinia, setActivePinia } from "pinia";
 import CustomBedDialog from "../../plugins/FundaCAD.PrintToolbox/CustomBedDialog.vue";
 import type { CustomBedRequest } from "../../plugins/FundaCAD.PrintToolbox/customBedDialog";
 
 enableAutoUnmount(afterEach);
+beforeEach(() => setActivePinia(createPinia()));
 
 const $ = (sel: string) => document.querySelector<HTMLInputElement>(sel);
 
@@ -54,10 +56,17 @@ describe("CustomBedDialog", () => {
     expect(resolve).toHaveBeenCalledWith(null);
   });
 
-  it("resolves null on Escape", () => {
+  it("resolves null once on Escape, through the frame or its own handler", () => {
     const resolve = open();
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-    expect(resolve).toHaveBeenCalledWith(null);
+    expect(resolve.mock.calls).toEqual([[null]]);
+  });
+
+  it("puts focus in the width field when it opens", async () => {
+    open();
+    await nextTick();
+    await nextTick();
+    expect(document.activeElement).toBe($('[data-testid="bed-custom-width"]'));
   });
 
   it("accepts on Enter", () => {

@@ -1,0 +1,9 @@
+{
+  "version": 10,
+  "parameters": {},
+  "features": [
+    { "id": "box", "type": "box", "length": 40, "width": 30, "height": 20, "operation": "new" },
+    { "id": "cyl", "type": "cylinder", "radius": 10, "height": 20, "operation": "new" },
+    { "id": "up", "type": "move", "dz": 12, "bodies": ["body2"] }
+  ]
+}

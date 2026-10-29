@@ -5,11 +5,15 @@ use std::collections::HashMap;
 
 use serde_json::Value;
 
+use crate::budget::{self, Page, Row};
 use crate::describe::g_format;
 use crate::mesh::MeshBody;
 
 /// The chord tolerance the section asks the engine to mesh at, in mm.
 pub const TOLERANCE: f64 = 0.01;
+
+/// The most characters of folded ids one row spells out.
+const IDS: usize = 240;
 
 /// A point on the plane, its normal, and the in-plane axes the outline is written in, with u x v = n.
 #[derive(Debug, Clone)]
@@ -481,6 +485,53 @@ pub fn report(id: &str, name: &str, plane: &Plane, cut: &Cut, outline: bool) -> 
         }
     }
     out.join("\n")
+}
+
+/// A body's section less where it sits, for folding bodies alike in all but position: the loops moved so the
+/// centroid is the origin, and no centroid line.
+pub fn alike(plane: &Plane, cut: &Cut, outline: bool) -> String {
+    let c = properties(&cut.loops).centroid;
+    let moved = |ls: &[Vec<[f64; 2]>]| -> Vec<Vec<[f64; 2]>> {
+        ls.iter().map(|l| l.iter().map(|p| [p[0] - c[0], p[1] - c[1]]).collect()).collect()
+    };
+    let at_origin = Cut { loops: moved(&cut.loops), open: moved(&cut.open), on_face: cut.on_face };
+    report("", "", plane, &at_origin, outline)
+        .lines()
+        .filter(|l| !l.starts_with("  centroid ("))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// The body rows of a section: a long list counts its bodies and their area first and folds bodies alike in
+/// all but position unless `full`, then shows one page of its rows and the line that asks for the rest.
+pub fn listing(rows: Vec<Row>, area: f64, page: Page, full: bool, outline_left_out: bool) -> Vec<String> {
+    let mut out = Vec::new();
+    if rows.len() > budget::FOLD_FROM {
+        let mut head = format!("{} bodies cut, {} mm2 in all", rows.len(), num4(area));
+        if !full {
+            head.push_str(
+                ", bodies with the same section about their own centroid in one row: `bodies` or full true \
+                 gives each its own",
+            );
+        }
+        out.push(head);
+        if outline_left_out {
+            out.push(
+                "Outline points left out of a long list: pass outline true, with `bodies` or a page, for each \
+                 loop's points"
+                    .into(),
+            );
+        }
+    }
+    let rows = if full {
+        rows.into_iter().map(|r| r.text).collect()
+    } else {
+        budget::fold_capped(rows, IDS, "full true lists every body")
+    };
+    let (shown, more) = page.cut(rows, "body rows");
+    out.extend(shown);
+    out.extend(more);
+    out
 }
 
 fn short(axis: &str) -> String {

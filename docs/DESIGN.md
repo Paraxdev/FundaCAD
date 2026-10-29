@@ -288,16 +288,18 @@ Scrims (`.modal-overlay`, `.cmdk-backdrop`, `.choice-backdrop`, final values in
 a dialog, blurred and dimmed. A new modal reuses `.modal-overlay` rather than
 writing its own scrim.
 
-Stacking tokens: `--z-float` 20, `--z-popover` 200, `--z-menu` 3000,
+Stacking tokens: `--z-panel` 19, `--z-float` 20, `--z-popover` 200, `--z-menu` 3000,
 `--z-modal` 4000, `--z-toast` 5000. Most layers still use literals, so pick
 your layer from what is actually on screen:
 
 | z | Layer |
 |---|---|
+| 17 | `.sketch-dim-leaders`, `calc(var(--z-panel) - 2)`, the sketch dimension leaders, under the panel |
+| 18 | `.stress-glyph-label`, `calc(var(--z-panel) - 1)`, the Stress readouts in the view, under the panel |
+| 19 | `.measure-panel` (`--z-panel`), every floating panel |
 | 20 | `#float-layer` (`--z-float`), the cards and rail |
 | 200 | `.float-popover` (`--z-popover`) |
 | 1000 | `.modal-overlay` |
-| 1500 | `.measure-panel` |
 | 2000 | `.menu-popup` |
 | 2450 | `.logcon` |
 | 2500 | `.toast-stack` |
@@ -306,7 +308,11 @@ your layer from what is actually on screen:
 | 4001 | `.select-pop`, `calc(var(--z-modal) + 1)`, so a picker clears its dialog |
 | 5000 | `.cmdk-backdrop` |
 
-New layers use a `--z-*` token or `calc()` on one, never a new literal.
+New layers use a `--z-*` token or `calc()` on one, never a new literal. Every dialog
+and its popups (Select, Menu, the title bar menus) draw over the floating panels and
+the in-view chips, and a floating panel never draws over the rail or the view controls
+nor sets a z-index of its own; `tests/ui/designSpec.test.ts` holds all three, and
+`e2e/stress_under_dialogs_e2e.cjs` checks them in a real layout.
 
 ## 4. The glass recipe
 
@@ -560,6 +566,10 @@ pack, falls back to forge): 24 by 24 viewBox, about 20 by 20 live area,
 `--text-dim` or `--text-mute`, hover `--text`, active `--accent-hot`. Never use
 a Unicode glyph or emoji as an icon.
 
+An `Icon` is hidden from screen readers (`aria-hidden="true"`, `focusable="false"`) unless it has a `label`, which
+makes it `role="img"` named by that label. Give a label only to an icon that says something no text beside it does,
+such as a status icon alone in a row; an icon inside a named control never takes one.
+
 Names are the file names, in camelCase. Look in the folder before you pick
 one; a name that is not there renders nothing. The common actions:
 
@@ -632,6 +642,13 @@ nothing in the set fits, extend the closest base component, with a spec in `test
 ### The base set
 
 The props beyond `tip`, `keys`, `disabled` and `disabledReason`, which every control takes.
+
+`Select`, `ChoiceList`, `TextField`, `NumberField`, `Slider`, `Checkbox`, `Segmented` and `Tabs` each need a name:
+`label`, the words, or `labelledby`, the id of a visible label (inside a `FieldRow`, the `labelId` its slot hands
+over), never both. Their props take the `Named` union of `components/ui/useName.ts`, so `vue-tsc` refuses a call with
+neither, and in dev a control given neither, nor an `aria-label` or `aria-labelledby` attribute, warns
+"<Kind> has no name". A `Checkbox` may take its slot text instead. `tip` is the tooltip, and only names a control
+given nothing else (a plain JS plugin skips the type check), without its key chord, so a release build still says it.
 
 | Component | For | Props that matter | States |
 |---|---|---|---|
@@ -941,11 +958,11 @@ their own keys and drag; new rows of that kind wear the `ListRow` look.
 
 `Dialog` holds the modal gate (`composables/useModalGate.ts`) while open, keeps Tab inside, focuses the `[autofocus]`
 control or else the first control after the close button, and gives focus back to its opener on close. Escape closes
-the topmost dialog only. `ModalFrame.vue` is the old frame contract over it, with no Escape, no gate and no focus
-moves, for the dialogs that still do those themselves. `Menu` takes the arrows, Home and End, type ahead, Enter or
-Space to choose and close, ArrowRight and ArrowLeft into and out of a submenu, and Escape through `claimEscape`, and
-gives focus back to its opener. `Popover` with `focus="first"` moves focus into the card (or onto it, when it holds
-no control), and `returnFocus` gives it back on close.
+the topmost dialog only. `ModalFrame.vue` is the frame plugins import over it: the same Escape and focus moves but
+no gate, and props to opt out of Escape and focus for a plugin that still does those itself. `Menu` takes the
+arrows, Home and End, type ahead, Enter or Space to choose and close, ArrowRight and ArrowLeft into and out of a
+submenu, and Escape through `claimEscape`, and gives focus back to its opener. `Popover` with `focus="first"` moves
+focus into the card (or onto it, when it holds no control), and `returnFocus` gives it back on close.
 
 ![A context menu and the selection state of the shell](design/context-menu-dark.png)
 
@@ -953,8 +970,10 @@ no control), and `returnFocus` gives it back on close.
 
 ### 7.11 Tooltips
 
-There is no tooltip component. Use the native `title` plus an `aria-label`
-with the same text, and put the shortcut in brackets, written as in
+There is no tooltip component. A tooltip is the native `title`, and a `title` is a bonus for the mouse only:
+VoiceOver and Orca mostly skip it, and a keyboard, touch or switch user never sees it. So a `title` never carries the
+only name, a state or an error. An icon only control takes an `aria-label` with the same text as its `title`, and
+the shortcut goes in brackets, written as in
 [9](#9-voice-and-wording): `title="Reset camera (Shift+Home)"`. A base control
 writes both from `tip` and `keys`: `<IconButton icon="history" tip="History" keys="Ctrl+Alt+H" />`. A `Button`
 with a word keeps the word as its name and takes the tip as its `title` only, and while a control is disabled its
@@ -962,6 +981,13 @@ with a word keeps the word as its name and takes the tip as its `title` only, an
 (`src/input/platform.ts`), which writes the Command and Option glyphs on a Mac:
 `:title="fmtKeys('History (Ctrl+Alt+H)')"`. Do not invent a tooltip popover.
 On the model, where a hand cannot spare a hover, show a real element instead.
+
+State goes where every reader gets it: in the name, in `aria-describedby` pointing at text, or in a `.sr-only` span
+(`_utilities.scss`) beside the visible text, with the visual mark `aria-hidden`. The title bar's unsaved star is
+`aria-hidden` and followed by `<span class="sr-only"> Unsaved changes</span>`, a History chip says its file, its
+error or note, switched off or suppressed and rolled back in an `.sr-only` span after its name, a failed tree row
+adds ", failed", and a show or hide eye says its state through `aria-pressed`. A detail that only adds to a name,
+such as a home card's full path, goes in `aria-describedby` on a `hidden` span, and its `title` can stay.
 
 ### 7.12 Plugin UI
 
@@ -1009,7 +1035,17 @@ defineEmits<{ close: [] }>();
   handler (clearing the selection, leaving the tool). See
   [11](#11-accessibility) for when to leave it off.
 - Placement is fixed for every panel: `position: fixed; top: 128px; right: 268px;
-  z-index: 1500`, outside `#float-layer`, so two panels open at once overlap.
+  z-index: var(--z-panel)`, outside `#float-layer` and under it, so the rail, the
+  view controls and every dialog draw over an open panel. `panelStack.ts` sets `top`
+  and `right` under the view cube and clear of the right cards, and a `max-width` that
+  keeps a wide panel clear of the rail, again whenever a panel, a card or `#float-layer`
+  resizes. When the span beside the rail is under a panel's `min-width`, the column
+  moves to the highest shelf right of the cards that holds it (under History in a
+  narrow Render stage), and only when none does it keeps its `min-width` beside the
+  rail, under the cards. An open panel stays open across the Model and Render switch,
+  as every inspect panel does, narrowing to fit the smaller stage, so a row of buttons
+  in a panel wraps rather than clips. The in-view chips (`.dim-input`, `.sketch-dims`,
+  `.snap-tag`, `.prompt` and the like) draw over a panel they meet.
   The shell is `min-width: 180px`, `padding: var(--s-4)`, `font-size: 12px`.
 
 | Class | Recipe |
@@ -1128,7 +1164,7 @@ The box beside the cursor or the gizmo while a sketch or feature tool runs. One 
 | Error (`.dim-bad`) | Every field `--error-tint` with `--error` text, the message in `.dim-problem` hung under the box |
 | Place | Beside the cursor 16px right of and below the point at its natural size, flipped to the other side where the window ends, clamped into a window too small for either; never over the point. Flipped above, the box takes `.dim-above` and its error line hangs over it. Beside a gizmo `pastTip` or `placeBeside` |
 | Touch | Buttons stay 24px under a mouse; a `::before` grows each to 36px tall. Under `@media (pointer: coarse)` they are 30px, 6px apart, so the hit area reaches 36px each way, the floor over the model |
-| Keys | Tab and Shift+Tab walk the shown fields, then each option, and wrap; Enter in a field commits, Esc cancels (the tool's capture listener) |
+| Keys | Tab and Shift+Tab walk the shown fields, the tool's extra controls, each option, then Confirm and Cancel, and leave the box off either end; Enter in a field commits, Enter or Space on a button is that button's (a tool's capture listener skips it through `isBoxButtonKey`), Esc cancels (the tool's capture listener). Fillet and chamfer keep Tab in the field or on the canvas as the flip, Shift+Tab from the field steps back onto Cancel, and Tab off Cancel moves on past the box |
 
 A number the tool needs is a small field, never a chip that cycles. A new option goes through `DimOption`
 (`DimToggleDef` with an `icon`, `DimSegmentedDef` or `DimActionDef`), with an icon from `src/assets/icons/forge/`.
@@ -1296,8 +1332,10 @@ dialog has `role="dialog"` and a name: `aria-labelledby` pointing at its
 visible title (`Dialog.vue`, `ModalFrame.vue` over it and the chooser in
 `ModalHost.vue`, through `useId()`), or an `aria-label` when it has no title
 (`CommandPalette.vue`, `HomeScreen.vue`, `ConsolePanel.vue`,
-`TargetEditPanel.vue`). A modal one also has `aria-modal="true"`. Decorative
-icons get `aria-hidden`.
+`TargetEditPanel.vue`). A modal one also has `aria-modal="true"`. An `Icon`
+is `aria-hidden` unless it has a `label` ([6.4](#64-icons)). Every base control has a name
+([The base set](#the-base-set)), and a state, an error or a name never lives in a `title` alone
+([7.11](#711-tooltips)).
 
 Keyboard: every control is reachable and shows the focus outline. Single letter
 shortcuts are ignored while typing (`isEditableTarget`, `ui/focus.ts`). Every
@@ -1347,6 +1385,7 @@ Not handled yet, so do not rely on them: `prefers-contrast`, `forced-colors`,
 | Check with blur off | Rely on blur to make text legible |
 | Use `--t-fast`, `--t-med` and `--ease` | Write `0.14s ease-out` |
 | Write `title` plus `aria-label`, shortcuts as Ctrl+Alt+H through `fmtKeys()` | Build a custom tooltip, or write "Ctrl Alt H" |
+| Name every base control with `label` or `labelledby`, and put a state in the name, `aria-describedby` or a `.sr-only` span | Leave a state, an error or the only name in a `title`, or label an `Icon` inside a named control |
 | Build a readout from `Panel` and the `.measure-*` classes | Invent `.my-panel-head` and `.my-row` with their own padding |
 | Leave Escape to the tool that owns the panel | Call `claimEscape()` from a tool panel |
 | Use `--error` | Use `--danger` or a hard coded red |
@@ -1378,7 +1417,8 @@ Run all of it. Paste the screenshots into the review.
    about 40px and nothing moves.
 8. **Keyboard.** Tab through it: every control shows the accent outline, Escape does what
    [11](#11-accessibility) says for this kind of surface, Enter does the
-   primary thing. A dialog has `role="dialog"` and a name.
+   primary thing. A dialog has `role="dialog"` and a name. Every control has a name, and no state lives only in a
+   `title` ([7.11](#711-tooltips)).
 9. **Motion.** Entrances use `pop-in` or `glass-in`; with Animations off
    (Preferences, Accessibility) everything jumps to its end state.
 10. **Wording.** Every string passes [9](#9-voice-and-wording), and

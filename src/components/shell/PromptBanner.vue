@@ -7,6 +7,7 @@ import { keyHint } from "../../input/shortcuts";
 import { sketchToolName } from "../../ui/railDefs";
 import { runningTool } from "../../ui/runningTool";
 import { LEFT_CARDS, RIGHT_CARDS, centreShift, promptInsets, type Box } from "../../ui/promptPlacement";
+import { announce } from "../../ui/announce";
 
 const prompt = usePromptStore();
 const engine = useEngine();
@@ -22,6 +23,26 @@ const title = computed<{ label: string; keys?: string } | null>(() => {
   const keys = keyHint(running.action);
   return { label: running.label, ...(keys ? { keys } : {}) };
 });
+
+const SEP = " · ";
+// The dot is drawn but hidden from screen readers, which read it aloud; the announcer says commas instead.
+const parts = computed(() => fmtKeys(prompt.text ?? "").split(SEP));
+
+// The tool's name leads the first prompt a tool gives, and a later step says only what changed.
+let spokenTitle: string | null = null;
+watch(
+  () => [title.value?.label ?? null, prompt.text] as const,
+  ([label, text]) => {
+    if (!text) {
+      spokenTitle = null;
+      return;
+    }
+    const fresh = !!label && label !== spokenTitle;
+    spokenTitle = label;
+    announce(fresh ? `${label}, ${fmtKeys(text)}` : fmtKeys(text), "polite", { key: "prompt", delay: 120 });
+  },
+  { immediate: true },
+);
 
 const MIN_WIDTH = 220;
 
@@ -96,6 +117,11 @@ onUnmounted(() => {
     <span v-if="title" class="prompt-title" data-testid="prompt-title">
       {{ title.label }}<kbd v-if="title.keys" class="prompt-key">{{ fmtKeys(title.keys) }}</kbd>
     </span>
-    <span id="prompt" class="prompt-text">{{ fmtKeys(prompt.text ?? "") }}</span>
+    <span id="prompt" class="prompt-text"
+      ><template v-for="(part, i) in parts" :key="i"
+        ><span v-if="i" class="prompt-sep" aria-hidden="true">{{ SEP }}</span
+        >{{ part }}</template
+      ></span
+    >
   </div>
 </template>

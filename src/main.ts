@@ -24,6 +24,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { harnessWanted } from "./harness/wanted";
 import { installGuidePressGuard } from "./ui/guide/pressGuard";
 import { watchFirstFrame } from "./app/firstFrame";
+import { trackFocus } from "./components/ui/focusables";
 
 // Before anything is constructed, so a failure inside createEngine still reaches the user.
 installGlobalErrorHandlers();
@@ -39,6 +40,7 @@ canvas.id = "canvas"; // keeps the #canvas rule in styles/_layout.scss
 const engine = createEngine(canvas);
 
 installGuidePressGuard();
+trackFocus();
 const app = createApp(App);
 // A reactive proxy would break structuredClone in the undo snapshot and the identity checks of the delta protocol.
 app.provide(ENGINE, markRaw(engine));

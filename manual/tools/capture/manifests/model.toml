@@ -29,7 +29,7 @@ steps = [
 ]
 show = "A block with a round hole left where a cylinder was subtracted."
 alt = "A block with a round hole where a cylinder was subtracted"
-uses = ["manual/docs/model/combine.md:5"]
+uses = ["manual/docs/model/combine.md"]
 
 [[shot]]
 file = "manual/docs/img/construct-planes.png"
@@ -39,7 +39,7 @@ crop = "region"
 stub = true
 show = "A block with an offset plane above it and a vertical datum axis."
 alt = "A block with an offset plane above it and a vertical datum axis"
-uses = ["manual/docs/model/construct.md:5"]
+uses = ["manual/docs/model/construct.md"]
 
 [[shot]]
 file = "manual/docs/img/expression-value.png"
@@ -49,7 +49,7 @@ crop = "control"
 stub = true
 show = "The Extrude distance value box holding the expression rib = width / 4, with the current value box options."
 alt = "The Extrude distance box holding rib = width / 4"
-uses = ["manual/docs/model/expressions.md:5"]
+uses = ["manual/docs/model/expressions.md"]
 
 [[shot]]
 file = "manual/docs/img/extrude-taper.png"
@@ -78,7 +78,7 @@ steps = [
 ]
 show = "An extrude preview with a 12 degree taper, the distance and angle boxes below it, as the value box looks now."
 alt = "An extrude preview with a 12 degree taper, the distance and angle boxes below it"
-uses = ["manual/docs/model/extrude.md:5"]
+uses = ["manual/docs/model/extrude.md"]
 
 [[shot]]
 file = "manual/docs/img/rectangle-extrude.gif"
@@ -118,7 +118,7 @@ frames = [
 ]
 show = "Drawing a rectangle and extruding it into a block (24 frames, 800 wide)."
 alt = "Drawing a rectangle and extruding it into a block"
-uses = ["manual/docs/model/extrude.md:11"]
+uses = ["manual/docs/model/extrude.md"]
 
 [[shot]]
 file = "manual/docs/img/extrude-thin.png"
@@ -151,7 +151,7 @@ steps = [
 ]
 show = "A thin extrude of an open L of two lines, a 2 mm wall with a mitred corner."
 alt = "A thin extrude of an L of two lines, a 2 mm wall with a mitred corner"
-uses = ["manual/docs/model/extrude.md:32"]
+uses = ["manual/docs/model/extrude.md"]
 
 [[shot]]
 file = "manual/docs/img/fillet-edge.png"
@@ -171,7 +171,7 @@ steps = [
 ]
 show = "A block edge being rounded, the radius box beside it, with the continuity options of today (G3 fillets are recent)."
 alt = "A block edge being rounded, the radius box beside it"
-uses = ["manual/docs/model/fillet-chamfer.md:5"]
+uses = ["manual/docs/model/fillet-chamfer.md"]
 
 [[shot]]
 file = "manual/docs/img/fillet-drag.gif"
@@ -197,7 +197,7 @@ frames = [
 ]
 show = "A fillet radius growing on a block edge as the arrow is dragged (about 12 frames, 800 wide). Show the continuity choice if the box shows it (G3 is recent)."
 alt = "A fillet radius growing on an edge"
-uses = ["manual/docs/model/fillet-chamfer.md:11"]
+uses = ["manual/docs/model/fillet-chamfer.md"]
 
 [[shot]]
 file = "manual/docs/img/hole-dialog.png"
@@ -222,7 +222,7 @@ steps = [
 ]
 show = "The Hole box with size M3 and a through depth over a block."
 alt = "The Hole box with size M3 and a through depth over a block"
-uses = ["manual/docs/model/hole.md:5"]
+uses = ["manual/docs/model/hole.md"]
 
 [[shot]]
 file = "manual/docs/img/items-list.png"
@@ -232,7 +232,7 @@ crop = "panel"
 stub = true
 show = "The Items card with a Hardware folder holding two bodies, one of them hidden."
 alt = "The Items card with a Hardware folder holding two bodies, one of them hidden"
-uses = ["manual/docs/model/items.md:5"]
+uses = ["manual/docs/model/items.md"]
 
 [[shot]]
 file = "manual/docs/img/loft-adapter.png"
@@ -277,7 +277,7 @@ steps = [
 ]
 show = "A circle at the bottom lofted into a square at the top."
 alt = "A circle at the bottom lofted into a square at the top"
-uses = ["manual/docs/model/loft-sweep.md:5"]
+uses = ["manual/docs/model/loft-sweep.md"]
 
 [[shot]]
 file = "manual/docs/img/move-gizmo.png"
@@ -301,7 +301,7 @@ steps = [
 ]
 show = "The move gizmo with arrows, squares and rings in the axis colours, and its value bar."
 alt = "The move gizmo with arrows, squares and rings, and its value bar"
-uses = ["manual/docs/model/move.md:5"]
+uses = ["manual/docs/model/move.md"]
 
 [[shot]]
 file = "manual/docs/img/parameters-dialog.png"
@@ -311,7 +311,7 @@ crop = "panel"
 stub = true
 show = "The Parameters dialog listing width, depth and holes."
 alt = "The Parameters dialog listing width, depth and holes"
-uses = ["manual/docs/model/parameters.md:5"]
+uses = ["manual/docs/model/parameters.md"]
 
 [[shot]]
 file = "manual/docs/img/pattern-holes.png"
@@ -355,7 +355,7 @@ steps = [
 ]
 show = "A plate with a row of five holes made with Linear Pattern."
 alt = "A plate with a row of five holes"
-uses = ["manual/docs/model/pattern.md:5"]
+uses = ["manual/docs/model/pattern.md"]
 
 [[shot]]
 file = "manual/docs/img/presspull-face.png"
@@ -378,7 +378,7 @@ steps = [
 ]
 show = "A selected top face being pulled out by Press/Pull, the value box above it."
 alt = "A selected top face being pulled out by Press/Pull, the value box above it"
-uses = ["manual/docs/model/press-pull.md:5"]
+uses = ["manual/docs/model/press-pull.md"]
 
 [[shot]]
 file = "manual/docs/img/presspull.gif"
@@ -406,7 +406,7 @@ frames = [
 ]
 show = "A top face pulled out 1 mm a frame to 10 mm with the push arrow, the value box following it, then Enter."
 alt = "A face being pulled out with Press/Pull"
-uses = ["manual/docs/model/press-pull.md:11"]
+uses = ["manual/docs/model/press-pull.md"]
 
 [[shot]]
 file = "manual/docs/img/primitive-cylinder.png"
@@ -433,7 +433,7 @@ steps = [
 ]
 show = "A cylinder on the origin and its Radius and Height rows in the History card."
 alt = "A cylinder on the origin and its Radius and Height rows in the History card"
-uses = ["manual/docs/model/primitives.md:5"]
+uses = ["manual/docs/model/primitives.md"]
 
 [[shot]]
 file = "manual/docs/img/revolve-profile.png"
@@ -472,7 +472,7 @@ steps = [
 ]
 show = "A vase made by revolving a half outline."
 alt = "A vase made by revolving a half outline"
-uses = ["manual/docs/model/revolve.md:5"]
+uses = ["manual/docs/model/revolve.md"]
 
 [[shot]]
 file = "manual/docs/img/mirror-half.png"
@@ -517,7 +517,7 @@ steps = [
 ]
 show = "One half of a bracket beside its mirrored copy."
 alt = "One half of a bracket beside its mirrored copy"
-uses = ["manual/docs/model/scale-mirror.md:19"]
+uses = ["manual/docs/model/scale-mirror.md"]
 
 [[shot]]
 file = "manual/docs/img/shell-mug.png"
@@ -549,7 +549,7 @@ steps = [
 ]
 show = "A cylinder hollowed into an open mug."
 alt = "A cylinder hollowed into an open mug"
-uses = ["manual/docs/model/shell.md:5"]
+uses = ["manual/docs/model/shell.md"]
 
 [[shot]]
 file = "manual/docs/img/history-card.png"
@@ -566,4 +566,4 @@ steps = [
 ]
 show = "The History card with the Extrude step open and its rows."
 alt = "The History card with the Extrude step open"
-uses = ["manual/docs/model/timeline.md:7"]
+uses = ["manual/docs/model/timeline.md"]

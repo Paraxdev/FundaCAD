@@ -1,25 +1,29 @@
 <script setup lang="ts" generic="T extends string">
 import { computed, useTemplateRef } from "vue";
 import { useRovingFocus } from "./useRovingFocus";
+import { useName, type Named } from "./useName";
 
-const props = defineProps<{
-  options: readonly {
-    value: T;
-    label: string;
-    hint?: string | undefined;
-    disabled?: boolean | undefined;
-    /** Greyed but still answers a click. */ clickable?: boolean | undefined;
-    title?: string | undefined;
-  }[];
-  modelValue: T | null;
-  /** Set by a combobox that keeps focus itself (Select): the highlighted row, and no row takes focus. Left out, the
-   *  list holds one Tab stop and the arrows move focus. */
-  active?: number | undefined;
-  /** Names each option `${id}-${index}`, for `aria-activedescendant`. */
-  id?: string | undefined;
-}>();
+const props = defineProps<
+  {
+    options: readonly {
+      value: T;
+      label: string;
+      hint?: string | undefined;
+      disabled?: boolean | undefined;
+      /** Greyed but still answers a click. */ clickable?: boolean | undefined;
+      title?: string | undefined;
+    }[];
+    modelValue: T | null;
+    /** Set by a combobox that keeps focus itself (Select): the highlighted row, and no row takes focus. Left out, the
+     *  list holds one Tab stop and the arrows move focus. */
+    active?: number | undefined;
+    /** Names each option `${id}-${index}`, for `aria-activedescendant`. */
+    id?: string | undefined;
+  } & Named
+>();
 const emit = defineEmits<{ "update:modelValue": [T]; "update:active": [number] }>();
 
+const name = useName(props, "ChoiceList");
 const driven = computed(() => props.active !== undefined);
 const list = useTemplateRef<HTMLElement>("list");
 const roving = useRovingFocus({
@@ -41,7 +45,7 @@ function hover(i: number) {
 </script>
 
 <template>
-  <div :id="id" ref="list" class="opt-list" role="listbox" @keydown="driven || roving.onKeydown($event)">
+  <div v-bind="name" :id="id" ref="list" class="opt-list" role="listbox" @keydown="driven || roving.onKeydown($event)">
     <!-- Driven rows never take focus from the combobox, so a pointer pick keeps it on the trigger. -->
     <button
       v-for="(o, i) in options"

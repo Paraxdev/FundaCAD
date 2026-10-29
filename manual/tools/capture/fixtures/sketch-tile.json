@@ -1,0 +1,9 @@
+{
+  "version": 10,
+  "parameters": {},
+  "features": [
+    { "id": "s", "type": "sketch", "plane": "XY", "name": "Tile",
+      "entities": [{ "type": "rectangle", "id": "r1", "width": 8, "height": 8, "x": 0, "y": 0 }],
+      "constraints": [] }
+  ]
+}

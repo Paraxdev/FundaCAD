@@ -324,7 +324,8 @@ describe("each kind of schema field", () => {
   it("toggles a boolean with its checkbox, and once from its title", async () => {
     const row = await field("on");
     const box = row.get(".ui-checkbox input");
-    expect(box.attributes("aria-label")).toBe("Snap");
+    const title = row.get(".pref-title");
+    expect([box.attributes("aria-labelledby"), title.text()]).toEqual([title.attributes("id"), "Snap"]);
     await box.trigger("change");
     expect(k.get("on")).toBe(true);
     await box.trigger("keydown", { key: " " });

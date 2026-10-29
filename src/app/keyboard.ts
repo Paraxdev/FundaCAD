@@ -1,6 +1,7 @@
 import { installKeymap } from "../input/keymap";
 import { isEditableTarget, isPageSelectAll } from "../ui/focus";
-import { saveDocument, saveDocumentAs, exportSelection } from "../io/files";
+import { exportSelection } from "../io/files";
+import { saveWork, saveWorkAs } from "./documentActions";
 import { SKETCH_TOOLS } from "./actionTables";
 import { logError, toggleConsole } from "../ui/logStore";
 import { isSessionEnded } from "../document/session";
@@ -112,10 +113,10 @@ export function installKeyboard(e: Engine): void {
       void e.openDoc();
     } else if (k === "s" && ev.shiftKey) {
       ev.preventDefault();
-      void saveDocumentAs(e.store);
+      void saveWorkAs(e);
     } else if (k === "s") {
       ev.preventDefault();
-      void saveDocument(e.store);
+      void saveWork(e);
     } else if (k === "e") {
       ev.preventDefault();
       void exportSelection(e.store, e.geometry, e.viewport);

@@ -47,14 +47,21 @@ alt = "The History card with the Extrude step open"
 | `stub` | `true` until the entry has its steps, the tool skips it |
 | `readouts` | `true` keeps the frame and rebuild timings, which are hidden so a retake does not change for no reason |
 | `show`, `alt` | what the picture must show and the page's alt text |
+| `uses` | the pages that show the picture, from the repo root |
 
-Each entry starts from a new document in its theme unless its first step opens something.
+Each entry starts from a new document in its theme unless its first step opens something. Each file or fixture opens with the camera of a fresh window, so a picture does not depend on the entries before it.
 
-In a worktree whose node_modules is a junction, vite refuses the app's fonts, so the tool serves them from disk. A picture in a system font was taken without the tool.
+Copies are made after the retakes, so a copy holds the picture taken in the same run. The last line counts what was taken, failed, still a stub, kept and copied. A run fails when a picture fails, or when `--only` names a stub or a name no manifest has.
 
-The tool runs its own vite (`vite.config.mjs` here) with a dependency cache in the temp folder, one per checkout. A junctioned node_modules shares vite's usual cache with every other checkout, and when another vite rebuilds it, this page reloads in the middle of a shot. The low performance warning SwiftShader brings up is hidden too, and a screenshot that hangs is taken again (the result line counts them).
+`python3 tests/manual/test_capture.py` checks that each page in `uses` shows the picture with the entry's `alt`, that every manual and README picture has an entry of its size, and the GIF encoder.
 
-With other headless pages running on the PC, a page can stop drawing for good. An entry that fails is then taken once more in a new session. Each file or fixture opens with the camera of a fresh window, so a picture does not depend on the entries before it.
+What the tool works around:
+
+- In a worktree whose node_modules is a junction, vite refuses the app's fonts, so the tool serves them from disk. A picture in a system font was taken without the tool.
+- It runs its own vite (`vite.config.mjs` here) with a dependency cache in the temp folder, one per checkout. On the shared cache of a junctioned node_modules, another vite's rebuild reloads the page in the middle of a shot.
+- The low performance warning SwiftShader brings up is hidden.
+- A screenshot that hangs is taken again, and the result line counts them.
+- With other headless pages running on the PC, a page can stop drawing for good. An entry that fails is then taken once more in a new session.
 
 ## Crops
 

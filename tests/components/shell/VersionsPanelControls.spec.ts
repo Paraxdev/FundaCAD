@@ -66,6 +66,15 @@ describe("Versions panel controls", () => {
     expect(spy).toHaveBeenCalledWith(expect.any(String), "alt");
   });
 
+  it("names the message and branch name fields, which only had a placeholder", async () => {
+    const { store } = saved();
+    const w = mountPanel(store);
+    await w.get(".versions-main").trigger("click");
+    await w.findAll(".versions-actions button")[1]!.trigger("click");
+    const names = w.findAll(".versions-input input").map((i) => i.attributes("aria-label"));
+    expect(names).toEqual(["Version message", "Branch name"]);
+  });
+
   it("switches branch from the base select", async () => {
     const { store, one } = saved();
     store.branchFromVersion(one.id, "alt");

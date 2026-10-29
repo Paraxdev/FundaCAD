@@ -82,6 +82,9 @@ distributing FundaCAD under its own terms.
   (and its `-parse-float`, `-parse-integer`, `-util`, `-write-float`, `-write-integer` crates),
   **minimal-lexical**, **matrixmultiply** and **rawpointer**, MIT OR Apache-2.0; **wide** and
   **safe_arch**, Zlib OR Apache-2.0 OR MIT
+- **axe-core** 4.10.2 (the accessibility smoke test, vendored unchanged as
+  tools/harness/src/fundacad_harness/vendor/axe-4.10.2.min.js), MPL-2.0, source at
+  https://github.com/dequelabs/axe-core. Test tooling, not shipped with the app
 
 ## Written offer (LGPL source availability)
 

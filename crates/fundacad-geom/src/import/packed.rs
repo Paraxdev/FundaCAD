@@ -37,7 +37,7 @@ fn sweep_stale(dir: &Path) {
     }
 }
 
-fn temp_step() -> Result<(Unpacked, File), String> {
+pub(crate) fn temp_step() -> Result<(Unpacked, File), String> {
     static NEXT: AtomicUsize = AtomicUsize::new(0);
     let dir = std::env::temp_dir();
     sweep_stale(&dir);

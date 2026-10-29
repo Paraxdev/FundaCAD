@@ -36,7 +36,7 @@ function onPeriod(v: string) {
 </script>
 
 <template>
-  <h3 class="prefs-pane-title">Updates</h3>
+  <h3 class="prefs-pane-title" tabindex="-1">Updates</h3>
   <div class="prefs-grid">
     <div v-if="supported === false" class="pref-card wide" data-updates-unsupported>
       <p class="pref-hint">
@@ -59,6 +59,7 @@ function onPeriod(v: string) {
           <label class="pref-title" for="prefs-update-period">Check</label>
           <Select
             id="prefs-update-period"
+            label="Check"
             :model-value="period"
             :options="options"
             :disabled="!auto"

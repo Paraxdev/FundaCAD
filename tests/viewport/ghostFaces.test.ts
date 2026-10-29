@@ -7,7 +7,15 @@
 
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { bodyOutline, edgeFaceSamples, facesAtPoint, resampleEdge } from "../../src/viewport/ghosts";
+import {
+  GhostLayer,
+  bodyOutline,
+  edgeFaceSamples,
+  facesAtPoint,
+  resampleEdge,
+  sampleBudget,
+  type SampleBudget,
+} from "../../src/viewport/ghosts";
 import {
   ARC_SEGMENTS,
   TRIM_BUDGET,
@@ -662,6 +670,106 @@ describe("blend ghost cost on a large body", () => {
     const bare = samples.map(({ outline: _, ...s }) => s);
     const starved = sweepBlendGhost(samples, 2, "fillet", false, { left: 50, failed: false });
     expect(starved).toEqual(sweepBlendGhost(bare, 2, "fillet"));
+  });
+
+  it("shares one sampling budget over an update's edges, so a big pick goes bare past it", () => {
+    const model = modelOf(buildDShaft(R, a, H, 1500));
+    const one = sampleBudget();
+    expect(edgeFaceSamples(model, edge(), one)!.samples.every((s) => s.outline)).toBe(true);
+    const fresh = sampleBudget();
+    const left = { outline: (fresh.outline - one.outline) * 2.5, reach: (fresh.reach - one.reach) * 2.5 };
+    const picks = Array.from({ length: 6 }, () => edgeFaceSamples(model, edge(), left)!);
+    expect(picks.map((p) => p.samples.some((s) => s.outline))).toEqual([true, true, false, false, false, false]);
+    expect(left.outline).toBeGreaterThanOrEqual(0);
+    expect(left.reach).toBeGreaterThanOrEqual(0);
+  });
+
+  it("measures no outline and no reach once the update's budget is spent", () => {
+    const model = modelOf(buildDShaft(R, a, H, 1500));
+    const funded = edgeFaceSamples(model, edge())!.samples;
+    expect(funded.some((s) => Number.isFinite(s.reach1!) || Number.isFinite(s.reach2!))).toBe(true);
+    const spent = { outline: 0, reach: 0 };
+    const { samples } = edgeFaceSamples(model, edge(), spent)!;
+    expect(samples.some((s) => s.outline)).toBe(false);
+    expect(samples.every((s) => s.reach1 === Infinity && s.reach2 === Infinity)).toBe(true);
+    expect(spent).toEqual({ outline: 0, reach: 0 });
+  });
+
+  it("measures a face's reach at fewer samples as the budget runs low, still at both ends", () => {
+    const model = modelOf(buildCylinder(48, 10, 10));
+    const rim = () => ({ body: "cyl", points: rimPolyline(90, 10, 10, 0.013) });
+    const full = sampleBudget();
+    edgeFaceSamples(model, rim(), full);
+    const wall = 2 * 48;
+    const left = { outline: 0, reach: 4 * wall };
+    expect(sampleBudget().reach - full.reach).toBeGreaterThan(left.reach);
+    const { samples } = edgeFaceSamples(model, rim(), left)!;
+    expect(samples.some((s) => s.outline)).toBe(false);
+    expect(left).toEqual({ outline: 0, reach: expect.any(Number) });
+    expect(left.reach).toBeGreaterThanOrEqual(0);
+    expect(Number.isFinite(samples[0]!.reach1!)).toBe(true);
+    expect(Number.isFinite(samples.at(-1)!.reach1!)).toBe(true);
+  });
+
+  const layerOn = (model: () => ModelView) =>
+    new GhostLayer({
+      model,
+      addToScene: () => {},
+      removeFromScene: () => {},
+      requestRender: () => {},
+      faceNormalWorld: () => new THREE.Vector3(0, 0, 1),
+    });
+  // A budget with nothing to spend and no retry slice reads back what earlier updates cached.
+  const cachedOn = (model: ModelView, e: ReturnType<typeof edge>) =>
+    edgeFaceSamples(model, e, { outline: 0, reach: 0 });
+
+  it("spends one budget over every edge of a ghost update, not one per edge", () => {
+    const model = modelOf(buildDShaft(R, a, H, 6000));
+    const edges = Array.from({ length: 80 }, edge);
+    layerOn(() => model).setBlendGhost(edges, 2, "fillet");
+    expect(cachedOn(model, edges[0]!)!.samples.some((s) => s.outline)).toBe(true);
+    expect(cachedOn(model, edges[79]!)!.samples.some((s) => s.outline)).toBe(false);
+  });
+
+  it("spends at most a tenth of an update's budget on the edges an earlier update cut short", () => {
+    const model = modelOf(buildDShaft(R, a, H, 6000));
+    const edges = Array.from({ length: 80 }, edge);
+    const first = sampleBudget();
+    for (const e of edges) edgeFaceSamples(model, e, first);
+    const whole = sampleBudget();
+    const next = sampleBudget();
+    for (const e of edges) edgeFaceSamples(model, e, next);
+    const spent = (pick: (b: SampleBudget) => number) =>
+      pick(whole) - pick(next) + (whole.retry && next.retry ? pick(whole.retry) - pick(next.retry) : 0);
+    expect(spent((b) => b.outline)).toBeGreaterThan(0);
+    expect(spent((b) => b.outline)).toBeLessThanOrEqual(whole.outline / 10);
+    expect(spent((b) => b.reach)).toBeLessThanOrEqual(whole.reach / 10);
+  });
+
+  it("samples the edges an update's budget cut short in full over the next updates", () => {
+    const model = modelOf(buildDShaft(R, a, H, 6000));
+    const ghosts = layerOn(() => model);
+    const edges = Array.from({ length: 80 }, edge);
+    const outlined = () => edges.map((e) => cachedOn(model, e)!.samples.some((s) => s.outline));
+    ghosts.setBlendGhost(edges, 2, "fillet");
+    expect(outlined().indexOf(false)).toBeGreaterThan(0);
+    for (let i = 1; i <= 100 && outlined().includes(false); i++) ghosts.setBlendGhost(edges, 2 + i / 100, "fillet");
+    expect(outlined()).toEqual(edges.map(() => true));
+  });
+
+  it("measures a cut short edge again on the model it was first sampled on, not a preview shown since", () => {
+    const start = modelOf(buildDShaft(R, a, H, 6000));
+    let shown = start;
+    const ghosts = layerOn(() => shown);
+    const edges = Array.from({ length: 30 }, edge);
+    const measured = (e: ReturnType<typeof edge>) =>
+      cachedOn(shown, e)!.samples.map((s) => [s.reach1, s.reach2, s.outline?.segs.length]);
+    ghosts.setBlendGhost(edges, 2, "fillet");
+    expect(measured(edges[29]!).flat()).toContain(Infinity);
+    shown = modelOf(buildDShaft(R, a, H, 1500));
+    for (let i = 1; i <= 40; i++) ghosts.setBlendGhost(edges, 2, "fillet");
+    const whole = edgeFaceSamples(start, edge())!.samples.map((s) => [s.reach1, s.reach2, s.outline?.segs.length]);
+    expect(edges.map(measured)).toEqual(edges.map(() => whole));
   });
 });
 
