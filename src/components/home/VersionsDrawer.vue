@@ -26,6 +26,13 @@ const branches = computed(() => (summary.value ? branchNames(summary.value) : []
 const shown = computed(() => picked.value ?? summary.value?.current ?? null);
 const rows = computed(() => (summary.value && shown.value ? branchLog(summary.value, shown.value) : []));
 const titled = (v: { message: string; time: number }) => `${v.message || "Untitled version"}, ${ago(v.time)}`;
+// Plain saves share a message and ago() rounds the time, so a name that repeats also says where its row sits.
+const named = computed(() => {
+  const counts = new Map<string, number>();
+  for (const v of rows.value) counts.set(titled(v), (counts.get(titled(v)) ?? 0) + 1);
+  const n = rows.value.length;
+  return rows.value.map((v, i) => (counts.get(titled(v))! > 1 ? `${titled(v)}, ${i + 1} of ${n}` : titled(v)));
+});
 
 const root = ref<HTMLElement | null>(null);
 const heading = ref<HTMLElement | null>(null);
@@ -93,7 +100,7 @@ onBeforeUnmount(() => back.restore((n) => !!root.value?.contains(n)));
         >Restore brings a version back into the document, {{ fmtKeys("Ctrl+Z") }} undoes it. Open copy starts a new
         document from it.</p
       >
-      <div v-for="v in rows" :key="v.id" class="home-version">
+      <div v-for="(v, i) in rows" :key="v.id" class="home-version">
         <div class="home-version-text">
           <span class="home-version-msg">{{ v.message || "Untitled version" }}</span>
           <span class="home-version-time">{{ ago(v.time) }}</span>
@@ -103,7 +110,7 @@ onBeforeUnmount(() => back.restore((n) => !!root.value?.contains(n)));
             size="sm"
             class="home-drawer-act home-version-restore"
             title="Bring this version back into the document"
-            :aria-label="`Restore ${titled(v)}`"
+            :aria-label="`Restore ${named[i]}`"
             @click="emit('restore', v.id)"
             >Restore</Button
           >
@@ -111,7 +118,7 @@ onBeforeUnmount(() => back.restore((n) => !!root.value?.contains(n)));
             size="sm"
             class="home-drawer-act home-version-copy"
             title="Start a new untitled document from this version"
-            :aria-label="`Open copy of ${titled(v)}`"
+            :aria-label="`Open copy of ${named[i]}`"
             @click="emit('copy', v.id)"
             >Open copy</Button
           >

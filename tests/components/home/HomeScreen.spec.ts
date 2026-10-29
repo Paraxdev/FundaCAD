@@ -783,6 +783,31 @@ describe("HomeScreen", () => {
       expect(names(".home-branch-open")).toEqual(["Open the document on wide", "Open the document on main"]);
     });
 
+    it("tells apart versions that share a message and a time by their place in the list", async () => {
+      const saved = (id: string, parent: string | null) => ({
+        ...row(id, parent, "main", 5),
+        message: "Saved version",
+      });
+      const same: DocSummary = {
+        format: "funda",
+        versions: [saved("s1", null), { ...row("s2", "s1", "main", 5) }, saved("s3", "s2")],
+        branches: { main: "s3" },
+        current: "main",
+      };
+      await drawerFor({ [P]: same });
+      const names = (sel: string) => $$(sel).map((b) => b.getAttribute("aria-label"));
+      expect(names(".home-version-restore")).toEqual([
+        `Restore Saved version, ${ago(5)}, 1 of 3`,
+        `Restore msg s2, ${ago(5)}`,
+        `Restore Saved version, ${ago(5)}, 3 of 3`,
+      ]);
+      expect(names(".home-version-copy")).toEqual([
+        `Open copy of Saved version, ${ago(5)}, 1 of 3`,
+        `Open copy of msg s2, ${ago(5)}`,
+        `Open copy of Saved version, ${ago(5)}, 3 of 3`,
+      ]);
+    });
+
     it("says when there is no history, the file is too old, or it cannot be read", async () => {
       await drawerFor({ [P]: { ...hist, versions: [], branches: {} } });
       expect($(".home-drawer-note")!.textContent).toBe("No versions saved in this document.");
