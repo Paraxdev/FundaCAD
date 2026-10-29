@@ -57,6 +57,7 @@ function makeEngine(doc: CadDocument, bodies: { id: string; name: string; nodeRe
   const buildVersion = ref(0);
   const hidden = new Set<string>();
   const hiddenSketches = new Set<string>();
+  const suppressed = new Set<string>();
   const removed: string[][] = [];
   const lit: unknown[] = [];
   const planeWrites: Map<string, boolean>[] = [];
@@ -150,6 +151,7 @@ function makeEngine(doc: CadDocument, bodies: { id: string; name: string; nodeRe
     },
     colorPalette: [{ name: "Slot 1", color: "#ff0000" }],
     isPlaneVisible: () => true,
+    isSuppressed: (id: string) => suppressed.has(id),
     isBodyVisible: (id: string) => !hidden.has(id),
     setBodiesVisibility: (vis: Map<string, boolean>) => {
       bodyWrites.push(new Map(vis));
@@ -183,6 +185,7 @@ function makeEngine(doc: CadDocument, bodies: { id: string; name: string; nodeRe
     removed,
     lit,
     planeWrites,
+    suppressed,
     isSketchVisible: (id: string) => !hiddenSketches.has(id),
     /** Edit in place, identity is preserved on purpose. */
     edit(fn: (d: CadDocument) => void) {
@@ -1228,5 +1231,116 @@ describe("Items head and foot controls", () => {
     expect(close.attributes("title")).toContain("Hide the items");
     await close.trigger("click");
     expect(useShellStore().itemsOpen).toBe(false);
+  });
+});
+
+describe("Items tree by keys", () => {
+  // Vue skips a handler attached in the same ms an event was first seen, see TreeControls.spec.ts.
+  async function open(fake: ReturnType<typeof makeEngine>) {
+    const w = mount(BrowserPane, { global: { provide: { [ENGINE as symbol]: fake.engine } }, attachTo: document.body });
+    await nextTick();
+    await new Promise((r) => setTimeout(r, 2));
+    return w;
+  }
+  function press(key: string, init: KeyboardEventInit = {}) {
+    const e = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...init });
+    (document.activeElement ?? document.body).dispatchEvent(e);
+    return e;
+  }
+  const focusOn = (el: { element: Element }) => (el.element as HTMLElement).focus();
+  const focusedLabel = () => document.activeElement?.getAttribute("aria-label");
+
+  it("is a multiselectable tree named Items whose heads and rows carry level, position and state", async () => {
+    contribute("p", { browserSections: [{ key: "referenceImages", component: MarkerSection }] });
+    const fake = makeEngine({ parameters: {}, features: [sketch("s1"), sketch("s2")] }, []);
+    const w = await open(fake);
+    const tree = w.get('#browser .float-card-body [role="tree"]');
+    expect([tree.attributes("aria-label"), tree.attributes("aria-multiselectable")]).toEqual(["Items", "true"]);
+    const head = folderNamed(w, "Sketches")!;
+    expect([head.attributes("role"), head.attributes("aria-level"), head.attributes("aria-expanded")]).toEqual([
+      "treeitem",
+      "1",
+      "true",
+    ]);
+    const s2 = rowNamed(w, "Sketch2");
+    expect(["aria-level", "aria-posinset", "aria-setsize", "aria-selected"].map((a) => s2.attributes(a))).toEqual([
+      "2",
+      "2",
+      "2",
+      "false",
+    ]);
+    const group = tree.get('[role="group"]');
+    expect([group.attributes("aria-label"), group.find('[role="treeitem"]').exists()]).toEqual([
+      "Reference images",
+      false,
+    ]);
+    const empty = w.get(".empty-state");
+    expect([empty.attributes("role"), empty.attributes("aria-disabled"), empty.attributes("aria-selected")]).toEqual([
+      "treeitem",
+      "true",
+      undefined,
+    ]);
+    w.unmount();
+  });
+
+  it("walks the rows by arrows, and Space adds a body to the selection as a Ctrl click does", async () => {
+    const fake = makeEngine({ parameters: {}, features: [] }, [
+      { id: "b1", name: "Body1" },
+      { id: "b2", name: "Body2" },
+    ]);
+    const w = await open(fake);
+    await rowNamed(w, "Body1").trigger("click");
+    focusOn(rowNamed(w, "Body1"));
+    expect(press("ArrowDown").defaultPrevented).toBe(true);
+    expect(focusedLabel()).toBe("Body2");
+    press(" ");
+    expect(fake.engine.viewport.getSelectedBodies()).toEqual(["b1", "b2"]);
+    press(" ");
+    expect(fake.engine.viewport.getSelectedBodies()).toEqual(["b1"]);
+    w.unmount();
+  });
+
+  it("closes a section on Enter and opens it again on Right, and its head says so", async () => {
+    const fake = makeEngine({ parameters: {}, features: [sketch("s1")] }, []);
+    const w = await open(fake);
+    focusOn(folderNamed(w, "Sketches")!);
+    press("Enter");
+    await nextTick();
+    expect([
+      useBrowserStore().isCollapsed("f:Sketches"),
+      folderNamed(w, "Sketches")!.attributes("aria-expanded"),
+    ]).toEqual([true, "false"]);
+    press("ArrowRight");
+    await nextTick();
+    expect(folderNamed(w, "Sketches")!.attributes("aria-expanded")).toBe("true");
+    press("ArrowDown");
+    expect(focusedLabel()).toBe("Sketch1");
+    w.unmount();
+  });
+
+  it("deletes the focused row on Delete without the window's Delete also running", async () => {
+    const fake = makeEngine({ parameters: {}, features: [sketch("s1"), sketch("s2")] }, []);
+    const w = await open(fake);
+    const heard: string[] = [];
+    const spy = (e: KeyboardEvent) => heard.push(e.key);
+    window.addEventListener("keydown", spy);
+    focusOn(rowNamed(w, "Sketch2"));
+    press("Delete");
+    window.removeEventListener("keydown", spy);
+    expect([fake.removed, heard]).toEqual([[["s2"]], []]);
+    w.unmount();
+  });
+
+  it("rests the Tab stop on the selected row and says a suppressed row is suppressed", async () => {
+    const fake = makeEngine({ parameters: {}, features: [sketch("s1"), sketch("s2")] }, []);
+    fake.suppressed.add("s2");
+    const w = await open(fake);
+    await rowNamed(w, "Sketch2").trigger("click");
+    await nextTick();
+    const stops = w.findAll('[role="treeitem"]').filter((r) => r.attributes("tabindex") === "0");
+    expect(stops.map((r) => r.attributes("aria-label"))).toEqual(["Sketch2"]);
+    const s2 = rowNamed(w, "Sketch2");
+    expect(w.get(`#${s2.attributes("aria-describedby")}`).text()).toBe("suppressed");
+    w.unmount();
   });
 });

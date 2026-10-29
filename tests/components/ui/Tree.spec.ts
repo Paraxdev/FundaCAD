@@ -256,6 +256,17 @@ describe("Tree", () => {
     expect(focused()).toBe("Sketches");
   });
 
+  it("lets go of a focused row when a press lands outside the tree, where the viewport keeps focus put", () => {
+    const w = render();
+    const outside = document.body.appendChild(document.createElement("div"));
+    tabTo(w, "body1");
+    row(w, "body2").element.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    expect(focused()).toBe("Body 1");
+    outside.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    expect(document.activeElement).not.toBe(row(w, "body1").element);
+    outside.remove();
+  });
+
   it("leaves keys typed in a field inside a row alone", () => {
     const w = render();
     const input = w.find("input.rename").element as HTMLInputElement;

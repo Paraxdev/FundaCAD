@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, provide, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, provide, ref, watch } from "vue";
 import { useName, type Named } from "./useName";
 import { useRovingFocus } from "./useRovingFocus";
 import {
@@ -113,6 +113,17 @@ function onContextmenu(e: MouseEvent) {
   e.preventDefault();
   e.stopPropagation();
 }
+
+// The viewport keeps focus where it was on a press, so a row clicked earlier would go on taking Delete and the
+// arrows meant for the model.
+function onDocPointerdown(e: PointerEvent) {
+  const a = document.activeElement;
+  const tree = root.value;
+  if (!(a instanceof HTMLElement) || !tree || !a.matches(TREE_ITEM_SELECTOR) || !tree.contains(a)) return;
+  if (!(e.target instanceof Node && tree.contains(e.target))) a.blur();
+}
+onMounted(() => document.addEventListener("pointerdown", onDocPointerdown, true));
+onUnmounted(() => document.removeEventListener("pointerdown", onDocPointerdown, true));
 
 function claim(e: KeyboardEvent) {
   e.preventDefault();
