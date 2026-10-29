@@ -132,6 +132,7 @@ onMounted(() => {
     onA11yPrefsChange(() => {
       a11y.value = a11yPrefs();
       reducesMotion.value = systemReducesMotion();
+      if (a11y.value.verbosity !== "verbose") presetNote.value = "";
     }),
     onNavPrefsChange(() => {
       nav.value = getNavPrefs();
@@ -221,6 +222,14 @@ function pickAnimations(id: string) {
 function pickVerbosity(id: string) {
   const v = asVerbosity(id);
   if (v) setA11yPref("verbosity", v);
+}
+const presetNote = ref("");
+async function screenReaderPreset() {
+  applyScreenReaderPreset();
+  // Emptied for a tick first, so a second press changes the live region and is spoken again.
+  presetNote.value = "";
+  await nextTick();
+  presetNote.value = "Announcements set to Verbose.";
 }
 
 const UNITS = [
@@ -751,7 +760,7 @@ function onClassicCamera(on: boolean) {
         <section v-show="category === 'access'" v-bind="pane('access')" class="prefs-pane">
           <h3 class="prefs-pane-title" tabindex="-1">Accessibility</h3>
           <div class="prefs-a11y-actions">
-            <Button data-a11y-preset aria-describedby="prefs-a11y-actions-hint" @click="applyScreenReaderPreset"
+            <Button data-a11y-preset aria-describedby="prefs-a11y-actions-hint" @click="screenReaderPreset"
               >Screen reader preset</Button
             >
             <Button
@@ -761,6 +770,7 @@ function onClassicCamera(on: boolean) {
               @click="resetA11yPrefs"
               >Reset to defaults</Button
             >
+            <span id="prefs-a11y-preset-status" class="prefs-a11y-status" role="status">{{ presetNote }}</span>
             <p id="prefs-a11y-actions-hint" class="pref-hint">
               Screen reader preset sets Announcements to Verbose, the setup that suits NVDA, VoiceOver and other screen
               readers. Reset to defaults clears every choice below, so Animations follows the system again.

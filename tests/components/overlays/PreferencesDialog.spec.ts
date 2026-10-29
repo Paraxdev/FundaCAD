@@ -470,6 +470,25 @@ describe("Preferences Accessibility", () => {
     expect(reset.getAttribute("aria-disabled")).toBe("true");
   });
 
+  it("says the Screen reader preset took in a status line, again on a second press, gone once Announcements moves", async () => {
+    await open();
+    await category("access");
+    const status = $("#prefs-a11y-preset-status");
+    expect([status.getAttribute("role"), status.textContent]).toEqual(["status", ""]);
+    $("[data-a11y-preset]").click();
+    await flushPromises();
+    expect(status.textContent).toBe("Announcements set to Verbose.");
+    const seen: string[] = [];
+    const watcher = new MutationObserver(() => seen.push(status.textContent ?? ""));
+    watcher.observe(status, { childList: true, characterData: true, subtree: true });
+    $("[data-a11y-preset]").click();
+    await flushPromises();
+    watcher.disconnect();
+    expect(seen).toEqual(["", "Announcements set to Verbose."]);
+    await pick("prefs-verbosity", "Normal");
+    expect(status.textContent).toBe("");
+  });
+
   it("opens Appearance from the Vision group and lands on its title", async () => {
     await open();
     await category("access");
