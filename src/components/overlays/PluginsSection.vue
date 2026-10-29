@@ -349,7 +349,7 @@ async function drop(id: string, name: string) {
           <li v-for="line in describeGrants(u.offer.manifest).cannot" :key="line">{{ line }}</li>
         </ul>
       </div>
-      <div class="sm-hint">{{ sandboxNote(u.offer.manifest.kind) }}</div>
+      <div class="sm-hint">{{ sandboxNote(u.offer.manifest) }}</div>
       <div class="plug-actions">
         <Button :disabled="busy === rec.id" @click="showing = ''">Cancel</Button>
         <Button variant="primary" :disabled="busy === rec.id" @click="accept(u.offer, 'updated')">
@@ -375,7 +375,7 @@ async function drop(id: string, name: string) {
           <li v-for="line in describeGrants(manifest).cannot" :key="line">{{ line }}</li>
         </ul>
       </div>
-      <div class="sm-hint">{{ sandboxNote(manifest.kind) }}</div>
+      <div class="sm-hint">{{ sandboxNote(manifest) }}</div>
     </div>
   </div>
 
@@ -462,7 +462,7 @@ async function drop(id: string, name: string) {
           <li v-for="line in describeGrants(candidate.manifest).cannot" :key="line">{{ line }}</li>
         </ul>
       </div>
-      <div class="sm-hint">{{ sandboxNote(candidate.manifest.kind) }}</div>
+      <div class="sm-hint">{{ sandboxNote(candidate.manifest) }}</div>
       <div class="plug-actions">
         <Button :disabled="busy === candidate.manifest.id" @click="candidate = null">Cancel</Button>
         <Button variant="primary" :disabled="busy === candidate.manifest.id" @click="acceptCandidate(candidate)">
@@ -496,7 +496,7 @@ async function drop(id: string, name: string) {
           <li v-for="line in describeGrants(p.manifest).cannot" :key="line">{{ line }}</li>
         </ul>
       </div>
-      <div class="sm-hint">{{ sandboxNote(p.manifest.kind) }}</div>
+      <div class="sm-hint">{{ sandboxNote(p.manifest) }}</div>
       <div class="plug-actions">
         <Button :disabled="busy === p.manifest.id" @click="showing = ''">Cancel</Button>
         <Button variant="primary" :disabled="busy === p.manifest.id" @click="accept(p)">

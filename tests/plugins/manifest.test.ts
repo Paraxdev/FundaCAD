@@ -170,13 +170,30 @@ describe("the install screen's two lists", () => {
     // it.
     expect(describeGrants(reader).cannot).not.toContain("Add a panel to the window");
   });
+
+  it("says a geometry component that reads files can read any file, not only picked ones", () => {
+    const wasm = ok({ ...base, kind: "compute", grants: ["files.read"], geometryWasm: "geometry.wasm" });
+    expect(describeGrants(wasm).can).toContain("Read any file you can open on this computer");
+    expect(describeGrants(wasm).can).not.toContain("Read files you pick for it");
+    const windowSide = ok({ ...base, kind: "panel", grants: ["files.read"] });
+    expect(describeGrants(windowSide).can).toContain("Read files you pick for it");
+  });
 });
 
 describe("saying what a process plugin actually is", () => {
   it("does not pretend a separate program is in a cage", () => {
-    expect(sandboxNote("process")).toContain("normal program on your computer");
-    expect(sandboxNote("panel")).toContain("all it can do");
-    expect(sandboxNote("compute")).toContain("all it can do");
+    expect(sandboxNote(ok({ ...base, kind: "process" }))).toContain("normal program on your computer");
+    expect(sandboxNote(ok({ ...base, kind: "panel" }))).toContain("all it can do");
+    expect(sandboxNote(ok({ ...base, kind: "compute" }))).toContain("all it can do");
+  });
+
+  it("does not promise no access to files when its geometry can read any file", () => {
+    for (const kind of ["panel", "compute"]) {
+      const note = sandboxNote(ok({ ...base, kind, grants: ["files.read"], geometryWasm: "geometry.wasm" }));
+      expect(note).not.toContain("no access to your files");
+      expect(note).toContain("read any file you can open");
+    }
+    expect(sandboxNote(ok({ ...base, kind: "compute", geometryWasm: "geometry.wasm" }))).toContain("all it can do");
   });
 });
 
