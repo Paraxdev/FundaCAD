@@ -60,9 +60,11 @@ function rail(layerEl: HTMLElement, right: number) {
   layerEl.append(el);
 }
 
-function panel() {
+/** A panel 200 px tall and `width` wide, the Stress panel's width by default. */
+function panel(width = 340) {
   const el = document.createElement("div");
   for (const k of ["scrollHeight", "offsetHeight", "clientHeight"]) Object.defineProperty(el, k, { get: () => 200 });
+  Object.defineProperty(el, "offsetWidth", { get: () => width });
   document.body.append(el);
   return el;
 }
@@ -103,6 +105,18 @@ describe("the panel column follows the float layer", () => {
       right: `${VIEWPORT - (cardLeft() - MARGIN)}px`,
       maxWidth: `${cardLeft() - MARGIN - (RAIL + MARGIN)}px`,
     });
+  });
+
+  it("leaves a panel that fits the span without an inline max-width, so its own max-width still holds", async () => {
+    const right = { at: VIEWPORT };
+    const { el: layerEl } = layer(right);
+    rail(layerEl, 500);
+    const p = panel(300);
+    panelStack.add("params", p);
+    right.at = VIEWPORT - DOCK;
+    resized(layerEl);
+    await frame();
+    expect(p.style.maxWidth).toBe("");
   });
 
   it("stops watching the layer once no panel is open, so its resizes place nothing", async () => {

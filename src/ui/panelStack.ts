@@ -122,8 +122,11 @@ function place() {
   const box: Box = { left: area.left, right: area.right, top: area.top, bottom: area.bottom };
   const top = stackTop(box);
   const free = clearOfCards(box, { top, bottom: box.bottom }, CUBE_MARGIN, 0);
-  // Right anchored and under the float layer, so a panel wider than the span would hide under the rail.
-  for (const p of open) p.el.style.maxWidth = `${Math.floor(free.right - free.left)}px`;
+  // Right anchored and under the float layer, so a panel wider than the span would hide under the rail. Only a
+  // panel that is too wide gets the cap, so a panel's own max-width holds otherwise.
+  const room = Math.floor(free.right - free.left);
+  for (const p of open) p.el.style.maxWidth = "";
+  for (const p of open) if (p.el.offsetWidth > room) p.el.style.maxWidth = `${room}px`;
   const slots = layoutStack(
     open.map((p) => ({
       id: p.id,
