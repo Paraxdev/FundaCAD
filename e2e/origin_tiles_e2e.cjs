@@ -14,7 +14,7 @@ const path = require("path");
 
 // TILE_SIZE_PX, TILE_GAP_PX + TILE_SIZE_PX and the MIN_TILE_SCALE floor in src/viewport/originTiles.ts.
 const SIZE = 64;
-const EXTENT = 64;
+const EXTENT = 72;
 const FLOOR = 0.65 * SIZE;
 
 const TOKEN = process.env.SC_TOKEN || "";
@@ -130,7 +130,7 @@ const PLANES = ["XY", "XZ", "YZ"];
   // On screen length of the XY tile's side, and what the size rule says it should be.
   const xySide = () =>
     page.evaluate(
-      ({ size, extent, floor }) => {
+      ({ size, floor }) => {
         const v = window.viewport;
         const m = v.scene.planes.XY;
         m.updateWorldMatrix(true, false);
@@ -139,10 +139,10 @@ const PLANES = ["XY", "XZ", "YZ"];
         const b = v.projectToScreen(new V(size / 2, 0, 0).applyMatrix4(m.matrixWorld));
         const pws = v.pixelWorldSize(new V(0, 0, 0));
         const diag = v.modelDiagonal();
-        const k = diag == null ? 1 : Math.max(floor / size, Math.min(1, ((diag / pws) * 0.45) / extent));
+        const k = diag == null ? 1 : Math.max(floor / size, Math.min(1, ((diag / pws) * 0.45) / size));
         return { px: Math.hypot(b.x - a.x, b.y - a.y), want: size * k };
       },
-      { size: SIZE, extent: EXTENT, floor: FLOOR },
+      { size: SIZE, floor: FLOOR },
     );
 
   const labelAt = () =>

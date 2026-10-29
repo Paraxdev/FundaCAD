@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { LABEL_BOX_PX, OriginTiles, TILE_SIZE_PX, type ScreenFrame } from "../../src/viewport/originTiles";
+import { LABEL_BOX_PX, OriginTiles, TILE_GAP_PX, TILE_SIZE_PX, type ScreenFrame } from "../../src/viewport/originTiles";
 import {
   HIT_MIN_COARSE_PX,
   HIT_MIN_PX,
@@ -88,13 +88,14 @@ function largestSquare(
   return out;
 }
 
-const originOf = (frame: ScreenFrame): P2 => {
-  const n = new THREE.Vector3().project(frame.camera);
+const screenOf = (frame: ScreenFrame, x = 0, y = 0, z = 0): P2 => {
+  const n = new THREE.Vector3(x, y, z).project(frame.camera);
   return {
     x: (n.x * 0.5 + 0.5) * frame.rect.width + frame.rect.left,
     y: (-n.y * 0.5 + 0.5) * frame.rect.height + frame.rect.top,
   };
 };
+const originOf = (frame: ScreenFrame): P2 => screenOf(frame);
 
 function narrowWidth(t: PlaneOnScreen): number {
   let w = Infinity;
@@ -179,17 +180,19 @@ describe("hit area on screen", () => {
     expect(at(34.1, 0, 44)).toBe(null);
   });
 
-  it("picks the tile drawn in front, else the one facing the camera most, at the origin and nothing far away", () => {
-    for (const [dir, want] of [
-      [TOP, "XY"],
-      [[1, -1.5, 1.1], "XZ"],
+  it("picks the tile drawn in front where two overlap beside the origin, and nothing far away", () => {
+    for (const [dir, under, want] of [
+      [TOP, ["XY"], "XY"],
+      [[1, -1.5, 1.1], ["XY", "XZ"], "XZ"],
     ] as const) {
       const { t, frame, screen, labels } = tilesAt(dir as [number, number, number]);
-      const o = originOf(frame);
-      expect(pickPlaneOnScreen(screen, labels, o, HIT_MIN_PX, LABEL_BOX_PX)).toMatchObject({
+      const corner = screenOf(frame, TILE_GAP_PX + 4, TILE_GAP_PX + 4, 0);
+      expect(screen.filter((s) => polygonDistance(corner, s.outline) === 0).map((s) => s.plane)).toEqual(under);
+      expect(pickPlaneOnScreen(screen, labels, corner, HIT_MIN_PX, LABEL_BOX_PX)).toMatchObject({
         plane: want,
         distance: 0,
       });
+      const o = originOf(frame);
       expect(pickPlaneOnScreen(screen, labels, { x: o.x + 250, y: o.y + 250 }, HIT_MIN_PX, LABEL_BOX_PX)).toBe(null);
       t.dispose();
     }
