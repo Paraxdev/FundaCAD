@@ -1,41 +1,65 @@
-# The user manual (manual/, built with Zensical) on GitHub Pages.
+# The user manual (manual/, built with Zensical) on GitHub Pages, in two versions: beta built from main and
+# dev built from dev, at /beta/ and /dev/ of one site with a version switch (manual/tools/build_versions.py).
 # One-time repo setting: Settings, Pages, Source = GitHub Actions.
 name: manual
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
     paths:
       - "manual/**"
       - ".github/workflows/manual.yml"
+      - "tests/manual/test_versions.py"
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: true
 
 jobs:
+  # The github-pages environment only lets main deploy, so a run on any other branch starts one on main,
+  # which builds both versions. A dispatch made with the job token still starts a run.
+  hand-over:
+    if: github.ref_name != 'main'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - run: gh workflow run manual.yml --repo "$GITHUB_REPOSITORY" --ref main
+        env:
+          GH_TOKEN: ${{ github.token }}
+
   deploy:
+    if: github.ref_name == 'main'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: true
     steps:
       - uses: actions/configure-pages@v6
       - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          ref: dev
+          path: versions/dev
+          sparse-checkout: manual
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
       - run: pip install "zensical==0.0.69"
-      - run: zensical build --clean
-        working-directory: manual
+      - run: python tests/manual/test_versions.py
+      - run: >-
+          python manual/tools/build_versions.py
+          --version beta=manual --version dev=versions/dev/manual
+          --default beta --out pages
       - uses: actions/upload-pages-artifact@v5
         with:
-          path: manual/site
+          path: pages
       - uses: actions/deploy-pages@v5
         id: deployment
