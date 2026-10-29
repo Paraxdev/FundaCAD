@@ -201,6 +201,28 @@ describe("window focus", () => {
     expect(active()).toBe($("#field"));
   });
 
+  it("drops the landmark's tabindex when the landmark could not take focus", async () => {
+    $("#main").setAttribute("inert", "");
+    focusReturn(mainLandmark).restore(() => false);
+    await tick();
+    expect({ focus: active(), tabindex: $("#main").getAttribute("tabindex") }).toEqual({
+      focus: document.body,
+      tabindex: null,
+    });
+    $("#main").removeAttribute("inert");
+    focusReturn(mainLandmark).restore(() => false);
+    expect({ focus: active(), tabindex: $("#main").getAttribute("tabindex") }).toEqual({
+      focus: $("#main"),
+      tabindex: "-1",
+    });
+    $("#a").focus();
+    await tick();
+    expect({ focus: active(), tabindex: $("#main").getAttribute("tabindex") }).toEqual({
+      focus: $("#a"),
+      tabindex: null,
+    });
+  });
+
   it("leaves focus on the body when the user put it there", async () => {
     $("#field").focus();
     vi.spyOn(document, "hasFocus").mockReturnValue(true);

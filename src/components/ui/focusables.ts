@@ -100,6 +100,8 @@ export function mainLandmark(): HTMLElement | null {
       el.removeEventListener("blur", off);
     });
   el.addEventListener("blur", off);
+  // A hidden or inert landmark refuses focus and never blurs, so the tabindex also goes on the next tick.
+  off();
   return el;
 }
 
