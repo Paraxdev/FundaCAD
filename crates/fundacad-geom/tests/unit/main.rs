@@ -24,6 +24,7 @@ mod import_blobstore;
 mod import_dxf;
 mod import_mesh;
 mod import_scan;
+mod import_size;
 mod import_stage;
 mod jobs;
 mod mesh_edges;

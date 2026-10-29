@@ -510,6 +510,22 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Fixed
 
+- **A STEP file whose edges lost their vertices imports whole.** Some exporters
+  (SolidWorks 2014 seen) write an edge whose end names another entity where a
+  vertex belongs, and the whole surface model read as an empty part. The
+  vertices are rebuilt from the edges and curves next to them, with a note, and
+  a file that builds nothing at all is now an error that says so.
+
+- **One body of tens of thousands of faces is drawn.** It meshes on a coarser
+  tier sized to fit the frame cap, and at full quality when that surely fits,
+  so the 89,776 face Aventador STEP shows instead of being too detailed to
+  display. Meshing it beats as it goes, so the engine no longer reaps it as
+  stalled.
+
+- **A file past the import size cap names a way through.** A text mesh such as
+  OBJ is pointed at binary STL, a binary mesh at decimating, and a STEP past
+  1 GiB at splitting the assembly or importing a binary STL of it.
+
 - **Sketch Mirror copies polygons and slots as themselves.** A mirrored polygon
   or slot came out as a stray point.
 
