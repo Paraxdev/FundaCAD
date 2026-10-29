@@ -65,51 +65,34 @@ fn a_binary_marker_longer_than_the_buffer_is_an_error() {
     a_valid_cube_still_imports();
 }
 
-/// The binary reader looks up every subshape, location and curve through a map
-/// whose only bounds guard is the macro `No_Exception` compiles out. The text
-/// reader's index path has a test above; the binary reader, the path a stored
-/// `.funda` blob actually takes, had none. A V3 blob lists each shape's
-/// subshapes as `<orientation byte><8-byte little-endian table index>`; this
-/// raises an edge's vertex reference past the shape table, which is the shape
-/// index lookup at the heart of the earlier finding. Location and curve indices
-/// reach the same map by the same macro. A reference is nine bytes,
-/// `<orientation><4-byte little-endian table index><4-byte location index>`.
+/// The binary reader resolves a subshape reference through an index into the
+/// shape table. A reference is `<orientation byte><4-byte little-endian table
+/// index><4-byte little-endian location index>`, and the blob ends with the one
+/// that names the top-level shape. Forging that index past the table must come
+/// back as an Err with the engine still up, never a wrong shape.
+///
+/// This guards refusal and liveness, not the range check itself: on the MSVC
+/// kernel an out-of-range read is turned into a catchable failure whether the
+/// kernel keeps its bounds checks or not, so a checked and an unchecked kernel
+/// both refuse this. The marker test above is the one that crashes an unchecked
+/// kernel, by overrunning a stack buffer rather than a map.
 #[test]
 fn a_binary_subshape_index_past_the_table_is_an_error() {
     let mut blob = v3_cube_bytes();
-    let ts = blob.windows(b"TShapes".len()).position(|w| w == b"TShapes").expect("marker present");
-    let after = ts + b"TShapes ".len();
-    let n: u64 =
-        blob[after..].iter().take_while(|b| b.is_ascii_digit()).fold(0, |a, b| a * 10 + u64::from(b - b'0'));
-    let is_ref = |w: &[u8]| (w[0] == 0 || w[0] == 1) && (1..=n).contains(&u64::from(w[1])) && w[2..9].iter().all(|&b| b == 0);
-    let at = blob[ts..]
-        .windows(18)
-        .position(|w| is_ref(&w[..9]) && is_ref(&w[9..]))
-        .map(|p| ts + p + 1)
-        .expect("a subshape reference pair");
-    blob[at..at + 4].copy_from_slice(&2_000_000_000u32.to_le_bytes());
+    let index = blob.len() - 8;
+    blob[index..index + 4].copy_from_slice(&2_000_000_000u32.to_le_bytes());
     assert!(blob_to_shape(&blob).is_err());
     a_valid_cube_still_imports();
 }
 
-/// The second four bytes of a subshape reference are its location index. A
-/// location past the location table reaches the same checked map as the shape
-/// index, through the same macro, so the binary reader must return an Err and
-/// never resolve the reference through an out-of-range map slot.
+/// The four bytes after the index are the reference's location index, resolved
+/// through the location table by the same lookup. A location past that table is
+/// refused the same way, see the note on the subshape index above.
 #[test]
 fn a_binary_location_index_past_the_table_is_an_error() {
     let mut blob = v3_cube_bytes();
-    let ts = blob.windows(b"TShapes".len()).position(|w| w == b"TShapes").expect("marker present");
-    let after = ts + b"TShapes ".len();
-    let n: u64 =
-        blob[after..].iter().take_while(|b| b.is_ascii_digit()).fold(0, |a, b| a * 10 + u64::from(b - b'0'));
-    let is_ref = |w: &[u8]| (w[0] == 0 || w[0] == 1) && (1..=n).contains(&u64::from(w[1])) && w[2..9].iter().all(|&b| b == 0);
-    let at = blob[ts..]
-        .windows(18)
-        .position(|w| is_ref(&w[..9]) && is_ref(&w[9..]))
-        .map(|p| ts + p + 1)
-        .expect("a subshape reference pair");
-    blob[at + 4..at + 8].copy_from_slice(&2_000_000_000u32.to_le_bytes());
+    let location = blob.len() - 4;
+    blob[location..location + 4].copy_from_slice(&2_000_000_000u32.to_le_bytes());
     assert!(blob_to_shape(&blob).is_err());
     a_valid_cube_still_imports();
 }
@@ -124,9 +107,7 @@ fn from_bin_refuses_any_header_but_the_one_the_app_writes() {
 
     let header = b"Open CASCADE Topology V3 (c)";
     let pos = v3.windows(header.len()).position(|w| w == header).expect("header present");
-    for other in
-        [b"Open CASCADE Topology V1 (c)", b"Open CASCADE Topology V2 (c)", b"Open CASCADE Topology V4 (c)"]
-    {
+    for other in [b"Open CASCADE Topology V1 (c)", b"Open CASCADE Topology V2 (c)", b"Open CASCADE Topology V4 (c)"] {
         let mut forged = v3.clone();
         forged[pos..pos + header.len()].copy_from_slice(other);
         assert!(
