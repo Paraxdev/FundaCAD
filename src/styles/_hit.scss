@@ -9,3 +9,12 @@
     inset: min(0px, (100% - var(--hit-min)) / 2);
   }
 }
+
+// A host $gap after another control: its area grows only into that gap at the start and takes the rest at the
+// end, so the later pseudo, painted on top, never takes the control before it.
+@mixin after-gap($gap, $pseudo: before) {
+  &::#{$pseudo} {
+    inset-inline-start: clamp(-1 * $gap, (100% - var(--hit-min)) / 2, 0px);
+    inset-inline-end: min(0px, (100% - var(--hit-min)) / 2, 100% + $gap - var(--hit-min));
+  }
+}

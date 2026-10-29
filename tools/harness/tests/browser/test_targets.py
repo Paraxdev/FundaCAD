@@ -125,6 +125,15 @@ def test_no_hit_area_covers_another_controls_centre(reports, screen, mode):
     )
 
 
+@pytest.mark.parametrize("screen", SCREENS)
+@pytest.mark.parametrize("mode", ["default", "large"])
+def test_no_hit_area_takes_the_edge_of_another_controls_box(reports, screen, mode):
+    stolen = report(reports, screen)[mode]["stolen"]
+    assert not stolen, f"{screen} ({mode}) has controls whose own edge a neighbour's hit area takes:\n" + "\n".join(
+        f"{line({**t, 'by': ''})} at its {t['side']} edge, by {t['by']} \"{t['byName']}\"" for t in stolen
+    )
+
+
 @pytest.mark.parametrize("screen", LARGE_SCREENS)
 def test_larger_click_targets_reach_32_px(reports, screen):
     small = under_large(report(reports, screen)["large"])

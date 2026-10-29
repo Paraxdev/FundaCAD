@@ -63,15 +63,13 @@
   color: var(--on-accent);
 }
 
-:root[data-pointer="touch"] .btn.btn-sm,
-:root[data-targets="large"] .btn.btn-sm {
+:root[data-pointer="touch"] .btn.btn-sm {
   position: relative;
 }
-:root[data-pointer="touch"] .btn.btn-sm::before,
-:root[data-targets="large"] .btn.btn-sm::before {
+:root[data-pointer="touch"] .btn.btn-sm::before {
   content: "";
   position: absolute;
-  inset: min(-6px, (100% - var(--hit-min)) / 2) min(-2px, (100% - var(--hit-min)) / 2);
+  inset: -6px -2px;
 }
 
 // A tile is a card to click: a column of picture and text, sized by its grid, padded by --tile-pad.

@@ -33,6 +33,14 @@ describe("hit area mixin", () => {
     expect(valueOf(out, ".y::after", "inset")).toBe("min(0px, (100% - var(--hit-min)) / 2)");
     expect(missingHitAreas(out, [".x", ".y"])).toEqual([]);
   });
+
+  it("grows a host that sits a gap after another control only into that gap at its start", () => {
+    const after = withMixin(".z { @include area; @include after-gap(4px); }");
+    expect(valueOf(after, ".z::before", "inset-inline-start")).toBe("clamp(-4px, (100% - var(--hit-min)) / 2, 0px)");
+    expect(valueOf(after, ".z::before", "inset-inline-end")).toBe(
+      "min(0px, (100% - var(--hit-min)) / 2, 100% + 4px - var(--hit-min))",
+    );
+  });
 });
 
 describe("hit area guard", () => {
@@ -75,6 +83,15 @@ describe("base components", () => {
     }
   });
 
+  // The value field's own gap is all the room between the value and its unit picker.
+  it("grow a value field's unit picker past its end, never over the value before it", () => {
+    const chip = ".ui-number-field > .ui-unit-chip.is-picker::before";
+    expect(valueOf(css, chip, "inset-inline-start")).toBe("clamp(-1 * var(--s-1), (100% - var(--hit-min)) / 2, 0px)");
+    expect(valueOf(css, chip, "inset-inline-end")).toBe(
+      "min(0px, (100% - var(--hit-min)) / 2, 100% + var(--s-1) - var(--hit-min))",
+    );
+  });
+
   // A range is hit only on itself and draws no pseudo, so the input grows and its margins hand the growth back.
   it("grow the slider's own range input around a centred track", () => {
     expect(valueOf(css, ".ui-slider-input", "height")).toBe("max(20px, var(--hit-min))");
@@ -102,9 +119,12 @@ describe("Larger click targets", () => {
 
   // These stay touch only: a range and the legacy checkbox input reach --hit-min through their own rules, which
   // these would shift or shrink, and the pointer: coarse value box spacing follows the device, not the setting.
+  // A Button sm reaches 32 through the mixin alone, the finger floor would take the Snapping tile's edge.
   it("turns on every touch hit area for any pointer", () => {
     expect(untwinned).toEqual(
       [
+        ".btn.btn-sm",
+        ".btn.btn-sm::before",
         ".check input",
         ".dim-btn.icon-btn::before",
         ".dim-btn::before",
@@ -117,9 +137,7 @@ describe("Larger click targets", () => {
     expect(large(".tree-caret", "position")).toBe("relative");
     expect(large(".tree-caret.icon-btn.icon-btn-sm::before", "inset")).toBe("-13px -14px");
     expect(large(".icon-btn.icon-btn-sm::before", "inset")).toBe("-8px");
-    expect(large(".btn.btn-sm::before", "inset")).toBe(
-      "min(-6px, (100% - var(--hit-min)) / 2) min(-2px, (100% - var(--hit-min)) / 2)",
-    );
+    expect(large(".btn.btn-sm::before", "inset")).toBeUndefined();
     expect(large(".timeline-transport .tl-btn.icon-btn.icon-btn-sm::before", "inset")).toBe("-5px -1px");
     expect(large(".timeline-marker .marker-grip::after", "inset")).toBe("-12px -13px");
   });
