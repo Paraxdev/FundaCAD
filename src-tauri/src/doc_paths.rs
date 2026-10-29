@@ -70,15 +70,32 @@ impl Vouched {
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
+
+    /// The path itself, or a path inside a held folder. A dot only part could climb out, so it never counts.
+    pub fn covers(&self, raw: &str) -> bool {
+        const SEPS: [char; 2] = ['\\', '/'];
+        let key = key_of(raw);
+        self.0.iter().any(|k| {
+            *k == key
+                || key
+                    .strip_prefix(k.trim_end_matches(SEPS))
+                    .and_then(|rest| rest.strip_prefix(SEPS))
+                    .is_some_and(|rest| rest.split(SEPS).all(|part| !part.trim_end_matches([' ', '.']).is_empty()))
+        })
+    }
+}
+
+fn refusal(raw: &str) -> String {
+    format!(
+        "{raw} is a network or device path. FundaCAD opens one only after it is picked in a dialog, dropped, passed at \
+         launch or chosen from the recent list"
+    )
 }
 
 /// A string check only, so a refused path never reaches the file system (which would authenticate to a remote host).
 pub fn refuse_unvouched(raw: &str, vouched: &Vouched) -> Result<(), String> {
     if is_remote_or_device(raw) && !vouched.contains(raw) {
-        return Err(format!(
-            "{raw} is a network or device path. FundaCAD opens one only after it is picked in a dialog, dropped, \
-             passed at launch or chosen from the recent list"
-        ));
+        return Err(refusal(raw));
     }
     Ok(())
 }
@@ -159,21 +176,52 @@ fn names_a_stream(path: &Path) -> bool {
     path.components().any(|c| matches!(c, std::path::Component::Normal(n) if n.to_string_lossy().contains(':')))
 }
 
+/// Network paths handed over natively in any session. Home's recent list and folders live in the page, which may only
+/// point back at one of these, never add one.
+#[derive(Default)]
+struct Kept {
+    held: Vouched,
+    file: Option<PathBuf>,
+}
+
 /// The app state the open commands consult. The lock covers the string check only, so a slow network stat never
 /// holds up another command.
 #[derive(Default)]
-pub struct Provenance(Mutex<Vouched>);
+pub struct Provenance {
+    session: Mutex<Vouched>,
+    kept: Mutex<Kept>,
+}
+
+fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(|e| e.into_inner())
+}
 
 impl Provenance {
+    /// A dialog, a launch argument or a drop.
     pub fn vouch_all<'a>(&self, paths: impl IntoIterator<Item = &'a str>) {
-        let mut held = self.0.lock().unwrap_or_else(|e| e.into_inner());
-        for p in paths {
-            held.vouch(p);
+        let paths: Vec<&str> = paths.into_iter().collect();
+        let mut session = lock(&self.session);
+        for p in &paths {
+            session.vouch(p);
+        }
+        drop(session);
+        let remote: Vec<&str> = paths.into_iter().filter(|p| is_remote_or_device(p)).collect();
+        if remote.is_empty() {
+            return;
+        }
+        let mut kept = lock(&self.kept);
+        for p in remote {
+            kept.held.vouch(p);
+        }
+        if let Some(file) = &kept.file {
+            if let Ok(body) = serde_json::to_string(&kept.held.0) {
+                let _ = std::fs::write(file, body);
+            }
         }
     }
 
     pub fn refuse_unvouched(&self, raw: &str) -> Result<(), String> {
-        refuse_unvouched(raw, &self.0.lock().unwrap_or_else(|e| e.into_inner()))
+        refuse_unvouched(raw, &lock(&self.session))
     }
 
     pub fn check_open(&self, raw: &str) -> Result<PathBuf, String> {
@@ -189,5 +237,38 @@ impl Provenance {
     pub fn stat(&self, raw: &str) -> Result<Option<DocStat>, String> {
         self.refuse_unvouched(raw)?;
         stat_path(raw)
+    }
+
+    /// Reads the paths kept by earlier sessions from `file`, which later vouches write back to.
+    pub fn keep_in(&self, file: PathBuf) {
+        let keys: Vec<String> =
+            std::fs::read_to_string(&file).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+        let mut kept = lock(&self.kept);
+        for k in keys.iter().filter(|k| is_remote_or_device(k)) {
+            kept.held.vouch(k);
+        }
+        kept.file = Some(file);
+    }
+
+    /// A pick on Home vouches for this session only a path that was once handed over, or one inside such a folder.
+    pub fn note_recent(&self, raw: &str) -> Result<(), String> {
+        self.refuse_unknown(raw)?;
+        if is_remote_or_device(raw) {
+            lock(&self.session).vouch(raw);
+        }
+        Ok(())
+    }
+
+    /// For Home's list, stat and summary of paths the page holds.
+    pub fn refuse_unknown(&self, raw: &str) -> Result<(), String> {
+        if is_remote_or_device(raw) && !lock(&self.session).covers(raw) && !lock(&self.kept).held.covers(raw) {
+            return Err(refusal(raw));
+        }
+        Ok(())
+    }
+
+    pub fn check_home(&self, raw: &str) -> Result<PathBuf, String> {
+        self.refuse_unknown(raw)?;
+        require_file(raw)
     }
 }

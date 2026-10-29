@@ -217,3 +217,68 @@ fn a_save_to_a_windows_device_name_or_a_file_stream_is_refused() {
         assert_eq!(check_save(raw), Ok(std::path::PathBuf::from(raw)), "{raw}");
     }
 }
+
+fn refusal(raw: &str) -> Result<(), String> {
+    Err(refuse_unvouched(raw, &Vouched::default()).unwrap_err())
+}
+
+#[test]
+fn home_reopens_a_network_path_only_if_it_was_once_handed_over() {
+    let dir = temp_dir("kept");
+    let file = dir.join("vouched-paths.json");
+    let raw = "//host/share/a.funda";
+    let first = Provenance::default();
+    first.keep_in(file.clone());
+    assert_eq!(first.note_recent(raw), refusal(raw));
+    assert_eq!(first.refuse_unvouched(raw), refusal(raw));
+    first.vouch_all([raw, "C:/local/b.funda"]);
+    let kept: Vec<String> = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+    assert_eq!(kept, vec![if cfg!(windows) { raw.replace('/', "\\") } else { raw.to_string() }]);
+
+    let next = Provenance::default();
+    next.keep_in(file);
+    assert_eq!(next.refuse_unvouched(raw), refusal(raw));
+    assert_eq!(next.refuse_unknown(raw), Ok(()));
+    assert_eq!(next.note_recent(raw), Ok(()));
+    assert_eq!(next.refuse_unvouched(raw), Ok(()));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn home_reads_under_a_network_folder_only_once_it_was_handed_over() {
+    let held = Provenance::default();
+    let inside = "//host/share/parts/sub/a.funda";
+    assert_eq!(held.refuse_unknown(inside), refusal(inside));
+    held.vouch_all(["//host/share/parts"]);
+    assert_eq!(held.refuse_unknown("//host/share/parts"), Ok(()));
+    assert_eq!(held.refuse_unknown(inside), Ok(()));
+    assert_eq!(held.refuse_unvouched(inside), refusal(inside));
+    for outside in [
+        "//host/share/parts/../secret.funda",
+        "//host/share/parts/./../x.funda",
+        "//host/share/parts/.. /x.funda",
+        "//host/share/parts//a.funda",
+        "//host/share/partsx/a.funda",
+        "//host/share/parts\u{15c}a.funda",
+        "//host/share/parts\u{12f}a.funda",
+        "//other/share/parts/a.funda",
+    ] {
+        assert_eq!(held.refuse_unknown(outside), refusal(outside), "{outside}");
+    }
+    assert_eq!(held.refuse_unknown("C:/local/a.funda"), Ok(()));
+    assert_eq!(held.note_recent(inside), Ok(()));
+    assert_eq!(held.refuse_unvouched(inside), Ok(()));
+}
+
+#[test]
+fn home_reads_a_summary_only_from_a_file_it_may_reach() {
+    let dir = temp_dir("home_file");
+    let held = Provenance::default();
+    let raw = dir.to_string_lossy().into_owned();
+    assert_eq!(held.check_home(&raw), Err(format!("{raw} is not a file")));
+    assert_eq!(held.check_home("//host/share/a.funda").map(|_| ()), refusal("//host/share/a.funda"));
+    let file = dir.join("a.funda");
+    std::fs::write(&file, "{}").unwrap();
+    assert_eq!(held.check_home(file.to_str().unwrap()), Ok(file));
+    let _ = std::fs::remove_dir_all(&dir);
+}

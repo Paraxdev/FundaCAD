@@ -256,6 +256,6 @@ pub async fn container_stat(
 
 /// The user picked `path` on Home's recent list or a Home folder, so it may be opened this session.
 #[tauri::command]
-pub fn paths_note_recent(held: tauri::State<'_, crate::doc_paths::Provenance>, path: String) {
-    held.vouch_all([path.as_str()]);
+pub fn paths_note_recent(held: tauri::State<'_, crate::doc_paths::Provenance>, path: String) -> Result<(), String> {
+    held.note_recent(&path)
 }

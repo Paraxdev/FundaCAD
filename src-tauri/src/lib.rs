@@ -528,6 +528,9 @@ pub fn run() {
                     println!("[settings] a settings file did not read and was kept as {}", kept.display());
                 }
             }
+            if let Ok(dir) = app.path().app_data_dir() {
+                app.state::<doc_paths::Provenance>().keep_in(dir.join("vouched-paths.json"));
+            }
             launch::queue_first_launch(app);
             vouch_dialog_paths(app.handle());
             app.manage(engine::Engine::start(app.handle()));
