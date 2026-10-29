@@ -716,10 +716,10 @@ const nodes = useDocValue((doc): TreeNode[] => {
         (e) => selectFolder(ids, e),
       ),
       selected: ids.length > 0 && ids.every((id) => selectedIds.has(id)),
-      // The head's eye stands for every body under it, see setVisibility.
+      // The head's eye stands for every body under it, see setVisibility. Its Visibility menu is the eye's Alt click
+      // for keys.
       ...eye({ category: "bodies", key: `g:${g.key}`, ids }, anyVisible),
-      // The rest is an element's. An assembly node is a fact about a file, so it gets none of it and TreeFolder draws no
-      // menu.
+      // The rest is an element's. An assembly node is a fact about a file, so it gets none of it.
       ...(element
         ? {
             id: element,
@@ -727,7 +727,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
             remove: () => store.removeElement(element),
             extraMenu: [
               { label: "New element inside", onClick: () => fileIntoNewElement([], element) },
-              ...(ids.length ? [moveBodiesMenu(ids, element)] : []),
+              ...(ids.length ? [moveBodiesMenu(ids, element), visibilityMenu("bodies", ids, "bodies")] : []),
               moveElementMenu(element),
               { separator: true, label: "" },
             ],
@@ -735,7 +735,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
             acceptDrop: () => canDropInto(element),
             dropHere: () => dropInto(element),
           }
-        : { extraMenu: assemblyMenu(g.key) }),
+        : { extraMenu: [...assemblyMenu(g.key), ...(ids.length ? [visibilityMenu("bodies", ids, "bodies")] : [])] }),
     });
     if (collapsed) return;
     for (const c of g.children) groupNode(c, depth + 1);

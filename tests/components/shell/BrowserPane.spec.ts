@@ -1414,6 +1414,32 @@ describe("Items tree by keys", () => {
     w.unmount();
   });
 
+  it("offers Show only these on an element head, the eye's Alt click by keys", async () => {
+    const fake = makeEngine({ parameters: {}, features: [] }, [
+      { id: "b1", name: "Body1" },
+      { id: "b2", name: "Body2" },
+      { id: "b3", name: "Body3" },
+    ]);
+    const w = await open(fake);
+    const rig = fake.store.addElement("Rig");
+    fake.store.setBodiesElement(["b1", "b2"], rig);
+    await nextTick();
+    vi.mocked(contextMenu).mockClear();
+    focusOn(folderNamed(w, "Rig")!);
+    press("F10", { shiftKey: true });
+    const items = vi.mocked(contextMenu).mock.calls.at(-1)![2] as CtxItem[];
+    const visibility = items.find((i) => i.label === "Visibility")!;
+    visibility.children!.find((c) => c.label === "Show only these 2")!.onClick!();
+    expect(fake.bodyWrites.at(-1)).toEqual(
+      new Map([
+        ["b1", true],
+        ["b2", true],
+        ["b3", false],
+      ]),
+    );
+    w.unmount();
+  });
+
   it("rests the Tab stop on the selected row and says a suppressed row is suppressed", async () => {
     const fake = makeEngine({ parameters: {}, features: [sketch("s1"), sketch("s2")] }, []);
     fake.suppressed.add("s2");
