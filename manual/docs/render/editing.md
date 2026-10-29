@@ -25,7 +25,7 @@ Advanced opens Sheen and Anisotropy, and Scatter (mm) on glass.
 The warning triangle beside Emission marks a heavy effect. Every glowing body adds lights and shadows, which can slow the view on a large model, so a thin bar under the slider shows the lights filling in.
 
 - Lights other parts appears once Emission is above zero. Untick it to glow without lighting the parts around it.
-- The glow spills light only with Bloom on, under Environment.
+- The glow spills light only while Bloom Amount, on the Environment tab, is above zero.
 
 ## Glass
 

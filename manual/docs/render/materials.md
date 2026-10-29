@@ -12,7 +12,7 @@ Pick Render on the Model and Render switch in the title bar, or Materials under 
 
 1. Select the bodies or faces in the model.
 2. Click a tile in the Library. The panel below previews it, the model does not change yet.
-3. Double-click the tile, or press Apply, to use it.
+3. Double-click the tile, or press the Apply button, to use it. It names what it dresses, such as Apply to 1 body.
 
 You can also drag a tile straight onto the model. Dropping on a face dresses only that face, hold Shift while you drop to dress the whole body.
 
@@ -24,5 +24,5 @@ Clear takes the material off the selection. The tile the selection wears has an 
 - Search materials filters the tiles by name.
 - New adds a copy of the selected material for you to change.
 - Ctrl or Shift click picks several tiles, then Remove from the model, Delete or Deselect.
-- Right-click a tile to Apply, Duplicate, Remove from the model or Delete it, Del deletes too. Whatever wore a deleted material goes back to the default grey.
+- Right-click a tile to apply it, Duplicate, Remove from the model or Delete it, Del deletes too. Whatever wore a deleted material goes back to the default grey.
 - Import… and Export… at the bottom share a material library file between documents.
