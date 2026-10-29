@@ -141,7 +141,7 @@ const max = (f: Field) => EXPERIMENTAL_RANGE[f.key][1] / f.scale;
 </script>
 
 <template>
-  <h3 class="prefs-pane-title">Experimental</h3>
+  <h3 class="prefs-pane-title" tabindex="-1">Experimental</h3>
   <p class="pref-warning" role="note" data-experimental-warning>
     These settings can make FundaCAD unstable or crash it. Use them at your own risk.
   </p>

@@ -2,7 +2,7 @@
 // Mirrors the setting modules (ui/theme, icons, units, renderPrefs) with no store of its own, every change applies live.
 // The mirrors re-read on each module's subscription, the modules stay Vue-free so the headless suite can import them.
 
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { useDialogStore } from "../../stores/dialogs";
 import { pluginFocus } from "../../plugins/settingsFocus";
 import Button from "../ui/Button.vue";
@@ -10,6 +10,7 @@ import Checkbox from "../ui/Checkbox.vue";
 import Dialog from "../ui/Dialog.vue";
 import Segmented from "../ui/Segmented.vue";
 import Select from "../ui/Select.vue";
+import Tabs from "../ui/Tabs.vue";
 import McpSection from "./McpSection.vue";
 import DenoiserRow from "../shell/DenoiserRow.vue";
 import PluginsSection from "./PluginsSection.vue";
@@ -135,16 +136,32 @@ onUnmounted(() => {
 
 // A plugin's settings are under its own row in Plugins, not a category here.
 const categories = computed(() => [
-  { id: "appearance", label: "Appearance" },
-  { id: "viewport", label: "Viewport" },
-  { id: "navigation", label: "Navigation" },
-  { id: "access", label: "Accessibility" },
-  { id: "updates", label: "Updates" },
-  { id: "mcp", label: "AI assistants" },
-  { id: "plugins", label: "Plugins" },
-  { id: "experimental", label: "Experimental" },
+  { value: "appearance", label: "Appearance" },
+  { value: "viewport", label: "Viewport" },
+  { value: "navigation", label: "Navigation" },
+  { value: "access", label: "Accessibility" },
+  { value: "updates", label: "Updates" },
+  { value: "mcp", label: "AI assistants" },
+  { value: "plugins", label: "Plugins" },
+  { value: "experimental", label: "Experimental" },
 ]);
 const category = ref(pluginFocus.value ? "plugins" : "appearance");
+const panes = ref<HTMLElement | null>(null);
+const pane = (id: string) => ({
+  id: `prefs-pane-${id}`,
+  role: "tabpanel",
+  "aria-label": categories.value.find((c) => c.value === id)?.label,
+  "data-pane": id,
+  // AI assistants and Plugins have no title, so the pane itself takes the focus.
+  tabindex: id === "mcp" || id === "plugins" ? -1 : undefined,
+});
+// A click or Enter on a category focuses its title so a screen reader says where it went, the arrows stay on the tabs.
+async function revealPane(e: MouseEvent) {
+  if (!(e.target as Element).closest("[role=tab]")) return;
+  await nextTick();
+  const el = panes.value?.querySelector<HTMLElement>(`[data-pane="${category.value}"]`);
+  (el?.querySelector<HTMLElement>(".prefs-pane-title[tabindex]") ?? el)?.focus();
+}
 watch(pluginFocus, (id) => {
   if (id) category.value = "plugins";
 });
@@ -338,28 +355,28 @@ function onClassicCamera(on: boolean) {
     title="Preferences"
     panel-class="prefs-panel"
     :body="false"
-    initial-focus=".prefs-nav-btn.active"
+    initial-focus=".prefs-cats [role=tab][aria-selected=true]"
     @close="close()"
   >
     <div class="modal-body prefs">
-      <nav class="prefs-nav" aria-label="Preference categories">
-        <button
-          v-for="c in categories"
-          :key="c.id"
-          type="button"
-          class="prefs-nav-btn"
-          :class="{ active: category === c.id }"
-          :aria-current="category === c.id ? 'page' : undefined"
-          :data-category="c.id"
-          @click="category = c.id"
-          >{{ c.label }}</button
-        >
-      </nav>
+      <Tabs
+        v-model="category"
+        :tabs="categories"
+        variant="bar"
+        orientation="vertical"
+        label="Preference categories"
+        class="prefs-nav prefs-cats"
+        @click="revealPane"
+      >
+        <template #tab="{ tab, selected }">
+          <span class="prefs-nav-btn" :class="{ active: selected }" :data-category="tab.value">{{ tab.label }}</span>
+        </template>
+      </Tabs>
 
-      <div class="prefs-panes">
+      <div ref="panes" class="prefs-panes">
         <!-- v-show, so a control keeps its id whichever category is open. -->
-        <section v-show="category === 'appearance'" class="prefs-pane">
-          <h3 class="prefs-pane-title">Appearance</h3>
+        <section v-show="category === 'appearance'" v-bind="pane('appearance')" class="prefs-pane">
+          <h3 class="prefs-pane-title" tabindex="-1">Appearance</h3>
           <div class="prefs-grid">
             <div class="pref-card wide">
               <div class="pref-head">
@@ -434,8 +451,8 @@ function onClassicCamera(on: boolean) {
           </div>
         </section>
 
-        <section v-show="category === 'viewport'" class="prefs-pane">
-          <h3 class="prefs-pane-title">Viewport</h3>
+        <section v-show="category === 'viewport'" v-bind="pane('viewport')" class="prefs-pane">
+          <h3 class="prefs-pane-title" tabindex="-1">Viewport</h3>
           <div class="prefs-grid">
             <div class="pref-card">
               <div class="pref-head">
@@ -562,8 +579,8 @@ function onClassicCamera(on: boolean) {
           </div>
         </section>
 
-        <section v-show="category === 'navigation'" class="prefs-pane">
-          <h3 class="prefs-pane-title">Navigation</h3>
+        <section v-show="category === 'navigation'" v-bind="pane('navigation')" class="prefs-pane">
+          <h3 class="prefs-pane-title" tabindex="-1">Navigation</h3>
           <div class="prefs-grid">
             <div class="pref-card">
               <div class="pref-head">
@@ -664,8 +681,8 @@ function onClassicCamera(on: boolean) {
           </div>
         </section>
 
-        <section v-show="category === 'access'" class="prefs-pane">
-          <h3 class="prefs-pane-title">Accessibility</h3>
+        <section v-show="category === 'access'" v-bind="pane('access')" class="prefs-pane">
+          <h3 class="prefs-pane-title" tabindex="-1">Accessibility</h3>
           <div class="prefs-grid">
             <div class="pref-card">
               <Checkbox
@@ -703,19 +720,24 @@ function onClassicCamera(on: boolean) {
           </div>
         </section>
 
-        <section v-show="category === 'updates'" class="prefs-pane">
+        <section v-show="category === 'updates'" v-bind="pane('updates')" class="prefs-pane">
           <UpdatesSection />
         </section>
 
-        <section v-show="category === 'mcp'" class="prefs-pane prefs-pane-flow">
+        <section v-show="category === 'mcp'" v-bind="pane('mcp')" class="prefs-pane prefs-pane-flow">
           <McpSection />
         </section>
 
-        <section v-show="category === 'plugins'" class="prefs-pane prefs-pane-flow">
+        <section v-show="category === 'plugins'" v-bind="pane('plugins')" class="prefs-pane prefs-pane-flow">
           <PluginsSection />
         </section>
 
-        <section v-show="category === 'experimental'" class="prefs-pane" data-prefs-experimental>
+        <section
+          v-show="category === 'experimental'"
+          v-bind="pane('experimental')"
+          class="prefs-pane"
+          data-prefs-experimental
+        >
           <ExperimentalSection />
         </section>
       </div>

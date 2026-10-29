@@ -46,6 +46,28 @@
   color: var(--accent-hot);
   font-weight: 600;
 }
+// Preferences draws its categories with the base Tabs, the row look stays on the inner .prefs-nav-btn it shares
+// with Shortcuts, so the tab itself is bare.
+.prefs-cats.ui-tabs .ui-tab,
+.prefs-cats.ui-tabs .ui-tab:hover,
+.prefs-cats.ui-tabs .ui-tab:active {
+  height: auto;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  background: none;
+}
+.prefs-cats.ui-tabs .ui-tab.is-selected::after {
+  content: none;
+}
+.prefs-cats .prefs-nav-btn {
+  flex: 1;
+}
+// A title or pane takes focus only to be read out after a category switch, it is not a control.
+.prefs-pane-title:focus-visible,
+.prefs-pane:focus-visible {
+  outline: none;
+}
 
 .prefs-panes {
   min-width: 0;
@@ -285,7 +307,8 @@ label.pref-head {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr);
   }
-  .prefs-nav {
+  .prefs-nav,
+  .prefs-cats.ui-tabs-vertical {
     flex-direction: row;
     overflow-x: auto;
     border-right: 0;

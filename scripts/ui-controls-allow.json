@@ -72,7 +72,6 @@
   { "path": "plugins/FundaCAD.Texture/TextureToolPanel.vue", "kind": "select", "count": 5, "reason": "before the base set, migrates in lane S (shipped plugins, heavy)" },
   { "path": "plugins/FundaCAD.Texture/TextureToolPanel.vue", "kind": "style:inline", "count": 13, "reason": "before the base set, migrates in lane S (shipped plugins, heavy)" },
   { "path": "src/components/overlays/PluginSettingsForm.vue", "kind": "input[type=color]", "count": 1, "reason": "native colour picker, no themed equivalent yet, lane N" },
-  { "path": "src/components/overlays/PreferencesDialog.vue", "kind": "button", "count": 1, "reason": "the category nav, Tabs puts no class or data-category on a tab and the e2e scripts click .prefs-nav-btn[data-category]" },
   { "path": "src/components/overlays/PreferencesDialog.vue", "kind": "input[type=file]", "count": 2, "reason": "hidden file picker, never rendered, moves to dom.ts pickFile once lane L adds it" },
   { "path": "src/components/overlays/PreferencesDialog.vue", "kind": "input[type=range]", "count": 4, "reason": "Slider puts an id on its wrapper, not the range, and e2e render_look fills #prefs-bloom" },
   { "path": "src/components/overlays/RadialMenuHost.vue", "kind": "role=menuitem", "count": 1, "reason": "the radial menu keeps its own behaviour, PROPOSAL section 2" },

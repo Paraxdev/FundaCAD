@@ -52,7 +52,7 @@ const stopName = (el: Element | null): string => {
   const h = el as HTMLElement;
   const group = h.closest("[role=radiogroup]");
   if (group) return `${group.id}:${label(h)}`;
-  return h.dataset.category ?? (h.closest("label[id]")?.id || h.id || label(h) || h.getAttribute("aria-label") || "");
+  return h.dataset.tab ?? (h.closest("label[id]")?.id || h.id || label(h) || h.getAttribute("aria-label") || "");
 };
 
 async function category(id: string) {
@@ -113,7 +113,7 @@ describe("Preferences choices", () => {
   it("steps Tab and Shift+Tab once per group through the dialog, wrapping at both ends", async () => {
     await open();
     await category("navigation");
-    const start = $(".prefs-nav-btn.active");
+    const start = $(".prefs-cats [role=tab][aria-selected=true]");
     start.focus();
     const walk = async (shift: boolean) => {
       const seen: string[] = [];
@@ -125,11 +125,6 @@ describe("Preferences choices", () => {
     };
     const forward = [
       "navigation",
-      "access",
-      "updates",
-      "mcp",
-      "plugins",
-      "experimental",
       "prefs-smoothing",
       "prefs-orbit-pivot:Under cursor",
       "prefs-inertia",
@@ -138,8 +133,6 @@ describe("Preferences choices", () => {
       "prefs-classic-camera",
       "Done",
       "Close",
-      "appearance",
-      "viewport",
     ];
     expect(await walk(false)).toEqual(forward);
     expect(await walk(true)).toEqual([forward[0], ...forward.slice(1).reverse()]);
@@ -210,6 +203,62 @@ describe("Preferences choices", () => {
   });
 });
 
+describe("Preferences categories", () => {
+  const tabs = () => [...document.querySelectorAll<HTMLElement>(".prefs-cats [role=tab]")];
+  const shown = () =>
+    [...document.querySelectorAll<HTMLElement>("[role=tabpanel]")].filter((p) => p.style.display !== "none");
+
+  it("draws the categories as one vertical tab list over labelled panes", async () => {
+    await open();
+    const list = $(".prefs-cats");
+    expect([list.getAttribute("role"), list.getAttribute("aria-orientation"), list.getAttribute("aria-label")]).toEqual(
+      ["tablist", "vertical", "Preference categories"],
+    );
+    expect(tabs().map(label)).toEqual([
+      "Appearance",
+      "Viewport",
+      "Navigation",
+      "Accessibility",
+      "Updates",
+      "AI assistants",
+      "Plugins",
+      "Experimental",
+    ]);
+    expect(tabs().map((t) => [t.getAttribute("aria-selected"), t.tabIndex])).toEqual(
+      tabs().map((_, i) => (i === 0 ? ["true", 0] : ["false", -1])),
+    );
+    expect(document.querySelectorAll("[role=tabpanel]").length).toBe(8);
+    expect(shown().map((p) => p.getAttribute("aria-label"))).toEqual(["Appearance"]);
+  });
+
+  it("moves through the categories with the arrows and keeps focus on the tabs", async () => {
+    await open();
+    tabs()[0]!.focus();
+    await press("ArrowDown");
+    expect([document.activeElement, shown().map((p) => p.dataset.pane)]).toEqual([tabs()[1], ["viewport"]]);
+    await press("End");
+    expect([document.activeElement, shown().map((p) => p.dataset.pane)]).toEqual([tabs()[7], ["experimental"]]);
+  });
+
+  it("lands on the pane title after a click on a category, or on the pane when it has no title", async () => {
+    await open();
+    await category("access");
+    expect([document.activeElement?.tagName, label(document.activeElement)]).toEqual(["H3", "Accessibility"]);
+    await category("updates");
+    expect([document.activeElement?.tagName, label(document.activeElement)]).toEqual(["H3", "Updates"]);
+    await category("mcp");
+    expect(document.activeElement).toBe($("#prefs-pane-mcp"));
+  });
+
+  it("leaves focus alone on a click in the list that misses every category", async () => {
+    await open();
+    const start = document.activeElement;
+    $(".prefs-cats").click();
+    await flushPromises();
+    expect(document.activeElement).toBe(start);
+  });
+});
+
 describe("Preferences settings and frame", () => {
   it("toggles a setting once with Space on its checkbox", async () => {
     await open();
@@ -225,7 +274,7 @@ describe("Preferences settings and frame", () => {
     const dialogs = useDialogStore();
     dialogs.preferences = true;
     await open();
-    expect((document.activeElement as HTMLElement).dataset.category).toBe("appearance");
+    expect((document.activeElement as HTMLElement).dataset.tab).toBe("appearance");
     [...document.querySelectorAll<HTMLElement>(".modal-foot button")].find((b) => label(b) === "Done")!.click();
     expect(dialogs.preferences).toBe(false);
   });
