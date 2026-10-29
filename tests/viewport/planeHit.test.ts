@@ -198,6 +198,31 @@ describe("hit area on screen", () => {
     }
   });
 
+  it("keeps the origin itself off every drawn tile from every side, so a mouse there picks nothing at the top or home", () => {
+    const views = [TOP, OBLIQUE, ...AROUND];
+    const under = views.map((dir) => {
+      const { t, frame, screen } = tilesAt(dir);
+      const o = originOf(frame);
+      t.dispose();
+      return screen.filter((s) => polygonDistance(o, s.outline) === 0).map((s) => s.plane);
+    });
+    expect(under).toEqual(views.map(() => []));
+    const picks = [TOP, HOME].map((dir) => {
+      const { t, frame, screen, labels } = tilesAt(dir);
+      const o = originOf(frame);
+      t.dispose();
+      return [HIT_MIN_PX, HIT_MIN_COARSE_PX].map((min) => {
+        const hit = pickPlaneOnScreen(screen, labels, o, min, LABEL_BOX_PX);
+        return hit && `${hit.plane} ${hit.part}`;
+      });
+    });
+    // A coarse pointer's wider pad round the foreshortened XZ tile still reaches the origin at home.
+    expect(picks).toEqual([
+      [null, null],
+      [null, "XZ pad"],
+    ]);
+  });
+
   it("matches the drawn tile under the pointer through OriginTiles.pick, and nothing once hidden", () => {
     const { t, frame, screen } = tilesAt([1, -1.5, 1.1]);
     // Toward each tile's far corner, where no other tile is drawn over it from this side.
