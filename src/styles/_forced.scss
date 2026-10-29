@@ -103,11 +103,9 @@ $selected: (
   }
   .ui-slider-input::-webkit-slider-thumb {
     background-color: ButtonText !important;
-    box-shadow: 0 0 0 2px Canvas;
   }
   .ui-slider-input::-moz-range-thumb {
     background-color: ButtonText !important;
-    box-shadow: 0 0 0 2px Canvas;
   }
 
   // Panel glyphs stroke theme tokens, so they follow the text colour like the icons.
