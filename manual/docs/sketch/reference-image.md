@@ -1,37 +1,48 @@
 # Reference images
 
-Put a photo or a drawing on a plane and sketch over it. Photograph a broken part on a cutting mat, insert the photo, scale it to a length you know, and redraw the part on top.
+Put a photo or a drawing on a plane and sketch over it. For example, photograph a broken part on a cutting mat, scale the photo to a length you know and redraw the part on top.
 
-Choose Reference Image under Insert, click a base plane, a datum plane or a flat face, and pick a PNG or a JPEG. The image lands 100 mm wide on that plane, half transparent, and gets a row under Reference images in the Items list.
+## Insert an image
+
+1. Choose Reference Image under Insert on the rail.
+2. Click a base plane, a datum plane or a flat face.
+3. Pick a PNG or a JPEG, up to 32 MB.
+
+The image lands 100 mm wide and half transparent. It gets a row under Reference images in the Items card.
 
 <!-- shot: reference-image | a photo of a bracket under a sketch on XY, calibrated to 100 mm -->
 
 ## Scale it to a real size
 
-Click the image's row to open its panel and press Calibrate. Click two points on the image that you know the distance between, for example two marks 100 mm apart on the mat, then type that distance and press Enter. The image scales about the first point, so that point stays where it was. A unit works too: `4 in`.
+1. Click the image's row to open its panel, and press Calibrate.
+2. Click two points on the image whose distance you know, for example two marks 100 mm apart on the mat.
+3. Type that distance and press Enter. A unit works too, such as `4 in`.
 
-To set a size without two points, type a width in the panel. The height follows from the picture's own proportions.
+The image scales about the first point, so that point stays put. To set a size without two points, type a Width in the panel instead.
 
-## Move, turn and fade it
+## The panel
 
-| In the panel | What it does |
+| Field | What it does |
 | --- | --- |
-| Width | the size, about the centre |
-| Angle | turns the image about the plane's normal, in degrees |
+| Width | the size, about the centre; the Height follows the picture |
+| Angle | turns the image on its plane, in degrees |
 | Opacity | how much of the model and the grid shows through |
-| Flip X, Flip Y | mirrors a photo taken from the other side |
+| Flip X, Y | mirrors a photo taken from the other side |
 | Lock | stops moving and calibrating by accident |
 
-Shift drag the selected image to move it along its plane. Each drag, each calibration and each change in the panel is one step of Undo.
+Shift drag the selected image to move it along its plane. Each drag, calibration and panel change is one step of Undo.
 
-A sketch on the same plane draws over the image. The row in Items has an eye to hide the image, a lock and a cross to delete it. The Display popover hides every reference image at once.
+## Show, hide and delete
 
-## Saving, pictures and exports
+- The row in Items has an eye to hide the image, a lock and a cross to delete it. Double-click its name to rename it.
+- The Display popover hides every reference image at once.
+- A sketch on the same plane draws over the image.
 
-The image is saved inside the .funda file, so the file opens with the image on another computer. A version of FundaCAD that does not know reference images still keeps them when it saves the file.
+## Files, pictures and exports
 
-A picture from Render leaves reference images out. Switch on Reference images under Edge lines to have them in it. A path traced picture never has them. Exports to STL, STEP, 3MF and the rest never contain them, an image builds nothing.
+- The image is saved inside the .funda file, so it opens with the image on another computer.
+- A row that says image not found means the picture is not in the file. Insert it again.
+- Save picture in the Render Camera tab leaves the images out. Tick Reference images there to keep them. Path traced never shows them.
+- STL, STEP, 3MF and every other export leave them out, an image builds nothing.
 
-## More about
-
-An image on a datum plane follows the datum when the datum moves. An image on a body face keeps the plane the face had when you picked it, so if the face moves later, insert the image again or move it by hand. A row that says image not found means the file was saved without the picture, which happens when a document is downloaded from the browser version.
+An image on a datum plane follows the datum when it moves. An image on a face keeps the plane the face had when you picked it.

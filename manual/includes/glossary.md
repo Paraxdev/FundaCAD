@@ -41,6 +41,8 @@
 *[loose end]: An end of a line or arc that does not join the rest of the outline.
 *[loose ends]: An end of a line or arc that does not join the rest of the outline.
 *[Loose ends]: An end of a line or arc that does not join the rest of the outline.
+*[Projected curves]: Curves copied from the model into a sketch, they follow the model when it changes.
+*[projected curves]: Curves copied from the model into a sketch, they follow the model when it changes.
 *[Sketch]: A flat drawing on a plane or a face.
 *[sketch]: A flat drawing on a plane or a face.
 *[Chamfer]: A flat bevel cut along an edge.
