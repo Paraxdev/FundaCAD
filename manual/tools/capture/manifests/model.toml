@@ -184,7 +184,22 @@ file = "manual/docs/img/hole-dialog.png"
 size = [960, 700]
 theme = "fundacad"
 crop = "region"
-stub = true
+at = [240, 85]
+park = [1300, 860]
+pause = 1600
+steps = [
+  { open = "fixture:sketch-block.json" },
+  { panel = "items", open = false },
+  { panel = "history", open = false },
+  { view = "fit" },
+  { evaluate = "() => document.querySelector('canvas').dispatchEvent(new WheelEvent('wheel', { deltaY: 100, clientX: 760, clientY: 450, bubbles: true, cancelable: true }))" },
+  { wait = 600 },
+  { tool = "Hole" },
+  { pick_face = "top" },
+  { type = ["X", "-12"] },
+  { type = ["Y", "8"] },
+  { wait = 800 },
+]
 show = "The Hole box with size M3 and a through depth over a block."
 alt = "The Hole box with size M3 and a through depth over a block"
 uses = ["manual/docs/model/hole.md:5"]
@@ -249,7 +264,21 @@ file = "manual/docs/img/move-gizmo.png"
 size = [900, 580]
 theme = "fundacad"
 crop = "region"
-stub = true
+at = [400, 150]
+park = [1300, 860]
+pause = 1600
+steps = [
+  { open = "fixture:sketch-block.json" },
+  { panel = "items", open = false },
+  { panel = "history", open = false },
+  { view = "fit" },
+  { evaluate = "() => document.querySelector('canvas').dispatchEvent(new WheelEvent('wheel', { deltaY: 100, clientX: 760, clientY: 450, bubbles: true, cancelable: true }))" },
+  { wait = 600 },
+  { evaluate = "() => document.querySelector('canvas').dispatchEvent(new WheelEvent('wheel', { deltaY: 100, clientX: 760, clientY: 450, bubbles: true, cancelable: true }))" },
+  { wait = 600 },
+  { tool = "Move" },
+  { wait = 800 },
+]
 show = "The move gizmo with arrows, squares and rings in the axis colours, and its value bar."
 alt = "The move gizmo with arrows, squares and rings, and its value bar"
 uses = ["manual/docs/model/move.md:5"]
@@ -396,7 +425,42 @@ file = "manual/docs/img/mirror-half.png"
 size = [660, 620]
 theme = "fundacad"
 crop = "region"
-stub = true
+around = "world:0,-15,18"
+offset = [0, 20]
+park = [1300, 860]
+pause = 1600
+steps = [
+  { open = "fixture:sketch-block.json" },
+  { open = "new" },
+  { panel = "items", open = false },
+  { panel = "history", open = false },
+  { tool = "Sketch" },
+  { pick_plane = "XZ" },
+  { tool = "Line" },
+  { click_at = true, sketch = [0, 0] },
+  { click_at = true, sketch = [40, 0] },
+  { click_at = true, sketch = [40, 36] },
+  { click_at = true, sketch = [30, 36] },
+  { click_at = true, sketch = [30, 10] },
+  { click_at = true, sketch = [0, 10] },
+  { click_at = true, sketch = [0, 0] },
+  { press = "Escape" },
+  { press = "Escape" },
+  { press = "Escape" },
+  { tool = "Extrude" },
+  { click_at = true, world = [15, 0, 5] },
+  { type = ["D", "30"] },
+  { press = "Enter" },
+  { wait = 800 },
+  { evaluate = "() => document.querySelector('canvas').dispatchEvent(new WheelEvent('wheel', { deltaY: 100, clientX: 720, clientY: 450, bubbles: true, cancelable: true }))" },
+  { wait = 600 },
+  { evaluate = "() => document.querySelector('canvas').dispatchEvent(new WheelEvent('wheel', { deltaY: 100, clientX: 720, clientY: 450, bubbles: true, cancelable: true }))" },
+  { wait = 600 },
+  { tool = "Mirror" },
+  { wait = 400 },
+  { evaluate = "() => [...document.querySelectorAll('.mirror-chips button')].find((b) => b.textContent.trim() === 'YZ').click()" },
+  { wait = 800 },
+]
 show = "One half of a bracket beside its mirrored copy."
 alt = "One half of a bracket beside its mirrored copy"
 uses = ["manual/docs/model/scale-mirror.md:19"]
