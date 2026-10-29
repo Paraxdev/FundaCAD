@@ -128,15 +128,16 @@ Lines (layout dividers only, see [Depth without lines](#depth-without-lines)):
 | Token | Noir | Use |
 |---|---|---|
 | `--line` | `#322c42` | Hairline dividers between the parts of a dialog, menu or dock (`.modal-head`, `.modal-foot`, `.menu-sep`, `.ctx-sep`, `.rd-tabs`, `.prefs-nav`) and the title bar edge |
-| `--line-strong` | `#5c5470` | The scrollbar thumb. Decorative only (2.45:1 on `--panel`) |
+| `--line-strong` | `#847c9a` | The scrollbar thumb and any line that marks a boundary: 3:1 on `--panel` and `--raised` in every shipped theme (`tests/ui/themeContrast.test.ts`) |
 
 Text:
 
 | Token | Noir | Use |
 |---|---|---|
 | `--text` | `#f6f0e4` | Primary text, titles, values |
-| `--text-dim` | `#aaa1b5` | Secondary labels, idle icons, a dimmed tree row |
-| `--text-mute` | `#7d7590` | Hints, caps labels, idle close glyphs, metadata, a hidden tree row. Fails AA on panels in Noir, never for text a user needs |
+| `--text-dim` | `#c4bcd0` | Secondary labels, idle icons, a dimmed tree row |
+| `--text-mute` | `#a9a2ba` | Hints, caps labels, idle close glyphs, metadata, a hidden tree row. 4.5:1 on `--panel`, `--panel-2`, `--raised`, `--raised-2` and the rail pill glass in every shipped theme, like `--text` and `--text-dim` |
+| `--text-faint` | `--text-mute` 70% into `--panel` | Decoration only (a rule, an idle glyph stroke), never text: it sits under 4.5:1 by design |
 
 Accent (also what selected edges, dimensions and manipulator handles are drawn in):
 

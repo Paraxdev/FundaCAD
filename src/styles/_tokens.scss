@@ -16,11 +16,13 @@
 
   /* Kept off pure black: --line-strong also draws the scrollbar thumb. */
   --line: #322c42;
-  --line-strong: #5c5470;
+  --line-strong: #847c9a;
 
   --text: #f6f0e4;
-  --text-dim: #aaa1b5;
-  --text-mute: #7d7590;
+  --text-dim: #c4bcd0;
+  --text-mute: #a9a2ba;
+  /* Decoration only (rules, idle glyph strokes), never text: it sits under 4.5:1 by design. */
+  --text-faint: color-mix(in srgb, var(--text-mute) 70%, var(--panel));
 
   /* Also draws selected edges, dimensions and manipulator handles. */
   --accent: #9a9ff0;

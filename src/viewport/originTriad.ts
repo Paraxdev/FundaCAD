@@ -155,7 +155,7 @@ export class OriginTriad {
   }
 
   applyTheme() {
-    const c = themeColor("--text-mute", 0x7d7590);
+    const c = themeColor("--text-mute", 0xa9a2ba);
     for (const m of this.dotMats) m.color.setHex(c);
     this.highlight(this.hot);
   }

@@ -3,6 +3,15 @@
 // the defaults in _tokens.scss.
 
 import { describe, expect, it } from "vitest";
+import {
+  type Rgba,
+  contrastFailures,
+  contrastRatio as contrast,
+  mix,
+  over,
+  paletteContrast,
+  parseColor as parse,
+} from "../../src/ui/contrast";
 import { themes } from "../../src/ui/theme";
 
 const sources = Object.fromEntries(
@@ -15,41 +24,6 @@ const sources = Object.fromEntries(
   ).map(([path, text]) => [path.replace(/^(\.\.\/)+/, ""), text]),
 );
 
-type Rgba = [number, number, number, number];
-
-function parse(value: string): Rgba {
-  const v = value.trim();
-  const hex = /^#([0-9a-f]{6})$/i.exec(v);
-  if (hex) {
-    const n = parseInt(hex[1] ?? "", 16);
-    return [(n >> 16) & 255, (n >> 8) & 255, n & 255, 1];
-  }
-  const fn = /^rgba?\(([^)]+)\)$/i.exec(v);
-  if (fn) {
-    const [r = NaN, g = NaN, b = NaN, a = 1] = (fn[1] ?? "").split(",").map(Number);
-    return [r, g, b, a];
-  }
-  throw new Error(`not a colour: ${value}`);
-}
-
-const over = (top: Rgba, under: Rgba): Rgba => {
-  const a = top[3];
-  return [top[0] * a + under[0] * (1 - a), top[1] * a + under[1] * (1 - a), top[2] * a + under[2] * (1 - a), 1];
-};
-const mix = (a: Rgba, pct: number, b: Rgba): Rgba => over([a[0], a[1], a[2], pct], b);
-
-function luminance([r, g, b]: Rgba): number {
-  const lin = (c: number) => {
-    const s = c / 255;
-    return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-  };
-  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
-}
-function contrast(fg: Rgba, bg: Rgba): number {
-  const [a, b] = [luminance(fg), luminance(bg)];
-  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
-}
-
 const NOIR = Object.fromEntries(
   [...(sources["src/styles/_tokens.scss"] ?? "").matchAll(/^\s*(--[\w-]+):\s*(#[0-9a-f]{6}|rgba?\([^)]*\));/gim)].map(
     (m) => [m[1], m[2]],
@@ -60,6 +34,7 @@ const shipped = themes()
   .filter((t) => !t.custom)
   .map((t) => ({
     label: t.label,
+    mode: t.mode,
     palette: { ...NOIR, ...("palette" in t ? (t.palette as Record<string, string>) : {}) },
   }));
 
@@ -89,6 +64,22 @@ describe("theme contrast", () => {
   it("covers Noir and the light theme", () => {
     expect(shipped.map((t) => t.label)).toEqual(expect.arrayContaining(["FundaCAD Noir", "Solarized Light"]));
   });
+
+  it("checks every text token on every surface and the strong line on panel and raised", () => {
+    const names = paletteContrast(shipped[0]!.palette, "dark").map((r) => r.what);
+    for (const fg of ["--text", "--text-dim", "--text-mute"]) {
+      for (const bg of ["--panel", "--panel-2", "--raised", "--raised-2", "the rail pill glass"]) {
+        expect(names).toContain(`${fg} on ${bg}`);
+      }
+    }
+    expect(names).toEqual(expect.arrayContaining(["--line-strong on --panel", "--line-strong on --raised"]));
+  });
+
+  for (const theme of shipped) {
+    it(`${theme.label} text passes 4.5:1 and the strong line 3:1 on every surface`, () => {
+      expect(contrastFailures(theme.palette, theme.mode)).toEqual([]);
+    });
+  }
 
   for (const theme of shipped) {
     it(`${theme.label} chip text reaches WCAG AA`, () => {
