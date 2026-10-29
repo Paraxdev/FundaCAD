@@ -538,3 +538,65 @@ describe("Preferences sliders, hints and upload errors", () => {
     await vi.waitFor(() => expect(errors[1]!.textContent).toBe("Pick a PNG or JPEG picture."));
   });
 });
+
+// axe's name, id and reference rules on all eight panes: the harness's axe run sees only the pane that is open.
+describe("Preferences names on every pane", () => {
+  const CONTROLS =
+    "button, input, select, textarea, [role=tab], [role=radio], [role=checkbox], [role=switch], [role=combobox]," +
+    " [role=slider], [role=radiogroup], [role=group], [role=tabpanel], [role=tablist], [role=dialog]";
+  const FROM_CONTENT = new Set(["button", "tab", "radio", "checkbox", "switch"]);
+  const LABELABLE = new Set(["BUTTON", "INPUT", "SELECT", "TEXTAREA"]);
+  const roleOf = (el: Element) => el.getAttribute("role") ?? (el.tagName === "BUTTON" ? "button" : "");
+  const hidden = (el: Element) =>
+    !!el.closest("[hidden], [aria-hidden=true], .hidden") || (el as HTMLInputElement).type === "hidden";
+  const textOf = (ids: string) =>
+    ids
+      .split(/\s+/)
+      .map((id) => document.getElementById(id)?.textContent?.trim() ?? "")
+      .join(" ")
+      .trim();
+  const nameOf = (el: HTMLElement) => {
+    const by = el.getAttribute("aria-labelledby");
+    if (by) return textOf(by);
+    const forLabel = el.id ? document.querySelector(`label[for="${CSS.escape(el.id)}"]`) : null;
+    return (
+      el.getAttribute("aria-label")?.trim() ||
+      forLabel?.textContent?.trim() ||
+      (LABELABLE.has(el.tagName) ? el.closest("label")?.textContent?.trim() : "") ||
+      (FROM_CONTENT.has(roleOf(el)) ? el.textContent?.trim() : "") ||
+      ""
+    );
+  };
+
+  it("gives every control a name, every id once, and every id it points at", async () => {
+    await open();
+    const dialog = $(".prefs-panel").closest<HTMLElement>("[role=dialog]")!;
+    const panes = [...dialog.querySelectorAll<HTMLElement>("[role=tabpanel]")].map((p) => p.dataset.pane);
+    expect(panes).toEqual([
+      "appearance",
+      "viewport",
+      "navigation",
+      "access",
+      "updates",
+      "mcp",
+      "plugins",
+      "experimental",
+    ]);
+    const all = [dialog, ...dialog.querySelectorAll<HTMLElement>("*")];
+    // The plugin address field has only a placeholder until the base TextField takes a label.
+    const nameless = all
+      .filter((el) => el.matches(CONTROLS) && !hidden(el) && !nameOf(el) && !el.closest(".plug-address"))
+      .map((el) => `${el.closest<HTMLElement>("[data-pane]")?.dataset.pane}: ${el.outerHTML.slice(0, 120)}`);
+    const ids = all.map((el) => el.id).filter(Boolean);
+    const twice = ids.filter((id, i) => ids.indexOf(id) !== i);
+    const dangling = all.flatMap((el) =>
+      ["aria-labelledby", "aria-describedby", "aria-controls", "for"].flatMap((a) =>
+        (el.getAttribute(a) ?? "")
+          .split(/\s+/)
+          .filter((id) => id && !document.getElementById(id))
+          .map((id) => `${a}=${id}`),
+      ),
+    );
+    expect({ nameless, twice, dangling }).toEqual({ nameless: [], twice: [], dangling: [] });
+  });
+});
