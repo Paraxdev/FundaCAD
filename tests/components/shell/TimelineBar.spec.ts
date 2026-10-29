@@ -71,6 +71,8 @@ interface Opts {
   failed?: string[];
   /** the saved rollback marker, 6 (after every feature) when left out */
   rollback?: number;
+  /** mounted into the document, so focus moves */
+  attach?: boolean;
 }
 
 function mountBar(o: Opts = {}) {
@@ -182,6 +184,7 @@ function mountBar(o: Opts = {}) {
     onRepick: () => {},
   });
   const w = mount(TimelineBar, {
+    ...(o.attach ? { attachTo: document.body } : {}),
     global: { provide: { [ENGINE as symbol]: e }, stubs: { FeatureProperties: true, Icon: true } },
   });
   const chip = (id: string) => w.get(`.timeline-node[data-id="${id}"]`);
@@ -697,5 +700,154 @@ describe("History's head toggles", () => {
     } finally {
       scroll.mockRestore();
     }
+  });
+});
+
+describe("History steps by keys", () => {
+  const ids = ["sk", "ex1", "rv", "jt", "mc", "dp"];
+  const mounted: ReturnType<typeof mountBar>[] = [];
+  afterEach(() => {
+    for (const m of mounted.splice(0)) m.w.unmount();
+  });
+  // Vue skips a handler for an event first seen in the ms it was attached.
+  const open = async (o: Opts = {}) => {
+    const m = mountBar({ ...o, attach: true });
+    mounted.push(m);
+    await new Promise((r) => setTimeout(r, 2));
+    return m;
+  };
+  const el = (m: ReturnType<typeof mountBar>, id: string) => m.chip(id).element as HTMLElement;
+  const focused = () => (document.activeElement as HTMLElement | null)?.dataset.id;
+  const press = (key: string, init: KeyboardEventInit = {}) => {
+    const e = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...init });
+    (document.activeElement ?? document.body).dispatchEvent(e);
+    return e;
+  };
+  const lit = (m: ReturnType<typeof mountBar>) => ids.map((id) => m.chip(id).classes("selected"));
+
+  it("is a list named Steps of buttons with one Tab stop, on the last step built", async () => {
+    const m = await open({ rollback: 3, ops: ["import"] });
+    const track = m.w.get(".timeline-track");
+    expect(track.attributes("role")).toBe("list");
+    expect(track.attributes("aria-label")).toBe("Steps");
+    expect(m.w.findAll(".timeline-item").map((x) => x.attributes("role"))).toEqual(ids.map(() => "listitem"));
+    expect(m.w.get(".timeline-node.running").attributes("role")).toBe("listitem");
+    expect(ids.map((id) => m.chip(id).attributes("role"))).toEqual(ids.map(() => "button"));
+    expect(ids.map((id) => m.chip(id).attributes("tabindex"))).toEqual(["-1", "-1", "0", "-1", "-1", "-1"]);
+    await m.chip("jt").trigger("click");
+    expect(m.chip("jt").attributes("tabindex")).toBe("0");
+  });
+
+  it("names no list while the empty line shows", async () => {
+    const m = await open({ features: [] });
+    expect(m.w.get(".timeline-track").attributes("role")).toBeUndefined();
+  });
+
+  it("walks the steps with the arrows, Home and End, stops at the ends and keeps the keys from the window", async () => {
+    const m = await open();
+    const heard = vi.fn();
+    window.addEventListener("keydown", heard);
+    el(m, "ex1").focus();
+    press("ArrowDown");
+    expect(focused()).toBe("rv");
+    press("ArrowRight");
+    expect(focused()).toBe("jt");
+    press("ArrowUp");
+    press("ArrowLeft");
+    expect(focused()).toBe("ex1");
+    press("Home");
+    expect(focused()).toBe("sk");
+    press("ArrowUp");
+    expect(focused()).toBe("sk");
+    press("End");
+    expect(focused()).toBe("dp");
+    press("ArrowDown");
+    expect(focused()).toBe("dp");
+    expect(heard).not.toHaveBeenCalled();
+    window.removeEventListener("keydown", heard);
+    await m.w.vm.$nextTick();
+    expect(m.chip("dp").attributes("tabindex")).toBe("0");
+  });
+
+  it("Space picks a step and folds it again, Shift+Space takes a run", async () => {
+    const m = await open();
+    el(m, "rv").focus();
+    press(" ");
+    await m.w.vm.$nextTick();
+    expect(lit(m)).toEqual([false, false, true, false, false, false]);
+    expect(m.w.findAll(".timeline-props")).toHaveLength(1);
+    press(" ");
+    await m.w.vm.$nextTick();
+    expect(m.w.findAll(".timeline-props")).toHaveLength(0);
+    press(" ");
+    el(m, "mc").focus();
+    press(" ", { shiftKey: true });
+    await m.w.vm.$nextTick();
+    expect(lit(m)).toEqual([false, false, true, true, true, false]);
+  });
+
+  it("Enter edits the focused step, closing an open edit first", async () => {
+    const m = await open({ tool: { name: "extrude", on: "ex1" }, preview: { id: "ex1" } });
+    el(m, "rv").focus();
+    const e = press("Enter");
+    expect(e.defaultPrevented).toBe(true);
+    expect(m.log).toEqual(["cancel:extrude", "startEdit:revolvePitch"]);
+  });
+
+  it("F2 renames the focused step, picked or not, and Enter in the field hands focus back", async () => {
+    const m = await open();
+    await m.chip("sk").trigger("click");
+    el(m, "jt").focus();
+    press("F2");
+    await m.w.vm.$nextTick();
+    await m.w.vm.$nextTick();
+    const field = m.chip("jt").find(".t-rename input");
+    expect(field.exists()).toBe(true);
+    expect(m.chip("jt").attributes("role")).toBeUndefined();
+    expect(document.activeElement).toBe(field.element);
+    press("ArrowDown");
+    expect(m.chip("jt").find(".t-rename input").exists()).toBe(true);
+    (field.element as HTMLInputElement).value = "Hinge";
+    await field.trigger("input");
+    await new Promise((r) => setTimeout(r, 2));
+    press("Enter");
+    await m.w.vm.$nextTick();
+    await m.w.vm.$nextTick();
+    expect(m.log).toContain("rename:jt:Hinge");
+    expect(focused()).toBe("jt");
+    expect(m.chip("jt").attributes("role")).toBe("button");
+  });
+
+  it.each([
+    ["Shift+F10", { key: "F10", shiftKey: true }],
+    ["the Menu key", { key: "ContextMenu" }],
+  ])(
+    "%s opens the step's menu under it, and the browser's own contextmenu after it opens no second",
+    async (_, init) => {
+      const m = await open();
+      vi.mocked(contextMenu).mockClear();
+      el(m, "ex1").focus();
+      const e = press(init.key, init);
+      expect(e.defaultPrevented).toBe(true);
+      expect(vi.mocked(contextMenu)).toHaveBeenCalledTimes(1);
+      const [x, y, items] = vi.mocked(contextMenu).mock.calls[0]!;
+      const r = el(m, "ex1").getBoundingClientRect();
+      expect([x, y]).toEqual([r.left + 24, r.bottom]);
+      expect((items as CtxItem[]).map((i) => i.label)).toContain("Rename");
+      await m.chip("ex1").trigger("contextmenu");
+      expect(vi.mocked(contextMenu)).toHaveBeenCalledTimes(1);
+      await m.chip("ex1").trigger("contextmenu");
+      expect(vi.mocked(contextMenu)).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it("lets a press outside the History take focus off a clicked step", async () => {
+    const m = await open();
+    el(m, "rv").focus();
+    document.body.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    expect(focused()).toBeUndefined();
+    el(m, "rv").focus();
+    el(m, "jt").dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    expect(focused()).toBe("rv");
   });
 });
