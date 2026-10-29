@@ -23,7 +23,14 @@ file = "manual/docs/img/sketch-loose-ends.png"
 size = [520, 300]
 theme = "fundacad"
 crop = "region"
-stub = true
+around = "sketch:31,10"
+park = [300, 860]
+steps = [
+  { open = "fixture:sketch-loose.json", name = "Outline.funda" },
+  { click = "feature:s", double = true },
+  { evaluate = "() => window.viewport.frameAround([31, 10, 0], 130)" },
+  { wait = 900 },
+]
 show = "Amber dots on the corners of an outline drawn without snapping, and red dots on a line whose ends touch nothing."
 alt = "Amber dots on the corners of an outline drawn without snapping, and red dots on a line whose ends touch nothing"
 uses = ["manual/docs/sketch/constraints.md:17"]
@@ -79,8 +86,19 @@ file = "manual/docs/img/sketch-pattern.png"
 size = [520, 440]
 theme = "fundacad"
 crop = "region"
-stub = true
-show = "A bolt circle of six holes with the count and diameter boxes. The page also covers the Staggered Holes tool (recent rename), check its name in src."
+around = "sketch:12,0"
+steps = [
+  { open = "new" },
+  { press = "s" },
+  { pick_plane = "XY" },
+  { evaluate = "() => window.viewport.frameAround([12, 0, 0], 130)" },
+  { wait = 900 },
+  { tool = "Bolt Circle" },
+  { click_at = true, sketch = [0, 0] },
+  { hover = [14.14, 14.14], space = "sketch" },
+  { wait = 400 },
+]
+show = "A bolt circle of six holes with the count and diameter boxes."
 alt = "A bolt circle of six holes with the count and diameter boxes"
 uses = ["manual/docs/sketch/hole-patterns.md:5"]
 
