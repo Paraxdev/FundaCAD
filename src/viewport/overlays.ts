@@ -49,7 +49,7 @@ export function makeZebraMaterial(): THREE.ShaderMaterial {
         return floor(x) * 0.5 + max(fract(x) - 0.5, 0.0);
       }
       void main() {
-        vec3 N = normalize(vN);
+        vec3 N = length(vN) > 0.0 ? normalize(vN) : vec3(0.0);
         vec3 R = reflect(vec3(0.0, 0.0, -1.0), N);
         vec3 a = uDirection > 0.5 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
         float u = dot(vD, a) + dot(R, a) * (uReach - ${ZEBRA_LAMBDA.toFixed(4)} * dot(vD, R));

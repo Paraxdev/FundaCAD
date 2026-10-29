@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { fitZebraMaterial, makeZebraMaterial } from "../../src/viewport/overlays";
 import {
   type Vec3,
+  type ZebraDirection,
   ZEBRA_LAMBDA,
   ZEBRA_WIDTH_DEFAULT,
   zebraFrame,
@@ -127,6 +128,52 @@ describe("fitZebraMaterial", () => {
     const fresh = makeZebraMaterial();
     fitZebraMaterial(fresh, big, s);
     expect(frameOf(mat)).toEqual(frameOf(fresh));
+  });
+});
+
+// The fragment shader's stripe lines run as JS with GLSL's vector helpers, so they must give
+// zebraStripeCoord's value for the same point, normal and frame.
+const glsl = {
+  vec3: (x: number, y = x, z = x) => [x, y, z],
+  dot: (a: number[], b: number[]) => a[0]! * b[0]! + a[1]! * b[1]! + a[2]! * b[2]!,
+  length: (a: number[]) => Math.hypot(a[0]!, a[1]!, a[2]!),
+  normalize: (a: number[]) => a.map((x) => x / Math.hypot(a[0]!, a[1]!, a[2]!)),
+  reflect: (i: number[], n: number[]) => i.map((x, j) => x - 2 * glsl.dot(n, i) * n[j]!),
+};
+
+function shaderStripeCoord(mat: THREE.ShaderMaterial) {
+  const src = mat.fragmentShader;
+  const start = src.lastIndexOf("void main() {") + "void main() {".length;
+  const body = src.slice(start, src.indexOf("float s =", start)).replace(/\b(?:vec3|float)\s+(\w+)\s*=/g, "const $1 =");
+  const run = new Function(...Object.keys(glsl), "vD", "vN", "uReach", "uDirection", `${body}\nreturn u;`) as (
+    ...args: unknown[]
+  ) => number;
+  return (d: Vec3, n: Vec3, reach: number, direction: ZebraDirection) =>
+    run(...Object.values(glsl), d, n, reach, direction === "vertical" ? 1 : 0);
+}
+
+describe("the zebra fragment shader", () => {
+  const shader = shaderStripeCoord(makeZebraMaterial());
+
+  it("computes the same stripe coordinate as zebraStripeCoord", () => {
+    const cv: Vec3 = [3, -2, -40];
+    const cases: { pv: Vec3; nv: Vec3 }[] = [
+      { pv: [5, 7, -35], nv: [0, 0, 1] },
+      { pv: [-12, 4, -48], nv: [0.3, -0.5, 0.81] },
+      { pv: [8, -9, -30], nv: [-0.7, 0.2, 0.68] },
+      { pv: [1, 2, -41], nv: [0.4, 0.1, -0.9] },
+      { pv: [-4, 11, -52], nv: [0.99, 0, 0.01] },
+    ];
+    for (const direction of ["horizontal", "vertical"] as const)
+      for (const { pv, nv } of cases) {
+        const d: Vec3 = [pv[0] - cv[0], pv[1] - cv[1], pv[2] - cv[2]];
+        expect(shader(d, nv, 18, direction)).toBeCloseTo(zebraStripeCoord(pv, nv, cv, direction, 18), 9);
+      }
+  });
+
+  it("stays finite on a zero normal, as zebraStripeCoord does", () => {
+    const u = shader([4, -3, 2], [0, 0, 0], 18, "horizontal");
+    expect(u).toBe(zebraStripeCoord([4, -3, 2], [0, 0, 0], [0, 0, 0], "horizontal", 18));
   });
 });
 
