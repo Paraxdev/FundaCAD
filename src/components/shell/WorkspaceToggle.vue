@@ -34,6 +34,7 @@ const options = WORKSPACES.map((w) => ({
     :options="options"
     label="Workspace"
     size="sm"
+    activation="manual"
     @update:model-value="setWorkspace"
   />
 </template>

@@ -667,7 +667,7 @@ given nothing else (a plain JS plugin skips the type check), without its key cho
 | `Slider` | A value along a range | `modelValue`, `min`, `max`, `step`, `label`, `showValue`, `unit`; `commit`: `live` or `end` (on release) | hover, pressed, focus, disabled |
 | `Tabs` | The pages of one surface | `tabs` (`value`, `label`, `icon`, `disabled`, `title`); `modelValue`; `variant`: `underline` (a card), `bar` (a dock), `nav` (a settings page list, `aria-current`); `orientation`; `label`; `panels`, an id base (`useId`) shared with a `TabPanel` around each page, which gives the selected tab `aria-controls` | hover, pressed, focus, selected, disabled with its reason |
 | `Menu`, `MenuItem`, `MenuSeparator` | Popup and context menus | Menu: `anchor`, or `at` (a point) for a context menu, `side`, `align`, `focus`; MenuItem: `label`, `icon`, `keys`, `checked` (a `menuitemcheckbox`), `danger`, a nested `Menu` for a submenu | hover, keyboard focus, pressed, open, checked, danger, disabled |
-| `Popover` | A card that opens from a button: options, pickers | `anchor`, `side`, `align`; `kind`, a class for the card; `minWidth`; `focus`: `first` or `none`; `returnFocus` | open; it closes on Escape and on a press outside |
+| `Popover` | A card that opens from a button: options, pickers | `anchor`, `side`, `align`; `kind`, a class for the card; `minWidth`; `label` or `labelledby` makes it a `dialog` that takes focus to its first control when a key opened it (`focus`: `keyboard`) and gives it back to the opener on close (`returnFocus`); `role="none"` for a card that is part of its opener, like the `Select` list, which then needs no name; `focus`: `first`, `keyboard` or `none` | open; it closes on Escape and on a press outside |
 | `Dialog` | A modal: a task that holds the rest of the app | `title` or the `title` slot; `size`: `sm`, `md`, `lg`; `closeOnEsc`; `initialFocus`; `returnFocus`; a `footer` slot | focus held inside, focus back on close |
 | `ConfirmDialog` | A short question with a few answers, or a checklist to confirm | `title`, `message`; `options` (`value`, `label`, `hint`, `primary`); `danger`; `multi` with `min`; `confirmLabel`, `cancelLabel` | as `Dialog`, and its buttons |
 | `Panel` | A small tool or readout panel ([7.13](#713-tool-and-readout-panels-measure-panel)) | `open`, `title`, `hint`, `closable`, `closeOnEsc`, `panelClass`; `head-actions` and `foot` slots | none of its own, its controls carry theirs |
@@ -675,10 +675,11 @@ given nothing else (a plain JS plugin skips the type check), without its key cho
 | `FieldRow` | A label and its control | `label`; `for`, or the id it hands its slot; `hint`; `error`; `layout`: `inline` or `stacked` | error |
 | `ListRow` | A selectable row in a list, or a row that is a button | `label`, `hint`, `icon`, `selected`; `as`: `option` (inside a listbox, whose owner moves focus) or `button` | hover, pressed, focus, selected, disabled |
 | `RailButton` | A tool on the rail ([7.3](#73-rail-tile-rail-btn-rail-tile-rail-pill)) | as today | as 7.3 |
+| `Toolbar` | A row or column of controls that is one Tab stop: the rail, the view controls, a panel's actions | `label` or `labelledby`; `orientation`: `horizontal` (default), `vertical` or `both`; `wrap`; `tag`. Its buttons are found in the slot, the arrows, Home and End move among them, a nested `Segmented` keeps its own stop and keys, a text field keeps its arrows | none of its own, its controls carry theirs |
 
 Each look is in the subsections below. Three composables sit under them, for a base component that needs one:
 `useDisabled` (below), `useRovingFocus` (one Tab stop, the arrows, Home and End, wrapping; `Segmented`, `Tabs`,
-`Menu`, the `Select` list and the `ConfirmDialog` answers) and `useCommitField` (the draft, commit on Enter or
+`Menu`, the `Select` list and the `ConfirmDialog` answers; `Toolbar` reuses its `rovingIndex` over the buttons it finds) and `useCommitField` (the draft, commit on Enter or
 blur, revert on Escape, the rejected text kept, the preview debounce; under `TextField` and `NumberField`).
 
 ### States and the one disabled model
@@ -995,9 +996,9 @@ such as a home card's full path, goes in `aria-describedby` on a `hidden` span, 
 A plugin cannot add selectors to `_glass.scss`, so it draws with what the host gives it. `fundacad/ui`
 (`src/plugins/hostUi.ts`) exports the base set: `Button`, `IconButton`, `Chip`, `KeyChip`, `TextField`,
 `NumberField`, `UnitChip`, `Select`, `Checkbox`, `Switch`, `SwitchRow`, `Segmented`, `Slider`, `Tabs`, `Menu`,
-`MenuItem`, `MenuSeparator`, `Popover`, `Dialog`, `ConfirmDialog`, `Panel`, `Card`, `FieldRow` and `ListRow`, with
-the `SegmentedOption` and `TabItem` types, plus `Icon` and `InlineLabel`. They are the app's own components, not
-copies, so a plugin and the app cannot drift (`tests/components/plugins/hostUi.spec.ts`).
+`MenuItem`, `MenuSeparator`, `Popover`, `Dialog`, `ConfirmDialog`, `Panel`, `Card`, `FieldRow`, `ListRow` and
+`Toolbar`, with the `SegmentedOption` and `TabItem` types, plus `Icon` and `InlineLabel`. They are the app's own
+components, not copies, so a plugin and the app cannot drift (`tests/components/plugins/hostUi.spec.ts`).
 
 The names it exported before stay: `FloatingPanel` and `ModalFrame` (the old contracts over `Panel` and `Dialog`),
 and the Render dock rows `RenderSection`, `RenderSlider`, `RenderSwitch` and `RenderChoices`. Inside them, use base

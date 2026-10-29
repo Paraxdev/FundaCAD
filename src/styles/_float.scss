@@ -306,6 +306,16 @@
   position: relative;
   z-index: 1;
 }
+/* The toolbar between the nav and its two lists lays them out as the rail did. */
+.rail-bar {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--float-gap);
+  min-height: 0;
+  pointer-events: none;
+}
 .rail-list {
   display: flex;
   flex-direction: column;
@@ -344,7 +354,7 @@
 }
 /* A scrolling list clips 32px past its box (.rail-list's shadow room); without the bottom
    overhang the clip ends a gap above the foot. */
-.tool-rail.scrolls > .rail-list:first-child {
+.tool-rail.scrolls > .rail-bar > .rail-list:first-child {
   margin-bottom: 0;
 }
 .rail-sep {

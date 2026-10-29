@@ -26,6 +26,7 @@ export { default as SwitchRow } from "../components/ui/SwitchRow.vue";
 export { default as Tabs } from "../components/ui/Tabs.vue";
 export { default as TabPanel } from "../components/ui/TabPanel.vue";
 export { default as TextField } from "../components/ui/TextField.vue";
+export { default as Toolbar } from "../components/ui/Toolbar.vue";
 export { default as UnitChip } from "../components/ui/UnitChip.vue";
 export type { SegmentedOption } from "../components/ui/Segmented.vue";
 export type { TabItem } from "../components/ui/Tabs.vue";

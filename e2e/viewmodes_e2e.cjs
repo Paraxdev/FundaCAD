@@ -155,7 +155,7 @@ function check(ok, what, detail) {
       page.evaluate(() => {
         const v = window.viewport;
         const pressed = [...document.querySelectorAll("[data-view-mode]")]
-          .filter((b) => b.getAttribute("aria-pressed") === "true")
+          .filter((b) => b.getAttribute("aria-checked") === "true")
           .map((b) => b.dataset.viewMode);
         const pt = document.querySelector('[data-view-mode="pathtraced"]');
         return {

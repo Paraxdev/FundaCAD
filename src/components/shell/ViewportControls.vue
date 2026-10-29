@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, useId, useTemplateRef } from "vue";
+import { computed, onMounted, onUnmounted, ref, useId, useTemplateRef, type ComponentPublicInstance } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { useBuildValue } from "../../app/useDoc";
 import { useUiStore } from "../../stores/ui";
@@ -28,7 +28,8 @@ import type { ProjectionMode } from "../../viewport/cameras";
 import IconButton from "../ui/IconButton.vue";
 import Button from "../ui/Button.vue";
 import ListRow from "../ui/ListRow.vue";
-import Segmented from "../ui/Segmented.vue";
+import Segmented, { type SegmentedOption } from "../ui/Segmented.vue";
+import Toolbar from "../ui/Toolbar.vue";
 import Icon from "./Icon.vue";
 import VersionsPanel from "./VersionsPanel.vue";
 import Popover from "../ui/Popover.vue";
@@ -44,7 +45,8 @@ const shell = useShellStore();
 const dialogs = useDialogStore();
 const sketchPalette = useSketchPaletteStore();
 
-const root = useTemplateRef<HTMLElement>("root");
+const bar = useTemplateRef<ComponentPublicInstance>("bar");
+const rootEl = () => (bar.value?.$el as HTMLElement | undefined) ?? null;
 const anchors = new Map<string, HTMLElement>();
 const anchorOf = (id: string) => anchors.get(id) ?? null;
 function open(id: string, ev: MouseEvent) {
@@ -57,7 +59,7 @@ const isOpen = (id: string) => shell.popover === `vc:${id}`;
 // edge the floating cards take (this column, and the history or palette beside it).
 let ro: ResizeObserver | null = null;
 function reportInset() {
-  const el = root.value?.parentElement ?? root.value;
+  const el = rootEl()?.parentElement ?? rootEl();
   if (!el) return;
   const canvas = engine.canvas.getBoundingClientRect();
   const r = el.getBoundingClientRect();
@@ -65,9 +67,9 @@ function reportInset() {
 }
 onMounted(() => {
   ro = new ResizeObserver(reportInset);
-  const side = root.value?.parentElement;
-  if (side) ro.observe(side);
-  if (root.value) ro.observe(root.value);
+  const root = rootEl();
+  if (root?.parentElement) ro.observe(root.parentElement);
+  if (root) ro.observe(root);
   reportInset();
 });
 onUnmounted(() => {
@@ -191,9 +193,22 @@ const viewModes = computed(() =>
   VIEW_MODES.map((v) => {
     const block = v.id === "pathtraced" ? pathTracedBlock(tier.value) : null;
     const hint = v.id === "pathtraced" ? PAUSED_HINT[ui.traceState] : undefined;
-    const title = block ? block.tooltip : hint ? `${v.label} (Z), ${hint}` : `${v.label} (Z)`;
-    return { ...v, disabled: block !== null, softBlock: block?.reason === "perf", title };
+    const name = hint ? `${v.label} (Z), ${hint}` : `${v.label} (Z)`;
+    const title = block ? block.tooltip : name;
+    return { ...v, disabled: block !== null, softBlock: block?.reason === "perf", name, title };
   }),
+);
+const viewModeOptions = computed<SegmentedOption<ViewMode>[]>(() =>
+  viewModes.value.map((v) => ({
+    value: v.id,
+    label: v.label,
+    icon: v.icon,
+    tip: v.name,
+    disabled: v.disabled,
+    disabledReason: v.title,
+    clickable: v.softBlock,
+    attrs: { "data-view-mode": v.id },
+  })),
 );
 const viewModeChoices = computed(() =>
   viewModes.value.map((v) => ({
@@ -244,12 +259,14 @@ async function screenshot() {
 </script>
 
 <template>
-  <div id="viewcontrols" ref="root" class="float-column">
+  <Toolbar id="viewcontrols" ref="bar" class="float-column" label="View controls" orientation="vertical">
     <div v-if="ui.lowPerformance && !ui.lowPerformanceDismissed" class="float-group perf-warn-group">
       <IconButton
         icon="warning"
         tip="Low performance"
         class="perf-warn"
+        popup="dialog"
+        :expanded="isOpen('perf')"
         :active="isOpen('perf')"
         @click="open('perf', $event)"
       />
@@ -268,42 +285,68 @@ async function screenshot() {
       />
     </div>
     <div class="float-group">
-      <IconButton icon="magnet" tip="Snapping" :active="isOpen('snap')" @click="open('snap', $event)" />
+      <IconButton
+        icon="magnet"
+        tip="Snapping"
+        popup="dialog"
+        :expanded="isOpen('snap')"
+        :active="isOpen('snap')"
+        @click="open('snap', $event)"
+      />
       <!-- A reading, not an icon, so a Button: its text is the name and the tip only the tooltip. -->
       <Button
         variant="ghost"
         size="sm"
         class="grid-btn"
         tip="Grid and units"
+        popup="dialog"
+        :expanded="isOpen('grid')"
         :pressed="isOpen('grid')"
         @click="open('grid', $event)"
         >{{ gridLabelCompact }}</Button
       >
-      <IconButton icon="views" tip="Views" :active="isOpen('views')" @click="open('views', $event)" />
+      <IconButton
+        icon="views"
+        tip="Views"
+        popup="dialog"
+        :expanded="isOpen('views')"
+        :active="isOpen('views')"
+        @click="open('views', $event)"
+      />
       <IconButton icon="view-reset" tip="Reset camera" keys="Shift+Home" @click="engine.handleAction('reset-camera')" />
     </div>
-    <div class="float-group view-modes" role="group" aria-label="View mode">
-      <IconButton
-        v-for="v in viewModes"
-        :key="v.id"
-        :icon="v.icon"
-        :tip="v.title"
-        :active="ui.viewMode === v.id"
-        :disabled="v.disabled"
-        :clickable="v.softBlock"
-        :data-view-mode="v.id"
-        @click="pickViewMode(v.id)"
-      />
-    </div>
+    <!-- Manual: arrowing onto Path traced must not start a trace, and no wrap lets the arrows go on along the column. -->
+    <Segmented
+      class="float-group view-modes"
+      label="View mode"
+      :options="viewModeOptions"
+      :model-value="ui.viewMode"
+      size="lg"
+      variant="tile"
+      icon-only
+      orientation="vertical"
+      activation="manual"
+      :wrap="false"
+      @update:model-value="pickViewMode"
+    />
     <div class="float-group">
       <IconButton
         icon="shaded"
         tip="Display"
+        popup="dialog"
+        :expanded="isOpen('display')"
         :active="isOpen('display') || ui.xray || ui.wireframe"
         @click="open('display', $event)"
       />
       <IconButton icon="camera" tip="Screenshot" :active="saving" @click="screenshot()" />
-      <IconButton icon="versions" tip="Versions" :active="isOpen('versions')" @click="open('versions', $event)" />
+      <IconButton
+        icon="versions"
+        tip="Versions"
+        popup="dialog"
+        :expanded="isOpen('versions')"
+        :active="isOpen('versions')"
+        @click="open('versions', $event)"
+      />
       <IconButton
         v-if="!shell.narrow"
         icon="history"
@@ -323,6 +366,7 @@ async function screenshot() {
       :anchor="anchorOf('perf')"
       side="left"
       kind="vc-pop perf-pop"
+      label="Low performance"
       @close="shell.closePopover()"
     >
       <div class="perf-pop-title">Low performance</div>
@@ -345,12 +389,20 @@ async function screenshot() {
       :anchor="anchorOf('versions')"
       side="left"
       kind="vc-pop versions-pop"
+      label="Versions"
       @close="shell.closePopover()"
     >
       <VersionsPanel />
     </Popover>
 
-    <Popover v-if="isOpen('snap')" :anchor="anchorOf('snap')" side="left" kind="vc-pop" @close="shell.closePopover()">
+    <Popover
+      v-if="isOpen('snap')"
+      :anchor="anchorOf('snap')"
+      side="left"
+      kind="vc-pop"
+      label="Snapping"
+      @close="shell.closePopover()"
+    >
       <div class="pop-section">Snap to</div>
       <Toggle
         :model-value="sketchPalette.state.snap"
@@ -376,7 +428,14 @@ async function screenshot() {
       />
     </Popover>
 
-    <Popover v-if="isOpen('grid')" :anchor="anchorOf('grid')" side="left" kind="vc-pop" @close="shell.closePopover()">
+    <Popover
+      v-if="isOpen('grid')"
+      :anchor="anchorOf('grid')"
+      side="left"
+      kind="vc-pop"
+      label="Grid and units"
+      @close="shell.closePopover()"
+    >
       <div class="pop-section">Units</div>
       <ChoiceList label="Units" :options="UNITS" :model-value="unit" @update:model-value="pickUnit" />
       <div class="pop-rule"></div>
@@ -387,7 +446,14 @@ async function screenshot() {
       >
     </Popover>
 
-    <Popover v-if="isOpen('views')" :anchor="anchorOf('views')" side="left" kind="vc-pop" @close="shell.closePopover()">
+    <Popover
+      v-if="isOpen('views')"
+      :anchor="anchorOf('views')"
+      side="left"
+      kind="vc-pop"
+      label="Views"
+      @close="shell.closePopover()"
+    >
       <Tabs
         v-model="viewTab"
         label="Views"
@@ -433,6 +499,7 @@ async function screenshot() {
       :anchor="anchorOf('display')"
       side="left"
       kind="vc-pop"
+      label="Display"
       @close="shell.closePopover()"
     >
       <div class="pop-section">Shading</div>
@@ -521,5 +588,5 @@ async function screenshot() {
         @update:model-value="runAndRefresh('component-colors')"
       />
     </Popover>
-  </div>
+  </Toolbar>
 </template>

@@ -32,6 +32,7 @@ const BASE = [
   "Tabs",
   "TabPanel",
   "TextField",
+  "Toolbar",
   "UnitChip",
 ];
 
