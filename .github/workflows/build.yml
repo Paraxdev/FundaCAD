@@ -1065,18 +1065,21 @@ jobs:
           TITLE="FundaCAD $VERSION beta"
           if gh release view "$V" --repo "$R" >/dev/null 2>&1; then
             gh release edit "$V" --repo "$R" --title "$TITLE" --notes-file version-notes.md
-          elif ! gh release create "$V" --repo "$R" --target "$SHA" --draft --latest=false \
-              --title "$TITLE" --notes-file version-notes.md; then
-            # The same refusal as the rolling tag's: this token may not make a
-            # tag on a commit that changes a workflow file. The beta is out.
-            echo "::warning::no $V release, its tag could not be made on ${SHA:0:7}; the rolling beta has this build"
-            exit 0
+          else
+            gh release create "$V" --repo "$R" --target "$SHA" --draft --latest=false \
+              --title "$TITLE" --notes-file version-notes.md
           fi
           # Package managers pin a file by its hash, and this release's files never change.
           (cd release && sha256sum $(ls | sort)) | sed 's/ \*/  /' > SHA256SUMS.txt
           files=$(find release -type f | sort)
           gh release upload "$V" --repo "$R" --clobber $files SHA256SUMS.txt
-          gh release edit "$V" --repo "$R" --draft=false --prerelease=false --latest="$latest"
+          # GitHub makes a draft's tag only when it is published, and refuses this token a tag
+          # on a commit that changes a workflow file. The rolling beta is already out.
+          if ! gh release edit "$V" --repo "$R" --draft=false --prerelease=false --latest="$latest"; then
+            [ "$(gh release view "$V" --repo "$R" --json isDraft --jq .isDraft)" = true ] || exit 1
+            gh release delete "$V" --repo "$R" --yes
+            echo "::warning::no $V release, GitHub refused its tag on ${SHA:0:7}, as this token may not tag a commit that changes a workflow file; the rolling beta has this build"
+          fi
 
   # Browser end-to-end checks for the imported-assembly Browser tree.
   #

@@ -18,13 +18,17 @@ WORKFLOW = os.path.join(HERE, "..", "..", ".github", "workflows", "build.yml")
 SHA = "a1b2c3d4e5f6a7b8c9d0a1b2c3d4e5f6a7b8c9d0"
 NOTES = "> ### Read this first\n\nRolling FundaCAD 1.0 beta (1.0.412), Rust engine, rebuilt from `main`.\n\n## Changes\n"
 
-# $1 is the gh subcommand group, $2 the verb. STABLE, EXISTS and REFUSE come from the case.
+# $1 is the gh subcommand group, $2 the verb. STABLE, EXISTS (draft or published) and REFUSE
+# come from the case; REFUSE fails the publish edit, where GitHub makes a draft's tag.
 GH = r"""gh() {
   printf '%s\n' "$*" >> calls.log
   case "$1 $2" in
     "release list") printf '%s' "$STABLE" ;;
-    "release view") [ -n "$EXISTS" ] ;;
-    "release create") [ -z "$REFUSE" ] ;;
+    "release view")
+      [ -n "$EXISTS" ] || [ -e made ] || return 1
+      case "$*" in *isDraft*) if [ -e made ] || [ "$EXISTS" = draft ]; then echo true; else echo false; fi ;; esac ;;
+    "release create") : > made ;;
+    "release edit") case "$*" in *--draft=false*) [ -z "$REFUSE" ] ;; esac ;;
     *) return 0 ;;
   esac
 }
@@ -46,7 +50,7 @@ BASH = shutil.which("bash")
 
 @unittest.skipUnless(BASH, "needs bash")
 class VersionRelease(unittest.TestCase):
-    def run_step(self, stable="", exists="", refuse=""):
+    def run_step(self, stable="", exists="", refuse="", code=0):
         cwd = tempfile.mkdtemp(prefix="verrel-")
         self.addCleanup(shutil.rmtree, cwd, True)
         os.makedirs(os.path.join(cwd, "release"))
@@ -57,7 +61,7 @@ class VersionRelease(unittest.TestCase):
             f.write(NOTES)
         env = {**os.environ, "VERSION": "1.0.412", "SHA": SHA, "STABLE": stable, "EXISTS": exists, "REFUSE": refuse}
         out = subprocess.run([BASH, "-c", GH + step_script()], cwd=cwd, env=env, capture_output=True, text=True)
-        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertEqual(out.returncode, code, out.stderr)
         with open(os.path.join(cwd, "calls.log")) as f:
             calls = [c for c in f.read().splitlines() if not c.startswith(("release list", "release view"))]
         with open(os.path.join(cwd, "version-notes.md")) as f:
@@ -101,11 +105,34 @@ class VersionRelease(unittest.TestCase):
         self.assertFalse(any(c.startswith("release create") for c in calls))
         self.assertEqual(calls[-1], "release edit v1.0.412 --repo o/r --draft=false --prerelease=false --latest=true")
 
-    def test_a_refused_tag_warns_and_leaves_the_beta_alone(self):
+    def test_a_refused_tag_deletes_the_draft_warns_and_leaves_the_beta_alone(self):
         calls, _, out = self.run_step(refuse="yes")
-        self.assertEqual(len(calls), 1)
         self.assertTrue(calls[0].startswith("release create v1.0.412"))
+        self.assertEqual(
+            calls[-2:],
+            [
+                "release edit v1.0.412 --repo o/r --draft=false --prerelease=false --latest=true",
+                "release delete v1.0.412 --repo o/r --yes",
+            ],
+        )
+        self.assertIn("::warning::no v1.0.412 release, GitHub refused its tag on a1b2c3d", out)
+        self.assertIn("may not tag a commit that changes a workflow file", out)
+
+    def test_a_rerun_deletes_a_draft_an_earlier_refusal_left(self):
+        calls, _, out = self.run_step(exists="draft", refuse="yes")
+        self.assertEqual(calls[-1], "release delete v1.0.412 --repo o/r --yes")
         self.assertIn("::warning::no v1.0.412 release", out)
+
+    def test_a_published_release_that_fails_to_update_is_kept_and_fails_the_step(self):
+        calls, _, out = self.run_step(exists="published", refuse="yes", code=1)
+        self.assertEqual(calls[-1], "release edit v1.0.412 --repo o/r --draft=false --prerelease=false --latest=true")
+        self.assertFalse(any(c.startswith("release delete") for c in calls))
+        self.assertNotIn("::warning::", out)
+
+    def test_a_published_tag_deletes_nothing_and_warns_nothing(self):
+        calls, _, out = self.run_step()
+        self.assertFalse(any(c.startswith("release delete") for c in calls))
+        self.assertNotIn("::warning::", out)
 
 
 if __name__ == "__main__":
