@@ -88,8 +88,8 @@
 *[stress]: An analysis of how one body bends and where it is strained.
 *[Safety factor]: The yield strength divided by the peak stress. Under 1, the part is likely to fail.
 *[safety factor]: The yield strength divided by the peak stress. Under 1, the part is likely to fail.
-*[Bloom]: A soft halo around faces with Emission turned up that does not light other objects. The path traced view also spills bright highlights.
-*[Emission]: A material setting that makes a body give off light.
+*[Bloom]: A soft glow spilling off faces with Emission turned up. In the path traced view bright highlights spill too.
+*[Emission]: A material setting that makes a body give off light. It can slow the view on a large model.
 *[Knurl]: A grip pattern of small diamond ridges, one of the Surface Texture kinds.
 *[Knurling]: A grip pattern of small diamond ridges, one of the Surface Texture kinds.
 *[Node editor]: The graph where you build a surface finish from connected patterns.
