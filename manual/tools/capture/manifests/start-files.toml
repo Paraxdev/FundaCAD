@@ -16,7 +16,41 @@ file = "manual/docs/img/home.png"
 size = [1440, 900]
 theme = "fundacad"
 crop = "window"
-stub = true
+park = [1400, 860]
+pause = 1500
+# Home only lists documents through the desktop library, so the dev fake library stands in, with real card
+# pictures drawn from three examples the way a save draws them.
+steps = [
+  { evaluate = "async () => { const { templateText } = await import('/src/templates/index.ts'); window.store.load(await templateText('plate')); }" },
+  "settle",
+  { evaluate = "() => window.viewport.resetCamera(true)" },
+  "settle",
+  { evaluate = "() => { (window.__captureThumbs ??= []).push(window.viewport.renderThumbnail(480, 300)); }" },
+  { evaluate = "async () => { const { templateText } = await import('/src/templates/index.ts'); window.store.load(await templateText('wall-bracket')); }" },
+  "settle",
+  { evaluate = "() => window.viewport.resetCamera(true)" },
+  "settle",
+  { evaluate = "() => { (window.__captureThumbs ??= []).push(window.viewport.renderThumbnail(480, 300)); }" },
+  { evaluate = "async () => { const { templateText } = await import('/src/templates/index.ts'); window.store.load(await templateText('pinned-lever')); }" },
+  "settle",
+  { evaluate = "() => window.viewport.resetCamera(true)" },
+  "settle",
+  { evaluate = "() => { (window.__captureThumbs ??= []).push(window.viewport.renderThumbnail(480, 300)); }" },
+  { evaluate = '''() => {
+    const thumbs = window.__captureThumbs;
+    window.store.newDocument();
+    const now = Date.now();
+    const files = [
+      { path: "D:/Projects/shelf/mounting plate.funda", mtimeMs: now - 40 * 60000, thumb: thumbs[0] },
+      { path: "D:/Projects/shelf/wall bracket.funda", mtimeMs: now - 26 * 3600000, thumb: thumbs[1] },
+      { path: "D:/Projects/press/lever arm.funda", mtimeMs: now - 4 * 86400000, thumb: thumbs[2] },
+    ];
+    localStorage.setItem("fundacad.recentFiles", JSON.stringify(files.map((f, i) => ({ path: f.path, openedAt: now - i * 1000 }))));
+    localStorage.setItem("fundacad.home.folders", JSON.stringify([{ path: "D:/Projects/shelf", addedAt: now }]));
+    window.__fundacad.home.useFakeLibrary(files);
+    window.__fundacad.handleAction("welcome");
+  }''' },
+]
 show = "Home with Blank and Open at the top, three recent documents and the examples under them."
 alt = "Home with Blank and Open at the top, three recent documents and the examples under them"
 uses = ["manual/docs/files/home.md:5"]
