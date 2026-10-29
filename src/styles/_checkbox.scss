@@ -10,11 +10,13 @@
   height: 18px;
   cursor: pointer;
 }
+// The box is a span beside the input, not a label, so the hidden input itself grows to --hit-min.
 .check input {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  top: min(0px, (100% - var(--hit-min)) / 2);
+  left: min(0px, (100% - var(--hit-min)) / 2);
+  width: max(100%, var(--hit-min));
+  height: max(100%, var(--hit-min));
   margin: 0;
   opacity: 0;
   cursor: pointer;

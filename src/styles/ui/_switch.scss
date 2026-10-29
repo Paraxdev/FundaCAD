@@ -1,5 +1,7 @@
 // Switch: the 36 by 20 on and off switch.
 
+@use "../hit";
+
 .ui-switch {
   position: relative;
   flex: none;
@@ -11,6 +13,7 @@
   background: var(--raised-2);
   cursor: pointer;
   transition: background var(--t-fast) var(--ease);
+  @include hit.area($position: null);
 }
 .ui-switch-knob {
   position: absolute;

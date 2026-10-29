@@ -1,13 +1,17 @@
 // Checkbox: the 18px drawn box over a native input, indeterminate included.
 
+@use "../hit";
+
 $tick: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 6.2l2.3 2.3 4.7-5' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 
+// The label toggles the input, so its area is the target.
 .ui-checkbox {
   display: inline-flex;
   align-items: center;
   gap: var(--s-2);
   font-size: 12.5px;
   cursor: pointer;
+  @include hit.area;
 }
 .ui-checkbox-box {
   position: relative;

@@ -43,3 +43,33 @@ describe("hit area guard", () => {
     expect(missingHitAreas(sample, [".a", ".b", ".c", ".d > .e"])).toEqual([".b", ".c"]);
   });
 });
+
+describe("base components", () => {
+  const HOSTS = [
+    ".icon-btn.icon-btn-sm",
+    ".icon-btn.icon-btn-md",
+    ".icon-btn.icon-btn-lg",
+    ".btn.btn-sm",
+    ".ui-checkbox",
+    ".ui-switch",
+  ];
+
+  it("each grow a hit area of at least --hit-min", () => {
+    expect(missingHitAreas(css, HOSTS)).toEqual([]);
+  });
+
+  it("are the containing block of their hit area outside touch too", () => {
+    expect(valueOf(css, ".icon-btn", "position")).toBe("relative");
+    expect(valueOf(css, ".btn.btn-sm", "position")).toBe("relative");
+    expect(valueOf(css, ".ui-checkbox", "position")).toBe("relative");
+    expect(valueOf(css, ".ui-switch", "position")).toBe("relative");
+  });
+
+  // The legacy box is a span beside its input, so a pseudo on it would not toggle: the hidden input itself grows.
+  it("grow the legacy checkbox's own input", () => {
+    expect(valueOf(css, ".check input", "top")).toBe("min(0px, (100% - var(--hit-min)) / 2)");
+    expect(valueOf(css, ".check input", "left")).toBe("min(0px, (100% - var(--hit-min)) / 2)");
+    expect(valueOf(css, ".check input", "width")).toBe("max(100%, var(--hit-min))");
+    expect(valueOf(css, ".check input", "height")).toBe("max(100%, var(--hit-min))");
+  });
+});
