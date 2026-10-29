@@ -192,6 +192,7 @@ function onDrop(e: DragEvent) {
       :icon-size="13"
       :tip="fmtKeys('Show/hide · drag across eyes to show or hide many · Alt+click to show only this')"
       :data-visible="visible !== false"
+      :aria-pressed="visible !== false"
       @pointerdown.stop="onEyeDown"
       @click.stop="onEyeClick"
     />

@@ -69,6 +69,8 @@ interface Opts {
   regions?: string[];
   /** features the last build failed */
   failed?: string[];
+  /** the saved rollback marker, 6 (after every feature) when left out */
+  rollback?: number;
 }
 
 function mountBar(o: Opts = {}) {
@@ -155,7 +157,7 @@ function mountBar(o: Opts = {}) {
       isSuppressed: (id: string) => !!o.suppressed?.includes(id),
       setSuppressed: (ids: string[], on: boolean) => log.push(`suppress:${on}:${ids.join(",")}`),
       removeFeatures: (ids: string[]) => log.push(`remove:${ids.join(",")}`),
-      rollbackIndex: 6,
+      rollbackIndex: o.rollback ?? 6,
       buildState: {
         result: o.failed ? { featureErrors: o.failed.map((id) => ({ feature_id: id, message: "failed" })) } : null,
         building: false,
@@ -329,6 +331,31 @@ describe("an import's chip", () => {
     expect(m.chip("i1").find(".t-name").text()).toBe("Housing");
     expect(m.chip("i2").find(".t-name").text()).toBe("gear-box");
     expect(m.chip("i2").attributes("title")).not.toContain("File:");
+  });
+
+  it("reads the file name after the chip's name too, since a screen reader skips the tooltip", () => {
+    const m = mountBar({ features: [imp("i1", "gear-box", { nodes }), imp("i2", "gear-box")] });
+    expect(m.chip("i1").find(".sr-only").text()).toBe(", file: gear-box");
+    expect(m.chip("i2").find(".sr-only").exists()).toBe(false);
+  });
+});
+
+describe("a chip's state in words", () => {
+  const said = (m: ReturnType<typeof mountBar>, id: string) => m.chip(id).find(".sr-only");
+
+  it("reads a failure, a suppressed step and the rolled back steps after the name", () => {
+    const m = mountBar({ failed: ["ex1"], suppressed: ["rv"], rollback: 4 });
+    expect(said(m, "ex1").text()).toBe(", failed: failed");
+    expect(said(m, "rv").text()).toBe(", suppressed");
+    expect(said(m, "mc").text()).toBe(", rolled back");
+    expect(said(m, "dp").text()).toBe(", rolled back");
+    expect(said(m, "sk").exists()).toBe(false);
+    expect(said(m, "jt").exists()).toBe(false);
+  });
+
+  it("reads a step whose Active when condition is 0 as switched off", () => {
+    const m = mountBar({ features: [{ id: "a", type: "sketch", plane: "XY", entities: [], activeWhen: 0 }] });
+    expect(said(m, "a").text()).toBe(", switched off");
   });
 });
 

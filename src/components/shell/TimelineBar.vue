@@ -233,6 +233,24 @@ function chipTitle(f: { id: string; type: string; name?: string; shown?: string;
   );
 }
 
+// The tooltip and the chip's colour, as words a screen reader reads after the chip's name.
+const chipStates = computed(() =>
+  features.value.map((f, i) => {
+    const err = errors.value.get(f.id);
+    const note = notes.value.get(f.id);
+    const placeholder = placeholders.value.get(f.id);
+    return [
+      f.type === "import" && f.name && f.shown !== f.name ? `file: ${f.name}` : "",
+      err ? `failed: ${err}` : note ? `note: ${note}` : "",
+      f.inactive ? "switched off" : suppressed.value.has(f.id) ? "suppressed" : "",
+      placeholder !== undefined ? placeholderNote(placeholder) : "",
+      i >= rollback.value ? "rolled back" : "",
+    ]
+      .filter(Boolean)
+      .join(", ");
+  }),
+);
+
 // A click selects a step without moving the model, a double-click edits it with the model rolled back to just before
 // it. Both are ignored while a tool owns the screen, except a double-click, which closes the other edit first.
 function busyElsewhere(): boolean {
@@ -624,6 +642,7 @@ function openMultiMenu(e: MouseEvent, ids: string[]) {
                   />
                 </span>
                 <span v-else class="t-name">{{ f.shown }}</span>
+                <span v-if="chipStates[i]" class="sr-only">, {{ chipStates[i] }}</span>
                 <Icon
                   class="t-caret"
                   :name="selection.featureId === f.id && !several ? 'caretDown' : 'caretRight'"
