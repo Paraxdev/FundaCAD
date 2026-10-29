@@ -70,10 +70,15 @@ const check = (name, ok, detail) => {
       return r ? { left: r.left, top: r.top, right: r.right, bottom: r.bottom } : null;
     }, sel);
   const meets = (a, b) => !!a && !!b && a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+  // Note: an open dialog makes the page behind it inert, and an inert element takes no hit test, so a probe
+  // lifts inert for its one read and tests the paint order the z-index sets.
   const hitAt = (x, y) =>
     page.evaluate(
       ([px, py]) => {
+        const inert = [...document.querySelectorAll("[inert]")];
+        for (const n of inert) n.removeAttribute("inert");
         const el = document.elementFromPoint(px, py);
+        for (const n of inert) n.setAttribute("inert", "");
         const inSelect = !!el?.closest("#prefs-theme");
         const inPanel = !!el?.closest(".measure-panel");
         const where = inSelect ? "in #prefs-theme" : inPanel ? "in .measure-panel" : "elsewhere";
@@ -112,6 +117,10 @@ const check = (name, ok, detail) => {
   console.log("\n2. the Theme select is reachable");
   const hit = await hitAt(cx, cy);
   check("the select centre lands in the select", hit.inSelect && !hit.inPanel, hit.what);
+  const inertPanel = await page.evaluate(
+    () => !!document.querySelector(".measure-panel.stress-panel")?.closest("[inert]"),
+  );
+  check("the panel behind Preferences is inert", inertPanel);
   await page.evaluate(() => {
     const p = document.querySelector(".measure-panel.stress-panel");
     p.dataset.z = p.style.zIndex;
