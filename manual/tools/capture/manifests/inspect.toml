@@ -190,7 +190,10 @@ at = [650, 165]
 park = [1900, 1060]
 steps = [
   { open = "example:Wall bracket" },
-  { evaluate = "() => { const r = window.viewport.rig; r.zoomBy(1.5); r.panScreen(0.1, -0.15); window.viewport.requestRender(); }" },
+  # The peak is under the arm at the gusset's tip, so the camera is level with the underside.
+  { evaluate = "() => { const v = window.viewport; const b = v.model.box; v.rig.setViewDir(b.min.clone().set(0.5, -1, -0.08), b.min.clone().set(0, 0, 1)); v.requestRender(); }" },
+  { wait = 900 },
+  { evaluate = "() => { const r = window.viewport.rig; r.zoomBy(1.45); r.panScreen(0.1, -0.02); window.viewport.requestRender(); }" },
   { wait = 700 },
   { tool = "Stress" },
   { wait = 600 },
@@ -200,30 +203,28 @@ steps = [
   { evaluate = "() => document.querySelectorAll('.toast-close').forEach((b) => b.click())" },
   { wait = 500 },
 ]
-show = "The Stress panel on its Results tab listing peak stress, deflection and safety factor beside the coloured bracket (Set up and Results tabs are recent)."
-alt = "The Stress panel listing peak stress, deflection and safety factor beside the coloured bracket"
+show = "The Stress panel on its Results tab beside the bracket coloured blue to red, the red at the gusset's tip under the pin."
+alt = "The Stress panel listing peak stress, deflection and safety factor beside the bracket coloured blue to red"
 uses = ["manual/docs/inspect/stress-results.md:5"]
 
 [[shot]]
 file = "manual/docs/img/stress-bracket.png"
 size = [580, 600]
-viewport = [1920, 1080]
+viewport = [1600, 740]
 theme = "fundacad"
 crop = "region"
-at = [625, 198]
-park = [1900, 1060]
+at = [645, 140]
+park = [1590, 730]
 steps = [
   { open = "example:Wall bracket" },
-  { evaluate = "() => { const r = window.viewport.rig; r.zoomBy(1.38); r.panScreen(0.12, 0); window.viewport.requestRender(); }" },
+  # From behind, so the held back face shows as well as the load arrow.
+  { evaluate = "() => { const v = window.viewport; const b = v.model.box; v.rig.setViewDir(b.min.clone().set(-1, -0.8, 0.6), b.min.clone().set(0, 0, 1)); v.requestRender(); }" },
+  { wait = 900 },
+  { evaluate = "() => { const v = window.viewport; v.rig.zoomBy(2, v.model.box.getCenter(v.model.box.min.clone())); v.rig.panScreen(0.063, -0.19); v.requestRender(); }" },
   { wait = 700 },
   { tool = "Stress" },
-  { wait = 600 },
-  { click_css = ".stress-run" },
-  { evaluate = "() => new Promise((res) => { const t = setInterval(() => { if (document.querySelector('.stress-legend')) { clearInterval(t); res(); } }, 250); })" },
-  { wait = 1500 },
-  { evaluate = "() => document.querySelectorAll('.toast-close').forEach((b) => b.click())" },
-  { wait = 500 },
+  { wait = 1200 },
 ]
-show = "An L bracket coloured by stress, with a load arrow at the end of its arm."
-alt = "An L bracket coloured by stress, with a load arrow at the end of its arm"
+show = "The Stress panel on its Set up tab with Support 1 and Load 1, beside the bracket with its held face and load arrow."
+alt = "The Stress panel's Set up tab with one support and one load, beside the bracket"
 uses = ["manual/docs/inspect/stress.md:5"]

@@ -2,7 +2,7 @@
 
 Stress shows how a part bends and where the material works hardest, so you can tell whether a bracket or clip will hold.
 
-![An L bracket coloured by stress, with a load arrow at the end of its arm](../img/stress-bracket.png)
+![The Stress panel's Set up tab with one support and one load, beside the bracket](../img/stress-bracket.png)
 
 1. Under Inspect, open Analyze and pick Stress. The Set up tab opens.
 2. Pick the part under Body. A selected body, or the only one, is picked for you.
