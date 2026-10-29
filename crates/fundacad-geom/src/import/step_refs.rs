@@ -5,7 +5,7 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs::File;
-use std::io::{BufRead, BufReader, BufWriter, Write};
+use std::io::{BufRead, BufReader, BufWriter, Read, Write};
 use std::path::Path;
 
 use super::packed::{temp_step, Unpacked};
@@ -335,7 +335,8 @@ fn list(s: &[u8]) -> impl Iterator<Item = &[u8]> {
     s.split(|&b| b == b',')
 }
 
-/// Past this a quote never closed, so the scan gives up rather than hold the rest of the file.
+/// A record past this never ended (a quote left open, or no `;` at all), so the scan gives up rather than hold the
+/// rest of the file.
 const MAX_RECORD: usize = 64 << 20;
 
 /// Every `;` ended record, a `;` inside a quoted string kept in its record.
@@ -346,16 +347,17 @@ fn for_each_record(path: &Path, mut f: impl FnMut(&[u8]) -> Result<(), String>) 
     let mut quoted = false;
     loop {
         let mut i = rec.len();
-        if reader.read_until(b';', &mut rec).map_err(|e| e.to_string())? == 0 {
+        if i > MAX_RECORD {
+            return Err(format!("a STEP record runs past {} MiB", MAX_RECORD >> 20));
+        }
+        let room = (MAX_RECORD + 1 - i) as u64;
+        if (&mut reader).take(room).read_until(b';', &mut rec).map_err(|e| e.to_string())? == 0 {
             return if rec.is_empty() { Ok(()) } else { f(&rec) };
         }
         while i < rec.len() {
             i += if rec[i] == b'\'' { quote_at(&rec, i, &mut quoted) } else { 1 };
         }
-        if quoted {
-            if rec.len() > MAX_RECORD {
-                return Err(format!("a quoted string runs past {} MiB", MAX_RECORD >> 20));
-            }
+        if quoted || rec.last() != Some(&b';') {
             continue;
         }
         f(&rec)?;

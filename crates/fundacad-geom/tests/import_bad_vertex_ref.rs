@@ -207,3 +207,12 @@ fn a_vertex_is_not_made_on_a_curve_end_nothing_else_vouches_for() {
          its faces."
     );
 }
+
+#[test]
+fn a_record_that_never_ends_stops_the_scan() {
+    let file = blob_dir().join("no_semicolon.step");
+    std::fs::write(&file, vec![b'x'; (64 << 20) + 1]).unwrap();
+    let err = step_refs::scan(&file).err();
+    let _ = std::fs::remove_file(&file);
+    assert_eq!(err.as_deref(), Some("a STEP record runs past 64 MiB"));
+}
