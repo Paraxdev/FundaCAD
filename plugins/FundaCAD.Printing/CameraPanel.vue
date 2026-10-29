@@ -56,8 +56,13 @@ watch(
 </script>
 
 <template>
-  <FloatingPanel :open="!!cameraPanel" close-on-esc @close="cameraPanel = null">
-    <div class="measure-title">Camera, {{ cameraPanel }}</div>
+  <FloatingPanel
+    :open="!!cameraPanel"
+    :title="cameraPanel ? `Camera, ${cameraPanel}` : 'Camera'"
+    close-on-esc
+    @close="cameraPanel = null"
+  >
+    <div class="measure-title" aria-hidden="true">Camera, {{ cameraPanel }}</div>
     <img
       class="camera-frame"
       alt="printer camera"

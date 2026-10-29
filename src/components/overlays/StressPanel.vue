@@ -100,10 +100,10 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
 </script>
 
 <template>
-  <FloatingPanel :open="!!panels.stress" panel-class="stress-panel" @close="close">
+  <FloatingPanel :open="!!panels.stress" title="Stress" panel-class="stress-panel" @close="close">
     <template v-if="panels.stress && setup">
       <div class="stress-head">
-        <div class="measure-title">Stress</div>
+        <div class="measure-title" aria-hidden="true">Stress</div>
         <IconButton
           class="stress-close"
           icon="close"

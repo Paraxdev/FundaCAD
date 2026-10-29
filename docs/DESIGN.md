@@ -1007,13 +1007,15 @@ blur or shadow.
 ### 7.13 Tool and readout panels (`.measure-panel`)
 
 `Panel.vue` is the shell; it draws the glass, and on request a head and a hint. `FloatingPanel.vue` is its old name,
-taking only `open`, `closeOnEsc` and `panelClass`.
+taking only `open`, a required `title`, `closeOnEsc` and `panelClass`; it passes `titleHidden`, so its content draws
+the visible head and marks that copy `aria-hidden="true"`.
 
 ```ts
 defineProps<{
   open: boolean;
   title?: string;
   hint?: string;
+  titleHidden?: boolean; // false
   closable?: boolean; // false
   closeOnEsc?: boolean; // false
   panelClass?: string; // ""
@@ -1027,7 +1029,8 @@ defineEmits<{ close: [] }>();
   panel only through `panelClass` and a rule for that class in `_modals.scss`
   (`.properties-panel` min width 260px, `.stress-panel` 340px wide and
   scrolling).
-- `title` draws the panel's name as its `.measure-title` and names the panel (`role="region"`, `aria-labelledby`);
+- `title` draws the panel's name as its `.measure-title`, an `h2`, and names the panel (`role="region"`,
+  `aria-labelledby`), so heading keys and the rotor reach it. `titleHidden` keeps that `h2` for screen readers only;
   `head-actions` sit beside it and `closable` adds the 28px Close button after them. `hint` is the last line, a
   `.measure-hint`; the `foot` slot sits under the content. Without them the content is yours, from the classes below.
 - `closeOnEsc` adds a capture phase `keydown` listener on `window` that emits

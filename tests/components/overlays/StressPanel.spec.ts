@@ -112,6 +112,16 @@ describe("StressPanel", () => {
     expect(q(".stress-panel")).toBeNull();
   });
 
+  it("is a region headed Stress, the drawn title hidden from screen readers so it is read once", async () => {
+    await mounted();
+    usePanelsStore().showStress("b1");
+    await flushPromises();
+    const el = q(".stress-panel")!;
+    const head = document.getElementById(el.getAttribute("aria-labelledby")!)!;
+    expect([el.getAttribute("role"), head.tagName, head.textContent]).toEqual(["region", "H2", "Stress"]);
+    expect(q(".stress-head .measure-title")!.getAttribute("aria-hidden")).toBe("true");
+  });
+
   it("shows the setup and hands the face buttons, Run and Close to the facade", async () => {
     const { panels } = await mounted();
     usePanelsStore().showStress("b1");
