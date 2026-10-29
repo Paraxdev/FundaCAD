@@ -116,15 +116,18 @@ jobs:
       matrix:
         variant: [release, sanitize]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ matrix.variant == 'before-planar-fix' && 'd7c14e629688d19b569b01bf2027ea1ddec2682b' || github.sha }}
+          persist-credentials: false
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
 
       - name: Cache the static OpenCASCADE build
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: target/OCCT
           key: occt-static-${{ runner.os }}-${{ hashFiles('third_party/opencascade-rs/crates/occt-sys/src/lib.rs', 'third_party/opencascade-rs/crates/opencascade-sys/build.rs', 'third_party/opencascade-rs/crates/opencascade-sys/Cargo.toml') }}
