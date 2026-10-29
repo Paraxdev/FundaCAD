@@ -6,7 +6,14 @@ file = "manual/docs/img/sketch-constraints.png"
 size = [860, 600]
 theme = "fundacad"
 crop = "region"
-stub = true
+at = [580, 62]
+park = [300, 860]
+steps = [
+  { open = "fixture:sketch-plate.json", name = "Plate.funda" },
+  { click = "feature:s", double = true },
+  { evaluate = "() => window.viewport.frameAround([4, -5, 0], 115)" },
+  { wait = 900 },
+]
 show = "A dimensioned rectangle and the Relations list in the sketch palette."
 alt = "A dimensioned rectangle and the Relations list in the sketch palette"
 uses = ["manual/docs/sketch/constraints.md:5"]
@@ -56,7 +63,14 @@ file = "manual/docs/img/sketch-palette.png"
 size = [290, 620]
 theme = "fundacad"
 crop = "panel"
-stub = true
+target = "#palette"
+fit = "size"
+park = [300, 860]
+steps = [
+  { open = "fixture:sketch-plate.json", name = "Plate.funda" },
+  { click = "feature:s", double = true },
+  { wait = 600 },
+]
 show = "The sketch palette with Snap, Construction and the other options."
 alt = "The sketch palette with Snap, Construction and the other options"
 uses = ["manual/docs/sketch/snapping.md:5"]

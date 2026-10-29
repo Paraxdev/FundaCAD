@@ -18,7 +18,7 @@ The palette holds the options of the sketch you are in.
 | Reference Dim | New dimensions only measure, see [Dimensions](dimensions.md). |
 | Sketch Grid | Shows the grid. |
 | Snap | Snaps to the grid and onto lines. Off, the cursor still catches points. |
-| Show Profile | Shades the closed regions. |
+| Show Profile | Shades the closed regions of your other sketches. The sketch you are in stays shaded. |
 | Show Dimensions | Shows the dimensions. |
 | Show Constraints | Shows the constraint marks and the Relations list. |
 
