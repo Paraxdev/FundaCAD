@@ -54,6 +54,9 @@ jobs:
       - name: UI controls
         run: node scripts/check-ui-controls.mjs
 
+      - name: Font sizes
+        run: node scripts/check-font-sizes.mjs
+
       - name: Install Node
         uses: actions/setup-node@v4
         with:

@@ -470,22 +470,32 @@ labels. New mono text uses 400 or 500. `.key-chip kbd`, `.grid-btn`,
 `.versions-branch-name` and `.prompt-key` use mono 600, which has no face and
 renders as a synthetic bold; do not copy it.
 
-The base is `font-size: 13px` with `font-feature-settings: "cv11", "ss01", "tnum"`
+The base is `font-size: var(--fs-body)` with `font-feature-settings: "cv11", "ss01", "tnum"`
 on `html, body`, so numerals are tabular everywhere. Numbers in fields use the
-UI font, not mono. All sizes are px, there is no rem.
+UI font, not mono. Text sizes are the rem tokens of `_tokens.scss`, so the
+browser's text size and Interface size both carry them, and nothing renders
+under 11px:
 
-| Size | Role | Examples |
-|---|---|---|
-| 9px | On canvas micro text, badge digits | `.dim-field`, `.icon-btn-badge` |
-| 10px | Caps micro labels, counts | `.palette-title`, `.panel-title`, `.context-tab`, `.tree-count` |
-| 10.5px | Secondary micro | `.rail-sub`, `.rd-head`, `.sm-section` |
-| 11px | Small secondary text, default caps label | `.rail-group-name`, `.cmdk-group`, `.cmdk-key`, `.opt-hint`, `.sm-input` |
-| 11.5px | State and note text | `.ft-state`, `.param-note`, `.toast-action` |
-| 12px | Controls and body in panels | `button`, `.btn`, `.param-row label`, `.pop-note`, `.prompt` |
-| 12.5px | Rows and labels of the floating shell | `.rail-label`, `.opt-row`, `.ctx-item`, `.tree-folder`, `.float-tab`, `.toast` |
-| 13px | Card titles | `.float-card-title` (600) |
-| 14px | Dialog title | `.modal-head h2` (600, letter-spacing 0.3px) |
-| 15px | Command palette input | `.cmdk-input` |
+| Token | Size | Role | Examples |
+|---|---|---|---|
+| `--fs-micro` | 0.6875rem, 11px | The floor: caps micro labels, counts, badge digits, small secondary text | `.chip-xs`, `.ui-field-sm`, `.panel-title`, `.rail-sub` |
+| `--fs-small` | 0.75rem, 12px | Controls and body in panels, every error | `button`, `.ui-field-hint`, an error hint, `.prompt` |
+| `--fs-body` | 0.8125rem, 13px | Body, rows and labels of the floating shell, card titles | `body`, `.rail-label`, `.float-card-title` (600) |
+| `--fs-title` | 0.9375rem, 15px | Dialog titles, the command palette input | `.modal-head h2`, `.cmdk-input` |
+| `--fs-display` | 1.125rem, 18px | The two Preferences headings | `.prefs-pane-title` |
+
+A size between two tokens takes the nearest one at or above the floor, so the
+old 10 and 10.5px become 11px, 11.5px becomes 12px and 12.5px becomes 13px.
+`node scripts/check-font-sizes.mjs` runs in CI beside the controls guard, and
+`tests/ui/fontSizes.test.ts` runs the same scan (`scanFontSizes` in
+`scripts/fontSizes.mjs`) in `npm test`: a `font-size`, the size in a `font`
+shorthand, an inline style or a style object in `src/` or `plugins/` has to be
+a `var(--fs-*)` token (a fallback, as in `var(--fs-micro, 11px)`, and a unitless
+`--*-scale` factor in a `calc` are fine) or a global keyword like `inherit`.
+`scripts/font-size-allow.json` is a ratchet like the controls allowlist, one
+count per file: moving sizes to tokens lowers it with `--lower`, never raise it.
+Canvas fonts set from TS (`ctx.font`) are not CSS and follow Viewport label
+size instead.
 
 There is no display type. Nothing in the chrome is above 15px except two
 Preferences headings at 18px.
@@ -495,7 +505,7 @@ Caps labels are small, bold, uppercase and tracked, in `--text-mute` or
 `--text-mute`; `.palette-title` 1.2px, `#context-tab` 0.8px and
 `.home-nav-section` 0.4px, all `--text-dim`. Match the sibling label when you
 extend a surface. A label in a new surface is
-`font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-mute)`
+`font-size: var(--fs-micro); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-mute)`
 (0.06em for a section head), and `--text-dim` only where it must be read, not
 just scanned. Titles and row labels are sentence case and untracked.
 
