@@ -1720,17 +1720,21 @@ impl FundaCad {
         }
         let (rows, tail) = self.changed_bodies(&bodies, full).await;
         let listed = rows.len();
-        let rows = budget::fold(
-            rows.into_iter()
-                .map(|(id, line)| {
-                    let name = names.get(&id).cloned().unwrap_or_default();
-                    budget::Row::of_line(id, name, line)
-                })
-                .collect(),
-        );
+        let rows = if full {
+            rows.into_iter().map(|(_, line)| line).collect()
+        } else {
+            budget::fold(
+                rows.into_iter()
+                    .map(|(id, line)| {
+                        let name = names.get(&id).cloned().unwrap_or_default();
+                        budget::Row::of_line(id, name, line)
+                    })
+                    .collect(),
+            )
+        };
         let (shown, more) = page.cut_asking(rows, "rows", if full { "" } else { "full true and " });
         let mut lines = Vec::new();
-        if listed > budget::FOLD_FROM {
+        if listed > budget::FOLD_FROM && !full {
             lines.push(format!(
                 "{listed} bodies{}, alike ones in one row:",
                 if listed < bodies.len() { " changed" } else { "" }
@@ -1812,10 +1816,9 @@ impl FundaCad {
         let mut gone: Vec<&String> = previous.keys().filter(|id| !bodies.iter().any(|(b, _, _)| b == *id)).collect();
         gone.sort_by(|a, b| budget::natural(a, b));
         if !gone.is_empty() {
-            out.push(format!(
-                "gone since the last build: {}",
-                budget::ranges(&gone.iter().map(|s| s.as_str()).collect::<Vec<_>>(), false)
-            ));
+            let gone: Vec<&str> = gone.iter().map(|s| s.as_str()).collect();
+            let said = if gone.len() > budget::FOLD_FROM { budget::ranges(&gone, false) } else { gone.join(", ") };
+            out.push(format!("gone since the last build: {said}"));
         }
         let same = bodies.len() - shown;
         if same > 0 {
@@ -1891,7 +1894,8 @@ impl FundaCad {
                     .collect(),
                 Err(e) => return engine_gone(&e),
             };
-            let (ids, line) = page.cut(ids, "bodies");
+            let few = ids.len() <= budget::FOLD_FROM && args.get("limit").is_none_or(Value::is_null);
+            let (ids, line) = if few { Page { limit: 0, ..page } } else { page }.cut(ids, "bodies");
             if let Some(line) = line {
                 if ids.is_empty() {
                     return text(line);

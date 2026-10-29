@@ -65,7 +65,6 @@ fn every_reply_on_a_pattern_of_2000_pins_stays_within_its_byte_budget() {
     let probe = json!([{"op": "param", "name": "probe", "expr": "3"}, {"op": "param_remove", "name": "probe"}]);
     let calls = [
         ("build", json!({}), 600),
-        ("build", json!({"full": true}), 600),
         ("inspect", json!({}), 1000),
         ("inspect", json!({"detail": true}), 8000),
         ("inspect", json!({"detail": true, "selectors": true}), 20000),
@@ -111,6 +110,10 @@ fn every_row_a_long_reply_folds_or_pages_away_is_one_argument_off() {
     let built = reply(&mut mcp, "build", json!({}));
     assert!(built.starts_with(&format!("{BODIES} bodies, alike ones in one row:\n")), "{}", head(&built));
     assert!(built.contains("(and 1999 more alike: body4..body2002, named \"Pin 2\"..\"Pin 2000\")"), "{built}");
+    let whole = reply(&mut mcp, "build", json!({"full": true}));
+    assert_eq!(whole.lines().filter(|l| l.starts_with("body")).count(), BODIES, "full lists every body");
+    assert!(whole.starts_with("body1 \"Pin\": 2.0 x 2.0 x 2.0 mm") && !whole.contains("alike"), "{}", head(&whole));
+    assert!(whole.contains(&format!("\n{LAST} \"Pin 2000\": 2.0 x 2.0 x 2.0 mm")), "the last pin: {}", head(&whole));
 
     let rows = reply(&mut mcp, "inspect", json!({"limit": 1}));
     assert!(rows.ends_with("showing rows 1 to 1 of 3: pass offset 1 for the next 1, or limit 0 for all"), "{rows}");
