@@ -57,7 +57,8 @@ function ringFaults(css: string): string[] {
 }
 
 const css = compileMainScss();
-const rules = focusRules(css);
+// _forced.scss only recolours rings, tests/ui/forcedColors.test.ts covers it.
+const rules = focusRules(css).filter((r) => !r.within.some((w) => w.includes("forced-colors")));
 const ruleFor = (selector: string) =>
   rules.filter((r) =>
     r.selector

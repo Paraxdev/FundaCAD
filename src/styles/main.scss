@@ -38,5 +38,7 @@
 @use "touch";
 // Last on purpose, see the header of _icons.scss.
 @use "icons";
+// After every state rule it recolours for a Windows contrast theme.
+@use "forced";
 // Truly last, it switches every animation off when asked.
 @use "motion";

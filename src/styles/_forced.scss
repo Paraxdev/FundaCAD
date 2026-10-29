@@ -1,0 +1,110 @@
+// Forced colours, a Windows contrast theme in WebView2. The browser drops box-shadow and gradients and maps every
+// author colour to the theme, which erases control edges, selected fills and the slider. WKWebView and WebKitGTK
+// never match this query, the High Contrast themes (ui/theme.ts) cover macOS and Linux.
+// tests/ui/forcedColors.test.ts holds every rule here to system colours.
+
+$selected: (
+  ".ui-list-row.is-selected",
+  ".ui-segment.is-selected",
+  ".ui-tabs-nav .ui-tab.is-selected",
+  ".ui-checkbox.is-on .ui-checkbox-mark",
+  ".ui-checkbox.is-mixed .ui-checkbox-mark",
+  ".ui-switch.is-on",
+  ".feature-row.selected",
+  ".tree-folder.selected",
+  "#timeline .timeline-node.selected",
+  ".opt-row.selected",
+  ".home-nav-row.active",
+  ".prefs-nav-btn.active",
+  ".rail-btn.active",
+  ".float-tab.active",
+  ".icon-btn.active",
+  ".btn.is-on",
+  ".btn.on",
+  ".dim-btn.on",
+  ".cmdk-item.active",
+  ".rd-tile.is-selected",
+  ".mats-row.is-selected"
+);
+
+@media (forced-colors: active) {
+  // No specificity, so any focus ring replaces the edge while it shows.
+  :where(.ui-field, .sm-input, .sm-select, .param-select, .ui-checkbox-mark, .ui-switch, .ui-segmented-bar) {
+    outline: 1px solid ButtonText;
+    outline-offset: -1px;
+  }
+
+  // Important: the state rules set their own colours at every specificity, and those get mapped to Canvas.
+  #{$selected} {
+    background-color: Highlight !important;
+    color: HighlightText !important;
+  }
+  :is(#{$selected}) :not(input, textarea) {
+    color: HighlightText !important;
+  }
+  .ui-tab.is-selected::after {
+    background-color: Highlight !important;
+  }
+  .ui-checkbox-mark::after {
+    background-color: HighlightText !important;
+  }
+  .ui-switch-knob {
+    background-color: ButtonText !important;
+  }
+  .ui-switch.is-on .ui-switch-knob {
+    background-color: HighlightText !important;
+  }
+
+  :focus-visible,
+  .ui-field:focus-within,
+  .ui-checkbox-input:focus-visible + .ui-checkbox-mark,
+  .ui-slider:has(.ui-slider-input:focus-visible),
+  .dim-field input:focus,
+  .units select:focus {
+    outline-color: Highlight !important;
+  }
+
+  // The rail and its fill are gradients, so the slider opts out and paints them in system colours itself.
+  .ui-slider-input {
+    forced-color-adjust: none;
+  }
+  .ui-slider-input::-webkit-slider-runnable-track {
+    background: linear-gradient(to right, Highlight var(--ui-slider-fill), ButtonText var(--ui-slider-fill));
+  }
+  .ui-slider-input::-moz-range-track {
+    background: linear-gradient(to right, Highlight var(--ui-slider-fill), ButtonText var(--ui-slider-fill));
+  }
+  .profile-slider .ui-slider-input::-webkit-slider-runnable-track {
+    background: linear-gradient(
+      to right,
+      ButtonText var(--profile-from),
+      Highlight var(--profile-from),
+      Highlight var(--profile-to),
+      ButtonText var(--profile-to)
+    );
+  }
+  .profile-slider .ui-slider-input::-moz-range-track {
+    background: linear-gradient(
+      to right,
+      ButtonText var(--profile-from),
+      Highlight var(--profile-from),
+      Highlight var(--profile-to),
+      ButtonText var(--profile-to)
+    );
+  }
+  .ui-slider-input::-webkit-slider-thumb {
+    background-color: ButtonText !important;
+    box-shadow: 0 0 0 2px Canvas;
+  }
+  .ui-slider-input::-moz-range-thumb {
+    background-color: ButtonText !important;
+    box-shadow: 0 0 0 2px Canvas;
+  }
+
+  // Panel glyphs stroke theme tokens, so they follow the text colour like the icons.
+  .profile-glyph-edge,
+  .profile-glyph-corner,
+  .guide-model polyline {
+    stroke: currentColor;
+  }
+}
