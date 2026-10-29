@@ -69,7 +69,7 @@ export function setPressed(el: HTMLElement, on: boolean): void {
 }
 
 /** Acts on a primary press without moving focus (a tool box keeps its field), and on a click no press led to: Enter,
- *  Space and a screen reader's activation (NVDA browse mode, VoiceOver VO+Space, Orca) send only the click. */
+ *  Space and a screen reader's activation (NVDA browse mode, VoiceOver VO+Space, the Linux reader) send only the click. */
 export function onActivate(el: HTMLElement, act: (e: Event) => void): void {
   let press: { up: number } | null = null;
   el.addEventListener("pointerdown", (e) => {
