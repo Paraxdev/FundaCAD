@@ -117,10 +117,12 @@
 .tree-eye.icon-btn:focus-visible {
   opacity: 1;
 }
-:root[data-pointer="touch"] .tree-caret.icon-btn.icon-btn-sm::before {
+:root[data-pointer="touch"] .tree-caret.icon-btn.icon-btn-sm::before,
+:root[data-targets="large"] .tree-caret.icon-btn.icon-btn-sm::before {
   inset: -13px -14px;
 }
-:root[data-pointer="touch"] .tree-eye.icon-btn.icon-btn-sm::before {
+:root[data-pointer="touch"] .tree-eye.icon-btn.icon-btn-sm::before,
+:root[data-targets="large"] .tree-eye.icon-btn.icon-btn-sm::before {
   inset: -13px -6px;
 }
 /* The Extra Parameters plugin draws its setup button with inline styles, so its hit area is set here. */

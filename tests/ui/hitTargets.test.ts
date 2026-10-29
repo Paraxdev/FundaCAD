@@ -5,7 +5,7 @@ import * as sass from "sass";
 import { describe, expect, it } from "vitest";
 import hitScss from "../../src/styles/_hit.scss?raw";
 import { compileMainScss } from "./compileStyles";
-import { missingHitAreas, valueOf } from "./hitGuard";
+import { missingHitAreas, touchTwins, valueOf } from "./hitGuard";
 
 const css = compileMainScss();
 
@@ -92,5 +92,47 @@ describe("base components", () => {
     expect(valueOf(css, ".check input", "left")).toBe("min(0px, (100% - var(--hit-min)) / 2)");
     expect(valueOf(css, ".check input", "width")).toBe("max(100%, var(--hit-min))");
     expect(valueOf(css, ".check input", "height")).toBe("max(100%, var(--hit-min))");
+  });
+});
+
+describe("Larger click targets", () => {
+  const { untwinned, fingerTwinned } = touchTwins(css);
+
+  // These stay touch only: a range and the legacy checkbox input reach --hit-min through their own rules, which
+  // these would shift or shrink, and the pointer: coarse value box spacing follows the device, not the setting.
+  it("turns on every touch hit area for any pointer", () => {
+    expect(untwinned).toEqual(
+      [
+        ".check input",
+        ".dim-btn.icon-btn::before",
+        ".dim-btn::before",
+        ".param-switch input",
+        ".profile-slider .ui-slider-input",
+        "input[type=range]",
+      ].sort(),
+    );
+    const large = (sel: string, prop: string) => valueOf(css, `:root[data-targets="large"] ${sel}`, prop);
+    expect(large(".tree-caret", "position")).toBe("relative");
+    expect(large(".tree-caret.icon-btn.icon-btn-sm::before", "inset")).toBe("-13px -14px");
+    expect(large(".icon-btn.icon-btn-sm::before", "inset")).toBe("-8px");
+    expect(large(".btn.btn-sm::before", "inset")).toBe("-6px -2px");
+    expect(large(".timeline-transport .tl-btn.icon-btn.icon-btn-sm::before", "inset")).toBe("-5px -1px");
+    expect(large(".timeline-marker .marker-grip::after", "inset")).toBe("-12px -13px");
+  });
+
+  it("leaves the finger only rules to touch", () => {
+    expect(fingerTwinned).toEqual([]);
+    expect(valueOf(css, ':root[data-pointer="touch"] .tree-eye', "opacity")).toBe("0.9");
+    expect(valueOf(css, ':root[data-pointer="touch"] .rel-del', "visibility")).toBe("visible");
+    expect(valueOf(css, ':root[data-targets="large"] .tree-eye', "opacity")).toBeUndefined();
+    expect(valueOf(css, ':root[data-targets="large"] .rel-del', "visibility")).toBeUndefined();
+  });
+
+  it("guard names a touch area with no twin and a finger only rule with one", () => {
+    const sample = sass.compileString(
+      ':root[data-pointer="touch"], :root[data-targets="large"] { .a::before { inset: -4px; } .f { opacity: 1; } }\n' +
+        ':root[data-pointer="touch"] .b::before { inset: -4px; } :root[data-pointer="touch"] .g:hover { transform: none; }',
+    ).css;
+    expect(touchTwins(sample)).toEqual({ untwinned: [".b::before"], fingerTwinned: [".f"] });
   });
 });

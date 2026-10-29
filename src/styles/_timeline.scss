@@ -33,13 +33,16 @@
   color: var(--text);
 }
 /* The base sm touch inset would overlap the 2px gaps, so the transport keeps its own from _touch.scss. */
-:root[data-pointer="touch"] .timeline-transport .tl-btn.icon-btn.icon-btn-sm::before {
+:root[data-pointer="touch"] .timeline-transport .tl-btn.icon-btn.icon-btn-sm::before,
+:root[data-targets="large"] .timeline-transport .tl-btn.icon-btn.icon-btn-sm::before {
   inset: -5px -1px;
 }
-:root[data-pointer="touch"] .timeline-transport .tl-btn.icon-btn.icon-btn-sm:first-child::before {
+:root[data-pointer="touch"] .timeline-transport .tl-btn.icon-btn.icon-btn-sm:first-child::before,
+:root[data-targets="large"] .timeline-transport .tl-btn.icon-btn.icon-btn-sm:first-child::before {
   left: -7px;
 }
-:root[data-pointer="touch"] .timeline-transport .tl-btn.icon-btn.icon-btn-sm:last-child::before {
+:root[data-pointer="touch"] .timeline-transport .tl-btn.icon-btn.icon-btn-sm:last-child::before,
+:root[data-targets="large"] .timeline-transport .tl-btn.icon-btn.icon-btn-sm:last-child::before {
   right: -7px;
 }
 .timeline-errbadge {

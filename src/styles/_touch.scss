@@ -33,9 +33,11 @@ textarea,
 }
 
 /* Small targets grow to about 40px through a transparent pseudo element with a negative inset, held back
-   from scroller edges so nothing reflows. The kind flips after hit testing, so the first touch tap stays small. */
-:root[data-pointer="touch"] {
-  // Hosts get position: relative here only, so the mouse layout is untouched. None of them may hold an
+   from scroller edges so nothing reflows. The kind flips after hit testing, so the first touch tap stays small.
+   Larger click targets turns the same areas on for every pointer. */
+:root[data-pointer="touch"],
+:root[data-targets="large"] {
+  // Hosts get position: relative here only, so the default layout is untouched. None of them may hold an
   // absolute child placed against an outer box, check that before adding one.
   .tree-caret,
   .tree-eye,
@@ -93,10 +95,6 @@ textarea,
   }
   .tree-eye::before {
     inset: -13px -6px;
-  }
-  // A finger never hovers, so at the resting 0.35 the eye looks switched off.
-  .tree-eye {
-    opacity: 0.9;
   }
 
   // Title bar: each reaches the full 36px bar and no further, never over the model.
@@ -190,28 +188,7 @@ textarea,
   .target-edit::before {
     inset: -8px -2px;
   }
-  // The checkbox already lies over the drawn switch, so it just grows. A checkbox keeps its
-  // own width when only its edges are given, hence the explicit size.
-  .param-switch input,
-  .check input {
-    top: -9px;
-    left: -5px;
-    width: calc(100% + 10px);
-    height: calc(100% + 18px);
-  }
-  // Padding grows the press area and the margin hands it back: the UA margin on a range is
-  // 2px, so -8px against 10px leaves the outer box unchanged.
-  input[type="range"] {
-    padding-top: 10px;
-    padding-bottom: 10px;
-    margin-top: -8px;
-    margin-bottom: -8px;
-  }
 
-  // Sketch palette: the delete cross only appears under a hovering mouse, out of a finger's reach.
-  .rel-del {
-    visibility: visible;
-  }
   .rel-del::before {
     inset: -9px -11px;
   }
@@ -245,11 +222,6 @@ textarea,
   .dim-unit::before {
     inset: -11px -8px -11px -4px;
   }
-  // A native range is hit only on itself, so the input grows into the gaps around it, centred on the rail.
-  .profile-slider .ui-slider-input {
-    height: 36px;
-    margin: -8px 0;
-  }
 
   // Each grown label hides model from picking, so these stop at 36px. The area goes under
   // the label's content (it has a transform), or it would cover the value box.
@@ -262,9 +234,44 @@ textarea,
   }
 }
 
-/* A finger leaves :hover set until the next tap elsewhere, so hover never moves anything
-   here; colour changes stay. */
+/* Touch only: the inputs below reach --hit-min under Larger click targets through their own rules
+   (ui/_slider.scss, _checkbox.scss), which these would shift or shrink. */
 :root[data-pointer="touch"] {
+  // The checkbox already lies over the drawn switch, so it just grows. A checkbox keeps its
+  // own width when only its edges are given, hence the explicit size.
+  .param-switch input,
+  .check input {
+    top: -9px;
+    left: -5px;
+    width: calc(100% + 10px);
+    height: calc(100% + 18px);
+  }
+  // Padding grows the press area and the margin hands it back: the UA margin on a range is
+  // 2px, so -8px against 10px leaves the outer box unchanged.
+  input[type="range"] {
+    padding-top: 10px;
+    padding-bottom: 10px;
+    margin-top: -8px;
+    margin-bottom: -8px;
+  }
+  // A native range is hit only on itself, so the input grows into the gaps around it, centred on the rail.
+  .profile-slider .ui-slider-input {
+    height: 36px;
+    margin: -8px 0;
+  }
+}
+
+/* Finger only. A finger never hovers, and leaves :hover set until the next tap elsewhere, so hover
+   never moves anything here; colour changes stay. */
+:root[data-pointer="touch"] {
+  // At the resting 0.35 the eye looks switched off.
+  .tree-eye {
+    opacity: 0.9;
+  }
+  // Sketch palette: the delete cross only appears under a hovering mouse, out of a finger's reach.
+  .rel-del {
+    visibility: visible;
+  }
   .timeline-node:hover {
     transform: none;
   }

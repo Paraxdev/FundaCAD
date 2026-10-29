@@ -41,3 +41,25 @@ export function missingHitAreas(css: string, hosts: readonly string[]): string[]
   }
   return hosts.filter((host) => !grown.has(normal(host)));
 }
+
+const TOUCH = ":root[data-pointer=touch] ";
+const LARGE = ":root[data-targets=large] ";
+const FINGER = /(?:^|;)\s*(?:opacity|visibility|transform):/;
+
+/** Touch rules with no Larger click targets twin in the same rule, and finger only rules (opacity,
+ *  visibility, transform) that have one, each by its selector after the root. */
+export function touchTwins(css: string): { untwinned: string[]; fingerTwinned: string[] } {
+  const untwinned = new Set<string>();
+  const fingerTwinned = new Set<string>();
+  for (const { selectors, body } of rules(css)) {
+    const finger = FINGER.test(body);
+    for (const s of selectors) {
+      if (!s.startsWith(TOUCH)) continue;
+      const tail = s.slice(TOUCH.length);
+      const twinned = selectors.includes(LARGE + tail);
+      if (finger && twinned) fingerTwinned.add(tail);
+      if (!finger && !twinned) untwinned.add(tail);
+    }
+  }
+  return { untwinned: [...untwinned].sort(), fingerTwinned: [...fingerTwinned].sort() };
+}

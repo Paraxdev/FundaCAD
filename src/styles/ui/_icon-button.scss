@@ -57,11 +57,14 @@
 }
 
 :root[data-pointer="touch"] .icon-btn.icon-btn-sm::before,
-:root[data-pointer="touch"] .icon-btn.icon-btn-md::before {
+:root[data-pointer="touch"] .icon-btn.icon-btn-md::before,
+:root[data-targets="large"] .icon-btn.icon-btn-sm::before,
+:root[data-targets="large"] .icon-btn.icon-btn-md::before {
   content: "";
   position: absolute;
   inset: -6px;
 }
-:root[data-pointer="touch"] .icon-btn.icon-btn-sm::before {
+:root[data-pointer="touch"] .icon-btn.icon-btn-sm::before,
+:root[data-targets="large"] .icon-btn.icon-btn-sm::before {
   inset: -8px;
 }
