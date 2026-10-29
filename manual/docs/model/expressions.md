@@ -1,12 +1,14 @@
 # Expressions
 
-An expression is a small calculation you type where a number goes, such as `width / 2`. It works in a step's values, in the value box while a tool runs, on sketch dimensions and in the Parameters dialog.
+An expression is a small calculation you type where a number goes, such as `width / 2`. Parameter names work in a step's values in the History, on sketch dimensions and in the Parameters dialog.
 
-![The Extrude distance box holding rib = width / 4](../img/expression-value.png)
+The value box of a running tool, such as Extrude, takes numbers, units and plain maths like `20 / 4` or `1 in`, but no names.
+
+![A sketch dimension's value box holding hole = width / 5](../img/expression-value.png)
 
 ## Writing one
 
-- Put a name and an equals sign first, as in `rib = width / 4`, to name the result.
+- Put a name and an equals sign first, as in `hole = width / 5`, to name the result. This works in a step's values and on sketch dimensions.
 - Units are mm, cm, in, deg and rad, so `1 in` is 25.4 mm.
 - Without a unit, a length is mm and an angle is degrees.
 - Use `+`, `-`, `*`, `/`, `^` for powers, brackets, and `PI`.

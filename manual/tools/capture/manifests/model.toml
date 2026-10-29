@@ -36,7 +36,24 @@ file = "manual/docs/img/construct-planes.png"
 size = [660, 620]
 theme = "fundacad"
 crop = "region"
-stub = true
+around = "world:0,0,15"
+park = [1300, 860]
+pause = 1600
+steps = [
+  { open = "fixture:sketch-block.json" },
+  { panel = "items", open = false },
+  { panel = "history", open = false },
+  { tool = "Datum Plane" },
+  { click_at = true, world = [0, 0, 10] },
+  { type = ["Offset", "25"], enter = true },
+  { press = "Escape" },
+  { tool = "Axis on Edge" },
+  { pick_edge = "near=30,-20,0", via = "edge" },
+  { press = "Escape" },
+  { mouse = "down", at = [1250, 250], button = "right" },
+  { mouse = "move", by = [0, -30], steps = 6 },
+  { mouse = "up", button = "right" },
+]
 show = "A block with an offset plane above it and a vertical datum axis."
 alt = "A block with an offset plane above it and a vertical datum axis"
 uses = ["manual/docs/model/construct.md"]
@@ -45,10 +62,29 @@ uses = ["manual/docs/model/construct.md"]
 file = "manual/docs/img/expression-value.png"
 size = [480, 240]
 theme = "fundacad"
-crop = "control"
-stub = true
-show = "The Extrude distance value box holding the expression rib = width / 4, with the current value box options."
-alt = "The Extrude distance box holding rib = width / 4"
+crop = "region"
+around = "sketch:5,11"
+park = [1300, 860]
+steps = [
+  { open = "fixture:sketch-dim.json" },
+  { evaluate = "() => window.store.addParam('width', '40')" },
+  { wait = 400 },
+  { panel = "history" },
+  { click = "feature:s", double = true },
+  { panel = "items", open = false },
+  { panel = "history", open = false },
+  { evaluate = "() => window.viewport.frameAround([14, 10, 0], 110)" },
+  { wait = 900 },
+  { tool = "Dimension" },
+  { click_at = true, sketch = [16, 10] },
+  { hover = [26, 17], space = "sketch" },
+  { click_at = true, sketch = [26, 17] },
+  { wait = 400 },
+  { evaluate = "() => { const i = document.querySelector('.dim-field input'); i.focus(); i.value = 'hole = width / 5'; i.dispatchEvent(new Event('input', { bubbles: true })); }" },
+  { wait = 400 },
+]
+show = "A sketch dimension's value box holding the expression hole = width / 5."
+alt = "A sketch dimension's value box holding hole = width / 5"
 uses = ["manual/docs/model/expressions.md"]
 
 [[shot]]
@@ -229,7 +265,17 @@ file = "manual/docs/img/items-list.png"
 size = [276, 852]
 theme = "fundacad"
 crop = "panel"
-stub = true
+target = "#browser"
+fit = "size"
+park = [1300, 860]
+steps = [
+  { open = "fixture:items-hardware.json" },
+  { panel = "history", open = false },
+  { panel = "items" },
+  { evaluate = "() => document.querySelectorAll('#browser .tree-folder[aria-expanded=\"false\"] .tree-caret').forEach((b) => b.click())" },
+  { wait = 300 },
+  { press = "Escape" },
+]
 show = "The Items card with a Hardware folder holding two bodies, one of them hidden."
 alt = "The Items card with a Hardware folder holding two bodies, one of them hidden"
 uses = ["manual/docs/model/items.md"]
@@ -308,7 +354,17 @@ file = "manual/docs/img/parameters-dialog.png"
 size = [694, 306]
 theme = "fundacad"
 crop = "panel"
-stub = true
+target = ".params-dialog"
+pad = 10
+fit = "size"
+park = [1300, 860]
+steps = [
+  { evaluate = "() => { window.store.addParam('width', '40'); window.store.addParam('depth', '30'); window.store.addParam('holes', '4', 'count'); }" },
+  { wait = 400 },
+  { evaluate = "() => { window.store.setParamComment('width', 'Plate width'); window.store.setParamComment('holes', 'Holes along the edge'); }" },
+  { wait = 400 },
+  { tool = "Parameters" },
+]
 show = "The Parameters dialog listing width, depth and holes."
 alt = "The Parameters dialog listing width, depth and holes"
 uses = ["manual/docs/model/parameters.md"]
