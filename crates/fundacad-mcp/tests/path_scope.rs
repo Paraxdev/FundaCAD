@@ -118,8 +118,21 @@ fn by_default_the_tools_reach_any_plain_folder() {
     let r = mcp.call("doc_save", json!({"path": slash(&folder.join("a.txt"))}));
     assert!(r.is_error && r.text.contains(".funda"), "{}", r.text);
     assert!(!folder.join("a.txt").exists());
-    let r = mcp.call("doc_save", json!({"path": slash(&data.join("recovery").join("r.funda"))}));
-    assert!(!r.is_error, "the recovery folder is the app's own: {}", r.text);
+    let snapshot = data.join("recovery").join("r.funda");
+    let r = mcp.call("doc_save", json!({"path": slash(&snapshot)}));
+    assert!(r.is_error, "{}", r.text);
+    assert_eq!(
+        r.text,
+        format!(
+            "{} is refused: the app's recovery folder holds the snapshots FundaCAD writes itself. Save to a \
+             folder of your own, such as one under Documents.",
+            snapshot.display()
+        )
+    );
+    assert!(!snapshot.exists());
+    std::fs::copy(&file, &snapshot).unwrap();
+    let r = mcp.call("doc_open", json!({"path": slash(&snapshot)}));
+    assert!(!r.is_error, "the recovery folder is the app's own, so a snapshot opens: {}", r.text);
 }
 
 #[test]

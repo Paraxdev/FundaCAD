@@ -346,7 +346,7 @@ fn dot_name(c: Component<'_>) -> Option<String> {
 }
 
 /// Windows and macOS file names ignore case, so a place spelled in another case is the same place.
-fn within(path: &Path, place: &Path) -> bool {
+pub fn within(path: &Path, place: &Path) -> bool {
     if cfg!(any(windows, target_os = "macos")) {
         let fold = |p: &Path| PathBuf::from(p.to_string_lossy().to_lowercase());
         fold(path).starts_with(fold(place))

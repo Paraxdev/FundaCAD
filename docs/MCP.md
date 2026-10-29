@@ -84,7 +84,8 @@ existing file that does not look like the kind it writes (a FundaCAD file, or
 a file of the export format; an empty file is fine) unless the call passes
 `overwrite: true`. A `separate` export checks every file it would replace
 before it moves the first one. `export` refuses any format but STEP, STL,
-3MF, DXF and SVG.
+3MF, DXF and SVG, and `doc_save` refuses the app's recovery folder, since the
+app offers each file there back at launch.
 
 Strict mode keeps the server to a folder list. It is on when a folder is
 given with `--allow-path <folder>` (repeatable, after `--mcp` for

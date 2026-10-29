@@ -27,6 +27,19 @@ pub fn extension_refusal(path: &Path, exts: &[&str], what: &str) -> Option<Strin
     None
 }
 
+/// The app offers every .funda in its recovery folder back at launch, so only the app writes there.
+pub fn recovery_refusal(path: &Path) -> Option<String> {
+    let recovery = crate::scope::canonical(&crate::app_session::app_data_dir().join("recovery"))?;
+    let target = crate::scope::canonical(path)?;
+    crate::scope::within(&target, &recovery).then(|| {
+        format!(
+            "{} is refused: the app's recovery folder holds the snapshots FundaCAD writes itself. Save to a \
+             folder of your own, such as one under Documents.",
+            path.display()
+        )
+    })
+}
+
 fn after_blanks(head: &[u8]) -> &[u8] {
     let head = head.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(head);
     let start = head.iter().position(|b| !b.is_ascii_whitespace()).unwrap_or(head.len());

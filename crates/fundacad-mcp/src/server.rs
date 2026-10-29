@@ -822,6 +822,9 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
             Ok(p) => p,
             Err(e) => return Ok(e),
         };
+        if let Some(why) = write_target::recovery_refusal(&path) {
+            return Ok(failure(why));
+        }
         // A .fundab path gets docfile's own refusal, which says how to make one.
         if !docfile::is_binary_path(&path) {
             if let Some(why) = write_target::extension_refusal(&path, &[docfile::TEXT_EXT], "doc_save") {
