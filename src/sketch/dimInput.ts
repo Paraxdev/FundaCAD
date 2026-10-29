@@ -1187,15 +1187,36 @@ export class DimInput {
       this.problem?.remove();
       this.problem = null;
       this.root.classList.remove("dim-bad");
+      this.markInvalid([]);
       return;
     }
     this.root.classList.add("dim-bad");
     if (!this.problem) {
       this.problem = document.createElement("div");
       this.problem.className = "dim-problem";
+      this.problem.id = `dim-problem-${this.boxNo}`;
       this.root.appendChild(this.problem);
     }
     this.problem.textContent = message;
+    const shown = this.fields.filter((f) => !f.hidden);
+    const typed = this.typedProblem ? shown.filter((f) => this.fieldProblem(f)) : [];
+    this.markInvalid(typed.length ? typed : shown);
+  }
+
+  private markInvalid(bad: Field[]) {
+    for (const f of this.fields) {
+      const on = bad.includes(f) && this.problem;
+      const describedBy = [f.chip?.id, on ? this.problem!.id : ""].filter(Boolean).join(" ");
+      if (describedBy) f.input.setAttribute("aria-describedby", describedBy);
+      else f.input.removeAttribute("aria-describedby");
+      if (on) {
+        f.input.setAttribute("aria-invalid", "true");
+        f.input.setAttribute("aria-errormessage", this.problem!.id);
+      } else {
+        f.input.removeAttribute("aria-invalid");
+        f.input.removeAttribute("aria-errormessage");
+      }
+    }
   }
 
   /** For a tool that judges its own values: the preview channel only hears about values sent to the kernel. */

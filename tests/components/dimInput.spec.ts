@@ -436,6 +436,39 @@ describe("what is typed is read, or refused out loud", () => {
     expect(problem()).toBe("R must be more than 0");
   });
 
+  it("marks the refused field invalid and points it at the reason, and clears both once the value reads", () => {
+    dim.show(
+      [
+        { name: "width", label: "W", positive: true },
+        { name: "height", label: "H" },
+      ],
+      () => {},
+    );
+    const state = () =>
+      [0, 1].map((i) => ({
+        invalid: input(i).getAttribute("aria-invalid"),
+        error: input(i).getAttribute("aria-errormessage"),
+        describedBy: input(i).getAttribute("aria-describedby"),
+      }));
+    const [w, h] = [0, 1].map((i) => input(i).getAttribute("aria-describedby")!);
+    type("-2");
+    const id = root().querySelector(".dim-problem")!.id;
+    const refused = state();
+    type("2");
+    expect({ chips: [w, h].every((c) => /^dim-unit-\d+$/.test(c!)), id, refused, cleared: state() }).toEqual({
+      chips: true,
+      id: expect.stringMatching(/^dim-problem-\d+$/),
+      refused: [
+        { invalid: "true", error: id, describedBy: `${w} ${id}` },
+        { invalid: null, error: null, describedBy: h },
+      ],
+      cleared: [
+        { invalid: null, error: null, describedBy: w },
+        { invalid: null, error: null, describedBy: h },
+      ],
+    });
+  });
+
   it("holds a count to whole numbers and its floor", () => {
     const commit = vi.fn();
     dim.show([{ name: "count", label: "N", kind: "count", integer: true, atLeast: 3 }], commit);
