@@ -33,6 +33,9 @@
 *[Profile]: A closed outline in a sketch that a solid can be made from.
 *[profile]: A closed outline in a sketch that a solid can be made from.
 *[profiles]: A closed outline in a sketch that a solid can be made from.
+*[construction geometry]: Guide lines in a sketch that are never part of an outline.
+*[reference dimension]: A dimension that only measures and never moves the sketch.
+*[reference dimensions]: A dimension that only measures and never moves the sketch.
 *[Sketch]: A flat drawing on a plane or a face.
 *[sketch]: A flat drawing on a plane or a face.
 *[Chamfer]: A flat bevel cut along an edge.
