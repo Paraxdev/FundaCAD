@@ -331,8 +331,9 @@ the bundle:
   feed. It starts as a draft until its files are up, and is the repository's
   latest release only while no stable release is published (stable installs
   find their feed through `releases/latest`). Its tag is made on the build's
-  commit by the job's token, which GitHub refuses on a commit that changes a
-  workflow file, so such a build warns and has only the rolling beta.
+  commit when the draft is published, by the job's token, which GitHub refuses
+  on a commit that changes a workflow file, so such a build deletes the draft,
+  warns and has only the rolling beta.
   `tests/build/test_version_release.py` runs the step against a stub `gh`.
 
 ### 6.1 The updater endpoint
