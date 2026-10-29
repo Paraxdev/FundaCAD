@@ -14,6 +14,7 @@ steps = [
   { panel = "items" },
   { panel = "history" },
   { press = "Escape" },
+  { evaluate = "() => document.documentElement.classList.remove('no-glass-blur')" },
   { evaluate = "() => { document.activeElement?.blur(); const el = document.elementFromPoint(845, 600); el.dispatchEvent(new WheelEvent('wheel', { deltaY: -300, clientX: 845, clientY: 600, bubbles: true, cancelable: true })); }" },
   { wait = 800 },
 ]
@@ -34,7 +35,9 @@ steps = [
   { panel = "items" },
   { panel = "history" },
   { press = "Escape" },
-  { evaluate = "() => document.activeElement?.blur()" },
+  { evaluate = "() => { const el = document.elementFromPoint(655, 350); el.dispatchEvent(new WheelEvent('wheel', { deltaY: -150, clientX: 655, clientY: 350, bubbles: true, cancelable: true })); }" },
+  { wait = 800 },
+  { evaluate = "() => { document.activeElement?.blur(); document.documentElement.classList.remove('no-glass-blur'); }" },
 ]
 show = "The workspace in FundaCAD Noir, every panel floating over the model as glass."
 alt = "The workspace in FundaCAD Noir: every panel floats over the model as glass"
@@ -54,8 +57,19 @@ file = "docs/design/workspace-blur-off.png"
 size = [1200, 736]
 theme = "fundacad"
 crop = "window"
-stub = true
-show = "The same workspace with blur off: opaque fills, same shapes and shadows."
+park = [1060, 700]
+pause = 1200
+steps = [
+  { open = "example:Wall bracket" },
+  { wait = 1200 },
+  { panel = "items" },
+  { panel = "history" },
+  { press = "Escape" },
+  { evaluate = "() => { const el = document.elementFromPoint(655, 350); el.dispatchEvent(new WheelEvent('wheel', { deltaY: -150, clientX: 655, clientY: 350, bubbles: true, cancelable: true })); }" },
+  { wait = 800 },
+  { evaluate = "() => { document.activeElement?.blur(); document.documentElement.classList.add('no-glass-blur'); }" },
+]
+show = "The same workspace as workspace-dark.png with blur off: opaque fills, same shapes and shadows."
 alt = "Blur off: opaque fills, same shapes and shadows"
 uses = ["docs/DESIGN.md:443"]
 
@@ -64,7 +78,20 @@ file = "docs/design/context-menu-dark.png"
 size = [1200, 736]
 theme = "fundacad"
 crop = "window"
-stub = true
+pause = 1200
+steps = [
+  { open = "example:Wall bracket" },
+  { wait = 1200 },
+  { panel = "items" },
+  { press = "Escape" },
+  { mouse = "down", at = [640, 620], button = "middle" },
+  { mouse = "move", by = [-150, 0], steps = 12 },
+  { mouse = "up", button = "middle" },
+  { evaluate = "() => { document.activeElement?.blur(); document.documentElement.classList.remove('no-glass-blur'); }" },
+  { mouse = "down", at = [625, 300], button = "right" },
+  { mouse = "up", button = "right" },
+  { wait = 600 },
+]
 show = "A context menu open in the workspace and the selection state of the shell, FundaCAD Noir."
 alt = "A context menu and the selection state of the shell"
 uses = ["docs/DESIGN.md:950"]
@@ -74,7 +101,19 @@ file = "docs/design/preferences-dark.png"
 size = [1200, 736]
 theme = "fundacad"
 crop = "window"
-stub = true
+park = [1180, 720]
+pause = 1200
+steps = [
+  { open = "example:Wall bracket" },
+  { wait = 1200 },
+  { panel = "items" },
+  { panel = "history" },
+  { press = "Escape" },
+  { evaluate = "() => { document.activeElement?.blur(); document.documentElement.classList.remove('no-glass-blur'); }" },
+  { panel = "preferences" },
+  { wait = 600 },
+  { evaluate = "() => document.activeElement?.blur()" },
+]
 show = "Preferences as a glass dialog with inset wells and one primary button, FundaCAD Noir."
 alt = "Preferences: a glass dialog with inset wells and one primary button"
 uses = ["docs/DESIGN.md:952"]
@@ -92,7 +131,9 @@ steps = [
   { panel = "items" },
   { panel = "history" },
   { press = "Escape" },
-  { evaluate = "() => document.activeElement?.blur()" },
+  { evaluate = "() => { const el = document.elementFromPoint(655, 350); el.dispatchEvent(new WheelEvent('wheel', { deltaY: -150, clientX: 655, clientY: 350, bubbles: true, cancelable: true })); }" },
+  { wait = 800 },
+  { evaluate = "() => { document.activeElement?.blur(); document.documentElement.classList.remove('no-glass-blur'); }" },
 ]
 show = "The same workspace as workspace-dark.png in Solarized Light."
 alt = "The same workspace in Solarized Light"
