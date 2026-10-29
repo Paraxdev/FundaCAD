@@ -10,7 +10,7 @@ Put a photo or a drawing on a plane and sketch over it. For example, photograph 
 
 The image lands 100 mm wide and half transparent. It gets a row under Reference images in the Items card.
 
-<!-- shot: reference-image | a photo of a bracket under a sketch on XY, calibrated to 100 mm -->
+![A picture of a bracket on a cutting mat with its outline sketched over it](../img/reference-image.png)
 
 ## Scale it to a real size
 
@@ -40,9 +40,7 @@ Shift drag the selected image to move it along its plane. Each drag, calibration
 
 ## Files, pictures and exports
 
-- The image is saved inside the .funda file, so it opens with the image on another computer.
-- A row that says image not found means the picture is not in the file. Insert it again.
-- Save picture in the Render Camera tab leaves the images out. Tick Reference images there to keep them. Path traced never shows them.
-- STL, STEP, 3MF and every other export leave them out, an image builds nothing.
+- The image is saved inside the .funda file. A row that says image not found means it is not in the file, so insert it again.
+- Exports leave the images out. Save picture in the Render Camera tab keeps them only with Reference images ticked.
 
 An image on a datum plane follows the datum when it moves. An image on a face keeps the plane the face had when you picked it.
