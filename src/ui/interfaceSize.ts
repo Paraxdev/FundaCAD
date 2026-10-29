@@ -1,7 +1,9 @@
 // Interface size, applied as the webview's own zoom under Tauri, so the CSS viewport shrinks and the layout and
 // breakpoints reflow as in a browser. Vite dev and the harness have no webview API and zoom the root instead.
 
+import { zoomChord, type ZoomChord } from "../input/platform";
 import { a11yPrefs, INTERFACE_SIZE_MAX, INTERFACE_SIZES, onA11yPrefsChange, setA11yPref } from "./a11yPrefs";
+import { announce } from "./announce";
 
 const isTauri = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
@@ -33,6 +35,24 @@ export function stepInterfaceSize(dir: 1 | -1): number {
 export function resetInterfaceSize(): number {
   setA11yPref("interfaceSize", 100);
   return a11yPrefs().interfaceSize;
+}
+
+/** The keys and the palette commands: steps or resets the size and says the new one, or that it is at an end. */
+export function changeInterfaceSize(how: ZoomChord) {
+  const before = a11yPrefs().interfaceSize;
+  const now = how === "reset" ? resetInterfaceSize() : stepInterfaceSize(how === "up" ? 1 : -1);
+  const end = how !== "reset" && now === before ? (how === "up" ? ", the largest" : ", the smallest") : "";
+  announce(`Interface size ${now} percent${end}`, "polite", { key: "interface-size" });
+}
+
+/** For a window keydown listener in the capture phase, so no field, menu or running tool sees the chord. */
+export function interfaceSizeKey(ev: KeyboardEvent): boolean {
+  const how = zoomChord(ev);
+  if (!how) return false;
+  ev.preventDefault();
+  ev.stopImmediatePropagation();
+  changeInterfaceSize(how);
+  return true;
 }
 
 let installed = false;
