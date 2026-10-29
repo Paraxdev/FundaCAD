@@ -1,4 +1,6 @@
-use fundacad_lib::doc_paths::{check_open, is_remote_or_device, refuse_unvouched, Provenance, Vouched, MAX_VOUCHED};
+use fundacad_lib::doc_paths::{
+    check_open, check_save, is_remote_or_device, refuse_unvouched, Provenance, Vouched, MAX_VOUCHED,
+};
 
 fn temp_dir(name: &str) -> std::path::PathBuf {
     let dir = std::env::temp_dir().join(format!("fundacad-doc-paths-{name}-{}", std::process::id()));
@@ -114,4 +116,31 @@ fn the_app_state_still_requires_a_file() {
     std::fs::write(&file, "{}").unwrap();
     assert_eq!(held.check_open(file.to_str().unwrap()).unwrap(), file);
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_save_to_a_relative_path_is_refused() {
+    for raw in ["a.funda", "parts/a.funda", "./a.fundab"] {
+        assert!(check_save(raw).is_err(), "{raw} should be refused");
+    }
+}
+
+#[test]
+fn a_save_under_another_extension_is_refused() {
+    let dir = std::env::temp_dir();
+    for name in ["x.cmd", "x.ps1", "x.json", "x.bat", "x", "x.funda.cmd", "x.funda.", "x.funda "] {
+        let raw = dir.join(name);
+        let raw = raw.to_str().unwrap();
+        let err = check_save(raw).expect_err(raw);
+        assert!(err.contains(".funda"), "{err}");
+    }
+}
+
+#[test]
+fn a_save_to_an_absolute_document_path_passes() {
+    let dir = std::env::temp_dir();
+    for name in ["x.funda", "X.FUNDA", "x.fundab", "x.neocad", "x.Sindri"] {
+        let raw = dir.join(name);
+        assert_eq!(check_save(raw.to_str().unwrap()).unwrap(), raw);
+    }
 }

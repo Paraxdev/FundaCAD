@@ -96,6 +96,23 @@ pub fn require_file(raw: &str) -> Result<PathBuf, String> {
     }
 }
 
+/// Only an absolute path with a document extension, so a save never writes any other kind of file.
+pub fn check_save(raw: &str) -> Result<PathBuf, String> {
+    let path = Path::new(raw);
+    if !path.is_absolute() {
+        return Err(format!("{raw} is not a full path, so it was not saved."));
+    }
+    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+    let ours = [crate::DOC_EXT, fundacad_format::json_doc::BINARY_DOC_EXT]
+        .into_iter()
+        .chain(crate::LEGACY_DOC_EXTS)
+        .any(|e| e.eq_ignore_ascii_case(ext));
+    if !ours {
+        return Err("FundaCAD saves documents only as .funda, .fundab, .neocad or .sindri files.".to_string());
+    }
+    Ok(path.to_path_buf())
+}
+
 /// The app state the open commands consult. The lock covers the string check only, so a slow network stat never
 /// holds up another command.
 #[derive(Default)]

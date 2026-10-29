@@ -120,11 +120,12 @@ pub async fn container_save(
     optional_hashes: Option<Vec<String>>,
     carried: Option<Vec<fundacad_format::fnda::Carried>>,
 ) -> Result<(), String> {
+    let path = crate::doc_paths::check_save(&path)?;
     let stores = Stores { blobs: blob_dir(&app)?, meshes: mesh_dir(&app)?, sections: section_dir(&app)? };
     let app_version = app.package_info().version.to_string();
     save_document(
         &stores,
-        std::path::Path::new(&path),
+        &path,
         &document_json,
         hashes,
         optional_hashes.unwrap_or_default(),

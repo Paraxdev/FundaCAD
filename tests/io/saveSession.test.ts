@@ -9,6 +9,7 @@ const host = vi.hoisted(() => ({
   hold: null as Promise<void> | null,
   savePath: "D:/parts/b.funda" as string | null,
   pickHold: null as Promise<void> | null,
+  picked: [] as { defaultPath?: string }[],
 }));
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: async (cmd: string, args: Record<string, unknown>) => {
@@ -19,7 +20,8 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   message: async () => {},
-  save: async () => {
+  save: async (opts: { defaultPath?: string }) => {
+    host.picked.push(opts);
     if (host.pickHold) await host.pickHold;
     return host.savePath;
   },
@@ -63,6 +65,7 @@ const saves = () =>
 describe("a save and the document it began with", () => {
   beforeEach(() => {
     host.invoked = [];
+    host.picked = [];
     host.hold = null;
     host.pickHold = null;
     host.savePath = "D:/parts/b.funda";
@@ -96,6 +99,20 @@ describe("a save and the document it began with", () => {
         saves: [{ path: "D:/parts/a.funda", features: ["a-plate"] }],
       },
       second: { dirty: false, path: "D:/parts/b.funda", features: ["c-plate"] },
+    });
+  });
+
+  it("Save of a document opened from a .json file asks where to write it as .funda", async () => {
+    const store = edited("D:/parts/old.json");
+    await saveDocument(store);
+    expect({
+      suggested: host.picked.map((o) => o.defaultPath?.split(/[\\/]/).pop()),
+      meta: meta(store),
+      saves: saves(),
+    }).toEqual({
+      suggested: ["old.funda"],
+      meta: { dirty: false, path: "D:/parts/b.funda", features: ["a-plate"] },
+      saves: [{ path: "D:/parts/b.funda", features: ["a-plate"] }],
     });
   });
 
