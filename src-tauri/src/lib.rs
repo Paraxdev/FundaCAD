@@ -4,6 +4,7 @@
 // `pub` so tests/container_seam.rs can drive the engine environment and the
 // container the way the app does.
 pub mod container;
+pub mod doc_paths;
 pub mod engine;
 pub use fundacad_format::{fnda, json_doc};
 mod drop_paths;
@@ -318,6 +319,18 @@ fn safe_mode_decide() -> SafeMode {
     SafeMode { reason, dir, set_compositing }
 }
 
+/// The dialog plugin allows each picked or saved path on the fs scope, which tells its listeners, so Rust learns the
+/// dialog paths with no change to the page.
+fn vouch_dialog_paths(app: &tauri::AppHandle) {
+    use tauri_plugin_fs::FsExt;
+    let Some(scope) = app.try_fs_scope() else { return };
+    let app = app.clone();
+    scope.listen(move |event| {
+        let tauri::scope::fs::Event::PathAllowed(path) = event else { return };
+        app.state::<doc_paths::Provenance>().vouch_all([path.to_string_lossy().as_ref()]);
+    });
+}
+
 /// Writes a diagnosis if the frontend never checks in. It rules the engine out by name: the loudest thing in the log, a
 /// healthy engine above a blank window reads as an engine problem, and it is not.
 fn watch_frontend_load(app: tauri::AppHandle) {
@@ -420,6 +433,8 @@ pub fn run() {
         container::container_open_bytes,
         container::container_verify,
         container::container_is_container,
+        container::container_stat,
+        container::paths_note_recent,
         home_commands::library_stat,
         home_commands::library_list,
         home_commands::doc_summary,
@@ -480,6 +495,7 @@ pub fn run() {
         .manage(spacemouse::Inventory::default())
         .manage(launch::LaunchPaths::default())
         .manage(drop_paths::Held::default())
+        .manage(doc_paths::Provenance::default())
         // Files a person handed to a plugin this session, never on disk, so a plugin cannot come back tomorrow holding
         // a token for a file somebody forgot they offered.
         .manage(plugins::files::Handles::default())
@@ -520,7 +536,11 @@ pub fn run() {
                     println!("[settings] a settings file did not read and was kept as {}", kept.display());
                 }
             }
+            if let Ok(dir) = app.path().app_data_dir() {
+                app.state::<doc_paths::Provenance>().keep_in(dir.join("vouched-paths.json"));
+            }
             launch::queue_first_launch(app);
+            vouch_dialog_paths(app.handle());
             app.manage(engine::Engine::start(app.handle()));
             if reason.is_none() {
                 frames::denoiser::load_installed(app.handle());

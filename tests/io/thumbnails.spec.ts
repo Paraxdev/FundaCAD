@@ -22,6 +22,7 @@ function fakeLib(cached: string | null = null) {
     summary: vi.fn(async () => null),
     thumbs: vi.fn(async (paths: string[]) => paths.map(() => cached)),
     putThumb: vi.fn(async () => {}),
+    vouch: vi.fn(async () => {}),
   } satisfies DocumentLibrary;
   setLibrary(lib);
   return lib;

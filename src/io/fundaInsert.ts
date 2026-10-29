@@ -16,12 +16,33 @@ export type FundaInsertMode = "append" | "link";
 export interface FundaLink {
   path: string;
   stamp: string;
+  size?: number;
+  mtime?: number;
 }
 
-/** A source document, already read: its path and its document JSON. */
+/** A file's size and last modified time, as the native side reports them. */
+export interface FileStat {
+  size: number;
+  mtimeMs: number;
+}
+
+/** What a stat of a linked file found: its size and time, no file there, or nothing it could tell. */
+export type LinkStat = FileStat | "missing" | "unknown";
+
+/** A source document, already read: its path, its document JSON and, when known, the file's stat taken before
+ *  the read. */
 export interface FundaSource {
   path: string;
   text: string;
+  stat?: FileStat;
+}
+
+function linkOf(source: FundaSource): FundaLink {
+  return {
+    path: source.path,
+    stamp: documentStamp(source.text),
+    ...(source.stat ? { size: source.stat.size, mtime: source.stat.mtimeMs } : {}),
+  };
 }
 
 /** A fingerprint of a document's text, to tell whether a linked file changed. */
@@ -122,7 +143,7 @@ export async function insertFundaDocument(
     name: baseName(source.path),
     source: source.path,
     ...importFields(baked),
-    ...(mode === "link" ? { link: { path: source.path, stamp: documentStamp(source.text) } } : {}),
+    ...(mode === "link" ? { link: linkOf(source) } : {}),
   } as Feature);
   return { ok: true, id };
 }
@@ -146,25 +167,29 @@ export async function updateFundaLink(
   if (!baked.ok) return baked;
   store.updateFeature(featureId, {
     ...importFields(baked),
-    link: { path: source.path, stamp: documentStamp(source.text) },
+    link: linkOf(source),
   } as Partial<Feature>);
   return { ok: true, id: featureId };
 }
 
-/** Linked steps whose file no longer matches what was read. `read` answers null
- *  for a file that cannot be read, which is reported apart from a change. */
+/** Linked steps whose file no longer matches the size and time stored when it was read, never reading the file.
+ *  A link stored without them, a file the stat could not tell about, or a new time on the same size (a copy or a
+ *  checkout keeps the content) is unknown until the user updates it. */
 export async function staleLinks(
   features: readonly Feature[],
-  read: (path: string) => Promise<string | null>,
-): Promise<{ changed: string[]; missing: string[] }> {
+  stat: (path: string) => Promise<LinkStat>,
+): Promise<{ changed: string[]; missing: string[]; unknown: string[] }> {
   const changed: string[] = [];
   const missing: string[] = [];
+  const unknown: string[] = [];
   for (const raw of features) {
     const f = asFeature(raw, "import");
     if (!f?.link) continue;
-    const text = await read(f.link.path);
-    if (text === null) missing.push(f.id);
-    else if (documentStamp(text) !== f.link.stamp) changed.push(f.id);
+    const now = await stat(f.link.path);
+    if (now === "missing") missing.push(f.id);
+    else if (now === "unknown" || f.link.size === undefined || f.link.mtime === undefined) unknown.push(f.id);
+    else if (now.size !== f.link.size) changed.push(f.id);
+    else if (now.mtimeMs !== f.link.mtime) unknown.push(f.id);
   }
-  return { changed, missing };
+  return { changed, missing, unknown };
 }
