@@ -4,6 +4,7 @@
 // `pub` so tests/container_seam.rs can drive the engine environment and the
 // container the way the app does.
 pub mod container;
+pub mod doc_paths;
 pub mod engine;
 pub use fundacad_format::{fnda, json_doc};
 mod drop_paths;

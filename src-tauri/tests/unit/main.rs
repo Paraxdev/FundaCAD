@@ -1,3 +1,4 @@
+mod doc_paths;
 mod launch_args;
 mod library;
 mod log_file;
