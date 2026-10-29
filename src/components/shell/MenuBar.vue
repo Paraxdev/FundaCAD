@@ -81,15 +81,21 @@ async function onF10(e: KeyboardEvent) {
   cameFrom = at && at !== document.body ? at : null;
   bar.value?.focus();
 }
+// An open menu's rows sit outside the nav, so only focus moving on while no menu is open forgets the way back.
+const onFocusin = (e: FocusEvent) => {
+  if (openIndex.value === null && !root.value?.contains(e.target as Node | null)) cameFrom = null;
+};
 
 let releaseKeys = () => {};
 onMounted(() => {
   releaseKeys = guardMenuKeys();
   window.addEventListener("keydown", onF10);
+  document.addEventListener("focusin", onFocusin);
 });
 onUnmounted(() => {
   releaseKeys();
   window.removeEventListener("keydown", onF10);
+  document.removeEventListener("focusin", onFocusin);
 });
 </script>
 

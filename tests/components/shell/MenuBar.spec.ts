@@ -188,6 +188,23 @@ describe("menubar roles and keys", () => {
     w.unmount();
   });
 
+  it("F10 forgets where it came from once focus leaves the menu bar, so Tab out and back stays put", () => {
+    const w = mountFour();
+    const out = document.createElement("button");
+    const other = document.createElement("button");
+    document.body.append(out, other);
+    out.focus();
+    key("F10");
+    expect(label()).toBe("File");
+    other.focus();
+    (w.get('[role="menuitem"][tabindex="0"]').element as HTMLElement).focus();
+    key("F10");
+    expect(label()).toBe("File");
+    out.remove();
+    other.remove();
+    w.unmount();
+  });
+
   it("F10 closes an open menu and lands on its menu bar item", async () => {
     const w = mountFour();
     await w.findAll(".menu-btn")[2]!.trigger("click");
