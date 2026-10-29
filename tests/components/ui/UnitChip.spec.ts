@@ -36,7 +36,11 @@ describe("UnitChip", () => {
   it("with options is a unit picker that emits the picked unit", async () => {
     const w = await render({ options: ["mm", "in", "um"] });
     const chip = w.get(".ui-unit-chip");
-    expect([chip.attributes("role"), chip.text(), chip.attributes("aria-label")]).toEqual(["combobox", "mm", "Unit"]);
+    expect([chip.attributes("role"), chip.text(), chip.attributes("aria-label")]).toEqual([
+      "combobox",
+      "mm",
+      "Unit, mm",
+    ]);
     await chip.trigger("keydown", { key: "ArrowDown" });
     await flushPromises();
     const labels = [...document.body.querySelectorAll("[role=option] .opt-label")].map((e) => e.textContent);
@@ -50,7 +54,7 @@ describe("UnitChip", () => {
     const chip = (await render({ options: ["mm", "in"], label: "Width unit", tip: "Change unit" })).get(
       ".ui-unit-chip",
     );
-    expect([chip.attributes("aria-label"), chip.attributes("title")]).toEqual(["Width unit", "Change unit"]);
+    expect([chip.attributes("aria-label"), chip.attributes("title")]).toEqual(["Width unit, mm", "Change unit"]);
   });
 
   it("disabled refuses to open", async () => {

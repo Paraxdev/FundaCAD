@@ -536,7 +536,7 @@
   background: var(--panel-2);
 }
 
-.cmdk-item.active {
+.cmdk-list .cmdk-item.is-active {
   background: color-mix(in srgb, var(--accent) 16%, transparent);
 }
 

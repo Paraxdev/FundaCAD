@@ -4,7 +4,7 @@ import RenderSections from "./RenderSections.vue";
 // Editing is live with no OK: none of it is on the undo stack, so a buffered copy would be a library the model is not
 // wearing.
 
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref, useId } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { useBrowserStore } from "../../stores/browser";
 import { useBuildValue } from "../../app/useDoc";
@@ -23,6 +23,7 @@ import { contextMenu, type CtxItem } from "../../ui/menu";
 import { choose } from "../../ui/choice";
 import { contributedMaterialPresets } from "../../plugins/contrib";
 import { modsOf, selectRow } from "../../ui/rowSelection";
+import Listbox from "../ui/Listbox.vue";
 
 const engine = useEngine();
 const store = engine.store;
@@ -94,6 +95,8 @@ const matches = (m: MaterialDef) => {
 /** The ones on the model first: an imported assembly wears fifteen of a thirty-strong library. */
 const used = computed(() => library.value.filter((m) => usage.value.has(m.id) && matches(m)));
 const all = computed(() => library.value.filter(matches));
+const libraryItems = computed(() => all.value.map((m) => ({ value: m.id, label: m.name, m })));
+const tileHowtoId = useId();
 
 const selected = computed<MaterialDef | null>(() => library.value.find((m) => m.id === selectedId.value) ?? null);
 
@@ -147,6 +150,20 @@ function pick(id: string, e: MouseEvent, order: readonly MaterialDef[]) {
   );
   selectedIds.value = [...next.keys];
   anchorId.value = next.anchor;
+}
+
+function pickTile(id: string, e: MouseEvent) {
+  pick(id, e, all.value);
+  e.preventDefault();
+}
+
+function applyTile(id: string) {
+  selectOnly(id);
+  applyToSelection();
+}
+
+function tileName(m: MaterialDef) {
+  return `${m.name}, ${finishLabel(m)}${wornId.value === m.id ? ", applied to the selection" : ""}`;
 }
 
 async function deleteSelected() {
@@ -506,39 +523,49 @@ async function doImport() {
           <Icon name="plus" :size="13" />New
         </button>
       </h3>
-      <div class="rd-grid" role="listbox" aria-label="Material library">
-        <button
-          v-for="m in all"
-          :key="m.id"
-          class="rd-tile"
-          :class="{ 'is-selected': selectedSet.has(m.id), 'is-worn': wornId === m.id }"
-          role="option"
-          :aria-selected="selectedSet.has(m.id)"
-          draggable="true"
-          :data-material="m.id"
-          :title="
-            wornId === m.id
-              ? `${m.name}, ${finishLabel(m)}. Already applied to the selection.`
-              : `${m.name}, ${finishLabel(m)}. Click to preview here, double-click or Apply below to use it. Drag onto a face, hold Shift for the whole body.`
-          "
-          @click="pick(m.id, $event, all)"
-          @dblclick="
-            selectOnly(m.id);
-            applyToSelection();
-          "
-          @contextmenu="openMenu($event, m)"
-          @dragstart="onDragStart($event, m)"
-          @dragend="endMaterialDrag()"
-        >
-          <span v-if="wornId === m.id" class="rd-worn" title="What the selection wears now">
-            <Icon name="check" :size="11" /> Applied
-          </span>
-          <img v-if="preview(m)" class="rd-ball" :src="preview(m)!" alt="" />
-          <span v-else class="rd-ball flat" :style="{ background: m.color }"></span>
-          <span class="rd-sub">{{ finishLabel(m) }}</span>
-          <span class="rd-tile-name">{{ m.name }}</span>
-        </button>
-      </div>
+      <Listbox
+        v-model:anchor="anchorId"
+        class="rd-grid"
+        label="Material library"
+        multiple
+        :items="libraryItems"
+        :model-value="selectedIds"
+        @update:model-value="(v) => (selectedIds = typeof v === 'string' ? [v] : [...v])"
+        @apply="applyTile"
+      >
+        <template #option="{ item: { m }, selected, attrs }">
+          <button
+            v-bind="attrs"
+            class="rd-tile"
+            :class="{ 'is-selected': selected, 'is-worn': wornId === m.id }"
+            :aria-label="tileName(m)"
+            :aria-describedby="tileHowtoId"
+            draggable="true"
+            :data-material="m.id"
+            :title="
+              wornId === m.id
+                ? `${m.name}, ${finishLabel(m)}. Already applied to the selection.`
+                : `${m.name}, ${finishLabel(m)}. Click to preview here, double-click or Apply below to use it. Drag onto a face, hold Shift for the whole body.`
+            "
+            @click="pickTile(m.id, $event)"
+            @dblclick="applyTile(m.id)"
+            @contextmenu="openMenu($event, m)"
+            @dragstart="onDragStart($event, m)"
+            @dragend="endMaterialDrag()"
+          >
+            <span v-if="wornId === m.id" class="rd-worn" title="What the selection wears now">
+              <Icon name="check" :size="11" /> Applied
+            </span>
+            <img v-if="preview(m)" class="rd-ball" :src="preview(m)!" alt="" />
+            <span v-else class="rd-ball flat" :style="{ background: m.color }"></span>
+            <span class="rd-sub">{{ finishLabel(m) }}</span>
+            <span class="rd-tile-name">{{ m.name }}</span>
+          </button>
+        </template>
+      </Listbox>
+      <span :id="tileHowtoId" class="sr-only"
+        >Space picks or drops it to edit below, Enter applies it to the selection.</span
+      >
       <div v-if="!all.length" class="sm-hint">
         {{ search ? "Nothing here matches that." : "This document has no materials." }}
       </div>

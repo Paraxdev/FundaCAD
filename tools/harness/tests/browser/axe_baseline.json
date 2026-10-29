@@ -21,9 +21,8 @@
     "meta-viewport": 1
   },
   "palette": {
-    "color-contrast": 12,
-    "meta-viewport": 1,
-    "scrollable-region-focusable": 1
+    "color-contrast": 4,
+    "meta-viewport": 1
   },
   "render": {
     "color-contrast": 4,

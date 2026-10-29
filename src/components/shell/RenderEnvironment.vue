@@ -3,13 +3,14 @@ import RenderSections from "./RenderSections.vue";
 import DenoiserRow from "./DenoiserRow.vue";
 import Button from "../ui/Button.vue";
 import Checkbox from "../ui/Checkbox.vue";
+import Listbox from "../ui/Listbox.vue";
 import Segmented from "../ui/Segmented.vue";
 import Slider from "../ui/Slider.vue";
 import TextField from "../ui/TextField.vue";
 // The same settings are also in Preferences on purpose: here you try six in ten seconds while looking at the part,
 // which a swatch grid suits and a dropdown in a modal does not.
 
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, useId, watch } from "vue";
 import {
   ENVIRONMENTS_LIST,
   REALTIME_QUALITY_PREFS,
@@ -69,6 +70,8 @@ const saved = ref<EnvEntry[]>([]);
 const activeSaved = ref<string | null>(activeSavedId());
 const notice = ref<string | null>(null);
 const naming = ref<{ id: string | null; text: string } | null>(null);
+let namingFrom: HTMLElement | null = null;
+const howtoId = useId();
 let nameInput: { focus: () => void } | null = null;
 const setNameInput = (el: unknown) => {
   nameInput = el as { focus: () => void } | null;
@@ -142,8 +145,23 @@ const pickSaved = (entry: EnvEntry) => {
   void applySavedEnvironment(engine.store, entry).catch(fail);
 };
 const startNaming = (id: string | null, text: string) => {
+  namingFrom = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   naming.value = { id, text };
   void nextTick(() => nameInput?.focus());
+};
+// Only Enter and Escape hand focus back: a blur means it already went somewhere on purpose.
+const focusNamingFrom = () => {
+  const el = namingFrom;
+  namingFrom = null;
+  if (el?.isConnected) el.focus();
+};
+const onNameEnter = () => {
+  void finishNaming();
+  focusNamingFrom();
+};
+const onNameEscape = () => {
+  naming.value = null;
+  focusNamingFrom();
 };
 const finishNaming = async () => {
   const n = naming.value;
@@ -161,6 +179,31 @@ const saveName = () => (hdrLabel.value ?? "My environment").replace(/\.(hdr|exr)
 const removeSaved = (entry: EnvEntry) => {
   void deleteSavedEnvironment(entry.id).catch(fail);
 };
+
+type SavedItem = { value: string; label: string; entry: EnvEntry | null };
+const savedItems = computed<SavedItem[]>(() => [
+  ...(hdrHash.value && !activeSaved.value
+    ? [{ value: "hdr", label: hdrLabel.value ?? "Imported HDR", entry: null }]
+    : []),
+  ...saved.value.map((s) => ({ value: `saved:${s.id}`, label: s.name, entry: s })),
+]);
+const savedValue = computed(() => (activeSaved.value ? `saved:${activeSaved.value}` : hdrHash.value ? "hdr" : null));
+const activeEntry = computed(() => saved.value.find((s) => s.id === activeSaved.value) ?? null);
+const pickSavedValue = (v: string | string[]) => {
+  const entry = savedItems.value.find((it) => it.value === v)?.entry;
+  if (entry) pickSaved(entry);
+};
+// The window's Delete removes a selected face or feature, so the tile keeps its keys to itself.
+const onSavedKey = (e: KeyboardEvent, entry: EnvEntry) => {
+  if (e.key !== "F2" && e.key !== "Delete" && e.key !== "Backspace") return;
+  e.preventDefault();
+  e.stopPropagation();
+  if (e.key === "F2") return startNaming(entry.id, entry.name);
+  const tile = e.currentTarget as HTMLElement;
+  const next = [tile.nextElementSibling, tile.previousElementSibling].find((el) => el?.matches("[data-roving]"));
+  (next as HTMLElement | undefined)?.focus();
+  removeSaved(entry);
+};
 const thumbStyle = (thumb: string) =>
   thumb.startsWith("data:") ? { backgroundImage: `url("${thumb}")`, backgroundSize: "cover" } : { background: thumb };
 const toggleBehind = () => {
@@ -177,6 +220,8 @@ const BACKGROUNDS: { id: Background; label: string }[] = [
 const pickEnv = (id: Environment) => {
   chooseBuiltInEnvironment(engine.store, id);
 };
+const STUDIO_ITEMS = ENVIRONMENTS_LIST.map((e) => ({ value: e.id, label: e.label, e }));
+const studioValue = computed(() => STUDIO_ITEMS.find((it) => it.value === prefs.value.environment)?.value ?? null);
 const DENOISES: { id: Denoise; label: string }[] = [
   { id: "off", label: "Off" },
   { id: "standard", label: "Standard" },
@@ -228,23 +273,32 @@ const qualityChoices = computed(() =>
   <div class="rd-scroll">
     <section class="rd-section">
       <h3 class="rd-head">Studio</h3>
-      <div class="rd-grid" role="listbox" aria-label="Environment">
-        <button
-          v-for="e in ENVIRONMENTS_LIST"
-          :key="e.id"
-          class="rd-tile"
-          :class="{ 'is-selected': prefs.environment === e.id }"
-          role="option"
-          :aria-selected="prefs.environment === e.id"
-          :data-environment="e.id"
-          :title="e.note"
-          @click="pickEnv(e.id)"
-        >
-          <span class="rd-ball" :style="{ background: e.swatch }"></span>
-          <span class="rd-tile-name">{{ e.label }}</span>
-          <span class="rd-sub">{{ e.note }}</span>
-        </button>
-      </div>
+      <Listbox
+        class="rd-grid"
+        label="Environment"
+        :items="STUDIO_ITEMS"
+        :model-value="studioValue"
+        @update:model-value="(v) => typeof v === 'string' && pickEnv(v)"
+        @apply="pickEnv"
+      >
+        <template #option="{ item: { e }, selected, attrs }">
+          <button
+            v-bind="attrs"
+            class="rd-tile"
+            :class="{ 'is-selected': selected }"
+            :aria-label="`${e.label}, ${e.note}`"
+            :aria-describedby="`${howtoId}-studio`"
+            :data-environment="e.id"
+            :title="e.note"
+            @click.prevent="pickEnv(e.id)"
+          >
+            <span class="rd-ball" :style="{ background: e.swatch }"></span>
+            <span class="rd-tile-name">{{ e.label }}</span>
+            <span class="rd-sub">{{ e.note }}</span>
+          </button>
+        </template>
+      </Listbox>
+      <span :id="`${howtoId}-studio`" class="sr-only">Space or Enter lights the model with it.</span>
       <p class="sm-hint">
         Every one of these is built in the renderer out of a few lit panels, so none of them is a file to download. A
         metal is almost entirely reflection, which is why the choice changes so much.
@@ -253,72 +307,84 @@ const qualityChoices = computed(() =>
 
     <section class="rd-section" data-env-custom>
       <h3 class="rd-head">Your environments</h3>
-      <div v-if="saved.length || hdrHash" class="rd-grid" role="listbox" aria-label="Saved environments">
-        <button
-          v-if="hdrHash && !activeSaved"
-          class="rd-tile is-selected"
-          role="option"
-          aria-selected="true"
-          data-environment="hdr"
-          :title="hdrLabel ?? 'Imported HDR'"
-        >
-          <span
-            class="rd-ball"
-            :class="{ 'rd-ball-hdr': !hdrPicture }"
-            :style="hdrPicture ? thumbStyle(hdrPicture) : undefined"
-          ></span>
-          <span class="rd-tile-name">{{ hdrLabel ?? "Imported HDR" }}</span>
-          <span class="rd-sub">Imported, not saved yet</span>
-        </button>
-        <div v-for="s in saved" :key="s.id" class="rd-saved">
+      <Listbox
+        v-if="savedItems.length"
+        class="rd-grid"
+        label="Saved environments"
+        :items="savedItems"
+        :model-value="savedValue"
+        @update:model-value="pickSavedValue"
+        @apply="pickSavedValue"
+      >
+        <template #option="{ item: { entry, label }, selected, attrs }">
           <button
+            v-if="entry"
+            v-bind="attrs"
             class="rd-tile"
-            :class="{ 'is-selected': activeSaved === s.id }"
-            role="option"
-            :aria-selected="activeSaved === s.id"
-            :data-saved-environment="s.name"
-            :title="s.name"
-            @click="pickSaved(s)"
+            :class="{ 'is-selected': selected }"
+            :aria-describedby="`${howtoId}-saved`"
+            :data-saved-environment="entry.name"
+            :title="entry.name"
+            @click.prevent="pickSaved(entry)"
+            @keydown="onSavedKey($event, entry)"
           >
-            <span class="rd-ball" :style="thumbStyle(s.thumb)"></span>
-            <span class="rd-tile-name">{{ s.name }}</span>
+            <span class="rd-ball" :style="thumbStyle(entry.thumb)"></span>
+            <span class="rd-tile-name">{{ entry.name }}</span>
           </button>
-          <TextField
-            v-if="naming && naming.id === s.id"
-            :ref="setNameInput"
-            v-model="naming.text"
-            class="rd-name"
-            size="sm"
-            select-on-focus
-            label="Environment name"
-            maxlength="60"
-            @keydown.enter.prevent="finishNaming"
-            @keydown.escape.prevent="naming = null"
-            @blur="finishNaming"
-          />
-          <div v-else class="rd-saved-actions">
-            <Button size="sm" variant="ghost" :data-rename="s.name" @click="startNaming(s.id, s.name)">Rename</Button>
-            <Button size="sm" variant="ghost" :data-delete="s.name" @click="removeSaved(s)">Delete</Button>
-          </div>
-        </div>
-      </div>
+          <button
+            v-else
+            v-bind="attrs"
+            class="rd-tile is-selected"
+            :aria-label="`${label}, imported, not saved yet`"
+            data-environment="hdr"
+            :title="label"
+          >
+            <span
+              class="rd-ball"
+              :class="{ 'rd-ball-hdr': !hdrPicture }"
+              :style="hdrPicture ? thumbStyle(hdrPicture) : undefined"
+            ></span>
+            <span class="rd-tile-name">{{ label }}</span>
+            <span class="rd-sub">Imported, not saved yet</span>
+          </button>
+        </template>
+      </Listbox>
+      <span :id="`${howtoId}-saved`" class="sr-only"
+        >Space or Enter lights the model with it, F2 renames it, Delete removes it.</span
+      >
       <div class="rd-chips" role="group" aria-label="Your environments">
         <Button size="sm" data-env-import @click="fileInput?.click()">Import HDR...</Button>
         <Button size="sm" data-env-save @click="startNaming(null, saveName())">Save as...</Button>
+        <template v-if="activeEntry">
+          <Button
+            size="sm"
+            :aria-label="`Rename ${activeEntry.name}`"
+            :data-rename="activeEntry.name"
+            @click="startNaming(activeEntry.id, activeEntry.name)"
+            >Rename</Button
+          >
+          <Button
+            size="sm"
+            :aria-label="`Delete ${activeEntry.name}`"
+            :data-delete="activeEntry.name"
+            @click="removeSaved(activeEntry)"
+            >Delete</Button
+          >
+        </template>
         <input ref="fileInput" type="file" accept=".hdr,.exr" hidden data-env-file @change="onFilePicked" />
       </div>
       <TextField
-        v-if="naming && naming.id === null"
+        v-if="naming"
         :ref="setNameInput"
         v-model="naming.text"
         class="rd-name"
         size="sm"
         select-on-focus
-        label="Name for this environment"
+        :label="naming.id ? 'Environment name' : 'Name for this environment'"
         maxlength="60"
         data-env-name
-        @keydown.enter.prevent="finishNaming"
-        @keydown.escape.prevent="naming = null"
+        @keydown.enter.prevent="onNameEnter"
+        @keydown.escape.prevent="onNameEscape"
         @blur="finishNaming"
       />
       <div v-if="notice" class="sm-hint rd-notice" role="status" data-env-notice>{{ notice }}</div>

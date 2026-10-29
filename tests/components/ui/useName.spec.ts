@@ -75,13 +75,14 @@ describe("useName", () => {
 
 // A JS plugin skips the type check, and a release build has no warning, so a tip it used as the name must still name.
 describe("a base control named by its tip alone", () => {
-  it.each<[string, () => Element]>([
+  it.each<[string, () => Element, string?]>([
     [
       "Select",
       () =>
         mount(Select, {
           props: { modelValue: "a", options: [{ value: "a", label: "A" }], tip: "Fruit", keys: "F" } as never,
         }).get("button").element,
+      "Fruit, A",
     ],
     [
       "TextField",
@@ -96,8 +97,8 @@ describe("a base control named by its tip alone", () => {
       () => mount(Slider, { props: { modelValue: 1, tip: "Fruit", keys: "F" } as never }).get("input").element,
     ],
     ["Checkbox", () => mount(Checkbox, { props: { modelValue: false, tip: "Fruit", keys: "F" } }).get("input").element],
-  ])("%s reads the tip without its key chord as its name", (_, focusable) => {
+  ])("%s reads the tip without its key chord as its name", (_, focusable, name = "Fruit") => {
     const el = focusable();
-    expect([el.getAttribute("aria-label"), el.getAttribute("aria-labelledby")]).toEqual(["Fruit", null]);
+    expect([el.getAttribute("aria-label"), el.getAttribute("aria-labelledby")]).toEqual([name, null]);
   });
 });

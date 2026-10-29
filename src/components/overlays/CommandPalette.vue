@@ -1,26 +1,23 @@
 <script setup lang="ts">
-import { fmtKeys } from "../../input/platform";
+import { fmtKeys, isMac } from "../../input/platform";
 import { computed, nextTick, onUnmounted, ref, useTemplateRef, watch } from "vue";
 import { claimEscape } from "../../ui/escapeClaim";
 import { useCommandPaletteStore } from "../../stores/commandPalette";
 import { allCommands } from "../../ui/commands";
 import { score } from "../../ui/commandScore";
-import TextField from "../ui/TextField.vue";
+import { announce, cancelAnnouncement } from "../../ui/announce";
+import Combobox from "../ui/Combobox.vue";
 import { focusReturn } from "../ui/focusables";
 import { inertOthers } from "../../composables/useModalGate";
 
 const cmdk = useCommandPaletteStore();
-const input = useTemplateRef<InstanceType<typeof TextField>>("input");
+const input = useTemplateRef<{ focus: () => void }>("input");
 const card = useTemplateRef<HTMLElement>("card");
 const backdrop = useTemplateRef<HTMLElement>("backdrop");
 const query = ref("");
 const active = ref(0);
-
-// A plain array, not a ref: write-only DOM handles for scrollIntoView, reactivity per keystroke buys nothing.
-let itemEls: (HTMLElement | null)[] = [];
-function setItemEl(i: number, el: unknown) {
-  itemEls[i] = (el as HTMLElement | null) ?? null;
-}
+const COUNT = "cmdk-count";
+const ARROWS: Record<string, string> = { Up: "ArrowUp", Down: "ArrowDown", Left: "ArrowLeft", Right: "ArrowRight" };
 
 const results = computed(() => {
   if (!cmdk.open) return [];
@@ -34,9 +31,41 @@ const results = computed(() => {
     .map((x) => x.c);
 });
 
+// aria-keyshortcuts spells out the modifier and lists alternatives with a space: "Home / F6" is "Home F6".
+function ariaShortcut(hint: string): string {
+  const ctrl = isMac() ? "Meta" : "Control";
+  return hint
+    .split(/\s*\/\s*/)
+    .map((k) =>
+      k
+        .split("+")
+        .map((p) => (p === "Ctrl" ? ctrl : (ARROWS[p] ?? p)))
+        .join("+"),
+    )
+    .join(" ");
+}
+
+const options = computed(() =>
+  results.value.map((c) => ({
+    value: c.id,
+    label: c.label,
+    keyshortcuts: c.key ? ariaShortcut(c.key) : undefined,
+  })),
+);
+
 watch(results, () => {
   active.value = 0;
-  itemEls = [];
+});
+
+// The query is cleared on close, so opening says nothing and only typing speaks the count. The first match comes with
+// it, since its row id stays the same and a reader that speaks only on an aria-activedescendant change skips it.
+watch(query, () => {
+  if (!cmdk.open) return;
+  const n = results.value.length;
+  const first = results.value[0];
+  const name = first ? [first.label, first.group, first.key && fmtKeys(first.key)].filter(Boolean).join(", ") : "";
+  const text = !first ? "No matching command" : `${n === 1 ? "1 command" : `${n} commands`}. ${name}`;
+  announce(text, "polite", { key: COUNT, delay: 300 });
 });
 
 // Escape is claimed so a screen under the palette, such as Home, leaves it alone. The input mounts in the same flush
@@ -48,11 +77,14 @@ let back: ReturnType<typeof focusReturn> | null = null;
 onUnmounted(() => {
   releaseEscape?.();
   releaseInert?.();
+  cancelAnnouncement(COUNT);
 });
 watch(
   () => cmdk.open,
   async (isOpen) => {
     if (!isOpen) {
+      cancelAnnouncement(COUNT);
+      query.value = "";
       releaseEscape?.();
       releaseEscape = null;
       releaseInert?.();
@@ -63,7 +95,6 @@ watch(
     }
     releaseEscape ??= claimEscape();
     back ??= focusReturn();
-    query.value = "";
     active.value = 0;
     await nextTick();
     if (cmdk.open && backdrop.value) releaseInert ??= inertOthers(backdrop.value);
@@ -71,27 +102,11 @@ watch(
   },
 );
 
-function setActive(i: number) {
-  if (i < 0 || i >= results.value.length) return;
-  active.value = i;
-  void nextTick(() => itemEls[i]?.scrollIntoView({ block: "nearest" }));
-}
-
-function runIndex(i: number) {
-  const cmd = results.value[i];
-  if (cmd) cmdk.runCommand(cmd.id);
-}
-
+// The Combobox has already taken the arrows and Enter on a row.
 function onKey(e: KeyboardEvent) {
-  if (e.key === "ArrowDown") {
+  if (e.defaultPrevented) return;
+  if (e.key === "Enter") {
     e.preventDefault();
-    setActive(Math.min(active.value + 1, results.value.length - 1));
-  } else if (e.key === "ArrowUp") {
-    e.preventDefault();
-    setActive(Math.max(active.value - 1, 0));
-  } else if (e.key === "Enter") {
-    e.preventDefault();
-    runIndex(active.value);
   } else if (e.key === "Tab") {
     // The input is the palette's one Tab stop, so Tab stays on it rather than leaving for the page underneath.
     e.preventDefault();
@@ -108,31 +123,32 @@ function onKey(e: KeyboardEvent) {
   <Teleport to="body">
     <div v-if="cmdk.open" ref="backdrop" class="cmdk-backdrop" @pointerdown.self="cmdk.close()">
       <div ref="card" class="cmdk-card" role="dialog" aria-modal="true" aria-label="Command palette">
-        <TextField
+        <Combobox
           ref="input"
           v-model="query"
+          v-model:active="active"
           class="cmdk-input"
+          list-class="cmdk-list"
+          option-class="cmdk-item"
+          :options="options"
           placeholder="Search commands…"
           label="Search commands"
           spellcheck="false"
           @keydown="onKey"
-        />
-        <div class="cmdk-list">
-          <div
-            v-for="(c, i) in results"
-            :key="c.id"
-            :ref="(el) => setItemEl(i, el)"
-            class="cmdk-item"
-            :class="{ active: i === active }"
-            @pointermove="setActive(i)"
-            @click="runIndex(i)"
-          >
-            <span class="cmdk-label">{{ c.label }}</span>
-            <span class="cmdk-group">{{ c.group }}</span>
-            <span v-if="c.key" class="cmdk-key">{{ fmtKeys(c.key) }}</span>
-          </div>
-          <div v-if="!results.length" class="cmdk-empty">No matching command</div>
-        </div>
+          @pick="cmdk.runCommand($event)"
+        >
+          <!-- The commas are for the option name, which a screen reader reads as one line. -->
+          <template #default="{ index }">
+            <span class="cmdk-label">{{ results[index]?.label }}</span>
+            <span class="sr-only">, </span>
+            <span class="cmdk-group">{{ results[index]?.group }}</span>
+            <template v-if="results[index]?.key">
+              <span class="sr-only">, </span>
+              <span class="cmdk-key">{{ fmtKeys(results[index]!.key!) }}</span>
+            </template>
+          </template>
+          <template #empty><div class="cmdk-empty">No matching command</div></template>
+        </Combobox>
       </div>
     </div>
   </Teleport>

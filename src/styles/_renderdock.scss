@@ -364,16 +364,6 @@
   transition: width 120ms linear;
 }
 
-.rd-saved {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-.rd-saved-actions {
-  display: flex;
-  gap: 2px;
-}
 .rd-mini {
   flex: 1;
   padding: 1px var(--s-1);

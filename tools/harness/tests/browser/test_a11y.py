@@ -27,7 +27,7 @@ pytestmark = [pytest.mark.browser, pytest.mark.smoke, pytest.mark.a11y]
 BASELINE = Path(__file__).with_name("axe_baseline.json")
 ALLOWED = read_baseline(BASELINE)
 ARIA_DIR = Path(__file__).with_name("aria")
-ARIA = {"empty_workspace": "shell.yml", "home": "home.yml", "settings": "settings.yml"}
+ARIA = {"empty_workspace": "shell.yml", "home": "home.yml", "palette": "palette.yml", "settings": "settings.yml"}
 # A template naming a node the page lacks must fail, so the templates can never match vacuously.
 ARIA_NEGATIVE = ("empty_workspace", '- dialog "No such dialog"')
 
@@ -102,6 +102,8 @@ def show_stress(s):
 def show_palette(s):
     s.page.keyboard.press("Control+F")
     s.page.locator(".cmdk-list").wait_for()
+    s.page.keyboard.type("fil")
+    s.page.keyboard.press("ArrowDown")
 
 
 def show_confirm(s):

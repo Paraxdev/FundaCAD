@@ -1,3 +1,5 @@
+import re
+
 import pytest
 from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
@@ -90,3 +92,25 @@ def test_reopening_an_extrude_speaks_the_extrude_prompt(s):
     assert not any("·" in t for t in spoken), spoken
     s.press("Escape")
     s.press("Escape")
+
+
+def test_typing_in_the_palette_speaks_the_result_count_once_and_closing_drops_a_pending_one(s):
+    s.open_file(SKETCH_EXTRUDE)
+    listen(s)
+    s.page.keyboard.press("Control+F")
+    s.page.locator(".cmdk-list").wait_for()
+    try:
+        s.page.keyboard.type("fil", delay=60)
+        heard(s, "command")
+        s.page.wait_for_timeout(600)
+        counts = [t for t in s.page.evaluate("() => window.__spoken") if "command" in t]
+        assert len(counts) == 1 and re.fullmatch(r"\d+ commands\. Fillet\W+(Modify|MODIFY)\W+F", counts[0]), counts
+        s.page.keyboard.type("l")
+        s.page.keyboard.press("Escape")
+        s.page.locator(".cmdk-list").wait_for(state="detached")
+        s.page.wait_for_timeout(600)
+        after = [t for t in s.page.evaluate("() => window.__spoken") if "command" in t]
+        assert after == counts, after
+    finally:
+        if s.page.locator(".cmdk-list").count():
+            s.page.keyboard.press("Escape")
