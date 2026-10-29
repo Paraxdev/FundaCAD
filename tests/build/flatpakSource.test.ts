@@ -60,6 +60,25 @@ describe("the generator venv of the source check", () => {
   });
 });
 
+describe("the source check job", () => {
+  // The cold build fills about 7 GB and the runner has many times that free, so no step frees disk space first.
+  it("runs these steps in order", () => {
+    const steps = workflow.split(/\r?\n/).flatMap((l) => /^ {6}- (?:name|uses): (.*)$/.exec(l)?.[1] ?? []);
+    expect(steps).toEqual([
+      "actions/checkout@v4",
+      "Install flatpak-builder",
+      "Generate the cargo and npm sources",
+      "Restore the downloaded sources",
+      "Install the SDK and download every source",
+      "Save the downloaded sources",
+      "Build from source with no network",
+      "Check the libraries come from the runtime",
+      "Start the Flatpak and build a box",
+      "Upload the flatpak-builder log",
+    ]);
+  });
+});
+
 describe("parseRequirements", () => {
   it("reports a package with no exact version or no hash", () => {
     const hash = `--hash=sha256:${"a".repeat(64)}`;
