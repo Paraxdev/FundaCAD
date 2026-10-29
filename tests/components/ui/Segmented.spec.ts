@@ -8,12 +8,28 @@ enableAutoUnmount(afterEach);
 afterEach(() => setMacForTest(null));
 
 type V = "mm" | "cm" | "in" | "ft";
-type Opt = { value: V; label?: string; icon?: string; tip?: string; keys?: string; disabled?: boolean };
+type Opt = {
+  value: V;
+  label?: string;
+  icon?: string;
+  tip?: string;
+  keys?: string;
+  disabled?: boolean;
+  clickable?: boolean;
+};
 
 const units = (disabled: V[] = []): Opt[] =>
   (["mm", "cm", "in", "ft"] as V[]).map((value) => ({ value, label: value, disabled: disabled.includes(value) }));
 
-async function render(props: { options: Opt[]; modelValue: V; iconOnly?: boolean; disabled?: boolean; size?: "sm" }) {
+async function render(props: {
+  options: Opt[];
+  modelValue: V;
+  iconOnly?: boolean;
+  disabled?: boolean;
+  size?: "sm";
+  orientation?: "horizontal" | "vertical";
+  activation?: "auto" | "manual";
+}) {
   const w = mount(Segmented<V>, {
     props: { label: "Units", ...props, "onUpdate:modelValue": (v: V) => w.setProps({ modelValue: v }) },
     attachTo: document.body,
@@ -147,5 +163,69 @@ describe("Segmented", () => {
     mount(Segmented<V>, { props: { modelValue: "mm", options: units() } as never });
     expect(warn.mock.calls.some((c) => String(c[0]).includes("Segmented has no name"))).toBe(true);
     warn.mockRestore();
+  });
+
+  it("with manual activation the arrows only move focus, and Space, Enter or a click picks", async () => {
+    const w = await render({ options: units(), modelValue: "mm", activation: "manual" });
+    (radios(w)[0]!.element as HTMLElement).focus();
+    expect(await press("ArrowRight")).toBe(true);
+    await press("ArrowRight");
+    expect([focused(), checked(w), stops(w), emitted(w)]).toEqual([
+      "in",
+      ["true", "false", "false", "false"],
+      ["-1", "-1", "0", "-1"],
+      [],
+    ]);
+    // A native button turns Space and Enter into a click in every webview, which picks.
+    await radios(w)[2]!.trigger("click");
+    expect([emitted(w), checked(w)]).toEqual([["in"], ["false", "false", "true", "false"]]);
+    await press("End");
+    expect([focused(), emitted(w)]).toEqual(["ft", ["in"]]);
+  });
+
+  it("gives a manual group's Tab stop back to the checked option once focus leaves it", async () => {
+    const w = await render({ options: units(), modelValue: "cm", activation: "manual" });
+    const outside = document.createElement("button");
+    document.body.append(outside);
+    (radios(w)[1]!.element as HTMLElement).focus();
+    await press("ArrowRight");
+    expect(stops(w)).toEqual(["-1", "-1", "0", "-1"]);
+    outside.focus();
+    await flushPromises();
+    expect(stops(w)).toEqual(["-1", "0", "-1", "-1"]);
+    outside.remove();
+  });
+
+  it("keeps the stop on the focused option while focus only moves inside an automatic group", async () => {
+    const w = await render({ options: units(), modelValue: "cm" });
+    const outside = document.createElement("button");
+    document.body.append(outside);
+    (radios(w)[3]!.element as HTMLElement).focus();
+    outside.focus();
+    await flushPromises();
+    expect(stops(w)).toEqual(["-1", "-1", "-1", "0"]);
+    outside.remove();
+  });
+
+  it("greys a soft blocked option but still reaches and picks it", async () => {
+    const opts = units(["cm"]).map((o) => (o.value === "cm" ? { ...o, clickable: true } : o));
+    const w = await render({ options: opts, modelValue: "mm" });
+    expect([radios(w)[1]!.attributes("aria-disabled"), radios(w)[1]!.classes("is-disabled")]).toEqual(["true", true]);
+    (radios(w)[0]!.element as HTMLElement).focus();
+    await press("ArrowRight");
+    expect([focused(), emitted(w)]).toEqual(["cm", ["cm"]]);
+    await radios(w)[0]!.trigger("click");
+    await radios(w)[1]!.trigger("click");
+    expect(emitted(w)).toEqual(["cm", "mm", "cm"]);
+  });
+
+  it("moves with Up and Down when vertical and leaves Left and Right to its parent", async () => {
+    const w = await render({ options: units(), modelValue: "mm", orientation: "vertical" });
+    (radios(w)[0]!.element as HTMLElement).focus();
+    expect(await press("ArrowRight")).toBe(false);
+    expect(await press("ArrowDown")).toBe(true);
+    await press("ArrowUp");
+    await press("ArrowUp");
+    expect([focused(), emitted(w)]).toEqual(["ft", ["cm", "mm", "ft"]]);
   });
 });

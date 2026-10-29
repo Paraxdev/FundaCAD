@@ -51,14 +51,14 @@ describe("WorkspaceToggle", () => {
     expect(w.get('[data-workspace="model"]').attributes("aria-checked")).toBe("true");
   });
 
-  it("is one Tab stop, and the arrows switch the workspace", async () => {
+  it("is one Tab stop, and the arrows only move focus so Render loads on Space, Enter or a click", async () => {
     const w = await render();
     expect(radios(w).map((r) => r.attributes("tabindex"))).toEqual(["0", "-1"]);
     (radios(w)[0]!.element as HTMLElement).focus();
     await press("ArrowRight");
+    expect([workspace(), (document.activeElement as HTMLElement).dataset.workspace]).toEqual(["model", "render"]);
+    await radios(w)[1]!.trigger("click");
     expect(workspace()).toBe("render");
-    await press("ArrowLeft");
-    expect(workspace()).toBe("model");
   });
 
   it("is gone while a sketch is open", async () => {

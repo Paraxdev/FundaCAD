@@ -4,7 +4,7 @@ import Icon from "../shell/Icon.vue";
 import { fmtKeys } from "../../input/platform";
 import { useDisabled } from "./useDisabled";
 import { useName, type Named } from "./useName";
-import { useRovingFocus } from "./useRovingFocus";
+import { useRovingFocus, type RovingOrientation } from "./useRovingFocus";
 
 export interface SegmentedOption<V> {
   value: V;
@@ -13,6 +13,8 @@ export interface SegmentedOption<V> {
   tip?: string | undefined;
   keys?: string | undefined;
   disabled?: boolean | undefined;
+  /** Greyed but still answers a click or a key, a soft block the pick lifts, as IconButton's clickable. */
+  clickable?: boolean | undefined;
   /** Extra attributes on the option's button, such as a data hook for e2e. */
   attrs?: Record<string, string> | undefined;
 }
@@ -28,9 +30,12 @@ const props = withDefaults(
       iconOnly?: boolean;
       disabled?: boolean;
       disabledReason?: string | undefined;
+      orientation?: RovingOrientation;
+      /** `manual`: the arrows only move focus and Space, Enter or a click picks, for a switch that loads something heavy. */
+      activation?: "auto" | "manual";
     } & Named
   >(),
-  { size: "md", variant: "bar", iconOnly: false, disabled: false },
+  { size: "md", variant: "bar", iconOnly: false, disabled: false, orientation: "horizontal", activation: "auto" },
 );
 const emit = defineEmits<{ "update:modelValue": [T] }>();
 defineSlots<{ option?(p: { option: SegmentedOption<T>; selected: boolean }): unknown }>();
@@ -40,15 +45,29 @@ const d = useDisabled(props);
 const root = ref<HTMLElement | null>(null);
 const selected = computed(() => props.options.findIndex((o) => o.value === props.modelValue));
 
+const blocked = (o: SegmentedOption<T>) => !!o.disabled && !o.clickable;
+
 function pick(i: number) {
   const o = props.options[i];
-  if (!o || o.disabled || props.disabled || o.value === props.modelValue) return;
+  if (!o || blocked(o) || props.disabled || o.value === props.modelValue) return;
   emit("update:modelValue", o.value);
 }
 
-const r = useRovingFocus({ items: () => props.options, active: selected, container: root, onMove: pick });
+const r = useRovingFocus({
+  items: () => props.options.map((o) => ({ disabled: blocked(o) })),
+  active: selected,
+  container: root,
+  orientation: () => props.orientation,
+  onMove: (i) => {
+    if (props.activation === "auto") pick(i);
+  },
+});
 const onKeydown = (e: KeyboardEvent) => {
   if (!props.disabled) r.onKeydown(e);
+};
+// Tab back into a manual group lands on the checked option, not on one the arrows left focus on.
+const onFocusout = (e: FocusEvent) => {
+  if (props.activation === "manual" && !root.value?.contains(e.relatedTarget as Node | null)) r.onFocus(-1);
 };
 
 const tipOf = (o: SegmentedOption<T>) => {
@@ -66,6 +85,7 @@ const tipOf = (o: SegmentedOption<T>) => {
     v-bind="{ ...d.bind.value, ...name }"
     :title="d.title(undefined)"
     @keydown="onKeydown"
+    @focusout="onFocusout"
   >
     <button
       v-for="(o, i) in options"
