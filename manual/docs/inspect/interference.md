@@ -1,9 +1,15 @@
 # Interference
 
-Interference lists bodies that overlap, which you want to know before printing an assembly.
+Interference finds bodies that overlap, which you want to know before you print an assembly. It needs at least two bodies.
 
-![Interference panel naming one clash between a box and a cylinder with its overlap volume](../img/interference-list.png)
+![Interference panel naming one clash between a box and a cylinder, with the overlap drawn in red](../img/interference-list.png)
 
-Each row names a pair and the size of the overlap, and a click highlights the pair. Clearance mode lists pairs closer than a distance you type, and 0.2 mm is a sensible first try.
+1. Under Inspect, open Analyze and pick Interference.
+2. Each row names a pair of bodies and the volume of their overlap, and the overlap is drawn in red in the view.
+3. Click a row to highlight that pair.
 
-Only closed solids can be checked. A body that is a surface, or an import whose faces do not close properly, is listed as not checked with the reason, so an empty list never hides it.
+An overlap inside a part is hidden, so press X to see through the parts.
+
+Turn on Clearance mode to also list pairs that come closer than a gap you type. It starts at 0.2 mm, a common gap for parts printed in place.
+
+Only closed solids can be checked. A surface, or an import whose faces do not close, is listed as Not checked with the reason, so an empty list never hides it.

@@ -6,7 +6,17 @@ file = "manual/docs/img/bed-fit-result.png"
 size = [640, 700]
 theme = "fundacad"
 crop = "region"
-stub = true
+at = [434, 189]
+park = [1400, 880]
+steps = [
+  { open = "example:Wall bracket" },
+  { evaluate = "() => { const r = window.viewport.rig; r.zoomBy(0.93); r.panScreen(0.06, -0.16); window.viewport.requestRender(); }" },
+  { wait = 700 },
+  { tool = "Bed Fit Check" },
+  { wait = 400 },
+  { evaluate = "() => [...document.querySelectorAll('.ui-confirm-choice')].find((b) => b.textContent.trim().startsWith('220 x 220 x 250')).click()" },
+  { wait = 500 },
+]
 show = "A bracket with the Bed Fit Check result saying it fits a 220 by 220 by 250 mm bed (Print group)."
 alt = "A bracket with a message that it fits the 220 by 220 by 250 mm bed"
 uses = ["manual/docs/inspect/bed-fit.md"]
@@ -14,29 +24,69 @@ uses = ["manual/docs/inspect/bed-fit.md"]
 [[shot]]
 file = "manual/docs/img/interference-list.png"
 size = [750, 640]
+viewport = [1920, 1080]
 theme = "fundacad"
 crop = "region"
-stub = true
-show = "The Interference panel naming one clash between a box and a cylinder with its overlap volume."
-alt = "Interference panel naming one clash between a box and a cylinder with its overlap volume"
+at = [810, 170]
+park = [1900, 1060]
+steps = [
+  { open = "fixture:box-cylinder.json" },
+  { evaluate = "() => { const r = window.viewport.rig; r.zoomBy(1.45); r.panScreen(-0.355, 0.18); window.viewport.requestRender(); }" },
+  { wait = 700 },
+  { tool = "Interference" },
+  { wait = 1500 },
+  { evaluate = "() => document.querySelectorAll('.toast-close').forEach((b) => b.click())" },
+  # The overlap is inside the box, X sees through the parts so it shows. It stays on across entries, so it goes off after.
+  { press = "x" },
+  { evaluate = "() => { setTimeout(() => window.viewport.setXray(false), 4000); }" },
+  { wait = 500 },
+]
+show = "The Interference panel naming one clash between a box and a cylinder, the overlap drawn red inside the see through parts."
+alt = "Interference panel naming one clash between a box and a cylinder, with the overlap drawn in red"
 uses = ["manual/docs/inspect/interference.md"]
 
 [[shot]]
 file = "manual/docs/img/measure-two-holes.png"
 size = [790, 640]
+viewport = [1920, 1080]
 theme = "fundacad"
 crop = "region"
-stub = true
-show = "The Measure panel showing the distance and angle between two hole edges."
-alt = "Measure panel showing the distance and angle between two hole edges"
+at = [770, 170]
+park = [1900, 1060]
+steps = [
+  { open = "example:Plate" },
+  { evaluate = "() => { const r = window.viewport.rig; r.zoomBy(1.2); r.panScreen(-0.318, 0.107); window.viewport.requestRender(); }" },
+  { wait = 700 },
+  { tool = "Measure" },
+  # Straight edges, as a hole's rim has no direction and reads 90 degrees to anything.
+  { click = "edge:near=0,25,6" },
+  { click = "edge:near=40,-25,3" },
+  { wait = 500 },
+]
+show = "The Measure panel showing the distance, centers and a 90 degree angle between the plate's back edge and a corner edge."
+alt = "Measure panel showing the distance, centers and angle between two edges of a plate"
 uses = ["manual/docs/inspect/measure.md"]
 
 [[shot]]
 file = "manual/docs/img/overhang-red.png"
 size = [850, 440]
+viewport = [1920, 1080]
 theme = "fundacad"
 crop = "region"
-stub = true
+at = [705, 171]
+park = [1900, 1060]
+steps = [
+  { open = "fixture:tee.json" },
+  { evaluate = "() => { const v = window.viewport; const b = v.model.box; v.rig.setViewDir(b.min.clone().set(0.45, -1.3, -0.6), b.min.clone().set(0, 0, 1)); v.requestRender(); }" },
+  { wait = 900 },
+  { evaluate = "() => { const r = window.viewport.rig; r.zoomBy(1.8); r.panScreen(-0.04, 0.3); window.viewport.requestRender(); }" },
+  { wait = 700 },
+  { tool = "Overhang" },
+  { wait = 600 },
+  # Seen from below the bed, the grid lies over the undersides, so it is off for this picture and back on after.
+  { evaluate = "() => import('/src/ui/viewMode.ts').then((m) => { m.setOverlay('grid', false); setTimeout(() => m.setOverlay('grid', true), 5000); })" },
+  { wait = 300 },
+]
 show = "Undersides of a T shaped part painted red beside the Overhang analysis panel."
 alt = "Undersides of a T shaped part painted red beside the Overhang analysis panel"
 uses = ["manual/docs/inspect/overhang.md"]
@@ -46,7 +96,19 @@ file = "manual/docs/img/printability-panel.png"
 size = [426, 575]
 theme = "fundacad"
 crop = "panel"
-stub = true
+target = ".printability-panel"
+fit = "size"
+park = [1400, 880]
+steps = [
+  { open = "example:Capsule holder" },
+  { tool = "Printability" },
+  { click_css = ".printability-run" },
+  { wait = 1500 },
+  { evaluate = "() => document.querySelectorAll('.toast-close').forEach((b) => b.click())" },
+  # Number boxes show the PC's decimal comma whatever the browser is told, as text they read 0.4 as in the page.
+  { evaluate = "() => document.querySelectorAll('.printability-panel input[type=number]').forEach((i) => { i.type = 'text'; })" },
+  { wait = 800 },
+]
 show = "The Printability panel with its settings and two findings."
 alt = "The Printability panel with its settings and two findings"
 uses = ["manual/docs/inspect/printability.md"]
@@ -56,7 +118,13 @@ file = "manual/docs/img/properties-panel.png"
 size = [564, 347]
 theme = "fundacad"
 crop = "panel"
-stub = true
+target = ".properties-panel"
+fit = "size"
+park = [1400, 880]
+steps = [
+  { open = "example:Wall bracket" },
+  { tool = "Properties" },
+]
 show = "The Properties panel with the PLA print estimate."
 alt = "The Properties panel with the PLA print estimate"
 uses = ["manual/docs/inspect/properties.md"]
@@ -64,9 +132,24 @@ uses = ["manual/docs/inspect/properties.md"]
 [[shot]]
 file = "manual/docs/img/section-handle.png"
 size = [880, 740]
+viewport = [1920, 1080]
 theme = "fundacad"
 crop = "region"
-stub = true
+at = [555, 35]
+park = [1900, 1060]
+steps = [
+  { open = "example:Wall bracket" },
+  { evaluate = "() => { window.viewport.rig.zoomBy(1.08); window.viewport.requestRender(); }" },
+  { wait = 700 },
+  { tool = "Section View" },
+  { wait = 400 },
+  { evaluate = "() => [...document.querySelectorAll('.ui-confirm-choice')].find((b) => b.textContent.trim().startsWith('Z')).click()" },
+  { wait = 800 },
+  # The value box has focus, so F would be typed into it, the chip's Flip keeps the lower half instead.
+  { click_css = "[data-testid=\"section-flip\"]" },
+  { type = ["Offset", "8"] },
+  { wait = 600 },
+]
 show = "A bracket cut along Z with the offset handle and value box."
 alt = "A bracket cut along Z with the offset handle and value box"
 uses = ["manual/docs/inspect/section.md"]
@@ -74,9 +157,25 @@ uses = ["manual/docs/inspect/section.md"]
 [[shot]]
 file = "manual/docs/img/section-chip.png"
 size = [880, 740]
+viewport = [1920, 1080]
 theme = "fundacad"
 crop = "region"
-stub = true
+at = [555, 35]
+park = [1900, 1060]
+steps = [
+  { open = "example:Wall bracket" },
+  { evaluate = "() => { window.viewport.rig.zoomBy(1.08); window.viewport.requestRender(); }" },
+  { wait = 700 },
+  { tool = "Section View" },
+  { wait = 400 },
+  { evaluate = "() => [...document.querySelectorAll('.ui-confirm-choice')].find((b) => b.textContent.trim().startsWith('Z')).click()" },
+  { wait = 800 },
+  { click_css = "[data-testid=\"section-flip\"]" },
+  { type = ["Offset", "8"] },
+  { wait = 600 },
+  { press = "Enter" },
+  { wait = 600 },
+]
 show = "The cut bracket with the Section on chip and its Edit, Flip and Off buttons."
 alt = "The cut bracket with the Section on chip and its Edit, Flip and Off buttons"
 uses = ["manual/docs/inspect/section.md"]
@@ -84,19 +183,48 @@ uses = ["manual/docs/inspect/section.md"]
 [[shot]]
 file = "manual/docs/img/stress-results.png"
 size = [900, 740]
+viewport = [1920, 1080]
 theme = "fundacad"
 crop = "region"
-stub = true
-show = "The Stress panel on its Results tab listing peak stress, deflection and safety factor beside the coloured bracket (Set up and Results tabs are recent)."
-alt = "The Stress panel listing peak stress, deflection and safety factor beside the coloured bracket"
+at = [650, 165]
+park = [1900, 1060]
+steps = [
+  { open = "example:Wall bracket" },
+  # The peak is under the arm at the gusset's tip, so the camera is level with the underside.
+  { evaluate = "() => { const v = window.viewport; const b = v.model.box; v.rig.setViewDir(b.min.clone().set(0.5, -1, -0.08), b.min.clone().set(0, 0, 1)); v.requestRender(); }" },
+  { wait = 900 },
+  { evaluate = "() => { const r = window.viewport.rig; r.zoomBy(1.45); r.panScreen(0.1, -0.02); window.viewport.requestRender(); }" },
+  { wait = 700 },
+  { tool = "Stress" },
+  { wait = 600 },
+  { click_css = ".stress-run" },
+  { evaluate = "() => new Promise((res) => { const t = setInterval(() => { if (document.querySelector('.stress-legend')) { clearInterval(t); res(); } }, 250); })" },
+  { wait = 1500 },
+  { evaluate = "() => document.querySelectorAll('.toast-close').forEach((b) => b.click())" },
+  { wait = 500 },
+]
+show = "The Stress panel on its Results tab beside the bracket coloured blue to red, the red at the gusset's tip under the pin."
+alt = "The Stress panel listing peak stress, deflection and safety factor beside the bracket coloured blue to red"
 uses = ["manual/docs/inspect/stress-results.md"]
 
 [[shot]]
 file = "manual/docs/img/stress-bracket.png"
 size = [580, 600]
+viewport = [1600, 740]
 theme = "fundacad"
 crop = "region"
-stub = true
-show = "An L bracket coloured blue to red by stress, with a load arrow on the upright."
-alt = "An L bracket coloured blue to red by stress, with a load arrow on the upright"
+at = [645, 140]
+park = [1590, 730]
+steps = [
+  { open = "example:Wall bracket" },
+  # From behind, so the held back face shows as well as the load arrow.
+  { evaluate = "() => { const v = window.viewport; const b = v.model.box; v.rig.setViewDir(b.min.clone().set(-1, -0.8, 0.6), b.min.clone().set(0, 0, 1)); v.requestRender(); }" },
+  { wait = 900 },
+  { evaluate = "() => { const v = window.viewport; v.rig.zoomBy(2, v.model.box.getCenter(v.model.box.min.clone())); v.rig.panScreen(0.063, -0.19); v.requestRender(); }" },
+  { wait = 700 },
+  { tool = "Stress" },
+  { wait = 1200 },
+]
+show = "The Stress panel on its Set up tab with Support 1 and Load 1, beside the bracket with its held face and load arrow."
+alt = "The Stress panel's Set up tab with one support and one load, beside the bracket"
 uses = ["manual/docs/inspect/stress.md"]
