@@ -37,13 +37,14 @@ const check = (name, ok, detail) => {
     failures++;
   });
   await page.goto(`${URL}?token=${TOKEN}&engine=${PORT}`, { timeout: 120000 });
+  await page.waitForFunction(() => !!window.store && !!window.viewport, null, { timeout: 60000 });
   await page.waitForTimeout(3000);
+  // On a loaded machine the first run dialog can still be animating in, so Escape it when the click cannot land.
   const modal = await page.$(".modal-close");
   if (modal) {
-    await modal.click();
+    await modal.click({ timeout: 10000 }).catch(() => page.keyboard.press("Escape"));
     await page.waitForTimeout(400);
   }
-  await page.waitForFunction(() => !!window.store && !!window.viewport, null, { timeout: 60000 });
   const shot = async (name) => {
     if (SHOTS) await page.screenshot({ path: path.join(SHOTS, `${name}.png`) });
   };
@@ -128,15 +129,18 @@ const check = (name, ok, detail) => {
     check("the list centre lands in the list", inList);
   }
   await shot("theme_list_open");
-  await page.keyboard.press("Escape");
-  await page.waitForTimeout(200);
-  await page.keyboard.press("Escape");
-  await page.waitForSelector("#prefs-theme", { state: "detached", timeout: 5000 }).catch(() => {});
+  // One Escape for the list and one for Preferences, but a loaded machine can swallow one inside the Escape release
+  // window, so press until Preferences is gone and never once more, which would close the Stress panel.
+  for (let i = 0; i < 4 && (await page.$("#prefs-theme")); i++) {
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(500);
+  }
   check("Preferences closes", !(await page.$("#prefs-theme")));
 
   console.log("\n3. Stress in Render");
-  await page.click('#workspace-toggle [data-workspace="render"]');
-  await page.waitForSelector("#renderdock", { timeout: 15000 });
+  // The first switch to Render compiles its shaders on the CPU under SwiftShader, which can hold the page a while.
+  await page.click('#workspace-toggle [data-workspace="render"]', { timeout: 90000 });
+  await page.waitForSelector("#renderdock", { timeout: 90000 });
   await page.waitForTimeout(800);
   await shot("stress_in_render");
   const open = await page.$(".measure-panel.stress-panel");
