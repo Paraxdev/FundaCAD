@@ -4,6 +4,19 @@ A sketch is a flat drawing on a plane or on a face. Most parts begin as one.
 
 ![An open sketch on a block's top face, with the tool rail and the sketch palette](../img/sketch-overview.png)
 
-Press S and click one of the three origin planes, the small tiles beside the origin, or any flat face of a body. If a flat face is already selected, the sketch opens on it straight away. XY is the floor, so a sketch there is a view from above.
+1. Press S.
+2. Click one of the three origin planes, the small tiles beside the origin, a datum plane or a flat face of a body.
 
-Esc backs out one step at a time, and Exit Sketching on the rail leaves on purpose. Pressing E or Q inside a sketch finishes it and starts Extrude or Press/Pull.
+If a flat face is already selected, the sketch opens on it straight away. A round face gives the plane that touches it where you click.
+
+XY is the floor, so a sketch there is a view from above.
+
+With no sketch open, L, R, C, A and P start a sketch with Line, Rectangle, Circle, Arc or Project ready.
+
+## Leave a sketch
+
+Every way out keeps what you drew.
+
+- Esc backs out one step at a time, and the last press closes the sketch.
+- Exit Sketching on the rail closes it at once.
+- E or Q closes it and starts Extrude or Press/Pull.
