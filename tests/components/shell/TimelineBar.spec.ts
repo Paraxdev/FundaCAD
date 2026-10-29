@@ -4,8 +4,8 @@
 // joint begin their preview only on the first change, mechanism and datum keep
 // theirs in place, a new sketch has no sketch id yet.
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ref } from "vue";
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
+import { nextTick, ref } from "vue";
 import { mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import TimelineBar from "../../../src/components/shell/TimelineBar.vue";
@@ -963,5 +963,86 @@ describe("History steps by keys", () => {
     el(m, "rv").focus();
     el(m, "jt").dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
     expect(focused()).toBe("rv");
+  });
+});
+
+describe("History's rollback slider", () => {
+  const mounted: ReturnType<typeof mountBar>[] = [];
+  afterEach(() => {
+    for (const m of mounted.splice(0)) m.w.unmount();
+  });
+  const open = async (o: Opts = {}) => {
+    const m = mountBar({ ...o, attach: true });
+    mounted.push(m);
+    await new Promise((r) => setTimeout(r, 2));
+    return m;
+  };
+  const range = (m: ReturnType<typeof mountBar>) => m.w.get(".tl-rollback input").element as HTMLInputElement;
+  const press = (m: ReturnType<typeof mountBar>, key: string) => {
+    const e = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });
+    let reached = false;
+    const seen = () => (reached = true);
+    window.addEventListener("keydown", seen);
+    range(m).dispatchEvent(e);
+    window.removeEventListener("keydown", seen);
+    return reached;
+  };
+
+  it("is a range named Rollback over every step, read as the step it sits after", async () => {
+    const m = await open({ rollback: 3 });
+    const r = range(m);
+    expect([r.type, r.min, r.max, r.step, r.value]).toEqual(["range", "0", "6", "1", "3"]);
+    expect(document.getElementById(r.getAttribute("aria-labelledby")!)?.textContent).toBe("Rollback");
+    expect(r.getAttribute("aria-valuetext")).toBe(`after ${m.chip("rv").get(".t-name").text()}, step 3 of 6`);
+    const start = await open({ rollback: 0 });
+    expect(range(start).getAttribute("aria-valuetext")).toBe(
+      `at the start, before ${start.chip("sk").get(".t-name").text()}`,
+    );
+    expect(m.w.findAll(".timeline-marker").map((x) => x.attributes("aria-hidden"))).toEqual(["true"]);
+  });
+
+  it("moves the saved marker one step a key and keeps those keys from the window", async () => {
+    const m = await open({ rollback: 3 });
+    range(m).focus();
+    expect(press(m, "ArrowLeft")).toBe(false);
+    expect(press(m, "Home")).toBe(false);
+    expect(press(m, "End")).toBe(false);
+    expect(m.log.filter((l) => l.startsWith("rollback:"))).toEqual(["rollback:2", "rollback:0", "rollback:6"]);
+    expect(press(m, "Escape")).toBe(true);
+  });
+
+  it("sits just before the steps, so the marker draws its focus, and keeps the moved marker in view", async () => {
+    const m = await open({ rollback: 3 });
+    expect(m.w.get(".tl-rollback").element.nextElementSibling?.classList.contains("timeline-scroll")).toBe(true);
+    const seen = vi.fn();
+    const was = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = seen;
+    onTestFinished(() => void (Element.prototype.scrollIntoView = was));
+    const roll = async (k: number) => {
+      (m.e.store as unknown as { rollbackIndex: number }).rollbackIndex = k;
+      m.e.bridge.docVersion.value++;
+      await nextTick();
+      await nextTick();
+    };
+    await roll(2);
+    expect(seen).not.toHaveBeenCalled();
+    range(m).focus();
+    await roll(1);
+    expect(seen).toHaveBeenCalledTimes(1);
+    expect(seen.mock.contexts[0]).toBe(m.w.get(".timeline-marker").element);
+  });
+
+  it("stands down during an edit, on the edited step, as the transport does", async () => {
+    const m = await open({ rollback: 6, preview: { id: "ex1" } });
+    expect(range(m).value).toBe("2");
+    expect(range(m).getAttribute("aria-disabled")).toBe("true");
+    range(m).focus();
+    press(m, "ArrowLeft");
+    expect(m.log.filter((l) => l.startsWith("rollback:"))).toEqual([]);
+  });
+
+  it("is left out while the empty line shows", async () => {
+    const m = await open({ features: [] });
+    expect(m.w.find(".tl-rollback").exists()).toBe(false);
   });
 });

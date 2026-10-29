@@ -374,6 +374,11 @@
   background: var(--accent);
   border-radius: var(--r-pill);
 }
+/* The Rollback range is read, not seen, and only keys reach it, so its focus is drawn on the marker. */
+.tl-rollback:has(input:focus) + .timeline-scroll .timeline-marker {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
 .timeline-marker .marker-grip {
   position: absolute;
   top: -2px;

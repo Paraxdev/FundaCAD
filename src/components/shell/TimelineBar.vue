@@ -11,6 +11,7 @@ import Icon from "./Icon.vue";
 import Button from "../ui/Button.vue";
 import Chip from "../ui/Chip.vue";
 import IconButton from "../ui/IconButton.vue";
+import Slider from "../ui/Slider.vue";
 import TextField from "../ui/TextField.vue";
 import { contextMenu } from "../../ui/menu";
 import { announce } from "../../ui/announce";
@@ -526,6 +527,25 @@ function onMarkerDown(e: PointerEvent) {
   window.addEventListener("pointercancel", cancel);
 }
 
+// The marker by keys: a Rollback range outside the moving chips, so its focus survives every step. setRollback(k) builds
+// features[0..k-1], so k is read as the step it sits after.
+const markerFocus = ref(false);
+function rollbackText(k: number) {
+  const f = features.value;
+  if (!f.length) return "no steps";
+  if (k <= 0) return `at the start, before ${f[0]!.shown}`;
+  return `after ${f[Math.min(k, f.length) - 1]!.shown}, step ${k} of ${f.length}`;
+}
+function onRollbackKey(e: KeyboardEvent) {
+  if (e.defaultPrevented) e.stopPropagation();
+}
+watch(rollback, () => {
+  if (!markerFocus.value) return;
+  void nextTick(() =>
+    track.value?.querySelector(".timeline-marker")?.scrollIntoView?.({ block: "nearest", inline: "nearest" }),
+  );
+});
+
 /** Which gap (0..n) the pointer falls into. The arithmetic, including the track's axis (the strip can sit on the
  *  right), is in ui/trackGaps.ts. */
 function gapIndexAt(ev: PointerEvent): number {
@@ -685,6 +705,22 @@ function openMultiMenu(e: MouseEvent, ids: string[]) {
       />
     </div>
 
+    <Slider
+      v-if="features.length"
+      class="tl-rollback sr-only"
+      label="Rollback"
+      :model-value="rollback"
+      :min="0"
+      :max="features.length"
+      commit="end"
+      :value-text="rollbackText"
+      :disabled="editing"
+      disabled-reason="Finish or cancel the edit to move the rollback"
+      @update:model-value="store.setRollback"
+      @keydown="onRollbackKey"
+      @focusin="markerFocus = true"
+      @focusout="markerFocus = false"
+    />
     <div ref="scroller" class="timeline-scroll" @dragover="onDragOverScroller">
       <div
         ref="track"
@@ -700,6 +736,7 @@ function openMultiMenu(e: MouseEvent, ids: string[]) {
             <div
               v-if="i === rollback"
               class="timeline-marker"
+              aria-hidden="true"
               title="Drag to roll the model back / forward"
               @pointerdown="onMarkerDown"
               ><span class="marker-grip"></span
@@ -778,6 +815,7 @@ function openMultiMenu(e: MouseEvent, ids: string[]) {
           <div
             v-if="rollback >= features.length"
             class="timeline-marker"
+            aria-hidden="true"
             title="Drag to roll the model back / forward"
             @pointerdown="onMarkerDown"
             ><span class="marker-grip"></span
