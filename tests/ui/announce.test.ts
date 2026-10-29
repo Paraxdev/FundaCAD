@@ -31,6 +31,27 @@ describe("announce", () => {
     expect(assertive.textContent).toBe("");
   });
 
+  it("empties a region once its sentence has been heard, so browsing never meets a stale prompt", () => {
+    attach();
+    m.announce("Extrude, click to apply");
+    frame();
+    vi.advanceTimersByTime(7000);
+    expect(polite.textContent).toBe("Extrude, click to apply");
+    vi.advanceTimersByTime(1500);
+    expect(polite.textContent).toBe("");
+  });
+
+  it("keeps a newer sentence for its own full time", () => {
+    attach();
+    m.announce("First");
+    frame();
+    vi.advanceTimersByTime(6000);
+    m.announce("Second");
+    frame();
+    vi.advanceTimersByTime(6000);
+    expect(polite.textContent).toBe("Second");
+  });
+
   it("speaks errors in the assertive region", () => {
     attach();
     m.announce("Build failed at Extrude 2", "assertive");
