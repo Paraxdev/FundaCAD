@@ -54,6 +54,18 @@ fn a_path_argument_is_remembered_by_its_folder_and_extension() {
 }
 
 #[test]
+fn a_script_or_program_argument_is_remembered_exactly() {
+    let dir = std::env::temp_dir().join("staging");
+    for name in
+        ["run.py", "run.PY", "run.bat", "run.cmd", "run.ps1", "run.exe", "run.sh", "run.js", "run.vbs", "run.jar"]
+    {
+        let a = text(dir.join(name));
+        assert_eq!(args_shape(&[a.clone()]), vec![a.clone()], "{name}");
+        assert!(approval_text("A.B", "/opt/run", &[a]).ends_with("Allow it now, and later for the same arguments?"));
+    }
+}
+
+#[test]
 fn an_approval_is_for_one_plugin_one_program_and_one_argument_shape() {
     let dir = std::env::temp_dir().join(format!("fundacad-approvals-{}", std::process::id()));
     let path = dir.join("launch-approvals.json");

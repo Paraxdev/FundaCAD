@@ -72,14 +72,22 @@ fn shipped_spawn(manifest: &str, plugin: &str) -> bool {
         && m["grants"].as_array().is_some_and(|g| g.iter().any(|x| x.as_str() == Some(SPAWN)))
 }
 
+/// A file of one of these types runs as code when passed to an interpreter, so its approval names the file.
+const CODE_EXTS: &str = "app applescript bash bat cjs cmd com command cpl desktop dll dylib exe fish hta inf jar js \
+                         jse ksh lnk lua mjs msc msi msp php pif pl pm ps1 psd1 psm1 py pyc pyw pyz rb reg run scpt \
+                         scr sh so tcl vbe vbs wsf wsh zsh";
+
 /// What an approval remembers about the arguments: an absolute file path by its folder and extension, so a new
 /// export next to the last one is covered, and anything else exactly.
 pub fn args_shape(args: &[String]) -> Vec<String> {
     args.iter()
         .map(|a| {
             let p = Path::new(a);
-            match (p.is_absolute(), p.parent(), p.extension()) {
-                (true, Some(dir), Some(ext)) => text(dir.join(format!("*.{}", ext.to_string_lossy().to_lowercase()))),
+            let ext = p.extension().map(|e| e.to_string_lossy().to_lowercase());
+            match (p.is_absolute(), p.parent(), ext) {
+                (true, Some(dir), Some(ext)) if !CODE_EXTS.split_whitespace().any(|c| c == ext) => {
+                    text(dir.join(format!("*.{ext}")))
+                }
                 _ => a.clone(),
             }
         })
@@ -133,9 +141,13 @@ pub fn approval_text(plugin: &str, program: &str, args: &[String]) -> String {
         let lines: Vec<String> = args.iter().map(|a| format!("  {}", one_line(a))).collect();
         format!("with these arguments:\n{}", lines.join("\n"))
     };
+    let later = if args_shape(args) == args {
+        "for the same arguments"
+    } else {
+        "for the same arguments or another file of the same type in the same folder"
+    };
     format!(
-        "The plugin {} wants to start this program:\n\n{}\n\n{listed}\n\nAllow it now, and later for the same arguments \
-         or another file of the same type in the same folder?",
+        "The plugin {} wants to start this program:\n\n{}\n\n{listed}\n\nAllow it now, and later {later}?",
         one_line(plugin),
         one_line(program)
     )
