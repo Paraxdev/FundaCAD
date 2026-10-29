@@ -459,14 +459,19 @@ fn stale_seed(line: &str) -> bool {
     })
 }
 
-/// A kernel configured before the seeds above, which is rebuilt once.
+/// A kernel configured before the seeds above, which is rebuilt once. Our own
+/// builds leave the stamp, so a kernel without it is old or prebuilt elsewhere.
+/// A missing build cache (a prebuilt root, or the CI cache that drops `build`)
+/// cannot prove the seeds, so it is treated as needing the rebuild too.
 #[cfg(feature = "builtin")]
 fn kernel_unchecked(root: &std::path::Path) -> bool {
     if root.join(STATE_DIR).join("checked-reads").exists() {
         return false;
     }
-    std::fs::read_to_string(root.join("build").join("CMakeCache.txt"))
-        .is_ok_and(|cache| cache.lines().any(stale_seed))
+    match std::fs::read_to_string(root.join("build").join("CMakeCache.txt")) {
+        Ok(cache) => cache.lines().any(stale_seed),
+        Err(_) => true,
+    }
 }
 
 /// An MSVC kernel compiled without optimisation, which is rebuilt once.
