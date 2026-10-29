@@ -2,8 +2,6 @@
 
 A document is one file that holds the whole model, with its steps, parameters and imports.
 
-<!-- shot: save-as-dialog | Save As offering .funda and .fundab -->
-
 ## Save
 
 Ctrl+S saves, and Ctrl+Shift+S (Save As…) asks where. Save As offers two formats:
@@ -21,10 +19,6 @@ While you have unsaved changes, FundaCAD keeps a recovery copy. If the app close
 
 ## Files from a newer version
 
-A file saved by a newer version of FundaCAD still opens. A notice lists the features this version does not know, and the history shows them greyed, named by their type.
+A file saved by a newer version of FundaCAD still opens. A notice lists the steps this version does not know, and the History shows them greyed. Saving writes them back unchanged, but the bodies after them may differ until you open the file in the newer version.
 
-They are kept, and saving writes them back unchanged. Bodies after them may differ, because this version builds without them. Open the file in the newer version to see it as it was made.
-
-Versions saved by the newer version are kept the same way, until you save a version here, which replaces them. The Versions panel says so.
-
-A `.fundab` file can also hold parts this version does not read. Saving it as `.fundab` keeps them, saving it as `.funda` does not.
+Its versions are kept too, until you save a version here. Parts of a `.fundab` file that this version does not read are kept only when you save it as `.fundab` again.

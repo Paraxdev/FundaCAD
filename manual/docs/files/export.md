@@ -21,7 +21,7 @@ Type picks the format.
 - **Unit**: for STL and 3MF. Leave it on Millimeter, since a slicer reads the numbers as they are.
 - **Format**: for STL, Binary or ASCII.
 - **Refinement**: how finely curves are cut into triangles. Medium suits most prints, High suits large smooth curves, Low suits quick tests.
-- **Advanced**: shows Surface deviation, Normal deviation and Maximum cell size, to set the triangles by hand. Changing them turns Refinement to Custom.
+- **Advanced**: sets the triangles by hand, and turns Refinement to Custom.
 
 Press Export… and pick where the file goes. If a step failed, a warning names it, because its shape is missing from the file.
 
@@ -33,7 +33,4 @@ DXF and SVG draw one sketch or one flat face at true size, in millimetres.
    For a face, right click it in the view and choose Export face as DXF… or Export face as SVG….
 2. Set Tolerance, then press Export….
 
-You can also select the sketch or face and press Ctrl+E.
-
-- A face keeps its holes, and its drawing lines up with a sketch on that face.
-- Lines, arcs and circles stay exact. Other curves become short straight lines within Tolerance of the curve.
+A face keeps its holes. Lines, arcs and circles stay exact, other curves become short straight lines within Tolerance.
