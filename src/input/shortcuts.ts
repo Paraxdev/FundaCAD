@@ -2,6 +2,7 @@
 // the `?` HUD renders it, so they cannot disagree.
 
 import { useDialogStore } from "../stores/dialogs";
+import { singleKeysOn } from "../ui/a11yPrefs";
 import { readSetting } from "../ui/storedSetting";
 import { DEFAULT_BINDINGS, bindingRows, pointerBindings } from "../viewport/navigator/bindings";
 
@@ -116,6 +117,8 @@ export function keyHint(action: string): string | undefined {
  *  while sketching; model keys otherwise; global always). */
 export function resolveShortcut(key: string, shift: boolean, context: "model" | "sketch", ctrl = false): string | null {
   const k = key.toLowerCase();
+  // Single key shortcuts off: a character key without Ctrl or Cmd, Shift held or not, binds nothing (WCAG 2.1.4).
+  if (!ctrl && k.length === 1 && !singleKeysOn()) return null;
   for (const s of activeShortcuts()) {
     // Every flag is compared, absent ones too: bare B (Chamfer) and Ctrl+B (Subtract) are different commands.
     if (s.key !== k || !!s.shift !== shift || !!s.ctrl !== ctrl) continue;

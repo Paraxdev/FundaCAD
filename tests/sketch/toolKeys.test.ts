@@ -1,6 +1,9 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect } from "vitest";
 import { sketchToolKey } from "../../src/sketch/toolKeys";
 import { SHORTCUTS } from "../../src/input/shortcuts";
+import { setA11yPref } from "../../src/ui/a11yPrefs";
+
+afterEach(() => setA11yPref("singleKeys", true));
 
 const press = (
   key: string,
@@ -13,6 +16,12 @@ describe("sketchToolKey", () => {
     expect(sketchToolKey(press("C"), "select")).toBe("circle");
     expect(sketchToolKey(press("p"), "select")).toBe("project");
     expect(sketchToolKey(press("a"), "arc")).toBe("tangent-arc");
+  });
+
+  it("arms nothing while Single key shortcuts is off", () => {
+    setA11yPref("singleKeys", false);
+    expect(sketchToolKey(press("l"), "select")).toBeNull();
+    expect(sketchToolKey(press("a"), "arc")).toBeNull();
   });
 
   it("leaves every sketch constraint shortcut with a modifier to the keymap", () => {
