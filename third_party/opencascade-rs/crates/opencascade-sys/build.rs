@@ -122,9 +122,10 @@ Set FUNDACAD_ALLOW_WINDOWS_GNU=1 to build it anyway.
 
     build
         .cpp(true)
-        // The shims use C++14 generic lambdas and later. MSVC defaults to C++14
-        // and ignores this flag, so only GCC and Clang ever saw the old c++11.
-        .flag_if_supported("-std=c++17")
+        // Match the kernel's C++20: the shims include OCCT headers, and the same
+        // inline definition compiled under two standards is an ODR violation on
+        // GCC and Clang. MSVC takes /std from its own default and ignores this.
+        .flag_if_supported("-std=c++20")
         .define("_USE_MATH_DEFINES", "TRUE")
         .include(occt_config.include_dir)
         .include("include")
@@ -162,7 +163,8 @@ fn patch_occt(occt: &OcctConfig) -> std::path::PathBuf {
     build
         .cpp(true)
         .opt_level(2)
-        .flag_if_supported("-std=c++17")
+        // The patched members are OCCT's own sources, compiled as the kernel is.
+        .flag_if_supported("-std=c++20")
         .define("_USE_MATH_DEFINES", "TRUE")
         .include(&occt.include_dir);
     let run = |cmd: &mut Command| {
