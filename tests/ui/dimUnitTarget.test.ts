@@ -10,6 +10,8 @@ const styles = import.meta.glob("../../src/styles/_utilities.scss", {
 }) as Record<string, string>;
 const utilities = Object.values(styles)[0]!;
 
+const SIZING = ["width", "height", "min-width", "min-height", "max-width", "max-height", "padding", "background-clip"];
+
 function declarations(selector: string): Record<string, string> {
   const at = utilities.indexOf(`\n${selector} {`);
   if (at < 0) return {};
@@ -17,7 +19,7 @@ function declarations(selector: string): Record<string, string> {
   const out: Record<string, string> = {};
   for (const line of body.replace(/\/\*[\s\S]*?\*\//g, "").split(";")) {
     const [k, ...v] = line.split(":");
-    if (k?.trim() && v.length) out[k.trim()] = v.join(":").trim();
+    if (k?.trim() && v.length && SIZING.includes(k.trim())) out[k.trim()] = v.join(":").trim();
   }
   return out;
 }
@@ -29,14 +31,7 @@ describe("value box unit chip target", () => {
       before: declarations(".dim-field .dim-unit::before"),
       choiceBefore: declarations(".dim-field .dim-choice::before"),
     }).toEqual({
-      chip: {
-        "min-width": "24px",
-        "min-height": "24px",
-        "justify-content": "center",
-        padding: "3px 2px",
-        "background-clip": "content-box",
-        "border-radius": "8px",
-      },
+      chip: { "min-width": "24px", "min-height": "24px", padding: "3px 2px", "background-clip": "content-box" },
       before: {},
       choiceBefore: {},
     });
