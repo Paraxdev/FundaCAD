@@ -56,6 +56,11 @@ pub fn save_document(
     carried: Vec<fundacad_format::fnda::Carried>,
     app_version: &str,
 ) -> Result<(), String> {
+    if !hashes.iter().all(|h| is_hash(h)) {
+        return Err("This document names imported geometry by a malformed id, so saving was stopped. \
+                    The previous file is unchanged."
+            .to_string());
+    }
     let mut blobs = BTreeMap::new();
     let mut missing = Vec::new();
     for h in hashes {

@@ -30,7 +30,7 @@ pub fn is_binary_doc_path(path: &Path) -> bool {
     path.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case(BINARY_DOC_EXT))
 }
 
-fn is_hash(s: &str) -> bool {
+pub(crate) fn is_hash(s: &str) -> bool {
     s.len() == 32 && s.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 
