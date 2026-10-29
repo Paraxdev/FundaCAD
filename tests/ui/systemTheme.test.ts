@@ -60,11 +60,14 @@ type WindowHandlers = {
   focus?: (e: { payload: boolean }) => void;
 };
 
-function tauriWindow(theme: string): WindowHandlers {
+function tauriWindow(theme: string | Error): WindowHandlers {
   const handlers: WindowHandlers = {};
   vi.doMock("@tauri-apps/api/window", () => ({
     getCurrentWindow: () => ({
-      theme: async () => theme,
+      theme: async () => {
+        if (theme instanceof Error) throw theme;
+        return theme;
+      },
       onThemeChanged: async (fn: NonNullable<WindowHandlers["theme"]>) => {
         handlers.theme = fn;
         return () => {};
@@ -210,6 +213,20 @@ describe("the Rust os_a11y_prefs fallback", () => {
     await invoke.mock.results[1]!.value;
     expect(theme.resolvedTheme()).toBe("high-contrast-dark");
     expect(changes).not.toHaveBeenCalled();
+  });
+
+  it("still asks again on focus when the window theme cannot be read", async () => {
+    let highContrast = false;
+    const invoke = vi.fn(async () => ({ highContrast }));
+    vi.doMock("@tauri-apps/api/core", () => ({ invoke }));
+    const win = tauriWindow(new Error("theme is not supported on this platform"));
+    const { theme } = await boot({});
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(win.focus).toBeDefined());
+    highContrast = true;
+    win.focus!({ payload: true });
+    await vi.waitFor(() => expect(theme.resolvedTheme()).toBe("high-contrast-dark"));
+    expect(invoke).toHaveBeenCalledTimes(2);
   });
 
   it("asks again when the window theme changes, as GNOME High Contrast swaps the GTK theme", async () => {

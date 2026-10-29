@@ -55,22 +55,31 @@ function setWindowTheme(theme: string | null) {
   changed();
 }
 
-async function watchWindow() {
+async function settle(call: () => Promise<unknown>) {
   try {
-    const { getCurrentWindow } = await import("@tauri-apps/api/window");
-    const win = getCurrentWindow();
-    await win.onThemeChanged(({ payload }) => {
-      setWindowTheme(payload);
-      void askNative();
-    });
-    setWindowTheme(await win.theme());
-    // GNOME High Contrast sends the webview no event, so the OS is asked again whenever the user comes back.
-    await win.onFocusChanged(({ payload }) => {
-      if (payload) void askNative();
-    });
+    await call();
   } catch {
     /* the media query answer stands */
   }
+}
+
+async function watchWindow() {
+  const win = await import("@tauri-apps/api/window").then((m) => m.getCurrentWindow()).catch(() => null);
+  if (!win) return;
+  // Each call stands alone, so a WebKitGTK that rejects theme() still gets the focus refresh.
+  // GNOME High Contrast sends the webview no event, so the OS is asked again whenever the user comes back.
+  await settle(() =>
+    win.onFocusChanged(({ payload }) => {
+      if (payload) void askNative();
+    }),
+  );
+  await settle(() =>
+    win.onThemeChanged(({ payload }) => {
+      setWindowTheme(payload);
+      void askNative();
+    }),
+  );
+  await settle(async () => setWindowTheme(await win.theme()));
 }
 
 async function askNative() {
