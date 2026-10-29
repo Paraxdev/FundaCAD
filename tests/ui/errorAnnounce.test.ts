@@ -71,4 +71,16 @@ describe("spoken errors", () => {
     frame();
     expect(assertive.textContent).toBe("Could not open");
   });
+
+  it("a burst of one error toast interrupts once while its notice counts every one", () => {
+    for (let i = 0; i < 5; i++) {
+      t.toast("Panel handler failed", { kind: "error" });
+      frame();
+      vi.advanceTimersByTime(100);
+    }
+    expect(n.errorNotice()?.count).toBe(5);
+    expect(a.recentAnnouncements()).toEqual([
+      expect.objectContaining({ text: "Panel handler failed", priority: "assertive" }),
+    ]);
+  });
 });

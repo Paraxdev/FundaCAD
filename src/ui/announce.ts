@@ -34,6 +34,7 @@ const MAX_HISTORY = 30;
 const FRAME_FALLBACK_MS = 100;
 // Alternated onto a repeat, since VoiceOver drops an announcement identical to the last one.
 const REPEAT_MARK = "\u00a0";
+const ASSERTIVE_QUIET_REPEAT_MS = 1000;
 
 let readVerbosity: () => Verbosity = () => "normal";
 
@@ -84,10 +85,20 @@ class Channel {
   marked = false;
   private frame: number | null = null;
   private timer: ReturnType<typeof setTimeout> | null = null;
+  private saidAt = new Map<string, number>();
 
-  constructor(readonly priority: AnnouncePriority) {}
+  constructor(
+    readonly priority: AnnouncePriority,
+    /** A text said again within this long is dropped, the window sliding while the repeats keep coming. */
+    private readonly quietRepeatMs = 0,
+  ) {}
 
   push(text: string, key: string | undefined) {
+    const said = this.saidAt.get(text);
+    if (said !== undefined && Date.now() - said < this.quietRepeatMs) {
+      this.saidAt.set(text, Date.now());
+      return;
+    }
     if (key !== undefined) this.pending = this.pending.filter((p) => p.key !== key);
     if (this.pending.some((p) => p.text === text)) return;
     this.pending.push({ text, key });
@@ -115,6 +126,11 @@ class Channel {
     this.cancel();
     if (!this.region || !this.pending.length) return;
     let text = joined(this.pending.map((p) => p.text));
+    if (this.quietRepeatMs > 0) {
+      const now = Date.now();
+      for (const [t, at] of this.saidAt) if (now - at >= this.quietRepeatMs) this.saidAt.delete(t);
+      for (const p of this.pending) this.saidAt.set(p.text, now);
+    }
     this.pending = [];
     if (text === this.last) {
       this.marked = !this.marked;
@@ -130,7 +146,8 @@ class Channel {
 
 const channels: Record<AnnouncePriority, Channel> = {
   polite: new Channel("polite"),
-  assertive: new Channel("assertive"),
+  // Each assertive line interrupts, so an error a failing handler raises every few frames is said once, not on a loop.
+  assertive: new Channel("assertive", ASSERTIVE_QUIET_REPEAT_MS),
 };
 const waiting = new Map<string, ReturnType<typeof setTimeout>>();
 const history: Announcement[] = [];

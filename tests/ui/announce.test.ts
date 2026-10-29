@@ -158,6 +158,42 @@ describe("announce", () => {
     frame();
     expect(m.recentAnnouncements()).toEqual([]);
   });
+
+  it("interrupts once for an error that keeps repeating, and again after a quiet second", () => {
+    attach();
+    const heard = () => m.recentAnnouncements().map((a) => [a.text, a.priority]);
+    m.announce("Handler failed", "assertive");
+    frame();
+    for (let i = 0; i < 8; i++) {
+      vi.advanceTimersByTime(300);
+      m.announce("Handler failed", "assertive");
+      frame();
+    }
+    expect(assertive.textContent).toBe("Handler failed");
+    expect(heard()).toEqual([["Handler failed", "assertive"]]);
+    vi.advanceTimersByTime(1100);
+    m.announce("Handler failed", "assertive");
+    frame();
+    expect(assertive.textContent?.trim()).toBe("Handler failed");
+    expect(heard()).toEqual([
+      ["Handler failed", "assertive"],
+      ["Handler failed", "assertive"],
+    ]);
+  });
+
+  it("still speaks a different error, and a polite repeat, within that second", () => {
+    attach();
+    m.announce("Could not save", "assertive");
+    m.announce("Sketch mode");
+    frame();
+    vi.advanceTimersByTime(200);
+    m.announce("Could not export", "assertive");
+    m.announce("Sketch mode");
+    frame();
+    const said = (p: string) => m.recentAnnouncements().flatMap((a) => (a.priority === p ? [a.text] : []));
+    expect(said("assertive")).toEqual(["Could not save", "Could not export"]);
+    expect(said("polite")).toEqual(["Sketch mode", "Sketch mode"]);
+  });
 });
 
 describe("spoken", () => {
