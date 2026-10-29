@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { panelStack } from "../../src/ui/panelStack";
 import { MARGIN } from "../../src/viewport/viewCube";
+import type { Box } from "../../src/ui/promptPlacement";
 
 const observers: RO[] = [];
 class RO {
@@ -100,8 +101,7 @@ function boxOf(el: HTMLElement) {
   return { left: leftOf(el) - width, right: leftOf(el), top, bottom: top + height };
 }
 
-const overlap = (a: Omit<DOMRect, "toJSON">, b: Omit<DOMRect, "toJSON">) =>
-  a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+const overlap = (a: Box, b: Box) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
 
 const cards = () =>
   [...document.querySelectorAll(".float-right > *, .float-left-stack > *, .tool-rail .rail-btn")].map((c) =>
@@ -283,5 +283,22 @@ describe("each panel takes its own column on a stage too narrow for the widest",
       minWidth: "560px",
       maxWidth: "",
     });
+  });
+
+  it("stops the column beside the rail short of a lower shelf that Parameters takes across it", () => {
+    const low = { ...view, bottom: 300 };
+    const { el: layerEl } = layer({ at: STAGE }, [low, { ...history, bottom: 200 }]);
+    items(layerEl);
+    rail(layerEl, RAIL);
+    const p = params();
+    const s = stress();
+    panelStack.add("stress", s);
+    panelStack.add("params", p);
+    expect({ top: p.style.top, right: s.style.right }).toEqual({
+      top: `${low.bottom + MARGIN}px`,
+      right: `${VIEWPORT - besideRight(STAGE)}px`,
+    });
+    expect(overlap(boxOf(p), boxOf(s))).toBe(false);
+    for (const el of [p, s]) for (const c of cards()) expect(overlap(boxOf(el), c)).toBe(false);
   });
 });

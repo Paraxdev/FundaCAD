@@ -89,7 +89,14 @@ export function layoutStack(
   });
 }
 
-const open: { id: string; el: HTMLElement; used: number; onClick: (e: MouseEvent) => void }[] = [];
+// `min` holds the inline min-width a panel had before place() capped it to its column.
+const open: {
+  id: string;
+  el: HTMLElement;
+  used: number;
+  min?: string | undefined;
+  onClick: (e: MouseEvent) => void;
+}[] = [];
 let observer: ResizeObserver | null = null;
 let frame = 0;
 let uses = 0;
@@ -113,61 +120,90 @@ function header(el: HTMLElement): number | undefined {
   return Math.ceil(bottom + (parseFloat(cs.paddingBottom) || 0) + (parseFloat(cs.borderBottomWidth) || 0));
 }
 
-/** The column's top and span: left of the right cards, or when that is under `least` wide, the highest shelf right of
- *  the cards beside it. With neither, `least` wide beside the rail and running under the cards, as the prompt gives. */
-function column(box: Box, least: number): { top: number; free: Box } {
+interface Column {
+  top: number;
+  bottom: number;
+  free: Box;
+}
+
+const span = (c: Column) => c.free.right - c.free.left;
+
+/** The columns a panel can take: left of the right cards, then each shelf at least MIN_HEIGHT tall right of the cards
+ *  beside it, highest first. */
+function columns(box: Box): Column[] {
   const top = stackTop(box);
-  const beside = clearOfCards(box, { top, bottom: box.bottom }, CUBE_MARGIN, 0);
-  if (beside.right - beside.left >= least) return { top, free: beside };
+  const bottom = box.bottom - CUBE_MARGIN;
+  const list = [{ top, bottom, free: clearOfCards(box, { top, bottom: box.bottom }, CUBE_MARGIN, 0) }];
   const cards = [...document.querySelectorAll(RIGHT_CARDS)].map((c) => c.getBoundingClientRect());
   const tops = [top, ...cards.map((c) => c.bottom + CUBE_MARGIN)];
   for (const t of [...new Set(tops)].sort((a, b) => a - b)) {
-    if (t < top || box.bottom - CUBE_MARGIN - t < MIN_HEIGHT) continue;
+    if (t < top || bottom - t < MIN_HEIGHT) continue;
     const rail = clearOfCards(box, { top: t, bottom: box.bottom }, CUBE_MARGIN, 0).left;
     const left = cards
       .filter((c) => c.right > c.left && c.bottom > t)
       .reduce((l, c) => Math.max(l, Math.round(c.right + CUBE_MARGIN)), rail);
-    if (box.right - CUBE_MARGIN - left >= least)
-      return { top: t, free: { ...box, left, right: box.right - CUBE_MARGIN } };
+    list.push({ top: t, bottom, free: { ...box, left, right: box.right - CUBE_MARGIN } });
   }
-  return { top, free: clearOfCards(box, { top, bottom: box.bottom }, CUBE_MARGIN, least) };
+  return list;
 }
 
 function place() {
   frame = 0;
   // A panel with its own scroller reports the height it was last capped to, so measure it uncapped.
-  for (const p of open) p.el.style.maxHeight = "";
+  for (const p of open) {
+    p.el.style.maxHeight = "";
+    p.el.style.maxWidth = "";
+    if (p.min !== undefined) p.el.style.minWidth = p.min;
+    p.min = undefined;
+  }
   const layer = document.getElementById("float-layer");
   const area = (layer ?? document.body).getBoundingClientRect();
   const box: Box = { left: area.left, right: area.right, top: area.top, bottom: area.bottom };
-  const least = Math.max(0, ...open.map((p) => parseFloat(getComputedStyle(p.el).minWidth) || 0));
-  const { top, free } = column(box, least);
-  // Right anchored and under the float layer, so a panel wider than the span would hide under the rail. Only a
-  // panel that is too wide gets the cap, so a panel's own max-width holds otherwise.
-  const room = Math.floor(free.right - free.left);
-  for (const p of open) p.el.style.maxWidth = "";
-  for (const p of open) if (p.el.offsetWidth > room) p.el.style.maxWidth = `${room}px`;
-  const slots = layoutStack(
-    open.map((p) => ({
-      id: p.id,
-      height: natural(p.el),
-      floor: scrollerFloor(p.el),
-      head: header(p.el),
-      rank: p.used,
-    })),
-    top,
-    box.bottom - CUBE_MARGIN,
-  );
-  slots.forEach((s, i) => {
-    const el = open[i]!.el;
-    const { style } = el;
-    style.top = `${s.top}px`;
-    // Fixed, so right counts from the viewport edge, not the layer, which ends at the Render dock.
-    style.right = `${Math.round(document.documentElement.clientWidth - free.right)}px`;
-    style.maxHeight = s.maxHeight === null ? "" : `${s.maxHeight}px`;
-    el.toggleAttribute("data-capped", s.maxHeight !== null && !s.folded);
-    el.toggleAttribute("data-folded", !!s.folded);
-  });
+  const cols = columns(box);
+  const widest = cols.reduce((w, c) => (span(c) > span(w) ? c : w));
+  const mins = open.map((p) => parseFloat(getComputedStyle(p.el).minWidth) || 0);
+  const at = mins.map((min) => cols.find((c) => span(c) >= min) ?? widest);
+  const used = cols.filter((c) => at.includes(c));
+  // A lower shelf reaches across the columns above it, so each of those stops short of it.
+  for (const c of used)
+    for (const d of used)
+      if (d.top > c.top && d.free.left < c.free.right && c.free.left < d.free.right)
+        c.bottom = Math.min(c.bottom, d.top - GAP);
+  for (const c of used) {
+    const here = open.filter((_, i) => at[i] === c);
+    const least = mins.filter((_, i) => at[i] === c);
+    // Right anchored and under the float layer, so a panel wider than the span would hide under the rail or a card.
+    // Only a panel that is too wide gets the cap, so a panel's own min and max width hold otherwise.
+    const room = Math.max(0, Math.floor(span(c)));
+    for (const [i, p] of here.entries()) {
+      if (least[i]! > room) {
+        p.min = p.el.style.minWidth;
+        p.el.style.minWidth = `${room}px`;
+      }
+      if (p.el.offsetWidth > room) p.el.style.maxWidth = `${room}px`;
+    }
+    const slots = layoutStack(
+      here.map((p) => ({
+        id: p.id,
+        height: natural(p.el),
+        floor: scrollerFloor(p.el),
+        head: header(p.el),
+        rank: p.used,
+      })),
+      c.top,
+      c.bottom,
+    );
+    slots.forEach((s, i) => {
+      const el = here[i]!.el;
+      const { style } = el;
+      style.top = `${s.top}px`;
+      // Fixed, so right counts from the viewport edge, not the layer, which ends at the Render dock.
+      style.right = `${Math.round(document.documentElement.clientWidth - c.free.right)}px`;
+      style.maxHeight = s.maxHeight === null ? "" : `${s.maxHeight}px`;
+      el.toggleAttribute("data-capped", s.maxHeight !== null && !s.folded);
+      el.toggleAttribute("data-folded", !!s.folded);
+    });
+  }
 }
 
 function schedule() {
@@ -202,7 +238,8 @@ export const panelStack = {
   remove(id: string) {
     const i = open.findIndex((p) => p.id === id);
     if (i < 0) return;
-    const { el, onClick } = open[i]!;
+    const { el, min, onClick } = open[i]!;
+    if (min !== undefined) el.style.minWidth = min;
     observer?.unobserve(el);
     el.removeEventListener("click", onClick);
     el.removeAttribute("data-folded");
