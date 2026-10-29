@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
 from importlib import resources
 from pathlib import Path
 from typing import Any, Callable, Sequence
 
-from .errors import HarnessError, Occluded, SettleTimeout
+from .errors import DriverMismatch, HarnessError, Occluded, SettleTimeout
 
 AXE_VERSION = "4.10.2"
 AXE_SHA256 = "b511cd9dec01c76f4b2ad1723b66b6db37d4c2eb4ed199076e1829d9ee7b75e3"
@@ -24,8 +25,9 @@ _RUN = (
 Counts = dict[str, int]
 Baseline = dict[str, Counts]
 Flow = tuple[str, Callable[[Any], Any], Callable[[Any], Any], Any]
-# A loaded machine leaves the page too busy to take a click or settle in time, and a second try usually gets through.
-BUSY = (Occluded, SettleTimeout, TimeoutError)
+# A loaded machine leaves the page too busy to take a click or settle in time, and a page vite reloaded mid walk
+# to rebuild its dependencies comes back with no driver. A second try on a fresh page usually gets through.
+BUSY = (Occluded, SettleTimeout, TimeoutError, DriverMismatch)
 
 
 def busy(e: Exception) -> bool:
@@ -94,26 +96,68 @@ def write_baseline(path: Path, baseline: Baseline) -> None:
     path.write_text(json.dumps(baseline, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def fresh_page(s: Any, base: Callable[[Any], Any]) -> None:
+    """Reloads the session's page and brings it to `base`, the steps a Session takes after a reload it did not ask for,
+    without its limit of one reload in 30 s."""
+
+    # An unsaved document asks before the page unloads, and Playwright dismisses that, which cancels the reload.
+    def leave_unsaved(dialog: Any) -> None:
+        if dialog.type == "beforeunload":
+            dialog.accept()
+        else:
+            dialog.dismiss()
+
+    s.page.on("dialog", leave_unsaved)
+    try:
+        # On a loaded machine vite can take past a minute to serve the module graph, the driver wait polls for it.
+        s.page.goto(s.url, wait_until="commit", timeout=30_000)
+    finally:
+        s.page.remove_listener("dialog", leave_unsaved)
+    s._wait_driver()
+    s._seen_navs = s._navs
+    # Right after a reload Home's close button can keep moving past the 5 s a click waits, Escape needs no target.
+    if s.bridge.call("startScreen") != "none":
+        s.page.keyboard.press("Escape")
+        s._wait_for(lambda: s.bridge.call("startScreen") == "none", 10)
+    s.dismiss_start()
+    base(s)
+    s.settle()
+
+
 def walk(
     s: Any,
     flows: Sequence[Flow],
     scan: Callable[[Any, str], Any],
     reset: Callable[[Any, Any], Any],
     retries: int = 1,
+    reset_budget: float | None = None,
+    clock: Callable[[], float] = time.monotonic,
 ) -> dict[str, Any]:
     """Shows and scans each `(name, show, leave, base)` screen in turn, the scan or the error text per name.
 
     Each screen starts where the one before left the page, unless that one broke or did not close: then
-    `reset(s, base)` gives it a fresh page brought to its base first, so a broken screen fails alone. A screen that
-    was too busy is shown again from its base, up to `retries` times.
+    `reset(s, base)` gives it a fresh page brought to its base first, so a broken screen does not break the next.
+    A screen that was too busy is shown again from its base, up to `retries` times. Once the resets have taken
+    `reset_budget` seconds no new one starts, so a page too slow to reload cannot hold the walk past its time limit.
     """
     results: dict[str, Any] = {}
     dirty = False
+    spent = 0.0
     for name, show, leave, base in flows:
         for attempt in range(retries + 1):
             try:
                 if dirty:
-                    reset(s, base)
+                    if reset_budget is not None and spent >= reset_budget:
+                        if attempt == 0:
+                            results[name] = (
+                                f"not run, the resets before it took {spent:.0f} s of a {reset_budget:.0f} s budget"
+                            )
+                        break
+                    start = clock()
+                    try:
+                        reset(s, base)
+                    finally:
+                        spent += clock() - start
                     dirty = False
                 show(s)
                 results[name] = scan(s, name)
@@ -129,3 +173,16 @@ def walk(
             except Exception:
                 dirty = True
     return results
+
+
+def verdicts(results: dict[str, Any]) -> tuple[dict[str, Any], dict[str, str]]:
+    """Splits each screen's `{"axe": violations, "aria": {key: mismatch}}`, an error standing for both."""
+    axe: dict[str, Any] = {}
+    aria: dict[str, str] = {}
+    for name, found in results.items():
+        if isinstance(found, str):
+            axe[name] = aria[name] = found
+        else:
+            axe[name] = found["axe"]
+            aria.update(found["aria"])
+    return axe, aria

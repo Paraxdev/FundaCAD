@@ -12,10 +12,12 @@ from fundacad_harness import Session
 from fundacad_harness.a11y import (
     axe_violations,
     counts,
+    fresh_page,
     lowered_baseline,
     over_baseline,
     read_baseline,
     under_baseline,
+    verdicts,
     walk,
     write_baseline,
 )
@@ -154,41 +156,18 @@ FLOWS = (
     ("confirm", show_confirm, escape, open_fixture),
 )
 SCREENS = [name for name, *_ in FLOWS]
-
-
-def fresh_page(s, base):
-    # The steps Session takes after a reload it did not ask for, without its limit of one reload in 30 s. An unsaved
-    # document asks before the page unloads, and Playwright dismisses that, which cancels the reload.
-    def leave_unsaved(dialog):
-        if dialog.type == "beforeunload":
-            dialog.accept()
-        else:
-            dialog.dismiss()
-
-    s.page.on("dialog", leave_unsaved)
-    try:
-        s.page.goto(s.url, wait_until="domcontentloaded", timeout=60_000)
-    finally:
-        s.page.remove_listener("dialog", leave_unsaved)
-    s._wait_driver()
-    s._seen_navs = s._navs
-    # Right after a reload Home's close button can keep moving past the 5 s a click waits, Escape needs no target.
-    if s.bridge.call("startScreen") != "none":
-        s.page.keyboard.press("Escape")
-        s._wait_for(lambda: s.bridge.call("startScreen") == "none", 10)
-    s.dismiss_start()
-    base(s)
-    s.settle()
+# The CI step has 10 minutes and one reset that hangs can take three, so a walk that keeps needing them stops early.
+RESET_BUDGET = 120
 
 
 @pytest.fixture(scope="module")
 def scans():
-    """Walks every screen once in one session, from a fresh page after a screen that broke, so it fails alone."""
+    """Walks every screen once in one session, on a fresh page after a screen that broke, while the resets last."""
     out = out_dir()
-    aria: dict[str, str] = {}
 
     def scan(s, name):
         _settled(s)
+        aria: dict[str, str] = {}
         (out / f"aria_{name}.yml").write_text(s.page.locator("body").aria_snapshot(), encoding="utf-8")
         if name in ARIA:
             aria[name] = aria_mismatch(s, (ARIA_DIR / ARIA[name]).read_text(encoding="utf-8"))
@@ -196,20 +175,17 @@ def scans():
             aria["negative"] = aria_mismatch(s, ARIA_NEGATIVE[1], timeout=500)
         found = axe_violations(s.page)
         (out / f"axe_{name}.json").write_text(json.dumps(found, indent=1), encoding="utf-8")
-        return found
+        return {"axe": found, "aria": aria}
 
     s = Session(viewport=(1400, 900))
     try:
-        results = walk(s, FLOWS, scan, fresh_page)
+        axe, aria = verdicts(walk(s, FLOWS, scan, fresh_page, reset_budget=RESET_BUDGET))
     finally:
         s.close()
-    for name, found in results.items():
-        if isinstance(found, str):
-            aria.setdefault(name, found)
     if os.environ.get("FUNDACAD_AXE_LOWER") == "1":
-        ran = {name: counts(found) for name, found in results.items() if isinstance(found, list)}
+        ran = {name: counts(found) for name, found in axe.items() if isinstance(found, list)}
         write_baseline(BASELINE, lowered_baseline(ran, ALLOWED))
-    return {"axe": results, "aria": aria}
+    return {"axe": axe, "aria": aria}
 
 
 @pytest.mark.parametrize("screen", SCREENS)
