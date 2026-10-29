@@ -7,10 +7,10 @@ export const APP_HTML = `
   <button id="undo-btn" class="tb-btn" title="Undo (Ctrl+Z)" aria-label="Undo"></button>
   <button id="redo-btn" class="tb-btn" title="Redo (Ctrl+Y)" aria-label="Redo" disabled></button>
   <span id="docname" class="docname dirty"><!-- a dev build keeps comments -->Untitled<span class="dirty-mark" aria-hidden="true">*</span> <span class="sr-only">Unsaved changes</span></span>
-  <nav id="menubar">
-    <div class="menu"><button class="btn menu-btn" aria-expanded="false">File</button></div>
-    <div class="menu"><button class="btn menu-btn is-open" aria-expanded="true">Edit</button></div>
-  </nav>
+  <nav id="menubar" aria-label="Menu"><div class="menubar-bar" role="menubar" aria-label="Menu">
+    <div class="menu" role="none"><button class="btn menu-btn" role="menuitem" aria-haspopup="menu" aria-expanded="false" tabindex="-1">File</button></div>
+    <div class="menu" role="none"><button class="btn menu-btn is-open" role="menuitem" aria-haspopup="menu" aria-expanded="true" tabindex="0">Edit</button></div>
+  </div></nav>
 </header>
 <div class="ui-menu" role="menu" aria-label="Edit"><div class="menubar-rows" role="none">
   <div class="ui-menu-item menu-item" role="menuitem"><span class="ui-menu-label">Preferences...</span><span class="ui-menu-keys">Ctrl+,</span></div>

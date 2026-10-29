@@ -1,10 +1,11 @@
 - banner:
   - button "Home"
-  - navigation:
-    - button "File"
-    - button "Edit"
-    - button "View"
-    - button "Help"
+  - navigation "Menu":
+    - menubar "Menu":
+      - menuitem "File"
+      - menuitem "Edit"
+      - menuitem "View"
+      - menuitem "Help"
   - button "Undo"
   - button "Redo"
   - radiogroup "Workspace":

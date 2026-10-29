@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import MenuBar from "../../../src/components/shell/MenuBar.vue";
 import { escapeClaimed } from "../../../src/ui/escapeClaim";
+import { inertOthers } from "../../../src/composables/useModalGate";
 
 enableAutoUnmount(afterEach);
 
@@ -114,5 +115,109 @@ describe("menubar popups", () => {
     key("Escape");
     await settle();
     expect([popup(), document.activeElement, escapeClaimed()]).toEqual([null, view.element, false]);
+  });
+});
+
+describe("menubar roles and keys", () => {
+  const four = ["File", "Edit", "View", "Help"].map((label) => ({
+    label,
+    items: [{ label: `${label} row`, onClick: () => {} }],
+  }));
+  const mountFour = () => mount(MenuBar, { props: { menus: four }, attachTo: document.body });
+  const label = () => document.activeElement?.textContent?.trim() ?? null;
+
+  it("is a labelled nav holding one menubar of menuitems with a single Tab stop", () => {
+    const w = mountFour();
+    const nav = w.get("nav#menubar");
+    expect(nav.attributes("aria-label")).toBe("Menu");
+    const bar = w.get('[role="menubar"]');
+    expect(bar.attributes("aria-label")).toBe("Menu");
+    expect(w.findAll(".menu").map((c) => c.attributes("role"))).toEqual(["none", "none", "none", "none"]);
+    const btns = w.findAll(".menu-btn");
+    expect(btns.map((b) => [b.attributes("role"), b.attributes("aria-haspopup"), b.attributes("tabindex")])).toEqual([
+      ["menuitem", "menu", "0"],
+      ["menuitem", "menu", "-1"],
+      ["menuitem", "menu", "-1"],
+      ["menuitem", "menu", "-1"],
+    ]);
+    expect(btns[0]!.attributes("aria-pressed")).toBeUndefined();
+  });
+
+  it("ArrowRight, ArrowLeft, Home and End move among closed menus without opening one", async () => {
+    const w = mountFour();
+    w.get<HTMLElement>(".menu-btn").element.focus();
+    key("ArrowRight");
+    expect([label(), popup()]).toEqual(["Edit", null]);
+    key("ArrowLeft");
+    key("ArrowLeft");
+    expect(label()).toBe("Help");
+    key("Home");
+    expect(label()).toBe("File");
+    key("End");
+    expect(label()).toBe("Help");
+    await flushPromises();
+    expect(w.findAll(".menu-btn").map((b) => b.attributes("tabindex"))).toEqual(["-1", "-1", "-1", "0"]);
+  });
+
+  it("ArrowRight in the open File menu goes to Edit, not past it", async () => {
+    const w = mountFour();
+    w.get<HTMLElement>(".menu-btn").element.focus();
+    key("ArrowDown");
+    await flushPromises();
+    key("ArrowRight");
+    await vi.waitFor(() => expect(focused()).toBe("Edit row"));
+    expect(popup()?.getAttribute("aria-label")).toBe("Edit");
+    key("Escape");
+    await settle();
+    expect([label(), w.findAll(".menu-btn")[1]!.attributes("tabindex")]).toEqual(["Edit", "0"]);
+  });
+
+  it("F10 puts focus on the menu bar's stop and gives it back on a second press", async () => {
+    const w = mountFour();
+    const out = document.createElement("button");
+    document.body.append(out);
+    out.focus();
+    key("F10");
+    expect(label()).toBe("File");
+    key("ArrowRight");
+    key("F10");
+    expect(document.activeElement).toBe(out);
+    key("F10");
+    expect(label()).toBe("Edit");
+    out.remove();
+    w.unmount();
+  });
+
+  it("F10 closes an open menu and lands on its menu bar item", async () => {
+    const w = mountFour();
+    await w.findAll(".menu-btn")[2]!.trigger("click");
+    await vi.waitFor(() => expect(focused()).toBe("View row"));
+    key("F10");
+    await vi.waitFor(() => expect(label()).toBe("View"));
+    expect(popup()).toBe(null);
+  });
+
+  it("F10 leaves focus alone with a modifier, when taken already, or while a dialog holds the page", () => {
+    mountFour();
+    const out = document.createElement("button");
+    document.body.append(out);
+    out.focus();
+    for (const init of [{ shiftKey: true }, { ctrlKey: true }, { altKey: true }]) {
+      out.dispatchEvent(new KeyboardEvent("keydown", { key: "F10", bubbles: true, cancelable: true, ...init }));
+    }
+    expect(document.activeElement).toBe(out);
+    const taken = new KeyboardEvent("keydown", { key: "F10", bubbles: true, cancelable: true });
+    taken.preventDefault();
+    out.dispatchEvent(taken);
+    expect(document.activeElement).toBe(out);
+    const dlg = document.createElement("div");
+    document.body.append(dlg);
+    dlg.append(out);
+    const release = inertOthers(dlg);
+    out.focus();
+    key("F10");
+    expect(document.activeElement).toBe(out);
+    release();
+    dlg.remove();
   });
 });

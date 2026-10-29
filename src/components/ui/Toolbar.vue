@@ -9,9 +9,10 @@ const props = withDefaults(
       orientation?: RovingOrientation;
       wrap?: boolean;
       tag?: string;
+      role?: "toolbar" | "menubar";
     } & Named
   >(),
-  { orientation: "horizontal", wrap: true, tag: "div" },
+  { orientation: "horizontal", wrap: true, tag: "div", role: "toolbar" },
 );
 
 const name = useName(props, "Toolbar");
@@ -164,7 +165,7 @@ onBeforeUnmount(() => observer?.disconnect());
   <component
     :is="tag"
     ref="root"
-    role="toolbar"
+    :role="role"
     :aria-orientation="orientation === 'vertical' ? 'vertical' : undefined"
     v-bind="name"
     @keydown="onKeydown"
