@@ -2,6 +2,7 @@
 // Export hands the engine a path from the save dialog, so the file never round-trips through the webview.
 
 import { suggestedSavePath } from "./saveFolder";
+import { pickFile } from "../components/ui/dom";
 import type { CarriedSection, DocumentStore, GivenUp } from "../document/store";
 import { asFeature } from "../types";
 import type { GeometryBackend } from "../geometry/client";
@@ -1394,38 +1395,20 @@ function downloadText(name: string, text: string) {
 
 /** The browser fallback for picking a JSON file, apart from uploadText so a material library picker does not
  *  offer .funda files. */
-function uploadJson(accept = ".json,application/json"): Promise<string | null> {
-  return new Promise((resolve) => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = accept;
-    input.onchange = () => {
-      const file = input.files?.[0];
-      if (!file) return resolve(null);
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result));
-      reader.onerror = () => resolve(null);
-      reader.readAsText(file);
-    };
-    input.click();
-  });
+async function uploadJson(accept = ".json,application/json"): Promise<string | null> {
+  const file = await pickFile(accept);
+  return file ? readPicked(file) : null;
 }
 
 /** The picked file's name alongside its text, so the browser Open path can set
  *  the title bar the way a Tauri Open sets it from the chosen path. */
-function uploadText(): Promise<{ text: string; name: string } | null> {
-  return new Promise((resolve) => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = [DOC_EXT, ...LEGACY_DOC_EXTS].map((e) => `.${e}`).join(",") + ",.json,application/json";
-    input.onchange = () => {
-      const file = input.files?.[0];
-      if (!file) return resolve(null);
-      const reader = new FileReader();
-      reader.onload = () => resolve({ text: String(reader.result), name: file.name });
-      reader.onerror = () => resolve(null);
-      reader.readAsText(file);
-    };
-    input.click();
-  });
+async function uploadText(): Promise<{ text: string; name: string } | null> {
+  const file = await pickFile([DOC_EXT, ...LEGACY_DOC_EXTS].map((e) => `.${e}`).join(",") + ",.json,application/json");
+  if (!file) return null;
+  const text = await readPicked(file);
+  return text === null ? null : { text, name: file.name };
+}
+
+function readPicked(file: File): Promise<string | null> {
+  return file.text().catch(() => null);
 }
