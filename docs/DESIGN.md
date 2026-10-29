@@ -649,6 +649,8 @@ over), never both. Their props take the `Named` union of `components/ui/useName.
 neither, and in dev a control given neither, nor an `aria-label` or `aria-labelledby` attribute, warns
 "<Kind> has no name". A `Checkbox` may take its slot text instead. `tip` is the tooltip, and only names a control
 given nothing else (a plain JS plugin skips the type check), without its key chord, so a release build still says it.
+A `Select` trigger's name carries its value ("Theme, Dark", or the `labelledby` text then the value), since VoiceOver
+and Orca read only the name of a combobox named by `aria-label`; its open list is named by the label alone.
 
 | Component | For | Props that matter | States |
 |---|---|---|---|

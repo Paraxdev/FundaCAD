@@ -46,7 +46,9 @@ const listName = computed<Named>(() => {
 const open = ref(false);
 const active = ref(-1);
 const btn = useTemplateRef<HTMLButtonElement>("btn");
-const listId = `${useId()}-list`;
+const uid = useId();
+const listId = `${uid}-list`;
+const valueId = `${uid}-value`;
 /** Measured on open: the list reads as this field's list when it is at least as
  *  wide as the field, and these fields stretch to fill their row. */
 const width = ref(0);
@@ -55,6 +57,13 @@ const flags = computed(() => props.options.map((o) => !!o.disabled));
 const selected = computed(() => props.options.findIndex((o) => o.value === props.modelValue));
 const tipText = computed(() => (props.tip ? fmtKeys(props.keys ? `${props.tip} (${props.keys})` : props.tip) : null));
 const shown = computed(() => props.options[selected.value]?.label ?? props.placeholder ?? props.modelValue);
+// An aria-label alone hides a combobox's value from VoiceOver and Orca, so the trigger's name carries the value too.
+const triggerName = computed(() => {
+  const by = name.value["aria-labelledby"];
+  if (by) return { "aria-label": undefined, "aria-labelledby": `${by} ${valueId}` };
+  const label = name.value["aria-label"];
+  return { "aria-label": label ? `${label}, ${shown.value}` : undefined, "aria-labelledby": undefined };
+});
 
 function openAt(at: number) {
   if (d.isDisabled.value) return;
@@ -187,7 +196,7 @@ onBeforeUnmount(() => window.clearTimeout(bufferTimer));
 <template>
   <button
     ref="btn"
-    v-bind="mergeProps($attrs, d.bind.value, name)"
+    v-bind="mergeProps($attrs, d.bind.value, triggerName)"
     :id="id"
     type="button"
     role="combobox"
@@ -207,7 +216,7 @@ onBeforeUnmount(() => window.clearTimeout(bufferTimer));
     @keydown="onKeydown"
     @keyup="onKeyup"
   >
-    <span class="select-value">{{ shown }}</span>
+    <span :id="valueId" class="select-value">{{ shown }}</span>
   </button>
 
   <Popover

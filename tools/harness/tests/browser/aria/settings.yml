@@ -7,7 +7,7 @@
     - button "Navigation"
     - button "Accessibility"
   - heading "Appearance" [level=3]
-  - combobox "Theme"
+  - combobox /^Theme, /
   - radiogroup "Units":
     - radio "mm" [checked]
     - radio "cm"

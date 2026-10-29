@@ -176,6 +176,8 @@ export interface UiUnitChipOptions extends DisabledOptions {
 }
 
 const unitLabel = (id: string) => unitById(id)?.label ?? id;
+/** Each picker chip's own name, which its aria-label carries ahead of the unit it shows, as Select.vue does. */
+const chipNames = new WeakMap<HTMLElement, string>();
 
 /** UnitChip.vue as DOM: a caption span, or with options the closed Select chip trigger. The caller owns the menu
  *  and marks it with setExpanded. */
@@ -192,7 +194,7 @@ export function uiUnitChip(o: UiUnitChipOptions): HTMLElement {
   b.setAttribute("role", "combobox");
   b.className = "ui-unit-chip is-picker ui-select-sm";
   const tip = tipText(o.tip ?? "Unit", o.keys)!;
-  b.setAttribute("aria-label", o.tip ?? "Unit");
+  chipNames.set(b, o.tip ?? "Unit");
   b.setAttribute("aria-haspopup", "listbox");
   b.setAttribute("aria-expanded", "false");
   const value = document.createElement("span");
@@ -211,6 +213,7 @@ export function setChipUnit(chip: HTMLElement, unit: string): void {
   }
   chip.dataset.value = unit;
   chip.querySelector(".select-value")!.textContent = unitLabel(unit);
+  chip.setAttribute("aria-label", `${chipNames.get(chip) ?? "Unit"}, ${unitLabel(unit)}`);
 }
 
 /** A picker trigger's open state, with the id of the list it opened. */
