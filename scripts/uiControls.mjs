@@ -238,14 +238,14 @@ function lineIndex(src) {
 }
 
 // A name a screen reader can read: one of `props` or aria-label/aria-labelledby, static and not blank, or bound to
-// anything but an empty literal. A v-bind spread may carry one, so it counts.
+// anything but an empty literal, null, undefined or false. A v-bind spread may carry one, so it counts.
 function hasName(attrs, props) {
   if (attrs.has("v-bind")) return true;
   for (const p of [...props, "aria-label", "aria-labelledby"]) {
     const plain = attrs.get(p);
     if (typeof plain === "string" && plain.trim() !== "") return true;
     const bound = attrs.get(`:${p}`) ?? attrs.get(`v-bind:${p}`);
-    if (typeof bound === "string" && bound.trim() !== "" && !/^\s*(["'`])\s*\1\s*$/.test(bound)) return true;
+    if (typeof bound === "string" && !/^\s*(?:(["'`])\s*\1|null|undefined|false)?\s*$/.test(bound)) return true;
   }
   return false;
 }
@@ -371,14 +371,21 @@ function optionKeys(lexed, from, to) {
   return out;
 }
 
-// How many options of one Segmented show only an icon with nothing to name them. An options expression this cannot
-// follow to its declaration in the file, or to an export of another scanned file, is not counted.
-function namelessSegments(attrs, { script, exported }) {
+// How many options of one Segmented show only an icon with nothing to name them, over both branches of a ternary.
+// An options expression this cannot follow to its declaration in the file, or to an export of another scanned file,
+// is not counted.
+function namelessSegments(attrs, sources) {
   const expr = attrs.get(":options") ?? attrs.get("v-bind:options");
   if (typeof expr !== "string") return 0;
   const iconOnly = ["icon-only", "iconOnly", ":icon-only", ":iconOnly"].some(
     (a) => attrs.has(a) && attrs.get(a) !== "false",
   );
+  const branches = /^[^?:]+\?\s*([\w$.()\s]+?)\s*:\s*([\w$.()\s]+?)\s*$/.exec(expr);
+  const exprs = branches ? [branches[1], branches[2]] : [expr];
+  return exprs.reduce((n, e) => n + namelessOptions(e, iconOnly, sources), 0);
+}
+
+function namelessOptions(expr, iconOnly, { script, exported }) {
   const id = /^\s*([A-Za-z_$][\w$]*)\s*(?:\(\s*\)|\.value)?\s*$/.exec(expr)?.[1];
   let lexed = id ? script : lexScript(expr);
   let span = id ? declaration(script, id) : [0, expr.length];

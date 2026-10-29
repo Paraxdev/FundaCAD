@@ -252,6 +252,47 @@ describe("icon only controls without a name", () => {
       "src/components/A.vue:13 Segmented:no-name",
     ]);
   });
+
+  it("counts a name bound to null, undefined or false as no name", () => {
+    const src = vue(
+      [
+        `<IconButton icon="x" :tip="null" />`,
+        `<IconButton icon="x" :tip=" undefined " />`,
+        `<RailButton icon="x" :label="false" />`,
+        `<IconButton icon="x" :aria-label="null" tip="" />`,
+        `<IconButton icon="x" :tip="nullable" />`,
+        `<IconButton icon="x" :tip="undefinedTip ?? 'Close'" />`,
+      ].join("\n"),
+    );
+    expect(kinds({ "src/components/A.vue": src })).toEqual([
+      "src/components/A.vue:6 IconButton:no-name",
+      "src/components/A.vue:7 IconButton:no-name",
+      "src/components/A.vue:8 RailButton:no-name",
+      "src/components/A.vue:9 IconButton:no-name",
+    ]);
+  });
+
+  it("follows both branches of a Segmented options ternary", () => {
+    const script = [
+      `const wide = [{ value: "a", icon: "x" }, { value: "b", icon: "y" }];`,
+      `const narrow = [{ value: "a", icon: "x", tip: "A" }, { value: "c", icon: "z" }];`,
+    ].join("\n");
+    const src = vue(
+      [
+        `<Segmented v-model="a" :options="roomy ? wide : narrow" />`,
+        `<Segmented v-model="a" :options="roomy ? narrow : SHARED" />`,
+      ].join("\n"),
+      script,
+    );
+    const shared = `export const SHARED = [{ value: "s", icon: "s" }, { value: "t", icon: "t", label: "T" }];\n`;
+    expect(kinds({ "src/components/A.vue": src, "src/ui/shared.ts": shared })).toEqual([
+      "src/components/A.vue:7 Segmented:no-name",
+      "src/components/A.vue:7 Segmented:no-name",
+      "src/components/A.vue:7 Segmented:no-name",
+      "src/components/A.vue:8 Segmented:no-name",
+      "src/components/A.vue:8 Segmented:no-name",
+    ]);
+  });
 });
 
 describe("legacy classes", () => {
