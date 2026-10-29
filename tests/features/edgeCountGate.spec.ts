@@ -144,7 +144,7 @@ describe("edge count gate", () => {
       rig(n).starters.startFillet();
       await nextTick();
       await flush();
-      const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
+      const dialog = document.querySelector<HTMLElement>('[role="alertdialog"]')!;
       const read = (attr: string) => document.getElementById(dialog.getAttribute(attr) ?? "")?.textContent ?? "";
       expect(read("aria-labelledby")).toBe(question()!.title);
       expect(read("aria-describedby")).toBe(question()!.message);
