@@ -148,6 +148,7 @@ const numberStyle = { ...fieldStyle, flex: "1 0 76px", minWidth: "76px" };
             <input
               v-else-if="row.control.kind === 'toggle'"
               type="checkbox"
+              :aria-label="row.name"
               :checked="row.def.value !== 0"
               @change="commit(row, ($event.target as HTMLInputElement).checked ? 1 : 0)"
             />
@@ -155,6 +156,7 @@ const numberStyle = { ...fieldStyle, flex: "1 0 76px", minWidth: "76px" };
             <select
               v-else-if="row.control.kind === 'choice'"
               :style="fieldStyle"
+              :aria-label="row.name"
               :value="String(row.def.value)"
               @change="commit(row, num($event))"
             >
@@ -170,6 +172,7 @@ const numberStyle = { ...fieldStyle, flex: "1 0 76px", minWidth: "76px" };
             <template v-else-if="row.control.kind === 'slider'">
               <input
                 type="range"
+                :aria-label="row.name"
                 :style="sliderStyle"
                 :min="row.control.min"
                 :max="row.control.max"
@@ -186,6 +189,7 @@ const numberStyle = { ...fieldStyle, flex: "1 0 76px", minWidth: "76px" };
             <template v-else>
               <input
                 type="number"
+                :aria-label="row.name"
                 :style="numberStyle"
                 :min="row.control.min"
                 :max="row.control.max"
