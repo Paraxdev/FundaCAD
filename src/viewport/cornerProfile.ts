@@ -30,23 +30,34 @@ export function superellipseCorner(p0: Vec2, vertex: Vec2, p2: Vec2, exponent: n
 /** A square centred on the origin, counter clockwise from its (+, -) corner,
  *  each corner cut back `leg` along both sides and bridged by a superellipse. */
 export function roundedSquare(size: number, leg: number, exponent: number, segments: number): Vec2[] {
+  return roundedSquareCorners(size, [leg, leg, leg, leg], exponent, segments);
+}
+
+/** `roundedSquare` with a leg per corner, in the same order, a leg of 0 keeping that corner square. */
+export function roundedSquareCorners(
+  size: number,
+  legs: readonly [number, number, number, number],
+  exponent: number,
+  segments: number,
+): Vec2[] {
   const h = size / 2;
-  const l = Math.min(h, Math.max(0, leg));
   const corners: Vec2[] = [
     [h, -h],
     [h, h],
     [-h, h],
     [-h, -h],
   ];
-  if (l === 0) return corners.map(([x, y]) => [x, y]);
+  const same = (p: Vec2, q: Vec2 | undefined) => q !== undefined && p[0] === q[0] && p[1] === q[1];
   const out: Vec2[] = [];
   corners.forEach((v, i) => {
+    const l = Math.min(h, Math.max(0, legs[i]!));
     const prev = corners[(i + 3) % 4]!;
     const next = corners[(i + 1) % 4]!;
     const toward = (to: Vec2): Vec2 => [v[0] + Math.sign(to[0] - v[0]) * l, v[1] + Math.sign(to[1] - v[1]) * l];
-    const arc = superellipseCorner(toward(prev), v, toward(next), exponent, segments);
+    const arc = l === 0 ? [[v[0], v[1]] as Vec2] : superellipseCorner(toward(prev), v, toward(next), exponent, segments);
     // At a half size leg two neighbouring corners share their tangent point.
-    out.push(...(l === h ? arc.slice(1) : arc));
+    out.push(...(same(arc[0]!, out[out.length - 1]) ? arc.slice(1) : arc));
   });
+  if (out.length > 1 && same(out[0]!, out[out.length - 1])) out.shift();
   return out;
 }

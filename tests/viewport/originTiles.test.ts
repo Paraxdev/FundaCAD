@@ -20,7 +20,7 @@ import {
   type TileState,
 } from "../../src/viewport/originTiles";
 import { AXIS_COLOR } from "../../src/viewport/originTriad";
-import { SQUIRCLE_EXPONENT, roundedSquare } from "../../src/viewport/cornerProfile";
+import { SQUIRCLE_EXPONENT, roundedSquareCorners } from "../../src/viewport/cornerProfile";
 import { markOverlay, overlayLayer } from "../../src/viewport/overlayKinds";
 import type { Plane3 } from "../../src/types";
 
@@ -85,23 +85,22 @@ describe("TILE_SHAPE", () => {
   it("is clearly bigger than a rail tile and rounds like one, with the app's squircle", () => {
     expect(TILE_SHAPE).toEqual({
       sizePx: 85,
-      gapPx: 12,
+      gapPx: 0,
       radiusPx: 36,
       exponent: SQUIRCLE_EXPONENT,
-      octant: { x: 1, y: -1, z: 1 },
+      octant: { x: 1, y: 1, z: 1 },
     });
     expect(TILE_SHAPE.radiusPx / TILE_SHAPE.sizePx).toBeCloseTo(17 / 40, 2);
-    expect(TILE_SHAPE.gapPx / TILE_SHAPE.sizePx).toBeCloseTo(6 / 40, 1);
     expect(TILE_SHAPE.sizePx * MIN_TILE_SCALE).toBeGreaterThanOrEqual(40);
   });
 });
 
 describe("tilePose", () => {
-  it("puts each default tile in its own quadrant of the home octant", () => {
+  it("puts each default tile in the positive quadrant of its two axes, its corner on the origin", () => {
     expect(PLANES.map((k) => tilePose(k, TILE_SHAPE))).toEqual([
-      { centre: [54.5, -54.5, 0], u: [1, 0, 0], v: [0, 1, 0], normal: [0, 0, 1] },
-      { centre: [54.5, 0, 54.5], u: [1, 0, 0], v: [0, 0, 1], normal: [0, -1, 0] },
-      { centre: [0, -54.5, 54.5], u: [0, 1, 0], v: [0, 0, 1], normal: [1, 0, 0] },
+      { centre: [42.5, 42.5, 0], u: [1, 0, 0], v: [0, 1, 0], normal: [0, 0, 1] },
+      { centre: [42.5, 0, 42.5], u: [1, 0, 0], v: [0, 0, 1], normal: [0, -1, 0] },
+      { centre: [0, 42.5, 42.5], u: [0, 1, 0], v: [0, 0, 1], normal: [1, 0, 0] },
     ]);
   });
 
@@ -129,6 +128,81 @@ describe("tilePose", () => {
       ];
       for (const x of d) expect(x).toBeCloseTo(want, 12);
     }
+  });
+});
+
+describe("a tile on its plane", () => {
+  const L = TILE_SHAPE.sizePx;
+  /** The two axes a plane spans and its normal, as indices into a world point. */
+  const AXES: Record<Plane3, [number, number, number]> = { XY: [0, 1, 2], XZ: [0, 2, 1], YZ: [1, 2, 0] };
+  const tidy = (n: number) => Math.round(n * 1e6) / 1e6 + 0;
+  const worldPoints = (mesh: THREE.Mesh) => {
+    const pos = mesh.geometry.getAttribute("position");
+    return Array.from({ length: pos.count }, (_, i) =>
+      new THREE.Vector3().fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld).toArray().map(tidy),
+    );
+  };
+  /** Indices of the cyclic neighbours of the point at (0, 0) on the plane. */
+  const sides = (pts: number[][], a: number, b: number) => {
+    const i = pts.findIndex((p) => p[a] === 0 && p[b] === 0);
+    expect(i).toBeGreaterThanOrEqual(0);
+    const at = (j: number) => pts[(j + pts.length) % pts.length]!;
+    return [at(i - 1), at(i + 1)].map((p) => [p[a], p[b]]).sort((p, q) => p[0]! - q[0]!);
+  };
+
+  it("has its corner at the origin and runs its two edges straight along the positive axes", () => {
+    const t = new OriginTiles(new THREE.Scene());
+    t.group.updateMatrixWorld(true);
+    for (const k of PLANES) {
+      const [a, b, n] = AXES[k];
+      for (const mesh of [t.planes[k], child(t.planes[k], "rim") as THREE.Mesh]) {
+        const pts = worldPoints(mesh);
+        for (const p of pts) {
+          expect(p[n]).toBe(0);
+          for (const c of [p[a]!, p[b]!]) {
+            expect(c).toBeGreaterThanOrEqual(0);
+            expect(c).toBeLessThanOrEqual(L);
+          }
+        }
+        const has = (x: number, y: number) => pts.some((p) => p[a] === x && p[b] === y);
+        expect([has(0, 0), has(L, 0), has(0, L), has(L, L)]).toEqual([true, true, true, false]);
+      }
+      expect(sides(worldPoints(t.planes[k]), a, b)).toEqual([
+        [0, L],
+        [L, 0],
+      ]);
+    }
+    t.dispose();
+  });
+
+  it("picks along the same outline, its corner on the origin and its sides on the arrows", () => {
+    const t = new OriginTiles(new THREE.Scene());
+    const eyes: Record<Plane3, { at: THREE.Vector3Tuple; up: THREE.Vector3Tuple }> = {
+      XY: { at: [0, 0, 300], up: [0, 1, 0] },
+      XZ: { at: [0, -300, 0], up: [0, 0, 1] },
+      YZ: { at: [300, 0, 0], up: [0, 0, 1] },
+    };
+    const rect = { left: 0, top: 0, width: 400, height: 400 };
+    for (const k of PLANES) {
+      const cam = new THREE.OrthographicCamera(-200, 200, 200, -200, 1, 1000);
+      cam.position.set(...eyes[k].at);
+      cam.up.set(...eyes[k].up);
+      cam.lookAt(0, 0, 0);
+      cam.updateMatrixWorld(true);
+      const [a, b] = AXES[k];
+      const tip = (axis: number) => [0, 1, 2].map((i) => (i === axis ? L : 0)) as THREE.Vector3Tuple;
+      const screen = (p: THREE.Vector3Tuple) => {
+        const s = new THREE.Vector3(...p).project(cam);
+        return [tidy((s.x * 0.5 + 0.5) * 400), tidy((-s.y * 0.5 + 0.5) * 400)];
+      };
+      const ring = t.onScreen({ camera: cam, rect }).find((s) => s.plane === k)!.outline.map((p) => [tidy(p.x), tidy(p.y)]);
+      const i = ring.findIndex(([x, y]) => x === 200 && y === 200);
+      expect(i).toBeGreaterThanOrEqual(0);
+      const near = [ring[(i + ring.length - 1) % ring.length], ring[(i + 1) % ring.length]];
+      expect(near).toContainEqual(screen(tip(a)));
+      expect(near).toContainEqual(screen(tip(b)));
+    }
+    t.dispose();
   });
 });
 
@@ -403,8 +477,9 @@ describe("OriginTiles", () => {
       }
       return a;
     };
+    // Only the far corner, local (+, +) for XY, is rounded.
     const square = (size: number, leg: number) => {
-      const pts = roundedSquare(size, leg, TILE_SHAPE.exponent, CORNER_SEGMENTS);
+      const pts = roundedSquareCorners(size, [0, leg, 0, 0], TILE_SHAPE.exponent, CORNER_SEGMENTS);
       let a = 0;
       pts.forEach((p, i) => {
         const q = pts[(i + 1) % pts.length]!;
@@ -424,14 +499,14 @@ describe("OriginTiles", () => {
     t.group.scale.setScalar(0.37);
     t.group.updateMatrixWorld(true);
     const corner = (k: Plane3) =>
-      new THREE.Vector3(20, 20, 0)
+      new THREE.Vector3(20, 10, 0)
         .applyMatrix4(t.planes[k].matrixWorld)
         .toArray()
         .map((n) => Math.round(n * 1e9) / 1e9 + 0);
     expect(PLANES.map(corner)).toEqual([
-      [74.5 * 0.37, -34.5 * 0.37, 0].map((n) => Math.round(n * 1e9) / 1e9),
-      [74.5 * 0.37, 0, 74.5 * 0.37].map((n) => Math.round(n * 1e9) / 1e9),
-      [0, -34.5 * 0.37, 74.5 * 0.37].map((n) => Math.round(n * 1e9) / 1e9),
+      [62.5 * 0.37, 52.5 * 0.37, 0].map((n) => Math.round(n * 1e9) / 1e9),
+      [62.5 * 0.37, 0, 52.5 * 0.37].map((n) => Math.round(n * 1e9) / 1e9),
+      [0, 62.5 * 0.37, 52.5 * 0.37].map((n) => Math.round(n * 1e9) / 1e9),
     ]);
     t.dispose();
   });
