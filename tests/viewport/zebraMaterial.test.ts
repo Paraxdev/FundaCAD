@@ -4,13 +4,24 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { fitZebraMaterial, makeZebraMaterial } from "../../src/viewport/overlays";
-import { ZEBRA_LAMBDA, ZEBRA_WIDTH_DEFAULT, zebraFrame, zebraStripeCoord } from "../../src/viewport/zebraStripes";
+import {
+  type Vec3,
+  ZEBRA_LAMBDA,
+  ZEBRA_WIDTH_DEFAULT,
+  zebraFrame,
+  zebraStripeCoord,
+} from "../../src/viewport/zebraStripes";
 import { Viewport } from "../../src/viewport/viewport";
 import { DEFAULT_RENDER, setRenderPref } from "../../src/ui/renderPrefs";
 
 const box = () => new THREE.Box3(new THREE.Vector3(-30, -20, 0), new THREE.Vector3(30, 20, 24));
 const DIAG = Math.hypot(60, 40, 24);
 const val = (m: THREE.ShaderMaterial, name: string) => m.uniforms[name]!.value as unknown;
+const frameOf = (m: THREE.ShaderMaterial) => ({
+  centre: (val(m, "uCenter") as THREE.Vector3).toArray(),
+  reach: val(m, "uReach"),
+  period: val(m, "uPeriod"),
+});
 
 describe("zebraFrame", () => {
   it("centres on the box and reaches about half its radius", () => {
@@ -47,6 +58,21 @@ describe("zebraFrame", () => {
     const flat = zebraFrame([0, 0, 0], [0, 0, 0], 3);
     expect(flat.reach).toBeGreaterThan(0);
     expect(flat.period).toBeGreaterThan(0);
+  });
+
+  it("holds the frame while an edit nudges the box, so the stripes stay put", () => {
+    const held = zebraFrame([-30, -20, 0], [30, 20, 24], 3);
+    expect(zebraFrame([-30, -20, 0], [31, 20, 25], 3, held)).toEqual(held);
+    expect(zebraFrame([-30, -20, -6], [30, 32, 24], 3, held)).toEqual(held);
+    expect(zebraFrame([-29, -20, 0], [31, 20, 24], 5, held)).toEqual(zebraFrame([-30, -20, 0], [30, 20, 24], 5));
+  });
+
+  it("refits once the box grows, shrinks or moves well past the held frame", () => {
+    const held = zebraFrame([-30, -20, 0], [30, 20, 24], 3);
+    const fresh = (min: Vec3, max: Vec3) => expect(zebraFrame(min, max, 3, held)).toEqual(zebraFrame(min, max, 3));
+    fresh([-60, -40, 0], [60, 40, 48]);
+    fresh([-10, -5, 0], [10, 5, 8]);
+    fresh([20, -20, 0], [80, 20, 24]);
   });
 });
 
@@ -87,6 +113,20 @@ describe("fitZebraMaterial", () => {
     expect(val(mat, "uPeriod")).toBe(before);
     expect(Number.isFinite(val(mat, "uReach") as number)).toBe(true);
     expect(val(mat, "uDirection")).toBe(1);
+  });
+
+  it("keeps the stripes put when an edit nudges the box and refits when the box outgrows them", () => {
+    const mat = makeZebraMaterial();
+    const s = { direction: "horizontal", width: 3 } as const;
+    fitZebraMaterial(mat, box(), s);
+    const before = frameOf(mat);
+    fitZebraMaterial(mat, new THREE.Box3(new THREE.Vector3(-30, -20, 0), new THREE.Vector3(31, 20, 25)), s);
+    expect(frameOf(mat)).toEqual(before);
+    const big = new THREE.Box3(new THREE.Vector3(-90, -60, 0), new THREE.Vector3(90, 60, 72));
+    fitZebraMaterial(mat, big, s);
+    const fresh = makeZebraMaterial();
+    fitZebraMaterial(fresh, big, s);
+    expect(frameOf(mat)).toEqual(frameOf(fresh));
   });
 });
 
@@ -130,5 +170,16 @@ describe("the zebra view options", () => {
     v.setZebra(true);
     expect(val(mesh.material as THREE.ShaderMaterial, "uDirection")).toBe(1);
     setRenderPref("zebraDirection", DEFAULT_RENDER.zebraDirection);
+  });
+
+  it("keep the stripes put through a rebuild that nudges the model box", () => {
+    const { v, mesh, sync } = bare();
+    sync();
+    v.setZebra(true);
+    const mat = mesh.material as THREE.ShaderMaterial;
+    const before = frameOf(mat);
+    (v as unknown as { model: { box: THREE.Box3 } }).model.box.max.set(31, 20, 25);
+    (v as unknown as { applyZebra(): void }).applyZebra();
+    expect(frameOf(mat)).toEqual(before);
   });
 });

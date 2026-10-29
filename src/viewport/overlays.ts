@@ -4,7 +4,7 @@ import * as THREE from "three";
 import type { ModelView } from "./render";
 import { copyPatches } from "./shaderPatches";
 import { DISPLAY_COLOR_GLSL, displayColorUniforms, followComposer } from "./composerColor";
-import { ZEBRA_LAMBDA, type ZebraDirection, zebraFrame } from "./zebraStripes";
+import { ZEBRA_LAMBDA, type ZebraDirection, type ZebraFrame, zebraFrame } from "./zebraStripes";
 
 export interface ZebraSettings {
   direction: ZebraDirection;
@@ -66,11 +66,14 @@ export function makeZebraMaterial(): THREE.ShaderMaterial {
   return mat;
 }
 
+const zebraHeld = new WeakMap<THREE.ShaderMaterial, ZebraFrame>();
+
 export function fitZebraMaterial(mat: THREE.ShaderMaterial, box: THREE.Box3, settings: ZebraSettings): void {
   const u = mat.uniforms as Record<"uDirection" | "uPeriod" | "uReach" | "uCenter", THREE.IUniform>;
   u.uDirection.value = settings.direction === "vertical" ? 1 : 0;
   if (box.isEmpty()) return;
-  const f = zebraFrame(box.min.toArray(), box.max.toArray(), settings.width);
+  const f = zebraFrame(box.min.toArray(), box.max.toArray(), settings.width, zebraHeld.get(mat));
+  zebraHeld.set(mat, f);
   (u.uCenter.value as THREE.Vector3).set(...f.centre);
   u.uReach.value = f.reach;
   u.uPeriod.value = f.period;
