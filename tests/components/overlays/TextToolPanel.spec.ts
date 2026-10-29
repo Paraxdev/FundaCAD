@@ -85,6 +85,29 @@ describe("TextToolPanel", () => {
     expect(sizeBox().value).toBe("6");
   });
 
+  it("names the style boxes Bold and Italic while they show B and I", () => {
+    open();
+    // The name a screen reader builds from the wrapping label: its text without aria-hidden parts.
+    const named = (el: Element): string =>
+      [...el.childNodes]
+        .map((n) => (n instanceof Element ? (n.getAttribute("aria-hidden") === "true" ? "" : named(n)) : n.textContent))
+        .join("");
+    const boxes = [...document.querySelectorAll<HTMLInputElement>("input[type=checkbox]")];
+    expect(
+      boxes.map((b) => {
+        const label = b.closest("label")!;
+        return [
+          b.getAttribute("aria-label"),
+          named(label).trim(),
+          label.querySelector(".ui-checkbox-label")!.textContent,
+        ];
+      }),
+    ).toEqual([
+      [null, "Bold", "BBold"],
+      [null, "Italic", "IItalic"],
+    ]);
+  });
+
   it("focuses the text on open", () => {
     open();
     expect(document.activeElement).toBe(document.querySelector("textarea"));

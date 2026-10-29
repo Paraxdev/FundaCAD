@@ -146,8 +146,12 @@ onUnmounted(() => {
       </div>
 
       <div class="text-tool-row">
-        <Checkbox :model-value="form.bold" label="B" tip="Bold" @update:model-value="set('bold', $event)" />
-        <Checkbox :model-value="form.italic" label="I" tip="Italic" @update:model-value="set('italic', $event)" />
+        <Checkbox :model-value="form.bold" tip="Bold" @update:model-value="set('bold', $event)"
+          ><span aria-hidden="true">B</span><span class="sr-only">Bold</span></Checkbox
+        >
+        <Checkbox :model-value="form.italic" tip="Italic" @update:model-value="set('italic', $event)"
+          ><span aria-hidden="true">I</span><span class="sr-only">Italic</span></Checkbox
+        >
         <Segmented
           :model-value="form.align"
           :options="aligns"
