@@ -82,7 +82,11 @@ pub fn doc_import() -> JsonObject {
 }
 
 pub fn doc_save() -> JsonObject {
-    object(json!({"path": {"type": "string"}}), &[])
+    object(
+        json!({"path": {"type": "string"},
+               "overwrite": {"type": "boolean", "description": "replace a file there that is not a .funda"}}),
+        &[],
+    )
 }
 
 pub fn doc_get() -> JsonObject {
@@ -506,7 +510,9 @@ pub fn export() -> JsonObject {
                              "description": "write the file even if a feature failed to build \
                                              (default: refuse and name the failures)"},
             "full": {"type": "boolean",
-                     "description": "separate: one line per file written, nothing folded"}
+                     "description": "separate: one line per file written, nothing folded"},
+            "overwrite": {"type": "boolean",
+                          "description": "replace a file there, or a separate part, of another kind"}
         }),
         &["path", "format"],
     );

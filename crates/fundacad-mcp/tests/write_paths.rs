@@ -140,3 +140,52 @@ fn export_refuses_a_name_of_its_format_that_leads_to_another_kind_of_file() {
     assert!(r.is_error && r.text.contains("only .stl files"), "{}", r.text);
     assert_eq!(std::fs::read_to_string(&notes).unwrap(), "keep me");
 }
+
+#[test]
+fn doc_save_replaces_a_file_of_another_kind_only_with_overwrite() {
+    let (own, _work, folder) = dirs();
+    let mut mcp = server(own.path(), &folder);
+    let plain = folder.join("x.funda");
+    std::fs::write(&plain, "keep me").unwrap();
+    let r = mcp.call("doc_save", json!({"path": slash(&plain)}));
+    assert!(r.is_error && r.text.contains("overwrite: true"), "{}", r.text);
+    assert_eq!(std::fs::read_to_string(&plain).unwrap(), "keep me");
+    let r = mcp.call("doc_save", json!({"path": slash(&plain), "overwrite": true}));
+    assert!(!r.is_error, "{}", r.text);
+    assert!(std::fs::read_to_string(&plain).unwrap().trim_start().starts_with('{'));
+    let r = mcp.call("doc_save", json!({"path": slash(&plain)}));
+    assert!(!r.is_error, "a .funda file is replaced without asking: {}", r.text);
+    let empty = folder.join("empty.funda");
+    std::fs::write(&empty, "").unwrap();
+    let r = mcp.call("doc_save", json!({"path": slash(&empty)}));
+    assert!(!r.is_error, "an empty file is replaced without asking: {}", r.text);
+}
+
+#[test]
+fn export_replaces_a_file_of_another_kind_only_with_overwrite() {
+    let (own, _work, folder) = dirs();
+    let mut mcp = server(own.path(), &folder);
+    let r = mcp.call("feature_add", json!({"feature": {"type": "box", "length": 10, "width": 10, "height": 10}}));
+    assert!(!r.is_error, "{}", r.text);
+    let stl = folder.join("a.stl");
+    std::fs::write(&stl, "keep me").unwrap();
+    let r = mcp.call("export", json!({"path": slash(&stl), "format": "stl"}));
+    assert!(r.is_error && r.text.contains("overwrite: true"), "{}", r.text);
+    assert_eq!(std::fs::read_to_string(&stl).unwrap(), "keep me");
+    let r = mcp.call("export", json!({"path": slash(&stl), "format": "stl", "overwrite": true}));
+    assert!(!r.is_error, "{}", r.text);
+    assert_ne!(std::fs::read(&stl).unwrap(), b"keep me");
+    let r = mcp.call("export", json!({"path": slash(&stl), "format": "stl"}));
+    assert!(!r.is_error, "an STL file is replaced without asking: {}", r.text);
+
+    let kit = folder.join("kit");
+    std::fs::create_dir_all(&kit).unwrap();
+    std::fs::write(kit.join("Box.stl"), "keep me").unwrap();
+    let whole = slash(&folder.join("kit.stl"));
+    let r = mcp.call("export", json!({"path": whole, "format": "stl", "separate": true}));
+    assert!(r.is_error && r.text.contains("overwrite: true"), "{}", r.text);
+    assert_eq!(std::fs::read_to_string(kit.join("Box.stl")).unwrap(), "keep me");
+    let r = mcp.call("export", json!({"path": whole, "format": "stl", "separate": true, "overwrite": true}));
+    assert!(!r.is_error, "{}", r.text);
+    assert_ne!(std::fs::read(kit.join("Box.stl")).unwrap(), b"keep me");
+}

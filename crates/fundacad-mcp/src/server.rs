@@ -807,7 +807,7 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
 
     #[tool(
         name = "doc_save",
-        description = "Write the document to a .funda file, which the FundaCAD app opens directly. Saves to the path it was opened from if none is given. Any ordinary folder works; home itself, a drive root, hidden (dot) folders and network paths are refused, and a server started with --allow-path keeps to those folders.",
+        description = "Write the document to a .funda file, which the FundaCAD app opens directly. Saves to the path it was opened from if none is given. The path ends in .funda; another kind of file there is kept unless overwrite:true. Any ordinary folder works; home itself, a drive root, hidden (dot) folders and network paths are refused, and a server started with --allow-path keeps to those folders.",
         input_schema = crate::tools::doc_save(),
         annotations(read_only_hint = false, destructive_hint = true, idempotent_hint = true, open_world_hint = false)
     )]
@@ -825,6 +825,11 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
         if !docfile::is_binary_path(&path) {
             if let Some(why) = write_target::extension_refusal(&path, &[docfile::TEXT_EXT], "doc_save") {
                 return Ok(failure(why));
+            }
+            if !truthy(args.get("overwrite")) {
+                if let Some(why) = write_target::overwrite_refusal(&path, &[docfile::TEXT_EXT], "doc_save") {
+                    return Ok(failure(why));
+                }
             }
         }
         model::recompute_parameters(&mut st.doc);
@@ -1219,7 +1224,7 @@ note: left out of the file, because this build cannot read them and a .funda has
 
     #[tool(
         name = "export",
-        description = "Write the model to STEP, STL or 3MF, or one sketch (`sketch`) or flat face (`face`) to DXF or SVG at true size in mm. `separate` writes one file per body, named after the body; `body` writes one body, `bodies` a list of them, merged or with `separate`; `layFlat` turns the parts for printing. Refused if a feature failed to build, naming which, unless allowPartial:true is passed, in which case it writes the file anyway and still names the failures. A long `separate` list folds files of one name and size into one line and shows 30 rows: `offset` pages on, `limit` 0 shows every row, `full` lists every file.",
+        description = "Write the model to STEP, STL or 3MF, or one sketch (`sketch`) or flat face (`face`) to DXF or SVG at true size in mm. `separate` writes one file per body, named after the body; `body` writes one body, `bodies` a list of them, merged or with `separate`; `layFlat` turns the parts for printing. `path` ends in the format's extension; another kind of file there is kept unless overwrite:true. Refused if a feature failed to build, naming which, unless allowPartial:true is passed, in which case it writes the file anyway and still names the failures. A long `separate` list folds files of one name and size into one line and shows 30 rows: `offset` pages on, `limit` 0 shows every row, `full` lists every file.",
         input_schema = crate::tools::export(),
         annotations(read_only_hint = false, destructive_hint = true, idempotent_hint = true, open_world_hint = false)
     )]
@@ -1237,9 +1242,17 @@ note: left out of the file, because this build cannot read them and a .funda has
         };
         // A separate export's path names a folder; an unknown format is left to the engine's refusal.
         let exts = format_exts(&format);
+        let what = format!("export to {}", format.to_ascii_uppercase());
+        let overwrite = truthy(args.get("overwrite"));
+        let guard = |to: &Path| {
+            if overwrite || exts.is_empty() {
+                None
+            } else {
+                write_target::overwrite_refusal(to, exts, &what)
+            }
+        };
         if !truthy(args.get("separate")) && !exts.is_empty() {
-            let what = format!("export to {}", format.to_ascii_uppercase());
-            if let Some(why) = write_target::extension_refusal(&path, exts, &what) {
+            if let Some(why) = write_target::extension_refusal(&path, exts, &what).or_else(|| guard(&path)) {
                 return Ok(failure(why));
             }
         }
@@ -1397,7 +1410,7 @@ note: left out of the file, because this build cannot read them and a .funda has
             )));
         }
         let mut out = if separate {
-            match place_files(&result, &folder, page, full) {
+            match place_files(&result, &folder, page, full, guard) {
                 Ok(written) => written,
                 Err(e) => {
                     discard();
@@ -1468,8 +1481,14 @@ pub(crate) fn no_such_body(wanted: &str, built: &[Value]) -> String {
     format!("no body '{wanted}' in this build, have {}", have.join(", "))
 }
 
-/// Replaces files of the same name in `folder` and leaves anything else there alone.
-fn place_files(result: &Value, folder: &Path, page: Page, full: bool) -> Result<String, String> {
+/// Replaces the files of the same name in `folder` that `guard` lets through, and leaves anything else there alone.
+fn place_files(
+    result: &Value,
+    folder: &Path,
+    page: Page,
+    full: bool,
+    guard: impl Fn(&Path) -> Option<String>,
+) -> Result<String, String> {
     let written: Vec<PathBuf> = result
         .get("paths")
         .and_then(Value::as_array)
@@ -1482,6 +1501,9 @@ fn place_files(result: &Value, folder: &Path, page: Page, full: bool) -> Result<
     // taken by a folder refuses the export with the old parts untouched.
     if let Some(to) = written.iter().filter_map(|from| Some(folder.join(from.file_name()?))).find(|to| to.is_dir()) {
         return Err(format!("{} is a folder, so the part of that name cannot be written there.", to.display()));
+    }
+    if let Some(why) = written.iter().find_map(|from| guard(&folder.join(from.file_name()?))) {
+        return Err(format!("{why} No part was written."));
     }
     std::fs::create_dir_all(folder).map_err(|e| format!("Could not make {}: {e}", folder.display()))?;
     let (mut lines, mut sizes) = (Vec::new(), Vec::new());
