@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, useTemplateRef } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, onUpdated, ref, useTemplateRef } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { useBuildValue } from "../../app/useDoc";
 import { useUiStore } from "../../stores/ui";
@@ -24,6 +24,7 @@ import { OVERLAY_KINDS, OVERLAY_LABELS } from "../../viewport/overlayKinds";
 import { isRenderLowPower } from "../../viewport/render";
 import { toast } from "../../ui/toast";
 import { featureFailures } from "../../ui/featureNotes";
+import { useScrollCue } from "../../composables/useScrollCue";
 import type { ProjectionMode } from "../../viewport/cameras";
 import IconButton from "../ui/IconButton.vue";
 import Button from "../ui/Button.vue";
@@ -62,13 +63,32 @@ function reportInset() {
   const r = el.getBoundingClientRect();
   engine.viewport.setViewCubeInset(Math.max(0, Math.round(canvas.right - r.left)));
 }
+const scroller = useTemplateRef<HTMLElement>("scroller");
+/** The controls are taller than the column's room, so the list clips at the column and scrolls. */
+const scrolls = ref(false);
+const cue = useScrollCue(scroller);
+function measureFit() {
+  const list = scroller.value;
+  const room = root.value?.parentElement?.clientHeight;
+  if (!list || !room) return;
+  const cs = getComputedStyle(list);
+  const content = list.scrollHeight - (parseFloat(cs.paddingTop) || 0) - (parseFloat(cs.paddingBottom) || 0);
+  scrolls.value = content > room + 1;
+  void nextTick(cue.update);
+}
 onMounted(() => {
-  ro = new ResizeObserver(reportInset);
+  ro = new ResizeObserver(() => {
+    reportInset();
+    measureFit();
+  });
   const side = root.value?.parentElement;
   if (side) ro.observe(side);
   if (root.value) ro.observe(root.value);
   reportInset();
+  void nextTick(measureFit);
 });
+// A group that comes or goes (narrow stage, low performance, bug report) leaves a capped column the same size.
+onUpdated(() => void nextTick(measureFit));
 onUnmounted(() => {
   ro?.disconnect();
   engine.viewport.setViewCubeInset(0);
@@ -242,281 +262,323 @@ async function screenshot() {
 </script>
 
 <template>
-  <div id="viewcontrols" ref="root" class="float-column">
-    <div v-if="ui.lowPerformance && !ui.lowPerformanceDismissed" class="float-group perf-warn-group">
-      <IconButton
-        icon="warning"
-        tip="Low performance"
-        class="perf-warn"
-        :active="isOpen('perf')"
-        @click="open('perf', $event)"
-      />
-    </div>
-    <!-- On a narrow stage Items and History are drawers, and their switches
+  <div id="viewcontrols" ref="root" :class="{ scrolls, 'more-above': cue.above.value, 'more-below': cue.below.value }">
+    <div ref="scroller" class="float-column vc-scroll" @scroll.passive="cue.update()" @focusin="cue.reveal">
+      <div v-if="ui.lowPerformance && !ui.lowPerformanceDismissed" class="float-group perf-warn-group">
+        <IconButton
+          icon="warning"
+          tip="Low performance"
+          class="perf-warn"
+          :active="isOpen('perf')"
+          @click="open('perf', $event)"
+        />
+      </div>
+      <!-- On a narrow stage Items and History are drawers, and their switches
          go first, where a short column cannot scroll them out of sight. -->
-    <div v-if="shell.narrow" class="float-group">
-      <IconButton icon="items" tip="Items" keys="Ctrl+Alt+S" :active="shell.itemsShown" @click="shell.toggleItems()" />
-      <IconButton
-        icon="history"
-        :tip="ui.sketchActive ? 'Sketch options' : 'History'"
-        keys="Ctrl+Alt+H"
-        :active="shell.historyShown"
-        :badge="errorCount || null"
-        @click="shell.toggleHistory()"
-      />
-    </div>
-    <div class="float-group">
-      <IconButton icon="magnet" tip="Snapping" :active="isOpen('snap')" @click="open('snap', $event)" />
-      <!-- A reading, not an icon, so a Button: its text is the name and the tip only the tooltip. -->
-      <Button
-        variant="ghost"
-        size="sm"
-        class="grid-btn"
-        tip="Grid and units"
-        :pressed="isOpen('grid')"
-        @click="open('grid', $event)"
-        >{{ gridLabelCompact }}</Button
-      >
-      <IconButton icon="views" tip="Views" :active="isOpen('views')" @click="open('views', $event)" />
-      <IconButton icon="view-reset" tip="Reset camera" keys="Shift+Home" @click="engine.handleAction('reset-camera')" />
-    </div>
-    <div class="float-group view-modes" role="group" aria-label="View mode">
-      <IconButton
-        v-for="v in viewModes"
-        :key="v.id"
-        :icon="v.icon"
-        :tip="v.title"
-        :active="ui.viewMode === v.id"
-        :disabled="v.disabled"
-        :clickable="v.softBlock"
-        :data-view-mode="v.id"
-        @click="pickViewMode(v.id)"
-      />
-    </div>
-    <div class="float-group">
-      <IconButton
-        icon="shaded"
-        tip="Display"
-        :active="isOpen('display') || ui.xray || ui.wireframe"
-        @click="open('display', $event)"
-      />
-      <IconButton icon="camera" tip="Screenshot" :active="saving" @click="screenshot()" />
-      <IconButton icon="versions" tip="Versions" :active="isOpen('versions')" @click="open('versions', $event)" />
-      <IconButton
-        v-if="!shell.narrow"
-        icon="history"
-        tip="History"
-        keys="Ctrl+Alt+H"
-        :active="shell.historyOpen"
-        :badge="errorCount || null"
-        @click="shell.toggleHistory()"
-      />
-    </div>
-    <div v-if="dialogs.bugDeps" class="float-group">
-      <IconButton icon="bug" tip="Report a problem" @click="dialogs.bugReport = true" />
-    </div>
-
-    <Popover
-      v-if="isOpen('perf')"
-      :anchor="anchorOf('perf')"
-      side="left"
-      kind="vc-pop perf-pop"
-      @close="shell.closePopover()"
-    >
-      <div class="perf-pop-title">Low performance</div>
-      <p class="perf-pop-text">Detected stutters, your machine may have problems with displaying the models.</p>
-      <p v-if="!isRenderLowPower()" class="perf-pop-text">
-        Consider enabling
-        <Button variant="ghost" size="sm" class="perf-pop-link" @click="enablePerformanceMode()"
-          >performance mode</Button
-        >
-      </p>
-      <p class="perf-pop-text" title="Lowest quality, for slow or virtual machines">
-        {{ isRenderLowPower() ? "Performance mode is on, consider enabling" : "or, on a slow or virtual machine," }}
-        <Button variant="ghost" size="sm" class="perf-pop-link" @click="enablePotatoMode()">potato mode</Button>
-      </p>
-      <Button variant="ghost" block class="vc-pop-btn" @click="dismissPerformanceWarning()">Dismiss</Button>
-    </Popover>
-
-    <Popover
-      v-if="isOpen('versions')"
-      :anchor="anchorOf('versions')"
-      side="left"
-      kind="vc-pop versions-pop"
-      @close="shell.closePopover()"
-    >
-      <VersionsPanel />
-    </Popover>
-
-    <Popover v-if="isOpen('snap')" :anchor="anchorOf('snap')" side="left" kind="vc-pop" @close="shell.closePopover()">
-      <div class="pop-section">Snap to</div>
-      <Toggle
-        :model-value="sketchPalette.state.snap"
-        label="Grid"
-        @update:model-value="sketchPalette.set('snap', $event)"
-      />
-      <div class="pop-rule"></div>
-      <div class="pop-section">Show</div>
-      <Toggle
-        :model-value="sketchPalette.state.grid"
-        label="Sketch grid"
-        @update:model-value="sketchPalette.set('grid', $event)"
-      />
-      <Toggle
-        :model-value="sketchPalette.state.constraints"
-        label="Constraints"
-        @update:model-value="sketchPalette.set('constraints', $event)"
-      />
-      <Toggle
-        :model-value="sketchPalette.state.dimensions"
-        label="Dimensions"
-        @update:model-value="sketchPalette.set('dimensions', $event)"
-      />
-    </Popover>
-
-    <Popover v-if="isOpen('grid')" :anchor="anchorOf('grid')" side="left" kind="vc-pop" @close="shell.closePopover()">
-      <div class="pop-section">Units</div>
-      <ChoiceList label="Units" :options="UNITS" :model-value="unit" @update:model-value="pickUnit" />
-      <div class="pop-rule"></div>
-      <div class="pop-section">Grid</div>
-      <p class="pop-note"
-        >One square is {{ gridLabel }} at this zoom. Zoom in for a finer grid, and the move gizmo steps by a tenth of a
-        square.</p
-      >
-    </Popover>
-
-    <Popover v-if="isOpen('views')" :anchor="anchorOf('views')" side="left" kind="vc-pop" @close="shell.closePopover()">
-      <Tabs
-        v-model="viewTab"
-        label="Views"
-        :tabs="[
-          { value: 'views', label: 'Views' },
-          { value: 'appearance', label: 'Appearance' },
-        ]"
-      />
-      <template v-if="viewTab === 'views'">
-        <Button block class="vc-pop-btn" @click="engine.handleAction('iso')"
-          ><template #icon><Icon name="view-iso" :size="16" /></template>Default View</Button
-        >
-        <Button variant="ghost" block class="vc-pop-btn" @click="engine.handleAction('fit')"
-          ><template #icon><Icon name="view-fit" :size="16" /></template>Fit to Model</Button
-        >
-        <div class="pop-rule"></div>
-        <ListRow v-for="v in VIEWS" :key="v.view" :label="v.label" @click="engine.viewport.setStandardView(v.view)"
-          ><template #leading><Icon class="ui-list-row-icon" :name="`view-${v.view}`" :size="18" /></template
-        ></ListRow>
-      </template>
-      <template v-else>
-        <div class="pop-section">Projection</div>
-        <ChoiceList
-          label="Projection"
-          :options="PROJECTIONS"
-          :model-value="projection"
-          @update:model-value="pickProjection"
+      <div v-if="shell.narrow" class="float-group">
+        <IconButton
+          icon="items"
+          tip="Items"
+          keys="Ctrl+Alt+S"
+          :active="shell.itemsShown"
+          @click="shell.toggleItems()"
         />
-        <div class="pop-rule"></div>
-        <div class="pop-section">Select</div>
-        <ChoiceList
-          label="Select mode"
-          :options="SELECT_MODES"
-          :model-value="ui.selMode"
-          @update:model-value="pickSelectMode"
+        <IconButton
+          icon="history"
+          :tip="ui.sketchActive ? 'Sketch options' : 'History'"
+          keys="Ctrl+Alt+H"
+          :active="shell.historyShown"
+          :badge="errorCount || null"
+          @click="shell.toggleHistory()"
         />
-      </template>
-    </Popover>
-
-    <Popover
-      v-if="isOpen('display')"
-      :anchor="anchorOf('display')"
-      side="left"
-      kind="vc-pop"
-      @close="shell.closePopover()"
-    >
-      <div class="pop-section">Shading</div>
-      <ChoiceList
-        label="Shading"
-        :options="viewModeChoices"
-        :model-value="ui.viewMode"
-        @update:model-value="pickViewMode"
-      />
-      <template v-if="ui.viewMode === 'matcap'">
-        <Segmented
-          class="matcap-swatches"
-          variant="chips"
-          label="Matcap"
-          icon-only
-          :model-value="matcap.style"
-          :options="matcapOptions"
-          @update:model-value="setRenderPref('matcapStyle', $event)"
+      </div>
+      <div class="float-group">
+        <IconButton icon="magnet" tip="Snapping" :active="isOpen('snap')" @click="open('snap', $event)" />
+        <!-- A reading, not an icon, so a Button: its text is the name and the tip only the tooltip. -->
+        <Button
+          variant="ghost"
+          size="sm"
+          class="grid-btn"
+          tip="Grid and units"
+          :pressed="isOpen('grid')"
+          @click="open('grid', $event)"
+          >{{ gridLabelCompact }}</Button
         >
-          <template #option="{ option }"
-            ><span class="matcap-ball" :style="{ backgroundImage: `url(${matcapSwatchUrl(option.value)})` }"></span
-          ></template>
-        </Segmented>
+        <IconButton icon="views" tip="Views" :active="isOpen('views')" @click="open('views', $event)" />
+        <IconButton
+          icon="view-reset"
+          tip="Reset camera"
+          keys="Shift+Home"
+          @click="engine.handleAction('reset-camera')"
+        />
+      </div>
+      <div class="float-group view-modes" role="group" aria-label="View mode">
+        <IconButton
+          v-for="v in viewModes"
+          :key="v.id"
+          :icon="v.icon"
+          :tip="v.title"
+          :active="ui.viewMode === v.id"
+          :disabled="v.disabled"
+          :clickable="v.softBlock"
+          :data-view-mode="v.id"
+          @click="pickViewMode(v.id)"
+        />
+      </div>
+      <div class="float-group">
+        <IconButton
+          icon="shaded"
+          tip="Display"
+          :active="isOpen('display') || ui.xray || ui.wireframe"
+          @click="open('display', $event)"
+        />
+        <IconButton icon="camera" tip="Screenshot" :active="saving" @click="screenshot()" />
+        <IconButton icon="versions" tip="Versions" :active="isOpen('versions')" @click="open('versions', $event)" />
+        <IconButton
+          v-if="!shell.narrow"
+          icon="history"
+          tip="History"
+          keys="Ctrl+Alt+H"
+          :active="shell.historyOpen"
+          :badge="errorCount || null"
+          @click="shell.toggleHistory()"
+        />
+      </div>
+      <div v-if="dialogs.bugDeps" class="float-group">
+        <IconButton icon="bug" tip="Report a problem" @click="dialogs.bugReport = true" />
+      </div>
+
+      <Popover
+        v-if="isOpen('perf')"
+        :anchor="anchorOf('perf')"
+        side="left"
+        kind="vc-pop perf-pop"
+        @close="shell.closePopover()"
+      >
+        <div class="perf-pop-title">Low performance</div>
+        <p class="perf-pop-text">Detected stutters, your machine may have problems with displaying the models.</p>
+        <p v-if="!isRenderLowPower()" class="perf-pop-text">
+          Consider enabling
+          <Button variant="ghost" size="sm" class="perf-pop-link" @click="enablePerformanceMode()"
+            >performance mode</Button
+          >
+        </p>
+        <p class="perf-pop-text" title="Lowest quality, for slow or virtual machines">
+          {{ isRenderLowPower() ? "Performance mode is on, consider enabling" : "or, on a slow or virtual machine," }}
+          <Button variant="ghost" size="sm" class="perf-pop-link" @click="enablePotatoMode()">potato mode</Button>
+        </p>
+        <Button variant="ghost" block class="vc-pop-btn" @click="dismissPerformanceWarning()">Dismiss</Button>
+      </Popover>
+
+      <Popover
+        v-if="isOpen('versions')"
+        :anchor="anchorOf('versions')"
+        side="left"
+        kind="vc-pop versions-pop"
+        @close="shell.closePopover()"
+      >
+        <VersionsPanel />
+      </Popover>
+
+      <Popover v-if="isOpen('snap')" :anchor="anchorOf('snap')" side="left" kind="vc-pop" @close="shell.closePopover()">
+        <div class="pop-section">Snap to</div>
         <Toggle
-          :model-value="matcap.tint"
-          label="Tint with body colors"
-          @update:model-value="setRenderPref('matcapTint', $event)"
+          :model-value="sketchPalette.state.snap"
+          label="Grid"
+          @update:model-value="sketchPalette.set('snap', $event)"
         />
-      </template>
-      <Toggle
-        v-if="ui.viewMode === 'pathtraced'"
-        :model-value="realtimeWhileMoving"
-        label="Realtime while moving"
-        title="Off keeps the traced view up while the view moves, noisy until it rests"
-        data-pt-moving
-        @update:model-value="setRenderPref('realtimeWhileMoving', $event)"
-      />
-      <div class="pop-rule"></div>
-      <div class="pop-section">Overlays</div>
-      <Toggle
-        :model-value="overlays.on"
-        label="Show overlays"
-        data-overlay="all"
-        @update:model-value="setOverlaysOn($event)"
-      />
-      <Toggle
-        v-for="k in OVERLAY_KINDS"
-        :key="k"
-        :model-value="overlays.kinds[k]"
-        :label="OVERLAY_LABELS[k]"
-        :disabled="!overlays.on"
-        :data-overlay="k"
-        @update:model-value="setOverlay(k, $event)"
-      />
-      <p class="pop-note">A running tool still shows its gizmo, and a hidden outline still selects its edge.</p>
-      <Button
-        variant="ghost"
-        block
-        class="vc-pop-btn"
-        data-action="clean-view"
-        @click="engine.handleAction('clean-view')"
-        >{{ overlays.on ? "Clean view" : "Bring overlays back" }}
-        <template v-if="cleanKey" #trailing
-          ><span class="pop-key">{{ cleanKey }}</span></template
-        ></Button
+        <div class="pop-rule"></div>
+        <div class="pop-section">Show</div>
+        <Toggle
+          :model-value="sketchPalette.state.grid"
+          label="Sketch grid"
+          @update:model-value="sketchPalette.set('grid', $event)"
+        />
+        <Toggle
+          :model-value="sketchPalette.state.constraints"
+          label="Constraints"
+          @update:model-value="sketchPalette.set('constraints', $event)"
+        />
+        <Toggle
+          :model-value="sketchPalette.state.dimensions"
+          label="Dimensions"
+          @update:model-value="sketchPalette.set('dimensions', $event)"
+        />
+      </Popover>
+
+      <Popover v-if="isOpen('grid')" :anchor="anchorOf('grid')" side="left" kind="vc-pop" @close="shell.closePopover()">
+        <div class="pop-section">Units</div>
+        <ChoiceList label="Units" :options="UNITS" :model-value="unit" @update:model-value="pickUnit" />
+        <div class="pop-rule"></div>
+        <div class="pop-section">Grid</div>
+        <p class="pop-note"
+          >One square is {{ gridLabel }} at this zoom. Zoom in for a finer grid, and the move gizmo steps by a tenth of
+          a square.</p
+        >
+      </Popover>
+
+      <Popover
+        v-if="isOpen('views')"
+        :anchor="anchorOf('views')"
+        side="left"
+        kind="vc-pop"
+        @close="shell.closePopover()"
       >
-      <div class="pop-rule"></div>
-      <Toggle :model-value="ui.xray" label="X-Ray" @update:model-value="engine.handleAction('toggle-xray')" />
-      <Toggle
-        :model-value="ui.wireframe"
-        label="Wireframe"
-        @update:model-value="engine.handleAction('toggle-wireframe')"
-      />
-      <div class="pop-rule"></div>
-      <div class="pop-section">Surface analysis</div>
-      <Toggle :model-value="analysis.zebra" label="Zebra" @update:model-value="runAndRefresh('zebra')" />
-      <Toggle
-        :model-value="analysis.curvature"
-        label="Curvature combs"
-        @update:model-value="runAndRefresh('curvature')"
-      />
-      <Toggle :model-value="analysis.overhang" label="Overhang" @update:model-value="runAndRefresh('draft-analysis')" />
-      <Toggle
-        :model-value="analysis.colors"
-        label="Body colors"
-        @update:model-value="runAndRefresh('component-colors')"
-      />
-    </Popover>
+        <Tabs
+          v-model="viewTab"
+          label="Views"
+          :tabs="[
+            { value: 'views', label: 'Views' },
+            { value: 'appearance', label: 'Appearance' },
+          ]"
+        />
+        <template v-if="viewTab === 'views'">
+          <Button block class="vc-pop-btn" @click="engine.handleAction('iso')"
+            ><template #icon><Icon name="view-iso" :size="16" /></template>Default View</Button
+          >
+          <Button variant="ghost" block class="vc-pop-btn" @click="engine.handleAction('fit')"
+            ><template #icon><Icon name="view-fit" :size="16" /></template>Fit to Model</Button
+          >
+          <div class="pop-rule"></div>
+          <ListRow v-for="v in VIEWS" :key="v.view" :label="v.label" @click="engine.viewport.setStandardView(v.view)"
+            ><template #leading><Icon class="ui-list-row-icon" :name="`view-${v.view}`" :size="18" /></template
+          ></ListRow>
+        </template>
+        <template v-else>
+          <div class="pop-section">Projection</div>
+          <ChoiceList
+            label="Projection"
+            :options="PROJECTIONS"
+            :model-value="projection"
+            @update:model-value="pickProjection"
+          />
+          <div class="pop-rule"></div>
+          <div class="pop-section">Select</div>
+          <ChoiceList
+            label="Select mode"
+            :options="SELECT_MODES"
+            :model-value="ui.selMode"
+            @update:model-value="pickSelectMode"
+          />
+        </template>
+      </Popover>
+
+      <Popover
+        v-if="isOpen('display')"
+        :anchor="anchorOf('display')"
+        side="left"
+        kind="vc-pop"
+        @close="shell.closePopover()"
+      >
+        <div class="pop-section">Shading</div>
+        <ChoiceList
+          label="Shading"
+          :options="viewModeChoices"
+          :model-value="ui.viewMode"
+          @update:model-value="pickViewMode"
+        />
+        <template v-if="ui.viewMode === 'matcap'">
+          <Segmented
+            class="matcap-swatches"
+            variant="chips"
+            label="Matcap"
+            icon-only
+            :model-value="matcap.style"
+            :options="matcapOptions"
+            @update:model-value="setRenderPref('matcapStyle', $event)"
+          >
+            <template #option="{ option }"
+              ><span class="matcap-ball" :style="{ backgroundImage: `url(${matcapSwatchUrl(option.value)})` }"></span
+            ></template>
+          </Segmented>
+          <Toggle
+            :model-value="matcap.tint"
+            label="Tint with body colors"
+            @update:model-value="setRenderPref('matcapTint', $event)"
+          />
+        </template>
+        <Toggle
+          v-if="ui.viewMode === 'pathtraced'"
+          :model-value="realtimeWhileMoving"
+          label="Realtime while moving"
+          title="Off keeps the traced view up while the view moves, noisy until it rests"
+          data-pt-moving
+          @update:model-value="setRenderPref('realtimeWhileMoving', $event)"
+        />
+        <div class="pop-rule"></div>
+        <div class="pop-section">Overlays</div>
+        <Toggle
+          :model-value="overlays.on"
+          label="Show overlays"
+          data-overlay="all"
+          @update:model-value="setOverlaysOn($event)"
+        />
+        <Toggle
+          v-for="k in OVERLAY_KINDS"
+          :key="k"
+          :model-value="overlays.kinds[k]"
+          :label="OVERLAY_LABELS[k]"
+          :disabled="!overlays.on"
+          :data-overlay="k"
+          @update:model-value="setOverlay(k, $event)"
+        />
+        <p class="pop-note">A running tool still shows its gizmo, and a hidden outline still selects its edge.</p>
+        <Button
+          variant="ghost"
+          block
+          class="vc-pop-btn"
+          data-action="clean-view"
+          @click="engine.handleAction('clean-view')"
+          >{{ overlays.on ? "Clean view" : "Bring overlays back" }}
+          <template v-if="cleanKey" #trailing
+            ><span class="pop-key">{{ cleanKey }}</span></template
+          ></Button
+        >
+        <div class="pop-rule"></div>
+        <Toggle :model-value="ui.xray" label="X-Ray" @update:model-value="engine.handleAction('toggle-xray')" />
+        <Toggle
+          :model-value="ui.wireframe"
+          label="Wireframe"
+          @update:model-value="engine.handleAction('toggle-wireframe')"
+        />
+        <div class="pop-rule"></div>
+        <div class="pop-section">Surface analysis</div>
+        <Toggle :model-value="analysis.zebra" label="Zebra" @update:model-value="runAndRefresh('zebra')" />
+        <Toggle
+          :model-value="analysis.curvature"
+          label="Curvature combs"
+          @update:model-value="runAndRefresh('curvature')"
+        />
+        <Toggle
+          :model-value="analysis.overhang"
+          label="Overhang"
+          @update:model-value="runAndRefresh('draft-analysis')"
+        />
+        <Toggle
+          :model-value="analysis.colors"
+          label="Body colors"
+          @update:model-value="runAndRefresh('component-colors')"
+        />
+      </Popover>
+    </div>
+
+    <IconButton
+      v-if="cue.above.value"
+      class="vc-more vc-more-up"
+      icon="caretDown"
+      tip="More view controls above"
+      size="md"
+      tabindex="-1"
+      @click="cue.page(-1)"
+    />
+    <IconButton
+      v-if="cue.below.value"
+      class="vc-more vc-more-down"
+      icon="caretDown"
+      tip="More view controls below"
+      size="md"
+      tabindex="-1"
+      @click="cue.page(1)"
+    />
   </div>
 </template>

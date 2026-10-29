@@ -329,9 +329,9 @@
   margin-bottom: 0;
   scroll-padding-block: 36px;
 }
-.tool-rail > .rail-more {
+.tool-rail > .rail-more,
+#viewcontrols > .vc-more {
   position: absolute;
-  left: calc((var(--rail-tile) - 28px) / 2);
   z-index: 1;
   pointer-events: auto;
   background: var(--float-bg-solid);
@@ -339,10 +339,21 @@
   backdrop-filter: var(--float-blur);
   box-shadow: var(--float-shadow);
 }
-.tool-rail > .rail-more-up {
+.tool-rail > .rail-more {
+  left: calc((var(--rail-tile) - 28px) / 2);
+}
+#viewcontrols > .vc-more {
+  left: calc(50% - 14px);
+}
+.tool-rail > .rail-more-up,
+#viewcontrols > .vc-more-up {
   top: 0;
 }
-.tool-rail > .rail-more-up svg {
+#viewcontrols > .vc-more-down {
+  bottom: 0;
+}
+.tool-rail > .rail-more-up svg,
+#viewcontrols > .vc-more-up svg {
   transform: rotate(180deg);
 }
 .rail-sep {
@@ -868,17 +879,30 @@
   gap: var(--float-gap);
   pointer-events: none;
 }
-// Scrolls on a short stage, a large Interface size included; padding and margin cancel so the shadows are not
-// clipped, as in .rail-list.
 #viewcontrols {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   max-height: 100%;
+  pointer-events: none;
+}
+// Scrolls on a short stage, a large Interface size included; padding and margin cancel so the shadows are not
+// clipped, as in .rail-list. Once it scrolls it clips at its box, under the title bar, the cues kept clear.
+.vc-scroll {
+  min-height: 0;
   overflow-y: auto;
   padding: 32px;
   margin: -32px;
   scrollbar-width: none;
 }
-#viewcontrols::-webkit-scrollbar {
+.vc-scroll::-webkit-scrollbar {
   display: none;
+}
+#viewcontrols.scrolls > .vc-scroll {
+  padding-block: 0;
+  margin-block: 0;
+  scroll-padding-block: 36px;
 }
 .float-group {
   pointer-events: auto;
