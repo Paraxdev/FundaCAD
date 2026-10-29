@@ -79,13 +79,12 @@ pub fn guide_wait_schema() -> JsonObject {
             "field": {"type": "string", "description": "only this value box field, such as radius"},
             "timeout_s": {"type": "integer", "minimum": 1, "maximum": WAIT_MAX_S,
                 "description": "default 60"}
-        },
-        "required": []
+        }
     }))
 }
 
 pub fn guide_clear_schema() -> JsonObject {
-    obj(json!({"type": "object", "properties": {}, "required": []}))
+    obj(json!({"type": "object", "properties": {}}))
 }
 
 fn stopped_text(stopped: &Value) -> String {
