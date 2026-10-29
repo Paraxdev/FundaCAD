@@ -103,7 +103,9 @@ describe("importing from an Onshape link", () => {
     const { store, aborts } = fakeStore();
     const done = importFromOnshape(store, {} as never);
     const polls = () => h.seen.filter((r) => r.url.includes("/api/translations/")).length;
-    await vi.waitFor(() => expect(polls()).toBeGreaterThan(1), { timeout: 5000 });
+    // vi.waitFor moves fake time only 50 ms per real check, so a loaded runner timed out before the second poll.
+    for (let i = 0; i < 20 && polls() < 2; i++) await vi.advanceTimersByTimeAsync(1000);
+    expect(polls()).toBeGreaterThan(1);
     const abort = aborts.at(-1);
     expect(abort).toBeInstanceOf(AbortController);
     abort!.abort();
