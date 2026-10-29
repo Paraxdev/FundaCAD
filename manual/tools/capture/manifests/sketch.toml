@@ -52,16 +52,6 @@ alt = "A bolt circle of six holes with the count and diameter boxes"
 uses = ["manual/docs/sketch/hole-patterns.md:5"]
 
 [[shot]]
-file = "manual/docs/img/sketch-gear-profile.png"
-size = [1600, 1000]
-theme = "fundacad"
-crop = "window"
-stub = true
-show = "A gear profile drawn in a sketch, the sketch rail and the hint line at the bottom of the view, 1600x1000. Also copied to assets/readme for Flathub."
-alt = "A gear profile drawn in a sketch"
-uses = ["manual/docs/sketch/shapes.md:5"]
-
-[[shot]]
 file = "manual/docs/img/sketch-palette.png"
 size = [290, 620]
 theme = "fundacad"
@@ -86,3 +76,23 @@ steps = [
 show = "An open sketch on the top face of a block, with the tool rail and the sketch palette."
 alt = "An open sketch on a block's top face, with the tool rail and the sketch palette"
 uses = ["manual/docs/sketch/start.md:5"]
+
+# Last: it turns Show Dimensions and Show Constraints off, and the palette keeps them for the rest of the session.
+[[shot]]
+file = "manual/docs/img/sketch-gear-profile.png"
+size = [1600, 1000]
+theme = "fundacad"
+crop = "window"
+steps = [
+  { open = "fixture:sketch-gear.json", name = "Gear.funda" },
+  { click = "feature:s", double = true },
+  { click = "Show Dimensions" },
+  { click = "Show Constraints" },
+  { evaluate = "() => window.viewport.frameAround([0, 0, 0], 120)" },
+  { wait = 900 },
+  { tool = "Circle" },
+  { hover = [0, 0], space = "sketch" },
+]
+show = "A gear profile drawn in a sketch, the sketch rail and the hint line at the bottom of the view, 1600x1000. Also copied to assets/readme for Flathub."
+alt = "A gear profile drawn in a sketch"
+uses = ["manual/docs/sketch/shapes.md:5"]
