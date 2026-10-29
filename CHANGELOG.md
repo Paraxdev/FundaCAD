@@ -510,6 +510,11 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Fixed
 
+- **A dropdown's arrow stays put.** Hovering a dropdown, such as the Items
+  filter, slid its arrow up and out of sight, and an open list showed none. The
+  arrow now holds still, points right while the list is closed and turns down
+  while it is open, like the arrows on the Items tree.
+
 - **A STEP file whose edges lost their vertices imports whole.** Some exporters
   (SolidWorks 2014 seen) write an edge whose end names another entity where a
   vertex belongs, and the whole surface model read as an empty part. The
