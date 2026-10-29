@@ -84,6 +84,8 @@ onUnmounted(() => releaseKeys());
       @close="openIndex = null"
     >
       <div class="menubar-rows" role="none" :style="{ maxHeight: popupMaxHeight }">
+        <!-- Rows a parent adds above a menu's own, as TitleBar.vue does for the folded title bar. -->
+        <slot name="head" :menu="current.label" />
         <template v-for="(it, j) in current.items" :key="j">
           <MenuSeparator v-if="it.separator" />
           <MenuItem

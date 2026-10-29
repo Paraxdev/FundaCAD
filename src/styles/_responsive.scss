@@ -50,9 +50,11 @@
 /* Phone: the rail drops its label pills, each tile keeps its tooltip, and the Render dock stacks under
    the model. */
 @media (max-width: 560px) {
+  // Both of these move to the top of the File menu (TitleFold.vue), TITLEBAR_FOLD_PX in ui/layoutBreakpoints.ts.
   #titlebar .brand,
   #titlebar .context-tab,
-  #titlebar .docname {
+  #titlebar .docname,
+  #titlebar #workspace-toggle {
     display: none;
   }
 

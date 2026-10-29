@@ -169,13 +169,37 @@
   opacity: 0.38;
   filter: grayscale(1);
 }
+// The one item that shrinks: a long name pushed the workspace toggle off a narrow or zoomed bar. The window title,
+// and the File menu once the bar folds, show it whole.
 .docname {
+  display: inline-flex;
+  min-width: 0;
   color: var(--text-mute);
   font-size: 12px;
   letter-spacing: 0.2px;
 }
 .docname.dirty {
   color: var(--text);
+}
+.docname-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+// TitleFold.vue: the document name at the top of the File menu once the bar folds. Wraps, a long name stays whole.
+.tb-fold-doc {
+  max-width: 22rem;
+  padding: var(--s-2) var(--s-4) var(--s-3);
+  color: var(--text-mute);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.tb-fold-doc.dirty {
+  color: var(--text);
+}
+.tb-fold-doc .dirty-mark {
+  color: var(--accent);
 }
 
 // LiveSessionPill.vue, a button Chip beside the document name.
