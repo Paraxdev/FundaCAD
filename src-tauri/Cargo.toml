@@ -74,7 +74,7 @@ fundacad-format = { path = "../crates/fundacad-format" }
 # `deflate-flate2`, NOT the `deflate` umbrella: that one also pulls
 # `deflate-zopfli`, a much slower alternative compressor we have no use for and
 # which would otherwise land in the DEFAULT build.
-zip = { version = "4", default-features = false, features = ["deflate-flate2"] }
+zip = { version = "9", default-features = false, features = ["deflate-flate2"] }
 # flate2 is named EXPLICITLY, with its default `rust_backend`, and must stay that
 # way. zip's `deflate-flate2` turns on the flate2 dependency but does NOT select
 # a compression backend, so flate2 needs someone to enable one. This used to be

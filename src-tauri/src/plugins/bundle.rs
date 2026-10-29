@@ -171,10 +171,13 @@ pub fn extract_into(bytes: &[u8], dest: &Path) -> Result<(), String> {
     if zip.len() > MAX_ENTRIES {
         return Err(format!("bundle holds {} files", zip.len()));
     }
+    // Local headers that disagree with the central directory, or two entries under one name, let another unzip tool
+    // see different files, and so different permissions, than the ones unpacked here.
+    zip.validate_header_consistency().map_err(|e| format!("bundle is damaged: {e}"))?;
     let mut written: u64 = 0;
     for i in 0..zip.len() {
         let mut entry = zip.by_index(i).map_err(|e| format!("unreadable entry: {e}"))?;
-        let raw = entry.name().to_string();
+        let raw = entry.name().map_err(|e| format!("unreadable entry: {e}"))?.into_owned();
         // Recreating a symlink would be a second way out of the directory, so symlinks are refused by name.
         if let Some(mode) = entry.unix_mode() {
             if mode & 0o170000 == 0o120000 {
