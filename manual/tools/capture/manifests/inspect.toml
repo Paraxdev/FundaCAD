@@ -36,10 +36,13 @@ steps = [
   { tool = "Interference" },
   { wait = 1500 },
   { evaluate = "() => document.querySelectorAll('.toast-close').forEach((b) => b.click())" },
+  # The overlap is inside the box, X sees through the parts so it shows. It stays on across entries, so it goes off after.
+  { press = "x" },
+  { evaluate = "() => { setTimeout(() => window.viewport.setXray(false), 4000); }" },
   { wait = 500 },
 ]
-show = "The Interference panel naming one clash between a box and a cylinder with its overlap volume."
-alt = "Interference panel naming one clash between a box and a cylinder with its overlap volume"
+show = "The Interference panel naming one clash between a box and a cylinder, the overlap drawn red inside the see through parts."
+alt = "Interference panel naming one clash between a box and a cylinder, with the overlap drawn in red"
 uses = ["manual/docs/inspect/interference.md:5"]
 
 [[shot]]
@@ -55,12 +58,13 @@ steps = [
   { evaluate = "() => { const r = window.viewport.rig; r.zoomBy(1.2); r.panScreen(-0.318, 0.107); window.viewport.requestRender(); }" },
   { wait = 700 },
   { tool = "Measure" },
-  { click = "edge:near=-29.5,-17,6" },
-  { click = "edge:near=29.5,-17,6" },
+  # Straight edges, as a hole's rim has no direction and reads 90 degrees to anything.
+  { click = "edge:near=0,25,6" },
+  { click = "edge:near=40,-25,3" },
   { wait = 500 },
 ]
-show = "The Measure panel showing the distance and angle between two hole edges."
-alt = "Measure panel showing the distance and angle between two hole edges"
+show = "The Measure panel showing the distance, centers and a 90 degree angle between the plate's back edge and a corner edge."
+alt = "Measure panel showing the distance, centers and angle between two edges of a plate"
 uses = ["manual/docs/inspect/measure.md:5"]
 
 [[shot]]
@@ -101,6 +105,8 @@ steps = [
   { click_css = ".printability-run" },
   { wait = 1500 },
   { evaluate = "() => document.querySelectorAll('.toast-close').forEach((b) => b.click())" },
+  # Number boxes show the PC's decimal comma whatever the browser is told, as text they read 0.4 as in the page.
+  { evaluate = "() => document.querySelectorAll('.printability-panel input[type=number]').forEach((i) => { i.type = 'text'; })" },
   { wait = 800 },
 ]
 show = "The Printability panel with its settings and two findings."
