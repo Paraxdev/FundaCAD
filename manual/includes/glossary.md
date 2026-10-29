@@ -80,3 +80,4 @@
 *[Wireframe]: Showing only the edges of the model.
 *[wireframe]: Showing only the edges of the model.
 *[X-ray]: Seeing through the model to select what is behind.
+*[HDR]: A panorama picture of a room, an .hdr or .exr file, that lights the scene.
