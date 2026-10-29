@@ -995,9 +995,9 @@ such as a home card's full path, goes in `aria-describedby` on a `hidden` span, 
 A plugin cannot add selectors to `_glass.scss`, so it draws with what the host gives it. `fundacad/ui`
 (`src/plugins/hostUi.ts`) exports the base set: `Button`, `IconButton`, `Chip`, `KeyChip`, `TextField`,
 `NumberField`, `UnitChip`, `Select`, `Checkbox`, `Switch`, `SwitchRow`, `Segmented`, `Slider`, `Tabs`, `Menu`,
-`MenuItem`, `MenuSeparator`, `Popover`, `Dialog`, `ConfirmDialog`, `Panel`, `Card`, `FieldRow` and `ListRow`, with
-the `SegmentedOption` and `TabItem` types, plus `Icon` and `InlineLabel`. They are the app's own components, not
-copies, so a plugin and the app cannot drift (`tests/components/plugins/hostUi.spec.ts`).
+`MenuItem`, `MenuSeparator`, `Popover`, `Dialog`, `ConfirmDialog`, `Panel`, `Card`, `FieldRow`, `ListRow` and
+`Toolbar`, with the `SegmentedOption` and `TabItem` types, plus `Icon` and `InlineLabel`. They are the app's own
+components, not copies, so a plugin and the app cannot drift (`tests/components/plugins/hostUi.spec.ts`).
 
 The names it exported before stay: `FloatingPanel` and `ModalFrame` (the old contracts over `Panel` and `Dialog`),
 and the Render dock rows `RenderSection`, `RenderSlider`, `RenderSwitch` and `RenderChoices`. Inside them, use base
