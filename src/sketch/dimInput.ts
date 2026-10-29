@@ -117,6 +117,8 @@ interface Field {
 }
 
 const shownBoxes = new Set<DimInput>();
+let boxCount = 0;
+const BOX_HELP = "Enter applies, Escape cancels, Tab moves on";
 
 /** The box holding a typed value not yet entered, or null. `confirm` enters it as Enter would, false when refused. */
 export function typedDimBox(): { confirm(): boolean } | null {
@@ -246,11 +248,15 @@ export class DimInput {
   private external: string | null = null;
   private typedProblem: string | null = null;
   private focusName: string | null = null;
+  private helpId = `dim-help-${++boxCount}`;
 
   constructor() {
     this.root = document.createElement("div");
     this.root.className = "dim-input";
     this.root.style.display = "none";
+    this.root.setAttribute("role", "group");
+    // #prompt is the tool's banner line, so entering the box reads what the tool asks for, then the keys.
+    this.root.setAttribute("aria-describedby", `prompt ${this.helpId}`);
     document.body.appendChild(this.root);
     // Field inputs stop their own keys, so this hears only the option buttons.
     this.root.addEventListener("keydown", (e) => this.onOptionKey(e));
@@ -448,6 +454,13 @@ export class DimInput {
       this.onEndPress(no, () => this.onCancel?.());
       this.root.appendChild(no);
     }
+    // Hidden, yet read: an element aria-describedby points at directly is described even when hidden.
+    const help = document.createElement("span");
+    help.id = this.helpId;
+    help.hidden = true;
+    help.textContent = BOX_HELP;
+    this.root.appendChild(help);
+    this.nameGroup();
     // show() is often called from a pointerdown, and the browser moves focus to the click target after it returns,
     // so focus again next frame too or typing and Tab go nowhere.
     this.focus();
@@ -705,6 +718,12 @@ export class DimInput {
     const { icon: _old, ...rest } = f.def;
     f.def = icon ? { ...rest, label, icon } : { ...rest, label };
     this.paintName(f);
+    this.nameGroup();
+  }
+
+  private nameGroup() {
+    const labels = this.fields.filter((f) => !f.hidden).map((f) => f.def.label);
+    this.root.setAttribute("aria-label", labels.join(", ") || "Values");
   }
 
   /** Sets a field's choice without picking it. Does NOT call back, as with setToggle. */
@@ -749,6 +768,7 @@ export class DimInput {
     f.hidden = hidden;
     const wrap = f.input.closest("label");
     if (wrap) wrap.style.display = hidden ? "none" : "";
+    this.nameGroup();
   }
 
   /** show() calls it; a tool that keeps clicking the canvas with the box open must call it after each click,

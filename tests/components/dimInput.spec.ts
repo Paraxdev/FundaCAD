@@ -603,4 +603,62 @@ describe("DimInput names", () => {
     dim.setFieldLabel("r", "Diameter");
     expect(root().querySelector("input")!.getAttribute("aria-label")).toBe("Diameter");
   });
+
+  it("is a group named by its shown fields, renamed as they change", () => {
+    dim.show(
+      [
+        { name: "w", label: "Width" },
+        { name: "h", label: "Height" },
+      ],
+      () => {},
+    );
+    expect(root().getAttribute("role")).toBe("group");
+    expect(root().getAttribute("aria-label")).toBe("Width, Height");
+    dim.setFieldLabel("w", "Length");
+    expect(root().getAttribute("aria-label")).toBe("Length, Height");
+    dim.setFieldHidden("h", true);
+    expect(root().getAttribute("aria-label")).toBe("Length");
+    dim.setFieldHidden("w", true);
+    expect(root().getAttribute("aria-label")).toBe("Values");
+  });
+
+  it("is described by the tool's prompt and a hidden line of its keys, on every showing", () => {
+    const prompt = document.createElement("span");
+    prompt.id = "prompt";
+    prompt.textContent = "Drag the second corner";
+    document.body.appendChild(prompt);
+    const described = () =>
+      root()
+        .getAttribute("aria-describedby")!
+        .split(" ")
+        .map((id) => document.getElementById(id));
+    try {
+      for (let showing = 0; showing < 2; showing++) {
+        dim.show([{ name: "r", label: "R" }], () => {});
+        const [first, help] = described();
+        expect(first).toBe(prompt);
+        expect(help!.hidden).toBe(true);
+        expect(root().contains(help!)).toBe(true);
+        expect(help!.textContent).toBe("Enter applies, Escape cancels, Tab moves on");
+        dim.hide();
+      }
+    } finally {
+      prompt.remove();
+    }
+  });
+
+  it("gives each box its own help id", () => {
+    const other = new DimInput();
+    try {
+      dim.show([{ name: "r", label: "R" }], () => {});
+      other.show([{ name: "d", label: "D" }], () => {});
+      const ids = [...document.querySelectorAll<HTMLElement>(".dim-input")].map((r) =>
+        r.getAttribute("aria-describedby"),
+      );
+      expect(new Set(ids).size).toBe(2);
+      expect(document.querySelectorAll(".dim-input span[hidden]").length).toBe(2);
+    } finally {
+      other.dispose();
+    }
+  });
 });

@@ -154,6 +154,24 @@
   color: var(--accent-hot);
   background: var(--hover-wash);
 }
+/* A 24px target: at least 16px of chip plus the gaps beside it, never over the input or the next control.
+   The touch rule in _touch.scss sets all four insets, so it still wins under data-pointer="touch". */
+.dim-field .dim-unit {
+  position: relative;
+  min-width: 16px;
+}
+.dim-field .dim-unit::before {
+  content: "";
+  position: absolute;
+  top: calc(50% - 12px);
+  bottom: calc(50% - 12px);
+  left: -3px;
+  right: -5px;
+}
+.dim-field .dim-choice::before {
+  left: -5px;
+  right: -3px;
+}
 .dim-unit-menu {
   position: fixed;
   z-index: 3200;
