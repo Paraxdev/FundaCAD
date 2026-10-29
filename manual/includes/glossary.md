@@ -36,6 +36,11 @@
 *[construction geometry]: Guide lines in a sketch that are never part of an outline.
 *[reference dimension]: A dimension that only measures and never moves the sketch.
 *[reference dimensions]: A dimension that only measures and never moves the sketch.
+*[fully defined]: A sketch where every point is held by a rule, so nothing can move.
+*[Fully defined]: A sketch where every point is held by a rule, so nothing can move.
+*[loose end]: An end of a line or arc that does not join the rest of the outline.
+*[loose ends]: An end of a line or arc that does not join the rest of the outline.
+*[Loose ends]: An end of a line or arc that does not join the rest of the outline.
 *[Sketch]: A flat drawing on a plane or a face.
 *[sketch]: A flat drawing on a plane or a face.
 *[Chamfer]: A flat bevel cut along an edge.
