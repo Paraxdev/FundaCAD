@@ -6,7 +6,7 @@ import { SKETCH_TOOLS } from "./actionTables";
 import { logError, toggleConsole } from "../ui/logStore";
 import { isSessionEnded } from "../document/session";
 import { useDialogStore } from "../stores/dialogs";
-import { isMac, latinKey } from "../input/platform";
+import { latinKey, matchChord } from "../input/platform";
 import { useShellStore } from "../stores/shell";
 import { useCommandPaletteStore } from "../stores/commandPalette";
 import type { Engine } from "./engine";
@@ -64,14 +64,6 @@ export function installKeyboard(e: Engine): void {
     if (isPageSelectAll(ev)) ev.preventDefault();
   });
 
-  // Ctrl+` works inside text fields too: the full error text is most wanted while typing into the box that refused it.
-  window.addEventListener("keydown", (ev) => {
-    if (!(ev.ctrlKey || ev.metaKey)) return;
-    if (ev.key !== "`" && ev.code !== "Backquote") return;
-    ev.preventDefault();
-    toggleConsole();
-  });
-
   // Failures with no toast of their own would otherwise exist only in devtools, where a user reporting a bug never looks.
   window.addEventListener("error", (ev) => {
     logError(ev.error ?? ev.message, {
@@ -84,24 +76,21 @@ export function installKeyboard(e: Engine): void {
     logError(ev.reason, { source: "promise" });
   });
 
-  // file shortcuts, which work even mid sketch
+  // File shortcuts and the platform chords work even mid sketch, and inside text fields: the console's full error text
+  // is most wanted while typing into the box that refused it.
   window.addEventListener("keydown", (ev) => {
     if (!(ev.ctrlKey || ev.metaKey)) return;
-    const k = latinKey(ev);
-    if (ev.altKey) {
-      // Ctrl+Alt first, or Ctrl+Alt+S would also save. macOS Option types another character, so the physical key counts
-      // there; elsewhere only the typed letter, since AltGr reports Ctrl+Alt on Windows.
-      const mac = isMac();
-      const is = (letter: string) => k === letter || (mac && ev.code === `Key${letter.toUpperCase()}`);
-      if (is("s")) {
-        ev.preventDefault();
-        useShellStore().toggleItems();
-      } else if (is("h")) {
-        ev.preventDefault();
-        useShellStore().toggleHistory();
-      }
+    // Chords first, or Ctrl+Alt+S would also save. AltGr reports Ctrl+Alt on Windows, so its letters never match.
+    const chord = matchChord(ev);
+    if (chord) {
+      ev.preventDefault();
+      if (chord === "items") useShellStore().toggleItems();
+      else if (chord === "history") useShellStore().toggleHistory();
+      else toggleConsole();
       return;
     }
+    if (ev.altKey) return;
+    const k = latinKey(ev);
     if (k === "f" && !ev.shiftKey) {
       ev.preventDefault();
       useCommandPaletteStore().toggle(e.sketch.active ? "sketch" : "model");

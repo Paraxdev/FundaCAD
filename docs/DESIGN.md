@@ -975,11 +975,13 @@ VoiceOver and Orca mostly skip it, and a keyboard, touch or switch user never se
 only name, a state or an error. An icon only control takes an `aria-label` with the same text as its `title`, and
 the shortcut goes in brackets, written as in
 [9](#9-voice-and-wording): `title="Reset camera (Shift+Home)"`. A base control
-writes both from `tip` and `keys`: `<IconButton icon="history" tip="History" keys="Ctrl+Alt+H" />`. A `Button`
+writes both from `tip` and `keys`: `<IconButton icon="history" tip="History" :keys="chordKeys('history')" />`, where
+a window chord that differs per platform (Items, History, the console) comes from `chordKeys()` or `chordHint()` in
+`src/input/platform.ts`, never a literal. A `Button`
 with a word keeps the word as its name and takes the tip as its `title` only, and while a control is disabled its
 `disabledReason` is the `title`. Anywhere else, a text that names Ctrl or Alt goes through `fmtKeys()`
 (`src/input/platform.ts`), which writes the Command and Option glyphs on a Mac:
-`:title="fmtKeys('History (Ctrl+Alt+H)')"`. Do not invent a tooltip popover.
+`:title="fmtKeys('Redo (Ctrl+Shift+Z)')"`. Do not invent a tooltip popover.
 On the model, where a hand cannot spare a hover, show a real element instead.
 
 State goes where every reader gets it: in the name, in `aria-describedby` pointing at text, or in a `.sr-only` span
@@ -1235,9 +1237,10 @@ The product is spelled FundaCAD.
 UI names are proper nouns mid sentence: History, Items, Home, Preferences.
 Tool names are Title Case (Linear Pattern, Press/Pull). Keys are joined with
 a plus, as in the menus, the command palette and the hint tables: Ctrl+S,
-Ctrl+Alt+H, Shift+Home, Esc, Enter. Write Ctrl and Alt, never the Mac names,
+Ctrl+Shift+Z, Shift+Home, Esc, Enter. Write Ctrl and Alt, never the Mac names,
 and show any text that names them through `fmtKeys()` (`src/input/platform.ts`),
-which turns them into the Command and Option glyphs on a Mac. Use "No X yet" for lists that will fill and
+which turns them into the Command and Option glyphs on a Mac; Control+ names the literal Mac Control key and shows as
+its caret glyph. Use "No X yet" for lists that will fill and
 "X appear here" for passive sources. Technical engine text goes after a plain
 lead; the full text is kept in the console.
 
@@ -1384,7 +1387,7 @@ Not handled yet, so do not rely on them: `prefers-contrast`, `forced-colors`,
 | Check FundaCAD Noir and Solarized Light | Test only the dark theme |
 | Check with blur off | Rely on blur to make text legible |
 | Use `--t-fast`, `--t-med` and `--ease` | Write `0.14s ease-out` |
-| Write `title` plus `aria-label`, shortcuts as Ctrl+Alt+H through `fmtKeys()` | Build a custom tooltip, or write "Ctrl Alt H" |
+| Write `title` plus `aria-label`, shortcuts as Ctrl+Shift+Z through `fmtKeys()` | Build a custom tooltip, or write "Ctrl Alt H" |
 | Name every base control with `label` or `labelledby`, and put a state in the name, `aria-describedby` or a `.sr-only` span | Leave a state, an error or the only name in a `title`, or label an `Icon` inside a named control |
 | Build a readout from `Panel` and the `.measure-*` classes | Invent `.my-panel-head` and `.my-row` with their own padding |
 | Leave Escape to the tool that owns the panel | Call `claimEscape()` from a tool panel |

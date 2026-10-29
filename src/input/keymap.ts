@@ -1,7 +1,7 @@
 // The MCAD-style keymap, dispatching from the table in shortcuts.ts. File shortcuts are handled in main.ts.
 
 import { resolveShortcut } from "./shortcuts";
-import { latinKey } from "./platform";
+import { comboKey, latinKey } from "./platform";
 import { isEditableTarget, isLiveFocusTarget, isSelectTrigger, widgetOwnsKey } from "../ui/focus";
 
 /** Returns the uninstall. */
@@ -15,7 +15,7 @@ export function installKeymap(onAction: (a: string) => void, context: () => "mod
       if (e.target instanceof HTMLElement && !isLiveFocusTarget(e.target)) e.target.blur();
       else return;
     }
-    const k = latinKey(e);
+    const k = e.ctrlKey || e.metaKey ? comboKey(e) : latinKey(e);
 
     if (e.ctrlKey || e.metaKey) {
       if (k === "z" && !e.shiftKey) return (onAction("undo"), e.preventDefault());

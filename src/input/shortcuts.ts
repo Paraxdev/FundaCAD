@@ -159,6 +159,10 @@ const RESERVED: Record<string, string> = {
   "Ctrl+F": "Find",
   "Ctrl+K": "Command palette",
   "Ctrl+,": "Preferences",
+  // The platform chords of platform.ts without Alt, which the remap refuses anyway.
+  "Ctrl+Shift+1": "Items",
+  "Ctrl+Shift+2": "History",
+  "Ctrl+`": "Console",
   Escape: "Cancel",
   Tab: "Box select filter",
   Delete: "Delete",

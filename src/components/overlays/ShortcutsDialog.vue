@@ -6,7 +6,7 @@ import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useDialogStore } from "../../stores/dialogs";
 import { useModalStore } from "../../stores/modals";
 import { escapeClaimed } from "../../ui/escapeClaim";
-import { fmtKeys } from "../../input/platform";
+import { comboKey, fmtKeys } from "../../input/platform";
 import {
   SHORTCUTS,
   formatShortcut,
@@ -110,7 +110,7 @@ function capture(e: KeyboardEvent, id: string) {
   }
   // "?" arrives with shift held and keymap.ts resolves it without, so it is stored that way.
   const keys = {
-    key: e.key.toLowerCase(),
+    key: comboKey(e),
     shift: e.key === "?" ? false : e.shiftKey,
     ctrl: e.ctrlKey || e.metaKey,
   };

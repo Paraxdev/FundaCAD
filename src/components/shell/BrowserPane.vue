@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { fmtKeys } from "../../input/platform";
+import { chordKeys, fmtKeys } from "../../input/platform";
 // A flat list of nodes, not nested components: the stylesheet targets that DOM (`.tree-child` is a padding, not a
 // container) and the e2e suite walks it.
 
@@ -909,7 +909,8 @@ onUnmounted(() => root.value?.removeEventListener("wheel", onWheel));
         size="md"
         variant="plain"
         :icon-size="14"
-        :tip="fmtKeys('Hide the items (Ctrl+Alt+S)')"
+        tip="Hide the items"
+        :keys="chordKeys('items')"
         @click="shell.setItems(false)"
       />
     </div>
