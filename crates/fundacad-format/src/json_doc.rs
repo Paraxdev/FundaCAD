@@ -124,10 +124,20 @@ pub fn write_json_document(
 
 pub fn read_text_capped(path: &Path, cap: u64) -> Result<String, String> {
     let file = File::open(path).map_err(|e| e.to_string())?;
+    let len = file.metadata().map_err(|e| e.to_string())?.len();
+    read_text_within(file, len, cap)
+}
+
+/// `len` is the size the file system reports. The read is capped too, as a file can grow after the check.
+pub fn read_text_within(src: impl Read, len: u64, cap: u64) -> Result<String, String> {
+    let too_big = || format!("This document is larger than {} MiB and was refused.", cap >> 20);
+    if len > cap {
+        return Err(too_big());
+    }
     let mut bytes = Vec::new();
-    file.take(cap.saturating_add(1)).read_to_end(&mut bytes).map_err(|e| e.to_string())?;
+    src.take(cap.saturating_add(1)).read_to_end(&mut bytes).map_err(|e| e.to_string())?;
     if bytes.len() as u64 > cap {
-        return Err(format!("This document is larger than {} MiB and was refused.", cap >> 20));
+        return Err(too_big());
     }
     String::from_utf8(bytes).map_err(|_| "This document is not valid UTF-8 text.".to_string())
 }

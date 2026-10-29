@@ -120,3 +120,18 @@ fn a_text_at_the_cap_is_read_whole() {
     std::fs::write(&path, "y".repeat(32)).unwrap();
     assert_eq!(read_text_capped(&path, 32).unwrap(), "y".repeat(32));
 }
+
+struct Unreadable;
+
+impl std::io::Read for Unreadable {
+    fn read(&mut self, _: &mut [u8]) -> std::io::Result<usize> {
+        Err(std::io::Error::other("read"))
+    }
+}
+
+#[test]
+fn a_file_the_disk_reports_past_the_cap_is_refused_unread() {
+    let cap = 3 << 20;
+    let err = read_text_within(Unreadable, cap + 1, cap).unwrap_err();
+    assert_eq!(err, "This document is larger than 3 MiB and was refused.");
+}
