@@ -104,7 +104,10 @@ describe("Panel", () => {
       props: { open: true, title: "Stress", titleHidden: true, closable: true },
       attachTo: document.body,
     });
-    expect([$(".ui-panel-head .ui-panel-close") !== null, $(".ui-panel-head h2")]).toEqual([true, null]);
+    expect([
+      [...$(".ui-panel-head")!.children].map((c) => c.className),
+      $(".ui-panel > h2.sr-only")?.textContent,
+    ]).toEqual([["float-card-close ui-panel-close"], "Stress"]);
   });
 
   it("renders nothing while closed", async () => {
