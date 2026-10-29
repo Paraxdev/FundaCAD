@@ -5,7 +5,15 @@ import type { DocumentStore } from "../document/store";
 import type { GeometryBackend } from "../geometry/client";
 import { asFeature, type Feature } from "../types";
 import { BINARY_DOC_EXT, DOC_EXT, LEGACY_DOC_EXTS } from "./documentExt";
-import { baseName, insertFundaDocument, staleLinks, updateFundaLink, type FundaInsertMode } from "./fundaInsert";
+import {
+  baseName,
+  insertFundaDocument,
+  staleLinks,
+  updateFundaLink,
+  type FileStat,
+  type FundaInsertMode,
+  type LinkStat,
+} from "./fundaInsert";
 import { nativeDialog } from "./nativeDialog";
 
 const isTauri = () => "__TAURI_INTERNALS__" in window;
@@ -19,6 +27,17 @@ export async function readDocumentText(path: string): Promise<string | null> {
     return await invoke<string>("container_open", { path });
   } catch {
     return null;
+  }
+}
+
+/** A file's size and time without opening it: missing when it is gone, unknown when the native side refused the
+ *  path or could not tell. */
+export async function statDocument(path: string): Promise<LinkStat> {
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return (await invoke<FileStat | null>("container_stat", { path })) ?? "missing";
+  } catch {
+    return "unknown";
   }
 }
 
@@ -101,7 +120,7 @@ export function unlink(store: DocumentStore, featureId: string) {
 export async function checkLinks(store: DocumentStore, geometry: GeometryBackend) {
   if (!isTauri()) return;
   const s = store.session;
-  const { changed, missing } = await s.step(staleLinks(store.document.features, readDocumentText));
+  const { changed, missing } = await s.step(staleLinks(store.document.features, statDocument));
   if (changed.length) {
     const names = changed.map((id) => nameOf(store, id)).join(", ");
     await say(`${names} changed since ${changed.length === 1 ? "it was" : "they were"} linked`, "info", {

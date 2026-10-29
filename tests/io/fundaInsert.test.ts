@@ -85,30 +85,52 @@ describe("insertFundaDocument", () => {
     expect(f.link).toBeUndefined();
   });
 
-  it("links it with the file and a stamp, and an update re-reads it in place", async () => {
+  it("links it with the file, a stamp and the file's size and time, and an update re-reads it in place", async () => {
     const { be } = backend();
     const store = new DocumentStore(be, empty());
+    const first = { size: 120, mtimeMs: 1_700_000_000_000 };
     const res = await insertFundaDocument(
       store,
       be,
-      { path: "C:/parts/Bracket.funda", text: SOURCE },
+      { path: "C:/parts/Bracket.funda", text: SOURCE, stat: first },
       "link",
       "C:/tmp/a.step",
     );
     if (!res.ok) throw new Error(res.message);
-    const linked = store.document.features[0] as Feature & { link: { path: string; stamp: string } };
-    expect(linked.link).toEqual({ path: "C:/parts/Bracket.funda", stamp: documentStamp(SOURCE) });
+    const linked = store.document.features[0] as Feature & { link: unknown };
+    expect(linked.link).toEqual({
+      path: "C:/parts/Bracket.funda",
+      stamp: documentStamp(SOURCE),
+      size: 120,
+      mtime: 1_700_000_000_000,
+    });
 
     const changed = SOURCE.replace('"length":10', '"length":20');
-    expect((await staleLinks(store.document.features, async () => changed)).changed).toEqual([res.id]);
-    expect((await staleLinks(store.document.features, async () => null)).missing).toEqual([res.id]);
-
-    await updateFundaLink(store, be, res.id, { path: "C:/parts/Bracket.funda", text: changed }, "C:/tmp/b.step");
-    const after = store.document.features[0] as Feature & { geom: string; link: { stamp: string } };
+    const later = { size: 121, mtimeMs: 1_700_000_005_000 };
+    await updateFundaLink(
+      store,
+      be,
+      res.id,
+      { path: "C:/parts/Bracket.funda", text: changed, stat: later },
+      "C:/tmp/b.step",
+    );
+    const after = store.document.features[0] as Feature & { geom: string; link: unknown };
     expect(store.document.features).toHaveLength(1);
     expect(after.geom).toBe("hash2");
-    expect(after.link.stamp).toBe(documentStamp(changed));
-    expect((await staleLinks(store.document.features, async () => changed)).changed).toEqual([]);
+    expect(after.link).toEqual({
+      path: "C:/parts/Bracket.funda",
+      stamp: documentStamp(changed),
+      size: 121,
+      mtime: 1_700_000_005_000,
+    });
+  });
+
+  it("links without a size and time when the file could not be stat'd", async () => {
+    const { be } = backend();
+    const store = new DocumentStore(be, empty());
+    await insertFundaDocument(store, be, { path: "C:/parts/Bracket.funda", text: SOURCE }, "link", "C:/tmp/a.step");
+    const linked = store.document.features[0] as Feature & { link: unknown };
+    expect(linked.link).toEqual({ path: "C:/parts/Bracket.funda", stamp: documentStamp(SOURCE) });
   });
 
   it("adds nothing when the source does not build", async () => {
@@ -117,5 +139,45 @@ describe("insertFundaDocument", () => {
     const res = await insertFundaDocument(store, be, { path: "x.funda", text: SOURCE }, "append", "t.step");
     expect(res.ok).toBe(false);
     expect(store.document.features).toHaveLength(0);
+  });
+});
+
+describe("staleLinks", () => {
+  const link = (id: string, extra: Record<string, unknown>) =>
+    ({
+      id,
+      type: "import",
+      format: "step",
+      name: id,
+      source: `C:/parts/${id}.funda`,
+      geom: "0123456789abcdef0123456789abcdef",
+      solid: true,
+      link: { path: `C:/parts/${id}.funda`, stamp: "s", ...extra },
+    }) as unknown as Feature;
+  const known = { size: 10, mtime: 5000 };
+
+  it("compares the stored size and time with the file's", async () => {
+    const features = [
+      link("same", known),
+      link("bigger", known),
+      link("touched", known),
+      link("gone", known),
+      link("refused", known),
+      link("old", {}),
+      { id: "box1", type: "box", length: 1, width: 1, height: 1 } as unknown as Feature,
+    ];
+    const res = await staleLinks(features, async (path) => {
+      if (path.includes("bigger")) return { size: 11, mtimeMs: 5000 };
+      if (path.includes("touched")) return { size: 10, mtimeMs: 6000 };
+      if (path.includes("gone")) return "missing";
+      if (path.includes("refused")) return "unknown";
+      return { size: 10, mtimeMs: 5000 };
+    });
+    expect(res).toEqual({ changed: ["bigger", "touched"], missing: ["gone"], unknown: ["refused", "old"] });
+  });
+
+  it("still reports a missing file for a link made before sizes were stored", async () => {
+    const res = await staleLinks([link("old", {})], async () => "missing");
+    expect(res).toEqual({ changed: [], missing: ["old"], unknown: [] });
   });
 });
