@@ -16,6 +16,11 @@ body {
   background: var(--bg);
 }
 
+/* Boot under Tauri, until the stored interface size lands (ui/interfaceSize.ts). */
+html[data-sizing] body {
+  opacity: 0;
+}
+
 /* Not on html: the root keeps the browser's text size, so the --fs-* rem tokens follow it. */
 body {
   font-size: var(--fs-body);

@@ -1,17 +1,18 @@
 // Interface size: the stored setting and its gate, the steps and the cap, and how it reaches the page, the webview
 // zoom under Tauri and the root zoom elsewhere.
 
+import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const setZoom = vi.fn(() => Promise.resolve());
+const setZoom = vi.fn((_: number) => Promise.resolve());
 vi.mock("@tauri-apps/api/webview", () => ({ getCurrentWebview: () => ({ setZoom }) }));
 
 let stored: Map<string, string>;
-let root: { style: { zoom: string } };
+let root: { style: { zoom: string }; dataset: Record<string, string> };
 
 function boot(entries: Record<string, string> = {}, tauri = false) {
   stored = new Map(Object.entries(entries));
-  root = { style: { zoom: "" } };
+  root = { style: { zoom: "" }, dataset: {} };
   vi.stubGlobal("localStorage", {
     getItem: (k: string) => stored.get(k) ?? null,
     setItem: (k: string, v: string) => void stored.set(k, v),
@@ -122,11 +123,72 @@ describe("applying it", () => {
     expect(root.style.zoom).toBe("");
   });
 
-  it("keeps working when the webview refuses the zoom", async () => {
+  it("zooms the root instead when the webview refuses the zoom, until a later webview zoom lands", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
     setZoom.mockImplementationOnce(() => Promise.reject(new Error("not allowed")));
     boot({ [KEY]: "150" }, true);
     const m = await load();
     expect(() => m.installInterfaceSize()).not.toThrow();
-    await vi.waitFor(() => expect(setZoom).toHaveBeenCalledWith(1.5));
+    await vi.waitFor(() => expect(root.style.zoom).toBe("1.5"));
+    expect(root.dataset).toEqual({});
+    m.stepInterfaceSize(1);
+    await vi.waitFor(() => expect(setZoom).toHaveBeenLastCalledWith(1.75));
+    await vi.waitFor(() => expect(root.style.zoom).toBe(""));
+  });
+});
+
+describe("the first paint", () => {
+  const deferred = () => {
+    let done = () => {};
+    const p = new Promise<void>((r) => (done = r));
+    return { p, done };
+  };
+
+  it("hides the page under Tauri until a stored size other than 100 lands", async () => {
+    const zoomed = deferred();
+    setZoom.mockImplementationOnce(() => zoomed.p);
+    boot({ [KEY]: "200" }, true);
+    const m = await load();
+    m.installInterfaceSize();
+    expect(root.dataset).toEqual({ sizing: "" });
+    await vi.waitFor(() => expect(setZoom).toHaveBeenCalledWith(2));
+    expect(root.dataset).toEqual({ sizing: "" });
+    zoomed.done();
+    await vi.waitFor(() => expect(root.dataset).toEqual({}));
+    expect(root.style.zoom).toBe("");
+  });
+
+  it("shows the page at once at 100, outside Tauri, and on a later change", async () => {
+    boot({}, true);
+    let m = await load();
+    m.installInterfaceSize();
+    expect(root.dataset).toEqual({});
+    m.stepInterfaceSize(1);
+    expect(root.dataset).toEqual({});
+    boot({ [KEY]: "200" });
+    m = await load();
+    m.installInterfaceSize();
+    expect(root.dataset).toEqual({});
+  });
+
+  it("shows the page anyway when the webview zoom never answers", async () => {
+    vi.useFakeTimers();
+    try {
+      setZoom.mockImplementationOnce(() => new Promise<void>(() => {}));
+      boot({ [KEY]: "200" }, true);
+      const m = await load();
+      m.installInterfaceSize();
+      await vi.advanceTimersByTimeAsync(m.SIZING_HIDE_MS - 1);
+      expect(root.dataset).toEqual({ sizing: "" });
+      await vi.advanceTimersByTimeAsync(1);
+      expect(root.dataset).toEqual({});
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("hides the body, not the root, so the window keeps the theme background", () => {
+    const base = readFileSync("src/styles/_base.scss", "utf8").replace(/\r\n/g, "\n");
+    expect(base).toContain("html[data-sizing] body {\n  opacity: 0;\n}");
   });
 });

@@ -7,16 +7,48 @@ import { announce } from "./announce";
 
 const isTauri = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
+/** The longest the page stays hidden at boot waiting for the webview zoom. */
+export const SIZING_HIDE_MS = 1500;
+
 let applied: number | null = null;
+
+function zoomRoot(pct: number) {
+  if (typeof document === "undefined") return;
+  document.documentElement.style.zoom = pct === 100 ? "" : String(pct / 100);
+}
+
+// The webview zoom is an IPC round trip that lands after the first paint, so a stored size would paint at 100 and
+// then reflow. The page stays hidden until it lands; html keeps painting the theme background meanwhile.
+function hideUntilSized(): () => void {
+  const root = document.documentElement;
+  root.dataset.sizing = "";
+  const reveal = () => {
+    clearTimeout(timer);
+    delete root.dataset.sizing;
+  };
+  const timer = setTimeout(reveal, SIZING_HIDE_MS);
+  return reveal;
+}
 
 export function applyInterfaceSize(pct: number) {
   if (pct === applied) return;
+  const boot = applied === null;
   applied = pct;
-  if (isTauri()) {
-    void import("@tauri-apps/api/webview").then((m) => m.getCurrentWebview().setZoom(pct / 100)).catch(() => {});
-  } else if (typeof document !== "undefined") {
-    document.documentElement.style.zoom = pct === 100 ? "" : String(pct / 100);
-  }
+  if (!isTauri()) return zoomRoot(pct);
+  const reveal = boot && pct !== 100 ? hideUntilSized() : () => {};
+  void import("@tauri-apps/api/webview")
+    .then((m) => m.getCurrentWebview().setZoom(pct / 100))
+    .then(
+      () => {
+        if (applied === pct) zoomRoot(100);
+      },
+      (err: unknown) => {
+        // A refused or failed webview zoom falls back to the root zoom, so the page still matches the setting.
+        if (applied === pct) zoomRoot(pct);
+        console.warn("[interface size] webview zoom failed, zooming the page instead", err);
+      },
+    )
+    .finally(reveal);
 }
 
 /** The next step up or down from `pct`, held between the smallest step and the largest. */
