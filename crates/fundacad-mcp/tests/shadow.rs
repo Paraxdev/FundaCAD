@@ -6,7 +6,7 @@ mod common;
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use common::{engine_binary, Mcp};
+use common::{engine_binary, mcp_binary, Mcp};
 use serde_json::json;
 
 fn copies(tmp: &Path, stem: &str) -> Vec<String> {
@@ -67,4 +67,23 @@ fn a_second_server_reuses_the_copy_of_an_unchanged_build() {
     assert!(!first.call("schema", json!({})).is_error);
     assert!(!second.call("schema", json!({})).is_error);
     assert_eq!(copies(tmp.path(), "fundacad-mcp").len(), 1);
+}
+
+#[test]
+fn a_copy_whose_bytes_differ_from_the_build_is_made_again() {
+    let tmp = tempfile::tempdir().expect("a temp dir");
+    let exe = mcp_binary();
+    let meta = std::fs::metadata(&exe).expect("the server binary");
+    let stamp =
+        meta.modified().expect("an mtime").duration_since(std::time::UNIX_EPOCH).expect("after 1970").as_millis();
+    let ext = if cfg!(windows) { ".exe" } else { "" };
+    let dir = tmp.path().join("fundacad-mcp-shadow");
+    std::fs::create_dir_all(&dir).expect("the shadow dir");
+    let planted = dir.join(format!("fundacad-mcp-{}-{stamp}{ext}", meta.len()));
+    std::fs::write(&planted, vec![0u8; meta.len() as usize]).expect("a same size file");
+    let mut mcp = shadowed(tmp.path(), &[("FUNDACAD_ENGINE_CMD", engine_binary().to_string_lossy().into_owned())]);
+    let reply = mcp.call("schema", json!({"type": "box"}));
+    assert!(!reply.is_error, "{}", reply.text);
+    let copy = std::fs::read(&planted).expect("the copy");
+    assert!(copy == std::fs::read(&exe).expect("the server binary"), "the copy holds the build's bytes");
 }

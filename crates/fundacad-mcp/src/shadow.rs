@@ -30,7 +30,8 @@ fn shadow_dir() -> PathBuf {
     std::env::temp_dir().join("fundacad-mcp-shadow")
 }
 
-/// Named by size and modified time, so a rebuilt binary gets a fresh copy and an unchanged one is reused.
+/// Named by size and modified time, so a rebuilt binary gets a fresh copy, and an unchanged one is reused
+/// only while its bytes still match the executable.
 fn copy_of(exe: &Path) -> std::io::Result<PathBuf> {
     let meta = std::fs::metadata(exe)?;
     let stamp =
@@ -41,7 +42,7 @@ fn copy_of(exe: &Path) -> std::io::Result<PathBuf> {
     std::fs::create_dir_all(&dir)?;
     let name = format!("{stem}-{}-{stamp}{ext}", meta.len());
     let dest = dir.join(&name);
-    if std::fs::metadata(&dest).is_ok_and(|m| m.len() == meta.len()) {
+    if same_bytes(exe, &dest) {
         return Ok(dest);
     }
     // Written beside and renamed into place, so a second server starting at
@@ -50,11 +51,32 @@ fn copy_of(exe: &Path) -> std::io::Result<PathBuf> {
     std::fs::copy(exe, &partial)?;
     if std::fs::rename(&partial, &dest).is_err() {
         let _ = std::fs::remove_file(&partial);
-        if !dest.is_file() {
+        if !same_bytes(exe, &dest) {
             return Err(std::io::Error::other("the copy could not be put in place"));
         }
     }
     Ok(dest)
+}
+
+fn same_bytes(a: &Path, b: &Path) -> bool {
+    use std::io::Read;
+    let (Ok(mut ra), Ok(mut rb)) = (std::fs::File::open(a), std::fs::File::open(b)) else { return false };
+    if ra.metadata().map(|m| m.len()).ok() != rb.metadata().map(|m| m.len()).ok() {
+        return false;
+    }
+    let (mut ba, mut bb) = (vec![0u8; 1 << 16], vec![0u8; 1 << 16]);
+    loop {
+        let n = match ra.read(&mut ba) {
+            Ok(n) => n,
+            Err(_) => return false,
+        };
+        if n == 0 {
+            return rb.read(&mut bb[..1]).is_ok_and(|m| m == 0);
+        }
+        if rb.read_exact(&mut bb[..n]).is_err() || ba[..n] != bb[..n] {
+            return false;
+        }
+    }
 }
 
 /// A copy still running is locked and stays, which is what should happen to it.
