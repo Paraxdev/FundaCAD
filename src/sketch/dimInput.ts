@@ -339,6 +339,16 @@ export class DimInput {
     return el instanceof Node && this.root.contains(el);
   }
 
+  ownsField(el: EventTarget | null): boolean {
+    return this.fields.some((f) => f.input === el);
+  }
+
+  /** For a tool whose Tab means something else (the fillet flip): Shift+Tab from a field steps back onto Cancel. */
+  focusLastStop() {
+    const from = document.activeElement instanceof HTMLElement ? document.activeElement : this.root;
+    this.tabStops(from).at(-1)?.focus();
+  }
+
   /** While a tool decides where to drop something, a click aimed at the canvas must pass through the box rather than
    *  hit confirm. Keystrokes are unaffected. Turn it off after the placing click, or confirm and cancel go dead. */
   setClickThrough(on: boolean) {

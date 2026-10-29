@@ -1071,13 +1071,14 @@ export class EdgeFeatureTool {
       this.commit();
       return;
     }
-    // Captured, so it reaches us from the heads-up input or the canvas and DimInput's own Tab never sees it; each
-    // treatment shows one field, so nothing is lost. A value the box refuses stays put and nothing flips.
+    // Tab in the field or on the canvas is the flip, captured before DimInput's own Tab; each treatment shows one
+    // field, so nothing is lost. The box's other stops walk as usual, and Shift+Tab from the field reaches them.
     if (e.key === "Tab" && this.phase === "drag") {
+      if (this.dim.ownsTarget(e.target) && !this.dim.ownsField(e.target)) return;
       e.preventDefault();
       e.stopImmediatePropagation();
-      if (!this.dim.accepts(this.field.name)) return;
-      this.flipKind();
+      if (e.shiftKey && this.dim.ownsField(e.target)) this.dim.focusLastStop();
+      else if (this.dim.accepts(this.field.name)) this.flipKind();
     }
   }
 
