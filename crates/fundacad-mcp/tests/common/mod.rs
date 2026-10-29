@@ -301,28 +301,38 @@ pub struct RealEngine {
 }
 
 impl RealEngine {
+    // free_port releases its port before the engine binds it, so a test starting beside this one can take it
+    // first and the engine exits without listening; a fresh port is tried then.
     pub fn start() -> RealEngine {
-        let port = free_port();
-        let token = format!("live-test-{port}");
-        let dir = std::env::temp_dir().join(format!("funda-live-e2e-{port}"));
-        std::fs::create_dir_all(&dir).expect("a temp dir");
-        let mut cmd = Command::new(engine_binary());
-        cmd.arg("--ws")
-            .env("FUNDACAD_ENGINE_PORT", port.to_string())
-            .env("FUNDACAD_ENGINE_TOKEN", &token)
-            .env_remove("SINDRI_ENGINE_PORT")
-            .env_remove("SINDRI_ENGINE_TOKEN")
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null());
-        let mut child = cmd.spawn().expect("the engine binary is built");
-        let stdout = child.stdout.take().expect("piped");
-        let mut lines = BufReader::new(stdout).lines();
-        let listening = lines.by_ref().take(200).any(|l| l.map(|l| l.starts_with("LISTENING")).unwrap_or(false));
-        assert!(listening, "the engine never said it was listening");
-        let session = dir.join("session.json");
-        let engine = RealEngine { port, token, session, dir, child };
-        engine.advertise();
-        engine
+        for _ in 0..5 {
+            let port = free_port();
+            let token = format!("live-test-{port}");
+            let dir = std::env::temp_dir().join(format!("funda-live-e2e-{port}"));
+            std::fs::create_dir_all(&dir).expect("a temp dir");
+            let mut cmd = Command::new(engine_binary());
+            cmd.arg("--ws")
+                .env("FUNDACAD_ENGINE_PORT", port.to_string())
+                .env("FUNDACAD_ENGINE_TOKEN", &token)
+                .env_remove("SINDRI_ENGINE_PORT")
+                .env_remove("SINDRI_ENGINE_TOKEN")
+                .stdout(Stdio::piped())
+                .stderr(Stdio::null());
+            let mut child = cmd.spawn().expect("the engine binary is built");
+            let stdout = child.stdout.take().expect("piped");
+            let mut lines = BufReader::new(stdout).lines();
+            let listening = lines.by_ref().take(200).any(|l| l.map(|l| l.starts_with("LISTENING")).unwrap_or(false));
+            if !listening {
+                let _ = child.kill();
+                let _ = child.wait();
+                let _ = std::fs::remove_dir_all(&dir);
+                continue;
+            }
+            let session = dir.join("session.json");
+            let engine = RealEngine { port, token, session, dir, child };
+            engine.advertise();
+            return engine;
+        }
+        panic!("the engine never said it was listening, on five ports");
     }
 
     pub fn advertise(&self) {
@@ -382,6 +392,10 @@ pub struct Host {
     /// An import is being read into the open document, so a whole other document is refused as the app does.
     pub importing: bool,
     pub refused: Vec<Value>,
+    /// The document session it names, as the app does, or none like an older app.
+    pub session: Option<String>,
+    /// Opened right after the next proposal is applied, before the publish that acknowledges it.
+    pub opens_after_apply: Option<String>,
     /// What the window shares as its title, the open file's path.
     pub title: String,
     next: u64,
@@ -398,6 +412,8 @@ impl Host {
             can_edit: true,
             importing: false,
             refused: Vec::new(),
+            session: None,
+            opens_after_apply: None,
             next: 0,
         }
     }
@@ -411,14 +427,13 @@ impl Host {
     }
 
     pub async fn tick(&mut self) -> Value {
-        let reply = self
-            .call(
-                "session_host",
-                json!({"document": self.doc, "revision": self.rev, "title": self.title,
+        let mut publish = json!({"document": self.doc, "revision": self.rev, "title": self.title,
                        "status": {"canEdit": self.can_edit, "applied": self.applied,
-                                  "refused": self.refused, "building": false}}),
-            )
-            .await;
+                                  "refused": self.refused, "building": false}});
+        if let Some(session) = &self.session {
+            publish["doc"] = json!(session);
+        }
+        let reply = self.call("session_host", publish).await;
         let res = reply.get("result").cloned().unwrap_or_else(|| json!({}));
         for p in res.get("proposals").and_then(Value::as_array).cloned().unwrap_or_default() {
             if !self.can_edit {
@@ -434,6 +449,11 @@ impl Host {
             self.applied.push(p.get("id").and_then(Value::as_str).unwrap_or("").to_string());
             if self.applied.len() > 16 {
                 self.applied.remove(0);
+            }
+            if let Some(next) = self.opens_after_apply.take() {
+                self.session = Some(next);
+                self.doc = a_document(1, "another-document");
+                self.rev += 1;
             }
         }
         res

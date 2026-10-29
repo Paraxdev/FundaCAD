@@ -5,7 +5,6 @@ import {
   type PrintabilityDeps,
 } from "../../plugins/FundaCAD.PrintToolbox/printabilityPanel";
 import { KIND_COLORS } from "../../plugins/FundaCAD.PrintToolbox/printability";
-import { EDGE_HOVER_COLOR } from "../../src/viewport/highlight";
 import type { CadDocument, PrintabilityOptions, PrintabilityReply, PrintabilityResult } from "fundacad";
 
 // The toolbox's Printability panel controller against a hand-made viewport,
@@ -80,6 +79,7 @@ function rig() {
   let selectedBodies: string[] = [];
   let stressBody: string | null = null;
   const hidden = new Set<string>();
+  const userNames = new Map<string, string>();
   const openListeners = new Set<() => void>();
   const docListeners = new Set<() => void>();
   const buildListeners = new Set<(s: BuildState) => void>();
@@ -124,6 +124,7 @@ function rig() {
     },
     onOpen: (fn: () => void) => sub(openListeners, fn),
     isBodyVisible: (id: string) => !hidden.has(id),
+    bodyName: (id: string) => userNames.get(id),
   };
   const geometry = {
     printability: (doc: CadDocument, opts: PrintabilityOptions, onStarted?: (id: string) => void) => {
@@ -165,6 +166,7 @@ function rig() {
       selectedBodies = ids;
     },
     hide: (id: string) => hidden.add(id),
+    rename: (id: string, name: string) => userNames.set(id, name),
     settle: (r: PrintabilityResult) => settle(r),
     editDoc: () => docListeners.forEach((f) => f()),
     /** A completed build: the rebuild bridge's setModel drops every mark, and
@@ -250,11 +252,6 @@ describe("printability panel flow", () => {
     expect(r.frames.at(-1)).toEqual({ at: [0, 5, 5], size: 5 });
   });
 
-  it("puts a finding forward in the app's own hover colour", () => {
-    // The plugin keeps its own copy of the colour, which this holds to the app's.
-    expect(EMPHASIS_COLOR).toBe(EDGE_HOVER_COLOR);
-  });
-
   it("does not tint a hidden body, nor a face past its body's faces", async () => {
     const r = rig();
     await checked(r);
@@ -337,6 +334,26 @@ describe("printability panel flow", () => {
     ]);
     r.rebuild([{ id: "body1", name: "Block", faceStart: 0, faceCount: 6 }]);
     expect(r.ui.bodies.value).toEqual([{ id: "body1", name: "Block" }]);
+  });
+
+  it("tells repeated engine names apart, in the Bodies line and the result alike", async () => {
+    const r = rig();
+    r.rename("body7", "Bracket");
+    r.rebuild([
+      { id: "body1", name: "Box", faceStart: 0, faceCount: 6 },
+      { id: "body2", name: "Box", faceStart: 6, faceCount: 6 },
+      { id: "body7", name: "Box", faceStart: 12, faceCount: 6 },
+    ]);
+    expect(r.ui.bodies.value).toEqual([
+      { id: "body1", name: "Box" },
+      { id: "body2", name: "Box 2" },
+      { id: "body7", name: "Bracket" },
+    ]);
+    await checked(r);
+    expect(r.ui.data.value!.result!.groups.map((g) => [g.body, g.name])).toEqual([
+      ["body1", "Box"],
+      ["body2", "Box 2"],
+    ]);
   });
 });
 

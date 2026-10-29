@@ -84,12 +84,13 @@ export function verdictView(r: VerdictInput, margin = SAFE_MARGIN, marked = true
     };
   }
   const safe = aboutFactor(sf, "down");
-  const about = safe.startsWith("more") ? safe : `about ${safe}`;
+  // Rounded down, so "at least": a 4.57 in the table reads 4.5 here.
+  const about = safe.startsWith("more") ? safe : `at least ${safe}`;
   const holds = rough ? "Holds by a rough reading," : "Holds,";
   const weakest = spot ? `Weakest ${spot}.` : null;
   const detail = [weakest, rough].filter(Boolean).join(" ") || null;
   if (sf < margin) {
-    return { level: "marginal", headline: `${holds} but only ${about}x safe, keep about ${margin}x.`, detail };
+    return { level: "marginal", headline: `${holds} ${about}x safe, but keep about ${margin}x.`, detail };
   }
   return { level: "holds", headline: `${holds} ${about}x safe.`, detail };
 }
@@ -97,7 +98,10 @@ export function verdictView(r: VerdictInput, margin = SAFE_MARGIN, marked = true
 /** The weakest spot's pin label, in the verdict's numbers. */
 export function weakSpotLabel(sf: number | null): string {
   if (sf === null || !Number.isFinite(sf)) return "Weakest";
-  if (sf >= 1) return `Weakest, ${aboutFactor(sf, "down")}x safe`;
+  if (sf >= 1) {
+    const safe = aboutFactor(sf, "down");
+    return `Weakest, ${safe.startsWith("more") ? safe : `at least ${safe}`}x safe`;
+  }
   const o = overload(sf);
   return "pct" in o ? `Weakest, ${o.pct}% over` : `Weakest, ${o.factor}x over`;
 }

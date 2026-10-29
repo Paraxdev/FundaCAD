@@ -131,10 +131,14 @@ function box() {
       return n ? n.title || n.textContent : null;
     });
   const toggle = b?.querySelector<HTMLElement>(".dim-toggle") ?? null;
+  const chosen = (name: string) => {
+    const g = b?.querySelector<HTMLElement>(`[data-option="${name}"]`);
+    return g && g.style.display !== "none" ? (g.querySelector(".on")?.getAttribute("aria-label") ?? null) : null;
+  };
   return {
     names,
     value: b?.querySelector("input")?.value ?? null,
-    toggle: toggle && toggle.style.display !== "none" ? toggle.textContent : null,
+    toggle: chosen("mode") ?? (toggle && toggle.style.display !== "none" ? toggle.textContent : null),
   };
 }
 

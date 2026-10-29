@@ -1,66 +1,20 @@
 <script setup lang="ts">
-import { fmtKeys } from "../../input/platform";
-import { computed, nextTick, onUnmounted, ref, watch, useTemplateRef } from "vue";
-import Icon from "../shell/Icon.vue";
+import { nextTick, onMounted, onUnmounted, useTemplateRef, watch } from "vue";
+import Menu from "../ui/Menu.vue";
+import MenuItem from "../ui/MenuItem.vue";
+import MenuSeparator from "../ui/MenuSeparator.vue";
 import { useContextMenuStore, type CtxItem } from "../../stores/contextMenu";
-import { claimEscape } from "../../ui/escapeClaim";
+import { isEditableTarget } from "../../ui/focus";
+import { guardMenuKeys } from "../../ui/menu";
 
 const s = useContextMenuStore();
+const menu = useTemplateRef<InstanceType<typeof Menu>>("menu");
 
-// The check gutter is per menu: with any toggle every row indents, or the checked row shifts sideways as it turns on.
-const hasChecks = computed(() => s.items.some((it) => it.checked !== undefined));
-
-const menuEl = useTemplateRef<HTMLDivElement>("menuEl");
-const subEl = useTemplateRef<HTMLDivElement>("subEl");
-const rootRows = ref<HTMLElement[]>([]);
-
-const pos = ref({ x: 0, y: 0 });
-// Hidden on first paint: the nudge needs the rendered size, and a pre-nudge frame would show the menu jump.
-const placed = ref(false);
-
-// One level of flyout, CtxItem.children is not recursive.
-const subIndex = ref<number | null>(null);
-const subPos = ref({ x: 0, y: 0 });
-const subPlaced = ref(false);
-let subCloseTimer: number | undefined;
-
-function cancelSubClose() {
-  clearTimeout(subCloseTimer);
-  subCloseTimer = undefined;
-}
-function closeSub() {
-  cancelSubClose();
-  subIndex.value = null;
-  subPlaced.value = false;
-}
-// Hover intent: a diagonal move toward the flyout crosses sibling rows, so sibling hover only schedules the close and
-// entering the flyout cancels it.
-function scheduleSubClose() {
-  cancelSubClose();
-  subCloseTimer = window.setTimeout(closeSub, 300);
-}
-
-async function openSub(i: number) {
-  if (subIndex.value === i) {
-    cancelSubClose(); // re-hovering the parent keeps its open flyout
-    return;
-  }
-  cancelSubClose();
-  subIndex.value = i;
-  subPlaced.value = false;
-  await nextTick();
-  const anchor = rootRows.value[i];
-  const sub = subEl.value;
-  if (!anchor || !sub) return;
-  // to the right of the parent item; flip left / shift up when it would overflow
-  const a = anchor.getBoundingClientRect();
-  const r = sub.getBoundingClientRect();
-  let sx = a.right + 2;
-  if (sx + r.width > window.innerWidth) sx = Math.max(4, a.left - r.width - 2);
-  let sy = a.top - 5;
-  if (sy + r.height > window.innerHeight) sy = Math.max(4, window.innerHeight - r.height - 4);
-  subPos.value = { x: sx, y: sy };
-  subPlaced.value = true;
+// A menu opened over a text field leaves focus in it: moving focus would blur a rename into committing, and the field's
+// own Cut, Copy and Paste need it back with its selection. A press on a row then keeps it there too.
+let fieldKept = false;
+function keepField(e: MouseEvent) {
+  if (fieldKept) e.preventDefault();
 }
 
 // Row hover is tracked here, not left to pointerleave: a click, Escape or outside press closes the menu under the
@@ -73,159 +27,116 @@ function setHover(it: CtxItem | null) {
   hovered = it;
   it?.onHover?.(true);
 }
+function unhover(it: CtxItem) {
+  if (hovered === it) setHover(null);
+}
+// Keyboard focus lights a row as the pointer does, but not the focus the menu itself takes as a click opens it.
+function onFocus(e: FocusEvent, it: CtxItem) {
+  if (e.currentTarget instanceof HTMLElement && e.currentTarget.matches(":focus-visible")) setHover(it);
+}
 
-function activate(it: CtxItem) {
-  if (it.disabled || it.separator) return;
+function rowAttrs(it: CtxItem) {
+  return {
+    class: ["ctx-item", { "has-swatch": !!it.swatch }],
+    style: it.swatch ? { "--swatch": it.swatch } : undefined,
+    label: it.label,
+    icon: it.icon,
+    keys: it.shortcut,
+    checked: it.checked,
+    danger: !!it.danger,
+    disabled: !!it.disabled,
+  };
+}
+
+function pick(it: CtxItem) {
   setHover(null);
-  s.close();
   it.onClick?.();
 }
 
-function onDown(e: PointerEvent) {
-  const t = e.target as Node;
-  if (!menuEl.value?.contains(t) && !subEl.value?.contains(t)) s.close();
-}
-function onKey(e: KeyboardEvent) {
-  if (e.key === "Escape") {
-    e.stopPropagation(); // Escape only closes the menu, not the app's selection
-    s.close();
-  }
-}
-let releaseEscape: (() => void) | null = null;
-function bind() {
-  releaseEscape ??= claimEscape();
-  document.addEventListener("pointerdown", onDown, true);
-  window.addEventListener("keydown", onKey, true);
-}
-function unbind() {
-  releaseEscape?.();
-  releaseEscape = null;
-  document.removeEventListener("pointerdown", onDown, true);
-  window.removeEventListener("keydown", onKey, true);
+function onClose() {
+  setHover(null);
+  s.close();
 }
 
 watch(
   () => s.epoch,
-  async () => {
-    unbind();
-    closeSub();
+  () => {
     setHover(null);
-    if (!s.open) return;
-    placed.value = false;
-    pos.value = { x: s.x, y: s.y };
-    await nextTick();
-    const el = menuEl.value;
-    if (el) {
-      const r = el.getBoundingClientRect();
-      const nx = r.right > window.innerWidth ? Math.max(4, s.x - r.width) : s.x;
-      const ny = r.bottom > window.innerHeight ? Math.max(4, s.y - r.height) : s.y;
-      pos.value = { x: nx, y: ny };
-    }
-    placed.value = true;
-    // Deferred so the right-click that opened the menu doesn't immediately
-    // close it again. Re-checks `open` in case something dismissed it first.
-    setTimeout(() => {
-      if (s.open) bind();
-    }, 0);
+    fieldKept = s.open && isEditableTarget(document.activeElement);
   },
-  { flush: "post" },
+  { flush: "sync" },
 );
 
-// A row added to an open menu (a late engine answer) can overflow the bottom. Only that overflow is corrected, so the
-// rows under the pointer stay put.
+// A row added to an open menu (a late engine answer) can overflow the bottom. The menu places itself again, which
+// leaves it where it is while it still fits, so the rows under the pointer stay put.
 watch(
   () => s.items,
   async () => {
     const opened = s.epoch;
-    if (!s.open || !placed.value) return;
     await nextTick();
-    const r = menuEl.value?.getBoundingClientRect();
-    if (!r || !s.open || !placed.value || opened !== s.epoch) return;
-    if (r.bottom > window.innerHeight) {
-      pos.value = { x: pos.value.x, y: Math.max(4, window.innerHeight - r.height - 4) };
-    }
+    if (s.open && opened === s.epoch) menu.value?.place();
   },
-  { flush: "post" },
 );
 
-// Closing by any path must also drop the global listeners.
 watch(
   () => s.open,
   (isOpen) => {
-    if (!isOpen) {
-      unbind();
-      closeSub();
-      setHover(null);
-    }
+    if (!isOpen) setHover(null);
   },
 );
 
+let releaseKeys = () => {};
+onMounted(() => (releaseKeys = guardMenuKeys()));
 onUnmounted(() => {
-  unbind();
-  cancelSubClose();
+  releaseKeys();
   setHover(null);
 });
 </script>
 
 <template>
-  <Teleport to="body">
-    <div
-      v-if="s.open"
-      ref="menuEl"
-      class="context-menu dynamic"
-      :style="{
-        left: `${pos.x}px`,
-        top: `${pos.y}px`,
-        visibility: placed ? undefined : 'hidden',
-      }"
-    >
-      <template v-for="(it, i) in s.items" :key="i">
-        <div v-if="it.separator" class="ctx-sep"></div>
-        <div
-          v-else
-          :ref="
-            (el) => {
-              if (el) rootRows[i] = el as HTMLElement;
-            }
-          "
-          class="ctx-item"
-          :class="{ danger: it.danger, disabled: it.disabled }"
-          @pointerenter="it.disabled ? undefined : (setHover(it), it.children ? openSub(i) : scheduleSubClose())"
-          @pointerleave="setHover(null)"
-          @click="it.children && !it.disabled ? openSub(i) : activate(it)"
-        >
-          <span v-if="hasChecks" class="ctx-check">
-            <Icon v-if="it.checked" name="check" :size="12" />
-          </span>
-          <span v-if="it.swatch" class="ctx-swatch" :style="{ background: it.swatch }"></span>
-          <Icon v-if="it.icon" :name="it.icon" :size="14" class="ctx-icon" />
-          <span class="ctx-label">{{ it.label }}</span>
-          <span v-if="it.shortcut" class="ctx-key">{{ fmtKeys(it.shortcut) }}</span>
-          <span v-if="it.children" class="ctx-caret"><Icon name="caretRight" :size="10" /></span>
-        </div>
-      </template>
-    </div>
-
-    <!-- one-level flyout, also on body so it can escape the parent's bounds -->
-    <div
-      v-if="s.open && subIndex !== null"
-      ref="subEl"
-      class="context-menu dynamic submenu"
-      :style="{
-        left: `${subPos.x}px`,
-        top: `${subPos.y}px`,
-        visibility: subPlaced ? undefined : 'hidden',
-      }"
-      @pointerenter="cancelSubClose()"
-    >
-      <template v-for="(c, j) in s.items[subIndex]?.children ?? []" :key="j">
-        <div v-if="c.separator" class="ctx-sep"></div>
-        <div v-else class="ctx-item" :class="{ danger: c.danger, disabled: c.disabled }" @click="activate(c)">
-          <span v-if="c.swatch" class="ctx-swatch" :style="{ background: c.swatch }"></span>
-          <span class="ctx-label">{{ c.label }}</span>
-          <span v-if="c.shortcut" class="ctx-key">{{ fmtKeys(c.shortcut) }}</span>
-        </div>
-      </template>
-    </div>
-  </Teleport>
+  <Menu
+    v-if="s.open"
+    ref="menu"
+    :key="s.epoch"
+    :at="{ x: s.x, y: s.y }"
+    :focus="fieldKept ? 'none' : 'first'"
+    @close="onClose"
+  >
+    <template v-for="(it, i) in s.items" :key="i">
+      <MenuSeparator v-if="it.separator" />
+      <MenuItem
+        v-else-if="it.children"
+        v-bind="rowAttrs(it)"
+        @pointerenter="it.disabled || setHover(it)"
+        @pointerleave="unhover(it)"
+        @focus="onFocus($event, it)"
+        @blur="unhover(it)"
+        @mousedown="keepField"
+      >
+        <template v-for="(c, j) in it.children" :key="j">
+          <MenuSeparator v-if="c.separator" />
+          <MenuItem
+            v-else
+            v-bind="rowAttrs(c)"
+            @select="pick(c)"
+            @pointerenter="c.disabled || setHover(c)"
+            @pointerleave="unhover(c)"
+            @focus="onFocus($event, c)"
+            @blur="unhover(c)"
+            @mousedown="keepField"
+          />
+        </template>
+      </MenuItem>
+      <MenuItem
+        v-else
+        v-bind="rowAttrs(it)"
+        @select="pick(it)"
+        @pointerenter="it.disabled || setHover(it)"
+        @pointerleave="unhover(it)"
+        @focus="onFocus($event, it)"
+        @blur="unhover(it)"
+        @mousedown="keepField"
+      />
+    </template>
+  </Menu>
 </template>

@@ -2,7 +2,7 @@
 // Values cross this boundary in MILLIMETRES; length fields show and parse the display unit, angles are degrees.
 
 import { iconElement } from "../ui/icons";
-import { isHistoryKey } from "../ui/focus";
+import { isHistoryKey, isMenuKey } from "../ui/focus";
 import { onPreviewError } from "../ui/previewError";
 import { getUnit, parseField } from "../ui/units";
 import { commonUnits, measureError, toUnit, tryParseMeasure, unitById, type UnitDef } from "../ui/measure";
@@ -14,9 +14,13 @@ export interface DimFieldDef extends ValueRule {
   /** a short word, or the tooltip when `icon` is given */
   label: string;
   icon?: string;
+  /** A letter shown after the icon, the axis of "Spacing X", or instead of a long label. */
+  tag?: string;
   kind?: "length" | "angle" | "count"; // default length; count = raw number, no unit
   /** The tool reads the raw text itself (a size name, a parameter expression), so the box does not judge it. */
   free?: boolean;
+  /** Words the tool reads itself besides a number ("through"): not judged, and getValue is null for them. */
+  words?: RegExp;
   /** What the field reads, picked from a menu on its name; `label` and `icon` are the chosen one's. */
   choices?: DimChoices;
 }
@@ -46,6 +50,51 @@ export interface DimToggleDef {
   title: string;
   initial: boolean;
   onChange: (on: boolean) => void;
+  /** Drawn as an icon switch whose label is its tooltip; without one the label is shown. */
+  icon?: string;
+}
+
+export interface DimSegment {
+  id: string;
+  label: string;
+  icon: string;
+  /** A short name shown beside a small icon ("G1"), for values whose glyphs alone read too alike. */
+  text?: string;
+  /** Why it cannot be picked now; greyed with this in its tooltip. `setSegmentDisabled` changes it later. */
+  disabled?: string;
+  /** Picks it while the tool runs; inside a value field it takes Alt, there the bare key is part of the number. */
+  key?: string;
+}
+
+/** A choice of a few named values, each one click away. The tool owns the state, as with the toggle. */
+export interface DimSegmentedDef {
+  name: string;
+  title: string;
+  segments: DimSegment[];
+  chosen: string;
+  onChoose: (id: string) => void;
+  /** A press or key on a disabled segment, with its reason, so the tool can say why nothing changed. */
+  onBlocked?: (id: string, reason: string) => void;
+}
+
+/** A one off verb beside the value, such as moving a hole to the face centre. */
+export interface DimActionDef {
+  name: string;
+  label: string;
+  icon: string;
+  onPress: () => void;
+}
+
+export type DimOption = DimToggleDef | DimSegmentedDef | DimActionDef;
+
+const isSegmented = (o: DimOption): o is DimSegmentedDef => "segments" in o;
+const isAction = (o: DimOption): o is DimActionDef => "onPress" in o;
+
+interface Segmented {
+  def: DimSegmentedDef;
+  el: HTMLElement;
+  chosen: string;
+  disabled: Map<string, string>;
 }
 
 interface Field {
@@ -59,6 +108,8 @@ interface Field {
   tag: HTMLElement;
   choice: string | null;
   userDriven: boolean;
+  /** In mm, the last valid value TYPED, never a seed: text that is no value reads as this one. */
+  lastGood: number | null;
   /** Set only by a keystroke: an edit tool seeds and locks every field before the user touches any. */
   typed?: boolean;
   hidden?: boolean;
@@ -116,6 +167,10 @@ export interface ScreenRect {
 
 /** px */
 const PAST_GAP = 10;
+/** px, from the cursor to the box's near corner */
+const CURSOR_GAP = 16;
+/** Holds "-12.75" with room to spare, so typing a usual number never resizes the box. */
+const MIN_FIELD_CH = 7;
 
 /** Past the tip along the arrow, else beside the tip, else behind the base, whichever first fits in `bounds`,
  *  clamped when none does. `dir` runs from base to tip in px. */
@@ -196,6 +251,8 @@ export class DimInput {
     this.root.className = "dim-input";
     this.root.style.display = "none";
     document.body.appendChild(this.root);
+    // Field inputs stop their own keys, so this hears only the option buttons.
+    this.root.addEventListener("keydown", (e) => this.onOptionKey(e));
     window.addEventListener("pointerdown", this.boundForeignDown, true);
   }
 
@@ -262,7 +319,7 @@ export class DimInput {
     defs: DimFieldDef[],
     onCommit: (values: Record<string, number>) => void,
     onCancel?: () => void,
-    toggle?: DimToggleDef,
+    options?: DimOption | DimOption[],
     extra?: HTMLElement,
     onInput?: () => void,
   ) {
@@ -299,6 +356,7 @@ export class DimInput {
         tag,
         choice: def.choices?.chosen ?? null,
         userDriven: false,
+        lastGood: null,
       };
       this.paintName(field);
       if (def.choices) {
@@ -328,44 +386,50 @@ export class DimInput {
       this.root.appendChild(wrap);
 
       input.addEventListener("keydown", (e) => this.onKey(e, field));
+      // A click into a value the tool wrote selects it, so typing replaces it; the release would drop the selection.
+      let keepSelection = false;
+      input.addEventListener("pointerdown", () => {
+        keepSelection = !field.userDriven && document.activeElement !== input;
+      });
+      input.addEventListener("focus", () => {
+        if (keepSelection) input.select();
+      });
+      input.addEventListener("mouseup", (e) => {
+        if (keepSelection) e.preventDefault();
+        keepSelection = false;
+      });
       input.addEventListener("input", () => {
         field.userDriven = true; // typing freezes the field from cursor tracking
         field.typed = true;
-        if (this.typedProblem) this.setTypedProblem(null);
         wrap.classList.add("typed");
         this.sizeToContent(field);
         this.adoptTypedUnit(field);
         this.adoptTypedChoice(field);
+        const v = this.parse(field);
+        if (v !== null && !this.rangeProblem(field.def, v)) field.lastGood = v;
+        this.setTypedProblem(
+          this.fieldProblem(field) ?? this.fields.map((x) => this.fieldProblem(x)).find(Boolean) ?? null,
+        );
         this.onInput?.();
       });
       this.sizeToContent(field);
       return field;
     });
     if (extra) this.root.appendChild(extra);
-    // The tool's switch sits ahead of confirm and cancel: it changes what is about to be committed.
-    if (toggle) {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "dim-btn dim-toggle";
-      btn.title = toggle.title;
-      btn.textContent = toggle.label;
-      btn.classList.toggle("on", toggle.initial);
-      btn.addEventListener("pointerdown", (e) => {
-        e.preventDefault(); // never blur the input to press it
-        e.stopPropagation();
-        this.setToggle(!this.toggleOn);
-        toggle.onChange(this.toggleOn);
-      });
-      this.root.appendChild(btn);
-      this.toggleBtn = btn;
-      this.toggleOn = toggle.initial;
+    // The tool's options sit ahead of confirm and cancel: they change what is about to be committed.
+    const opts = options === undefined ? [] : Array.isArray(options) ? options : [options];
+    if (opts.length) {
+      const group = document.createElement("div");
+      group.className = "dim-opts";
+      for (const o of opts) group.appendChild(this.optionElement(o));
+      this.root.appendChild(group);
     }
     // Visible confirm and cancel for mouse-first work; pointerdown with preventDefault so they never blur the input.
     const ok = document.createElement("button");
-    ok.className = "dim-btn dim-ok";
+    ok.className = "dim-btn dim-ok dim-end";
     ok.title = "Confirm (Enter)";
     ok.setAttribute("aria-label", "Confirm");
-    ok.appendChild(iconElement("check", 13));
+    ok.appendChild(iconElement("check", 15));
     ok.addEventListener("pointerdown", (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -378,7 +442,7 @@ export class DimInput {
       no.className = "dim-btn dim-no";
       no.title = "Cancel (Esc)";
       no.setAttribute("aria-label", "Cancel");
-      no.appendChild(iconElement("close", 13));
+      no.appendChild(iconElement("close", 15));
       no.addEventListener("pointerdown", (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -394,13 +458,173 @@ export class DimInput {
     // Subscribed per showing, or a tool would inherit the last tool's refusal. onPreviewError fires at once, so a box
     // opening onto an already failing preview shows it.
     this.unsubscribeError = onPreviewError((m) => this.setProblem(m));
+    if (this.segmented.some((g) => g.def.segments.some((x) => x.key)))
+      window.addEventListener("keydown", this.boundSegmentKey, true);
+  }
+
+  private optionElement(o: DimOption): HTMLElement {
+    if (isSegmented(o)) {
+      const el = document.createElement("div");
+      el.className = "dim-seg";
+      el.dataset.option = o.name;
+      el.setAttribute("role", "radiogroup");
+      el.setAttribute("aria-label", o.title);
+      el.title = o.title;
+      const g: Segmented = { def: o, el, chosen: o.chosen, disabled: new Map() };
+      for (const seg of o.segments) {
+        const b = this.optionButton(seg.icon, seg.label, "", seg.text);
+        b.classList.add("dim-segment");
+        b.dataset.id = seg.id;
+        b.setAttribute("role", "radio");
+        this.onPress(b, () => this.pickSegment(g, seg.id));
+        el.appendChild(b);
+        if (seg.disabled) g.disabled.set(seg.id, seg.disabled);
+      }
+      this.segmented.push(g);
+      this.paintSegmented(g);
+      return el;
+    }
+    if (isAction(o)) {
+      const b = this.optionButton(o.icon, o.label, o.label);
+      b.classList.add("dim-action");
+      b.dataset.option = o.name;
+      this.onPress(b, o.onPress);
+      this.presses.set(b, o.onPress);
+      return b;
+    }
+    const b = this.optionButton(o.icon, o.label, o.title);
+    b.classList.add("dim-toggle");
+    b.classList.toggle("on", o.initial);
+    b.setAttribute("aria-pressed", String(o.initial));
+    const flip = () => {
+      this.setToggle(!this.toggleOn);
+      o.onChange(this.toggleOn);
+    };
+    this.onPress(b, flip);
+    this.presses.set(b, flip);
+    // The first switch is the one setToggle and its kin address.
+    if (!this.toggleBtn) {
+      this.toggleBtn = b;
+      this.toggleOn = o.initial;
+    }
+    return b;
+  }
+
+  /** The word stays in the button for screen readers and text checks; it shows only when there is no icon. */
+  private optionButton(icon: string | undefined, label: string, title: string, text?: string): HTMLButtonElement {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "dim-btn dim-opt";
+    b.title = title;
+    if (icon) {
+      b.setAttribute("aria-label", label);
+      b.appendChild(iconElement(icon, text ? 12 : 16));
+    } else b.classList.add("dim-worded");
+    if (icon && text) {
+      b.classList.add("dim-texted");
+      const t = document.createElement("span");
+      t.className = "dim-seg-text";
+      t.textContent = text;
+      t.setAttribute("aria-hidden", "true");
+      b.appendChild(t);
+    }
+    const word = document.createElement("span");
+    word.className = "dim-word";
+    word.textContent = label;
+    b.appendChild(word);
+    return b;
+  }
+
+  private onPress(b: HTMLElement, act: () => void) {
+    b.addEventListener("pointerdown", (e) => {
+      e.preventDefault(); // never blur the input to press it
+      e.stopPropagation();
+      act();
+    });
+  }
+
+  private segmented: Segmented[] = [];
+  /** What Space or Enter does on a switch or an action, the same as a press. */
+  private presses = new Map<HTMLElement, () => void>();
+
+  /** Roving tabindex: the chosen segment is the group's one Tab stop. */
+  private paintSegmented(g: Segmented) {
+    for (const b of g.el.querySelectorAll<HTMLElement>(".dim-segment")) {
+      const id = b.dataset.id!;
+      const seg = g.def.segments.find((x) => x.id === id)!;
+      const on = id === g.chosen;
+      const why = g.disabled.get(id);
+      b.classList.toggle("on", on);
+      b.classList.toggle("disabled", !!why);
+      b.setAttribute("aria-checked", String(on));
+      if (why) b.setAttribute("aria-disabled", "true");
+      else b.removeAttribute("aria-disabled");
+      b.tabIndex = on ? 0 : -1;
+      const name = seg.key ? `${seg.label} (${seg.key})` : seg.label;
+      b.title = why ? `${name}: ${why}` : name;
+    }
+  }
+
+  /** Greys a segment out with the reason in its tooltip, or frees it with null. Clicks and keys skip it. */
+  setSegmentDisabled(name: string, id: string, reason: string | null) {
+    const g = this.segmented.find((x) => x.def.name === name);
+    if (!g) return;
+    if (reason) g.disabled.set(id, reason);
+    else g.disabled.delete(id);
+    this.paintSegmented(g);
+  }
+
+  private pickSegment(g: Segmented, id: string) {
+    const why = g.disabled.get(id);
+    if (why) g.def.onBlocked?.(id, why);
+    if (g.chosen === id || why) return;
+    g.chosen = id;
+    this.paintSegmented(g);
+    g.def.onChoose(id);
+  }
+
+  /** Sets a segmented option without picking it. Does NOT call back, as with setToggle. */
+  setOption(name: string, id: string) {
+    const g = this.segmented.find((x) => x.def.name === name);
+    if (!g) return;
+    g.chosen = id;
+    this.paintSegmented(g);
+  }
+
+  optionOf(name: string): string | null {
+    return this.segmented.find((x) => x.def.name === name)?.chosen ?? null;
+  }
+
+  /** For an option that applies only to some picks, such as the direction on a hole's face. */
+  setOptionHidden(name: string, hidden: boolean) {
+    const el = this.root.querySelector<HTMLElement>(`[data-option="${name}"]`);
+    if (el) el.style.display = hidden ? "none" : "";
+  }
+
+  private boundSegmentKey = (e: KeyboardEvent) => this.onSegmentKey(e);
+
+  private onSegmentKey(e: KeyboardEvent) {
+    if (!this.active || e.ctrlKey || e.metaKey || e.repeat || isMenuKey(e)) return;
+    const t = e.target;
+    const typing = t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement;
+    if (typing ? !(e.altKey && this.ownsTarget(t)) : e.altKey) return;
+    // Alt turns e.key into another character on some layouts; the code still names the key.
+    const key = /^Digit\d$/.test(e.code) ? e.code.slice(5) : e.key;
+    for (const g of this.segmented) {
+      const seg = g.def.segments.find((x) => x.key === key);
+      if (!seg || g.el.style.display === "none") continue;
+      e.preventDefault();
+      e.stopPropagation();
+      this.pickSegment(g, seg.id);
+      return;
+    }
   }
 
   /** Judged only once the user has typed: a value the cursor wrote is the tool's own. */
   private fieldProblem(f: Field): string | null {
     if (f.hidden || !f.userDriven || f.def.free) return null;
     const raw = this.numberText(f).trim();
-    if (!raw) return null;
+    if (!raw || f.def.words?.test(raw)) return null;
     const v = this.parse(f);
     if (v === null) {
       const err = measureError(raw, f.unit);
@@ -453,11 +677,13 @@ export class DimInput {
   setToggle(on: boolean) {
     this.toggleOn = on;
     this.toggleBtn?.classList.toggle("on", on);
+    this.toggleBtn?.setAttribute("aria-pressed", String(on));
   }
 
   /** For a switch that steps through several states rather than two. */
   setToggleLabel(label: string) {
-    if (this.toggleBtn) this.toggleBtn.textContent = label;
+    const word = this.toggleBtn?.querySelector(".dim-word");
+    if (word) word.textContent = label;
   }
 
   /** For a switch that applies only once the tool learns more, such as an engine answer that lands later. */
@@ -491,11 +717,13 @@ export class DimInput {
     const tag = f.tag;
     tag.replaceChildren();
     if (f.def.icon) {
-      tag.appendChild(iconElement(f.def.icon, 12));
+      tag.appendChild(iconElement(f.def.icon, 14));
+      if (f.def.tag) tag.append(f.def.tag);
       tag.title = f.def.label;
     } else {
-      tag.textContent = f.def.label;
-      tag.removeAttribute("title");
+      tag.textContent = f.def.tag ?? f.def.label;
+      if (f.def.tag) tag.title = f.def.label;
+      else tag.removeAttribute("title");
     }
     if (f.def.choices) tag.appendChild(iconElement("caretDown", 10));
     f.input.setAttribute("aria-label", f.def.label);
@@ -544,12 +772,7 @@ export class DimInput {
       field.userDriven = true; // Tab locks the current field
       const problem = this.fieldProblem(field);
       if (problem) this.setTypedProblem(problem);
-      const shown = this.fields.filter((f) => !f.hidden || f === field);
-      const next = shown[(shown.indexOf(field) + 1) % shown.length];
-      if (next) {
-        next.input.focus();
-        next.input.select();
-      }
+      this.moveFocus(field.input, e.shiftKey);
     } else if (e.key === "Enter") {
       e.preventDefault();
       this.commit();
@@ -558,9 +781,60 @@ export class DimInput {
     e.stopPropagation(); // never let drawing shortcuts fire while typing
   }
 
+  /** The shown fields in order, then one stop per shown option: the chosen segment of a group, or the button. */
+  private tabStops(current: HTMLElement): HTMLElement[] {
+    const fields = this.fields.filter((f) => !f.hidden || f.input === current).map((f) => f.input);
+    const options: HTMLElement[] = [];
+    for (const el of this.root.querySelectorAll<HTMLElement>(".dim-opts > *")) {
+      if (el.style.display === "none") continue;
+      if (!el.classList.contains("dim-seg")) options.push(el);
+      else {
+        const stop = el.querySelector<HTMLElement>('.dim-segment[tabindex="0"]') ?? el.querySelector(".dim-segment");
+        if (stop) options.push(stop);
+      }
+    }
+    return [...fields, ...options];
+  }
+
+  private moveFocus(from: HTMLElement, back: boolean) {
+    const stops = this.tabStops(from);
+    const at = stops.indexOf(from);
+    const next = stops[(at + (back ? stops.length - 1 : 1)) % stops.length];
+    if (!next) return;
+    next.focus();
+    if (next instanceof HTMLInputElement) next.select();
+  }
+
+  private onOptionKey(e: KeyboardEvent) {
+    const b = e.target;
+    if (!(b instanceof HTMLButtonElement) || !this.root.contains(b)) return;
+    const group = b.classList.contains("dim-segment") ? this.segmented.find((g) => g.el.contains(b)) : undefined;
+    const arrows: Record<string, number> = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 };
+    if (e.key === "Tab") {
+      this.moveFocus(b, e.shiftKey);
+    } else if (group && e.key in arrows) {
+      const segs = [...group.el.querySelectorAll<HTMLElement>(".dim-segment")].filter(
+        (x) => !group.disabled.has(x.dataset.id!),
+      );
+      const from = segs.indexOf(b);
+      const next = segs[(from + arrows[e.key]! + segs.length) % segs.length];
+      if (!next) return;
+      this.pickSegment(group, next.dataset.id!);
+      next.focus();
+    } else if (group && e.key === " ") {
+      this.pickSegment(group, b.dataset.id!);
+    } else if (group && e.key === "Enter") {
+      this.commit();
+    } else if (!group && (e.key === " " || e.key === "Enter")) {
+      this.presses.get(b)?.();
+    } else return;
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
   /** Grows with its content so a formula fits; floored so it neither collapses empty nor twitches on short values. */
   private sizeToContent(f: Field) {
-    f.input.style.width = `${Math.max(5, f.input.value.length + 1)}ch`;
+    f.input.style.width = `${Math.max(MIN_FIELD_CH, f.input.value.length + 1)}ch`;
   }
 
   /** A unit in the text changes what the field shows: type "1 inch" into a mm field and the chip moves, the number
@@ -669,6 +943,7 @@ export class DimInput {
     const f = this.fields.find((x) => x.def.name === name);
     if (!f) return;
     f.input.value = String(f.def.kind === "count" ? Math.round(value) : toUnit(value, f.unit));
+    f.lastGood = null;
     f.userDriven = true;
     this.sizeToContent(f);
   }
@@ -678,6 +953,7 @@ export class DimInput {
     const f = this.fields.find((x) => x.def.name === name);
     if (!f) return;
     f.input.value = text;
+    f.lastGood = null;
     f.userDriven = true;
     this.sizeToContent(f);
   }
@@ -686,7 +962,9 @@ export class DimInput {
    *  recent, and otherwise the number beside the moving handle would go on reading the stale typed value. */
   takeOver(name: string) {
     const f = this.fields.find((x) => x.def.name === name);
-    if (f) f.userDriven = false;
+    if (!f) return;
+    f.userDriven = false;
+    f.lastGood = null;
   }
 
   /** Every field turns red, not one: the engine refuses a feature, not a field (pitch and angle together), and the
@@ -727,13 +1005,14 @@ export class DimInput {
     return !!f && f.userDriven;
   }
 
-  /** in MM (length fields converted from the display unit), or null when the text is no value or is refused */
+  /** in MM (length fields converted from the display unit). Null for an empty box or one of the field's words; typed
+   *  text that is no value reads as the last valid value typed, null when there is none. */
   getValue(name: string): number | null {
     const f = this.fields.find((x) => x.def.name === name);
     if (!f) return null;
     const v = this.parse(f);
-    if (v === null || (f.userDriven && this.rangeProblem(f.def, v))) return null;
-    return v;
+    if (v !== null && !(f.userDriven && this.rangeProblem(f.def, v))) return v;
+    return this.fieldProblem(f) ? f.lastGood : null;
   }
 
   /** Null for a count. */
@@ -747,9 +1026,22 @@ export class DimInput {
     return this.fields.find((x) => x.def.name === name)?.input.value ?? "";
   }
 
+  /** Below right of the point, flipped to its other side where the window ends, never over it; clamped into a
+   *  window too small for either side. The error line hangs on the side away from the point. */
   position(screenX: number, screenY: number) {
-    this.root.style.left = `${screenX + 16}px`;
-    this.root.style.top = `${screenY + 16}px`;
+    const { w, h } = this.naturalSize();
+    const side = (at: number, size: number, room: number) => {
+      const after = at + CURSOR_GAP;
+      const before = at - CURSOR_GAP - size;
+      if (after + size <= room) return { pos: after, flipped: false };
+      if (before >= 0) return { pos: before, flipped: true };
+      return { pos: Math.max(0, Math.min(after, room - size)), flipped: false };
+    };
+    const x = side(screenX, w, window.innerWidth);
+    const y = side(screenY, h, window.innerHeight);
+    this.root.style.left = `${Math.round(x.pos)}px`;
+    this.root.style.top = `${Math.round(y.pos)}px`;
+    this.root.classList.toggle("dim-above", y.flipped);
   }
 
   /** `dir` is the arrow from base to tip on screen; the box is kept inside `bounds`. */
@@ -760,6 +1052,7 @@ export class DimInput {
       h: Math.max(this.root.offsetHeight, p ? p.offsetTop + p.offsetHeight : 0),
     };
     const at = pastTip(tip, dir, size, bounds);
+    this.root.classList.remove("dim-above");
     this.root.style.left = `${Math.round(at.left)}px`;
     this.root.style.top = `${Math.round(at.top)}px`;
   }
@@ -776,11 +1069,14 @@ export class DimInput {
 
   positionBeside(model: ScreenRect, anchor: ScreenPoint, bounds: ScreenRect) {
     const at = placeBeside(model, anchor, this.naturalSize(), bounds);
+    this.root.classList.remove("dim-above");
     this.root.style.left = `${Math.round(at.left)}px`;
     this.root.style.top = `${Math.round(at.top)}px`;
   }
 
+  // Centred on the drawing itself, so the placing click can land under it: it must not take that click.
   positionCentred(screenX: number, screenY: number) {
+    this.setClickThrough(true);
     this.root.style.left = `${Math.round(screenX - this.root.offsetWidth / 2)}px`;
     this.root.style.top = `${Math.round(screenY - this.root.offsetHeight / 2)}px`;
   }
@@ -789,19 +1085,26 @@ export class DimInput {
     return this.active && this.fields.some((f) => f.typed && !f.hidden);
   }
 
+  /** Not the user's confirm, so text that is no value refuses it even where Enter would fall back. */
   confirmTyped(): boolean {
-    return this.commit();
+    return this.commit(false);
   }
 
-  private commit(): boolean {
+  /** On Enter or the confirm button a field whose text is no value commits its last typed valid value, still marked;
+   *  with none, or on any other confirm, it refuses. */
+  private commit(explicit = true): boolean {
+    let marked: string | null = null;
     for (const f of this.fields) {
       const problem = this.fieldProblem(f);
       if (!problem) continue;
+      marked ??= problem;
+      if (explicit && f.lastGood !== null) continue;
       this.setTypedProblem(problem);
       f.input.focus();
       f.input.select();
       return false;
     }
+    if (marked) this.setTypedProblem(marked);
     const out: Record<string, number> = {};
     for (const f of this.fields) {
       const v = this.getValue(f.def.name); // already mm-converted
@@ -817,6 +1120,10 @@ export class DimInput {
     // so this drops the pointer, not the DOM.
     this.toggleBtn = null;
     this.toggleOn = false;
+    this.segmented = [];
+    this.presses.clear();
+    this.root.classList.remove("dim-above");
+    window.removeEventListener("keydown", this.boundSegmentKey, true);
     this.active = false;
     shownBoxes.delete(this);
     this.closeMenu();

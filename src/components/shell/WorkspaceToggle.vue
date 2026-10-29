@@ -2,7 +2,7 @@
 // In the title bar, not the ribbon: the ribbon is a workspace's contents, and the title bar never scrolls.
 
 import { onMounted, onUnmounted, ref } from "vue";
-import Icon from "./Icon.vue";
+import Segmented from "../ui/Segmented.vue";
 import { onWorkspaceChange, setWorkspace, workspace, WORKSPACES } from "../../ui/workspace";
 import { useUiStore } from "../../stores/ui";
 
@@ -15,23 +15,25 @@ onMounted(() => {
   });
 });
 onUnmounted(() => off?.());
+
+const options = WORKSPACES.map((w) => ({
+  value: w.id,
+  label: w.label,
+  icon: w.icon,
+  tip: w.id === "render" ? "Render: materials, environment and camera" : "Model: the full width, every tool",
+  attrs: { "data-workspace": w.id },
+}));
 </script>
 
 <template>
   <!-- Hidden, not disabled, while a sketch is open: a sketch is its own mode with its own escape. -->
-  <div v-if="!ui.sketchActive" id="workspace-toggle" class="segmented" role="group" aria-label="Workspace">
-    <button
-      v-for="w in WORKSPACES"
-      :key="w.id"
-      type="button"
-      class="seg-btn"
-      :class="{ active: active === w.id }"
-      :data-workspace="w.id"
-      :aria-pressed="active === w.id"
-      :title="w.id === 'render' ? 'Render: materials, environment and camera' : 'Model: the full width, every tool'"
-      @click="setWorkspace(w.id)"
-    >
-      <Icon :name="w.icon" :size="14" /><span>{{ w.label }}</span>
-    </button>
-  </div>
+  <Segmented
+    v-if="!ui.sketchActive"
+    id="workspace-toggle"
+    :model-value="active"
+    :options="options"
+    label="Workspace"
+    size="sm"
+    @update:model-value="setWorkspace"
+  />
 </template>

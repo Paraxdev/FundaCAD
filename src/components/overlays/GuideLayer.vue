@@ -10,6 +10,7 @@ import type { GuideState, StepState } from "../../ui/guide/guideSession";
 import { placeBubble, ringRect, type Placed } from "../../ui/guide/placement";
 import { modelShape, type ModelShape } from "../../ui/guide/probe";
 import type { Box } from "../../ui/controlRefs";
+import Button from "../ui/Button.vue";
 
 const engine = useEngine();
 const guide = engine.guide;
@@ -38,7 +39,7 @@ let scrolledFor = -1;
 let shapeFor: { seq: number; build: unknown; shape: ModelShape | Error } | null = null;
 const RETRY_FRAMES = 30;
 
-const AVOID = ".modal-panel, .choice-card, .cmdk-card";
+const AVOID = ".modal-panel, .cmdk-card";
 
 function sameBox(a: Box | null, b: Box | null): boolean {
   return !!a && !!b && a.left === b.left && a.top === b.top && a.width === b.width && a.height === b.height;
@@ -218,8 +219,8 @@ const counter = computed(() =>
         <p class="guide-caption">{{ step.caption }}</p>
         <p v-if="hint" class="guide-hint">{{ hint }}</p>
         <div class="guide-actions">
-          <button id="guide-stop" type="button" class="btn" @click="guide.stop()">Stop</button>
-          <button id="guide-next" type="button" class="btn btn-primary" @click="guide.next()">Next</button>
+          <Button id="guide-stop" @click="guide.stop()">Stop</Button>
+          <Button id="guide-next" variant="primary" @click="guide.next()">Next</Button>
         </div>
       </div>
     </div>

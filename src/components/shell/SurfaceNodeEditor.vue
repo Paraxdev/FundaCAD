@@ -718,16 +718,16 @@ const pending = computed(() => {
 }
 .ne-node {
   position: absolute;
-  background: var(--glass-sheen), var(--float-bg-solid);
-  border: 1px solid var(--float-line);
+  background: var(--float-bg-solid);
+  border: 1px solid transparent;
   border-radius: var(--float-tile-radius);
   corner-shape: squircle;
-  box-shadow: var(--glass-inset), var(--float-shadow);
+  box-shadow: var(--float-shadow);
   font-size: 12px;
   user-select: none;
 }
 .ne-node.ne-output {
-  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--float-bg-solid));
 }
 .ne-node-head {
   padding: 4px 8px;
@@ -766,7 +766,7 @@ const pending = computed(() => {
   flex: 1;
   background: rgba(255, 255, 255, 0.04);
   color: var(--text);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid transparent;
   border-radius: var(--float-chip-radius);
   corner-shape: squircle;
   font-size: 11px;
@@ -775,7 +775,7 @@ const pending = computed(() => {
 .ne-ramp-bar {
   height: 12px;
   border-radius: var(--r-sm);
-  border: 1px solid var(--line);
+  border: 1px solid transparent;
   margin-bottom: 2px;
 }
 .ne-stop {
@@ -882,7 +882,7 @@ const pending = computed(() => {
   font-size: 11px;
   color: var(--text-dim);
   background: var(--float-bg-solid);
-  border: 1px solid var(--float-line);
+  border: 1px solid transparent;
   border-radius: var(--float-chip-radius);
   corner-shape: squircle;
   padding: 1px 6px;
@@ -891,7 +891,7 @@ const pending = computed(() => {
 .ne-hint {
   font-size: 11px;
   color: var(--text-dim);
-  border: 1px solid var(--float-line);
+  border: 1px solid transparent;
   border-radius: var(--float-chip-radius);
   corner-shape: squircle;
   padding: 1px 6px;
@@ -907,13 +907,13 @@ const pending = computed(() => {
   min-width: 130px;
   max-height: 70vh;
   overflow-y: auto;
-  background: var(--glass-sheen), var(--float-bg-solid);
+  background: var(--float-bg-solid);
   -webkit-backdrop-filter: var(--float-blur);
   backdrop-filter: var(--float-blur);
-  border: 1px solid var(--float-line);
+  border: 1px solid transparent;
   border-radius: var(--float-tile-radius);
   corner-shape: squircle;
-  box-shadow: var(--glass-inset), var(--float-shadow);
+  box-shadow: var(--float-shadow);
   padding: 5px;
 }
 .ne-addhead {

@@ -70,4 +70,22 @@ describe("a drawn model behind its document", () => {
       landed: false,
     });
   });
+
+  it("counts each load that drops the model, a replacing one too, and no edit", async () => {
+    const { store, land } = rig();
+    await land(false);
+    const counts = [store.loadCount];
+    store.updateFeature("a", { length: 12.5 } as never);
+    await land();
+    counts.push(store.loadCount);
+    store.loadDocument({ parameters: {}, features: [box("a", 30)] }, { replace: true });
+    counts.push(store.loadCount);
+    store.loadDocument({ parameters: {}, features: [box("c", 7)] }, { replace: true });
+    counts.push(store.loadCount);
+    store.loadDocument({ parameters: {}, features: [box("d", 41)] });
+    counts.push(store.loadCount);
+    await land();
+    const c0 = counts[0]!;
+    expect(counts).toEqual([c0, c0, c0 + 1, c0 + 2, c0 + 3]);
+  });
 });

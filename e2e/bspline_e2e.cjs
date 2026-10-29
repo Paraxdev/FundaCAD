@@ -384,7 +384,7 @@ const check = (name, ok, detail) => {
       .map((x) => ({
         text: x.textContent.trim(),
         disabled: x.classList.contains("disabled"),
-        checked: !!x.querySelector(".ctx-check *"),
+        checked: !!x.querySelector(".ui-menu-check *"),
       })),
   );
   await page.screenshot({ path: path.join(OUT, "bs-9-degree-menu.png") });

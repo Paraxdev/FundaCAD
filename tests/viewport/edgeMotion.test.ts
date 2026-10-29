@@ -226,6 +226,26 @@ describe("the edge level rule under a GPU queue a few frames deep", () => {
     ]);
   });
 
+  it("keeps thin when the first thin frame built the batches, leaving out the fat frames still in flight", () => {
+    const r = new EdgeMotionRule();
+    const modes = [r.gestureStart(PLATES, 0)];
+    let now = 0;
+    for (let k = 1; k <= 36; k++) {
+      if (modes.at(-1) === "thin" && modes.at(-2) !== "thin") r.skipNext();
+      const p = modes[Math.max(0, k - 4)] === "thin" ? THIN : FAT;
+      now += p;
+      modes.push(r.sample(p, now));
+    }
+    expect(modes.map((m) => m[0]).join("")).toBe("f".repeat(8) + "t".repeat(29));
+  });
+
+  it("leaves free queue slots out of the first gesture's fat windows, so the thin frames are held to the real fat frame", () => {
+    // The container run's first orbit: [708, 9, 584, 636], [1297, 15, 612, 6] took the fat frame for 313 ms, and
+    // thin frames of 214 to 283 ms failed to beat 70 % of it.
+    const modes = lagged(new EdgeMotionRule(), [FAT, 9, FAT, FAT, FAT, 15, FAT, 6], 40, 0);
+    expect(modes).toMatch(/^f+t+$/);
+  });
+
   it("forgets the fat frame with the model", () => {
     const r = learnThin();
     expect(gesture(r, { ...PLATES, segments: 20_000 }, [12, 12, 12, 12, ...Array(8).fill(FAT)], 60_000)).toEqual([

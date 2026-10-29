@@ -2,7 +2,7 @@
 // Export hands the engine a path from the save dialog, so the file never round-trips through the webview.
 
 import { suggestedSavePath } from "./saveFolder";
-import type { CarriedSection, DocumentStore } from "../document/store";
+import type { CarriedSection, DocumentStore, GivenUp } from "../document/store";
 import { asFeature } from "../types";
 import type { GeometryBackend } from "../geometry/client";
 import type { CadDocument, ExportFormat, Feature, ImportFormat, PlaneDef } from "../types";
@@ -21,6 +21,7 @@ import {
   saveExportSettings,
   type FlatSource,
 } from "./exportSettings";
+import { labelledBodies } from "../ui/bodyLabels";
 import { buildBodyTree, importTrees } from "../ui/browserTree";
 import { referencedGeometry } from "../document/versions";
 import { hashShapedStrings } from "../document/geometryRefs";
@@ -83,19 +84,23 @@ async function writeContainer(store: DocumentStore, path: string): Promise<strin
 
 // The file holds the document as it was at `edits`: a change since is not in it, so it stays unsaved and its snapshot
 // stays the one that has it.
-function savedAs(store: DocumentStore, path: string, edits: number) {
+function savedAs(store: DocumentStore, path: string, edits: number, swaps: number) {
+  if (store.untitledSwapCount !== swaps) return;
   const whole = store.editCount === edits;
   store.markSaved(path, whole);
   noteRecent(path);
   if (whole) void clearRecovery(path);
 }
 
-/** Save: write to the current path if known, else behave like Save As. */
-export async function saveDocument(store: DocumentStore) {
+/** Save: write to the current path if known, else behave like Save As. `beforeWrite` runs once the path is known,
+ *  so a cancelled dialog runs nothing. */
+export async function saveDocument(store: DocumentStore, beforeWrite?: () => void) {
   if (isTauri() && store.filePath) {
     const session = store.session;
     const path = store.filePath;
+    beforeWrite?.();
     const edits = store.editCount;
+    const swaps = store.untitledSwapCount;
     const err = await writeContainer(store, path);
     if (err) {
       await reportError(`Couldn't save ${path}: ${err}`);
@@ -103,15 +108,16 @@ export async function saveDocument(store: DocumentStore) {
     }
     // The file holds the document as it was when the save began, so another document opened meanwhile is not saved.
     if (!session.alive) return;
-    savedAs(store, path, edits);
+    savedAs(store, path, edits, swaps);
   } else {
-    await saveDocumentAs(store);
+    await saveDocumentAs(store, beforeWrite);
   }
 }
 
 /** Save As: always prompt for a path (or download in a plain browser). */
-export async function saveDocumentAs(store: DocumentStore) {
+export async function saveDocumentAs(store: DocumentStore, beforeWrite?: () => void) {
   const session = store.session;
+  const swaps = store.untitledSwapCount;
   if (isTauri()) {
     const { save } = await import("@tauri-apps/plugin-dialog");
     const path = await save({
@@ -124,8 +130,9 @@ export async function saveDocumentAs(store: DocumentStore) {
         isDocumentExt(store.fileName.split(".").pop()?.toLowerCase()) ? store.fileName : `${store.fileName}.${DOC_EXT}`,
       ),
     });
-    // A path picked for a document that was closed meanwhile is not where the next one goes.
-    if (path && session.alive) {
+    // A path picked for a document that was closed or swapped for an assistant's meanwhile is not where the next one goes.
+    if (path && session.alive && store.untitledSwapCount === swaps) {
+      beforeWrite?.();
       const edits = store.editCount;
       const err = await writeContainer(store, path);
       if (err) {
@@ -133,11 +140,12 @@ export async function saveDocumentAs(store: DocumentStore) {
         return;
       }
       if (!session.alive) return;
-      savedAs(store, path, edits);
+      savedAs(store, path, edits, swaps);
     }
   } else {
     // Reuse the settled name so a second Save As downloads "Untitled.funda" again, not "Untitled.funda.funda".
     const name = store.filePath ? store.fileName : `${store.fileName}.${DOC_EXT}`;
+    beforeWrite?.();
     const built = await browserDocumentText(store);
     if ("refused" in built) {
       await reportError(built.refused);
@@ -146,7 +154,7 @@ export async function saveDocumentAs(store: DocumentStore) {
     if (!session.alive) return;
     downloadText(name, built.text);
     // No real path, but without this the title bar read "Untitled*" forever, as if the save had failed.
-    store.markSaved(name);
+    if (store.untitledSwapCount === swaps) store.markSaved(name);
   }
 }
 
@@ -259,22 +267,25 @@ export async function openDocument(
   },
 ) {
   if (isTauri()) {
-    // A file picked for a document closed while the dialog was up is not imported into the next one.
+    // A file picked for a document closed while the dialog was up is not imported into the next one. Only the dialog
+    // counts as an import here, so no doc_set replaces its document, and Home still sees a blank one as blank.
     const session = store.session;
     const { open } = await import("@tauri-apps/plugin-dialog");
-    const path = await open({
-      multiple: false,
-      // MCAD-style: Open takes our document AND mesh/CAD files (imported as a
-      // body), routed by extension below, so users can just "open" an STL.
-      filters: [
-        {
-          name: "All supported",
-          extensions: dialogExts([DOC_EXT, BINARY_DOC_EXT, ...LEGACY_DOC_EXTS, "json", ...IMPORT_EXTS]),
-        },
-        { name: "FundaCAD Document", extensions: dialogExts([DOC_EXT, BINARY_DOC_EXT, ...LEGACY_DOC_EXTS, "json"]) },
-        { name: "Mesh / CAD", extensions: dialogExts(IMPORT_EXTS) },
-      ],
-    });
+    const path = await store.importing(() =>
+      open({
+        multiple: false,
+        // MCAD-style: Open takes our document AND mesh/CAD files (imported as a
+        // body), routed by extension below, so users can just "open" an STL.
+        filters: [
+          {
+            name: "All supported",
+            extensions: dialogExts([DOC_EXT, BINARY_DOC_EXT, ...LEGACY_DOC_EXTS, "json", ...IMPORT_EXTS]),
+          },
+          { name: "FundaCAD Document", extensions: dialogExts([DOC_EXT, BINARY_DOC_EXT, ...LEGACY_DOC_EXTS, "json"]) },
+          { name: "Mesh / CAD", extensions: dialogExts(IMPORT_EXTS) },
+        ],
+      }),
+    );
     if (typeof path !== "string") return;
     const ext = path.split(".").pop()?.toLowerCase();
     if (isDocumentExt(ext)) {
@@ -300,11 +311,11 @@ export async function openDocumentText(
   let unpublished: string | null;
   try {
     unpublished = await publishEmbeddedGeometry(store, text);
-    if (!(await mayStillReplace(store, ticket, name))) return "dropped";
+    if (!(await mayStillReplace(store, ticket, name))) return settle(store, ticket, "dropped");
     store.load(text);
   } catch (e) {
     await reportUnreadable(e);
-    return "unreadable";
+    return settle(store, ticket, "unreadable");
   }
   // No real path, but the name lets the title bar show what is open and drop the unsaved marker.
   store.markSaved(name);
@@ -341,9 +352,23 @@ export async function openDocumentBytes(
     };
   } catch (e) {
     await reportError(`Couldn't open ${file.name}: ${errMsg(e)}`);
-    return "unreadable";
+    return settle(store, ticket, "unreadable");
   }
-  return finishOpen(store, file.name, opened, geometry, null, ticket);
+  return settle(store, ticket, await finishOpen(store, file.name, opened, geometry, null, ticket));
+}
+
+/** A template is read like a file, so a New or an edit made meanwhile is kept the same way. */
+export async function openTemplate(
+  store: DocumentStore,
+  name: string,
+  read: () => Promise<string>,
+): Promise<OpenOutcome> {
+  const ticket = openTicket(store);
+  const text = await read();
+  if (!(await mayStillReplace(store, ticket, name))) return settle(store, ticket, "dropped");
+  store.load(text);
+  store.markOpenedWithoutPath(name);
+  return "ok";
 }
 
 /** "unreadable": the file is gone or corrupt, callers may forget it. "newerFormat": this build is too old, and
@@ -354,11 +379,18 @@ export type OpenOutcome = "ok" | "unreadable" | "newerFormat" | "dropped";
 interface OpenTicket {
   op: OpenOp;
   edits: number;
+  given: GivenUp | null;
 }
 
 // Taken when the user has agreed to replace the open document, before the file is read.
 function openTicket(store: DocumentStore): OpenTicket {
-  return { op: store.sessions.opening(), edits: store.editCount };
+  return { op: store.sessions.opening(), edits: store.userEditCount, given: store.givenUpMark };
+}
+
+// An open that did not land kept the document, so the Discard it asked for no longer drops its crash snapshot.
+function settle(store: DocumentStore, ticket: OpenTicket, outcome: OpenOutcome): OpenOutcome {
+  if (outcome !== "ok") store.revokeGivenUp(ticket.given);
+  return outcome;
 }
 
 // Right before the swap: what the user agreed to replace must still be what is open (rm4abwsm).
@@ -370,8 +402,8 @@ async function mayStillReplace(store: DocumentStore, ticket: OpenTicket, name: s
       toast(`${name} was not opened, another document was started while it was read.`, { kind: "info" });
       return false;
     }
-    if (store.editCount === ticket.edits || !store.dirty) return true;
-    ticket.edits = store.editCount;
+    if (store.userEditCount === ticket.edits || !store.dirty) return true;
+    ticket.edits = store.userEditCount;
     const { choose } = await import("../ui/choice");
     const pick = await choose(
       `${store.fileName} changed while ${name} was read. Discard those changes and open ${name}?`,
@@ -381,7 +413,7 @@ async function mayStillReplace(store: DocumentStore, ticket: OpenTicket, name: s
       ],
     );
     if (pick !== "discard") return false;
-    store.markGivenUp();
+    ticket.given = store.markGivenUp();
   }
 }
 
@@ -463,9 +495,9 @@ export async function openDocumentAtPath(
     // container format, a damaged archive, geometry that does not match its
     // manifest), so pass them through rather than wrapping them in ours.
     await reportError(`Couldn't open ${base}: ${errMsg(e)}`);
-    return "unreadable";
+    return settle(store, ticket, "unreadable");
   }
-  return finishOpen(store, base, opened, geometry, path, ticket);
+  return settle(store, ticket, await finishOpen(store, base, opened, geometry, path, ticket));
 }
 
 interface RustOpened {
@@ -558,12 +590,15 @@ export function sketchFlatSource(store: DocumentStore, sketchId: string): FlatSo
 
 /** File, Export: the selected bodies, or a selected sketch or flat face for DXF and SVG. */
 export async function exportSelection(store: DocumentStore, geometry: GeometryBackend, viewport: ExportViewport) {
-  const { useSelectionStore } = await import("../stores/selection");
+  const { useSelectionStore, pickedFeatureCount } = await import("../stores/selection");
+  const sel = useSelectionStore();
+  // Several picked rows have no one sketch to draw.
+  const several = pickedFeatureCount(sel.rows, store.document.features) > 1;
   return exportModel(
     store,
     geometry,
     viewport.selectionBodyIds(),
-    flatSourceOf(store, viewport, useSelectionStore().featureId),
+    several ? null : flatSourceOf(store, viewport, sel.featureId),
   );
 }
 
@@ -579,7 +614,7 @@ export async function exportModel(
   // The dialogs wait on the user; a document closed meanwhile is not exported, nor is the one opened after it.
   const session = store.session;
   const built = store.buildState.result?.bodies ?? [];
-  const bodies = built.map((b) => ({ id: b.id, name: store.bodyName(b.id) ?? b.name }));
+  const bodies = labelledBodies(store);
   const docName = store.fileName === "Untitled" ? "" : store.fileName.replace(/\.[^.]+$/, "");
   const { groups } = buildBodyTree(built, importTrees(store.document), store.bodyElements, store.bodyElementMap());
   const start = exportScopeFromSelection(selected, bodies, groups, docName);
@@ -759,34 +794,37 @@ export async function importModel(store: DocumentStore, geometry: GeometryBacken
   }
   const session = store.session;
   const { open } = await import("@tauri-apps/plugin-dialog");
-  const path = await open({
-    multiple: false,
-    filters: [
-      { name: "All supported", extensions: dialogExts(IMPORT_EXTS) },
-      { name: "STL", extensions: dialogExts(["stl"]) },
-      { name: "3MF", extensions: dialogExts(["3mf"]) },
-      { name: "STEP", extensions: dialogExts(["step", "stp", "stpz", "gz"]) },
-      { name: "IGES", extensions: dialogExts(["iges", "igs"]) },
-      { name: "BREP", extensions: dialogExts(["brep"]) },
-      { name: "OCCT XBF", extensions: dialogExts(["xbf"]) },
-      { name: "FreeCAD", extensions: dialogExts(["fcstd"]) },
-      { name: "Rhino 3DM", extensions: dialogExts(["3dm"]) },
-      { name: "IFC (buildings)", extensions: dialogExts(["ifc"]) },
-      { name: "DXF (AutoCAD)", extensions: dialogExts(["dxf"]) },
-      { name: "SVG (drawing)", extensions: dialogExts(["svg"]) },
-      { name: "OBJ", extensions: dialogExts(["obj"]) },
-      { name: "PLY", extensions: dialogExts(["ply"]) },
-      { name: "OFF", extensions: dialogExts(["off"]) },
-      { name: "AMF", extensions: dialogExts(["amf"]) },
-      { name: "glTF", extensions: dialogExts(["glb", "gltf"]) },
-      { name: "VRML", extensions: dialogExts(["wrl", "wrz"]) },
-      { name: "X3D", extensions: dialogExts(["x3d", "x3dz"]) },
-      { name: "FBX (Maya, 3ds Max)", extensions: dialogExts(["fbx"]) },
-      { name: "3DS (old 3ds Max)", extensions: dialogExts(["3ds"]) },
-    ],
+  // Counted as an import from the dialog on, so a doc_set cannot replace the document the picked file lands in.
+  await store.importing(async () => {
+    const path = await open({
+      multiple: false,
+      filters: [
+        { name: "All supported", extensions: dialogExts(IMPORT_EXTS) },
+        { name: "STL", extensions: dialogExts(["stl"]) },
+        { name: "3MF", extensions: dialogExts(["3mf"]) },
+        { name: "STEP", extensions: dialogExts(["step", "stp", "stpz", "gz"]) },
+        { name: "IGES", extensions: dialogExts(["iges", "igs"]) },
+        { name: "BREP", extensions: dialogExts(["brep"]) },
+        { name: "OCCT XBF", extensions: dialogExts(["xbf"]) },
+        { name: "FreeCAD", extensions: dialogExts(["fcstd"]) },
+        { name: "Rhino 3DM", extensions: dialogExts(["3dm"]) },
+        { name: "IFC (buildings)", extensions: dialogExts(["ifc"]) },
+        { name: "DXF (AutoCAD)", extensions: dialogExts(["dxf"]) },
+        { name: "SVG (drawing)", extensions: dialogExts(["svg"]) },
+        { name: "OBJ", extensions: dialogExts(["obj"]) },
+        { name: "PLY", extensions: dialogExts(["ply"]) },
+        { name: "OFF", extensions: dialogExts(["off"]) },
+        { name: "AMF", extensions: dialogExts(["amf"]) },
+        { name: "glTF", extensions: dialogExts(["glb", "gltf"]) },
+        { name: "VRML", extensions: dialogExts(["wrl", "wrz"]) },
+        { name: "X3D", extensions: dialogExts(["x3d", "x3dz"]) },
+        { name: "FBX (Maya, 3ds Max)", extensions: dialogExts(["fbx"]) },
+        { name: "3DS (old 3ds Max)", extensions: dialogExts(["3ds"]) },
+      ],
+    });
+    if (typeof path !== "string" || !session.alive) return;
+    await importPath(store, geometry, path);
   });
-  if (typeof path !== "string" || !session.alive) return;
-  await importPath(store, geometry, path);
 }
 
 /** The most recently cancelled import's path, so a retry is one click. Session state only, never in the document. */

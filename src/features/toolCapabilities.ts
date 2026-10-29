@@ -25,6 +25,7 @@ export type ToolId =
   | "move"
   | "pattern-linear"
   | "pattern-circular"
+  | "pattern-rect"
   | "mirror"
   | "boolean-union"
   | "boolean-subtract"
@@ -68,6 +69,7 @@ export const TOOL_CAPABILITIES: Record<ToolId, ToolCapability> = {
   // that made it, so a hole's wall patterns the hole (features/patternSources.ts).
   "pattern-linear": { label: "Linear Pattern", consumes: ["body", "face"], source: "selection" },
   "pattern-circular": { label: "Circular Pattern", consumes: ["body", "face"], source: "selection" },
+  "pattern-rect": { label: "Rect Pattern", consumes: ["body", "face"], source: "selection" },
   mirror: { label: "Mirror", consumes: ["body"], source: "selection" },
   // The first selected body is the one kept, so Subtract has a direction without asking.
   "boolean-union": { label: "Union", consumes: ["body"], source: "selection", min: 2 },

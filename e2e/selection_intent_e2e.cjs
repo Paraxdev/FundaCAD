@@ -293,7 +293,7 @@ const check = (name, ok, detail) => {
       const edge = await page.evaluate(() => ({
         edges: window.viewport.selectedEdgeLines().length,
         bodies: window.viewport.getSelectedBodies().length,
-        menu: !!document.querySelector(".context-menu"),
+        menu: !!document.querySelector(".ctx-item"),
       }));
       check(
         "a click right on an edge takes the edge, not the body",

@@ -13,9 +13,11 @@ pub mod ws;
 pub use doc_state::DocState;
 pub use supervise::{Budget, Clocks};
 
-use fundacad_protocol::{envelope, import_stage, send_reply, CancelToken, JobResult, Limits, Message, ReplyOptions};
+use fundacad_protocol::{
+    build_phase, envelope, import_stage, send_reply, CancelToken, JobResult, Limits, Message, ReplyOptions,
+};
 use serde_json::{json, Map, Value};
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, VecDeque};
 use std::io;
 use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
 use std::sync::mpsc;
@@ -53,6 +55,7 @@ pub trait Outbox: Send + Sync + 'static {
 /// What a running job reports, read by the progress ticker.
 #[derive(Debug, Default)]
 pub struct Progress {
+    phase: AtomicI64,
     feature: AtomicI64,
     meshed: AtomicI64,
     mesh_total: AtomicI64,
@@ -63,16 +66,33 @@ pub struct Progress {
 }
 
 impl Progress {
+    /// Feature `index` is running.
     pub fn feature(&self, index: i64) {
         self.feature.store(index, Ordering::Relaxed);
-        self.tick();
+        self.enter(build_phase::FEATURE);
     }
 
-    /// Meshing phase: `meshed` of `total` bodies. (-1, -1) leaves it.
+    /// Any phase but meshing, which [`Progress::meshing`] enters.
+    pub fn phase(&self, phase: i64) {
+        self.enter(phase);
+    }
+
+    /// Meshing phase: `meshed` of `total` bodies that really need meshing.
     pub fn meshing(&self, meshed: i64, total: i64) {
-        self.feature.store(-1, Ordering::Relaxed);
         self.meshed.store(meshed, Ordering::Relaxed);
         self.mesh_total.store(total, Ordering::Relaxed);
+        self.enter(build_phase::MESHING);
+    }
+
+    fn enter(&self, phase: i64) {
+        if phase != build_phase::FEATURE {
+            self.feature.store(-1, Ordering::Relaxed);
+        }
+        if phase != build_phase::MESHING {
+            self.meshed.store(-1, Ordering::Relaxed);
+            self.mesh_total.store(-1, Ordering::Relaxed);
+        }
+        self.phase.store(phase, Ordering::Relaxed);
         self.tick();
     }
 
@@ -96,6 +116,7 @@ impl Progress {
     }
 
     fn reset(&self) {
+        self.phase.store(build_phase::PREPARING, Ordering::Relaxed);
         self.feature.store(-1, Ordering::Relaxed);
         self.meshed.store(-1, Ordering::Relaxed);
         self.mesh_total.store(-1, Ordering::Relaxed);
@@ -267,15 +288,17 @@ fn ends(ended: &[Ended], client: u64, doc: &str) -> bool {
     ended.iter().any(|(c, d)| *c == client && d.as_deref().map_or(true, |d| d == doc))
 }
 
-/// `owed` carries a release the jobs could not make yet, until it is made or a document holds something again.
+/// `owed` carries a release the jobs could not make yet, until it is made or a named document holds something again.
+/// A client that names no document (the MCP's live rebuild) never ends one, so it never keeps the caches held.
 fn forget_ended<J: Jobs>(pool: &Pool<J>, jobs: &mut J, docs: &mut Docs, owed: &mut bool) {
     let ended = std::mem::take(&mut *lock(&pool.ended));
+    let unnamed = |docs: &Docs| docs.keys().all(|(_, doc)| doc.is_empty());
     if !ended.is_empty() {
         docs.retain(|(client, doc), held| held.holds() && !ends(&ended, *client, doc));
-        *owed = docs.is_empty();
+        *owed = unnamed(docs);
     }
     if *owed {
-        *owed = docs.is_empty() && !jobs.release();
+        *owed = unnamed(docs) && !jobs.release();
     }
 }
 
@@ -306,8 +329,8 @@ pub struct Engine {
     /// Locked before `running` wherever both are held.
     waiting: Arc<Mutex<Vec<Waiting>>>,
     ended: Arc<Mutex<Vec<Ended>>>,
-    /// Documents a client ended, whose late requests are answered cancelled instead of run.
-    gone: Mutex<HashSet<(u64, String)>>,
+    /// The documents clients ended last, whose late requests are answered cancelled instead of run.
+    gone: Mutex<VecDeque<(u64, String)>>,
     next_ticket: AtomicU64,
     out: Arc<dyn Outbox>,
     next_client: AtomicU64,
@@ -421,7 +444,7 @@ impl Engine {
             }
             op => {
                 let doc = doc_of(&req);
-                if !doc.is_empty() && lock(&self.gone).contains(&(client, doc.clone())) {
+                if !doc.is_empty() && lock(&self.gone).iter().any(|(c, d)| *c == client && *d == doc) {
                     reply(envelope::cancelled(&id));
                     return;
                 }
@@ -503,8 +526,10 @@ impl Engine {
         let hit = |c: u64, d: &str| c == client && doc.map_or(true, |x| x == d);
         let mut waiting = lock(&self.waiting);
         let mut ended = 0;
+        let mut docs: Vec<String> = vec![];
         if let Some(r) = lock(&self.running).as_ref().filter(|r| hit(r.client, &r.doc)) {
             r.cancel.cancel();
+            docs.push(r.doc.clone());
             ended += 1;
         }
         let (withdrawn, kept): (Vec<Waiting>, Vec<Waiting>) =
@@ -517,16 +542,34 @@ impl Engine {
                 let _ = w.out.send(&mut std::iter::once(Message::Text(envelope::cancelled(&w.id))));
             }
         }
-        match doc {
-            Some(d) => {
-                lock(&self.gone).insert((client, d.to_owned()));
+        let mut gone = lock(&self.gone);
+        match (doc, answer) {
+            (Some(d), _) => remember_gone(&mut gone, client, d),
+            (None, true) => {
+                for d in docs.iter().chain(withdrawn.iter().map(|w| &w.doc)) {
+                    remember_gone(&mut gone, client, d);
+                }
             }
-            None => lock(&self.gone).retain(|(c, _)| *c != client),
+            (None, false) => gone.retain(|(c, _)| *c != client),
         }
+        drop(gone);
         lock(&self.ended).push((client, doc.map(str::to_owned)));
         let _ = self.jobs.send(Work::End);
         ended
     }
+}
+
+/// Enough for every document a session closes before a late request of one arrives.
+const GONE_KEPT: usize = 64;
+
+fn remember_gone(gone: &mut VecDeque<(u64, String)>, client: u64, doc: &str) {
+    if doc.is_empty() || gone.iter().any(|(c, d)| *c == client && d == doc) {
+        return;
+    }
+    if gone.len() >= GONE_KEPT {
+        gone.pop_front();
+    }
+    gone.push_back((client, doc.to_owned()));
 }
 
 /// One connection's handle on a shared [`Engine`].
@@ -741,8 +784,9 @@ fn spawn_watchdog(
             }
             let p = &job.progress;
             let frame = if job.frames == Frames::Building {
-                envelope::building(
+                envelope::building_in(
                     &job.id,
+                    p.phase.load(Ordering::Relaxed),
                     p.feature.load(Ordering::Relaxed),
                     p.meshed.load(Ordering::Relaxed),
                     p.mesh_total.load(Ordering::Relaxed),

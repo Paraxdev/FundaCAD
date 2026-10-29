@@ -43,7 +43,7 @@ const PLANE_AT: Record<number, PlanePickTarget> = {
   180: { kind: "face", spec: ROUND.def, face: ROUND },
 };
 
-function rig(bodyIds = ["body1", "body2", "body3"]) {
+function rig(bodyIds = ["body1", "body2", "body3"], names: Record<string, string> = {}) {
   const canvas = document.createElement("canvas");
   document.body.appendChild(canvas);
   const log = {
@@ -93,7 +93,7 @@ function rig(bodyIds = ["body1", "body2", "body3"]) {
   const addFeatures = vi.fn();
   const store = {
     document: { features: [{ id: "f5", type: "datumPlane", plane: DATUM, name: "Slant" }] },
-    buildState: { result: { bodies: bodyIds.map((id) => ({ id, name: id === "body3" ? "Pin" : id })) } },
+    buildState: { result: { bodies: bodyIds.map((id) => ({ id, name: names[id] ?? (id === "body3" ? "Pin" : id) })) } },
     addFeatures,
     bodyName: (id: string) => (id === "body2" ? "Bracket" : undefined),
   } as unknown as DocumentStore;
@@ -331,6 +331,12 @@ describe("picking", () => {
     const r = rig();
     r.tool.start(["body1", "body2", "body3", "ghost"], r.done);
     expect(panel()!.fields[0].items).toEqual(["body1", "Bracket", "Pin", "ghost"]);
+  });
+
+  it("numbers bodies that share a built name in build order", () => {
+    const r = rig(["body4", "body2", "body7", "body9"], { body4: "Box", body7: "Box", body9: "Box" });
+    r.tool.start(["body9", "body2", "body4", "body7"], r.done);
+    expect(panel()!.fields[0].items).toEqual(["Box 3", "Bracket", "Box", "Box 2"]);
   });
 
   it("removes a body or the plane from its list", () => {

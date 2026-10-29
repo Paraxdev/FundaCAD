@@ -199,11 +199,11 @@ const check = (name, ok, detail) => {
   p = await labelAt(sketchLabels[2]);
   await page.mouse.click(p.x, p.y, { button: "right" });
   await page.waitForTimeout(300);
-  const vis = page.locator(".context-menu .ctx-item", { hasText: "Visibility" }).first();
+  const vis = page.locator(".ctx-item", { hasText: "Visibility" }).first();
   await vis.hover();
   await page.waitForTimeout(300);
   await page.screenshot({ path: `${OUT}/3-visibility-menu.png` });
-  await page.locator(".context-menu.submenu .ctx-item", { hasText: "Hide these 4" }).click();
+  await page.locator(".ui-submenu .ctx-item", { hasText: "Hide these 4" }).click();
   await page.waitForTimeout(400);
   const hid = await eyes(sketchLabels.slice(0, 6));
   check(

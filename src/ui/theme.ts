@@ -70,7 +70,6 @@ function noirTint(
       "--accent-hot": accent.accentHot,
       "--accent-tint": `rgba(${rgb}, 0.14)`,
       "--accent-tint-2": `rgba(${rgb}, 0.24)`,
-      "--accent-glow": `rgba(${rgb}, 0.35)`,
       "--on-accent": accent.onAccent,
       "--accent-blue": accent.accent,
     },
@@ -78,7 +77,7 @@ function noirTint(
 }
 
 /** A couple of well-known palettes, plus dark Noir variants that keep the
- *  built-in theme's shell but swap its mint-green accent for another hue. */
+ *  built-in theme's shell but swap its periwinkle accent for another hue. */
 const SHIPPED_THEMES: ShippedTheme[] = [
   {
     id: "dracula",
@@ -101,7 +100,6 @@ const SHIPPED_THEMES: ShippedTheme[] = [
       "--accent-hot": "#d6acff",
       "--accent-tint": "rgba(189, 147, 249, 0.14)",
       "--accent-tint-2": "rgba(189, 147, 249, 0.24)",
-      "--accent-glow": "rgba(189, 147, 249, 0.35)",
       "--on-accent": "#1b0f2e",
       "--ok": "#50fa7b",
       "--warn": "#ffb86c",
@@ -126,13 +124,12 @@ const SHIPPED_THEMES: ShippedTheme[] = [
       "--line": "#d6cfb4",
       "--line-strong": "#93a1a1",
       "--text": "#073642",
-      "--text-dim": "#4c6067",
-      "--text-mute": "#839496",
-      "--accent": "#268bd2",
-      "--accent-hot": "#0f5a8c",
-      "--accent-tint": "rgba(38, 139, 210, 0.14)",
-      "--accent-tint-2": "rgba(38, 139, 210, 0.24)",
-      "--accent-glow": "rgba(38, 139, 210, 0.35)",
+      "--text-dim": "#3a4f55",
+      "--text-mute": "#4d6165",
+      "--accent": "#25669b",
+      "--accent-hot": "#173f5f",
+      "--accent-tint": "rgba(37, 102, 155, 0.14)",
+      "--accent-tint-2": "rgba(37, 102, 155, 0.24)",
       "--on-accent": "#fdf6e3",
       "--ok": "#859900",
       "--warn": "#b58900",
@@ -145,7 +142,8 @@ const SHIPPED_THEMES: ShippedTheme[] = [
   {
     // Simulation checked so no two signal colours collapse under protanopia, deuteranopia or tritanopia (closest pair
     // ΔE ~29), with lightness steps for monochromacy. Violet accent, as blue merged with the teal ok in tritanopia;
-    // error clears ~6:1 contrast as it is drawn as text.
+    // error clears ~6:1 contrast as it is drawn as text. The axes trade green for yellow, stepped dark, light and
+    // mid: closest pair ΔE2000 23 in deuteranopia and 13 in greyscale, where Noir's red and green give 8 and 1.
     id: "colorblind-safe",
     label: "Colour-Blind Safe",
     mode: "dark",
@@ -162,18 +160,20 @@ const SHIPPED_THEMES: ShippedTheme[] = [
       "--text": "#f5f7fa",
       "--text-dim": "#b5c0cc",
       "--text-mute": "#7e8b99",
-      "--accent": "#8f7fe8",
-      "--accent-hot": "#ab9cf2",
-      "--accent-tint": "rgba(143, 127, 232, 0.14)",
-      "--accent-tint-2": "rgba(143, 127, 232, 0.24)",
-      "--accent-glow": "rgba(143, 127, 232, 0.35)",
+      "--accent": "#9b6cff",
+      "--accent-hot": "#b89aff",
+      "--accent-tint": "rgba(155, 108, 255, 0.14)",
+      "--accent-tint-2": "rgba(155, 108, 255, 0.24)",
       "--on-accent": "#0d0a1f",
       "--ok": "#2ec4b6",
       "--warn": "#f4c542",
       "--error": "#ff5c5c",
       "--error-tint": "rgba(255, 92, 92, 0.16)",
       "--pick-line": "#ff8fc8",
-      "--accent-blue": "#8f7fe8",
+      "--accent-blue": "#9b6cff",
+      "--axis-x": "#e5483a",
+      "--axis-y": "#eedf6b",
+      "--axis-z": "#6aaef0",
     },
   },
   noirTint("noir-blue", "Noir Blue", {
@@ -197,7 +197,8 @@ const KEY = "fundacad.theme";
 const LEGACY_KEYS = ["neocad.theme", "sindricad.theme"];
 const LIBRARY_KEY = "fundacad.themes";
 
-/** The palette half of _tokens.scss. Anything else in a file is dropped. */
+/** The palette half of _tokens.scss. Anything else in a file is dropped, so an older file that sets the
+ *  retired --accent-glow still loads, without its glow. */
 const PALETTE_TOKENS = new Set<string>([
   "--bg",
   "--panel",
@@ -214,7 +215,6 @@ const PALETTE_TOKENS = new Set<string>([
   "--accent-hot",
   "--accent-tint",
   "--accent-tint-2",
-  "--accent-glow",
   "--on-accent",
   "--ok",
   "--warn",
@@ -222,6 +222,9 @@ const PALETTE_TOKENS = new Set<string>([
   "--error-tint",
   "--pick-line",
   "--accent-blue",
+  "--axis-x",
+  "--axis-y",
+  "--axis-z",
 ]);
 
 /** Hex or rgb()/rgba() only: viewport/themeColors.parseCssColor understands
@@ -310,6 +313,8 @@ function apply(id: string) {
   appliedProps = [];
   root.style.removeProperty("color-scheme");
   const theme = findTheme(id);
+  // Light palettes get their own glass fills and shadow in _tokens.scss.
+  root.classList.toggle("theme-light", theme?.mode === "light");
   // The built-in theme lives on :root in _tokens.scss, nothing to apply here.
   if (!theme || !("palette" in theme)) return;
   const palette = (theme as CustomTheme | ShippedTheme).palette;

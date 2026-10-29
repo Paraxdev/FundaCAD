@@ -166,7 +166,7 @@ def test_the_hole_value_box_fits_the_window_at_1400(plate):
     plate.press("Escape")
 
 
-@pytest.mark.parametrize("label", ["Text", "Project", "Rect Pattern", "Circular Pat.", "Bolt Circle", "Hex Holes", "Honeycomb", "Grid Holes"])
+@pytest.mark.parametrize("label", ["Text", "Project", "Rect Pattern", "Circular Pat.", "Bolt Circle", "Staggered Holes", "Honeycomb", "Grid Holes"])
 def test_a_sketch_tool_starts_with_a_prompt(s, label):
     s.tool("Sketch")
     s.pick_plane("XY")

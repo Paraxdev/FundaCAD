@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
+import { createPinia, setActivePinia } from "pinia";
 import { createDatumPlanes } from "../../src/app/datumPlanes";
 import type { Engine } from "../../src/app/engine";
 import type { Feature, PlaneDef } from "../../src/types";
@@ -32,6 +33,8 @@ const p0 = { id: "P0", type: "datumPlane", plane: "XY", offset: 10 } as Datum;
 const p1 = { id: "P1", type: "datumPlane", plane: "XY", planeId: "P0", offset: 10, tiltX: 90 } as Datum;
 
 describe("datum planes as the app draws them", () => {
+  beforeEach(() => setActivePinia(createPinia()));
+
   it("places a child on its parent datum, pose and all", () => {
     const { api } = engine([p0, p1]);
     const d = api.datumPlaneDef(p1);

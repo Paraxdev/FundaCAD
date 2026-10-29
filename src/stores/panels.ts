@@ -52,13 +52,14 @@ export interface InterferenceData {
   unchecked: string[];
 }
 
-/** The deformed shape drawn on the result's colours: the scale on the slider,
- *  the automatic one it started at, the slider's top, and whether it swings. */
+/** The deformed shape: the scale on the slider, the automatic one it started at, the slider's top, whether it swings,
+ *  and whether it is drawn at all, with or without the colours. */
 export interface StressDeform {
   scale: number;
   auto: number;
   max: number;
   animate: boolean;
+  shown: boolean;
 }
 
 /** A point pinned on the coloured body, as a triangle and barycentric weights so it rides the deformed shape, and the
@@ -88,8 +89,9 @@ export interface StressData {
   /** Probe mode, and the points pinned with it. */
   probe: boolean;
   pins: StressProbePin[];
-  /** The row whose next click on the body places a spot, null when none is. */
+  /** The row whose next click on the body takes the face clicked, or places a spot with `placeAs` "spot". */
   placing: StressTarget | null;
+  placeAs: "face" | "spot";
   /** The setup as JSON when the last Run started, to tell when the result no longer matches it. */
   ranSetup: string | null;
 }
@@ -134,6 +136,7 @@ export const usePanelsStore = defineStore("panels", () => {
       probe: false,
       pins: [],
       placing: null,
+      placeAs: "face",
       ranSetup: null,
     };
   }
@@ -183,8 +186,10 @@ export const usePanelsStore = defineStore("panels", () => {
     else delete row.spots;
   }
 
-  function setStressPlacing(target: StressTarget | null) {
-    if (stress.value) stress.value.placing = target;
+  function setStressPlacing(target: StressTarget | null, as: "face" | "spot" = "face") {
+    if (!stress.value) return;
+    stress.value.placing = target;
+    stress.value.placeAs = as;
   }
 
   function setStressSupportFaces(supportId: number, faces: StressFaceSet) {

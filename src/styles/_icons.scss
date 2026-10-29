@@ -39,10 +39,8 @@
   color: var(--accent);
 }
 
-/* .menu-item is space-between, and the check gutter makes three children, which would
-   park the label mid row; the auto margin pins the shortcut right. */
 .menu-shortcut {
-  margin-left: auto;
+  margin-left: var(--s-7);
 }
 
 .docname .dirty-mark {

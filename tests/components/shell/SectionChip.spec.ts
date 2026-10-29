@@ -98,7 +98,7 @@ describe("the section chip", () => {
     t.go("editing");
     await nextTick();
     expect(edit.attributes("aria-pressed")).toBe("true");
-    expect(edit.classes()).toContain("active");
+    expect(edit.classes()).toContain("is-on");
     t.calls.length = 0;
     await edit.trigger("click");
     expect(t.calls).toEqual(["confirm"]);
@@ -110,7 +110,8 @@ describe("the section chip", () => {
     const w = mountChip(t.engine);
     const edit = w.find('[data-testid="section-edit"]');
     expect(edit.attributes("aria-disabled")).toBe("true");
-    expect(edit.classes()).toContain("disabled");
+    expect(edit.classes()).toContain("is-disabled");
+    expect(edit.attributes("title")).toBe("Finish the current tool first");
     await edit.trigger("click");
     expect(t.calls).toEqual([]);
 
@@ -119,7 +120,7 @@ describe("the section chip", () => {
     window.dispatchEvent(new Event("pointerup"));
     await flush();
     expect(edit.attributes("aria-disabled")).toBeUndefined();
-    expect(edit.classes()).not.toContain("disabled");
+    expect(edit.classes()).not.toContain("is-disabled");
     await edit.trigger("click");
     expect(t.calls).toEqual(["dropBodyGizmo", "edit"]);
   });

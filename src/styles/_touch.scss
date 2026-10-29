@@ -49,7 +49,6 @@ textarea,
   .params-del,
   .target-edit,
   .rel-del,
-  .fm-x,
   .timeline-errbadge,
   .timeline-cancel,
   .timeline-related,
@@ -73,7 +72,6 @@ textarea,
   .params-del::before,
   .target-edit::before,
   .rel-del::before,
-  .fm-x::before,
   .timeline-errbadge::before,
   .timeline-cancel::before,
   .timeline-related::before,
@@ -196,7 +194,8 @@ textarea,
   }
   // The checkbox already lies over the drawn switch, so it just grows. A checkbox keeps its
   // own width when only its edges are given, hence the explicit size.
-  .param-switch input {
+  .param-switch input,
+  .check input {
     top: -9px;
     left: -5px;
     width: calc(100% + 10px);
@@ -224,21 +223,19 @@ textarea,
     bottom: -6px;
   }
 
-  // The blend's edge list. Same reasoning for the last row.
-  .fm-x::before {
-    inset: -9px;
-  }
+  // The blend's edge list, an IconButton with its own target. Same reasoning for the last row.
   .fm-row:last-child .fm-x::before {
     bottom: -6px;
   }
 
-  // On-canvas value boxes. The cluster wraps in a 4px gap, so the buttons grow
-  // up and down, sideways only into half the gap, and the last one outwards.
+  // On-canvas value boxes. The 24px buttons sit 2px apart in a 3px padded chip, so they
+  // grow up and down to 36px, sideways only into half the gap, and the last one outwards.
   .dim-btn::before {
-    inset: -5px -2px;
+    inset: -6px -1px;
   }
+  // A coarse pointer meets the 36px floor sideways too, see the media query below.
   .dim-btn.dim-no::before {
-    right: -8px;
+    right: -9px;
   }
   // About 27px tall; the 8px gap between them is split.
   .section-chip-btn::before {
@@ -276,5 +273,22 @@ textarea,
   }
   .profile-track:hover:not(.scrubbing) .profile-track-knob {
     transform: none;
+  }
+}
+
+// A finger gets bigger value box buttons with room between them: 30px apart by 6px reach 36px each way.
+// Keyed on the device, not the last pointer, so the box never changes size under a hand.
+@media (pointer: coarse) {
+  .dim-input,
+  .dim-opts,
+  .dim-seg {
+    gap: 6px;
+  }
+  .dim-btn {
+    min-width: 30px;
+    height: 30px;
+  }
+  :root[data-pointer="touch"] .dim-btn::before {
+    inset: -6px -3px;
   }
 }

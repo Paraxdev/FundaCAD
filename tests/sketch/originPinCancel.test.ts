@@ -11,9 +11,9 @@ import { SketchMode } from "../../src/sketch/sketchMode";
 import type { ResolvedEntity } from "../../src/sketch/snap";
 import type { SketchConstraint } from "../../src/types";
 
-// Node has no DOM, and onKey asks isEditableTarget, which tests instanceof
+// Node has no DOM, and onKey asks isEditableTarget and its own panel checks, which test instanceof
 // against these.
-for (const name of ["HTMLElement", "HTMLInputElement", "HTMLTextAreaElement", "HTMLSelectElement"]) {
+for (const name of ["Element", "HTMLElement", "HTMLInputElement", "HTMLTextAreaElement", "HTMLSelectElement"]) {
   (globalThis as Record<string, unknown>)[name] ??= class {};
 }
 

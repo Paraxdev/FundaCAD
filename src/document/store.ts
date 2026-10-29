@@ -90,7 +90,9 @@ import { extrasEmpty, trialConfiguration } from "../params/extras";
 import type { FieldKind } from "./numFields";
 import { writeTarget } from "./numFields";
 import { markReceived, markSent } from "../diagnostics/rebuildTiming";
+import { logEditTiming } from "../diagnostics/editTiming";
 import { featureMeta } from "../ui/featureMeta";
+import { afterPaint, APPLY_LABEL_AFTER_MS, BUILD_PHASE } from "../geometry/buildPhase";
 import { OpCancelled, SessionHost, isSessionEnded, type DocumentSession } from "./session";
 import { SessionState, type BusyOp } from "./sessionState";
 
@@ -115,9 +117,11 @@ export interface RebuildState {
   result: RebuildResult | null;
   errorFeatureId: string | null;
   errorMessage: string | null;
-  // Feature index the engine is executing (-1 = tessellating), streamed about 1/s during long rebuilds.
+  // Feature index the engine is executing (-1 outside the feature phase), streamed about 1/s during long rebuilds.
   progress: number | null;
-  // Bodies meshed and total during the meshing phase, where the feature index stays -1.
+  // A `BUILD_PHASE`, null until the first report.
+  phase: number | null;
+  // Bodies meshed and to mesh during the meshing phase, hits excluded.
   meshed: number | null;
   meshTotal: number | null;
   // `result` stays the previous model during a chunked reply, so only the viewport sees a partial body list.
@@ -511,6 +515,11 @@ const emptyResult = (): RebuildResult => ({
   bodies: [],
 });
 
+export interface GivenUp {
+  readonly session: DocumentSession;
+  readonly edits: number;
+}
+
 export class DocumentStore {
   readonly sessions = new SessionHost();
   private doc: CadDocument;
@@ -526,7 +535,12 @@ export class DocumentStore {
   private pathlessName: string | null = null;
   private isDirty = false; // unsaved changes since last save/open/new
   private edits = 0;
+  private userEdits = 0;
   private keepClean = 0;
+  // Steps below the undo top, counted from the document's start, and that count at the last save or open. Null when
+  // no undo or redo can bring back what the file holds.
+  private undoAt = 0;
+  private savedAt: number | null = 0;
   private rollback: number | null = null; // # of active features (null = all); timeline marker
   private suppressed = new Set<string>(); // feature ids skipped on rebuild (suppress)
   private sketchVis = new Overlay<boolean>("sketchVisibility", isBool); // explicit per-sketch show/hide overrides
@@ -590,6 +604,7 @@ export class DocumentStore {
     streamed: null,
     streamTotal: null,
     progress: null,
+    phase: null,
     meshed: null,
     meshTotal: null,
   };
@@ -615,13 +630,14 @@ export class DocumentStore {
       this.emitBusy();
     });
     migrateDocument(this.doc); // the seed doc skips load(); normalize it the same way
-    geometry.onProgress?.((feature, meshed, meshTotal, id) => {
+    geometry.onProgress?.((feature, meshed, meshTotal, id, phase) => {
       // A status of any other request, an import or an ended document's rebuild, is not this build's progress.
       if (!this.build.building || (id !== undefined && id !== this.st.inflight?.id)) return;
       // -1/-1 means not meshing; null lets the chip tell "no denominator" from "0 of N".
       this.build = {
         ...this.build,
         progress: feature,
+        phase: phase ?? null,
         meshed: meshed >= 0 ? meshed : null,
         meshTotal: meshTotal > 0 ? meshTotal : null,
       };
@@ -636,9 +652,13 @@ export class DocumentStore {
       const chunk: BuildChunk = { ...c, epoch: this.buildEpoch };
       for (const fn of this.chunkListeners) fn(chunk);
     });
+    // An op whose request id is not back yet waits for its own progress rather than taking another op's.
     geometry.onOpProgress?.((id, pct, stage) => {
-      if (!this.busy.active || (this.busy.id !== null && this.busy.id !== id)) return;
-      this.setBusy({ ...this.busy, pct, stage: stage || null });
+      const op = this.st.busyOps.find((o) => o.state.id === id);
+      if (!op) return;
+      const next = { ...op.state, pct, stage: stage || null };
+      if (this.st.busyOps.at(-1) === op) this.setBusy(next);
+      else op.state = next;
     });
     // Only the busy op's own request: any other id is not what this document waits on.
     geometry.onQueue?.((id, behind) => {
@@ -711,6 +731,10 @@ export class DocumentStore {
     return false;
   }
   private loads = 0;
+  /** Bumped by every load that throws the model on screen away, a replacing one included. */
+  get loadCount(): number {
+    return this.loads;
+  }
 
   /** An edit is waiting out the rebuild debounce. */
   get rebuildPending(): boolean {
@@ -723,11 +747,11 @@ export class DocumentStore {
     return () => this.busyListeners.delete(fn);
   }
 
-  // `onStarted` hands back the request id, else a rebuild started meanwhile would be "most recent". An op that never
-  // reaches the engine passes `abort`. `holdHistory` blocks undo/redo, since an import's late step would drop a redo.
+  // `onStarted` hands back the request id, else a rebuild started meanwhile would be "most recent", and a label for
+  // an op whose passes differ. An op that never reaches the engine passes `abort`. `holdHistory` blocks undo/redo, since an import's late step would drop a redo.
   async runBusy<T>(
     label: string,
-    fn: (onStarted: (id: string) => void) => Promise<T>,
+    fn: (onStarted: (id: string, label?: string) => void) => Promise<T>,
     opts: { rebuild?: boolean; abort?: AbortController; holdHistory?: boolean } = {},
   ): Promise<T> {
     const op: BusyOp = {
@@ -744,9 +768,9 @@ export class DocumentStore {
     st.busyOps.push(op);
     this.setBusy(op.state);
     try {
-      return await fn((id) => {
+      return await fn((id, label) => {
         if (op.abort.signal.aborted) throw new OpCancelled();
-        op.state = { ...op.state, id, waiting: null };
+        op.state = { ...op.state, id, waiting: null, label: label ?? op.state.label };
         if (st === this.st && st.busyOps.at(-1) === op) this.setBusy(op.state);
       });
     } finally {
@@ -859,6 +883,16 @@ export class DocumentStore {
   private editPreviewListeners = new Set<() => void>();
   private emitEditPreview() {
     for (const fn of this.editPreviewListeners) fn();
+    this.emitPreview();
+  }
+  // A preview set while a rebuild runs only queues, so no build event says it started.
+  onPreview(fn: () => void): () => void {
+    this.previewListeners.add(fn);
+    return () => this.previewListeners.delete(fn);
+  }
+  private previewListeners = new Set<() => void>();
+  private emitPreview() {
+    for (const fn of this.previewListeners) fn();
   }
 
   // The tool's live version while one edits it, so a panel beside the tool never contradicts it.
@@ -888,6 +922,7 @@ export class DocumentStore {
   markSaved(path: string, clean = true) {
     this.path = path;
     this.pathlessName = null;
+    this.savedAt = clean ? this.undoAt : null;
     if (clean) this.isDirty = false;
     this.emitMeta();
   }
@@ -895,6 +930,7 @@ export class DocumentStore {
   markOpenedWithoutPath(name: string) {
     this.path = null;
     this.pathlessName = name;
+    this.savedAt = this.undoAt;
     this.isDirty = false;
     this.emitMeta();
   }
@@ -920,6 +956,7 @@ export class DocumentStore {
       streamed: null,
       streamTotal: null,
       progress: null,
+      phase: null,
       meshed: null,
       meshTotal: null,
       previewBuilt: null,
@@ -942,12 +979,13 @@ export class DocumentStore {
 
   // Not for a replace load, where an armed tool stays and keeps previewing.
   private dropToolPreview() {
+    const had = this.preview !== null;
     this.preview = null;
     this.previewHold = false;
     if (this.editPreview) {
       this.editPreview = null;
       this.emitEditPreview();
-    }
+    } else if (had) this.emitPreview();
   }
 
   newDocument() {
@@ -976,6 +1014,7 @@ export class DocumentStore {
     this.carriedSections = [];
     this.path = null;
     this.pathlessName = null;
+    this.savedAt = this.undoAt;
     this.isDirty = false;
     this.dropToolPreview();
     this.discardModelForReplacement();
@@ -985,7 +1024,9 @@ export class DocumentStore {
     this.scheduleRebuild(true);
   }
 
+  private docEdits = 0;
   private emitDoc() {
+    this.docEdits++;
     for (const fn of this.docListeners) fn(this.doc);
   }
   private emitBuild() {
@@ -997,22 +1038,39 @@ export class DocumentStore {
   private emitMeta() {
     for (const fn of this.metaListeners) fn();
   }
-  private markDirty() {
+  private markDirty(byUser = true) {
     this.edits++;
+    if (byUser) this.userEdits++;
     if (this.isDirty || this.keepClean) return;
     this.isDirty = true;
     this.emitMeta();
+  }
+  // A change no undo step holds survives every undo and redo, so none of them gets back to what the file holds.
+  private markUnstepped() {
+    if (!this.keepClean) this.savedAt = null;
+    this.markDirty();
   }
 
   // Counts every change, saved or not, so a caller can tell nothing else changed between two of its own steps.
   get editCount(): number {
     return this.edits;
   }
+  // Leaves out derived commits (a projection refresh, a measured field), which the user did not make.
+  get userEditCount(): number {
+    return this.userEdits;
+  }
 
-  private givenUpAt: { session: DocumentSession; edits: number } | null = null;
+  private givenUpAt: GivenUp | null = null;
   /** The user chose Discard or Don't save for the document as it stands now. */
-  markGivenUp() {
-    this.givenUpAt = { session: this.session, edits: this.edits };
+  markGivenUp(): GivenUp {
+    return (this.givenUpAt = { session: this.session, edits: this.edits });
+  }
+  get givenUpMark(): GivenUp | null {
+    return this.givenUpAt;
+  }
+  // The open the answer was for did not land, so the document was kept after all. A later answer is left alone.
+  revokeGivenUp(mark: GivenUp | null) {
+    if (mark !== null && this.givenUpAt === mark) this.givenUpAt = null;
   }
   // An edit made after the answer, or another document, was not given up.
   get givenUp(): boolean {
@@ -1030,6 +1088,7 @@ export class DocumentStore {
   }
   // Back to what the last save or open left, as when a cancelled import was the only change.
   markClean() {
+    this.savedAt = this.undoAt;
     if (!this.isDirty) return;
     this.isDirty = false;
     this.emitMeta();
@@ -1040,15 +1099,38 @@ export class DocumentStore {
 
   private collecting: UndoEntry[] | null = null;
 
+  // A new step on top of the undo stack. The redo steps it drops are gone, the saved point with them when it was there.
+  private stepped() {
+    if (this.savedAt !== null && this.savedAt > this.undoAt) this.savedAt = null;
+    const keep = this.keepClean > 0 && this.savedAt === this.undoAt;
+    this.undoAt++;
+    if (keep) this.savedAt = this.undoAt;
+  }
+  // The top step itself grew (a coalesced drag, a joined step), so its position no longer holds what was saved there.
+  private grewTop() {
+    if (this.keepClean || this.savedAt === null || this.savedAt < this.undoAt) return;
+    this.savedAt = null;
+  }
+  private settleDirty() {
+    const dirty = this.savedAt !== this.undoAt;
+    if (dirty === this.isDirty) return;
+    this.isDirty = dirty;
+    this.emitMeta();
+  }
+
   private pushUndo(): UndoEntry & { kind: "doc" } {
     const entry = { kind: "doc" as const, doc: clone(this.doc) };
     if (this.collecting) this.collecting.push(entry);
-    else if (this.undoStack.push(entry) > DocumentStore.UNDO_CAP) this.undoStack.shift();
+    else {
+      this.stepped();
+      if (this.undoStack.push(entry) > DocumentStore.UNDO_CAP) this.undoStack.shift();
+    }
     return entry;
   }
 
   private pushOverlayUndo(entry: { undo: () => void; redo: () => void }) {
     if (this.collecting) return void this.collecting.push({ kind: "overlay", ...entry });
+    this.stepped();
     this.undoStack.push({ kind: "overlay", ...entry });
     if (this.undoStack.length > DocumentStore.UNDO_CAP) this.undoStack.shift();
     this.redoStack = [];
@@ -1109,7 +1191,7 @@ export class DocumentStore {
     this.redoStack = [];
     // A user edit is the "edit the model to retry" the valve toast promises.
     this.rearmProjectionValve();
-    this.applyDerived(fn, immediate);
+    this.applyDerived(fn, immediate, true);
   }
 
   // name -> why its value is stale (cycle, unknown ref, non-finite, missing target) from the last recompute.
@@ -1138,43 +1220,58 @@ export class DocumentStore {
   private queueParamCommit(fn: (d: CadDocument) => void) {
     const st = this.st;
     st.paramPending++;
+    const owner = this.untitledDoc;
     st.paramChain = st.paramChain
       // Only the last of a burst rebuilds at once, the rest keep the debounce, so
       // a plugin setting ten parameters does not start and supersede nine builds.
-      .then(() => (st.session.alive ? st.session.step(this.commitWithCascade(fn, --st.paramPending === 0)) : undefined))
+      .then(() =>
+        st.session.alive ? st.session.step(this.commitWithCascade(fn, --st.paramPending === 0, owner)) : undefined,
+      )
       .catch((e) => {
         if (isSessionEnded(e)) return;
         console.error("param commit failed:", e);
         this.onWarning?.("Parameter change failed to apply, see the console for details.");
       });
   }
-  private async commitWithCascade(fn: (d: CadDocument) => void, immediate: boolean): Promise<void> {
-    const draft = clone(this.doc);
-    fn(draft);
-    const r = params.recompute(draft);
-    const open = this.openSketchId?.() ?? null;
-    for (const sid of r.affectedSketches) {
-      if (sid === open) continue;
-      const f = draft.features.find(
-        (x): x is Extract<Feature, { type: "sketch" }> => x.type === "sketch" && x.id === sid,
-      );
-      if (!f) continue;
-      const solved = await this.solveConstrainedSketch(f, draft.parameters);
-      if (solved) f.entities = solved;
+  // A doc edit landing during the solves (a doc_set, an import, a restore) would be overwritten by the
+  // stale draft, so the cascade redoes on top of it; past 3 tries it lands unsolved rather than never.
+  // An assistant's doc_open or doc_new since the edit was queued put another document in place, so the change is dropped.
+  private async commitWithCascade(fn: (d: CadDocument) => void, immediate: boolean, owner: number): Promise<void> {
+    const st = this.st;
+    for (let tries = 1; ; tries++) {
+      if (this.untitledDoc !== owner) return this.warnParamDropped(owner);
+      const seen = this.docEdits;
+      const draft = clone(this.doc);
+      fn(draft);
+      const r = params.recompute(draft);
+      const open = this.openSketchId?.() ?? null;
+      const sketches = [...r.affectedSketches].filter((sid) => sid !== open);
+      if (tries > 3) for (const sid of sketches) this.onParamSolveIssue?.(sid);
+      else
+        for (const sid of sketches) {
+          const at = draft.features.find((x) => x.id === sid);
+          const f = asFeature(at, "sketch");
+          if (!f) continue;
+          const solved = await this.solveConstrainedSketch(f, draft.parameters);
+          if (solved) f.entities = solved;
+        }
+      if (!st.session.alive) return;
+      if (this.docEdits !== seen || this.untitledDoc !== owner) continue;
+      this.mutate((d) => {
+        d.parameters = draft.parameters;
+        if (draft.paramDefs) d.paramDefs = draft.paramDefs;
+        else delete d.paramDefs;
+        if (draft.paramExtras) d.paramExtras = draft.paramExtras;
+        else delete d.paramExtras;
+        // The draft is a clone, and the rebuild wire resends every changed object, so keep the untouched features.
+        d.features = draft.features.map((f, i) => {
+          const was = d.features[i];
+          return was && was.id === f.id && JSON.stringify(was) === JSON.stringify(f) ? was : f;
+        });
+      }, immediate);
+      this.onParamsApplied?.();
+      return;
     }
-    this.mutate((d) => {
-      d.parameters = draft.parameters;
-      if (draft.paramDefs) d.paramDefs = draft.paramDefs;
-      else delete d.paramDefs;
-      if (draft.paramExtras) d.paramExtras = draft.paramExtras;
-      else delete d.paramExtras;
-      // The draft is a clone, and the rebuild wire resends every changed object, so keep the untouched features.
-      d.features = draft.features.map((f, i) => {
-        const was = d.features[i];
-        return was && was.id === f.id && JSON.stringify(was) === JSON.stringify(f) ? was : f;
-      });
-    }, immediate);
-    this.onParamsApplied?.();
   }
 
   // Projection updates land as a derived commit with no undo entry, so an upstream edit settles in two rebuilds.
@@ -1298,13 +1395,15 @@ export class DocumentStore {
   }
 
   // Derived commits call this directly to stay out of undo.
-  private applyDerived(fn: (doc: CadDocument) => void, immediate = true) {
+  private applyDerived(fn: (doc: CadDocument) => void, immediate = true, byUser = false) {
     const joins = joinSignatures(this.doc);
     fn(this.doc);
     forgetStaleJoins(joins, this.doc);
     canonicalMirrorPlanes(this.doc);
     if (this.doc.paramDefs) this.applyRecompute(params.recompute(this.doc));
-    this.markDirty();
+    // A derived commit at the saved point goes into the next step's snapshot, so undoing back there keeps it.
+    if (!byUser && !this.keepClean && this.savedAt === this.undoAt) this.savedAt = null;
+    this.markDirty(byUser);
     this.emitDoc();
     this.scheduleRebuild(immediate);
   }
@@ -1606,6 +1705,23 @@ export class DocumentStore {
     );
   }
 
+  // One undo step for the lot, with the rollback marker staying on the feature it was on.
+  removeFeatures(ids: readonly string[]) {
+    const gone = new Set(ids);
+    const at = this.doc.features.flatMap((f, i) => (gone.has(f.id) ? [i] : []));
+    if (!at.length) return;
+    this.step(
+      (d) => {
+        d.features = d.features.filter((f) => !gone.has(f.id));
+      },
+      true,
+      () => {
+        if (this.rollback !== null) this.rollback -= at.filter((i) => i < this.rollback!).length;
+        for (const id of gone) this.suppressed.delete(id);
+      },
+    );
+  }
+
   // features[0..rollbackIndex-1] are built.
   get rollbackIndex(): number {
     return this.rollback ?? this.doc.features.length;
@@ -1632,11 +1748,31 @@ export class DocumentStore {
     this.pushOverlayUndo({ undo: () => set(was), redo: () => set(!was) });
   }
 
+  // One undo step however many; a feature already in the asked state is left out of it, and an id the document does
+  // not hold is never recorded, since nextId would hand it to a later feature born suppressed.
+  setSuppressed(ids: readonly string[], on: boolean) {
+    const have = new Set(this.doc.features.map((f) => f.id));
+    const todo = ids.filter((id) => have.has(id) && this.suppressed.has(id) !== on);
+    if (!todo.length) return;
+    const set = (to: boolean) => {
+      for (const id of todo) {
+        if (to) this.suppressed.add(id);
+        else this.suppressed.delete(id);
+      }
+      this.markDirty();
+      this.emitDoc();
+      this.scheduleRebuild(true);
+    };
+    set(on);
+    this.pushOverlayUndo({ undo: () => set(!on), redo: () => set(on) });
+  }
+
   // No undo, not dirty. `hold` keeps the last model that built on screen if the kernel refuses (see heldRefusal).
   setPreview(feature: Feature | Feature[] | null, opts?: { hold?: boolean }) {
     const had = this.preview !== null;
     this.preview = feature === null ? null : Array.isArray(feature) ? feature : [feature];
     this.previewHold = feature !== null && !!opts?.hold;
+    this.emitPreview();
     if (feature === null && had) this.leavePreview();
     else this.scheduleRebuild(true);
   }
@@ -1737,16 +1873,20 @@ export class DocumentStore {
   private undoStep() {
     const prev = this.undoStack.pop();
     if (!prev) return;
+    this.undoAt--;
     this.emitRewind();
     this.redoStack.push(this.applyUndoEntry(prev, "undo"));
+    this.settleDirty();
   }
   redo() {
     if (this.st.historyHeld) return;
     const next = this.redoStack.pop();
     if (!next) return;
+    this.undoAt++;
     this.emitRewind();
     this.undoStack.push(this.applyUndoEntry(next, "redo"));
     if (this.undoStack.length > DocumentStore.UNDO_CAP) this.undoStack.shift();
+    this.settleDirty();
   }
   private applyUndoEntry(e: UndoEntry, way: "undo" | "redo"): UndoEntry {
     if (e.kind === "overlay") {
@@ -1782,9 +1922,11 @@ export class DocumentStore {
     }
     if (!taken.length) return join;
     if (join) {
+      this.grewTop();
       this.undoStack[this.undoStack.length - 1] = { kind: "group", entries: [top!, ...taken] };
       return true;
     }
+    this.stepped();
     this.undoStack.push(taken.length > 1 ? { kind: "group", entries: taken } : taken[0]!);
     if (this.undoStack.length > DocumentStore.UNDO_CAP) this.undoStack.shift();
     this.redoStack = [];
@@ -1929,6 +2071,26 @@ export class DocumentStore {
     });
   }
 
+  // setPlaneVisibility for several, as one undo step.
+  setPlanesVisibility(changes: ReadonlyMap<string, boolean>) {
+    const prior = new Map<string, boolean | undefined>();
+    for (const [id, v] of changes) {
+      if ((this.planeVis.get(id) ?? true) === v) continue;
+      prior.set(id, this.planeVis.get(id));
+    }
+    if (!prior.size) return;
+    const put = (to: (id: string) => boolean | undefined) => {
+      for (const id of prior.keys()) {
+        const v = to(id);
+        if (v === undefined) this.planeVis.delete(id);
+        else this.planeVis.set(id, v);
+      }
+      this.markDirty();
+    };
+    put((id) => changes.get(id));
+    this.pushOverlayUndo({ undo: () => put((id) => prior.get(id)), redo: () => put((id) => changes.get(id)) });
+  }
+
   // Undefined means use the rebuilt name.
   bodyName(id: string): string | undefined {
     return this.bodyNames.get(id);
@@ -2016,7 +2178,7 @@ export class DocumentStore {
     const next = study ? structuredClone(study) : null;
     if (JSON.stringify(next) === JSON.stringify(this.stress)) return;
     this.stress = next;
-    this.markDirty();
+    this.markUnstepped();
   }
 
   get documentEnvironment(): Readonly<DocEnvironment> | null {
@@ -2027,7 +2189,7 @@ export class DocumentStore {
   setDocumentEnvironment(env: DocEnvironment | null, opts: { quiet?: boolean } = {}) {
     if (sameDocEnvironment(env, this.environment)) return;
     this.environment = env ? { ...env, settings: { ...env.settings } } : null;
-    if (!opts.quiet) this.markDirty();
+    if (!opts.quiet) this.markUnstepped();
   }
 
   get sectionView(): Readonly<SectionView> | null {
@@ -2041,7 +2203,7 @@ export class DocumentStore {
     if (sameSectionView(read, this.cut)) return;
     this.cut = read;
     if (read) delete this.unreadSections.sectionView;
-    this.markDirty();
+    this.markUnstepped();
     this.emitSectionView();
   }
 
@@ -2087,7 +2249,7 @@ export class DocumentStore {
     const next: ElementDef = { id, name: label };
     if (under !== null) next.parent = under;
     this.elements = [...this.elements, next];
-    this.markDirty();
+    this.markUnstepped();
     this.emitBuild();
     return id;
   }
@@ -2097,7 +2259,7 @@ export class DocumentStore {
     const n = name.trim();
     if (!n) return;
     this.elements = this.elements.map((e) => (e.id === id ? { ...e, name: n } : e));
-    this.markDirty();
+    this.markUnstepped();
     this.emitBuild();
   }
 
@@ -2109,7 +2271,7 @@ export class DocumentStore {
     // `reparented` returns untouched entries by identity and refuses an illegal move by returning them all.
     if (next.every((e, i) => e === this.elements[i])) return;
     this.elements = next;
-    this.markDirty();
+    this.markUnstepped();
     this.emitBuild();
   }
 
@@ -2123,7 +2285,7 @@ export class DocumentStore {
       if (movedTo === null) this.bodyElement.delete(body);
       else this.bodyElement.set(body, movedTo);
     }
-    this.markDirty();
+    this.markUnstepped();
     this.emitBuild();
   }
 
@@ -2147,7 +2309,7 @@ export class DocumentStore {
       changed = true;
     }
     if (!changed) return;
-    this.markDirty();
+    this.markUnstepped();
     this.emitBuild();
   }
 
@@ -2169,6 +2331,7 @@ export class DocumentStore {
     const c = this.refCoalesce;
     if (opts.coalesce && c && c.key === opts.coalesce && this.undoStack[this.undoStack.length - 1] === c.top) {
       c.after.v = after;
+      this.grewTop();
       this.redoStack = [];
     } else {
       const before = this.refImages;
@@ -2316,7 +2479,7 @@ export class DocumentStore {
     };
     next.id = uniqueId(m?.id && !taken.has(m.id) ? m.id : slugId(name), taken);
     this.materials = [...this.materials, next];
-    this.markDirty();
+    this.markUnstepped();
     this.emitBuild();
     return next.id;
   }
@@ -2362,7 +2525,7 @@ export class DocumentStore {
       return merged;
     });
     if (!changed) return;
-    this.markDirty();
+    this.markUnstepped();
     this.emitBuild();
   }
 
@@ -2377,14 +2540,14 @@ export class DocumentStore {
     if (!this.materials.some((m) => gone.has(m.id))) return;
     this.materials = this.materials.filter((m) => !gone.has(m.id));
     this.dropMaterialUses(gone);
-    this.markDirty();
+    this.markUnstepped();
     this.emitBuild();
   }
 
   // Keeps them in the library.
   unassignMaterials(ids: Iterable<string>) {
     if (!this.dropMaterialUses(new Set(ids))) return;
-    this.markDirty();
+    this.markUnstepped();
     this.emitBuild();
   }
 
@@ -2422,7 +2585,7 @@ export class DocumentStore {
     }
     if (!added && !updated) return { added, updated };
     this.materials = next;
-    this.markDirty();
+    this.markUnstepped();
     this.emitBuild();
     return { added, updated };
   }
@@ -2442,7 +2605,7 @@ export class DocumentStore {
     if (this.importColorSource(featureId) === source) return;
     if (source === "faces") this.importColors.set(featureId, "faces");
     else this.importColors.delete(featureId);
-    this.markDirty();
+    this.markUnstepped();
     this.emitBuild();
   }
 
@@ -2493,7 +2656,7 @@ export class DocumentStore {
     const cur = this.palette[i];
     if (!cur) return;
     this.palette[i] = { ...cur, ...patch };
-    this.markDirty();
+    this.markUnstepped();
     this.emitBuild();
   }
   // One emit. Undefined entries leave that slot untouched.
@@ -2505,7 +2668,7 @@ export class DocumentStore {
       changed = true;
     });
     if (!changed) return;
-    this.markDirty();
+    this.markUnstepped();
     this.emitBuild();
   }
   // Undefined means the default shade.
@@ -2575,7 +2738,7 @@ export class DocumentStore {
     const v = commitVersion(repo, this.workingSnapshot(), message, Date.now());
     if (!v) return null;
     this.repo = repo;
-    this.markDirty();
+    this.markUnstepped();
     this.emitMeta();
     return v;
   }
@@ -2626,9 +2789,41 @@ export class DocumentStore {
     return JSON.stringify(this.toObject(), null, 2);
   }
   // `replace` puts another state of the same document in place (a version, an assistant's or a plugin's edit), as one
-  // undoable step that leaves the versions alone.
-  load(json: string, opts: { replace?: boolean } = {}) {
-    this.loadAs(json, opts.replace ? "edit" : "open");
+  // undoable step that leaves the versions alone. `untitled` also drops the file path, so Save asks where.
+  load(json: string, opts: { replace?: boolean; untitled?: boolean } = {}) {
+    if (!opts.replace || !opts.untitled) return this.loadAs(json, opts.replace ? "edit" : "open");
+    this.undoAsOne(() => {
+      this.loadAs(json, "edit");
+      this.dropPathUndoably();
+    });
+  }
+  private untitledSwaps = 0;
+  // Which untitled load is on screen, put back by its undo, so an edit queued on a document knows it is still there.
+  private untitledDoc = 0;
+  private untitledSeq = 0;
+  private droppedFor = -1;
+  private warnParamDropped(owner: number) {
+    if (this.droppedFor === owner) return;
+    this.droppedFor = owner;
+    this.onWarning?.("A parameter change was dropped, another document replaced this one before it finished applying.");
+  }
+  // Moves on an untitled load and on its undo and redo: a save begun before it holds the other document, so it must not
+  // name the one on screen.
+  get untitledSwapCount(): number {
+    return this.untitledSwaps;
+  }
+  private dropPathUndoably() {
+    const was = { path: this.path, name: this.pathlessName, doc: this.untitledDoc };
+    const now = ++this.untitledSeq;
+    const put = (path: string | null, name: string | null, doc: number) => {
+      this.untitledSwaps++;
+      this.untitledDoc = doc;
+      this.path = path;
+      this.pathlessName = name;
+      this.emitMeta();
+    };
+    put(null, null, now);
+    this.pushOverlayUndo({ undo: () => put(was.path, was.name, was.doc), redo: () => put(null, null, now) });
   }
   // A version is always the open document, even one sharing no feature with what is on screen.
   private loadAs(json: string, as: "open" | "edit" | "version") {
@@ -2652,7 +2847,10 @@ export class DocumentStore {
     }
     this.emitRewind();
     const replaced = replace ? { entry: this.pushUndo(), before: this.stateSections(true) } : null;
-    if (!replaced) this.undoStack = [];
+    if (!replaced) {
+      this.undoStack = [];
+      this.savedAt = null;
+    }
     this.redoStack = [];
     this.rearmProjectionValve(); // valve state must never cross documents
     // The versions are the open file's history, which a replacing load's copy may lack or hold stale or foreign.
@@ -2795,7 +2993,7 @@ export class DocumentStore {
     if (vis) this.isolate = vis[1];
     return back;
   }
-  loadDocument(doc: CadDocument, opts: { replace?: boolean } = {}) {
+  loadDocument(doc: CadDocument, opts: { replace?: boolean; untitled?: boolean } = {}) {
     this.load(JSON.stringify(doc), opts);
   }
 
@@ -2893,6 +3091,7 @@ export class DocumentStore {
       ...this.build,
       building: true,
       progress: null,
+      phase: null,
       meshed: null,
       meshTotal: null,
       streamed: null,
@@ -2941,6 +3140,7 @@ export class DocumentStore {
     const done = {
       building: false,
       progress: null,
+      phase: null,
       meshed: null,
       meshTotal: null,
       streamed: null,
@@ -3006,6 +3206,7 @@ export class DocumentStore {
               const all = st.computeAllQueued && !!computeAll;
               st.computeAllQueued = false;
               this.emitBuildStarted();
+              const startedAt = Date.now();
               const sent = this.doc;
               const sentLoad = this.loads;
               const previewing = !!(this.preview || this.editPreview);
@@ -3014,11 +3215,12 @@ export class DocumentStore {
               const key = previewing ? null : buildKey(effective);
               const flight: NonNullable<SessionState["inflight"]> = { gen: ++this.sendGen, id: null, cancelled: false };
               st.inflight = flight;
+              const sentAtMs = performance.now();
               markSent();
               const send = (id: string) => {
                 if (flight.dropped) throw new OpCancelled();
                 flight.id = id;
-                onStarted(id);
+                onStarted(id, all ? "Computing all" : "Rebuilding");
               };
               const reply =
                 all && computeAll
@@ -3037,6 +3239,19 @@ export class DocumentStore {
                 continue;
               }
               if (key !== null && this.refusedProvisional(reply, key)) continue;
+              if (reply.ok && Date.now() - startedAt >= APPLY_LABEL_AFTER_MS) {
+                this.build = {
+                  ...this.build,
+                  progress: null,
+                  meshed: null,
+                  meshTotal: null,
+                  phase: BUILD_PHASE.applying,
+                };
+                this.emitBuild();
+                await afterPaint();
+                if (!st.session.alive) break;
+                if (flight.gen <= this.staleThrough) continue;
+              }
               if (!previewing) this.keepBodyIds(sent, reply);
               const settled = this.settledBuild(reply, sentPreview);
               // An incomplete stream left a partial model on screen; drop it before this result (on failure the
@@ -3045,7 +3260,18 @@ export class DocumentStore {
               this.build = settled;
               if (reply.ok) st.drawnFrom = { ids: new Set(sent.features.map((f) => f.id)), load: sentLoad };
               if (key !== null && reply.ok) this.st.committedShown = { key, state: settled };
+              const appliedAtMs = performance.now();
               this.emitBuild();
+              // Compute All is no edit, and its reply carries no stage timing.
+              if (reply.ok && !previewing && !all) {
+                const cost = this.geometry.lastRebuildCost?.();
+                logEditTiming({
+                  totalMs: performance.now() - sentAtMs,
+                  engine: cost?.engine ?? null,
+                  replyBytes: cost?.replyBytes ?? 0,
+                  applyMs: performance.now() - appliedAtMs,
+                });
+              }
               // Compute All is the explicit retry the valve toast promises, so it re-arms the valve first.
               if (reply.ok && all) this.rearmProjectionValve();
               // After publishing; a failed rebuild says nothing about projections.
@@ -3084,6 +3310,7 @@ export class DocumentStore {
     this.build = {
       building: false,
       progress: null,
+      phase: null,
       meshed: null,
       meshTotal: null,
       streamed: null,

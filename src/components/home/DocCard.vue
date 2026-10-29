@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, useTemplateRef, watch } from "vue";
 import Icon from "../shell/Icon.vue";
+import Button from "../ui/Button.vue";
+import IconButton from "../ui/IconButton.vue";
 import { ago } from "../../ui/timeAgo";
 import { folderPath, type HomeEntry } from "../../ui/homeList";
 import type { ThumbQueue } from "../../ui/thumbQueue";
@@ -20,7 +22,8 @@ const badge = computed(() => {
   return props.unreadable ? "Could not be read" : null;
 });
 
-const root = ref<HTMLElement | null>(null);
+const card = useTemplateRef<InstanceType<typeof Button>>("card");
+const root = (): HTMLElement | null => card.value?.$el ?? null;
 const pic = ref<string | null>(null);
 let inView = false;
 let watcher: IntersectionObserver | null = null;
@@ -44,9 +47,9 @@ onMounted(() => {
       if (inView) ask();
       else props.thumbs?.cancel(props.entry.path);
     },
-    { root: root.value?.closest(".home-scroll") ?? null, rootMargin: "200px" },
+    { root: root()?.closest(".home-scroll") ?? null, rootMargin: "200px" },
   );
-  watcher.observe(root.value!);
+  watcher.observe(root()!);
 });
 watch(
   () => [props.entry.editedAt, props.entry.missing],
@@ -62,8 +65,9 @@ onUnmounted(() => {
 
 <template>
   <div class="home-cell">
-    <button
-      ref="root"
+    <Button
+      ref="card"
+      variant="tile"
       class="home-card"
       :class="{ missing: entry.missing }"
       :title="entry.path"
@@ -78,15 +82,17 @@ onUnmounted(() => {
       <span class="home-card-name">{{ entry.name }}</span>
       <span class="home-card-folder" :title="folderPath(entry.path)">{{ entry.folder }}</span>
       <span class="home-card-time">{{ when }}</span>
-    </button>
-    <button
+    </Button>
+    <IconButton
       v-if="!entry.missing"
       class="home-card-versions"
-      title="Versions"
+      icon="versions"
+      tip="Versions"
+      size="md"
+      variant="tile"
+      :icon-size="14"
       :aria-label="`Versions of ${entry.name}`"
       @click="emit('versions')"
-    >
-      <Icon name="versions" :size="14" />
-    </button>
+    />
   </div>
 </template>

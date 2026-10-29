@@ -82,6 +82,11 @@ pub fn begin(dir: &Path) -> std::io::Result<u32> {
     Ok(prev)
 }
 
+/// A safe session keeps the count, so closing it and starting again comes back safe instead of failing twice more.
+pub fn clears_count(reason: Option<Reason>) -> bool {
+    reason.is_none()
+}
+
 pub fn cleared(dir: &Path) {
     let _ = std::fs::remove_file(dir.join(MARKER));
 }

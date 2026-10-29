@@ -189,6 +189,8 @@ export async function runComputePlugin(
   if (rec.consented.kind !== "compute") {
     throw new Error(`${rec.id} is a ${rec.consented.kind} plugin, which is not run here`);
   }
+  // Before the runner modules load: a document closed meanwhile is not the one the run was started on.
+  const session = store.session;
   const manifest = installedManifest(rec);
   if (!manifest) throw new Error(`${rec.id} has no record this app can read`);
 
@@ -202,6 +204,7 @@ export async function runComputePlugin(
     grants: manifest.grants,
     host: appHost({
       store,
+      session,
       // Files handed to this plugin are recorded against its id in Rust. Without it the file ops refuse.
       plugin: manifest.id,
       native: tauriNative(),

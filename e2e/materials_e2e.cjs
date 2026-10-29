@@ -442,6 +442,21 @@ const check = (name, ok, detail) => {
     page.evaluate(() => window.viewport.scene.renderer.info.programs.map((q) => q.cacheKey.split(",")[0]));
   const progStill = await programs();
   const keysStill = await programKeys();
+  // The low power motion draw goes to the canvas and a still frame through the post chain, so a hover glow needs
+  // both output variants before the first glow shows, or its first motion frame links one.
+  const glowSpaces = await page.evaluate(() => [
+    ...new Set(
+      window.viewport.scene.renderer.info.programs
+        .filter((q) => q.name === "selection-glow")
+        .map((q) => q.cacheKey.split(",").find((k) => k.startsWith("srgb")))
+        .sort(),
+    ),
+  ]);
+  check(
+    "the selection glow is linked for the canvas and the post chain before any hover",
+    JSON.stringify(glowSpaces) === JSON.stringify(["srgb", "srgb-linear"]),
+    JSON.stringify(glowSpaces),
+  );
   const cv = await page.evaluate(() => {
     const r = window.viewport.scene.renderer.domElement.getBoundingClientRect();
     return [r.left + r.width / 2, r.top + r.height / 2];

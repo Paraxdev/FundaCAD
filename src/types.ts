@@ -508,7 +508,7 @@ export type CoreFeature =
       radius: Num;
       profile?: Num;
       sizeType?: "radius" | "chord";
-      continuity?: "G1" | "G2";
+      continuity?: "G1" | "G2" | "G3";
       tangentEdges?: boolean;
       draft?: boolean;
     }
@@ -1130,6 +1130,8 @@ export interface StressStudy {
   custom: { E: number; nu: number; yield: number; density: number };
   /** mm, null for the engine's automatic size. */
   size: number | null;
+  /** Absent for Standard, so a default study saves as before. */
+  refine?: "fine" | "off";
 }
 
 // A non-fatal note from a rebuild: a low-confidence match, a skipped boolean, a sealed void.
@@ -1165,7 +1167,16 @@ export interface TrackedFaceRecord {
 export interface RebuildResult {
   mesh: { positions: F32Wire; indices: U32Wire; faceIds: U32Wire; normals?: F32Wire };
   // `smooth`: the two faces meet tangentially here (a fillet's boundary), drawn per the tangent edges setting.
-  edges: { id: string; points: [number, number, number][]; body?: string; smooth?: boolean }[];
+  // `curvature`: the faces' largest curvature across the edge, per mm of radius and per mm of chord, absent when
+  // flat; a G2 or G3 fillet applies while the one for its size type times its size stays below 1e-6
+  // (features/continuity.ts).
+  edges: {
+    id: string;
+    points: [number, number, number][];
+    body?: string;
+    smooth?: boolean;
+    curvature?: [number, number];
+  }[];
   bbox: { min: Vec3; max: Vec3 };
   // Each body's faceId range. No `etag` means always rebuild the body's mesh.
   bodies?: {

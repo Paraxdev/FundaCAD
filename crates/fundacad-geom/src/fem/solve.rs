@@ -226,6 +226,9 @@ pub struct Solution {
     pub elements: usize,
     /// Face ids of the supports that no boundary triangle carries, so they hold nothing.
     pub missing_fixed: Vec<u32>,
+    /// One per `TetMesh::tets`: the Zienkiewicz Zhu estimate, the complementary energy (N mm) of the gap between the
+    /// element's own corner stresses and the smoothed nodal stress, square rooted.
+    pub element_error: Vec<f64>,
 }
 
 impl Solution {
@@ -1488,6 +1491,7 @@ struct Fields {
     residual: Vec<(u32, V3)>,
     strain_energy: f64,
     dofs: usize,
+    element_error: Vec<f64>,
 }
 
 /// Solves K u = f with `prescribed` displacements given and the partial `holds` kept from moving that way, then
@@ -1716,6 +1720,7 @@ fn analyse(
     let mut f_int = vec![[0.0; 3]; nn];
     let mut sum = vec![[0.0; 6]; q.corners];
     let mut count = vec![0u32; q.corners];
+    let mut own = Vec::with_capacity(q.tets.len());
     for (e, t) in q.tets.iter().enumerate() {
         if e % TICK_EVERY == 0 && !tick() {
             return Err(SolveError::Cancelled);
@@ -1732,6 +1737,7 @@ fn analyse(
                 f_int[a as usize][i] += s;
             }
         }
+        let mut corner = [[0.0; 6]; 4];
         for c in 0..4 {
             let mut l = [0.0; 4];
             l[c] = 1.0;
@@ -1741,10 +1747,28 @@ fn analyse(
                 sum[n][k] += s[k];
             }
             count[n] += 1;
+            corner[c] = s;
         }
+        own.push(corner);
     }
     let mut stress: Vec<[f64; 6]> =
         sum.iter().zip(&count).map(|(s, &c)| if c > 0 { s.map(|v| v / c as f64) } else { [0.0; 6] }).collect();
+    let element_error: Vec<f64> = q
+        .tets
+        .iter()
+        .zip(&own)
+        .enumerate()
+        .map(|(e, (t, corner))| {
+            let sum: f64 = (0..4)
+                .map(|c| {
+                    let n = &stress[t[c] as usize];
+                    complementary(&[0, 1, 2, 3, 4, 5].map(|k| n[k] - corner[c][k]), lame)
+                })
+                .sum();
+            (geo[e].volume / 4.0 * sum).max(0.0).sqrt()
+        })
+        .collect();
+    drop(own);
     for &[a, b] in &q.edges {
         let (sa, sb) = (stress[a as usize], stress[b as usize]);
         stress.push([0, 1, 2, 3, 4, 5].map(|k| 0.5 * (sa[k] + sb[k])));
@@ -1771,7 +1795,23 @@ fn analyse(
     if !(energy.is_finite() && finite(&reaction) && stress.iter().all(|s| finite(s))) {
         return Err(SolveError::Overflow);
     }
-    Ok(Fields { displacement, stress, applied, reaction, residual, strain_energy: 0.5 * energy, dofs: ndof })
+    Ok(Fields {
+        displacement,
+        stress,
+        applied,
+        reaction,
+        residual,
+        strain_energy: 0.5 * energy,
+        dofs: ndof,
+        element_error,
+    })
+}
+
+/// d : C^-1 : d for a stress d in [xx, yy, zz, xy, yz, zx], from Lame's constants.
+fn complementary(d: &[f64; 6], (lambda, mu): (f64, f64)) -> f64 {
+    let trace = d[0] + d[1] + d[2];
+    let squares = d[0] * d[0] + d[1] * d[1] + d[2] * d[2] + 2.0 * (d[3] * d[3] + d[4] * d[4] + d[5] * d[5]);
+    (squares - lambda / (3.0 * lambda + 2.0 * mu) * trace * trace) / (2.0 * mu)
 }
 
 /// Elements per leaf of the dissection.
@@ -2035,6 +2075,7 @@ fn finish(
         strain_energy: f.strain_energy,
         dofs: f.dofs,
         missing_fixed,
+        element_error: f.element_error,
     })
 }
 
@@ -2512,5 +2553,21 @@ mod tests {
         // A corner takes minus a twentieth of an element's share, a mid-edge node a fifth.
         let n = shape_values([0.25; 4]);
         assert!((n.iter().sum::<f64>() - 1.0).abs() < 1e-15);
+    }
+
+    #[test]
+    fn the_complementary_energy_is_the_hand_value_for_tension_shear_and_pressure() {
+        let m = Material { e: 3500.0, nu: 0.3 };
+        let l = lame(m);
+        let bulk = m.e / (3.0 * (1.0 - 2.0 * m.nu));
+        let shear = m.e / (2.0 * (1.0 + m.nu));
+        let close = |a: f64, b: f64| (a - b).abs() < 1e-12 * b.abs();
+        // Tension along a slanted axis n: d = 7.3 n n.
+        let n = [0.36, -0.48, 0.8];
+        let t = [n[0] * n[0], n[1] * n[1], n[2] * n[2], n[0] * n[1], n[1] * n[2], n[2] * n[0]].map(|v| 7.3 * v);
+        assert!(close(complementary(&t, l), 7.3 * 7.3 / m.e));
+        assert!(close(complementary(&[0.0, 0.0, 0.0, 0.0, -2.9, 0.0], l), 2.9 * 2.9 / shear));
+        assert!(close(complementary(&[-4.1, -4.1, -4.1, 0.0, 0.0, 0.0], l), 4.1 * 4.1 / bulk));
+        assert_eq!(complementary(&[0.0; 6], l), 0.0);
     }
 }

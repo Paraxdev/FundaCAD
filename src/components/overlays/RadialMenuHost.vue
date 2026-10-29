@@ -54,7 +54,7 @@ const slots = computed(() => {
   position: absolute;
   transform: translate(-50%, -50%);
   border-radius: 50%;
-  border: 1px solid var(--line-strong);
+  border: 1px solid transparent;
   background: color-mix(in srgb, var(--float-bg-solid) 70%, transparent);
 }
 .radial-item {
@@ -66,13 +66,12 @@ const slots = computed(() => {
   white-space: nowrap;
   font-size: 12px;
   border-radius: 999px;
-  border: 1px solid var(--line-strong);
+  border: 1px solid transparent;
   background: var(--float-bg-solid);
   color: var(--text);
   box-shadow: 0 2px 8px rgb(0 0 0 / 0.25);
 }
 .radial-item.hot {
-  border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 22%, var(--float-bg-solid));
 }
 .radial-item.disabled {

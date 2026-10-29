@@ -7,6 +7,7 @@ import RoundTripReadout from "./RoundTripReadout.vue";
 import SelectionReadout from "./SelectionReadout.vue";
 import NormalToSketch from "./NormalToSketch.vue";
 import SectionChip from "./SectionChip.vue";
+import UpdatingChip from "./UpdatingChip.vue";
 import { useClearOfCards } from "../../composables/useClearOfCards";
 import { draggingMaterial, dropScopeFor, endMaterialDrag, MATERIAL_MIME, type DropScope } from "../../ui/materialDrag";
 
@@ -123,6 +124,7 @@ function onDrop(e: DragEvent) {
     <SelectionReadout />
     <div ref="top" class="vp-top">
       <SectionChip />
+      <UpdatingChip />
       <NormalToSketch />
     </div>
   </div>

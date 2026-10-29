@@ -50,6 +50,10 @@ jobs:
       - name: Repo hygiene
         run: sh scripts/check-repo-hygiene.sh
 
+      # No deps, so the runner's own node is enough this early.
+      - name: UI controls
+        run: node scripts/check-ui-controls.mjs
+
       - name: Install Node
         uses: actions/setup-node@v4
         with:
@@ -86,6 +90,10 @@ jobs:
       # The notes part of the release job's Publish step, against a stub gh.
       - name: Release notes tests
         run: python3 tests/build/test_release_notes.py
+
+      # The step that keeps every beta as its own v1.0.<run number> release.
+      - name: Version release tests
+        run: python3 tests/build/test_version_release.py
 
       # The plugin sandbox is a worker ENTRY, so Rollup treats its exports as
       # unreachable and drops them. That produced a chunk with none of the
@@ -1035,6 +1043,49 @@ jobs:
             gh release edit "$TAG" --repo "$R" --draft=false --prerelease=false --latest="$latest"
           fi
 
+      # Every beta also stays on as a normal release of its own, v1.0.<run
+      # number>, so a version can be linked, downloaded and packaged (Flathub,
+      # winget) after the rolling beta has moved on. It carries no latest.json:
+      # installed betas keep updating from the rolling feed. It is the repo's
+      # latest release only while no stable release exists, because stable
+      # installs find their feed through releases/latest.
+      - name: Publish this version's own release
+        if: needs.channel.outputs.release == 'beta'
+        shell: bash
+        run: |
+          set -euo pipefail
+          R='${{ github.repository }}'
+          V="v$VERSION"
+          sed '0,/^Rolling FundaCAD 1\.0 beta (/s//FundaCAD 1.0 beta (/' notes.md > version-notes.md
+          printf '\nThe [rolling beta](https://github.com/%s/releases/tag/beta) always has the newest build.\n' "$R" >> version-notes.md
+          stable=$(gh release list --repo "$R" --exclude-drafts --exclude-pre-releases --limit 1000 \
+            --json tagName --jq '.[].tagName' | grep -E '^v1\.([1-9][0-9]*)\.(0|[1-9][0-9]*)$' || true)
+          latest=true
+          [ -z "$stable" ] || latest=false
+          TITLE="FundaCAD $VERSION beta"
+          if gh release view "$V" --repo "$R" >/dev/null 2>&1; then
+            gh release edit "$V" --repo "$R" --title "$TITLE" --notes-file version-notes.md
+          else
+            gh release create "$V" --repo "$R" --target "$SHA" --draft --latest=false \
+              --title "$TITLE" --notes-file version-notes.md
+          fi
+          # Package managers pin a file by its hash, and this release's files never change.
+          (cd release && sha256sum $(ls | sort)) | sed 's/ \*/  /' > SHA256SUMS.txt
+          files=$(find release -type f | sort)
+          gh release upload "$V" --repo "$R" --clobber $files SHA256SUMS.txt
+          # GitHub makes a draft's tag only when it is published, and refuses this token a tag
+          # on a commit that changes a workflow file. The rolling beta is already out.
+          if ! gh release edit "$V" --repo "$R" --draft=false --prerelease=false --latest="$latest" 2> publish-error.txt; then
+            # The prefix keeps a line of GitHub's text from running as a workflow command.
+            sed 's/^/gh: /' publish-error.txt >&2
+            # Only the tag refusal deletes the draft, any other failure keeps it for a rerun.
+            grep -qE 'HTTP 422|tag_name|workflow' publish-error.txt || exit 1
+            [ "$(gh release view "$V" --repo "$R" --json isDraft --jq .isDraft)" = true ] || exit 1
+            gh release delete "$V" --repo "$R" --yes
+            err=$(tr -s '\r\n' ' ' < publish-error.txt | sed 's/ $//')
+            echo "::warning::no $V release, GitHub would not publish it on ${SHA:0:7}, so its draft is deleted: $err. This token may not tag a commit that changes a workflow file, the rolling beta has this build"
+          fi
+
   # Browser end-to-end checks for the imported-assembly Browser tree.
   #
   # Deliberately NON-GATING: nothing `needs:` this job, so a browser flake can
@@ -1124,6 +1175,12 @@ jobs:
           SC_TOKEN: citoken
           SC_CHROME: /usr/bin/google-chrome
         run: node e2e/matcap_first_stress_e2e.cjs
+
+      - name: Stress panel under dialogs and clear of the rail end-to-end
+        env:
+          SC_TOKEN: citoken
+          SC_CHROME: /usr/bin/google-chrome
+        run: node e2e/stress_under_dialogs_e2e.cjs
 
       # Builds only the small frames crate and tungstenite, no Tauri, no kernel.
       - name: Native frames over WebSocket end-to-end

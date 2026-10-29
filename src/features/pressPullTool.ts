@@ -6,7 +6,15 @@ import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore, RebuildState } from "../document/store";
 import type { FaceAxisReply } from "../geometry/client";
 import type { Feature, PressPullDirection, PressPullMode, Selector, Vec3 } from "../types";
-import { DimInput, type DimChoice, type DimChoices, type DimFieldDef, type DimToggleDef } from "../sketch/dimInput";
+import {
+  DimInput,
+  type DimChoice,
+  type DimChoices,
+  type DimFieldDef,
+  type DimOption,
+  type DimSegmentedDef,
+  type DimToggleDef,
+} from "../sketch/dimInput";
 import { setPrompt } from "../ui/prompt";
 import { fmtLength, snap } from "../ui/units";
 import {
@@ -14,7 +22,6 @@ import {
   createDragHandle,
   nameHandle,
   createRotationArc,
-  fluentRelease,
   HANDLE_LENGTH,
   HANDLE_UP,
   type DragHandle,
@@ -30,6 +37,7 @@ import {
   type SizeQuantity,
 } from "./sizeQuantity";
 import { CanvasGesture } from "./canvasGesture";
+import { HeldSignal } from "./heldEdit";
 import { trackedFace } from "./holeFace";
 import { commitDecision } from "./edgeDragMath";
 import {
@@ -92,6 +100,13 @@ const QUANTITIES: (DimChoice & { id: SizeQuantity })[] = [
 const CURVED = ["cylinder", "sphere", "cone", "torus"] as const;
 
 const MODES: PressPullMode[] = ["auto", "join", "cut", "new", "intersect"];
+const MODE_ICON: Record<PressPullMode, string> = {
+  auto: "presspull",
+  join: "booleanUnion",
+  cut: "booleanSubtract",
+  new: "newBody",
+  intersect: "booleanIntersect",
+};
 const MODE_LABEL: Record<PressPullMode, string> = {
   auto: "Auto",
   join: "Join",
@@ -135,7 +150,6 @@ export class PressPullTool {
   private direction: PressPullDirection = "normal";
   private holeAxis: HoleAxis | null = null;
   private axisAsk = 0; // bumped per question, so a late answer for another face is dropped
-  private directionBtn: HTMLButtonElement | null = null;
   // Where the arrow stands and points along the normal, restored on switching back.
   private faceAnchor = new THREE.Vector3();
   private faceNormal = new THREE.Vector3(0, 0, 1);
@@ -163,8 +177,6 @@ export class PressPullTool {
   private taperGrabInset = 0;
   /** true while our push is appended to the build as the live preview */
   private enginePreviewOn = false;
-  /** The drag began on the passive selection handle, a one-press gesture, so releasing finishes it. */
-  private fluentGrab = false;
   private grabValue = 0; // value at grab start (relative drag)
   private grabProj = 0; // axis projection at grab start
   private downPos = { x: 0, y: 0 };
@@ -177,6 +189,7 @@ export class PressPullTool {
 
   private dim = new DimInput();
   private onDone: ((id: string | null) => void) | null = null;
+  private readonly held = new HeldSignal();
 
   private readonly gesture: CanvasGesture;
 
@@ -219,7 +232,6 @@ export class PressPullTool {
   private grabHandle(clientX: number, clientY: number) {
     if (this.phase !== "drag") return;
     this.grabbing = true;
-    this.fluentGrab = true;
     this.downOnGizmo = true;
     this.downPos = { x: clientX, y: clientY };
     this.lastPointer = { x: clientX, y: clientY };
@@ -304,18 +316,24 @@ export class PressPullTool {
         const curved = this.curve !== null;
         this.faces.push(hit.selector);
         this.faceIds.push(hit.faceId);
-        // The axis was the first face's; the faces share one arrow from here.
+        // The faces share one arrow from here, and the engine's answer about the first face's axis no longer applies.
         this.axisAsk++;
         this.holeAxis = null;
         this.curve = null;
         this.curveRound = null;
-        if (this.directionBtn) this.directionBtn.style.display = "none";
+        this.dim.setOptionHidden("direction", true);
         if (this.direction === "axis") this.setDirection("normal");
         if (curved || this.viewport.roundFaceAt(hit.faceId, hit.anchor)) this.resizing = true;
         if (this.round && !this.inTangentRun()) this.dropRound();
         if (this.resizing) {
           this.mode = "auto";
           this.taper = 0;
+        } else {
+          // The arrow moves to the face just picked: the drag is measured along it, each face moves along its own.
+          this.anchor.copy(hit.anchor);
+          this.faceAnchor.copy(hit.anchor);
+          this.faceNormal.copy(hit.normal).normalize();
+          this.axis.copy(this.faceNormal);
         }
         if (was !== this.boxShape()) this.showBox();
         else this.syncToggle();
@@ -350,30 +368,20 @@ export class PressPullTool {
   private onUp(e: PointerEvent) {
     if (e.button !== 0 || this.phase !== "drag") return;
     if (this.pickingTarget) return; // T-mode clicks are fully handled in onDown
+    // Letting go of a handle only ends the drag: the box options and Enter are still to come.
     if (this.taperGrabbing) {
-      // Releasing the arc finishes the gesture; a press that never travelled stays put.
       this.taperGrabbing = false;
-      const moved = Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
       this.viewport.domElement.style.cursor = this.taperHovering ? "grab" : "default";
-      if (moved) this.commit();
+      this.dim.focus();
+      this.held.sync(this.pending);
       return;
     }
     if (this.grabbing) {
       this.grabbing = false;
-      // commit and cancel both want the kernel already chasing where the drag ended
       this.flushPreviewNow();
-      const release = fluentRelease({
-        fluent: this.fluentGrab,
-        moved: Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3,
-        // commit()'s own threshold, so a drag back to the face cancels rather than parking the user in a tool they never opened.
-        meaningful: !this.neutral,
-      });
-      // Cleared before dispatching: commit() can decline and leave the tool alive, and a stale flag would make the next
-      // release rerun this decision.
-      this.fluentGrab = false;
-      if (release === "commit") return this.commit();
-      if (release === "cancel") return this.cancel();
       this.viewport.domElement.style.cursor = this.hovering ? "grab" : "default";
+      this.dim.focus();
+      this.held.sync(this.pending);
       return;
     }
     const moved = Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
@@ -473,16 +481,19 @@ export class PressPullTool {
     ];
     if (!this.resizing) defs.push({ name: "taper", label: "Angle", icon: "angle", kind: "angle" });
     this.toggleKind = !this.resizing ? "mode" : this.round ? "follow" : null;
-    const toggle =
-      this.toggleKind === "mode" ? this.modeToggle() : this.toggleKind === "follow" ? this.followToggle() : undefined;
+    const options: DimOption[] = [
+      ...(this.toggleKind === "mode" ? [this.modeOption()] : this.toggleKind === "follow" ? [this.followToggle()] : []),
+      this.directionOption(),
+    ];
     this.dim.show(
       defs,
       () => this.commit(),
       () => this.cancel(),
-      toggle,
-      this.directionButton(),
+      options,
+      undefined,
       () => this.onTyped(),
     );
+    this.dim.setOptionHidden("direction", !this.holeAxis);
     this.syncToggle();
     // A round face opens at the size it already is, the number to edit; a flat face opens at 0, a travel.
     this.dim.updateFromCursor({ distance: this.readout(), ...(this.resizing ? {} : { taper: this.taper }) });
@@ -612,6 +623,7 @@ export class PressPullTool {
           }
         }
       }
+      this.held.sync(this.pending);
       this.gesture.frame();
     }
   }
@@ -771,7 +783,7 @@ export class PressPullTool {
         );
       }
       // Nothing to ghost once the drag asks for the face to go; the readout dropping to 0 and this line say so.
-      if (this.removing) return setPrompt("Release to remove this face · drag back to keep it · Esc");
+      if (this.removing) return setPrompt("Enter removes this face · drag back to keep it · Esc");
       const moves = this.followMoves();
       if (moves > 0) {
         return setPrompt(
@@ -913,16 +925,15 @@ export class PressPullTool {
     this.taperArc = null;
   }
 
-  private modeToggle(): DimToggleDef {
+  private modeOption(): DimSegmentedDef {
     return {
-      label: MODE_LABEL[this.mode],
+      name: "mode",
       title:
         "Auto grows or shrinks the face; Join, Cut, New body and Intersect extrude it and combine with any body it reaches",
-      initial: this.mode !== "auto",
-      onChange: () => {
-        this.mode = MODES[(MODES.indexOf(this.mode) + 1) % MODES.length] ?? "auto";
-        this.dim.setToggle(this.mode !== "auto");
-        this.dim.setToggleLabel(MODE_LABEL[this.mode]);
+      segments: MODES.map((m) => ({ id: m, label: MODE_LABEL[m], icon: MODE_ICON[m] })),
+      chosen: this.mode,
+      onChoose: (id) => {
+        this.mode = id as PressPullMode;
         this.refreshPreview(true);
       },
     };
@@ -931,6 +942,7 @@ export class PressPullTool {
   private followToggle(): DimToggleDef {
     return {
       label: "Tangent faces follow",
+      icon: "tangent",
       title:
         "On, the faces that run smoothly into this one move with it once it is too small or too big for them to meet it, so a slot narrows as one; off, that size is refused",
       initial: this.follow,
@@ -980,22 +992,18 @@ export class PressPullTool {
   }
 
   /** Hidden until the engine says the face has an axis; a fresh one per showing of the box. */
-  private directionButton(): HTMLButtonElement {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "dim-btn dim-direction";
-    btn.title =
-      "Along axis slides the end of a hole down the hole, so the hole gets deeper and its end keeps its shape; Along normal offsets the face";
-    btn.textContent = DIRECTION_LABEL[this.direction];
-    btn.classList.toggle("on", this.direction === "axis");
-    btn.style.display = this.holeAxis ? "" : "none";
-    btn.addEventListener("pointerdown", (e) => {
-      e.preventDefault(); // never blur the input to press it
-      e.stopPropagation();
-      this.setDirection(this.direction === "axis" ? "normal" : "axis");
-    });
-    this.directionBtn = btn;
-    return btn;
+  private directionOption(): DimSegmentedDef {
+    return {
+      name: "direction",
+      title:
+        "Along axis slides the end of a hole down the hole, so the hole gets deeper and its end keeps its shape; Along normal offsets the face",
+      segments: [
+        { id: "normal", label: DIRECTION_LABEL.normal, icon: "offsetFace" },
+        { id: "axis", label: DIRECTION_LABEL.axis, icon: "datumAxis" },
+      ],
+      chosen: this.direction,
+      onChoose: (id) => this.setDirection(id as PressPullDirection),
+    };
   }
 
   private askAxis(face: Selector, bodyId: string | null) {
@@ -1009,7 +1017,7 @@ export class PressPullTool {
       if (this.round) return;
       this.holeAxis = offeredAxis(reply);
       if (!this.holeAxis) return;
-      if (this.directionBtn) this.directionBtn.style.display = "";
+      this.dim.setOptionHidden("direction", false);
       if (initialDirection(this.holeAxis) === "axis") this.setDirection("axis");
     });
   }
@@ -1045,7 +1053,7 @@ export class PressPullTool {
     if (!this.quantityPicked) this.quantity = defaultQuantity(r.full);
     // A round end of a hole still slides down it; a cylinder never did.
     this.holeAxis = r.kind === "cylinder" ? null : offeredAxis(reply);
-    if (this.directionBtn) this.directionBtn.style.display = this.holeAxis ? "" : "none";
+    this.dim.setOptionHidden("direction", !this.holeAxis);
     this.setDirection(initialDirection(this.holeAxis), was);
     return true;
   }
@@ -1084,10 +1092,7 @@ export class PressPullTool {
       this.value = 0;
       this.showBox();
     }
-    if (this.directionBtn) {
-      this.directionBtn.textContent = DIRECTION_LABEL[this.direction];
-      this.directionBtn.classList.toggle("on", this.direction === "axis");
-    }
+    this.dim.setOption("direction", this.direction);
     this.dim.setFieldHidden("taper", this.direction === "axis");
     if (this.direction === "axis" && axis) {
       const [x, y, z] = anchorOnAxis([this.faceAnchor.x, this.faceAnchor.y, this.faceAnchor.z], axis);
@@ -1232,6 +1237,26 @@ export class PressPullTool {
     this.onDone?.(null);
   }
 
+  /** A push dragged or typed that Enter would write. */
+  get pending(): boolean {
+    return this.active && this.phase === "drag" && !this.pickingTarget && !this.neutral;
+  }
+
+  get dragging(): boolean {
+    return this.grabbing || this.taperGrabbing;
+  }
+
+  /** Told when `pending` turns on or off, for the unsaved mark and the close guard. */
+  onHeldChange(fn: () => void): () => void {
+    return this.held.on(fn);
+  }
+
+  /** For a save: the push is written as Enter writes it, which may decline and keep the tool open. A drag still
+   *  under the hand is left alone. */
+  confirmHeld() {
+    if (this.pending && !this.dragging) this.commit();
+  }
+
   private cleanup() {
     const el = this.viewport.domElement;
     this.gesture.detach();
@@ -1261,7 +1286,6 @@ export class PressPullTool {
     this.taperGrabbing = false;
     this.taperHovering = false;
     this.taper = 0;
-    this.fluentGrab = false;
     this.hovering = false;
     this.value = 0;
     this.round = null;
@@ -1272,8 +1296,8 @@ export class PressPullTool {
     this.axisAsk++;
     this.holeAxis = null;
     this.direction = "normal";
-    this.directionBtn = null;
     setPrompt(null);
+    this.held.sync(this.pending);
   }
 
   private disposeGizmo() {

@@ -324,6 +324,20 @@ the bundle:
   then the warning, which is not optional: this is the Funda Engine and the sidecar is retired, anything that builds differently from the sidecar is worth a report, plugin
   geometry runs as WebAssembly components, and the sidecar's documents open
   here.
+- Every beta also stays on as a normal release of its own, `v1.0.<run
+  number>`, titled `FundaCAD 1.0.<run number> beta`, with the same installers
+  and plugin bundles plus a `SHA256SUMS.txt`, but no `latest.json`, so a version can be linked and
+  packaged after the rolling beta moves on while installed betas keep their
+  feed. It starts as a draft until its files are up, and is the repository's
+  latest release only while no stable release is published (stable installs
+  find their feed through `releases/latest`). Its tag is made on the build's
+  commit when the draft is published, by the job's token, which GitHub refuses
+  on a commit that changes a workflow file. A draft whose tag GitHub refuses (an
+  HTTP 422, or an error that names `tag_name` or a workflow) is deleted with a
+  warning that quotes GitHub's error, and the build has only the rolling beta.
+  Any other failure, such as a failed create or a 5xx on publish, fails the
+  step, and a rerun of the job publishes the draft it keeps.
+  `tests/build/test_version_release.py` runs the step against a stub `gh`.
 
 ### 6.1 The updater endpoint
 
@@ -385,10 +399,12 @@ worker reached over Tauri IPC, so the webview never opens a socket.
   only, not the build tree beside it) under the same key as `rust-geom`'s; the
   Linux leg installs `cmake`, which `.github/actions/linux-deps` deliberately
   leaves out.
-- The updater is still off everywhere. `tauri.conf.json` carries upstream's
-  minisign pubkey, so `release` withholds `latest.json` and says so in
-  the notes, on every channel. Generating a keypair turns the feed
-  on.
+- The updater is on for every channel. Since run 386 `tauri.conf.json` carries
+  this project's own minisign pubkey (`57D9422..`), and `release` signs each
+  installer with `TAURI_SIGNING_PRIVATE_KEY` and writes a signed `latest.json`.
+  It still withholds the feed, with a warning, if the pubkey is upstream's
+  again or nothing was signed. Installs from before 1.0.386 carry upstream's
+  key, so they cannot verify an update and need a new installer.
 - Plugin bundles ARE published to this release, packed by `bundle` with
   their geometry components and nothing else, and the app installs from it
   (`RELEASE_TAG` in `src/plugins/index.ts`). A development or stable build
@@ -600,6 +616,10 @@ line out (`cargo run --release -p fundacad-geom --example bench_suite -- ...`):
 
 `FUNDACAD_BENCH_PHASES=1` adds a phase table (`crate::bench`).
 `FUNDACAD_THREADS` caps both the engine's rayon pool and OCCT's.
+Always on, a cached rebuild's reply carries `timing` (copy, replay with its slowest feature, post, mesh in ms), and the
+app writes one `edit` line per committed rebuild to its log: `edit 3.8 s: copy 2.8, replay 0.01 (fillet), post 0.3,
+mesh 0.008 (1 part), reply 600 KB, apply 0.4`. Mesh is the wall time of the meshing step (bodies mesh in parallel, and stored mesh reads count in it), post is what the
+engine did beyond the other three (document parse, the reply fields), apply the app's commit.
 
 `crates/fundacad-cli/examples/bench_open.rs` times the document file itself, for
 documents with big imports (`cargo run --release -p fundacad-cli --example bench_open -- ...`):

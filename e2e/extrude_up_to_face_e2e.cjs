@@ -105,10 +105,10 @@ const check = (name, ok, detail) => {
   await page.waitForTimeout(500);
   const rows = await page.$$eval(".timeline-props .param-row", (els) =>
     els.map((el) => {
-      const sel = el.querySelector("select");
+      const sel = el.querySelector("[role=combobox]:not(.ui-unit-chip)");
       return {
         label: el.querySelector("label")?.textContent?.trim() ?? "",
-        value: sel ? (sel.options[sel.selectedIndex]?.text ?? "") : null,
+        value: sel ? sel.textContent.trim() : null,
       };
     }),
   );

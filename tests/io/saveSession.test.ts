@@ -157,7 +157,7 @@ describe("a save and the document it began with", () => {
     });
   });
 
-  it("an autosave timer of the old document never fires after New, the new document's own does", async () => {
+  it("an autosave timer of the old document never fires after New, its unsaved edits are written as New ends it", async () => {
     vi.useFakeTimers();
     try {
       const store = edited("D:/parts/a.funda");
@@ -174,7 +174,7 @@ describe("a save and the document it began with", () => {
       const writes = host.invoked
         .filter((c) => c.cmd === "recovery_write")
         .map((c) => JSON.parse(String(c.args.json)).doc.features.map((f: { id: string }) => f.id));
-      expect({ afterNew, writes }).toEqual({ afterNew: 0, writes: [["b-plate"]] });
+      expect({ afterNew, writes }).toEqual({ afterNew: 1, writes: [["a-plate", "a-more"], ["b-plate"]] });
     } finally {
       vi.useRealTimers();
     }
@@ -220,6 +220,7 @@ describe("a save and the document it began with", () => {
       installAutosave(store);
       store.addFeature(box("a-more", 5));
       vi.advanceTimersByTime(200_000);
+      store.markGivenUp();
       store.newDocument();
       await flush();
       const afterNew = host.invoked.filter((c) => c.cmd === "recovery_write").length;

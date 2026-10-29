@@ -39,7 +39,7 @@ impl Shape {
     }
 }
 
-fn rotate(p: V3, ax: f64, ay: f64, az: f64) -> V3 {
+pub(crate) fn rotate(p: V3, ax: f64, ay: f64, az: f64) -> V3 {
     let (s, c) = ax.sin_cos();
     let p = [p[0], c * p[1] - s * p[2], s * p[1] + c * p[2]];
     let (s, c) = ay.sin_cos();
@@ -50,7 +50,7 @@ fn rotate(p: V3, ax: f64, ay: f64, az: f64) -> V3 {
 
 /// A box `size` with corner at the origin, then `place`d; face ids 2a + side (0 for
 /// minus x, 1 for plus x, ...), two triangles per face.
-fn cuboid(size: V3, place: &dyn Fn(V3) -> V3) -> SurfaceMesh {
+pub(crate) fn cuboid(size: V3, place: &dyn Fn(V3) -> V3) -> SurfaceMesh {
     let mut s = Shape::default();
     for i in 0..8 {
         let p = [0, 1, 2].map(|a| if (i >> a) & 1 == 1 { size[a] } else { 0.0 });
@@ -130,7 +130,7 @@ fn torus(big: f64, small: f64, nu: usize, nv: usize) -> SurfaceMesh {
 
 /// Square plate `2 half` wide and `thick` high with a round hole of radius `r` through it
 /// along z. Face ids: 0 top, 1 bottom, 2 to 5 the sides, 6 the hole.
-fn holed_plate(half: f64, thick: f64, r: f64, segments: usize) -> SurfaceMesh {
+pub(crate) fn holed_plate(half: f64, thick: f64, r: f64, segments: usize) -> SurfaceMesh {
     assert_eq!(segments % 8, 0, "the square corners must be on the sampled angles");
     let mut s = Shape::default();
     let tau = 2.0 * std::f64::consts::PI;

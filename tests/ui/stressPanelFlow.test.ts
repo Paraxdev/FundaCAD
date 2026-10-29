@@ -7,7 +7,11 @@ import type { StressOptions, StressReply, StressResult } from "../../src/geometr
 import type { CadDocument, StressStudy, Vec3 } from "../../src/types";
 import type { StressGlyphHandlers, StressGlyphModel } from "../../src/viewport/stressGlyphs";
 import { autoDeformScale, probeLabel, probeValues, swingScale } from "../../src/ui/stress";
-import { drawnCorner, engineHit, refineSurface } from "../../src/ui/stressSurface";
+import { drawnSurface, readAt, weakSpot, type DisplayMesh } from "../../src/ui/stressDrawn";
+import { locator, type EngineSurface } from "../../src/ui/stressLocate";
+
+// Without a display mesh the engine surface is drawn as it came.
+const asSent = (s: EngineSurface) => drawnSurface(null, s, locator(s), { min: 1, max: 4 });
 
 // The Stress panel's facade against a hand-made viewport, store and engine:
 // faces come from the selection stamped with their body, Run sends what the
@@ -68,8 +72,10 @@ function rig() {
   const glyphCalls: string[] = [];
   let handlers: StressGlyphHandlers | null = null;
   let pick: { tri: number; weights: Vec3; point: Vec3 } | null = null;
+  let display: DisplayMesh | null = null;
 
   const viewport = {
+    bodyDisplayMesh: () => display,
     getSelectedBodies: () => [],
     getSelectedFaceIds: () => selected,
     faceIdToBodyId: (f: number) => FACES[f]?.body ?? null,
@@ -121,7 +127,9 @@ function rig() {
       openListeners.push(fn);
       return () => {};
     },
-    isBodyVisible: () => true,
+    isBodyVisible: (_id: string) => true,
+    bodyName: (_id: string): string | undefined => undefined,
+    loadCount: 3,
     get stressStudy() {
       return study;
     },
@@ -156,6 +164,7 @@ function rig() {
         setModel: (m: StressGlyphModel) => glyphModels.push(m),
         setProbe: (on: boolean) => glyphCalls.push(`probe ${on}`),
         setProbePins: (p: unknown[]) => glyphCalls.push(`pins ${p.length}`),
+        setPlacing: (p: { radius: number | null } | null) => glyphCalls.push(`placing ${p ? p.radius : "off"}`),
         setWeakSpot: (w: { tri: number; weights: Vec3; label: string } | null) => weakSpots.push(w),
         dispose: () => glyphCalls.push("dispose"),
       };
@@ -164,6 +173,7 @@ function rig() {
   const ui = createPanels(deps);
   return {
     ui,
+    store,
     built,
     marks,
     overlays,
@@ -176,6 +186,9 @@ function rig() {
     glyphModels,
     glyphCalls,
     handlers: () => handlers!,
+    showDisplay: (m: DisplayMesh | null) => {
+      display = m;
+    },
     pickAt: (p: typeof pick) => {
       pick = p;
     },
@@ -195,6 +208,11 @@ function rig() {
     },
     settle: (r: StressResult) => settle(r),
     editDoc: () => docListeners.forEach((f) => f()),
+    /** An assistant's or a plugin's load put in place of the model, keeping the study. */
+    replaceLoad: () => {
+      store.loadCount++;
+      docListeners.forEach((f) => f());
+    },
     /** A new build drawn with these faces: the viewport drops its overlays and
      *  the rebuild bridge asks the panel to mark again. */
     rebuild: (faces: FaceMap) => {
@@ -252,14 +270,14 @@ describe("stress panel flow", () => {
     r.ui.setStressFacesFromSelection({ support: 1 });
     const d = usePanelsStore().stress!;
     const toasts = r.statuses.length;
-    r.ui.placeStressSpot({ load: 1 });
+    r.ui.placeStressSpot({ load: 1 }, "spot");
     expect(d.placing).toEqual({ load: 1 });
     expect(r.statuses.slice(toasts), "the panel's own hint says it, no toast over it").toEqual([]);
     // A click on another body is told so and places nothing.
-    r.handlers().placeSpot!({ at: [1, 1, 0], normal: [0, 0, 1], body: "b2" }, false);
+    r.handlers().placeSpot!({ at: [1, 1, 0], normal: [0, 0, 1], body: "b2", faceId: 9 }, false);
     expect(r.statuses.at(-1)).toMatch(/another body/);
     expect(d.setup.loads[0]!.spots).toBeUndefined();
-    r.handlers().placeSpot!({ at: [5.00001, 5, 10], normal: [0, 0, 1], body: "b1" }, false);
+    r.handlers().placeSpot!({ at: [5.00001, 5, 10], normal: [0, 0, 1], body: "b1", faceId: 2 }, false);
     expect(d.placing, "one click, one spot").toBeNull();
     expect(d.setup.loads[0]!.spots).toEqual([{ at: [5, 5, 10], radius: 5, normal: [0, 0, 1] }]);
     await flush();
@@ -274,8 +292,8 @@ describe("stress panel flow", () => {
     expect(d.setup.loads[0]!.spots![0]!.radius).toBe(5);
     r.handlers().spotRadius!({ load: 1 }, 0, 2);
     r.handlers().spotRadiusEnd!({ load: 1 }, 0, false);
-    r.ui.placeStressSpot({ load: 1 });
-    r.handlers().placeSpot!({ at: [2, 2, 10], normal: [0, 0, 1], body: "b1" }, true);
+    r.ui.placeStressSpot({ load: 1 }, "spot");
+    r.handlers().placeSpot!({ at: [2, 2, 10], normal: [0, 0, 1], body: "b1", faceId: 2 }, true);
     expect(d.placing, "Shift keeps placing").toEqual({ load: 1 });
     r.handlers().leavePlacing!();
     expect(d.placing).toBeNull();
@@ -284,6 +302,71 @@ describe("stress panel flow", () => {
 
     void r.ui.runStress();
     expect(r.calls[0]!.opts.loads).toEqual([{ spots: [{ at: [5, 5, 10], radius: 2 }], force: [0, 0, -100] }]);
+  });
+
+  it("a click adds the whole face clicked, Shift adds more, and a face held already is not added twice", async () => {
+    const r = rig();
+    r.ui.showStress();
+    const d = usePanelsStore().stress!;
+    r.ui.placeStressSpot({ support: 1 });
+    expect([d.placing, d.placeAs]).toEqual([{ support: 1 }, "face"]);
+    expect(r.glyphCalls.at(-1), "no spot orb follows the cursor").toBe("placing null");
+    r.handlers().placeSpot!({ at: [3.25, 7.5, 0], normal: [0, 0, -1], body: "b1", faceId: 1 }, false);
+    expect(d.placing, "one click, one face").toBeNull();
+    expect(d.setup.body).toBe("b1");
+    expect(d.setup.supports[0]).toEqual({
+      id: 1,
+      type: "fixed",
+      faces: {
+        selectors: [{ kind: "face", by: "nearest", point: [3.25, 7.5, 0], body: "b1" }],
+        faceIds: [1],
+        normalSum: [0, 0, -100],
+        area: 100,
+      },
+    });
+
+    r.ui.placeStressSpot({ support: 1 });
+    r.handlers().placeSpot!({ at: [6.5, 1.75, 10], normal: [0, 0, 1], body: "b1", faceId: 2 }, true);
+    r.handlers().placeSpot!({ at: [8, 4, 10], normal: [0, 0, 1], body: "b1", faceId: 2 }, true);
+    expect(d.placing, "Shift keeps picking").toEqual({ support: 1 });
+    r.handlers().placeSpot!({ at: [1, 1, 0], normal: [0, 0, 1], body: "b2", faceId: 9 }, true);
+    expect(r.statuses.at(-1)).toMatch(/another body/);
+    expect(d.setup.supports[0]!.faces.selectors.map((x) => "point" in x && x.point)).toEqual([
+      [3.25, 7.5, 0],
+      [6.5, 1.75, 10],
+    ]);
+    expect(d.setup.supports[0]!.faces.faceIds).toEqual([1, 2]);
+    expect(d.setup.supports[0]!.spots).toBeUndefined();
+    r.ui.placeStressSpot({ support: 1 });
+    expect(d.placing, "the button again stops picking").toBeNull();
+    expect(r.marks.at(-1)).toEqual([
+      { faceIds: [1, 2], color: 0x4ac6ff },
+      { faceIds: [], color: 0xff9a2e },
+    ]);
+  });
+
+  it("switches between picking faces and placing spots on one row, and each button stops only its own", () => {
+    const r = rig();
+    r.ui.showStress();
+    const d = usePanelsStore().stress!;
+    r.select([1]);
+    r.ui.setStressFacesFromSelection({ support: 1 });
+    r.ui.placeStressSpot({ load: 1 });
+    r.ui.placeStressSpot({ load: 1 }, "spot");
+    expect([d.placing, d.placeAs], "Spot switches the row to spots").toEqual([{ load: 1 }, "spot"]);
+    expect(r.glyphCalls.slice(-2)).toEqual(["placing null", "placing 5"]);
+    r.handlers().placeSpot!({ at: [7.25, 2.5, 10], normal: [0, 0, 1], body: "b1", faceId: 2 }, false);
+    expect(d.setup.loads[0]!.faces.faceIds, "a spot click adds no face").toEqual([]);
+    expect(d.setup.loads[0]!.spots).toEqual([{ at: [7.25, 2.5, 10], radius: 5, normal: [0, 0, 1] }]);
+    r.ui.placeStressSpot({ load: 1 }, "spot");
+    r.ui.placeStressSpot({ load: 1 }, "spot");
+    expect(d.placing).toBeNull();
+    r.ui.placeStressSpot({ load: 1 }, "spot");
+    r.ui.placeStressSpot({ load: 1 });
+    expect([d.placing, d.placeAs], "Click faces switches it back").toEqual([{ load: 1 }, "face"]);
+    r.handlers().placeSpot!({ at: [2.5, 6, 10], normal: [0, 0, 1], body: "b1", faceId: 2 }, false);
+    expect(d.setup.loads[0]!.faces.faceIds).toEqual([2]);
+    expect(d.setup.loads[0]!.spots).toHaveLength(1);
   });
 
   it("refuses faces on another body than the one analysed", () => {
@@ -310,16 +393,38 @@ describe("stress panel flow", () => {
     await run;
     expect(usePanelsStore().stress!.running).toBe(false);
     expect(usePanelsStore().stress!.result?.rows.find((x) => x.k === "Safety factor")?.v).toBe("12.5");
-    // One engine triangle is drawn two levels finer, sixteen triangles, over the engine's own range.
-    const drawn = refineSurface(reply.surface!, 2);
+    // With no display mesh for the body the engine's triangle is drawn as sent, over the engine's own range.
     expect(r.overlays.at(-1)).toEqual({
       bodyId: "b1",
-      positions: drawn.positions,
-      indices: drawn.indices,
-      values: drawn.values,
+      positions: Float32Array.from([0, 0, 0, 1, 0, 0, 0, 1, 0]),
+      indices: Uint32Array.from([0, 1, 2]),
+      values: Float32Array.from([1, 4, 2]),
       range: { min: 1, max: 4 },
+      colours: true,
     });
-    expect(drawn.indices.length / 3).toBe(16);
+  });
+
+  it("paints the body's own display mesh, split finer, with the engine's values at its corners", async () => {
+    const r = rig();
+    setUp(r);
+    // The engine triangle as the viewport tessellated it, global face 7 being the body's local face 0.
+    r.showDisplay({
+      positions: Float32Array.from([0, 0, 0, 1, 0, 0, 0, 1, 0]),
+      indices: Uint32Array.from([0, 1, 2]),
+      faceIds: Int32Array.from([7]),
+      faceStart: 7,
+    });
+    const run = r.ui.runStress();
+    r.settle({ ok: true, result: reply });
+    await run;
+    const o = r.overlays.at(-1) as { positions: Float32Array; indices: Uint32Array; values: Float32Array };
+    expect(o.indices.length / 3).toBeGreaterThan(1);
+    const corner = (p: Vec3) => {
+      for (let v = 0; v < o.positions.length / 3; v++)
+        if ([0, 1, 2].every((k) => o.positions[v * 3 + k] === p[k])) return Math.round(o.values[v]! * 1e4) / 1e4;
+      return null;
+    };
+    expect([corner([0, 0, 0]), corner([1, 0, 0]), corner([0, 1, 0])]).toEqual([1, 4, 2]);
   });
 
   it("cancels by its own request id and stays quiet about it", async () => {
@@ -392,7 +497,9 @@ describe("stress panel across changes", () => {
     // No tint over the colours.
     expect(r.marks.at(-1)).toBeNull();
     r.ui.setStressColours(false);
-    expect(r.overlays.at(-1)).toBeNull();
+    // Plain and still, kept for the weakest spot's pin while the body itself shows.
+    expect(r.overlays.at(-1)).toMatchObject({ bodyId: "b1", colours: false });
+    expect(r.overlays.at(-1)).not.toHaveProperty("displacement");
     expect(p.stress!.colours).toBe("hidden");
     expect(r.marks.at(-1)).toEqual([
       { faceIds: [1], color: 0x4ac6ff },
@@ -734,11 +841,11 @@ describe("the deformed shape and the probe", () => {
     await deformed(r);
     const p = usePanelsStore();
     const auto = p.stress!.deform!.auto;
-    expect(p.stress!.deform).toEqual({ scale: auto, auto, max: 4 * auto, animate: false });
+    expect(p.stress!.deform).toEqual({ scale: auto, auto, max: 4 * auto, animate: false, shown: true });
     // The scale is the engine mesh's; the drawn shape bends by the refined displacement.
     expect(auto).toBe(autoDeformScale(moving.surface!.positions, moving.surface!.displacement!));
     expect(r.overlays.at(-1)).toMatchObject({
-      displacement: refineSurface(moving.surface!, 2).displacement,
+      displacement: Float32Array.from(moving.surface!.displacement!),
       scale: auto,
     });
     r.ui.setStressDeformation(1);
@@ -773,13 +880,14 @@ describe("the deformed shape and the probe", () => {
     await deformed(r);
     const p = usePanelsStore();
     r.ui.setStressProbe(true);
-    const hit = { tri: 13, weights: [0.25, 0.25, 0.5] as Vec3, point: [0, 0, 0] as Vec3 };
+    const hit = { tri: 0, weights: [0.25, 0.25, 0.5] as Vec3, point: [0, 0, 0] as Vec3 };
     r.handlers().pinProbe(hit);
     const label = p.stress!.pins[0]!.label;
     r.ui.setStressDeformation(37.5);
     expect(p.stress!.pins.map((x) => ({ tri: x.tri, weights: x.weights, label: x.label }))).toEqual([
-      { tri: 13, weights: [0.25, 0.25, 0.5], label },
+      { tri: 0, weights: [0.25, 0.25, 0.5], label },
     ]);
+    expect(r.handlers().probeLabel({ ...hit, tri: 13 }), "a triangle the drawing does not have").toBeNull();
   });
 
   it("animates on frames until the panel closes", async () => {
@@ -816,14 +924,16 @@ describe("the deformed shape and the probe", () => {
     r.ui.setStressProbe(true);
     expect(p.stress!.probe).toBe(true);
     expect(r.glyphCalls).toContain("probe true");
-    // A hit on the drawn mesh reads the engine's surface: at an engine vertex its own values, between them the
-    // engine's interpolation in the engine triangle the drawn one lies in.
-    const drawn = refineSurface(moving.surface!, 2);
-    const corner = drawnCorner(drawn, 1)!;
+    // A hit on the drawn mesh reads the engine's surface where its rest point lies: at an engine vertex its own
+    // values, between them the engine's interpolation.
+    const drawn = asSent(moving.surface!);
+    const corner = { tri: 0, weights: [0, 1, 0] as Vec3 };
     const hit = { ...corner, point: [100, 0, -2] as Vec3 };
     expect(r.handlers().probeLabel(hit)).toBe("4 MPa, 2 mm");
-    const inner = { tri: 9, weights: [0.2, 0.5, 0.3] as Vec3, point: [0, 0, 0] as Vec3 };
-    const at = engineHit(drawn, inner.tri, inner.weights)!;
+    const inner = { tri: 0, weights: [0.2, 0.5, 0.3] as Vec3, point: [0, 0, 0] as Vec3 };
+    const at = readAt(drawn, locator(moving.surface!), inner.tri, inner.weights)!;
+    expect(at.tri).toBe(0);
+    expect(at.weights.map((w) => Math.round(w * 1e5) / 1e5)).toEqual([0.2, 0.5, 0.3]);
     expect(r.handlers().probeLabel(inner)).toBe(probeLabel(probeValues(moving.surface!, at.tri, at.weights)!, "mm"));
     r.handlers().pinProbe(hit);
     expect(p.stress!.pins.map((x) => x.label)).toEqual(["4 MPa, 2 mm"]);
@@ -1132,7 +1242,7 @@ describe("playing and pausing the deformation", () => {
     expect(scale).not.toBe(1);
   });
 
-  it("pauses when the tab asks, and when the colours go, coming back at the held pose", async () => {
+  it("pauses when the tab asks, and when the shape goes, coming back at the held pose", async () => {
     const { r, scale } = await played();
     const p = usePanelsStore();
     r.ui.setStressAnimate(true);
@@ -1149,10 +1259,12 @@ describe("playing and pausing the deformation", () => {
     frame(5000);
     clock = 5300;
     r.ui.setStressColours(false);
+    expect(p.stress!.deform!.animate, "the colours no longer carry the shape").toBe(true);
+    r.ui.setStressShape(false);
     expect(p.stress!.deform!.animate).toBe(false);
     expect(frames.size).toBe(0);
-    r.ui.setStressColours(true);
-    expect(r.overlays.at(-1)).toMatchObject({ scale: swingScale(REST + 500, scale) });
+    r.ui.setStressShape(true);
+    expect(r.overlays.at(-1)).toMatchObject({ colours: false, scale: swingScale(REST + 500, scale) });
   });
 
   it("resets to the full pose and cancels on Close, and a new Run starts still at full", async () => {
@@ -1239,7 +1351,7 @@ describe("the result through a close", () => {
     r.ui.showStress();
     const p = usePanelsStore();
     expect(p.stress!.colours).toBe("hidden");
-    expect(r.overlays.at(-1)).toBeNull();
+    expect(r.overlays.at(-1)).toMatchObject({ bodyId: "b1", colours: false });
     r.ui.setStressColours(true);
     expect(p.stress!.colours).toBe("shown");
   });
@@ -1266,6 +1378,23 @@ describe("the result through a close", () => {
     expect(p.stress!.result).not.toBeNull();
     expect(p.stress!.colours).toBe("shown");
     expect(p.stress!.ranSetup).not.toBe(JSON.stringify(p.stress!.setup));
+  });
+
+  it("drops it after a replacing load, the model it ran on is gone, and keeps it again after the next Run", async () => {
+    const { r, p } = await ranAndClosed();
+    r.replaceLoad();
+    r.ui.showStress();
+    expect(p.stress!.result).toBeNull();
+    expect(p.stress!.colours).toBe("none");
+    expect(r.overlays.at(-1)).toBeNull();
+
+    setUp(r);
+    await settled(r);
+    const again = p.stress!.result;
+    r.ui.closeStress();
+    r.editDoc();
+    r.ui.showStress();
+    expect(p.stress!.result).toEqual(again);
   });
 
   it("drops it for another body, another document, or a Run stopped by the close", async () => {
@@ -1317,31 +1446,209 @@ describe("the weakest spot", () => {
     await run;
   }
 
-  it("is pinned at the drawn corner of the vertex nearest the peak, with the safety factor", async () => {
+  it("is pinned at the drawn point nearest the peak, with the safety factor", async () => {
     const r = rig();
     setUp(r);
     await ran(r, bent);
-    const corner = drawnCorner(refineSurface(bent.surface!, 2), 1)!;
-    expect(r.weakSpots.at(-1)).toEqual({ ...corner, label: "Weakest, 3.3x safe" });
+    const spot = weakSpot(asSent(bent.surface!), [100.2, 0.1, -0.05], 2)!;
+    expect(spot.tri).toBe(0);
+    expect(spot.weights[1]).toBeGreaterThan(0.99);
+    expect(r.weakSpots.at(-1)).toEqual({ ...spot, label: "Weakest, at least 3.3x safe" });
   });
 
-  it("goes with the colours, on a new Run and when the model changes, and moves with a new peak", async () => {
+  it("stays through the colours and shape switches, goes on a new Run and a model change, moves with a new peak", async () => {
     const r = rig();
     setUp(r);
     await ran(r, bent);
+    const pin = r.weakSpots.at(-1);
+    expect(pin).not.toBeNull();
     r.ui.setStressColours(false);
-    expect(r.weakSpots.at(-1)).toBeNull();
+    r.ui.setStressShape(false);
+    expect(r.weakSpots.at(-1)).toEqual(pin);
     r.ui.setStressColours(true);
-    expect(r.weakSpots.at(-1)).not.toBeNull();
+    expect(r.weakSpots.at(-1)).toEqual(pin);
     const run = r.ui.runStress();
     expect(r.weakSpots.at(-1)).toBeNull();
     const moved = { ...bent, safetyFactor: null, maxVonMises: { value: 4, at: [2.5, 9.5, 0.5] as Vec3, face: 2 } };
     r.settle({ ok: true, result: moved });
     await run;
-    const corner = drawnCorner(refineSurface(bent.surface!, 2), 2)!;
-    expect(r.weakSpots.at(-1)).toEqual({ ...corner, label: "Weakest" });
+    const spot = weakSpot(asSent(bent.surface!), [2.5, 9.5, 0.5], 2)!;
+    expect(spot.weights[2]).toBeGreaterThan(0.9);
+    expect(r.weakSpots.at(-1)).toEqual({ ...spot, label: "Weakest" });
     r.editDoc();
     r.rebuild(FIRST);
     expect(r.weakSpots.at(-1)).toBeNull();
+  });
+});
+
+describe("the colours and the deformed shape, each with its own switch", () => {
+  const leaning: StressReply = {
+    ...reply,
+    safetyFactor: 4.57,
+    maxVonMises: { value: 4, at: [100.2, 0.1, -0.05], face: 2 },
+    surface: {
+      ...reply.surface!,
+      positions: [13.5, -7.25, 4.1, 100, 0, 0, 2, 10, 0.5],
+      displacement: [0, 0, 0, 0.25, 0, -2, 0, 0.5, -1],
+    },
+  };
+  const TINT = [
+    { faceIds: [1], color: 0x4ac6ff },
+    { faceIds: [2], color: 0xff9a2e },
+  ];
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  async function ran() {
+    const r = rig();
+    setUp(r);
+    const run = r.ui.runStress();
+    r.settle({ ok: true, result: leaning });
+    await run;
+    const p = usePanelsStore();
+    const drawn = asSent(leaning.surface!);
+    const still = {
+      bodyId: "b1",
+      positions: drawn.positions,
+      indices: drawn.indices,
+      values: drawn.values,
+      range: { min: 1, max: 4 },
+    };
+    const bent = { displacement: drawn.displacement, scale: p.stress!.deform!.auto };
+    const pin = r.weakSpots.at(-1)!;
+    const seen = () => ({
+      overlay: r.overlays.at(-1),
+      marks: r.marks.at(-1),
+      pin: r.weakSpots.at(-1),
+      colours: p.stress!.colours,
+      shape: p.stress!.deform!.shown,
+    });
+    return { r, p, still, bent, pin, seen };
+  }
+
+  it("draws each of the four combinations, the weakest pin through all of them", async () => {
+    const { r, still, bent, pin, seen } = await ran();
+    expect(pin.label).toBe("Weakest, at least 4.5x safe");
+    expect(seen()).toEqual({
+      overlay: { ...still, colours: true, ...bent },
+      marks: null,
+      pin,
+      colours: "shown",
+      shape: true,
+    });
+    r.ui.setStressColours(false);
+    expect(seen()).toEqual({
+      overlay: { ...still, colours: false, ...bent },
+      marks: null,
+      pin,
+      colours: "hidden",
+      shape: true,
+    });
+    r.ui.setStressShape(false);
+    // Plain and still: the body itself shows, its faces tinted and pickable.
+    expect(seen()).toEqual({
+      overlay: { ...still, colours: false },
+      marks: TINT,
+      pin,
+      colours: "hidden",
+      shape: false,
+    });
+    r.ui.setStressColours(true);
+    expect(seen()).toEqual({ overlay: { ...still, colours: true }, marks: null, pin, colours: "shown", shape: false });
+    r.ui.setStressShape(true);
+    expect(seen()).toEqual({
+      overlay: { ...still, colours: true, ...bent },
+      marks: null,
+      pin,
+      colours: "shown",
+      shape: true,
+    });
+  });
+
+  it("a shape switch already on draws nothing again, and Close leaves the plain body", async () => {
+    const { r } = await ran();
+    const n = r.overlays.length;
+    r.ui.setStressShape(true);
+    expect(r.overlays.length).toBe(n);
+    r.ui.setStressColours(false);
+    r.ui.closeStress();
+    expect({ overlay: r.overlays.at(-1), marks: r.marks.at(-1), panel: usePanelsStore().stress }).toEqual({
+      overlay: null,
+      marks: null,
+      panel: null,
+    });
+  });
+
+  it("placing a spot takes both off, so the click lands on the body", async () => {
+    const { r, p, still, pin, seen } = await ran();
+    r.ui.placeStressSpot({ support: p.stress!.setup.supports[0]!.id });
+    expect(seen()).toEqual({
+      overlay: { ...still, colours: false },
+      marks: TINT,
+      pin,
+      colours: "hidden",
+      shape: false,
+    });
+  });
+
+  it("Play puts a hidden shape back, and the slider moves it only while it is drawn", async () => {
+    const { r, p, still, bent, seen } = await ran();
+    r.ui.setStressShape(false);
+    r.ui.setStressDeformation(2.5);
+    expect(r.overlays.at(-1)).toEqual({ ...still, colours: true });
+    r.ui.setStressShape(true);
+    expect(seen().overlay).toEqual({ ...still, colours: true, ...bent, scale: 2.5 });
+    vi.stubGlobal("requestAnimationFrame", () => 7);
+    vi.stubGlobal("cancelAnimationFrame", () => {});
+    r.ui.setStressShape(false);
+    r.ui.setStressAnimate(true);
+    expect({ shape: p.stress!.deform!.shown, animate: p.stress!.deform!.animate }).toEqual({
+      shape: true,
+      animate: true,
+    });
+  });
+
+  it("an eye toggle keeps the shape and the pin with the colours off, and draws nothing over a hidden body", async () => {
+    const { r, still, bent, pin, seen } = await ran();
+    r.rebuild(FIRST);
+    expect(seen()).toEqual({
+      overlay: { ...still, colours: false, ...bent },
+      marks: null,
+      pin,
+      colours: "hidden",
+      shape: true,
+    });
+    r.store.isBodyVisible = () => false;
+    r.rebuild(FIRST);
+    expect(seen()).toEqual({ overlay: null, marks: null, pin, colours: "hidden", shape: true });
+  });
+
+  it("neither switch draws over a body hidden with the eye, and both draw again once it shows", async () => {
+    const { r, still, bent } = await ran();
+    r.store.isBodyVisible = (id: string) => id !== "b1";
+    r.ui.setStressShape(false);
+    expect(r.overlays.at(-1)).toBeNull();
+    r.ui.setStressColours(false);
+    expect(r.overlays.at(-1)).toBeNull();
+    r.ui.setStressShape(true);
+    expect(r.overlays.at(-1)).toBeNull();
+    r.store.isBodyVisible = () => true;
+    r.ui.setStressColours(true);
+    expect(r.overlays.at(-1)).toEqual({ ...still, colours: true, ...bent });
+  });
+
+  it("an edit drops the drawing whichever switch is on", async () => {
+    const { r } = await ran();
+    r.ui.setStressColours(false);
+    r.editDoc();
+    r.rebuild(FIRST);
+    const n = r.overlays.length;
+    r.ui.setStressShape(true);
+    r.ui.setStressColours(true);
+    expect(r.overlays.length).toBe(n);
+    expect({ colours: usePanelsStore().stress!.colours, deform: usePanelsStore().stress!.deform }).toEqual({
+      colours: "none",
+      deform: null,
+    });
   });
 });

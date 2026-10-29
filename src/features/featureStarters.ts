@@ -32,6 +32,7 @@ import type { PlaneOffsetTool } from "./planeOffsetTool";
 import type { DatumPoseTool } from "./datumPoseTool";
 import { placeDatum, poseFields, ZERO_POSE, type DatumPose } from "../document/datumPose";
 import { pickPlaneTarget, planeSpecOf, type FacePlanePick } from "./facePlanePick";
+import { bodyLabels } from "../ui/bodyLabels";
 import { choose } from "../ui/choice";
 import { pointInRegion } from "../sketch/region";
 import { setPrompt } from "../ui/prompt";
@@ -286,7 +287,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
 
   /** The pose is stored relative to the reference, so the plane stays parametric. */
   function placeNewDatum(spec: PlaneSpec, ref: DatumRef, then: (id: string, def: PlaneDef) => void) {
-    datumPose.start({ src: spec, pose: ZERO_POSE, ghost: true }, (pose: DatumPose | null) => {
+    datumPose.start({ src: spec, pose: ZERO_POSE, ghost: true }, (pose: DatumPose | null, bySave) => {
       if (!pose) return;
       const id = store.nextId();
       store.addFeature({
@@ -297,7 +298,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
         ...poseFields(pose),
         ...ref,
       } as Feature);
-      then(id, placeDatum(spec, pose));
+      if (!bySave) then(id, placeDatum(spec, pose));
     });
   }
 
@@ -920,11 +921,11 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     window.addEventListener("keydown", onEsc, true);
   }
 
-  /** Labels use the sidebar rename (store.bodyName) so the picker matches the browser tree. */
   function chooseBody(title: string, bodies: { id: string; name: string }[]): Promise<string | null> {
+    const labels = bodyLabels(bodies, (id) => store.bodyName(id));
     return choose<string>(
       title,
-      bodies.map((b) => ({ value: b.id, label: store.bodyName(b.id) ?? b.name })),
+      bodies.map((b) => ({ value: b.id, label: labels.get(b.id)! })),
     );
   }
 

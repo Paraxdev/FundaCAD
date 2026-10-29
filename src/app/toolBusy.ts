@@ -89,8 +89,9 @@ export function createToolBusy(
     toolOwnsScreen: () => busy(false),
     toolAtWork: () => busy(false, false),
     // Unconditional about why the gizmo is up: a Move started by hand over a body selection is the same gizmo.
+    // A drag let go of but not yet entered is written, as the release itself used to.
     dropBodyGizmo: () => {
-      if (e.tools.move.active && e.viewport.selecting === "bodies") e.tools.move.cancel();
+      if (e.tools.move.active && e.viewport.selecting === "bodies") e.tools.move.settle();
     },
     raiseBodyGizmo,
     restoreBodyGizmo: () => {

@@ -9,7 +9,7 @@
 //      the handle rides on the face.
 //   3. Dragging on, in past R 2, is refused in the value box and on the
 //      handle, and the grown end stays on screen.
-//   4. Letting go commits the grown end that was on screen.
+//   4. Letting go then Enter commits the grown end that was on screen.
 //   5. A round hole reads as a diameter.
 //
 // Shots: 01_picked, 02_grown, 03_refused, 04_committed, 05_hole.
@@ -231,8 +231,9 @@ const HOLE_WALL = [0, 7.125 + 3.3690784184224394, 13.015];
   check("and its volume", Math.abs((await volume()) - vGrown) < 1e-6 * vGrown);
   await shot("03_refused");
 
-  // --- 4. letting go commits what is on screen ---------------------------------
+  // --- 4. letting go then Enter commits what is on screen ----------------------
   await page.mouse.up();
+  await page.keyboard.press("Enter");
   await settle();
   await page.waitForTimeout(800);
   await settle();

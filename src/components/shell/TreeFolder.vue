@@ -4,6 +4,7 @@
 
 import { computed, nextTick, ref, useTemplateRef, watch } from "vue";
 import Icon from "./Icon.vue";
+import IconButton from "../ui/IconButton.vue";
 import { fmtKeys } from "../../input/platform";
 import InlineLabel from "./InlineLabel.vue";
 import { folderIndent } from "../../ui/browserTree";
@@ -58,14 +59,19 @@ function onClick(e: MouseEvent) {
   else emit("toggle");
 }
 
+// A caret left focused by a mouse click would fold the folder again on a later Enter or Space.
+function onCaretClick(e: MouseEvent) {
+  if (e.detail > 0) (e.currentTarget as HTMLElement | null)?.blur();
+}
+
 function onDblClick(e: MouseEvent) {
-  if (!props.activate || (e.target as HTMLElement | null)?.closest?.(".tree-caret, [contenteditable='true']")) return;
+  if (!props.activate || (e.target as HTMLElement | null)?.closest?.(".tree-caret, .tree-label.renaming")) return;
   emit("toggle");
 }
 
 /** Same reason as TreeRow: Shift-click takes a run, not a text selection. */
 function onMouseDown(e: MouseEvent) {
-  if (e.shiftKey && !(e.target as HTMLElement | null)?.closest?.("[contenteditable='true']")) e.preventDefault();
+  if (e.shiftKey && !(e.target as HTMLElement | null)?.closest?.(".tree-label.renaming")) e.preventDefault();
 }
 
 function startRename() {
@@ -141,7 +147,7 @@ function onDrop(e: DragEvent) {
 </script>
 
 <template>
-  <!-- aria-expanded is the only place the disclosure state is legible from outside, the caret is an icon. -->
+  <!-- The head carries aria-expanded as well as the caret, since a click on the head itself may toggle it. -->
   <div
     class="tree-folder"
     :data-id="id"
@@ -161,22 +167,33 @@ function onDrop(e: DragEvent) {
     @drop="onDrop"
     @pointerenter="eyeOver?.()"
   >
-    <span class="tree-caret"><Icon :name="collapsed ? 'caretRight' : 'caretDown'" :size="11" /></span>
+    <IconButton
+      class="tree-caret"
+      variant="plain"
+      size="sm"
+      :icon="collapsed ? 'caretRight' : 'caretDown'"
+      :icon-size="11"
+      :tip="collapsed ? 'Expand' : 'Collapse'"
+      :aria-expanded="!collapsed"
+      @click="onCaretClick"
+    />
     <span class="feature-icon"><Icon :name="icon" :size="14" /></span>
     <InlineLabel ref="labelEl" :text="label" :rename="rename" />
     <span style="flex: 1"></span>
     <span class="tree-count">{{ count || "" }}</span>
     <!-- .stop: the eye sits inside the head, and a bare click would also
          collapse the section it is trying to hide. -->
-    <span
+    <IconButton
       v-if="toggleVis || eyeDown"
       class="tree-eye"
-      :title="fmtKeys('Show/hide · drag across eyes to show or hide many · Alt+click to show only this')"
+      variant="plain"
+      size="sm"
+      :icon="visible === false ? 'hidden' : 'visible'"
+      :icon-size="13"
+      :tip="fmtKeys('Show/hide · drag across eyes to show or hide many · Alt+click to show only this')"
       :data-visible="visible !== false"
       @pointerdown.stop="onEyeDown"
       @click.stop="onEyeClick"
-    >
-      <Icon :name="visible === false ? 'hidden' : 'visible'" :size="13" />
-    </span>
+    />
   </div>
 </template>

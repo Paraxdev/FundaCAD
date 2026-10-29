@@ -4,6 +4,9 @@ import type { Viewport } from "../viewport/viewport";
 import type { EdgeRef } from "../viewport/edgeLines";
 import type { DocumentStore } from "../document/store";
 import type { Selector } from "../types";
+import { bodyLabels } from "../ui/bodyLabels";
+import { escapeClaimed } from "../ui/escapeClaim";
+import { isMenuKey } from "../ui/focus";
 import { setPrompt } from "../ui/prompt";
 import { trackedFace } from "./holeFace";
 import { pointOf, readTarget, sameEntry, writeTarget, type TargetEntry, type TargetField } from "./selectionTargets";
@@ -285,8 +288,8 @@ export class TargetEditTool {
     const t = this.target;
     if (!t) return "";
     if (t.kind === "body" && typeof entry === "string") {
-      const body = (this.store.buildState.result?.bodies ?? []).find((b) => b.id === entry);
-      return this.store.bodyName(entry) ?? body?.name ?? entry;
+      const built = this.store.buildState.result?.bodies ?? [];
+      return bodyLabels(built, (id) => this.store.bodyName(id)).get(entry) ?? this.store.bodyName(entry) ?? entry;
     }
     // Edges and faces have no names, so a row says its kind and whether this build shows it.
     return resolved ? `1 ${t.kind}` : `1 ${t.kind} (not on this build)`;
@@ -301,7 +304,7 @@ export class TargetEditTool {
   }
 
   private onKey(e: KeyboardEvent) {
-    if (!this.active) return;
+    if (!this.active || isMenuKey(e) || (e.key === "Escape" && escapeClaimed())) return;
     if (e.key === "Escape") {
       e.preventDefault();
       e.stopPropagation();

@@ -262,7 +262,7 @@ which a fresh engine could no longer start one and every build failed.
 | tool | what it is for |
 | --- | --- |
 | `schema` | every feature type, its fields, an example and its traps. Read first. |
-| `doc_new` / `doc_open` / `doc_save` / `doc_get` / `doc_set` | the document. `doc_open` of a file from a newer FundaCAD adds a `note:` line naming the feature types this build does not know; they are kept and saved with the file. An older file holding an old feature type gets a note to open and save it in the app first, since MCP does not update old files |
+| `doc_new` / `doc_open` / `doc_save` / `doc_get` / `doc_set` | the document. `doc_open` of a file from a newer FundaCAD adds a `note:` line naming the feature types this build does not know; they are kept and saved with the file. An older file holding an old feature type gets a note to open and save it in the app first, since MCP does not update old files. `doc_get` gives the geometry only (features, parameters, paramDefs, bodyIds, version), so `doc_set` replaces those and keeps the open document's other parts (stress study, environment, palette, materials, elements, reference images, body and face overlays) unless the document sent names them; a key sent as null clears it. `doc_new` and `doc_open` still replace everything |
 | `param_set` / `param_remove` | the parameter table (this is what makes it parametric) |
 | `feature_add` / `feature_update` / `feature_remove` / `feature_move` | the timeline |
 | `edit` | several of the above and `param_set` in one call, all or nothing, optionally building once at the end |
@@ -345,6 +345,11 @@ on, `loads` may be left out. `[0, 0, 0]` pulls nowhere and counts as no gravity.
 
 The summary adds a `weight` line when gravity is on, and the reaction at each
 support, in the order `fixed` then `supports`, when there is more than one.
+
+`refine` chooses how the mesh is refined: `standard` (the default) solves,
+splits the elements where the stress error is high and solves again; `fine`
+refines up to three times and takes longer; `off` solves one even mesh. The
+mesh line of the summary says how many passes ran and the finest element size.
 
 The same names are the op vocabulary a compute plugin reaches the document
 through (`src/plugins/broker/ops.ts`), and `tests/plugins/broker.test.ts` reads

@@ -9,7 +9,7 @@
 }
 .modal-panel {
   background: var(--panel, #16181d);
-  border: 1px solid var(--line, #262a31);
+  border: 1px solid transparent;
   border-radius: var(--r-lg, 10px);
   /* The flat zero blur elevation of every overlay: a soft blur read as an odd halo against
      the dark backdrop. */
@@ -58,28 +58,6 @@
   gap: var(--s-3);
   padding: var(--s-5);
   border-top: 1px solid var(--line, #262a31);
-}
-.btn {
-  background: var(--raised, #22262e);
-  color: var(--text, #e6e8ec);
-  border: 1px solid var(--line-strong, #323843);
-  border-radius: var(--r-sm, 6px);
-  /* The same pair as the bare button rule in _layout: OK is the default button recoloured. */
-  padding: var(--s-3) var(--s-4);
-  font-size: 12px;
-  cursor: pointer;
-}
-.btn:hover {
-  background: var(--raised-2, #2a2f38);
-}
-.btn-primary {
-  background: var(--accent, #ff7a3c);
-  border-color: var(--accent, #ff7a3c);
-  color: var(--on-accent, #160a04);
-  font-weight: 600;
-}
-.btn-primary:hover {
-  background: var(--accent-hot, #ff9a5c);
 }
 
 /* 3D mouse (sm) settings. */
@@ -142,13 +120,13 @@
   bottom: 0;
   left: 50%;
   width: 0;
-  background: var(--accent, #ff7a3c);
+  background: var(--accent);
   border-radius: var(--r-pill);
 }
 .sm-test {
   width: 240px;
   height: 170px;
-  border: 1px solid var(--line, #262a31);
+  border: 1px solid transparent;
   border-radius: var(--r-md, 8px);
   background: var(--bg, #0e0f12);
 }
@@ -166,7 +144,7 @@
 }
 .sm-row input[type="range"] {
   width: 100%;
-  accent-color: var(--accent, #ff7a3c);
+  accent-color: var(--accent);
 }
 .sm-slabel {
   font-size: 11px;
@@ -209,7 +187,7 @@
     5px 5px;
   background-repeat: no-repeat;
   color: var(--text, #e6e8ec);
-  border: 1px solid var(--line-strong, #323843);
+  border: 1px solid transparent;
   border-radius: var(--r-sm, 6px);
   /* The 26px clears the gradient caret above, placed from the right edge, like every other
      select. */
@@ -217,12 +195,9 @@
   font-size: 11px;
   cursor: pointer;
 }
-.sm-select:hover {
-  border-color: #3d4452;
-}
 .sm-select:focus {
-  outline: none;
-  border-color: var(--accent, #ff7a3c);
+  outline: 1px solid var(--accent);
+  outline-offset: 0;
 }
 /* WebKitGTK renders the native option popup light by default. */
 .sm-select option {
@@ -242,31 +217,24 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.select-trigger:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
 .select-trigger.open {
-  border-color: var(--accent, #ff7a3c);
+  background-color: color-mix(in srgb, var(--accent) 14%, var(--field-bg));
 }
 /* A text field: .sm-select without the caret, which would say the value is one of a fixed
    set. */
 .sm-input {
   background-color: var(--panel-2, #1c1f26);
   color: var(--text, #e6e8ec);
-  border: 1px solid var(--line-strong, #323843);
+  border: 1px solid transparent;
   border-radius: var(--r-sm, 6px);
   padding: var(--s-2) var(--s-3);
   font: inherit;
   font-size: 11px;
   min-width: 0;
 }
-.sm-input:hover {
-  border-color: #3d4452;
-}
 .sm-input:focus {
-  outline: none;
-  border-color: var(--accent, #ff7a3c);
+  outline: 1px solid var(--accent);
+  outline-offset: 0;
 }
 .sm-inv {
   font-size: 11px;
@@ -348,15 +316,19 @@
   border: 0;
   padding: 0;
   font: inherit;
-  color: var(--accent, #ff7a3c);
+  color: var(--accent);
   cursor: pointer;
 }
 .plug-link + .plug-link {
   margin-left: var(--s-2);
 }
 .plug-forget {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
   margin-left: var(--s-3);
   white-space: nowrap;
+  cursor: pointer;
 }
 /* flex: none, the .plug-url basis of 240px is a height in this column and made the box 240px tall. */
 .plug-url.plug-search {
@@ -370,9 +342,8 @@
   gap: 6px;
 }
 .plug-settings-btn.on {
-  background: var(--accent-tint);
-  border-color: var(--accent);
-  color: var(--accent);
+  background: linear-gradient(var(--accent-wash), var(--accent-wash)), var(--float-chip-bg);
+  color: var(--accent-hot);
 }
 /* A plugin's settings, set in under its row like an add-on's panel. */
 .plug-settings {
@@ -384,7 +355,7 @@
   flex-direction: column;
   gap: var(--s-2);
   padding: var(--s-3);
-  border: 1px solid var(--line, #2a2f3a);
+  border: 1px solid transparent;
   border-radius: 6px;
   background: var(--panel-2, #1c1f26);
 }
@@ -428,7 +399,7 @@
   flex: 1 1 240px;
   min-width: 0;
   padding: var(--s-2);
-  border: 1px solid var(--line, #2a2f3a);
+  border: 1px solid transparent;
   border-radius: 6px;
   background: var(--panel-2, #1c1f26);
   color: var(--text, #e6e8ec);
@@ -446,7 +417,7 @@
   color: var(--text-dim, #9aa3af);
 }
 .mcp-status.on {
-  color: var(--accent, #ff7a3c);
+  color: var(--accent);
 }
 .mcp-setup {
   display: flex;
@@ -460,7 +431,7 @@
   max-height: 200px;
   overflow: auto;
   padding: var(--s-2);
-  border: 1px solid var(--line, #2a2f3a);
+  border: 1px solid transparent;
   border-radius: 6px;
   background: var(--panel-2, #1c1f26);
   color: var(--text, #e6e8ec);
@@ -484,7 +455,7 @@
 }
 .choice-card {
   background: var(--panel-2, #1c1f26);
-  border: 1px solid var(--line-strong, #323843);
+  border: 1px solid transparent;
   border-radius: var(--r-lg, 10px);
   box-shadow: var(--shadow-3);
   padding: var(--s-5, 16px);
@@ -513,7 +484,7 @@
   /* Card padding: a tile with a stacked title and caption, not a control. */
   padding: var(--s-4);
   background: var(--raised, #22262e);
-  border: 1px solid var(--line, #262a31);
+  border: 1px solid transparent;
   border-radius: var(--r-md, 8px);
   color: var(--text, #e6e8ec);
   font-size: 12px;
@@ -523,25 +494,22 @@
     border-color var(--t-fast, 120ms) var(--ease);
 }
 .choice-btn:hover {
-  background: var(--accent-tint, rgba(255, 122, 60, 0.14));
-  border-color: var(--accent, #ff7a3c);
+  background: var(--accent-tint);
 }
 .choice-btn small {
   color: var(--text-mute, #6b7280);
   font-size: 10px;
 }
 .choice-btn.choice-primary {
-  background: var(--accent, #ff7a3c);
-  border-color: var(--accent, #ff7a3c);
-  color: var(--on-accent, #160a04);
+  background: var(--accent);
+  color: var(--on-accent);
   font-weight: 600;
 }
 .choice-btn.choice-primary:hover:not(:disabled) {
-  background: var(--accent-hot, #ff9a5c);
-  border-color: var(--accent-hot, #ff9a5c);
+  background: var(--accent-hot);
 }
 .choice-btn.choice-primary small {
-  color: color-mix(in srgb, var(--on-accent, #160a04) 70%, transparent);
+  color: color-mix(in srgb, var(--on-accent) 70%, transparent);
 }
 .choice-btn.choice-primary:disabled {
   opacity: 0.4;
@@ -568,7 +536,7 @@
   cursor: pointer;
 }
 .choice-check:hover {
-  background: var(--accent-tint, rgba(255, 122, 60, 0.14));
+  background: var(--accent-tint);
 }
 .choice-check small {
   color: var(--text-mute, #6b7280);
@@ -613,22 +581,16 @@
   display: flex;
   flex-direction: column;
   background: var(--panel-2, #1b1f24);
-  border: 1px solid var(--line-strong, #3a4048);
+  border: 1px solid transparent;
   border-radius: var(--r-lg, 12px);
   box-shadow: var(--shadow-3, 0 16px 48px rgba(0, 0, 0, 0.5));
   overflow: hidden;
   animation: pop-in var(--t-fast, 0.12s) var(--ease, ease);
 }
+/* The TextField well, inset like the rows under it. */
 .cmdk-input {
-  border: none;
-  outline: none;
-  background: transparent;
-  color: var(--text, #e6e9ee);
-  font: inherit;
-  font-size: 15px;
-  /* Same inset as .modal-head, so both dialog shapes open at the same size. */
-  padding: var(--s-5);
-  border-bottom: 1px solid var(--line, #23272e);
+  flex: none;
+  margin: var(--s-3) var(--s-3) var(--s-1);
 }
 .cmdk-list {
   overflow-y: auto;
@@ -646,8 +608,8 @@
   color: var(--text, #e6e9ee);
 }
 .cmdk-item.active {
-  background: var(--accent-tint, rgba(255, 122, 60, 0.14));
-  color: var(--accent-hot, #ff9a5c);
+  background: var(--accent-tint);
+  color: var(--accent-hot);
 }
 .cmdk-label {
   flex: 1;
@@ -673,10 +635,10 @@
   position: fixed;
   top: 128px;
   right: 268px;
-  z-index: 1500;
+  z-index: var(--z-panel);
   min-width: 180px;
   background: var(--panel-2, #1b1f24);
-  border: 1px solid var(--line-strong, #3a4048);
+  border: 1px solid transparent;
   border-radius: var(--r-md, 8px);
   box-shadow: var(--shadow-3, 0 16px 48px rgba(0, 0, 0, 0.5));
   /* Same inset as .palette, the other small panel that floats over the model. */
@@ -684,19 +646,35 @@
   font-size: 12px;
   color: var(--text, #e6e9ee);
 }
+.measure-panel[data-capped] {
+  overflow-y: auto;
+}
+.measure-panel[data-folded] {
+  overflow: hidden;
+  cursor: pointer;
+}
+.measure-panel[data-folded] > :not(:first-child) {
+  visibility: hidden;
+}
 .properties-panel {
   min-width: 260px;
+  .measure-row {
+    align-items: center;
+  }
+  .select-trigger {
+    width: auto;
+  }
 }
 /* Stress labels in the view: the value by the cursor while dragging or probing, and each
    pinned probe's readout. */
 .stress-glyph-label {
   position: fixed;
-  z-index: 1400;
+  z-index: calc(var(--z-panel) - 1);
   pointer-events: none;
   padding: 2px 6px;
   border-radius: var(--r-xs, 4px);
   background: var(--panel-2, #1b1f24);
-  border: 1px solid var(--line-strong, #3a4048);
+  border: 1px solid transparent;
   color: var(--text, #e6e9ee);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
@@ -711,7 +689,7 @@
 .measure-title {
   font-weight: 600;
   margin-bottom: var(--s-2);
-  color: var(--accent-hot, #ff9a5c);
+  color: var(--accent-hot);
 }
 .measure-row {
   display: flex;
@@ -725,6 +703,28 @@
 }
 .measure-v {
   font-variant-numeric: tabular-nums;
+}
+/* A set width, so the hint wraps instead of stretching the panel. */
+.overhang-panel {
+  width: 260px;
+  .measure-row {
+    align-items: center;
+  }
+  .select-trigger {
+    width: 96px;
+  }
+}
+.overhang-threshold {
+  width: 136px;
+}
+.overhang-key {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: var(--s-2);
+  border-radius: 2px;
+  vertical-align: middle;
+  background: var(--key);
 }
 .measure-hint {
   margin-top: var(--s-2);
@@ -742,9 +742,9 @@
 }
 .measure-select,
 .measure-number {
-  background: var(--panel-3, #14171b);
+  background: var(--field-bg);
   color: var(--text, #e6e9ee);
-  border: 1px solid var(--line-strong, #3a4048);
+  border: 1px solid transparent;
   border-radius: var(--r-xs, 4px);
   font: inherit;
   font-variant-numeric: tabular-nums;
@@ -763,16 +763,12 @@
 }
 .bug-report-card .bug-desc {
   width: 100%;
-  box-sizing: border-box;
-  resize: vertical;
-  margin: var(--s-3) 0;
-  font-size: 12px;
+  margin: 0 0 var(--s-3);
 }
 .bug-report-card .bug-check {
-  display: block;
-  margin: var(--s-1) 0;
+  display: flex;
+  margin: var(--s-2) 0;
   font-size: 12px;
-  cursor: pointer;
 }
 .bug-report-card .bug-preview {
   margin: var(--s-3) 0;
@@ -819,11 +815,6 @@
 .bug-report-card .bug-doc-big {
   margin: 0 0 var(--s-2);
 }
-.bug-report-card .btn:disabled,
-.bug-report-card .choice-btn:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
 
 /* Materials: library and editor side by side, since picking a material and dragging a
    slider is one gesture. */
@@ -839,7 +830,7 @@
 }
 .mats-list {
   overflow: auto;
-  border: 1px solid var(--line, #262a31);
+  border: 1px solid transparent;
   border-radius: var(--r-sm, 6px);
   padding: var(--s-1);
 }
@@ -862,8 +853,7 @@
   background: var(--raised, #22262e);
 }
 .mats-row.is-selected {
-  background: var(--accent-tint);
-  border-color: var(--accent);
+  background: var(--accent-tint-2);
 }
 .mats-swatch {
   flex: 0 0 auto;
@@ -891,7 +881,7 @@
   height: 26px;
   padding: 0;
   background: var(--panel-2);
-  border: 1px solid var(--line, #262a31);
+  border: 1px solid transparent;
   border-radius: var(--r-sm, 6px);
   cursor: pointer;
 }

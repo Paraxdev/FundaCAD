@@ -37,6 +37,14 @@ impl Jobs for Fake {
         ctx: &JobContext,
     ) -> JobResult {
         self.rebuilds.fetch_add(1, Ordering::SeqCst);
+        for step in doc["report"].as_array().into_iter().flatten() {
+            let n = step[1].as_i64().unwrap_or(-1);
+            match step[0].as_str() {
+                Some("feature") => ctx.progress.feature(n),
+                Some("meshing") => ctx.progress.meshing(n, step[2].as_i64().unwrap_or(-1)),
+                _ => ctx.progress.phase(n),
+            }
+        }
         if let Some(g) = &self.gate {
             while g.recv_timeout(Duration::from_millis(10)).is_err() {
                 if ctx.cancel.is_cancelled() {
@@ -176,6 +184,32 @@ fn a_long_job_reports_progress_before_its_reply() {
             assert_eq!(m["ok"], true);
             break;
         }
+    }
+}
+
+fn first_building_frame(report: Value) -> Value {
+    let (gate_tx, gate_rx) = channel();
+    let (e, rx, _) = engine(Some(gate_rx));
+    send(&e, json!({"id": "slow", "op": "rebuild", "document": {"features": [], "report": report}}));
+    let frame = text(next(&rx));
+    gate_tx.send(()).unwrap();
+    frame
+}
+
+#[test]
+fn a_building_frame_names_the_phase_and_keeps_the_counters_to_their_own_phase() {
+    let cases = [
+        (json!([]), json!([0, -1, -1, -1])),
+        (json!([["feature", 4]]), json!([1, 4, -1, -1])),
+        (json!([["feature", 4], ["phase", 2]]), json!([2, -1, -1, -1])),
+        (json!([["feature", 4], ["meshing", 3, 7]]), json!([3, -1, 3, 7])),
+        (json!([["meshing", 3, 7], ["phase", 4]]), json!([4, -1, -1, -1])),
+        (json!([["meshing", 3, 7], ["feature", 9]]), json!([1, 9, -1, -1])),
+    ];
+    for (report, want) in cases {
+        let f = first_building_frame(report.clone());
+        let got = json!([f["phase"], f["feature"], f["meshed"], f["meshTotal"]]);
+        assert_eq!(got, want, "after {report}");
     }
 }
 

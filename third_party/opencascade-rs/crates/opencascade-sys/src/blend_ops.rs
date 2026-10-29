@@ -9,6 +9,7 @@ mod inner {
         include!("opencascade-sys/include/blend_ops.hxx");
         include!("opencascade-sys/include/blend_conic.hxx");
         include!("opencascade-sys/include/blend_section.hxx");
+        include!("opencascade-sys/include/blend_measure.hxx");
 
         type TopoDS_Shape = crate::topo_ds::TopoDS_Shape;
         type Message_ProgressRange = crate::message::Message_ProgressRange;
@@ -49,6 +50,7 @@ mod inner {
             status: &mut i32,
             message: &mut String,
         ) -> UniquePtr<TopoDS_Shape>;
+        /// `continuity` 1, 2 or 3 is the section's continuity with the faces.
         /// Never throws: `status` 0 built, 1 SectionBlendError, 2 another
         /// exception, 3 cancelled through `progress`, checked between its steps
         /// and inside every boolean. `one_shot` false skips cutting every tool
@@ -61,7 +63,7 @@ mod inner {
             sizes: &[f64],
             size2: f64,
             unit: f64,
-            g2: bool,
+            continuity: i32,
             draft: bool,
             profile: f64,
             one_shot: bool,
@@ -69,5 +71,9 @@ mod inner {
             status: &mut i32,
             message: &mut String,
         ) -> UniquePtr<TopoDS_Shape>;
+        /// A test helper, see blend_measure.hxx: curvature and rate jumps across
+        /// the tangent contacts, the largest crease, the contact count, the
+        /// largest tolerance and 1 when the shape is valid. Empty when it raised.
+        pub fn blend_contact_jumps(shape: &TopoDS_Shape, radius: f64, reach: f64) -> Vec<f64>;
     }
 }

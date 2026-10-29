@@ -9,7 +9,9 @@ import { renderPrefs, setRenderPref } from "../../../src/ui/renderPrefs";
 
 enableAutoUnmount(afterEach);
 
-const input = (id: string) => document.getElementById(id) as HTMLInputElement;
+// The id is on the Checkbox's label, the native box is inside it.
+const row = (id: string) => document.getElementById(id)!;
+const input = (id: string) => row(id).querySelector("input")!;
 
 describe("Potato mode in Preferences", () => {
   beforeEach(() => {
@@ -20,8 +22,8 @@ describe("Potato mode in Preferences", () => {
 
   it("sits directly beneath the performance switch with its tooltip", () => {
     mount(PreferencesDialog, { attachTo: document.body });
-    const perfHead = input("prefs-performance-mode").closest(".pref-head")!;
-    const potatoHead = input("prefs-potato-mode").closest(".pref-head")!;
+    const perfHead = row("prefs-performance-mode").closest(".pref-head")!;
+    const potatoHead = row("prefs-potato-mode").closest(".pref-head")!;
     expect(potatoHead.parentElement).toBe(perfHead.parentElement);
     // The performance hint, then the potato switch.
     expect(perfHead.nextElementSibling!.nextElementSibling).toBe(potatoHead);
@@ -38,13 +40,22 @@ describe("Potato mode in Preferences", () => {
     expect(renderPrefs().potatoMode).toBe(true);
     expect(renderPrefs().performanceMode).toBe(false);
     expect(input("prefs-performance-mode").checked).toBe(true);
-    expect(input("prefs-performance-mode").disabled).toBe(true);
+    expect(row("prefs-performance-mode").getAttribute("aria-disabled")).toBe("true");
 
     potato.checked = false;
     potato.dispatchEvent(new Event("change"));
     await nextTick();
     expect(renderPrefs().potatoMode).toBe(false);
     expect(input("prefs-performance-mode").checked).toBe(false);
-    expect(input("prefs-performance-mode").disabled).toBe(false);
+    expect(row("prefs-performance-mode").hasAttribute("aria-disabled")).toBe(false);
+  });
+
+  it("refuses a click on performance mode while potato mode holds it on", async () => {
+    setRenderPref("potatoMode", true);
+    mount(PreferencesDialog, { attachTo: document.body });
+    await nextTick();
+    input("prefs-performance-mode").click();
+    await nextTick();
+    expect([renderPrefs().performanceMode, input("prefs-performance-mode").checked]).toEqual([false, true]);
   });
 });

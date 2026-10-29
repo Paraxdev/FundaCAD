@@ -191,13 +191,9 @@ const check = (name, ok, detail) => {
   console.log("\n[prompt, render]");
   await page.evaluate(() => window.__fundacad.handleAction("materials"));
   await page.waitForTimeout(600);
-  await page.click('.rd-tab[data-tab="environment"]');
+  await page.click('#renderdock [role=tab][data-tab="environment"]');
   await page.waitForTimeout(200);
-  if (
-    !(await page.evaluate(
-      () => document.querySelector('[data-shadows="mode"]')?.getAttribute("aria-pressed") === "true",
-    ))
-  ) {
+  if (!(await page.evaluate(() => document.querySelector('[data-shadows="mode"] input')?.checked === true))) {
     await page.click('[data-shadows="mode"]');
   }
   await page.click('[data-key-light="aim"]');

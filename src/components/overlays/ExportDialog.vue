@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from "vue";
-import { useModalGate } from "../../composables/useModalGate";
 import { escapeClaimed } from "../../ui/escapeClaim";
 import { useExportDialogStore } from "../../stores/exportDialog";
 import {
@@ -19,15 +18,15 @@ import {
   type Faceting,
   type Refinement,
 } from "../../io/exportSettings";
-import ModalFrame from "./ModalFrame.vue";
-import NumberBox from "../shell/NumberBox.vue";
+import Button from "../ui/Button.vue";
+import Dialog from "../ui/Dialog.vue";
+import NumberField from "../ui/NumberField.vue";
 import Select from "../ui/Select.vue";
+import Switch from "../ui/Switch.vue";
 
 const dialog = useExportDialogStore();
 const bodies = dialog.request?.bodies ?? [];
 const picked = dialog.request?.selected?.length ?? 0;
-
-useModalGate();
 
 const flat = dialog.request?.flat ?? null;
 const formatOptions = flat ? FORMATS : FORMATS.filter((f) => !isFlatFormat(f.value));
@@ -103,9 +102,16 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
 </script>
 
 <template>
-  <ModalFrame panel-class="export-dialog" @close="cancel()">
-    <template #title>Export</template>
-
+  <!-- Escape and Enter are this dialog's own handler above; the frame holds the modal gate and the focus. Fields are
+       live, as Enter confirms before a field would commit. -->
+  <Dialog
+    title="Export"
+    panel-class="export-dialog"
+    :close-on-esc="false"
+    :body="false"
+    initial-focus="[data-testid=export-confirm]"
+    @close="cancel()"
+  >
     <div class="modal-body prefs export-body">
       <label class="prefs-row">
         <span class="prefs-label">Type</span>
@@ -118,19 +124,17 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
         </div>
         <label class="prefs-row">
           <span class="prefs-label">Tolerance</span>
-          <span class="export-num">
-            <NumberBox
-              class="sm-input"
-              data-testid="export-tolerance"
-              :model-value="settings.tolerance"
-              @update:model-value="
-                (v: number | null) => {
-                  if (v != null && Number.isFinite(v)) settings.tolerance = v;
-                }
-              "
-            />
-            <span class="export-unit">mm</span>
-          </span>
+          <NumberField
+            commit="live"
+            unit="mm"
+            data-testid="export-tolerance"
+            :model-value="settings.tolerance"
+            @update:model-value="
+              (v: number | null) => {
+                if (v != null && Number.isFinite(v)) settings.tolerance = v;
+              }
+            "
+          />
         </label>
         <div class="sm-hint"
           >Drawn at true size in millimetres. Lines, arcs and circles stay exact, other curves become polylines this
@@ -168,61 +172,52 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
         </label>
         <label class="prefs-row">
           <span class="prefs-label">Advanced</span>
-          <span class="param-switch prefs-switch">
-            <input v-model="settings.showAdvanced" type="checkbox" data-testid="export-advanced" />
-            <span class="track"><span class="knob"></span></span>
-          </span>
+          <Switch v-model="settings.showAdvanced" label="Advanced" data-testid="export-advanced" />
         </label>
 
         <template v-if="settings.showAdvanced">
           <label class="prefs-row">
             <span class="prefs-label">Surface deviation</span>
-            <span class="export-num">
-              <NumberBox
-                class="sm-input"
-                data-testid="export-surface-deviation"
-                :model-value="settings.faceting.surfaceDeviation"
-                @update:model-value="setFacet('surfaceDeviation', $event)"
-              />
-              <span class="export-unit">mm</span>
-            </span>
+            <NumberField
+              commit="live"
+              unit="mm"
+              data-testid="export-surface-deviation"
+              :model-value="settings.faceting.surfaceDeviation"
+              @update:model-value="setFacet('surfaceDeviation', $event)"
+            />
           </label>
           <div class="sm-hint">The largest distance allowed between the body and a facet.</div>
           <label class="prefs-row">
             <span class="prefs-label">Normal deviation</span>
-            <span class="export-num">
-              <NumberBox
-                class="sm-input"
-                data-testid="export-normal-deviation"
-                :model-value="settings.faceting.normalDeviation"
-                @update:model-value="setFacet('normalDeviation', $event)"
-              />
-              <span class="export-unit">°</span>
-            </span>
+            <NumberField
+              commit="live"
+              unit="deg"
+              data-testid="export-normal-deviation"
+              :model-value="settings.faceting.normalDeviation"
+              @update:model-value="setFacet('normalDeviation', $event)"
+            />
           </label>
           <div class="sm-hint">The largest angle allowed between the normals of two neighbouring facets.</div>
           <label class="prefs-row">
             <span class="prefs-label">Maximum cell size</span>
-            <span class="export-num">
-              <NumberBox
-                class="sm-input"
-                data-testid="export-max-edge"
-                :model-value="settings.faceting.maxEdgeLength"
-                @update:model-value="setFacet('maxEdgeLength', $event)"
-              />
-              <span class="export-unit">mm</span>
-            </span>
+            <NumberField
+              commit="live"
+              unit="mm"
+              data-testid="export-max-edge"
+              :model-value="settings.faceting.maxEdgeLength"
+              @update:model-value="setFacet('maxEdgeLength', $event)"
+            />
           </label>
           <div class="sm-hint">The longest a facet edge may be, 0 for no limit.</div>
         </template>
       </template>
     </div>
 
-    <div class="modal-foot">
-      <button type="button" class="btn" @click="cancel()">Cancel</button>
-      <button type="button" class="btn btn-primary" data-testid="export-confirm" @click="confirm()">Export…</button>
-    </div>
-  </ModalFrame>
+    <template #footer>
+      <Button @click="cancel()">Cancel</Button>
+      <Button variant="primary" data-testid="export-confirm" @click="confirm()">Export…</Button>
+    </template>
+  </Dialog>
 </template>
 
 <style scoped>
@@ -236,19 +231,5 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
 }
 .export-body .prefs-row {
   grid-template-columns: 130px 1fr;
-}
-.export-num {
-  display: flex;
-  align-items: center;
-  gap: var(--s-2);
-}
-.export-num input {
-  flex: 1;
-  min-width: 0;
-}
-.export-unit {
-  width: 22px;
-  font-size: 12px;
-  color: var(--text-dim);
 }
 </style>

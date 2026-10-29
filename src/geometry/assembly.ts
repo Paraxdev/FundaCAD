@@ -1,6 +1,7 @@
 // Assembles a rebuild reply's per-body payloads into one flat RebuildResult. A chunked reply's head frame
 // lists every body, so all offsets are planned before any payload arrives and chunks may land in any order.
 
+import type { EngineTiming } from "../diagnostics/editTiming";
 import type { FaceColorRuns, F32Wire, RebuildResult, U32Wire } from "../types";
 
 // Protocol v2 wire shapes (server.py _rebuild_job / _body_payload). `unchanged` marks a stub for a cached etag.
@@ -50,13 +51,19 @@ export interface WireBodyStub {
 export type WireBody = WireBodyFull | WireBodyStub;
 
 /** Edge polylines as every consumer sees them; decodeBinaryFrame expands the packed binary form first. */
-export type WireEdgeList = { points: [number, number, number][]; body?: string; smooth?: boolean }[];
+export type WireEdgeList = {
+  points: [number, number, number][];
+  body?: string;
+  smooth?: boolean;
+  curvature?: [number, number];
+}[];
 
 // The engine's raw rebuild result: a resync request, a protocol v2 per-body result, or the legacy single mesh.
 // One flat all-optional shape so the `?.resync` / `?.protocol` checks need no narrowing.
 export interface WireRebuildResult {
   resync?: true;
   protocol?: 2;
+  timing?: EngineTiming;
   bodies?: WireBody[];
   bbox?: { min: number[]; max: number[] } | null;
   diagnostics?: RebuildResult["diagnostics"];
@@ -331,6 +338,7 @@ export class RebuildAssembly {
         points: e.points,
         ...(e.body !== undefined ? { body: e.body } : {}),
         ...(e.smooth ? { smooth: true } : {}),
+        ...(e.curvature !== undefined ? { curvature: e.curvature } : {}),
       };
     }
     // geometry-side metadata only reachable from the payload

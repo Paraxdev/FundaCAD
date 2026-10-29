@@ -1,39 +1,72 @@
 import { describe, it, expect } from "vitest";
-import { buildProgress, historyShowsBusy, historyShowsEmpty, runningRows, waitLabel } from "../../src/ui/buildProgress";
+import { BUILD_PHASE } from "../../src/geometry/buildPhase";
+import {
+  buildProgress,
+  type BuildReport,
+  historyShowsBusy,
+  historyShowsEmpty,
+  runningRows,
+  waitLabel,
+} from "../../src/ui/buildProgress";
+
+const P = BUILD_PHASE;
+const steps = ["Sketch", "Extrude", "Fillet", "Hole", "Shell"];
+const at = (r: Partial<BuildReport>) =>
+  buildProgress({ phase: null, progress: null, meshed: null, meshTotal: null, ...r }, steps);
 
 describe("buildProgress", () => {
   it("is indeterminate before the first progress report", () => {
-    expect(buildProgress(null, null, null, 5)).toEqual({ label: "building…", pct: 0 });
+    expect(at({})).toEqual({ label: "building…", pct: 0 });
   });
 
-  it("counts features from 1, not 0", () => {
-    // progress is a 0-based index; the chip has to read "building 1/5" on the
-    // first feature or it looks stuck.
-    expect(buildProgress(0, null, null, 5)).toEqual({ label: "building 1/5", pct: 20 });
-    expect(buildProgress(4, null, null, 5)).toEqual({ label: "building 5/5", pct: 100 });
+  it("says preparing, saving and collecting for the phases that run no feature", () => {
+    expect(at({ phase: P.preparing }).label).toBe("preparing…");
+    expect(at({ phase: P.saving }).label).toBe("saving a checkpoint…");
+    expect(at({ phase: P.assembling }).label).toBe("collecting the result…");
+    expect(at({ phase: P.applying })).toEqual({ label: "applying to the view…", pct: 100 });
   });
 
-  it("never reports past the total", () => {
-    expect(buildProgress(9, null, null, 5).label).toBe("building 5/5");
+  it("names the running feature and counts from 1, not 0", () => {
+    expect(at({ phase: P.feature, progress: 2 })).toEqual({ label: "Fillet 3/5", pct: 60 });
+    expect(at({ phase: P.feature, progress: 4 })).toEqual({ label: "Shell 5/5", pct: 100 });
+  });
+
+  it("never reports past the total, and keeps a feature it has no name for", () => {
+    expect(at({ phase: P.feature, progress: 9 })).toEqual({ label: "building 5/5", pct: 100 });
   });
 
   it("survives an empty document without dividing by zero", () => {
-    expect(buildProgress(0, null, null, 0).pct).toBe(0);
+    expect(buildProgress({ phase: P.feature, progress: 0, meshed: null, meshTotal: null }, [])).toEqual({
+      label: "building 0/0",
+      pct: 0,
+    });
   });
 
-  // The meshing (payload) phase reports feature = -1 for its WHOLE duration,
-  // measured at 136s on the reference assembly, so without per-body counts it
-  // renders as a bar pinned at 0% under a static label. These two cases are the
-  // difference between "is it frozen?" and a progress bar.
-  it("falls back to an indeterminate label when the engine sends no mesh counts", () => {
-    expect(buildProgress(-1, null, null, 5)).toEqual({ label: "meshing…", pct: 0 });
-    expect(buildProgress(-1, 3, 0, 5)).toEqual({ label: "meshing…", pct: 0 });
+  it("falls back to an indeterminate label when meshing has no count", () => {
+    expect(at({ phase: P.meshing })).toEqual({ label: "meshing…", pct: 0 });
+    expect(at({ phase: P.meshing, meshed: 3, meshTotal: 0 })).toEqual({ label: "meshing…", pct: 0 });
   });
 
-  it("shows the real fraction once mesh counts arrive", () => {
-    expect(buildProgress(-1, 3, 12, 5)).toEqual({ label: "meshing 3/12", pct: 25 });
-    // a count running past the total must not read "13/12" or exceed 100%
-    expect(buildProgress(-1, 13, 12, 5)).toEqual({ label: "meshing 12/12", pct: 100 });
+  it("counts the parts really meshed, one part singly", () => {
+    expect(at({ phase: P.meshing, meshed: 3, meshTotal: 12 })).toEqual({ label: "meshing 3/12 parts", pct: 25 });
+    expect(at({ phase: P.meshing, meshed: 13, meshTotal: 12 })).toEqual({ label: "meshing 12/12 parts", pct: 100 });
+    expect(at({ phase: P.meshing, meshed: 0, meshTotal: 1 })).toEqual({ label: "meshing 1 part", pct: 0 });
+  });
+
+  // The fault: an edit with one body to mesh said "meshing" from 1 s in, through the copy, the fillet and the
+  // checkpoint. Walk the phases of such an edit in the order the engine reports them.
+  it("says meshing only while a body is being meshed", () => {
+    const edit: BuildReport[] = [
+      { phase: P.preparing, progress: -1, meshed: null, meshTotal: null },
+      { phase: P.feature, progress: 4, meshed: null, meshTotal: null },
+      { phase: P.saving, progress: -1, meshed: null, meshTotal: null },
+      { phase: P.assembling, progress: -1, meshed: null, meshTotal: null },
+      { phase: P.meshing, progress: -1, meshed: 0, meshTotal: 1 },
+      { phase: P.assembling, progress: -1, meshed: null, meshTotal: null },
+      { phase: P.applying, progress: null, meshed: null, meshTotal: null },
+    ];
+    const says = edit.map((r) => buildProgress(r, steps).label.includes("mesh"));
+    expect(says).toEqual([false, false, false, false, true, false, false]);
   });
 });
 

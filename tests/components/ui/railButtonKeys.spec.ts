@@ -22,3 +22,20 @@ describe("rail key hint", () => {
     expect(w.attributes("title")).toBe("Search (Ctrl F)");
   });
 });
+
+describe("rail button tip", () => {
+  it("shows the tip as the tooltip and keeps the label as the name", () => {
+    const w = mount(RailButton, {
+      props: { icon: "caretDown", label: "Surface Texture", tip: "Surface Texture, 2 tools" },
+    });
+    expect([w.attributes("title"), w.attributes("aria-label")]).toEqual([
+      "Surface Texture, 2 tools",
+      "Surface Texture",
+    ]);
+  });
+
+  it("draws the icon at the size asked for", () => {
+    const w = mount(RailButton, { props: { icon: "caretDown", label: "Group", iconSize: 18 } });
+    expect(w.get(".rail-tile svg").attributes("width")).toBe("18");
+  });
+});

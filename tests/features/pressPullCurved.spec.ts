@@ -120,14 +120,15 @@ function box() {
       return n ? n.title || n.textContent : null;
     });
   const toggle = b?.querySelector<HTMLElement>(".dim-toggle") ?? null;
+  const chosen = (name: string) => {
+    const g = b?.querySelector<HTMLElement>(`[data-option="${name}"]`);
+    return g && g.style.display !== "none" ? (g.querySelector(".on")?.getAttribute("aria-label") ?? null) : null;
+  };
   return {
     names,
     value: b?.querySelector("input")?.value ?? null,
-    toggle: toggle && toggle.style.display !== "none" ? toggle.textContent : null,
-    direction:
-      b?.querySelector<HTMLElement>(".dim-direction")?.style.display !== "none"
-        ? (b?.querySelector<HTMLElement>(".dim-direction")?.textContent ?? null)
-        : null,
+    toggle: chosen("mode") ?? (toggle && toggle.style.display !== "none" ? toggle.textContent : null),
+    direction: chosen("direction"),
   };
 }
 
@@ -211,7 +212,9 @@ describe("press/pull on a sphere, a cone or a torus", () => {
       const { t } = await started([0, 0, 1], [0, 0, 1], ballEnd);
       expect(internals(t).direction).toBe("axis");
       expect(box()).toMatchObject({ names: ["D"], toggle: "Auto", direction: "Along axis" });
-      document.querySelector(".dim-direction")!.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+      document
+        .querySelector('[data-option="direction"] .dim-segment:not(.on)')!
+        .dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
       expect(box()).toMatchObject({ names: ["R"], toggle: null, direction: "Along normal" });
       expect(dirOf(t)).toEqual([0, 0, -1]);
     });
@@ -255,10 +258,14 @@ describe("press/pull on a sphere, a cone or a torus", () => {
       const floor: FaceAxisReply = { axis: { origin: [0, 0, 0], dir: [0, 0, 1] }, hole: true, resize: cone };
       const { t } = await started([0, 1, 0], [0, 0, 1], floor);
       expect(box()).toMatchObject({ names: ["D"], toggle: "Auto", direction: "Along axis" });
-      document.querySelector(".dim-direction")!.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+      document
+        .querySelector('[data-option="direction"] .dim-segment:not(.on)')!
+        .dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
       expect(box()).toMatchObject({ names: ["Offset"], toggle: null, direction: "Along normal" });
       expect(dirOf(t)).toEqual([0, 0, 1]);
-      document.querySelector(".dim-direction")!.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+      document
+        .querySelector('[data-option="direction"] .dim-segment:not(.on)')!
+        .dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
       expect(box()).toMatchObject({ names: ["D"], toggle: "Auto", direction: "Along axis" });
     });
   });
@@ -309,10 +316,10 @@ describe("press/pull on a sphere, a cone or a torus", () => {
       expect(prompt()).not.toMatch(/past/);
     });
 
-    it("a refused typed radius never says release to remove", async () => {
+    it("a refused typed radius never offers removal", async () => {
       const { t, canvas } = await started([0, 0, 1], [0, 0, 1], hole(true));
       dragTo(t, canvas, -2.9);
-      expect(prompt()).toMatch(/Release to remove this face/);
+      expect(prompt()).toMatch(/Enter removes this face/);
       type("r-2");
       expect(prompt()).not.toMatch(/remove/);
       expect(prompt()).toMatch(/A radius can't be negative · type another radius/);

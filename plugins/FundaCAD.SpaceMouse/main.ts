@@ -22,7 +22,7 @@ type Inventory = { picked: string | null; seen: string[]; note?: string | null }
 export async function activate(e: Engine): Promise<() => void> {
   const stops = await install(e.viewport);
 
-  // The whole View menu is this capability's, so with it off the menu is absent. `checked` is re-evaluated each time a
+  // These items join the core View menu, and with the capability off they are absent. `checked` is re-evaluated each time a
   // menu opens, so the mode is read straight from the module.
   stops.push(
     contribute("FundaCAD.SpaceMouse", {
@@ -31,6 +31,7 @@ export async function activate(e: Engine): Promise<() => void> {
           menu: "View",
           before: "Help",
           items: [
+            { separator: true, label: "" },
             {
               label: "SpaceMouse: Object Mode",
               checked: () => getSpaceMouseMode() === "object",

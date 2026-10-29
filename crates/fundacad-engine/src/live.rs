@@ -13,6 +13,8 @@ pub const MAX_PENDING: usize = 8;
 pub const MAX_NOTE: usize = 400;
 /// Characters of a guide caption kept.
 pub const MAX_CAPTION: usize = 600;
+/// Refusals of the engine's own kept for guests, as many as the app keeps of its own.
+pub const MAX_REFUSED: usize = 16;
 
 pub type Clock = Box<dyn Fn() -> f64 + Send>;
 
@@ -28,6 +30,11 @@ pub struct LiveSession {
     /// id to (name, last seen).
     guests: HashMap<String, (Value, f64)>,
     pending: Vec<Map<String, Value>>,
+    /// Proposals whose base the host moved past before collecting them, shown to guests beside the host's refusals.
+    refused: Vec<Value>,
+    /// Proposal ids are `p<nonce>-<n>` and `n` survives a release: the app keeps the ids it took or refused across
+    /// a release and an engine restart, and an agent waiting on a new id must never match one of those.
+    nonce: String,
     next_proposal: u64,
     /// What the host's guide shows, stored as the host sent it.
     guide_state: Value,
@@ -58,6 +65,16 @@ fn name_text(v: &Value) -> String {
     }
 }
 
+/// `RandomState` keys are random per process and step per call, the clock and pid are mixed in on top.
+fn session_nonce() -> String {
+    use std::hash::{BuildHasher, Hasher};
+    let mut h = std::collections::hash_map::RandomState::new().build_hasher();
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos());
+    h.write_u128(now);
+    h.write_u32(std::process::id());
+    format!("{:010x}", h.finish() & 0xff_ffff_ffff)
+}
+
 impl LiveSession {
     pub fn new(clock: Clock) -> LiveSession {
         LiveSession {
@@ -70,6 +87,8 @@ impl LiveSession {
             status: json!({}),
             guests: HashMap::new(),
             pending: Vec::new(),
+            refused: Vec::new(),
+            nonce: session_nonce(),
             next_proposal: 0,
             guide_state: Value::Null,
             guide_step: None,
@@ -93,7 +112,7 @@ impl LiveSession {
         self.status = json!({});
         self.guests.clear();
         self.pending.clear();
-        self.next_proposal = 0;
+        self.refused.clear();
         self.reset_guide();
     }
 
@@ -135,6 +154,7 @@ impl LiveSession {
             self.host_id = Some(host_id.to_owned());
             self.doc = doc;
             self.pending.clear();
+            self.refused.clear();
             self.reset_guide();
         }
         self.document = document;
@@ -143,7 +163,20 @@ impl LiveSession {
         self.status = if truthy(Some(&status)) { status } else { json!({}) };
         // Expire first, then take, or a dead guest's proposal is handed over on its way out.
         let guests = self.guest_names();
-        let taken = std::mem::take(&mut self.pending);
+        // An edit or import that landed since the guest read would be wiped by handing it over.
+        let (taken, stale): (Vec<_>, Vec<_>) = std::mem::take(&mut self.pending)
+            .into_iter()
+            .partition(|p| p.get("baseRevision").and_then(Value::as_i64) == Some(revision));
+        for p in stale {
+            let base = p.get("baseRevision").cloned().unwrap_or(Value::Null);
+            let message = format!(
+                "the document in the app changed before it took this edit (revision {base} -> {revision}), \
+                 nothing was applied; read it again with doc_get and retry"
+            );
+            self.refused.push(json!({"id": p.get("id").cloned().unwrap_or(Value::Null), "message": message}));
+        }
+        let over = self.refused.len().saturating_sub(MAX_REFUSED);
+        self.refused.drain(..over);
         json!({"ok": true, "guests": guests, "proposals": taken})
     }
 
@@ -165,7 +198,7 @@ impl LiveSession {
             "attached": self.host_id.is_some(),
             "revision": self.revision,
             "title": self.title,
-            "status": self.status,
+            "status": self.status_with_refusals(),
             "document": self.document,
             "guests": self.guest_names(),
         });
@@ -173,6 +206,18 @@ impl LiveSession {
             st["doc"] = self.doc.clone();
         }
         st
+    }
+
+    fn status_with_refusals(&self) -> Value {
+        let mut status = self.status.clone();
+        if self.refused.is_empty() {
+            return status;
+        }
+        let Some(obj) = status.as_object_mut() else { return status };
+        let mut refused = obj.get("refused").and_then(Value::as_array).cloned().unwrap_or_default();
+        refused.extend(self.refused.iter().cloned());
+        obj.insert("refused".into(), Value::Array(refused));
+        status
     }
 
     /// `propose`: an offered replacement, or which of three things went wrong.
@@ -240,7 +285,7 @@ impl LiveSession {
                 "message": "the app has not collected the last edits yet"});
         }
         self.next_proposal += 1;
-        let pid = format!("p{}", self.next_proposal);
+        let pid = format!("p{}-{}", self.nonce, self.next_proposal);
         let note = note
             .filter(|n| truthy(Some(n)))
             .map(|n| Value::String(name_text(n).chars().take(MAX_NOTE).collect()))

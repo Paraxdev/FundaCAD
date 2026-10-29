@@ -1,11 +1,30 @@
-/** Inputs, textareas, selects and contentEditable, so typing "T" in a field does not start the Text tool. */
+// Inputs that take no typed text, so a focused one must not swallow the sketch keys.
+const NON_TEXT_INPUTS = new Set(["checkbox", "radio", "range", "button", "color", "submit", "reset"]);
+
+/** The base Select's button, whose typed letters search its list as a select's do. */
+export const isSelectTrigger = (t: EventTarget | null) =>
+  t instanceof HTMLElement && t.getAttribute("role") === "combobox";
+
+/** Text inputs, textareas, selects, Select triggers and contentEditable, so typing "T" in a field does not start the
+ *  Text tool. */
 export function isEditableTarget(t: EventTarget | null): boolean {
   return (
-    t instanceof HTMLInputElement ||
+    (t instanceof HTMLInputElement && !NON_TEXT_INPUTS.has(t.type)) ||
     t instanceof HTMLTextAreaElement ||
     t instanceof HTMLSelectElement ||
+    isSelectTrigger(t) ||
     (t instanceof HTMLElement && t.isContentEditable)
   );
+}
+
+const MENU_KEYS = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "Enter", "Tab"]);
+
+/** A key a focused menu row moves, runs or types ahead with. Window capture listeners hear it before the menu does,
+ *  so a tool asks here and leaves it, the way it asks escapeClaimed() for Escape. */
+export function isMenuKey(e: KeyboardEvent): boolean {
+  if (typeof Element === "undefined" || !(e.target instanceof Element && e.target.closest(".ui-menu"))) return false;
+  if (e.ctrlKey || e.altKey || e.metaKey) return false;
+  return MENU_KEYS.has(e.key) || (typeof e.key === "string" && e.key.length === 1);
 }
 
 /** False for a field removed, hidden, or put away by a key handler while the key was still on its way to the window
@@ -28,5 +47,5 @@ export function isHistoryKey(e: KeyboardEvent): boolean {
 export function isPageSelectAll(e: KeyboardEvent): boolean {
   if (!(e.ctrlKey || e.metaKey) || e.altKey) return false;
   if (e.key.toLowerCase() !== "a") return false;
-  return !isEditableTarget(e.target);
+  return !isEditableTarget(e.target) || isSelectTrigger(e.target);
 }

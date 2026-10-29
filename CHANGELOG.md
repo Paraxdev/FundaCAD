@@ -25,6 +25,12 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- **G3 fillets.** The fillet box has a third continuity icon, G3, on key 3. It
+  eases into the faces with no jump in curvature and none in how fast the
+  curvature changes either. G2 and G3 now need both faces flat across the edge,
+  so they are greyed out on an edge that runs along a curved face, and a
+  document saved with a G2 fillet on such an edge no longer builds. Opening that
+  fillet turns it back to G1 and says why, and Enter saves it.
 - **Stress results open with a plain verdict.** The first line says whether the
   part holds and with how much margin, or where it is likely to fail, and a pin
   marks the weakest spot on the part. A line under it says how far it bends and

@@ -10,7 +10,8 @@ import { useSelectionStore } from "../../stores/selection";
 import { useBrowserStore } from "../../stores/browser";
 import TreeFolder from "./TreeFolder.vue";
 import TreeRow from "./TreeRow.vue";
-import Icon from "./Icon.vue";
+import IconButton from "../ui/IconButton.vue";
+import Select from "../ui/Select.vue";
 import { useShellStore } from "../../stores/shell";
 import { contextMenu } from "../../ui/menu";
 import {
@@ -29,7 +30,6 @@ import { adoptImportedColors, exportModel, sketchFlatSource } from "../../io/fil
 import { ancestryOf } from "../../document/elements";
 import {
   BROWSER_FILTERS,
-  asBrowserFilter,
   getBrowserFilter,
   isBrowserSection,
   onBrowserFilterChange,
@@ -38,7 +38,8 @@ import {
   type BrowserSection,
 } from "../../ui/browserFilter";
 import type { CtxItem } from "../../ui/menu";
-import { actOn as actOnSelection, EMPTY_SELECTION, modsOf, selectGroup, selectRow } from "../../ui/rowSelection";
+import { actOn as actOnSelection, modsOf, selectGroup, selectRow } from "../../ui/rowSelection";
+import { clickFeatureRow, deleteRows, rowTargets } from "../../app/featureRows";
 import { VisibilityPaint } from "../../ui/visibilityPaint";
 import { routeTreeClick, treePickWaiting, type TreePick } from "../../ui/treePick";
 import { featurePick } from "../../app/featurePick";
@@ -47,6 +48,7 @@ import { contributedBrowserSections, contributedPalette, onContribChange } from 
 import type { Component } from "vue";
 import { featuresOf } from "../../types";
 import type { CadDocument, Feature, Plane3 } from "../../types";
+import { bodyLabels } from "../../ui/bodyLabels";
 
 const engine = useEngine();
 
@@ -83,10 +85,7 @@ const offFilter = onBrowserFilterChange(() => {
 });
 onUnmounted(offFilter);
 
-function onFilterInput(ev: Event) {
-  const id = asBrowserFilter((ev.target as HTMLSelectElement).value);
-  if (id) setBrowserFilter(id);
-}
+const filterOptions = BROWSER_FILTERS.map((f) => ({ value: f.id, label: f.label }));
 
 /** The lists whose eyes paint together: a drag started on a sketch's eye shows
  *  or hides sketches and nothing else. Element and assembly heads are bodies. */
@@ -224,7 +223,7 @@ function setVisibility(category: string, changes: ReadonlyMap<string, boolean>) 
     for (const [id, v] of changes) store.setSketchVisibility(id, v);
     if (!engine.sketch.active) engine.overlay.update(store.document);
   } else {
-    for (const [id, v] of changes) store.setPlaneVisibility(id, v);
+    store.setPlanesVisibility(changes);
     engine.syncDatumPlanes();
   }
   browser.bumpView(); // sketch and plane overrides are display-only: the store emits nothing
@@ -343,27 +342,17 @@ function selectFolder(ids: readonly string[], e: MouseEvent) {
   engine.viewport.setSelectedBodies(next);
 }
 
-/** Click, Ctrl-click or Shift-click a sketch row. The timeline and inspector follow the row just clicked, a Ctrl-click
- *  removing it hands that role to another. */
-function selectSketch(id: string, e: MouseEvent) {
-  const order = featuresOf(store.document.features, "sketch").map((f) => f.id);
-  const next = selectRow(browser.sketchSelection, order, id, modsOf(e));
-  browser.sketchSelection = next;
-  if (next.keys.includes(id)) engine.selectFeature(id);
-  else if (selection.featureId === id) engine.selectFeature(next.keys.at(-1) ?? null);
+/** Click, Ctrl-click or Shift-click a row of a feature list (sketches, planes, datums, the origin). The run is over
+ *  that list as drawn. */
+function selectRowIn(order: readonly string[], id: string, e: MouseEvent) {
+  clickFeatureRow(engine, order, id, e);
 }
 
-// A feature picked anywhere else (the timeline, the viewport) replaces the
-// Browser's sketch selection, unless it is one of the sketches already in it,
-// which is what the line above does to itself.
-watch(
-  () => selection.featureId,
-  (id) => {
-    if (id !== null && browser.sketchSelection.keys.includes(id)) return;
-    const isSketch = id !== null && store.document.features.some((f) => f.id === id && f.type === "sketch");
-    browser.sketchSelection = isSketch ? { keys: [id], anchor: id } : EMPTY_SELECTION;
-  },
-);
+/** The rows a menu or delete on `id` covers, kept to the one list: a mixed selection acts on each list separately. */
+function targetsIn(list: readonly { id: string }[], id: string): string[] {
+  const here = new Set(list.map((f) => f.id));
+  return rowTargets(id, store.document.features).filter((t) => here.has(t));
+}
 
 /** The per-body list the panel renders: the rebuild's own bodies, or a single
  *  implicit body when the backend sent no body metadata but a solid exists. */
@@ -513,6 +502,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
   const sketches = featuresOf(doc.features, "sketch");
   const datums = featuresOf(doc.features, "datumPlane");
   const selectedIds = new Set(browser.selectedBodyIds);
+  const picked = new Set(selection.rows.keys);
   const out: TreeNode[] = [];
   // Whether anything claims this document's bodies have colours. The swatch on a
   // body row is drawn only when something does; see bodyRow below.
@@ -543,11 +533,16 @@ const nodes = useDocValue((doc): TreeNode[] => {
         label: `${p} plane`,
         icon: "plane",
         dim: true,
+        selected: picked.has(`o:${p}`),
         activate: viaTool(
           () => ({ kind: "basePlane", plane: p }),
-          () => sketchOnPlane(p),
+          (e) => {
+            const mods = modsOf(e);
+            if (mods.toggle || mods.range) selectRowIn(["o:XY", "o:XZ", "o:YZ"], `o:${p}`, e);
+            else sketchOnPlane(p);
+          },
         ),
-        title: `Start a sketch on the ${p} plane`,
+        title: fmtKeys(`Click to start a sketch on the ${p} plane · Ctrl+click or Shift+click to select several`),
       })),
     );
 
@@ -555,28 +550,41 @@ const nodes = useDocValue((doc): TreeNode[] => {
     folder(
       "Planes",
       "plane",
-      datums.map((f, i) => ({
-        kind: "row" as const,
-        k: `p:${f.id}`,
-        depth: 1,
-        label: f.name || `Plane${i + 1}`,
-        icon: "plane",
-        selected: selection.featureId === f.id,
-        error: errId === f.id,
-        ...eye({ category: "planes", key: f.id }, store.isPlaneVisible(f.id)),
-        activate: viaTool(
-          () => featurePick(engine, f),
-          () => engine.selectFeature(f.id),
-        ),
-        extraMenu: [
-          { label: "Cut all bodies", onClick: () => void engine.starters.startCutByPlane(f.id) },
-          visibilityMenu("planes", [f.id], "planes"),
-        ],
-        rename: (name: string) => store.updateFeature(f.id, { name } as Partial<Feature>),
-        remove: () => store.removeFeature(f.id),
-        title:
-          "Construction plane, select then Split Body cuts by it · right-click for Cut / Rename / Delete · eye to show/hide",
-      })),
+      datums.map((f, i) => {
+        const targets = targetsIn(datums, f.id);
+        const many = targets.length > 1;
+        return {
+          kind: "row" as const,
+          k: `p:${f.id}`,
+          depth: 1,
+          label: f.name || `Plane${i + 1}`,
+          icon: "plane",
+          selected: picked.has(f.id) || selection.featureId === f.id,
+          error: errId === f.id,
+          ...eye({ category: "planes", key: f.id }, store.isPlaneVisible(f.id)),
+          activate: viaTool(
+            () => featurePick(engine, f),
+            (e) =>
+              selectRowIn(
+                datums.map((d) => d.id),
+                f.id,
+                e,
+              ),
+          ),
+          extraMenu: [
+            many
+              ? { label: "Cut all bodies (select one plane)", disabled: true }
+              : { label: "Cut all bodies", onClick: () => void engine.starters.startCutByPlane(f.id) },
+            visibilityMenu("planes", targets, "planes"),
+            ...(many ? [{ label: "Rename (select one plane)", disabled: true }] : []),
+          ],
+          rename: many ? undefined : (name: string) => store.updateFeature(f.id, { name } as Partial<Feature>),
+          remove: () => deleteRows(engine, targets),
+          title: fmtKeys(
+            "Construction plane · Ctrl+click adds, Shift+click takes a run · select one, then Split Body cuts by it · right-click for Cut / Rename / Delete · eye to show/hide",
+          ),
+        };
+      }),
     );
   }
 
@@ -589,25 +597,38 @@ const nodes = useDocValue((doc): TreeNode[] => {
     folder(
       "Datums",
       "datumPoint",
-      refGeom.map((f, i) => ({
-        kind: "row" as const,
-        k: `d:${f.id}`,
-        depth: 1,
-        label: f.name || (f.type === "datumAxis" ? `Axis${i + 1}` : `Point${i + 1}`),
-        icon: f.type === "datumAxis" ? "datumAxis" : "datumPoint",
-        selected: selection.featureId === f.id,
-        error: errId === f.id,
-        ...eye({ category: "datums", key: f.id }, store.isPlaneVisible(f.id)),
-        activate: viaTool(
-          () => featurePick(engine, f),
-          () => engine.selectFeature(f.id),
-        ),
-        extraMenu: [visibilityMenu("datums", [f.id], "datums")],
-        rename: (name: string) => store.updateFeature(f.id, { name } as Partial<Feature>),
-        remove: () => store.removeFeature(f.id),
-        title:
-          "Reference geometry · select to use as a mate or measure reference · right-click to Rename / Delete · eye to show/hide",
-      })),
+      refGeom.map((f, i) => {
+        const targets = targetsIn(refGeom, f.id);
+        const many = targets.length > 1;
+        return {
+          kind: "row" as const,
+          k: `d:${f.id}`,
+          depth: 1,
+          label: f.name || (f.type === "datumAxis" ? `Axis${i + 1}` : `Point${i + 1}`),
+          icon: f.type === "datumAxis" ? "datumAxis" : "datumPoint",
+          selected: picked.has(f.id) || selection.featureId === f.id,
+          error: errId === f.id,
+          ...eye({ category: "datums", key: f.id }, store.isPlaneVisible(f.id)),
+          activate: viaTool(
+            () => featurePick(engine, f),
+            (e) =>
+              selectRowIn(
+                refGeom.map((d) => d.id),
+                f.id,
+                e,
+              ),
+          ),
+          extraMenu: [
+            visibilityMenu("datums", targets, "datums"),
+            ...(many ? [{ label: "Rename (select one datum)", disabled: true }] : []),
+          ],
+          rename: many ? undefined : (name: string) => store.updateFeature(f.id, { name } as Partial<Feature>),
+          remove: () => deleteRows(engine, targets),
+          title: fmtKeys(
+            "Reference geometry · Ctrl+click adds, Shift+click takes a run · select to use as a mate or measure reference · right-click to Rename / Delete · eye to show/hide",
+          ),
+        };
+      }),
     );
   }
 
@@ -619,6 +640,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
   }
 
   const scanIds = new Set((store.buildState.result?.bodies ?? []).filter((b) => b.scan).map((b) => b.id));
+  const labels = bodyLabels(store.buildState.result?.bodies ?? [], (id) => store.bodyName(id));
   const bodyRow = (b: BodyRef, depth: number): RowNode => {
     // The slot swatch shows only while something contributes a body colour menu, a chip nobody can change is a colour
     // nobody chose. The assignment stays in the document either way.
@@ -631,7 +653,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
       k: `b:${b.id}`,
       id: b.id,
       depth,
-      label: store.bodyName(b.id) ?? b.name,
+      label: labels.get(b.id) ?? store.bodyName(b.id) ?? b.name,
       icon: scanIds.has(b.id) ? "scan" : "body",
       ...(chip ? { swatch: chip } : {}),
       selected: selectedIds.has(b.id),
@@ -790,36 +812,48 @@ const nodes = useDocValue((doc): TreeNode[] => {
     );
   }
 
-  const pickedSketches = browser.sketchSelection.keys;
   if (show("sketches"))
     folder(
       "Sketches",
       "sketch",
-      sketches.map((f, i) => ({
-        kind: "row" as const,
-        k: `s:${f.id}`,
-        depth: 1,
-        label: f.name || `Sketch${i + 1}`,
-        icon: "sketch",
-        selected: pickedSketches.includes(f.id) || selection.featureId === f.id,
-        error: errId === f.id,
-        ...eye({ category: "sketches", key: f.id }, engine.isSketchVisible(f.id)),
-        activate: viaTool(
-          () => ({ kind: "sketch", id: f.id }),
-          (e) => selectSketch(f.id, e),
-        ),
-        edit: editRow(f.id),
-        extraMenu: [
-          visibilityMenu("sketches", actOnSelection(pickedSketches, f.id), "sketches"),
-          { label: "Export as DXF…", onClick: () => exportSketch(f.id, "dxf") },
-          { label: "Export as SVG…", onClick: () => exportSketch(f.id, "svg") },
-        ],
-        rename: (name: string) => store.updateFeature(f.id, { name } as Partial<Feature>),
-        remove: () => store.removeFeature(f.id),
-        title: fmtKeys(
-          "Click to select (Ctrl+click adds, Shift+click takes a run) · double-click to edit · right-click for Visibility / Edit / Rename / Delete · drag across eyes to show or hide many",
-        ),
-      })),
+      sketches.map((f, i) => {
+        const targets = targetsIn(sketches, f.id);
+        const many = targets.length > 1;
+        const one = (label: string, onClick: () => void): CtxItem =>
+          many ? { label: `${label} (select one sketch)`, disabled: true } : { label, onClick };
+        return {
+          kind: "row" as const,
+          k: `s:${f.id}`,
+          depth: 1,
+          label: f.name || `Sketch${i + 1}`,
+          icon: "sketch",
+          selected: picked.has(f.id) || selection.featureId === f.id,
+          error: errId === f.id,
+          ...eye({ category: "sketches", key: f.id }, engine.isSketchVisible(f.id)),
+          activate: viaTool(
+            () => ({ kind: "sketch", id: f.id }),
+            (e) =>
+              selectRowIn(
+                sketches.map((d) => d.id),
+                f.id,
+                e,
+              ),
+          ),
+          edit: many ? undefined : editRow(f.id),
+          extraMenu: [
+            visibilityMenu("sketches", targets, "sketches"),
+            one("Export as DXF…", () => exportSketch(f.id, "dxf")),
+            one("Export as SVG…", () => exportSketch(f.id, "svg")),
+            ...(many ? [{ label: "Edit (select one sketch)", disabled: true }] : []),
+            ...(many ? [{ label: "Rename (select one sketch)", disabled: true }] : []),
+          ],
+          rename: many ? undefined : (name: string) => store.updateFeature(f.id, { name } as Partial<Feature>),
+          remove: () => deleteRows(engine, targets),
+          title: fmtKeys(
+            "Click to select (Ctrl+click adds, Shift+click takes a run) · double-click to edit · right-click for Visibility / Edit / Rename / Delete · drag across eyes to show or hide many",
+          ),
+        };
+      }),
     );
 
   return out;
@@ -869,20 +903,25 @@ onUnmounted(() => root.value?.removeEventListener("wheel", onWheel));
   <aside id="browser" class="float-card">
     <div class="float-card-head">
       <span class="float-card-title">Items</span>
-      <button class="float-card-close" :title="fmtKeys('Hide the items (Ctrl+Alt+S)')" @click="shell.setItems(false)"
-        ><Icon name="close" :size="14"
-      /></button>
+      <IconButton
+        class="float-card-close"
+        icon="close"
+        size="md"
+        variant="plain"
+        :icon-size="14"
+        :tip="fmtKeys('Hide the items (Ctrl+Alt+S)')"
+        @click="shell.setItems(false)"
+      />
     </div>
     <div class="browser-title">
-      <select
+      <Select
         id="browser-filter"
         class="browser-filter"
-        title="Show only one kind of item"
-        :value="filter"
-        @change="onFilterInput"
-      >
-        <option v-for="f in BROWSER_FILTERS" :key="f.id" :value="f.id">{{ f.label }}</option>
-      </select>
+        tip="Show only one kind of item"
+        :model-value="filter"
+        :options="filterOptions"
+        @update:model-value="setBrowserFilter"
+      />
     </div>
     <div ref="root" class="float-card-body">
       <template v-for="n in nodes" :key="n.k">
@@ -942,9 +981,15 @@ onUnmounted(() => root.value?.removeEventListener("wheel", onWheel));
     </div>
     <div class="float-card-foot">
       <span class="float-card-spacer"></span>
-      <button class="float-card-more" title="More" aria-label="More" @click="openMore($event)"
-        ><Icon name="more" :size="18"
-      /></button>
+      <IconButton
+        class="float-card-more"
+        icon="more"
+        size="md"
+        variant="plain"
+        :icon-size="18"
+        tip="More"
+        @click="openMore($event)"
+      />
     </div>
   </aside>
 </template>

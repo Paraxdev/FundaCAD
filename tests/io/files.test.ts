@@ -431,6 +431,33 @@ describe("export runs as a cancellable busy op", () => {
     expect(flatSourceOf(store, viewport(false), null)).toBeNull();
   });
 
+  it("File, Export offers DXF and SVG for one picked sketch and not while several rows are picked", async () => {
+    const { createPinia, setActivePinia } = await import("pinia");
+    setActivePinia(createPinia());
+    const { useSelectionStore } = await import("../../src/stores/selection");
+    const { backend, store } = storeWith(async () => ({ ok: true, path: "" }));
+    store.load(
+      JSON.stringify({
+        parameters: {},
+        features: [
+          { id: "sk1", type: "sketch", entities: [], constraints: [] },
+          { id: "sk2", type: "sketch", entities: [], constraints: [] },
+        ],
+      }),
+    );
+    const asked: ExportAsk[] = [];
+    ui.exportDialog = async (what) => void asked.push(what);
+    const viewport = { selectionBodyIds: () => [], selectedFaceSketchPlane: () => null };
+    const sel = useSelectionStore();
+    const { exportSelection } = await import("../../src/io/files");
+    sel.featureId = "sk2";
+    sel.rows = { keys: ["sk2"], anchor: "sk2" };
+    await exportSelection(store, backend, viewport);
+    sel.rows = { keys: ["sk1", "sk2"], anchor: "sk1" };
+    await exportSelection(store, backend, viewport);
+    expect(asked.map((a) => a.flat?.label ?? null)).toEqual(["Sketch2", null]);
+  });
+
   it("clears busy even when the backend throws", async () => {
     const { backend, store } = storeWith(async () => {
       throw new Error("socket died");

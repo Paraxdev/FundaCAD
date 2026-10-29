@@ -1,4 +1,4 @@
-import { measureError, parseMeasure, toUnit, unitById, type UnitDef } from "../ui/measure";
+import { parseMeasure, toUnit, unitById, type UnitDef } from "../ui/measure";
 import { valueProblem, type NumberSetting } from "./settings";
 
 /** The unit a bare number in this field means, null for a plain number. */
@@ -8,44 +8,53 @@ export function fieldUnit(p: NumberSetting, lengthUnit: string): UnitDef | null 
   return null;
 }
 
-/** The stored number as the field shows it. */
-export function numberText(p: NumberSetting, v: number, lengthUnit: string): string {
-  return String(toUnit(v, fieldUnit(p, lengthUnit)));
+// The finest change roundForDisplay keeps at a shown size: hundredths from 1 up, two digits past the zeros below it.
+function shownGrid(size: number): number {
+  if (size >= 1) return 0.01;
+  return size > 0 ? 10 ** -Math.min(6, 2 + Math.ceil(-Math.log10(size))) : 1e-6;
 }
 
-export function unitLabel(p: NumberSetting, lengthUnit: string): string {
-  return fieldUnit(p, lengthUnit)?.label ?? p.unit ?? "";
-}
+// roundForDisplay keeps a whole thousandth at any size.
+const inThousandths = (v: number) => Math.abs(v * 1000 - Math.round(v * 1000)) < 1e-6;
 
-/** Typed text read through the app's measure grammar, then the property's own
- *  limits, so "1 in" works in a length and "abc" says why it does not. */
-export function parseNumberField(
+/** How a number setting renders as a NumberField. A length or an angle is a unit the field converts, any other unit
+ *  text a caption beside a plain number. The schema's step is in the stored unit, the field's in the shown one. */
+export function numberField(
   p: NumberSetting,
-  raw: string,
   lengthUnit: string,
-): { value: number } | { error: string } {
+  value?: number,
+): {
+  unit: string | null;
+  caption: string | null;
+  step: number;
+  parse: (raw: string, unit: UnitDef | null) => number;
+  validate: (v: number) => string | null;
+} {
   const unit = fieldUnit(p, lengthUnit);
-  const bad = raw.trim() === "" ? "type a value" : measureError(raw, unit);
-  if (bad) return { error: bad };
-  const value = parseMeasure(raw, unit).value;
-  const problem = valueProblem(p, value);
-  if (!problem) return { value };
-  const shown = (n: number) => `${toUnit(n, unit)}${unit ? ` ${unit.label}` : ""}`;
-  if (p.min !== undefined && value < p.min) return { error: `at least ${shown(p.min)}` };
-  if (p.max !== undefined && value > p.max) return { error: `at most ${shown(p.max)}` };
-  return { error: problem };
-}
-
-/** `times` steps of the declared step (1 for an integer without one), on the step grid and inside the limits.
- *  Null when the property declares nothing to step by. */
-export function stepNumber(p: NumberSetting, v: number, times: number): number | null {
-  const step = p.step ?? (p.integer ? 1 : undefined);
-  if (!step || !(step > 0)) return null;
-  // Rounded to 1e-9 so 0.1 steps read back as 0.3, not 0.30000000000000004.
-  let next = Math.round((Math.round(v / step) + times) * step * 1e9) / 1e9;
-  if (p.min !== undefined) next = Math.max(p.min, next);
-  if (p.max !== undefined) next = Math.min(p.max, next);
-  return p.integer ? Math.round(next) : next;
+  const declared = p.step ?? (p.integer ? 1 : undefined);
+  const step = declared && declared > 0 ? declared : null;
+  const shown = (v: number, u: UnitDef | null) => String(toUnit(v, u));
+  const factor = unit?.factor ?? 1;
+  const perStep = step ? step / factor : 0;
+  const reach = Math.max(
+    0,
+    ...[value, p.min, p.max].filter((v): v is number => Number.isFinite(v)).map((v) => Math.abs(v / factor)),
+  );
+  return {
+    unit: unit?.id ?? null,
+    caption: unit ? null : p.unit || null,
+    // With nothing to step by the step is zero, so the arrows leave an in-range value alone. A step finer than the
+    // text can show would leave the text where it was, so it moves one shown digit and parse puts it on the step.
+    step: perStep && !inThousandths(perStep) ? Math.max(perStep, shownGrid(reach)) : perStep,
+    // The field steps and spells in the shown unit, rounded, so its own text for a step or a limit is read as that
+    // exact value. Otherwise 5 mm stepped in inches would store 5.0038 and the max would refuse itself.
+    parse: (raw, u) => {
+      const v = parseMeasure(raw, u).value;
+      const onStep = step ? Math.round(Math.round(v / step) * step * 1e9) / 1e9 : undefined;
+      return [onStep, p.min, p.max].find((c) => c !== undefined && shown(c, u) === raw.trim()) ?? v;
+    },
+    validate: (v) => valueProblem(p, v),
+  };
 }
 
 const MODIFIER_KEYS = new Set(["Control", "Shift", "Alt", "Meta"]);

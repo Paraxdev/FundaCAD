@@ -26,7 +26,7 @@ import {
   mirrorMarkObjects,
   CURVE_COLOR,
   PREVIEW_COLOR,
-  SELECT_COLOR,
+  sketchSelectColor,
 } from "./overlay";
 import {
   constrainedPoles,
@@ -42,7 +42,7 @@ import { DimInput } from "./dimInput";
 import { TextPanel } from "./textPanel";
 import type { TextValues } from "./textPanel";
 import { fetchFonts } from "./textCache";
-import { isEditableTarget } from "../ui/focus";
+import { isEditableTarget, isMenuKey } from "../ui/focus";
 import { SketchDimensions, type ExtraDim } from "./sketchDimensions";
 import { SketchGlyphs } from "./sketchGlyphs";
 import { RelationsPanel } from "./relationsPanel";
@@ -83,6 +83,7 @@ import { expandPattern, translated } from "./pattern";
 import { MirrorFlow, type MirrorHost } from "./mirrorFlow";
 import { showMirrorPanel } from "../features/mirrorPanel";
 import { mirrorLineColor, mirrorObjectsColor } from "../features/mirrorColors";
+import { onThemeChange } from "../ui/theme";
 import {
   candidatesFromEntities,
   curvesFromEntities,
@@ -196,6 +197,7 @@ export type SketchTool =
   | "midpoint"
   | "collinear"
   | "fix"
+  | "patternLinear"
   | "patternRect"
   | "patternCircular"
   | "hexHoles"
@@ -254,6 +256,8 @@ export class SketchMode {
   gizmo: {
     start(target: MoveTarget, done: () => void): void;
     cancel(): void;
+    /** writes a drag let go of but not yet entered, then ends */
+    settle(): void;
     readonly active: boolean;
   } | null = null;
 
@@ -680,6 +684,8 @@ export class SketchMode {
 
     this.session.dispose();
     const session = (this.session = new Disposer());
+    // The selected entity takes the accent, which only a redraw re-reads.
+    session.add(onThemeChange(() => this.redraw()));
     const el = this.viewport.domElement;
     session.listen(el, "pointerdown", this.boundDown);
     session.listen(el, "pointermove", this.boundMove);
@@ -733,7 +739,10 @@ export class SketchMode {
 
   finish(commit = true) {
     if (!this.active) return;
-    if (this.gizmo?.active) this.gizmo.cancel();
+    if (this.gizmo?.active) {
+      if (commit) this.gizmo.settle();
+      else this.gizmo.cancel();
+    }
     const store = this.store!;
     this.modifyFlow.reset(); // an offset left mid-placement takes its face-edge projection with it
     this.patternFlow.flushOnFinish(); // may add patterns, must precede the snapshot
@@ -789,10 +798,7 @@ export class SketchMode {
     this.viewport.hoverEntity(null); // drop any Project-tool 3D hover highlight
     this.modifyFlow.reset();
     this.mirrorFlow.reset();
-    this.overlay.setPreview([]);
-    this.overlay.setSnap(null);
     this.snapTag.hide();
-    this.overlay.setHandleDot(null);
     this.snapWorld = null;
     this.removeGrid();
     this.viewport.exitSketchView();
@@ -821,16 +827,15 @@ export class SketchMode {
     this.dimFlow.resetDimPicks();
     this.constraintTools.resetPending();
     this.tool = "select";
-    this.overlay.setActiveSketch([]); // clear in-progress curves (else they orphan on screen)
-    this.overlay.setActiveRegions([], this.plane); // drop active-sketch fills (committed ones re-render)
+    // Last, as the resets above may redraw; the guides, curves and fills a session drew otherwise outlive it.
+    this.overlay.clearTransient();
     this.looseNow = null;
-    this.overlay.setLooseEnds(this.plane, null);
     if (this.store) this.overlay.update(this.store.document);
     this.onState?.();
   }
 
   setTool(t: SketchTool) {
-    if (this.gizmo?.active) this.gizmo.cancel();
+    if (this.gizmo?.active) this.gizmo.settle();
     // With something selected, move, rotate and scale are one gizmo on it; the
     // click flows below are what they fall back to with nothing selected.
     if ((t === "move" || t === "rotate" || t === "scale" || t === "mirror") && this.active && this.gizmo) {
@@ -2142,7 +2147,7 @@ export class SketchMode {
           x: a.x,
           y: a.y,
           radius: a.distanceTo(vertex),
-          sides: Math.max(3, Math.round(this.polygonSides)),
+          sides: this.boxSides(),
           angle: (Math.atan2(vertex.y - a.y, vertex.x - a.x) * 180) / Math.PI,
         });
         dims = { radius: a.distanceTo(vertex) };
@@ -2247,7 +2252,15 @@ export class SketchMode {
                   : [{ name: "width", label: "W", positive: true }]
                 : null;
     if (!defs) return;
-    this.dim.show(defs, () => this.multiClickAt(this.lastCursor.clone()));
+    this.dim.show(
+      defs,
+      () => this.multiClickAt(this.lastCursor.clone()),
+      undefined,
+      undefined,
+      undefined,
+      () => this.previewAtCursor(),
+    );
+    if (t === "polygon") this.dim.updateFromCursor({ sides: this.polygonSides });
   }
 
   private multiClickAt(p: THREE.Vector2) {
@@ -2513,6 +2526,12 @@ export class SketchMode {
     this.patternFlow.edit(patId);
   }
 
+  /** The box's side count; text that is no count reads as the last one that was. */
+  private boxSides(): number {
+    const n = this.dim.getValue("sides");
+    return n != null && Number.isFinite(n) ? Math.max(3, Math.min(64, Math.round(n))) : this.polygonSides;
+  }
+
   private polygonClick(p: THREE.Vector2) {
     if (!this.clickPts.length) {
       this.clickPts = [p.clone()];
@@ -2523,9 +2542,7 @@ export class SketchMode {
     this.clickPts = [];
     this.overlay.setPreview([]);
     if (!center) return;
-    // honor a typed side count (N); blank/invalid keeps the current count
-    const rawN = this.dim.getValue("sides");
-    if (rawN != null && Number.isFinite(rawN)) this.polygonSides = Math.max(3, Math.min(64, Math.round(rawN)));
+    this.polygonSides = this.boxSides();
     const vertex = this.polygonVertex(center, p);
     this.dim.hide();
     this.commitPolygon(center, vertex);
@@ -2855,50 +2872,17 @@ export class SketchMode {
       return;
     }
 
-    if (this.base) {
-      const inferred = this.tool === "line" ? this.inferLine(hit.p) : null;
-      this.showInfer(inferred);
-      const geom = this.computeGeometry(this.base, inferred?.end ?? hit.p);
-      this.dim.updateFromCursor(geom.dims);
-      if (this.tool === "circle" && geom.entity?.type === "circle") {
-        // The diameter is drawn through the centre along the drag, and its field
-        // sits on that line where the eye already is.
-        const c = this.base,
-          r = geom.entity.radius;
-        const u = hit.p.clone().sub(c);
-        if (u.lengthSq() < 1e-12) u.set(1, 0);
-        u.normalize();
-        const diameter = curveObjects(
-          [
-            {
-              type: "line",
-              id: "__diameter__",
-              construction: true,
-              x1: c.x - u.x * r,
-              y1: c.y - u.y * r,
-              x2: c.x + u.x * r,
-              y2: c.y + u.y * r,
-            },
-          ],
-          this.plane,
-          PREVIEW_COLOR,
-        );
-        const at = this.viewport.projectToScreen(this.plane.to3D(c.x + (u.x * r) / 2, c.y + (u.y * r) / 2));
-        this.dim.positionCentred(at.x, at.y);
-        this.overlay.setPreview([geom.preview, ...diameter]);
-      } else {
-        this.dim.position(e.clientX, e.clientY);
-        this.overlay.setPreview([geom.preview]); // only the rubber-band redraws
-      }
-    } else {
-      this.overlay.setPreview([]);
-    }
+    if (this.base) this.basePreview(hit.p, e);
+    else this.overlay.setPreview([]);
   }
 
   private onKey(e: KeyboardEvent) {
+    if (isMenuKey(e)) return;
     // The dim box auto-focuses while drawing, so Esc in it must still cancel.
     const escInOwnDim = e.key === "Escape" && this.dim.isActive && this.dim.ownsTarget(e.target);
     if (!escInOwnDim && isEditableTarget(e.target)) return; // typing in a dim/text field, not a shortcut
+    // The Text panel's list, boxes and buttons are no text fields, yet a letter there must not switch the tool.
+    if (e.target instanceof Element && e.target.closest(".text-tool-panel")) return;
     // a pattern being placed/edited: Delete removes it, Esc keeps it as-is
     if (this.patternFlow.hasPending()) {
       if (e.key === "Delete" || e.key === "Backspace") {
@@ -3194,6 +3178,52 @@ export class SketchMode {
     }
   }
 
+  /** The drag tools' rubber band from `base`; without a pointer event the box stays where it is. */
+  private basePreview(cursor: THREE.Vector2, e?: PointerEvent) {
+    if (!this.base) return;
+    const inferred = this.tool === "line" ? this.inferLine(cursor) : null;
+    this.showInfer(inferred);
+    const geom = this.computeGeometry(this.base, inferred?.end ?? cursor);
+    this.dim.updateFromCursor(geom.dims);
+    if (this.tool === "circle" && geom.entity?.type === "circle") {
+      // The diameter is drawn through the centre along the drag, and its field
+      // sits on that line where the eye already is.
+      const c = this.base,
+        r = geom.entity.radius;
+      const u = cursor.clone().sub(c);
+      if (u.lengthSq() < 1e-12) u.set(1, 0);
+      u.normalize();
+      const diameter = curveObjects(
+        [
+          {
+            type: "line",
+            id: "__diameter__",
+            construction: true,
+            x1: c.x - u.x * r,
+            y1: c.y - u.y * r,
+            x2: c.x + u.x * r,
+            y2: c.y + u.y * r,
+          },
+        ],
+        this.plane,
+        PREVIEW_COLOR,
+      );
+      const at = this.viewport.projectToScreen(this.plane.to3D(c.x + (u.x * r) / 2, c.y + (u.y * r) / 2));
+      this.dim.positionCentred(at.x, at.y);
+      this.overlay.setPreview([geom.preview, ...diameter]);
+    } else {
+      if (e) this.dim.position(e.clientX, e.clientY);
+      this.overlay.setPreview([geom.preview]); // only the rubber-band redraws
+    }
+  }
+
+  /** A typed value reshapes the preview where the cursor already is, a pointer move need not come first. */
+  private previewAtCursor() {
+    if (this.base) this.basePreview(this.lastCursor.clone());
+    else this.multiClickPreview(this.lastCursor.clone());
+    this.viewport.requestRender();
+  }
+
   private showDimFields() {
     const defs =
       this.tool === "rectangle"
@@ -3207,7 +3237,14 @@ export class SketchMode {
               { name: "length", label: "L" },
               { name: "angle", label: "Angle", icon: "angle", kind: "angle" as const },
             ];
-    this.dim.show(defs, () => this.commitFromCursor(this.lastCursor));
+    this.dim.show(
+      defs,
+      () => this.commitFromCursor(this.lastCursor),
+      undefined,
+      undefined,
+      undefined,
+      () => this.previewAtCursor(),
+    );
   }
 
   private snapAt(clientX: number, clientY: number, noSnap = false) {
@@ -3330,7 +3367,7 @@ export class SketchMode {
       const chosen = this.entities.filter((e) => this.selected.has(e.id) && !lit.has(e.id));
       const hovered = this.entities.filter((e) => lit.has(e.id));
       if (normal.length) objs.push(...curveObjects(normal, this.plane, this.activeColor()));
-      if (chosen.length) objs.push(...curveObjects(chosen, this.plane, SELECT_COLOR, true));
+      if (chosen.length) objs.push(...curveObjects(chosen, this.plane, sketchSelectColor(), true));
       if (hovered.length) objs.push(...curveObjects(hovered, this.plane, PREVIEW_COLOR, true));
     } else {
       objs.push(...curveObjects(this.entities, this.plane, this.activeColor()));

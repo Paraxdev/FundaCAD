@@ -3,11 +3,15 @@ import { fmtKeys } from "../../input/platform";
 import { computed, nextTick, onMounted, onUnmounted, ref, useTemplateRef, watch } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { useDocValue, useBuildValue } from "../../app/useDoc";
-import { useSelectionStore } from "../../stores/selection";
+import { pickedFeatureCount, useSelectionStore } from "../../stores/selection";
 import { useTimelineStore } from "../../stores/timeline";
 import { useShellStore } from "../../stores/shell";
 import { featureMeta, stepName } from "../../ui/featureMeta";
 import Icon from "./Icon.vue";
+import Button from "../ui/Button.vue";
+import Chip from "../ui/Chip.vue";
+import IconButton from "../ui/IconButton.vue";
+import TextField from "../ui/TextField.vue";
 import { contextMenu } from "../../ui/menu";
 import {
   buildProgress,
@@ -26,6 +30,7 @@ import { relatedFeatureIds } from "../../ui/relatedFeatures";
 import { routeTreeClick, treePickWaiting } from "../../ui/treePick";
 import { featurePick } from "../../app/featurePick";
 import { closeOpenEdit } from "../../app/selection";
+import { clickFeatureRow, deleteRows, rowTargets, toggleSuppressRows } from "../../app/featureRows";
 import type { Feature } from "../../types";
 
 const engine = useEngine();
@@ -89,6 +94,15 @@ const related = computed<Set<string> | null>(() => {
 });
 const filtering = computed(() => relatedOn.value && related.value !== null);
 
+/** The chips as drawn, which a Shift-click run is measured over. */
+const shownIds = computed(() =>
+  features.value.filter((f) => !filtering.value || related.value?.has(f.id)).map((f) => f.id),
+);
+const picked = computed(() => new Set(selection.rows.keys));
+// Values show under the one chip the inspector follows, several picked chips have no single set of values.
+const several = computed(() => pickedFeatureCount(selection.rows, features.value) > 1);
+const isPicked = (id: string) => picked.value.has(id) || selection.featureId === id;
+
 const unit = ref(getUnit());
 const offUnit = onUnitChange(() => {
   unit.value = getUnit();
@@ -130,7 +144,12 @@ const notes = useBuildValue((b) =>
 /** Features the build left out because this version does not know their type. */
 const placeholders = useBuildValue((b) => featurePlaceholders({ skippedFeatures: b.result?.skippedFeatures }));
 const building = useBuildValue((b) => b.building);
-const progress = useBuildValue((b) => ({ progress: b.progress, meshed: b.meshed, meshTotal: b.meshTotal }));
+const progress = useBuildValue((b) => ({
+  phase: b.phase,
+  progress: b.progress,
+  meshed: b.meshed,
+  meshTotal: b.meshTotal,
+}));
 
 // Busy is timed from the transition, not each emission: an op emits busy frames throughout, and re-arming would never
 // elapse. The delay keeps a fast op from flashing a button.
@@ -168,7 +187,10 @@ onUnmounted(() => {
 const chip = computed(() =>
   busy.value.waiting
     ? { label: "waiting…", pct: 0 }
-    : buildProgress(progress.value.progress, progress.value.meshed, progress.value.meshTotal, features.value.length),
+    : buildProgress(
+        progress.value,
+        features.value.map((f) => f.shown),
+      ),
 );
 const line = computed(() => busyLine(busy.value));
 
@@ -217,14 +239,21 @@ function busyElsewhere(): boolean {
   return engine.toolBusy() || engine.sketch.active;
 }
 // A tool waiting for a pick takes the chip the way it takes an Items row.
-function onChipClick(id: string) {
+function onChipClick(id: string, ev: MouseEvent) {
   const f = treePickWaiting() ? store.document.features.find((x) => x.id === id) : undefined;
   if (f) {
     routeTreeClick(featurePick(engine, f), { busyHint: () => null, hint: (t) => engine.setStatus(t, "") });
     return;
   }
   if (busyElsewhere()) return;
-  timeline.select(id);
+  if (ev.ctrlKey || ev.metaKey || ev.shiftKey) clickFeatureRow(engine, shownIds.value, id, ev);
+  // A plain click on the open chip folds it, but not the second click of a double-click, which goes on to edit.
+  else if (ev.detail < 2 && selection.featureId === id && !several.value) timeline.select(null);
+  else timeline.select(id);
+}
+/** A Shift-click takes a run of chips, so the browser's text selection across the labels is suppressed. */
+function onChipMouseDown(ev: MouseEvent) {
+  if (ev.shiftKey && !(ev.target as HTMLElement | null)?.closest?.("input")) ev.preventDefault();
 }
 function onChipDblclick(id: string) {
   if (treePickWaiting()) return;
@@ -241,22 +270,27 @@ function linkedPath(id: string): string | null {
 function hasOwnName(id: string): boolean {
   return !!(store.document.features.find((f) => f.id === id) as { name?: string } | undefined)?.name;
 }
+// One save per edit, as in InlineLabel: the blur of a field that is closing commits again and falls out here.
+let renameOpenId: string | null = null;
 function startRename(id: string) {
   renamingId.value = id;
-  void nextTick(() => {
-    const el = track.value?.querySelector<HTMLInputElement>(".t-rename");
-    el?.focus();
-    el?.select();
-  });
+  renameOpenId = id;
+  void nextTick(() => track.value?.querySelector<HTMLInputElement>(".t-rename input")?.focus());
 }
-function finishRename(e: Event, save: boolean) {
-  const id = renamingId.value;
-  if (!id) return;
+// The field commits on Enter and blur and reverts on Escape before these run, they only close it.
+function saveRename(name: string) {
+  const id = renameOpenId;
+  renameOpenId = null;
+  if (id) store.renameFeature(id, name);
+}
+function onRenameFieldKey(e: KeyboardEvent) {
+  if (e.key !== "Enter" && e.key !== "Escape") return;
+  e.preventDefault();
+  renameOpenId = null;
   renamingId.value = null;
-  if (save) store.renameFeature(id, (e.target as HTMLInputElement).value);
 }
 function onRenameKey(e: KeyboardEvent) {
-  if (e.key !== "F2" || renamingId.value || !selection.featureId) return;
+  if (e.key !== "F2" || renamingId.value || !selection.featureId || several.value) return;
   const t = e.target as HTMLElement | null;
   if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
   if (!features.value.some((f) => f.id === selection.featureId)) return;
@@ -379,6 +413,11 @@ function gapIndexAt(ev: PointerEvent): number {
 
 function openMenu(e: MouseEvent, id: string, i: number) {
   e.preventDefault();
+  const targets = rowTargets(id, features.value);
+  if (targets.length > 1) {
+    openMultiMenu(e, targets);
+    return;
+  }
   // Re-pick only when this feature's last build reported an ambiguous saved reference, offering it on a healthy one
   // invites overwriting working references.
   const repick = timeline.canRepick(id) ? [{ label: "Re-pick face…", onClick: () => timeline.repick(id) }] : [];
@@ -419,7 +458,21 @@ function openMenu(e: MouseEvent, id: string, i: number) {
     { label: "Roll back before this", onClick: () => store.setRollback(i) },
     { label: "Roll to here", onClick: () => store.setRollback(i + 1) },
     { separator: true, label: "" },
-    { label: "Delete", danger: true, onClick: () => store.removeFeature(id) },
+    { label: "Delete", danger: true, onClick: () => deleteRows(engine, [id]) },
+  ]);
+}
+
+/** Several chips picked: what makes sense on all of them, and the single-feature items shown off with the reason. */
+function openMultiMenu(e: MouseEvent, ids: string[]) {
+  const n = ids.length;
+  const allOff = ids.every((x) => suppressed.value.has(x));
+  contextMenu(e.clientX, e.clientY, [
+    { label: "Edit (select one feature)", disabled: true },
+    { label: "Rename (select one feature)", disabled: true },
+    { label: allOff ? `Unsuppress these ${n}` : `Suppress these ${n}`, onClick: () => toggleSuppressRows(store, ids) },
+    { label: "Roll back before this (select one feature)", disabled: true },
+    { separator: true, label: "" },
+    { label: `Delete these ${n}`, danger: true, onClick: () => deleteRows(engine, ids) },
   ]);
 }
 </script>
@@ -428,63 +481,82 @@ function openMenu(e: MouseEvent, id: string, i: number) {
   <section id="timeline" class="timeline-shell float-card" aria-label="History">
     <div class="float-card-head">
       <span class="float-card-title">History</span>
-      <button
+      <Chip
         v-if="related"
+        as="button"
         class="timeline-related"
         :class="{ on: relatedOn }"
+        :variant="relatedOn ? 'accent' : 'neutral'"
         data-testid="history-related"
-        :title="
+        :tip="
           relatedOn
             ? 'Showing what relates to the selection, click to show everything'
             : 'Show only what relates to the selection'
         "
+        :aria-label="`Related to Selection, ${related.size}`"
+        :aria-pressed="relatedOn"
         @click="toggleRelated()"
-        >Related to Selection · {{ related.size }}</button
+        >Related to Selection · {{ related.size }}</Chip
       >
-      <button
+      <Chip
+        as="button"
+        variant="error"
+        icon="warning"
         class="timeline-errbadge"
         :class="{ hidden: errors.size === 0 }"
-        title="Failing features, click to jump to the next one"
+        tip="Failing features, click to jump to the next one"
+        :aria-label="`${errors.size} failing feature${errors.size === 1 ? '' : 's'}, click to jump to the next one`"
         @click="jumpToNextError()"
-        ><Icon name="warning" :size="14" /> {{ errors.size }}</button
+        >{{ errors.size }}</Chip
       >
-      <button
+      <IconButton
         class="float-card-close"
-        :title="fmtKeys('Hide the history (Ctrl+Alt+H)')"
+        icon="close"
+        size="md"
+        variant="plain"
+        :icon-size="14"
+        :tip="fmtKeys('Hide the history (Ctrl+Alt+H)')"
         @click="shellStore.setHistory(false)"
-        ><Icon name="close" :size="14"
-      /></button>
+      />
     </div>
     <!-- Transport moves the saved marker and stands down during an edit, the drawn marker is on the edited step then. -->
     <div class="timeline-transport">
-      <button
+      <IconButton
         class="tl-btn"
-        title="Roll back to the start"
+        icon="skipStart"
+        size="sm"
+        variant="plain"
+        tip="Roll back to the start"
         :disabled="editing || docRollback <= 0"
         @click="store.setRollback(0)"
-        ><Icon name="skipStart"
-      /></button>
-      <button
+      />
+      <IconButton
         class="tl-btn"
-        title="Step one feature back"
+        icon="stepBack"
+        size="sm"
+        variant="plain"
+        tip="Step one feature back"
         :disabled="editing || docRollback <= 0"
         @click="store.setRollback(Math.max(0, docRollback - 1))"
-        ><Icon name="stepBack"
-      /></button>
-      <button
+      />
+      <IconButton
         class="tl-btn"
-        title="Step one feature forward"
+        icon="stepForward"
+        size="sm"
+        variant="plain"
+        tip="Step one feature forward"
         :disabled="editing || docRollback >= features.length"
         @click="store.setRollback(Math.min(features.length, docRollback + 1))"
-        ><Icon name="stepForward"
-      /></button>
-      <button
+      />
+      <IconButton
         class="tl-btn"
-        title="Roll forward to the end"
+        icon="skipEnd"
+        size="sm"
+        variant="plain"
+        tip="Roll forward to the end"
         :disabled="editing || docRollback >= features.length"
         @click="store.setRollback(features.length)"
-        ><Icon name="skipEnd"
-      /></button>
+      />
     </div>
 
     <div ref="scroller" class="timeline-scroll" @dragover="onDragOverScroller">
@@ -506,7 +578,7 @@ function openMenu(e: MouseEvent, id: string, i: number) {
                 class="timeline-node"
                 :data-id="f.id"
                 :class="{
-                  selected: selection.featureId === f.id,
+                  selected: isPicked(f.id),
                   error: errors.has(f.id),
                   // amber only where there is no red: the build SUCCEEDED, so
                   // the chip must not read as a failure. `notes` already drops
@@ -519,7 +591,8 @@ function openMenu(e: MouseEvent, id: string, i: number) {
                 }"
                 :title="chipTitle(f, i)"
                 draggable="true"
-                @click="onChipClick(f.id)"
+                @mousedown="onChipMouseDown"
+                @click="onChipClick(f.id, $event)"
                 @dblclick="onChipDblclick(f.id)"
                 @contextmenu="openMenu($event, f.id, i)"
                 @dragstart="onDragStart(f.id, $event)"
@@ -528,29 +601,37 @@ function openMenu(e: MouseEvent, id: string, i: number) {
                 @drop="onDrop(f.id, i, $event)"
               >
                 <span class="glyph"><Icon :name="metaFor(f).icon" :size="18" /></span>
-                <input
+                <!-- display: contents, so a press on the well's padding stays out of the chip as one on the text does -->
+                <span
                   v-if="renamingId === f.id"
-                  class="t-rename"
-                  :value="f.name || metaFor(f).label"
-                  :placeholder="metaFor(f).label"
-                  spellcheck="false"
+                  class="t-rename-hold"
                   @click.stop
                   @dblclick.stop
                   @pointerdown.stop
-                  @keydown.stop="
-                    $event.key === 'Enter'
-                      ? finishRename($event, true)
-                      : $event.key === 'Escape'
-                        ? finishRename($event, false)
-                        : undefined
-                  "
-                  @blur="finishRename($event, true)"
-                />
+                  @keydown.stop="onRenameFieldKey"
+                >
+                  <TextField
+                    class="t-rename"
+                    size="sm"
+                    commit="change"
+                    select-on-focus
+                    aria-label="Rename"
+                    :model-value="f.name || metaFor(f).label"
+                    :placeholder="metaFor(f).label"
+                    spellcheck="false"
+                    @update:model-value="saveRename"
+                    @blur="renamingId = null"
+                  />
+                </span>
                 <span v-else class="t-name">{{ f.shown }}</span>
-                <Icon class="t-caret" :name="selection.featureId === f.id ? 'caretDown' : 'caretRight'" :size="12" />
+                <Icon
+                  class="t-caret"
+                  :name="selection.featureId === f.id && !several ? 'caretDown' : 'caretRight'"
+                  :size="12"
+                />
               </div>
               <!-- The values sit under the clicked chip, so the history already names the operation and the form need not. -->
-              <div v-if="selection.featureId === f.id" class="timeline-props">
+              <div v-if="selection.featureId === f.id && !several" class="timeline-props">
                 <FeatureProperties :feature-id="f.id" :unit="unit" />
               </div>
             </div>
@@ -566,8 +647,13 @@ function openMenu(e: MouseEvent, id: string, i: number) {
           <!-- An import shows here from the moment it starts, not only once its file is read. -->
           <div v-for="op in rows" :key="op.key" class="timeline-node running" :data-op="op.key">
             <span class="t-build" :title="op.label">{{ op.stage ? `${op.label}, ${op.stage}` : op.label }}</span>
-            <button class="t-op-cancel" :title="`Stop ${op.label}`" @click="store.cancelRunningOp(op.key)"
-              >Cancel</button
+            <Button
+              class="t-op-cancel"
+              variant="ghost"
+              size="sm"
+              :tip="`Stop ${op.label}`"
+              @click="store.cancelRunningOp(op.key)"
+              >Cancel</Button
             >
           </div>
           <div v-if="building" class="timeline-node building">
@@ -595,17 +681,19 @@ function openMenu(e: MouseEvent, id: string, i: number) {
         ></span>
       </template>
     </div>
-    <button
+    <Button
       class="timeline-cancel"
       :class="{ hidden: !showCancel }"
+      variant="danger"
+      size="sm"
       :disabled="cancelling"
-      :title="
+      :tip="
         busy.waiting
           ? 'Withdraw this request, the job it waits on carries on'
           : busy.label || 'Stop the running operation'
       "
       @click="cancelBusy()"
-      >Cancel</button
+      >Cancel</Button
     >
   </section>
 </template>

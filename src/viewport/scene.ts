@@ -4,6 +4,7 @@ import * as THREE from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { stickyFact } from "../diagnostics/breadcrumbs";
 import { gridStep } from "../sketch/planeGrid";
+import { gridMajorEvery } from "../../src/ui/units";
 import { isRenderLowPower, setRenderLowPower } from "./render";
 import {
   composerClearColor,
@@ -71,12 +72,12 @@ export interface SceneBundle {
 }
 
 /** Cells and view are both measured in pixels, so no constant fits: 100 cells of 64px is five laptop screens but
- *  barely two on a wide monitor. Rounded up to whole major cells, since the major grid divides the span by five. */
-export function groundGridCells(worldPerPixel: number, diagonalPx: number, cell: number): number {
+ *  barely two on a wide monitor. Rounded up to whole major cells of `every` minor cells. */
+export function groundGridCells(worldPerPixel: number, diagonalPx: number, cell: number, every = 5): number {
   const want = (worldPerPixel * diagonalPx * GROUND_COVER) / cell;
   const cells = Number.isFinite(want) && want > 0 ? Math.ceil(want) : MIN_GROUND_CELLS;
   const clamped = Math.min(Math.max(cells, MIN_GROUND_CELLS), MAX_GROUND_CELLS);
-  return Math.ceil(clamped / 5) * 5;
+  return Math.ceil(clamped / every) * every;
 }
 
 /** A grazing view compresses the far half into the top of the frame, where a lattice that stops draws its edge
@@ -164,7 +165,7 @@ export class AdaptiveGrid {
   applyTheme() {
     const minor = new THREE.Color(themeColor("--grid-minor", 0x3a414d));
     const major = new THREE.Color(themeColor("--grid-major", 0x5c6b7a));
-    const accent = new THREE.Color(themeColor("--accent", 0x4bf9bc));
+    const accent = new THREE.Color(themeColor("--accent", 0x9a9ff0));
     (this.mat.uniforms.uMinor!.value as THREE.Color).copy(minor);
     (this.mat.uniforms.uMajorC!.value as THREE.Color).copy(major.lerp(accent, 0.4));
   }
@@ -174,12 +175,13 @@ export class AdaptiveGrid {
   update(targetX: number, targetY: number, worldPerPixel: number, diagonalPx: number, gridZ = 0) {
     this.group.position.z = gridZ; // track the model floor every frame, even if x/y/cell are cached
     const cell = gridStep(worldPerPixel, 0);
-    const majorCell = cell * 5;
+    const every = gridMajorEvery(cell);
+    const majorCell = cell * every;
     const cx = Math.round(targetX / majorCell) * majorCell;
     const cy = Math.round(targetY / majorCell) * majorCell;
-    const cells = groundGridCells(worldPerPixel, diagonalPx, cell);
+    const cells = groundGridCells(worldPerPixel, diagonalPx, cell, every);
     const size = cell * cells;
-    const k = `${cell}:${cx}:${cy}:${cells}`;
+    const k = `${cell}:${every}:${cx}:${cy}:${cells}`;
     if (k === this.key) return;
     this.key = k;
     this.step = cell;

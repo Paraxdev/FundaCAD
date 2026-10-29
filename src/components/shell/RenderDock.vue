@@ -4,6 +4,7 @@
 
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import Icon from "./Icon.vue";
+import Tabs from "../ui/Tabs.vue";
 import RenderMaterials from "./RenderMaterials.vue";
 import RenderEnvironment from "./RenderEnvironment.vue";
 import RenderCamera from "./RenderCamera.vue";
@@ -12,10 +13,10 @@ import { useHomeStore } from "../../stores/home";
 
 type Tab = "material" | "environment" | "camera";
 
-const TABS: { id: Tab; label: string; icon: string }[] = [
-  { id: "material", label: "Material", icon: "material" },
-  { id: "environment", label: "Environment", icon: "sphere" },
-  { id: "camera", label: "Camera", icon: "camera" },
+const TABS: { value: Tab; label: string; icon: string }[] = [
+  { value: "material", label: "Material", icon: "material" },
+  { value: "environment", label: "Environment", icon: "sphere" },
+  { value: "camera", label: "Camera", icon: "camera" },
 ];
 
 // Kept across a trip through Model and back: coming back to the tab you were on is what the workspace you left means.
@@ -36,20 +37,11 @@ onUnmounted(() => off?.());
 
 <template>
   <aside v-if="open" id="renderdock" aria-label="Render">
-    <div class="rd-tabs" role="tablist">
-      <button
-        v-for="t in TABS"
-        :key="t.id"
-        class="rd-tab"
-        :class="{ active: tab === t.id }"
-        role="tab"
-        :aria-selected="tab === t.id"
-        :data-tab="t.id"
-        @click="tab = t.id"
+    <Tabs v-model="tab" class="rd-tabs" variant="bar" :tabs="TABS" label="Render">
+      <template #tab="{ tab: t }"
+        ><Icon :name="t.icon!" :size="14" /><span>{{ t.label }}</span></template
       >
-        <Icon :name="t.icon" :size="14" /><span>{{ t.label }}</span>
-      </button>
-    </div>
+    </Tabs>
     <!-- v-show, not v-if: each tab keeps its scroll position, search box and selected row, so comparing finishes needs
     no re-navigation. -->
     <RenderMaterials v-show="tab === 'material'" />

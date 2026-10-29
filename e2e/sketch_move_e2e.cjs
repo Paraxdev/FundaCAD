@@ -120,6 +120,7 @@ const near = (a, b, tol = 1e-3) => Math.abs(a - b) <= tol;
       await page.waitForTimeout(16);
     }
     await page.mouse.up();
+    await page.keyboard.press("Enter");
   };
 
   // --- 1. whole sketch slides along Z ---------------------------------------
@@ -176,6 +177,7 @@ const near = (a, b, tol = 1e-3) => Math.abs(a - b) <= tol;
       await page.waitForTimeout(16);
     }
     await page.mouse.up();
+    await page.keyboard.press("Enter");
   }
   check("the press took the X ring", grabbed?.kind === "ring" && grabbed.index === 0, JSON.stringify(grabbed));
   await settle();

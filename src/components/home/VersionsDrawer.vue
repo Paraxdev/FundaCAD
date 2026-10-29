@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { fmtKeys } from "../../input/platform";
 import { computed, onMounted, ref } from "vue";
-import Icon from "../shell/Icon.vue";
+import Button from "../ui/Button.vue";
+import Chip from "../ui/Chip.vue";
+import IconButton from "../ui/IconButton.vue";
+import ListRow from "../ui/ListRow.vue";
 import type { DocSummary } from "../../io/library";
 import { ago } from "../../ui/timeAgo";
 import { branchLog, branchNames } from "../../ui/homeVersions";
@@ -33,9 +36,15 @@ onMounted(async () => {
   <aside class="home-drawer" role="region" :aria-label="`Versions of ${name}`">
     <div class="home-drawer-head">
       <span class="home-drawer-title">{{ name }}</span>
-      <button class="home-drawer-close" aria-label="Close versions" title="Close versions" @click="emit('close')">
-        <Icon name="close" :size="13" />
-      </button>
+      <IconButton
+        class="home-drawer-close"
+        icon="close"
+        tip="Close versions"
+        size="sm"
+        variant="plain"
+        :icon-size="13"
+        @click="emit('close')"
+      />
     </div>
 
     <p v-if="state === 'loading'" class="home-drawer-note">Reading versions…</p>
@@ -44,12 +53,24 @@ onMounted(async () => {
     <p v-else-if="!summary?.versions.length" class="home-drawer-note">No versions saved in this document.</p>
     <template v-else>
       <div class="home-drawer-section">Branches</div>
-      <div v-for="b in branches" :key="b" class="home-branch" :class="{ shown: b === shown }">
-        <button class="home-branch-name" :title="`Show the versions on ${b}`" @click="picked = b">
-          {{ b }}<span v-if="b === summary!.current" class="home-branch-current">current</span>
-        </button>
-        <button class="home-drawer-act home-branch-open" :title="`Open the document on ${b}`" @click="emit('branch', b)"
-          >Open</button
+      <div v-for="b in branches" :key="b" class="home-branch">
+        <ListRow
+          class="home-branch-name"
+          :label="b"
+          :selected="b === shown"
+          :title="`Show the versions on ${b}`"
+          @click="picked = b"
+        >
+          <template v-if="b === summary!.current" #trailing>
+            <Chip class="home-branch-current">current</Chip>
+          </template>
+        </ListRow>
+        <Button
+          size="sm"
+          class="home-drawer-act home-branch-open"
+          :title="`Open the document on ${b}`"
+          @click="emit('branch', b)"
+          >Open</Button
         >
       </div>
 
@@ -64,17 +85,19 @@ onMounted(async () => {
           <span class="home-version-time">{{ ago(v.time) }}</span>
         </div>
         <div class="home-version-acts">
-          <button
+          <Button
+            size="sm"
             class="home-drawer-act home-version-restore"
             title="Bring this version back into the document"
             @click="emit('restore', v.id)"
-            >Restore</button
+            >Restore</Button
           >
-          <button
+          <Button
+            size="sm"
             class="home-drawer-act home-version-copy"
             title="Start a new untitled document from this version"
             @click="emit('copy', v.id)"
-            >Open copy</button
+            >Open copy</Button
           >
         </div>
       </div>

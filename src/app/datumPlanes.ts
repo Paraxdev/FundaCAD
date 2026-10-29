@@ -1,5 +1,6 @@
 import type { Engine } from "./engine";
 import { asFeature, type Feature, type PlaneDef, type PlaneSpec } from "../types";
+import { useSelectionStore } from "../stores/selection";
 import { placeDatum, poseOf, sourceOfPlaced, type DatumPose } from "../document/datumPose";
 
 type Datum = Extract<Feature, { type: "datumPlane" }>;
@@ -36,6 +37,10 @@ export function createDatumPlanes(
   const datumPlaneDef = (f: Datum): PlaneDef => datumPlaneDefIn(f, new Set());
 
   // Resolved client side, so moving or showing a plane needs no rebuild.
+  const lit = () => {
+    const rows = useSelectionStore().rows.keys;
+    return rows.length > 1 ? rows : e.selectedFeature;
+  };
   let lastSynced = "";
   const syncDatumPlanes = () => {
     const planes = e.store.document.features
@@ -65,12 +70,12 @@ export function createDatumPlanes(
           : { id: f.id, origin: f.origin, dir: f.dir };
       });
     // Every build emit lands here, including the per second progress ticks of a long rebuild, which must not repaint.
-    const key = JSON.stringify([planes, points, axes, e.viewport.modelDiagonal(), e.selectedFeature]);
+    const key = JSON.stringify([planes, points, axes, e.viewport.modelDiagonal(), lit()]);
     if (key === lastSynced) return;
     lastSynced = key;
     e.viewport.setDatumPlanes(planes);
     e.viewport.setDatumMarkers(points, axes);
-    e.viewport.highlightDatum(e.selectedFeature);
+    e.viewport.highlightDatum(lit());
   };
 
   const previewDatumPose = (id: string, pose: DatumPose | null) => {

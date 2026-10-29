@@ -13,7 +13,7 @@ import type { SketchTool } from "./sketchMode";
 // preset hole patterns: self-contained (click a center, no source selection)
 export const PRESET_PATTERNS = new Set<SketchTool>(["hexHoles", "honeycomb", "boltCircle", "gridHoles"]);
 // patterns that replicate the current selection (MCAD-style)
-export const ENTITY_PATTERNS = new Set<SketchTool>(["patternRect", "patternCircular"]);
+export const ENTITY_PATTERNS = new Set<SketchTool>(["patternLinear", "patternRect", "patternCircular"]);
 export const PATTERN_TOOLS = new Set<SketchTool>([...PRESET_PATTERNS, ...ENTITY_PATTERNS]);
 
 /** The slice of SketchMode this flow reads/writes, live accessors, not copies. */
@@ -165,11 +165,18 @@ export class PatternFlow {
   private showHud(pat: SketchPattern) {
     const cur: Record<string, number> = {};
     const vals = pat as unknown as Record<string, unknown>;
-    for (const d of this.patternDimDefs(pat.type)) {
+    for (const d of this.patternDimDefs(pat)) {
       const v = vals[d.name];
       if (typeof v === "number") cur[d.name] = v;
     }
-    this.host.dim().show(this.patternDimDefs(pat.type), () => this.commit());
+    this.host.dim().show(
+      this.patternDimDefs(pat),
+      () => this.commit(),
+      undefined,
+      undefined,
+      undefined,
+      () => this.onTyped(),
+    );
     this.host.dim().updateFromCursor(cur);
   }
 
@@ -216,10 +223,17 @@ export class PatternFlow {
     if (tool === "honeycomb") return { id, type: "honeycomb", cx: c.x, cy: c.y, diameter: 12, spacing: 13, rings: 2 };
     if (tool === "patternCircular")
       return { id, type: "patternCircular", sources, cx: c.x, cy: c.y, count: 6, angle: 360 };
-    return { id, type: "patternRect", sources, countX: 3, countY: 1, spacingX: 15, spacingY: 15 }; // patternRect
+    // Linear is one row of the stored rect pattern, so old documents and the engine need nothing new.
+    if (tool === "patternLinear")
+      return { id, type: "patternRect", sources, countX: 3, countY: 1, spacingX: 15, spacingY: 0 };
+    return { id, type: "patternRect", sources, countX: 3, countY: 3, spacingX: 15, spacingY: 15 };
   }
 
-  private patternDimDefs(type: SketchPattern["type"]) {
+  private patternDimDefs(pat: SketchPattern) {
+    const type = pat.type;
+    if (type === "patternRect" && this.host.tool() === "patternLinear") {
+      return [{ name: "countX", label: "N", kind: "count" as const, integer: true, atLeast: 1 }];
+    }
     if (type === "boltCircle")
       return [
         { name: "count", label: "N", kind: "count" as const, integer: true, atLeast: 1 },
@@ -267,23 +281,14 @@ export class PatternFlow {
     const dx = p.x - this.patternCenter.x,
       dy = p.y - this.patternCenter.y;
     const r = Math.hypot(dx, dy);
-    const dimN = (name: string, fallback: number) => Math.round(dim.getValue(name) ?? fallback);
+    this.readFields(pat);
     if (pat.type === "boltCircle") {
       if (r > 1) pat.bcd = Math.round(2 * r * 10) / 10;
-      pat.count = Math.max(1, dimN("count", pat.count as number));
-      pat.diameter = dim.getValue("diameter") ?? (pat.diameter as number);
     } else if (pat.type === "gridHoles") {
       if (r > 1) pat.spacingX = pat.spacingY = Math.round((r / 1.5) * 10) / 10;
-      pat.countX = Math.max(1, dimN("countX", pat.countX as number));
-      pat.countY = Math.max(1, dimN("countY", pat.countY as number));
-      pat.diameter = dim.getValue("diameter") ?? (pat.diameter as number);
     } else if (pat.type === "hexHoles" || pat.type === "honeycomb") {
       if (r > 1) pat.spacing = Math.round((r / 2) * 10) / 10;
-      pat.rings = Math.max(0, dimN("rings", pat.rings as number));
-      pat.diameter = dim.getValue("diameter") ?? (pat.diameter as number);
     } else if (pat.type === "patternRect") {
-      pat.countX = Math.max(1, dimN("countX", pat.countX as number));
-      pat.countY = Math.max(1, dimN("countY", pat.countY as number));
       if (pat.countY === 1) {
         // A single row is a LINE, so it follows the cursor's direction too; a grid keeps axis-aligned steps as its two
         // directions are separate answers.
@@ -297,7 +302,6 @@ export class PatternFlow {
         if (Math.abs(dy) > 1) pat.spacingY = Math.round(dy * 10) / 10;
       }
     } else if (pat.type === "patternCircular") {
-      pat.count = Math.max(1, dimN("count", pat.count as number));
       const src = dim.isUserDriven("angle") ? null : this.firstSourcePoint(pat.sources);
       const swept = src
         ? patternSweepDeg({
@@ -333,8 +337,42 @@ export class PatternFlow {
     return null;
   }
 
+  /** The values the box holds, which a typed one always wins over the cursor for. */
+  private readFields(pat: SketchPattern) {
+    const dim = this.host.dim();
+    const dimN = (name: string, fallback: number) => Math.round(dim.getValue(name) ?? fallback);
+    if (pat.type === "boltCircle") {
+      pat.count = Math.max(1, dimN("count", pat.count as number));
+      pat.diameter = dim.getValue("diameter") ?? (pat.diameter as number);
+    } else if (pat.type === "gridHoles") {
+      pat.countX = Math.max(1, dimN("countX", pat.countX as number));
+      pat.countY = Math.max(1, dimN("countY", pat.countY as number));
+      pat.diameter = dim.getValue("diameter") ?? (pat.diameter as number);
+    } else if (pat.type === "hexHoles" || pat.type === "honeycomb") {
+      pat.rings = Math.max(0, dimN("rings", pat.rings as number));
+      pat.diameter = dim.getValue("diameter") ?? (pat.diameter as number);
+    } else if (pat.type === "patternRect") {
+      pat.countX = Math.max(1, dimN("countX", pat.countX as number));
+      if (this.host.tool() !== "patternLinear") {
+        pat.countY = Math.max(1, dimN("countY", pat.countY as number));
+        // A row stores no Y gap, so a grid made from one needs a real one or its rows stack.
+        if (pat.countY > 1 && pat.spacingY === 0) pat.spacingY = pat.spacingX === 0 ? 15 : pat.spacingX;
+      }
+    } else if (pat.type === "patternCircular") {
+      pat.count = Math.max(1, dimN("count", pat.count as number));
+      if (dim.isUserDriven("angle")) pat.angle = dim.getValue("angle") ?? (pat.angle as number);
+    }
+  }
+
+  private onTyped() {
+    if (!this.pendingPattern) return;
+    this.readFields(this.pendingPattern);
+    this.host.refreshActive();
+  }
+
   commit() {
     if (!this.pendingPattern) return;
+    this.readFields(this.pendingPattern);
     this.host.patterns().push(this.pendingPattern);
     this.host.requestSolve();
     this.pendingPattern = null;
@@ -365,7 +403,8 @@ export class PatternFlow {
     this.sweep = null; // the first drag sample re-seeds the accumulator from the cursor
     this.patternCenter = new THREE.Vector2("cx" in pat ? (pat.cx as number) : 0, "cy" in pat ? (pat.cy as number) : 0);
     this.centreDrag = false;
-    this.host.setActiveTool(pat.type);
+    // A single row is what Linear stores, so it reopens there, matching its glyph.
+    this.host.setActiveTool(pat.type === "patternRect" && pat.countY === 1 ? "patternLinear" : pat.type);
     this.showHud(pat);
     setPrompt("Drag or type to change · click to commit · Delete removes · Esc");
     this.syncDot();

@@ -17,6 +17,7 @@ import {
   type DragHandle,
 } from "./manipulator";
 import { CanvasGesture } from "./canvasGesture";
+import { HeldSignal } from "./heldEdit";
 import { commitDecision } from "./edgeDragMath";
 import { deltaForDiameter, deltaForRadius, radialDrag, type RoundFace } from "./radialDrag";
 import { offeredResize, resizeAxis, type OfferedResize, type ResizeAxis } from "./pressPullAxis";
@@ -77,6 +78,7 @@ export class FaceOffsetTool {
   private grabProj = 0;
   private downPos = { x: 0, y: 0 };
   private downOnGizmo = false;
+  private readonly heldSignal = new HeldSignal();
 
   private previewTimer: number | null = null;
   private unsubBuild: (() => void) | null = null;
@@ -174,6 +176,13 @@ export class FaceOffsetTool {
         this.faceIds.push(hit.faceId);
         const wasRound = this.round !== null;
         if (this.round && !this.inTangentRun()) this.dropRound();
+        // The handle moves to the face just picked; a round run keeps its lead face, which it reads a size from.
+        if (!this.round) {
+          this.anchor.copy(hit.anchor);
+          this.faceNormal.copy(hit.normal).normalize();
+          this.axis.copy(this.faceNormal);
+          if (this.mode === "shell") this.axis.negate();
+        }
         if (wasRound !== (this.round !== null)) this.showBox();
         else this.syncToggle();
         this.refreshPreview(true);
@@ -205,8 +214,8 @@ export class FaceOffsetTool {
       this.grabbing = false;
       this.viewport.domElement.style.cursor = this.hovering ? "grab" : "default";
       this.flushPreviewNow();
-      // A drag out and back can end within a few pixels of where it began.
-      if ((moved || this.value !== this.grabValue) && !this.neutral) this.commit();
+      // Letting go only ends the drag, Enter applies it.
+      this.dim.focus();
       return;
     }
     if (this.downOnGizmo || moved) return;
@@ -314,6 +323,7 @@ export class FaceOffsetTool {
   private totalToggle(): DimToggleDef {
     return {
       label: "Total",
+      icon: "thicknessTotal",
       title: "Read and type the whole thickness to the opposite face instead of the change",
       initial: this.total,
       onChange: (on: boolean) => {
@@ -326,6 +336,7 @@ export class FaceOffsetTool {
   private followToggle(): DimToggleDef {
     return {
       label: "Tangent faces follow",
+      icon: "tangent",
       title:
         "On, the faces that run smoothly into this one move with it once it is too small or too big for them to meet it, so a slot narrows as one; off, that size is refused",
       initial: this.follow,
@@ -567,6 +578,7 @@ export class FaceOffsetTool {
   }
 
   private refreshPreview(now = false) {
+    this.heldSignal.sync(this.pending);
     this.refreshRefusal();
     this.prompt();
     this.clearPreviewTimer();
@@ -698,6 +710,26 @@ export class FaceOffsetTool {
     this.onDone?.(null);
   }
 
+  /** An offset dragged or typed that Enter would write. */
+  get pending(): boolean {
+    return this.active && this.phase === "drag" && !this.neutral;
+  }
+
+  get dragging(): boolean {
+    return this.grabbing;
+  }
+
+  /** Told when `pending` turns on or off, for the unsaved mark and the close guard. */
+  onHeldChange(fn: () => void): () => void {
+    return this.heldSignal.on(fn);
+  }
+
+  /** For a save: the offset is written as Enter writes it, which may decline and keep the tool open. A drag still
+   *  under the hand is left alone. */
+  confirmHeld() {
+    if (this.pending && !this.dragging) this.commit();
+  }
+
   private cleanup() {
     const el = this.viewport.domElement;
     this.gesture.detach();
@@ -724,6 +756,7 @@ export class FaceOffsetTool {
     this.axisAsk++;
     this.toggleKind = null;
     setPrompt(null);
+    this.heldSignal.sync(this.pending);
   }
 
   private disposeGizmo() {

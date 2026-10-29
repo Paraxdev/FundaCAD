@@ -7,6 +7,7 @@ import { cameraFlightsOn } from "../../ui/motion";
 import { orthoClip, perspClip, NEAR_AT_REST } from "../clipPlanes";
 import { boxDepthRange, visibleNearDepth } from "./anchor";
 import { bindInput } from "./input";
+import { measureFitInsets } from "../../app/fitInsets";
 import { Navigator, lookQuatUp } from "./navigator";
 import { clonePose, distanceOf, eyeOf, forwardOf, setOrientation } from "./pose";
 import { getNavPrefs, noteDetectedWheel, onNavPrefsChange } from "../../ui/interactionPrefs";
@@ -40,6 +41,13 @@ export function createNavigatorRig(dom: HTMLElement, aspect: number): CameraRig 
   };
   applyPrefs();
   onNavPrefsChange(applyPrefs);
+
+  // Insets only describe the live canvas, a capture at another size gets none.
+  const fitInsets = () => {
+    const r = dom.getBoundingClientRect?.();
+    if (!r || Math.abs(r.width - nav.frame.width) > 1 || Math.abs(r.height - nav.frame.height) > 1) return undefined;
+    return measureFitInsets(dom);
+  };
 
   const eye = new THREE.Vector3();
   const upV = new THREE.Vector3();
@@ -237,7 +245,7 @@ export function createNavigatorRig(dom: HTMLElement, aspect: number): CameraRig 
     fit(box, opts) {
       const o = fitOpts(opts);
       if (o.padding === undefined) {
-        nav.fitBox(box, { animate: animate(o.animate) });
+        nav.fitBox(box, { animate: animate(o.animate), insets: fitInsets() });
         return;
       }
       const empty = box.isEmpty();
@@ -258,7 +266,7 @@ export function createNavigatorRig(dom: HTMLElement, aspect: number): CameraRig 
       if (!box || box.isEmpty()) nav.resetView(null, 0, cameraFlightsOn());
       else {
         const s = box.getBoundingSphere(new THREE.Sphere());
-        nav.resetView(s.center, s.radius, cameraFlightsOn(), box);
+        nav.resetView(s.center, s.radius, cameraFlightsOn(), box, fitInsets());
       }
     },
     setStandardView(view) {

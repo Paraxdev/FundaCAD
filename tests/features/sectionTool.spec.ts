@@ -151,12 +151,13 @@ describe("section phases", () => {
     expect(sent.at(-1)).toEqual(plane(12.25, 1, 0.14));
   });
 
-  it("an offset the box refuses keeps editing", () => {
+  it("Enter on text that is no offset keeps the cut at the last valid offset", () => {
     const { tool, sent } = setup();
     tool.start("Z");
+    type("6.5");
     key(type("abc"), "Enter");
-    expect(tool.phase).toBe("editing");
-    expect(sent).toEqual([plane(0, 1, 0.14)]);
+    expect(tool.phase).toBe("on");
+    expect(sent.at(-1)).toEqual(plane(6.5, 1, 0.14));
   });
 
   it("Esc in the box or on the canvas keeps the cut on", () => {

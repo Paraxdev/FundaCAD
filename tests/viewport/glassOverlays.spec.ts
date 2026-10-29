@@ -74,7 +74,7 @@ describe("glass refracts only bodies", () => {
   it("selection glow, face hover and edge emphasis stay out of the refraction", () => {
     const g = new THREE.Group();
     g.add(makeSelectionGlow(new THREE.BoxGeometry(1, 1, 1), "select"));
-    g.add(makeFaceHoverOverlay(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), new THREE.Color(1, 0, 0)));
+    g.add(makeFaceHoverOverlay(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), new Float32Array(9), "hover"));
     g.add(new EdgeEmphasis(RES, 0xff0000).object);
     expect(sort(g).opaque).toEqual([]);
   });

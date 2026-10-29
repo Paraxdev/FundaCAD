@@ -1,6 +1,5 @@
 import { defineStore } from "pinia";
 import { ref, shallowRef } from "vue";
-import { EMPTY_SELECTION, type RowSelection } from "../ui/rowSelection";
 
 /** Assembly nodes ("n:<featureId>/<index>") start collapsed, folders ("f:Bodies") do not. Derived from the key,
  *  since a write inside the panel's computed would loop; namespaced so STEP names cannot collide. */
@@ -36,10 +35,6 @@ export const useBrowserStore = defineStore("browser", () => {
    *  on a body's eye followed by a move would pick the body up. */
   const painting = ref(false);
 
-  /** The several sketches Browser Ctrl and Shift clicks gather. stores/selection.ts holds the ONE the timeline and
-   *  inspector follow, and this is resynced when that changes from elsewhere. */
-  const sketchSelection = shallowRef<RowSelection<string>>(EMPTY_SELECTION);
-
   /** Where a Shift-click on a body row measures its run from. The selection itself lives in the viewport. */
   const bodyAnchor = ref<string | null>(null);
 
@@ -64,7 +59,6 @@ export const useBrowserStore = defineStore("browser", () => {
     viewTick,
     drag,
     painting,
-    sketchSelection,
     bodyAnchor,
     isCollapsed,
     toggle,

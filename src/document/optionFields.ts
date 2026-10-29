@@ -320,8 +320,10 @@ export const FEATURE_CHOICE_FIELDS: Partial<Record<FeatureType, ChoiceField[]>> 
       options: [
         { value: "G1", label: "G1" },
         { value: "G2", label: "G2" },
+        { value: "G3", label: "G3" },
       ],
-      title: "G1 is a circular round; G2 eases into the faces with no jump in curvature",
+      title:
+        "G1 is a circular round; G2 eases into the faces with no jump in curvature, G3 with no jump in its rate either. G2 and G3 need both faces flat across the edge",
     },
   ],
   chamfer: [
@@ -409,7 +411,6 @@ export const FEATURE_TOGGLE_FIELDS: Partial<Record<FeatureType, ToggleField[]>> 
 // a type with no rule or no installed plugin, since hiding a row on a guess loses an editable value.
 export function fieldApplies(type: FeatureType | string, field: string, values: Record<string, unknown>): boolean {
   if (type === "chamfer" && field === "distance2") return values.chamferType === "twoDistance";
-  if (type === "fillet" && field === "profile") return values.continuity !== "G2";
   if (type === "hole") return holeFieldApplies(field, values);
   if (type === "extrude") return extrudeFieldApplies(field, values);
   if (type === "press-pull" && field === "upToOffset") {

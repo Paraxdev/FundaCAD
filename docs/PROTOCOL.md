@@ -53,8 +53,9 @@ reach the supervisor.
 `doc` names the open document the request works for (the app sends its document session's id, third after `id` and
 `op`, so the desktop relay reads it from the request's first bytes). It is optional: a request without it belongs to
 the document `""`. The held document a delta rebuild patches is kept per connection and `doc`, and `doc_end` ends
-every job of one `doc`. App wide ops (`ping`, `cancel`, `doc_end`, `listFonts`, `tessellateText`, `session_*`) carry
-no `doc`.
+every job of one `doc`. App wide ops (`ping`, `cancel`, `listFonts`, `tessellateText`, `session_release`,
+`session_state`, `session_leave`, `session_guide`) carry no `doc`. `doc_end` names the `doc` it ends, and
+`session_host` and `session_propose` name the live session's document, never a job's.
 
 ## Reply envelope
 
@@ -220,7 +221,7 @@ or a **full payload**, when the client's `known` etag for that body is stale or 
   "indices": [ /* flat triangle index array */ ],
   "faceIds": [ /* per-triangle face id, local to this body */ ],
   "faceOwners": [ /* per-face owner id or null, for feature highlighting */ ],
-  "edges": [ { "points": [...], "body": "b1", "smooth": true } ],  // "smooth" present only when the edge's two faces meet tangentially
+  "edges": [ { "points": [...], "body": "b1", "smooth": true, "curvature": [0.065, 0.052] } ],  // "smooth" present only when the edge's two faces meet tangentially; "curvature" only when a face curves across the edge, per mm of radius then per mm of chord (the first times the radius a chord sized fillet makes there): a G2 or G3 fillet is refused there once the one for its size type times its size reaches 1e-6, 1e30 when unreadable or the edge has three or more faces. A binary frame packs it as "curvature": [[edge index, per radius, per chord], ...]
   "faceCount": 12,
   "fault": "is not a closed solid, 4 of its edges bound only one face, so it has no inside"
 }
@@ -472,8 +473,9 @@ same request gives the same answer every time.
     { "spots": [ { "at": [12, 0, 3.5], "radius": 4 } ], "force": [0, 0, -50] }  // no face of its own
   ],
   "material": "PLA",     // optional, default PLA; a preset or {"E", "nu", "yield", "density", "name"}
-  "size": 1.5,           // optional, element size in mm
-  "maxElements": 30000 } // optional, default 30000, at most 80000
+  "size": 1.5,           // optional, starting element size in mm
+  "maxElements": 30000,  // optional, default 30000, at most 80000, a ceiling for every pass
+  "refine": "standard" } // optional, "off" | "standard" (default) | "fine"
 ```
 
 - `fixed` and each load's `faces` take one face selector or a list (the same forms
@@ -529,6 +531,15 @@ same request gives the same answer every time.
   PETG 1.27, ABS 1.04, ASA 1.07, PA12 nylon 1.01, PC 1.20, aluminium 2.70, steel 7.85.
   A custom material needs `E` and `nu`; without `yield` the reply's `safetyFactor` is
   null, and without `density` there is no gravity.
+- `refine`: every mode first solves the mesh `off` solves. `standard` then estimates the
+  stress error of each element, splits the elements where it is high and solves once more,
+  within `maxElements` and about twice the first solve's time, unless the stress gaps of
+  the split elements say the peak cannot move by more than about 3%, then the split mesh is
+  not solved and the answer is `off`'s; `fine` runs up to three
+  refined solves and may take six times as long; `off` stops after the first, the answer of
+  before refinement existed. A refined solve does not split the elements at a sharp inside corner,
+  at the edge of a fixed or pinned face, or at a sharp edge of the part, whose readings grow
+  as elements get smaller. Any other value is refused naming the three.
 - `size` defaults to about 70% of `maxElements` for the body's volume, and at most
   half its typical thickness `2 V / A`. A size smaller than `maxElements` allows is
   grown to fit before anything is meshed (a warning says so). `maxElements` above
@@ -543,7 +554,9 @@ Reply:
 ```jsonc
 { "body": "body3", "name": "Spring",
   "material": { "name": "PLA", "E": 3500, "nu": 0.36, "yield": 50, "density": 1.24 },
-  "mesh": { "nodes": 12345, "elements": 23456, "size": 1.2, "minDihedral": 11.2 },
+  "mesh": { "nodes": 41210, "elements": 24102, "size": 3.0, "finest": 0.78, "minDihedral": 14.2,
+            "passes": [ { "elements": 9554, "maxVonMises": 12.63 }, { "elements": 24102, "maxVonMises": 14.1 } ],
+            "stop": "passes" },
   "maxVonMises": { "value": 31.2, "at": [x,y,z], "face": 4 },   // face null when the peak is inside
   "maxDisplacement": { "value": 0.84, "at": [x,y,z], "vector": [dx,dy,dz] },
   "safetyFactor": 1.6,                 // yield / peak von Mises
@@ -553,21 +566,30 @@ Reply:
                                       // then `supports` in order; they sum to `reaction`
   "warnings": ["..."],
   "surface": { "positions": [...], "indices": [...], "faceIds": [...],
-               "vonMises": [...], "displacement": [...] },
+               "vonMises": [...], "displacement": [...], "stress": [...] },
   "errors": [ /* feature failures, only when a feature failed */ ] }
 ```
 
-- `mesh.nodes` counts the quadratic mesh's nodes (corners and mid-edge nodes).
+- `mesh.nodes` counts the quadratic mesh's nodes (corners and mid-edge nodes). `size` is
+  the starting element size, `finest` the smallest mean edge of any element, `passes` one
+  entry per solve, the last being the result; `nodes`, `elements` and `minDihedral` are
+  the final mesh's. `stop` says why refinement ended: `off`, `passes` (all the mode's),
+  `settled` (the next pass could not move the peak, `standard` only), `elements` (no room
+  under `maxElements`), `time` (about a minute), `memory` (the solver's limit) or
+  `unrefinable` (nothing left to split); older engines omit it.
 - `maxVonMises.face` is the face index (the `i` of `inspect`, the mesh `faceIds`) the
   peak lies on: of the boundary triangles touching it, the face with the most area.
 - `safetyFactor` is null when the material has no `yield` or nothing is stressed.
 - `material.density` is null when the material has none.
 - `reactions` splits the reaction among the supports: a node two supports share gives
   each the part along the directions it holds, or all of it to a fixed one.
-- `surface` is the boundary of the volume mesh, outward wound: `positions` (xyz per
+- `surface` is the boundary of the final, refined volume mesh, outward wound: `positions` (xyz per
   vertex), `indices` (three per triangle), `faceIds` (one per triangle), and per vertex
-  `vonMises` (MPa) and `displacement` (xyz, mm), as inline JSON numbers like the overlap
-  meshes of `interference`, positions rounded to 4 places and the fields to 6.
+  `vonMises` (MPa), `displacement` (xyz, mm) and `stress` (the smoothed stress tensor, xx yy
+  zz xy yz zx, MPa, whose von Mises is `vonMises`), as inline JSON numbers like the overlap
+  meshes of `interference`, positions rounded to 4 places and the fields to 6. A reader
+  blending values inside a triangle blends `stress` and takes its von Mises, since
+  blended `vonMises` dents where a component changes sign.
 - `warnings`, in plain words: a deflection above a tenth of the part's smallest
   bounding size (a linear analysis is not trustworthy there), a load only on fixed
   faces, a peak near an edge where two faces fold inward by more than 30 degrees or
@@ -575,7 +597,9 @@ Reply:
   grows as the mesh is refined), elements larger than half the typical thickness `2 V / A`
   (thin walls may get fewer than two through them), an element size grown to stay within
   `maxElements`, held faces too narrow for any node to lie on them, and for plastics that
-  printed parts are weaker across their layers.
+  printed parts are weaker across their layers, a peak that moved by more than 10% with
+  the last refinement, and a refinement stopped early to stay within about a minute or the
+  solver's memory.
 - A refusal is an ordinary error reply, `{"ok": false, "error": {"message"}}`: no body
   or an unknown one, a body that is not one closed solid facing outward, no held face, no load (and no gravity) or
   loads only on fixed faces, a selector that picks nothing, an unknown material or
@@ -1069,13 +1093,14 @@ During a `rebuild` or `computeAll`, the engine sends interim frames on the same
 connection, reusing the request's `id` but with **no `ok` field**:
 
 ```jsonc
-{ "id": "<same id as the request>", "status": "building", "feature": 3 }
+{ "id": "<same id as the request>", "status": "building", "phase": 1, "feature": 3 }
 ```
 
-`feature` is the index of the feature currently being built, or `-1` while
-tessellating. `meshed` / `meshTotal` carry the payload phase's per-body denominator
-(both `-1` outside it), so a client can say "meshing 812/3071" rather than sitting at
-0% for the whole phase. These fire roughly once a second during a long rebuild. An
+`phase` is what the job is doing: `0` preparing (copying the model it resumes from), `1` running a
+feature, `2` saving a checkpoint, `3` meshing, `4` assembling the reply. `feature` is the index of the
+feature running, `-1` outside phase `1`. `meshed` / `meshTotal` count the bodies really being meshed
+(a body served from a cache is not counted, and a rebuild with none never enters phase `3`), both `-1`
+outside it. These fire roughly once a second during a long rebuild. An
 `import` streams the same way with `status: "importing"` and `phase` / `label` / `pct`.
 
 Every client of one engine shares its job thread, so a request can wait behind another

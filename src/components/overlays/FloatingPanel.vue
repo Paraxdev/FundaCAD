@@ -1,38 +1,17 @@
 <script setup lang="ts">
-// The measure-panel popup shell worn by Properties, Interference, Overhang, Parameters and plugin panels.
+// The old name of ui/Panel, kept for the panels and plugins that import it.
 
-import { onUnmounted, watch } from "vue";
+import Panel from "../ui/Panel.vue";
 
-const props = withDefaults(defineProps<{ open: boolean; closeOnEsc?: boolean; panelClass?: string }>(), {
+withDefaults(defineProps<{ open: boolean; closeOnEsc?: boolean; panelClass?: string }>(), {
   closeOnEsc: false,
   panelClass: "",
 });
 const emit = defineEmits<{ close: [] }>();
-
-// Capture phase and no stopPropagation: the panels are non-modal, so Escape also reaches the global handler.
-function onEsc(e: KeyboardEvent) {
-  if (e.key === "Escape") emit("close");
-}
-
-function unbind() {
-  window.removeEventListener("keydown", onEsc, true);
-}
-
-watch(
-  () => props.open && props.closeOnEsc,
-  (armed) => {
-    unbind();
-    if (armed) window.addEventListener("keydown", onEsc, true);
-  },
-  { immediate: true },
-);
-onUnmounted(unbind);
 </script>
 
 <template>
-  <Teleport to="body">
-    <div v-if="open" class="measure-panel" :class="panelClass">
-      <slot />
-    </div>
-  </Teleport>
+  <Panel :open="open" :close-on-esc="closeOnEsc" :panel-class="panelClass" @close="emit('close')">
+    <slot />
+  </Panel>
 </template>

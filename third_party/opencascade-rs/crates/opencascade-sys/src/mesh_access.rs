@@ -64,6 +64,8 @@ mod inner {
             params: &mut Vec<f64>,
         ) -> bool;
         pub fn mesh_access_edge_smooth(m: &MeshAccess, edge: i32, cos_tol: f64) -> i32;
+        pub fn mesh_access_edge_cross_curvature(m: &MeshAccess, edge: i32) -> f64;
+        pub fn mesh_access_edge_dihedral_deg(m: &MeshAccess, edge: i32) -> f64;
         pub fn mesh_access_edge_brep_range(
             m: &MeshAccess,
             edge: i32,

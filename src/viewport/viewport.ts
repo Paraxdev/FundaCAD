@@ -18,6 +18,7 @@ import {
   setEdgeResolution,
   visibleBodyMeshes,
   BASE_COLOR,
+  SCAN_COLOR,
   type BodyMesh,
   type ModelView,
   type EdgeRef,
@@ -42,6 +43,9 @@ import {
   buildClearanceLine,
   buildComMarker,
   buildStressMesh,
+  plainStressMaterial,
+  solidColors,
+  stressSurfaceGeometry,
   buildFaceMarkMesh,
   clearOverlayObjects,
 } from "./overlays";
@@ -50,7 +54,8 @@ import { Picker, modelScale, type EdgeCandidate, type Hit, type PickMods } from 
 import { bandIndex, expandToBand, type BandIndex } from "./faceBands";
 import { flushRaycastIndex } from "./raycastIndex";
 import { applyKeptSpan, firstKeptHit, SECTION_PICK_SLACK, type KeptHit } from "./sectionPick";
-import { clipSelectionOverlays } from "./selectionGlow";
+import { clipSelectionOverlays, selectionGlowWarmup } from "./selectionGlow";
+import { linkProgramsAhead } from "./linkPrograms";
 import { GhostLayer, type BlendGhostEdge } from "./ghosts";
 import type { BlendKind } from "../features/blendGhost";
 import { hideFlushSeams } from "./flushSeams";
@@ -129,7 +134,8 @@ const NO_WORK: ActiveWork = { tool: false, sketch: false, planes: false };
 const SKETCH_DIM_OPACITY = 0.55;
 const SKETCH_DIM_EDGE_OPACITY = 0.5;
 
-import { Highlighter, EDGE_HOVER_COLOR, sameHover } from "./highlight";
+import { Highlighter, edgeHoverColor, sameHover } from "./highlight";
+import { DRAFT_COLORS } from "./draftColors";
 import { ProgressiveModel } from "./progressive";
 import { nearestEdgeByMid, nearestEdgeByCurve, midMatchTol, edgeSelectorFrom, polylineMid } from "./edgeMatch";
 import { mergeScope, pickScope, type ScopeDecision, type ScopeView } from "./pickScope";
@@ -137,20 +143,8 @@ import { clickTakes, DwellIntent, type SelectPolicy } from "./clickIntent";
 import { getHoverDwellMs, getNavPrefs } from "../ui/interactionPrefs";
 import { edgesOnFace, faceEdgeTol, faceSurface, type Tri } from "./faceEdges";
 import { remapSelection, remapStreamedSelection, shouldAnnounce } from "./selectionMemo";
-import {
-  arcSweep,
-  cylinderFromFace,
-  FULL_SWEEP,
-  isPlanarFace,
-  onRoundFace,
-  radialAt,
-  roundStand,
-  solidInsideCylinder,
-  sphereCentreFromFace,
-  unit,
-  type Cylinder,
-} from "../features/planeMath";
-import { facetNormalAt, type RoundFace } from "../features/radialDrag";
+import { radialAt, type Cylinder } from "../features/planeMath";
+import type { RoundFace } from "../features/radialDrag";
 import type { Plane3, PlaneDef, RebuildResult, Selector, Vec3 } from "../types";
 import { dragStep } from "./dragStep";
 import { faceSketchPlane } from "../sketch/sketchView";
@@ -166,12 +160,26 @@ import {
   dragBox,
   isAreaDrag,
   areaSelectionMode,
+  areaTakesProfiles,
+  AreaPreviewGate,
   nextAreaFilter,
   type AreaFilter,
   type AreaMode,
   type ScreenRect,
 } from "./areaSelect";
 import { collectInBox, projectForArea, type AreaProjection } from "./areaProjection";
+import { scheduleAreaIndex } from "./areaIndex";
+import {
+  faceCentroidOf,
+  faceNormalOf,
+  faceTrianglesOf,
+  planeOfFace,
+  PressPullMemo,
+  roundFitOf,
+  roundFrom,
+  type PressPullFaces,
+  type RoundFit,
+} from "./faceAnalysis";
 import { isEditableTarget } from "../ui/focus";
 import { hitScale } from "../input/pointerKind";
 import { setEmissionProgress } from "../ui/emissionProgress";
@@ -288,7 +296,7 @@ export class Viewport {
   // Datum points and axes, apart from datumQuads so a plane pick never resolves to one.
   private datumMarkers: THREE.Mesh[] = [];
   private hoveredDatum: string | null = null;
-  private selectedDatum: string | null = null;
+  private selectedDatum: ReadonlySet<string> = new Set();
   private dragMoved = false;
   private downPos = { x: 0, y: 0 };
   // "redefine cube side from a model face" pick mode (null = not active)
@@ -312,6 +320,7 @@ export class Viewport {
   /** Fired when the body selection changes; "restore" when a rebuild carried it
    *  over rather than someone picking it. */
   onBodySelectionChange: ((cause?: "restore") => void) | null = null;
+  onAnalysisChange: (() => void) | null = null;
   // An edge click that hit two coincident edges of touching bodies (edgeTies.ts).
   // Returning true means the app took the click and asked which one.
   onAmbiguousEdge: ((cands: EdgeCandidate[], at: { x: number; y: number }, mods: PickMods) => boolean) | null = null;
@@ -459,6 +468,7 @@ export class Viewport {
       this.scene.applyRenderPrefs();
       this.scene.originTiles.applyTheme(this.groundHex());
       this.cube.applyTheme();
+      this.emphasis?.setColor(edgeHoverColor());
       this.requestRender();
     });
     this.loop();
@@ -823,7 +833,10 @@ export class Viewport {
     if (this.selectPolicy === "auto" && this.model && this.highlighter) {
       const bodyId = this.autoBodyAt(hit, clientX, clientY, ctrl || shift);
       if (bodyId) {
-        if (this.regionPickAt?.(clientX, clientY, ctrl || shift)) return;
+        if (this.regionPickAt?.(clientX, clientY, ctrl || shift)) {
+          this.requestRender();
+          return;
+        }
         this.setSelectionMode("bodies");
         if (ctrl || shift) this.highlighter.toggleSelectBody(bodyId);
         else this.highlighter.selectOnlyBody(bodyId);
@@ -837,7 +850,11 @@ export class Viewport {
     const e = { clientX, clientY, ctrlKey: ctrl, metaKey: false, shiftKey: shift };
     // A visible sketch's area is preferred over the face it lies on (with the exceptions in
     // sketch/regionOverSurface.ts); an edge is still preferred over both.
-    if (hit?.kind !== "edge" && this.regionPickAt?.(e.clientX, e.clientY, e.ctrlKey || e.metaKey || e.shiftKey)) return;
+    if (hit?.kind !== "edge" && this.regionPickAt?.(e.clientX, e.clientY, e.ctrlKey || e.metaKey || e.shiftKey)) {
+      // Hover draws only on a move, so a pick under a still cursor asks for its own frame.
+      this.requestRender();
+      return;
+    }
     // Reference geometry not overlapping the body. Markers and quads are raycast together so the nearest wins
     // by depth.
     if (!hit && (this.datumQuads.length || this.datumMarkers.length)) {
@@ -964,6 +981,9 @@ export class Viewport {
   /** Fires once a press has travelled far enough to be a box, so the app can stand down what is up only
    *  because something is selected. */
   onAreaBegin: (() => void) | null = null;
+  /** The box over the visible sketches' areas: `take` false leaves only what an additive box started from. */
+  onAreaProfiles:
+    ((rect: ScreenRect, mode: AreaMode, take: boolean, additive: boolean, announce: boolean) => void) | null = null;
   private areaAt: { x: number; y: number } | null = null;
   private areaDown: AreaDrag | null = null;
   private areaBox = new AreaBox();
@@ -1280,16 +1300,20 @@ export class Viewport {
   });
 
   private lightTarget: THREE.WebGLRenderTarget | null = null;
+  private glowLinked = false;
 
   /** Links the emitter light programs ahead, on driver threads where KHR_parallel_shader_compile allows, so a
-   *  glow does not stall a frame for a second. The canvas and the post chain buffer each get their own program.
-   *  Polled directly, compileAsync checks the current program, which the next frame switches back. */
+   *  glow does not stall a frame for a second. The light count is part of every program key, so the selection
+   *  glow is linked again in the new lights. */
   private prepareLights(show: THREE.Object3D, hide: THREE.Object3D | null): Promise<void> {
     const hideWas = hide?.visible ?? false;
     show.visible = true;
     if (hide) hide.visible = false;
     try {
-      return this.linkPrograms(this.scene.scene, "emitter light");
+      return Promise.all([
+        this.linkPrograms(this.scene.scene, "emitter light"),
+        this.linkPrograms(selectionGlowWarmup(), "selection glow"),
+      ]).then(() => {});
     } finally {
       show.visible = false;
       if (hide) hide.visible = hideWas;
@@ -1302,29 +1326,8 @@ export class Viewport {
   }
 
   private linkPrograms(obj: THREE.Object3D, what: string): Promise<void> {
-    const r = this.scene.renderer;
-    const props = (
-      r as unknown as { properties: { get(m: THREE.Material): { currentProgram?: { isReady(): boolean } } } }
-    ).properties;
-    const programs: { isReady(): boolean }[] = [];
-    const before = r.getRenderTarget();
-    try {
-      for (const target of [null, (this.lightTarget ??= new THREE.WebGLRenderTarget(1, 1))]) {
-        r.setRenderTarget(target);
-        for (const m of r.compile(obj, this.rig.active, this.scene.scene)) {
-          const p = props.get(m).currentProgram;
-          if (p) programs.push(p);
-        }
-      }
-    } catch (e) {
-      console.warn(`[viewport] ${what} programs could not be linked ahead:`, e);
-    } finally {
-      r.setRenderTarget(before);
-    }
-    return new Promise((resolve) => {
-      const poll = () => (programs.every((p) => p.isReady()) ? resolve() : setTimeout(poll, 16));
-      poll();
-    });
+    this.lightTarget ??= new THREE.WebGLRenderTarget(1, 1);
+    return linkProgramsAhead(this.scene.renderer, obj, this.rig.active, this.scene.scene, this.lightTarget, what);
   }
 
   private peek: ReadonlySet<string> = new Set();
@@ -1369,13 +1372,21 @@ export class Viewport {
    *  dropped by anything that changes what is on screen. */
   private areaProj: AreaProjection | null = null;
 
+  private areaPreview = new AreaPreviewGate();
+  private pressPull = new PressPullMemo();
+
   private dropAreaProjection() {
     this.areaProj = null;
+    this.areaPreview.reset();
   }
 
   private projectForArea(): AreaProjection {
-    if (!this.model) return { bodies: [], edges: [] };
-    return projectForArea(this.model, this.rig.active, this.canvas.getBoundingClientRect(), this.seeThrough);
+    return projectForArea(
+      this.model ?? { bodies: [], edges: [] },
+      this.rig.active,
+      this.canvas.getBoundingClientRect(),
+      this.seeThrough,
+    );
   }
 
   /** Shared by the drag and by Tab, so the two never disagree about the box on screen. */
@@ -1502,13 +1513,16 @@ export class Viewport {
   /** Take what the box covers, starting from the selection at drag start. `announce`
    *  is false for preview frames, so listeners hear only the finished selection. */
   selectInBox(rect: ScreenRect, mode: AreaMode, from: AreaDrag, announce: boolean) {
+    // The filter decides the kind of selection, "all" follows the mode.
+    const kind = areaSelectionMode(this.areaFilter, this.selectionMode);
+    // A sketch's areas live in the overlay, and a sketch alone has no model.
+    this.onAreaProfiles?.(rect, mode, areaTakesProfiles(this.areaFilter, kind), from.additive, announce);
     const h = this.highlighter;
     if (!h || !this.model) return;
     const got = collectInBox(this.areaProj ?? this.projectForArea(), rect, mode);
-    // The filter decides the kind of selection, "all" follows the mode.
-    const kind = areaSelectionMode(this.areaFilter, this.selectionMode);
     // On release only: switching to bodies raises the move gizmo mid-drag otherwise.
     if (announce && kind !== this.selectionMode) this.setSelectionMode(kind);
+    if (!this.areaPreview.paint(kind, this.areaFilter, got, announce)) return;
     // Both kinds are cleared every frame, Tab can change the filter mid drag.
     h.clearSelection();
     h.clearBodySelection();
@@ -1523,10 +1537,12 @@ export class Viewport {
       } else {
         this.edgeScope = { scope: "chain", reason: "tangent" };
       }
-      if (this.areaFilter !== "edges") for (const f of got.faces) h.selectFace(f);
-      if (this.areaFilter !== "faces") for (const e of got.edges) h.selectEdge(e);
+      const faces = this.areaFilter === "all" || this.areaFilter === "faces";
+      const edges = this.areaFilter === "all" || this.areaFilter === "edges";
+      if (faces) for (const f of got.faces) h.selectFace(f);
+      if (edges) for (const e of got.edges) h.selectEdge(e);
       // A box states its extent, so a later fillet must not widen it to tangent chains.
-      if (got.edges.length && this.areaFilter !== "faces") {
+      if (got.edges.length && edges) {
         this.edgeScope = { scope: "single", reason: "shift" };
       }
       if (announce) this.onSelectionChange?.();
@@ -1620,6 +1636,7 @@ export class Viewport {
   setAnalysis(mode: "none" | "component" | "draft") {
     this.analysis = mode;
     this.applyAnalysis();
+    this.onAnalysisChange?.();
   }
 
   get draftConfig(): { dir: "+X" | "-X" | "+Y" | "-Y" | "+Z" | "-Z"; threshold: number } {
@@ -1643,7 +1660,45 @@ export class Viewport {
     if (this.analysis === "draft") this.applyAnalysis();
   }
 
+  /** What a body's base colours depend on, null when they depend on more than it names (draft reads the pose). Face
+   *  paint is keyed by local face so a shifted body with the same look is not repainted. */
+  private paintKeys(bodies: readonly BodyMesh[]): Map<BodyMesh, string | null> {
+    const keys = new Map<BodyMesh, string | null>();
+    const model = this.model;
+    if (!model || this.analysis === "draft") return new Map(bodies.map((b) => [b, null]));
+    if (this.analysis === "component") {
+      const index = new Map(model.bodies.map((b, i) => [b, i]));
+      for (const b of bodies) keys.set(b, `component|${index.get(b)}`);
+      return keys;
+    }
+    const own = new Map<BodyMesh, string[]>();
+    const paint = this.finish.facePaint;
+    for (const k of Object.keys(paint)) {
+      const fid = Number(k);
+      const b = bodyOfFace(model, fid);
+      if (!b) continue;
+      const list = own.get(b) ?? [];
+      list.push(`${fid - b.faceStart}:${paint[fid]}`);
+      own.set(b, list);
+    }
+    for (const b of bodies) keys.set(b, `none|${this.finish.bodyPaint[b.id] ?? ""}|${(own.get(b) ?? []).join(",")}`);
+    return keys;
+  }
+
+  // A body whose paint inputs are the same as when it was last painted keeps its colours, which cost 0.2 to 0.6 s a
+  // commit on the SV08 when every body was repainted.
   private applyAnalysis(only?: Iterable<BodyMesh>) {
+    if (!this.highlighter || !this.model) return;
+    const keys = this.paintKeys([...(only ?? this.model.bodies)]);
+    const stale = [...keys].filter(([b, k]) => k === null || b.paintKey !== k).map(([b]) => b);
+    if (stale.length) {
+      this.paintBases(stale);
+      for (const b of stale) b.paintKey = keys.get(b) ?? undefined;
+    }
+    this.requestRender();
+  }
+
+  private paintBases(only: BodyMesh[]) {
     if (!this.highlighter || !this.model) return;
     if (this.analysis === "component") {
       const hue = new Map<string, THREE.Color>();
@@ -1651,9 +1706,9 @@ export class Viewport {
       this.highlighter.setBase((fid) => hue.get(this.faceIdToBodyId(fid) ?? "") ?? BASE_COLOR, only);
     } else if (this.analysis === "draft") {
       const B = this.draftDir;
-      const OVERHANG = new THREE.Color(0xe24a3b); // unsupported overhang (red)
-      const TOP = new THREE.Color(0x49c46a); // up-facing
-      const WALL = new THREE.Color(0x4aa3e2); // wall / steep-enough downward
+      const OVERHANG = new THREE.Color(DRAFT_COLORS.overhang);
+      const TOP = new THREE.Color(DRAFT_COLORS.top);
+      const WALL = new THREE.Color(DRAFT_COLORS.wall);
       // A downward face overhangs when its angle from straight down (β) is below the threshold.
       this.highlighter.setBase((fid) => {
         const c = this.faceNormalWorld(fid).dot(B); // cos(angle to build dir)
@@ -1671,7 +1726,6 @@ export class Viewport {
         return hex ? new THREE.Color(hex) : BASE_COLOR;
       }, only);
     }
-    this.requestRender();
   }
 
   /** body id → hex, repainted unless an analysis overlay masks it. */
@@ -1803,6 +1857,7 @@ export class Viewport {
   setZebra(on: boolean) {
     this.zebra = on;
     this.applyZebra();
+    this.onAnalysisChange?.();
   }
   private applyZebra() {
     if (!this.model) return;
@@ -1829,6 +1884,7 @@ export class Viewport {
   setCurvatureCombs(on: boolean) {
     this.combs = on;
     this.applyCombs();
+    this.onAnalysisChange?.();
   }
   private applyCombs() {
     if (this.combsObj) {
@@ -2050,7 +2106,7 @@ export class Viewport {
       this.datumGroup.add(m);
       this.datumQuads.push(m);
     }
-    this.highlightDatum(this.selectedDatum);
+    this.paintDatums();
   }
 
   /** Datum points and axes as pickable geometry, sized against the model. */
@@ -2100,21 +2156,25 @@ export class Viewport {
   }
 
   /** Brighten the selected construction plane; others stay faint. */
-  highlightDatum(id: string | null) {
-    this.selectedDatum = id;
+  highlightDatum(id: string | readonly string[] | null) {
+    this.selectedDatum = new Set(id === null ? [] : typeof id === "string" ? [id] : id);
     this.paintDatums();
   }
 
   private paintDatums() {
     for (const q of this.datumQuads) {
       const id = q.userData.datumId as string;
-      (q.material as THREE.MeshBasicMaterial).opacity =
-        id === this.selectedDatum ? 0.32 : id === this.hoveredDatum ? 0.24 : 0.12;
+      (q.material as THREE.MeshBasicMaterial).opacity = this.selectedDatum.has(id)
+        ? 0.32
+        : id === this.hoveredDatum
+          ? 0.24
+          : 0.12;
     }
     // A point or axis is a solid mark, so it brightens rather than fades and stays clearly visible otherwise.
     for (const m of this.datumMarkers) {
       const id = m.userData.datumId as string;
-      (m.material as THREE.MeshBasicMaterial).opacity = id === this.selectedDatum || id === this.hoveredDatum ? 1 : 0.7;
+      (m.material as THREE.MeshBasicMaterial).opacity =
+        this.selectedDatum.has(id) || id === this.hoveredDatum ? 1 : 0.7;
     }
     this.requestRender();
   }
@@ -2319,63 +2379,9 @@ export class Viewport {
   /** A by:"nearest" selector per face plus the first face's normal and anchor. `round` marks a lone cylindrical
    *  face (a drag resizes), `lead` the first of several that run smoothly into it and resize as one. On a round
    *  face the anchor is on the surface and the normal is the outward one there. */
-  selectedFacesForPressPull(): {
-    selectors: Selector[];
-    faceIds: number[];
-    normal: THREE.Vector3;
-    anchor: THREE.Vector3;
-    bodyId: string | null;
-    round: RoundFace | null;
-    lead: RoundFace | null;
-  } | null {
+  selectedFacesForPressPull(): PressPullFaces | null {
     if (!this.highlighter || !this.model) return null;
-    const faces = this.highlighter.getSelectedFaces();
-    if (faces.length === 0) return null;
-    const selectors: Selector[] = faces.map((fid) => {
-      const c = this.faceCentroidWorld(fid);
-      return { kind: "face", by: "nearest", point: [c.x, c.y, c.z] };
-    });
-    const first = faces[0];
-    if (first === undefined) return null;
-    let anchor = this.faceCentroidWorld(first);
-    let normal = this.faceNormalWorld(first);
-    let round: RoundFace | null = null;
-    const fit = this.roundFit(first);
-    const stand =
-      fit && roundStand(fit.cylinder, fit.points, fit.full, this.faceClickOn(fit), [anchor.x, anchor.y, anchor.z]);
-    if (fit && stand) {
-      anchor = new THREE.Vector3(...stand.point);
-      round = this.roundFrom(fit, stand.radial);
-      normal = round.radial.clone().multiplyScalar(round.solidInside ? 1 : -1);
-    } else {
-      const tris = this.faceTriangles(first);
-      const normals = tris.map((t) => t.getNormal(new THREE.Vector3()).toArray() as Vec3);
-      // A sphere, cone or torus: the normal where the handle stands, as the tool uses, never the average,
-      // which on a closed face points along its axis or nowhere.
-      const curved = !isPlanarFace(normals);
-      // A sphere resizes about its centre, so its handle points out from there
-      // on a dimple too, where the face's own normal points in.
-      const centre = curved
-        ? sphereCentreFromFace(
-            tris.flatMap((t) => [t.a.toArray(), t.b.toArray(), t.c.toArray()] as Vec3[]),
-            normals,
-          )
-        : null;
-      const out = centre && unit([anchor.x - centre[0], anchor.y - centre[1], anchor.z - centre[2]]);
-      const at = out ? new THREE.Vector3(...out) : curved ? facetNormalAt(tris, anchor) : null;
-      if (at) normal = at;
-    }
-    return {
-      selectors,
-      faceIds: [...faces],
-      normal,
-      anchor,
-      bodyId: this.faceIdToBodyId(first),
-      // A multi-face press/pull shares a single distance along a single normal;
-      // a diameter is a property of one face and has no meaning spread across several.
-      round: faces.length === 1 ? round : null,
-      lead: faces.length > 1 ? round : null,
-    };
+    return this.pressPull.get(this.model, this.highlighter.getSelectedFaces(), this.faceClick);
   }
 
   /** The cylinder a face lies on, or null. Not from faceNormalWorld: a closed
@@ -2391,41 +2397,12 @@ export class Viewport {
     return this.roundFit(faceId)?.cylinder ?? null;
   }
 
-  private roundFit(faceId: number): { cylinder: Cylinder; solidInside: boolean; points: Vec3[]; full: boolean } | null {
-    const tris = this.faceTriangles(faceId);
-    if (tris.length < 3) return null;
-    const points: Vec3[] = [];
-    const normals: Vec3[] = [];
-    const n = new THREE.Vector3();
-    for (const t of tris) {
-      points.push([t.a.x, t.a.y, t.a.z], [t.b.x, t.b.y, t.b.z], [t.c.x, t.c.y, t.c.z]);
-      t.getNormal(n);
-      normals.push([n.x, n.y, n.z]);
-    }
-    const cylinder = cylinderFromFace(points, normals);
-    if (!cylinder) return null;
-    const solidInside = solidInsideCylinder(cylinder, points, normals);
-    if (solidInside === null) return null;
-    return { cylinder, solidInside, points, full: arcSweep(cylinder, points) > FULL_SWEEP };
+  private roundFit(faceId: number): RoundFit | null {
+    return roundFitOf(this.model, faceId);
   }
 
   private roundFrom(fit: { cylinder: Cylinder; solidInside: boolean; full: boolean }, radial: Vec3): RoundFace {
-    return {
-      cylinder: fit.cylinder,
-      radius: fit.cylinder.radius,
-      solidInside: fit.solidInside,
-      radial: new THREE.Vector3(radial[0], radial[1], radial[2]),
-      full: fit.full,
-      tangent: null,
-    };
-  }
-
-  /** Where the face selected by the last plain click was hit, when that point
-   *  lies on this round face. */
-  private faceClickOn(fit: { cylinder: Cylinder; points: Vec3[] }): Vec3 | null {
-    const at = this.faceClick;
-    if (!at) return null;
-    return onRoundFace(fit.cylinder, fit.points, at, Math.max(0.05 * fit.cylinder.radius, 1e-3)) ? at : null;
+    return roundFrom(fit, radial);
   }
 
   /** So "click a face, press S" skips the plane picker. Null for none or a curved face. The winding already
@@ -2438,18 +2415,12 @@ export class Viewport {
     if (!this.highlighter || !this.model) return null;
     const faceId = this.highlighter.getSelectedFaces()[0];
     if (faceId === undefined) return null;
-    const n = this.faceNormalWorld(faceId);
-    const c = this.faceCentroidWorld(faceId);
-    const tris = this.faceTriangles(faceId);
-    if (tris.length === 0) return null;
     // Every vertex on the plane through the centroid, with a model scaled tolerance as selectCoplanarFaces uses.
     const tol = 1e-3 * (this.model.box.getSize(new THREE.Vector3()).length() || 1) + 1e-4;
-    const d0 = n.dot(c);
-    for (const t of tris) {
-      for (const v of [t.a, t.b, t.c]) {
-        if (Math.abs(n.dot(v) - d0) > tol) return null;
-      }
-    }
+    const flat = planeOfFace(this.model, faceId, tol);
+    if (!flat) return null;
+    const n = flat.normal;
+    const c = flat.origin;
     return {
       plane: faceSketchPlane([n.x, n.y, n.z], [c.x, c.y, c.z]),
       faceId,
@@ -2470,18 +2441,8 @@ export class Viewport {
   /** The plane of a face, or null when the face is curved. */
   planarFace(faceId: number): { normal: THREE.Vector3; origin: THREE.Vector3 } | null {
     if (!this.model) return null;
-    const tris = this.faceTriangles(faceId);
-    if (tris.length === 0) return null;
-    const n = this.faceNormalWorld(faceId);
-    const c = this.faceCentroidWorld(faceId);
     const tol = 1e-3 * (this.model.box.getSize(new THREE.Vector3()).length() || 1) + 1e-4;
-    const d0 = n.dot(c);
-    for (const t of tris) {
-      for (const v of [t.a, t.b, t.c]) {
-        if (Math.abs(n.dot(v) - d0) > tol) return null;
-      }
-    }
-    return { normal: n, origin: c };
+    return planeOfFace(this.model, faceId, tol);
   }
 
   /** The flat face nearest `point` whose plane passes through it. Unlike
@@ -2659,6 +2620,7 @@ export class Viewport {
         if (b.mesh.visible !== vis) {
           b.mesh.visible = vis;
           b.edges.setBodyVisible(vis);
+          if (vis) scheduleAreaIndex(b);
           anyChanged = true;
         }
       }
@@ -3087,22 +3049,7 @@ export class Viewport {
 
   /** The Measure tool's raw material for a true shortest distance. */
   faceTriangles(faceId: number): THREE.Triangle[] {
-    const out: THREE.Triangle[] = [];
-    const body = this.model && bodyOfFace(this.model, faceId);
-    const tris = body?.faceTriangles.get(faceId);
-    if (!body || !tris) return out;
-    const pos = body.mesh.geometry.getAttribute("position");
-    const index = body.mesh.geometry.getIndex()!;
-    const mw = body.mesh.matrixWorld;
-    for (const t of tris) {
-      const tri = new THREE.Triangle(
-        new THREE.Vector3().fromBufferAttribute(pos, index.getX(t * 3)).applyMatrix4(mw),
-        new THREE.Vector3().fromBufferAttribute(pos, index.getX(t * 3 + 1)).applyMatrix4(mw),
-        new THREE.Vector3().fromBufferAttribute(pos, index.getX(t * 3 + 2)).applyMatrix4(mw),
-      );
-      out.push(tri);
-    }
-    return out;
+    return faceTrianglesOf(this.model, faceId);
   }
 
   /** Measure's aiming feedback. */
@@ -3171,8 +3118,10 @@ export class Viewport {
   private clearanceLines: THREE.Line[] = [];
 
   /** The analysed body's surface coloured over `range` (blue low, red high) in its place, the body hidden
-   *  meanwhile. `displacement` (three numbers per vertex) draws it deformed, see setStressDeformation. Null
-   *  clears, as does the next setModel. Tells onStressOverlayChange listeners when the body changes. */
+   *  meanwhile. `displacement` (three numbers per vertex) draws it deformed, see setStressDeformation. `colours`
+   *  false draws it in the body's own colour, and undeformed as well leaves the body itself on show, the surface
+   *  kept only for stressOverlayPoint. Null clears, as does the next setModel. Tells onStressOverlayChange
+   *  listeners when the body changes. */
   setStressOverlay(
     o: {
       bodyId: string;
@@ -3182,8 +3131,11 @@ export class Viewport {
       range: { min: number; max: number };
       displacement?: ArrayLike<number>;
       scale?: number;
+      colours?: boolean;
     } | null,
   ) {
+    this.stressRest?.dispose();
+    this.stressRest = null;
     if (this.stressMesh) {
       clearOverlayObjects([this.stressMesh]);
       this.stressMesh = null;
@@ -3198,14 +3150,27 @@ export class Viewport {
       }
       this.stressHidden = null;
     }
-    if (o && o.positions.length && o.indices.length && o.values.length * 3 === o.positions.length) {
-      this.stressMesh = buildStressMesh(o.positions, o.indices, stressColors(o.values, o.range.min, o.range.max));
+    const valid = !!o && o.positions.length > 0 && o.indices.length > 0 && o.values.length * 3 === o.positions.length;
+    const moves = !!o?.displacement && o.displacement.length === o.positions.length;
+    if (o && valid && o.colours === false && !moves) {
+      this.stressRest = stressSurfaceGeometry(o.positions, o.indices);
+    } else if (o && valid) {
+      const b = this.model?.bodies.find((x) => x.id === o.bodyId);
+      const plain = o.colours === false;
+      const colors = plain
+        ? solidColors(o.positions.length / 3, this.bodyColour(b))
+        : stressColors(o.values, o.range.min, o.range.max);
+      this.stressMesh = buildStressMesh(o.positions, o.indices, colors);
+      const own = plain ? plainStressMaterial(b?.mesh.material) : null;
+      if (own) {
+        (this.stressMesh.material as THREE.Material).dispose();
+        this.stressMesh.material = own;
+      }
       this.scene.scene.add(markInPicture(this.stressMesh));
-      if (o.displacement && o.displacement.length === o.positions.length) {
-        this.stressShape = { base: Float32Array.from(o.positions), displacement: Float32Array.from(o.displacement) };
+      if (moves) {
+        this.stressShape = { base: Float32Array.from(o.positions), displacement: Float32Array.from(o.displacement!) };
         this.setStressDeformation(o.scale ?? 0);
       }
-      const b = this.model?.bodies.find((x) => x.id === o.bodyId);
       if (b) {
         this.stressHidden = { bodyId: b.id, wasVisible: b.mesh.visible };
         b.mesh.visible = false;
@@ -3217,8 +3182,14 @@ export class Viewport {
     this.requestRender();
     if (this.stressBody !== was) for (const fn of this.stressListeners) fn();
   }
+  /** The colour a body is painted as a whole. Its albedo is in its vertex colours, its material stays white. */
+  private bodyColour(b: BodyMesh | undefined): THREE.Color {
+    const hex = b ? this.finish.bodyPaint[b.id] : undefined;
+    return hex ? new THREE.Color(hex) : b?.scan ? SCAN_COLOR : BASE_COLOR;
+  }
+  /** True while an overlay is set, drawn in its colours, plain or only kept for its points. */
   hasStressOverlay(): boolean {
-    return this.stressMesh !== null;
+    return this.stressMesh !== null || this.stressRest !== null;
   }
   /** Null when none is up. Other face tints leave that body alone, a tint over the colours would misread them. */
   stressOverlayBody(): string | null {
@@ -3272,7 +3243,7 @@ export class Viewport {
   }
 
   private stressCorners(tri: number): [Vec3, Vec3, Vec3] | null {
-    const geo = this.stressMesh?.geometry;
+    const geo = this.stressMesh?.geometry ?? this.stressRest;
     const index = geo?.getIndex();
     if (!geo || !index || tri < 0 || tri * 3 + 2 >= index.count) return null;
     const pos = geo.getAttribute("position");
@@ -3284,6 +3255,7 @@ export class Viewport {
   }
 
   private stressMesh: THREE.Mesh | null = null;
+  private stressRest: THREE.BufferGeometry | null = null;
   private stressHidden: { bodyId: string; wasVisible: boolean } | null = null;
   /** The overlay's undeformed positions and displacement, while it has one. */
   private stressShape: { base: Float32Array; displacement: Float32Array } | null = null;
@@ -3419,6 +3391,7 @@ export class Viewport {
     const planes = on ? [this.sectionPlane] : null;
     this.picker.setClip(on ? this.sectionPlane : null);
     clipSelectionOverlays(planes);
+    void this.linkPrograms(selectionGlowWarmup(), "selection glow");
     if (this.model) {
       for (const b of this.model.bodies) {
         for (const mat of bodyMaterials(b)) mat.clippingPlanes = planes;
@@ -3497,6 +3470,27 @@ export class Viewport {
     };
   }
 
+  /** A world space copy of the body's display mesh, null when the body is not on the model. */
+  bodyDisplayMesh(
+    bodyId: string,
+  ): { positions: Float32Array; indices: Uint32Array; faceIds: Int32Array; faceStart: number } | null {
+    const body = this.model?.bodies.find((b) => b.id === bodyId);
+    const index = body?.mesh.geometry.getIndex();
+    if (!body || !index) return null;
+    const pos = body.mesh.geometry.getAttribute("position");
+    body.mesh.updateMatrixWorld();
+    const p = new THREE.Vector3();
+    const positions = new Float32Array(pos.count * 3);
+    for (let v = 0; v < pos.count; v++) {
+      p.fromBufferAttribute(pos, v).applyMatrix4(body.mesh.matrixWorld);
+      positions.set([p.x, p.y, p.z], v * 3);
+    }
+    const tris = Math.min(body.faceIds.length, Math.floor(index.count / 3));
+    const indices = new Uint32Array(tris * 3);
+    for (let i = 0; i < tris * 3; i++) indices[i] = index.getX(i);
+    return { positions, indices, faceIds: Int32Array.from(body.faceIds.slice(0, tris)), faceStart: body.faceStart };
+  }
+
   /** A by:"nearest" face selector, the surface normal and the hit point under the cursor. */
   pickFaceForPressPull(
     clientX: number,
@@ -3548,9 +3542,10 @@ export class Viewport {
       return;
     }
     if (!this.emphasis) {
-      this.emphasis = new EdgeEmphasis(this.resolution, EDGE_HOVER_COLOR);
+      this.emphasis = new EdgeEmphasis(this.resolution, edgeHoverColor());
       this.addToScene(this.emphasis.object, "highlight");
     }
+    this.emphasis.setColor(edgeHoverColor());
     this.emphasis.showAll(lines.map((l) => l.points));
     this.requestRender();
   }
@@ -3607,39 +3602,7 @@ export class Viewport {
   /** A point on a face: the vertex mean snapped to the nearest triangle centroid. The
    *  mean alone lands on a cylinder's axis, where by:"nearest" finds the inner wall. */
   private faceCentroidWorld(faceId: number): THREE.Vector3 {
-    const acc = new THREE.Vector3();
-    const body = this.model && bodyOfFace(this.model, faceId);
-    const tris = body?.faceTriangles.get(faceId);
-    if (!body || !tris) return acc;
-    const pos = body.mesh.geometry.getAttribute("position");
-    const index = body.mesh.geometry.getIndex()!;
-    const tmp = new THREE.Vector3();
-    const seen = new Set<number>();
-    for (const t of tris) {
-      for (let k = 0; k < 3; k++) {
-        const vi = index.getX(t * 3 + k);
-        if (seen.has(vi)) continue;
-        seen.add(vi);
-        acc.add(tmp.fromBufferAttribute(pos, vi));
-      }
-    }
-    if (seen.size) acc.divideScalar(seen.size);
-
-    const cent = new THREE.Vector3();
-    const best = new THREE.Vector3();
-    let bestD = Infinity;
-    for (const t of tris) {
-      cent.set(0, 0, 0);
-      for (let k = 0; k < 3; k++) cent.add(tmp.fromBufferAttribute(pos, index.getX(t * 3 + k)));
-      cent.divideScalar(3);
-      const d = cent.distanceToSquared(acc);
-      if (d < bestD) {
-        bestD = d;
-        best.copy(cent);
-      }
-    }
-    if (bestD < Infinity) acc.copy(best);
-    return acc.applyMatrix4(body.mesh.matrixWorld);
+    return faceCentroidOf(this.model, faceId);
   }
 
   /** The geometric middle a person means by centre, seeding the Hole tool. faceCentroidWorld snaps to one
@@ -3666,28 +3629,7 @@ export class Viewport {
 
   /** Exact for a planar face, a representative outward direction for a curved one. */
   private faceNormalWorld(faceId: number): THREE.Vector3 {
-    const acc = new THREE.Vector3();
-    const body = this.model && bodyOfFace(this.model, faceId);
-    const tris = body?.faceTriangles.get(faceId);
-    if (!body || !tris) {
-      acc.set(0, 0, 1);
-      return acc;
-    }
-    const pos = body.mesh.geometry.getAttribute("position");
-    const index = body.mesh.geometry.getIndex()!;
-    const a = new THREE.Vector3();
-    const b = new THREE.Vector3();
-    const c = new THREE.Vector3();
-    const n = new THREE.Vector3();
-    for (const t of tris) {
-      a.fromBufferAttribute(pos, index.getX(t * 3));
-      b.fromBufferAttribute(pos, index.getX(t * 3 + 1));
-      c.fromBufferAttribute(pos, index.getX(t * 3 + 2));
-      n.copy(b.sub(a).cross(c.sub(a))); // length = 2× triangle area → area-weighted
-      acc.add(n);
-    }
-    if (acc.lengthSq() < 1e-12) acc.set(0, 0, 1);
-    return acc.normalize().transformDirection(body.mesh.matrixWorld).normalize();
+    return faceNormalOf(this.model, faceId);
   }
 
   private sharedRaycaster = new THREE.Raycaster();
@@ -3926,9 +3868,11 @@ export class Viewport {
 
   private projScratch = new THREE.Vector3();
   /** Client coords. */
-  projectToScreen(world: THREE.Vector3): { x: number; y: number } {
+  /** `clip` makes a point behind the camera or past the far plane NaN, where the plain projection would mirror it. */
+  projectToScreen(world: THREE.Vector3, clip = false): { x: number; y: number } {
     const rect = this.canvas.getBoundingClientRect();
     const v = this.projScratch.copy(world).project(this.rig.active);
+    if (clip && (v.z < -1 || v.z > 1)) return { x: NaN, y: NaN };
     return {
       x: (v.x * 0.5 + 0.5) * rect.width + rect.left,
       y: (-v.y * 0.5 + 0.5) * rect.height + rect.top,
@@ -4577,6 +4521,10 @@ export class Viewport {
         this.cube.render(this.rig.active); // draw the ViewCube overlay in the corner
         this.fence.mark();
         this.fps.frame();
+        if (!moved && !this.glowLinked) {
+          this.glowLinked = true;
+          void this.linkPrograms(selectionGlowWarmup(), "selection glow");
+        }
         if (moved) this.movedDrawAt = now;
         this.needsRender = false;
         if (this.lingerFrames > 0) this.lingerFrames--;

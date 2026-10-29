@@ -2,6 +2,7 @@
 import { ref } from "vue";
 import { leaveSafeMode, safeMode, safeModeLeaveNote, safeModeWhy } from "../../ui/safeMode";
 import { openReportDialog } from "../../ui/bugReporter";
+import Button from "../ui/Button.vue";
 
 const info = safeMode();
 const leaving = ref(false);
@@ -28,8 +29,8 @@ async function restart() {
       <template v-if="safeModeLeaveNote(info)"> {{ safeModeLeaveNote(info) }}</template>
       <span v-if="failed" class="failed">{{ failed }}</span>
     </div>
-    <button type="button" class="btn" :disabled="leaving" @click="restart">Restart normally</button>
-    <button type="button" class="btn safe-report" @click="openReportDialog()">Report a problem</button>
+    <Button :disabled="leaving" @click="restart">Restart normally</Button>
+    <Button class="safe-report" @click="openReportDialog()">Report a problem</Button>
   </div>
 </template>
 
@@ -58,8 +59,7 @@ async function restart() {
   color: var(--warn);
   margin-top: 4px;
 }
-button {
+.btn {
   flex: 0 0 auto;
-  white-space: nowrap;
 }
 </style>

@@ -124,7 +124,7 @@ describe("PrintabilityPanel", () => {
     expect(p.data.value!.setup.checks.wall).toBe(false);
     q(".printability-run")!.click();
     expect(ctl.run).toHaveBeenCalledOnce();
-    expect((q(".printability-cancel") as HTMLButtonElement).disabled).toBe(true);
+    expect(q(".printability-cancel")).toBeNull();
   });
 
   it("turns off the up choice while laying flat", async () => {
@@ -147,14 +147,20 @@ describe("PrintabilityPanel", () => {
     expect(q(".printability-scope")?.textContent).toBe("Lid");
   });
 
-  it("enables Cancel while a Check runs", async () => {
+  it("offers Cancel in place of Close only while a Check runs", async () => {
     const { ctl, p } = await mounted();
     p.show();
+    await flushPromises();
+    expect([!!q(".printability-cancel"), !!q(".printability-close")]).toEqual([false, true]);
     p.started();
     await flushPromises();
     expect(q(".printability-run")?.textContent).toBe("Checking…");
+    expect([!!q(".printability-cancel"), !!q(".printability-close")]).toEqual([true, false]);
     q(".printability-cancel")!.click();
     expect(ctl.cancel).toHaveBeenCalledOnce();
+    p.finished({ result: formatPrintabilityResult({ ...reply, bodies: [], findings: [], errors: [] }) });
+    await flushPromises();
+    expect([!!q(".printability-cancel"), !!q(".printability-close")]).toEqual([false, true]);
   });
 
   it("lists the findings by body, with body notes, Nothing found, the legend and the failures", async () => {

@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect
 import { useWhatsNewStore } from "../../stores/whatsNew";
 import { REPO_URL } from "../../ui/reportText";
 import { openExternal } from "../../ui/welcome";
+import Button from "../ui/Button.vue";
 
 const news = useWhatsNewStore();
 // A start from a double-clicked file closes Home within a moment, which does not count as reading the card.
@@ -47,10 +48,8 @@ const title = computed(() =>
       </template>
     </div>
     <div class="home-news-acts">
-      <button type="button" class="btn home-news-all" @click="void openExternal(`${REPO_URL}/releases`)">
-        All release notes
-      </button>
-      <button type="button" class="btn home-news-hide" @click="news.dismiss()">Hide</button>
+      <Button class="home-news-all" @click="void openExternal(`${REPO_URL}/releases`)">All release notes</Button>
+      <Button class="home-news-hide" @click="news.dismiss()">Hide</Button>
     </div>
   </section>
 </template>

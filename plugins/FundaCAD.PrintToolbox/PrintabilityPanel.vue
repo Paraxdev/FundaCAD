@@ -171,10 +171,8 @@ function findingStyle(index: number): CSSProperties {
         <button type="button" class="btn btn-primary printability-run" :disabled="d.running" @click="ctl.run()">{{
           d.running ? "Checking…" : "Check"
         }}</button>
-        <button type="button" class="btn printability-cancel" :disabled="!d.running" @click="ctl.cancel()"
-          >Cancel</button
-        >
-        <button type="button" class="btn printability-close" @click="ctl.close()">Close</button>
+        <button v-if="d.running" type="button" class="btn printability-cancel" @click="ctl.cancel()">Cancel</button>
+        <button v-else type="button" class="btn printability-close" @click="ctl.close()">Close</button>
       </div>
       <div v-if="d.error" class="measure-hint printability-error" :style="WARN">{{ d.error }}</div>
 

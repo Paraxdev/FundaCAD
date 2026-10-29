@@ -7,6 +7,7 @@ import type { DatumPose } from "../document/datumPose";
 import type { SketchPlane } from "../sketch/plane";
 import { createDragHandle, nameHandle, leanOutOfView, type DragHandle } from "./manipulator";
 import { createSlimRing, ringLook, type SlimRing } from "./slimRing";
+import { axisColor, type AxisKey } from "../viewport/originTriad";
 
 export type Turn = "tiltX" | "tiltY" | "spin";
 export type Grab = "offset" | Turn;
@@ -16,9 +17,9 @@ export const RING_PX = 62;
 /** Share of the offset arrow still shown with the normal at the camera, so it keeps a length to aim at from the top. */
 const ARROW_MIN_SCREEN = 0.7;
 
-// The move gizmo's palette, so a tilt about x reads as the same red as sliding along x.
+// The move gizmo's axis colours, so a tilt about x reads as the same colour as sliding along x.
 const RING_NAME: Record<Turn, string> = { tiltX: "tilt x", tiltY: "tilt y", spin: "spin" };
-const AXIS_COLOR: Record<Turn, number> = { tiltX: 0xff5a5a, tiltY: 0x5ad15a, spin: 0x5a9bff };
+const RING_AXIS: Record<Turn, AxisKey> = { tiltX: "x", tiltY: "y", spin: "z" };
 const UP = new THREE.Vector3(0, 1, 0);
 
 /** Rebuilt by the tool every frame. */
@@ -98,7 +99,7 @@ export class DatumRings {
       r.group.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(y.clone().cross(z), y, z));
       r.group.position.copy(s.pivot);
       r.group.scale.setScalar(s.k);
-      r.paint(ringLook(t as Grab, s.hover, s.grab, TURNS), AXIS_COLOR[t]);
+      r.paint(ringLook(t as Grab, s.hover, s.grab, TURNS), axisColor(RING_AXIS[t]));
     }
     this.rim.position.copy(s.pivot);
     this.rim.quaternion.copy(cam.quaternion);

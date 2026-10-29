@@ -1,11 +1,13 @@
 // The MCAD-style keymap, dispatching from the table in shortcuts.ts. File shortcuts are handled in main.ts.
 
 import { resolveShortcut } from "./shortcuts";
-import { isEditableTarget, isLiveFocusTarget } from "../ui/focus";
+import { isEditableTarget, isLiveFocusTarget, isSelectTrigger } from "../ui/focus";
 
 export function installKeymap(onAction: (a: string) => void, context: () => "model" | "sketch") {
   window.addEventListener("keydown", (e) => {
-    if (isEditableTarget(e.target)) {
+    // A Select trigger holds no text to undo, so its Ctrl combos reach the keymap as a button's do.
+    const selectCombo = (e.ctrlKey || e.metaKey) && isSelectTrigger(e.target);
+    if (isEditableTarget(e.target) && !selectCombo) {
       // A ghost field (ui/focus.ts): blur it and fall through, or it swallows this shortcut and every later one.
       if (e.target instanceof HTMLElement && !isLiveFocusTarget(e.target)) e.target.blur();
       else return;

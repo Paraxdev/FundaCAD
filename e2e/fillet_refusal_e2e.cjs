@@ -273,10 +273,11 @@ const check = (name, ok, detail) => {
   check("refused before release", beforeRelease.refusal !== null, beforeRelease.refusal);
   await page.screenshot({ path: `${OUT}/2-refused.png` });
   await page.mouse.up();
+  await page.keyboard.press("Enter");
   await settle();
   const c2 = await state();
   check(
-    "releasing commits the last good radius, not the refused one",
+    "Enter after the release commits the last good radius, not the refused one",
     !c2.active && c2.feats.length === 1 && c2.feats[0].endsWith(`=${beforeRelease.shown}`),
     c2.feats,
   );
@@ -298,6 +299,7 @@ const check = (name, ok, detail) => {
     await page.mouse.move(p.x, p.y);
   }
   await page.mouse.up();
+  await page.keyboard.press("Enter");
   await settle();
   await page.waitForTimeout(500);
   await settle();

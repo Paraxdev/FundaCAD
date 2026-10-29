@@ -122,7 +122,7 @@ describe("the chooser", () => {
 
   it("keeps blank issues and links the security advisory and the manual, read from their own files", () => {
     expect(securityUrl).toBe("https://github.com/Paraxdev/fundacad/security/advisories/new");
-    expect(manualUrl).toBe("https://paraxdev.github.io/FundaCAD/");
+    expect(manualUrl).toBe("https://fundacad.dev/");
     expect({ blank: /^blank_issues_enabled: true$/m.test(configYml), urls }).toEqual({
       blank: true,
       urls: [securityUrl, manualUrl],

@@ -7,6 +7,7 @@ import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeome
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import { overlayMaterial } from "./overlayMaterial";
 import { markOverlay } from "./overlayKinds";
+import { uploadSpan, uploadWhole } from "./gpuUpload";
 import type { RebuildResult } from "../types";
 import type { TangentEdges } from "../ui/renderPrefs";
 
@@ -21,6 +22,8 @@ export interface EdgeRef {
   readonly points: EdgePt[];
   /** the faces either side meet tangentially (a fillet's boundary) */
   readonly smooth: boolean;
+  /** the faces' largest curvature across the edge, per mm of radius and of chord, when not flat */
+  readonly curvature?: readonly [number, number];
   /** the merged object that draws this edge, and this edge's slot in it */
   readonly draw: BodyEdges;
   readonly slot: number;
@@ -67,7 +70,15 @@ export class BodyEdges {
     const base = new THREE.Color(EDGE_IDLE_COLOR);
     for (let i = 0; i < n; i++) {
       const e = edges[i]!;
-      this.refs.push({ id: e.id, body: e.body, points: e.points, smooth: e.smooth === true, draw: this, slot: i });
+      this.refs.push({
+        id: e.id,
+        body: e.body,
+        points: e.points,
+        smooth: e.smooth === true,
+        ...(e.curvature !== undefined ? { curvature: e.curvature } : {}),
+        draw: this,
+        slot: i,
+      });
       this.segCount[i] = Math.max(0, e.points.length - 1);
       this.rgb[i * 3] = base.r;
       this.rgb[i * 3 + 1] = base.g;
@@ -177,10 +188,7 @@ export class BodyEdges {
       this.colorBuf[o + 5] = color.b;
     }
     const attr = this.object.geometry.attributes.instanceColorStart as THREE.InterleavedBufferAttribute | undefined;
-    if (attr) {
-      attr.data.addUpdateRange(start * 6, n * 6);
-      attr.data.needsUpdate = true;
-    }
+    if (attr) uploadSpan(attr.data, start * 6, n * 6);
   }
 
   /** Repaint one edge in its IDLE colour: `base`, or lighter for a faint
@@ -223,10 +231,7 @@ export class BodyEdges {
       }
     }
     const attr = this.object.geometry.attributes.instanceColorStart as THREE.InterleavedBufferAttribute | undefined;
-    if (attr) {
-      attr.data.clearUpdateRanges(); // whole-buffer rewrite; drop queued sub-ranges
-      attr.data.needsUpdate = true;
-    }
+    if (attr) uploadWhole(attr.data);
   }
 
   /** Hide/show one edge (display only). Takes effect on the next flush(). */

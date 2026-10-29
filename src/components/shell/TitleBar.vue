@@ -1,12 +1,11 @@
 <script setup lang="ts">
-import { fmtKeys } from "../../input/platform";
 import { markRaw, ref, onMounted, onUnmounted } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { useUiStore } from "../../stores/ui";
 import { useHomeStore } from "../../stores/home";
 import { buildMenubar } from "../../app/menubarDef";
 import { onContribChange } from "../../plugins/contrib";
-import Icon from "./Icon.vue";
+import IconButton from "../ui/IconButton.vue";
 import WorkspaceToggle from "./WorkspaceToggle.vue";
 import MenuBar from "./MenuBar.vue";
 import LiveSessionPill from "./LiveSessionPill.vue";
@@ -44,37 +43,44 @@ onUnmounted(() => {
 <template>
   <header id="titlebar" :class="{ 'home-up': home.shown }">
     <span class="brand" :inert="home.shown"><img :src="brandLockup" alt="FundaCAD" /></span>
-    <button
+    <IconButton
       id="home-btn"
-      class="tb-btn"
-      :class="{ active: home.shown }"
-      title="Home"
-      aria-label="Home"
-      :aria-pressed="home.shown"
+      icon="home"
+      tip="Home"
+      size="sm"
+      variant="plain"
+      :icon-size="15"
+      :active="home.shown"
       @click="engine.ui.home.toggle()"
-      ><Icon name="home" :size="15"
-    /></button>
+    />
     <!-- display: contents, so the bar's flex row and its narrow window rules see the controls as before. -->
     <div class="tb-rest" :inert="home.shown">
       <MenuBar :menus="menus" />
-      <button
+      <!-- The name leaves the keys out, they are in the tooltip and a screen reader need not say them. -->
+      <IconButton
         id="undo-btn"
-        class="tb-btn"
-        :title="fmtKeys('Undo (Ctrl+Z)')"
+        icon="undo"
+        tip="Undo"
+        keys="Ctrl+Z"
         aria-label="Undo"
+        size="sm"
+        variant="plain"
+        :icon-size="15"
         :disabled="!ui.canUndo"
         @click="engine.doUndo()"
-        ><Icon name="undo" :size="15"
-      /></button>
-      <button
+      />
+      <IconButton
         id="redo-btn"
-        class="tb-btn"
-        :title="fmtKeys('Redo (Ctrl+Y)')"
+        icon="redo"
+        tip="Redo"
+        keys="Ctrl+Y"
         aria-label="Redo"
+        size="sm"
+        variant="plain"
+        :icon-size="15"
         :disabled="!ui.canRedo"
         @click="engine.doRedo()"
-        ><Icon name="redo" :size="15"
-      /></button>
+      />
       <span id="context-tab" class="context-tab" :class="{ sketch: ui.sketchActive }">
         {{ ui.sketchActive ? "SKETCH" : "SOLID" }}
       </span>

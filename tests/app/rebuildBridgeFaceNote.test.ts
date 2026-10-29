@@ -4,6 +4,7 @@ import { describe, it, expect, vi } from "vitest";
 import { installRebuildBridge } from "../../src/app/rebuildBridge";
 import type { Engine } from "../../src/app/engine";
 import type { RebuildState } from "../../src/document/store";
+import { SessionHost } from "../../src/document/session";
 
 const { toasts } = vi.hoisted(() => ({ toasts: [] as { count: string; kind: unknown }[] }));
 vi.mock("../../src/ui/toast", () => ({
@@ -26,6 +27,7 @@ function bridge() {
     onBuildChunk: () => {},
     onBuildAbort: () => {},
     onOpen: () => {},
+    sessions: new SessionHost(),
     materialPaint: () => ({}),
     materialFinishes: () => ({}),
     faceMaterialEntries: () => [],

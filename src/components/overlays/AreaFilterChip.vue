@@ -20,7 +20,7 @@ const mode = shallowRef<AreaMode>("window");
 
 const label = computed(() => {
   const f = filter.value;
-  return f === "all" ? "Everything" : f === "faces" ? "Faces" : f === "edges" ? "Edges" : "Bodies";
+  return { all: "Everything", faces: "Faces", profiles: "Sketch profiles", edges: "Edges", bodies: "Bodies" }[f];
 });
 
 const verdict = computed(() => (mode.value === "window" ? "fully inside" : "touched"));

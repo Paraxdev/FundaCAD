@@ -47,6 +47,10 @@ function fakeEngine(
         cancel: () => {
           cancelled++;
         },
+        // Writes a drag not yet entered, then ends like cancel; counted with it here.
+        settle: () => {
+          cancelled++;
+        },
       },
       edgeFeature: off,
       pressPull: off,
@@ -123,7 +127,7 @@ describe("toolAtWork", () => {
 });
 
 describe("dropBodyGizmo", () => {
-  it("cancels the gizmo a body selection raised", () => {
+  it("puts away the gizmo a body selection raised", () => {
     const f = fakeEngine({ move: true, mode: "bodies" });
     createToolBusy(f.e).dropBodyGizmo();
     expect(f.cancels()).toBe(1);

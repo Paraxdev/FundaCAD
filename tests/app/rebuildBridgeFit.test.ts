@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { installRebuildBridge } from "../../src/app/rebuildBridge";
 import type { Engine } from "../../src/app/engine";
 import type { RebuildState } from "../../src/document/store";
+import { SessionHost } from "../../src/document/session";
 
 vi.mock("../../src/ui/toast", () => ({ toast: () => {} }));
 
@@ -29,6 +30,7 @@ function bridge() {
     materialLibrary: [],
     importColorSource: () => undefined,
     isBodyVisible: () => true,
+    sessions: new SessionHost(),
   };
   const viewport = new Proxy({} as Record<string, unknown>, {
     get: (_t, k) =>
@@ -53,7 +55,12 @@ function bridge() {
     const result = { mesh: { positions: solid ? [0, 0, 0] : [], indices: [], faceIds: [] }, edges: [], bodies: [] };
     for (const fn of builds) fn({ building: false, result } as unknown as RebuildState);
   };
-  return { show, open: () => opens.forEach((fn) => fn()), fits, resets, e };
+  // As the store's load does: the old session ends, the next begins, then the open is announced.
+  const open = () => {
+    store.sessions.begin("open");
+    opens.forEach((fn) => fn());
+  };
+  return { show, open, fits, resets, e };
 }
 
 describe("the camera after an import", () => {
@@ -84,11 +91,45 @@ describe("the camera after an import", () => {
     const b = bridge();
     b.show([box], true);
     b.show([box], true);
-    b.e.frameNextModel();
     b.open();
+    b.e.frameNextModel();
     b.show([{ id: "plate", type: "extrude" }], true);
     b.show([{ id: "plate", type: "extrude" }], true);
     expect([b.fits, b.resets]).toEqual([[true, false, true, false], [[false]]]);
+  });
+
+  it("does not frame the next document's model for a template whose model never landed", () => {
+    const b = bridge();
+    b.show([box], true);
+    b.open();
+    b.e.frameNextModel();
+    b.show([{ id: "sk1", type: "sketch" }], false);
+    b.open();
+    b.show([{ id: "plate", type: "extrude" }], true);
+    b.open();
+    b.e.frameNextModel();
+    b.show([{ id: "rib", type: "extrude" }], true);
+    expect([b.fits, b.resets]).toEqual([
+      [true, false, true],
+      [[false], [false]],
+    ]);
+  });
+
+  it("frames the first model after launch, whichever document brings it", () => {
+    const first = bridge();
+    first.show([], false);
+    first.open();
+    first.show([{ id: "plate", type: "extrude" }], true);
+    first.open();
+    first.show([{ id: "rib", type: "extrude" }], true);
+    const viaTemplate = bridge();
+    viaTemplate.show([], false);
+    viaTemplate.open();
+    viaTemplate.e.frameNextModel();
+    viaTemplate.show([{ id: "sk1", type: "sketch" }], false);
+    viaTemplate.open();
+    viaTemplate.show([{ id: "plate", type: "extrude" }], true);
+    expect([first.fits, viaTemplate.fits]).toEqual([[true, false], [true]]);
   });
 
   it("leaves the camera alone for a part drawn into an emptied view", () => {

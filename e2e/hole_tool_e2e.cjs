@@ -143,7 +143,7 @@ const check = (name, ok, detail) => {
   await page.waitForTimeout(500);
   t = await tool();
   check("re-editing opens the tool on its two holes", t.active && t.n === 2, JSON.stringify(t));
-  const toggle = await page.$(".dim-input .dim-toggle");
+  const toggle = await page.$('.dim-input [data-option="type"] [data-id="counterbore"]');
   if (toggle) await toggle.dispatchEvent("pointerdown");
   await page.waitForTimeout(1200);
   await settled();

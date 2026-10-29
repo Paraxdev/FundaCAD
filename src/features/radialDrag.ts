@@ -113,7 +113,7 @@ export const COLLAPSE_FRACTION = 0.1;
 export type RadialMode = "resize" | "remove";
 
 export interface RadialDrag {
-  /** what a release right now would do */
+  /** what confirming right now would do */
   mode: RadialMode;
   /** In mm, 0 once removing. A partial arc can read at or below zero, which the engine refuses with the reason. */
   radius: number;

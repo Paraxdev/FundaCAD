@@ -1,5 +1,7 @@
 //! Finite element analysis: the tetrahedral mesher, the TET10 solver and their shared types.
 
+pub mod adapt;
+pub mod refine;
 pub mod solve;
 pub mod tetmesh;
 

@@ -1,18 +1,75 @@
-import { openDocument, openDocumentAtPath, type OpenOutcome } from "../io/files";
+import {
+  openDocument,
+  openDocumentAtPath,
+  openTemplate,
+  saveDocument,
+  saveDocumentAs,
+  type OpenOutcome,
+} from "../io/files";
 import { choose } from "../ui/choice";
+import { toast } from "../ui/toast";
 import type { Engine } from "./engine";
+import type { HeldEdit } from "../features/heldEdit";
 import { TEMPLATES, templateText } from "../templates";
 import { copyName } from "../ui/homeVersions";
 import { closeHome, homeIsOpen } from "../ui/home";
 import { displayName } from "../ui/homeList";
 
-/** An open sketch's edits reach the store only when the sketch is finished, so
- *  `store.dirty` alone misses them. */
-export function hasUnsavedWork(e: Pick<Engine, "store" | "sketch">): boolean {
-  return e.store.dirty || e.sketch.hasUncommittedEdits;
+type WorkEngine = Pick<Engine, "store" | "sketch"> & Partial<Pick<Engine, "tools">>;
+
+/** The tools whose drag, let go of but not entered, is unsaved work. Missing ones are skipped for partial fakes. */
+export function heldEdits(tools: Engine["tools"] | undefined): HeldEdit[] {
+  if (!tools) return [];
+  return [
+    tools.move,
+    tools.pressPull,
+    tools.edgeFeature,
+    tools.extrude,
+    tools.draft,
+    tools.faceOffset,
+    tools.joint,
+    tools.mechanism,
+    tools.datumPose,
+  ].filter((t): t is NonNullable<typeof t> => !!t);
 }
 
-export async function mayDiscard(e: Pick<Engine, "store" | "sketch">, question: string): Promise<boolean> {
+const anyHeld = (e: Partial<Pick<Engine, "tools">>) => heldEdits(e.tools).some((h) => h.pending);
+const anySavableHeld = (e: Partial<Pick<Engine, "tools">>) => heldEdits(e.tools).some((h) => h.pending && !h.inSketch);
+
+/** An open sketch's edits, and a drag let go of but not entered, reach the store only later, so
+ *  `store.dirty` alone misses them. */
+export function hasUnsavedWork(e: WorkEngine): boolean {
+  return e.store.dirty || e.sketch.hasUncommittedEdits || anyHeld(e);
+}
+
+/** A save writes what the user sees, so a drag let go of but not entered is written first, as Enter would. */
+export function settleHeldEdit(e: Partial<Pick<Engine, "tools">>): void {
+  for (const h of heldEdits(e.tools)) h.confirmHeld();
+}
+
+export type SaveEngine = Pick<Engine, "store"> & Partial<Pick<Engine, "tools">>;
+
+/** What a save would write: the store's changes, or a drag let go of but not entered. */
+export function needsSave(e: SaveEngine): boolean {
+  return e.store.dirty || anySavableHeld(e);
+}
+
+/** A held edit its tool would not enter (a kernel refusal, an unreadable value) stays held, so the user is told. */
+function settleForSave(e: SaveEngine): void {
+  settleHeldEdit(e);
+  if (anySavableHeld(e)) toast("The held drag could not be entered, so the save left it out", { kind: "warning" });
+}
+
+// Settled once the path is chosen, so a cancelled Save As dialog leaves the drag held and Escape still cancels it.
+export async function saveWork(e: SaveEngine): Promise<void> {
+  await saveDocument(e.store, () => settleForSave(e));
+}
+
+export async function saveWorkAs(e: SaveEngine): Promise<void> {
+  await saveDocumentAs(e.store, () => settleForSave(e));
+}
+
+export async function mayDiscard(e: WorkEngine, question: string): Promise<boolean> {
   if (!hasUnsavedWork(e)) return true;
   const pick = await choose(question, [
     { value: "discard", label: "Discard", hint: "lose the unsaved changes" },
@@ -156,9 +213,7 @@ export async function newFromTemplate(e: ExampleEngine, id: string): Promise<voi
   const info = TEMPLATES.find((t) => t.id === id);
   if (!info) return;
   if (!(await mayDiscard(e, "Discard unsaved changes and start a new document?"))) return;
-  e.store.load(await templateText(id));
-  e.store.markOpenedWithoutPath(info.name);
-  e.frameNextModel();
+  if ((await openTemplate(e.store, info.name, () => templateText(id))) === "ok") e.frameNextModel();
 }
 
 type VersionEngine = Pick<Engine, "store" | "sketch" | "geometry" | "toolAtWork" | "setStatus">;
@@ -224,11 +279,16 @@ export function createDocumentActions(e: Engine): Pick<Engine, "newDocument" | "
     // re-open waiting on a drag's rebuild lands on the undone model (FI-2). Home closes so the change is seen.
     doUndo() {
       closeHome();
+      // A drag not yet entered is the last step, so undo takes back only that.
+      const pending = e.tools.move.pending;
       e.tools.move.cancel();
+      if (pending) return;
       if (!e.sketch.undoEdit()) e.store.undo();
     },
     doRedo() {
       closeHome();
+      // A drag not yet entered is a new step, which leaves nothing to redo.
+      if (e.tools.move.pending) return e.tools.move.settle();
       e.tools.move.cancel();
       if (!e.sketch.redoEdit()) e.store.redo();
     },

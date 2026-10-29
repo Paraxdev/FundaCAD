@@ -85,8 +85,15 @@ const polygon = (pts) => pts.map((p, i) => line(`l${i}`, p, pts[(i + 1) % pts.le
     });
   const button = () =>
     page.evaluate(() => {
-      const b = document.querySelector(".dim-input .dim-direction");
-      return b ? { text: b.textContent, on: b.classList.contains("on"), shown: b.style.display !== "none" } : null;
+      const g = document.querySelector('.dim-input [data-option="direction"]');
+      const c = g?.querySelector(".dim-segment.on");
+      return g
+        ? {
+            text: c?.getAttribute("aria-label") ?? null,
+            on: c?.dataset.id === "axis",
+            shown: g.style.display !== "none",
+          }
+        : null;
     });
 
   await page.evaluate(
@@ -154,14 +161,16 @@ const polygon = (pts) => pts.map((p, i) => line(`l${i}`, p, pts[(i + 1) % pts.le
       return !!i && i.style.display !== "none";
     });
   check("the Angle field is hidden along the axis, where it does nothing", !(await angleShown()));
-  const modeToggle = await page.$(".dim-input .dim-toggle");
-  check("the operation button is still the box's toggle", !!modeToggle && (await modeToggle.textContent()) === "Auto");
+  const mode = await page.evaluate(
+    () => document.querySelector('.dim-input [data-option="mode"] .dim-segment.on')?.getAttribute("aria-label") ?? null,
+  );
+  check("the operation buttons are still in the box, on Auto", mode === "Auto", mode);
   await shot("01_picked");
 
   const flip = async () => {
     await page.evaluate(() =>
       document
-        .querySelector(".dim-input .dim-direction")
+        .querySelector('.dim-input [data-option="direction"] .dim-segment:not(.on)')
         .dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0 })),
     );
     await page.waitForTimeout(300);
@@ -175,10 +184,10 @@ const polygon = (pts) => pts.map((p, i) => line(`l${i}`, p, pts[(i + 1) % pts.le
   });
   const offset = await page.evaluate(() => {
     const box = [...document.querySelectorAll(".dim-input")].find((b) => b.style.display !== "none");
-    const toggle = box?.querySelector(".dim-toggle");
+    const modes = box?.querySelector('[data-option="mode"]');
     return {
       name: box?.querySelector(".dim-name")?.textContent ?? null,
-      mode: !!toggle && toggle.style.display !== "none",
+      mode: !!modes && modes.style.display !== "none",
     };
   });
   check(

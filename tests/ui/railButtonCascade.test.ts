@@ -1,38 +1,9 @@
 import postcss, { type Rule } from "postcss";
-import * as sass from "sass";
 import { describe, expect, it } from "vitest";
 
-const sources = import.meta.glob("../../src/styles/*.scss", {
-  query: "?raw",
-  import: "default",
-  eager: true,
-}) as Record<string, string>;
+import { compileMainScss } from "./compileStyles";
 
-const scss = new Map(
-  Object.entries(sources).map(([path, text]) => [
-    path
-      .split("/")
-      .pop()!
-      .replace(/^_/, "")
-      .replace(/\.scss$/, ""),
-    text,
-  ]),
-);
-
-const css = postcss.parse(
-  sass.compileString(scss.get("main") ?? "", {
-    url: new URL("file:///styles/main.scss"),
-    importers: [
-      {
-        canonicalize: (url) => new URL(url, "file:///styles/"),
-        load: (canonical) => {
-          const contents = scss.get(canonical.pathname.split("/").pop()!);
-          return contents === undefined ? null : { contents, syntax: "scss" };
-        },
-      },
-    ],
-  }).css,
-);
+const css = postcss.parse(compileMainScss());
 
 // Specificity of a selector made only of a tag, classes and :hover, or null when
 // it carries a combinator or any other pseudo, or names something the element

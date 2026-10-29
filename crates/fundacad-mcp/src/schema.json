@@ -252,7 +252,7 @@
     "radius": "Num",
     "profile": "optional Num, clamped to -0.99..0.95: 0 (or absent) is the circular fillet, toward -1 flattens it to a chamfer's chord, toward +1 pulls it into the corner",
     "sizeType": "optional \"radius\" (default) or \"chord\": chord reads `radius` as the width across the round",
-    "continuity": "optional \"G1\" (default) or \"G2\"",
+    "continuity": "optional \"G1\" (default, a circular round), \"G2\" (no jump in curvature, sets back 1.55 times the radius) or \"G3\" (no jump in curvature or its rate, sets back 1.46 times the radius). G2 and G3 need both faces flat across every edge: lines between planes at any angle, a plane meeting a cylinder or cone at a rim, and the corner of three perpendicular planes. On an edge along a curved face (a plane meeting a cylinder along its length, a sphere, a torus, a freeform face) they are refused, use G1 there. The `profile` applies to G2 and G3 too.",
     "tangentEdges": "optional bool, default true: carry the round along edges tangent to the picked ones; false stops at the picked edges",
     "draft": "optional bool"
    },

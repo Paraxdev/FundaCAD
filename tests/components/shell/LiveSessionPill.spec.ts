@@ -84,7 +84,20 @@ describe("the assistant badge", () => {
     await nextTick();
     const title = w.find("#live-pill").attributes("title") ?? "";
     expect(title).toContain("not change it");
-    expect(w.find("#live-pill").classes()).toContain("readonly");
+    expect(w.find("#live-pill").classes()).toEqual(expect.arrayContaining(["readonly", "chip-neutral"]));
+  });
+
+  it("is a button chip named by what it shows, with the sentence only as its tooltip", async () => {
+    const engine = makeEngine({ sharing: true, guests: ["an assistant"], lastEdit: null });
+    const w = mountPill(engine as Engine);
+    await nextTick();
+    const pill = w.get("#live-pill");
+    expect([pill.element.tagName, pill.attributes("type"), pill.attributes("aria-label")]).toEqual([
+      "BUTTON",
+      "button",
+      undefined,
+    ]);
+    expect(pill.classes()).toEqual(expect.arrayContaining(["chip", "chip-accent"]));
   });
 
   it("goes away when the session stops", async () => {

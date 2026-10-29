@@ -84,6 +84,7 @@ describe("AreaFilterChip", () => {
     for (const [f, word] of [
       ["all", "Everything"],
       ["faces", "Faces"],
+      ["profiles", "Sketch profiles"],
       ["edges", "Edges"],
       ["bodies", "Bodies"],
     ] as const) {

@@ -458,7 +458,7 @@ impl FundaCad {
     }
 
     pub async fn engine_port(&self) -> u16 {
-        self.state.lock().await.link.port
+        self.state.lock().await.link.port()
     }
 
     /// Settable too, so a test can reach the re-probe branch without building anything.
@@ -619,8 +619,9 @@ impl FundaCad {
             model::fill_defaults(&mut st.doc);
             // No invalidate: `view` checks the cached mesh against the document in hand anyway,
             // and dropping it on every pull would make each live build then view rebuild twice.
-            st.doc.clone()
+            (st.doc.clone(), st.path.clone(), st.unread_sections.clone())
         };
+        let (before, path_before, unread_before) = before;
 
         let out = run.await;
         let Ok(CallToolResponse::Complete(result)) = out else {
@@ -649,12 +650,12 @@ impl FundaCad {
                 Ok(Ok(CallToolResponse::Complete(append(result, &format!("\n(applied in FundaCAD, revision {rev})")))))
             }
             Err(e) => {
-                // The local document holds an edit the app never took, so put it back, or the next tool builds
-                // on a change nowhere else has. A lost engine retries privately from the pulled document so the
-                // edit is not applied twice; the mesh cache follows the restored signature, and the next build
-                // lists every body again.
+                // Put back the edit the app never took, and a refused doc_open's path, or a bare doc_save writes
+                // the user's document over that file. A lost engine retries privately from the pulled document.
                 let mut st = self.state.lock().await;
                 st.doc = before;
+                st.path = path_before;
+                st.unread_sections = unread_before;
                 st.reported = None;
                 if e.is_lost() {
                     return Err(e);
@@ -871,7 +872,7 @@ note: left out of the file, because this build cannot read them and a .funda has
 
     #[tool(
         name = "doc_get",
-        description = "The whole document as JSON: parameters, the feature timeline in order, and `bodyIds`, the record that keeps every body's id. Pass all of it back to `doc_set` and the same ids come out.",
+        description = "The document's geometry as JSON: parameters, the feature timeline in order, and `bodyIds`, the record that keeps every body's id. Pass all of it back to `doc_set` and the same ids come out; the parts it leaves out (stress study, environment, materials and the like) stay in the document.",
         input_schema = crate::tools::doc_get(),
         annotations(read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
@@ -893,7 +894,7 @@ note: left out of the file, because this build cannot read them and a .funda has
 
     #[tool(
         name = "doc_set",
-        description = "Replace the whole document with the given JSON. For wholesale rewrites; prefer the feature_* tools for edits. Keep the `bodyIds` that `doc_get` gave; without it the document is numbered as a new one, where a join keeps the id of the body it merges into.",
+        description = "Replace what `doc_get` gives (features, parameters, paramDefs, bodyIds, version) with the given JSON. For wholesale rewrites; prefer the feature_* tools for edits. Every other part of the open document (stress study, environment, materials, palette, overlays, reference images) stays unless the JSON names it, and a key named with null is cleared. Keep the `bodyIds` that `doc_get` gave; without it the document is numbered as a new one, where a join keeps the id of the body it merges into.",
         input_schema = crate::tools::doc_set(),
         annotations(read_only_hint = false, destructive_hint = true, idempotent_hint = true, open_world_hint = false)
     )]
@@ -921,6 +922,7 @@ note: left out of the file, because this build cannot read them and a .funda has
         }
         let mut st = self.state.lock().await;
         model::forget_stale_joins(&st.doc, &mut next);
+        model::keep_unnamed_keys(&st.doc, &mut next);
         st.doc = next;
         model::fill_defaults(&mut st.doc);
         fundacad_core::body_ids::ensure_map(&mut st.doc);

@@ -19,6 +19,7 @@ import {
 import { ROTATE_SNAP_DEG, angleInFrame, ringDragDegenerate, rotationFrame, snapDegrees } from "./transformGizmo";
 import { unwrapTurn } from "./screwMath";
 import { CanvasGesture } from "./canvasGesture";
+import { HeldSignal } from "./heldEdit";
 
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 const v3 = (p: Vec3) => new THREE.Vector3(p[0], p[1], p[2]);
@@ -58,6 +59,8 @@ export class JointTool {
   private dim = new DimInput();
   private onDone: ((id: string | null) => void) | null = null;
   private previewing = false;
+  private opened = { offset: 0, angle: 0 };
+  private readonly held = new HeldSignal();
 
   private readonly gesture: CanvasGesture;
 
@@ -93,6 +96,7 @@ export class JointTool {
     this.onDone = onDone;
     this.offset = jt.offset ?? 0;
     this.angle = jt.angle ?? 0;
+    this.opened = { offset: this.offset, angle: this.angle };
     this.base.copy(v3(mark.origin));
     this.dir.copy(v3(mark.dir));
     if (this.dir.lengthSq() < 1e-12) this.dir.set(0, 0, 1);
@@ -186,14 +190,16 @@ export class JointTool {
 
   private onUp(e: PointerEvent) {
     if (e.button !== 0) return;
+    const moved = Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
     if (this.grabbing || this.grabbingAngle) {
       this.grabbing = false;
       this.grabbingAngle = false;
       this.viewport.domElement.style.cursor = this.hovering || this.hoveringDial ? "grab" : "default";
-      this.commit();
+      // Letting go of a drag only ends it, Enter applies; a press that never travelled still applies as before.
+      if (moved) this.dim.focus();
+      else this.commit();
       return;
     }
-    const moved = Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
     if (!this.downOnGizmo && !moved) this.commit();
   }
 
@@ -268,6 +274,7 @@ export class JointTool {
   }
 
   private pushPreview() {
+    this.held.sync(this.pending);
     if (!this.active || !this.id) return;
     const f = this.store.document.features.find((x) => x.id === this.id);
     if (!f || f.type !== "joint") return;
@@ -293,6 +300,26 @@ export class JointTool {
       angle: angle || undefined,
     } as unknown as Partial<Feature>);
     done?.(id);
+  }
+
+  /** An offset or angle dragged or typed that Enter would write. */
+  get pending(): boolean {
+    const { offset, angle } = this.opened;
+    return this.active && (Math.abs(this.offset - offset) > 1e-9 || Math.abs(this.angle - angle) > 1e-9);
+  }
+
+  get dragging(): boolean {
+    return this.grabbing || this.grabbingAngle;
+  }
+
+  /** Told when `pending` turns on or off, for the unsaved mark and the close guard. */
+  onHeldChange(fn: () => void): () => void {
+    return this.held.on(fn);
+  }
+
+  /** For a save: the edit is written as Enter writes it. A drag still under the hand is left alone. */
+  confirmHeld() {
+    if (this.pending && !this.dragging) this.commit();
   }
 
   cancel() {
@@ -330,5 +357,6 @@ export class JointTool {
     this.id = null;
     this.onDone = null;
     setPrompt(null);
+    this.held.sync(this.pending);
   }
 }

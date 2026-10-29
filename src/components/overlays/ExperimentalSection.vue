@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
+import { claimEscape } from "../../ui/escapeClaim";
 import {
   DEFAULT_EXPERIMENTAL,
   ENV_WIDTHS,
@@ -12,6 +13,9 @@ import {
   type ExperimentalPrefs,
 } from "../../ui/experimentalPrefs";
 import { hdrTextureMax } from "../../viewport/hdrRegistry";
+import Button from "../ui/Button.vue";
+import NumberField from "../ui/NumberField.vue";
+import Segmented from "../ui/Segmented.vue";
 
 type NumberKey = keyof typeof EXPERIMENTAL_RANGE;
 
@@ -22,7 +26,30 @@ onMounted(() => {
     prefs.value = { ...experimentalPrefs() };
   });
 });
-onUnmounted(() => off?.());
+// While the focused number holds a draft, its Escape reverts the draft and the dialog closes on the next Escape.
+let releaseEscape: (() => void) | null = null;
+function holdEscape(on: boolean) {
+  if (on) releaseEscape ??= claimEscape();
+  else {
+    releaseEscape?.();
+    releaseEscape = null;
+  }
+}
+const refused = (e: Event) => (e.target as HTMLElement).getAttribute("aria-invalid") === "true";
+// A draft that reads back as the stored number leaves Escape nothing to revert, so the first Escape closes.
+function drafted(f: Field, e: Event) {
+  const text = (e.target as HTMLInputElement).value.trim();
+  holdEscape(text === "" ? boxValue(f) !== null : Number(text) !== boxValue(f));
+}
+function onNumberKey(f: Field, e: KeyboardEvent) {
+  if (e.key === "ArrowUp" || e.key === "ArrowDown") void nextTick(() => drafted(f, e));
+  else if (e.key === "Escape") holdEscape(false);
+  else if (e.key === "Enter") void nextTick(() => holdEscape(refused(e)));
+}
+onUnmounted(() => {
+  off?.();
+  holdEscape(false);
+});
 
 const changed = computed(() =>
   (Object.keys(DEFAULT_EXPERIMENTAL) as (keyof ExperimentalPrefs)[]).some(
@@ -30,6 +57,8 @@ const changed = computed(() =>
   ),
 );
 const widthLabel = (w: EnvWidth) => (w === "gpu" ? `GPU maximum (${hdrTextureMax()})` : String(w));
+const widthOptions = () =>
+  ENV_WIDTHS.map((w) => ({ value: w, label: widthLabel(w), attrs: { "data-env-width": String(w) } }));
 
 interface Field {
   key: NumberKey;
@@ -102,15 +131,10 @@ const PATH: Field[] = [
 const shown = (f: Field) => +(prefs.value[f.key] / f.scale).toFixed(f.key === "pictureMegapixels" ? 1 : 3);
 /** Trace resolution's 0 is Auto, shown as an empty box. */
 const autoAtZero = (f: Field) => f.key === "traceScale";
-const boxValue = (f: Field) => (autoAtZero(f) && shown(f) === 0 ? "" : String(shown(f)));
+const boxValue = (f: Field) => (autoAtZero(f) && shown(f) === 0 ? null : shown(f));
 const defaultShown = (f: Field) =>
   +(DEFAULT_EXPERIMENTAL[f.key] / f.scale).toFixed(f.key === "pictureMegapixels" ? 1 : 3);
-const onNumber = (f: Field, e: Event) => {
-  const input = e.target as HTMLInputElement;
-  const v = input.value.trim() === "" && autoAtZero(f) ? 0 : Number.parseFloat(input.value);
-  if (Number.isFinite(v)) setExperimentalPref(f.key, v * f.scale);
-  input.value = boxValue(f);
-};
+const onNumber = (f: Field, v: number | null) => setExperimentalPref(f.key, (v ?? 0) * f.scale);
 const pickWidth = (w: EnvWidth) => setExperimentalPref("envWidth", w);
 const min = (f: Field) => EXPERIMENTAL_RANGE[f.key][0] / f.scale;
 const max = (f: Field) => EXPERIMENTAL_RANGE[f.key][1] / f.scale;
@@ -125,19 +149,13 @@ const max = (f: Field) => EXPERIMENTAL_RANGE[f.key][1] / f.scale;
     <div class="pref-card wide">
       <div class="pref-head">
         <span class="pref-title">HDR environment size</span>
-        <div id="prefs-env-width" class="pref-seg" role="radiogroup" aria-label="HDR environment size">
-          <button
-            v-for="w in ENV_WIDTHS"
-            :key="w"
-            type="button"
-            role="radio"
-            :aria-checked="prefs.envWidth === w"
-            :class="{ on: prefs.envWidth === w }"
-            :data-env-width="w"
-            @click="pickWidth(w)"
-            >{{ widthLabel(w) }}</button
-          >
-        </div>
+        <Segmented
+          id="prefs-env-width"
+          label="HDR environment size"
+          :model-value="prefs.envWidth"
+          :options="widthOptions()"
+          @update:model-value="pickWidth"
+        />
       </div>
       <p class="pref-hint">
         The width an imported HDR is kept at, for lighting and inside saved documents; the lighting reads half of it.
@@ -147,18 +165,24 @@ const max = (f: Field) => EXPERIMENTAL_RANGE[f.key][1] / f.scale;
     <div v-for="f in PATH" :key="f.key" class="pref-card">
       <div class="pref-head">
         <label class="pref-title" :for="`prefs-x-${f.key}`">{{ f.title }}</label>
-        <span class="pref-number">
-          <input
+        <span
+          class="pref-number"
+          @input="drafted(f, $event)"
+          @keydown="onNumberKey(f, $event)"
+          @focusin="holdEscape(refused($event))"
+          @focusout="holdEscape(false)"
+        >
+          <NumberField
             :id="`prefs-x-${f.key}`"
-            class="sm-input"
-            type="number"
+            :model-value="boxValue(f)"
             :min="min(f)"
             :max="max(f)"
             :step="f.step"
-            :value="boxValue(f)"
+            :nullable="autoAtZero(f)"
             :placeholder="autoAtZero(f) ? 'Auto' : undefined"
+            :width-ch="9"
             :data-experimental="f.key"
-            @change="onNumber(f, $event)"
+            @update:model-value="onNumber(f, $event)"
           />
           <span class="prefs-readout">{{ f.unit }}</span>
         </span>
@@ -167,8 +191,6 @@ const max = (f: Field) => EXPERIMENTAL_RANGE[f.key][1] / f.scale;
     </div>
   </div>
   <div class="prefs-actions">
-    <button type="button" class="btn" :disabled="!changed" data-experimental-reset @click="resetExperimentalPrefs"
-      >Reset to defaults</button
-    >
+    <Button :disabled="!changed" data-experimental-reset @click="resetExperimentalPrefs">Reset to defaults</Button>
   </div>
 </template>

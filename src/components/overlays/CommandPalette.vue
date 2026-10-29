@@ -5,9 +5,12 @@ import { claimEscape } from "../../ui/escapeClaim";
 import { useCommandPaletteStore } from "../../stores/commandPalette";
 import { allCommands } from "../../ui/commands";
 import { score } from "../../ui/commandScore";
+import TextField from "../ui/TextField.vue";
+import { focusReturn } from "../ui/focusables";
 
 const cmdk = useCommandPaletteStore();
-const input = useTemplateRef<HTMLInputElement>("input");
+const input = useTemplateRef<InstanceType<typeof TextField>>("input");
+const card = useTemplateRef<HTMLElement>("card");
 const query = ref("");
 const active = ref(0);
 
@@ -35,8 +38,9 @@ watch(results, () => {
 });
 
 // Escape is claimed so a screen under the palette, such as Home, leaves it alone. The input mounts in the same flush
-// as the open, so focus waits for it.
+// as the open, so focus waits for it. Focus goes back to where it was on close, the palette is gone by then.
 let releaseEscape: (() => void) | null = null;
+let back: ReturnType<typeof focusReturn> | null = null;
 onUnmounted(() => releaseEscape?.());
 watch(
   () => cmdk.open,
@@ -44,9 +48,12 @@ watch(
     if (!isOpen) {
       releaseEscape?.();
       releaseEscape = null;
+      back?.restore((n) => !!card.value?.contains(n));
+      back = null;
       return;
     }
     releaseEscape ??= claimEscape();
+    back ??= focusReturn();
     query.value = "";
     active.value = 0;
     await nextTick();
@@ -75,6 +82,9 @@ function onKey(e: KeyboardEvent) {
   } else if (e.key === "Enter") {
     e.preventDefault();
     runIndex(active.value);
+  } else if (e.key === "Tab") {
+    // The input is the palette's one Tab stop, so Tab stays on it rather than leaving for the page underneath.
+    e.preventDefault();
   } else if (e.key === "Escape") {
     // Also stopPropagation: Escape is the global cancel key too, and closing the palette must not cancel what is under it.
     e.preventDefault();
@@ -87,8 +97,8 @@ function onKey(e: KeyboardEvent) {
 <template>
   <Teleport to="body">
     <div v-if="cmdk.open" class="cmdk-backdrop" @pointerdown.self="cmdk.close()">
-      <div class="cmdk-card" role="dialog" aria-modal="true" aria-label="Command palette">
-        <input
+      <div ref="card" class="cmdk-card" role="dialog" aria-modal="true" aria-label="Command palette">
+        <TextField
           ref="input"
           v-model="query"
           class="cmdk-input"

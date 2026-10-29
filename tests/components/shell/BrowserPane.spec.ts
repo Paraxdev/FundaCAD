@@ -22,7 +22,10 @@ import { nextTick, ref } from "vue";
 import { mount, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import BrowserPane from "../../../src/components/shell/BrowserPane.vue";
+import Select from "../../../src/components/ui/Select.vue";
+import { useShellStore } from "../../../src/stores/shell";
 import { ENGINE } from "../../../src/app/engineKey";
+import { createSelection } from "../../../src/app/selection";
 import { contribute, resetContributions } from "../../../src/plugins/contrib";
 import { setBrowserFilter } from "../../../src/ui/browserFilter";
 import { contextMenu, type CtxItem } from "../../../src/ui/menu";
@@ -54,6 +57,9 @@ function makeEngine(doc: CadDocument, bodies: { id: string; name: string; nodeRe
   const buildVersion = ref(0);
   const hidden = new Set<string>();
   const hiddenSketches = new Set<string>();
+  const removed: string[][] = [];
+  const lit: unknown[] = [];
+  const planeWrites: Map<string, boolean>[] = [];
   /** Every batched body visibility write, to count re-renders by. */
   const bodyWrites: Map<string, boolean>[] = [];
   let selectedBodies: string[] = [];
@@ -150,6 +156,14 @@ function makeEngine(doc: CadDocument, bodies: { id: string; name: string; nodeRe
       for (const [id, v] of vis) v ? hidden.delete(id) : hidden.add(id);
       buildVersion.value++;
     },
+    removeFeatures: (ids: string[]) => {
+      removed.push([...ids]);
+      doc.features = doc.features.filter((f) => !ids.includes(f.id));
+      docVersion.value++;
+    },
+    setPlanesVisibility: (changes: Map<string, boolean>) => {
+      planeWrites.push(new Map(changes));
+    },
     setSketchVisibility: (id: string, v: boolean) => {
       v ? hiddenSketches.delete(id) : hiddenSketches.add(id);
     },
@@ -166,6 +180,9 @@ function makeEngine(doc: CadDocument, bodies: { id: string; name: string; nodeRe
     buildVersion,
     store,
     bodyWrites,
+    removed,
+    lit,
+    planeWrites,
     isSketchVisible: (id: string) => !hiddenSketches.has(id),
     /** Edit in place, identity is preserved on purpose. */
     edit(fn: (d: CadDocument) => void) {
@@ -187,7 +204,7 @@ function makeEngine(doc: CadDocument, bodies: { id: string; name: string; nodeRe
           selectedBodies = [...ids];
         },
       },
-      selectFeature: () => {},
+      ...createSelection({ viewport: { highlightDatum: (id: unknown) => lit.push(id) } } as unknown as Engine),
       editFeature: () => {},
       syncDatumPlanes: () => {},
     } as unknown as Engine,
@@ -387,7 +404,7 @@ describe("BrowserPane", () => {
     await rowNamed(w, "Bracket").find(".tree-eye").trigger("click");
     await nextTick();
     expect(fake.store.isBodyVisible("body1")).toBe(false);
-    expect(rowNamed(w, "Bracket").find(".tree-label").attributes("style") ?? "").toContain("opacity");
+    expect(rowNamed(w, "Bracket").find(".tree-label").attributes("style") ?? "").toContain("--text-mute");
 
     // the control: a pointer's own click after its press does not toggle again
     await clickEye(rowNamed(w, "Bracket"));
@@ -643,7 +660,7 @@ describe("BrowserPane", () => {
         .map((r) => r.text);
     expect(heads()).toEqual(["Origin", "Planes", "Bodies", "Sketches"]);
 
-    const select = w.get("#browser-filter");
+    const select = w.getComponent(Select);
     await select.setValue("sketches");
     expect(heads()).toEqual(["Sketches"]);
     // The Bodies folder's own empty state must go with it, under "Sketches" a
@@ -695,11 +712,11 @@ describe("BrowserPane", () => {
     await nextTick();
     expect(w.find(".marker").exists()).toBe(true);
 
-    await w.get("#browser-filter").setValue("sketches");
+    await w.getComponent(Select).setValue("sketches");
     expect(w.find(".marker").exists()).toBe(false);
 
     // ...and back, with the bodies it rides alongside.
-    await w.get("#browser-filter").setValue("bodies");
+    await w.getComponent(Select).setValue("bodies");
     expect(w.find(".marker").exists()).toBe(true);
   });
 
@@ -714,7 +731,7 @@ describe("BrowserPane", () => {
     });
     const w = render(fake);
     await nextTick();
-    await w.get("#browser-filter").setValue("sketches");
+    await w.getComponent(Select).setValue("sketches");
     expect(w.find(".marker").exists()).toBe(true);
   });
 
@@ -867,6 +884,112 @@ describe("BrowserPane", () => {
     await rowNamed(w, "A").trigger("click", { ctrlKey: true });
     await nextTick();
     expect(["A", "B"].map((n) => rowNamed(w, n).classes("selected"))).toEqual([false, true]);
+  });
+
+  describe("planes and datums", () => {
+    const plane = (id: string, name: string) => ({ id, type: "datumPlane", plane: "XY", offset: 1, name }) as Feature;
+    const axis = (id: string, name: string) =>
+      ({ id, type: "datumAxis", origin: [0, 0, 0], dir: [0, 0, 1], name }) as Feature;
+    const lit = (w: VueWrapper, names: string[]) => names.map((n) => rowNamed(w, n).classes("selected"));
+    const menuOf = async (w: VueWrapper, name: string) => {
+      await rowNamed(w, name).trigger("contextmenu");
+      return vi.mocked(contextMenu).mock.calls.at(-1)![2] as CtxItem[];
+    };
+    const four = () =>
+      makeEngine({
+        parameters: {},
+        features: [plane("p1", "A"), plane("p2", "B"), plane("p3", "C"), plane("p4", "D")],
+      });
+
+    it("a plain click selects one plane, Ctrl toggles, Shift takes a run, as the body list does", async () => {
+      const w = render(four());
+      await rowNamed(w, "A").trigger("click");
+      await rowNamed(w, "C").trigger("click", { ctrlKey: true });
+      expect(lit(w, ["A", "B", "C", "D"])).toEqual([true, false, true, false]);
+      await rowNamed(w, "A").trigger("click", { metaKey: true });
+      expect(lit(w, ["A", "B", "C", "D"])).toEqual([false, false, true, false]);
+      await rowNamed(w, "B").trigger("click");
+      await rowNamed(w, "D").trigger("click", { shiftKey: true });
+      expect(lit(w, ["A", "B", "C", "D"])).toEqual([false, true, true, true]);
+      await rowNamed(w, "A").trigger("click");
+      expect(lit(w, ["A", "B", "C", "D"])).toEqual([true, false, false, false]);
+    });
+
+    it("lights every picked plane in the view, as one plane lights alone", async () => {
+      const fake = four();
+      const w = render(fake);
+      await rowNamed(w, "A").trigger("click");
+      await rowNamed(w, "B").trigger("click", { shiftKey: true });
+      expect(fake.lit).toEqual(["p1", ["p1", "p2"]]);
+    });
+
+    it("hides several picked planes in one write and deletes them as one step", async () => {
+      const fake = four();
+      const w = render(fake);
+      await rowNamed(w, "A").trigger("click");
+      await rowNamed(w, "C").trigger("click", { shiftKey: true });
+      const items = await menuOf(w, "B");
+      items.find((i) => i.label === "Visibility")!.children!.find((c) => c.label === "Hide these 3")!.onClick!();
+      expect(fake.planeWrites).toEqual([
+        new Map([
+          ["p1", false],
+          ["p2", false],
+          ["p3", false],
+        ]),
+      ]);
+    });
+
+    it("offers Delete on the whole selection, and single-plane actions off with the reason", async () => {
+      const fake = four();
+      const w = render(fake);
+      await rowNamed(w, "A").trigger("click");
+      await rowNamed(w, "B").trigger("click", { ctrlKey: true });
+      const items = await menuOf(w, "A");
+      const cut = items.find((i) => i.label.startsWith("Cut all bodies"))!;
+      expect(cut).toMatchObject({ label: "Cut all bodies (select one plane)", disabled: true });
+      expect(items.find((i) => i.label.startsWith("Rename"))).toMatchObject({ disabled: true });
+      items.find((i) => i.label === "Delete")!.onClick!();
+      expect(fake.removed).toEqual([["p1", "p2"]]);
+    });
+
+    it("a plain right-click on a plane outside the selection acts on that plane alone", async () => {
+      const fake = four();
+      const w = render(fake);
+      await rowNamed(w, "A").trigger("click");
+      await rowNamed(w, "B").trigger("click", { ctrlKey: true });
+      const items = await menuOf(w, "D");
+      expect(items.find((i) => i.label.startsWith("Cut all bodies"))!.disabled).toBeUndefined();
+      items.find((i) => i.label === "Delete")!.onClick!();
+      expect(fake.removed).toEqual([["p4"]]);
+    });
+
+    it("selects datum axes the same way", async () => {
+      const w = render(makeEngine({ parameters: {}, features: [axis("a1", "X1"), axis("a2", "X2")] }));
+      await rowNamed(w, "X1").trigger("click");
+      await rowNamed(w, "X2").trigger("click", { shiftKey: true });
+      expect(lit(w, ["X1", "X2"])).toEqual([true, true]);
+    });
+
+    it("selects origin planes with Ctrl or Shift, and a plain click still starts the sketch", async () => {
+      const fake = makeEngine({ parameters: {}, features: [] });
+      const w = render(fake);
+      await rowNamed(w, "XY plane").trigger("click", { ctrlKey: true });
+      await rowNamed(w, "YZ plane").trigger("click", { shiftKey: true });
+      expect(lit(w, ["XY plane", "XZ plane", "YZ plane"])).toEqual([true, true, true]);
+      const enter = (fake.engine as unknown as { sketch: { enter: ReturnType<typeof vi.fn> } }).sketch.enter;
+      expect(enter).not.toHaveBeenCalled();
+      await rowNamed(w, "XZ plane").trigger("click");
+      expect(enter).toHaveBeenCalledWith("XZ", fake.store);
+    });
+
+    it("keeps planes and sketches as separate runs", async () => {
+      const w = render(
+        makeEngine({ parameters: {}, features: [sketch("s1", "S1"), plane("p1", "A"), plane("p2", "B")] }),
+      );
+      await rowNamed(w, "S1").trigger("click");
+      await rowNamed(w, "B").trigger("click", { shiftKey: true });
+      expect(lit(w, ["S1", "A", "B"])).toEqual([false, false, true]);
+    });
   });
 
   it("takes a Shift-click run of bodies into the viewport's selection", async () => {
@@ -1052,5 +1175,40 @@ describe("a row double click while another edit is open", () => {
     await nextTick();
     await rowNamed(w, "Sketch1").trigger("dblclick");
     expect(log).toEqual(["cancel:revolvePitch", "edit:s1"]);
+  });
+});
+
+describe("Items head and foot controls", () => {
+  it("the kind filter is a base Select that picks from its own list", async () => {
+    const fake = makeEngine({ parameters: {}, features: [sketch("s1")] }, [{ id: "b1", name: "Body1" }]);
+    const w = mount(BrowserPane, { global: { provide: { [ENGINE as symbol]: fake.engine } }, attachTo: document.body });
+    const trigger = w.get("#browser-filter");
+    expect([trigger.attributes("role"), trigger.attributes("title")]).toEqual([
+      "combobox",
+      "Show only one kind of item",
+    ]);
+    await trigger.trigger("click");
+    await nextTick();
+    const opt = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
+      (o) => o.textContent?.trim() === "Sketches",
+    );
+    opt!.click();
+    await nextTick();
+    const heads = w.findAll(".tree-folder .tree-label").map((l) => l.text());
+    expect(heads).toEqual(["Sketches"]);
+    w.unmount();
+  });
+
+  it("More and the close are base icon buttons, More opens its menu by the button", async () => {
+    const w = render(makeEngine({ parameters: {}, features: [] }, []));
+    const more = w.get(".float-card-more");
+    expect([more.classes("icon-btn"), more.attributes("aria-label")]).toEqual([true, "More"]);
+    vi.mocked(contextMenu).mockClear();
+    await more.trigger("click");
+    expect(vi.mocked(contextMenu)).toHaveBeenCalledTimes(1);
+    const close = w.get("#browser .float-card-close");
+    expect(close.attributes("title")).toContain("Hide the items");
+    await close.trigger("click");
+    expect(useShellStore().itemsOpen).toBe(false);
   });
 });

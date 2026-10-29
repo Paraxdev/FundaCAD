@@ -2,6 +2,7 @@ import { setPrompt } from "../ui/prompt";
 import { asFeature } from "../types";
 import { contributedFeature } from "../plugins/contrib";
 import { useSelectionStore } from "../stores/selection";
+import { EMPTY_SELECTION, type RowSelection } from "../ui/rowSelection";
 import type { Engine } from "./engine";
 import type { Feature } from "../types";
 import type { DatumPose } from "../document/datumPose";
@@ -48,7 +49,7 @@ export function switchEdit(e: Engine, id: string): void {
 
 export function createSelection(
   e: Engine,
-): Pick<Engine, "selectFeature" | "editFeature" | "featureForFace" | "deleteSelectedFace"> {
+): Pick<Engine, "selectFeature" | "selectFeatureRows" | "editFeature" | "featureForFace" | "deleteSelectedFace"> {
   // Defined here, not returned: the engine installs the rest with Object.assign, which copies a getter's value.
   Object.defineProperty(e, "selectedFeature", {
     get: () => useSelectionStore().featureId,
@@ -63,9 +64,20 @@ export function createSelection(
   });
 
   const selectFeature = (id: string | null, explicit = true) => {
-    useSelectionStore().featureId = id;
-    useSelectionStore().featureExplicit = explicit;
+    const sel = useSelectionStore();
+    sel.featureId = id;
+    sel.featureExplicit = explicit;
+    // An engine made pick is not a row the user chose, so a Ctrl-click beside it must not pick it too.
+    sel.rows = id === null || !explicit ? EMPTY_SELECTION : { keys: [id], anchor: id };
     e.viewport.highlightDatum(id);
+  };
+
+  const selectFeatureRows = (next: RowSelection<string>, primary: string | null) => {
+    const sel = useSelectionStore();
+    sel.rows = next;
+    sel.featureId = primary;
+    sel.featureExplicit = true;
+    e.viewport.highlightDatum(next.keys.length > 1 ? next.keys : primary);
   };
 
   const featureForFace = (faceId: number): string | null => {
@@ -155,5 +167,5 @@ export function createSelection(
     }
   };
 
-  return { selectFeature, editFeature, featureForFace, deleteSelectedFace };
+  return { selectFeature, selectFeatureRows, editFeature, featureForFace, deleteSelectedFace };
 }

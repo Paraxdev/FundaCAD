@@ -600,6 +600,112 @@ fn face_owners_survive_a_disk_resume_of_faces_measuring_on_a_rounding_tie() {
     assert_eq!(face_owners(&again), face_owners(&built(&edited)), "faces lost their owner in the second restore");
 }
 
+/// Three bodies, each last changed by a later feature than the one that made it: body1 by the cut at 3, body2 by
+/// the slanted move at 2, body3 by the move at 5.
+fn three_moved_bodies() -> Value {
+    json!({"parameters": {}, "features": [
+        {"id": "b1", "type": "box", "length": 14, "width": 9, "height": 6, "operation": "new"},
+        {"id": "b2", "type": "box", "length": 11, "width": 4, "height": 8, "operation": "new"},
+        {"id": "m2", "type": "move", "bodies": ["body2"], "rz": 23, "dx": 23, "dy": -9.5, "dz": 1.5},
+        {"id": "c1", "type": "box", "length": 3, "width": 5, "height": 20, "operation": "cut", "targets": ["body1"]},
+        {"id": "b3", "type": "box", "length": 5, "width": 7, "height": 2.5, "operation": "new"},
+        {"id": "m3", "type": "move", "bodies": ["body3"], "rx": 11, "dx": -17, "dy": 13, "dz": 4},
+    ]})
+}
+
+fn blob_names(root: &std::path::Path) -> std::collections::BTreeSet<String> {
+    let mut out = std::collections::BTreeSet::new();
+    for shard in std::fs::read_dir(root.join("blobs")).into_iter().flatten().flatten() {
+        for blob in std::fs::read_dir(shard.path()).into_iter().flatten().flatten() {
+            out.insert(blob.path().file_stem().unwrap().to_string_lossy().into_owned());
+        }
+    }
+    out
+}
+
+fn eager_cache(root: &std::path::Path) -> RebuildCache {
+    let mut cache = RebuildCache::new(Some(GeomStore::open(root).unwrap()));
+    cache.budget_ms = 0.0;
+    cache.tip_after = Duration::ZERO;
+    cache
+}
+
+/// The blobs an edit of `index` to `value` adds after a full build, with the edited document's chain keys.
+fn blobs_an_edit_writes(
+    root: &std::path::Path,
+    index: usize,
+    field: &str,
+    value: Value,
+) -> (Value, Vec<String>, std::collections::BTreeSet<String>) {
+    let base = three_moved_bodies();
+    let mut cache = eager_cache(root);
+    warm(&mut cache, &base);
+    assert_eq!(cache.stats.checkpoints_written, 6, "one checkpoint per feature, the tip not saved twice");
+    let before = blob_names(root);
+    let edited = edit(&base, index, field, value);
+    let (got, replayed) = warm(&mut cache, &edited);
+    assert_eq!(cache.stats.source, Source::Ram);
+    assert_eq!(replayed, (index..6).collect::<Vec<_>>());
+    assert_eq!(cache.stats.checkpoints_written, 6 - index);
+    assert_eq!(got, cold(&edited));
+    let keys = cache.chain_keys(&edited);
+    (edited, keys, blob_names(root).difference(&before).cloned().collect())
+}
+
+#[test]
+fn a_resume_then_a_checkpoint_writes_only_the_changed_bodies() {
+    use fundacad_geom::cache::keys::blob_key;
+    let root = scratch("resume-blobs");
+    let (_, keys, written) = blobs_an_edit_writes(&root, 4, "length", json!(6.5));
+    let expected: std::collections::BTreeSet<String> =
+        [blob_key(&keys[4], "body3"), blob_key(&keys[5], "body3")].into_iter().collect();
+    assert_eq!(written, expected);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_reopen_from_that_checkpoint_gives_the_same_document() {
+    let root = scratch("resume-reopen");
+    let (edited, _, _) = blobs_an_edit_writes(&root, 4, "length", json!(6.5));
+    let mut reopened = RebuildCache::new(Some(GeomStore::open(&root).unwrap()));
+    let (got, replayed) = warm(&mut reopened, &edited);
+    assert_eq!((reopened.stats.source, reopened.stats.resumed_at), (Source::Disk, 6));
+    assert!(replayed.is_empty(), "replayed {replayed:?} after a disk resume");
+    assert_eq!(got, cold(&edited));
+
+    let base = three_moved_bodies();
+    let (got, _) = warm(&mut reopened, &base);
+    assert_eq!(got, cold(&base));
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// body1 at the resume point is the shape before the cut at 3, so the previous build's key for body1 (the cut
+/// shape) must not name it: a reopen of the first three features would then fail its fingerprint and rebuild cold.
+#[test]
+fn a_body_the_edit_changes_gets_a_new_blob() {
+    use fundacad_geom::cache::keys::blob_key;
+    let root = scratch("resume-changed");
+    let (edited, keys, written) = blobs_an_edit_writes(&root, 1, "width", json!(4.75));
+    let expected: std::collections::BTreeSet<String> = [
+        blob_key(&keys[1], "body2"),
+        blob_key(&keys[2], "body2"),
+        blob_key(&keys[3], "body1"),
+        blob_key(&keys[4], "body3"),
+        blob_key(&keys[5], "body3"),
+    ]
+    .into_iter()
+    .collect();
+    assert_eq!(written, expected);
+
+    let prefix = json!({"parameters": {}, "features": edited["features"].as_array().unwrap()[..3]});
+    let mut reopened = RebuildCache::new(Some(GeomStore::open(&root).unwrap()));
+    let (got, replayed) = warm(&mut reopened, &prefix);
+    assert_eq!((reopened.stats.source, reopened.stats.resumed_at), (Source::Disk, 3));
+    assert!(replayed.is_empty(), "replayed {replayed:?} after a disk resume");
+    assert_eq!(got, cold(&prefix));
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 #[test]
 fn releasing_the_cache_drops_its_snapshots_and_payloads_and_the_next_build_is_whole() {
     let raw = doc();
@@ -630,11 +736,99 @@ fn a_cancelled_mesh_pass_meshes_no_body_and_answers_none() {
 
     let mut ticks = 0;
     let whole = cache.mesh(&r, TOL, &Map::new(), &mut |_, _| ticks += 1);
-    assert_eq!((whole.bodies.len(), ticks, cache.stats.meshed), (r.bodies.len(), r.bodies.len(), r.bodies.len()));
+    // The pass opens with a 0 of N report, then one per body meshed.
+    assert_eq!((whole.bodies.len(), ticks, cache.stats.meshed), (r.bodies.len(), r.bodies.len() + 1, r.bodies.len()));
 
     token.cancel();
     let mut stopped = RebuildCache::new(None);
     let mut ticks = 0;
     let none = stopped.mesh(&r, TOL, &Map::new(), &mut |_, _| ticks += 1);
     assert_eq!((none.bodies.len(), ticks, stopped.stats.meshed, stopped.holding()), (0, 0, 0, (0, 0)));
+}
+
+/// A plate with a hole, turned about z then x and moved off the origin, as stress_ops' holed plate.
+fn turned_plate() -> Value {
+    json!({"parameters": {}, "features": [
+        {"id": "p", "type": "box", "length": 120, "width": 40, "height": 10},
+        {"id": "h", "type": "cylinder", "radius": 6, "height": 30},
+        {"id": "cut", "type": "boolean", "operation": "subtract", "target": "body1", "tools": ["body2"]},
+        {"id": "z", "type": "move", "rz": 30, "bodies": ["body1"]},
+        {"id": "x", "type": "move", "rx": 20, "dx": 17, "dy": -9, "dz": 31, "bodies": ["body1"]},
+    ]})
+}
+
+fn surface_of(r: &Rebuild) -> Vec<f64> {
+    use fundacad_geom::mesh::{tessellate, MeshParams};
+    let shape = &r.bodies[0].shape;
+    let access = opencascade::mesh_access::MeshAccess::new(shape);
+    let params = MeshParams { linear: 0.05, angular: 0.25, relative: false, display: false, force_remesh: true };
+    tessellate(shape, &access, params).positions
+}
+
+// A stress study meshes the body it is given, and its mesher turns a last bit difference into a different mesh.
+#[test]
+fn a_ram_resume_at_any_feature_builds_the_cold_shape_to_the_last_bit() {
+    let raw = turned_plate();
+    let want = surface_of(&built(&raw));
+    for at in 1..raw["features"].as_array().unwrap().len() {
+        let mut prefix = raw.clone();
+        prefix["features"].as_array_mut().unwrap().truncate(at);
+        let mut cache = RebuildCache::new(None);
+        cache.rebuild(&typed(&prefix), &prefix, &NoWatch).unwrap_or_else(|_| panic!("cancelled"));
+        let r = cache.rebuild(&typed(&raw), &raw, &NoWatch).unwrap_or_else(|_| panic!("cancelled"));
+        assert_eq!((cache.stats.source, cache.stats.resumed_at), (Source::Ram, at));
+        assert!(surface_of(&r) == want, "resumed at {at}");
+    }
+}
+
+/// The holed plate, then a second hole of `r` cut beside the first.
+fn plate_with_second_hole(r: f64) -> Value {
+    json!({"parameters": {}, "features": [
+        {"id": "p", "type": "box", "length": 120, "width": 40, "height": 10},
+        {"id": "h", "type": "cylinder", "radius": 6, "height": 30},
+        {"id": "cut", "type": "boolean", "operation": "subtract", "target": "body1", "tools": ["body2"]},
+        {"id": "h2", "type": "cylinder", "radius": r, "height": 30},
+        {"id": "m2", "type": "move", "dx": 7, "dy": 2, "bodies": ["body2"]},
+        {"id": "cut2", "type": "boolean", "operation": "subtract", "target": "body1", "tools": ["body2"]},
+    ]})
+}
+
+fn brep_text(r: &Rebuild, name: &str) -> String {
+    let path = scratch(name).with_extension("brep");
+    r.bodies[0].shape.write_brep_text(&path).unwrap();
+    let text = std::fs::read_to_string(&path).unwrap();
+    let _ = std::fs::remove_file(&path);
+    text
+}
+
+// The second cut overlaps the first hole, so it would write into the faces and edges the snapshot after the first cut
+// holds. A blob reads a zero back as -0 in places, so the RAM resume is held to a disk resume straight into the same
+// document, and to a cold build's surface.
+#[test]
+fn a_ram_resume_after_a_disk_resume_builds_what_a_cold_build_does() {
+    let root = scratch("disk-then-ram");
+    let (first, second) = (plate_with_second_hole(3.0), plate_with_second_hole(2.0));
+    {
+        let mut cache = RebuildCache::new(Some(GeomStore::open(&root).unwrap()));
+        cache.budget_ms = 0.0;
+        cache.tip_after = Duration::ZERO;
+        let mut prefix = first.clone();
+        prefix["features"].as_array_mut().unwrap().truncate(3);
+        cache.rebuild(&typed(&prefix), &prefix, &NoWatch).unwrap_or_else(|_| panic!("cancelled"));
+    }
+    let resumed = |cache: &mut RebuildCache, raw: &Value, source: Source| {
+        let r = cache.rebuild(&typed(raw), raw, &NoWatch).unwrap_or_else(|_| panic!("cancelled"));
+        assert_eq!((cache.stats.source, cache.stats.resumed_at), (source, 3));
+        r
+    };
+    let mut cache = RebuildCache::new(Some(GeomStore::open(&root).unwrap()));
+    let r = resumed(&mut cache, &first, Source::Disk);
+    assert!(surface_of(&r) == surface_of(&built(&first)));
+    let after_disk = resumed(&mut cache, &second, Source::Ram);
+    let straight = resumed(&mut RebuildCache::new(Some(GeomStore::open(&root).unwrap())), &second, Source::Disk);
+    assert!(
+        brep_text(&after_disk, "after-disk") == brep_text(&straight, "straight"),
+        "the first build wrote into the snapshot"
+    );
+    assert!(surface_of(&after_disk) == surface_of(&built(&second)));
 }

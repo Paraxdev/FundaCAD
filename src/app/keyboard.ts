@@ -1,6 +1,7 @@
 import { installKeymap } from "../input/keymap";
 import { isEditableTarget, isPageSelectAll } from "../ui/focus";
-import { saveDocument, saveDocumentAs, exportSelection } from "../io/files";
+import { exportSelection } from "../io/files";
+import { saveWork, saveWorkAs } from "./documentActions";
 import { SKETCH_TOOLS } from "./actionTables";
 import { logError, toggleConsole } from "../ui/logStore";
 import { isSessionEnded } from "../document/session";
@@ -9,6 +10,7 @@ import { isMac } from "../input/platform";
 import { useShellStore } from "../stores/shell";
 import { useCommandPaletteStore } from "../stores/commandPalette";
 import type { Engine } from "./engine";
+import { pickedFeatureIds } from "./featureRows";
 
 /** The keymap plus window level handlers that bypass it, such as the file shortcuts that must work mid sketch. */
 export function installKeyboard(e: Engine): void {
@@ -53,7 +55,7 @@ export function installKeyboard(e: Engine): void {
     if (ev.key !== "Delete" && ev.key !== "Backspace") return;
     if (e.deleteSelectedFace()) return;
     if (e.selectedFeature && e.selectedFeatureExplicit) {
-      e.store.removeFeature(e.selectedFeature);
+      e.store.removeFeatures(pickedFeatureIds(e));
       e.selectFeature(null);
     }
   });
@@ -111,10 +113,10 @@ export function installKeyboard(e: Engine): void {
       void e.openDoc();
     } else if (k === "s" && ev.shiftKey) {
       ev.preventDefault();
-      void saveDocumentAs(e.store);
+      void saveWorkAs(e);
     } else if (k === "s") {
       ev.preventDefault();
-      void saveDocument(e.store);
+      void saveWork(e);
     } else if (k === "e") {
       ev.preventDefault();
       void exportSelection(e.store, e.geometry, e.viewport);
@@ -122,7 +124,7 @@ export function installKeyboard(e: Engine): void {
     // Ctrl+, sits here rather than in the keymap so it works mid sketch.
     else if (ev.key === ",") {
       ev.preventDefault();
-      useDialogStore().preferences = true;
+      useDialogStore().openPreferences();
     }
   });
 }

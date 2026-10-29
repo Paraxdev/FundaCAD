@@ -2,6 +2,9 @@
 
 import { setLeftButtonOwner } from "../viewport/navigator/bindings";
 import { Viewport } from "../viewport/viewport";
+import { onUnitChange } from "../ui/units";
+import { soleSelectedFeature } from "./featureRows";
+import type { RowSelection } from "../ui/rowSelection";
 import { asFeature } from "../types";
 import { isSessionEnded } from "../document/session";
 import { Geometry, type GeometryBackend } from "../geometry/client";
@@ -15,6 +18,7 @@ import { initSolver } from "../sketch/solver";
 import { installAutosave, checkRecovery } from "../io/recovery";
 import { installLaunchPaths } from "../io/launchPaths";
 import { toast } from "../ui/toast";
+import { traceFaultToast } from "../ui/traceFault";
 import { logWarning } from "../ui/logStore";
 import { crumb } from "../diagnostics/breadcrumbs";
 
@@ -155,8 +159,8 @@ export interface Engine {
   toolOwnsScreen(): boolean;
   /** toolOwnsScreen() minus a modal (Home counts as one): a sketch or tool is at work on the document. */
   toolAtWork(): boolean;
-  /** A body verb calls this first, or its own toolBusy() check refuses it. The gizmo is always untouched, since a drag
-   *  commits on pointerup. */
+  /** A body verb calls this first, or its own toolBusy() check refuses it. A drag let go of but not yet entered is
+   *  written first, so the verb acts on where the bodies were left. */
   dropBodyGizmo(): void;
   raiseBodyGizmo(): void;
   /** Raises it again once the command dropBodyGizmo made way for is escaped, while the same bodies are selected. */
@@ -171,6 +175,8 @@ export interface Engine {
   /** Picked by the user rather than set by the engine (stores/selection.ts). */
   readonly selectedFeatureExplicit: boolean;
   selectFeature(id: string | null, explicit?: boolean): void;
+  /** Several rows picked at once, `primary` being the one the inspector follows. */
+  selectFeatureRows(next: RowSelection<string>, primary: string | null): void;
   editFeature(id: string): void;
   featureForFace(faceId: number): string | null;
   deleteSelectedFace(): boolean;
@@ -222,6 +228,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   };
 
   e.viewport = new Viewport(canvas);
+  onUnitChange(() => e.viewport.requestRender());
   e.viewport.onGridStep = (mm) => {
     useUiStore().gridStepMm = mm;
   };
@@ -238,12 +245,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   e.viewport.onTraceStateChange = (st) => {
     useUiStore().traceState = st;
   };
-  e.viewport.onTraceFault = (why, off) => {
-    toast(off ? `${why}. Path tracing is off until FundaCAD restarts.` : `${why}. The view is back on Realtime.`, {
-      kind: "error",
-      source: "pathtrace",
-    });
-  };
+  e.viewport.onTraceFault = traceFaultToast;
   e.viewport.onTraceNotice = (message) => toast(message, { kind: "warning", source: "pathtrace" });
   e.viewport.onStutterChange = (on) => {
     useUiStore().lowPerformance = on;
@@ -373,6 +375,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   e.sketch.gizmo = {
     start: (target, done) => move.startTarget(target, () => done()),
     cancel: () => move.cancel(),
+    settle: () => move.settle(),
     get active() {
       return move.active;
     },
@@ -420,6 +423,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
     },
     viewport: e.viewport,
     browser: useBrowserStore(),
+    selectFeature: (id) => e.selectFeature(id),
   });
   watchOutOfDate(e.store, (on) => e.viewport.setModelOutOfDate(on));
   installEnvironmentSync(e.store);
@@ -486,7 +490,8 @@ export function mountUi(e: Engine): void {
     selectFeature: (id, explicit) => e.selectFeature(id, explicit),
     noteCommitted: (id) => e.noteCommitted(id),
     isSketchConsumed: (id) => e.isSketchConsumed(id),
-    getSelectedFeature: () => e.selectedFeature,
+    // Starters that need exactly one feature see none while several rows are picked, and ask for a pick as usual.
+    getSelectedFeature: () => soleSelectedFeature(e),
     getSelectedFeatureExplicit: () => e.selectedFeatureExplicit,
     setPlanePick: (v) => {
       e.planePick = v;

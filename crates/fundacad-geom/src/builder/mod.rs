@@ -713,7 +713,12 @@ pub struct Cancelled;
 
 /// Hooks the engine hands a rebuild: progress per feature, cancel between them.
 pub trait Watch {
+    /// Feature `index` has finished.
     fn feature(&self, _index: usize) {}
+    /// Feature `index` is about to run.
+    fn feature_started(&self, _index: usize) {}
+    /// A [`fundacad_protocol::build_phase`] other than meshing, which `meshing` enters.
+    fn phase(&self, _phase: i64) {}
     fn meshing(&self, _done: usize, _total: usize) {}
     fn cancelled(&self) -> bool {
         false
@@ -1178,6 +1183,7 @@ pub fn rebuild_from(
         if watch.cancelled() {
             return Err(Cancelled);
         }
+        watch.feature_started(i);
         let began = Instant::now();
         crate::trace::begin();
         let fid = rawf.get("id").and_then(Value::as_str);

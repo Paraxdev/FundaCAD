@@ -20,6 +20,7 @@ export const SKETCH_TOOLS = new Set([
   "boltCircle",
   "hexHoles",
   "gridHoles",
+  "patternLinear",
   "patternRect",
   "patternCircular",
   "honeycomb",
@@ -68,6 +69,7 @@ export const NON_REPEATABLE = new Set([
   "redo",
   "compute-all",
   "shortcut-help",
+  "preferences",
   "manual",
   "report-problem",
   "suggest-idea",
@@ -99,7 +101,7 @@ export const NON_REPEATABLE = new Set([
 
 /** Entity patterns word their own prompt as curves are picked and the pattern
  *  is placed, so a state change must not reset it to a line of this table. */
-export const SELF_PROMPTING = new Set<SketchTool>(["patternRect", "patternCircular", "mirror"]);
+export const SELF_PROMPTING = new Set<SketchTool>(["patternLinear", "patternRect", "patternCircular", "mirror"]);
 
 export const SKETCH_PROMPTS: Record<string, string> = {
   select: "Line (L) · Rectangle (R) · Circle (C) · Arc (A) · Trim (T)",
@@ -113,7 +115,7 @@ export const SKETCH_PROMPTS: Record<string, string> = {
   text: "Click where the text goes, or drag a box for it · Esc",
   project: "Click an edge or face of the model to project it into the sketch · Esc",
   boltCircle: "Click the centre of the bolt circle, set the count, click again to place · Esc",
-  hexHoles: "Click the centre of the hex holes, set the rings, click again to place · Esc",
+  hexHoles: "Click the centre of the staggered holes, set the rings, click again to place · Esc",
   honeycomb: "Click the centre of the honeycomb, set the rings, click again to place · Esc",
   gridHoles: "Click the centre of the grid, set the counts, click again to place · Esc",
   polygon: "Click the centre, then a vertex · Esc",

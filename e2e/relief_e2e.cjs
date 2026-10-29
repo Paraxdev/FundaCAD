@@ -9,7 +9,7 @@
 //
 // Usage (from the repo root, vite + engine `fundacad-engine --ws` running):
 //   SC_TOKEN=<engine token> [SC_URL=http://localhost:5173/] [SC_ENGINE_PORT=8765] \
-//     node e2e/relief_e2e.cjs [outDir]
+//     [SC_ANGLE=swiftshader|d3d11] node e2e/relief_e2e.cjs [outDir]
 const { chromium } = require("playwright-core");
 const fs = require("fs");
 const path = require("path");
@@ -18,6 +18,7 @@ const TOKEN = process.env.SC_TOKEN || "";
 const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const URL = process.env.SC_URL || "http://localhost:5173/";
 const PORT = process.env.SC_ENGINE_PORT || "8765";
+const ANGLE = process.env.SC_ANGLE || "swiftshader";
 const OUT = path.resolve(process.argv[2] || "relief_shots");
 if (!TOKEN) {
   console.error("set SC_TOKEN");
@@ -37,13 +38,18 @@ const PITCH = 0.3;
   fs.mkdirSync(OUT, { recursive: true });
   const browser = await chromium.launch({
     executablePath: EXE,
-    args: ["--use-angle=swiftshader", "--no-sandbox", "--enable-unsafe-swiftshader"],
+    args: [`--use-angle=${ANGLE}`, "--no-sandbox", "--enable-unsafe-swiftshader"].concat(
+      ANGLE === "swiftshader" ? [] : ["--enable-gpu", "--ignore-gpu-blocklist"],
+    ),
   });
   try {
     const page = await browser.newPage({ viewport: { width: 1000, height: 800 } });
     const shaderErrors = [];
+    // three warns a Program Info Log for a program that linked, where D3D11 puts HLSL warnings such as X4122.
     page.on("console", (m) => {
-      if (/Shader Error|Program Info Log|WebGL: INVALID/i.test(m.text())) shaderErrors.push(m.text().slice(0, 400));
+      const t = m.text();
+      if (/Shader Error|WebGL: INVALID/i.test(t) || (/Program Info Log/i.test(t) && m.type() === "error"))
+        shaderErrors.push(t.slice(0, 400));
     });
     page.on("pageerror", (e) => {
       console.error("PAGE ERROR:", e.message);
@@ -133,7 +139,12 @@ const PITCH = 0.3;
           }
           await wait(300);
         },
+        // The projection is read before the still: a still resizes the canvas, which refits a camera the user
+        // never moved, so the camera after it can hold another zoom than the one drawn.
         async still(name) {
+          const cam = v.rig.active;
+          cam.updateMatrixWorld();
+          const camAt = cam.clone();
           const url = v.renderStill(1, { realtime: true });
           const img = await new Promise((res, rej) => {
             const i = new Image();
@@ -147,10 +158,9 @@ const PITCH = 0.3;
           const g = c.getContext("2d");
           g.drawImage(img, 0, 0);
           const d = g.getImageData(0, 0, c.width, c.height).data;
-          const cam = v.rig.active;
-          const mmPerPx = (cam.top - cam.bottom) / cam.zoom / img.height;
+          const mmPerPx = (camAt.top - camAt.bottom) / camAt.zoom / img.height;
           const toPx = (x, y, z) => {
-            const p = new window.__THREE_V3(x, y, z).project(cam);
+            const p = new window.__THREE_V3(x, y, z).project(camAt);
             return [((p.x + 1) / 2) * img.width, ((1 - p.y) / 2) * img.height];
           };
           window.__shots = window.__shots || {};

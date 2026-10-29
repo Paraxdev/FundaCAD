@@ -116,3 +116,13 @@ export function convertControl(
       };
   }
 }
+
+/** The full name always leads, then the problem or the comment on their own lines. */
+export function rowTooltip(row: Pick<TuneRow, "name" | "problem" | "def">): string {
+  return [row.name, row.problem, row.def.comment].filter((l): l is string => !!l).join("\n");
+}
+
+/** The name column's width in characters: the longest name shown, so the value fields line up. */
+export function nameColumnChars(rows: readonly { name: string }[]): number {
+  return rows.reduce((n, r) => Math.max(n, r.name.length), 0);
+}

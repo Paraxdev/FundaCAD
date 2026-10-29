@@ -3,7 +3,7 @@ use fundacad_geom::fem::TetMesh;
 
 /// A box [0, size] of n cells per axis, six tetrahedra per cell, boundary triangles tagged 0 to 5 for -x, +x, -y,
 /// +y, -z, +z. `jitter` moves interior nodes by up to that fraction of a cell, deterministically.
-fn box_mesh(size: V3, n: [usize; 3], jitter: f64) -> TetMesh {
+pub(crate) fn box_mesh(size: V3, n: [usize; 3], jitter: f64) -> TetMesh {
     let id = |i: usize, j: usize, k: usize| (i + (n[0] + 1) * (j + (n[1] + 1) * k)) as u32;
     let h = [0, 1, 2].map(|a| size[a] / n[a] as f64);
     let mut nodes = Vec::new();
@@ -599,4 +599,52 @@ fn cross(a: V3, b: V3) -> V3 {
 
 fn norm(a: V3) -> f64 {
     dot(a, a).sqrt()
+}
+
+fn placed(m: &mut TetMesh) {
+    for p in &mut m.nodes {
+        let (s, c) = 0.52f64.sin_cos();
+        let q = [c * p[0] - s * p[1], s * p[0] + c * p[1], p[2]];
+        let (s, c) = 0.35f64.sin_cos();
+        *p = [q[0] + 17.0, c * q[1] - s * q[2] - 9.0, s * q[1] + c * q[2] + 31.0];
+    }
+}
+
+#[test]
+fn the_error_estimate_is_zero_where_the_solution_is_exact() {
+    let mut m = box_mesh([60.0, 11.0, 7.0], [8, 2, 2], 0.25);
+    placed(&mut m);
+    let axis = {
+        let d = sub(m.nodes[1], m.nodes[0]);
+        d.map(|v| v / norm(d))
+    };
+    let p = Problem {
+        mesh: &m,
+        supports: vec![],
+        body_force: None,
+        material: Material { e: 3500.0, nu: 0.0 },
+        fixed: vec![0],
+        loads: vec![Load { faces: vec![1], kind: LoadKind::Force(axis.map(|v| v * 700.0)) }],
+    };
+    let s = solve(&p, &mut go).unwrap();
+    assert_eq!(s.element_error.len(), m.tets.len());
+    let total = s.element_error.iter().map(|e| e * e).sum::<f64>().sqrt();
+    assert!(total < 1e-9 * (2.0 * s.strain_energy).sqrt(), "{total} against energy {}", s.strain_energy);
+}
+
+#[test]
+fn the_error_estimate_peaks_beside_a_clamped_end() {
+    let c = cantilever([20, 3, 3]);
+    let m = box_mesh([100.0, 10.0, 10.0], [20, 3, 3], 0.0);
+    assert_eq!(c.s.element_error.len(), m.tets.len());
+    assert!(c.s.element_error.iter().all(|e| e.is_finite() && *e >= 0.0));
+    let worst = (0..m.tets.len()).max_by(|&a, &b| c.s.element_error[a].total_cmp(&c.s.element_error[b])).unwrap();
+    let x = m.tets[worst].iter().map(|&n| m.nodes[n as usize][0]).sum::<f64>() / 4.0;
+    assert!(x < 10.0, "largest error at x = {x}");
+    let mid = (0..m.tets.len())
+        .filter(|&t| m.tets[t].iter().all(|&n| (m.nodes[n as usize][0] - 50.0).abs() < 6.0))
+        .map(|t| c.s.element_error[t])
+        .fold(0.0, f64::max);
+    assert!(c.s.element_error[worst] > 3.0 * mid, "{} against {mid} at mid span", c.s.element_error[worst]);
+    assert!(cantilever([20, 3, 3]).s.element_error == c.s.element_error);
 }

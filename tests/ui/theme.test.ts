@@ -13,6 +13,9 @@ import {
   themes,
   type ShippedTheme,
 } from "../../src/ui/theme";
+import { oklch } from "../../src/viewport/pickColors";
+import { AXIS_COLOR } from "../../src/viewport/originTriad";
+import tokensScss from "../../src/styles/_tokens.scss?raw";
 
 // The module is a singleton with mutable state (the uploaded-theme library and
 // the active id), so every test that adds a palette clears it again, and the
@@ -118,6 +121,39 @@ describe("the theme roster", () => {
     const status = new Set([palette["--ok"], palette["--warn"], palette["--error"]]);
 
     expect(status.size).toBe(3);
+  });
+
+  it("gives the colour-blind safe theme an accent that reads apart from Noir's own", () => {
+    const hex = (c: string) => parseInt(c.slice(1), 16);
+    const lab = (c: string) => {
+      const [L, C, h] = oklch(hex(c));
+      return [L, C * Math.cos((h * Math.PI) / 180), C * Math.sin((h * Math.PI) / 180)];
+    };
+    const noir = lab(/--accent:\s*(#[0-9a-f]{6})/.exec(tokensScss)?.[1] ?? "");
+    const safe = lab((themes().find((t) => t.id === "colorblind-safe") as ShippedTheme).palette["--accent"] ?? "");
+
+    expect(Math.hypot(...noir.map((v, i) => v - (safe[i] ?? NaN)))).toBeGreaterThan(0.12);
+  });
+
+  it("steps the colour-blind safe axes apart in lightness, which every kind of colour blindness still sees", () => {
+    const palette = (themes().find((t) => t.id === "colorblind-safe") as ShippedTheme).palette;
+    const L = ["--axis-x", "--axis-y", "--axis-z"].map((k) => oklch(parseInt((palette[k] ?? "").slice(1), 16))[0]);
+
+    for (const [a, b] of [
+      [0, 1],
+      [1, 2],
+      [0, 2],
+    ] as const) {
+      expect(Math.abs(L[a]! - L[b]!)).toBeGreaterThan(0.08);
+    }
+  });
+
+  it("keeps Noir's axis tokens in step with the viewport's fallbacks", () => {
+    for (const [axis, hex] of Object.entries(AXIS_COLOR)) {
+      const token = new RegExp(`--axis-${axis}:\\s*#([0-9a-f]{6});`).exec(tokensScss)?.[1];
+
+      expect(parseInt(token ?? "", 16)).toBe(hex);
+    }
   });
 
   it("cannot remove a shipped theme", () => {
@@ -229,6 +265,26 @@ describe("addCustomTheme", () => {
       "--bg": "#141414",
       "--accent": "rgba(240, 152, 45, 0.5)",
     });
+  });
+
+  it("loads an older theme that still sets the retired glow, without the glow", () => {
+    const res = addCustomTheme({
+      label: "Old mint",
+      mode: "light",
+      "--bg": "#fdf6e3",
+      "--accent": "#268bd2",
+      "--accent-glow": "rgba(38, 139, 210, 0.35)",
+    });
+
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.theme.palette).toStrictEqual({ "--bg": "#fdf6e3", "--accent": "#268bd2" });
+    expect(themeMode(res.theme.id)).toBe("light");
+  });
+
+  it("ships no theme that lights a glow", () => {
+    const glowing = themes().filter((t) => "palette" in t && "--accent-glow" in (t as ShippedTheme).palette);
+    expect(glowing.map((t) => t.id)).toEqual([]);
   });
 
   it("rejects a value that tries to break out of a declaration", () => {

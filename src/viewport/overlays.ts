@@ -2,6 +2,7 @@
 
 import * as THREE from "three";
 import type { ModelView } from "./render";
+import { copyPatches } from "./shaderPatches";
 import { DISPLAY_COLOR_GLSL, displayColorUniforms, followComposer } from "./composerColor";
 
 /** Bands follow the reflected view vector, so curvature breaks show as broken or bunched stripes.
@@ -136,8 +137,7 @@ export function buildStressMesh(
   indices: ArrayLike<number>,
   colors: Float32Array,
 ): THREE.Mesh {
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  const geo = stressSurfaceGeometry(positions, indices);
   // The ramp is authored in sRGB; vertex colours are read as linear.
   const lin = new Float32Array(colors.length);
   const c = new THREE.Color();
@@ -148,8 +148,6 @@ export function buildStressMesh(
     lin[i + 2] = c.b;
   }
   geo.setAttribute("color", new THREE.BufferAttribute(lin, 3));
-  // Shared with the drawn surface, which nothing writes after it is made.
-  geo.setIndex(indices instanceof Uint32Array ? new THREE.BufferAttribute(indices, 1) : Array.from(indices));
   geo.computeVertexNormals();
   const mat = new THREE.MeshStandardMaterial({
     vertexColors: true,
@@ -161,6 +159,36 @@ export function buildStressMesh(
   const mesh = new THREE.Mesh(geo, mat);
   mesh.raycast = () => {};
   return mesh;
+}
+
+/** `count` vertex colours of `c` in sRGB, as buildStressMesh takes them. */
+export function solidColors(count: number, c: THREE.Color): Float32Array {
+  const { r, g, b } = c.getRGB({ r: 0, g: 0, b: 0 }, THREE.SRGBColorSpace);
+  const out = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) out.set([r, g, b], i * 3);
+  return out;
+}
+
+export function stressSurfaceGeometry(positions: ArrayLike<number>, indices: ArrayLike<number>): THREE.BufferGeometry {
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  // Shared with the drawn surface, which nothing writes after it is made.
+  geo.setIndex(indices instanceof Uint32Array ? new THREE.BufferAttribute(indices, 1) : Array.from(indices));
+  return geo;
+}
+
+/** The body's own material for the stress surface drawn without its colours, a copy since the overlay disposes it;
+ *  null when the body has no lit material to copy. */
+export function plainStressMaterial(material: THREE.Material | THREE.Material[] | undefined): THREE.Material | null {
+  const m = Array.isArray(material) ? material[0] : material;
+  if (!(m instanceof THREE.MeshStandardMaterial)) return null;
+  const copy = m.clone();
+  // The glass patch reads a thickness drawn for the body's own mesh.
+  copyPatches(m, copy, (p) => p.name !== "glassAuto");
+  copy.side = THREE.DoubleSide;
+  // The surface shares its vertices across sharp edges, so smooth normals would bend the light over every face.
+  copy.flatShading = true;
+  return copy;
 }
 
 /** A translucent tint over a set of faces (world-space triangles, nine numbers

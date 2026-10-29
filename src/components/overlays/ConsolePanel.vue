@@ -2,7 +2,8 @@
 // The log view (ui/logStore.ts records it). Unlike a toast nothing is clipped or expires, a stack must be readable whole.
 
 import { computed, nextTick, onUnmounted, ref, watch } from "vue";
-import Icon from "../shell/Icon.vue";
+import Button from "../ui/Button.vue";
+import IconButton from "../ui/IconButton.vue";
 import {
   clearLog,
   clearRevealed,
@@ -105,28 +106,30 @@ const clockOf = (at: number) => new Date(at).toLocaleTimeString(undefined, { hou
     <div v-if="open" class="logcon" role="dialog" aria-label="Console">
       <div class="logcon-head">
         <span class="logcon-title">Console</span>
-        <button
+        <Button
           v-for="lvl in LEVELS"
           :key="lvl"
-          type="button"
+          size="sm"
+          variant="ghost"
           class="logcon-filter"
-          :class="[`is-${lvl}`, { on: show[lvl] }]"
-          :aria-pressed="show[lvl] ? 'true' : 'false'"
+          :class="`is-${lvl}`"
+          :pressed="show[lvl]"
           @click="show[lvl] = !show[lvl]"
         >
           {{ lvl }} <span class="logcon-count">{{ counts[lvl] }}</span>
-        </button>
+        </Button>
         <span class="logcon-spacer"></span>
-        <button type="button" class="logcon-btn" title="Copy everything shown" @click="copy(formatLog(rows), null)">
-          <Icon name="copy" :size="14" />
-        </button>
+        <IconButton
+          icon="copy"
+          tip="Copy everything shown"
+          size="sm"
+          variant="plain"
+          :icon-size="14"
+          @click="copy(formatLog(rows), null)"
+        />
         <!-- cleanUp, not bin: the icon table has no bin, and an unknown name renders as a blank square. -->
-        <button type="button" class="logcon-btn" title="Clear" @click="clearLog()">
-          <Icon name="cleanUp" :size="14" />
-        </button>
-        <button type="button" class="logcon-btn" title="Close" @click="setConsoleOpen(false)">
-          <Icon name="close" :size="14" />
-        </button>
+        <IconButton icon="cleanUp" tip="Clear" size="sm" variant="plain" :icon-size="14" @click="clearLog()" />
+        <IconButton icon="close" tip="Close" size="sm" variant="plain" :icon-size="14" @click="setConsoleOpen(false)" />
       </div>
 
       <div ref="body" class="logcon-body">
@@ -143,17 +146,18 @@ const clockOf = (at: number) => new Date(at).toLocaleTimeString(undefined, { hou
           <span class="logcon-time">{{ clockOf(e.at) }}</span>
           <span v-if="e.source" class="logcon-src">{{ e.source }}</span>
           <span class="logcon-msg">{{ e.message }}</span>
-          <button v-if="e.detail" type="button" class="logcon-more" @click="toggleDetail(e.id)">{{
+          <Button v-if="e.detail" size="sm" variant="ghost" class="logcon-more" @click="toggleDetail(e.id)">{{
             expanded.has(e.id) ? "less" : "more"
-          }}</button>
-          <button
-            type="button"
+          }}</Button>
+          <IconButton
             class="logcon-copy"
-            :title="copied === e.id ? 'Copied' : 'Copy this entry'"
+            :icon="copied === e.id ? 'check' : 'copy'"
+            :tip="copied === e.id ? 'Copied' : 'Copy this entry'"
+            size="sm"
+            variant="plain"
+            :icon-size="12"
             @click="copy(formatEntry(e), e.id)"
-          >
-            <Icon :name="copied === e.id ? 'check' : 'copy'" :size="12" />
-          </button>
+          />
           <pre v-if="e.detail && expanded.has(e.id)" class="logcon-detail">{{ e.detail }}</pre>
         </div>
       </div>

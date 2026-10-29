@@ -125,6 +125,15 @@ fn pack_edges<'a>(body: &'a FullBody, p: &mut Packer<'a>) -> Value {
     if !smooth.is_empty() {
         out.insert("smooth".into(), Value::Array(smooth));
     }
+    let curved: Vec<Value> = body
+        .edges
+        .iter()
+        .enumerate()
+        .filter_map(|(i, e)| e.curvature.map(|[k, c]| json!([i, crate::body::f32_value(k), crate::body::f32_value(c)])))
+        .collect();
+    if !curved.is_empty() {
+        out.insert("curvature".into(), Value::Array(curved));
+    }
     Value::Object(out)
 }
 
@@ -410,6 +419,13 @@ pub fn decode_frame(bytes: &[u8]) -> Result<Value, String> {
         let counts = packed.get("$counts").and_then(&mut take).unwrap_or_default();
         let smooth: std::collections::HashSet<u64> =
             packed.get("smooth").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_u64).collect();
+        let curved: std::collections::HashMap<u64, Value> = packed
+            .get("curvature")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|p| Some((p.get(0)?.as_u64()?, json!([p.get(1)?, p.get(2)?]))))
+            .collect();
         let owner = packed.get("body").cloned().unwrap_or(Value::Null);
         let mut next = pts.chunks_exact(3);
         let mut edges = Vec::with_capacity(counts.len());
@@ -421,6 +437,9 @@ pub fn decode_frame(bytes: &[u8]) -> Result<Value, String> {
             em.insert("body".into(), owner.clone());
             if smooth.contains(&(i as u64)) {
                 em.insert("smooth".into(), Value::Bool(true));
+            }
+            if let Some(k) = curved.get(&(i as u64)) {
+                em.insert("curvature".into(), k.clone());
             }
             edges.push(Value::Object(em));
         }

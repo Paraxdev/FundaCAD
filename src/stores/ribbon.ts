@@ -11,6 +11,9 @@ export const useRibbonStore = defineStore("ribbon", () => {
   /** The sketch feature being edited, null for a sketch not yet committed. */
   const sketchId = ref<string | null>(null);
 
+  /** The viewport's analysis toggles, pushed in by app/viewportWiring.ts since the viewport is not reactive. */
+  const viewOn = ref<Record<string, boolean>>({});
+
   let run: ((action: string) => void) | null = null;
   function bind(fn: (action: string) => void) {
     run = fn;
@@ -19,5 +22,5 @@ export const useRibbonStore = defineStore("ribbon", () => {
     run?.(action);
   }
 
-  return { context, activeSketchTool, sketchId, bind, act };
+  return { context, activeSketchTool, sketchId, viewOn, bind, act };
 });

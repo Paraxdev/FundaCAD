@@ -28,6 +28,30 @@ enableAutoUnmount(afterEach);
 
 const $ = (sel: string) => document.querySelector<HTMLElement>(sel);
 const $$ = (sel: string) => [...document.querySelectorAll<HTMLElement>(sel)];
+const options = () => $$('[role="option"]');
+// Vue skips a listener for an event stamped in the same millisecond it was attached, so a fresh list waits a tick.
+const settle = () => new Promise((r) => setTimeout(r, 2));
+async function pick(trigger: string, label: string) {
+  $(trigger)!.click();
+  await nextTick();
+  await settle();
+  options()
+    .find((o) => o.textContent?.trim() === label)!
+    .click();
+  await nextTick();
+  // The list gives its Escape claim back after the event, which a test of Escape right after would still see.
+  await settle();
+}
+async function optionsOf(trigger: string) {
+  $(trigger)!.click();
+  await nextTick();
+  const labels = options().map((o) => o.textContent?.trim());
+  await settle();
+  $(trigger)!.click();
+  await nextTick();
+  await settle();
+  return labels;
+}
 const key = (k: string, init: KeyboardEventInit = {}) =>
   window.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true, ...init }));
 
@@ -103,6 +127,8 @@ describe("HomeScreen", () => {
   it("keeps the .modal-close button the e2e scripts click", () => {
     open();
     expect($(".modal-close")?.getAttribute("aria-label")).toBe("Back to the document");
+    expect($(".modal-close")?.getAttribute("title")).toBe("Back to the document");
+    expect($(".modal-close")?.getAttribute("type")).toBe("button");
   });
 
   it("shows a card per recent document, the name escaped once", () => {
@@ -285,7 +311,7 @@ describe("HomeScreen", () => {
       { path: "C:/work/gear.funda", openedAt: 1 },
     ]);
     await flushPromises();
-    const field = document.querySelector<HTMLInputElement>(".home-search")!;
+    const field = document.querySelector<HTMLInputElement>(".home-search input")!;
     field.value = "gea";
     field.dispatchEvent(new Event("input"));
     await nextTick();
@@ -302,12 +328,36 @@ describe("HomeScreen", () => {
       { path: "C:/a.funda", openedAt: 1 },
     ]);
     await flushPromises();
-    const sort = document.querySelector<HTMLSelectElement>(".home-sort")!;
-    sort.value = "name";
-    sort.dispatchEvent(new Event("change"));
-    await nextTick();
+    await pick(".home-sort", "Name");
     expect($$(".home-card-name").map((n) => n.textContent)).toEqual(["a", "b"]);
     expect(localStorage.getItem("fundacad.home.sort")).toBe("name");
+  });
+
+  it("picks the sort from the keyboard, and Escape on the open list leaves Home up", async () => {
+    const { home } = open([
+      { path: "C:/b.funda", openedAt: 2 },
+      { path: "C:/a.funda", openedAt: 1 },
+    ]);
+    await flushPromises();
+    const sort = $(".home-sort")!;
+    const press = (k: string) =>
+      sort.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true }));
+    sort.focus();
+    press("ArrowDown");
+    await nextTick();
+    expect(sort.getAttribute("aria-expanded")).toBe("true");
+    press("Escape");
+    await nextTick();
+    await settle();
+    expect(home.visible).toBe(true);
+    expect(sort.getAttribute("aria-expanded")).toBe("false");
+    press("End");
+    await nextTick();
+    press("Enter");
+    await nextTick();
+    await settle();
+    expect($$(".home-card-name").map((n) => n.textContent)).toEqual(["a", "b"]);
+    expect(document.activeElement).toBe(sort);
   });
 
   it("takes Ctrl+F for its search field instead of passing it on", () => {
@@ -317,12 +367,12 @@ describe("HomeScreen", () => {
     key("f", { ctrlKey: true });
     window.removeEventListener("keydown", seen);
     expect(seen).not.toHaveBeenCalled();
-    expect(document.activeElement).toBe($(".home-search"));
+    expect(document.activeElement).toBe($(".home-search input"));
   });
 
   it("puts the focus in its search field", () => {
     open([{ path: "C:/a.funda", openedAt: 1 }]);
-    expect(document.activeElement).toBe($(".home-search"));
+    expect(document.activeElement).toBe($(".home-search input"));
   });
 
   it("gives the focus back to what had it when it closes", async () => {
@@ -345,7 +395,7 @@ describe("HomeScreen", () => {
       { path: "C:/a.funda", openedAt: 1 },
       { path: "C:/b.funda", openedAt: 2 },
     ]);
-    const field = document.querySelector<HTMLInputElement>(".home-search")!;
+    const field = document.querySelector<HTMLInputElement>(".home-search input")!;
     field.value = "a";
     field.dispatchEvent(new Event("input"));
     await nextTick();
@@ -360,7 +410,7 @@ describe("HomeScreen", () => {
 
   it("lets undo work inside the search field", () => {
     open([{ path: "C:/a.funda", openedAt: 1 }]);
-    const field = $(".home-search")!;
+    const field = $(".home-search input")!;
     field.focus();
     const seen = vi.fn();
     window.addEventListener("keydown", seen);
@@ -397,7 +447,7 @@ describe("HomeScreen", () => {
       { path: "C:/work/gear.funda", openedAt: 1 },
     ]);
     await flushPromises();
-    const field = document.querySelector<HTMLInputElement>(".home-search")!;
+    const field = document.querySelector<HTMLInputElement>(".home-search input")!;
     field.value = "LEVER";
     field.dispatchEvent(new Event("input"));
     await nextTick();
@@ -471,7 +521,7 @@ describe("HomeScreen", () => {
       files: [stat("D:/proj/b.funda", 30), stat("D:/proj/sub/a.funda", 20)],
       truncated: false,
     };
-    const rows = () => $$(".home-nav-row").map((r) => r.textContent?.trim());
+    const rows = () => $$(".home-nav .ui-list-row").map((r) => r.textContent?.trim());
     const menuRows = () => [...document.querySelectorAll<HTMLElement>(".ctx-menu button, .ctx-item")];
 
     beforeEach(() => setSaveFolder(null));
@@ -483,12 +533,13 @@ describe("HomeScreen", () => {
       $(".home-add-folder")!.click();
       await flushPromises();
       expect(rows()).toEqual(["Recent", "proj", "Add folder…"]);
-      expect($(".home-folder-row.active")!.getAttribute("title")).toBe("D:/proj");
+      expect($(".home-folder-row.is-selected")!.getAttribute("title")).toBe("D:/proj");
+      expect($(".home-folder-row")!.getAttribute("aria-current")).toBe("true");
+      expect($(".home-recent-row")!.getAttribute("aria-current")).toBeNull();
       expect($$(".home-card-name").map((n) => n.textContent)).toEqual(["b", "a"]);
       expect(JSON.parse(localStorage.getItem("fundacad.home.folders")!)[0].path).toBe("D:/proj");
-      const sort = document.querySelector<HTMLSelectElement>(".home-sort")!;
-      expect([...sort.options].map((o) => o.textContent)).toEqual(["Last edited", "Name"]);
-      $(".home-nav-row")!.click();
+      expect(await optionsOf(".home-sort")).toEqual(["Last edited", "Name"]);
+      $(".home-recent-row")!.click();
       await flushPromises();
       expect($$(".home-card-name").map((n) => n.textContent)).toEqual(["r"]);
     });
@@ -497,12 +548,11 @@ describe("HomeScreen", () => {
       const lib = fakeLibrary([], 0, {}, []);
       open([{ path: "C:/r.funda", openedAt: 1 }], {}, lib);
       await flushPromises();
-      const select = document.querySelector<HTMLSelectElement>(".home-view-select")!;
-      select.value = "add";
-      select.dispatchEvent(new Event("change"));
+      await pick(".home-view-select", "Add folder…");
       await flushPromises();
       expect(lib.pickFolder).toHaveBeenCalledOnce();
-      expect(select.value).toBe("recent");
+      expect($(".home-view-select")!.dataset.value).toBe("recent");
+      expect($(".home-view-select")!.textContent?.trim()).toBe("Recent");
     });
 
     it("removes a folder from Home and goes back to Recent", async () => {
@@ -522,7 +572,7 @@ describe("HomeScreen", () => {
         .click();
       await flushPromises();
       expect(rows()).toEqual(["Recent", "Add folder…"]);
-      expect($(".home-nav-row.active")!.textContent).toBe("Recent");
+      expect($(".home-recent-row.is-selected")!.textContent).toBe("Recent");
       expect(localStorage.getItem("fundacad.home.folders")).toBe("[]");
     });
 
@@ -603,10 +653,12 @@ describe("HomeScreen", () => {
     it("lists the branches, current first, and the versions of the one shown", async () => {
       await drawerFor({ [P]: hist });
       expect(texts(".home-branch-name")).toEqual(["widecurrent", "main"]);
+      expect(texts('.home-branch-name[aria-current="true"]')).toEqual(["widecurrent"]);
       expect(texts(".home-version-msg")).toEqual(["msg v3", "msg v1"]);
       $$(".home-branch-name")[1]!.click();
       await nextTick();
       expect(texts(".home-version-msg")).toEqual(["msg v2", "msg v1"]);
+      expect(texts('.home-branch-name[aria-current="true"]')).toEqual(["main"]);
     });
 
     it("restores a version and closes once the document shows it", async () => {
@@ -745,7 +797,7 @@ describe("Home on a first run", () => {
     localStorage.setItem("fundacad.home.folders", JSON.stringify([{ path: "D:/proj", addedAt: 1 }]));
     open([], {}, fakeLibrary());
     expect($(".home-welcome")).not.toBeNull();
-    const field = document.querySelector<HTMLInputElement>(".home-search")!;
+    const field = document.querySelector<HTMLInputElement>(".home-search input")!;
     field.value = "plat";
     field.dispatchEvent(new Event("input"));
     await nextTick();

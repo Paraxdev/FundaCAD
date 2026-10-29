@@ -186,11 +186,6 @@ impl LiveLink {
             if st.get("attached") != Some(&json!(true)) {
                 return Err(LiveError::NoAppOpen("the FundaCAD window closed before the edit was applied".into()));
             }
-            // The app opened another document before taking the edit, which the engine then dropped.
-            if self.doc.is_some() && st.get("doc") != self.doc.as_ref() {
-                self.base = None;
-                return Err(LiveError::Refused(DOC_CHANGED.into()));
-            }
             let status = st.get("status").cloned().unwrap_or_else(|| json!({}));
             let refused = status
                 .get("refused")
@@ -210,6 +205,12 @@ impl LiveLink {
                 self.title = st.get("title").and_then(Value::as_str).map(str::to_string);
                 self.status = status;
                 return Ok(self.base.unwrap_or(0));
+            }
+            // Only after the ids: the app may open another document right after taking this edit, and a retry would
+            // then land it twice. Without its id here, the engine dropped it with the document it was for.
+            if self.doc.is_some() && st.get("doc") != self.doc.as_ref() {
+                self.base = None;
+                return Err(LiveError::Refused(DOC_CHANGED.into()));
             }
         }
         Err(LiveError::Timeout(format!(

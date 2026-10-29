@@ -10,6 +10,9 @@ pub struct Edge {
     pub points: Vec<[f32; 3]>,
     /// The two faces meet tangentially.
     pub smooth: bool,
+    /// The largest curvature across the edge of its faces when a fillet size could meet it, per mm of radius and per
+    /// mm of chord: G2 and G3 apply while the one for the size type times the size stays below 1e-6.
+    pub curvature: Option<[f32; 2]>,
 }
 
 /// A body the client does not hold, sent in full. `fields` keeps every non-array field in write order; the mesh keys
@@ -92,6 +95,9 @@ impl FullBody {
                 if e.smooth {
                     em.insert("smooth".into(), Value::Bool(true));
                 }
+                if let Some(k) = e.curvature {
+                    em.insert("curvature".into(), Value::Array(k.map(f32_value).to_vec()));
+                }
                 Value::Object(em)
             })
             .collect();
@@ -100,7 +106,7 @@ impl FullBody {
     }
 }
 
-fn f32_value(x: f32) -> Value {
+pub(crate) fn f32_value(x: f32) -> Value {
     serde_json::Number::from_f64(f64::from(x)).map_or(Value::Null, Value::Number)
 }
 

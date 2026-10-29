@@ -2,8 +2,11 @@
 import { computed, ref } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { usePanelsStore } from "../../stores/panels";
-import NumberBox from "../shell/NumberBox.vue";
 import Icon from "../shell/Icon.vue";
+import Button from "../ui/Button.vue";
+import IconButton from "../ui/IconButton.vue";
+import NumberField from "../ui/NumberField.vue";
+import Switch from "../ui/Switch.vue";
 import Select from "../ui/Select.vue";
 import StressMaterialFields from "./StressMaterialFields.vue";
 import {
@@ -12,6 +15,7 @@ import {
   GRAVITY_DIRECTIONS,
   GRAVITY_MARK_COLOR,
   LOAD_MARK_COLOR,
+  REFINE_CHOICES,
   SUPPORT_COLORS,
   SUPPORT_KINDS,
   cssHex,
@@ -34,6 +38,8 @@ const LOAD_KINDS = [
   { value: "force", label: "Force" },
   { value: "pressure", label: "Pressure" },
 ] as const;
+const AXES = [0, 1, 2] as const;
+const AXIS_NAMES = ["X", "Y", "Z"] as const;
 const gravityOptions = GRAVITY_DIRECTIONS.map((d) => ({ value: d, label: AXIS_LABELS[d] }));
 
 // The analysed body when the current model does not have it (the timeline rolled back before it), so the list can
@@ -48,8 +54,8 @@ const bodyOptions = computed(() => {
   return opts;
 });
 
-// Open on first show when a size is set, so a value that changes the Run is never hidden.
-const moreOpen = ref(props.setup.size != null);
+// Open on first show when a size or refinement is set, so a value that changes the Run is never hidden.
+const moreOpen = ref(props.setup.size != null || props.setup.refine !== "standard");
 
 function supportColor(t: StressSupportType): string {
   return cssHex(SUPPORT_COLORS[t]);
@@ -59,13 +65,13 @@ function supportHint(t: StressSupportType): string {
   return SUPPORT_KINDS.find((k) => k.value === t)?.hint ?? "";
 }
 
-function placing(target: StressTarget): boolean {
-  return sameTarget(panels.stress?.placing ?? null, target);
+function placing(target: StressTarget, as: "face" | "spot"): boolean {
+  return sameTarget(panels.stress?.placing ?? null, target) && panels.stress?.placeAs === as;
 }
 </script>
 
 <template>
-  <div class="stress-step stress-setup">
+  <div class="stress-step stress-setup" data-panel-scroll>
     <label class="stress-field">
       <span class="measure-k">Body</span>
       <Select
@@ -92,57 +98,70 @@ function placing(target: StressTarget): boolean {
           :title="supportHint(x.type)"
           @update:model-value="engine.ui.panels.setStressSupportType(x.id, $event)"
         />
-        <button
+        <IconButton
           v-if="setup.supports.length > 1"
-          type="button"
-          class="float-card-close stress-remove-support"
-          :title="`Remove support ${i + 1}`"
-          :aria-label="`Remove support ${i + 1}`"
+          class="stress-remove-support"
+          icon="close"
+          :tip="`Remove support ${i + 1}`"
+          size="sm"
+          variant="danger"
+          :icon-size="14"
           @click="engine.ui.panels.removeStressSupport(x.id)"
-        >
-          <Icon name="close" :size="14" />
-        </button>
+        />
       </div>
       <div class="stress-faces">
         <span class="measure-k stress-count">{{ faceCountLabel(x.faces, x.spots) }}</span>
         <span class="stress-face-actions">
-          <button
-            type="button"
-            class="btn stress-place-support"
-            :class="{ active: placing({ support: x.id }) }"
-            :aria-pressed="placing({ support: x.id })"
-            title="Click the body to place a spot"
+          <Button
+            size="sm"
+            class="stress-place-support"
+            :pressed="placing({ support: x.id }, 'face')"
+            tip="Click faces of the body to add each whole face"
             @click="engine.ui.panels.placeStressSpot({ support: x.id })"
-            >{{ placing({ support: x.id }) ? "Placing…" : "Click on body" }}</button
+            >{{ placing({ support: x.id }, "face") ? "Picking…" : "Click faces" }}</Button
           >
-          <button
-            type="button"
-            class="btn stress-set-support"
-            title="Use the faces selected in the view"
+          <Button
+            size="sm"
+            class="stress-spot-support"
+            :pressed="placing({ support: x.id }, 'spot')"
+            tip="Click the body to place a round spot, for a local support"
+            @click="engine.ui.panels.placeStressSpot({ support: x.id }, 'spot')"
+            >{{ placing({ support: x.id }, "spot") ? "Placing…" : "Spot" }}</Button
+          >
+          <Button
+            size="sm"
+            class="stress-set-support"
+            tip="Use the faces selected in the view"
             @click="engine.ui.panels.setStressFacesFromSelection({ support: x.id })"
-            >Use selected faces</button
+            >Use selected faces</Button
           >
         </span>
       </div>
       <div v-for="(spot, k) in x.spots ?? []" :key="'ss' + x.id + '-' + k" class="stress-field stress-spot">
         <span class="measure-k">Spot {{ k + 1 }}</span>
-        <span class="stress-number"
-          ><NumberBox v-model="spot.radius" class="sm-input stress-spot-radius" title="Radius" /> mm</span
-        >
-        <button
-          type="button"
-          class="float-card-close stress-remove-spot"
-          :title="`Remove spot ${k + 1}`"
-          :aria-label="`Remove spot ${k + 1}`"
+        <NumberField
+          v-model="spot.radius"
+          commit="live"
+          unit="mm"
+          :width-ch="7"
+          class="stress-spot-radius"
+          title="Radius"
+          aria-label="Radius"
+        />
+        <IconButton
+          class="stress-remove-spot"
+          icon="close"
+          :tip="`Remove spot ${k + 1}`"
+          size="sm"
+          variant="danger"
+          :icon-size="14"
           @click="engine.ui.panels.removeStressSpot({ support: x.id }, k)"
-        >
-          <Icon name="close" :size="14" />
-        </button>
+        />
       </div>
     </div>
-    <button type="button" class="btn stress-add stress-add-support" @click="engine.ui.panels.addStressSupport()">
-      <Icon name="plus" :size="14" />Add support
-    </button>
+    <Button size="sm" icon="plus" class="stress-add stress-add-support" @click="engine.ui.panels.addStressSupport()"
+      >Add support</Button
+    >
 
     <div class="rd-head stress-caption"
       >Loads <span class="tree-count">{{ setup.loads.length }}</span></div
@@ -153,86 +172,108 @@ function placing(target: StressTarget): boolean {
         <span class="stress-item-name">Load {{ i + 1 }}</span>
         <Select v-model="l.kind" :options="LOAD_KINDS" class="stress-load-kind" />
         <!-- Down to no load at all: a body under its own weight alone is a study. -->
-        <button
-          type="button"
-          class="float-card-close stress-remove-load"
-          :title="`Remove load ${i + 1}`"
-          :aria-label="`Remove load ${i + 1}`"
+        <IconButton
+          class="stress-remove-load"
+          icon="close"
+          :tip="`Remove load ${i + 1}`"
+          size="sm"
+          variant="danger"
+          :icon-size="14"
           @click="engine.ui.panels.removeStressLoad(l.id)"
-        >
-          <Icon name="close" :size="14" />
-        </button>
+        />
       </div>
       <div class="stress-faces">
         <span class="measure-k stress-count">{{ faceCountLabel(l.faces, l.spots) }}</span>
         <span class="stress-face-actions">
-          <button
-            type="button"
-            class="btn stress-place-load"
-            :class="{ active: placing({ load: l.id }) }"
-            :aria-pressed="placing({ load: l.id })"
-            title="Click the body to place a spot"
+          <Button
+            size="sm"
+            class="stress-place-load"
+            :pressed="placing({ load: l.id }, 'face')"
+            tip="Click faces of the body to add each whole face"
             @click="engine.ui.panels.placeStressSpot({ load: l.id })"
-            >{{ placing({ load: l.id }) ? "Placing…" : "Click on body" }}</button
+            >{{ placing({ load: l.id }, "face") ? "Picking…" : "Click faces" }}</Button
           >
-          <button
-            type="button"
-            class="btn stress-set-load"
-            title="Use the faces selected in the view"
+          <Button
+            size="sm"
+            class="stress-spot-load"
+            :pressed="placing({ load: l.id }, 'spot')"
+            tip="Click the body to place a round spot, for a local load"
+            @click="engine.ui.panels.placeStressSpot({ load: l.id }, 'spot')"
+            >{{ placing({ load: l.id }, "spot") ? "Placing…" : "Spot" }}</Button
+          >
+          <Button
+            size="sm"
+            class="stress-set-load"
+            tip="Use the faces selected in the view"
             @click="engine.ui.panels.setStressFacesFromSelection({ load: l.id })"
-            >Use selected faces</button
+            >Use selected faces</Button
           >
         </span>
       </div>
       <div v-for="(spot, k) in l.spots ?? []" :key="'ls' + l.id + '-' + k" class="stress-field stress-spot">
         <span class="measure-k">Spot {{ k + 1 }}</span>
-        <span class="stress-number"
-          ><NumberBox v-model="spot.radius" class="sm-input stress-spot-radius" title="Radius" /> mm</span
-        >
-        <button
-          type="button"
-          class="float-card-close stress-remove-spot"
-          :title="`Remove spot ${k + 1}`"
-          :aria-label="`Remove spot ${k + 1}`"
+        <NumberField
+          v-model="spot.radius"
+          commit="live"
+          unit="mm"
+          :width-ch="7"
+          class="stress-spot-radius"
+          title="Radius"
+          aria-label="Radius"
+        />
+        <IconButton
+          class="stress-remove-spot"
+          icon="close"
+          :tip="`Remove spot ${k + 1}`"
+          size="sm"
+          variant="danger"
+          :icon-size="14"
           @click="engine.ui.panels.removeStressSpot({ load: l.id }, k)"
-        >
-          <Icon name="close" :size="14" />
-        </button>
+        />
       </div>
       <template v-if="l.kind === 'force'">
         <div class="stress-field">
           <span class="measure-k">Force</span>
-          <span class="stress-number"><NumberBox v-model="l.force" class="sm-input stress-force" /> N</span>
+          <NumberField v-model="l.force" commit="live" unit="N" :width-ch="7" class="stress-force" aria-label="Force" />
           <Select v-model="l.direction" :options="FORCE_DIRECTIONS" class="stress-direction" title="Direction" />
         </div>
         <div v-if="l.direction === 'custom'" class="stress-field">
           <span class="measure-k">X, Y, Z</span>
           <span class="stress-xyz-row">
-            <NumberBox
-              v-for="k in 3"
-              :key="k"
-              v-model="l.custom[k - 1]"
-              class="sm-input stress-xyz"
-              :title="String(l.custom[k - 1])"
+            <!-- Wide enough for what a drag writes, a sign and three decimals. -->
+            <NumberField
+              v-for="i in AXES"
+              :key="i"
+              v-model="l.custom[i]"
+              commit="live"
+              :step="0.1"
+              :width-ch="6"
+              class="stress-xyz"
+              :title="String(l.custom[i])"
+              :aria-label="AXIS_NAMES[i]"
             />
           </span>
         </div>
       </template>
       <div v-else class="stress-field">
         <span class="measure-k">Pressure</span>
-        <span class="stress-number"><NumberBox v-model="l.pressure" class="sm-input stress-pressure" /> MPa</span>
+        <NumberField
+          v-model="l.pressure"
+          commit="live"
+          unit="MPa"
+          :width-ch="7"
+          class="stress-pressure"
+          aria-label="Pressure"
+        />
       </div>
     </div>
-    <button type="button" class="btn stress-add stress-add-load" @click="engine.ui.panels.addStressLoad()">
-      <Icon name="plus" :size="14" />Add load
-    </button>
+    <Button size="sm" icon="plus" class="stress-add stress-add-load" @click="engine.ui.panels.addStressLoad()"
+      >Add load</Button
+    >
 
     <div class="stress-field stress-weight">
       <label class="stress-gravity" title="Load the body with its own weight">
-        <span class="param-switch">
-          <input v-model="setup.gravity.on" type="checkbox" class="stress-gravity-on" />
-          <span class="track"><span class="knob" /></span>
-        </span>
+        <Switch v-model="setup.gravity.on" class="stress-gravity-on" label="Own weight" />
         <span class="stress-swatch" :style="{ background: gravityColor }" />
         <span class="measure-k">Own weight</span>
       </label>
@@ -248,17 +289,34 @@ function placing(target: StressTarget): boolean {
     <div class="rd-head stress-caption">Material</div>
     <StressMaterialFields :setup="setup" />
 
-    <button type="button" class="stress-more" :aria-expanded="moreOpen" @click="moreOpen = !moreOpen">
-      <Icon :name="moreOpen ? 'caretDown' : 'caretRight'" :size="12" />More options
-    </button>
+    <Button variant="ghost" size="sm" class="stress-more" :aria-expanded="moreOpen" @click="moreOpen = !moreOpen">
+      <template #icon><Icon :name="moreOpen ? 'caretDown' : 'caretRight'" :size="12" /></template>More options
+    </Button>
     <div v-show="moreOpen" class="stress-fold stress-more-body">
       <div class="stress-field">
         <span class="measure-k">Mesh size</span>
-        <span class="stress-number">
-          <NumberBox v-model="setup.size" nullable class="sm-input stress-size" placeholder="auto" /> mm
-        </span>
+        <NumberField
+          v-model="setup.size"
+          commit="live"
+          nullable
+          unit="mm"
+          :width-ch="7"
+          class="stress-size"
+          placeholder="auto"
+          aria-label="Mesh size"
+        />
       </div>
       <div class="sm-hint">Smaller is finer and slower.</div>
+      <div class="stress-field">
+        <span class="measure-k">Refinement</span>
+        <Select
+          v-model="setup.refine"
+          :options="REFINE_CHOICES"
+          class="stress-refine"
+          title="Refine the mesh where stress is high"
+        />
+      </div>
+      <div class="sm-hint">Fine finds the peak more closely and takes longer. Off uses one even mesh.</div>
     </div>
 
     <div v-if="panels.stress?.error" class="measure-hint stress-error">{{ panels.stress.error }}</div>

@@ -199,13 +199,14 @@ describe("what a picked body is offered", () => {
     const one = labels(toolbarOffers({ body: 1 }));
     expect(one).toContain("pattern-linear");
     expect(one).toContain("pattern-circular");
+    expect(one).toContain("pattern-rect");
     expect(one).toContain("move");
   });
 
   it("offers Mirror for one body or several, right after the patterns, and not for a face", () => {
     for (const n of [1, 3]) {
       const offered = labels(selectionOffers({ body: n }));
-      expect(offered.indexOf("mirror")).toBe(offered.indexOf("pattern-circular") + 1);
+      expect(offered.indexOf("mirror")).toBe(offered.indexOf("pattern-rect") + 1);
     }
     expect(labels(selectionOffers({ face: 2 }))).not.toContain("mirror");
     expect(labels(selectionOffers({}))).not.toContain("mirror");

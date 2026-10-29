@@ -347,7 +347,7 @@ export class SectionTool {
     this.handle = nameHandle(createDragHandle(), "section");
     this.gizmo = this.handle.group;
     this.viewport.addToScene(this.gizmo, "section");
-    this.dim.show([{ name: "offset", label: "Offset", kind: "length" }], () => this.confirm());
+    this.dim.show([{ name: "offset", label: "Offset", icon: "offsetPlane", kind: "length" }], () => this.confirm());
     this.dim.updateFromCursor({ offset: this.offset });
     this.place();
     this.prompt();

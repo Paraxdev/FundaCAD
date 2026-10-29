@@ -2,13 +2,14 @@
 //! the body's checkpoint blob key, `mesh::CODE_VERSION` and the deflections.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
 
 use fundacad_protocol::{Edge, FullBody};
 use serde_json::{Map, Value};
 
 use super::store::GeomStore;
-use crate::mesh::{self, effective_tolerance, MeshBody, PayloadCache, ViewportProfile};
+use crate::mesh::{self, effective_tolerance, Cached, MeshBody, PayloadCache, ViewportProfile};
 
 /// `_MESH_PERSIST_MIN_MS`: cheaper payloads are not worth a disk write.
 pub const PERSIST_MIN: Duration = Duration::from_millis(50);
@@ -21,7 +22,8 @@ struct RamPayload {
     /// `mesh::pass_key`: a mesh pass spec or its code version changing on the
     /// same shape must mesh again.
     passes: Option<String>,
-    payload: FullBody,
+    etag: String,
+    payload: Arc<FullBody>,
 }
 
 #[derive(Default)]
@@ -95,25 +97,27 @@ pub struct Tiered<'a> {
 }
 
 impl PayloadCache for Tiered<'_> {
-    fn get(&mut self, body: &MeshBody<'_>, tolerance: f64, profile: ViewportProfile) -> Option<FullBody> {
+    fn get(&mut self, body: &MeshBody<'_>, tolerance: f64, profile: ViewportProfile) -> Option<Cached> {
         let req = request(tolerance, profile);
         let passes = mesh::pass_key(body);
         if let (Some(ident), Some(hit)) = (body.identity, self.payloads.ram.get(&body.id)) {
             if hit.identity == ident && hit.request == req && hit.passes == passes {
                 self.payloads.ram_hits += 1;
-                return Some(hit.payload.clone());
+                return Some(Cached { etag: hit.etag.clone(), payload: Arc::clone(&hit.payload) });
             }
         }
         let store = self.store?;
         let key = body.mesh_key.as_deref()?;
         let payload = decode(&store.get_mesh(&body_artifact_key(key, passes.as_deref(), tolerance, profile))?)?;
         self.payloads.disk_hits += 1;
+        let etag = mesh::etag_with(&payload, passes.as_deref());
+        let payload = Arc::new(payload);
         if let Some(identity) = body.identity {
-            self.payloads
-                .ram
-                .insert(body.id.clone(), RamPayload { identity, request: req, passes, payload: payload.clone() });
+            let entry =
+                RamPayload { identity, request: req, passes, etag: etag.clone(), payload: Arc::clone(&payload) };
+            self.payloads.ram.insert(body.id.clone(), entry);
         }
-        Some(payload)
+        Some(Cached { etag, payload })
     }
 
     fn put(
@@ -121,7 +125,8 @@ impl PayloadCache for Tiered<'_> {
         body: &MeshBody<'_>,
         tolerance: f64,
         profile: ViewportProfile,
-        payload: &FullBody,
+        payload: FullBody,
+        etag: &str,
         build: Duration,
     ) {
         self.payloads.meshed += 1;
@@ -129,14 +134,18 @@ impl PayloadCache for Tiered<'_> {
         if let (Some(store), Some(key)) = (self.store, body.mesh_key.as_deref()) {
             if build >= self.persist_after || profile.size_scale != 1.0 {
                 let at = body_artifact_key(key, passes.as_deref(), tolerance, profile);
-                let _ = store.put_mesh(&at, &encode(payload));
+                let _ = store.put_mesh(&at, &encode(&payload));
             }
         }
         if let Some(identity) = body.identity {
-            self.payloads.ram.insert(
-                body.id.clone(),
-                RamPayload { identity, request: request(tolerance, profile), passes, payload: payload.clone() },
-            );
+            let entry = RamPayload {
+                identity,
+                request: request(tolerance, profile),
+                passes,
+                etag: etag.to_owned(),
+                payload: Arc::new(payload),
+            };
+            self.payloads.ram.insert(body.id.clone(), entry);
         }
     }
 }
@@ -168,7 +177,8 @@ pub fn encode(b: &FullBody) -> Vec<u8> {
     b.face_ids.iter().for_each(|v| out.extend_from_slice(&v.to_le_bytes()));
     put_u32(&mut out, b.edges.len());
     for e in &b.edges {
-        out.push(u8::from(e.smooth));
+        out.push(u8::from(e.smooth) | (u8::from(e.curvature.is_some()) << 1));
+        e.curvature.iter().flatten().for_each(|k| out.extend_from_slice(&k.to_le_bytes()));
         put_u32(&mut out, e.points.len());
         e.points.iter().flatten().for_each(|v| out.extend_from_slice(&v.to_le_bytes()));
     }
@@ -226,10 +236,12 @@ pub fn decode(data: &[u8]) -> Option<FullBody> {
     let n = r.u32()?;
     let mut edges = Vec::with_capacity(n.min(1 << 20));
     for _ in 0..n {
-        let smooth = r.u8()? != 0;
+        let flags = r.u8()?;
+        let smooth = flags & 1 != 0;
+        let curvature = if flags & 2 != 0 { r.f32s(2)?.try_into().ok() } else { None };
         let k = r.u32()?;
         let flat = r.f32s(k.checked_mul(3)?)?;
-        edges.push(Edge { points: flat.chunks_exact(3).map(|p| [p[0], p[1], p[2]]).collect(), smooth });
+        edges.push(Edge { points: flat.chunks_exact(3).map(|p| [p[0], p[1], p[2]]).collect(), smooth, curvature });
     }
     if !r.0.is_empty() {
         return None;

@@ -45,6 +45,10 @@ fn body_from_json(m: &Map<String, Value>) -> WireBody {
                         })
                         .collect(),
                     smooth: pyjson::truthy(e.get("smooth")),
+                    curvature: e
+                        .get("curvature")
+                        .and_then(Value::as_array)
+                        .and_then(|k| Some([k.first()?.as_f64()? as f32, k.get(1)?.as_f64()? as f32])),
                 })
                 .collect()
         })

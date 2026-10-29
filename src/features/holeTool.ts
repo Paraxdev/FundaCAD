@@ -36,6 +36,12 @@ const TYPE_LABEL: Record<HoleType, string> = {
   countersink: "Countersink",
   insert: "Insert",
 };
+const TYPE_ICON: Record<HoleType, string> = {
+  simple: "holeSimple",
+  counterbore: "holeCounterbore",
+  countersink: "holeCountersink",
+  insert: "holeInsert",
+};
 const THROUGH = /^\s*(thr(u|ough)?|all)\s*$/i;
 
 export class HoleTool {
@@ -280,20 +286,10 @@ export class HoleTool {
     this.points = points ? points.map((q) => [...q] as Vec3) : [round3(onPlane)];
     this.previewId = this.editId ?? this.store.nextId();
     this.viewport.clearHover();
-    const centerBtn = document.createElement("button");
-    centerBtn.type = "button";
-    centerBtn.className = "dim-btn";
-    centerBtn.title = "Move the hole to the centre of the face";
-    centerBtn.textContent = "Center";
-    centerBtn.addEventListener("pointerdown", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      this.centerFirstPoint();
-    });
     this.dim.show(
       [
-        { name: "size", label: "Size", kind: "count", free: true },
-        { name: "depth", label: "Depth", kind: "length", free: true },
+        { name: "size", label: "Size", icon: "diameter", kind: "count", free: true },
+        { name: "depth", label: "Depth", icon: "depth", kind: "length", positive: true, words: THROUGH },
         // Offset from the face centre (this.center) along its own xdir/ydir, so
         // a hole can be placed exactly without pixel-hunting for the click spot.
         { name: "x", label: "X", kind: "length" },
@@ -301,13 +297,21 @@ export class HoleTool {
       ],
       () => this.commit(),
       () => this.cancel(),
-      {
-        label: TYPE_LABEL[this.holeType],
-        title: "Hole type: simple, counterbore, countersink or heat-set insert",
-        initial: false,
-        onChange: () => this.nextType(),
-      },
-      centerBtn,
+      [
+        {
+          name: "type",
+          title: "Hole type: simple, counterbore, countersink or heat-set insert",
+          segments: HOLE_TYPES.map((t) => ({ id: t, label: TYPE_LABEL[t], icon: TYPE_ICON[t] })),
+          chosen: this.holeType,
+          onChoose: (id) => this.setType(id as HoleType),
+        },
+        {
+          name: "center",
+          label: "Move the hole to the centre of the face",
+          icon: "faceCenter",
+          onPress: () => this.centerFirstPoint(),
+        },
+      ],
     );
     this.lastSizeText = this.sizeText();
     this.dim.seedText("size", this.lastSizeText);
@@ -347,10 +351,9 @@ export class HoleTool {
     this.dim.focus();
   }
 
-  private nextType() {
-    this.holeType = HOLE_TYPES[(HOLE_TYPES.indexOf(this.holeType) + 1) % HOLE_TYPES.length]!;
-    this.dim.setToggle(false);
-    this.dim.setToggleLabel(TYPE_LABEL[this.holeType]);
+  private setType(t: HoleType) {
+    this.holeType = t;
+    this.dim.setOption("type", t);
     this.resized = true;
     if (this.holeType === "insert") {
       if (!INSERT[this.size]) this.size = "M5";
@@ -363,18 +366,14 @@ export class HoleTool {
     this.valueChanged();
   }
 
-  /** A size name and "through" are not numbers, so this tool reads them and must refuse what it could not read
-   *  rather than build the last value it could. */
+  /** A size name is not a number, so this tool reads it and must refuse what it could not read rather than build the
+   *  last size it could. The box judges a typed depth itself, except that an insert cannot go through. */
   private typedProblem(): string | null {
     if (this.dim.isUserDriven("size") && !parseHoleSize(this.dim.getRaw("size"))) {
       return badHoleSizeText(this.dim.getRaw("size"));
     }
     const depthText = this.dim.getRaw("depth");
-    if (this.dim.isUserDriven("depth") && !(THROUGH.test(depthText) && this.holeType !== "insert")) {
-      const v = this.dim.getValue("depth");
-      if (v == null) return `Depth: "${depthText.trim()}" is not a number`;
-      if (v <= 0) return "Depth must be more than 0";
-    }
+    if (this.holeType === "insert" && THROUGH.test(depthText)) return "Depth: an insert hole cannot go through";
     return null;
   }
 

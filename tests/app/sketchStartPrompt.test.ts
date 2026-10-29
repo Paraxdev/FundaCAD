@@ -32,7 +32,7 @@ describe("the prompt a sketch tool starts with", () => {
 
   it("is left to the entity patterns and Mirror, which word their own as things are picked", () => {
     const { to } = bridge();
-    expect([...SELF_PROMPTING].sort()).toEqual(["mirror", "patternCircular", "patternRect"]);
+    expect([...SELF_PROMPTING].sort()).toEqual(["mirror", "patternCircular", "patternLinear", "patternRect"]);
     to("patternRect");
     setPrompt("2 picked · click more to add · click where the pattern starts · Esc");
     to("patternRect");

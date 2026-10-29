@@ -1,39 +1,45 @@
 <script setup lang="ts">
 // The unit is a chip, not part of the label: a label is a name and a unit is part of the value ("Radius mm | 5in" reads
-// as a contradiction). The same vocabulary as sketch/dimInput.ts, down to the class.
+// as a contradiction).
 
-import ValidatedInput from "./ValidatedInput.vue";
+import { ref } from "vue";
+import NumberField from "../ui/NumberField.vue";
+import type { UnitDef } from "../../ui/measure";
 
-const props = defineProps<{
+defineProps<{
   label: string;
   /** The value's key, rendered as data-field so a row can be found by it. */
   field?: string | undefined;
-  /** Current committed value, in whatever spelling the panel wants shown. */
-  value: string;
-  /** Return an error message to show, or null on success. */
-  commit: (raw: string) => string | null;
+  /** Canonical, or null while `text` shows what drives it. */
+  value: number | null;
+  /** An expression shown in place of the value. */
+  text?: string | null | undefined;
+  /** A ui/measure unit id, the unit the value is shown in. Absent for a unitless field, which gets no chip. */
+  unit?: string | null | undefined;
+  /** Unit ids the chip offers. Absent, the chip is a caption: only a number can be re-shown in another unit, an
+   *  expression cannot. */
+  units?: readonly string[] | undefined;
+  parse: (raw: string, unit: UnitDef | null) => number | null;
+  validate?: ((value: number) => string | null) | undefined;
+  /** Commits what `parse` leaves as text, returning the refusal or null. */
+  expression?: ((raw: string) => string | null) | undefined;
   /** Extra classes for the row (fx-row, param-stale, …). */
   rowClass?: string | undefined;
   /** Tooltip for the row; the input's own title is the error, when there is one. */
   rowTitle?: string | undefined;
   hint?: string | undefined;
-  /** What the value is measured in, e.g. "mm" or "°". Empty for a unitless
-   *  field, which gets no chip rather than a blank one. */
-  unit?: string | undefined;
-  /** Opens the unit picker under the chip. Absent, the chip is a caption: only a number can be re-shown in another
-   *  unit, an expression cannot. */
-  pickUnit?: ((x: number, y: number) => void) | undefined;
-  /** Shows what the typed text would do without committing, passed through to ValidatedInput. */
-  preview?: ((raw: string) => void) | undefined;
+  preview?: ((value: number | null) => void) | undefined;
   previewEnd?: ((committing: boolean) => void) | undefined;
   /** Why the previewed value could not be built, shown as a line under the row since a tooltip is only found by
    *  someone who already suspects one. */
   problem?: string | null | undefined;
 }>();
+const emit = defineEmits<{ commit: [number]; "update:unit": [string] }>();
 
-function onPickUnit(e: MouseEvent) {
-  const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-  props.pickUnit?.(r.left, r.bottom + 2);
+const refused = ref<string | null>(null);
+
+function onValue(v: number | null) {
+  if (v !== null) emit("commit", v);
 }
 </script>
 
@@ -41,20 +47,26 @@ function onPickUnit(e: MouseEvent) {
   <div class="param-row" :class="rowClass" :title="rowTitle" :data-field="field">
     <label>{{ label }}</label>
     <div class="param-value">
-      <ValidatedInput
+      <NumberField
         :aria-label="label"
-        :value="value"
-        :commit="commit"
-        :hint="hint"
+        :title="hint"
+        :model-value="value"
+        :text="text"
+        :unit="unit"
+        :units="units"
+        :unit-tip="units?.length ? 'Change unit' : 'Expressions are written in this unit'"
+        adopt-unit
+        :parse="parse"
+        :validate="validate"
+        :expression="expression"
         :preview="preview"
         :preview-end="previewEnd"
         :problem="problem"
+        @update:model-value="onValue"
+        @update:unit="emit('update:unit', $event)"
+        @error="refused = $event"
       />
-      <button v-if="unit && pickUnit" type="button" class="dim-unit" title="Change unit" @click="onPickUnit">{{
-        unit
-      }}</button>
-      <span v-else-if="unit" class="dim-unit static" title="Expressions are written in this unit">{{ unit }}</span>
     </div>
-    <p v-if="problem" class="param-problem">{{ problem }}</p>
+    <p v-if="refused || problem" class="param-problem">{{ refused ?? problem }}</p>
   </div>
 </template>

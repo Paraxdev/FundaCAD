@@ -341,10 +341,10 @@ const TINT_DEPTH = 20;
 type MaterialPatch = Partial<Omit<MaterialDef, "id">>;
 
 /** Glass controls only where the viewport draws glass: see-through and not metal. */
+// Flakes and Flake size stay in the document but are not offered: nothing draws them yet (material rework 5pkzj6br).
 const ADVANCED_SLIDERS = [
   { field: "sheen", label: "Sheen" },
   { field: "anisotropy", label: "Anisotropy" },
-  { field: "flakes", label: "Flakes" },
 ] as const;
 
 function isGlass(m: MaterialDef): boolean {
@@ -707,19 +707,6 @@ async function doImport() {
             :data-field="s.field"
             :value="finishOf(selected)[s.field]"
             @input="set(s.field, ($event.target as HTMLInputElement).value)"
-          />
-        </label>
-        <label class="prefs-row">
-          <span class="prefs-label">Flake size (mm)</span>
-          <input
-            class="sm-slider"
-            type="range"
-            min="0.02"
-            max="2"
-            step="0.01"
-            data-field="flakeSize"
-            :value="finishOf(selected).flakeSize"
-            @input="set('flakeSize', ($event.target as HTMLInputElement).value)"
           />
         </label>
         <label v-if="isGlass(selected)" class="prefs-row">

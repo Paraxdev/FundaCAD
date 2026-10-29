@@ -81,6 +81,7 @@ export interface SpotHit {
   /** The surface's outward normal there. */
   normal: Vec3;
   body: string | null;
+  faceId: number;
 }
 
 export type ForcePatch = ReturnType<typeof forceDragPatch>;
@@ -171,7 +172,7 @@ export class StressGlyphs {
   private orbs: Orb[] = [];
   /** The orb under the cursor in place mode, where a click would put a spot. */
   private preview: Orb | null = null;
-  private placing: { color: number; radius: number } | null = null;
+  private placing: { color: number; radius: number | null } | null = null;
   private shared: {
     shaft: THREE.CylinderGeometry;
     head: THREE.ConeGeometry;
@@ -223,9 +224,9 @@ export class StressGlyphs {
     this.rebuild();
   }
 
-  /** The next click on the body puts a spot there, an orb follows the cursor meanwhile. Null ends place
-   *  mode. */
-  setPlacing(p: { color: number; radius: number } | null) {
+  /** The next click on the body is handed to placeSpot, an orb of `radius` follows the cursor when it places a spot.
+   *  Null ends place mode. */
+  setPlacing(p: { color: number; radius: number | null } | null) {
     this.placing = p;
     this.press = null;
     if (!p) this.dropPreview();
@@ -658,6 +659,7 @@ export class StressGlyphs {
       at: [hit.anchor.x, hit.anchor.y, hit.anchor.z],
       normal: [hit.normal.x, hit.normal.y, hit.normal.z],
       body: hit.bodyId,
+      faceId: hit.faceId,
     };
   }
 
@@ -756,14 +758,15 @@ export class StressGlyphs {
       return;
     }
     if (this.placing) {
-      const hit = this.spotHit(e.clientX, e.clientY);
-      if (!hit) {
+      const r = this.placing.radius;
+      const hit = r === null ? null : this.spotHit(e.clientX, e.clientY);
+      if (!hit || r === null) {
         this.dropPreview();
       } else if (this.preview) {
         this.preview.at.set(...hit.at);
         if (this.layOrb(this.preview)) this.host.requestRender();
       } else {
-        this.preview = this.makeOrb(hit.at, this.placing.radius, this.placing.color, null);
+        this.preview = this.makeOrb(hit.at, r, this.placing.color, null);
         this.loop();
         this.host.requestRender();
       }

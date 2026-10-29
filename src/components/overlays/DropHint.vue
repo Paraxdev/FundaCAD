@@ -46,7 +46,7 @@ onUnmounted(() => uninstall?.());
   padding: 16px 20px;
   border-radius: 14px;
   background: var(--float-bg-solid);
-  border: 1px solid var(--float-line);
+  border: 1px solid transparent;
   color: var(--text);
   text-align: center;
 }

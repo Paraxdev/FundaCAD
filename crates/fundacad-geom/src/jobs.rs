@@ -15,8 +15,12 @@ pub struct GeomJobs;
 struct EngineWatch<'a>(&'a JobContext);
 
 impl Watch for EngineWatch<'_> {
-    fn feature(&self, index: usize) {
+    fn feature_started(&self, index: usize) {
         self.0.progress.feature(i64::try_from(index).unwrap_or(i64::MAX));
+    }
+
+    fn phase(&self, phase: i64) {
+        self.0.progress.phase(phase);
     }
 
     fn meshing(&self, done: usize, total: usize) {
@@ -58,6 +62,7 @@ fn rebuild_with(
     watch: &dyn Watch,
     mut cache: Option<&mut RebuildCache>,
 ) -> JobResult {
+    let started = std::time::Instant::now();
     let _beat = crate::heartbeat::install(watch.heartbeat());
     let _cancel = crate::cancel::install(watch.cancel_token());
     let typed: CadDocument = match CadDocument::from_value_lenient(doc) {
@@ -79,17 +84,27 @@ fn rebuild_with(
         }
         return JobResult::Json(builder::result_fields(&typed, &r));
     }
+    watch.phase(fundacad_protocol::build_phase::ASSEMBLING);
     let fields = builder::result_fields(&typed, &r);
+    let mut timing = None;
     let meshed = match cache {
-        Some(c) => JobResult::Mesh(c.mesh(&r, tolerance, known, &mut |done, total| watch.meshing(done, total))),
+        Some(c) => {
+            let m = c.mesh(&r, tolerance, known, &mut |done, total| watch.meshing(done, total));
+            timing = Some(crate::cache::timing::wire(&c.stats, doc, started.elapsed()));
+            JobResult::Mesh(m)
+        }
         None => mesh_result(&r.bodies, tolerance, known, watch),
     };
+    watch.phase(fundacad_protocol::build_phase::ASSEMBLING);
     match meshed {
         JobResult::Mesh(mut mesh) => {
             let bbox = mesh.fields.get("bbox").cloned().unwrap_or(Value::Null);
             let failed = mesh.fields.remove(crate::mesh::PASS_ERRORS);
             let mut merged = fields;
             merged.insert("bbox".into(), bbox);
+            if let Some(t) = timing {
+                merged.insert("timing".into(), t);
+            }
             if let Some(Value::Array(failed)) = failed {
                 add_pass_errors(&mut merged, failed);
             }
@@ -134,6 +149,10 @@ fn add_pass_errors(fields: &mut Map<String, Value>, failed: Vec<Value>) {
 }
 
 #[cfg(test)]
+#[path = "jobs_release_tests.rs"]
+mod release_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
@@ -150,7 +169,8 @@ mod tests {
             panic!("expected a mesh result");
         };
         assert_eq!(m.bodies.len(), 3);
-        assert_eq!(ctx.progress.beats(), 6, "one beat per feature and one per meshed body");
+        // 3 features, the two phase changes around meshing, the meshing start and 3 bodies
+        assert_eq!(ctx.progress.beats(), 9, "a beat per feature start, phase change and meshed body");
     }
 
     /// The field report's fillet: three edges at a corner, a radius the kernel's filleter refuses, so it
@@ -249,13 +269,22 @@ impl Jobs for GeomJobs {
         crate::bench::doing()
     }
 
-    // Note: an abandoned rebuild can still hold the cache, so this never waits for it.
+    // An abandoned job can still hold a cache, so this never waits for it. The memos are this thread's, the job
+    // thread's, and keyed by shape, not by document.
     fn release(&mut self) -> bool {
-        match cache::global().try_lock() {
-            Ok(mut cache) => cache.release(),
-            Err(std::sync::TryLockError::Poisoned(p)) => p.into_inner().release(),
-            Err(std::sync::TryLockError::WouldBlock) => return false,
-        }
-        true
+        crate::kernel::forget_remembered();
+        crate::features::resize::memo::forget();
+        let rebuilt = match cache::global().try_lock() {
+            Ok(mut cache) => {
+                cache.release();
+                true
+            }
+            Err(std::sync::TryLockError::Poisoned(p)) => {
+                p.into_inner().release();
+                true
+            }
+            Err(std::sync::TryLockError::WouldBlock) => false,
+        };
+        crate::inspect::release_locals() && rebuilt
     }
 }

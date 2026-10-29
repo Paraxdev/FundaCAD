@@ -261,6 +261,20 @@ fn forget_stale_join(doc: &mut Doc, before: Option<&Value>, after: &Value) {
     }
 }
 
+/// The keys `doc_get` hands out, the only ones `doc_set` replaces whether or not the incoming document names them.
+pub const DOC_GET_KEYS: [&str; 5] = ["features", "parameters", "paramDefs", "bodyIds", "version"];
+
+/// `doc_get` never showed the assistant the open document's other keys (stress, environment, materials,
+/// overlays), so the ones `next` leaves out stay. A key `next` sets to null is cleared.
+pub fn keep_unnamed_keys(open: &Doc, next: &mut Doc) {
+    for (key, value) in open {
+        if !DOC_GET_KEYS.contains(&key.as_str()) && !next.contains_key(key) {
+            next.insert(key.clone(), value.clone());
+        }
+    }
+    next.retain(|key, value| DOC_GET_KEYS.contains(&key.as_str()) || !value.is_null());
+}
+
 /// `forget_stale_join` for a whole document handed over in place of `before`, since `doc_get`, edit, `doc_set`
 /// is an edit too. A feature `before` lacks is left alone: a new file's joins may predate the map.
 pub fn forget_stale_joins(before: &Doc, after: &mut Doc) {

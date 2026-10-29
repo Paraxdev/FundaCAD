@@ -10,6 +10,7 @@ import {
   areaFilterIcon,
   areaFilterLabel,
   areaSelectionMode,
+  areaTakesProfiles,
   AREA_FILTERS,
   boxOf,
   boxVerdict,
@@ -18,6 +19,7 @@ import {
   faceInBox,
   isAreaDrag,
   nextAreaFilter,
+  outlineInBox,
   polylineInBox,
   pointInRect,
   unionBox,
@@ -183,7 +185,17 @@ describe("the filter decides what kind of selection a box makes", () => {
       expect(areaSelectionMode("bodies", current)).toBe("bodies");
       expect(areaSelectionMode("faces", current)).toBe("faces");
       expect(areaSelectionMode("edges", current)).toBe("faces");
+      expect(areaSelectionMode("profiles", current)).toBe("faces");
     }
+  });
+
+  it("takes sketch profiles with faces, and only them with the profiles filter", () => {
+    expect(areaTakesProfiles("faces", "faces")).toBe(true);
+    expect(areaTakesProfiles("all", "faces")).toBe(true);
+    expect(areaTakesProfiles("profiles", "faces")).toBe(true);
+    expect(areaTakesProfiles("all", "bodies")).toBe(false);
+    expect(areaTakesProfiles("edges", "faces")).toBe(false);
+    expect(areaTakesProfiles("bodies", "bodies")).toBe(false);
   });
 
   it("leaves the mode alone for `all`", () => {
@@ -266,5 +278,27 @@ describe("boxVerdict", () => {
     expect(unionBox([0, 0, 10, 10], [5, 5, 20, 20])).toEqual([0, 0, 20, 20]);
     expect(unionBox([0, 0, 10, 10], null)).toBeNull();
     expect(unionBox(null, [0, 0, 10, 10])).toBeNull();
+  });
+});
+
+describe("a sketch profile by its outline on screen", () => {
+  const square = (x: number, y: number, size: number) => [x, y, x + size, y, x + size, y + size, x, y + size];
+
+  it("is in a window only when the whole outline is", () => {
+    expect(outlineInBox(square(120, 120, 20), R, "window")).toBe(true);
+    expect(outlineInBox(square(190, 120, 20), R, "window")).toBe(false);
+  });
+
+  it("is touched by a crossing over its edge, or by a box lying wholly inside it", () => {
+    expect(outlineInBox(square(190, 120, 20), R, "crossing")).toBe(true);
+    expect(outlineInBox(square(0, 0, 400), R, "crossing")).toBe(true);
+    // CONTROL: beside the box, not under it.
+    expect(outlineInBox(square(300, 300, 20), R, "crossing")).toBe(false);
+  });
+
+  it("is never taken with a point behind the camera", () => {
+    const behind = [120, 120, NaN, NaN, 140, 140];
+    expect(outlineInBox(behind, R, "window")).toBe(false);
+    expect(outlineInBox(behind, R, "crossing")).toBe(false);
   });
 });

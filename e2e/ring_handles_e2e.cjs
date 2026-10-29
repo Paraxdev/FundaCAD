@@ -513,7 +513,7 @@ const check = (name, ok, detail) => {
     await page.mouse.up();
     check("the ring still turns the body, 90 about Z", deg === 90, String(deg));
   }
-  // A released drag commits and the gizmo comes back on the moved box; put the
+  // The released drag is still pending in the gizmo; drop it and put the
   // box back so the light shots are of the same scene.
   await settle();
   await page.evaluate(() => window.__fundacad.move.cancel());
@@ -531,13 +531,12 @@ const check = (name, ok, detail) => {
   console.log("\n[light]");
   await page.evaluate(() => window.__fundacad.handleAction("materials"));
   await page.waitForTimeout(600);
-  await page.click('.rd-tab[data-tab="environment"]');
+  await page.click('#renderdock [role=tab][data-tab="environment"]');
   await page.waitForTimeout(200);
   if (
     !(await page.evaluate(
       () =>
-        window.__fundacad.lightAim.angles &&
-        document.querySelector('[data-shadows="mode"]')?.getAttribute("aria-pressed") === "true",
+        window.__fundacad.lightAim.angles && document.querySelector('[data-shadows="mode"] input')?.checked === true,
     ))
   ) {
     await page.click('[data-shadows="mode"]');

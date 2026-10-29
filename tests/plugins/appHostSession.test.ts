@@ -63,7 +63,7 @@ describe("a plugin run and the document it works on", () => {
 
   it("goes on in the document its own doc_new started", async () => {
     const store = new DocumentStore(stubBackend, { parameters: {}, features: [] });
-    const run = appHost({ store });
+    const run = appHost({ store, mayDiscard: async () => true });
     await run.perform("feature_add", plate("a1"));
     const made = await outcome(run.perform("doc_new", {}));
     const inNew = await outcome(run.perform("feature_add", plate("n1")));

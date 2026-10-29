@@ -1,4 +1,5 @@
-import { saveDocument, saveDocumentAs, exportSelection, importModel } from "../io/files";
+import { exportSelection, importModel } from "../io/files";
+import { saveWork, saveWorkAs } from "./documentActions";
 import { contributedMenus } from "../plugins/contrib";
 import { toggleShortcutHUD } from "../input/shortcuts";
 import { checkForUpdates, showAbout } from "../ui/updates";
@@ -10,7 +11,10 @@ import { ideaUrl, REPO_URL } from "../ui/reportText";
 import type { MenuDef } from "../ui/menu";
 import { beforeUpdate } from "./unsavedGuard";
 import { PRODUCT_NAME } from "./channel";
+import { allCommands } from "../ui/commands";
+import { analysisFlags } from "../ui/railActive";
 import type { Engine } from "./engine";
+import { pickedFeatureIds, toggleSuppressRows } from "./featureRows";
 
 const ISSUES_URL = `${REPO_URL}/issues`;
 
@@ -32,6 +36,25 @@ function withContributions(menus: MenuDef[]): MenuDef[] {
   return out;
 }
 
+const ANALYSIS_ITEMS = [
+  { id: "draft-analysis", label: "Overhang" },
+  { id: "zebra", label: "Zebra" },
+  { id: "curvature", label: "Curvature" },
+  { id: "component-colors", label: "Body Colors" },
+];
+
+function viewItems(e: Engine): MenuDef["items"] {
+  const view = allCommands()
+    .filter((c) => c.group === "View")
+    .map((c) => ({ label: c.label, ...(c.key ? { shortcut: c.key } : {}), onClick: () => e.handleAction(c.id) }));
+  const analysis = ANALYSIS_ITEMS.map((a) => ({
+    label: a.label,
+    checked: () => analysisFlags(e.viewport)[a.id] === true,
+    onClick: () => e.handleAction(a.id),
+  }));
+  return [...view, { separator: true, label: "" }, ...analysis];
+}
+
 /** `disabled` and `checked` are thunks, re-evaluated every time a menu opens. */
 export function buildMenubar(e: Engine): MenuDef[] {
   return withContributions([
@@ -45,8 +68,8 @@ export function buildMenubar(e: Engine): MenuDef[] {
         { separator: true, label: "" },
         { label: "Import Mesh…", onClick: () => void importModel(e.store, e.geometry) },
         { separator: true, label: "" },
-        { label: "Save", shortcut: "Ctrl+S", onClick: () => void saveDocument(e.store) },
-        { label: "Save As…", shortcut: "Ctrl+Shift+S", onClick: () => void saveDocumentAs(e.store) },
+        { label: "Save", shortcut: "Ctrl+S", onClick: () => void saveWork(e) },
+        { label: "Save As…", shortcut: "Ctrl+Shift+S", onClick: () => void saveWorkAs(e) },
         { separator: true, label: "" },
         { label: "Export…", shortcut: "Ctrl+E", onClick: () => void exportSelection(e.store, e.geometry, e.viewport) },
       ],
@@ -75,7 +98,7 @@ export function buildMenubar(e: Engine): MenuDef[] {
           onClick: () => {
             if (e.deleteSelectedFace()) return;
             if (e.selectedFeature) {
-              e.store.removeFeature(e.selectedFeature);
+              e.store.removeFeatures(pickedFeatureIds(e));
               e.selectFeature(null);
             }
           },
@@ -83,7 +106,7 @@ export function buildMenubar(e: Engine): MenuDef[] {
         {
           label: "Suppress / Unsuppress",
           disabled: () => !e.selectedFeature,
-          onClick: () => e.selectedFeature && e.store.toggleSuppress(e.selectedFeature),
+          onClick: () => e.selectedFeature && toggleSuppressRows(e.store, pickedFeatureIds(e)),
         },
         { separator: true, label: "" },
         // No ellipsis: it opens a workspace, not a window.
@@ -92,11 +115,12 @@ export function buildMenubar(e: Engine): MenuDef[] {
           label: "Preferences…",
           shortcut: "Ctrl+,",
           onClick: () => {
-            useDialogStore().preferences = true;
+            useDialogStore().openPreferences();
           },
         },
       ],
     },
+    { label: "View", items: viewItems(e) },
     {
       label: "Help",
       items: [

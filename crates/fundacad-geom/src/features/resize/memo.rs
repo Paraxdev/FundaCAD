@@ -43,6 +43,14 @@ pub fn forget() {
     SURFACES.with(|m| m.borrow_mut().clear());
 }
 
+#[cfg(test)]
+pub(crate) fn held() -> usize {
+    VOLUMES.with(|m| m.borrow().len())
+        + AROUND.with(|m| m.borrow().len())
+        + SECTIONS.with(|m| m.borrow().len())
+        + SURFACES.with(|m| m.borrow().len())
+}
+
 pub(super) fn count(f: fn(&mut Seen)) {
     SEEN.with(|s| {
         let mut v = s.get();
@@ -73,7 +81,7 @@ fn remembered<K, T: Clone>(
     v
 }
 
-pub(super) fn volume(body: &Shape) -> f64 {
+pub(crate) fn volume(body: &Shape) -> f64 {
     remembered(&VOLUMES, |s| s.volumes += 1, |k| k.is_same(body), || body.clone(), || kernel::volume(body))
 }
 

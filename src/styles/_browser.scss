@@ -5,36 +5,11 @@
   align-items: center;
   gap: var(--s-2);
 }
-.browser-filter {
-  /* Labels are long ("Planes and axes") in a fixed 232px panel, so this shrinks instead
-     of pushing the heading out. */
+/* Labels are long ("Planes and axes") in a fixed 232px panel, so the base Select shrinks instead of pushing the
+   heading out. */
+.browser-filter.select-trigger {
   flex: 1 1 auto;
   min-width: 0;
-  appearance: none;
-  -webkit-appearance: none;
-  background: var(--panel-2);
-  border: 1px solid var(--line);
-  border-radius: var(--r-sm);
-  padding: 2px var(--s-2);
-  color: var(--text-dim);
-  /* Not .panel-title's uppercase tracking: this is a value the user picked, not a heading. */
-  font: inherit;
-  font-size: 11px;
-  letter-spacing: normal;
-  text-transform: none;
-  cursor: pointer;
-}
-.browser-filter:hover {
-  border-color: var(--line-strong);
-  color: var(--text);
-}
-.browser-filter:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-.browser-filter option {
-  background: var(--panel-2);
-  color: var(--text);
 }
 
 .tree-folder {
@@ -55,20 +30,24 @@
 .tree-folder:hover {
   background: var(--raised);
 }
-/* An inset ring, not a background: during a drag the pointer is over the head, so a
-   background would look like plain hover. */
+/* A drop target is a stronger wash than a selected row (16%) with a 2px accent bar on its
+   leading edge, so it is not mistaken for plain hover or selection during a drag. */
 .tree-folder.drop-into,
 .feature-row.drop-into {
-  box-shadow: inset 0 0 0 1px var(--accent);
-  background: var(--accent-tint);
+  background: var(--accent-tint-2);
+  box-shadow: inset 2px 0 0 var(--accent);
 }
-.tree-caret {
+/* The caret and the eye are sm IconButtons held to the label's height, at 24px they would grow every row. The
+   caret keeps the 12px the indents count on, so it shows no wash, the head's own hover is its cue. */
+.tree-caret.icon-btn.icon-btn-sm {
   width: 12px;
-  font-size: 9px;
+  height: 16px;
   color: var(--text-mute);
-  transition: color var(--t-fast) var(--ease);
 }
-.tree-folder:hover .tree-caret {
+.tree-caret.icon-btn.icon-btn-sm:hover:not(.is-disabled) {
+  background: none;
+}
+.tree-folder:hover .tree-caret.icon-btn.icon-btn-sm {
   color: var(--text-dim);
 }
 .tree-count {
@@ -96,7 +75,7 @@
     color-mix(in srgb, var(--accent) 22%, transparent),
     color-mix(in srgb, var(--accent) 6%, transparent)
   );
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent);
+  box-shadow: none;
   color: var(--accent-hot);
 }
 .tree-label {
@@ -104,28 +83,43 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* WebKit inherits -webkit-user-select, and a contenteditable that inherited none can
-   refuse the caret. */
+/* WebKit inherits -webkit-user-select, and a field that inherited none can refuse the
+   caret. */
 .tree-label.renaming {
+  flex: 1 1 auto;
+  height: auto;
+  height: 1lh;
+  font-size: inherit;
   -webkit-user-select: text;
   user-select: text;
 }
-.tree-eye {
-  font-size: 12px;
-  color: var(--text-mute);
-  opacity: 0.35;
-  padding: 0 var(--s-2);
-  cursor: pointer;
+.tree-label.renaming > input {
+  -webkit-user-select: text;
+  user-select: text;
+}
+.tree-eye.icon-btn.icon-btn-sm {
+  width: calc(13px + 2 * var(--s-2));
+  height: 16px;
   transition:
+    background var(--t-fast) var(--ease),
     color var(--t-fast) var(--ease),
     opacity var(--t-fast) var(--ease);
 }
-.feature-row:hover .tree-eye {
+.tree-eye.icon-btn {
+  opacity: 0.35;
+}
+.feature-row:hover .tree-eye.icon-btn {
   opacity: 0.9;
 }
-.tree-eye:hover {
-  color: var(--accent-hot);
+.tree-eye.icon-btn:hover,
+.tree-eye.icon-btn:focus-visible {
   opacity: 1;
+}
+:root[data-pointer="touch"] .tree-caret.icon-btn.icon-btn-sm::before {
+  inset: -13px -14px;
+}
+:root[data-pointer="touch"] .tree-eye.icon-btn.icon-btn-sm::before {
+  inset: -13px -6px;
 }
 
 /* In-canvas sketch dimensions stay off the spacing scale on purpose: they are projected
@@ -143,7 +137,7 @@
   height: 100%;
   overflow: hidden;
   pointer-events: none;
-  z-index: calc(var(--z-float) - 1);
+  z-index: calc(var(--z-panel) - 2);
 }
 .sketch-dim-leaders line {
   stroke: var(--accent);
@@ -201,7 +195,7 @@
 }
 /* The dimension the Delete key will remove. */
 .sketch-dim.is-selected {
-  outline: 2px solid var(--accent, #4a9eff);
+  outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
 /* Click through under other tools, so a label over a circle centre does not swallow the
@@ -248,19 +242,11 @@
   pointer-events: none;
   cursor: default;
 }
-.sketch-dim input {
+.sketch-dim .sketch-dim-field {
   width: 52px;
-  border: 1px solid var(--line-strong);
-  background: var(--bg);
-  color: var(--text);
-  font-size: 11px;
+  height: 19px;
+  padding: 0 var(--s-1);
   font-variant-numeric: tabular-nums;
-  padding: 1px 4px;
-  border-radius: var(--r-sm);
-}
-.sketch-dim input:focus {
-  outline: none;
-  border-color: var(--accent-hot);
 }
 .sketch-glyph.pattern {
   height: 20px;

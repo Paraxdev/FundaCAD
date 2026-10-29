@@ -30,7 +30,7 @@ export function closeWelcome(): void {
   }
 }
 
-export const MANUAL_URL = "https://paraxdev.github.io/FundaCAD/";
+export const MANUAL_URL = "https://fundacad.dev/";
 
 const isTauri = () => "__TAURI_INTERNALS__" in window;
 

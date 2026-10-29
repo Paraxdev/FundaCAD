@@ -48,7 +48,7 @@
     <color type="primary" scheme_preference="light">#4ca5e0</color>
     <color type="primary" scheme_preference="dark">#1f4f70</color>
   </branding>
-  <url type="homepage">https://github.com/Paraxdev/FundaCAD</url>
+  <url type="homepage">https://fundacad.dev/</url>
   <url type="bugtracker">https://github.com/Paraxdev/FundaCAD/issues</url>
   <url type="vcs-browser">https://github.com/Paraxdev/FundaCAD</url>
   <content_rating type="oars-1.1"/>

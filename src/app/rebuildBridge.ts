@@ -16,6 +16,10 @@ export function installRebuildBridge(e: Engine): void {
   // New homes the camera for a 20 mm part, so an import into an empty view is fitted too.
   let viewEmpty = true;
   e.store.onOpen(() => (viewEmpty = true));
+  // The launch fit holds until a model is drawn, the startup document is empty. A template's fit whose model never
+  // landed is not the next document's, an opener asks again after the begin.
+  let launchFit = true;
+  e.store.sessions.onBegin(() => (pendingFit = launchFit));
   const fitNow = () => pendingFit || (viewEmpty && e.store.document.features.some((f) => f.type === "import"));
 
   // Plugin paint wins over the document's materials, which usually just repeat what an imported file said.
@@ -81,7 +85,7 @@ export function installRebuildBridge(e: Engine): void {
       e.viewport.setBodyFinish(e.store.materialFinishes());
       e.viewport.setRelief(contributedRelief());
       e.viewport.beginProgressiveModel(c.epoch, c.manifest, c.result, c.bbox, hidden, fitNow());
-      pendingFit = viewEmpty = false;
+      pendingFit = viewEmpty = launchFit = false;
       return;
     }
     const hidden = c.bodies.filter((b) => !e.store.isBodyVisible(b.id)).map((b) => b.id);
@@ -95,7 +99,7 @@ export function installRebuildBridge(e: Engine): void {
       if (s.result.mesh.positions.length > 0) {
         const hidden = (s.result.bodies ?? []).filter((b) => !e.store.isBodyVisible(b.id)).map((b) => b.id);
         e.viewport.setModel(s.result, fitNow(), hidden);
-        pendingFit = viewEmpty = false;
+        pendingFit = viewEmpty = launchFit = false;
         const p = paint();
         e.viewport.setBodyPaint(p.bodies);
         e.viewport.setFacePaint(p.faces);

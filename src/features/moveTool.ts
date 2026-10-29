@@ -23,7 +23,9 @@ import {
   MIN_SCALE,
 } from "./transformGizmo";
 import { CanvasGesture } from "./canvasGesture";
+import { HeldSignal } from "./heldEdit";
 import { RotateDial } from "../viewport/rotateDial";
+import { themedAxis } from "../viewport/originTriad";
 import { overlayMaterial } from "../viewport/overlayMaterial";
 import { resolveShortcut } from "../input/shortcuts";
 import { createSlimRing, ringLook, type SlimRing } from "./slimRing";
@@ -32,9 +34,9 @@ const Y_AXIS = new THREE.Vector3(0, 1, 0);
 const HOT = 0xffe9a8; // hovered / grabbed handle
 const AXIS_NAME = ["x", "y", "z"];
 const AXES = [
-  { dir: new THREE.Vector3(1, 0, 0), color: 0xff5a5a }, // X red
-  { dir: new THREE.Vector3(0, 1, 0), color: 0x5ad15a }, // Y green
-  { dir: new THREE.Vector3(0, 0, 1), color: 0x5a9bff }, // Z blue
+  themedAxis("x", { dir: new THREE.Vector3(1, 0, 0) }),
+  themedAxis("y", { dir: new THREE.Vector3(0, 1, 0) }),
+  themedAxis("z", { dir: new THREE.Vector3(0, 0, 1) }),
 ];
 
 // Gizmo units are screen pixels: the group is scaled by pixelWorldSize every frame. The arrows reach past
@@ -133,6 +135,7 @@ export class MoveTool {
   /** Raised by a body selection, so it draws only with the handles overlay on. Kept over a drag's re-open. */
   ambient = false;
   private unwatchOverlays: (() => void) | null = null;
+  private readonly held = new HeldSignal();
 
   private readonly gesture: CanvasGesture;
 
@@ -200,10 +203,18 @@ export class MoveTool {
     if (this.gizmo) this.placeGizmo(this.gizmo);
     this.dim.show(
       [
-        { name: "move", label: "Move", kind: "length" },
-        { name: "turn", label: "Angle", kind: "angle" },
+        { name: "move", label: "Move", icon: "move", kind: "length" },
+        { name: "turn", label: "Angle", icon: "rotate", kind: "angle" },
         ...(target.handles.cubes.length
-          ? [{ name: "size", label: "Scale", kind: "count" as const, ...featureValueRule("scale", "factor") }]
+          ? [
+              {
+                name: "size",
+                label: "Scale",
+                icon: "scale",
+                kind: "count" as const,
+                ...featureValueRule("scale", "factor"),
+              },
+            ]
           : []),
       ],
       () => this.settleTyped(),
@@ -211,6 +222,7 @@ export class MoveTool {
       target.canCopy
         ? {
             label: "Copy",
+            icon: "copy",
             title: "Leave the original where it is and move a copy",
             initial: this.copy,
             onChange: (on) => {
@@ -418,15 +430,18 @@ export class MoveTool {
 
   private onUp(e: PointerEvent) {
     if (e.button !== 0) return;
-    if (this.grab) {
+    const g = this.grab;
+    if (g) {
       this.grab = null;
       this.viewport.gizmoDragging = false;
       this.dropDial();
       this.stepLabel = "";
       setPrompt(idlePrompt(this.cubes.length > 0));
       this.viewport.domElement.style.cursor = this.hover ? "grab" : "default";
-      // Each drag is its own timeline row, so undo undoes the last nudge and the next drag starts from this pose.
-      this.settleDrag();
+      // Letting go only ends the drag: Enter writes every drag since the last one as one timeline row.
+      if (g.kind === "size") this.dim.focusField("size");
+      else if (g.kind === "ring") this.dim.focusField("turn");
+      else this.dim.focusField("move");
       return;
     }
     const moved = Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
@@ -440,17 +455,48 @@ export class MoveTool {
     }
   }
 
-  /** The re-open waits for the rebuild: the gizmo is placed from the model, and the old one would double the
-   *  next move. */
-  private settleDrag() {
-    this.commitAndReopen(true);
-  }
-
-  /** Re-opens like a drag once something was written, closes when nothing was. */
+  /** Re-opens once something was written, closes when nothing was. The re-open waits for the rebuild: the gizmo is
+   *  placed from the model, and the old one would double the next move. */
   private settleTyped() {
     const unplaced = this.typedWithoutHandle();
     if (unplaced) return this.dim.flag(unplaced);
-    this.commitAndReopen(false);
+    this.commitAndReopen();
+  }
+
+  /** Something dragged or typed that Enter would write. */
+  get pending(): boolean {
+    if (!this.active) return false;
+    const v = this.values();
+    return (
+      Math.hypot(v.dx, v.dy, v.dz) > 1e-9 || Math.abs(v.rx) + Math.abs(v.ry) + Math.abs(v.rz) > 1e-9 || this.resized()
+    );
+  }
+
+  get dragging(): boolean {
+    return !!this.grab;
+  }
+
+  get inSketch(): boolean {
+    return !!this.target?.inSketch;
+  }
+
+  /** Told when `pending` turns on or off, for the unsaved mark and the close guard. */
+  onHeldChange(fn: () => void): () => void {
+    return this.held.on(fn);
+  }
+
+  /** For a command that needs the gizmo out of the way: what was dragged is written, as Enter would, and the
+   *  session ends. */
+  settle() {
+    this.dropPendingReopen();
+    this.commit();
+  }
+
+  /** For a save: what was dragged or typed is written as Enter writes it, and the gizmo comes back. A drag still
+   *  under the hand, or a value Enter would refuse, is left alone. */
+  confirmHeld() {
+    if (this.grab || !this.pending || this.inSketch || this.typedWithoutHandle()) return;
+    this.commitAndReopen();
   }
 
   /** A typed value only means something along a handle, so one typed before any handle was picked is refused. */
@@ -468,14 +514,14 @@ export class MoveTool {
     return null;
   }
 
-  private commitAndReopen(evenUnchanged: boolean) {
+  private commitAndReopen() {
     const target = this.target;
     const done = this.onDone;
     const through = this.onClickThrough;
     // The last grabbed handle outlives the re-open, so a click on an arrow still says where the next typed distance goes.
     const chosen = this.last;
     const res = this.commit();
-    if (!target || (!res && !evenUnchanged)) return;
+    if (!target || !res) return;
     // Asked only once the rebuild has landed, so an owner that has closed by then can answer null.
     const reopen = () => {
       this.pendingReopen = null;
@@ -488,8 +534,7 @@ export class MoveTool {
       if (chosen?.kind === "size") this.dim.focusField("size");
       else if (chosen?.kind === "ring") this.dim.focusField("turn");
     };
-    // A drag that ended where it started writes nothing, so there is no rebuild to wait for.
-    if (!res?.rebuild) return reopen();
+    if (!res.rebuild) return reopen();
     // Wait for the falling edge: onBuild replays the current state to a new subscriber before the round trip
     // is announced, and re-opening on that replay would count this drag twice.
     let started = false;
@@ -589,6 +634,7 @@ export class MoveTool {
       this.dial.placeLabel((w) => this.viewport.projectToScreen(w));
     }
     this.applyTyped();
+    this.held.sync(this.pending);
     this.gesture.frame();
   }
 
@@ -652,7 +698,7 @@ export class MoveTool {
     this.refreshPreview();
   }
 
-  /** Instant ghost, no engine round-trip; the real write happens on release. */
+  /** Instant ghost, no engine round-trip; the real write happens on Enter. */
   private refreshPreview() {
     this.target?.preview(this.transform(), this.copy);
   }
@@ -826,7 +872,7 @@ export class MoveTool {
       sized,
       copy: this.copy,
     });
-    this.copy = false; // one copy per drag, the next drag moves again
+    this.copy = false; // one copy per commit, the next one moves again
     const done = this.onDone;
     this.cleanup();
     done?.(res.id);
@@ -898,5 +944,6 @@ export class MoveTool {
     this.scl.set(1, 1, 1);
     this.pivotSnapped = false;
     setPrompt(null);
+    this.held.sync(this.pending);
   }
 }

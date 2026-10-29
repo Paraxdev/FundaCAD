@@ -23,6 +23,8 @@ import type {
 } from "../types";
 import { RebuildAssembly, manifestFromBodies } from "./assembly";
 import { pipe, pipeFault } from "../diagnostics/pipelineLog";
+import type { EngineTiming } from "../diagnostics/editTiming";
+import { BUILD_PHASE } from "./buildPhase";
 import { EngineTransport, type GeometryTransport } from "./transport";
 import { SessionEnded, isOpCancelled, type DocumentSession, type SessionHost } from "../document/session";
 import { SessionWire } from "./sessionWire";
@@ -212,7 +214,11 @@ export interface StressOptions {
   material: StressMaterial;
   size?: number;
   maxElements?: number;
+  /** Absent is "standard". */
+  refine?: StressRefine;
 }
+
+export type StressRefine = "off" | "standard" | "fine";
 
 /** A linear static analysis of one body, display only. `surface` is the analysis mesh boundary with a value per
  *  vertex, `displacement` three numbers per vertex, `weight` the gravity force (null without gravity), and
@@ -221,7 +227,17 @@ export interface StressReply {
   body: string;
   name: string;
   material: { name: string; E: number; nu: number; yield: number; density?: number | null };
-  mesh: { nodes: number; elements: number; size: number; minDihedral: number };
+  /** `size` is the starting element size, `finest` the smallest after refinement, `stop` why refinement ended
+   *  (docs/PROTOCOL.md); older engines omit `finest`, `passes` and `stop`. */
+  mesh: {
+    nodes: number;
+    elements: number;
+    size: number;
+    minDihedral: number;
+    finest?: number;
+    passes?: { elements: number; maxVonMises: number }[];
+    stop?: string;
+  };
   /** `face` is null for a peak inside the body, away from every face. */
   maxVonMises: { value: number; at: Vec3; face?: number | null };
   maxDisplacement: { value: number; at: Vec3; vector: Vec3 };
@@ -232,7 +248,15 @@ export interface StressReply {
   weight?: Vec3 | null;
   reactions?: Vec3[];
   warnings?: string[];
-  surface?: { positions: number[]; indices: number[]; faceIds?: number[]; vonMises: number[]; displacement?: number[] };
+  /** `stress` is six numbers per vertex, xx yy zz xy yz zx in MPa, absent from older engines. */
+  surface?: {
+    positions: number[];
+    indices: number[];
+    faceIds?: number[];
+    vonMises: number[];
+    displacement?: number[];
+    stress?: number[];
+  };
   errors?: { feature_id?: string; message: string }[];
 }
 
@@ -315,6 +339,8 @@ export type PrintabilityResult =
 export interface GeometryBackend {
   /** `onId` receives the request id, again if a resync sends it a second time. */
   rebuild(doc: CadDocument, tolerance?: number, onId?: (id: string) => void): Promise<RebuildReply>;
+  /** What the last rebuild's reply weighed and what the engine says its stages took. */
+  lastRebuildCost?(): { engine: EngineTiming | null; replyBytes: number };
   /** Per-glyph 2D outlines for a sketch text entity; the engine owns fonts, so previews match the extruded solid. */
   tessellateText(entity: object, pathEntity?: object): Promise<TextFace[]>;
   /** Project body edges, face boundaries or sketch curves onto a sketch plane. `doc` is the timeline prefix for
@@ -420,8 +446,8 @@ export interface GeometryBackend {
   // Call once before any op. Earlier ops queue in the outbox until it opens, so ordering is not critical.
   init(): Promise<void>;
   onStatus(fn: StatusListener): () => void;
-  /** Build progress about once a second: the feature index (-1 while tessellating), and while meshing the
-   *  per-body `meshed`/`meshTotal` (else -1), which keeps the bar moving through 136 s of meshing on big assemblies. */
+  /** Build progress about once a second: the feature running (-1 outside the feature phase), while meshing the
+   *  `meshed`/`meshTotal` bodies really being meshed (else -1), and the engine's `phase`. */
   onProgress?(fn: ProgressListener): () => void;
   /** Installments of a chunked rebuild reply for progressive display; the in-process backend never streams. */
   onRebuildChunk?(fn: (c: RebuildChunk) => void): () => void;
@@ -463,6 +489,8 @@ interface WireEdgesPacked {
   body?: string;
   /** indices of the edges whose faces meet tangentially */
   smooth?: number[];
+  /** [index, curvature across the edge per mm of radius, per mm of chord] of the edges whose faces curve across them */
+  curvature?: [number, number, number][];
 }
 
 /** Re-split packed edges (`counts` points per edge) into per-edge triples. Exported for its own test, since the
@@ -472,6 +500,7 @@ export function expandPackedEdges(
   counts: Uint32Array,
   body: string | undefined,
   smooth?: readonly number[],
+  curvature?: readonly (readonly [number, number, number])[],
 ): WireEdgeList {
   const list: WireEdgeList = [];
   let o = 0;
@@ -484,6 +513,10 @@ export function expandPackedEdges(
   for (const i of smooth ?? []) {
     const e = list[i];
     if (e) e.smooth = true;
+  }
+  for (const [i, k, c] of curvature ?? []) {
+    const e = list[i];
+    if (e) e.curvature = [k, c];
   }
   return list;
 }
@@ -565,6 +598,7 @@ export function decodeBinaryFrame(buf: ArrayBuffer): BinaryHeader {
         resolveBuf(rawEdges.$counts) as Uint32Array,
         rawEdges.body,
         rawEdges.smooth,
+        rawEdges.curvature,
       );
     }
   }
@@ -610,8 +644,15 @@ export function tooLargeToSend(len: number): string | null {
 /** One `importing` frame: the request it is for, its stage fraction 0 to 100 or
  *  null while the stage has none, and the stage name. */
 export type OpProgressListener = (id: string, pct: number | null, stage: string) => void;
-// `id` is the rebuild the status belongs to; a backend that runs one build at a time may leave it out.
-export type ProgressListener = (feature: number, meshed: number, meshTotal: number, id?: string) => void;
+// `id` is the rebuild the status belongs to; a backend that runs one build at a time may leave it out. `phase` is a
+// `BUILD_PHASE`, left out by a backend that does not report one.
+export type ProgressListener = (
+  feature: number,
+  meshed: number,
+  meshTotal: number,
+  id?: string,
+  phase?: number,
+) => void;
 
 /** Another client's job one of ours is waiting behind, as the engine names it. */
 export interface EngineWait {
@@ -774,7 +815,15 @@ export class Geometry implements GeometryBackend {
     this.outbox = [];
   }
 
+  private replyBytes = 0;
+  private engineTiming: EngineTiming | null = null;
+
+  lastRebuildCost() {
+    return { engine: this.engineTiming, replyBytes: this.replyBytes };
+  }
+
   private onMessage(data: string | ArrayBuffer) {
+    this.replyBytes += typeof data === "string" ? data.length : data.byteLength;
     if (typeof data !== "string") {
       this.handleBinaryReply(data);
       return;
@@ -799,7 +848,8 @@ export class Geometry implements GeometryBackend {
         const f = typeof msg.feature === "number" ? msg.feature : -1;
         const m = typeof msg.meshed === "number" ? msg.meshed : -1;
         const mt = typeof msg.meshTotal === "number" ? msg.meshTotal : -1;
-        for (const fn of this.progressListeners) fn(f, m, mt, msg.id);
+        const phase = typeof msg.phase === "number" ? msg.phase : f >= 0 ? BUILD_PHASE.feature : BUILD_PHASE.preparing;
+        for (const fn of this.progressListeners) fn(f, m, mt, msg.id, phase);
       } else if (msg.status === "importing") {
         const pct = typeof msg.pct === "number" && msg.pct >= 0 ? Math.min(msg.pct, 100) : null;
         const label = typeof msg.label === "string" ? msg.label : "";
@@ -874,6 +924,7 @@ export class Geometry implements GeometryBackend {
       const prev = this.streams.get(id);
       if (prev) clearTimeout(prev.timer);
       const result = header.result as WireRebuildResult & { manifest?: WireManifestEntry[] };
+      this.engineTiming = result.timing ?? null;
       const manifest = result.manifest ?? [];
       delete result.manifest;
       // Plan the whole reply from the manifest now, so each body draws as soon as its chunk lands, and an unbacked
@@ -1118,6 +1169,8 @@ export class Geometry implements GeometryBackend {
   }
 
   async rebuild(doc: CadDocument, tolerance = 0.1, onId?: (id: string) => void): Promise<RebuildReply> {
+    this.replyBytes = 0;
+    this.engineTiming = null;
     const scope = this.scope();
     const known: Record<string, string> = {};
     for (const [id, p] of this.wire.bodyMesh) known[id] = p.etag;
@@ -1156,6 +1209,7 @@ export class Geometry implements GeometryBackend {
       payload = { document: doc, revision: this.revision + 1 };
       msg = await this.rebuildCall("rebuild", { ...payload, tolerance }, scope, onId);
     }
+    if (msg.ok && msg.result?.timing) this.engineTiming = msg.result.timing;
     if (msg.ok && !msg.result?.resync) {
       this.revision = payload.revision;
       this.wire.lastSent = { features: doc.features.slice(), parameters: pJson, bodyVisibility: vJson, bodyIds: iJson };

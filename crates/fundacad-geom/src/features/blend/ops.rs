@@ -124,6 +124,12 @@ pub fn dihedral_deg(shape: &Shape, edge: &Shape) -> Option<f64> {
     (d >= 0.0).then_some(d)
 }
 
+/// The angle between the two faces of `edge` at its point nearest `p`.
+pub fn dihedral_at(shape: &Shape, edge: &Shape, p: glam::DVec3) -> Option<f64> {
+    let d = crate::bench::phase("blend_dihedral", || ffi::blend_dihedral_deg(shape.raw(), edge.raw(), p.x, p.y, p.z));
+    (d >= 0.0).then_some(d)
+}
+
 /// Per triangle `[face index, a, b, c]` flattened, see blend_overlap.py `_triangles`.
 pub fn face_triangles(faces: &[Shape], deflection: f64) -> Result<Vec<f64>, String> {
     let comp = kernel::compound(faces);
@@ -156,6 +162,7 @@ pub fn conic(shape: &Shape, edges: &[Shape], radius: f64, profile: f64) -> Resul
 /// section_blend.py `section_blend` through blends.py `section_fn`. Cutting every tool at once can leave tool
 /// faces inside the result on the faces that replaced them, which BRepCheck passes. Which answer folds depends on
 /// the body's orientation, so a folded one is built again without the one-shot cut, and refused if that folds too.
+/// `continuity` is 1, 2 or 3, the section's continuity with the faces.
 #[allow(clippy::too_many_arguments)]
 pub fn section(
     shape: &Shape,
@@ -164,16 +171,16 @@ pub fn section(
     sizes: &[f64],
     size2: Option<f64>,
     unit: f64,
-    g2: bool,
+    continuity: i32,
     draft: bool,
     profile: f64,
 ) -> Result<Shape, SectionErr> {
-    let built = section_with(shape, edges, chamfer, sizes, size2, unit, g2, draft, profile, true)?;
+    let built = section_with(shape, edges, chamfer, sizes, size2, unit, continuity, draft, profile, true)?;
     let size = sizes.iter().copied().fold(f64::INFINITY, f64::min).min(size2.unwrap_or(f64::INFINITY));
     if !super::overlap::folds_over_itself(shape, &built, size) {
         return Ok(built);
     }
-    let again = section_with(shape, edges, chamfer, sizes, size2, unit, g2, draft, profile, false)?;
+    let again = section_with(shape, edges, chamfer, sizes, size2, unit, continuity, draft, profile, false)?;
     if super::overlap::folds_over_itself(shape, &again, size) {
         return Err(SectionErr::Blend("at this size the blend folds over itself".into()));
     }
@@ -188,7 +195,7 @@ fn section_with(
     sizes: &[f64],
     size2: Option<f64>,
     unit: f64,
-    g2: bool,
+    continuity: i32,
     draft: bool,
     profile: f64,
     one_shot: bool,
@@ -206,7 +213,7 @@ fn section_with(
             sizes,
             size2.unwrap_or(f64::NAN),
             unit,
-            g2,
+            continuity,
             draft,
             profile,
             one_shot,
@@ -244,6 +251,36 @@ fn section_with(
         }
         _ => Err(SectionErr::Internal(message)),
     }
+}
+
+/// How smoothly a blended body's faces meet, see blend_measure.hxx.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ContactJumps {
+    /// The largest curvature jump across a tangent contact, times the radius.
+    pub curvature: f64,
+    /// The largest jump in the curvature's rate along the walk across it, times the radius squared.
+    pub rate: f64,
+    /// The largest angle, in degrees, between faces that meet within 5 degrees.
+    pub crease_deg: f64,
+    pub contacts: usize,
+    pub max_tolerance: f64,
+    pub valid: bool,
+}
+
+/// `reach` is about the blend's setback; the walks span 4 percent of it into each face.
+pub fn contact_jumps(shape: &Shape, radius: f64, reach: f64) -> Result<ContactJumps, String> {
+    let v = ffi::blend_contact_jumps(shape.raw(), radius, reach);
+    if v.len() < 6 {
+        return Err("the contact measurement raised".into());
+    }
+    Ok(ContactJumps {
+        curvature: v[0],
+        rate: v[1],
+        crease_deg: v[2],
+        contacts: v[3] as usize,
+        max_tolerance: v[4],
+        valid: v[5] > 0.5,
+    })
 }
 
 pub fn is_valid(shape: &Shape) -> bool {

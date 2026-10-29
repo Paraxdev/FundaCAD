@@ -214,6 +214,16 @@ fn remembered<T: Copy>(
     v
 }
 
+pub fn forget_remembered() {
+    BOXES.with(|m| m.borrow_mut().clear());
+    DIAGONALS.with(|m| m.borrow_mut().clear());
+}
+
+#[cfg(test)]
+pub(crate) fn remembered_held() -> usize {
+    BOXES.with(|m| m.borrow().len()) + DIAGONALS.with(|m| m.borrow().len())
+}
+
 /// A copy has the same geometry and tolerances, so the same exact box.
 pub fn remember_copy(from: &Shape, to: &Shape) {
     fn share<T: Copy>(memo: &'static std::thread::LocalKey<Remembered<T>>, from: &Shape, to: &Shape) {

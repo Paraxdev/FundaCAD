@@ -1,4 +1,4 @@
-import { saveDocument, saveDocumentAs, exportSelection, importModel } from "../io/files";
+import { exportSelection, importModel } from "../io/files";
 import { setWorkspace } from "../ui/workspace";
 import { chooseViewMode, nextViewMode, requestPathTraced, toggleCleanView, type ViewMode } from "../ui/viewMode";
 import { contributedAction } from "../plugins/contrib";
@@ -8,9 +8,11 @@ import { choose } from "../ui/choice";
 import { endPickSession } from "../ui/treePick";
 import { SKETCH_TOOLS, SKETCH_MODIFY, NON_REPEATABLE } from "./actionTables";
 import { booleanOpOfAction } from "../features/booleanOps";
+import { useDialogStore } from "../stores/dialogs";
 import { useUiStore } from "../stores/ui";
 import { useSketchPaletteStore } from "../stores/sketchPalette";
 import type { Engine } from "./engine";
+import { saveWork, saveWorkAs } from "./documentActions";
 import type { SketchTool } from "../sketch/sketchMode";
 import { isChoiceOpen } from "../ui/choice";
 import { openReportDialog } from "../ui/bugReporter";
@@ -47,7 +49,7 @@ const KEEPS_PICK = new Set([
 ]);
 
 /** A body selection raises Move, which toolBusy() counts, so these stand it down first or they refuse silently. */
-const BODY_VERBS = new Set(["mirror", "pattern-linear", "pattern-circular"]);
+const BODY_VERBS = new Set(["mirror", "pattern-linear", "pattern-circular", "pattern-rect"]);
 
 /** The one dispatcher for the ribbon, the keymap, the command palette and every context menu. */
 export function createActions(e: Engine): (action: string) => void {
@@ -108,6 +110,7 @@ export function createActions(e: Engine): (action: string) => void {
     // Before the sketch finish below, so a sketch open when the problem showed is reported open.
     if (action === "report-problem") return openReportDialog();
     if (action === "suggest-idea") return void openExternal(ideaUrl());
+    if (action === "preferences") return void useDialogStore().openPreferences();
     if (action === "manual") return void openExternal(MANUAL_URL);
     // The arrow keys turn the view and nothing else: they leave a sketch open,
     // and a tool that reads the arrows itself (the pattern count) keeps them.
@@ -199,7 +202,7 @@ export function createActions(e: Engine): (action: string) => void {
         void import("../io/fundaLinks").then((m) => m.insertDocumentFromDialog(e.store, e.geometry));
         break;
       case "save":
-        void saveDocument(e.store);
+        void saveWork(e);
         break;
       case "open":
         void e.openDoc();
@@ -257,6 +260,9 @@ export function createActions(e: Engine): (action: string) => void {
         break;
       case "pattern-circular":
         e.starters.startPattern("circular");
+        break;
+      case "pattern-rect":
+        e.starters.startPattern("rect");
         break;
       case "simplify-mesh":
         e.starters.startSimplifyMesh();
@@ -362,7 +368,7 @@ export function createActions(e: Engine): (action: string) => void {
         void e.newDocument();
         break;
       case "saveas":
-        void saveDocumentAs(e.store);
+        void saveWorkAs(e);
         break;
       case "fit":
         e.viewport.fitView();

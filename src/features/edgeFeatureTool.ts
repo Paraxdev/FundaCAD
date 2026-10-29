@@ -14,13 +14,13 @@ import type { Feature, ParamTarget, Selector } from "../types";
 import { midMatchTol, polylineMid, edgeSelectorFrom } from "../viewport/edgeMatch";
 import { pickScope, type PickScope } from "../viewport/pickScope";
 import { canConsume } from "./toolCapabilities";
-import { DimInput } from "../sketch/dimInput";
+import { DimInput, type DimSegment } from "../sketch/dimInput";
+import { type Continuity, continuityBlocked, continuityOf, pickedReach } from "./continuity";
 import { setPrompt } from "../ui/prompt";
 import {
   createDragHandle,
   nameHandle,
   edgeHandleAxis,
-  fluentRelease,
   HANDLE_UP,
   handleScale,
   leanOutOfView,
@@ -53,12 +53,14 @@ import {
   type ValueBounds,
 } from "./edgeDragMath";
 import { CanvasGesture } from "./canvasGesture";
+import { HeldSignal } from "./heldEdit";
 import { blendEditCommit } from "./blendEdit";
 import { pointOnEdge } from "./edgeNudge";
 import { blendClickTarget, missPrompt, screenPolylineDist } from "./blendPick";
 import { EDGE_GRAB_PX } from "../viewport/edgeBand";
 import { hitPx } from "../input/pointerKind";
-import { EDGE_HOVER_COLOR } from "../viewport/highlight";
+import { edgeHoverColor, edgeSelectColor } from "../viewport/highlight";
+import { onThemeChange } from "../ui/theme";
 import { toast } from "../ui/toast";
 import { isEditableTarget } from "../ui/focus";
 
@@ -67,14 +69,22 @@ type Kind = EdgeTreatment;
 type Vec3 = [number, number, number];
 
 const Y_AXIS = HANDLE_UP;
-// Ghost member lines drawn over the preview, where the members were consumed into rounded faces. The colours match
-// the Highlighter's SELECT and ERROR tiers.
-const GHOST_SELECT = 0xff7a3c;
+// Ghost member lines drawn over the preview, where the members were consumed into rounded faces, in the Highlighter's
+// selected edge colour, or its error red.
 const GHOST_ERROR = 0xe23b3b;
+const ghostColor = (g: { failed: boolean }) => (g.failed ? GHOST_ERROR : edgeSelectColor());
 
 /** Only delays the OCCT preview; the client side ghost (viewport.setBlendGhost) still redraws every frame, so a fast
  *  drag does not queue a rebuild per pixel. */
 const PREVIEW_DEBOUNCE_MS = 150;
+
+export type { Continuity };
+/** One segment per profile, in order, so a later G3 is one more entry. */
+export const CONTINUITY_SEGMENTS: (DimSegment & { id: Continuity })[] = [
+  { id: "G1", label: "G1, circular round", text: "G1", icon: "continuityG1", key: "1" },
+  { id: "G2", label: "G2, curvature continuous", text: "G2", icon: "continuityG2", key: "2" },
+  { id: "G3", label: "G3, curvature rate continuous", text: "G3", icon: "continuityG3", key: "3" },
+];
 
 /** Chain members toggle as one unit, recorded at add time since the preview may consume the edges and the chain could
  *  not be recomputed from the displayed model. */
@@ -87,8 +97,10 @@ interface GhostEdge {
   points: Vec3[];
   line: Line2;
   chain: number;
-  /** its colour when not hovered, select or error */
-  color: number;
+  /** the faces' largest curvature across this edge, per mm of radius and of chord, as the engine reports it */
+  curvature?: readonly [number, number];
+  /** drawn in the error red when not hovered */
+  failed: boolean;
 }
 
 /** An unresolved row is a saved selector the current geometry no longer shows: still part of the feature and
@@ -109,6 +121,8 @@ export class EdgeFeatureTool {
   private axis = new THREE.Vector3(1, 0, 0);
   private quat = new THREE.Quaternion(); // Y -> axis, for orienting the handle
   private tangent: THREE.Vector3 | null = null; // edge direction (null = pre-selection fallback)
+  /** Where the most recently picked edge's middle was, so the handle stays on it as other members come and go. */
+  private lastPickMid: Vec3 | null = null;
   private value = 2; // radius / distance in mm, a MAGNITUDE, never negative
   /** Position on the drag axis: |signed| is `value`, and its sign picks between
    *  `positiveKind` and its opposite. 0 means "no feature here". */
@@ -124,6 +138,7 @@ export class EdgeFeatureTool {
   private editId: string | null = null; // committed feature id being edited
   private awaitingRollback = false; // waiting for the rolled-back model build
   private unsubBuild: (() => void) | null = null;
+  private unsubTheme: (() => void) | null = null;
   /** Set when the edited field is a bare reference to another parameter (store.bareParamRef): commit writes the drag's
    *  value into that parameter and the field stays bound. */
   private paramRef: string | null = null;
@@ -141,11 +156,12 @@ export class EdgeFeatureTool {
   /** Options the drag does not set, kept from the edited feature so a re-edit does not reset them. */
   private options: Record<string, unknown> = {};
   private optionsKind: Kind | null = null;
-  private continuity: "G1" | "G2" = "G1";
+  private continuity: Continuity = "G1";
   private hovering = false;
   private grabbing = false;
-  /** The drag began on the passive selection handle, a one press gesture, so releasing commits (onUp). */
-  private fluentGrab = false;
+  /** A drag let go of or a value typed, so the open default alone is not unsaved work. */
+  private touched = false;
+  private readonly held = new HeldSignal();
   private grabSigned = 0; // signed offset at grab start (relative drag)
   private grabProj = 0; // axis projection at grab start
   private downPos = { x: 0, y: 0 };
@@ -215,7 +231,7 @@ export class EdgeFeatureTool {
   /** What the kernel said the last time it refused this question. */
   private refusal: { code: string | null; message: string } | null = null;
   /** Null when the screen shows no blend of ours. A refused size keeps the previous one on screen (store.setPreview's
-   *  hold), so a refused release commits this. */
+   *  hold), so a refused confirm commits this. */
   private shown: number | null = null;
   /** the refusal currently painted on the handle, box and prompt */
   private refusalShown: string | null = null;
@@ -292,14 +308,16 @@ export class EdgeFeatureTool {
     this.phase = "pick";
     this.onDone = onDone;
     this.tangent = null;
+    this.lastPickMid = null;
     this.viewport.suspendPicking = true; // we drive our own edge-only picking
     this.viewport.emphasizeEdges(true); // light up all edges so they're easy to target
     this.gesture.attach();
+    this.unsubTheme = onThemeChange(() => this.recolorGhosts());
 
     if (seed.length) {
       // A handle grab opens at 0, so the drag is the radius and the press point means no feature; a command opens on
       // the default. The handle's own anchor is kept, it may stand where the edge was clicked.
-      this.beginDrag(seed, opts?.anchor?.clone() ?? this.anchorFromSelectors(seed), opts?.tangent ?? null, undefined, {
+      this.beginDrag(seed, opts?.anchor?.clone() ?? null, opts?.tangent ?? null, undefined, {
         fromZero: !!opts?.grabAt,
         // A face's edges are the complete set asked for, chain expansion could only add edges off the face. An edge
         // pre-selection keeps the scope its own picks decided (pickScope.ts).
@@ -325,7 +343,6 @@ export class EdgeFeatureTool {
   private grabHandle(clientX: number, clientY: number) {
     if (this.phase !== "drag") return;
     this.grabbing = true;
-    this.fluentGrab = true;
     this.downOnGizmo = true;
     this.downPos = { x: clientX, y: clientY };
     this.grabSigned = this.signed;
@@ -365,7 +382,7 @@ export class EdgeFeatureTool {
     this.value = value;
     this.signed = value;
     this.profile = f.type === "fillet" && typeof f.profile === "number" ? clampProfile(f.profile) : 0;
-    this.continuity = f.type === "fillet" && f.continuity === "G2" ? "G2" : "G1";
+    this.continuity = f.type === "fillet" ? continuityOf(f.continuity) : "G1";
     this.options =
       f.type === "fillet"
         ? { sizeType: f.sizeType, tangentEdges: f.tangentEdges }
@@ -396,7 +413,9 @@ export class EdgeFeatureTool {
         if (!s.previewBuilt) return;
         this.awaitingRollback = false;
         this.seedGhosts(rollbackSels);
-        this.opened = this.buildFeature();
+        // As stored, so a G2 or G3 the picked edges cannot take is dropped by pushPreview below, said after the
+        // phase prompt and written on commit.
+        this.opened = this.featureNow();
         this.enterEditUI();
         this.refreshGhost();
         this.pushPreview();
@@ -432,6 +451,7 @@ export class EdgeFeatureTool {
   /** Unmatched selectors are kept for commit with no visual; the engine resolves them by nearest at build time. */
   private seedGhosts(sels: Selector[]) {
     for (const sel of sels) {
+      if ("point" in sel) this.lastPickMid = sel.point as Vec3;
       if (!("point" in sel)) {
         this.unmatchedSels.push(sel);
         continue;
@@ -439,7 +459,7 @@ export class EdgeFeatureTool {
       const line = this.viewport.edgeLineForSelector(sel.point as Vec3, sel.body);
       const same = line && this.ghosts.find((g) => g.points === line.points);
       if (same) same.sels.push(sel);
-      else if (line) this.addGhost(sel, line.points as Vec3[]);
+      else if (line) this.addGhost(sel, line.points as Vec3[], undefined, line.curvature);
       else this.unmatchedSels.push(sel);
     }
   }
@@ -447,7 +467,7 @@ export class EdgeFeatureTool {
   private chainCounter = 0; // one id per add gesture (chain toggles as a unit)
   private memberSeq = 0; // one id per member, stable for the panel's row keys
 
-  private addGhost(sel: Selector, points: Vec3[], chain?: number) {
+  private addGhost(sel: Selector, points: Vec3[], chain?: number, curvature?: readonly [number, number]) {
     const mid = polylineMid(points);
     if (!mid) return; // an edge always has points; nothing to ghost otherwise
     const geo = new LineGeometry();
@@ -456,7 +476,7 @@ export class EdgeFeatureTool {
     geo.setPositions(flat);
     const el = this.viewport.domElement;
     const mat = new LineMaterial({
-      color: GHOST_SELECT,
+      color: edgeSelectColor(),
       linewidth: 3.5,
       worldUnits: false,
       depthTest: false,
@@ -473,7 +493,8 @@ export class EdgeFeatureTool {
       points,
       line,
       chain: chain ?? ++this.chainCounter,
-      color: GHOST_SELECT,
+      ...(curvature ? { curvature } : {}),
+      failed: false,
     });
   }
 
@@ -578,8 +599,8 @@ export class EdgeFeatureTool {
     if (g === this.hoveredGhost) return;
     const prev = this.hoveredGhost;
     this.hoveredGhost = g;
-    if (prev && this.ghosts.includes(prev)) (prev.line.material as LineMaterial).color.set(prev.color);
-    if (g) (g.line.material as LineMaterial).color.set(EDGE_HOVER_COLOR);
+    if (prev && this.ghosts.includes(prev)) (prev.line.material as LineMaterial).color.set(ghostColor(prev));
+    if (g) (g.line.material as LineMaterial).color.set(edgeHoverColor());
     this.viewport.requestRender();
   }
 
@@ -636,13 +657,14 @@ export class EdgeFeatureTool {
    *  way, so it deselects as one unit. */
   private addPicked(line: EdgeRef, scope: PickScope) {
     const chainId = ++this.chainCounter;
+    this.lastPickMid = polylineMid(line.points as Vec3[]) ?? null;
     for (const l of scope === "single" ? [line] : this.tangentChain(line)) {
       const pts = l.points as Vec3[];
       const sel = edgeSelectorFrom({ points: pts, body: l.body });
       if (!sel) continue;
       const mid = sel.point;
       if (this.ghosts.some((g) => Math.hypot(g.mid[0] - mid[0], g.mid[1] - mid[1], g.mid[2] - mid[2]) < 1e-6)) continue;
-      this.addGhost(sel, pts, chainId);
+      this.addGhost(sel, pts, chainId, l.curvature);
     }
   }
 
@@ -693,13 +715,17 @@ export class EdgeFeatureTool {
       () => this.cancel(),
       this.kind === "fillet"
         ? {
-            label: this.continuity,
+            name: "continuity",
             title:
-              "Continuity: G1 is a circular round, G2 eases into the faces with no jump in curvature. Click to switch",
-            initial: this.continuity === "G2",
-            onChange: (on) => {
-              this.continuity = on ? "G2" : "G1";
-              this.dim.setToggleLabel(this.continuity);
+              "Continuity: G1 is a circular round, G2 eases into the faces with no jump in curvature, G3 with no jump in its rate either",
+            segments: CONTINUITY_SEGMENTS.map((s) => {
+              const why = this.continuityBlocked(s.id);
+              return why ? { ...s, disabled: why } : s;
+            }),
+            chosen: this.continuity,
+            onBlocked: (_id, why) => setPrompt(why),
+            onChoose: (id) => {
+              this.continuity = id as Continuity;
               this.forgetBuildRange(); // G2 sets back further, so its limit is not G1's
               this.pushPreview();
             },
@@ -785,9 +811,7 @@ export class EdgeFeatureTool {
       return;
     }
     if (this.neutral) {
-      setPrompt(
-        `Drag out for a ${this.positiveKind}, back for a ${otherTreatment(this.positiveKind)} · release to cancel`,
-      );
+      setPrompt(`Drag out for a ${this.positiveKind}, back for a ${otherTreatment(this.positiveKind)} · Esc`);
       return;
     }
     if (this.refusalShown) {
@@ -810,7 +834,25 @@ export class EdgeFeatureTool {
 
   /** Edit mode replaces the committed feature in place, create mode appends. No members or a drag on the origin
    *  would build a blend OCCT refuses on every pointermove, so both drop back to the bare model. */
+  private continuityBlocked(c: Continuity): string | null {
+    const chord = this.optionsKind === "fillet" && this.options.sizeType === "chord";
+    return continuityBlocked(c, pickedReach(this.ghosts, this.value, chord ? "chord" : "radius"));
+  }
+
+  /** Greys out G2 and G3 while a picked edge runs along a curved face; the engine refuses them there too. */
+  private refreshContinuityReach() {
+    if (this.kind !== "fillet") return;
+    for (const s of CONTINUITY_SEGMENTS) this.dim.setSegmentDisabled("continuity", s.id, this.continuityBlocked(s.id));
+    const why = this.continuityBlocked(this.continuity);
+    if (!why) return;
+    this.continuity = "G1";
+    this.dim.setOption("continuity", "G1");
+    this.forgetBuildRange();
+    setPrompt(`${why}, so the fillet is G1 now`);
+  }
+
   private pushPreview() {
+    this.refreshContinuityReach();
     if (this.neutral || !this.currentSelectors().length) {
       if (this.editId) this.store.setEditPreview(null);
       else this.store.setPreview(null);
@@ -881,8 +923,14 @@ export class EdgeFeatureTool {
       const failed = !!entry?.failed?.some(
         (e) => Math.hypot(e.mid[0] - g.mid[0], e.mid[1] - g.mid[1], e.mid[2] - g.mid[2]) <= tol,
       );
-      g.color = failed ? GHOST_ERROR : GHOST_SELECT;
-      if (g !== this.hoveredGhost) (g.line.material as LineMaterial).color.set(g.color);
+      g.failed = failed;
+    }
+    this.recolorGhosts();
+  }
+
+  private recolorGhosts() {
+    for (const g of this.ghosts) {
+      (g.line.material as LineMaterial).color.set(g === this.hoveredGhost ? edgeHoverColor() : ghostColor(g));
     }
     this.viewport.requestRender();
   }
@@ -984,20 +1032,12 @@ export class EdgeFeatureTool {
     if (this.grabbing) {
       const moved = Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
       this.grabbing = false;
-      // Commit and cancel both want the kernel chasing the size the drag ended on, so skip the debounce.
+      // Letting go only ends the drag, the box options and Enter are still to come.
       this.flushPreviewNow();
-      // Shared with Press/Pull's handle over faces; fluentRelease says what each outcome guards against.
-      const release = fluentRelease({
-        fluent: this.fluentGrab,
-        moved,
-        meaningful: !this.neutral,
-      });
-      // Cleared before dispatching: commit() can decline and leave the tool alive, and a stale flag would re-run this
-      // on the next release.
-      this.fluentGrab = false;
-      if (release === "commit") return this.commit();
-      if (release === "cancel") return this.cancel();
       this.viewport.domElement.style.cursor = this.hovering ? "grab" : "default";
+      this.dim.focus();
+      if (moved) this.touched = true;
+      this.held.sync(this.pending);
       if (!moved) {
         // A press that never travelled opens the full tool; from the selection handle that arms on nothing, so put
         // the default value up.
@@ -1016,6 +1056,7 @@ export class EdgeFeatureTool {
     if (this.downOnGizmo || moved) return;
     if (this.memberCount()) setPrompt(missPrompt(this.kind, this.memberCount()));
     else this.promptForPhase();
+    this.dim.focus();
   }
 
   private onKey(e: KeyboardEvent) {
@@ -1040,9 +1081,10 @@ export class EdgeFeatureTool {
     }
   }
 
+  /** A null `anchor` stands the handle on the most recently picked edge. */
   private beginDrag(
     edges: Selector[],
-    anchor: THREE.Vector3,
+    anchor: THREE.Vector3 | null,
     tangent: THREE.Vector3 | null,
     chainSource?: EdgeRef,
     opts?: { fromZero?: boolean; scope?: PickScope },
@@ -1061,8 +1103,10 @@ export class EdgeFeatureTool {
         }
       }
     }
-    this.anchor.copy(anchor);
-    this.tangent = tangent;
+    if (anchor) {
+      this.anchor.copy(anchor);
+      this.tangent = tangent;
+    } else this.placeOnLastPick();
     this.phase = "drag";
     this.axis.copy(this.computeAxis());
     this.quat.setFromUnitVectors(Y_AXIS, this.axis);
@@ -1119,10 +1163,12 @@ export class EdgeFeatureTool {
           // A typed value is held only to the absolute floor, not the drag's zoom scaled step, and lands on the
           // current treatment's side so a later grab carries on from it.
           this.setValue(clampValue(v, { min: MIN_EDGE_VALUE, max: Infinity }));
+          this.touched = true;
           this.schedulePreviewDuringDrag();
           if (this.neutral !== wasNeutral) this.promptForPhase();
         }
       }
+      this.held.sync(this.pending);
       this.gesture.frame();
     }
   }
@@ -1155,7 +1201,7 @@ export class EdgeFeatureTool {
     const sels = this.currentSelectors();
     if (sels.length) {
       if (this.editId) this.placeOnMembers();
-      else this.anchor.copy(this.anchorFromSelectors(sels));
+      else this.placeOnLastPick();
       this.axis.copy(this.computeAxis());
       this.quat.setFromUnitVectors(Y_AXIS, this.axis);
     }
@@ -1169,6 +1215,11 @@ export class EdgeFeatureTool {
   }
 
   private buildFeature(): Feature {
+    this.refreshContinuityReach();
+    return this.featureNow();
+  }
+
+  private featureNow(): Feature {
     const v = this.size();
     const sels = this.currentSelectors();
     const edges = sels.length === 1 && sels[0] ? sels[0] : sels;
@@ -1177,7 +1228,7 @@ export class EdgeFeatureTool {
         ? Object.fromEntries(Object.entries(this.options).filter(([, x]) => x !== undefined))
         : {};
     if (this.kind !== "fillet") return { id: this.previewId, type: "chamfer", edges, distance: v, ...kept };
-    const g2 = this.continuity === "G2" ? { continuity: "G2" as const } : {};
+    const g2 = this.continuity !== "G1" ? { continuity: this.continuity } : {};
     // Omitted at 0 so a plain fillet stays plain in the document and keeps routing to the kernel's own filleter
     // rather than the reweighting path.
     return isPlainProfile(this.profile)
@@ -1252,6 +1303,26 @@ export class EdgeFeatureTool {
     this.onDone?.(null);
   }
 
+  /** A blend dragged or typed that Enter would write. */
+  get pending(): boolean {
+    return this.touched && this.active && this.phase === "drag" && !this.neutral && this.currentSelectors().length > 0;
+  }
+
+  get dragging(): boolean {
+    return this.grabbing;
+  }
+
+  /** Told when `pending` turns on or off, for the unsaved mark and the close guard. */
+  onHeldChange(fn: () => void): () => void {
+    return this.held.on(fn);
+  }
+
+  /** For a save: the blend is written as Enter writes it, which may decline and keep the tool open. A drag still
+   *  under the hand is left alone. */
+  confirmHeld() {
+    if (this.pending && !this.dragging) this.commit();
+  }
+
   private cleanup() {
     const el = this.viewport.domElement;
     this.gesture.detach();
@@ -1271,6 +1342,8 @@ export class EdgeFeatureTool {
     this.disposeGizmo();
     this.disposeGhosts();
     this.unsubBuild?.();
+    this.unsubTheme?.();
+    this.unsubTheme = null;
     this.unsubBuild = null;
     this.editId = null;
     this.paramRef = null;
@@ -1283,13 +1356,14 @@ export class EdgeFeatureTool {
     this.active = false;
     this.phase = "pick";
     this.grabbing = false;
-    this.fluentGrab = false;
+    this.touched = false;
     this.refusalShown = null;
     this.forgetBuildRange();
     this.hovering = false;
     this.signed = 0;
     this.grabSigned = 0;
     setPrompt(null);
+    this.held.sync(this.pending);
   }
 
   private disposeGizmo() {
@@ -1316,22 +1390,36 @@ export class EdgeFeatureTool {
     this.tangent = place.tangent ? new THREE.Vector3(...place.tangent) : null;
   }
 
-  /** Averages the selector points (nearest selectors carry their edge midpoint), else the model's bbox centre. */
-  private anchorFromSelectors(sels: Selector[]): THREE.Vector3 {
-    const acc = new THREE.Vector3();
-    let n = 0;
-    for (const s of sels) {
-      if ("point" in s) {
-        acc.add(new THREE.Vector3(s.point[0], s.point[1], s.point[2]));
-        n++;
-      }
+  /** Create mode: the middle of the most recently picked edge, across it, as the passive handle stands
+   *  (edgeNudge.handlePlacement). An average of several edges lands in mid air. */
+  private placeOnLastPick() {
+    const at = this.lastPickMid;
+    const away = (g: GhostEdge) => (at ? Math.hypot(g.mid[0] - at[0], g.mid[1] - at[1], g.mid[2] - at[2]) : 0);
+    // Nearest rather than equal: a seeded selector's point and its matched edge's middle differ by rounding.
+    const g = at
+      ? this.ghosts.reduce<GhostEdge | null>((b, x) => (!b || away(x) < away(b) ? x : b), null)
+      : this.ghosts.at(-1);
+    const place = g ? pointOnEdge(g.points, g.mid) : null;
+    if (!place) {
+      this.anchor.copy(this.anchorFromSelectors(this.currentSelectors()));
+      this.tangent = null;
+      return;
     }
-    if (n > 0) return acc.multiplyScalar(1 / n);
+    this.anchor.set(...place.anchor);
+    this.tangent = place.tangent ? new THREE.Vector3(...place.tangent) : null;
+  }
+
+  /** The last selector's point (a nearest selector carries its edge midpoint), else the model's bbox centre. */
+  private anchorFromSelectors(sels: Selector[]): THREE.Vector3 {
+    for (let i = sels.length - 1; i >= 0; i--) {
+      const s = sels[i]!;
+      if ("point" in s) return new THREE.Vector3(s.point[0], s.point[1], s.point[2]);
+    }
     const bb = this.store.buildState.result?.bbox;
     if (bb) {
       return new THREE.Vector3((bb.min[0] + bb.max[0]) / 2, (bb.min[1] + bb.max[1]) / 2, (bb.min[2] + bb.max[2]) / 2);
     }
-    return acc;
+    return new THREE.Vector3();
   }
 }
 

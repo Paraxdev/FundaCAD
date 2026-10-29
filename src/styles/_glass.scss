@@ -10,8 +10,7 @@
 .choice-card,
 .float-right .palette,
 #viewport .prompt,
-.dim-field,
-.dim-btn,
+.dim-input,
 .dim-unit-menu,
 .home-side,
 .home-tools,
@@ -27,22 +26,40 @@
 .sel-readout,
 .normal-to-sketch,
 .section-chip,
+.updating-chip,
 .snap-tag,
 .sketch-dim,
 .sketch-glyph {
   corner-shape: squircle;
-  background: var(--glass-sheen), var(--float-bg);
+  background: var(--float-bg);
   -webkit-backdrop-filter: var(--float-blur);
   backdrop-filter: var(--float-blur);
-  border: 1px solid var(--float-line);
-  box-shadow: var(--glass-inset), var(--float-shadow);
+  border: 1px solid transparent;
+  box-shadow: var(--float-shadow);
 }
 
 .float-popover,
 .context-menu,
 .choice-card,
 .dim-unit-menu {
-  background: var(--glass-sheen), var(--float-bg-solid);
+  background: var(--float-bg-solid);
+}
+/* One level up from the card each, a tile and then a chip, a touch lighter. */
+.rail-tile,
+.home-new-card,
+.home-card,
+.home-example {
+  background: var(--float-tile-bg);
+}
+.rail-pill,
+.dim-input,
+.roundtrip,
+.sel-readout,
+.normal-to-sketch,
+.section-chip,
+.updating-chip,
+.snap-tag {
+  background: var(--float-chip-bg);
 }
 
 .float-card,
@@ -62,8 +79,7 @@
   border-radius: var(--float-tile-radius);
 }
 .rail-pill,
-.dim-field,
-.dim-btn,
+.dim-input,
 .dim-unit-menu,
 .home-card-versions,
 .home-badge,
@@ -74,12 +90,14 @@
 .sel-readout,
 .normal-to-sketch,
 .section-chip,
+.updating-chip,
 .snap-tag,
 .sketch-dim,
 .sketch-glyph {
   border-radius: var(--float-chip-radius);
 }
-/* A sketch label keeps its state in its border: accent, dashed when driven, red or amber when flagged. */
+/* A sketch label keeps its state in its border: accent, dashed when driven, red or amber when flagged.
+   The one outline left on glass, it is a reading on the model, not a surface edge. */
 .sketch-dim,
 .sketch-glyph {
   border-color: var(--accent);
@@ -94,34 +112,6 @@
   position: relative;
 }
 
-.float-card::after,
-.float-group::after,
-.float-popover:not(.rail-flyout)::after,
-.rail-tile::after,
-.context-menu::after,
-.choice-card::after,
-.float-right .palette::after,
-.home-side::after,
-.home-tools::after,
-.home-new-card::after,
-.home-card::after,
-.home-example::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  padding: 1px;
-  border-radius: inherit;
-  corner-shape: inherit;
-  background: var(--glass-rim);
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask:
-    linear-gradient(#000 0 0) content-box exclude,
-    linear-gradient(#000 0 0);
-  pointer-events: none;
-}
 .float-group {
   position: relative;
 }
@@ -141,44 +131,23 @@
 .home-new-card:hover,
 .home-card:hover,
 .home-example:hover {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.02) 62%), var(--float-bg);
+  background: linear-gradient(var(--hover-wash), var(--hover-wash)), var(--float-tile-bg);
   transform: translateY(-1px);
 }
 .rail-btn:active .rail-tile {
   transform: scale(0.94);
 }
-.home-new-card:hover,
-.home-card:hover,
-.home-example:hover,
-.home-card:focus-visible,
-.home-example:focus-visible,
-.home-card-versions:hover {
-  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
-}
 .rail-btn.active .rail-tile,
 .rail-btn.holding .rail-tile,
 .icon-btn.active {
-  background:
-    radial-gradient(
-      120% 100% at 50% 0%,
-      color-mix(in srgb, var(--accent) 44%, transparent),
-      color-mix(in srgb, var(--accent) 8%, transparent) 72%
-    ),
-    var(--float-bg);
-  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background: linear-gradient(var(--accent-wash), var(--accent-wash)), var(--float-tile-bg);
   color: var(--accent-hot);
-  /* An even halo, not a drop: the rail tiles sit tight, so an offset bloom looks sliced
-     off. */
-  box-shadow:
-    var(--glass-inset),
-    0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent),
-    0 0 16px 1px var(--accent-glow);
+}
+.icon-btn.active {
+  box-shadow: none;
 }
 .rail-pill {
   padding: 3px 9px;
-}
-.rail-btn:hover .rail-pill {
-  border-color: rgba(255, 255, 255, 0.16);
 }
 .rail-corner {
   right: 4px;
@@ -234,8 +203,8 @@
 }
 .key-chip kbd {
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.1);
+  background: var(--float-chip-bg);
+  border-color: transparent;
 }
 
 .feature-row.selected,
@@ -243,12 +212,8 @@
 .opt-row.selected,
 .home-nav-row.active,
 .home-branch.shown {
-  background: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--accent) 22%, transparent),
-    color-mix(in srgb, var(--accent) 6%, transparent)
-  );
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  box-shadow: none;
   color: var(--accent-hot);
 }
 .opt-row.selected::before {
@@ -258,24 +223,27 @@
 .context-menu {
   padding: 5px;
 }
-.ctx-item:hover,
 .home-nav-row:hover:not(.active) {
   background: color-mix(in srgb, var(--accent) 16%, transparent);
 }
 
 .dim-field.typed {
-  border-color: color-mix(in srgb, var(--accent) 70%, transparent);
-  box-shadow:
-    var(--glass-inset),
-    0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent),
-    var(--float-shadow);
+  background: var(--hover-wash);
 }
-.dim-btn.dim-toggle.on,
-.dim-btn.dim-direction.on,
+.dim-bad .dim-field,
+.dim-bad .dim-field.typed {
+  background: var(--error-tint);
+}
+.dim-btn.on,
 .section-chip-btn.active {
   /* Mixed into an opaque dark, not transparency: over a pale model a see-through
      tint washed the label out. */
-  background: color-mix(in srgb, var(--accent) 20%, var(--panel));
+  background: color-mix(in srgb, var(--accent) 24%, var(--panel));
+}
+/* On paper the dark mix reads as grey: the accent tint with the accent ink instead, above 3:1 on the chip. */
+:root.theme-light .dim-btn.on {
+  background: var(--accent-tint-2);
+  color: var(--accent);
 }
 
 .pop-wide,
@@ -283,25 +251,23 @@
 .section-chip-btn {
   corner-shape: squircle;
   border-radius: var(--float-chip-radius);
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  background: var(--float-chip-bg);
+  border: 1px solid transparent;
+  box-shadow: none;
 }
 .pop-wide:hover,
 .palette-btn:hover,
 .section-chip-btn:hover:not(.disabled) {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: linear-gradient(var(--hover-wash), var(--hover-wash)), var(--float-chip-bg);
 }
 .pop-wide.ghost {
   background: none;
-  box-shadow: none;
 }
 
 .choice-backdrop {
   background: rgba(5, 4, 9, 0.35);
-  -webkit-backdrop-filter: blur(6px) saturate(1.2);
-  backdrop-filter: blur(6px) saturate(1.2);
+  -webkit-backdrop-filter: blur(6px) saturate(1.05);
+  backdrop-filter: blur(6px) saturate(1.05);
 }
 .choice-card {
   padding: 18px;
@@ -310,12 +276,11 @@
 .choice-btn {
   min-width: 64px;
   white-space: nowrap;
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.08);
+  background: var(--float-chip-bg);
+  border-color: transparent;
 }
 .choice-btn:hover {
-  background: color-mix(in srgb, var(--accent) 16%, transparent);
-  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background: color-mix(in srgb, var(--accent) 16%, var(--float-chip-bg));
 }
 
 .modal-panel,
@@ -334,10 +299,10 @@
 .guide-bubble,
 #safe-mode-banner {
   corner-shape: squircle;
-  background: var(--glass-sheen), var(--float-bg-solid);
+  background: var(--float-bg-solid);
   -webkit-backdrop-filter: var(--float-blur);
   backdrop-filter: var(--float-blur);
-  border: 1px solid var(--float-line);
+  border: 1px solid transparent;
 }
 .cmdk-card,
 .menu-popup,
@@ -353,12 +318,12 @@
 .home-welcome,
 .guide-bubble,
 #safe-mode-banner {
-  box-shadow: var(--glass-inset), var(--float-shadow);
+  box-shadow: var(--float-shadow);
 }
 /* .modal-panel sits on a dark scrim where the soft --float-shadow has no contrast. Loads
    after the --shadow-3 in _modals.scss on purpose. */
 .modal-panel {
-  box-shadow: var(--glass-inset), var(--shadow-3);
+  box-shadow: var(--shadow-3);
 }
 .modal-panel,
 .cmdk-card,
@@ -381,48 +346,6 @@
 .areachip {
   border-radius: var(--float-chip-radius);
 }
-/* Static in their own partials, so without this the ::after rim resolves against the
-   full screen and is drawn around the window. */
-.modal-panel,
-.cmdk-card,
-.tgt-panel,
-.toast,
-#renderdock,
-.home-news,
-.home-welcome {
-  position: relative;
-}
-.modal-panel::after,
-.cmdk-card::after,
-.menu-popup::after,
-.toast::after,
-.logcon::after,
-.measure-panel::after,
-.tgt-panel::after,
-#renderdock::after,
-.ne-overlay::after,
-.home-drawer::after,
-.home-news::after,
-.home-welcome::after,
-.guide-bubble::after,
-#safe-mode-banner::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  padding: 1px;
-  border-radius: inherit;
-  corner-shape: inherit;
-  background: var(--glass-rim);
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask:
-    linear-gradient(#000 0 0) content-box exclude,
-    linear-gradient(#000 0 0);
-  pointer-events: none;
-}
-
 /* A dock and a drawer float like the cards do, clear of the window edges. */
 #renderdock {
   margin: var(--s-3) var(--s-3) var(--s-3) 0;
@@ -436,25 +359,22 @@
 }
 
 .toast.toast-error {
-  background: var(--glass-sheen), color-mix(in srgb, var(--error) 22%, var(--float-bg-solid));
-  border-color: color-mix(in srgb, var(--error) 70%, transparent);
+  background: color-mix(in srgb, var(--error) 22%, var(--float-bg-solid));
 }
 .toast.toast-warning {
-  background: var(--glass-sheen), color-mix(in srgb, #d2a83b 20%, var(--float-bg-solid));
-  border-color: color-mix(in srgb, #d2a83b 70%, transparent);
+  background: color-mix(in srgb, #d2a83b 20%, var(--float-bg-solid));
 }
 
 #safe-mode-banner {
-  background: var(--glass-sheen), color-mix(in srgb, var(--warn) 9%, var(--float-bg-solid));
-  border-color: color-mix(in srgb, var(--warn) 70%, transparent);
+  background: color-mix(in srgb, var(--warn) 12%, var(--float-bg-solid));
 }
 
 .modal-overlay,
 .cmdk-backdrop,
 .home.bg-workspace::before {
   background: rgba(5, 4, 9, 0.35);
-  -webkit-backdrop-filter: blur(6px) saturate(1.2);
-  backdrop-filter: blur(6px) saturate(1.2);
+  -webkit-backdrop-filter: blur(6px) saturate(1.05);
+  backdrop-filter: blur(6px) saturate(1.05);
 }
 
 /* Home's paper, opaque so the workspace stays out of sight; the grain is a 160px noise
@@ -515,54 +435,65 @@
   border-radius: var(--float-tile-radius);
 }
 
-.btn,
-.home-drawer-act {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.1);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
-}
-.btn:hover:not(:disabled),
-.home-drawer-act:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+// The one .btn rule, also the base of Button.vue. A variant only sets --btn-fill and --btn-hover, so the hover and
+// disabled rules hold for each one, and the bare button:hover in _layout.scss cannot light a disabled .btn.
+.btn {
+  --btn-fill: var(--float-chip-bg);
+  --btn-hover: linear-gradient(var(--hover-wash), var(--hover-wash)), var(--float-chip-bg);
+  padding: var(--s-3) var(--s-4);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  background: var(--btn-fill);
+  border: 1px solid transparent;
+  box-shadow: none;
+  cursor: pointer;
+  transition:
+    background var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease),
+    transform var(--t-fast) var(--ease);
 }
 .btn-primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.28),
-    0 8px 22px -10px var(--accent-glow);
+  --btn-fill: var(--accent);
+  --btn-hover: var(--accent-hot);
+  color: var(--on-accent);
+  font-weight: 600;
 }
-.btn-primary:hover:not(:disabled) {
-  background: var(--accent-hot);
-  border-color: var(--accent-hot);
+.btn:hover:not(:disabled, .is-disabled) {
+  background: var(--btn-hover);
 }
-/* These shadows load after the shared ring in _base.scss at the same
-   specificity, so without this the ring never shows on them. */
-.btn:focus-visible,
-.pop-wide:focus-visible,
-.palette-btn:focus-visible,
-.section-chip-btn:focus-visible {
-  box-shadow:
-    0 0 0 2px var(--bg),
-    0 0 0 4px var(--accent-glow);
+.btn:is(:disabled, .is-disabled) {
+  background: var(--btn-fill);
+  opacity: 0.45;
+  cursor: default;
+}
+.home-drawer-act {
+  background: var(--float-chip-bg);
+  border-color: transparent;
+  box-shadow: none;
+}
+.home-drawer-act:hover {
+  background: linear-gradient(var(--hover-wash), var(--hover-wash)), var(--float-chip-bg);
 }
 
+/* Fields sink: a darker well than the surface they sit on, no edge. */
 .sm-input,
 .sm-select,
 .home-search,
 .home-sort,
-.home-view-select {
-  background-color: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.1);
+.home-view-select,
+.xp-row input,
+.versions-input,
+#browser .browser-filter {
+  background-color: var(--field-bg);
+  border-color: transparent;
 }
 .sm-input:focus,
 .sm-select:focus,
 .home-search:focus,
 .home-sort:focus,
 .home-view-select:focus {
-  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent);
+  box-shadow: none;
 }
 .sm-select option,
 .home-sort option,
@@ -570,7 +501,6 @@
   background: var(--panel-2);
 }
 
-.menu-item:hover,
 .cmdk-item.active {
   background: color-mix(in srgb, var(--accent) 16%, transparent);
 }
@@ -592,6 +522,13 @@ html.no-glass-blur *::before,
 html.no-glass-blur *::after {
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
+}
+/* The blur is half of what sets a dialog apart from the app behind it, so the plain fill
+   alone has to be darker. */
+html.no-glass-blur .modal-overlay,
+html.no-glass-blur .choice-backdrop,
+html.no-glass-blur .cmdk-backdrop {
+  background: var(--scrim-flat);
 }
 /* Without the blur the scrim would show the float cards sharp through it. */
 html.no-glass-blur .home.bg-workspace::before {

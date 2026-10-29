@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import Icon from "../shell/Icon.vue";
+import Button from "../ui/Button.vue";
+import IconButton from "../ui/IconButton.vue";
 import { useToastStore } from "../../stores/toasts";
 
 const toasts = useToastStore();
@@ -12,18 +13,25 @@ const toasts = useToastStore();
       <div v-for="t in toasts.items" :key="t.id" class="toast" :class="[`toast-${t.kind}`, { 'toast-out': t.leaving }]">
         <!-- Messages carry engine error text and document-sourced names, {{ }} escapes them. -->
         <span class="toast-msg">{{ t.message }}</span>
-        <button
+        <Button
           v-if="t.action"
+          size="sm"
           class="toast-action"
           @click="
             t.action.onClick();
             toasts.dismiss(t.id);
           "
-          >{{ t.action.label }}</button
+          >{{ t.action.label }}</Button
         >
-        <button class="toast-close" aria-label="Dismiss" @click="toasts.dismiss(t.id)">
-          <Icon name="close" :size="12" />
-        </button>
+        <IconButton
+          icon="close"
+          tip="Dismiss"
+          size="sm"
+          variant="plain"
+          :icon-size="12"
+          class="toast-close"
+          @click="toasts.dismiss(t.id)"
+        />
       </div>
     </div>
   </Teleport>

@@ -2,6 +2,7 @@ import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore } from "../document/store";
 import type { Plane3 } from "../types";
+import { bodyLabels } from "../ui/bodyLabels";
 import { setPrompt } from "../ui/prompt";
 import { isEditableTarget } from "../ui/focus";
 import { awaitTreePick, treePickRefusal, type TreePick, type TreePickAnswer } from "../ui/treePick";
@@ -146,8 +147,8 @@ export class MirrorTool {
   }
 
   private bodyLabel(id: string): string {
-    const built = this.store.buildState.result?.bodies?.find((b) => b.id === id);
-    return this.store.bodyName(id) ?? built?.name ?? id;
+    const built = this.store.buildState.result?.bodies ?? [];
+    return bodyLabels(built, (b) => this.store.bodyName(b)).get(id) ?? this.store.bodyName(id) ?? id;
   }
 
   private planeOf(t: PlanePickTarget): MirrorPlanePick | null {

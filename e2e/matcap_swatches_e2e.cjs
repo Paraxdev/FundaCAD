@@ -93,7 +93,7 @@ function check(ok, what, detail) {
     const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("fundacad.render")).matcapStyle);
     check(saved === "metal", "the choice is saved", saved);
     check(
-      (await page.getAttribute('.matcap-swatch[data-matcap="metal"]', "aria-pressed")) === "true",
+      (await page.getAttribute('.matcap-swatch[data-matcap="metal"]', "aria-checked")) === "true",
       "the swatch shows active",
     );
     await shot("metal.png");

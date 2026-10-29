@@ -277,6 +277,22 @@ fn local_cache() -> &'static Mutex<LocalCache> {
     CACHE.get_or_init(Mutex::default)
 }
 
+/// False when a job abandoned mid inspect still holds the cache.
+pub(crate) fn release_locals() -> bool {
+    match local_cache().try_lock() {
+        Ok(mut c) => c.entries.clear(),
+        Err(std::sync::TryLockError::Poisoned(p)) => p.into_inner().entries.clear(),
+        Err(std::sync::TryLockError::WouldBlock) => return false,
+    }
+    true
+}
+
+#[cfg(test)]
+pub(crate) fn locals_held(shapes: &[&Shape]) -> usize {
+    let cache = local_cache().lock().unwrap_or_else(|p| p.into_inner());
+    shapes.iter().filter(|s| cache.entries.contains_key(&local_key(s))).count()
+}
+
 fn local_key(shape: &Shape) -> LocalKey {
     (fq::FQ_tshape(shape.raw()), fq::FQ_orientation(shape.raw()))
 }

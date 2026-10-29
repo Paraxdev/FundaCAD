@@ -191,7 +191,7 @@ function modelDoc() {
       const f = await findFace();
       await tile.click();
       await page.waitForTimeout(400);
-      await page.locator(".choice-btn", { hasText: "Face or plane" }).click();
+      await page.locator(".ui-confirm-choice", { hasText: "Face or plane" }).click();
       await page.waitForTimeout(300);
       await page.mouse.click(f.x, f.y);
       await page.waitForTimeout(300);
@@ -204,7 +204,7 @@ function modelDoc() {
     console.log("\n[part 1: confirm keeps the cut on]");
     await tile.click();
     await page.waitForTimeout(400);
-    await page.locator(".choice-btn", { hasText: "Face or plane" }).click();
+    await page.locator(".ui-confirm-choice", { hasText: "Face or plane" }).click();
     await page.waitForTimeout(300);
     check("Section aims after Face or plane", (await state()).phase === "aiming");
     await page.mouse.click(face.x, face.y);
@@ -385,7 +385,7 @@ function modelDoc() {
     });
     await page.waitForTimeout(200);
     const hits = await page.evaluate(() =>
-      [...document.querySelectorAll(".section-chip-btn")].map((b) => {
+      [...document.querySelectorAll(".section-chip .btn")].map((b) => {
         const r = b.getBoundingClientRect();
         const before = getComputedStyle(b, "::before");
         return Math.round(r.height - parseFloat(before.top) - parseFloat(before.bottom));
@@ -423,7 +423,7 @@ function modelDoc() {
         (r) => r.left < c.box.right && r.right > c.box.left && r.top < c.box.bottom && r.bottom > c.box.top,
       );
       const covered = await page.evaluate(() =>
-        [...document.querySelectorAll(".section-chip-btn")]
+        [...document.querySelectorAll(".section-chip .btn")]
           .filter((b) => {
             const r = b.getBoundingClientRect();
             return !b.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));

@@ -28,9 +28,25 @@ describe("verdictView", () => {
     expect(SAFE_MARGIN).toBe(1.5);
   });
 
+  it("reads a rounded down factor as at least, so 4.57 in the table is not contradicted", () => {
+    expect([4.57, 4.5, 4.4999, 1.57, 100, 100.01].map((sf) => verdictView({ safetyFactor: sf }).headline)).toEqual([
+      "Holds, at least 4.5x safe.",
+      "Holds, at least 4.5x safe.",
+      "Holds, at least 4.4x safe.",
+      "Holds, at least 1.5x safe.",
+      "Holds, at least 100x safe.",
+      "Holds, more than 100x safe.",
+    ]);
+    expect([4.57, 1.499, 100.01].map(weakSpotLabel)).toEqual([
+      "Weakest, at least 4.5x safe",
+      "Weakest, at least 1.4x safe",
+      "Weakest, more than 100x safe",
+    ]);
+  });
+
   it("states the safe factor rounded down and the overload rounded up", () => {
-    expect(verdictView({ safetyFactor: 3.32 }).headline).toBe("Holds, about 3.3x safe.");
-    expect(verdictView({ safetyFactor: 1.499 }).headline).toBe("Holds, but only about 1.4x safe, keep about 1.5x.");
+    expect(verdictView({ safetyFactor: 3.32 }).headline).toBe("Holds, at least 3.3x safe.");
+    expect(verdictView({ safetyFactor: 1.499 }).headline).toBe("Holds, at least 1.4x safe, but keep about 1.5x.");
     expect(verdictView({ safetyFactor: 250 }).headline).toBe("Holds, more than 100x safe.");
     expect(verdictView({ safetyFactor: null }).detail).toBeNull();
   });
@@ -58,10 +74,10 @@ describe("verdictView", () => {
   it("names the marked spot only while it is marked", () => {
     const at = (sf: number, marked: boolean) => verdictView({ safetyFactor: sf }, SAFE_MARGIN, marked);
     expect([3.32, 1.2, 0.62].map((sf) => at(sf, true))).toEqual([
-      { level: "holds", headline: "Holds, about 3.3x safe.", detail: "Weakest at the marked spot." },
+      { level: "holds", headline: "Holds, at least 3.3x safe.", detail: "Weakest at the marked spot." },
       {
         level: "marginal",
-        headline: "Holds, but only about 1.2x safe, keep about 1.5x.",
+        headline: "Holds, at least 1.2x safe, but keep about 1.5x.",
         detail: "Weakest at the marked spot.",
       },
       {
@@ -71,8 +87,8 @@ describe("verdictView", () => {
       },
     ]);
     expect([3.32, 1.2, 0.62].map((sf) => at(sf, false))).toEqual([
-      { level: "holds", headline: "Holds, about 3.3x safe.", detail: null },
-      { level: "marginal", headline: "Holds, but only about 1.2x safe, keep about 1.5x.", detail: null },
+      { level: "holds", headline: "Holds, at least 3.3x safe.", detail: null },
+      { level: "marginal", headline: "Holds, at least 1.2x safe, but keep about 1.5x.", detail: null },
       { level: "fails", headline: "Likely to fail.", detail: "The load is about 62% more than it can take." },
     ]);
   });
@@ -82,13 +98,13 @@ describe("verdictView", () => {
       verdictView({ safetyFactor: sf, peakPlace }, SAFE_MARGIN, marked);
     expect(v(2.94, "corner")).toEqual({
       level: "holds",
-      headline: "Holds by a rough reading, about 2.9x safe.",
+      headline: "Holds by a rough reading, at least 2.9x safe.",
       detail:
         "Weakest at the marked sharp corner. The number at a sharp corner is rough, and rounding the corner makes it stronger.",
     });
     expect(v(1.3, "support", false)).toEqual({
       level: "marginal",
-      headline: "Holds by a rough reading, but only about 1.3x safe, keep about 1.5x.",
+      headline: "Holds by a rough reading, at least 1.3x safe, but keep about 1.5x.",
       detail: "Weakest at the edge of a support. The number there is rough, so read the colour a little away from it.",
     });
     expect(v(0.8, "corner", false)).toEqual({
@@ -140,8 +156,8 @@ describe("peakPlaceOf", () => {
 describe("weakSpotLabel", () => {
   it("gives the safe factor rounded down, or the overload as the verdict words it", () => {
     expect([3.32, 1, 0.978, 0.31, 0.004, null, Infinity].map(weakSpotLabel)).toEqual([
-      "Weakest, 3.3x safe",
-      "Weakest, 1x safe",
+      "Weakest, at least 3.3x safe",
+      "Weakest, at least 1x safe",
       "Weakest, 3% over",
       "Weakest, 3.3x over",
       "Weakest, more than 100x over",

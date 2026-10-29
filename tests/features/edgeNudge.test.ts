@@ -33,23 +33,24 @@ describe("handlePlacement", () => {
     expect(handlePlacement([straight])?.tangent).toEqual([1, 0, 0]);
   });
 
-  it("averages the midpoints of a multi-edge selection", () => {
+  // The mean of several midpoints used to stand the handle in mid air, over the
+  // middle of a box's top face rather than on any of its edges.
+  it("stands on the most recently picked of several edges, not their average", () => {
     const other: Vec3[] = [
       [0, 4, 0],
       [10, 4, 0],
     ];
-    expect(handlePlacement([straight, other])?.anchor).toEqual([5, 2, 0]);
+    expect(handlePlacement([straight, other])?.anchor).toEqual([5, 4, 0]);
+    expect(handlePlacement([other, straight])?.anchor).toEqual([5, 0, 0]);
   });
 
-  it("takes the first edge's tangent for a multi-edge selection", () => {
-    // There is no single right perpendicular for several edges; one that lies
-    // across a real member is preferred over the camera-right fallback.
+  it("lies across the most recently picked edge", () => {
     const acrossY: Vec3[] = [
       [0, 0, 0],
       [0, 6, 0],
     ];
-    expect(handlePlacement([straight, acrossY])?.tangent).toEqual([1, 0, 0]);
-    expect(handlePlacement([acrossY, straight])?.tangent).toEqual([0, 1, 0]);
+    expect(handlePlacement([straight, acrossY])?.tangent).toEqual([0, 1, 0]);
+    expect(handlePlacement([acrossY, straight])?.tangent).toEqual([1, 0, 0]);
   });
 
   it("returns a unit tangent whatever the edge's length", () => {
@@ -60,10 +61,7 @@ describe("handlePlacement", () => {
     expect(handlePlacement([long])?.tangent).toEqual([0, 0, 1]);
   });
 
-  it("reports no tangent for a closed edge and lets the caller fall back", () => {
-    // A full circle's first and last samples coincide, so it has no chord. The
-    // handle still has somewhere to stand, it just needs the camera's right
-    // vector for direction, which this module has no way to know.
+  it("lies across a closed edge where it stands, though the edge has no chord", () => {
     const circle: Vec3[] = [
       [1, 0, 0],
       [0, 1, 0],
@@ -72,16 +70,16 @@ describe("handlePlacement", () => {
       [1, 0, 0],
     ];
     const place = handlePlacement([circle]);
-    expect(place).not.toBeNull();
-    expect(place?.tangent).toBeNull();
+    expect(place?.anchor).toEqual([-1, 0, 0]);
+    expect(place?.tangent?.map((c) => Math.round(c * 1e6) / 1e6 + 0)).toEqual([-0.707107, -0.707107, 0]);
   });
 
-  it("borrows a tangent from a later edge when the first has none", () => {
+  it("passes over a last edge with no length for the one picked before it", () => {
     const degenerate: Vec3[] = [
       [3, 3, 3],
       [3, 3, 3],
     ];
-    expect(handlePlacement([degenerate, straight])?.tangent).toEqual([1, 0, 0]);
+    expect(handlePlacement([straight, degenerate])).toEqual({ anchor: [5, 0, 0], tangent: [1, 0, 0] });
   });
 
   it("has nothing to offer for an empty selection", () => {
