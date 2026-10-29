@@ -1,9 +1,28 @@
 # Printer connection
 
-This plugin shortens the trip from model to printer. It works with Moonraker printers and OrcaSlicer, and only on your local network. It is on by default.
+This plugin takes a model from FundaCAD to OrcaSlicer and to a Moonraker printer on your local network. It is on by default and works in the desktop app only.
 
 ![The Print group on the tool rail, listing Print Project, Open in OrcaSlicer and Send to Printer](../img/printing-menu.png)
 
-Print Project writes a 3MF with one object per body and their filament slots. Open in OrcaSlicer does that and opens the result. Send to Printer takes the sliced `.gcode`, asks which filament goes in which toolhead, and starts the job when you press Upload & Print.
+Its commands are under Print on the rail and in the File menu.
 
-A status line over the viewport shows progress, and Camera in the File menu shows the printer's camera. Your printers are listed in `printers.json` in the plugin data folder.
+| Command | What it does |
+| --- | --- |
+| Print Project | Saves a 3MF with one object per body and its filament slot. In the File menu it is Export for Print (3MF)… |
+| Open in OrcaSlicer | Saves the same 3MF and opens it in OrcaSlicer |
+| Send to Printer | Sends a sliced `.gcode` file to the printer and starts it |
+| Camera… | Shows the printer's camera, from the File menu |
+
+## Send a job
+
+1. Slice the model in OrcaSlicer and save the `.gcode`.
+2. Choose Send to Printer and pick that file.
+3. Choose the toolhead that holds each filament.
+4. Tick Auto bed leveling, Flow calibrate or Timelapse if you want them.
+5. Press Upload & Print.
+
+While the job runs, a pill near the bottom of the window shows its progress. Click the pill to see the camera.
+
+## Your printers
+
+The printer list is `printers.json`, in the app data folder under `plugin-data/FundaCAD.Printing`. The plugin only reaches addresses on your local network.
