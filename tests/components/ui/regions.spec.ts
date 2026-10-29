@@ -1,16 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { setShortcutOverrides } from "../../../src/input/shortcuts";
+import { announce } from "../../../src/ui/announce";
 
 import {
   REGION_ORDER,
   currentRegion,
   cycleRegion,
   focusRegion,
+  goToRegion,
   installRegionKeys,
   regionsInOrder,
   trackRegionFocus,
 } from "../../../src/ui/regions";
+
+vi.mock("../../../src/ui/announce", () => ({ announce: vi.fn() }));
 
 const $ = (sel: string) => document.querySelector<HTMLElement>(sel)!;
 const active = () => document.activeElement;
@@ -155,6 +159,36 @@ describe("focusRegion", () => {
     $("#viewport").innerHTML = `<canvas id="canvas" tabindex="-1"></canvas>`;
     focusRegion({ kind: "viewport", el: $("#main") });
     expect(active()).toBe($("#main"));
+  });
+});
+
+describe("goToRegion", () => {
+  it("focuses the region asked for wherever focus is, Model on its landmark", () => {
+    $("#step").focus();
+    expect(goToRegion("tools")?.kind).toBe("tools");
+    expect(active()).toBe($("#sketch"));
+    goToRegion("viewport");
+    expect(active()).toBe($("#main"));
+    goToRegion("menubar");
+    expect(active()).toBe($("#file"));
+  });
+
+  it("steps on through the open panels when asked again from one", () => {
+    $("#file").focus();
+    goToRegion("panel");
+    expect(active()).toBe($("#p1"));
+    goToRegion("panel");
+    expect(active()).toBe(document.querySelectorAll(".ui-panel")[1]);
+    goToRegion("panel");
+    expect(active()).toBe($("#p1"));
+  });
+
+  it("says so and leaves focus alone when the region is not on screen", () => {
+    $("#browser").hidden = true;
+    $("#file").focus();
+    expect(goToRegion("items")).toBeNull();
+    expect(active()).toBe($("#file"));
+    expect(announce).toHaveBeenLastCalledWith("Items is not on screen");
   });
 });
 
