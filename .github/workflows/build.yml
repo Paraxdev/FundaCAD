@@ -1075,10 +1075,12 @@ jobs:
           gh release upload "$V" --repo "$R" --clobber $files SHA256SUMS.txt
           # GitHub makes a draft's tag only when it is published, and refuses this token a tag
           # on a commit that changes a workflow file. The rolling beta is already out.
-          if ! gh release edit "$V" --repo "$R" --draft=false --prerelease=false --latest="$latest"; then
+          if ! gh release edit "$V" --repo "$R" --draft=false --prerelease=false --latest="$latest" 2> publish-error.txt; then
+            cat publish-error.txt >&2
             [ "$(gh release view "$V" --repo "$R" --json isDraft --jq .isDraft)" = true ] || exit 1
             gh release delete "$V" --repo "$R" --yes
-            echo "::warning::no $V release, GitHub refused its tag on ${SHA:0:7}, as this token may not tag a commit that changes a workflow file; the rolling beta has this build"
+            err=$(tr -s '\r\n' ' ' < publish-error.txt | sed 's/ $//')
+            echo "::warning::no $V release, GitHub would not publish it on ${SHA:0:7}, so its draft is deleted: $err. This token may not tag a commit that changes a workflow file, the rolling beta has this build"
           fi
 
   # Browser end-to-end checks for the imported-assembly Browser tree.
