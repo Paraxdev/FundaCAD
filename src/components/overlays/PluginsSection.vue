@@ -58,8 +58,12 @@ onMounted(() => {
 });
 onUnmounted(() => offPlugins?.());
 
-function toggle(id: string, run: boolean) {
-  setPluginEnabled(id, run);
+function toggle(id: string, run: boolean, name: string) {
+  setPluginEnabled(id, run).catch((err: unknown) =>
+    toast(`Could not tell the geometry engine that ${name} is switched ${run ? "on" : "off"}. ${String(err)}`, {
+      kind: "error",
+    }),
+  );
   readState();
 }
 
@@ -292,7 +296,7 @@ async function drop(id: string, name: string) {
           :labelledby="`prefs-plugin-${rec.id}-name`"
           :tip="`Run ${manifest ? manifest.name : rec.id}`"
           :title="on[rec.id] === false ? 'Switched off' : 'Running'"
-          @update:model-value="toggle(rec.id, $event)"
+          @update:model-value="toggle(rec.id, $event, manifest ? manifest.name : rec.id)"
         />
         <Button :disabled="busy === rec.id" @click="drop(rec.id, manifest ? manifest.name : rec.id)">
           {{ busy === rec.id ? "Removing…" : "Remove" }}

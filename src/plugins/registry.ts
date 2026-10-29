@@ -11,17 +11,17 @@ const listeners = new Set<() => void>();
 let synced: Promise<void> = Promise.resolve();
 
 /** The engine cannot read this window's storage, so the set is copied to the plugins root for it, in order. */
-function tellEngine(set: ReadonlySet<string>): void {
-  if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) return;
+function tellEngine(set: ReadonlySet<string>): Promise<void> {
+  if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) return Promise.resolve();
   const ids = [...set].sort();
-  synced = synced
-    .then(async () => {
-      const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("plugin_set_disabled", { ids });
-    })
-    .catch((e: unknown) => console.warn("the engine was not told which plugins are off:", e));
+  const sent = synced.then(async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("plugin_set_disabled", { ids });
+  });
+  synced = sent.catch(() => {});
+  return sent;
 }
-tellEngine(off);
+tellEngine(off).catch((e: unknown) => console.warn("the engine was not told which plugins are off:", e));
 
 /** Accepts a list of ids, or the older `{id: boolean}` map still in people's storage, where `false` means off.
  *  The next write saves the new shape. */
@@ -56,8 +56,10 @@ export function disabledPlugins(): ReadonlySet<string> {
   return off;
 }
 
-export function setPluginEnabled(id: string, value: boolean): void {
-  if (typeof value !== "boolean" || pluginEnabled(id) === value) return;
+/** Takes effect in this window at once. Rejects when the engine could not be told, which keeps building with the
+ *  last set written until a later change or the next start writes it again. */
+export function setPluginEnabled(id: string, value: boolean): Promise<void> {
+  if (typeof value !== "boolean" || pluginEnabled(id) === value) return Promise.resolve();
   // A fresh set, so a subscriber can compare identity with disabledPlugins() to decide to redraw.
   const next = new Set(off);
   if (value) next.delete(id);
@@ -68,8 +70,9 @@ export function setPluginEnabled(id: string, value: boolean): void {
   } catch {
     /* private mode / no storage: the choice just does not survive the session */
   }
-  tellEngine(next);
+  const told = tellEngine(next);
   for (const fn of listeners) fn();
+  return told;
 }
 
 export function onPluginChange(fn: () => void): () => void {

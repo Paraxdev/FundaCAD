@@ -43,7 +43,7 @@ vi.mock("../../../src/plugins", async (importOriginal) => {
 const PluginsSection = (await import("../../../src/components/overlays/PluginsSection.vue")).default;
 const { candidateFrom } = await import("../../../src/plugins");
 const { errorNotice } = await import("../../../src/ui/errorNotice");
-const { pluginEnabled } = await import("../../../src/plugins/registry");
+const { pluginEnabled, setPluginEnabled } = await import("../../../src/plugins/registry");
 const { definePluginSettings, storageKey } = await import("../../../src/plugins/settings");
 const { contribute, resetContributions } = await import("../../../src/plugins/contrib");
 
@@ -332,6 +332,29 @@ describe("the list of what is installed", () => {
     expect((input.element as HTMLInputElement).checked).toBe(false);
     await input.trigger("change");
     expect(pluginEnabled("widgets")).toBe(true);
+  });
+
+  it("says so when the engine could not be told a plugin is switched off", async () => {
+    installedPlugins.mockResolvedValue([record({})]);
+    const w = await mounted();
+    const win = window as unknown as Record<string, unknown>;
+    win.__TAURI_INTERNALS__ = {
+      invoke: async (cmd: string) => {
+        if (cmd === "plugin_set_disabled") throw new Error("disk full");
+      },
+    };
+    try {
+      await w.get('[data-plugin="widgets"] .plug-controls .ui-checkbox input').trigger("change");
+      expect(pluginEnabled("widgets")).toBe(false);
+      await vi.waitFor(() =>
+        expect(errorNotice()?.message).toBe(
+          "Could not tell the geometry engine that widgets is switched off. Error: disk full",
+        ),
+      );
+    } finally {
+      delete win.__TAURI_INTERNALS__;
+      void setPluginEnabled("widgets", true);
+    }
   });
 
   it("opens an installed plugin's settings from a Settings button carrying the base button icon", async () => {

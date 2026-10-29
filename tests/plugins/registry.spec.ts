@@ -21,10 +21,11 @@ const KEY = "fundacad.plugins";
 const ID = "FundaCAD.Printing";
 const OTHER = "FundaCAD.SpaceMouse";
 
-const host = vi.hoisted(() => ({ invoked: [] as { cmd: string; args: unknown }[] }));
+const host = vi.hoisted(() => ({ invoked: [] as { cmd: string; args: unknown }[], fail: "" }));
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: async (cmd: string, args: unknown) => {
     host.invoked.push({ cmd, args });
+    if (host.fail) throw new Error(host.fail);
   },
 }));
 
@@ -165,6 +166,7 @@ describe("what the engine is told", () => {
   const win = window as unknown as Record<string, unknown>;
   beforeEach(() => {
     host.invoked = [];
+    host.fail = "";
   });
   afterEach(() => {
     delete win.__TAURI_INTERNALS__;
@@ -182,6 +184,17 @@ describe("what the engine is told", () => {
       { cmd: "plugin_set_disabled", args: { ids: [ID, OTHER] } },
       { cmd: "plugin_set_disabled", args: { ids: [ID] } },
     ]);
+  });
+
+  it("hands a failed write back to the caller, and the next change sends the whole set again", async () => {
+    win.__TAURI_INTERNALS__ = {};
+    const m = await load();
+    host.fail = "disk full";
+    await expect(m.setPluginEnabled(ID, false)).rejects.toThrow("disk full");
+    expect(m.pluginEnabled(ID)).toBe(false);
+    host.fail = "";
+    await expect(m.setPluginEnabled(OTHER, false)).resolves.toBeUndefined();
+    expect(host.invoked.at(-1)).toEqual({ cmd: "plugin_set_disabled", args: { ids: [ID, OTHER] } });
   });
 
   it("is not called in a plain browser session, which has no engine of its own", async () => {
