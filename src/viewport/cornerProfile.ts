@@ -54,7 +54,8 @@ export function roundedSquareCorners(
     const prev = corners[(i + 3) % 4]!;
     const next = corners[(i + 1) % 4]!;
     const toward = (to: Vec2): Vec2 => [v[0] + Math.sign(to[0] - v[0]) * l, v[1] + Math.sign(to[1] - v[1]) * l];
-    const arc = l === 0 ? [[v[0], v[1]] as Vec2] : superellipseCorner(toward(prev), v, toward(next), exponent, segments);
+    const arc =
+      l === 0 ? [[v[0], v[1]] as Vec2] : superellipseCorner(toward(prev), v, toward(next), exponent, segments);
     // At a half size leg two neighbouring corners share their tangent point.
     out.push(...(same(arc[0]!, out[out.length - 1]) ? arc.slice(1) : arc));
   });

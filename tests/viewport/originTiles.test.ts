@@ -198,7 +198,10 @@ describe("a tile on its plane", () => {
         const s = new THREE.Vector3(...p).project(cam);
         return [tidy((s.x * 0.5 + 0.5) * 400), tidy((-s.y * 0.5 + 0.5) * 400)];
       };
-      const ring = t.onScreen({ camera: cam, rect }).find((s) => s.plane === k)!.outline.map((p) => [tidy(p.x), tidy(p.y)]);
+      const ring = t
+        .onScreen({ camera: cam, rect })
+        .find((s) => s.plane === k)!
+        .outline.map((p) => [tidy(p.x), tidy(p.y)]);
       const i = ring.findIndex(([x, y]) => x === 200 && y === 200);
       expect(i).toBeGreaterThanOrEqual(0);
       const near = [ring[(i + ring.length - 1) % ring.length], ring[(i + 1) % ring.length]];
