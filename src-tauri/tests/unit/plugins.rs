@@ -4,4 +4,5 @@ mod handed;
 mod keystore;
 mod launch;
 mod localnet;
+mod official;
 mod web;

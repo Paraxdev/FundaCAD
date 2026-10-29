@@ -11,8 +11,8 @@ pub mod localnet;
 pub mod web;
 
 use bundle::{
-    allowed_bundle_url, bundle_target, extract_into, grants_match, now_secs, safe_id, sha256_hex, Consented,
-    MAX_DOWNLOAD,
+    allowed_bundle_url, bundle_target, extract_into, grants_match, is_official_url, now_secs, official_label, safe_id,
+    sha256_hex, Consented, MAX_DOWNLOAD, OFFICIAL_IDS,
 };
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -68,6 +68,8 @@ pub(crate) fn consented_of(app: &AppHandle, id: &str) -> Option<bundle::Consente
 fn read_record(dir: &Path) -> Option<Installed> {
     let text = std::fs::read_to_string(dir.join(RECORD)).ok()?;
     let mut rec: Installed = serde_json::from_str(&text).ok()?;
+    // Decided again on read, so a record labelled by an older, looser check loses the label.
+    rec.official = rec.official && official_label(is_official_url(&rec.source), &rec.consented.kind, &rec.id);
     rec.component = has_component(dir);
     Some(rec)
 }
@@ -158,6 +160,7 @@ fn install_bytes(
         return finish(Err(e), &staging);
     }
 
+    let official = official_label(official, &found.kind, &id);
     let record = Installed {
         id: id.clone(),
         version: found.version.clone(),
@@ -229,7 +232,10 @@ fn inspect_bytes(app: &AppHandle, bytes: &[u8], source: String, official: bool) 
     // failed to unpack is the one case where the leftovers are attacker-chosen.
     let _ = std::fs::remove_dir_all(&scratch);
 
-    Ok(Inspected { manifest: read?, sha256, source, official })
+    let manifest = read?;
+    let field = |k: &str| manifest.get(k).and_then(serde_json::Value::as_str).unwrap_or("");
+    let official = official_label(official, field("kind"), field("id"));
+    Ok(Inspected { manifest, sha256, source, official })
 }
 
 /// Download a bundle and read its manifest, installing nothing.
@@ -358,7 +364,7 @@ pub fn plugin_code(app: AppHandle, id: String) -> Result<String, String> {
             record.consented.kind
         ));
     }
-    if !record.official {
+    if !record.official || !OFFICIAL_IDS.contains(&id) {
         return Err(
             "this plugin did not come from FundaCAD's own releases, and code that runs in the              app's own context is loaded only from there"
                 .into(),

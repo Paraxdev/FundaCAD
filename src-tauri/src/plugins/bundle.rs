@@ -72,6 +72,29 @@ pub fn is_official_url(raw: &str) -> bool {
     official_url(raw).is_some()
 }
 
+/// The ids of plugins/*/manifest.json whose code runs in the window, kept in step by tests/unit/plugins/official.rs.
+pub const OFFICIAL_IDS: &[&str] = &[
+    "FundaCAD.ExtraParameters",
+    "FundaCAD.Gamepad",
+    "FundaCAD.MultiColor",
+    "FundaCAD.Navigation",
+    "FundaCAD.Onshape",
+    "FundaCAD.Organic",
+    "FundaCAD.PrintLook",
+    "FundaCAD.PrintToolbox",
+    "FundaCAD.Printing",
+    "FundaCAD.ReferenceImages",
+    "FundaCAD.Screws",
+    "FundaCAD.SpaceMouse",
+    "FundaCAD.Texture",
+];
+
+/// A kind that runs in the app's own context is official only as one of the plugins FundaCAD ships, so a release
+/// asset alone cannot introduce new app side code.
+pub fn official_label(url_official: bool, kind: &str, id: &str) -> bool {
+    url_official && (!matches!(kind, "builtin" | "process") || OFFICIAL_IDS.contains(&id))
+}
+
 /// The parsed form is what gets fetched, stored as the source and labelled, so the three cannot disagree.
 pub struct BundleTarget {
     pub url: url::Url,

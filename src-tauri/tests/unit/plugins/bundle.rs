@@ -2,8 +2,8 @@ use std::io::Write;
 use std::path::PathBuf;
 
 use fundacad_lib::plugins::bundle::{
-    allowed_bundle_url, bundle_target, extract_into, grants_match, is_official_url, now_secs, official_url, safe_entry,
-    safe_id, sha256_hex, Consented, BUNDLE_PREFIX,
+    allowed_bundle_url, bundle_target, extract_into, grants_match, is_official_url, now_secs, official_label,
+    official_url, safe_entry, safe_id, sha256_hex, Consented, BUNDLE_PREFIX,
 };
 
 /// An id becomes a directory under the plugins root, so every refusal below is a path guard.
@@ -263,6 +263,21 @@ fn the_url_fetched_is_the_one_stored_and_labelled() {
 
     for bad in ["http://github.com/Paraxdev/fundacad/releases/download/beta/x.zip", "https://github.com@evil.example.com/x.zip"] {
         assert!(bundle_target(bad).is_err(), "fetchable: {bad}");
+    }
+}
+
+#[test]
+fn app_side_code_from_a_release_is_official_only_for_a_shipped_id() {
+    for kind in ["builtin", "process"] {
+        assert!(official_label(true, kind, "FundaCAD.Printing"), "{kind}");
+        assert!(!official_label(true, kind, "FundaCAD.Unknown"), "{kind}");
+        assert!(!official_label(true, kind, "fundacad.printing"), "{kind}");
+        assert!(!official_label(true, kind, ""), "{kind}");
+        assert!(!official_label(false, kind, "FundaCAD.Printing"), "{kind}");
+    }
+    for kind in ["compute", "panel"] {
+        assert!(official_label(true, kind, "FundaCAD.Unknown"), "{kind}");
+        assert!(!official_label(false, kind, "FundaCAD.Printing"), "{kind}");
     }
 }
 
