@@ -122,6 +122,23 @@ describe("forced colours", () => {
     }
   });
 
+  it("opt selected states out, so Chromium draws no Canvas backplate behind their HighlightText", () => {
+    for (const selector of [".ui-segment.is-selected", ".prefs-nav-btn.active", ".feature-row.selected"])
+      expect(value(selector, "forced-color-adjust"), selector).toBe("none");
+    const inside = (prop: string, value: string) =>
+      rules.filter(
+        (r) =>
+          r.selectors.length === 1 &&
+          r.selectors[0]!.startsWith(":is(.ui-list-row.is-selected,") &&
+          r.decls.some((d) => d.prop === prop && d.value === value),
+      );
+    const cleared = inside("background-color", "transparent");
+    expect(cleared).toHaveLength(1);
+    for (const kept of ["input", ".ui-checkbox-mark", ".ui-switch", ".ui-switch-knob"])
+      expect(cleared[0]!.selectors[0], kept).toMatch(new RegExp(`:not\\([^)]*${kept.replace(".", "\\.")}[,)]`));
+    expect(inside("forced-color-adjust", "auto")[0]?.selectors[0]).toMatch(/ :is\(input, textarea\)$/);
+  });
+
   it("keep the tab bar, the tick and the switch knob visible", () => {
     expect(value(".ui-tab.is-selected::after", "background-color")).toBe("Highlight !important");
     expect(value(".ui-checkbox-mark::after", "background-color")).toBe("HighlightText !important");

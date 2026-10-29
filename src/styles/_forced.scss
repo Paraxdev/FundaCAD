@@ -35,12 +35,21 @@ $selected: (
   }
 
   // Important: the state rules set their own colours at every specificity, and those get mapped to Canvas.
+  // Opted out, as Chromium otherwise draws a Canvas backplate behind each text line, black under black HighlightText.
   #{$selected} {
+    forced-color-adjust: none;
     background-color: Highlight !important;
     color: HighlightText !important;
   }
   :is(#{$selected}) :not(input, textarea) {
     color: HighlightText !important;
+  }
+  // Opted out, a badge or chip inside would keep its theme fill, so only the controls keep theirs.
+  :is(#{$selected}) :not(input, textarea, .ui-checkbox-mark, .ui-switch, .ui-switch-knob) {
+    background-color: transparent !important;
+  }
+  :is(#{$selected}) :is(input, textarea) {
+    forced-color-adjust: auto;
   }
   .ui-tab.is-selected::after {
     background-color: Highlight !important;
