@@ -21,11 +21,13 @@ function rig() {
   faceIds.forEach((f, t) => faceTriangles.set(f, [...(faceTriangles.get(f) ?? []), t]));
   const body = { id: "b1", faceStart: 0, faceCount: 6, mesh, faceIds, baseColors: base, faceTriangles };
   const painted: THREE.Color[] = [];
-  const edge = {
-    body: "b1",
-    slot: 0,
-    draw: { setColor: (_s: number, c: THREE.Color) => painted.push(c.clone()), setIdleColor: () => {} },
-  } as unknown as EdgeRef;
+  const draw = {
+    setColor: (_s: number, c: THREE.Color) => painted.push(c.clone()),
+    setIdleColor: () => {},
+    refs: [] as EdgeRef[],
+  };
+  const edge = { body: "b1", slot: 0, draw } as unknown as EdgeRef;
+  draw.refs.push(edge);
   const view = { bodies: [body as unknown as BodyMesh] } as unknown as ModelView;
   return { view, mesh, edge, painted };
 }

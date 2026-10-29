@@ -134,7 +134,7 @@ const NO_WORK: ActiveWork = { tool: false, sketch: false, planes: false };
 const SKETCH_DIM_OPACITY = 0.55;
 const SKETCH_DIM_EDGE_OPACITY = 0.5;
 
-import { Highlighter, edgeHoverColor, sameHover } from "./highlight";
+import { Highlighter, PREVIEW_PAINT, edgeHoverColor, sameHover } from "./highlight";
 import { DRAFT_COLORS } from "./draftColors";
 import { ProgressiveModel } from "./progressive";
 import { nearestEdgeByMid, nearestEdgeByCurve, midMatchTol, edgeSelectorFrom, polylineMid } from "./edgeMatch";
@@ -161,13 +161,13 @@ import {
   isAreaDrag,
   areaSelectionMode,
   areaTakesProfiles,
-  AreaPreviewGate,
+  FrameCoalescer,
   nextAreaFilter,
   type AreaFilter,
   type AreaMode,
   type ScreenRect,
 } from "./areaSelect";
-import { collectInBox, projectForArea, type AreaProjection } from "./areaProjection";
+import { collectInBox, PREVIEW_REACH, projectForArea, type AreaProjection } from "./areaProjection";
 import { scheduleAreaIndex } from "./areaIndex";
 import {
   faceCentroidOf,
@@ -531,7 +531,9 @@ export class Viewport {
         // A press is a click until it has travelled, so box reactions fire here, once per drag.
         if (!this.areaBox.visible) this.onAreaBegin?.();
         this.areaAt = { x: e.clientX, y: e.clientY };
-        this.showAreaBox();
+        const { rect, mode } = dragBox(down.x, down.y, e.clientX, e.clientY);
+        this.areaBox.show(rect.x0, rect.y0, rect.x1, rect.y1, mode);
+        this.areaFrame.queue();
       }
       // A right or middle drag is the camera's and keeps its shadow maps. A plain move with no tool draws only
       // if the hover or the ViewCube lit something new, a tool or the area box may repaint off any move.
@@ -1372,12 +1374,18 @@ export class Viewport {
    *  dropped by anything that changes what is on screen. */
   private areaProj: AreaProjection | null = null;
 
-  private areaPreview = new AreaPreviewGate();
+  private areaFrame = new FrameCoalescer(() => this.previewAreaFrame());
+
+  /** Run by the render loop before it draws, so a move's preview lands in that frame, overlay and wide lines too. */
+  private previewAreaFrame() {
+    this.showAreaBox();
+    this.highlighter?.settle();
+  }
   private pressPull = new PressPullMemo();
 
   private dropAreaProjection() {
     this.areaProj = null;
-    this.areaPreview.reset();
+    this.areaFrame.cancel();
   }
 
   private projectForArea(): AreaProjection {
@@ -1519,35 +1527,39 @@ export class Viewport {
     this.onAreaProfiles?.(rect, mode, areaTakesProfiles(this.areaFilter, kind), from.additive, announce);
     const h = this.highlighter;
     if (!h || !this.model) return;
-    const got = collectInBox(this.areaProj ?? this.projectForArea(), rect, mode);
+    const got = collectInBox(this.areaProj ?? this.projectForArea(), rect, mode, announce ? Infinity : PREVIEW_REACH);
+    if (got.pending) this.areaFrame.queue();
     // On release only: switching to bodies raises the move gizmo mid-drag otherwise.
     if (announce && kind !== this.selectionMode) this.setSelectionMode(kind);
-    if (!this.areaPreview.paint(kind, this.areaFilter, got, announce)) return;
-    // Both kinds are cleared every frame, Tab can change the filter mid drag.
-    h.clearSelection();
-    h.clearBodySelection();
+    const faces = new Set<number>();
+    const edges = new Set<EdgeRef>();
+    const bodies = new Set<string>();
+    // Tab can change the filter mid drag, so the kind the box does not take is emptied every frame.
     if (kind === "bodies") {
-      if (from.additive) for (const id of from.bodies) h.selectBody(id);
-      for (const id of got.bodies) h.selectBody(id);
-      if (announce) this.onBodySelectionChange?.();
+      if (from.additive) for (const id of from.bodies) bodies.add(id);
+      for (const id of got.bodies) bodies.add(id);
     } else {
       if (from.additive) {
-        for (const f of from.faces) h.selectFace(f);
-        for (const e of from.edges) h.selectEdge(e);
+        for (const f of from.faces) faces.add(f);
+        for (const e of from.edges) edges.add(e);
       } else {
         this.edgeScope = { scope: "chain", reason: "tangent" };
       }
-      const faces = this.areaFilter === "all" || this.areaFilter === "faces";
-      const edges = this.areaFilter === "all" || this.areaFilter === "edges";
-      if (faces) for (const f of got.faces) h.selectFace(f);
-      if (edges) for (const e of got.edges) h.selectEdge(e);
+      const takeFaces = this.areaFilter === "all" || this.areaFilter === "faces";
+      const takeEdges = this.areaFilter === "all" || this.areaFilter === "edges";
+      if (takeFaces) for (const f of got.faces) faces.add(f);
+      if (takeEdges) for (const e of got.edges) edges.add(e);
       // A box states its extent, so a later fillet must not widen it to tangent chains.
-      if (got.edges.length && edges) {
+      if (got.edges.length && takeEdges) {
         this.edgeScope = { scope: "single", reason: "shift" };
       }
-      if (announce) this.onSelectionChange?.();
     }
-    this.requestRender();
+    const paint = h.setSelection({ faces, edges, bodies }, announce ? Infinity : PREVIEW_PAINT);
+    if (paint.changed) this.requestRender();
+    if (paint.pending) this.areaFrame.queue();
+    if (!announce) return;
+    if (kind === "bodies") this.onBodySelectionChange?.();
+    else this.onSelectionChange?.();
   }
 
   faceIdToBodyId(faceId: number): string | null {
@@ -4431,6 +4443,11 @@ export class Viewport {
   }
 
   private loop = () => {
+    this.renderFrame();
+    requestAnimationFrame(this.loop);
+  };
+
+  private renderFrame() {
     // One bad frame must not kill the loop, a throw is logged and scheduling goes on.
     try {
       const now = performance.now();
@@ -4442,6 +4459,7 @@ export class Viewport {
       const resized = this.applyMotionScale(moved, now);
       this.edgeMotionTick(moved, now);
       if (resized === "changed" || (resized === "wait" && moved)) this.requestRender();
+      this.areaFrame.flush();
       this.syncOverlayMask();
       if (this.needsRender) syncOverlayLayers(this.scene.scene);
       this.trace.tick({
@@ -4532,6 +4550,5 @@ export class Viewport {
     } catch (e) {
       console.error("[viewport] render loop frame error (continuing):", e);
     }
-    requestAnimationFrame(this.loop);
-  };
+  }
 }
