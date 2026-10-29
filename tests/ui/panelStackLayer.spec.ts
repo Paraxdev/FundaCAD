@@ -187,6 +187,51 @@ describe("the panel column follows the float layer", () => {
     });
   });
 
+  /** A Stress panel with a 180 px min-width capped to the span beside the rail, and that span. */
+  async function capped() {
+    const right = { at: VIEWPORT };
+    const { el: layerEl, cardLeft } = layer(right, [{ from: CARD, width: CARD, bottom: 900 }]);
+    const RAIL = 700;
+    rail(layerEl, RAIL);
+    const p = panel();
+    p.style.minWidth = "180px";
+    panelStack.add("stress", p);
+    right.at = VIEWPORT - DOCK;
+    resized(layerEl);
+    await frame();
+    const span = cardLeft() - MARGIN - (RAIL + MARGIN);
+    expect({ minWidth: p.style.minWidth, under: span < 180 }).toEqual({ minWidth: `${span}px`, under: true });
+    return { p, layerEl, span };
+  }
+
+  it("keeps a min-width another writer sets on a capped panel when it places the panel again", async () => {
+    const { p, layerEl, span } = await capped();
+    const own = `${span - 20}px`;
+    p.style.minWidth = own;
+    resized(layerEl);
+    await frame();
+    const placed = { minWidth: p.style.minWidth, maxWidth: p.style.maxWidth };
+    panelStack.remove("stress");
+    expect({ placed, closed: p.style.minWidth }).toEqual({
+      placed: { minWidth: own, maxWidth: `${span}px` },
+      closed: own,
+    });
+  });
+
+  it("keeps a min-width another writer sets on a capped panel when the panel closes", async () => {
+    const { p, span } = await capped();
+    const own = `${span - 20}px`;
+    p.style.minWidth = own;
+    panelStack.remove("stress");
+    expect(p.style.minWidth).toBe(own);
+  });
+
+  it("gives a capped panel its own inline min-width back when it closes", async () => {
+    const { p } = await capped();
+    panelStack.remove("stress");
+    expect(p.style.minWidth).toBe("180px");
+  });
+
   it("leaves a panel that fits the span without an inline max-width, so its own max-width still holds", async () => {
     const right = { at: VIEWPORT };
     const { el: layerEl } = layer(right);
