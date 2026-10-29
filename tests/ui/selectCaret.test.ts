@@ -56,6 +56,20 @@ describe("the Select caret", () => {
     ).toEqual([]);
   });
 
+  it("keeps 26px on the right of a trigger in every rule that pads one, the room the caret is inset into", () => {
+    const rights: string[] = [];
+    css.walkRules((rule: Rule) => {
+      const hit = rule.selectors.filter((s) => /\.(sm-select|select-trigger)\b/.test(s.split(/[\s>+~]+/).pop() ?? ""));
+      if (hit.length === 0) return;
+      rule.walkDecls(/^padding(-right|-inline|-inline-end)?$/, (d) => {
+        const parts = postcss.list.space(d.value);
+        const shorthand = d.prop === "padding" || d.prop === "padding-inline";
+        rights.push(`${hit.join(", ")} ${shorthand ? (parts[1] ?? parts[0]) : d.value}`);
+      });
+    });
+    expect(rights).toEqual([".sm-select 26px"]);
+  });
+
   it("is no background paint of the trigger, so the bare button:hover shorthand has nothing to wipe or slide", () => {
     expect(
       decls(
