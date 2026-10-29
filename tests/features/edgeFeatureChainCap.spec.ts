@@ -5,14 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import * as THREE from "three";
 import { EdgeFeatureTool } from "../../src/features/edgeFeatureTool";
-import { confirmEdgeCount } from "../../src/features/edgeCountGate";
+import { EDGE_CAP, confirmEdgeCount } from "../../src/features/edgeCountGate";
 import type { DocumentStore } from "../../src/document/store";
 import type { Viewport } from "../../src/viewport/viewport";
 
-vi.mock("../../src/features/edgeCountGate", () => ({
-  EDGE_WARN: 50,
-  EDGE_CAP: 200,
-  edgeGate: (n: number) => (n > 200 ? "refuse" : n > 50 ? "warn" : "go"),
+vi.mock("../../src/features/edgeCountGate", async (real) => ({
+  ...(await real<typeof import("../../src/features/edgeCountGate")>()),
   confirmEdgeCount: vi.fn(async () => false),
 }));
 
@@ -96,12 +94,22 @@ describe("fillet on a chain scoped preselection", () => {
     tool.cancel();
   });
 
-  it("refuses and closes when the chains pass the cap", () => {
-    const { tool } = rig(3, 100, 50);
+  it("takes chains of exactly the cap", () => {
+    const { tool } = rig(2, EDGE_CAP / 2, EDGE_CAP / 2);
+    const done = vi.fn();
+    tool.start("fillet", done);
+    expect(done).not.toHaveBeenCalled();
+    expect(tool.memberRows().length).toBe(EDGE_CAP);
+    expect(confirmEdgeCount).not.toHaveBeenCalled();
+    tool.cancel();
+  });
+
+  it("refuses and closes when the chains pass the cap by one edge", () => {
+    const { tool } = rig(1, EDGE_CAP + 1, EDGE_CAP + 1);
     const done = vi.fn();
     tool.start("fillet", done);
     expect(done).toHaveBeenCalledWith(null);
     expect(tool.memberRows().length).toBe(0);
-    expect(confirmEdgeCount).toHaveBeenCalledWith("Fillet", 300);
+    expect(confirmEdgeCount).toHaveBeenCalledWith("Fillet", EDGE_CAP + 1);
   });
 });

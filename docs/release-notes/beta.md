@@ -8,6 +8,7 @@
 **Modeling**
 - Fillets have a third continuity, G3, on key 3. G2 and G3 are greyed out on an edge that runs along a curved face, with the reason. A saved G2 fillet on such an edge no longer builds, so open it and press Enter to keep it as G1.
 - A fillet or chamfer that cannot be built right is refused instead of coming out wrong. Some chamfers at a corner where edges meet used to come back 10 to 13 percent too big, with no word.
+- A fillet or chamfer on thousands of edges opens much faster. Past 3,000 edges it asks first and names the count, and past 5,000 it refuses and says why, since a preview that big runs for minutes and can use up all free memory.
 - Pattern tools lead with Linear and Circular, and bodies get Rect grid as a third choice. Hex Holes is now called Staggered Holes.
 - The value box is one compact row with icon options, every option is a Tab stop, and hole type and Press/Pull mode and direction take one click. A number typed there redraws the preview at once, and Enter commits it.
 - Letting go of a dragged handle keeps the tool open, so you can still change its options. Enter commits, Esc cancels, and digits you type after a drag are kept. With several edges or faces picked, the handle stands on the last one.
@@ -50,6 +51,7 @@
 - On low powered or software graphics, Path traced is greyed out with the reason.
 - With Realtime while moving off, the traced picture can trail the edges for a moment while you drag.
 - On Linux, an HDR dropped on the window is not picked up yet. Use Import HDR in the Render panel.
+- With more than 128 edges in one fillet or chamfer, the drag stops the size only at the 128 edges nearest the arrow. A size too big for an edge farther away shows as a red preview instead.
 
 ## Downloads
 

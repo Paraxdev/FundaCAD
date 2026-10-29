@@ -20,6 +20,8 @@ const props = withDefaults(
     /** Wraps the default slot in .modal-body. */
     body?: boolean;
     panelClass?: string | undefined;
+    /** Id of the text a screen reader reads after the title, a confirm's message. */
+    describedBy?: string | undefined;
   }>(),
   {
     title: undefined,
@@ -30,6 +32,7 @@ const props = withDefaults(
     gate: true,
     body: true,
     panelClass: undefined,
+    describedBy: undefined,
   },
 );
 const emit = defineEmits<{ close: [] }>();
@@ -105,6 +108,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
         role="dialog"
         aria-modal="true"
         :aria-labelledby="titleId"
+        :aria-describedby="describedBy"
         tabindex="-1"
         @keydown="onTab"
       >

@@ -129,7 +129,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   };
 
   /** A big selection asks first (edgeCountGate.ts). The tool waits for the answer, so a handle grab that had to ask
-   *  opens without scrubbing: the pointer that pressed it is long gone. */
+   *  opens on its arrow without scrubbing: the pointer that pressed it is long gone. */
   const startEdgeFeature = (kind: "fillet" | "chamfer", opts?: Parameters<EdgeFeatureTool["start"]>[2]) => {
     if (toolBusy()) return;
     const count = edgeFeature.seedCount(kind);
@@ -138,7 +138,8 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       return;
     }
     void confirmEdgeCount(TOOL_CAPABILITIES[kind].label, count).then((ok) => {
-      if (ok && !toolBusy()) edgeFeature.start(kind, committed);
+      const { grabAt: _, ...arrow } = opts ?? {};
+      if (ok && !toolBusy()) edgeFeature.start(kind, committed, opts ? arrow : undefined);
     });
   };
   const startFillet = () => startEdgeFeature("fillet");
