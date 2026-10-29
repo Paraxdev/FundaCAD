@@ -154,27 +154,19 @@
   color: var(--accent-hot);
   background: var(--hover-wash);
 }
-/* A 24px target: at least 16px of chip plus the gaps beside it, never over the input or the next control.
-   The touch rule in _touch.scss sets all four insets, so it still wins under data-pointer="touch". */
+/* The element itself is the 24px target, so a bounding box scan reads it; the hover wash stays chip sized inside. */
 .dim-field .dim-unit {
-  position: relative;
-  min-width: 16px;
+  min-width: 24px;
+  min-height: 24px;
   /* Over .ui-unit-chip, which the chip also wears and which loads later. */
   justify-content: center;
-  padding: 2px 2px;
-  border-radius: 6px;
+  padding: 3px 2px;
+  background-clip: content-box;
+  border-radius: 8px;
 }
-.dim-field .dim-unit::before {
-  content: "";
-  position: absolute;
-  top: calc(50% - 12px);
-  bottom: calc(50% - 12px);
-  left: -3px;
-  right: -5px;
-}
-.dim-field .dim-choice::before {
-  left: -5px;
-  right: -3px;
+/* The picker's own wash rules use the background shorthand, which resets the clip. */
+.dim-field .dim-unit.is-picker:is(:hover, :active, .is-open) {
+  background-clip: content-box;
 }
 .dim-unit-menu {
   position: fixed;
