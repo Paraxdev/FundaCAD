@@ -36,7 +36,26 @@ file = "manual/docs/img/extrude-taper.png"
 size = [960, 800]
 theme = "fundacad"
 crop = "region"
-stub = true
+at = [285, 52]
+park = [1300, 700]
+steps = [
+  { panel = "items" },
+  { panel = "history", open = false },
+  { tool = "Sketch" },
+  { pick_plane = "XY" },
+  { tool = "Rectangle" },
+  { click_at = true, sketch = [-30, -20] },
+  { click_at = true, sketch = [30, 20] },
+  { press = "Escape" },
+  { press = "Escape" },
+  { tool = "Extrude" },
+  { click_at = true, world = [0, 0, 0] },
+  { type = ["D", "25"] },
+  { type = ["Angle", "12"] },
+  { mouse = "down", at = [760, 180], button = "middle" },
+  { mouse = "move", by = [-140, -50], steps = 6 },
+  { mouse = "up", button = "middle" },
+]
 show = "An extrude preview with a 12 degree taper, the distance and angle boxes below it, as the value box looks now."
 alt = "An extrude preview with a 12 degree taper, the distance and angle boxes below it"
 uses = ["manual/docs/model/extrude.md:5"]
@@ -46,9 +65,38 @@ file = "manual/docs/img/rectangle-extrude.gif"
 size = [800, 655]
 theme = "fundacad"
 crop = "region"
+at = [300, 198]
 gif = { delay = 100, loop = 0 }
-stub = true
-show = "Drawing a rectangle and extruding it into a block (about 29 frames, 800 wide)."
+steps = [
+  { open = "fixture:sketch-block.json" },
+  { open = "new" },
+  { panel = "history", open = false },
+  { panel = "items", open = false },
+  { tool = "Sketch" },
+  { pick_plane = "XY" },
+  { tool = "Rectangle" },
+  { mouse = "move", at = [-20, -15], space = "sketch", steps = 4 },
+]
+frames = [
+  { hold = 700 },
+  { steps = [{ mouse = "down" }, { mouse = "up" }], hold = 200 },
+  { steps = [{ mouse = "move", at = [-15, -11.25], space = "sketch", steps = 3 }], hold = 90, settle = false },
+  { steps = [{ mouse = "move", at = [-10, -7.5], space = "sketch", steps = 3 }], hold = 90, settle = false },
+  { steps = [{ mouse = "move", at = [-5, -3.75], space = "sketch", steps = 3 }], hold = 90, settle = false },
+  { steps = [{ mouse = "move", at = [0, 0], space = "sketch", steps = 3 }], hold = 90, settle = false },
+  { steps = [{ mouse = "move", at = [5, 3.75], space = "sketch", steps = 3 }], hold = 90, settle = false },
+  { steps = [{ mouse = "move", at = [10, 7.5], space = "sketch", steps = 3 }], hold = 90, settle = false },
+  { steps = [{ mouse = "move", at = [15, 11.25], space = "sketch", steps = 3 }], hold = 90, settle = false },
+  { steps = [{ mouse = "move", at = [20, 15], space = "sketch", steps = 3 }], hold = 90, settle = false },
+  { steps = [{ mouse = "down" }, { mouse = "up" }], hold = 600 },
+  { steps = [{ press = "Escape" }, { press = "Escape" }], hold = 700 },
+  { steps = [{ wait = 600 }, { tool = "Extrude" }, { click_at = true, world = [0, 0, 0] }], hold = 700 },
+  { steps = [{ mouse = "down", at = [0, 0, 12], space = "world" }], hold = 100 },
+  { steps = [{ mouse = "move", by = [0, -10], steps = 2 }], repeat = 8, hold = 90, settle = false },
+  { steps = [{ mouse = "up" }], hold = 300 },
+  { steps = [{ press = "Enter" }, { press = "Escape" }], hold = 1800 },
+]
+show = "Drawing a rectangle and extruding it into a block (24 frames, 800 wide)."
 alt = "Drawing a rectangle and extruding it into a block"
 uses = ["manual/docs/model/extrude.md:11"]
 
@@ -57,8 +105,31 @@ file = "manual/docs/img/extrude-thin.png"
 size = [640, 520]
 theme = "fundacad"
 crop = "region"
-stub = true
-show = "A thin extrude of an open L of two lines, a 2 mm wall with a mitred corner, the Thin switch on."
+around = "world:2.5,2.5,10"
+offset = [-70, 0]
+park = [1420, 880]
+steps = [
+  { open = "fixture:sketch-block.json" },
+  { open = "new" },
+  { panel = "items" },
+  { panel = "history" },
+  { tool = "Sketch" },
+  { pick_plane = "XY" },
+  { tool = "Line" },
+  { click_at = true, sketch = [-30, 25] },
+  { click_at = true, sketch = [-30, -20] },
+  { click_at = true, sketch = [35, -20] },
+  { press = "Escape" },
+  { press = "Escape" },
+  { press = "Escape" },
+  { click = "Sketch1" },
+  { press = "e" },
+  { type = ["prop:distance", "20"], enter = true },
+  { panel = "history", open = false },
+  { press = "Escape" },
+  { panel = "items", open = false },
+]
+show = "A thin extrude of an open L of two lines, a 2 mm wall with a mitred corner."
 alt = "A thin extrude of an L of two lines, a 2 mm wall with a mitred corner"
 uses = ["manual/docs/model/extrude.md:32"]
 
