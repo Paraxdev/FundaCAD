@@ -31,7 +31,6 @@ modules:
   - name: occt
     buildsystem: cmake-ninja
     builddir: true
-    no-debuginfo: true
     build-options:
       # The SDK flags carry -g, which makes the static libraries several GB.
       cflags: -O2 -pipe -fPIC -ffunction-sections -fdata-sections
