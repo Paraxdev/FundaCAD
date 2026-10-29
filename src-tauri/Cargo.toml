@@ -62,7 +62,9 @@ fundacad-tracer = { path = "tracer" }
 # wgpu-hal's dx12 backend (cargo update -p gpu-allocator moves the edge).
 wgpu = "=30.0.1"
 futures-executor = "0.3"
-tauri-plugin-updater = "2"
+# Without the zip feature: it only unpacks v1 compatible bundles, and releases make v2 ones (.exe, a bare AppImage,
+# .app.tar.gz, which macOS unpacks without it). It is also what pulled zip 4 in.
+tauri-plugin-updater = { version = "2", default-features = false, features = ["rustls-tls"] }
 tauri-plugin-process = "2"
 # The document files (.fundab, the ZIP container, the JSON .funda) live in the
 # fundacad-format crate, shared with the engine and the CLI. The app owns them,
