@@ -107,13 +107,16 @@ class Manifests(unittest.TestCase):
         copies = {shot["file"]: shot["from"] in files for _, shot in entries() if shot.get("crop") == "copy"}
         self.assertEqual(copies, {f: True for f in copies})
 
-    def test_the_fixtures_are_at_the_current_format_version(self):
+    # An older fixture opens through migration, a newer one would put the app's newer file notice in the picture.
+    def test_no_fixture_is_newer_than_the_app(self):
         migrate = (REPO / "src" / "document" / "migrate.ts").read_text(encoding="utf-8")
         current = int(re.search(r"export const FORMAT_VERSION = (\d+);", migrate).group(1))
-        versions = {
-            p.name: json.loads(p.read_text(encoding="utf-8"))["version"] for p in (TOOL / "fixtures").glob("*.json")
+        newer = {
+            p.name: version
+            for p in (TOOL / "fixtures").glob("*.json")
+            if (version := json.loads(p.read_text(encoding="utf-8"))["version"]) > current
         }
-        self.assertEqual(versions, {name: current for name in versions})
+        self.assertEqual(newer, {})
 
 
 def lzw_decode(data: bytes, min_size: int) -> bytes:
