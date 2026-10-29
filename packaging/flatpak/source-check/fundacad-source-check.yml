@@ -67,6 +67,11 @@ modules:
       - -DUSE_XLIB=FALSE
       - -DINSTALL_DIR_LIB=lib
       - -DINSTALL_DIR_INCLUDE=include
+    # The stamp opencascade-sys leaves on its own kernels: without it the
+    # kernel counts as built before the range checks and is rebuilt, which
+    # cannot happen at /app/occt.
+    post-install:
+      - install -Dm644 /dev/null /app/occt/.fundacad/checked-reads
     # Linked statically into the binary, nothing of it ships.
     cleanup:
       - /occt
