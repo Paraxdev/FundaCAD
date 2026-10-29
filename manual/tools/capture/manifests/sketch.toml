@@ -33,7 +33,19 @@ file = "manual/docs/img/sketch-dimension.png"
 size = [640, 260]
 theme = "fundacad"
 crop = "region"
-stub = true
+around = "sketch:15,13.5"
+park = [1000, 760]
+steps = [
+  { open = "fixture:sketch-dim.json", name = "Plate.funda" },
+  { click = "feature:s", double = true },
+  { evaluate = "() => window.viewport.frameAround([6, 13, 0], 130)" },
+  { wait = 900 },
+  { tool = "Dimension" },
+  { click_at = true, sketch = [20.3, 19.7] },
+  { hover = [20, 23], space = "sketch" },
+  { click_at = true, sketch = [20, 23] },
+  { wait = 400 },
+]
 show = "The Dimension tool on a rectangle edge with its value box."
 alt = "The Dimension tool on a rectangle edge with its value box"
 uses = ["manual/docs/sketch/dimensions.md:5"]
@@ -43,7 +55,21 @@ file = "manual/docs/img/sketch-typed-size.png"
 size = [640, 260]
 theme = "fundacad"
 crop = "region"
-stub = true
+around = "sketch:30,10"
+offset = [60, 0]
+steps = [
+  { open = "new" },
+  { press = "s" },
+  { pick_plane = "XY" },
+  { evaluate = "() => window.viewport.frameAround([30, 10, 0], 130)" },
+  { wait = 900 },
+  { tool = "Rectangle" },
+  { click_at = true, sketch = [0, 0] },
+  { hover = [33, 20], space = "sketch" },
+  { press = ["4", "0"] },
+  { hover = [42, 20], space = "sketch" },
+  { wait = 400 },
+]
 show = "A rectangle being drawn with 40 typed into the width box."
 alt = "A rectangle being drawn with 40 typed into the width box"
 uses = ["manual/docs/sketch/exact-sizes.md:5"]

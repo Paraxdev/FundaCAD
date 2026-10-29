@@ -1,0 +1,12 @@
+{
+  "version": 10,
+  "parameters": {},
+  "features": [
+    { "id": "s", "type": "sketch", "plane": "XY", "name": "Plate",
+      "entities": [{ "type": "rectangle", "id": "r1", "width": 40, "height": 20, "x": 20, "y": 10 }],
+      "constraints": [
+        { "type": "p2pDistance", "e1": "r1", "p1": 0, "e2": "r1", "p2": 3, "value": 20 },
+        { "type": "fix", "e": "r1", "p": 0 }
+      ] }
+  ]
+}
