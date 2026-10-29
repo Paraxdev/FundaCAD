@@ -190,7 +190,7 @@ There is no info, success tint, warn tint or disabled token. Derive them:
 | Tile on | `linear-gradient(var(--accent-wash), var(--accent-wash)), var(--float-tile-bg)` |
 | Field focus | `outline: 1px solid var(--accent)`, no ring and no border change |
 | Warn or error surface | `color-mix(in srgb, var(--warn) 9%, var(--float-bg-solid))` (`.perf-pop`), `color-mix(in srgb, var(--error) 22%, var(--float-bg-solid))` (`.toast-error`) |
-| Warn or error small text on glass or a panel | `color-mix(in srgb, var(--warn) 60%, var(--text))` or the same with `--error` (`.sketch-dim.conflict`, `.rel-row.over .rel-sym`); the bare `--warn` and `--error` fall under AA in Solarized Light, keep them for the border |
+| Warn or error small text on glass or a panel | `color-mix(in srgb, var(--warn) 60%, var(--text))` or the same with `--error` (`.sketch-dim.conflict`, `.rel-row.over .rel-sym`); the bare `--warn` and `--error` pass on the panels, keep them for borders and panel text |
 
 ### 2.2 Shape and motion tokens
 
@@ -1285,6 +1285,11 @@ and `--text`, so the cards follow the palette.
   on: the card, the solid card, a tile, a chip and a field. `--on-accent` on
   `--accent` is held above 4.5:1 too. A light theme's `--accent-hot` is darker
   than its `--accent`, not lighter, because it is text on an accent tint.
+- **Signals stay apart.** `--ok`, `--warn` and `--error` read at 4.5:1 as text
+  on `--panel` and `--panel-2`, and `--pick-line` at 3:1 on `--viewport-bg`.
+  Two signals that a protanope, deuteranope or tritanope sees within ΔE2000 15
+  of each other differ by at least 10 L*, so lightness tells them apart where
+  hue does not (`deltaE2000` in `src/ui/contrast.ts`).
 
 `tests/ui/designSpec.test.ts` and `tests/ui/themeContrast.test.ts` hold these
 numbers for Solarized Light.

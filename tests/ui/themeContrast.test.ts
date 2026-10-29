@@ -7,6 +7,8 @@ import {
   type Rgba,
   contrastFailures,
   contrastRatio as contrast,
+  deltaE2000,
+  lightness,
   mix,
   over,
   paletteContrast,
@@ -75,8 +77,32 @@ describe("theme contrast", () => {
     expect(names).toEqual(expect.arrayContaining(["--line-strong on --panel", "--line-strong on --raised"]));
   });
 
+  it("checks every signal colour as text on the panels and the pick line on the scene", () => {
+    const names = paletteContrast(shipped[0]!.palette, "dark").map((r) => r.what);
+    for (const fg of ["--ok", "--warn", "--error"]) {
+      for (const bg of ["--panel", "--panel-2"]) expect(names).toContain(`${fg} on ${bg}`);
+    }
+    expect(names).toContain("--pick-line on --viewport-bg");
+  });
+
+  it("flags two signal colours a colour vision deficiency merges and lightness does not split", () => {
+    const apart = (r: { what: string }) => r.what.endsWith("apart in lightness");
+    const merged = { ...shipped[0]!.palette, "--ok": "#17c99a", "--warn": "#7bbf3a" };
+    expect(contrastFailures(merged, "dark").map((r) => r.what)).toContain("--ok and --warn apart in lightness");
+    const split = { ...merged, "--ok": "#1c6b65", "--warn": "#7a5d00", "--error": "#8a1f1d" };
+    const paper = { ...split, "--panel": "#eee8d5", "--panel-2": "#e3ddc7" };
+    expect(contrastFailures(paper, "light").filter(apart)).toEqual([]);
+  });
+
+  it("measures signal separation as CIE lightness and simulated colour difference", () => {
+    expect(lightness(parse("#ffffff"))).toBeCloseTo(100, 1);
+    expect(lightness(parse("#777777"))).toBeCloseTo(50.03, 1);
+    expect(deltaE2000(parse("#859900"), parse("#b58900"), "deuteranopia")).toBeLessThan(15);
+    expect(deltaE2000(parse("#1c6b65"), parse("#7a5d00"), "deuteranopia")).toBeGreaterThan(15);
+  });
+
   for (const theme of shipped) {
-    it(`${theme.label} text passes 4.5:1 and the strong line 3:1 on every surface`, () => {
+    it(`${theme.label} text and signals pass 4.5:1, lines 3:1, and signals stay apart`, () => {
       expect(contrastFailures(theme.palette, theme.mode)).toEqual([]);
     });
   }
