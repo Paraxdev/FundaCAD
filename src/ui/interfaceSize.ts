@@ -11,10 +11,12 @@ const isTauri = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in 
 export const SIZING_HIDE_MS = 1500;
 
 let applied: number | null = null;
+let webviewPct = 100;
 
-function zoomRoot(pct: number) {
+/** Zooms the root by what the webview zoom `under` leaves of `pct`. */
+function zoomRoot(pct: number, under = 100) {
   if (typeof document === "undefined") return;
-  document.documentElement.style.zoom = pct === 100 ? "" : String(pct / 100);
+  document.documentElement.style.zoom = pct === under ? "" : String(pct / under);
 }
 
 // The webview zoom is an IPC round trip that lands after the first paint, so a stored size would paint at 100 and
@@ -40,11 +42,12 @@ export function applyInterfaceSize(pct: number) {
     .then((m) => m.getCurrentWebview().setZoom(pct / 100))
     .then(
       () => {
-        if (applied === pct) zoomRoot(100);
+        webviewPct = pct;
+        if (applied === pct) zoomRoot(pct, webviewPct);
       },
       (err: unknown) => {
         // A refused or failed webview zoom falls back to the root zoom, so the page still matches the setting.
-        if (applied === pct) zoomRoot(pct);
+        if (applied === pct) zoomRoot(pct, webviewPct);
         console.warn("[interface size] webview zoom failed, zooming the page instead", err);
       },
     )

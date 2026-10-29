@@ -135,6 +135,22 @@ describe("applying it", () => {
     await vi.waitFor(() => expect(setZoom).toHaveBeenLastCalledWith(1.75));
     await vi.waitFor(() => expect(root.style.zoom).toBe(""));
   });
+
+  it("zooms the root only by the rest when a refusal follows a webview zoom that landed", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    boot({ [KEY]: "200" }, true);
+    const m = await load();
+    m.installInterfaceSize();
+    await vi.waitFor(() => expect(root.dataset).toEqual({}));
+    expect(setZoom).toHaveBeenLastCalledWith(2);
+    setZoom.mockImplementationOnce(() => Promise.reject(new Error("not allowed")));
+    m.stepInterfaceSize(-1);
+    await vi.waitFor(() => expect(root.style.zoom).toBe("0.875"));
+    setZoom.mockImplementationOnce(() => Promise.reject(new Error("not allowed")));
+    m.stepInterfaceSize(1);
+    await vi.waitFor(() => expect(setZoom).toHaveBeenLastCalledWith(2));
+    await vi.waitFor(() => expect(root.style.zoom).toBe(""));
+  });
 });
 
 describe("the first paint", () => {
