@@ -27,9 +27,9 @@ LOOKUP = "release view v1.0.412 --repo o/r --json isDraft --jq .isDraft"
 DELETE = "release delete v1.0.412 --repo o/r --yes"
 NOTES = "> ### Read this first\n\nRolling FundaCAD 1.0 beta (1.0.412), Rust engine, rebuilt from `main`.\n\n## Changes\n"
 
-# $1 is the gh subcommand group, $2 the verb. STABLE, EXISTS (draft or published), REFUSE,
-# LOOKUP_FAILS and DELETE_FAILS come from the case. REFUSE is the error GitHub prints when it
-# fails the publish edit, where it makes a draft's tag.
+# $1 is the gh subcommand group, $2 the verb. STABLE, EXISTS (draft or published), CREATE_FAILS,
+# REFUSE, LOOKUP_FAILS and DELETE_FAILS come from the case. REFUSE is the error GitHub prints when
+# it fails the publish edit, where it makes a draft's tag.
 GH = r"""gh() {
   printf '%s\n' "$*" >> calls.log
   case "$1 $2" in
@@ -39,7 +39,7 @@ GH = r"""gh() {
       case "$*" in *isDraft*)
         [ -z "$LOOKUP_FAILS" ] || return 1
         if [ -e made ] || [ "$EXISTS" = draft ]; then echo true; else echo false; fi ;; esac ;;
-    "release create") : > made ;;
+    "release create") [ -z "$CREATE_FAILS" ] || { echo "HTTP 403: API rate limit exceeded" >&2; return 1; }; : > made ;;
     "release edit") case "$*" in *--draft=false*) [ -z "$REFUSE" ] || { printf '%s\n' "$REFUSE" >&2; return 1; } ;; esac ;;
     "release delete") [ -z "$DELETE_FAILS" ] ;;
     *) return 0 ;;
@@ -63,7 +63,7 @@ BASH = shutil.which("bash")
 
 @unittest.skipUnless(BASH, "needs bash")
 class VersionRelease(unittest.TestCase):
-    def run_step(self, stable="", exists="", refuse="", lookup_fails="", delete_fails="", code=0):
+    def run_step(self, stable="", exists="", refuse="", lookup_fails="", delete_fails="", create_fails="", code=0):
         cwd = tempfile.mkdtemp(prefix="verrel-")
         self.addCleanup(shutil.rmtree, cwd, True)
         os.makedirs(os.path.join(cwd, "release"))
@@ -73,9 +73,10 @@ class VersionRelease(unittest.TestCase):
         with open(os.path.join(cwd, "notes.md"), "w", newline="\n") as f:
             f.write(NOTES)
         env = {**os.environ, "VERSION": "1.0.412", "SHA": SHA, "STABLE": stable, "EXISTS": exists, "REFUSE": refuse,
-               "LOOKUP_FAILS": lookup_fails, "DELETE_FAILS": delete_fails}
+               "LOOKUP_FAILS": lookup_fails, "DELETE_FAILS": delete_fails, "CREATE_FAILS": create_fails}
         out = subprocess.run([BASH, "-c", GH + step_script()], cwd=cwd, env=env, capture_output=True, text=True)
         self.assertEqual(out.returncode, code, out.stderr)
+        self.stderr = out.stderr.splitlines()
         with open(os.path.join(cwd, "calls.log")) as f:
             calls = [c for c in f.read().splitlines() if not c.startswith("release list") and c != "release view v1.0.412 --repo o/r"]
         with open(os.path.join(cwd, "version-notes.md")) as f:
@@ -154,6 +155,26 @@ class VersionRelease(unittest.TestCase):
         calls, _, warnings = self.run_step(refuse=REFUSAL, delete_fails="yes", code=1)
         self.assertEqual(calls[-3:], [PUBLISH, LOOKUP, DELETE])
         self.assertEqual(warnings, [])
+
+    def test_a_publish_failure_that_is_not_a_refusal_keeps_the_draft_and_fails_the_step(self):
+        calls, _, warnings = self.run_step(refuse="HTTP 503: 100% bad", code=1)
+        self.assertEqual(calls[-1], PUBLISH)
+        self.assertFalse(any(c.startswith(("release view", "release delete")) for c in calls))
+        self.assertEqual(warnings, [])
+
+    def test_a_failed_create_fails_the_step_without_a_warning(self):
+        calls, _, warnings = self.run_step(create_fails="yes", code=1)
+        self.assertEqual(
+            calls,
+            [f"release create v1.0.412 --repo o/r --target {SHA} --draft --latest=false --title FundaCAD 1.0.412 beta --notes-file version-notes.md"],
+        )
+        self.assertEqual(warnings, [])
+
+    def test_githubs_error_text_cannot_run_a_workflow_command(self):
+        calls, _, _ = self.run_step(refuse=REFUSAL + "\n  ::error::injected")
+        self.assertEqual(calls[-1], DELETE)
+        self.assertEqual([line for line in self.stderr if line.lstrip().startswith("::")], [])
+        self.assertIn("gh:   ::error::injected", self.stderr)
 
     def test_a_published_tag_deletes_nothing_and_warns_nothing(self):
         calls, _, warnings = self.run_step()

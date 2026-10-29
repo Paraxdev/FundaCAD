@@ -1076,7 +1076,10 @@ jobs:
           # GitHub makes a draft's tag only when it is published, and refuses this token a tag
           # on a commit that changes a workflow file. The rolling beta is already out.
           if ! gh release edit "$V" --repo "$R" --draft=false --prerelease=false --latest="$latest" 2> publish-error.txt; then
-            cat publish-error.txt >&2
+            # The prefix keeps a line of GitHub's text from running as a workflow command.
+            sed 's/^/gh: /' publish-error.txt >&2
+            # Only the tag refusal deletes the draft, any other failure keeps it for a rerun.
+            grep -qE 'HTTP 422|tag_name|workflow' publish-error.txt || exit 1
             [ "$(gh release view "$V" --repo "$R" --json isDraft --jq .isDraft)" = true ] || exit 1
             gh release delete "$V" --repo "$R" --yes
             err=$(tr -s '\r\n' ' ' < publish-error.txt | sed 's/ $//')
