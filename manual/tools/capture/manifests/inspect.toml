@@ -79,7 +79,7 @@ crop = "region"
 stub = true
 show = "The cut bracket with the Section on chip and its Edit, Flip and Off buttons."
 alt = "The cut bracket with the Section on chip and its Edit, Flip and Off buttons"
-uses = ["manual/docs/inspect/section.md:11"]
+uses = ["manual/docs/inspect/section.md:26"]
 
 [[shot]]
 file = "manual/docs/img/stress-results.png"
