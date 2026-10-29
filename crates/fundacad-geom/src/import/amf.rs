@@ -35,11 +35,12 @@ fn xml_of(data: Vec<u8>, cap: u64) -> Result<String, String> {
         return String::from_utf8(data).map_err(|_| bad("it is neither XML nor a zip"));
     }
     let mut z = zip::ZipArchive::new(std::io::Cursor::new(data)).map_err(bad)?;
-    let name = z
-        .file_names()
+    let names = z.file_names().map(|n| n.map(String::from)).collect::<Result<Vec<_>, _>>().map_err(bad)?;
+    let name = names
+        .iter()
         .find(|n| n.to_lowercase().ends_with(".amf"))
-        .or_else(|| z.file_names().find(|n| !n.ends_with('/')))
-        .map(String::from)
+        .or_else(|| names.iter().find(|n| !n.ends_with('/')))
+        .cloned()
         .ok_or_else(|| bad("the zip holds no .amf entry"))?;
     let mut xml = String::new();
     z.by_name(&name).map_err(bad)?.take(cap + 1).read_to_string(&mut xml).map_err(bad)?;

@@ -88,7 +88,9 @@ pub fn unpack_step(path: &Path, cap: u64) -> Result<Option<Unpacked>, String> {
         return Ok(None);
     }
     let mut z = zip::ZipArchive::new(file).map_err(|e| format!("couldn't open this zip file ({e})"))?;
-    let files: Vec<String> = z.file_names().filter(|n| !n.ends_with('/')).map(str::to_string).collect();
+    let names = z.file_names().map(|n| n.map(String::from)).collect::<Result<Vec<_>, _>>();
+    let names = names.map_err(|e| format!("couldn't read the names in this zip file ({e})"))?;
+    let files: Vec<String> = names.into_iter().filter(|n| !n.ends_with('/')).collect();
     let steps: Vec<&String> = files.iter().filter(|n| is_step_name(n)).collect();
     let name = match (steps.as_slice(), files.as_slice()) {
         ([one], _) => (*one).clone(),
