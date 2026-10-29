@@ -126,6 +126,15 @@ jobs:
           rustc --edition 2021 --test -D warnings src-tauri/tests/unit/log_file.rs -o "$RUNNER_TEMP/log_file_test"
           "$RUNNER_TEMP/log_file_test"
 
+      # The manual's capture tool: its manifests against the pages, its GIF encoder and its retries. It needs
+      # tomllib, which the runner's Python 3.10 lacks, so this comes last in the job.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Capture tool tests
+        run: python tests/manual/test_capture.py
+
   # What this run builds and where it goes (docs/ENGINE.md section 7). `config`
   # is empty on a ref that builds no installers. `gated` is false on dev, whose
   # installers still start after `test` and `rust-geom` finish but do not need
@@ -1212,10 +1221,6 @@ jobs:
         run: |
           pip install -e "tools/harness[test]"
           python -m pytest tools/harness/tests/unit -q
-
-      # The manual's capture tool runs on the harness: its manifests against the pages, and its GIF encoder.
-      - name: Capture tool tests
-        run: python tests/manual/test_capture.py
 
       - name: Agent harness smoke set
         env:
