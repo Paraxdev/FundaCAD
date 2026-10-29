@@ -2,13 +2,18 @@ import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } fr
 import { enableAutoUnmount, mount } from "@vue/test-utils";
 import { defineComponent, h } from "vue";
 
+import Checkbox from "../../../src/components/ui/Checkbox.vue";
+import NumberField from "../../../src/components/ui/NumberField.vue";
+import Select from "../../../src/components/ui/Select.vue";
+import Slider from "../../../src/components/ui/Slider.vue";
+import TextField from "../../../src/components/ui/TextField.vue";
 import { useName, type NameProps } from "../../../src/components/ui/useName";
 
 enableAutoUnmount(afterEach);
 
 const Probe = defineComponent({
   inheritAttrs: false,
-  props: { label: String, labelledby: String, slotted: Boolean },
+  props: { label: String, labelledby: String, tip: String, slotted: Boolean },
   setup(props: NameProps & { slotted: boolean }) {
     const name = useName(props, "Probe", () => props.slotted);
     return () => h("button", name.value);
@@ -50,5 +55,49 @@ describe("useName", () => {
   it("passes an attribute name through for a plugin that skips the type check", () => {
     const w = mount(Probe, { attrs: { "aria-label": "Depth" } });
     expect(w.attributes("aria-label")).toBe("Depth");
+  });
+
+  it("falls back to the tip when nothing else names the control, and still warns", () => {
+    const w = mount(Probe, { props: { tip: "Depth" } });
+    expect([w.attributes("aria-label"), warned()]).toEqual(["Depth", true]);
+  });
+
+  it("names the element by its label or labelledby over the tip", () => {
+    const label = mount(Probe, { props: { label: "Radius", tip: "Hole radius" } });
+    const by = mount(Probe, { props: { labelledby: "radius-label", tip: "Hole radius" } });
+    expect([label.attributes("aria-label"), by.attributes("aria-label"), by.attributes("aria-labelledby")]).toEqual([
+      "Radius",
+      undefined,
+      "radius-label",
+    ]);
+  });
+});
+
+// A JS plugin skips the type check, and a release build has no warning, so a tip it used as the name must still name.
+describe("a base control named by its tip alone", () => {
+  it.each<[string, () => Element]>([
+    [
+      "Select",
+      () =>
+        mount(Select, {
+          props: { modelValue: "a", options: [{ value: "a", label: "A" }], tip: "Fruit", keys: "F" } as never,
+        }).get("button").element,
+    ],
+    [
+      "TextField",
+      () => mount(TextField, { props: { modelValue: "", tip: "Fruit", keys: "F" } as never }).get("input").element,
+    ],
+    [
+      "NumberField",
+      () => mount(NumberField, { props: { modelValue: 1, tip: "Fruit", keys: "F" } as never }).get("input").element,
+    ],
+    [
+      "Slider",
+      () => mount(Slider, { props: { modelValue: 1, tip: "Fruit", keys: "F" } as never }).get("input").element,
+    ],
+    ["Checkbox", () => mount(Checkbox, { props: { modelValue: false, tip: "Fruit", keys: "F" } }).get("input").element],
+  ])("%s reads the tip without its key chord as its name", (_, focusable) => {
+    const el = focusable();
+    expect([el.getAttribute("aria-label"), el.getAttribute("aria-labelledby")]).toEqual(["Fruit", null]);
   });
 });

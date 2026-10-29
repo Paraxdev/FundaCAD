@@ -641,7 +641,8 @@ The props beyond `tip`, `keys`, `disabled` and `disabledReason`, which every con
 `label`, the words, or `labelledby`, the id of a visible label (inside a `FieldRow`, the `labelId` its slot hands
 over), never both. Their props take the `Named` union of `components/ui/useName.ts`, so `vue-tsc` refuses a call with
 neither, and in dev a control given neither, nor an `aria-label` or `aria-labelledby` attribute, warns
-"<Kind> has no name". A `Checkbox` may take its slot text instead. `tip` is the tooltip only, never the name.
+"<Kind> has no name". A `Checkbox` may take its slot text instead. `tip` is the tooltip, and only names a control
+given nothing else (a plain JS plugin skips the type check), without its key chord, so a release build still says it.
 
 | Component | For | Props that matter | States |
 |---|---|---|---|
