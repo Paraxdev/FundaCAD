@@ -202,12 +202,14 @@ const check = (name, ok, detail) => {
     unclamped > railNow.width,
     `${unclamped} against ${railNow.width}`,
   );
-  // Any box in the panel that clips or scrolls sideways, leaving out text that ends in an ellipsis on purpose.
+  // Any box in the panel that clips or scrolls sideways, leaving out text that ends in an ellipsis on purpose
+  // and screen reader only text, which is clipped to 1 px by design.
   const spill = await page.evaluate(() => {
     const p = document.querySelector(".measure-panel.stress-panel");
     return [p, ...p.querySelectorAll("*")]
       .filter((e) => {
         const cs = getComputedStyle(e);
+        if (e.classList.contains("sr-only")) return false;
         return cs.overflowX !== "visible" && cs.textOverflow !== "ellipsis" && e.scrollWidth > e.clientWidth + 1;
       })
       .map((e) => `${e.tagName}.${[...e.classList].join(".")} ${e.scrollWidth} in ${e.clientWidth}`);
