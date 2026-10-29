@@ -68,6 +68,7 @@ pub const INSTRUCTIONS: &str = "Rules that save most failed builds:
 - Never guess a selector: take it from `inspect`, and always set its `body`.
 - To fit something to a part in a file, `doc_import` the file. Never model against a stand-in you made up; if you cannot reach the file, ask for its path.
 - Files: `doc_save`, `export`, `doc_open` and `doc_import` take a local path in any ordinary folder, not home itself, a drive root, a hidden (dot) folder or a network path; a server started with --allow-path keeps to those folders, and a refusal says which.
+- Long replies come summary first with alike rows folded: `offset` pages on, `limit` 0 shows all, `body` or `bodies` narrows, `detail` or `outline` adds rows, `full` lists everything.
 
 Working order: `param_set` the driving dimensions first, `feature_add` a few features, `build` often, `inspect`, `view`, then `doc_save` to a .funda file the app opens.
 
@@ -874,7 +875,7 @@ note: left out of the file, because this build cannot read them and a .funda has
 
     #[tool(
         name = "doc_get",
-        description = "The document's geometry as JSON: parameters, the feature timeline in order, and `bodyIds`, the record that keeps every body's id. Pass all of it back to `doc_set` and the same ids come out; the parts it leaves out (stress study, environment, materials and the like) stay in the document.",
+        description = "The document's geometry as JSON: parameters, the feature timeline in order, and `bodyIds`, the record that keeps every body's id. Pass all of it back to `doc_set` and the same ids come out; the parts it leaves out (stress study, environment, materials and the like) stay in the document. By default runs of bodyIds read as one range entry and an import's long node and part lists are left out, which `doc_set` reads back; `full` gives the document as stored.",
         input_schema = crate::tools::doc_get(),
         annotations(read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
@@ -1117,7 +1118,7 @@ note: left out of the file, because this build cannot read them and a .funda has
 
     #[tool(
         name = "section",
-        description = "Cut the built bodies with a plane and get, per body, the outline in the plane as closed loops of points and the section properties: area, centroid, second moments of area about the centroid (and principal ones when they differ), furthest fibre, section modulus and polar moment. For quick beam and spring checks. `axis` and `at` cut across X, Y or Z; `origin` and `normal` cut at any angle. Changes nothing.",
+        description = "Cut the built bodies with a plane and get, per body, the outline in the plane as closed loops of points and the section properties: area, centroid, second moments of area about the centroid (and principal ones when they differ), furthest fibre, section modulus and polar moment. For quick beam and spring checks. `axis` and `at` cut across X, Y or Z; `origin` and `normal` cut at any angle. Changes nothing. Over 10 bodies it counts them first, folds bodies with the same section into one row, leaves the loop points out (`outline` true shows them, 5 bodies a page) and shows 30 rows: `offset` pages on, `limit` 0 shows every row, `bodies` picks some, `full` gives every body with its outline.",
         input_schema = crate::tools::section(),
         annotations(read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
@@ -1137,7 +1138,7 @@ note: left out of the file, because this build cannot read them and a .funda has
 
     #[tool(
         name = "printability",
-        description = "Check the built parts for FDM printing before they are printed: overhangs past the angle that prints unsupported (45 deg), walls under two nozzle widths, floors under two layers, gaps narrow enough to fuse, flat ceilings bridged further than 10 mm, and shells that are not closed solids. Each finding names the face (F index, for `inspect` and `view` highlight_faces) and ends in a `view` focus. As modelled with +Z up, or `layFlat` as `export` would lay the parts. Measured on a fine mesh, the triangles an STL export holds. A flat ceiling counts as a bridge when walls hold it on two opposite sides, otherwise it is an overhang. Changes nothing.",
+        description = "Check the built parts for FDM printing before they are printed: overhangs past the angle that prints unsupported (45 deg), walls under two nozzle widths, floors under two layers, gaps narrow enough to fuse, flat ceilings bridged further than 10 mm, and shells that are not closed solids. Each finding names the face (F index, for `inspect` and `view` highlight_faces) and ends in a `view` focus. As modelled with +Z up, or `layFlat` as `export` would lay the parts. Measured on a fine mesh, the triangles an STL export holds. A flat ceiling counts as a bridge when walls hold it on two opposite sides, otherwise it is an overhang. Changes nothing. A long report counts its findings first, folds bodies alike in all but their ids and position into one row and shows 30 rows: `offset` pages on, `limit` 0 shows every row, `bodies` checks some, `full` gives each body its own block, `all` every finding.",
         input_schema = crate::tools::printability(),
         annotations(read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
@@ -1167,7 +1168,7 @@ note: left out of the file, because this build cannot read them and a .funda has
 
     #[tool(
         name = "build",
-        description = "Rebuild the document and report what came out: the bodies, their sizes, and any feature that failed. Build often, an error names the feature that caused it. isError is true if ANY feature failed, even when other features still produced bodies; the text still lists everything that did build, so check isError rather than scanning for \"FEATURE FAILED\".",
+        description = "Rebuild the document and report what came out: the bodies, their sizes, and any feature that failed. Build often, an error names the feature that caused it. isError is true if ANY feature failed, even when other features still produced bodies; the text still lists everything that did build, so check isError rather than scanning for \"FEATURE FAILED\". Over 10 bodies, bodies alike in all but their ids share one row and 30 rows show: `offset` pages on, `limit` 0 shows every row, `full` lists every body, not only the changed ones, and `inspect` with `body` gives one.",
         input_schema = crate::tools::build(),
         annotations(read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
@@ -1181,7 +1182,7 @@ note: left out of the file, because this build cannot read them and a .funda has
 
     #[tool(
         name = "inspect",
-        description = "Exact measurements of the built bodies. A bare call returns a one-line summary per body (volume, area, bounding box); pass detail:true and selectors:true to also list every face and edge with a ready-made SELECTOR you can paste into the next feature. Also flags seam edges and wrapping faces, which are what fillet and press/pull refuse. With `sketch` it reports that sketch's loose ends instead, the usual reason a sketch shows no closed profile: looseEnds { open: [{entity, p, at}], untied: [{entity, p, at, touches, gap, tieable}] } in sketch mm; `sketch_tie` ties the untied ones.",
+        description = "Exact measurements of the built bodies. A bare call returns a one-line summary per body (volume, area, bounding box); pass detail:true and selectors:true to also list every face and edge with a ready-made SELECTOR you can paste into the next feature. Also flags seam edges and wrapping faces, which are what fillet and press/pull refuse. With `sketch` it reports that sketch's loose ends instead, the usual reason a sketch shows no closed profile: looseEnds { open: [{entity, p, at}], untied: [{entity, p, at, touches, gap, tieable}] } in sketch mm; `sketch_tie` ties the untied ones. Over 10 bodies alike ones share one row and 30 rows show, with detail or selectors 5 bodies: `offset` pages on, `limit` 0 shows all, `body` or `bodies` picks the ones you need.",
         input_schema = crate::tools::inspect(),
         annotations(read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
@@ -1211,7 +1212,7 @@ note: left out of the file, because this build cannot read them and a .funda has
 
     #[tool(
         name = "export",
-        description = "Write the model to STEP, STL or 3MF, or one sketch (`sketch`) or flat face (`face`) to DXF or SVG at true size in mm. `separate` writes one file per body, named after the body; `body` writes one body, `bodies` a list of them, merged or with `separate`; `layFlat` turns the parts for printing. Refused if a feature failed to build, naming which, unless allowPartial:true is passed, in which case it writes the file anyway and still names the failures.",
+        description = "Write the model to STEP, STL or 3MF, or one sketch (`sketch`) or flat face (`face`) to DXF or SVG at true size in mm. `separate` writes one file per body, named after the body; `body` writes one body, `bodies` a list of them, merged or with `separate`; `layFlat` turns the parts for printing. Refused if a feature failed to build, naming which, unless allowPartial:true is passed, in which case it writes the file anyway and still names the failures. A long `separate` list folds files of one name and size into one line and shows 30 rows: `offset` pages on, `limit` 0 shows every row, `full` lists every file.",
         input_schema = crate::tools::export(),
         annotations(read_only_hint = false, destructive_hint = true, idempotent_hint = true, open_world_hint = false)
     )]

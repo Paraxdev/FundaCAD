@@ -208,7 +208,18 @@ fn the_server_instructions_survive_a_host_that_keeps_2048_characters() {
     for live in [false, true] {
         let text = instructions_for(live);
         assert!(text.chars().count() <= 2048, "live={live}: {} characters", text.chars().count());
-        for rule in ["Z is up", "CENTRED ON THE ORIGIN", "`move`", "body1", "ABOVE", "`targets`", "NAME", "`schema`"] {
+        for rule in [
+            "Z is up",
+            "CENTRED ON THE ORIGIN",
+            "`move`",
+            "body1",
+            "ABOVE",
+            "`targets`",
+            "NAME",
+            "`schema`",
+            "`offset`",
+            "`full`",
+        ] {
             assert!(text.contains(rule), "live={live} lost {rule:?}");
         }
     }
@@ -245,4 +256,25 @@ fn the_tool_list_has_no_space_runs_no_empty_required_and_stays_small() {
         }
     }
     assert!(total < 42000, "tools/list is {total} bytes");
+}
+
+#[test]
+fn a_tool_that_folds_or_pages_says_in_its_description_how_to_ask_for_more() {
+    let tools = fundacad_mcp::server::FundaCad::with_link(fundacad_mcp::link::EngineLink::private()).tools();
+    let mut checked = 0;
+    for tool in &tools {
+        let description = tool.description.clone().unwrap_or_default();
+        let properties = tool.input_schema.get("properties").and_then(Value::as_object).cloned().unwrap_or_default();
+        for arg in ["limit", "offset", "full", "outline"] {
+            if properties.contains_key(arg) {
+                checked += 1;
+                assert!(
+                    description.contains(&format!("`{arg}`")),
+                    "{} takes {arg} and its description never says so",
+                    tool.name
+                );
+            }
+        }
+    }
+    assert!(checked >= 15, "only {checked} paging arguments found");
 }

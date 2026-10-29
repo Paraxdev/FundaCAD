@@ -12,7 +12,7 @@ fn paged(mut schema: JsonObject, rows: &str) -> JsonObject {
         p.insert(
             "limit".into(),
             json!({"type": "integer", "minimum": 0,
-                   "description": format!("how many {rows} to show, 0 for all; a longer list ends in a line saying how to ask for the rest")}),
+                   "description": format!("how many {rows} to show, 0 for all")}),
         );
         p.insert(
             "offset".into(),
@@ -90,10 +90,9 @@ pub fn doc_get() -> JsonObject {
         json!({"features_only": {"type": "boolean",
                                  "description": "omit the parameter table"},
                "full": {"type": "boolean",
-                        "description": "the document as stored, pretty printed: every bodyIds entry and every \
-                                        import's nodes and parts. By default runs of bodyIds read as one \
-                                        \"sep1:0..sep1:9\": \"body4..body13\" entry and an import's lists \
-                                        over 30 entries are left out; doc_set reads both back"}}),
+                        "description": "the document as stored, pretty printed, where by default a run of bodyIds \
+                                        reads as one \"sep1:0..sep1:9\": \"body4..body13\" entry and an \
+                                        import's lists over 30 entries are left out"}}),
         &[],
     )
 }
@@ -189,9 +188,7 @@ fn section_fields() -> JsonObject {
     object(
         json!({
             "full": {"type": "boolean",
-                     "description": "one block per body with its outline; by default a long list \
-                                     counts its bodies first and folds bodies with the same section about \
-                                     their own centroid into one row"},
+                     "description": "one block per body with its outline, nothing folded"},
             "axis": {"type": "string", "enum": ["X", "Y", "Z"],
                      "description": "cut across this axis, at `at`"},
             "at": {"type": "number", "description": "where along the axis, in mm"},
@@ -247,9 +244,7 @@ fn printability_fields() -> JsonObject {
     object(
         json!({
             "full": {"type": "boolean",
-                     "description": "one block per body with its own focus; by default a long report \
-                                     counts its findings first and folds bodies alike in all but their ids \
-                                     and position into one row"},
+                     "description": "one block per body with its own focus, nothing folded"},
             "bodies": {"type": "array", "items": {"type": "string"},
                        "description": "only these bodies, by id or name; every body if omitted"},
             "nozzle": {"type": "number", "description": "nozzle width in mm (default 0.4)"},
@@ -284,8 +279,7 @@ fn interference_fields() -> JsonObject {
     object(
         json!({
             "full": {"type": "boolean",
-                     "description": "one row per pair with where it meets; by default a long \
-                                     list folds pairs alike in all but their ids into one row"},
+                     "description": "one row per pair with where it meets, nothing folded"},
             "bodies": {"type": "array", "items": {"type": "string"},
                        "description": "only check these bodies against each other, by id or \
                                        name; every body if omitted"},
@@ -512,8 +506,7 @@ pub fn export() -> JsonObject {
                              "description": "write the file even if a feature failed to build \
                                              (default: refuse and name the failures)"},
             "full": {"type": "boolean",
-                     "description": "separate: one line per file written; by default a long list folds the \
-                                     files of one name and size into one line"}
+                     "description": "separate: one line per file written, nothing folded"}
         }),
         &["path", "format"],
     );
