@@ -7,7 +7,7 @@ import { renderPrefs, setRenderPref } from "../../../src/ui/renderPrefs";
 
 enableAutoUnmount(afterEach);
 
-const slider = () => document.getElementById("prefs-bloom") as HTMLInputElement;
+const slider = () => document.querySelector("#prefs-bloom input[type=range]") as HTMLInputElement;
 
 async function drag(to: string) {
   slider().value = to;
@@ -21,16 +21,19 @@ describe("the Bloom slider in Preferences", () => {
     setRenderPref("bloom", 0.4);
   });
 
-  it("sets the bloom amount to where it is dragged, a string from the DOM included", async () => {
+  it("sets the bloom amount to where it is dragged in percent, a string from the DOM included", async () => {
     mount(PreferencesDialog, { attachTo: document.body });
-    await drag("0.65");
+    expect(slider().value).toBe("40");
+    expect(slider().getAttribute("aria-valuetext")).toBe("40%");
+    await drag("65");
     expect(renderPrefs().bloom).toBe(0.65);
-    await drag("1");
+    await drag("100");
     expect(renderPrefs().bloom).toBe(1);
     await drag("0");
     expect(renderPrefs().bloom).toBe(0);
-    await drag("0.15");
+    await drag("15");
     expect(renderPrefs().bloom).toBe(0.15);
-    expect(slider().value).toBe("0.15");
+    expect(slider().value).toBe("15");
+    expect(slider().getAttribute("aria-valuetext")).toBe("15%");
   });
 });

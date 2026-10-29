@@ -251,8 +251,6 @@ const TOUCHPAD_SCROLL = [
 
 const HOME_BACKGROUND_OPTIONS = HOME_BACKGROUNDS.map((b) => ({ value: b.id, label: b.label }));
 
-const value = (ev: Event) => (ev.target as HTMLSelectElement).value;
-
 const themeOptions = computed(() => themeList.value.map((t) => ({ value: t.id, label: t.label })));
 const packOptions = computed(() => iconPacks().map((p) => ({ value: p.id, label: p.label })));
 const environmentOptions = ENVIRONMENTS_LIST.map((e) => ({ value: e.id, label: e.label, hint: e.note }));
@@ -276,6 +274,7 @@ async function onUpload(ev: Event) {
   // Reset at once so picking the same file again, after fixing it, still fires change.
   input.value = "";
   if (!file) return;
+  themeError.value = "";
   let parsed: unknown;
   try {
     parsed = JSON.parse(await file.text());
@@ -330,6 +329,7 @@ async function onHomeImage(ev: Event) {
   const file = input.files?.[0];
   input.value = "";
   if (!file) return;
+  homeImageError.value = "";
   const res = await storeHomeImage(file);
   if (!res.ok) {
     homeImageError.value = res.error;
@@ -346,11 +346,13 @@ function pickBackground(id: string) {
   const v = asBackground(id);
   if (v) setRenderPref("background", v);
 }
-function onBrightness(ev: Event) {
-  setRenderPref("brightness", Number.parseFloat(value(ev)));
+// Brightness and Bloom are shown and spoken in percent, Smoothing in milliseconds, the stores keep their own units.
+const BRIGHTNESS_PCT = { min: Math.round(MIN_BRIGHTNESS * 100), max: Math.round(MAX_BRIGHTNESS * 100) };
+function onBrightness(pct: number) {
+  setRenderPref("brightness", pct / 100);
 }
-function onBloom(ev: Event) {
-  const v = asBloom(Number.parseFloat(value(ev)));
+function onBloom(pct: number) {
+  const v = asBloom(pct / 100);
   if (v !== null) setRenderPref("bloom", v);
 }
 function pickTracer(id: string) {
@@ -382,8 +384,8 @@ function pickTouchpadScroll(id: string) {
   const v = asTouchpadScroll(id);
   if (v) setNavPrefs({ touchpadScroll: v });
 }
-function onSmoothing(ev: Event) {
-  setNavPrefs({ smoothTime: Number.parseFloat(value(ev)) });
+function onSmoothing(ms: number) {
+  setNavPrefs({ smoothTime: ms / 1000 });
 }
 function onClassicCamera(on: boolean) {
   classicCamera.value = on;
@@ -424,9 +426,15 @@ function onClassicCamera(on: boolean) {
             <div class="pref-card wide">
               <div class="pref-head">
                 <label class="pref-title" for="prefs-theme">Theme</label>
-                <Select id="prefs-theme" :model-value="theme" :options="themeOptions" @update:model-value="onTheme" />
+                <Select
+                  id="prefs-theme"
+                  aria-describedby="prefs-theme-hint"
+                  :model-value="theme"
+                  :options="themeOptions"
+                  @update:model-value="onTheme"
+                />
               </div>
-              <p class="pref-hint">
+              <p id="prefs-theme-hint" class="pref-hint">
                 FundaCAD Noir, Dracula, Solarized Light and the Noir Blue/Red/Orange tints ship with FundaCAD. Upload a
                 JSON palette to add your own, it is stored in this browser's preferences. Keys are colour tokens like
                 <code>--bg</code> and <code>--accent</code>, values are hex or rgb().
@@ -443,7 +451,7 @@ function onClassicCamera(on: boolean) {
                 <Button @click="pickThemeFile">Upload theme…</Button>
                 <Button v-if="activeIsCustom" @click="onRemoveTheme">Remove</Button>
               </div>
-              <p v-if="themeError" class="pref-hint prefs-theme-error">{{ themeError }}</p>
+              <p id="prefs-theme-error" class="pref-hint prefs-theme-error" role="alert">{{ themeError }}</p>
             </div>
             <div class="pref-card">
               <div class="pref-head">
@@ -456,19 +464,23 @@ function onClassicCamera(on: boolean) {
                 <span class="pref-title">Units</span>
                 <Segmented
                   id="prefs-unit"
+                  aria-describedby="prefs-unit-hint"
                   label="Units"
                   :model-value="unit"
                   :options="UNITS"
                   @update:model-value="pickUnit"
                 />
               </div>
-              <p class="pref-hint">Geometry is always stored in millimetres, this is display only.</p>
+              <p id="prefs-unit-hint" class="pref-hint"
+                >Geometry is always stored in millimetres, this is display only.</p
+              >
             </div>
             <div class="pref-card wide">
               <div class="pref-head">
                 <span class="pref-title">Home background</span>
                 <Segmented
                   id="prefs-home-background"
+                  aria-describedby="prefs-home-background-hint"
                   label="Home background"
                   :model-value="homeBg"
                   :options="HOME_BACKGROUND_OPTIONS"
@@ -477,7 +489,9 @@ function onClassicCamera(on: boolean) {
                   @update:model-value="pickHomeBackground"
                 />
               </div>
-              <p class="pref-hint">What Home sits on. Workspace shows your model dimmed behind it.</p>
+              <p id="prefs-home-background-hint" class="pref-hint"
+                >What Home sits on. Workspace shows your model dimmed behind it.</p
+              >
               <div v-if="homeBg === 'image'" class="prefs-actions">
                 <Button @click="homeImageInput?.click()">Choose image…</Button>
               </div>
@@ -489,7 +503,7 @@ function onClassicCamera(on: boolean) {
                 :accept="HOME_IMAGE_TYPES.join(',')"
                 @change="onHomeImage"
               />
-              <p v-if="homeImageError" class="pref-hint prefs-theme-error">{{ homeImageError }}</p>
+              <p id="prefs-home-image-error" class="pref-hint prefs-theme-error" role="alert">{{ homeImageError }}</p>
             </div>
           </div>
         </section>
@@ -502,12 +516,13 @@ function onClassicCamera(on: boolean) {
                 <label class="pref-title" for="prefs-environment">Reflections</label>
                 <Select
                   id="prefs-environment"
+                  aria-describedby="prefs-environment-hint"
                   :model-value="render.environment"
                   :options="environmentOptions"
                   @update:model-value="onEnvironment"
                 />
               </div>
-              <p class="pref-hint">
+              <p id="prefs-environment-hint" class="pref-hint">
                 A metal is almost entirely reflection, so with none it renders nearly black. Flat is the clearer way to
                 read shape.
               </p>
@@ -525,18 +540,16 @@ function onClassicCamera(on: boolean) {
               </div>
             </div>
             <div class="pref-card">
-              <div class="pref-head">
-                <label class="pref-title" for="prefs-brightness">Environment brightness</label>
-              </div>
-              <input
+              <Slider
                 id="prefs-brightness"
-                class="sm-slider pref-slider"
-                type="range"
-                :min="MIN_BRIGHTNESS"
-                :max="MAX_BRIGHTNESS"
-                step="0.05"
-                :value="render.brightness"
-                @input="onBrightness"
+                label="Environment brightness"
+                unit="%"
+                show-value
+                :min="BRIGHTNESS_PCT.min"
+                :max="BRIGHTNESS_PCT.max"
+                :step="5"
+                :model-value="Math.round(render.brightness * 100)"
+                @update:model-value="onBrightness"
               />
               <p class="pref-hint">
                 How strongly the environment lights the model and shows in its reflections, an imported HDR included.
@@ -547,30 +560,29 @@ function onClassicCamera(on: boolean) {
                 <span class="pref-title">Tangent edges</span>
                 <Segmented
                   id="prefs-tangent-edges"
+                  aria-describedby="prefs-tangent-edges-hint"
                   label="Tangent edges"
                   :model-value="render.tangentEdges"
                   :options="TANGENT"
                   @update:model-value="pickTangent"
                 />
               </div>
-              <p class="pref-hint">
+              <p id="prefs-tangent-edges-hint" class="pref-hint">
                 Where two faces meet smoothly, like the borders of a fillet, there is no corner to see, only a line
                 across one continuous surface.
               </p>
             </div>
             <div class="pref-card">
-              <div class="pref-head">
-                <label class="pref-title" for="prefs-bloom">Bloom</label>
-              </div>
-              <input
+              <Slider
                 id="prefs-bloom"
-                class="sm-slider pref-slider"
-                type="range"
-                min="0"
-                max="1"
-                step="0.05"
-                :value="render.bloom"
-                @input="onBloom"
+                label="Bloom"
+                unit="%"
+                show-value
+                :min="0"
+                :max="100"
+                :step="5"
+                :model-value="Math.round(render.bloom * 100)"
+                @update:model-value="onBloom"
               />
               <p class="pref-hint">
                 Light spilling off faces with Emission turned up. In the path traced view bright highlights spill too.
@@ -581,13 +593,14 @@ function onClassicCamera(on: boolean) {
                 <span class="pref-title">Path tracer</span>
                 <Segmented
                   id="prefs-tracer"
+                  aria-describedby="prefs-tracer-hint"
                   label="Path tracer"
                   :model-value="render.tracer"
                   :options="TRACERS"
                   @update:model-value="pickTracer"
                 />
               </div>
-              <p class="pref-hint">
+              <p id="prefs-tracer-hint" class="pref-hint">
                 Where Path traced runs. Native traces in the app itself, WebGPU in the viewport's web view; Auto picks
                 the faster one this computer has. If the one picked is missing, the other is used.
               </p>
@@ -626,19 +639,16 @@ function onClassicCamera(on: boolean) {
           <h3 class="prefs-pane-title" tabindex="-1">Navigation</h3>
           <div class="prefs-grid">
             <div class="pref-card">
-              <div class="pref-head">
-                <label class="pref-title" for="prefs-smoothing">Smoothing</label>
-                <span class="prefs-readout">{{ nav.smoothTime.toFixed(3) }} s</span>
-              </div>
-              <input
+              <Slider
                 id="prefs-smoothing"
-                class="sm-slider pref-slider"
-                type="range"
-                min="0"
-                max="0.3"
-                step="0.005"
-                :value="nav.smoothTime"
-                @input="onSmoothing"
+                label="Smoothing"
+                unit="ms"
+                show-value
+                :min="0"
+                :max="300"
+                :step="5"
+                :model-value="Math.round(nav.smoothTime * 1000)"
+                @update:model-value="onSmoothing"
               />
               <p class="pref-hint">
                 How long a zoom or a drag takes to catch up with the hand. 0 follows the mouse exactly; whatever it is
@@ -650,13 +660,14 @@ function onClassicCamera(on: boolean) {
                 <span class="pref-title">Orbit pivot</span>
                 <Segmented
                   id="prefs-orbit-pivot"
+                  aria-describedby="prefs-orbit-pivot-hint"
                   label="Orbit pivot"
                   :model-value="nav.orbitPivot"
                   :options="ORBIT_PIVOTS"
                   @update:model-value="pickOrbitPivot"
                 />
               </div>
-              <p class="pref-hint">
+              <p id="prefs-orbit-pivot-hint" class="pref-hint">
                 What a drag turns the view about. Under cursor takes the model point you press on, Origin always turns
                 about the world origin, and Selection about the centre of what is selected (under the cursor while
                 nothing is). The arrow keys turn about the same point, 15° a press, 5° with Shift.
@@ -679,13 +690,14 @@ function onClassicCamera(on: boolean) {
                 <span class="pref-title">Scrolling</span>
                 <Segmented
                   id="prefs-wheel-device"
+                  aria-describedby="prefs-wheel-device-hint"
                   label="Scrolling"
                   :model-value="nav.wheelDevice"
                   :options="WHEEL_DEVICES"
                   @update:model-value="pickWheelDevice"
                 />
               </div>
-              <p class="pref-hint">
+              <p id="prefs-wheel-device-hint" class="pref-hint">
                 A mouse wheel zooms; a touchpad's two fingers turn or move the view and a pinch zooms. Automatic tells
                 them apart each time you scroll<template v-if="nav.wheelDevice === 'auto' && detectedWheel"
                   >, and took the last one for a {{ detectedWheel }}</template
@@ -697,13 +709,14 @@ function onClassicCamera(on: boolean) {
                 <span class="pref-title">Two-finger scroll</span>
                 <Segmented
                   id="prefs-touchpad-scroll"
+                  aria-describedby="prefs-touchpad-scroll-hint"
                   label="Two-finger scroll"
                   :model-value="nav.touchpadScroll"
                   :options="TOUCHPAD_SCROLL"
                   @update:model-value="pickTouchpadScroll"
                 />
               </div>
-              <p class="pref-hint">
+              <p id="prefs-touchpad-scroll-hint" class="pref-hint">
                 On a touchpad, what two fingers scrolling do to the view. Shift with the scroll does the other, and a
                 pinch zooms toward the pointer.
               </p>

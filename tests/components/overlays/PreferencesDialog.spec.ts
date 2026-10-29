@@ -16,6 +16,7 @@ import {
   useHomeImageStore,
 } from "../../../src/ui/homeBackground";
 import { experimentalPrefs, resetExperimentalPrefs, setExperimentalPref } from "../../../src/ui/experimentalPrefs";
+import { renderPrefs, setRenderPref } from "../../../src/ui/renderPrefs";
 
 enableAutoUnmount(afterEach);
 
@@ -53,7 +54,10 @@ const stopName = (el: Element | null): string => {
   const h = el as HTMLElement;
   const group = h.closest("[role=radiogroup]");
   if (group) return `${group.id}:${label(h)}`;
-  return h.dataset.tab ?? (h.closest("label[id]")?.id || h.id || label(h) || h.getAttribute("aria-label") || "");
+  return (
+    h.dataset.tab ??
+    (h.closest("label[id], .ui-slider[id]")?.id || h.id || label(h) || h.getAttribute("aria-label") || "")
+  );
 };
 
 async function category(id: string) {
@@ -98,7 +102,7 @@ describe("Preferences choices", () => {
     await open();
     await category("navigation");
     const pane = $(".prefs-pane:not([style*='none'])");
-    expect(focusables(pane).map((el) => el.id || label(el))).toEqual([
+    expect(focusables(pane).map((el) => el.id || el.closest(".ui-slider[id]")?.id || label(el))).toEqual([
       "prefs-smoothing",
       "Under cursor",
       "",
@@ -435,5 +439,63 @@ describe("Preferences Accessibility", () => {
     expect($('[data-pane="appearance"]').style.display).not.toBe("none");
     expect(document.activeElement).toBe($('[data-pane="appearance"] .prefs-pane-title'));
     expect($(".prefs-nav-btn.active").dataset.category).toBe("appearance");
+  });
+});
+
+describe("Preferences sliders, hints and upload errors", () => {
+  const slider = (id: string) => $(`#${id} input[type=range]`);
+  const name = (el: HTMLElement) => $(`#${el.getAttribute("aria-labelledby")}`).textContent;
+
+  async function pickFile(id: string, file: File) {
+    const input = $(`#${id}`) as HTMLInputElement;
+    Object.defineProperty(input, "files", { value: [file], configurable: true });
+    input.dispatchEvent(new Event("change"));
+    await flushPromises();
+  }
+
+  beforeEach(() => {
+    setRenderPref("brightness", 1);
+    setRenderPref("bloom", 0.4);
+    setNavPrefs({ smoothTime: 0.1 });
+  });
+
+  it("speaks Environment brightness and Bloom in percent and Smoothing in milliseconds", async () => {
+    await open();
+    const rows = [
+      ["prefs-brightness", "Environment brightness", "100%", () => renderPrefs().brightness, 1.05, "105%"],
+      ["prefs-bloom", "Bloom", "40%", () => renderPrefs().bloom, 0.45, "45%"],
+      ["prefs-smoothing", "Smoothing", "100 ms", () => getNavPrefs().smoothTime, 0.105, "105 ms"],
+    ] as const;
+    for (const [id, text, before, read, after, spoken] of rows) {
+      const input = slider(id);
+      expect([name(input), input.getAttribute("aria-valuetext")]).toEqual([text, before]);
+      input.focus();
+      await press("ArrowRight");
+      expect([read(), input.getAttribute("aria-valuetext")]).toEqual([after, spoken]);
+    }
+  });
+
+  it("links each choice to the hint under it, and every description it names has text", async () => {
+    await open();
+    expect($("#prefs-orbit-pivot").getAttribute("aria-describedby")).toBe("prefs-orbit-pivot-hint");
+    expect($("#prefs-theme").getAttribute("aria-describedby")).toBe("prefs-theme-hint");
+    const refs = [...document.querySelectorAll(".prefs-panel [aria-describedby]")].flatMap((el) =>
+      el.getAttribute("aria-describedby")!.split(" "),
+    );
+    expect(refs.length).toBeGreaterThanOrEqual(12);
+    for (const ref of refs) expect(document.getElementById(ref)?.textContent?.trim(), ref).toBeTruthy();
+  });
+
+  it("keeps both upload errors as empty alerts until a refused file fills them", async () => {
+    await open();
+    const errors = ["prefs-theme-error", "prefs-home-image-error"].map((id) => $(`#${id}`));
+    expect(errors.map((e) => [e.getAttribute("role"), e.textContent])).toEqual([
+      ["alert", ""],
+      ["alert", ""],
+    ]);
+    await pickFile("prefs-theme-file", new File(["{ not json"], "bad.json", { type: "application/json" }));
+    await vi.waitFor(() => expect(errors[0]!.textContent).toBe("That file is not valid JSON."));
+    await pickFile("prefs-home-image", new File(["text"], "notes.txt", { type: "text/plain" }));
+    await vi.waitFor(() => expect(errors[1]!.textContent).toBe("Pick a PNG or JPEG picture."));
   });
 });
