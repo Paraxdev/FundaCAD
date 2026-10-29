@@ -55,11 +55,28 @@ afterEach(() => {
   vi.doUnmock("@tauri-apps/api/core");
 });
 
-function tauriWindow(theme: string) {
+type WindowHandlers = {
+  theme?: (e: { payload: string }) => void;
+  focus?: (e: { payload: boolean }) => void;
+};
+
+function tauriWindow(theme: string): WindowHandlers {
+  const handlers: WindowHandlers = {};
   vi.doMock("@tauri-apps/api/window", () => ({
-    getCurrentWindow: () => ({ theme: async () => theme, onThemeChanged: async () => () => {} }),
+    getCurrentWindow: () => ({
+      theme: async () => theme,
+      onThemeChanged: async (fn: WindowHandlers["theme"]) => {
+        handlers.theme = fn;
+        return () => {};
+      },
+      onFocusChanged: async (fn: WindowHandlers["focus"]) => {
+        handlers.focus = fn;
+        return () => {};
+      },
+    }),
   }));
   vi.stubGlobal("window", { __TAURI_INTERNALS__: {} });
+  return handlers;
 }
 
 describe("systemThemeFor", () => {
@@ -161,6 +178,35 @@ describe("the Rust os_a11y_prefs fallback", () => {
     const { theme } = await boot({ contrast: true });
     await vi.waitFor(() => expect(invoke).toHaveBeenCalled());
     await vi.waitFor(() => expect(theme.resolvedTheme()).toBe("high-contrast-light"));
+  });
+
+  it("asks again when the window regains focus, so contrast switched off while running is followed", async () => {
+    let highContrast = true;
+    const invoke = vi.fn(async () => ({ highContrast }));
+    vi.doMock("@tauri-apps/api/core", () => ({ invoke }));
+    const win = tauriWindow("dark");
+    const { theme } = await boot({});
+    await vi.waitFor(() => expect(theme.resolvedTheme()).toBe("high-contrast-dark"));
+    await vi.waitFor(() => expect(win.focus).toBeDefined());
+    highContrast = false;
+    win.focus!({ payload: false });
+    win.focus!({ payload: true });
+    await vi.waitFor(() => expect(theme.resolvedTheme()).toBe("fundacad"));
+    expect(invoke).toHaveBeenCalledTimes(2);
+  });
+
+  it("asks again when the window theme changes, as GNOME High Contrast swaps the GTK theme", async () => {
+    let highContrast = false;
+    const invoke = vi.fn(async () => ({ highContrast }));
+    vi.doMock("@tauri-apps/api/core", () => ({ invoke }));
+    const win = tauriWindow("light");
+    const { theme } = await boot({});
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(win.theme).toBeDefined());
+    highContrast = true;
+    win.theme!({ payload: "dark" });
+    await vi.waitFor(() => expect(theme.resolvedTheme()).toBe("high-contrast-dark"));
+    expect(invoke).toHaveBeenCalledTimes(2);
   });
 
   it("leaves the media query answer when the command is missing", async () => {

@@ -55,12 +55,19 @@ function setWindowTheme(theme: string | null) {
   changed();
 }
 
-async function watchWindowTheme() {
+async function watchWindow() {
   try {
     const { getCurrentWindow } = await import("@tauri-apps/api/window");
     const win = getCurrentWindow();
-    await win.onThemeChanged(({ payload }) => setWindowTheme(payload));
+    await win.onThemeChanged(({ payload }) => {
+      setWindowTheme(payload);
+      void askNative();
+    });
     setWindowTheme(await win.theme());
+    // GNOME High Contrast sends the webview no event, so the OS is asked again whenever the user comes back.
+    await win.onFocusChanged(({ payload }) => {
+      if (payload) void askNative();
+    });
   } catch {
     /* the media query answer stands */
   }
@@ -70,8 +77,9 @@ async function askNative() {
   try {
     const { invoke } = await import("@tauri-apps/api/core");
     const prefs = await invoke<{ highContrast: boolean | null }>("os_a11y_prefs");
-    if (prefs?.highContrast !== true) return;
-    nativeContrast = true;
+    const next = prefs?.highContrast === true;
+    if (next === nativeContrast) return;
+    nativeContrast = next;
     changed();
   } catch {
     /* the media queries stand */
@@ -85,7 +93,7 @@ export function onOsAppearanceChange(fn: () => void): () => void {
     watching = true;
     if (typeof matchMedia === "function") for (const q of [LIGHT, ...CONTRAST]) watchMedia(q);
     if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
-      void watchWindowTheme();
+      void watchWindow();
       void askNative();
     }
   }
