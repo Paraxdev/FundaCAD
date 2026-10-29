@@ -165,8 +165,20 @@ token and the port instead.
 
 The manual lives in `manual/` and is built with [Zensical](https://zensical.org). To preview
 it, run `pip install zensical` and then `zensical serve` inside `manual/`. It is published to
-GitHub Pages from `main`, so a manual change goes live with the next beta, when `dev` is
-promoted to `main`.
+GitHub Pages in two versions on one site: Beta at `/beta/`, built from `main`, and Dev at
+`/dev/`, built from `dev`. A push to either branch that touches `manual/` publishes both, and
+visitors land on Beta. An old link without a version opens the same page in Beta.
+
+To build both versions the way the workflow does, check out the other branch's `manual/`
+somewhere and run this from the repo root:
+
+```sh
+python manual/tools/build_versions.py --version beta=<main checkout>/manual \
+  --version dev=manual --default beta --out <empty folder>
+```
+
+Add `--zensical <path>` when `zensical` is not on the PATH. Serve the out folder with
+`python -m http.server` to try the switch next to the site name.
 
 The pages are in `manual/docs/` and the navigation is in `manual/zensical.toml`. Write for
 someone who wants to print a part: short paragraphs of whole sentences, and only tool names,

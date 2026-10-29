@@ -25,6 +25,10 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- **The manual has a Beta and a Dev version.** fundacad.dev opens the Beta
+  manual, and a switch at the top of every page opens the same page in Dev.
+  Help, Manual in the app opens the version that matches your build.
+
 - **G3 fillets.** The fillet box has a third continuity icon, G3, on key 3. It
   eases into the faces with no jump in curvature and none in how fast the
   curvature changes either. G2 and G3 now need both faces flat across the edge,
