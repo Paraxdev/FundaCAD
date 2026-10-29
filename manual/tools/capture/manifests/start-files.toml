@@ -70,20 +70,43 @@ file = "manual/docs/img/first-part-rectangle.png"
 size = [890, 850]
 theme = "fundacad"
 crop = "region"
-stub = true
+viewport = [890, 900]
+at = [0, 50]
+# No park: the mouse stays on the second corner, so the rectangle is still being drawn with its W and H boxes.
+steps = [
+  { press = "s" },
+  { pick_plane = "XY" },
+  { panel = "items", open = false },
+  { press = "r" },
+  { click_at = true, sketch = [20, 10] },
+  { hover = [-19.4, -9.6], space = "sketch" },
+]
 show = "A rough rectangle drawn on the XY sketch plane, the first step of the first part."
 alt = "A rough rectangle drawn on the sketch plane"
-uses = ["manual/docs/start/first-part.md:7"]
+uses = ["manual/docs/start/first-part.md:11"]
 
 [[shot]]
 file = "manual/docs/img/first-part-extrude.png"
 size = [880, 780]
 theme = "fundacad"
 crop = "region"
-stub = true
+around = "world:6,0,2.5"
+park = [1430, 890]
+steps = [
+  { open = "fixture:plate-sketch.json" },
+  { view = "iso" },
+  { panel = "items", open = false },
+  { panel = "history", open = false },
+  # A sketch alone gives Fit nothing to frame, so the camera is zoomed by hand.
+  { evaluate = "() => window.viewport.rig.zoomBy(0.55)" },
+  "settle",
+  { press = "e" },
+  { click_at = true, world = [10, 0, 0] },
+  { type = ["D", "5"] },
+]
 show = "The extrude arrow over the plate preview: a rectangle with a circle hole, extruded 5 mm."
 alt = "The extrude arrow with the plate previewed"
-uses = ["manual/docs/start/first-part.md:13"]
+uses = ["manual/docs/start/first-part.md:25"]
 
 [[shot]]
 file = "manual/docs/img/first-part-export.png"
