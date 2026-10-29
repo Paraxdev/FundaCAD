@@ -18,16 +18,19 @@ The areas are `start-files`, `model`, `sketch`, `inspect`, `render`, `ai-plugins
 ```toml
 [[shot]]
 file = "manual/docs/img/history-card.png"
-size = [300, 389]
+size = [300, 520]
 theme = "fundacad"
 crop = "panel"
 target = "#timeline"
-show = "The History card of the Wall bracket with its features in order."
-alt = "The History card"
+pad = 6
+park = [900, 700]
 steps = [
-  { open = "example:Wall bracket" },
+  { open = "fixture:sketch-extrude.json" },
   { panel = "history" },
+  { click_css = '.timeline-node[data-id="e"]' },
 ]
+show = "The History card with the Extrude step open and its rows."
+alt = "The History card with the Extrude step open"
 ```
 
 | key | meaning |
@@ -50,6 +53,8 @@ Each entry starts from a new document in its theme unless its first step opens s
 In a worktree whose node_modules is a junction, vite refuses the app's fonts, so the tool serves them from disk. A picture in a system font was taken without the tool.
 
 The tool runs its own vite (`vite.config.mjs` here) with a dependency cache in the temp folder, one per checkout. A junctioned node_modules shares vite's usual cache with every other checkout, and when another vite rebuilds it, this page reloads in the middle of a shot. The low performance warning SwiftShader brings up is hidden too, and a screenshot that hangs is taken again (the result line counts them).
+
+With other headless pages running on the PC, a page can stop drawing for good. An entry that fails is then taken once more in a new session. Each file or fixture opens with the camera of a fresh window, so a picture does not depend on the entries before it.
 
 ## Crops
 

@@ -37,6 +37,10 @@ WATCH_OPEN = """() => {
 OPENED = "() => window.__captureOpened && window.store.document.features.length > 0"
 SET_THEME = "(id) => import('/src/ui/theme.ts').then((m) => m.setTheme(id))"
 SET_PARAM = "([n, e]) => window.store.setParamExpr(n, e)"
+DRAWING = """() => Promise.race([
+  new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(true)))),
+  new Promise((r) => setTimeout(() => r(false), 5000)),
+])"""
 # The frame and rebuild timings differ on every run, so a retake would change for no reason. readouts = true keeps them.
 HIDE_READOUTS = """(hide) => {
   let el = document.getElementById('capture-hide-readouts');
@@ -158,6 +162,13 @@ def open_example(s, name: str):
     s.settle()
 
 
+def fresh_camera(s):
+    # Only the first model drawn in a window is fitted on open, a later file keeps the camera of the one before, so a
+    # picture would depend on the entries taken before it in the same session.
+    s.page.evaluate("() => window.viewport.resetCamera(true)")
+    s.settle()
+
+
 def do_open(s, what: str, name: str | None = None):
     kind, _, arg = what.partition(":")
     if kind == "example":
@@ -173,8 +184,10 @@ def do_open(s, what: str, name: str | None = None):
             named.parent.mkdir(parents=True, exist_ok=True)
             src = shutil.copyfile(src, named)
         s.open_file(src)
+        fresh_camera(s)
     elif kind == "file":
         s.open_file(REPO / arg)
+        fresh_camera(s)
     elif kind == "new":
         s.new_document()
         s.settle()
@@ -452,6 +465,11 @@ def main(argv=None) -> int:
             super()._launch_browser()
             serve_fonts(self.page)
 
+        # A fresh vite transforms every source file again on the first load, which took over the harness's
+        # 60 s on a busy PC.
+        def _wait_driver(self, timeout: float = 240) -> None:
+            super()._wait_driver(timeout)
+
     frames_root.mkdir(parents=True, exist_ok=True)
     vite, vite_url = start_vite(frames_root / "vite.log")
     try:
@@ -465,8 +483,21 @@ def shoot(live, args, frames_root: Path, CaptureSession, vite_url: str) -> int:
     failed = 0
     for gpu in (False, True):
         batch = [x for x in live if bool(x.get("gpu")) == gpu]
-        if not batch:
-            continue
+        # With other SwiftShader pages running on the PC, a page sometimes stops drawing for good, and only a new
+        # session gets it going again, so what failed is taken once more in one.
+        for attempt in range(2):
+            if not batch:
+                break
+            if attempt:
+                print(f"taking {len(batch)} again in a new session")
+            batch = run_batch(batch, gpu, args, frames_root, CaptureSession, vite_url)
+        failed += len(batch)
+    return failed
+
+
+def run_batch(batch, gpu: bool, args, frames_root: Path, CaptureSession, vite_url: str) -> list:
+    taken = []
+    try:
         with CaptureSession(engine=args.engine, viewport=viewport_of(batch[0]), gpu=gpu, vite_url=vite_url,
                             settle_timeout=args.settle_timeout, repo=REPO) as s:
             for shot in batch:
@@ -474,17 +505,22 @@ def shoot(live, args, frames_root: Path, CaptureSession, vite_url: str) -> int:
                 t = time.monotonic()
                 try:
                     note = take(s, shot, out, frames_root)
+                    taken.append(shot)
                     print(f"took {out} {note} in {time.monotonic() - t:.0f} s")
                 except Exception as e:
-                    failed += 1
                     frames_root.mkdir(parents=True, exist_ok=True)
                     seen = frames_root / f"{name_of(shot)}-failed.png"
                     try:
-                        s.page.screenshot(path=str(seen))
+                        s.page.screenshot(path=str(seen), timeout=15_000)
                     except Exception:
                         seen = None
                     print(f"FAILED {shot['file']}: {e}" + (f", the screen is in {seen}" if seen else ""))
-    return failed
+                    if not s.page.evaluate(DRAWING):
+                        print("the page stopped drawing, the rest wait for a new session")
+                        break
+    except Exception as e:
+        print(f"FAILED the session: {e}")
+    return [x for x in batch if not any(x is y for y in taken)]
 
 
 if __name__ == "__main__":
