@@ -53,13 +53,14 @@ jobs:
           git init -q "$tools"
           git -C "$tools" fetch -q --depth 1 https://github.com/flatpak/flatpak-builder-tools "$BUILDER_TOOLS_COMMIT"
           git -C "$tools" checkout -q FETCH_HEAD
-          python3 -m venv "$RUNNER_TEMP/gen"
-          "$RUNNER_TEMP/gen/bin/pip" install -q aiohttp tomlkit PyYAML "$tools/node"
+          python3.12 -m venv "$RUNNER_TEMP/gen"
+          "$RUNNER_TEMP/gen/bin/pip" install -q --require-hashes -r "$CHECK_DIR/generator-requirements.txt"
 
+          # The node generator runs from the tools checkout, installing it would build it with an unpinned poetry-core.
           py="$RUNNER_TEMP/gen/bin/python"
           "$py" "$tools/cargo/flatpak-cargo-generator.py" src-tauri/Cargo.lock -o "$CHECK_DIR/cargo-sources-app.json"
           "$py" "$tools/cargo/flatpak-cargo-generator.py" Cargo.lock -o "$CHECK_DIR/cargo-sources-root.json"
-          "$RUNNER_TEMP/gen/bin/flatpak-node-generator" npm package-lock.json -o "$CHECK_DIR/node-sources.json"
+          PYTHONPATH="$tools/node" "$py" -m flatpak_node_generator npm package-lock.json -o "$CHECK_DIR/node-sources.json"
           for f in "$CHECK_DIR"/*-sources*.json; do
             echo "$f: $(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))))' "$f") sources"
           done
