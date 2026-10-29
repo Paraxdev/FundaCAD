@@ -1019,9 +1019,13 @@ defineEmits<{ close: [] }>();
   view controls and every dialog draw over an open panel. `panelStack.ts` sets `top`
   and `right` under the view cube and clear of the right cards, and a `max-width` that
   keeps a wide panel clear of the rail, again whenever a panel, a card or `#float-layer`
-  resizes. An open panel stays open across the Model and Render switch, as every
-  inspect panel does, narrowing to fit the smaller stage, so a row of buttons in a
-  panel wraps rather than clips.
+  resizes. When the span beside the rail is under a panel's `min-width`, the column
+  moves to the highest shelf right of the cards that holds it (under History in a
+  narrow Render stage), and only when none does it keeps its `min-width` beside the
+  rail, under the cards. An open panel stays open across the Model and Render switch,
+  as every inspect panel does, narrowing to fit the smaller stage, so a row of buttons
+  in a panel wraps rather than clips. The in-view chips (`.dim-input`, `.sketch-dims`,
+  `.snap-tag`, `.prompt` and the like) draw over a panel they meet.
   The shell is `min-width: 180px`, `padding: var(--s-4)`, `font-size: 12px`.
 
 | Class | Recipe |

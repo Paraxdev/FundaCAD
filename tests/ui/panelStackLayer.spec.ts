@@ -34,19 +34,29 @@ Object.defineProperty(document.documentElement, "clientWidth", { configurable: t
 
 const frame = () => new Promise((r) => requestAnimationFrame(r));
 
-/** The float layer with one right card, ending `right` px from the left of the window. */
-function layer(right: { at: number }) {
+/** A right card `from` px left of the layer's right edge. */
+interface Card {
+  from: number;
+  width: number;
+  bottom: number;
+}
+
+/** The float layer ending `right` px from the left of the window, with its right cards, one by default. */
+function layer(right: { at: number }, cards: Card[] = [{ from: CARD, width: CARD, bottom: 600 }]) {
   const el = document.createElement("div");
   el.id = "float-layer";
   el.getBoundingClientRect = () => ({ left: 0, right: right.at, top: 0, bottom: 900 }) as DOMRect;
   const col = document.createElement("div");
   col.className = "float-right";
-  const card = document.createElement("div");
-  card.getBoundingClientRect = () => ({ left: right.at - CARD, right: right.at, top: 12, bottom: 600 }) as DOMRect;
-  col.append(card);
+  for (const c of cards) {
+    const card = document.createElement("div");
+    card.getBoundingClientRect = () =>
+      ({ left: right.at - c.from, right: right.at - c.from + c.width, top: 12, bottom: c.bottom }) as DOMRect;
+    col.append(card);
+  }
   el.append(col);
   document.body.append(el);
-  return { el, cardLeft: () => right.at - CARD };
+  return { el, cardLeft: () => right.at - Math.max(...cards.map((c) => c.from)) };
 }
 
 /** A tool rail button in the layer whose label ends `right` px from the left of the window. */
@@ -91,7 +101,7 @@ describe("the panel column follows the float layer", () => {
     expect(parseFloat(p.style.right)).toBeGreaterThan(DOCK + CARD);
   });
 
-  it("narrows a panel to the span between the rail and the cards, so it never slides under the rail", async () => {
+  it("narrows a panel to the span between the rail and the cards, so it stays clear of the rail", async () => {
     const right = { at: VIEWPORT };
     const { el: layerEl, cardLeft } = layer(right);
     const RAIL = 500;
@@ -104,6 +114,47 @@ describe("the panel column follows the float layer", () => {
     expect({ right: p.style.right, maxWidth: p.style.maxWidth }).toEqual({
       right: `${VIEWPORT - (cardLeft() - MARGIN)}px`,
       maxWidth: `${cardLeft() - MARGIN - (RAIL + MARGIN)}px`,
+    });
+  });
+
+  it("moves the column to the shelf right of the view controls when the span beside the rail is under the min-width", async () => {
+    const right = { at: VIEWPORT };
+    const view = { from: 340, width: 48, bottom: 600 };
+    const history = { from: 280, width: 266, bottom: 200 };
+    const { el: layerEl, cardLeft } = layer(right, [view, history]);
+    const RAIL = 600;
+    rail(layerEl, RAIL);
+    const p = panel();
+    p.style.minWidth = "180px";
+    panelStack.add("stress", p);
+    right.at = VIEWPORT - DOCK;
+    resized(layerEl);
+    await frame();
+    expect(cardLeft() - MARGIN - (RAIL + MARGIN)).toBeLessThan(180);
+    const shelfLeft = right.at - view.from + view.width + MARGIN;
+    expect({ top: p.style.top, right: p.style.right, maxWidth: p.style.maxWidth }).toEqual({
+      top: `${history.bottom + MARGIN}px`,
+      right: `${VIEWPORT - (right.at - MARGIN)}px`,
+      maxWidth: `${right.at - MARGIN - shelfLeft}px`,
+    });
+  });
+
+  it("keeps the min-width clear of the rail, running under the cards, when no shelf beside them fits it", async () => {
+    const right = { at: VIEWPORT };
+    const { el: layerEl, cardLeft } = layer(right, [{ from: CARD, width: CARD, bottom: 900 }]);
+    const RAIL = 700;
+    const MIN = 180;
+    rail(layerEl, RAIL);
+    const p = panel();
+    p.style.minWidth = `${MIN}px`;
+    panelStack.add("stress", p);
+    right.at = VIEWPORT - DOCK;
+    resized(layerEl);
+    await frame();
+    expect(cardLeft() - MARGIN - (RAIL + MARGIN)).toBeLessThan(MIN);
+    expect({ right: p.style.right, maxWidth: p.style.maxWidth }).toEqual({
+      right: `${VIEWPORT - (RAIL + MARGIN + MIN)}px`,
+      maxWidth: `${MIN}px`,
     });
   });
 

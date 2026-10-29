@@ -113,6 +113,26 @@ function header(el: HTMLElement): number | undefined {
   return Math.ceil(bottom + (parseFloat(cs.paddingBottom) || 0) + (parseFloat(cs.borderBottomWidth) || 0));
 }
 
+/** The column's top and span: left of the right cards, or when that is under `least` wide, the highest shelf right of
+ *  the cards beside it. With neither, `least` wide beside the rail and running under the cards, as the prompt gives. */
+function column(box: Box, least: number): { top: number; free: Box } {
+  const top = stackTop(box);
+  const beside = clearOfCards(box, { top, bottom: box.bottom }, CUBE_MARGIN, 0);
+  if (beside.right - beside.left >= least) return { top, free: beside };
+  const cards = [...document.querySelectorAll(RIGHT_CARDS)].map((c) => c.getBoundingClientRect());
+  const tops = [top, ...cards.map((c) => c.bottom + CUBE_MARGIN)];
+  for (const t of [...new Set(tops)].sort((a, b) => a - b)) {
+    if (t < top || box.bottom - CUBE_MARGIN - t < MIN_HEIGHT) continue;
+    const rail = clearOfCards(box, { top: t, bottom: box.bottom }, CUBE_MARGIN, 0).left;
+    const left = cards
+      .filter((c) => c.right > c.left && c.bottom > t)
+      .reduce((l, c) => Math.max(l, Math.round(c.right + CUBE_MARGIN)), rail);
+    if (box.right - CUBE_MARGIN - left >= least)
+      return { top: t, free: { ...box, left, right: box.right - CUBE_MARGIN } };
+  }
+  return { top, free: clearOfCards(box, { top, bottom: box.bottom }, CUBE_MARGIN, least) };
+}
+
 function place() {
   frame = 0;
   // A panel with its own scroller reports the height it was last capped to, so measure it uncapped.
@@ -120,8 +140,8 @@ function place() {
   const layer = document.getElementById("float-layer");
   const area = (layer ?? document.body).getBoundingClientRect();
   const box: Box = { left: area.left, right: area.right, top: area.top, bottom: area.bottom };
-  const top = stackTop(box);
-  const free = clearOfCards(box, { top, bottom: box.bottom }, CUBE_MARGIN, 0);
+  const least = Math.max(0, ...open.map((p) => parseFloat(getComputedStyle(p.el).minWidth) || 0));
+  const { top, free } = column(box, least);
   // Right anchored and under the float layer, so a panel wider than the span would hide under the rail. Only a
   // panel that is too wide gets the cap, so a panel's own max-width holds otherwise.
   const room = Math.floor(free.right - free.left);

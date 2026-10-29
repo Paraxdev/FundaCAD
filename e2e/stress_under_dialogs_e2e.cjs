@@ -7,6 +7,8 @@
 //      its list; at the old z 1500 the same point landed in the panel.
 //   3. In Render the panel stays open, clear of the view controls and the tool
 //      rail, narrowed to the span between them when it would not fit.
+//   4. On a stage where even its min-width does not fit beside the rail, the
+//      panel moves to the shelf right of the view controls, every control in reach.
 //
 // Usage (from the repo root, with vite + engine running):
 //   SC_TOKEN=<engine token> SC_CHROME=<chrome.exe> [SC_URL=http://localhost:5173/] \
@@ -45,8 +47,12 @@ const check = (name, ok, detail) => {
     await modal.click({ timeout: 10000 }).catch(() => page.keyboard.press("Escape"));
     await page.waitForTimeout(400);
   }
+  // A shot is only a debugging aid, and right after a resize SwiftShader can hold one past its timeout.
   const shot = async (name) => {
-    if (SHOTS) await page.screenshot({ path: path.join(SHOTS, `${name}.png`) });
+    if (!SHOTS) return;
+    await page
+      .screenshot({ path: path.join(SHOTS, `${name}.png`) })
+      .catch((e) => console.log(`  (no ${name} shot, ${e.message.split("\n")[0]})`));
   };
 
   await page.evaluate(async () => {
@@ -198,6 +204,81 @@ const check = (name, ok, detail) => {
       .map((e) => `${e.tagName}.${[...e.classList].join(".")} ${e.scrollWidth} in ${e.clientWidth}`);
   });
   check("the narrowed panel's content still fits its width", spill.length === 0, spill.join(", "));
+
+  console.log("\n4. Stress on a narrow Render stage");
+  const placed = await page.$eval(".measure-panel.stress-panel", (p) => p.style.right);
+  await page.setViewportSize({ width: 1200, height: 800 });
+  // SwiftShader repaints the whole stage after a resize, which can hold the frame that places the panel a while.
+  await page.waitForFunction(
+    (was) => document.querySelector(".measure-panel.stress-panel").style.right !== was,
+    placed,
+    { timeout: 60000 },
+  );
+  await page.waitForTimeout(400);
+  await shot("stress_in_narrow_render");
+  const narrow = await page.evaluate(() => {
+    const p = document.querySelector(".measure-panel.stress-panel");
+    const r = p.getBoundingClientRect();
+    const meets = (b) => b.left < r.right && r.left < b.right && b.top < r.bottom && r.top < b.bottom;
+    const box = (e) => e.getBoundingClientRect();
+    const rail = [
+      ...document.querySelectorAll("#float-layer .tool-rail .rail-btn, #float-layer .tool-rail .rail-group"),
+    ]
+      .map(box)
+      .filter((b) => b.bottom > r.top && b.top < r.bottom);
+    const cards = [...document.querySelectorAll("#float-layer .float-right > *")].map(box);
+    const railRight = Math.max(...rail.map((b) => b.right));
+    const centre = (e) => ({ x: (box(e).left + box(e).right) / 2, y: (box(e).top + box(e).bottom) / 2 });
+    // In view: inside the panel and every box between that clips it, so not scrolled out of a capped panel.
+    const inView = (e) => {
+      const { x, y } = centre(e);
+      for (let a = e.parentElement; a && a !== p.parentElement; a = a.parentElement) {
+        const b = box(a);
+        const clips = a === p || getComputedStyle(a).overflowY !== "visible";
+        if (clips && (x < b.left || x > b.right || y < b.top || y > b.bottom)) return false;
+      }
+      return true;
+    };
+    const controls = [...p.querySelectorAll("button, input, select, [role=switch], [role=radio]")].filter(
+      (e) => box(e).width > 0 && box(e).height > 0 && inView(e),
+    );
+    // Each control whose centre a click cannot reach, because something else draws there.
+    const blocked = controls.filter((e) => {
+      const { x, y } = centre(e);
+      return !document.elementFromPoint(x, y)?.closest(".measure-panel");
+    });
+    return {
+      span: Math.round(Math.min(...cards.map((c) => c.left)) - railRight),
+      min: parseFloat(getComputedStyle(p).minWidth),
+      left: Math.round(r.left),
+      width: Math.round(r.width),
+      railRight: Math.round(railRight),
+      cards: cards.filter(meets).length,
+      groups: [...document.querySelectorAll("#float-layer .float-group")].map(box).filter(meets).length,
+      blocked: blocked.map((e) => e.textContent.trim().slice(0, 16) || e.tagName),
+      controls: controls.length,
+    };
+  });
+  check(
+    "CONTROL: the span beside the rail is under the panel's min-width",
+    narrow.span < narrow.min,
+    JSON.stringify(narrow),
+  );
+  check(
+    "the panel is clear of the tool rail",
+    narrow.left > narrow.railRight,
+    `left ${narrow.left}, rail ${narrow.railRight}`,
+  );
+  check(
+    "and clear of the right cards and view controls",
+    narrow.cards + narrow.groups === 0,
+    `${narrow.cards} cards, ${narrow.groups} groups`,
+  );
+  check(
+    "every panel control is in reach",
+    narrow.controls > 0 && narrow.blocked.length === 0,
+    `${narrow.blocked.length} of ${narrow.controls} ${narrow.blocked.join(", ")}`,
+  );
 
   await browser.close();
   console.log(failures ? `\n${failures} check(s) failed` : "\nall checks passed");
