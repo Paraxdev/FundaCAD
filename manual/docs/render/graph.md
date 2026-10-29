@@ -2,7 +2,7 @@
 
 The node editor builds a surface pattern of your own from small blocks called nodes. It opens along the bottom of the screen, with your part above it as a live preview.
 
-<!-- shot: render-node-editor | node editor with Noise wired to Output -->
+![The node editor with a Noise node wired into Output](../img/render-node-editor.png)
 
 ## Build a graph
 

@@ -76,3 +76,54 @@ steps = [
 show = "A part with several materials in the Render workspace, 1600x1000. Also copied to assets/readme for Flathub."
 alt = "A part with several materials in the Render workspace"
 uses = ["manual/docs/render/materials.md:5"]
+
+[[shot]]
+file = "manual/docs/img/render-node-editor.png"
+size = [1440, 900]
+theme = "fundacad"
+crop = "window"
+park = [1300, 120]
+pause = 1600
+steps = [
+  { open = "example:Wall bracket" },
+  { wait = 800 },
+  { panel = "history", open = false },
+  { panel = "items", open = false },
+  { evaluate = "() => { const s = window.store; s.setBodiesMaterial(s.build.result.bodies.map((b) => b.id), 'm-steel'); }" },
+  { wait = 400 },
+  { click_css = '[data-workspace="render"]' },
+  { wait = 600 },
+  { click_css = '#renderdock [data-tab="material"]' },
+  { wait = 600 },
+  { click_css = '#renderdock .rd-tile[data-material="m-steel"]' },
+  { wait = 600 },
+  { click_css = '#renderdock [data-editgraph]' },
+  { wait = 800 },
+  { click_css = '.ne-bar [data-add="noise"]' },
+  { wait = 400 },
+  { click_css = '.ne-node[data-node-type="noise"] [data-out]' },
+  { click_css = '.ne-node[data-node-type="output"] [data-in$=":bump"]' },
+  { wait = 300 },
+  { click_css = '.ne-node[data-node-type="noise"] [data-out]' },
+  { click_css = '.ne-node[data-node-type="output"] [data-in$=":roughness"]' },
+  { wait = 300 },
+  { evaluate = "() => [...document.querySelectorAll('.ne-bar .rd-chip')].find((b) => b.textContent.trim() === 'Fit')?.click()" },
+  { wait = 800 },
+  { mouse = "down", at = [830, 669], space = "screen" },
+  { mouse = "move", at = [210, 600], space = "screen", steps = 12 },
+  { mouse = "up" },
+  { wait = 300 },
+  { evaluate = "() => [...document.querySelectorAll('.ne-bar .rd-chip')].find((b) => b.textContent.trim() === 'Fit')?.click()" },
+  { wait = 800 },
+  { evaluate = "() => document.querySelector('#renderdock .rd-tile[data-material=\"m-steel\"]').scrollIntoView({ block: 'start' })" },
+  { wait = 600 },
+  { evaluate = "() => (window.viewport.canvas ?? document.querySelector('canvas')).dispatchEvent(new WheelEvent('wheel', { deltaY: 240, clientX: 650, clientY: 300, bubbles: true, cancelable: true }))" },
+  { wait = 800 },
+  { mouse = "down", at = [650, 300], space = "screen", button = "middle" },
+  { mouse = "move", at = [650, 120], space = "screen", steps = 20 },
+  { mouse = "up", button = "middle" },
+  { wait = 600 },
+]
+show = "The node editor along the bottom with a Noise node wired into Output, the part above it."
+alt = "The node editor with a Noise node wired into Output"
+uses = ["manual/docs/render/graph.md:5"]
