@@ -124,12 +124,41 @@ fn high_contrast() -> Option<bool> {
     None
 }
 
-/// A missing tool, a failed call or a missing key all give None.
 #[cfg(unix)]
 fn run(program: &str, args: &[&str]) -> Option<String> {
-    use std::process::{Command, Stdio};
-    let out = Command::new(program).args(args).stdin(Stdio::null()).stderr(Stdio::null()).output().ok()?;
-    out.status.success().then(|| String::from_utf8_lossy(&out.stdout).into_owned())
+    let mut command = std::process::Command::new(program);
+    command.args(args);
+    run_within(command, std::time::Duration::from_secs(2))
+}
+
+/// A missing tool, a failed call, a missing key or no answer within `limit` all give None.
+#[cfg(any(unix, test))]
+pub fn run_within(mut command: std::process::Command, limit: std::time::Duration) -> Option<String> {
+    use std::io::Read;
+    use std::process::Stdio;
+    use std::time::{Duration, Instant};
+    let mut child = command.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn().ok()?;
+    let mut stdout = child.stdout.take()?;
+    let (sent, received) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let mut text = Vec::new();
+        let _ = sent.send(stdout.read_to_end(&mut text).map(|_| text));
+    });
+    let deadline = Instant::now() + limit;
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(10)),
+            _ => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+        }
+    };
+    // A grandchild can hold stdout open after the tool exits, so the read gets only what is left of the limit.
+    let text = received.recv_timeout(deadline.saturating_duration_since(Instant::now())).ok()?.ok()?;
+    status.success().then(|| String::from_utf8_lossy(&text).into_owned())
 }
 
 #[cfg(test)]

@@ -1,4 +1,6 @@
 use super::*;
+use std::process::Command;
+use std::time::{Duration, Instant};
 
 fn never() -> Option<String> {
     panic!("an earlier source already answered")
@@ -59,4 +61,40 @@ fn the_answer_reaches_the_webview_in_camel_case() {
 #[test]
 fn reading_the_os_never_panics() {
     let _ = read();
+}
+
+fn hangs() -> Command {
+    let mut cmd = Command::new(if cfg!(windows) { "ping" } else { "sleep" });
+    if cfg!(windows) {
+        cmd.args(["-n", "6", "127.0.0.1"]);
+    } else {
+        cmd.arg("5");
+    }
+    cmd
+}
+
+fn shell(script: &str) -> Command {
+    let (sh, flag) = if cfg!(windows) { ("cmd", "/C") } else { ("sh", "-c") };
+    let mut cmd = Command::new(sh);
+    cmd.args([flag, script]);
+    cmd
+}
+
+#[test]
+fn a_tool_that_hangs_is_given_up_on_at_the_limit() {
+    let started = Instant::now();
+    assert_eq!(run_within(hangs(), Duration::from_millis(300)), None);
+    assert!(started.elapsed() < Duration::from_secs(3), "waited {:?}", started.elapsed());
+}
+
+#[test]
+fn a_tool_that_answers_in_time_gives_its_whole_output() {
+    let newline = if cfg!(windows) { "\r\n" } else { "\n" };
+    assert_eq!(run_within(shell("echo true"), Duration::from_secs(10)), Some(format!("true{newline}")));
+}
+
+#[test]
+fn a_tool_that_fails_or_is_missing_gives_nothing() {
+    assert_eq!(run_within(shell("exit 1"), Duration::from_secs(10)), None);
+    assert_eq!(run_within(Command::new("fundacad-no-such-tool"), Duration::from_secs(10)), None);
 }
