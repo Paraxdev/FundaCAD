@@ -190,3 +190,20 @@ fn a_vertex_is_made_where_the_curves_at_it_end_together() {
     let first_edge_end = (2, 0, vec!["#454=VERTEX_POINT('',#25);".to_string()]);
     assert_eq!(made, vec![first_edge_end; 16]);
 }
+
+#[test]
+fn a_vertex_is_not_made_on_a_curve_end_nothing_else_vouches_for() {
+    let file = variant("both_missing.step", |t| {
+        missing_vertex(t)
+            .replace("#22 = VERTEX_POINT('',#23);", "#22 = CARTESIAN_POINT('',(0.,0.,0.));")
+            .replace("#27 = CARTESIAN_POINT('',(0.,0.,0.));", "#27 = CARTESIAN_POINT('',(-18.,0.,0.));")
+    });
+    let scan = step_refs::scan(&file).unwrap();
+    assert_eq!(scan.repaired.as_ref().map_or(0, |r| r.fixed), 0);
+    assert_eq!(
+        scan.note().unwrap(),
+        "4 edges of this STEP file named another entity where a vertex belongs, an exporter fault that hides every \
+         face of the shell model around it. 4 could not be repaired, so that shell model is still left out with all \
+         its faces."
+    );
+}

@@ -170,8 +170,8 @@ pub fn scan(path: &Path) -> Result<Scan, String> {
     }
 
     // A vertex id the file never defines as a vertex (SolidWorks gave it to an edge) gets a new VERTEX_POINT on the
-    // end control point of a clamped B-spline edge that uses it, only where every such edge at it ends at one place
-    // and runs from there to its other vertex, so an edge on part of a curve is left alone.
+    // end control point of the clamped B-spline edges that use it, only where they all end at one place, none misses
+    // a known vertex at its other end, and a second curve or such a vertex vouches for the place.
     let missing: HashSet<Id> = ends.values().flat_map(|&(s, e)| [s, e]).filter(|v| !is_vertex(v)).collect();
     let mut point_of: HashMap<Id, Id> = HashMap::new();
     if !missing.is_empty() {
@@ -195,19 +195,20 @@ pub fn scan(path: &Path) -> Result<Scan, String> {
         }
         let at = points(path, wanted)?;
         let same = |a: Id, b: Id| a == b || at.get(&a).zip(at.get(&b)).is_some_and(|(p, q)| close(p, q));
-        let mut place: BTreeMap<Id, Option<Id>> = BTreeMap::new();
+        let mut place: BTreeMap<Id, Option<(Id, bool)>> = BTreeMap::new();
         for &(v, curve, at_start, other) in &uses {
             let Some(&(first, last)) = curves.get(&curve) else { continue };
             let (here, there) = if at_start { (first, last) } else { (last, first) };
-            let whole = vertex_at.get(&other).is_none_or(|&p| same(p, there));
-            let slot = place.entry(v).or_insert(Some(here));
-            if !whole || !slot.is_some_and(|p| same(p, here)) {
-                *slot = None;
-            }
+            let whole = vertex_at.get(&other).map(|&p| same(p, there));
+            let next = match place.get(&v) {
+                None => Some((here, whole == Some(true))),
+                Some(&seen) => seen.filter(|&(p, _)| same(p, here)).map(|(p, _)| (p, true)),
+            };
+            place.insert(v, next.filter(|_| whole != Some(false)));
         }
         let mut made: HashMap<Id, Id> = HashMap::new();
         for (v, point) in place {
-            if let Some(point) = point {
+            if let Some((point, true)) = point {
                 last_id += 1;
                 made.insert(v, last_id);
                 point_of.insert(last_id, point);
