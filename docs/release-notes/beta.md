@@ -3,27 +3,27 @@
 ## What's new since the last beta
 
 **Security**
-- A zip names each file in two places. Opening a .funda file or installing a plugin now refuses a zip whose two names disagree, a trick that can hide a file from a check.
-- The zip, Wasmtime and rustls libraries inside the app move past their published security fixes.
+- Opening a .funda file or installing a plugin is safer, a file that tries to hide part of its content is refused.
+- Updated dependencies to newer versions to fix vulnerabilities.
 
 **Big models**
-- A big STEP with broken vertices loads whole, with the vertices repaired, and a body with tens of thousands of faces is meshed at a detail the view can draw.
-- Box select on a huge model repaints only what changed, so the box follows the pointer smoothly.
-- A fillet or chamfer on thousands of edges opens much faster. Past 3,000 edges it asks first and names the count, and past 5,000 it refuses and says why, since a preview that big runs for minutes and can use up all free memory.
+- A big STEP assembly with broken parts is now repaired and opens.
+- Box select on a huge model follows the pointer smoothly.
+- A fillet or chamfer on thousands of edges opens much faster, and a very large one asks first.
 
 **Modeling**
-- In the value box, Enter or Space on a button presses that button, so Cancel no longer commits the tool. A refused value says why.
-- On a narrow window, each floating panel takes the space it fits, so Parameters and Stress stay open beside the side panel instead of folding under History.
+- In the value box, Cancel no longer applies the tool, and a refused value says why.
+- On a narrow window, Parameters and Stress stay open beside the side panel.
 
 **Accessibility**
-- Screen readers hear prompts, selections, build results, errors, saves and exports through one announcer. An error that keeps repeating is said once, and a prompt is cleared once it has been heard.
-- Every control has a name of its own, a unit picker is named after its field, such as Width unit, and History steps and tree rows say failed, suppressed or rolled back in words.
-- Dialogs, Home, the command palette and Versions keep the app behind them out of reach, and give focus back when they close.
-- In Preferences, Accessibility, Animations can follow the system, Announcements sets how much a screen reader hears, and Screen reader preset sets it to Verbose in one click.
+- Screen readers hear prompts, selections, build results, errors, saves and exports.
+- Every control has its own name, and History and the tree say in words when a step failed or is turned off.
+- Dialogs keep the keyboard inside and give focus back when they close.
+- New settings in Preferences, Accessibility: Animations, Announcements and a Screen reader preset.
 
 **AI assistants and help**
-- An AI assistant reads a big model in a fraction of the tokens, since long replies fold alike rows and come a page at a time.
-- The manual at fundacad.dev matches the app again, with shorter pages and every picture retaken.
+- AI assistants read big models with far fewer tokens.
+- The manual matches the app again, with shorter pages and newer screenshots.
 
 ## Known limits
 
