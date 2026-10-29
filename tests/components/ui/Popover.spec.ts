@@ -3,6 +3,7 @@ import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import { defineComponent, h, nextTick, ref } from "vue";
 
 import Popover from "../../../src/components/ui/Popover.vue";
+import Select from "../../../src/components/ui/Select.vue";
 import Menu from "../../../src/components/ui/Menu.vue";
 import MenuItem from "../../../src/components/ui/MenuItem.vue";
 import { escapeClaimed } from "../../../src/ui/escapeClaim";
@@ -24,13 +25,17 @@ function esc(): KeyboardEvent {
   return e;
 }
 
-async function render(props: Record<string, unknown> = {}, focusOpener = true) {
+async function render(
+  props: Record<string, unknown> = {},
+  focusOpener = true,
+  openerAttrs: Record<string, string> = {},
+) {
   const open = ref(false);
   const Host = defineComponent({
     setup() {
       const opener = ref<HTMLButtonElement | null>(null);
       return () => [
-        h("button", { ref: opener, class: "opener" }, "Pick"),
+        h("button", { ref: opener, class: "opener", ...openerAttrs }, "Pick"),
         open.value
           ? h(Popover, { anchor: opener.value, ...props, onClose: () => (open.value = false) }, () => [
               h("p", "Pick one"),
@@ -202,6 +207,32 @@ describe("Popover", () => {
       document.body.innerHTML = "";
       await render({ label: "Pick" });
       expect(named(warn)).toBe(0);
+      warn.mockRestore();
+    });
+
+    it("a card opened from a combobox or a listbox popup is part of its opener and needs no name", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      await render({}, true, { role: "combobox" });
+      document.body.innerHTML = "";
+      await render({}, true, { "aria-haspopup": "listbox" });
+      expect(named(warn)).toBe(0);
+      expect($(".float-popover")!.hasAttribute("role")).toBe(false);
+      document.body.innerHTML = "";
+      await render({}, true, { "aria-haspopup": "dialog" });
+      expect(named(warn)).toBe(1);
+      warn.mockRestore();
+    });
+
+    it("an open Select's list card does not warn", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const options = [
+        { value: "a", label: "Apple" },
+        { value: "b", label: "Banana" },
+      ];
+      const w = mount(Select<string>, { props: { modelValue: "a", options, label: "Fruit" }, attachTo: document.body });
+      await w.get("button").trigger("click");
+      await settle();
+      expect([!!$("[role=listbox]"), named(warn)]).toEqual([true, 0]);
       warn.mockRestore();
     });
   });
