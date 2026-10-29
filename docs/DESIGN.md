@@ -560,6 +560,10 @@ pack, falls back to forge): 24 by 24 viewBox, about 20 by 20 live area,
 `--text-dim` or `--text-mute`, hover `--text`, active `--accent-hot`. Never use
 a Unicode glyph or emoji as an icon.
 
+An `Icon` is hidden from screen readers (`aria-hidden="true"`, `focusable="false"`) unless it has a `label`, which
+makes it `role="img"` named by that label. Give a label only to an icon that says something no text beside it does,
+such as a status icon alone in a row; an icon inside a named control never takes one.
+
 Names are the file names, in camelCase. Look in the folder before you pick
 one; a name that is not there renders nothing. The common actions:
 
@@ -632,6 +636,12 @@ nothing in the set fits, extend the closest base component, with a spec in `test
 ### The base set
 
 The props beyond `tip`, `keys`, `disabled` and `disabledReason`, which every control takes.
+
+`Select`, `ChoiceList`, `TextField`, `NumberField`, `Slider`, `Checkbox`, `Segmented` and `Tabs` each need a name:
+`label`, the words, or `labelledby`, the id of a visible label (inside a `FieldRow`, the `labelId` its slot hands
+over), never both. Their props take the `Named` union of `components/ui/useName.ts`, so `vue-tsc` refuses a call with
+neither, and in dev a control given neither, nor an `aria-label` or `aria-labelledby` attribute, warns
+"<Kind> has no name". A `Checkbox` may take its slot text instead. `tip` is the tooltip only, never the name.
 
 | Component | For | Props that matter | States |
 |---|---|---|---|
@@ -953,8 +963,10 @@ no control), and `returnFocus` gives it back on close.
 
 ### 7.11 Tooltips
 
-There is no tooltip component. Use the native `title` plus an `aria-label`
-with the same text, and put the shortcut in brackets, written as in
+There is no tooltip component. A tooltip is the native `title`, and a `title` is a bonus for the mouse only:
+VoiceOver and Orca mostly skip it, and a keyboard, touch or switch user never sees it. So a `title` never carries the
+only name, a state or an error. An icon only control takes an `aria-label` with the same text as its `title`, and
+the shortcut goes in brackets, written as in
 [9](#9-voice-and-wording): `title="Reset camera (Shift+Home)"`. A base control
 writes both from `tip` and `keys`: `<IconButton icon="history" tip="History" keys="Ctrl+Alt+H" />`. A `Button`
 with a word keeps the word as its name and takes the tip as its `title` only, and while a control is disabled its
@@ -962,6 +974,13 @@ with a word keeps the word as its name and takes the tip as its `title` only, an
 (`src/input/platform.ts`), which writes the Command and Option glyphs on a Mac:
 `:title="fmtKeys('History (Ctrl+Alt+H)')"`. Do not invent a tooltip popover.
 On the model, where a hand cannot spare a hover, show a real element instead.
+
+State goes where every reader gets it: in the name, in `aria-describedby` pointing at text, or in a `.sr-only` span
+(`_utilities.scss`) beside the visible text, with the visual mark `aria-hidden`. The title bar's unsaved star is
+`aria-hidden` and followed by `<span class="sr-only"> Unsaved changes</span>`, a History chip says its file, its
+error or note, switched off or suppressed and rolled back in an `.sr-only` span after its name, a failed tree row
+adds ", failed", and a show or hide eye says its state through `aria-pressed`. A detail that only adds to a name,
+such as a home card's full path, goes in `aria-describedby` on a `hidden` span, and its `title` can stay.
 
 ### 7.12 Plugin UI
 
@@ -1296,8 +1315,10 @@ dialog has `role="dialog"` and a name: `aria-labelledby` pointing at its
 visible title (`Dialog.vue`, `ModalFrame.vue` over it and the chooser in
 `ModalHost.vue`, through `useId()`), or an `aria-label` when it has no title
 (`CommandPalette.vue`, `HomeScreen.vue`, `ConsolePanel.vue`,
-`TargetEditPanel.vue`). A modal one also has `aria-modal="true"`. Decorative
-icons get `aria-hidden`.
+`TargetEditPanel.vue`). A modal one also has `aria-modal="true"`. An `Icon`
+is `aria-hidden` unless it has a `label` ([6.4](#64-icons)). Every base control has a name
+([The base set](#the-base-set)), and a state, an error or a name never lives in a `title` alone
+([7.11](#711-tooltips)).
 
 Keyboard: every control is reachable and shows the focus outline. Single letter
 shortcuts are ignored while typing (`isEditableTarget`, `ui/focus.ts`). Every
@@ -1347,6 +1368,7 @@ Not handled yet, so do not rely on them: `prefers-contrast`, `forced-colors`,
 | Check with blur off | Rely on blur to make text legible |
 | Use `--t-fast`, `--t-med` and `--ease` | Write `0.14s ease-out` |
 | Write `title` plus `aria-label`, shortcuts as Ctrl+Alt+H through `fmtKeys()` | Build a custom tooltip, or write "Ctrl Alt H" |
+| Name every base control with `label` or `labelledby`, and put a state in the name, `aria-describedby` or a `.sr-only` span | Leave a state, an error or the only name in a `title`, or label an `Icon` inside a named control |
 | Build a readout from `Panel` and the `.measure-*` classes | Invent `.my-panel-head` and `.my-row` with their own padding |
 | Leave Escape to the tool that owns the panel | Call `claimEscape()` from a tool panel |
 | Use `--error` | Use `--danger` or a hard coded red |
@@ -1378,7 +1400,8 @@ Run all of it. Paste the screenshots into the review.
    about 40px and nothing moves.
 8. **Keyboard.** Tab through it: every control shows the accent outline, Escape does what
    [11](#11-accessibility) says for this kind of surface, Enter does the
-   primary thing. A dialog has `role="dialog"` and a name.
+   primary thing. A dialog has `role="dialog"` and a name. Every control has a name, and no state lives only in a
+   `title` ([7.11](#711-tooltips)).
 9. **Motion.** Entrances use `pop-in` or `glass-in`; with Animations off
    (Preferences, Accessibility) everything jumps to its end state.
 10. **Wording.** Every string passes [9](#9-voice-and-wording), and

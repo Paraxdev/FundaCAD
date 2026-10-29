@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, useTemplateRef, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, useId, useTemplateRef, watch } from "vue";
 import Icon from "../shell/Icon.vue";
 import Button from "../ui/Button.vue";
 import IconButton from "../ui/IconButton.vue";
@@ -22,6 +22,7 @@ const badge = computed(() => {
   return props.unreadable ? "Could not be read" : null;
 });
 
+const pathId = useId();
 const card = useTemplateRef<InstanceType<typeof Button>>("card");
 const root = (): HTMLElement | null => card.value?.$el ?? null;
 const pic = ref<string | null>(null);
@@ -71,6 +72,7 @@ onUnmounted(() => {
       class="home-card"
       :class="{ missing: entry.missing }"
       :title="entry.path"
+      :aria-describedby="pathId"
       @click="emit('open')"
       @contextmenu.prevent.stop="emit('menu', $event)"
     >
@@ -83,6 +85,7 @@ onUnmounted(() => {
       <span class="home-card-folder" :title="folderPath(entry.path)">{{ entry.folder }}</span>
       <span class="home-card-time">{{ when }}</span>
     </Button>
+    <span :id="pathId" hidden>{{ entry.path }}</span>
     <IconButton
       v-if="!entry.missing"
       class="home-card-versions"
