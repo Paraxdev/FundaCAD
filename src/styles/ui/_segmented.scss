@@ -135,3 +135,39 @@
 .ui-segmented-chips.is-disabled .ui-segment:not(.is-selected):hover {
   background: var(--float-chip-bg);
 }
+
+.ui-segmented-vertical {
+  flex-direction: column;
+}
+.ui-segmented-lg {
+  font-size: 12.5px;
+}
+.ui-segmented-lg .ui-segment {
+  height: 40px;
+}
+.ui-segmented-icon.ui-segmented-lg .ui-segment {
+  width: 40px;
+}
+
+// The viewport icon tiles of IconButton lg, as one radiogroup in a .float-group.
+.ui-segmented-tile {
+  gap: 2px;
+}
+.ui-segmented-tile .ui-segment {
+  flex: none;
+  border-radius: calc(var(--float-radius) - 4px);
+  transition:
+    background var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease),
+    transform var(--t-fast) var(--ease);
+}
+.ui-segmented-tile .ui-segment:hover:not(.is-disabled) {
+  background: var(--raised);
+}
+.ui-segmented-tile .ui-segment:active:not(.is-disabled) {
+  transform: scale(0.94);
+}
+.ui-segmented-tile .ui-segment.is-selected {
+  background: linear-gradient(var(--accent-wash), var(--accent-wash)), var(--float-tile-bg);
+  color: var(--accent-hot);
+}

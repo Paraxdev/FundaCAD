@@ -196,3 +196,51 @@ describe("ViewportControls popover openers", () => {
     expect([card()?.getAttribute("aria-label"), card()?.contains(document.activeElement)]).toEqual(["Views", false]);
   });
 });
+
+async function press(key: string) {
+  const e = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });
+  (document.activeElement ?? document.body).dispatchEvent(e);
+  await flushPromises();
+}
+const focusedName = () => document.activeElement?.getAttribute("aria-label") ?? document.activeElement?.textContent;
+
+describe("ViewportControls View mode and toolbar", () => {
+  it("shows View mode as one radiogroup whose arrows only move focus, a click picks", async () => {
+    const { w, handleAction } = await render(TIER);
+    const group = w.get('[role="radiogroup"][aria-label="View mode"]');
+    const radios = group.findAll('[role="radio"]');
+    expect(
+      radios.map((r) => [r.attributes("data-view-mode"), r.attributes("aria-checked"), r.attributes("tabindex")]),
+    ).toEqual([
+      ["matcap", "false", "-1"],
+      ["realtime", "true", "0"],
+      ["pathtraced", "false", "-1"],
+    ]);
+    expect(radios.map((r) => r.attributes("aria-pressed"))).toEqual([undefined, undefined, undefined]);
+    (radios[1]!.element as HTMLElement).focus();
+    await press("ArrowDown");
+    expect([focusedName(), handleAction.mock.calls]).toEqual(["Path traced (Z)", []]);
+    await radios[2]!.trigger("click");
+    expect(handleAction.mock.calls).toEqual([["viewmode-pathtraced"]]);
+  });
+
+  it("makes the controls column one vertical toolbar whose arrows step over View mode", async () => {
+    const { w } = await render(TIER);
+    const bar = w.get('[role="toolbar"]');
+    expect([bar.attributes("aria-label"), bar.attributes("aria-orientation"), bar.attributes("id")]).toEqual([
+      "View controls",
+      "vertical",
+      "viewcontrols",
+    ]);
+    const own = bar.findAll("button").filter((b) => !b.element.closest('[role="radiogroup"]'));
+    expect(own.map((b) => b.attributes("tabindex")).filter((t) => t === "0")).toEqual(["0"]);
+    (w.get('[aria-label="Reset camera (Shift+Home)"]').element as HTMLElement).focus();
+    await press("ArrowDown");
+    expect(focusedName()).toBe("Realtime (Z)");
+    await press("ArrowDown");
+    await press("ArrowDown");
+    expect(focusedName()).toBe("Display");
+    await press("ArrowUp");
+    expect(focusedName()).toBe("Realtime (Z)");
+  });
+});

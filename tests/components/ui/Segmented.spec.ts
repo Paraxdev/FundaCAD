@@ -26,9 +26,11 @@ async function render(props: {
   modelValue: V;
   iconOnly?: boolean;
   disabled?: boolean;
-  size?: "sm";
+  size?: "sm" | "lg";
+  variant?: "tile";
   orientation?: "horizontal" | "vertical";
   activation?: "auto" | "manual";
+  wrap?: boolean;
 }) {
   const w = mount(Segmented<V>, {
     props: { label: "Units", ...props, "onUpdate:modelValue": (v: V) => w.setProps({ modelValue: v }) },
@@ -227,5 +229,33 @@ describe("Segmented", () => {
     await press("ArrowUp");
     await press("ArrowUp");
     expect([focused(), emitted(w)]).toEqual(["ft", ["cm", "mm", "ft"]]);
+  });
+  it("without wrap leaves an arrow at either end to its parent, and keeps the arrows inside", async () => {
+    const w = await render({ options: units(), modelValue: "mm", orientation: "vertical", wrap: false });
+    (radios(w)[0]!.element as HTMLElement).focus();
+    expect(await press("ArrowUp")).toBe(false);
+    expect(await press("ArrowDown")).toBe(true);
+    await press("End");
+    expect([focused(), await press("ArrowDown"), focused()]).toEqual(["ft", false, "ft"]);
+    expect(await press("Home")).toBe(true);
+  });
+
+  it("lays a vertical large tile group out as a column of viewport tiles", async () => {
+    const opts = units().map((o) => ({ ...o, icon: "view-iso" }));
+    const w = await render({
+      options: opts,
+      modelValue: "mm",
+      iconOnly: true,
+      size: "lg",
+      variant: "tile",
+      orientation: "vertical",
+    });
+    const g = w.get('[role="radiogroup"]');
+    expect(["ui-segmented-lg", "ui-segmented-tile", "ui-segmented-vertical"].filter((c) => g.classes(c))).toEqual([
+      "ui-segmented-lg",
+      "ui-segmented-tile",
+      "ui-segmented-vertical",
+    ]);
+    expect(w.get(".ui-segment svg").attributes("width")).toBe("20");
   });
 });

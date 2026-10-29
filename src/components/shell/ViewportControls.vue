@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, useTemplateRef } from "vue";
+import { computed, onMounted, onUnmounted, ref, useTemplateRef, type ComponentPublicInstance } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { useBuildValue } from "../../app/useDoc";
 import { useUiStore } from "../../stores/ui";
@@ -28,7 +28,8 @@ import type { ProjectionMode } from "../../viewport/cameras";
 import IconButton from "../ui/IconButton.vue";
 import Button from "../ui/Button.vue";
 import ListRow from "../ui/ListRow.vue";
-import Segmented from "../ui/Segmented.vue";
+import Segmented, { type SegmentedOption } from "../ui/Segmented.vue";
+import Toolbar from "../ui/Toolbar.vue";
 import Icon from "./Icon.vue";
 import VersionsPanel from "./VersionsPanel.vue";
 import Popover from "../ui/Popover.vue";
@@ -43,7 +44,8 @@ const shell = useShellStore();
 const dialogs = useDialogStore();
 const sketchPalette = useSketchPaletteStore();
 
-const root = useTemplateRef<HTMLElement>("root");
+const bar = useTemplateRef<ComponentPublicInstance>("bar");
+const rootEl = () => (bar.value?.$el as HTMLElement | undefined) ?? null;
 const anchors = new Map<string, HTMLElement>();
 const anchorOf = (id: string) => anchors.get(id) ?? null;
 function open(id: string, ev: MouseEvent) {
@@ -56,7 +58,7 @@ const isOpen = (id: string) => shell.popover === `vc:${id}`;
 // edge the floating cards take (this column, and the history or palette beside it).
 let ro: ResizeObserver | null = null;
 function reportInset() {
-  const el = root.value?.parentElement ?? root.value;
+  const el = rootEl()?.parentElement ?? rootEl();
   if (!el) return;
   const canvas = engine.canvas.getBoundingClientRect();
   const r = el.getBoundingClientRect();
@@ -64,9 +66,9 @@ function reportInset() {
 }
 onMounted(() => {
   ro = new ResizeObserver(reportInset);
-  const side = root.value?.parentElement;
-  if (side) ro.observe(side);
-  if (root.value) ro.observe(root.value);
+  const root = rootEl();
+  if (root?.parentElement) ro.observe(root.parentElement);
+  if (root) ro.observe(root);
   reportInset();
 });
 onUnmounted(() => {
@@ -193,6 +195,17 @@ const viewModes = computed(() =>
     return { ...v, disabled: block !== null, softBlock: block?.reason === "perf", title };
   }),
 );
+const viewModeOptions = computed<SegmentedOption<ViewMode>[]>(() =>
+  viewModes.value.map((v) => ({
+    value: v.id,
+    label: v.label,
+    icon: v.icon,
+    tip: v.title,
+    disabled: v.disabled,
+    clickable: v.softBlock,
+    attrs: { "data-view-mode": v.id },
+  })),
+);
 const viewModeChoices = computed(() =>
   viewModes.value.map((v) => ({
     value: v.id,
@@ -242,7 +255,7 @@ async function screenshot() {
 </script>
 
 <template>
-  <div id="viewcontrols" ref="root" class="float-column">
+  <Toolbar id="viewcontrols" ref="bar" class="float-column" label="View controls" orientation="vertical">
     <div v-if="ui.lowPerformance && !ui.lowPerformanceDismissed" class="float-group perf-warn-group">
       <IconButton
         icon="warning"
@@ -298,19 +311,20 @@ async function screenshot() {
       />
       <IconButton icon="view-reset" tip="Reset camera" keys="Shift+Home" @click="engine.handleAction('reset-camera')" />
     </div>
-    <div class="float-group view-modes" role="group" aria-label="View mode">
-      <IconButton
-        v-for="v in viewModes"
-        :key="v.id"
-        :icon="v.icon"
-        :tip="v.title"
-        :active="ui.viewMode === v.id"
-        :disabled="v.disabled"
-        :clickable="v.softBlock"
-        :data-view-mode="v.id"
-        @click="pickViewMode(v.id)"
-      />
-    </div>
+    <!-- Manual: arrowing onto Path traced must not start a trace, and no wrap lets the arrows go on along the column. -->
+    <Segmented
+      class="float-group view-modes"
+      label="View mode"
+      :options="viewModeOptions"
+      :model-value="ui.viewMode"
+      size="lg"
+      variant="tile"
+      icon-only
+      orientation="vertical"
+      activation="manual"
+      :wrap="false"
+      @update:model-value="pickViewMode"
+    />
     <div class="float-group">
       <IconButton
         icon="shaded"
@@ -569,5 +583,5 @@ async function screenshot() {
         @update:model-value="runAndRefresh('component-colors')"
       />
     </Popover>
-  </div>
+  </Toolbar>
 </template>

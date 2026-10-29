@@ -19,5 +19,6 @@
   - button "Modify"
   - button "Construct"
   - button "Inspect"
-- group "View mode"
+- toolbar "View controls":
+  - radiogroup "View mode"
 - region "History"

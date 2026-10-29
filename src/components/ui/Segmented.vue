@@ -4,7 +4,7 @@ import Icon from "../shell/Icon.vue";
 import { fmtKeys } from "../../input/platform";
 import { useDisabled } from "./useDisabled";
 import { useName, type Named } from "./useName";
-import { useRovingFocus, type RovingOrientation } from "./useRovingFocus";
+import { rovingIndex, useRovingFocus, type RovingOrientation } from "./useRovingFocus";
 
 export interface SegmentedOption<V> {
   value: V;
@@ -24,18 +24,29 @@ const props = withDefaults(
     {
       modelValue: T;
       options: readonly SegmentedOption<T>[];
-      size?: "sm" | "md";
-      /** `chips` is the Render dock look: separate chips instead of one joined bar. */
-      variant?: "bar" | "chips";
+      /** lg is a 40px viewport tile. */
+      size?: "sm" | "md" | "lg";
+      /** `chips` is the Render dock look: separate chips instead of one joined bar. `tile` is the viewport icon tiles. */
+      variant?: "bar" | "chips" | "tile";
       iconOnly?: boolean;
       disabled?: boolean;
       disabledReason?: string | undefined;
       orientation?: RovingOrientation;
       /** `manual`: the arrows only move focus and Space, Enter or a click picks, for a switch that loads something heavy. */
       activation?: "auto" | "manual";
+      /** false: an arrow at either end is left to the parent, so a Toolbar around the group moves on. */
+      wrap?: boolean;
     } & Named
   >(),
-  { size: "md", variant: "bar", iconOnly: false, disabled: false, orientation: "horizontal", activation: "auto" },
+  {
+    size: "md",
+    variant: "bar",
+    iconOnly: false,
+    disabled: false,
+    orientation: "horizontal",
+    activation: "auto",
+    wrap: true,
+  },
 );
 const emit = defineEmits<{ "update:modelValue": [T] }>();
 defineSlots<{ option?(p: { option: SegmentedOption<T>; selected: boolean }): unknown }>();
@@ -58,17 +69,28 @@ const r = useRovingFocus({
   active: selected,
   container: root,
   orientation: () => props.orientation,
+  wrap: () => props.wrap,
   onMove: (i) => {
     if (props.activation === "auto") pick(i);
   },
 });
+const ARROWS = /^Arrow(Up|Down|Left|Right)$/;
+function atEnd(e: KeyboardEvent): boolean {
+  if (props.wrap || !ARROWS.test(e.key)) return false;
+  const els = [...(root.value?.querySelectorAll("[data-roving]") ?? [])];
+  const from = els.findIndex((el) => el.contains(e.target as Node));
+  const off = props.options.map(blocked);
+  return from >= 0 && rovingIndex(e.key, from, off, { orientation: props.orientation, wrap: false }) === from;
+}
 const onKeydown = (e: KeyboardEvent) => {
-  if (!props.disabled) r.onKeydown(e);
+  if (!props.disabled && !atEnd(e)) r.onKeydown(e);
 };
 // Tab back into a manual group lands on the checked option, not on one the arrows left focus on.
 const onFocusout = (e: FocusEvent) => {
   if (props.activation === "manual" && !root.value?.contains(e.relatedTarget as Node | null)) r.onFocus(-1);
 };
+
+const ICON_SIZE = { sm: 14, md: 16, lg: 20 } as const;
 
 const tipOf = (o: SegmentedOption<T>) => {
   const name = o.tip ?? (props.iconOnly ? o.label : undefined);
@@ -81,7 +103,11 @@ const tipOf = (o: SegmentedOption<T>) => {
     ref="root"
     role="radiogroup"
     class="ui-segmented"
-    :class="[`ui-segmented-${size}`, `ui-segmented-${variant}`, { 'ui-segmented-icon': iconOnly }]"
+    :class="[
+      `ui-segmented-${size}`,
+      `ui-segmented-${variant}`,
+      { 'ui-segmented-icon': iconOnly, 'ui-segmented-vertical': orientation === 'vertical' },
+    ]"
     v-bind="{ ...d.bind.value, ...name }"
     :title="d.title(undefined)"
     @keydown="onKeydown"
@@ -105,7 +131,7 @@ const tipOf = (o: SegmentedOption<T>) => {
       @click="pick(i)"
     >
       <slot name="option" :option="o" :selected="i === selected">
-        <Icon v-if="o.icon" :name="o.icon" :size="size === 'sm' ? 14 : 16" />
+        <Icon v-if="o.icon" :name="o.icon" :size="ICON_SIZE[size]" />
         <span v-if="o.label && !iconOnly" class="ui-segment-label">{{ o.label }}</span>
       </slot>
     </button>
