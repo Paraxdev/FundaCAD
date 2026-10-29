@@ -63,9 +63,9 @@ describe("the generator venv of the source check", () => {
 describe("the source check job", () => {
   // The cold build fills about 7 GB and the runner has many times that free, so no step frees disk space first.
   it("runs these steps in order", () => {
-    const steps = workflow.split(/\r?\n/).flatMap((l) => /^ {6}- (?:name|uses): (.*)$/.exec(l)?.[1] ?? []);
+    const steps = workflow.split(/\r?\n/).flatMap((l) => /^ {6}- (?:name|uses): (.*?)(?:@\S+.*)?$/.exec(l)?.[1] ?? []);
     expect(steps).toEqual([
-      "actions/checkout@v4",
+      "actions/checkout",
       "Install flatpak-builder",
       "Generate the cargo and npm sources",
       "Restore the downloaded sources",

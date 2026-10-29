@@ -29,7 +29,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 240
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Install flatpak-builder
         shell: bash
@@ -63,7 +63,7 @@ jobs:
       # Only the downloads are cached, every build starts from nothing.
       - name: Restore the downloaded sources
         id: downloads
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ${{ runner.temp }}/fb-state/downloads
           key: flatpak-source-downloads-${{ hashFiles('Cargo.lock', 'src-tauri/Cargo.lock', 'package-lock.json', 'packaging/flatpak/source-check/fundacad-source-check.yml') }}
@@ -84,7 +84,7 @@ jobs:
 
       - name: Save the downloaded sources
         if: steps.downloads.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ${{ runner.temp }}/fb-state/downloads
           key: ${{ steps.downloads.outputs.cache-primary-key }}
@@ -120,7 +120,7 @@ jobs:
 
       - name: Upload the flatpak-builder log
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: flatpak-source-log
           retention-days: 7
