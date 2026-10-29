@@ -25,6 +25,12 @@ LARGE_SHORT = (
         "the transport buttons are 24 px wide with 2 px gaps, a wider area would cover the next one",
     ),
     (
+        "div.timeline-track > div.timeline-item > div.timeline-node",
+        1,
+        29,
+        "the History strip scrolls, so it clips a grown hit area to the step's own height",
+    ),
+    (
         "div.feature-row.tree-child > input",
         1,
         24,
