@@ -117,14 +117,36 @@ describe("ProfileChip", () => {
     expect(slider().getAttribute("aria-label")).toBe("Profile");
     expect(slider().getAttribute("aria-valuetext")).toBe("0, circular");
     key(slider(), "ArrowRight");
-    expect(chip.profile).toBeCloseTo(0.025);
+    expect(chip.profile).toBe(0.024);
     expect(onChange).toHaveBeenLastCalledWith(chip.profile);
-    expect(slider().getAttribute("aria-valuetext")).toBe("+0.025, fuller");
+    expect(slider().getAttribute("aria-valuetext")).toBe("+0.024, fuller");
     key(slider(), "Home");
     expect(chip.profile).toBe(-0.99);
     expect(slider().getAttribute("aria-valuetext")).toBe("-0.990, nearly a chamfer");
     key(slider(), "End");
     expect(chip.profile).toBe(0.95);
+  });
+
+  it("the slider's ends are the profile's limits, so End and Home put the thumb on the track's ends", () => {
+    mount(0).click();
+    const thumb = () => ({
+      value: slider().value,
+      from: slider().style.getPropertyValue("--profile-from"),
+      to: slider().style.getPropertyValue("--profile-to"),
+    });
+    const centre = thumb();
+    key(slider(), "End");
+    const end = { profile: chip.profile, ...thumb() };
+    key(slider(), "ArrowLeft");
+    const stepBack = chip.profile;
+    key(slider(), "Home");
+    const home = { profile: chip.profile, ...thumb() };
+    expect({ centre, end, stepBack, home }).toEqual({
+      centre: { value: "0", from: "50%", to: "50%" },
+      end: { profile: 0.95, value: "1", from: "50%", to: "100%" },
+      stepBack: 0.926,
+      home: { profile: -0.99, value: "-1", from: "0%", to: "50%" },
+    });
   });
 
   it("the number field takes an exact value on Enter, clamps it, and refuses text", () => {

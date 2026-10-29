@@ -40,6 +40,11 @@ const SLIDER_STEP = 0.025;
 
 let panels = 0;
 
+/** The track runs -1..1 with the circular fillet at its centre and the profile's limits at its ends, as the old drag
+ *  track did; a step lands on three decimals, which is all a profile shows. */
+const toTrack = (p: number) => fractionFromProfile(p) * 2 - 1;
+const fromTrack = (t: number) => Number(profileFromFraction((t + 1) / 2).toFixed(3));
+
 function glyph(size: number): { svg: SVGSVGElement; set: (p: number) => void } {
   const svg = document.createElementNS(SVG, "svg");
   svg.setAttribute("viewBox", "0 0 24 24");
@@ -252,13 +257,16 @@ export class ProfileChip {
     });
 
     const slider = uiSlider({
-      value: this.value,
+      value: toTrack(this.value),
       min: -1,
       max: 1,
       step: SLIDER_STEP,
       tip: "Profile",
-      valueText: (v) => `${formatProfile(v)}, ${describeProfile(v)}`,
-      onValue: (v) => this.change(v),
+      valueText: (t) => {
+        const p = snapProfile(fromTrack(t));
+        return `${formatProfile(p)}, ${describeProfile(p)}`;
+      },
+      onValue: (t) => this.change(fromTrack(t)),
     });
     slider.root.classList.add("profile-slider");
     slider.root.style.width = `${TRACK_PX}px`;
@@ -286,8 +294,8 @@ export class ProfileChip {
         num.input.value = formatProfile(this.value);
         setInvalid(num, null);
       }
-      slider.set(this.value);
-      const at = ((this.value + 1) / 2) * 100;
+      slider.set(toTrack(this.value));
+      const at = fractionFromProfile(this.value) * 100;
       slider.input.style.setProperty("--profile-from", `${Math.min(at, 50)}%`);
       slider.input.style.setProperty("--profile-to", `${Math.max(at, 50)}%`);
       for (const { b, value } of buttons) {
