@@ -67,7 +67,6 @@ import { HoleTool } from "../features/holeTool";
 import { cancelActiveTools, createToolBusy } from "./toolBusy";
 import {
   createDocumentActions,
-  heldEdits,
   newFromTemplate,
   openAtVersion,
   openOnBranch,
@@ -262,7 +261,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   e.viewport.attachStore(e.store);
   // Once, before any component exists; components read version refs instead of subscribing.
   e.bridge = createDocBridge(e.store);
-  const autosave = installAutosave(e.store);
+  installAutosave(e.store);
   // Safe mode offers no snapshot: one that kills the app would kill every start.
   recoveryAsked = safeMode() ? Promise.resolve() : checkRecovery(e.store);
 
@@ -373,7 +372,6 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   };
 
   const move = e.tools.move;
-  for (const h of heldEdits(e.tools)) autosave.watchHeld(h);
   e.sketch.gizmo = {
     start: (target, done) => move.startTarget(target, () => done()),
     cancel: () => move.cancel(),

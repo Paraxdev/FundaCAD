@@ -11,10 +11,15 @@ import type { Engine } from "../../src/app/engine";
 import type { Viewport } from "../../src/viewport/viewport";
 import { box, stubBackend } from "../document/storeKit";
 
-const host = vi.hoisted(() => ({ saved: [] as string[], pick: "D:/parts/as.funda" as string | null }));
+const host = vi.hoisted(() => ({
+  saved: [] as string[],
+  recovery: [] as string[],
+  pick: "D:/parts/as.funda" as string | null,
+}));
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: async (cmd: string, args: Record<string, unknown>) => {
     if (cmd === "container_save") host.saved.push(String(args.documentJson));
+    if (cmd === "recovery_write") host.recovery.push(String(args.json));
     return undefined;
   },
 }));
@@ -35,6 +40,7 @@ const { createActions } = await import("../../src/app/actions");
 const { installUnsavedGuard, closeRequestHandler } = await import("../../src/app/unsavedGuard");
 const { installTitlebar } = await import("../../src/app/titlebar");
 const { useUiStore } = await import("../../src/stores/ui");
+const { installAutosave } = await import("../../src/io/recovery");
 
 let frames: (() => void)[] = [];
 const flushFrame = () => {
@@ -53,7 +59,7 @@ function lenient<T>(own: Record<string, unknown>): T {
 
 /** Every tool not given is closed and holds nothing. */
 function idleTools(own: Record<string, unknown>): Engine["tools"] {
-  const idle = { active: false, pending: false, dragging: false, onHeldChange: () => () => {}, confirmHeld() {} };
+  const idle = { active: false, pending: false, onHeldChange: () => () => {}, confirmHeld() {} };
   return new Proxy(own, { get: (t, k) => (k in t ? t[k as string] : idle) }) as unknown as Engine["tools"];
 }
 
@@ -135,6 +141,7 @@ beforeAll(() => {
 });
 beforeEach(() => {
   host.saved = [];
+  host.recovery = [];
   host.pick = "D:/parts/as.funda";
   win.asked = [];
   frames = [];
@@ -186,6 +193,28 @@ describe("a Move drag let go of but not entered", () => {
     expect(moves()).toEqual([]);
     pointer(canvas, "pointerup", 60);
     expect(tool.pending).toBe(true);
+  });
+});
+
+describe("an idle autosave and a held Move drag", () => {
+  it("leaves the drag held past the quiet period, so Escape still cancels it and no copy is written", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    try {
+      installAutosave(store);
+      dragAndLetGo();
+      flushFrame();
+      await vi.advanceTimersByTimeAsync(31_000);
+      await settle();
+      const held = { pending: tool.pending, recovery: host.recovery.length };
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      expect({ held, features: store.document.features.map((f) => f.type), dirty: store.dirty }).toEqual({
+        held: { pending: true, recovery: 0 },
+        features: ["box"],
+        dirty: false,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

@@ -1,6 +1,6 @@
 // Crash-recovery autosave. Rust owns the snapshot files (recovery_* commands) outside the webview's fs scope;
-// this decides when: 30 s after the last edit, at most 2 min behind, only while dirty or a drag is held. A save
-// clears the slot.
+// this decides when: 30 s after the last edit, at most 2 min behind, only while dirty. A save clears the slot.
+// A drag let go of but not entered stays out of the copy: entering it behind the user would stop Escape cancelling it.
 
 import type { DocumentSession } from "../document/session";
 import type { DocumentStore } from "../document/store";
@@ -39,24 +39,8 @@ interface Snapshot {
   json: string;
 }
 
-/** A tool edit let go of but not entered, which a save enters first. */
-export interface HeldEdit {
-  readonly pending: boolean;
-  /** A drag still under the hand, which `confirmHeld` leaves alone. */
-  readonly dragging: boolean;
-  onHeldChange(fn: () => void): () => void;
-  confirmHeld(): void;
-}
-
-export interface Autosave {
-  /** A held edit counts as unsaved work, and a snapshot enters it first, so the copy holds what the user sees.
-   *  Called once per tool that can hold one. */
-  watchHeld(edit: HeldEdit): void;
-}
-
-export function installAutosave(store: DocumentStore): Autosave {
-  if (!isTauri()) return { watchHeld() {} };
-  const heldEdits: HeldEdit[] = [];
+export function installAutosave(store: DocumentStore) {
+  if (!isTauri()) return;
   let idleTimer: (() => void) | null = null;
   let oldestEdit: number | null = null;
   let writing = false;
@@ -120,12 +104,9 @@ export function installAutosave(store: DocumentStore): Autosave {
   };
 
   const write = () => {
-    for (const h of heldEdits) h.confirmHeld();
     idleTimer?.();
     idleTimer = null;
     oldestEdit = null;
-    // Entered once it has been let go and left alone for another quiet period.
-    if (heldEdits.some((h) => h.dragging)) schedule();
     if (!store.dirty) return;
     if (writing) {
       rerun = true;
@@ -136,7 +117,7 @@ export function installAutosave(store: DocumentStore): Autosave {
   };
 
   const schedule = () => {
-    if (!store.dirty && !heldEdits.some((h) => h.pending)) return;
+    if (!store.dirty) return;
     const now = Date.now();
     if (oldestEdit == null) oldestEdit = now;
     idleTimer?.();
@@ -180,13 +161,6 @@ export function installAutosave(store: DocumentStore): Autosave {
     oldestEdit = null;
     void import("@tauri-apps/api/core").then(({ invoke }) => invoke("recovery_clear", { slot })).catch(() => {});
   });
-
-  return {
-    watchHeld(edit) {
-      heldEdits.push(edit);
-      edit.onHeldChange(schedule);
-    },
-  };
 }
 
 /** Drop the recovery snapshots of a document that was just saved. */

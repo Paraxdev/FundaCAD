@@ -8,7 +8,7 @@ import {
 } from "../io/files";
 import { choose } from "../ui/choice";
 import type { Engine } from "./engine";
-import type { HeldEdit } from "../io/recovery";
+import type { HeldEdit } from "../features/heldEdit";
 import { TEMPLATES, templateText } from "../templates";
 import { copyName } from "../ui/homeVersions";
 import { closeHome, homeIsOpen } from "../ui/home";

@@ -1,3 +1,10 @@
+/** A tool edit let go of but not entered, which a save enters first. */
+export interface HeldEdit {
+  readonly pending: boolean;
+  onHeldChange(fn: () => void): () => void;
+  confirmHeld(): void;
+}
+
 /** Tells watchers when a tool's held edit (let go of, not entered) turns on or off. */
 export class HeldSignal {
   private shown = false;
