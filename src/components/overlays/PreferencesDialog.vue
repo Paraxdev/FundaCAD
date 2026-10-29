@@ -752,8 +752,8 @@ function onClassicCamera(on: boolean) {
               >Reset to defaults</Button
             >
             <p id="prefs-a11y-actions-hint" class="pref-hint">
-              Screen reader preset sets Announcements to Verbose, the setup for NVDA, VoiceOver and Orca. Reset to
-              defaults clears every choice below, so Animations follows the system again.
+              Screen reader preset sets Announcements to Verbose, the setup that suits NVDA, VoiceOver and other screen
+              readers. Reset to defaults clears every choice below, so Animations follows the system again.
             </p>
           </div>
 
