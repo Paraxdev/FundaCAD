@@ -38,3 +38,28 @@ export function zebraStripeCoord(
   const d: Vec3 = [pv[0] - cv[0], pv[1] - cv[1], pv[2] - cv[2]];
   return dot(d, a) + dot(r, a) * (reach - ZEBRA_LAMBDA * dot(d, r));
 }
+
+export const ZEBRA_WIDTH_MIN = 1;
+export const ZEBRA_WIDTH_MAX = 5;
+export const ZEBRA_WIDTH_DEFAULT = 3;
+const PERIODS_AT_WIDTH_ONE = 30;
+
+export interface ZebraFrame {
+  centre: Vec3;
+  reach: number;
+  period: number;
+}
+
+/** The stripe frame for a model box: its centre, a reach about its radius, and a stripe period that
+ *  fits PERIODS_AT_WIDTH_ONE / width periods along the diagonal. */
+export function zebraFrame(min: Vec3, max: Vec3, width: number): ZebraFrame {
+  const w = Number.isFinite(width)
+    ? Math.min(ZEBRA_WIDTH_MAX, Math.max(ZEBRA_WIDTH_MIN, width))
+    : ZEBRA_WIDTH_DEFAULT;
+  const diag = Math.hypot(max[0] - min[0], max[1] - min[1], max[2] - min[2]) || 1;
+  return {
+    centre: [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2],
+    reach: diag / 2,
+    period: (diag * w) / PERIODS_AT_WIDTH_ONE,
+  };
+}

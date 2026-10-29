@@ -39,6 +39,8 @@ import { sceneStats } from "../diagnostics/sceneStats";
 import { crumb } from "../diagnostics/breadcrumbs";
 import {
   makeZebraMaterial,
+  fitZebraMaterial,
+  type ZebraSettings,
   buildCurvatureCombs,
   buildClashMesh,
   buildClearanceLine,
@@ -50,6 +52,7 @@ import {
   buildFaceMarkMesh,
   clearOverlayObjects,
 } from "./overlays";
+import { ZEBRA_WIDTH_DEFAULT } from "./zebraStripes";
 import { barycentric, displacedPositions, stressColors } from "../ui/stress";
 import { Picker, modelScale, type EdgeCandidate, type Hit, type PickMods } from "./picking";
 import { bandIndex, expandToBand, type BandIndex } from "./faceBands";
@@ -1645,6 +1648,7 @@ export class Viewport {
   private draftThreshold = 45;
   private zebra = false;
   private zebraMat: THREE.ShaderMaterial | null = null;
+  private zebraSettings: ZebraSettings = { direction: "horizontal", width: ZEBRA_WIDTH_DEFAULT };
   // Each body's own material while zebra is on.
   private savedMats = new Map<string, THREE.Material | THREE.Material[]>();
   private combs = false;
@@ -1880,6 +1884,7 @@ export class Viewport {
     if (!this.model) return;
     if (this.zebra) {
       if (!this.zebraMat) this.zebraMat = makeZebraMaterial();
+      fitZebraMaterial(this.zebraMat, this.model.box, this.zebraSettings);
       for (const b of this.model.bodies) {
         if (b.mesh.material !== this.zebraMat) {
           this.savedMats.set(b.id, b.mesh.material);
