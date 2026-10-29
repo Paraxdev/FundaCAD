@@ -48,6 +48,12 @@ function lenient<T>(own: Record<string, unknown>): T {
   return new Proxy(own, { get: (t, k) => (k in t ? t[k as string] : () => undefined) }) as unknown as T;
 }
 
+/** Every tool not given is closed and holds nothing. */
+function idleTools(own: Record<string, unknown>): Engine["tools"] {
+  const idle = { active: false, pending: false, dragging: false, onHeldChange: () => () => {}, confirmHeld() {} };
+  return new Proxy(own, { get: (t, k) => (k in t ? t[k as string] : idle) }) as unknown as Engine["tools"];
+}
+
 /** The ray at y runs along +X at z = y over a body 10 across, so a press at 40 takes the Z arrow and a drag to 60
  *  lifts the body 20. */
 function fakeViewport(scene: THREE.Scene) {
@@ -97,7 +103,12 @@ function selectBody() {
   tool.markAmbient();
   flushFrame();
   scene.updateMatrixWorld(true);
-  Object.assign(engine, { store, viewport: vp, sketch: { active: false }, tools: lenient({ move: tool }) });
+  Object.assign(engine, {
+    store,
+    viewport: vp,
+    sketch: { active: false },
+    tools: idleTools({ move: tool }),
+  });
 }
 
 function dragAndLetGo() {

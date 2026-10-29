@@ -15,6 +15,7 @@ import { DatumPoseTool } from "../../src/features/datumPoseTool";
 import { MoveTool } from "../../src/features/moveTool";
 import { ALL_HANDLES, WORLD_FRAME, type MoveResult, type MoveTarget } from "../../src/features/moveTarget";
 import type { DocumentStore } from "../../src/document/store";
+import { needsSave, settleHeldEdit, type SaveEngine } from "../../src/app/documentActions";
 import type { Viewport } from "../../src/viewport/viewport";
 import type { Feature, Selector } from "../../src/types";
 
@@ -229,6 +230,61 @@ describe("Press/Pull", () => {
     t.away();
     click(t.canvas, 200);
     expect(t.added).toEqual([{ id: "f1", type: "press-pull", face: FACE, distance: 3, operation: "join", body: "b1" }]);
+  });
+
+  describe("a push let go of but not entered", () => {
+    const saving = (tool: PressPullTool) =>
+      ({ store: { dirty: false }, tools: { pressPull: tool } }) as unknown as SaveEngine;
+
+    it("is written once by a save, as Enter would", () => {
+      const t = setup(true);
+      fluentDrag(t.canvas, 50);
+      expect(needsSave(saving(t.tool))).toBe(true);
+      settleHeldEdit(saving(t.tool));
+      settleHeldEdit(saving(t.tool));
+      expect(t.added).toEqual([
+        { id: "f1", type: "press-pull", face: FACE, distance: 5, operation: "join", body: "b1" },
+      ]);
+      expect(t.tool.active).toBe(false);
+      expect(needsSave(saving(t.tool))).toBe(false);
+    });
+
+    it("is left alone by a save while the hand still holds it", () => {
+      const t = setup(true);
+      pointer(t.canvas, "pointermove", 50);
+      settleHeldEdit(saving(t.tool));
+      expect(t.added).toEqual([]);
+      expect(t.tool.active).toBe(true);
+      pointer(t.canvas, "pointerup", 50);
+      settleHeldEdit(saving(t.tool));
+      expect(t.added).toHaveLength(1);
+    });
+
+    it("tells its watchers, and Esc still cancels it and clears the mark", () => {
+      const t = setup(true);
+      const seen = vi.fn();
+      t.tool.onHeldChange(seen);
+      fluentDrag(t.canvas, 50);
+      expect(seen).toHaveBeenCalledTimes(1);
+      expect(t.tool.pending).toBe(true);
+      escape();
+      expect(t.tool.active).toBe(false);
+      expect(t.added).toEqual([]);
+      expect(seen).toHaveBeenCalledTimes(2);
+      expect(needsSave(saving(t.tool))).toBe(false);
+    });
+
+    it("stays quiet before any drag, and a save leaves the tool open", () => {
+      const t = setup(false);
+      const seen = vi.fn();
+      t.tool.onHeldChange(seen);
+      flushFrame();
+      expect(needsSave(saving(t.tool))).toBe(false);
+      settleHeldEdit(saving(t.tool));
+      expect(t.added).toEqual([]);
+      expect(t.tool.active).toBe(true);
+      expect(seen).not.toHaveBeenCalled();
+    });
   });
 });
 

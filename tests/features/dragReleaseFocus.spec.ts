@@ -23,6 +23,7 @@ function release(proto: object, extra: Rig, ev: { x: number; y: number }, fluent
     viewport: { domElement: { style: {} } },
     dim: { focus, updateFromCursor() {} },
     flushPreviewNow() {},
+    held: { sync() {} },
     commit,
     cancel,
     ...extra,
