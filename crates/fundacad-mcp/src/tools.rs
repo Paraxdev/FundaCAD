@@ -272,7 +272,7 @@ fn printability_fields() -> JsonObject {
 }
 
 pub fn interference() -> JsonObject {
-    paged(interference_fields(), "rows of each list (default 30, all with full)")
+    paged(interference_fields(), "rows of each list (default 30, pairs per sweep step 10, all with full)")
 }
 
 fn interference_fields() -> JsonObject {

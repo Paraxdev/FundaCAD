@@ -26,7 +26,8 @@ Nothing is out of reach. The last line of a shortened reply says how to ask for 
 
 - `offset` pages on to the next rows, and `limit` 0 shows every row.
 - `body` or `bodies` narrows the reply to the parts it names.
-- `detail` and `selectors` on inspect add the faces and edges, 5 bodies a page, and `outline` on section adds the loop points.
+- `detail` and `selectors` on inspect add the faces and edges, 5 bodies a page once there are more than 10, and `outline` on section adds the loop points.
+- A clash check that steps a parameter (`sweep`) gives each step with more than 10 clashing pairs as their total and the 10 largest.
 - `full` gives the whole reply, one row per body, pair or file.
 
 You do not set any of this yourself, the assistant reads the summary and asks for the details.

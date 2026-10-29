@@ -262,12 +262,12 @@ which a fresh engine could no longer start one and every build failed.
 | tool | what it is for |
 | --- | --- |
 | `schema` | every feature type, its fields, an example and its traps. Read first. |
-| `doc_new` / `doc_open` / `doc_save` / `doc_get` / `doc_set` | the document. `doc_open` of a file from a newer FundaCAD adds a `note:` line naming the feature types this build does not know; they are kept and saved with the file. An older file holding an old feature type gets a note to open and save it in the app first, since MCP does not update old files. `doc_get` gives the geometry only (features, parameters, paramDefs, bodyIds, version), so `doc_set` replaces those and keeps the open document's other parts (stress study, environment, palette, materials, elements, reference images, body and face overlays) unless the document sent names them; a key sent as null clears it. `doc_new` and `doc_open` still replace everything |
+| `doc_new` / `doc_open` / `doc_save` / `doc_get` / `doc_set` | the document. `doc_open` of a file from a newer FundaCAD adds a `note:` line naming the feature types this build does not know; they are kept and saved with the file. An older file holding an old feature type gets a note to open and save it in the app first, since MCP does not update old files. `doc_get` gives the geometry only (features, parameters, paramDefs, bodyIds, version), so `doc_set` replaces those and keeps the open document's other parts (stress study, environment, palette, materials, elements, reference images, body and face overlays) unless the document sent names them; a key sent as null clears it. On a long document `doc_get` folds and leaves out rows, see Long replies below. `doc_new` and `doc_open` still replace everything |
 | `param_set` / `param_remove` | the parameter table (this is what makes it parametric) |
 | `feature_add` / `feature_update` / `feature_remove` / `feature_move` | the timeline |
 | `edit` | several of the above and `param_set` in one call, all or nothing, optionally building once at the end |
 | `sketch_merge` | replace overlapping closed shapes of a sketch with the lines, arcs and circles around their union, so an extrude picks it with one `regions` point; replies with that point |
-| `build` | rebuild, and say what came out and what failed. After the first build it lists only the bodies that changed; `full` lists them all. A feature of a type this build does not know (a file from a newer FundaCAD) reads `SKIPPED (id): unknown feature type: X, kept in the document but not built`, and like a failure it sets isError |
+| `build` | rebuild, and say what came out and what failed. After the first build it lists only the bodies that changed; `full` lists them all, one row per body. A feature of a type this build does not know (a file from a newer FundaCAD) reads `SKIPPED (id): unknown feature type: X, kept in the document but not built`, and like a failure it sets isError |
 | `interference` | which bodies overlap and by how much, and which come closer than a clearance, once or at every step of a parameter (`sweep`). A body that is not a closed solid is named as not checked, with why. Changes nothing |
 | `section` | cut the bodies with a plane: the outline as closed loops of points, and area, centroid, second moments, section modulus and polar moment for beam checks |
 | `stress` | a linear static stress analysis of one body: hold faces (`fixed`, or `supports` that are fixed, pinned or slider), load others with a force or a pressure, add its weight with `gravity`, pick a material, and get the peak von Mises stress and where, the largest deflection, the safety factor against yield, the load balance with the reaction at each support, warnings, and a PNG coloured by stress. Changes nothing |
@@ -280,6 +280,34 @@ which a fresh engine could no longer start one and every build failed.
 | `guide_highlight` / `guide_wait` / `guide_clear` | guide mode, below: show the user a step in their own window and wait for them |
 
 `schema` is also served as an MCP resource at `fundacad://schema`.
+
+### Long replies
+
+A list of more than 10 rows (`FOLD_FROM` in `crates/fundacad-mcp/src/budget.rs`) would spend an
+agent's context on rows that say the same thing. So `build`, `inspect`,
+`interference`, `printability`, `section`, a separate `export` and `doc_get`
+then give a summary first, the counts and totals, fold rows alike in all but
+their ids into one row that lists the other ids as ranges (`body4..body2002`),
+and show 30 rows, the last line saying how to ask for the next. A shorter list
+reads as it always did. Every row stays one argument away:
+
+- `offset` and `limit` page, and `limit` 0 shows every row.
+- `body` or `bodies` narrows the reply to the bodies named.
+- `full` gives one row per body, pair or file with nothing folded.
+- `inspect` with `detail` or `selectors` measures 5 bodies a page once there
+  are more than 10, and `section` leaves the outline points out past 10 bodies
+  unless `outline` is true.
+- An `interference` sweep step with more than 10 clashing pairs gives their
+  total and its 10 largest; `offset` and `limit` page every step's pairs.
+- A long `doc_get` puts one feature to a line, folds runs of `bodyIds` into one
+  range entry and replaces an import's `nodes` or `parts` list longer than 30 with a
+  line giving its length. `doc_set` spells the ranges out again and takes the
+  lists back from the open document's import of the same id, refusing when its
+  geometry or length differs. `doc_get` with `full` gives the stored document
+  as it is.
+
+`crates/fundacad-mcp/tests/budget.rs` holds each reply to a byte budget on a pattern of 2000 pins
+and on 60 boxes that are all different.
 
 ### Guide mode
 
