@@ -56,9 +56,9 @@ describe("ModalHost", () => {
   });
   afterEach(() => window.removeEventListener("keydown", listen));
 
-  it("is a labelled modal dialog with the first choice focused", async () => {
+  it("is a labelled modal alertdialog with the first choice focused", async () => {
     await open(choose("Cut along what?", OPTIONS));
-    const panel = $("[role=dialog]")!;
+    const panel = $("[role=alertdialog]")!;
     expect(panel.getAttribute("aria-modal")).toBe("true");
     expect(document.getElementById(panel.getAttribute("aria-labelledby")!)!.textContent).toBe("Cut along what?");
     expect(active()?.textContent).toContain("Face or plane");
@@ -95,7 +95,7 @@ describe("ModalHost", () => {
     key("Escape");
     expect(await answer).toBeNull();
     await nextTick();
-    expect($("[role=dialog]")).toBeNull();
+    expect($("[role=alertdialog]")).toBeNull();
     expect(active()).toBe(opener);
     expect(useModalStore().depth).toBe(0);
   });
@@ -123,7 +123,7 @@ describe("ModalHost", () => {
     expect(active()).toBe($$(".ui-confirm-check input")[0]);
     expect($(".ui-confirm-ok")!.getAttribute("aria-disabled")).toBe("true");
     key("Enter");
-    expect($("[role=dialog]")).not.toBeNull();
+    expect($("[role=alertdialog]")).not.toBeNull();
     $$(".ui-confirm-check input")[1]!.click();
     await nextTick();
     key("Enter");
@@ -159,7 +159,7 @@ describe("ModalHost", () => {
     expect(await one).toBeNull();
     await nextTick();
     await settle();
-    expect($("[role=dialog] h2")!.textContent).toBe("Second?");
+    expect($("[role=alertdialog] h2")!.textContent).toBe("Second?");
     expect(active()?.textContent).toBe("Ex");
     key("Enter");
     expect(await two).toBe("x");

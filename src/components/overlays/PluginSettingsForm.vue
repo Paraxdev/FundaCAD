@@ -11,6 +11,7 @@ import NumberField from "../ui/NumberField.vue";
 import Select from "../ui/Select.vue";
 import TextField from "../ui/TextField.vue";
 import UnitChip from "../ui/UnitChip.vue";
+import { nativeDialog } from "../../io/nativeDialog";
 
 const props = defineProps<{
   settings?: PluginSettings | undefined;
@@ -116,7 +117,7 @@ function onKey(p: SettingProp, ev: KeyboardEvent) {
 const isTauri = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 async function pickFile(p: SettingProp & { extensions?: readonly string[] }) {
-  const { open } = await import("@tauri-apps/plugin-dialog");
+  const { open } = await nativeDialog();
   const exts = p.extensions ? [...p.extensions] : undefined;
   const picked = await open({
     multiple: false,

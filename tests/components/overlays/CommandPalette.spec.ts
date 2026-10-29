@@ -100,6 +100,26 @@ describe("CommandPalette", () => {
     expect([$(".cmdk-card"), heard, document.activeElement]).toEqual([null, [], opener]);
   });
 
+  it("makes the page behind inert while open, and live again before focus goes back", async () => {
+    await openPalette();
+    expect([!!opener.closest("[inert]"), $(".cmdk-backdrop")!.closest("[inert]")]).toEqual([true, null]);
+    key("Escape");
+    await nextTick();
+    await later();
+    expect([$$("[inert]"), document.activeElement]).toEqual([[], opener]);
+  });
+
+  it("hands focus to the main landmark when its opener is gone", async () => {
+    const main = document.createElement("main");
+    document.body.append(main);
+    await openPalette();
+    opener.remove();
+    key("Escape");
+    await nextTick();
+    await later();
+    expect([document.activeElement, $$("[inert]")]).toEqual([main, []]);
+  });
+
   it("over a dialog, Escape closes only the palette", async () => {
     const under = mount(Dialog, { props: { title: "Export" }, attachTo: document.body });
     await later();

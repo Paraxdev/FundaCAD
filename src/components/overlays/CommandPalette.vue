@@ -7,10 +7,12 @@ import { allCommands } from "../../ui/commands";
 import { score } from "../../ui/commandScore";
 import TextField from "../ui/TextField.vue";
 import { focusReturn } from "../ui/focusables";
+import { inertOthers } from "../../composables/useModalGate";
 
 const cmdk = useCommandPaletteStore();
 const input = useTemplateRef<InstanceType<typeof TextField>>("input");
 const card = useTemplateRef<HTMLElement>("card");
+const backdrop = useTemplateRef<HTMLElement>("backdrop");
 const query = ref("");
 const active = ref(0);
 
@@ -38,16 +40,23 @@ watch(results, () => {
 });
 
 // Escape is claimed so a screen under the palette, such as Home, leaves it alone. The input mounts in the same flush
-// as the open, so focus waits for it. Focus goes back to where it was on close, the palette is gone by then.
+// as the open, so focus and the inert page wait for it. The page is live again before focus goes back, since an
+// inert opener cannot take it.
 let releaseEscape: (() => void) | null = null;
+let releaseInert: (() => void) | null = null;
 let back: ReturnType<typeof focusReturn> | null = null;
-onUnmounted(() => releaseEscape?.());
+onUnmounted(() => {
+  releaseEscape?.();
+  releaseInert?.();
+});
 watch(
   () => cmdk.open,
   async (isOpen) => {
     if (!isOpen) {
       releaseEscape?.();
       releaseEscape = null;
+      releaseInert?.();
+      releaseInert = null;
       back?.restore((n) => !!card.value?.contains(n));
       back = null;
       return;
@@ -57,6 +66,7 @@ watch(
     query.value = "";
     active.value = 0;
     await nextTick();
+    if (cmdk.open && backdrop.value) releaseInert ??= inertOthers(backdrop.value);
     input.value?.focus();
   },
 );
@@ -96,7 +106,7 @@ function onKey(e: KeyboardEvent) {
 
 <template>
   <Teleport to="body">
-    <div v-if="cmdk.open" class="cmdk-backdrop" @pointerdown.self="cmdk.close()">
+    <div v-if="cmdk.open" ref="backdrop" class="cmdk-backdrop" @pointerdown.self="cmdk.close()">
       <div ref="card" class="cmdk-card" role="dialog" aria-modal="true" aria-label="Command palette">
         <TextField
           ref="input"

@@ -3,6 +3,7 @@
 
 import { useDialogStore } from "../stores/dialogs";
 import { pluginFocus } from "./settingsFocus";
+import { nativeDialog } from "../io/nativeDialog";
 
 // The contribution table, the only way onto the app's surfaces.
 export { contribute, contributedPalette, onContribChange, service } from "./contrib";
@@ -151,13 +152,13 @@ export async function saveDialog(opts: {
   filters?: { name: string; extensions: string[] }[];
   defaultPath?: string;
 }): Promise<string | null> {
-  const { save } = await import("@tauri-apps/plugin-dialog");
+  const { save } = await nativeDialog();
   return await save(opts);
 }
 
 /** Null when dismissed. Single selection only. */
 export async function openDialog(opts: { filters?: { name: string; extensions: string[] }[] }): Promise<string | null> {
-  const { open } = await import("@tauri-apps/plugin-dialog");
+  const { open } = await nativeDialog();
   const picked = await open({ ...opts, multiple: false });
   return typeof picked === "string" ? picked : null;
 }
