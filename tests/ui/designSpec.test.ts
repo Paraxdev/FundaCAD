@@ -473,6 +473,69 @@ function errorFill(files: [string, string][]): string {
   return best.value;
 }
 
+// A sum of integers, the inside of a calc() once its var()s are numbers. NaN for anything else.
+function sumOf(expr: string): number {
+  const m = /^\s*(-?\d+)((?:\s*[+-]\s*-?\d+)*)\s*$/.exec(expr);
+  if (!m) return NaN;
+  return [...(m[2] ?? "").matchAll(/([+-])\s*(-?\d+)/g)].reduce(
+    (t, [, op, n]) => t + (op === "-" ? -1 : 1) * Number(n),
+    Number(m[1]),
+  );
+}
+
+function resolveZ(value: string, vars: Record<string, string>, depth = 0): number {
+  if (depth > 8) return NaN;
+  let expr = value
+    .replace(/var\((--[\w-]+)\)/g, (_, name: string) => String(resolveZ(vars[name] ?? "", vars, depth + 1)))
+    .replace(/calc\(/g, "(");
+  for (let next = expr; /\(/.test(expr); expr = next) {
+    next = expr.replace(/\(([^()]*)\)/g, (_, inner: string) => String(sumOf(inner)));
+    if (next === expr) return NaN;
+  }
+  return sumOf(expr);
+}
+
+/** The z-index the last rule naming `selector` on its own sets, NaN when none does. */
+function zIndexOf(files: Iterable<[string, string]>, selector: string, vars: Record<string, string>): number {
+  let value = "";
+  for (const [path, text] of files)
+    for (const { selectors, decls } of rulesOf(path, text))
+      if (selectors.includes(selector)) value = decls.filter(({ prop }) => prop === "z-index").pop()?.value ?? value;
+  return resolveZ(value, vars);
+}
+
+/** Each pair where the layer meant to be on top does not resolve above the one meant to be under it. */
+function misordered(
+  files: [string, string][],
+  vars: Record<string, string>,
+  pairs: readonly (readonly [top: string, under: string])[],
+): string[] {
+  return pairs
+    .map(([top, under]) => ({ top, under, a: zIndexOf(files, top, vars), b: zIndexOf(files, under, vars) }))
+    .filter(({ a, b }) => !(a > b))
+    .map(({ top, under, a, b }) => `${top} ${a} over ${under} ${b}`);
+}
+
+/** The classes a floating panel carries: Panel.vue's own, and each panel-class a <Panel> or <FloatingPanel> passes. */
+function floatingPanelClasses(templates: Map<string, string>): string[] {
+  const out = new Set(["measure-panel", "ui-panel"]);
+  for (const text of templates.values())
+    for (const [tag] of text.matchAll(/<(?:Panel|FloatingPanel)\b(?:[^>"]|"[^"]*")*>/g))
+      for (const c of /\spanel-class="([^"]*)"/.exec(tag)?.[1]?.split(/\s+/) ?? []) if (c) out.add(c);
+  return [...out].sort();
+}
+
+/** Each rule that gives a floating panel a z-index of its own, which takes it out of the panel layer. */
+function panelZOverrides(files: Iterable<[string, string]>, classes: readonly string[]): string[] {
+  return [...files].flatMap(([path, text]) =>
+    rulesOf(path, text)
+      .filter(({ decls }) => decls.some(({ prop }) => prop === "z-index"))
+      .flatMap(({ selectors }) => selectors)
+      .filter((s) => s !== ".measure-panel" && compoundOf(s).classes.some((c) => classes.includes(c)))
+      .map((s) => `${path} ${s}`),
+  );
+}
+
 describe("design spec guard", () => {
   it("reads the sources", () => {
     expect(vueFiles.size).toBeGreaterThan(50);
@@ -609,6 +672,43 @@ describe("design spec guard", () => {
     expect(switchesIn(vueFiles, rendered)).toEqual([]);
   });
 
+  it("draws every dialog and its popups over the floating panels, and the panels under the rail", () => {
+    const vars = block(styleOf(TOKENS, scssFiles.get(TOKENS) ?? ""), ":root");
+    const dialogs = [".modal-overlay", ".choice-backdrop", ".cmdk-backdrop"];
+    const popups = [".float-popover.select-pop", ".ui-menu", ".menu-popup"];
+    // The in-view chips sit by the model or the cursor, so they draw over a panel they meet.
+    const chips = [
+      ".float-card.text-tool-panel",
+      ".dim-input",
+      ".sketch-dims",
+      ".timeline-props.floating",
+      ".rotate-dial-label",
+      ".snap-tag",
+      ".prompt",
+    ];
+    // Everything else that draws over the model: the panels, the Stress and sketch readouts, the in-view chips.
+    const inView = [".measure-panel", ".stress-glyph-label", ".sketch-dim-leaders", ...chips];
+    const pairs = [
+      ...[...dialogs, ...popups].flatMap((top) => inView.map((under) => [top, under] as const)),
+      ...chips.map((top) => [top, ".measure-panel"] as const),
+      [".float-popover", ".measure-panel"] as const,
+      ["#float-layer", ".measure-panel"] as const,
+      [".measure-panel", ".stress-glyph-label"] as const,
+      [".measure-panel", ".sketch-dim-leaders"] as const,
+    ];
+    expect(misordered([...scssFiles, ...uiScssFiles], vars, pairs)).toEqual([]);
+    const panels = floatingPanelClasses(vueFiles);
+    expect(panels).toEqual([
+      "measure-panel",
+      "overhang-panel",
+      "params-dialog",
+      "properties-panel",
+      "stress-panel",
+      "ui-panel",
+    ]);
+    expect(panelZOverrides(styled, panels)).toEqual([]);
+  });
+
   it("finds what the check helpers are meant to find", () => {
     expect(
       colourLiterals(
@@ -720,5 +820,34 @@ describe("design spec guard", () => {
          &:hover { background: var(--hover-wash); } .b { border-radius: var(--float-chip-radius); } }`,
       ),
     ).toEqual([]);
+    const zVars = { "--z-a": "20", "--z-b": "calc(var(--z-a) - 1)" };
+    expect(resolveZ("calc(var(--z-b) + 2)", zVars)).toBe(21);
+    expect(resolveZ("var(--z-missing)", zVars)).toBeNaN();
+    const zCss = (panel: string): [string, string][] => [
+      ["x.scss", `.dialog { z-index: calc(var(--z-a) + 1); } .panel { z-index: ${panel}; }`],
+    ];
+    expect(misordered(zCss("var(--z-b)"), zVars, [[".dialog", ".panel"]])).toEqual([]);
+    expect(misordered(zCss("1500"), zVars, [[".dialog", ".panel"]])).toEqual([".dialog 21 over .panel 1500"]);
+    expect(misordered(zCss("var(--z-b)"), zVars, [[".dialog", ".gone"]])).toHaveLength(1);
+    expect(
+      floatingPanelClasses(
+        new Map([
+          ["a.vue", `<Panel :open="a > b" panel-class="x-panel y" @close="() => go()">`],
+          ["b.vue", `<ModalFrame panel-class="z-dialog"><FloatingPanel :panel-class="c" panel-class="w">`],
+        ]),
+      ),
+    ).toEqual(["measure-panel", "ui-panel", "w", "x-panel", "y"]);
+    expect(
+      panelZOverrides(
+        [
+          [
+            "x.scss",
+            `.x-panel { z-index: 5; } .x-panel .inner { z-index: 2; } .measure-panel { z-index: var(--z-panel); }
+             .measure-panel[data-capped], .other { z-index: 3; } .y-panel { width: 1px; }`,
+          ],
+        ],
+        ["measure-panel", "x-panel", "y-panel"],
+      ),
+    ).toEqual(["x.scss .x-panel", "x.scss .measure-panel[data-capped]"]);
   });
 });

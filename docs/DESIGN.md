@@ -288,16 +288,18 @@ Scrims (`.modal-overlay`, `.cmdk-backdrop`, `.choice-backdrop`, final values in
 a dialog, blurred and dimmed. A new modal reuses `.modal-overlay` rather than
 writing its own scrim.
 
-Stacking tokens: `--z-float` 20, `--z-popover` 200, `--z-menu` 3000,
+Stacking tokens: `--z-panel` 19, `--z-float` 20, `--z-popover` 200, `--z-menu` 3000,
 `--z-modal` 4000, `--z-toast` 5000. Most layers still use literals, so pick
 your layer from what is actually on screen:
 
 | z | Layer |
 |---|---|
+| 17 | `.sketch-dim-leaders`, `calc(var(--z-panel) - 2)`, the sketch dimension leaders, under the panel |
+| 18 | `.stress-glyph-label`, `calc(var(--z-panel) - 1)`, the Stress readouts in the view, under the panel |
+| 19 | `.measure-panel` (`--z-panel`), every floating panel |
 | 20 | `#float-layer` (`--z-float`), the cards and rail |
 | 200 | `.float-popover` (`--z-popover`) |
 | 1000 | `.modal-overlay` |
-| 1500 | `.measure-panel` |
 | 2000 | `.menu-popup` |
 | 2450 | `.logcon` |
 | 2500 | `.toast-stack` |
@@ -306,7 +308,11 @@ your layer from what is actually on screen:
 | 4001 | `.select-pop`, `calc(var(--z-modal) + 1)`, so a picker clears its dialog |
 | 5000 | `.cmdk-backdrop` |
 
-New layers use a `--z-*` token or `calc()` on one, never a new literal.
+New layers use a `--z-*` token or `calc()` on one, never a new literal. Every dialog
+and its popups (Select, Menu, the title bar menus) draw over the floating panels and
+the in-view chips, and a floating panel never draws over the rail or the view controls
+nor sets a z-index of its own; `tests/ui/designSpec.test.ts` holds all three, and
+`e2e/stress_under_dialogs_e2e.cjs` checks them in a real layout.
 
 ## 4. The glass recipe
 
@@ -1009,7 +1015,17 @@ defineEmits<{ close: [] }>();
   handler (clearing the selection, leaving the tool). See
   [11](#11-accessibility) for when to leave it off.
 - Placement is fixed for every panel: `position: fixed; top: 128px; right: 268px;
-  z-index: 1500`, outside `#float-layer`, so two panels open at once overlap.
+  z-index: var(--z-panel)`, outside `#float-layer` and under it, so the rail, the
+  view controls and every dialog draw over an open panel. `panelStack.ts` sets `top`
+  and `right` under the view cube and clear of the right cards, and a `max-width` that
+  keeps a wide panel clear of the rail, again whenever a panel, a card or `#float-layer`
+  resizes. When the span beside the rail is under a panel's `min-width`, the column
+  moves to the highest shelf right of the cards that holds it (under History in a
+  narrow Render stage), and only when none does it keeps its `min-width` beside the
+  rail, under the cards. An open panel stays open across the Model and Render switch,
+  as every inspect panel does, narrowing to fit the smaller stage, so a row of buttons
+  in a panel wraps rather than clips. The in-view chips (`.dim-input`, `.sketch-dims`,
+  `.snap-tag`, `.prompt` and the like) draw over a panel they meet.
   The shell is `min-width: 180px`, `padding: var(--s-4)`, `font-size: 12px`.
 
 | Class | Recipe |

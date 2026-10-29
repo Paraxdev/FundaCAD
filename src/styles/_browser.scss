@@ -137,7 +137,7 @@
   height: 100%;
   overflow: hidden;
   pointer-events: none;
-  z-index: calc(var(--z-float) - 1);
+  z-index: calc(var(--z-panel) - 2);
 }
 .sketch-dim-leaders line {
   stroke: var(--accent);

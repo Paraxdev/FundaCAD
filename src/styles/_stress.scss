@@ -115,9 +115,12 @@
 .stress-count {
   min-width: 0;
 }
+// Wraps when a narrow stage leaves the panel less than its width, as in Render.
 .stress-face-actions {
   display: flex;
-  flex: none;
+  flex-wrap: wrap;
+  flex: 0 1 auto;
+  min-width: 0;
   gap: var(--s-1);
 }
 .stress-spot .stress-remove-spot {
