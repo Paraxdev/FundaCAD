@@ -332,8 +332,9 @@ the bundle:
   latest release only while no stable release is published (stable installs
   find their feed through `releases/latest`). Its tag is made on the build's
   commit when the draft is published, by the job's token, which GitHub refuses
-  on a commit that changes a workflow file, so such a build deletes the draft,
-  warns and has only the rolling beta.
+  on a commit that changes a workflow file. A draft GitHub will not publish, for
+  that or any other reason, is deleted with a warning that quotes GitHub's
+  error, and the build has only the rolling beta.
   `tests/build/test_version_release.py` runs the step against a stub `gh`.
 
 ### 6.1 The updater endpoint
