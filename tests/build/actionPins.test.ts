@@ -3,62 +3,140 @@
 // a tag or branch that its owner can move.
 
 import { describe, expect, it } from "vitest";
+import { grants, pinFindings, refusedForms, usesSteps, yamlLines } from "../../scripts/actionPins.mjs";
 
-const files = {
-  ...import.meta.glob("../../.github/workflows/*.yml", { query: "?raw", import: "default", eager: true }),
-  ...import.meta.glob("../../.github/actions/*/action.yml", { query: "?raw", import: "default", eager: true }),
-} as Record<string, string>;
-
-const USES = /^\s*(?:-\s+)?uses:\s*(\S+)(.*)$/;
-const indentOf = (line: string) => line.length - line.trimStart().length;
-
-/** The lines of the step that holds line i, from its dash to the next line indented no further. */
-function stepAt(lines: string[], i: number): string[] {
-  let start = i;
-  while (start > 0 && !/^\s*-\s/.test(lines[start])) start--;
-  const indent = indentOf(lines[start]);
-  let end = start + 1;
-  while (end < lines.length && (!lines[end].trim() || indentOf(lines[end]) > indent)) end++;
-  return lines.slice(start, end);
-}
-
-function usesLines() {
-  return Object.entries(files).flatMap(([path, text]) => {
-    const lines = text.split(/\r?\n/);
-    return lines.flatMap((line, i) => {
-      const m = USES.exec(line);
-      return m ? [{ where: `${path}:${i + 1}`, ref: m[1], rest: m[2], step: stepAt(lines, i) }] : [];
-    });
-  });
-}
+const all = import.meta.glob("../../.github/**/*.{yml,yaml}", {
+  query: "?raw",
+  import: "default",
+  eager: true,
+}) as Record<string, string>;
+const CI_FILE = /\/\.github\/(?:workflows\/[^/]+|actions\/.+\/action)\.ya?ml$/;
+const files = Object.fromEntries(Object.entries(all).filter(([path]) => CI_FILE.test(path)));
 
 describe("third party code in CI", () => {
-  it("reads every workflow and composite action", () => {
+  it("reads every workflow and composite action, and no other YAML under .github can run code", () => {
     const paths = Object.keys(files);
     expect(paths.filter((p) => p.includes("/workflows/")).length).toBeGreaterThan(0);
-    expect(paths.filter((p) => p.endsWith("/action.yml")).length).toBeGreaterThan(0);
-    expect(usesLines().filter((u) => !u.ref.startsWith("./")).length).toBeGreaterThan(0);
+    expect(paths.filter((p) => p.includes("/actions/")).length).toBeGreaterThan(0);
+    expect(usesSteps(files).filter((u) => !u.ref.startsWith("./")).length).toBeGreaterThan(0);
+    const rest = Object.keys(all).filter(
+      (p) => !CI_FILE.test(p) && !/\/\.github\/(?:dependabot|FUNDING)\.yml$|\/ISSUE_TEMPLATE\//.test(p),
+    );
+    expect(rest).toEqual([]);
   });
 
-  it("runs every action at a pinned commit with its tag in a comment", () => {
-    const loose = usesLines()
-      .filter((u) => !u.ref.startsWith("./"))
-      .filter((u) => !/^[\w.-]+\/[\w./-]+@[0-9a-f]{40}$/.test(u.ref) || !/^\s+#\s+\S+\s*$/.test(u.rest))
-      .map((u) => `${u.where} ${u.ref}${u.rest}`);
-    expect(loose).toEqual([]);
+  it("is written only in YAML forms the scan reads", () => {
+    expect(Object.entries(files).flatMap(([path, text]) => refusedForms(path, text))).toEqual([]);
+  });
+
+  // Whether a commit really is its tag needs the network: node scripts/verify-action-pins.mjs asks GitHub.
+  it("runs every action at a pinned commit with its exact tag in a comment, the same everywhere", () => {
+    expect(pinFindings(files)).toEqual([]);
   });
 
   it("names the stable toolchain on every rust-toolchain step", () => {
-    const steps = usesLines().filter((u) => u.ref.startsWith("dtolnay/rust-toolchain@"));
+    const steps = usesSteps(files).filter((u) => u.ref.startsWith("dtolnay/rust-toolchain@"));
     expect(steps.length).toBeGreaterThan(0);
     const unnamed = steps.filter((u) => !u.step.some((l) => /^\s+toolchain:\s*stable\s*$/.test(l))).map((u) => u.where);
     expect(unnamed).toEqual([]);
   });
+
+  // Dependabot's "/" covers .github/workflows only, so an action called from a composite action would never be bumped.
+  it("calls outside actions only from workflows", () => {
+    const composite = Object.fromEntries(Object.entries(files).filter(([path]) => path.includes("/actions/")));
+    expect(
+      usesSteps(composite)
+        .filter((u) => !u.ref.startsWith("./"))
+        .map((u) => u.where),
+    ).toEqual([]);
+  });
 });
 
-const dependabot = Object.values(
-  import.meta.glob("../../.github/dependabot.yml", { query: "?raw", import: "default", eager: true }),
-)[0] as string | undefined;
+describe("the CI scan", () => {
+  it("refuses every other spelling of uses and permissions, and anchors, aliases, tags and merge keys", () => {
+    const odd = [
+      '      - "uses": swatinem/rust-cache@v2',
+      "      - {uses: dtolnay/rust-toolchain@stable}",
+      "      - uses : tauri-apps/tauri-action@v0",
+      "      - uses: 'actions/checkout@v4'",
+      "      - uses:",
+      "    'permissions':",
+      "    permissions: {contents: write}",
+      "    permissions: &grant",
+      "    permissions: *grant",
+      "    <<: *job",
+      "    ? permissions",
+      "    if: !cancelled()",
+    ];
+    expect(refusedForms("x.yml", odd.join("\n"))).toEqual(odd.map((l, i) => `x.yml:${i + 1} ${l.trim()}`));
+  });
+
+  it("reads the plain forms and skips the text of block scalars", () => {
+    const text = [
+      "    permissions:",
+      "      contents: read",
+      "    if: ${{ !cancelled() && github.ref != 'x' }}",
+      "    steps:",
+      `      - uses: actions/checkout@${"a".repeat(40)} # v4.4.0`,
+      "      - run: | # build",
+      '          echo "uses: {a} &b *c" # permissions: x',
+      "          ls *.zip",
+      "        shell: bash",
+    ].join("\n");
+    expect(refusedForms("x.yml", text)).toEqual([]);
+    expect(yamlLines(text).map((l) => l.n)).toEqual([1, 2, 3, 4, 5, 6, 9]);
+  });
+
+  it("reports a loose ref, a moving tag and a commit or tag that disagrees with another use", () => {
+    const sha = (c: string) => c.repeat(40);
+    const uses = [
+      `actions/checkout@${sha("a")} # v4.4.0`,
+      `actions/checkout@${sha("b")} # v4.4.0`,
+      `actions/cache/restore@${sha("c")} # v4.3.0`,
+      `actions/cache@${sha("c")} # v4.2.0`,
+      `swatinem/rust-cache@${sha("d")} # v2`,
+      `dtolnay/rust-toolchain@${sha("e")} # stable`,
+      `tauri-apps/tauri-action@${sha("f")} # stable`,
+      "tauri-apps/tauri-action@v0",
+      `docker://alpine@sha256:${sha("0")}${sha("0").slice(0, 24)}`,
+      "./.github/actions/linux-deps",
+    ];
+    const text = uses.map((u) => `      - uses: ${u}`).join("\n");
+    expect(pinFindings({ "x.yml": text })).toEqual([
+      "x.yml:8 is not pinned to a commit with its tag in a comment: tauri-apps/tauri-action@v0",
+      `x.yml:9 is not pinned to a commit with its tag in a comment: ${uses[8]}`,
+      "x.yml:5 names v2, not an exact release tag",
+      "x.yml:7 names stable, not an exact release tag",
+      `actions/cache@${sha("c")} is commented as v4.3.0 and v4.2.0`,
+      `actions/checkout v4.4.0 is pinned to ${sha("a")} and ${sha("b")}`,
+    ]);
+  });
+
+  it("files each grant under its own job at any indent, and none from a block scalar", () => {
+    const text = [
+      "on: push",
+      "jobs:",
+      "    build:",
+      "        permissions:",
+      "            contents: write # for the release",
+      "        steps:",
+      "            - run: |",
+      "                permissions:",
+      "                  contents: write",
+      "    'deploy':",
+      "        permissions: write-all",
+      "permissions:",
+      "  contents: read",
+    ].join("\n");
+    expect(grants({ "w/.github/workflows/x.yml": text })).toEqual([
+      "x.yml build contents: write",
+      "x.yml deploy write-all",
+      "x.yml top contents: read",
+    ]);
+  });
+});
+
+const dependabot = all["../../.github/dependabot.yml"] as string | undefined;
 
 describe("pinned actions stay current", () => {
   it("has Dependabot bump only the workflow actions, weekly, on dev", () => {
@@ -72,39 +150,13 @@ describe("pinned actions stay current", () => {
   });
 });
 
-/** Every permission a workflow grants, as `file job key: level`, with `top` for the workflow wide block. */
-function grants(): string[] {
-  return Object.entries(files)
-    .filter(([path]) => path.includes("/workflows/"))
-    .flatMap(([path, text]) => {
-      const file = path.split("/").pop();
-      const lines = text.split(/\r?\n/);
-      let job = "top";
-      let inJobs = false;
-      const out: string[] = [];
-      lines.forEach((line, i) => {
-        if (/^jobs:\s*$/.test(line)) inJobs = true;
-        const name = /^ {2}([\w-]+):\s*$/.exec(line);
-        if (inJobs && name) job = name[1];
-        const block = /^(\s*)permissions:\s*(\S*)/.exec(line);
-        if (!block) return;
-        if (block[2] && !block[2].startsWith("#")) out.push(`${file} ${job} ${block[2]}`);
-        for (let j = i + 1; j < lines.length && (!lines[j].trim() || indentOf(lines[j]) > block[1].length); j++) {
-          const grant = lines[j].replace(/#.*/, "").trim();
-          if (grant) out.push(`${file} ${job} ${grant.replace(/:\s*/, ": ")}`);
-        }
-      });
-      return out;
-    });
-}
-
 describe("job permissions", () => {
   it("lets the bundle job read the repository and nothing more", () => {
-    expect(grants().filter((g) => g.startsWith("build.yml bundle "))).toEqual(["build.yml bundle contents: read"]);
+    expect(grants(files).filter((g) => g.startsWith("build.yml bundle "))).toEqual(["build.yml bundle contents: read"]);
   });
 
   it("grants write access only to the release job and the Pages deploy", () => {
-    expect(grants().filter((g) => !g.endsWith(": read"))).toEqual([
+    expect(grants(files).filter((g) => !g.endsWith(": read"))).toEqual([
       "build.yml release contents: write",
       "manual.yml top pages: write",
       "manual.yml top id-token: write",
@@ -114,9 +166,11 @@ describe("job permissions", () => {
 
 describe("checkout credentials", () => {
   it("leaves no repository token in the git config of any checkout", () => {
-    const steps = usesLines().filter((u) => u.ref.startsWith("actions/checkout@"));
+    const steps = usesSteps(files).filter((u) => u.ref.startsWith("actions/checkout@"));
     expect(steps.length).toBeGreaterThan(0);
-    const kept = steps.filter((u) => !u.step.some((l) => /^\s+persist-credentials:\s*false\s*$/.test(l))).map((u) => u.where);
+    const kept = steps
+      .filter((u) => !u.step.some((l) => /^\s+persist-credentials:\s*false\s*$/.test(l)))
+      .map((u) => u.where);
     expect(kept).toEqual([]);
   });
 });
