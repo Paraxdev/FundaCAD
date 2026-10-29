@@ -2,8 +2,8 @@ use std::io::Write;
 use std::path::PathBuf;
 
 use fundacad_lib::plugins::bundle::{
-    allowed_bundle_url, extract_into, grants_match, is_official_url, now_secs, official_url, safe_entry, safe_id,
-    sha256_hex, Consented, BUNDLE_PREFIX,
+    allowed_bundle_url, bundle_target, extract_into, grants_match, is_official_url, now_secs, official_url, safe_entry,
+    safe_id, sha256_hex, Consented, BUNDLE_PREFIX,
 };
 
 /// An id becomes a directory under the plugins root, so every refusal below is a path guard.
@@ -229,6 +229,40 @@ fn official_holds_only_for_a_tag_and_asset_the_parser_leaves_as_written() {
     ] {
         let url = format!("{prefix}{tail}");
         assert!(!is_official_url(&url), "wrongly ours: {url}");
+    }
+}
+
+/// What is fetched is what gets stored as the source and labelled, even where the parser rewrites the text it was given.
+#[test]
+fn the_url_fetched_is_the_one_stored_and_labelled() {
+    let ours = format!("{BUNDLE_PREFIX}beta/plugin-mcp.zip");
+    let target = bundle_target(&ours).expect("ours is fetchable");
+    assert_eq!(target.url.as_str(), ours);
+    assert!(target.official);
+
+    let fetched = "https://github.com/Paraxdev/fundacad/releases/download/beta/x.zip";
+    let elsewhere = "https://github.com/someone/else/releases/download/beta/x.zip";
+    let base = "https://github.com/Paraxdev/fundacad/releases/download/";
+    for (raw, want) in [
+        ("https://GitHub.com/Paraxdev/fundacad/releases/download/beta/x.zip".to_string(), fetched),
+        ("https://GITHUB.COM/Paraxdev/fundacad/releases/download/beta/x.zip".to_string(), fetched),
+        ("https://github.com:443/Paraxdev/fundacad/releases/download/beta/x.zip".to_string(), fetched),
+        (format!("{base}%2e%2e/%2e%2e/%2e%2e/%2e%2e/someone/else/releases/download/beta/x.zip"), elsewhere),
+        (format!("{base}%2E%2E/%2E%2E/%2E%2E/%2E%2E/someone/else/releases/download/beta/x.zip"), elsewhere),
+        (format!("{base}.%2e/%2e./.%2E/%2E./someone/else/releases/download/beta/x.zip"), elsewhere),
+    ] {
+        let target = bundle_target(&raw).unwrap_or_else(|e| panic!("{raw}: {e}"));
+        assert_eq!(target.url.as_str(), want, "fetched from {raw}");
+        assert!(!target.official, "labelled ours: {raw}");
+    }
+
+    let third_party = "https://plugins.example.com:8443/a/b.zip?token=abc";
+    let target = bundle_target(third_party).expect("a self hosted URL is fetchable");
+    assert_eq!(target.url.as_str(), third_party);
+    assert!(!target.official);
+
+    for bad in ["http://github.com/Paraxdev/fundacad/releases/download/beta/x.zip", "https://github.com@evil.example.com/x.zip"] {
+        assert!(bundle_target(bad).is_err(), "fetchable: {bad}");
     }
 }
 

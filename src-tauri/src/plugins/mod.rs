@@ -11,7 +11,7 @@ pub mod localnet;
 pub mod web;
 
 use bundle::{
-    allowed_bundle_url, extract_into, grants_match, is_official_url, now_secs, safe_id, sha256_hex, Consented,
+    allowed_bundle_url, bundle_target, extract_into, grants_match, now_secs, safe_id, sha256_hex, Consented,
     MAX_DOWNLOAD,
 };
 use serde::{Deserialize, Serialize};
@@ -235,9 +235,9 @@ fn inspect_bytes(app: &AppHandle, bytes: &[u8], source: String, official: bool) 
 /// Download a bundle and read its manifest, installing nothing.
 #[tauri::command]
 pub async fn plugin_inspect_url(app: AppHandle, url: String) -> Result<Inspected, String> {
-    let bytes = fetch_bundle(&url).await?;
-    let official = is_official_url(&url);
-    inspect_bytes(&app, &bytes, url, official)
+    let target = bundle_target(&url)?;
+    let bytes = fetch_bundle(&target.url).await?;
+    inspect_bytes(&app, &bytes, target.url.into(), target.official)
 }
 
 /// Read a bundle the user already has, installing nothing.
@@ -249,13 +249,7 @@ pub fn plugin_inspect_file(app: AppHandle, path: String) -> Result<Inspected, St
 
 /// Get a bundle's bytes over HTTPS, refusing to reach anywhere it may not. In Rust, since widening `connect-src` for a
 /// fetch() would open the releases host to every script in the window.
-async fn fetch_bundle(url: &str) -> Result<Vec<u8>, String> {
-    if !allowed_bundle_url(url) {
-        return Err(format!(
-            "a plugin can only be downloaded over https from a named host, and that is not one: {url}"
-        ));
-    }
-
+async fn fetch_bundle(url: &url::Url) -> Result<Vec<u8>, String> {
     // Every hop is checked: reqwest follows redirects, so an approved host could 302 to plain HTTP. The hop limit
     // restates reqwest's default, since a custom policy replaces it.
     let client = reqwest::Client::builder()
@@ -273,7 +267,7 @@ async fn fetch_bundle(url: &str) -> Result<Vec<u8>, String> {
         .build()
         .map_err(|e| e.to_string())?;
 
-    let resp = client.get(url).send().await.map_err(|e| format!("could not download the plugin: {e}"))?;
+    let resp = client.get(url.clone()).send().await.map_err(|e| format!("could not download the plugin: {e}"))?;
     if !resp.status().is_success() {
         return Err(format!("the download answered {}", resp.status()));
     }
@@ -305,9 +299,9 @@ pub async fn plugin_install(
     promise: String,
     expect: Consented,
 ) -> Result<Installed, String> {
-    let bytes = fetch_bundle(&url).await?;
-    let official = is_official_url(&url);
-    install_bytes(&app, &id, url, official, &bytes, sha256, promise, expect)
+    let target = bundle_target(&url)?;
+    let bytes = fetch_bundle(&target.url).await?;
+    install_bytes(&app, &id, target.url.into(), target.official, &bytes, sha256, promise, expect)
 }
 
 /// Install a zip the user has. The same pipeline: the grant comparison is the only gate a local file has, so skipping

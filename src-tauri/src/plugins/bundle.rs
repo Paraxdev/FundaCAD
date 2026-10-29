@@ -72,6 +72,24 @@ pub fn is_official_url(raw: &str) -> bool {
     official_url(raw).is_some()
 }
 
+/// The parsed form is what gets fetched, stored as the source and labelled, so the three cannot disagree.
+pub struct BundleTarget {
+    pub url: url::Url,
+    pub official: bool,
+}
+
+pub fn bundle_target(raw: &str) -> Result<BundleTarget, String> {
+    let refused = || format!("a plugin can only be downloaded over https from a named host, and that is not one: {raw}");
+    if !allowed_bundle_url(raw) {
+        return Err(refused());
+    }
+    let url = url::Url::parse(raw).map_err(|_| refused())?;
+    if !allowed_bundle_url(url.as_str()) {
+        return Err(refused());
+    }
+    Ok(BundleTarget { official: is_official_url(raw), url })
+}
+
 /// HTTPS, a real host and nothing in the authority that changes its meaning. HTTPS is the point: without it every later
 /// check runs against whatever the network sent. Private and loopback hosts are allowed on purpose (self hosted
 /// servers).
