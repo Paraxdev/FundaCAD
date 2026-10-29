@@ -1,11 +1,19 @@
 # Share your document
 
-The Live document setting on the AI assistants page decides what an assistant may do with your open document.
+The Live document setting on the AI assistants page decides what an assistant may do with the document you have open.
 
-![Live document setting open, offering Do not share, Share read only and Share and allow edits](../img/ai-live-document.png)
+![The Live document choices open in Preferences, AI assistants](../img/ai-live-document.png)
 
-Share, and allow edits lets the assistant change the document while you watch, and each change is one step Ctrl+Z can undo. Share, read only lets it look and measure. Do not share gives it a copy of its own.
+| Live document | What the assistant may do |
+| --- | --- |
+| Share, and allow edits | Change your document while you watch. Each change is one step Ctrl+Z can undo. This is the default. |
+| Share, read only | Look at your document and measure it. |
+| Do not share | Work on a copy of its own. |
 
-Give the assistant real dimensions or a STEP file of what the part must fit, and ask it to use named parameters and save a `.funda` file.
+The Status row below it says whether an assistant is connected. While one is, the title bar shows its name and what it last did, and a click there opens this setting.
 
-It can save that file in any of your folders, and read a STEP file from one, but not from a hidden folder, your home folder itself or a drive root. If you started it with `--allow-path`, it keeps to those folders and the folder of your open document. [Connect an AI assistant](connect.md) shows how.
+## Ask for a part that fits
+
+Give the assistant real dimensions, or a STEP file of what the part must fit. Ask it to use named parameters and to save a `.funda` file.
+
+It saves and reads files in your folders, with the limits on [Connect an AI assistant](connect.md#where-it-may-open-and-save-files).

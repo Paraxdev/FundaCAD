@@ -359,8 +359,13 @@ fn copy_into<W: Write + Seek>(z: &mut zip::ZipWriter<W>, src: &Path) -> Result<(
 }
 
 fn open_archive(path: &Path) -> Result<zip::ZipArchive<File>, String> {
+    let damaged = |_| "This document is damaged and cannot be opened.".to_string();
     let f = File::open(path).map_err(|e| e.to_string())?;
-    zip::ZipArchive::new(f).map_err(|_| "This document is damaged and cannot be opened.".to_string())
+    let mut z = zip::ZipArchive::new(f).map_err(damaged)?;
+    // Local headers that disagree with the central directory, duplicate names or overlapping entries let another
+    // reader see a different document in the same file.
+    z.validate_header_consistency().map_err(damaged)?;
+    Ok(z)
 }
 
 /// Refuse a bomb BEFORE inflating anything.
