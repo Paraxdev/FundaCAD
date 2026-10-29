@@ -1,3 +1,5 @@
+@use "hit";
+
 /* Type and margins come from .panel-title in _timeline.scss; this adds the row layout
    for the kind filter. */
 .browser-title {
@@ -121,6 +123,10 @@
 :root[data-pointer="touch"] .tree-eye.icon-btn.icon-btn-sm::before {
   inset: -13px -6px;
 }
+/* The Extra Parameters plugin draws its setup button with inline styles, so its hit area is set here. */
+.xp-setup {
+  @include hit.area;
+}
 
 /* In-canvas sketch dimensions stay off the spacing scale on purpose: they are projected
    from Three.js every frame, so their px sizes are a picking budget, not chrome. */
@@ -225,6 +231,9 @@
   line-height: 1;
   cursor: pointer;
   pointer-events: auto;
+}
+.sketch-glyph {
+  @include hit.area($position: null);
 }
 .sketch-glyph:hover {
   border-color: var(--accent-hot);

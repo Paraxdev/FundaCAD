@@ -79,6 +79,13 @@ describe("base components", () => {
     expect(valueOf(css, ".ui-slider-input", "margin")).toBe("calc((20px - max(20px, var(--hit-min))) / 2) 0");
   });
 
+  it("grow the shell's own small controls too", () => {
+    expect(missingHitAreas(css, [".sketch-glyph", ".rd-mini", ".xp-setup"])).toEqual([]);
+    expect(valueOf(css, ".sketch-glyph", "position")).toBe("absolute");
+    expect(valueOf(css, ".rd-mini", "position")).toBe("relative");
+    expect(valueOf(css, ".xp-setup", "position")).toBe("relative");
+  });
+
   // The legacy box is a span beside its input, so a pseudo on it would not toggle: the hidden input itself grows.
   it("grow the legacy checkbox's own input", () => {
     expect(valueOf(css, ".check input", "top")).toBe("min(0px, (100% - var(--hit-min)) / 2)");
