@@ -1,4 +1,12 @@
-<script setup lang="ts" generic="T extends string">
+<script lang="ts">
+export interface ListboxItem<T extends string = string> {
+  value: T;
+  label: string;
+  disabled?: boolean | undefined;
+}
+</script>
+
+<script setup lang="ts" generic="T extends string, I extends ListboxItem<T> = ListboxItem<T>">
 // A listbox whose options are the caller's own elements: the option slot draws every item, in order, and binds the
 // attrs it is handed. Focus moves among them on one Tab stop, Space selects, Enter emits apply. A caller with its own
 // pointer rules calls preventDefault in its click handler, else a click selects the option. With multiple set the
@@ -9,12 +17,6 @@ import { rovingIndex, useRovingFocus } from "./useRovingFocus";
 import { useName, type Named } from "./useName";
 import { isMac } from "../../input/platform";
 import { modsOf, selectRow, type SelectMods } from "../../ui/rowSelection";
-
-interface Item {
-  value: T;
-  label: string;
-  disabled?: boolean | undefined;
-}
 
 interface OptionAttrs {
   id: string;
@@ -28,7 +30,7 @@ interface OptionAttrs {
 
 const props = defineProps<
   {
-    items: readonly Item[];
+    items: readonly I[];
     modelValue: T | null | readonly T[];
     multiple?: boolean;
     /** The option a Shift run starts from; left out, the listbox keeps its own. */
@@ -37,7 +39,7 @@ const props = defineProps<
 >();
 const emit = defineEmits<{ "update:modelValue": [T | T[]]; "update:anchor": [T]; apply: [T] }>();
 defineSlots<{
-  option(p: { item: Item; index: number; selected: boolean; attrs: OptionAttrs }): unknown;
+  option(p: { item: I; index: number; selected: boolean; attrs: OptionAttrs }): unknown;
 }>();
 
 const name = useName(props, "Listbox");
@@ -56,7 +58,7 @@ const roving = useRovingFocus({
 
 const elements = () => [...(root.value?.querySelectorAll<HTMLElement>("[data-roving]") ?? [])];
 
-function attrsOf(item: Item, i: number): OptionAttrs {
+function attrsOf(item: I, i: number): OptionAttrs {
   return {
     id: `${id}-${i}`,
     role: "option",
@@ -160,13 +162,19 @@ function target(k: string, from: number, els: readonly HTMLElement[]): number | 
   return null;
 }
 
+// The window keymap reads no defaultPrevented, so a key this list used would also turn the view or start a tool.
+function consume(e: KeyboardEvent) {
+  e.preventDefault();
+  e.stopPropagation();
+}
+
 // Firefox clicks a button on the Space keyup, which would select again after Space already did.
 let swallowSpaceUp = false;
 
 function onKeydown(e: KeyboardEvent) {
   if (e.defaultPrevented) return;
   if (props.multiple && isSelectAll(e)) {
-    e.preventDefault();
+    consume(e);
     selectAll();
     return;
   }
@@ -177,7 +185,7 @@ function onKeydown(e: KeyboardEvent) {
   if (from < 0) return;
   const k = e.key;
   if (k === "Enter" || (k === " " && buffer === "")) {
-    e.preventDefault();
+    consume(e);
     const it = props.items[from];
     if (k === " ") {
       swallowSpaceUp = true;
@@ -188,7 +196,7 @@ function onKeydown(e: KeyboardEvent) {
   const nav = target(k, from, els);
   const next = nav ?? (k.length === 1 ? typeAhead(k, from) : null);
   if (next === null) return;
-  e.preventDefault();
+  consume(e);
   if (next !== from || hit < 0) roving.focus(next);
   if (props.multiple && e.shiftKey && nav !== null && next !== from) extend(from, next);
 }

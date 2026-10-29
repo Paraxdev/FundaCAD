@@ -232,6 +232,37 @@ describe("Listbox", () => {
     expect(focusedLabel()).toBe("Oak");
     expect((await press("Tab")).defaultPrevented).toBe(false);
   });
+
+  // The window keymap turns the view on the arrows and starts tools on letters, and it does not read defaultPrevented.
+  it("keeps the keys it handles from the window's shortcuts and lets the others through", async () => {
+    const w = render({ multiple: true, modelValue: [] });
+    const heard: string[] = [];
+    const listen = (e: KeyboardEvent) => heard.push(e.key);
+    window.addEventListener("keydown", listen);
+    try {
+      (opts(w)[0]!.element as HTMLElement).focus();
+      for (const k of ["ArrowRight", "ArrowDown", "Home", "End", "r", " ", "Enter"]) await press(k);
+      await press("a", { ctrlKey: true });
+      await press("ArrowLeft", { shiftKey: true });
+      expect(heard).toEqual([]);
+      for (const k of ["Delete", "Escape", "Tab", "F2"]) await press(k);
+      await press("z", { ctrlKey: true });
+      expect(heard).toEqual(["Delete", "Escape", "Tab", "F2", "z"]);
+    } finally {
+      window.removeEventListener("keydown", listen);
+    }
+  });
+
+  it("hands the slot the caller's own item, extra fields and all", () => {
+    const items = ITEMS.map((it) => ({ ...it, swatch: `#${it.value}` }));
+    const w = mount(Listbox<V, (typeof items)[number]>, {
+      props: { items, modelValue: null, label: "Materials" },
+      slots: {
+        option: (p: { item: (typeof items)[number]; attrs: object }) => h("button", { ...p.attrs }, p.item.swatch),
+      },
+    });
+    expect(opts(w).map((o) => o.text())).toEqual(ITEMS.map((it) => `#${it.value}`));
+  });
 });
 
 describe("Listbox multiple", () => {
