@@ -3,17 +3,17 @@
 
 import * as THREE from "three";
 import { asFeature } from "../types";
-import { Line2 } from "three/examples/jsm/lines/Line2.js";
 import type { EdgeRef } from "../viewport/edgeLines";
-import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
-import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore, RebuildState } from "../document/store";
 import { featureValueRule } from "../document/numFields";
 import type { Feature, ParamTarget, Selector } from "../types";
 import { midMatchTol, polylineMid, edgeSelectorFrom } from "../viewport/edgeMatch";
 import { pickScope, type PickScope } from "../viewport/pickScope";
-import { canConsume } from "./toolCapabilities";
+import { canConsume, TOOL_CAPABILITIES } from "./toolCapabilities";
+import { EDGE_CAP, confirmEdgeCount } from "./edgeCountGate";
+import { MidSet, TangentChains } from "./tangentChains";
+import { GhostLines, type GhostSlot } from "./ghostLines";
 import { DimInput, type DimSegment } from "../sketch/dimInput";
 import { type Continuity, continuityBlocked, continuityOf, pickedReach } from "./continuity";
 import { setPrompt } from "../ui/prompt";
@@ -72,7 +72,7 @@ const Y_AXIS = HANDLE_UP;
 // Ghost member lines drawn over the preview, where the members were consumed into rounded faces, in the Highlighter's
 // selected edge colour, or its error red.
 const GHOST_ERROR = 0xe23b3b;
-const ghostColor = (g: { failed: boolean }) => (g.failed ? GHOST_ERROR : edgeSelectColor());
+const ghostColor = (g: { failed: boolean }, select = edgeSelectColor()) => (g.failed ? GHOST_ERROR : select);
 
 /** Only delays the OCCT preview; the client side ghost (viewport.setBlendGhost) still redraws every frame, so a fast
  *  drag does not queue a rebuild per pixel. */
@@ -95,7 +95,7 @@ interface GhostEdge {
   sels: Selector[];
   mid: Vec3;
   points: Vec3[];
-  line: Line2;
+  slot: GhostSlot;
   chain: number;
   /** the faces' largest curvature across this edge, per mm of radius and of chord, as the engine reports it */
   curvature?: readonly [number, number];
@@ -133,6 +133,7 @@ export class EdgeFeatureTool {
 
   // Every member is a ghost line drawn through the model (depthTest off), so hidden members stay visible and clickable.
   private ghosts: GhostEdge[] = []; // membership display + toggle targets
+  private ghostLines: GhostLines | null = null;
   private unmatchedSels: Selector[] = []; // saved selectors we couldn't visualize (kept for commit)
 
   private editId: string | null = null; // committed feature id being edited
@@ -207,7 +208,10 @@ export class EdgeFeatureTool {
     // Picked edges are matched by geometry, not model edge ids, which the preview renumbers; localClearance already
     // drops chain mates sharing a vertex as inside the touch tolerance.
     const selected = this.ghosts.map((g, i) => ({ id: `pick:${i}`, points: g.points }));
-    this.clearanceLimitMm = clearanceLimit(localClearance({ selected, all, modelScale: this.modelDiagonal() ?? 0 }));
+    const near = [this.anchor.x, this.anchor.y, this.anchor.z] as const;
+    this.clearanceLimitMm = clearanceLimit(
+      localClearance({ selected, all, modelScale: this.modelDiagonal() ?? 0, near }),
+    );
   }
 
   /** mm from the picked edge, signed by the cursor's side (features/edgeSwipe.ts). Directions are projected from a
@@ -298,7 +302,8 @@ export class EdgeFeatureTool {
     if (this.active) return;
     // The direct entry needs the selection its handle was drawn for. If a rebuild landed between paint and press,
     // refuse before installing anything rather than arm an unasked pick phase that holds toolBusy().
-    const pre = this.viewport.selectedEdgeSelectors();
+    const preSeeds = this.viewport.selectedEdgeSeeds();
+    const pre = preSeeds.map((s) => s.sel);
     if (opts?.grabAt && !pre.length) return;
     // A selected face stands for every edge around it. Asking toolCapabilities.ts here keeps the table and the
     // behaviour in step, and opens the face route from every entry point at once.
@@ -317,13 +322,14 @@ export class EdgeFeatureTool {
     if (seed.length) {
       // A handle grab opens at 0, so the drag is the radius and the press point means no feature; a command opens on
       // the default. The handle's own anchor is kept, it may stand where the edge was clicked.
-      this.beginDrag(seed, opts?.anchor?.clone() ?? null, opts?.tangent ?? null, undefined, {
+      const began = this.beginDrag(seed, opts?.anchor?.clone() ?? null, opts?.tangent ?? null, undefined, {
         fromZero: !!opts?.grabAt,
         // A face's edges are the complete set asked for, chain expansion could only add edges off the face. An edge
         // pre-selection keeps the scope its own picks decided (pickScope.ts).
         scope: pre.length ? this.viewport.selectedEdgeScope().scope : "single",
+        ...(pre.length ? { lines: preSeeds.map((s) => s.line) } : {}),
       });
-      if (opts?.grabAt) this.grabHandle(opts.grabAt.x, opts.grabAt.y);
+      if (began && opts?.grabAt) this.grabHandle(opts.grabAt.x, opts.grabAt.y);
     } else {
       setPrompt(`Click an edge to ${kind} · Ctrl-click a chain · Shift-click one · or pick a face`);
     }
@@ -449,49 +455,71 @@ export class EdgeFeatureTool {
   }
 
   /** Unmatched selectors are kept for commit with no visual; the engine resolves them by nearest at build time. */
-  private seedGhosts(sels: Selector[]) {
-    for (const sel of sels) {
+  /** `lines[i]`, when given, is the edge `sels[i]` was made from, so it is not matched back by geometry. */
+  private seedGhosts(sels: Selector[], lines?: readonly (EdgeRef | undefined)[]) {
+    const byPoints = new Map<unknown, (typeof this.ghosts)[number]>(this.ghosts.map((g) => [g.points, g]));
+    let color: number | undefined;
+    sels.forEach((sel, i) => {
       if ("point" in sel) this.lastPickMid = sel.point as Vec3;
       if (!("point" in sel)) {
         this.unmatchedSels.push(sel);
-        continue;
+        return;
       }
-      const line = this.viewport.edgeLineForSelector(sel.point as Vec3, sel.body);
-      const same = line && this.ghosts.find((g) => g.points === line.points);
+      const line = lines?.[i] ?? this.viewport.edgeLineForSelector(sel.point as Vec3, sel.body);
+      const same = line && byPoints.get(line.points);
       if (same) same.sels.push(sel);
-      else if (line) this.addGhost(sel, line.points as Vec3[], undefined, line.curvature);
-      else this.unmatchedSels.push(sel);
+      else if (line) {
+        color ??= edgeSelectColor();
+        this.addGhost(sel, line.points as Vec3[], undefined, line.curvature, color);
+        const added = this.ghosts[this.ghosts.length - 1];
+        if (added?.points === line.points) byPoints.set(line.points, added);
+      } else this.unmatchedSels.push(sel);
+    });
+    this.ghostLines?.sync();
+  }
+
+  /** How many edges start() would seed, for the count gate (edgeCountGate.ts), without seeding them. */
+  seedCount(kind: Kind): number {
+    const n = this.viewport.selectedEdgeCount();
+    if (!n) return canConsume(kind, "face") ? this.faceEdgeSelectors().length : 0;
+    if (this.viewport.selectedEdgeScope().scope !== "chain") return n;
+    const chains = this.chains();
+    const seen = new MidSet();
+    let count = 0;
+    for (const { line } of this.viewport.selectedEdgeSeeds()) {
+      const mid = edgeSelectorFrom({ points: line.points as Vec3[], body: line.body })?.point;
+      if (!mid || seen.has(mid)) continue;
+      for (const l of chains.chain(line)) {
+        const m = edgeSelectorFrom({ points: l.points as Vec3[], body: l.body })?.point;
+        if (m && !seen.has(m)) {
+          seen.add(m);
+          count++;
+        }
+      }
     }
+    return Math.max(n, count);
   }
 
   private chainCounter = 0; // one id per add gesture (chain toggles as a unit)
   private memberSeq = 0; // one id per member, stable for the panel's row keys
 
-  private addGhost(sel: Selector, points: Vec3[], chain?: number, curvature?: readonly [number, number]) {
+  private addGhost(
+    sel: Selector,
+    points: Vec3[],
+    chain?: number,
+    curvature?: readonly [number, number],
+    color = edgeSelectColor(),
+  ) {
     const mid = polylineMid(points);
     if (!mid) return; // an edge always has points; nothing to ghost otherwise
-    const geo = new LineGeometry();
-    const flat: number[] = [];
-    for (const p of points) flat.push(p[0], p[1], p[2]);
-    geo.setPositions(flat);
-    const el = this.viewport.domElement;
-    const mat = new LineMaterial({
-      color: edgeSelectColor(),
-      linewidth: 3.5,
-      worldUnits: false,
-      depthTest: false,
-      transparent: true,
-    });
-    mat.resolution.set(el.clientWidth, el.clientHeight);
-    const line = new Line2(geo, mat);
-    line.renderOrder = 998;
-    this.viewport.addToScene(line);
+    this.ghostLines ??= new GhostLines(this.viewport);
+    const slot = this.ghostLines.add(points, color);
     this.ghosts.push({
       id: ++this.memberSeq,
       sels: [sel],
       mid,
       points,
-      line,
+      slot,
       chain: chain ?? ++this.chainCounter,
       ...(curvature ? { curvature } : {}),
       failed: false,
@@ -548,16 +576,11 @@ export class EdgeFeatureTool {
     setPrompt(`Click an edge in the view to add it to the ${this.kind}`);
   }
 
-  private removeGhost(g: GhostEdge) {
-    if (g === this.hoveredGhost) this.hoveredGhost = null;
-    this.ghosts = this.ghosts.filter((x) => x !== g);
-    this.viewport.removeFromScene(g.line);
-    g.line.geometry.dispose();
-    (g.line.material as LineMaterial).dispose();
-  }
-
   private disposeGhosts() {
-    for (const g of [...this.ghosts]) this.removeGhost(g);
+    this.hoveredGhost = null;
+    this.ghosts = [];
+    this.ghostLines?.dispose();
+    this.ghostLines = null;
     this.unmatchedSels = [];
   }
 
@@ -599,73 +622,63 @@ export class EdgeFeatureTool {
     if (g === this.hoveredGhost) return;
     const prev = this.hoveredGhost;
     this.hoveredGhost = g;
-    if (prev && this.ghosts.includes(prev)) (prev.line.material as LineMaterial).color.set(ghostColor(prev));
-    if (g) (g.line.material as LineMaterial).color.set(edgeHoverColor());
+    if (prev) this.ghostLines?.setColor(prev.slot, ghostColor(prev));
+    if (g) this.ghostLines?.setColor(g.slot, edgeHoverColor());
     this.viewport.requestRender();
   }
 
   // A blend cannot end mid tangency (OCCT cannot stop it at the joint), so every pick expands across tangent
   // continuous edges and deselection removes the same chain.
 
-  /** Breadth first across shared endpoints whose end tangents are colinear, `start` included. */
-  private tangentChain(start: EdgeRef): EdgeRef[] {
-    const all = this.viewport.visibleEdgeLines();
+  /** Built per gesture: the visible edges change with every rebuild and visibility toggle. */
+  private chains(): TangentChains {
     const bb = this.store.buildState.result?.bbox;
     const diag = bb ? Math.hypot(bb.max[0] - bb.min[0], bb.max[1] - bb.min[1], bb.max[2] - bb.min[2]) : 100;
-    const joinTol = Math.max(1e-4, 1e-5 * diag); // endpoint coincidence
-    const G1_COS = Math.cos((10 * Math.PI) / 180); // tangents within 10°
+    return new TangentChains(this.viewport.visibleEdgeLines(), Math.max(1e-4, 1e-5 * diag));
+  }
 
-    type End = { p: Vec3; t: THREE.Vector3 }; // endpoint + unit tangent there
-    const endsOf = (l: EdgeRef): End[] => {
-      const pts = l.points as Vec3[];
-      const first = pts[0];
-      const second = pts[1];
-      const last = pts[pts.length - 1];
-      const prev = pts[pts.length - 2];
-      if (!first || !second || !last || !prev) return [];
-      const tHead = new THREE.Vector3(second[0] - first[0], second[1] - first[1], second[2] - first[2]).normalize();
-      const tTail = new THREE.Vector3(last[0] - prev[0], last[1] - prev[1], last[2] - prev[2]).normalize();
-      return [
-        { p: first, t: tHead },
-        { p: last, t: tTail },
-      ];
-    };
-
-    const chain = new Set<EdgeRef>([start]);
-    const queue: EdgeRef[] = [start];
-    while (queue.length) {
-      const cur = queue.pop();
-      if (!cur) break;
-      for (const ce of endsOf(cur)) {
-        for (const cand of all) {
-          if (chain.has(cand)) continue;
-          for (const oe of endsOf(cand)) {
-            const d = Math.hypot(ce.p[0] - oe.p[0], ce.p[1] - oe.p[1], ce.p[2] - oe.p[2]);
-            if (d > joinTol) continue;
-            if (Math.abs(ce.t.dot(oe.t)) < G1_COS) continue;
-            chain.add(cand);
-            queue.push(cand);
-            break;
-          }
-        }
-      }
-    }
-    return [...chain];
+  private memberMids(): MidSet {
+    const mids = new MidSet();
+    for (const g of this.ghosts) mids.add(g.mid);
+    return mids;
   }
 
   /** Takes the tangent chain along or not by `scope` (viewport/pickScope.ts). The gesture shares one chain id either
    *  way, so it deselects as one unit. */
-  private addPicked(line: EdgeRef, scope: PickScope) {
-    const chainId = ++this.chainCounter;
+  /** Adds nothing once the members would pass EDGE_CAP and returns the member count the picks would have made, 0
+   *  while they fit. One `ctx` serves a whole seed, `chained` collects the mids of every chain walked so far. */
+  private addPicked(
+    line: EdgeRef,
+    scope: PickScope,
+    ctx: { chains?: TangentChains; mids: MidSet; chained?: MidSet; pending: number } = {
+      mids: this.memberMids(),
+      pending: 0,
+    },
+  ): number {
     this.lastPickMid = polylineMid(line.points as Vec3[]) ?? null;
-    for (const l of scope === "single" ? [line] : this.tangentChain(line)) {
-      const pts = l.points as Vec3[];
-      const sel = edgeSelectorFrom({ points: pts, body: l.body });
+    const fresh: { sel: Selector & { point: Vec3 }; l: EdgeRef }[] = [];
+    for (const l of scope === "single" ? [line] : (ctx.chains ?? this.chains()).chain(line)) {
+      const sel = edgeSelectorFrom({ points: l.points as Vec3[], body: l.body });
       if (!sel) continue;
-      const mid = sel.point;
-      if (this.ghosts.some((g) => Math.hypot(g.mid[0] - mid[0], g.mid[1] - mid[1], g.mid[2] - mid[2]) < 1e-6)) continue;
-      this.addGhost(sel, pts, chainId, l.curvature);
+      ctx.chained?.add(sel.point);
+      if (ctx.mids.has(sel.point)) continue;
+      ctx.mids.add(sel.point);
+      fresh.push({ sel, l });
     }
+    // Past the cap the rest is only counted, so the refusal names the whole count.
+    if (ctx.pending || this.memberCount() + fresh.length > EDGE_CAP) {
+      ctx.pending += fresh.length;
+      return this.memberCount() + ctx.pending;
+    }
+    const chainId = ++this.chainCounter;
+    const color = edgeSelectColor();
+    for (const { sel, l } of fresh) this.addGhost(sel, l.points as Vec3[], chainId, l.curvature, color);
+    this.ghostLines?.sync();
+    return 0;
+  }
+
+  private refuseOverCap(count: number) {
+    void confirmEdgeCount(TOOL_CAPABILITIES[this.kind].label, count);
   }
 
   /** Same rule as the picks that armed the tool (viewport/pickScope.ts), so adding mid gesture behaves the same. */
@@ -675,9 +688,9 @@ export class EdgeFeatureTool {
 
   /** The chain id is recorded at add time, so this works after the preview consumed the chain's edges. */
   private removeWithChain(g: GhostEdge) {
-    for (const ghost of [...this.ghosts]) {
-      if (ghost.chain === g.chain) this.removeGhost(ghost);
-    }
+    if (this.hoveredGhost?.chain === g.chain) this.hoveredGhost = null;
+    this.ghosts = this.ghosts.filter((x) => x.chain !== g.chain || void this.ghostLines?.remove(x.slot));
+    this.ghostLines?.sync();
   }
 
   private enterEditUI() {
@@ -929,8 +942,9 @@ export class EdgeFeatureTool {
   }
 
   private recolorGhosts() {
+    const select = edgeSelectColor();
     for (const g of this.ghosts) {
-      (g.line.material as LineMaterial).color.set(g === this.hoveredGhost ? edgeHoverColor() : ghostColor(g));
+      this.ghostLines?.setColor(g.slot, g === this.hoveredGhost ? edgeHoverColor() : ghostColor(g, select));
     }
     this.viewport.requestRender();
   }
@@ -1019,7 +1033,10 @@ export class EdgeFeatureTool {
       this.hoverGhost(null);
       this.hoverModelEdge(null);
       if (t.kind === "member") this.removeWithChain(t.g);
-      else this.addPicked(t.hit.edge, this.scopeFor(e, t.hit.edge));
+      else {
+        const over = this.addPicked(t.hit.edge, this.scopeFor(e, t.hit.edge));
+        if (over) this.refuseOverCap(over);
+      }
       this.afterMembershipChange();
       this.downOnGizmo = true;
       return;
@@ -1071,37 +1088,50 @@ export class EdgeFeatureTool {
       this.commit();
       return;
     }
-    // Captured, so it reaches us from the heads-up input or the canvas and DimInput's own Tab never sees it; each
-    // treatment shows one field, so nothing is lost. A value the box refuses stays put and nothing flips.
+    // Tab in the field or on the canvas (which takes no focus, so the body) is the flip, captured before DimInput's
+    // own Tab. Every other control keeps Tab, so Shift+Tab from the field walks the box and Tab off Cancel moves on.
     if (e.key === "Tab" && this.phase === "drag") {
+      const t = e.target;
+      const onCanvas = t === document.body || t === document.documentElement || t === this.viewport.domElement;
+      if (!onCanvas && !this.dim.ownsField(t)) return;
       e.preventDefault();
       e.stopImmediatePropagation();
-      if (!this.dim.accepts(this.field.name)) return;
-      this.flipKind();
+      if (e.shiftKey && this.dim.ownsField(e.target)) this.dim.focusLastStop();
+      else if (this.dim.accepts(this.field.name)) this.flipKind();
     }
   }
 
-  /** A null `anchor` stands the handle on the most recently picked edge. */
+  /** A null `anchor` stands the handle on the most recently picked edge. False when the members passed EDGE_CAP, the
+   *  tool is then closed. */
   private beginDrag(
     edges: Selector[],
     anchor: THREE.Vector3 | null,
     tangent: THREE.Vector3 | null,
     chainSource?: EdgeRef,
-    opts?: { fromZero?: boolean; scope?: PickScope },
-  ) {
+    opts?: { fromZero?: boolean; scope?: PickScope; lines?: readonly (EdgeRef | undefined)[] },
+  ): boolean {
     // Each member's tangent chain is expanded unless the gesture is single scoped; unmatched selectors still commit,
     // just without a visual.
     const scope = opts?.scope ?? "chain";
+    let over = 0;
     if (chainSource) {
-      this.addPicked(chainSource, scope);
+      over = this.addPicked(chainSource, scope);
     } else {
-      this.seedGhosts(edges);
+      this.seedGhosts(edges, opts?.lines);
       if (scope === "chain") {
+        // A member on a chain already walked adds nothing, so each chain is walked once.
+        const ctx = { chains: this.chains(), mids: this.memberMids(), chained: new MidSet(), pending: 0 };
         for (const g of [...this.ghosts]) {
+          if (ctx.chained.has(g.mid)) continue;
           const line = this.viewport.edgeLineByMid(g.mid);
-          if (line) this.addPicked(line, "chain");
+          if (line) over = this.addPicked(line, "chain", ctx) || over;
         }
       }
+    }
+    if (over) {
+      this.cancel();
+      this.refuseOverCap(over);
+      return false;
     }
     if (anchor) {
       this.anchor.copy(anchor);
@@ -1126,6 +1156,7 @@ export class EdgeFeatureTool {
     this.pushPreview();
     if (!this.unsubBuild) this.watchBuilds(null); // create mode: failure feedback only
     this.gesture.frame();
+    return true;
   }
 
   /** Reconciled per frame rather than at the six places a fillet's members or application can change. */

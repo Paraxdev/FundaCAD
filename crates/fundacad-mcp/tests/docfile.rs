@@ -352,3 +352,57 @@ async fn a_json_save_names_the_sections_of_the_fundab_it_leaves_out() {
     let r = srv.t_doc_save(args(&tmp.path().join("copy.funda"))).await.unwrap();
     assert!(!text_of(&r).contains("note: "), "a second save has nothing new to leave out: {}", text_of(&r));
 }
+
+// A streaming reader walks the local file headers and this reader the central directory, so a `.funda` where the
+// two disagree shows each of them a different document.
+
+const DECOY: &str = "decoyent.json";
+
+fn funda_zip(path: &Path) {
+    let decoy = json!({"version": 9, "features": []}).to_string();
+    let document = Value::Object(doc(&digest(&geometry()))).to_string();
+    let mut z = zip::ZipWriter::new(std::fs::File::create(path).unwrap());
+    let options = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    for (name, data) in [("document.json", document), (DECOY, decoy)] {
+        z.start_file(name, options).unwrap();
+        z.write_all(data.as_bytes()).unwrap();
+    }
+    z.finish().unwrap();
+}
+
+fn rename(bytes: &mut [u8], signature: &[u8; 4], name_at: usize, from: &str, to: &str) {
+    assert_eq!(from.len(), to.len(), "a rename in place keeps every offset");
+    let at = (0..bytes.len() - name_at - from.len())
+        .find(|&p| &bytes[p..p + 4] == signature && &bytes[p + name_at..p + name_at + from.len()] == from.as_bytes())
+        .unwrap_or_else(|| panic!("no record names {from}"));
+    bytes[at + name_at..at + name_at + to.len()].copy_from_slice(to.as_bytes());
+}
+
+fn tampered(tag: &str, edit: impl Fn(&mut Vec<u8>)) -> (tempfile::TempDir, std::path::PathBuf) {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join(format!("{tag}.funda"));
+    funda_zip(&path);
+    let (untouched, _) = docfile::read_document(&path).unwrap();
+    assert_eq!(untouched["features"][0]["name"], "Speaker");
+    let mut bytes = std::fs::read(&path).unwrap();
+    edit(&mut bytes);
+    std::fs::write(&path, &bytes).unwrap();
+    (tmp, path)
+}
+
+#[test]
+fn a_funda_whose_local_header_names_another_file_is_refused() {
+    let (_tmp, path) = tampered("renamed", |b| rename(b, b"PK\x03\x04", 30, "document.json", DECOY));
+    let err = docfile::read_document(&path).map(|_| ()).unwrap_err();
+    assert!(err.0.contains("is damaged"), "{err}");
+}
+
+#[test]
+fn a_funda_with_two_entries_named_document_json_is_refused() {
+    let (_tmp, path) = tampered("twice", |b| {
+        rename(b, b"PK\x03\x04", 30, DECOY, "document.json");
+        rename(b, b"PK\x01\x02", 46, DECOY, "document.json");
+    });
+    let err = docfile::read_document(&path).map(|_| ()).unwrap_err();
+    assert!(err.0.contains("is damaged"), "{err}");
+}

@@ -1,15 +1,19 @@
 <script setup lang="ts">
-import { computed, ref, useId, watch } from "vue";
+import { computed, mergeProps, onBeforeUnmount, ref, useAttrs, useId, watch } from "vue";
 import { fmtKeys } from "../../input/platform";
 import { useDisabled } from "./useDisabled";
+import { useName, type Named } from "./useName";
+import { announce } from "../../ui/announce";
 
-const props = withDefaults(
-  defineProps<{
+defineOptions({ inheritAttrs: false });
+
+// No withDefaults: over the Named union it collapses the type check to any props.
+const props = defineProps<
+  {
     modelValue: number;
     min?: number;
     max?: number;
     step?: number;
-    label?: string | undefined;
     showValue?: boolean;
     unit?: string | undefined;
     /** `end` holds update:modelValue back until the drag is released. */
@@ -18,14 +22,24 @@ const props = withDefaults(
     keys?: string | undefined;
     disabled?: boolean;
     disabledReason?: string | undefined;
-  }>(),
-  { min: 0, max: 100, step: 1, showValue: false, commit: "live", disabled: false },
-);
+  } & Named
+>();
 const emit = defineEmits<{ "update:modelValue": [number]; commit: [number] }>();
 defineSlots<{ value?(p: { value: number }): unknown }>();
 
+const attrs = useAttrs();
 const d = useDisabled(props);
 const id = useId();
+const name = useName(props, "Slider");
+const lo = computed(() => props.min ?? 0);
+const hi = computed(() => props.max ?? 100);
+const inc = computed(() => props.step ?? 1);
+const rootAttrs = computed(() => {
+  const { "aria-label": _l, "aria-labelledby": _b, ...rest } = attrs;
+  return mergeProps(rest, d.bind.value);
+});
+// A label is drawn, so the range is named by that text; otherwise by labelledby or a plugin's aria attribute.
+const inputName = computed(() => (props.label ? { "aria-labelledby": `${id}-label` } : name.value));
 const tipText = computed(() => (props.tip && props.keys ? `${props.tip} (${fmtKeys(props.keys)})` : props.tip));
 const draft = ref<number | null>(null);
 const shown = computed(() => draft.value ?? props.modelValue);
@@ -35,17 +49,16 @@ watch(
   () => (draft.value = null),
 );
 const fill = computed(() => {
-  const span = props.max - props.min;
-  return span > 0 ? `${((Math.min(Math.max(shown.value, props.min), props.max) - props.min) / span) * 100}%` : "0%";
+  const span = hi.value - lo.value;
+  return span > 0 ? `${((Math.min(Math.max(shown.value, lo.value), hi.value) - lo.value) / span) * 100}%` : "0%";
 });
-const readout = computed(() =>
-  !props.unit ? String(shown.value) : props.unit === "%" ? `${shown.value}%` : `${shown.value} ${props.unit}`,
-);
+const readoutOf = (v: number) => (!props.unit ? String(v) : props.unit === "%" ? `${v}%` : `${v} ${props.unit}`);
+const readout = computed(() => readoutOf(shown.value));
 
-const decimals = computed(() => (String(props.step).split(".")[1] ?? "").length);
+const decimals = computed(() => (String(inc.value).split(".")[1] ?? "").length);
 function snap(v: number) {
-  const n = Math.round((v - props.min) / props.step);
-  const s = Math.min(Math.max(props.min + n * props.step, props.min), props.max);
+  const n = Math.round((v - lo.value) / inc.value);
+  const s = Math.min(Math.max(lo.value + n * inc.value, lo.value), hi.value);
   return Number(s.toFixed(decimals.value));
 }
 
@@ -56,11 +69,37 @@ function onInput(e: Event) {
     return;
   }
   const v = Number(el.value);
-  if (props.commit === "live") emit("update:modelValue", v);
+  if (props.commit !== "end") emit("update:modelValue", v);
   else draft.value = v;
 }
+// A focused range speaks its own value for keys and a screen reader's own steps, so only a pointer drag is announced.
+let dragged = false;
+let release: AbortController | null = null;
+let releaseTimer: ReturnType<typeof setTimeout> | undefined;
+function endDrag() {
+  release?.abort();
+  release = null;
+  clearTimeout(releaseTimer);
+  dragged = false;
+}
+function onPointerdown() {
+  endDrag();
+  dragged = true;
+  release = new AbortController();
+  // The release fires change after pointerup in the same task, so the mark is cleared one task later.
+  const ended = () => {
+    release?.abort();
+    release = null;
+    releaseTimer = setTimeout(() => (dragged = false));
+  };
+  window.addEventListener("pointerup", ended, { signal: release.signal });
+  window.addEventListener("pointercancel", ended, { signal: release.signal });
+}
+onBeforeUnmount(endDrag);
 function onChange(e: Event) {
   const el = e.target as HTMLInputElement;
+  const wasDrag = dragged;
+  dragged = false;
   if (d.isDisabled.value) {
     el.value = String(props.modelValue);
     return;
@@ -69,20 +108,22 @@ function onChange(e: Event) {
   draft.value = null;
   if (props.commit === "end" && v !== props.modelValue) emit("update:modelValue", v);
   emit("commit", v);
+  if (wasDrag)
+    announce([props.label ?? name.value["aria-label"], readoutOf(v)].filter(Boolean).join(" "), "polite", { key: id });
 }
 
 // The keys are stepped here, not natively, so a key press is one update and one commit in every engine.
 function onKeydown(e: KeyboardEvent) {
-  const big = Math.max(props.step, (props.max - props.min) / 10);
+  const big = Math.max(inc.value, (hi.value - lo.value) / 10);
   const to: Record<string, (v: number) => number> = {
-    ArrowRight: (v) => v + props.step,
-    ArrowUp: (v) => v + props.step,
-    ArrowLeft: (v) => v - props.step,
-    ArrowDown: (v) => v - props.step,
+    ArrowRight: (v) => v + inc.value,
+    ArrowUp: (v) => v + inc.value,
+    ArrowLeft: (v) => v - inc.value,
+    ArrowDown: (v) => v - inc.value,
     PageUp: (v) => v + big,
     PageDown: (v) => v - big,
-    Home: () => props.min,
-    End: () => props.max,
+    Home: () => lo.value,
+    End: () => hi.value,
   };
   const move = to[e.key];
   if (!move || e.altKey || e.ctrlKey || e.metaKey) return;
@@ -97,25 +138,26 @@ function onKeydown(e: KeyboardEvent) {
 </script>
 
 <template>
-  <div class="ui-slider" v-bind="d.bind.value" :title="d.title(tipText)">
+  <div class="ui-slider" v-bind="rootAttrs" :title="d.title(tipText)">
     <span v-if="label" :id="`${id}-label`" class="ui-slider-label">{{ label }}</span>
     <input
       type="range"
       class="ui-slider-input"
-      :min="min"
-      :max="max"
-      :step="step"
+      :min="lo"
+      :max="hi"
+      :step="inc"
       :value="shown"
       :style="{ '--ui-slider-fill': fill }"
-      :aria-labelledby="label ? `${id}-label` : undefined"
-      :aria-label="label ? undefined : tipText"
+      v-bind="inputName"
       :aria-valuetext="unit ? readout : undefined"
       :aria-disabled="disabled ? 'true' : undefined"
+      @pointerdown="onPointerdown"
+      @blur="endDrag"
       @input="onInput"
       @change="onChange"
       @keydown="onKeydown"
     />
-    <output v-if="showValue || $slots.value" class="ui-slider-value"
+    <output v-if="showValue || $slots.value" class="ui-slider-value" aria-live="off"
       ><slot name="value" :value="shown">{{ readout }}</slot></output
     >
   </div>

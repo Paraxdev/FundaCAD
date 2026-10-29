@@ -268,8 +268,8 @@ describe("StressPanel", () => {
         el.getAttribute("aria-label"),
       );
     expect(names()).toEqual([
-      "Radius",
-      "Radius",
+      "Spot 1 radius",
+      "Spot 1 radius",
       "Force",
       "X",
       "Y",
@@ -291,7 +291,7 @@ describe("StressPanel", () => {
     expect(
       [radius.getAttribute("aria-invalid"), radius.getAttribute("aria-label")],
       "an error swaps only the title",
-    ).toEqual(["true", "Radius"]);
+    ).toEqual(["true", "Spot 1 radius"]);
   });
 
   it("follows a value set from the view, and steps Poisson's ratio and density in their own sizes", async () => {
@@ -516,7 +516,8 @@ describe("StressPanel", () => {
     p.setStressDeform({ scale: 1, auto: 12.5, max: 50, animate: false, shown: true });
     await flushPromises();
     const slider = q(".stress-deform input") as HTMLInputElement;
-    expect([slider.step, slider.value, slider.getAttribute("aria-label")]).toEqual(["0.1", "1", "Exaggeration"]);
+    const name = document.getElementById(slider.getAttribute("aria-labelledby")!)?.textContent;
+    expect([slider.step, slider.value, name]).toEqual(["0.1", "1", "Exaggeration"]);
     p.stress!.deform!.max = 4;
     await flushPromises();
     expect(slider.step).toBe("0.01");

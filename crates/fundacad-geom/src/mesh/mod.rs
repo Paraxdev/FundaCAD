@@ -112,10 +112,47 @@ pub fn body_payload(shape: &Shape, id: &str, name: &str, tolerance: f64, profile
         shape,
         tolerance,
         profile,
+        false,
     )
 }
 
-fn body_payload_for(body: &MeshBody<'_>, shape: &Shape, tolerance: f64, profile: ViewportProfile) -> FullBody {
+/// One body's payload as a reply meshes it, from its face tier fitted to `budget` wire bytes.
+pub fn fitted_body_payload(
+    shape: &Shape,
+    id: &str,
+    name: &str,
+    tolerance: f64,
+    profile: ViewportProfile,
+    budget: usize,
+) -> FullBody {
+    let body = MeshBody { id: id.into(), name: name.into(), shape: Some(shape), ..Default::default() };
+    let faces = crate::kernel::count(shape, crate::kernel::Kind::Face);
+    fitted(&body, shape, faces, tolerance, profile, budget, &|| false)
+}
+
+fn fitted(
+    body: &MeshBody<'_>,
+    shape: &Shape,
+    faces: usize,
+    tolerance: f64,
+    profile: ViewportProfile,
+    budget: usize,
+    stopped: &dyn Fn() -> bool,
+) -> FullBody {
+    profile::fit(profile, faces, budget, stopped, |p, clean| {
+        let b = body_payload_for(body, shape, tolerance, p, clean);
+        let size = b.wire_size();
+        (b, size)
+    })
+}
+
+fn body_payload_for(
+    body: &MeshBody<'_>,
+    shape: &Shape,
+    tolerance: f64,
+    profile: ViewportProfile,
+    clean: bool,
+) -> FullBody {
     let access = crate::bench::phase("mesh_access", || MeshAccess::new(shape));
     let claims = crate::bench::phase("resolve_passes", || PassClaims::resolve(shape, &body.mesh_passes));
     let tess = claims.tessellate(
@@ -128,7 +165,8 @@ fn body_payload_for(body: &MeshBody<'_>, shape: &Shape, tolerance: f64, profile:
             // A displaced face's shading lives in its normals, so a pass keeps
             // them even on the coarse large-document tiers.
             display: profile.display_normals() || !claims.is_empty(),
-            force_remesh: false,
+            // BRepMesh keeps a stored mesh finer than asked, so a coarser retry has to clear it.
+            force_remesh: clean,
         },
         VIEWPORT_DENSITY_CAP,
     );
@@ -494,8 +532,12 @@ fn built_payloads(
     let mut out: Vec<Option<Built>> = Vec::with_capacity(bodies.len());
     let mut misses: Vec<usize> = Vec::new();
     let ticked = std::sync::atomic::AtomicUsize::new(0);
+    let faces: Vec<usize> =
+        bodies.iter().map(|b| b.shape.map_or(0, |s| crate::kernel::count(s, crate::kernel::Kind::Face))).collect();
+    // A fitted payload is cached under its body's starting guess, the profile known before meshing.
+    let profiles: Vec<ViewportProfile> = faces.iter().map(|&n| profile.for_faces(n)).collect();
     for (i, body) in bodies.iter().enumerate() {
-        let cached = body.shape.and_then(|_| cache.get(body, tolerance, profile)).map(Built::Hit);
+        let cached = body.shape.and_then(|_| cache.get(body, tolerance, profiles[i])).map(Built::Hit);
         if cached.is_none() && body.shape.is_some() {
             misses.push(i);
         } else {
@@ -512,15 +554,20 @@ fn built_payloads(
     }
 
     let tick = std::sync::Mutex::new(on_body);
+    // The hook is thread local and the pool's threads would mesh a big body for minutes without a beat.
+    let beat = crate::heartbeat::current();
     let mesh_one = |k: usize| {
         if stopped() {
             return None;
         }
+        let _beat = crate::heartbeat::install(beat.clone());
         let i = misses[k];
         let body = &bodies[i];
         let shape = body.shape.expect("a miss has a shape");
         let began = std::time::Instant::now();
-        let full = crate::bench::phase("body_payload", || body_payload_for(body, shape, tolerance, profile));
+        let full = crate::bench::phase("body_payload", || {
+            fitted(body, shape, faces[i], tolerance, profile, profile::SINGLE_BODY_BUDGET, &stopped)
+        });
         let done = ticked.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
         if let Ok(mut t) = tick.lock() {
             t(done, total);
@@ -540,7 +587,7 @@ fn built_payloads(
     for (k, (full, took)) in made.into_iter().filter_map(|(k, m)| Some((k, m?))) {
         let i = misses[k];
         let tag = full.fields.get("etag").and_then(Value::as_str).unwrap_or_default();
-        cache.put(&bodies[i], tolerance, profile, strip_envelope(&full), tag, took);
+        cache.put(&bodies[i], tolerance, profiles[i], strip_envelope(&full), tag, took);
         out[i] = Some(Built::Fresh(full));
     }
     // A pass stopped part way answers no body rather than some of them.

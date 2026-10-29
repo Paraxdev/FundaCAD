@@ -46,6 +46,28 @@
   color: var(--accent-hot);
   font-weight: 600;
 }
+// Preferences draws its categories with the base Tabs, the row look stays on the inner .prefs-nav-btn it shares
+// with Shortcuts, so the tab itself is bare.
+.prefs-cats.ui-tabs .ui-tab,
+.prefs-cats.ui-tabs .ui-tab:hover,
+.prefs-cats.ui-tabs .ui-tab:active {
+  height: auto;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  background: none;
+}
+.prefs-cats.ui-tabs .ui-tab.is-selected::after {
+  content: none;
+}
+.prefs-cats .prefs-nav-btn {
+  flex: 1;
+}
+// A title or pane takes focus only to be read out after a category switch, it is not a control.
+.prefs-pane-title:focus-visible,
+.prefs-pane:focus-visible {
+  outline: none;
+}
 
 .prefs-panes {
   min-width: 0;
@@ -130,9 +152,6 @@ label.pref-head {
   align-items: center;
   gap: var(--s-2);
 }
-.pref-slider {
-  width: 100%;
-}
 .pref-card .prefs-readout {
   font-size: 13px;
   color: var(--text-dim);
@@ -147,6 +166,60 @@ label.pref-head {
 /* The choices keep their width and the title beside them wraps, so no choice is cut short. */
 .pref-head > .ui-segmented {
   flex: none;
+}
+/* Four segments do not fit beside a title in one column, so they drop under it instead of leaving the card. */
+.pref-head.pref-wrap {
+  flex-wrap: wrap;
+}
+
+/* A card's slider keeps the card look: title and value on the head row, the track full width below. */
+.pref-card > .ui-slider {
+  grid-template-columns: minmax(0, 1fr) auto;
+  row-gap: var(--s-2);
+}
+.pref-card > .ui-slider .ui-slider-label {
+  display: flex;
+  align-items: center;
+  min-height: 30px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+.pref-card > .ui-slider .ui-slider-value {
+  font-size: 13px;
+}
+.pref-card > .ui-slider .ui-slider-input {
+  grid-row: 2;
+  grid-column: 1 / -1;
+}
+
+/* An empty upload error stays in the tree, so its alert role is live before the text lands, but out of the card's gap. */
+.pref-card > .prefs-theme-error:empty {
+  position: absolute;
+}
+
+.prefs-a11y-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  margin-bottom: var(--s-5);
+}
+.prefs-a11y-actions .pref-hint {
+  flex-basis: 100%;
+}
+.prefs-a11y-status {
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.prefs-group + .prefs-group {
+  margin-top: var(--s-5);
+}
+.prefs-group-title {
+  margin: 0 0 var(--s-3);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-dim);
 }
 
 /* Sections with their own rows (assistants, plugins), sized like the cards around them. */
@@ -285,7 +358,8 @@ label.pref-head {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr);
   }
-  .prefs-nav {
+  .prefs-nav,
+  .prefs-cats.ui-tabs-vertical {
     flex-direction: row;
     overflow-x: auto;
     border-right: 0;

@@ -41,12 +41,17 @@ describe("ConfirmDialog", () => {
     document.body.innerHTML = "";
   });
 
-  it("is a dialog labelled by its title, with the message, and it holds the modal gate", async () => {
+  it("is an alertdialog labelled by its title, described by the message, and it holds the modal gate", async () => {
     await render();
-    const panel = $('[role="dialog"]')!;
+    const panel = $('[role="alertdialog"]')!;
     expect(document.getElementById(panel.getAttribute("aria-labelledby")!)?.textContent).toBe("Unsaved changes");
-    expect($(".ui-confirm-message")!.textContent).toBe("Save before closing?");
+    expect(document.getElementById(panel.getAttribute("aria-describedby")!)?.textContent).toBe("Save before closing?");
     expect(useModalStore().depth).toBe(1);
+  });
+
+  it("points aria-describedby at nothing when it has no message", async () => {
+    await render({ message: undefined });
+    expect($('[role="alertdialog"]')!.hasAttribute("aria-describedby")).toBe(false);
   });
 
   it("focuses the primary choice first, and the choices are one Tab stop", async () => {

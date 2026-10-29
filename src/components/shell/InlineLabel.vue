@@ -53,7 +53,7 @@ defineExpose({ start });
     size="sm"
     commit="change"
     select-on-focus
-    aria-label="Rename"
+    label="Rename"
     :model-value="text"
     @update:model-value="save"
     @keydown.stop="onKeydown"

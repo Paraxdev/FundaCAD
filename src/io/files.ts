@@ -2,6 +2,7 @@
 // Export hands the engine a path from the save dialog, so the file never round-trips through the webview.
 
 import { suggestedSavePath } from "./saveFolder";
+import { pickFile } from "../components/ui/dom";
 import type { CarriedSection, DocumentStore, GivenUp } from "../document/store";
 import { asFeature } from "../types";
 import type { GeometryBackend } from "../geometry/client";
@@ -29,6 +30,7 @@ import { blake2b128Hex } from "../document/blake2b";
 import { UnreadableDocumentError } from "../document/documentShape";
 import { noteRecent } from "./recentFiles";
 import { closeHome } from "../ui/home";
+import { announce } from "../ui/announce";
 import { captureAfterOpen, captureThumbnail, storeThumbnail } from "./thumbnails";
 import { BINARY_DOC_EXT, DOC_EXT, LEGACY_DOC_EXTS, isDocumentExt, leftOutSectionsNotice } from "./documentExt";
 import { announceImportedBody } from "../plugins/contrib";
@@ -39,6 +41,7 @@ import { importedBodyColors } from "../document/faceColors";
 import { openNotices } from "../document/openNotice";
 import type { FaceColorRuns } from "../types";
 import { isSessionEnded, type OpenOp } from "../document/session";
+import { nativeDialog } from "./nativeDialog";
 
 const isTauri = () => "__TAURI_INTERNALS__" in window;
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -88,6 +91,7 @@ function savedAs(store: DocumentStore, path: string, edits: number, swaps: numbe
   if (store.untitledSwapCount !== swaps) return;
   const whole = store.editCount === edits;
   store.markSaved(path, whole);
+  announce(`Saved ${fileName(path)}`);
   noteRecent(path);
   if (whole) void clearRecovery(path);
 }
@@ -119,7 +123,7 @@ export async function saveDocumentAs(store: DocumentStore, beforeWrite?: () => v
   const session = store.session;
   const swaps = store.untitledSwapCount;
   if (isTauri()) {
-    const { save } = await import("@tauri-apps/plugin-dialog");
+    const { save } = await nativeDialog();
     const path = await save({
       filters: [
         { name: "FundaCAD Document (JSON)", extensions: [DOC_EXT, ...LEGACY_DOC_EXTS] },
@@ -154,7 +158,10 @@ export async function saveDocumentAs(store: DocumentStore, beforeWrite?: () => v
     if (!session.alive) return;
     downloadText(name, built.text);
     // No real path, but without this the title bar read "Untitled*" forever, as if the save had failed.
-    if (store.untitledSwapCount === swaps) store.markSaved(name);
+    if (store.untitledSwapCount === swaps) {
+      store.markSaved(name);
+      announce(`Saved ${name}`);
+    }
   }
 }
 
@@ -270,7 +277,7 @@ export async function openDocument(
     // A file picked for a document closed while the dialog was up is not imported into the next one. Only the dialog
     // counts as an import here, so no doc_set replaces its document, and Home still sees a blank one as blank.
     const session = store.session;
-    const { open } = await import("@tauri-apps/plugin-dialog");
+    const { open } = await nativeDialog();
     const path = await store.importing(() =>
       open({
         multiple: false,
@@ -319,6 +326,7 @@ export async function openDocumentText(
   }
   // No real path, but the name lets the title bar show what is open and drop the unsaved marker.
   store.markSaved(name);
+  if (!unpublished) announce(`Opened ${name}`);
   await warnAboutOpen(store);
   if (unpublished)
     await reportError(
@@ -544,6 +552,7 @@ async function finishOpen(
     return "unreadable";
   }
   store.carriedSections = carried;
+  announce(`Opened ${base}`);
   // freshly opened == clean
   if (path) {
     store.markSaved(path);
@@ -667,7 +676,7 @@ export async function exportModel(
       : (opts.bodies ? start.base : docName) || (opts.separate || opts.bodies ? "parts" : "part");
   const name = exportFileName(base, kind.ext);
   const dir = lastExportDir();
-  const { save } = await import("@tauri-apps/plugin-dialog");
+  const { save } = await nativeDialog();
   const path = await save({
     filters: [{ name: kind.label, extensions: dialogExts(kind.exts) }],
     // "separate" derives one file per body as "<base>-<body>.<ext>", so name the base.
@@ -720,6 +729,7 @@ export async function exportModel(
     const title = res.warnings?.length
       ? `Exported ${written.length} file${written.length === 1 ? "" : "s"}, with warnings`
       : `Exported ${written.length} file${written.length === 1 ? "" : "s"}`;
+    announce(title);
     await listModal(title, lines);
   }
 }
@@ -793,7 +803,7 @@ export async function importModel(store: DocumentStore, geometry: GeometryBacken
     return;
   }
   const session = store.session;
-  const { open } = await import("@tauri-apps/plugin-dialog");
+  const { open } = await nativeDialog();
   // Counted as an import from the dialog on, so a doc_set cannot replace the document the picked file lands in.
   await store.importing(async () => {
     const path = await open({
@@ -1217,7 +1227,7 @@ async function reportUnreadable(e: unknown) {
 export async function reportError(msg: string, detail?: string) {
   if (isTauri()) {
     if (detail) console.error(detail);
-    const { message } = await import("@tauri-apps/plugin-dialog");
+    const { message } = await nativeDialog();
     await message(msg, { title: "FundaCAD", kind: "error" });
   } else {
     // No native dialog, so use the app's title bar error notice (ui/toast.ts to ui/errorNotice.ts).
@@ -1268,7 +1278,7 @@ export async function exportMaterialLibrary(store: DocumentStore) {
     downloadText(name, text);
     return;
   }
-  const { save } = await import("@tauri-apps/plugin-dialog");
+  const { save } = await nativeDialog();
   const path = await save({
     filters: [{ name: "Material library", extensions: ["json"] }],
     defaultPath: name,
@@ -1288,7 +1298,7 @@ export async function importMaterialLibrary(
 ): Promise<{ added: number; updated: number; problem: string | null } | null> {
   let text: string | null = null;
   if (isTauri()) {
-    const { open } = await import("@tauri-apps/plugin-dialog");
+    const { open } = await nativeDialog();
     const path = await open({
       multiple: false,
       filters: [{ name: "Material library", extensions: ["json"] }],
@@ -1322,7 +1332,7 @@ export async function saveTextFile(
     downloadText(suggested, text);
     return true;
   }
-  const { save } = await import("@tauri-apps/plugin-dialog");
+  const { save } = await nativeDialog();
   const path = await save({ filters: [filter], defaultPath: suggested });
   if (!path) return false;
   try {
@@ -1337,7 +1347,7 @@ export async function saveTextFile(
 /** The text of a file the person picks, or null when dismissed or unreadable. */
 export async function openTextFile(filter: { name: string; extensions: string[] }): Promise<string | null> {
   if (!isTauri()) return uploadJson(filter.extensions.map((e) => `.${e}`).join(","));
-  const { open } = await import("@tauri-apps/plugin-dialog");
+  const { open } = await nativeDialog();
   const path = await open({ multiple: false, filters: [filter] });
   if (typeof path !== "string") return null;
   try {
@@ -1364,7 +1374,7 @@ export async function saveRenderedImage(dataUrl: string, suggested: string): Pro
     a.click();
     return suggested;
   }
-  const { save } = await import("@tauri-apps/plugin-dialog");
+  const { save } = await nativeDialog();
   const path = await save({
     filters: [{ name: "PNG image", extensions: ["png"] }],
     defaultPath: suggested,
@@ -1394,38 +1404,20 @@ function downloadText(name: string, text: string) {
 
 /** The browser fallback for picking a JSON file, apart from uploadText so a material library picker does not
  *  offer .funda files. */
-function uploadJson(accept = ".json,application/json"): Promise<string | null> {
-  return new Promise((resolve) => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = accept;
-    input.onchange = () => {
-      const file = input.files?.[0];
-      if (!file) return resolve(null);
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result));
-      reader.onerror = () => resolve(null);
-      reader.readAsText(file);
-    };
-    input.click();
-  });
+async function uploadJson(accept = ".json,application/json"): Promise<string | null> {
+  const file = await pickFile(accept);
+  return file ? readPicked(file) : null;
 }
 
 /** The picked file's name alongside its text, so the browser Open path can set
  *  the title bar the way a Tauri Open sets it from the chosen path. */
-function uploadText(): Promise<{ text: string; name: string } | null> {
-  return new Promise((resolve) => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = [DOC_EXT, ...LEGACY_DOC_EXTS].map((e) => `.${e}`).join(",") + ",.json,application/json";
-    input.onchange = () => {
-      const file = input.files?.[0];
-      if (!file) return resolve(null);
-      const reader = new FileReader();
-      reader.onload = () => resolve({ text: String(reader.result), name: file.name });
-      reader.onerror = () => resolve(null);
-      reader.readAsText(file);
-    };
-    input.click();
-  });
+async function uploadText(): Promise<{ text: string; name: string } | null> {
+  const file = await pickFile([DOC_EXT, ...LEGACY_DOC_EXTS].map((e) => `.${e}`).join(",") + ",.json,application/json");
+  if (!file) return null;
+  const text = await readPicked(file);
+  return text === null ? null : { text, name: file.name };
+}
+
+function readPicked(file: File): Promise<string | null> {
+  return file.text().catch(() => null);
 }

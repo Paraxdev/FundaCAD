@@ -3,9 +3,11 @@
 
 pub mod app_session;
 pub mod blobs;
+pub mod budget;
 pub mod clash;
 pub mod describe;
 pub mod docfile;
+pub mod docget;
 pub mod edits;
 pub mod guide;
 pub mod layflat;
@@ -16,6 +18,7 @@ pub mod measure;
 pub mod mesh;
 pub mod model;
 pub mod png;
+pub mod printrep;
 pub mod render;
 pub mod schema;
 pub mod scope;

@@ -58,7 +58,10 @@
   gap: var(--s-4);
   padding: var(--s-5) var(--s-5) var(--s-3);
 }
-.home-head .modal-close {
+.home-head-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
   margin-left: auto;
 }
 .home-new {
@@ -371,6 +374,7 @@ $card-bleed-bottom: 44px;
 .home-drawer-title {
   flex: 1;
   min-width: 0;
+  margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

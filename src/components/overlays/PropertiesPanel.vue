@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // The measurements are a one-shot readout of the selection at open (ui/panels.ts), the filament estimate is live.
 
-import { computed, reactive } from "vue";
+import { computed, reactive, useId } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { usePanelsStore } from "../../stores/panels";
 import Panel from "../ui/Panel.vue";
@@ -24,6 +24,7 @@ const panels = usePanelsStore();
 // A local copy so the controls respond instantly, each edit also persists through the app-wide setPrintPref: a pick at
 // once, a typed number on its field's change.
 const prefs = reactive({ ...printPrefs() });
+const infillId = useId();
 type Key = "materialId" | "customDensity" | "infillPct" | "wallThicknessMm";
 function commit<K extends Key>(key: K) {
   setPrintPref(key, prefs[key]);
@@ -96,7 +97,7 @@ function close() {
             :model-value="prefs.materialId"
             :options="MATERIALS"
             size="sm"
-            aria-label="Material"
+            label="Material"
             @update:model-value="set('materialId', $event)"
           />
         </div>
@@ -111,6 +112,7 @@ function close() {
             :min="0.1"
             :max="30"
             :step="0.01"
+            label="Density"
             tip="Density"
             :model-value="prefs.customDensity"
             @update:model-value="take('customDensity', $event)"
@@ -118,10 +120,11 @@ function close() {
           />
         </div>
         <div class="measure-row">
-          <span class="measure-k">Infill</span>
+          <span :id="infillId" class="measure-k">Infill</span>
           <Slider
             v-model="prefs.infillPct"
             class="measure-v"
+            :labelledby="infillId"
             :min="0"
             :max="100"
             :step="5"
@@ -142,6 +145,7 @@ function close() {
             :min="0"
             :max="20"
             :step="0.1"
+            label="Wall thickness"
             tip="Wall thickness"
             :model-value="prefs.wallThicknessMm"
             @update:model-value="take('wallThicknessMm', $event)"

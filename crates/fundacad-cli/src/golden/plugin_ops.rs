@@ -235,7 +235,9 @@ fn compare_export(ctx: &Ctx, py: &Value, path: &Path, reply: &Value) -> (Vec<Str
         Ok(z) => z,
         Err(e) => return (vec![format!("not a zip: {e}")], notes),
     };
-    let names: Vec<String> = (0..zip.len()).filter_map(|i| zip.by_index(i).ok().map(|f| f.name().to_owned())).collect();
+    let names: Vec<String> = (0..zip.len())
+        .filter_map(|i| zip.by_index(i).ok().and_then(|f| f.name().ok().map(|n| n.into_owned())))
+        .collect();
     let entries = py["entries"].as_array().cloned().unwrap_or_default();
     let want: Vec<&str> = entries.iter().map(|e| e["name"].as_str().unwrap_or("")).collect();
     if names != want {
@@ -426,7 +428,7 @@ pub fn record_case(ctx: &Ctx, name: &str) -> Result<Value, String> {
             let mut f = zip.by_index(k).map_err(|e| e.to_string())?;
             let mut data = Vec::new();
             f.read_to_end(&mut data).map_err(|e| e.to_string())?;
-            entries.push(zip_entry(f.name(), &data));
+            entries.push(zip_entry(&f.name().map_err(|e| e.to_string())?, &data));
         }
         case["entries"] = Value::Array(entries);
         return Ok(case);

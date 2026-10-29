@@ -1,25 +1,17 @@
-// Animations on or off. Off sets data-motion="off" on <html> for _motion.scss; script motion reads motionOn() and
-// snaps. Never set follows the OS reduce motion preference.
+// Animations on or off, from the Follow system, On or Off choice in a11yPrefs.ts. Off sets data-motion="off" on
+// <html> for _motion.scss; script motion reads motionOn() and snaps. Follow system tracks the OS while the app runs.
 
-import { readSetting } from "./storedSetting";
+import { a11yPrefs, onA11yPrefsChange, setA11yPref, systemReducesMotion } from "./a11yPrefs";
 import { renderPrefs } from "./renderPrefs";
-
-const KEY = "fundacad.animations";
 
 const listeners = new Set<() => void>();
 
-function systemReduces(): boolean {
-  return typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+function resolve(): boolean {
+  const choice = a11yPrefs().animations;
+  return choice === "system" ? !systemReducesMotion() : choice === "on";
 }
 
-function readStored(): boolean {
-  const v = readSetting(KEY);
-  if (v === "on") return true;
-  if (v === "off") return false;
-  return !systemReduces();
-}
-
-let on = readStored();
+let on = resolve();
 
 function apply() {
   if (typeof document === "undefined") return;
@@ -27,6 +19,14 @@ function apply() {
   else document.documentElement.dataset.motion = "off";
 }
 apply();
+
+onA11yPrefsChange(() => {
+  const next = resolve();
+  if (next === on) return;
+  on = next;
+  apply();
+  for (const fn of listeners) fn();
+});
 
 export function motionOn(): boolean {
   return on;
@@ -38,16 +38,9 @@ export function cameraFlightsOn(): boolean {
   return on && !renderPrefs().potatoMode;
 }
 
+/** Pins Animations to On or Off, leaving Follow system. */
 export function setMotion(next: boolean) {
-  if (next === on) return;
-  on = next;
-  try {
-    localStorage.setItem(KEY, next ? "on" : "off");
-  } catch {
-    /* ignore */
-  }
-  apply();
-  for (const fn of listeners) fn();
+  setA11yPref("animations", next ? "on" : "off");
 }
 
 export function onMotionChange(fn: () => void): () => void {

@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, onUnmounted, ref, watch } from "vue";
 import { useHomeStore } from "../../stores/home";
+import { useDialogStore } from "../../stores/dialogs";
 import { useModalStore } from "../../stores/modals";
-import { useModalGate } from "../../composables/useModalGate";
+import { inertOthers, useModalGate } from "../../composables/useModalGate";
+import { focusReturn, mainLandmark } from "../ui/focusables";
 import { welcomeClosed, welcomeOnStartup, setWelcomeOnStartup } from "../../ui/welcome";
 import { openReportDialog } from "../../ui/bugReporter";
 import { forgetRecent, getRecentFiles } from "../../io/recentFiles";
@@ -53,6 +55,7 @@ import logoLightUrl from "../../../assets/brand/fundacad-lockup-app-light.svg";
 
 const home = useHomeStore();
 const modals = useModalStore();
+const dialogs = useDialogStore();
 const cb = home.callbacks!;
 const ctx = useContextMenuStore();
 const lib = library();
@@ -225,6 +228,15 @@ function loadVersions(entry: HomeEntry) {
   };
 }
 
+// The card is found by its place in the grid when the drawer closes, the list may have been filtered meanwhile.
+function versionsButton(path: string) {
+  return () => {
+    const cells = root.value?.querySelectorAll(".home-grid:not(.home-examples) > .home-cell");
+    const cell = cells?.[entries.value.findIndex((e) => e.path === path)];
+    return cell?.querySelector<HTMLElement>(".home-card-versions") ?? null;
+  };
+}
+
 async function versionAction(act: Promise<boolean>): Promise<void> {
   if (await act) {
     drawer.value = null;
@@ -267,7 +279,8 @@ const welcomeHidden = ref(welcomeClosed());
 watch(showOnStartup, setWelcomeOnStartup);
 
 const root = ref<HTMLElement | null>(null);
-let focusBefore: Element | null = null;
+let back: ReturnType<typeof focusReturn> | null = null;
+let releaseInert: (() => void) | null = null;
 
 const background = ref(getHomeBackground());
 const imageUrl = ref<string | null>(null);
@@ -287,9 +300,16 @@ onMounted(() => {
   ownDepth = modals.depth;
   window.addEventListener("keydown", onKey, true);
   void refreshStats();
-  focusBefore = document.activeElement;
+  // With no opener, as at launch, closing Home lands on the workspace rather than the body.
+  back = focusReturn(mainLandmark);
+  // The title bar's Home toggle stays live, it is how Home closes again.
+  if (root.value) releaseInert = inertOthers(root.value, ["#home-btn"]);
   const first = searchInput() ?? root.value?.querySelector<HTMLElement>(".home-main button");
   first?.focus({ preventScroll: true });
+});
+onBeforeUnmount(() => {
+  releaseInert?.();
+  back?.restore((n) => !!root.value?.contains(n));
 });
 onUnmounted(() => {
   window.removeEventListener("keydown", onKey, true);
@@ -297,8 +317,6 @@ onUnmounted(() => {
   offBackground();
   imageLoad++;
   if (imageUrl.value) URL.revokeObjectURL(imageUrl.value);
-  const lost = !document.activeElement || document.activeElement === document.body;
-  if (lost && focusBefore instanceof HTMLElement && focusBefore.isConnected) focusBefore.focus({ preventScroll: true });
 });
 </script>
 
@@ -309,6 +327,7 @@ onUnmounted(() => {
     :class="homeBackgroundClass(background, imageUrl)"
     :style="homeBackgroundStyle(background, imageUrl)"
     role="dialog"
+    aria-modal="true"
     aria-label="Home"
   >
     <aside class="home-side">
@@ -327,15 +346,20 @@ onUnmounted(() => {
     <div class="home-main">
       <div class="home-head">
         <NewStrip @blank="startNew(() => cb.newDocument())" @open="cb.openDoc()" />
-        <IconButton
-          class="modal-close"
-          icon="close"
-          tip="Back to the document"
-          size="md"
-          variant="plain"
-          :icon-size="15"
-          @click="close()"
-        />
+        <div class="home-head-actions">
+          <Button variant="ghost" size="sm" class="home-a11y" @click="dialogs.openPreferences('access')">
+            Accessibility
+          </Button>
+          <IconButton
+            class="modal-close"
+            icon="close"
+            tip="Back to the document"
+            size="md"
+            variant="plain"
+            :icon-size="15"
+            @click="close()"
+          />
+        </div>
       </div>
 
       <div v-if="lib && (all.length || folders.length)" class="home-tools">
@@ -343,7 +367,7 @@ onUnmounted(() => {
           class="home-view-select"
           :model-value="view"
           :options="viewOptions"
-          aria-label="Show"
+          label="Show"
           @update:model-value="onViewSelect"
         />
         <TextField
@@ -351,10 +375,10 @@ onUnmounted(() => {
           class="home-search"
           type="search"
           placeholder="Search documents"
-          aria-label="Search documents"
+          label="Search documents"
           spellcheck="false"
         />
-        <Select v-model="shownSort" class="home-sort" :options="sorts" aria-label="Sort by" />
+        <Select v-model="shownSort" class="home-sort" :options="sorts" label="Sort by" />
       </div>
 
       <p v-if="listing && !(listing instanceof Error) && listing.truncated" class="home-note">
@@ -413,6 +437,7 @@ onUnmounted(() => {
         :key="drawer.path"
         :name="drawer.name"
         :load="loadVersions(drawer)"
+        :return-to="versionsButton(drawer.path)"
         @close="drawer = null"
         @restore="(id) => versionAction(cb.openVersion(drawer!.path, id, false))"
         @copy="(id) => versionAction(cb.openVersion(drawer!.path, id, true))"

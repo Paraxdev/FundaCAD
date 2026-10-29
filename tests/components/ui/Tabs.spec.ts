@@ -1,6 +1,7 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import Tabs from "../../../src/components/ui/Tabs.vue";
+import type { Named } from "../../../src/components/ui/useName";
 import { setMacForTest } from "../../../src/input/platform";
 
 enableAutoUnmount(afterEach);
@@ -10,14 +11,19 @@ type T = "a" | "b" | "c";
 type Tab = { value: T; label: string; disabled?: boolean; title?: string; tip?: string; keys?: string };
 
 function render(tabs: Tab[], modelValue: T = "a") {
-  return mount(Tabs<T>, { props: { tabs, modelValue } });
+  return mount(Tabs<T>, { props: { tabs, modelValue, label: "Steps" } });
 }
 
-type Extra = { variant?: "underline" | "bar" | "nav"; orientation?: "horizontal" | "vertical"; label?: string };
+type Extra = { variant?: "underline" | "bar" | "nav"; orientation?: "horizontal" | "vertical" } & Named;
 
-async function live(tabs: Tab[], modelValue: T = "a", extra: Extra = {}) {
+async function live(tabs: Tab[], modelValue: T = "a", extra: Extra = { label: "Steps" }) {
   const w = mount(Tabs<T>, {
-    props: { tabs, modelValue, ...extra, "onUpdate:modelValue": (v: T) => w.setProps({ modelValue: v }) },
+    props: {
+      tabs,
+      modelValue,
+      ...extra,
+      "onUpdate:modelValue": (v: T) => w.setProps({ modelValue: v }),
+    },
     attachTo: document.body,
   });
   // Vue skips a listener for an event stamped in the same millisecond it was attached, once another listener ran.
@@ -110,7 +116,7 @@ describe("Tabs", () => {
   });
 
   it("uses ArrowUp and ArrowDown when vertical", async () => {
-    const w = await live(abc(), "a", { orientation: "vertical" });
+    const w = await live(abc(), "a", { orientation: "vertical", label: "Steps" });
     expect(w.attributes("aria-orientation")).toBe("vertical");
     (tabEls(w)[0]!.element as HTMLElement).focus();
     await press("ArrowDown");
@@ -158,5 +164,17 @@ describe("Tabs", () => {
     setMacForTest(true);
     const w = await live([{ value: "a", label: "Views", tip: "Views", keys: "Ctrl+1" }]);
     expect(tabEls(w)[0]!.attributes("title")).toBe("Views (⌘+1)");
+  });
+
+  it("names the bar by labelledby alone when given one", async () => {
+    const w = await live(abc(), "a", { labelledby: "steps-head" });
+    expect([w.attributes("aria-label"), w.attributes("aria-labelledby")]).toEqual([undefined, "steps-head"]);
+  });
+
+  it("warns in a dev build when it has no name", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    mount(Tabs<T>, { props: { tabs: abc(), modelValue: "a" } as never });
+    expect(warn.mock.calls.some((c) => String(c[0]).includes("Tabs has no name"))).toBe(true);
+    warn.mockRestore();
   });
 });

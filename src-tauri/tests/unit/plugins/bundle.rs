@@ -58,7 +58,7 @@ fn zip_of(entries: &[(&str, &[u8])]) -> Vec<u8> {
     let mut buf = std::io::Cursor::new(Vec::new());
     {
         let mut w = zip::ZipWriter::new(&mut buf);
-        let opts: zip::write::FileOptions<'_, ()> = zip::write::FileOptions::default();
+        let opts = zip::write::SimpleFileOptions::default();
         for (name, body) in entries {
             w.start_file(*name, opts).unwrap();
             w.write_all(body).unwrap();
@@ -186,6 +186,52 @@ fn a_zip_that_writes_outside_the_plugin_directory_is_refused() {
     let err = extract_into(&bytes, &dir.join("plug")).expect_err("zip slip must be refused");
     assert!(err.contains("unsafe path"), "refused for the wrong reason: {err}");
     assert!(!outside.exists(), "the escaping entry was written to {}", outside.display());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+const LOCAL: &[u8; 4] = b"PK\x03\x04";
+const LOCAL_NAME_AT: usize = 30;
+const CENTRAL: &[u8; 4] = b"PK\x01\x02";
+const CENTRAL_NAME_AT: usize = 46;
+
+fn rename(bytes: &mut [u8], signature: &[u8; 4], name_at: usize, from: &str, to: &str) {
+    assert_eq!(from.len(), to.len(), "a rename in place keeps every offset");
+    let at = (0..bytes.len() - name_at - from.len())
+        .find(|&p| &bytes[p..p + 4] == signature && &bytes[p + name_at..p + name_at + from.len()] == from.as_bytes())
+        .unwrap_or_else(|| panic!("no record names {from}"));
+    bytes[at + name_at..at + name_at + to.len()].copy_from_slice(to.as_bytes());
+}
+
+fn is_empty(dir: &std::path::Path) -> bool {
+    std::fs::read_dir(dir).map(|mut d| d.next().is_none()).unwrap_or(true)
+}
+
+/// A streaming unzip walks the local headers and we walk the central directory, so a bundle where the two disagree
+/// would unpack one set of files for us and another for anyone checking it with a different tool.
+#[test]
+fn a_bundle_whose_local_header_names_another_file_is_refused() {
+    let dir = tmpdir("local-header");
+    let mut bytes = zip_of(&[("manifest.json", b"{}" as &[u8]), ("server.py", b"print(1)")]);
+    rename(&mut bytes, LOCAL, LOCAL_NAME_AT, "server.py", "loader.py");
+    let err = extract_into(&bytes, &dir).expect_err("a bundle with a renamed local header must be refused");
+    assert!(err.contains("damaged"), "refused for the wrong reason: {err}");
+    assert!(is_empty(&dir), "a refused bundle left files behind");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Two entries named manifest.json: one tool shows the first one's permissions, another installs the second's.
+#[test]
+fn a_bundle_with_two_manifests_is_refused() {
+    let dir = tmpdir("two-manifests");
+    let mut bytes = zip_of(&[
+        ("manifest.json", br#"{"permissions":["document.read"]}"# as &[u8]),
+        ("manifesx.json", br#"{"permissions":["process.spawn"]}"#),
+    ]);
+    rename(&mut bytes, LOCAL, LOCAL_NAME_AT, "manifesx.json", "manifest.json");
+    rename(&mut bytes, CENTRAL, CENTRAL_NAME_AT, "manifesx.json", "manifest.json");
+    let err = extract_into(&bytes, &dir).expect_err("a bundle with two manifests must be refused");
+    assert!(err.contains("damaged"), "refused for the wrong reason: {err}");
+    assert!(is_empty(&dir), "a refused bundle left files behind");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

@@ -77,6 +77,7 @@ function placing(target: StressTarget, as: "face" | "spot"): boolean {
       <Select
         :model-value="setup.body ?? ''"
         :options="bodyOptions"
+        label="Body"
         class="stress-body"
         testid="stress-body"
         :disabled="running"
@@ -94,6 +95,7 @@ function placing(target: StressTarget, as: "face" | "spot"): boolean {
         <Select
           :model-value="x.type"
           :options="SUPPORT_KINDS"
+          :label="`Support ${i + 1} type`"
           class="stress-support-type"
           :title="supportHint(x.type)"
           @update:model-value="engine.ui.panels.setStressSupportType(x.id, $event)"
@@ -146,7 +148,7 @@ function placing(target: StressTarget, as: "face" | "spot"): boolean {
           :width-ch="7"
           class="stress-spot-radius"
           title="Radius"
-          aria-label="Radius"
+          :label="`Spot ${k + 1} radius`"
         />
         <IconButton
           class="stress-remove-spot"
@@ -170,7 +172,7 @@ function placing(target: StressTarget, as: "face" | "spot"): boolean {
       <div class="stress-item-head">
         <span class="stress-swatch" :style="{ background: loadColor }" />
         <span class="stress-item-name">Load {{ i + 1 }}</span>
-        <Select v-model="l.kind" :options="LOAD_KINDS" class="stress-load-kind" />
+        <Select v-model="l.kind" :options="LOAD_KINDS" :label="`Load ${i + 1} kind`" class="stress-load-kind" />
         <!-- Down to no load at all: a body under its own weight alone is a study. -->
         <IconButton
           class="stress-remove-load"
@@ -219,7 +221,7 @@ function placing(target: StressTarget, as: "face" | "spot"): boolean {
           :width-ch="7"
           class="stress-spot-radius"
           title="Radius"
-          aria-label="Radius"
+          :label="`Spot ${k + 1} radius`"
         />
         <IconButton
           class="stress-remove-spot"
@@ -234,8 +236,14 @@ function placing(target: StressTarget, as: "face" | "spot"): boolean {
       <template v-if="l.kind === 'force'">
         <div class="stress-field">
           <span class="measure-k">Force</span>
-          <NumberField v-model="l.force" commit="live" unit="N" :width-ch="7" class="stress-force" aria-label="Force" />
-          <Select v-model="l.direction" :options="FORCE_DIRECTIONS" class="stress-direction" title="Direction" />
+          <NumberField v-model="l.force" commit="live" unit="N" :width-ch="7" class="stress-force" label="Force" />
+          <Select
+            v-model="l.direction"
+            :options="FORCE_DIRECTIONS"
+            label="Force direction"
+            class="stress-direction"
+            title="Direction"
+          />
         </div>
         <div v-if="l.direction === 'custom'" class="stress-field">
           <span class="measure-k">X, Y, Z</span>
@@ -250,7 +258,7 @@ function placing(target: StressTarget, as: "face" | "spot"): boolean {
               :width-ch="6"
               class="stress-xyz"
               :title="String(l.custom[i])"
-              :aria-label="AXIS_NAMES[i]"
+              :label="AXIS_NAMES[i]"
             />
           </span>
         </div>
@@ -263,7 +271,7 @@ function placing(target: StressTarget, as: "face" | "spot"): boolean {
           unit="MPa"
           :width-ch="7"
           class="stress-pressure"
-          aria-label="Pressure"
+          label="Pressure"
         />
       </div>
     </div>
@@ -281,6 +289,7 @@ function placing(target: StressTarget, as: "face" | "spot"): boolean {
         v-if="setup.gravity.on"
         v-model="setup.gravity.direction"
         :options="gravityOptions"
+        label="Which way is down"
         class="stress-gravity-dir"
         title="Which way is down"
       />
@@ -303,7 +312,7 @@ function placing(target: StressTarget, as: "face" | "spot"): boolean {
           :width-ch="7"
           class="stress-size"
           placeholder="auto"
-          aria-label="Mesh size"
+          label="Mesh size"
         />
       </div>
       <div class="sm-hint">Smaller is finer and slower.</div>
@@ -312,6 +321,7 @@ function placing(target: StressTarget, as: "face" | "spot"): boolean {
         <Select
           v-model="setup.refine"
           :options="REFINE_CHOICES"
+          label="Refinement"
           class="stress-refine"
           title="Refine the mesh where stress is high"
         />

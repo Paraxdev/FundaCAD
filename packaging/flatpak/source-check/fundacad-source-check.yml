@@ -1,0 +1,120 @@
+# CI check only (.github/workflows/flatpak-source.yml), not a release manifest.
+# It proves FundaCAD builds from source in the GNOME SDK with no network: the
+# workflow generates cargo-sources-*.json and node-sources.json next to this file
+# first, and flatpak-builder runs without --share=network in build-args.
+app-id: dev.fundacad.app
+runtime: org.gnome.Platform
+runtime-version: '50'
+sdk: org.gnome.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+  - org.freedesktop.Sdk.Extension.node22
+command: fundacad
+finish-args:
+  - --share=ipc
+  # X11, as the AppImage does (GDK_BACKEND=x11 in its GTK hook): WebKitGTK
+  # under Tauri crashes on the Wayland backend, tauri-apps/tauri#8541.
+  - --socket=x11
+  - --env=GDK_BACKEND=x11
+  - --device=dri
+  # A SpaceMouse is read over hidraw (src-tauri/src/spacemouse.rs), which only
+  # --device=all exposes.
+  - --device=all
+  # Plugin bundles, the OIDN denoiser and the update feed are downloaded at run time.
+  - --share=network
+  # Documents live anywhere under home, and the MCP server opens paths it is
+  # given, so the file chooser portal alone is not enough.
+  - --filesystem=home
+modules:
+  # The static kernel opencascade-sys links, built the way occt-sys builds it
+  # (src/lib.rs of occt-sys 0.6.0), then found through FUNDACAD_OCCT_ROOT.
+  - name: occt
+    buildsystem: cmake-ninja
+    builddir: true
+    build-options:
+      # The SDK flags carry -g, which makes the static libraries several GB.
+      cflags: -O2 -pipe -fPIC -ffunction-sections -fdata-sections
+      cflags-override: true
+      cxxflags: -O2 -pipe -fPIC -ffunction-sections -fdata-sections
+      cxxflags-override: true
+      env:
+        CMAKE_POLICY_VERSION_MINIMUM: '3.5'
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DCMAKE_INSTALL_PREFIX=/app/occt
+      - -DINSTALL_DIR=/app/occt
+      - -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+      - -DBUILD_PATCH=/run/build/occt/occt-patch
+      - -DBUILD_LIBRARY_TYPE=Static
+      - -DBUILD_MODULE_ApplicationFramework=FALSE
+      - -DBUILD_MODULE_Draw=FALSE
+      - -DUSE_D3D=FALSE
+      - -DUSE_DRACO=FALSE
+      - -DUSE_EIGEN=FALSE
+      - -DUSE_FFMPEG=FALSE
+      - -DUSE_FREEIMAGE=FALSE
+      - -DUSE_FREETYPE=FALSE
+      - -DUSE_GLES2=FALSE
+      - -DUSE_OPENGL=FALSE
+      - -DUSE_OPENVR=FALSE
+      - -DUSE_RAPIDJSON=FALSE
+      - -DUSE_TBB=FALSE
+      - -DUSE_TCL=FALSE
+      - -DUSE_TK=FALSE
+      - -DUSE_VTK=FALSE
+      - -DUSE_XLIB=FALSE
+      - -DINSTALL_DIR_LIB=lib
+      - -DINSTALL_DIR_INCLUDE=include
+    # Linked statically into the binary, nothing of it ships.
+    cleanup:
+      - /occt
+    sources:
+      - type: archive
+        url: https://github.com/Open-Cascade-SAS/OCCT/archive/refs/tags/V7_8_1.tar.gz
+        sha256: 7321af48c34dc253bf8aae3f0430e8cb10976961d534d8509e72516978aa82f5
+      # adm/MODULES without Visualization and Draw, as occt-sys passes it.
+      - type: dir
+        path: ../../../third_party/opencascade-rs/crates/occt-sys/patch
+        dest: occt-patch
+
+  - name: fundacad
+    buildsystem: simple
+    build-options:
+      append-path: /usr/lib/sdk/rust-stable/bin:/usr/lib/sdk/node22/bin
+      env:
+        CARGO_HOME: /run/build/fundacad/cargo
+        CARGO_NET_OFFLINE: 'true'
+        FUNDACAD_OCCT_ROOT: /app/occt
+        CMAKE_POLICY_VERSION_MINIMUM: '3.5'
+        npm_config_cache: /run/build/fundacad/flatpak-node/npm-cache
+        npm_config_offline: 'true'
+    sources:
+      - type: dir
+        path: ../../..
+        skip:
+          - .git
+          - node_modules
+          - dist
+          - target
+          - src-tauri/target
+      - cargo-sources-app.json
+      - cargo-sources-root.json
+      - node-sources.json
+    build-commands:
+      - npm ci --offline
+      - npm run build
+      # What tauri build runs: the CLI adds the custom-protocol feature, without
+      # it the binary loads the dev server instead of the embedded frontend.
+      - cargo build --release --locked --offline --features tauri/custom-protocol --manifest-path src-tauri/Cargo.toml
+      - install -Dm755 src-tauri/target/release/fundacad /app/bin/fundacad
+      - install -Dm644 packaging/flatpak/dev.fundacad.app.desktop /app/share/applications/dev.fundacad.app.desktop
+      - install -Dm644 packaging/flatpak/dev.fundacad.app.metainfo.xml /app/share/metainfo/dev.fundacad.app.metainfo.xml
+      # Named after the app id, or flatpak does not export it to the host.
+      - sed 's/name="fundacad"/name="dev.fundacad.app"/' packaging/dev.fundacad.app.mime.xml > mime.xml
+      - install -Dm644 mime.xml /app/share/mime/packages/dev.fundacad.app.xml
+      - install -Dm644 src-tauri/icons/32x32.png /app/share/icons/hicolor/32x32/apps/dev.fundacad.app.png
+      - install -Dm644 src-tauri/icons/64x64.png /app/share/icons/hicolor/64x64/apps/dev.fundacad.app.png
+      - install -Dm644 src-tauri/icons/128x128.png /app/share/icons/hicolor/128x128/apps/dev.fundacad.app.png
+      - install -Dm644 src-tauri/icons/128x128@2x.png /app/share/icons/hicolor/256x256/apps/dev.fundacad.app.png
+      - install -Dm644 src-tauri/icons/icon.png /app/share/icons/hicolor/512x512/apps/dev.fundacad.app.png
+      - install -Dm644 assets/brand/fundacad-mark.svg /app/share/icons/hicolor/scalable/apps/dev.fundacad.app.svg

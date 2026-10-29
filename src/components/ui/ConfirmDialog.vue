@@ -1,5 +1,5 @@
 <script setup lang="ts" generic="T extends string">
-import { computed, ref, useTemplateRef, watch } from "vue";
+import { computed, ref, useId, useTemplateRef, watch } from "vue";
 import Dialog from "./Dialog.vue";
 import { useDisabled } from "./useDisabled";
 import { useRovingFocus } from "./useRovingFocus";
@@ -22,6 +22,7 @@ const props = withDefaults(
 );
 const emit = defineEmits<{ pick: [T]; confirm: [T[]]; cancel: [] }>();
 
+const messageId = useId();
 const row = useTemplateRef<HTMLElement>("row");
 const primary = computed(() => props.options.findIndex((o) => o.primary));
 const roving = useRovingFocus({
@@ -50,11 +51,13 @@ const confirm = ok.guard(() => emit("confirm", picked.value));
     :title="title"
     size="sm"
     panel-class="ui-confirm"
+    role="alertdialog"
+    :described-by="message ? messageId : undefined"
     :initial-focus="!multi && primary >= 0 ? '.ui-confirm-primary' : 'first'"
     @close="emit('cancel')"
   >
     <template v-if="message || multi" #default>
-      <p v-if="message" class="ui-confirm-message">{{ message }}</p>
+      <p v-if="message" :id="messageId" class="ui-confirm-message">{{ message }}</p>
       <div v-if="multi" class="ui-confirm-checklist">
         <label v-for="(o, i) in options" :key="o.value" class="ui-confirm-check">
           <input v-model="ticked[i]" type="checkbox" />

@@ -1,0 +1,134 @@
+# Pictures of the Render pages. An entry with stub = true still needs its steps and crop,
+# its show line says what the picture must show.
+# The Print rail button shows the icon of whichever print plugin started first, so the window shots restart two of
+# them in a fixed order after all three are up, which leaves the printer icon on it.
+
+[[shot]]
+file = "manual/docs/img/render-material-sliders.png"
+size = [315, 850]
+viewport = [1440, 900]
+theme = "fundacad"
+crop = "region"
+around = "#renderdock"
+offset = [0.5, 0]
+pause = 1200
+steps = [
+  { open = "example:Wall bracket" },
+  { wait = 800 },
+  { panel = "history", open = false },
+  { panel = "items", open = true },
+  { evaluate = "() => { const s = window.store; s.setBodiesMaterial(s.build.result.bodies.map((b) => b.id), 'm-steel'); }" },
+  { click_css = '.feature-row[data-id="body1"]' },
+  { wait = 400 },
+  { click_css = '[data-workspace="render"]' },
+  { wait = 600 },
+  { click_css = '#renderdock [data-tab="material"]' },
+  { wait = 600 },
+  { click_css = '#renderdock .rd-tile[data-material="m-steel"]' },
+  { wait = 600 },
+  { evaluate = "() => [...document.querySelectorAll('#renderdock .btn')].find((b) => b.textContent.trim() === 'Export…')?.scrollIntoView({ block: 'end' })" },
+  { wait = 600 },
+]
+show = "The material panel for Steel with Metalness, Roughness, Transmission, Emission and Clearcoat sliders."
+alt = "Material panel for Steel with Metalness, Roughness, Transmission, Emission and Clearcoat sliders"
+uses = ["manual/docs/render/editing.md"]
+
+[[shot]]
+file = "manual/docs/img/render-camera-tab.png"
+size = [1440, 900]
+theme = "fundacad"
+crop = "window"
+park = [700, 880]
+pause = 1600
+steps = [
+  { open = "example:Wall bracket" },
+  { wait = 800 },
+  { panel = "history", open = false },
+  { panel = "items", open = false },
+  { evaluate = "async () => { const c = await import('/src/plugins/contrib.ts'); const r = await import('/src/plugins/registry.ts'); const has = (a) => c.contributedRibbon().some((g) => g.items.some((i) => i.action === a)); const until = async (ok) => { for (let i = 0; i < 100 && !ok(); i++) await new Promise((f) => setTimeout(f, 100)); }; await until(() => ['print-export', 'layer-lines', 'print-bed-fit-check'].every(has)); for (const [id, a] of [['FundaCAD.PrintLook', 'layer-lines'], ['FundaCAD.PrintToolbox', 'print-bed-fit-check']]) { r.setPluginEnabled(id, false); await until(() => !has(a)); r.setPluginEnabled(id, true); await until(() => has(a)); } return c.contributedRibbon().map((g) => g.items[0].action); }" },
+  { click_css = '[data-workspace="render"]' },
+  { wait = 600 },
+  { click_css = '#renderdock [data-tab="camera"]' },
+  { wait = 600 },
+]
+show = "The Render workspace on its Camera tab with the Field of view slider."
+alt = "The Camera tab of the Render workspace with the Field of view slider"
+uses = ["manual/docs/render/environment.md"]
+
+[[shot]]
+file = "manual/docs/img/render-materials.png"
+size = [1600, 1000]
+theme = "fundacad"
+crop = "window"
+park = [760, 980]
+pause = 1600
+steps = [
+  { open = "example:Capsule holder" },
+  { wait = 800 },
+  { evaluate = "async () => { const c = await import('/src/plugins/contrib.ts'); const r = await import('/src/plugins/registry.ts'); const has = (a) => c.contributedRibbon().some((g) => g.items.some((i) => i.action === a)); const until = async (ok) => { for (let i = 0; i < 100 && !ok(); i++) await new Promise((f) => setTimeout(f, 100)); }; await until(() => ['print-export', 'layer-lines', 'print-bed-fit-check'].every(has)); for (const [id, a] of [['FundaCAD.PrintLook', 'layer-lines'], ['FundaCAD.PrintToolbox', 'print-bed-fit-check']]) { r.setPluginEnabled(id, false); await until(() => !has(a)); r.setPluginEnabled(id, true); await until(() => has(a)); } return c.contributedRibbon().map((g) => g.items[0].action); }" },
+  { panel = "history", open = false },
+  { panel = "items", open = false },
+  { evaluate = "() => { const s = window.store; const ids = s.build.result.bodies.map((b) => b.id); s.setBodiesMaterial([ids[0]], 'm-carpaint'); s.setBodiesMaterial(ids.slice(1), 'm-chrome'); return ids; }" },
+  { wait = 600 },
+  { click_css = '[data-workspace="render"]' },
+  { wait = 600 },
+  { click_css = '#renderdock [data-tab="material"]' },
+  { wait = 600 },
+  { evaluate = "() => window.viewport.resetCamera(true)" },
+  { wait = 800 },
+]
+show = "A part with several materials in the Render workspace, 1600x1000. Also copied to assets/readme for Flathub."
+alt = "A part with several materials in the Render workspace"
+uses = ["manual/docs/render/materials.md"]
+
+[[shot]]
+file = "manual/docs/img/render-node-editor.png"
+size = [1440, 900]
+theme = "fundacad"
+crop = "window"
+park = [1300, 120]
+pause = 1600
+steps = [
+  { open = "example:Wall bracket" },
+  { wait = 800 },
+  { evaluate = "async () => { const c = await import('/src/plugins/contrib.ts'); const r = await import('/src/plugins/registry.ts'); const has = (a) => c.contributedRibbon().some((g) => g.items.some((i) => i.action === a)); const until = async (ok) => { for (let i = 0; i < 100 && !ok(); i++) await new Promise((f) => setTimeout(f, 100)); }; await until(() => ['print-export', 'layer-lines', 'print-bed-fit-check'].every(has)); for (const [id, a] of [['FundaCAD.PrintLook', 'layer-lines'], ['FundaCAD.PrintToolbox', 'print-bed-fit-check']]) { r.setPluginEnabled(id, false); await until(() => !has(a)); r.setPluginEnabled(id, true); await until(() => has(a)); } return c.contributedRibbon().map((g) => g.items[0].action); }" },
+  { panel = "history", open = false },
+  { panel = "items", open = false },
+  { evaluate = "() => { const s = window.store; s.setBodiesMaterial(s.build.result.bodies.map((b) => b.id), 'm-steel'); }" },
+  { wait = 400 },
+  { click_css = '[data-workspace="render"]' },
+  { wait = 600 },
+  { click_css = '#renderdock [data-tab="material"]' },
+  { wait = 600 },
+  { click_css = '#renderdock .rd-tile[data-material="m-steel"]' },
+  { wait = 600 },
+  { click_css = '#renderdock [data-editgraph]' },
+  { wait = 800 },
+  { click_css = '.ne-bar [data-add="noise"]' },
+  { wait = 400 },
+  { click_css = '.ne-node[data-node-type="noise"] [data-out]' },
+  { click_css = '.ne-node[data-node-type="output"] [data-in$=":bump"]' },
+  { wait = 300 },
+  { click_css = '.ne-node[data-node-type="noise"] [data-out]' },
+  { click_css = '.ne-node[data-node-type="output"] [data-in$=":roughness"]' },
+  { wait = 300 },
+  { evaluate = "() => [...document.querySelectorAll('.ne-bar .rd-chip')].find((b) => b.textContent.trim() === 'Fit')?.click()" },
+  { wait = 800 },
+  { mouse = "down", at = [830, 669], space = "screen" },
+  { mouse = "move", at = [210, 600], space = "screen", steps = 12 },
+  { mouse = "up" },
+  { wait = 300 },
+  { evaluate = "() => [...document.querySelectorAll('.ne-bar .rd-chip')].find((b) => b.textContent.trim() === 'Fit')?.click()" },
+  { wait = 800 },
+  { evaluate = "() => document.querySelector('#renderdock .rd-tile[data-material=\"m-steel\"]').scrollIntoView({ block: 'start' })" },
+  { wait = 600 },
+  { evaluate = "() => (window.viewport.canvas ?? document.querySelector('canvas')).dispatchEvent(new WheelEvent('wheel', { deltaY: 240, clientX: 650, clientY: 300, bubbles: true, cancelable: true }))" },
+  { wait = 800 },
+  { mouse = "down", at = [650, 300], space = "screen", button = "middle" },
+  { mouse = "move", at = [650, 120], space = "screen", steps = 20 },
+  { mouse = "up", button = "middle" },
+  { wait = 600 },
+]
+show = "The node editor along the bottom with a Noise node wired into Output, the part above it."
+alt = "The node editor with a Noise node wired into Output"
+uses = ["manual/docs/render/graph.md"]

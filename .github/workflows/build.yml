@@ -95,6 +95,19 @@ jobs:
       - name: Version release tests
         run: python3 tests/build/test_version_release.py
 
+      # The checks of the AT-SPI dump the bundle leg runs, against fake trees. Not a
+      # gate until it has run green here, like the walks they check.
+      - name: AT-SPI dump tests
+        continue-on-error: true
+        run: python3 tests/build/test_atspi_dump.py
+
+      # The checks of the UI Automation walk the Windows bundle leg runs, against
+      # fake trees, in pwsh on Linux. Not a gate until it has run green here.
+      - name: UI Automation walk tests
+        continue-on-error: true
+        shell: pwsh
+        run: ./tests/build/test_uia_walk.ps1
+
       # The plugin sandbox is a worker ENTRY, so Rollup treats its exports as
       # unreachable and drops them. That produced a chunk with none of the
       # sandbox in it, past every unit test, and would have failed at the first
@@ -125,6 +138,18 @@ jobs:
         run: |
           rustc --edition 2021 --test -D warnings src-tauri/tests/unit/log_file.rs -o "$RUNNER_TEMP/log_file_test"
           "$RUNNER_TEMP/log_file_test"
+
+      # The manual's capture tool: its manifests against the pages, its GIF encoder and its retries. It needs
+      # tomllib, which the runner's Python 3.10 lacks, so this comes last in the job.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Capture tool tests
+        run: python tests/manual/test_capture.py
+
+      - name: Manual glossary tests
+        run: python tests/manual/test_glossary.py
 
   # What this run builds and where it goes (docs/ENGINE.md section 7). `config`
   # is empty on a ref that builds no installers. `gated` is false on dev, whose
@@ -511,6 +536,32 @@ jobs:
           FUNDACAD_MCP_MODE=attach FUNDACAD_SESSION_FILE="$session" \
             python3 scripts/bundle-smoke.py --work "$RUNNER_TEMP/smoke-gui" -- "$RUNNER_TEMP/deb-root/usr/bin/fundacad" --mcp
 
+      # What Orca reads: the AppImage on its own accessibility bus, its AT-SPI
+      # tree dumped and red on a nameless button or no web document. Not a gate
+      # until wave 1 of the accessibility work has run green here.
+      - name: Dump the AppImage accessibility tree over AT-SPI
+        if: matrix.platform == 'ubuntu-22.04'
+        continue-on-error: true
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo timeout -k 10 300 apt-get install -y -qq xvfb at-spi2-core gir1.2-atspi-2.0 python3-gi libglib2.0-bin
+          img=$(find src-tauri/target/release/bundle/appimage -maxdepth 1 -name '*.AppImage' | head -1)
+          if [ -z "$img" ]; then echo "::error::no AppImage to start"; exit 1; fi
+          dbus-run-session -- bash scripts/a11y/atspi-run.sh "$img" "$RUNNER_TEMP/atspi"
+
+      - name: Upload the AT-SPI dump
+        if: always() && matrix.platform == 'ubuntu-22.04'
+        uses: actions/upload-artifact@v4
+        with:
+          name: atspi-dump
+          path: |
+            ${{ runner.temp }}/atspi/*.txt
+            ${{ runner.temp }}/atspi/*.log
+          if-no-files-found: ignore
+          retention-days: 7
+
       # The portable exe the release uploads, and the macOS app's binary, which
       # Tauri names after the binary or the product depending on its version.
       - name: Start the shipped executable and build a box
@@ -526,6 +577,28 @@ jobs:
           esac
           if [ -z "${bin:-}" ] || [ ! -f "$bin" ]; then echo "::error::no executable to start"; exit 1; fi
           "$py" scripts/bundle-smoke.py --work "$RUNNER_TEMP/smoke-exe" -- "$bin" --mcp
+
+      # What NVDA and Narrator read: the exe's window walked over UI Automation,
+      # red on a nameless button or no web document. Windows PowerShell, whose
+      # .NET carries UIAutomationClient. Not a gate until wave 1 of the
+      # accessibility work has run green here.
+      - name: Walk the exe window over UI Automation
+        if: matrix.platform == 'windows-latest'
+        continue-on-error: true
+        timeout-minutes: 10
+        shell: powershell
+        run: |
+          & ./scripts/a11y/uia_walk.ps1 -Exe "src-tauri/target/release/$env:FUNDACAD_BIN.exe" -Out "$env:RUNNER_TEMP/uia/uia.txt"
+          exit $LASTEXITCODE
+
+      - name: Upload the UI Automation walk
+        if: always() && matrix.platform == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: uia-walk
+          path: ${{ runner.temp }}/uia/
+          if-no-files-found: ignore
+          retention-days: 7
 
       # The updater runs the installer as `/P /R /UPDATE`, and from the portable
       # build that is the first install, which has to make the Start menu entry
@@ -1235,7 +1308,7 @@ jobs:
           TMPDIR: ${{ runner.temp }}/harness
         run: |
           mkdir -p "$TMPDIR"
-          python -m pytest tools/harness/tests -m smoke -q
+          python -m pytest tools/harness/tests -m "smoke and not a11y" -q
 
       - name: Agent harness logs on failure
         if: failure()
@@ -1243,6 +1316,30 @@ jobs:
         with:
           name: harness-logs
           path: ${{ runner.temp }}/harness
+          if-no-files-found: ignore
+          retention-days: 7
+
+      # The axe baseline was seeded on Windows Chrome, so this stays
+      # continue-on-error until wave 1 of the accessibility epic has landed.
+      - name: Accessibility smoke (axe and aria snapshots)
+        continue-on-error: true
+        timeout-minutes: 10
+        env:
+          FUNDACAD_ENGINE_CMD: ${{ github.workspace }}/engine-bin/fundacad-engine
+          FUNDACAD_CHROME: /usr/bin/google-chrome
+          FUNDACAD_HARNESS_KEEP: "1"
+          FUNDACAD_A11Y_OUT: ${{ runner.temp }}/a11y/out
+          TMPDIR: ${{ runner.temp }}/a11y/harness
+        run: |
+          mkdir -p "$TMPDIR" "$FUNDACAD_A11Y_OUT"
+          python -m pytest tools/harness/tests -m a11y -q
+
+      - name: Accessibility smoke report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: a11y-smoke
+          path: ${{ runner.temp }}/a11y
           if-no-files-found: ignore
           retention-days: 7
 

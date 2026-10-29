@@ -1,0 +1,30 @@
+- status
+- alert
+- dialog "Preferences":
+  - heading "Preferences" [level=2]
+  - button "Close"
+  - tablist "Preference categories":
+    - tab "Appearance" [selected]
+    - tab "Viewport"
+    - tab "Navigation"
+    - tab "Accessibility"
+    - tab "Updates"
+    - tab "AI assistants"
+    - tab "Plugins"
+    - tab "Experimental"
+  - tabpanel "Appearance":
+    - heading "Appearance" [level=3]
+    - combobox "Theme"
+    - button "Upload theme…"
+    - alert
+    - combobox "Icons"
+    - radiogroup "Units":
+      - radio "mm" [checked]
+      - radio "cm"
+      - radio "in"
+    - radiogroup "Home background":
+      - radio "Paper" [checked]
+      - radio "Workspace"
+      - radio "Your own image"
+    - alert
+  - button "Done"

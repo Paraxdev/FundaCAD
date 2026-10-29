@@ -16,11 +16,16 @@ import StressResultsStep from "./StressResultsStep.vue";
 import { buildStressRequest } from "../../ui/stress";
 import { escapeClaimed } from "../../ui/escapeClaim";
 import { isEditableTarget } from "../../ui/focus";
+import { announce } from "../../ui/announce";
 
 type Step = "setup" | "results";
 
 const engine = useEngine();
 const panels = usePanelsStore();
+watch(
+  () => panels.stress?.running,
+  (running) => running && announce("Analysing", "polite", { key: "stress" }),
+);
 
 const bodies = ref<{ id: string; name: string }[]>([]);
 function readBodies() {
@@ -109,7 +114,7 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
           @click="close"
         />
       </div>
-      <Tabs v-model="step" :tabs="tabs" />
+      <Tabs v-model="step" label="Stress steps" :tabs="tabs" />
 
       <KeepAlive>
         <StressResultsStep v-if="step === 'results' && result" :result="result" />

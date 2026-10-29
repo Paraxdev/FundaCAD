@@ -121,7 +121,7 @@ export function iconPaths(name: string): string {
 
 /** For a caller with a string slot. Prefer <Icon>, or iconElement() in imperative DOM code. */
 export function icon(name: string): string {
-  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">${iconPaths(name)}</svg>`;
+  return `<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">${iconPaths(name)}</svg>`;
 }
 
 /** For surfaces built with document.createElement (the sketch dimension box). Its innerHTML is the same sanctioned
@@ -131,6 +131,8 @@ export function iconElement(name: string, size = 16): SVGSVGElement {
   // `.icon { flex: 0 0 auto }` keeps the icon from collapsing in a flex slot; the heads-up box marks drew 0px wide.
   svg.setAttribute("class", "icon");
   svg.setAttribute("data-icon", name);
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("focusable", "false");
   svg.setAttribute("viewBox", "0 0 24 24");
   svg.setAttribute("width", String(size));
   svg.setAttribute("height", String(size));

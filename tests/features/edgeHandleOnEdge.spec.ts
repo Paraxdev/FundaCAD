@@ -88,12 +88,14 @@ describe("the fillet tool's handle", () => {
       domElement: canvas,
       camera: camera(),
       suspendPicking: false,
-      selectedEdgeSelectors: () =>
+      selectedEdgeSeeds: () =>
         EDGES.slice(0, picked).map((e) => ({
-          kind: "edge",
-          by: "nearest",
-          point: mid(e.points as Vec3[]),
-          body: "b1",
+          sel: {
+            kind: "edge",
+            by: "nearest",
+            point: mid(e.points as Vec3[]),
+            body: "b1",
+          },
         })),
       selectedEdgeScope: () => ({ scope: "single" }),
       edgeLineForSelector: (p: Vec3) => byMid(p),

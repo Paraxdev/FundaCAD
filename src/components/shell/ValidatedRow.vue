@@ -48,7 +48,7 @@ function onValue(v: number | null) {
     <label>{{ label }}</label>
     <div class="param-value">
       <NumberField
-        :aria-label="label"
+        :label="label"
         :title="hint"
         :model-value="value"
         :text="text"

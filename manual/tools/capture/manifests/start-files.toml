@@ -1,0 +1,197 @@
+# Pictures of the Start and Files pages. An entry with stub = true still needs its steps and crop,
+# its show line says what the picture must show.
+# The Windows warning on install and the system Save As window are not pictured: both are outside the app's page.
+
+[[shot]]
+file = "manual/docs/img/export-dialog.png"
+size = [748, 417]
+theme = "fundacad"
+crop = "region"
+around = ".export-dialog"
+# The odd height around a whole pixel centre lands on half pixels and the rounding drops a row, so it moves by half.
+offset = [0, 0.5]
+park = [1400, 860]
+# The cards are closed so the margin around the window shows only the canvas.
+steps = [
+  { open = "example:Wall bracket" },
+  { panel = "items", open = false },
+  { panel = "history", open = false },
+  { press = "Ctrl+E" },
+  { wait = 300 },
+]
+show = "The Export window with STL and Medium chosen."
+alt = "The Export window with STL and Medium chosen"
+uses = ["manual/docs/files/export.md"]
+
+[[shot]]
+file = "manual/docs/img/home.png"
+size = [1440, 900]
+theme = "fundacad"
+crop = "window"
+park = [1400, 860]
+pause = 1500
+# Home only lists documents through the desktop library, so the dev fake library stands in, with real card
+# pictures drawn from three examples the way a save draws them.
+steps = [
+  { evaluate = "async () => { const { templateText } = await import('/src/templates/index.ts'); window.store.load(await templateText('plate')); }" },
+  "settle",
+  { evaluate = "() => window.viewport.resetCamera(true)" },
+  "settle",
+  { evaluate = "() => { (window.__captureThumbs ??= []).push(window.viewport.renderThumbnail(480, 300)); }" },
+  { evaluate = "async () => { const { templateText } = await import('/src/templates/index.ts'); window.store.load(await templateText('wall-bracket')); }" },
+  "settle",
+  { evaluate = "() => window.viewport.resetCamera(true)" },
+  "settle",
+  { evaluate = "() => { (window.__captureThumbs ??= []).push(window.viewport.renderThumbnail(480, 300)); }" },
+  { evaluate = "async () => { const { templateText } = await import('/src/templates/index.ts'); window.store.load(await templateText('pinned-lever')); }" },
+  "settle",
+  { evaluate = "() => window.viewport.resetCamera(true)" },
+  "settle",
+  { evaluate = "() => { (window.__captureThumbs ??= []).push(window.viewport.renderThumbnail(480, 300)); }" },
+  { evaluate = '''() => {
+    const thumbs = window.__captureThumbs;
+    window.store.newDocument();
+    const now = Date.now();
+    const files = [
+      { path: "D:/Projects/shelf/mounting plate.funda", mtimeMs: now - 40 * 60000, thumb: thumbs[0] },
+      { path: "D:/Projects/shelf/wall bracket.funda", mtimeMs: now - 26 * 3600000, thumb: thumbs[1] },
+      { path: "D:/Projects/press/lever arm.funda", mtimeMs: now - 4 * 86400000, thumb: thumbs[2] },
+    ];
+    localStorage.setItem("fundacad.recentFiles", JSON.stringify(files.map((f, i) => ({ path: f.path, openedAt: now - i * 1000 }))));
+    localStorage.setItem("fundacad.home.folders", JSON.stringify([{ path: "D:/Projects/shelf", addedAt: now }]));
+    window.__fundacad.home.useFakeLibrary(files);
+    window.__fundacad.handleAction("welcome");
+  }''' },
+]
+show = "Home with Blank and Open at the top, three recent documents and the examples under them."
+alt = "Home with Blank and Open at the top, three recent documents and the examples under them"
+uses = ["manual/docs/files/home.md"]
+
+[[shot]]
+file = "manual/docs/img/versions-panel.png"
+size = [420, 280]
+theme = "fundacad"
+crop = "region"
+around = ".versions-pop"
+park = [900, 860]
+# Version times are moved back after each save, so the rows read as an afternoon of work and not all "just now".
+steps = [
+  { open = "example:Plate" },
+  # The first edit of an example names the extrude distance d1, which would count as a settings change in the next version.
+  { evaluate = "() => window.store.updateFeature('plate', {})" },
+  "settle",
+  { evaluate = "() => { window.store.saveVersion('first plate'); window.store.versionRepo.versions.at(-1).time = Date.now() - 3 * 3600000; }" },
+  { evaluate = '''() => {
+    const corner = (x, y) => ({ kind: "edge", by: "match", fp: { mid: [x, y, 3], dir: [0, 0, 1], length: 6, curve: "line" }, body: "body1" });
+    const edges = [corner(40, 25), corner(-40, 25), corner(-40, -25), corner(40, -25)];
+    window.store.addFeature({ id: "corners", type: "fillet", name: "Rounded corners", edges, radius: 5 }, 2);
+  }''' },
+  "settle",
+  { evaluate = "() => { window.store.saveVersion('rounded corners'); window.store.versionRepo.versions.at(-1).time = Date.now() - 25 * 60000; }" },
+  { param = "holeDiameter", value = "6" },
+  { panel = "history", open = false },
+  { click = "Versions" },
+  { wait = 300 },
+  { evaluate = "() => { const i = document.querySelector('.versions-pop .versions-input input'); i.value = 'bigger holes'; i.dispatchEvent(new Event('input')); }" },
+]
+show = "The Versions panel listing two saved versions with their notes, one change counted and a note typed."
+alt = "Versions panel listing two saved versions with their notes"
+uses = ["manual/docs/files/versions.md"]
+
+[[shot]]
+file = "manual/docs/img/first-part-rectangle.png"
+size = [890, 850]
+theme = "fundacad"
+crop = "region"
+viewport = [890, 900]
+at = [0, 50]
+park = [860, 880]
+# Corners off the grid lines, so snap leaves the rectangle rough. The palette is hidden so the drawing has the room.
+steps = [
+  { press = "s" },
+  { pick_plane = "XY" },
+  { panel = "items", open = false },
+  { evaluate = "() => document.getElementById('palette').classList.add('hidden')" },
+  { press = "r" },
+  { click_at = true, sketch = [17.2, 6.8] },
+  { click_at = true, sketch = [-22.4, -12.6] },
+]
+show = "A rough rectangle drawn on the XY sketch plane, the first step of the first part."
+alt = "A rough rectangle drawn on the sketch plane"
+uses = ["manual/docs/start/first-part.md"]
+
+[[shot]]
+file = "manual/docs/img/first-part-extrude.png"
+size = [880, 780]
+theme = "fundacad"
+crop = "region"
+around = "world:6,0,2.5"
+park = [1430, 890]
+steps = [
+  { open = "fixture:plate-sketch.json" },
+  { view = "iso" },
+  { panel = "items", open = false },
+  { panel = "history", open = false },
+  # A sketch alone gives Fit nothing to frame, so the camera is zoomed by hand.
+  { evaluate = "() => window.viewport.rig.zoomBy(0.55)" },
+  "settle",
+  { press = "e" },
+  { click_at = true, world = [10, 0, 0] },
+  { type = ["D", "5"] },
+]
+show = "The extrude arrow over the plate preview: a rectangle with a circle hole, extruded 5 mm."
+alt = "The extrude arrow with the plate previewed"
+uses = ["manual/docs/start/first-part.md"]
+
+[[shot]]
+file = "manual/docs/img/first-part-export.png"
+size = [748, 417]
+crop = "copy"
+from = "manual/docs/img/export-dialog.png"
+show = "The Export window with STL, Millimeter and Medium chosen, as the first part page describes."
+alt = "The Export window with STL and Medium chosen"
+uses = ["manual/docs/start/first-part.md"]
+
+[[shot]]
+file = "manual/docs/img/insert-document.png"
+size = [460, 200]
+theme = "fundacad"
+crop = "region"
+around = ".ui-confirm"
+park = [1400, 860]
+# Insert Document reads the file through the desktop app, so the page asks the same question the app asks after the pick.
+steps = [
+  { open = "example:Plate" },
+  { evaluate = '''async () => {
+    const { choose } = await import('/src/ui/choice.ts');
+    choose('Insert wall bracket.funda', [
+      { value: 'append', label: 'Append', hint: 'copy it in once' },
+      { value: 'link', label: 'Link', hint: 'update when the file changes' },
+    ]);
+  }''' },
+  { wait = 300 },
+]
+show = "The Insert Document question with Append and Link, each with its hint."
+alt = "Insert Document asking Append or Link"
+uses = ["manual/docs/files/link.md"]
+
+[[shot]]
+file = "manual/docs/img/import-step.png"
+size = [1064, 600]
+theme = "fundacad"
+crop = "region"
+at = [0, 40]
+park = [1400, 860]
+steps = [
+  { import_file = "tests/fixtures/asm_colors.step" },
+  { panel = "items" },
+  { click_css = '.tree-folder[aria-expanded="false"] .tree-caret' },
+  { press = "Escape" },
+  "settle",
+  # The Views fit raced the import's own camera move, so the camera is reset straight away instead.
+  { evaluate = "() => window.viewport.resetCamera(true)" },
+  "settle",
+]
+show = "A STEP assembly imported, its parts listed as bodies in the Items card."
+alt = "An imported STEP assembly with one body per part"
+uses = ["manual/docs/files/import.md"]

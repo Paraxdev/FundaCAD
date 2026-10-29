@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 
 import Checkbox from "../../../src/components/ui/Checkbox.vue";
@@ -8,15 +8,20 @@ enableAutoUnmount(afterEach);
 type Props = {
   modelValue: boolean;
   label?: string;
+  labelledby?: string;
   indeterminate?: boolean;
   tip?: string;
   disabled?: boolean;
   disabledReason?: string;
 };
 
-async function render(props: Props, { follow = true } = {}) {
+async function render(props: Props, { follow = true, attrs = {} as Record<string, string> } = {}) {
   const w = mount(Checkbox, {
-    props: { ...props, "onUpdate:modelValue": (v: boolean) => (follow ? w.setProps({ modelValue: v }) : undefined) },
+    props: {
+      ...props,
+      "onUpdate:modelValue": (v: boolean) => (follow ? w.setProps({ modelValue: v }) : undefined),
+    } as never,
+    attrs,
     attachTo: document.body,
   });
   // Vue skips a listener for an event stamped in the same millisecond it was attached, once another listener ran.
@@ -78,10 +83,39 @@ describe("Checkbox", () => {
     expect([emitted(w), input(w).checked, input(w).indeterminate]).toEqual([[[true], [true]], true, true]);
   });
 
-  it("names a box with no label from its tip", async () => {
-    const w = await render({ modelValue: false, tip: "Select all" });
-    expect([input(w).getAttribute("aria-label"), w.attributes("title")]).toEqual(["Select all", "Select all"]);
-    expect(w.find(".ui-checkbox-label").exists()).toBe(false);
+  it("is named by its drawn label or slot through the wrapping label, with no aria name on the box", async () => {
+    const drawn = await render({ modelValue: false, label: "Snap to grid" });
+    const slotted = mount(Checkbox, { props: { modelValue: false }, slots: { default: "<b>Orbit inertia</b>" } });
+    for (const w of [drawn, slotted]) {
+      const box = w.get("input");
+      expect([box.attributes("aria-label"), box.attributes("aria-labelledby")]).toEqual([undefined, undefined]);
+    }
+    expect(slotted.get(".ui-checkbox-label").text()).toBe("Orbit inertia");
+  });
+
+  it("puts labelledby or a plugin's aria-label on the box, not on the label, and keeps tip as the tooltip only", async () => {
+    const by = await render({ modelValue: false, labelledby: "row-title", tip: "Run it" });
+    expect([input(by).getAttribute("aria-labelledby"), input(by).getAttribute("aria-label")]).toEqual([
+      "row-title",
+      null,
+    ]);
+    expect([by.attributes("title"), by.find(".ui-checkbox-label").exists()]).toEqual(["Run it", false]);
+    const plug = await render({ modelValue: false }, { attrs: { "aria-label": "Select all", id: "all" } });
+    expect([input(plug).getAttribute("aria-label"), plug.attributes("aria-label"), plug.attributes("id")]).toEqual([
+      "Select all",
+      undefined,
+      "all",
+    ]);
+  });
+
+  it("warns in a dev build when it has no label, labelledby or slot, and not when the slot names it", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const named = () => warn.mock.calls.filter((c) => String(c[0]).includes("Checkbox has no name")).length;
+    mount(Checkbox, { props: { modelValue: false }, slots: { default: "Orbit inertia" } });
+    expect(named()).toBe(0);
+    mount(Checkbox, { props: { modelValue: false, tip: "Only a tooltip" } });
+    expect(named()).toBe(1);
+    warn.mockRestore();
   });
 
   it("refuses the label, the box and Space while disabled, keeps focus and the reason as title", async () => {

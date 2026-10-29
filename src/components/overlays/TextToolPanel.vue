@@ -105,7 +105,7 @@ onUnmounted(() => {
         multiline
         rows="2"
         placeholder="Text…"
-        aria-label="Text"
+        label="Text"
         @update:model-value="set('text', $event)"
         @keydown.enter.ctrl.prevent="commit"
         @keydown.enter.meta.prevent="commit"
@@ -115,14 +115,16 @@ onUnmounted(() => {
         :model-value="form.font"
         :options="fonts"
         size="sm"
+        label="Font"
         tip="Font"
         @update:model-value="set('font', $event)"
       />
 
       <div class="text-tool-row">
-        <label class="text-tool-label" :for="`${id}-height`">Size</label>
+        <label :id="`${id}-height-label`" class="text-tool-label" :for="`${id}-height`">Size</label>
         <TextField
           :id="`${id}-height`"
+          :labelledby="`${id}-height-label`"
           class="text-tool-num"
           :model-value="form.height"
           size="sm"
@@ -130,9 +132,10 @@ onUnmounted(() => {
           :error="errors.height"
           @update:model-value="set('height', $event)"
         />
-        <label class="text-tool-label" :for="`${id}-angle`">Angle°</label>
+        <label :id="`${id}-angle-label`" class="text-tool-label" :for="`${id}-angle`">Angle°</label>
         <TextField
           :id="`${id}-angle`"
+          :labelledby="`${id}-angle-label`"
           class="text-tool-num"
           :model-value="form.angle"
           size="sm"
@@ -143,8 +146,12 @@ onUnmounted(() => {
       </div>
 
       <div class="text-tool-row">
-        <Checkbox :model-value="form.bold" label="B" tip="Bold" @update:model-value="set('bold', $event)" />
-        <Checkbox :model-value="form.italic" label="I" tip="Italic" @update:model-value="set('italic', $event)" />
+        <Checkbox :model-value="form.bold" tip="Bold" @update:model-value="set('bold', $event)"
+          ><span aria-hidden="true">B</span><span class="sr-only">Bold</span></Checkbox
+        >
+        <Checkbox :model-value="form.italic" tip="Italic" @update:model-value="set('italic', $event)"
+          ><span aria-hidden="true">I</span><span class="sr-only">Italic</span></Checkbox
+        >
         <Segmented
           :model-value="form.align"
           :options="aligns"
@@ -155,9 +162,10 @@ onUnmounted(() => {
       </div>
 
       <div class="text-tool-row">
-        <label class="text-tool-label" :for="`${id}-box`">Box width (mm)</label>
+        <label :id="`${id}-box-label`" class="text-tool-label" :for="`${id}-box`">Box width (mm)</label>
         <TextField
           :id="`${id}-box`"
+          :labelledby="`${id}-box-label`"
           class="text-tool-wide"
           :model-value="form.boxWidth"
           size="sm"

@@ -5,11 +5,13 @@ export interface ChoiceOption<T extends string = string> {
   value: T;
   label: string;
   hint?: string;
+  primary?: boolean;
 }
 
 export interface ChooseReq {
   kind: "choose";
   title: string;
+  message?: string;
   options: ChoiceOption[];
   resolve: (v: string | null) => void;
 }

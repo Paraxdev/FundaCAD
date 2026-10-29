@@ -1,3 +1,4 @@
+use fundacad_mcp::budget::Page;
 use fundacad_mcp::clash::*;
 use serde_json::json;
 
@@ -64,7 +65,7 @@ fn a_pair_that_was_not_tested_is_never_called_clear() {
         "has faces that point the wrong way, at 65 of its edges the two faces disagree about which side is inside";
     let r = json!({"pairs": [], "clearances": [], "uncheckedPairs": 1,
                    "unchecked": [{"id": "body1", "name": "Echo Dot 2", "reason": reason}]});
-    let text = report(&r, 1.0);
+    let text = report(&r, 1.0, Page::all(), false);
     assert!(!text.contains("No bodies overlap"), "{text}");
     assert!(
         text.starts_with("NOT CHECKED: 1 pair that may overlap, because one of the two bodies cannot be judged:"),
@@ -74,7 +75,7 @@ fn a_pair_that_was_not_tested_is_never_called_clear() {
     assert!(text.contains("No overlap among the pairs that were checked."), "{text}");
 
     let clear = json!({"pairs": [], "clearances": []});
-    assert!(report(&clear, 0.0).starts_with("No bodies overlap."));
+    assert!(report(&clear, 0.0, Page::all(), false).starts_with("No bodies overlap."));
 
     let swept = sweep_report(
         "press",
@@ -123,4 +124,133 @@ fn a_sweep_names_where_it_clashes() {
     assert!(text.starts_with("Overlaps at 1 of 2 steps: press = 4 mm."), "{text}");
     assert!(text.contains("0.4 mm (body1 \"Head\" / body2 \"Slider\", at press = 0 mm)"), "{text}");
     assert!(text.contains("press = 4: CLASH body1/body2 2.5 mm3"), "{text}");
+}
+
+/// A bar through a row of pins: pins 2..13 overlap it alike, pin 1 by more, and pins 20..59 pass 1 mm from it.
+fn a_bar_through_pins() -> serde_json::Value {
+    let pin = |i: usize| (format!("body{}", i + 1), format!("Pin {i}"));
+    let mut pairs = Vec::new();
+    for i in 1..=13 {
+        let (id, name) = pin(i);
+        let (y, volume) = (i as f64 * 3.0, if i == 1 { 9.0 } else { 4.0 });
+        pairs.push(json!({"a": "body1", "aName": "Bar", "b": id, "bName": name, "volume": volume,
+                          "bbox": {"min": [0.0, y, 0.0], "max": [1.0, y + 2.0, 2.0]}}));
+    }
+    let clearances: Vec<_> = (20..60)
+        .map(|i| {
+            let (id, name) = pin(i);
+            json!({"a": "body1", "aName": "Bar", "b": id, "bName": name, "distance": 1.0,
+                   "pointA": [0.0, i as f64, 0.0], "pointB": [0.0, i as f64, 1.0]})
+        })
+        .collect();
+    json!({"pairs": pairs, "clearances": clearances})
+}
+
+#[test]
+fn a_long_list_sums_first_and_folds_alike_pairs() {
+    let r = a_bar_through_pins();
+    let text = report(&r, 1.0, Page { offset: 0, limit: 30 }, false);
+    let lines: Vec<&str> = text.lines().collect();
+    assert_eq!(lines[0], "13 overlapping pairs: 57 mm3 overlap in all, largest first, alike pairs in one row");
+    assert_eq!(lines[1], "  body1 \"Bar\" / body2 \"Pin 1\": 9 mm3 overlap, from (0, 3, 0) to (1, 5, 2)");
+    assert_eq!(
+        lines[2],
+        "  body1 \"Bar\" / body3 \"Pin 2\": 4 mm3 overlap, from (0, 6, 0) to (1, 8, 2) \
+         (and 11 more alike: body1 / body4..body14)"
+    );
+    assert_eq!(lines[3], "Within 1 mm without overlapping: 40 pairs, nearest first, alike pairs in one row");
+    assert!(lines[4].ends_with("(and 39 more alike: body1 / body22..body60)"), "{text}");
+    assert_eq!(lines.len(), 5, "{text}");
+}
+
+#[test]
+fn every_pair_stays_reachable_by_page_and_full() {
+    let r = a_bar_through_pins();
+    let full = report(&r, 1.0, Page::all(), true);
+    assert!(full.starts_with("13 overlapping pairs: 57 mm3 overlap in all, largest first\n"), "{full}");
+    assert!(!full.contains("alike"), "{full}");
+    assert!(full.contains("  body1 \"Bar\" / body60 \"Pin 59\": 1 mm apart, at (0, 59, 0) and (0, 59, 1)"), "{full}");
+    assert_eq!(full.lines().count(), 2 + 13 + 40);
+
+    let first = report(&r, 1.0, Page { offset: 0, limit: 5 }, true);
+    assert!(first.contains("  showing overlap rows 1 to 5 of 13: pass offset 5 for the next 5, or limit 0 for all"));
+    assert!(first.contains("  showing near rows 1 to 5 of 40: pass offset 5 for the next 5, or limit 0 for all"));
+    let last = report(&r, 1.0, Page { offset: 35, limit: 5 }, true);
+    assert!(last.contains("  no overlap rows from offset 35: there are 13"), "{last}");
+    assert!(last.contains("  showing near rows 36 to 40 of 40"), "{last}");
+    assert!(last.contains("body60 \"Pin 59\""), "{last}");
+}
+
+#[test]
+fn a_fold_with_more_ids_than_fit_says_how_many_and_how_to_list_them() {
+    let clearances: Vec<_> = (0..200)
+        .map(|i| {
+            json!({"a": "body1", "aName": "Bar", "b": format!("body{}", 2 + i * 2), "bName": format!("Pin {i}"),
+                   "distance": 0.5, "pointA": [0.0, 0.0, 0.0], "pointB": [0.0, 0.0, 0.5]})
+        })
+        .collect();
+    let text = report(&json!({"pairs": [], "clearances": clearances}), 1.0, Page { offset: 0, limit: 30 }, false);
+    assert!(text.contains(" more, full true lists every pair)"), "{text}");
+    assert!(text.len() < 600, "{} bytes: {text}", text.len());
+}
+
+#[test]
+fn a_short_list_reads_as_it_always_did() {
+    let r = json!({"pairs": [{"a": "body1", "aName": "Bar", "b": "body2", "bName": "Pin", "volume": 4.0,
+                              "bbox": {"min": [0.0, 0.0, 0.0], "max": [1.0, 2.0, 2.0]}}],
+                   "clearances": []});
+    assert_eq!(
+        report(&r, 1.0, Page { offset: 0, limit: 30 }, false),
+        "1 overlapping pair:\n  body1 \"Bar\" / body2 \"Pin\": 4 mm3 overlap, from (0, 0, 0) to (1, 2, 2)\n\
+         No other pair comes within 1 mm."
+    );
+}
+
+#[test]
+fn pairs_with_no_body_in_common_fold_to_their_pair_ids_in_counting_order() {
+    let clearances: Vec<_> = (1..=12)
+        .map(|i| {
+            json!({"a": format!("body{i}"), "aName": format!("Pin {i}"), "b": format!("body{}", i + 1),
+                   "bName": format!("Pin {}", i + 1), "distance": 0.5, "pointA": [0.0, 0.0, 0.0], "pointB": [0.5, 0.0, 0.0]})
+        })
+        .collect();
+    let text = report(&json!({"pairs": [], "clearances": clearances}), 1.0, Page { offset: 0, limit: 30 }, false);
+    assert!(text.contains("(and 11 more alike: body2/body3, body3/body4, "), "{text}");
+    assert!(text.contains("body9/body10, body10/body11, body11/body12, body12/body13)"), "{text}");
+}
+
+#[test]
+fn a_sweep_step_with_a_long_list_sums_it_and_shows_its_largest_pairs() {
+    let r = a_bar_through_pins();
+    let steps = [Step { value: 1.0, reply: Ok(r.clone()) }, Step { value: 2.0, reply: Ok(r) }];
+    let top: Vec<String> = (3..=11).map(|b| format!("body1/body{b} 4 mm3")).collect();
+    let text = sweep_report("lift", "mm", &steps, 0.0, &[]);
+    let step = format!(
+        "CLASH 13 pairs, 57 mm3 in all, largest first: body1/body2 9 mm3, {} and 3 more, closest body1/body21 1 mm",
+        top.join(", ")
+    );
+    assert_eq!(
+        text,
+        format!(
+            "Overlaps at 2 of 2 steps: lift = 1, 2 mm.\nlift = 1: {step}\nlift = 2: {step}\n\
+             A step shows pairs 1 to 10: pass offset 10 for the next 10, or limit 0 for every pair"
+        )
+    );
+
+    let rest = sweep_paged("lift", "mm", &steps[..1], 0.0, &[], Page { offset: 10, limit: 10 }, false);
+    assert_eq!(
+        rest,
+        "Overlaps at 1 of 1 steps: lift = 1 mm.\nlift = 1: CLASH 13 pairs, 57 mm3 in all, largest first, pairs 11 to 13: \
+         body1/body12 4 mm3, body1/body13 4 mm3, body1/body14 4 mm3, closest body1/body21 1 mm"
+    );
+
+    let full = sweep_paged("lift", "mm", &steps[..1], 0.0, &[], Page::all(), true);
+    let every: Vec<String> = (2..=14).map(|b| format!("body1/body{b} {} mm3", if b == 2 { 9 } else { 4 })).collect();
+    assert_eq!(
+        full,
+        format!(
+            "Overlaps at 1 of 1 steps: lift = 1 mm.\nlift = 1: CLASH {}, closest body1/body21 1 mm",
+            every.join(", ")
+        )
+    );
 }

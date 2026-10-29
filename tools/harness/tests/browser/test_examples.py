@@ -42,6 +42,10 @@ def test_big_model_zoom(s, tmp_path):
     example("big_model_zoom").run(s, tmp_path)
 
 
+def test_big_model_box(s, tmp_path):
+    example("big_model_box").run(s, tmp_path)
+
+
 def test_shipped_examples(s):
     example("shipped_examples").run(s)
 

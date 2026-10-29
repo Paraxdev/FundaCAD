@@ -35,7 +35,8 @@ describe("OverhangPanel", () => {
     expect(q(".overhang-panel .select-trigger")?.getAttribute("data-value")).toBe("-Y");
     const slider = q(".overhang-panel input[type=range]") as HTMLInputElement;
     expect(slider.classList.contains("ui-slider-input")).toBe(true);
-    expect([slider.value, slider.getAttribute("aria-label")]).toEqual(["38", "Overhang threshold"]);
+    const name = document.getElementById(slider.getAttribute("aria-labelledby")!)?.textContent;
+    expect([slider.value, name]).toEqual(["38", "Threshold"]);
     expect(q(".overhang-panel .ui-slider-value")?.textContent).toBe("38°");
   });
 

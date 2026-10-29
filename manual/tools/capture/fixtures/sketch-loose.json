@@ -1,0 +1,15 @@
+{
+  "version": 10,
+  "parameters": {},
+  "features": [
+    { "id": "s", "type": "sketch", "plane": "XY", "name": "Outline",
+      "entities": [
+        { "type": "line", "id": "a", "x1": 0, "y1": 0, "x2": 40, "y2": 0 },
+        { "type": "line", "id": "b", "x1": 40, "y1": 0, "x2": 40, "y2": 20 },
+        { "type": "line", "id": "c", "x1": 40, "y1": 20, "x2": 0, "y2": 20 },
+        { "type": "line", "id": "d", "x1": 0, "y1": 20, "x2": 0, "y2": 0 },
+        { "type": "line", "id": "e", "x1": 52, "y1": 17, "x2": 62, "y2": 3 }
+      ],
+      "constraints": [] }
+  ]
+}

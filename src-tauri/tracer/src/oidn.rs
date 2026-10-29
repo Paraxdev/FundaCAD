@@ -342,7 +342,8 @@ fn unpack(archive: &[u8], rel: &Release, dir: &Path) -> Result<(), String> {
         let mut z = zip::ZipArchive::new(std::io::Cursor::new(archive)).map_err(|e| bad(&e))?;
         for i in 0..z.len() {
             let mut entry = z.by_index(i).map_err(|e| bad(&e))?;
-            if let Some(f) = wanted(rel, entry.name()) {
+            let pinned = wanted(rel, &entry.name().map_err(|e| bad(&e))?);
+            if let Some(f) = pinned {
                 let mut bytes = Vec::new();
                 entry.read_to_end(&mut bytes).map_err(|e| bad(&e))?;
                 put(dir, f, &bytes)?;
