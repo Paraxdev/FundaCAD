@@ -4,7 +4,12 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { fitZebraMaterial, makeZebraMaterial } from "../../src/viewport/overlays";
-import { ZEBRA_LAMBDA, zebraFrame } from "../../src/viewport/zebraStripes";
+import {
+  ZEBRA_LAMBDA,
+  ZEBRA_WIDTH_DEFAULT,
+  zebraFrame,
+  zebraStripeCoord,
+} from "../../src/viewport/zebraStripes";
 import { Viewport } from "../../src/viewport/viewport";
 import { DEFAULT_RENDER, setRenderPref } from "../../src/ui/renderPrefs";
 
@@ -13,10 +18,23 @@ const DIAG = Math.hypot(60, 40, 24);
 const val = (m: THREE.ShaderMaterial, name: string) => m.uniforms[name]!.value as unknown;
 
 describe("zebraFrame", () => {
-  it("centres on the box and reaches about its radius", () => {
+  it("centres on the box and reaches about half its radius", () => {
     const f = zebraFrame([-30, -20, 0], [30, 20, 24], 3);
     expect(f.centre).toEqual([0, 0, 12]);
-    expect(f.reach).toBeCloseTo(DIAG / 2);
+    expect(f.reach).toBeCloseTo(DIAG / 4);
+  });
+
+  it("puts a few stripes on a 90 degree fillet at the default width, not a comb", () => {
+    const f = zebraFrame([-30, -20, 0], [30, 20, 24], ZEBRA_WIDTH_DEFAULT);
+    const r = 5;
+    const u = (deg: number) => {
+      const t = (deg * Math.PI) / 180;
+      const n = [0, Math.sin(t), Math.cos(t)] as const;
+      return zebraStripeCoord([0, r * n[1], r * n[2]], n, [0, 0, 0], "horizontal", f.reach);
+    };
+    const stripes = Math.abs(u(45) - u(-45)) / f.period;
+    expect(stripes).toBeGreaterThan(3);
+    expect(stripes).toBeLessThan(7);
   });
 
   it("scales the period with the width, wider stripes for a larger width", () => {
@@ -60,7 +78,7 @@ describe("fitZebraMaterial", () => {
     fitZebraMaterial(mat, box(), { direction: "vertical", width: 2 });
     expect(val(mat, "uDirection")).toBe(1);
     expect((val(mat, "uCenter") as THREE.Vector3).toArray()).toEqual([0, 0, 12]);
-    expect(val(mat, "uReach")).toBeCloseTo(DIAG / 2);
+    expect(val(mat, "uReach")).toBeCloseTo(DIAG / 4);
     const thin = val(mat, "uPeriod") as number;
     fitZebraMaterial(mat, box(), { direction: "horizontal", width: 4 });
     expect(val(mat, "uDirection")).toBe(0);

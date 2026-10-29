@@ -50,8 +50,9 @@ export interface ZebraFrame {
   period: number;
 }
 
-/** The stripe frame for a model box: its centre, a reach about its radius, and a stripe period that
- *  fits PERIODS_AT_WIDTH_ONE / width periods along the diagonal. */
+/** The stripe frame for a model box: its centre, a reach about half its radius, and a stripe period
+ *  that fits PERIODS_AT_WIDTH_ONE / width periods along the diagonal. A longer reach packs a fillet
+ *  with a comb of stripes too thin to judge. */
 export function zebraFrame(min: Vec3, max: Vec3, width: number): ZebraFrame {
   const w = Number.isFinite(width)
     ? Math.min(ZEBRA_WIDTH_MAX, Math.max(ZEBRA_WIDTH_MIN, width))
@@ -59,7 +60,7 @@ export function zebraFrame(min: Vec3, max: Vec3, width: number): ZebraFrame {
   const diag = Math.hypot(max[0] - min[0], max[1] - min[1], max[2] - min[2]) || 1;
   return {
     centre: [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2],
-    reach: diag / 2,
+    reach: diag / 4,
     period: (diag * w) / PERIODS_AT_WIDTH_ONE,
   };
 }
