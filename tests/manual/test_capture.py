@@ -305,5 +305,88 @@ class Run(unittest.TestCase):
         self.assertEqual((code, lines[-1]), (1, "0 taken, 1 failed, 1 still a stub, 1 kept, 0 copied"))
 
 
+class Shoot(unittest.TestCase):
+    """shoot with a fake session that records what it tried, and a take that fails as each test says."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.frames = Path(tmp.name)
+        self.args = mock.Mock(engine=None, settle_timeout=1, out=self.frames / "out")
+        self.sessions = []
+        self.fails = {}
+        self.stalls = set()
+        self.broken = 0
+        test = self
+
+        class Page:
+            drawing = True
+
+            def evaluate(self, js):
+                return self.drawing if js == capture.DRAWING else None
+
+            def screenshot(self, path, timeout):
+                raise RuntimeError("no screen")
+
+        class FakeSession:
+            def __init__(self, gpu, **kwargs):
+                if test.broken:
+                    test.broken -= 1
+                    test.sessions.append((gpu, "did not open"))
+                    raise RuntimeError("no browser")
+                self.page = Page()
+                self.tried = []
+                test.sessions.append((gpu, self.tried))
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+        def take(s, shot, out, frames_root):
+            name = capture.name_of(shot)
+            s.tried.append(name)
+            if test.fails.get(name):
+                test.fails[name] -= 1
+                s.page.drawing = name not in test.stalls
+                raise capture.ShotError("did not settle")
+            return ""
+
+        self.FakeSession = FakeSession
+        patch = mock.patch.object(capture, "take", take)
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def shoot(self, *names, gpu=()):
+        live = [{"file": f"img/{n}.png", "crop": "region", "gpu": n in gpu} for n in names]
+        with contextlib.redirect_stdout(io.StringIO()):
+            failed = capture.shoot(live, self.args, self.frames, self.FakeSession, "http://vite")
+        return [capture.name_of(x) for x in failed], self.sessions
+
+    def test_every_entry_is_taken_in_one_session_per_renderer(self):
+        self.assertEqual(self.shoot("a", "b", "g", gpu=("g",)), ([], [(False, ["a", "b"]), (True, ["g"])]))
+
+    def test_a_failure_on_a_page_that_still_draws_goes_on_and_is_taken_again_in_a_new_session(self):
+        self.fails = {"a": 1}
+        self.assertEqual(self.shoot("a", "b"), ([], [(False, ["a", "b"]), (False, ["a"])]))
+
+    def test_a_page_that_stopped_drawing_leaves_the_rest_for_the_new_session(self):
+        self.fails, self.stalls = {"a": 1}, {"a"}
+        self.assertEqual(self.shoot("a", "b", "c"), ([], [(False, ["a"]), (False, ["a", "b", "c"])]))
+
+    def test_an_entry_that_fails_twice_is_failed_and_not_tried_a_third_time(self):
+        self.fails = {"b": 5}
+        self.assertEqual(self.shoot("a", "b"), (["b"], [(False, ["a", "b"]), (False, ["b"])]))
+
+    def test_a_session_that_does_not_open_is_opened_once_more(self):
+        self.broken = 1
+        self.assertEqual(self.shoot("a"), ([], [(False, "did not open"), (False, ["a"])]))
+
+    def test_two_sessions_that_do_not_open_fail_their_entries(self):
+        self.broken = 2
+        self.assertEqual(self.shoot("a", "b"), (["a", "b"], [(False, "did not open"), (False, "did not open")]))
+
+
 if __name__ == "__main__":
     unittest.main()
