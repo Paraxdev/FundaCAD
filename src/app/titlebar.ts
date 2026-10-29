@@ -2,6 +2,7 @@ import { repairableDiagFor } from "../features/repickReference";
 import { useUiStore } from "../stores/ui";
 import { useTimelineStore } from "../stores/timeline";
 import type { Engine } from "./engine";
+import { needsSave } from "./documentActions";
 
 /** The half of the titlebar that subscribes to the store; the rest is components/shell/TitleBar.vue. */
 export function installTitlebar(e: Engine): void {
@@ -17,10 +18,12 @@ export function installTitlebar(e: Engine): void {
   e.store.onDocChange(syncUndo);
   e.store.onBuild(syncUndo);
   e.store.onBusy(syncUndo);
-  e.store.onMeta(() => {
+  const syncMeta = () => {
     ui.docName = e.store.fileName;
-    ui.dirty = e.store.dirty;
-  });
+    ui.dirty = needsSave(e);
+  };
+  e.store.onMeta(syncMeta);
+  e.tools.move.onHeldChange(syncMeta);
 
   useTimelineStore().bind({
     onSelect: (id) => e.selectFeature(id),

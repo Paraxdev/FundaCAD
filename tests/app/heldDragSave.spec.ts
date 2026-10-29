@@ -18,10 +18,20 @@ vi.mock("@tauri-apps/api/core", () => ({
 vi.mock("@tauri-apps/plugin-dialog", () => ({ message: async () => {}, save: async () => host.pick }));
 vi.mock("../../src/ui/toast", () => ({ toast: () => null, dismissToast: () => {} }));
 vi.mock("../../src/io/recentFiles", () => ({ noteRecent() {}, forgetRecent() {}, getRecentFiles: () => [] }));
+const win = vi.hoisted(() => ({ asked: [] as string[], pick: "cancel" }));
+vi.mock("../../src/ui/choice", () => ({
+  choose: async (question: string) => {
+    win.asked.push(question);
+    return win.pick;
+  },
+}));
 
 const { installKeyboard } = await import("../../src/app/keyboard");
 const { buildMenubar } = await import("../../src/app/menubarDef");
 const { createActions } = await import("../../src/app/actions");
+const { installUnsavedGuard, closeRequestHandler } = await import("../../src/app/unsavedGuard");
+const { installTitlebar } = await import("../../src/app/titlebar");
+const { useUiStore } = await import("../../src/stores/ui");
 
 let frames: (() => void)[] = [];
 const flushFrame = () => {
@@ -87,7 +97,7 @@ function selectBody() {
   tool.markAmbient();
   flushFrame();
   scene.updateMatrixWorld(true);
-  Object.assign(engine, { store, viewport: vp, sketch: { active: false }, tools: { move: tool } });
+  Object.assign(engine, { store, viewport: vp, sketch: { active: false }, tools: lenient({ move: tool }) });
 }
 
 function dragAndLetGo() {
@@ -112,6 +122,7 @@ beforeAll(() => {
 beforeEach(() => {
   host.saved = [];
   host.pick = "D:/parts/as.funda";
+  win.asked = [];
   frames = [];
   vi.stubGlobal("requestAnimationFrame", (fn: () => void) => {
     frames.push(fn);
@@ -171,5 +182,67 @@ describe("with nothing held", () => {
     expect(host.saved).toHaveLength(1);
     expect(lastSaved().features.map((f) => f.type)).toEqual(["box"]);
     expect(tool.active).toBe(true);
+  });
+});
+
+describe("a held Move drag and closing the window", () => {
+  const unsavedMark = () => ({ window: document.title.startsWith("a.funda*"), titlebar: useUiStore().dirty });
+  const escape = () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  // The desktop guard reaches the window through a dynamic import, so its title and close are checked in the browser.
+  const inBrowser = () => {
+    delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
+    installUnsavedGuard(live);
+    installTitlebar(live);
+  };
+  const tabCloseStopped = () => {
+    const ev = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(ev);
+    return ev.defaultPrevented;
+  };
+  async function closeWindow(pick: string) {
+    win.pick = pick;
+    let prevented = false;
+    await closeRequestHandler(live)({ preventDefault: () => (prevented = true) });
+    return prevented;
+  }
+
+  it("marks the title unsaved while held, and Escape after let go cancels the drag and clears the mark", () => {
+    inBrowser();
+    dragAndLetGo();
+    flushFrame();
+    expect(unsavedMark()).toEqual({ window: true, titlebar: true });
+    escape();
+    expect(tool.pending).toBe(false);
+    expect(store.document.features.map((f) => f.type)).toEqual(["box"]);
+    expect(unsavedMark()).toEqual({ window: false, titlebar: false });
+  });
+
+  it("stops a browser tab closing while held", () => {
+    inBrowser();
+    dragAndLetGo();
+    expect(tabCloseStopped()).toBe(true);
+  });
+
+  it("asks before the window closes, and Cancel keeps the window and the held drag", async () => {
+    dragAndLetGo();
+    expect(await closeWindow("cancel")).toBe(true);
+    expect(win.asked).toEqual(["Save changes to a.funda before closing?"]);
+    expect(tool.pending).toBe(true);
+  });
+
+  it("asks before the window closes, and Save writes the moved body", async () => {
+    dragAndLetGo();
+    expect(await closeWindow("save")).toBe(false);
+    expect(moves()[0]).toMatchObject({ bodies: ["body1"], dz: 20 });
+    expect(store.dirty).toBe(false);
+  });
+
+  it("with nothing held closes without asking and leaves the title clean", async () => {
+    expect(await closeWindow("cancel")).toBe(false);
+    expect(win.asked).toEqual([]);
+    inBrowser();
+    flushFrame();
+    expect(tabCloseStopped()).toBe(false);
+    expect(unsavedMark()).toEqual({ window: false, titlebar: false });
   });
 });

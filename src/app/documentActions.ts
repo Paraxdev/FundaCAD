@@ -28,6 +28,11 @@ export function settleHeldEdit(e: Partial<Pick<Engine, "tools">>): void {
 
 export type SaveEngine = Pick<Engine, "store"> & Partial<Pick<Engine, "tools">>;
 
+/** What a save would write: the store's changes, or a Move drag let go of but not entered. */
+export function needsSave(e: SaveEngine): boolean {
+  return e.store.dirty || !!e.tools?.move.pending;
+}
+
 export async function saveWork(e: SaveEngine): Promise<void> {
   settleHeldEdit(e);
   await saveDocument(e.store);

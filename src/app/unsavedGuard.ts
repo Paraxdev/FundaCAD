@@ -3,7 +3,7 @@ import { choose } from "../ui/choice";
 import { PRODUCT_NAME } from "./channel";
 import type { BeforeInstall } from "../ui/updates";
 import type { Engine } from "./engine";
-import { saveWork, type SaveEngine } from "./documentActions";
+import { needsSave, saveWork, type SaveEngine } from "./documentActions";
 
 const isTauri = () => "__TAURI_INTERNALS__" in window;
 
@@ -14,7 +14,7 @@ export function windowTitle(fileName: string, dirty: boolean): string {
 
 /** Resolves whether to go on; a Save As that was cancelled or failed leaves the document dirty, so that is a no. */
 export async function saveFirst(e: SaveEngine, question: string, discardHint: string): Promise<boolean> {
-  if (!e.store.dirty) return true;
+  if (!needsSave(e)) return true;
   const pick = await choose(question, [
     { value: "save", label: "Save" },
     { value: "discard", label: "Don't save", hint: discardHint },
@@ -30,7 +30,7 @@ export async function saveFirst(e: SaveEngine, question: string, discardHint: st
 }
 
 /** Save writes the store and never an open sketch's edits, so an open sketch stops the update instead of asking. */
-export function beforeUpdate(e: Pick<Engine, "store" | "sketch">): BeforeInstall {
+export function beforeUpdate(e: Pick<Engine, "store" | "sketch"> & SaveEngine): BeforeInstall {
   return async () => {
     if (e.sketch.hasUncommittedEdits) return "sketch";
     const question = `Save changes to ${e.store.fileName} before updating?`;
@@ -38,12 +38,12 @@ export function beforeUpdate(e: Pick<Engine, "store" | "sketch">): BeforeInstall
   };
 }
 
-/** The window title follows the document, and closing a window with unsaved
+/** The window title follows the document, a held Move drag included, and closing a window with unsaved
  *  changes asks whether to save them first. */
 export function installUnsavedGuard(e: Engine): void {
   let shown = "";
   const applyTitle = () => {
-    const title = windowTitle(e.store.fileName, e.store.dirty);
+    const title = windowTitle(e.store.fileName, needsSave(e));
     if (title === shown) return;
     shown = title;
     document.title = title;
@@ -54,37 +54,43 @@ export function installUnsavedGuard(e: Engine): void {
     }
   };
   e.store.onMeta(applyTitle);
+  e.tools.move.onHeldChange(applyTitle);
   applyTitle();
 
   if (!isTauri()) {
     window.addEventListener("beforeunload", (ev) => {
-      if (!e.store.dirty) return;
+      if (!needsSave(e)) return;
       ev.preventDefault();
       ev.returnValue = "";
     });
     return;
   }
 
-  let asking = false;
   void import("@tauri-apps/api/window").then(({ getCurrentWindow }) =>
-    getCurrentWindow().onCloseRequested(async (ev) => {
-      if (!e.store.dirty) return;
-      if (asking) {
-        ev.preventDefault();
-        return;
-      }
-      asking = true;
-      await confirmClose(e, ev).finally(() => {
-        asking = false;
-      });
-    }),
+    getCurrentWindow().onCloseRequested(closeRequestHandler(e)),
   );
+}
+
+/** The desktop window's close request; a second one while the first is still asking is held back. */
+export function closeRequestHandler(e: SaveEngine): (ev: { preventDefault(): void }) => Promise<void> {
+  let asking = false;
+  return async (ev) => {
+    if (!needsSave(e)) return;
+    if (asking) {
+      ev.preventDefault();
+      return;
+    }
+    asking = true;
+    await confirmClose(e, ev).finally(() => {
+      asking = false;
+    });
+  };
 }
 
 /** A close with unsaved work: Save, Don't save or Cancel. Don't save gives the work up, so the next start must not
  *  offer its snapshot back. */
-export async function confirmClose(e: Pick<Engine, "store">, ev: { preventDefault(): void }): Promise<void> {
+export async function confirmClose(e: SaveEngine, ev: { preventDefault(): void }): Promise<void> {
   const question = `Save changes to ${e.store.fileName} before closing?`;
   if (!(await saveFirst(e, question, "close and lose the changes"))) ev.preventDefault();
-  else if (e.store.dirty) await clearRecovery(e.store.filePath);
+  else if (needsSave(e)) await clearRecovery(e.store.filePath);
 }

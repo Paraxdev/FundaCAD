@@ -134,6 +134,8 @@ export class MoveTool {
   /** Raised by a body selection, so it draws only with the handles overlay on. Kept over a drag's re-open. */
   ambient = false;
   private unwatchOverlays: (() => void) | null = null;
+  private heldShown = false;
+  private heldWatchers = new Set<() => void>();
 
   private readonly gesture: CanvasGesture;
 
@@ -470,6 +472,19 @@ export class MoveTool {
     );
   }
 
+  /** Told when `pending` turns on or off, for the unsaved mark and the close guard. */
+  onHeldChange(fn: () => void): () => void {
+    this.heldWatchers.add(fn);
+    return () => this.heldWatchers.delete(fn);
+  }
+
+  private syncHeld() {
+    const held = this.pending;
+    if (held === this.heldShown) return;
+    this.heldShown = held;
+    for (const fn of this.heldWatchers) fn();
+  }
+
   /** For a command that needs the gizmo out of the way: what was dragged is written, as Enter would, and the
    *  session ends. */
   settle() {
@@ -619,6 +634,7 @@ export class MoveTool {
       this.dial.placeLabel((w) => this.viewport.projectToScreen(w));
     }
     this.applyTyped();
+    this.syncHeld();
     this.gesture.frame();
   }
 
@@ -928,5 +944,6 @@ export class MoveTool {
     this.scl.set(1, 1, 1);
     this.pivotSnapped = false;
     setPrompt(null);
+    this.syncHeld();
   }
 }
