@@ -27,6 +27,8 @@ const props = withDefaults(
     labelled?: boolean;
     /** A tooltip other than the name, such as a group's tool count. The accessible name stays the label. */
     tip?: string | undefined;
+    /** Words for the accessible name only, such as which tool of a family is on. */
+    spoken?: string | undefined;
     iconSize?: number;
   }>(),
   {
@@ -42,6 +44,7 @@ const props = withDefaults(
     clickable: false,
     labelled: true,
     tip: undefined,
+    spoken: undefined,
     iconSize: 22,
   },
 );
@@ -51,7 +54,10 @@ const reasonId = useId();
 const text = (sub: string) =>
   [props.label, sub, props.keys ? `(${fmtKeys(props.keys)})` : ""].filter(Boolean).join(" ");
 const toggle = computed(() => props.pressed !== undefined && !props.popup);
-const name = computed(() => text(toggle.value ? "" : props.sub));
+const name = computed(() => {
+  const base = text(toggle.value ? "" : props.sub);
+  return props.spoken ? `${base}, ${props.spoken}` : base;
+});
 const spokenReason = computed(() => (d.isDisabled.value && props.disabledReason ? props.disabledReason : ""));
 </script>
 

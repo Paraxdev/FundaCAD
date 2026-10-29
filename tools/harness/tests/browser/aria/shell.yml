@@ -13,12 +13,13 @@
 - complementary:
   - text: Items
 - navigation "Tools":
-  - button /^Search/
-  - button /^Sketch/
-  - button "Create"
-  - button "Modify"
-  - button "Construct"
-  - button "Inspect"
+  - toolbar "Tools":
+    - button /^Search/
+    - button /^Sketch/
+    - button "Create"
+    - button "Modify"
+    - button "Construct"
+    - button "Inspect"
 - toolbar "View controls":
   - radiogroup "View mode"
 - region "History"
