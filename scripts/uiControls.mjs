@@ -371,7 +371,29 @@ function optionKeys(lexed, from, to) {
   return out;
 }
 
-// How many options of one Segmented show only an icon with nothing to name them, over both branches of a ternary.
+// Every branch of a top level `cond ? a : b`, nested ternaries split again and the conditions dropped.
+function ternaryBranches(expr) {
+  const { code, inString } = lexScript(expr);
+  let depth = 0;
+  let open = 0;
+  let q = -1;
+  for (let i = 0; i < code.length; i++) {
+    const ch = code[i];
+    if (inString[i]) continue;
+    if ("([{".includes(ch)) depth++;
+    else if (")]}".includes(ch)) depth--;
+    else if (depth > 0) continue;
+    else if (ch === "?") {
+      if (code[i + 1] === "?" || (code[i + 1] === "." && !/\d/.test(code[i + 2] ?? ""))) i++;
+      else if (open++ === 0) q = i;
+    } else if (ch === ":" && open > 0 && --open === 0) {
+      return [...ternaryBranches(expr.slice(q + 1, i)), ...ternaryBranches(expr.slice(i + 1))];
+    }
+  }
+  return [expr];
+}
+
+// How many options of one Segmented show only an icon with nothing to name them, over every branch of a ternary.
 // An options expression this cannot follow to its declaration in the file, or to an export of another scanned file,
 // is not counted.
 function namelessSegments(attrs, sources) {
@@ -380,9 +402,7 @@ function namelessSegments(attrs, sources) {
   const iconOnly = ["icon-only", "iconOnly", ":icon-only", ":iconOnly"].some(
     (a) => attrs.has(a) && attrs.get(a) !== "false",
   );
-  const branches = /^[^?:]+\?\s*([\w$.()\s]+?)\s*:\s*([\w$.()\s]+?)\s*$/.exec(expr);
-  const exprs = branches ? [branches[1], branches[2]] : [expr];
-  return exprs.reduce((n, e) => n + namelessOptions(e, iconOnly, sources), 0);
+  return ternaryBranches(expr).reduce((n, e) => n + namelessOptions(e, iconOnly, sources), 0);
 }
 
 function namelessOptions(expr, iconOnly, { script, exported }) {

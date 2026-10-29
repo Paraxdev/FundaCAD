@@ -293,6 +293,29 @@ describe("icon only controls without a name", () => {
       "src/components/A.vue:8 Segmented:no-name",
     ]);
   });
+
+  it("follows a Segmented options ternary past optional chains, nested ternaries and inline arrays", () => {
+    const script = [
+      `const wide = [{ value: "a", icon: "x" }, { value: "b", icon: "y" }];`,
+      `const narrow = [{ value: "a", icon: "x", tip: "A" }, { value: "c", icon: "z" }];`,
+    ].join("\n");
+    const src = vue(
+      [
+        `<Segmented v-model="a" :options="ui?.roomy ?? false ? wide : narrow" />`,
+        `<Segmented v-model="a" :options="big ? wide : small ? narrow : SHARED" />`,
+        `<Segmented v-model="a" :options="roomy ? [{ value: 'z', icon: 'z' }] : narrow" />`,
+        `<Segmented v-model="a" :options="pick(roomy ? 1 : 2) ? narrow : narrow" />`,
+      ].join("\n"),
+      script,
+    );
+    const shared = `export const SHARED = [{ value: "s", icon: "s" }, { value: "t", icon: "t", label: "T" }];\n`;
+    expect(kinds({ "src/components/A.vue": src, "src/ui/shared.ts": shared })).toEqual([
+      ...Array(3).fill("src/components/A.vue:7 Segmented:no-name"),
+      ...Array(4).fill("src/components/A.vue:8 Segmented:no-name"),
+      ...Array(2).fill("src/components/A.vue:9 Segmented:no-name"),
+      ...Array(2).fill("src/components/A.vue:10 Segmented:no-name"),
+    ]);
+  });
 });
 
 describe("legacy classes", () => {
