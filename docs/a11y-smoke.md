@@ -157,8 +157,9 @@ Each step says what to do and what you should hear. Mark it in the results: **P*
     "Viewport labels" radio group with "Medium, checked". Pick 200% and press Escape. Shrink the window as far as
     it goes and Tab through the tool rail: each tool is read as it scrolls into view. Open File: its first rows read
     "Model Workspace" and "Render Workspace" as checkable menu items, one of them checked, and the window title still
-    names the document. Ctrl+0 puts the size back. Fail: a size not spoken, or spoken twice per press, a control Tab
-    reaches but nothing reads, or a workspace row read without its checked state.
+    names the document. Quit and start FundaCAD again: it opens at 200 percent, with no frame at 100 first. Ctrl+0
+    puts the size back. Fail: a size not spoken, or spoken twice per press, a control Tab reaches but nothing reads, a
+    workspace row read without its checked state, or a restart that opens at 100 percent or shows it first.
 
 Some of these are expected to be silent today: tool prompts, the added feature and toasts are spoken once the
 announcer lands. Record what you hear anyway. A step that was P and turns S or W is a regression and blocks the
