@@ -23,7 +23,7 @@
 - Interference tints a clicked pair in violet, and a second click clears it. Printability shows Cancel only while a check runs. Overhang uses the app's select and slider, and says which faces need support.
 
 **Render**
-- The Path traced fallback shows as a warning with its full reason, and a finished view with double sided glass no longer restarts on every redraw. With Shadows on, the first stress result or extrude preview after launch is drawn. A saved environment is highlighted again after a reload, and HDR Rotation and Exposure show their value live.
+- The Path traced fallback shows as a warning with its full reason, and a finished view with double sided glass no longer restarts on every redraw. A saved environment is highlighted again after a reload, and HDR Rotation and Exposure show their value live.
 
 **Accessibility and themes**
 - The app has a new look, with borderless glass, depth from lighter fills and soft shadows, a calm accent without glow, paper cards in light themes and a themed checkbox for settings. The FundaCAD Noir accent is periwinkle instead of mint.
