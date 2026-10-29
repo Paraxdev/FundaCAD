@@ -1,0 +1,9 @@
+/* Nested numbered lists read 1.1 and 1.2 under their step. Where a browser
+   cannot set marker content it falls back to plain 1. and 2. */
+.md-typeset ol ol:not([type]) {
+  list-style-type: decimal;
+}
+
+.md-typeset ol ol:not([type]) > li::marker {
+  content: counters(list-item, ".") ". ";
+}
