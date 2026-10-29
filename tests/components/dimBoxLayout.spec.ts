@@ -248,6 +248,68 @@ describe("every option one click away", () => {
   });
 });
 
+describe("buttons from the base set", () => {
+  const classes = (el: Element) => [...el.classList].sort();
+
+  it("builds Confirm, Cancel and an option as IconButton sm plain under the dim classes, named by the bare word", () => {
+    dim.show(
+      FIELDS,
+      () => {},
+      () => {},
+      [{ label: "Copy", title: "Copy", icon: "copy", initial: false, onChange: () => {} }],
+    );
+    const ok = root().querySelector(".dim-ok")!;
+    const no = root().querySelector(".dim-no")!;
+    const sw = root().querySelector(".dim-toggle")!;
+    const base = ["dim-btn", "icon-btn", "icon-btn-plain", "icon-btn-sm"];
+    expect(classes(ok)).toEqual([...base, "dim-end", "dim-ok"].sort());
+    expect(classes(no)).toEqual([...base, "dim-no"].sort());
+    expect(classes(sw)).toEqual([...base, "dim-opt", "dim-toggle"].sort());
+    expect([ok, no, sw].map((b) => [b.getAttribute("aria-label"), b.getAttribute("title")])).toEqual([
+      ["Confirm", "Confirm (Enter)"],
+      ["Cancel", "Cancel (Esc)"],
+      ["Copy", "Copy"],
+    ]);
+  });
+
+  it("builds a switch with no icon as Button sm ghost showing its word, named by it", () => {
+    dim.show(FIELDS, () => {}, undefined, [{ label: "Flip", title: "Flip it", initial: false, onChange: () => {} }]);
+    const b = root().querySelector(".dim-toggle")!;
+    expect(classes(b)).toEqual(["btn", "btn-ghost", "btn-sm", "dim-btn", "dim-opt", "dim-toggle", "dim-worded"]);
+    expect([b.querySelector(".dim-word")?.textContent, b.hasAttribute("aria-label"), b.getAttribute("title")]).toEqual([
+      "Flip",
+      false,
+      "Flip it",
+    ]);
+  });
+
+  it("a screen reader's click acts once on a switch, an action and a segment", () => {
+    const { log } = showOptions();
+    for (const sel of [".dim-toggle", '[data-option="center"]', '.dim-segment[data-id="c"]'])
+      root().querySelector<HTMLElement>(sel)!.click();
+    expect(log).toEqual(["copy true", "centre", "kind c"]);
+  });
+
+  it("a press and the click its release sends act once", () => {
+    const { log } = showOptions();
+    const sw = root().querySelector<HTMLElement>(".dim-toggle")!;
+    click(sw);
+    window.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
+    sw.click();
+    expect(log).toEqual(["copy true"]);
+  });
+
+  it("cancels the release of a Space a switch acted on, so an engine's late click does not flip it back", () => {
+    const { log } = showOptions();
+    const sw = root().querySelector<HTMLElement>(".dim-toggle")!;
+    sw.focus();
+    press(" ");
+    const up = new KeyboardEvent("keyup", { key: " ", bubbles: true, cancelable: true });
+    sw.dispatchEvent(up);
+    expect([log, up.defaultPrevented]).toEqual([["copy true"], true]);
+  });
+});
+
 describe("placement beside the cursor", () => {
   const size = (w: number, h: number) => {
     Object.defineProperty(root(), "offsetWidth", { configurable: true, value: w });

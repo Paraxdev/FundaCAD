@@ -230,7 +230,9 @@ textarea,
 
   // On-canvas value boxes. The 24px buttons sit 2px apart in a 3px padded chip, so they
   // grow up and down to 36px, sideways only into half the gap, and the last one outwards.
-  .dim-btn::before {
+  // .icon-btn too: IconButton sm's own touch area is 8px all round, which would overlap the next button.
+  .dim-btn::before,
+  .dim-btn.icon-btn::before {
     inset: -6px -1px;
   }
   // A coarse pointer meets the 36px floor sideways too, see the media query below.
@@ -284,11 +286,13 @@ textarea,
   .dim-seg {
     gap: 6px;
   }
-  .dim-btn {
+  .dim-btn,
+  .dim-btn.icon-btn {
     min-width: 30px;
     height: 30px;
   }
-  :root[data-pointer="touch"] .dim-btn::before {
+  :root[data-pointer="touch"] .dim-btn::before,
+  :root[data-pointer="touch"] .dim-btn.icon-btn::before {
     inset: -6px -3px;
   }
 }

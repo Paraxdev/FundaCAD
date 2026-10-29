@@ -1,7 +1,15 @@
 // On-canvas heads-up dimension input: tracking fields follow the cursor, typing holds, Tab locks, Enter commits.
 // Values cross this boundary in MILLIMETRES; length fields show and parse the display unit, angles are degrees.
 
-import { onActivate, setChipUnit, setExpanded, uiNumberInput } from "../components/ui/dom";
+import {
+  onActivate,
+  setChipUnit,
+  setExpanded,
+  uiButton,
+  uiIconButton,
+  uiNumberInput,
+  type UiIconButtonOptions,
+} from "../components/ui/dom";
 import { iconElement } from "../ui/icons";
 import { isHistoryKey, isMenuKey } from "../ui/focus";
 import { claimEscape } from "../ui/escapeClaim";
@@ -138,6 +146,14 @@ function initialUnit(kind: DimFieldDef["kind"]): UnitDef | null {
 function paintChip(chip: HTMLElement, unit: UnitDef) {
   setChipUnit(chip, unit.id);
   chip.setAttribute("aria-label", `Unit, ${unit.label}`);
+}
+
+/** IconButton sm plain under the box's own .dim-btn look, named by the bare word: the tooltip carries the key. */
+function boxIconButton(o: Omit<UiIconButtonOptions, "size" | "variant">, name: string): HTMLButtonElement {
+  const b = uiIconButton({ ...o, size: "sm", variant: "plain" });
+  b.classList.add("dim-btn");
+  b.setAttribute("aria-label", name);
+  return b;
 }
 
 /** Confirm and cancel act on the press and the box goes with it, so the release landed on the canvas and selected
@@ -445,21 +461,13 @@ export class DimInput {
       for (const o of opts) group.appendChild(this.optionElement(o));
       this.root.appendChild(group);
     }
-    const ok = document.createElement("button");
-    ok.type = "button";
-    ok.className = "dim-btn dim-ok dim-end";
-    ok.title = "Confirm (Enter)";
-    ok.setAttribute("aria-label", "Confirm");
-    ok.appendChild(iconElement("check", 15));
+    const ok = boxIconButton({ icon: "check", tip: "Confirm", keys: "Enter", iconSize: 15 }, "Confirm");
+    ok.classList.add("dim-ok", "dim-end");
     this.onEndPress(ok, () => this.commit());
     this.root.appendChild(ok);
     if (this.onCancel) {
-      const no = document.createElement("button");
-      no.type = "button";
-      no.className = "dim-btn dim-no";
-      no.title = "Cancel (Esc)";
-      no.setAttribute("aria-label", "Cancel");
-      no.appendChild(iconElement("close", 15));
+      const no = boxIconButton({ icon: "close", tip: "Cancel", keys: "Esc", iconSize: 15 }, "Cancel");
+      no.classList.add("dim-no");
       this.onEndPress(no, () => this.onCancel?.());
       this.root.appendChild(no);
     }
@@ -541,15 +549,16 @@ export class DimInput {
 
   /** The word stays in the button for screen readers and text checks; it shows only when there is no icon. */
   private optionButton(icon: string | undefined, label: string, title: string, text?: string): HTMLButtonElement {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.className = "dim-btn dim-opt";
-    b.title = title;
-    if (icon) {
-      b.setAttribute("aria-label", label);
-      b.appendChild(iconElement(icon, text ? 12 : 16));
-    } else b.classList.add("dim-worded");
-    if (icon && text) {
+    if (!icon) {
+      // clickable: the box keeps its own disabled model, a greyed segment still takes the arrows and Enter.
+      const b = uiButton({ label, variant: "ghost", size: "sm", tip: title || undefined, clickable: true });
+      b.classList.add("dim-btn", "dim-opt", "dim-worded");
+      b.querySelector(".btn-label")!.classList.add("dim-word");
+      return b;
+    }
+    const b = boxIconButton({ icon, tip: title || label, iconSize: text ? 12 : 16, clickable: true }, label);
+    b.classList.add("dim-opt");
+    if (text) {
       b.classList.add("dim-texted");
       const t = document.createElement("span");
       t.className = "dim-seg-text";
@@ -564,11 +573,13 @@ export class DimInput {
     return b;
   }
 
+  /** Acts on the press, never blurring the field, and on a screen reader's click. Space and Enter act on their
+   *  keydown in onOptionKey, which cancels Enter's click; some engines still click on a handled Space's release. */
   private onPress(b: HTMLElement, act: () => void) {
-    b.addEventListener("pointerdown", (e) => {
-      e.preventDefault(); // never blur the input to press it
-      e.stopPropagation();
-      act();
+    onActivate(b, () => act());
+    b.addEventListener("pointerdown", (e) => e.stopPropagation());
+    b.addEventListener("keyup", (e) => {
+      if (e.key === " ") e.preventDefault();
     });
   }
 

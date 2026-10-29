@@ -92,5 +92,5 @@
   { "path": "src/components/shell/SurfaceNodeEditor.vue", "kind": "select", "count": 1, "reason": "before the base set, migrates in lane O (render materials)" },
   { "path": "src/components/shell/ValidatedInput.vue", "kind": "input[type=text]", "count": 1, "reason": "before the base set, migrates in lane I (feature rows and readouts)" },
   { "path": "src/features/profileChip.ts", "kind": "createElement:button", "count": 2, "reason": "before the base set, migrates in lane L (TS tool boxes)" },
-  { "path": "src/sketch/dimInput.ts", "kind": "createElement:button", "count": 4, "reason": "before the base set, migrates in lane L (TS tool boxes)" }
+  { "path": "src/sketch/dimInput.ts", "kind": "createElement:button", "count": 1, "reason": "before the base set, migrates in lane L (TS tool boxes)" }
 ]
