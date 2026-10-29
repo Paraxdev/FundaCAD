@@ -6,7 +6,27 @@ file = "manual/docs/img/combine-subtract.png"
 size = [660, 620]
 theme = "fundacad"
 crop = "region"
-stub = true
+park = [1300, 860]
+pause = 1600
+steps = [
+  { open = "fixture:sketch-block.json" },
+  { panel = "items", open = false },
+  { panel = "history" },
+  { tool = "Primitive" },
+  { click = "Cylinder" },
+  { wait = 600 },
+  { evaluate = "() => [...document.querySelectorAll('.timeline-node')].at(-1).click()" },
+  { wait = 400 },
+  { type = ["prop:radius", "10"], enter = true },
+  { type = ["prop:height", "40"], enter = true },
+  { evaluate = "() => document.activeElement && document.activeElement.blur()" },
+  { panel = "history", open = false },
+  { tool = "Subtract" },
+  { click_at = true, world = [25, 15, 10] },
+  { click_at = true, world = [0, 0, 20] },
+  { wait = 800 },
+  { press = "Escape" },
+]
 show = "A block with a round hole left where a cylinder was subtracted."
 alt = "A block with a round hole where a cylinder was subtracted"
 uses = ["manual/docs/model/combine.md:5"]
@@ -298,7 +318,41 @@ file = "manual/docs/img/pattern-holes.png"
 size = [660, 620]
 theme = "fundacad"
 crop = "region"
-stub = true
+park = [1300, 860]
+pause = 1600
+steps = [
+  { open = "fixture:sketch-block.json" },
+  { open = "new" },
+  { panel = "items", open = false },
+  { panel = "history" },
+  { tool = "Primitive" },
+  { click = "Box" },
+  { wait = 600 },
+  { click_css = ".timeline-node" },
+  { type = ["prop:length", "100"], enter = true },
+  { type = ["prop:width", "30"], enter = true },
+  { type = ["prop:height", "6"], enter = true },
+  { evaluate = "() => document.activeElement && document.activeElement.blur()" },
+  { panel = "history", open = false },
+  { tool = "Hole" },
+  { pick_face = "top" },
+  { type = ["Size", "M8"] },
+  { type = ["X", "-40"] },
+  { type = ["Y", "0"], enter = true },
+  { wait = 800 },
+  { press = "Escape" },
+  { panel = "history" },
+  { evaluate = "() => [...document.querySelectorAll('.timeline-node')].at(-1).click()" },
+  { wait = 400 },
+  { tool = "Linear Pattern" },
+  { type = ["Spacing", "20"] },
+  { type = ["Copies", "5"], enter = true },
+  { wait = 800 },
+  { press = "Escape" },
+  { panel = "history", open = false },
+  { evaluate = "() => document.querySelector('canvas').dispatchEvent(new WheelEvent('wheel', { deltaY: 100, clientX: 720, clientY: 450, bubbles: true, cancelable: true }))" },
+  { wait = 600 },
+]
 show = "A plate with a row of five holes made with Linear Pattern."
 alt = "A plate with a row of five holes"
 uses = ["manual/docs/model/pattern.md:5"]
@@ -470,7 +524,29 @@ file = "manual/docs/img/shell-mug.png"
 size = [660, 620]
 theme = "fundacad"
 crop = "region"
-stub = true
+park = [1300, 860]
+pause = 1600
+steps = [
+  { open = "fixture:sketch-block.json" },
+  { open = "new" },
+  { panel = "items", open = false },
+  { panel = "history" },
+  { tool = "Primitive" },
+  { click = "Cylinder" },
+  { wait = 600 },
+  { click_css = ".timeline-node" },
+  { type = ["prop:radius", "20"], enter = true },
+  { type = ["prop:height", "40"], enter = true },
+  { evaluate = "() => document.activeElement && document.activeElement.blur()" },
+  { panel = "history", open = false },
+  { tool = "Shell" },
+  { pick_face = "top" },
+  { type = ["T", "2"], enter = true },
+  { wait = 800 },
+  { press = "Escape" },
+  { evaluate = "() => document.querySelector('canvas').dispatchEvent(new WheelEvent('wheel', { deltaY: -100, clientX: 720, clientY: 470, bubbles: true, cancelable: true }))" },
+  { wait = 600 },
+]
 show = "A cylinder hollowed into an open mug."
 alt = "A cylinder hollowed into an open mug"
 uses = ["manual/docs/model/shell.md:5"]
