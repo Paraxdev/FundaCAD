@@ -1,6 +1,7 @@
 // On-canvas heads-up dimension input: tracking fields follow the cursor, typing holds, Tab locks, Enter commits.
 // Values cross this boundary in MILLIMETRES; length fields show and parse the display unit, angles are degrees.
 
+import { onActivate } from "../components/ui/dom";
 import { iconElement } from "../ui/icons";
 import { isHistoryKey, isMenuKey } from "../ui/focus";
 import { onPreviewError } from "../ui/previewError";
@@ -338,7 +339,11 @@ export class DimInput {
       wrap.dataset.field = def.name;
       const tag = document.createElement(def.choices ? "button" : "span");
       tag.className = def.choices ? "dim-name dim-unit dim-choice" : "dim-name";
-      if (tag instanceof HTMLButtonElement) tag.type = "button";
+      // Out of the Tab order like the unit chip, or Shift+Tab off the first field would land here, not leave the box.
+      if (tag instanceof HTMLButtonElement) {
+        tag.type = "button";
+        tag.tabIndex = -1;
+      }
       wrap.appendChild(tag);
       const input = document.createElement("input");
       input.type = "text";
@@ -372,6 +377,7 @@ export class DimInput {
         const chip = document.createElement("button");
         chip.type = "button";
         chip.className = "dim-unit";
+        chip.tabIndex = -1;
         chip.title = "Change unit";
         chip.textContent = field.unit.label;
         chip.addEventListener("pointerdown", (e) => {
@@ -424,31 +430,22 @@ export class DimInput {
       for (const o of opts) group.appendChild(this.optionElement(o));
       this.root.appendChild(group);
     }
-    // Visible confirm and cancel for mouse-first work; pointerdown with preventDefault so they never blur the input.
     const ok = document.createElement("button");
+    ok.type = "button";
     ok.className = "dim-btn dim-ok dim-end";
     ok.title = "Confirm (Enter)";
     ok.setAttribute("aria-label", "Confirm");
     ok.appendChild(iconElement("check", 15));
-    ok.addEventListener("pointerdown", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      swallowRelease(e.pointerId);
-      this.commit();
-    });
+    this.onEndPress(ok, () => this.commit());
     this.root.appendChild(ok);
     if (this.onCancel) {
       const no = document.createElement("button");
+      no.type = "button";
       no.className = "dim-btn dim-no";
       no.title = "Cancel (Esc)";
       no.setAttribute("aria-label", "Cancel");
       no.appendChild(iconElement("close", 15));
-      no.addEventListener("pointerdown", (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        swallowRelease(e.pointerId);
-        this.onCancel?.();
-      });
+      this.onEndPress(no, () => this.onCancel?.());
       this.root.appendChild(no);
     }
     // show() is often called from a pointerdown, and the browser moves focus to the click target after it returns,
@@ -460,6 +457,16 @@ export class DimInput {
     this.unsubscribeError = onPreviewError((m) => this.setProblem(m));
     if (this.segmented.some((g) => g.def.segments.some((x) => x.key)))
       window.addEventListener("keydown", this.boundSegmentKey, true);
+  }
+
+  /** Confirm and Cancel act on the press, which never blurs the field, and on the click Enter, Space or a screen
+   *  reader sends. The box often goes with the press, so its release must not land on the canvas behind. */
+  private onEndPress(b: HTMLButtonElement, act: () => void) {
+    onActivate(b, (e) => {
+      if (e.type === "pointerdown") swallowRelease((e as PointerEvent).pointerId);
+      act();
+    });
+    b.addEventListener("pointerdown", (e) => e.stopPropagation());
   }
 
   private optionElement(o: DimOption): HTMLElement {
@@ -768,11 +775,10 @@ export class DimInput {
       return;
     }
     if (e.key === "Tab") {
-      e.preventDefault();
       field.userDriven = true; // Tab locks the current field
       const problem = this.fieldProblem(field);
       if (problem) this.setTypedProblem(problem);
-      this.moveFocus(field.input, e.shiftKey);
+      if (this.moveFocus(field.input, e.shiftKey)) e.preventDefault();
     } else if (e.key === "Enter") {
       e.preventDefault();
       this.commit();
@@ -781,7 +787,8 @@ export class DimInput {
     e.stopPropagation(); // never let drawing shortcuts fire while typing
   }
 
-  /** The shown fields in order, then one stop per shown option: the chosen segment of a group, or the button. */
+  /** The shown fields in order, one stop per shown option (the chosen segment of a group, or the button), then
+   *  Confirm and Cancel. */
   private tabStops(current: HTMLElement): HTMLElement[] {
     const fields = this.fields.filter((f) => !f.hidden || f.input === current).map((f) => f.input);
     const options: HTMLElement[] = [];
@@ -793,16 +800,18 @@ export class DimInput {
         if (stop) options.push(stop);
       }
     }
-    return [...fields, ...options];
+    const ends = [...this.root.querySelectorAll<HTMLElement>(".dim-ok, .dim-no")];
+    return [...fields, ...options, ...ends];
   }
 
-  private moveFocus(from: HTMLElement, back: boolean) {
+  /** False off either end: there Tab stays the browser's and leaves the box, which never traps the keyboard. */
+  private moveFocus(from: HTMLElement, back: boolean): boolean {
     const stops = this.tabStops(from);
-    const at = stops.indexOf(from);
-    const next = stops[(at + (back ? stops.length - 1 : 1)) % stops.length];
-    if (!next) return;
+    const next = stops[stops.indexOf(from) + (back ? -1 : 1)];
+    if (!next) return false;
     next.focus();
     if (next instanceof HTMLInputElement) next.select();
+    return true;
   }
 
   private onOptionKey(e: KeyboardEvent) {
@@ -811,7 +820,11 @@ export class DimInput {
     const group = b.classList.contains("dim-segment") ? this.segmented.find((g) => g.el.contains(b)) : undefined;
     const arrows: Record<string, number> = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 };
     if (e.key === "Tab") {
-      this.moveFocus(b, e.shiftKey);
+      if (!this.moveFocus(b, e.shiftKey)) return;
+    } else if (b.classList.contains("dim-ok") || b.classList.contains("dim-no")) {
+      // Their own click acts on Enter and Space; kept from the window so a tool's Enter does not act as well.
+      if (e.key === "Enter" || e.key === " ") e.stopPropagation();
+      return;
     } else if (group && e.key in arrows) {
       const segs = [...group.el.querySelectorAll<HTMLElement>(".dim-segment")].filter(
         (x) => !group.disabled.has(x.dataset.id!),

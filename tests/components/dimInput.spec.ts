@@ -292,6 +292,71 @@ describe("DimInput confirm and cancel", () => {
   });
 });
 
+describe("DimInput from the keyboard alone", () => {
+  const key = (k: string, shift = false) =>
+    document.activeElement!.dispatchEvent(
+      new KeyboardEvent("keydown", { key: k, shiftKey: shift, bubbles: true, cancelable: true }),
+    );
+  const typeInto = (text: string) => {
+    const i = document.activeElement as HTMLInputElement;
+    i.value = text;
+    i.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+  const ok = () => root().querySelector<HTMLButtonElement>(".dim-ok")!;
+  const no = () => root().querySelector<HTMLButtonElement>(".dim-no")!;
+
+  it("types width and height, Tabs to Confirm and confirms with its click", () => {
+    const commits: Record<string, number>[] = [];
+    dim.show(
+      [
+        { name: "w", label: "Width" },
+        { name: "h", label: "Height" },
+      ],
+      (v) => commits.push(v),
+      () => {},
+    );
+    typeInto("30");
+    key("Tab");
+    typeInto("20");
+    key("Tab");
+    expect(document.activeElement).toBe(ok());
+    // Enter on a button is the browser's click, so the box leaves the key alone and keeps it from the window.
+    const heard: string[] = [];
+    const hear = (e: KeyboardEvent) => heard.push(e.key);
+    window.addEventListener("keydown", hear);
+    expect(key("Enter")).toBe(true);
+    window.removeEventListener("keydown", hear);
+    expect(heard).toEqual([]);
+    expect(commits).toEqual([]);
+    ok().click();
+    expect(commits).toEqual([{ w: 30, h: 20 }]);
+  });
+
+  it("lets Tab off Cancel leave the box, and Cancel answers its click", () => {
+    let cancelled = 0;
+    dim.show(
+      [{ name: "r", label: "R" }],
+      () => {},
+      () => cancelled++,
+    );
+    key("Tab");
+    key("Tab");
+    expect(document.activeElement).toBe(no());
+    expect(key("Tab")).toBe(true);
+    no().click();
+    expect(cancelled).toBe(1);
+  });
+
+  it("confirms once for a press and the click that follows its release", () => {
+    let commits = 0;
+    dim.show([{ name: "r", label: "R" }], () => commits++);
+    press("pointerdown", ok());
+    press("pointerup", ok());
+    ok().click();
+    expect(commits).toBe(1);
+  });
+});
+
 describe("DimInput hidden fields", () => {
   it("hides a field in place, keeps what was typed and Tab skips it", () => {
     dim.show(

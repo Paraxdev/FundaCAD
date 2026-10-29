@@ -73,7 +73,8 @@ export function setPressed(el: HTMLElement, on: boolean): void {
 export function onActivate(el: HTMLElement, act: (e: Event) => void): void {
   let press: { up: number } | null = null;
   el.addEventListener("pointerdown", (e) => {
-    if (e.button !== 0) return;
+    // `> 0`, not `!== 0`: a synthetic press (tests, the harness) is a plain Event with no button.
+    if (e.button > 0) return;
     e.preventDefault();
     if (blocked(el)) return;
     const p = { up: Infinity };

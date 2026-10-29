@@ -1,5 +1,5 @@
-// The compact value box: Tab walks the fields only, typing never resizes it, every option is one click, and it
-// sits beside the point it measures, never over it.
+// The compact value box: Tab walks the fields, options, Confirm and Cancel and then leaves, typing never resizes it,
+// every option is one click, and it sits beside the point it measures, never over it.
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { DimInput, type DimOption } from "../../src/sketch/dimInput";
@@ -17,8 +17,11 @@ const root = () => document.querySelector<HTMLElement>(".dim-input")!;
 const inputOf = (name: string) => root().querySelector<HTMLInputElement>(`.dim-field[data-field="${name}"] input`)!;
 const focusedField = () =>
   (document.activeElement as HTMLElement | null)?.closest<HTMLElement>(".dim-field")?.dataset.field;
+/** True when the box let the key through, so the browser moves focus on out of the box. */
 const tab = (shift = false) =>
-  document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: shift, bubbles: true }));
+  document.activeElement!.dispatchEvent(
+    new KeyboardEvent("keydown", { key: "Tab", shiftKey: shift, bubbles: true, cancelable: true }),
+  );
 const click = (el: Element) => el.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
 function type(name: string, text: string) {
   const i = inputOf(name);
@@ -34,30 +37,58 @@ const FIELDS = [
 ];
 
 describe("Tab order", () => {
-  it("walks the fields in order and wraps, Shift+Tab walks back", () => {
+  it("walks the fields in order to Confirm, then lets Tab leave; Shift+Tab walks back", () => {
     dim.show(FIELDS, () => {});
-    const seen = [focusedField()];
+    const seen = [stop()];
     for (let i = 0; i < 4; i++) {
-      tab();
-      seen.push(focusedField());
+      expect(tab()).toBe(false);
+      seen.push(stop());
     }
-    expect(seen).toEqual(["size", "depth", "x", "y", "size"]);
-    tab(true);
-    expect(focusedField()).toEqual("y");
+    expect(seen).toEqual(["size", "depth", "x", "y", "confirm"]);
+    expect(tab()).toBe(true);
+    expect(stop()).toEqual("confirm");
+    expect(tab(true)).toBe(false);
+    expect(stop()).toEqual("y");
   });
 
-  it("skips a hidden field, then stops once on each option and wraps", () => {
+  it("lets Shift+Tab off the first field leave the box", () => {
+    dim.show(FIELDS, () => {});
+    expect(stop()).toEqual("size");
+    expect(tab(true)).toBe(true);
+    expect(stop()).toEqual("size");
+  });
+
+  it("skips a hidden field, stops once on each option, then on Confirm and Cancel, and leaves", () => {
     const { log } = showOptions();
     dim.setFieldHidden("x", true);
     const seen = [stop()];
-    for (let i = 0; i < 6; i++) {
-      tab();
+    for (let i = 0; i < 7; i++) {
+      expect(tab()).toBe(false);
       seen.push(stop());
     }
-    expect(seen).toEqual(["size", "depth", "y", "kind:b", "toggle:Copy", "action:Centre", "size"]);
-    tab(true);
+    expect(seen).toEqual(["size", "depth", "y", "kind:b", "toggle:Copy", "action:Centre", "confirm", "cancel"]);
+    expect(tab()).toBe(true);
+    expect(tab(true)).toBe(false);
+    expect(stop()).toEqual("confirm");
+    expect(tab(true)).toBe(false);
     expect(stop()).toEqual("action:Centre");
     expect(log).toEqual([]);
+  });
+
+  it("never stops on a unit chip or a choice tag", () => {
+    dim.show(
+      [
+        {
+          name: "size",
+          label: "Size",
+          choices: { chosen: "a", options: [{ id: "a", label: "A", word: "a" }], onChoose: () => {} },
+        },
+        { name: "depth", label: "Depth", kind: "length" },
+      ],
+      () => {},
+    );
+    expect(root().querySelector<HTMLElement>(".dim-choice")!.tabIndex).toBe(-1);
+    expect(root().querySelector<HTMLElement>('.dim-field[data-field="depth"] .dim-unit')!.tabIndex).toBe(-1);
   });
 
   it("skips a hidden option", () => {
@@ -97,6 +128,8 @@ function stop(): string | undefined {
   if (el?.classList.contains("dim-segment")) return `kind:${el.dataset.id}`;
   if (el?.classList.contains("dim-toggle")) return `toggle:${el.textContent}`;
   if (el?.classList.contains("dim-action")) return `action:${el.textContent}`;
+  if (el?.classList.contains("dim-ok")) return "confirm";
+  if (el?.classList.contains("dim-no")) return "cancel";
   return focusedField();
 }
 

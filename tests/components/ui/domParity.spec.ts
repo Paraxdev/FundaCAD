@@ -304,6 +304,12 @@ describe("onActivate", () => {
     expect([acts, down.defaultPrevented]).toEqual([[], false]);
   });
 
+  it("acts on a plain press event with no button, as tests and the harness send it", () => {
+    const { b, acts } = button();
+    b.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    expect(acts).toEqual(["pointerdown"]);
+  });
+
   it("refuses a disabled button's press, click and Enter", () => {
     const { b, acts } = button({ disabled: true });
     press(b);
