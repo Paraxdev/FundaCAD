@@ -16,9 +16,9 @@ Double-click a number to change it later, right-click it to delete it. A dimensi
 
 Right-click while the Dimension tool runs for the choices a click cannot make.
 
-- Pick Circle/Arc Tangent: the next click on a circle or arc measures to its edge, not its centre.
-- Reflex angle: an angle measures the outside of the wedge.
-- Radius or Diameter: what a lone circle or arc shows.
-- Driven (reference): the dimensions you place next are reference dimensions.
+1. Pick Circle/Arc Tangent: the next click on a circle or arc measures to its edge, not its centre.
+2. Reflex angle: an angle measures the outside of the wedge.
+3. Radius or Diameter: what a lone circle or arc shows.
+4. Driven (reference): the dimensions you place next are reference dimensions.
 
 A reference dimension shows a size but never moves the sketch, and you cannot type into it. Reference Dim in the palette is the same switch. Lengths and diameters cannot be reference dimensions yet.

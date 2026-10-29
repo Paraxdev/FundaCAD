@@ -869,7 +869,7 @@ the input inside it, and the error state keeps it.
 |---|---|---|---|
 | `TextField`, `NumberField` (`.ui-field`) | squircle, chip radius, fill `--field-bg`, the inset `--control-edge`; `md` 32px, padding `0 var(--s-3)`, 12px; `sm` 24px, padding `0 var(--s-2)`, 11px; placeholder `--text-mute`; `NumberField` in tabular numbers | `outline: var(--focus-ring-width) solid var(--accent)` on `:focus-within`, offset 1px, no ring | `.is-error`: fill `--error-tint`, the accent ring kept, the reason tells the error; disabled, the disabled model |
 | `UnitChip` (`.ui-unit-chip`) | a 600 `--text-mute` word on no fill, inside the well | | picker: hover and open `--accent-hot` on `--hover-wash`, pressed `--accent-wash` |
-| `Select` (`.sm-select.select-trigger`) | as the field, plus a drawn caret; `sm` 24px | as the field, the edge kept | `.is-open`: accent 14% into the well, and a `.float-popover.select-pop` of `.opt-row`s whose keyboard row is `.is-active`, washed; disabled keeps its caret |
+| `Select` (`.sm-select.select-trigger`) | as the field, plus a `.select-caret`, a 10px `caretRight` Icon in `--text-dim` centred in the 26px right padding, never a background layer; `sm` 24px; the chip variant has none | as the field, the edge kept | `.is-open`: accent 14% into the well, the caret turns 90deg about its centre to point down (`--t-fast`), and a `.float-popover.select-pop` of `.opt-row`s whose keyboard row is `.is-active`, washed; hover never moves the caret; disabled keeps its caret; in forced colours it draws in the mapped text colour |
 
 Keys. `TextField` in `change` mode and `NumberField`: Enter commits, blur commits, Escape goes back to the last
 committed text and ends a preview; text that does not commit stays, with `aria-invalid` and the reason in its
@@ -1168,10 +1168,25 @@ guard test cannot see them; hold them to these rules by hand.
 - Neutral parts read tokens through `themeColor` and are read again on a theme
   change.
 - Sizes are screen pixels, held through `gizmoScale.ts` at every zoom.
-- The tiles are 68px, 10px off the axes, one per quadrant facing the home view,
-  never below about 41px. Their 29px corner is the same squircle as `corner-shape:
-  squircle`, a rail tile's 17px on 40px scaled up (`TILE_CORNER_RADIUS_PX` and
-  `SQUIRCLE_EXPONENT` in `src/viewport/originTiles.ts` and `cornerProfile.ts`).
+- Each tile has its corner on the origin and spans the positive side of its two
+  axes, so two of its edges run along the axis arrows. A tile is as long as an
+  arrow, 64px, and while the tiles show both share one floor, so a tile edge and
+  an arrow stay equal at every zoom and never fall below about 41px (hidden, the
+  arrows may shrink to their own floor, `triadMinScale`). Only the far corner is
+  rounded, 27px, the same squircle as `corner-shape: squircle`, a rail tile's 17px
+  on 40px scaled up (`TILE_CORNER_RADIUS_PX` and `SQUIRCLE_EXPONENT` in
+  `src/viewport/originTiles.ts` and `cornerProfile.ts`). While the tiles show,
+  the arrows draw over their rims and under their names (`OriginTriad.drawOver`),
+  so the edges along the axes keep the axis colours.
+- A tile's name sits at its centre. Where the tiles overlap, the tile drawn in
+  front keeps its name there and a name that would cover another name or sit on
+  that tile walks toward its own far corner. A tile seen edge on has its name
+  beside it, on the side away from the other tiles. A press on a name, or in the
+  44px box around it (48px under a coarse pointer), takes its plane, so a plane
+  mostly hidden behind another keeps a full target. The names keep those boxes
+  apart, moving off their walk when they must. Elsewhere, where tiles overlap, a
+  press goes to the one drawn in front (`placeLabels` and `pickPlaneOnScreen` in
+  `src/viewport/planeHit.ts`).
 - What a body hides draws faint, not gone.
 - A name in the scene is a camera facing sprite, `--ui` 700 at 11px, inked in
   `--text` or `--viewport-bg`, whichever reads on the ground. It fades out when

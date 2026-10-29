@@ -82,6 +82,7 @@ export class OriginTriad {
    *  axis pick to raycast and read `userData.axis` from. */
   readonly arms: THREE.Object3D[] = [];
   private readonly dotMats: THREE.MeshBasicMaterial[] = [];
+  private readonly layered: [THREE.Object3D, number][] = [];
   private materials: THREE.Material[] = [];
   private geometries: THREE.BufferGeometry[] = [];
   private repaint: ((hot: boolean) => void)[] = [];
@@ -123,6 +124,7 @@ export class OriginTriad {
       ] as const) {
         const line = new THREE.Mesh(lineGeo, mat);
         line.renderOrder = order;
+        this.layered.push([line, order]);
         arm.add(line);
       }
       const sleeve = new THREE.Mesh(sleeveGeo, sleeveMat);
@@ -146,6 +148,7 @@ export class OriginTriad {
       const mat = new THREE.MeshBasicMaterial({ transparent: true, opacity, depthTest, depthWrite: false });
       const dot = new THREE.Mesh(dotGeo, mat);
       dot.renderOrder = order;
+      this.layered.push([dot, order]);
       this.dotMats.push(mat);
       this.materials.push(mat);
       this.group.add(dot);
@@ -170,8 +173,13 @@ export class OriginTriad {
   }
 
   /** `pixelWorldSize` is the world size of one screen pixel AT THE ORIGIN. */
-  update(pixelWorldSize: number | null, modelDiagonal: number | null) {
-    this.group.scale.setScalar(glyphWorldScale(TRIAD_LENGTH_PX, modelDiagonal, pixelWorldSize, MIN_TRIAD_SCALE));
+  update(pixelWorldSize: number | null, modelDiagonal: number | null, minScale = MIN_TRIAD_SCALE) {
+    this.group.scale.setScalar(glyphWorldScale(TRIAD_LENGTH_PX, modelDiagonal, pixelWorldSize, minScale));
+  }
+
+  /** While the origin planes show, the arms draw just over `order` (their rims), so the plane edges read as the arrows. */
+  drawOver(order: number | null) {
+    for (const [o, own] of this.layered) o.renderOrder = order === null ? own : order + own / 10;
   }
 
   dispose() {

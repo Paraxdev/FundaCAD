@@ -14,7 +14,7 @@ A version is a checkpoint saved inside the document, so you can go back to it af
 
 Click a row to list the steps it changed.
 
-- **Restore** takes the document back to that version. Undo brings back what you had.
-- **Branch from here** starts a separate line of work. Name the branch and press Create.
+1. **Restore** takes the document back to that version. Undo brings back what you had.
+2. **Branch from here** starts a separate line of work. Name the branch and press Create.
 
 With more than one branch, a list at the top of the panel switches between them. The Versions button on a card in [Home](home.md) lists the versions without opening the document.

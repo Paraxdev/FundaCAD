@@ -22,3 +22,8 @@ export function sourceforgeUrl(tag: string = release): string {
   const base = "https://sourceforge.net/projects/fundacad/files/";
   return tag === "beta" || tag === "development" ? `${base}${tag}/` : base;
 }
+
+/** The manual has a dev version built from dev and a beta one built from main, stable builds read the beta. */
+export function manualUrl(tag: string = release): string {
+  return `https://fundacad.dev/${tag === "development" ? "dev" : "beta"}/`;
+}

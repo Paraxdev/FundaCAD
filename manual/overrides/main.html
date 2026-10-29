@@ -12,6 +12,12 @@
   {%- endif -%}
 {% endblock %}
 
+{#- The theme shows this banner on every version but the default one, so only on the dev manual. -#}
+{% block outdated %}
+  This is the manual for FundaCAD Dev, the build with the newest changes.
+  <a href="{{ base_url }}/../beta/"><strong>Open the beta manual</strong></a>
+{% endblock %}
+
 {#- Link previews on Reddit, Discord, Mastodon and X read these, the theme writes none. -#}
 {% block extrahead %}
   {%- set title = home_title if not page or page.url == "" else (page.title | striptags) ~ " - " ~ config.site_name -%}

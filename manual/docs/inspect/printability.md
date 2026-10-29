@@ -24,8 +24,8 @@ Printability looks through the model and lists what is likely to go wrong when y
 
 Findings are listed per body, each with a colour that matches its tint in the view. A legend under the list names the colours.
 
-- Hover a finding to pick out its face.
-- Click a finding to turn the view to it.
+1. Hover a finding to pick out its face.
+2. Click a finding to turn the view to it.
 
 If you change the model, the tints go away. Press Check again to see them on the new model.
 

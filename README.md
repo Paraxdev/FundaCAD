@@ -27,10 +27,10 @@ It is the normal download, and somewhat stable.
 The [development build](https://github.com/Paraxdev/fundacad/releases/tag/development) gets every
 change the day it lands. It is the bleeding edge and can be broken.
 
-- There is no account and no cloud, your files stay on your disk.
-- An install only updates to a newer build of the same kind. On Linux only the AppImage updates itself.
-- The builds are not code signed, so Windows and macOS warn you on the first start.
-  The [install page](https://fundacad.dev/start/install/) shows how to get past that.
+1. There is no account and no cloud, your files stay on your disk.
+2. An install only updates to a newer build of the same kind. On Linux only the AppImage updates itself.
+3. The builds are not code signed, so Windows and macOS warn you on the first start.
+   The [install page](https://fundacad.dev/start/install/) shows how to get past that.
 
 ## Build from source
 
@@ -67,15 +67,15 @@ npm run tauri build
 
 ## What you can do
 
-- Sketch with lines, arcs, splines and text, and pin the shape down with constraints and dimensions.
-- Turn sketches into solids with extrude, revolve, loft and sweep, then change them with fillets, chamfers, holes, shells and patterns.
-- Keep every step in the History, go back to any of them, and let the part rebuild.
-- Drive a design from named parameters, so a bracket 2 mm wider is one number away.
-- Check a part before printing: measure it, cut it open, look for overhangs and thin walls, and see where it bends under load with Stress.
-- Render it with materials, glass and glowing parts in the Render workspace.
-- Add optional plugins, such as fasteners, surface textures and a printer connection.
-- Let an AI assistant build and check parts through the built-in MCP server. It only runs when an assistant starts it.
-- Export STL, 3MF, STEP and GLB, or a sketch as DXF and SVG. Import STEP, IGES, DXF, SVG and most mesh files.
+1. Sketch with lines, arcs, splines and text, and pin the shape down with constraints and dimensions.
+2. Turn sketches into solids with extrude, revolve, loft and sweep, then change them with fillets, chamfers, holes, shells and patterns.
+3. Keep every step in the History, go back to any of them, and let the part rebuild.
+4. Drive a design from named parameters, so a bracket 2 mm wider is one number away.
+5. Check a part before printing: measure it, cut it open, look for overhangs and thin walls, and see where it bends under load with Stress.
+6. Render it with materials, glass and glowing parts in the Render workspace.
+7. Add optional plugins, such as fasteners, surface textures and a printer connection.
+8. Let an AI assistant build and check parts through the built-in MCP server. It only runs when an assistant starts it.
+9. Export STL, 3MF, STEP and GLB, or a sketch as DXF and SVG. Import STEP, IGES, DXF, SVG and most mesh files.
 
 ## Documentation
 
@@ -87,13 +87,13 @@ with a first part from sketch to exported file.
 Building from source, running the tests and fixing common build problems are in
 [CONTRIBUTING.md](CONTRIBUTING.md). The technical notes are in `docs/`.
 
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), how the processes fit together
-- [`docs/ENGINE.md`](docs/ENGINE.md), the Funda Engine, its tests and the release channels
-- [`docs/PROTOCOL.md`](docs/PROTOCOL.md), the messages the frontend and the engine exchange
-- [`docs/FUNDA-FORMAT.md`](docs/FUNDA-FORMAT.md), the `.funda` and `.fundab` file formats
-- [`docs/PACKAGING.md`](docs/PACKAGING.md), how a desktop bundle and the kernel are built
-- [`docs/MCP.md`](docs/MCP.md), how an AI assistant connects and what it can do
-- [`docs/PLUGINS.md`](docs/PLUGINS.md), writing plugins and what they may reach
+1. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), how the processes fit together
+2. [`docs/ENGINE.md`](docs/ENGINE.md), the Funda Engine, its tests and the release channels
+3. [`docs/PROTOCOL.md`](docs/PROTOCOL.md), the messages the frontend and the engine exchange
+4. [`docs/FUNDA-FORMAT.md`](docs/FUNDA-FORMAT.md), the `.funda` and `.fundab` file formats
+5. [`docs/PACKAGING.md`](docs/PACKAGING.md), how a desktop bundle and the kernel are built
+6. [`docs/MCP.md`](docs/MCP.md), how an AI assistant connects and what it can do
+7. [`docs/PLUGINS.md`](docs/PLUGINS.md), writing plugins and what they may reach
 
 ## Reporting problems
 
@@ -110,11 +110,11 @@ I decide what gets built and in what order, steer the work, check what lands and
 
 I apply real software engineering practice so the codebase and the features do not turn into a mess:
 
-- Larger changes are built on their own branch and reviewed by a second AI agent whose job is to break them, then fixed until that review passes.
-- Every change runs over 8,000 unit and component tests, end to end checks that drive the app in a browser like a user, and golden geometry checks against known good results.
-- CI builds every change on Windows, macOS and Linux, and installs the Linux builds on Ubuntu, Debian and Fedora. The beta only publishes once they are all green.
-- The interface follows a written design spec ([docs/DESIGN.md](docs/DESIGN.md)), and tests check the interface against it.
-- Bugs come before new features.
+1. Larger changes are built on their own branch and reviewed by a second AI agent whose job is to break them, then fixed until that review passes.
+2. Every change runs over 8,000 unit and component tests, end to end checks that drive the app in a browser like a user, and golden geometry checks against known good results.
+3. CI builds every change on Windows, macOS and Linux, and installs the Linux builds on Ubuntu, Debian and Fedora. The beta only publishes once they are all green.
+4. The interface follows a written design spec ([docs/DESIGN.md](docs/DESIGN.md)), and tests check the interface against it.
+5. Bugs come before new features.
 
 AI does not decide what ships. Store submissions, such as the Flathub manifest and its review, are written and handled by me by hand.
 
@@ -127,9 +127,9 @@ The goal is a coherent program that holds up in daily use and is as flexible as 
 
 You may use AI to write features and pull requests. You are responsible for what it produces:
 
-- read the change, understand it and make sure it works;
-- write at least one test that checks a known good case, where the feature allows it;
-- say in the pull request that AI wrote it.
+1. read the change, understand it and make sure it works;
+2. write at least one test that checks a known good case, where the feature allows it;
+3. say in the pull request that AI wrote it.
 
 If you use AI to write an issue or a bug report, read it first and make sure you can reproduce what it says. A vague or incoherent report takes much longer to understand and fix.
 

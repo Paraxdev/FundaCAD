@@ -18,14 +18,14 @@ Click another face instead of empty space, and the face moves up to it. T does t
 
 ## Box options
 
-- Angle slopes the sides as the face moves, like a draft. The curved handle beside the arrow drags it.
-- Auto grows or shrinks the face. Join, Cut, New and Intersect extrude it instead and combine it with any body it reaches.
-- Along axis shows on the end of a hole. It slides the end down the hole, so the hole gets deeper. Along normal offsets the face.
+1. Angle slopes the sides as the face moves, like a draft. The curved handle beside the arrow drags it.
+2. Auto grows or shrinks the face. Join, Cut, New and Intersect extrude it instead and combine it with any body it reaches.
+3. Along axis shows on the end of a hole. It slides the end down the hole, so the hole gets deeper. Along normal offsets the face.
 
 ## Round faces
 
 On a round face, such as the wall of a hole, the drag resizes it. The box starts at the size the face has now.
 
-- Pick R, Diameter or Offset in the box, or type r2.5, d5 or +0.5.
-- Shrinking a full round under a tenth of its radius removes the face when you press Enter.
-- Tangent faces follow, on by default, moves the faces that run smoothly into it too, so a slot narrows as one. Off, a size they cannot meet is refused.
+1. Pick R, Diameter or Offset in the box, or type r2.5, d5 or +0.5.
+2. Shrinking a full round under a tenth of its radius removes the face when you press Enter.
+3. Tangent faces follow, on by default, moves the faces that run smoothly into it too, so a slot narrows as one. Off, a size they cannot meet is refused.

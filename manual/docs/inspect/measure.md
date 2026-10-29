@@ -7,10 +7,10 @@ Measure tells you how long, how far apart or at what angle things are, from what
 1. Press I, or pick Measure under Inspect.
 2. Click a face or edge. The panel shows its Area or Length, and the point it measured from.
 3. Click a second face or edge. The panel shows:
-    - Distance, the shortest gap between the two
-    - ΔX ΔY ΔZ, that gap split along the axes
-    - Centers, the distance between the middle of each
-    - Angle, the angle between them, for flat faces and straight edges
+    1. Distance, the shortest gap between the two
+    2. ΔX ΔY ΔZ, that gap split along the axes
+    3. Centers, the distance between the middle of each
+    4. Angle, the angle between them, for flat faces and straight edges
 4. A third click starts over, and Esc closes Measure.
 
 You can also right-click a face or edge and pick Measure from here.

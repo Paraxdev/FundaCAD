@@ -34,13 +34,13 @@ Shift drag the selected image to move it along its plane. Each drag, calibration
 
 ## Show, hide and delete
 
-- The row in Items has an eye to hide the image, a lock and a cross to delete it. Double-click its name to rename it.
-- The Display popover hides every reference image at once.
-- A sketch on the same plane draws over the image.
+1. The row in Items has an eye to hide the image, a lock and a cross to delete it. Double-click its name to rename it.
+2. The Display popover hides every reference image at once.
+3. A sketch on the same plane draws over the image.
 
 ## Files, pictures and exports
 
-- The image is saved inside the .funda file. A row that says image not found means it is not in the file, so insert it again.
-- Exports leave the images out. Save picture in the Render Camera tab keeps them only with Reference images ticked.
+1. The image is saved inside the .funda file. A row that says image not found means it is not in the file, so insert it again.
+2. Exports leave the images out. Save picture in the Render Camera tab keeps them only with Reference images ticked.
 
 An image on a datum plane follows the datum when it moves. An image on a face keeps the plane the face had when you picked it.

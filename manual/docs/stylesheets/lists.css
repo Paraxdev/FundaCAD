@@ -1,0 +1,25 @@
+/* Nested numbered lists read 1.1 and 1.2 under their step. Safari styles only
+   color and font-size on ::marker, so the numbers come from ::before. */
+.md-typeset ol {
+  counter-reset: fc-step;
+}
+
+.md-typeset ol > li {
+  counter-increment: fc-step;
+}
+
+.md-typeset ol ol:not([type]) {
+  list-style-type: none;
+}
+
+.md-typeset ol ol:not([type]) > li {
+  position: relative;
+}
+
+.md-typeset ol ol:not([type]) > li::before {
+  content: counters(fc-step, ".") ". ";
+  position: absolute;
+  right: 100%;
+  white-space: pre;
+  font-variant-numeric: tabular-nums;
+}

@@ -10,11 +10,11 @@ Move (M) places a body somewhere else. It moves a sketch or a datum plane the sa
 
 The handles:
 
-- Arrows slide along an axis.
-- Squares slide in a plane.
-- Rings turn the body.
-- Cubes resize it.
-- The centre moves the point the other handles act about.
+1. Arrows slide along an axis.
+2. Squares slide in a plane.
+3. Rings turn the body.
+4. Cubes resize it.
+5. The centre moves the point the other handles act about.
 
 To type an exact value, click an arrow, a ring or a cube first, then type it in Move, Angle or Scale in the box.
 

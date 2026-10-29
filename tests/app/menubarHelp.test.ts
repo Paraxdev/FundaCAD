@@ -61,9 +61,9 @@ describe("the Help menu", () => {
     expect(inScope("https://paraxdev.github.io/elsewhere/")).toBe(false);
   });
 
-  it("names the manual by the site the docs build publishes", () => {
+  it("names the beta manual of the site the docs build publishes", () => {
     const site = /^site_url = "(.+)"$/m.exec(zensicalToml)![1];
-    expect(MANUAL_URL).toBe(site);
+    expect(MANUAL_URL).toBe(`${site}beta/`);
   });
 
   it("opens the report only once the reporter is bound", () => {

@@ -14,5 +14,5 @@ A round face is resized instead of moved. A full cylinder takes a diameter, part
 
 The value box has one option, depending on the face:
 
-- Total, on a flat face of a wall: read and type the whole thickness to the opposite face instead of the change.
-- Tangent faces follow, on a round face with faces running smoothly into it: on by default, those faces move along so a slot narrows as one. Off, a size they cannot meet is refused.
+1. Total, on a flat face of a wall: read and type the whole thickness to the opposite face instead of the change.
+2. Tangent faces follow, on a round face with faces running smoothly into it: on by default, those faces move along so a slot narrows as one. Off, a size they cannot meet is refused.

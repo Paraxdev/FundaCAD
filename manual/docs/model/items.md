@@ -8,16 +8,16 @@ Origin, Bodies and Sketches are always there. Planes, Datums, Joints and Mechani
 
 ## Rows
 
-- Click selects a row, Ctrl+click adds one, and Shift+click takes a run.
-- Click a plane under Origin to start a sketch on it.
-- Double-click renames a body or edits a sketch.
-- Right-click a body for Move to, Material, Visibility, Rename and Delete.
+1. Click selects a row, Ctrl+click adds one, and Shift+click takes a run.
+2. Click a plane under Origin to start a sketch on it.
+3. Double-click renames a body or edits a sketch.
+4. Right-click a body for Move to, Material, Visibility, Rename and Delete.
 
 ## Hiding
 
-- Click a row's eye to hide or show it, or drag across several eyes.
-- Alt+click an eye to show only that row, and Alt+click it again to bring the rest back.
-- H hides the selected bodies, and Shift+H shows them all.
+1. Click a row's eye to hide or show it, or drag across several eyes.
+2. Alt+click an eye to show only that row, and Alt+click it again to bring the rest back.
+3. H hides the selected bodies, and Shift+H shows them all.
 
 A hidden body is left out of any join, cut or intersect, unless the step names it as a target.
 

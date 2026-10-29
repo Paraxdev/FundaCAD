@@ -3,6 +3,7 @@
 // shared Popover and ChoiceList instead. Focus stays on the trigger, the list follows by aria-activedescendant.
 
 import { computed, mergeProps, nextTick, onBeforeUnmount, ref, useId, useTemplateRef, watch } from "vue";
+import Icon from "../shell/Icon.vue";
 import Popover from "./Popover.vue";
 import ChoiceList from "./ChoiceList.vue";
 import { rovingIndex, rovingStop } from "./useRovingFocus";
@@ -217,6 +218,7 @@ onBeforeUnmount(() => window.clearTimeout(bufferTimer));
     @keyup="onKeyup"
   >
     <span :id="valueId" class="select-value">{{ shown }}</span>
+    <Icon v-if="variant !== 'chip'" class="select-caret" name="caretRight" :size="10" />
   </button>
 
   <Popover

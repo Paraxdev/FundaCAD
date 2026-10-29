@@ -1,43 +1,70 @@
-# The user manual (manual/, built with Zensical) on GitHub Pages.
+# The user manual (manual/, built with Zensical) on GitHub Pages, in two versions: beta built from main and
+# dev built from dev, at /beta/ and /dev/ of one site with a version switch (manual/tools/build_versions.py).
 # One-time repo setting: Settings, Pages, Source = GitHub Actions.
 name: manual
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
     paths:
       - "manual/**"
       - ".github/workflows/manual.yml"
+      - "tests/manual/test_versions.py"
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: true
 
 jobs:
+  # The github-pages environment only lets main deploy, so a run on any other branch starts one on main,
+  # which builds both versions. A dispatch made with the job token still starts a run.
+  hand-over:
+    if: github.ref_name != 'main'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - run: gh workflow run manual.yml --repo "$GITHUB_REPOSITORY" --ref main
+        env:
+          GH_TOKEN: ${{ github.token }}
+
   deploy:
+    if: github.ref_name == 'main'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: true
     steps:
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # A dev checkout or build that fails only leaves dev out with a warning, beta still publishes.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        continue-on-error: true
+        with:
+          ref: dev
+          path: versions/dev
+          sparse-checkout: manual
+          persist-credentials: false
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: "3.13"
       - run: pip install "zensical==0.0.69"
-      - run: zensical build --clean
-        working-directory: manual
+      - run: python tests/manual/test_versions.py
+      - run: >-
+          python manual/tools/build_versions.py
+          --version beta=manual --version dev=versions/dev/manual
+          --default beta --out pages
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
-          path: manual/site
+          path: pages
       - uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
         id: deployment

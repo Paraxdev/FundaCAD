@@ -4,6 +4,7 @@ import {
   MAX_EXPONENT,
   SQUIRCLE_EXPONENT,
   roundedSquare,
+  roundedSquareCorners,
   superellipseCorner,
   type Vec2,
 } from "../../src/viewport/cornerProfile";
@@ -159,5 +160,44 @@ describe("roundedSquare", () => {
     expect(signedArea(at(SQUIRCLE_EXPONENT))).toBeGreaterThan(signedArea(at(CIRCLE_EXPONENT)));
     expect(signedArea(at(9))).toBeGreaterThan(signedArea(at(SQUIRCLE_EXPONENT)));
     expect(signedArea(at(9))).toBeLessThan(size * size);
+  });
+});
+
+describe("roundedSquareCorners", () => {
+  it("is roundedSquare when every corner takes the same leg", () => {
+    for (const [size, leg, n] of [
+      [10, 3, 2],
+      [37, 7.3, 24],
+      [14.6, 7.3, 10],
+      [37, 0, 10],
+    ] as const) {
+      expect(roundedSquareCorners(size, [leg, leg, leg, leg], SQUIRCLE_EXPONENT, n)).toEqual(
+        roundedSquare(size, leg, SQUIRCLE_EXPONENT, n),
+      );
+    }
+  });
+
+  it("rounds only the corners given a leg and keeps the others square", () => {
+    const pts = roundedSquareCorners(10, [0, 3, 0, 0], SQUIRCLE_EXPONENT, 2).map(([x, y]) => [
+      +x.toFixed(9),
+      +y.toFixed(9),
+    ]);
+    const r = +(2 + 3 * 2 ** -0.25).toFixed(9);
+    expect(pts).toEqual([
+      [5, -5],
+      [5, 2],
+      [r, r],
+      [2, 5],
+      [-5, 5],
+      [-5, -5],
+    ]);
+  });
+
+  it("keeps one point where two half size legs meet", () => {
+    const pts = roundedSquareCorners(10, [0, 5, 5, 0], CIRCLE_EXPONENT, 4);
+    expect(pts.length).toBe(1 + 5 + 4 + 1);
+    expect(new Set(pts.map(([x, y]) => `${x},${y}`)).size).toBe(pts.length);
+    expect(signedArea(pts)).toBeGreaterThan(100 - 2 * 25);
+    expect(signedArea(pts)).toBeLessThan(100);
   });
 });
