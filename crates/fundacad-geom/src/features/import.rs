@@ -14,7 +14,8 @@ use crate::builder::{Ctx, FResult, Fail, ImportedMeta};
 use crate::import::blobstore::{self, BlobStore};
 use crate::kernel::{self, Kind};
 
-const BINTOOLS_MAGIC: &[u8] = b"Open CASCADE Topology V";
+/// The header `xcaf::to_bin_v3` writes, the only binary format the engine stores.
+const BIN_V3_HEADER: &[u8] = b"\nOpen CASCADE Topology V3 (c)\n";
 const BREP_MAGIC: &[u8] = b"CASCADE Topology V";
 /// `MAX_BREP_BYTES`, the decoded size cap of the legacy inline copy.
 pub const MAX_BREP_BYTES: usize = 64 * 1024 * 1024;
@@ -28,7 +29,7 @@ fn has_magic(data: &[u8], magic: &[u8]) -> bool {
 /// `_blob_to_shape`: the header is checked because a crafted container
 /// chooses both the bytes and the hash they are stored under.
 pub fn blob_to_shape(data: &[u8]) -> FResult<Shape> {
-    if !has_magic(data, BINTOOLS_MAGIC) {
+    if !data.starts_with(BIN_V3_HEADER) {
         return Err(Fail::msg("stored geometry is not a valid binary BREP (bad header)"));
     }
     let shape = xcaf::from_bin(data).map_err(|_| Fail::Internal("Standard_Failure".into()))?;

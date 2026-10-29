@@ -10,6 +10,6 @@ mod inner {
         #[cxx_name = "write_brep_bin"]
         pub fn write_bin(shape: &TopoDS_Shape, path: String) -> bool;
         #[cxx_name = "read_brep_bin"]
-        pub fn read_bin(path: String) -> UniquePtr<TopoDS_Shape>;
+        pub fn read_bin(path: String) -> Result<UniquePtr<TopoDS_Shape>>;
     }
 }
