@@ -10,12 +10,14 @@ import { initTheme } from "./ui/theme";
 import { installGlassBlurSwitch } from "./ui/glassBlur";
 import { installInterfaceSize } from "./ui/interfaceSize";
 import { installComfortableText } from "./ui/comfortableText";
+import { installViewportLabels } from "./ui/viewportLabels";
 
 // Applies a stored non-default theme before anything renders, so the app never paints one palette then swaps.
 initTheme();
 installGlassBlurSwitch();
 installInterfaceSize();
 installComfortableText();
+installViewportLabels();
 import "./diagnostics/breadcrumbs"; // installs window error listeners (bug-report trail)
 import { createApp, markRaw } from "vue";
 import { createPinia, setActivePinia } from "pinia";

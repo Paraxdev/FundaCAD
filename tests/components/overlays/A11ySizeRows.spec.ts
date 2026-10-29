@@ -1,5 +1,5 @@
 // The size rows of the Accessibility Vision group: Interface size picks a zoom step and follows the keys, Comfortable
-// text spaces the text out.
+// text spaces the text out, Viewport labels sizes the names drawn over the model.
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import A11ySizeRows from "../../../src/components/overlays/A11ySizeRows.vue";
@@ -84,5 +84,36 @@ describe("Comfortable text", () => {
     setA11yPref("comfortableText", true);
     await flushPromises();
     expect(box().checked).toBe(true);
+  });
+});
+
+describe("Viewport labels", () => {
+  const group = () => $("#prefs-viewport-labels");
+  const radios = () => [...group().querySelectorAll<HTMLElement>("[role=radio]")];
+  const checked = () => radios().find((r) => r.getAttribute("aria-checked") === "true")!;
+
+  it("is a radio group named by its title and described by its hint, the four sizes spelled out", () => {
+    open();
+    expect([group().getAttribute("role"), group().getAttribute("aria-label")]).toEqual([
+      "radiogroup",
+      "Viewport labels",
+    ]);
+    expect(group().getAttribute("aria-describedby")).toBe("prefs-viewport-labels-hint");
+    expect(text($("#prefs-viewport-labels-hint"))).toContain("sketch dimensions, constraint marks and plane names");
+    expect(radios().map(text)).toEqual(["Small", "Medium", "Large", "Extra large"]);
+    expect(text(checked())).toBe("Medium");
+  });
+
+  it("stores the size picked and shows one made elsewhere or undone by Reset to defaults", async () => {
+    open();
+    radios()[3]!.click();
+    await flushPromises();
+    expect([a11yPrefs().viewportLabels, text(checked())]).toEqual(["xl", "Extra large"]);
+    resetA11yPrefs();
+    await flushPromises();
+    expect(text(checked())).toBe("Medium");
+    setA11yPref("viewportLabels", "s");
+    await flushPromises();
+    expect(text(checked())).toBe("Small");
   });
 });

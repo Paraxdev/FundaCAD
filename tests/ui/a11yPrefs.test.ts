@@ -66,6 +66,7 @@ describe("defaults", () => {
       verbosity: "normal",
       interfaceSize: 100,
       comfortableText: false,
+      viewportLabels: "m",
     });
     expect(m.getVerbosity()).toBe("normal");
     expect(m.motionOn()).toBe(true);
@@ -195,6 +196,7 @@ describe("reset and the screen reader preset", () => {
       verbosity: "verbose",
       interfaceSize: 100,
       comfortableText: false,
+      viewportLabels: "m",
     });
     expect(stored.get("fundacad.a11y.verbosity")).toBe("verbose");
     expect(calls).toBe(1);

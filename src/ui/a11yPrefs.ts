@@ -11,18 +11,23 @@ export type Verbosity = "off" | "errors" | "normal" | "verbose";
 /** The browser's zoom steps, in percent. */
 export const INTERFACE_SIZES: readonly number[] = [80, 90, 100, 110, 125, 150, 175, 200];
 export const INTERFACE_SIZE_MAX = 200;
+export type ViewportLabels = "s" | "m" | "l" | "xl";
+export const VIEWPORT_LABELS: readonly ViewportLabels[] = ["s", "m", "l", "xl"];
 
 export interface SizePrefs {
   /** The zoom of the whole interface in percent, one of INTERFACE_SIZES. */
   interfaceSize: number;
   /** Line height 1.5, letter spacing 0.12em and word spacing 0.16em on all text, the WCAG text spacing test. */
   comfortableText: boolean;
+  /** The size of the names drawn over the model: sketch dimensions and glyphs, plane names and the view cube. */
+  viewportLabels: ViewportLabels;
 }
 
-const SIZE_DEFAULTS: SizePrefs = { interfaceSize: 100, comfortableText: false };
+const SIZE_DEFAULTS: SizePrefs = { interfaceSize: 100, comfortableText: false, viewportLabels: "m" };
 const SIZE_KEYS: Record<keyof SizePrefs, string> = {
   interfaceSize: "fundacad.a11y.interfaceSize",
   comfortableText: "fundacad.a11y.comfortableText",
+  viewportLabels: "fundacad.a11y.viewportLabels",
 };
 
 export function asInterfaceSize(v: unknown): number | null {
@@ -35,9 +40,14 @@ export function asComfortableText(v: unknown): boolean | null {
   return v === false || v === "false" ? false : null;
 }
 
+export function asViewportLabels(v: unknown): ViewportLabels | null {
+  return VIEWPORT_LABELS.includes(v as ViewportLabels) ? (v as ViewportLabels) : null;
+}
+
 const SIZE_GATES: { [K in keyof SizePrefs]: (v: unknown) => SizePrefs[K] | null } = {
   interfaceSize: asInterfaceSize,
   comfortableText: asComfortableText,
+  viewportLabels: asViewportLabels,
 };
 
 export interface A11yPrefs extends SizePrefs {

@@ -216,6 +216,7 @@ const a11yChanged = computed(
     a11y.value.verbosity !== DEFAULT_A11Y.verbosity ||
     a11y.value.interfaceSize !== DEFAULT_A11Y.interfaceSize ||
     a11y.value.comfortableText !== DEFAULT_A11Y.comfortableText ||
+    a11y.value.viewportLabels !== DEFAULT_A11Y.viewportLabels ||
     dwell.value !== DEFAULT_DWELL_MS,
 );
 function pickAnimations(id: string) {

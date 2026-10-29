@@ -92,6 +92,7 @@ describe("Preferences choices", () => {
       ["prefs-orbit-pivot", "Orbit pivot", "Under cursor|Origin|Selection"],
       ["prefs-wheel-device", "Scrolling", "Automatic|Touchpad|Mouse"],
       ["prefs-touchpad-scroll", "Two-finger scroll", "Orbits|Pans"],
+      ["prefs-viewport-labels", "Viewport labels", "Small|Medium|Large|Extra large"],
       ["prefs-verbosity", "Announcements", "Off|Errors|Normal|Verbose"],
       ["prefs-motion", "Animations", "Follow system|On|Off"],
       ["prefs-env-width", "HDR environment size", expect.stringMatching(/^2048\|4096\|8192\|16384\|GPU maximum/)],
@@ -483,6 +484,19 @@ describe("Preferences Accessibility", () => {
     reset.click();
     await flushPromises();
     expect([a11yPrefs().interfaceSize, label($("#prefs-interface-size"))]).toEqual([100, "100%"]);
+    expect(reset.getAttribute("aria-disabled")).toBe("true");
+  });
+
+  it("lets Reset to defaults put a changed Viewport labels size back to Medium", async () => {
+    await open();
+    await category("access");
+    const reset = $("[data-a11y-reset]");
+    setA11yPref("viewportLabels", "l");
+    await flushPromises();
+    expect(reset.getAttribute("aria-disabled")).toBeNull();
+    reset.click();
+    await flushPromises();
+    expect(a11yPrefs().viewportLabels).toBe("m");
     expect(reset.getAttribute("aria-disabled")).toBe("true");
   });
 

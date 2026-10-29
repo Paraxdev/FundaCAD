@@ -116,6 +116,8 @@ import type { TraceState } from "./pathtrace/state";
 import { onWorkspaceChange, workspace } from "../ui/workspace";
 import { invalidateThemeColors } from "./themeColors";
 import { onThemeChange } from "../ui/theme";
+import { onA11yPrefsChange } from "../ui/a11yPrefs";
+import { viewportLabelScale } from "../ui/viewportLabels";
 import type { ViewCubeSide } from "../types";
 
 /** A selection captured before a rebuild replaces the Highlighter (selectionMemo.ts). */
@@ -458,6 +460,13 @@ export class Viewport {
       if (renderPrefs().tangentEdges !== this.tangentEdges) this.applyTangentEdges();
       this.syncViewMode();
       this.overlays = savedOverlays();
+      this.requestRender();
+    });
+    let labelScale = viewportLabelScale();
+    onA11yPrefsChange(() => {
+      if (viewportLabelScale() === labelScale) return;
+      labelScale = viewportLabelScale();
+      this.scene.originTiles.applyLabelScale();
       this.requestRender();
     });
     onThemeChange(() => {
