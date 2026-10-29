@@ -75,6 +75,25 @@ _PROBE = r"""
     }
     return out;
   };
+  const scrollers = (el) => {
+    const out = [];
+    for (let a = el.parentElement; a; a = a.parentElement) {
+      const cs = getComputedStyle(a);
+      if (/auto|scroll/.test(cs.overflowX + cs.overflowY)) out.push(a);
+    }
+    return out;
+  };
+  const cut = (el, r) => scrollers(el).some((a) => {
+    const b = a.getBoundingClientRect();
+    const top = b.top + a.clientTop, left = b.left + a.clientLeft;
+    return r.top < top - 0.5 || r.left < left - 0.5 || r.bottom > top + a.clientHeight + 0.5
+      || r.right > left + a.clientWidth + 0.5;
+  });
+  const reveal = (el) => {
+    const saved = [...scrollers(el), document.scrollingElement].map((a) => [a, a.scrollLeft, a.scrollTop]);
+    el.scrollIntoView({block: 'nearest', inline: 'nearest', behavior: 'instant'});
+    return () => saved.forEach(([a, x, y]) => a.scrollTo({left: x, top: y, behavior: 'instant'}));
+  };
   const out = {targets: [], covered: [], occluded: [], stolen: [], offscreen: 0};
   for (const el of document.querySelectorAll(sel)) {
     const r = el.getBoundingClientRect();
@@ -93,9 +112,14 @@ _PROBE = r"""
       continue;
     }
     for (const s of stolen(el, r, cx, cy)) out.stolen.push({...base, ...s});
-    const limX = Math.min(Math.ceil(r.width / 2) + 24, reach), limY = Math.min(Math.ceil(r.height / 2) + 24, reach);
-    const left = extent(el, cx, cy, -1, 0, limX), right = extent(el, cx, cy, 1, 0, limX);
-    const up = extent(el, cx, cy, 0, -1, limY), down = extent(el, cx, cy, 0, 1, limY);
+    // A control a scroller cuts is measured scrolled into view, where a person scrolls to press it, then put back.
+    const back = cut(el, r) ? reveal(el) : null;
+    const m = back ? el.getBoundingClientRect() : r;
+    const mx = m.x + m.width / 2, my = m.y + m.height / 2;
+    const limX = Math.min(Math.ceil(m.width / 2) + 24, reach), limY = Math.min(Math.ceil(m.height / 2) + 24, reach);
+    const left = extent(el, mx, my, -1, 0, limX), right = extent(el, mx, my, 1, 0, limX);
+    const up = extent(el, mx, my, 0, -1, limY), down = extent(el, mx, my, 0, 1, limY);
+    if (back) back();
     const capped = [left, right].includes(reach) || [up, down].includes(reach);
     out.targets.push({...base, hit: [left + right + 1, up + down + 1], capped});
   }

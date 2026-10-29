@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Callable
 
 CONTROLS = (
     "button, a[href], input:not([type=hidden]), select, textarea, summary, [contenteditable=true], [role=button],"
@@ -81,9 +81,10 @@ const why = (el, slack, cover) => {
 };
 """
 
+# A skip link sits off screen until it has focus, so only the walk checks it.
 _CLIPPED = (
-    "([sel, slack, cover]) => {" + _WHY + "const out = [];"
-    " for (const el of document.querySelectorAll(sel)) { if (!rendered(el)) continue;"
+    "([sel, slack, cover]) => {" + _WHY + "const SHOWN_ON_FOCUS = '.skip-link:not(:focus)'; const out = [];"
+    " for (const el of document.querySelectorAll(sel)) { if (!rendered(el) || el.matches(SHOWN_ON_FOCUS)) continue;"
     " const w = why(el, slack, cover); if (w) out.push(`${name(el)}: ${w}`); } return out; }"
 )
 
@@ -97,17 +98,19 @@ _STOP = (
     " return { name: name(el), again: false, why: rendered(el) ? why(el, slack, true) : 'focused but not rendered' }; }"
 )
 
-# A scroller that hides its scrollbar has to show a named cue for each way it can still scroll.
+# A scroller that hides its scrollbar has to show a named cue for each way it can still scroll. The cue sits beside
+# the scroller or, when the scroller is a roving toolbar's list, beside that toolbar so arrows never land on it.
 _CUELESS = r"""
 () => {
   const out = [];
-  const cue = (scroller, way) => [...scroller.parentElement.querySelectorAll('button, [role=button]')].some((b) => {
+  const near = (scroller) => [scroller.parentElement, scroller.parentElement?.parentElement].filter(Boolean);
+  const cue = (scroller, way) => near(scroller).some((box) => [...box.querySelectorAll('button, [role=button]')].some((b) => {
     if (scroller.contains(b) || !(b.getAttribute('aria-label') || '').trim().endsWith(` ${way}`)) return false;
     const r = b.getBoundingClientRect();
     if (r.width < 2 || r.height < 2) return false;
     const hit = document.elementFromPoint((r.left + r.right) / 2, (r.top + r.bottom) / 2);
     return !!hit && b.contains(hit);
-  });
+  }));
   for (const el of document.querySelectorAll('body *')) {
     const cs = getComputedStyle(el);
     if (cs.scrollbarWidth !== 'none' || !/auto|scroll/.test(cs.overflowY + cs.overflowX)) continue;
@@ -135,8 +138,17 @@ def focus_stop(page: Any, slack: float = 1) -> dict | None:
     return page.evaluate(_STOP, slack)
 
 
-def tab_walk(page: Any, limit: int = 200, key: str = "Tab") -> list[dict]:
-    """Presses `key` from the current focus until focus comes back to the first stop, one entry per stop."""
+def focus_top(page: Any) -> None:
+    """Puts the Tab start at the top of the page, so a walk does not begin on a roving item that gives up its stop."""
+    page.evaluate(
+        "() => { const s = document.createElement('span'); s.tabIndex = -1; document.body.prepend(s); s.focus();"
+        " s.blur(); s.remove(); }"
+    )
+
+
+def tab_walk(page: Any, limit: int = 200, key: str = "Tab", each: Callable[[Any], list[str]] | None = None) -> list[dict]:
+    """Presses `key` from the current focus until focus comes back to the first stop, one entry per stop. `each`
+    runs at every stop and what it finds joins that stop's why."""
     page.evaluate("() => document.querySelectorAll('[data-walk-first]').forEach((e) => e.removeAttribute('data-walk-first'))")
     stops: list[dict] = []
     for _ in range(limit):
@@ -148,6 +160,8 @@ def tab_walk(page: Any, limit: int = 200, key: str = "Tab") -> list[dict]:
             continue
         if stop["again"]:
             return stops
+        if each:
+            stop["why"] = "; ".join([w for w in [stop["why"], *each(page)] if w])
         stops.append(stop)
     stops.append({"name": "(walk)", "again": False, "why": f"focus never came back to the first stop in {limit}"})
     return stops
