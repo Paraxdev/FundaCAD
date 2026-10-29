@@ -171,6 +171,47 @@ label.pref-head {
   flex: none;
 }
 
+/* A card's slider keeps the card look: title and value on the head row, the track full width below. */
+.pref-card > .ui-slider {
+  grid-template-columns: minmax(0, 1fr) auto;
+  row-gap: var(--s-2);
+}
+.pref-card > .ui-slider .ui-slider-label {
+  display: flex;
+  align-items: center;
+  min-height: 30px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+.pref-card > .ui-slider .ui-slider-value {
+  font-size: 13px;
+}
+.pref-card > .ui-slider .ui-slider-input {
+  grid-row: 2;
+  grid-column: 1 / -1;
+}
+
+.prefs-a11y-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  margin-bottom: var(--s-5);
+}
+.prefs-a11y-actions .pref-hint {
+  flex-basis: 100%;
+}
+.prefs-group + .prefs-group {
+  margin-top: var(--s-5);
+}
+.prefs-group-title {
+  margin: 0 0 var(--s-3);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
 /* Sections with their own rows (assistants, plugins), sized like the cards around them. */
 .prefs-pane-flow {
   display: flex;

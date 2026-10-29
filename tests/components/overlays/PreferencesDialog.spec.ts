@@ -6,7 +6,8 @@ import PreferencesDialog from "../../../src/components/overlays/PreferencesDialo
 import { focusables } from "../../../src/components/ui/focusables";
 import { useDialogStore } from "../../../src/stores/dialogs";
 import { getUnit, setUnit } from "../../../src/ui/units";
-import { getNavPrefs, setNavPrefs } from "../../../src/ui/interactionPrefs";
+import { getHoverDwellMs, getNavPrefs, setHoverDwellMs, setNavPrefs } from "../../../src/ui/interactionPrefs";
+import { a11yPrefs, getVerbosity, resetA11yPrefs, setA11yPref } from "../../../src/ui/a11yPrefs";
 import { motionOn, setMotion } from "../../../src/ui/motion";
 import {
   getHomeBackground,
@@ -87,6 +88,8 @@ describe("Preferences choices", () => {
       ["prefs-orbit-pivot", "Orbit pivot", "Under cursor|Origin|Selection"],
       ["prefs-wheel-device", "Scrolling", "Automatic|Touchpad|Mouse"],
       ["prefs-touchpad-scroll", "Two-finger scroll", "Orbits|Pans"],
+      ["prefs-verbosity", "Announcements", "Off|Errors|Normal|Verbose"],
+      ["prefs-motion", "Animations", "Follow system|On|Off"],
       ["prefs-env-width", "HDR environment size", expect.stringMatching(/^2048\|4096\|8192\|16384\|GPU maximum/)],
     ]);
   });
@@ -262,12 +265,12 @@ describe("Preferences categories", () => {
 describe("Preferences settings and frame", () => {
   it("toggles a setting once with Space on its checkbox", async () => {
     await open();
-    await category("access");
-    $("#prefs-motion input").focus();
+    await category("navigation");
+    $("#prefs-inertia input").focus();
     await press(" ");
-    expect(motionOn()).toBe(false);
+    expect(getNavPrefs().inertia).toBe(true);
     await press(" ", { repeat: true });
-    expect(motionOn()).toBe(false);
+    expect(getNavPrefs().inertia).toBe(true);
   });
 
   it("opens with focus on the open category, and Done closes it", async () => {
@@ -352,5 +355,85 @@ describe("Preferences settings and frame", () => {
     await new Promise((r) => setTimeout(r, 0));
     await press("Escape");
     expect(dialogs.preferences).toBe(false);
+  });
+});
+
+describe("Preferences Accessibility", () => {
+  beforeEach(() => resetA11yPrefs());
+  const groupName = (g: Element) => $(`#${g.getAttribute("aria-labelledby")}`).textContent?.trim();
+  const pick = async (group: string, choice: string) => {
+    radios(group)
+      .find((r) => label(r) === choice)!
+      .click();
+    await flushPromises();
+  };
+
+  it("draws the groups Vision, Speech, Keyboard and pointer and Motion, each named by its heading", async () => {
+    await open();
+    await category("access");
+    const groups = [...$('[data-pane="access"]').querySelectorAll("[role=group]")];
+    expect(groups.map(groupName)).toEqual(["Vision", "Speech", "Keyboard and pointer", "Motion"]);
+  });
+
+  it("picks Animations from Follow system, On and Off, and says what the system has while following it", async () => {
+    await open();
+    await category("access");
+    expect(radios("prefs-motion").map(label)).toEqual(["Follow system", "On", "Off"]);
+    expect($("#prefs-motion").getAttribute("aria-describedby")).toBe("prefs-motion-hint");
+    expect($("#prefs-motion-hint").textContent).toContain("The system has them on right now.");
+    await pick("prefs-motion", "Off");
+    expect([a11yPrefs().animations, motionOn()]).toEqual(["off", false]);
+    expect($("#prefs-motion-hint").textContent).not.toContain("right now");
+    await pick("prefs-motion", "Follow system");
+    expect([a11yPrefs().animations, motionOn()]).toEqual(["system", true]);
+  });
+
+  it("sets the Announcements level the announcer reads", async () => {
+    await open();
+    await category("access");
+    expect(radios("prefs-verbosity").map(label)).toEqual(["Off", "Errors", "Normal", "Verbose"]);
+    await pick("prefs-verbosity", "Errors");
+    expect(getVerbosity()).toBe("errors");
+  });
+
+  it("names Hover delay and speaks its value in milliseconds as the arrows move it", async () => {
+    await open();
+    await category("access");
+    const input = $("#prefs-hover-dwell input[type=range]");
+    expect($(`#${input.getAttribute("aria-labelledby")}`).textContent).toBe("Hover delay");
+    expect(input.getAttribute("aria-valuetext")).toBe("800 ms");
+    input.focus();
+    await press("ArrowRight");
+    expect(getHoverDwellMs()).toBe(850);
+    expect(input.getAttribute("aria-valuetext")).toBe("850 ms");
+  });
+
+  it("applies the Screen reader preset, and Reset to defaults clears every choice, Hover delay too", async () => {
+    await open();
+    await category("access");
+    const reset = $("[data-a11y-reset]");
+    expect(reset.getAttribute("aria-disabled")).toBe("true");
+    $("[data-a11y-preset]").click();
+    await flushPromises();
+    expect(getVerbosity()).toBe("verbose");
+    expect(label(radios("prefs-verbosity").find((r) => r.getAttribute("aria-checked") === "true")!)).toBe("Verbose");
+    setA11yPref("animations", "off");
+    setHoverDwellMs(1200);
+    await flushPromises();
+    expect(reset.getAttribute("aria-disabled")).toBeNull();
+    reset.click();
+    await flushPromises();
+    expect([a11yPrefs().animations, getVerbosity(), getHoverDwellMs()]).toEqual(["system", "normal", 800]);
+    expect(reset.getAttribute("aria-disabled")).toBe("true");
+  });
+
+  it("opens Appearance from the Vision group and lands on its title", async () => {
+    await open();
+    await category("access");
+    $("[data-a11y-appearance]").click();
+    await flushPromises();
+    expect($('[data-pane="appearance"]').style.display).not.toBe("none");
+    expect(document.activeElement).toBe($('[data-pane="appearance"] .prefs-pane-title'));
+    expect($(".prefs-nav-btn.active").dataset.category).toBe("appearance");
   });
 });

@@ -10,6 +10,7 @@ import Checkbox from "../ui/Checkbox.vue";
 import Dialog from "../ui/Dialog.vue";
 import Segmented from "../ui/Segmented.vue";
 import Select from "../ui/Select.vue";
+import Slider from "../ui/Slider.vue";
 import Tabs from "../ui/Tabs.vue";
 import McpSection from "./McpSection.vue";
 import DenoiserRow from "../shell/DenoiserRow.vue";
@@ -28,7 +29,17 @@ import {
 } from "../../ui/theme";
 import { asIconPackId, getIconPack, iconPacks, onIconPackChange, setIconPack } from "../../ui/icons";
 import { asUnit, getUnit, onUnitChange, setUnit } from "../../ui/units";
-import { motionOn, onMotionChange, setMotion } from "../../ui/motion";
+import {
+  a11yPrefs,
+  applyScreenReaderPreset,
+  asAnimations,
+  asVerbosity,
+  DEFAULT_A11Y,
+  onA11yPrefsChange,
+  resetA11yPrefs,
+  setA11yPref,
+  systemReducesMotion,
+} from "../../ui/a11yPrefs";
 import {
   getHomeBackground,
   HOME_BACKGROUNDS,
@@ -43,6 +54,7 @@ import {
   asOrbitPivot,
   asTouchpadScroll,
   asWheelDevice,
+  DEFAULT_DWELL_MS,
   getDetectedWheel,
   getHoverDwellMs,
   getNavPrefs,
@@ -92,7 +104,8 @@ const pack = ref(getIconPack());
 const unit = ref(getUnit());
 const render = ref(renderPrefs());
 const dwell = ref(getHoverDwellMs());
-const motion = ref(motionOn());
+const a11y = ref(a11yPrefs());
+const reducesMotion = ref(systemReducesMotion());
 const nav = ref(getNavPrefs());
 const detectedWheel = ref(getDetectedWheel());
 const classicCamera = ref(navigatorChoice() === "legacy");
@@ -116,8 +129,9 @@ onMounted(() => {
     onHoverDwellChange(() => {
       dwell.value = getHoverDwellMs();
     }),
-    onMotionChange(() => {
-      motion.value = motionOn();
+    onA11yPrefsChange(() => {
+      a11y.value = a11yPrefs();
+      reducesMotion.value = systemReducesMotion();
     }),
     onNavPrefsChange(() => {
       nav.value = getNavPrefs();
@@ -156,15 +170,47 @@ const pane = (id: string) => ({
   tabindex: id === "mcp" || id === "plugins" ? -1 : undefined,
 });
 // A click or Enter on a category focuses its title so a screen reader says where it went, the arrows stay on the tabs.
-async function revealPane(e: MouseEvent) {
-  if (!(e.target as Element).closest("[role=tab]")) return;
+async function focusPane() {
   await nextTick();
   const el = panes.value?.querySelector<HTMLElement>(`[data-pane="${category.value}"]`);
   (el?.querySelector<HTMLElement>(".prefs-pane-title[tabindex]") ?? el)?.focus();
 }
+function revealPane(e: MouseEvent) {
+  if ((e.target as Element).closest("[role=tab]")) void focusPane();
+}
+function showPane(id: string) {
+  category.value = id;
+  void focusPane();
+}
 watch(pluginFocus, (id) => {
   if (id) category.value = "plugins";
 });
+
+const ANIMATIONS = [
+  { value: "system", label: "Follow system" },
+  { value: "on", label: "On" },
+  { value: "off", label: "Off" },
+];
+const VERBOSITY = [
+  { value: "off", label: "Off" },
+  { value: "errors", label: "Errors" },
+  { value: "normal", label: "Normal" },
+  { value: "verbose", label: "Verbose" },
+];
+const a11yChanged = computed(
+  () =>
+    a11y.value.animations !== DEFAULT_A11Y.animations ||
+    a11y.value.verbosity !== DEFAULT_A11Y.verbosity ||
+    dwell.value !== DEFAULT_DWELL_MS,
+);
+function pickAnimations(id: string) {
+  const v = asAnimations(id);
+  if (v) setA11yPref("animations", v);
+}
+function pickVerbosity(id: string) {
+  const v = asVerbosity(id);
+  if (v) setA11yPref("verbosity", v);
+}
 
 const UNITS = [
   { value: "mm", label: "mm" },
@@ -302,9 +348,6 @@ function pickBackground(id: string) {
 }
 function onBrightness(ev: Event) {
   setRenderPref("brightness", Number.parseFloat(value(ev)));
-}
-function onDwell(ev: Event) {
-  setHoverDwellMs(Number.parseFloat(value(ev)));
 }
 function onBloom(ev: Event) {
   const v = asBloom(Number.parseFloat(value(ev)));
@@ -683,39 +726,111 @@ function onClassicCamera(on: boolean) {
 
         <section v-show="category === 'access'" v-bind="pane('access')" class="prefs-pane">
           <h3 class="prefs-pane-title" tabindex="-1">Accessibility</h3>
-          <div class="prefs-grid">
-            <div class="pref-card">
-              <Checkbox
-                id="prefs-motion"
-                class="pref-head pref-check"
-                :model-value="motion"
-                @update:model-value="setMotion"
-                ><span class="pref-title">Animations</span></Checkbox
-              >
-              <p class="pref-hint">
-                Off makes every transition instant: menus, panels, the error notice and camera moves all jump straight
-                to where they end. Follows the system's reduce motion setting until changed here.
-              </p>
-            </div>
-            <div class="pref-card">
-              <div class="pref-head">
-                <label class="pref-title" for="prefs-hover-dwell">Hover delay</label>
-                <span class="prefs-readout">{{ (dwell / 1000).toFixed(2) }} s</span>
+          <div class="prefs-a11y-actions">
+            <Button data-a11y-preset aria-describedby="prefs-a11y-actions-hint" @click="applyScreenReaderPreset"
+              >Screen reader preset</Button
+            >
+            <Button
+              :disabled="!a11yChanged"
+              data-a11y-reset
+              aria-describedby="prefs-a11y-actions-hint"
+              @click="resetA11yPrefs"
+              >Reset to defaults</Button
+            >
+            <p id="prefs-a11y-actions-hint" class="pref-hint">
+              Screen reader preset sets Announcements to Verbose, the setup for NVDA, VoiceOver and Orca. Reset to
+              defaults clears every choice below, so Animations follows the system again.
+            </p>
+          </div>
+
+          <div class="prefs-group" role="group" aria-labelledby="prefs-a11y-vision">
+            <h4 id="prefs-a11y-vision" class="prefs-group-title">Vision</h4>
+            <div class="prefs-grid">
+              <div class="pref-card">
+                <div class="pref-head">
+                  <span class="pref-title">Theme</span>
+                  <Button data-a11y-appearance aria-describedby="prefs-a11y-theme-hint" @click="showPane('appearance')"
+                    >Open Appearance</Button
+                  >
+                </div>
+                <p id="prefs-a11y-theme-hint" class="pref-hint">
+                  Themes are picked under Appearance. Colour-Blind Safe draws the axes, planes and gizmos in vermilion,
+                  yellow and sky blue, and Solarized Light is a light theme.
+                </p>
               </div>
-              <input
-                id="prefs-hover-dwell"
-                class="sm-slider pref-slider"
-                type="range"
-                :min="MIN_DWELL_MS"
-                :max="MAX_DWELL_MS"
-                step="50"
-                :value="dwell"
-                @input="onDwell"
-              />
-              <p class="pref-hint">
-                How long the pointer rests on a part before its face is highlighted instead of the whole part. A click
-                selects whatever is highlighted, so a longer delay makes it easier to select whole parts.
-              </p>
+            </div>
+          </div>
+
+          <div class="prefs-group" role="group" aria-labelledby="prefs-a11y-speech">
+            <h4 id="prefs-a11y-speech" class="prefs-group-title">Speech</h4>
+            <div class="prefs-grid">
+              <div class="pref-card">
+                <div class="pref-head">
+                  <span class="pref-title">Announcements</span>
+                  <Segmented
+                    id="prefs-verbosity"
+                    label="Announcements"
+                    aria-describedby="prefs-verbosity-hint"
+                    :model-value="a11y.verbosity"
+                    :options="VERBOSITY"
+                    @update:model-value="pickVerbosity"
+                  />
+                </div>
+                <p id="prefs-verbosity-hint" class="pref-hint">
+                  How much the app tells a screen reader: nothing, errors only, prompts and results, or every change as
+                  well.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="prefs-group" role="group" aria-labelledby="prefs-a11y-input">
+            <h4 id="prefs-a11y-input" class="prefs-group-title">Keyboard and pointer</h4>
+            <div class="prefs-grid">
+              <div class="pref-card">
+                <Slider
+                  id="prefs-hover-dwell"
+                  label="Hover delay"
+                  unit="ms"
+                  show-value
+                  :min="MIN_DWELL_MS"
+                  :max="MAX_DWELL_MS"
+                  :step="50"
+                  :model-value="dwell"
+                  @update:model-value="setHoverDwellMs"
+                />
+                <p class="pref-hint">
+                  How long the pointer rests on a part before its face is highlighted instead of the whole part. A click
+                  selects whatever is highlighted, so a longer delay makes it easier to select whole parts.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="prefs-group" role="group" aria-labelledby="prefs-a11y-motion">
+            <h4 id="prefs-a11y-motion" class="prefs-group-title">Motion</h4>
+            <div class="prefs-grid">
+              <div class="pref-card">
+                <div class="pref-head">
+                  <span class="pref-title">Animations</span>
+                  <Segmented
+                    id="prefs-motion"
+                    label="Animations"
+                    aria-describedby="prefs-motion-hint"
+                    :model-value="a11y.animations"
+                    :options="ANIMATIONS"
+                    @update:model-value="pickAnimations"
+                  />
+                </div>
+                <p id="prefs-motion-hint" class="pref-hint">
+                  Off makes every transition instant: menus, panels, the error notice and camera moves all jump straight
+                  to where they end. Follow system takes Animation effects on Windows, Reduce motion on macOS or Reduce
+                  animation on GNOME, and changes the moment the system does.
+                  <template v-if="a11y.animations === 'system'"
+                    >The system has them {{ reducesMotion ? "off" : "on" }} right now.</template
+                  >
+                </p>
+              </div>
             </div>
           </div>
         </section>
