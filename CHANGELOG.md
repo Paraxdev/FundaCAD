@@ -32,6 +32,21 @@ This file starts on 2026-08-03. For anything before that, see the
   Smaller Interface and Reset Interface Size, and the size is kept across a
   restart. The page no longer refuses browser zoom either.
 
+- **Every control fits at a large size or in a small window.** The tool rail
+  and the view controls on the right scroll when they do not fit, an arrow at
+  either end pages through what is out of sight, and Tab scrolls each control
+  into view. A title bar too narrow for the document name and the Model and
+  Render switch moves them to the top of the File menu. At 200 percent in the
+  smallest window every control can still be reached.
+
+- **Comfortable text.** Preferences, Accessibility, Vision has a Comfortable
+  text box that spaces lines, letters and words further apart. Buttons, tabs
+  and labels grow or wrap to fit the wider text instead of cutting it short.
+
+- **Viewport labels.** Beside it, Small, Medium, Large or Extra large sizes the
+  sketch dimensions, constraint marks, plane names and the view cube, on their
+  own or on top of the Interface size. Medium is the default.
+
 - **G3 fillets.** The fillet box has a third continuity icon, G3, on key 3. It
   eases into the faces with no jump in curvature and none in how fast the
   curvature changes either. G2 and G3 now need both faces flat across the edge,
@@ -457,6 +472,10 @@ This file starts on 2026-08-03. For anything before that, see the
 - **An AI assistant can now work on the document you have open, instead of on a copy.** Connected through MCP, its edits appear in the window as it makes them, each one a single undo, and a badge next to the document name says who is connected and what they last did. Before this, an assistant started a geometry engine of its own and handed its work back as a file you had to open, so nothing it did was visible while it did it. Preferences has an Assistants section with three settings: don't share, share read-only, or share and allow edits. It can only ever *offer* an edit, the window decides whether to take it, and refuses one written against a model that has since changed, so an assistant cannot overwrite what you did while it was thinking.
 
 ### Changed
+
+- **No text is smaller than 11 px.** Labels, counts and badge digits that were
+  9 or 10 px are 11 px now, and the error under a field or a dimension is 12 px.
+  Every text size follows the Interface size.
 
 - **Sketch Mirror applies on Enter, not on the line click.** Pick the line,
   check the preview, then press Enter or the check.
