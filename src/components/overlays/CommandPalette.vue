@@ -57,11 +57,14 @@ watch(results, () => {
   active.value = 0;
 });
 
-// The query is cleared on close, so opening says nothing and only typing speaks the count.
+// The query is cleared on close, so opening says nothing and only typing speaks the count. The first match comes with
+// it, since its row id stays the same and a reader that speaks only on an aria-activedescendant change skips it.
 watch(query, () => {
   if (!cmdk.open) return;
   const n = results.value.length;
-  const text = n === 0 ? "No matching command" : n === 1 ? "1 command" : `${n} commands`;
+  const first = results.value[0];
+  const name = first ? [first.label, first.group, first.key && fmtKeys(first.key)].filter(Boolean).join(", ") : "";
+  const text = !first ? "No matching command" : `${n === 1 ? "1 command" : `${n} commands`}. ${name}`;
   announce(text, "polite", { key: COUNT, delay: 300 });
 });
 

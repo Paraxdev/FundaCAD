@@ -114,12 +114,13 @@ Each step says what to do and what you should hear. Mark it in the results: **P*
 8. **Type in a field (1 min).** In the palette search (Ctrl+K), type `extrude`. Each letter is echoed, Left and Right
    read the character under the caret, and the list of matches is reachable and read. Escape closes the palette.
 9. **Hear the count and the command (1 min).** Press Ctrl+K and type `fil`. After a short pause you hear how many
-   commands match ("4 commands"), once, not once per letter. Press ArrowDown: focus stays in the search field and
-   you hear the second match with its group, "Vertical Edge Fillet, Print" (NVDA may add "2 of 4"). Press ArrowUp:
-   "Fillet, Modify, F", the first match with its group and shortcut. Type more letters until nothing matches: "No
-   matching command". Press Escape: the palette closes and no count follows. Fail: silence on an arrow, a count
-   per letter, or a count after Escape. Orca follows the active match through `aria-activedescendant`, the
-   weakest of the three readers here: write down whether every arrow was read.
+   commands match and the first of them, "4 commands. Fillet, Modify, F", once, not once per letter. Press
+   ArrowDown: focus stays in the search field and you hear the second match with its group, "Vertical Edge Fillet,
+   Print" (NVDA may add "2 of 4"). Press ArrowUp: "Fillet, Modify, F", the first match with its group and
+   shortcut. Type more letters until nothing matches: "No matching command". Press Escape: the palette closes
+   and no count follows. Fail: silence on an arrow, a count per letter, or a count after Escape. Orca follows
+   the active match through `aria-activedescendant`, the weakest of the three readers here: write down whether
+   every arrow was read.
 10. **Pick from a list (1 min).** Press Ctrl+, (comma) and Tab to Theme. You hear its name and its value together,
     "Theme, FundaCAD Noir" (or the theme in use), as a combobox or pop up button, on VoiceOver and Orca as well
     as NVDA. ArrowDown opens the list, read as "Theme", and each arrow reads one theme. Enter picks it, the list

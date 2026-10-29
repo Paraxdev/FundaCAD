@@ -104,7 +104,7 @@ def test_typing_in_the_palette_speaks_the_result_count_once_and_closing_drops_a_
         heard(s, "command")
         s.page.wait_for_timeout(600)
         counts = [t for t in s.page.evaluate("() => window.__spoken") if "command" in t]
-        assert len(counts) == 1 and re.fullmatch(r"\d+ commands", counts[0]), counts
+        assert len(counts) == 1 and re.fullmatch(r"\d+ commands\. Fillet\W+(Modify|MODIFY)\W+F", counts[0]), counts
         s.page.keyboard.type("l")
         s.page.keyboard.press("Escape")
         s.page.locator(".cmdk-list").wait_for(state="detached")

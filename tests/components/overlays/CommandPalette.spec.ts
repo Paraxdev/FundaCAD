@@ -20,6 +20,7 @@ const later = () => new Promise((r) => setTimeout(r, 5));
 const input = () => $(".cmdk-input input") as HTMLInputElement;
 const options = () => $$('[role="listbox"] [role="option"]');
 const activeOption = () => document.getElementById(input().getAttribute("aria-activedescendant") ?? "");
+const nameOf = (o: HTMLElement) => o.textContent!.replace(/\s+/g, " ").trim();
 
 function type(text: string) {
   input().value = text;
@@ -174,7 +175,7 @@ describe("CommandPalette", () => {
     type("save as");
     await nextTick();
     const o = activeOption()!;
-    expect(o.textContent!.replace(/\s+/g, " ").trim()).toBe("Save As…, File, Ctrl+Shift+S");
+    expect(nameOf(o)).toBe("Save As…, File, Ctrl+Shift+S");
     expect(o.getAttribute("aria-keyshortcuts")).toBe("Control+Shift+S");
     expect([
       o.querySelector(".cmdk-label"),
@@ -206,7 +207,7 @@ describe("CommandPalette", () => {
     ).toEqual(["false", "true"]);
   });
 
-  it("speaks the result count once, 300 ms after a burst of typing stops", async () => {
+  it("speaks the result count and the first match once, 300 ms after a burst of typing stops", async () => {
     await openPalette();
     const { lines, detach } = liveRegions();
     vi.useFakeTimers();
@@ -220,11 +221,12 @@ describe("CommandPalette", () => {
     vi.advanceTimersByTime(400);
     const n = options().length;
     expect(n).toBeGreaterThan(1);
-    expect(lines).toEqual([`${n} commands`]);
+    expect(lines).toEqual([`${n} commands. ${nameOf(options()[0]!)}`]);
     detach();
   });
 
-  it("says one command, and no matching command with the list closed", async () => {
+  it("says one command with its name, and no matching command with the list closed", async () => {
+    setMacForTest(false);
     await openPalette();
     const { lines, detach } = liveRegions();
     vi.useFakeTimers();
@@ -234,7 +236,7 @@ describe("CommandPalette", () => {
     type("zzqq");
     await nextTick();
     vi.advanceTimersByTime(500);
-    expect(lines).toEqual(["1 command", "No matching command"]);
+    expect(lines).toEqual(["1 command. Save As, File, Ctrl+Shift+S", "No matching command"]);
     expect([input().getAttribute("aria-expanded"), input().getAttribute("aria-activedescendant")]).toEqual([
       "false",
       null,
