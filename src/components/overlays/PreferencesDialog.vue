@@ -17,6 +17,7 @@ import DenoiserRow from "../shell/DenoiserRow.vue";
 import PluginsSection from "./PluginsSection.vue";
 import ExperimentalSection from "./ExperimentalSection.vue";
 import UpdatesSection from "./UpdatesSection.vue";
+import A11ySizeRows from "./A11ySizeRows.vue";
 import {
   addCustomTheme,
   asThemeId,
@@ -213,6 +214,7 @@ const a11yChanged = computed(
   () =>
     a11y.value.animations !== DEFAULT_A11Y.animations ||
     a11y.value.verbosity !== DEFAULT_A11Y.verbosity ||
+    a11y.value.interfaceSize !== DEFAULT_A11Y.interfaceSize ||
     dwell.value !== DEFAULT_DWELL_MS,
 );
 function pickAnimations(id: string) {
@@ -812,6 +814,7 @@ function onClassicCamera(on: boolean) {
                   yellow and sky blue, and Solarized Light is a light theme.
                 </p>
               </div>
+              <A11ySizeRows />
             </div>
           </div>
 

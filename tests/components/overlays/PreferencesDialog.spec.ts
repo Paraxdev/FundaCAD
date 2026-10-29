@@ -470,6 +470,22 @@ describe("Preferences Accessibility", () => {
     expect(reset.getAttribute("aria-disabled")).toBe("true");
   });
 
+  it("holds Interface size in the Vision group, and Reset to defaults puts a changed size back to 100", async () => {
+    await open();
+    await category("access");
+    expect($("#prefs-interface-size").closest("[role=group]")!.getAttribute("aria-labelledby")).toBe(
+      "prefs-a11y-vision",
+    );
+    const reset = $("[data-a11y-reset]");
+    setA11yPref("interfaceSize", 125);
+    await flushPromises();
+    expect(reset.getAttribute("aria-disabled")).toBeNull();
+    reset.click();
+    await flushPromises();
+    expect([a11yPrefs().interfaceSize, label($("#prefs-interface-size"))]).toEqual([100, "100%"]);
+    expect(reset.getAttribute("aria-disabled")).toBe("true");
+  });
+
   it("says the Screen reader preset took in a status line, again on a second press, gone once Announcements moves", async () => {
     await open();
     await category("access");
