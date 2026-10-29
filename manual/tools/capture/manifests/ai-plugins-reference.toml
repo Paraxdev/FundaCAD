@@ -62,11 +62,17 @@ uses = ["manual/docs/plugins/gamepad.md:5"]
 
 [[shot]]
 file = "manual/docs/img/printing-menu.png"
-size = [480, 600]
+size = [480, 654]
 theme = "fundacad"
-crop = "control"
-stub = true
-show = "The Print group on the tool rail, listing Print Project, Open in OrcaSlicer and Send to Printer."
+crop = "region"
+at = [280, 246]
+park = [1300, 860]
+steps = [
+  { open = "new" },
+  { click_css = '[data-family="cat:PRINT"]' },
+  { wait = 400 },
+]
+show = "The Print group open from the tool rail: the print toolbox tools, Bed Fit Check, Printability and Layer lines, then Print Project, Open in OrcaSlicer and Send to Printer at the bottom. 654 px tall since Layer lines joined the group."
 alt = "The Print group on the tool rail, listing Print Project, Open in OrcaSlicer and Send to Printer"
 uses = ["manual/docs/plugins/printing.md:5"]
 
@@ -111,10 +117,23 @@ uses = ["manual/docs/plugins/spacemouse.md:5"]
 [[shot]]
 file = "manual/docs/img/texture-knurl.png"
 size = [1000, 840]
+viewport = [1500, 900]
 theme = "fundacad"
 crop = "region"
-stub = true
-show = "A cylinder with a knurled surface and the settings of the Texture step in the History card."
+at = [500, 40]
+park = [1300, 860]
+steps = [
+  { open = "new" },
+  { evaluate = '() => { const s = window.store; s.addFeature({ id: "cy", type: "cylinder", radius: 15, height: 20 }); s.addFeature({ id: "tx", type: "texture", body: "body1", kind: "knurl", depth: 0.4, scale: 2 }); }' },
+  { wait = 4000 },
+  { view = "iso" },
+  { evaluate = '() => { document.elementFromPoint(800, 485).dispatchEvent(new WheelEvent("wheel", { deltaY: -200, clientX: 800, clientY: 485, bubbles: true, cancelable: true })); }' },
+  { wait = 800 },
+  { panel = "history" },
+  { click_css = '.timeline-node[data-id="tx"]' },
+  { wait = 1500 },
+]
+show = "A cylinder with a knurled surface and the Texture step open in the History card, Pattern Knurl, Depth 0.4 and Scale 2 mm. The view is zoomed in one wheel step."
 alt = "A cylinder with a knurled surface and the Texture step's settings in the History card"
 uses = ["manual/docs/plugins/texture.md:5"]
 
