@@ -40,7 +40,6 @@ export const TILE_GAP_PX = 10;
 /** Only the corner away from the origin is rounded, the other three face the arrows. */
 export const TILE_CORNER_RADIUS_PX = 27;
 export const TILE_OCTANT: Octant = { x: 1, y: 1, z: 1 };
-export const TILE_EXTENT_PX = TILE_GAP_PX + TILE_SIZE_PX;
 /** The tiles are click targets, so they stop shrinking at about 41 px, a rail tile. */
 export const MIN_TILE_SCALE = 0.65;
 
