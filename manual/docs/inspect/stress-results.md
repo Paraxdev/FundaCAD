@@ -13,6 +13,7 @@ The first line says in plain words how the part does. A coloured bar beside it i
 | Holds, at least 3.2x safe. | The part holds with room to spare, at 1.5x or more. |
 | Holds, at least 1.2x safe, but keep about 1.5x. | It holds, but under 1.5x the margin is thin. |
 | Likely to fail at the marked spot. | The load is more than the part can take. A small overload is given in percent, such as about 3% more. |
+| Nothing is stressed, check the loads. | The loads put no stress in the part. |
 
 A pin in the view marks the weakest spot. The line under the verdict says how far the part bends.
 
@@ -37,10 +38,6 @@ A printed part is weaker across its layer lines, so do not trust a safety factor
 - Colours turns the stress colours on and off. Deformed shape turns the bent shape on and off.
 - Read a point, then click the part to read the stress and the bend there. Each reading is listed as Point 1, Point 2 and so on, with a button to remove it.
 
-Colours can jump along a sharp edge, since each face is coloured on its own.
-
 ## After a change
 
 If you change the model or the setup after a run, Results says so. Run again brings it up to date.
-
-Closing the panel keeps the result, and opening Stress again shows it.

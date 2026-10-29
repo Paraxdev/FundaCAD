@@ -11,7 +11,7 @@ Section cuts the model open with a plane so you can see inside.
 3. Drag the handle, or type an offset in the value box.
 4. Press Enter, the check or Esc to keep the cut.
 
-While the handle shows, two keys change the cut:
+While the handle shows, and before you type an offset, two keys change the cut:
 
 - F flips which half is kept.
 - G changes how the cut half shows: hidden, faint, soft or strong. It starts at soft.
