@@ -5,8 +5,16 @@
 file = "manual/docs/img/export-dialog.png"
 size = [748, 417]
 theme = "fundacad"
-crop = "panel"
-stub = true
+crop = "region"
+around = ".export-dialog"
+# The odd height around a whole pixel centre lands on half pixels and the rounding drops a row, so it moves by half.
+offset = [0, 0.5]
+park = [1400, 860]
+steps = [
+  { open = "example:Wall bracket" },
+  { press = "Ctrl+E" },
+  { wait = 300 },
+]
 show = "The Export window with STL and Medium chosen."
 alt = "The Export window with STL and Medium chosen"
 uses = ["manual/docs/files/export.md:5"]
@@ -112,8 +120,16 @@ uses = ["manual/docs/start/first-part.md:25"]
 file = "manual/docs/img/first-part-export.png"
 size = [748, 417]
 theme = "fundacad"
-crop = "panel"
-stub = true
+crop = "region"
+around = ".export-dialog"
+# The odd height around a whole pixel centre lands on half pixels and the rounding drops a row, so it moves by half.
+offset = [0, 0.5]
+park = [1400, 860]
+steps = [
+  { open = "example:Plate" },
+  { press = "Ctrl+E" },
+  { wait = 300 },
+]
 show = "The Export window with STL, Millimeter and Medium chosen, as the first part page describes."
 alt = "The Export window with STL and Medium chosen"
-uses = ["manual/docs/start/first-part.md:19"]
+uses = ["manual/docs/start/first-part.md:35"]
