@@ -60,7 +60,22 @@ _PROBE = r"""
     return n;
   };
   const sel = native + ', ' + [...ROLES].map((r) => '[role="' + r + '"]').join(', ');
-  const out = {targets: [], covered: [], occluded: [], offscreen: 0};
+  const within = (el, x, y) => [el, ...(el.labels || [])].some((n) => {
+    const b = n.getBoundingClientRect();
+    return x >= b.left && x <= b.right && y >= b.top && y <= b.bottom;
+  });
+  // A point 1 px inside each edge that another control takes with its grown area, not with its own box.
+  const stolen = (el, r, cx, cy) => {
+    const sides = [['left', r.left + 1, cy], ['right', r.right - 1, cy], ['top', cx, r.top + 1],
+      ['bottom', cx, r.bottom - 1]];
+    const out = [];
+    for (const [side, x, y] of sides) {
+      const h = at(x, y), by = h && !inside(el, h) && owner(h);
+      if (by && !by.contains(el) && !within(by, x, y)) out.push({side, by: path(by), byName: name(by)});
+    }
+    return out;
+  };
+  const out = {targets: [], covered: [], occluded: [], stolen: [], offscreen: 0};
   for (const el of document.querySelectorAll(sel)) {
     const r = el.getBoundingClientRect();
     if (r.width < 2 || r.height < 2) continue;
@@ -77,6 +92,7 @@ _PROBE = r"""
       else out.occluded.push({...base, by: hit ? path(hit) : ''});
       continue;
     }
+    for (const s of stolen(el, r, cx, cy)) out.stolen.push({...base, ...s});
     const limX = Math.min(Math.ceil(r.width / 2) + 24, reach), limY = Math.min(Math.ceil(r.height / 2) + 24, reach);
     const left = extent(el, cx, cy, -1, 0, limX), right = extent(el, cx, cy, 1, 0, limX);
     const up = extent(el, cx, cy, 0, -1, limY), down = extent(el, cx, cy, 0, 1, limY);

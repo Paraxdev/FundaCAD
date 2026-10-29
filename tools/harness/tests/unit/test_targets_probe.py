@@ -67,6 +67,20 @@ def test_a_grown_area_over_a_neighbours_centre_is_reported_covered(page):
     assert [t["name"] for t in report["targets"]] == ["Over"]
 
 
+def test_a_later_neighbours_grown_area_over_an_earlier_ones_edge_is_reported_stolen(page):
+    page.set_content(
+        STYLE
+        + '<button id="first" class="grow" aria-label="First" style="left:20px;top:20px;width:20px"></button>'
+        + '<button id="second" class="grow" aria-label="Second" style="left:40px;top:20px;width:20px"></button>'
+        + '<button id="apart" class="grow" aria-label="Apart" style="left:100px;top:20px"></button>'
+    )
+    report = targets.probe(page)
+    assert [(t["sel"], t["side"], t["by"], t["byName"]) for t in report["stolen"]] == [
+        ("button#first", "right", "button#second", "Second")
+    ]
+    assert report["covered"] == []
+
+
 def test_a_hidden_input_counts_its_label_and_inert_or_tiny_controls_are_skipped(page):
     page.set_content(
         STYLE
