@@ -13,4 +13,4 @@ To cut every visible body with a datum plane, right-click the plane in the view 
 
 ## Separate
 
-Separate, next to Split Body, turns each loose piece of a body into a body of its own. Select the bodies first, or pick one from the list it shows. Each piece keeps the colour, material and folder of the body it came from.
+Separate, next to Split Body, turns each loose piece of a body into a body of its own. Select the bodies first, or pick one from the list it shows. Each piece keeps the colour, material and element of the body it came from.

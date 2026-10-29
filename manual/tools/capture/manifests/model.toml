@@ -276,8 +276,8 @@ steps = [
   { wait = 300 },
   { press = "Escape" },
 ]
-show = "The Items card with a Hardware folder holding two bodies, one of them hidden."
-alt = "The Items card with a Hardware folder holding two bodies, one of them hidden"
+show = "The Items card with a Hardware element holding two bodies, one of them hidden."
+alt = "The Items card with a Hardware element holding two bodies, one of them hidden"
 uses = ["manual/docs/model/items.md"]
 
 [[shot]]

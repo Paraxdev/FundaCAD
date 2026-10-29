@@ -2,7 +2,7 @@
 
 The Items card lists what is in the document. Ctrl+Alt+S shows or hides it.
 
-![The Items card with a Hardware folder holding two bodies, one of them hidden](../img/items-list.png)
+![The Items card with a Hardware element holding two bodies, one of them hidden](../img/items-list.png)
 
 Origin, Bodies and Sketches are always there. Planes, Datums, Joints and Mechanisms appear once you have one. The list at the top shows only one kind: All items, Bodies, Planes and axes, or Sketches.
 
@@ -11,7 +11,7 @@ Origin, Bodies and Sketches are always there. Planes, Datums, Joints and Mechani
 - Click selects a row, Ctrl+click adds one, and Shift+click takes a run.
 - Click a plane under Origin to start a sketch on it.
 - Double-click renames a body or edits a sketch.
-- Right-click a body for Move, Material, Visibility, Rename and Delete.
+- Right-click a body for Move to, Material, Visibility, Rename and Delete.
 
 ## Hiding
 
