@@ -472,6 +472,10 @@ export class MoveTool {
     );
   }
 
+  get dragging(): boolean {
+    return !!this.grab;
+  }
+
   /** Told when `pending` turns on or off, for the unsaved mark and the close guard. */
   onHeldChange(fn: () => void): () => void {
     this.heldWatchers.add(fn);
