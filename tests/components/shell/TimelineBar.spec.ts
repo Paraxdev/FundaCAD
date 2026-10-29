@@ -392,6 +392,19 @@ describe("a chip's state in words", () => {
     expect(said(m, "jt")).toBe("step 4 of 6, warning: no faces moved");
   });
 
+  it("draws a corner glyph whose shape tells a failure from a warning, and none on a clean step", () => {
+    const m = mountBar({ failed: ["ex1"], notes: { jt: "no faces moved" } });
+    const flag = (id: string) =>
+      m
+        .chip(id)
+        .findAll(".t-flag > *")
+        .map((i) => i.attributes("name"));
+    expect(flag("ex1")).toEqual(["error"]);
+    expect(flag("jt")).toEqual(["warning"]);
+    expect(flag("sk")).toEqual([]);
+    expect(m.chip("ex1").get(".t-flag").attributes("aria-hidden")).toBe("true");
+  });
+
   it("reads the kind of a step that carries a name of its own", () => {
     const ext = (id: string, name?: string) => ({ id, type: "extrude", sketch: "s", distance: 1, name });
     const m = mountBar({ features: [ext("a", "Lid"), ext("b"), ext("c", "Extrude top")] });

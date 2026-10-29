@@ -800,6 +800,10 @@ function openMultiMenu(e: MouseEvent, ids: string[]) {
                 </span>
                 <span v-else class="t-name">{{ f.shown }}</span>
                 <span :id="`${stateIds}-${i}`" class="sr-only t-state">{{ chipStates[i] }}</span>
+                <!-- A shape as well as a colour, so a failure and a warning stay apart in greyscale. -->
+                <span v-if="errors.has(f.id) || notes.has(f.id)" class="t-flag" aria-hidden="true">
+                  <Icon :name="errors.has(f.id) ? 'error' : 'warning'" :size="11" />
+                </span>
                 <Icon
                   class="t-caret"
                   :name="selection.featureId === f.id && !several ? 'caretDown' : 'caretRight'"

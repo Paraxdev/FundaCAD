@@ -244,10 +244,64 @@
 .timeline-node.rolled {
   opacity: 0.38;
 }
-.timeline-node.suppressed,
+/* Faded less than a placeholder, so its strike keeps 3:1 on the light themes. */
+.timeline-node.suppressed {
+  opacity: 0.6;
+  filter: grayscale(1);
+}
 .timeline-node.placeholder {
   opacity: 0.5;
   filter: grayscale(1);
+}
+/* The state marks are shapes too, so a state still reads in greyscale and in Colour-Blind Safe:
+   a bar under a picked step, a corner glyph on a failed or warned one, a strike through a
+   suppressed one. tests/ui/themeContrast.test.ts holds each at 3:1 on every fill under it. */
+.timeline-node.selected::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 3px;
+  height: 2px;
+  border-radius: var(--r-pill);
+  background: var(--accent-hot);
+  pointer-events: none;
+}
+.timeline-node .t-flag {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  display: flex;
+  line-height: 0;
+  pointer-events: none;
+}
+/* The house hairline is too thin to read at 11px. */
+.timeline-node .t-flag .icon {
+  stroke-width: 2.4;
+}
+.timeline-node.error .t-flag {
+  color: var(--error);
+}
+/* Amber alone falls under 3:1 on Solarized Light; a share of the text colour darkens it on a light theme and lifts
+   it on a dark one. */
+.timeline-node.warn .t-flag {
+  color: color-mix(in srgb, var(--warn) 60%, var(--text));
+}
+.timeline-node.suppressed .glyph {
+  position: relative;
+}
+.timeline-node.suppressed .glyph::after {
+  content: "";
+  position: absolute;
+  left: -2px;
+  right: -2px;
+  top: 50%;
+  height: 2px;
+  margin-top: -1px;
+  border-radius: var(--r-pill);
+  background: var(--text);
+  transform: rotate(-45deg);
+  pointer-events: none;
 }
 .timeline-node.drop-target {
   border-left: 2px solid var(--accent);
