@@ -72,8 +72,7 @@ pub fn peek_triangle_count(path: &Path, fmt: &str) -> Option<u64> {
         }
         "3mf" => {
             let mut z = zip::ZipArchive::new(std::fs::File::open(path).ok()?).ok()?;
-            let parts: Vec<String> =
-                z.file_names().filter(|n| n.to_lowercase().ends_with(".model")).map(String::from).collect();
+            let parts: Vec<String> = model_parts(&z).ok()?;
             if parts.is_empty() {
                 return None;
             }
@@ -199,13 +198,20 @@ fn stl_triangles(data: &[u8]) -> Result<Triangles, String> {
     Ok((pos, idx))
 }
 
+/// The `.model` part names of a 3MF zip.
+fn model_parts<R: std::io::Read + std::io::Seek>(z: &zip::ZipArchive<R>) -> zip::result::ZipResult<Vec<String>> {
+    z.file_names()
+        .filter(|n| n.as_ref().map_or(true, |n| n.to_lowercase().ends_with(".model")))
+        .map(|n| n.map(String::from))
+        .collect()
+}
+
 /// Every mesh object of every model part, root part first.
 fn threemf_meshes(path: &Path) -> Result<Vec<Triangles>, String> {
     use quick_xml::events::Event;
     let bad = |e: &dyn std::fmt::Display| format!("could not read the 3MF file: {e}");
     let mut z = zip::ZipArchive::new(std::fs::File::open(path).map_err(|e| bad(&e))?).map_err(|e| bad(&e))?;
-    let mut parts: Vec<String> =
-        z.file_names().filter(|n| n.to_lowercase().ends_with(".model")).map(String::from).collect();
+    let mut parts = model_parts(&z).map_err(|e| bad(&e))?;
     parts.sort_by_key(|n| n != "3D/3dmodel.model");
     let mut out = Vec::new();
     for name in parts {

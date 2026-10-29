@@ -58,7 +58,7 @@ fn roundtrip_preserves_bytes_exactly() {
     // decompressor just to learn the format version.
     {
         let mut z = zip::ZipArchive::new(File::open(&dest).unwrap()).unwrap();
-        assert_eq!(z.by_index(0).unwrap().name(), "manifest.json");
+        assert_eq!(z.by_index(0).unwrap().name().unwrap(), "manifest.json");
         assert_eq!(z.by_name("manifest.json").unwrap().compression(), zip::CompressionMethod::Stored);
         assert!(
             z.by_name(&format!("geom/{hb}.bbrep")).unwrap().compressed_size() < 500_000,
@@ -110,7 +110,7 @@ fn tampered_geometry_is_refused_and_nothing_is_published() {
         let opts = SimpleFileOptions::default();
         for i in 0..zin.len() {
             let mut e = zin.by_index(i).unwrap();
-            let name = e.name().to_string();
+            let name = e.name().unwrap().to_string();
             let mut payload = Vec::new();
             e.read_to_end(&mut payload).unwrap();
             if name.starts_with("geom/") {

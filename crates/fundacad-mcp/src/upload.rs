@@ -446,7 +446,8 @@ fn unzip_one(src_path: &Path, dst_path: &Path, fmt: &str, told_format: bool) -> 
         if e.is_dir() {
             continue;
         }
-        entries.push((i, e.name().to_string(), e.size()));
+        let Ok(name) = e.name() else { continue };
+        entries.push((i, name.into_owned(), e.size()));
     }
     if entries.is_empty() {
         return fail("the archive holds no files.");
