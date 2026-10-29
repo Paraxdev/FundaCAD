@@ -108,7 +108,8 @@ function onChange(e: Event) {
   draft.value = null;
   if (props.commit === "end" && v !== props.modelValue) emit("update:modelValue", v);
   emit("commit", v);
-  if (wasDrag) announce([props.label ?? tipText.value, readoutOf(v)].filter(Boolean).join(" "), "polite", { key: id });
+  if (wasDrag)
+    announce([props.label ?? name.value["aria-label"], readoutOf(v)].filter(Boolean).join(" "), "polite", { key: id });
 }
 
 // The keys are stepped here, not natively, so a key press is one update and one commit in every engine.
