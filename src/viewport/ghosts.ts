@@ -178,8 +178,9 @@ export class GhostLayer {
     let unsure = false;
     // One budget for the whole update, however many edges are picked.
     const budget = { left: TRIM_BUDGET, failed: false };
+    const sampling = sampleBudget();
     for (const edge of edges) {
-      const found = edgeFaceSamples(model, edge);
+      const found = edgeFaceSamples(model, edge, sampling);
       if (!found) continue; // can't tell the two faces apart here, skip THIS edge
       const geo = sweepBlendGhost(found.samples, size, kind, found.closed, budget);
       if (!geo) continue;
@@ -829,6 +830,16 @@ const OUTLINE_KEEP = 1e5;
 /** Triangle tests one edge may spend measuring how far its faces run; a face
  *  bigger than that is measured at every few samples only. */
 const REACH_BUDGET = 5e5;
+/** Triangle tests one ghost update spends on outlines and reaches over all its edges, however many are picked. An
+ *  edge past them goes bare, or measures its reach at fewer samples. */
+const UPDATE_OUTLINE_TESTS = 1e7;
+const UPDATE_REACH_TESTS = 5e6;
+
+export interface SampleBudget {
+  outline: number;
+  reach: number;
+}
+export const sampleBudget = (): SampleBudget => ({ outline: UPDATE_OUTLINE_TESTS, reach: UPDATE_REACH_TESTS });
 
 let outlineScratch = new Float64Array(4096);
 
@@ -1042,7 +1053,11 @@ function endSample(point: Pt3, t1: THREE.Vector3 | null, s: EdgeSample): EdgeSam
 
 /** Face 1 pinned to the same faceId throughout. Null when the body is gone, the edge has fewer than 2 points or too few
  *  samples find their faces; a single unresolved sample (a seam, a T-junction) is skipped. */
-function edgeFaceSamples(model: ModelView, edge: BlendGhostEdge): EdgeGhostSamples | null {
+function edgeFaceSamples(
+  model: ModelView,
+  edge: BlendGhostEdge,
+  budget: SampleBudget = sampleBudget(),
+): EdgeGhostSamples | null {
   const cached = edgeSampleCache.get(edge.points);
   if (cached) return cached;
   const body = model.bodies.find((b) => b.id === edge.body);
@@ -1116,27 +1131,31 @@ function edgeFaceSamples(model: ModelView, edge: BlendGhostEdge): EdgeGhostSampl
 
   const m = wedges.length;
   const straight = !closed && wedges.every((w) => w.tangent.dot(wedges[0]!.tangent) > 1 - 1e-12);
-  const lineCuts = straight
+  const scan = straight && grid.count < budget.outline;
+  const lineCuts = scan
     ? cutsAlongLine(
         grid,
         wedges[0]!.tangent,
         wedges.map((w) => w.pv),
-        OUTLINE_CUTS,
+        Math.min(OUTLINE_CUTS, budget.outline - grid.count),
       )
     : null;
+  if (scan) budget.outline -= grid.count + (lineCuts?.reduce((sum, l) => sum + l.length, 0) ?? 0);
   const reaches = ([0, 1] as const).map((slot) => {
     const face = (j: number) => wedges[j]!.faces[slot];
-    const size = (j: number) => faceTris(grid, face(j)).length;
     const out = new Array<number>(m).fill(NaN);
     for (let j = 0; j < m; j++) {
       const w = wedges[j]!;
-      if (lineCuts) {
-        out[j] = faceReach(grid, face(j), lineCuts[j]!, w.pv, wedges[0]!.tangent, slot ? w.d2 : w.d1, grid.tolerance);
+      const tris = lineCuts ? lineCuts[j]! : faceTris(grid, face(j));
+      const stride = lineCuts ? 1 : Math.ceil((m * tris.length) / Math.max(1, Math.min(REACH_BUDGET, budget.reach)));
+      if (stride > 1 && j % stride && j < m - 1 && face(j - 1) === face(j) && face(j + 1) === face(j)) continue;
+      if (tris.length > budget.reach) {
+        out[j] = Infinity;
         continue;
       }
-      const stride = Math.ceil((m * size(j)) / REACH_BUDGET);
-      if (stride > 1 && j % stride && j < m - 1 && face(j - 1) === face(j) && face(j + 1) === face(j)) continue;
-      out[j] = faceReach(grid, face(j), faceTris(grid, face(j)), w.pv, w.tangent, slot ? w.d2 : w.d1, grid.tolerance);
+      budget.reach -= tris.length;
+      const tangent = lineCuts ? wedges[0]!.tangent : w.tangent;
+      out[j] = faceReach(grid, face(j), tris, w.pv, tangent, slot ? w.d2 : w.d1, grid.tolerance);
     }
     // In between, the nearer end of the face measured on either side.
     for (let j = 0, last = -1; j < m; j++) {
@@ -1151,7 +1170,8 @@ function edgeFaceSamples(model: ModelView, edge: BlendGhostEdge): EdgeGhostSampl
     return out;
   });
 
-  let sectioned = !!lineCuts || (!straight && grid.count * m <= OUTLINE_TESTS);
+  let sectioned = !!lineCuts || (!straight && grid.count * m <= Math.min(OUTLINE_TESTS, budget.outline));
+  if (sectioned && !lineCuts) budget.outline -= grid.count * m;
   let cuts = 0;
   const samples: EdgeSample[] = wedges.map((w, j) => {
     const sample: EdgeSample = {

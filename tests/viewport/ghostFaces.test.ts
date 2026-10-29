@@ -7,7 +7,14 @@
 
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { bodyOutline, edgeFaceSamples, facesAtPoint, resampleEdge } from "../../src/viewport/ghosts";
+import {
+  GhostLayer,
+  bodyOutline,
+  edgeFaceSamples,
+  facesAtPoint,
+  resampleEdge,
+  sampleBudget,
+} from "../../src/viewport/ghosts";
 import {
   ARC_SEGMENTS,
   TRIM_BUDGET,
@@ -662,6 +669,61 @@ describe("blend ghost cost on a large body", () => {
     const bare = samples.map(({ outline: _, ...s }) => s);
     const starved = sweepBlendGhost(samples, 2, "fillet", false, { left: 50, failed: false });
     expect(starved).toEqual(sweepBlendGhost(bare, 2, "fillet"));
+  });
+
+  it("shares one sampling budget over an update's edges, so a big pick goes bare past it", () => {
+    const model = modelOf(buildDShaft(R, a, H, 1500));
+    const one = sampleBudget();
+    expect(edgeFaceSamples(model, edge(), one)!.samples.every((s) => s.outline)).toBe(true);
+    const fresh = sampleBudget();
+    const left = { outline: (fresh.outline - one.outline) * 2.5, reach: (fresh.reach - one.reach) * 2.5 };
+    const picks = Array.from({ length: 6 }, () => edgeFaceSamples(model, edge(), left)!);
+    expect(picks.map((p) => p.samples.some((s) => s.outline))).toEqual([true, true, false, false, false, false]);
+    expect(left.outline).toBeGreaterThanOrEqual(0);
+    expect(left.reach).toBeGreaterThanOrEqual(0);
+  });
+
+  it("measures no outline and no reach once the update's budget is spent", () => {
+    const model = modelOf(buildDShaft(R, a, H, 1500));
+    const funded = edgeFaceSamples(model, edge())!.samples;
+    expect(funded.some((s) => Number.isFinite(s.reach1!) || Number.isFinite(s.reach2!))).toBe(true);
+    const spent = { outline: 0, reach: 0 };
+    const { samples } = edgeFaceSamples(model, edge(), spent)!;
+    expect(samples.some((s) => s.outline)).toBe(false);
+    expect(samples.every((s) => s.reach1 === Infinity && s.reach2 === Infinity)).toBe(true);
+    expect(spent).toEqual({ outline: 0, reach: 0 });
+  });
+
+  it("measures a face's reach at fewer samples as the budget runs low, still at both ends", () => {
+    const model = modelOf(buildCylinder(48, 10, 10));
+    const rim = () => ({ body: "cyl", points: rimPolyline(90, 10, 10, 0.013) });
+    const full = sampleBudget();
+    edgeFaceSamples(model, rim(), full);
+    const wall = 2 * 48;
+    const left = { outline: 0, reach: 4 * wall };
+    expect(sampleBudget().reach - full.reach).toBeGreaterThan(left.reach);
+    const { samples } = edgeFaceSamples(model, rim(), left)!;
+    expect(samples.some((s) => s.outline)).toBe(false);
+    expect(left).toEqual({ outline: 0, reach: expect.any(Number) });
+    expect(left.reach).toBeGreaterThanOrEqual(0);
+    expect(Number.isFinite(samples[0]!.reach1!)).toBe(true);
+    expect(Number.isFinite(samples.at(-1)!.reach1!)).toBe(true);
+  });
+
+  it("spends one budget over every edge of a ghost update, not one per edge", () => {
+    const model = modelOf(buildDShaft(R, a, H, 6000));
+    const ghosts = new GhostLayer({
+      model: () => model,
+      addToScene: () => {},
+      removeFromScene: () => {},
+      requestRender: () => {},
+      faceNormalWorld: () => new THREE.Vector3(0, 0, 1),
+    });
+    const edges = Array.from({ length: 80 }, edge);
+    ghosts.setBlendGhost(edges, 2, "fillet");
+    // The samples are cached per edge, so these read back what the update made.
+    expect(edgeFaceSamples(model, edges[0]!)!.samples.some((s) => s.outline)).toBe(true);
+    expect(edgeFaceSamples(model, edges[79]!)!.samples.some((s) => s.outline)).toBe(false);
   });
 });
 
