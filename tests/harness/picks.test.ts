@@ -292,7 +292,7 @@ describe("planes and free points", () => {
     const { h } = rig();
     const tiles = new OriginTiles(new THREE.Scene());
     tiles.setShown(true);
-    tiles.group.scale.setScalar(4 / 17);
+    tiles.group.scale.setScalar(5 / 16);
     // Tile centres (10, 10, 0), (10, 0, 10) and (0, 10, 10), through the rig's projection.
     const centres = { XY: [230, 460], XZ: [200, 400], YZ: [130, 360] } as const;
     const vp = h.viewport as unknown as Record<string, unknown>;

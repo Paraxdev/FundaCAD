@@ -170,8 +170,8 @@ export class OriginTriad {
   }
 
   /** `pixelWorldSize` is the world size of one screen pixel AT THE ORIGIN. */
-  update(pixelWorldSize: number | null, modelDiagonal: number | null) {
-    this.group.scale.setScalar(glyphWorldScale(TRIAD_LENGTH_PX, modelDiagonal, pixelWorldSize, MIN_TRIAD_SCALE));
+  update(pixelWorldSize: number | null, modelDiagonal: number | null, minScale = MIN_TRIAD_SCALE) {
+    this.group.scale.setScalar(glyphWorldScale(TRIAD_LENGTH_PX, modelDiagonal, pixelWorldSize, minScale));
   }
 
   dispose() {

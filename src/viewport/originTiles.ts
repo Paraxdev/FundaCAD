@@ -4,7 +4,7 @@
 
 import * as THREE from "three";
 import { glyphScale, glyphWorldScale } from "./gizmoScale";
-import { axisColor, type AxisKey } from "./originTriad";
+import { MIN_TRIAD_SCALE, TRIAD_LENGTH_PX, axisColor, type AxisKey } from "./originTriad";
 import { SQUIRCLE_EXPONENT, roundedSquareCorners, type Vec2 } from "./cornerProfile";
 import { themeColor } from "./themeColors";
 import { pickPlaneOnScreen, placeLabels, type P2, type PlaneHit, type PlaneOnScreen } from "./planeHit";
@@ -34,15 +34,20 @@ export interface TilePose {
   normal: Vec3;
 }
 
-// The app's own squircle tiles scaled up from a 40 px rail tile with its 17 px corner and 6 px gap.
-export const TILE_SIZE_PX = 85;
+// As long as an axis arrow, rounded like a 40 px rail tile with its 17 px corner.
+export const TILE_SIZE_PX = TRIAD_LENGTH_PX;
 export const TILE_GAP_PX = 0;
 /** Only the corner away from the origin is rounded, the other three sit on the arrows. */
-export const TILE_CORNER_RADIUS_PX = 36;
+export const TILE_CORNER_RADIUS_PX = 27;
 export const TILE_OCTANT: Octant = { x: 1, y: 1, z: 1 };
 export const TILE_EXTENT_PX = TILE_GAP_PX + TILE_SIZE_PX;
-/** The tiles are click targets, so they stop shrinking at 41 px, about a rail tile. */
-export const MIN_TILE_SCALE = 0.48;
+/** The tiles are click targets, so they stop shrinking at about 41 px, a rail tile. */
+export const MIN_TILE_SCALE = 0.65;
+
+/** While the tiles show, the arrows share their floor, so a tile edge stays as long as an arrow at every zoom. */
+export function triadMinScale(tilesShown: boolean): number {
+  return tilesShown ? MIN_TILE_SCALE : MIN_TRIAD_SCALE;
+}
 export const CORNER_SEGMENTS = 24;
 export const RIM_PX = 1.5;
 export const RIM_INK_MIX = 0.4;

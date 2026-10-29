@@ -28,6 +28,7 @@ import { SectionCaps } from "./sectionCaps";
 import { pickFacePlaneAt } from "../features/facePlanePick";
 import { FpsMeter } from "./fpsMeter";
 import { planeHitMinPx } from "./planeHit";
+import { triadMinScale } from "./originTiles";
 import { StutterWatch } from "./stutterWatch";
 import { MotionQuality, motionPixelScale, pixelBoundView, type DrawnView } from "./motionQuality";
 import { EdgeBlend, EdgeMotionRule, type EdgeLoad, type EdgeMode } from "./edgeMotion";
@@ -4524,7 +4525,11 @@ export class Viewport {
         }
         // Origin arrows keep a constant screen size, measured at the origin where they are drawn.
         if (this.overlayDrawn("origin"))
-          this.scene.triad.update(this.pixelWorldSize(WORLD_ORIGIN), this.modelDiagonal());
+          this.scene.triad.update(
+            this.pixelWorldSize(WORLD_ORIGIN),
+            this.modelDiagonal(),
+            triadMinScale(this.planesOnTop),
+          );
         if (this.planesOnTop) this.syncOriginTiles();
         // Focus on whatever the view is centred on, every frame since a wheel changes the orbit distance.
         this.scene.post.focusDistance = this.rig.active.position.distanceTo(t);

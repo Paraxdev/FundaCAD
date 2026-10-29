@@ -14,12 +14,15 @@ import {
   LABEL_HOT_SCALE,
   labelInk,
   mixHex,
+  tileOutline,
   tilePose,
   tileStates,
+  triadMinScale,
   type TilePose,
   type TileState,
 } from "../../src/viewport/originTiles";
-import { AXIS_COLOR } from "../../src/viewport/originTriad";
+import { AXIS_COLOR, MIN_TRIAD_SCALE, OriginTriad, TRIAD_LENGTH_PX } from "../../src/viewport/originTriad";
+import { GLYPH_MODEL_FRACTION } from "../../src/viewport/gizmoScale";
 import { SQUIRCLE_EXPONENT, roundedSquareCorners } from "../../src/viewport/cornerProfile";
 import { markOverlay, overlayLayer } from "../../src/viewport/overlayKinds";
 import type { Plane3 } from "../../src/types";
@@ -82,25 +85,25 @@ afterEach(() => {
 
 describe("TILE_SHAPE", () => {
   // A rail tile is 40 px with a 17 px squircle corner (--rail-tile, --float-tile-radius).
-  it("is clearly bigger than a rail tile and rounds like one, with the app's squircle", () => {
+  it("is as long as an axis arrow and rounds like a rail tile, with the app's squircle", () => {
     expect(TILE_SHAPE).toEqual({
-      sizePx: 85,
+      sizePx: TRIAD_LENGTH_PX,
       gapPx: 0,
-      radiusPx: 36,
+      radiusPx: 27,
       exponent: SQUIRCLE_EXPONENT,
       octant: { x: 1, y: 1, z: 1 },
     });
     expect(TILE_SHAPE.radiusPx / TILE_SHAPE.sizePx).toBeCloseTo(17 / 40, 2);
-    expect(TILE_SHAPE.sizePx * MIN_TILE_SCALE).toBeGreaterThanOrEqual(40);
+    expect(TILE_SHAPE.sizePx * MIN_TILE_SCALE).toBeGreaterThanOrEqual(41);
   });
 });
 
 describe("tilePose", () => {
   it("puts each default tile in the positive quadrant of its two axes, its corner on the origin", () => {
     expect(PLANES.map((k) => tilePose(k, TILE_SHAPE))).toEqual([
-      { centre: [42.5, 42.5, 0], u: [1, 0, 0], v: [0, 1, 0], normal: [0, 0, 1] },
-      { centre: [42.5, 0, 42.5], u: [1, 0, 0], v: [0, 0, 1], normal: [0, -1, 0] },
-      { centre: [0, 42.5, 42.5], u: [0, 1, 0], v: [0, 0, 1], normal: [1, 0, 0] },
+      { centre: [32, 32, 0], u: [1, 0, 0], v: [0, 1, 0], normal: [0, 0, 1] },
+      { centre: [32, 0, 32], u: [1, 0, 0], v: [0, 0, 1], normal: [0, -1, 0] },
+      { centre: [0, 32, 32], u: [0, 1, 0], v: [0, 0, 1], normal: [1, 0, 0] },
     ]);
   });
 
@@ -504,10 +507,45 @@ describe("OriginTiles", () => {
         .toArray()
         .map((n) => Math.round(n * 1e9) / 1e9 + 0);
     expect(PLANES.map(corner)).toEqual([
-      [62.5 * 0.37, 52.5 * 0.37, 0].map((n) => Math.round(n * 1e9) / 1e9),
-      [62.5 * 0.37, 0, 52.5 * 0.37].map((n) => Math.round(n * 1e9) / 1e9),
-      [0, 62.5 * 0.37, 52.5 * 0.37].map((n) => Math.round(n * 1e9) / 1e9),
+      [52 * 0.37, 42 * 0.37, 0].map((n) => Math.round(n * 1e9) / 1e9),
+      [52 * 0.37, 0, 42 * 0.37].map((n) => Math.round(n * 1e9) / 1e9),
+      [0, 52 * 0.37, 42 * 0.37].map((n) => Math.round(n * 1e9) / 1e9),
     ]);
     t.dispose();
+  });
+});
+
+describe("tiles and arrows", () => {
+  it("makes each tile edge exactly as long as an axis arrow at every zoom while the tiles show", () => {
+    const scene = new THREE.Scene();
+    const tiles = new OriginTiles(scene);
+    const triad = new OriginTriad(scene);
+    tiles.setShown(true);
+    for (const pws of [0.004, 0.37, 1.9, 60]) {
+      for (const k of [null, 1.4, 1, 0.83, 0.6, 0.45, 0.3, 0.1]) {
+        const diag = k == null ? null : (k * TRIAD_LENGTH_PX * pws) / GLYPH_MODEL_FRACTION;
+        tiles.update(pws, diag, homeCamera());
+        triad.update(pws, diag, triadMinScale(true));
+        scene.updateMatrixWorld(true);
+        const arm = TRIAD_LENGTH_PX * triad.group.scale.x;
+        expect(arm / pws).toBeGreaterThanOrEqual(41);
+        for (const plane of PLANES) {
+          const pose = tilePose(plane, TILE_SHAPE);
+          const pts = tileOutline(plane, TILE_SHAPE).map(([x, y]) =>
+            new THREE.Vector3(x, y, 0).applyMatrix4(tiles.planes[plane].matrixWorld),
+          );
+          const reach = (axis: readonly number[]) => Math.max(...pts.map((p) => p.dot(new THREE.Vector3(...axis))));
+          expect(reach(pose.u) / arm).toBeCloseTo(1, 9);
+          expect(reach(pose.v) / arm).toBeCloseTo(1, 9);
+        }
+      }
+    }
+    tiles.dispose();
+    triad.dispose();
+  });
+
+  it("lets the arrows shrink to their own floor while the tiles are hidden", () => {
+    expect(triadMinScale(false)).toBe(MIN_TRIAD_SCALE);
+    expect(triadMinScale(true)).toBe(MIN_TILE_SCALE);
   });
 });

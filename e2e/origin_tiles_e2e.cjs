@@ -13,9 +13,9 @@ const os = require("os");
 const path = require("path");
 
 // TILE_SIZE_PX, TILE_GAP_PX + TILE_SIZE_PX and the MIN_TILE_SCALE floor in src/viewport/originTiles.ts.
-const SIZE = 85;
-const EXTENT = 97;
-const FLOOR = 0.48 * SIZE;
+const SIZE = 64;
+const EXTENT = 64;
+const FLOOR = 0.65 * SIZE;
 
 const TOKEN = process.env.SC_TOKEN || "";
 const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
@@ -501,7 +501,7 @@ const PLANES = ["XY", "XZ", "YZ"];
         window.viewport.scene.originTiles.reshape(s);
         window.viewport.requestRender();
       }, shape);
-    const DEFAULT = { sizePx: SIZE, gapPx: EXTENT - SIZE, radiusPx: 36, exponent: 4, octant: { x: 1, y: -1, z: 1 } };
+    const DEFAULT = { sizePx: SIZE, gapPx: EXTENT - SIZE, radiusPx: 27, exponent: 4, octant: { x: 1, y: 1, z: 1 } };
     const BIG = { sizePx: 240, radiusPx: 102, gapPx: 36 };
     for (const theme of ["noir", "solarized"]) {
       await page.evaluate((th) => {
