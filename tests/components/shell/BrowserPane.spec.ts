@@ -374,7 +374,7 @@ describe("BrowserPane", () => {
     expect(fake.store.isBodyVisible("body2")).toBe(false);
     await nextTick();
     expect(eyeName(folderNamed(w, "Rig"))).toBe("hidden");
-    expect(folderNamed(w, "Rig")!.find(".tree-eye").attributes("aria-pressed")).toBe("false");
+    expect(folderNamed(w, "Rig")!.find(".tree-eye").attributes("aria-label")).toBe("Show Rig");
   });
 
   it("takes a body dragged onto an element head into it, and back out on the Bodies head", async () => {
@@ -536,12 +536,15 @@ describe("BrowserPane", () => {
     ]);
     fake.store.buildState.errorFeatureId = "s1";
     const w = render(fake);
-    expect(rowNamed(w, "Base").find(".sr-only").text()).toBe(", failed");
-    expect(rowNamed(w, "Lid").find(".sr-only").exists()).toBe(false);
+    expect(rowNamed(w, "Base").find(".tree-state").text()).toBe("failed");
+    expect(rowNamed(w, "Lid").find(".tree-state").exists()).toBe(false);
     const eye = () => rowNamed(w, "Bracket").find(".tree-eye");
-    expect(eye().attributes("aria-pressed")).toBe("true");
+    expect(eye().attributes("aria-label")).toBe("Hide Bracket");
     await clickEye(rowNamed(w, "Bracket"));
-    expect(eye().attributes("aria-pressed")).toBe("false");
+    expect([eye().attributes("aria-label"), rowNamed(w, "Bracket").find(".tree-state").text()]).toEqual([
+      "Show Bracket",
+      "hidden",
+    ]);
   });
 
   it("starts assembly nodes COLLAPSED and expands them on click", async () => {

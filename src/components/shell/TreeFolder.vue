@@ -2,12 +2,12 @@
 // The label comes from untrusted STEP names, so it is interpolated, never markup, and esc() would double-escape.
 // Rename, menu and drop are opt-in by prop, without them the head is a read-only heading.
 
-import { computed, nextTick, ref, useTemplateRef, watch } from "vue";
+import { computed, inject, nextTick, ref, useId, useTemplateRef, watch } from "vue";
 import Icon from "./Icon.vue";
 import IconButton from "../ui/IconButton.vue";
 import TreeItem from "../ui/TreeItem.vue";
-import type { TreeItemActions } from "../ui/treeContext";
-import { keyClick, useKeyRename } from "./treeRowKeys";
+import { TREE, type TreeItemActions } from "../ui/treeContext";
+import { EYE_HELP, eyeName, keyClick, stateWords, useKeyRename } from "./treeRowKeys";
 import { fmtKeys } from "../../input/platform";
 import InlineLabel from "./InlineLabel.vue";
 import { folderIndent } from "../../ui/browserTree";
@@ -55,6 +55,13 @@ const emit = defineEmits<{ toggle: [] }>();
 const browser = useBrowserStore();
 const labelEl = useTemplateRef<InstanceType<typeof InlineLabel>>("labelEl");
 const item = useTemplateRef<InstanceType<typeof TreeItem>>("item");
+const stateId = useId();
+const helpId = useId();
+const inTree = inject(TREE, null) !== null;
+const hasEye = computed(() => !!(props.toggleVis || props.eyeDown));
+const state = computed(() =>
+  stateWords([props.count > 0 && `${props.count} items`, hasEye.value && props.visible === false && "hidden"]),
+);
 
 // Only nested heads carry an inline padding, so a top-level folder keeps
 // whatever the stylesheet gives it.
@@ -98,6 +105,7 @@ watch(
 
 function menuItems(fromKeys = false): CtxItem[] {
   const items: CtxItem[] = [...(props.extraMenu ?? [])];
+  if (props.toggleVis) items.push({ label: props.visible === false ? "Show" : "Hide", onClick: props.toggleVis });
   if (props.rename) items.push({ label: "Rename", onClick: () => keyRename.start(fromKeys) });
   if (props.remove) items.push({ label: "Delete", danger: true, onClick: props.remove });
   return items;
@@ -183,6 +191,7 @@ function onDrop(e: DragEvent) {
     :label="label"
     :selected="!!selected"
     :selectable="!!activate"
+    :describedby="state ? stateId : undefined"
     :actions="keys"
     :data-id="id"
     :class="{ 'drop-into': inside > 0, selected: selected }"
@@ -207,14 +216,16 @@ function onDrop(e: DragEvent) {
       size="sm"
       :icon="collapsed ? 'caretRight' : 'caretDown'"
       :icon-size="11"
-      :tip="collapsed ? 'Expand' : 'Collapse'"
+      :tip="`${collapsed ? 'Expand' : 'Collapse'} ${label}`"
       :aria-expanded="!collapsed"
+      :tabindex="inTree ? -1 : undefined"
       @click="onCaretClick"
     />
     <span class="feature-icon"><Icon :name="icon" :size="14" /></span>
     <InlineLabel ref="labelEl" :text="label" :rename="rename" />
     <span style="flex: 1"></span>
     <span class="tree-count">{{ count || "" }}</span>
+    <span v-if="state" :id="stateId" class="sr-only tree-state">{{ state }}</span>
     <!-- .stop: the eye sits inside the head, and a bare click would also
          collapse the section it is trying to hide. -->
     <IconButton
@@ -224,11 +235,14 @@ function onDrop(e: DragEvent) {
       size="sm"
       :icon="visible === false ? 'hidden' : 'visible'"
       :icon-size="13"
-      :tip="fmtKeys('Show/hide · drag across eyes to show or hide many · Alt+click to show only this')"
+      :tip="fmtKeys(EYE_HELP)"
+      :aria-label="eyeName(visible, label)"
+      :aria-describedby="helpId"
+      :tabindex="inTree ? -1 : undefined"
       :data-visible="visible !== false"
-      :aria-pressed="visible !== false"
       @pointerdown.stop="onEyeDown"
       @click.stop="onEyeClick"
     />
+    <span v-if="hasEye" :id="helpId" class="sr-only">{{ fmtKeys(EYE_HELP) }}</span>
   </TreeItem>
 </template>

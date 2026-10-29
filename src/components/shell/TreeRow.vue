@@ -1,12 +1,12 @@
 <script setup lang="ts">
 // Labels come from STEP names and user renames, InlineLabel interpolates them, and esc() would double-escape.
 
-import { computed, nextTick, ref, useId, useTemplateRef, watch } from "vue";
+import { computed, inject, nextTick, ref, useId, useTemplateRef, watch } from "vue";
 import Icon from "./Icon.vue";
 import IconButton from "../ui/IconButton.vue";
 import TreeItem from "../ui/TreeItem.vue";
-import type { TreeItemActions } from "../ui/treeContext";
-import { keyClick, useKeyRename } from "./treeRowKeys";
+import { TREE, type TreeItemActions } from "../ui/treeContext";
+import { EYE_HELP, eyeName, keyClick, stateWords, useKeyRename } from "./treeRowKeys";
 import { fmtKeys } from "../../input/platform";
 import InlineLabel from "./InlineLabel.vue";
 import { rowIndent } from "../../ui/browserTree";
@@ -26,6 +26,7 @@ const props = defineProps<{
   dim?: boolean | undefined;
   selected?: boolean | undefined;
   error?: boolean | undefined;
+  suppressed?: boolean | undefined;
   /** Eye state. Omit both `toggleVis` and `eyeDown` to render no eye at all. */
   visible?: boolean | undefined;
   title?: string | undefined;
@@ -56,7 +57,17 @@ const props = defineProps<{
 const browser = useBrowserStore();
 const labelEl = useTemplateRef<InstanceType<typeof InlineLabel>>("labelEl");
 const item = useTemplateRef<InstanceType<typeof TreeItem>>("item");
-const failId = useId();
+const stateId = useId();
+const helpId = useId();
+const inTree = inject(TREE, null) !== null;
+const hasEye = computed(() => !!(props.toggleVis || props.eyeDown));
+const state = computed(() =>
+  stateWords([
+    props.error && "failed",
+    hasEye.value && props.visible === false && "hidden",
+    props.suppressed && "suppressed",
+  ]),
+);
 
 const style = computed(() => ({
   ...(props.depth > 1 ? { paddingLeft: `${rowIndent(props.depth)}px` } : {}),
@@ -105,6 +116,7 @@ function onDblClick(e: MouseEvent) {
 
 function menuItems(fromKeys = false): CtxItem[] {
   const items: CtxItem[] = [...(props.extraMenu ?? [])];
+  if (props.toggleVis) items.push({ label: props.visible === false ? "Show" : "Hide", onClick: props.toggleVis });
   if (props.edit) items.push({ label: "Edit", onClick: props.edit });
   if (props.rename) items.push({ label: "Rename", onClick: () => keyRename.start(fromKeys) });
   if (props.remove) items.push({ label: "Delete", onClick: props.remove });
@@ -197,7 +209,7 @@ function onDrop(e: DragEvent) {
     :label="label"
     :selected="!!selected"
     :selectable="!!activate"
-    :describedby="error ? failId : undefined"
+    :describedby="state ? stateId : undefined"
     :actions="keys"
     :data-id="id"
     :class="{ selected: selected, error: error, 'drop-into': inside > 0 }"
@@ -220,7 +232,7 @@ function onDrop(e: DragEvent) {
     <span class="feature-icon"><Icon :name="icon" :size="14" /></span>
     <span v-if="swatch" class="tree-swatch" :style="{ ...swatchStyle, background: swatch }"></span>
     <InlineLabel ref="labelEl" :text="label" :rename="rename" :label-style="labelStyle" />
-    <span v-if="error" :id="failId" class="sr-only">, failed</span>
+    <span v-if="state" :id="stateId" class="sr-only tree-state">{{ state }}</span>
     <span style="flex: 1"></span>
     <!-- .stop so the eye neither selects nor edits the row it sits in -->
     <IconButton
@@ -230,12 +242,15 @@ function onDrop(e: DragEvent) {
       size="sm"
       :icon="visible === false ? 'hidden' : 'visible'"
       :icon-size="13"
-      :tip="fmtKeys('Show/hide · drag across eyes to show or hide many · Alt+click to show only this')"
+      :tip="fmtKeys(EYE_HELP)"
+      :aria-label="eyeName(visible, label)"
+      :aria-describedby="helpId"
+      :tabindex="inTree ? -1 : undefined"
       :data-visible="visible !== false"
-      :aria-pressed="visible !== false"
       @pointerdown.stop="onEyeDown"
       @click.stop="onEyeClick"
       @dblclick.stop
     />
+    <span v-if="hasEye" :id="helpId" class="sr-only">{{ fmtKeys(EYE_HELP) }}</span>
   </TreeItem>
 </template>

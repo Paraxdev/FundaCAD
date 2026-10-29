@@ -36,3 +36,14 @@ export function useKeyRename(start: () => void, row: () => HTMLElement | null | 
     },
   };
 }
+
+export const EYE_HELP = "Show/hide · drag across eyes to show or hide many · Alt+click to show only this";
+
+/** The eye says what a press does to which row, so a list of them reads as rows, not as one repeated tip. */
+export function eyeName(visible: boolean | undefined, label: string): string {
+  return `${visible === false ? "Show" : "Hide"} ${label}`;
+}
+
+export function stateWords(words: readonly (string | false | null | undefined)[]): string {
+  return words.filter(Boolean).join(", ");
+}

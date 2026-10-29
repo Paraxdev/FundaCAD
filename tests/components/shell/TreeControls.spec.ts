@@ -70,8 +70,16 @@ describe("tree row eye", () => {
     expect(eye.classes()).toContain("icon-btn");
     expect(eye.attributes("data-visible")).toBe("false");
     expect(eye.attributes("title")).toContain("Show/hide");
-    expect(eye.attributes("aria-label")).toContain("Show/hide");
     expect(eye.find("svg").attributes("data-icon")).toBe("hidden");
+  });
+
+  it("is named by its action and row, with the long help as its description", async () => {
+    const w = row({ toggleVis: vi.fn(), visible: false });
+    const eye = () => w.get(".tree-eye");
+    expect([eye().attributes("aria-label"), eye().attributes("aria-pressed")]).toEqual(["Show Plate", undefined]);
+    expect(document.getElementById(eye().attributes("aria-describedby")!)?.textContent).toContain("drag across eyes");
+    await w.setProps({ visible: true });
+    expect(eye().attributes("aria-label")).toBe("Hide Plate");
   });
 
   it("toggles on a keyboard click and neither selects nor edits the row", async () => {
@@ -107,12 +115,12 @@ describe("tree folder caret and eye", () => {
     const w = folder({ activate: vi.fn() });
     const caret = w.get(".tree-caret");
     expect(caret.element.tagName).toBe("BUTTON");
-    expect(caret.attributes("aria-label")).toBe("Expand");
+    expect(caret.attributes("aria-label")).toBe("Expand Robot");
     expect(caret.attributes("aria-expanded")).toBe("false");
     await caret.trigger("click");
     expect(w.emitted("toggle")).toHaveLength(1);
     await w.setProps({ collapsed: false });
-    expect(w.get(".tree-caret").attributes("aria-label")).toBe("Collapse");
+    expect(w.get(".tree-caret").attributes("aria-label")).toBe("Collapse Robot");
   });
 
   it("a pointer click on the caret drops its focus, so Enter or Space cannot fold again, a keyboard click keeps it", async () => {
@@ -146,6 +154,14 @@ describe("tree folder caret and eye", () => {
     await eye.trigger("click");
     expect(toggleVis).toHaveBeenCalledTimes(1);
     expect(w.emitted("toggle")).toBeUndefined();
+  });
+
+  it("the eye is named by its action and folder", () => {
+    const w = folder({ toggleVis: vi.fn(), visible: false });
+    expect([w.get(".tree-eye").attributes("aria-label"), w.get(".tree-eye").attributes("aria-pressed")]).toEqual([
+      "Show Robot",
+      undefined,
+    ]);
   });
 });
 
@@ -208,10 +224,45 @@ describe("tree rows and heads as tree items", () => {
     expect([r.attributes("data-id"), r.attributes("title"), r.attributes("tabindex")]).toEqual(["b1", "Body", "0"]);
   });
 
-  it("a failed row says so in its description", async () => {
-    const w = await inTree(TreeRow, { ...plate, error: true });
-    const by = w.get(".feature-row").attributes("aria-describedby")!;
-    expect(document.getElementById(by)?.textContent).toContain("failed");
+  const description = (el: { attributes: (k: string) => string | undefined }) => {
+    const by = el.attributes("aria-describedby");
+    return by ? document.getElementById(by)?.textContent?.trim() : undefined;
+  };
+
+  it("a row says it failed, is hidden or suppressed in its description", async () => {
+    const w = await inTree(TreeRow, { ...plate, error: true, suppressed: true, visible: false, toggleVis: vi.fn() });
+    expect(description(w.get(".feature-row"))).toBe("failed, hidden, suppressed");
+    const plain = await inTree(TreeRow, { ...plate, visible: false });
+    expect(description(plain.get(".feature-row"))).toBeUndefined();
+  });
+
+  it("a head says it is hidden and how many it holds", async () => {
+    const w = await inTree(TreeFolder, { ...bodies, collapsed: true, visible: false, toggleVis: vi.fn() });
+    expect(description(w.get(".tree-folder"))).toBe("2 items, hidden");
+  });
+
+  it("the eye and caret leave the Tab order to the treeitem inside a Tree, and keep it outside one", async () => {
+    const w = await inTree(TreeFolder, { ...bodies, collapsed: true, toggleVis: vi.fn() });
+    expect([w.get(".tree-caret").attributes("tabindex"), w.get(".tree-eye").attributes("tabindex")]).toEqual([
+      "-1",
+      "-1",
+    ]);
+    const r = await inTree(TreeRow, { ...plate, toggleVis: vi.fn() });
+    expect(r.get(".tree-eye").attributes("tabindex")).toBe("-1");
+    expect(folder({ toggleVis: vi.fn() }).get(".tree-eye").attributes("tabindex")).toBeUndefined();
+  });
+
+  it("the menu of a row or head with an eye hides or shows it", async () => {
+    const toggleVis = vi.fn();
+    const menu = useContextMenuStore();
+    const w = await inTree(TreeRow, { ...plate, visible: true, toggleVis, rename: vi.fn() });
+    press(w.get(".feature-row").element, "F10", { shiftKey: true });
+    expect(menu.items.map((i) => i.label)).toEqual(["Hide", "Rename"]);
+    menu.items[0]!.onClick?.();
+    expect(toggleVis).toHaveBeenCalledTimes(1);
+    const f = await inTree(TreeFolder, { ...bodies, collapsed: true, visible: false, toggleVis });
+    press(f.get(".tree-folder").element, "ContextMenu");
+    expect(menu.items.map((i) => i.label)).toEqual(["Show"]);
   });
 
   it("Space is the platform toggle click, Shift+Space a run, and Enter a plain click without an edit", async () => {
