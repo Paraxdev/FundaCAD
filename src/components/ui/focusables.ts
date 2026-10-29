@@ -90,12 +90,15 @@ export function mainLandmark(): HTMLElement | null {
 /** Remembers what holds focus now, for an overlay that gives it back on close. The returned `restore` refocuses it
  *  only while focus is still inside `within` or lost to the body, never when the user moved on to something else.
  *  When the opener is gone it tries `fallback`, then the last tracked control outside `within`, then the main
- *  landmark. With no opener at all (focus sat on the body) only `fallback` is tried. */
-export function focusReturn(fallback?: () => HTMLElement | null | undefined): {
+ *  landmark. With no opener at all (focus sat on the body) only `fallback` is tried. `from` names the opener
+ *  when it is known better than by what holds focus, as WebKit does not focus a clicked button. */
+export function focusReturn(
+  fallback?: () => HTMLElement | null | undefined,
+  from: Element | null = document.activeElement,
+): {
   restore: (within: (node: Node) => boolean) => void;
 } {
-  const prev = document.activeElement;
-  const opener = prev instanceof HTMLElement && prev !== document.body ? prev : null;
+  const opener = from instanceof HTMLElement && from !== document.body ? from : null;
   return {
     restore(within) {
       const now = document.activeElement;

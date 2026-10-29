@@ -23,6 +23,7 @@ import ContextMenuHost from "../../../src/components/overlays/ContextMenuHost.vu
 import HomeScreen from "../../../src/components/home/HomeScreen.vue";
 import ModalHost from "../../../src/components/overlays/ModalHost.vue";
 import { MANUAL_URL } from "../../../src/ui/welcome";
+import { ago } from "../../../src/ui/timeAgo";
 
 enableAutoUnmount(afterEach);
 
@@ -737,6 +738,49 @@ describe("HomeScreen", () => {
       expect(home.visible).toBe(true);
       key("Escape");
       expect(home.visible).toBe(false);
+    });
+
+    it("takes focus on its heading and gives it to the card's Versions button on close", async () => {
+      await drawerFor({ [P]: hist });
+      const heading = $(".home-drawer-title")!;
+      expect(heading.tagName).toBe("H2");
+      expect(document.activeElement).toBe(heading);
+      $(".home-drawer-close")!.click();
+      await nextTick();
+      expect($(".home-drawer")).toBeNull();
+      expect(document.activeElement).toBe($(".home-card-versions"));
+    });
+
+    it("gives focus to the card even when the click left focus elsewhere, as WebKit does", async () => {
+      await drawerFor({ [P]: hist });
+      key("Escape");
+      await nextTick();
+      $(".home-search input")?.focus();
+      $(".home-card-versions")!.click();
+      await flushPromises();
+      expect(document.activeElement).toBe($(".home-drawer-title"));
+      $$(".home-version-copy")[0]!.focus();
+      key("Escape");
+      await nextTick();
+      expect(document.activeElement).toBe($(".home-card-versions"));
+    });
+
+    it("leaves focus alone when it moved out of the drawer before it closed", async () => {
+      await drawerFor({ [P]: hist });
+      const other = $(".home-report")!;
+      other.focus();
+      key("Escape");
+      await nextTick();
+      expect($(".home-drawer")).toBeNull();
+      expect(document.activeElement).toBe(other);
+    });
+
+    it("names each version action after its version and time", async () => {
+      await drawerFor({ [P]: hist });
+      const names = (sel: string) => $$(sel).map((b) => b.getAttribute("aria-label"));
+      expect(names(".home-version-restore")).toEqual([`Restore msg v3, ${ago(3)}`, `Restore msg v1, ${ago(1)}`]);
+      expect(names(".home-version-copy")).toEqual([`Open copy of msg v3, ${ago(3)}`, `Open copy of msg v1, ${ago(1)}`]);
+      expect(names(".home-branch-open")).toEqual(["Open the document on wide", "Open the document on main"]);
     });
 
     it("says when there is no history, the file is too old, or it cannot be read", async () => {

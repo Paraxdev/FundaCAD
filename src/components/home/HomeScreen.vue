@@ -226,6 +226,15 @@ function loadVersions(entry: HomeEntry) {
   };
 }
 
+// The card is found by its place in the grid when the drawer closes, the list may have been filtered meanwhile.
+function versionsButton(path: string) {
+  return () => {
+    const cells = root.value?.querySelectorAll(".home-grid:not(.home-examples) > .home-cell");
+    const cell = cells?.[entries.value.findIndex((e) => e.path === path)];
+    return cell?.querySelector<HTMLElement>(".home-card-versions") ?? null;
+  };
+}
+
 async function versionAction(act: Promise<boolean>): Promise<void> {
   if (await act) {
     drawer.value = null;
@@ -421,6 +430,7 @@ onUnmounted(() => {
         :key="drawer.path"
         :name="drawer.name"
         :load="loadVersions(drawer)"
+        :return-to="versionsButton(drawer.path)"
         @close="drawer = null"
         @restore="(id) => versionAction(cb.openVersion(drawer!.path, id, false))"
         @copy="(id) => versionAction(cb.openVersion(drawer!.path, id, true))"

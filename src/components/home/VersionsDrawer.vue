@@ -1,15 +1,21 @@
 <script setup lang="ts">
 import { fmtKeys } from "../../input/platform";
-import { computed, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import Button from "../ui/Button.vue";
 import Chip from "../ui/Chip.vue";
 import IconButton from "../ui/IconButton.vue";
 import ListRow from "../ui/ListRow.vue";
+import { focusReturn } from "../ui/focusables";
 import type { DocSummary } from "../../io/library";
 import { ago } from "../../ui/timeAgo";
 import { branchLog, branchNames } from "../../ui/homeVersions";
 
-const props = defineProps<{ name: string; load: () => Promise<DocSummary | null> }>();
+/** `returnTo` finds the control that opened the drawer, for when the opener is gone or WebKit never focused it. */
+const props = defineProps<{
+  name: string;
+  load: () => Promise<DocSummary | null>;
+  returnTo?: () => HTMLElement | null;
+}>();
 const emit = defineEmits<{ close: []; restore: [id: string]; copy: [id: string]; branch: [name: string] }>();
 
 const summary = ref<DocSummary | null>(null);
@@ -19,8 +25,14 @@ const picked = ref<string | null>(null);
 const branches = computed(() => (summary.value ? branchNames(summary.value) : []));
 const shown = computed(() => picked.value ?? summary.value?.current ?? null);
 const rows = computed(() => (summary.value && shown.value ? branchLog(summary.value, shown.value) : []));
+const titled = (v: { message: string; time: number }) => `${v.message || "Untitled version"}, ${ago(v.time)}`;
+
+const root = ref<HTMLElement | null>(null);
+const heading = ref<HTMLElement | null>(null);
+const back = focusReturn(() => props.returnTo?.(), props.returnTo?.() ?? document.activeElement);
 
 onMounted(async () => {
+  heading.value?.focus();
   try {
     const s = await props.load();
     summary.value = s;
@@ -30,12 +42,13 @@ onMounted(async () => {
     state.value = "failed";
   }
 });
+onBeforeUnmount(() => back.restore((n) => !!root.value?.contains(n)));
 </script>
 
 <template>
-  <aside class="home-drawer" role="region" :aria-label="`Versions of ${name}`">
+  <aside ref="root" class="home-drawer" role="region" :aria-label="`Versions of ${name}`">
     <div class="home-drawer-head">
-      <span class="home-drawer-title">{{ name }}</span>
+      <h2 ref="heading" class="home-drawer-title" tabindex="-1" data-focus-landing>{{ name }}</h2>
       <IconButton
         class="home-drawer-close"
         icon="close"
@@ -69,6 +82,7 @@ onMounted(async () => {
           size="sm"
           class="home-drawer-act home-branch-open"
           :title="`Open the document on ${b}`"
+          :aria-label="`Open the document on ${b}`"
           @click="emit('branch', b)"
           >Open</Button
         >
@@ -89,6 +103,7 @@ onMounted(async () => {
             size="sm"
             class="home-drawer-act home-version-restore"
             title="Bring this version back into the document"
+            :aria-label="`Restore ${titled(v)}`"
             @click="emit('restore', v.id)"
             >Restore</Button
           >
@@ -96,6 +111,7 @@ onMounted(async () => {
             size="sm"
             class="home-drawer-act home-version-copy"
             title="Start a new untitled document from this version"
+            :aria-label="`Open copy of ${titled(v)}`"
             @click="emit('copy', v.id)"
             >Open copy</Button
           >
