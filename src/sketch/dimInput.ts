@@ -4,6 +4,7 @@
 import { onActivate, setChipUnit, setExpanded, uiNumberInput } from "../components/ui/dom";
 import { iconElement } from "../ui/icons";
 import { isHistoryKey, isMenuKey } from "../ui/focus";
+import { claimEscape } from "../ui/escapeClaim";
 import { onPreviewError } from "../ui/previewError";
 import { getUnit, parseField } from "../ui/units";
 import { commonUnits, measureError, toUnit, tryParseMeasure, unitById, type UnitDef } from "../ui/measure";
@@ -120,6 +121,7 @@ const shownBoxes = new Set<DimInput>();
 let boxCount = 0;
 let chipCount = 0;
 const BOX_HELP = "Enter applies, Escape cancels, Tab moves on";
+const LIST_HELP = "Alt+Down opens the field's list";
 
 /** The box holding a typed value not yet entered, or null. `confirm` enters it as Enter would, false when refused. */
 export function typedDimBox(): { confirm(): boolean } | null {
@@ -357,6 +359,8 @@ export class DimInput {
       if (tag instanceof HTMLButtonElement) {
         tag.type = "button";
         tag.tabIndex = -1;
+        tag.setAttribute("role", "combobox");
+        tag.setAttribute("aria-haspopup", "listbox");
         tag.setAttribute("aria-expanded", "false");
       }
       wrap.appendChild(tag);
@@ -385,13 +389,7 @@ export class DimInput {
         lastGood: null,
       };
       this.paintName(field);
-      if (def.choices) {
-        tag.addEventListener("pointerdown", (e) => {
-          e.preventDefault(); // never blur the input to open the menu
-          e.stopPropagation();
-          this.openChoiceMenu(field);
-        });
-      }
+      if (def.choices) this.wireAnchor(tag, field, (keys) => this.openChoiceMenu(field, keys));
 
       if (field.unit && num.chip) {
         // The unit is a button: clicking it changes what the field shows without retyping the number.
@@ -401,11 +399,7 @@ export class DimInput {
         chip.tabIndex = -1;
         paintChip(chip, field.unit);
         input.setAttribute("aria-describedby", chip.id);
-        chip.addEventListener("pointerdown", (e) => {
-          e.preventDefault(); // never blur the input to open the menu
-          e.stopPropagation();
-          this.openUnitMenu(field);
-        });
+        this.wireAnchor(chip, field, (keys) => this.openUnitMenu(field, keys));
         wrap.appendChild(chip);
         field.chip = chip;
       }
@@ -473,7 +467,7 @@ export class DimInput {
     const help = document.createElement("span");
     help.id = this.helpId;
     help.hidden = true;
-    help.textContent = BOX_HELP;
+    help.textContent = this.fields.some((f) => f.chip || f.def.choices) ? `${BOX_HELP}, ${LIST_HELP}` : BOX_HELP;
     this.root.appendChild(help);
     this.nameGroup();
     // show() is often called from a pointerdown, and the browser moves focus to the click target after it returns,
@@ -766,7 +760,11 @@ export class DimInput {
       if (f.def.tag) tag.title = f.def.label;
       else tag.removeAttribute("title");
     }
-    if (f.def.choices) tag.appendChild(iconElement("caretDown", 10));
+    if (f.def.choices) {
+      tag.appendChild(iconElement("caretDown", 10));
+      const word = f.def.choices.options.find((o) => o.id === f.choice)?.word ?? f.def.label;
+      tag.setAttribute("aria-label", `Measure, ${word}`);
+    }
     f.input.setAttribute("aria-label", f.def.label);
   }
 
@@ -817,8 +815,16 @@ export class DimInput {
     } else if (e.key === "Enter") {
       e.preventDefault();
       this.commit();
+    } else if (e.key === "Escape" && this.menu) {
+      // The open list claimed this Escape, so the tool left it.
+      e.preventDefault();
+      this.closeMenu();
+    } else if (e.key === "ArrowDown" && e.altKey && (field.chip || field.def.choices)) {
+      e.preventDefault();
+      if (field.chip) this.openUnitMenu(field, true);
+      else this.openChoiceMenu(field, true);
     }
-    // Escape is handled by the owning tool's capture-phase keydown listener.
+    // Escape is otherwise handled by the owning tool's capture-phase keydown listener.
     e.stopPropagation(); // never let drawing shortcuts fire while typing
   }
 
@@ -901,10 +907,12 @@ export class DimInput {
   }
 
   /** A unit picked from the chip CONVERTS the value: 10 mm shown as inches is 0.3937 in, not 10 in. */
-  private openUnitMenu(f: Field) {
+  private openUnitMenu(f: Field, keys: boolean) {
     if (!f.unit || !f.chip) return;
     this.openMenu(
       f.chip,
+      "Unit",
+      keys,
       commonUnits(f.unit.dim).map((u) => ({
         label: u.label,
         active: u.id === f.unit?.id,
@@ -921,11 +929,13 @@ export class DimInput {
   }
 
   /** The tool rewrites the value in the new terms. */
-  private openChoiceMenu(f: Field) {
+  private openChoiceMenu(f: Field, keys: boolean) {
     const choices = f.def.choices;
     if (!choices) return;
     this.openMenu(
       f.tag,
+      "Measure",
+      keys,
       choices.options.map((c) => ({
         label: c.word,
         active: c.id === f.choice,
@@ -939,44 +949,154 @@ export class DimInput {
     );
   }
 
-  private openMenu(anchor: HTMLElement, rows: { label: string; active: boolean; pick: () => void }[]) {
+  /** The unit chip and the choice tag. A press opens the list and leaves the field focused; a click (Enter, Space,
+   *  a screen reader) or a key opens it with the focus on the anchor, which drives it by aria-activedescendant. */
+  private wireAnchor(anchor: HTMLElement, f: Field, open: (keys: boolean) => void) {
+    let spaceAt = -Infinity;
+    const afterSpace = () => performance.now() - spaceAt < 500;
+    onActivate(anchor, (e) => {
+      e.stopPropagation();
+      if (e.type !== "click") return open(false);
+      // Some engines still click a button on the release of a Space its keydown already handled.
+      if (afterSpace()) return;
+      if (this.menuAnchor === anchor) this.closeMenu();
+      else open(true);
+    });
+    anchor.addEventListener("keydown", (e) => {
+      if (this.onAnchorKey(e, f, anchor) && e.key === " ") spaceAt = performance.now();
+    });
+    anchor.addEventListener("keyup", (e) => {
+      if (e.key === " " && afterSpace()) e.preventDefault();
+    });
+  }
+
+  private onAnchorKey(e: KeyboardEvent, f: Field, anchor: HTMLElement): boolean {
+    const k = e.key;
+    const chip = anchor === f.chip;
+    const open = () => (chip ? this.openUnitMenu(f, true) : this.openChoiceMenu(f, true));
+    if (k === "Tab") {
+      this.closeMenu();
+      // Neither is a stop: the tag sits before its input and the chip after it.
+      if (chip === e.shiftKey) {
+        f.input.focus();
+        f.input.select();
+        e.preventDefault();
+      } else if (this.moveFocus(f.input, e.shiftKey)) e.preventDefault();
+      e.stopPropagation();
+      return true;
+    }
+    if (e.ctrlKey || e.metaKey) return false;
+    if (this.menuAnchor !== anchor) {
+      if (k !== "Enter" && k !== " " && k !== "ArrowDown" && k !== "ArrowUp") return false;
+      open();
+    } else if (k === "Escape") {
+      this.closeMenu();
+      f.input.focus();
+    } else if (k === "Enter" || k === " " || (k === "ArrowUp" && e.altKey)) {
+      this.menuRows[this.menuActive]?.pick();
+    } else if (k === "ArrowDown" || k === "ArrowUp") {
+      this.setMenuActive(this.menuActive + (k === "ArrowDown" ? 1 : -1));
+    } else if (k === "Home" || k === "End") {
+      this.setMenuActive(k === "Home" ? 0 : this.menuRows.length - 1);
+    } else if (k === (chip ? "ArrowLeft" : "ArrowRight") && (chip ? f.def.choices : f.chip)) {
+      // Left and Right step between the field's two lists, the tag's on the left and the unit's on the right.
+      if (chip) this.openChoiceMenu(f, true);
+      else this.openUnitMenu(f, true);
+    } else return false;
+    e.preventDefault();
+    e.stopPropagation();
+    return true;
+  }
+
+  private openMenu(
+    anchor: HTMLElement,
+    label: string,
+    keys: boolean,
+    rows: { label: string; active: boolean; pick: () => void }[],
+  ) {
     this.closeMenu();
     this.menuAnchor = anchor;
     const menu = document.createElement("div");
     menu.className = "dim-unit-menu";
-    for (const r of rows) {
+    menu.id = `dim-menu-${this.boxNo}`;
+    menu.setAttribute("role", "listbox");
+    menu.setAttribute("aria-label", label);
+    this.menuRows = rows.map((r, i) => {
       const row = document.createElement("button");
       row.type = "button";
       row.className = "dim-unit-item" + (r.active ? " active" : "");
+      row.id = `${menu.id}-${i}`;
+      row.tabIndex = -1;
+      row.setAttribute("role", "option");
+      row.setAttribute("aria-selected", String(r.active));
       row.textContent = r.label;
-      row.addEventListener("pointerdown", (e) => {
-        e.preventDefault();
-        e.stopPropagation();
+      const pick = () => {
         this.closeMenu();
         r.pick();
+      };
+      onActivate(row, (e) => {
+        e.stopPropagation();
+        pick();
       });
       menu.appendChild(row);
-    }
+      return { el: row, pick };
+    });
     const at = anchor.getBoundingClientRect();
     menu.style.left = `${at.left}px`;
     menu.style.top = `${at.bottom + 2}px`;
-    menu.id = `dim-menu-${this.boxNo}`;
     document.body.appendChild(menu);
     this.menu = menu;
     setExpanded(anchor, true, menu.id);
+    // Tools that ask escapeClaimed() leave the next Escape to the list, which closes back to the field.
+    this.releaseEscape = claimEscape();
+    if (keys) {
+      anchor.focus();
+      this.setMenuActive(
+        Math.max(
+          0,
+          rows.findIndex((r) => r.active),
+        ),
+      );
+    }
     // One dismissal path, on the next press anywhere else.
-    setTimeout(() => window.addEventListener("pointerdown", this.boundCloseMenu, { once: true, capture: true }), 0);
+    this.menuTimer = setTimeout(
+      () => window.addEventListener("pointerdown", this.boundCloseMenu, { once: true, capture: true }),
+      0,
+    );
   }
 
   private menu: HTMLDivElement | null = null;
   private menuAnchor: HTMLElement | null = null;
+  private menuRows: { el: HTMLElement; pick: () => void }[] = [];
+  private menuActive = -1;
+  private menuTimer: ReturnType<typeof setTimeout> | undefined;
+  private releaseEscape: (() => void) | null = null;
   private boundCloseMenu = () => this.closeMenu();
 
+  private setMenuActive(i: number) {
+    const anchor = this.menuAnchor;
+    if (!anchor || !this.menuRows.length) return;
+    this.menuActive = Math.min(this.menuRows.length - 1, Math.max(0, i));
+    this.menuRows.forEach((r, k) => r.el.classList.toggle("is-active", k === this.menuActive));
+    const row = this.menuRows[this.menuActive]!.el;
+    anchor.setAttribute("aria-activedescendant", row.id);
+    row.scrollIntoView?.({ block: "nearest" });
+  }
+
   private closeMenu() {
+    clearTimeout(this.menuTimer);
+    window.removeEventListener("pointerdown", this.boundCloseMenu, true);
     this.menu?.remove();
     this.menu = null;
-    if (this.menuAnchor) setExpanded(this.menuAnchor, false);
+    this.menuRows = [];
+    this.menuActive = -1;
+    if (this.menuAnchor) {
+      setExpanded(this.menuAnchor, false);
+      this.menuAnchor.removeAttribute("aria-activedescendant");
+    }
     this.menuAnchor = null;
+    this.releaseEscape?.();
+    this.releaseEscape = null;
   }
 
   /** values in MM; only tracking fields accept them */

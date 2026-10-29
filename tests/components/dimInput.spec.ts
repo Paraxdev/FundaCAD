@@ -9,6 +9,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DimInput } from "../../src/sketch/dimInput";
 import { iconElement } from "../../src/ui/icons";
+import { escapeClaimed } from "../../src/ui/escapeClaim";
 
 /** happy-dom has no PointerEvent constructor in every version, and nothing here
  *  reads a pointer property, only the target, so a plain bubbling Event is
@@ -639,9 +640,11 @@ describe("DimInput names", () => {
         expect(first).toBe(prompt);
         expect(help!.hidden).toBe(true);
         expect(root().contains(help!)).toBe(true);
-        expect(help!.textContent).toBe("Enter applies, Escape cancels, Tab moves on");
+        expect(help!.textContent).toBe("Enter applies, Escape cancels, Tab moves on, Alt+Down opens the field's list");
         dim.hide();
       }
+      dim.show([{ name: "n", label: "Count", kind: "count" }], () => {});
+      expect(described()[1]!.textContent).toBe("Enter applies, Escape cancels, Tab moves on");
     } finally {
       prompt.remove();
     }
@@ -727,5 +730,212 @@ describe("DimInput names", () => {
     } finally {
       other.dispose();
     }
+  });
+});
+
+describe("DimInput lists by keyboard", () => {
+  const key = (target: EventTarget, k: string, mods: KeyboardEventInit = {}) => {
+    const e = new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true, ...mods });
+    target.dispatchEvent(e);
+    return e;
+  };
+  const menu = () => document.querySelector<HTMLElement>(".dim-unit-menu");
+  const rows = () => [...menu()!.querySelectorAll<HTMLElement>(".dim-unit-item")];
+  const inputs = () => [...root().querySelectorAll<HTMLInputElement>("input")];
+  const chipOf = (i: number) => root().querySelectorAll<HTMLElement>(".dim-field .dim-unit:not(.dim-choice)")[i]!;
+  const activeRow = (anchor: HTMLElement) => document.getElementById(anchor.getAttribute("aria-activedescendant")!);
+  const showWidth = () => {
+    dim.show(
+      [
+        { name: "w", label: "Width" },
+        { name: "h", label: "Height" },
+      ],
+      () => {},
+      () => {},
+    );
+    inputs()[0]!.focus();
+  };
+  const choiceField = (options: { id: string; label: string; word: string }[], onChoose: (id: string) => void) =>
+    dim.show(
+      [
+        {
+          name: "size",
+          label: "Diameter",
+          kind: "length",
+          choices: { options, chosen: "diameter", onChoose: (id) => onChoose(id) },
+        },
+      ],
+      () => {},
+    );
+
+  it("opens the unit list on Alt+Down from the field, a listbox of options with the shown unit selected", () => {
+    showWidth();
+    expect(key(inputs()[0]!, "ArrowDown", { altKey: true }).defaultPrevented).toBe(true);
+    const chip = chipOf(0);
+    expect([menu()!.getAttribute("role"), menu()!.getAttribute("aria-label")]).toEqual(["listbox", "Unit"]);
+    expect(rows().every((r) => r.getAttribute("role") === "option" && r.tabIndex === -1)).toBe(true);
+    const selected = rows().filter((r) => r.getAttribute("aria-selected") === "true");
+    expect(selected.map((r) => r.textContent)).toEqual([chip.dataset.value]);
+    expect(document.activeElement).toBe(chip);
+    expect(chip.getAttribute("aria-expanded")).toBe("true");
+    expect(activeRow(chip)).toBe(selected[0]);
+    expect(selected[0]!.classList.contains("is-active")).toBe(true);
+    // A field with no choices has no list to its left.
+    expect(key(chip, "ArrowLeft").defaultPrevented).toBe(false);
+    expect(menu()!.getAttribute("aria-label")).toBe("Unit");
+  });
+
+  it("control: Alt+Down in a count field, which has no unit, opens nothing", () => {
+    dim.show([{ name: "n", label: "Count", kind: "count" }], () => {});
+    expect(key(inputs()[0]!, "ArrowDown", { altKey: true }).defaultPrevented).toBe(false);
+    expect(menu()).toBeNull();
+  });
+
+  it("moves through the options with the arrows, Home and End, and Enter converts back in the field", () => {
+    showWidth();
+    inputs()[0]!.value = "10";
+    inputs()[0]!.dispatchEvent(new Event("input", { bubbles: true }));
+    key(inputs()[0]!, "ArrowDown", { altKey: true });
+    const chip = chipOf(0);
+    key(chip, "End");
+    expect(activeRow(chip)).toBe(rows().at(-1));
+    key(chip, "Home");
+    key(chip, "ArrowUp");
+    expect(activeRow(chip)).toBe(rows()[0]);
+    const inch = rows().findIndex((r) => r.textContent === "in");
+    for (let i = 0; i < inch; i++) key(chip, "ArrowDown");
+    expect(activeRow(chip)!.textContent).toBe("in");
+    expect(key(chip, "Enter").defaultPrevented).toBe(true);
+    expect(menu()).toBeNull();
+    expect(document.activeElement).toBe(inputs()[0]);
+    expect(Number(inputs()[0]!.value)).toBeCloseTo(0.39, 2);
+    expect([chip.getAttribute("aria-label"), chip.hasAttribute("aria-activedescendant")]).toEqual(["Unit, in", false]);
+  });
+
+  it("closes the list on Escape back to the field, claiming the key from the tool", async () => {
+    const cancelled = vi.fn();
+    const heard: boolean[] = [];
+    const tool = (e: KeyboardEvent) => {
+      if (e.key === "Escape") heard.push(escapeClaimed());
+    };
+    window.addEventListener("keydown", tool, true);
+    try {
+      dim.show([{ name: "w", label: "Width" }], () => {}, cancelled);
+      inputs()[0]!.focus();
+      key(inputs()[0]!, "ArrowDown", { altKey: true });
+      expect(key(chipOf(0), "Escape").defaultPrevented).toBe(true);
+      expect(menu()).toBeNull();
+      expect(document.activeElement).toBe(inputs()[0]);
+
+      // A list a press opened leaves the focus in the field, whose Escape closes it the same way.
+      press("pointerdown", chipOf(0));
+      expect(document.activeElement).toBe(inputs()[0]);
+      key(inputs()[0]!, "Escape");
+      expect(menu()).toBeNull();
+      expect(heard).toEqual([true, true]);
+      expect(cancelled).not.toHaveBeenCalled();
+      await new Promise((r) => setTimeout(r, 0));
+      key(inputs()[0]!, "Escape");
+      expect(heard.at(-1)).toBe(false);
+    } finally {
+      window.removeEventListener("keydown", tool, true);
+    }
+  });
+
+  it("opens on Enter, Space and the arrows on the chip", () => {
+    showWidth();
+    const chip = chipOf(0);
+    for (const k of ["Enter", " ", "ArrowDown", "ArrowUp"]) {
+      chip.focus();
+      expect(key(chip, k).defaultPrevented).toBe(true);
+      expect([k, menu() !== null, document.activeElement === chip]).toEqual([k, true, true]);
+      key(chip, "Escape");
+    }
+    expect(menu()).toBeNull();
+    expect(key(chip, "ArrowDown", { ctrlKey: true }).defaultPrevented).toBe(false);
+    expect(menu()).toBeNull();
+  });
+
+  it("answers a click with no press, as a screen reader sends, on the chip and on an option", () => {
+    showWidth();
+    const chip = chipOf(0);
+    press("click", chip);
+    expect(document.activeElement).toBe(chip);
+    expect(menu()).not.toBeNull();
+    press("click", chip);
+    expect(menu()).toBeNull();
+    press("click", chip);
+    press(
+      "click",
+      rows().find((r) => r.textContent === "cm")!,
+    );
+    expect(menu()).toBeNull();
+    expect(chip.getAttribute("aria-label")).toBe("Unit, cm");
+  });
+
+  it("control: the click a Space sends on its release does not close the list it opened", () => {
+    showWidth();
+    const chip = chipOf(0);
+    chip.focus();
+    key(chip, " ");
+    const up = new KeyboardEvent("keyup", { key: " ", bubbles: true, cancelable: true });
+    chip.dispatchEvent(up);
+    expect(up.defaultPrevented).toBe(true);
+    press("click", chip);
+    expect(menu()).not.toBeNull();
+  });
+
+  it("lets Tab on the chip move on from its field and Shift+Tab return to its input, closing the list", () => {
+    showWidth();
+    key(inputs()[0]!, "ArrowDown", { altKey: true });
+    expect(key(chipOf(0), "Tab").defaultPrevented).toBe(true);
+    expect([menu(), document.activeElement]).toEqual([null, inputs()[1]]);
+    key(inputs()[1]!, "ArrowDown", { altKey: true });
+    expect(key(chipOf(1), "Tab", { shiftKey: true }).defaultPrevented).toBe(true);
+    expect([menu(), document.activeElement]).toEqual([null, inputs()[1]]);
+  });
+
+  it("makes the choice tag a named combobox, and Left and Right step between its list and the unit's", () => {
+    const seen: string[] = [];
+    choiceField(
+      [
+        { id: "radius", label: "R", word: "Radius" },
+        { id: "diameter", label: "Diameter", word: "Diameter" },
+      ],
+      (id) => seen.push(id),
+    );
+    const tag = root().querySelector<HTMLElement>(".dim-choice")!;
+    expect(["role", "aria-haspopup", "aria-label"].map((a) => tag.getAttribute(a))).toEqual([
+      "combobox",
+      "listbox",
+      "Measure, Diameter",
+    ]);
+    inputs()[0]!.focus();
+    key(inputs()[0]!, "ArrowDown", { altKey: true });
+    expect(document.activeElement).toBe(chipOf(0));
+    key(chipOf(0), "ArrowLeft");
+    expect([document.activeElement, menu()!.getAttribute("aria-label")]).toEqual([tag, "Measure"]);
+    expect(activeRow(tag)!.textContent).toBe("Diameter");
+    key(tag, "ArrowRight");
+    expect([document.activeElement, menu()!.getAttribute("aria-label")]).toEqual([chipOf(0), "Unit"]);
+    key(chipOf(0), "ArrowLeft");
+    key(tag, "ArrowUp");
+    key(tag, " ");
+    expect(seen).toEqual(["radius"]);
+    expect([menu(), document.activeElement, tag.getAttribute("aria-label")]).toEqual([
+      null,
+      inputs()[0],
+      "Measure, Radius",
+    ]);
+  });
+
+  it("lets Tab on the tag go into its input and Shift+Tab off the first field's tag leave the box", () => {
+    choiceField([{ id: "diameter", label: "Diameter", word: "Diameter" }], () => {});
+    const tag = root().querySelector<HTMLElement>(".dim-choice")!;
+    tag.focus();
+    expect(key(tag, "Tab").defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(inputs()[0]);
+    tag.focus();
+    expect(key(tag, "Tab", { shiftKey: true }).defaultPrevented).toBe(false);
   });
 });
