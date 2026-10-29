@@ -1,12 +1,12 @@
 <script setup lang="ts">
 // Laid out like Preferences: a General page with the app's own keys and one page per plugin that moves or adds keys.
-// A key is changed by clicking it and pressing the new one; the choice is kept per row in input/shortcuts.ts.
+// A key is changed through KeyCapture's dialog, never on focus; the choice is kept per row in input/shortcuts.ts.
 
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref, useId } from "vue";
 import { useDialogStore } from "../../stores/dialogs";
 import { useModalStore } from "../../stores/modals";
 import { escapeClaimed } from "../../ui/escapeClaim";
-import { comboKey, fmtKeys } from "../../input/platform";
+import { fmtKeys, spokenKeys } from "../../input/platform";
 import {
   SHORTCUTS,
   formatShortcut,
@@ -24,6 +24,7 @@ import { shippedPlugins } from "../../plugins/shipped";
 import { sameId } from "../../plugins/manifest";
 import Button from "../ui/Button.vue";
 import Dialog from "../ui/Dialog.vue";
+import KeyCapture, { type CapturedKey } from "../ui/KeyCapture.vue";
 import TextField from "../ui/TextField.vue";
 
 const dialogs = useDialogStore();
@@ -83,7 +84,6 @@ const resettable = computed(() =>
 
 const wide = (g: HudGroup) => ["Conflicts", "Mouse", "Always"].includes(g.name);
 
-const capturing = ref<string | null>(null);
 interface Pending {
   id: string;
   keys: { key: string; shift: boolean; ctrl: boolean };
@@ -92,40 +92,23 @@ interface Pending {
 }
 const pending = ref<Pending | null>(null);
 
-function startCapture(id: string, ev: MouseEvent) {
+function onCapture(id: string, k: CapturedKey) {
   pending.value = null;
-  capturing.value = id;
-  (ev.currentTarget as HTMLElement).focus();
-}
-
-const MODIFIERS = new Set(["Shift", "Control", "Alt", "Meta", "AltGraph", "CapsLock"]);
-
-function capture(e: KeyboardEvent, id: string) {
-  e.preventDefault();
-  e.stopImmediatePropagation();
-  if (MODIFIERS.has(e.key)) return;
-  if (e.key === "Escape" && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
-    capturing.value = null;
-    return;
-  }
   // "?" arrives with shift held and keymap.ts resolves it without, so it is stored that way.
-  const keys = {
-    key: comboKey(e),
-    shift: e.key === "?" ? false : e.shiftKey,
-    ctrl: e.ctrlKey || e.metaKey,
-  };
-  const problem = setUserShortcut(id, { ...keys, alt: e.altKey });
-  capturing.value = null;
+  const keys = { key: k.key, shift: k.key === "?" ? false : k.shift, ctrl: k.ctrl };
+  const problem = setUserShortcut(id, { ...keys, alt: k.alt });
   if (!problem) return;
   pending.value = { id, keys, problem, name: formatShortcut({ ...keys, action: "", context: "global", label: "" }) };
 }
 
-function problemText(p: Pending): string {
+function problemText(p: Pending, keys: (k: string) => string = fmtKeys): string {
   const p0 = p.problem;
-  if ("conflict" in p0) return `${fmtKeys(p.name)} is already used by ${p0.conflict.label}`;
-  if ("reserved" in p0) return `${fmtKeys(p.name)} is taken by ${p0.reserved}`;
+  if ("conflict" in p0) return `${keys(p.name)} is already used by ${p0.conflict.label}`;
+  if ("reserved" in p0) return `${keys(p.name)} is taken by ${p0.reserved}`;
   return p0.refused;
 }
+const problemOf = (id: string) => (pending.value?.id === id ? problemText(pending.value, spokenKeys) : undefined);
+const problemId = useId();
 
 function replace() {
   const p = pending.value;
@@ -139,7 +122,6 @@ function reset(ids: string[]) {
 }
 
 function onKey(e: KeyboardEvent) {
-  if (capturing.value) return capture(e, capturing.value);
   if (e.key !== "Escape" || modals.current !== null || modals.depth !== ownDepth || escapeClaimed()) return;
   e.preventDefault();
   e.stopImmediatePropagation();
@@ -219,17 +201,14 @@ onUnmounted(() => {
                 <span class="sc-label">{{ r.label }}</span>
                 <span v-if="r.changed" class="sc-changed">changed</span>
                 <template v-if="r.id">
-                  <button
-                    type="button"
+                  <KeyCapture
                     class="sc-key"
-                    :class="{ capturing: capturing === r.id, unset: !r.key }"
-                    :title="capturing === r.id ? 'Press the new keys, Esc cancels' : 'Click to change'"
-                    @click="startCapture(r.id, $event)"
-                    @blur="capturing === r.id && (capturing = null)"
-                    ><template v-if="capturing === r.id">Press keys…</template
-                    ><kbd v-else-if="r.key">{{ fmtKeys(r.key) }}</kbd
-                    ><template v-else>Not set</template></button
-                  >
+                    :class="{ unset: !r.key }"
+                    :action="r.label"
+                    :keys="r.key"
+                    :problem="problemOf(r.id)"
+                    @capture="onCapture(r.id, $event)"
+                  />
                   <button
                     v-if="mine.has(r.id)"
                     type="button"
@@ -243,12 +222,18 @@ onUnmounted(() => {
                   <kbd>{{ fmtKeys(r.key) }}</kbd>
                   <span class="sc-fixed" title="This one cannot be changed here">fixed</span>
                 </template>
-                <div v-if="pending && pending.id === r.id" class="sc-problem" role="alert">
-                  <span>{{ problemText(pending) }}</span>
-                  <Button v-if="'conflict' in pending.problem" size="sm" variant="primary" @click="replace()"
+                <!-- KeyCapture speaks the problem as it closes, so the row is no second live region. -->
+                <div v-if="pending && pending.id === r.id" class="sc-problem">
+                  <span :id="problemId">{{ problemText(pending) }}</span>
+                  <Button
+                    v-if="'conflict' in pending.problem"
+                    size="sm"
+                    variant="primary"
+                    :aria-describedby="problemId"
+                    @click="replace()"
                     >Replace</Button
                   >
-                  <Button size="sm" @click="pending = null">Cancel</Button>
+                  <Button size="sm" :aria-describedby="problemId" @click="pending = null">Cancel</Button>
                 </div>
               </div>
             </div>

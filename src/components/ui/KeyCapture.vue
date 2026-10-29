@@ -11,6 +11,8 @@ import KeyChip from "./KeyChip.vue";
 export interface CapturedKey {
   /** As comboKey reads it: lower case, and the US key under a non Latin letter. */
   key: string;
+  /** e.key as typed, for a setting that keeps named keys ("ArrowUp", "F5") by their own names. */
+  name: string;
   code: string;
   /** Ctrl, or Cmd on macOS, as the shortcut table means it. */
   ctrl: boolean;
@@ -68,7 +70,14 @@ function onPadKey(e: KeyboardEvent) {
   e.stopPropagation();
   if (e.key === "Escape") return void finish(null);
   if (MODIFIERS.has(e.key) || UNFINISHED.has(e.key) || e.isComposing) return;
-  const key = { key: comboKey(e), code: e.code, ctrl: e.ctrlKey || e.metaKey, shift: e.shiftKey, alt: e.altKey };
+  const key = {
+    key: comboKey(e),
+    name: e.key,
+    code: e.code,
+    ctrl: e.ctrlKey || e.metaKey,
+    shift: e.shiftKey,
+    alt: e.altKey,
+  };
   void finish(() => emit("capture", key));
 }
 </script>

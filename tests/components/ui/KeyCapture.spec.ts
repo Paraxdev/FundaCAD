@@ -111,7 +111,7 @@ describe("KeyCapture", () => {
     const e = key(pad()!, "K", { code: "KeyK", ctrlKey: true, shiftKey: true });
     await settle();
     window.removeEventListener("keydown", seen);
-    expect(captured).toEqual([{ key: "k", code: "KeyK", ctrl: true, shift: true, alt: false }]);
+    expect(captured).toEqual([{ key: "k", name: "K", code: "KeyK", ctrl: true, shift: true, alt: false }]);
     expect([e.defaultPrevented, seen.mock.calls.length]).toEqual([true, 0]);
     expect($(".ui-dialog")).toBeNull();
     expect(active()).toBe(button().element);

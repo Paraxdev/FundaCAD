@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { nextTick } from "vue";
 import { enableAutoUnmount, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
@@ -9,15 +9,22 @@ import { useModalStore } from "../../../src/stores/modals";
 import { contribute, resetContributions, setGrantLookup } from "../../../src/plugins/contrib";
 import { useDialogStore } from "../../../src/stores/dialogs";
 import { resetUserShortcuts, resolveShortcut } from "../../../src/input/shortcuts";
+import { announce } from "../../../src/ui/announce";
+import { setMacForTest } from "../../../src/input/platform";
+
+vi.mock(import("../../../src/ui/announce"), async (orig) => ({ ...(await orig()), announce: vi.fn() }));
 
 enableAutoUnmount(afterEach);
 
 beforeEach(() => {
   setActivePinia(createPinia());
   setGrantLookup(() => ["input.remap"]);
+  vi.mocked(announce).mockClear();
+  setMacForTest(false);
   mount(ShortcutsDialog, { attachTo: document.body });
 });
 afterEach(() => {
+  setMacForTest(null);
   resetUserShortcuts();
   resetContributions();
 });
@@ -26,13 +33,16 @@ const rows = () => [...document.querySelectorAll<HTMLElement>(".sc-row")];
 const rowOf = (label: string) => rows().find((r) => r.querySelector(".sc-label")?.textContent === label)!;
 const keycap = (label: string) => rowOf(label).querySelector<HTMLButtonElement>(".sc-key")!;
 const tabs = () => [...document.querySelectorAll(".prefs-nav-btn")].map((b) => b.textContent);
-const press = (init: KeyboardEventInit) => {
-  window.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...init }));
-  return nextTick();
+const settle = () => new Promise((r) => setTimeout(r, 5));
+const pad = () => document.querySelector<HTMLElement>(".key-capture-pad");
+const press = (init: KeyboardEventInit, target: EventTarget = window) => {
+  target.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...init }));
+  return settle();
 };
+const type = (init: KeyboardEventInit) => press(init, pad()!);
 async function capture(label: string) {
   keycap(label).click();
-  await nextTick();
+  await settle();
 }
 async function click(el: Element | null) {
   (el as HTMLElement).click();
@@ -44,36 +54,66 @@ describe("changing a key in the shortcuts dialog", () => {
     expect(tabs()).toEqual(["General"]);
   });
 
-  it("captures the next combination and saves it", async () => {
+  it("never takes a key while the key button only has focus", async () => {
+    keycap("Fillet").focus();
+    await press({ key: "g" }, keycap("Fillet"));
+    expect([pad(), resolveShortcut("f", false, "model"), resolveShortcut("g", false, "model")]).toEqual([
+      null,
+      "fillet",
+      null,
+    ]);
+  });
+
+  it("captures the next combination in its dialog, saves it and says so", async () => {
     await capture("Fillet");
-    expect(keycap("Fillet").textContent).toContain("Press keys");
-    await press({ key: "Shift" });
-    expect(keycap("Fillet").textContent).toContain("Press keys");
-    await press({ key: "G" });
+    expect(document.activeElement).toBe(pad());
+    await type({ key: "Shift" });
+    expect(pad()).not.toBeNull();
+    await type({ key: "G" });
     expect(resolveShortcut("g", false, "model")).toBe("fillet");
     expect(keycap("Fillet").querySelector("kbd")?.textContent).toBe("G");
     expect(rowOf("Fillet").textContent).toContain("changed");
     expect(JSON.parse(localStorage.getItem("fundacad.keymap") ?? "[]")).toHaveLength(1);
+    expect([pad(), document.activeElement]).toEqual([null, keycap("Fillet")]);
+    expect(keycap("Fillet").getAttribute("aria-label")).toBe("Fillet, shortcut G, change");
+    expect(vi.mocked(announce).mock.calls).toEqual([["Fillet is now G", "polite"]]);
   });
 
-  it("is cancelled by Escape without closing the dialog", async () => {
+  it("reads a question mark without the shift it arrives with", async () => {
+    await capture("Fillet");
+    await type({ key: "?", code: "Slash", shiftKey: true });
+    expect(rowOf("Fillet").querySelector(".sc-problem span")?.textContent).toBe("? is taken by This sheet");
+    expect(resolveShortcut("?", false, "model")).toBe("shortcut-help");
+  });
+
+  it("is cancelled by Escape, in the pad or on its buttons, without closing the dialog", async () => {
+    useDialogStore().shortcuts = true;
+    await capture("Fillet");
+    await type({ key: "Escape" });
+    expect(pad()).toBeNull();
     await capture("Fillet");
     await press({ key: "Escape" });
+    expect(pad()).toBeNull();
     expect(keycap("Fillet").querySelector("kbd")?.textContent).toBe("F");
     expect(resolveShortcut("f", false, "model")).toBe("fillet");
-    expect(document.querySelector(".shortcuts-panel")).not.toBeNull();
+    expect([useDialogStore().shortcuts, !!document.querySelector(".shortcuts-panel")]).toEqual([true, true]);
+    expect(announce).not.toHaveBeenCalled();
   });
 
   it("shows a conflict, where cancel leaves everything and replace takes the key", async () => {
     await capture("Fillet");
-    await press({ key: "e" });
+    await type({ key: "e" });
     expect(rowOf("Fillet").querySelector(".sc-problem")?.textContent).toContain("E is already used by Extrude");
+    expect(vi.mocked(announce).mock.calls).toEqual([["E is already used by Extrude", "assertive"]]);
+    const problem = rowOf("Fillet").querySelector(".sc-problem span")!;
+    const replace = rowOf("Fillet").querySelector(".sc-problem .btn-primary")!;
+    expect([problem.closest("[role=alert]"), replace.getAttribute("aria-describedby")]).toEqual([null, problem.id]);
     expect(resolveShortcut("e", false, "model")).toBe("extrude");
     await click(rowOf("Fillet").querySelector(".sc-problem .btn:not(.btn-primary)"));
     expect(rowOf("Fillet").querySelector(".sc-problem")).toBeNull();
 
     await capture("Fillet");
-    await press({ key: "e" });
+    await type({ key: "e" });
     await click(rowOf("Fillet").querySelector(".sc-problem .btn-primary"));
     expect(resolveShortcut("e", false, "model")).toBe("fillet");
     expect(keycap("Extrude").textContent).toContain("Not set");
@@ -81,9 +121,9 @@ describe("changing a key in the shortcuts dialog", () => {
 
   it("resets one row and, with Reset all, every changed row of the page", async () => {
     await capture("Fillet");
-    await press({ key: "g" });
+    await type({ key: "g" });
     await capture("Measure");
-    await press({ key: "j" });
+    await type({ key: "j" });
     await click(rowOf("Fillet").querySelector(".sc-reset"));
     expect(resolveShortcut("f", false, "model")).toBe("fillet");
     expect(resolveShortcut("j", false, "model")).toBe("measure");
@@ -100,8 +140,9 @@ describe("changing a key in the shortcuts dialog", () => {
 
   it("refuses a reserved key", async () => {
     await capture("Fillet");
-    await press({ key: "z", ctrlKey: true });
+    await type({ key: "z", code: "KeyZ", ctrlKey: true });
     expect(rowOf("Fillet").querySelector(".sc-problem")?.textContent).toContain("taken by Undo");
+    expect(vi.mocked(announce).mock.calls).toEqual([["Control Z is taken by Undo", "assertive"]]);
   });
 
   it("filters across the pages with the search field", async () => {
@@ -138,7 +179,7 @@ describe("a plugin that contributes keys", () => {
     await click(document.querySelectorAll(".prefs-nav-btn")[1]!);
     expect(keycap("Radial menu").querySelector("kbd")?.textContent).toBe("W");
     await capture("Radial menu");
-    await press({ key: "y" });
+    await type({ key: "y" });
     expect(resolveShortcut("y", false, "model")).toBe("test.radial");
     off();
     await nextTick();
@@ -147,7 +188,6 @@ describe("a plugin that contributes keys", () => {
 });
 
 describe("the shortcuts frame", () => {
-  const settle = () => new Promise((r) => setTimeout(r, 5));
   const search = () => document.querySelector<HTMLInputElement>("[data-shortcut-search]")!;
 
   it("opens on the search field, labelled, and holds the modal gate", async () => {

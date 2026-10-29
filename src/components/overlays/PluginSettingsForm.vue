@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, shallowRef, watch, type Component } from "vue";
 import { settingMatches, type PluginSettings, type SettingProp } from "../../plugins/settings";
-import { fmtKeys } from "../../input/platform";
 import { keyCombo, numberField } from "../../plugins/settingsInput";
 import { getUnit, onUnitChange } from "../../ui/units";
 import Button from "../ui/Button.vue";
 import Checkbox from "../ui/Checkbox.vue";
 import IconButton from "../ui/IconButton.vue";
+import KeyCapture, { type CapturedKey } from "../ui/KeyCapture.vue";
 import NumberField from "../ui/NumberField.vue";
 import Select from "../ui/Select.vue";
 import TextField from "../ui/TextField.vue";
@@ -24,7 +24,6 @@ const values = shallowRef<Record<string, unknown>>(props.settings?.all() ?? {});
 const unit = ref(getUnit());
 /** why typed text was not stored, per key */
 const errors = ref<Record<string, string>>({});
-const capturing = ref("");
 
 let off: (() => void) | null = null;
 watch(
@@ -93,25 +92,11 @@ function withoutKey<T>(o: Record<string, T>, k: string): Record<string, T> {
   return next;
 }
 
-function onKey(p: SettingProp, ev: KeyboardEvent) {
-  if (ev.key === "Tab") return;
-  ev.preventDefault();
-  ev.stopPropagation();
-  if (ev.key === "Escape") {
-    capturing.value = "";
-    (ev.target as HTMLElement).blur();
-    return;
-  }
-  if (ev.key === "Backspace" || ev.key === "Delete") {
-    store(p, "");
-    return;
-  }
-  const combo = keyCombo(ev);
-  if (combo) {
-    store(p, combo);
-    capturing.value = "";
-    (ev.target as HTMLElement).blur();
-  }
+// A letter is kept by its US key, so a non Latin layout stores the same E; a named key keeps its own name.
+function storeKey(p: SettingProp, k: CapturedKey) {
+  const key = k.key.length === 1 ? k.key : k.name;
+  const combo = keyCombo({ key, ctrlKey: k.ctrl, metaKey: false, altKey: k.alt, shiftKey: k.shift });
+  if (combo) store(p, combo);
 }
 
 const isTauri = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -212,16 +197,17 @@ const isDefault = (p: SettingProp) => {
               @change="store(p, ($event.target as HTMLInputElement).value)"
             />
 
-            <Button
+            <KeyCapture
               v-else-if="p.type === 'key'"
               :id="id(p)"
               class="plugset-key"
-              @focus="capturing = p.key"
-              @blur="capturing = ''"
-              @keydown="onKey(p, $event)"
-            >
-              {{ capturing === p.key ? "Press a key…" : fmtKeys((values[p.key] as string) || "None") }}
-            </Button>
+              :action="p.label ?? p.key"
+              :keys="(values[p.key] as string) || undefined"
+              :problem="errors[p.key]"
+              clearable
+              @capture="storeKey(p, $event)"
+              @clear="store(p, '')"
+            />
 
             <template v-else-if="p.type === 'file'">
               <TextField
