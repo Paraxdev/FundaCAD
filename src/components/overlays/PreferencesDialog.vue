@@ -2,7 +2,7 @@
 // Mirrors the setting modules (ui/theme, icons, units, renderPrefs) with no store of its own, every change applies live.
 // The mirrors re-read on each module's subscription, the modules stay Vue-free so the headless suite can import them.
 
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch, type Directive } from "vue";
 import { useDialogStore } from "../../stores/dialogs";
 import { pluginFocus } from "../../plugins/settingsFocus";
 import Button from "../ui/Button.vue";
@@ -231,6 +231,15 @@ async function screenReaderPreset() {
   await nextTick();
   presetNote.value = "Announcements set to Verbose.";
 }
+
+// Note: Slider puts fallthrough attributes on its wrapper and repeats aria-valuetext in its output,
+// so the range takes the hint here and the output is hidden from screen readers.
+const vRangeHint: Directive<HTMLElement, string> = {
+  mounted(el, { value }) {
+    el.querySelector("input[type=range]")?.setAttribute("aria-describedby", value);
+    el.querySelector("output")?.setAttribute("aria-hidden", "true");
+  },
+};
 
 const UNITS = [
   { value: "mm", label: "mm" },
@@ -562,6 +571,7 @@ function onClassicCamera(on: boolean) {
             <div class="pref-card">
               <Slider
                 id="prefs-brightness"
+                v-range-hint="'prefs-brightness-hint'"
                 label="Environment brightness"
                 unit="%"
                 show-value
@@ -571,7 +581,7 @@ function onClassicCamera(on: boolean) {
                 :model-value="Math.round(render.brightness * 100)"
                 @update:model-value="onBrightness"
               />
-              <p class="pref-hint">
+              <p id="prefs-brightness-hint" class="pref-hint">
                 How strongly the environment lights the model and shows in its reflections, an imported HDR included.
               </p>
             </div>
@@ -595,6 +605,7 @@ function onClassicCamera(on: boolean) {
             <div class="pref-card">
               <Slider
                 id="prefs-bloom"
+                v-range-hint="'prefs-bloom-hint'"
                 label="Bloom"
                 unit="%"
                 show-value
@@ -604,7 +615,7 @@ function onClassicCamera(on: boolean) {
                 :model-value="Math.round(render.bloom * 100)"
                 @update:model-value="onBloom"
               />
-              <p class="pref-hint">
+              <p id="prefs-bloom-hint" class="pref-hint">
                 Light spilling off faces with Emission turned up. In the path traced view bright highlights spill too.
               </p>
             </div>
@@ -661,6 +672,7 @@ function onClassicCamera(on: boolean) {
             <div class="pref-card">
               <Slider
                 id="prefs-smoothing"
+                v-range-hint="'prefs-smoothing-hint'"
                 label="Smoothing"
                 unit="ms"
                 show-value
@@ -670,7 +682,7 @@ function onClassicCamera(on: boolean) {
                 :model-value="Math.round(nav.smoothTime * 1000)"
                 @update:model-value="onSmoothing"
               />
-              <p class="pref-hint">
+              <p id="prefs-smoothing-hint" class="pref-hint">
                 How long a zoom or a drag takes to catch up with the hand. 0 follows the mouse exactly; whatever it is
                 set to, the point under the cursor stays under it on every frame.
               </p>
@@ -824,6 +836,7 @@ function onClassicCamera(on: boolean) {
               <div class="pref-card">
                 <Slider
                   id="prefs-hover-dwell"
+                  v-range-hint="'prefs-hover-dwell-hint'"
                   label="Hover delay"
                   unit="ms"
                   show-value
@@ -833,7 +846,7 @@ function onClassicCamera(on: boolean) {
                   :model-value="dwell"
                   @update:model-value="setHoverDwellMs"
                 />
-                <p class="pref-hint">
+                <p id="prefs-hover-dwell-hint" class="pref-hint">
                   How long the pointer rests on a part before its face is highlighted instead of the whole part. A click
                   selects whatever is highlighted, so a longer delay makes it easier to select whole parts.
                 </p>

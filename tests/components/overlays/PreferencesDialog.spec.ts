@@ -533,6 +533,20 @@ describe("Preferences sliders, hints and upload errors", () => {
     }
   });
 
+  it("links each slider's range to the hint under it and hides the readout that repeats its value", async () => {
+    await open();
+    const ids = ["prefs-hover-dwell", "prefs-brightness", "prefs-bloom", "prefs-smoothing"];
+    const links = ids.map((id) => {
+      const input = slider(id);
+      return [
+        input.getAttribute("aria-describedby"),
+        input.closest(".pref-card")!.querySelector(".pref-hint")!.id,
+        $(`#${id} output`).getAttribute("aria-hidden"),
+      ];
+    });
+    expect(links).toEqual(ids.map((id) => [`${id}-hint`, `${id}-hint`, "true"]));
+  });
+
   it("links each choice to the hint under it, and every description it names has text", async () => {
     await open();
     expect($("#prefs-orbit-pivot").getAttribute("aria-describedby")).toBe("prefs-orbit-pivot-hint");
