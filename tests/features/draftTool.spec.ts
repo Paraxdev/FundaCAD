@@ -256,7 +256,7 @@ describe("DraftTool X key", () => {
 
   it("cycles the pull axis by the physical key on a Cyrillic layout", () => {
     const t = started();
-    const axis = () => /pull along ([XYZ]), X cycles/.exec(usePromptStore().text)?.[1];
+    const axis = () => /pull along ([XYZ]), X cycles/.exec(usePromptStore().text ?? "")?.[1];
     const was = axis()!;
     press("ч", "KeyX");
     expect(axis()).toBe({ X: "Y", Y: "Z", Z: "X" }[was]);

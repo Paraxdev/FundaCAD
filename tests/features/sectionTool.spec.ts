@@ -240,7 +240,7 @@ describe("section phases", () => {
     for (const [k, code] of [
       ["а", "KeyF"],
       ["п", "KeyG"],
-    ]) {
+    ] as const) {
       canvas.dispatchEvent(new KeyboardEvent("keydown", { key: k, code, bubbles: true, cancelable: true }));
     }
     expect(sent).toEqual([plane(0, 1, 0.14), plane(0, -1, 0.14), plane(0, -1, 0.3)]);

@@ -50,19 +50,6 @@ function fakeStore() {
   return { store: store as unknown as DocumentStore, added };
 }
 
-type Inner = {
-  count: number;
-  countY: number;
-  value: number;
-  valueY: number;
-  axis: number;
-  hitAxis: () => number;
-  dragAt: () => number;
-  onDown: (e: unknown) => void;
-  onUp: (e: unknown) => void;
-  commit: () => void;
-};
-
 type Inner = { count: number; place: string };
 
 const made: PatternTool[] = [];
