@@ -6,8 +6,9 @@
       - menuitem "Edit"
       - menuitem "View"
       - menuitem "Help"
-  - button "Undo"
-  - button "Redo"
+  - toolbar "Undo and redo":
+    - button "Undo"
+    - button "Redo"
   - radiogroup "Workspace":
     - radio "Model" [checked]
     - radio "Render"

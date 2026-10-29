@@ -163,6 +163,12 @@
 .tb-rest {
   display: contents;
 }
+/* Undo and Redo sit in one toolbar box, spaced like the bar's own row. */
+.tb-history {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+}
 /* Under Home, inert takes these controls' input; a display: contents box paints nothing,
    so the dimming goes on its children. */
 #titlebar.home-up .brand,
