@@ -105,7 +105,7 @@ pub fn scan(path: &Path) -> Result<Scan, String> {
         Ok(())
     })?;
     let is_vertex = |v: &Id| vertices.contains(v);
-    let mut ends: HashMap<Id, (Id, Id)> = edges
+    let mut ends: BTreeMap<Id, (Id, Id)> = edges
         .iter()
         .filter(|(_, e)| !is_vertex(&e.start) || !is_vertex(&e.end))
         .map(|(&id, e)| (id, (e.start, e.end)))
@@ -138,7 +138,7 @@ pub fn scan(path: &Path) -> Result<Scan, String> {
     loops.retain(|l| l.iter().any(|oe| oriented.get(oe).is_some_and(|(e, _)| ends.contains_key(e))));
 
     // An edge loop is a chain, so the end of each oriented edge is the start of the next.
-    let side = |oe: Id, start: bool, ends: &HashMap<Id, (Id, Id)>| -> Option<Id> {
+    let side = |oe: Id, start: bool, ends: &BTreeMap<Id, (Id, Id)>| -> Option<Id> {
         let &(edge, fwd) = oriented.get(&oe)?;
         let (s, e) = ends.get(&edge).copied().or_else(|| edges.get(&edge).map(|e| (e.start, e.end)))?;
         Some(if start == fwd { s } else { e })

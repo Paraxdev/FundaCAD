@@ -178,8 +178,15 @@ fn a_vertex_is_not_made_where_the_curves_at_it_end_apart() {
 #[test]
 fn a_vertex_is_made_where_the_curves_at_it_end_together() {
     let file = variant("splines_together.step", |t| two_splines(t, "#49 = CARTESIAN_POINT('',(18.,0.,0.));"));
-    let repaired = step_refs::scan(&file).unwrap().repaired.expect("the missing vertex is made");
-    assert_eq!((repaired.fixed, repaired.unfixed), (2, 0));
-    let text = std::fs::read_to_string(repaired.path()).unwrap();
-    assert!(text.contains("=VERTEX_POINT('',#25);"), "the new vertex sits on the first edge's curve end");
+    // Each scan hashes its maps afresh, so a repair that hangs on their order shows up within a few runs.
+    let made: Vec<(usize, usize, Vec<String>)> = (0..16)
+        .map(|_| {
+            let repaired = step_refs::scan(&file).unwrap().repaired.expect("the missing vertex is made");
+            let text = std::fs::read_to_string(repaired.path()).unwrap();
+            let new = text.lines().filter(|l| l.contains("=VERTEX_POINT(")).map(String::from).collect();
+            (repaired.fixed, repaired.unfixed, new)
+        })
+        .collect();
+    let first_edge_end = (2, 0, vec!["#454=VERTEX_POINT('',#25);".to_string()]);
+    assert_eq!(made, vec![first_edge_end; 16]);
 }
