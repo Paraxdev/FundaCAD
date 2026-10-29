@@ -12,7 +12,9 @@ A parameter is a number with a name. Make one called `width`, use it in three pl
 
 ## Use one
 
-Type the name in any value box where a number goes, such as `width`. The value is then tied to the parameter, and changing the parameter rebuilds every step that uses it.
+Type the name where a number goes, such as `width`, in a step's values in the History card, on a sketch dimension or in the Parameters dialog. The value is then tied to the parameter, and changing the parameter rebuilds every step that uses it.
+
+The value box of a running tool, such as Extrude, takes no names. Type the number there, then the name in the step's row in the History card.
 
 A tied value shows `fx:` in front of it, and hovering its row shows the parameter and its value. Dragging a handle will not overwrite it.
 

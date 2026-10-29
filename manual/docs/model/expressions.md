@@ -1,6 +1,6 @@
 # Expressions
 
-An expression is a small calculation you type where a number goes, such as `width / 2`. Parameter names work in a step's values in the History, on sketch dimensions and in the Parameters dialog.
+An expression is a small calculation you type where a number goes, such as `width / 2`. Parameter names work in a step's values in the History card, on sketch dimensions and in the Parameters dialog.
 
 The value box of a running tool, such as Extrude, takes numbers, units and plain maths like `20 / 4` or `1 in`, but no names.
 
