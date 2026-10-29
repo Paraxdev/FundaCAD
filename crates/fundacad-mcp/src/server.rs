@@ -30,6 +30,7 @@ use crate::render::{self, ViewRequest};
 use crate::schema;
 use crate::scope::PathScope;
 use crate::upload::{self, Upload, ASK_FOR_A_PATH, IMPORT_FORMATS, PIECES_WORTH_IT};
+use crate::write_target;
 
 /// Renders go back inline, so their size costs context: 640x480 is about 25 kB of PNG on a typical part.
 pub const MAX_IMAGE_PX: i64 = 1600;
@@ -820,6 +821,12 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
             Ok(p) => p,
             Err(e) => return Ok(e),
         };
+        // A .fundab path gets docfile's own refusal, which says how to make one.
+        if !docfile::is_binary_path(&path) {
+            if let Some(why) = write_target::extension_refusal(&path, &[docfile::TEXT_EXT], "doc_save") {
+                return Ok(failure(why));
+            }
+        }
         model::recompute_parameters(&mut st.doc);
         if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
             if !parent.is_dir() {

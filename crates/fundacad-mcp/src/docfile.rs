@@ -10,6 +10,7 @@ use blake2::digest::{Update, VariableOutput};
 use serde_json::{Map, Value};
 
 pub const BINARY_EXT: &str = "fundab";
+pub const TEXT_EXT: &str = "funda";
 pub const GEOMETRY_KEY: &str = "geometry";
 const MAGIC: &[u8; 8] = b"FUNDACAD";
 const TAIL_MAGIC: &[u8; 8] = b"FNDATAIL";
