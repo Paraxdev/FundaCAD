@@ -17,7 +17,7 @@ Click a card to open it. A card shows the model from its last save, its folder a
 A card can carry a mark:
 
 - **Open**: the document is open now.
-- **Not found**: the file was moved or deleted. Click the card to take it off the list.
+- **Not found**: the file was moved or deleted. Click the card and choose Remove from list to take it off.
 - **Could not be read**: the file is damaged or is not a document.
 
 Right click a card for Open, Versions, Remove from list and Copy path. A card that is not found has no Versions, and a card in a folder has no Remove from list.

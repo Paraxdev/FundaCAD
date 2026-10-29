@@ -13,7 +13,8 @@ Type picks the format.
 | STL, 3MF | A slicer. |
 | STEP | Another CAD program, it keeps the exact surfaces. |
 | GLB | A viewer. |
-| DXF, SVG | A laser cutter or a drawing program, see below. |
+
+For a laser cutter, export a sketch or a flat face as DXF or SVG, see below.
 
 ## Settings
 

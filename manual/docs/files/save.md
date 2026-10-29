@@ -19,6 +19,9 @@ While you have unsaved changes, FundaCAD keeps a recovery copy. If the app close
 
 ## Files from a newer version
 
-A file saved by a newer version of FundaCAD still opens. A notice lists the steps this version does not know, and the History shows them greyed. Saving writes them back unchanged, but the bodies after them may differ until you open the file in the newer version.
+A file saved by a newer version of FundaCAD still opens. A notice lists the steps this version does not know.
 
-Its versions are kept too, until you save a version here. Parts of a `.fundab` file that this version does not read are kept only when you save it as `.fundab` again.
+- The History shows those steps greyed, and saving writes them back unchanged.
+- The bodies after them may differ until you open the file in the newer version.
+- The file's saved versions are kept until you save a version here.
+- Parts of a `.fundab` file that this version does not read are kept only if you save it as `.fundab` again.
