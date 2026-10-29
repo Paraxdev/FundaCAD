@@ -36,6 +36,7 @@ const GLOBAL: Command[] = [
   { id: "viewmode-cycle", label: "Next View Mode", group: "View", context: "global", key: "Z" },
   { id: "show-all-bodies", label: "Show All Bodies", group: "View", context: "global", key: "Shift+H" },
   { id: "preferences", label: "Preferences…", group: "Edit", context: "global", key: "Ctrl+," },
+  { id: "accessibility-settings", label: "Accessibility Settings…", group: "Edit", context: "global" },
   { id: "shortcut-help", label: "Keyboard Shortcuts…", group: "Help", context: "global", key: "?" },
   { id: "manual", label: "Manual", group: "Help", context: "global" },
   { id: "report-problem", label: "Report a Problem…", group: "Help", context: "global" },

@@ -110,6 +110,7 @@ export function createActions(e: Engine): (action: string) => void {
     if (action === "report-problem") return openReportDialog();
     if (action === "suggest-idea") return void openExternal(ideaUrl());
     if (action === "preferences") return void useDialogStore().openPreferences();
+    if (action === "accessibility-settings") return void useDialogStore().openPreferences("access");
     if (action === "manual") return void openExternal(MANUAL_URL);
     // The arrow keys turn the view and nothing else: they leave a sketch open,
     // and a tool that reads the arrows itself (the pattern count) keeps them.

@@ -70,6 +70,7 @@ export const NON_REPEATABLE = new Set([
   "compute-all",
   "shortcut-help",
   "preferences",
+  "accessibility-settings",
   "manual",
   "report-problem",
   "suggest-idea",

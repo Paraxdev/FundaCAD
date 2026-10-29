@@ -159,7 +159,8 @@ const categories = computed(() => [
   { value: "plugins", label: "Plugins" },
   { value: "experimental", label: "Experimental" },
 ]);
-const category = ref(pluginFocus.value ? "plugins" : "appearance");
+const asked = categories.value.find((c) => c.value === dialogs.prefsCategory)?.value;
+const category = ref(pluginFocus.value ? "plugins" : (asked ?? "appearance"));
 const panes = ref<HTMLElement | null>(null);
 const pane = (id: string) => ({
   id: `prefs-pane-${id}`,

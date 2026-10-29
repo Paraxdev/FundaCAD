@@ -10,14 +10,16 @@ const e = { sketch: { active: false }, lastAction: "extrude" } as unknown as Eng
 
 beforeEach(() => setActivePinia(createPinia()));
 
-describe("the palette's Preferences and Keyboard shortcuts", () => {
+describe("the palette's Preferences, Accessibility Settings and Keyboard shortcuts", () => {
   it("are listed once each, and neither repeats as the last command", () => {
-    const cmds = allCommands().filter((c) => c.id === "preferences" || c.id === "shortcut-help");
-    expect(cmds.map((c) => [c.id, c.group, c.key])).toEqual([
-      ["preferences", "Edit", "Ctrl+,"],
-      ["shortcut-help", "Help", "?"],
+    const ids = ["preferences", "accessibility-settings", "shortcut-help"];
+    const cmds = allCommands().filter((c) => ids.includes(c.id));
+    expect(cmds.map((c) => [c.id, c.label, c.group, c.key])).toEqual([
+      ["preferences", "Preferences…", "Edit", "Ctrl+,"],
+      ["accessibility-settings", "Accessibility Settings…", "Edit", undefined],
+      ["shortcut-help", "Keyboard Shortcuts…", "Help", "?"],
     ]);
-    expect(["preferences", "shortcut-help"].filter((id) => !NON_REPEATABLE.has(id))).toEqual([]);
+    expect(ids.filter((id) => !NON_REPEATABLE.has(id))).toEqual([]);
   });
 
   it("the action opens Preferences and closes the shortcuts dialog under it", () => {
@@ -27,5 +29,15 @@ describe("the palette's Preferences and Keyboard shortcuts", () => {
     expect([d.preferences, d.shortcuts, e.lastAction]).toEqual([true, false, "extrude"]);
     createActions(e)("preferences");
     expect([d.preferences, d.shortcuts]).toEqual([true, false]);
+  });
+
+  it("Accessibility Settings opens Preferences on Accessibility, and plain Preferences on its default again", () => {
+    const d = useDialogStore();
+    d.shortcuts = true;
+    createActions(e)("accessibility-settings");
+    expect([d.preferences, d.prefsCategory, d.shortcuts, e.lastAction]).toEqual([true, "access", false, "extrude"]);
+    d.preferences = false;
+    createActions(e)("preferences");
+    expect([d.preferences, d.prefsCategory]).toEqual([true, null]);
   });
 });

@@ -8,6 +8,7 @@ import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { useModalStore } from "../../../src/stores/modals";
 import { useHomeStore } from "../../../src/stores/home";
+import { useDialogStore } from "../../../src/stores/dialogs";
 import { choose } from "../../../src/ui/choice";
 import type { HomeCallbacks } from "../../../src/ui/home";
 import type { OpenOutcome } from "../../../src/io/files";
@@ -129,6 +130,19 @@ describe("HomeScreen", () => {
     expect($(".modal-close")?.getAttribute("aria-label")).toBe("Back to the document");
     expect($(".modal-close")?.getAttribute("title")).toBe("Back to the document");
     expect($(".modal-close")?.getAttribute("type")).toBe("button");
+  });
+
+  it("the header's Accessibility button opens Preferences on Accessibility and leaves Home under it", () => {
+    const { home } = open();
+    const btn = $(".home-head .home-a11y")!;
+    expect([btn.tagName, btn.getAttribute("type"), btn.textContent?.trim()]).toEqual([
+      "BUTTON",
+      "button",
+      "Accessibility",
+    ]);
+    btn.click();
+    const d = useDialogStore();
+    expect([d.preferences, d.prefsCategory, home.visible]).toEqual([true, "access", true]);
   });
 
   it("shows a card per recent document, the name escaped once", () => {

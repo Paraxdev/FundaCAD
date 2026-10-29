@@ -257,6 +257,17 @@ describe("Preferences categories", () => {
     expect(document.activeElement).toBe($("#prefs-pane-mcp"));
   });
 
+  it("opens on the category it was asked for, and on Appearance for one it does not have", async () => {
+    useDialogStore().openPreferences("access");
+    const w = await open();
+    expect([shown().map((p) => p.dataset.pane), label(document.activeElement)]).toEqual([["access"], "Accessibility"]);
+    expect(document.activeElement?.getAttribute("role")).toBe("tab");
+    w.unmount();
+    useDialogStore().openPreferences("nope");
+    await open();
+    expect(shown().map((p) => p.dataset.pane)).toEqual(["appearance"]);
+  });
+
   it("leaves focus alone on a click in the list that misses every category", async () => {
     await open();
     const start = document.activeElement;
