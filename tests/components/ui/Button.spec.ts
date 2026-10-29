@@ -112,6 +112,29 @@ describe("Button", () => {
     expect([w.attributes("aria-pressed"), w.classes("is-on")]).toEqual(["true", true]);
   });
 
+  it("says popup and expanded instead of pressed when popup is set, keeping the on look", async () => {
+    const { w } = await render({ popup: "dialog", pressed: true });
+    expect([w.attributes("aria-haspopup"), w.attributes("aria-expanded"), w.attributes("aria-pressed")]).toEqual([
+      "dialog",
+      "false",
+      undefined,
+    ]);
+    expect(w.classes("is-on")).toBe(true);
+    await w.setProps({ expanded: true });
+    expect(w.attributes("aria-expanded")).toBe("true");
+    await w.setProps({ popup: true });
+    expect(w.attributes("aria-haspopup")).toBe("true");
+  });
+
+  it("writes no popup state without popup, even when expanded is passed", async () => {
+    const { w } = await render({ expanded: true, pressed: false });
+    expect([w.attributes("aria-haspopup"), w.attributes("aria-expanded"), w.attributes("aria-pressed")]).toEqual([
+      undefined,
+      undefined,
+      "false",
+    ]);
+  });
+
   it("writes the same title and aria-label from tip and keys through fmtKeys on an icon only button", async () => {
     setMacForTest(true);
     const mac = await render({ tip: "Save", keys: "Ctrl+S" }, null);

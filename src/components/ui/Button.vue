@@ -13,6 +13,9 @@ const props = withDefaults(
     block?: boolean;
     /** A toggle: sets `aria-pressed` and `.is-on`. Leave it out for a plain action. */
     pressed?: boolean | undefined;
+    /** Opens a popup of this kind: `aria-haspopup` and `aria-expanded`, never `aria-pressed`; `pressed` is the look. */
+    popup?: "dialog" | "menu" | "listbox" | true | undefined;
+    expanded?: boolean;
     icon?: string | undefined;
     type?: "button" | "submit" | "reset";
     tip?: string | undefined;
@@ -25,6 +28,8 @@ const props = withDefaults(
     size: "md",
     block: false,
     pressed: undefined,
+    popup: undefined,
+    expanded: false,
     icon: undefined,
     type: "button",
     tip: undefined,
@@ -49,7 +54,9 @@ const ariaLabel = computed(() => (slots.default ? undefined : label.value));
     :class="[`btn-${variant}`, variant === 'tile' ? null : `btn-${size}`, { 'btn-block': block, 'is-on': pressed }]"
     :title="d.title(label)"
     :aria-label="ariaLabel"
-    :aria-pressed="pressed"
+    :aria-pressed="popup ? undefined : pressed"
+    :aria-haspopup="popup || undefined"
+    :aria-expanded="popup ? expanded : undefined"
   >
     <slot name="icon"><Icon v-if="icon" :name="icon" :size="14" /></slot>
     <span v-if="$slots.default" class="btn-label"><slot /></span>

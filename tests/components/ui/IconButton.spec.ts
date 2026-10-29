@@ -69,6 +69,29 @@ describe("IconButton", () => {
     expect([w.attributes("aria-pressed"), w.classes("active"), w.classes("is-on")]).toEqual(["true", true, true]);
   });
 
+  it("says popup and expanded instead of pressed when popup is set, keeping the active look", async () => {
+    const { w } = await render({ popup: "dialog", active: true });
+    expect([w.attributes("aria-haspopup"), w.attributes("aria-expanded"), w.attributes("aria-pressed")]).toEqual([
+      "dialog",
+      "false",
+      undefined,
+    ]);
+    expect([w.classes("active"), w.classes("is-on")]).toEqual([true, true]);
+    await w.setProps({ expanded: true });
+    expect(w.attributes("aria-expanded")).toBe("true");
+    await w.setProps({ popup: "menu" });
+    expect(w.attributes("aria-haspopup")).toBe("menu");
+  });
+
+  it("writes no popup state without popup, even when expanded is passed", async () => {
+    const { w } = await render({ expanded: true, active: false });
+    expect([w.attributes("aria-haspopup"), w.attributes("aria-expanded"), w.attributes("aria-pressed")]).toEqual([
+      undefined,
+      undefined,
+      "false",
+    ]);
+  });
+
   it("renders disabled as aria-disabled and .is-disabled, never native, and keeps the title live", async () => {
     const { w } = await render({ disabled: true });
     expect([w.attributes("aria-disabled"), w.classes("is-disabled"), w.attributes("disabled")]).toEqual([

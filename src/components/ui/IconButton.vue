@@ -15,6 +15,9 @@ const props = withDefaults(
     variant?: "plain" | "tile" | "danger";
     /** A toggle: sets `aria-pressed` and `.is-on`. Leave it out for a plain action. */
     active?: boolean | undefined;
+    /** Opens a popup of this kind: `aria-haspopup` and `aria-expanded`, never `aria-pressed`; `active` is the look. */
+    popup?: "dialog" | "menu" | "listbox" | true | undefined;
+    expanded?: boolean;
     iconSize?: number | undefined;
     badge?: string | number | null;
     disabled?: boolean;
@@ -26,6 +29,8 @@ const props = withDefaults(
     size: "lg",
     variant: "tile",
     active: undefined,
+    popup: undefined,
+    expanded: false,
     iconSize: undefined,
     badge: null,
     disabled: false,
@@ -47,7 +52,9 @@ const hasBadge = computed(() => props.badge !== null && props.badge !== "");
     :class="[`icon-btn-${variant}`, `icon-btn-${size}`, { active, 'is-on': active }]"
     :title="d.title(label)"
     :aria-label="hasBadge ? `${label}, ${badge}` : label"
-    :aria-pressed="active"
+    :aria-pressed="popup ? undefined : active"
+    :aria-haspopup="popup || undefined"
+    :aria-expanded="popup ? expanded : undefined"
   >
     <Icon :name="icon" :size="iconSize ?? (size === 'lg' ? 20 : 14)" />
     <span v-if="hasBadge" class="chip chip-error chip-xs icon-btn-badge" aria-hidden="true">{{ badge }}</span>
