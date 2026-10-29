@@ -38,6 +38,7 @@ Press ? in the app to see the same list. On a Mac, use Cmd for Ctrl. Single lett
 | Ctrl+Shift+S | Save As |
 | Ctrl+E | Export |
 | Ctrl+, | Preferences |
+| Ctrl+Plus, Ctrl+Minus, Ctrl+0 | Interface size larger, smaller, back to 100 percent |
 | Home | Fit the view |
 | Esc | Cancel the tool or clear the selection |
 

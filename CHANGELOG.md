@@ -25,6 +25,13 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- **Interface size.** Preferences, Accessibility, Vision has an Interface size
+  from 80 to 150 percent that makes every panel, menu and label larger or
+  smaller. Ctrl+Plus, Ctrl+Minus and Ctrl+0 (Cmd on a Mac) change it from
+  anywhere and say the new size, the command palette has Larger Interface,
+  Smaller Interface and Reset Interface Size, and the size is kept across a
+  restart. The page no longer refuses browser zoom either.
+
 - **G3 fillets.** The fillet box has a third continuity icon, G3, on key 3. It
   eases into the faces with no jump in curvature and none in how fast the
   curvature changes either. G2 and G3 now need both faces flat across the edge,

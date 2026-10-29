@@ -453,6 +453,7 @@ export function shortcutHudGroups(skip: ReadonlySet<string> = new Set()): HudGro
         { key: "Ctrl+Z / Ctrl+Y", label: "Undo / Redo" },
         { key: "Ctrl+S / Ctrl+Shift+S", label: "Save / Save As" },
         { key: "Ctrl+N / Ctrl+O / Ctrl+E", label: "New / Open / Export" },
+        { key: "Ctrl+Plus / Ctrl+Minus / Ctrl+0", label: "Interface size larger / smaller / 100%" },
         { key: "Del", label: "Delete face (heal) / feature" },
         { key: "Esc", label: "Cancel / clear selection" },
         // A gesture, not a key, listed here because this is where anyone would look. "right"/"left" name the

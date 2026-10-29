@@ -3,7 +3,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setMacForTest, zoomChord } from "../../src/input/platform";
-import { SHORTCUTS, checkRow, checkShortcut, type Shortcut } from "../../src/input/shortcuts";
+import { SHORTCUTS, checkRow, checkShortcut, shortcutHudGroups, type Shortcut } from "../../src/input/shortcuts";
 
 const announce = vi.hoisted(() => vi.fn());
 vi.mock("../../src/ui/announce", () => ({ announce }));
@@ -80,6 +80,13 @@ describe("the shortcut table", () => {
       expect(checkRow("fit", { key, ctrl: true })).toEqual({ reserved: "Interface size" });
     }
     expect(checkShortcut({ action: "fit", key: "+", ctrl: true, shift: true })).toEqual({ reserved: "Interface size" });
+  });
+
+  it("lists them under Always in the shortcuts dialog, with no id to remap", () => {
+    const always = shortcutHudGroups().find((g) => g.name === "Always")!.rows;
+    const row = always.find((r) => r.label.includes("Interface size"));
+    expect(row?.key).toBe("Ctrl+Plus / Ctrl+Minus / Ctrl+0");
+    expect(row?.id).toBeUndefined();
   });
 });
 
