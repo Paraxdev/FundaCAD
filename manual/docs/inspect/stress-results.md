@@ -10,8 +10,8 @@ The first line says in plain words how the part does. A coloured bar beside it i
 
 | Verdict | What it means |
 | --- | --- |
-| Holds, at least 2x safe. | The part holds with room to spare. |
-| Holds, at least 1.2x safe, but keep about 1.5x. | It holds, but the margin is thin. |
+| Holds, at least 3.2x safe. | The part holds with room to spare, at 1.5x or more. |
+| Holds, at least 1.2x safe, but keep about 1.5x. | It holds, but under 1.5x the margin is thin. |
 | Likely to fail at the marked spot. | The load is more than the part can take. A small overload is given in percent, such as about 3% more. |
 
 A pin in the view marks the weakest spot. The line under the verdict says how far the part bends.

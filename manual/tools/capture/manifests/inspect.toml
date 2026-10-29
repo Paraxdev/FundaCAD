@@ -177,9 +177,23 @@ uses = ["manual/docs/inspect/section.md:26"]
 [[shot]]
 file = "manual/docs/img/stress-results.png"
 size = [900, 740]
+viewport = [1920, 1080]
 theme = "fundacad"
 crop = "region"
-stub = true
+at = [650, 165]
+park = [1900, 1060]
+steps = [
+  { open = "example:Wall bracket" },
+  { evaluate = "() => { const r = window.viewport.rig; r.zoomBy(1.5); r.panScreen(0.1, -0.15); window.viewport.requestRender(); }" },
+  { wait = 700 },
+  { tool = "Stress" },
+  { wait = 600 },
+  { click_css = ".stress-run" },
+  { evaluate = "() => new Promise((res) => { const t = setInterval(() => { if (document.querySelector('.stress-legend')) { clearInterval(t); res(); } }, 250); })" },
+  { wait = 1500 },
+  { evaluate = "() => document.querySelectorAll('.toast-close').forEach((b) => b.click())" },
+  { wait = 500 },
+]
 show = "The Stress panel on its Results tab listing peak stress, deflection and safety factor beside the coloured bracket (Set up and Results tabs are recent)."
 alt = "The Stress panel listing peak stress, deflection and safety factor beside the coloured bracket"
 uses = ["manual/docs/inspect/stress-results.md:5"]
@@ -187,9 +201,23 @@ uses = ["manual/docs/inspect/stress-results.md:5"]
 [[shot]]
 file = "manual/docs/img/stress-bracket.png"
 size = [580, 600]
+viewport = [1920, 1080]
 theme = "fundacad"
 crop = "region"
-stub = true
-show = "An L bracket coloured blue to red by stress, with a load arrow on the upright."
-alt = "An L bracket coloured blue to red by stress, with a load arrow on the upright"
+at = [625, 198]
+park = [1900, 1060]
+steps = [
+  { open = "example:Wall bracket" },
+  { evaluate = "() => { const r = window.viewport.rig; r.zoomBy(1.38); r.panScreen(0.12, 0); window.viewport.requestRender(); }" },
+  { wait = 700 },
+  { tool = "Stress" },
+  { wait = 600 },
+  { click_css = ".stress-run" },
+  { evaluate = "() => new Promise((res) => { const t = setInterval(() => { if (document.querySelector('.stress-legend')) { clearInterval(t); res(); } }, 250); })" },
+  { wait = 1500 },
+  { evaluate = "() => document.querySelectorAll('.toast-close').forEach((b) => b.click())" },
+  { wait = 500 },
+]
+show = "An L bracket coloured by stress, with a load arrow at the end of its arm."
+alt = "An L bracket coloured by stress, with a load arrow at the end of its arm"
 uses = ["manual/docs/inspect/stress.md:5"]
