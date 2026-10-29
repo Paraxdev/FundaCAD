@@ -158,11 +158,18 @@ uses = ["manual/docs/reference/preferences.md:5"]
 
 [[shot]]
 file = "manual/docs/img/shortcuts-overlay.png"
-size = [628, 814]
+size = [972, 692]
 theme = "fundacad"
 crop = "panel"
-stub = true
-show = "The keyboard shortcut list (press ?) shown over the viewport."
+target = ".modal-panel.shortcuts-panel"
+pad = 6
+park = [1300, 860]
+steps = [
+  { open = "example:Wall bracket" },
+  { menu = "Help/Keyboard Shortcuts" },
+  { wait = 400 },
+]
+show = "The Keyboard shortcuts dialog (press ?) over a part: its page list, Search shortcuts, and the Model and Sketch commands with their keys."
 alt = "The keyboard shortcut list shown over the viewport"
 uses = ["manual/docs/reference/shortcuts.md:5"]
 
