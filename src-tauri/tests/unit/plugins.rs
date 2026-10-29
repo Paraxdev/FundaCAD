@@ -1,7 +1,9 @@
 mod bundle;
 mod data;
+mod discovery;
 mod handed;
 mod keystore;
 mod launch;
 mod localnet;
+mod official;
 mod web;

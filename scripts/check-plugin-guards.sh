@@ -11,8 +11,8 @@
 # STATUS_ENTRYPOINT_NOT_FOUND before a single test starts, so the test still
 # inline in handed.rs would otherwise ship having never been executed here.
 #
-# So: build bundle.rs on its own, in a throwaway crate that links serde, sha2
-# and zip and nothing else, and run its tests against the real file. Same
+# So: build bundle.rs on its own, in a throwaway crate that links serde, sha2,
+# url and zip and nothing else, and run its tests against the real file. Same
 # source, no webview, no excuse.
 #
 # It then does one thing the unit tests cannot: builds a plugin bundle the way
@@ -50,8 +50,9 @@ name = "fundacad_lib"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
-zip = { version = "4", default-features = false, features = ["deflate-flate2"] }
+zip = { version = "9", default-features = false, features = ["deflate-flate2"] }
 flate2 = "1"
+url = "2"
 
 [workspace]
 TOML

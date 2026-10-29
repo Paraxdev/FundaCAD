@@ -14,6 +14,10 @@ fn temp_root(tag: &str) -> PathBuf {
     root
 }
 
+fn checkout(root: &Path) -> [PluginRoot; 1] {
+    [PluginRoot { dir: root.to_path_buf(), records: false }]
+}
+
 fn put_manifest(root: &Path, id: &str, man: Value) {
     let dir = root.join(id);
     std::fs::create_dir_all(&dir).unwrap();
@@ -33,7 +37,7 @@ fn a_bundle_identity_moves_with_its_version_and_its_component() {
         );
         std::fs::write(root.join("P").join("p.wasm"), wasm).unwrap();
         let mut reg = Registry::default();
-        reg.replace(discover_in(std::slice::from_ref(&root)));
+        reg.replace(discover_in(&checkout(&root)));
         let id = identity(&mut reg.entries[0]);
         let _ = std::fs::remove_dir_all(&root);
         id
@@ -56,7 +60,7 @@ fn a_plugin_without_a_component_owns_its_names() {
                "featureTypes": ["legacyThing"], "shapeGenerators": ["widget"], "exporters": ["legacy-3mf"]}),
     );
     let mut reg = Registry::default();
-    reg.replace(discover_in(std::slice::from_ref(&root)));
+    reg.replace(discover_in(&checkout(&root)));
     let mut say = |claim, name: &str| {
         let m = component_for(&mut reg, claim, name).err().expect("nothing runs it");
         missing(claim, name, m)
@@ -86,17 +90,17 @@ fn a_rescan_finds_a_plugin_installed_later() {
     let root = temp_root("rescan");
     put_manifest(&root, "A.One", json!({"id": "A.One", "featureTypes": ["one"]}));
     let mut reg = Registry::default();
-    reg.replace(discover_in(std::slice::from_ref(&root)));
+    reg.replace(discover_in(&checkout(&root)));
     reg.entries[0].loaded = Loaded::Broken("kept".into());
     assert!(matches!(component_for(&mut reg, Claim::Feature, "two"), Err(Missing::Unknown)));
 
     put_manifest(&root, "B.Two", json!({"id": "B.Two", "featureTypes": ["two"]}));
-    reg.replace(discover_in(std::slice::from_ref(&root)));
+    reg.replace(discover_in(&checkout(&root)));
     assert!(matches!(component_for(&mut reg, Claim::Feature, "two"), Err(Missing::Broken(id, _)) if id == "B.Two"));
     assert!(matches!(&reg.entries[0].loaded, Loaded::Broken(why) if why == "kept"));
 
     put_manifest(&root, "A.One", json!({"id": "A.One", "featureTypes": ["one"], "version": "1.1.0"}));
-    reg.replace(discover_in(std::slice::from_ref(&root)));
+    reg.replace(discover_in(&checkout(&root)));
     assert!(matches!(&reg.entries[0].loaded, Loaded::NotYet), "a replaced bundle is read again");
     let _ = std::fs::remove_dir_all(&root);
 }

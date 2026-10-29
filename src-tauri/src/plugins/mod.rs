@@ -11,8 +11,8 @@ pub mod localnet;
 pub mod web;
 
 use bundle::{
-    allowed_bundle_url, extract_into, grants_match, is_official_url, now_secs, safe_id, sha256_hex, Consented,
-    MAX_DOWNLOAD,
+    allowed_bundle_url, bundle_target, extract_into, grants_match, is_official_url, now_secs, official_label, safe_id,
+    sha256_hex, Consented, MAX_DOWNLOAD, OFFICIAL_IDS,
 };
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -68,6 +68,8 @@ pub(crate) fn consented_of(app: &AppHandle, id: &str) -> Option<bundle::Consente
 fn read_record(dir: &Path) -> Option<Installed> {
     let text = std::fs::read_to_string(dir.join(RECORD)).ok()?;
     let mut rec: Installed = serde_json::from_str(&text).ok()?;
+    // Decided again on read, so a record labelled by an older, looser check loses the label.
+    rec.official = rec.official && official_label(is_official_url(&rec.source), &rec.consented.kind, &rec.id);
     rec.component = has_component(dir);
     Some(rec)
 }
@@ -158,6 +160,7 @@ fn install_bytes(
         return finish(Err(e), &staging);
     }
 
+    let official = official_label(official, &found.kind, &id);
     let record = Installed {
         id: id.clone(),
         version: found.version.clone(),
@@ -229,15 +232,18 @@ fn inspect_bytes(app: &AppHandle, bytes: &[u8], source: String, official: bool) 
     // failed to unpack is the one case where the leftovers are attacker-chosen.
     let _ = std::fs::remove_dir_all(&scratch);
 
-    Ok(Inspected { manifest: read?, sha256, source, official })
+    let manifest = read?;
+    let field = |k: &str| manifest.get(k).and_then(serde_json::Value::as_str).unwrap_or("");
+    let official = official_label(official, field("kind"), field("id"));
+    Ok(Inspected { manifest, sha256, source, official })
 }
 
 /// Download a bundle and read its manifest, installing nothing.
 #[tauri::command]
 pub async fn plugin_inspect_url(app: AppHandle, url: String) -> Result<Inspected, String> {
-    let bytes = fetch_bundle(&url).await?;
-    let official = is_official_url(&url);
-    inspect_bytes(&app, &bytes, url, official)
+    let target = bundle_target(&url)?;
+    let bytes = fetch_bundle(&target.url).await?;
+    inspect_bytes(&app, &bytes, target.url.into(), target.official)
 }
 
 /// Read a bundle the user already has, installing nothing.
@@ -249,13 +255,7 @@ pub fn plugin_inspect_file(app: AppHandle, path: String) -> Result<Inspected, St
 
 /// Get a bundle's bytes over HTTPS, refusing to reach anywhere it may not. In Rust, since widening `connect-src` for a
 /// fetch() would open the releases host to every script in the window.
-async fn fetch_bundle(url: &str) -> Result<Vec<u8>, String> {
-    if !allowed_bundle_url(url) {
-        return Err(format!(
-            "a plugin can only be downloaded over https from a named host, and that is not one: {url}"
-        ));
-    }
-
+async fn fetch_bundle(url: &url::Url) -> Result<Vec<u8>, String> {
     // Every hop is checked: reqwest follows redirects, so an approved host could 302 to plain HTTP. The hop limit
     // restates reqwest's default, since a custom policy replaces it.
     let client = reqwest::Client::builder()
@@ -273,7 +273,7 @@ async fn fetch_bundle(url: &str) -> Result<Vec<u8>, String> {
         .build()
         .map_err(|e| e.to_string())?;
 
-    let resp = client.get(url).send().await.map_err(|e| format!("could not download the plugin: {e}"))?;
+    let resp = client.get(url.clone()).send().await.map_err(|e| format!("could not download the plugin: {e}"))?;
     if !resp.status().is_success() {
         return Err(format!("the download answered {}", resp.status()));
     }
@@ -305,9 +305,9 @@ pub async fn plugin_install(
     promise: String,
     expect: Consented,
 ) -> Result<Installed, String> {
-    let bytes = fetch_bundle(&url).await?;
-    let official = is_official_url(&url);
-    install_bytes(&app, &id, url, official, &bytes, sha256, promise, expect)
+    let target = bundle_target(&url)?;
+    let bytes = fetch_bundle(&target.url).await?;
+    install_bytes(&app, &id, target.url.into(), target.official, &bytes, sha256, promise, expect)
 }
 
 /// Install a zip the user has. The same pipeline: the grant comparison is the only gate a local file has, so skipping
@@ -364,7 +364,7 @@ pub fn plugin_code(app: AppHandle, id: String) -> Result<String, String> {
             record.consented.kind
         ));
     }
-    if !record.official {
+    if !record.official || !OFFICIAL_IDS.contains(&id) {
         return Err(
             "this plugin did not come from FundaCAD's own releases, and code that runs in the              app's own context is loaded only from there"
                 .into(),
@@ -408,4 +408,24 @@ pub fn plugin_remove(app: AppHandle, id: String) -> Result<(), String> {
         return Ok(());
     }
     std::fs::remove_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))
+}
+
+/// Read by crates/fundacad-geom/src/plugins, which cannot see the window's storage. The underscore keeps it from
+/// being any plugin's directory name.
+pub const DISABLED: &str = "disabled_ids.json";
+
+/// The ids switched off in the window, sorted, written whole and then renamed into place. An id that could not be a
+/// plugin's is dropped.
+pub fn write_disabled(root: &Path, ids: &[String]) -> Result<(), String> {
+    let ids: std::collections::BTreeSet<&str> = ids.iter().filter_map(|id| safe_id(id).ok()).collect();
+    let text = serde_json::to_string(&ids).map_err(|e| e.to_string())?;
+    let path = root.join(DISABLED);
+    let tmp = root.join(format!("{DISABLED}.tmp"));
+    std::fs::write(&tmp, text).map_err(|e| format!("{}: {e}", tmp.display()))?;
+    std::fs::rename(&tmp, &path).map_err(|e| format!("{}: {e}", path.display()))
+}
+
+#[tauri::command]
+pub fn plugin_set_disabled(app: AppHandle, ids: Vec<String>) -> Result<(), String> {
+    write_disabled(&plugins_root(&app)?, &ids)
 }

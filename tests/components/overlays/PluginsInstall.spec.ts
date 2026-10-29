@@ -17,7 +17,7 @@
 // question being asked.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { enableAutoUnmount, mount } from "@vue/test-utils";
+import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 
 const inspectUrl = vi.fn();
@@ -43,7 +43,7 @@ vi.mock("../../../src/plugins", async (importOriginal) => {
 const PluginsSection = (await import("../../../src/components/overlays/PluginsSection.vue")).default;
 const { candidateFrom } = await import("../../../src/plugins");
 const { errorNotice } = await import("../../../src/ui/errorNotice");
-const { pluginEnabled } = await import("../../../src/plugins/registry");
+const { pluginEnabled, setPluginEnabled } = await import("../../../src/plugins/registry");
 const { definePluginSettings, storageKey } = await import("../../../src/plugins/settings");
 const { contribute, resetContributions } = await import("../../../src/plugins/contrib");
 
@@ -332,6 +332,32 @@ describe("the list of what is installed", () => {
     expect((input.element as HTMLInputElement).checked).toBe(false);
     await input.trigger("change");
     expect(pluginEnabled("widgets")).toBe(true);
+  });
+
+  it("keeps a plugin running and says so when the engine could not be told it is switched off", async () => {
+    installedPlugins.mockResolvedValue([record({})]);
+    const w = await mounted();
+    const win = window as unknown as Record<string, unknown>;
+    win.__TAURI_INTERNALS__ = {
+      invoke: async (cmd: string) => {
+        if (cmd === "plugin_set_disabled") throw new Error("disk full");
+      },
+    };
+    try {
+      await w.get('[data-plugin="widgets"] .plug-controls .ui-checkbox input').trigger("change");
+      expect(pluginEnabled("widgets")).toBe(false);
+      await vi.waitFor(() =>
+        expect(errorNotice()?.message).toBe(
+          "Could not switch widgets off, the geometry engine could not be told. Error: disk full",
+        ),
+      );
+      await flushPromises();
+      const box = w.get('[data-plugin="widgets"] .plug-controls .ui-checkbox');
+      expect([pluginEnabled("widgets"), box.attributes("title")]).toEqual([true, "Running"]);
+    } finally {
+      delete win.__TAURI_INTERNALS__;
+      void setPluginEnabled("widgets", true);
+    }
   });
 
   it("opens an installed plugin's settings from a Settings button carrying the base button icon", async () => {
