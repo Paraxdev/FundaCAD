@@ -43,7 +43,7 @@
   align-items: center;
   gap: var(--s-2);
   margin: 0 0 var(--s-2);
-  font-size: 10.5px;
+  font-size: var(--fs-micro);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.8px;
@@ -60,7 +60,7 @@
   background: var(--panel-2);
   color: var(--text-dim);
   font: inherit;
-  font-size: 10.5px;
+  font-size: var(--fs-micro);
   letter-spacing: 0;
   text-transform: none;
   cursor: pointer;
@@ -119,14 +119,14 @@
 }
 .rd-used-name {
   display: block;
-  font-size: 12px;
+  font-size: var(--fs-small);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .rd-used-count {
   flex: 0 0 auto;
-  font-size: 10px;
+  font-size: var(--fs-micro);
   line-height: 1.25;
   text-align: right;
   color: var(--text-mute);
@@ -180,7 +180,7 @@
   border-radius: var(--r-pill);
   background: var(--accent);
   color: var(--panel-2);
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-weight: 600;
 }
 .rd-ball {
@@ -203,7 +203,7 @@
   border: 1px solid var(--line);
 }
 .rd-tile-name {
-  font-size: 11.5px;
+  font-size: var(--fs-small);
   line-height: 1.3;
   white-space: nowrap;
   overflow: hidden;
@@ -211,7 +211,7 @@
 }
 .rd-sub {
   display: block;
-  font-size: 10px;
+  font-size: var(--fs-micro);
   color: var(--text-mute);
   white-space: nowrap;
   overflow: hidden;
@@ -234,7 +234,7 @@
   background: var(--panel-2);
   color: var(--text-dim);
   font: inherit;
-  font-size: 11px;
+  font-size: var(--fs-micro);
   cursor: pointer;
 }
 .rd-chip:hover {
@@ -315,7 +315,7 @@
   background: var(--panel-2);
   box-shadow: var(--shadow-2);
   color: var(--text);
-  font-size: 11.5px;
+  font-size: var(--fs-small);
   white-space: nowrap;
   pointer-events: none;
 }
@@ -337,7 +337,7 @@
   background: var(--float-chip-bg);
   color: var(--text-mute);
   font: inherit;
-  font-size: 10px;
+  font-size: var(--fs-micro);
 }
 
 .rd-heavy-label {
@@ -381,7 +381,7 @@
   border-radius: var(--r-sm);
   background: transparent;
   color: var(--text-mute);
-  font-size: 11px;
+  font-size: var(--fs-micro);
   cursor: pointer;
 }
 .rd-mini:hover {

@@ -78,7 +78,7 @@ describe("the one .btn rule", () => {
       "--btn-fill": "var(--float-chip-bg)",
       "--btn-hover": "linear-gradient(var(--hover-wash), var(--hover-wash)), var(--float-chip-bg)",
       padding: "var(--s-3) var(--s-4)",
-      "font-size": "12px",
+      "font-size": "var(--fs-small)",
       "font-weight": "500",
       color: "var(--text)",
       background: "var(--btn-fill)",

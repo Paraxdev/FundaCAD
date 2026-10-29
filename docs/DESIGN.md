@@ -42,7 +42,7 @@ those files, change this page in the same commit.
    `--accent-hot`, so the readout reads as the tool's output
    ([7.13](#713-tool-and-readout-panels-measure-panel)). Card and dialog titles
    stay `--text`.
-6. **Dense rows, generous shell.** Rows and labels are small (12 to 12.5px,
+6. **Dense rows, generous shell.** Rows and labels are small (12 to 13px,
    34px rows, 40px tiles). The air lives at the shell level: gaps, card
    padding, big corner radii.
 7. **Tokens only.** Every colour, radius, gap, duration and shadow is a custom
@@ -501,7 +501,7 @@ There is no display type. Nothing in the chrome is above 15px except two
 Preferences headings at 18px.
 
 Caps labels are small, bold, uppercase and tracked, in `--text-mute` or
-`--text-dim`. The existing ones use px tracking: `.panel-title` 10px/700, 1px,
+`--text-dim`. The existing ones use px tracking: `.panel-title` 11px/700, 1px,
 `--text-mute`; `.palette-title` 1.2px, `#context-tab` 0.8px and
 `.home-nav-section` 0.4px, all `--text-dim`. Match the sibling label when you
 extend a surface. A label in a new surface is
@@ -769,7 +769,7 @@ Glass group A, `--float-radius`, `overflow: hidden`.
 | `.float-card-close`, `.float-card-more` | The small icon button, see below |
 | `.float-card-body` | padding `var(--s-1) var(--s-2) var(--s-2)`, scrolls, `overscroll-behavior: contain` |
 | `.float-card-foot` | padding `4px 6px`, no divider line |
-| Section label (`.panel-title`) | 10px, 700, uppercase, letter-spacing 1px, `--text-mute` |
+| Section label (`.panel-title`) | `--fs-micro`, 700, uppercase, letter-spacing 1px, `--text-mute` |
 
 The small icon button is `IconButton` at `size="md"` with `variant="plain"`. It is not tied to a card: it works in
 any glass surface, a card head, a `Panel`, a popover. Use it for any 28px icon action (close, copy, more) instead of
@@ -814,7 +814,7 @@ wears it.
 `RailButton.vue`. The tile is glass A at `--rail-tile`, `--float-tile-radius`,
 filled with `--float-tile-bg`. The pill (label) is glass A, `--float-chip-radius`,
 filled with `--float-chip-bg`, padding `3px 9px`, label `.rail-label`
-12.5px/600, sub label `.rail-sub` 10.5px `--text-mute`.
+`--fs-body`/600, sub label `.rail-sub` `--fs-micro` `--text-mute`.
 
 | State | Recipe |
 |---|---|
@@ -925,11 +925,11 @@ Render, `.active` in `--accent-tint-2`), `.rd-tab` (the Render dock, `.active` w
 | Class | Recipe |
 |---|---|
 | `Chip` (`.chip`) | squircle, chip radius, fill `--float-chip-bg`, no edge; `sm` 11px/20px, 500, `--text-dim`, padding `0 var(--s-2)`; `md` 12px/26px, 600, `--text`; `accent`: `--accent-wash` over the fill, `--accent-hot`; `warn`: warn 16% over the fill; `error`: `--error-tint`, `--error`. A button chip hovers `--hover-wash` over its fill; `removable` adds a 16px `IconButton` "Remove X" |
-| `Chip` `xs` (a count badge) | 9px/14px, 700, tabular, min width 14px; on an icon it is solid, `--accent` with `--on-accent`, `--warn` or `--error` with `--bg` |
+| `Chip` `xs` (a count badge) | `--fs-micro`/16px, 700, tabular, min width 16px; on an icon it is solid, `--accent` with `--on-accent`, `--warn` or `--error` with `--bg` |
 | `KeyChip` (`.key-chip kbd`) | mono 10px, `--text-dim`, padding `0 4px`, radius 6px, fill `--float-chip-bg`, no edge; `inTitle` hides it from a screen reader |
 | `.rd-chip` | padding `3px var(--s-2)`, `--panel-2`, pill radius, 11px `--text-dim`; hover `--raised`, `--text`; `.active` fill `--accent-tint-2`, `--accent-hot`; disabled opacity 0.55 |
 | `#context-tab` | 10px, 700, uppercase, letter-spacing 0.8px, padding `var(--s-1) var(--s-3)`; `.sketch` turns it accent (`--accent-hot`, fill `--accent-tint-2`) |
-| `.tree-count` | 10px, 600, `--text-mute`, `--panel-2` pill, hidden when empty |
+| `.tree-count` | `--fs-micro`, 600, `--text-mute`, `--panel-2` pill, hidden when empty |
 | `.section-chip` (`SectionChip.vue`) | glass A in `--float-chip-bg`, chip radius, padding `var(--s-1) var(--s-1) var(--s-1) var(--s-3)`, gap `--s-2`, 600 12px `--text`, the section icon in `--accent`, `pop-in`; `role="toolbar"`; shown only while a cut is on, absent otherwise; under 560px, or when the top row is too narrow for them, the words hide and the icon's `title` says them |
 | `.section-chip-btn` | chip fill of `.pop-wide`, chip radius, padding `var(--s-1) var(--s-3)`, 600 12px `--text-dim`; hover `--text`; `.active` (Edit while editing, `aria-pressed`) as `.dim-btn.on`; `.disabled` with `aria-disabled` opacity 0.45, no hover; shared focus outline; a 40px hit area on touch |
 | `.updating-chip` (`UpdatingChip.vue`) | glass A in `--float-chip-bg`, chip radius, padding `var(--s-1) var(--s-3)`, gap `--s-2`, 500 11.5px `--text-dim`, `pop-in`, `role="status"`, `pointer-events: none` so a pick goes through to the model; a 10px ring spinner in `--accent` on a 25% accent track; shown while a rebuild other than a tool preview has run past `OUT_OF_DATE_GRACE_MS` (600 ms, `app/staleModel.ts`), gone when it lands, is cancelled or the document is replaced; it never ghosts the model |
@@ -1056,7 +1056,7 @@ defineEmits<{ close: [] }>();
   as every inspect panel does, narrowing to fit the smaller stage, so a row of buttons
   in a panel wraps rather than clips. The in-view chips (`.dim-input`, `.sketch-dims`,
   `.snap-tag`, `.prompt` and the like) draw over a panel they meet.
-  The shell is `min-width: 180px`, `padding: var(--s-4)`, `font-size: 12px`.
+  The shell is `min-width: 180px`, `padding: var(--s-4)`, `font-size: var(--fs-small)`.
 
 | Class | Recipe |
 |---|---|
@@ -1066,7 +1066,7 @@ defineEmits<{ close: [] }>();
 | `.measure-v` | the value, `font-variant-numeric: tabular-nums` |
 | `.measure-divider` | 1px `--line`, margin `var(--s-2) 0` |
 | `.measure-select`, `.measure-number` | the old small inline fields; new work uses `Select` and `NumberField` at `sm` |
-| `.measure-hint` | 10px, `--text-mute`, `margin-top: var(--s-2)`. The last line, saying how the panel closes ("Esc to close", "Esc to exit", "Overhang again to close"); `hint` writes it |
+| `.measure-hint` | `--fs-micro`, `--text-mute`, `margin-top: var(--s-2)`. The last line, saying how the panel closes ("Esc to close", "Esc to exit", "Overhang again to close"); `hint` writes it |
 | Fields | `FieldRow` with its control, for a label and something to change; `.measure-row` is for a label and a value |
 | Actions | `Button`, or `Button variant="primary"` for the one main action; a 28px icon action is `IconButton size="md" variant="plain"` ([7.1](#71-floating-card-float-card)) |
 

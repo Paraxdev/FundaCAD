@@ -31,7 +31,7 @@
   background: transparent;
   color: var(--text-dim);
   font: inherit;
-  font-size: 14px;
+  font-size: var(--fs-title);
   cursor: pointer;
   transition:
     background var(--t-fast) var(--ease),
@@ -76,7 +76,7 @@
 }
 .prefs-pane-title {
   margin: 0 0 var(--s-4);
-  font-size: 18px;
+  font-size: var(--fs-display);
   font-weight: 600;
   color: var(--text);
 }
@@ -118,13 +118,13 @@ label.pref-head {
   border-top: 1px solid var(--line);
 }
 .pref-title {
-  font-size: 14px;
+  font-size: var(--fs-title);
   font-weight: 600;
   color: var(--text);
 }
 .pref-hint {
   margin: 0;
-  font-size: 12.5px;
+  font-size: var(--fs-body);
   line-height: 1.5;
   color: var(--text-dim);
 }
@@ -132,7 +132,7 @@ label.pref-head {
   min-width: 150px;
   max-width: 60%;
   height: 30px;
-  font-size: 13px;
+  font-size: var(--fs-body);
 }
 .pref-warning {
   margin: 0 0 var(--s-4);
@@ -140,7 +140,7 @@ label.pref-head {
   border: 1px solid var(--warn);
   border-radius: 6px;
   background: color-mix(in srgb, var(--warn) 10%, transparent);
-  font-size: 13px;
+  font-size: var(--fs-body);
   line-height: 1.5;
   color: var(--text);
 }
@@ -153,14 +153,14 @@ label.pref-head {
   gap: var(--s-2);
 }
 .pref-card .prefs-readout {
-  font-size: 13px;
+  font-size: var(--fs-body);
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
 }
 .pref-card .btn {
   height: 30px;
   padding: 0 var(--s-4);
-  font-size: 13px;
+  font-size: var(--fs-body);
 }
 
 /* The choices keep their width and the title beside them wraps, so no choice is cut short. */
@@ -181,12 +181,12 @@ label.pref-head {
   display: flex;
   align-items: center;
   min-height: 30px;
-  font-size: 14px;
+  font-size: var(--fs-title);
   font-weight: 600;
   color: var(--text);
 }
 .pref-card > .ui-slider .ui-slider-value {
-  font-size: 13px;
+  font-size: var(--fs-body);
 }
 .pref-card > .ui-slider .ui-slider-input {
   grid-row: 2;
@@ -209,7 +209,7 @@ label.pref-head {
   flex-basis: 100%;
 }
 .prefs-a11y-status {
-  font-size: 12.5px;
+  font-size: var(--fs-body);
   color: var(--text-dim);
 }
 .prefs-group + .prefs-group {
@@ -217,7 +217,7 @@ label.pref-head {
 }
 .prefs-group-title {
   margin: 0 0 var(--s-3);
-  font-size: 13px;
+  font-size: var(--fs-body);
   font-weight: 600;
   color: var(--text-dim);
 }
@@ -230,7 +230,7 @@ label.pref-head {
 }
 .prefs-pane-flow .sm-section {
   margin-top: var(--s-3);
-  font-size: 18px;
+  font-size: var(--fs-display);
   font-weight: 600;
   letter-spacing: 0;
   text-transform: none;
@@ -240,7 +240,7 @@ label.pref-head {
   margin-top: 0;
 }
 .prefs-pane-flow .sm-hint {
-  font-size: 12.5px;
+  font-size: var(--fs-body);
   line-height: 1.5;
 }
 .prefs-pane-flow .prefs-row {
@@ -251,13 +251,13 @@ label.pref-head {
   background: var(--float-tile-bg);
 }
 .prefs-pane-flow .prefs-label {
-  font-size: 14px;
+  font-size: var(--fs-title);
   font-weight: 600;
   color: var(--text);
 }
 .prefs-pane-flow .sm-select {
   height: 30px;
-  font-size: 13px;
+  font-size: var(--fs-body);
 }
 
 /* ShortcutsDialog.vue, on the Preferences page layout. */
@@ -280,7 +280,7 @@ label.pref-head {
   align-items: center;
   gap: var(--s-2) var(--s-3);
   min-height: 30px;
-  font-size: 13px;
+  font-size: var(--fs-body);
   color: var(--text-dim);
 }
 .sc-label {
@@ -297,7 +297,7 @@ label.pref-head {
   background: var(--float-chip-bg);
   color: var(--accent-hot);
   font: inherit;
-  font-size: 12px;
+  font-size: var(--fs-small);
   text-align: center;
 }
 .sc-key {
@@ -320,7 +320,7 @@ label.pref-head {
 .sc-changed,
 .sc-fixed {
   line-height: 1;
-  font-size: 11px;
+  font-size: var(--fs-micro);
   color: var(--accent);
 }
 .sc-fixed {
@@ -333,7 +333,7 @@ label.pref-head {
   background: transparent;
   color: var(--text-dim);
   font: inherit;
-  font-size: 12px;
+  font-size: var(--fs-small);
   text-decoration: underline;
   cursor: pointer;
 }

@@ -31,7 +31,7 @@
 }
 .modal-head h2 {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--fs-title);
   font-weight: 600;
   letter-spacing: 0.3px;
 }
@@ -39,7 +39,7 @@
   background: transparent;
   border: none;
   color: var(--text-dim, #9aa3af);
-  font-size: 15px;
+  font-size: var(--fs-title);
   cursor: pointer;
   padding: var(--s-1) var(--s-3);
   border-radius: var(--r-sm, 6px);
@@ -73,7 +73,7 @@
   gap: var(--s-3);
 }
 .sm-section {
-  font-size: 10.5px;
+  font-size: var(--fs-micro);
   text-transform: uppercase;
   letter-spacing: 0.7px;
   color: var(--text-mute, #6b7280);
@@ -84,7 +84,7 @@
   margin-top: 0;
 }
 .sm-hint {
-  font-size: 11px;
+  font-size: var(--fs-micro);
   color: var(--text-dim, #9aa3af);
 }
 .sm-axis-row {
@@ -94,7 +94,7 @@
   gap: var(--s-3);
 }
 .sm-axis-label {
-  font-size: 11px;
+  font-size: var(--fs-micro);
   color: var(--text-dim, #9aa3af);
 }
 .sm-axis-track {
@@ -147,17 +147,17 @@
   accent-color: var(--accent);
 }
 .sm-slabel {
-  font-size: 11px;
+  font-size: var(--fs-micro);
   color: var(--text-dim, #9aa3af);
 }
 .sm-sval {
-  font-size: 11px;
+  font-size: var(--fs-micro);
   color: var(--text-mute, #6b7280);
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
 .sm-radio {
-  font-size: 12px;
+  font-size: var(--fs-small);
   margin-right: var(--s-4);
   cursor: pointer;
 }
@@ -168,7 +168,7 @@
   gap: var(--s-3);
 }
 .sm-map-label {
-  font-size: 11px;
+  font-size: var(--fs-micro);
   color: var(--text-dim, #9aa3af);
 }
 .sm-select {
@@ -192,7 +192,7 @@
   /* The 26px clears the gradient caret above, placed from the right edge, like every other
      select. */
   padding: var(--s-2) 26px var(--s-2) var(--s-3);
-  font-size: 11px;
+  font-size: var(--fs-micro);
   cursor: pointer;
 }
 .sm-select:focus {
@@ -229,7 +229,7 @@
   border-radius: var(--r-sm, 6px);
   padding: var(--s-2) var(--s-3);
   font: inherit;
-  font-size: 11px;
+  font-size: var(--fs-micro);
   min-width: 0;
 }
 .sm-input:focus {
@@ -237,7 +237,7 @@
   outline-offset: 0;
 }
 .sm-inv {
-  font-size: 11px;
+  font-size: var(--fs-micro);
   color: var(--text-dim, #9aa3af);
   display: flex;
   align-items: center;
@@ -263,7 +263,7 @@
   cursor: pointer;
 }
 .prefs-label {
-  font-size: 12px;
+  font-size: var(--fs-small);
   color: var(--text-dim, #9aa3af);
 }
 .prefs-switch {
@@ -303,12 +303,12 @@
   flex: none;
 }
 .plug-name {
-  font-size: 13px;
+  font-size: var(--fs-body);
   color: var(--text, #e6e8ec);
 }
 .plug-summary,
 .plug-state {
-  font-size: 11px;
+  font-size: var(--fs-micro);
   color: var(--text-dim, #9aa3af);
 }
 .plug-link {
@@ -360,7 +360,7 @@
   background: var(--panel-2, #1c1f26);
 }
 .plug-listhead {
-  font-size: 11px;
+  font-size: var(--fs-micro);
   color: var(--text-mute, #6b7280);
   text-transform: uppercase;
   letter-spacing: 0.6px;
@@ -368,7 +368,7 @@
 .plug-consent ul {
   margin: 4px 0 0;
   padding-left: 18px;
-  font-size: 12px;
+  font-size: var(--fs-small);
   color: var(--text, #e6e8ec);
 }
 /* The "will not" list is quieter: it is there to judge the first list against. */
@@ -385,7 +385,7 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--s-2);
-  font-size: 12px;
+  font-size: var(--fs-small);
 }
 /* Wraps rather than scrolls, so a URL's host is never off screen. */
 .plug-add {
@@ -404,16 +404,16 @@
   background: var(--panel-2, #1c1f26);
   color: var(--text, #e6e8ec);
   font: inherit;
-  font-size: 12px;
+  font-size: var(--fs-small);
 }
 /* Above the two lists: where a bundle came from is what a person can judge, so it is read
    before deciding. */
 .plug-origin {
-  font-size: 12px;
+  font-size: var(--fs-small);
   color: var(--text, #e6e8ec);
 }
 .mcp-status {
-  font-size: 12px;
+  font-size: var(--fs-small);
   color: var(--text-dim, #9aa3af);
 }
 .mcp-status.on {
@@ -436,7 +436,7 @@
   background: var(--panel-2, #1c1f26);
   color: var(--text, #e6e8ec);
   font-family: var(--mono, ui-monospace, monospace);
-  font-size: 11px;
+  font-size: var(--fs-micro);
   white-space: pre;
   user-select: text;
 }
@@ -462,7 +462,7 @@
   min-width: 280px;
 }
 .choice-title {
-  font-size: 13px;
+  font-size: var(--fs-body);
   font-weight: 600;
   color: var(--text, #e6e8ec);
   margin-bottom: var(--s-4, 12px);
@@ -487,7 +487,7 @@
   border: 1px solid transparent;
   border-radius: var(--r-md, 8px);
   color: var(--text, #e6e8ec);
-  font-size: 12px;
+  font-size: var(--fs-small);
   cursor: pointer;
   transition:
     background var(--t-fast, 120ms) var(--ease),
@@ -498,7 +498,7 @@
 }
 .choice-btn small {
   color: var(--text-mute, #6b7280);
-  font-size: 10px;
+  font-size: var(--fs-micro);
 }
 .choice-btn.choice-primary {
   background: var(--accent);
@@ -532,7 +532,7 @@
   padding: var(--s-2) var(--s-3);
   border-radius: var(--r-md, 8px);
   color: var(--text, #e6e8ec);
-  font-size: 12px;
+  font-size: var(--fs-small);
   cursor: pointer;
 }
 .choice-check:hover {
@@ -540,7 +540,7 @@
 }
 .choice-check small {
   color: var(--text-mute, #6b7280);
-  font-size: 10px;
+  font-size: var(--fs-micro);
   margin-left: auto;
 }
 .choice-list {
@@ -549,7 +549,7 @@
   padding: 0;
   max-height: 280px;
   overflow: auto;
-  font-size: 12px;
+  font-size: var(--fs-small);
   color: var(--text, #e6e8ec);
 }
 .choice-list li {
@@ -615,13 +615,13 @@
   flex: 1;
 }
 .cmdk-group {
-  font-size: 11px;
+  font-size: var(--fs-micro);
   color: var(--text-mute, #6b7280);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 .cmdk-key {
-  font-size: 11px;
+  font-size: var(--fs-micro);
   color: var(--text-mute, #6b7280);
   font-variant-numeric: tabular-nums;
 }
@@ -643,7 +643,7 @@
   box-shadow: var(--shadow-3, 0 16px 48px rgba(0, 0, 0, 0.5));
   /* Same inset as .palette, the other small panel that floats over the model. */
   padding: var(--s-4);
-  font-size: 12px;
+  font-size: var(--fs-small);
   color: var(--text, #e6e9ee);
 }
 .measure-panel[data-capped] {
@@ -676,7 +676,7 @@
   background: var(--panel-2, #1b1f24);
   border: 1px solid transparent;
   color: var(--text, #e6e9ee);
-  font-size: 11px;
+  font-size: var(--fs-micro);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -728,7 +728,7 @@
 }
 .measure-hint {
   margin-top: var(--s-2);
-  font-size: 10px;
+  font-size: var(--fs-micro);
   color: var(--text-mute, #6b7280);
 }
 .mirror-chips {
@@ -768,11 +768,11 @@
 .bug-report-card .bug-check {
   display: flex;
   margin: var(--s-2) 0;
-  font-size: 12px;
+  font-size: var(--fs-small);
 }
 .bug-report-card .bug-preview {
   margin: var(--s-3) 0;
-  font-size: 11.5px;
+  font-size: var(--fs-small);
 }
 .bug-report-card .bug-preview pre {
   max-height: 220px;
@@ -789,7 +789,7 @@
   justify-content: space-between;
   gap: var(--s-3);
   margin: var(--s-2) 0;
-  font-size: 12px;
+  font-size: var(--fs-small);
 }
 .bug-report-card .bug-shot-saved {
   display: flex;
@@ -805,7 +805,7 @@
 .bug-report-card .bug-note,
 .bug-report-card .bug-shot-saved,
 .bug-report-card .bug-again {
-  font-size: 11.5px;
+  font-size: var(--fs-small);
   color: var(--text-dim);
 }
 .bug-report-card .bug-note {
@@ -845,7 +845,7 @@
   padding: var(--s-2);
   color: var(--text, #e6e8ec);
   font: inherit;
-  font-size: 12px;
+  font-size: var(--fs-small);
   text-align: left;
   cursor: pointer;
 }
@@ -911,7 +911,7 @@
   min-width: 0;
 }
 .prefs-readout {
-  font-size: 11px;
+  font-size: var(--fs-micro);
   font-variant-numeric: tabular-nums;
   color: var(--text-dim);
   min-width: 3.5em;

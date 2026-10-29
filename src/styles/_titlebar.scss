@@ -24,7 +24,7 @@
 }
 
 .context-tab {
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-weight: 700;
   letter-spacing: 0.8px;
   color: var(--text-dim);
@@ -60,7 +60,7 @@
   /* The 1px is not a spacing rung but the hairline that keeps adjacent hover fills apart;
      a rung would widen the menu bar at the notice slot's expense. */
   margin: var(--s-2) 1px;
-  font-size: 12.5px;
+  font-size: var(--fs-body);
 }
 .menubar .btn.menu-btn.is-open {
   background: var(--btn-hover);
@@ -127,7 +127,7 @@
 }
 .menu-shortcut {
   color: var(--text-mute);
-  font-size: 11px;
+  font-size: var(--fs-micro);
   font-variant-numeric: tabular-nums;
 }
 .menu-item:hover .menu-shortcut {
@@ -175,7 +175,7 @@
   display: inline-flex;
   min-width: 0;
   color: var(--text-mute);
-  font-size: 12px;
+  font-size: var(--fs-small);
   letter-spacing: 0.2px;
 }
 .docname.dirty {
@@ -192,7 +192,7 @@
   max-width: 286px;
   padding: var(--s-2) var(--s-4) var(--s-3);
   color: var(--text-mute);
-  font-size: 12px;
+  font-size: var(--fs-small);
   overflow-wrap: anywhere;
 }
 .tb-fold-doc.dirty {

@@ -22,7 +22,7 @@
   cursor: pointer;
   user-select: none;
   font-weight: 600;
-  font-size: 12.5px;
+  font-size: var(--fs-body);
   color: var(--text);
   border-radius: var(--r-sm);
   transition: background var(--t-fast) var(--ease);
@@ -51,7 +51,7 @@
   color: var(--text-dim);
 }
 .tree-count {
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: var(--text-mute);
@@ -161,7 +161,7 @@
   position: absolute;
   transform: translate(-50%, -50%);
   color: var(--text);
-  font-size: 11px;
+  font-size: var(--fs-micro);
   font-weight: 550;
   font-variant-numeric: tabular-nums;
   padding: 2px 7px;
@@ -220,7 +220,7 @@
   align-items: center;
   justify-content: center;
   color: var(--accent-hot);
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-weight: 600;
   line-height: 1;
   cursor: pointer;
