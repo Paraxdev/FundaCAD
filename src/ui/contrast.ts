@@ -140,6 +140,18 @@ const MINIMA: Record<ContrastLevel, Record<"text" | "line" | "signal" | "edge" |
   high: { text: 7, line: 4.5, signal: 4.5, edge: 4.5, ring: 4.5 },
 };
 
+/** The tokens _contrast.scss swaps under More and Maximum contrast, each for the value of a stronger token. */
+export const CONTRAST_TOKENS: Record<"more" | "maximum", Record<string, string>> = {
+  more: { "--text-mute": "--text-dim", "--control-edge": "--text-dim" },
+  maximum: { "--text-dim": "--text", "--text-mute": "--text", "--line-strong": "--text", "--control-edge": "--text" },
+};
+
+export function atContrast(p: Record<string, string>, setting: keyof typeof CONTRAST_TOKENS): Record<string, string> {
+  const out = { ...p };
+  for (const [token, from] of Object.entries(CONTRAST_TOKENS[setting])) out[token] = p[from] ?? `missing ${from}`;
+  return out;
+}
+
 /** The rail pill and readout glass over the bare scene, as _tokens.scss builds --float-bg for each mode. */
 export function glassFill(p: Record<string, string>, mode: "dark" | "light"): Rgba {
   const c = (name: string) => parseColor(p[name] ?? `missing ${name}`);

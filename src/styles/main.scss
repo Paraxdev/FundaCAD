@@ -3,6 +3,8 @@
 // and the e2e suite selects on these class names. No SCSS variables, the theme is custom properties.
 
 @use "tokens";
+// Right after the tokens it swaps under More and Maximum contrast.
+@use "contrast";
 @use "base";
 @use "titlebar";
 @use "palette";

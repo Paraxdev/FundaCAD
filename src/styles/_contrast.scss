@@ -1,0 +1,16 @@
+// The Contrast setting (ui/contrastSetting.ts). A palette sits inline on <html>, so each swap needs !important
+// to beat it. ui/contrast.ts CONTRAST_TOKENS mirrors these swaps for the contrast tests.
+
+:root[data-contrast="more"] {
+  --text-mute: var(--text-dim) !important;
+  --control-edge: var(--text-dim) !important;
+  --focus-ring-width: 3px;
+}
+
+:root[data-contrast="maximum"] {
+  --text-dim: var(--text) !important;
+  --text-mute: var(--text) !important;
+  --line-strong: var(--text) !important;
+  --control-edge: var(--text) !important;
+  --focus-ring-width: 3px;
+}

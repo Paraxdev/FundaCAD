@@ -4,8 +4,10 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  CONTRAST_TOKENS,
   CONTROL_EDGE_SHARE,
   type Rgba,
+  atContrast,
   contrastFailures,
   contrastRatio as contrast,
   deltaE2000,
@@ -258,4 +260,51 @@ describe("theme contrast", () => {
       .map(([path]) => path);
     expect(offenders).toEqual([]);
   });
+});
+
+describe("More and Maximum contrast", () => {
+  const scss = sources["src/styles/_contrast.scss"] ?? "";
+
+  function block(level: string): string {
+    const at = scss.indexOf(`[data-contrast="${level}"]`);
+    return at < 0 ? "" : scss.slice(at, scss.indexOf("}", at));
+  }
+
+  it("_contrast.scss swaps the tokens the maths assumes, over the inline palette", () => {
+    for (const [level, swaps] of Object.entries(CONTRAST_TOKENS)) {
+      const rules = [...block(level).matchAll(/(--[\w-]+):\s*var\((--[\w-]+)\)\s*!important;/g)];
+      expect(Object.fromEntries(rules.map((m) => [m[1], m[2]]))).toEqual(swaps);
+      expect(block(level)).toMatch(/--focus-ring-width:\s*3px;/);
+    }
+  });
+
+  it("main.scss loads _contrast.scss after the tokens it replaces", () => {
+    const main = sources["src/styles/main.scss"] ?? "";
+    expect(main.indexOf('@use "contrast"')).toBeGreaterThan(main.indexOf('@use "tokens"'));
+  });
+
+  it("atContrast replaces a token by the palette value of its stronger twin", () => {
+    const p = { "--text": "#ffffff", "--text-dim": "#cccccc", "--text-mute": "#999999", "--line-strong": "#777777" };
+    expect(atContrast(p, "more")).toMatchObject({ "--text-mute": "#cccccc", "--control-edge": "#cccccc" });
+    expect(atContrast(p, "maximum")).toMatchObject({
+      "--text-dim": "#ffffff",
+      "--text-mute": "#ffffff",
+      "--line-strong": "#ffffff",
+      "--control-edge": "#ffffff",
+    });
+    expect(p["--text-mute"]).toBe("#999999");
+  });
+
+  for (const theme of shipped) {
+    const level = HIGH_CONTRAST.has(theme.id) ? "high" : "standard";
+    for (const setting of ["more", "maximum"] as const) {
+      it(`${theme.label} keeps every pair at least as strong under ${setting}`, () => {
+        const before = new Map(paletteContrast(theme.palette, theme.mode, level).map((r) => [r.what, r.ratio]));
+        const weaker = paletteContrast(atContrast(theme.palette, setting), theme.mode, level)
+          .filter((r) => r.ratio < (before.get(r.what) ?? 0) - 0.01)
+          .map((r) => `${r.what} ${before.get(r.what)} to ${r.ratio}`);
+        expect(weaker).toEqual([]);
+      });
+    }
+  }
 });

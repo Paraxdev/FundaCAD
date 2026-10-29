@@ -6,14 +6,21 @@ import { readSetting } from "./storedSetting";
 
 export type Animations = "system" | "on" | "off";
 export type Verbosity = "off" | "errors" | "normal" | "verbose";
+/** "system" is More when the OS asks for contrast, else Standard; contrastSetting.ts resolves and applies it. */
+export type Contrast = "system" | "standard" | "more" | "maximum";
 
 export interface A11yPrefs {
   animations: Animations;
   /** How much the announcer speaks: nothing, errors only, prompts and results, or every change too. */
   verbosity: Verbosity;
+  contrast: Contrast;
 }
 
-export const DEFAULT_A11Y: Readonly<A11yPrefs> = { animations: "system", verbosity: "normal" };
+export const DEFAULT_A11Y: Readonly<A11yPrefs> = {
+  animations: "system",
+  verbosity: "normal",
+  contrast: "system",
+};
 
 /** One click for screen reader users. Later settings join it: Single key shortcuts off, Solid panels on and
  *  Notification time Until dismissed. */
@@ -23,10 +30,12 @@ export const SCREEN_READER_PRESET: Readonly<Partial<A11yPrefs>> = { verbosity: "
 const KEYS: Record<keyof A11yPrefs, string> = {
   animations: "fundacad.animations",
   verbosity: "fundacad.a11y.verbosity",
+  contrast: "fundacad.a11y.contrast",
 };
 
 const ANIMATIONS: readonly Animations[] = ["system", "on", "off"];
 const VERBOSITY: readonly Verbosity[] = ["off", "errors", "normal", "verbose"];
+const CONTRAST: readonly Contrast[] = ["system", "standard", "more", "maximum"];
 
 export function asAnimations(v: unknown): Animations | null {
   return ANIMATIONS.includes(v as Animations) ? (v as Animations) : null;
@@ -34,10 +43,14 @@ export function asAnimations(v: unknown): Animations | null {
 export function asVerbosity(v: unknown): Verbosity | null {
   return VERBOSITY.includes(v as Verbosity) ? (v as Verbosity) : null;
 }
+export function asContrast(v: unknown): Contrast | null {
+  return CONTRAST.includes(v as Contrast) ? (v as Contrast) : null;
+}
 
 const GATES: { [K in keyof A11yPrefs]: (v: unknown) => A11yPrefs[K] | null } = {
   animations: asAnimations,
   verbosity: asVerbosity,
+  contrast: asContrast,
 };
 
 function readStored(): A11yPrefs {
