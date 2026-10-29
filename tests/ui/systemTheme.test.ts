@@ -65,11 +65,11 @@ function tauriWindow(theme: string): WindowHandlers {
   vi.doMock("@tauri-apps/api/window", () => ({
     getCurrentWindow: () => ({
       theme: async () => theme,
-      onThemeChanged: async (fn: WindowHandlers["theme"]) => {
+      onThemeChanged: async (fn: NonNullable<WindowHandlers["theme"]>) => {
         handlers.theme = fn;
         return () => {};
       },
-      onFocusChanged: async (fn: WindowHandlers["focus"]) => {
+      onFocusChanged: async (fn: NonNullable<WindowHandlers["focus"]>) => {
         handlers.focus = fn;
         return () => {};
       },
