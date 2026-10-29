@@ -8,6 +8,7 @@ import {
   uiButton,
   uiIconButton,
   uiNumberInput,
+  uiOption,
   type UiIconButtonOptions,
 } from "../components/ui/dom";
 import { iconElement } from "../ui/icons";
@@ -1033,14 +1034,9 @@ export class DimInput {
     menu.setAttribute("role", "listbox");
     menu.setAttribute("aria-label", label);
     this.menuRows = rows.map((r, i) => {
-      const row = document.createElement("button");
-      row.type = "button";
-      row.className = "dim-unit-item" + (r.active ? " active" : "");
-      row.id = `${menu.id}-${i}`;
-      row.tabIndex = -1;
-      row.setAttribute("role", "option");
-      row.setAttribute("aria-selected", String(r.active));
-      row.textContent = r.label;
+      const row = uiOption({ id: `${menu.id}-${i}`, label: r.label, selected: r.active, bare: true });
+      row.classList.add("dim-unit-item");
+      row.classList.toggle("active", r.active);
       const pick = () => {
         this.closeMenu();
         r.pick();

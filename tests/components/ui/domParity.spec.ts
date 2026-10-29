@@ -3,6 +3,7 @@ import { enableAutoUnmount, mount } from "@vue/test-utils";
 import type { Component } from "vue";
 
 import Button from "../../../src/components/ui/Button.vue";
+import ChoiceList from "../../../src/components/ui/ChoiceList.vue";
 import IconButton from "../../../src/components/ui/IconButton.vue";
 import NumberField from "../../../src/components/ui/NumberField.vue";
 import Slider from "../../../src/components/ui/Slider.vue";
@@ -17,6 +18,7 @@ import {
   uiButton,
   uiIconButton,
   uiNumberInput,
+  uiOption,
   uiSlider,
   uiUnitChip,
 } from "../../../src/components/ui/dom";
@@ -146,6 +148,46 @@ describe("dom.ts controls match their Vue twins", () => {
       b.value,
       b.style.getPropertyValue("--ui-slider-fill"),
     ]);
+  });
+
+  const choices = [
+    { value: "mm", label: "mm" },
+    { value: "in", label: "in", hint: "inch", title: "Imperial" },
+    { value: "deg", label: "deg" },
+  ];
+  const listRows = (active: number) =>
+    Array.from(vue(ChoiceList, { options: choices, modelValue: "in", active, id: "lst" }).children);
+
+  it("ChoiceList's driven rows", () => {
+    const theirs = listRows(1);
+    const mine = choices.map((c, i) => {
+      const row = uiOption({
+        id: `lst-${i}`,
+        label: c.label,
+        hint: c.hint,
+        title: c.title,
+        selected: c.value === "in",
+      });
+      row.classList.toggle("is-active", i === 1);
+      return dom(row);
+    });
+    expect(mine.map(shape)).toEqual(theirs.map(shape));
+    expect(mine.map((r) => r.id)).toEqual(theirs.map((r) => r.id));
+  });
+
+  it("a bare option drops only .opt-row, so a list keeps its own row look", () => {
+    const theirs = shape(listRows(0)[0]!);
+    expect(shape(dom(uiOption({ id: "lst-0", label: "mm", bare: true })))).toEqual({
+      ...theirs,
+      classes: theirs.classes.filter((c) => c !== "opt-row" && c !== "is-active"),
+    });
+  });
+
+  it("an option's press keeps focus on the combobox", () => {
+    const row = dom(uiOption({ id: "o-0", label: "mm" }));
+    const press = new MouseEvent("mousedown", { bubbles: true, cancelable: true });
+    row.dispatchEvent(press);
+    expect(press.defaultPrevented).toBe(true);
   });
 });
 

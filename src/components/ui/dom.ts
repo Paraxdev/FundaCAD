@@ -222,6 +222,44 @@ export function setExpanded(trigger: HTMLElement, open: boolean, listId?: string
   else trigger.removeAttribute("aria-controls");
 }
 
+export interface UiOptionOptions {
+  /** The list's id and the row's index, as ChoiceList names a row for `aria-activedescendant`. */
+  id: string;
+  label: string;
+  hint?: string | undefined;
+  selected?: boolean | undefined;
+  title?: string | undefined;
+  /** Leaves out .opt-row, whose look (loaded after the tool box styles) would repaint a list that paints its own rows. */
+  bare?: boolean | undefined;
+}
+
+/** A driven ChoiceList.vue row as DOM: focus stays on the combobox, which marks the highlighted row .is-active. */
+export function uiOption(o: UiOptionOptions): HTMLButtonElement {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.id = o.id;
+  b.tabIndex = -1;
+  b.setAttribute("role", "option");
+  b.dataset.roving = "";
+  if (!o.bare) b.classList.add("opt-row");
+  b.classList.toggle("selected", !!o.selected);
+  b.classList.toggle("is-selected", !!o.selected);
+  b.setAttribute("aria-selected", String(!!o.selected));
+  setTitle(b, o.title);
+  const label = document.createElement("span");
+  label.className = "opt-label";
+  label.textContent = o.label;
+  b.append(label);
+  if (o.hint) {
+    const hint = document.createElement("span");
+    hint.className = "opt-hint";
+    hint.textContent = o.hint;
+    b.append(hint);
+  }
+  b.addEventListener("mousedown", (e) => e.preventDefault());
+  return b;
+}
+
 export interface UiNumberInputOptions extends DisabledOptions {
   /** The name, and the title. */
   tip?: string | undefined;
