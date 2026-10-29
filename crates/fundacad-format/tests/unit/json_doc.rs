@@ -103,3 +103,20 @@ fn refuses_a_document_that_already_uses_the_key() {
     assert!(err.contains("already has"));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn a_text_past_the_cap_is_refused() {
+    let dir = tmpdir("cap_over");
+    let path = dir.join("big.funda");
+    std::fs::write(&path, "x".repeat(33)).unwrap();
+    let err = read_text_capped(&path, 32).unwrap_err();
+    assert!(err.contains("larger than"), "{err}");
+}
+
+#[test]
+fn a_text_at_the_cap_is_read_whole() {
+    let dir = tmpdir("cap_at");
+    let path = dir.join("fit.funda");
+    std::fs::write(&path, "y".repeat(32)).unwrap();
+    assert_eq!(read_text_capped(&path, 32).unwrap(), "y".repeat(32));
+}

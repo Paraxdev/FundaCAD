@@ -4,7 +4,7 @@
 
 use std::collections::BTreeMap;
 use std::fs::File;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 use base64::Engine;
@@ -19,6 +19,8 @@ pub const BINARY_DOC_EXT: &str = "fundab";
 pub const EMBEDDED_GEOMETRY_KEY: &str = "geometry";
 
 const MAX_TOTAL: u64 = 8 << 30;
+// Base64 geometry up to MAX_TOTAL plus room for the feature tree.
+const MAX_DOC_TEXT: u64 = MAX_TOTAL / 3 * 4 + (256 << 20);
 
 const DAMAGED: &str = "This document's embedded geometry is damaged and cannot be opened.";
 
@@ -120,10 +122,20 @@ pub fn write_json_document(
     Ok(())
 }
 
+pub fn read_text_capped(path: &Path, cap: u64) -> Result<String, String> {
+    let file = File::open(path).map_err(|e| e.to_string())?;
+    let mut bytes = Vec::new();
+    file.take(cap.saturating_add(1)).read_to_end(&mut bytes).map_err(|e| e.to_string())?;
+    if bytes.len() as u64 > cap {
+        return Err(format!("This document is larger than {} MiB and was refused.", cap >> 20));
+    }
+    String::from_utf8(bytes).map_err(|_| "This document is not valid UTF-8 text.".to_string())
+}
+
 /// Open a JSON document: publish its geometry into `blob_dir`, each blob verified against its hash, and return the
 /// document without the map. Text that is not a JSON object comes back untouched for the frontend to report.
 pub fn read_json_document(path: &Path, blob_dir: &Path) -> Result<String, String> {
-    let text = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+    let text = read_text_capped(path, MAX_DOC_TEXT)?;
     if !text.contains(&format!("\"{EMBEDDED_GEOMETRY_KEY}\"")) {
         return Ok(text);
     }
