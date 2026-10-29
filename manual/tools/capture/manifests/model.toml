@@ -244,7 +244,20 @@ file = "manual/docs/img/presspull-face.png"
 size = [840, 740]
 theme = "fundacad"
 crop = "region"
-stub = true
+at = [367, 115]
+park = [1300, 700]
+steps = [
+  { open = "fixture:sketch-block.json" },
+  { panel = "items", open = false },
+  { panel = "history", open = false },
+  { view = "fit" },
+  { evaluate = "() => document.querySelector('canvas').dispatchEvent(new WheelEvent('wheel', { deltaY: 100, clientX: 760, clientY: 450, bubbles: true, cancelable: true }))" },
+  { wait = 600 },
+  { tool = "Press/Pull" },
+  { pick_face = "top" },
+  { type = ["D", "9"] },
+  { wait = 800 },
+]
 show = "A selected top face being pulled out by Press/Pull, the value box above it."
 alt = "A selected top face being pulled out by Press/Pull, the value box above it"
 uses = ["manual/docs/model/press-pull.md:5"]
@@ -254,9 +267,26 @@ file = "manual/docs/img/presspull.gif"
 size = [800, 705]
 theme = "fundacad"
 crop = "region"
+at = [387, 95]
 gif = { delay = 100, loop = 0 }
-stub = true
-show = "A face being pulled out with Press/Pull (about 26 frames, 800 wide)."
+steps = [
+  { open = "fixture:sketch-block.json" },
+  { panel = "items", open = false },
+  { panel = "history", open = false },
+  { view = "fit" },
+  { evaluate = "() => document.querySelector('canvas').dispatchEvent(new WheelEvent('wheel', { deltaY: 100, clientX: 760, clientY: 450, bubbles: true, cancelable: true }))" },
+  { wait = 600 },
+  { tool = "Press/Pull" },
+  { pick_face = "top" },
+  { mouse = "move", at = [1300, 700] },
+]
+frames = [
+  { hold = 900 },
+  { steps = [{ drag_handle = "push", mm = 1 }], repeat = 10, hold = 120 },
+  { steps = [{ mouse = "move", at = [1300, 700] }], hold = 900 },
+  { steps = [{ press = "Enter" }], hold = 1800 },
+]
+show = "A top face pulled out 1 mm a frame to 10 mm with the push arrow, the value box following it, then Enter."
 alt = "A face being pulled out with Press/Pull"
 uses = ["manual/docs/model/press-pull.md:11"]
 
