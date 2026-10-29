@@ -50,7 +50,7 @@ gif = { delay = 100, loop = 0 }
 stub = true
 show = "Drawing a rectangle and extruding it into a block (about 29 frames, 800 wide)."
 alt = "Drawing a rectangle and extruding it into a block"
-uses = ["manual/docs/model/extrude.md:8"]
+uses = ["manual/docs/model/extrude.md:11"]
 
 [[shot]]
 file = "manual/docs/img/extrude-thin.png"
@@ -60,7 +60,7 @@ crop = "region"
 stub = true
 show = "A thin extrude of an open L of two lines, a 2 mm wall with a mitred corner, the Thin switch on."
 alt = "A thin extrude of an L of two lines, a 2 mm wall with a mitred corner"
-uses = ["manual/docs/model/extrude.md:20"]
+uses = ["manual/docs/model/extrude.md:32"]
 
 [[shot]]
 file = "manual/docs/img/fillet-edge.png"
@@ -81,7 +81,7 @@ gif = { delay = 100, loop = 0 }
 stub = true
 show = "A fillet radius growing on a block edge as the arrow is dragged (about 12 frames, 800 wide). Show the continuity choice if the box shows it (G3 is recent)."
 alt = "A fillet radius growing on an edge"
-uses = ["manual/docs/model/fillet-chamfer.md:8"]
+uses = ["manual/docs/model/fillet-chamfer.md:11"]
 
 [[shot]]
 file = "manual/docs/img/hole-dialog.png"
@@ -192,7 +192,7 @@ crop = "region"
 stub = true
 show = "One half of a bracket beside its mirrored copy."
 alt = "One half of a bracket beside its mirrored copy"
-uses = ["manual/docs/model/scale-mirror.md:5"]
+uses = ["manual/docs/model/scale-mirror.md:19"]
 
 [[shot]]
 file = "manual/docs/img/shell-mug.png"
@@ -219,4 +219,4 @@ steps = [
 ]
 show = "The History card with the Extrude step open and its rows."
 alt = "The History card with the Extrude step open"
-uses = ["manual/docs/model/timeline.md:5"]
+uses = ["manual/docs/model/timeline.md:7"]
