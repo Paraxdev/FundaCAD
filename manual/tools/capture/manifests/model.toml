@@ -204,7 +204,42 @@ file = "manual/docs/img/loft-adapter.png"
 size = [660, 620]
 theme = "fundacad"
 crop = "region"
-stub = true
+around = "world:0,0,15"
+park = [1300, 860]
+pause = 1600
+steps = [
+  { open = "fixture:sketch-block.json" },
+  { open = "new" },
+  { panel = "items", open = false },
+  { panel = "history", open = false },
+  { tool = "Sketch" },
+  { pick_plane = "XY" },
+  { tool = "Circle" },
+  { click_at = true, sketch = [0, 0] },
+  { click_at = true, sketch = [16, 0] },
+  { press = "Escape" },
+  { press = "Escape" },
+  { press = "Escape" },
+  { press = "o" },
+  { pick_plane = "XY" },
+  { type = ["Offset", "30"], enter = true },
+  { tool = "Rectangle" },
+  { click_at = true, sketch = [-15, -15] },
+  { click_at = true, sketch = [15, 15] },
+  { press = "Escape" },
+  { press = "Escape" },
+  { press = "Escape" },
+  { tool = "Loft" },
+  { click_at = true, world = [9, -12, 0] },
+  { click_at = true, world = [0, 0, 30] },
+  { press = "Enter" },
+  { wait = 800 },
+  { panel = "items" },
+  { evaluate = "() => [...document.querySelectorAll('.feature-row')].find((r) => r.textContent.includes('Plane1')).querySelector('.tree-eye').click()" },
+  { panel = "items", open = false },
+  { evaluate = "() => document.querySelector('canvas').dispatchEvent(new WheelEvent('wheel', { deltaY: -100, clientX: 720, clientY: 540, bubbles: true, cancelable: true }))" },
+  { wait = 600 },
+]
 show = "A circle at the bottom lofted into a square at the top."
 alt = "A circle at the bottom lofted into a square at the top"
 uses = ["manual/docs/model/loft-sweep.md:5"]
@@ -295,7 +330,24 @@ file = "manual/docs/img/primitive-cylinder.png"
 size = [890, 720]
 theme = "fundacad"
 crop = "region"
-stub = true
+at = [550, 38]
+park = [1300, 860]
+pause = 1600
+steps = [
+  { open = "fixture:sketch-block.json" },
+  { open = "new" },
+  { panel = "items", open = false },
+  { panel = "history" },
+  { tool = "Primitive" },
+  { click = "Cylinder" },
+  { wait = 600 },
+  { click_css = ".timeline-node" },
+  { type = ["prop:radius", "12"], enter = true },
+  { type = ["prop:height", "30"], enter = true },
+  { evaluate = "() => document.activeElement && document.activeElement.blur()" },
+  { evaluate = "() => document.querySelector('canvas').dispatchEvent(new WheelEvent('wheel', { deltaY: -100, clientX: 600, clientY: 470, bubbles: true, cancelable: true }))" },
+  { wait = 600 },
+]
 show = "A cylinder on the origin and its Radius and Height rows in the History card."
 alt = "A cylinder on the origin and its Radius and Height rows in the History card"
 uses = ["manual/docs/model/primitives.md:5"]
@@ -305,7 +357,36 @@ file = "manual/docs/img/revolve-profile.png"
 size = [660, 620]
 theme = "fundacad"
 crop = "region"
-stub = true
+around = "world:0,0,22"
+offset = [0, 14]
+park = [1300, 860]
+pause = 1600
+steps = [
+  { open = "fixture:sketch-block.json" },
+  { open = "new" },
+  { panel = "items", open = false },
+  { panel = "history", open = false },
+  { tool = "Sketch" },
+  { pick_plane = "XZ" },
+  { tool = "Line" },
+  { click_at = true, sketch = [0, 0] },
+  { click_at = true, sketch = [10, 0] },
+  { click_at = true, sketch = [17, 16] },
+  { click_at = true, sketch = [10, 32] },
+  { click_at = true, sketch = [7, 37] },
+  { click_at = true, sketch = [10, 44] },
+  { click_at = true, sketch = [0, 44] },
+  { click_at = true, sketch = [0, 0] },
+  { press = "Escape" },
+  { press = "Escape" },
+  { press = "Escape" },
+  { tool = "Revolve" },
+  { wait = 400 },
+  { click_at = true, world = [0, 0, 6] },
+  { wait = 800 },
+  { evaluate = "() => document.querySelector('canvas').dispatchEvent(new WheelEvent('wheel', { deltaY: -100, clientX: 720, clientY: 360, bubbles: true, cancelable: true }))" },
+  { wait = 600 },
+]
 show = "A vase made by revolving a half outline."
 alt = "A vase made by revolving a half outline"
 uses = ["manual/docs/model/revolve.md:5"]
