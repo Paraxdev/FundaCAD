@@ -17,6 +17,7 @@ import DenoiserRow from "../shell/DenoiserRow.vue";
 import PluginsSection from "./PluginsSection.vue";
 import ExperimentalSection from "./ExperimentalSection.vue";
 import UpdatesSection from "./UpdatesSection.vue";
+import A11yContrastRows from "./A11yContrastRows.vue";
 import {
   addCustomTheme,
   asThemeId,
@@ -135,7 +136,7 @@ onMounted(() => {
     onA11yPrefsChange(() => {
       a11y.value = a11yPrefs();
       reducesMotion.value = systemReducesMotion();
-      if (a11y.value.verbosity !== "verbose") presetNote.value = "";
+      if (a11y.value.verbosity !== "verbose" || !a11y.value.solidPanels) presetNote.value = "";
     }),
     onNavPrefsChange(() => {
       nav.value = getNavPrefs();
@@ -214,6 +215,8 @@ const VERBOSITY = [
 ];
 const a11yChanged = computed(
   () =>
+    a11y.value.contrast !== DEFAULT_A11Y.contrast ||
+    a11y.value.solidPanels !== DEFAULT_A11Y.solidPanels ||
     a11y.value.animations !== DEFAULT_A11Y.animations ||
     a11y.value.verbosity !== DEFAULT_A11Y.verbosity ||
     dwell.value !== DEFAULT_DWELL_MS,
@@ -232,7 +235,7 @@ async function screenReaderPreset() {
   // Emptied for a tick first, so a second press changes the live region and is spoken again.
   presetNote.value = "";
   await nextTick();
-  presetNote.value = "Announcements set to Verbose.";
+  presetNote.value = "Announcements set to Verbose and Solid panels on.";
 }
 
 // Note: Slider puts fallthrough attributes on its wrapper and repeats aria-valuetext in its output,
@@ -806,8 +809,9 @@ function onClassicCamera(on: boolean) {
             >
             <span id="prefs-a11y-preset-status" class="prefs-a11y-status" role="status">{{ presetNote }}</span>
             <p id="prefs-a11y-actions-hint" class="pref-hint">
-              Screen reader preset sets Announcements to Verbose, the setup that suits NVDA, VoiceOver and other screen
-              readers. Reset to defaults clears every choice below, so Animations follows the system again.
+              Screen reader preset sets Announcements to Verbose and turns Solid panels on, the setup that suits NVDA,
+              VoiceOver and other screen readers. Reset to defaults clears every choice below, so Contrast and
+              Animations follow the system again.
             </p>
           </div>
 
@@ -827,6 +831,7 @@ function onClassicCamera(on: boolean) {
                   blue, and FundaCAD Light and Solarized Light are light themes.
                 </p>
               </div>
+              <A11yContrastRows />
             </div>
           </div>
 
