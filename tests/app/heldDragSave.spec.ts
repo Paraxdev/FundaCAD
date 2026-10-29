@@ -24,7 +24,14 @@ vi.mock("@tauri-apps/api/core", () => ({
   },
 }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({ message: async () => {}, save: async () => host.pick }));
-vi.mock("../../src/ui/toast", () => ({ toast: () => null, dismissToast: () => {} }));
+const said = vi.hoisted(() => [] as string[]);
+vi.mock("../../src/ui/toast", () => ({
+  toast: (message: string) => {
+    said.push(message);
+    return null;
+  },
+  dismissToast: () => {},
+}));
 vi.mock("../../src/io/recentFiles", () => ({ noteRecent() {}, forgetRecent() {}, getRecentFiles: () => [] }));
 const win = vi.hoisted(() => ({ asked: [] as string[], pick: "cancel" }));
 vi.mock("../../src/ui/choice", () => ({
@@ -142,6 +149,7 @@ beforeAll(() => {
 beforeEach(() => {
   host.saved = [];
   host.recovery = [];
+  said.length = 0;
   host.pick = "D:/parts/as.funda";
   win.asked = [];
   frames = [];
@@ -278,6 +286,19 @@ describe("a held Move drag and closing the window", () => {
     expect(await closeWindow("save")).toBe(false);
     expect(moves()[0]).toMatchObject({ bodies: ["body1"], dz: 20 });
     expect(store.dirty).toBe(false);
+  });
+
+  it("keeps the window open after Save when the held drag could not be entered, and says so", async () => {
+    // Stands in for a tool whose commit the kernel refused, so the drag stays held.
+    const refused = { active: true, pending: true, onHeldChange: () => () => {}, confirmHeld() {} };
+    engine.tools = idleTools({ move: tool, pressPull: refused });
+    const prevented = await closeWindow("save");
+    expect({ prevented, said: [...said], saved: host.saved.length, held: refused.pending }).toEqual({
+      prevented: true,
+      said: ["The held drag could not be entered, so the save left it out"],
+      saved: 1,
+      held: true,
+    });
   });
 
   it("with nothing held closes without asking and leaves the title clean", async () => {

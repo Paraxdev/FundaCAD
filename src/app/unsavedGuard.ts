@@ -12,7 +12,8 @@ export function windowTitle(fileName: string, dirty: boolean): string {
   return `${fileName}${dirty ? "*" : ""} · ${PRODUCT_NAME}`;
 }
 
-/** Resolves whether to go on; a Save As that was cancelled or failed leaves the document dirty, so that is a no. */
+/** Resolves whether to go on; a Save As that was cancelled or failed leaves the document dirty, and a held drag Save
+ *  could not enter stays held, so both are a no. */
 export async function saveFirst(e: SaveEngine, question: string, discardHint: string): Promise<boolean> {
   if (!needsSave(e)) return true;
   const pick = await choose(question, [
@@ -26,7 +27,7 @@ export async function saveFirst(e: SaveEngine, question: string, discardHint: st
   }
   if (pick !== "save") return false;
   await saveWork(e);
-  return !e.store.dirty;
+  return !needsSave(e);
 }
 
 /** Save writes the store and never an open sketch's edits, so an open sketch stops the update instead of asking. */

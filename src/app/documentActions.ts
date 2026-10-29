@@ -7,6 +7,7 @@ import {
   type OpenOutcome,
 } from "../io/files";
 import { choose } from "../ui/choice";
+import { toast } from "../ui/toast";
 import type { Engine } from "./engine";
 import type { HeldEdit } from "../features/heldEdit";
 import { TEMPLATES, templateText } from "../templates";
@@ -52,13 +53,19 @@ export function needsSave(e: SaveEngine): boolean {
   return e.store.dirty || anyHeld(e);
 }
 
-export async function saveWork(e: SaveEngine): Promise<void> {
+/** A held edit its tool would not enter (a kernel refusal, an unreadable value) stays held, so the user is told. */
+function settleForSave(e: SaveEngine): void {
   settleHeldEdit(e);
+  if (anyHeld(e)) toast("The held drag could not be entered, so the save left it out", { kind: "warning" });
+}
+
+export async function saveWork(e: SaveEngine): Promise<void> {
+  settleForSave(e);
   await saveDocument(e.store);
 }
 
 export async function saveWorkAs(e: SaveEngine): Promise<void> {
-  settleHeldEdit(e);
+  settleForSave(e);
   await saveDocumentAs(e.store);
 }
 
