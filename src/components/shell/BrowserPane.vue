@@ -10,6 +10,11 @@ import { useSelectionStore } from "../../stores/selection";
 import { useBrowserStore } from "../../stores/browser";
 import TreeFolder from "./TreeFolder.vue";
 import TreeRow from "./TreeRow.vue";
+import Tree from "../ui/Tree.vue";
+import TreeItem from "../ui/TreeItem.vue";
+import PluginSectionItem from "./PluginSectionItem.vue";
+import { itemsMove, itemsTreeMeta, sectionName } from "../../ui/itemsTree";
+import { announce } from "../../ui/announce";
 import IconButton from "../ui/IconButton.vue";
 import Select from "../ui/Select.vue";
 import { useShellStore } from "../../stores/shell";
@@ -135,6 +140,7 @@ interface RowNode {
   dim?: boolean | undefined;
   selected?: boolean | undefined;
   error?: boolean | undefined;
+  suppressed?: boolean | undefined;
   visible?: boolean | undefined;
   vis?: VisTag | undefined;
   eyeDown?: ((e: PointerEvent) => void) | undefined;
@@ -160,6 +166,8 @@ interface EmptyNode {
 interface PluginNode {
   kind: "plugin";
   k: string;
+  /** The section's name for a screen reader, from its key. */
+  label: string;
   component: Component;
 }
 type TreeNode = FolderNode | RowNode | EmptyNode | PluginNode;
@@ -561,6 +569,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
           icon: "plane",
           selected: picked.has(f.id) || selection.featureId === f.id,
           error: errId === f.id,
+          suppressed: store.isSuppressed(f.id),
           ...eye({ category: "planes", key: f.id }, store.isPlaneVisible(f.id)),
           activate: viaTool(
             () => featurePick(engine, f),
@@ -608,6 +617,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
           icon: f.type === "datumAxis" ? "datumAxis" : "datumPoint",
           selected: picked.has(f.id) || selection.featureId === f.id,
           error: errId === f.id,
+          suppressed: store.isSuppressed(f.id),
           ...eye({ category: "datums", key: f.id }, store.isPlaneVisible(f.id)),
           activate: viaTool(
             () => featurePick(engine, f),
@@ -636,7 +646,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
   // filter section of its own is always shown, rather than vanishing under a filter nobody told it about.
   for (const { key, section } of sections.value) {
     if (section.filter && isBrowserSection(section.filter) && !show(section.filter)) continue;
-    out.push({ kind: "plugin", k: `x:${key}`, component: section.component });
+    out.push({ kind: "plugin", k: `x:${key}`, label: sectionName(section.key), component: section.component });
   }
 
   const scanIds = new Set((store.buildState.result?.bodies ?? []).filter((b) => b.scan).map((b) => b.id));
@@ -674,7 +684,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
       acceptDrop: () => canDropOntoBody(b.id),
       dropHere: () => dropOntoBody(b.id),
       rename: (name: string) => store.setBodyName(b.id, name),
-      remove: () => store.removeBody(b.id),
+      remove: () => store.removeBodies(actOn(b.id)),
       title: fmtKeys(
         "Click to select (Ctrl+click adds, Shift+click takes a run) · drag onto another body to group them, or into an element · double-click to rename · right-click for Move / Material / Visibility / Rename / Delete · drag across eyes to show or hide many",
       ),
@@ -706,10 +716,10 @@ const nodes = useDocValue((doc): TreeNode[] => {
         (e) => selectFolder(ids, e),
       ),
       selected: ids.length > 0 && ids.every((id) => selectedIds.has(id)),
-      // The head's eye stands for every body under it, see setVisibility.
+      // The head's eye stands for every body under it, see setVisibility. Its Visibility menu is the eye's Alt click
+      // for keys.
       ...eye({ category: "bodies", key: `g:${g.key}`, ids }, anyVisible),
-      // The rest is an element's. An assembly node is a fact about a file, so it gets none of it and TreeFolder draws no
-      // menu.
+      // The rest is an element's. An assembly node is a fact about a file, so it gets none of it.
       ...(element
         ? {
             id: element,
@@ -717,7 +727,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
             remove: () => store.removeElement(element),
             extraMenu: [
               { label: "New element inside", onClick: () => fileIntoNewElement([], element) },
-              ...(ids.length ? [moveBodiesMenu(ids, element)] : []),
+              ...(ids.length ? [moveBodiesMenu(ids, element), visibilityMenu("bodies", ids, "bodies")] : []),
               moveElementMenu(element),
               { separator: true, label: "" },
             ],
@@ -725,7 +735,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
             acceptDrop: () => canDropInto(element),
             dropHere: () => dropInto(element),
           }
-        : { extraMenu: assemblyMenu(g.key) }),
+        : { extraMenu: [...assemblyMenu(g.key), ...(ids.length ? [visibilityMenu("bodies", ids, "bodies")] : [])] }),
     });
     if (collapsed) return;
     for (const c of g.children) groupNode(c, depth + 1);
@@ -773,6 +783,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
         icon: "assembly",
         selected: selection.featureId === f.id,
         error: errId === f.id,
+        suppressed: store.isSuppressed(f.id),
         activate: viaTool(
           () => ({ kind: "feature", id: f.id }),
           () => engine.selectFeature(f.id),
@@ -800,6 +811,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
         icon: "mechanism",
         selected: selection.featureId === f.id,
         error: errId === f.id,
+        suppressed: store.isSuppressed(f.id),
         activate: viaTool(
           () => ({ kind: "feature", id: f.id }),
           () => engine.selectFeature(f.id),
@@ -829,6 +841,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
           icon: "sketch",
           selected: picked.has(f.id) || selection.featureId === f.id,
           error: errId === f.id,
+          suppressed: store.isSuppressed(f.id),
           ...eye({ category: "sketches", key: f.id }, engine.isSketchVisible(f.id)),
           activate: viaTool(
             () => ({ kind: "sketch", id: f.id }),
@@ -858,6 +871,45 @@ const nodes = useDocValue((doc): TreeNode[] => {
 
   return out;
 });
+
+const emptySections = ref<ReadonlySet<string>>(new Set());
+function setSectionEmpty(k: string, empty: boolean) {
+  if (emptySections.value.has(k) === empty) return;
+  const next = new Set(emptySections.value);
+  if (empty) next.add(k);
+  else next.delete(k);
+  emptySections.value = next;
+}
+const treeItems = computed(() =>
+  itemsTreeMeta(
+    nodes.value.map((n) => (n.kind === "plugin" && emptySections.value.has(n.k) ? { ...n, empty: true } : n)),
+  ),
+);
+
+function reorderRow(key: string, delta: -1 | 1) {
+  const list = nodes.value;
+  const n = list.find((x) => x.k === key);
+  if (!n || (n.kind !== "row" && n.kind !== "folder")) return;
+  const m = itemsMove(list, key, delta);
+  if (m.kind === "fixed") return announce(`${n.label} keeps its place, only timeline features move`);
+  if (m.kind === "end") {
+    const head = list
+      .slice(0, list.indexOf(n))
+      .reverse()
+      .find((x): x is FolderNode => x.kind === "folder");
+    return announce(`${n.label} is already ${delta < 0 ? "first" : "last"} in ${head?.label ?? "Items"}`);
+  }
+  store.moveFeature(
+    m.id,
+    store.document.features.findIndex((f) => f.id === m.sibling),
+  );
+  announce(`Moved ${n.label} ${delta < 0 ? "above" : "below"} ${m.label}`);
+}
+
+/** The Tab stop rests on the first selected row, so Tab into the tree lands where the user was. */
+const activeKey = computed(
+  () => nodes.value.find((n) => (n.kind === "row" || n.kind === "folder") && n.selected)?.k ?? null,
+);
 
 /** Each category's eyes in drawn order (what a paint drag fills and a Shift-click run measures), plus the bodies behind
  *  each folder head. Derived from the node list so it cannot disagree with the screen. */
@@ -925,60 +977,79 @@ onUnmounted(() => root.value?.removeEventListener("wheel", onWheel));
       />
     </div>
     <div ref="root" class="float-card-body">
-      <template v-for="n in nodes" :key="n.k">
-        <TreeFolder
-          v-if="n.kind === 'folder'"
-          :data-key="n.key"
-          :label="n.label"
-          :icon="n.icon"
-          :count="n.count"
-          :depth="n.depth"
-          :collapsed="n.collapsed"
-          :visible="n.visible"
-          :eye-down="n.eyeDown"
-          :toggle-vis="n.toggleVis"
-          :eye-over="n.eyeOver"
-          :id="n.id"
-          :rename="n.rename"
-          :remove="n.remove"
-          :extra-menu="n.extraMenu"
-          :drag-start="n.dragStart"
-          :accept-drop="n.acceptDrop"
-          :drop-here="n.dropHere"
-          :activate="n.activate"
-          :selected="n.selected"
-          @toggle="browser.toggle(n.key)"
-        />
-        <TreeRow
-          v-else-if="n.kind === 'row'"
-          :label="n.label"
-          :icon="n.icon"
-          :depth="n.depth"
-          :id="n.id"
-          :swatch="n.swatch"
-          :dim="n.dim"
-          :selected="n.selected"
-          :error="n.error"
-          :visible="n.visible"
-          :title="n.title"
-          :activate="n.activate"
-          :eye-down="n.eyeDown"
-          :toggle-vis="n.toggleVis"
-          :eye-over="n.eyeOver"
-          :edit="n.edit"
-          :rename="n.rename"
-          :remove="n.remove"
-          :extra-menu="n.extraMenu"
-          :drag-start="n.dragStart"
-          :accept-drop="n.acceptDrop"
-          :drop-here="n.dropHere"
-        />
-        <div v-else-if="n.kind === 'empty'" class="empty-state tree-child">{{ n.text }}</div>
+      <Tree label="Items" multiselectable :items="treeItems" :active-key="activeKey" @reorder="reorderRow">
+        <template v-for="n in nodes" :key="n.k">
+          <TreeFolder
+            v-if="n.kind === 'folder'"
+            :tree-key="n.k"
+            :data-key="n.key"
+            :label="n.label"
+            :icon="n.icon"
+            :count="n.count"
+            :depth="n.depth"
+            :collapsed="n.collapsed"
+            :visible="n.visible"
+            :eye-down="n.eyeDown"
+            :toggle-vis="n.toggleVis"
+            :eye-over="n.eyeOver"
+            :id="n.id"
+            :rename="n.rename"
+            :remove="n.remove"
+            :extra-menu="n.extraMenu"
+            :drag-start="n.dragStart"
+            :accept-drop="n.acceptDrop"
+            :drop-here="n.dropHere"
+            :activate="n.activate"
+            :selected="n.selected"
+            @toggle="browser.toggle(n.key)"
+          />
+          <TreeRow
+            v-else-if="n.kind === 'row'"
+            :tree-key="n.k"
+            :label="n.label"
+            :icon="n.icon"
+            :depth="n.depth"
+            :id="n.id"
+            :swatch="n.swatch"
+            :dim="n.dim"
+            :selected="n.selected"
+            :error="n.error"
+            :suppressed="n.suppressed"
+            :visible="n.visible"
+            :title="n.title"
+            :activate="n.activate"
+            :eye-down="n.eyeDown"
+            :toggle-vis="n.toggleVis"
+            :eye-over="n.eyeOver"
+            :edit="n.edit"
+            :rename="n.rename"
+            :remove="n.remove"
+            :extra-menu="n.extraMenu"
+            :drag-start="n.dragStart"
+            :accept-drop="n.acceptDrop"
+            :drop-here="n.dropHere"
+          />
+          <TreeItem
+            v-else-if="n.kind === 'empty'"
+            class="empty-state tree-child"
+            :item-key="n.k"
+            :label="n.text"
+            :selectable="false"
+            >{{ n.text }}</TreeItem
+          >
 
-        <!-- A section some plugin added. It draws its own rows, decides its own
-           visibility and is unmounted when its capability stops. -->
-        <component :is="n.component" v-else />
-      </template>
+          <!-- A section some plugin added. It draws its own rows, decides its own visibility and is unmounted when
+               its capability stops. A tree may own only rows, so the section sits in a row named by it, and in none
+               while it draws nothing. -->
+          <PluginSectionItem
+            v-else
+            :item-key="n.k"
+            :label="n.label"
+            :component="n.component"
+            @empty="setSectionEmpty(n.k, $event)"
+          />
+        </template>
+      </Tree>
     </div>
     <div class="float-card-foot">
       <span class="float-card-spacer"></span>

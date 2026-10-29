@@ -140,6 +140,77 @@ describe("theme contrast", () => {
     });
   }
 
+  // A History step's state marks are drawn shapes, so WCAG 1.4.11 asks 3:1 against every fill under them: the strip
+  // chip, the bar its corner glyph overhangs, and the side panel row. A suppressed chip fades and greys, mark and all.
+  // A list of selectors is a cascade: the first rule that sets the property wins.
+  function ruleValue(path: string, selectors: string | string[], prop: string): string {
+    const text = sources[path] ?? "";
+    for (const selector of [selectors].flat()) {
+      const at = text.indexOf(`${selector} {`);
+      const body = at < 0 ? "" : text.slice(at, text.indexOf("}", at));
+      const value = new RegExp(`(?:^|[\\s;{])${prop}:\\s*([^;]+);`).exec(body)?.[1]?.trim();
+      if (value) return value;
+    }
+    return `no ${prop} in ${[selectors].flat().join(", ")}`;
+  }
+  type Under = (t: (v: string) => Rgba) => Rgba;
+  const glassOf: Under = (t) => mix(t("var(--panel)"), 0.72, t("var(--viewport-bg)"));
+  const grey = ([r, g, b, a]: Rgba): Rgba => {
+    const y = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    return [y, y, y, a];
+  };
+  const MARKS: { selector: string | string[]; prop: string; under: Under[]; behind?: Under[]; faded?: boolean }[] = [
+    {
+      selector: ".timeline-node.error .t-flag",
+      prop: "color",
+      under: [(t) => over(t("var(--error-tint)"), t("var(--panel)")), (t) => t("var(--panel)"), glassOf],
+    },
+    {
+      selector: ".timeline-node.warn .t-flag",
+      prop: "color",
+      under: [(t) => t("var(--panel-2)"), (t) => t("var(--panel)"), glassOf],
+    },
+    {
+      selector: ".timeline-node.selected::after",
+      prop: "background",
+      under: [(t) => over(t("var(--accent-tint)"), t("var(--panel)")), (t) => t("var(--raised)")],
+    },
+    {
+      selector: ".timeline-node.suppressed .glyph::after",
+      prop: "background",
+      under: [(t) => t("var(--panel-2)"), glassOf],
+      faded: true,
+    },
+    {
+      selector: [".timeline-node.suppressed.selected::after", ".timeline-node.selected::after"],
+      prop: "background",
+      under: [(t) => over(t("var(--accent-tint)"), t("var(--panel)")), (t) => t("var(--raised)")],
+      behind: [(t) => t("var(--panel)"), glassOf],
+      faded: true,
+    },
+  ];
+
+  for (const theme of shipped) {
+    it(`${theme.label} History error, warning, selected and suppressed marks reach 3:1`, () => {
+      const p = theme.palette;
+      const t = (v: string) => resolve(v, p);
+      const tl = "src/styles/_timeline.scss";
+      const alpha = Number(ruleValue(tl, ".timeline-node.suppressed", "opacity"));
+      expect(alpha).toBeGreaterThan(0);
+      expect(ruleValue(tl, ".timeline-node.suppressed", "filter")).toBe("grayscale(1)");
+      const failing = MARKS.flatMap(({ selector, prop, under, behind: behinds, faded }) =>
+        under.map((u, i) => {
+          let [fg, bg] = [t(ruleValue(tl, selector, prop)), u(t)];
+          // The faded chip shows the bar through it, or the glass in the side panel, which is its own fill there.
+          const behind = behinds?.[i]?.(t) ?? (i === 0 ? t("var(--panel)") : bg);
+          if (faded) [fg, bg] = [mix(grey(fg), alpha, behind), mix(grey(bg), alpha, behind)];
+          return { selector: [selector].flat()[0], under: i, ratio: Math.round(contrast(fg, bg) * 100) / 100 };
+        }),
+      ).filter((r) => r.ratio < 3);
+      expect(failing).toEqual([]);
+    });
+  }
+
   it("no chip keeps a hard coded dark fill that stays dark on a light theme", () => {
     const dark = /rgba?\(\s*(?:22,\s*24,\s*29|18,\s*20,\s*25)\b/;
     const offenders = Object.entries(sources)
