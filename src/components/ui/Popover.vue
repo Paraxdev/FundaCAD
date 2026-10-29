@@ -52,9 +52,9 @@ const pos = ref({ left: -9999, top: -9999 });
 
 const named = () => !!(props.label || props.labelledby);
 // A combobox or a listbox popup names the list it opens, so its card is part of the opener, as Select's is.
+// Any other opener states role none or a name itself.
 const partOfOpener = () =>
-  props.anchor?.getAttribute("role") === "combobox" ||
-  ["listbox", "tree", "grid"].includes(props.anchor?.getAttribute("aria-haspopup") ?? "");
+  props.anchor?.getAttribute("role") === "combobox" || props.anchor?.getAttribute("aria-haspopup") === "listbox";
 const name = useName(props, "Popover", () => named() || props.role === "none" || partOfOpener());
 const dialog = computed(() => props.role !== "none" && (props.role === "dialog" || named()));
 const focusMode = computed(() => props.focus ?? (named() ? "keyboard" : "none"));

@@ -223,6 +223,17 @@ describe("Popover", () => {
       warn.mockRestore();
     });
 
+    it("a card opened from a tree or grid popup still asks for a name or role none", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      await render({}, true, { "aria-haspopup": "tree" });
+      document.body.innerHTML = "";
+      await render({}, true, { "aria-haspopup": "grid" });
+      document.body.innerHTML = "";
+      await render({ role: "none" }, true, { "aria-haspopup": "tree" });
+      expect(named(warn)).toBe(2);
+      warn.mockRestore();
+    });
+
     it("an open Select's list card does not warn", async () => {
       const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
       const options = [
