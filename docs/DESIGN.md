@@ -1346,11 +1346,41 @@ Focus:
 - Never use a ring `box-shadow` for focus, and never `outline: none` without a
   replacement.
 
-Contrast (Noir): `--text` on `--panel` 15.35:1, `--text-dim` 7.03:1, `--accent`
-7.13:1, `--accent-hot` 9.97:1, `--on-accent` on `--accent` 7.80:1, `--error`
-5.76:1. `--text-mute` is 4.00:1 on `--panel` and 3.06:1 on `--raised`: hints and
-metadata only. `--line-strong` is decorative. On the light theme every text
-token reaches 4.5:1 ([10](#10-light-and-dark-themes)).
+Contrast (Noir): `--text` on `--panel` 15.35:1, `--text-dim` 9.50:1,
+`--text-mute` 7.11:1 (4.64:1 on `--raised-2`, the lowest), `--accent` 7.13:1,
+`--accent-hot` 9.97:1, `--on-accent` on `--accent` 7.80:1, `--error` 5.76:1,
+`--line-strong` 4.42:1 (3.39:1 on `--raised`) and `--control-edge` 4.72:1.
+`--text-faint` is the one token under 4.5:1, so it never carries text.
+`src/ui/contrast.ts` holds the pairs and `tests/ui/themeContrast.test.ts` runs
+them over every shipped theme:
+
+| Pair | Standard | High Contrast pair |
+|---|---|---|
+| `--text`, `--text-dim`, `--text-mute` on `--panel`, `--panel-2`, `--raised`, `--raised-2`, the panel glass and a solid panel over a white model; `--on-accent` on `--accent` | 4.5:1 | 7:1 |
+| `--line-strong` on `--panel` and `--raised` | 3:1 | 4.5:1 |
+| `--control-edge` on the field well, the empty checkbox, the slider rail and the switch track, and against the panel round them | 3:1 | 4.5:1 |
+| `--ok`, `--warn`, `--error` as text on `--panel` and `--panel-2` | 4.5:1 | 4.5:1 |
+| Two signals a protan, deutan or tritan view merges (dE2000 under 15) | 10 L* apart | 10 L* apart |
+| The focus ring (`--accent`) on every surface and the glass | 3:1 | 4.5:1 |
+| `--axis-x`, `--axis-y`, `--axis-z` and `--pick-line` on `--viewport-bg` | 3:1 | 3:1 |
+
+An uploaded palette is checked against the same pairs at the standard bar: it
+still loads, and the Appearance pane lists the pairs it fails in a status line
+under the picker.
+
+The Contrast setting (Settings, Accessibility: Follow system, Standard, More,
+Maximum) writes `html[data-contrast]`, and `_contrast.scss` swaps tokens over
+any theme: More draws `--text-mute` and `--control-edge` as `--text-dim`,
+Maximum draws `--text-dim`, `--text-mute`, `--line-strong` and
+`--control-edge` as `--text`, and both set `--focus-ring-width` to 3px and turn
+Solid panels on. Follow system gives More when the OS asks for contrast. Solid
+panels (`html.solid-panels`, also in the Screen reader preset) turns the glass
+off and fills panels, tiles and chips with `--float-bg-solid`, so text keeps
+4.5:1 over a white model.
+
+The System theme, the first run default, follows the OS: dark gives FundaCAD
+Noir, light gives FundaCAD Light, and an OS that asks for contrast gives High
+Contrast Dark or Light. A theme the user picked always wins over it.
 
 Semantics: an icon only button has an `aria-label` (and the same `title`).
 Toggles use `aria-pressed`, switches `role="switch"` with `aria-checked`,
@@ -1388,13 +1418,14 @@ swallows its own click and Enter. The old menu and context rows take
 `pointer-events: none` instead.
 
 `prefers-contrast` and `forced-colors` only steer the System theme to High
-Contrast (`ui/osTheme.ts`), together with the Rust `os_a11y_prefs` command,
+Contrast and Follow system contrast to More (`ui/osTheme.ts`), together with the Rust `os_a11y_prefs` command,
 which asks Windows, the desktop portal or gsettings on Linux and macOS
 Increase contrast, as WebKitGTK reports no `prefers-contrast` at all. Under
 `forced-colors` (a Windows contrast theme) `_forced.scss` redraws what the
 browser erases: control edges as an inset 1px ButtonText outline, selected and
-pressed states in Highlight and HighlightText, the focus ring in Highlight and
-the slider rail in system colours. Not handled yet: `prefers-reduced-transparency`, a
+pressed states in Highlight and HighlightText (with `forced-color-adjust: none`,
+as Chromium otherwise draws a Canvas backplate behind their text), the focus
+ring in Highlight and the slider rail in system colours. Not handled yet: `prefers-reduced-transparency`, a
 role on the toast stack.
 
 ## 12. Do and don't
