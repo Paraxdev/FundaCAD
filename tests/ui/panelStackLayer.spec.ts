@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { panelStack } from "../../src/ui/panelStack";
+import { panelStack, stackTop } from "../../src/ui/panelStack";
 import { MARGIN } from "../../src/viewport/viewCube";
 import type { Box } from "../../src/ui/promptPlacement";
 
@@ -300,5 +300,69 @@ describe("each panel takes its own column on a stage too narrow for the widest",
     });
     expect(overlap(boxOf(p), boxOf(s))).toBe(false);
     for (const el of [p, s]) for (const c of cards()) expect(overlap(boxOf(el), c)).toBe(false);
+  });
+
+  it("moves Stress down to the shelf Parameters takes when that shelf would cut every column above it too short", () => {
+    const low = { ...view, bottom: 230 };
+    const { el: layerEl } = layer({ at: STAGE }, [low, { ...history, bottom: 180 }]);
+    items(layerEl);
+    rail(layerEl, RAIL);
+    const s = stress();
+    const p = params();
+    panelStack.add("stress", s);
+    panelStack.add("params", p);
+    const shelf = low.bottom + MARGIN;
+    const right = `${VIEWPORT - (STAGE - MARGIN)}px`;
+    const at = (el: HTMLElement) => ({
+      top: el.style.top,
+      right: el.style.right,
+      minWidth: el.style.minWidth,
+      maxWidth: el.style.maxWidth,
+      maxHeight: el.style.maxHeight,
+    });
+    expect({ stress: at(s), params: at(p) }).toEqual({
+      stress: { top: `${shelf}px`, right, minWidth: "180px", maxWidth: "", maxHeight: "" },
+      params: {
+        top: `${shelf + 200 + 12}px`,
+        right,
+        minWidth: "560px",
+        maxWidth: `${STAGE - MARGIN - (RAIL + MARGIN)}px`,
+        maxHeight: "",
+      },
+    });
+    expect(overlap(boxOf(p), boxOf(s))).toBe(false);
+    for (const el of [p, s]) for (const c of cards()) expect(overlap(boxOf(el), c)).toBe(false);
+  });
+
+  it("keeps Parameters and Stress beside the rail and Properties on the shelf with the app's own min-widths", () => {
+    stage(STAGE);
+    const p = panel(600);
+    p.style.minWidth = "180px";
+    const s = stress();
+    const props = panel(284);
+    props.style.minWidth = "260px";
+    panelStack.add("params", p);
+    panelStack.add("stress", s);
+    panelStack.add("props", props);
+    const beside = `${VIEWPORT - besideRight(STAGE)}px`;
+    const room = `${besideRight(STAGE) - (RAIL + MARGIN)}px`;
+    const top = stackTop({ left: 0, right: STAGE, top: 0, bottom: 900 });
+    const at = (el: HTMLElement) => ({
+      top: el.style.top,
+      right: el.style.right,
+      maxWidth: el.style.maxWidth,
+      folded: el.hasAttribute("data-folded"),
+    });
+    expect({ params: at(p), stress: at(s), props: at(props) }).toEqual({
+      params: { top: `${top}px`, right: beside, maxWidth: room, folded: false },
+      stress: { top: `${top + 200 + 12}px`, right: beside, maxWidth: room, folded: false },
+      props: {
+        top: `${history.bottom + MARGIN}px`,
+        right: `${VIEWPORT - (STAGE - MARGIN)}px`,
+        maxWidth: "",
+        folded: false,
+      },
+    });
+    for (const el of [p, s, props]) for (const c of cards()) expect(overlap(boxOf(el), c)).toBe(false);
   });
 });
