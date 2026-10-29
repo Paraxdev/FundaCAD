@@ -7,13 +7,38 @@ import { readSetting } from "./storedSetting";
 export type Animations = "system" | "on" | "off";
 export type Verbosity = "off" | "errors" | "normal" | "verbose";
 
-export interface A11yPrefs {
+// The size settings, one block spread into the shared tables below.
+/** The browser's zoom steps, in percent. */
+export const INTERFACE_SIZES: readonly number[] = [80, 90, 100, 110, 125, 150, 175, 200];
+/** Held at 150 until every control stays reachable at 200. */
+export const INTERFACE_SIZE_MAX = 150;
+
+export interface SizePrefs {
+  /** The zoom of the whole interface in percent, one of INTERFACE_SIZES up to INTERFACE_SIZE_MAX. */
+  interfaceSize: number;
+}
+
+const SIZE_DEFAULTS: SizePrefs = { interfaceSize: 100 };
+const SIZE_KEYS: Record<keyof SizePrefs, string> = { interfaceSize: "fundacad.a11y.interfaceSize" };
+
+/** A size stored by a build with a higher cap reads back as the cap. */
+export function asInterfaceSize(v: unknown): number | null {
+  const n = typeof v === "string" && v.trim() !== "" ? Number(v) : v;
+  if (typeof n !== "number" || !INTERFACE_SIZES.includes(n)) return null;
+  return Math.min(n, INTERFACE_SIZE_MAX);
+}
+
+const SIZE_GATES: { [K in keyof SizePrefs]: (v: unknown) => SizePrefs[K] | null } = {
+  interfaceSize: asInterfaceSize,
+};
+
+export interface A11yPrefs extends SizePrefs {
   animations: Animations;
   /** How much the announcer speaks: nothing, errors only, prompts and results, or every change too. */
   verbosity: Verbosity;
 }
 
-export const DEFAULT_A11Y: Readonly<A11yPrefs> = { animations: "system", verbosity: "normal" };
+export const DEFAULT_A11Y: Readonly<A11yPrefs> = { animations: "system", verbosity: "normal", ...SIZE_DEFAULTS };
 
 /** One click for screen reader users. Later settings join it: Single key shortcuts off, Solid panels on and
  *  Notification time Until dismissed. */
@@ -23,6 +48,7 @@ export const SCREEN_READER_PRESET: Readonly<Partial<A11yPrefs>> = { verbosity: "
 const KEYS: Record<keyof A11yPrefs, string> = {
   animations: "fundacad.animations",
   verbosity: "fundacad.a11y.verbosity",
+  ...SIZE_KEYS,
 };
 
 const ANIMATIONS: readonly Animations[] = ["system", "on", "off"];
@@ -38,13 +64,14 @@ export function asVerbosity(v: unknown): Verbosity | null {
 const GATES: { [K in keyof A11yPrefs]: (v: unknown) => A11yPrefs[K] | null } = {
   animations: asAnimations,
   verbosity: asVerbosity,
+  ...SIZE_GATES,
 };
 
 function readStored(): A11yPrefs {
   const out = { ...DEFAULT_A11Y };
   for (const k of Object.keys(KEYS) as (keyof A11yPrefs)[]) {
     const v = GATES[k](readSetting(KEYS[k]));
-    if (v !== null) (out as Record<keyof A11yPrefs, string>)[k] = v;
+    if (v !== null) (out as Record<keyof A11yPrefs, unknown>)[k] = v;
   }
   return out;
 }
@@ -79,10 +106,10 @@ export function getVerbosity(): Verbosity {
   return current.verbosity;
 }
 
-function store(k: keyof A11yPrefs, v: string | null) {
+function store(k: keyof A11yPrefs, v: A11yPrefs[keyof A11yPrefs] | null) {
   try {
     if (v === null) localStorage.removeItem(KEYS[k]);
-    else localStorage.setItem(KEYS[k], v);
+    else localStorage.setItem(KEYS[k], String(v));
   } catch {
     /* ignore */
   }
