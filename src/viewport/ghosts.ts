@@ -835,13 +835,25 @@ const REACH_BUDGET = 5e5;
 const UPDATE_OUTLINE_TESTS = 1e7;
 const UPDATE_REACH_TESTS = 5e6;
 
+/** The share of an update's budget that measures again the edges an earlier update cut short, so a big pick's drag
+ *  keeps its frame rate while they fill in over the next updates. */
+const RETRY_SHARE = 0.1;
+const RETRY_OUTLINE_TESTS = UPDATE_OUTLINE_TESTS * RETRY_SHARE;
+const RETRY_REACH_TESTS = UPDATE_REACH_TESTS * RETRY_SHARE;
+
 export interface SampleBudget {
   outline: number;
   reach: number;
-  /** Set once an edge of this update ran out of it, so edges an earlier update cut short wait for the next. */
+  /** What this update may spend on the edges an earlier one cut short. Without it they read back as cached. */
+  retry?: SampleBudget;
+  /** Set on `retry` once an edge came out short of it, so the rest wait for the next update. */
   starved?: boolean;
 }
-export const sampleBudget = (): SampleBudget => ({ outline: UPDATE_OUTLINE_TESTS, reach: UPDATE_REACH_TESTS });
+export const sampleBudget = (): SampleBudget => ({
+  outline: UPDATE_OUTLINE_TESTS,
+  reach: UPDATE_REACH_TESTS,
+  retry: { outline: RETRY_OUTLINE_TESTS, reach: RETRY_REACH_TESTS },
+});
 
 let outlineScratch = new Float64Array(4096);
 
@@ -1033,8 +1045,9 @@ export interface EdgeGhostSamples {
 /** Keyed by the edge's `points` identity. Resolved once against the gesture's starting model, since the first preview
  *  already lacks the sharp corner this ghost sweeps. */
 const edgeSampleCache = new WeakMap<readonly Pt3[], EdgeGhostSamples>();
-/** Samples an update's spent budget cut short, measured again by a later update that still has budget left. */
-const partialSamples = new WeakSet<EdgeGhostSamples>();
+/** Samples an update's spent budget cut short, with the model they were made on: a later update measures them again
+ *  there, not on a preview that has landed since. */
+const partialSamples = new WeakMap<EdgeGhostSamples, ModelView>();
 
 /** `from` turned by the rotation that takes tangent `t0` to `t1`, what carries
  *  an inset sample's wedge out to the edge's true end. */
@@ -1063,8 +1076,38 @@ function edgeFaceSamples(
   budget: SampleBudget = sampleBudget(),
 ): EdgeGhostSamples | null {
   const cached = edgeSampleCache.get(edge.points);
-  if (cached && (budget.starved || !partialSamples.has(cached))) return cached;
+  if (cached) return budget.retry ? sampledAgain(edge, cached, budget.retry) : cached;
   const fresh = budget.outline >= UPDATE_OUTLINE_TESTS && budget.reach >= UPDATE_REACH_TESTS;
+  const made = measureEdge(model, edge, budget);
+  if (!made) return null;
+  edgeSampleCache.set(edge.points, made.samples);
+  // With the whole budget in hand a cut short edge is as good as it gets, so only a starved one is measured again.
+  if (made.short && !fresh) partialSamples.set(made.samples, model);
+  return made.samples;
+}
+
+/** A retry is kept only when it comes out whole. One short of a whole slice will not do better in a later update
+ *  either, so that edge keeps what it has. */
+function sampledAgain(edge: BlendGhostEdge, cached: EdgeGhostSamples, retry: SampleBudget): EdgeGhostSamples {
+  const model = partialSamples.get(cached);
+  if (!model || retry.starved) return cached;
+  const whole = retry.outline >= RETRY_OUTLINE_TESTS && retry.reach >= RETRY_REACH_TESTS;
+  const again = measureEdge(model, edge, retry);
+  if (again && !again.short) {
+    edgeSampleCache.set(edge.points, again.samples);
+    return again.samples;
+  }
+  retry.starved = true;
+  if (whole || !again) partialSamples.delete(cached);
+  return cached;
+}
+
+/** `short` when the budget, not the edge's own limits, cut its outline or reach. */
+function measureEdge(
+  model: ModelView,
+  edge: BlendGhostEdge,
+  budget: SampleBudget,
+): { samples: EdgeGhostSamples; short: boolean } | null {
   let short = false;
   const body = model.bodies.find((b) => b.id === edge.body);
   if (!body || edge.points.length < 2) return null;
@@ -1221,14 +1264,7 @@ function edgeFaceSamples(
     if (head) samples.unshift(head);
     if (tail) samples.push(tail);
   }
-  const out = { samples, closed };
-  edgeSampleCache.set(edge.points, out);
-  // With the whole budget in hand a cut short edge is as good as it gets, so only a starved one is measured again.
-  if (short && !fresh) {
-    partialSamples.add(out);
-    budget.starved = true;
-  }
-  return out;
+  return { samples: { samples, closed }, short };
 }
 
 export { resampleEdge, facesAtPoint, edgeFaceSamples, bodyOutline };
