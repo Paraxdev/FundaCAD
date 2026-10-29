@@ -442,6 +442,31 @@ fn unoptimised_flags(line: &str) -> bool {
     })
 }
 
+/// Exceptions on keep OCCT's range checks, which No_Exception compiles out, and
+/// C++20 bounds each `stream >> char_array` by the array's size (P0487R1).
+#[cfg(feature = "builtin")]
+const KERNEL_CACHE_SEEDS: [&str; 2] =
+    ["BUILD_RELEASE_DISABLE_EXCEPTIONS:BOOL=OFF", "BUILD_CPP_STANDARD:STRING=C++20"];
+
+/// A cached entry for one of the seeded variables that holds another value.
+#[cfg(feature = "builtin")]
+fn stale_seed(line: &str) -> bool {
+    KERNEL_CACHE_SEEDS.iter().any(|seed| {
+        let name = seed.split(':').next().unwrap();
+        line.strip_prefix(name).is_some_and(|rest| rest.starts_with(':')) && line != *seed
+    })
+}
+
+/// A kernel configured before the seeds above, which is rebuilt once.
+#[cfg(feature = "builtin")]
+fn kernel_unchecked(root: &std::path::Path) -> bool {
+    if root.join(STATE_DIR).join("checked-reads").exists() {
+        return false;
+    }
+    std::fs::read_to_string(root.join("build").join("CMakeCache.txt"))
+        .is_ok_and(|cache| cache.lines().any(stale_seed))
+}
+
 /// An MSVC kernel compiled without optimisation, which is rebuilt once.
 #[cfg(feature = "builtin")]
 fn kernel_unoptimised(root: &std::path::Path) -> bool {
@@ -457,7 +482,7 @@ fn kernel_unoptimised(root: &std::path::Path) -> bool {
 /// Builds and installs the kernel into `root` unless a complete one is there.
 #[cfg(feature = "builtin")]
 fn build_kernel_into(root: &std::path::Path) {
-    if kernel_config_dir(root).is_some() && !kernel_unoptimised(root) {
+    if kernel_config_dir(root).is_some() && !kernel_unoptimised(root) && !kernel_unchecked(root) {
         return;
     }
     refuse_foreign_kernel(root);
@@ -490,11 +515,15 @@ directory named OCCT to build one there.
     let lock = std::fs::File::create(state.join("kernel.lock")).unwrap();
     lock.lock().unwrap();
     if kernel_config_dir(root).is_some() {
-        if !kernel_unoptimised(root) {
+        let why = if kernel_unoptimised(root) {
+            "was compiled without optimisation"
+        } else if kernel_unchecked(root) {
+            "was built with its range checks off"
+        } else {
             return;
-        }
+        };
         println!(
-            "cargo:warning=the OpenCASCADE kernel in {} was compiled without optimisation, rebuilding it once, about twenty minutes",
+            "cargo:warning=the OpenCASCADE kernel in {} {why}, rebuilding it once, about twenty minutes",
             root.display()
         );
     }
@@ -518,7 +547,7 @@ directory named OCCT to build one there.
         if line.starts_with("//") {
             comment.push_str(line);
             comment.push('\n');
-        } else if generator.is_some() && unoptimised_flags(line) {
+        } else if (generator.is_some() && unoptimised_flags(line)) || stale_seed(line) {
             comment.clear();
         } else {
             seeded.push_str(&std::mem::take(&mut comment));
@@ -529,6 +558,12 @@ directory named OCCT to build one there.
     seeded.push_str(&comment);
     if !seeded.contains("CMAKE_EXPORT_NO_PACKAGE_REGISTRY") {
         seeded.push_str("CMAKE_EXPORT_NO_PACKAGE_REGISTRY:BOOL=ON\n");
+    }
+    for seed in KERNEL_CACHE_SEEDS {
+        if !seeded.lines().any(|line| line == seed) {
+            seeded.push_str(seed);
+            seeded.push('\n');
+        }
     }
     if seeded != cached {
         std::fs::write(&cache, seeded).unwrap();
@@ -552,6 +587,7 @@ directory named OCCT to build one there.
     std::fs::remove_file(&installing).unwrap();
     // Whatever flags this build came out with, it is not rebuilt for them again.
     std::fs::write(state.join("release-flags"), "").unwrap();
+    std::fs::write(state.join("checked-reads"), "").unwrap();
     if kernel_config_dir(root).is_none() {
         panic!("OpenCASCADE was built but {} holds no complete install", root.display());
     }
