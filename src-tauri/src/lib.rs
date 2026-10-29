@@ -313,8 +313,6 @@ fn safe_mode_decide() -> SafeMode {
     SafeMode { reason, dir, set_compositing }
 }
 
-/// Writes a diagnosis if the frontend never checks in. It rules the engine out by name: the loudest thing in the log, a
-/// healthy engine above a blank window reads as an engine problem, and it is not.
 /// The dialog plugin allows each picked or saved path on the fs scope, which tells its listeners, so Rust learns the
 /// dialog paths with no change to the page.
 fn vouch_dialog_paths(app: &tauri::AppHandle) {
@@ -327,6 +325,8 @@ fn vouch_dialog_paths(app: &tauri::AppHandle) {
     });
 }
 
+/// Writes a diagnosis if the frontend never checks in. It rules the engine out by name: the loudest thing in the log, a
+/// healthy engine above a blank window reads as an engine problem, and it is not.
 fn watch_frontend_load(app: tauri::AppHandle) {
     std::thread::spawn(move || {
         std::thread::sleep(FRONTEND_READY_TIMEOUT);
