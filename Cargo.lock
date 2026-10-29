@@ -1131,7 +1131,7 @@ dependencies = [
  "reed-solomon-erasure",
  "serde",
  "serde_json",
- "zip 4.6.1",
+ "zip 9.1.3",
 ]
 
 [[package]]
