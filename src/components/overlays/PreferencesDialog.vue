@@ -159,8 +159,10 @@ const categories = computed(() => [
   { value: "plugins", label: "Plugins" },
   { value: "experimental", label: "Experimental" },
 ]);
-const asked = categories.value.find((c) => c.value === dialogs.prefsCategory)?.value;
-const category = ref(pluginFocus.value ? "plugins" : (asked ?? "appearance"));
+const known = (id: string | null) => categories.value.find((c) => c.value === id)?.value;
+const category = ref(pluginFocus.value ? "plugins" : (known(dialogs.prefsCategory) ?? "appearance"));
+// Taken once, so an open that sets `preferences` directly, as the Live session pill does, lands on Appearance.
+dialogs.prefsCategory = null;
 const panes = ref<HTMLElement | null>(null);
 const pane = (id: string) => ({
   id: `prefs-pane-${id}`,
@@ -186,6 +188,14 @@ function showPane(id: string) {
 watch(pluginFocus, (id) => {
   if (id) category.value = "plugins";
 });
+watch(
+  () => dialogs.prefsCategory,
+  (id) => {
+    const asked = known(id);
+    dialogs.prefsCategory = null;
+    if (asked) showPane(asked);
+  },
+);
 
 const ANIMATIONS = [
   { value: "system", label: "Follow system" },

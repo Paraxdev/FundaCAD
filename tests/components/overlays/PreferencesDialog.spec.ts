@@ -268,6 +268,34 @@ describe("Preferences categories", () => {
     expect(shown().map((p) => p.dataset.pane)).toEqual(["appearance"]);
   });
 
+  it("forgets the asked category once open, so the Live session pill's plain open lands on Appearance", async () => {
+    const d = useDialogStore();
+    d.openPreferences("access");
+    const w = await open();
+    expect([d.prefsCategory, shown().map((p) => p.dataset.pane)]).toEqual([null, ["access"]]);
+    d.preferences = false;
+    w.unmount();
+    d.preferences = true;
+    await open();
+    expect([d.prefsCategory, shown().map((p) => p.dataset.pane)]).toEqual([null, ["appearance"]]);
+  });
+
+  it("switches to a category asked for while it is open and lands on its title", async () => {
+    const d = useDialogStore();
+    await open();
+    d.openPreferences("access");
+    await flushPromises();
+    expect([d.prefsCategory, shown().map((p) => p.dataset.pane), label(document.activeElement)]).toEqual([
+      null,
+      ["access"],
+      "Accessibility",
+    ]);
+    expect(document.activeElement?.tagName).toBe("H3");
+    d.openPreferences();
+    await flushPromises();
+    expect(shown().map((p) => p.dataset.pane)).toEqual(["access"]);
+  });
+
   it("leaves focus alone on a click in the list that misses every category", async () => {
     await open();
     const start = document.activeElement;

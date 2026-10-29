@@ -9,7 +9,7 @@ export const useDialogStore = defineStore("dialogs", () => {
   const bugReport = ref(false);
   const preferences = ref(false);
   const shortcuts = ref(false);
-  /** The category Preferences opens on, read once when it mounts; null is its default, Appearance. */
+  /** The category Preferences opens on or switches to, taken and cleared by the dialog; null is Appearance. */
   const prefsCategory = ref<string | null>(null);
 
   /** Supplied once by app/engine.ts's mountUi(). Until then the bug button stays unrendered. */
