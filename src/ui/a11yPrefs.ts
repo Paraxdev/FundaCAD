@@ -15,18 +15,29 @@ export const INTERFACE_SIZE_MAX = 200;
 export interface SizePrefs {
   /** The zoom of the whole interface in percent, one of INTERFACE_SIZES. */
   interfaceSize: number;
+  /** Line height 1.5, letter spacing 0.12em and word spacing 0.16em on all text, the WCAG text spacing test. */
+  comfortableText: boolean;
 }
 
-const SIZE_DEFAULTS: SizePrefs = { interfaceSize: 100 };
-const SIZE_KEYS: Record<keyof SizePrefs, string> = { interfaceSize: "fundacad.a11y.interfaceSize" };
+const SIZE_DEFAULTS: SizePrefs = { interfaceSize: 100, comfortableText: false };
+const SIZE_KEYS: Record<keyof SizePrefs, string> = {
+  interfaceSize: "fundacad.a11y.interfaceSize",
+  comfortableText: "fundacad.a11y.comfortableText",
+};
 
 export function asInterfaceSize(v: unknown): number | null {
   const n = typeof v === "string" && v.trim() !== "" ? Number(v) : v;
   return typeof n === "number" && INTERFACE_SIZES.includes(n) ? n : null;
 }
 
+export function asComfortableText(v: unknown): boolean | null {
+  if (v === true || v === "true") return true;
+  return v === false || v === "false" ? false : null;
+}
+
 const SIZE_GATES: { [K in keyof SizePrefs]: (v: unknown) => SizePrefs[K] | null } = {
   interfaceSize: asInterfaceSize,
+  comfortableText: asComfortableText,
 };
 
 export interface A11yPrefs extends SizePrefs {

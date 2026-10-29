@@ -34,6 +34,7 @@
 @use "responsive";
 // After every surface it grows for a finger, and after _responsive so a breakpoint never undoes it.
 @use "touch";
+@use "comfortable";
 // Last on purpose, see the header of _icons.scss.
 @use "icons";
 // Truly last, it switches every animation off when asked.

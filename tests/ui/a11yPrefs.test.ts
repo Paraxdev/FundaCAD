@@ -61,7 +61,12 @@ afterEach(() => vi.unstubAllGlobals());
 describe("defaults", () => {
   it("follow the system and speak at the normal level when nothing is stored", async () => {
     const m = await load();
-    expect(m.a11yPrefs()).toEqual({ animations: "system", verbosity: "normal", interfaceSize: 100 });
+    expect(m.a11yPrefs()).toEqual({
+      animations: "system",
+      verbosity: "normal",
+      interfaceSize: 100,
+      comfortableText: false,
+    });
     expect(m.getVerbosity()).toBe("normal");
     expect(m.motionOn()).toBe(true);
   });
@@ -185,7 +190,12 @@ describe("reset and the screen reader preset", () => {
     let calls = 0;
     m.onA11yPrefsChange(() => calls++);
     m.applyScreenReaderPreset();
-    expect(m.a11yPrefs()).toEqual({ animations: "off", verbosity: "verbose", interfaceSize: 100 });
+    expect(m.a11yPrefs()).toEqual({
+      animations: "off",
+      verbosity: "verbose",
+      interfaceSize: 100,
+      comfortableText: false,
+    });
     expect(stored.get("fundacad.a11y.verbosity")).toBe("verbose");
     expect(calls).toBe(1);
   });

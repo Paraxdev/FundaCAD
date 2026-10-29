@@ -108,6 +108,11 @@ describe("Checkbox", () => {
     ]);
   });
 
+  it("puts aria-describedby on the box, where a screen reader reads the hint, not on the label", async () => {
+    const w = await render({ modelValue: false, label: "Comfortable text" }, { attrs: { "aria-describedby": "hint" } });
+    expect([input(w).getAttribute("aria-describedby"), w.attributes("aria-describedby")]).toEqual(["hint", undefined]);
+  });
+
   it("warns in a dev build when it has no label, labelledby or slot, and not when the slot names it", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const named = () => warn.mock.calls.filter((c) => String(c[0]).includes("Checkbox has no name")).length;
