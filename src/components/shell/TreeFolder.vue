@@ -5,6 +5,9 @@
 import { computed, nextTick, ref, useTemplateRef, watch } from "vue";
 import Icon from "./Icon.vue";
 import IconButton from "../ui/IconButton.vue";
+import TreeItem from "../ui/TreeItem.vue";
+import type { TreeItemActions } from "../ui/treeContext";
+import { keyClick, useKeyRename } from "./treeRowKeys";
 import { fmtKeys } from "../../input/platform";
 import InlineLabel from "./InlineLabel.vue";
 import { folderIndent } from "../../ui/browserTree";
@@ -43,12 +46,15 @@ const props = defineProps<{
    *  (or a double-click) opens and closes it. */
   activate?: ((e: MouseEvent) => void) | undefined;
   selected?: boolean | undefined;
+  /** The head's key in the Tree it sits in, the id or label when left out. */
+  treeKey?: string | undefined;
 }>();
 
 const emit = defineEmits<{ toggle: [] }>();
 
 const browser = useBrowserStore();
 const labelEl = useTemplateRef<InstanceType<typeof InlineLabel>>("labelEl");
+const item = useTemplateRef<InstanceType<typeof TreeItem>>("item");
 
 // Only nested heads carry an inline padding, so a top-level folder keeps
 // whatever the stylesheet gives it.
@@ -77,6 +83,7 @@ function onMouseDown(e: MouseEvent) {
 function startRename() {
   void nextTick(() => labelEl.value?.start());
 }
+const keyRename = useKeyRename(startRename, () => item.value?.$el as HTMLElement | undefined);
 
 // A freshly made element starts its own rename, so naming it is typing. Same field and immediate watch as TreeRow.
 watch(
@@ -84,20 +91,42 @@ watch(
   (id) => {
     if (!id || id !== props.id) return;
     browser.pendingRenameId = null;
-    startRename();
+    keyRename.start();
   },
   { immediate: true },
 );
 
-function openMenu(e: MouseEvent) {
+function menuItems(fromKeys = false): CtxItem[] {
   const items: CtxItem[] = [...(props.extraMenu ?? [])];
-  if (props.rename) items.push({ label: "Rename", onClick: startRename });
+  if (props.rename) items.push({ label: "Rename", onClick: () => keyRename.start(fromKeys) });
   if (props.remove) items.push({ label: "Delete", danger: true, onClick: props.remove });
+  return items;
+}
+function openMenu(e: MouseEvent) {
+  const items = menuItems();
   if (!items.length) return;
   e.preventDefault();
   e.stopPropagation();
   contextMenu(e.clientX, e.clientY, items);
 }
+
+// Enter opens and closes the head, as a double click does; Space selects what it holds when it selects.
+const keys = computed<TreeItemActions>(() => {
+  const { activate, rename, remove } = props;
+  return {
+    select: activate && ((e) => activate(keyClick(e))),
+    open: () => emit("toggle"),
+    toggle: (open) => {
+      if (open === props.collapsed) emit("toggle");
+    },
+    rename: rename && (() => keyRename.start(true)),
+    remove: remove && (() => remove()),
+    menu: (r) => {
+      const items = menuItems(true);
+      if (items.length) contextMenu(r.left + 24, r.bottom, items);
+    },
+  };
+});
 
 // The eye, handled as in TreeRow.
 function onEyeDown(e: PointerEvent) {
@@ -147,13 +176,17 @@ function onDrop(e: DragEvent) {
 </script>
 
 <template>
-  <!-- The head carries aria-expanded as well as the caret, since a click on the head itself may toggle it. -->
-  <div
+  <TreeItem
+    ref="item"
     class="tree-folder"
+    :item-key="treeKey ?? id ?? label"
+    :label="label"
+    :selected="!!selected"
+    :selectable="!!activate"
+    :actions="keys"
     :data-id="id"
     :class="{ 'drop-into': inside > 0, selected: selected }"
     :style="style"
-    :aria-expanded="!collapsed"
     :draggable="!!dragStart"
     @mousedown="onMouseDown"
     @click="onClick"
@@ -166,6 +199,7 @@ function onDrop(e: DragEvent) {
     @dragover="onOver"
     @drop="onDrop"
     @pointerenter="eyeOver?.()"
+    @keydown.capture="keyRename.onKeydownCapture"
   >
     <IconButton
       class="tree-caret"
@@ -196,5 +230,5 @@ function onDrop(e: DragEvent) {
       @pointerdown.stop="onEyeDown"
       @click.stop="onEyeClick"
     />
-  </div>
+  </TreeItem>
 </template>

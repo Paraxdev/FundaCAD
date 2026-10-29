@@ -1,10 +1,10 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { enableAutoUnmount, mount } from "@vue/test-utils";
 import { defineComponent, h, ref, type Component, type PropType } from "vue";
 
 import Tree from "../../../src/components/ui/Tree.vue";
 import TreeItem from "../../../src/components/ui/TreeItem.vue";
-import type { TreeMeta } from "../../../src/components/ui/treeContext";
+import type { TreeItemActions, TreeMeta } from "../../../src/components/ui/treeContext";
 
 enableAutoUnmount(afterEach);
 
@@ -25,6 +25,7 @@ const Harness = defineComponent({
     selected: { type: Array as PropType<string[]>, default: () => [] },
     activeKey: { type: String, default: null },
     reorderBlurs: { type: Boolean, default: false },
+    actions: { type: Object as PropType<Record<string, TreeItemActions>>, default: () => ({}) },
   },
   emits: ["select", "open", "rename", "remove", "menu", "reorder", "toggle"],
   setup(props, { emit }) {
@@ -60,7 +61,13 @@ const Harness = defineComponent({
             list.value.map((it) =>
               h(
                 TreeItem,
-                { key: it.key, itemKey: it.key, label: it.label!, selected: props.selected.includes(it.key) },
+                {
+                  key: it.key,
+                  itemKey: it.key,
+                  label: it.label!,
+                  selected: props.selected.includes(it.key),
+                  actions: props.actions[it.key],
+                },
                 { default: () => (it.key === "body2" ? [it.label, h("input", { class: "rename" })] : it.label) },
               ),
             ),
@@ -157,6 +164,26 @@ describe("Tree", () => {
     expect(w.emitted("open")).toEqual([["body1"]]);
     expect(w.emitted("rename")).toEqual([["body1"]]);
     expect(w.emitted("remove")).toEqual([["body1"], ["body1"]]);
+  });
+
+  it("hands a key to the row's own action, and emits only the keys the row leaves out", () => {
+    const own = { rename: vi.fn(), open: vi.fn(), menu: vi.fn() };
+    const toggle = vi.fn();
+    const w = render({ actions: { body1: own, sketches: { toggle } } });
+    tabTo(w, "body1");
+    for (const key of ["F2", "Enter", "Delete"]) expect(press(key).defaultPrevented).toBe(true);
+    press("F10", { shiftKey: true });
+    tabTo(w, "sketches");
+    press("ArrowRight");
+    expect([own.rename.mock.calls.length, own.open.mock.calls.length, toggle.mock.calls]).toEqual([1, 1, [[true]]]);
+    expect(own.menu.mock.calls[0]![0]).toHaveProperty("top");
+    expect([w.emitted("rename"), w.emitted("open"), w.emitted("menu"), w.emitted("toggle")]).toEqual([
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+    ]);
+    expect(w.emitted("remove")).toEqual([["body1"]]);
   });
 
   it("opens the row menu on Shift+F10 and the Menu key with the row's rect", () => {

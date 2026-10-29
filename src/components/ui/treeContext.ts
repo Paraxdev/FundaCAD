@@ -21,10 +21,22 @@ export interface TreeSlot {
   disabled: boolean;
 }
 
+/** What a row does with its own keys. A key whose action the row leaves out goes to the Tree's emit instead. */
+export interface TreeItemActions {
+  select?: ((e: KeyboardEvent) => void) | undefined;
+  open?: ((e: KeyboardEvent) => void) | undefined;
+  rename?: (() => void) | undefined;
+  remove?: (() => void) | undefined;
+  menu?: ((rect: DOMRect) => void) | undefined;
+  toggle?: ((expanded: boolean) => void) | undefined;
+}
+
 export interface TreeContext {
   slot: (key: string) => TreeSlot | undefined;
   tabindex: (key: string) => 0 | -1;
   onItemFocus: (key: string) => void;
+  /** Returns the call that drops them again. */
+  actions: (key: string, get: () => TreeItemActions) => () => void;
 }
 
 export const TREE: InjectionKey<TreeContext> = Symbol("tree");

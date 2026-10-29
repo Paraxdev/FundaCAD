@@ -2,7 +2,15 @@
 import { computed, provide, ref, watch } from "vue";
 import { useName, type Named } from "./useName";
 import { useRovingFocus } from "./useRovingFocus";
-import { TREE, TREE_ITEM_SELECTOR, isMenuKeyEvent, treeSlots, typeAheadIndex, type TreeMeta } from "./treeContext";
+import {
+  TREE,
+  TREE_ITEM_SELECTOR,
+  isMenuKeyEvent,
+  treeSlots,
+  typeAheadIndex,
+  type TreeItemActions,
+  type TreeMeta,
+} from "./treeContext";
 
 const props = withDefaults(
   defineProps<
@@ -42,6 +50,8 @@ const r = useRovingFocus({
   wrap: false,
 });
 
+const own = new Map<string, () => TreeItemActions>();
+
 provide(TREE, {
   slot: (key) => slots.value.get(key),
   tabindex: (key) => {
@@ -51,6 +61,12 @@ provide(TREE, {
   onItemFocus: (key) => {
     const i = indexOf.value.get(key);
     if (i !== undefined) r.onFocus(i);
+  },
+  actions: (key, get) => {
+    own.set(key, get);
+    return () => {
+      if (own.get(key) === get) own.delete(key);
+    };
   },
 });
 
@@ -126,6 +142,8 @@ function onKeydown(e: KeyboardEvent) {
   const it = props.items[i];
   if (!it) return;
   const s = slots.value.get(it.key)!;
+  const a = own.get(it.key)?.() ?? {};
+  const toggle = (open: boolean) => (a.toggle ? a.toggle(open) : emit("toggle", it.key, open));
   if (NAV_KEYS.has(e.key)) {
     keyboard.value = true;
     typed = "";
@@ -140,36 +158,42 @@ function onKeydown(e: KeyboardEvent) {
   if (isMenuKeyEvent(e)) {
     claim(e);
     menuKeyAt = performance.now();
-    emit("menu", it.key, el.getBoundingClientRect());
+    const rect = el.getBoundingClientRect();
+    if (a.menu) a.menu(rect);
+    else emit("menu", it.key, rect);
     return;
   }
   if (e.ctrlKey || e.altKey || e.metaKey) return;
   switch (e.key) {
     case " ":
       claim(e);
-      emit("select", it.key, e);
+      if (a.select) a.select(e);
+      else emit("select", it.key, e);
       return;
     case "Enter":
       claim(e);
-      emit("open", it.key, e);
+      if (a.open) a.open(e);
+      else emit("open", it.key, e);
       return;
     case "F2":
       claim(e);
-      emit("rename", it.key);
+      if (a.rename) a.rename();
+      else emit("rename", it.key);
       return;
     case "Delete":
     case "Backspace":
       claim(e);
-      emit("remove", it.key);
+      if (a.remove) a.remove();
+      else emit("remove", it.key);
       return;
     case "ArrowRight":
       claim(e);
-      if (s.expandable && !s.expanded) emit("toggle", it.key, true);
+      if (s.expandable && !s.expanded) toggle(true);
       else if (s.expanded && isChild(i + 1, it.level)) r.focus(i + 1);
       return;
     case "ArrowLeft": {
       claim(e);
-      if (s.expanded) return emit("toggle", it.key, false);
+      if (s.expanded) return toggle(false);
       for (let p = i - 1; p >= 0; p--) {
         const up = props.items[p]!;
         if (up.level < it.level) {
