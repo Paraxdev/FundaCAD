@@ -272,6 +272,8 @@ export class DimInput {
   private unsubscribeError: (() => void) | null = null;
   /** The kernel's or tool's complaint; the box's own about typed text is shown first, the user can act on it. */
   private external: string | null = null;
+  /** A tool's own control beside the fields, such as the fillet's profile chip. */
+  private extra: HTMLElement | null = null;
   private typedProblem: string | null = null;
   private focusName: string | null = null;
   private boxNo = ++boxCount;
@@ -453,6 +455,7 @@ export class DimInput {
       this.sizeToContent(field);
       return field;
     });
+    this.extra = extra ?? null;
     if (extra) this.root.appendChild(extra);
     // The tool's options sit ahead of confirm and cancel: they change what is about to be committed.
     const opts = options === undefined ? [] : Array.isArray(options) ? options : [options];
@@ -840,10 +843,13 @@ export class DimInput {
     e.stopPropagation(); // never let drawing shortcuts fire while typing
   }
 
-  /** The shown fields in order, one stop per shown option (the chosen segment of a group, or the button), then
-   *  Confirm and Cancel. */
+  /** The shown fields in order, the tool's extra controls, one stop per shown option (the chosen segment of a group,
+   *  or the button), then Confirm and Cancel. */
   private tabStops(current: HTMLElement): HTMLElement[] {
     const fields = this.fields.filter((f) => !f.hidden || f.input === current).map((f) => f.input);
+    const extra = [...(this.extra?.querySelectorAll<HTMLElement>("button, input") ?? [])].filter(
+      (el) => el.tabIndex >= 0 && !el.closest("[hidden]"),
+    );
     const options: HTMLElement[] = [];
     for (const el of this.root.querySelectorAll<HTMLElement>(".dim-opts > *")) {
       if (el.style.display === "none") continue;
@@ -854,7 +860,7 @@ export class DimInput {
       }
     }
     const ends = [...this.root.querySelectorAll<HTMLElement>(".dim-ok, .dim-no")];
-    return [...fields, ...options, ...ends];
+    return [...fields, ...extra, ...options, ...ends];
   }
 
   /** False off either end: there Tab stays the browser's and leaves the box, which never traps the keyboard. */
@@ -869,6 +875,14 @@ export class DimInput {
 
   private onOptionKey(e: KeyboardEvent) {
     const b = e.target;
+    if (b instanceof HTMLElement && this.extra?.contains(b)) {
+      // The extra control answers its own keys; the box only walks Tab through it.
+      if (e.key === "Tab" && this.moveFocus(b, e.shiftKey)) {
+        e.preventDefault();
+        e.stopPropagation();
+      } else if (b instanceof HTMLButtonElement && (e.key === "Enter" || e.key === " ")) e.stopPropagation();
+      return;
+    }
     if (!(b instanceof HTMLButtonElement) || !this.root.contains(b)) return;
     const group = b.classList.contains("dim-segment") ? this.segmented.find((g) => g.el.contains(b)) : undefined;
     const arrows: Record<string, number> = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 };
@@ -1311,6 +1325,7 @@ export class DimInput {
     this.unsubscribeError?.();
     this.unsubscribeError = null;
     this.problem = null; // innerHTML below takes the element with it
+    this.extra = null;
     this.external = null;
     this.typedProblem = null;
     this.root.classList.remove("dim-bad");

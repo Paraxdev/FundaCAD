@@ -2,6 +2,7 @@
 // every option is one click, and it sits beside the point it measures, never over it.
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { ProfileChip } from "../../src/features/profileChip";
 import { DimInput, type DimOption } from "../../src/sketch/dimInput";
 
 let dim: DimInput;
@@ -49,6 +50,38 @@ describe("Tab order", () => {
     expect(stop()).toEqual("confirm");
     expect(tab(true)).toBe(false);
     expect(stop()).toEqual("y");
+  });
+
+  it("walks through a tool's extra control, and into its open panel, between the fields and Confirm", () => {
+    const chip = new ProfileChip(0, () => {});
+    const commits: unknown[] = [];
+    dim.show(
+      FIELDS.slice(0, 1),
+      (v) => commits.push(v),
+      () => {},
+      undefined,
+      chip.el,
+    );
+    const at = () => (document.activeElement as HTMLElement).className;
+    expect(tab()).toBe(false);
+    expect(at()).toContain("profile-chip");
+    // Enter on the chip is the chip's own: the box neither commits nor prevents its click.
+    expect(press("Enter")).toBe(true);
+    expect(commits).toEqual([]);
+    expect(tab()).toBe(false);
+    expect(stop()).toBe("confirm");
+    expect(tab(true)).toBe(false);
+    (document.activeElement as HTMLElement).click();
+    const seen: string[] = [];
+    for (let i = 0; i < 7; i++) {
+      expect(tab()).toBe(false);
+      const el = document.activeElement as HTMLElement;
+      seen.push(el.closest(".profile-number") ? "number" : el.closest(".profile-slider") ? "slider" : el.textContent!);
+    }
+    expect(seen).toEqual(["number", "Flat", "Soft", "Round", "Full", "Tight", "slider"]);
+    expect(tab()).toBe(false);
+    expect(stop()).toBe("confirm");
+    chip.dispose();
   });
 
   it("lets Shift+Tab off the first field leave the box", () => {
