@@ -35,7 +35,7 @@ const check = (name, ok, detail) => {
     executablePath: EXE,
     args: [`--use-angle=${ANGLE}`, "--enable-gpu", "--ignore-gpu-blocklist", "--no-sandbox"],
   });
-  const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+  const page = await browser.newPage({ colorScheme: "dark", viewport: { width: 1400, height: 900 } });
   const shaderErrors = [];
   // A Program Info Log holding only D3D compiler warnings (three's own PMREM
   // program logs warning X4122 on ANGLE) links and runs, so it is not an error.

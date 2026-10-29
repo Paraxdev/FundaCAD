@@ -116,6 +116,7 @@ import type { TraceState } from "./pathtrace/state";
 import { onWorkspaceChange, workspace } from "../ui/workspace";
 import { invalidateThemeColors } from "./themeColors";
 import { onThemeChange } from "../ui/theme";
+import { onContrastChange } from "../ui/contrastSetting";
 import type { ViewCubeSide } from "../types";
 
 /** A selection captured before a rebuild replaces the Highlighter (selectionMemo.ts). */
@@ -460,7 +461,7 @@ export class Viewport {
       this.overlays = savedOverlays();
       this.requestRender();
     });
-    onThemeChange(() => {
+    const recolor = () => {
       // Explicit, so the result does not depend on which subscriber ran first.
       invalidateThemeColors();
       this.scene.grid.applyTheme();
@@ -470,7 +471,10 @@ export class Viewport {
       this.cube.applyTheme();
       this.emphasis?.setColor(edgeHoverColor());
       this.requestRender();
-    });
+    };
+    onThemeChange(recolor);
+    // More and Maximum swap the muted text and strong line the triad and the cube are painted in.
+    onContrastChange(recolor);
     this.loop();
   }
 

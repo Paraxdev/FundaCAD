@@ -1,9 +1,13 @@
 // Glass without blur for software renderers: a backdrop-filter over the WebGL viewport under SwiftShader cost about
 // 1.5 cores for a blinking caret. Potato mode or a software renderer sets `no-glass-blur` on <html> for _glass.scss.
+// Solid panels (a11yPrefs, implied by More and Maximum contrast) sets it too, and `solid-panels` for opaque fills.
 
+import { a11yPrefs, onA11yPrefsChange } from "./a11yPrefs";
+import { contrastSetting, onContrastChange } from "./contrastSetting";
 import { onRenderPrefsChange, renderPrefs, type RenderPrefs } from "./renderPrefs";
 
 export const NO_GLASS_BLUR_CLASS = "no-glass-blur";
+export const SOLID_PANELS_CLASS = "solid-panels";
 
 const SOFTWARE_RENDERER = /swiftshader|llvmpipe|software|basic render|microsoft basic/i;
 
@@ -13,13 +17,23 @@ export function isSoftwareRendererName(name: string): boolean {
 
 let softwareRenderer = false;
 
-export function glassBlurOff(p: Readonly<RenderPrefs> = renderPrefs(), software = softwareRenderer): boolean {
-  return p.potatoMode || software;
+export function solidPanelsOn(): boolean {
+  return a11yPrefs().solidPanels || contrastSetting() !== "standard";
+}
+
+export function glassBlurOff(
+  p: Readonly<RenderPrefs> = renderPrefs(),
+  software = softwareRenderer,
+  solid = solidPanelsOn(),
+): boolean {
+  return p.potatoMode || software || solid;
 }
 
 function apply() {
   if (typeof document === "undefined") return;
-  document.documentElement.classList.toggle(NO_GLASS_BLUR_CLASS, glassBlurOff());
+  const root = document.documentElement.classList;
+  root.toggle(NO_GLASS_BLUR_CLASS, glassBlurOff());
+  root.toggle(SOLID_PANELS_CLASS, solidPanelsOn());
 }
 
 export function isSoftwareRenderer(): boolean {
@@ -40,4 +54,6 @@ export function installGlassBlurSwitch(): void {
   installed = true;
   apply();
   onRenderPrefsChange(apply);
+  onA11yPrefsChange(apply);
+  onContrastChange(apply);
 }

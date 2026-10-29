@@ -37,7 +37,7 @@ const REPEATS = 7;
     executablePath: process.env.SC_CHROME || "/usr/bin/chromium",
     args: ["--use-angle=swiftshader", "--no-sandbox"],
   });
-  const page = await browser.newPage();
+  const page = await browser.newPage({ colorScheme: "dark" });
   page.on("pageerror", (e) => console.error("PAGE ERROR:", e.message));
 
   // SUBSTITUTE the token into the engine URL, the app already builds `?token=`

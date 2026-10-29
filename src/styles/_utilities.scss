@@ -168,8 +168,8 @@
   padding: 0 4px;
 }
 .dim-field input:focus {
-  outline: 1px solid var(--accent);
-  outline-offset: 0;
+  outline: var(--focus-ring-width) solid var(--accent);
+  outline-offset: 1px;
 }
 /* A quiet word that changes the shown unit without retyping. */
 .dim-unit {
@@ -264,8 +264,8 @@
   background: var(--hover-wash);
 }
 .dim-btn:focus-visible {
-  outline: 1px solid var(--accent);
-  outline-offset: 0;
+  outline: var(--focus-ring-width) solid var(--accent);
+  outline-offset: 1px;
 }
 /* A segment that names itself ("G1") beside a small glyph. */
 .dim-btn.dim-texted {
@@ -475,22 +475,26 @@
   position: relative;
 }
 .profile-slider .ui-slider-input::-webkit-slider-runnable-track {
-  background: linear-gradient(
-    to right,
-    var(--check-off) var(--profile-from),
-    var(--accent) var(--profile-from),
-    var(--accent) var(--profile-to),
-    var(--check-off) var(--profile-to)
-  );
+  background:
+    linear-gradient(
+      to right,
+      transparent var(--profile-from),
+      var(--accent) var(--profile-from),
+      var(--accent) var(--profile-to),
+      transparent var(--profile-to)
+    ),
+    linear-gradient(var(--control-edge), var(--control-edge)) var(--check-off);
 }
 .profile-slider .ui-slider-input::-moz-range-track {
-  background: linear-gradient(
-    to right,
-    var(--check-off) var(--profile-from),
-    var(--accent) var(--profile-from),
-    var(--accent) var(--profile-to),
-    var(--check-off) var(--profile-to)
-  );
+  background:
+    linear-gradient(
+      to right,
+      transparent var(--profile-from),
+      var(--accent) var(--profile-from),
+      var(--accent) var(--profile-to),
+      transparent var(--profile-to)
+    ),
+    linear-gradient(var(--control-edge), var(--control-edge)) var(--check-off);
 }
 .profile-track-ends {
   display: flex;
@@ -587,8 +591,8 @@
   transition: border-color var(--t-fast) var(--ease);
 }
 .units select:focus {
-  outline: 1px solid var(--accent);
-  outline-offset: 0;
+  outline: var(--focus-ring-width) solid var(--accent);
+  outline-offset: 1px;
 }
 
 /* The angle a ring drag has turned, at the leading edge of the dial. */

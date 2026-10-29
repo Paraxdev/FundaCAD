@@ -67,7 +67,7 @@ async function dragMaterialTo(page, materialId, x, y, opts = {}) {
     executablePath: EXE,
     args: ["--use-angle=swiftshader", "--no-sandbox"],
   });
-  const page = await browser.newPage({ viewport: { width: 1500, height: 950 } });
+  const page = await browser.newPage({ colorScheme: "dark", viewport: { width: 1500, height: 950 } });
   page.on("pageerror", (e) => {
     console.error("PAGE ERROR:", e.message);
     failures++;

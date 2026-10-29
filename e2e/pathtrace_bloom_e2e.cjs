@@ -87,7 +87,7 @@ let serve = null;
     ],
   });
   try {
-    const page = await browser.newPage({ viewport: { width: VW, height: VH } });
+    const page = await browser.newPage({ colorScheme: "dark", viewport: { width: VW, height: VH } });
     page.on("pageerror", (e) => {
       console.error("PAGE ERROR:", e.message);
       failures++;

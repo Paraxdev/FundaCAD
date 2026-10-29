@@ -134,7 +134,7 @@ const inPage = () => {
     args: [`--use-angle=${ANGLE}`, "--enable-gpu", "--ignore-gpu-blocklist", "--no-sandbox"],
   });
   try {
-    const page = await browser.newPage({ viewport: { width: 1400, height: 860 } });
+    const page = await browser.newPage({ colorScheme: "dark", viewport: { width: 1400, height: 860 } });
     page.on("pageerror", (e) => {
       console.error("PAGE ERROR:", e.message);
       failures++;

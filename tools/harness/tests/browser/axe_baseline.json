@@ -1,19 +1,15 @@
 {
   "confirm": {
-    "color-contrast": 1,
     "meta-viewport": 1
   },
   "empty_workspace": {
-    "color-contrast": 5,
     "meta-viewport": 1
   },
   "example": {
     "aria-allowed-attr": 1,
-    "color-contrast": 3,
     "meta-viewport": 1
   },
   "extrude": {
-    "color-contrast": 6,
     "meta-viewport": 1,
     "target-size": 1
   },
@@ -21,11 +17,9 @@
     "meta-viewport": 1
   },
   "palette": {
-    "color-contrast": 4,
     "meta-viewport": 1
   },
   "render": {
-    "color-contrast": 4,
     "meta-viewport": 1
   },
   "settings": {
@@ -33,11 +27,9 @@
   },
   "sketch": {
     "aria-allowed-attr": 1,
-    "color-contrast": 3,
     "meta-viewport": 1
   },
   "stress": {
-    "color-contrast": 4,
     "meta-viewport": 1
   }
 }

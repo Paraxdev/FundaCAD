@@ -66,8 +66,8 @@
     box-shadow var(--t-fast) var(--ease);
 }
 .param-select:focus {
-  outline: 1px solid var(--accent);
-  outline-offset: 0;
+  outline: var(--focus-ring-width) solid var(--accent);
+  outline-offset: 1px;
 }
 
 /* Same box as .param-select for the same reason. Only the file name shows, a path does
@@ -133,7 +133,7 @@
   opacity: 0.55;
 }
 .param-switch input:focus-visible + .track {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring-width) solid var(--accent);
   outline-offset: 2px;
 }
 

@@ -4,7 +4,10 @@
   height: 4px;
   border: 0;
   border-radius: var(--r-pill);
-  background: linear-gradient(to right, var(--accent) var(--ui-slider-fill), var(--check-off) var(--ui-slider-fill));
+  // The empty rail is a 4px line, so it is drawn whole in the edge colour rather than as an inset rim.
+  background:
+    linear-gradient(to right, var(--accent) var(--ui-slider-fill), transparent var(--ui-slider-fill)),
+    linear-gradient(var(--control-edge), var(--control-edge)) var(--check-off);
 }
 @mixin thumb {
   width: 14px;
@@ -73,17 +76,25 @@
   transform: scale(1.25);
   background: var(--accent-hot);
 }
-// The outline goes round the thumb, not the input's square box.
+// WebKit paints no outline on the thumb pseudo element, so the ring goes round the whole slider row.
 .ui-slider-input:focus-visible {
   outline: none;
 }
-.ui-slider-input:focus-visible::-webkit-slider-thumb {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+.ui-slider:has(.ui-slider-input:focus-visible) {
+  corner-shape: squircle;
+  border-radius: var(--float-chip-radius);
+  outline: var(--focus-ring-width) solid var(--accent);
+  outline-offset: 1px;
 }
-.ui-slider-input:focus-visible::-moz-range-thumb {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+@supports not selector(:has(*)) {
+  .ui-slider-input:focus-visible::-webkit-slider-thumb {
+    outline: var(--focus-ring-width) solid var(--accent);
+    outline-offset: 2px;
+  }
+  .ui-slider-input:focus-visible::-moz-range-thumb {
+    outline: var(--focus-ring-width) solid var(--accent);
+    outline-offset: 2px;
+  }
 }
 
 .ui-slider.is-disabled {

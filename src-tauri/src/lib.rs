@@ -13,6 +13,7 @@ mod launch;
 pub mod launch_args;
 pub mod library;
 mod log_file;
+pub mod os_a11y_prefs;
 pub mod plugins;
 pub mod safe_mode;
 pub mod session_file;
@@ -133,6 +134,11 @@ fn recovery_clear(app: tauri::AppHandle, slot: String) -> Result<(), String> {
 
 /// In app updates only apply to what the Tauri updater can replace: NSIS on Windows, the .app, the AppImage. A deb or
 /// rpm install belongs to the package manager, so the frontend hides the update UI.
+#[tauri::command]
+async fn os_a11y_prefs() -> os_a11y_prefs::OsA11yPrefs {
+    tauri::async_runtime::spawn_blocking(os_a11y_prefs::read).await.unwrap_or_default()
+}
+
 #[tauri::command]
 fn updates_supported() -> bool {
     if cfg!(target_os = "linux") {
@@ -400,6 +406,7 @@ pub fn run() {
         log_tail,
         log_line,
         system_info::system_info,
+        os_a11y_prefs,
         safe_mode_exit,
         launch::take_launch_paths,
         drop_paths::drop_paths_take,

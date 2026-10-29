@@ -16,11 +16,13 @@
 
   /* Kept off pure black: --line-strong also draws the scrollbar thumb. */
   --line: #322c42;
-  --line-strong: #5c5470;
+  --line-strong: #847c9a;
 
   --text: #f6f0e4;
-  --text-dim: #aaa1b5;
-  --text-mute: #7d7590;
+  --text-dim: #c4bcd0;
+  --text-mute: #a9a2ba;
+  /* Decoration only (rules, idle glyph strokes), never text: it sits under 4.5:1 by design. */
+  --text-faint: color-mix(in srgb, var(--text-mute) 70%, var(--panel));
 
   /* Also draws selected edges, dimensions and manipulator handles. */
   --accent: #9a9ff0;
@@ -80,6 +82,10 @@
   --float-tile-bg: color-mix(in srgb, #fff 5%, var(--float-bg));
   --float-chip-bg: color-mix(in srgb, #fff 10%, var(--float-bg));
   --field-bg: rgba(0, 0, 0, 0.3);
+  /* The inset edge of every field like control, 3:1 on the panel and on the control fill (ui/contrast.ts). */
+  --control-edge: color-mix(in srgb, var(--text) 50%, transparent);
+  /* Every keyboard focus outline, 3px under More and Maximum contrast. */
+  --focus-ring-width: 2px;
   /* A dialog's scrim when the blur is off and the fill alone must set the app behind apart. */
   --scrim-flat: rgba(5, 4, 9, 0.6);
   /* An empty checkbox, a deeper well than a field so the small box still reads on a card. */
@@ -131,6 +137,7 @@
   --field-bg: color-mix(in srgb, var(--text) 11%, var(--float-bg-solid));
   --hover-wash: color-mix(in srgb, var(--text) 6%, transparent);
   --check-off: color-mix(in srgb, var(--text) 24%, transparent);
+  --control-edge: color-mix(in srgb, var(--text) 68%, transparent);
   --float-shadow:
     0 1px 3px color-mix(in srgb, var(--text) 16%, transparent),
     0 12px 28px -10px color-mix(in srgb, var(--text) 42%, transparent);

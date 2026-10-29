@@ -35,7 +35,7 @@ const check = (name, ok, detail) => {
     executablePath: EXE,
     args: ["--use-angle=swiftshader", "--no-sandbox", "--enable-unsafe-swiftshader"],
   });
-  const page = await browser.newPage({ viewport: { width: 1200, height: 800 } });
+  const page = await browser.newPage({ colorScheme: "dark", viewport: { width: 1200, height: 800 } });
   const shaderErrors = [];
   page.on("console", (m) => {
     if (/Shader Error|Program Info Log|WebGL: INVALID/i.test(m.text())) shaderErrors.push(m.text().slice(0, 300));

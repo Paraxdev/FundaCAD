@@ -7,10 +7,12 @@ import "@fontsource/jetbrains-mono/latin-400.css";
 import "@fontsource/jetbrains-mono/latin-500.css";
 import "./styles/main.scss";
 import { initTheme } from "./ui/theme";
+import { initContrast } from "./ui/contrastSetting";
 import { installGlassBlurSwitch } from "./ui/glassBlur";
 
 // Applies a stored non-default theme before anything renders, so the app never paints one palette then swaps.
 initTheme();
+initContrast();
 installGlassBlurSwitch();
 import "./diagnostics/breadcrumbs"; // installs window error listeners (bug-report trail)
 import { createApp, markRaw } from "vue";

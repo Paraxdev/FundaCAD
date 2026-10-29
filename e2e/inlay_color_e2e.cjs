@@ -85,7 +85,7 @@ async function countInk(page, tag) {
   };
 
   const browser = await chromium.launch({ executablePath: CHROME, headless: true });
-  const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+  const page = await browser.newPage({ colorScheme: "dark", viewport: { width: 1280, height: 800 } });
   page.on("pageerror", (e) => console.log("  [pageerror]", e.message));
 
   await page.goto(URL, { waitUntil: "networkidle" });

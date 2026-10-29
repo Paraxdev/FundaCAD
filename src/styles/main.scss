@@ -3,6 +3,8 @@
 // and the e2e suite selects on these class names. No SCSS variables, the theme is custom properties.
 
 @use "tokens";
+// Right after the tokens it swaps under More and Maximum contrast.
+@use "contrast";
 @use "base";
 @use "titlebar";
 @use "palette";
@@ -36,5 +38,7 @@
 @use "touch";
 // Last on purpose, see the header of _icons.scss.
 @use "icons";
+// After every state rule it recolours for a Windows contrast theme.
+@use "forced";
 // Truly last, it switches every animation off when asked.
 @use "motion";

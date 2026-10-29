@@ -128,15 +128,16 @@ Lines (layout dividers only, see [Depth without lines](#depth-without-lines)):
 | Token | Noir | Use |
 |---|---|---|
 | `--line` | `#322c42` | Hairline dividers between the parts of a dialog, menu or dock (`.modal-head`, `.modal-foot`, `.menu-sep`, `.ctx-sep`, `.rd-tabs`, `.prefs-nav`) and the title bar edge |
-| `--line-strong` | `#5c5470` | The scrollbar thumb. Decorative only (2.45:1 on `--panel`) |
+| `--line-strong` | `#847c9a` | The scrollbar thumb and any line that marks a boundary: 3:1 on `--panel` and `--raised` in every shipped theme (`tests/ui/themeContrast.test.ts`) |
 
 Text:
 
 | Token | Noir | Use |
 |---|---|---|
 | `--text` | `#f6f0e4` | Primary text, titles, values |
-| `--text-dim` | `#aaa1b5` | Secondary labels, idle icons, a dimmed tree row |
-| `--text-mute` | `#7d7590` | Hints, caps labels, idle close glyphs, metadata, a hidden tree row. Fails AA on panels in Noir, never for text a user needs |
+| `--text-dim` | `#c4bcd0` | Secondary labels, idle icons, a dimmed tree row |
+| `--text-mute` | `#a9a2ba` | Hints, caps labels, idle close glyphs, metadata, a hidden tree row. 4.5:1 on `--panel`, `--panel-2`, `--raised`, `--raised-2` and the rail pill glass in every shipped theme, like `--text` and `--text-dim` |
+| `--text-faint` | `--text-mute` 70% into `--panel` | Decoration only (a rule, an idle glyph stroke), never text: it sits under 4.5:1 by design |
 
 Accent (also what selected edges, dimensions and manipulator handles are drawn in):
 
@@ -160,6 +161,7 @@ Fills of depth ([3](#3-surfaces-and-elevation) puts them to use):
 | `--float-chip-bg` | `color-mix(in srgb, #fff 10%, var(--float-bg))` | A chip, pill, button or key cap on a card |
 | `--field-bg` | `rgba(0, 0, 0, 0.3)` | A text field or select, sunk below the surface it sits on |
 | `--check-off` | `rgba(0, 0, 0, 0.45)` | An empty checkbox, a deeper well than a field so the small box still reads |
+| `--control-edge` | `--text` 50% over the control (68% in a light theme) | The inset 1px edge of every field like control, 3:1 on the panel around it and on its own fill (`src/ui/contrast.ts`) |
 | `--hover-wash` | `rgba(255, 255, 255, 0.07)` | A hover, laid over the fill of the control |
 | `--float-shadow` | `0 2px 5px rgba(0, 0, 0, 0.32), 0 16px 34px -14px rgba(0, 0, 0, 0.62)` | The one shadow of all glass |
 
@@ -178,7 +180,7 @@ Status:
 | `--error` | `#ff5c5c` | Errors, destructive items, failed steps |
 | `--error-tint` | `rgba(255, 92, 92, 0.14)` | Error backgrounds |
 | `--pick-line` | `#b48cff` | The second pick colour, apart from the accent: the Mirror line or plane, in the view and on its panel field |
-| `--axis-x`, `--axis-y`, `--axis-z` | `#ff5a5a`, `#46d97a`, `#4d8dff` | X, Y and Z in the view: the origin triad and plane tiles, the Move, Pattern and datum gizmos. Colour-Blind Safe trades them for `#e5483a`, `#eedf6b`, `#6aaef0` |
+| `--axis-x`, `--axis-y`, `--axis-z` | `#ff5a5a`, `#46d97a`, `#4d8dff` | X, Y and Z in the view: the origin triad and plane tiles, the Move, Pattern and datum gizmos. Colour-Blind Safe trades them for `#e5483a`, `#eedf6b`, `#6aaef0`. Every palette keeps them at 3:1 on `--viewport-bg`, so the light themes set darker ones |
 
 There is no info, success tint, warn tint or disabled token. Derive them:
 
@@ -187,9 +189,9 @@ There is no info, success tint, warn tint or disabled token. Derive them:
 | Hover of a control | `linear-gradient(var(--hover-wash), var(--hover-wash)), <the control's own fill>` |
 | Menu or list row hover, selected row | `color-mix(in srgb, var(--accent) 16%, transparent)`, text `--accent-hot`, no ring |
 | Tile on | `linear-gradient(var(--accent-wash), var(--accent-wash)), var(--float-tile-bg)` |
-| Field focus | `outline: 1px solid var(--accent)`, no ring and no border change |
+| Field focus | `outline: var(--focus-ring-width) solid var(--accent)`, offset 1px, no ring and no border change |
 | Warn or error surface | `color-mix(in srgb, var(--warn) 9%, var(--float-bg-solid))` (`.perf-pop`), `color-mix(in srgb, var(--error) 22%, var(--float-bg-solid))` (`.toast-error`) |
-| Warn or error small text on glass or a panel | `color-mix(in srgb, var(--warn) 60%, var(--text))` or the same with `--error` (`.sketch-dim.conflict`, `.rel-row.over .rel-sym`); the bare `--warn` and `--error` fall under AA in Solarized Light, keep them for the border |
+| Warn or error small text on glass or a panel | `color-mix(in srgb, var(--warn) 60%, var(--text))` or the same with `--error` (`.sketch-dim.conflict`, `.rel-row.over .rel-sym`); the bare `--warn` and `--error` pass on the panels, keep them for borders and panel text |
 
 ### 2.2 Shape and motion tokens
 
@@ -443,8 +445,13 @@ html.no-glass-blur *, html.no-glass-blur *::before, html.no-glass-blur *::after 
 }
 ```
 
-The fills go opaque, while shape, shadow, spacing and accent use stay. This is
-the only legitimate opaque glass, and it must still look finished:
+The fills go opaque, while shape, shadow, spacing and accent use stay. The
+Solid panels setting (Settings, Accessibility) sets the class too, and so do
+More and Maximum contrast, so text over a white or busy model keeps 4.5:1. It
+also adds `solid-panels`, whose rule in `_glass.scss` makes `--float-bg` the
+opaque `--float-bg-solid` in light themes as well, where the plain
+`no-glass-blur` override loses to `:root.theme-light`. These are the only
+legitimate opaque glass, and they must still look finished:
 
 ![Blur off: opaque fills, same shapes and shadows](design/workspace-blur-off.png)
 
@@ -699,11 +706,11 @@ painting.
 |---|---|---|
 | Hover | `:hover:not(.is-disabled)` | `--hover-wash` over the fill, or the component's own, below |
 | Pressed | `:active:not(.is-disabled)` | a scale (0.97 on a button, 0.94 on an icon button or a tile) or a deeper wash |
-| Focus visible | `:focus-visible` | the shared outline ([11](#11-accessibility)); a field 1px accent on its well; a segment, tab, menu item or list row inset |
+| Focus visible | `:focus-visible` | the shared outline ([11](#11-accessibility)); a field the same ring on its well, offset 1px; a segment, tab, menu item or list row inset by the ring width |
 | On | `.is-on`, `aria-pressed` or `aria-checked` | `--accent-wash` over the fill with `--accent-hot` ink, or an `--accent` fill on `Checkbox` and `Switch` |
 | Selected | `.is-selected`, `aria-selected` or `aria-checked` | accent 16% or `--accent-wash`, `--accent-hot` |
 | Open | `.is-open`, `aria-expanded` | the hover look, held while its menu or list is open |
-| Error | `.is-error`, `aria-invalid` | `--error-tint`, an `--error` outline while focused, the reason in `title` |
+| Error | `.is-error`, `aria-invalid` | `--error-tint`, the accent ring kept while focused, the reason in `title` |
 | Disabled | `.is-disabled`, `aria-disabled="true"` | opacity 0.45, `cursor: default`, no hover and no press |
 
 Disabled is one model everywhere, `useDisabled` (`src/components/ui/useDisabled.ts`):
@@ -854,14 +861,15 @@ with the last raw button.
 
 ### 7.5 Inputs and selects
 
-A field is a sunken well: `--field-bg`, darker than the surface it sits on, with no edge. Focus draws a 1px accent
-outline on the well, not on the input inside it.
+A field is a sunken well: `--field-bg`, darker than the surface it sits on, ringed by the inset 1px `--control-edge`
+(`box-shadow: inset 0 0 0 1px`, never a border or outline). Focus draws the shared ring on the well, offset 1px, not on
+the input inside it, and the error state keeps it.
 
 | Component | Idle | Focus | Error and other states |
 |---|---|---|---|
-| `TextField`, `NumberField` (`.ui-field`) | squircle, chip radius, fill `--field-bg`; `md` 32px, padding `0 var(--s-3)`, 12px; `sm` 24px, padding `0 var(--s-2)`, 11px; placeholder `--text-mute`; `NumberField` in tabular numbers | `outline: 1px solid var(--accent)` on `:focus-within`, no ring | `.is-error`: fill `--error-tint`, the outline `--error`; disabled, the disabled model |
+| `TextField`, `NumberField` (`.ui-field`) | squircle, chip radius, fill `--field-bg`, the inset `--control-edge`; `md` 32px, padding `0 var(--s-3)`, 12px; `sm` 24px, padding `0 var(--s-2)`, 11px; placeholder `--text-mute`; `NumberField` in tabular numbers | `outline: var(--focus-ring-width) solid var(--accent)` on `:focus-within`, offset 1px, no ring | `.is-error`: fill `--error-tint`, the accent ring kept, the reason tells the error; disabled, the disabled model |
 | `UnitChip` (`.ui-unit-chip`) | a 600 `--text-mute` word on no fill, inside the well | | picker: hover and open `--accent-hot` on `--hover-wash`, pressed `--accent-wash` |
-| `Select` (`.sm-select.select-trigger`) | as the field, plus a drawn caret; `sm` 24px | as the field | `.is-open`: accent 14% into the well, and a `.float-popover.select-pop` of `.opt-row`s whose keyboard row is `.is-active`, washed; disabled keeps its caret |
+| `Select` (`.sm-select.select-trigger`) | as the field, plus a drawn caret; `sm` 24px | as the field, the edge kept | `.is-open`: accent 14% into the well, and a `.float-popover.select-pop` of `.opt-row`s whose keyboard row is `.is-active`, washed; disabled keeps its caret |
 
 Keys. `TextField` in `change` mode and `NumberField`: Enter commits, blur commits, Escape goes back to the last
 committed text and ends a preview; text that does not commit stays, with `aria-invalid` and the reason in its
@@ -897,10 +905,10 @@ shows in the model as you flip it.
 
 | Component | Idle | On | Disabled | Focus |
 |---|---|---|---|---|
-| `Checkbox` (`.ui-checkbox`) | an 18 by 18 box, squircle, radius half the chip radius, fill `--check-off`, no edge; hover `--hover-wash` over it. The native input lies over the box, so ids, labels and change handlers stay native; Space flips it once | `.is-on`: fill `--accent`, a `--on-accent` tick, hover `--accent-hot`; `.is-mixed` (`indeterminate`) a bar instead of the tick | the box and label fade, no hover | `outline: 2px solid var(--accent)`, offset 2px, round the box |
-| `Switch` (`.ui-switch`, `role="switch"`, `aria-checked`) | 36 by 20, `--r-pill` track `--raised-2`, knob 14px `--text`; hover `--hover-wash` over the track; pressed, the knob stretches | `.is-on`: track `--accent`, hover `--accent-hot`, knob `translateX(16px)` in `--on-accent` | the disabled model | the shared outline |
+| `Checkbox` (`.ui-checkbox`) | an 18 by 18 box, squircle, radius half the chip radius, fill `--check-off`, the inset `--control-edge`; hover `--hover-wash` over it. The native input lies over the box, so ids, labels and change handlers stay native; Space flips it once | `.is-on`: fill `--accent` and no edge, a `--on-accent` tick, hover `--accent-hot`; `.is-mixed` (`indeterminate`) a bar instead of the tick | the box and label fade, no hover | the ring width, offset 2px, round the box |
+| `Switch` (`.ui-switch`, `role="switch"`, `aria-checked`) | 36 by 20, `--r-pill` track `--raised-2` with the inset `--control-edge`, knob 14px `--text`; hover `--hover-wash` over the track; pressed, the knob stretches | `.is-on`: track `--accent` and no edge, hover `--accent-hot`, knob `translateX(16px)` in `--on-accent` | the disabled model | the shared outline |
 | `SwitchRow` (`.ui-switch-row`, a `<label>`) | `float`: padding `6px var(--s-1)`, squircle, chip radius, 12.5px, the state "On" or "Off" in 11.5px `--text-mute`, row hover `--hover-wash`; `param`: a 12px `--text-dim` label with the switch at the end | the switch's | the row fades as a whole, the switch inside does not fade again | the switch's |
-| `Slider` (`.ui-slider`) | label `--text-dim`, a 4px `--r-pill` track filled `--accent` up to the value over `--check-off`, a 14px `--text` thumb, the value in 11.5px tabular `--text-dim`; hover `scale(1.15)` on the thumb, pressed `scale(1.25)` and `--accent-hot` | | the disabled model | `outline: 2px solid var(--accent)`, offset 2px, round the thumb |
+| `Slider` (`.ui-slider`) | label `--text-dim`, a 4px `--r-pill` track filled `--accent` up to the value, past it `--control-edge` over `--check-off` (a 4px rail takes the edge colour whole, not as a rim; `.profile-slider` too), a 14px `--text` thumb, the value in 11.5px tabular `--text-dim`; hover `scale(1.15)` on the thumb, pressed `scale(1.25)` and `--accent-hot` | | the disabled model | the ring round the whole `.ui-slider` row, chip radius, through `:has(.ui-slider-input:focus-visible)`; round the thumb, offset 2px, only where `:has` is missing, as WebKit paints no outline on the thumb |
 
 A click anywhere on a `SwitchRow` flips the switch once, since the row is the switch's label. The old `.sm-slider`
 is a native range with `accent-color: var(--accent)`.
@@ -909,7 +917,7 @@ is a native range with `accent-color: var(--accent)`.
 
 | Component | Idle | Hover | Selected | Focus |
 |---|---|---|---|---|
-| `Segmented` `bar` (`.ui-segmented-bar`) | one well, `--field-bg`, padding 2px, squircle, chip radius; segments `calc(var(--float-chip-radius) - 2px)`, `--text-dim`, 500; `md` 12.5px, `sm` 11.5px | `--hover-wash`, `--text` | `.is-selected`: `--accent-wash`, `--accent-hot`, 600 | the shared outline, inset |
+| `Segmented` `bar` (`.ui-segmented-bar`) | one well, `--field-bg` with the inset `--control-edge`, padding 2px, squircle, chip radius; segments `calc(var(--float-chip-radius) - 2px)`, `--text-dim`, 500; `md` 12.5px, `sm` 11.5px | `--hover-wash`, `--text` | `.is-selected`: `--accent-wash`, `--accent-hot`, 600 | the shared outline, inset |
 | `Segmented` `chips` (the Render dock) | separate chips in `--float-chip-bg`, `md` 32px, `sm` 24px | `--hover-wash` over the chip | as `bar` | the shared outline, inset |
 | `Tabs` `underline` (a card, `.float-tabs`) | 12.5px, 600, `--text-dim` | `--text` | `.is-selected`: `--text` and a 2px `--accent` underline from 25% to 75% | the shared outline, inset |
 | `Tabs` `bar` (a dock) | 32px chips, 11.5px, 500, `--text-mute` | `--hover-wash`, `--text-dim` | `--accent-hot` and a 2px `--accent` bar under it (a bar, not a fill) | the shared outline, inset |
@@ -1280,8 +1288,16 @@ still loads, the token is dropped.
 Shipped: FundaCAD Noir (built in, dark), Dracula, **Solarized Light** (the light
 one: `--bg #fdf6e3`, `--panel #eee8d5`, `--raised #ffffff`, `--text #073642`,
 `--text-dim #3a4f55`, `--text-mute #4d6165`, `--accent #25669b`,
-`--accent-hot #173f5f`), Colour-Blind Safe, and the Noir Blue, Red and Orange
+`--accent-hot #173f5f`), **FundaCAD Light** (Noir's violet on paper, `--bg #f5f3f9`,
+`--panel #ebe8f2`, `--text #1b1826`, `--accent #4a4fb5`), **High Contrast Dark** and
+**High Contrast Light**, Colour-Blind Safe, and the Noir Blue, Red and Orange
 tints. Users can upload their own palette.
+
+The High Contrast pair keeps a higher bar than the rest: every text token at 7:1
+on every surface and on the panel glass, and `--line-strong`, `--control-edge`,
+the signals and the focus ring (`--accent`) at 4.5:1. Their surfaces are near
+black or near white and set `--control-edge` outright. The dark one uses a cyan
+accent, as yellow is `--warn`.
 
 ![The same workspace in Solarized Light](design/workspace-light.png)
 
@@ -1309,9 +1325,16 @@ and `--text`, so the cards follow the palette.
   on: the card, the solid card, a tile, a chip and a field. `--on-accent` on
   `--accent` is held above 4.5:1 too. A light theme's `--accent-hot` is darker
   than its `--accent`, not lighter, because it is text on an accent tint.
+- **Signals stay apart.** `--ok`, `--warn` and `--error` read at 4.5:1 as text
+  on `--panel` and `--panel-2`, and `--pick-line` at 3:1 on `--viewport-bg`.
+  Two signals that a protanope, deuteranope or tritanope sees within ΔE2000 15
+  of each other differ by at least 10 L*, so lightness tells them apart where
+  hue does not (`deltaE2000` in `src/ui/contrast.ts`).
 
 `tests/ui/designSpec.test.ts` and `tests/ui/themeContrast.test.ts` hold these
-numbers for Solarized Light.
+numbers for every shipped light theme (Solarized Light, FundaCAD Light and High
+Contrast Light). In every theme the focus ring reads at 3:1 on each surface and
+the axes at 3:1 on `--viewport-bg`.
 
 What this means for you:
 
@@ -1331,24 +1354,58 @@ What this means for you:
 Focus:
 
 - The shared outline (`_base.scss`):
-  `:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }`.
+  `:focus-visible { outline: var(--focus-ring-width) solid var(--accent); outline-offset: 1px; }`.
+  `--focus-ring-width` is 2px, and every focus outline reads it (`tests/ui/focusRing.test.ts`).
   It shows on keyboard focus only, never on a pointer click, and it is the one
   outline on a rounded surface ([Depth without lines](#depth-without-lines)).
 - Fields (`TextField`, `NumberField`, `Select`, and the old `.sm-input`,
-  `.param-row input` and Items filter) draw a 1px accent outline with no offset
-  while focused. `Checkbox` draws a 2px outline at a 2px offset around its box,
-  `Slider` around its thumb.
+  `.param-row input` and Items filter) draw the same ring at a 1px offset
+  while focused, and an error keeps it. `Checkbox` draws it at a 2px offset
+  around its box. `Slider` draws it round its whole row through `:has`, since
+  WebKit paints no outline on the thumb, and round the thumb only where `:has`
+  is missing.
 - Tabs, segments, menu items and list rows use an inset outline
-  (`outline-offset: -2px`), so a clipped row does not hide it. On the rail the
+  (`outline-offset: calc(-1 * var(--focus-ring-width))`), so a clipped row
+  does not hide it. On the rail the
   outline is on the `.rail-btn` button, not on the `.rail-tile` inside it.
 - Never use a ring `box-shadow` for focus, and never `outline: none` without a
   replacement.
 
-Contrast (Noir): `--text` on `--panel` 15.35:1, `--text-dim` 7.03:1, `--accent`
-7.13:1, `--accent-hot` 9.97:1, `--on-accent` on `--accent` 7.80:1, `--error`
-5.76:1. `--text-mute` is 4.00:1 on `--panel` and 3.06:1 on `--raised`: hints and
-metadata only. `--line-strong` is decorative. On the light theme every text
-token reaches 4.5:1 ([10](#10-light-and-dark-themes)).
+Contrast (Noir): `--text` on `--panel` 15.35:1, `--text-dim` 9.50:1,
+`--text-mute` 7.11:1 (4.64:1 on `--raised-2`, the lowest), `--accent` 7.13:1,
+`--accent-hot` 9.97:1, `--on-accent` on `--accent` 7.80:1, `--error` 5.76:1,
+`--line-strong` 4.42:1 (3.39:1 on `--raised`) and `--control-edge` 4.72:1.
+`--text-faint` is the one token under 4.5:1, so it never carries text.
+`src/ui/contrast.ts` holds the pairs and `tests/ui/themeContrast.test.ts` runs
+them over every shipped theme:
+
+| Pair | Standard | High Contrast pair |
+|---|---|---|
+| `--text`, `--text-dim`, `--text-mute` on `--panel`, `--panel-2`, `--raised`, `--raised-2`, the panel glass and a solid panel over a white model; `--on-accent` on `--accent` | 4.5:1 | 7:1 |
+| `--line-strong` on `--panel` and `--raised` | 3:1 | 4.5:1 |
+| `--control-edge` on the field well, the empty checkbox, the slider rail and the switch track, and against the panel round them | 3:1 | 4.5:1 |
+| `--ok`, `--warn`, `--error` as text on `--panel` and `--panel-2` | 4.5:1 | 4.5:1 |
+| Two signals a protan, deutan or tritan view merges (dE2000 under 15) | 10 L* apart | 10 L* apart |
+| The focus ring (`--accent`) on every surface and the glass | 3:1 | 4.5:1 |
+| `--axis-x`, `--axis-y`, `--axis-z` and `--pick-line` on `--viewport-bg` | 3:1 | 3:1 |
+
+An uploaded palette is checked against the same pairs at the standard bar: it
+still loads, and the Appearance pane lists the pairs it fails in a status line
+under the picker.
+
+The Contrast setting (Settings, Accessibility: Follow system, Standard, More,
+Maximum) writes `html[data-contrast]`, and `_contrast.scss` swaps tokens over
+any theme: More draws `--text-mute` and `--control-edge` as `--text-dim`,
+Maximum draws `--text-dim`, `--text-mute`, `--line-strong` and
+`--control-edge` as `--text`, and both set `--focus-ring-width` to 3px and turn
+Solid panels on. Follow system gives More when the OS asks for contrast. Solid
+panels (`html.solid-panels`, also in the Screen reader preset) turns the glass
+off and fills panels, tiles and chips with `--float-bg-solid`, so text keeps
+4.5:1 over a white model.
+
+The System theme, the first run default, follows the OS: dark gives FundaCAD
+Noir, light gives FundaCAD Light, and an OS that asks for contrast gives High
+Contrast Dark or Light. A theme the user picked always wins over it.
 
 Semantics: an icon only button has an `aria-label` (and the same `title`).
 Toggles use `aria-pressed`, switches `role="switch"` with `aria-checked`,
@@ -1385,8 +1442,19 @@ in the `title`, opacity 0.45, `cursor: default` and no hover; the control
 swallows its own click and Enter. The old menu and context rows take
 `pointer-events: none` instead.
 
-Not handled yet, so do not rely on them: `prefers-contrast`, `forced-colors`,
-`prefers-reduced-transparency`, a role on the toast stack.
+`prefers-contrast` and `forced-colors` only steer the System theme to High
+Contrast and Follow system contrast to More (`ui/osTheme.ts`), together with the Rust `os_a11y_prefs` command,
+which asks Windows, the desktop portal or gsettings on Linux and macOS
+Increase contrast, as WebKitGTK reports no `prefers-contrast` at all. It is
+asked at startup and again each time the window regains focus or changes
+theme, and gives up on a tool that has not answered within two seconds, which
+keeps the last answer rather than turning contrast off. Under
+`forced-colors` (a Windows contrast theme) `_forced.scss` redraws what the
+browser erases: control edges as an inset 1px ButtonText outline, selected and
+pressed states in Highlight and HighlightText (with `forced-color-adjust: none`,
+as Chromium otherwise draws a Canvas backplate behind their text), the focus
+ring in Highlight and the slider rail in system colours. Not handled yet: `prefers-reduced-transparency`, a
+role on the toast stack.
 
 ## 12. Do and don't
 

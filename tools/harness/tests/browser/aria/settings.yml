@@ -17,6 +17,7 @@
     - combobox /^Theme, /
     - button "Upload theme…"
     - alert
+    - status
     - combobox /^Icons, /
     - radiogroup "Units":
       - radio "mm" [checked]
