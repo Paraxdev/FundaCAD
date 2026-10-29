@@ -1,8 +1,8 @@
 // Interface size: the stored setting and its gate, the steps and the cap, and how it reaches the page, the webview
 // zoom under Tauri and the root zoom elsewhere.
 
-import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import baseScss from "../../src/styles/_base.scss?raw";
 
 const setZoom = vi.fn((_: number) => Promise.resolve());
 vi.mock("@tauri-apps/api/webview", () => ({ getCurrentWebview: () => ({ setZoom }) }));
@@ -188,7 +188,7 @@ describe("the first paint", () => {
   });
 
   it("hides the body, not the root, so the window keeps the theme background", () => {
-    const base = readFileSync("src/styles/_base.scss", "utf8").replace(/\r\n/g, "\n");
+    const base = baseScss.replace(/\r\n/g, "\n");
     expect(base).toContain("html[data-sizing] body {\n  opacity: 0;\n}");
   });
 });
