@@ -676,16 +676,21 @@ describe("design spec guard", () => {
     const vars = block(styleOf(TOKENS, scssFiles.get(TOKENS) ?? ""), ":root");
     const dialogs = [".modal-overlay", ".choice-backdrop", ".cmdk-backdrop"];
     const popups = [".float-popover.select-pop", ".ui-menu", ".menu-popup"];
-    // Everything else that draws over the model: the panels, the Stress and sketch readouts, the in-view chips.
-    const inView = [
-      ".measure-panel",
-      ".stress-glyph-label",
-      ".sketch-dim-leaders",
+    // The in-view chips sit by the model or the cursor, so they draw over a panel they meet.
+    const chips = [
       ".float-card.text-tool-panel",
       ".dim-input",
+      ".sketch-dims",
+      ".timeline-props.floating",
+      ".rotate-dial-label",
+      ".snap-tag",
+      ".prompt",
     ];
+    // Everything else that draws over the model: the panels, the Stress and sketch readouts, the in-view chips.
+    const inView = [".measure-panel", ".stress-glyph-label", ".sketch-dim-leaders", ...chips];
     const pairs = [
       ...[...dialogs, ...popups].flatMap((top) => inView.map((under) => [top, under] as const)),
+      ...chips.map((top) => [top, ".measure-panel"] as const),
       [".float-popover", ".measure-panel"] as const,
       ["#float-layer", ".measure-panel"] as const,
       [".measure-panel", ".stress-glyph-label"] as const,
