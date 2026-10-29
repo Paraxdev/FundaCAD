@@ -162,7 +162,7 @@ gif = { delay = 100, loop = 0 }
 stub = true
 show = "A face being pulled out with Press/Pull (about 26 frames, 800 wide)."
 alt = "A face being pulled out with Press/Pull"
-uses = ["manual/docs/model/press-pull.md:8"]
+uses = ["manual/docs/model/press-pull.md:11"]
 
 [[shot]]
 file = "manual/docs/img/primitive-cylinder.png"
