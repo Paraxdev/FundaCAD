@@ -6,6 +6,11 @@
 *[mesh]: A surface made of many small triangles, as in STL, 3MF and GLB files.
 *[STEP]: A file format that stores the exact solid, for handing parts to other CAD programs.
 *[STL]: The triangle mesh format almost every slicer reads.
+*[Reference scan]: A big mesh brought in to look at and measure, not to edit.
+*[reference scan]: A big mesh brought in to look at and measure, not to edit.
+*[Safe mode]: A start with plugins, saved preferences and work recovery off, to get past a problem.
+*[safe mode]: A start with plugins, saved preferences and work recovery off, to get past a problem.
+*[Versions]: Checkpoints saved inside a document, that you can go back to.
 *[Body]: One solid shape in your model.
 *[Bodies]: One solid shape in your model.
 *[body]: One solid shape in your model.
