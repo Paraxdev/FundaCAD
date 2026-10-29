@@ -220,6 +220,7 @@ function onKeydown(e: KeyboardEvent) {
       v-if="unit"
       :unit="unit"
       :options="units"
+      :label="label && `${label} unit`"
       :tip="unitTip"
       :disabled="disabled"
       @update:unit="emit('update:unit', $event)"

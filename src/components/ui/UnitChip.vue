@@ -9,18 +9,20 @@ const props = withDefaults(
     unit: string;
     /** Unit ids to pick from. Without them the chip is a caption. */
     options?: readonly string[] | undefined;
-    /** The picker's name, and the caption's title. */
+    /** The picker's name, such as "Width unit". Without it the tip names the picker. */
+    label?: string | undefined;
+    /** The picker's tooltip, and the caption's title. */
     tip?: string | undefined;
     keys?: string | undefined;
     disabled?: boolean | undefined;
     disabledReason?: string | undefined;
   }>(),
-  { tip: undefined, disabled: false },
+  { label: undefined, tip: undefined, disabled: false },
 );
 const emit = defineEmits<{ "update:unit": [string] }>();
 
-const label = (id: string) => unitById(id)?.label ?? id;
-const choices = computed(() => (props.options ?? []).map((id) => ({ value: id, label: label(id) })));
+const unitLabel = (id: string) => unitById(id)?.label ?? id;
+const choices = computed(() => (props.options ?? []).map((id) => ({ value: id, label: unitLabel(id) })));
 </script>
 
 <template>
@@ -30,12 +32,12 @@ const choices = computed(() => (props.options ?? []).map((id) => ({ value: id, l
     size="sm"
     :model-value="unit"
     :options="choices"
-    :label="tip ?? 'Unit'"
+    :label="label ?? tip ?? 'Unit'"
     :tip="tip ?? 'Unit'"
     :keys="keys"
     :disabled="disabled"
     :disabled-reason="disabledReason"
     @update:model-value="emit('update:unit', $event)"
   />
-  <span v-else class="ui-unit-chip" :title="tip">{{ label(unit) }}</span>
+  <span v-else class="ui-unit-chip" :title="tip">{{ unitLabel(unit) }}</span>
 </template>
