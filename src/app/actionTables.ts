@@ -98,6 +98,8 @@ export const NON_REPEATABLE = new Set([
   "hide-selected",
   "show-all-bodies",
   "clean-view",
+  "region-next",
+  "region-prev",
 ]);
 
 /** Entity patterns word their own prompt as curves are picked and the pattern

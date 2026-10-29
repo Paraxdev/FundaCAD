@@ -22,7 +22,7 @@ const GLOBAL: Command[] = [
   { id: "export", label: "Export…", group: "File", context: "global", key: "Ctrl+E" },
   { id: "undo", label: "Undo", group: "Edit", context: "global", key: "Ctrl+Z" },
   { id: "redo", label: "Redo", group: "Edit", context: "global", key: "Ctrl+Y" },
-  { id: "fit", label: "Fit View", group: "View", context: "global", key: "Home / F6" },
+  { id: "fit", label: "Fit View", group: "View", context: "global", key: "Home" },
   { id: "reset-camera", label: "Reset Camera", group: "View", context: "global", key: "Shift+Home" },
   { id: "iso", label: "Isometric View", group: "View", context: "global" },
   { id: "top", label: "Top View", group: "View", context: "global" },

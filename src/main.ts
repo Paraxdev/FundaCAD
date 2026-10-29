@@ -25,6 +25,7 @@ import { harnessWanted } from "./harness/wanted";
 import { installGuidePressGuard } from "./ui/guide/pressGuard";
 import { watchFirstFrame } from "./app/firstFrame";
 import { trackFocus } from "./components/ui/focusables";
+import { installRegionKeys, trackRegionFocus } from "./ui/regions";
 
 // Before anything is constructed, so a failure inside createEngine still reaches the user.
 installGlobalErrorHandlers();
@@ -41,6 +42,8 @@ const engine = createEngine(canvas);
 
 installGuidePressGuard();
 trackFocus();
+trackRegionFocus();
+installRegionKeys(() => (engine.sketch.active ? "sketch" : "model"));
 const app = createApp(App);
 // A reactive proxy would break structuredClone in the undo snapshot and the identity checks of the delta protocol.
 app.provide(ENGINE, markRaw(engine));

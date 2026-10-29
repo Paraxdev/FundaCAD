@@ -1,10 +1,13 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { setShortcutOverrides } from "../../../src/input/shortcuts";
 
 import {
   REGION_ORDER,
   currentRegion,
   cycleRegion,
   focusRegion,
+  installRegionKeys,
   regionsInOrder,
   trackRegionFocus,
 } from "../../../src/ui/regions";
@@ -152,5 +155,73 @@ describe("focusRegion", () => {
     $("#viewport").innerHTML = `<canvas id="canvas" tabindex="-1"></canvas>`;
     focusRegion({ kind: "viewport", el: $("#main") });
     expect(active()).toBe($("#main"));
+  });
+});
+
+describe("installRegionKeys", () => {
+  let stopKeys: () => void = () => {};
+  const press = (target: Element, key: string, init: KeyboardEventInit = {}) => {
+    const ev = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...init });
+    target.dispatchEvent(ev);
+    return ev;
+  };
+  beforeEach(() => {
+    stopKeys = installRegionKeys(() => "model");
+  });
+  afterEach(() => {
+    stopKeys();
+    setShortcutOverrides([]);
+  });
+
+  it("moves one region per F6 and back with Shift+F6, the window keymap never seeing it", () => {
+    const onWindow = vi.fn();
+    window.addEventListener("keydown", onWindow);
+    $("#file").focus();
+    expect(press($("#file"), "F6").defaultPrevented).toBe(true);
+    expect(active()).toBe($("#sketch"));
+    press($("#sketch"), "F6", { shiftKey: true });
+    expect(active()).toBe($("#file"));
+    window.removeEventListener("keydown", onWindow);
+    expect(onWindow).not.toHaveBeenCalled();
+  });
+
+  it("works from a text field, which the keymap skips", () => {
+    $("#browser").insertAdjacentHTML("afterbegin", `<input id="filter" />`);
+    $("#filter").focus();
+    press($("#filter"), "F6");
+    expect(currentRegion()?.kind).toBe("viewport");
+  });
+
+  it("leaves an F6 another handler already claimed", () => {
+    $("#file").addEventListener("keydown", (e) => e.preventDefault());
+    $("#file").focus();
+    press($("#file"), "F6");
+    expect(active()).toBe($("#file"));
+  });
+
+  it("leaves other keys, and Alt or Ctrl with F6, to the keymap", () => {
+    $("#file").focus();
+    press($("#file"), "F5");
+    press($("#file"), "F6", { altKey: true });
+    press($("#file"), "F6", { ctrlKey: true });
+    expect(active()).toBe($("#file"));
+  });
+
+  it("follows a remap, but a letter key still types into a text field", () => {
+    setShortcutOverrides([{ action: "region-next", key: "j" }]);
+    $("#file").focus();
+    press($("#file"), "j");
+    expect(active()).toBe($("#sketch"));
+    $("#browser").insertAdjacentHTML("afterbegin", `<input id="filter" />`);
+    $("#filter").focus();
+    expect(press($("#filter"), "j").defaultPrevented).toBe(false);
+    expect(active()).toBe($("#filter"));
+  });
+
+  it("stops listening once stopped", () => {
+    stopKeys();
+    $("#file").focus();
+    press($("#file"), "F6");
+    expect(active()).toBe($("#file"));
   });
 });

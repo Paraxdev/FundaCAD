@@ -1,4 +1,6 @@
 import { focusables, landOn, shown } from "../components/ui/focusables";
+import { resolveShortcut } from "../input/shortcuts";
+import { isEditableTarget } from "./focus";
 
 /** The parts of the shell F6 and Shift+F6 step through, in that order. */
 export const REGION_ORDER = [
@@ -111,4 +113,21 @@ export function trackRegionFocus(): () => void {
     stopMemory = null;
   };
   return stopMemory;
+}
+
+/** F6 and Shift+F6 (or whatever they are remapped to) step between regions, from text fields too. On document, so it
+ *  runs before keymap.ts on window and stops the key there. An F6 a key capture already claimed is left alone. */
+export function installRegionKeys(context: () => "model" | "sketch"): () => void {
+  const onKey = (e: KeyboardEvent) => {
+    if (e.defaultPrevented || e.altKey) return;
+    const ctrl = e.ctrlKey || e.metaKey;
+    if (!ctrl && e.key.length === 1 && isEditableTarget(e.target)) return;
+    const action = resolveShortcut(e.key, e.shiftKey, context(), ctrl);
+    if (action !== "region-next" && action !== "region-prev") return;
+    e.preventDefault();
+    e.stopPropagation();
+    cycleRegion(action === "region-next" ? 1 : -1);
+  };
+  document.addEventListener("keydown", onKey);
+  return () => document.removeEventListener("keydown", onKey);
 }

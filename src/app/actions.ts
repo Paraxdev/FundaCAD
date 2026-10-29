@@ -4,6 +4,7 @@ import { chooseViewMode, nextViewMode, requestPathTraced, toggleCleanView, type 
 import { contributedAction } from "../plugins/contrib";
 import { openParamsDialog } from "../ui/paramsDialog";
 import { toggleShortcutHUD } from "../input/shortcuts";
+import { cycleRegion } from "../ui/regions";
 import { choose } from "../ui/choice";
 import { endPickSession } from "../ui/treePick";
 import { SKETCH_TOOLS, SKETCH_MODIFY, NON_REPEATABLE } from "./actionTables";
@@ -113,6 +114,9 @@ export function createActions(e: Engine): (action: string) => void {
     if (action === "preferences") return void useDialogStore().openPreferences();
     if (action === "accessibility-settings") return void useDialogStore().openPreferences("access");
     if (action === "manual") return void openExternal(MANUAL_URL);
+    // Moving focus leaves a sketch open and a pick waiting.
+    if (action === "region-next" || action === "region-prev")
+      return void cycleRegion(action === "region-next" ? 1 : -1);
     // The arrow keys turn the view and nothing else: they leave a sketch open,
     // and a tool that reads the arrows itself (the pattern count) keeps them.
     const step = /^view-step-(left|right|up|down)(-fine)?$/.exec(action);
