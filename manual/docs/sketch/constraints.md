@@ -12,9 +12,9 @@ The colour of the curves tells you how free the sketch still is:
 
 ## Add a constraint
 
-Some come for free. A line drawn within about 3 degrees of horizontal or vertical is made exact as you draw it.
+Some come for free as you draw a line. With both ends on the grid, a line whose ends share a grid row or column is made horizontal or vertical. With an end off the grid, as with Snap off or Ctrl held, a line within about 3 degrees of horizontal or vertical is made exact.
 
-1. Open **Constrain** in the CONSTRAINTS group and pick one, or press its key.
+1. Open **Constrain** on the rail and pick one, or press its key.
 2. Click the shapes the hint line asks for.
 3. Keep clicking to add more, press Esc to stop.
 
