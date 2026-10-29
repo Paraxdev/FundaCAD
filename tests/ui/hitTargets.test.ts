@@ -52,6 +52,11 @@ describe("base components", () => {
     ".btn.btn-sm",
     ".ui-checkbox",
     ".ui-switch",
+    ".ui-list-row",
+    "button.chip",
+    ".chip-body",
+    ".ui-segment",
+    ".ui-unit-chip.is-picker",
   ];
 
   it("each grow a hit area of at least --hit-min", () => {
@@ -63,6 +68,15 @@ describe("base components", () => {
     expect(valueOf(css, ".btn.btn-sm", "position")).toBe("relative");
     expect(valueOf(css, ".ui-checkbox", "position")).toBe("relative");
     expect(valueOf(css, ".ui-switch", "position")).toBe("relative");
+    for (const host of [".ui-list-row", "button.chip", ".chip-body", ".ui-segment", ".ui-unit-chip.is-picker"]) {
+      expect(valueOf(css, host, "position"), host).toBe("relative");
+    }
+  });
+
+  // A range is hit only on itself and draws no pseudo, so the input grows and its margins hand the growth back.
+  it("grow the slider's own range input around a centred track", () => {
+    expect(valueOf(css, ".ui-slider-input", "height")).toBe("max(20px, var(--hit-min))");
+    expect(valueOf(css, ".ui-slider-input", "margin")).toBe("calc((20px - max(20px, var(--hit-min))) / 2) 0");
   });
 
   // The legacy box is a span beside its input, so a pseudo on it would not toggle: the hidden input itself grows.

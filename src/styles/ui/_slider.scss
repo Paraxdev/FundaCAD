@@ -1,5 +1,7 @@
 // Slider: the range track, thumb and value readout.
 
+@use "../hit";
+
 @mixin track {
   height: 4px;
   border: 0;
@@ -37,8 +39,9 @@
 .ui-slider-input {
   grid-column: 2;
   width: 100%;
-  height: 20px;
-  margin: 0;
+  // Drawn 20px tall round a centred track; a range takes no pseudo, so the input itself is the hit area.
+  height: max(20px, var(--hit-min));
+  margin: calc((20px - max(20px, var(--hit-min))) / 2) 0;
   background: none;
   cursor: pointer;
   -webkit-appearance: none;
