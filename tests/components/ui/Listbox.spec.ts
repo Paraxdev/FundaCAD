@@ -253,6 +253,30 @@ describe("Listbox", () => {
     }
   });
 
+  it("lets a letter no option starts through to the window's single key shortcuts, but keeps one inside a word", async () => {
+    vi.useFakeTimers();
+    const heard: string[] = [];
+    const listen = (e: KeyboardEvent) => heard.push(`${e.key}${e.defaultPrevented ? " prevented" : ""}`);
+    window.addEventListener("keydown", listen);
+    try {
+      const w = render();
+      (opts(w)[0]!.element as HTMLElement).focus();
+      await press("f");
+      await press(" ");
+      expect([heard, focusedLabel(), w.emitted("update:modelValue")]).toEqual([["f"], "Oak", [["oak"]]]);
+      vi.advanceTimersByTime(600);
+      await press("s");
+      await press("x");
+      expect([heard, focusedLabel()]).toEqual([["f"], "Steel"]);
+      vi.advanceTimersByTime(600);
+      await press("x");
+      expect([heard, focusedLabel()]).toEqual([["f", "x"], "Steel"]);
+    } finally {
+      window.removeEventListener("keydown", listen);
+      vi.useRealTimers();
+    }
+  });
+
   it("hands the slot the caller's own item, extra fields and all", () => {
     const items = ITEMS.map((it) => ({ ...it, swatch: `#${it.value}` }));
     const w = mount(Listbox<V, (typeof items)[number]>, {

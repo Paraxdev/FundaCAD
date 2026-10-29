@@ -136,21 +136,25 @@ let buffer = "";
 let bufferTimer = 0;
 const TYPE_AHEAD_MS = 500;
 
-function typeAhead(ch: string, from: number): number {
-  window.clearTimeout(bufferTimer);
-  bufferTimer = window.setTimeout(() => (buffer = ""), TYPE_AHEAD_MS);
-  buffer += ch.toLowerCase();
+function typeAhead(ch: string, from: number): number | null {
+  const word = buffer + ch.toLowerCase();
   // A repeated letter cycles through the options it starts; a word keeps the current match while it still fits.
-  const cycling = [...buffer].every((c) => c === buffer[0]);
-  const needle = cycling ? buffer[0]! : buffer;
+  const cycling = [...word].every((c) => c === word[0]);
+  const needle = cycling ? word[0]! : word;
   const n = props.items.length;
   const start = cycling ? from + 1 : from;
-  for (let k = 0; k < n; k++) {
+  let hit = -1;
+  for (let k = 0; k < n && hit < 0; k++) {
     const i = (start + k) % n;
     const it = props.items[i]!;
-    if (!it.disabled && it.label.toLowerCase().startsWith(needle)) return i;
+    if (!it.disabled && it.label.toLowerCase().startsWith(needle)) hit = i;
   }
-  return from;
+  // A first letter no option starts belongs to the window, a single key shortcut such as F for fit.
+  if (hit < 0 && buffer === "") return null;
+  buffer = word;
+  window.clearTimeout(bufferTimer);
+  bufferTimer = window.setTimeout(() => (buffer = ""), TYPE_AHEAD_MS);
+  return hit < 0 ? from : hit;
 }
 
 function target(k: string, from: number, els: readonly HTMLElement[]): number | null {
