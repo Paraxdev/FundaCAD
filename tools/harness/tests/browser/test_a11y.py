@@ -109,7 +109,7 @@ def show_confirm(s):
     s.click("feature:e2")
     s.press("Delete")
     s.page.keyboard.press("Control+N")
-    s.page.get_by_role("dialog", name=re.compile("^Discard unsaved changes")).wait_for()
+    s.page.get_by_role("alertdialog", name=re.compile("^Discard unsaved changes")).wait_for()
 
 
 def aria_mismatch(s: Session, template: str, timeout: float = 5000) -> str:

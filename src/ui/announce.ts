@@ -35,6 +35,8 @@ const FRAME_FALLBACK_MS = 100;
 // Alternated onto a repeat, since VoiceOver drops an announcement identical to the last one.
 const REPEAT_MARK = "\u00a0";
 const ASSERTIVE_QUIET_REPEAT_MS = 1000;
+// Long enough for any voice to finish, short enough that browsing the page never meets a prompt of a tool long gone.
+const STALE_MS = 8000;
 
 let readVerbosity: () => Verbosity = () => "normal";
 
@@ -86,6 +88,7 @@ class Channel {
   private frame: number | null = null;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private saidAt = new Map<string, number>();
+  private stale: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     readonly priority: AnnouncePriority,
@@ -108,6 +111,7 @@ class Channel {
 
   schedule() {
     if (!this.region || this.frame !== null || this.timer !== null || !this.pending.length) return;
+    this.forget();
     // Cleared now and set a frame later, so the region reports a change even for a sentence it already holds.
     this.region.textContent = "";
     const run = () => this.flush();
@@ -115,7 +119,13 @@ class Channel {
     this.timer = setTimeout(run, typeof requestAnimationFrame === "function" ? FRAME_FALLBACK_MS : 16);
   }
 
+  private forget() {
+    if (this.stale !== null) clearTimeout(this.stale);
+    this.stale = null;
+  }
+
   cancel() {
+    this.forget();
     if (this.frame !== null && typeof cancelAnimationFrame === "function") cancelAnimationFrame(this.frame);
     if (this.timer !== null) clearTimeout(this.timer);
     this.frame = null;
@@ -140,6 +150,11 @@ class Channel {
     }
     if (this.marked) text += REPEAT_MARK;
     this.region.textContent = text;
+    const region = this.region;
+    this.stale = setTimeout(() => {
+      this.stale = null;
+      region.textContent = "";
+    }, STALE_MS);
     remember(this.last, this.priority);
   }
 }
