@@ -24,7 +24,7 @@
 
 **After you update**
 - Plugins that start other programs, such as Printing, ask for your OK once more.
-- Links in older documents show as "may have changed" until you press Update once.
+- An older document that links to another file through Insert Document says that file "may have changed" until you press Update once.
 - A document opened from a .json file is saved with Save As.
 
 ## Known limits
