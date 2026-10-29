@@ -135,3 +135,34 @@ fn a_file_the_disk_reports_past_the_cap_is_refused_unread() {
     let err = read_text_within(Unreadable, cap + 1, cap).unwrap_err();
     assert_eq!(err, "This document is larger than 3 MiB and was refused.");
 }
+
+#[test]
+fn a_json_document_past_one_gib_is_refused_unread() {
+    let dir = tmpdir("gib_open");
+    let path = dir.join("huge.funda");
+    std::fs::File::create(&path).unwrap().set_len((1 << 30) + 1).unwrap();
+    let got = read_json_document(&path, &dir.join("blobs")).err();
+    let _ = std::fs::remove_dir_all(&dir);
+    assert_eq!(got.as_deref(), Some("This document is larger than 1024 MiB and was refused."));
+}
+
+#[test]
+fn a_json_save_past_one_gib_is_refused_before_writing() {
+    let dir = tmpdir("gib_save");
+    let blob = dir.join("big.bbrep");
+    std::fs::File::create(&blob).unwrap().set_len(800 << 20).unwrap();
+    let dest = dir.join("p.funda");
+    let blobs = BTreeMap::from([("0123456789abcdef0123456789abcdef".to_string(), blob)]);
+    let got = write_json_document(&dest, "{}", &blobs).err();
+    let written = dest.exists();
+    let _ = std::fs::remove_dir_all(&dir);
+    assert_eq!(
+        (got.as_deref(), written),
+        (
+            Some(
+                "This document is larger than the 1024 MiB a .funda file can hold. Save it as a .fundab file instead."
+            ),
+            false
+        )
+    );
+}

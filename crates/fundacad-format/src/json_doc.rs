@@ -19,8 +19,8 @@ pub const BINARY_DOC_EXT: &str = "fundab";
 pub const EMBEDDED_GEOMETRY_KEY: &str = "geometry";
 
 const MAX_TOTAL: u64 = 8 << 30;
-// Base64 geometry up to MAX_TOTAL plus room for the feature tree.
-const MAX_DOC_TEXT: u64 = MAX_TOTAL / 3 * 4 + (256 << 20);
+/// Opening parses the whole text, so this bounds the memory an open needs. A bigger model saves as a binary document.
+pub const MAX_DOC_TEXT: u64 = 1 << 30;
 
 const DAMAGED: &str = "This document's embedded geometry is damaged and cannot be opened.";
 
@@ -67,14 +67,22 @@ pub fn write_json_document(
     if obj.contains_key(EMBEDDED_GEOMETRY_KEY) {
         return Err(format!("the document already has a `{EMBEDDED_GEOMETRY_KEY}` field"));
     }
+    let trimmed = document_json.trim_end();
+    let body = trimmed[..trimmed.len() - 1].trim_end();
+    let mut text_len = body.len() as u64 + 64;
     for (hash, src) in blob_paths {
         if !is_hash(hash) {
             return Err(format!("not a geometry hash: {hash}"));
         }
-        std::fs::metadata(src).map_err(|e| format!("could not read geometry {}: {e}", src.display()))?;
+        let meta = std::fs::metadata(src).map_err(|e| format!("could not read geometry {}: {e}", src.display()))?;
+        text_len = text_len.saturating_add(meta.len().div_ceil(3) * 4 + 64);
     }
-    let trimmed = document_json.trim_end();
-    let body = trimmed[..trimmed.len() - 1].trim_end();
+    if text_len > MAX_DOC_TEXT {
+        return Err(format!(
+            "This document is larger than the {} MiB a .funda file can hold. Save it as a .{BINARY_DOC_EXT} file instead.",
+            MAX_DOC_TEXT >> 20
+        ));
+    }
 
     if let Some(parent) = dest.parent() {
         if !parent.as_os_str().is_empty() {
