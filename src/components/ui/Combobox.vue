@@ -28,6 +28,8 @@ const props = defineProps<
     active: number;
     /** On the element around the list, which scrolls it and holds the empty slot. */
     listClass?: string | undefined;
+    /** On every option row. */
+    optionClass?: string | undefined;
   } & Named
 >();
 const emit = defineEmits<{ "update:modelValue": [string]; "update:active": [number]; pick: [T] }>();
@@ -45,13 +47,20 @@ const name = computed<Named>(() =>
   props.labelledby ? { labelledby: props.labelledby } : { label: props.label ?? "" },
 );
 
+// Keys in one task step from the row the previous one asked for, before the caller has written it back.
+let asked: number | null = null;
+
 function onKeydown(e: KeyboardEvent) {
   if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || !expanded.value) return;
   if (e.key === "ArrowDown" || e.key === "ArrowUp") {
     e.preventDefault();
+    const from = asked ?? current.value;
     const flags = props.options.map((o) => !!o.disabled);
-    const next = rovingIndex(e.key, current.value, flags, { orientation: "vertical", wrap: false });
-    if (next !== null && next !== current.value) emit("update:active", next);
+    const next = rovingIndex(e.key, from, flags, { orientation: "vertical", wrap: false });
+    if (next === null || next === from) return;
+    if (asked === null) void nextTick(() => (asked = null));
+    asked = next;
+    emit("update:active", next);
   } else if (e.key === "Enter") {
     const o = props.options[current.value];
     if (!o) return;
@@ -92,6 +101,7 @@ defineExpose({ focus: () => field.value?.focus() });
       v-bind="name"
       :id="listId"
       :options="options"
+      :option-class="optionClass"
       :model-value="options[current]?.value ?? null"
       :active="current"
       @update:model-value="emit('pick', $event)"

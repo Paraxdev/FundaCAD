@@ -21,6 +21,8 @@ const props = defineProps<
     active?: number | undefined;
     /** Names each option `${id}-${index}`, for `aria-activedescendant`. */
     id?: string | undefined;
+    /** Added to every option row, for a caller that draws its own row look. */
+    optionClass?: string | undefined;
   } & Named
 >();
 const emit = defineEmits<{ "update:modelValue": [T]; "update:active": [number] }>();
@@ -57,13 +59,16 @@ function hover(i: number) {
       role="option"
       data-roving
       class="opt-row"
-      :class="{
-        selected: o.value === modelValue,
-        'is-selected': o.value === modelValue,
-        disabled: o.disabled,
-        'is-disabled': o.disabled,
-        'is-active': driven && i === active,
-      }"
+      :class="[
+        optionClass,
+        {
+          selected: o.value === modelValue,
+          'is-selected': o.value === modelValue,
+          disabled: o.disabled,
+          'is-disabled': o.disabled,
+          'is-active': driven && i === active,
+        },
+      ]"
       :tabindex="driven ? -1 : roving.tabindex(i)"
       :aria-selected="o.value === modelValue"
       :aria-disabled="o.disabled || undefined"

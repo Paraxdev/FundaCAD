@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { enableAutoUnmount, mount } from "@vue/test-utils";
-import { h } from "vue";
+import { h, nextTick } from "vue";
 
 import Combobox from "../../../src/components/ui/Combobox.vue";
 
@@ -152,5 +152,19 @@ describe("Combobox", () => {
     const w = await render({ class: "cmdk-input", listClass: "cmdk-list" });
     expect(w.get(".ui-text-field").classes()).toContain("cmdk-input");
     expect(w.find('.cmdk-list [role="listbox"]').exists()).toBe(true);
+  });
+
+  it("puts optionClass on every option row", async () => {
+    const w = await render({ optionClass: "cmdk-item" });
+    expect(w.findAll('[role="option"]').every((o) => o.classes().includes("cmdk-item"))).toBe(true);
+  });
+
+  it("moves two rows on two arrows in one task, before the caller writes the first back", async () => {
+    const w = await render({ options: OPTIONS.map((o) => ({ ...o, disabled: false })) });
+    const el = input(w).element;
+    for (const k of ["ArrowDown", "ArrowDown"])
+      el.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true }));
+    await nextTick();
+    expect(input(w).attributes("aria-activedescendant")?.split("-").pop()).toBe("2");
   });
 });

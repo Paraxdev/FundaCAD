@@ -934,7 +934,7 @@ The chips on the model and in the dock above keep their own markup until they we
 | `.opt-row` (`ChoiceList.vue`) | padding `7px var(--s-3)`, 12.5px, chip radius | white 5% wash | `.selected`: accent 16% fill, `--accent-hot` | `.disabled` opacity 0.45, no hover |
 | `.ctx-item` (context menu) | padding `var(--s-3) var(--s-4)`, 12.5px, chip radius, `.ctx-key` 11px `--text-dim` | accent 16%, `--accent-hot` | | `.disabled` opacity 0.45, `pointer-events: none` |
 | `.menu-item` (title bar menu) | padding `var(--s-3) var(--s-4)`, gap `--s-7`, `.menu-shortcut` 11px `--text-mute` | accent 16%, `--accent-hot` | `.menu-check` gutter in `--accent` | `[disabled]` `--text-mute`, `pointer-events: none` |
-| `.cmdk-item` | padding `var(--s-3) var(--s-4)`, gap `--s-3`, chip radius | `.active` (pointer or keys): accent 16%, `--accent-hot` | | |
+| `.cmdk-item` | a Combobox option (`role="option"`), padding `var(--s-3) var(--s-4)`, gap `--s-3`, chip radius | `.is-active` (pointer or keys, the `aria-activedescendant` row): accent 16%, `--accent-hot` | | |
 | `.tree-folder`, `.feature-row`, `#timeline .timeline-node` | padding `var(--s-2) var(--s-1)` on `.tree-folder`, `--s-2` on the others (History rows 34px tall), chip radius | `--raised` | `.selected`: accent 16% fill, `--accent-hot` | |
 
 A destructive row is red text: `MenuItem` with `danger` is `--error`, hover `--error-tint`. The old
