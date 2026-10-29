@@ -1,7 +1,8 @@
-// The compact value box: Tab walks the fields only, typing never resizes it, every option is one click, and it
-// sits beside the point it measures, never over it.
+// The compact value box: Tab walks the fields, options, Confirm and Cancel and then leaves, typing never resizes it,
+// every option is one click, and it sits beside the point it measures, never over it.
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { ProfileChip } from "../../src/features/profileChip";
 import { DimInput, type DimOption } from "../../src/sketch/dimInput";
 
 let dim: DimInput;
@@ -17,8 +18,11 @@ const root = () => document.querySelector<HTMLElement>(".dim-input")!;
 const inputOf = (name: string) => root().querySelector<HTMLInputElement>(`.dim-field[data-field="${name}"] input`)!;
 const focusedField = () =>
   (document.activeElement as HTMLElement | null)?.closest<HTMLElement>(".dim-field")?.dataset.field;
+/** True when the box let the key through, so the browser moves focus on out of the box. */
 const tab = (shift = false) =>
-  document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: shift, bubbles: true }));
+  document.activeElement!.dispatchEvent(
+    new KeyboardEvent("keydown", { key: "Tab", shiftKey: shift, bubbles: true, cancelable: true }),
+  );
 const click = (el: Element) => el.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
 function type(name: string, text: string) {
   const i = inputOf(name);
@@ -34,30 +38,90 @@ const FIELDS = [
 ];
 
 describe("Tab order", () => {
-  it("walks the fields in order and wraps, Shift+Tab walks back", () => {
+  it("walks the fields in order to Confirm, then lets Tab leave; Shift+Tab walks back", () => {
     dim.show(FIELDS, () => {});
-    const seen = [focusedField()];
+    const seen = [stop()];
     for (let i = 0; i < 4; i++) {
-      tab();
-      seen.push(focusedField());
+      expect(tab()).toBe(false);
+      seen.push(stop());
     }
-    expect(seen).toEqual(["size", "depth", "x", "y", "size"]);
-    tab(true);
-    expect(focusedField()).toEqual("y");
+    expect(seen).toEqual(["size", "depth", "x", "y", "confirm"]);
+    expect(tab()).toBe(true);
+    expect(stop()).toEqual("confirm");
+    expect(tab(true)).toBe(false);
+    expect(stop()).toEqual("y");
   });
 
-  it("skips a hidden field, then stops once on each option and wraps", () => {
+  it("walks through a tool's extra control, and into its open panel, between the fields and Confirm", () => {
+    const chip = new ProfileChip(0, () => {});
+    const commits: unknown[] = [];
+    dim.show(
+      FIELDS.slice(0, 1),
+      (v) => commits.push(v),
+      () => {},
+      undefined,
+      chip.el,
+    );
+    const at = () => (document.activeElement as HTMLElement).className;
+    expect(tab()).toBe(false);
+    expect(at()).toContain("profile-chip");
+    // Enter on the chip is the chip's own: the box neither commits nor prevents its click.
+    expect(press("Enter")).toBe(true);
+    expect(commits).toEqual([]);
+    expect(tab()).toBe(false);
+    expect(stop()).toBe("confirm");
+    expect(tab(true)).toBe(false);
+    (document.activeElement as HTMLElement).click();
+    const seen: string[] = [];
+    for (let i = 0; i < 7; i++) {
+      expect(tab()).toBe(false);
+      const el = document.activeElement as HTMLElement;
+      seen.push(el.closest(".profile-number") ? "number" : el.closest(".profile-slider") ? "slider" : el.textContent!);
+    }
+    expect(seen).toEqual(["number", "Flat", "Soft", "Round", "Full", "Tight", "slider"]);
+    expect(tab()).toBe(false);
+    expect(stop()).toBe("confirm");
+    chip.dispose();
+  });
+
+  it("lets Shift+Tab off the first field leave the box", () => {
+    dim.show(FIELDS, () => {});
+    expect(stop()).toEqual("size");
+    expect(tab(true)).toBe(true);
+    expect(stop()).toEqual("size");
+  });
+
+  it("skips a hidden field, stops once on each option, then on Confirm and Cancel, and leaves", () => {
     const { log } = showOptions();
     dim.setFieldHidden("x", true);
     const seen = [stop()];
-    for (let i = 0; i < 6; i++) {
-      tab();
+    for (let i = 0; i < 7; i++) {
+      expect(tab()).toBe(false);
       seen.push(stop());
     }
-    expect(seen).toEqual(["size", "depth", "y", "kind:b", "toggle:Copy", "action:Centre", "size"]);
-    tab(true);
+    expect(seen).toEqual(["size", "depth", "y", "kind:b", "toggle:Copy", "action:Centre", "confirm", "cancel"]);
+    expect(tab()).toBe(true);
+    expect(tab(true)).toBe(false);
+    expect(stop()).toEqual("confirm");
+    expect(tab(true)).toBe(false);
     expect(stop()).toEqual("action:Centre");
     expect(log).toEqual([]);
+  });
+
+  it("never stops on a unit chip or a choice tag", () => {
+    dim.show(
+      [
+        {
+          name: "size",
+          label: "Size",
+          choices: { chosen: "a", options: [{ id: "a", label: "A", word: "a" }], onChoose: () => {} },
+        },
+        { name: "depth", label: "Depth", kind: "length" },
+      ],
+      () => {},
+    );
+    expect(root().querySelector<HTMLElement>(".dim-choice")!.tabIndex).toBe(-1);
+    expect(root().querySelector<HTMLElement>('.dim-field[data-field="depth"] .dim-unit')!.tabIndex).toBe(-1);
   });
 
   it("skips a hidden option", () => {
@@ -97,6 +161,8 @@ function stop(): string | undefined {
   if (el?.classList.contains("dim-segment")) return `kind:${el.dataset.id}`;
   if (el?.classList.contains("dim-toggle")) return `toggle:${el.textContent}`;
   if (el?.classList.contains("dim-action")) return `action:${el.textContent}`;
+  if (el?.classList.contains("dim-ok")) return "confirm";
+  if (el?.classList.contains("dim-no")) return "cancel";
   return focusedField();
 }
 
@@ -212,6 +278,68 @@ describe("every option one click away", () => {
     expect([sw.title, act.title]).toEqual(["Both ways", "Centre it"]);
     expect([!!sw.querySelector("svg.icon"), !!act.querySelector("svg.icon")]).toEqual([true, true]);
     expect(sw.textContent).toEqual("Symmetric");
+  });
+});
+
+describe("buttons from the base set", () => {
+  const classes = (el: Element) => [...el.classList].sort();
+
+  it("builds Confirm, Cancel and an option as IconButton sm plain under the dim classes, named by the bare word", () => {
+    dim.show(
+      FIELDS,
+      () => {},
+      () => {},
+      [{ label: "Copy", title: "Copy", icon: "copy", initial: false, onChange: () => {} }],
+    );
+    const ok = root().querySelector(".dim-ok")!;
+    const no = root().querySelector(".dim-no")!;
+    const sw = root().querySelector(".dim-toggle")!;
+    const base = ["dim-btn", "icon-btn", "icon-btn-plain", "icon-btn-sm"];
+    expect(classes(ok)).toEqual([...base, "dim-end", "dim-ok"].sort());
+    expect(classes(no)).toEqual([...base, "dim-no"].sort());
+    expect(classes(sw)).toEqual([...base, "dim-opt", "dim-toggle"].sort());
+    expect([ok, no, sw].map((b) => [b.getAttribute("aria-label"), b.getAttribute("title")])).toEqual([
+      ["Confirm", "Confirm (Enter)"],
+      ["Cancel", "Cancel (Esc)"],
+      ["Copy", "Copy"],
+    ]);
+  });
+
+  it("builds a switch with no icon as Button sm ghost showing its word, named by it", () => {
+    dim.show(FIELDS, () => {}, undefined, [{ label: "Flip", title: "Flip it", initial: false, onChange: () => {} }]);
+    const b = root().querySelector(".dim-toggle")!;
+    expect(classes(b)).toEqual(["btn", "btn-ghost", "btn-sm", "dim-btn", "dim-opt", "dim-toggle", "dim-worded"]);
+    expect([b.querySelector(".dim-word")?.textContent, b.hasAttribute("aria-label"), b.getAttribute("title")]).toEqual([
+      "Flip",
+      false,
+      "Flip it",
+    ]);
+  });
+
+  it("a screen reader's click acts once on a switch, an action and a segment", () => {
+    const { log } = showOptions();
+    for (const sel of [".dim-toggle", '[data-option="center"]', '.dim-segment[data-id="c"]'])
+      root().querySelector<HTMLElement>(sel)!.click();
+    expect(log).toEqual(["copy true", "centre", "kind c"]);
+  });
+
+  it("a press and the click its release sends act once", () => {
+    const { log } = showOptions();
+    const sw = root().querySelector<HTMLElement>(".dim-toggle")!;
+    click(sw);
+    window.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
+    sw.click();
+    expect(log).toEqual(["copy true"]);
+  });
+
+  it("cancels the release of a Space a switch acted on, so an engine's late click does not flip it back", () => {
+    const { log } = showOptions();
+    const sw = root().querySelector<HTMLElement>(".dim-toggle")!;
+    sw.focus();
+    press(" ");
+    const up = new KeyboardEvent("keyup", { key: " ", bubbles: true, cancelable: true });
+    sw.dispatchEvent(up);
+    expect([log, up.defaultPrevented]).toEqual([["copy true"], true]);
   });
 });
 

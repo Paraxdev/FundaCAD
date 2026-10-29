@@ -79,7 +79,7 @@ const FLAT_BASELINE: Record<string, number> = {
   "src/styles/_targetedit.scss": 2,
   "src/styles/_timeline.scss": 6,
   "src/styles/_titlebar.scss": 4,
-  "src/styles/_utilities.scss": 12,
+  "src/styles/_utilities.scss": 11,
 };
 
 // Blurs written by hand outside _glass.scss. Anything new uses var(--float-blur),

@@ -28,7 +28,6 @@ textarea,
 .dim-field,
 .dim-btn,
 .profile-chip,
-.profile-track,
 .timeline-marker {
   touch-action: none;
 }
@@ -82,8 +81,7 @@ textarea,
   .sketch-glyph::before,
   // ::before already draws the marker line and the track rail, so these take ::after, the grip too to match.
   .timeline-marker::after,
-  .timeline-marker .marker-grip::after,
-  .profile-track::after {
+  .timeline-marker .marker-grip::after {
     content: "";
     position: absolute;
   }
@@ -230,7 +228,9 @@ textarea,
 
   // On-canvas value boxes. The 24px buttons sit 2px apart in a 3px padded chip, so they
   // grow up and down to 36px, sideways only into half the gap, and the last one outwards.
-  .dim-btn::before {
+  // .icon-btn too: IconButton sm's own touch area is 8px all round, which would overlap the next button.
+  .dim-btn::before,
+  .dim-btn.icon-btn::before {
     inset: -6px -1px;
   }
   // A coarse pointer meets the 36px floor sideways too, see the media query below.
@@ -245,10 +245,10 @@ textarea,
   .dim-unit::before {
     inset: -11px -8px -11px -4px;
   }
-  // The knob rides a track that is the scrub target end to end, so it is the
-  // track that grows. Barely upwards, where the preset buttons are.
-  .profile-track::after {
-    inset: -4px 0 -16px;
+  // A native range is hit only on itself, so the input grows into the gaps around it, centred on the rail.
+  .profile-slider .ui-slider-input {
+    height: 36px;
+    margin: -8px 0;
   }
 
   // Each grown label hides model from picking, so these stop at 36px. The area goes under
@@ -271,9 +271,6 @@ textarea,
   .rail-btn:hover:not(:active) .rail-tile {
     transform: none;
   }
-  .profile-track:hover:not(.scrubbing) .profile-track-knob {
-    transform: none;
-  }
 }
 
 // A finger gets bigger value box buttons with room between them: 30px apart by 6px reach 36px each way.
@@ -284,11 +281,13 @@ textarea,
   .dim-seg {
     gap: 6px;
   }
-  .dim-btn {
+  .dim-btn,
+  .dim-btn.icon-btn {
     min-width: 30px;
     height: 30px;
   }
-  :root[data-pointer="touch"] .dim-btn::before {
+  :root[data-pointer="touch"] .dim-btn::before,
+  :root[data-pointer="touch"] .dim-btn.icon-btn::before {
     inset: -6px -3px;
   }
 }
