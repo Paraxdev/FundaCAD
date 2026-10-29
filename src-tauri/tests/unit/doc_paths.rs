@@ -1,6 +1,8 @@
 use fundacad_lib::doc_paths::{
-    check_open, check_save, is_remote_or_device, refuse_unvouched, stat_path, DocStat, Provenance, Vouched, MAX_VOUCHED,
+    check_open, check_save, is_remote_or_device, links_off_disk, refuse_off_disk, refuse_unvouched, stat_path, DocStat,
+    Provenance, Vouched, LINK_HOPS, MAX_VOUCHED,
 };
+use std::path::{Path, PathBuf};
 
 fn temp_dir(name: &str) -> std::path::PathBuf {
     let dir = std::env::temp_dir().join(format!("fundacad-doc-paths-{name}-{}", std::process::id()));
@@ -281,4 +283,90 @@ fn home_reads_a_summary_only_from_a_file_it_may_reach() {
     std::fs::write(&file, "{}").unwrap();
     assert_eq!(held.check_home(file.to_str().unwrap()), Ok(file));
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+type Links = &'static [(&'static str, Option<&'static str>)];
+
+fn fake_disk(links: Links) -> impl Fn(&Path) -> Option<Option<PathBuf>> {
+    move |at| links.iter().find(|(from, _)| Path::new(from) == at).map(|(_, to)| to.map(PathBuf::from))
+}
+
+fn link_refusal(raw: &str) -> Result<(), String> {
+    Err(format!(
+        "{raw} links to a network or device path. FundaCAD opens one only after it is picked in a dialog, dropped, \
+         passed at launch or chosen from the recent list"
+    ))
+}
+
+#[test]
+fn a_local_link_to_a_network_path_is_refused_like_one() {
+    let disk = fake_disk(&[("/parts/base.funda", Some("//host/share/base.funda"))]);
+    assert_eq!(refuse_off_disk("/parts/base.funda", &disk), link_refusal("/parts/base.funda"));
+}
+
+#[test]
+fn a_folder_link_to_a_device_path_refuses_every_file_under_it() {
+    let disk = fake_disk(&[("/parts", Some(r"\\.\pipe\x"))]);
+    assert_eq!(refuse_off_disk("/parts/a/base.funda", &disk), link_refusal("/parts/a/base.funda"));
+}
+
+#[test]
+fn a_link_to_a_local_file_opens() {
+    let disk =
+        fake_disk(&[("/parts/base.funda", Some("/store/base.funda")), ("/parts/rel.funda", Some("old/rel.funda"))]);
+    assert_eq!(
+        (refuse_off_disk("/parts/base.funda", &disk), refuse_off_disk("/parts/rel.funda", &disk)),
+        (Ok(()), Ok(()))
+    );
+}
+
+#[test]
+fn a_chain_of_links_is_followed_to_its_end() {
+    let disk =
+        fake_disk(&[("/a.funda", Some("b.funda")), ("/b.funda", Some("/c.funda")), ("/c.funda", Some("//h/s/c"))]);
+    assert_eq!(refuse_off_disk("/a.funda", &disk), link_refusal("/a.funda"));
+}
+
+#[test]
+fn a_link_loop_or_an_unreadable_link_counts_as_off_disk() {
+    let looped = fake_disk(&[("/a.funda", Some("/b.funda")), ("/b.funda", Some("/a.funda"))]);
+    let unreadable = fake_disk(&[("/a.funda", None)]);
+    assert_eq!(
+        (
+            links_off_disk(Path::new("/a.funda"), &looped, LINK_HOPS),
+            links_off_disk(Path::new("/a.funda"), &unreadable, 1)
+        ),
+        (true, true)
+    );
+}
+
+#[test]
+fn a_network_path_is_never_walked_for_links() {
+    let disk = |_: &Path| -> Option<Option<PathBuf>> { panic!("walked a network path") };
+    assert_eq!(
+        refuse_off_disk("//host/share/a.funda", &disk),
+        Err(refuse_unvouched("//host/share/a.funda", &Vouched::default()).unwrap_err())
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn a_symlink_to_a_network_path_opens_only_once_handed_over() {
+    let dir = temp_dir("symlink");
+    let link = dir.join("base.funda");
+    std::os::unix::fs::symlink("//host/share/base.funda", &link).unwrap();
+    let raw = link.to_str().unwrap();
+    let held = Provenance::default();
+    let before = held.refuse_unvouched(raw);
+    held.vouch_all([raw]);
+    let after = held.refuse_unvouched(raw);
+    let _ = std::fs::remove_dir_all(&dir);
+    assert_eq!((before, after), (link_refusal(raw), Ok(())));
+}
+
+#[cfg(windows)]
+#[test]
+fn a_folder_mounted_from_a_local_volume_opens() {
+    let disk = fake_disk(&[(r"C:\mnt", Some(r"\\?\Volume{0b1e5a6c-0000-0000-0000-100000000000}\"))]);
+    assert_eq!(refuse_off_disk(r"C:\mnt\base.funda", &disk), Ok(()));
 }

@@ -4,7 +4,7 @@
 
 use serde::Serialize;
 use std::collections::VecDeque;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::sync::Mutex;
 use std::time::UNIX_EPOCH;
 
@@ -30,6 +30,56 @@ pub fn is_remote_or_device(raw: &str) -> bool {
         use std::path::{Component, Prefix};
         if let Some(Component::Prefix(p)) = Path::new(raw).components().next() {
             return !matches!(p.kind(), Prefix::Disk(_));
+        }
+    }
+    false
+}
+
+/// Windows follows at most 63 links in a path, a document has no reason to chain more than a few.
+pub const LINK_HOPS: u8 = 8;
+
+/// A part's link target, read without following it: None for a part that is not a link, Some(None) for a link whose
+/// target cannot be read.
+pub type ReadLink<'a> = &'a dyn Fn(&Path) -> Option<Option<PathBuf>>;
+
+pub fn read_link_on_disk(at: &Path) -> Option<Option<PathBuf>> {
+    let meta = std::fs::symlink_metadata(at).ok()?;
+    meta.file_type().is_symlink().then(|| std::fs::read_link(at).ok())
+}
+
+/// Windows hands back a link to a local disk, or to a volume mounted in a folder, in verbatim form when it cannot
+/// shorten it. Both are local storage.
+fn target_off_disk(target: &Path) -> bool {
+    #[cfg(windows)]
+    if let Some(Component::Prefix(p)) = target.components().next() {
+        use std::path::Prefix::{Verbatim, VerbatimDisk};
+        match p.kind() {
+            VerbatimDisk(_) => return false,
+            Verbatim(name) if name.to_str().is_some_and(|n| n.starts_with("Volume{")) => return false,
+            _ => {}
+        }
+    }
+    target.to_str().is_none_or(is_remote_or_device)
+}
+
+/// Does opening `path` pass through a link to a network or device path? Each part is checked before a later part is
+/// reached through it, so the walk never follows a link it has not checked.
+pub fn links_off_disk(path: &Path, read: ReadLink, hops: u8) -> bool {
+    let mut at = PathBuf::new();
+    for part in path.components() {
+        at.push(part);
+        if !matches!(part, Component::Normal(_)) {
+            continue;
+        }
+        match read(&at) {
+            None => {}
+            Some(None) => return true,
+            Some(Some(target)) => {
+                let target = at.parent().map_or_else(|| target.clone(), |dir| dir.join(&target));
+                if hops == 0 || target_off_disk(&target) || links_off_disk(&target, read, hops - 1) {
+                    return true;
+                }
+            }
         }
     }
     false
@@ -85,19 +135,30 @@ impl Vouched {
     }
 }
 
-fn refusal(raw: &str) -> String {
+fn refusal(raw: &str, how: &str) -> String {
     format!(
-        "{raw} is a network or device path. FundaCAD opens one only after it is picked in a dialog, dropped, passed at \
-         launch or chosen from the recent list"
+        "{raw} {how} a network or device path. FundaCAD opens one only after it is picked in a dialog, dropped, passed \
+         at launch or chosen from the recent list"
     )
 }
 
-/// A string check only, so a refused path never reaches the file system (which would authenticate to a remote host).
-pub fn refuse_unvouched(raw: &str, vouched: &Vouched) -> Result<(), String> {
-    if is_remote_or_device(raw) && !vouched.contains(raw) {
-        return Err(refusal(raw));
+/// The string check comes first, so a network path never reaches the file system (which would authenticate to the
+/// remote host). A local path is then walked for a link that leads to one.
+pub fn refuse_off_disk(raw: &str, read: ReadLink) -> Result<(), String> {
+    if is_remote_or_device(raw) {
+        return Err(refusal(raw, "is"));
+    }
+    if links_off_disk(Path::new(raw), read, LINK_HOPS) {
+        return Err(refusal(raw, "links to"));
     }
     Ok(())
+}
+
+pub fn refuse_unvouched(raw: &str, vouched: &Vouched) -> Result<(), String> {
+    if vouched.contains(raw) {
+        return Ok(());
+    }
+    refuse_off_disk(raw, &read_link_on_disk)
 }
 
 /// The provenance check, then a regular file, so a device node or a pipe is never opened.
@@ -192,6 +253,10 @@ pub struct Provenance {
     kept: Mutex<Kept>,
 }
 
+fn off_disk(raw: &str) -> bool {
+    refuse_off_disk(raw, &read_link_on_disk).is_err()
+}
+
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
 }
@@ -205,7 +270,7 @@ impl Provenance {
             session.vouch(p);
         }
         drop(session);
-        let remote: Vec<&str> = paths.into_iter().filter(|p| is_remote_or_device(p)).collect();
+        let remote: Vec<&str> = paths.into_iter().filter(|p| off_disk(p)).collect();
         if remote.is_empty() {
             return;
         }
@@ -221,7 +286,10 @@ impl Provenance {
     }
 
     pub fn refuse_unvouched(&self, raw: &str) -> Result<(), String> {
-        refuse_unvouched(raw, &lock(&self.session))
+        if lock(&self.session).contains(raw) {
+            return Ok(());
+        }
+        refuse_off_disk(raw, &read_link_on_disk)
     }
 
     pub fn check_open(&self, raw: &str) -> Result<PathBuf, String> {
@@ -244,7 +312,7 @@ impl Provenance {
         let keys: Vec<String> =
             std::fs::read_to_string(&file).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
         let mut kept = lock(&self.kept);
-        for k in keys.iter().filter(|k| is_remote_or_device(k)) {
+        for k in keys.iter().filter(|k| off_disk(k)) {
             kept.held.vouch(k);
         }
         kept.file = Some(file);
@@ -253,7 +321,7 @@ impl Provenance {
     /// A pick on Home vouches for this session only a path that was once handed over, or one inside such a folder.
     pub fn note_recent(&self, raw: &str) -> Result<(), String> {
         self.refuse_unknown(raw)?;
-        if is_remote_or_device(raw) {
+        if off_disk(raw) {
             lock(&self.session).vouch(raw);
         }
         Ok(())
@@ -261,10 +329,10 @@ impl Provenance {
 
     /// For Home's list, stat and summary of paths the page holds.
     pub fn refuse_unknown(&self, raw: &str) -> Result<(), String> {
-        if is_remote_or_device(raw) && !lock(&self.session).covers(raw) && !lock(&self.kept).held.covers(raw) {
-            return Err(refusal(raw));
+        if lock(&self.session).covers(raw) || lock(&self.kept).held.covers(raw) {
+            return Ok(());
         }
-        Ok(())
+        refuse_off_disk(raw, &read_link_on_disk)
     }
 
     pub fn check_home(&self, raw: &str) -> Result<PathBuf, String> {
