@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { ariaKeys, fmtKeys, isMac, latinKey, setMacForTest } from "../../src/input/platform";
+import { ariaKeys, fmtKeys, isMac, latinKey, setMacForTest, spokenKeys } from "../../src/input/platform";
 
 afterEach(() => setMacForTest(null));
 
@@ -123,5 +123,38 @@ describe("ariaKeys", () => {
     expect(ariaKeys("")).toBeUndefined();
     expect(ariaKeys(undefined)).toBeUndefined();
     expect(ariaKeys([])).toBeUndefined();
+  });
+});
+
+describe("spokenKeys", () => {
+  it("says Control, Alt and Shift on Windows and Linux", () => {
+    setMacForTest(false);
+    expect(spokenKeys("Ctrl+Shift+Z")).toBe("Control Shift Z");
+    expect(spokenKeys("Ctrl Alt H")).toBe("Control Alt H");
+    expect(spokenKeys("e")).toBe("E");
+  });
+
+  it("says Command, Option and Control on macOS", () => {
+    setMacForTest(true);
+    expect(spokenKeys("Ctrl+Shift+Z")).toBe("Command Shift Z");
+    expect(spokenKeys("Alt+S")).toBe("Option S");
+    expect(spokenKeys("Control+`")).toBe("Control backtick");
+  });
+
+  it("names keys a voice would skip or spell, and joins alternatives with or", () => {
+    setMacForTest(false);
+    expect(spokenKeys("?")).toBe("question mark");
+    expect(spokenKeys("Esc")).toBe("Escape");
+    expect(spokenKeys("Left")).toBe("Left arrow");
+    expect(spokenKeys("PgUp")).toBe("Page up");
+    expect(spokenKeys("Ctrl++")).toBe("Control plus");
+    expect(spokenKeys("Ctrl+Y / Ctrl+Shift+Z")).toBe("Control Y or Control Shift Z");
+    expect(spokenKeys(["Ctrl+Alt+S", "Ctrl+Shift+1"])).toBe("Control Alt S or Control Shift 1");
+  });
+
+  it("keeps a hint that is no key as written, and says nothing for none", () => {
+    expect(spokenKeys("Middle drag")).toBe("Middle drag");
+    expect(spokenKeys("")).toBe("");
+    expect(spokenKeys(undefined)).toBe("");
   });
 });

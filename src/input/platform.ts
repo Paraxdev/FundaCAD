@@ -172,3 +172,42 @@ export function ariaKeys(keys: string | readonly string[] | undefined): string |
   const ok = out.filter((c): c is string => !!c);
   return ok.length ? [...new Set(ok)].join(" ") : undefined;
 }
+
+const SPOKEN_MAC: Record<string, string> = { Meta: "Command", Alt: "Option" };
+const SPOKEN_NAMED: Record<string, string> = {
+  ArrowUp: "Up arrow",
+  ArrowDown: "Down arrow",
+  ArrowLeft: "Left arrow",
+  ArrowRight: "Right arrow",
+  PageUp: "Page up",
+  PageDown: "Page down",
+  ",": "comma",
+  ".": "period",
+  "/": "slash",
+  "\\": "backslash",
+  ";": "semicolon",
+  "'": "quote",
+  "[": "left bracket",
+  "]": "right bracket",
+  "`": "backtick",
+  "-": "minus",
+  "=": "equals",
+  "?": "question mark",
+  "+": "plus",
+};
+
+/** A keys hint as a screen reader says it: Control, Alt and Shift, or Command, Option, Control and Shift on macOS,
+ *  punctuation as words (a voice at a low punctuation level skips it), alternatives joined by "or". */
+export function spokenKeys(keys: string | readonly string[] | undefined): string {
+  const list = typeof keys === "string" ? [keys] : (keys ?? []);
+  return list
+    .flatMap((k) => k.split(/\s+\/\s+/))
+    .map((k) => {
+      const c = ariaCombo(k);
+      if (!c) return k.trim();
+      const parts = c.endsWith("++") ? [...c.slice(0, -2).split("+"), "+"] : c.split("+");
+      return parts.map((p) => (isMac() ? SPOKEN_MAC[p] : undefined) ?? SPOKEN_NAMED[p] ?? p).join(" ");
+    })
+    .filter(Boolean)
+    .join(" or ");
+}
