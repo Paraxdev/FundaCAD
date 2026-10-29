@@ -1,4 +1,4 @@
-// The origin planes as three small tiles beside the origin: shown only while a
+// The origin planes as three small tiles with a corner on the origin: shown only while a
 // tool asks for a plane, a constant size on screen, each picking its own plane by
 // its tile or its name with a 44 px target at any angle, in Noir and
 // Solarized Light. SC_VARIANTS=1 also writes the corner comparison
@@ -13,9 +13,9 @@ const os = require("os");
 const path = require("path");
 
 // TILE_SIZE_PX, TILE_GAP_PX + TILE_SIZE_PX and the MIN_TILE_SCALE floor in src/viewport/originTiles.ts.
-const SIZE = 85;
-const EXTENT = 97;
-const FLOOR = 0.48 * SIZE;
+const SIZE = 64;
+const EXTENT = 64;
+const FLOOR = 0.65 * SIZE;
 
 const TOKEN = process.env.SC_TOKEN || "";
 const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
@@ -145,6 +145,34 @@ const PLANES = ["XY", "XZ", "YZ"];
       { size: SIZE, extent: EXTENT, floor: FLOOR },
     );
 
+  const labelAt = () =>
+    page.evaluate(() => {
+      const v = window.viewport;
+      return v.scene.originTiles.labelsOnScreen({ camera: v.rig.active, rect: v.domElement.getBoundingClientRect() });
+    });
+  // The largest square of pixels that all pick a plane, the size of its target on screen.
+  const targets = () =>
+    page.evaluate((planes) => {
+      const v = window.viewport;
+      const o = v.projectToScreen(new v.camera.position.constructor(0, 0, 0));
+      const R = 200;
+      const n = 2 * R;
+      const best = Object.fromEntries(planes.map((k) => [k, 0]));
+      const prev = Object.fromEntries(planes.map((k) => [k, new Uint16Array(n)]));
+      for (let j = 0; j < n; j++) {
+        const cur = Object.fromEntries(planes.map((k) => [k, new Uint16Array(n)]));
+        for (let i = 0; i < n; i++) {
+          const c = v.pickConstructionAt(o.x - R + i + 0.5, o.y - R + j + 0.5);
+          const k = c?.kind === "base" ? c.plane : null;
+          if (!k) continue;
+          cur[k][i] = i && j ? 1 + Math.min(prev[k][i], cur[k][i - 1], prev[k][i - 1]) : 1;
+          best[k] = Math.max(best[k], cur[k][i]);
+        }
+        Object.assign(prev, cur);
+      }
+      return best;
+    }, PLANES);
+
   await boot();
 
   console.log("\n[shown only while a tool asks for a plane]");
@@ -160,30 +188,52 @@ const PLANES = ["XY", "XZ", "YZ"];
     PLANES.every((k) => t[k].visible),
     JSON.stringify(t),
   );
-  const picks = await page.evaluate(
-    (t) =>
-      Object.fromEntries(
-        Object.entries(t).map(([k, p]) => {
-          const c = window.viewport.pickConstructionAt(p.x, p.y);
-          return [k, { construction: c?.kind === "base" ? c.plane : null, plane: window.viewport.pickPlane(p.x, p.y) }];
-        }),
-      ),
-    t,
-  );
+  const pickEach = (at) =>
+    page.evaluate(
+      (at) =>
+        Object.fromEntries(
+          Object.entries(at).map(([k, p]) => {
+            const c = window.viewport.pickConstructionAt(p.x, p.y);
+            return [
+              k,
+              { construction: c?.kind === "base" ? c.plane : null, plane: window.viewport.pickPlane(p.x, p.y) },
+            ];
+          }),
+        ),
+      at,
+    );
+  const homeLabels = await labelAt();
+  const picks = await pickEach({ ...homeLabels, front: t.XZ });
   check(
-    "each tile's middle picks its own plane",
-    PLANES.every((k) => picks[k].construction === k && picks[k].plane === k),
-    JSON.stringify(picks),
+    "each name picks its own plane, and the middle of the XZ tile drawn in front picks XZ",
+    PLANES.every((k) => picks[k].construction === k && picks[k].plane === k) &&
+      picks.front.construction === "XZ" &&
+      picks.front.plane === "XZ",
+    JSON.stringify({ homeLabels, picks }),
   );
   const o = await origin();
   check(
-    "the tiles sit beside the origin, not on it",
+    "each tile's middle sits off the origin",
     PLANES.every((k) => Math.hypot(t[k].x - o.x, t[k].y - o.y) > 15),
     JSON.stringify({ o, t }),
   );
+  const corners = await page.evaluate((o) => {
+    const v = window.viewport;
+    const drawn = v.scene.originTiles.onScreen({ camera: v.rig.active, rect: v.domElement.getBoundingClientRect() });
+    return Object.fromEntries(
+      drawn.map((d) => [d.plane, Math.min(...d.outline.map((p) => Math.hypot(p.x - o.x, p.y - o.y)))]),
+    );
+  }, o);
   check(
-    "the origin itself picks no tile",
-    (await page.evaluate((p) => window.viewport.pickPlane(p.x, p.y), o)) === null,
+    "every tile has its corner on the origin",
+    PLANES.every((k) => corners[k] < 0.5),
+    JSON.stringify(corners),
+  );
+  const homeTargets = await targets();
+  check(
+    "home view: every plane, the two behind XZ too, has a 44 px target",
+    PLANES.every((k) => homeTargets[k] >= 44),
+    JSON.stringify(homeTargets),
   );
   await shot("tiles-noir", around(o, 170));
 
@@ -224,11 +274,6 @@ const PLANES = ["XY", "XZ", "YZ"];
     JSON.stringify(names),
   );
   await shot("tiles-top-noir", around(await origin(), 170));
-  const labelAt = () =>
-    page.evaluate(() => {
-      const v = window.viewport;
-      return v.scene.originTiles.labelsOnScreen({ camera: v.rig.active, rect: v.domElement.getBoundingClientRect() });
-    });
   const labels = await labelAt();
   const labelPicks = await page.evaluate(
     (labels) =>
@@ -245,28 +290,6 @@ const PLANES = ["XY", "XZ", "YZ"];
     PLANES.every((k) => labelPicks[k] === k),
     JSON.stringify({ labels, labelPicks }),
   );
-  // The largest square of pixels that all pick a plane, the size of its target on screen.
-  const targets = () =>
-    page.evaluate((planes) => {
-      const v = window.viewport;
-      const o = v.projectToScreen(new v.camera.position.constructor(0, 0, 0));
-      const R = 200;
-      const n = 2 * R;
-      const best = Object.fromEntries(planes.map((k) => [k, 0]));
-      const prev = Object.fromEntries(planes.map((k) => [k, new Uint16Array(n)]));
-      for (let j = 0; j < n; j++) {
-        const cur = Object.fromEntries(planes.map((k) => [k, new Uint16Array(n)]));
-        for (let i = 0; i < n; i++) {
-          const c = v.pickConstructionAt(o.x - R + i + 0.5, o.y - R + j + 0.5);
-          const k = c?.kind === "base" ? c.plane : null;
-          if (!k) continue;
-          cur[k][i] = i && j ? 1 + Math.min(prev[k][i], cur[k][i - 1], prev[k][i - 1]) : 1;
-          best[k] = Math.max(best[k], cur[k][i]);
-        }
-        Object.assign(prev, cur);
-      }
-      return best;
-    }, PLANES);
   const topTargets = await targets();
   check(
     "top view: every plane, the two edge on ones too, has a 44 px target",
@@ -344,7 +367,7 @@ const PLANES = ["XY", "XZ", "YZ"];
   await settle();
   await askPlane();
   const sizes = [];
-  for (const scale of [12, 20, 120]) {
+  for (const scale of [12, 20, 30, 40, 120]) {
     await top([18, 11, 0], scale);
     sizes.push({ scale, ...(await xySide()) });
     await shot(`small-part-scale-${scale}-noir`, around(await origin(), 170));
@@ -418,7 +441,7 @@ const PLANES = ["XY", "XZ", "YZ"];
     PLANES.every((k) => depth[k].fill && depth[k].rim && !depth[k].ghost && !depth[k].label),
     JSON.stringify(depth),
   );
-  t = await tiles();
+  const inBody = await labelAt();
   const behind = await page.evaluate(
     (t) =>
       Object.fromEntries(
@@ -430,12 +453,12 @@ const PLANES = ["XY", "XZ", "YZ"];
           ];
         }),
       ),
-    t,
+    inBody,
   );
   check(
-    "a tile inside the body still picks its plane",
+    "a tile inside the body still picks its plane at its name",
     PLANES.every((k) => behind[k].plane === k) && PLANES.some((k) => behind[k].face),
-    JSON.stringify(behind),
+    JSON.stringify({ inBody, behind }),
   );
   await shot("depth-box-noir", around(await origin(), 170));
   await escape();
@@ -448,15 +471,15 @@ const PLANES = ["XY", "XZ", "YZ"];
   console.log("\n[a click sketches on the plane]");
   await home([0, 0, 0], 60);
   await askPlane();
-  t = await tiles();
-  await page.mouse.move(t.XY.x, t.XY.y);
+  const xyName = (await labelAt()).XY;
+  await page.mouse.move(xyName.x, xyName.y);
   await page.waitForTimeout(100);
   await page.mouse.down();
   await page.mouse.up();
   await page.waitForFunction(() => window.sketch.active, null, { timeout: 15000 }).catch(() => {});
   const took = await page.evaluate(() => ({ active: window.sketch.active, plane: window.sketch.plane ?? null }));
   check(
-    "clicking the XY tile opens a sketch on XY",
+    "clicking the XY name, beside the XZ tile in front, opens a sketch on XY",
     took.active && JSON.stringify(took.plane).includes("XY"),
     JSON.stringify(took),
   );
@@ -501,7 +524,7 @@ const PLANES = ["XY", "XZ", "YZ"];
         window.viewport.scene.originTiles.reshape(s);
         window.viewport.requestRender();
       }, shape);
-    const DEFAULT = { sizePx: SIZE, gapPx: EXTENT - SIZE, radiusPx: 36, exponent: 4, octant: { x: 1, y: -1, z: 1 } };
+    const DEFAULT = { sizePx: SIZE, gapPx: EXTENT - SIZE, radiusPx: 27, exponent: 4, octant: { x: 1, y: 1, z: 1 } };
     const BIG = { sizePx: 240, radiusPx: 102, gapPx: 36 };
     for (const theme of ["noir", "solarized"]) {
       await page.evaluate((th) => {
