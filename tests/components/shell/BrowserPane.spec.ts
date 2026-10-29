@@ -1284,11 +1284,11 @@ describe("Items tree by keys", () => {
       "2",
       "false",
     ]);
-    const group = tree.get('[role="group"]');
-    expect([group.attributes("aria-label"), group.find('[role="treeitem"]').exists()]).toEqual([
-      "Reference images",
-      false,
-    ]);
+    // A tree may own only rows and groups of rows, so a section's own controls sit inside a row named by it.
+    expect(tree.find('[role="group"]').exists()).toBe(false);
+    const section = tree.get('[role="treeitem"][aria-label="Reference images"]');
+    expect(["aria-level", "aria-selected"].map((a) => section.attributes(a))).toEqual(["1", undefined]);
+    expect(section.find('[role="treeitem"]').exists()).toBe(false);
     const empty = w.get(".empty-state");
     expect([empty.attributes("role"), empty.attributes("aria-disabled"), empty.attributes("aria-selected")]).toEqual([
       "treeitem",

@@ -239,6 +239,9 @@ describe("tree rows and heads as tree items", () => {
   it("a head says it is hidden and how many it holds", async () => {
     const w = await inTree(TreeFolder, { ...bodies, collapsed: true, visible: false, toggleVis: vi.fn() });
     expect(description(w.get(".tree-folder"))).toBe("2 items, hidden");
+    w.unmount();
+    const one = await inTree(TreeFolder, { ...bodies, count: 1 });
+    expect(description(one.get(".tree-folder"))).toBe("1 item");
   });
 
   it("the eye and caret leave the Tab order to the treeitem inside a Tree, and keep it outside one", async () => {

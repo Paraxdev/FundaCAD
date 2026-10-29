@@ -12,6 +12,7 @@
     - radio "Render"
 - complementary:
   - text: Items
+  - tree "Items"
 - navigation "Tools":
   - button /^Search/
   - button /^Sketch/

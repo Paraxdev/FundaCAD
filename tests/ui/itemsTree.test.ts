@@ -3,11 +3,11 @@ import { itemsMove, itemsTreeMeta, sectionName, type ItemsNode } from "../../src
 import { treeSlots } from "../../src/components/ui/treeContext";
 
 describe("itemsTreeMeta", () => {
-  it("gives each drawn row a level from its depth and leaves plugin sections out", () => {
+  it("gives each drawn row a level from its depth and a plugin section a top row named by the section", () => {
     const meta = itemsTreeMeta([
       { kind: "folder", k: "f:Sketches", depth: 0, collapsed: false, label: "Sketches" },
       { kind: "row", k: "s:s1", depth: 1, label: "Sketch1" },
-      { kind: "plugin", k: "x:p:parameters" },
+      { kind: "plugin", k: "x:p:parameters", label: "Parameters" },
       { kind: "folder", k: "f:Bodies", depth: 0, collapsed: false, label: "Bodies" },
       { kind: "folder", k: "e1", depth: 1, collapsed: true, label: "Frame" },
       { kind: "row", k: "b:b1", depth: 1, label: "Body 1" },
@@ -15,12 +15,13 @@ describe("itemsTreeMeta", () => {
     expect(meta).toEqual([
       { key: "f:Sketches", level: 1, expandable: true, expanded: true, label: "Sketches" },
       { key: "s:s1", level: 2, label: "Sketch1" },
+      { key: "x:p:parameters", level: 1, label: "Parameters" },
       { key: "f:Bodies", level: 1, expandable: true, expanded: true, label: "Bodies" },
       { key: "e1", level: 2, expandable: true, expanded: false, label: "Frame" },
       { key: "b:b1", level: 2, label: "Body 1" },
     ]);
     const s = treeSlots(meta);
-    expect([s.get("b:b1")?.posinset, s.get("b:b1")?.setsize, s.get("f:Bodies")?.posinset]).toEqual([2, 2, 2]);
+    expect([s.get("b:b1")?.posinset, s.get("b:b1")?.setsize, s.get("f:Bodies")?.posinset]).toEqual([2, 2, 3]);
   });
 
   it("puts an empty note under the head before it, as a row the arrows skip", () => {
@@ -54,7 +55,7 @@ describe("itemsMove", () => {
     { kind: "folder", k: "f:Sketches", depth: 0, collapsed: false, label: "Sketches" },
     { kind: "row", k: "s:s1", depth: 1, label: "Sketch1" },
     { kind: "row", k: "s:s2", depth: 1, label: "Sketch2" },
-    { kind: "plugin", k: "x:p:refs" },
+    { kind: "plugin", k: "x:p:refs", label: "Refs" },
     { kind: "folder", k: "f:Planes", depth: 0, collapsed: false, label: "Planes" },
     { kind: "row", k: "p:d1", depth: 1, label: "Plane1" },
   ];

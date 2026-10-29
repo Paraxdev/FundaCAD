@@ -60,7 +60,10 @@ const helpId = useId();
 const inTree = inject(TREE, null) !== null;
 const hasEye = computed(() => !!(props.toggleVis || props.eyeDown));
 const state = computed(() =>
-  stateWords([props.count > 0 && `${props.count} items`, hasEye.value && props.visible === false && "hidden"]),
+  stateWords([
+    props.count > 0 && `${props.count} ${props.count === 1 ? "item" : "items"}`,
+    hasEye.value && props.visible === false && "hidden",
+  ]),
 );
 
 // Only nested heads carry an inline padding, so a top-level folder keeps

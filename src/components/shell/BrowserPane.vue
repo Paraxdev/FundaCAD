@@ -1026,8 +1026,10 @@ onUnmounted(() => root.value?.removeEventListener("wheel", onWheel));
           >
 
           <!-- A section some plugin added. It draws its own rows, decides its own visibility and is unmounted when
-               its capability stops. A group is what a tree may hold besides its rows. -->
-          <div v-else role="group" :aria-label="n.label"><component :is="n.component" /></div>
+               its capability stops. A tree may own only rows, so the section sits in a row named by it. -->
+          <TreeItem v-else :item-key="n.k" :label="n.label" :selectable="false"
+            ><component :is="n.component"
+          /></TreeItem>
         </template>
       </Tree>
     </div>

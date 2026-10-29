@@ -91,3 +91,20 @@ export function typeAheadIndex(items: readonly TreeMeta[], from: number, text: s
   }
   return -1;
 }
+
+/** Runs `raise` and hands focus back to the tree a keyboard user was in, now and after the next frame, where a raised
+ *  field such as the Move box focuses itself a second time. A row reached by the pointer lets the field have it. */
+export function keepTreeKeyFocus(raise: () => void): void {
+  const at = typeof document === "undefined" ? null : document.activeElement;
+  const tree =
+    at instanceof HTMLElement && at.matches(TREE_ITEM_SELECTOR) ? at.closest<HTMLElement>("[data-tree-keys]") : null;
+  raise();
+  if (!tree) return;
+  // The arrows may have moved on before the frame, so the row to return to is the tree's Tab stop, not the first one.
+  const back = () => {
+    if (!tree.isConnected || tree.contains(document.activeElement)) return;
+    tree.querySelector<HTMLElement>(`${TREE_ITEM_SELECTOR}[tabindex="0"]`)?.focus();
+  };
+  back();
+  requestAnimationFrame(back);
+}

@@ -5,10 +5,10 @@ export type ItemsNode =
   | { kind: "folder"; k: string; depth: number; collapsed: boolean; label: string }
   | { kind: "row"; k: string; depth: number; label: string }
   | { kind: "empty"; k: string }
-  | { kind: "plugin"; k: string };
+  | { kind: "plugin"; k: string; label: string };
 
 /** The tree's rows in drawn order, one level per depth. An empty note sits under the head before it and cannot be
- *  reached by the arrows; a plugin section is a group of its own and has no row here. */
+ *  reached by the arrows; a plugin section is a top row that holds its own controls. */
 export function itemsTreeMeta(nodes: readonly ItemsNode[]): TreeMeta[] {
   const out: TreeMeta[] = [];
   let head = 0;
@@ -18,6 +18,7 @@ export function itemsTreeMeta(nodes: readonly ItemsNode[]): TreeMeta[] {
       out.push({ key: n.k, level: head, expandable: true, expanded: !n.collapsed, label: n.label });
     } else if (n.kind === "row") out.push({ key: n.k, level: n.depth + 1, label: n.label });
     else if (n.kind === "empty") out.push({ key: n.k, level: head + 1, disabled: true });
+    else out.push({ key: n.k, level: 1, label: n.label });
   }
   return out;
 }

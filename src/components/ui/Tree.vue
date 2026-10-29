@@ -229,6 +229,7 @@ defineExpose({ focusKey });
     role="tree"
     v-bind="name"
     :aria-multiselectable="multiselectable ? 'true' : undefined"
+    :data-tree-keys="keyboard ? '' : undefined"
     @keydown="onKeydown"
     @pointerdown.capture="onPointerdown"
     @focusin="onFocusin"

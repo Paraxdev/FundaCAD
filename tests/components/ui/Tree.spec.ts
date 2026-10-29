@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { enableAutoUnmount, mount } from "@vue/test-utils";
-import { defineComponent, h, ref, type Component, type PropType } from "vue";
+import { defineComponent, h, nextTick, ref, type Component, type PropType } from "vue";
 
 import Tree from "../../../src/components/ui/Tree.vue";
 import TreeItem from "../../../src/components/ui/TreeItem.vue";
-import type { TreeItemActions, TreeMeta } from "../../../src/components/ui/treeContext";
+import { keepTreeKeyFocus, type TreeItemActions, type TreeMeta } from "../../../src/components/ui/treeContext";
 
 enableAutoUnmount(afterEach);
 
@@ -254,6 +254,32 @@ describe("Tree", () => {
     press("ArrowDown");
     press("s");
     expect(focused()).toBe("Sketches");
+  });
+
+  it("keeps a keyboard user on their row when picking it raises a field that takes focus, not a mouse user", async () => {
+    const w = render();
+    const field = document.body.appendChild(document.createElement("input"));
+    const raise = () => {
+      field.focus();
+      requestAnimationFrame(() => field.focus());
+    };
+    tabTo(w, "body1");
+    await nextTick();
+    keepTreeKeyFocus(raise);
+    await new Promise((r) => requestAnimationFrame(() => r(null)));
+    expect(focused()).toBe("Body 1");
+    keepTreeKeyFocus(raise);
+    press("ArrowDown");
+    await new Promise((r) => requestAnimationFrame(() => r(null)));
+    expect(focused()).toBe("Body 2");
+    const r = row(w, "body2").element as HTMLElement;
+    r.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    r.focus();
+    await nextTick();
+    keepTreeKeyFocus(raise);
+    await new Promise((r) => requestAnimationFrame(() => r(null)));
+    expect(document.activeElement).toBe(field);
+    field.remove();
   });
 
   it("lets go of a focused row when a press lands outside the tree, where the viewport keeps focus put", () => {
