@@ -4,12 +4,22 @@ FundaCAD has a built-in server that lets an AI assistant build and check parts w
 
 <!-- shot: prefs-ai-assistants | AI assistants page with the Copy button -->
 
-Open Edit, Preferences (Ctrl+,) and choose AI assistants. Pick your assistant under How to connect it, and copy the text shown, which has your real path filled in.
-
-For Claude Code it is one `claude mcp add` command, then start a new session. For Claude Desktop, add the block to `claude_desktop_config.json` through Settings, Developer, Edit Config, and restart.
+1. Open Edit, Preferences (Ctrl+,) and choose AI assistants.
+2. Under How to connect it, pick your assistant in Assistant.
+3. Press Copy. The text has your real path filled in.
+4. Use the text in your assistant:
+    - **Claude Code**: run the `claude mcp add` command in a terminal, then start a new session.
+    - **Claude Desktop**: add the block to `claude_desktop_config.json` through Settings, Developer, Edit Config, then restart it.
+    - **Another MCP host**: start the program with `--mcp`, or give it the same block Claude Desktop takes.
 
 ## Where it may open and save files
 
-The assistant can open, import, save and export files in any of your folders. It never reads or writes in hidden folders (names that start with a dot, such as `.ssh`), directly in your home folder or at the root of a drive, so save in a folder inside them.
+The assistant can open, import, save and export files in any of your folders. It never reads or writes:
 
-To keep it to some folders only, add `--allow-path` and a folder after `--mcp` in the copied text, once per folder, for example `--mcp --allow-path D:/parts`. It then works only in those folders, the folder of the document you have open, and the app's own folders. When it is refused a file, it says why and which folder would let it through.
+- in hidden folders, whose names start with a dot, such as `.ssh`
+- directly in your home folder
+- at the root of a drive
+
+To keep it to some folders only, add `--allow-path` and a folder after `--mcp` in the copied text, once per folder. For example `--mcp --allow-path D:/parts`.
+
+It then works only in those folders, the folder of your open document and the app's own folders. When it is refused a file, it says why and which folder would let it through.
