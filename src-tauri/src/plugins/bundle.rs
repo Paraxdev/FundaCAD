@@ -111,7 +111,7 @@ pub fn bundle_target(raw: &str) -> Result<BundleTarget, String> {
     if !allowed_bundle_url(url.as_str()) {
         return Err(refused());
     }
-    Ok(BundleTarget { official: is_official_url(raw), url })
+    Ok(BundleTarget { official: is_official_url(url.as_str()), url })
 }
 
 /// HTTPS, a real host and nothing in the authority that changes its meaning. HTTPS is the point: without it every later

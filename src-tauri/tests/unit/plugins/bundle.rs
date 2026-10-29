@@ -253,7 +253,10 @@ fn the_url_fetched_is_the_one_stored_and_labelled() {
     ] {
         let target = bundle_target(&raw).unwrap_or_else(|e| panic!("{raw}: {e}"));
         assert_eq!(target.url.as_str(), want, "fetched from {raw}");
-        assert!(!target.official, "labelled ours: {raw}");
+        assert_eq!(target.official, want == fetched, "labelled from {raw}");
+        // The window installs with the source inspect handed back, so both screens must agree on the label.
+        let installed = bundle_target(target.url.as_str()).unwrap();
+        assert_eq!((installed.url, installed.official), (target.url, target.official), "relabelled: {raw}");
     }
 
     let third_party = "https://plugins.example.com:8443/a/b.zip?token=abc";
