@@ -635,7 +635,7 @@
   position: fixed;
   top: 128px;
   right: 268px;
-  z-index: 1500;
+  z-index: var(--z-panel);
   min-width: 180px;
   background: var(--panel-2, #1b1f24);
   border: 1px solid transparent;
@@ -669,7 +669,7 @@
    pinned probe's readout. */
 .stress-glyph-label {
   position: fixed;
-  z-index: 1400;
+  z-index: calc(var(--z-panel) - 1);
   pointer-events: none;
   padding: 2px 6px;
   border-radius: var(--r-xs, 4px);

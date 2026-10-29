@@ -288,16 +288,17 @@ Scrims (`.modal-overlay`, `.cmdk-backdrop`, `.choice-backdrop`, final values in
 a dialog, blurred and dimmed. A new modal reuses `.modal-overlay` rather than
 writing its own scrim.
 
-Stacking tokens: `--z-float` 20, `--z-popover` 200, `--z-menu` 3000,
+Stacking tokens: `--z-panel` 19, `--z-float` 20, `--z-popover` 200, `--z-menu` 3000,
 `--z-modal` 4000, `--z-toast` 5000. Most layers still use literals, so pick
 your layer from what is actually on screen:
 
 | z | Layer |
 |---|---|
+| 18 | `.stress-glyph-label`, `calc(var(--z-panel) - 1)`, the Stress readouts in the view, under the panel |
+| 19 | `.measure-panel` (`--z-panel`), every floating panel |
 | 20 | `#float-layer` (`--z-float`), the cards and rail |
 | 200 | `.float-popover` (`--z-popover`) |
 | 1000 | `.modal-overlay` |
-| 1500 | `.measure-panel` |
 | 2000 | `.menu-popup` |
 | 2450 | `.logcon` |
 | 2500 | `.toast-stack` |
@@ -306,7 +307,9 @@ your layer from what is actually on screen:
 | 4001 | `.select-pop`, `calc(var(--z-modal) + 1)`, so a picker clears its dialog |
 | 5000 | `.cmdk-backdrop` |
 
-New layers use a `--z-*` token or `calc()` on one, never a new literal.
+New layers use a `--z-*` token or `calc()` on one, never a new literal. Every dialog
+and its popups draw over the floating panels, and a floating panel never draws over
+the rail or the view controls; `tests/ui/designSpec.test.ts` holds both.
 
 ## 4. The glass recipe
 
@@ -1009,7 +1012,8 @@ defineEmits<{ close: [] }>();
   handler (clearing the selection, leaving the tool). See
   [11](#11-accessibility) for when to leave it off.
 - Placement is fixed for every panel: `position: fixed; top: 128px; right: 268px;
-  z-index: 1500`, outside `#float-layer`, so two panels open at once overlap.
+  z-index: var(--z-panel)`, outside `#float-layer` and under it, so the rail, the
+  view controls and every dialog draw over an open panel.
   The shell is `min-width: 180px`, `padding: var(--s-4)`, `font-size: 12px`.
 
 | Class | Recipe |

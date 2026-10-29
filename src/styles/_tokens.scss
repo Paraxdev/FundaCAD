@@ -103,6 +103,8 @@
   --glass-rim: linear-gradient(transparent, transparent);
 
   --z-float: 20;
+  /* Under the float layer, so a floating panel never covers the rail or the view controls. */
+  --z-panel: calc(var(--z-float) - 1);
   --z-popover: 200;
   --z-menu: 3000;
   --z-modal: 4000;
