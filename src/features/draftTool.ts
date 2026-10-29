@@ -12,6 +12,7 @@ import { axisDragDistance, createDragHandle, nameHandle, type DragHandle } from 
 import { MAX_DRAFT_DEG, draftAngle, draftDelta, draftLever, pullAxisFor, type Axis3 } from "./draftMath";
 import { CanvasGesture } from "./canvasGesture";
 import { previewVerdict } from "./previewVerdict";
+import { HeldSignal } from "./heldEdit";
 
 type Phase = "pick" | "drag";
 
@@ -46,6 +47,7 @@ export class DraftTool {
   private refusalShown: string | null = null;
   /** An Enter is waiting for the kernel's answer on the value it was pressed for. */
   private commitPending = false;
+  private readonly held = new HeldSignal();
 
   private dim = new DimInput();
   private onDone: ((id: string | null) => void) | null = null;
@@ -268,6 +270,7 @@ export class DraftTool {
       this.prompt();
     }
     this.store.setPreview(Math.abs(this.angle) < 1e-6 ? null : this.buildFeature());
+    this.held.sync(this.pending);
   }
 
   private buildGizmo() {
@@ -335,6 +338,26 @@ export class DraftTool {
     this.onDone?.(null);
   }
 
+  /** A draft angle dragged or typed that Enter would write. */
+  get pending(): boolean {
+    return this.active && this.phase === "drag" && Math.abs(this.angle) >= 1e-3;
+  }
+
+  get dragging(): boolean {
+    return this.grabbing;
+  }
+
+  /** Told when `pending` turns on or off, for the unsaved mark and the close guard. */
+  onHeldChange(fn: () => void): () => void {
+    return this.held.on(fn);
+  }
+
+  /** For a save: the draft is written as a click writes it, which may decline and keep the tool open. A drag still
+   *  under the hand is left alone. */
+  confirmHeld() {
+    if (this.pending && !this.dragging) this.commit();
+  }
+
   private cleanup() {
     const el = this.viewport.domElement;
     this.gesture.detach();
@@ -351,6 +374,7 @@ export class DraftTool {
     this.refusalShown = null;
     this.commitPending = false;
     setPrompt(null);
+    this.held.sync(this.pending);
   }
 
   private disposeGizmo() {
