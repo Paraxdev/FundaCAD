@@ -1,15 +1,16 @@
 - dialog "Preferences":
   - heading "Preferences" [level=2]
   - button "Close"
-  - navigation "Preference categories":
-    - button "Appearance"
-    - button "Viewport"
-    - button "Navigation"
-    - button "Accessibility"
-  - heading "Appearance" [level=3]
-  - combobox "Theme"
-  - radiogroup "Units":
-    - radio "mm" [checked]
-    - radio "cm"
-    - radio "in"
+  - tablist "Preference categories":
+    - tab "Appearance" [selected]
+    - tab "Viewport"
+    - tab "Navigation"
+    - tab "Accessibility"
+  - tabpanel "Appearance":
+    - heading "Appearance" [level=3]
+    - combobox "Theme"
+    - radiogroup "Units":
+      - radio "mm" [checked]
+      - radio "cm"
+      - radio "in"
   - button "Done"
