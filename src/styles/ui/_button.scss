@@ -71,7 +71,7 @@
 :root[data-targets="large"] .btn.btn-sm::before {
   content: "";
   position: absolute;
-  inset: -6px -2px;
+  inset: min(-6px, (100% - var(--hit-min)) / 2) min(-2px, (100% - var(--hit-min)) / 2);
 }
 
 // A tile is a card to click: a column of picture and text, sized by its grid, padded by --tile-pad.

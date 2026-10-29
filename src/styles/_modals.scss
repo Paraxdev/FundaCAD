@@ -1,3 +1,5 @@
+@use "hit";
+
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -43,6 +45,7 @@
   cursor: pointer;
   padding: var(--s-1) var(--s-3);
   border-radius: var(--r-sm, 6px);
+  @include hit.area;
 }
 .modal-close:hover {
   background: var(--raised, #22262e);

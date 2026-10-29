@@ -176,9 +176,10 @@ textarea,
   #timeline .timeline-marker .marker-grip::after {
     inset: -13px -8px;
   }
-  // The marker at the end of the list sits on the scroller's bottom padding,
-  // so its grip stays inside that padding.
-  #timeline .timeline-track > .timeline-marker:last-child .marker-grip::after {
+  // The marker at the end of the list, or above only filtered out chips, sits on the scroller's bottom
+  // padding, so its grip stays inside that padding.
+  #timeline .timeline-track > .timeline-marker:last-child .marker-grip::after,
+  #timeline .timeline-track > .timeline-marker.is-end .marker-grip::after {
     bottom: -9px;
   }
 

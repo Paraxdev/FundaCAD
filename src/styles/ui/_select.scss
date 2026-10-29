@@ -1,6 +1,12 @@
 // Select: the combobox trigger and its listbox.
 // The well and its caret are still .sm-select (_modals.scss, _glass.scss), the alias until wave 4 moves them here.
 
+@use "../hit";
+
+.select-trigger {
+  @include hit.area;
+}
+
 .select-trigger.ui-select-sm {
   min-height: 24px;
   padding-top: var(--s-1);

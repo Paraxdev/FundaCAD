@@ -57,6 +57,8 @@ describe("base components", () => {
     ".chip-body",
     ".ui-segment",
     ".ui-unit-chip.is-picker",
+    ".select-trigger",
+    ".modal-close",
   ];
 
   it("each grow a hit area of at least --hit-min", () => {
@@ -115,9 +117,18 @@ describe("Larger click targets", () => {
     expect(large(".tree-caret", "position")).toBe("relative");
     expect(large(".tree-caret.icon-btn.icon-btn-sm::before", "inset")).toBe("-13px -14px");
     expect(large(".icon-btn.icon-btn-sm::before", "inset")).toBe("-8px");
-    expect(large(".btn.btn-sm::before", "inset")).toBe("-6px -2px");
+    expect(large(".btn.btn-sm::before", "inset")).toBe(
+      "min(-6px, (100% - var(--hit-min)) / 2) min(-2px, (100% - var(--hit-min)) / 2)",
+    );
     expect(large(".timeline-transport .tl-btn.icon-btn.icon-btn-sm::before", "inset")).toBe("-5px -1px");
     expect(large(".timeline-marker .marker-grip::after", "inset")).toBe("-12px -13px");
+  });
+
+  it("keeps the grown areas at a scroller's far edges inside it", () => {
+    const large = (sel: string, prop: string) => valueOf(css, `:root[data-targets="large"] ${sel}`, prop);
+    expect(large(".stress-setup > .stress-more.btn.btn-sm::before", "bottom")).toBe("0");
+    expect(large(".stress-item-head > .stress-remove-load.icon-btn.icon-btn-sm::before", "right")).toBe("-4px");
+    expect(large("#timeline .timeline-track > .timeline-marker.is-end .marker-grip::after", "bottom")).toBe("-9px");
   });
 
   it("leaves the finger only rules to touch", () => {
