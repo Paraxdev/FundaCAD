@@ -116,6 +116,36 @@ pub fn body_payload(shape: &Shape, id: &str, name: &str, tolerance: f64, profile
     )
 }
 
+/// One body's payload as a reply meshes it, from its face tier fitted to `budget` wire bytes.
+pub fn fitted_body_payload(
+    shape: &Shape,
+    id: &str,
+    name: &str,
+    tolerance: f64,
+    profile: ViewportProfile,
+    budget: usize,
+) -> FullBody {
+    let body = MeshBody { id: id.into(), name: name.into(), shape: Some(shape), ..Default::default() };
+    let faces = crate::kernel::count(shape, crate::kernel::Kind::Face);
+    fitted(&body, shape, faces, tolerance, profile, budget, &|| false)
+}
+
+fn fitted(
+    body: &MeshBody<'_>,
+    shape: &Shape,
+    faces: usize,
+    tolerance: f64,
+    profile: ViewportProfile,
+    budget: usize,
+    stopped: &dyn Fn() -> bool,
+) -> FullBody {
+    profile::fit(profile, faces, budget, stopped, |p, clean| {
+        let b = body_payload_for(body, shape, tolerance, p, clean);
+        let size = b.wire_size();
+        (b, size)
+    })
+}
+
 fn body_payload_for(
     body: &MeshBody<'_>,
     shape: &Shape,
@@ -536,11 +566,7 @@ fn built_payloads(
         let shape = body.shape.expect("a miss has a shape");
         let began = std::time::Instant::now();
         let full = crate::bench::phase("body_payload", || {
-            profile::fit(profile, faces[i], profile::SINGLE_BODY_BUDGET, &stopped, |p, clean| {
-                let b = body_payload_for(body, shape, tolerance, p, clean);
-                let size = b.wire_size();
-                (b, size)
-            })
+            fitted(body, shape, faces[i], tolerance, profile, profile::SINGLE_BODY_BUDGET, &stopped)
         });
         let done = ticked.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
         if let Ok(mut t) = tick.lock() {
