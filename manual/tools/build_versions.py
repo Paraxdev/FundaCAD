@@ -151,7 +151,9 @@ def build_all(names: list[str], default: str, build_one) -> tuple[dict[str, list
     for name in names:
         try:
             built[name] = build_one(name)
-        except (BuildFailed, OSError, ValueError) as error:
+        except Exception as error:
+            if not isinstance(error, (BuildFailed, OSError, ValueError)):
+                error = f"{type(error).__name__}: {error}"
             if name == default:
                 raise SystemExit(f"[{name}] {error}")
             # A GitHub Actions annotation, so a broken dev manual shows on the run while beta still publishes.

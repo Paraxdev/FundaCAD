@@ -167,6 +167,24 @@ class BuildAll(unittest.TestCase):
                     ),
                 )
 
+    def test_a_dev_config_that_patch_config_cannot_read_is_left_out_with_its_error_type(self):
+        odd = {
+            'site_url = "https://fundacad.dev/"\n': "KeyError: 'site_url'",
+            '[[project]]\nsite_url = "https://fundacad.dev/"\n': "TypeError: list indices must be integers or slices, not str",
+        }
+        for config, reason in odd.items():
+            with self.subTest(reason=reason):
+                out = io.StringIO()
+                with contextlib.redirect_stdout(out):
+                    result = bv.build_all(["beta", "dev"], "beta", lambda name: [] if name == "beta" else bv.patch_config(config, name, SITE, "beta"))
+                self.assertEqual(
+                    (result, out.getvalue()),
+                    (
+                        ({"beta": []}, ["dev"]),
+                        f"::warning::The dev manual did not build ({reason}), it is left out and its pages open the beta manual\n",
+                    ),
+                )
+
     def test_a_default_version_that_fails_stops_the_publish(self):
         with self.assertRaises(SystemExit) as stop:
             self.run_builds({"beta": bv.BuildFailed("zensical failed with exit code 1")})
