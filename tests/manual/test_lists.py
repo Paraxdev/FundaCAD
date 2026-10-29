@@ -34,19 +34,34 @@ def bullet_items(path):
             yield number, line.strip()
 
 
+def css_rules(css):
+    css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
+    for selector, body in re.findall(r"([^{}]+)\{([^{}]*)\}", css):
+        pairs = (line.split(":", 1) for line in body.split(";") if line.strip())
+        yield " ".join(selector.split()), {name.strip(): value.strip() for name, value in pairs}
+
+
 class Lists(unittest.TestCase):
     def test_no_page_has_a_bullet_list(self):
         found = [f"{page.relative_to(ROOT).as_posix()}:{n}: {item}" for page in pages() for n, item in bullet_items(page)]
         if found:
             self.fail(f"{len(found)} bullet items, number them instead:\n" + "\n".join(found))
 
-    def test_the_manual_stylesheet_numbers_nested_lists_as_1_1(self):
-        project = tomllib.loads((MANUAL / "zensical.toml").read_text(encoding="utf-8"))["project"]
-        sheets = [MANUAL / project.get("docs_dir", "docs") / name for name in project.get("extra_css", [])]
+    def test_nested_items_read_1_1_in_every_browser(self):
+        config = tomllib.loads((MANUAL / "zensical.toml").read_text(encoding="utf-8"))["project"]
+        sheets = [MANUAL / config.get("docs_dir", "docs") / name for name in config.get("extra_css", [])]
         self.assertTrue(sheets, "zensical.toml names no extra_css")
         for sheet in sheets:
             self.assertTrue(sheet.is_file(), f"{sheet} is missing")
-        self.assertTrue(any("counters(" in sheet.read_text(encoding="utf-8") for sheet in sheets))
+        declared = [rule for sheet in sheets for rule in css_rules(sheet.read_text(encoding="utf-8"))]
+        numbered = [(selector, block["content"]) for selector, block in declared if "content" in block]
+        # Safari styles only color and font-size on ::marker, so the numbers must come from ::before.
+        self.assertEqual(numbered, [(".md-typeset ol ol:not([type]) > li::before", 'counters(fc-step, ".") ". "')])
+        self.assertIn((".md-typeset ol", {"counter-reset": "fc-step"}), declared)
+        self.assertIn((".md-typeset ol > li", {"counter-increment": "fc-step"}), declared)
+        self.assertIn((".md-typeset ol ol:not([type])", {"list-style-type": "none"}), declared)
+        # sane_lists would write start=, and fc-step would then lag the step it sits under.
+        self.assertNotIn("sane_lists", config.get("markdown_extensions", {}))
 
 
 if __name__ == "__main__":
