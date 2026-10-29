@@ -838,6 +838,8 @@ const UPDATE_REACH_TESTS = 5e6;
 export interface SampleBudget {
   outline: number;
   reach: number;
+  /** Set once an edge of this update ran out of it, so edges an earlier update cut short wait for the next. */
+  starved?: boolean;
 }
 export const sampleBudget = (): SampleBudget => ({ outline: UPDATE_OUTLINE_TESTS, reach: UPDATE_REACH_TESTS });
 
@@ -1031,6 +1033,8 @@ export interface EdgeGhostSamples {
 /** Keyed by the edge's `points` identity. Resolved once against the gesture's starting model, since the first preview
  *  already lacks the sharp corner this ghost sweeps. */
 const edgeSampleCache = new WeakMap<readonly Pt3[], EdgeGhostSamples>();
+/** Samples an update's spent budget cut short, measured again by a later update that still has budget left. */
+const partialSamples = new WeakSet<EdgeGhostSamples>();
 
 /** `from` turned by the rotation that takes tangent `t0` to `t1`, what carries
  *  an inset sample's wedge out to the edge's true end. */
@@ -1059,7 +1063,9 @@ function edgeFaceSamples(
   budget: SampleBudget = sampleBudget(),
 ): EdgeGhostSamples | null {
   const cached = edgeSampleCache.get(edge.points);
-  if (cached) return cached;
+  if (cached && (budget.starved || !partialSamples.has(cached))) return cached;
+  const fresh = budget.outline >= UPDATE_OUTLINE_TESTS && budget.reach >= UPDATE_REACH_TESTS;
+  let short = false;
   const body = model.bodies.find((b) => b.id === edge.body);
   if (!body || edge.points.length < 2) return null;
   const closed = isClosedPolyline(edge.points);
@@ -1132,12 +1138,14 @@ function edgeFaceSamples(
   const m = wedges.length;
   const straight = !closed && wedges.every((w) => w.tangent.dot(wedges[0]!.tangent) > 1 - 1e-12);
   const scan = straight && grid.count < budget.outline;
+  const cutCap = Math.min(OUTLINE_CUTS, budget.outline - grid.count);
+  if (straight && (!scan || cutCap < OUTLINE_CUTS)) short = true;
   const lineCuts = scan
     ? cutsAlongLine(
         grid,
         wedges[0]!.tangent,
         wedges.map((w) => w.pv),
-        Math.min(OUTLINE_CUTS, budget.outline - grid.count),
+        cutCap,
       )
     : null;
   if (scan) budget.outline -= grid.count + (lineCuts?.reduce((sum, l) => sum + l.length, 0) ?? 0);
@@ -1148,8 +1156,10 @@ function edgeFaceSamples(
       const w = wedges[j]!;
       const tris = lineCuts ? lineCuts[j]! : faceTris(grid, face(j));
       const stride = lineCuts ? 1 : Math.ceil((m * tris.length) / Math.max(1, Math.min(REACH_BUDGET, budget.reach)));
+      if (!lineCuts && stride > Math.ceil((m * tris.length) / REACH_BUDGET)) short = true;
       if (stride > 1 && j % stride && j < m - 1 && face(j - 1) === face(j) && face(j + 1) === face(j)) continue;
       if (tris.length > budget.reach) {
+        short = true;
         out[j] = Infinity;
         continue;
       }
@@ -1172,6 +1182,7 @@ function edgeFaceSamples(
 
   let sectioned = !!lineCuts || (!straight && grid.count * m <= Math.min(OUTLINE_TESTS, budget.outline));
   if (sectioned && !lineCuts) budget.outline -= grid.count * m;
+  if (!straight && !sectioned && grid.count * m <= OUTLINE_TESTS) short = true;
   let cuts = 0;
   const samples: EdgeSample[] = wedges.map((w, j) => {
     const sample: EdgeSample = {
@@ -1212,6 +1223,11 @@ function edgeFaceSamples(
   }
   const out = { samples, closed };
   edgeSampleCache.set(edge.points, out);
+  // With the whole budget in hand a cut short edge is as good as it gets, so only a starved one is measured again.
+  if (short && !fresh) {
+    partialSamples.add(out);
+    budget.starved = true;
+  }
   return out;
 }
 

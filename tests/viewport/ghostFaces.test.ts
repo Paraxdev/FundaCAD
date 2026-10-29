@@ -691,7 +691,7 @@ describe("blend ghost cost on a large body", () => {
     const { samples } = edgeFaceSamples(model, edge(), spent)!;
     expect(samples.some((s) => s.outline)).toBe(false);
     expect(samples.every((s) => s.reach1 === Infinity && s.reach2 === Infinity)).toBe(true);
-    expect(spent).toEqual({ outline: 0, reach: 0 });
+    expect(spent).toEqual({ outline: 0, reach: 0, starved: true });
   });
 
   it("measures a face's reach at fewer samples as the budget runs low, still at both ends", () => {
@@ -704,7 +704,7 @@ describe("blend ghost cost on a large body", () => {
     expect(sampleBudget().reach - full.reach).toBeGreaterThan(left.reach);
     const { samples } = edgeFaceSamples(model, rim(), left)!;
     expect(samples.some((s) => s.outline)).toBe(false);
-    expect(left).toEqual({ outline: 0, reach: expect.any(Number) });
+    expect(left).toEqual({ outline: 0, reach: expect.any(Number), starved: true });
     expect(left.reach).toBeGreaterThanOrEqual(0);
     expect(Number.isFinite(samples[0]!.reach1!)).toBe(true);
     expect(Number.isFinite(samples.at(-1)!.reach1!)).toBe(true);
@@ -721,9 +721,30 @@ describe("blend ghost cost on a large body", () => {
     });
     const edges = Array.from({ length: 80 }, edge);
     ghosts.setBlendGhost(edges, 2, "fillet");
-    // The samples are cached per edge, so these read back what the update made.
-    expect(edgeFaceSamples(model, edges[0]!)!.samples.some((s) => s.outline)).toBe(true);
-    expect(edgeFaceSamples(model, edges[79]!)!.samples.some((s) => s.outline)).toBe(false);
+    // The samples are cached per edge, and a spent budget reads back what the update made.
+    const cachedOnly = { outline: 0, reach: 0, starved: true };
+    expect(edgeFaceSamples(model, edges[0]!, cachedOnly)!.samples.some((s) => s.outline)).toBe(true);
+    expect(edgeFaceSamples(model, edges[79]!, cachedOnly)!.samples.some((s) => s.outline)).toBe(false);
+  });
+
+  it("samples the edges an update's budget cut short in full over the next updates", () => {
+    const model = modelOf(buildDShaft(R, a, H, 6000));
+    const ghosts = new GhostLayer({
+      model: () => model,
+      addToScene: () => {},
+      removeFromScene: () => {},
+      requestRender: () => {},
+      faceNormalWorld: () => new THREE.Vector3(0, 0, 1),
+    });
+    const edges = Array.from({ length: 80 }, edge);
+    const outlined = () =>
+      edges.map((e) =>
+        edgeFaceSamples(model, e, { outline: 0, reach: 0, starved: true })!.samples.some((s) => s.outline),
+      );
+    ghosts.setBlendGhost(edges, 2, "fillet");
+    expect(outlined().indexOf(false)).toBeGreaterThan(0);
+    for (let i = 1; i <= 10 && outlined().includes(false); i++) ghosts.setBlendGhost(edges, 2 + i / 10, "fillet");
+    expect(outlined()).toEqual(edges.map(() => true));
   });
 });
 
