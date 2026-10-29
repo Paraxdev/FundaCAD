@@ -178,6 +178,7 @@ async function takePicture() {
         <Select
           id="rd-aperture"
           size="sm"
+          label="Aperture"
           tip="Aperture"
           :options="APERTURES"
           :disabled="prefs.focusBlur === 0"

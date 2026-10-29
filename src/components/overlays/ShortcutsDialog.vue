@@ -198,7 +198,7 @@ onUnmounted(() => {
           type="search"
           spellcheck="false"
           placeholder="Search shortcuts"
-          aria-label="Search shortcuts"
+          label="Search shortcuts"
           data-shortcut-search
         />
 

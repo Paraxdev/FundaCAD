@@ -5,9 +5,15 @@
 import { computed, onUnmounted, ref } from "vue";
 import { iconPaths, onIconPackChange } from "../../ui/icons";
 
-const props = withDefaults(defineProps<{ name: string; size?: number | string }>(), {
-  size: 16,
-});
+const props = withDefaults(
+  defineProps<{
+    name: string;
+    size?: number | string;
+    /** Only for an icon that says something no text beside it does: it then reads as an image of this name. */
+    label?: string | undefined;
+  }>(),
+  { size: 16, label: undefined },
+);
 
 // The active pack is plain module state, so a per-icon counter re-resolves it. icons.ts stays Vue-free for the headless
 // suite.
@@ -26,6 +32,10 @@ const paths = computed(() => {
   <svg
     class="icon"
     :data-icon="name"
+    :role="label ? 'img' : undefined"
+    :aria-label="label || undefined"
+    :aria-hidden="label ? undefined : 'true'"
+    focusable="false"
     viewBox="0 0 24 24"
     :width="size"
     :height="size"

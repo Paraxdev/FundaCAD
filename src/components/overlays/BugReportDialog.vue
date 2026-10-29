@@ -129,6 +129,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
       class="bug-desc"
       multiline
       rows="4"
+      label="What happened"
       placeholder="What happened? What did you expect?"
     />
     <div v-if="askedForText && !description.trim()" class="bug-note bug-need-text" role="alert">

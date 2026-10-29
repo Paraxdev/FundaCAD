@@ -142,6 +142,15 @@ describe("HomeScreen", () => {
     expect($(".home-card")!.getAttribute("title")).toBe("C:/work/Bracket & Plate.sindri");
   });
 
+  it("describes a card by its full path, so a screen reader that skips the title still hears it", () => {
+    open([{ path: "C:/work/gear.funda", openedAt: 1 }]);
+    const card = $(".home-card")!;
+    const desc = document.getElementById(card.getAttribute("aria-describedby") ?? "");
+    expect(desc?.textContent).toBe("C:/work/gear.funda");
+    expect(desc?.hidden).toBe(true);
+    expect(card.contains(desc)).toBe(false);
+  });
+
   it("says where recent documents are in the browser build", () => {
     open([{ path: "C:/a.funda", openedAt: 1 }], {}, null);
     expect($$(".home-card")).toHaveLength(0);

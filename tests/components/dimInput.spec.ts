@@ -8,7 +8,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DimInput } from "../../src/sketch/dimInput";
-import { iconElement } from "../../src/ui/icons";
+import { icon, iconElement } from "../../src/ui/icons";
 import { escapeClaimed } from "../../src/ui/escapeClaim";
 
 /** happy-dom has no PointerEvent constructor in every version, and nothing here
@@ -101,6 +101,13 @@ describe("iconElement", () => {
     expect(svg.getAttribute("class")).toBe("icon");
     expect(svg.getAttribute("data-icon")).toBe("check");
     expect(svg.querySelector("path")).not.toBeNull();
+  });
+
+  it("is hidden from screen readers, so a field or button reads its own name with no stray image", () => {
+    const svg = iconElement("check", 13);
+    expect(svg.getAttribute("aria-hidden")).toBe("true");
+    expect(svg.getAttribute("focusable")).toBe("false");
+    expect(icon("check")).toMatch(/^<svg aria-hidden="true" focusable="false" /);
   });
 
   it("puts one in each of the box's buttons", () => {

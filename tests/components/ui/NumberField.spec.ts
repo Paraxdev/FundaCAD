@@ -9,8 +9,11 @@ afterEach(() => vi.useRealTimers());
 
 type Props = InstanceType<typeof NumberField>["$props"];
 
-async function render(props: Partial<Props> = {}) {
-  const w = mount(NumberField, { props: { modelValue: 5, ...props } as Props, attachTo: document.body });
+async function render(props: Record<string, unknown> = {}) {
+  const w = mount(NumberField, {
+    props: { modelValue: 5, label: "Depth", ...props } as never,
+    attachTo: document.body,
+  });
   // Vue skips a listener for an event stamped in the same millisecond it was attached, once another listener ran.
   await new Promise((r) => setTimeout(r, 2));
   const input = w.get("input");
@@ -65,6 +68,23 @@ describe("NumberField", () => {
       measureError("2 +", unitById("mm")),
       true,
     ]);
+  });
+
+  it("names the input by its label, and keeps tip and keys in the title only", async () => {
+    const { input } = await render({ label: "Depth", tip: "Cut depth", keys: "D" });
+    expect([input.attributes("aria-label"), input.attributes("title")]).toEqual(["Depth", "Cut depth (D)"]);
+  });
+
+  it("names the input by labelledby alone when given one", async () => {
+    const { input } = await render({ label: undefined, labelledby: "depth-label" });
+    expect([input.attributes("aria-label"), input.attributes("aria-labelledby")]).toEqual([undefined, "depth-label"]);
+  });
+
+  it("warns in a dev build when it has no name", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    mount(NumberField, { props: { modelValue: 1 } as never });
+    expect(warn.mock.calls.some((c) => String(c[0]).includes("NumberField has no name"))).toBe(true);
+    warn.mockRestore();
   });
 
   it("refuses a typed value outside min and max, and a validate answer, with the reason", async () => {
@@ -296,7 +316,7 @@ describe("NumberField expressions", () => {
     const { w, input, el } = await render({
       parse,
       expression: () => null,
-      validate: (v) => (v < 0 ? "too small" : null),
+      validate: (v: number) => (v < 0 ? "too small" : null),
     });
     el.focus();
     await commit(input, "-2");

@@ -186,6 +186,7 @@ function onDrop(e: DragEvent) {
     <span class="feature-icon"><Icon :name="icon" :size="14" /></span>
     <span v-if="swatch" class="tree-swatch" :style="{ ...swatchStyle, background: swatch }"></span>
     <InlineLabel ref="labelEl" :text="label" :rename="rename" :label-style="labelStyle" />
+    <span v-if="error" class="sr-only">, failed</span>
     <span style="flex: 1"></span>
     <!-- .stop so the eye neither selects nor edits the row it sits in -->
     <IconButton
@@ -197,6 +198,7 @@ function onDrop(e: DragEvent) {
       :icon-size="13"
       :tip="fmtKeys('Show/hide · drag across eyes to show or hide many · Alt+click to show only this')"
       :data-visible="visible !== false"
+      :aria-pressed="visible !== false"
       @pointerdown.stop="onEyeDown"
       @click.stop="onEyeClick"
       @dblclick.stop

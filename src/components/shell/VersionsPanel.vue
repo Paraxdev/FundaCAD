@@ -150,6 +150,7 @@ function changedNames(v: Version): { kind: string; name: string }[] {
         v-if="branches.length > 1"
         class="versions-branch"
         size="sm"
+        label="Branch"
         tip="Branch"
         :model-value="branch"
         :options="branches.map((b) => ({ value: b, label: b }))"
@@ -174,7 +175,14 @@ function changedNames(v: Version): { kind: string; name: string }[] {
 
     <!-- The guards stand in for a disabled submit button, which used to refuse Enter in the field too. -->
     <form class="versions-save" @submit.prevent="canSave && save()">
-      <TextField v-model="message" class="versions-input" placeholder="What changed" spellcheck="false" @keydown.stop />
+      <TextField
+        v-model="message"
+        class="versions-input"
+        placeholder="What changed"
+        label="Version message"
+        spellcheck="false"
+        @keydown.stop
+      />
       <Button type="submit" class="versions-save-btn" icon="commit" :disabled="!canSave">Save version</Button>
     </form>
 
@@ -209,6 +217,7 @@ function changedNames(v: Version): { kind: string; name: string }[] {
               v-model="branchName"
               class="versions-input"
               placeholder="Branch name"
+              label="Branch name"
               spellcheck="false"
               @keydown.stop
             />
