@@ -5,6 +5,8 @@ import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { fitZebraMaterial, makeZebraMaterial } from "../../src/viewport/overlays";
 import { ZEBRA_LAMBDA, zebraFrame } from "../../src/viewport/zebraStripes";
+import { Viewport } from "../../src/viewport/viewport";
+import { DEFAULT_RENDER, setRenderPref } from "../../src/ui/renderPrefs";
 
 const box = () => new THREE.Box3(new THREE.Vector3(-30, -20, 0), new THREE.Vector3(30, 20, 24));
 const DIAG = Math.hypot(60, 40, 24);
@@ -72,5 +74,48 @@ describe("fitZebraMaterial", () => {
     expect(val(mat, "uPeriod")).toBe(before);
     expect(Number.isFinite(val(mat, "uReach") as number)).toBe(true);
     expect(val(mat, "uDirection")).toBe(1);
+  });
+});
+
+describe("the zebra view options", () => {
+  // A viewport with one body and no renderer: enough for the zebra swap and the prefs sync.
+  function bare() {
+    const v = Object.create(Viewport.prototype) as Viewport & Record<string, unknown>;
+    const mesh = new THREE.Mesh<THREE.BufferGeometry, THREE.Material>(
+      new THREE.BufferGeometry(),
+      new THREE.MeshStandardMaterial(),
+    );
+    Object.assign(v, {
+      model: { box: box(), bodies: [{ id: "body1", mesh }] },
+      savedMats: new Map(),
+      requestRender: () => {},
+    });
+    return { v, mesh, sync: () => (v as unknown as { syncZebraPrefs(): void }).syncZebraPrefs() };
+  }
+
+  it("drive the shared material's direction and stripe width", () => {
+    const { v, mesh, sync } = bare();
+    sync();
+    v.setZebra(true);
+    const mat = mesh.material as THREE.ShaderMaterial;
+    expect(val(mat, "uDirection")).toBe(0);
+    const before = val(mat, "uPeriod") as number;
+    setRenderPref("zebraDirection", "vertical");
+    setRenderPref("zebraWidth", 5);
+    sync();
+    expect(mesh.material).toBe(mat);
+    expect(val(mat, "uDirection")).toBe(1);
+    expect(val(mat, "uPeriod")).toBeCloseTo((before * 5) / 3);
+    setRenderPref("zebraDirection", DEFAULT_RENDER.zebraDirection);
+    setRenderPref("zebraWidth", DEFAULT_RENDER.zebraWidth);
+  });
+
+  it("are kept while zebra is off and used when it is turned on", () => {
+    const { v, mesh, sync } = bare();
+    setRenderPref("zebraDirection", "vertical");
+    sync();
+    v.setZebra(true);
+    expect(val(mesh.material as THREE.ShaderMaterial, "uDirection")).toBe(1);
+    setRenderPref("zebraDirection", DEFAULT_RENDER.zebraDirection);
   });
 });

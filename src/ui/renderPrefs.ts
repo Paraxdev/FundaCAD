@@ -4,6 +4,7 @@
 import { readSetting } from "./storedSetting";
 import { DEFAULT_KEY } from "../viewport/keyLight";
 import { DEFAULT_OVERLAYS, asOverlays, type OverlayState } from "../viewport/overlayKinds";
+import { ZEBRA_WIDTH_DEFAULT, ZEBRA_WIDTH_MAX, ZEBRA_WIDTH_MIN, type ZebraDirection } from "../viewport/zebraStripes";
 
 /** What a metal reflects; with nothing to reflect it renders near black. Generated in the renderer from emissive
  *  boxes, no HDR file or network. "none" is the flat look, best for reading geometry. */
@@ -176,6 +177,9 @@ export interface RenderPrefs {
   /** Path traced draws the Realtime look while the view moves or an edit lands,
    *  and traces again once it rests. Off keeps the noisy trace up throughout. */
   realtimeWhileMoving: boolean;
+  /** Zebra's stripe direction on screen, and its width in steps from ZEBRA_WIDTH_MIN to ZEBRA_WIDTH_MAX. */
+  zebraDirection: ZebraDirection;
+  zebraWidth: number;
 }
 
 /** Photographic f-stops rather than 0..1, since people know which way f/2 is from f/11. */
@@ -216,6 +220,8 @@ export const DEFAULT_RENDER: RenderPrefs = {
   realtimeQuality: "auto",
   // On: a trace that restarts noisy on every frame of an orbit reads as broken.
   realtimeWhileMoving: true,
+  zebraDirection: "horizontal",
+  zebraWidth: ZEBRA_WIDTH_DEFAULT,
 };
 
 export const MIN_BRIGHTNESS = 0.4;
@@ -278,6 +284,15 @@ export function asGround(v: unknown): Ground | null {
 /** The ground pref of a workspace ("model" or "render"). */
 export function groundKey(w: "model" | "render"): "groundModel" | "groundRender" {
   return w === "render" ? "groundRender" : "groundModel";
+}
+
+export function asZebraDirection(v: unknown): ZebraDirection | null {
+  return v === "horizontal" || v === "vertical" ? v : null;
+}
+
+export function asZebraWidth(v: unknown): number | null {
+  const w = asClamped(v, ZEBRA_WIDTH_MIN, ZEBRA_WIDTH_MAX);
+  return w === null ? null : Math.round(w);
 }
 
 export function asTangentEdges(v: unknown): TangentEdges | null {
@@ -363,6 +378,8 @@ export function asRenderPrefs(v: unknown): RenderPrefs {
     realtimeQuality: asRealtimeQuality(o["realtimeQuality"]) ?? DEFAULT_RENDER.realtimeQuality,
     realtimeWhileMoving:
       typeof o["realtimeWhileMoving"] === "boolean" ? o["realtimeWhileMoving"] : DEFAULT_RENDER.realtimeWhileMoving,
+    zebraDirection: asZebraDirection(o["zebraDirection"]) ?? DEFAULT_RENDER.zebraDirection,
+    zebraWidth: asZebraWidth(o["zebraWidth"]) ?? DEFAULT_RENDER.zebraWidth,
   };
 }
 
@@ -436,7 +453,11 @@ export function setRenderPref<K extends keyof RenderPrefs>(key: K, value: Render
                                             ? asTracerPref(value)
                                             : key === "realtimeQuality"
                                               ? asRealtimeQuality(value)
-                                              : asBrightness(value);
+                                              : key === "zebraDirection"
+                                                ? asZebraDirection(value)
+                                                : key === "zebraWidth"
+                                                  ? asZebraWidth(value)
+                                                  : asBrightness(value);
   if (ok === null || current[key] === ok) return;
   // A fresh object rather than a mutation, so a subscriber may hold the result
   // of renderPrefs() and compare identity to decide it must redraw.

@@ -52,7 +52,6 @@ import {
   buildFaceMarkMesh,
   clearOverlayObjects,
 } from "./overlays";
-import { ZEBRA_WIDTH_DEFAULT } from "./zebraStripes";
 import { barycentric, displacedPositions, stressColors } from "../ui/stress";
 import { Picker, modelScale, type EdgeCandidate, type Hit, type PickMods } from "./picking";
 import { bandIndex, expandToBand, type BandIndex } from "./faceBands";
@@ -461,6 +460,7 @@ export class Viewport {
         this.edgeRule.reset();
       }
       if (renderPrefs().tangentEdges !== this.tangentEdges) this.applyTangentEdges();
+      this.syncZebraPrefs();
       this.syncViewMode();
       this.overlays = savedOverlays();
       this.requestRender();
@@ -1648,7 +1648,7 @@ export class Viewport {
   private draftThreshold = 45;
   private zebra = false;
   private zebraMat: THREE.ShaderMaterial | null = null;
-  private zebraSettings: ZebraSettings = { direction: "horizontal", width: ZEBRA_WIDTH_DEFAULT };
+  private zebraSettings: ZebraSettings = { direction: renderPrefs().zebraDirection, width: renderPrefs().zebraWidth };
   // Each body's own material while zebra is on.
   private savedMats = new Map<string, THREE.Material | THREE.Material[]>();
   private combs = false;
@@ -1879,6 +1879,13 @@ export class Viewport {
     this.zebra = on;
     this.applyZebra();
     this.onAnalysisChange?.();
+  }
+  private syncZebraPrefs() {
+    const { zebraDirection: direction, zebraWidth: width } = renderPrefs();
+    const s = this.zebraSettings;
+    if (s && s.direction === direction && s.width === width) return;
+    this.zebraSettings = { direction, width };
+    if (this.zebra) this.applyZebra();
   }
   private applyZebra() {
     if (!this.model) return;
