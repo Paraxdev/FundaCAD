@@ -24,7 +24,7 @@
   gap: 1px;
 }
 .ui-confirm-hint {
-  font-size: 10.5px;
+  font-size: var(--fs-micro);
   color: var(--text-mute);
 }
 .ui-confirm-primary .ui-confirm-hint {

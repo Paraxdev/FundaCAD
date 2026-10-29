@@ -14,12 +14,12 @@
 .btn.btn-sm {
   min-height: 28px;
   padding: var(--s-1) var(--s-3);
-  font-size: 12px;
+  font-size: var(--fs-small);
 }
 .btn.btn-md {
   min-height: 32px;
   padding: var(--s-1) var(--s-4);
-  font-size: 12.5px;
+  font-size: var(--fs-body);
 }
 .btn.btn-block {
   display: flex;

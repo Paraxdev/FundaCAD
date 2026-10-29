@@ -189,7 +189,7 @@
 }
 // TitleFold.vue: the document name at the top of the File menu once the bar folds. Wraps, a long name stays whole.
 .tb-fold-doc {
-  max-width: 22rem;
+  max-width: 286px;
   padding: var(--s-2) var(--s-4) var(--s-3);
   color: var(--text-mute);
   font-size: 12px;
@@ -204,7 +204,7 @@
 
 // LiveSessionPill.vue, a button Chip beside the document name.
 .chip.live-pill {
-  max-width: 22rem;
+  max-width: 286px;
   overflow: hidden;
 }
 .live-pill.readonly {

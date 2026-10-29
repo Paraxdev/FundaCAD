@@ -22,7 +22,7 @@
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   column-gap: var(--s-3);
-  font-size: 12px;
+  font-size: var(--fs-small);
 }
 .ui-slider-label {
   color: var(--text-dim);
@@ -30,7 +30,7 @@
 .ui-slider-value {
   min-width: 3ch;
   color: var(--text-dim);
-  font-size: 11.5px;
+  font-size: var(--fs-small);
   font-variant-numeric: tabular-nums;
   text-align: right;
 }

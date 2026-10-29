@@ -6,7 +6,7 @@ $tick: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox
   display: inline-flex;
   align-items: center;
   gap: var(--s-2);
-  font-size: 12.5px;
+  font-size: var(--fs-body);
   cursor: pointer;
 }
 .ui-checkbox-box {
