@@ -665,7 +665,7 @@ given nothing else (a plain JS plugin skips the type check), without its key cho
 | `SwitchRow` | A labelled row holding a `Switch`, in a tool panel, a popover or feature properties | `modelValue`, `label`, `icon`; `layout`: `float` (the view controls) or `param` (feature properties); a `hint` slot | the row's hover, the switch's states; disabled fades the row as a whole |
 | `Segmented` | A choice of 2 to 5 values, all shown | `modelValue`; `options` (`value`, `label`, `icon`, `tip`, `keys`, `disabled`); `label`, the group's name; `size`: `sm` 24 or `md` 32; `variant`: `bar` (one well) or `chips` (the Render dock); `iconOnly` | hover, pressed, focus, selected, a disabled segment, a disabled group |
 | `Slider` | A value along a range | `modelValue`, `min`, `max`, `step`, `label`, `showValue`, `unit`; `commit`: `live` or `end` (on release) | hover, pressed, focus, disabled |
-| `Tabs` | The pages of one surface | `tabs` (`value`, `label`, `icon`, `disabled`, `title`); `modelValue`; `variant`: `underline` (a card), `bar` (a dock), `nav` (a settings page list, `aria-current`); `orientation`; `label` | hover, pressed, focus, selected, disabled with its reason |
+| `Tabs` | The pages of one surface | `tabs` (`value`, `label`, `icon`, `disabled`, `title`); `modelValue`; `variant`: `underline` (a card), `bar` (a dock), `nav` (a settings page list, `aria-current`); `orientation`; `label`; `panels`, an id base (`useId`) shared with a `TabPanel` around each page, which gives the selected tab `aria-controls` | hover, pressed, focus, selected, disabled with its reason |
 | `Menu`, `MenuItem`, `MenuSeparator` | Popup and context menus | Menu: `anchor`, or `at` (a point) for a context menu, `side`, `align`, `focus`; MenuItem: `label`, `icon`, `keys`, `checked` (a `menuitemcheckbox`), `danger`, a nested `Menu` for a submenu | hover, keyboard focus, pressed, open, checked, danger, disabled |
 | `Popover` | A card that opens from a button: options, pickers | `anchor`, `side`, `align`; `kind`, a class for the card; `minWidth`; `focus`: `first` or `none`; `returnFocus` | open; it closes on Escape and on a press outside |
 | `Dialog` | A modal: a task that holds the rest of the app | `title` or the `title` slot; `size`: `sm`, `md`, `lg`; `closeOnEsc`; `initialFocus`; `returnFocus`; a `footer` slot | focus held inside, focus back on close |
@@ -900,7 +900,8 @@ is a native range with `accent-color: var(--accent)`.
 
 Both are one Tab stop: the arrow keys move and pick, Home and End go to the ends, and a disabled item is skipped.
 `Segmented` is a `radiogroup` of `radio`s, `Tabs` a `tablist` (ArrowUp and ArrowDown when vertical, `nav` is
-vertical by default).
+vertical by default). Each page sits in a `TabPanel` (`panels`, `value`), a `tabpanel` labelled by its tab;
+the `nav` look has no tab panels.
 
 A tab that cannot be chosen yet (the Stress panel's Results before a Run) passes `disabled` and a `title` saying why:
 opacity 0.45, `cursor: default`, no hover. Keep it in the bar rather than hiding it, a bar of one tab reads as a
