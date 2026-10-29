@@ -192,7 +192,7 @@ export function uiUnitChip(o: UiUnitChipOptions): HTMLElement {
   b.setAttribute("role", "combobox");
   b.className = "ui-unit-chip is-picker ui-select-sm";
   const tip = tipText(o.tip ?? "Unit", o.keys)!;
-  b.setAttribute("aria-label", tip);
+  b.setAttribute("aria-label", o.tip ?? "Unit");
   b.setAttribute("aria-haspopup", "listbox");
   b.setAttribute("aria-expanded", "false");
   const value = document.createElement("span");
@@ -299,7 +299,7 @@ export function uiNumberInput(o: UiNumberInputOptions = {}): UiNumberInput {
   if (o.placeholder !== undefined) input.placeholder = o.placeholder;
   if (o.disabled) input.readOnly = true;
   const tip = tipText(o.tip, o.keys);
-  if (tip) input.setAttribute("aria-label", tip);
+  if (o.tip) input.setAttribute("aria-label", o.tip);
   input.value = o.value ?? "";
   initDisabled(input, tip, o);
   root.append(input);
@@ -370,12 +370,13 @@ export function uiSlider(o: UiSliderOptions): UiSlider {
   input.max = String(max);
   input.step = String(step);
   if (o.label) input.setAttribute("aria-labelledby", `${id}-label`);
-  else if (tip) input.setAttribute("aria-label", tip);
+  else if (o.tip) input.setAttribute("aria-label", o.tip);
   if (o.disabled) input.setAttribute("aria-disabled", "true");
   root.append(input);
   const output = o.showValue ? document.createElement("output") : null;
   if (output) {
     output.className = "ui-slider-value";
+    output.setAttribute("aria-live", "off");
     root.append(output);
   }
   const readout = (v: number) => (!o.unit ? String(v) : o.unit === "%" ? `${v}%` : `${v} ${o.unit}`);
