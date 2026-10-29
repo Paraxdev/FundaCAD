@@ -2,7 +2,9 @@
 
 A dimension is a constraint with a number in it, such as a length of 40 mm.
 
-![The Dimension tool on a rectangle edge with its value box](../img/sketch-dimension.png)
+Most shapes already show their own sizes, such as a rectangle's width and height. Use the Dimension tool for the distances and angles between shapes.
+
+![The Dimension tool placing the distance from a hole to a rectangle's edge, with its value box](../img/sketch-dimension.png)
 
 1. Press D, or click Dimension on the rail.
 2. Click a line or circle. Click a second thing for the distance or angle between them.
