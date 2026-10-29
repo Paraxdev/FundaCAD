@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { enableAutoUnmount, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
-import { ref } from "vue";
+import { nextTick, ref } from "vue";
 import ViewportControls from "../../../src/components/shell/ViewportControls.vue";
 import { ENGINE } from "../../../src/app/engineKey";
 import type { Engine } from "../../../src/app/engine";
@@ -97,6 +97,25 @@ describe("ViewportControls popover controls", () => {
     byText(".vc-pop .btn", "Default View")!.click();
     byText(".vc-pop .btn", "Fit to Model")!.click();
     expect([setStandardView.mock.calls, handleAction.mock.calls]).toEqual([[["front"]], [["iso"], ["fit"]]]);
+  });
+
+  it("ties the Views and Appearance tabs to the page each one shows", async () => {
+    const { w } = await render(TIER);
+    await w.get('[aria-label="Views"]').trigger("click");
+    for (const [t, text] of [
+      ["views", "Default View"],
+      ["appearance", "Projection"],
+    ] as const) {
+      const tab = document.querySelector<HTMLElement>(`.vc-pop [role=tab][data-tab="${t}"]`)!;
+      tab.click();
+      await nextTick();
+      const page = document.getElementById(tab.getAttribute("aria-controls") ?? "");
+      expect([page?.getAttribute("role"), page?.getAttribute("aria-labelledby"), page?.textContent]).toEqual([
+        "tabpanel",
+        tab.id,
+        expect.stringContaining(text),
+      ]);
+    }
   });
 
   it("offers the matcap spheres as one radio group the arrows move through", async () => {

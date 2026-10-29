@@ -397,6 +397,23 @@ describe("StressPanel", () => {
     expect(q(".stress-legend")).not.toBeNull();
   });
 
+  it("ties the selected step tab to the step it shows, which that tab names", async () => {
+    await withResult();
+    for (const [t, step] of [
+      ["setup", ".stress-setup"],
+      ["results", ".stress-results"],
+    ] as const) {
+      tab(t).click();
+      await flushPromises();
+      const page = document.getElementById(tab(t).getAttribute("aria-controls") ?? "");
+      expect([page?.matches(step), page?.getAttribute("role"), page?.getAttribute("aria-labelledby")]).toEqual([
+        true,
+        "tabpanel",
+        tab(t).id,
+      ]);
+    }
+  });
+
   it("shows the setup again when the result goes, a Run is refused, or the panel reopens", async () => {
     const { p } = await withResult();
     p.clearStressResult();

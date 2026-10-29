@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, useTemplateRef } from "vue";
+import { computed, onMounted, onUnmounted, ref, useId, useTemplateRef } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { useBuildValue } from "../../app/useDoc";
 import { useUiStore } from "../../stores/ui";
@@ -35,6 +35,7 @@ import Popover from "../ui/Popover.vue";
 import Toggle from "../ui/Toggle.vue";
 import ChoiceList from "../ui/ChoiceList.vue";
 import Tabs from "../ui/Tabs.vue";
+import TabPanel from "../ui/TabPanel.vue";
 import type { SelectPolicy } from "../../viewport/clickIntent";
 
 const engine = useEngine();
@@ -108,6 +109,7 @@ const VIEWS = [
   { view: "left", label: "Left" },
 ] as const;
 const viewTab = ref<"views" | "appearance">("views");
+const viewPages = useId();
 
 const projection = computed<ProjectionMode>(() => {
   pulse.value;
@@ -389,12 +391,13 @@ async function screenshot() {
       <Tabs
         v-model="viewTab"
         label="Views"
+        :panels="viewPages"
         :tabs="[
           { value: 'views', label: 'Views' },
           { value: 'appearance', label: 'Appearance' },
         ]"
       />
-      <template v-if="viewTab === 'views'">
+      <TabPanel v-if="viewTab === 'views'" :panels="viewPages" value="views">
         <Button block class="vc-pop-btn" @click="engine.handleAction('iso')"
           ><template #icon><Icon name="view-iso" :size="16" /></template>Default View</Button
         >
@@ -405,8 +408,8 @@ async function screenshot() {
         <ListRow v-for="v in VIEWS" :key="v.view" :label="v.label" @click="engine.viewport.setStandardView(v.view)"
           ><template #leading><Icon class="ui-list-row-icon" :name="`view-${v.view}`" :size="18" /></template
         ></ListRow>
-      </template>
-      <template v-else>
+      </TabPanel>
+      <TabPanel v-else :panels="viewPages" value="appearance">
         <div class="pop-section">Projection</div>
         <ChoiceList
           label="Projection"
@@ -422,7 +425,7 @@ async function screenshot() {
           :model-value="ui.selMode"
           @update:model-value="pickSelectMode"
         />
-      </template>
+      </TabPanel>
     </Popover>
 
     <Popover

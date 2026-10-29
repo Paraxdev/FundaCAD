@@ -2,7 +2,7 @@
 // Mirrors the setting modules (ui/theme, icons, units, renderPrefs) with no store of its own, every change applies live.
 // The mirrors re-read on each module's subscription, the modules stay Vue-free so the headless suite can import them.
 
-import { computed, nextTick, onMounted, onUnmounted, ref, watch, type Directive } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, useId, watch, type Directive } from "vue";
 import { useDialogStore } from "../../stores/dialogs";
 import { pluginFocus } from "../../plugins/settingsFocus";
 import Button from "../ui/Button.vue";
@@ -12,6 +12,7 @@ import Segmented from "../ui/Segmented.vue";
 import Select from "../ui/Select.vue";
 import Slider from "../ui/Slider.vue";
 import Tabs from "../ui/Tabs.vue";
+import { tabPanelAttrs } from "../ui/tabIds";
 import McpSection from "./McpSection.vue";
 import DenoiserRow from "../shell/DenoiserRow.vue";
 import PluginsSection from "./PluginsSection.vue";
@@ -165,10 +166,9 @@ const category = ref(pluginFocus.value ? "plugins" : (known(dialogs.prefsCategor
 // Taken once, so an open that sets `preferences` directly, as the Live session pill does, lands on Appearance.
 dialogs.prefsCategory = null;
 const panes = ref<HTMLElement | null>(null);
+const panesId = useId();
 const pane = (id: string) => ({
-  id: `prefs-pane-${id}`,
-  role: "tabpanel",
-  "aria-label": categories.value.find((c) => c.value === id)?.label,
+  ...tabPanelAttrs(panesId, id),
   "data-pane": id,
   // AI assistants and Plugins have no title, so the pane itself takes the focus.
   tabindex: id === "mcp" || id === "plugins" ? -1 : undefined,
@@ -439,6 +439,7 @@ function onClassicCamera(on: boolean) {
         variant="bar"
         orientation="vertical"
         label="Preference categories"
+        :panels="panesId"
         class="prefs-nav prefs-cats"
         @click="revealPane"
       >

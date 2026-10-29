@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { panelId, tabId } from "./tabIds";
+import { tabPanelAttrs } from "./tabIds";
 
 defineProps<{
   /** The id base the Tabs above were given as `panels`. */
@@ -9,7 +9,7 @@ defineProps<{
 </script>
 
 <template>
-  <div :id="panelId(panels, value)" class="ui-tabpanel" role="tabpanel" :aria-labelledby="tabId(panels, value)">
+  <div class="ui-tabpanel" v-bind="tabPanelAttrs(panels, value)">
     <slot />
   </div>
 </template>
