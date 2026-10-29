@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { focusReturn, lastFocus, trackFocus, withFocusReturn } from "../../../src/components/ui/focusables";
+import {
+  focusReturn,
+  lastFocus,
+  mainLandmark,
+  trackFocus,
+  withFocusReturn,
+} from "../../../src/components/ui/focusables";
 
 const $ = (sel: string) => document.querySelector<HTMLElement>(sel)!;
 const active = () => document.activeElement;
@@ -67,6 +73,31 @@ describe("focusReturn", () => {
     expect(active()).toBe($("#main"));
     expect($("#main").getAttribute("tabindex")).toBe("-1");
     expect($("#main").hasAttribute("data-focus-landing")).toBe(true);
+  });
+
+  it("drops the tabindex it gave the landmark once focus moves on, so a click on a blank area cannot focus it", async () => {
+    $("#gone").focus();
+    const back = focusReturn();
+    $("#gone").remove();
+    back.restore(() => false);
+    $("#main").dispatchEvent(new FocusEvent("blur"));
+    await tick();
+    expect($("#main").getAttribute("tabindex")).toBe("-1");
+    $("#a").focus();
+    await tick();
+    expect(active()).toBe($("#a"));
+    expect($("#main").hasAttribute("tabindex")).toBe(false);
+  });
+
+  it("finds a control from before the overlay when the overlay's own controls filled the history", () => {
+    $("#dlg").innerHTML = Array.from({ length: 12 }, (_, i) => `<button id="d${i}">${i}</button>`).join("");
+    $("#a").focus();
+    $("#opener").focus();
+    const back = focusReturn();
+    for (let i = 0; i < 12; i++) $(`#d${i}`).focus();
+    $("#opener").remove();
+    back.restore(inside("#dlg"));
+    expect(active()).toBe($("#a"));
   });
 
   it("keeps a tabindex the landmark already has", () => {
@@ -139,6 +170,32 @@ describe("window focus", () => {
     vi.spyOn(document, "hasFocus").mockReturnValue(false);
     $("#field").blur();
     await tick();
+    window.dispatchEvent(new FocusEvent("focus"));
+    await tick();
+    expect(active()).toBe($("#field"));
+  });
+
+  it("skips a control that was removed while it held focus", async () => {
+    $("#field").focus();
+    $("#gone").focus();
+    $("#gone").remove();
+    expect(active()).toBe(document.body);
+    window.dispatchEvent(new FocusEvent("focus"));
+    await tick();
+    expect(active()).toBe($("#field"));
+  });
+
+  it("moves past a landmark that no longer takes focus", async () => {
+    $("#field").focus();
+    $("#field").blur();
+    focusReturn(mainLandmark).restore(() => false);
+    expect(active()).toBe($("#main"));
+    $("#a").focus();
+    await tick();
+    expect($("#main").hasAttribute("tabindex")).toBe(false);
+    // happy-dom focuses a div without a tabindex, a real engine refuses it.
+    vi.spyOn($("#main"), "focus").mockImplementation(() => {});
+    $("#a").remove();
     window.dispatchEvent(new FocusEvent("focus"));
     await tick();
     expect(active()).toBe($("#field"));

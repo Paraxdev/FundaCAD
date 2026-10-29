@@ -24,8 +24,10 @@ function shown(el: HTMLElement): boolean {
   return getComputedStyle(el).visibility !== "hidden";
 }
 
+const usable = (el: HTMLElement) => el.isConnected && !el.closest("[hidden], [inert]") && shown(el);
+
 function take(el: HTMLElement | null | undefined): boolean {
-  if (!el?.isConnected || el.closest("[hidden], [inert]") || !shown(el)) return false;
+  if (!el || !usable(el)) return false;
   el.focus();
   return document.activeElement === el;
 }
@@ -35,6 +37,10 @@ const onBody = () => !document.activeElement || document.activeElement === docum
 let history: HTMLElement[] = [];
 let parked = false;
 let uninstall: (() => void) | null = null;
+
+// Tries each candidate in turn, as one can look usable and still refuse focus, like a landmark whose tabindex went.
+const resume = (exclude: (node: Node) => boolean, from: HTMLElement[] = history) =>
+  from.some((el) => !exclude(el) && take(el));
 
 /** Starts the focus history that `focusReturn`, `withFocusReturn` and the window focus listener fall back on.
  *  Idempotent, the returned stop clears it for tests. */
@@ -57,7 +63,7 @@ export function trackFocus(): () => void {
   // the engine and only step in when it left focus on the body.
   const onWindow = () => {
     setTimeout(() => {
-      if (!parked && onBody()) take(history[0]);
+      if (!parked && onBody()) resume(() => false);
     });
   };
   document.addEventListener("focusin", onIn, true);
@@ -76,14 +82,24 @@ export function trackFocus(): () => void {
 
 /** The most recent tracked control that can still take focus and is not excluded. */
 export function lastFocus(exclude: (node: Node) => boolean = () => false): HTMLElement | null {
-  return history.find((el) => el.isConnected && !exclude(el) && !el.closest("[hidden], [inert]") && shown(el)) ?? null;
+  return history.find((el) => !exclude(el) && usable(el)) ?? null;
 }
 
 // A landmark is no control, so it takes focus by tabindex -1 and data-focus-landing drops the ring (_dialog.scss).
+// The tabindex goes once focus moves on, so a blank click cannot focus it, but not on the blur of the window leaving.
 export function mainLandmark(): HTMLElement | null {
   const el = document.querySelector<HTMLElement>(LANDMARK);
-  if (el && !el.hasAttribute("tabindex")) el.setAttribute("tabindex", "-1");
-  el?.setAttribute("data-focus-landing", "");
+  if (!el) return null;
+  el.setAttribute("data-focus-landing", "");
+  if (el.hasAttribute("tabindex")) return el;
+  el.setAttribute("tabindex", "-1");
+  const off = () =>
+    setTimeout(() => {
+      if (document.activeElement === el) return;
+      el.removeAttribute("tabindex");
+      el.removeEventListener("blur", off);
+    });
+  el.addEventListener("blur", off);
   return el;
 }
 
@@ -99,12 +115,14 @@ export function focusReturn(
   restore: (within: (node: Node) => boolean) => void;
 } {
   const opener = from instanceof HTMLElement && from !== document.body ? from : null;
+  // A long overlay's own controls can push everything before it out of the capped history.
+  const before = history.slice();
   return {
     restore(within) {
       const now = document.activeElement;
       if (now && now !== document.body && !within(now)) return;
       if (take(opener) || take(fallback?.()) || !opener) return;
-      if (!take(lastFocus((n) => n === opener || within(n)))) take(mainLandmark());
+      if (!resume((n) => n === opener || within(n), [...history, ...before])) take(mainLandmark());
     },
   };
 }
