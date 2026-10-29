@@ -1213,6 +1213,10 @@ jobs:
           pip install -e "tools/harness[test]"
           python -m pytest tools/harness/tests/unit -q
 
+      # The manual's capture tool runs on the harness: its manifests against the pages, and its GIF encoder.
+      - name: Capture tool tests
+        run: python tests/manual/test_capture.py
+
       - name: Agent harness smoke set
         env:
           FUNDACAD_ENGINE_CMD: ${{ github.workspace }}/engine-bin/fundacad-engine

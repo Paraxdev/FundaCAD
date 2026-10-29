@@ -9,7 +9,7 @@ crop = "panel"
 stub = true
 show = "The Export window with STL and Medium chosen."
 alt = "The Export window with STL and Medium chosen"
-uses = ["manual/docs/files/export.md:5"]
+uses = ["manual/docs/files/export.md"]
 
 [[shot]]
 file = "manual/docs/img/home.png"
@@ -19,7 +19,7 @@ crop = "window"
 stub = true
 show = "Home with Blank and Open at the top, three recent documents and the examples under them."
 alt = "Home with Blank and Open at the top, three recent documents and the examples under them"
-uses = ["manual/docs/files/home.md:5"]
+uses = ["manual/docs/files/home.md"]
 
 [[shot]]
 file = "manual/docs/img/versions-panel.png"
@@ -29,7 +29,7 @@ crop = "panel"
 stub = true
 show = "The Versions panel listing two saved versions with their notes."
 alt = "Versions panel listing two saved versions with their notes"
-uses = ["manual/docs/files/versions.md:5"]
+uses = ["manual/docs/files/versions.md"]
 
 [[shot]]
 file = "manual/docs/img/first-part-rectangle.png"
@@ -39,7 +39,7 @@ crop = "region"
 stub = true
 show = "A rough rectangle drawn on the XY sketch plane, the first step of the first part."
 alt = "A rough rectangle drawn on the sketch plane"
-uses = ["manual/docs/start/first-part.md:7"]
+uses = ["manual/docs/start/first-part.md"]
 
 [[shot]]
 file = "manual/docs/img/first-part-extrude.png"
@@ -49,7 +49,7 @@ crop = "region"
 stub = true
 show = "The extrude arrow over the plate preview: a rectangle with a circle hole, extruded 5 mm."
 alt = "The extrude arrow with the plate previewed"
-uses = ["manual/docs/start/first-part.md:13"]
+uses = ["manual/docs/start/first-part.md"]
 
 [[shot]]
 file = "manual/docs/img/first-part-export.png"
@@ -59,4 +59,4 @@ crop = "panel"
 stub = true
 show = "The Export window with STL, Millimeter and Medium chosen, as the first part page describes."
 alt = "The Export window with STL and Medium chosen"
-uses = ["manual/docs/start/first-part.md:19"]
+uses = ["manual/docs/start/first-part.md"]
