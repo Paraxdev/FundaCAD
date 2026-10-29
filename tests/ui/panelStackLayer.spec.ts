@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { panelStack } from "../../src/ui/panelStack";
+import { MARGIN } from "../../src/viewport/viewCube";
 
 const observers: RO[] = [];
 class RO {
@@ -48,6 +49,17 @@ function layer(right: { at: number }) {
   return { el, cardLeft: () => right.at - CARD };
 }
 
+/** A tool rail button in the layer whose label ends `right` px from the left of the window. */
+function rail(layerEl: HTMLElement, right: number) {
+  const el = document.createElement("div");
+  el.className = "tool-rail";
+  const btn = document.createElement("div");
+  btn.className = "rail-btn";
+  btn.getBoundingClientRect = () => ({ left: 12, right, top: 140, bottom: 700 }) as DOMRect;
+  el.append(btn);
+  layerEl.append(el);
+}
+
 function panel() {
   const el = document.createElement("div");
   for (const k of ["scrollHeight", "offsetHeight", "clientHeight"]) Object.defineProperty(el, k, { get: () => 200 });
@@ -77,11 +89,28 @@ describe("the panel column follows the float layer", () => {
     expect(parseFloat(p.style.right)).toBeGreaterThan(DOCK + CARD);
   });
 
+  it("narrows a panel to the span between the rail and the cards, so it never slides under the rail", async () => {
+    const right = { at: VIEWPORT };
+    const { el: layerEl, cardLeft } = layer(right);
+    const RAIL = 500;
+    rail(layerEl, RAIL);
+    const p = panel();
+    panelStack.add("stress", p);
+    right.at = VIEWPORT - DOCK;
+    resized(layerEl);
+    await frame();
+    expect({ right: p.style.right, maxWidth: p.style.maxWidth }).toEqual({
+      right: `${VIEWPORT - (cardLeft() - MARGIN)}px`,
+      maxWidth: `${cardLeft() - MARGIN - (RAIL + MARGIN)}px`,
+    });
+  });
+
   it("stops watching the layer once no panel is open, so its resizes place nothing", async () => {
     const right = { at: VIEWPORT };
     const { el: layerEl } = layer(right);
     const p = panel();
     panelStack.add("stress", p);
+    expect(resized(layerEl)).toBe(true);
     panelStack.remove("stress");
     const before = p.style.right;
     right.at = VIEWPORT - DOCK;
