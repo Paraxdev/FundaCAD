@@ -14,7 +14,7 @@ const path = require("path");
 
 // TILE_SIZE_PX, TILE_GAP_PX + TILE_SIZE_PX and the MIN_TILE_SCALE floor in src/viewport/originTiles.ts.
 const SIZE = 64;
-const EXTENT = 72;
+const EXTENT = 74;
 const FLOOR = 0.65 * SIZE;
 
 const TOKEN = process.env.SC_TOKEN || "";

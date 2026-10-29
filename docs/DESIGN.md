@@ -1168,7 +1168,7 @@ guard test cannot see them; hold them to these rules by hand.
 - Neutral parts read tokens through `themeColor` and are read again on a theme
   change.
 - Sizes are screen pixels, held through `gizmoScale.ts` at every zoom.
-- Each tile spans the positive side of its two axes, set 8px out from both
+- Each tile spans the positive side of its two axes, set 10px out from both
   arrows (`TILE_GAP_PX`), so its two inner edges run parallel to the arrows and
   the three tiles stand apart instead of meeting at the origin. A tile is as long
   as an arrow, 64px, and while the tiles show both share one floor, so a tile edge

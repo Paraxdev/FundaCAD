@@ -88,7 +88,7 @@ describe("TILE_SHAPE", () => {
   it("is as long as an axis arrow, sits a small gap off it and rounds like a rail tile, with the app's squircle", () => {
     expect(TILE_SHAPE).toEqual({
       sizePx: TRIAD_LENGTH_PX,
-      gapPx: 8,
+      gapPx: 10,
       radiusPx: 27,
       exponent: SQUIRCLE_EXPONENT,
       octant: { x: 1, y: 1, z: 1 },
@@ -101,9 +101,9 @@ describe("TILE_SHAPE", () => {
 describe("tilePose", () => {
   it("puts each default tile in the positive quadrant of its two axes, its corner a gap out on both arrows", () => {
     expect(PLANES.map((k) => tilePose(k, TILE_SHAPE))).toEqual([
-      { centre: [40, 40, 0], u: [1, 0, 0], v: [0, 1, 0], normal: [0, 0, 1] },
-      { centre: [40, 0, 40], u: [1, 0, 0], v: [0, 0, 1], normal: [0, -1, 0] },
-      { centre: [0, 40, 40], u: [0, 1, 0], v: [0, 0, 1], normal: [1, 0, 0] },
+      { centre: [42, 42, 0], u: [1, 0, 0], v: [0, 1, 0], normal: [0, 0, 1] },
+      { centre: [42, 0, 42], u: [1, 0, 0], v: [0, 0, 1], normal: [0, -1, 0] },
+      { centre: [0, 42, 42], u: [0, 1, 0], v: [0, 0, 1], normal: [1, 0, 0] },
     ]);
   });
 
@@ -512,9 +512,9 @@ describe("OriginTiles", () => {
         .toArray()
         .map((n) => Math.round(n * 1e9) / 1e9 + 0);
     expect(PLANES.map(corner)).toEqual([
-      [60 * 0.37, 50 * 0.37, 0].map((n) => Math.round(n * 1e9) / 1e9),
-      [60 * 0.37, 0, 50 * 0.37].map((n) => Math.round(n * 1e9) / 1e9),
-      [0, 60 * 0.37, 50 * 0.37].map((n) => Math.round(n * 1e9) / 1e9),
+      [62 * 0.37, 52 * 0.37, 0].map((n) => Math.round(n * 1e9) / 1e9),
+      [62 * 0.37, 0, 52 * 0.37].map((n) => Math.round(n * 1e9) / 1e9),
+      [0, 62 * 0.37, 52 * 0.37].map((n) => Math.round(n * 1e9) / 1e9),
     ]);
     t.dispose();
   });
@@ -576,7 +576,7 @@ describe("tiles and arrows", () => {
             .distanceTo(new THREE.Vector3(origin.x, origin.y));
         }),
       );
-      expect(off, tile.plane).toBeGreaterThanOrEqual(6);
+      expect(off, tile.plane).toBeGreaterThanOrEqual(7);
     }
     const corner = (k: Plane3) => {
       const { u, v } = tilePose(k, TILE_SHAPE);
@@ -590,7 +590,7 @@ describe("tiles and arrows", () => {
       ["XY", "YZ"],
       ["XZ", "YZ"],
     ] as const) {
-      expect(corner(a).distanceTo(corner(b)), `${a} ${b}`).toBeGreaterThanOrEqual(4);
+      expect(corner(a).distanceTo(corner(b)), `${a} ${b}`).toBeGreaterThanOrEqual(5);
     }
     t.dispose();
   });

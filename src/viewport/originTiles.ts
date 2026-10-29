@@ -36,7 +36,7 @@ export interface TilePose {
 
 // As long as an axis arrow, rounded like a 40 px rail tile with its 17 px corner.
 export const TILE_SIZE_PX = TRIAD_LENGTH_PX;
-export const TILE_GAP_PX = 8;
+export const TILE_GAP_PX = 10;
 /** Only the corner away from the origin is rounded, the other three face the arrows. */
 export const TILE_CORNER_RADIUS_PX = 27;
 export const TILE_OCTANT: Octant = { x: 1, y: 1, z: 1 };
