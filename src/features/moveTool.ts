@@ -477,6 +477,13 @@ export class MoveTool {
     this.commit();
   }
 
+  /** For a save: what was dragged or typed is written as Enter writes it, and the gizmo comes back. A drag still
+   *  under the hand, or a value Enter would refuse, is left alone. */
+  confirmHeld() {
+    if (this.grab || !this.pending || this.typedWithoutHandle()) return;
+    this.commitAndReopen();
+  }
+
   /** A typed value only means something along a handle, so one typed before any handle was picked is refused. */
   private typedWithoutHandle(): string | null {
     const typed = (name: string) => {

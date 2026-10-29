@@ -1,9 +1,9 @@
-import { saveDocument } from "../io/files";
 import { clearRecovery } from "../io/recovery";
 import { choose } from "../ui/choice";
 import { PRODUCT_NAME } from "./channel";
 import type { BeforeInstall } from "../ui/updates";
 import type { Engine } from "./engine";
+import { saveWork, type SaveEngine } from "./documentActions";
 
 const isTauri = () => "__TAURI_INTERNALS__" in window;
 
@@ -13,7 +13,7 @@ export function windowTitle(fileName: string, dirty: boolean): string {
 }
 
 /** Resolves whether to go on; a Save As that was cancelled or failed leaves the document dirty, so that is a no. */
-export async function saveFirst(e: Pick<Engine, "store">, question: string, discardHint: string): Promise<boolean> {
+export async function saveFirst(e: SaveEngine, question: string, discardHint: string): Promise<boolean> {
   if (!e.store.dirty) return true;
   const pick = await choose(question, [
     { value: "save", label: "Save" },
@@ -25,7 +25,7 @@ export async function saveFirst(e: Pick<Engine, "store">, question: string, disc
     return true;
   }
   if (pick !== "save") return false;
-  await saveDocument(e.store);
+  await saveWork(e);
   return !e.store.dirty;
 }
 

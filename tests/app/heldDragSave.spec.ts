@@ -1,0 +1,175 @@
+// A Move drag let go of but not entered is what the user sees, so every save writes it first, as Enter would.
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { createPinia, setActivePinia } from "pinia";
+import * as THREE from "three";
+import { DocumentStore } from "../../src/document/store";
+import { MoveTool } from "../../src/features/moveTool";
+import type { Engine } from "../../src/app/engine";
+import type { Viewport } from "../../src/viewport/viewport";
+import { box, stubBackend } from "../document/storeKit";
+
+const host = vi.hoisted(() => ({ saved: [] as string[], pick: "D:/parts/as.funda" as string | null }));
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: async (cmd: string, args: Record<string, unknown>) => {
+    if (cmd === "container_save") host.saved.push(String(args.documentJson));
+    return undefined;
+  },
+}));
+vi.mock("@tauri-apps/plugin-dialog", () => ({ message: async () => {}, save: async () => host.pick }));
+vi.mock("../../src/ui/toast", () => ({ toast: () => null, dismissToast: () => {} }));
+vi.mock("../../src/io/recentFiles", () => ({ noteRecent() {}, forgetRecent() {}, getRecentFiles: () => [] }));
+
+const { installKeyboard } = await import("../../src/app/keyboard");
+const { buildMenubar } = await import("../../src/app/menubarDef");
+const { createActions } = await import("../../src/app/actions");
+
+let frames: (() => void)[] = [];
+const flushFrame = () => {
+  const run = frames;
+  frames = [];
+  for (const f of run) f();
+};
+const settle = async () => {
+  for (let i = 0; i < 40; i++) await Promise.resolve();
+};
+
+/** Anything not given answers as a no-op, for the many calls made only for looks. */
+function lenient<T>(own: Record<string, unknown>): T {
+  return new Proxy(own, { get: (t, k) => (k in t ? t[k as string] : () => undefined) }) as unknown as T;
+}
+
+/** The ray at y runs along +X at z = y over a body 10 across, so a press at 40 takes the Z arrow and a drag to 60
+ *  lifts the body 20. */
+function fakeViewport(scene: THREE.Scene) {
+  const ray = (y: number) => new THREE.Raycaster(new THREE.Vector3(-200, 0, y), new THREE.Vector3(1, 0, 0));
+  const camera = new THREE.PerspectiveCamera();
+  camera.position.set(0, -500, 0);
+  camera.lookAt(0, 0, 0);
+  camera.updateMatrixWorld(true);
+  return lenient<Viewport>({
+    domElement: document.createElement("canvas"),
+    camera,
+    addToScene: (o: THREE.Object3D) => scene.add(o),
+    removeFromScene: (o: THREE.Object3D) => scene.remove(o),
+    pixelWorldSize: () => 1,
+    rayFrom: (_x: number, y: number) => ray(y),
+    probe: <T>(_x: number, y: number, test: (rc: THREE.Raycaster) => T) => test(ray(y)) || null,
+    projectToScreen: () => ({ x: 0, y: 0 }),
+    snapStep: () => 0.5,
+    modelDiagonal: () => 100,
+    overlayOn: () => true,
+    watchOverlays: () => () => {},
+    bodiesCentroid: () => new THREE.Vector3(),
+    bodiesBox: () => new THREE.Box3(new THREE.Vector3(-5, -5, -5), new THREE.Vector3(5, 5, 5)),
+  });
+}
+
+function pointer(canvas: HTMLElement, type: string, y: number) {
+  canvas.dispatchEvent(new PointerEvent(type, { clientX: 0, clientY: y, button: 0, bubbles: true, cancelable: true }));
+}
+
+const engine = {} as Record<string, unknown>;
+const live = lenient<Engine>(engine);
+let tool: MoveTool;
+let store: DocumentStore;
+let canvas: HTMLElement;
+
+/** A saved document with one body selected, so Move is up over it the way a body selection raises it. */
+function selectBody() {
+  store = new DocumentStore(stubBackend, { parameters: {}, features: [] });
+  store.addFeature(box("plate", 10));
+  store.markSaved("D:/parts/a.funda");
+  const scene = new THREE.Scene();
+  const vp = fakeViewport(scene);
+  canvas = vp.domElement;
+  tool = new MoveTool(vp, store);
+  tool.start(["body1"], () => {});
+  tool.markAmbient();
+  flushFrame();
+  scene.updateMatrixWorld(true);
+  Object.assign(engine, { store, viewport: vp, sketch: { active: false }, tools: { move: tool } });
+}
+
+function dragAndLetGo() {
+  pointer(canvas, "pointerdown", 40);
+  pointer(canvas, "pointermove", 60);
+  pointer(canvas, "pointerup", 60);
+}
+
+const lastSaved = () => JSON.parse(host.saved[host.saved.length - 1]!) as { features: Record<string, unknown>[] };
+const moves = () => lastSaved().features.filter((f) => f.type === "move");
+const fileItem = (label: string) =>
+  buildMenubar(live)
+    .find((m) => m.label === "File")!
+    .items.find((i) => i.label === label)!;
+const key = (shift = false) =>
+  window.dispatchEvent(new KeyboardEvent("keydown", { key: "s", ctrlKey: true, shiftKey: shift, bubbles: true }));
+
+beforeAll(() => {
+  setActivePinia(createPinia());
+  installKeyboard(live);
+});
+beforeEach(() => {
+  host.saved = [];
+  host.pick = "D:/parts/as.funda";
+  frames = [];
+  vi.stubGlobal("requestAnimationFrame", (fn: () => void) => {
+    frames.push(fn);
+    return frames.length;
+  });
+  vi.stubGlobal("cancelAnimationFrame", () => {});
+  (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {};
+  selectBody();
+});
+afterEach(() => {
+  if (tool.active) tool.cancel();
+  delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
+  vi.unstubAllGlobals();
+  document.body.innerHTML = "";
+});
+
+describe("a Move drag let go of but not entered", () => {
+  it("is held, not yet in the document", () => {
+    dragAndLetGo();
+    expect(tool.pending).toBe(true);
+    expect(store.document.features.map((f) => f.type)).toEqual(["box"]);
+  });
+
+  const paths: [string, () => void][] = [
+    ["Ctrl+S", () => key()],
+    ["Ctrl+Shift+S", () => key(true)],
+    ["File, Save", () => fileItem("Save").onClick!()],
+    ["File, Save As", () => fileItem("Save As…").onClick!()],
+    ["the palette's Save", () => createActions(live)("save")],
+    ["the palette's Save As", () => createActions(live)("saveas")],
+  ];
+  it.each(paths)("is written by %s, and the file holds the moved body", async (_name, save) => {
+    dragAndLetGo();
+    save();
+    await vi.waitFor(() => expect(host.saved).toHaveLength(1));
+    expect(moves()).toHaveLength(1);
+    expect(moves()[0]).toMatchObject({ bodies: ["body1"], dx: 0, dy: 0, dz: 20 });
+    expect(tool.pending).toBe(false);
+    expect(store.dirty).toBe(false);
+  });
+
+  it("is left alone by a save made while the handle is still under the hand", async () => {
+    pointer(canvas, "pointerdown", 40);
+    pointer(canvas, "pointermove", 60);
+    key();
+    await settle();
+    expect(moves()).toEqual([]);
+    pointer(canvas, "pointerup", 60);
+    expect(tool.pending).toBe(true);
+  });
+});
+
+describe("with nothing held", () => {
+  it("Ctrl+S saves the document as it was and leaves the gizmo up", async () => {
+    key();
+    await settle();
+    expect(host.saved).toHaveLength(1);
+    expect(lastSaved().features.map((f) => f.type)).toEqual(["box"]);
+    expect(tool.active).toBe(true);
+  });
+});

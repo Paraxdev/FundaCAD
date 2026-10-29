@@ -1,4 +1,5 @@
-import { saveDocument, saveDocumentAs, exportSelection, importModel } from "../io/files";
+import { exportSelection, importModel } from "../io/files";
+import { saveWork, saveWorkAs } from "./documentActions";
 import { contributedMenus } from "../plugins/contrib";
 import { toggleShortcutHUD } from "../input/shortcuts";
 import { checkForUpdates, showAbout } from "../ui/updates";
@@ -67,8 +68,8 @@ export function buildMenubar(e: Engine): MenuDef[] {
         { separator: true, label: "" },
         { label: "Import Mesh…", onClick: () => void importModel(e.store, e.geometry) },
         { separator: true, label: "" },
-        { label: "Save", shortcut: "Ctrl+S", onClick: () => void saveDocument(e.store) },
-        { label: "Save As…", shortcut: "Ctrl+Shift+S", onClick: () => void saveDocumentAs(e.store) },
+        { label: "Save", shortcut: "Ctrl+S", onClick: () => void saveWork(e) },
+        { label: "Save As…", shortcut: "Ctrl+Shift+S", onClick: () => void saveWorkAs(e) },
         { separator: true, label: "" },
         { label: "Export…", shortcut: "Ctrl+E", onClick: () => void exportSelection(e.store, e.geometry, e.viewport) },
       ],

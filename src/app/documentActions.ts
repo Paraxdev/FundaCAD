@@ -1,4 +1,11 @@
-import { openDocument, openDocumentAtPath, openTemplate, type OpenOutcome } from "../io/files";
+import {
+  openDocument,
+  openDocumentAtPath,
+  openTemplate,
+  saveDocument,
+  saveDocumentAs,
+  type OpenOutcome,
+} from "../io/files";
 import { choose } from "../ui/choice";
 import type { Engine } from "./engine";
 import { TEMPLATES, templateText } from "../templates";
@@ -12,6 +19,23 @@ type WorkEngine = Pick<Engine, "store" | "sketch"> & Partial<Pick<Engine, "tools
  *  `store.dirty` alone misses them. */
 export function hasUnsavedWork(e: WorkEngine): boolean {
   return e.store.dirty || e.sketch.hasUncommittedEdits || !!e.tools?.move.pending;
+}
+
+/** A save writes what the user sees, so a Move drag let go of but not entered is written first, as Enter would. */
+export function settleHeldEdit(e: Partial<Pick<Engine, "tools">>): void {
+  e.tools?.move.confirmHeld();
+}
+
+export type SaveEngine = Pick<Engine, "store"> & Partial<Pick<Engine, "tools">>;
+
+export async function saveWork(e: SaveEngine): Promise<void> {
+  settleHeldEdit(e);
+  await saveDocument(e.store);
+}
+
+export async function saveWorkAs(e: SaveEngine): Promise<void> {
+  settleHeldEdit(e);
+  await saveDocumentAs(e.store);
 }
 
 export async function mayDiscard(e: WorkEngine, question: string): Promise<boolean> {
