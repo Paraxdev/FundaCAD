@@ -296,13 +296,17 @@ export class Highlighter {
       this.selectLines.delete(draw);
     }
     if (!this.paintShown) return;
+    let draws = only;
+    if (!draws) {
+      const all = new Set<BodyEdges>();
+      for (const e of this.selectedEdges) if (pickLineFits(e)) all.add(e.draw);
+      draws = all;
+    }
+    // A draw's line lists its edges in the draw's order, so a box frame redoes it from that draw's edges alone.
     const byDraw = new Map<BodyEdges, EdgeRef[]>();
-    for (const e of this.selectedEdges) {
-      if (only && !only.has(e.draw)) continue;
-      if (this.errorEdges.has(e) || !pickLineFits(e)) continue;
-      const list = byDraw.get(e.draw) ?? [];
-      list.push(e);
-      byDraw.set(e.draw, list);
+    for (const draw of draws) {
+      const edges = draw.refs.filter((e) => this.selectedEdges.has(e) && !this.errorEdges.has(e) && pickLineFits(e));
+      if (edges.length) byDraw.set(draw, edges);
     }
     for (const [draw, edges] of byDraw) {
       const parts = edges.map((e) => segmentPositions(e.points));
@@ -453,6 +457,8 @@ export class Highlighter {
   /** Kept by key once taken down, since every pointer move clears the hover and sets it again. */
   private overlays: Record<PickKind, PickOverlay | null> = { hover: null, select: null };
   private selectOverlayQueued = false;
+  /** Bodies whose selected faces changed since the shown select overlay was built, null when any may have. */
+  private overlayMoved: Set<string> | null = null;
   private disposed = false;
 
   private bodyById(bodyId: string): BodyMesh | undefined {
@@ -534,7 +540,9 @@ export class Highlighter {
   }
 
   /** A box select adds faces one at a time, so the selected overlay is rebuilt once after the batch. */
-  private queueSelectOverlay() {
+  private queueSelectOverlay(moved?: ReadonlySet<string>) {
+    if (!moved) this.overlayMoved = null;
+    else if (this.overlayMoved) for (const b of moved) this.overlayMoved.add(b);
     if (this.selectOverlayQueued) return;
     this.selectOverlayQueued = true;
     queueMicrotask(() => this.runSelectOverlay());
@@ -543,7 +551,7 @@ export class Highlighter {
   private runSelectOverlay() {
     if (!this.selectOverlayQueued) return;
     this.selectOverlayQueued = false;
-    if (!this.disposed) this.syncOverlay("select");
+    if (!this.disposed) this.syncOverlay("select", this.overlayMoved ?? undefined);
   }
 
   /** Builds the overlay and wide lines queued in this task now, for a render loop about to draw the frame. */
@@ -552,7 +560,39 @@ export class Highlighter {
     this.runEdgeLines();
   }
 
-  private syncOverlay(kind: PickKind) {
+  private syncOverlay(kind: PickKind, moved?: ReadonlySet<string>) {
+    if (kind === "hover") return this.buildOverlay("hover");
+    const cur = this.overlays.select;
+    if (moved && cur?.shown && this.selectedFaces.size && this.paintShown) this.patchSelectOverlay(cur, moved);
+    else this.buildOverlay("select");
+    this.overlayMoved = this.overlays.select?.shown ? new Set() : null;
+  }
+
+  /** A box frame moves a few bodies' faces, so only their meshes are built again, in the order a full build keeps. */
+  private patchSelectOverlay(cur: PickOverlay, moved: ReadonlySet<string>) {
+    if (!moved.size) return;
+    const next: PickOverlay = { key: "", meshes: [], shown: false };
+    for (const m of cur.meshes) {
+      if (moved.has(m.userData.body as string)) disposeFaceHoverOverlay(m);
+      else next.meshes.push(m);
+    }
+    for (const id of moved) {
+      const body = this.bodyById(id);
+      if (!body) continue;
+      const fids: number[] = [];
+      for (let f = body.faceStart; f < body.faceStart + body.faceCount; f++) {
+        if (this.selectedFaces.has(f) && body.faceTriangles.has(f)) fids.push(f);
+      }
+      const mesh = fids.length ? this.overlayMesh(body, fids, "select") : null;
+      if (mesh) next.meshes.push(mesh);
+    }
+    const start = (m: THREE.Mesh) => this.bodyById(m.userData.body as string)?.faceStart ?? 0;
+    next.meshes.sort((a, b) => start(a) - start(b));
+    this.overlays.select = next;
+    this.showOverlay(next, true);
+  }
+
+  private buildOverlay(kind: PickKind) {
     const faces =
       kind === "hover"
         ? this.hoveredFaces.filter((f) => !this.selectedFaces.has(f))
@@ -587,36 +627,41 @@ export class Highlighter {
         old.delete(body.id);
         continue;
       }
-      const pos = body.mesh.geometry.getAttribute("position");
-      const index = body.mesh.geometry.getIndex();
-      if (!pos || !index) continue;
-      let n = 0;
-      for (const f of fids) n += body.faceTriangles.get(f)!.length;
-      const out = new Float32Array(n * 9);
-      const col = new Float32Array(n * 9);
-      let o = 0;
-      for (const f of fids) {
-        const c = this.faceColour(f, kind);
-        for (const t of body.faceTriangles.get(f)!) {
-          for (let k = 0; k < 3; k++) {
-            const v = index.getX(t * 3 + k);
-            col[o] = c.r;
-            col[o + 1] = c.g;
-            col[o + 2] = c.b;
-            out[o++] = pos.getX(v);
-            out[o++] = pos.getY(v);
-            out[o++] = pos.getZ(v);
-          }
-        }
-      }
-      const mesh = makeFaceHoverOverlay(out, col, kind);
-      mesh.userData.body = body.id;
-      mesh.userData.key = bodyKey;
-      next.meshes.push(mesh);
+      const mesh = this.overlayMesh(body, fids, kind);
+      if (mesh) next.meshes.push(mesh);
     }
     for (const m of old.values()) disposeFaceHoverOverlay(m);
     this.overlays[kind] = next;
     this.showOverlay(next, true);
+  }
+
+  private overlayMesh(body: BodyMesh, fids: number[], kind: PickKind): THREE.Mesh | null {
+    const pos = body.mesh.geometry.getAttribute("position");
+    const index = body.mesh.geometry.getIndex();
+    if (!pos || !index) return null;
+    let n = 0;
+    for (const f of fids) n += body.faceTriangles.get(f)!.length;
+    const out = new Float32Array(n * 9);
+    const col = new Float32Array(n * 9);
+    let o = 0;
+    for (const f of fids) {
+      const c = this.faceColour(f, kind);
+      for (const t of body.faceTriangles.get(f)!) {
+        for (let k = 0; k < 3; k++) {
+          const v = index.getX(t * 3 + k);
+          col[o] = c.r;
+          col[o + 1] = c.g;
+          col[o + 2] = c.b;
+          out[o++] = pos.getX(v);
+          out[o++] = pos.getY(v);
+          out[o++] = pos.getZ(v);
+        }
+      }
+    }
+    const mesh = makeFaceHoverOverlay(out, col, kind);
+    mesh.userData.body = body.id;
+    mesh.userData.key = fids.join(",");
+    return mesh;
   }
 
   private dropOverlay(kind: PickKind) {
@@ -703,12 +748,16 @@ export class Highlighter {
     edges: ReadonlySet<EdgeRef>;
     bodies: ReadonlySet<string>;
   }): boolean {
-    const dropFaces = [...this.selectedFaces].filter((f) => !want.faces.has(f));
-    const addFaces = [...want.faces].filter((f) => !this.selectedFaces.has(f));
-    const dropEdges = [...this.selectedEdges].filter((e) => !want.edges.has(e));
-    const addEdges = [...want.edges].filter((e) => !this.selectedEdges.has(e));
-    const flipBodies = [...this.selectedBodies].filter((b) => !want.bodies.has(b));
-    for (const b of want.bodies) if (!this.selectedBodies.has(b)) flipBodies.push(b);
+    const minus = <T>(a: ReadonlySet<T>, b: ReadonlySet<T>) => {
+      const out: T[] = [];
+      for (const x of a) if (!b.has(x)) out.push(x);
+      return out;
+    };
+    const dropFaces = minus(this.selectedFaces, want.faces);
+    const addFaces = minus(want.faces, this.selectedFaces);
+    const dropEdges = minus(this.selectedEdges, want.edges);
+    const addEdges = minus(want.edges, this.selectedEdges);
+    const flipBodies = minus(this.selectedBodies, want.bodies).concat(minus(want.bodies, this.selectedBodies));
     if (!dropFaces.length && !addFaces.length && !dropEdges.length && !addEdges.length && !flipBodies.length) {
       return false;
     }
@@ -743,15 +792,19 @@ export class Highlighter {
       const body = e.body && movedBodies.has(e.body) ? this.bodyById(e.body) : undefined;
       return body !== undefined && this.facesBeside(body, e).some((f) => moved.has(f));
     };
-    const scan = moved.size ? this.selectedEdges : fresh;
-    for (const e of scan) if (!this.errorEdges.has(e) && (fresh.has(e) || beside(e))) this.tint(e, "select");
+    for (const e of fresh) if (!this.errorEdges.has(e)) this.tint(e, "select");
+    for (const id of movedBodies) {
+      for (const e of this.bodyById(id)?.edges.refs ?? []) {
+        if (this.selectedEdges.has(e) && !fresh.has(e) && !this.errorEdges.has(e) && beside(e)) this.tint(e, "select");
+      }
+    }
     if (hov && !this.selectedEdges.has(hov) && !this.errorEdges.has(hov) && (hovWas || (moved.size && beside(hov)))) {
       this.tint(hov, "hover");
     }
     if (moved.size) {
       this.faceBodies = null;
       this.syncOverlay("hover");
-      this.queueSelectOverlay();
+      this.queueSelectOverlay(movedBodies);
     }
     for (const b of flipBodies) this.toggleSelectBody(b);
     // The starters read the order, a Boolean targets the first body, so it is the take's and not the drag path's.

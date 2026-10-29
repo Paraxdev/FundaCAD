@@ -161,6 +161,38 @@ describe("box delta end state", () => {
     h.dispose();
   });
 
+  it("reads none of the faces or edges of the bodies a box frame did not change", () => {
+    const rig = bodiesRig(40, 6);
+    const h = new Highlighter(rig.view);
+    const upTo = (n: number) =>
+      take(
+        Array.from({ length: n * 6 }, (_, f) => f),
+        rig.draws.slice(0, n).flatMap((d) => d.refs),
+      );
+    h.setSelection(upTo(39));
+    h.settle();
+    const reads = { faces: 0, edges: 0 };
+    for (const b of rig.bodies.slice(0, 39)) {
+      const tris = b.faceTriangles;
+      for (const name of ["get", "has", "keys", "entries", "forEach"] as const) {
+        const own = tris[name].bind(tris) as (...a: unknown[]) => unknown;
+        Object.defineProperty(tris, name, { value: (...a: unknown[]) => (reads.faces++, own(...a)) });
+      }
+    }
+    for (const e of rig.draws.slice(0, 39).flatMap((d) => d.refs)) {
+      for (const name of ["draw", "body", "points"] as const) {
+        const value = e[name];
+        Object.defineProperty(e, name, { get: () => (reads.edges++, value) });
+      }
+    }
+    h.setSelection(upTo(40));
+    h.settle();
+    expect(reads).toEqual({ faces: 0, edges: 0 });
+    const end = painted(h, rig);
+    expect([end.selectOverlay.length, end.lines.length]).toEqual([40, 40]);
+    h.dispose();
+  });
+
   it("builds the queued overlay and wide lines at once for a render loop about to draw the frame", async () => {
     const a = bodiesRig(2, 12);
     const b = bodiesRig(2, 12);
