@@ -124,5 +124,16 @@ class WriteRoot(unittest.TestCase):
             bv.write_root(out, SITE, ["beta", "dev"], "beta")
 
 
+class DevBanner(unittest.TestCase):
+    # The theme shows the outdated block on every version but the default, and a click on a link to another
+    # version's root keeps the current page, so the link must be exactly that root.
+    def test_the_banner_names_the_dev_build_and_links_the_beta_root(self):
+        main = (REPO / "manual" / "overrides" / "main.html").read_text(encoding="utf-8")
+        start = main.index("{% block outdated %}")
+        block = main[start : main.index("{% endblock %}", start)]
+        self.assertIn("FundaCAD Dev", block)
+        self.assertIn('href="{{ base_url }}/../beta/"', block)
+
+
 if __name__ == "__main__":
     unittest.main()
