@@ -21,6 +21,13 @@ const KEY = "fundacad.plugins";
 const ID = "FundaCAD.Printing";
 const OTHER = "FundaCAD.SpaceMouse";
 
+const host = vi.hoisted(() => ({ invoked: [] as { cmd: string; args: unknown }[] }));
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: async (cmd: string, args: unknown) => {
+    host.invoked.push({ cmd, args });
+  },
+}));
+
 async function load(stored?: Record<string, string>) {
   localStorage.clear();
   for (const [k, v] of Object.entries(stored ?? {})) localStorage.setItem(k, v);
@@ -149,5 +156,38 @@ describe("asDisabledSet", () => {
     expect([...asDisabledSet(42)]).toEqual([]);
     // The control: it is not simply returning empty for everything.
     expect(asDisabledSet([ID]).has(ID)).toBe(true);
+  });
+});
+
+describe("what the engine is told", () => {
+  // The engine runs outside this window and cannot read its storage, so without a copy on disk a plugin switched
+  // off here would still build its features there.
+  const win = window as unknown as Record<string, unknown>;
+  beforeEach(() => {
+    host.invoked = [];
+  });
+  afterEach(() => {
+    delete win.__TAURI_INTERNALS__;
+  });
+
+  it("gets the off set at startup and after every change, in order", async () => {
+    win.__TAURI_INTERNALS__ = {};
+    const m = await load({ [KEY]: JSON.stringify([OTHER]) });
+    m.setPluginEnabled(ID, false);
+    m.setPluginEnabled(ID, false);
+    m.setPluginEnabled(OTHER, true);
+    await vi.waitFor(() => expect(host.invoked).toHaveLength(3));
+    expect(host.invoked).toEqual([
+      { cmd: "plugin_set_disabled", args: { ids: [OTHER] } },
+      { cmd: "plugin_set_disabled", args: { ids: [ID, OTHER] } },
+      { cmd: "plugin_set_disabled", args: { ids: [ID] } },
+    ]);
+  });
+
+  it("is not called in a plain browser session, which has no engine of its own", async () => {
+    const m = await load();
+    m.setPluginEnabled(ID, false);
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+    expect(host.invoked).toEqual([]);
   });
 });

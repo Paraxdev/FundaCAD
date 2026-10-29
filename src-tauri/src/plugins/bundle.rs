@@ -102,7 +102,8 @@ pub struct BundleTarget {
 }
 
 pub fn bundle_target(raw: &str) -> Result<BundleTarget, String> {
-    let refused = || format!("a plugin can only be downloaded over https from a named host, and that is not one: {raw}");
+    let refused =
+        || format!("a plugin can only be downloaded over https from a named host, and that is not one: {raw}");
     if !allowed_bundle_url(raw) {
         return Err(refused());
     }

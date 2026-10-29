@@ -409,3 +409,23 @@ pub fn plugin_remove(app: AppHandle, id: String) -> Result<(), String> {
     }
     std::fs::remove_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))
 }
+
+/// Read by crates/fundacad-geom/src/plugins, which cannot see the window's storage. The underscore keeps it from
+/// being any plugin's directory name.
+pub const DISABLED: &str = "disabled_ids.json";
+
+/// The ids switched off in the window, sorted, written whole and then renamed into place. An id that could not be a
+/// plugin's is dropped.
+pub fn write_disabled(root: &Path, ids: &[String]) -> Result<(), String> {
+    let ids: std::collections::BTreeSet<&str> = ids.iter().filter_map(|id| safe_id(id).ok()).collect();
+    let text = serde_json::to_string(&ids).map_err(|e| e.to_string())?;
+    let path = root.join(DISABLED);
+    let tmp = root.join(format!("{DISABLED}.tmp"));
+    std::fs::write(&tmp, text).map_err(|e| format!("{}: {e}", tmp.display()))?;
+    std::fs::rename(&tmp, &path).map_err(|e| format!("{}: {e}", path.display()))
+}
+
+#[tauri::command]
+pub fn plugin_set_disabled(app: AppHandle, ids: Vec<String>) -> Result<(), String> {
+    write_disabled(&plugins_root(&app)?, &ids)
+}

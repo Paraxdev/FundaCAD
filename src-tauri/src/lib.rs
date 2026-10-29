@@ -426,6 +426,7 @@ pub fn run() {
         plugins::plugin_entry,
         plugins::plugin_code,
         plugins::plugin_remove,
+        plugins::plugin_set_disabled,
         plugins::files::plugin_file_pick,
         plugins::files::plugin_file_read,
         plugins::files::plugin_file_write,

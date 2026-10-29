@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use fundacad_geom::plugins::{discovered_ids, plugin_root, PluginRoot};
+use fundacad_lib::plugins::{write_disabled, DISABLED};
 use serde_json::json;
 
 fn temp_root(tag: &str) -> PathBuf {
@@ -71,4 +72,40 @@ fn only_the_checkout_plugins_dir_is_read_without_records() {
     let decided = plugin_root(elsewhere.clone());
     let _ = std::fs::remove_dir_all(&elsewhere);
     assert!(decided.records);
+}
+
+#[test]
+fn a_plugin_switched_off_in_the_window_is_not_loaded_by_the_engine() {
+    let root = temp_root("disabled");
+    let checkout = temp_root("disabled-checkout");
+    installed(&root, "Some.Plugin", "Some.Plugin", &[]);
+    installed(&root, "Other.Plugin", "Other.Plugin", &[]);
+    put_plugin(&checkout, "Some.Plugin", "Some.Plugin", &[]);
+    let roots = [PluginRoot { dir: root.clone(), records: true }, PluginRoot { dir: checkout.clone(), records: false }];
+
+    write_disabled(&root, &["Some.Plugin".into()]).unwrap();
+    let off = discovered_ids(&roots);
+    write_disabled(&root, &[]).unwrap();
+    let on = discovered_ids(&roots);
+    std::fs::write(root.join(DISABLED), "{not json").unwrap();
+    let unreadable = discovered_ids(&roots);
+    let _ = std::fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&checkout);
+
+    assert_eq!(off, ["Other.Plugin"]);
+    assert_eq!(on, ["Other.Plugin", "Some.Plugin"]);
+    assert_eq!(unreadable, ["Other.Plugin", "Some.Plugin"]);
+}
+
+#[test]
+fn the_switched_off_list_is_sorted_and_holds_only_plugin_ids() {
+    let root = temp_root("disabled-list");
+    let ids = ["Zed.Plugin", "../escape", "Alpha", "", "Zed.Plugin", ".staging-x"].map(String::from);
+    write_disabled(&root, &ids).unwrap();
+    let text = std::fs::read_to_string(root.join(DISABLED)).unwrap();
+    let left: Vec<String> =
+        std::fs::read_dir(&root).unwrap().map(|e| e.unwrap().file_name().into_string().unwrap()).collect();
+    let _ = std::fs::remove_dir_all(&root);
+    assert_eq!(text, r#"["Alpha","Zed.Plugin"]"#);
+    assert_eq!(left, [DISABLED]);
 }

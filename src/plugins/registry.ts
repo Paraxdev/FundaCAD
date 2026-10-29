@@ -8,6 +8,20 @@ const KEY = "fundacad.plugins";
 /** A set, not a map of booleans: "on" is the absence of an entry, so it has only one representation. */
 let off: ReadonlySet<string> = read();
 const listeners = new Set<() => void>();
+let synced: Promise<void> = Promise.resolve();
+
+/** The engine cannot read this window's storage, so the set is copied to the plugins root for it, in order. */
+function tellEngine(set: ReadonlySet<string>): void {
+  if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) return;
+  const ids = [...set].sort();
+  synced = synced
+    .then(async () => {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("plugin_set_disabled", { ids });
+    })
+    .catch((e: unknown) => console.warn("the engine was not told which plugins are off:", e));
+}
+tellEngine(off);
 
 /** Accepts a list of ids, or the older `{id: boolean}` map still in people's storage, where `false` means off.
  *  The next write saves the new shape. */
@@ -54,6 +68,7 @@ export function setPluginEnabled(id: string, value: boolean): void {
   } catch {
     /* private mode / no storage: the choice just does not survive the session */
   }
+  tellEngine(next);
   for (const fn of listeners) fn();
 }
 

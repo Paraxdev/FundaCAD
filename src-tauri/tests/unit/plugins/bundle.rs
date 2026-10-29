@@ -261,7 +261,10 @@ fn the_url_fetched_is_the_one_stored_and_labelled() {
     assert_eq!(target.url.as_str(), third_party);
     assert!(!target.official);
 
-    for bad in ["http://github.com/Paraxdev/fundacad/releases/download/beta/x.zip", "https://github.com@evil.example.com/x.zip"] {
+    for bad in [
+        "http://github.com/Paraxdev/fundacad/releases/download/beta/x.zip",
+        "https://github.com@evil.example.com/x.zip",
+    ] {
         assert!(bundle_target(bad).is_err(), "fetchable: {bad}");
     }
 }
