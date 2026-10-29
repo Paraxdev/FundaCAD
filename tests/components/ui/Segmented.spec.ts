@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 
 import Segmented from "../../../src/components/ui/Segmented.vue";
@@ -120,6 +120,7 @@ describe("Segmented", () => {
   it("puts an option's attrs on its button, under the group's own role and state", () => {
     const w = mount(Segmented<V>, {
       props: {
+        label: "Units",
         modelValue: "mm",
         options: [
           { value: "mm", label: "mm", attrs: { "data-unit": "mm", role: "button" } },
@@ -134,5 +135,17 @@ describe("Segmented", () => {
       "true",
     ]);
     expect(cm!.attributes("data-unit")).toBeUndefined();
+  });
+
+  it("names the group by labelledby alone when given one", () => {
+    const w = mount(Segmented<V>, { props: { labelledby: "units-head", modelValue: "mm", options: units() } });
+    expect([w.attributes("aria-label"), w.attributes("aria-labelledby")]).toEqual([undefined, "units-head"]);
+  });
+
+  it("warns in a dev build when it has no name", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    mount(Segmented<V>, { props: { modelValue: "mm", options: units() } as never });
+    expect(warn.mock.calls.some((c) => String(c[0]).includes("Segmented has no name"))).toBe(true);
+    warn.mockRestore();
   });
 });

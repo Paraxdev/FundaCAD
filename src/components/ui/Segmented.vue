@@ -3,6 +3,7 @@ import { computed, ref } from "vue";
 import Icon from "../shell/Icon.vue";
 import { fmtKeys } from "../../input/platform";
 import { useDisabled } from "./useDisabled";
+import { useName, type Named } from "./useName";
 import { useRovingFocus } from "./useRovingFocus";
 
 export interface SegmentedOption<V> {
@@ -17,23 +18,24 @@ export interface SegmentedOption<V> {
 }
 
 const props = withDefaults(
-  defineProps<{
-    modelValue: T;
-    options: readonly SegmentedOption<T>[];
-    /** The group's accessible name. */
-    label?: string | undefined;
-    size?: "sm" | "md";
-    /** `chips` is the Render dock look: separate chips instead of one joined bar. */
-    variant?: "bar" | "chips";
-    iconOnly?: boolean;
-    disabled?: boolean;
-    disabledReason?: string | undefined;
-  }>(),
+  defineProps<
+    {
+      modelValue: T;
+      options: readonly SegmentedOption<T>[];
+      size?: "sm" | "md";
+      /** `chips` is the Render dock look: separate chips instead of one joined bar. */
+      variant?: "bar" | "chips";
+      iconOnly?: boolean;
+      disabled?: boolean;
+      disabledReason?: string | undefined;
+    } & Named
+  >(),
   { size: "md", variant: "bar", iconOnly: false, disabled: false },
 );
 const emit = defineEmits<{ "update:modelValue": [T] }>();
 defineSlots<{ option?(p: { option: SegmentedOption<T>; selected: boolean }): unknown }>();
 
+const name = useName(props, "Segmented");
 const d = useDisabled(props);
 const root = ref<HTMLElement | null>(null);
 const selected = computed(() => props.options.findIndex((o) => o.value === props.modelValue));
@@ -61,8 +63,7 @@ const tipOf = (o: SegmentedOption<T>) => {
     role="radiogroup"
     class="ui-segmented"
     :class="[`ui-segmented-${size}`, `ui-segmented-${variant}`, { 'ui-segmented-icon': iconOnly }]"
-    v-bind="d.bind.value"
-    :aria-label="label"
+    v-bind="{ ...d.bind.value, ...name }"
     :title="d.title(undefined)"
     @keydown="onKeydown"
   >

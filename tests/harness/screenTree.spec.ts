@@ -106,6 +106,7 @@ describe("walkControls", () => {
   it("flags the picked choice of a choice group as on", () => {
     const group = mount(Segmented, {
       props: {
+        label: "Units",
         options: [
           { value: "mm", label: "Millimetres" },
           { value: "in", label: "Inches" },
