@@ -12,6 +12,8 @@ const props = defineProps<
       disabled?: boolean | undefined;
       /** Greyed but still answers a click. */ clickable?: boolean | undefined;
       title?: string | undefined;
+      /** The option's own shortcut in aria-keyshortcuts form, such as "Control+Shift+F". */
+      keyshortcuts?: string | undefined;
     }[];
     modelValue: T | null;
     /** Set by a combobox that keeps focus itself (Select): the highlighted row, and no row takes focus. Left out, the
@@ -65,14 +67,17 @@ function hover(i: number) {
       :tabindex="driven ? -1 : roving.tabindex(i)"
       :aria-selected="o.value === modelValue"
       :aria-disabled="o.disabled || undefined"
+      :aria-keyshortcuts="o.keyshortcuts"
       :title="o.title"
       @focus="roving.onFocus(i)"
       @pointermove="hover(i)"
       @mousedown="driven && $event.preventDefault()"
       @click="pick(o)"
     >
-      <span class="opt-label">{{ o.label }}</span>
-      <span v-if="o.hint" class="opt-hint">{{ o.hint }}</span>
+      <slot :option="o" :index="i" :selected="o.value === modelValue" :active="driven && i === active">
+        <span class="opt-label">{{ o.label }}</span>
+        <span v-if="o.hint" class="opt-hint">{{ o.hint }}</span>
+      </slot>
     </button>
   </div>
 </template>

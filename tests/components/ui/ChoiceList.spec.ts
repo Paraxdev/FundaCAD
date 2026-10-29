@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { enableAutoUnmount, mount } from "@vue/test-utils";
+import { h } from "vue";
 
 import ChoiceList from "../../../src/components/ui/ChoiceList.vue";
 
@@ -74,6 +75,25 @@ describe("ChoiceList", () => {
     expect([w.attributes("aria-label"), w.attributes("aria-labelledby")]).toEqual(["Fruit", undefined]);
     const by = (await render({ label: undefined, labelledby: "fruit-head" })).w;
     expect([by.attributes("aria-label"), by.attributes("aria-labelledby")]).toEqual([undefined, "fruit-head"]);
+  });
+
+  it("draws each row through the default slot when given one, the label and hint otherwise", async () => {
+    const w = mount(ChoiceList<V>, {
+      props: { options: OPTIONS.slice(0, 2), modelValue: "a", label: "Fruit", active: 1, id: "f" },
+      slots: {
+        default: (s: { option: { label: string }; index: number; selected: boolean; active: boolean }) =>
+          h("i", `${s.option.label} ${s.index} ${s.selected} ${s.active}`),
+      } as never,
+    });
+    expect(w.findAll(".opt-row i").map((r) => r.text())).toEqual(["Alpha 0 true false", "Beta 1 false true"]);
+    const plain = (await render()).rows[0]!;
+    expect(plain.find(".opt-label").text()).toBe("Alpha");
+  });
+
+  it("puts an option's keyshortcuts on its row as aria-keyshortcuts", async () => {
+    const { rows } = await render({ options: [{ value: "a", label: "Alpha", keyshortcuts: "Control+K" }] });
+    expect(rows[0]!.attributes("aria-keyshortcuts")).toBe("Control+K");
+    expect((await render()).rows[0]!.attributes("aria-keyshortcuts")).toBeUndefined();
   });
 
   it("warns in a dev build when it has no name", () => {
