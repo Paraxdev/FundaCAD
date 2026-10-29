@@ -9,9 +9,9 @@ Bring parts from other programs in as bodies, and drawings in as sketches.
 
 You can also drop files onto the window, several come in one after another. File > Open… takes the same formats.
 
-From Home, the file goes into the blank document and gives it its name. If the document behind Home holds work, FundaCAD asks whether to add the file to it or start a new document.
+![An imported STEP assembly with one body per part](../img/import-step.png)
 
-<!-- shot: import-step | imported STEP parts listed as bodies -->
+From Home, the file starts a new document named after it. If the document behind Home holds work, FundaCAD asks whether to add the file to it.
 
 ## Formats
 
