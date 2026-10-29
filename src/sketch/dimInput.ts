@@ -889,7 +889,7 @@ export class DimInput {
     if (e.key === "Tab") {
       if (!this.moveFocus(b, e.shiftKey)) return;
     } else if (b.classList.contains("dim-ok") || b.classList.contains("dim-no")) {
-      // Their own click acts on Enter and Space; kept from the window so a tool's Enter does not act as well.
+      // Their own click acts on Enter and Space. This stops the bubble listeners; capture ones ask isBoxButtonKey.
       if (e.key === "Enter" || e.key === " ") e.stopPropagation();
       return;
     } else if (group && e.key in arrows) {

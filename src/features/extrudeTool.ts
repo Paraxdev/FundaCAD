@@ -10,7 +10,7 @@ import type { Feature } from "../types";
 import { pointInRegion } from "../sketch/region";
 import { DimInput } from "../sketch/dimInput";
 import { escapeClaimed } from "../ui/escapeClaim";
-import { isMenuKey } from "../ui/focus";
+import { isBoxButtonKey, isMenuKey } from "../ui/focus";
 import { setPrompt } from "../ui/prompt";
 import { snap } from "../ui/units";
 import {
@@ -442,7 +442,7 @@ export class ExtrudeTool {
       this.updatePreview();
       return;
     }
-    if (isMenuKey(e) || (e.key === "Escape" && escapeClaimed())) return;
+    if (isMenuKey(e) || isBoxButtonKey(e) || (e.key === "Escape" && escapeClaimed())) return;
     if (this.dim.isActive && e.target instanceof HTMLInputElement) {
       if (e.key === "Escape") this.cancel();
       return;
