@@ -137,7 +137,8 @@ function place() {
     const el = open[i]!.el;
     const { style } = el;
     style.top = `${s.top}px`;
-    style.right = `${Math.round(area.right - free.right)}px`;
+    // Fixed, so right counts from the viewport edge, not the layer, which ends at the Render dock.
+    style.right = `${Math.round(document.documentElement.clientWidth - free.right)}px`;
     style.maxHeight = s.maxHeight === null ? "" : `${s.maxHeight}px`;
     el.toggleAttribute("data-capped", s.maxHeight !== null && !s.folded);
     el.toggleAttribute("data-folded", !!s.folded);
@@ -168,6 +169,9 @@ export const panelStack = {
     el.addEventListener("click", entry.onClick);
     observer?.observe(el);
     for (const c of document.querySelectorAll(RIGHT_CARDS)) observer?.observe(c);
+    // The Render dock narrows the layer and moves the cards without resizing them.
+    const layer = document.getElementById("float-layer");
+    if (layer) observer?.observe(layer);
     place();
   },
   remove(id: string) {

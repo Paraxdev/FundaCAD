@@ -1,0 +1,92 @@
+import { afterEach, describe, expect, it } from "vitest";
+import { panelStack } from "../../src/ui/panelStack";
+
+const observers: RO[] = [];
+class RO {
+  targets = new Set<Element>();
+  constructor(private cb: () => void) {
+    observers.push(this);
+  }
+  observe(el: Element) {
+    this.targets.add(el);
+  }
+  unobserve(el: Element) {
+    this.targets.delete(el);
+  }
+  disconnect() {
+    this.targets.clear();
+  }
+}
+(globalThis as unknown as { ResizeObserver: typeof RO }).ResizeObserver = RO;
+
+/** Fires the resize callback of each observer that watches `el`, and says whether any did. */
+function resized(el: Element): boolean {
+  const on = observers.filter((o) => o.targets.has(el));
+  for (const o of on) o["cb"]();
+  return on.length > 0;
+}
+
+const VIEWPORT = 1440;
+const DOCK = 340;
+const CARD = 260;
+Object.defineProperty(document.documentElement, "clientWidth", { configurable: true, get: () => VIEWPORT });
+
+const frame = () => new Promise((r) => requestAnimationFrame(r));
+
+/** The float layer with one right card, ending `right` px from the left of the window. */
+function layer(right: { at: number }) {
+  const el = document.createElement("div");
+  el.id = "float-layer";
+  el.getBoundingClientRect = () => ({ left: 0, right: right.at, top: 0, bottom: 900 }) as DOMRect;
+  const col = document.createElement("div");
+  col.className = "float-right";
+  const card = document.createElement("div");
+  card.getBoundingClientRect = () => ({ left: right.at - CARD, right: right.at, top: 12, bottom: 600 }) as DOMRect;
+  col.append(card);
+  el.append(col);
+  document.body.append(el);
+  return { el, cardLeft: () => right.at - CARD };
+}
+
+function panel() {
+  const el = document.createElement("div");
+  for (const k of ["scrollHeight", "offsetHeight", "clientHeight"]) Object.defineProperty(el, k, { get: () => 200 });
+  document.body.append(el);
+  return el;
+}
+
+const leftOf = (el: HTMLElement) => VIEWPORT - parseFloat(el.style.right);
+
+afterEach(() => {
+  for (const id of panelStack.ids()) panelStack.remove(id);
+  document.body.replaceChildren();
+  observers.length = 0;
+});
+
+describe("the panel column follows the float layer", () => {
+  it("moves an open panel clear of the cards when the Render dock narrows the layer", async () => {
+    const right = { at: VIEWPORT };
+    const { el: layerEl, cardLeft } = layer(right);
+    const p = panel();
+    panelStack.add("stress", p);
+    expect(leftOf(p)).toBeLessThanOrEqual(cardLeft());
+    right.at = VIEWPORT - DOCK;
+    expect(resized(layerEl)).toBe(true);
+    await frame();
+    expect(leftOf(p)).toBeLessThanOrEqual(cardLeft());
+    expect(parseFloat(p.style.right)).toBeGreaterThan(DOCK + CARD);
+  });
+
+  it("stops watching the layer once no panel is open, so its resizes place nothing", async () => {
+    const right = { at: VIEWPORT };
+    const { el: layerEl } = layer(right);
+    const p = panel();
+    panelStack.add("stress", p);
+    panelStack.remove("stress");
+    const before = p.style.right;
+    right.at = VIEWPORT - DOCK;
+    expect(resized(layerEl)).toBe(false);
+    await frame();
+    expect(p.style.right).toBe(before);
+  });
+});

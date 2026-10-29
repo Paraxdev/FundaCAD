@@ -1013,7 +1013,10 @@ defineEmits<{ close: [] }>();
   [11](#11-accessibility) for when to leave it off.
 - Placement is fixed for every panel: `position: fixed; top: 128px; right: 268px;
   z-index: var(--z-panel)`, outside `#float-layer` and under it, so the rail, the
-  view controls and every dialog draw over an open panel.
+  view controls and every dialog draw over an open panel. `panelStack.ts` sets `top`
+  and `right` under the view cube and clear of the right cards, again whenever a panel,
+  a card or `#float-layer` resizes, and an open panel stays open across the Model and
+  Render switch, as every inspect panel does, moving clear of the narrower stage.
   The shell is `min-width: 180px`, `padding: var(--s-4)`, `font-size: 12px`.
 
 | Class | Recipe |
