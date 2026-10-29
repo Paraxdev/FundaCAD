@@ -48,6 +48,7 @@ fn the_engine_loads_only_installed_plugins_the_person_agreed_to() {
     std::fs::write(broken.join("installed.json"), "{not json").unwrap();
     let bare = put_plugin(&root, "Bare.Record", "Bare.Record", &[]);
     std::fs::write(bare.join("installed.json"), r#"{"id": "Bare.Record"}"#).unwrap();
+    write_disabled(&root, &[]).unwrap();
 
     let ids = discovered_ids(&[PluginRoot { dir: root.clone(), records: true }]);
     let _ = std::fs::remove_dir_all(&root);
@@ -102,8 +103,28 @@ fn a_plugin_switched_off_in_the_window_is_not_loaded_by_the_engine() {
     assert_eq!(off, ["Other.Plugin"]);
     assert_eq!(on, ["Other.Plugin", "Some.Plugin"]);
     let none: [&str; 0] = [];
-    assert_eq!([unparseable, mistyped, unreadable], [none; 3]);
-    assert_eq!(never_written, ["Other.Plugin", "Some.Plugin"]);
+    // Never written is how a root installed by a version that kept the list only in the window looks.
+    assert_eq!([unparseable, mistyped, unreadable, never_written], [none; 4]);
+}
+
+/// On Windows another process, a scanner or a replace, can hold the list unshared for a moment.
+#[cfg(windows)]
+#[test]
+fn a_list_held_for_a_moment_still_applies() {
+    use std::os::windows::fs::OpenOptionsExt;
+    let root = temp_root("disabled-held");
+    installed(&root, "Some.Plugin", "Some.Plugin", &[]);
+    installed(&root, "Other.Plugin", "Other.Plugin", &[]);
+    write_disabled(&root, &["Some.Plugin".into()]).unwrap();
+    let held = std::fs::OpenOptions::new().read(true).share_mode(0).open(root.join(DISABLED)).unwrap();
+    let release = std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(30));
+        drop(held);
+    });
+    let ids = discovered_ids(&[PluginRoot { dir: root.clone(), records: true }]);
+    release.join().unwrap();
+    let _ = std::fs::remove_dir_all(&root);
+    assert_eq!(ids, ["Other.Plugin"]);
 }
 
 #[test]

@@ -162,8 +162,9 @@ use for them).
   install scratch. Outside a checkout's own `plugins/` a plugin loads only
   beside the app's `installed.json`, whose consented grants must equal the
   manifest's, and an id or directory the app lists in its `disabled_ids.json`
-  (switched off in the window) loads from no root. A list that is there but
-  unreadable switches every plugin off. It runs explicitly, from the engine's startup path only: a bare `builder::rebuild` has no plugins and an unknown type is
+  (switched off in the window) loads from no root. A list that is missing or
+  unreadable switches every plugin off, so a root an older version installed
+  loads none until the window has started once. It runs explicitly, from the engine's startup path only: a bare `builder::rebuild` has no plugins and an unknown type is
   skipped as "unknown feature type", exactly as in a document with no plugins
   installed. A skip is not an error: the rebuild lists it in `skippedFeatures`
   (docs/PROTOCOL.md) and builds the rest. A type a plugin declares but cannot

@@ -155,7 +155,10 @@ rather than the conversation. The binary to spawn is named by
 app itself (`fundacad --engine --ws`, recognised by the `engine_attach` command in
 its bytes, so a legacy window running the sidecar is never started by mistake), then the
 workspace `target/` directories. The spawned engine is told the app's plugin
-directory unless `FUNDACAD_PLUGIN_DIR` is already set.
+directory unless `FUNDACAD_PLUGIN_DIR` is already set. It runs the plugins the
+window has switched on, so from a root an older version installed it loads none
+until the window has started once and written its list (docs/ENGINE.md,
+Discovery).
 
 On Windows the process the host starts runs the server from a copy of its own
 executable in `%TEMP%\fundacad-mcp-shadow`, and copies the engine it found

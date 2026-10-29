@@ -68,6 +68,7 @@ const RESCAN_EVERY: Duration = Duration::from_secs(1);
 const RECORD: &str = "installed.json";
 /// Written by src-tauri/src/plugins `write_disabled`, the ids switched off in the window.
 const DISABLED: &str = "disabled_ids.json";
+const LIST_TRIES: u32 = 10;
 
 impl Registry {
     fn replace(&mut self, found: Vec<Declared>) {
@@ -206,19 +207,29 @@ fn consented(dir: &Path, man: &Value) -> bool {
     agreed == asked
 }
 
-/// None when a list is there but unreadable, which switches every plugin off. A list never written switches none off,
-/// since the window writes one at every start and on every switch, renamed into place whole.
+/// None when a list is missing or unreadable, which switches every plugin off: the window writes one at every start and
+/// on every switch, renamed into place whole, so only a root an older version installed has none.
 fn switched_off(roots: &[PluginRoot]) -> Option<BTreeSet<String>> {
     let mut off = BTreeSet::new();
     for root in roots.iter().filter(|r| r.records) {
-        let bytes = match std::fs::read(root.dir.join(DISABLED)) {
-            Ok(b) => b,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
-            Err(_) => return None,
-        };
+        let bytes = read_list(&root.dir.join(DISABLED)).ok()?;
         off.extend(serde_json::from_slice::<Vec<String>>(&bytes).ok()?);
     }
     Some(off)
+}
+
+/// Windows refuses a read while another process holds the file unshared, which a scanner or a replace does for a moment.
+fn read_list(path: &Path) -> std::io::Result<Vec<u8>> {
+    let mut tries = 0;
+    loop {
+        match std::fs::read(path) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound && tries < LIST_TRIES => {
+                tries += 1;
+                std::thread::sleep(Duration::from_millis(25));
+            }
+            read => return read,
+        }
+    }
 }
 
 /// The ids discovery would register from these roots, in the order it finds them.

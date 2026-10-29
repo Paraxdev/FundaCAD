@@ -135,6 +135,7 @@ fn a_changed_component_is_never_served_its_old_result() {
     let manifest: Value = serde_json::from_slice(&std::fs::read(bundle.join("manifest.json")).unwrap()).unwrap();
     let record = json!({"id": "FundaCAD.Texture", "consented": {"grants": manifest["grants"]}});
     std::fs::write(bundle.join("installed.json"), record.to_string()).unwrap();
+    std::fs::write(plugins_dir.join("disabled_ids.json"), "[]").unwrap();
     let original = std::fs::read(repo_plugin("FundaCAD.Texture").join("geometry.wasm")).unwrap();
     std::fs::write(bundle.join("geometry.wasm"), &original).unwrap();
 
