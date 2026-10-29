@@ -1188,7 +1188,10 @@ guard test cannot see them; hold them to these rules by hand.
   mostly hidden behind another keeps a full target. The names keep those boxes
   apart, moving off their walk when they must. Elsewhere, where tiles overlap, a
   press goes to the one drawn in front (`placeLabels` and `pickPlaneOnScreen` in
-  `src/viewport/planeHit.ts`).
+  `src/viewport/planeHit.ts`). The origin lies on no tile, so a mouse press there
+  picks nothing, but under a coarse pointer the 48px box round a foreshortened
+  tile may still reach it, as XZ's does at the home view: a full touch target is
+  worth more than an empty origin.
 - What a body hides draws faint, not gone.
 - A name in the scene is a camera facing sprite, `--ui` 700 at 11px, inked in
   `--text` or `--viewport-bg`, whichever reads on the ground. It fades out when
