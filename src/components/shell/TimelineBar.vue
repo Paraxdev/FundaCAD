@@ -716,7 +716,7 @@ function openMultiMenu(e: MouseEvent, ids: string[]) {
       :value-text="rollbackText"
       :disabled="editing"
       disabled-reason="Finish or cancel the edit to move the rollback"
-      @update:model-value="store.setRollback"
+      @update:model-value="(v: number) => store.setRollback(v)"
       @keydown="onRollbackKey"
       @focusin="markerFocus = true"
       @focusout="markerFocus = false"

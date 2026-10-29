@@ -1024,6 +1024,18 @@ describe("History's rollback slider", () => {
     expect(press(m, "Escape")).toBe(true);
   });
 
+  it("calls setRollback on the store itself, as the real store's method reads this", async () => {
+    const m = await open({ rollback: 3 });
+    const store = m.e.store as unknown as { setRollback: (i: number) => void };
+    const calls: unknown[] = [];
+    store.setRollback = function (this: unknown, i: number) {
+      calls.push(this === store ? i : "unbound");
+    };
+    range(m).focus();
+    press(m, "ArrowLeft");
+    expect(calls).toEqual([2]);
+  });
+
   it("sits just before the steps, so the marker draws its focus, and keeps the moved marker in view", async () => {
     const m = await open({ rollback: 3 });
     expect(m.w.get(".tl-rollback").element.nextElementSibling?.classList.contains("timeline-scroll")).toBe(true);
