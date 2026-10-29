@@ -147,6 +147,28 @@ function columns(box: Box): Column[] {
   return list;
 }
 
+/** Each panel's column: the first its min-width fits, else the widest. A lower shelf in use reaches across the columns
+ *  above it, so each of those stops short of it, and one cut under MIN_HEIGHT hands its panels on to the next. */
+function assign(cols: Column[], mins: readonly number[]): Column[] {
+  const floor = cols[0]!.bottom;
+  let live = cols;
+  for (;;) {
+    const widest = live.reduce((w, c) => (span(c) > span(w) ? c : w));
+    const at = mins.map((min) => live.find((c) => span(c) >= min) ?? widest);
+    const used = live.filter((c) => at.includes(c));
+    for (const c of used) {
+      c.bottom = floor;
+      for (const d of used)
+        if (d.top > c.top && d.free.left < c.free.right && c.free.left < d.free.right)
+          c.bottom = Math.min(c.bottom, d.top - GAP);
+    }
+    // The lowest column in use is never cut, so `live` never runs out.
+    const short = used.find((c) => c.bottom < floor && c.bottom - c.top < MIN_HEIGHT);
+    if (!short) return at;
+    live = live.filter((c) => c !== short);
+  }
+}
+
 function place() {
   frame = 0;
   // A panel with its own scroller reports the height it was last capped to, so measure it uncapped.
@@ -160,16 +182,9 @@ function place() {
   const area = (layer ?? document.body).getBoundingClientRect();
   const box: Box = { left: area.left, right: area.right, top: area.top, bottom: area.bottom };
   const cols = columns(box);
-  const widest = cols.reduce((w, c) => (span(c) > span(w) ? c : w));
   const mins = open.map((p) => parseFloat(getComputedStyle(p.el).minWidth) || 0);
-  const at = mins.map((min) => cols.find((c) => span(c) >= min) ?? widest);
-  const used = cols.filter((c) => at.includes(c));
-  // A lower shelf reaches across the columns above it, so each of those stops short of it.
-  for (const c of used)
-    for (const d of used)
-      if (d.top > c.top && d.free.left < c.free.right && c.free.left < d.free.right)
-        c.bottom = Math.min(c.bottom, d.top - GAP);
-  for (const c of used) {
+  const at = assign(cols, mins);
+  for (const c of cols.filter((c) => at.includes(c))) {
     const here = open.filter((_, i) => at[i] === c);
     const least = mins.filter((_, i) => at[i] === c);
     // Right anchored and under the float layer, so a panel wider than the span would hide under the rail or a card.
