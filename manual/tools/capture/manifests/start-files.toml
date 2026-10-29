@@ -67,9 +67,30 @@ uses = ["manual/docs/files/home.md:5"]
 file = "manual/docs/img/versions-panel.png"
 size = [420, 280]
 theme = "fundacad"
-crop = "panel"
-stub = true
-show = "The Versions panel listing two saved versions with their notes."
+crop = "region"
+around = ".versions-pop"
+park = [900, 860]
+# Version times are moved back after each save, so the rows read as an afternoon of work and not all "just now".
+steps = [
+  { open = "example:Plate" },
+  # The first edit of an example names the extrude distance d1, which would count as a settings change in the next version.
+  { evaluate = "() => window.store.updateFeature('plate', {})" },
+  "settle",
+  { evaluate = "() => { window.store.saveVersion('first plate'); window.store.versionRepo.versions.at(-1).time = Date.now() - 3 * 3600000; }" },
+  { evaluate = '''() => {
+    const corner = (x, y) => ({ kind: "edge", by: "match", fp: { mid: [x, y, 3], dir: [0, 0, 1], length: 6, curve: "line" }, body: "body1" });
+    const edges = [corner(40, 25), corner(-40, 25), corner(-40, -25), corner(40, -25)];
+    window.store.addFeature({ id: "corners", type: "fillet", name: "Rounded corners", edges, radius: 5 }, 2);
+  }''' },
+  "settle",
+  { evaluate = "() => { window.store.saveVersion('rounded corners'); window.store.versionRepo.versions.at(-1).time = Date.now() - 25 * 60000; }" },
+  { param = "holeDiameter", value = "6" },
+  { panel = "history", open = false },
+  { click = "Versions" },
+  { wait = 300 },
+  { evaluate = "() => { const i = document.querySelector('.versions-pop .versions-input input'); i.value = 'bigger holes'; i.dispatchEvent(new Event('input')); }" },
+]
+show = "The Versions panel listing two saved versions with their notes, one change counted and a note typed."
 alt = "Versions panel listing two saved versions with their notes"
 uses = ["manual/docs/files/versions.md:5"]
 
