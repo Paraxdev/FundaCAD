@@ -15,7 +15,7 @@ const ALWAYS_LIVE = ["#a11y-announcer", ".toast-stack"];
 type Layer = { el: HTMLElement; keep: string[] };
 const layers: Layer[] = [];
 // Only what this helper marked, so an element bound :inert elsewhere (App.vue under Home) is never cleared here.
-const marked = new Map<HTMLElement, { aria: boolean }>();
+const marked = new Map<HTMLElement, { inert: boolean; aria: boolean }>();
 
 /** Makes everything outside `el` inert until the returned release runs, since WebKit screen readers ignore
  *  aria-modal and would browse the page behind. Stacks: the newest connected layer wins, and releasing it hands
@@ -41,7 +41,7 @@ export function inertDepth(): number {
 
 function applyInert(): void {
   for (const [n, how] of marked) {
-    n.removeAttribute("inert");
+    if (how.inert) n.removeAttribute("inert");
     if (how.aria) n.removeAttribute("aria-hidden");
   }
   marked.clear();
@@ -59,12 +59,14 @@ function hideBesides(parent: Element, live: Set<Element>, path: Set<Element>): v
   for (const child of parent.children) {
     if (live.has(child)) continue;
     if (path.has(child)) hideBesides(child, live, path);
-    else if (child instanceof HTMLElement && !child.hasAttribute("inert") && !NO_MARK.has(child.tagName)) {
-      child.setAttribute("inert", "");
-      // Note: inert alone is enough on current WebKit, aria-hidden covers an older WebKitGTK that predates it.
+    else if (child instanceof HTMLElement && !NO_MARK.has(child.tagName)) {
+      const inert = !child.hasAttribute("inert");
+      if (inert) child.setAttribute("inert", "");
+      // Note: inert alone is enough on current WebKit, aria-hidden covers an older WebKitGTK that predates it,
+      // also on an element another component already binds :inert.
       const aria = !child.hasAttribute("aria-hidden");
       if (aria) child.setAttribute("aria-hidden", "true");
-      marked.set(child, { aria });
+      if (inert || aria) marked.set(child, { inert, aria });
     }
   }
 }

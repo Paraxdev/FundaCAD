@@ -119,6 +119,15 @@ describe("inertOthers", () => {
     expect($("#toasts").getAttribute("aria-hidden")).toBe("true");
   });
 
+  it("hides an element another component made inert from older WebKit too, and gives back only that", () => {
+    $("#viewport").setAttribute("inert", "");
+    const r = hold($("#home"));
+    expect($("#viewport").getAttribute("aria-hidden")).toBe("true");
+    r();
+    expect(inert("#viewport")).toBe(true);
+    expect($("#viewport").hasAttribute("aria-hidden")).toBe(false);
+  });
+
   it("skips a layer whose element left the page without a release", () => {
     hold($("#dlg-a .panel"));
     const gone = $("#dlg-b");
