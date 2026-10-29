@@ -212,6 +212,7 @@ const PALETTE_TOKENS = new Set<string>([
   "--text-dim",
   "--text-mute",
   "--text-faint",
+  "--control-edge",
   "--accent",
   "--accent-hot",
   "--accent-tint",

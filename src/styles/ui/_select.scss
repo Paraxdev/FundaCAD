@@ -7,6 +7,12 @@
   padding-bottom: var(--s-1);
 }
 
+// .sm-select:focus in _glass.scss clears the shadow, so the focused trigger names the edge again.
+.select-trigger.sm-select,
+.select-trigger.sm-select:focus {
+  box-shadow: inset 0 0 0 1px var(--control-edge);
+}
+
 .select-trigger.is-open {
   background-color: color-mix(in srgb, var(--accent) 14%, var(--field-bg));
 }

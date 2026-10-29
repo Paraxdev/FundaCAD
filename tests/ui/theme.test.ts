@@ -267,6 +267,12 @@ describe("addCustomTheme", () => {
     });
   });
 
+  it("keeps an uploaded control edge colour", () => {
+    const res = addCustomTheme({ "--bg": "#141414", "--control-edge": "rgba(255, 255, 255, 0.6)" });
+
+    expect(res.ok && res.theme.palette["--control-edge"]).toBe("rgba(255, 255, 255, 0.6)");
+  });
+
   it("loads an older theme that still sets the retired glow, without the glow", () => {
     const res = addCustomTheme({
       label: "Old mint",

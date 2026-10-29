@@ -455,22 +455,26 @@
   position: relative;
 }
 .profile-slider .ui-slider-input::-webkit-slider-runnable-track {
-  background: linear-gradient(
-    to right,
-    var(--check-off) var(--profile-from),
-    var(--accent) var(--profile-from),
-    var(--accent) var(--profile-to),
-    var(--check-off) var(--profile-to)
-  );
+  background:
+    linear-gradient(
+      to right,
+      transparent var(--profile-from),
+      var(--accent) var(--profile-from),
+      var(--accent) var(--profile-to),
+      transparent var(--profile-to)
+    ),
+    linear-gradient(var(--control-edge), var(--control-edge)) var(--check-off);
 }
 .profile-slider .ui-slider-input::-moz-range-track {
-  background: linear-gradient(
-    to right,
-    var(--check-off) var(--profile-from),
-    var(--accent) var(--profile-from),
-    var(--accent) var(--profile-to),
-    var(--check-off) var(--profile-to)
-  );
+  background:
+    linear-gradient(
+      to right,
+      transparent var(--profile-from),
+      var(--accent) var(--profile-from),
+      var(--accent) var(--profile-to),
+      transparent var(--profile-to)
+    ),
+    linear-gradient(var(--control-edge), var(--control-edge)) var(--check-off);
 }
 .profile-track-ends {
   display: flex;

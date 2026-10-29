@@ -126,6 +126,7 @@ const TEXT_SURFACES = ["--panel", "--panel-2", "--raised", "--raised-2"];
 const LINE_SURFACES = ["--panel", "--raised"];
 const SIGNALS = ["--ok", "--warn", "--error"];
 const SIGNAL_SURFACES = ["--panel", "--panel-2"];
+const EDGE_SURFACES = ["--panel", "--panel-2", "the panel glass"];
 const DICHROMATS: Vision[] = ["protanopia", "deuteranopia", "tritanopia"];
 const SIGNAL_DELTA_E = 15;
 const SIGNAL_LIGHTNESS_GAP = 10;
@@ -137,7 +138,30 @@ export function glassFill(p: Record<string, string>, mode: "dark" | "light"): Rg
   return mix(c("--panel"), 0.72, c("--viewport-bg"));
 }
 
-/** Every text, line and signal pair a palette must pass, worst first. `p` is a whole palette, Noir defaults filled in. */
+/** --control-edge in _tokens.scss is the text colour at this share over the control, for a palette that sets none. */
+export const CONTROL_EDGE_SHARE = { dark: 0.5, light: 0.68 };
+
+/** The fills a field like control paints over `under`, as _tokens.scss builds --field-bg and --check-off per mode. */
+function controlFills(p: Record<string, string>, mode: "dark" | "light", under: Rgba): [string, Rgba][] {
+  const c = (name: string) => parseColor(p[name] ?? `missing ${name}`);
+  const text = c("--text");
+  const field = mode === "light" ? mix(text, 0.11, mix(c("--raised"), 0.7, c("--bg"))) : over(c("--field-bg"), under);
+  const checkOff = mode === "light" ? mix(text, 0.24, under) : over(c("--check-off"), under);
+  return [
+    ["the field well", field],
+    ["the empty checkbox and slider rail", checkOff],
+    ["the switch track", c("--raised-2")],
+  ];
+}
+
+export function controlEdge(p: Record<string, string>, mode: "dark" | "light"): Rgba {
+  const set = p["--control-edge"];
+  if (set) return parseColor(set);
+  const [r, g, b, a] = parseColor(p["--text"] ?? "missing --text");
+  return [r, g, b, a * CONTROL_EDGE_SHARE[mode]];
+}
+
+/** Every text, line, signal and control edge pair a palette must pass, worst first. `p` is a whole palette, Noir defaults filled in. */
 export function paletteContrast(p: Record<string, string>, mode: "dark" | "light"): PairResult[] {
   const c = (name: string) => parseColor(p[name] ?? `missing ${name}`);
   const out: PairResult[] = [];
@@ -151,6 +175,16 @@ export function paletteContrast(p: Record<string, string>, mode: "dark" | "light
   for (const bg of LINE_SURFACES) add(`--line-strong on ${bg}`, c("--line-strong"), c(bg), 3);
   for (const fg of SIGNALS) for (const bg of SIGNAL_SURFACES) add(`${fg} on ${bg}`, c(fg), c(bg), 4.5);
   add("--pick-line on --viewport-bg", c("--pick-line"), c("--viewport-bg"), 3);
+  // The edge is an inset line painted over the control's own fill, so it has to stand clear of both sides.
+  const edge = controlEdge(p, mode);
+  for (const on of EDGE_SURFACES) {
+    const under = on === "the panel glass" ? glass : c(on);
+    for (const [fill, well] of controlFills(p, mode, under)) {
+      const line = over(edge, well);
+      add(`--control-edge on ${fill} against ${on}`, line, under, 3);
+      add(`--control-edge on ${fill} on ${on}, against the fill`, line, well, 3);
+    }
+  }
   // Hue alone does not tell two signals apart when a dichromat sees them merge, so those need a lightness gap.
   SIGNALS.forEach((a, i) =>
     SIGNALS.slice(i + 1).forEach((b) => {

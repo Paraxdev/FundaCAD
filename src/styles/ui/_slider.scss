@@ -4,7 +4,10 @@
   height: 4px;
   border: 0;
   border-radius: var(--r-pill);
-  background: linear-gradient(to right, var(--accent) var(--ui-slider-fill), var(--check-off) var(--ui-slider-fill));
+  // The empty rail is a 4px line, so it is drawn whole in the edge colour rather than as an inset rim.
+  background:
+    linear-gradient(to right, var(--accent) var(--ui-slider-fill), transparent var(--ui-slider-fill)),
+    linear-gradient(var(--control-edge), var(--control-edge)) var(--check-off);
 }
 @mixin thumb {
   width: 14px;
