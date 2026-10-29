@@ -193,6 +193,8 @@ function onKeydown(e: KeyboardEvent) {
       return;
     case "Delete":
     case "Backspace":
+      // A click that unpicked its row leaves focus there, the key still means the picked rows, as it did before.
+      if (!keyboard.value && pointerAt > -Infinity && el.getAttribute("aria-selected") === "false") return;
       claim(e);
       if (a.remove) a.remove();
       else emit("remove", it.key);

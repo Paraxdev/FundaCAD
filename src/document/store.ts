@@ -2620,6 +2620,13 @@ export class DocumentStore {
     this.addFeature(feat, this.doc.features.length);
   }
 
+  // One feature for the lot, so one undo puts every body back.
+  removeBodies(bodyIds: readonly string[]) {
+    if (!bodyIds.length) return;
+    const feat: Feature = { id: this.nextId(), type: "removeBody", bodies: [...bodyIds] };
+    this.addFeature(feat, this.doc.features.length);
+  }
+
   // Offset in X so the copy is not hidden inside the original.
   duplicateBody(bodyId: string) {
     const feat: Feature = {

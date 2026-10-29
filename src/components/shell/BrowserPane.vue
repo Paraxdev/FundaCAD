@@ -684,7 +684,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
       acceptDrop: () => canDropOntoBody(b.id),
       dropHere: () => dropOntoBody(b.id),
       rename: (name: string) => store.setBodyName(b.id, name),
-      remove: () => store.removeBody(b.id),
+      remove: () => store.removeBodies(actOn(b.id)),
       title: fmtKeys(
         "Click to select (Ctrl+click adds, Shift+click takes a run) · drag onto another body to group them, or into an element · double-click to rename · right-click for Move / Material / Visibility / Rename / Delete · drag across eyes to show or hide many",
       ),

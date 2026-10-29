@@ -65,6 +65,7 @@ function makeEngine(doc: CadDocument, bodies: { id: string; name: string; nodeRe
   const hiddenSketches = new Set<string>();
   const suppressed = new Set<string>();
   const removed: string[][] = [];
+  const removedBodies: string[][] = [];
   const lit: unknown[] = [];
   const planeWrites: Map<string, boolean>[] = [];
   /** Every batched body visibility write, to count re-renders by. */
@@ -170,6 +171,9 @@ function makeEngine(doc: CadDocument, bodies: { id: string; name: string; nodeRe
       doc.features.splice(to, 0, f);
       docVersion.value++;
     },
+    removeBodies: (ids: readonly string[]) => {
+      removedBodies.push([...ids]);
+    },
     removeFeatures: (ids: string[]) => {
       removed.push([...ids]);
       doc.features = doc.features.filter((f) => !ids.includes(f.id));
@@ -195,6 +199,7 @@ function makeEngine(doc: CadDocument, bodies: { id: string; name: string; nodeRe
     store,
     bodyWrites,
     removed,
+    removedBodies,
     lit,
     planeWrites,
     suppressed,
@@ -1343,6 +1348,45 @@ describe("Items tree by keys", () => {
     press("Delete");
     window.removeEventListener("keydown", spy);
     expect([fake.removed, heard]).toEqual([[["s2"]], []]);
+    w.unmount();
+  });
+
+  it("deletes the whole selection the focused body is in as one step, never part of it", async () => {
+    const fake = makeEngine({ parameters: {}, features: [] }, [
+      { id: "b1", name: "Body1" },
+      { id: "b2", name: "Body2" },
+      { id: "b3", name: "Body3" },
+    ]);
+    const w = await open(fake);
+    await rowNamed(w, "Body1").trigger("click");
+    await rowNamed(w, "Body2").trigger("click", { shiftKey: true });
+    // The real viewport hands its selection back to the browser store, the fake one does not.
+    useBrowserStore().setSelectedBodies(fake.engine.viewport.getSelectedBodies());
+    await nextTick();
+    focusOn(rowNamed(w, "Body2"));
+    press("Backspace");
+    expect(fake.removedBodies).toEqual([["b1", "b2"]]);
+    w.unmount();
+  });
+
+  it("leaves Delete to the window after a click that unpicked its row, which removes the picked rows as before", async () => {
+    const fake = makeEngine({ parameters: {}, features: [sketch("s1"), sketch("s2")] }, []);
+    const w = await open(fake);
+    const heard: string[] = [];
+    const spy = (e: KeyboardEvent) => heard.push(e.key);
+    window.addEventListener("keydown", spy);
+    await rowNamed(w, "Sketch1").trigger("click");
+    await rowNamed(w, "Sketch2").trigger("click", { ctrlKey: true });
+    await rowNamed(w, "Sketch2").trigger("pointerdown");
+    await rowNamed(w, "Sketch2").trigger("click", { ctrlKey: true });
+    focusOn(rowNamed(w, "Sketch2"));
+    press("Delete");
+    window.removeEventListener("keydown", spy);
+    expect([rowNamed(w, "Sketch2").attributes("aria-selected"), fake.removed, heard]).toEqual([
+      "false",
+      [],
+      ["Delete"],
+    ]);
     w.unmount();
   });
 
