@@ -1,0 +1,215 @@
+# Pictures of the Model pages. An entry with stub = true still needs its steps and crop,
+# its show line says what the picture must show.
+
+[[shot]]
+file = "manual/docs/img/combine-subtract.png"
+size = [660, 620]
+theme = "fundacad"
+crop = "region"
+stub = true
+show = "A block with a round hole left where a cylinder was subtracted."
+alt = "A block with a round hole where a cylinder was subtracted"
+uses = ["manual/docs/model/combine.md:5"]
+
+[[shot]]
+file = "manual/docs/img/construct-planes.png"
+size = [660, 620]
+theme = "fundacad"
+crop = "region"
+stub = true
+show = "A block with an offset plane above it and a vertical datum axis."
+alt = "A block with an offset plane above it and a vertical datum axis"
+uses = ["manual/docs/model/construct.md:5"]
+
+[[shot]]
+file = "manual/docs/img/expression-value.png"
+size = [480, 240]
+theme = "fundacad"
+crop = "control"
+stub = true
+show = "The Extrude distance value box holding the expression rib = width / 4, with the current value box options."
+alt = "The Extrude distance box holding rib = width / 4"
+uses = ["manual/docs/model/expressions.md:5"]
+
+[[shot]]
+file = "manual/docs/img/extrude-taper.png"
+size = [960, 800]
+theme = "fundacad"
+crop = "region"
+stub = true
+show = "An extrude preview with a 12 degree taper, the distance and angle boxes below it, as the value box looks now."
+alt = "An extrude preview with a 12 degree taper, the distance and angle boxes below it"
+uses = ["manual/docs/model/extrude.md:5"]
+
+[[shot]]
+file = "manual/docs/img/rectangle-extrude.gif"
+size = [800, 655]
+theme = "fundacad"
+crop = "region"
+gif = { delay = 100, loop = 0 }
+stub = true
+show = "Drawing a rectangle and extruding it into a block (about 29 frames, 800 wide)."
+alt = "Drawing a rectangle and extruding it into a block"
+uses = ["manual/docs/model/extrude.md:8"]
+
+[[shot]]
+file = "manual/docs/img/extrude-thin.png"
+size = [640, 520]
+theme = "fundacad"
+crop = "region"
+stub = true
+show = "A thin extrude of an open L of two lines, a 2 mm wall with a mitred corner, the Thin switch on."
+alt = "A thin extrude of an L of two lines, a 2 mm wall with a mitred corner"
+uses = ["manual/docs/model/extrude.md:20"]
+
+[[shot]]
+file = "manual/docs/img/fillet-edge.png"
+size = [860, 640]
+theme = "fundacad"
+crop = "region"
+stub = true
+show = "A block edge being rounded, the radius box beside it, with the continuity options of today (G3 fillets are recent)."
+alt = "A block edge being rounded, the radius box beside it"
+uses = ["manual/docs/model/fillet-chamfer.md:5"]
+
+[[shot]]
+file = "manual/docs/img/fillet-drag.gif"
+size = [800, 558]
+theme = "fundacad"
+crop = "region"
+gif = { delay = 100, loop = 0 }
+stub = true
+show = "A fillet radius growing on a block edge as the arrow is dragged (about 12 frames, 800 wide). Show the continuity choice if the box shows it (G3 is recent)."
+alt = "A fillet radius growing on an edge"
+uses = ["manual/docs/model/fillet-chamfer.md:8"]
+
+[[shot]]
+file = "manual/docs/img/hole-dialog.png"
+size = [960, 700]
+theme = "fundacad"
+crop = "region"
+stub = true
+show = "The Hole box with size M3 and a through depth over a block."
+alt = "The Hole box with size M3 and a through depth over a block"
+uses = ["manual/docs/model/hole.md:5"]
+
+[[shot]]
+file = "manual/docs/img/items-list.png"
+size = [276, 852]
+theme = "fundacad"
+crop = "panel"
+stub = true
+show = "The Items card with a Hardware folder holding two bodies, one of them hidden."
+alt = "The Items card with a Hardware folder holding two bodies, one of them hidden"
+uses = ["manual/docs/model/items.md:5"]
+
+[[shot]]
+file = "manual/docs/img/loft-adapter.png"
+size = [660, 620]
+theme = "fundacad"
+crop = "region"
+stub = true
+show = "A circle at the bottom lofted into a square at the top."
+alt = "A circle at the bottom lofted into a square at the top"
+uses = ["manual/docs/model/loft-sweep.md:5"]
+
+[[shot]]
+file = "manual/docs/img/move-gizmo.png"
+size = [900, 580]
+theme = "fundacad"
+crop = "region"
+stub = true
+show = "The move gizmo with arrows, squares and rings in the axis colours, and its value bar."
+alt = "The move gizmo with arrows, squares and rings, and its value bar"
+uses = ["manual/docs/model/move.md:5"]
+
+[[shot]]
+file = "manual/docs/img/parameters-dialog.png"
+size = [694, 306]
+theme = "fundacad"
+crop = "panel"
+stub = true
+show = "The Parameters dialog listing width, depth and holes."
+alt = "The Parameters dialog listing width, depth and holes"
+uses = ["manual/docs/model/parameters.md:5"]
+
+[[shot]]
+file = "manual/docs/img/pattern-holes.png"
+size = [660, 620]
+theme = "fundacad"
+crop = "region"
+stub = true
+show = "A plate with a row of five holes made with Linear Pattern."
+alt = "A plate with a row of five holes"
+uses = ["manual/docs/model/pattern.md:5"]
+
+[[shot]]
+file = "manual/docs/img/presspull-face.png"
+size = [840, 740]
+theme = "fundacad"
+crop = "region"
+stub = true
+show = "A selected top face being pulled out by Press/Pull, the value box above it."
+alt = "A selected top face being pulled out by Press/Pull, the value box above it"
+uses = ["manual/docs/model/press-pull.md:5"]
+
+[[shot]]
+file = "manual/docs/img/presspull.gif"
+size = [800, 705]
+theme = "fundacad"
+crop = "region"
+gif = { delay = 100, loop = 0 }
+stub = true
+show = "A face being pulled out with Press/Pull (about 26 frames, 800 wide)."
+alt = "A face being pulled out with Press/Pull"
+uses = ["manual/docs/model/press-pull.md:8"]
+
+[[shot]]
+file = "manual/docs/img/primitive-cylinder.png"
+size = [890, 720]
+theme = "fundacad"
+crop = "region"
+stub = true
+show = "A cylinder on the origin and its Radius and Height rows in the History card."
+alt = "A cylinder on the origin and its Radius and Height rows in the History card"
+uses = ["manual/docs/model/primitives.md:5"]
+
+[[shot]]
+file = "manual/docs/img/revolve-profile.png"
+size = [660, 620]
+theme = "fundacad"
+crop = "region"
+stub = true
+show = "A vase made by revolving a half outline."
+alt = "A vase made by revolving a half outline"
+uses = ["manual/docs/model/revolve.md:5"]
+
+[[shot]]
+file = "manual/docs/img/mirror-half.png"
+size = [660, 620]
+theme = "fundacad"
+crop = "region"
+stub = true
+show = "One half of a bracket beside its mirrored copy."
+alt = "One half of a bracket beside its mirrored copy"
+uses = ["manual/docs/model/scale-mirror.md:5"]
+
+[[shot]]
+file = "manual/docs/img/shell-mug.png"
+size = [660, 620]
+theme = "fundacad"
+crop = "region"
+stub = true
+show = "A cylinder hollowed into an open mug."
+alt = "A cylinder hollowed into an open mug"
+uses = ["manual/docs/model/shell.md:5"]
+
+[[shot]]
+file = "manual/docs/img/history-card.png"
+size = [300, 389]
+theme = "fundacad"
+crop = "panel"
+stub = true
+show = "The History card with the Extrude step open and its rows."
+alt = "The History card with the Extrude step open"
+uses = ["manual/docs/model/timeline.md:5"]

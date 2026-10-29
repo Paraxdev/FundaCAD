@@ -1,0 +1,102 @@
+# Pictures of the Inspect pages. An entry with stub = true still needs its steps and crop,
+# its show line says what the picture must show.
+
+[[shot]]
+file = "manual/docs/img/bed-fit-result.png"
+size = [640, 700]
+theme = "fundacad"
+crop = "region"
+stub = true
+show = "A bracket with the Bed Fit Check result saying it fits a 220 by 220 by 250 mm bed (Print group)."
+alt = "A bracket with a message that it fits the 220 by 220 by 250 mm bed"
+uses = ["manual/docs/inspect/bed-fit.md:5"]
+
+[[shot]]
+file = "manual/docs/img/interference-list.png"
+size = [750, 640]
+theme = "fundacad"
+crop = "region"
+stub = true
+show = "The Interference panel naming one clash between a box and a cylinder with its overlap volume."
+alt = "Interference panel naming one clash between a box and a cylinder with its overlap volume"
+uses = ["manual/docs/inspect/interference.md:5"]
+
+[[shot]]
+file = "manual/docs/img/measure-two-holes.png"
+size = [790, 640]
+theme = "fundacad"
+crop = "region"
+stub = true
+show = "The Measure panel showing the distance and angle between two hole edges."
+alt = "Measure panel showing the distance and angle between two hole edges"
+uses = ["manual/docs/inspect/measure.md:5"]
+
+[[shot]]
+file = "manual/docs/img/overhang-red.png"
+size = [850, 440]
+theme = "fundacad"
+crop = "region"
+stub = true
+show = "Undersides of a T shaped part painted red beside the Overhang analysis panel."
+alt = "Undersides of a T shaped part painted red beside the Overhang analysis panel"
+uses = ["manual/docs/inspect/overhang.md:5"]
+
+[[shot]]
+file = "manual/docs/img/printability-panel.png"
+size = [426, 575]
+theme = "fundacad"
+crop = "panel"
+stub = true
+show = "The Printability panel with its settings and two findings."
+alt = "The Printability panel with its settings and two findings"
+uses = ["manual/docs/inspect/printability.md:5"]
+
+[[shot]]
+file = "manual/docs/img/properties-panel.png"
+size = [564, 347]
+theme = "fundacad"
+crop = "panel"
+stub = true
+show = "The Properties panel with the PLA print estimate."
+alt = "The Properties panel with the PLA print estimate"
+uses = ["manual/docs/inspect/properties.md:5"]
+
+[[shot]]
+file = "manual/docs/img/section-handle.png"
+size = [880, 740]
+theme = "fundacad"
+crop = "region"
+stub = true
+show = "A bracket cut along Z with the offset handle and value box."
+alt = "A bracket cut along Z with the offset handle and value box"
+uses = ["manual/docs/inspect/section.md:5"]
+
+[[shot]]
+file = "manual/docs/img/section-chip.png"
+size = [880, 740]
+theme = "fundacad"
+crop = "region"
+stub = true
+show = "The cut bracket with the Section on chip and its Edit, Flip and Off buttons."
+alt = "The cut bracket with the Section on chip and its Edit, Flip and Off buttons"
+uses = ["manual/docs/inspect/section.md:11"]
+
+[[shot]]
+file = "manual/docs/img/stress-results.png"
+size = [900, 740]
+theme = "fundacad"
+crop = "region"
+stub = true
+show = "The Stress panel on its Results tab listing peak stress, deflection and safety factor beside the coloured bracket (Set up and Results tabs are recent)."
+alt = "The Stress panel listing peak stress, deflection and safety factor beside the coloured bracket"
+uses = ["manual/docs/inspect/stress-results.md:5"]
+
+[[shot]]
+file = "manual/docs/img/stress-bracket.png"
+size = [580, 600]
+theme = "fundacad"
+crop = "region"
+stub = true
+show = "An L bracket coloured blue to red by stress, with a load arrow on the upright."
+alt = "An L bracket coloured blue to red by stress, with a load arrow on the upright"
+uses = ["manual/docs/inspect/stress.md:5"]

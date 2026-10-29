@@ -1,0 +1,82 @@
+# Pictures of the Sketch pages. An entry with stub = true still needs its steps and crop,
+# its show line says what the picture must show.
+
+[[shot]]
+file = "manual/docs/img/sketch-constraints.png"
+size = [860, 600]
+theme = "fundacad"
+crop = "region"
+stub = true
+show = "A dimensioned rectangle and the Relations list in the sketch palette."
+alt = "A dimensioned rectangle and the Relations list in the sketch palette"
+uses = ["manual/docs/sketch/constraints.md:5"]
+
+[[shot]]
+file = "manual/docs/img/sketch-loose-ends.png"
+size = [520, 300]
+theme = "fundacad"
+crop = "region"
+stub = true
+show = "Amber dots on the corners of an outline drawn without snapping, and red dots on a line whose ends touch nothing."
+alt = "Amber dots on the corners of an outline drawn without snapping, and red dots on a line whose ends touch nothing"
+uses = ["manual/docs/sketch/constraints.md:17"]
+
+[[shot]]
+file = "manual/docs/img/sketch-dimension.png"
+size = [640, 260]
+theme = "fundacad"
+crop = "region"
+stub = true
+show = "The Dimension tool on a rectangle edge with its value box."
+alt = "The Dimension tool on a rectangle edge with its value box"
+uses = ["manual/docs/sketch/dimensions.md:5"]
+
+[[shot]]
+file = "manual/docs/img/sketch-typed-size.png"
+size = [640, 260]
+theme = "fundacad"
+crop = "region"
+stub = true
+show = "A rectangle being drawn with 40 typed into the width box."
+alt = "A rectangle being drawn with 40 typed into the width box"
+uses = ["manual/docs/sketch/exact-sizes.md:5"]
+
+[[shot]]
+file = "manual/docs/img/sketch-pattern.png"
+size = [520, 440]
+theme = "fundacad"
+crop = "region"
+stub = true
+show = "A bolt circle of six holes with the count and diameter boxes. The page also covers the Staggered Holes tool (recent rename), check its name in src."
+alt = "A bolt circle of six holes with the count and diameter boxes"
+uses = ["manual/docs/sketch/hole-patterns.md:5"]
+
+[[shot]]
+file = "manual/docs/img/sketch-gear-profile.png"
+size = [1600, 1000]
+theme = "fundacad"
+crop = "window"
+stub = true
+show = "A gear profile drawn in a sketch, the sketch rail and the hint line at the bottom of the view, 1600x1000. Also copied to assets/readme for Flathub."
+alt = "A gear profile drawn in a sketch"
+uses = ["manual/docs/sketch/shapes.md:5"]
+
+[[shot]]
+file = "manual/docs/img/sketch-palette.png"
+size = [290, 620]
+theme = "fundacad"
+crop = "panel"
+stub = true
+show = "The sketch palette with Snap, Construction and the other options."
+alt = "The sketch palette with Snap, Construction and the other options"
+uses = ["manual/docs/sketch/snapping.md:5"]
+
+[[shot]]
+file = "manual/docs/img/sketch-overview.png"
+size = [1440, 900]
+theme = "fundacad"
+crop = "window"
+stub = true
+show = "An open sketch on the top face of a block, with the tool rail and the sketch palette."
+alt = "An open sketch on a block's top face, with the tool rail and the sketch palette"
+uses = ["manual/docs/sketch/start.md:5"]

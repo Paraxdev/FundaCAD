@@ -1,0 +1,103 @@
+# Pictures of the AI, Plugins and Reference pages. An entry with stub = true still needs its steps and crop,
+# its show line says what the picture must show.
+
+[[shot]]
+file = "manual/docs/img/ai-live-document.png"
+size = [980, 330]
+theme = "fundacad"
+crop = "panel"
+stub = true
+show = "Preferences, AI assistants page, the Live document setting with its three choices Do not share, Share read only and Share and allow edits. Check the labels in src."
+alt = "Live document setting open, offering Do not share, Share read only and Share and allow edits"
+uses = ["manual/docs/ai/sharing.md:5"]
+
+[[shot]]
+file = "manual/docs/img/parameter-setup.png"
+size = [620, 430]
+theme = "fundacad"
+crop = "panel"
+stub = true
+show = "The Parameter Setup dialog with its Controls, Groups, Configurations and Checks."
+alt = "Parameter Setup dialog with Controls, Groups, Configurations and Checks"
+uses = ["manual/docs/plugins/extra-parameters.md:5"]
+
+[[shot]]
+file = "manual/docs/img/prefs-gamepad.png"
+size = [972, 692]
+theme = "fundacad"
+crop = "panel"
+stub = true
+show = "Preferences, Plugins, the Game controller row with its settings open."
+alt = "The Game controller row in Preferences, Plugins, with its settings open"
+uses = ["manual/docs/plugins/gamepad.md:5"]
+
+[[shot]]
+file = "manual/docs/img/printing-menu.png"
+size = [480, 600]
+theme = "fundacad"
+crop = "control"
+stub = true
+show = "The Print group on the tool rail, listing Print Project, Open in OrcaSlicer and Send to Printer."
+alt = "The Print group on the tool rail, listing Print Project, Open in OrcaSlicer and Send to Printer"
+uses = ["manual/docs/plugins/printing.md:5"]
+
+[[shot]]
+file = "manual/docs/img/fasteners-window.png"
+size = [900, 720]
+theme = "fundacad"
+crop = "panel"
+stub = true
+show = "The Fasteners window with an M3 socket head cap screw selected, its preview and its sizes."
+alt = "Fasteners window with an M3 socket head cap screw selected, showing its preview and sizes"
+uses = ["manual/docs/plugins/screws.md:5"]
+
+[[shot]]
+file = "manual/docs/img/spacemouse-settings.png"
+size = [972, 692]
+theme = "fundacad"
+crop = "panel"
+stub = true
+show = "Preferences, Plugins, the 3D mouse row with its settings open."
+alt = "The 3D mouse row in Preferences, Plugins, with its settings open"
+uses = ["manual/docs/plugins/spacemouse.md:5"]
+
+[[shot]]
+file = "manual/docs/img/texture-knurl.png"
+size = [1000, 840]
+theme = "fundacad"
+crop = "region"
+stub = true
+show = "A cylinder with a knurled surface and the settings of the Texture step in the History card."
+alt = "A cylinder with a knurled surface and the Texture step's settings in the History card"
+uses = ["manual/docs/plugins/texture.md:5"]
+
+[[shot]]
+file = "manual/docs/img/prefs-appearance.png"
+size = [972, 692]
+theme = "fundacad"
+crop = "panel"
+stub = true
+show = "Preferences on its Appearance page, the page list showing the pages of today (Accessibility and Updates are recent) and the theme choice with Colour-Blind Safe."
+alt = "Appearance page of Preferences"
+uses = ["manual/docs/reference/preferences.md:5"]
+
+[[shot]]
+file = "manual/docs/img/shortcuts-overlay.png"
+size = [628, 814]
+theme = "fundacad"
+crop = "panel"
+stub = true
+show = "The keyboard shortcut list (press ?) shown over the viewport."
+alt = "The keyboard shortcut list shown over the viewport"
+uses = ["manual/docs/reference/shortcuts.md:5"]
+
+[[shot]]
+file = "manual/docs/img/orbit.gif"
+size = [800, 737]
+theme = "fundacad"
+crop = "region"
+gif = { delay = 100, loop = 0 }
+stub = true
+show = "A part turning in the viewport as the right button is dragged (about 17 frames, 800 wide), view cube and axis colours as today."
+alt = "A part turning in the viewport as the right button is dragged"
+uses = ["manual/docs/reference/shortcuts.md:44"]

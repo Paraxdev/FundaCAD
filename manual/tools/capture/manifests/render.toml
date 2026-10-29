@@ -1,0 +1,32 @@
+# Pictures of the Render pages. An entry with stub = true still needs its steps and crop,
+# its show line says what the picture must show.
+
+[[shot]]
+file = "manual/docs/img/render-material-sliders.png"
+size = [315, 850]
+theme = "fundacad"
+crop = "panel"
+stub = true
+show = "The material panel for Steel with Metalness, Roughness, Transmission, Emission and Clearcoat sliders."
+alt = "Material panel for Steel with Metalness, Roughness, Transmission, Emission and Clearcoat sliders"
+uses = ["manual/docs/render/editing.md:5"]
+
+[[shot]]
+file = "manual/docs/img/render-camera-tab.png"
+size = [1440, 900]
+theme = "fundacad"
+crop = "window"
+stub = true
+show = "The Render workspace on its Camera tab with the Field of view slider."
+alt = "The Camera tab of the Render workspace with the Field of view slider"
+uses = ["manual/docs/render/environment.md:5"]
+
+[[shot]]
+file = "manual/docs/img/render-materials.png"
+size = [1600, 1000]
+theme = "fundacad"
+crop = "window"
+stub = true
+show = "A part with several materials in the Render workspace, 1600x1000. Also copied to assets/readme for Flathub."
+alt = "A part with several materials in the Render workspace"
+uses = ["manual/docs/render/materials.md:5"]

@@ -1,0 +1,62 @@
+# Pictures of the Start and Files pages. An entry with stub = true still needs its steps and crop,
+# its show line says what the picture must show.
+
+[[shot]]
+file = "manual/docs/img/export-dialog.png"
+size = [748, 417]
+theme = "fundacad"
+crop = "panel"
+stub = true
+show = "The Export window with STL and Medium chosen."
+alt = "The Export window with STL and Medium chosen"
+uses = ["manual/docs/files/export.md:5"]
+
+[[shot]]
+file = "manual/docs/img/home.png"
+size = [1440, 900]
+theme = "fundacad"
+crop = "window"
+stub = true
+show = "Home with Blank and Open at the top, three recent documents and the examples under them."
+alt = "Home with Blank and Open at the top, three recent documents and the examples under them"
+uses = ["manual/docs/files/home.md:5"]
+
+[[shot]]
+file = "manual/docs/img/versions-panel.png"
+size = [420, 280]
+theme = "fundacad"
+crop = "panel"
+stub = true
+show = "The Versions panel listing two saved versions with their notes."
+alt = "Versions panel listing two saved versions with their notes"
+uses = ["manual/docs/files/versions.md:5"]
+
+[[shot]]
+file = "manual/docs/img/first-part-rectangle.png"
+size = [890, 850]
+theme = "fundacad"
+crop = "region"
+stub = true
+show = "A rough rectangle drawn on the XY sketch plane, the first step of the first part."
+alt = "A rough rectangle drawn on the sketch plane"
+uses = ["manual/docs/start/first-part.md:7"]
+
+[[shot]]
+file = "manual/docs/img/first-part-extrude.png"
+size = [880, 780]
+theme = "fundacad"
+crop = "region"
+stub = true
+show = "The extrude arrow over the plate preview: a rectangle with a circle hole, extruded 5 mm."
+alt = "The extrude arrow with the plate previewed"
+uses = ["manual/docs/start/first-part.md:13"]
+
+[[shot]]
+file = "manual/docs/img/first-part-export.png"
+size = [748, 417]
+theme = "fundacad"
+crop = "panel"
+stub = true
+show = "The Export window with STL, Millimeter and Medium chosen, as the first part page describes."
+alt = "The Export window with STL and Medium chosen"
+uses = ["manual/docs/start/first-part.md:19"]
