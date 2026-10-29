@@ -545,9 +545,9 @@ function onClassicCamera(on: boolean) {
                 <label class="pref-title" for="prefs-environment">Reflections</label>
                 <Select
                   id="prefs-environment"
-                  aria-describedby="prefs-environment-hint"
                   :model-value="render.environment"
                   :options="environmentOptions"
+                  aria-describedby="prefs-environment-hint"
                   @update:model-value="onEnvironment"
                 />
               </div>

@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useHomeStore } from "../../stores/home";
-import { useModalStore } from "../../stores/modals";
 import { useDialogStore } from "../../stores/dialogs";
+import { useModalStore } from "../../stores/modals";
 import { useModalGate } from "../../composables/useModalGate";
 import { welcomeClosed, welcomeOnStartup, setWelcomeOnStartup } from "../../ui/welcome";
 import { openReportDialog } from "../../ui/bugReporter";
