@@ -11,6 +11,7 @@ import {
   contrastFailures,
   contrastRatio as contrast,
   deltaE2000,
+  glassFill,
   lightness,
   mix,
   over,
@@ -307,4 +308,32 @@ describe("More and Maximum contrast", () => {
       });
     }
   }
+});
+
+describe("Solid panels over a white model", () => {
+  const WHITE = parse("#ffffff");
+  const SOLID_ROW = "on a solid panel over a white model";
+
+  it("the glass alone lets a white model wash out Noir muted text, a solid panel does not", () => {
+    const mute = parse(NOIR["--text-mute"] ?? "missing");
+    expect(contrast(mute, glassFill(NOIR, "dark", { under: WHITE }))).toBeLessThan(4.5);
+    expect(contrast(mute, glassFill(NOIR, "dark", { under: WHITE, solid: true }))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  for (const theme of shipped) {
+    const level = HIGH_CONTRAST.has(theme.id) ? "high" : "standard";
+    it(`${theme.label} keeps every text token readable on a solid panel over a white model`, () => {
+      const rows = paletteContrast(theme.palette, theme.mode, level).filter((r) => r.what.endsWith(SOLID_ROW));
+      expect(rows.map((r) => r.what).sort()).toEqual(
+        ["--text", "--text-dim", "--text-mute"].map((t) => `${t} ${SOLID_ROW}`),
+      );
+      expect(rows.filter((r) => r.ratio < r.min)).toEqual([]);
+    });
+  }
+
+  it("_glass.scss makes the float fills opaque under html.solid-panels in dark and light themes", () => {
+    const scss = sources["src/styles/_glass.scss"] ?? "";
+    expect(scss).toMatch(/html:root\.solid-panels\s*\{[^}]*--float-bg:\s*var\(--float-bg-solid\);/);
+    expect(scss).toMatch(/html:root\.solid-panels:not\(\.theme-light\)\s*\{[^}]*--float-bg-solid:\s*var\(--panel\);/);
+  });
 });

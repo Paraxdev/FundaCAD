@@ -14,23 +14,27 @@ export interface A11yPrefs {
   /** How much the announcer speaks: nothing, errors only, prompts and results, or every change too. */
   verbosity: Verbosity;
   contrast: Contrast;
+  /** Opaque cards and pills instead of glass, so no model colour shows through; More and Maximum contrast imply it. */
+  solidPanels: boolean;
 }
 
 export const DEFAULT_A11Y: Readonly<A11yPrefs> = {
   animations: "system",
   verbosity: "normal",
   contrast: "system",
+  solidPanels: false,
 };
 
-/** One click for screen reader users. Later settings join it: Single key shortcuts off, Solid panels on and
- *  Notification time Until dismissed. */
-export const SCREEN_READER_PRESET: Readonly<Partial<A11yPrefs>> = { verbosity: "verbose" };
+/** One click for screen reader users. Later settings join it: Single key shortcuts off and Notification time Until
+ *  dismissed. */
+export const SCREEN_READER_PRESET: Readonly<Partial<A11yPrefs>> = { verbosity: "verbose", solidPanels: true };
 
 // fundacad.animations predates this module and held "on" or "off", absent meaning follow the OS; both still read.
 const KEYS: Record<keyof A11yPrefs, string> = {
   animations: "fundacad.animations",
   verbosity: "fundacad.a11y.verbosity",
   contrast: "fundacad.a11y.contrast",
+  solidPanels: "fundacad.a11y.solidPanels",
 };
 
 const ANIMATIONS: readonly Animations[] = ["system", "on", "off"];
@@ -46,18 +50,24 @@ export function asVerbosity(v: unknown): Verbosity | null {
 export function asContrast(v: unknown): Contrast | null {
   return CONTRAST.includes(v as Contrast) ? (v as Contrast) : null;
 }
+export function asFlag(v: unknown): boolean | null {
+  if (v === true || v === "true") return true;
+  if (v === false || v === "false") return false;
+  return null;
+}
 
 const GATES: { [K in keyof A11yPrefs]: (v: unknown) => A11yPrefs[K] | null } = {
   animations: asAnimations,
   verbosity: asVerbosity,
   contrast: asContrast,
+  solidPanels: asFlag,
 };
 
 function readStored(): A11yPrefs {
   const out = { ...DEFAULT_A11Y };
   for (const k of Object.keys(KEYS) as (keyof A11yPrefs)[]) {
     const v = GATES[k](readSetting(KEYS[k]));
-    if (v !== null) (out as Record<keyof A11yPrefs, string>)[k] = v;
+    if (v !== null) (out as Record<keyof A11yPrefs, unknown>)[k] = v;
   }
   return out;
 }
@@ -92,10 +102,10 @@ export function getVerbosity(): Verbosity {
   return current.verbosity;
 }
 
-function store(k: keyof A11yPrefs, v: string | null) {
+function store(k: keyof A11yPrefs, v: string | boolean | null) {
   try {
     if (v === null) localStorage.removeItem(KEYS[k]);
-    else localStorage.setItem(KEYS[k], v);
+    else localStorage.setItem(KEYS[k], String(v));
   } catch {
     /* ignore */
   }

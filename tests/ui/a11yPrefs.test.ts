@@ -61,7 +61,12 @@ afterEach(() => vi.unstubAllGlobals());
 describe("defaults", () => {
   it("follow the system and speak at the normal level when nothing is stored", async () => {
     const m = await load();
-    expect(m.a11yPrefs()).toEqual({ animations: "system", verbosity: "normal", contrast: "system" });
+    expect(m.a11yPrefs()).toEqual({
+      animations: "system",
+      verbosity: "normal",
+      contrast: "system",
+      solidPanels: false,
+    });
     expect(m.getVerbosity()).toBe("normal");
     expect(m.motionOn()).toBe(true);
   });
@@ -108,6 +113,20 @@ describe("stored values", () => {
     expect(calls).toBe(1);
     expect(m.getVerbosity()).toBe("errors");
     expect(stored.get("fundacad.a11y.verbosity")).toBe("errors");
+  });
+
+  it("read Solid panels as true or false and refuse anything else", async () => {
+    boot({ "fundacad.a11y.solidPanels": "true" });
+    let m = await load();
+    expect(m.a11yPrefs().solidPanels).toBe(true);
+    boot({ "fundacad.a11y.solidPanels": "yes" });
+    m = await load();
+    expect(m.a11yPrefs().solidPanels).toBe(false);
+    m.setA11yPref("solidPanels", true);
+    expect(stored.get("fundacad.a11y.solidPanels")).toBe("true");
+    m.setA11yPref("solidPanels", false);
+    expect(stored.get("fundacad.a11y.solidPanels")).toBe("false");
+    expect(m.a11yPrefs().solidPanels).toBe(false);
   });
 
   it("still change for this run when the store refuses the write", async () => {
@@ -168,7 +187,7 @@ describe("the OS preference while the app runs", () => {
 describe("reset and the screen reader preset", () => {
   it("reset drops every stored choice, Hover delay included, and follows the OS again", async () => {
     const os = new FakeQuery(true);
-    boot({ "fundacad.animations": "on", "fundacad.a11y.verbosity": "off" }, os);
+    boot({ "fundacad.animations": "on", "fundacad.a11y.verbosity": "off", "fundacad.a11y.solidPanels": "true" }, os);
     const m = await load();
     m.setHoverDwellMs(1500);
     m.resetA11yPrefs();
@@ -176,17 +195,19 @@ describe("reset and the screen reader preset", () => {
     expect(m.getHoverDwellMs()).toBe(m.DEFAULT_DWELL_MS);
     expect(stored.has("fundacad.animations")).toBe(false);
     expect(stored.has("fundacad.a11y.verbosity")).toBe(false);
+    expect(stored.has("fundacad.a11y.solidPanels")).toBe(false);
     expect(m.motionOn()).toBe(false);
   });
 
-  it("the preset sets Announcements to Verbose, stores it and leaves the rest", async () => {
+  it("the preset sets Announcements to Verbose and Solid panels on, stores them and leaves the rest", async () => {
     boot({ "fundacad.animations": "off" });
     const m = await load();
     let calls = 0;
     m.onA11yPrefsChange(() => calls++);
     m.applyScreenReaderPreset();
-    expect(m.a11yPrefs()).toEqual({ animations: "off", verbosity: "verbose", contrast: "system" });
+    expect(m.a11yPrefs()).toEqual({ animations: "off", verbosity: "verbose", contrast: "system", solidPanels: true });
     expect(stored.get("fundacad.a11y.verbosity")).toBe("verbose");
+    expect(stored.get("fundacad.a11y.solidPanels")).toBe("true");
     expect(calls).toBe(1);
   });
 });

@@ -152,11 +152,22 @@ export function atContrast(p: Record<string, string>, setting: keyof typeof CONT
   return out;
 }
 
-/** The rail pill and readout glass over the bare scene, as _tokens.scss builds --float-bg for each mode. */
-export function glassFill(p: Record<string, string>, mode: "dark" | "light"): Rgba {
+export interface GlassOptions {
+  /** What shows through the glass, the bare scene unless given. */
+  under?: Rgba;
+  /** Solid panels, html.solid-panels in _glass.scss. */
+  solid?: boolean;
+}
+
+const WHITE_MODEL: Rgba = [255, 255, 255, 1];
+
+/** The rail pill and readout glass, as _tokens.scss builds --float-bg for each mode and _glass.scss for Solid panels. */
+export function glassFill(p: Record<string, string>, mode: "dark" | "light", opts: GlassOptions = {}): Rgba {
   const c = (name: string) => parseColor(p[name] ?? `missing ${name}`);
-  if (mode === "light") return mix(mix(c("--raised"), 0.7, c("--bg")), 0.97, c("--viewport-bg"));
-  return mix(c("--panel"), 0.72, c("--viewport-bg"));
+  const under = opts.under ?? c("--viewport-bg");
+  const fill = mode === "light" ? mix(c("--raised"), 0.7, c("--bg")) : c("--panel");
+  if (opts.solid) return over(fill, under);
+  return mix(fill, mode === "light" ? 0.97 : 0.72, under);
 }
 
 /** --control-edge in _tokens.scss is the text colour at this share over the control, for a palette that sets none. */
@@ -194,9 +205,11 @@ export function paletteContrast(
   const add = (what: string, fg: Rgba, bg: Rgba, min: number) =>
     out.push({ what, ratio: Math.round(contrastRatio(fg, bg) * 100) / 100, min });
   const glass = glassFill(p, mode);
+  const solid = glassFill(p, mode, { under: WHITE_MODEL, solid: true });
   for (const fg of TEXT_TOKENS) {
     for (const bg of TEXT_SURFACES) add(`${fg} on ${bg}`, c(fg), c(bg), min.text);
     add(`${fg} on the rail pill glass`, c(fg), glass, min.text);
+    add(`${fg} on a solid panel over a white model`, c(fg), solid, min.text);
   }
   add("--on-accent on --accent", c("--on-accent"), c("--accent"), min.text);
   for (const bg of LINE_SURFACES) add(`--line-strong on ${bg}`, c("--line-strong"), c(bg), min.line);

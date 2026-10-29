@@ -445,8 +445,13 @@ html.no-glass-blur *, html.no-glass-blur *::before, html.no-glass-blur *::after 
 }
 ```
 
-The fills go opaque, while shape, shadow, spacing and accent use stay. This is
-the only legitimate opaque glass, and it must still look finished:
+The fills go opaque, while shape, shadow, spacing and accent use stay. The
+Solid panels setting (Settings, Accessibility) sets the class too, and so do
+More and Maximum contrast, so text over a white or busy model keeps 4.5:1. It
+also adds `solid-panels`, whose rule in `_glass.scss` makes `--float-bg` the
+opaque `--float-bg-solid` in light themes as well, where the plain
+`no-glass-blur` override loses to `:root.theme-light`. These are the only
+legitimate opaque glass, and they must still look finished:
 
 ![Blur off: opaque fills, same shapes and shadows](design/workspace-blur-off.png)
 
