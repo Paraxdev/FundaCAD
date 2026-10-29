@@ -346,7 +346,49 @@ pub struct Step {
 
 /// `asked` is the `bodies` filter; a step where one of them was not built says so on its line.
 pub fn sweep_report(param: &str, unit: &str, steps: &[Step], clearance: f64, asked: &[String]) -> String {
+    sweep_paged(param, unit, steps, clearance, asked, Page { offset: 0, limit: budget::FOLD_FROM }, false)
+}
+
+/// One step's clashing pairs: a long list sums first and goes largest first unless `full`, and shows `page` of
+/// itself. The bool is whether pairs past the page were left out.
+fn step_pairs(pairs: &[Value], page: Page, full: bool) -> (String, bool) {
+    let long = pairs.len() > budget::FOLD_FROM;
+    let mut sorted: Vec<&Value> = pairs.iter().collect();
+    if long && !full {
+        sorted.sort_by(|a, b| f(b, "volume").total_cmp(&f(a, "volume")));
+    }
+    let rows: Vec<String> = sorted.iter().map(|p| format!("{} {} mm3", pair_ids(p), mm(f(p, "volume")))).collect();
+    let total = rows.len();
+    let (shown, cut) = page.cut(rows, "pairs");
+    if cut.is_none() && (full || !long) {
+        return (shown.join(", "), false);
+    }
+    let sum: f64 = pairs.iter().map(|p| f(p, "volume")).sum();
+    let order = if long && !full { ", largest first" } else { "" };
+    let head = format!("{total} pairs, {} mm3 in all{order}", mm(sum));
+    if shown.is_empty() {
+        return (format!("{head}, none from offset {}", page.offset), false);
+    }
+    let end = page.offset + shown.len();
+    if page.offset > 0 {
+        return (format!("{head}, pairs {} to {end}: {}", page.offset + 1, shown.join(", ")), end < total);
+    }
+    let more = if end < total { format!(" and {} more", total - end) } else { String::new() };
+    (format!("{head}: {}{more}", shown.join(", ")), end < total)
+}
+
+/// As `sweep_report`, each step's pairs cut to `page`, and every pair in the engine's order when `full`.
+pub fn sweep_paged(
+    param: &str,
+    unit: &str,
+    steps: &[Step],
+    clearance: f64,
+    asked: &[String],
+    page: Page,
+    full: bool,
+) -> String {
     let at = |v: f64| format!("{param} = {}", g_format(v));
+    let mut left_out = false;
     let mut lines = Vec::new();
     let mut clashing: Vec<String> = Vec::new();
     let mut closest: Option<(f64, String, f64)> = None;
@@ -372,15 +414,9 @@ pub fn sweep_report(param: &str, unit: &str, steps: &[Step], clearance: f64, ask
             format!("{}: {}", at(st.value), if skipped.is_empty() { "clear" } else { "no overlap found" })
         } else {
             clashing.push(g_format(st.value));
-            format!(
-                "{}: CLASH {}",
-                at(st.value),
-                pairs
-                    .iter()
-                    .map(|p| format!("{} {} mm3", pair_ids(p), mm(f(p, "volume"))))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            )
+            let (said, more) = step_pairs(pairs, page, full);
+            left_out |= more;
+            format!("{}: CLASH {said}", at(st.value))
         };
         if let Some(g) = near.first() {
             let d = f(g, "distance");
@@ -495,6 +531,14 @@ pub fn sweep_report(param: &str, unit: &str, steps: &[Step], clearance: f64, ask
             " At {cut_steps} step{} the check stopped early: {}",
             plural(cut_steps),
             cut_short.as_deref().unwrap_or("not every pair was checked.")
+        ));
+    }
+    if left_out {
+        let next = page.offset + page.limit;
+        lines.push(format!(
+            "A step shows pairs {} to {next}: pass offset {next} for the next {}, or limit 0 for every pair",
+            page.offset + 1,
+            page.limit
         ));
     }
     format!("{summary}\n{}", lines.join("\n"))

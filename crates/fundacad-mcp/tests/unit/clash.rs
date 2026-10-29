@@ -218,3 +218,39 @@ fn pairs_with_no_body_in_common_fold_to_their_pair_ids_in_counting_order() {
     assert!(text.contains("(and 11 more alike: body2/body3, body3/body4, "), "{text}");
     assert!(text.contains("body9/body10, body10/body11, body11/body12, body12/body13)"), "{text}");
 }
+
+#[test]
+fn a_sweep_step_with_a_long_list_sums_it_and_shows_its_largest_pairs() {
+    let r = a_bar_through_pins();
+    let steps = [Step { value: 1.0, reply: Ok(r.clone()) }, Step { value: 2.0, reply: Ok(r) }];
+    let top: Vec<String> = (3..=11).map(|b| format!("body1/body{b} 4 mm3")).collect();
+    let text = sweep_report("lift", "mm", &steps, 0.0, &[]);
+    let step = format!(
+        "CLASH 13 pairs, 57 mm3 in all, largest first: body1/body2 9 mm3, {} and 3 more, closest body1/body21 1 mm",
+        top.join(", ")
+    );
+    assert_eq!(
+        text,
+        format!(
+            "Overlaps at 2 of 2 steps: lift = 1, 2 mm.\nlift = 1: {step}\nlift = 2: {step}\n\
+             A step shows pairs 1 to 10: pass offset 10 for the next 10, or limit 0 for every pair"
+        )
+    );
+
+    let rest = sweep_paged("lift", "mm", &steps[..1], 0.0, &[], Page { offset: 10, limit: 10 }, false);
+    assert_eq!(
+        rest,
+        "Overlaps at 1 of 1 steps: lift = 1 mm.\nlift = 1: CLASH 13 pairs, 57 mm3 in all, largest first, pairs 11 to 13: \
+         body1/body12 4 mm3, body1/body13 4 mm3, body1/body14 4 mm3, closest body1/body21 1 mm"
+    );
+
+    let full = sweep_paged("lift", "mm", &steps[..1], 0.0, &[], Page::all(), true);
+    let every: Vec<String> = (2..=14).map(|b| format!("body1/body{b} {} mm3", if b == 2 { 9 } else { 4 })).collect();
+    assert_eq!(
+        full,
+        format!(
+            "Overlaps at 1 of 1 steps: lift = 1 mm.\nlift = 1: CLASH {}, closest body1/body21 1 mm",
+            every.join(", ")
+        )
+    );
+}

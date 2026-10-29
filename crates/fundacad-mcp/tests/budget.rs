@@ -84,15 +84,23 @@ fn every_reply_on_a_pattern_of_2000_pins_stays_within_its_byte_budget() {
         ("feature_add", json!({"feature": {"type": "box", "length": 1, "width": 1, "height": 1}}), 200),
         ("doc_save", json!({"path": path(tmp.path(), "grid.funda")}), 400),
     ];
+    within_budget(&mut mcp, calls);
+}
+
+/// Each call's reply, once every one of them has been found to fit its budget of bytes.
+fn within_budget<const N: usize>(mcp: &mut Mcp, calls: [(&str, Value, usize); N]) -> Vec<String> {
     let mut over = Vec::new();
+    let mut replies = Vec::new();
     for (tool, args, budget) in calls {
-        let text = reply(&mut mcp, tool, args.clone());
+        let text = reply(mcp, tool, args.clone());
         eprintln!("{tool} {args}: {} bytes of {budget}", text.len());
         if text.len() > budget {
             over.push(format!("{tool} {args}: {} bytes, budget {budget}:\n{}", text.len(), head(&text)));
         }
+        replies.push(text);
     }
     assert!(over.is_empty(), "over budget:\n{}", over.join("\n\n"));
+    replies
 }
 
 #[test]
@@ -173,4 +181,51 @@ fn every_row_a_long_reply_folds_or_pages_away_is_one_argument_off() {
     reply(&mut mcp, "doc_set", json!({ "document": doc }));
     let back: Value = serde_json::from_str(&reply(&mut mcp, "doc_get", json!({"full": true}))).expect("JSON");
     assert_eq!(back["bodyIds"], whole["bodyIds"], "doc_set spells a folded run out again");
+}
+
+const BLOCKS: usize = 60;
+
+/// 60 boxes 4 mm apart, each a little longer than the last and overlapping the next alone, so nothing is alike: only the pages
+/// keep these replies short. Box widths are the parameter `w`, which the sweep steps.
+fn blocks() -> Mcp {
+    let mut mcp = Mcp::start(&BTreeMap::new(), &std::env::temp_dir());
+    let mut ops = vec![json!({"op": "param", "name": "w", "expr": "2"})];
+    for i in 1..=BLOCKS {
+        let length = 4.0 + 0.01 * i as f64;
+        ops.push(add(json!({"type": "box", "length": length, "width": "w", "height": 2})));
+        ops.push(add(json!({"type": "move", "dx": 4 * i, "bodies": [format!("body{i}")]})));
+    }
+    reply(&mut mcp, "edit", json!({ "ops": ops }));
+    mcp
+}
+
+#[test]
+fn every_reply_on_60_distinct_bodies_stays_within_its_byte_budget() {
+    let _turn = ONE_GRID.lock().unwrap_or_else(|e| e.into_inner());
+    let mut mcp = blocks();
+    let tmp = tempfile::tempdir().expect("a temp dir");
+    let sweep = json!({"sweep": {"param": "w", "values": [2, 2.5, 3]}, "clearance": 0});
+    let calls = [
+        ("build", json!({}), 3000),
+        ("inspect", json!({}), 3000),
+        ("inspect", json!({"detail": true}), 7000),
+        ("interference", json!({}), 3500),
+        ("interference", sweep, 1500),
+        ("printability", json!({}), 400),
+        ("section", json!({"axis": "Z", "at": 0.5}), 10000),
+        ("export", json!({"path": path(tmp.path(), "block.stl"), "format": "stl", "separate": true}), 400),
+        ("doc_get", json!({}), 11000),
+    ];
+    let replies = within_budget(&mut mcp, calls);
+
+    let clash = &replies[3];
+    assert!(clash.starts_with(&format!("{} overlapping pairs: ", BLOCKS - 1)), "{}", head(clash));
+    assert!(clash.contains(&format!("  showing overlap rows 1 to 30 of {}: pass offset 30", BLOCKS - 1)), "{clash}");
+    let swept = &replies[4];
+    assert_eq!(swept.matches(&format!(": CLASH {} pairs, ", BLOCKS - 1)).count(), 3, "{swept}");
+    assert!(swept.ends_with("A step shows pairs 1 to 10: pass offset 10 for the next 10, or limit 0 for every pair"));
+    let cut = &replies[6];
+    assert!(cut.contains(&format!("\nshowing body rows 1 to 30 of {BLOCKS}: pass offset 30 for the next 30")), "{cut}");
+    let every = reply(&mut mcp, "interference", json!({"sweep": {"param": "w", "values": [2]}, "full": true}));
+    assert_eq!(every.matches(" mm3").count(), BLOCKS - 1, "full lists every pair of the step: {every}");
 }

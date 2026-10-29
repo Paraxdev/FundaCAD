@@ -2314,11 +2314,6 @@ impl FundaCad {
                 None => return failure(format!("`clearance` is a distance in mm, 0 or more, got {v}")),
             },
         };
-        let full = truthy(args.get("full"));
-        let page = match Page::of(args, if full { 0 } else { budget::ROWS }) {
-            Ok(p) => p,
-            Err(why) => return failure(why),
-        };
         let bodies: Vec<String> = args
             .get("bodies")
             .and_then(Value::as_array)
@@ -2330,6 +2325,13 @@ impl FundaCad {
                 Ok(s) => Some(s),
                 Err(e) => return failure(e),
             },
+        };
+        let full = truthy(args.get("full"));
+        // A sweep repeats its pair list at every step, so a step shows fewer of them.
+        let rows = if sweep.is_some() { budget::FOLD_FROM } else { budget::ROWS };
+        let page = match Page::of(args, if full { 0 } else { rows }) {
+            Ok(p) => p,
+            Err(why) => return failure(why),
         };
         let (link, doc) = {
             let mut st = self.state.lock().await;
@@ -2420,7 +2422,7 @@ impl FundaCad {
             };
             steps.push(crate::clash::Step { value: *value, reply });
         }
-        let report = crate::clash::sweep_report(&sweep.param, &unit, &steps, clearance, &bodies);
+        let report = crate::clash::sweep_paged(&sweep.param, &unit, &steps, clearance, &bodies, page, full);
         let built: Vec<&Value> = steps.iter().filter_map(|s| s.reply.as_ref().ok()).collect();
         if built.is_empty() {
             return failure(report);
