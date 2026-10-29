@@ -24,7 +24,7 @@
 .ui-tab:focus-visible {
   corner-shape: squircle;
   border-radius: var(--float-chip-radius);
-  outline-offset: -2px;
+  outline-offset: calc(-1 * var(--focus-ring-width));
 }
 .ui-tab.is-selected::after {
   content: "";

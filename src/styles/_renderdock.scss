@@ -89,7 +89,7 @@
   padding: var(--s-1) 0;
 }
 .rd-search input:focus-visible {
-  outline: 1px solid var(--accent);
+  outline: var(--focus-ring-width) solid var(--accent);
   outline-offset: 2px;
 }
 

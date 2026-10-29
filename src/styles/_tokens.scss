@@ -84,6 +84,8 @@
   --field-bg: rgba(0, 0, 0, 0.3);
   /* The inset edge of every field like control, 3:1 on the panel and on the control fill (ui/contrast.ts). */
   --control-edge: color-mix(in srgb, var(--text) 50%, transparent);
+  /* Every keyboard focus outline, 3px under More and Maximum contrast. */
+  --focus-ring-width: 2px;
   /* A dialog's scrim when the blur is off and the fill alone must set the app behind apart. */
   --scrim-flat: rgba(5, 4, 9, 0.6);
   /* An empty checkbox, a deeper well than a field so the small box still reads on a card. */

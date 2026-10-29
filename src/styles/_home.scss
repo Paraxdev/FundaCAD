@@ -238,8 +238,8 @@ $card-bleed-bottom: 44px;
 }
 .home-card:focus-visible,
 .home-example:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
+  outline: var(--focus-ring-width) solid var(--accent);
+  outline-offset: calc(-1 * var(--focus-ring-width));
 }
 .home-card.missing {
   opacity: 0.55;

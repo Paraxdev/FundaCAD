@@ -38,7 +38,7 @@
   background: linear-gradient(var(--hover-wash), var(--hover-wash)), var(--hover-wash);
 }
 .ui-segment:focus-visible {
-  outline-offset: -2px;
+  outline-offset: calc(-1 * var(--focus-ring-width));
 }
 .ui-segment.is-selected {
   background: var(--accent-wash);

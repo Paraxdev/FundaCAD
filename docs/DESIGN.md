@@ -189,7 +189,7 @@ There is no info, success tint, warn tint or disabled token. Derive them:
 | Hover of a control | `linear-gradient(var(--hover-wash), var(--hover-wash)), <the control's own fill>` |
 | Menu or list row hover, selected row | `color-mix(in srgb, var(--accent) 16%, transparent)`, text `--accent-hot`, no ring |
 | Tile on | `linear-gradient(var(--accent-wash), var(--accent-wash)), var(--float-tile-bg)` |
-| Field focus | `outline: 1px solid var(--accent)`, no ring and no border change |
+| Field focus | `outline: var(--focus-ring-width) solid var(--accent)`, offset 1px, no ring and no border change |
 | Warn or error surface | `color-mix(in srgb, var(--warn) 9%, var(--float-bg-solid))` (`.perf-pop`), `color-mix(in srgb, var(--error) 22%, var(--float-bg-solid))` (`.toast-error`) |
 | Warn or error small text on glass or a panel | `color-mix(in srgb, var(--warn) 60%, var(--text))` or the same with `--error` (`.sketch-dim.conflict`, `.rel-row.over .rel-sym`); the bare `--warn` and `--error` pass on the panels, keep them for borders and panel text |
 
@@ -693,11 +693,11 @@ painting.
 |---|---|---|
 | Hover | `:hover:not(.is-disabled)` | `--hover-wash` over the fill, or the component's own, below |
 | Pressed | `:active:not(.is-disabled)` | a scale (0.97 on a button, 0.94 on an icon button or a tile) or a deeper wash |
-| Focus visible | `:focus-visible` | the shared outline ([11](#11-accessibility)); a field 1px accent on its well; a segment, tab, menu item or list row inset |
+| Focus visible | `:focus-visible` | the shared outline ([11](#11-accessibility)); a field the same ring on its well, offset 1px; a segment, tab, menu item or list row inset by the ring width |
 | On | `.is-on`, `aria-pressed` or `aria-checked` | `--accent-wash` over the fill with `--accent-hot` ink, or an `--accent` fill on `Checkbox` and `Switch` |
 | Selected | `.is-selected`, `aria-selected` or `aria-checked` | accent 16% or `--accent-wash`, `--accent-hot` |
 | Open | `.is-open`, `aria-expanded` | the hover look, held while its menu or list is open |
-| Error | `.is-error`, `aria-invalid` | `--error-tint`, an `--error` outline while focused, the reason in `title` |
+| Error | `.is-error`, `aria-invalid` | `--error-tint`, the accent ring kept while focused, the reason in `title` |
 | Disabled | `.is-disabled`, `aria-disabled="true"` | opacity 0.45, `cursor: default`, no hover and no press |
 
 Disabled is one model everywhere, `useDisabled` (`src/components/ui/useDisabled.ts`):
@@ -849,12 +849,12 @@ with the last raw button.
 ### 7.5 Inputs and selects
 
 A field is a sunken well: `--field-bg`, darker than the surface it sits on, ringed by the inset 1px `--control-edge`
-(`box-shadow: inset 0 0 0 1px`, never a border or outline). Focus draws a 1px accent outline on the well, not on the
-input inside it.
+(`box-shadow: inset 0 0 0 1px`, never a border or outline). Focus draws the shared ring on the well, offset 1px, not on
+the input inside it, and the error state keeps it.
 
 | Component | Idle | Focus | Error and other states |
 |---|---|---|---|
-| `TextField`, `NumberField` (`.ui-field`) | squircle, chip radius, fill `--field-bg`, the inset `--control-edge`; `md` 32px, padding `0 var(--s-3)`, 12px; `sm` 24px, padding `0 var(--s-2)`, 11px; placeholder `--text-mute`; `NumberField` in tabular numbers | `outline: 1px solid var(--accent)` on `:focus-within`, no ring | `.is-error`: fill `--error-tint`, the outline `--error`; disabled, the disabled model |
+| `TextField`, `NumberField` (`.ui-field`) | squircle, chip radius, fill `--field-bg`, the inset `--control-edge`; `md` 32px, padding `0 var(--s-3)`, 12px; `sm` 24px, padding `0 var(--s-2)`, 11px; placeholder `--text-mute`; `NumberField` in tabular numbers | `outline: var(--focus-ring-width) solid var(--accent)` on `:focus-within`, offset 1px, no ring | `.is-error`: fill `--error-tint`, the accent ring kept, the reason tells the error; disabled, the disabled model |
 | `UnitChip` (`.ui-unit-chip`) | a 600 `--text-mute` word on no fill, inside the well | | picker: hover and open `--accent-hot` on `--hover-wash`, pressed `--accent-wash` |
 | `Select` (`.sm-select.select-trigger`) | as the field, plus a drawn caret; `sm` 24px | as the field, the edge kept | `.is-open`: accent 14% into the well, and a `.float-popover.select-pop` of `.opt-row`s whose keyboard row is `.is-active`, washed; disabled keeps its caret |
 
@@ -883,10 +883,10 @@ shows in the model as you flip it.
 
 | Component | Idle | On | Disabled | Focus |
 |---|---|---|---|---|
-| `Checkbox` (`.ui-checkbox`) | an 18 by 18 box, squircle, radius half the chip radius, fill `--check-off`, the inset `--control-edge`; hover `--hover-wash` over it. The native input lies over the box, so ids, labels and change handlers stay native; Space flips it once | `.is-on`: fill `--accent` and no edge, a `--on-accent` tick, hover `--accent-hot`; `.is-mixed` (`indeterminate`) a bar instead of the tick | the box and label fade, no hover | `outline: 2px solid var(--accent)`, offset 2px, round the box |
+| `Checkbox` (`.ui-checkbox`) | an 18 by 18 box, squircle, radius half the chip radius, fill `--check-off`, the inset `--control-edge`; hover `--hover-wash` over it. The native input lies over the box, so ids, labels and change handlers stay native; Space flips it once | `.is-on`: fill `--accent` and no edge, a `--on-accent` tick, hover `--accent-hot`; `.is-mixed` (`indeterminate`) a bar instead of the tick | the box and label fade, no hover | the ring width, offset 2px, round the box |
 | `Switch` (`.ui-switch`, `role="switch"`, `aria-checked`) | 36 by 20, `--r-pill` track `--raised-2` with the inset `--control-edge`, knob 14px `--text`; hover `--hover-wash` over the track; pressed, the knob stretches | `.is-on`: track `--accent` and no edge, hover `--accent-hot`, knob `translateX(16px)` in `--on-accent` | the disabled model | the shared outline |
 | `SwitchRow` (`.ui-switch-row`, a `<label>`) | `float`: padding `6px var(--s-1)`, squircle, chip radius, 12.5px, the state "On" or "Off" in 11.5px `--text-mute`, row hover `--hover-wash`; `param`: a 12px `--text-dim` label with the switch at the end | the switch's | the row fades as a whole, the switch inside does not fade again | the switch's |
-| `Slider` (`.ui-slider`) | label `--text-dim`, a 4px `--r-pill` track filled `--accent` up to the value, past it `--control-edge` over `--check-off` (a 4px rail takes the edge colour whole, not as a rim; `.profile-slider` too), a 14px `--text` thumb, the value in 11.5px tabular `--text-dim`; hover `scale(1.15)` on the thumb, pressed `scale(1.25)` and `--accent-hot` | | the disabled model | `outline: 2px solid var(--accent)`, offset 2px, round the thumb |
+| `Slider` (`.ui-slider`) | label `--text-dim`, a 4px `--r-pill` track filled `--accent` up to the value, past it `--control-edge` over `--check-off` (a 4px rail takes the edge colour whole, not as a rim; `.profile-slider` too), a 14px `--text` thumb, the value in 11.5px tabular `--text-dim`; hover `scale(1.15)` on the thumb, pressed `scale(1.25)` and `--accent-hot` | | the disabled model | the ring round the whole `.ui-slider` row, chip radius, through `:has(.ui-slider-input:focus-visible)`; round the thumb, offset 2px, only where `:has` is missing, as WebKit paints no outline on the thumb |
 
 A click anywhere on a `SwitchRow` flips the switch once, since the row is the switch's label. The old `.sm-slider`
 is a native range with `accent-color: var(--accent)`.
@@ -1314,15 +1314,19 @@ What this means for you:
 Focus:
 
 - The shared outline (`_base.scss`):
-  `:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }`.
+  `:focus-visible { outline: var(--focus-ring-width) solid var(--accent); outline-offset: 1px; }`.
+  `--focus-ring-width` is 2px, and every focus outline reads it (`tests/ui/focusRing.test.ts`).
   It shows on keyboard focus only, never on a pointer click, and it is the one
   outline on a rounded surface ([Depth without lines](#depth-without-lines)).
 - Fields (`TextField`, `NumberField`, `Select`, and the old `.sm-input`,
-  `.param-row input` and Items filter) draw a 1px accent outline with no offset
-  while focused. `Checkbox` draws a 2px outline at a 2px offset around its box,
-  `Slider` around its thumb.
+  `.param-row input` and Items filter) draw the same ring at a 1px offset
+  while focused, and an error keeps it. `Checkbox` draws it at a 2px offset
+  around its box. `Slider` draws it round its whole row through `:has`, since
+  WebKit paints no outline on the thumb, and round the thumb only where `:has`
+  is missing.
 - Tabs, segments, menu items and list rows use an inset outline
-  (`outline-offset: -2px`), so a clipped row does not hide it. On the rail the
+  (`outline-offset: calc(-1 * var(--focus-ring-width))`), so a clipped row
+  does not hide it. On the rail the
   outline is on the `.rail-btn` button, not on the `.rail-tile` inside it.
 - Never use a ring `box-shadow` for focus, and never `outline: none` without a
   replacement.

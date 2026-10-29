@@ -700,7 +700,7 @@
 
 .float-tab:focus-visible {
   border-radius: var(--float-chip-radius);
-  outline-offset: -2px;
+  outline-offset: calc(-1 * var(--focus-ring-width));
 }
 .float-tabs {
   display: flex;

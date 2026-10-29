@@ -196,8 +196,8 @@
   cursor: pointer;
 }
 .sm-select:focus {
-  outline: 1px solid var(--accent);
-  outline-offset: 0;
+  outline: var(--focus-ring-width) solid var(--accent);
+  outline-offset: 1px;
 }
 /* WebKitGTK renders the native option popup light by default. */
 .sm-select option {
@@ -233,8 +233,8 @@
   min-width: 0;
 }
 .sm-input:focus {
-  outline: 1px solid var(--accent);
-  outline-offset: 0;
+  outline: var(--focus-ring-width) solid var(--accent);
+  outline-offset: 1px;
 }
 .sm-inv {
   font-size: 11px;

@@ -148,8 +148,8 @@
   padding: 0 4px;
 }
 .dim-field input:focus {
-  outline: 1px solid var(--accent);
-  outline-offset: 0;
+  outline: var(--focus-ring-width) solid var(--accent);
+  outline-offset: 1px;
 }
 /* A quiet word that changes the shown unit without retyping. */
 .dim-unit {
@@ -244,8 +244,8 @@
   background: var(--hover-wash);
 }
 .dim-btn:focus-visible {
-  outline: 1px solid var(--accent);
-  outline-offset: 0;
+  outline: var(--focus-ring-width) solid var(--accent);
+  outline-offset: 1px;
 }
 /* A segment that names itself ("G1") beside a small glyph. */
 .dim-btn.dim-texted {
@@ -571,8 +571,8 @@
   transition: border-color var(--t-fast) var(--ease);
 }
 .units select:focus {
-  outline: 1px solid var(--accent);
-  outline-offset: 0;
+  outline: var(--focus-ring-width) solid var(--accent);
+  outline-offset: 1px;
 }
 
 /* The angle a ring drag has turned, at the leading edge of the dial. */
