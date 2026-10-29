@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, useId, watch } from "vue";
+import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 import { fmtKeys } from "../../input/platform";
 import { useDisabled } from "./useDisabled";
 import { announce } from "../../ui/announce";
@@ -61,7 +61,28 @@ function onInput(e: Event) {
 }
 // A focused range speaks its own value for keys and a screen reader's own steps, so only a pointer drag is announced.
 let dragged = false;
-const onPointerdown = () => (dragged = true);
+let release: AbortController | null = null;
+let releaseTimer: ReturnType<typeof setTimeout> | undefined;
+function endDrag() {
+  release?.abort();
+  release = null;
+  clearTimeout(releaseTimer);
+  dragged = false;
+}
+function onPointerdown() {
+  endDrag();
+  dragged = true;
+  release = new AbortController();
+  // The release fires change after pointerup in the same task, so the mark is cleared one task later.
+  const ended = () => {
+    release?.abort();
+    release = null;
+    releaseTimer = setTimeout(() => (dragged = false));
+  };
+  window.addEventListener("pointerup", ended, { signal: release.signal });
+  window.addEventListener("pointercancel", ended, { signal: release.signal });
+}
+onBeforeUnmount(endDrag);
 function onChange(e: Event) {
   const el = e.target as HTMLInputElement;
   const wasDrag = dragged;
@@ -118,6 +139,7 @@ function onKeydown(e: KeyboardEvent) {
       :aria-valuetext="unit ? readout : undefined"
       :aria-disabled="disabled ? 'true' : undefined"
       @pointerdown="onPointerdown"
+      @blur="endDrag"
       @input="onInput"
       @change="onChange"
       @keydown="onKeydown"

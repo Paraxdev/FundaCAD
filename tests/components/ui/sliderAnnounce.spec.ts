@@ -59,4 +59,42 @@ describe("Slider speech", () => {
     await flushPromises();
     expect(announce).not.toHaveBeenCalled();
   });
+
+  it("still speaks a drag whose change fires just after the pointer is released", async () => {
+    const w = await render({});
+    range(w).dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    range(w).value = "45";
+    range(w).dispatchEvent(new Event("input", { bubbles: true }));
+    range(w).dispatchEvent(new Event("pointerup", { bubbles: true }));
+    range(w).dispatchEvent(new Event("change", { bubbles: true }));
+    await flushPromises();
+    expect(vi.mocked(announce).mock.calls.map((c) => c[0])).toEqual(["Opacity 45%"]);
+  });
+
+  const stepByReader = async (w: Awaited<ReturnType<typeof render>>, v: number) => {
+    range(w).value = String(v);
+    range(w).dispatchEvent(new Event("input", { bubbles: true }));
+    range(w).dispatchEvent(new Event("change", { bubbles: true }));
+    await flushPromises();
+  };
+
+  it.each([
+    ["a click that leaves the value where it was", "pointerup"],
+    ["a lost pointer", "pointercancel"],
+  ])("says nothing for a reader's step after %s", async (_, end) => {
+    const w = await render({});
+    range(w).dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    window.dispatchEvent(new Event(end));
+    await new Promise((r) => setTimeout(r, 2));
+    await stepByReader(w, 60);
+    expect(announce).not.toHaveBeenCalled();
+  });
+
+  it("says nothing for a reader's step once focus has left after a press", async () => {
+    const w = await render({});
+    range(w).dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    range(w).dispatchEvent(new Event("blur"));
+    await stepByReader(w, 60);
+    expect(announce).not.toHaveBeenCalled();
+  });
 });
