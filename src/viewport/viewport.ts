@@ -134,7 +134,7 @@ const NO_WORK: ActiveWork = { tool: false, sketch: false, planes: false };
 const SKETCH_DIM_OPACITY = 0.55;
 const SKETCH_DIM_EDGE_OPACITY = 0.5;
 
-import { Highlighter, edgeHoverColor, sameHover } from "./highlight";
+import { Highlighter, PREVIEW_PAINT, edgeHoverColor, sameHover } from "./highlight";
 import { DRAFT_COLORS } from "./draftColors";
 import { ProgressiveModel } from "./progressive";
 import { nearestEdgeByMid, nearestEdgeByCurve, midMatchTol, edgeSelectorFrom, polylineMid } from "./edgeMatch";
@@ -1554,7 +1554,9 @@ export class Viewport {
         this.edgeScope = { scope: "single", reason: "shift" };
       }
     }
-    if (h.setSelection({ faces, edges, bodies })) this.requestRender();
+    const paint = h.setSelection({ faces, edges, bodies }, announce ? Infinity : PREVIEW_PAINT);
+    if (paint.changed) this.requestRender();
+    if (paint.pending) this.areaFrame.queue();
     if (!announce) return;
     if (kind === "bodies") this.onBodySelectionChange?.();
     else this.onSelectionChange?.();

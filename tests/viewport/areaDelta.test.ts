@@ -32,7 +32,7 @@ describe("box preview delta", () => {
     await Promise.resolve();
     const s = spies(h);
     const lines = vi.spyOn(LineSegmentsGeometry.prototype, "setPositions");
-    expect(h.setSelection(take([...faces, 5000], draw.refs.slice(0, 5000)))).toBe(true);
+    expect(h.setSelection(take([...faces, 5000], draw.refs.slice(0, 5000))).changed).toBe(true);
     await Promise.resolve();
     expect(s.paintFace).toHaveBeenCalledTimes(1);
     expect(s.restoreFace).not.toHaveBeenCalled();
@@ -66,7 +66,7 @@ describe("box preview delta", () => {
     h.setSelection(take([1, 2], draw.refs.slice(0, 5)));
     await Promise.resolve();
     const s = spies(h);
-    expect(h.setSelection(take([2, 1], draw.refs.slice(0, 5)))).toBe(false);
+    expect(h.setSelection(take([2, 1], draw.refs.slice(0, 5))).changed).toBe(false);
     expect(s.paintFace).not.toHaveBeenCalled();
     expect(s.tint).not.toHaveBeenCalled();
     expect(s.overlay).not.toHaveBeenCalled();
@@ -91,7 +91,7 @@ describe("box preview delta", () => {
     const h = new Highlighter(view);
     h.setSelection(take([], [], ["b1"]));
     expect(h.getSelectedBodies()).toEqual(["b1"]);
-    expect(h.setSelection(take([], [], ["b1"]))).toBe(false);
+    expect(h.setSelection(take([], [], ["b1"])).changed).toBe(false);
     h.setSelection(take([3], []));
     expect(h.getSelectedBodies()).toEqual([]);
     expect(h.getSelectedFaces()).toEqual([3]);

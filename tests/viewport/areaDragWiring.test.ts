@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { Viewport, type AreaDrag } from "../../src/viewport/viewport";
 import { dragBox, FrameCoalescer } from "../../src/viewport/areaSelect";
 import { PREVIEW_REACH } from "../../src/viewport/areaProjection";
+import { PREVIEW_PAINT } from "../../src/viewport/highlight";
 
 const hoisted = vi.hoisted(() => ({ collect: vi.fn() }));
 vi.mock("../../src/viewport/areaProjection", async (orig) => ({
@@ -140,7 +141,7 @@ describe("box drag wiring", () => {
   it("finishes a preview its reach budget cut short in the next frame, and takes the whole box on release", () => {
     const r = rig();
     delete r.vp.selectInBox;
-    const setSelection = vi.fn((_: { faces: Set<number> }) => true);
+    const setSelection = vi.fn((_: { faces: Set<number> }) => ({ changed: true, pending: false }));
     Object.assign(r.vp, {
       model: {},
       areaFilter: "all",
@@ -167,6 +168,34 @@ describe("box drag wiring", () => {
       queued: 1,
       after: 0,
       takes: [[1], [1, 2], [1, 2]],
+    });
+  });
+
+  it("goes on painting in the next frame while the take is past a frame's paint budget, and paints it whole on release", () => {
+    const r = rig();
+    delete r.vp.selectInBox;
+    const setSelection = vi
+      .fn((_: { faces: Set<number> }, __?: number) => ({ changed: true, pending: false }))
+      .mockReturnValueOnce({ changed: true, pending: true });
+    Object.assign(r.vp, {
+      model: {},
+      areaFilter: "all",
+      selectionMode: "faces",
+      onSelectionChange: vi.fn(),
+      highlighter: { settle: vi.fn(), setSelection },
+    });
+    const full = { faces: [1, 2], edges: [], bodies: [], pending: false };
+    hoisted.collect.mockReturnValueOnce(full).mockReturnValueOnce(full).mockReturnValueOnce(full);
+    r.move(160, 140);
+    r.frame();
+    const queued = r.frames.size;
+    r.frame();
+    const after = r.frames.size;
+    r.up(160, 140);
+    expect({ budgets: setSelection.mock.calls.map((c) => c[1]), queued, after }).toEqual({
+      budgets: [PREVIEW_PAINT, PREVIEW_PAINT, Infinity],
+      queued: 1,
+      after: 0,
     });
   });
 });

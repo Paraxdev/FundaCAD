@@ -213,3 +213,77 @@ describe("box delta end state", () => {
     hb.dispose();
   });
 });
+
+describe("a box frame on a paint budget", () => {
+  const names = (h: Highlighter) => h.getSelectedEdges().map((e) => `${e.body}:${e.id}`);
+
+  it("paints whole bodies up to its budget, keeps the rest as they were, and ends where one call does", async () => {
+    const a = bodiesRig(3, 12);
+    const b = bodiesRig(3, 12);
+    const ha = new Highlighter(a.view);
+    const hb = new Highlighter(b.view);
+    ha.setSelection(take([0, 1, 30], [a.refs[0]!, a.refs[30]!]));
+    hb.setSelection(take([0, 1, 30], [b.refs[0]!, b.refs[30]!]));
+    const steps = [];
+    for (let i = 0; i < 3; i++) {
+      const got = ha.setSelection(take([0, 1, 12, 13], [a.refs[0]!, a.refs[11]!]), 1);
+      await settle();
+      steps.push({ ...got, faces: ha.getSelectedFaces(), edges: names(ha) });
+    }
+    hb.setSelection(take([0, 1, 12, 13], [b.refs[0]!, b.refs[11]!]));
+    await settle();
+    expect({ steps, end: painted(ha, a) }).toEqual({
+      steps: [
+        { changed: true, pending: true, faces: [0, 1], edges: ["b0:e0"] },
+        { changed: true, pending: false, faces: [0, 1, 12, 13], edges: ["b0:e0", "b1:e0"] },
+        { changed: false, pending: false, faces: [0, 1, 12, 13], edges: ["b0:e0", "b1:e0"] },
+      ],
+      end: painted(hb, b),
+    });
+    ha.dispose();
+    hb.dispose();
+  });
+
+  for (const seed of [31, 32, 33, 34, 35, 36]) {
+    it(`lands where a clear and select does once its frames run out, seed ${seed}`, async () => {
+      const a = bodiesRig(4, 9);
+      const b = bodiesRig(4, 9);
+      const ha = new Highlighter(a.view);
+      const hb = new Highlighter(b.view);
+      ha.setErrorEdges([a.refs[3]!, a.refs[20]!]);
+      hb.setErrorEdges([b.refs[3]!, b.refs[20]!]);
+      const rnd = seeded(seed);
+      for (let step = 0; step < 12; step++) {
+        const p = rnd() * 0.6;
+        const faces: number[] = [];
+        const edges: number[] = [];
+        for (let f = 0; f < 36; f++) if (rnd() < p) faces.push(f);
+        a.refs.forEach((_, i) => rnd() < p && edges.push(i));
+        if (rnd() < 0.4) {
+          const at = Math.floor(rnd() * a.refs.length);
+          ha.hoverEdge(a.refs[at]!);
+          hb.hoverEdge(b.refs[at]!);
+        }
+        const budget = 1 + Math.floor(rnd() * 80);
+        const want = take(
+          faces,
+          edges.map((i) => a.refs[i]!),
+        );
+        let calls = 1;
+        while (ha.setSelection(want, budget).pending) calls++;
+        clearAndSelect(
+          hb,
+          take(
+            faces,
+            edges.map((i) => b.refs[i]!),
+          ),
+        );
+        await settle();
+        expect(calls, `step ${step}`).toBeLessThanOrEqual(4);
+        expect(painted(ha, a), `step ${step}`).toEqual(painted(hb, b));
+      }
+      ha.dispose();
+      hb.dispose();
+    });
+  }
+});

@@ -23,6 +23,9 @@ import { PICK_ALPHA, composite, pickColor, type PickKind } from "./pickColors";
 import { uploadSpan, uploadWhole } from "./gpuUpload";
 
 const EDGE_BASE = new THREE.Color(0x1b1f24);
+/** Triangles and edge points a box preview frame repaints, counted over each body it changes, so a sweep over many
+ *  bodies paints over a few frames instead of stalling one. */
+export const PREVIEW_PAINT = 60_000;
 /** Px. An idle edge is 1.6 (edgeLines.ts EDGE_IDLE_WIDTH), so a pick stays thin enough to show which edge it is. */
 const EDGE_PICK_WIDTH: Record<PickKind, number> = { hover: 2.4, select: 3 };
 const EDGE_PICK_NAME = "edge-pick-line";
@@ -182,6 +185,14 @@ interface PickOverlay {
   key: string;
   meshes: THREE.Mesh[];
   shown: boolean;
+}
+
+/** `held` in `want`'s order, then what it holds that `want` drops, as a budgeted frame leaves it. */
+function inOrderOf<T>(want: ReadonlySet<T>, held: ReadonlySet<T>): Set<T> {
+  const out = new Set<T>();
+  for (const x of want) if (held.has(x)) out.add(x);
+  for (const x of held) out.add(x);
+  return out;
 }
 
 export interface HoverState {
@@ -743,23 +754,45 @@ export class Highlighter {
 
   /** Moves the selection to exactly `want`, painting only what changed, so a box preview frame costs its delta and an
    *  unchanged one nothing. False when nothing changed. */
-  setSelection(want: {
-    faces: ReadonlySet<number>;
-    edges: ReadonlySet<EdgeRef>;
-    bodies: ReadonlySet<string>;
-  }): boolean {
+  /** With a `budget` (PREVIEW_PAINT) the bodies past it keep their picks for a later call, and `pending` says so. */
+  setSelection(
+    want: {
+      faces: ReadonlySet<number>;
+      edges: ReadonlySet<EdgeRef>;
+      bodies: ReadonlySet<string>;
+    },
+    budget = Infinity,
+  ): { changed: boolean; pending: boolean } {
     const minus = <T>(a: ReadonlySet<T>, b: ReadonlySet<T>) => {
       const out: T[] = [];
       for (const x of a) if (!b.has(x)) out.push(x);
       return out;
     };
-    const dropFaces = minus(this.selectedFaces, want.faces);
-    const addFaces = minus(want.faces, this.selectedFaces);
-    const dropEdges = minus(this.selectedEdges, want.edges);
-    const addEdges = minus(want.edges, this.selectedEdges);
+    let dropFaces = minus(this.selectedFaces, want.faces);
+    let addFaces = minus(want.faces, this.selectedFaces);
+    let dropEdges = minus(this.selectedEdges, want.edges);
+    let addEdges = minus(want.edges, this.selectedEdges);
     const flipBodies = minus(this.selectedBodies, want.bodies).concat(minus(want.bodies, this.selectedBodies));
     if (!dropFaces.length && !addFaces.length && !dropEdges.length && !addEdges.length && !flipBodies.length) {
-      return false;
+      return { changed: false, pending: false };
+    }
+    let pending = false;
+    if (budget < Infinity) {
+      const taken = new Set<BodyMesh | BodyEdges>();
+      let spent = 0;
+      const fits = (owner: BodyMesh | BodyEdges | undefined) => {
+        if (!owner || taken.has(owner)) return true;
+        if (spent >= budget) return !(pending = true);
+        taken.add(owner);
+        spent += this.paintCost(owner);
+        return true;
+      };
+      const faceOwner = (f: number) => bodyOfFace(this.view, f);
+      const edgeOwner = (e: EdgeRef) => (e.body ? this.bodyById(e.body) : undefined) ?? e.draw;
+      dropFaces = dropFaces.filter((f) => fits(faceOwner(f)));
+      addFaces = addFaces.filter((f) => fits(faceOwner(f)));
+      dropEdges = dropEdges.filter((e) => fits(edgeOwner(e)));
+      addEdges = addEdges.filter((e) => fits(edgeOwner(e)));
     }
     const hov = this.hoveredEdge;
     const hovWas = hov !== null && this.selectedEdges.has(hov);
@@ -808,11 +841,24 @@ export class Highlighter {
     }
     for (const b of flipBodies) this.toggleSelectBody(b);
     // The starters read the order, a Boolean targets the first body, so it is the take's and not the drag path's.
-    this.selectedFaces = new Set(want.faces);
-    this.selectedEdges = new Set(want.edges);
+    this.selectedFaces = pending ? inOrderOf(want.faces, this.selectedFaces) : new Set(want.faces);
+    this.selectedEdges = pending ? inOrderOf(want.edges, this.selectedEdges) : new Set(want.edges);
     this.selectedBodies = new Set(want.bodies);
     this.queueEdgeLines();
-    return true;
+    return { changed: true, pending };
+  }
+
+  private paintCosts = new WeakMap<BodyMesh | BodyEdges, number>();
+
+  private paintCost(owner: BodyMesh | BodyEdges): number {
+    let n = this.paintCosts.get(owner);
+    if (n === undefined) {
+      const draw = "refs" in owner ? owner : owner.edges;
+      n = "refs" in owner ? 0 : owner.faceIds.length;
+      for (const e of draw?.refs ?? []) n += e.points?.length ?? 0;
+      this.paintCosts.set(owner, n);
+    }
+    return n;
   }
 
   /** the currently selected edge lines (for pre-selected fillet/chamfer). */
