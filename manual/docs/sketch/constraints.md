@@ -6,9 +6,9 @@ A constraint is a rule the sketch keeps true, such as "this line stays horizonta
 
 The colour of the curves tells you how free the sketch still is:
 
-- **Blue**: the sketch can still move.
-- **White**: the sketch is fully defined, nothing can move.
-- **Red**: two rules disagree.
+1. **Blue**: the sketch can still move.
+2. **White**: the sketch is fully defined, nothing can move.
+3. **Red**: two rules disagree.
 
 ## Add a constraint
 
@@ -39,18 +39,18 @@ With shapes already selected, a constraint that fits them applies at once. Right
 
 The palette lists every rule under **Relations**, one row each. It shows while **Show Constraints** is on.
 
-- The line on top says how free the sketch is, such as "2 degrees of freedom" or "Fully defined".
-- Hover a row to light up what it holds, click it to select those shapes.
-- Click the x on a row to delete that constraint.
-- A red icon marks a rule that conflicts, an amber one a rule that repeats another.
-- A dashed icon marks ends held only by where they sit. There is nothing to delete there.
+1. The line on top says how free the sketch is, such as "2 degrees of freedom" or "Fully defined".
+2. Hover a row to light up what it holds, click it to select those shapes.
+3. Click the x on a row to delete that constraint.
+4. A red icon marks a rule that conflicts, an amber one a rule that repeats another.
+5. A dashed icon marks ends held only by where they sit. There is nothing to delete there.
 
 ## Loose ends
 
 A sketch that will not extrude usually has a gap. While you sketch, dots mark the ends that keep it open:
 
-- **Red dot**: an end that touches nothing.
-- **Amber dot**: an end that meets another curve, but no rule holds it there.
+1. **Red dot**: an end that touches nothing.
+2. **Amber dot**: an end that meets another curve, but no rule holds it there.
 
 **Tie Loose Ends**, next to Constrain, ties every amber end in one step you can undo. When red ends sit close together, up to a tenth of the sketch's size and at most 10 mm, it offers **Close gap** to tie them across. Farther apart, draw a line to close them.
 
