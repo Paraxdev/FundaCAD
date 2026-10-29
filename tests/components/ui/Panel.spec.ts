@@ -40,10 +40,17 @@ describe("Panel", () => {
     expect(w.emitted("close")).toBeUndefined();
   });
 
-  it("with nothing but content renders the bare measure-panel, as FloatingPanel did", async () => {
+  it("with nothing but content draws no head, only a hidden Panel heading that keeps it a named region", async () => {
     mount(Panel, { props: { open: true, panelClass: "params-dialog" }, slots: { default: "<p>Body</p>" } });
     const el = $(".measure-panel.params-dialog")!;
-    expect([...el.children].map((c) => c.outerHTML)).toEqual(["<p>Body</p>"]);
+    expect([el.getAttribute("role"), document.getElementById(el.getAttribute("aria-labelledby")!)]).toEqual([
+      "region",
+      el.firstElementChild,
+    ]);
+    expect([...el.children].map((c) => `${c.tagName}.${c.className} ${c.textContent}`)).toEqual([
+      "H2.sr-only Panel",
+      "P. Body",
+    ]);
   });
 
   it("draws the title, hint, head actions, foot and a close button, labelled by the title", async () => {
@@ -154,5 +161,20 @@ describe("FloatingPanel names its region", () => {
       "Fasteners",
     ]);
     expect($(".ui-panel-head")).toBeNull();
+  });
+
+  it("still names its region when a plugin written in plain JS passes no title", async () => {
+    mount(FloatingPanel, {
+      props: { open: true } as unknown as { open: boolean; title: string },
+      attachTo: document.body,
+    });
+    const el = $(".ui-panel")!;
+    const head = document.getElementById(el.getAttribute("aria-labelledby")!)!;
+    expect([el.getAttribute("role"), head.tagName, head.className, head.textContent]).toEqual([
+      "region",
+      "H2",
+      "sr-only",
+      "Panel",
+    ]);
   });
 });

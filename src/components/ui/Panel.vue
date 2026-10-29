@@ -23,6 +23,8 @@ const emit = defineEmits<{ close: [] }>();
 const slots = useSlots();
 const titleId = useId();
 const shownTitle = computed(() => !!props.title && !props.titleHidden);
+// An untitled panel, as from a plugin, still needs a name to be a region in the landmarks list.
+const name = computed(() => props.title || "Panel");
 const hasHead = computed(() => shownTitle.value || props.closable || !!slots["head-actions"]);
 
 // Capture phase and no stopPropagation: the panels are non-modal, so Escape also reaches the global handler.
@@ -70,10 +72,10 @@ onUnmounted(() => {
       ref="el"
       class="measure-panel ui-panel"
       :class="panelClass"
-      :role="title ? 'region' : undefined"
-      :aria-labelledby="title ? titleId : undefined"
+      role="region"
+      :aria-labelledby="titleId"
     >
-      <h2 v-if="title && titleHidden" :id="titleId" class="sr-only">{{ title }}</h2>
+      <h2 v-if="!shownTitle" :id="titleId" class="sr-only">{{ name }}</h2>
       <div v-if="hasHead" class="ui-panel-head">
         <h2 v-if="shownTitle" :id="titleId" class="measure-title ui-panel-title">{{ title }}</h2>
         <slot name="head-actions" />

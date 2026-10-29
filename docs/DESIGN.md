@@ -1031,7 +1031,8 @@ defineEmits<{ close: [] }>();
   (`.properties-panel` min width 260px, `.stress-panel` 340px wide and
   scrolling).
 - `title` draws the panel's name as its `.measure-title`, an `h2`, and names the panel (`role="region"`,
-  `aria-labelledby`), so heading keys and the rotor reach it. `titleHidden` keeps that `h2` for screen readers only;
+  `aria-labelledby`), so heading keys and the rotor reach it. `titleHidden` keeps that `h2` for screen readers only.
+  A panel given no title (a plain JS plugin) is still a region, named by a hidden `h2` that reads Panel;
   `head-actions` sit beside it and `closable` adds the 28px Close button after them. `hint` is the last line, a
   `.measure-hint`; the `foot` slot sits under the content. Without them the content is yours, from the classes below.
 - `closeOnEsc` adds a capture phase `keydown` listener on `window` that emits
