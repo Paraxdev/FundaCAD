@@ -1,0 +1,12 @@
+{
+  "version": 10,
+  "parameters": {},
+  "features": [
+    { "id": "s1", "type": "sketch", "plane": "XZ",
+      "entities": [{ "type": "rectangle", "id": "r1", "width": 16, "height": 30, "x": 0, "y": 15 }] },
+    { "id": "stem", "type": "extrude", "sketch": "s1", "distance": 30, "symmetric": true, "operation": "new" },
+    { "id": "s2", "type": "sketch", "plane": "XZ",
+      "entities": [{ "type": "rectangle", "id": "r2", "width": 60, "height": 12, "x": 0, "y": 36 }] },
+    { "id": "bar", "type": "extrude", "sketch": "s2", "distance": 30, "symmetric": true, "operation": "join" }
+  ]
+}

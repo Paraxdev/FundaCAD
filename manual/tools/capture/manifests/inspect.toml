@@ -6,7 +6,17 @@ file = "manual/docs/img/bed-fit-result.png"
 size = [640, 700]
 theme = "fundacad"
 crop = "region"
-stub = true
+at = [434, 189]
+park = [1400, 880]
+steps = [
+  { open = "example:Wall bracket" },
+  { evaluate = "() => { const r = window.viewport.rig; r.zoomBy(0.93); r.panScreen(0.06, -0.16); window.viewport.requestRender(); }" },
+  { wait = 700 },
+  { tool = "Bed Fit Check" },
+  { wait = 400 },
+  { evaluate = "() => [...document.querySelectorAll('.ui-confirm-choice')].find((b) => b.textContent.trim().startsWith('220 x 220 x 250')).click()" },
+  { wait = 500 },
+]
 show = "A bracket with the Bed Fit Check result saying it fits a 220 by 220 by 250 mm bed (Print group)."
 alt = "A bracket with a message that it fits the 220 by 220 by 250 mm bed"
 uses = ["manual/docs/inspect/bed-fit.md:5"]
@@ -34,9 +44,23 @@ uses = ["manual/docs/inspect/measure.md:5"]
 [[shot]]
 file = "manual/docs/img/overhang-red.png"
 size = [850, 440]
+viewport = [1920, 1080]
 theme = "fundacad"
 crop = "region"
-stub = true
+at = [705, 171]
+park = [1900, 1060]
+steps = [
+  { open = "fixture:tee.json" },
+  { evaluate = "() => { const v = window.viewport; const b = v.model.box; v.rig.setViewDir(b.min.clone().set(0.45, -1.3, -0.6), b.min.clone().set(0, 0, 1)); v.requestRender(); }" },
+  { wait = 900 },
+  { evaluate = "() => { const r = window.viewport.rig; r.zoomBy(1.8); r.panScreen(-0.04, 0.3); window.viewport.requestRender(); }" },
+  { wait = 700 },
+  { tool = "Overhang" },
+  { wait = 600 },
+  # Seen from below the bed, the grid lies over the undersides, so it is off for this picture and back on after.
+  { evaluate = "() => import('/src/ui/viewMode.ts').then((m) => { m.setOverlay('grid', false); setTimeout(() => m.setOverlay('grid', true), 5000); })" },
+  { wait = 300 },
+]
 show = "Undersides of a T shaped part painted red beside the Overhang analysis panel."
 alt = "Undersides of a T shaped part painted red beside the Overhang analysis panel"
 uses = ["manual/docs/inspect/overhang.md:5"]
