@@ -1,6 +1,8 @@
 /** A tool edit let go of but not entered, which a save enters first. */
 export interface HeldEdit {
   readonly pending: boolean;
+  /** The edit lands in an open sketch, which Save cannot write. */
+  readonly inSketch?: boolean;
   onHeldChange(fn: () => void): () => void;
   confirmHeld(): void;
 }

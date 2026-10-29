@@ -4,6 +4,7 @@ import { createPinia, setActivePinia } from "pinia";
 import * as THREE from "three";
 import { DocumentStore } from "../../src/document/store";
 import { MoveTool } from "../../src/features/moveTool";
+import { bodyMoveTarget } from "../../src/features/moveTarget";
 import { DatumPoseTool } from "../../src/features/datumPoseTool";
 import { ZERO_POSE } from "../../src/document/datumPose";
 import type { Feature } from "../../src/types";
@@ -105,13 +106,14 @@ const live = lenient<Engine>(engine);
 let tool: MoveTool;
 let store: DocumentStore;
 let canvas: HTMLElement;
+let scene: THREE.Scene;
 
 /** A saved document with one body selected, so Move is up over it the way a body selection raises it. */
 function selectBody() {
   store = new DocumentStore(stubBackend, { parameters: {}, features: [] });
   store.addFeature(box("plate", 10));
   store.markSaved("D:/parts/a.funda");
-  const scene = new THREE.Scene();
+  scene = new THREE.Scene();
   const vp = fakeViewport(scene);
   canvas = vp.domElement;
   tool = new MoveTool(vp, store);
@@ -298,6 +300,46 @@ describe("a held Move drag and closing the window", () => {
       said: ["The held drag could not be entered, so the save left it out"],
       saved: 1,
       held: true,
+    });
+  });
+
+  it("on an open sketch's gizmo is not unsaved work, so the title stays clean, close does not ask, Save leaves it", async () => {
+    const intoSketch: unknown[] = [];
+    // Stands in for sketchEntityTarget, whose commit writes into the open sketch and not the store.
+    tool.startTarget(
+      {
+        ...bodyMoveTarget(engine.viewport as Viewport, store, ["body1"]),
+        inSketch: true,
+        commit: (r) => (intoSketch.push(r), { id: null, rebuild: false }),
+        reopen: () => null,
+      },
+      () => {},
+    );
+    flushFrame();
+    scene.updateMatrixWorld(true);
+    dragAndLetGo();
+    flushFrame();
+    const prevented = await closeWindow("cancel");
+    key();
+    await vi.waitFor(() => expect(host.saved).toHaveLength(1));
+    inBrowser();
+    flushFrame();
+    expect({
+      prevented,
+      asked: win.asked,
+      saved: lastSaved().features.map((f) => f.type),
+      intoSketch: intoSketch.length,
+      held: tool.pending,
+      mark: unsavedMark(),
+      said: [...said],
+    }).toEqual({
+      prevented: false,
+      asked: [],
+      saved: ["box"],
+      intoSketch: 0,
+      held: true,
+      mark: { window: false, titlebar: false },
+      said: [],
     });
   });
 

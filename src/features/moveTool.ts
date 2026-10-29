@@ -476,6 +476,10 @@ export class MoveTool {
     return !!this.grab;
   }
 
+  get inSketch(): boolean {
+    return !!this.target?.inSketch;
+  }
+
   /** Told when `pending` turns on or off, for the unsaved mark and the close guard. */
   onHeldChange(fn: () => void): () => void {
     return this.held.on(fn);
@@ -491,7 +495,7 @@ export class MoveTool {
   /** For a save: what was dragged or typed is written as Enter writes it, and the gizmo comes back. A drag still
    *  under the hand, or a value Enter would refuse, is left alone. */
   confirmHeld() {
-    if (this.grab || !this.pending || this.typedWithoutHandle()) return;
+    if (this.grab || !this.pending || this.inSketch || this.typedWithoutHandle()) return;
     this.commitAndReopen();
   }
 

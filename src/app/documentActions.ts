@@ -34,6 +34,8 @@ export function heldEdits(tools: Engine["tools"] | undefined): HeldEdit[] {
 }
 
 const anyHeld = (e: Partial<Pick<Engine, "tools">>) => heldEdits(e.tools).some((h) => h.pending);
+const anySavableHeld = (e: Partial<Pick<Engine, "tools">>) =>
+  heldEdits(e.tools).some((h) => h.pending && !h.inSketch);
 
 /** An open sketch's edits, and a drag let go of but not entered, reach the store only later, so
  *  `store.dirty` alone misses them. */
@@ -50,13 +52,13 @@ export type SaveEngine = Pick<Engine, "store"> & Partial<Pick<Engine, "tools">>;
 
 /** What a save would write: the store's changes, or a drag let go of but not entered. */
 export function needsSave(e: SaveEngine): boolean {
-  return e.store.dirty || anyHeld(e);
+  return e.store.dirty || anySavableHeld(e);
 }
 
 /** A held edit its tool would not enter (a kernel refusal, an unreadable value) stays held, so the user is told. */
 function settleForSave(e: SaveEngine): void {
   settleHeldEdit(e);
-  if (anyHeld(e)) toast("The held drag could not be entered, so the save left it out", { kind: "warning" });
+  if (anySavableHeld(e)) toast("The held drag could not be entered, so the save left it out", { kind: "warning" });
 }
 
 export async function saveWork(e: SaveEngine): Promise<void> {
