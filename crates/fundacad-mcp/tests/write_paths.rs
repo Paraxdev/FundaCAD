@@ -83,3 +83,60 @@ fn doc_save_refuses_a_funda_name_that_leads_to_another_kind_of_file() {
     assert_eq!(std::fs::read_to_string(&notes).unwrap(), "keep me");
     assert!(std::fs::symlink_metadata(&link).unwrap().file_type().is_symlink());
 }
+
+#[test]
+fn export_writes_only_files_of_the_chosen_format() {
+    let (own, _work, folder) = dirs();
+    let mut mcp = server(own.path(), &folder);
+    let r = mcp.call("feature_add", json!({"feature": {"type": "box", "length": 10, "width": 10, "height": 10}}));
+    assert!(!r.is_error, "{}", r.text);
+    let refused = [
+        ("a.txt", "stl"),
+        ("a.step", "stl"),
+        ("a", "stl"),
+        ("a.stl.cmd", "stl"),
+        ("a.stl.", "stl"),
+        ("a.stl", "step"),
+        ("a.funda", "3mf"),
+        ("a.svg", "dxf"),
+    ];
+    for (name, format) in refused {
+        let r = mcp.call("export", json!({"path": slash(&folder.join(name)), "format": format}));
+        assert!(r.is_error, "{name:?} as {format}: {}", r.text);
+        assert!(r.text.contains("writes only ."), "{name:?} as {format}: {}", r.text);
+    }
+    assert!(names_in(&folder).is_empty(), "{:?}", names_in(&folder));
+    let r = mcp.call("export", json!({"path": "rel.txt", "format": "stl"}));
+    assert!(r.is_error && r.text.contains("writes only .stl files"), "{}", r.text);
+
+    let upper = folder.join("b.STL");
+    let r = mcp.call("export", json!({"path": slash(&upper), "format": "stl"}));
+    assert!(!r.is_error, "{}", r.text);
+    assert!(upper.is_file());
+    let stp = folder.join("b.stp");
+    let r = mcp.call("export", json!({"path": slash(&stp), "format": "step"}));
+    assert!(!r.is_error, "{}", r.text);
+    assert!(stp.is_file());
+    let kit = folder.join("kit.txt");
+    let r = mcp.call("export", json!({"path": slash(&kit), "format": "stl", "separate": true}));
+    assert!(!r.is_error, "a separate export names a folder: {}", r.text);
+    assert_eq!(names_in(&kit), ["Box.stl"]);
+}
+
+#[test]
+fn export_refuses_a_name_of_its_format_that_leads_to_another_kind_of_file() {
+    let (own, _work, folder) = dirs();
+    let notes = folder.join("notes.txt");
+    std::fs::write(&notes, "keep me").unwrap();
+    let link = folder.join("x.stl");
+    if !link_file(&notes, &link) {
+        eprintln!("this account cannot make links, skipped");
+        return;
+    }
+    let mut mcp = server(own.path(), &folder);
+    let r = mcp.call("feature_add", json!({"feature": {"type": "box", "length": 10, "width": 10, "height": 10}}));
+    assert!(!r.is_error, "{}", r.text);
+    let r = mcp.call("export", json!({"path": slash(&link), "format": "stl"}));
+    assert!(r.is_error && r.text.contains("only .stl files"), "{}", r.text);
+    assert_eq!(std::fs::read_to_string(&notes).unwrap(), "keep me");
+}

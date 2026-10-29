@@ -1235,6 +1235,14 @@ note: left out of the file, because this build cannot read them and a .funda has
             Ok(f) => f,
             Err(e) => return Ok(e),
         };
+        // A separate export's path names a folder; an unknown format is left to the engine's refusal.
+        let exts = format_exts(&format);
+        if !truthy(args.get("separate")) && !exts.is_empty() {
+            let what = format!("export to {}", format.to_ascii_uppercase());
+            if let Some(why) = write_target::extension_refusal(&path, exts, &what) {
+                return Ok(failure(why));
+            }
+        }
         let full = truthy(args.get("full"));
         let page = match Page::of(&args, if full { 0 } else { budget::ROWS }) {
             Ok(p) => p,
