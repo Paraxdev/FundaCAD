@@ -12,5 +12,5 @@ With one body selected first, the tool asks only for the second. With two or mor
 
 The step's rows in the History card change it later:
 
-- Operation switches between Union, Subtract and Intersect.
-- Keep originals leaves the used bodies in place, so one bolt can cut three plates.
+1. Operation switches between Union, Subtract and Intersect.
+2. Keep originals leaves the used bodies in place, so one bolt can cut three plates.

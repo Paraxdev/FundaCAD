@@ -20,10 +20,10 @@ With a flat face selected, E works as Press/Pull on that face.
 
 The step's rows change where the solid starts and stops after it is made.
 
-- Start: Sketch plane, Offset, Face, Plane or Point.
-- End: Distance, Up to face, Up to plane, Up to point or Through all. An Up to end ignores the distance, and End offset runs past the target, or stops short when negative.
-- Two sided: the second side gets its own distance, taper and end.
-- Operation: New body, Join, Cut or Intersect.
+1. Start: Sketch plane, Offset, Face, Plane or Point.
+2. End: Distance, Up to face, Up to plane, Up to point or Through all. An Up to end ignores the distance, and End offset runs past the target, or stops short when negative.
+3. Two sided: the second side gets its own distance, taper and end.
+4. Operation: New body, Join, Cut or Intersect.
 
 ## Thin walls
 
@@ -33,9 +33,9 @@ Pick a sketch of open lines and arcs in the Items card and press E, and Extrude 
 
 The Thin switch in the step's rows turns any extrude into a wall along its sketch's curves, so a rectangle becomes a hollow frame. Thickness sets the wall, and Wall side places it:
 
-- Centered on the curves, the default.
-- Inside: the enclosed side of a closed outline, the side an open chain bends toward, or the left of a straight line as drawn.
-- Outside: the other side.
-- Two sides: Thickness inside and Thickness 2 outside.
+1. Centered on the curves, the default.
+2. Inside: the enclosed side of a closed outline, the side an open chain bends toward, or the left of a straight line as drawn.
+3. Outside: the other side.
+4. Two sides: Thickness inside and Thickness 2 outside.
 
 Corners are mitred, and walls that cross or meet become one body. Lines, arcs, circles, rectangles, polygons and slots can carry a wall, splines and ellipses not yet.

@@ -19,9 +19,9 @@ The pattern starts with 4 copies along X, one body width apart, so they just tou
 
 The pattern starts with 4 copies over a full turn about Z, through the origin.
 
-- Press an arrow to turn about X, Y or Z, and drag around it to set the angle. It snaps to 15 degrees, Shift gives single degrees.
-- Click an edge or face to turn about it.
-- Press C to switch the axis between the origin and the middle of the part.
+1. Press an arrow to turn about X, Y or Z, and drag around it to set the angle. It snaps to 15 degrees, Shift gives single degrees.
+2. Click an edge or face to turn about it.
+3. Press C to switch the axis between the origin and the middle of the part.
 
 A full 360 degrees spreads the copies evenly. The value box has Angle and Copies, and a click off the part applies.
 

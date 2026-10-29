@@ -8,10 +8,10 @@ The value box of a running tool, such as Extrude, takes numbers, units and plain
 
 ## Writing one
 
-- Put a name and an equals sign first, as in `hole = width / 5`, to name the result. This works in a step's values and on sketch dimensions.
-- Units are mm, cm, in, deg and rad, so `1 in` is 25.4 mm.
-- Without a unit, a length is mm and an angle is degrees.
-- Use `+`, `-`, `*`, `/`, `^` for powers, brackets, and `PI`.
+1. Put a name and an equals sign first, as in `hole = width / 5`, to name the result. This works in a step's values and on sketch dimensions.
+2. Units are mm, cm, in, deg and rad, so `1 in` is 25.4 mm.
+3. Without a unit, a length is mm and an angle is degrees.
+4. Use `+`, `-`, `*`, `/`, `^` for powers, brackets, and `PI`.
 
 ## Functions
 
