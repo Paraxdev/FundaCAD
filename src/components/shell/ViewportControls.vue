@@ -248,6 +248,8 @@ async function screenshot() {
         icon="warning"
         tip="Low performance"
         class="perf-warn"
+        popup="dialog"
+        :expanded="isOpen('perf')"
         :active="isOpen('perf')"
         @click="open('perf', $event)"
       />
@@ -266,18 +268,34 @@ async function screenshot() {
       />
     </div>
     <div class="float-group">
-      <IconButton icon="magnet" tip="Snapping" :active="isOpen('snap')" @click="open('snap', $event)" />
+      <IconButton
+        icon="magnet"
+        tip="Snapping"
+        popup="dialog"
+        :expanded="isOpen('snap')"
+        :active="isOpen('snap')"
+        @click="open('snap', $event)"
+      />
       <!-- A reading, not an icon, so a Button: its text is the name and the tip only the tooltip. -->
       <Button
         variant="ghost"
         size="sm"
         class="grid-btn"
         tip="Grid and units"
+        popup="dialog"
+        :expanded="isOpen('grid')"
         :pressed="isOpen('grid')"
         @click="open('grid', $event)"
         >{{ gridLabelCompact }}</Button
       >
-      <IconButton icon="views" tip="Views" :active="isOpen('views')" @click="open('views', $event)" />
+      <IconButton
+        icon="views"
+        tip="Views"
+        popup="dialog"
+        :expanded="isOpen('views')"
+        :active="isOpen('views')"
+        @click="open('views', $event)"
+      />
       <IconButton icon="view-reset" tip="Reset camera" keys="Shift+Home" @click="engine.handleAction('reset-camera')" />
     </div>
     <div class="float-group view-modes" role="group" aria-label="View mode">
@@ -297,11 +315,20 @@ async function screenshot() {
       <IconButton
         icon="shaded"
         tip="Display"
+        popup="dialog"
+        :expanded="isOpen('display')"
         :active="isOpen('display') || ui.xray || ui.wireframe"
         @click="open('display', $event)"
       />
       <IconButton icon="camera" tip="Screenshot" :active="saving" @click="screenshot()" />
-      <IconButton icon="versions" tip="Versions" :active="isOpen('versions')" @click="open('versions', $event)" />
+      <IconButton
+        icon="versions"
+        tip="Versions"
+        popup="dialog"
+        :expanded="isOpen('versions')"
+        :active="isOpen('versions')"
+        @click="open('versions', $event)"
+      />
       <IconButton
         v-if="!shell.narrow"
         icon="history"
@@ -321,6 +348,7 @@ async function screenshot() {
       :anchor="anchorOf('perf')"
       side="left"
       kind="vc-pop perf-pop"
+      label="Low performance"
       @close="shell.closePopover()"
     >
       <div class="perf-pop-title">Low performance</div>
@@ -343,12 +371,20 @@ async function screenshot() {
       :anchor="anchorOf('versions')"
       side="left"
       kind="vc-pop versions-pop"
+      label="Versions"
       @close="shell.closePopover()"
     >
       <VersionsPanel />
     </Popover>
 
-    <Popover v-if="isOpen('snap')" :anchor="anchorOf('snap')" side="left" kind="vc-pop" @close="shell.closePopover()">
+    <Popover
+      v-if="isOpen('snap')"
+      :anchor="anchorOf('snap')"
+      side="left"
+      kind="vc-pop"
+      label="Snapping"
+      @close="shell.closePopover()"
+    >
       <div class="pop-section">Snap to</div>
       <Toggle
         :model-value="sketchPalette.state.snap"
@@ -374,7 +410,14 @@ async function screenshot() {
       />
     </Popover>
 
-    <Popover v-if="isOpen('grid')" :anchor="anchorOf('grid')" side="left" kind="vc-pop" @close="shell.closePopover()">
+    <Popover
+      v-if="isOpen('grid')"
+      :anchor="anchorOf('grid')"
+      side="left"
+      kind="vc-pop"
+      label="Grid and units"
+      @close="shell.closePopover()"
+    >
       <div class="pop-section">Units</div>
       <ChoiceList label="Units" :options="UNITS" :model-value="unit" @update:model-value="pickUnit" />
       <div class="pop-rule"></div>
@@ -385,7 +428,14 @@ async function screenshot() {
       >
     </Popover>
 
-    <Popover v-if="isOpen('views')" :anchor="anchorOf('views')" side="left" kind="vc-pop" @close="shell.closePopover()">
+    <Popover
+      v-if="isOpen('views')"
+      :anchor="anchorOf('views')"
+      side="left"
+      kind="vc-pop"
+      label="Views"
+      @close="shell.closePopover()"
+    >
       <Tabs
         v-model="viewTab"
         label="Views"
@@ -430,6 +480,7 @@ async function screenshot() {
       :anchor="anchorOf('display')"
       side="left"
       kind="vc-pop"
+      label="Display"
       @close="shell.closePopover()"
     >
       <div class="pop-section">Shading</div>
