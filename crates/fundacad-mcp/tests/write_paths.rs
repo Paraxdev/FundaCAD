@@ -189,3 +189,29 @@ fn export_replaces_a_file_of_another_kind_only_with_overwrite() {
     assert!(!r.is_error, "{}", r.text);
     assert_ne!(std::fs::read(kit.join("Box.stl")).unwrap(), b"keep me");
 }
+
+#[test]
+fn export_refuses_a_format_it_does_not_list_whatever_the_path() {
+    let (own, _work, folder) = dirs();
+    let mut mcp = server(own.path(), &folder);
+    let r = mcp.call("feature_add", json!({"feature": {"type": "box", "length": 10, "width": 10, "height": 10}}));
+    assert!(!r.is_error, "{}", r.text);
+    let kept = folder.join("notes.docx");
+    std::fs::write(&kept, "keep me").unwrap();
+    let calls = [
+        json!({"path": slash(&folder.join("a.txt")), "format": "glb"}),
+        json!({"path": slash(&kept), "format": "glb", "overwrite": true}),
+        json!({"path": slash(&folder.join("a.glb")), "format": "GLB"}),
+        json!({"path": slash(&folder.join("kit")), "format": "glb", "separate": true}),
+        json!({"path": slash(&folder.join("a.obj")), "format": "obj"}),
+        json!({"path": slash(&folder.join("a.stl")), "format": " stl"}),
+    ];
+    for call in calls {
+        let r = mcp.call("export", call.clone());
+        let format = call["format"].as_str().unwrap();
+        assert!(r.is_error, "{call}: {}", r.text);
+        assert_eq!(r.text, format!("Cannot export '{format}' files. Formats: step, stl, 3mf, dxf, svg."), "{call}");
+    }
+    assert_eq!(names_in(&folder), ["notes.docx"]);
+    assert_eq!(std::fs::read_to_string(&kept).unwrap(), "keep me");
+}

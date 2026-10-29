@@ -83,7 +83,8 @@ name and the file a link points at are both checked. Neither replaces an
 existing file that does not look like the kind it writes (a FundaCAD file, or
 a file of the export format; an empty file is fine) unless the call passes
 `overwrite: true`. A `separate` export checks every file it would replace
-before it moves the first one.
+before it moves the first one. `export` refuses any format but STEP, STL,
+3MF, DXF and SVG.
 
 Strict mode keeps the server to a folder list. It is on when a folder is
 given with `--allow-path <folder>` (repeatable, after `--mcp` for

@@ -29,6 +29,7 @@ use crate::model::{self, Doc};
 use crate::render::{self, ViewRequest};
 use crate::schema;
 use crate::scope::PathScope;
+use crate::tools::EXPORT_FORMATS;
 use crate::upload::{self, Upload, ASK_FOR_A_PATH, IMPORT_FORMATS, PIECES_WORTH_IT};
 use crate::write_target;
 
@@ -1240,18 +1241,16 @@ note: left out of the file, because this build cannot read them and a .funda has
             Ok(f) => f,
             Err(e) => return Ok(e),
         };
-        // A separate export's path names a folder; an unknown format is left to the engine's refusal.
+        // The engine also writes formats this tool does not offer, which no extension or overwrite rule covers.
         let exts = format_exts(&format);
+        if exts.is_empty() {
+            return Ok(failure(format!("Cannot export '{format}' files. Formats: {}.", EXPORT_FORMATS.join(", "))));
+        }
         let what = format!("export to {}", format.to_ascii_uppercase());
         let overwrite = truthy(args.get("overwrite"));
-        let guard = |to: &Path| {
-            if overwrite || exts.is_empty() {
-                None
-            } else {
-                write_target::overwrite_refusal(to, exts, &what)
-            }
-        };
-        if !truthy(args.get("separate")) && !exts.is_empty() {
+        let guard = |to: &Path| if overwrite { None } else { write_target::overwrite_refusal(to, exts, &what) };
+        // A separate export's path names a folder.
+        if !truthy(args.get("separate")) {
             if let Some(why) = write_target::extension_refusal(&path, exts, &what).or_else(|| guard(&path)) {
                 return Ok(failure(why));
             }
