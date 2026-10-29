@@ -1,0 +1,23 @@
+- banner:
+  - button "Home"
+  - navigation:
+    - button "File"
+    - button "Edit"
+    - button "View"
+    - button "Help"
+  - button "Undo"
+  - button "Redo"
+  - radiogroup "Workspace":
+    - radio "Model" [checked]
+    - radio "Render"
+- complementary:
+  - text: Items
+- navigation "Tools":
+  - button /^Search/
+  - button /^Sketch/
+  - button "Create"
+  - button "Modify"
+  - button "Construct"
+  - button "Inspect"
+- group "View mode"
+- region "History"
