@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, onUnmounted, ref, watch } from "vue";
 import { useHomeStore } from "../../stores/home";
+import { useDialogStore } from "../../stores/dialogs";
 import { useModalStore } from "../../stores/modals";
 import { inertOthers, useModalGate } from "../../composables/useModalGate";
 import { focusReturn, mainLandmark } from "../ui/focusables";
@@ -54,6 +55,7 @@ import logoLightUrl from "../../../assets/brand/fundacad-lockup-app-light.svg";
 
 const home = useHomeStore();
 const modals = useModalStore();
+const dialogs = useDialogStore();
 const cb = home.callbacks!;
 const ctx = useContextMenuStore();
 const lib = library();
@@ -344,15 +346,20 @@ onUnmounted(() => {
     <div class="home-main">
       <div class="home-head">
         <NewStrip @blank="startNew(() => cb.newDocument())" @open="cb.openDoc()" />
-        <IconButton
-          class="modal-close"
-          icon="close"
-          tip="Back to the document"
-          size="md"
-          variant="plain"
-          :icon-size="15"
-          @click="close()"
-        />
+        <div class="home-head-actions">
+          <Button variant="ghost" size="sm" class="home-a11y" @click="dialogs.openPreferences('access')">
+            Accessibility
+          </Button>
+          <IconButton
+            class="modal-close"
+            icon="close"
+            tip="Back to the document"
+            size="md"
+            variant="plain"
+            :icon-size="15"
+            @click="close()"
+          />
+        </div>
       </div>
 
       <div v-if="lib && (all.length || folders.length)" class="home-tools">

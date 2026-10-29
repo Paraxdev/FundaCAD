@@ -9,6 +9,8 @@ export const useDialogStore = defineStore("dialogs", () => {
   const bugReport = ref(false);
   const preferences = ref(false);
   const shortcuts = ref(false);
+  /** The category Preferences opens on or switches to, taken and cleared by the dialog; null is Appearance. */
+  const prefsCategory = ref<string | null>(null);
 
   /** Supplied once by app/engine.ts's mountUi(). Until then the bug button stays unrendered. */
   const bugDeps = shallowRef<BugReportDeps | null>(null);
@@ -17,9 +19,11 @@ export const useDialogStore = defineStore("dialogs", () => {
     bugReport,
     preferences,
     shortcuts,
+    prefsCategory,
     bugDeps,
-    openPreferences: () => {
+    openPreferences: (category?: string) => {
       shortcuts.value = false;
+      prefsCategory.value = category ?? null;
       preferences.value = true;
     },
     bindBugReporter: (deps: BugReportDeps) => {

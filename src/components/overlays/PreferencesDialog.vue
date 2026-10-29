@@ -2,7 +2,7 @@
 // Mirrors the setting modules (ui/theme, icons, units, renderPrefs) with no store of its own, every change applies live.
 // The mirrors re-read on each module's subscription, the modules stay Vue-free so the headless suite can import them.
 
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch, type Directive } from "vue";
 import { useDialogStore } from "../../stores/dialogs";
 import { pluginFocus } from "../../plugins/settingsFocus";
 import Button from "../ui/Button.vue";
@@ -10,6 +10,8 @@ import Checkbox from "../ui/Checkbox.vue";
 import Dialog from "../ui/Dialog.vue";
 import Segmented from "../ui/Segmented.vue";
 import Select from "../ui/Select.vue";
+import Slider from "../ui/Slider.vue";
+import Tabs from "../ui/Tabs.vue";
 import McpSection from "./McpSection.vue";
 import DenoiserRow from "../shell/DenoiserRow.vue";
 import PluginsSection from "./PluginsSection.vue";
@@ -27,7 +29,17 @@ import {
 } from "../../ui/theme";
 import { asIconPackId, getIconPack, iconPacks, onIconPackChange, setIconPack } from "../../ui/icons";
 import { asUnit, getUnit, onUnitChange, setUnit } from "../../ui/units";
-import { motionOn, onMotionChange, setMotion } from "../../ui/motion";
+import {
+  a11yPrefs,
+  applyScreenReaderPreset,
+  asAnimations,
+  asVerbosity,
+  DEFAULT_A11Y,
+  onA11yPrefsChange,
+  resetA11yPrefs,
+  setA11yPref,
+  systemReducesMotion,
+} from "../../ui/a11yPrefs";
 import {
   getHomeBackground,
   HOME_BACKGROUNDS,
@@ -42,6 +54,7 @@ import {
   asOrbitPivot,
   asTouchpadScroll,
   asWheelDevice,
+  DEFAULT_DWELL_MS,
   getDetectedWheel,
   getHoverDwellMs,
   getNavPrefs,
@@ -91,7 +104,8 @@ const pack = ref(getIconPack());
 const unit = ref(getUnit());
 const render = ref(renderPrefs());
 const dwell = ref(getHoverDwellMs());
-const motion = ref(motionOn());
+const a11y = ref(a11yPrefs());
+const reducesMotion = ref(systemReducesMotion());
 const nav = ref(getNavPrefs());
 const detectedWheel = ref(getDetectedWheel());
 const classicCamera = ref(navigatorChoice() === "legacy");
@@ -115,8 +129,10 @@ onMounted(() => {
     onHoverDwellChange(() => {
       dwell.value = getHoverDwellMs();
     }),
-    onMotionChange(() => {
-      motion.value = motionOn();
+    onA11yPrefsChange(() => {
+      a11y.value = a11yPrefs();
+      reducesMotion.value = systemReducesMotion();
+      if (a11y.value.verbosity !== "verbose") presetNote.value = "";
     }),
     onNavPrefsChange(() => {
       nav.value = getNavPrefs();
@@ -135,19 +151,95 @@ onUnmounted(() => {
 
 // A plugin's settings are under its own row in Plugins, not a category here.
 const categories = computed(() => [
-  { id: "appearance", label: "Appearance" },
-  { id: "viewport", label: "Viewport" },
-  { id: "navigation", label: "Navigation" },
-  { id: "access", label: "Accessibility" },
-  { id: "updates", label: "Updates" },
-  { id: "mcp", label: "AI assistants" },
-  { id: "plugins", label: "Plugins" },
-  { id: "experimental", label: "Experimental" },
+  { value: "appearance", label: "Appearance" },
+  { value: "viewport", label: "Viewport" },
+  { value: "navigation", label: "Navigation" },
+  { value: "access", label: "Accessibility" },
+  { value: "updates", label: "Updates" },
+  { value: "mcp", label: "AI assistants" },
+  { value: "plugins", label: "Plugins" },
+  { value: "experimental", label: "Experimental" },
 ]);
-const category = ref(pluginFocus.value ? "plugins" : "appearance");
+const known = (id: string | null) => categories.value.find((c) => c.value === id)?.value;
+const category = ref(pluginFocus.value ? "plugins" : (known(dialogs.prefsCategory) ?? "appearance"));
+// Taken once, so an open that sets `preferences` directly, as the Live session pill does, lands on Appearance.
+dialogs.prefsCategory = null;
+const panes = ref<HTMLElement | null>(null);
+const pane = (id: string) => ({
+  id: `prefs-pane-${id}`,
+  role: "tabpanel",
+  "aria-label": categories.value.find((c) => c.value === id)?.label,
+  "data-pane": id,
+  // AI assistants and Plugins have no title, so the pane itself takes the focus.
+  tabindex: id === "mcp" || id === "plugins" ? -1 : undefined,
+});
+// A click or Enter on a category focuses its title so a screen reader says where it went, the arrows stay on the tabs.
+async function focusPane() {
+  await nextTick();
+  const el = panes.value?.querySelector<HTMLElement>(`[data-pane="${category.value}"]`);
+  (el?.querySelector<HTMLElement>(".prefs-pane-title[tabindex]") ?? el)?.focus();
+}
+function revealPane(e: MouseEvent) {
+  if ((e.target as Element).closest("[role=tab]")) void focusPane();
+}
+function showPane(id: string) {
+  category.value = id;
+  void focusPane();
+}
 watch(pluginFocus, (id) => {
   if (id) category.value = "plugins";
 });
+watch(
+  () => dialogs.prefsCategory,
+  (id) => {
+    const asked = known(id);
+    dialogs.prefsCategory = null;
+    if (asked) showPane(asked);
+  },
+);
+
+const ANIMATIONS = [
+  { value: "system", label: "Follow system" },
+  { value: "on", label: "On" },
+  { value: "off", label: "Off" },
+];
+const VERBOSITY = [
+  { value: "off", label: "Off" },
+  { value: "errors", label: "Errors" },
+  { value: "normal", label: "Normal" },
+  { value: "verbose", label: "Verbose" },
+];
+const a11yChanged = computed(
+  () =>
+    a11y.value.animations !== DEFAULT_A11Y.animations ||
+    a11y.value.verbosity !== DEFAULT_A11Y.verbosity ||
+    dwell.value !== DEFAULT_DWELL_MS,
+);
+function pickAnimations(id: string) {
+  const v = asAnimations(id);
+  if (v) setA11yPref("animations", v);
+}
+function pickVerbosity(id: string) {
+  const v = asVerbosity(id);
+  if (v) setA11yPref("verbosity", v);
+}
+const presetNote = ref("");
+async function screenReaderPreset() {
+  applyScreenReaderPreset();
+  // Emptied for a tick first, so a second press changes the live region and is spoken again.
+  presetNote.value = "";
+  await nextTick();
+  presetNote.value = "Announcements set to Verbose.";
+}
+
+// Note: Slider puts fallthrough attributes on its wrapper and repeats aria-valuetext in its output,
+// so the range takes the hint here and the output is hidden from screen readers.
+const vRangeHint: Directive<HTMLElement, string> = {
+  mounted(el, { value }) {
+    el.querySelector("input[type=range]")?.setAttribute("aria-describedby", value);
+    el.querySelector("output")?.setAttribute("aria-hidden", "true");
+  },
+};
 
 const UNITS = [
   { value: "mm", label: "mm" },
@@ -188,8 +280,6 @@ const TOUCHPAD_SCROLL = [
 
 const HOME_BACKGROUND_OPTIONS = HOME_BACKGROUNDS.map((b) => ({ value: b.id, label: b.label }));
 
-const value = (ev: Event) => (ev.target as HTMLSelectElement).value;
-
 const themeOptions = computed(() => themeList.value.map((t) => ({ value: t.id, label: t.label })));
 const packOptions = computed(() => iconPacks().map((p) => ({ value: p.id, label: p.label })));
 const environmentOptions = ENVIRONMENTS_LIST.map((e) => ({ value: e.id, label: e.label, hint: e.note }));
@@ -213,6 +303,7 @@ async function onUpload(ev: Event) {
   // Reset at once so picking the same file again, after fixing it, still fires change.
   input.value = "";
   if (!file) return;
+  themeError.value = "";
   let parsed: unknown;
   try {
     parsed = JSON.parse(await file.text());
@@ -267,6 +358,7 @@ async function onHomeImage(ev: Event) {
   const file = input.files?.[0];
   input.value = "";
   if (!file) return;
+  homeImageError.value = "";
   const res = await storeHomeImage(file);
   if (!res.ok) {
     homeImageError.value = res.error;
@@ -283,14 +375,13 @@ function pickBackground(id: string) {
   const v = asBackground(id);
   if (v) setRenderPref("background", v);
 }
-function onBrightness(ev: Event) {
-  setRenderPref("brightness", Number.parseFloat(value(ev)));
+// Brightness and Bloom are shown and spoken in percent, Smoothing in milliseconds, the stores keep their own units.
+const BRIGHTNESS_PCT = { min: Math.round(MIN_BRIGHTNESS * 100), max: Math.round(MAX_BRIGHTNESS * 100) };
+function onBrightness(pct: number) {
+  setRenderPref("brightness", pct / 100);
 }
-function onDwell(ev: Event) {
-  setHoverDwellMs(Number.parseFloat(value(ev)));
-}
-function onBloom(ev: Event) {
-  const v = asBloom(Number.parseFloat(value(ev)));
+function onBloom(pct: number) {
+  const v = asBloom(pct / 100);
   if (v !== null) setRenderPref("bloom", v);
 }
 function pickTracer(id: string) {
@@ -322,8 +413,8 @@ function pickTouchpadScroll(id: string) {
   const v = asTouchpadScroll(id);
   if (v) setNavPrefs({ touchpadScroll: v });
 }
-function onSmoothing(ev: Event) {
-  setNavPrefs({ smoothTime: Number.parseFloat(value(ev)) });
+function onSmoothing(ms: number) {
+  setNavPrefs({ smoothTime: ms / 1000 });
 }
 function onClassicCamera(on: boolean) {
   classicCamera.value = on;
@@ -338,28 +429,28 @@ function onClassicCamera(on: boolean) {
     title="Preferences"
     panel-class="prefs-panel"
     :body="false"
-    initial-focus=".prefs-nav-btn.active"
+    initial-focus=".prefs-cats [role=tab][aria-selected=true]"
     @close="close()"
   >
     <div class="modal-body prefs">
-      <nav class="prefs-nav" aria-label="Preference categories">
-        <button
-          v-for="c in categories"
-          :key="c.id"
-          type="button"
-          class="prefs-nav-btn"
-          :class="{ active: category === c.id }"
-          :aria-current="category === c.id ? 'page' : undefined"
-          :data-category="c.id"
-          @click="category = c.id"
-          >{{ c.label }}</button
-        >
-      </nav>
+      <Tabs
+        v-model="category"
+        :tabs="categories"
+        variant="bar"
+        orientation="vertical"
+        label="Preference categories"
+        class="prefs-nav prefs-cats"
+        @click="revealPane"
+      >
+        <template #tab="{ tab, selected }">
+          <span class="prefs-nav-btn" :class="{ active: selected }" :data-category="tab.value">{{ tab.label }}</span>
+        </template>
+      </Tabs>
 
-      <div class="prefs-panes">
+      <div ref="panes" class="prefs-panes">
         <!-- v-show, so a control keeps its id whichever category is open. -->
-        <section v-show="category === 'appearance'" class="prefs-pane">
-          <h3 class="prefs-pane-title">Appearance</h3>
+        <section v-show="category === 'appearance'" v-bind="pane('appearance')" class="prefs-pane">
+          <h3 class="prefs-pane-title" tabindex="-1">Appearance</h3>
           <div class="prefs-grid">
             <div class="pref-card wide">
               <div class="pref-head">
@@ -367,12 +458,13 @@ function onClassicCamera(on: boolean) {
                 <Select
                   id="prefs-theme"
                   label="Theme"
+                  aria-describedby="prefs-theme-hint"
                   :model-value="theme"
                   :options="themeOptions"
                   @update:model-value="onTheme"
                 />
               </div>
-              <p class="pref-hint">
+              <p id="prefs-theme-hint" class="pref-hint">
                 FundaCAD Noir, Dracula, Solarized Light and the Noir Blue/Red/Orange tints ship with FundaCAD. Upload a
                 JSON palette to add your own, it is stored in this browser's preferences. Keys are colour tokens like
                 <code>--bg</code> and <code>--accent</code>, values are hex or rgb().
@@ -389,7 +481,7 @@ function onClassicCamera(on: boolean) {
                 <Button @click="pickThemeFile">Upload theme…</Button>
                 <Button v-if="activeIsCustom" @click="onRemoveTheme">Remove</Button>
               </div>
-              <p v-if="themeError" class="pref-hint prefs-theme-error">{{ themeError }}</p>
+              <p id="prefs-theme-error" class="pref-hint prefs-theme-error" role="alert">{{ themeError }}</p>
             </div>
             <div class="pref-card">
               <div class="pref-head">
@@ -408,19 +500,23 @@ function onClassicCamera(on: boolean) {
                 <span class="pref-title">Units</span>
                 <Segmented
                   id="prefs-unit"
+                  aria-describedby="prefs-unit-hint"
                   label="Units"
                   :model-value="unit"
                   :options="UNITS"
                   @update:model-value="pickUnit"
                 />
               </div>
-              <p class="pref-hint">Geometry is always stored in millimetres, this is display only.</p>
+              <p id="prefs-unit-hint" class="pref-hint"
+                >Geometry is always stored in millimetres, this is display only.</p
+              >
             </div>
             <div class="pref-card wide">
               <div class="pref-head">
                 <span class="pref-title">Home background</span>
                 <Segmented
                   id="prefs-home-background"
+                  aria-describedby="prefs-home-background-hint"
                   label="Home background"
                   :model-value="homeBg"
                   :options="HOME_BACKGROUND_OPTIONS"
@@ -429,7 +525,9 @@ function onClassicCamera(on: boolean) {
                   @update:model-value="pickHomeBackground"
                 />
               </div>
-              <p class="pref-hint">What Home sits on. Workspace shows your model dimmed behind it.</p>
+              <p id="prefs-home-background-hint" class="pref-hint"
+                >What Home sits on. Workspace shows your model dimmed behind it.</p
+              >
               <div v-if="homeBg === 'image'" class="prefs-actions">
                 <Button @click="homeImageInput?.click()">Choose image…</Button>
               </div>
@@ -441,13 +539,13 @@ function onClassicCamera(on: boolean) {
                 :accept="HOME_IMAGE_TYPES.join(',')"
                 @change="onHomeImage"
               />
-              <p v-if="homeImageError" class="pref-hint prefs-theme-error">{{ homeImageError }}</p>
+              <p id="prefs-home-image-error" class="pref-hint prefs-theme-error" role="alert">{{ homeImageError }}</p>
             </div>
           </div>
         </section>
 
-        <section v-show="category === 'viewport'" class="prefs-pane">
-          <h3 class="prefs-pane-title">Viewport</h3>
+        <section v-show="category === 'viewport'" v-bind="pane('viewport')" class="prefs-pane">
+          <h3 class="prefs-pane-title" tabindex="-1">Viewport</h3>
           <div class="prefs-grid">
             <div class="pref-card">
               <div class="pref-head">
@@ -457,10 +555,11 @@ function onClassicCamera(on: boolean) {
                   label="Reflections"
                   :model-value="render.environment"
                   :options="environmentOptions"
+                  aria-describedby="prefs-environment-hint"
                   @update:model-value="onEnvironment"
                 />
               </div>
-              <p class="pref-hint">
+              <p id="prefs-environment-hint" class="pref-hint">
                 A metal is almost entirely reflection, so with none it renders nearly black. Flat is the clearer way to
                 read shape.
               </p>
@@ -478,20 +577,19 @@ function onClassicCamera(on: boolean) {
               </div>
             </div>
             <div class="pref-card">
-              <div class="pref-head">
-                <label class="pref-title" for="prefs-brightness">Environment brightness</label>
-              </div>
-              <input
+              <Slider
                 id="prefs-brightness"
-                class="sm-slider pref-slider"
-                type="range"
-                :min="MIN_BRIGHTNESS"
-                :max="MAX_BRIGHTNESS"
-                step="0.05"
-                :value="render.brightness"
-                @input="onBrightness"
+                v-range-hint="'prefs-brightness-hint'"
+                label="Environment brightness"
+                unit="%"
+                show-value
+                :min="BRIGHTNESS_PCT.min"
+                :max="BRIGHTNESS_PCT.max"
+                :step="5"
+                :model-value="Math.round(render.brightness * 100)"
+                @update:model-value="onBrightness"
               />
-              <p class="pref-hint">
+              <p id="prefs-brightness-hint" class="pref-hint">
                 How strongly the environment lights the model and shows in its reflections, an imported HDR included.
               </p>
             </div>
@@ -500,32 +598,32 @@ function onClassicCamera(on: boolean) {
                 <span class="pref-title">Tangent edges</span>
                 <Segmented
                   id="prefs-tangent-edges"
+                  aria-describedby="prefs-tangent-edges-hint"
                   label="Tangent edges"
                   :model-value="render.tangentEdges"
                   :options="TANGENT"
                   @update:model-value="pickTangent"
                 />
               </div>
-              <p class="pref-hint">
+              <p id="prefs-tangent-edges-hint" class="pref-hint">
                 Where two faces meet smoothly, like the borders of a fillet, there is no corner to see, only a line
                 across one continuous surface.
               </p>
             </div>
             <div class="pref-card">
-              <div class="pref-head">
-                <label class="pref-title" for="prefs-bloom">Bloom</label>
-              </div>
-              <input
+              <Slider
                 id="prefs-bloom"
-                class="sm-slider pref-slider"
-                type="range"
-                min="0"
-                max="1"
-                step="0.05"
-                :value="render.bloom"
-                @input="onBloom"
+                v-range-hint="'prefs-bloom-hint'"
+                label="Bloom"
+                unit="%"
+                show-value
+                :min="0"
+                :max="100"
+                :step="5"
+                :model-value="Math.round(render.bloom * 100)"
+                @update:model-value="onBloom"
               />
-              <p class="pref-hint">
+              <p id="prefs-bloom-hint" class="pref-hint">
                 Light spilling off faces with Emission turned up. In the path traced view bright highlights spill too.
               </p>
             </div>
@@ -534,13 +632,14 @@ function onClassicCamera(on: boolean) {
                 <span class="pref-title">Path tracer</span>
                 <Segmented
                   id="prefs-tracer"
+                  aria-describedby="prefs-tracer-hint"
                   label="Path tracer"
                   :model-value="render.tracer"
                   :options="TRACERS"
                   @update:model-value="pickTracer"
                 />
               </div>
-              <p class="pref-hint">
+              <p id="prefs-tracer-hint" class="pref-hint">
                 Where Path traced runs. Native traces in the app itself, WebGPU in the viewport's web view; Auto picks
                 the faster one this computer has. If the one picked is missing, the other is used.
               </p>
@@ -575,25 +674,23 @@ function onClassicCamera(on: boolean) {
           </div>
         </section>
 
-        <section v-show="category === 'navigation'" class="prefs-pane">
-          <h3 class="prefs-pane-title">Navigation</h3>
+        <section v-show="category === 'navigation'" v-bind="pane('navigation')" class="prefs-pane">
+          <h3 class="prefs-pane-title" tabindex="-1">Navigation</h3>
           <div class="prefs-grid">
             <div class="pref-card">
-              <div class="pref-head">
-                <label class="pref-title" for="prefs-smoothing">Smoothing</label>
-                <span class="prefs-readout">{{ nav.smoothTime.toFixed(3) }} s</span>
-              </div>
-              <input
+              <Slider
                 id="prefs-smoothing"
-                class="sm-slider pref-slider"
-                type="range"
-                min="0"
-                max="0.3"
-                step="0.005"
-                :value="nav.smoothTime"
-                @input="onSmoothing"
+                v-range-hint="'prefs-smoothing-hint'"
+                label="Smoothing"
+                unit="ms"
+                show-value
+                :min="0"
+                :max="300"
+                :step="5"
+                :model-value="Math.round(nav.smoothTime * 1000)"
+                @update:model-value="onSmoothing"
               />
-              <p class="pref-hint">
+              <p id="prefs-smoothing-hint" class="pref-hint">
                 How long a zoom or a drag takes to catch up with the hand. 0 follows the mouse exactly; whatever it is
                 set to, the point under the cursor stays under it on every frame.
               </p>
@@ -603,13 +700,14 @@ function onClassicCamera(on: boolean) {
                 <span class="pref-title">Orbit pivot</span>
                 <Segmented
                   id="prefs-orbit-pivot"
+                  aria-describedby="prefs-orbit-pivot-hint"
                   label="Orbit pivot"
                   :model-value="nav.orbitPivot"
                   :options="ORBIT_PIVOTS"
                   @update:model-value="pickOrbitPivot"
                 />
               </div>
-              <p class="pref-hint">
+              <p id="prefs-orbit-pivot-hint" class="pref-hint">
                 What a drag turns the view about. Under cursor takes the model point you press on, Origin always turns
                 about the world origin, and Selection about the centre of what is selected (under the cursor while
                 nothing is). The arrow keys turn about the same point, 15° a press, 5° with Shift.
@@ -632,13 +730,14 @@ function onClassicCamera(on: boolean) {
                 <span class="pref-title">Scrolling</span>
                 <Segmented
                   id="prefs-wheel-device"
+                  aria-describedby="prefs-wheel-device-hint"
                   label="Scrolling"
                   :model-value="nav.wheelDevice"
                   :options="WHEEL_DEVICES"
                   @update:model-value="pickWheelDevice"
                 />
               </div>
-              <p class="pref-hint">
+              <p id="prefs-wheel-device-hint" class="pref-hint">
                 A mouse wheel zooms; a touchpad's two fingers turn or move the view and a pinch zooms. Automatic tells
                 them apart each time you scroll<template v-if="nav.wheelDevice === 'auto' && detectedWheel"
                   >, and took the last one for a {{ detectedWheel }}</template
@@ -650,13 +749,14 @@ function onClassicCamera(on: boolean) {
                 <span class="pref-title">Two-finger scroll</span>
                 <Segmented
                   id="prefs-touchpad-scroll"
+                  aria-describedby="prefs-touchpad-scroll-hint"
                   label="Two-finger scroll"
                   :model-value="nav.touchpadScroll"
                   :options="TOUCHPAD_SCROLL"
                   @update:model-value="pickTouchpadScroll"
                 />
               </div>
-              <p class="pref-hint">
+              <p id="prefs-touchpad-scroll-hint" class="pref-hint">
                 On a touchpad, what two fingers scrolling do to the view. Shift with the scroll does the other, and a
                 pinch zooms toward the pointer.
               </p>
@@ -677,58 +777,137 @@ function onClassicCamera(on: boolean) {
           </div>
         </section>
 
-        <section v-show="category === 'access'" class="prefs-pane">
-          <h3 class="prefs-pane-title">Accessibility</h3>
-          <div class="prefs-grid">
-            <div class="pref-card">
-              <Checkbox
-                id="prefs-motion"
-                class="pref-head pref-check"
-                :model-value="motion"
-                @update:model-value="setMotion"
-                ><span class="pref-title">Animations</span></Checkbox
-              >
-              <p class="pref-hint">
-                Off makes every transition instant: menus, panels, the error notice and camera moves all jump straight
-                to where they end. Follows the system's reduce motion setting until changed here.
-              </p>
-            </div>
-            <div class="pref-card">
-              <div class="pref-head">
-                <label class="pref-title" for="prefs-hover-dwell">Hover delay</label>
-                <span class="prefs-readout">{{ (dwell / 1000).toFixed(2) }} s</span>
+        <section v-show="category === 'access'" v-bind="pane('access')" class="prefs-pane">
+          <h3 class="prefs-pane-title" tabindex="-1">Accessibility</h3>
+          <div class="prefs-a11y-actions">
+            <Button data-a11y-preset aria-describedby="prefs-a11y-actions-hint" @click="screenReaderPreset"
+              >Screen reader preset</Button
+            >
+            <Button
+              :disabled="!a11yChanged"
+              data-a11y-reset
+              aria-describedby="prefs-a11y-actions-hint"
+              @click="resetA11yPrefs"
+              >Reset to defaults</Button
+            >
+            <span id="prefs-a11y-preset-status" class="prefs-a11y-status" role="status">{{ presetNote }}</span>
+            <p id="prefs-a11y-actions-hint" class="pref-hint">
+              Screen reader preset sets Announcements to Verbose, the setup that suits NVDA, VoiceOver and other screen
+              readers. Reset to defaults clears every choice below, so Animations follows the system again.
+            </p>
+          </div>
+
+          <div class="prefs-group" role="group" aria-labelledby="prefs-a11y-vision">
+            <h4 id="prefs-a11y-vision" class="prefs-group-title">Vision</h4>
+            <div class="prefs-grid">
+              <div class="pref-card">
+                <div class="pref-head">
+                  <span class="pref-title">Theme</span>
+                  <Button data-a11y-appearance aria-describedby="prefs-a11y-theme-hint" @click="showPane('appearance')"
+                    >Open Appearance</Button
+                  >
+                </div>
+                <p id="prefs-a11y-theme-hint" class="pref-hint">
+                  Themes are picked under Appearance. Colour-Blind Safe draws the axes, planes and gizmos in vermilion,
+                  yellow and sky blue, and Solarized Light is a light theme.
+                </p>
               </div>
-              <input
-                id="prefs-hover-dwell"
-                class="sm-slider pref-slider"
-                type="range"
-                :min="MIN_DWELL_MS"
-                :max="MAX_DWELL_MS"
-                step="50"
-                :value="dwell"
-                @input="onDwell"
-              />
-              <p class="pref-hint">
-                How long the pointer rests on a part before its face is highlighted instead of the whole part. A click
-                selects whatever is highlighted, so a longer delay makes it easier to select whole parts.
-              </p>
+            </div>
+          </div>
+
+          <div class="prefs-group" role="group" aria-labelledby="prefs-a11y-speech">
+            <h4 id="prefs-a11y-speech" class="prefs-group-title">Speech</h4>
+            <div class="prefs-grid">
+              <div class="pref-card wide">
+                <div class="pref-head pref-wrap">
+                  <span class="pref-title">Announcements</span>
+                  <Segmented
+                    id="prefs-verbosity"
+                    label="Announcements"
+                    aria-describedby="prefs-verbosity-hint"
+                    :model-value="a11y.verbosity"
+                    :options="VERBOSITY"
+                    @update:model-value="pickVerbosity"
+                  />
+                </div>
+                <p id="prefs-verbosity-hint" class="pref-hint">
+                  How much the app tells a screen reader: nothing, errors only, prompts and results, or every change as
+                  well.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="prefs-group" role="group" aria-labelledby="prefs-a11y-input">
+            <h4 id="prefs-a11y-input" class="prefs-group-title">Keyboard and pointer</h4>
+            <div class="prefs-grid">
+              <div class="pref-card">
+                <Slider
+                  id="prefs-hover-dwell"
+                  v-range-hint="'prefs-hover-dwell-hint'"
+                  label="Hover delay"
+                  unit="ms"
+                  show-value
+                  :min="MIN_DWELL_MS"
+                  :max="MAX_DWELL_MS"
+                  :step="50"
+                  :model-value="dwell"
+                  @update:model-value="setHoverDwellMs"
+                />
+                <p id="prefs-hover-dwell-hint" class="pref-hint">
+                  How long the pointer rests on a part before its face is highlighted instead of the whole part. A click
+                  selects whatever is highlighted, so a longer delay makes it easier to select whole parts.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="prefs-group" role="group" aria-labelledby="prefs-a11y-motion">
+            <h4 id="prefs-a11y-motion" class="prefs-group-title">Motion</h4>
+            <div class="prefs-grid">
+              <div class="pref-card">
+                <div class="pref-head">
+                  <span class="pref-title">Animations</span>
+                  <Segmented
+                    id="prefs-motion"
+                    label="Animations"
+                    aria-describedby="prefs-motion-hint"
+                    :model-value="a11y.animations"
+                    :options="ANIMATIONS"
+                    @update:model-value="pickAnimations"
+                  />
+                </div>
+                <p id="prefs-motion-hint" class="pref-hint">
+                  Off makes every transition instant: menus, panels, the error notice and camera moves all jump straight
+                  to where they end. Follow system takes Animation effects on Windows, Reduce motion on macOS or Reduce
+                  animation on GNOME, and changes the moment the system does.
+                  <template v-if="a11y.animations === 'system'"
+                    >Right now the system has animations {{ reducesMotion ? "off" : "on" }}.</template
+                  >
+                </p>
+              </div>
             </div>
           </div>
         </section>
 
-        <section v-show="category === 'updates'" class="prefs-pane">
+        <section v-show="category === 'updates'" v-bind="pane('updates')" class="prefs-pane">
           <UpdatesSection />
         </section>
 
-        <section v-show="category === 'mcp'" class="prefs-pane prefs-pane-flow">
+        <section v-show="category === 'mcp'" v-bind="pane('mcp')" class="prefs-pane prefs-pane-flow">
           <McpSection />
         </section>
 
-        <section v-show="category === 'plugins'" class="prefs-pane prefs-pane-flow">
+        <section v-show="category === 'plugins'" v-bind="pane('plugins')" class="prefs-pane prefs-pane-flow">
           <PluginsSection />
         </section>
 
-        <section v-show="category === 'experimental'" class="prefs-pane" data-prefs-experimental>
+        <section
+          v-show="category === 'experimental'"
+          v-bind="pane('experimental')"
+          class="prefs-pane"
+          data-prefs-experimental
+        >
           <ExperimentalSection />
         </section>
       </div>
