@@ -5,7 +5,7 @@ name: flatpak-source
 
 on:
   push:
-    branches: [main, ci/flatpak-source]
+    branches: [main]
     paths-ignore:
       - "manual/**"
   schedule:
