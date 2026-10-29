@@ -213,3 +213,46 @@ def small_text(page: Any, floor: float = 11) -> list[str]:
 def cut_labels(page: Any, base: str = BASE) -> list[str]:
     """Every box in a rendered base control that cuts its own text, by an ellipsis or a fixed size."""
     return page.evaluate(_CUT, base)
+
+# The part of each box its clipping ancestors on the containing block chain leave, so a tool scrolled out of a rail
+# overlaps nothing.
+_OVERLAPS = (
+    "([items, cards, slack]) => {" + _WHY + r"""
+  const seen = (el) => {
+    const r = el.getBoundingClientRect();
+    const b = { x: [r.left, r.right], y: [r.top, r.bottom] };
+    let pos = getComputedStyle(el).position;
+    for (let a = el.parentElement; a && a !== document.documentElement; a = a.parentElement) {
+      const acs = getComputedStyle(a);
+      if (!contains(acs, pos)) continue;
+      pos = acs.position;
+      const ar = a.getBoundingClientRect();
+      if (acs.overflowX !== 'visible') b.x = [Math.max(b.x[0], ar.left), Math.min(b.x[1], ar.right)];
+      if (acs.overflowY !== 'visible') b.y = [Math.max(b.y[0], ar.top), Math.min(b.y[1], ar.bottom)];
+    }
+    return b;
+  };
+  const shown = (sel) => [...document.querySelectorAll(sel)]
+    .filter((el) => rendered(el) && el.checkVisibility({ opacityProperty: true, visibilityProperty: true }))
+    .map((el) => ({ el, b: seen(el) }));
+  const out = [];
+  const mine = shown(items);
+  const others = [...mine, ...shown(cards).filter((c) => !mine.some((m) => m.el === c.el))];
+  for (const [i, m] of mine.entries()) {
+    for (const [j, o] of others.entries()) {
+      // A pair of items is checked once.
+      if (j <= i || o.el.contains(m.el) || m.el.contains(o.el)) continue;
+      const w = Math.min(m.b.x[1], o.b.x[1]) - Math.max(m.b.x[0], o.b.x[0]);
+      const h = Math.min(m.b.y[1], o.b.y[1]) - Math.max(m.b.y[0], o.b.y[0]);
+      if (w > slack && h > slack) out.push(`${name(m.el)} overlaps ${name(o.el)} by ${Math.round(w)} x ${Math.round(h)}`);
+    }
+  }
+  return out;
+}"""
+)
+
+
+def overlapping(page: Any, items: str, cards: str, slack: float = 1) -> list[str]:
+    """Every rendered box matching `items` that overlaps another one, or a box matching `cards`, by more than
+    `slack` px each way, one line per pair."""
+    return page.evaluate(_OVERLAPS, [items, cards, slack])

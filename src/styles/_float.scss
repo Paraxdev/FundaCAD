@@ -1103,10 +1103,13 @@
   top: auto;
   bottom: calc(var(--float-gap) + 36px);
 }
+/* Insets and the slide back to the middle come from useClearSpan, as the prompt's do. */
 #viewport .fps {
-  left: 50%;
-  right: auto;
-  transform: translateX(-50%);
+  left: var(--span-left, 0px);
+  right: var(--span-right, 0px);
+  margin-inline: auto;
+  width: max-content;
+  translate: var(--span-shift, 0px) 0;
 }
 
 /* The name beside a sketch snap marker. */

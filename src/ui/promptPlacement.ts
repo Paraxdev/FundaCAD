@@ -76,15 +76,39 @@ export function clearRow(
 export const LEFT_CARDS =
   "#float-layer .float-left-stack > *, #float-layer .tool-rail .rail-btn, #float-layer .tool-rail .rail-group";
 export const RIGHT_CARDS = "#float-layer .float-right > *";
+/** The columns whose resizes move the cards. */
+export const COLUMNS =
+  "#float-layer .float-left, #float-layer .float-left-stack, #float-layer .tool-rail, #float-layer .float-right";
 
-const rects = (sel: string): Box[] => [...document.querySelectorAll(sel)].map((o) => o.getBoundingClientRect());
+/** The part of `el` its scrolling ancestors show. A tool scrolled out of the rail comes back empty, so no row makes
+ *  room for its label at a large interface size. */
+export function seenRect(el: Element): Box {
+  const r = el.getBoundingClientRect();
+  const out = { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+  for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
+    const cs = getComputedStyle(a);
+    if (!/auto|scroll/.test(cs.overflowX + cs.overflowY)) continue;
+    const ar = a.getBoundingClientRect();
+    if (cs.overflowX !== "visible") {
+      out.left = Math.max(out.left, ar.left);
+      out.right = Math.min(out.right, ar.right);
+    }
+    if (cs.overflowY !== "visible") {
+      out.top = Math.max(out.top, ar.top);
+      out.bottom = Math.min(out.bottom, ar.bottom);
+    }
+  }
+  return out;
+}
+
+export const cardRects = (sel: string): Box[] => [...document.querySelectorAll(sel)].map(seenRect);
 
 /** The part of `area` a row spanning `band` can use without sliding under a card. */
 export function clearOfCards(area: Box, band: { top: number; bottom: number }, gap: number, minWidth: number): Box {
   const { left, right } = promptInsets(
     area,
     band,
-    { left: rects(LEFT_CARDS), right: rects(RIGHT_CARDS) },
+    { left: cardRects(LEFT_CARDS), right: cardRects(RIGHT_CARDS) },
     gap,
     minWidth,
   );
