@@ -16,7 +16,18 @@ file = "manual/docs/img/render-camera-tab.png"
 size = [1440, 900]
 theme = "fundacad"
 crop = "window"
-stub = true
+park = [700, 880]
+pause = 1600
+steps = [
+  { open = "example:Wall bracket" },
+  { wait = 800 },
+  { panel = "history", open = false },
+  { panel = "items", open = true },
+  { click_css = '[data-workspace="render"]' },
+  { wait = 600 },
+  { click_css = '#renderdock [data-tab="camera"]' },
+  { wait = 600 },
+]
 show = "The Render workspace on its Camera tab with the Field of view slider."
 alt = "The Camera tab of the Render workspace with the Field of view slider"
 uses = ["manual/docs/render/environment.md:5"]
