@@ -4,9 +4,29 @@
 [[shot]]
 file = "manual/docs/img/render-material-sliders.png"
 size = [315, 850]
+viewport = [1440, 900]
 theme = "fundacad"
-crop = "panel"
-stub = true
+crop = "region"
+around = "#renderdock"
+offset = [0.5, 0]
+pause = 1200
+steps = [
+  { open = "example:Wall bracket" },
+  { wait = 800 },
+  { panel = "history", open = false },
+  { panel = "items", open = true },
+  { evaluate = "() => { const s = window.store; s.setBodiesMaterial(s.build.result.bodies.map((b) => b.id), 'm-steel'); }" },
+  { click_css = '.feature-row[data-id="body1"]' },
+  { wait = 400 },
+  { click_css = '[data-workspace="render"]' },
+  { wait = 600 },
+  { click_css = '#renderdock [data-tab="material"]' },
+  { wait = 600 },
+  { click_css = '#renderdock .rd-tile[data-material="m-steel"]' },
+  { wait = 600 },
+  { evaluate = "() => [...document.querySelectorAll('#renderdock .btn')].find((b) => b.textContent.trim() === 'Export…')?.scrollIntoView({ block: 'end' })" },
+  { wait = 600 },
+]
 show = "The material panel for Steel with Metalness, Roughness, Transmission, Emission and Clearcoat sliders."
 alt = "Material panel for Steel with Metalness, Roughness, Transmission, Emission and Clearcoat sliders"
 uses = ["manual/docs/render/editing.md:5"]
