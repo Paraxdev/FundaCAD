@@ -87,6 +87,9 @@
 *[Emission]: A material setting that makes a body give off light.
 *[Node editor]: The graph where you build a surface finish from connected patterns.
 *[node editor]: The graph where you build a surface finish from connected patterns.
+*[HDR]: A panorama picture of a room, an .hdr or .exr file, that lights the scene.
+*[IOR]: Index of refraction, how strongly glass or water bends the light that passes through it.
+*[Samples]: How many times Path traced follows the light for each pixel. More samples give a cleaner picture and take longer.
 *[MCP]: The connection that lets an AI assistant build and check parts.
 *[Plugin]: An optional add-on that brings extra tools.
 *[Plugins]: An optional add-on that brings extra tools.
