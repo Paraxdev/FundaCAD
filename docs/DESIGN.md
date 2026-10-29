@@ -1422,7 +1422,8 @@ Contrast and Follow system contrast to More (`ui/osTheme.ts`), together with the
 which asks Windows, the desktop portal or gsettings on Linux and macOS
 Increase contrast, as WebKitGTK reports no `prefers-contrast` at all. It is
 asked at startup and again each time the window regains focus or changes
-theme, and gives up on a tool that has not answered within two seconds. Under
+theme, and gives up on a tool that has not answered within two seconds, which
+keeps the last answer rather than turning contrast off. Under
 `forced-colors` (a Windows contrast theme) `_forced.scss` redraws what the
 browser erases: control edges as an inset 1px ButtonText outline, selected and
 pressed states in Highlight and HighlightText (with `forced-color-adjust: none`,

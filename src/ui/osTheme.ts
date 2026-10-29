@@ -77,7 +77,9 @@ async function askNative() {
   try {
     const { invoke } = await import("@tauri-apps/api/core");
     const prefs = await invoke<{ highContrast: boolean | null }>("os_a11y_prefs");
-    const next = prefs?.highContrast === true;
+    // Null is a lookup that timed out or failed, which says nothing about the setting.
+    if (typeof prefs?.highContrast !== "boolean") return;
+    const next = prefs.highContrast;
     if (next === nativeContrast) return;
     nativeContrast = next;
     changed();

@@ -195,6 +195,23 @@ describe("the Rust os_a11y_prefs fallback", () => {
     expect(invoke).toHaveBeenCalledTimes(2);
   });
 
+  it("keeps the last answer when a later lookup gets none, as a hung gsettings gives null", async () => {
+    let highContrast: boolean | null = true;
+    const invoke = vi.fn(async () => ({ highContrast }));
+    vi.doMock("@tauri-apps/api/core", () => ({ invoke }));
+    const win = tauriWindow("dark");
+    const { theme, changes } = await boot({});
+    await vi.waitFor(() => expect(theme.resolvedTheme()).toBe("high-contrast-dark"));
+    await vi.waitFor(() => expect(win.focus).toBeDefined());
+    changes.mockClear();
+    highContrast = null;
+    win.focus!({ payload: true });
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledTimes(2));
+    await invoke.mock.results[1]!.value;
+    expect(theme.resolvedTheme()).toBe("high-contrast-dark");
+    expect(changes).not.toHaveBeenCalled();
+  });
+
   it("asks again when the window theme changes, as GNOME High Contrast swaps the GTK theme", async () => {
     let highContrast = false;
     const invoke = vi.fn(async () => ({ highContrast }));
