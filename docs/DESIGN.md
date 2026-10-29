@@ -365,7 +365,7 @@ needs a larger radius to look the same size. Always pair a float radius with
 
 | Class | Component | Use it for |
 |---|---|---|
-| `.float-card` | `components/ui/Card.vue`; Items (`#browser`), History (`#timeline`), Fillet members | A card over the model, with `.float-card-head`, `.float-card-title`, `.float-card-close`, `.float-card-more`, `.float-card-body`, `.float-card-foot` |
+| `.float-card` | `components/ui/Card.vue`; Items (`#browser`), History (`#timeline`), Fillet members | A card over the model, with `.float-card-head`, `.float-card-title` (a heading, h2 unless `level` says otherwise, holding the toggle when collapsible), `.float-card-close`, `.float-card-more`, `.float-card-body`, `.float-card-foot` |
 | `.float-group` | `ViewportControls.vue` | A column or row of `.icon-btn` |
 | `.float-popover` | `components/ui/Popover.vue` | Anything that opens from a button: options, pickers, `Select.vue`'s list |
 | `.context-menu` | `ContextMenuHost.vue` | Right click menus |

@@ -20,6 +20,24 @@ describe("Card", () => {
     expect(w.find(".ui-card-toggle").exists()).toBe(false);
   });
 
+  it("titles itself with an h2 by default and the level asked for", () => {
+    const w = mount(Card, { props: { title: "History" } });
+    const h = w.find("h2.float-card-title");
+    expect([h.text(), h.attributes("id")]).toEqual(["History", w.attributes("aria-labelledby")]);
+    const deep = mount(Card, { props: { title: "Members", level: 3 } });
+    expect([deep.find("h3").text(), deep.find("h2").exists()]).toEqual(["Members", false]);
+  });
+
+  it("collapsible: the heading holds the toggle, so heading keys still reach it", () => {
+    const w = mount(Card, { props: { title: "Members", collapsible: true } });
+    const h = w.find("h2");
+    expect([h.attributes("id"), h.find("button.ui-card-toggle").exists()]).toEqual([
+      w.attributes("aria-labelledby"),
+      true,
+    ]);
+    expect(h.text()).toBe("Members");
+  });
+
   it("draws no foot without one", () => {
     const w = mount(Card, { props: { title: "History" } });
     expect(w.find(".float-card-foot").exists()).toBe(false);
