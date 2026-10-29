@@ -1,11 +1,32 @@
 # Scale and mirror
 
-Scale resizes a body by a factor, so 2 doubles every dimension. Mirror reflects a body and joins it to the original.
+Scale and Mirror sit under Move on the rail.
+
+## Scale
+
+Scale resizes the most recent body by a factor, about the origin, so 2 doubles every dimension. It is handy for fixing the units of an import.
+
+1. Click Scale. The step is added at a factor of 1, so nothing changes yet.
+2. Set Factor in the step's rows in the History card.
+3. To stretch one axis only, set X factor, Y factor or Z factor instead.
+
+The cubes on the Move gizmo resize a body too.
+
+## Mirror
+
+Mirror reflects bodies across a plane and joins each one to its original. Model half of a symmetric part and finish it in one step.
 
 ![One half of a bracket beside its mirrored copy](../img/mirror-half.png)
 
-Set the factor in the value rows of the Scale step. The X, Y and Z factor rows stretch one axis only.
+1. Select the bodies first, or click them once the panel is open. They go into Objects, and a lone body is already there.
+2. Pick the Mirror plane: XY, XZ or YZ in the panel, a plane or datum plane in the view, or a flat face of the part.
+3. Check the see-through preview, then press Enter or click Mirror. Esc cancels.
 
-Mirror opens a small panel with two fields: Objects, the bodies to mirror, and Mirror plane. Bodies you selected first are already in Objects. Click a body to add it and the panel moves on to the plane; Shift or Ctrl click adds more bodies. For the plane, click XY, XZ or YZ in the panel, a plane or datum plane in the view, or a flat face of the part. A flat face adds a datum plane named Mirror plane that follows the face. The icon beside a field makes it the one your clicks fill, and the cross clears it.
+The panel holds two lists, Objects and Mirror plane:
 
-A see-through copy shows the result. Press Enter or click Mirror to apply it, or Esc to cancel. Model half of a symmetric part and finish it in one step.
+- Click a list to make it the one your clicks fill. Tab switches between them.
+- Enter moves on to an empty list, then applies.
+- Shift or Ctrl click adds a body while you pick the plane.
+- Clear all empties a list, and the minus beside an entry removes it.
+
+A flat face adds a datum plane named Mirror plane that follows the face.
