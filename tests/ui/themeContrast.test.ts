@@ -33,9 +33,12 @@ const NOIR = Object.fromEntries(
   ),
 );
 
+const HIGH_CONTRAST = new Set(["high-contrast-dark", "high-contrast-light"]);
+
 const shipped = themes()
   .filter((t) => !t.custom)
   .map((t) => ({
+    id: t.id,
     label: t.label,
     mode: t.mode,
     palette: { ...NOIR, ...("palette" in t ? (t.palette as Record<string, string>) : {}) },
@@ -66,6 +69,36 @@ function pairs(p: Record<string, string>): [string, Rgba, Rgba][] {
 describe("theme contrast", () => {
   it("covers Noir and the light theme", () => {
     expect(shipped.map((t) => t.label)).toEqual(expect.arrayContaining(["FundaCAD Noir", "Solarized Light"]));
+  });
+
+  it("ships FundaCAD Light and a dark and a light high contrast theme", () => {
+    expect(shipped.map((t) => [t.id, t.label, t.mode])).toEqual(
+      expect.arrayContaining([
+        ["fundacad-light", "FundaCAD Light", "light"],
+        ["high-contrast-dark", "High Contrast Dark", "dark"],
+        ["high-contrast-light", "High Contrast Light", "light"],
+      ]),
+    );
+  });
+
+  it("checks the focus ring on every surface, the axes on the scene and text on the accent fill", () => {
+    const names = paletteContrast(shipped[0]!.palette, "dark").map((r) => r.what);
+    for (const bg of ["--panel", "--panel-2", "--raised", "--raised-2", "the panel glass"]) {
+      expect(names).toContain(`the focus ring on ${bg}`);
+    }
+    for (const axis of ["--axis-x", "--axis-y", "--axis-z"]) expect(names).toContain(`${axis} on --viewport-bg`);
+    expect(names).toContain("--on-accent on --accent");
+  });
+
+  it("holds a high contrast palette to 7:1 text and 4.5:1 lines, edges, signals and the focus ring", () => {
+    const p = shipped[0]!.palette;
+    expect(contrastFailures(p, "dark")).toEqual([]);
+    const high = contrastFailures(p, "dark", "high");
+    expect(high.map((r) => r.what)).toEqual(
+      expect.arrayContaining(["--text-mute on --raised-2", "--line-strong on --raised"]),
+    );
+    expect(high.find((r) => r.what === "--text-mute on --raised-2")?.min).toBe(7);
+    expect(high.find((r) => r.what === "--line-strong on --raised")?.min).toBe(4.5);
   });
 
   it("checks every text token on every surface and the strong line on panel and raised", () => {
@@ -161,8 +194,10 @@ describe("theme contrast", () => {
   });
 
   for (const theme of shipped) {
-    it(`${theme.label} text and signals pass 4.5:1, lines and control edges 3:1, and signals stay apart`, () => {
-      expect(contrastFailures(theme.palette, theme.mode)).toEqual([]);
+    const level = HIGH_CONTRAST.has(theme.id) ? "high" : "standard";
+    const bar = level === "high" ? "text 7:1, the rest 4.5:1" : "text and signals 4.5:1, lines and edges 3:1";
+    it(`${theme.label} passes ${bar}, and its signals stay apart`, () => {
+      expect(contrastFailures(theme.palette, theme.mode, level)).toEqual([]);
     });
   }
 

@@ -17,6 +17,7 @@ import {
 } from "../../../src/ui/homeBackground";
 import { experimentalPrefs, resetExperimentalPrefs, setExperimentalPref } from "../../../src/ui/experimentalPrefs";
 import { renderPrefs, setRenderPref } from "../../../src/ui/renderPrefs";
+import { themes } from "../../../src/ui/theme";
 
 enableAutoUnmount(afterEach);
 
@@ -556,6 +557,16 @@ describe("Preferences sliders, hints and upload errors", () => {
     );
     expect(refs.length).toBeGreaterThanOrEqual(12);
     for (const ref of refs) expect(document.getElementById(ref)?.textContent?.trim(), ref).toBeTruthy();
+  });
+
+  it("names every theme FundaCAD ships in the theme hint, and the vision themes in the Accessibility one", async () => {
+    await open();
+    const text = (id: string) => $(`#${id}`).textContent!.replace(/\s+/g, " ");
+    const shipped = themes().filter((t) => !t.custom);
+    expect(shipped.filter((t) => !text("prefs-theme-hint").includes(t.label)).map((t) => t.label)).toEqual([]);
+    for (const label of ["High Contrast Dark", "High Contrast Light", "Colour-Blind Safe", "FundaCAD Light"]) {
+      expect(text("prefs-a11y-theme-hint")).toContain(label);
+    }
   });
 
   it("keeps both upload errors as empty alerts until a refused file fills them", async () => {

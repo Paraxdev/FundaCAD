@@ -180,7 +180,7 @@ Status:
 | `--error` | `#ff5c5c` | Errors, destructive items, failed steps |
 | `--error-tint` | `rgba(255, 92, 92, 0.14)` | Error backgrounds |
 | `--pick-line` | `#b48cff` | The second pick colour, apart from the accent: the Mirror line or plane, in the view and on its panel field |
-| `--axis-x`, `--axis-y`, `--axis-z` | `#ff5a5a`, `#46d97a`, `#4d8dff` | X, Y and Z in the view: the origin triad and plane tiles, the Move, Pattern and datum gizmos. Colour-Blind Safe trades them for `#e5483a`, `#eedf6b`, `#6aaef0` |
+| `--axis-x`, `--axis-y`, `--axis-z` | `#ff5a5a`, `#46d97a`, `#4d8dff` | X, Y and Z in the view: the origin triad and plane tiles, the Move, Pattern and datum gizmos. Colour-Blind Safe trades them for `#e5483a`, `#eedf6b`, `#6aaef0`. Every palette keeps them at 3:1 on `--viewport-bg`, so the light themes set darker ones |
 
 There is no info, success tint, warn tint or disabled token. Derive them:
 
@@ -1258,8 +1258,16 @@ still loads, the token is dropped.
 Shipped: FundaCAD Noir (built in, dark), Dracula, **Solarized Light** (the light
 one: `--bg #fdf6e3`, `--panel #eee8d5`, `--raised #ffffff`, `--text #073642`,
 `--text-dim #3a4f55`, `--text-mute #4d6165`, `--accent #25669b`,
-`--accent-hot #173f5f`), Colour-Blind Safe, and the Noir Blue, Red and Orange
+`--accent-hot #173f5f`), **FundaCAD Light** (Noir's violet on paper, `--bg #f5f3f9`,
+`--panel #ebe8f2`, `--text #1b1826`, `--accent #4a4fb5`), **High Contrast Dark** and
+**High Contrast Light**, Colour-Blind Safe, and the Noir Blue, Red and Orange
 tints. Users can upload their own palette.
+
+The High Contrast pair keeps a higher bar than the rest: every text token at 7:1
+on every surface and on the panel glass, and `--line-strong`, `--control-edge`,
+the signals and the focus ring (`--accent`) at 4.5:1. Their surfaces are near
+black or near white and set `--control-edge` outright. The dark one uses a cyan
+accent, as yellow is `--warn`.
 
 ![The same workspace in Solarized Light](design/workspace-light.png)
 
@@ -1294,7 +1302,9 @@ and `--text`, so the cards follow the palette.
   hue does not (`deltaE2000` in `src/ui/contrast.ts`).
 
 `tests/ui/designSpec.test.ts` and `tests/ui/themeContrast.test.ts` hold these
-numbers for Solarized Light.
+numbers for every shipped light theme (Solarized Light, FundaCAD Light and High
+Contrast Light). In every theme the focus ring reads at 3:1 on each surface and
+the axes at 3:1 on `--viewport-bg`.
 
 What this means for you:
 

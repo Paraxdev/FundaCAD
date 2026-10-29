@@ -465,8 +465,9 @@ function onClassicCamera(on: boolean) {
                 />
               </div>
               <p id="prefs-theme-hint" class="pref-hint">
-                FundaCAD Noir, Dracula, Solarized Light and the Noir Blue/Red/Orange tints ship with FundaCAD. Upload a
-                JSON palette to add your own, it is stored in this browser's preferences. Keys are colour tokens like
+                Shipped with FundaCAD: FundaCAD Noir, FundaCAD Light, High Contrast Dark, High Contrast Light,
+                Colour-Blind Safe, Dracula, Solarized Light, Noir Blue, Noir Red and Noir Orange. Upload a JSON palette
+                to add your own, it is stored in this browser's preferences. Keys are colour tokens like
                 <code>--bg</code> and <code>--accent</code>, values are hex or rgb().
               </p>
               <div class="prefs-actions">
@@ -808,8 +809,9 @@ function onClassicCamera(on: boolean) {
                   >
                 </div>
                 <p id="prefs-a11y-theme-hint" class="pref-hint">
-                  Themes are picked under Appearance. Colour-Blind Safe draws the axes, planes and gizmos in vermilion,
-                  yellow and sky blue, and Solarized Light is a light theme.
+                  Themes are picked under Appearance. High Contrast Dark and High Contrast Light hold text at 7:1 and
+                  every edge at 4.5:1, Colour-Blind Safe draws the axes, planes and gizmos in vermilion, yellow and sky
+                  blue, and FundaCAD Light and Solarized Light are light themes.
                 </p>
               </div>
             </div>

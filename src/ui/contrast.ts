@@ -130,6 +130,15 @@ const EDGE_SURFACES = ["--panel", "--panel-2", "the panel glass"];
 const DICHROMATS: Vision[] = ["protanopia", "deuteranopia", "tritanopia"];
 const SIGNAL_DELTA_E = 15;
 const SIGNAL_LIGHTNESS_GAP = 10;
+const RING_SURFACES = ["--panel", "--panel-2", "--raised", "--raised-2", "the panel glass"];
+const AXES = ["--axis-x", "--axis-y", "--axis-z"];
+
+/** "high" is the bar the High Contrast themes keep: AAA text, and every line a viewer must find at text contrast. */
+export type ContrastLevel = "standard" | "high";
+const MINIMA: Record<ContrastLevel, Record<"text" | "line" | "signal" | "edge" | "ring", number>> = {
+  standard: { text: 4.5, line: 3, signal: 4.5, edge: 3, ring: 3 },
+  high: { text: 7, line: 4.5, signal: 4.5, edge: 4.5, ring: 4.5 },
+};
 
 /** The rail pill and readout glass over the bare scene, as _tokens.scss builds --float-bg for each mode. */
 export function glassFill(p: Record<string, string>, mode: "dark" | "light"): Rgba {
@@ -162,27 +171,37 @@ export function controlEdge(p: Record<string, string>, mode: "dark" | "light"): 
 }
 
 /** Every text, line, signal and control edge pair a palette must pass, worst first. `p` is a whole palette, Noir defaults filled in. */
-export function paletteContrast(p: Record<string, string>, mode: "dark" | "light"): PairResult[] {
+export function paletteContrast(
+  p: Record<string, string>,
+  mode: "dark" | "light",
+  level: ContrastLevel = "standard",
+): PairResult[] {
   const c = (name: string) => parseColor(p[name] ?? `missing ${name}`);
+  const min = MINIMA[level];
   const out: PairResult[] = [];
   const add = (what: string, fg: Rgba, bg: Rgba, min: number) =>
     out.push({ what, ratio: Math.round(contrastRatio(fg, bg) * 100) / 100, min });
   const glass = glassFill(p, mode);
   for (const fg of TEXT_TOKENS) {
-    for (const bg of TEXT_SURFACES) add(`${fg} on ${bg}`, c(fg), c(bg), 4.5);
-    add(`${fg} on the rail pill glass`, c(fg), glass, 4.5);
+    for (const bg of TEXT_SURFACES) add(`${fg} on ${bg}`, c(fg), c(bg), min.text);
+    add(`${fg} on the rail pill glass`, c(fg), glass, min.text);
   }
-  for (const bg of LINE_SURFACES) add(`--line-strong on ${bg}`, c("--line-strong"), c(bg), 3);
-  for (const fg of SIGNALS) for (const bg of SIGNAL_SURFACES) add(`${fg} on ${bg}`, c(fg), c(bg), 4.5);
+  add("--on-accent on --accent", c("--on-accent"), c("--accent"), min.text);
+  for (const bg of LINE_SURFACES) add(`--line-strong on ${bg}`, c("--line-strong"), c(bg), min.line);
+  for (const fg of SIGNALS) for (const bg of SIGNAL_SURFACES) add(`${fg} on ${bg}`, c(fg), c(bg), min.signal);
+  for (const bg of RING_SURFACES) {
+    add(`the focus ring on ${bg}`, c("--accent"), bg === "the panel glass" ? glass : c(bg), min.ring);
+  }
   add("--pick-line on --viewport-bg", c("--pick-line"), c("--viewport-bg"), 3);
+  for (const axis of AXES) add(`${axis} on --viewport-bg`, c(axis), c("--viewport-bg"), 3);
   // The edge is an inset line painted over the control's own fill, so it has to stand clear of both sides.
   const edge = controlEdge(p, mode);
   for (const on of EDGE_SURFACES) {
     const under = on === "the panel glass" ? glass : c(on);
     for (const [fill, well] of controlFills(p, mode, under)) {
       const line = over(edge, well);
-      add(`--control-edge on ${fill} against ${on}`, line, under, 3);
-      add(`--control-edge on ${fill} on ${on}, against the fill`, line, well, 3);
+      add(`--control-edge on ${fill} against ${on}`, line, under, min.edge);
+      add(`--control-edge on ${fill} on ${on}, against the fill`, line, well, min.edge);
     }
   }
   // Hue alone does not tell two signals apart when a dichromat sees them merge, so those need a lightness gap.
@@ -196,6 +215,10 @@ export function paletteContrast(p: Record<string, string>, mode: "dark" | "light
   return out.sort((a, b) => a.ratio / a.min - b.ratio / b.min);
 }
 
-export function contrastFailures(p: Record<string, string>, mode: "dark" | "light"): PairResult[] {
-  return paletteContrast(p, mode).filter((r) => r.ratio < r.min);
+export function contrastFailures(
+  p: Record<string, string>,
+  mode: "dark" | "light",
+  level: ContrastLevel = "standard",
+): PairResult[] {
+  return paletteContrast(p, mode, level).filter((r) => r.ratio < r.min);
 }
