@@ -8,9 +8,9 @@ This plugin gives each body a filament slot, and slot 1 prints on toolhead 1, sl
 
 A Palette section appears in the Items card once the document has a body and the printer answers. It needs the [Printer connection](printing.md) plugin on.
 
-- A new document has four slots: White, Black, Red and Blue.
-- Click a swatch to change its colour, and double-click a name to rename it.
-- Sync filaments from printer, the button beside the dot, copies the loaded filaments into the slots. It asks before it overwrites slots you changed.
+1. A new document has four slots: White, Black, Red and Blue.
+2. Click a swatch to change its colour, and double-click a name to rename it.
+3. Sync filaments from printer, the button beside the dot, copies the loaded filaments into the slots. It asks before it overwrites slots you changed.
 
 The dot is green when the slots match the printer, and yellow when the printer's filaments changed since the last sync.
 

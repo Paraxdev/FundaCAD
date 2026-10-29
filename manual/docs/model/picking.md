@@ -16,15 +16,15 @@ The same choice is under Select, in the Appearance tab of the Views button.
 
 ## Seeing through
 
-- X sees through the model, so you can pick what is behind.
-- Shift+X shows edges only.
+1. X sees through the model, so you can pick what is behind.
+2. Shift+X shows edges only.
 
 ## Box select
 
-- Drag to the right to take what lies fully inside the box.
-- Drag to the left to take anything it touches.
-- Hold Shift to add to the selection.
-- Press Tab while dragging to take everything, faces, sketch profiles, edges or bodies.
+1. Drag to the right to take what lies fully inside the box.
+2. Drag to the left to take anything it touches.
+3. Hold Shift to add to the selection.
+4. Press Tab while dragging to take everything, faces, sketch profiles, edges or bodies.
 
 ## Delete a face
 

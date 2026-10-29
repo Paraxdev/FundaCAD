@@ -6,9 +6,9 @@ This plugin draws the fine layer lines a printed part has across its surface. It
 
 Turn on Layer lines in one of these places:
 
-- Layer lines under Print on the rail.
-- The Printed look section of the Environment tab in Render.
-- The command palette, by searching for Layer lines.
+1. Layer lines under Print on the rail.
+2. The Printed look section of the Environment tab in Render.
+3. The command palette, by searching for Layer lines.
 
 The section has three settings.
 

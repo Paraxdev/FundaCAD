@@ -148,6 +148,9 @@ jobs:
       - name: Capture tool tests
         run: python tests/manual/test_capture.py
 
+      - name: Manual list tests
+        run: python tests/manual/test_lists.py
+
       - name: Manual glossary tests
         run: python tests/manual/test_glossary.py
 

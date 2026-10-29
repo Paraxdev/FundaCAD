@@ -17,9 +17,9 @@ See [Stress](../inspect/stress.md).
 
 A box and a lid laid flat side by side, ready to print. The lid has a lip that fits inside the box with `clearance` all round, 0.2 mm to start with.
 
-- Change `innerWidth`, `innerDepth` or `innerHeight` and both parts follow, the lid still fits.
-- If the fit prints too tight, raise `clearance` to 0.3 or 0.4.
-- `wall` sets the walls, `floor` the bottom and the lid, `lipHeight` how deep the lip goes.
+1. Change `innerWidth`, `innerDepth` or `innerHeight` and both parts follow, the lid still fits.
+2. If the fit prints too tight, raise `clearance` to 0.3 or 0.4.
+3. `wall` sets the walls, `floor` the bottom and the lid, `lipHeight` how deep the lip goes.
 
 See [Parameters](../model/parameters.md).
 
@@ -27,10 +27,10 @@ See [Parameters](../model/parameters.md).
 
 A tube and a screw-on cap laid side by side, ready to print. Both threads are modelled, and the cap's thread leaves `clearance` of play on both flanks, 0.25 mm to start with.
 
-- Change `innerDiameter`, `innerLength`, `wall` or `pitch` and both parts follow, the cap still screws on.
-- Set `screwedOn` to 1 to put the cap on the tube, and back to 0 to lay both out again.
-- If the thread prints too tight, raise `clearance` to 0.3 or 0.4.
-- `threadLength` sets how far the thread runs down the tube. It stays between 2.5 and 9 pitches, and within `innerLength`.
+1. Change `innerDiameter`, `innerLength`, `wall` or `pitch` and both parts follow, the cap still screws on.
+2. Set `screwedOn` to 1 to put the cap on the tube, and back to 0 to lay both out again.
+3. If the thread prints too tight, raise `clearance` to 0.3 or 0.4.
+4. `threadLength` sets how far the thread runs down the tube. It stays between 2.5 and 9 pitches, and within `innerLength`.
 
 With a tube under 20 mm `innerDiameter` or a longer thread, set `screwedOn` to 1 and run [Interference](../inspect/interference.md) to check that the parts do not touch.
 

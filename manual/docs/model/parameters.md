@@ -20,9 +20,9 @@ A tied value shows `fx:` in front of it, and hovering its row shows the paramete
 
 ## Edit and delete
 
-- Change a name or an expression right in its row. A new name follows everywhere the parameter is used.
-- The comment is a note for yourself.
-- The x at the end of a row deletes the parameter, unless something still uses it. Hover the x to see what.
+1. Change a name or an expression right in its row. A new name follows everywhere the parameter is used.
+2. The comment is a note for yourself.
+3. The x at the end of a row deletes the parameter, unless something still uses it. Hover the x to see what.
 
 ## Model parameters
 

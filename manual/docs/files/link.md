@@ -14,5 +14,5 @@ The shape arrives as a body, without the steps that made it.
 
 When a linked file has changed, opening the document says so and offers Update. You can also right click the step in the History:
 
-- **Update from linked file** reads the file again.
-- **Unlink** keeps the shape and forgets the file.
+1. **Update from linked file** reads the file again.
+2. **Unlink** keeps the shape and forgets the file.

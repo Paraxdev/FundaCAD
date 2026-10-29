@@ -2,10 +2,10 @@
 
 When something goes wrong, or does not do what you expected, tell us. The report opens from any of these:
 
-- Help > Report a Problem…
-- the bug button at the foot of the view controls, on the right of the view;
-- Report a problem, on the Home screen or on the safe mode banner;
-- Report, on the notice that says the geometry engine stopped.
+1. Help > Report a Problem…
+2. the bug button at the foot of the view controls, on the right of the view;
+3. Report a problem, on the Home screen or on the safe mode banner;
+4. Report, on the notice that says the geometry engine stopped.
 
 ## Send a report
 
@@ -20,11 +20,11 @@ Opening an issue needs a GitHub account, and nothing leaves your computer until 
 
 What will be sent shows the exact text before anything is copied:
 
-- the version, your system, the engine and the plugins that run;
-- your description;
-- your last steps and the last three errors;
-- the end of the app log, unless you untick it;
-- the current document, only when you tick it.
+1. the version, your system, the engine and the plugins that run;
+2. your description;
+3. your last steps and the last three errors;
+4. the end of the app log, unless you untick it;
+5. the current document, only when you tick it.
 
 User names in file paths are hidden. A document too big for an issue is left out, so put the `.funda` file in a `.zip` and drag it into the issue yourself.
 
