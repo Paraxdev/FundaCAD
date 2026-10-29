@@ -57,7 +57,7 @@ const flags = computed(() => props.options.map((o) => !!o.disabled));
 const selected = computed(() => props.options.findIndex((o) => o.value === props.modelValue));
 const tipText = computed(() => (props.tip ? fmtKeys(props.keys ? `${props.tip} (${props.keys})` : props.tip) : null));
 const shown = computed(() => props.options[selected.value]?.label ?? props.placeholder ?? props.modelValue);
-// An aria-label alone hides a combobox's value from VoiceOver and Orca, so the trigger's name carries the value too.
+// An aria-label alone hides a combobox's value from the WebKit screen readers, so the trigger's name carries the value too.
 const triggerName = computed(() => {
   const by = name.value["aria-labelledby"];
   if (by) return { "aria-label": undefined, "aria-labelledby": `${by} ${valueId}` };
