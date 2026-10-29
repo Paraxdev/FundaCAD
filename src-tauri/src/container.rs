@@ -221,3 +221,9 @@ pub async fn container_verify(path: String) -> Result<fundacad_format::fnda::Rep
 pub fn container_is_container(held: tauri::State<'_, crate::doc_paths::Provenance>, path: String) -> bool {
     held.check_open(&path).is_ok_and(|p| looks_like_container(&p))
 }
+
+/// The user picked `path` on Home's recent list or a Home folder, so it may be opened this session.
+#[tauri::command]
+pub fn paths_note_recent(held: tauri::State<'_, crate::doc_paths::Provenance>, path: String) {
+    held.vouch_all([path.as_str()]);
+}

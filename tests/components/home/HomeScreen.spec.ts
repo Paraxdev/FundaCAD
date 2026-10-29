@@ -13,6 +13,7 @@ import { choose } from "../../../src/ui/choice";
 import type { HomeCallbacks } from "../../../src/ui/home";
 import type { OpenOutcome } from "../../../src/io/files";
 import {
+  library,
   setLibrary,
   type DocumentLibrary,
   type DocSummary,
@@ -100,6 +101,7 @@ function fakeLibrary(
     ),
     thumbs: vi.fn(async (paths: string[]) => paths.map((p) => `data:image/jpeg;base64,${btoa(p)}`)),
     putThumb: vi.fn(async () => {}),
+    vouch: vi.fn(async () => {}),
   };
 }
 
@@ -259,6 +261,28 @@ describe("HomeScreen", () => {
 
   it("opens a card through openPath", async () => {
     const { cb } = open([{ path: "C:/a.funda", openedAt: 1 }]);
+    $(".home-card")!.click();
+    await flushPromises();
+    expect(cb.openPath).toHaveBeenCalledWith("C:/a.funda");
+  });
+
+  it("vouches for a network card's path before it opens it", async () => {
+    const lib = fakeLibrary();
+    const { cb } = open([{ path: "//nas/share/a.funda", openedAt: 1 }], {}, lib);
+    $(".home-card")!.click();
+    await flushPromises();
+    expect(lib.vouch).toHaveBeenCalledWith("//nas/share/a.funda");
+    expect(vi.mocked(lib.vouch).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(cb.openPath).mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it("still opens a card when the vouch is refused", async () => {
+    const lib = fakeLibrary();
+    lib.vouch = vi.fn(async () => {
+      throw new Error("no");
+    });
+    const { cb } = open([{ path: "C:/a.funda", openedAt: 1 }], {}, lib);
     $(".home-card")!.click();
     await flushPromises();
     expect(cb.openPath).toHaveBeenCalledWith("C:/a.funda");
@@ -733,6 +757,15 @@ describe("HomeScreen", () => {
       await flushPromises();
       expect(cb.openVersion).toHaveBeenCalledWith(P, "v3", false);
       expect(home.visible).toBe(false);
+    });
+
+    it("vouches for the drawer's path before a version or branch opens it", async () => {
+      const { cb } = await drawerFor({ [P]: hist });
+      const vouch = vi.mocked(library()!.vouch);
+      button(".home-version-restore", "Restore").click();
+      await flushPromises();
+      expect(vouch).toHaveBeenCalledWith(P);
+      expect(vouch.mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(cb.openVersion).mock.invocationCallOrder[0]!);
     });
 
     it("passes the copy and branch actions through and stays up when they are refused", async () => {
