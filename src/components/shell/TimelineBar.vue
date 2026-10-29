@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { fmtKeys } from "../../input/platform";
-import { computed, nextTick, onMounted, onUnmounted, ref, useTemplateRef, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, useId, useTemplateRef, watch } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { useDocValue, useBuildValue } from "../../app/useDoc";
 import { pickedFeatureCount, useSelectionStore } from "../../stores/selection";
@@ -13,6 +13,7 @@ import Chip from "../ui/Chip.vue";
 import IconButton from "../ui/IconButton.vue";
 import TextField from "../ui/TextField.vue";
 import { contextMenu } from "../../ui/menu";
+import { announce } from "../../ui/announce";
 import { useRovingFocus } from "../ui/useRovingFocus";
 import { isMenuKeyEvent } from "../ui/treeContext";
 import {
@@ -235,18 +236,22 @@ function chipTitle(f: { id: string; type: string; name?: string; shown?: string;
   );
 }
 
-// The tooltip and the chip's colour, as words a screen reader reads after the chip's name.
+// The glyph, the tooltip and the chip's colour, as words a screen reader reads after the chip's name.
 const chipStates = computed(() =>
   features.value.map((f, i) => {
     const err = errors.value.get(f.id);
     const note = notes.value.get(f.id);
     const placeholder = placeholders.value.get(f.id);
+    const kind = metaFor(f).label;
     return [
+      f.shown.toLowerCase().includes(kind.toLowerCase()) ? "" : kind,
+      `step ${i + 1} of ${features.value.length}`,
       f.type === "import" && f.name && f.shown !== f.name ? `file: ${f.name}` : "",
-      err ? `failed: ${err}` : note ? `note: ${note}` : "",
+      err ? `failed: ${err}` : note ? `warning: ${note}` : "",
       f.inactive ? "switched off" : suppressed.value.has(f.id) ? "suppressed" : "",
       placeholder !== undefined ? placeholderNote(placeholder) : "",
       i >= rollback.value ? "rolled back" : "",
+      isPicked(f.id) ? "selected" : "",
     ]
       .filter(Boolean)
       .join(", ");
@@ -330,12 +335,40 @@ const stepRoving = useRovingFocus({
   orientation: "both",
   wrap: false,
 });
+const stateIds = useId();
+const REORDER_KEYS: Record<string, -1 | 1> = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 };
+// A move redraws the chips, which can drop the focused one's focus and leaves the roving stop on its old index.
+let refocus: { id: string; at: number } | null = null;
+watch(
+  features,
+  () => {
+    const r = refocus;
+    refocus = null;
+    if (!r || performance.now() - r.at > 2000) return;
+    const j = features.value.findIndex((f) => f.id === r.id);
+    if (j >= 0) stepRoving.focus(j);
+  },
+  { flush: "post" },
+);
+// Past the next step the list shows, the same index both ways as a drop on that chip.
+function reorderStep(i: number, delta: -1 | 1) {
+  const list = features.value;
+  const f = list[i];
+  if (!f) return;
+  let j = i + delta;
+  while (j >= 0 && j < list.length && filtering.value && !related.value?.has(list[j]!.id)) j += delta;
+  const to = list[j];
+  if (!to) return announce(`${f.shown} is already the ${delta < 0 ? "first" : "last"} step`);
+  refocus = { id: f.id, at: performance.now() };
+  store.moveFeature(f.id, j);
+  announce(`Moved ${f.shown} ${delta < 0 ? "before" : "after"} ${to.shown}`);
+}
 let menuKeyAt = -Infinity;
 function claim(e: KeyboardEvent) {
   e.preventDefault();
   e.stopPropagation();
 }
-// Space is a click, Shift+Space a Shift click for a run, Enter the double click that edits.
+// Space is a click, Shift+Space a Shift click for a run, Enter the double click that edits, Alt with an arrow a move.
 function onChipKey(e: KeyboardEvent, id: string, i: number) {
   if (e.target !== e.currentTarget) return;
   if (isMenuKeyEvent(e)) {
@@ -343,6 +376,12 @@ function onChipKey(e: KeyboardEvent, id: string, i: number) {
     menuKeyAt = performance.now();
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     openMenu(new MouseEvent("contextmenu", { clientX: r.left + 24, clientY: r.bottom }), id, i, true);
+    return;
+  }
+  const delta = e.altKey && !e.ctrlKey && !e.metaKey ? REORDER_KEYS[e.key] : undefined;
+  if (delta) {
+    claim(e);
+    reorderStep(i, delta);
     return;
   }
   if (e.ctrlKey || e.altKey || e.metaKey) return;
@@ -669,6 +708,9 @@ function openMultiMenu(e: MouseEvent, ids: string[]) {
               <div
                 class="timeline-node"
                 :role="renamingId === f.id ? undefined : 'button'"
+                :aria-label="renamingId === f.id ? undefined : f.shown"
+                :aria-describedby="renamingId === f.id ? undefined : `${stateIds}-${i}`"
+                :aria-current="i === rollback - 1 ? 'step' : undefined"
                 :tabindex="stepRoving.tabindex(i)"
                 :data-id="f.id"
                 :class="{
@@ -720,7 +762,7 @@ function openMultiMenu(e: MouseEvent, ids: string[]) {
                   />
                 </span>
                 <span v-else class="t-name">{{ f.shown }}</span>
-                <span v-if="chipStates[i]" class="sr-only">, {{ chipStates[i] }}</span>
+                <span :id="`${stateIds}-${i}`" class="sr-only t-state">{{ chipStates[i] }}</span>
                 <Icon
                   class="t-caret"
                   :name="selection.featureId === f.id && !several ? 'caretDown' : 'caretRight'"
