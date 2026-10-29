@@ -88,13 +88,33 @@ fn a_plugin_switched_off_in_the_window_is_not_loaded_by_the_engine() {
     write_disabled(&root, &[]).unwrap();
     let on = discovered_ids(&roots);
     std::fs::write(root.join(DISABLED), "{not json").unwrap();
+    let unparseable = discovered_ids(&roots);
+    std::fs::write(root.join(DISABLED), r#"["Some.Plugin", 7]"#).unwrap();
+    let mistyped = discovered_ids(&roots);
+    std::fs::remove_file(root.join(DISABLED)).unwrap();
+    std::fs::create_dir(root.join(DISABLED)).unwrap();
     let unreadable = discovered_ids(&roots);
+    std::fs::remove_dir(root.join(DISABLED)).unwrap();
+    let never_written = discovered_ids(&roots);
     let _ = std::fs::remove_dir_all(&root);
     let _ = std::fs::remove_dir_all(&checkout);
 
     assert_eq!(off, ["Other.Plugin"]);
     assert_eq!(on, ["Other.Plugin", "Some.Plugin"]);
-    assert_eq!(unreadable, ["Other.Plugin", "Some.Plugin"]);
+    let none: [&str; 0] = [];
+    assert_eq!([unparseable, mistyped, unreadable], [none; 3]);
+    assert_eq!(never_written, ["Other.Plugin", "Some.Plugin"]);
+}
+
+#[test]
+fn a_switched_off_plugin_stays_off_whatever_its_manifest_calls_it() {
+    let root = temp_root("disabled-renamed");
+    installed(&root, "Some.Plugin", "Another.Name", &[]);
+    installed(&root, "Other.Plugin", "Other.Plugin", &[]);
+    write_disabled(&root, &["Some.Plugin".into()]).unwrap();
+    let ids = discovered_ids(&[PluginRoot { dir: root.clone(), records: true }]);
+    let _ = std::fs::remove_dir_all(&root);
+    assert_eq!(ids, ["Other.Plugin"]);
 }
 
 #[test]

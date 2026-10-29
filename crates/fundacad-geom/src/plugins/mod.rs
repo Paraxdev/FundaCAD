@@ -206,15 +206,19 @@ fn consented(dir: &Path, man: &Value) -> bool {
     agreed == asked
 }
 
-/// Unreadable counts as nothing switched off, as the window's own store does.
-fn switched_off(roots: &[PluginRoot]) -> BTreeSet<String> {
-    roots
-        .iter()
-        .filter(|r| r.records)
-        .filter_map(|r| std::fs::read(r.dir.join(DISABLED)).ok())
-        .filter_map(|b| serde_json::from_slice::<Vec<String>>(&b).ok())
-        .flatten()
-        .collect()
+/// None when a list is there but unreadable, which switches every plugin off. A list never written switches none off,
+/// since the window writes one at every start and on every switch, renamed into place whole.
+fn switched_off(roots: &[PluginRoot]) -> Option<BTreeSet<String>> {
+    let mut off = BTreeSet::new();
+    for root in roots.iter().filter(|r| r.records) {
+        let bytes = match std::fs::read(root.dir.join(DISABLED)) {
+            Ok(b) => b,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(_) => return None,
+        };
+        off.extend(serde_json::from_slice::<Vec<String>>(&bytes).ok()?);
+    }
+    Some(off)
 }
 
 /// The ids discovery would register from these roots, in the order it finds them.
@@ -225,7 +229,9 @@ pub fn discovered_ids(roots: &[PluginRoot]) -> Vec<String> {
 fn discover_in(roots: &[PluginRoot]) -> Vec<Declared> {
     let mut out: Vec<Declared> = Vec::new();
     // From the app's root, and applied to every root, so a checkout's copy does not stand in for one switched off.
-    let off = switched_off(roots);
+    let Some(off) = switched_off(roots) else {
+        return out;
+    };
     for root in roots {
         let Ok(rd) = std::fs::read_dir(&root.dir) else {
             continue;
@@ -250,7 +256,9 @@ fn discover_in(roots: &[PluginRoot]) -> Vec<Declared> {
                 .and_then(Value::as_str)
                 .map(str::to_owned)
                 .unwrap_or_else(|| dir.file_name().unwrap_or_default().to_string_lossy().into_owned());
-            if off.contains(&id) || out.iter().any(|d| d.id == id) {
+            // The window names an installed plugin by its directory, which a manifest's own id need not match.
+            let named = dir.file_name().unwrap_or_default().to_string_lossy();
+            if off.contains(&id) || off.contains(named.as_ref()) || out.iter().any(|d| d.id == id) {
                 continue;
             }
             let wasm = man.get(MANIFEST_WASM).and_then(Value::as_str).map(str::to_owned);
