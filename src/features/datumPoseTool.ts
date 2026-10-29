@@ -14,6 +14,7 @@ import { RotateDial } from "../viewport/rotateDial";
 import { SketchPlane } from "../sketch/plane";
 import { pivotOf, placeDatum, turnAxes, type DatumPose, type PoseField } from "../document/datumPose";
 import { DatumRings, RING_PX, type Grab, type RingScene } from "./datumRings";
+import { HeldSignal } from "./heldEdit";
 
 /** Degrees per step: the default, with Shift, and with Alt (free). */
 export const TILT_STEP_DEG = 5;
@@ -43,6 +44,9 @@ export interface PoseToolOptions {
   /** draw a ghost of the plane (creating, where no real quad exists yet) */
   ghost: boolean;
 }
+
+/** `bySave` is set when a save entered the pose, so the caller adds the datum and skips what follows it. */
+export type PoseDone = (pose: DatumPose | null, bySave?: boolean) => void;
 
 export class DatumPoseTool {
   active = false;
@@ -75,8 +79,9 @@ export class DatumPoseTool {
   private downOnGizmo = false;
 
   private dim = new DimInput();
-  private onDone: ((pose: DatumPose | null) => void) | null = null;
+  private onDone: PoseDone | null = null;
   private readonly gesture: CanvasGesture;
+  private readonly held = new HeldSignal();
 
   constructor(private viewport: Viewport) {
     this.gesture = new CanvasGesture(viewport.domElement, {
@@ -88,7 +93,7 @@ export class DatumPoseTool {
     });
   }
 
-  start(opts: PoseToolOptions, onDone: (pose: DatumPose | null) => void) {
+  start(opts: PoseToolOptions, onDone: PoseDone) {
     if (this.active) return;
     this.active = true;
     this.opts = opts;
@@ -291,6 +296,7 @@ export class DatumPoseTool {
   }
 
   private refresh() {
+    this.held.sync(this.pending);
     this.updateGhost();
     this.opts?.onLive?.({ ...this.pose });
     this.viewport.requestRender();
@@ -358,8 +364,8 @@ export class DatumPoseTool {
     this.ghostMesh.quaternion.copy(p.orientation());
   }
 
-  /** Enter, the tick box, or a click off the handles. */
-  private finish() {
+  /** Enter, the tick box, a click off the handles, or a save. */
+  private finish(bySave = false) {
     if (!this.active) return;
     this.readTyped();
     const pose = { ...this.pose };
@@ -367,7 +373,26 @@ export class DatumPoseTool {
     if (editing) this.step();
     const done = this.onDone;
     this.cleanup();
-    done?.(editing ? null : pose);
+    done?.(editing ? null : pose, bySave);
+  }
+
+  /** A pose dragged or typed that Enter would write or hand out. */
+  get pending(): boolean {
+    return this.active && this.changed();
+  }
+
+  get dragging(): boolean {
+    return this.grab !== null;
+  }
+
+  /** Told when `pending` turns on or off, for the unsaved mark and the close guard. */
+  onHeldChange(fn: () => void): () => void {
+    return this.held.on(fn);
+  }
+
+  /** For a save: the pose is written as Enter writes it. A drag still under the hand is left alone. */
+  confirmHeld() {
+    if (this.pending && !this.dragging) this.finish(true);
   }
 
   cancel() {
@@ -404,5 +429,6 @@ export class DatumPoseTool {
     this.hover = null;
     this.opts = null;
     setPrompt(null);
+    this.held.sync(this.pending);
   }
 }

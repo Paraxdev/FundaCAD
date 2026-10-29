@@ -21,6 +21,7 @@ import {
 import { ROTATE_SNAP_DEG, angleInFrame, ringDragDegenerate, rotationFrame, snapDegrees } from "./transformGizmo";
 import { unwrapTurn } from "./screwMath";
 import { CanvasGesture } from "./canvasGesture";
+import { HeldSignal } from "./heldEdit";
 
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 const v3 = (p: Vec3) => new THREE.Vector3(p[0], p[1], p[2]);
@@ -55,6 +56,7 @@ export class MechanismTool {
   private dim = new DimInput();
   private onDone: ((id: string | null) => void) | null = null;
   private previewing = false;
+  private readonly held = new HeldSignal();
 
   private readonly gesture: CanvasGesture;
 
@@ -239,6 +241,7 @@ export class MechanismTool {
   // In place, so the features after the mechanism (an interference check, a body joining the moved parts) stay on
   // screen while the linkage moves.
   private pushPreview() {
+    this.held.sync(this.pending);
     if (!this.active || !this.id) return;
     const f = this.store.document.features.find((x) => x.id === this.id);
     if (!f || f.type !== "mechanism") return;
@@ -273,6 +276,25 @@ export class MechanismTool {
     done?.(id);
   }
 
+  /** A drive value dragged or typed that Enter would write. */
+  get pending(): boolean {
+    return this.active && Math.abs(this.value - this.opened) > 1e-9;
+  }
+
+  get dragging(): boolean {
+    return this.grabbing;
+  }
+
+  /** Told when `pending` turns on or off, for the unsaved mark and the close guard. */
+  onHeldChange(fn: () => void): () => void {
+    return this.held.on(fn);
+  }
+
+  /** For a save: the edit is written as Enter writes it. A drag still under the hand is left alone. */
+  confirmHeld() {
+    if (this.pending && !this.dragging) this.commit();
+  }
+
   cancel() {
     const done = this.onDone;
     this.cleanup(true);
@@ -301,5 +323,6 @@ export class MechanismTool {
     this.id = null;
     this.onDone = null;
     setPrompt(null);
+    this.held.sync(this.pending);
   }
 }

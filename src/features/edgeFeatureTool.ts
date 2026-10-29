@@ -53,6 +53,7 @@ import {
   type ValueBounds,
 } from "./edgeDragMath";
 import { CanvasGesture } from "./canvasGesture";
+import { HeldSignal } from "./heldEdit";
 import { blendEditCommit } from "./blendEdit";
 import { pointOnEdge } from "./edgeNudge";
 import { blendClickTarget, missPrompt, screenPolylineDist } from "./blendPick";
@@ -158,6 +159,9 @@ export class EdgeFeatureTool {
   private continuity: Continuity = "G1";
   private hovering = false;
   private grabbing = false;
+  /** A drag let go of or a value typed, so the open default alone is not unsaved work. */
+  private touched = false;
+  private readonly held = new HeldSignal();
   private grabSigned = 0; // signed offset at grab start (relative drag)
   private grabProj = 0; // axis projection at grab start
   private downPos = { x: 0, y: 0 };
@@ -1032,6 +1036,8 @@ export class EdgeFeatureTool {
       this.flushPreviewNow();
       this.viewport.domElement.style.cursor = this.hovering ? "grab" : "default";
       this.dim.focus();
+      if (moved) this.touched = true;
+      this.held.sync(this.pending);
       if (!moved) {
         // A press that never travelled opens the full tool; from the selection handle that arms on nothing, so put
         // the default value up.
@@ -1157,10 +1163,12 @@ export class EdgeFeatureTool {
           // A typed value is held only to the absolute floor, not the drag's zoom scaled step, and lands on the
           // current treatment's side so a later grab carries on from it.
           this.setValue(clampValue(v, { min: MIN_EDGE_VALUE, max: Infinity }));
+          this.touched = true;
           this.schedulePreviewDuringDrag();
           if (this.neutral !== wasNeutral) this.promptForPhase();
         }
       }
+      this.held.sync(this.pending);
       this.gesture.frame();
     }
   }
@@ -1295,6 +1303,26 @@ export class EdgeFeatureTool {
     this.onDone?.(null);
   }
 
+  /** A blend dragged or typed that Enter would write. */
+  get pending(): boolean {
+    return this.touched && this.active && this.phase === "drag" && !this.neutral && this.currentSelectors().length > 0;
+  }
+
+  get dragging(): boolean {
+    return this.grabbing;
+  }
+
+  /** Told when `pending` turns on or off, for the unsaved mark and the close guard. */
+  onHeldChange(fn: () => void): () => void {
+    return this.held.on(fn);
+  }
+
+  /** For a save: the blend is written as Enter writes it, which may decline and keep the tool open. A drag still
+   *  under the hand is left alone. */
+  confirmHeld() {
+    if (this.pending && !this.dragging) this.commit();
+  }
+
   private cleanup() {
     const el = this.viewport.domElement;
     this.gesture.detach();
@@ -1328,12 +1356,14 @@ export class EdgeFeatureTool {
     this.active = false;
     this.phase = "pick";
     this.grabbing = false;
+    this.touched = false;
     this.refusalShown = null;
     this.forgetBuildRange();
     this.hovering = false;
     this.signed = 0;
     this.grabSigned = 0;
     setPrompt(null);
+    this.held.sync(this.pending);
   }
 
   private disposeGizmo() {

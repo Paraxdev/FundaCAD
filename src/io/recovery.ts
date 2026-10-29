@@ -1,5 +1,6 @@
 // Crash-recovery autosave. Rust owns the snapshot files (recovery_* commands) outside the webview's fs scope;
 // this decides when: 30 s after the last edit, at most 2 min behind, only while dirty. A save clears the slot.
+// A drag let go of but not entered stays out of the copy: entering it behind the user would stop Escape cancelling it.
 
 import type { DocumentSession } from "../document/session";
 import type { DocumentStore } from "../document/store";

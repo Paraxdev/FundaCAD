@@ -1,4 +1,4 @@
-import { saveDocument, saveDocumentAs, exportSelection, importModel } from "../io/files";
+import { exportSelection, importModel } from "../io/files";
 import { setWorkspace } from "../ui/workspace";
 import { chooseViewMode, nextViewMode, requestPathTraced, toggleCleanView, type ViewMode } from "../ui/viewMode";
 import { contributedAction } from "../plugins/contrib";
@@ -12,6 +12,7 @@ import { useDialogStore } from "../stores/dialogs";
 import { useUiStore } from "../stores/ui";
 import { useSketchPaletteStore } from "../stores/sketchPalette";
 import type { Engine } from "./engine";
+import { saveWork, saveWorkAs } from "./documentActions";
 import type { SketchTool } from "../sketch/sketchMode";
 import { isChoiceOpen } from "../ui/choice";
 import { openReportDialog } from "../ui/bugReporter";
@@ -201,7 +202,7 @@ export function createActions(e: Engine): (action: string) => void {
         void import("../io/fundaLinks").then((m) => m.insertDocumentFromDialog(e.store, e.geometry));
         break;
       case "save":
-        void saveDocument(e.store);
+        void saveWork(e);
         break;
       case "open":
         void e.openDoc();
@@ -367,7 +368,7 @@ export function createActions(e: Engine): (action: string) => void {
         void e.newDocument();
         break;
       case "saveas":
-        void saveDocumentAs(e.store);
+        void saveWorkAs(e);
         break;
       case "fit":
         e.viewport.fitView();
