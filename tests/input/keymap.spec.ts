@@ -6,6 +6,11 @@ import { mount } from "@vue/test-utils";
 import { installKeymap } from "../../src/input/keymap";
 import ChoiceRow from "../../src/components/shell/ChoiceRow.vue";
 
+// One keymap at a time, as the app has: an earlier test's keymap would take the key first.
+const installed: (() => void)[] = [];
+const install = (...args: Parameters<typeof installKeymap>) => installed.push(installKeymap(...args));
+afterEach(() => installed.splice(0).forEach((off) => off()));
+
 function ctrlZ(target: EventTarget, key = "z") {
   const e = new KeyboardEvent("keydown", { key, ctrlKey: true, bubbles: true, cancelable: true });
   Object.defineProperty(e, "target", { value: target });
@@ -19,7 +24,7 @@ describe("installKeymap", () => {
 
   it("a live, visible input still blocks the shortcut (normal typing is safe)", () => {
     const actions: string[] = [];
-    installKeymap(
+    install(
       (a) => actions.push(a),
       () => "model",
     );
@@ -32,7 +37,7 @@ describe("installKeymap", () => {
 
   it("a hidden ghost input is released and the shortcut still fires", () => {
     const actions: string[] = [];
-    installKeymap(
+    install(
       (a) => actions.push(a),
       () => "model",
     );
@@ -47,7 +52,7 @@ describe("installKeymap", () => {
 
   it("a detached ghost input is released and the shortcut still fires", () => {
     const actions: string[] = [];
-    installKeymap(
+    install(
       (a) => actions.push(a),
       () => "model",
     );
@@ -60,7 +65,7 @@ describe("installKeymap", () => {
   });
   it("a focused choice row's typed letters search its list and start no tool", async () => {
     const actions: string[] = [];
-    installKeymap(
+    install(
       (a) => actions.push(a),
       () => "model",
     );
@@ -84,7 +89,7 @@ describe("installKeymap", () => {
   });
   it("a focused choice row lets Ctrl+Z and Ctrl+Y through, since it has no text of its own to undo", () => {
     const actions: string[] = [];
-    installKeymap(
+    install(
       (a) => actions.push(a),
       () => "model",
     );

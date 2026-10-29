@@ -1,5 +1,5 @@
 import { installKeymap } from "../input/keymap";
-import { isEditableTarget, isPageSelectAll } from "../ui/focus";
+import { isEditableTarget, isPageSelectAll, widgetOwnsKey } from "../ui/focus";
 import { exportSelection } from "../io/files";
 import { saveWork, saveWorkAs } from "./documentActions";
 import { SKETCH_TOOLS } from "./actionTables";
@@ -42,7 +42,7 @@ export function installKeyboard(e: Engine): void {
 
   // Tab cycles an open area box's filter; not in the keymap, since otherwise Tab must stay the browser's focus key.
   window.addEventListener("keydown", (ev) => {
-    if (ev.key !== "Tab" || ev.ctrlKey || ev.metaKey || ev.altKey) return;
+    if (ev.key !== "Tab" || ev.ctrlKey || ev.metaKey || ev.altKey || widgetOwnsKey(ev)) return;
     if (!e.viewport.cycleAreaFilter()) return;
     ev.preventDefault();
   });
@@ -50,7 +50,7 @@ export function installKeyboard(e: Engine): void {
   // A selected face is removed and healed; otherwise only a feature the user picked is deleted, never the profile
   // that exiting a sketch auto selects.
   window.addEventListener("keydown", (ev) => {
-    if (isEditableTarget(ev.target)) return;
+    if (isEditableTarget(ev.target) || widgetOwnsKey(ev)) return;
     if (e.toolBusy()) return;
     if (ev.key !== "Delete" && ev.key !== "Backspace") return;
     if (e.deleteSelectedFace()) return;

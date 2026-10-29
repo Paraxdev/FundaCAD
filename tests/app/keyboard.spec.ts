@@ -77,6 +77,34 @@ describe("Delete key", () => {
     pressDelete();
     expect(removeFeature).not.toHaveBeenCalled();
   });
+
+  it("leaves a Delete a focused widget already handled", () => {
+    const { e, removeFeature } = fakeEngine({ selectedFeature: "f1", explicit: true });
+    installKeyboard(e);
+    const row = document.createElement("div");
+    row.addEventListener("keydown", (ev) => ev.preventDefault());
+    document.body.appendChild(row);
+    row.dispatchEvent(new KeyboardEvent("keydown", { key: "Delete", bubbles: true, cancelable: true }));
+    expect(removeFeature).not.toHaveBeenCalled();
+  });
+});
+
+describe("Tab in an area box", () => {
+  beforeEach(() => setActivePinia(createPinia()));
+
+  it("cycles the filter unless a focus trap already took the Tab", () => {
+    const { e } = fakeEngine({ selectedFeature: null, explicit: false });
+    const cycle = vi.fn(() => true);
+    (e.viewport as unknown as { cycleAreaFilter: () => boolean }).cycleAreaFilter = cycle;
+    installKeyboard(e);
+    const trap = document.createElement("div");
+    document.body.appendChild(trap);
+    trap.addEventListener("keydown", (ev) => ev.preventDefault(), { once: true });
+    trap.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }));
+    expect(cycle).not.toHaveBeenCalled();
+    trap.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }));
+    expect(cycle).toHaveBeenCalledTimes(1);
+  });
 });
 
 // PH-2: Ctrl+A outside a field selected the text of the whole app.
