@@ -6,6 +6,7 @@ import Popover from "../../../src/components/ui/Popover.vue";
 import Menu from "../../../src/components/ui/Menu.vue";
 import MenuItem from "../../../src/components/ui/MenuItem.vue";
 import { escapeClaimed } from "../../../src/ui/escapeClaim";
+import { setInputModalityForTest } from "../../../src/ui/inputModality";
 
 enableAutoUnmount(afterEach);
 
@@ -23,7 +24,7 @@ function esc(): KeyboardEvent {
   return e;
 }
 
-async function render(props: Record<string, unknown> = {}) {
+async function render(props: Record<string, unknown> = {}, focusOpener = true) {
   const open = ref(false);
   const Host = defineComponent({
     setup() {
@@ -41,7 +42,7 @@ async function render(props: Record<string, unknown> = {}) {
     },
   });
   mount(Host, { attachTo: document.body });
-  $(".opener")!.focus();
+  if (focusOpener) $(".opener")!.focus();
   open.value = true;
   await nextTick();
   await settle();
@@ -51,6 +52,7 @@ async function render(props: Record<string, unknown> = {}) {
 describe("Popover", () => {
   beforeEach(() => {
     document.body.innerHTML = "";
+    setInputModalityForTest("pointer");
   });
 
   it("leaves focus where it was by default, and Escape closes it without returning focus", async () => {
@@ -125,5 +127,82 @@ describe("Popover", () => {
     await nextTick();
     $(".ui-menu-item")!.dispatchEvent(new Event("pointerdown", { bubbles: true }));
     expect(open.value).toBe(true);
+  });
+
+  describe("named", () => {
+    it("is a dialog named by its label or by the element labelledby points at", async () => {
+      await render({ label: "Views" });
+      expect([$(".float-popover")!.getAttribute("role"), $(".float-popover")!.getAttribute("aria-label")]).toEqual([
+        "dialog",
+        "Views",
+      ]);
+      document.body.innerHTML = "";
+      await render({ labelledby: "pick-head" });
+      const card = $(".float-popover")!;
+      expect([
+        card.getAttribute("role"),
+        card.getAttribute("aria-labelledby"),
+        card.hasAttribute("aria-label"),
+      ]).toEqual(["dialog", "pick-head", false]);
+    });
+
+    it("opened by a key, focuses its first control and gives focus back to the opener on Escape", async () => {
+      setInputModalityForTest("keyboard");
+      const { open } = await render({ label: "Pick" });
+      expect(active()?.className).toBe("a");
+      esc();
+      await nextTick();
+      expect([open.value, active()?.className]).toEqual([false, "opener"]);
+    });
+
+    it("opened by a click, leaves focus alone, and a press outside does not pull focus to the opener", async () => {
+      const { open } = await render({ label: "Pick" }, false);
+      expect(active()).toBe(document.body);
+      document.body.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+      await nextTick();
+      expect([open.value, active()]).toEqual([false, document.body]);
+    });
+
+    it("opened by a click, gives focus back when the user tabbed into it", async () => {
+      const { open } = await render({ label: "Pick" });
+      $(".b")!.focus();
+      esc();
+      await nextTick();
+      expect([open.value, active()?.className]).toEqual([false, "opener"]);
+    });
+
+    it("keeps an explicit focus none and returnFocus false", async () => {
+      setInputModalityForTest("keyboard");
+      const { open } = await render({ label: "Pick", focus: "none", returnFocus: false });
+      expect(active()?.className).toBe("opener");
+      $(".a")!.focus();
+      esc();
+      await nextTick();
+      expect(open.value).toBe(false);
+      expect(active()?.className).not.toBe("opener");
+    });
+  });
+
+  describe("name check", () => {
+    const named = (warn: { mock: { calls: unknown[][] } }) =>
+      warn.mock.calls.filter((c) => String(c[0]).includes("Popover has no name")).length;
+
+    it("warns in a dev build when it has neither a name nor role none", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      await render();
+      expect(named(warn)).toBe(1);
+      expect($(".float-popover")!.hasAttribute("role")).toBe(false);
+      warn.mockRestore();
+    });
+
+    it("role none needs no name and is no dialog, a named card does not warn", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      await render({ role: "none" });
+      expect($(".float-popover")!.hasAttribute("role")).toBe(false);
+      document.body.innerHTML = "";
+      await render({ label: "Pick" });
+      expect(named(warn)).toBe(0);
+      warn.mockRestore();
+    });
   });
 });

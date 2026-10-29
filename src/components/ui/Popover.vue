@@ -2,11 +2,13 @@
 // A card anchored beside the element that opened it. Closes on a press outside
 // it and on Escape, and keeps itself inside the window as its content changes.
 
-import { nextTick, onBeforeUnmount, onMounted, onUnmounted, ref, useTemplateRef } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, onUnmounted, ref, useTemplateRef } from "vue";
 import { placeBeside, type Side } from "../../ui/anchor";
 import { claimEscape } from "../../ui/escapeClaim";
+import { inputModality } from "../../ui/inputModality";
 import { escapeLayer } from "./escapeLayer";
 import { focusables, focusReturn } from "./focusables";
+import { useName } from "./useName";
 
 const props = withDefaults(
   defineProps<{
@@ -20,17 +22,39 @@ const props = withDefaults(
     clear?: HTMLElement | null;
     /** px floor, for a card that should not be narrower than what opened it (a picker under a full-width field) */
     minWidth?: number | null;
-    /** "first" moves focus to the card's first control on open, or to the card when it holds none. */
-    focus?: "first" | "none";
-    /** Gives focus back to what held it before, on close, while focus is still in the card. */
-    returnFocus?: boolean;
+    /** Names the card, which makes it a dialog that takes focus when a key opened it and gives focus back. */
+    label?: string;
+    labelledby?: string;
+    /** "none" for a card that is part of its opener, such as a picker's list, which then needs no name. */
+    role?: "dialog" | "none";
+    /** "first" moves focus to the card's first control on open, or to the card when it holds none, and "keyboard"
+     *  does so only when a key opened it. A named card defaults to "keyboard", an unnamed one to "none". */
+    focus?: "first" | "keyboard" | "none";
+    /** Gives focus back to what held it before, on close, while focus is still in the card. A named card defaults
+     *  to doing so when a key opened it or focus is in the card, so a click elsewhere keeps today's focus. */
+    returnFocus?: boolean | undefined;
   }>(),
-  { side: "right", align: "start", gap: 8, kind: "", clear: null, minWidth: null, focus: "none", returnFocus: false },
+  {
+    side: "right",
+    align: "start",
+    gap: 8,
+    kind: "",
+    clear: null,
+    minWidth: null,
+    // Note: without an explicit undefined Vue casts an absent boolean to false, and the named default needs to tell.
+    returnFocus: undefined,
+  },
 );
 const emit = defineEmits<{ close: [] }>();
 
 const el = useTemplateRef<HTMLElement>("el");
 const pos = ref({ left: -9999, top: -9999 });
+
+const named = () => !!(props.label || props.labelledby);
+const name = useName(props, "Popover", () => named() || props.role === "none");
+const dialog = computed(() => props.role !== "none" && (props.role === "dialog" || named()));
+const focusMode = computed(() => props.focus ?? (named() ? "keyboard" : "none"));
+const byKey = inputModality() === "keyboard";
 
 function place() {
   const a = props.anchor;
@@ -71,14 +95,17 @@ onMounted(async () => {
   window.addEventListener("keydown", onKey, true);
   await nextTick();
   place();
-  if (props.focus === "first" && el.value) (focusables(el.value)[0] ?? el.value).focus();
+  if (el.value && (focusMode.value === "first" || (focusMode.value === "keyboard" && byKey)))
+    (focusables(el.value)[0] ?? el.value).focus();
   ro = new ResizeObserver(() => place());
   if (el.value) ro.observe(el.value);
   window.addEventListener("resize", place);
   document.addEventListener("pointerdown", onDown, true);
 });
 onBeforeUnmount(() => {
-  if (props.returnFocus) back.restore((n) => !!el.value?.contains(n));
+  const inCard = (n: Node | null) => !!n && !!el.value?.contains(n);
+  const give = props.returnFocus ?? (named() && (byKey || inCard(document.activeElement)));
+  if (give) back.restore(inCard);
 });
 onUnmounted(() => {
   releaseEscape();
@@ -98,7 +125,9 @@ defineExpose({ place });
       ref="el"
       class="float-popover"
       :class="kind"
-      :tabindex="focus === 'first' ? -1 : undefined"
+      :role="dialog ? 'dialog' : undefined"
+      v-bind="dialog ? name : {}"
+      :tabindex="focusMode === 'none' ? undefined : -1"
       :style="{ left: `${pos.left}px`, top: `${pos.top}px`, ...(minWidth ? { minWidth: `${minWidth}px` } : {}) }"
     >
       <slot />

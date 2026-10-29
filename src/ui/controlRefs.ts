@@ -130,7 +130,8 @@ const MODAL = ".home, .modal-overlay, .choice-backdrop, .cmdk-backdrop";
 export function regionOf(el: Element): string {
   if (el.closest(".context-menu, .ctx-item")) return "context";
   if (el.closest(".menu-popup, #menubar, .menu-item")) return "menu";
-  if (el.closest(`${MODAL}, [role=dialog]`)) return "dialog";
+  // A named Popover is a dialog too, but it belongs to the controls that open it.
+  if (el.closest(`${MODAL}, [role=dialog]:not(.float-popover)`)) return "dialog";
   if (el.closest("#toolrail, .rail-flyout")) return "toolrail";
   if (el.closest("#titlebar")) return "titlebar";
   if (el.closest(".timeline-props")) return "props";
