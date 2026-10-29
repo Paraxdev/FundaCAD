@@ -81,6 +81,33 @@ function panel(width = 340) {
 
 const leftOf = (el: HTMLElement) => VIEWPORT - parseFloat(el.style.right);
 
+/** The Items card in the layer's left stack, as tall as the layer. */
+function items(layerEl: HTMLElement) {
+  const stack = document.createElement("div");
+  stack.className = "float-left-stack";
+  const card = document.createElement("div");
+  card.getBoundingClientRect = () => ({ left: 12, right: 276, top: 12, bottom: 888 }) as DOMRect;
+  stack.append(card);
+  layerEl.append(stack);
+}
+
+/** A panel's box in window coordinates, sized as CSS would size it from its inline min and max width. */
+function boxOf(el: HTMLElement) {
+  const max = el.style.maxWidth ? parseFloat(el.style.maxWidth) : Infinity;
+  const width = Math.max(parseFloat(el.style.minWidth) || 0, Math.min(el.offsetWidth, max));
+  const top = parseFloat(el.style.top);
+  const height = el.style.maxHeight ? parseFloat(el.style.maxHeight) : el.offsetHeight;
+  return { left: leftOf(el) - width, right: leftOf(el), top, bottom: top + height };
+}
+
+const overlap = (a: Omit<DOMRect, "toJSON">, b: Omit<DOMRect, "toJSON">) =>
+  a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+
+const cards = () =>
+  [...document.querySelectorAll(".float-right > *, .float-left-stack > *, .tool-rail .rail-btn")].map((c) =>
+    c.getBoundingClientRect(),
+  );
+
 afterEach(() => {
   for (const id of panelStack.ids()) panelStack.remove(id);
   document.body.replaceChildren();
@@ -139,7 +166,7 @@ describe("the panel column follows the float layer", () => {
     });
   });
 
-  it("keeps the min-width clear of the rail, running under the cards, when no shelf beside them fits it", async () => {
+  it("caps the min-width to the span beside the rail when no shelf fits it, so it stays clear of the cards", async () => {
     const right = { at: VIEWPORT };
     const { el: layerEl, cardLeft } = layer(right, [{ from: CARD, width: CARD, bottom: 900 }]);
     const RAIL = 700;
@@ -151,10 +178,12 @@ describe("the panel column follows the float layer", () => {
     right.at = VIEWPORT - DOCK;
     resized(layerEl);
     await frame();
-    expect(cardLeft() - MARGIN - (RAIL + MARGIN)).toBeLessThan(MIN);
-    expect({ right: p.style.right, maxWidth: p.style.maxWidth }).toEqual({
-      right: `${VIEWPORT - (RAIL + MARGIN + MIN)}px`,
-      maxWidth: `${MIN}px`,
+    const span = cardLeft() - MARGIN - (RAIL + MARGIN);
+    expect(span).toBeLessThan(MIN);
+    expect({ right: p.style.right, minWidth: p.style.minWidth, maxWidth: p.style.maxWidth }).toEqual({
+      right: `${VIEWPORT - (cardLeft() - MARGIN)}px`,
+      minWidth: `${span}px`,
+      maxWidth: `${span}px`,
     });
   });
 
@@ -182,5 +211,77 @@ describe("the panel column follows the float layer", () => {
     expect(resized(layerEl)).toBe(false);
     await frame();
     expect(p.style.right).toBe(before);
+  });
+});
+
+describe("each panel takes its own column on a stage too narrow for the widest", () => {
+  const STAGE = 1058;
+  const RAIL = 447;
+  const view = { from: 360, width: 48, bottom: 800 };
+  const history = { from: 300, width: 288, bottom: 318 };
+
+  function stage(at: number) {
+    const { el } = layer({ at }, [view, history]);
+    items(el);
+    rail(el, RAIL);
+  }
+
+  function params() {
+    const p = panel(600);
+    p.style.minWidth = "560px";
+    return p;
+  }
+
+  function stress() {
+    const p = panel();
+    p.style.minWidth = "180px";
+    return p;
+  }
+
+  const besideRight = (at: number) => at - view.from - MARGIN;
+
+  it("keeps Stress beside the rail and moves Parameters, capped, to the widest shelf, both clear of every card", () => {
+    stage(STAGE);
+    const p = params();
+    const s = stress();
+    panelStack.add("params", p);
+    panelStack.add("stress", s);
+    const shelfLeft = STAGE - view.from + view.width + MARGIN;
+    expect({ right: s.style.right, minWidth: s.style.minWidth, maxWidth: s.style.maxWidth }).toEqual({
+      right: `${VIEWPORT - besideRight(STAGE)}px`,
+      minWidth: "180px",
+      maxWidth: `${besideRight(STAGE) - (RAIL + MARGIN)}px`,
+    });
+    expect({ top: p.style.top, right: p.style.right, minWidth: p.style.minWidth, maxWidth: p.style.maxWidth }).toEqual({
+      top: `${history.bottom + MARGIN}px`,
+      right: `${VIEWPORT - (STAGE - MARGIN)}px`,
+      minWidth: `${STAGE - MARGIN - shelfLeft}px`,
+      maxWidth: `${STAGE - MARGIN - shelfLeft}px`,
+    });
+    for (const el of [p, s]) for (const c of cards()) expect(overlap(boxOf(el), c)).toBe(false);
+    expect(overlap(boxOf(p), boxOf(s))).toBe(false);
+  });
+
+  it("keeps Stress alone beside the rail, capped to that span, with its own min-width", () => {
+    stage(STAGE);
+    const s = stress();
+    panelStack.add("stress", s);
+    expect({ right: s.style.right, minWidth: s.style.minWidth, maxWidth: s.style.maxWidth }).toEqual({
+      right: `${VIEWPORT - besideRight(STAGE)}px`,
+      minWidth: "180px",
+      maxWidth: `${besideRight(STAGE) - (RAIL + MARGIN)}px`,
+    });
+  });
+
+  it("keeps Parameters alone beside the rail on a stage wide enough, with no inline widths of its own", () => {
+    stage(VIEWPORT);
+    const p = params();
+    panelStack.add("params", p);
+    expect(besideRight(VIEWPORT) - (RAIL + MARGIN)).toBeGreaterThanOrEqual(600);
+    expect({ right: p.style.right, minWidth: p.style.minWidth, maxWidth: p.style.maxWidth }).toEqual({
+      right: `${VIEWPORT - besideRight(VIEWPORT)}px`,
+      minWidth: "560px",
+      maxWidth: "",
+    });
   });
 });
