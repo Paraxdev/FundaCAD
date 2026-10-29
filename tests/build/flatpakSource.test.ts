@@ -21,7 +21,7 @@ function parseRequirements(text: string): [string, boolean, number][] {
     .map((line) => line.replace(/(^|\s)#.*$/, "").trim())
     .filter((line) => line.length > 0)
     .map((line) => {
-      const spec = line.split(/\s+/)[0];
+      const spec = line.split(/\s+/)[0] ?? "";
       const name = /^[A-Za-z0-9._-]+/.exec(spec)?.[0] ?? spec;
       return [name, /^[A-Za-z0-9._-]+==[0-9][^\s=<>!~*,;]*$/.test(spec), line.match(HASH)?.length ?? 0];
     });
