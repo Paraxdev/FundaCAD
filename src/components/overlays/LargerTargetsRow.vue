@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, type Directive } from "vue";
+import { onMounted, onUnmounted, ref } from "vue";
 import Checkbox from "../ui/Checkbox.vue";
 import { onA11yPrefsChange } from "../../ui/a11yPrefs";
 import { largeTargetsOn, setLargeTargets } from "../../ui/targets";
@@ -12,20 +12,13 @@ onMounted(() => {
   });
 });
 onUnmounted(() => stop?.());
-
-// Note: Checkbox puts fallthrough attributes on its label, so the box itself takes the hint here.
-const vBoxHint: Directive<HTMLElement, string> = {
-  mounted(el, { value }) {
-    el.querySelector("input[type=checkbox]")?.setAttribute("aria-describedby", value);
-  },
-};
 </script>
 
 <template>
   <div class="pref-card">
     <Checkbox
       id="prefs-larger-targets"
-      v-box-hint="'prefs-larger-targets-hint'"
+      aria-describedby="prefs-larger-targets-hint"
       class="pref-head pref-check"
       :model-value="on"
       @update:model-value="setLargeTargets"

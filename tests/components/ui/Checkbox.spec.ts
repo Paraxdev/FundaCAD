@@ -108,6 +108,16 @@ describe("Checkbox", () => {
     ]);
   });
 
+  it("puts aria-describedby on the box, not on the label, and keeps it through a change", async () => {
+    const w = await render({ modelValue: false, label: "Snap" }, { attrs: { "aria-describedby": "snap-hint" } });
+    await w.find("label").trigger("click");
+    expect([input(w).checked, input(w).getAttribute("aria-describedby"), w.attributes("aria-describedby")]).toEqual([
+      true,
+      "snap-hint",
+      undefined,
+    ]);
+  });
+
   it("warns in a dev build when it has no label, labelledby or slot, and not when the slot names it", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const named = () => warn.mock.calls.filter((c) => String(c[0]).includes("Checkbox has no name")).length;
