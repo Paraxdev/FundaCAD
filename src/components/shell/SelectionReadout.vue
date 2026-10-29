@@ -30,7 +30,7 @@ watch(
   bottom: var(--s-4);
   padding: var(--s-0) var(--s-3);
   font:
-    11px/1.4 ui-monospace,
+    var(--fs-micro)/1.4 ui-monospace,
     "SF Mono",
     Menlo,
     Consolas,

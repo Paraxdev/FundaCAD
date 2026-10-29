@@ -52,6 +52,6 @@ onUnmounted(() => uninstall?.());
 }
 .drophint-card span {
   opacity: 0.75;
-  font-size: 12px;
+  font-size: var(--fs-small);
 }
 </style>

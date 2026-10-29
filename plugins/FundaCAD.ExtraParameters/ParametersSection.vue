@@ -101,7 +101,7 @@ const numberStyle = { ...fieldStyle, flex: "1 0 76px", minWidth: "76px" };
         </select>
         <span
           v-if="activeId && drift.length"
-          style="opacity: 0.6; font-size: 11px"
+          style="opacity: 0.6; font-size: var(--fs-micro, 11px)"
           :title="`Changed since it was applied: ${drift.join(', ')}`"
           >modified</span
         >

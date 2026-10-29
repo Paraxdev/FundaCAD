@@ -108,7 +108,7 @@ onUnmounted(() => {
           border: none;
           color: inherit;
           cursor: pointer;
-          font-size: 13px;
+          font-size: var(--fs-body, 13px);
           padding: 0 4px;
           margin-right: 6px;
         "
@@ -146,9 +146,12 @@ onUnmounted(() => {
           rename-on-dblclick
           :rename="(name: string) => store.setPaletteSlot(i, { name })"
         />
-        <span v-if="slot.material" class="pal-material" style="margin-left: 6px; opacity: 0.55; font-size: 11px">{{
-          slot.material
-        }}</span>
+        <span
+          v-if="slot.material"
+          class="pal-material"
+          style="margin-left: 6px; opacity: 0.55; font-size: var(--fs-micro, 11px)"
+          >{{ slot.material }}</span
+        >
       </div>
     </template>
   </template>

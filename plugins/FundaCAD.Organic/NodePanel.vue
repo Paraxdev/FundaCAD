@@ -71,7 +71,7 @@ const root: CSSProperties = {
   border: "1px solid var(--line-strong, #3a4150)",
   borderRadius: "var(--r-md, 6px)",
   boxShadow: "var(--shadow-2, 0 6px 20px rgba(0,0,0,0.4))",
-  font: "12px system-ui, sans-serif",
+  font: "var(--fs-small, 12px) system-ui, sans-serif",
   color: "var(--text, #dce3ee)",
   width: "280px",
   maxWidth: "calc(100vw - 24px)",
@@ -86,7 +86,7 @@ const section: CSSProperties = {
   color: "var(--text-mute, #8b93a3)",
   margin: "8px 0 4px",
   textTransform: "uppercase",
-  fontSize: "10px",
+  fontSize: "var(--fs-micro, 11px)",
   letterSpacing: "0.06em",
 };
 const row: CSSProperties = { display: "flex", gap: "6px", alignItems: "center", marginBottom: "4px" };
@@ -96,7 +96,11 @@ const grid: CSSProperties = {
   gap: "4px 6px",
   alignItems: "center",
 };
-const axisHead: CSSProperties = { color: "var(--text-mute, #8b93a3)", textAlign: "center", fontSize: "10px" };
+const axisHead: CSSProperties = {
+  color: "var(--text-mute, #8b93a3)",
+  textAlign: "center",
+  fontSize: "var(--fs-micro, 11px)",
+};
 const field: CSSProperties = {
   background: "var(--panel-2, #161a20)",
   color: "var(--text, #dce3ee)",
@@ -145,7 +149,7 @@ const tag: CSSProperties = {
   background: "var(--panel, #20242c)",
   color: "var(--text, #dce3ee)",
   border: "1px solid var(--line-strong, #3a4150)",
-  font: "11px system-ui, sans-serif",
+  font: "var(--fs-micro, 11px) system-ui, sans-serif",
   whiteSpace: "nowrap",
 };
 </script>

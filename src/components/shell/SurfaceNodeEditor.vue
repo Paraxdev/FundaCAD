@@ -723,7 +723,7 @@ const pending = computed(() => {
   border-radius: var(--float-tile-radius);
   corner-shape: squircle;
   box-shadow: var(--float-shadow);
-  font-size: 12px;
+  font-size: var(--fs-small);
   user-select: none;
 }
 .ne-node.ne-output {
@@ -743,7 +743,7 @@ const pending = computed(() => {
   border: none;
   color: var(--text-dim);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--fs-title);
   line-height: 1;
   padding: 0 2px;
 }
@@ -769,7 +769,7 @@ const pending = computed(() => {
   border: 1px solid transparent;
   border-radius: var(--float-chip-radius);
   corner-shape: squircle;
-  font-size: 11px;
+  font-size: var(--fs-micro);
   padding: 1px 4px;
 }
 .ne-ramp-bar {
@@ -791,14 +791,14 @@ const pending = computed(() => {
 .ne-addstop {
   align-self: flex-start;
   padding: 1px 6px;
-  font-size: 11px;
+  font-size: var(--fs-micro);
 }
 .ne-port {
   position: absolute;
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 11px;
+  font-size: var(--fs-micro);
   color: var(--text-dim);
   cursor: pointer;
 }
@@ -856,7 +856,7 @@ const pending = computed(() => {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 11px;
+  font-size: var(--fs-micro);
   color: var(--text-dim);
 }
 /* a coloured stripe down the left edge names the node's family at a glance */
@@ -879,7 +879,7 @@ const pending = computed(() => {
   position: absolute;
   right: 8px;
   bottom: 6px;
-  font-size: 11px;
+  font-size: var(--fs-micro);
   color: var(--text-dim);
   background: var(--float-bg-solid);
   border: 1px solid transparent;
@@ -889,7 +889,7 @@ const pending = computed(() => {
   pointer-events: none;
 }
 .ne-hint {
-  font-size: 11px;
+  font-size: var(--fs-micro);
   color: var(--text-dim);
   border: 1px solid transparent;
   border-radius: var(--float-chip-radius);
@@ -918,7 +918,7 @@ const pending = computed(() => {
 }
 .ne-addhead {
   font-weight: 600;
-  font-size: 11px;
+  font-size: var(--fs-micro);
   color: var(--text-dim);
   padding: 2px 6px 4px;
 }
@@ -928,7 +928,7 @@ const pending = computed(() => {
   margin-top: 2px;
 }
 .ne-addgrp-label {
-  font-size: 10px;
+  font-size: var(--fs-micro);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-dim);
@@ -941,7 +941,7 @@ const pending = computed(() => {
   background: none;
   border: none;
   color: var(--text);
-  font-size: 12px;
+  font-size: var(--fs-small);
   padding: 3px 8px;
   border-radius: var(--float-chip-radius);
   corner-shape: squircle;

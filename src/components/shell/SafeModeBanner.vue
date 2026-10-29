@@ -47,7 +47,7 @@ async function restart() {
   max-width: min(760px, calc(100vw - 32px));
   padding: var(--s-3) var(--s-4);
   color: var(--text);
-  font-size: 12.5px;
+  font-size: var(--fs-body);
   line-height: 1.45;
 }
 .text {

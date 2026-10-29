@@ -63,7 +63,9 @@ const iconBtn = "background: none; border: none; color: inherit; cursor: pointer
             }
           "
         />
-        <span v-if="missing(r.id)" style="margin-left: 6px; opacity: 0.6; font-size: 11px">image not found</span>
+        <span v-if="missing(r.id)" style="margin-left: 6px; opacity: 0.6; font-size: var(--fs-micro, 11px)"
+          >image not found</span
+        >
         <span style="flex: 1"></span>
         <button
           :style="iconBtn"
