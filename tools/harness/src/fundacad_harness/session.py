@@ -53,6 +53,7 @@ class Session(Actions):
         headed: bool | None = None,
         gpu: bool = False,
         viewport: tuple[int, int] = (1400, 900),
+        scale: float = 1,
         record: str | os.PathLike | None = None,
         keep: bool | None = None,
         repo: str | os.PathLike | None = None,
@@ -66,6 +67,7 @@ class Session(Actions):
         self.headed = _flag("FUNDACAD_HARNESS_HEADED") if headed is None else headed
         self.gpu = gpu
         self.viewport = viewport
+        self.scale = scale
         self.record_path = record
         self.keep = _flag("FUNDACAD_HARNESS_KEEP") if keep is None else keep
         self.settle_timeout = settle_timeout
@@ -98,6 +100,8 @@ class Session(Actions):
             opts: dict[str, Any] = {}
             if tuple(viewport) != (1400, 900):
                 opts["viewport"] = tuple(viewport)
+            if scale != 1:
+                opts["scale"] = scale
             if gpu:
                 opts["gpu"] = True
             if settle_timeout != 60:
@@ -156,7 +160,7 @@ class Session(Actions):
             executable_path=self.chrome, headless=not self.headed, args=chrome_args(self.gpu)
         )
         ctx = self._browser.new_context(
-            viewport={"width": self.viewport[0], "height": self.viewport[1]}, device_scale_factor=1
+            viewport={"width": self.viewport[0], "height": self.viewport[1]}, device_scale_factor=self.scale
         )
         self.page = ctx.new_page()
         self._page_log = open(self.work / "page.log", "w", encoding="utf-8", errors="replace")

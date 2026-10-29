@@ -849,6 +849,18 @@
   gap: var(--float-gap);
   pointer-events: none;
 }
+// Scrolls on a short stage, a large Interface size included; padding and margin cancel so the shadows are not
+// clipped, as in .rail-list.
+#viewcontrols {
+  max-height: 100%;
+  overflow-y: auto;
+  padding: 32px;
+  margin: -32px;
+  scrollbar-width: none;
+}
+#viewcontrols::-webkit-scrollbar {
+  display: none;
+}
 .float-group {
   pointer-events: auto;
   display: flex;

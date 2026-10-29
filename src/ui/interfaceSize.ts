@@ -1,5 +1,5 @@
 // Interface size, applied as the webview's own zoom under Tauri, so the CSS viewport shrinks and the layout and
-// breakpoints reflow as in a browser. Vite dev and the harness have no webview API and zoom the root instead.
+// breakpoints reflow as in a browser. Vite dev zooms the root instead, which also scales vh, so only Tauri is exact.
 
 import { zoomChord, type ZoomChord } from "../input/platform";
 import { a11yPrefs, INTERFACE_SIZE_MAX, INTERFACE_SIZES, onA11yPrefsChange, setA11yPref } from "./a11yPrefs";

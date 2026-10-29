@@ -67,6 +67,7 @@ Options:
 | `headed=` | `False` | show the browser window |
 | `gpu=` | `False` | real GPU flags instead of software rendering |
 | `viewport=` | `(1400, 900)` | page size in pixels |
+| `scale=` | `1` | device pixel ratio; `viewport=(911, 512), scale=1.5` is a 1366 by 768 window at Interface size 150 percent |
 | `keep=` | `False` | keep the work folder (logs, screenshots) after a clean close |
 | `record=` | none | write the session's actions to a script that replays them, see Recording |
 | `repo=` | discovered | the checkout to serve |
