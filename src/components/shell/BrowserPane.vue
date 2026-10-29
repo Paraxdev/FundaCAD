@@ -952,9 +952,9 @@ onUnmounted(() => root.value?.removeEventListener("wheel", onWheel));
 </script>
 
 <template>
-  <aside id="browser" class="float-card">
+  <aside id="browser" class="float-card" aria-labelledby="browser-heading">
     <div class="float-card-head">
-      <span class="float-card-title">Items</span>
+      <h2 id="browser-heading" class="float-card-title">Items</h2>
       <IconButton
         class="float-card-close"
         icon="close"

@@ -70,7 +70,7 @@ describe("Dialog", () => {
     const panel = $(".ui-dialog")!;
     expect([panel.getAttribute("role"), panel.getAttribute("aria-modal")]).toEqual(["dialog", "true"]);
     const title = document.getElementById(panel.getAttribute("aria-labelledby")!);
-    expect(title?.textContent).toBe("Export");
+    expect([title?.tagName, title?.textContent]).toEqual(["H2", "Export"]);
   });
 
   it("is described only when given an id, and wears alertdialog when asked", async () => {

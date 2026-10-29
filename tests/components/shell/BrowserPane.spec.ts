@@ -326,6 +326,14 @@ describe("BrowserPane", () => {
     setActivePinia(createPinia());
   });
 
+  it("is a complementary region named by its Items heading", () => {
+    const w = render(makeEngine({ parameters: {}, features: [] }));
+    const aside = w.get("aside#browser");
+    const h = w.get("h2.float-card-title");
+    expect(h.text()).toBe("Items");
+    expect(aside.attributes("aria-labelledby")).toBe(h.attributes("id"));
+  });
+
   // --- elements: the user's own folders over the bodies --------------------
 
   it("draws an element as a folder, with the bodies filed into it under it", async () => {

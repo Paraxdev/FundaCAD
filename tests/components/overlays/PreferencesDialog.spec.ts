@@ -235,7 +235,10 @@ describe("Preferences categories", () => {
       tabs().map((_, i) => (i === 0 ? ["true", 0] : ["false", -1])),
     );
     expect(document.querySelectorAll("[role=tabpanel]").length).toBe(8);
-    expect(shown().map((p) => p.getAttribute("aria-label"))).toEqual(["Appearance"]);
+    const first = tabs()[0]!;
+    expect(shown().map((p) => [p.dataset.pane, p.id, p.getAttribute("aria-labelledby")])).toEqual([
+      ["appearance", first.getAttribute("aria-controls"), first.id],
+    ]);
   });
 
   it("moves through the categories with the arrows and keeps focus on the tabs", async () => {
@@ -254,7 +257,7 @@ describe("Preferences categories", () => {
     await category("updates");
     expect([document.activeElement?.tagName, label(document.activeElement)]).toEqual(["H3", "Updates"]);
     await category("mcp");
-    expect(document.activeElement).toBe($("#prefs-pane-mcp"));
+    expect(document.activeElement).toBe($('[data-pane="mcp"]'));
   });
 
   it("opens on the category it was asked for, and on Appearance for one it does not have", async () => {

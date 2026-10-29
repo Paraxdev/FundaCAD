@@ -4,13 +4,14 @@
 // bubble phase for that, so a layer that stopped the key never reaches it. The setup and the last result stay in the
 // document and the panel, as with Close.
 
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, useId, watch } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { usePanelsStore } from "../../stores/panels";
 import FloatingPanel from "./FloatingPanel.vue";
 import Button from "../ui/Button.vue";
 import IconButton from "../ui/IconButton.vue";
 import Tabs from "../ui/Tabs.vue";
+import { tabPanelAttrs } from "../ui/tabIds";
 import StressSetupStep from "./StressSetupStep.vue";
 import StressResultsStep from "./StressResultsStep.vue";
 import { buildStressRequest } from "../../ui/stress";
@@ -48,6 +49,7 @@ const ready = computed(() => !!setup.value && buildStressRequest(setup.value).ok
 
 // Results once a Run brings one, Set up when it goes or a Run is refused, since the cause is usually in the setup.
 const step = ref<Step>("setup");
+const steps = useId();
 watch(result, (now, was) => {
   if (now && !was) step.value = "results";
   if (!now) step.value = "setup";
@@ -100,10 +102,10 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
 </script>
 
 <template>
-  <FloatingPanel :open="!!panels.stress" panel-class="stress-panel" @close="close">
+  <FloatingPanel :open="!!panels.stress" title="Stress" panel-class="stress-panel" @close="close">
     <template v-if="panels.stress && setup">
       <div class="stress-head">
-        <div class="measure-title">Stress</div>
+        <div class="measure-title" aria-hidden="true">Stress</div>
         <IconButton
           class="stress-close"
           icon="close"
@@ -114,11 +116,15 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
           @click="close"
         />
       </div>
-      <Tabs v-model="step" label="Stress steps" :tabs="tabs" />
+      <Tabs v-model="step" label="Stress steps" :tabs="tabs" :panels="steps" />
 
       <KeepAlive>
-        <StressResultsStep v-if="step === 'results' && result" :result="result" />
-        <StressSetupStep v-else :setup="setup" :bodies="bodies" />
+        <StressResultsStep
+          v-if="step === 'results' && result"
+          v-bind="tabPanelAttrs(steps, 'results')"
+          :result="result"
+        />
+        <StressSetupStep v-else v-bind="tabPanelAttrs(steps, 'setup')" :setup="setup" :bodies="bodies" />
       </KeepAlive>
 
       <div class="measure-hint">

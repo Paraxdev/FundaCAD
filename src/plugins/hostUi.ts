@@ -24,6 +24,7 @@ export { default as Slider } from "../components/ui/Slider.vue";
 export { default as Switch } from "../components/ui/Switch.vue";
 export { default as SwitchRow } from "../components/ui/SwitchRow.vue";
 export { default as Tabs } from "../components/ui/Tabs.vue";
+export { default as TabPanel } from "../components/ui/TabPanel.vue";
 export { default as TextField } from "../components/ui/TextField.vue";
 export { default as UnitChip } from "../components/ui/UnitChip.vue";
 export type { SegmentedOption } from "../components/ui/Segmented.vue";

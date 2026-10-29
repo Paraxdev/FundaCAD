@@ -1,4 +1,5 @@
 import type { SketchTool } from "../sketch/sketchMode";
+import type { RegionKind } from "../ui/regions";
 
 /** Inside a sketch these switch the tool; outside one they start a sketch with it. */
 export const SKETCH_TOOLS = new Set([
@@ -98,7 +99,25 @@ export const NON_REPEATABLE = new Set([
   "hide-selected",
   "show-all-bodies",
   "clean-view",
+  "region-next",
+  "region-prev",
+  "go-menubar",
+  "go-tools",
+  "go-items",
+  "go-model",
+  "go-panels",
+  "go-history",
 ]);
+
+/** The palette's Go to commands and the region each one focuses. */
+export const GO_REGIONS: Record<string, RegionKind> = {
+  "go-menubar": "menubar",
+  "go-tools": "tools",
+  "go-items": "items",
+  "go-model": "viewport",
+  "go-panels": "panel",
+  "go-history": "history",
+};
 
 /** Entity patterns word their own prompt as curves are picked and the pattern
  *  is placed, so a state change must not reset it to a line of this table. */

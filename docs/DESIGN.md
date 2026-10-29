@@ -365,7 +365,7 @@ needs a larger radius to look the same size. Always pair a float radius with
 
 | Class | Component | Use it for |
 |---|---|---|
-| `.float-card` | `components/ui/Card.vue`; Items (`#browser`), History (`#timeline`), Fillet members | A card over the model, with `.float-card-head`, `.float-card-title`, `.float-card-close`, `.float-card-more`, `.float-card-body`, `.float-card-foot` |
+| `.float-card` | `components/ui/Card.vue`; Items (`#browser`), History (`#timeline`), Fillet members | A card over the model, with `.float-card-head`, `.float-card-title` (a heading, h2 unless `level` says otherwise, holding the toggle when collapsible), `.float-card-close`, `.float-card-more`, `.float-card-body`, `.float-card-foot` |
 | `.float-group` | `ViewportControls.vue` | A column or row of `.icon-btn` |
 | `.float-popover` | `components/ui/Popover.vue` | Anything that opens from a button: options, pickers, `Select.vue`'s list |
 | `.context-menu` | `ContextMenuHost.vue` | Right click menus |
@@ -665,7 +665,7 @@ given nothing else (a plain JS plugin skips the type check), without its key cho
 | `SwitchRow` | A labelled row holding a `Switch`, in a tool panel, a popover or feature properties | `modelValue`, `label`, `icon`; `layout`: `float` (the view controls) or `param` (feature properties); a `hint` slot | the row's hover, the switch's states; disabled fades the row as a whole |
 | `Segmented` | A choice of 2 to 5 values, all shown | `modelValue`; `options` (`value`, `label`, `icon`, `tip`, `keys`, `disabled`); `label`, the group's name; `size`: `sm` 24 or `md` 32; `variant`: `bar` (one well) or `chips` (the Render dock); `iconOnly` | hover, pressed, focus, selected, a disabled segment, a disabled group |
 | `Slider` | A value along a range | `modelValue`, `min`, `max`, `step`, `label`, `showValue`, `unit`; `commit`: `live` or `end` (on release) | hover, pressed, focus, disabled |
-| `Tabs` | The pages of one surface | `tabs` (`value`, `label`, `icon`, `disabled`, `title`); `modelValue`; `variant`: `underline` (a card), `bar` (a dock), `nav` (a settings page list, `aria-current`); `orientation`; `label` | hover, pressed, focus, selected, disabled with its reason |
+| `Tabs` | The pages of one surface | `tabs` (`value`, `label`, `icon`, `disabled`, `title`); `modelValue`; `variant`: `underline` (a card), `bar` (a dock), `nav` (a settings page list, `aria-current`); `orientation`; `label`; `panels`, an id base (`useId`) shared with a `TabPanel` around each page, which gives the selected tab `aria-controls` | hover, pressed, focus, selected, disabled with its reason |
 | `Menu`, `MenuItem`, `MenuSeparator` | Popup and context menus | Menu: `anchor`, or `at` (a point) for a context menu, `side`, `align`, `focus`; MenuItem: `label`, `icon`, `keys`, `checked` (a `menuitemcheckbox`), `danger`, a nested `Menu` for a submenu | hover, keyboard focus, pressed, open, checked, danger, disabled |
 | `Popover` | A card that opens from a button: options, pickers | `anchor`, `side`, `align`; `kind`, a class for the card; `minWidth`; `focus`: `first` or `none`; `returnFocus` | open; it closes on Escape and on a press outside |
 | `Dialog` | A modal: a task that holds the rest of the app | `title` or the `title` slot; `size`: `sm`, `md`, `lg`; `closeOnEsc`; `initialFocus`; `returnFocus`; a `footer` slot | focus held inside, focus back on close |
@@ -900,7 +900,8 @@ is a native range with `accent-color: var(--accent)`.
 
 Both are one Tab stop: the arrow keys move and pick, Home and End go to the ends, and a disabled item is skipped.
 `Segmented` is a `radiogroup` of `radio`s, `Tabs` a `tablist` (ArrowUp and ArrowDown when vertical, `nav` is
-vertical by default).
+vertical by default). Each page sits in a `TabPanel` (`panels`, `value`), a `tabpanel` labelled by its tab;
+the `nav` look has no tab panels.
 
 A tab that cannot be chosen yet (the Stress panel's Results before a Run) passes `disabled` and a `title` saying why:
 opacity 0.45, `cursor: default`, no hover. Keep it in the bar rather than hiding it, a bar of one tab reads as a
@@ -1007,13 +1008,15 @@ blur or shadow.
 ### 7.13 Tool and readout panels (`.measure-panel`)
 
 `Panel.vue` is the shell; it draws the glass, and on request a head and a hint. `FloatingPanel.vue` is its old name,
-taking only `open`, `closeOnEsc` and `panelClass`.
+taking only `open`, a required `title`, `closeOnEsc` and `panelClass`; it passes `titleHidden`, so its content draws
+the visible head and marks that copy `aria-hidden="true"`.
 
 ```ts
 defineProps<{
   open: boolean;
   title?: string;
   hint?: string;
+  titleHidden?: boolean; // false
   closable?: boolean; // false
   closeOnEsc?: boolean; // false
   panelClass?: string; // ""
@@ -1027,7 +1030,9 @@ defineEmits<{ close: [] }>();
   panel only through `panelClass` and a rule for that class in `_modals.scss`
   (`.properties-panel` min width 260px, `.stress-panel` 340px wide and
   scrolling).
-- `title` draws the panel's name as its `.measure-title` and names the panel (`role="region"`, `aria-labelledby`);
+- `title` draws the panel's name as its `.measure-title`, an `h2`, and names the panel (`role="region"`,
+  `aria-labelledby`), so heading keys and the rotor reach it. `titleHidden` keeps that `h2` for screen readers only.
+  A panel given no title (a plain JS plugin) is still a region, named by a hidden `h2` that reads Panel;
   `head-actions` sit beside it and `closable` adds the 28px Close button after them. `hint` is the last line, a
   `.measure-hint`; the `foot` slot sits under the content. Without them the content is yours, from the classes below.
 - `closeOnEsc` adds a capture phase `keydown` listener on `window` that emits

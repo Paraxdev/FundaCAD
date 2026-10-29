@@ -30,6 +30,7 @@ const BASE = [
   "Switch",
   "SwitchRow",
   "Tabs",
+  "TabPanel",
   "TextField",
   "UnitChip",
 ];

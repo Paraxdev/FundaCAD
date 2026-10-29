@@ -1,7 +1,6 @@
 {
   "confirm": {
-    "aria-allowed-attr": 3,
-    "color-contrast": 4,
+    "color-contrast": 1,
     "meta-viewport": 1
   },
   "empty_workspace": {
@@ -16,13 +15,13 @@
   "extrude": {
     "color-contrast": 6,
     "meta-viewport": 1,
-    "target-size": 2
+    "target-size": 1
   },
   "home": {
     "meta-viewport": 1
   },
   "palette": {
-    "color-contrast": 16,
+    "color-contrast": 12,
     "meta-viewport": 1,
     "scrollable-region-focusable": 1
   },
@@ -31,7 +30,6 @@
     "meta-viewport": 1
   },
   "settings": {
-    "color-contrast": 4,
     "meta-viewport": 1
   },
   "sketch": {
@@ -40,8 +38,7 @@
     "meta-viewport": 1
   },
   "stress": {
-    "button-name": 1,
-    "color-contrast": 15,
+    "color-contrast": 4,
     "meta-viewport": 1
   }
 }
