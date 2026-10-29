@@ -321,10 +321,29 @@
 .tool-rail.compact .rail-label {
   font-size: 12px;
 }
-/* A scrolling list clips 32px past its box (.rail-list's shadow room); without the bottom
-   overhang the clip ends a gap above the foot. */
+/* A scrolling list clips at its box: no bottom overhang ends the clip a gap above the foot, no top one keeps scrolled
+   tiles out of the title bar, and the scroll padding keeps a focused tile clear of the More tools cues. */
 .tool-rail.scrolls > .rail-list:first-child {
+  margin-top: 0;
+  padding-top: 0;
   margin-bottom: 0;
+  scroll-padding-block: 36px;
+}
+.tool-rail > .rail-more {
+  position: absolute;
+  left: calc((var(--rail-tile) - 28px) / 2);
+  z-index: 1;
+  pointer-events: auto;
+  background: var(--float-bg-solid);
+  -webkit-backdrop-filter: var(--float-blur);
+  backdrop-filter: var(--float-blur);
+  box-shadow: var(--float-shadow);
+}
+.tool-rail > .rail-more-up {
+  top: 0;
+}
+.tool-rail > .rail-more-up svg {
+  transform: rotate(180deg);
 }
 .rail-sep {
   flex: none;
