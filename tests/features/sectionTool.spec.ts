@@ -11,6 +11,7 @@ import { usePromptStore } from "../../src/stores/prompt";
 import type { Viewport } from "../../src/viewport/viewport";
 import type { PlaneDef, SectionView, Vec3 } from "../../src/types";
 import { readSectionView } from "../../src/document/sectionView";
+import { setA11yPref } from "../../src/ui/a11yPrefs";
 
 const CENTRE: Vec3 = [37.5, -12, 20];
 
@@ -110,6 +111,7 @@ describe("section phases", () => {
   });
   afterEach(() => {
     for (const t of made.splice(0)) t.stop();
+    setA11yPref("singleKeys", true);
     vi.unstubAllGlobals();
     document.body.innerHTML = "";
   });
@@ -230,6 +232,29 @@ describe("section phases", () => {
       target.dispatchEvent(new KeyboardEvent("keydown", { key: "g", altKey: true, bubbles: true, cancelable: true }));
     }
     expect(sent).toEqual([plane(0, 1, 0.14)]);
+  });
+
+  it("F and G on a Cyrillic layout flip and step the ghost by the physical key", () => {
+    const { tool, canvas, sent } = setup();
+    tool.start("Z");
+    for (const [k, code] of [
+      ["а", "KeyF"],
+      ["п", "KeyG"],
+    ]) {
+      canvas.dispatchEvent(new KeyboardEvent("keydown", { key: k, code, bubbles: true, cancelable: true }));
+    }
+    expect(sent).toEqual([plane(0, 1, 0.14), plane(0, -1, 0.14), plane(0, -1, 0.3)]);
+  });
+
+  it("with Single key shortcuts off, F and G do nothing, the box types them and the prompt drops them", () => {
+    setA11yPref("singleKeys", false);
+    const { tool, canvas, sent } = setup();
+    tool.start("Z");
+    const pressed = [key(canvas, "f"), key(canvas, "g"), key(input()!, "f"), key(input()!, "G")];
+    expect(pressed.map((e) => e.defaultPrevented)).toEqual([false, false, false, false]);
+    expect(sent).toEqual([plane(0, 1, 0.14)]);
+    expect(tool.phase).toBe("editing");
+    expect(prompt()).toBe("Drag the handle or type an offset · Enter or Esc keeps the cut");
   });
 
   it("G cycles the ghost while editing and does nothing once the cut is on", () => {

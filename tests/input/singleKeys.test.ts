@@ -2,7 +2,7 @@
 // nothing, so voice dictation and screen reader browse mode cannot start a tool. Chords and named keys stay.
 
 import { afterEach, describe, expect, it } from "vitest";
-import { resolveShortcut, setShortcutOverrides } from "../../src/input/shortcuts";
+import { resolveShortcut, setShortcutOverrides, toolChar } from "../../src/input/shortcuts";
 import { setA11yPref } from "../../src/ui/a11yPrefs";
 
 afterEach(() => {
@@ -58,5 +58,33 @@ describe("Single key shortcuts", () => {
     setA11yPref("singleKeys", false);
     expect(resolveShortcut("g", false, "model")).toBeNull();
     expect(resolveShortcut("j", false, "model", true)).toBe("extrude");
+  });
+});
+
+type Key = { key: string; code?: string; ctrlKey?: boolean; metaKey?: boolean; altKey?: boolean; shiftKey?: boolean };
+const press = (k: Key) => toolChar({ ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...k });
+
+describe("a running tool's own character keys", () => {
+  const keys: Key[] = [
+    { key: "f", code: "KeyF" },
+    { key: "G", code: "KeyG", shiftKey: true },
+    { key: "а", code: "KeyF" },
+    { key: "х", code: "BracketLeft" },
+    { key: "]", code: "BracketRight" },
+    { key: "+", code: "Equal", shiftKey: true },
+    { key: "-", code: "Minus" },
+    { key: "f", code: "KeyF", ctrlKey: true },
+    { key: "ArrowUp", code: "ArrowUp" },
+    { key: "Escape", code: "Escape" },
+  ];
+
+  it("on, read as the Latin key of the layout, Shift held or not, and named keys read as nothing", () => {
+    expect(keys.map(press)).toEqual(["f", "g", "f", "[", "]", "+", "-", "f", "", ""]);
+  });
+
+  it("off, only a Ctrl or Cmd chord still reads", () => {
+    setA11yPref("singleKeys", false);
+    expect(keys.map(press)).toEqual(["", "", "", "", "", "", "", "f", "", ""]);
+    expect(press({ key: "c", code: "KeyC", metaKey: true })).toBe("c");
   });
 });

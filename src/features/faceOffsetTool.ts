@@ -23,6 +23,7 @@ import { deltaForDiameter, deltaForRadius, radialDrag, type RoundFace } from "./
 import { offeredResize, resizeAxis, type OfferedResize, type ResizeAxis } from "./pressPullAxis";
 import { featureKey, PreviewOutcomes } from "./previewOutcomes";
 import { axialSpan, ResizeGuides } from "./resizeGuides";
+import { toolChar } from "../input/shortcuts";
 
 export type FaceOffsetMode = "offsetFace" | "thicken" | "shell";
 
@@ -228,7 +229,7 @@ export class FaceOffsetTool {
       return;
     }
     // Thicken's one option worth a key: grow the wall both ways about the surface
-    if ((e.key === "s" || e.key === "S") && this.mode === "thicken" && this.phase === "drag") {
+    if (toolChar(e) === "s" && this.mode === "thicken" && this.phase === "drag") {
       this.symmetric = !this.symmetric;
       this.refreshPreview(true);
     }

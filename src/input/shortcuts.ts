@@ -3,6 +3,7 @@
 
 import { useDialogStore } from "../stores/dialogs";
 import { singleKeysOn } from "../ui/a11yPrefs";
+import { latinKey } from "./platform";
 import { readSetting } from "../ui/storedSetting";
 import { DEFAULT_BINDINGS, bindingRows, pointerBindings } from "../viewport/navigator/bindings";
 
@@ -125,6 +126,13 @@ export function resolveShortcut(key: string, shift: boolean, context: "model" | 
     if (s.context === "global" || s.context === context) return s.action;
   }
   return null;
+}
+
+/** A running tool's own character key (Section's F, Pattern's ] or +) by latinKey, or "" for a named key, and with
+ *  Single key shortcuts off unless Ctrl or Cmd is held. Each tool still applies its own modifier rule. */
+export function toolChar(e: { key: string; code?: string; ctrlKey: boolean; metaKey: boolean; altKey: boolean }) {
+  const k = latinKey(e);
+  return k.length === 1 && (singleKeysOn() || e.ctrlKey || e.metaKey) ? k : "";
 }
 
 // Overrides: a plugin holding input.remap may move a key.

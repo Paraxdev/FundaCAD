@@ -8,6 +8,8 @@ import { SECTION_GHOSTS, sameSectionView } from "../document/sectionView";
 import { DimInput } from "../sketch/dimInput";
 import { clearPrompt, setPrompt } from "../ui/prompt";
 import { isEditableTarget } from "../ui/focus";
+import { toolChar } from "../input/shortcuts";
+import { singleKeysOn } from "../ui/a11yPrefs";
 import { snap } from "../ui/units";
 import { axisDragDistance, createDragHandle, nameHandle, HANDLE_UP, type DragHandle } from "./manipulator";
 import { pickPlaneTarget } from "./facePlanePick";
@@ -426,7 +428,7 @@ export class SectionTool {
   }
 
   private onKey(e: KeyboardEvent) {
-    const letter = e.ctrlKey || e.metaKey || e.altKey ? "" : e.key.toLowerCase();
+    const letter = e.ctrlKey || e.metaKey || e.altKey ? "" : toolChar(e);
     // Our box holds focus from the moment editing starts, so Esc there is ours, and F and G are too until something
     // is typed: no offset starts with either letter.
     const ownDim = this.dim.isActive && this.dim.ownsTarget(e.target);
@@ -495,9 +497,10 @@ export class SectionTool {
   }
 
   private prompt() {
-    this.editPrompt =
-      "Drag the handle or type an offset · F flips the kept side · " +
-      `G changes how the cut half shows (${ghostLabel(this.ghost)}) · Enter or Esc keeps the cut`;
+    const keys = singleKeysOn()
+      ? ` · F flips the kept side · G changes how the cut half shows (${ghostLabel(this.ghost)})`
+      : "";
+    this.editPrompt = `Drag the handle or type an offset${keys} · Enter or Esc keeps the cut`;
     setPrompt(this.editPrompt);
   }
 

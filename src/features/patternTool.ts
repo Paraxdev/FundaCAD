@@ -9,6 +9,8 @@ import type { Axis3, Feature, Selector, Vec3 } from "../types";
 import { DimInput } from "../sketch/dimInput";
 import { setPrompt } from "../ui/prompt";
 import { isEditableTarget } from "../ui/focus";
+import { toolChar } from "../input/shortcuts";
+import { singleKeysOn } from "../ui/a11yPrefs";
 import { logError } from "../ui/logStore";
 import { snap } from "../ui/units";
 import { axisDragDistance } from "./manipulator";
@@ -439,7 +441,8 @@ export class PatternTool {
       this.commitSoon();
       return;
     }
-    if (this.kind === "circular" && (e.key === "c" || e.key === "C") && !e.ctrlKey && !e.metaKey) {
+    const char = toolChar(e);
+    if (this.kind === "circular" && char === "c" && !e.ctrlKey && !e.metaKey) {
       e.preventDefault();
       e.stopPropagation();
       this.place = this.place === "origin" ? "centre" : "origin";
@@ -451,8 +454,8 @@ export class PatternTool {
     }
     // Both spellings of the count keys. In a field + and - are the value's sign or arithmetic, never the count.
     const typing = isEditableTarget(e.target);
-    const up = e.key === "]" || e.key === "ArrowUp" || (e.key === "+" && !typing);
-    const down = e.key === "[" || e.key === "ArrowDown" || (e.key === "-" && !typing);
+    const up = char === "]" || e.key === "ArrowUp" || (char === "+" && !typing);
+    const down = char === "[" || e.key === "ArrowDown" || (char === "-" && !typing);
     if (!up && !down) return;
     const next = clampCount(this.count + (up ? 1 : -1));
     if (next === this.count) return;
@@ -489,13 +492,17 @@ export class PatternTool {
         : describePattern(this.kind, this.count, this.value, this.axisName());
     if (body === this.promptKey) return;
     this.promptKey = body;
+    const keys = singleKeysOn();
+    const count = keys ? "[ ]" : "Up and Down";
     if (this.kind === "rect") {
-      setPrompt(`${this.promptPrefix}${body} · drag the X or Y arrow · [ ] X count · Enter or click to apply · Esc`);
+      setPrompt(
+        `${this.promptPrefix}${body} · drag the X or Y arrow · ${count} X count · Enter or click to apply · Esc`,
+      );
       return;
     }
     if (this.kind === "linear") {
       setPrompt(
-        `${this.promptPrefix}${body} · drag an arrow · [ and ] change the count · Enter or click to apply · Esc`,
+        `${this.promptPrefix}${body} · drag an arrow · ${keys ? "[ and ]" : count} change the count · Enter or click to apply · Esc`,
       );
       return;
     }
@@ -506,7 +513,7 @@ export class PatternTool {
           ? "through the part's middle"
           : "through the origin";
     setPrompt(
-      `${this.promptPrefix}${this.pickNote}${body}, ${where} · click an edge or face to turn about it · C origin or middle · [ ] count · Enter or click off the part to apply · Esc`,
+      `${this.promptPrefix}${this.pickNote}${body}, ${where} · click an edge or face to turn about it${keys ? " · C origin or middle" : ""} · ${count} count · Enter or click off the part to apply · Esc`,
     );
   }
 
