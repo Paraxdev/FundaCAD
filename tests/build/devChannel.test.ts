@@ -13,7 +13,8 @@ import productRaw from "../../src-tauri/tauri.dev-product.conf.json?raw";
 import hooks from "../../src-tauri/windows/installer-hooks.nsh?raw";
 import workflow from "../../.github/workflows/build.yml?raw";
 import linkRs from "../../crates/fundacad-mcp/src/link.rs?raw";
-import { productName, versionLabel } from "../../src/app/channel";
+import manualWorkflow from "../../.github/workflows/manual.yml?raw";
+import { manualUrl, productName, versionLabel } from "../../src/app/channel";
 
 const conf = JSON.parse(confRaw);
 const product = JSON.parse(productRaw);
@@ -81,6 +82,13 @@ describe("FundaCAD Dev", () => {
     expect(versionLabel("1.0.512", "beta")).toBe("1.0.512");
     expect(versionLabel("1.2.3", "v1.2.3")).toBe("1.2.3");
     expect(versionLabel("unknown", "development")).toBe("unknown");
+  });
+
+  it("opens the dev manual, while the beta and stable builds open the beta one", () => {
+    expect(manualWorkflow).toContain("--version beta=manual --version dev=versions/dev/manual");
+    expect(manualUrl("development")).toBe("https://fundacad.dev/dev/");
+    expect(manualUrl("beta")).toBe("https://fundacad.dev/beta/");
+    expect(manualUrl("v1.2.3")).toBe("https://fundacad.dev/beta/");
   });
 });
 
