@@ -4,12 +4,7 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { fitZebraMaterial, makeZebraMaterial } from "../../src/viewport/overlays";
-import {
-  ZEBRA_LAMBDA,
-  ZEBRA_WIDTH_DEFAULT,
-  zebraFrame,
-  zebraStripeCoord,
-} from "../../src/viewport/zebraStripes";
+import { ZEBRA_LAMBDA, ZEBRA_WIDTH_DEFAULT, zebraFrame, zebraStripeCoord } from "../../src/viewport/zebraStripes";
 import { Viewport } from "../../src/viewport/viewport";
 import { DEFAULT_RENDER, setRenderPref } from "../../src/ui/renderPrefs";
 

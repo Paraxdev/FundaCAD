@@ -26,13 +26,7 @@ export function zebraReflect(nv: Vec3): Vec3 {
 /** Stripe coordinate in model units at view space point pv with normal nv, centre cv the model's.
  *  The reflected ray meets a stripe environment about reach away, so curvature bends the stripes,
  *  and the position term keeps a flat face striped where its reflection alone is constant. */
-export function zebraStripeCoord(
-  pv: Vec3,
-  nv: Vec3,
-  cv: Vec3,
-  direction: ZebraDirection,
-  reach: number,
-): number {
+export function zebraStripeCoord(pv: Vec3, nv: Vec3, cv: Vec3, direction: ZebraDirection, reach: number): number {
   const a = zebraAxis(direction);
   const r = zebraReflect(nv);
   const d: Vec3 = [pv[0] - cv[0], pv[1] - cv[1], pv[2] - cv[2]];
@@ -54,9 +48,7 @@ export interface ZebraFrame {
  *  that fits PERIODS_AT_WIDTH_ONE / width periods along the diagonal. A longer reach packs a fillet
  *  with a comb of stripes too thin to judge. */
 export function zebraFrame(min: Vec3, max: Vec3, width: number): ZebraFrame {
-  const w = Number.isFinite(width)
-    ? Math.min(ZEBRA_WIDTH_MAX, Math.max(ZEBRA_WIDTH_MIN, width))
-    : ZEBRA_WIDTH_DEFAULT;
+  const w = Number.isFinite(width) ? Math.min(ZEBRA_WIDTH_MAX, Math.max(ZEBRA_WIDTH_MIN, width)) : ZEBRA_WIDTH_DEFAULT;
   const diag = Math.hypot(max[0] - min[0], max[1] - min[1], max[2] - min[2]) || 1;
   return {
     centre: [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2],

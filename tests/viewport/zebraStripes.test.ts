@@ -4,11 +4,7 @@
 
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
-import {
-  type Vec3,
-  type ZebraDirection,
-  zebraStripeCoord,
-} from "../../src/viewport/zebraStripes";
+import { type Vec3, type ZebraDirection, zebraStripeCoord } from "../../src/viewport/zebraStripes";
 
 const DIRS: ZebraDirection[] = ["horizontal", "vertical"];
 const REACH = 40;
@@ -103,13 +99,7 @@ describe("zebra stripe coordinate", () => {
         const n: Vec3 = [Math.sin(polar) * Math.cos(az), Math.sin(polar) * Math.sin(az), Math.cos(polar)];
         // the face point under screen offset (dx, dy), in view space where the screen is x and y
         const at = (dx: number, dy: number) =>
-          zebraStripeCoord(
-            [p0[0] + dx, p0[1] + dy, p0[2] - (n[0] * dx + n[1] * dy) / n[2]],
-            n,
-            c,
-            dir,
-            REACH,
-          );
+          zebraStripeCoord([p0[0] + dx, p0[1] + dy, p0[2] - (n[0] * dx + n[1] * dy) / n[2]], n, c, dir, REACH);
         const gx = at(1, 0) - at(0, 0);
         const gy = at(0, 1) - at(0, 0);
         expect(at(2, 0) - at(0, 0)).toBeCloseTo(2 * gx, 9);
