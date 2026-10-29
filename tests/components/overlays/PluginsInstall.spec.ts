@@ -323,7 +323,8 @@ describe("the list of what is installed", () => {
     const box = () => w.get('[data-plugin="widgets"] .plug-controls .ui-checkbox');
     const input = box().get("input");
     expect(box().attributes("id")).toBe("prefs-plugin-widgets");
-    expect(input.attributes("aria-label")).toMatch(/^Run /);
+    const name = w.get(`[data-plugin="widgets"] #${input.attributes("aria-labelledby")}`);
+    expect([name.classes("plug-name"), input.attributes("aria-label")]).toEqual([true, undefined]);
     expect(box().attributes("title")).toBe("Running");
     await input.trigger("keydown", { key: " " });
     expect(pluginEnabled("widgets")).toBe(false);

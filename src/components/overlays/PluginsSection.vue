@@ -271,7 +271,7 @@ async function drop(id: string, name: string) {
   >
     <div class="plug-head">
       <div>
-        <div class="plug-name">{{ manifest ? manifest.name : rec.id }}</div>
+        <div :id="`prefs-plugin-${rec.id}-name`" class="plug-name">{{ manifest ? manifest.name : rec.id }}</div>
         <div class="plug-summary">{{ manifest ? manifest.summary : "" }}</div>
       </div>
       <div class="plug-controls">
@@ -289,6 +289,7 @@ async function drop(id: string, name: string) {
         <Checkbox
           :id="`prefs-plugin-${rec.id}`"
           :model-value="on[rec.id] !== false"
+          :labelledby="`prefs-plugin-${rec.id}-name`"
           :tip="`Run ${manifest ? manifest.name : rec.id}`"
           :title="on[rec.id] === false ? 'Switched off' : 'Running'"
           @update:model-value="toggle(rec.id, $event)"

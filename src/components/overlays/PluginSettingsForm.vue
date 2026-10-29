@@ -144,6 +144,7 @@ const isDefault = (p: SettingProp) => {
       <div v-for="p in list" :key="p.key" class="pref-card plugset-row" :data-setting="p.key">
         <div class="pref-head">
           <label
+            :id="`${id(p)}-title`"
             class="pref-title"
             :for="p.type === 'boolean' ? undefined : id(p)"
             @click="p.type === 'boolean' && store(p, values[p.key] !== true)"
@@ -154,6 +155,7 @@ const isDefault = (p: SettingProp) => {
               v-if="p.type === 'boolean'"
               :id="id(p)"
               :model-value="values[p.key] === true"
+              :labelledby="`${id(p)}-title`"
               :tip="p.label"
               @update:model-value="store(p, $event)"
             />
