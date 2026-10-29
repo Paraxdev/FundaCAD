@@ -2,14 +2,7 @@
 import { onMounted, onUnmounted, ref } from "vue";
 import Select from "../ui/Select.vue";
 import { fmtKeys } from "../../input/platform";
-import {
-  a11yPrefs,
-  asInterfaceSize,
-  INTERFACE_SIZE_MAX,
-  INTERFACE_SIZES,
-  onA11yPrefsChange,
-  setA11yPref,
-} from "../../ui/a11yPrefs";
+import { a11yPrefs, asInterfaceSize, INTERFACE_SIZES, onA11yPrefsChange, setA11yPref } from "../../ui/a11yPrefs";
 
 const size = ref(a11yPrefs().interfaceSize);
 let off: (() => void) | null = null;
@@ -20,7 +13,7 @@ onMounted(() => {
 });
 onUnmounted(() => off?.());
 
-const SIZE_OPTIONS = INTERFACE_SIZES.filter((s) => s <= INTERFACE_SIZE_MAX).map((s) => ({
+const SIZE_OPTIONS = INTERFACE_SIZES.map((s) => ({
   value: String(s),
   label: `${s}%`,
 }));

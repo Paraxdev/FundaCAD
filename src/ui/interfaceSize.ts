@@ -2,7 +2,7 @@
 // breakpoints reflow as in a browser. Vite dev zooms the root instead, which also scales vh, so only Tauri is exact.
 
 import { zoomChord, type ZoomChord } from "../input/platform";
-import { a11yPrefs, INTERFACE_SIZE_MAX, INTERFACE_SIZES, onA11yPrefsChange, setA11yPref } from "./a11yPrefs";
+import { a11yPrefs, INTERFACE_SIZES, onA11yPrefsChange, setA11yPref } from "./a11yPrefs";
 import { announce } from "./announce";
 
 const isTauri = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -19,10 +19,9 @@ export function applyInterfaceSize(pct: number) {
   }
 }
 
-/** The next step up or down from `pct`, held between the smallest step and the cap. */
+/** The next step up or down from `pct`, held between the smallest step and the largest. */
 export function steppedInterfaceSize(pct: number, dir: 1 | -1): number {
-  const steps = INTERFACE_SIZES.filter((s) => s <= INTERFACE_SIZE_MAX);
-  const next = dir > 0 ? steps.find((s) => s > pct) : [...steps].reverse().find((s) => s < pct);
+  const next = dir > 0 ? INTERFACE_SIZES.find((s) => s > pct) : [...INTERFACE_SIZES].reverse().find((s) => s < pct);
   return next ?? pct;
 }
 

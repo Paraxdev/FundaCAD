@@ -37,21 +37,22 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("the gate", () => {
-  it("takes the zoom steps up to the cap, as numbers and as stored strings", async () => {
+  it("takes every zoom step up to 200, as numbers and as stored strings", async () => {
     const m = await load();
-    for (const v of [80, 90, 100, 110, 125, 150, "125"]) expect(m.asInterfaceSize(v)).toBe(Number(v));
+    for (const v of [80, 90, 100, 110, 125, 150, 175, 200, "125", "200"]) expect(m.asInterfaceSize(v)).toBe(Number(v));
   });
 
-  it("refuses sizes between the steps, below them and anything not a number", async () => {
+  it("refuses sizes between the steps, past either end and anything not a number", async () => {
     const m = await load();
-    for (const v of [130, 70, 0, -100, "", "big", null, undefined, Number.NaN]) expect(m.asInterfaceSize(v)).toBeNull();
+    for (const v of [130, 70, 250, 0, -100, "", "big", null, undefined, Number.NaN]) {
+      expect(m.asInterfaceSize(v)).toBeNull();
+    }
   });
 
-  it("reads a size above the cap back as the cap", async () => {
+  it("goes up to 200 percent, the largest step", async () => {
     const m = await load();
-    expect(m.INTERFACE_SIZE_MAX).toBe(150);
-    expect(m.asInterfaceSize(200)).toBe(150);
-    expect(m.asInterfaceSize("175")).toBe(150);
+    expect(m.INTERFACE_SIZE_MAX).toBe(200);
+    expect(m.INTERFACE_SIZES.at(-1)).toBe(200);
   });
 });
 
@@ -80,9 +81,9 @@ describe("the stored size", () => {
 });
 
 describe("stepping", () => {
-  it("walks the steps up to the cap and stops there", async () => {
+  it("walks the steps up to 200 and stops there", async () => {
     const m = await load();
-    expect([1, 2, 3, 4].map(() => m.stepInterfaceSize(1))).toEqual([110, 125, 150, 150]);
+    expect([1, 2, 3, 4, 5, 6].map(() => m.stepInterfaceSize(1))).toEqual([110, 125, 150, 175, 200, 200]);
   });
 
   it("walks the steps down to 80 and stops there", async () => {

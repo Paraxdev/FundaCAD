@@ -37,11 +37,11 @@ describe("Interface size", () => {
     expect(text($("#prefs-interface-size-hint"))).toContain("⌘+Plus and ⌘+Minus");
   });
 
-  it("offers the zoom steps up to the cap and stores the one picked", async () => {
+  it("offers every zoom step up to 200 and stores the one picked", async () => {
     open();
     trigger().click();
     await flushPromises();
-    expect(options().map(text)).toEqual(["80%", "90%", "100%", "110%", "125%", "150%"]);
+    expect(options().map(text)).toEqual(["80%", "90%", "100%", "110%", "125%", "150%", "175%", "200%"]);
     options()
       .find((o) => text(o) === "125%")!
       .click();

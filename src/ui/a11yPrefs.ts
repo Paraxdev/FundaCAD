@@ -10,22 +10,19 @@ export type Verbosity = "off" | "errors" | "normal" | "verbose";
 // The size settings, one block spread into the shared tables below.
 /** The browser's zoom steps, in percent. */
 export const INTERFACE_SIZES: readonly number[] = [80, 90, 100, 110, 125, 150, 175, 200];
-/** Held at 150 until every control stays reachable at 200. */
-export const INTERFACE_SIZE_MAX = 150;
+export const INTERFACE_SIZE_MAX = 200;
 
 export interface SizePrefs {
-  /** The zoom of the whole interface in percent, one of INTERFACE_SIZES up to INTERFACE_SIZE_MAX. */
+  /** The zoom of the whole interface in percent, one of INTERFACE_SIZES. */
   interfaceSize: number;
 }
 
 const SIZE_DEFAULTS: SizePrefs = { interfaceSize: 100 };
 const SIZE_KEYS: Record<keyof SizePrefs, string> = { interfaceSize: "fundacad.a11y.interfaceSize" };
 
-/** A size stored by a build with a higher cap reads back as the cap. */
 export function asInterfaceSize(v: unknown): number | null {
   const n = typeof v === "string" && v.trim() !== "" ? Number(v) : v;
-  if (typeof n !== "number" || !INTERFACE_SIZES.includes(n)) return null;
-  return Math.min(n, INTERFACE_SIZE_MAX);
+  return typeof n === "number" && INTERFACE_SIZES.includes(n) ? n : null;
 }
 
 const SIZE_GATES: { [K in keyof SizePrefs]: (v: unknown) => SizePrefs[K] | null } = {

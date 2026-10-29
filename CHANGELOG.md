@@ -26,7 +26,7 @@ This file starts on 2026-08-03. For anything before that, see the
 ### Added
 
 - **Interface size.** Preferences, Accessibility, Vision has an Interface size
-  from 80 to 150 percent that makes every panel, menu and label larger or
+  from 80 to 200 percent that makes every panel, menu and label larger or
   smaller. Ctrl+Plus, Ctrl+Minus and Ctrl+0 (Cmd on a Mac) change it from
   anywhere and say the new size, the command palette has Larger Interface,
   Smaller Interface and Reset Interface Size, and the size is kept across a
