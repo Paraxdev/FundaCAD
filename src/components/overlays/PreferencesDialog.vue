@@ -851,7 +851,7 @@ function onClassicCamera(on: boolean) {
                   to where they end. Follow system takes Animation effects on Windows, Reduce motion on macOS or Reduce
                   animation on GNOME, and changes the moment the system does.
                   <template v-if="a11y.animations === 'system'"
-                    >The system has them {{ reducesMotion ? "off" : "on" }} right now.</template
+                    >Right now the system has animations {{ reducesMotion ? "off" : "on" }}.</template
                   >
                 </p>
               </div>

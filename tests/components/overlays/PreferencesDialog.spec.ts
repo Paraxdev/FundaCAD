@@ -423,7 +423,7 @@ describe("Preferences Accessibility", () => {
     await category("access");
     expect(radios("prefs-motion").map(label)).toEqual(["Follow system", "On", "Off"]);
     expect($("#prefs-motion").getAttribute("aria-describedby")).toBe("prefs-motion-hint");
-    expect($("#prefs-motion-hint").textContent).toContain("The system has them on right now.");
+    expect($("#prefs-motion-hint").textContent).toContain("Right now the system has animations on.");
     await pick("prefs-motion", "Off");
     expect([a11yPrefs().animations, motionOn()]).toEqual(["off", false]);
     expect($("#prefs-motion-hint").textContent).not.toContain("right now");
