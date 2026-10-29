@@ -70,7 +70,7 @@ const CONTROL = [
 
 const TEXT_ONLY = "#docname, #prompt, [data-testid=selection-readout]";
 const LABEL_NOISE =
-  ".menu-shortcut, .ctx-key, .ui-menu-keys, .cmdk-key, .menu-check, .ui-menu-check, .dirty-mark, .t-caret, .tree-count, .choice-btn > small, .ui-confirm-choice > .ui-confirm-hint";
+  ".menu-shortcut, .ctx-key, .ui-menu-keys, .cmdk-key, .menu-check, .ui-menu-check, .dirty-mark, .sr-only, .t-caret, .tree-count, .choice-btn > small, .ui-confirm-choice > .ui-confirm-hint";
 const MAX_LABEL = 60;
 
 const realRect = (el: Element): Box => el.getBoundingClientRect();

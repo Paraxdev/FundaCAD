@@ -6,7 +6,7 @@ export const APP_HTML = `
 <header id="titlebar">
   <button id="undo-btn" class="tb-btn" title="Undo (Ctrl+Z)" aria-label="Undo"></button>
   <button id="redo-btn" class="tb-btn" title="Redo (Ctrl+Y)" aria-label="Redo" disabled></button>
-  <span id="docname" class="docname dirty"><!-- a dev build keeps comments -->Untitled<span class="dirty-mark">*</span></span>
+  <span id="docname" class="docname dirty"><!-- a dev build keeps comments -->Untitled<span class="dirty-mark" aria-hidden="true">*</span> <span class="sr-only">Unsaved changes</span></span>
   <nav id="menubar">
     <div class="menu"><button class="btn menu-btn" aria-expanded="false">File</button></div>
     <div class="menu"><button class="btn menu-btn is-open" aria-expanded="true">Edit</button></div>

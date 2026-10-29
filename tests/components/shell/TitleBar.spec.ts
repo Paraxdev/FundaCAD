@@ -11,6 +11,7 @@ import { ENGINE } from "../../../src/app/engineKey";
 import type { Engine } from "../../../src/app/engine";
 import type { HomeCallbacks } from "../../../src/ui/home";
 import { useHomeStore } from "../../../src/stores/home";
+import { useUiStore } from "../../../src/stores/ui";
 import TitleBar from "../../../src/components/shell/TitleBar.vue";
 
 vi.mock("../../../src/app/menubarDef", () => ({
@@ -64,5 +65,39 @@ describe("the title bar under Home", () => {
     const w = mount(TitleBar, { attachTo: document.body, global: { provide: { [ENGINE as symbol]: makeEngine() } } });
     await nextTick();
     expect(w.get("#titlebar").element.querySelector("[inert]")).toBeNull();
+  });
+});
+
+describe("the document name", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    document.body.innerHTML = "";
+  });
+
+  // What a screen reader reads: aria-hidden subtrees drop out, an sr-only span stays.
+  const spoken = (el: Element): string =>
+    [...el.childNodes]
+      .map((n) => {
+        if (n instanceof Element) return n.getAttribute("aria-hidden") === "true" ? "" : spoken(n);
+        return n.nodeType === Node.TEXT_NODE ? n.textContent : "";
+      })
+      .join("");
+
+  it("hides the unsaved star from screen readers, which read Unsaved changes after the name instead", async () => {
+    const ui = useUiStore();
+    ui.docName = "bracket.funda";
+    const w = mount(TitleBar, { attachTo: document.body, global: { provide: { [ENGINE as symbol]: makeEngine() } } });
+    const name = w.get("#docname");
+    expect(name.find(".dirty-mark").exists()).toBe(false);
+    expect(name.find(".sr-only").exists()).toBe(false);
+    expect(spoken(name.element).trim()).toBe("bracket.funda");
+
+    ui.dirty = true;
+    await nextTick();
+    const star = name.get(".dirty-mark");
+    expect(star.text()).toBe("*");
+    expect(star.attributes("aria-hidden")).toBe("true");
+    expect(name.get(".sr-only").text()).toBe("Unsaved changes");
+    expect(spoken(name.element).trim()).toBe("bracket.funda Unsaved changes");
   });
 });

@@ -86,7 +86,8 @@ onUnmounted(() => {
       </span>
       <span id="docname" class="docname" :class="{ dirty: ui.dirty }">
         <!-- After the name, never before: a prefix moved the filename sideways when the document went dirty. -->
-        {{ ui.docName }}<span v-if="ui.dirty" class="dirty-mark" title="Unsaved changes">*</span>
+        {{ ui.docName }}<span v-if="ui.dirty" class="dirty-mark" title="Unsaved changes" aria-hidden="true">*</span>
+        <span v-if="ui.dirty" class="sr-only"> Unsaved changes</span>
       </span>
       <!-- Beside the name because it is about this document, renders nothing unless an assistant is attached. -->
       <LiveSessionPill />
