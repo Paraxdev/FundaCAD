@@ -15,8 +15,8 @@ steps = [
   { click_css = "#prefs-live" },
   { wait = 300 },
 ]
-show = "Preferences, AI assistants page, the Live document setting with its three choices Do not share, Share read only and Share and allow edits. Check the labels in src."
-alt = "Live document setting open, offering Do not share, Share read only and Share and allow edits"
+show = "Preferences, AI assistants page, the Live document setting with its three choices open. Check the labels in src."
+alt = "The Live document choices open in Preferences, AI assistants"
 uses = ["manual/docs/ai/sharing.md"]
 
 [[shot]]

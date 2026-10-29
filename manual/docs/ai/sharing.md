@@ -2,7 +2,7 @@
 
 The Live document setting on the AI assistants page decides what an assistant may do with the document you have open.
 
-![Live document setting open, offering Do not share, Share read only and Share and allow edits](../img/ai-live-document.png)
+![The Live document choices open in Preferences, AI assistants](../img/ai-live-document.png)
 
 | Live document | What the assistant may do |
 | --- | --- |
