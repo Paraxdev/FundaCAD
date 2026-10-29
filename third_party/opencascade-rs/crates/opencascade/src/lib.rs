@@ -47,6 +47,8 @@ pub enum Error {
     IgesWriteFailed,
     #[error("failed to read BREP file")]
     BrepReadFailed,
+    #[error("stored geometry is not a binary BREP in the format the engine writes (bad header)")]
+    BrepBadHeader,
     #[error("failed to write BREP file")]
     BrepWriteFailed,
     #[error("failed to triangulate Shape")]

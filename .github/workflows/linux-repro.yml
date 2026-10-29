@@ -130,7 +130,7 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: target/OCCT
-          key: occt-static-${{ runner.os }}-${{ hashFiles('third_party/opencascade-rs/crates/occt-sys/src/lib.rs', 'third_party/opencascade-rs/crates/opencascade-sys/build.rs', 'third_party/opencascade-rs/crates/opencascade-sys/Cargo.toml') }}
+          key: occt-static-v2-${{ runner.os }}-${{ hashFiles('third_party/opencascade-rs/crates/occt-sys/src/lib.rs', 'third_party/opencascade-rs/crates/opencascade-sys/build.rs', 'third_party/opencascade-rs/crates/opencascade-sys/Cargo.toml') }}
 
       - name: Build
         shell: bash

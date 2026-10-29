@@ -85,6 +85,18 @@ pub fn one_face_missing(lines: &mut Vec<String>, at: &Records) {
     lines[at.shell] = lines[at.shell].split(' ').skip(2).collect::<Vec<_>>().join(" ");
 }
 
+/// The solid names a subshape number far beyond the shape table.
+pub fn shape_index_past_table(lines: &mut Vec<String>, at: &Records) {
+    let rest: Vec<&str> = lines[at.solid].split(' ').skip(1).collect();
+    lines[at.solid] = format!("+2000000000 {}", rest.join(" "));
+}
+
+/// The solid's subshape reference is one long run of digits.
+pub fn reference_token_past_buffer(lines: &mut Vec<String>, at: &Records) {
+    let rest: Vec<&str> = lines[at.solid].split(' ').skip(1).collect();
+    lines[at.solid] = format!("+{} {}", "1".repeat(400), rest.join(" "));
+}
+
 /// The compound holds the shell where it held the solid.
 pub fn shell_alone(lines: &mut Vec<String>, at: &Records) {
     let shell = lines[at.solid].split(' ').next().expect("the shell's number").to_owned();

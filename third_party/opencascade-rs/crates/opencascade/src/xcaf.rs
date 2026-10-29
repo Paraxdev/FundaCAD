@@ -286,6 +286,11 @@ pub fn set_heal_budget(seconds: f64) {
     ffi::step_set_heal_budget(seconds);
 }
 
+/// The header `to_bin_v3` writes: `BinTools_ShapeSetBase::THE_ASCII_VERSIONS[3]`
+/// framed by the newlines the stream begins with. A stored blob is the only
+/// thing `from_bin` ever reads, and the engine only ever writes this one format.
+const BIN_V3_HEADER: &[u8] = b"\nOpen CASCADE Topology V3 (c)\n";
+
 /// Binary BREP, BinTools format V3 with triangles.
 pub fn to_bin_v3(shape: &Shape) -> Result<Vec<u8>, Error> {
     shape.to_brep_bytes(
@@ -295,6 +300,11 @@ pub fn to_bin_v3(shape: &Shape) -> Result<Vec<u8>, Error> {
 }
 
 pub fn from_bin(data: &[u8]) -> Result<Shape, Error> {
+    // Every caller reads bytes a .funda chose, so the reader runs only on the
+    // one header the writer emits, never on another version's layout.
+    if !data.starts_with(BIN_V3_HEADER) {
+        return Err(Error::BrepBadHeader);
+    }
     Shape::from_brep_bytes(data, &ProgressRange::detached())
 }
 
