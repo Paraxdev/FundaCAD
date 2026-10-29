@@ -28,6 +28,7 @@ export function heldEdits(tools: Engine["tools"] | undefined): HeldEdit[] {
     tools.faceOffset,
     tools.joint,
     tools.mechanism,
+    tools.datumPose,
   ].filter((t): t is NonNullable<typeof t> => !!t);
 }
 

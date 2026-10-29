@@ -4,6 +4,9 @@ import { createPinia, setActivePinia } from "pinia";
 import * as THREE from "three";
 import { DocumentStore } from "../../src/document/store";
 import { MoveTool } from "../../src/features/moveTool";
+import { DatumPoseTool } from "../../src/features/datumPoseTool";
+import { ZERO_POSE } from "../../src/document/datumPose";
+import type { Feature } from "../../src/types";
 import type { Engine } from "../../src/app/engine";
 import type { Viewport } from "../../src/viewport/viewport";
 import { box, stubBackend } from "../document/storeKit";
@@ -255,5 +258,32 @@ describe("a held Move drag and closing the window", () => {
     flushFrame();
     expect(tabCloseStopped()).toBe(false);
     expect(unsavedMark()).toEqual({ window: false, titlebar: false });
+  });
+});
+
+describe("a new datum plane let go of but not entered", () => {
+  it("is in the file Ctrl+S writes, added the way Enter adds it", async () => {
+    const vp = fakeViewport(new THREE.Scene());
+    const datum = new DatumPoseTool(vp);
+    Object.assign(datum, { hit: () => "offset" });
+    // Stands in for placeNewDatum in featureStarters, which adds the plane when the tool hands it the pose.
+    datum.start({ src: "XY", pose: { ...ZERO_POSE }, ghost: true }, (pose) => {
+      if (pose)
+        store.addFeature({ id: store.nextId(), type: "datumPlane", plane: "XY", offset: pose.offset } as Feature);
+    });
+    engine.tools = idleTools({ move: tool, datumPose: datum });
+    flushFrame();
+    pointer(vp.domElement, "pointerdown", 40);
+    pointer(vp.domElement, "pointermove", 50);
+    pointer(vp.domElement, "pointermove", 60);
+    pointer(vp.domElement, "pointerup", 60);
+    expect(datum.pending).toBe(true);
+    key();
+    await vi.waitFor(() => expect(host.saved).toHaveLength(1));
+    expect(lastSaved().features.filter((f) => f.type === "datumPlane")).toEqual([
+      expect.objectContaining({ plane: "XY", offset: 20 }),
+    ]);
+    expect(datum.active).toBe(false);
+    expect(store.dirty).toBe(false);
   });
 });

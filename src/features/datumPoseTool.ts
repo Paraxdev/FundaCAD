@@ -14,6 +14,7 @@ import { RotateDial } from "../viewport/rotateDial";
 import { SketchPlane } from "../sketch/plane";
 import { pivotOf, placeDatum, turnAxes, type DatumPose, type PoseField } from "../document/datumPose";
 import { DatumRings, RING_PX, type Grab, type RingScene } from "./datumRings";
+import { HeldSignal } from "./heldEdit";
 
 /** Degrees per step: the default, with Shift, and with Alt (free). */
 export const TILT_STEP_DEG = 5;
@@ -77,6 +78,7 @@ export class DatumPoseTool {
   private dim = new DimInput();
   private onDone: ((pose: DatumPose | null) => void) | null = null;
   private readonly gesture: CanvasGesture;
+  private readonly held = new HeldSignal();
 
   constructor(private viewport: Viewport) {
     this.gesture = new CanvasGesture(viewport.domElement, {
@@ -291,6 +293,7 @@ export class DatumPoseTool {
   }
 
   private refresh() {
+    this.held.sync(this.pending);
     this.updateGhost();
     this.opts?.onLive?.({ ...this.pose });
     this.viewport.requestRender();
@@ -370,6 +373,25 @@ export class DatumPoseTool {
     done?.(editing ? null : pose);
   }
 
+  /** A pose dragged or typed that Enter would write or hand out. */
+  get pending(): boolean {
+    return this.active && this.changed();
+  }
+
+  get dragging(): boolean {
+    return this.grab !== null;
+  }
+
+  /** Told when `pending` turns on or off, for the unsaved mark and the close guard. */
+  onHeldChange(fn: () => void): () => void {
+    return this.held.on(fn);
+  }
+
+  /** For a save: the pose is written as Enter writes it. A drag still under the hand is left alone. */
+  confirmHeld() {
+    if (this.pending && !this.dragging) this.finish();
+  }
+
   cancel() {
     const done = this.onDone;
     this.cleanup();
@@ -404,5 +426,6 @@ export class DatumPoseTool {
     this.hover = null;
     this.opts = null;
     setPrompt(null);
+    this.held.sync(this.pending);
   }
 }
