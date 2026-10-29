@@ -95,9 +95,22 @@ uses = ["manual/docs/reference/shortcuts.md:5"]
 file = "manual/docs/img/orbit.gif"
 size = [800, 737]
 theme = "fundacad"
+viewport = [1440, 940]
 crop = "region"
-gif = { delay = 100, loop = 0 }
-stub = true
+at = [330, 44]
+steps = [
+  { open = "example:Wall bracket" },
+  { mouse = "down", at = [1000, 900], button = "middle" },
+  { mouse = "move", by = [0, -40], steps = 4 },
+  { mouse = "up", button = "middle" },
+]
+gif = { delay = 90, loop = 0 }
+frames = [
+  { hold = 700 },
+  { steps = [{ mouse = "down", at = [1000, 900], button = "right" }, { mouse = "move", by = [30, 0], steps = 4 }, { mouse = "up", button = "right" }], repeat = 7 },
+  { steps = [{ mouse = "down", at = [1000, 900], button = "right" }, { mouse = "move", by = [30, 0], steps = 4 }, { mouse = "up", button = "right" }], hold = 400 },
+  { steps = [{ mouse = "down", at = [1000, 900], button = "right" }, { mouse = "move", by = [-30, 0], steps = 4 }, { mouse = "up", button = "right" }], repeat = 8 },
+]
 show = "A part turning in the viewport as the right button is dragged (about 17 frames, 800 wide), view cube and axis colours as today."
 alt = "A part turning in the viewport as the right button is dragged"
 uses = ["manual/docs/reference/shortcuts.md:44"]

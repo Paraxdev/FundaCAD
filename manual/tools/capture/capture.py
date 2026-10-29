@@ -5,6 +5,7 @@ python manual/tools/capture/capture.py --area all --list
 """
 import argparse
 import base64
+import os
 import shutil
 import struct
 import sys
@@ -22,6 +23,10 @@ AREAS = ("start-files", "model", "sketch", "inspect", "render", "ai-plugins-refe
 DEFAULT_VIEWPORT = (1440, 900)
 DEFAULT_PAUSE = 400
 THEME_ALIASES = {"dark": "fundacad", "noir": "fundacad", "light": "solarized-light"}
+# Playwright does not report where the mouse is, so relative moves ("by") start from here.
+MOUSE = [0.0, 0.0]
+# Screenshots taken again after a hang, reported with the shot.
+RETRIES = [0]
 # Session methods a step may not call, they would end or restart the session.
 NOT_STEPS = {"open", "close", "call", "screenshot", "pids"}
 
@@ -38,7 +43,7 @@ HIDE_READOUTS = """(hide) => {
   if (!el) {
     el = document.createElement('style');
     el.id = 'capture-hide-readouts';
-    el.textContent = '#fps, .roundtrip { visibility: hidden !important; }';
+    el.textContent = '#fps, .roundtrip { visibility: hidden !important; } .perf-warn-group { display: none !important; }';
     document.head.append(el);
   }
   el.disabled = !hide;
@@ -78,6 +83,27 @@ def serve_fonts(page):
 
     page.route("**/@fs/**/*.woff2*", fulfill)
     page.route("**/@fs/**/*.woff", fulfill)
+
+
+def start_vite(log: Path):
+    from fundacad_harness.launch import LaunchError, free_port, http_ok, spawn
+
+    node = shutil.which("node")
+    if not node:
+        raise LaunchError("node is not on PATH")
+    port = free_port()
+    cmd = [node, str(REPO / "node_modules" / "vite" / "bin" / "vite.js"), "--config", str(HERE / "vite.config.mjs"),
+           "--host", "127.0.0.1", "--port", str(port), "--strictPort"]
+    proc = spawn("vite", cmd, REPO, dict(os.environ), log)
+    end = time.monotonic() + 90
+    while time.monotonic() < end:
+        if http_ok(f"http://127.0.0.1:{port}/"):
+            return proc, f"http://127.0.0.1:{port}"
+        if not proc.alive():
+            break
+        time.sleep(0.25)
+    proc.stop()
+    raise LaunchError(f"vite did not answer on port {port}", proc.tail())
 
 
 def load(area: str) -> list[dict]:
@@ -193,11 +219,16 @@ def run_step(s, step):
         if isinstance(value, str):
             page.hover(value)
         else:
-            page.mouse.move(*point(s, value, opts.get("space", "screen")))
+            MOUSE[:] = point(s, value, opts.get("space", "screen"))
+            page.mouse.move(*MOUSE)
     elif action == "mouse":
         m = page.mouse
         if "at" in opts:
-            m.move(*point(s, opts["at"], opts.get("space", "screen")), steps=opts.get("steps", 1))
+            MOUSE[:] = point(s, opts["at"], opts.get("space", "screen"))
+        elif "by" in opts:
+            MOUSE[:] = [MOUSE[0] + opts["by"][0], MOUSE[1] + opts["by"][1]]
+        if "at" in opts or "by" in opts:
+            m.move(*MOUSE, steps=opts.get("steps", 1))
         if value == "down":
             m.down(button=opts.get("button", "left"))
         elif value == "up":
@@ -297,10 +328,20 @@ def still(s, shot: dict, rect, path: Path):
     if "park" in shot:
         s.page.mouse.move(*shot["park"])
     s.page.wait_for_timeout(shot.get("pause", DEFAULT_PAUSE))
-    if rect:
-        s.page.screenshot(path=str(path), clip=rect)
-    else:
-        s.page.screenshot(path=str(path))
+    path.write_bytes(grab(s, rect))
+
+
+def grab(s, rect) -> bytes:
+    """A screenshot, tried again when it hangs: under SwiftShader one now and then waits on a frame that never comes,
+    and the next one is taken at once."""
+    for attempt in range(3):
+        try:
+            return s.page.screenshot(clip=rect, timeout=15_000) if rect else s.page.screenshot(timeout=15_000)
+        except Exception as e:
+            if "Timeout" not in str(e) or attempt == 2:
+                raise
+            RETRIES[0] += 1
+            s.page.wait_for_timeout(500)
 
 
 def take_gif(s, shot: dict, rect, path: Path, frames_dir: Path) -> str:
@@ -318,7 +359,7 @@ def take_gif(s, shot: dict, rect, path: Path, frames_dir: Path) -> str:
             if frame.get("settle", True):
                 s.settle()
             s.page.wait_for_timeout(frame.get("pause", 150))
-            png = s.page.screenshot(clip=rect) if rect else s.page.screenshot()
+            png = grab(s, rect)
             (frames_dir / f"{len(frames) + 1:03}.png").write_bytes(png)
             w, h, data = s.page.evaluate(DECODE, base64.b64encode(png).decode())
             frames.append((w, h, base64.b64decode(data), frame.get("hold", delay)))
@@ -329,6 +370,7 @@ def take_gif(s, shot: dict, rect, path: Path, frames_dir: Path) -> str:
 
 
 def take(s, shot: dict, out: Path, frames_root: Path) -> str:
+    RETRIES[0] = 0
     prepare(s, shot)
     rect = crop_rect(s, shot)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -341,6 +383,8 @@ def take(s, shot: dict, out: Path, frames_root: Path) -> str:
         note = ""
     want = tuple(shot.get("size", (w, h)))
     size = f"{w}x{h}" if (w, h) == want else f"{w}x{h}, the manifest says {want[0]}x{want[1]}"
+    if RETRIES[0]:
+        note += f" {RETRIES[0]} screenshots taken again after a hang"
     errors = s.page_errors()
     if errors:
         note += f" page errors: {errors[-3:]}"
@@ -382,7 +426,6 @@ def main(argv=None) -> int:
         return 0
 
     frames_root = args.frames or Path(tempfile.gettempdir()) / "fundacad-capture"
-    failed = 0
     live = []
     for shot in shots:
         kind = shot.get("crop", "window")
@@ -409,12 +452,23 @@ def main(argv=None) -> int:
             super()._launch_browser()
             serve_fonts(self.page)
 
+    frames_root.mkdir(parents=True, exist_ok=True)
+    vite, vite_url = start_vite(frames_root / "vite.log")
+    try:
+        failed = shoot(live, args, frames_root, CaptureSession, vite_url)
+    finally:
+        vite.stop()
+    return 1 if failed else 0
+
+
+def shoot(live, args, frames_root: Path, CaptureSession, vite_url: str) -> int:
+    failed = 0
     for gpu in (False, True):
         batch = [x for x in live if bool(x.get("gpu")) == gpu]
         if not batch:
             continue
-        with CaptureSession(engine=args.engine, viewport=viewport_of(batch[0]), gpu=gpu,
-                     settle_timeout=args.settle_timeout, repo=REPO) as s:
+        with CaptureSession(engine=args.engine, viewport=viewport_of(batch[0]), gpu=gpu, vite_url=vite_url,
+                            settle_timeout=args.settle_timeout, repo=REPO) as s:
             for shot in batch:
                 out = target_path(shot, args.out)
                 t = time.monotonic()
@@ -430,7 +484,7 @@ def main(argv=None) -> int:
                     except Exception:
                         seen = None
                     print(f"FAILED {shot['file']}: {e}" + (f", the screen is in {seen}" if seen else ""))
-    return 1 if failed else 0
+    return failed
 
 
 if __name__ == "__main__":
