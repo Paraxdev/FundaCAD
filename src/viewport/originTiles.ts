@@ -1,5 +1,5 @@
-// The origin planes as small tiles, each in the positive quadrant of its two axes with its corner on
-// the origin, so its edges lie on the triad's arrows and the tiles meet without crossing. A press is matched
+// The origin planes as small tiles, each in the positive quadrant of its two axes a small gap off both
+// arrows, so its edges run parallel to the triad's arrows and the three tiles stand apart. A press is matched
 // on screen by planeHit.ts, so a tile seen edge on is still found by its pad or its name box.
 
 import * as THREE from "three";
@@ -36,8 +36,8 @@ export interface TilePose {
 
 // As long as an axis arrow, rounded like a 40 px rail tile with its 17 px corner.
 export const TILE_SIZE_PX = TRIAD_LENGTH_PX;
-export const TILE_GAP_PX = 0;
-/** Only the corner away from the origin is rounded, the other three sit on the arrows. */
+export const TILE_GAP_PX = 8;
+/** Only the corner away from the origin is rounded, the other three face the arrows. */
 export const TILE_CORNER_RADIUS_PX = 27;
 export const TILE_OCTANT: Octant = { x: 1, y: 1, z: 1 };
 export const TILE_EXTENT_PX = TILE_GAP_PX + TILE_SIZE_PX;
@@ -277,9 +277,10 @@ export class OriginTiles {
     camera: THREE.Camera,
     rect?: ScreenFrame["rect"],
   ) {
-    const extent = this.shape.gapPx + this.shape.sizePx;
-    this.k = glyphScale(extent, modelDiagonal, pixelWorldSize, MIN_TILE_SCALE);
-    this.group.scale.setScalar(glyphWorldScale(extent, modelDiagonal, pixelWorldSize, MIN_TILE_SCALE));
+    // Scaled by the size, not size plus gap, so a tile edge keeps the triad's scale and an arrow's length.
+    const size = this.shape.sizePx;
+    this.k = glyphScale(size, modelDiagonal, pixelWorldSize, MIN_TILE_SCALE);
+    this.group.scale.setScalar(glyphWorldScale(size, modelDiagonal, pixelWorldSize, MIN_TILE_SCALE));
     if (rect && rect.width > 0 && rect.height > 0 && this.group.scale.x > 0) this.placeNames({ camera, rect });
     this.paintLook();
   }
@@ -303,7 +304,7 @@ export class OriginTiles {
       const normal = new THREE.Vector3(...tilePose(plane, this.shape).normal);
       const toEye = ortho ? eyeDir : eye.clone().sub(centreW).normalize();
       const n = "xyz".indexOf(NORMAL_AXIS[plane]);
-      // Every tile shares the origin corner and spans the octant, so the eye on the far side of one sees it on top.
+      // Every tile lies in the octant's quadrant of its plane, so the eye on the far side of one sees it on top.
       const side = (ortho ? eyeDir : eye).getComponent(n) * this.shape.octant[NORMAL_AXIS[plane]];
       return {
         plane,
