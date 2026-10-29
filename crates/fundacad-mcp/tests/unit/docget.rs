@@ -93,6 +93,28 @@ fn a_left_out_list_with_no_feature_to_take_it_from_is_refused() {
 }
 
 #[test]
+fn a_left_out_list_is_not_taken_from_another_document_s_import_of_the_same_id() {
+    let mut next = obj(json!({"features": leave_out_lists(&import(40))}));
+    let why = take_back_lists(&obj(json!({"features": import(50)})), &mut next).unwrap_err();
+    assert_eq!(
+        why,
+        "f1 has its 40 nodes left out, but the open document's f1 has 50: it is another import, \
+         doc_get with full true gives this one's"
+    );
+
+    let mut shown = leave_out_lists(&import(40));
+    shown[0]["geom"] = json!("g1");
+    let mut other = import(40);
+    other[0]["geom"] = json!("g2");
+    let why = take_back_lists(&obj(json!({"features": other})), &mut obj(json!({"features": shown}))).unwrap_err();
+    assert_eq!(
+        why,
+        "f1 has its nodes left out, but the open document's f1 imports other geometry: \
+         doc_get with full true gives this one's"
+    );
+}
+
+#[test]
 fn lines_put_one_feature_to_a_line_and_read_back_as_the_same_json() {
     let doc = obj(json!({
         "features": [{"type": "box", "length": 2, "id": "bx1"}, {"type": "move", "dx": 1.5, "bodies": ["body1"], "id": "mv1"}],

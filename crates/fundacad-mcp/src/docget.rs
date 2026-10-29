@@ -104,33 +104,45 @@ pub fn leave_out_lists(features: &Value) -> Value {
     features
 }
 
-/// Puts back the lists `leave_out_lists` took out, from the open document's feature of the same id.
+/// Puts back the lists `leave_out_lists` took out, from the open document's feature of the same id. Ids repeat
+/// across documents, so that feature has to import the same geometry and hold as many items as the line says.
 pub fn take_back_lists(open: &Map<String, Value>, next: &mut Map<String, Value>) -> Result<(), String> {
-    let had = |id: &str, key: &str| -> Option<Value> {
-        open.get("features")?
-            .as_array()?
-            .iter()
-            .find(|f| f.get("id").and_then(Value::as_str) == Some(id))?
-            .get(key)
-            .filter(|v| v.is_array())
-            .cloned()
+    let had = |id: &str| -> Option<&Map<String, Value>> {
+        open.get("features")?.as_array()?.iter().filter_map(Value::as_object).find(|f| {
+            f.get("id").and_then(Value::as_str) == Some(id) && f.get("type").and_then(Value::as_str) == Some("import")
+        })
     };
     for f in
         next.get_mut("features").and_then(Value::as_array_mut).into_iter().flatten().filter_map(Value::as_object_mut)
     {
         let id = f.get("id").and_then(Value::as_str).unwrap_or_default().to_string();
         for key in IMPORT_LISTS {
-            if !f.get(key).is_some_and(Value::is_string) {
+            let Some(line) = f.get(key).and_then(Value::as_str).map(str::to_string) else {
                 continue;
+            };
+            let Some(was) = had(&id) else {
+                return Err(format!(
+                    "{id} has its {key} left out and the open document has no {id} to take them from: \
+                     doc_get with full true gives them"
+                ));
+            };
+            if was.get("geom").zip(f.get("geom")).is_some_and(|(a, b)| a != b) {
+                return Err(format!(
+                    "{id} has its {key} left out, but the open document's {id} imports other geometry: \
+                     doc_get with full true gives this one's"
+                ));
             }
-            match had(&id, key) {
-                Some(list) => {
-                    f.insert(key.into(), list);
+            let said = line.split(' ').next().and_then(|n| n.parse::<usize>().ok());
+            match was.get(key).and_then(Value::as_array) {
+                Some(list) if Some(list.len()) == said => {
+                    f.insert(key.into(), Value::Array(list.clone()));
                 }
-                None => {
+                list => {
                     return Err(format!(
-                        "{id} has its {key} left out and the open document has no {id} to take them from: \
-                         doc_get with full true gives them"
+                        "{id} has its {}, but the open document's {id} has {}: it is another import, \
+                         doc_get with full true gives this one's",
+                        line.split(',').next().unwrap_or(&line),
+                        list.map_or(0, Vec::len)
                     ))
                 }
             }
