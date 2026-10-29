@@ -119,6 +119,14 @@ fn a_page_says_what_it_left_out_and_how_to_ask_for_it() {
 }
 
 #[test]
+fn a_huge_limit_shows_every_row_from_the_offset() {
+    let huge = Page::of(&args(json!({"limit": 1e30, "offset": 1})), 30).unwrap();
+    let (shown, more) = huge.cut(vec![1, 2, 3], "rows");
+    assert_eq!(shown, vec![2, 3]);
+    assert_eq!(more.unwrap(), "showing rows 2 to 3 of 3");
+}
+
+#[test]
 fn selector_numbers_lose_their_float_noise() {
     assert_eq!(rounded(&json!(2.9999999999999996)), json!(3.0));
     assert_eq!(rounded(&json!(4.44e-16)), json!(0.0));

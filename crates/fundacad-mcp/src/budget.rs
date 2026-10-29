@@ -53,7 +53,7 @@ impl Page {
         if self.offset >= total {
             return (Vec::new(), Some(format!("no {noun} from offset {}: there are {total}", self.offset)));
         }
-        let end = if self.limit == 0 { total } else { total.min(self.offset + self.limit) };
+        let end = if self.limit == 0 { total } else { total.min(self.offset.saturating_add(self.limit)) };
         if self.offset == 0 && end == total {
             return (rows, None);
         }
