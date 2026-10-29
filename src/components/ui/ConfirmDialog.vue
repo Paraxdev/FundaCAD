@@ -25,7 +25,6 @@ const emit = defineEmits<{ pick: [T]; confirm: [T[]]; cancel: [] }>();
 const messageId = useId();
 const row = useTemplateRef<HTMLElement>("row");
 const primary = computed(() => props.options.findIndex((o) => o.primary));
-const messageId = useId();
 const roving = useRovingFocus({
   items: () => props.options.map(() => ({ disabled: false })),
   active: primary,
@@ -55,7 +54,6 @@ const confirm = ok.guard(() => emit("confirm", picked.value));
     role="alertdialog"
     :described-by="message ? messageId : undefined"
     :initial-focus="!multi && primary >= 0 ? '.ui-confirm-primary' : 'first'"
-    :described-by="message ? messageId : undefined"
     @close="emit('cancel')"
   >
     <template v-if="message || multi" #default>
