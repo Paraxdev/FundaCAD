@@ -1,11 +1,14 @@
 <script setup lang="ts" generic="T extends string">
 // A listbox whose options are the caller's own elements: the option slot draws every item, in order, and binds the
 // attrs it is handed. Focus moves among them on one Tab stop, Space selects, Enter emits apply. A caller with its own
-// pointer rules calls preventDefault in its click handler, else a click selects the option.
+// pointer rules calls preventDefault in its click handler, else a click selects the option. With multiple set the
+// model is an array: Space toggles, Shift with an arrow or Space takes the run from the anchor, Cmd+A or Ctrl+A all.
 
 import { computed, onBeforeUnmount, useId, useTemplateRef } from "vue";
 import { rovingIndex, useRovingFocus } from "./useRovingFocus";
 import { useName, type Named } from "./useName";
+import { isMac } from "../../input/platform";
+import { modsOf, selectRow, type SelectMods } from "../../ui/rowSelection";
 
 interface Item {
   value: T;
@@ -23,8 +26,16 @@ interface OptionAttrs {
   onFocus: () => void;
 }
 
-const props = defineProps<{ items: readonly Item[]; modelValue: T | null } & Named>();
-const emit = defineEmits<{ "update:modelValue": [T]; apply: [T] }>();
+const props = defineProps<
+  {
+    items: readonly Item[];
+    modelValue: T | null | readonly T[];
+    multiple?: boolean;
+    /** The option a Shift run starts from; left out, the listbox keeps its own. */
+    anchor?: T | null;
+  } & Named
+>();
+const emit = defineEmits<{ "update:modelValue": [T | T[]]; "update:anchor": [T]; apply: [T] }>();
 defineSlots<{
   option(p: { item: Item; index: number; selected: boolean; attrs: OptionAttrs }): unknown;
 }>();
@@ -33,9 +44,13 @@ const name = useName(props, "Listbox");
 const id = useId();
 const root = useTemplateRef<HTMLElement>("root");
 const disabled = computed(() => props.items.map((it) => !!it.disabled));
+const picked = computed(() => {
+  const v = props.modelValue;
+  return new Set<T>(typeof v === "string" ? [v] : (v ?? []));
+});
 const roving = useRovingFocus({
   items: () => props.items,
-  active: () => props.items.findIndex((it) => it.value === props.modelValue),
+  active: () => props.items.findIndex((it) => picked.value.has(it.value)),
   container: root,
 });
 
@@ -46,16 +61,61 @@ function attrsOf(item: Item, i: number): OptionAttrs {
     id: `${id}-${i}`,
     role: "option",
     tabindex: roving.tabindex(i),
-    "aria-selected": item.value === props.modelValue,
+    "aria-selected": picked.value.has(item.value),
     "aria-disabled": item.disabled || undefined,
     "data-roving": "",
     onFocus: () => roving.onFocus(i),
   };
 }
 
-function select(i: number) {
+let ownAnchor: T | null = null;
+const anchorValue = () => (props.anchor !== undefined ? props.anchor : ownAnchor);
+
+function setAnchor(v: T) {
+  if (v === anchorValue()) return;
+  ownAnchor = v;
+  emit("update:anchor", v);
+}
+
+// A disabled option joins no run, though one the caller already picked stays picked.
+function commit(keys: readonly T[]) {
+  const off = new Set(props.items.filter((it) => it.disabled).map((it) => it.value));
+  const cur = picked.value;
+  const next = keys.filter((k) => !off.has(k) || cur.has(k));
+  if (next.length === cur.size && next.every((k) => cur.has(k))) return;
+  emit("update:modelValue", next);
+}
+
+function choose(i: number, mods: SelectMods, anchor = anchorValue()) {
   const it = props.items[i];
-  if (it && !it.disabled && it.value !== props.modelValue) emit("update:modelValue", it.value);
+  if (!it || it.disabled) return;
+  if (!props.multiple) {
+    if (it.value !== props.modelValue) emit("update:modelValue", it.value);
+    return;
+  }
+  const order = props.items.map((x) => x.value);
+  const next = selectRow({ keys: [...picked.value], anchor }, order, it.value, mods);
+  commit(next.keys);
+  if (next.anchor !== null) setAnchor(next.anchor);
+}
+
+// The anchor goes in by hand: a caller's v-model:anchor only reaches the prop on its next render.
+function extend(from: number, to: number) {
+  let a = anchorValue();
+  if (a === null || !props.items.some((it) => it.value === a)) a = props.items[from]?.value ?? null;
+  choose(to, { toggle: false, range: true }, a);
+}
+
+// Options outside this list stay picked, so a caller can share one selection between lists.
+function selectAll() {
+  const own = new Set(props.items.map((it) => it.value));
+  const foreign = [...picked.value].filter((k) => !own.has(k));
+  commit([...props.items.filter((it) => !it.disabled || picked.value.has(it.value)).map((it) => it.value), ...foreign]);
+}
+
+function isSelectAll(e: KeyboardEvent) {
+  const mod = isMac() ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
+  return mod && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "a";
 }
 
 // Measured at the keypress, so a dock resized to fewer columns steps by the rows it draws now.
@@ -104,7 +164,13 @@ function target(k: string, from: number, els: readonly HTMLElement[]): number | 
 let swallowSpaceUp = false;
 
 function onKeydown(e: KeyboardEvent) {
-  if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
+  if (e.defaultPrevented) return;
+  if (props.multiple && isSelectAll(e)) {
+    e.preventDefault();
+    selectAll();
+    return;
+  }
+  if (e.altKey || e.ctrlKey || e.metaKey) return;
   const els = elements();
   const hit = els.findIndex((el) => el.contains(e.target as Node));
   const from = hit >= 0 ? hit : roving.stop.value;
@@ -115,15 +181,16 @@ function onKeydown(e: KeyboardEvent) {
     const it = props.items[from];
     if (k === " ") {
       swallowSpaceUp = true;
-      select(from);
+      choose(from, { toggle: !e.shiftKey, range: e.shiftKey });
     } else if (it && !it.disabled) emit("apply", it.value);
     return;
   }
-  let next = target(k, from, els);
-  if (next === null && k.length === 1) next = typeAhead(k, from);
+  const nav = target(k, from, els);
+  const next = nav ?? (k.length === 1 ? typeAhead(k, from) : null);
   if (next === null) return;
   e.preventDefault();
   if (next !== from || hit < 0) roving.focus(next);
+  if (props.multiple && e.shiftKey && nav !== null && next !== from) extend(from, next);
 }
 
 function onKeyup(e: KeyboardEvent) {
@@ -135,16 +202,24 @@ function onKeyup(e: KeyboardEvent) {
 function onClick(e: MouseEvent) {
   if (e.defaultPrevented) return;
   const i = elements().findIndex((el) => el.contains(e.target as Node));
-  if (i >= 0) select(i);
+  if (i >= 0) choose(i, modsOf(e));
 }
 
 onBeforeUnmount(() => window.clearTimeout(bufferTimer));
 </script>
 
 <template>
-  <div v-bind="name" ref="root" role="listbox" @keydown="onKeydown" @keyup="onKeyup" @click="onClick">
+  <div
+    v-bind="name"
+    ref="root"
+    role="listbox"
+    :aria-multiselectable="multiple || undefined"
+    @keydown="onKeydown"
+    @keyup="onKeyup"
+    @click="onClick"
+  >
     <template v-for="(item, i) in items" :key="item.value">
-      <slot name="option" :item="item" :index="i" :selected="item.value === modelValue" :attrs="attrsOf(item, i)" />
+      <slot name="option" :item="item" :index="i" :selected="picked.has(item.value)" :attrs="attrsOf(item, i)" />
     </template>
   </div>
 </template>
