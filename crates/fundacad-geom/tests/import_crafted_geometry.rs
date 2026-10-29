@@ -65,6 +65,33 @@ fn a_binary_marker_longer_than_the_buffer_is_an_error() {
     a_valid_cube_still_imports();
 }
 
+/// The binary reader looks up every subshape, location and curve through a map
+/// whose only bounds guard is the macro `No_Exception` compiles out. The text
+/// reader's index path has a test above; the binary reader, the path a stored
+/// `.funda` blob actually takes, had none. A V3 blob lists each shape's
+/// subshapes as `<orientation byte><8-byte little-endian table index>`; this
+/// raises an edge's vertex reference past the shape table, which is the shape
+/// index lookup at the heart of the earlier finding. Location and curve indices
+/// reach the same map by the same macro. A reference is nine bytes,
+/// `<orientation><4-byte little-endian table index><4-byte location index>`.
+#[test]
+fn a_binary_subshape_index_past_the_table_is_an_error() {
+    let mut blob = v3_cube_bytes();
+    let ts = blob.windows(b"TShapes".len()).position(|w| w == b"TShapes").expect("marker present");
+    let after = ts + b"TShapes ".len();
+    let n: u64 =
+        blob[after..].iter().take_while(|b| b.is_ascii_digit()).fold(0, |a, b| a * 10 + u64::from(b - b'0'));
+    let is_ref = |w: &[u8]| (w[0] == 0 || w[0] == 1) && (1..=n).contains(&u64::from(w[1])) && w[2..9].iter().all(|&b| b == 0);
+    let at = blob[ts..]
+        .windows(18)
+        .position(|w| is_ref(&w[..9]) && is_ref(&w[9..]))
+        .map(|p| ts + p + 1)
+        .expect("a subshape reference pair");
+    blob[at..at + 4].copy_from_slice(&2_000_000_000u32.to_le_bytes());
+    assert!(blob_to_shape(&blob).is_err());
+    a_valid_cube_still_imports();
+}
+
 /// `read_blob` and `get_blob` reach the binary reader through `from_bin` without
 /// going by `blob_to_shape`, so the header guard lives in `from_bin` to cover
 /// every caller, not only the import feature.
