@@ -79,6 +79,11 @@ export function fitZebraMaterial(mat: THREE.ShaderMaterial, box: THREE.Box3, set
   u.uPeriod.value = f.period;
 }
 
+/** The next fit starts from its own box instead of holding this frame. */
+export function releaseZebraFrame(mat: THREE.ShaderMaterial): void {
+  zebraHeld.delete(mat);
+}
+
 /** At each interior polyline vertex a hair points to the concave side, as long as the Menger
  *  curvature, and the tips are joined into a comb. Null if nothing is curved. */
 export function buildCurvatureCombs(view: ModelView, box: THREE.Box3): THREE.LineSegments | null {

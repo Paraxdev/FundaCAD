@@ -3,7 +3,7 @@
 
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
-import { fitZebraMaterial, makeZebraMaterial } from "../../src/viewport/overlays";
+import { fitZebraMaterial, makeZebraMaterial, releaseZebraFrame } from "../../src/viewport/overlays";
 import {
   type Vec3,
   type ZebraDirection,
@@ -129,6 +129,18 @@ describe("fitZebraMaterial", () => {
     fitZebraMaterial(fresh, big, s);
     expect(frameOf(mat)).toEqual(frameOf(fresh));
   });
+
+  it("fits afresh once the held frame is released, even for a box the held one would cover", () => {
+    const mat = makeZebraMaterial();
+    const s = { direction: "horizontal", width: 3 } as const;
+    fitZebraMaterial(mat, box(), s);
+    releaseZebraFrame(mat);
+    const next = new THREE.Box3(new THREE.Vector3(-30, -20, 0), new THREE.Vector3(36, 24, 28));
+    fitZebraMaterial(mat, next, s);
+    const fresh = makeZebraMaterial();
+    fitZebraMaterial(fresh, next, s);
+    expect(frameOf(mat)).toEqual(frameOf(fresh));
+  });
 });
 
 // The fragment shader's stripe lines run as JS with GLSL's vector helpers, so they must give
@@ -228,5 +240,19 @@ describe("the zebra view options", () => {
     (v as unknown as { model: { box: THREE.Box3 } }).model.box.max.set(31, 20, 25);
     (v as unknown as { applyZebra(): void }).applyZebra();
     expect(frameOf(mat)).toEqual(before);
+  });
+
+  it("fit a newly opened document's own frame, not the one the last document held", () => {
+    const { v, mesh, sync } = bare();
+    sync();
+    v.setZebra(true);
+    const mat = mesh.material as THREE.ShaderMaterial;
+    v.forgetZebraFrame();
+    const next = new THREE.Box3(new THREE.Vector3(-30, -20, 0), new THREE.Vector3(36, 24, 28));
+    (v as unknown as { model: { box: THREE.Box3 } }).model.box = next;
+    (v as unknown as { applyZebra(): void }).applyZebra();
+    const fresh = makeZebraMaterial();
+    fitZebraMaterial(fresh, next, { direction: DEFAULT_RENDER.zebraDirection, width: DEFAULT_RENDER.zebraWidth });
+    expect(frameOf(mat)).toEqual(frameOf(fresh));
   });
 });

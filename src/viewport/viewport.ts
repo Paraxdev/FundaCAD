@@ -40,6 +40,7 @@ import { crumb } from "../diagnostics/breadcrumbs";
 import {
   makeZebraMaterial,
   fitZebraMaterial,
+  releaseZebraFrame,
   type ZebraSettings,
   buildCurvatureCombs,
   buildClashMesh,
@@ -1886,6 +1887,10 @@ export class Viewport {
     if (s && s.direction === direction && s.width === width) return;
     this.zebraSettings = { direction, width };
     if (this.zebra) this.applyZebra();
+  }
+  /** An opened document fits its own stripe frame, not the one held through the last document's edits. */
+  forgetZebraFrame() {
+    if (this.zebraMat) releaseZebraFrame(this.zebraMat);
   }
   private applyZebra() {
     if (!this.model) return;
