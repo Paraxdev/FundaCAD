@@ -55,3 +55,19 @@ describe("third party code in CI", () => {
     expect(unnamed).toEqual([]);
   });
 });
+
+const dependabot = Object.values(
+  import.meta.glob("../../.github/dependabot.yml", { query: "?raw", import: "default", eager: true }),
+)[0] as string | undefined;
+
+describe("pinned actions stay current", () => {
+  it("has Dependabot bump only the workflow actions, weekly, on dev", () => {
+    expect(dependabot).toBeDefined();
+    const text = dependabot ?? "";
+    expect(text).toMatch(/^version:\s*2\s*$/m);
+    expect([...text.matchAll(/package-ecosystem:\s*"?([\w-]+)"?/g)].map((m) => m[1])).toEqual(["github-actions"]);
+    expect(text).toMatch(/^\s+directory:\s*"\/"\s*$/m);
+    expect(text).toMatch(/^\s+interval:\s*"?weekly"?\s*$/m);
+    expect(text).toMatch(/^\s+target-branch:\s*"?dev"?\s*$/m);
+  });
+});
