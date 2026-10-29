@@ -349,6 +349,78 @@ describe("Fillet", () => {
     expect(t.tool.active).toBe(true);
     expect(t.added).toEqual([]);
   });
+
+  describe("a radius let go of but not entered", () => {
+    const saving = (tool: EdgeFeatureTool) =>
+      ({ store: { dirty: false }, tools: { edgeFeature: tool } }) as unknown as SaveEngine;
+    const FILLET = { id: "f1", type: "fillet", radius: 2, edges: EDGE };
+
+    it("is written once by a save, as Enter would", () => {
+      const t = setup(true);
+      fluentDrag(t.canvas, 20);
+      expect(needsSave(saving(t.tool))).toBe(true);
+      settleHeldEdit(saving(t.tool));
+      settleHeldEdit(saving(t.tool));
+      expect(t.added).toEqual([FILLET]);
+      expect(t.tool.active).toBe(false);
+      expect(needsSave(saving(t.tool))).toBe(false);
+    });
+
+    it("is left alone by a save while the hand grabs it again", () => {
+      const t = setup(true);
+      fluentDrag(t.canvas, 20);
+      flushFrame();
+      pointer(t.canvas, "pointerdown", 20);
+      pointer(t.canvas, "pointermove", 30);
+      settleHeldEdit(saving(t.tool));
+      expect(t.added).toEqual([]);
+      expect(t.tool.active).toBe(true);
+      vi.advanceTimersByTime(500);
+      pointer(t.canvas, "pointerup", 30);
+      settleHeldEdit(saving(t.tool));
+      expect(t.added).toEqual([{ ...FILLET, radius: 3 }]);
+    });
+
+    it("tells its watchers, and Esc still cancels it and clears the mark", () => {
+      const t = setup(true);
+      const seen = vi.fn();
+      t.tool.onHeldChange(seen);
+      fluentDrag(t.canvas, 20);
+      expect(seen).toHaveBeenCalledTimes(1);
+      expect(t.tool.pending).toBe(true);
+      escape();
+      expect(t.tool.active).toBe(false);
+      expect(t.added).toEqual([]);
+      expect(seen).toHaveBeenCalledTimes(2);
+      expect(needsSave(saving(t.tool))).toBe(false);
+      t.tool.start("fillet", t.done);
+      flushFrame();
+      expect(needsSave(saving(t.tool))).toBe(false);
+    });
+
+    it("stays quiet on the default the command opens with, and a save leaves the tool open", () => {
+      const t = setup(false);
+      const seen = vi.fn();
+      t.tool.onHeldChange(seen);
+      flushFrame();
+      expect(input().value).not.toBe("");
+      expect(needsSave(saving(t.tool))).toBe(false);
+      settleHeldEdit(saving(t.tool));
+      expect(t.added).toEqual([]);
+      expect(t.tool.active).toBe(true);
+      expect(seen).not.toHaveBeenCalled();
+    });
+
+    it("counts a typed radius", () => {
+      const t = setup(false);
+      input().value = "3";
+      input().dispatchEvent(new Event("input", { bubbles: true }));
+      flushFrame();
+      expect(needsSave(saving(t.tool))).toBe(true);
+      settleHeldEdit(saving(t.tool));
+      expect(t.added).toEqual([{ ...FILLET, radius: 3 }]);
+    });
+  });
 });
 
 describe("Draft", () => {
