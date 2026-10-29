@@ -167,8 +167,8 @@ function spansOverlap(pts: readonly number[], nx: number, ny: number, r: ScreenR
   return !(hi < rlo || rhi < lo);
 }
 
-// Screen bounding boxes answer most of the model at drag rate: they settle a window outright, and can only rule a
-// crossing out.
+// Screen bounding boxes answer most of the model at drag rate: they settle a window outright, and a crossing when the
+// shape's box misses the rect or lies wholly inside it.
 
 /** [x0, y0, x1, y1], or null when part of the shape is behind the camera. */
 export type ScreenBox = readonly [number, number, number, number] | null;
@@ -205,7 +205,8 @@ export function boxVerdict(b: ScreenBox, r: ScreenRect, mode: AreaMode): boolean
     return b !== null && b[0] >= r.x0 && b[1] >= r.y0 && b[2] <= r.x1 && b[3] <= r.y1;
   }
   if (b === null) return "look";
-  return b[0] > r.x1 || b[2] < r.x0 || b[1] > r.y1 || b[3] < r.y0 ? false : "look";
+  if (b[0] > r.x1 || b[2] < r.x0 || b[1] > r.y1 || b[3] < r.y0) return false;
+  return b[0] >= r.x0 && b[1] >= r.y0 && b[2] <= r.x1 && b[3] <= r.y1 ? true : "look";
 }
 
 /** A window needs every sample inside. A crossing tests each segment, so an edge passing through with no sample
