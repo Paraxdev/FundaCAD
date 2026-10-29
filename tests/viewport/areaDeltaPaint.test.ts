@@ -189,7 +189,7 @@ describe("box delta end state", () => {
     h.settle();
     expect(reads).toEqual({ faces: 0, edges: 0 });
     const end = painted(h, rig);
-    expect([end.selectOverlay.length, end.lines.length]).toEqual([40, 40]);
+    expect([end.selectOverlay?.length, end.lines.length]).toEqual([40, 40]);
     h.dispose();
   });
 
