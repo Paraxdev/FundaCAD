@@ -52,7 +52,15 @@ async function boot(os: Partial<Os> | null, stored: Record<string, string> = {})
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.doUnmock("@tauri-apps/api/window");
+  vi.doUnmock("@tauri-apps/api/core");
 });
+
+function tauriWindow(theme: string) {
+  vi.doMock("@tauri-apps/api/window", () => ({
+    getCurrentWindow: () => ({ theme: async () => theme, onThemeChanged: async () => () => {} }),
+  }));
+  vi.stubGlobal("window", { __TAURI_INTERNALS__: {} });
+}
 
 describe("systemThemeFor", () => {
   it("maps dark, light and contrast from the OS to a shipped palette", async () => {
@@ -131,6 +139,47 @@ describe("following the OS", () => {
     await vi.waitFor(() => expect(theme.resolvedTheme()).toBe("fundacad-light"));
     expect(changes).toHaveBeenCalledTimes(1);
     handler!({ payload: "dark" });
+    expect(theme.resolvedTheme()).toBe("fundacad");
+  });
+});
+
+describe("the Rust os_a11y_prefs fallback", () => {
+  it("asks once in Tauri and turns a dark OS high contrast when it says so", async () => {
+    const invoke = vi.fn(async () => ({ highContrast: true }));
+    vi.doMock("@tauri-apps/api/core", () => ({ invoke }));
+    tauriWindow("dark");
+    const { theme } = await boot({});
+    await vi.waitFor(() => expect(theme.resolvedTheme()).toBe("high-contrast-dark"));
+    expect(invoke).toHaveBeenCalledTimes(1);
+    expect(invoke).toHaveBeenCalledWith("os_a11y_prefs");
+  });
+
+  it("never turns contrast off that the media query reports", async () => {
+    const invoke = vi.fn(async () => ({ highContrast: false }));
+    vi.doMock("@tauri-apps/api/core", () => ({ invoke }));
+    tauriWindow("light");
+    const { theme } = await boot({ contrast: true });
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalled());
+    await vi.waitFor(() => expect(theme.resolvedTheme()).toBe("high-contrast-light"));
+  });
+
+  it("leaves the media query answer when the command is missing", async () => {
+    const invoke = vi.fn(async () => {
+      throw new Error("command os_a11y_prefs not found");
+    });
+    vi.doMock("@tauri-apps/api/core", () => ({ invoke }));
+    tauriWindow("dark");
+    const { theme } = await boot({});
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalled());
+    expect(theme.resolvedTheme()).toBe("fundacad");
+  });
+
+  it("is never asked outside Tauri", async () => {
+    const invoke = vi.fn(async () => ({ highContrast: true }));
+    vi.doMock("@tauri-apps/api/core", () => ({ invoke }));
+    const { theme } = await boot({});
+    await Promise.resolve();
+    expect(invoke).not.toHaveBeenCalled();
     expect(theme.resolvedTheme()).toBe("fundacad");
   });
 });

@@ -11,6 +11,8 @@ const CONTRAST = ["(prefers-contrast: more)", "(forced-colors: active)"];
 
 /** The Tauri window theme, which WebKitGTK does not always pass on to prefers-color-scheme. */
 let windowDark: boolean | null = null;
+/** The Rust os_a11y_prefs answer, for GNOME High Contrast and the like that no media query reports. */
+let nativeContrast = false;
 const listeners = new Set<() => void>();
 let watching = false;
 
@@ -27,7 +29,7 @@ function matches(query: string): boolean {
 export function osAppearance(): OsAppearance {
   return {
     dark: windowDark ?? !matches(LIGHT),
-    contrast: CONTRAST.some(matches),
+    contrast: nativeContrast || CONTRAST.some(matches),
   };
 }
 
@@ -64,13 +66,28 @@ async function watchWindowTheme() {
   }
 }
 
+async function askNative() {
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const prefs = await invoke<{ highContrast: boolean | null }>("os_a11y_prefs");
+    if (prefs?.highContrast !== true) return;
+    nativeContrast = true;
+    changed();
+  } catch {
+    /* the media queries stand */
+  }
+}
+
 /** Calls `fn` after the OS appearance changes. Listening starts with the first subscriber. */
 export function onOsAppearanceChange(fn: () => void): () => void {
   listeners.add(fn);
   if (!watching) {
     watching = true;
     if (typeof matchMedia === "function") for (const q of [LIGHT, ...CONTRAST]) watchMedia(q);
-    if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) void watchWindowTheme();
+    if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
+      void watchWindowTheme();
+      void askNative();
+    }
   }
   return () => listeners.delete(fn);
 }

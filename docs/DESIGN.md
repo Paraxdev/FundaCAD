@@ -1382,8 +1382,12 @@ in the `title`, opacity 0.45, `cursor: default` and no hover; the control
 swallows its own click and Enter. The old menu and context rows take
 `pointer-events: none` instead.
 
-Not handled yet, so do not rely on them: `prefers-contrast`, `forced-colors`,
-`prefers-reduced-transparency`, a role on the toast stack.
+`prefers-contrast` and `forced-colors` only steer the System theme to High
+Contrast (`ui/osTheme.ts`), together with the Rust `os_a11y_prefs` command,
+which asks Windows, the desktop portal or gsettings on Linux and macOS
+Increase contrast, as WebKitGTK reports no `prefers-contrast` at all. No
+stylesheet reads them yet. Not handled yet: `prefers-reduced-transparency`, a
+role on the toast stack.
 
 ## 12. Do and don't
 
