@@ -1,4 +1,5 @@
-use fundacad_lib::container::{mesh_sources, save_document, Stores};
+use fundacad_lib::container::{mesh_sources, save_document, verify_document, Stores};
+use fundacad_lib::doc_paths::{refuse_unvouched, Provenance, Vouched};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
@@ -44,5 +45,20 @@ fn a_save_takes_a_mesh_only_by_a_plain_key_inside_the_store() {
     let outside = dir.join("outside").to_string_lossy().into_owned();
     let got = mesh_sources(&meshes, vec!["good".into(), outside, "../outside".into(), "gone".into()]);
     assert_eq!(got, BTreeMap::from([("good".to_string(), meshes.join("good.bin"))]));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_verify_refuses_a_device_path_nobody_handed_over() {
+    let raw = r"\\.\NUL";
+    let want = refuse_unvouched(raw, &Vouched::default()).unwrap_err();
+    assert_eq!(verify_document(&Provenance::default(), raw).map(|_| ()), Err(want));
+}
+
+#[test]
+fn a_verify_refuses_a_folder() {
+    let dir = tmpdir("verify_dir");
+    let raw = dir.to_string_lossy().into_owned();
+    assert_eq!(verify_document(&Provenance::default(), &raw).map(|_| ()), Err(format!("{raw} is not a file")));
     let _ = std::fs::remove_dir_all(&dir);
 }

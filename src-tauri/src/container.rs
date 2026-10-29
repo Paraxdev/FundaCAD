@@ -123,6 +123,7 @@ pub fn save_document(
 #[tauri::command]
 pub async fn container_save(
     app: tauri::AppHandle,
+    held: tauri::State<'_, crate::doc_paths::Provenance>,
     path: String,
     document_json: String,
     hashes: Vec<String>,
@@ -130,7 +131,7 @@ pub async fn container_save(
     optional_hashes: Option<Vec<String>>,
     carried: Option<Vec<fundacad_format::fnda::Carried>>,
 ) -> Result<(), String> {
-    let path = crate::doc_paths::check_save(&path)?;
+    let path = held.check_save(&path)?;
     let stores = Stores { blobs: blob_dir(&app)?, meshes: mesh_dir(&app)?, sections: section_dir(&app)? };
     let app_version = app.package_info().version.to_string();
     save_document(
@@ -223,8 +224,18 @@ pub async fn container_open_bytes(
 
 /// Check a format 2 file end to end without opening it.
 #[tauri::command]
-pub async fn container_verify(path: String) -> Result<fundacad_format::fnda::RepairReport, String> {
-    fundacad_format::fnda::verify(std::path::Path::new(&path))
+pub async fn container_verify(
+    held: tauri::State<'_, crate::doc_paths::Provenance>,
+    path: String,
+) -> Result<fundacad_format::fnda::RepairReport, String> {
+    verify_document(&held, &path)
+}
+
+pub fn verify_document(
+    held: &crate::doc_paths::Provenance,
+    path: &str,
+) -> Result<fundacad_format::fnda::RepairReport, String> {
+    fundacad_format::fnda::verify(&held.check_open(path)?)
 }
 
 /// True if `path` is a container rather than a legacy plain-JSON document.

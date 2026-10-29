@@ -181,3 +181,39 @@ fn a_save_to_an_absolute_document_path_passes() {
         assert_eq!(check_save(raw.to_str().unwrap()).unwrap(), raw);
     }
 }
+
+#[test]
+fn a_save_to_a_network_path_needs_it_handed_over() {
+    let raw = "//host/share/a.funda";
+    let held = Provenance::default();
+    assert_eq!(held.check_save(raw), Err(refuse_unvouched(raw, &Vouched::default()).unwrap_err()));
+    held.vouch_all([raw]);
+    assert_eq!(held.check_save(raw), Ok(std::path::PathBuf::from(raw)));
+}
+
+#[cfg(windows)]
+#[test]
+fn a_save_to_a_windows_device_name_or_a_file_stream_is_refused() {
+    for raw in [
+        r"C:\docs\NUL.funda",
+        r"C:\docs\con.fundab",
+        r"C:\docs\Aux.neocad",
+        r"C:\docs\prn.sindri",
+        r"C:\docs\COM1.funda",
+        r"C:\docs\lpt9.funda",
+        r"C:\docs\COM¹.funda",
+        r"C:\docs\nul .funda",
+        r"C:\docs\nul.txt.funda",
+        r"C:\docs\CONIN$.funda",
+        r"C:\docs\a.cmd:x.funda",
+        r"C:\docs:x\a.funda",
+    ] {
+        assert_eq!(
+            check_save(raw),
+            Err(format!("{raw} names a Windows device or a file stream, so it was not saved."))
+        );
+    }
+    for raw in [r"C:\docs\console.funda", r"C:\docs\nullable.funda", r"C:\docs\COM10.funda", r"C:\con\a.funda"] {
+        assert_eq!(check_save(raw), Ok(std::path::PathBuf::from(raw)), "{raw}");
+    }
+}

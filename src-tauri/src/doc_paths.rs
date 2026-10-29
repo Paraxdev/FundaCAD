@@ -137,7 +137,26 @@ pub fn check_save(raw: &str) -> Result<PathBuf, String> {
     if !ours {
         return Err("FundaCAD saves documents only as .funda, .fundab, .neocad or .sindri files.".to_string());
     }
+    if cfg!(windows) && (names_a_device(path) || names_a_stream(path)) {
+        return Err(format!("{raw} names a Windows device or a file stream, so it was not saved."));
+    }
     Ok(path.to_path_buf())
+}
+
+/// Windows maps these names to a device whatever extension follows, and ignores trailing spaces before it.
+fn names_a_device(path: &Path) -> bool {
+    let name = path.file_name().map(|n| n.to_string_lossy().to_uppercase()).unwrap_or_default();
+    let stem = name.split('.').next().unwrap_or("").trim_end_matches(' ');
+    let numbered = |base: &str| {
+        stem.strip_prefix(base)
+            .is_some_and(|n| n.chars().count() == 1 && n.chars().all(|c| c.is_ascii_digit() || "¹²³".contains(c)))
+    };
+    ["CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$"].contains(&stem) || numbered("COM") || numbered("LPT")
+}
+
+/// A colon past the drive names an alternate data stream of another file.
+fn names_a_stream(path: &Path) -> bool {
+    path.components().any(|c| matches!(c, std::path::Component::Normal(n) if n.to_string_lossy().contains(':')))
 }
 
 /// The app state the open commands consult. The lock covers the string check only, so a slow network stat never
@@ -160,6 +179,11 @@ impl Provenance {
     pub fn check_open(&self, raw: &str) -> Result<PathBuf, String> {
         self.refuse_unvouched(raw)?;
         require_file(raw)
+    }
+
+    pub fn check_save(&self, raw: &str) -> Result<PathBuf, String> {
+        self.refuse_unvouched(raw)?;
+        check_save(raw)
     }
 
     pub fn stat(&self, raw: &str) -> Result<Option<DocStat>, String> {
