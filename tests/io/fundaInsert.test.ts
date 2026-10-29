@@ -156,7 +156,7 @@ describe("staleLinks", () => {
     }) as unknown as Feature;
   const known = { size: 10, mtime: 5000 };
 
-  it("compares the stored size and time with the file's", async () => {
+  it("calls a file changed only when its size differs, and a new time alone may have changed", async () => {
     const features = [
       link("same", known),
       link("bigger", known),
@@ -173,7 +173,7 @@ describe("staleLinks", () => {
       if (path.includes("refused")) return "unknown";
       return { size: 10, mtimeMs: 5000 };
     });
-    expect(res).toEqual({ changed: ["bigger", "touched"], missing: ["gone"], unknown: ["refused", "old"] });
+    expect(res).toEqual({ changed: ["bigger"], missing: ["gone"], unknown: ["touched", "refused", "old"] });
   });
 
   it("still reports a missing file for a link made before sizes were stored", async () => {

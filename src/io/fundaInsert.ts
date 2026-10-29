@@ -173,7 +173,8 @@ export async function updateFundaLink(
 }
 
 /** Linked steps whose file no longer matches the size and time stored when it was read, never reading the file.
- *  A link stored without them, or a file the stat could not tell about, is unknown until the user updates it. */
+ *  A link stored without them, a file the stat could not tell about, or a new time on the same size (a copy or a
+ *  checkout keeps the content) is unknown until the user updates it. */
 export async function staleLinks(
   features: readonly Feature[],
   stat: (path: string) => Promise<LinkStat>,
@@ -187,7 +188,8 @@ export async function staleLinks(
     const now = await stat(f.link.path);
     if (now === "missing") missing.push(f.id);
     else if (now === "unknown" || f.link.size === undefined || f.link.mtime === undefined) unknown.push(f.id);
-    else if (now.size !== f.link.size || now.mtimeMs !== f.link.mtime) changed.push(f.id);
+    else if (now.size !== f.link.size) changed.push(f.id);
+    else if (now.mtimeMs !== f.link.mtime) unknown.push(f.id);
   }
   return { changed, missing, unknown };
 }
