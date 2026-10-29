@@ -830,11 +830,6 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
             if let Some(why) = write_target::extension_refusal(&path, &[docfile::TEXT_EXT], "doc_save") {
                 return Ok(failure(why));
             }
-            if !truthy(args.get("overwrite")) {
-                if let Some(why) = write_target::overwrite_refusal(&path, &[docfile::TEXT_EXT], "doc_save") {
-                    return Ok(failure(why));
-                }
-            }
         }
         model::recompute_parameters(&mut st.doc);
         if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
@@ -859,6 +854,12 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
                     log(&format!("[mcp] could not ask the engine for {digest}: {e}"));
                     asking_failed = Some(e);
                 }
+            }
+        }
+        // Judged after the geometry has come from the engine, right before the write.
+        if !docfile::is_binary_path(&path) && !truthy(args.get("overwrite")) {
+            if let Some(why) = write_target::overwrite_refusal(&path, &[docfile::TEXT_EXT], "doc_save") {
+                return Ok(failure(why));
             }
         }
         let mut stamped = st.doc.clone();
@@ -1251,10 +1252,18 @@ note: left out of the file, because this build cannot read them and a .funda has
         }
         let what = format!("export to {}", format.to_ascii_uppercase());
         let overwrite = truthy(args.get("overwrite"));
-        let guard = |to: &Path| if overwrite { None } else { write_target::overwrite_refusal(to, exts, &what) };
+        let guard = |to: &Path| {
+            write_target::extension_refusal(to, exts, &what).or_else(|| {
+                if overwrite {
+                    None
+                } else {
+                    write_target::overwrite_refusal(to, exts, &what)
+                }
+            })
+        };
         // A separate export's path names a folder.
         if !truthy(args.get("separate")) {
-            if let Some(why) = write_target::extension_refusal(&path, exts, &what).or_else(|| guard(&path)) {
+            if let Some(why) = guard(&path) {
                 return Ok(failure(why));
             }
         }
@@ -1420,6 +1429,11 @@ note: left out of the file, because this build cannot read them and a .funda has
                 }
             }
         } else {
+            // Judged again, since the engine may have taken minutes.
+            if let Some(why) = guard(&path) {
+                discard();
+                return Ok(failure(why));
+            }
             if let Err(e) = std::fs::rename(&tmp_path, &path) {
                 discard();
                 return Ok(failure(format!("Could not write {}: {e}", path.display())));
