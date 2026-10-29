@@ -89,17 +89,25 @@ export function layoutStack(
   });
 }
 
-// `min` holds the inline min-width a panel had before place() capped it to its column.
-const open: {
+// `min` holds the inline min-width a panel had before place() capped it to its column, `cap` the one place() set.
+interface Open {
   id: string;
   el: HTMLElement;
   used: number;
   min?: string | undefined;
+  cap?: string | undefined;
   onClick: (e: MouseEvent) => void;
-}[] = [];
+}
+const open: Open[] = [];
 let observer: ResizeObserver | null = null;
 let frame = 0;
 let uses = 0;
+
+/** Gives a capped panel its inline min-width back, unless another writer replaced the cap since. */
+function uncap(p: Open) {
+  if (p.min !== undefined && p.el.style.minWidth === p.cap) p.el.style.minWidth = p.min;
+  p.min = p.cap = undefined;
+}
 
 function natural(el: HTMLElement): number {
   return el.scrollHeight + (el.offsetHeight - el.clientHeight);
@@ -175,8 +183,7 @@ function place() {
   for (const p of open) {
     p.el.style.maxHeight = "";
     p.el.style.maxWidth = "";
-    if (p.min !== undefined) p.el.style.minWidth = p.min;
-    p.min = undefined;
+    uncap(p);
   }
   const layer = document.getElementById("float-layer");
   const area = (layer ?? document.body).getBoundingClientRect();
@@ -194,6 +201,7 @@ function place() {
       if (least[i]! > room) {
         p.min = p.el.style.minWidth;
         p.el.style.minWidth = `${room}px`;
+        p.cap = p.el.style.minWidth;
       }
       if (p.el.offsetWidth > room) p.el.style.maxWidth = `${room}px`;
     }
@@ -253,8 +261,9 @@ export const panelStack = {
   remove(id: string) {
     const i = open.findIndex((p) => p.id === id);
     if (i < 0) return;
-    const { el, min, onClick } = open[i]!;
-    if (min !== undefined) el.style.minWidth = min;
+    const entry = open[i]!;
+    const { el, onClick } = entry;
+    uncap(entry);
     observer?.unobserve(el);
     el.removeEventListener("click", onClick);
     el.removeAttribute("data-folded");
