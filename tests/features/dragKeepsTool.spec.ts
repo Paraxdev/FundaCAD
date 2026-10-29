@@ -857,6 +857,60 @@ describe("Joint", () => {
     click(t.canvas, 200);
     expect(t.updated).toEqual([["j1", { offset: 2, angle: undefined }]]);
   });
+
+  describe("an offset or angle let go of but not entered", () => {
+    const saving = (tool: JointTool) => ({ store: { dirty: false }, tools: { joint: tool } }) as unknown as SaveEngine;
+
+    it("is written once by a save, as Enter would", () => {
+      const t = setup();
+      dragHandle(t.canvas, 0, 20);
+      expect(needsSave(saving(t.tool))).toBe(true);
+      settleHeldEdit(saving(t.tool));
+      settleHeldEdit(saving(t.tool));
+      expect(t.updated).toEqual([["j1", { offset: 2, angle: undefined }]]);
+      expect(t.tool.active).toBe(false);
+      expect(needsSave(saving(t.tool))).toBe(false);
+    });
+
+    it("is left alone by a save while the hand still holds it", () => {
+      const t = setup();
+      flushFrame();
+      pointer(t.canvas, "pointerdown", 0);
+      pointer(t.canvas, "pointermove", 20);
+      settleHeldEdit(saving(t.tool));
+      expect(t.updated).toEqual([]);
+      expect(t.tool.active).toBe(true);
+      pointer(t.canvas, "pointerup", 20);
+      settleHeldEdit(saving(t.tool));
+      expect(t.updated).toEqual([["j1", { offset: 2, angle: undefined }]]);
+    });
+
+    it("tells its watchers, and Esc still cancels it and clears the mark", () => {
+      const t = setup();
+      const seen = vi.fn();
+      t.tool.onHeldChange(seen);
+      dragHandle(t.canvas, 0, 20);
+      expect(seen).toHaveBeenCalledTimes(1);
+      expect(t.tool.pending).toBe(true);
+      escape();
+      expect(t.tool.active).toBe(false);
+      expect(t.updated).toEqual([]);
+      expect(seen).toHaveBeenCalledTimes(2);
+      expect(needsSave(saving(t.tool))).toBe(false);
+    });
+
+    it("stays quiet on the value it opened with, and a save leaves the tool open", () => {
+      const t = setup();
+      const seen = vi.fn();
+      t.tool.onHeldChange(seen);
+      flushFrame();
+      expect(needsSave(saving(t.tool))).toBe(false);
+      settleHeldEdit(saving(t.tool));
+      expect(t.updated).toEqual([]);
+      expect(t.tool.active).toBe(true);
+      expect(seen).not.toHaveBeenCalled();
+    });
+  });
 });
 
 describe("Mechanism", () => {
@@ -908,6 +962,61 @@ describe("Mechanism", () => {
     t.away();
     click(t.canvas, 200);
     expect(t.updated).toEqual([["m1", { offset: 3 }]]);
+  });
+
+  describe("a drive value let go of but not entered", () => {
+    const saving = (tool: MechanismTool) =>
+      ({ store: { dirty: false }, tools: { mechanism: tool } }) as unknown as SaveEngine;
+
+    it("is written once by a save, as Enter would", () => {
+      const t = setup();
+      dragHandle(t.canvas, 0, 30);
+      expect(needsSave(saving(t.tool))).toBe(true);
+      settleHeldEdit(saving(t.tool));
+      settleHeldEdit(saving(t.tool));
+      expect(t.updated).toEqual([["m1", { offset: 3 }]]);
+      expect(t.tool.active).toBe(false);
+      expect(needsSave(saving(t.tool))).toBe(false);
+    });
+
+    it("is left alone by a save while the hand still holds it", () => {
+      const t = setup();
+      flushFrame();
+      pointer(t.canvas, "pointerdown", 0);
+      pointer(t.canvas, "pointermove", 30);
+      settleHeldEdit(saving(t.tool));
+      expect(t.updated).toEqual([]);
+      expect(t.tool.active).toBe(true);
+      pointer(t.canvas, "pointerup", 30);
+      settleHeldEdit(saving(t.tool));
+      expect(t.updated).toEqual([["m1", { offset: 3 }]]);
+    });
+
+    it("tells its watchers, and Esc still cancels it and clears the mark", () => {
+      const t = setup();
+      const seen = vi.fn();
+      t.tool.onHeldChange(seen);
+      dragHandle(t.canvas, 0, 30);
+      expect(seen).toHaveBeenCalledTimes(1);
+      expect(t.tool.pending).toBe(true);
+      escape();
+      expect(t.tool.active).toBe(false);
+      expect(t.updated).toEqual([]);
+      expect(seen).toHaveBeenCalledTimes(2);
+      expect(needsSave(saving(t.tool))).toBe(false);
+    });
+
+    it("stays quiet on the value it opened with, and a save leaves the tool open", () => {
+      const t = setup();
+      const seen = vi.fn();
+      t.tool.onHeldChange(seen);
+      flushFrame();
+      expect(needsSave(saving(t.tool))).toBe(false);
+      settleHeldEdit(saving(t.tool));
+      expect(t.updated).toEqual([]);
+      expect(t.tool.active).toBe(true);
+      expect(seen).not.toHaveBeenCalled();
+    });
   });
 });
 
