@@ -1346,6 +1346,30 @@ describe("Items tree by keys", () => {
     w.unmount();
   });
 
+  it("gives a plugin section that draws nothing no row and no Tab stop, and a row once it draws", async () => {
+    const shown = ref(false);
+    const Maybe = { setup: () => ({ shown }), template: `<div v-if="shown" class="marker">Contributed</div>` };
+    contribute("p", { browserSections: [{ key: "referenceImages", component: Maybe }] });
+    const fake = makeEngine({ parameters: {}, features: [] }, [{ id: "b1", name: "Body1" }]);
+    const w = await open(fake);
+    const settle = () => new Promise((r) => setTimeout(r, 0)).then(() => nextTick());
+    const state = () => {
+      const tops = w.findAll('[role="treeitem"][aria-level="1"]');
+      return [
+        w.findAll('[aria-label="Reference images"]').length,
+        w.findAll("[data-tree-item]").filter((r) => r.attributes("tabindex") === "0").length,
+        folderNamed(w, "Bodies")!.attributes("aria-setsize") === String(tops.length),
+      ];
+    };
+    await settle();
+    expect(state()).toEqual([0, 1, true]);
+    shown.value = true;
+    await settle();
+    await settle();
+    expect([...state(), w.find(".marker").exists()]).toEqual([1, 1, true, true]);
+    w.unmount();
+  });
+
   it("rests the Tab stop on the selected row and says a suppressed row is suppressed", async () => {
     const fake = makeEngine({ parameters: {}, features: [sketch("s1"), sketch("s2")] }, []);
     fake.suppressed.add("s2");

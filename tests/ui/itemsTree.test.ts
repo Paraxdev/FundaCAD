@@ -31,6 +31,18 @@ describe("itemsTreeMeta", () => {
     ]);
     expect(meta[1]).toEqual({ key: "f:Bodies:empty", level: 2, disabled: true });
   });
+
+  it("leaves out a plugin section that draws nothing, so it takes no place in the count", () => {
+    const meta = itemsTreeMeta([
+      { kind: "plugin", k: "x:p:a", label: "A", empty: true },
+      { kind: "plugin", k: "x:p:b", label: "B" },
+      { kind: "folder", k: "f:Bodies", depth: 0, collapsed: true, label: "Bodies" },
+    ]);
+    expect(meta).toEqual([
+      { key: "x:p:b", level: 1, label: "B" },
+      { key: "f:Bodies", level: 1, expandable: true, expanded: false, label: "Bodies" },
+    ]);
+  });
 });
 
 describe("sectionName", () => {

@@ -12,6 +12,7 @@ import TreeFolder from "./TreeFolder.vue";
 import TreeRow from "./TreeRow.vue";
 import Tree from "../ui/Tree.vue";
 import TreeItem from "../ui/TreeItem.vue";
+import PluginSectionItem from "./PluginSectionItem.vue";
 import { itemsMove, itemsTreeMeta, sectionName } from "../../ui/itemsTree";
 import { announce } from "../../ui/announce";
 import IconButton from "../ui/IconButton.vue";
@@ -871,7 +872,19 @@ const nodes = useDocValue((doc): TreeNode[] => {
   return out;
 });
 
-const treeItems = computed(() => itemsTreeMeta(nodes.value));
+const emptySections = ref<ReadonlySet<string>>(new Set());
+function setSectionEmpty(k: string, empty: boolean) {
+  if (emptySections.value.has(k) === empty) return;
+  const next = new Set(emptySections.value);
+  if (empty) next.add(k);
+  else next.delete(k);
+  emptySections.value = next;
+}
+const treeItems = computed(() =>
+  itemsTreeMeta(
+    nodes.value.map((n) => (n.kind === "plugin" && emptySections.value.has(n.k) ? { ...n, empty: true } : n)),
+  ),
+);
 
 function reorderRow(key: string, delta: -1 | 1) {
   const list = nodes.value;
@@ -1026,10 +1039,15 @@ onUnmounted(() => root.value?.removeEventListener("wheel", onWheel));
           >
 
           <!-- A section some plugin added. It draws its own rows, decides its own visibility and is unmounted when
-               its capability stops. A tree may own only rows, so the section sits in a row named by it. -->
-          <TreeItem v-else :item-key="n.k" :label="n.label" :selectable="false"
-            ><component :is="n.component"
-          /></TreeItem>
+               its capability stops. A tree may own only rows, so the section sits in a row named by it, and in none
+               while it draws nothing. -->
+          <PluginSectionItem
+            v-else
+            :item-key="n.k"
+            :label="n.label"
+            :component="n.component"
+            @empty="setSectionEmpty(n.k, $event)"
+          />
         </template>
       </Tree>
     </div>

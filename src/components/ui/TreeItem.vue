@@ -13,15 +13,31 @@ const props = withDefaults(
       describedby?: string | undefined;
       as?: string;
       actions?: TreeItemActions | undefined;
+      /** True while the row has nothing to show: its content stays mounted, hidden, and the row leaves the tree. The
+       *  Tree's items must leave its key out too. */
+      absent?: boolean;
     } & NameProps
   >(),
-  { selected: false, selectable: true, describedby: undefined, as: "div", actions: undefined },
+  { selected: false, selectable: true, describedby: undefined, as: "div", actions: undefined, absent: false },
 );
 
 const tree = inject(TREE, null);
 // A row names itself by its label element, its text content would also read the eye and caret names.
 const name = useName(props, "TreeItem");
 const s = computed(() => tree?.slot(props.itemKey));
+const row = computed(() => ({
+  role: "treeitem",
+  "data-tree-item": "",
+  ...name.value,
+  tabindex: tree?.tabindex(props.itemKey),
+  "aria-level": s.value?.level,
+  "aria-posinset": s.value?.posinset,
+  "aria-setsize": s.value?.setsize,
+  "aria-selected": props.selectable ? (props.selected ? "true" : "false") : undefined,
+  "aria-expanded": s.value?.expandable ? (s.value.expanded ? "true" : "false") : undefined,
+  "aria-disabled": s.value?.disabled ? "true" : undefined,
+  "aria-describedby": props.describedby,
+}));
 // Outside a Tree a treeitem would be an orphan role, so the row draws as a plain element there.
 
 watch(
@@ -34,22 +50,7 @@ watch(
 </script>
 
 <template>
-  <component
-    :is="as"
-    v-if="tree"
-    role="treeitem"
-    data-tree-item
-    v-bind="name"
-    :tabindex="tree.tabindex(itemKey)"
-    :aria-level="s?.level"
-    :aria-posinset="s?.posinset"
-    :aria-setsize="s?.setsize"
-    :aria-selected="selectable ? (selected ? 'true' : 'false') : undefined"
-    :aria-expanded="s?.expandable ? (s.expanded ? 'true' : 'false') : undefined"
-    :aria-disabled="s?.disabled ? 'true' : undefined"
-    :aria-describedby="describedby"
-    @focus="tree.onItemFocus(itemKey)"
-  >
+  <component :is="as" v-if="tree" v-bind="absent ? { hidden: true } : row" @focus="absent || tree.onItemFocus(itemKey)">
     <slot />
   </component>
   <component :is="as" v-else><slot /></component>
