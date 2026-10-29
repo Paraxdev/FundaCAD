@@ -7,6 +7,8 @@ const KEY = "fundacad.plugins";
 
 /** A set, not a map of booleans: "on" is the absence of an entry, so it has only one representation. */
 let off: ReadonlySet<string> = read();
+/** The set the engine last took. A switch it was not told about is undone back to this one. */
+let told: ReadonlySet<string> = off;
 const listeners = new Set<() => void>();
 let synced: Promise<void> = Promise.resolve();
 
@@ -17,6 +19,7 @@ function tellEngine(set: ReadonlySet<string>): Promise<void> {
   const sent = synced.then(async () => {
     const { invoke } = await import("@tauri-apps/api/core");
     await invoke("plugin_set_disabled", { ids });
+    told = set;
   });
   synced = sent.catch(() => {});
   return sent;
@@ -56,23 +59,30 @@ export function disabledPlugins(): ReadonlySet<string> {
   return off;
 }
 
-/** Takes effect in this window at once. Rejects when the engine could not be told, which keeps building with the
- *  last set written until a later change or the next start writes it again. */
-export function setPluginEnabled(id: string, value: boolean): Promise<void> {
-  if (typeof value !== "boolean" || pluginEnabled(id) === value) return Promise.resolve();
-  // A fresh set, so a subscriber can compare identity with disabledPlugins() to decide to redraw.
-  const next = new Set(off);
-  if (value) next.delete(id);
-  else next.add(id);
+function apply(next: ReadonlySet<string>) {
   off = next;
   try {
     localStorage.setItem(KEY, JSON.stringify([...next].sort()));
   } catch {
     /* private mode / no storage: the choice just does not survive the session */
   }
-  const told = tellEngine(next);
   for (const fn of listeners) fn();
-  return told;
+}
+
+/** Takes effect in this window at once. Rejects when the engine could not be told, and unless a later switch is on its
+ *  way, goes back to the last set the engine took, so the window never shows a plugin off that the engine still runs. */
+export function setPluginEnabled(id: string, value: boolean): Promise<void> {
+  if (typeof value !== "boolean" || pluginEnabled(id) === value) return Promise.resolve();
+  // A fresh set, so a subscriber can compare identity with disabledPlugins() to decide to redraw.
+  const next = new Set(off);
+  if (value) next.delete(id);
+  else next.add(id);
+  const sent = tellEngine(next).catch((e: unknown) => {
+    if (off === next) apply(told);
+    throw e;
+  });
+  apply(next);
+  return sent;
 }
 
 export function onPluginChange(fn: () => void): () => void {

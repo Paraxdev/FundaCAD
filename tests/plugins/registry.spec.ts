@@ -21,11 +21,15 @@ const KEY = "fundacad.plugins";
 const ID = "FundaCAD.Printing";
 const OTHER = "FundaCAD.SpaceMouse";
 
-const host = vi.hoisted(() => ({ invoked: [] as { cmd: string; args: unknown }[], fail: "" }));
+const host = vi.hoisted(() => ({
+  invoked: [] as { cmd: string; args: unknown }[],
+  fail: "" as string | ((ids: string[]) => string),
+}));
 vi.mock("@tauri-apps/api/core", () => ({
-  invoke: async (cmd: string, args: unknown) => {
+  invoke: async (cmd: string, args: { ids: string[] }) => {
     host.invoked.push({ cmd, args });
-    if (host.fail) throw new Error(host.fail);
+    const why = typeof host.fail === "function" ? host.fail(args.ids) : host.fail;
+    if (why) throw new Error(why);
   },
 }));
 
@@ -186,15 +190,30 @@ describe("what the engine is told", () => {
     ]);
   });
 
-  it("hands a failed write back to the caller, and the next change sends the whole set again", async () => {
+  it("undoes a switch the engine was not told about, so the window and the engine run the same plugins", async () => {
     win.__TAURI_INTERNALS__ = {};
     const m = await load();
+    const seen: boolean[] = [];
+    m.onPluginChange(() => seen.push(m.pluginEnabled(ID)));
     host.fail = "disk full";
     await expect(m.setPluginEnabled(ID, false)).rejects.toThrow("disk full");
-    expect(m.pluginEnabled(ID)).toBe(false);
+    expect([m.pluginEnabled(ID), localStorage.getItem(KEY), seen]).toEqual([true, "[]", [false, true]]);
     host.fail = "";
     await expect(m.setPluginEnabled(OTHER, false)).resolves.toBeUndefined();
-    expect(host.invoked.at(-1)).toEqual({ cmd: "plugin_set_disabled", args: { ids: [ID, OTHER] } });
+    expect(host.invoked.at(-1)).toEqual({ cmd: "plugin_set_disabled", args: { ids: [OTHER] } });
+  });
+
+  it("goes back to the last set the engine took when two switches are in flight", async () => {
+    win.__TAURI_INTERNALS__ = {};
+    const after = async (failing: number) => {
+      const m = await load();
+      host.fail = (ids) => (ids.length === failing ? "disk full" : "");
+      const sent = [m.setPluginEnabled(ID, false), m.setPluginEnabled(OTHER, false)];
+      const settled = await Promise.allSettled(sent);
+      return [settled.map((r) => r.status), m.pluginEnabled(ID), m.pluginEnabled(OTHER)];
+    };
+    expect(await after(1)).toEqual([["rejected", "fulfilled"], false, false]);
+    expect(await after(2)).toEqual([["fulfilled", "rejected"], false, true]);
   });
 
   it("is not called in a plain browser session, which has no engine of its own", async () => {

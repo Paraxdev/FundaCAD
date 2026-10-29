@@ -60,7 +60,7 @@ onUnmounted(() => offPlugins?.());
 
 function toggle(id: string, run: boolean, name: string) {
   setPluginEnabled(id, run).catch((err: unknown) =>
-    toast(`Could not tell the geometry engine that ${name} is switched ${run ? "on" : "off"}. ${String(err)}`, {
+    toast(`Could not switch ${name} ${run ? "on" : "off"}, the geometry engine could not be told. ${String(err)}`, {
       kind: "error",
     }),
   );
