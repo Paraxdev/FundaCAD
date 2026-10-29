@@ -69,6 +69,19 @@ describe("walkControls", () => {
     expect([box.ref, box.label]).toEqual(["choice:Box", "Box"]);
   });
 
+  it("names a control by its sr-only text only when nothing visible names it", () => {
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      '<div class="choice-backdrop"><button class="choice-btn"><span class="sr-only">Close</span></button>' +
+        '<button class="choice-btn"><span>Keep</span><span class="sr-only">, unsaved</span></button></div>',
+    );
+    const choices = walkControls(document, { rect }).controls.filter((c) => c.ref.startsWith("choice:"));
+    expect(choices.map((c) => [c.ref, c.label])).toEqual([
+      ["choice:Close", "Close"],
+      ["choice:Keep", "Keep"],
+    ]);
+  });
+
   it("names a ConfirmDialog choice and its footer buttons as choices too", () => {
     document.body.insertAdjacentHTML(
       "beforeend",

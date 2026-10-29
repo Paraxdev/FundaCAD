@@ -69,22 +69,26 @@ const CONTROL = [
 ].join(",");
 
 const TEXT_ONLY = "#docname, #prompt, [data-testid=selection-readout]";
-const LABEL_NOISE =
-  ".menu-shortcut, .ctx-key, .ui-menu-keys, .cmdk-key, .menu-check, .ui-menu-check, .dirty-mark, .sr-only, .t-caret, .tree-count, .choice-btn > small, .ui-confirm-choice > .ui-confirm-hint";
+const HINT_NOISE =
+  ".menu-shortcut, .ctx-key, .ui-menu-keys, .cmdk-key, .menu-check, .ui-menu-check, .dirty-mark, .t-caret, .tree-count, .choice-btn > small, .ui-confirm-choice > .ui-confirm-hint";
+const LABEL_NOISE = `${HINT_NOISE}, .sr-only`;
 const MAX_LABEL = 60;
 
 const realRect = (el: Element): Box => el.getBoundingClientRect();
 
 /** Text a person reads on the element, without key hints and markers. */
-export function visibleText(el: Element): string {
+export function visibleText(el: Element, noise = LABEL_NOISE): string {
   let out = "";
   const walk = (n: Node) => {
     if (n.nodeType === 3) out += n.textContent ?? "";
-    else if (n instanceof Element && !n.matches(LABEL_NOISE)) n.childNodes.forEach(walk);
+    else if (n instanceof Element && !n.matches(noise)) n.childNodes.forEach(walk);
   };
   walk(el);
   return out.replace(/\s+/g, " ").trim();
 }
+
+// Text only a screen reader hears names a control when nothing on screen does.
+const readText = (el: Element): string => visibleText(el) || visibleText(el, HINT_NOISE);
 
 function clip(s: string): string {
   return s.length > MAX_LABEL ? `${s.slice(0, MAX_LABEL - 3)}...` : s;
@@ -104,10 +108,10 @@ export function labelOf(el: HTMLElement): string {
     const p = el.getAttribute("placeholder");
     if (p) return clip(p);
     const lab = el.closest("label") ?? el.closest(".param-row")?.querySelector("label");
-    if (lab) return clip(visibleText(lab));
+    if (lab) return clip(readText(lab));
     return clip(el.getAttribute("title") ?? "");
   }
-  const text = visibleText(el);
+  const text = readText(el);
   return clip(text || (el.getAttribute("title") ?? "").trim());
 }
 
