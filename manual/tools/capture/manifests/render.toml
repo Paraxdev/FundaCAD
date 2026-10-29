@@ -1,5 +1,7 @@
 # Pictures of the Render pages. An entry with stub = true still needs its steps and crop,
 # its show line says what the picture must show.
+# The Print rail button shows the icon of whichever print plugin started first, so the window shots restart two of
+# them in a fixed order after all three are up, which leaves the printer icon on it.
 
 [[shot]]
 file = "manual/docs/img/render-material-sliders.png"
@@ -42,7 +44,8 @@ steps = [
   { open = "example:Wall bracket" },
   { wait = 800 },
   { panel = "history", open = false },
-  { panel = "items", open = true },
+  { panel = "items", open = false },
+  { evaluate = "async () => { const c = await import('/src/plugins/contrib.ts'); const r = await import('/src/plugins/registry.ts'); const has = (a) => c.contributedRibbon().some((g) => g.items.some((i) => i.action === a)); const until = async (ok) => { for (let i = 0; i < 100 && !ok(); i++) await new Promise((f) => setTimeout(f, 100)); }; await until(() => ['print-export', 'layer-lines', 'print-bed-fit-check'].every(has)); for (const [id, a] of [['FundaCAD.PrintLook', 'layer-lines'], ['FundaCAD.PrintToolbox', 'print-bed-fit-check']]) { r.setPluginEnabled(id, false); await until(() => !has(a)); r.setPluginEnabled(id, true); await until(() => has(a)); } return c.contributedRibbon().map((g) => g.items[0].action); }" },
   { click_css = '[data-workspace="render"]' },
   { wait = 600 },
   { click_css = '#renderdock [data-tab="camera"]' },
@@ -50,7 +53,7 @@ steps = [
 ]
 show = "The Render workspace on its Camera tab with the Field of view slider."
 alt = "The Camera tab of the Render workspace with the Field of view slider"
-uses = ["manual/docs/render/environment.md:5"]
+uses = ["manual/docs/render/environment.md:49"]
 
 [[shot]]
 file = "manual/docs/img/render-materials.png"
@@ -62,6 +65,7 @@ pause = 1600
 steps = [
   { open = "example:Capsule holder" },
   { wait = 800 },
+  { evaluate = "async () => { const c = await import('/src/plugins/contrib.ts'); const r = await import('/src/plugins/registry.ts'); const has = (a) => c.contributedRibbon().some((g) => g.items.some((i) => i.action === a)); const until = async (ok) => { for (let i = 0; i < 100 && !ok(); i++) await new Promise((f) => setTimeout(f, 100)); }; await until(() => ['print-export', 'layer-lines', 'print-bed-fit-check'].every(has)); for (const [id, a] of [['FundaCAD.PrintLook', 'layer-lines'], ['FundaCAD.PrintToolbox', 'print-bed-fit-check']]) { r.setPluginEnabled(id, false); await until(() => !has(a)); r.setPluginEnabled(id, true); await until(() => has(a)); } return c.contributedRibbon().map((g) => g.items[0].action); }" },
   { panel = "history", open = false },
   { panel = "items", open = false },
   { evaluate = "() => { const s = window.store; const ids = s.build.result.bodies.map((b) => b.id); s.setBodiesMaterial([ids[0]], 'm-carpaint'); s.setBodiesMaterial(ids.slice(1), 'm-chrome'); return ids; }" },
@@ -87,6 +91,7 @@ pause = 1600
 steps = [
   { open = "example:Wall bracket" },
   { wait = 800 },
+  { evaluate = "async () => { const c = await import('/src/plugins/contrib.ts'); const r = await import('/src/plugins/registry.ts'); const has = (a) => c.contributedRibbon().some((g) => g.items.some((i) => i.action === a)); const until = async (ok) => { for (let i = 0; i < 100 && !ok(); i++) await new Promise((f) => setTimeout(f, 100)); }; await until(() => ['print-export', 'layer-lines', 'print-bed-fit-check'].every(has)); for (const [id, a] of [['FundaCAD.PrintLook', 'layer-lines'], ['FundaCAD.PrintToolbox', 'print-bed-fit-check']]) { r.setPluginEnabled(id, false); await until(() => !has(a)); r.setPluginEnabled(id, true); await until(() => has(a)); } return c.contributedRibbon().map((g) => g.items[0].action); }" },
   { panel = "history", open = false },
   { panel = "items", open = false },
   { evaluate = "() => { const s = window.store; s.setBodiesMaterial(s.build.result.bodies.map((b) => b.id), 'm-steel'); }" },
