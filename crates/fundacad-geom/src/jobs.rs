@@ -169,8 +169,8 @@ mod tests {
             panic!("expected a mesh result");
         };
         assert_eq!(m.bodies.len(), 3);
-        // 3 features, the two phase changes around meshing, the meshing start and 3 bodies
-        assert_eq!(ctx.progress.beats(), 9, "a beat per feature start, phase change and meshed body");
+        // 3 features, the two phase changes around meshing, the meshing start, 3 bodies and their 18 faces
+        assert_eq!(ctx.progress.beats(), 27, "a beat per feature start, phase change, meshed body and face");
     }
 
     /// The field report's fillet: three edges at a corner, a radius the kernel's filleter refuses, so it
