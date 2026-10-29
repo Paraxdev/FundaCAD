@@ -22,8 +22,8 @@ function rowTitle(r: RelationRow): string {
 
 <template>
   <!-- `.hidden` rather than v-if, so the panel keeps its DOM and CSS transition between sketches. -->
-  <aside id="palette" class="palette" :class="{ hidden: !palette.visible }">
-    <div class="palette-title">SKETCH PALETTE</div>
+  <aside id="palette" class="palette" :class="{ hidden: !palette.visible }" aria-labelledby="palette-heading">
+    <h2 id="palette-heading" class="palette-title">Sketch palette</h2>
     <div class="palette-section">Options</div>
     <Button block class="palette-btn" tip="Square the view to the sketch plane" @click="palette.lookAt()"
       >Look At</Button

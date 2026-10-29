@@ -13,8 +13,8 @@
     - radio "Render"
 - main "Model":
   - heading [level=1]
-  - complementary:
-    - text: Items
+  - complementary "Items":
+    - heading "Items" [level=2]
   - navigation "Tools":
     - button /^Search/
     - button /^Sketch/
