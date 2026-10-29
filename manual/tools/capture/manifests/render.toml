@@ -37,7 +37,22 @@ file = "manual/docs/img/render-materials.png"
 size = [1600, 1000]
 theme = "fundacad"
 crop = "window"
-stub = true
+park = [760, 980]
+pause = 1600
+steps = [
+  { open = "example:Capsule holder" },
+  { wait = 800 },
+  { panel = "history", open = false },
+  { panel = "items", open = false },
+  { evaluate = "() => { const s = window.store; const ids = s.build.result.bodies.map((b) => b.id); s.setBodiesMaterial([ids[0]], 'm-carpaint'); s.setBodiesMaterial(ids.slice(1), 'm-chrome'); return ids; }" },
+  { wait = 600 },
+  { click_css = '[data-workspace="render"]' },
+  { wait = 600 },
+  { click_css = '#renderdock [data-tab="material"]' },
+  { wait = 600 },
+  { evaluate = "() => window.viewport.resetCamera(true)" },
+  { wait = 800 },
+]
 show = "A part with several materials in the Render workspace, 1600x1000. Also copied to assets/readme for Flathub."
 alt = "A part with several materials in the Render workspace"
 uses = ["manual/docs/render/materials.md:5"]
