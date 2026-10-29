@@ -3,27 +3,29 @@
 ## What's new since the last beta
 
 **Security**
-- Opening a .funda file or installing a plugin is safer, a file that tries to hide part of its content is refused.
-- Updated dependencies to newer versions to fix vulnerabilities.
-
-**Big models**
-- A big STEP assembly with broken parts is now repaired and opens.
-- Box select on a huge model follows the pointer smoothly.
-- A fillet or chamfer on thousands of edges opens much faster, and a very large one asks first.
-
-**Modeling**
-- In the value box, Cancel no longer applies the tool, and a refused value says why.
-- On a narrow window, Parameters and Stress stay open beside the side panel.
+- Opening a .funda file is safer, damaged or crafted geometry inside it is refused instead of read.
+- AI assistants can save only .funda files and export only the format you asked for, and never into folders that start programs.
+- A document no longer opens the files it links to by itself, and a network link opens only once you picked it.
+- Only FundaCAD's own plugins are shown as official, and that label can no longer be faked.
+- Release builds are harder to tamper with.
 
 **Accessibility**
-- Screen readers hear prompts, selections, build results, errors, saves and exports.
-- Every control has its own name, and History and the tree say in words when a step failed or is turned off.
-- Dialogs keep the keyboard inside and give focus back when they close.
-- New settings in Preferences, Accessibility: Animations, Announcements and a Screen reader preset.
+- The tree, toolbars, pickers, lists and the command palette all work by keyboard.
+- F6 moves between the main parts of the window, and screen readers can jump between them.
+- Shortcuts can be changed, and they no longer fire while you type.
+- Text and controls stay readable in every theme, and controls are big enough to hit easily.
 
-**AI assistants and help**
-- AI assistants read big models with far fewer tokens.
-- The manual matches the app again, with shorter pages and newer screenshots.
+**Modeling**
+- The origin planes start at the origin and line up with the axis arrows.
+- The arrow on a drop-down turns down when the list opens, instead of sliding away.
+
+**Help**
+- The manual has a beta and a dev version, with a switch on every page, and its lists are numbered.
+
+**After you update**
+- Plugins that start other programs, such as Printing, ask for your OK once more.
+- Links in older documents show as "may have changed" until you press Update once.
+- A document opened from a .json file is saved with Save As.
 
 ## Known limits
 
