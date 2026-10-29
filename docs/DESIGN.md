@@ -1020,7 +1020,8 @@ defineEmits<{ close: [] }>();
   and `right` under the view cube and clear of the right cards, and a `max-width` that
   keeps a wide panel clear of the rail, again whenever a panel, a card or `#float-layer`
   resizes. An open panel stays open across the Model and Render switch, as every
-  inspect panel does, narrowing to fit the smaller stage.
+  inspect panel does, narrowing to fit the smaller stage, so a row of buttons in a
+  panel wraps rather than clips.
   The shell is `min-width: 180px`, `padding: var(--s-4)`, `font-size: 12px`.
 
 | Class | Recipe |

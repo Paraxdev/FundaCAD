@@ -5,7 +5,8 @@
 //      covers the Theme select's centre (CONTROL, or the check proves nothing).
 //   2. The point there lands in the select, not the panel, and a click opens
 //      its list; at the old z 1500 the same point landed in the panel.
-//   3. In Render the panel stays open and clear of the view modes group.
+//   3. In Render the panel stays open, clear of the view controls and the tool
+//      rail, narrowed to the span between them when it would not fit.
 //
 // Usage (from the repo root, with vite + engine running):
 //   SC_TOKEN=<engine token> SC_CHROME=<chrome.exe> [SC_URL=http://localhost:5173/] \
@@ -152,6 +153,47 @@ const check = (name, ok, detail) => {
   );
   const over = groups.filter((g) => meets(inRender, g));
   check("and clear of every view control group", over.length === 0, `${over.length} of ${groups.length} meet it`);
+
+  // The rail's buttons and groups rather than the rail, whose box runs the full height at its widest label.
+  const railHits = () =>
+    page.evaluate(() => {
+      const p = document.querySelector(".measure-panel.stress-panel").getBoundingClientRect();
+      const rail = [
+        ...document.querySelectorAll("#float-layer .tool-rail .rail-btn, #float-layer .tool-rail .rail-group"),
+      ];
+      const hit = rail.filter((e) => {
+        const r = e.getBoundingClientRect();
+        return p.left < r.right && r.left < p.right && p.top < r.bottom && r.top < p.bottom;
+      });
+      return { hit: hit.length, of: rail.length, left: Math.round(p.left), width: Math.round(p.width) };
+    });
+  const railNow = await railHits();
+  check("CONTROL: the tool rail is there", railNow.of > 0, `${railNow.of} buttons and groups`);
+  check("the panel is clear of the tool rail", railNow.hit === 0, JSON.stringify(railNow));
+  const unclamped = await page.evaluate(() => {
+    const p = document.querySelector(".measure-panel.stress-panel");
+    const kept = p.style.maxWidth;
+    p.style.maxWidth = "";
+    const width = Math.round(p.getBoundingClientRect().width);
+    p.style.maxWidth = kept;
+    return width;
+  });
+  check(
+    "CONTROL: without its max-width the panel is wider than the span it gets",
+    unclamped > railNow.width,
+    `${unclamped} against ${railNow.width}`,
+  );
+  // Any box in the panel that clips or scrolls sideways, leaving out text that ends in an ellipsis on purpose.
+  const spill = await page.evaluate(() => {
+    const p = document.querySelector(".measure-panel.stress-panel");
+    return [p, ...p.querySelectorAll("*")]
+      .filter((e) => {
+        const cs = getComputedStyle(e);
+        return cs.overflowX !== "visible" && cs.textOverflow !== "ellipsis" && e.scrollWidth > e.clientWidth + 1;
+      })
+      .map((e) => `${e.tagName}.${[...e.classList].join(".")} ${e.scrollWidth} in ${e.clientWidth}`);
+  });
+  check("the narrowed panel's content still fits its width", spill.length === 0, spill.join(", "));
 
   await browser.close();
   console.log(failures ? `\n${failures} check(s) failed` : "\nall checks passed");

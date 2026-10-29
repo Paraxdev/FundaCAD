@@ -1168,6 +1168,12 @@ jobs:
           SC_CHROME: /usr/bin/google-chrome
         run: node e2e/matcap_first_stress_e2e.cjs
 
+      - name: Stress panel under dialogs and clear of the rail end-to-end
+        env:
+          SC_TOKEN: citoken
+          SC_CHROME: /usr/bin/google-chrome
+        run: node e2e/stress_under_dialogs_e2e.cjs
+
       # Builds only the small frames crate and tungstenite, no Tauri, no kernel.
       - name: Native frames over WebSocket end-to-end
         env:
