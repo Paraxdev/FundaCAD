@@ -8,7 +8,7 @@ Fasteners is a library of standard screws, bolts, nuts, washers and heat-set ins
 
 1. Pick Fasteners and search the Catalogue, for example `M4x20` or `socket`.
 2. Click a row to see its preview and specs, with the clearance hole and the tap drill.
-3. Set Length, Drive, Pitch and Thread if you need others.
+3. Set Length, Pitch, Thread and Hand if you need others. Drive shows when the screw comes with more than one.
 4. Select a flat face and press Insert on selected face, or drag the row onto a face.
 
 With no face selected, the button reads Insert at origin. Thread Simplified is a plain cylinder that builds fast, and Modelled helix builds a real thread for close-ups.
