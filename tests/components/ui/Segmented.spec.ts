@@ -15,6 +15,7 @@ type Opt = {
   tip?: string;
   keys?: string;
   disabled?: boolean;
+  disabledReason?: string;
   clickable?: boolean;
 };
 
@@ -238,6 +239,34 @@ describe("Segmented", () => {
     await press("End");
     expect([focused(), await press("ArrowDown"), focused()]).toEqual(["ft", false, "ft"]);
     expect(await press("Home")).toBe(true);
+  });
+
+  it("keeps a blocked option's name and gives its reason as the tooltip and the description", async () => {
+    const reason = "Needs a graphics card";
+    const why = (r: ReturnType<typeof radios>[number]) => {
+      const id = r.attributes("aria-describedby");
+      return id ? document.getElementById(id)?.textContent : undefined;
+    };
+    const w = await render({
+      options: [
+        { value: "mm", icon: "grid", tip: "Grid", disabledReason: reason },
+        { value: "cm", icon: "snap", tip: "Snap", disabled: true, disabledReason: reason },
+        { value: "in", label: "in", disabled: true, clickable: true, disabledReason: reason },
+      ],
+      modelValue: "mm",
+      iconOnly: true,
+    });
+    expect(radios(w).map((r) => [r.attributes("aria-label"), r.attributes("title"), why(r)])).toEqual([
+      ["Grid", "Grid", undefined],
+      ["Snap", reason, reason],
+      ["in", reason, reason],
+    ]);
+    await w.setProps({ iconOnly: false });
+    expect(radios(w).map((r) => [r.attributes("aria-label"), why(r)])).toEqual([
+      [undefined, undefined],
+      ["Snap", reason],
+      ["in", reason],
+    ]);
   });
 
   it("lays a vertical large tile group out as a column of viewport tiles", async () => {

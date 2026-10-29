@@ -1,5 +1,5 @@
 <script setup lang="ts" generic="T extends string | number">
-import { computed, ref } from "vue";
+import { computed, ref, useId } from "vue";
 import Icon from "../shell/Icon.vue";
 import { fmtKeys } from "../../input/platform";
 import { useDisabled } from "./useDisabled";
@@ -13,6 +13,8 @@ export interface SegmentedOption<V> {
   tip?: string | undefined;
   keys?: string | undefined;
   disabled?: boolean | undefined;
+  /** While disabled: the tooltip and the spoken description, the name stays the tip. */
+  disabledReason?: string | undefined;
   /** Greyed but still answers a click or a key, a soft block the pick lifts, as IconButton's clickable. */
   clickable?: boolean | undefined;
   /** Extra attributes on the option's button, such as a data hook for e2e. */
@@ -96,6 +98,10 @@ const tipOf = (o: SegmentedOption<T>) => {
   const name = o.tip ?? (props.iconOnly ? o.label : undefined);
   return name && o.keys ? `${name} (${fmtKeys(o.keys)})` : name;
 };
+const reasonId = useId();
+const reasonOf = (o: SegmentedOption<T>) => (o.disabled && o.disabledReason ? o.disabledReason : "");
+// A text option with a reason takes its label as aria-label too, so the sr-only reason stays out of its name.
+const nameOf = (o: SegmentedOption<T>) => (props.iconOnly ? tipOf(o) : reasonOf(o) ? (o.label ?? tipOf(o)) : undefined);
 </script>
 
 <template>
@@ -124,8 +130,9 @@ const tipOf = (o: SegmentedOption<T>) => {
       :class="{ 'is-selected': i === selected, 'is-disabled': o.disabled }"
       :aria-checked="i === selected ? 'true' : 'false'"
       :aria-disabled="o.disabled ? 'true' : undefined"
-      :aria-label="iconOnly ? tipOf(o) : undefined"
-      :title="tipOf(o)"
+      :aria-label="nameOf(o)"
+      :aria-describedby="reasonOf(o) ? `${reasonId}-${i}` : undefined"
+      :title="reasonOf(o) || tipOf(o)"
       :tabindex="r.tabindex(i)"
       @focus="r.onFocus(i)"
       @click="pick(i)"
@@ -134,6 +141,7 @@ const tipOf = (o: SegmentedOption<T>) => {
         <Icon v-if="o.icon" :name="o.icon" :size="ICON_SIZE[size]" />
         <span v-if="o.label && !iconOnly" class="ui-segment-label">{{ o.label }}</span>
       </slot>
+      <span v-if="reasonOf(o)" :id="`${reasonId}-${i}`" class="sr-only">{{ reasonOf(o) }}</span>
     </button>
   </div>
 </template>

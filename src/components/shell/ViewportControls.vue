@@ -191,8 +191,9 @@ const viewModes = computed(() =>
   VIEW_MODES.map((v) => {
     const block = v.id === "pathtraced" ? pathTracedBlock(tier.value) : null;
     const hint = v.id === "pathtraced" ? PAUSED_HINT[ui.traceState] : undefined;
-    const title = block ? block.tooltip : hint ? `${v.label} (Z), ${hint}` : `${v.label} (Z)`;
-    return { ...v, disabled: block !== null, softBlock: block?.reason === "perf", title };
+    const name = hint ? `${v.label} (Z), ${hint}` : `${v.label} (Z)`;
+    const title = block ? block.tooltip : name;
+    return { ...v, disabled: block !== null, softBlock: block?.reason === "perf", name, title };
   }),
 );
 const viewModeOptions = computed<SegmentedOption<ViewMode>[]>(() =>
@@ -200,8 +201,9 @@ const viewModeOptions = computed<SegmentedOption<ViewMode>[]>(() =>
     value: v.id,
     label: v.label,
     icon: v.icon,
-    tip: v.title,
+    tip: v.name,
     disabled: v.disabled,
+    disabledReason: v.title,
     clickable: v.softBlock,
     attrs: { "data-view-mode": v.id },
   })),
