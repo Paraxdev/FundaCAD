@@ -138,7 +138,17 @@ file = "manual/docs/img/fillet-edge.png"
 size = [860, 640]
 theme = "fundacad"
 crop = "region"
-stub = true
+at = [360, 165]
+park = [1300, 700]
+steps = [
+  { open = "fixture:sketch-block.json" },
+  { panel = "items", open = false },
+  { panel = "history", open = false },
+  { view = "fit" },
+  { tool = "Fillet" },
+  { click = "edge:between top front" },
+  { type = ["R", "6"] },
+]
 show = "A block edge being rounded, the radius box beside it, with the continuity options of today (G3 fillets are recent)."
 alt = "A block edge being rounded, the radius box beside it"
 uses = ["manual/docs/model/fillet-chamfer.md:5"]
@@ -148,8 +158,23 @@ file = "manual/docs/img/fillet-drag.gif"
 size = [800, 558]
 theme = "fundacad"
 crop = "region"
+at = [380, 245]
 gif = { delay = 100, loop = 0 }
-stub = true
+steps = [
+  { open = "fixture:sketch-block.json" },
+  { panel = "items", open = false },
+  { panel = "history", open = false },
+  { view = "fit" },
+  { tool = "Fillet" },
+  { click = "edge:between top front" },
+  { mouse = "move", at = [1300, 700] },
+]
+frames = [
+  { hold = 900 },
+  { steps = [{ drag_handle = "size", mm = 0.75 }], repeat = 10, hold = 120 },
+  { steps = [{ mouse = "move", at = [1300, 700] }], hold = 900 },
+  { steps = [{ press = "Enter" }], hold = 1800 },
+]
 show = "A fillet radius growing on a block edge as the arrow is dragged (about 12 frames, 800 wide). Show the continuity choice if the box shows it (G3 is recent)."
 alt = "A fillet radius growing on an edge"
 uses = ["manual/docs/model/fillet-chamfer.md:11"]
