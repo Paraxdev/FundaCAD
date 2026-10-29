@@ -28,6 +28,8 @@ const usable = (el: HTMLElement) => el.isConnected && !el.closest("[hidden], [in
 
 function take(el: HTMLElement | null | undefined): boolean {
   if (!el || !usable(el)) return false;
+  // A landmark dropped the tabindex landOn gave it when focus left, so it needs it again to take focus back.
+  if (el.hasAttribute("data-focus-landing")) landOn(el);
   el.focus();
   return document.activeElement === el;
 }

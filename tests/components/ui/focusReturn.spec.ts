@@ -89,6 +89,19 @@ describe("focusReturn", () => {
     expect($("#main").hasAttribute("tabindex")).toBe(false);
   });
 
+  it("hands focus back to a landed landmark that opened the overlay after its tabindex went", async () => {
+    $("#a").focus();
+    mainLandmark()!.focus();
+    const back = focusReturn();
+    $("#inner").focus();
+    await tick();
+    expect($("#main").hasAttribute("tabindex")).toBe(false);
+    back.restore(inside("#dlg"));
+    expect(active()).toBe($("#main"));
+    // A browser only focuses the landmark through the tabindex, happy-dom focuses it either way.
+    expect($("#main").getAttribute("tabindex")).toBe("-1");
+  });
+
   it("finds a control from before the overlay when the overlay's own controls filled the history", () => {
     $("#dlg").innerHTML = Array.from({ length: 12 }, (_, i) => `<button id="d${i}">${i}</button>`).join("");
     $("#a").focus();
