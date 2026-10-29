@@ -437,6 +437,11 @@ fn read_zip(path: &Path) -> Result<(Value, Vec<(String, Vec<u8>)>), DocumentFile
     let Ok(mut z) = zip::ZipArchive::new(file) else {
         return fail(format!("{} is not a FundaCAD document.", path.display()));
     };
+    // Local headers that disagree with the central directory, duplicate names or overlapping entries let another
+    // reader see a different document in the same file.
+    if z.validate_header_consistency().is_err() {
+        return fail(format!("{} is damaged and cannot be opened.", path.display()));
+    }
     let total: u64 = (0..z.len()).filter_map(|i| z.by_index_raw(i).ok().map(|e| e.size())).sum();
     if total > MAX_TOTAL {
         return fail("this document expands to more than 8 GiB and was refused");
