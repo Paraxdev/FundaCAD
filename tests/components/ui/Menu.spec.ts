@@ -7,6 +7,7 @@ import MenuItem from "../../../src/components/ui/MenuItem.vue";
 import MenuSeparator from "../../../src/components/ui/MenuSeparator.vue";
 import { escapeClaimed } from "../../../src/ui/escapeClaim";
 import Dialog from "../../../src/components/ui/Dialog.vue";
+import { isMac } from "../../../src/input/platform";
 import { createPinia, setActivePinia } from "pinia";
 
 enableAutoUnmount(afterEach);
@@ -75,7 +76,7 @@ describe("Menu", () => {
     expect([open.getAttribute("aria-disabled"), open.classList.contains("is-disabled")]).toEqual(["true", true]);
     const exp = menu!.children[4] as HTMLElement;
     expect([exp.getAttribute("aria-haspopup"), exp.getAttribute("aria-expanded")]).toEqual(["menu", "false"]);
-    expect((menu!.children[0] as HTMLElement).getAttribute("aria-keyshortcuts")).toBe("Ctrl+N");
+    expect((menu!.children[0] as HTMLElement).getAttribute("aria-keyshortcuts")).toBe(isMac() ? "Meta+N" : "Control+N");
   });
 
   it("moves with ArrowDown and ArrowUp, skipping the disabled item and wrapping, and Home and End", async () => {

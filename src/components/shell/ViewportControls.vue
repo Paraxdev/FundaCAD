@@ -20,7 +20,7 @@ import {
 } from "../../ui/viewMode";
 import { onWorkspaceChange } from "../../ui/workspace";
 import { keyHint } from "../../input/shortcuts";
-import { chordKeys } from "../../input/platform";
+import { chordsOf } from "../../input/platform";
 import { OVERLAY_KINDS, OVERLAY_LABELS } from "../../viewport/overlayKinds";
 import { isRenderLowPower } from "../../viewport/render";
 import { toast } from "../../ui/toast";
@@ -259,14 +259,14 @@ async function screenshot() {
       <IconButton
         icon="items"
         tip="Items"
-        :keys="chordKeys('items')"
+        :keys="chordsOf('items')"
         :active="shell.itemsShown"
         @click="shell.toggleItems()"
       />
       <IconButton
         icon="history"
         :tip="ui.sketchActive ? 'Sketch options' : 'History'"
-        :keys="chordKeys('history')"
+        :keys="chordsOf('history')"
         :active="shell.historyShown"
         :badge="errorCount || null"
         @click="shell.toggleHistory()"
@@ -313,7 +313,7 @@ async function screenshot() {
         v-if="!shell.narrow"
         icon="history"
         tip="History"
-        :keys="chordKeys('history')"
+        :keys="chordsOf('history')"
         :active="shell.historyOpen"
         :badge="errorCount || null"
         @click="shell.toggleHistory()"

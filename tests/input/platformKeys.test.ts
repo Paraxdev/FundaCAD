@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { fmtKeys, isMac, latinKey, setMacForTest } from "../../src/input/platform";
+import { ariaKeys, fmtKeys, isMac, latinKey, setMacForTest } from "../../src/input/platform";
 
 afterEach(() => setMacForTest(null));
 
@@ -76,5 +76,52 @@ describe("latinKey", () => {
   it("keeps a non Latin key with no Latin twin", () => {
     expect(k("ж", "IntlBackslash")).toBe("ж");
     expect(latinKey({ key: "у" })).toBe("у");
+  });
+});
+
+describe("ariaKeys", () => {
+  it("writes Control on Windows and Linux", () => {
+    setMacForTest(false);
+    expect(ariaKeys("Ctrl+Shift+Z")).toBe("Control+Shift+Z");
+    expect(ariaKeys("Ctrl+Alt+S")).toBe("Control+Alt+S");
+    expect(ariaKeys("Ctrl F")).toBe("Control+F");
+    expect(ariaKeys("Ctrl+,")).toBe("Control+,");
+    expect(ariaKeys("Ctrl+`")).toBe("Control+`");
+  });
+
+  it("writes Meta for Ctrl on macOS and keeps the literal Control key", () => {
+    setMacForTest(true);
+    expect(ariaKeys("Ctrl+Shift+Z")).toBe("Meta+Shift+Z");
+    expect(ariaKeys("Ctrl+Alt+S")).toBe("Meta+Alt+S");
+    expect(ariaKeys("Control+`")).toBe("Control+`");
+  });
+
+  it("names keys by their key values and writes single letters upper case", () => {
+    setMacForTest(false);
+    expect(ariaKeys("Esc")).toBe("Escape");
+    expect(ariaKeys("Del")).toBe("Delete");
+    expect(ariaKeys("e")).toBe("E");
+    expect(ariaKeys("Shift+h")).toBe("Shift+H");
+    expect(ariaKeys("Shift+Home")).toBe("Shift+Home");
+    expect(ariaKeys("f2")).toBe("F2");
+    expect(ariaKeys("?")).toBe("?");
+    expect(ariaKeys("Ctrl++")).toBe("Control++");
+  });
+
+  it("space separates alternatives from a hint or a list", () => {
+    setMacForTest(false);
+    expect(ariaKeys("Ctrl+Z / Ctrl+Y")).toBe("Control+Z Control+Y");
+    expect(ariaKeys(["Ctrl+Alt+S", "Ctrl+Shift+1"])).toBe("Control+Alt+S Control+Shift+1");
+    setMacForTest(true);
+    expect(ariaKeys(["Ctrl+Shift+1"])).toBe("Meta+Shift+1");
+  });
+
+  it("leaves out what is no key, and gives nothing for no keys", () => {
+    setMacForTest(false);
+    expect(ariaKeys("Shift+drag")).toBeUndefined();
+    expect(ariaKeys("Arrows / Esc")).toBe("Escape");
+    expect(ariaKeys("")).toBeUndefined();
+    expect(ariaKeys(undefined)).toBeUndefined();
+    expect(ariaKeys([])).toBeUndefined();
   });
 });

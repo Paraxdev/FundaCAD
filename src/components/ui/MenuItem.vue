@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, inject, mergeProps, onMounted, onUnmounted, useSlots, useTemplateRef } from "vue";
-import { fmtKeys } from "../../input/platform";
+import { ariaKeys, fmtKeys } from "../../input/platform";
 import Icon from "../shell/Icon.vue";
 import Menu from "./Menu.vue";
 import { MENU, type MenuEntry } from "./menuContext";
@@ -57,7 +57,7 @@ const hasSub = computed(() => !!slots.default);
     :aria-checked="checked === undefined ? undefined : checked"
     :aria-haspopup="hasSub ? 'menu' : undefined"
     :aria-expanded="hasSub ? subOpen : undefined"
-    :aria-keyshortcuts="keys"
+    :aria-keyshortcuts="ariaKeys(keys)"
     :title="d.title(tip)"
     :tabindex="ctx.tabindex(me)"
     data-roving

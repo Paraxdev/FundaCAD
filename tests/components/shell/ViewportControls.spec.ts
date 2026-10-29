@@ -8,6 +8,7 @@ import type { Engine } from "../../../src/app/engine";
 import { resetPathTracedOverride, type RenderTier } from "../../../src/ui/viewMode";
 import { renderPrefs, setRenderPref } from "../../../src/ui/renderPrefs";
 import { useUiStore } from "../../../src/stores/ui";
+import { setMacForTest } from "../../../src/input/platform";
 
 enableAutoUnmount(afterEach);
 
@@ -122,5 +123,19 @@ describe("ViewportControls popover controls", () => {
     swatches[3]!.click();
     expect(renderPrefs().matcapStyle).toBe("wax");
     setRenderPref("matcapStyle", "studio");
+  });
+});
+
+describe("ViewportControls History button", () => {
+  afterEach(() => setMacForTest(null));
+
+  it.each([
+    [false, "History (Ctrl+Alt+H)", "Control+Alt+H Control+Shift+2"],
+    [true, "History (⌘+Shift+2)", "Meta+Shift+2"],
+  ])("on macOS %s is named History and announces every chord of the platform", async (mac, title, keys) => {
+    setMacForTest(mac);
+    const { w } = await render(TIER);
+    const btn = w.get('button[aria-label="History"]');
+    expect([btn.attributes("title"), btn.attributes("aria-keyshortcuts")]).toEqual([title, keys]);
   });
 });

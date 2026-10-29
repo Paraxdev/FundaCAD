@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { chordKeys } from "../../input/platform";
+import { chordsOf } from "../../input/platform";
 import { computed, nextTick, onMounted, onUnmounted, ref, useTemplateRef, watch } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { useDocValue, useBuildValue } from "../../app/useDoc";
@@ -534,7 +534,7 @@ function openMultiMenu(e: MouseEvent, ids: string[]) {
         variant="plain"
         :icon-size="14"
         tip="Hide the history"
-        :keys="chordKeys('history')"
+        :keys="chordsOf('history')"
         @click="shellStore.setHistory(false)"
       />
     </div>

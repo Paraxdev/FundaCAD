@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import { ariaKeys } from "../../input/platform";
 import Icon from "../shell/Icon.vue";
 import { tipText } from "./tip";
 import { useDisabled } from "./useDisabled";
@@ -9,7 +10,8 @@ const props = withDefaults(
     icon: string;
     /** Required: an icon has no text, so this is its only name. */
     tip: string;
-    keys?: string | undefined;
+    /** A list shows its first in the tooltip and announces them all. */
+    keys?: string | readonly string[] | undefined;
     /** sm 24px, md 28px (a card close), lg 40px (a viewport tile). */
     size?: "sm" | "md" | "lg";
     variant?: "plain" | "tile" | "danger";
@@ -35,7 +37,7 @@ const props = withDefaults(
 );
 
 const d = useDisabled(props);
-const label = computed(() => tipText(props.tip, props.keys));
+const title = computed(() => tipText(props.tip, typeof props.keys === "string" ? props.keys : props.keys?.[0]));
 const hasBadge = computed(() => props.badge !== null && props.badge !== "");
 </script>
 
@@ -45,8 +47,9 @@ const hasBadge = computed(() => props.badge !== null && props.badge !== "");
     type="button"
     class="icon-btn"
     :class="[`icon-btn-${variant}`, `icon-btn-${size}`, { active, 'is-on': active }]"
-    :title="d.title(label)"
-    :aria-label="hasBadge ? `${label}, ${badge}` : label"
+    :title="d.title(title)"
+    :aria-label="hasBadge ? `${tip}, ${badge}` : tip"
+    :aria-keyshortcuts="ariaKeys(keys)"
     :aria-pressed="active"
   >
     <Icon :name="icon" :size="iconSize ?? (size === 'lg' ? 20 : 14)" />

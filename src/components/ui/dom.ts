@@ -2,6 +2,7 @@
 
 import { iconElement } from "../../ui/icons";
 import { unitById } from "../../ui/measure";
+import { ariaKeys } from "../../input/platform";
 import { tipText } from "./tip";
 import { swallowDisabled } from "./useDisabled";
 
@@ -110,6 +111,11 @@ export interface UiButtonOptions extends DisabledOptions {
   keys?: string | undefined;
 }
 
+function setKeys(el: HTMLElement, keys: string | undefined) {
+  const aria = ariaKeys(keys);
+  if (aria) el.setAttribute("aria-keyshortcuts", aria);
+}
+
 /** Button.vue as DOM. */
 export function uiButton(o: UiButtonOptions = {}): HTMLButtonElement {
   const b = document.createElement("button");
@@ -126,7 +132,8 @@ export function uiButton(o: UiButtonOptions = {}): HTMLButtonElement {
     text.className = "btn-label";
     text.textContent = o.label;
     b.append(text);
-  } else if (tip) b.setAttribute("aria-label", tip);
+  } else if (o.tip) b.setAttribute("aria-label", o.tip);
+  setKeys(b, o.keys);
   initDisabled(b, tip, o);
   return b;
 }
@@ -152,7 +159,8 @@ export function uiIconButton(o: UiIconButtonOptions): HTMLButtonElement {
   if (o.active !== undefined) setPressed(b, o.active);
   const tip = tipText(o.tip, o.keys)!;
   const badged = o.badge !== undefined && o.badge !== null && o.badge !== "";
-  b.setAttribute("aria-label", badged ? `${tip}, ${o.badge}` : tip);
+  b.setAttribute("aria-label", badged ? `${o.tip}, ${o.badge}` : o.tip);
+  setKeys(b, o.keys);
   b.append(iconElement(o.icon, o.iconSize ?? (size === "lg" ? 20 : 14)));
   if (badged) {
     const badge = document.createElement("span");

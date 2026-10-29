@@ -110,3 +110,65 @@ export function chordKeys(id: ChordId): string {
 export function chordHint(id: ChordId): string {
   return fmtKeys(chordKeys(id));
 }
+
+const ARIA_MODIFIERS: Record<string, string> = {
+  ctrl: "Control",
+  control: "Control",
+  cmd: "Meta",
+  command: "Meta",
+  meta: "Meta",
+  alt: "Alt",
+  option: "Alt",
+  shift: "Shift",
+};
+const ARIA_NAMED: Record<string, string> = {
+  esc: "Escape",
+  escape: "Escape",
+  del: "Delete",
+  delete: "Delete",
+  ins: "Insert",
+  insert: "Insert",
+  return: "Enter",
+  enter: "Enter",
+  tab: "Tab",
+  space: "Space",
+  backspace: "Backspace",
+  home: "Home",
+  end: "End",
+  pgup: "PageUp",
+  pageup: "PageUp",
+  pgdn: "PageDown",
+  pagedown: "PageDown",
+  up: "ArrowUp",
+  down: "ArrowDown",
+  left: "ArrowLeft",
+  right: "ArrowRight",
+  arrowup: "ArrowUp",
+  arrowdown: "ArrowDown",
+  arrowleft: "ArrowLeft",
+  arrowright: "ArrowRight",
+};
+
+function ariaCombo(text: string): string | null {
+  const t = text.trim();
+  const parts = t.endsWith("++") ? [...t.slice(0, -2).split(/[+\s]+/), "+"] : t.split(/[+\s]+/);
+  const key = parts.pop() ?? "";
+  const mods: string[] = [];
+  for (const p of parts) {
+    const m = ARIA_MODIFIERS[p.toLowerCase()];
+    if (!m) return null;
+    mods.push(p.toLowerCase() === "ctrl" && isMac() ? "Meta" : m);
+  }
+  const named = ARIA_NAMED[key.toLowerCase()] ?? (/^F([1-9]|1\d|2[0-4])$/i.test(key) ? key.toUpperCase() : null);
+  const k = named ?? ([...key].length === 1 ? key.toUpperCase() : null);
+  return k ? [...mods, k].join("+") : null;
+}
+
+/** A keys hint (or a list of them) as aria-keyshortcuts wants it: Ctrl is Control, or Meta on macOS, Esc is Escape,
+ *  alternatives written "A / B" are space separated. A hint that is no key (a drag, "Arrows") is left out. */
+export function ariaKeys(keys: string | readonly string[] | undefined): string | undefined {
+  const list = typeof keys === "string" ? [keys] : (keys ?? []);
+  const out = list.flatMap((k) => k.split(/\s+\/\s+/)).map(ariaCombo);
+  const ok = out.filter((c): c is string => !!c);
+  return ok.length ? [...new Set(ok)].join(" ") : undefined;
+}

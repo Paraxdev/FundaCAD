@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import { ariaKeys } from "../../input/platform";
 import Icon from "../shell/Icon.vue";
 import IconButton from "./IconButton.vue";
 import { tipText } from "./tip";
@@ -52,14 +53,16 @@ const removeTip = computed(() => (props.label ? `Remove ${props.label}` : "Remov
     :class="[`chip-${variant}`, `chip-${size}`]"
     :type="rootIsButton ? 'button' : undefined"
     :title="split ? undefined : d.title(text)"
-    :aria-label="rootIsButton ? text : undefined"
+    :aria-label="rootIsButton ? tip : undefined"
+    :aria-keyshortcuts="rootIsButton ? ariaKeys(keys) : undefined"
   >
     <button
       v-if="split"
       type="button"
       class="chip-body"
       :title="d.title(text)"
-      :aria-label="text"
+      :aria-label="tip"
+      :aria-keyshortcuts="ariaKeys(keys)"
       :aria-disabled="disabled ? 'true' : undefined"
     >
       <Icon v-if="icon" :name="icon" :size="12" />
