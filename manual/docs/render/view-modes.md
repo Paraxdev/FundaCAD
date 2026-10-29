@@ -35,6 +35,8 @@ The line under Denoise names the denoiser in use, and says why when a download f
 
 Hover the Path traced button to read why.
 
+- FundaCAD is still checking whether this system can path trace, just after it starts.
+- The system has no GPU tracer.
 - Performance mode is on, or FundaCAD found the computer low powered. Click Path traced, then click it again while the warning shows, to trace anyway until FundaCAD restarts.
 - No graphics card was found.
 - The computer only offers software graphics, which is too slow to path trace.
