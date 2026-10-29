@@ -34,8 +34,8 @@ svgtypes = "0.15"
 # Pinned exactly: its generated bindings are tied to the bundled ufbx.c it compiles.
 ufbx = "=0.11.5"
 # Rhino .3dm reader, pure Rust. Pinned: a young crate, a new release is checked against tests/import_rhino.rs first.
-cadmpeg-codec-rhino = "=0.6.1"
-cadmpeg-ir = "=0.6.1"
+cadmpeg-codec-rhino = "=0.6.7"
+cadmpeg-ir = "=0.6.7"
 # IFC reader, pure Rust, MPL-2.0. Pinned so a release cannot change building geometry under tests/import_ifc.rs.
 ifc-lite-core = "=20.4.0"
 ifc-lite-processing = "=20.4.0"
