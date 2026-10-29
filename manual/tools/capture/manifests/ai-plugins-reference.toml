@@ -34,7 +34,16 @@ file = "manual/docs/img/prefs-gamepad.png"
 size = [972, 692]
 theme = "fundacad"
 crop = "panel"
-stub = true
+target = ".modal-panel.prefs-panel"
+pad = 6
+park = [1300, 860]
+steps = [
+  { open = "new" },
+  { evaluate = "() => import('/src/plugins/host.ts').then((m) => m.openPluginSettings('FundaCAD.Gamepad'))" },
+  { wait = 500 },
+  { evaluate = '''() => { let e = document.querySelector('[data-plugin-row="FundaCAD.Gamepad"]'); while (e && !(e.scrollHeight > e.clientHeight && getComputedStyle(e).overflowY !== 'visible')) e = e.parentElement; if (e) e.scrollTop -= 14; }''' },
+  { wait = 200 },
+]
 show = "Preferences, Plugins, the Game controller row with its settings open."
 alt = "The Game controller row in Preferences, Plugins, with its settings open"
 uses = ["manual/docs/plugins/gamepad.md:5"]
@@ -64,7 +73,16 @@ file = "manual/docs/img/spacemouse-settings.png"
 size = [972, 692]
 theme = "fundacad"
 crop = "panel"
-stub = true
+target = ".modal-panel.prefs-panel"
+pad = 6
+park = [1300, 860]
+steps = [
+  { open = "new" },
+  { evaluate = "() => import('/src/plugins/host.ts').then((m) => m.openPluginSettings('FundaCAD.SpaceMouse'))" },
+  { wait = 500 },
+  { evaluate = '''() => { let e = document.querySelector('[data-plugin-row="FundaCAD.SpaceMouse"]'); while (e && !(e.scrollHeight > e.clientHeight && getComputedStyle(e).overflowY !== 'visible')) e = e.parentElement; if (e) e.scrollTop -= 14; }''' },
+  { wait = 200 },
+]
 show = "Preferences, Plugins, the 3D mouse row with its settings open."
 alt = "The 3D mouse row in Preferences, Plugins, with its settings open"
 uses = ["manual/docs/plugins/spacemouse.md:5"]

@@ -13,6 +13,7 @@ Button 1 fits the view and button 2 returns to the isometric view.
 
 View, 3D Mouse Settings opens its settings.
 
+- Mode picks Object mode or Camera mode, as the View menu does.
 - Pan, Zoom and Rotate set the speeds.
 - Deadzone: raise it if the view creeps.
 - Cross-axis filter stops a hard tilt from also zooming.

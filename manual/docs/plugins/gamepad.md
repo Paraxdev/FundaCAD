@@ -19,6 +19,6 @@ Plug it in and press any button, FundaCAD only notices a controller after its fi
 | Right stick click | Fit View |
 | D-pad up, down, left, right | Top, Front, Isometric and Right views |
 
-To change a button, open its Settings in Edit, Preferences, Plugins and pick a key or a command under Buttons. Pan speed, Rotate speed, Zoom speed, Stick deadzone and the invert switches are there too.
+To change a button, open its Settings in Edit, Preferences, Plugins and pick a key or a command under Buttons. Pan speed, Rotate speed, Zoom speed, Cursor speed, Stick deadzone and the invert switches are there too.
 
 On a Steam Deck, add FundaCAD to Steam as a non-Steam game and start it from there, so the app sees a controller. The trackpads keep working as a mouse.
