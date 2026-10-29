@@ -516,6 +516,26 @@ function misordered(
     .map(({ top, under, a, b }) => `${top} ${a} over ${under} ${b}`);
 }
 
+/** The classes a floating panel carries: Panel.vue's own, and each panel-class a <Panel> or <FloatingPanel> passes. */
+function floatingPanelClasses(templates: Map<string, string>): string[] {
+  const out = new Set(["measure-panel", "ui-panel"]);
+  for (const text of templates.values())
+    for (const [tag] of text.matchAll(/<(?:Panel|FloatingPanel)\b(?:[^>"]|"[^"]*")*>/g))
+      for (const c of /\spanel-class="([^"]*)"/.exec(tag)?.[1]?.split(/\s+/) ?? []) if (c) out.add(c);
+  return [...out].sort();
+}
+
+/** Each rule that gives a floating panel a z-index of its own, which takes it out of the panel layer. */
+function panelZOverrides(files: Iterable<[string, string]>, classes: readonly string[]): string[] {
+  return [...files].flatMap(([path, text]) =>
+    rulesOf(path, text)
+      .filter(({ decls }) => decls.some(({ prop }) => prop === "z-index"))
+      .flatMap(({ selectors }) => selectors)
+      .filter((s) => s !== ".measure-panel" && compoundOf(s).classes.some((c) => classes.includes(c)))
+      .map((s) => `${path} ${s}`),
+  );
+}
+
 describe("design spec guard", () => {
   it("reads the sources", () => {
     expect(vueFiles.size).toBeGreaterThan(50);
@@ -655,13 +675,33 @@ describe("design spec guard", () => {
   it("draws every dialog and its popups over the floating panels, and the panels under the rail", () => {
     const vars = block(styleOf(TOKENS, scssFiles.get(TOKENS) ?? ""), ":root");
     const dialogs = [".modal-overlay", ".choice-backdrop", ".cmdk-backdrop"];
-    const popups = [".float-popover", ".float-popover.select-pop", ".ui-menu"];
+    const popups = [".float-popover.select-pop", ".ui-menu", ".menu-popup"];
+    // Everything else that draws over the model: the panels, the Stress and sketch readouts, the in-view chips.
+    const inView = [
+      ".measure-panel",
+      ".stress-glyph-label",
+      ".sketch-dim-leaders",
+      ".float-card.text-tool-panel",
+      ".dim-input",
+    ];
     const pairs = [
-      ...[...dialogs, ...popups].map((top) => [top, ".measure-panel"] as const),
+      ...[...dialogs, ...popups].flatMap((top) => inView.map((under) => [top, under] as const)),
+      [".float-popover", ".measure-panel"] as const,
       ["#float-layer", ".measure-panel"] as const,
       [".measure-panel", ".stress-glyph-label"] as const,
+      [".measure-panel", ".sketch-dim-leaders"] as const,
     ];
     expect(misordered([...scssFiles, ...uiScssFiles], vars, pairs)).toEqual([]);
+    const panels = floatingPanelClasses(vueFiles);
+    expect(panels).toEqual([
+      "measure-panel",
+      "overhang-panel",
+      "params-dialog",
+      "properties-panel",
+      "stress-panel",
+      "ui-panel",
+    ]);
+    expect(panelZOverrides(styled, panels)).toEqual([]);
   });
 
   it("finds what the check helpers are meant to find", () => {
@@ -784,5 +824,25 @@ describe("design spec guard", () => {
     expect(misordered(zCss("var(--z-b)"), zVars, [[".dialog", ".panel"]])).toEqual([]);
     expect(misordered(zCss("1500"), zVars, [[".dialog", ".panel"]])).toEqual([".dialog 21 over .panel 1500"]);
     expect(misordered(zCss("var(--z-b)"), zVars, [[".dialog", ".gone"]])).toHaveLength(1);
+    expect(
+      floatingPanelClasses(
+        new Map([
+          ["a.vue", `<Panel :open="a > b" panel-class="x-panel y" @close="() => go()">`],
+          ["b.vue", `<ModalFrame panel-class="z-dialog"><FloatingPanel :panel-class="c" panel-class="w">`],
+        ]),
+      ),
+    ).toEqual(["measure-panel", "ui-panel", "w", "x-panel", "y"]);
+    expect(
+      panelZOverrides(
+        [
+          [
+            "x.scss",
+            `.x-panel { z-index: 5; } .x-panel .inner { z-index: 2; } .measure-panel { z-index: var(--z-panel); }
+             .measure-panel[data-capped], .other { z-index: 3; } .y-panel { width: 1px; }`,
+          ],
+        ],
+        ["measure-panel", "x-panel", "y-panel"],
+      ),
+    ).toEqual(["x.scss .x-panel", "x.scss .measure-panel[data-capped]"]);
   });
 });

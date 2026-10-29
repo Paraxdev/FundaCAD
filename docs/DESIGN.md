@@ -294,6 +294,7 @@ your layer from what is actually on screen:
 
 | z | Layer |
 |---|---|
+| 17 | `.sketch-dim-leaders`, `calc(var(--z-panel) - 2)`, the sketch dimension leaders, under the panel |
 | 18 | `.stress-glyph-label`, `calc(var(--z-panel) - 1)`, the Stress readouts in the view, under the panel |
 | 19 | `.measure-panel` (`--z-panel`), every floating panel |
 | 20 | `#float-layer` (`--z-float`), the cards and rail |
@@ -308,8 +309,10 @@ your layer from what is actually on screen:
 | 5000 | `.cmdk-backdrop` |
 
 New layers use a `--z-*` token or `calc()` on one, never a new literal. Every dialog
-and its popups draw over the floating panels, and a floating panel never draws over
-the rail or the view controls; `tests/ui/designSpec.test.ts` holds both.
+and its popups (Select, Menu, the title bar menus) draw over the floating panels and
+the in-view chips, and a floating panel never draws over the rail or the view controls
+nor sets a z-index of its own; `tests/ui/designSpec.test.ts` holds all three, and
+`e2e/stress_under_dialogs_e2e.cjs` checks them in a real layout.
 
 ## 4. The glass recipe
 
