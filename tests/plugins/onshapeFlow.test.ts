@@ -103,14 +103,7 @@ describe("importing from an Onshape link", () => {
     const { store, aborts } = fakeStore();
     const done = importFromOnshape(store, {} as never);
     const polls = () => h.seen.filter((r) => r.url.includes("/api/translations/")).length;
-    // Each request is signed through WebCrypto, which settles on a real tick, so fake time steps between real waits.
-    await vi.waitFor(
-      async () => {
-        await vi.advanceTimersByTimeAsync(1000);
-        expect(polls()).toBeGreaterThan(1);
-      },
-      { timeout: 15_000 },
-    );
+    await vi.waitFor(() => expect(polls()).toBeGreaterThan(1), { timeout: 5000 });
     const abort = aborts.at(-1);
     expect(abort).toBeInstanceOf(AbortController);
     abort!.abort();
