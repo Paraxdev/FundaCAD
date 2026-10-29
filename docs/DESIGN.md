@@ -643,7 +643,8 @@ nothing in the set fits, extend the closest base component, with a spec in `test
 
 The props beyond `tip`, `keys`, `disabled` and `disabledReason`, which every control takes.
 
-`Select`, `ChoiceList`, `TextField`, `NumberField`, `Slider`, `Checkbox`, `Segmented` and `Tabs` each need a name:
+`Select`, `ChoiceList`, `Combobox`, `Listbox`, `TextField`, `NumberField`, `Slider`, `Checkbox`, `Segmented` and
+`Tabs` each need a name:
 `label`, the words, or `labelledby`, the id of a visible label (inside a `FieldRow`, the `labelId` its slot hands
 over), never both. Their props take the `Named` union of `components/ui/useName.ts`, so `vue-tsc` refuses a call with
 neither, and in dev a control given neither, nor an `aria-label` or `aria-labelledby` attribute, warns
@@ -662,6 +663,8 @@ and Orca read only the name of a combobox named by `aria-label`; its open list i
 | `NumberField` | Every number a person types | `modelValue: number \| null`; `commit`: `change` (default) or `live`; `unit` and `units` (the unit and its picker); `parse`, `ui/measure` by default, so units, fractions and a decimal comma read; `validate`; `problem`, a refusal from the kernel; `min`, `max`, `step`; `nullable`; `preview` and `previewEnd`; `widthCh` | focus, error with the rejected text kept, disabled |
 | `UnitChip` | The unit beside a value | `unit`; `options` makes it a picker, without them it is a caption | picker: hover, pressed, open, disabled |
 | `Select` | A choice from a list too long to show at once | `modelValue`; `options` (`value`, `label`, `hint`, `disabled`); `placeholder`; `size`; `variant`: `field` (a well) or `chip` (the `UnitChip` look) | hover, focus, open with an active row, disabled |
+| `Combobox` | A search field over the list of its matches, as the command palette is | `modelValue`, the query; `options` (`value`, `label`, `hint`, `disabled`, `keyshortcuts`); `active` with `v-model:active`, -1 for none; `listClass`, `optionClass`; `pick` emits the chosen value; a `default` slot per option, an `empty` slot | focus, the active row `.is-active`, a disabled option |
+| `Listbox` | A group of picks drawn as the caller's own elements: tiles, swatches, cards | `items` (`value`, `label`, `disabled`); `modelValue`; `multiple` makes it an array, with `v-model:anchor`; the `option` slot hands `attrs` to bind on the caller's element; `apply` on Enter | focus, selected, a disabled option |
 | `Checkbox` | A setting, on any settings page | `modelValue`, `label`, `indeterminate` | hover, pressed, focus, disabled, on, mixed |
 | `Switch` | A live toggle, whose change shows in the model as it flips | `modelValue`; `label`, its name when there is no `tip` | hover, pressed, focus, disabled, on |
 | `SwitchRow` | A labelled row holding a `Switch`, in a tool panel, a popover or feature properties | `modelValue`, `label`, `icon`; `layout`: `float` (the view controls) or `param` (feature properties); a `hint` slot | the row's hover, the switch's states; disabled fades the row as a whole |
@@ -680,8 +683,9 @@ and Orca read only the name of a combobox named by `aria-label`; its open list i
 
 Each look is in the subsections below. Three composables sit under them, for a base component that needs one:
 `useDisabled` (below), `useRovingFocus` (one Tab stop, the arrows, Home and End, wrapping; `Segmented`, `Tabs`,
-`Menu`, the `Select` list and the `ConfirmDialog` answers) and `useCommitField` (the draft, commit on Enter or
-blur, revert on Escape, the rejected text kept, the preview debounce; under `TextField` and `NumberField`).
+`Menu`, the `Select` list, the `ConfirmDialog` answers and `Listbox`, which adds the grid arrows and type ahead
+itself) and `useCommitField` (the draft, commit on Enter or blur, revert on Escape, the rejected text kept, the
+preview debounce; under `TextField` and `NumberField`).
 
 ### States and the one disabled model
 
@@ -863,6 +867,15 @@ committed text and ends a preview; text that does not commit stays, with `aria-i
 `role="combobox"` trigger over a `role="listbox"`: ArrowDown or ArrowUp opens it and moves, Home and End, type ahead,
 Enter or Space picks, Escape closes and gives focus back to the trigger.
 
+`Combobox` keeps focus in its input (`role="combobox"`) over a `ChoiceList` in driven mode: ArrowDown and ArrowUp
+move the `aria-activedescendant` row, without wrapping and skipping a disabled one, Enter picks it, and every other
+key edits the query. `Listbox` is one Tab stop: Left and Right step one option, Up and Down one row of the grid (its
+columns measured from where the options sit), Home and End, type ahead on the label, no wrapping, a disabled one
+skipped. Moving focus never selects, since a pick may start a render: Space selects, and Enter emits `apply`. With
+`multiple` (`aria-multiselectable`) Space toggles, Shift with Space or an arrow takes the run from the anchor, and
+Cmd+A on macOS or Ctrl+A elsewhere takes every enabled option. It stops the keys it uses from reaching the window
+shortcuts, so an arrow in a grid does not also turn the view.
+
 Old fields that still paint: `.sm-input` (dialogs, the dock), `.param-row input` (feature values; `.input-error`
 and `.param-stale` use hard coded reds and ambers), native `<select>`s, and `.dim-field` in the value box
 ([7.16](#716-floating-value-box-dim-input-diminput)). Fields keep a visible focus; never `outline: none` without a
@@ -933,7 +946,7 @@ The chips on the model and in the dock above keep their own markup until they we
 | Class | Idle | Hover | Selected | Disabled |
 |---|---|---|---|---|
 | `ListRow` (`.ui-list-row`) | padding `7px var(--s-3)`, 12.5px, squircle, chip radius, icon `--text-dim`; pressed `--accent-wash`; focus the shared outline, inset | `--hover-wash`, icon `--accent-hot` | `.is-selected`: accent 16% fill, `--accent-hot` | the disabled model, no hover |
-| `.opt-row` (`ChoiceList.vue`) | padding `7px var(--s-3)`, 12.5px, chip radius | white 5% wash | `.selected`: accent 16% fill, `--accent-hot` | `.disabled` opacity 0.45, no hover |
+| `.opt-row` (`ChoiceList.vue`) | padding `7px var(--s-3)`, 12.5px, chip radius | white 5% wash | `.selected`: accent 16% fill, `--accent-hot`; in a `Combobox` the active row is also `.is-active` | `.disabled` opacity 0.45, no hover |
 | `.ctx-item` (context menu) | padding `var(--s-3) var(--s-4)`, 12.5px, chip radius, `.ctx-key` 11px `--text-dim` | accent 16%, `--accent-hot` | | `.disabled` opacity 0.45, `pointer-events: none` |
 | `.menu-item` (title bar menu) | padding `var(--s-3) var(--s-4)`, gap `--s-7`, `.menu-shortcut` 11px `--text-mute` | accent 16%, `--accent-hot` | `.menu-check` gutter in `--accent` | `[disabled]` `--text-mute`, `pointer-events: none` |
 | `.cmdk-item` | a Combobox option (`role="option"`), padding `var(--s-3) var(--s-4)`, gap `--s-3`, chip radius | `.is-active` (pointer or keys, the `aria-activedescendant` row): accent 16%, `--accent-hot` | | |
