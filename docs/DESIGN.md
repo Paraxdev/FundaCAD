@@ -675,10 +675,11 @@ given nothing else (a plain JS plugin skips the type check), without its key cho
 | `FieldRow` | A label and its control | `label`; `for`, or the id it hands its slot; `hint`; `error`; `layout`: `inline` or `stacked` | error |
 | `ListRow` | A selectable row in a list, or a row that is a button | `label`, `hint`, `icon`, `selected`; `as`: `option` (inside a listbox, whose owner moves focus) or `button` | hover, pressed, focus, selected, disabled |
 | `RailButton` | A tool on the rail ([7.3](#73-rail-tile-rail-btn-rail-tile-rail-pill)) | as today | as 7.3 |
+| `Toolbar` | A row or column of controls that is one Tab stop: the rail, the view controls, a panel's actions | `label` or `labelledby`; `orientation`: `horizontal` (default), `vertical` or `both`; `wrap`; `tag`. Its buttons are found in the slot, the arrows, Home and End move among them, a nested `Segmented` keeps its own stop and keys, a text field keeps its arrows | none of its own, its controls carry theirs |
 
 Each look is in the subsections below. Three composables sit under them, for a base component that needs one:
 `useDisabled` (below), `useRovingFocus` (one Tab stop, the arrows, Home and End, wrapping; `Segmented`, `Tabs`,
-`Menu`, the `Select` list and the `ConfirmDialog` answers) and `useCommitField` (the draft, commit on Enter or
+`Menu`, the `Select` list and the `ConfirmDialog` answers; `Toolbar` reuses its `rovingIndex` over the buttons it finds) and `useCommitField` (the draft, commit on Enter or
 blur, revert on Escape, the rejected text kept, the preview debounce; under `TextField` and `NumberField`).
 
 ### States and the one disabled model
