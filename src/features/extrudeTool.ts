@@ -26,6 +26,7 @@ import { regionAnchor } from "./regionNudge";
 import { OP_WORD, plannedOperation, type ExtrudeOp } from "./extrudeOperation";
 import { sweepProbePoints } from "./sweepProbe";
 import { previewVerdict } from "./previewVerdict";
+import { HeldSignal } from "./heldEdit";
 
 /** Below this the extrude is straight: the frontend prism draws instantly and no kernel preview is asked for. */
 const TAPER_EPS = 0.05;
@@ -85,6 +86,9 @@ export class ExtrudeTool {
   private fluentGrab = false;
   /** Set once a drag lets go, so moving the hand to the box does not drag the depth along. */
   private depthHeld = false;
+  /** A drag let go of or a value typed, so the depth an entry opens with alone is not unsaved work. */
+  private touched = false;
+  private readonly held = new HeldSignal();
   private downPos = { x: 0, y: 0 };
 
   /** Degrees, positive narrows the far face. Zero is the plain straight prism. */
@@ -308,7 +312,10 @@ export class ExtrudeTool {
   /** A value typed with the mouse still fires no pointermove, so this keeps the prompt and the operation read off it
    *  from lagging one word behind until Enter. */
   private onTypedDistance() {
-    if (this.phase !== "drag" || !this.dim.isUserDriven("distance")) return;
+    if (this.phase !== "drag") return;
+    this.touched = true;
+    this.held.sync(this.pending);
+    if (!this.dim.isUserDriven("distance")) return;
     const v = this.dim.getValue("distance");
     if (v != null) this.distance = v;
     this.updatePreview();
@@ -384,6 +391,7 @@ export class ExtrudeTool {
         this.disposeTaperHandle();
         this.clearPeek();
         setPrompt("Click a profile area · Esc");
+        this.held.sync(this.pending);
         return;
       }
       this.positionDim();
@@ -401,22 +409,19 @@ export class ExtrudeTool {
     if (this.taperGrabbing) {
       this.taperGrabbing = false;
       this.viewport.domElement.style.cursor = this.taperHovering ? "grab" : "default";
-      this.dim.focus();
-      return;
-    }
-    if (this.grabbing) {
+    } else if (this.grabbing) {
       this.grabbing = false;
       this.viewport.domElement.style.cursor = this.hovering ? "grab" : "default";
       if (!moved) return this.commit();
       this.depthHeld = true;
-      this.dim.focus();
-      return;
-    }
-    if (!this.fluentGrab) return;
-    this.fluentGrab = false;
-    this.viewport.domElement.style.cursor = "default";
-    // A fluent press that never travelled opens the full tool with the depth still following the hand.
-    if (moved) this.depthHeld = true;
+    } else if (this.fluentGrab) {
+      this.fluentGrab = false;
+      this.viewport.domElement.style.cursor = "default";
+      // A fluent press that never travelled opens the full tool with the depth still following the hand.
+      if (moved) this.depthHeld = true;
+    } else return;
+    if (moved) this.touched = true;
+    this.held.sync(this.pending);
     this.dim.focus();
   }
 
@@ -530,6 +535,7 @@ export class ExtrudeTool {
 
   private updatePreview() {
     if (!this.selected.length) return;
+    this.held.sync(this.pending);
     this.refreshPrompt();
     // A typed ∠ is preferred over the last dragged taper, the same way a typed depth is.
     if (this.dim.isUserDriven("taper")) {
@@ -959,6 +965,32 @@ export class ExtrudeTool {
     this.onDone?.(null);
   }
 
+  /** An extrude dragged or typed that Enter would write. */
+  get pending(): boolean {
+    return (
+      this.touched &&
+      this.active &&
+      this.phase === "drag" &&
+      this.selected.length > 0 &&
+      Math.abs(this.distance) >= 1e-3
+    );
+  }
+
+  get dragging(): boolean {
+    return this.grabbing || this.taperGrabbing || this.fluentGrab;
+  }
+
+  /** Told when `pending` turns on or off, for the unsaved mark and the close guard. */
+  onHeldChange(fn: () => void): () => void {
+    return this.held.on(fn);
+  }
+
+  /** For a save: the extrude is written as Enter writes it, which may decline and keep the tool open. A drag still
+   *  under the hand is left alone. */
+  confirmHeld() {
+    if (this.pending && !this.dragging) this.commit();
+  }
+
   private cleanup() {
     const el = this.viewport.domElement;
     el.removeEventListener("pointermove", this.boundMove);
@@ -968,6 +1000,7 @@ export class ExtrudeTool {
     el.style.cursor = "default";
     this.fluentGrab = false;
     this.depthHeld = false;
+    this.touched = false;
     this.grabProj = null;
     this.dim.hide();
     this.disposePreviewGeom();
@@ -1001,6 +1034,7 @@ export class ExtrudeTool {
       this.overlay.update(this.store.document); // re-hide the consumed sketch
     }
     setPrompt(null);
+    this.held.sync(this.pending);
   }
 
   /** The material is reused. */

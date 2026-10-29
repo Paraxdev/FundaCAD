@@ -19,7 +19,7 @@ type WorkEngine = Pick<Engine, "store" | "sketch"> & Partial<Pick<Engine, "tools
 /** The tools whose drag, let go of but not entered, is unsaved work. Missing ones are skipped for partial fakes. */
 export function heldEdits(tools: Engine["tools"] | undefined): HeldEdit[] {
   if (!tools) return [];
-  return [tools.move, tools.pressPull, tools.edgeFeature].filter((t): t is NonNullable<typeof t> => !!t);
+  return [tools.move, tools.pressPull, tools.edgeFeature, tools.extrude].filter((t): t is NonNullable<typeof t> => !!t);
 }
 
 const anyHeld = (e: Partial<Pick<Engine, "tools">>) => heldEdits(e.tools).some((h) => h.pending);

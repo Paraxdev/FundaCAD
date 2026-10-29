@@ -613,6 +613,87 @@ describe("Extrude", () => {
     click(t.canvas, 30);
     expect(t.added).toEqual([feature(3)]);
   });
+
+  describe("a depth let go of but not entered", () => {
+    const saving = (tool: ExtrudeTool) =>
+      ({ store: { dirty: false }, tools: { extrude: tool } }) as unknown as SaveEngine;
+    function armDrag(t: ReturnType<typeof setup>, from: number, to: number) {
+      pointer(t.canvas, "pointermove", from);
+      t.over(true);
+      dragHandle(t.canvas, from, to);
+    }
+
+    it("is written once by a save, as Enter would", () => {
+      const t = setup(true);
+      fluentDrag(t.canvas, 50);
+      expect(needsSave(saving(t.tool))).toBe(true);
+      settleHeldEdit(saving(t.tool));
+      settleHeldEdit(saving(t.tool));
+      expect(t.added).toEqual([feature(5)]);
+      expect(t.tool.active).toBe(false);
+      expect(needsSave(saving(t.tool))).toBe(false);
+    });
+
+    it("is left alone by a save while the hand grabs it again", () => {
+      const t = setup(false);
+      armDrag(t, 0, 40);
+      pointer(t.canvas, "pointerdown", 40);
+      pointer(t.canvas, "pointermove", 60);
+      settleHeldEdit(saving(t.tool));
+      expect(t.added).toEqual([]);
+      expect(t.tool.active).toBe(true);
+      pointer(t.canvas, "pointerup", 60);
+      settleHeldEdit(saving(t.tool));
+      expect(t.added).toEqual([feature(6)]);
+    });
+
+    it("tells its watchers, and Esc still cancels it and clears the mark", () => {
+      const t = setup(true);
+      const seen = vi.fn();
+      t.tool.onHeldChange(seen);
+      fluentDrag(t.canvas, 50);
+      expect(seen).toHaveBeenCalledTimes(1);
+      expect(t.tool.pending).toBe(true);
+      escape();
+      expect(t.tool.active).toBe(false);
+      expect(t.added).toEqual([]);
+      expect(seen).toHaveBeenCalledTimes(2);
+      expect(needsSave(saving(t.tool))).toBe(false);
+      t.tool.start(t.done);
+      expect(needsSave(saving(t.tool))).toBe(false);
+    });
+
+    it("stays quiet while the depth only follows the cursor, and a save leaves the tool open", () => {
+      const t = setup(false);
+      const seen = vi.fn();
+      t.tool.onHeldChange(seen);
+      pointer(t.canvas, "pointermove", 30);
+      expect(needsSave(saving(t.tool))).toBe(false);
+      settleHeldEdit(saving(t.tool));
+      expect(t.added).toEqual([]);
+      expect(t.tool.active).toBe(true);
+      expect(seen).not.toHaveBeenCalled();
+    });
+
+    it("stays quiet on a drag back to no depth", () => {
+      const t = setup(false);
+      armDrag(t, 0, 40);
+      dragHandle(t.canvas, 40, 0);
+      expect(needsSave(saving(t.tool))).toBe(false);
+      settleHeldEdit(saving(t.tool));
+      expect(t.added).toEqual([]);
+      expect(t.tool.active).toBe(true);
+    });
+
+    it("counts a typed depth", () => {
+      const t = setup(false);
+      input().value = "7";
+      input().dispatchEvent(new Event("input", { bubbles: true }));
+      expect(needsSave(saving(t.tool))).toBe(true);
+      settleHeldEdit(saving(t.tool));
+      expect(t.added).toEqual([feature(7)]);
+    });
+  });
 });
 
 describe("Joint", () => {
