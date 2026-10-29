@@ -1,5 +1,6 @@
 mod bundle;
 mod data;
+mod discovery;
 mod handed;
 mod keystore;
 mod launch;

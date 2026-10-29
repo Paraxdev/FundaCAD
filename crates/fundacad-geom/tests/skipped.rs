@@ -108,6 +108,7 @@ fn a_declared_plugin_that_will_not_load_still_fails_its_features() {
     let plugin = dir.join("Test.Old");
     std::fs::create_dir_all(&plugin).unwrap();
     std::fs::write(plugin.join("manifest.json"), r#"{"id": "Test.Old", "featureTypes": ["oldThing"]}"#).unwrap();
+    std::fs::write(plugin.join("installed.json"), r#"{"id": "Test.Old", "consented": {"grants": []}}"#).unwrap();
     std::env::set_var("FUNDACAD_PLUGIN_DIR", &dir);
     fundacad_geom::plugins::reset_for_tests();
     fundacad_geom::plugins::load();
