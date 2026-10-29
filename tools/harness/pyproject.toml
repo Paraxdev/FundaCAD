@@ -7,7 +7,7 @@ name = "fundacad-harness"
 version = "0.1.0"
 description = "Drive the FundaCAD browser build the way a person does, for agent tests and walkthroughs"
 requires-python = ">=3.10"
-dependencies = ["playwright>=1.44,<2"]
+dependencies = ["playwright>=1.49,<2"]
 
 [project.optional-dependencies]
 test = ["pytest>=8"]
