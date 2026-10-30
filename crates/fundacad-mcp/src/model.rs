@@ -114,6 +114,20 @@ pub fn fill_defaults(doc: &mut Doc) {
     doc.entry("paramDefs").or_insert_with(|| json!({}));
 }
 
+/// What is wrong with the document's top level shape, if anything.
+pub fn shape_problem(doc: &Doc) -> Option<&'static str> {
+    if !doc.get("features").is_some_and(Value::is_array) {
+        return Some("`features` is not a list");
+    }
+    if doc.get("parameters").is_some_and(|p| !p.is_object()) {
+        return Some("`parameters` is not an object");
+    }
+    if doc.get("paramDefs").is_some_and(|p| !p.is_object()) {
+        return Some("`paramDefs` is not an object");
+    }
+    None
+}
+
 pub fn features(doc: &Doc) -> &[Value] {
     doc.get("features").and_then(Value::as_array).map_or(&[][..], Vec::as_slice)
 }

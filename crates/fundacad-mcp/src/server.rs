@@ -935,6 +935,9 @@ note: left out of the file, because this build cannot read them and a .funda has
             return Ok(failure("`document` needs a `features` list."));
         }
         let mut next = doc.as_object().cloned().unwrap_or_default();
+        if let Some(why) = model::shape_problem(&next) {
+            return Ok(failure(format!("`document` is not a FundaCAD document: {why}.")));
+        }
         // Shortcuts only: a whole document may carry entity fields from a
         // newer build, and refusing it over them would lose the lot.
         let mut notes = Vec::new();

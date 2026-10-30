@@ -117,6 +117,9 @@ pub fn read_document_full(
     if !doc.contains_key("features") {
         return fail(format!("{} is not a FundaCAD document (no `features`).", path.display()));
     }
+    if let Some(why) = crate::model::shape_problem(&doc) {
+        return fail(format!("{} is not a FundaCAD document ({why}).", path.display()));
+    }
     if blobs.iter().any(|(digest, data)| hash(data) != *digest) {
         return fail("this document's geometry does not match its hash, the file is damaged or was modified");
     }
