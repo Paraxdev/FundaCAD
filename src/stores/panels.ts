@@ -186,6 +186,13 @@ export const usePanelsStore = defineStore("panels", () => {
     else delete row.spots;
   }
 
+  function clearStressPlaces(target: StressTarget) {
+    const row = stressRow(target);
+    if (!row) return;
+    row.faces = emptyFaceSet();
+    delete row.spots;
+  }
+
   function setStressPlacing(target: StressTarget | null, as: "face" | "spot" = "face") {
     if (!stress.value) return;
     stress.value.placing = target;
@@ -296,6 +303,7 @@ export const usePanelsStore = defineStore("panels", () => {
     stressRow,
     addStressSpot,
     removeStressSpot,
+    clearStressPlaces,
     setStressPlacing,
     stressStarted,
     stressSent,

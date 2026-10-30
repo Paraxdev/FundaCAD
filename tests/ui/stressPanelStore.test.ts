@@ -81,6 +81,27 @@ describe("stress panel store", () => {
     expect(p.stress?.setup.supports.map((x) => x.faces.faceIds.length)).toEqual([0, 1, 0]);
   });
 
+  it("clears one row's faces and spots and leaves the other rows alone", () => {
+    const p = usePanelsStore();
+    p.showStress("b1");
+    p.addStressSupport("pinned");
+    p.setStressSupportFaces(1, someFaces);
+    p.setStressSupportFaces(2, someFaces);
+    p.addStressSpot({ support: 1 }, { at: [1, 2, 3], radius: 4, normal: [0, 0, 1] });
+    p.setStressLoadFaces(1, someFaces);
+    p.addStressSpot({ load: 1 }, { at: [1, 2, 3], radius: 4, normal: [0, 0, 1] });
+    p.clearStressPlaces({ support: 1 });
+    const s = p.stress!.setup;
+    expect(s.supports[0]!.faces).toEqual({ selectors: [], faceIds: [], normalSum: [0, 0, 0], area: 0 });
+    expect(s.supports[0]!.spots).toBeUndefined();
+    expect(s.supports[1]!.faces.faceIds).toEqual([7]);
+    expect(s.loads[0]!.spots).toHaveLength(1);
+    p.clearStressPlaces({ load: 1 });
+    expect(s.loads[0]!.faces.selectors).toEqual([]);
+    expect(s.loads[0]!.spots).toBeUndefined();
+    expect(s.body, "the body analysed stays").toBe("b1");
+  });
+
   it("puts a read-back setup in place and drops the result drawn from the old one", () => {
     const p = usePanelsStore();
     p.showStress("b1");

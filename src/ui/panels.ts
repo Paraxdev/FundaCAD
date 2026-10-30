@@ -785,6 +785,12 @@ export function createPanels(deps: PanelsDeps) {
     panels.removeStressSpot(target, index);
   }
 
+  function clearStressPlaces(target: StressTarget) {
+    if (sameTarget(panels.stress?.placing ?? null, target)) stopPlacing();
+    panels.clearStressPlaces(target);
+    refreshStressMarks();
+  }
+
   /** The selected faces as a face set, each selector stamped with its body,
    *  or why they cannot be one. */
   function selectedStressFaces(): { faces: StressFaceSet; body: string } | string {
@@ -1197,6 +1203,7 @@ export function createPanels(deps: PanelsDeps) {
     setStressFacesFromSelection,
     placeStressSpot,
     removeStressSpot,
+    clearStressPlaces,
     addStressSupport,
     removeStressSupport,
     setStressSupportType,
