@@ -111,3 +111,15 @@ fn the_solve_time_grows_as_the_work_and_turns_back_into_elements() {
     assert_eq!(elements_within(f64::INFINITY), usize::MAX);
     assert_eq!(elements_within(0.0), 0);
 }
+
+#[test]
+fn the_release_clock_matches_the_measured_runs_and_prices_a_compact_part_higher() {
+    for (elements, seconds) in [(67_688, 5.5), (99_316, 8.7), (179_240, 21.4)] {
+        let said = release_seconds(elements);
+        assert!((said / seconds - 1.0).abs() < 0.25, "{elements}: {said} against {seconds}");
+    }
+    assert!(release_seconds(80_000) < solve_seconds(80_000) / 3.0);
+    assert!(release_compact_seconds(50_000) >= 3.0 * release_seconds(50_000));
+    assert!(release_elements_within(release_seconds(120_000)).abs_diff(120_000) <= 1);
+    assert_eq!(release_elements_within(f64::INFINITY), usize::MAX);
+}

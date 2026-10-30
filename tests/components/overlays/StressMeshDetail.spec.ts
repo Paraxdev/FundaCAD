@@ -46,11 +46,11 @@ describe("the finer answer in the Stress setup", () => {
     expect(runStress).toHaveBeenCalledWith(true);
   });
 
-  it("says one minute for a short run", async () => {
+  it("says seconds for a short run", async () => {
     const { w, store } = await mounted();
-    refused(store, 12);
+    refused(store, 22);
     await flushPromises();
-    expect(button(w).text()).toBe("Run with finer detail (about 1 min)");
+    expect(button(w).text()).toBe("Run with finer detail (about 20 seconds)");
   });
 
   it("shows no button for an error without the answer", async () => {

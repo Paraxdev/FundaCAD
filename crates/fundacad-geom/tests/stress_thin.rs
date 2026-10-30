@@ -2,7 +2,7 @@
 //! standoffs, held on a side or inside two bores and pushed on two standoff tops.
 
 use fundacad_geom::builder::NoWatch;
-use fundacad_geom::fem::adapt::solve_seconds;
+use fundacad_geom::fem::adapt::release_seconds;
 use fundacad_geom::stress::{stress_result_with, StressLimits, MAX_ELEMENTS};
 use fundacad_protocol::JobResult;
 use serde_json::{json, Value};
@@ -56,6 +56,15 @@ fn nearest(p: [f64; 3]) -> Value {
 
 fn top(i: usize) -> Value {
     nearest([AT[i][0] + 0.5 * (OUTER + BORE), AT[i][1], HEIGHT])
+}
+
+fn with_bore(mut doc: Value, bore: f64) -> Value {
+    for f in doc["features"].as_array_mut().unwrap() {
+        if f["type"] == "cylinder" && f["id"].as_str().is_some_and(|i| i.starts_with('b')) {
+            f["radius"] = json!(bore);
+        }
+    }
+    doc
 }
 
 fn bore(i: usize) -> Value {
@@ -198,7 +207,7 @@ fn assert_finer_answer(r: &Value, elements: std::ops::Range<f64>) {
 }
 
 fn no_time_limit() -> StressLimits {
-    StressLimits { refine_seconds: f64::INFINITY, ..Default::default() }
+    StressLimits { refine_seconds: f64::INFINITY, retry_seconds: f64::INFINITY, ..Default::default() }
 }
 
 #[test]
@@ -220,7 +229,7 @@ fn a_wall_past_the_element_limit_answers_with_a_finer_run() {
 
 #[test]
 fn a_wall_past_the_time_limit_answers_with_a_finer_run() {
-    let r = run_within(plate_on_its_side(), StressLimits { refine_seconds: 1.0, ..no_time_limit() });
+    let r = run_within(plate_on_its_side(), StressLimits { retry_seconds: 1.0, ..no_time_limit() });
     assert_finer_answer(&r, 30_000.0..60_000.0);
 }
 
@@ -297,6 +306,19 @@ fn a_wall_that_stops_the_run_is_named_with_its_thickness_and_place() {
 fn a_mesh_past_the_memory_limit_is_priced_as_a_compact_part() {
     let r = run_within(plate_on_its_side(), StressLimits { memory_cap: 1 << 20, ..no_time_limit() });
     let finer = &r["error"]["finer"];
-    let plain = solve_seconds(num(&finer["elements"]) as usize);
+    let plain = release_seconds(num(&finer["elements"]) as usize);
     assert!(num(&finer["seconds"]) >= 1.5 * plain, "{r}");
+}
+
+#[test]
+fn walls_of_1_2_mm_retry_past_the_old_limit_without_asking() {
+    let mut req = plate_on_its_side();
+    let mut doc = with_bore(standoff_plate(), OUTER - 1.2);
+    doc["features"][0]["length"] = json!(100.0);
+    doc["features"][0]["width"] = json!(60.0);
+    req["document"] = doc;
+    req["fixed"] = json!([nearest([-50.0, 0.0, 0.0])]);
+    let r = run(req);
+    assert!(r.get("error").is_none(), "{r}");
+    assert!(num(&r["mesh"]["elements"]) > MAX_ELEMENTS as f64, "{}", r["mesh"]);
 }

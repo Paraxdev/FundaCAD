@@ -40,6 +40,9 @@ const BISECTIONS: u8 = 3;
 const MIN_REFINED_DIHEDRAL: f64 = 5.0;
 /// Refinement stops when the next pass is predicted to end past this many seconds of the run.
 const REFINE_SECONDS: f64 = 60.0;
+/// A retry after a mesh came apart goes on silently up to this many release build seconds, which is the 60 s the
+/// person may wait with 4 times to spare for a slower machine.
+const RETRY_SECONDS: f64 = 15.0;
 
 /// Elements a run the person asked for after a finer answer may grow a mesh to.
 pub const FINER_MAX_ELEMENTS: usize = 400_000;
@@ -48,7 +51,9 @@ pub const FINER_MAX_ELEMENTS: usize = 400_000;
 #[derive(Clone, Copy, Debug)]
 pub struct StressLimits {
     pub refine_seconds: f64,
-    /// Elements the automatic size may grow a mesh to when walls are too thin for its first mesh.
+    /// Release build seconds the retry for walls too thin for the first mesh may take before it asks.
+    pub retry_seconds: f64,
+    /// Elements that retry may grow a mesh to, however fast it would be.
     pub auto_elements: usize,
     /// Bytes the factorisation may take, and how far a run asked for after a finer answer may lift that.
     pub memory_cap: u64,
@@ -59,7 +64,8 @@ impl Default for StressLimits {
     fn default() -> Self {
         StressLimits {
             refine_seconds: REFINE_SECONDS,
-            auto_elements: MAX_ELEMENTS,
+            retry_seconds: RETRY_SECONDS,
+            auto_elements: FINER_MAX_ELEMENTS,
             memory_cap: solve::FACTOR_MEMORY_CAP,
             finer_memory_cap: solve::FINER_MEMORY_CAP,
         }
@@ -1074,17 +1080,18 @@ struct Finer {
 
 impl Finer {
     fn of(elements: usize) -> Finer {
-        Finer { elements, seconds: adapt::solve_seconds(elements).ceil() as u64 }
+        Finer { elements, seconds: adapt::release_seconds(elements).ceil() as u64 }
     }
 
     fn of_compact(elements: usize) -> Finer {
-        Finer { elements, seconds: adapt::compact_solve_seconds(elements).ceil() as u64 }
+        Finer { elements, seconds: adapt::release_compact_seconds(elements).ceil() as u64 }
     }
 
     /// The run past `ceiling` elements that should keep `wall`, when it is one the finer limit allows.
     fn past(volume: f64, ceiling: usize, wall: Option<ThinWall>) -> Option<Finer> {
         let floor = size_floor(volume, ceiling);
-        let h = match wall.map(|w| w.thickness * WALL_SHARE) {
+        // The retry that fits shrinks once more below the wall's size, as the finer run's own retry does.
+        let h = match wall.map(|w| w.thickness * WALL_SHARE * RETRY_SHRINK) {
             Some(h) if h < floor => h,
             _ => floor * FINER_STEP,
         };
@@ -1550,7 +1557,7 @@ fn analyse(
             // Fine names its elements to start finer, so it must not give up before Standard does.
             max_elements
         } else {
-            limits.auto_elements.min(adapt::elements_within(limits.refine_seconds)).max(max_elements)
+            limits.auto_elements.min(adapt::release_elements_within(limits.retry_seconds)).max(max_elements)
         };
         let Retried { mesh, wall } = mesh_finer(&surface, volume, first, ceiling, &needed, &mut tick);
         let gave_up = match &mesh {

@@ -45,22 +45,36 @@ pub fn work(elements: usize) -> f64 {
 /// (measured 27.5 s at 47937, 37.6 s at 61936, which the exponent predicts within 2%).
 const REFERENCE_ELEMENTS: f64 = 50_000.0;
 const SECONDS_AT_REFERENCE: f64 = 30.0;
-/// A compact part fills in more of its factor: a solid block of 47250 elements took 54.5 s, about twice a thin one.
-const COMPACT_SLOWDOWN: f64 = 2.0;
-
 /// The seconds one solve of this many elements is predicted to take.
 pub fn solve_seconds(elements: usize) -> f64 {
     SECONDS_AT_REFERENCE * (elements as f64 / REFERENCE_ELEMENTS).powf(WORK_EXPONENT)
 }
 
-/// [`solve_seconds`] for a part compact enough that the solver's memory is what stopped it.
-pub fn compact_solve_seconds(elements: usize) -> f64 {
-    COMPACT_SLOWDOWN * solve_seconds(elements)
-}
-
 /// The most elements [`solve_seconds`] predicts can be solved in `seconds`.
 pub fn elements_within(seconds: f64) -> usize {
     (REFERENCE_ELEMENTS * (seconds / SECONDS_AT_REFERENCE).powf(1.0 / WORK_EXPONENT)) as usize
+}
+
+/// Release build, standoff plate with walls 1.0 to 1.3 mm: 5.5 s at 67688 elements, 8.7 s at 99316, 21.4 s at 179240.
+const RELEASE_REFERENCE_ELEMENTS: f64 = 100_000.0;
+const RELEASE_SECONDS_AT_REFERENCE: f64 = 9.0;
+/// A solid block of 38808 to 52224 elements took 4 to 4.4 times a thin walled part of as many.
+const RELEASE_COMPACT_SLOWDOWN: f64 = 4.0;
+
+/// The seconds a release build takes to mesh and solve this many elements of a thin walled part, which the labels
+/// and the silent retry ceiling quote. [`solve_seconds`] stays the refinement's own, more cautious, clock.
+pub fn release_seconds(elements: usize) -> f64 {
+    RELEASE_SECONDS_AT_REFERENCE * (elements as f64 / RELEASE_REFERENCE_ELEMENTS).powf(WORK_EXPONENT)
+}
+
+/// [`release_seconds`] for a part compact enough that the solver's memory is what stopped it.
+pub fn release_compact_seconds(elements: usize) -> f64 {
+    RELEASE_COMPACT_SLOWDOWN * release_seconds(elements)
+}
+
+/// The most elements [`release_seconds`] predicts can be solved in `seconds`.
+pub fn release_elements_within(seconds: f64) -> usize {
+    (RELEASE_REFERENCE_ELEMENTS * (seconds / RELEASE_SECONDS_AT_REFERENCE).powf(1.0 / WORK_EXPONENT)) as usize
 }
 
 /// The element cap of the next refinement pass after the passes of `counts` (pass 0 first), or None when the plan's
