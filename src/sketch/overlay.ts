@@ -200,6 +200,9 @@ export class SketchOverlay {
    *  areas shown are split against an older model until the next update(). */
   splitStale = false;
 
+  /** Set by the app to ask the on demand viewport for a frame, or a redrawn overlay waits for the next pointer move. */
+  changed: () => void = () => {};
+
   /** Rebuild committed sketch curves + region fills from the document. */
   update(doc: CadDocument, hiddenSketchId: string | null = null) {
     this.splitStale = false;
@@ -245,6 +248,7 @@ export class SketchOverlay {
         this.regions.push(wr);
       }
     }
+    this.changed();
   }
 
   /** From the client-side glyph tessellation cache, empty until it warms; the fill repaints a frame later. */

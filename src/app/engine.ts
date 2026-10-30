@@ -283,6 +283,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
 
   e.overlay = new SketchOverlay();
   e.viewport.addToScene(e.overlay.group, "sketches");
+  e.overlay.changed = () => e.viewport.requestRender();
   e.sketch = new SketchMode(e.viewport, e.overlay);
   // Areas split where the engine cuts a consuming feature's profile, so a highlighted area is what builds. The build
   // result is the epoch, since a visibility toggle re-emits the same one.
