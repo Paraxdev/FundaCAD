@@ -1,8 +1,12 @@
 //! In the Flatpak an assistant reaches one folder of its own, and any other path asks the user in the app.
 
+use crate::link::{args, EngineLink};
 use crate::scope::{canonical, within};
+use serde_json::{json, Value};
 use std::future::Future;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 pub const FOLDER_NAME: &str = "FundaCAD";
 
@@ -189,6 +193,92 @@ pub async fn reach<A: AskUser>(
                 Answer::Declined => Err(declined(kind, &path)),
                 Answer::NoWindow => Err(refusal()),
             }
+        }
+    }
+}
+
+/// The user may be reading the request or browsing folders, so this waits minutes, not seconds.
+pub const ASK_TIMEOUT: Duration = Duration::from_secs(300);
+pub const ASK_POLL: Duration = Duration::from_millis(300);
+
+/// Asks through the live session the app window hosts in the engine; the window shows the file chooser.
+pub struct EngineAsker {
+    pub link: Arc<EngineLink>,
+    /// The assistant's name, as the window's title for the request shows it.
+    pub name: String,
+    pub poll: Duration,
+    pub timeout: Duration,
+}
+
+impl EngineAsker {
+    pub fn new(link: Arc<EngineLink>, name: impl Into<String>) -> EngineAsker {
+        EngineAsker { link, name: name.into(), poll: ASK_POLL, timeout: ASK_TIMEOUT }
+    }
+
+    /// The op's own answer, or None when the socket went away with the window's engine.
+    async fn call(&self, payload: Value) -> Result<Option<Value>, String> {
+        let mut payload = payload;
+        payload["name"] = json!(self.name);
+        let Ok(reply) = self.link.call("session_ask", payload).await else {
+            return Ok(None);
+        };
+        if reply.get("ok") != Some(&json!(true)) {
+            let why = reply.pointer("/error/message").and_then(Value::as_str).unwrap_or("the engine refused");
+            return Err(format!("FundaCAD could not ask the user for a file: {why}"));
+        }
+        Ok(Some(reply.get("result").cloned().unwrap_or_else(|| json!({}))))
+    }
+
+    async fn wait(&self, id: &str, kind: AskKind) -> Result<Answer, String> {
+        let deadline = Instant::now() + self.timeout;
+        while Instant::now() < deadline {
+            tokio::time::sleep(self.poll).await;
+            let Some(res) = self.call(args([("askId", json!(id))])).await? else {
+                return Ok(Answer::NoWindow);
+            };
+            // Unknown here means the engine dropped the ask with its session.
+            if res.get("ok") != Some(&json!(true)) {
+                return Ok(Answer::NoWindow);
+            }
+            if res.get("answered") != Some(&json!(true)) {
+                continue;
+            }
+            return Ok(match res.get("path").and_then(Value::as_str).filter(|p| !p.is_empty()) {
+                Some(path) => Answer::Picked(PathBuf::from(path)),
+                None if res.get("closed") == Some(&json!(true)) => Answer::NoWindow,
+                None => Answer::Declined,
+            });
+        }
+        let _ = self.call(args([("askId", json!(id)), ("cancel", json!(true))])).await;
+        let done = if kind == AskKind::Open { "opened" } else { "written" };
+        let minutes = self.timeout.as_secs().div_ceil(60);
+        let unit = if minutes == 1 { "minute" } else { "minutes" };
+        Err(format!(
+            "The user did not answer the file chooser in the FundaCAD window within {minutes} {unit}, so nothing was \
+             {done}."
+        ))
+    }
+}
+
+impl AskUser for EngineAsker {
+    fn ask(&self, ask: PathAsk) -> impl Future<Output = Result<Answer, String>> + Send {
+        async move {
+            let shown = json!({"kind": ask.kind.as_str(), "tool": ask.tool,
+                               "path": ask.path.to_string_lossy(), "exts": ask.exts});
+            let Some(res) = self.call(args([("ask", shown)])).await? else {
+                return Ok(Answer::NoWindow);
+            };
+            if res.get("ok") != Some(&json!(true)) {
+                if res.get("reason").and_then(Value::as_str) == Some("no-host") {
+                    return Ok(Answer::NoWindow);
+                }
+                let why = res.get("message").and_then(Value::as_str).unwrap_or("the request was refused");
+                return Err(format!("FundaCAD could not ask the user for a file: {why}"));
+            }
+            let Some(id) = res.get("askId").and_then(Value::as_str) else {
+                return Err("FundaCAD could not ask the user for a file: the engine gave no request id".into());
+            };
+            self.wait(id, ask.kind).await
         }
     }
 }
