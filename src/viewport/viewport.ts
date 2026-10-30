@@ -62,6 +62,7 @@ import { clipSelectionOverlays, selectionGlowWarmup } from "./selectionGlow";
 import { linkProgramsAhead } from "./linkPrograms";
 import { GhostLayer, type BlendGhostEdge } from "./ghosts";
 import type { BlendKind } from "../features/blendGhost";
+import type { Continuity } from "../features/continuity";
 import { hideFlushSeams } from "./flushSeams";
 import { EdgeEmphasis } from "./edgeEmphasis";
 import { ViewCube, FACE_VIEWS } from "./viewCube";
@@ -3888,8 +3889,14 @@ export class Viewport {
   clearPressPullGhost() {
     this.ghosts.clearPressPullGhost();
   }
-  setBlendGhost(edges: readonly BlendGhostEdge[], size: number, kind: BlendKind, capped = false) {
-    this.ghosts.setBlendGhost(edges, size, kind, capped);
+  setBlendGhost(
+    edges: readonly BlendGhostEdge[],
+    size: number,
+    kind: BlendKind,
+    capped = false,
+    continuity: Continuity = "G1",
+  ) {
+    this.ghosts.setBlendGhost(edges, size, kind, capped, continuity);
   }
   clearBlendGhost() {
     this.ghosts.clearBlendGhost();

@@ -19,7 +19,7 @@ const EDGE = { kind: "edge", by: "nearest", point: [0, 0, 0], body: "b1" };
 
 /** One picked edge per curvature, the engine's `curvature` across each, per mm of radius and of chord (absent when
  *  flat). */
-function setup(curvatures: number[] = []) {
+function setup(curvatures: number[] = [], kind: "fillet" | "chamfer" = "fillet") {
   const picks = curvatures.map((_, i) => ({ ...EDGE, point: [i * 10, 0, 0] }));
   const lines = curvatures.map((k, i) => ({
     id: `e${i}`,
@@ -35,6 +35,7 @@ function setup(curvatures: number[] = []) {
   camera.position.set(0, -100, 0);
   camera.lookAt(0, 0, 0);
   camera.updateMatrixWorld(true);
+  const ghostDraws: unknown[][] = [];
   const vp = lenient<Viewport>({
     domElement: document.createElement("canvas"),
     camera,
@@ -48,6 +49,7 @@ function setup(curvatures: number[] = []) {
     edgeLineByMid: () => null,
     visibleEdgeLines: () => [],
     rayFrom: () => new THREE.Raycaster(new THREE.Vector3(0, -100, 0), new THREE.Vector3(0, 1, 0)),
+    setBlendGhost: (...args: unknown[]) => ghostDraws.push(args),
   });
   let n = 0;
   const added: unknown[] = [];
@@ -60,8 +62,8 @@ function setup(curvatures: number[] = []) {
     addFeature: (f: unknown) => added.push(f),
   });
   const tool = new EdgeFeatureTool(vp, store);
-  tool.start("fillet", () => {});
-  return { tool, added };
+  tool.start(kind, () => {});
+  return { tool, added, ghostDraws };
 }
 
 /** Edits a stored fillet on one edge that curves across at `curvature` per mm of radius and of chord, once the
@@ -81,11 +83,13 @@ function setupEdit(fillet: Record<string, unknown>, curvature: [number, number])
   camera.position.set(0, -100, 0);
   camera.lookAt(0, 0, 0);
   camera.updateMatrixWorld(true);
+  const ghostDraws: unknown[][] = [];
   const vp = lenient<Viewport>({
     domElement: document.createElement("canvas"),
     camera,
     suspendPicking: false,
     edgeLineForSelector: () => line,
+    setBlendGhost: (...args: unknown[]) => ghostDraws.push(args),
     pixelWorldSize: () => 0.1,
     projectToScreen: () => ({ x: 100, y: 100 }),
     modelDiagonal: () => 100,
@@ -112,7 +116,7 @@ function setupEdit(fillet: Record<string, unknown>, curvature: [number, number])
   const tool = new EdgeFeatureTool(vp, store);
   expect(tool.startEdit("f1", () => {})).toBe(true);
   landed!({ building: false, result: { bbox: { min: [0, 0, 0], max: [1, 1, 1] } }, previewBuilt: [] });
-  return { tool, added };
+  return { tool, added, ghostDraws };
 }
 
 const input = () => document.querySelector<HTMLInputElement>(".dim-input input")!;
@@ -209,6 +213,26 @@ describe("fillet continuity control", () => {
     expect(t.added).toEqual([{ id: "f1", type: "fillet", radius: 4, edges: EDGE, continuity: "G2" }]);
   });
 
+  it("a picked profile redraws the preview at once, in that profile", () => {
+    t.tool.cancel();
+    document.body.innerHTML = "";
+    t = setup([0]);
+    const drawn = () => t.ghostDraws.at(-1)?.[4];
+    expect(drawn()).toBe("G1");
+    click(segment("G3"));
+    expect(drawn()).toBe("G3");
+    input().blur();
+    key(document.body, "2");
+    expect(drawn()).toBe("G2");
+  });
+
+  it("a chamfer preview is drawn as G1", () => {
+    t.tool.cancel();
+    document.body.innerHTML = "";
+    t = setup([0], "chamfer");
+    expect(t.ghostDraws.at(-1)?.[4]).toBe("G1");
+  });
+
   describe("on an edge along a curved face", () => {
     it("a mixed pick greys G2 and G3 with the reason, and their keys say why instead of picking", () => {
       t.tool.cancel();
@@ -283,6 +307,14 @@ describe("fillet continuity control", () => {
       type("20");
       enter();
       expect(t.added).toEqual([{ id: "f1", type: "fillet", radius: 20, edges: { ...EDGE, point: [0, 0, 0] } }]);
+    });
+
+    it("opening a stored G2 its edge refuses draws the preview as G1", () => {
+      t.tool.cancel();
+      document.body.innerHTML = "";
+      t = setupEdit({ radius: 2, continuity: "G2" }, [1 / 15, 1 / 15]);
+      expect(t.ghostDraws.length).toBeGreaterThan(0);
+      expect(t.ghostDraws.at(-1)?.[4]).toBe("G1");
     });
   });
 });
