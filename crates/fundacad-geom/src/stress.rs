@@ -45,13 +45,21 @@ const REFINE_SECONDS: f64 = 60.0;
 #[derive(Clone, Copy, Debug)]
 pub struct StressLimits {
     pub refine_seconds: f64,
+    /// Elements the automatic size may grow a mesh to when walls are too thin for its first mesh.
+    pub auto_elements: usize,
 }
 
 impl Default for StressLimits {
     fn default() -> Self {
-        StressLimits { refine_seconds: REFINE_SECONDS }
+        StressLimits { refine_seconds: REFINE_SECONDS, auto_elements: MAX_ELEMENTS }
     }
 }
+
+/// The lattice keeps a wall when the element is at most this times its thickness: a 1.3 mm wall meshed at 1.5 mm
+/// and came apart at 1.55 mm.
+const WALL_SHARE: f64 = 1.1;
+/// Every retry after a mesh came apart shrinks the elements at least this much.
+const RETRY_SHRINK: f64 = 0.9;
 
 /// Tetrahedra per element size cubed of the mesher's lattice, with its allowance for the
 /// stencils that split boundary cells (`tetmesh` TETS_PER_CELL x BOUNDARY_ALLOWANCE).
@@ -954,6 +962,34 @@ fn solve_error_text(e: &SolveError, elements: usize) -> String {
     }
 }
 
+/// Meshes again with smaller elements after the automatic size came apart, no larger than the thinnest wall
+/// allows, until a mesh holds or the finest that `ceiling` elements allow came apart too; then `failed` stands.
+fn mesh_finer(
+    surface: &SurfaceMesh,
+    volume: f64,
+    failed: MeshError,
+    ceiling: usize,
+    tick: &mut dyn FnMut() -> bool,
+) -> Result<(TetMesh, MeshStats), MeshError> {
+    let mut h = match failed {
+        MeshError::TooThin { size, .. } | MeshError::TooSmall { size, .. } => size,
+        other => return Err(other),
+    };
+    let wall = tetmesh::thinnest_wall(surface, 2.0 * h, tick)?;
+    let floor = size_floor(volume, ceiling);
+    loop {
+        if h <= floor {
+            return Err(failed);
+        }
+        let shrunk = h * RETRY_SHRINK;
+        h = wall.map_or(shrunk, |w| shrunk.min(w.thickness * WALL_SHARE)).max(floor);
+        match tetmesh::tetrahedralize(surface, &MeshOptions { size: h, max_tets: ceiling }, tick) {
+            Err(MeshError::TooThin { .. } | MeshError::TooSmall { .. }) => continue,
+            other => return other,
+        }
+    }
+}
+
 fn mesh_error_text(e: &MeshError) -> String {
     match e {
         MeshError::Cancelled => "cancelled".into(),
@@ -1225,7 +1261,8 @@ fn analyse(
     let refine = refine_of(req.get("refine"))?;
     let started = Instant::now();
     let mut warnings: Vec<String> = Vec::new();
-    let max_elements = match positive(req, "maxElements")? {
+    let asked_elements = positive(req, "maxElements")?;
+    let max_elements = match asked_elements {
         None => DEFAULT_MAX_ELEMENTS,
         Some(n) if n > MAX_ELEMENTS as f64 => {
             warnings.push(format!(
@@ -1351,10 +1388,16 @@ fn analyse(
         crate::heartbeat::beat();
         !(watch.cancelled() || crate::cancel::requested())
     };
-    let stuff = |size: f64, tick: &mut dyn FnMut() -> bool| {
-        tetmesh::tetrahedralize(&surface, &MeshOptions { size, max_tets: max_elements }, tick)
-    };
-    let (mesh, stats): (TetMesh, MeshStats) = stuff(effective, &mut tick).map_err(|e| mesh_error_text(&e))?;
+    let first = tetmesh::tetrahedralize(&surface, &MeshOptions { size: effective, max_tets: max_elements }, &mut tick);
+    let retried = first.is_err() && size.is_none();
+    let (mesh, stats): (TetMesh, MeshStats) = match first {
+        Err(e) if retried => {
+            let ceiling = if asked_elements.is_some() { max_elements } else { limits.auto_elements };
+            mesh_finer(&surface, volume, e, ceiling, &mut tick)
+        }
+        other => other,
+    }
+    .map_err(|e| mesh_error_text(&e))?;
 
     // Every spot in one list, the supports' first, each with its name for a refusal.
     let mut spots = Vec::new();
@@ -1495,7 +1538,8 @@ fn analyse(
             stats.size, thickness
         ));
     }
-    if stats.size > requested * 1.0001 {
+    // A finer retry sizes the mesh by its thinnest wall, not by the element limit.
+    if !retried && stats.size > requested * 1.0001 {
         warnings.push(format!(
             "the element size grew from {requested:.3} mm to {:.3} mm to stay within {max_elements} elements, allow more elements for a finer mesh",
             stats.size

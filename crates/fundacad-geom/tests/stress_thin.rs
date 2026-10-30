@@ -2,7 +2,7 @@
 //! standoffs, held on a side or inside two bores and pushed on two standoff tops.
 
 use fundacad_geom::builder::NoWatch;
-use fundacad_geom::stress::{stress_result_with, StressLimits};
+use fundacad_geom::stress::{stress_result_with, StressLimits, MAX_ELEMENTS};
 use fundacad_protocol::JobResult;
 use serde_json::{json, Value};
 
@@ -23,7 +23,7 @@ fn json_of(r: JobResult) -> Value {
 
 fn run(req: Value) -> Value {
     let Value::Object(m) = req else { panic!("a request is an object") };
-    json_of(stress_result_with(&m, &NoWatch, &StressLimits { refine_seconds: f64::INFINITY }))
+    json_of(stress_result_with(&m, &NoWatch, &StressLimits { refine_seconds: f64::INFINITY, ..Default::default() }))
 }
 
 /// A plate centred on the origin from z = -1 to 1, with four tubes standing on it to z = HEIGHT and bored through
@@ -75,6 +75,9 @@ fn sane(r: &Value) {
     let moved = num(&r["maxDisplacement"]["value"]);
     assert!(peak.is_finite() && peak > 0.0, "{peak}");
     assert!(moved.is_finite() && moved > 0.0, "{moved}");
+    assert!(num(&r["mesh"]["elements"]) <= MAX_ELEMENTS as f64, "{}", r["mesh"]);
+    let warnings = r["warnings"].as_array().map_or(&[][..], |w| w.as_slice());
+    assert!(!warnings.iter().any(|w| w.as_str().is_some_and(|w| w.contains("grew"))), "{warnings:?}");
     let applied = vec3(&r["applied"]);
     let reaction = vec3(&r["reaction"]);
     let size = applied.iter().map(|v| v * v).sum::<f64>().sqrt();
