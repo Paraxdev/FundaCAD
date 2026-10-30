@@ -40,18 +40,25 @@ To remove FundaCAD, run `flatpak uninstall dev.fundacad.app`, `sudo apt remove f
 
 The beta suits most people, a change only reaches it once it has passed every test. The [development build](https://github.com/Paraxdev/fundacad/releases/tag/development) has every change the day it lands, and is sometimes broken.
 
-To switch, install the file from the other page. If its version number is lower, uninstall first.
+The development build is a separate app called FundaCAD Dev. It installs beside FundaCAD, so you can keep both.
+
+To move between Beta and Stable, see [Updates](#updates).
 
 ## Updates
 
 When a new build is out, a message at the bottom of the window says so. Restart & update installs it, after asking you to save your changes.
 
-Preferences > Updates sets when FundaCAD looks:
+Preferences > Updates sets when and where FundaCAD looks:
 
 1. **Check for updates automatically** is on to start with. Off, nothing is sent until you choose Help > Check for Updates….
 2. **Check** picks Every launch, Daily or Weekly. Daily is the default.
+3. **Channel** picks where updates come from: Stable or Beta. Until the first stable release is out, Stable shows No stable release yet and cannot be picked.
 
-On Linux only the AppImage updates itself. For the other files, install the newer one over the old one.
+The next check looks in the channel you pick. If the build there is older than yours, FundaCAD asks before it installs it. Your files and settings stay.
+
+Picking Development opens the release page of FundaCAD Dev, which installs beside this app.
+
+On Linux only the AppImage updates itself. For the other files, install the newer one over the old one. Their Updates page shows the Channel but cannot change it.
 
 ## If FundaCAD opens blank
 
