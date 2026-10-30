@@ -73,7 +73,7 @@ function keepOnly(src, ranges) {
 
 function vueRegions(src) {
   const scripts = [];
-  for (const m of src.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)) {
+  for (const m of src.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script\b[^>]*>/gi)) {
     const start = m.index + m[0].indexOf(">") + 1;
     scripts.push([start, start + m[1].length]);
   }

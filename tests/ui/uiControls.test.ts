@@ -147,6 +147,11 @@ describe("controls built in TS", () => {
     const src = vue(`<div />`, `const b = document.createElement("button");`);
     expect(kinds({ "src/components/A.vue": src })).toEqual(["src/components/A.vue:2 createElement:button"]);
   });
+
+  it("finds a script block whatever the case or spacing of its tags", () => {
+    const src = `<SCRIPT setup>\nconst b = document.createElement("button");\n</script >\n\n<template>\n<div />\n</template>\n`;
+    expect(kinds({ "src/components/A.vue": src })).toEqual(["src/components/A.vue:2 createElement:button"]);
+  });
 });
 
 describe("inline styles", () => {
