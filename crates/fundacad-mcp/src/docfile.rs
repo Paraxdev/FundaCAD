@@ -341,7 +341,7 @@ fn read_fnda(raw: &[u8]) -> Result<(Value, Vec<(String, Vec<u8>)>, Vec<String>),
         let (ta, tb, tl) = (u64_at(head, 16) as usize, u64_at(head, 24) as usize, u64_at(head, 32) as usize);
         let crc = u32_at(head, 40);
         for off in [ta, tb] {
-            if off + tl > raw.len() {
+            if off.checked_add(tl).is_none_or(|end| end > raw.len()) {
                 continue;
             }
             let t = &raw[off..off + tl];
@@ -405,15 +405,21 @@ fn read_fnda(raw: &[u8]) -> Result<(Value, Vec<(String, Vec<u8>)>, Vec<String>),
         if shard == 0 || k == 0 {
             return damaged();
         }
-        let groups = stored.div_ceil(shard * k);
+        let (Some(step), Some(stride)) = (shard.checked_mul(k), (k + m).checked_mul(shard)) else {
+            return damaged();
+        };
+        if stored > raw.len() || off > raw.len() {
+            return damaged();
+        }
+        let groups = stored.div_ceil(step);
         let mut data = Vec::with_capacity(stored);
         let mut q = off;
         for _ in 0..groups {
-            let end = (q + shard * k).min(raw.len());
-            if q < raw.len() {
-                data.extend_from_slice(&raw[q..end]);
+            if q >= raw.len() {
+                break;
             }
-            q += (k + m) * shard;
+            data.extend_from_slice(&raw[q..q.saturating_add(step).min(raw.len())]);
+            q = q.saturating_add(stride);
         }
         data.truncate(stored);
         let body = if codec == 1 { inflate_raw(&data, rawlen).unwrap_or_default() } else { data };
@@ -553,10 +559,10 @@ fn cbor_item(b: &[u8], mut p: usize) -> Result<(Value, usize), DocumentFileError
                     p += 1;
                 }
                 Some(n) => {
-                    let end = p + n as usize;
-                    if end > b.len() {
+                    let Some(end) = usize::try_from(n).ok().and_then(|n| p.checked_add(n)).filter(|&e| e <= b.len())
+                    else {
                         return bad_cbor();
-                    }
+                    };
                     parts.extend_from_slice(&b[p..end]);
                     p = end;
                 }

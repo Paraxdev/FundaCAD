@@ -80,7 +80,9 @@ fn write_raw(path: &Path, sections: &[Section]) {
         table.extend_from_slice(&s.off.unwrap_or(off).to_le_bytes());
         table.extend_from_slice(&s.stored.unwrap_or(s.stored_bytes.len() as u64).to_le_bytes());
         table.extend_from_slice(&s.rawlen.to_le_bytes());
-        table.extend_from_slice(&[0u8; 16]);
+        let digest = fundacad_mcp::docfile::hash(&s.stored_bytes);
+        let digest: Vec<u8> = (0..16).map(|i| u8::from_str_radix(&digest[2 * i..2 * i + 2], 16).unwrap()).collect();
+        table.extend_from_slice(if s.codec == 0 { &digest } else { &[0u8; 16] });
         table.extend_from_slice(&s.shard.to_le_bytes());
         table.extend_from_slice(&s.k.to_le_bytes());
         table.extend_from_slice(&s.m.to_le_bytes());
@@ -128,4 +130,55 @@ fn geometry_sections_together_past_the_limit_are_refused_before_reading() {
     write_raw(&path, &sections);
     let e = fundacad_mcp::docfile::read_document(&path).unwrap_err();
     assert!(e.0.contains("8 GiB"), "{}", e.0);
+}
+
+fn set_table_offset(path: &Path, at: u64) {
+    let mut raw = std::fs::read(path).unwrap();
+    raw[16..24].copy_from_slice(&at.to_le_bytes());
+    raw[24..32].copy_from_slice(&at.to_le_bytes());
+    let crc = crc32(&raw[..56]);
+    raw[56..60].copy_from_slice(&crc.to_le_bytes());
+    std::fs::write(path, &raw).unwrap();
+}
+
+#[test]
+fn a_table_offset_past_the_address_space_is_refused() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("part.fundab");
+    write_raw(&path, &[Section::new(1, 0, vec![0xA0], 1)]);
+    set_table_offset(&path, u64::MAX - 8);
+    assert!(fundacad_mcp::docfile::read_document(&path).is_err());
+}
+
+#[test]
+fn a_section_stored_size_larger_than_the_file_is_refused() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("part.fundab");
+    for stored in [u64::MAX, 1 << 40, 4096] {
+        let mut s = Section::new(1, 0, vec![0xA0], 1);
+        s.stored = Some(stored);
+        write_raw(&path, &[s]);
+        let (out, largest) = largest_allocation_during(|| fundacad_mcp::docfile::read_document(&path));
+        assert!(out.is_err(), "stored {stored}");
+        assert!(largest < 1 << 20, "stored {stored}: the reader asked for {largest} bytes at once");
+    }
+}
+
+#[test]
+fn a_section_offset_past_the_address_space_is_refused() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("part.fundab");
+    let mut s = Section::new(1, 0, vec![0xA0], 1);
+    s.off = Some(u64::MAX);
+    write_raw(&path, &[s]);
+    assert!(fundacad_mcp::docfile::read_document(&path).is_err());
+}
+
+#[test]
+fn a_cbor_string_longer_than_its_section_is_refused() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("part.fundab");
+    let doc = [0x7B, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF];
+    write_raw(&path, &[Section::new(1, 0, doc.to_vec(), doc.len() as u64)]);
+    assert!(fundacad_mcp::docfile::read_document(&path).is_err());
 }
