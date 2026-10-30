@@ -225,6 +225,26 @@ fn a_saved_file_holds_what_the_app_reads_and_opens_again_unchanged() {
 }
 
 #[test]
+fn the_list_says_when_its_face_numbers_are_older_than_the_model() {
+    const OLD: &str =
+        "The document has not been built since it last changed, so these face numbers may name other faces.";
+    let mut mcp = Mcp::start(&BTreeMap::new(), &std::env::temp_dir());
+    box_part(&mut mcp);
+    ok(mcp.call("material_set", json!({"id": "m-green", "name": "Green", "color": "#00dd00"})));
+    ok(mcp.call("material_assign", json!({"material": "m-green", "faces": [{"body": "body1", "face": 1}]})));
+    let list = ok(mcp.call("material_list", json!({})));
+    assert!(list.contains("body1 F1") && !list.contains(OLD), "{list}");
+
+    ok(mcp.call("feature_update", json!({"id": "bx", "patch": {"height": 12}})));
+    let list = ok(mcp.call("material_list", json!({})));
+    assert!(list.contains(OLD), "{list}");
+
+    ok(mcp.call("build", json!({})));
+    let list = ok(mcp.call("material_list", json!({})));
+    assert!(!list.contains(OLD), "{list}");
+}
+
+#[test]
 fn a_saved_face_that_is_gone_is_reported_and_not_painted_on_another_face() {
     let mut mcp = Mcp::start(&BTreeMap::new(), &std::env::temp_dir());
     box_part(&mut mcp);

@@ -566,6 +566,15 @@ pub fn lost_faces_note(doc: &Doc, mesh: &[MeshBody]) -> Option<String> {
     })
 }
 
+/// For `material_list` when the document changed after its last build, so the saved numbers cannot be checked yet.
+pub fn unbuilt_faces_note(doc: &Doc) -> Option<String> {
+    let worn = doc.get("faceMaterials").and_then(Value::as_object).is_some_and(|m| !m.is_empty());
+    (worn && faces_unreliable(doc).is_none()).then(|| {
+        "The document has not been built since it last changed, so these face numbers may name other faces. After `build` they are current, and this list names any that are on no face."
+            .to_string()
+    })
+}
+
 /// Moves each saved face to the number it has in this build, the way the app does when it saves, so the keys, the list
 /// and a later assign all speak of the same face. Numbers mean nothing here while the timeline is not whole.
 pub fn rekey_faces(doc: &mut Doc, mesh: &[MeshBody]) {

@@ -287,6 +287,21 @@ fn a_face_lost_in_a_rebuild_paints_nothing_and_the_list_says_so() {
 }
 
 #[test]
+fn saved_face_numbers_from_before_the_last_build_are_called_out() {
+    let mut d = new_document();
+    assert_eq!(unbuilt_faces_note(&d), None, "no face wears anything");
+    d.insert("faceMaterials".into(), json!({"body1#1": "m-a"}));
+    assert_eq!(
+        unbuilt_faces_note(&d).as_deref(),
+        Some(
+            "The document has not been built since it last changed, so these face numbers may name other faces. After `build` they are current, and this list names any that are on no face."
+        )
+    );
+    d.insert("rollback".into(), json!("f1"));
+    assert_eq!(unbuilt_faces_note(&d), None, "a build does not move them while the timeline is not whole");
+}
+
+#[test]
 fn a_face_moves_to_its_new_number_unless_the_timeline_is_not_whole() {
     let quad = |z: f32| [0.0, 0.0, z, 1.0, 0.0, z, 1.0, 1.0, z, 0.0, 1.0, z];
     let mesh = MeshBody {

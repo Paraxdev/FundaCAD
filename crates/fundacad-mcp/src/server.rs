@@ -1142,12 +1142,19 @@ note: left out of the file, because this build cannot read them and a .funda has
     pub async fn t_material_list(&self, _args: JsonObject) -> Result<CallToolResult, McpError> {
         let st = self.state.lock().await;
         let mut out = materials_doc::list(&st.doc);
-        // The mesh of an older build, or of none, says nothing about where the saved faces are now.
-        if !st.mesh.is_empty() && st.built_for.as_deref() == Some(&signature(&st.doc)) {
-            if let Some(note) = materials_doc::lost_faces_note(&st.doc, &st.mesh) {
-                out.push('\n');
-                out.push_str(&note);
-            }
+        // The mesh of an older build, or of none, says nothing about where the saved faces are now. A live window
+        // keeps its own numbers, and no MCP build moves them.
+        let built = st.built_for.as_deref() == Some(&signature(&st.doc));
+        let note = if built && !st.mesh.is_empty() {
+            materials_doc::lost_faces_note(&st.doc, &st.mesh)
+        } else if !built && st.live.is_none() {
+            materials_doc::unbuilt_faces_note(&st.doc)
+        } else {
+            None
+        };
+        if let Some(note) = note {
+            out.push('\n');
+            out.push_str(&note);
         }
         Ok(text(out))
     }
