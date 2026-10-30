@@ -100,13 +100,12 @@ runs:
         # system wide AppImage cannot read, and appimagetool now refuses that.
         chmod -R a+rX "$root"
 
-        curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 -o "$work/appimagetool" \
-          https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
-        chmod +x "$work/appimagetool"
-        # The runtime the build fetched with retries, so appimagetool does not
-        # download it again with none.
-        ARCH=x86_64 "$work/appimagetool" --appimage-extract-and-run \
-          ${LDAI_RUNTIME_FILE:+--runtime-file "$LDAI_RUNTIME_FILE"} "$root" "$img"
+        # Both come from the bundle job's checked pin file. Without --runtime-file
+        # appimagetool would fetch an unchecked runtime itself.
+        [ -x "${APPIMAGETOOL:-}" ] || { echo "::error::APPIMAGETOOL is not set to the pinned appimagetool"; exit 1; }
+        [ -s "${LDAI_RUNTIME_FILE:-}" ] || { echo "::error::LDAI_RUNTIME_FILE is not set to the pinned runtime"; exit 1; }
+        ARCH=x86_64 "$APPIMAGETOOL" --appimage-extract-and-run \
+          --runtime-file "$LDAI_RUNTIME_FILE" "$root" "$img"
         echo "after: $(du -m "$img" | cut -f1) MB"
 
         # The old .sig covers the old bytes. Leaving it would hand every existing
