@@ -62,10 +62,12 @@ fn is_hash(s: &str) -> bool {
     s.len() == 32 && s.bytes().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
 }
 
+fn wrong_geometry<T>() -> Result<T, DocumentFileError> {
+    fail("this document's geometry does not match its hash, the file is damaged or was modified")
+}
+
+// Every reader below has already checked each blob against its hash.
 fn publish(root: &Path, digest: &str, data: &[u8]) -> Result<(), DocumentFileError> {
-    if hash(data) != digest {
-        return fail("this document's geometry does not match its hash, the file is damaged or was modified");
-    }
     if std::fs::create_dir_all(root).is_err() {
         return fail(format!("cannot write the blob store at {}", root.display()));
     }
@@ -122,14 +124,11 @@ pub fn read_document_full(
     if let Some(why) = crate::model::shape_problem(&doc) {
         return fail(format!("{} is not a FundaCAD document ({why}).", path.display()));
     }
-    if blobs.iter().any(|(digest, data)| hash(data) != *digest) {
-        return fail("this document's geometry does not match its hash, the file is damaged or was modified");
-    }
     Ok((doc, blobs, unread))
 }
 
 /// Best effort: a store this process cannot write is no reason to refuse a
-/// file whose geometry the engine took directly.
+/// file whose geometry the engine took directly. Takes blobs as `read_document_full` returns them, already checked.
 pub fn publish_all(root: &Path, blobs: &[(String, Vec<u8>)]) -> bool {
     blobs.iter().all(|(digest, data)| publish(root, digest, data).is_ok())
 }
@@ -160,7 +159,8 @@ fn read_json(path: &Path, raw: &[u8]) -> Result<(Value, Vec<(String, Vec<u8>)>),
                 return fail("this document expands to more than 8 GiB and was refused");
             }
             match base64::engine::general_purpose::STANDARD.decode(b64) {
-                Ok(data) => blobs.push((digest.clone(), data)),
+                Ok(data) if hash(&data) == *digest => blobs.push((digest.clone(), data)),
+                Ok(_) => return wrong_geometry(),
                 Err(_) => return fail("this document's embedded geometry is damaged"),
             }
         }
@@ -542,6 +542,9 @@ fn read_zip(path: &Path) -> Result<(Value, Vec<(String, Vec<u8>)>), DocumentFile
             continue;
         }
         if let Some(data) = read_entry(&mut z, entry) {
+            if hash(&data) != h {
+                return wrong_geometry();
+            }
             blobs.push((h.to_string(), data));
         }
     }

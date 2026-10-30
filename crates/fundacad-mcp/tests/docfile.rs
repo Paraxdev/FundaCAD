@@ -270,6 +270,24 @@ fn damaged_binary_and_wrong_geometry_are_refused() {
     let store = tmp.path().join("b2");
     assert!(docfile::read(&jpath, Some(&store)).is_err(), "geometry that does not match its hash was accepted");
     assert!(!store.join(format!("{d}.bbrep")).exists());
+
+    let zpath = tmp.path().join("bad-zip.funda");
+    let mut z = zip::ZipWriter::new(std::fs::File::create(&zpath).unwrap());
+    let options = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    let manifest = json!({"blobs": [{"hash": d, "entry": "blobs/a.bbrep"}]}).to_string();
+    for (name, data) in [
+        ("document.json", Value::Object(doc(&d)).to_string().into_bytes()),
+        ("manifest.json", manifest.into_bytes()),
+        ("blobs/a.bbrep", b"not the geometry".to_vec()),
+    ] {
+        z.start_file(name, options).unwrap();
+        z.write_all(&data).unwrap();
+    }
+    z.finish().unwrap();
+    let store = tmp.path().join("b3");
+    let err = docfile::read(&zpath, Some(&store)).unwrap_err();
+    assert!(err.to_string().contains("does not match its hash"), "{err}");
+    assert!(!store.join(format!("{d}.bbrep")).exists());
 }
 
 #[test]
