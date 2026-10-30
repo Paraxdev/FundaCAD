@@ -71,9 +71,31 @@ describe("the sign job", () => {
   it("signs every updater bundle the release offers with the lockfile's tauri CLI", () => {
     const signStep = steps(sign).find((s) => s.startsWith("name: Sign the updater bundles")) ?? "";
     expect(signStep).toMatch(/node_modules\/\.bin\/tauri signer sign/);
-    for (const pattern of ["'*.AppImage'", "'*setup.exe'", "'*.msi'", "'*.app.tar.gz'"]) expect(signStep).toContain(pattern);
+    for (const pattern of ["'*.AppImage'", "'*setup.exe'", "'*.msi'", "'*.app.tar.gz'"])
+      expect(signStep).toContain(pattern);
     expect(signStep).toMatch(/TAURI_SIGNING_PRIVATE_KEY: \$\{\{ secrets\.TAURI_SIGNING_PRIVATE_KEY \}\}/);
     expect(sign).toMatch(/name: fundacad-signatures/);
+  });
+
+  // A signer that prompts would otherwise read the rest of the list from the loop's stdin and
+  // end the loop early with exit 0, leaving one platform unsigned without a failed job.
+  it("keeps the bundle list away from the signer and fails unless every bundle got a signature", () => {
+    const run = runText(steps(sign).find((s) => s.startsWith("name: Sign the updater bundles")) ?? "");
+    const lines = run
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => !l.startsWith("#"));
+    expect(lines.filter((l) => /tauri signer sign/.test(l))).toEqual([
+      'node_modules/.bin/tauri signer sign "$f" < /dev/null',
+    ]);
+    expect(lines.filter((l) => /\bread\b|^done\b/.test(l))).toEqual([
+      "while IFS= read -r f <&3; do",
+      "done 3< bundles.txt",
+    ]);
+    expect(lines.slice(lines.indexOf("done 3< bundles.txt") + 1).filter(Boolean)).toEqual([
+      "want=$(wc -l < bundles.txt); got=$(find sigs -name '*.sig' | wc -l)",
+      '[ "$want" -eq "$got" ] || { echo "::error::signed $got of $want updater bundles"; exit 1; }',
+    ]);
   });
 
   it("is the only job or action the signing key reaches", () => {

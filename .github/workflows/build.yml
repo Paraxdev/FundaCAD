@@ -886,13 +886,16 @@ jobs:
           mkdir sigs
           find dist -type f \( -name '*.AppImage' -o -name '*setup.exe' -o -name '*.msi' -o -name '*.app.tar.gz' \) > bundles.txt
           [ -s bundles.txt ] || { echo "::error::no updater bundle to sign"; exit 1; }
-          while IFS= read -r f; do
+          # The list is read on fd 3, so a signer that prompts gets /dev/null, not the rest of the list.
+          while IFS= read -r f <&3; do
             sig="sigs/$(basename "$f").sig"
             [ ! -e "$sig" ] || { echo "::error::two bundles are named $(basename "$f")"; exit 1; }
-            node_modules/.bin/tauri signer sign "$f"
+            node_modules/.bin/tauri signer sign "$f" < /dev/null
             mv "$f.sig" "$sig"
             echo "signed $f"
-          done < bundles.txt
+          done 3< bundles.txt
+          want=$(wc -l < bundles.txt); got=$(find sigs -name '*.sig' | wc -l)
+          [ "$want" -eq "$got" ] || { echo "::error::signed $got of $want updater bundles"; exit 1; }
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: steps.decide.outputs.sign == 'true'
