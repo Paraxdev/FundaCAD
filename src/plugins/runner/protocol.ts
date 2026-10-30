@@ -32,6 +32,9 @@ export const START = "__fundacadStartPlugin";
 /** Longest line of plugin output kept, so a megabyte per line cannot be a cheap denial of service. */
 export const MAX_LOG = 2000;
 
+/** Largest result kept, in characters of the JSON ./guest.ts sends it as. */
+export const MAX_RESULT = 4_000_000;
+
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 
 /** Null rather than a throw, so a plugin's malformed message never becomes a crash report about the app. */
@@ -46,10 +49,18 @@ export function parseFromGuest(raw: unknown): ToHost | null {
       if (typeof raw.op !== "string") return null;
       return { t: "call", id: raw.id, op: raw.op, params: raw.params };
     }
-    case "done":
+    case "done": {
+      let size: number;
+      try {
+        size = JSON.stringify(raw.value)?.length ?? 0;
+      } catch {
+        return { t: "failed", why: "the plugin returned a result that could not be read" };
+      }
+      if (size > MAX_RESULT) return { t: "failed", why: `the plugin returned more than ${MAX_RESULT} characters` };
       return { t: "done", value: raw.value };
+    }
     case "failed":
-      return { t: "failed", why: typeof raw.why === "string" ? raw.why : "the plugin failed" };
+      return { t: "failed", why: typeof raw.why === "string" ? raw.why.slice(0, MAX_LOG) : "the plugin failed" };
     case "log":
       return { t: "log", text: String(raw.text ?? "").slice(0, MAX_LOG) };
     default:

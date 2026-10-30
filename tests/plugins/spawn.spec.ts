@@ -17,7 +17,7 @@
 // scripts/check-sandbox-chunk.mjs checks the third thing neither of these can,
 // which is that the BUILT chunk still contains it.
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { __workerScript, spawnAndRun } from "../../src/plugins/runner/spawn";
 import { START } from "../../src/plugins/runner/protocol";
@@ -121,5 +121,49 @@ describe("spawning", () => {
     // Once, not never and not twice. A Worker left running after a successful
     // plugin is the leak nobody notices, because everything looked fine.
     expect(disposed).toBe(1);
+  });
+});
+
+describe("a Worker that fails outside its port", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  class FakeWorker extends EventTarget {
+    static last: FakeWorker | null = null;
+    terminated = false;
+    constructor() {
+      super();
+      FakeWorker.last = this;
+    }
+    postMessage() {}
+    terminate() {
+      this.terminated = true;
+    }
+  }
+
+  // A real deadline, short, so the old code ends on it and is told apart from a run ended by the event.
+  const run = () =>
+    spawnAndRun({
+      plugin: "p",
+      grants: [],
+      host: testHost(),
+      source: "return 1;",
+      limits: { deadlineMs: 200 },
+    });
+
+  it("ends the run at once when the script does not load", async () => {
+    vi.stubGlobal("Worker", FakeWorker);
+    const promise = run();
+    FakeWorker.last!.dispatchEvent(new ErrorEvent("error", { message: "failed to fetch the module" }));
+    const out = await promise;
+    expect(out).toMatchObject({ ok: false, reason: "plugin-failed" });
+    expect(out.ok === false && out.why).toContain("failed to fetch the module");
+    expect(FakeWorker.last!.terminated).toBe(true);
+  });
+
+  it("ends the run at once when a message cannot be read", async () => {
+    vi.stubGlobal("Worker", FakeWorker);
+    const promise = run();
+    FakeWorker.last!.dispatchEvent(new Event("messageerror"));
+    expect(await promise).toMatchObject({ ok: false, reason: "sandbox-lost" });
   });
 });
