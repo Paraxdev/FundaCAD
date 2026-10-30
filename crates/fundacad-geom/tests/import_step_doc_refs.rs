@@ -85,5 +85,9 @@ fn a_document_reference_inside_a_complex_entity_is_refused() {
          #90004 = ( APPLIED_DOCUMENT_REFERENCE(#90003,'',(#5)) REPRESENTATION_ITEM('') );"
     );
     let err = import(&main_file("complex.step", PD, &extra)).unwrap_err();
-    assert!(err.contains("external document"), "{err}");
+    assert_eq!(
+        err,
+        "FundaCAD could not check this STEP file before reading it: this STEP file names an external document \
+         inside a complex entity, which FundaCAD does not read"
+    );
 }

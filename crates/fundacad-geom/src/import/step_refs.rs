@@ -100,22 +100,28 @@ pub fn scan(path: &Path) -> Result<Scan, String> {
         if document_ref(kind).is_some() {
             documents += 1;
         } else if is_usage(kind) {
-            let a = args(rest);
-            if let (Some(parent), Some(child)) =
-                (a.get(3).and_then(|r| reference(r)), a.get(4).and_then(|r| reference(r)))
-            {
+            if let Some((parent, child)) = usage_ends(&args(rest)) {
                 holds.entry(parent).or_default().push(child);
             }
         } else if kind.is_empty() {
-            for n in complex_names(rest) {
-                if document_ref(n).is_some() {
-                    return Err("this STEP file names an external document inside a complex entity, which FundaCAD                                 does not read"
+            let parts: Vec<(&[u8], &[u8])> = complex_parts(rest).collect();
+            if parts.iter().any(|(n, _)| document_ref(n).is_some()) {
+                return Err(
+                    "this STEP file names an external document inside a complex entity, which FundaCAD does not read"
+                        .into(),
+                );
+            }
+            if parts.iter().any(|(n, _)| is_usage(n)) {
+                let relationship = parts
+                    .iter()
+                    .find(|(n, _)| n.eq_ignore_ascii_case(b"PRODUCT_DEFINITION_RELATIONSHIP"))
+                    .map(|(_, a)| args(a));
+                let Some((parent, child)) = relationship.as_deref().and_then(usage_ends) else {
+                    return Err("this STEP file places an assembly part through a complex entity whose parent and \
+                                part FundaCAD cannot find"
                         .into());
-                }
-                if is_usage(n) {
-                    return Err("this STEP file places an assembly part through a complex entity, which FundaCAD                                 does not read"
-                        .into());
-                }
+                };
+                holds.entry(parent).or_default().push(child);
             }
         }
         match kind {
@@ -141,8 +147,14 @@ pub fn scan(path: &Path) -> Result<Scan, String> {
         }
         Ok(())
     })?;
-    if holds_itself(&holds) {
-        return Err("this STEP assembly holds itself through its own parts, so it has no end to place".into());
+    match assembly_depth(&holds) {
+        None => return Err("this STEP assembly holds itself through its own parts, so it has no end to place".into()),
+        Some(depth) if depth > MAX_DEPTH => {
+            return Err(format!(
+                "this STEP assembly is nested more than {MAX_DEPTH} levels deep, which FundaCAD does not import"
+            ))
+        }
+        Some(_) => {}
     }
     let is_vertex = |v: &Id| vertices.contains(v);
     let mut ends: BTreeMap<Id, (Id, Id)> = edges
@@ -331,39 +343,53 @@ fn is_usage(kind: &[u8]) -> bool {
     kind.eq_ignore_ascii_case(b"NEXT_ASSEMBLY_USAGE_OCCURRENCE") || kind.eq_ignore_ascii_case(b"NAUO")
 }
 
-/// Whether a product definition reaches itself through the parts it holds, searched without recursion.
-fn holds_itself(holds: &HashMap<Id, Vec<Id>>) -> bool {
-    // 1 while on the current path, 2 once every part below it is known to end.
-    let mut state: HashMap<Id, u8> = HashMap::new();
+/// The relating (parent) and related (part) product definitions of a usage, its arguments 3 and 4.
+fn usage_ends(a: &[&[u8]]) -> Option<(Id, Id)> {
+    Some((reference(a.get(3)?)?, reference(a.get(4)?)?))
+}
+
+/// max_depth in xcaf.hxx, checked here too since OCCT's own transfer walks every level before that walk runs.
+const MAX_DEPTH: usize = 256;
+
+/// The most assembly levels above any part, or None when a product definition reaches itself through the parts
+/// it holds, searched without recursion.
+fn assembly_depth(holds: &HashMap<Id, Vec<Id>>) -> Option<usize> {
+    // None while on the current path, then the levels below it once every part below it is known to end.
+    let mut state: HashMap<Id, Option<usize>> = HashMap::new();
+    let mut deepest = 0;
     for &root in holds.keys() {
         if state.contains_key(&root) {
             continue;
         }
-        state.insert(root, 1);
+        state.insert(root, None);
         let mut stack: Vec<(Id, usize)> = vec![(root, 0)];
         while let Some(top) = stack.last_mut() {
             let (node, i) = *top;
-            let Some(&child) = holds.get(&node).and_then(|c| c.get(i)) else {
-                state.insert(node, 2);
+            let children = holds.get(&node).map_or(&[][..], Vec::as_slice);
+            let Some(&child) = children.get(i) else {
+                let below = children.iter().filter_map(|c| state.get(c).copied().flatten()).max();
+                let levels = below.map_or(0, |b| b + 1);
+                deepest = deepest.max(levels);
+                state.insert(node, Some(levels));
                 stack.pop();
                 continue;
             };
             top.1 += 1;
             match state.get(&child) {
-                Some(1) => return true,
-                Some(_) => {}
+                Some(None) => return None,
+                Some(Some(_)) => {}
                 None => {
-                    state.insert(child, 1);
+                    state.insert(child, None);
                     stack.push((child, 0));
                 }
             }
         }
     }
-    false
+    Some(deepest)
 }
 
-/// Every unquoted name followed by `(` in the parts of a complex entity.
-fn complex_names(s: &[u8]) -> impl Iterator<Item = &[u8]> {
+/// Every unquoted name followed by `(` in the parts of a complex entity, with the text from its `(` on.
+fn complex_parts(s: &[u8]) -> impl Iterator<Item = (&[u8], &[u8])> {
     let ident = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
     let (mut i, mut quoted) = (0usize, false);
     std::iter::from_fn(move || {
@@ -380,8 +406,9 @@ fn complex_names(s: &[u8]) -> impl Iterator<Item = &[u8]> {
             while i < s.len() && ident(s[i]) {
                 i += 1;
             }
-            if trim_start(&s[i..]).starts_with(b"(") {
-                return Some(&s[from..i]);
+            let tail = trim_start(&s[i..]);
+            if tail.starts_with(b"(") {
+                return Some((&s[from..i], tail));
             }
         }
         None

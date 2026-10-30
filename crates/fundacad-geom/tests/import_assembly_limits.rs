@@ -95,3 +95,79 @@ fn a_shared_assembly_without_a_loop_still_imports() {
     let store = BlobStore::open(path.parent().unwrap()).unwrap();
     import::import_geometry(path.to_str().unwrap(), "step", &store).unwrap();
 }
+
+fn import_step(path: &std::path::Path) -> Result<serde_json::Map<String, serde_json::Value>, String> {
+    let store = BlobStore::open(path.parent().unwrap()).unwrap();
+    import::import_geometry(path.to_str().unwrap(), "step", &store)
+}
+
+/// The same file with every instance written as the complex entity some exporters use for it.
+fn with_complex_usages(path: PathBuf) -> PathBuf {
+    let text = std::fs::read_to_string(&path).unwrap();
+    let text: String = text
+        .lines()
+        .map(|line| match line.split_once(" = NEXT_ASSEMBLY_USAGE_OCCURRENCE(") {
+            Some((id, rest)) => {
+                let a: Vec<&str> = rest.trim_end_matches(");").split(',').collect();
+                format!(
+                    "{id} = ( ASSEMBLY_COMPONENT_USAGE($) NEXT_ASSEMBLY_USAGE_OCCURRENCE() \
+                     PRODUCT_DEFINITION_RELATIONSHIP({},{},{},{},{}) PRODUCT_DEFINITION_USAGE() );\n",
+                    a[0], a[1], a[2], a[3], a[4]
+                )
+            }
+            None => format!("{line}\n"),
+        })
+        .collect();
+    std::fs::write(&path, text).unwrap();
+    path
+}
+
+const TOO_DEEP: &str = "FundaCAD could not check this STEP file before reading it: this STEP assembly is nested \
+                        more than 256 levels deep, which FundaCAD does not import";
+
+#[test]
+fn an_assembly_nested_one_level_past_the_cap_is_refused_before_it_is_read() {
+    assert_eq!(import_step(&assembly("nested_257.step", 257, 1, false)).unwrap_err(), TOO_DEEP);
+}
+
+#[test]
+fn an_assembly_nested_thousands_of_levels_deep_is_refused_before_it_is_read() {
+    assert_eq!(import_step(&assembly("nested_5000.step", 5000, 1, false)).unwrap_err(), TOO_DEEP);
+}
+
+#[test]
+fn an_assembly_nested_exactly_to_the_cap_still_imports() {
+    let out = import_step(&assembly("nested_256.step", 256, 1, false)).unwrap();
+    assert_eq!(out.get("faces"), Some(&serde_json::json!(6)), "{out:?}");
+}
+
+#[test]
+fn a_complex_entity_instance_without_a_loop_still_imports() {
+    let out = import_step(&with_complex_usages(assembly("complex_usage.step", 3, 2, false))).unwrap();
+    // OCCT 7.8 places no part through a complex instance, so only the cube itself is read.
+    assert_eq!(out.get("faces"), Some(&serde_json::json!(6)), "{out:?}");
+}
+
+#[test]
+fn a_complex_entity_instance_without_its_parent_and_part_is_refused() {
+    let path = assembly("complex_bare.step", 2, 1, false);
+    let mut text = std::fs::read_to_string(&path).unwrap();
+    let end = text.rfind("ENDSEC;").unwrap();
+    text.insert_str(end, "#200001 = ( ASSEMBLY_COMPONENT_USAGE($) NEXT_ASSEMBLY_USAGE_OCCURRENCE() );\n");
+    std::fs::write(&path, text).unwrap();
+    assert_eq!(
+        import_step(&path).unwrap_err(),
+        "FundaCAD could not check this STEP file before reading it: this STEP file places an assembly part through a \
+         complex entity whose parent and part FundaCAD cannot find"
+    );
+}
+
+#[test]
+fn a_complex_entity_instance_that_closes_a_loop_is_refused() {
+    let err = import_step(&with_complex_usages(assembly("complex_loop.step", 3, 1, true))).unwrap_err();
+    assert_eq!(
+        err,
+        "FundaCAD could not check this STEP file before reading it: this STEP assembly holds itself through its own \
+         parts, so it has no end to place"
+    );
+}
