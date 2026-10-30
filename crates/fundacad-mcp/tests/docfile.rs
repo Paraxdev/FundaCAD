@@ -188,6 +188,26 @@ fn write_fundab_with(
 }
 
 #[test]
+fn a_funda_longer_than_the_app_opens_is_not_written() {
+    let tmp = tempfile::tempdir().unwrap();
+    let data = geometry();
+    let d = digest(&data);
+    let fetched = std::collections::HashMap::from([(d.clone(), data.clone())]);
+    let empty = tmp.path().join("empty");
+    let path = tmp.path().join("part.funda");
+    assert_eq!(docfile::write_with(&path, &doc(&d), Some(&empty), &fetched).unwrap(), 1);
+    let len = std::fs::metadata(&path).unwrap().len();
+    std::fs::remove_file(&path).unwrap();
+
+    for cap in [len - 1, data.len() as u64] {
+        let refused = docfile::write_within(&path, &doc(&d), Some(&empty), &fetched, cap);
+        assert!(refused.is_err_and(|e| e.0.contains(".fundab")), "cap {cap}");
+        assert!(!path.exists(), "cap {cap}");
+    }
+    assert_eq!(docfile::write_within(&path, &doc(&d), Some(&empty), &fetched, len).unwrap(), 1);
+}
+
+#[test]
 fn json_round_trips_with_geometry_embedded_last() {
     let tmp = tempfile::tempdir().unwrap();
     let data = geometry();

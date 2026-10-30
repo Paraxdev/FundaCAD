@@ -21,6 +21,8 @@ const KIND_SEGMENTS: u8 = 4;
 const MAX_TOTAL: u64 = 8 << 30;
 // serde_json's own nesting limit, so a document read here can go through JSON again.
 const MAX_CBOR_DEPTH: usize = 128;
+/// The app refuses to open a .funda longer than this (fundacad_format::json_doc::MAX_DOC_TEXT).
+pub const MAX_DOC_TEXT: u64 = 1 << 30;
 
 #[derive(Debug, Clone)]
 pub struct DocumentFileError(pub String);
@@ -260,6 +262,17 @@ pub fn write_with(
     root: Option<&Path>,
     fetched: &std::collections::HashMap<String, Vec<u8>>,
 ) -> Result<usize, DocumentFileError> {
+    write_within(path, doc, root, fetched, MAX_DOC_TEXT)
+}
+
+/// [`write_with`] refusing a file longer than `max_text` bytes.
+pub fn write_within(
+    path: &Path,
+    doc: &Map<String, Value>,
+    root: Option<&Path>,
+    fetched: &std::collections::HashMap<String, Vec<u8>>,
+    max_text: u64,
+) -> Result<usize, DocumentFileError> {
     if is_binary_path(path) {
         return fail(
             "a .fundab file carries error correction only the FundaCAD app writes. Save as \
@@ -269,14 +282,11 @@ pub fn write_with(
     let root = root.map_or_else(blob_dir, Path::to_path_buf);
     let mut body: Map<String, Value> =
         doc.iter().filter(|(k, _)| k.as_str() != GEOMETRY_KEY).map(|(k, v)| (k.clone(), v.clone())).collect();
-    let mut geometry = Map::new();
+    let mut blobs = Vec::new();
     let mut missing = Vec::new();
     for digest in referenced_geometry(&body) {
-        let data = fetched.get(&digest).cloned().or_else(|| local_blob(&root, &digest));
-        match data {
-            Some(data) => {
-                geometry.insert(digest, Value::String(base64::engine::general_purpose::STANDARD.encode(data)));
-            }
+        match fetched.get(&digest).cloned().or_else(|| local_blob(&root, &digest)) {
+            Some(data) => blobs.push((digest, data)),
             None => missing.push(digest),
         }
     }
@@ -297,8 +307,16 @@ pub fn write_with(
     }
     for digest in optional_geometry(&body) {
         if let Some(data) = fetched.get(&digest).cloned().or_else(|| local_blob(&root, &digest)) {
-            geometry.insert(digest, Value::String(base64::engine::general_purpose::STANDARD.encode(data)));
+            blobs.push((digest, data));
         }
+    }
+    let encoded: u64 = blobs.iter().map(|(_, d)| (d.len() as u64).div_ceil(3) * 4 + 80).sum();
+    if encoded > max_text {
+        return too_long(encoded, max_text);
+    }
+    let mut geometry = Map::new();
+    for (digest, data) in blobs {
+        geometry.insert(digest, Value::String(base64::engine::general_purpose::STANDARD.encode(data)));
     }
     let embedded = geometry.len();
     if embedded > 0 {
@@ -309,6 +327,9 @@ pub fn write_with(
         Err(e) => return fail(format!("the document could not be written: {e}")),
     };
     text.push('\n');
+    if text.len() as u64 > max_text {
+        return too_long(text.len() as u64, max_text);
+    }
     let tmp = path.with_extension(format!(
         "{}.tmp-{}",
         path.extension().map_or(String::new(), |e| e.to_string_lossy().into_owned()),
@@ -322,6 +343,16 @@ pub fn write_with(
         return fail(format!("cannot write {}", path.display()));
     }
     Ok(embedded)
+}
+
+fn too_long<T>(len: u64, max_text: u64) -> Result<T, DocumentFileError> {
+    fail(format!(
+        "the document with its imported geometry comes to {} MiB, more than the {} MiB a .funda file \
+         can hold, so nothing was written. Remove the largest imports, or save it from the FundaCAD \
+         app as .fundab.",
+        len.div_ceil(1 << 20),
+        max_text >> 20
+    ))
 }
 
 // Format 2, read without repair: the data shards are the stored bytes, so joining them and checking
