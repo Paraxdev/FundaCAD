@@ -440,6 +440,18 @@ impl Budget {
             self.values.checked_sub(n).ok_or_else(|| super::scan::too_dense_for_a_scan(MAX_TRIANGLES as u64))?;
         Ok(())
     }
+
+    fn fits_triangles(&self, n: usize) -> Result<(), String> {
+        if n > self.triangles {
+            return Err(super::scan::too_dense_for_a_scan((MAX_TRIANGLES - self.triangles + n) as u64));
+        }
+        Ok(())
+    }
+}
+
+/// The triangles a fan over each `-1` separated face of `index` makes.
+fn fan_triangles(index: &[f64]) -> usize {
+    index.split(|&i| i < 0.0).map(|f| f.len().saturating_sub(2)).sum()
 }
 
 struct Walk<'b> {
@@ -537,6 +549,12 @@ impl Walk<'_> {
                 let point = coord.as_ref().and_then(|c| c.nums("point")).unwrap_or(&[]);
                 let index = g.nums(if kind == "IndexedFaceSet" { "coordIndex" } else { "index" }).unwrap_or(&[]);
                 self.budget.take_values(point.len().saturating_add(index.len()))?;
+                let fan = match kind {
+                    "IndexedFaceSet" => fan_triangles(index),
+                    "IndexedTriangleSet" => index.len() / 3,
+                    _ => point.len() / 9,
+                };
+                self.budget.fits_triangles(fan)?;
                 let pts = point.to_vec();
                 let nv = (pts.len() / 3) as i64;
                 let mut t = Vec::new();
@@ -571,10 +589,8 @@ impl Walk<'_> {
             }
         };
         let ntri = tris.len() / 3;
-        self.budget.triangles =
-            self.budget.triangles.checked_sub(ntri).ok_or_else(|| {
-                super::scan::too_dense_for_a_scan((MAX_TRIANGLES - self.budget.triangles + ntri) as u64)
-            })?;
+        self.budget.fits_triangles(ntri)?;
+        self.budget.triangles -= ntri;
         let base =
             u32::try_from(self.pos.len() / 3).map_err(|_| super::scan::too_dense_for_a_scan(MAX_TRIANGLES as u64))?;
         for p in points.chunks_exact(3) {
