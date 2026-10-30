@@ -40,6 +40,21 @@ pub fn recovery_refusal(path: &Path) -> Option<String> {
     })
 }
 
+/// The doc_save rules for a tool that writes a file of the kind `exts` names: not into the recovery folder,
+/// only those extensions, into a folder that exists, and over another kind of file only with `overwrite`.
+pub fn save_refusal(path: &Path, exts: &[&str], what: &str, overwrite: bool) -> Option<String> {
+    if let Some(why) = recovery_refusal(path).or_else(|| extension_refusal(path, exts, what)) {
+        return Some(why);
+    }
+    if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty() && !p.is_dir()) {
+        return Some(format!("No such directory: {}", parent.display()));
+    }
+    if overwrite {
+        return None;
+    }
+    overwrite_refusal(path, exts, what)
+}
+
 fn after_blanks(head: &[u8]) -> &[u8] {
     let head = head.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(head);
     let start = head.iter().position(|b| !b.is_ascii_whitespace()).unwrap_or(head.len());

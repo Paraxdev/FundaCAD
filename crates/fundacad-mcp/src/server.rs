@@ -672,7 +672,7 @@ impl FundaCad {
 }
 
 /// Python's `bool(x)` for a JSON value.
-fn truthy(v: Option<&Value>) -> bool {
+pub(crate) fn truthy(v: Option<&Value>) -> bool {
     match v {
         None | Some(Value::Null) | Some(Value::Bool(false)) => false,
         Some(Value::String(s)) => !s.is_empty(),

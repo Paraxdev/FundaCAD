@@ -12,7 +12,8 @@ use serde_json::{json, Value};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, Lines};
 use tokio::process::{Child, ChildStdin, ChildStdout, Command};
 
-use crate::server::{failure, log, text, FundaCad, MAX_IMAGE_PX};
+use crate::server::{failure, log, text, truthy, FundaCad, MAX_IMAGE_PX};
+use crate::{docfile, write_target};
 
 pub const UI_TOOLS: &[&str] = &["ui_open", "ui_do", "ui_read", "ui_shot", "ui_close"];
 
@@ -251,15 +252,24 @@ impl FundaCad {
     pub async fn t_ui_do(&self, mut args: JsonObject) -> Result<CallToolResult, McpError> {
         if let Some(steps) = args.get_mut("steps").and_then(Value::as_array_mut) {
             for step in steps.iter_mut().filter_map(Value::as_object_mut) {
-                let files =
-                    matches!(step.get("do").and_then(Value::as_str), Some("open_file" | "import_file" | "save_as"));
+                let verb = step.get("do").and_then(Value::as_str);
+                let saves = verb == Some("save_as");
+                let files = saves || matches!(verb, Some("open_file" | "import_file"));
+                let overwrite = saves && truthy(step.remove("overwrite").as_ref());
                 let Some(raw) = step.get("path").and_then(Value::as_str).filter(|_| files) else {
                     continue;
                 };
-                match self.scoped(raw).await {
-                    Ok(p) => step.insert("path".into(), json!(p.to_string_lossy())),
+                let p = match self.scoped(raw).await {
+                    Ok(p) => p,
                     Err(e) => return Ok(e),
                 };
+                if saves {
+                    if let Some(why) = write_target::save_refusal(&p, &[docfile::TEXT_EXT], "ui_do save_as", overwrite)
+                    {
+                        return Ok(failure(why));
+                    }
+                }
+                step.insert("path".into(), json!(p.to_string_lossy()));
             }
         }
         Ok(self.relay("do", args).await)
