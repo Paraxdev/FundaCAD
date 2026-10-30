@@ -18,6 +18,7 @@ import {
 import { drawnSurfaceInFrames, readAt, weakSpot as drawnWeakSpot, type DrawnSurface } from "./stressDrawn";
 import { locator, type Locator } from "./stressLocate";
 import { weakSpotLabel } from "./stressVerdict";
+import { StressHistory } from "./stressHistory";
 import { sentence } from "./stressWarnings";
 import {
   AXES,
@@ -271,6 +272,8 @@ export function createPanels(deps: PanelsDeps) {
   let animT0 = 0;
   // Where the gravity arrow stands, for the build it was measured on.
   let centre: { build: unknown; body: string; at: Vec3 | null } | null = null;
+  // The setup's own undo while the panel is open, apart from the model's history.
+  const history = new StressHistory();
 
   store.onDocChange(() => {
     docEpoch++;
@@ -293,6 +296,23 @@ export function createPanels(deps: PanelsDeps) {
     },
     { deep: true, flush: "sync" },
   );
+
+  // Noted before the next render, not per write, so one panel action that edits several rows is one undo step.
+  watch(
+    () => panels.stress?.setup,
+    (setup) => {
+      history.note(setup ?? null, Date.now());
+      showUndo();
+    },
+    { deep: true },
+  );
+
+  function showUndo() {
+    const d = panels.stress;
+    if (!d) return;
+    d.canUndo = history.canUndo;
+    d.canRedo = history.canRedo;
+  }
 
   function persist() {
     const d = panels.stress;
@@ -363,6 +383,8 @@ export function createPanels(deps: PanelsDeps) {
     colours = null;
     viewport.setStressOverlay(null);
     panels.replaceStressSetup(setup);
+    history.reset(panels.stress?.setup ?? null);
+    showUndo();
     glyphs?.setProbePins([]);
     weakSpot = null;
     showWeakSpot();
@@ -785,6 +807,12 @@ export function createPanels(deps: PanelsDeps) {
     panels.removeStressSpot(target, index);
   }
 
+  function clearStressPlaces(target: StressTarget) {
+    if (sameTarget(panels.stress?.placing ?? null, target)) stopPlacing();
+    panels.clearStressPlaces(target);
+    refreshStressMarks();
+  }
+
   /** The selected faces as a face set, each selector stamped with its body,
    *  or why they cannot be one. */
   function selectedStressFaces(): { faces: StressFaceSet; body: string } | string {
@@ -1143,6 +1171,41 @@ export function createPanels(deps: PanelsDeps) {
     if (id) await geometry.cancel?.(id);
   }
 
+  /** Ctrl+Z while the panel is open takes back a setup step, never the model's. False when the panel is closed. */
+  function undoStress(): boolean {
+    return stepStress("undo");
+  }
+
+  function redoStress(): boolean {
+    return stepStress("redo");
+  }
+
+  function stepStress(way: "undo" | "redo"): boolean {
+    const d = panels.stress;
+    if (!d) return false;
+    const step = history[way](d.setup, Date.now());
+    if (!step) {
+      setStatus(way === "undo" ? "Nothing left to undo in Stress" : "Nothing to redo in Stress", "");
+      showUndo();
+      return true;
+    }
+    if (step.setup.body !== d.setup.body) {
+      if (d.running) {
+        void cancelStress();
+        runSeq++;
+        panels.stressFinished({});
+      }
+      clearResult();
+    }
+    d.setup = step.setup;
+    if (d.placing && !panels.stressRow(d.placing)) stopPlacing();
+    facesFor = null;
+    refreshStressMarks();
+    showUndo();
+    setStatus(`${way === "undo" ? "Undid" : "Redid"}: ${step.label}`, "");
+    return true;
+  }
+
   /** Close Stress, stopping a Run in flight, and drop its colours, marks and
    *  glyphs. The study stays in the document for the next time. */
   function closeStress() {
@@ -1163,6 +1226,7 @@ export function createPanels(deps: PanelsDeps) {
         : null;
     runSeq++;
     panels.stress = null;
+    history.reset(null);
     colours = null;
     facesFor = null;
     persisted = null;
@@ -1190,6 +1254,8 @@ export function createPanels(deps: PanelsDeps) {
     closeOverhangSettings,
     showStress,
     closeStress,
+    undoStress,
+    redoStress,
     runStress,
     cancelStress,
     stressBodies,
@@ -1197,6 +1263,7 @@ export function createPanels(deps: PanelsDeps) {
     setStressFacesFromSelection,
     placeStressSpot,
     removeStressSpot,
+    clearStressPlaces,
     addStressSupport,
     removeStressSupport,
     setStressSupportType,

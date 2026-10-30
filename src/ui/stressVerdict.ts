@@ -109,6 +109,14 @@ export function weakSpotLabel(sf: number | null): string {
 /** How far the part bends and how it is drawn at the slider's `scale`; null without a deflection. */
 export function deflectionNote(maxDeflectionMm: number | null, unit: Unit, scale: number): string | null {
   if (maxDeflectionMm === null || !Number.isFinite(maxDeflectionMm)) return null;
-  const drawn = scale === 0 ? "not drawn" : scale === 1 ? "drawn at true size" : `drawn ${deformLabel(scale)} larger`;
+  const label = deformLabel(scale);
+  const drawn =
+    scale === 0
+      ? "not drawn"
+      : label === "1x"
+        ? "drawn at true size"
+        : scale < 1
+          ? `drawn at ${label} true size`
+          : `drawn ${label} larger`;
   return `Bends at most ${displayRound(toDisplay(maxDeflectionMm))} ${unit}, ${drawn}.`;
 }

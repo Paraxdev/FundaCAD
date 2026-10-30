@@ -97,6 +97,7 @@ describe("Undo and Redo", () => {
     const e = {
       tools: { move: { cancel: () => {} } },
       sketch: { undoEdit: () => false, redoEdit: () => false },
+      ui: { panels: { undoStress: () => false, redoStress: () => false } },
       store: { undo: () => calls.push("undo"), redo: () => calls.push("redo") },
     } as unknown as Engine;
     const a = createDocumentActions(e);
@@ -111,10 +112,45 @@ describe("Undo and Redo", () => {
     const e = {
       tools: { move: { pending: true, cancel: () => calls.push("drop drag") } },
       sketch: { undoEdit: () => false, redoEdit: () => false },
+      ui: { panels: { undoStress: () => false, redoStress: () => false } },
       store: { undo: () => calls.push("undo"), redo: () => calls.push("redo") },
     } as unknown as Engine;
     createDocumentActions(e).doUndo();
     expect(calls).toEqual(["drop drag"]);
+  });
+
+  it("while Stress is open take back and put back its setup steps, never the model's", () => {
+    const calls: string[] = [];
+    closeHome.mockReset();
+    const e = {
+      tools: { move: { cancel: () => {} } },
+      sketch: { undoEdit: () => false, redoEdit: () => false },
+      ui: { panels: { undoStress: () => !!calls.push("stress undo"), redoStress: () => !!calls.push("stress redo") } },
+      store: { undo: () => calls.push("undo"), redo: () => calls.push("redo") },
+    } as unknown as Engine;
+    const a = createDocumentActions(e);
+    a.doUndo();
+    a.doRedo();
+    expect(calls).toEqual(["stress undo", "stress redo"]);
+  });
+
+  it("go to the model once Stress is closed, and to an open sketch before Stress", () => {
+    const calls: string[] = [];
+    closeHome.mockReset();
+    const undoStress = () => {
+      calls.push("stress undo");
+      return false;
+    };
+    const closed = {
+      tools: { move: { cancel: () => {} } },
+      sketch: { undoEdit: () => false, redoEdit: () => false },
+      ui: { panels: { undoStress } },
+      store: { undo: () => calls.push("undo"), redo: () => calls.push("redo") },
+    } as unknown as Engine;
+    createDocumentActions(closed).doUndo();
+    const sketching = { ...closed, sketch: { undoEdit: () => !!calls.push("sketch undo") } } as unknown as Engine;
+    createDocumentActions(sketching).doUndo();
+    expect(calls).toEqual(["stress undo", "undo", "sketch undo"]);
   });
 });
 
@@ -139,6 +175,7 @@ describe("a Move drag let go of but not yet entered", () => {
         move: { pending: true, cancel: () => calls.push("drop drag"), settle: () => calls.push("write drag") },
       },
       sketch: { undoEdit: () => false, redoEdit: () => calls.push("sketch redo") },
+      ui: { panels: { undoStress: () => false, redoStress: () => false } },
       store: { undo: () => calls.push("undo"), redo: () => calls.push("redo") },
     } as unknown as Engine;
     createDocumentActions(e).doRedo();
