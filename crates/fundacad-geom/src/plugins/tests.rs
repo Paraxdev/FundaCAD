@@ -343,6 +343,17 @@ fn one_plugin_memory_still_grows_to_the_whole_cap() {
 }
 
 #[test]
+fn a_refused_memory_growth_gives_nothing_back_to_the_total() {
+    use wasmtime::ResourceLimiter;
+    let half = MEMORY_LIMIT / 2;
+    let mut limits = host::store_limits();
+    assert!(limits.memory_growing(0, half, None).unwrap());
+    assert!(!matches!(limits.memory_growing(half, MEMORY_LIMIT + (64 << 10), None), Ok(true)));
+    let _ = limits.memory_grow_failed(wasmtime::Error::msg("refused"));
+    assert!(!matches!(limits.memory_growing(0, half + (64 << 10), None), Ok(true)));
+}
+
+#[test]
 fn a_triangulation_finer_than_its_floor_meshes_at_the_floor() {
     let triangles = |times_floor: f64| {
         let ball = k::make_sphere((0.0, 0.0, 0.0), 10.0).unwrap();

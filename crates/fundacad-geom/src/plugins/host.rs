@@ -74,6 +74,7 @@ pub(super) fn store_limits() -> Limits {
 
 impl ResourceLimiter for Limits {
     fn memory_growing(&mut self, current: usize, desired: usize, maximum: Option<usize>) -> wasmtime::Result<bool> {
+        self.last_growth = 0;
         if !self.per_store.memory_growing(current, desired, maximum)? {
             return Ok(false);
         }
@@ -1109,7 +1110,6 @@ impl files::Host for State {
     }
 }
 
-/// An OS error the way Python's OSError prints it, which plugin messages quote.
 /// Reads through take() as well, so a file that grows after the size check is caught.
 pub(super) fn read_file(path: &str, cap: u64) -> Result<Vec<u8>, String> {
     use std::io::Read;
@@ -1126,6 +1126,7 @@ pub(super) fn read_file(path: &str, cap: u64) -> Result<Vec<u8>, String> {
     Ok(out)
 }
 
+/// An OS error the way Python's OSError prints it, which plugin messages quote.
 fn io_text(e: &std::io::Error, path: &str) -> String {
     let (code, what) = match e.kind() {
         std::io::ErrorKind::NotFound => (2, "No such file or directory"),
