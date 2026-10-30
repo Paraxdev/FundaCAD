@@ -65,14 +65,8 @@ fn source() -> Result<(Arc<dyn FrameSource>, String), String> {
     }
 }
 
-fn token() -> Result<String, String> {
-    let mut b = [0u8; 16];
-    getrandom::getrandom(&mut b).map_err(|e| e.to_string())?;
-    Ok(b.iter().map(|x| format!("{x:02x}")).collect())
-}
-
 fn open_ws(src: Arc<dyn FrameSource>, width: u32, height: u32) -> Result<(Open, Opened), String> {
-    let token = token()?;
+    let token = fundacad_engine::ws::mint_token().map_err(|e| e.to_string())?;
     let extra = fundacad_engine::ws::appenv("EXTRA_ORIGINS").unwrap_or_default();
     let gate = fundacad_engine::ws::Gate::new(token.clone(), &extra);
     let authorize: fundacad_frames::Authorize = Arc::new(move |q: Option<&str>, o: Option<&str>| gate.authorized(q, o));

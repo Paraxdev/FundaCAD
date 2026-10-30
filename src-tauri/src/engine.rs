@@ -251,9 +251,7 @@ fn supervise(inner: Arc<Inner>) {
 /// 256-bit secret for the live session port, from the OS CSPRNG. A failure is
 /// fatal rather than a fallback to a guessable token.
 fn random_token() -> String {
-    let mut buf = [0u8; 32];
-    getrandom::getrandom(&mut buf).expect("OS CSPRNG unavailable");
-    buf.iter().map(|b| format!("{b:02x}")).collect()
+    fundacad_engine::ws::mint_token().expect("OS CSPRNG unavailable")
 }
 
 /// The blob store is passed because container.rs reads and writes the same directory, and the plugin root because Rust

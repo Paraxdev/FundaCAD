@@ -15,14 +15,7 @@ pub fn available_bytes() -> Option<u64> {
 
 /// A human size for an error message, "1.8 GiB", `sysmem.describe`.
 pub fn describe(nbytes: u64) -> String {
-    let mut n = nbytes as f64;
-    for unit in ["B", "KiB", "MiB"] {
-        if n < 1024.0 {
-            return format!("{n:.0} {unit}");
-        }
-        n /= 1024.0;
-    }
-    format!("{n:.1} GiB")
+    fundacad_protocol::frame::describe_size(usize::try_from(nbytes).unwrap_or(usize::MAX))
 }
 
 /// `mesh_import.IMPORT_RSS_PER_FILE_BYTE`: peak resident bytes per file byte
