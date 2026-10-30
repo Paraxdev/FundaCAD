@@ -480,6 +480,19 @@ fn an_open_refuses_sections_that_together_expand_past_its_budget() {
 }
 
 #[test]
+fn an_unread_section_past_the_budget_is_dropped_and_the_open_goes_on() {
+    let dir = tmpdir("carrybudget");
+    let (path, _) = future_file(&dir);
+    retable(&path, |entries| entries.iter_mut().find(|e| e.kind == 9).unwrap().raw_len = 9 << 30);
+    let carry = dir.join("sections");
+    let opened = read_file(&path, &dir.join("blobs"), Some(&carry)).unwrap();
+    assert!(same_json(&opened.document_json, r#"{"version":11,"features":[]}"#));
+    assert!(opened.carried.is_empty());
+    assert_eq!(std::fs::read_dir(&carry).unwrap().count(), 0);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn a_document_section_past_the_json_cap_is_refused_before_it_is_read() {
     let dir = tmpdir("doccap");
     let (path, _, _) = sample(&dir);

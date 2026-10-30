@@ -802,26 +802,38 @@ pub fn read_file_with(
 
     let mut jobs: Vec<Job> = Vec::new();
     let mut queued = HashMap::new();
-    let mut queue = |e, dest, role| queue_job(&mut jobs, &mut queued, e, dest, role, rows_of(e));
     std::fs::create_dir_all(blob_dir).map_err(io)?;
     for e in entries.iter().filter(|e| e.kind == KIND_GEOMETRY) {
         let hash = hex(&e.raw_hash);
         if e.name != hash {
             return Err(DAMAGED.to_string());
         }
-        queue(e, blob_dir.join(format!("{hash}.bbrep")), Role::Geometry);
+        queue_job(&mut jobs, &mut queued, e, blob_dir.join(format!("{hash}.bbrep")), Role::Geometry, rows_of(e));
     }
+    let mut budget = jobs
+        .iter()
+        .try_fold(0u64, |sum, j| sum.checked_add(j.entry.raw_len))
+        .and_then(|sum| MAX_RAW.checked_sub(sum))
+        .ok_or_else(too_big)?;
     let mut carried: Vec<(Carried, Option<usize>)> = Vec::new();
     if let Some(dir) = carry_dir {
         std::fs::create_dir_all(dir).map_err(io)?;
         for e in entries.iter().filter(|e| carries(e)) {
             let hash = hex(&e.raw_hash);
-            let job = queue(e, dir.join(format!("{hash}.bin")), Role::Carried);
+            let before = jobs.len();
+            let dest = dir.join(format!("{hash}.bin"));
+            let job = queue_job(&mut jobs, &mut queued, e, dest.clone(), Role::Carried, rows_of(e));
+            if jobs.len() > before {
+                // A section this version does not read is dropped once the budget runs out, the open goes on.
+                let Some(left) = budget.checked_sub(e.raw_len) else {
+                    jobs.pop();
+                    queued.remove(&dest);
+                    continue;
+                };
+                budget = left;
+            }
             carried.push((Carried { kind: e.kind, name: e.name.clone(), hash }, job));
         }
-    }
-    if jobs.iter().try_fold(0u64, |sum, j| sum.checked_add(j.entry.raw_len)).is_none_or(|sum| sum > MAX_RAW) {
-        return Err(too_big());
     }
 
     if !jobs.is_empty() {
