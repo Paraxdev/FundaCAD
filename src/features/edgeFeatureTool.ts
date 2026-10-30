@@ -741,6 +741,7 @@ export class EdgeFeatureTool {
             onChoose: (id) => {
               this.continuity = id as Continuity;
               this.forgetBuildRange(); // G2 sets back further, so its limit is not G1's
+              this.refreshGhost();
               this.pushPreview();
             },
           }
@@ -862,6 +863,7 @@ export class EdgeFeatureTool {
     this.continuity = "G1";
     this.dim.setOption("continuity", "G1");
     this.forgetBuildRange();
+    this.refreshGhost();
     setPrompt(`${why}, so the fillet is G1 now`);
   }
 
@@ -903,6 +905,7 @@ export class EdgeFeatureTool {
       size,
       this.kind,
       capped,
+      this.kind === "fillet" ? this.continuity : "G1",
     );
   }
 

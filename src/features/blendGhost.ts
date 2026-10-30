@@ -2,6 +2,8 @@
 // Sections come from the wedge the two faces make across the edge, not from normals, whose sign the mesh does not
 // carry and which cannot tell convex from concave.
 
+import type { Continuity } from "./continuity";
+
 export type Pt3 = readonly [number, number, number];
 type Vec3 = [number, number, number];
 type V2 = [number, number];
@@ -60,6 +62,11 @@ export const TRIM_BUDGET = 3e5;
 const MAX_SECTORS = 1024;
 /** Widens a segment's sector range so rounding never drops a segment the exact test would count. */
 const SECTOR_PAD = 1e-7;
+// The engine's section constants, secblend in blend_section.hxx: how far out G2 and G3 set their feet, and G2's pull.
+const G2_SETBACK = 1.55;
+const G2_TENSION = 0.5;
+const G3_SETBACK = ((G2_SETBACK * 3) / 8) * (128 / 51);
+const SETBACK: Record<Continuity, number> = { G1: 1, G2: G2_SETBACK, G3: G3_SETBACK };
 
 function sub(a: Pt3, b: Pt3): Vec3 {
   return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
@@ -86,6 +93,7 @@ const add2 = (a: V2, b: V2): V2 => [a[0] + b[0], a[1] + b[1]];
 const sub2 = (a: V2, b: V2): V2 => [a[0] - b[0], a[1] - b[1]];
 const scale2 = (a: V2, s: number): V2 => [a[0] * s, a[1] * s];
 const len2 = (a: V2) => Math.hypot(a[0], a[1]);
+const perp2 = (a: V2): V2 => [-a[1], a[0]];
 
 /** The edge at the origin: the face leaves along `dir`, `side` is the unit normal into the wedge, `bend` curls
  *  toward `side`. */
@@ -377,9 +385,50 @@ function wedgeOf(sample: EdgeSample): { d1: Vec3; e2: Vec3; alpha: number; cosA:
   return e2 ? { d1, e2, alpha, cosA } : null;
 }
 
-/** From face 1's contact to face 2's: an arc for a fillet, the two points for a chamfer. Without a `budget` the
- *  outline is left out. */
-function crossSection(sample: EdgeSample, wanted: number, kind: BlendKind, budget: TrimBudget | null): Section | null {
+/** Where the lines through `a` along `da` and through `b` along `db` meet, null when they run parallel. */
+function meet(a: V2, da: V2, b: V2, db: V2): V2 | null {
+  const hit = lineLine({ line: true, point: a, dir: da }, { line: true, point: b, dir: db });
+  return hit[0] ?? null;
+}
+
+const lerp2 = (a: V2, b: V2, t: number): V2 => add2(a, scale2(sub2(b, a), t));
+
+/** The engine's G2 or G3 section from foot `qa` to foot `qb`, whose tangent lines meet at `k`. */
+function blendPoles(qa: V2, k: V2, qb: V2, continuity: "G2" | "G3"): V2[] {
+  if (continuity === "G2") return [qa, lerp2(qa, k, 1 - G2_TENSION), k, lerp2(qb, k, 1 - G2_TENSION), qb];
+  const poles: V2[] = new Array(8);
+  for (let i = 0; i < 4; i++) {
+    poles[i] = lerp2(qa, k, i / 4);
+    poles[7 - i] = lerp2(qb, k, i / 4);
+  }
+  return poles;
+}
+
+function bezier(poles: readonly V2[]): (s: number) => V2 {
+  const n = poles.length;
+  const xs = new Float64Array(n);
+  const ys = new Float64Array(n);
+  return (s) => {
+    for (let i = 0; i < n; i++) [xs[i], ys[i]] = poles[i]!;
+    for (let r = 1; r < n; r++) {
+      for (let i = 0; i < n - r; i++) {
+        xs[i] = xs[i]! * (1 - s) + xs[i + 1]! * s;
+        ys[i] = ys[i]! * (1 - s) + ys[i + 1]! * s;
+      }
+    }
+    return [xs[0]!, ys[0]!];
+  };
+}
+
+/** From face 1's contact to face 2's: the section `continuity` builds for a fillet, the two points for a chamfer.
+ *  Without a `budget` the outline is left out. */
+function crossSection(
+  sample: EdgeSample,
+  wanted: number,
+  kind: BlendKind,
+  budget: TrimBudget | null,
+  continuity: Continuity,
+): Section | null {
   const w = wedgeOf(sample);
   if (!w) return null;
   const { d1, e2, alpha, cosA } = w;
@@ -391,7 +440,8 @@ function crossSection(sample: EdgeSample, wanted: number, kind: BlendKind, budge
   // A small ball tucked into the corner is in the material on a convex edge and in the air on a concave one. Like the
   // kernel's fallback, a convex round is a cut trimmed where it leaves the body, a concave a fill held to the faces.
   const convex = outline?.refInside ?? false;
-  const size = convex ? wanted : Math.min(wanted, kind === "chamfer" ? room : room * Math.tan(alpha / 2));
+  const asked = kind === "fillet" ? wanted * SETBACK[continuity] : wanted;
+  const size = convex ? asked : Math.min(asked, kind === "chamfer" ? room : room * Math.tan(alpha / 2));
   if (size < EPS) return null;
 
   const f1: Face2 = { dir: [1, 0], side: [0, 1], bend: sample.bend1 ?? 0 };
@@ -413,19 +463,23 @@ function crossSection(sample: EdgeSample, wanted: number, kind: BlendKind, budge
       unsure = f1.bend !== 0 || f2.bend !== 0;
     }
     if (!ball) return null;
-    const { center } = ball;
+    const { center, touch1, touch2 } = ball;
     inner = center;
-    const u = scale2(sub2(ball.touch1, center), 1 / size);
-    const v = scale2(sub2(ball.touch2, center), 1 / size);
+    const u = scale2(sub2(touch1, center), 1 / size);
+    const v = scale2(sub2(touch2, center), 1 / size);
+    const k = continuity === "G1" ? null : meet(touch1, perp2(u), touch2, perp2(v));
     const sweep = Math.acos(Math.max(-1, Math.min(1, dot2(u, v))));
     const sinSweep = Math.sin(sweep);
-    curve = (s) => {
-      const dir =
-        sinSweep < EPS
-          ? u
-          : add2(scale2(u, Math.sin((1 - s) * sweep) / sinSweep), scale2(v, Math.sin(s * sweep) / sinSweep));
-      return add2(center, scale2(dir, size));
-    };
+    curve =
+      k && continuity !== "G1"
+        ? bezier(blendPoles(touch1, k, touch2, continuity))
+        : (s) => {
+            const dir =
+              sinSweep < EPS
+                ? u
+                : add2(scale2(u, Math.sin((1 - s) * sweep) / sinSweep), scale2(v, Math.sin(s * sweep) / sinSweep));
+            return add2(center, scale2(dir, size));
+          };
   }
 
   let [lo, hi] = [0, 1];
@@ -456,12 +510,13 @@ export function sweepBlendGhost(
   kind: BlendKind,
   closed = false,
   budget: TrimBudget = { left: TRIM_BUDGET, failed: false },
+  continuity: Continuity = "G1",
 ): GhostGeometry | null {
   if (size < EPS || samples.length < 2) return null;
   const sectionsWith = (b: TrimBudget | null) => {
     const out: Section[] = [];
     for (const s of samples) {
-      const cs = crossSection(s, size, kind, b);
+      const cs = crossSection(s, size, kind, b, continuity);
       if (!cs || b?.failed) return null;
       out.push(cs);
     }
