@@ -173,6 +173,7 @@ describe("extrude depth box", () => {
       nextId: () => "f9",
       classifyTargetExpr,
       hiddenBodyIds: () => undefined,
+      boundExpr: () => null,
       addFeature,
     };
     const viewport = {
