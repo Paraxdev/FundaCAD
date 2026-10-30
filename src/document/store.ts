@@ -1610,10 +1610,11 @@ export class DocumentStore {
   }
 
   /** A bound numeric field is re-asserted by the recompute; use setTargetValue/setTargetExpr. */
-  updateFeature(id: string, patch: Partial<Feature>) {
+  updateFeature(id: string, patch: Partial<Feature>, bindings?: SketchBinding[]) {
     this.mutate((d) => {
       const i = d.features.findIndex((f) => f.id === id);
       if (i >= 0) d.features[i] = { ...d.features[i], ...patch } as Feature;
+      this.applyBindings(d, bindings);
     });
   }
 
@@ -1653,15 +1654,20 @@ export class DocumentStore {
 
   // One undo step; with a parameter it goes through the cascade so both land in one mutate. Ends an open preview
   // without its own rebuild. On an invalid parameter value it returns the error and writes nothing.
-  commitFeatureEdit(id: string, feature: Feature | null, param: { name: string; value: number } | null): string | null {
+  commitFeatureEdit(
+    id: string,
+    feature: Feature | null,
+    param: { name: string; value: number } | null,
+    bindings?: SketchBinding[],
+  ): string | null {
     const put = (d: CadDocument) => {
-      if (!feature) return;
-      const i = d.features.findIndex((f) => f.id === id);
-      if (i >= 0) d.features[i] = feature;
+      const i = feature ? d.features.findIndex((f) => f.id === id) : -1;
+      if (feature && i >= 0) d.features[i] = feature;
+      this.applyBindings(d, bindings);
     };
     if (!param) {
       this.endEditPreview(false);
-      if (feature) this.mutate(put, true);
+      if (feature || bindings?.length) this.mutate(put, true);
       return null;
     }
     const expr = String(param.value);

@@ -4,7 +4,7 @@ import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
 import type { PlaneDef } from "../types";
 import type { SketchPlane } from "../sketch/plane";
-import { DimInput } from "../sketch/dimInput";
+import { DimInput, type DimDocument } from "../sketch/dimInput";
 import { setPrompt } from "../ui/prompt";
 import { snap } from "../ui/units";
 import { axisDragDistance, createDragHandle, nameHandle, type DragHandle } from "./manipulator";
@@ -30,12 +30,15 @@ export class PlaneOffsetTool {
   private downPos = { x: 0, y: 0 };
   private downOnGizmo = false;
 
-  private dim = new DimInput();
+  private dim = new DimInput(() => this.doc());
   private onDone: ((def: PlaneDef | null) => void) | null = null;
 
   private readonly gesture: CanvasGesture;
 
-  constructor(private viewport: Viewport) {
+  constructor(
+    private viewport: Viewport,
+    private doc: () => DimDocument | null = () => null,
+  ) {
     this.gesture = new CanvasGesture(viewport.domElement, {
       move: (e) => this.onMove(e),
       down: (e) => this.onDown(e),

@@ -38,6 +38,7 @@ function fakeStore() {
   const added: Feature[] = [];
   const store = {
     nextId: () => "p1",
+    boundExpr: () => null,
     addFeature: (f: Feature) => added.push(f),
     document: { features: [{ id: "h", type: "hole" }] },
     buildState: {

@@ -10,6 +10,7 @@ import type { Feature, Vec3 } from "../types";
 import { detectRegions, pointInRegion } from "../sketch/region";
 import { resolveEntities } from "../sketch/resolve";
 import { DimInput } from "../sketch/dimInput";
+import { boxBindings } from "./boxBindings";
 import { setPrompt } from "../ui/prompt";
 import { snap } from "../ui/units";
 import { axisDragDistance, createDragHandle, nameHandle, leanOutOfView, type DragHandle } from "./manipulator";
@@ -495,13 +496,21 @@ export class RevolvePitchTool {
     const id = this.id;
     const { pitch, angle } = this;
     const done = this.onDone;
+    const bindings = boxBindings(this.dim, this.store, id, [
+      { box: "angle", field: "angle", value: angle, kind: "angle" },
+      ...(pitch ? [{ box: "pitch", field: "pitch", value: pitch }] : []),
+    ]);
     // false: the write below schedules the rebuild, and closing with its own would flash the pre-commit model.
     this.cleanup(false);
     // A zero pitch drops the field, so a revolve that never climbed reads exactly as it did before.
-    this.store.updateFeature(id, {
-      angle,
-      pitch: pitch || undefined,
-    } as unknown as Partial<Feature>);
+    this.store.updateFeature(
+      id,
+      {
+        angle,
+        pitch: pitch || undefined,
+      } as unknown as Partial<Feature>,
+      bindings,
+    );
     done?.(id);
   }
 

@@ -4,7 +4,7 @@
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
 import type { PlaneDef, PlaneSpec } from "../types";
-import { DimInput, type DimFieldDef } from "../sketch/dimInput";
+import { DimInput, type DimDocument, type DimFieldDef } from "../sketch/dimInput";
 import { setPrompt } from "../ui/prompt";
 import { snap } from "../ui/units";
 import { axisDragDistance, HANDLE_IDLE } from "./manipulator";
@@ -78,12 +78,15 @@ export class DatumPoseTool {
   private downPos = { x: 0, y: 0 };
   private downOnGizmo = false;
 
-  private dim = new DimInput();
+  private dim = new DimInput(() => this.doc());
   private onDone: PoseDone | null = null;
   private readonly gesture: CanvasGesture;
   private readonly held = new HeldSignal();
 
-  constructor(private viewport: Viewport) {
+  constructor(
+    private viewport: Viewport,
+    private doc: () => DimDocument | null = () => null,
+  ) {
     this.gesture = new CanvasGesture(viewport.domElement, {
       move: (e) => this.onMove(e),
       down: (e) => this.onDown(e),

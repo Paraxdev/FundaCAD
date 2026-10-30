@@ -7,6 +7,8 @@ import * as THREE from "three";
 import { ExtrudeTool } from "../../src/features/extrudeTool";
 import { DraftTool } from "../../src/features/draftTool";
 import { HoleTool } from "../../src/features/holeTool";
+import { PatternTool } from "../../src/features/patternTool";
+import { JointTool } from "../../src/features/jointTool";
 import { DocumentStore } from "../../src/document/store";
 import type { DimInput } from "../../src/sketch/dimInput";
 import type { GeometryBackend } from "../../src/geometry/client";
@@ -227,7 +229,7 @@ describe("editing an extrude in the Extrude tool", () => {
 });
 
 /** The document half of the store is the real one, the scene half answers as an idle kernel would. */
-function sceneless(real: DocumentStore, id: string) {
+function sceneless(real: DocumentStore, id: string, result: unknown = null) {
   return {
     get document() {
       return real.document;
@@ -237,13 +239,17 @@ function sceneless(real: DocumentStore, id: string) {
     isParamBound: real.isParamBound.bind(real),
     addFeature: real.addFeature.bind(real),
     replaceFeature: real.replaceFeature.bind(real),
+    updateFeature: real.updateFeature.bind(real),
+    beginEditPreview: () => {},
+    setEditPreview: () => {},
+    endEditPreview: () => {},
     nextId: () => id,
     setPreview: () => {},
     verifyCommit: () => {},
     onBuild: () => () => {},
     hasPreview: false,
     previewError: null,
-    buildState: { building: false, result: null },
+    buildState: { building: false, result },
   } as unknown as DocumentStore;
 }
 
@@ -269,6 +275,14 @@ function fakeViewport() {
     }),
     planarFace: () => ({ normal: new THREE.Vector3(0, 0, 1), origin: new THREE.Vector3(0, 0, 10) }),
     faceAreaCentroidWorld: () => new THREE.Vector3(0, 0, 10),
+    bodiesCentroid: () => new THREE.Vector3(),
+    bodiesBox: () => new THREE.Box3(new THREE.Vector3(-5, -5, 0), new THREE.Vector3(5, 5, 5)),
+    setPatternGhost: () => {},
+    clearPatternGhost: () => {},
+    clearPatternFeatureGhost: () => {},
+    hoverEntity: () => {},
+    snapStep: () => 1,
+    camera: new THREE.PerspectiveCamera(),
     modelBox: () => new THREE.Box3(new THREE.Vector3(-10, -10, 0), new THREE.Vector3(10, 10, 10)),
   } as never;
 }
@@ -313,5 +327,45 @@ describe("other model tools keep a typed parameter expression", () => {
     expect(s.setParamExpr("width", "80")).toBeNull();
     await ticks();
     expect(field_(s, "h1", "depth")).toBe(10);
+  });
+
+  it("Pattern binds its spacing and copies, which follow their parameters", async () => {
+    const s = model({
+      parameters: { width: 40, n: 3 },
+      paramDefs: { width: { expr: "40", value: 40, unit: "mm" }, n: { expr: "3", value: 3, unit: "count" } },
+      features: [{ id: "f1", type: "box", width: 20, depth: 20, height: 10 } as unknown as Feature],
+    });
+    new PatternTool(fakeViewport(), sceneless(s, "p1")).start("linear", ["body1"], () => {});
+    type("count", "n + 1");
+    type("spacing", "width / 8");
+    flushFrame();
+    enter("spacing");
+    expect(field_(s, "p1", "spacing")).toBe(5);
+    expect(field_(s, "p1", "count")).toBe(4);
+    expect(s.boundExpr({ kind: "feature", feature: "p1", field: "spacing" })?.expr).toBe("width / 8");
+    expect(s.setParamExpr("width", "80")).toBeNull();
+    expect(s.setParamExpr("n", "5")).toBeNull();
+    await ticks();
+    expect(field_(s, "p1", "spacing")).toBe(10);
+    expect(field_(s, "p1", "count")).toBe(6);
+  });
+
+  it("Joint binds a typed offset through its edit, which follows width", async () => {
+    const s = model({
+      features: [
+        { id: "f1", type: "box", width: 20, depth: 20, height: 10 } as unknown as Feature,
+        { id: "j1", type: "joint" } as unknown as Feature,
+      ],
+    });
+    const marks = { datumMarks: { j1: { kind: "axis", origin: [0, 0, 0], dir: [0, 0, 1] } } };
+    expect(new JointTool(fakeViewport(), sceneless(s, "j1", marks)).startEdit("j1", () => {})).toBe(true);
+    type("offset", "width / 8");
+    flushFrame();
+    enter("offset");
+    expect(field_(s, "j1", "offset")).toBe(5);
+    expect(s.boundExpr({ kind: "feature", feature: "j1", field: "offset" })?.expr).toBe("width / 8");
+    expect(s.setParamExpr("width", "80")).toBeNull();
+    await ticks();
+    expect(field_(s, "j1", "offset")).toBe(10);
   });
 });

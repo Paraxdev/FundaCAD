@@ -6,6 +6,7 @@ import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore } from "../document/store";
 import type { Feature, Selector } from "../types";
 import { DimInput } from "../sketch/dimInput";
+import { boxBindings } from "./boxBindings";
 import { setPrompt } from "../ui/prompt";
 import { toast } from "../ui/toast";
 import { snap } from "../ui/units";
@@ -317,10 +318,15 @@ export class ThreadTool {
       toast("That pitch is too coarse for this diameter, the groove would reach the axis.");
       return;
     }
+    const thread = features[0] as Feature & { pitch: number; length?: number };
+    const bindings = boxBindings(this.dim, this.store, thread.id, [
+      { box: "pitch", field: "pitch", value: thread.pitch },
+      ...(thread.length != null ? [{ box: "length", field: "length", value: thread.length }] : []),
+    ]);
     // Cleanup before the write, so addFeatures' rebuild is the only one; after it the part
     // would build twice and flash the pre-commit state.
     this.cleanup();
-    this.store.addFeatures(features);
+    this.store.addFeatures(features, bindings);
     const last = features[features.length - 1]!;
     this.onDone?.(last.id);
   }

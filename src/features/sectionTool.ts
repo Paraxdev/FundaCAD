@@ -5,7 +5,7 @@ import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
 import type { Plane3, PlaneDef, SectionView, Vec3 } from "../types";
 import { SECTION_GHOSTS, sameSectionView } from "../document/sectionView";
-import { DimInput } from "../sketch/dimInput";
+import { DimInput, type DimDocument } from "../sketch/dimInput";
 import { clearPrompt, setPrompt } from "../ui/prompt";
 import { isEditableTarget } from "../ui/focus";
 import { toolChar } from "../input/shortcuts";
@@ -50,6 +50,8 @@ export interface SectionDeps {
   datumDef?: (id: string) => PlaneDef | null;
   /** After an explicit confirm, not one forced by another tool taking the screen. */
   afterEdit?: () => void;
+  /** Where the value box looks up parameter names. */
+  doc?: () => DimDocument | null;
   /** Where the cut is saved. The tool writes every change to it and takes on any change it did not write. */
   saved?: {
     get(): Readonly<SectionView> | null;
@@ -83,7 +85,7 @@ export class SectionTool {
   private savedCut: Readonly<SectionView> | null = null;
   private editPrompt = "";
 
-  private dim = new DimInput();
+  private dim = new DimInput(() => this.deps.doc?.() ?? null);
   private pointV = new THREE.Vector3();
   private axisV = new THREE.Vector3();
 
