@@ -331,7 +331,12 @@ pub fn read_gltf(json: &Value, buffers: &[Cow<'_, [u8]>], mm_per_unit: f64) -> R
                 idx.extend(tris[..tris.len() / 3 * 3].iter().map(|t| t + base));
             }
         }
-        for c in node.get("children").and_then(Value::as_array).into_iter().flatten().rev() {
+        let children = node.get("children").and_then(Value::as_array).map_or(&[][..], Vec::as_slice);
+        // Every queued child costs a visit when it is popped, so the queue never outgrows the budget.
+        if stack.len().saturating_add(children.len()) > visits_left {
+            return Err("this glTF places its nodes under too many parents to import".into());
+        }
+        for c in children.iter().rev() {
             if let Some(c) = c.as_u64() {
                 stack.push((c as usize, world, depth + 1));
             }
