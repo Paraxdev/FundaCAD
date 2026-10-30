@@ -1077,6 +1077,10 @@ impl Finer {
         Finer { elements, seconds: adapt::solve_seconds(elements).ceil() as u64 }
     }
 
+    fn of_compact(elements: usize) -> Finer {
+        Finer { elements, seconds: adapt::compact_solve_seconds(elements).ceil() as u64 }
+    }
+
     /// The run past `ceiling` elements that should keep `wall`, when it is one the finer limit allows.
     fn past(volume: f64, ceiling: usize, wall: Option<ThinWall>) -> Option<Finer> {
         let floor = size_floor(volume, ceiling);
@@ -1104,6 +1108,12 @@ impl From<&str> for Refusal {
     fn from(message: &str) -> Self {
         message.to_string().into()
     }
+}
+
+fn wall_words(wall: Option<ThinWall>) -> String {
+    let Some(ThinWall { thickness, at: [x, y, z], .. }) = wall else { return String::new() };
+    let digits = if thickness < 1.0 { 2 } else { 1 };
+    format!(", the thinnest wall is about {thickness:.digits$} mm thick, near ({x:.1}, {y:.1}, {z:.1}) mm")
 }
 
 fn mesh_error_text(e: &MeshError) -> String {
@@ -1526,6 +1536,7 @@ fn analyse(
     };
     let first_size = first.as_ref().ok().map(|m| m.1.size);
     let mut offer = None;
+    let mut gave_up_at = String::new();
     let meshed = if size.is_some() || first.as_ref().is_ok_and(|m| needed.carried_by(&m.0)) {
         first
     } else {
@@ -1547,12 +1558,15 @@ fn analyse(
                 matches!(e, MeshError::TooThin { .. } | MeshError::TooSmall { .. } | MeshError::TooManyElements { .. })
             }
         };
-        if gave_up && !finer_asked {
-            offer = Finer::past(volume, ceiling, wall);
+        if gave_up {
+            gave_up_at = wall_words(wall);
+            if !finer_asked {
+                offer = Finer::past(volume, ceiling, wall);
+            }
         }
         mesh
     };
-    let (mesh, stats) = meshed.map_err(|e| Refusal { message: mesh_error_text(&e), finer: offer })?;
+    let (mesh, stats) = meshed.map_err(|e| Refusal { message: mesh_error_text(&e) + &gave_up_at, finer: offer })?;
     let retried = size.is_none() && first_size != Some(stats.size);
 
     // Every spot in one list, the supports' first, each with its name for a refusal.
@@ -1587,11 +1601,11 @@ fn analyse(
             PassFail::Solve(SolveError::TooLarge { needed, .. }, elements)
                 if retried && !finer_asked && *needed <= solve::memory_limit_under(limits.finer_memory_cap) =>
             {
-                Some(Finer::of(*elements))
+                Some(Finer::of_compact(*elements))
             }
             _ => offer,
         };
-        Refusal { message: e.text(), finer }
+        Refusal { message: e.text() + &gave_up_at, finer }
     })?;
     let mut finest = refine::finest(&cur.mesh);
     let mut passes = vec![(cur.mesh.tets.len(), cur.sol.max_von_mises)];

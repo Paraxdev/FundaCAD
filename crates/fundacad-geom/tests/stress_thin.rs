@@ -2,6 +2,7 @@
 //! standoffs, held on a side or inside two bores and pushed on two standoff tops.
 
 use fundacad_geom::builder::NoWatch;
+use fundacad_geom::fem::adapt::solve_seconds;
 use fundacad_geom::stress::{stress_result_with, StressLimits, MAX_ELEMENTS};
 use fundacad_protocol::JobResult;
 use serde_json::{json, Value};
@@ -264,4 +265,27 @@ fn a_face_narrower_than_the_finest_mesh_answers_with_a_finer_run() {
     );
     assert!(r["error"]["message"].as_str().is_some_and(|m| !m.is_empty()), "{r}");
     assert_finer_answer(&r, 30_000.0..400_000.0);
+}
+
+#[test]
+fn a_wall_that_stops_the_run_is_named_with_its_thickness_and_place() {
+    let r = run_within(plate_on_its_side(), StressLimits { auto_elements: 30_000, ..no_time_limit() });
+    let message = r["error"]["message"].as_str().unwrap_or_else(|| panic!("{r}"));
+    let (_, words) = message.split_once("the thinnest wall is about 1.3 mm thick, near (").unwrap_or(("", ""));
+    let (place, unit) = words.split_once(')').unwrap_or_else(|| panic!("{message}"));
+    assert_eq!(unit, " mm", "{message}");
+    let place: Vec<f64> = place.split(", ").map(|n| n.parse().unwrap_or_else(|_| panic!("{message}"))).collect();
+    let on_a_tube = AT.iter().any(|[x, y]| {
+        let from_axis = (place[0] - x).hypot(place[1] - y);
+        from_axis > BORE - 0.1 && from_axis < OUTER + 0.1
+    });
+    assert!(on_a_tube, "{message}");
+}
+
+#[test]
+fn a_mesh_past_the_memory_limit_is_priced_as_a_compact_part() {
+    let r = run_within(plate_on_its_side(), StressLimits { memory_cap: 1 << 20, ..no_time_limit() });
+    let finer = &r["error"]["finer"];
+    let plain = solve_seconds(num(&finer["elements"]) as usize);
+    assert!(num(&finer["seconds"]) >= 1.5 * plain, "{r}");
 }

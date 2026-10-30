@@ -41,13 +41,21 @@ pub fn work(elements: usize) -> f64 {
     (elements as f64).powf(WORK_EXPONENT)
 }
 
-/// A release build at this many elements took about `SECONDS_AT_REFERENCE` to solve.
+/// A release build on a thin walled part took about `SECONDS_AT_REFERENCE` to mesh and solve this many elements
+/// (measured 27.5 s at 47937, 37.6 s at 61936, which the exponent predicts within 2%).
 const REFERENCE_ELEMENTS: f64 = 50_000.0;
-const SECONDS_AT_REFERENCE: f64 = 25.0;
+const SECONDS_AT_REFERENCE: f64 = 30.0;
+/// A compact part fills in more of its factor: a solid block of 47250 elements took 54.5 s, about twice a thin one.
+const COMPACT_SLOWDOWN: f64 = 2.0;
 
 /// The seconds one solve of this many elements is predicted to take.
 pub fn solve_seconds(elements: usize) -> f64 {
     SECONDS_AT_REFERENCE * (elements as f64 / REFERENCE_ELEMENTS).powf(WORK_EXPONENT)
+}
+
+/// [`solve_seconds`] for a part compact enough that the solver's memory is what stopped it.
+pub fn compact_solve_seconds(elements: usize) -> f64 {
+    COMPACT_SLOWDOWN * solve_seconds(elements)
 }
 
 /// The most elements [`solve_seconds`] predicts can be solved in `seconds`.

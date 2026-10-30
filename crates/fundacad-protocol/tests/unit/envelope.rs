@@ -37,3 +37,12 @@ fn reply_for_dispatches() {
         r#"{"id": 7, "ok": false, "error": {"message": "boom"}}"#
     );
 }
+
+#[test]
+fn reply_for_keeps_the_finer_run_a_refusal_offers() {
+    let e = json!({"error": {"message": "too thin", "finer": {"elements": 90000, "seconds": 120}}});
+    assert_eq!(
+        reply_for(&json!(7), e.as_object().unwrap_or(&Map::new())),
+        r#"{"id": 7, "ok": false, "error": {"message": "too thin", "finer": {"elements": 90000, "seconds": 120}}}"#
+    );
+}

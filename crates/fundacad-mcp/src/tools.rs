@@ -389,16 +389,18 @@ pub fn stress() -> JsonObject {
                                          g/cm3. Without yield there is no safety factor, \
                                          without density no gravity"},
             "size": {"type": "number",
-                     "description": "element size in mm (default: chosen from the part's \
+                     "description": "element size in mm (default: from the part's \
                                      volume and thickness). Smaller is finer and slower"},
             "maxElements": {"type": "integer",
-                            "description": "the most tetrahedra the mesh may have (default \
+                            "description": "the most tetrahedra (default \
                                             30000, at most 80000). A size too fine for it is \
                                             grown, with a warning"},
             "refine": {"type": "string", "enum": ["off", "standard", "fine"],
-                       "description": "standard (default) solves, then refines the mesh where \
+                       "description": "standard (default) solves, refines where \
                                        the stress error is high and solves again; fine refines \
                                        further and takes longer; off solves one even mesh"},
+            "finer": {"type": "boolean",
+                      "description": "run past the limits once when a refusal offers it"},
             "image": {"type": "boolean",
                       "description": "return a PNG of the body coloured by stress, blue low \
                                       to red high, with a colour bar (default true)"},

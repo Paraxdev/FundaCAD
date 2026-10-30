@@ -475,7 +475,8 @@ same request gives the same answer every time.
   "material": "PLA",     // optional, default PLA; a preset or {"E", "nu", "yield", "density", "name"}
   "size": 1.5,           // optional, starting element size in mm
   "maxElements": 30000,  // optional, default 30000, at most 80000, a ceiling for every pass
-  "refine": "standard" } // optional, "off" | "standard" (default) | "fine"
+  "refine": "standard",  // optional, "off" | "standard" (default) | "fine"
+  "finer": true }        // optional, only after an error that offers it, runs past the limits once
 ```
 
 - `fixed` and each load's `faces` take one face selector or a list (the same forms
@@ -547,6 +548,12 @@ same request gives the same answer every time.
   less when the machine has less free, which a compact part usually passes above
   about 50000 elements (a slender or thin walled one goes further). A mesh that would
   not fit is refused with the `maxElements` that would.
+- Without `size`, a mesh that comes apart or loses a face the study needs is meshed again
+  finer by itself, up to 80000 elements and what about a minute allows. Past that the
+  error carries `"finer": { "elements": 90000, "seconds": 120 }`, a rough estimate.
+  The same request with `"finer": true` may then reach 400000 elements and 8 GB once, the
+  free memory rule still applies. A run past those has no `finer`, and an error from a
+  wall that gave way names its thickness and place in `message`.
 - A load only on fixed faces does nothing to the part: it is refused when every load
   is and gravity is off, and otherwise draws a warning.
 
