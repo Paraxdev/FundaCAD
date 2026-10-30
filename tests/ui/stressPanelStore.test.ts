@@ -26,7 +26,6 @@ describe("stress panel store", () => {
     expect(p.stress?.setup.supports.map((x) => [x.id, x.type])).toEqual([[1, "fixed"]]);
     expect(p.stress?.setup.gravity).toEqual({ on: false, direction: "-Z" });
     expect(p.stress?.setup.material).toBe("PLA");
-    expect(p.stress?.setup.size).toBeNull();
     expect(p.stress?.running).toBe(false);
   });
 

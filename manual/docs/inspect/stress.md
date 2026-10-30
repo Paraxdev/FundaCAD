@@ -45,11 +45,16 @@ A load is a Force in newtons or a Pressure in MPa. A new load starts at 100 N.
 
 Material lists PLA, PETG, ABS, ASA, PA12 nylon, PC, aluminium 6061-T6 and steel S235, and starts at PLA. Pick Custom to type your own E, Poisson's ratio, Yield and Density.
 
-More options holds two settings.
+More options holds Mesh detail, how finely the part is split into small pieces. It starts at Standard.
 
-| Setting | What it does | Starts at |
-| --- | --- | --- |
-| Mesh size | The size of the pieces the part is split into. Smaller is finer and slower. | auto |
-| Refinement | Standard makes the mesh finer where the stress is high and solves again. Fine finds the peak more closely and takes longer. Off uses one even mesh. | Standard |
+| Mesh detail | What it does |
+| --- | --- |
+| Coarse | Uses one even split, the quickest run. |
+| Standard | Splits finer where the stress is high and solves again. |
+| Fine | Finds the peak more closely and takes longer. |
+
+Thin walls and small faces get a finer split by themselves. If that would take too long or need too much memory, the run stops and offers one button, such as Run with finer detail (about 20 seconds). Press it to run once with the limit raised. A part too thin for even that run gets no button, the message says which wall is the thinnest. A solid part with a face too narrow for the mesh gets no button either, as a split that fine would not fit in memory, so pick a wider face.
+
+A study that used to warn that a fixed face got too little of the split now tries a finer one first, so its numbers can differ from an older result.
 
 While it runs, the panel shows Analysing… with a Cancel button.

@@ -475,7 +475,8 @@ same request gives the same answer every time.
   "material": "PLA",     // optional, default PLA; a preset or {"E", "nu", "yield", "density", "name"}
   "size": 1.5,           // optional, starting element size in mm
   "maxElements": 30000,  // optional, default 30000, at most 80000, a ceiling for every pass
-  "refine": "standard" } // optional, "off" | "standard" (default) | "fine"
+  "refine": "standard",  // optional, "off" | "standard" (default) | "fine"
+  "finer": true }        // optional, only after an error that offers it, runs past the limits once
 ```
 
 - `fixed` and each load's `faces` take one face selector or a list (the same forms
@@ -547,6 +548,21 @@ same request gives the same answer every time.
   less when the machine has less free, which a compact part usually passes above
   about 50000 elements (a slender or thin walled one goes further). A mesh that would
   not fit is refused with the `maxElements` that would.
+- Without `size`, a mesh that comes apart or loses a face the study needs is meshed again
+  finer by itself, up to about 148000 elements, what 15 s of a release build allows. A
+  `maxElements` in the request is the ceiling of this retry, except with
+  `"refine": "fine"`. Past that the error carries
+  `"finer": { "elements": 180000, "seconds": 20 }`, a rough estimate. The same request
+  with `"finer": true` may then reach 250000 elements and 8 GiB once, the free memory rule
+  still applies. There is no `finer` when that many elements would not fit that memory:
+  8 GiB holds about 220000 of a thin walled part and about 100000 of a part with no thin
+  wall, whose `seconds` are about 4 times as long, so such a part that loses a face past
+  the 148000 gets no `finer`. An error from a wall that gave way names its thickness and
+  place in `message`.
+- A study the solver would run with a warning, only some fixed faces lost, also retries,
+  within `maxElements` (30000 by default). When a retry keeps those faces the answer has a
+  finer mesh and other numbers than the warned run of an earlier build. When none does,
+  it stays on the first mesh with its warning. An explicit `size` never retries.
 - A load only on fixed faces does nothing to the part: it is refused when every load
   is and gravity is off, and otherwise draws a warning.
 

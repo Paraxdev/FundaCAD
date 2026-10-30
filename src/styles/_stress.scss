@@ -261,6 +261,9 @@
   margin-top: var(--s-2);
   border-radius: var(--r-xs);
 }
+.stress-finer {
+  margin-top: var(--s-2);
+}
 // The app's error and warning inks for small text on glass: the accent is a green, which would read a failing safety
 // factor as a good one, and the bare tokens fall under AA in the light theme.
 .stress-error,

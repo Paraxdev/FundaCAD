@@ -50,6 +50,7 @@ import type { WireBody, WireBodyFull, WireEdgeList, WireManifestEntry, WireRebui
 interface WireError {
   message: string;
   feature_id?: string;
+  finer?: StressFiner;
 }
 type RawReply<T> =
   | { id: string; ok: true; result: T }
@@ -216,6 +217,14 @@ export interface StressOptions {
   maxElements?: number;
   /** Absent is "standard". */
   refine?: StressRefine;
+  /** Only after a refusal that offered it, runs past the limits once. */
+  finer?: boolean;
+}
+
+/** What a run past the limits would take, offered by a refusal. `seconds` is a rough estimate of the solve alone. */
+export interface StressFiner {
+  elements: number;
+  seconds: number;
 }
 
 export type StressRefine = "off" | "standard" | "fine";
@@ -260,7 +269,8 @@ export interface StressReply {
   errors?: { feature_id?: string; message: string }[];
 }
 
-export type StressResult = { ok: true; result: StressReply } | { ok: false; message: string; cancelled?: boolean };
+export type StressResult =
+  { ok: true; result: StressReply } | { ok: false; message: string; cancelled?: boolean; finer?: StressFiner };
 
 export type PrintabilityCheck = "overhang" | "wall" | "gap" | "bridge" | "open";
 export type PrintabilityUp = "+X" | "-X" | "+Y" | "-Y" | "+Z" | "-Z";
@@ -1526,7 +1536,8 @@ export class Geometry implements GeometryBackend {
     const msg = await this.call<StressReply>("stress", { document: doc, body, ...opts }, onStarted);
     if (msg.ok) return { ok: true, result: msg.result };
     if (msg.cancelled) return { ok: false, cancelled: true, message: "stress analysis cancelled" };
-    return { ok: false, message: msg.error?.message ?? "stress analysis failed" };
+    const finer = msg.error?.finer;
+    return { ok: false, message: msg.error?.message ?? "stress analysis failed", ...(finer ? { finer } : {}) };
   }
 
   async printability(

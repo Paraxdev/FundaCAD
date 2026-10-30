@@ -15,7 +15,7 @@ use crate::export;
 use crate::fem::adapt::{self, Refine};
 use crate::fem::refine::{self, RefineOptions};
 use crate::fem::solve::{self, Axis, Hold, Load, LoadKind, Problem, SlideFace, Solution, SolveError, Support};
-use crate::fem::tetmesh::{self, MeshError};
+use crate::fem::tetmesh::{self, MeshError, ThinWall};
 use crate::fem::{MeshOptions, MeshStats, SurfaceMesh, TetMesh};
 use crate::kernel::{self, Kind};
 use crate::mesh::{tessellate, MeshParams};
@@ -40,18 +40,46 @@ const BISECTIONS: u8 = 3;
 const MIN_REFINED_DIHEDRAL: f64 = 5.0;
 /// Refinement stops when the next pass is predicted to end past this many seconds of the run.
 const REFINE_SECONDS: f64 = 60.0;
+/// A retry after a mesh came apart goes on silently up to this many release build seconds, which is the 60 s the
+/// person may wait with 4 times to spare for a slower machine.
+const RETRY_SECONDS: f64 = 15.0;
+
+/// Elements a run the person asked for after a finer answer may grow a mesh to, a little past what
+/// `FINER_MEMORY_CAP` holds of a thin walled part as a mesh can land above the count it was promised.
+pub const FINER_MAX_ELEMENTS: usize = 250_000;
 
 /// What bounds one analysis. Tests lift `refine_seconds` so a slow debug build refines as far as a fast one.
 #[derive(Clone, Copy, Debug)]
 pub struct StressLimits {
     pub refine_seconds: f64,
+    /// Release build seconds the retry for walls too thin for the first mesh may take before it asks.
+    pub retry_seconds: f64,
+    /// Elements that retry may grow a mesh to, however fast it would be.
+    pub auto_elements: usize,
+    /// Bytes the factorisation may take, and how far a run asked for after a finer answer may lift that.
+    pub memory_cap: u64,
+    pub finer_memory_cap: u64,
 }
 
 impl Default for StressLimits {
     fn default() -> Self {
-        StressLimits { refine_seconds: REFINE_SECONDS }
+        StressLimits {
+            refine_seconds: REFINE_SECONDS,
+            retry_seconds: RETRY_SECONDS,
+            auto_elements: FINER_MAX_ELEMENTS,
+            memory_cap: solve::FACTOR_MEMORY_CAP,
+            finer_memory_cap: solve::FINER_MEMORY_CAP,
+        }
     }
 }
+
+/// The lattice keeps a wall when the element is at most this times its thickness: a 1.3 mm wall meshed at 1.5 mm
+/// and came apart at 1.55 mm.
+const WALL_SHARE: f64 = 1.1;
+/// Every retry after a mesh came apart shrinks the elements at least this much.
+const RETRY_SHRINK: f64 = 0.9;
+/// A finer run's size below the finest one tried when no wall names a size, about twice the elements.
+const FINER_STEP: f64 = 0.8;
 
 /// Tetrahedra per element size cubed of the mesher's lattice, with its allowance for the
 /// stencils that split boundary cells (`tetmesh` TETS_PER_CELL x BOUNDARY_ALLOWANCE).
@@ -67,8 +95,8 @@ const CORNER_REACH: f64 = 1.5;
 /// kinked chords there read a notch stress once the elements beside them are small. Wall bracket gusset tip: 15.1 MPa
 /// unrefined, 17.2 refined at half a size, 15.2 at one, 12.3 to 14.3 on uniform meshes of 1.6 to 2 mm.
 const ROUNDED_REACH: f64 = 1.0;
-/// How long the factorisation may keep the job's heartbeat going. `FACTOR_MEMORY_CAP` bounds
-/// it to well under a minute, so this only stops beats for a call that is truly stuck.
+/// How long the factorisation may keep the job's heartbeat going. `FINER_MEMORY_CAP` bounds
+/// it to a few minutes, so this only stops beats for a call that is truly stuck.
 const FACTOR_BEATS: Duration = Duration::from_secs(600);
 
 /// Standard gravity in m/s2, what `gravity: true` pulls with along -Z.
@@ -954,6 +982,160 @@ fn solve_error_text(e: &SolveError, elements: usize) -> String {
     }
 }
 
+/// The faces a study acts through: a support holds the nodes on its faces, a load pushes on the boundary triangles
+/// tagged with its faces.
+struct NeededFaces {
+    held: Vec<u32>,
+    loaded: Vec<u32>,
+}
+
+impl NeededFaces {
+    fn holding(&self, mesh: &TetMesh) -> usize {
+        self.held.iter().filter(|f| mesh.node_faces.iter().any(|p| p.1 == **f)).count()
+    }
+
+    fn loadable(&self, mesh: &TetMesh) -> bool {
+        self.loaded.iter().all(|f| mesh.boundary_face.contains(f))
+    }
+
+    /// A narrow held face can carry a single row of nodes, and the body turns about a row whatever holds it.
+    fn held_in_a_row(&self, mesh: &TetMesh) -> bool {
+        let mut nodes = mesh.node_faces.iter().filter(|p| self.held.contains(&p.1)).map(|p| mesh.nodes[p.0 as usize]);
+        let Some(a) = nodes.next() else { return false };
+        let rest: Vec<[f64; 3]> = nodes.collect();
+        let from_a = |p: [f64; 3]| dot(sub(p, a), sub(p, a));
+        let far = rest.iter().copied().max_by(|p, q| from_a(*p).total_cmp(&from_a(*q))).unwrap_or(a);
+        let along = sub(far, a);
+        let reach = from_a(far);
+        rest.iter().all(|&p| {
+            let across = cross(along, sub(p, a));
+            dot(across, across) <= 1e-6 * reach * reach
+        })
+    }
+
+    fn carried_by(&self, mesh: &TetMesh) -> bool {
+        self.holding(mesh) == self.held.len() && self.loadable(mesh) && !self.held_in_a_row(mesh)
+    }
+
+    /// The solver refuses a mesh without a loaded face, without any held face or held in one row, and only warns of
+    /// some held face.
+    fn solvable_on(&self, mesh: &TetMesh) -> bool {
+        self.holding(mesh) > 0 && self.loadable(mesh) && !self.held_in_a_row(mesh)
+    }
+}
+
+struct Retried {
+    mesh: Result<(TetMesh, MeshStats), MeshError>,
+    wall: Option<ThinWall>,
+}
+
+/// Meshes again with smaller elements after the automatic size came apart or lost a face the study needs, until a
+/// mesh carries them or the finest that `ceiling` elements allow did not. A wall that came apart sets the size, as
+/// shrinking by steps would stuff it for nothing, while a lost face has no such size and comes back by lattice phase.
+fn mesh_finer(
+    surface: &SurfaceMesh,
+    volume: f64,
+    first: Result<(TetMesh, MeshStats), MeshError>,
+    ceiling: usize,
+    needed: &NeededFaces,
+    tick: &mut dyn FnMut() -> bool,
+) -> Retried {
+    let (mut h, mut came_apart) = match &first {
+        Ok((_, stats)) => (stats.size, false),
+        Err(MeshError::TooThin { size, .. } | MeshError::TooSmall { size, .. }) => (*size, true),
+        Err(_) => return Retried { mesh: first, wall: None },
+    };
+    let wall = match tetmesh::thinnest_wall(surface, 2.0 * h, tick) {
+        Ok(wall) => wall,
+        Err(e) => return Retried { mesh: Err(e), wall: None },
+    };
+    let floor = size_floor(volume, ceiling);
+    let mut kept = first;
+    while h > floor {
+        h *= RETRY_SHRINK;
+        if let (true, Some(w)) = (came_apart, wall) {
+            h = h.min(w.thickness * WALL_SHARE);
+        }
+        h = h.max(floor);
+        match tetmesh::tetrahedralize(surface, &MeshOptions { size: h, max_tets: ceiling }, tick) {
+            Ok(m) if needed.carried_by(&m.0) => return Retried { mesh: Ok(m), wall },
+            Ok(m) => {
+                came_apart = false;
+                if kept.is_err() {
+                    kept = Ok(m);
+                }
+            }
+            Err(MeshError::TooThin { .. } | MeshError::TooSmall { .. }) => came_apart = true,
+            Err(other) => return Retried { mesh: Err(other), wall },
+        }
+    }
+    Retried { mesh: kept, wall }
+}
+
+/// What a run past the limits would take, so the person can ask for it once.
+#[derive(Clone, Copy, Debug)]
+struct Finer {
+    elements: usize,
+    seconds: u64,
+}
+
+impl Finer {
+    fn of(elements: usize) -> Finer {
+        Finer { elements, seconds: adapt::release_seconds(elements).ceil() as u64 }
+    }
+
+    fn of_compact(elements: usize) -> Finer {
+        Finer { elements, seconds: adapt::release_compact_seconds(elements).ceil() as u64 }
+    }
+
+    /// The run past `ceiling` elements that should keep `wall`, when the lifted limits can hold it, so the button
+    /// never promises a run the solver would refuse for memory.
+    fn past(volume: f64, ceiling: usize, wall: Option<ThinWall>, limits: &StressLimits) -> Option<Finer> {
+        Finer::within(volume, ceiling, wall, solve::memory_limit_under(limits.finer_memory_cap))
+    }
+
+    fn within(volume: f64, ceiling: usize, wall: Option<ThinWall>, memory: u64) -> Option<Finer> {
+        let floor = size_floor(volume, ceiling);
+        // No wall found means no thin part to price it as, and a solid one asks more memory and time.
+        let (holds, of): (_, fn(usize) -> Finer) = match wall {
+            Some(_) => (adapt::elements_in_memory(memory), Finer::of),
+            None => (adapt::elements_in_compact_memory(memory), Finer::of_compact),
+        };
+        let most = holds.min(FINER_MAX_ELEMENTS);
+        let elements_at = |h: f64| (TETS_PER_SIZE_CUBED * volume / h.powi(3)).ceil() as usize;
+        // The retry that fits shrinks once more below the wall's size, as the finer run's own retry does.
+        let elements = match wall.map(|w| w.thickness * WALL_SHARE * RETRY_SHRINK) {
+            Some(h) if h < floor => elements_at(h),
+            // No size is known to bring a lost face back, so any finer mesh the memory holds may do.
+            _ => elements_at(floor * FINER_STEP).min(most).max(ceiling + 1),
+        };
+        (elements <= most).then(|| of(elements))
+    }
+}
+
+struct Refusal {
+    message: String,
+    finer: Option<Finer>,
+}
+
+impl From<String> for Refusal {
+    fn from(message: String) -> Self {
+        Refusal { message, finer: None }
+    }
+}
+
+impl From<&str> for Refusal {
+    fn from(message: &str) -> Self {
+        message.to_string().into()
+    }
+}
+
+fn wall_words(wall: Option<ThinWall>) -> String {
+    let Some(ThinWall { thickness, at: [x, y, z], .. }) = wall else { return String::new() };
+    let digits = if thickness < 1.0 { 2 } else { 1 };
+    format!(", the thinnest wall is about {thickness:.digits$} mm thick, near ({x:.1}, {y:.1}, {z:.1}) mm")
+}
+
 fn mesh_error_text(e: &MeshError) -> String {
     match e {
         MeshError::Cancelled => "cancelled".into(),
@@ -976,6 +1158,7 @@ struct Setup<'a> {
     /// Density times gravity, N per cubic mm, before scaling to the real volume.
     weight: Option<[f64; 3]>,
     volume: f64,
+    memory_cap: u64,
 }
 
 /// One solve on `mesh` as stuffed or refined. `held` lists every face and spot a support holds, sorted by id.
@@ -1097,7 +1280,8 @@ fn solve_pass(
             w.map(|c| c * scale)
         }),
     };
-    let sol = solve::solve_with(&problem, tick, &mut |f| crate::heartbeat::while_running(FACTOR_BEATS, f))
+    let long = &mut |f: &mut dyn FnMut()| crate::heartbeat::while_running(FACTOR_BEATS, f);
+    let sol = solve::solve_capped(&problem, tick, long, s.memory_cap)
         .map_err(|e| PassFail::Solve(renumber_load(e, &origin), mesh.tets.len()))?;
     Ok(Pass { mesh, stats, sol, spotted, held })
 }
@@ -1198,7 +1382,15 @@ pub fn stress_result_with(req: &Map<String, Value>, watch: &dyn Watch, limits: &
             }
             JobResult::Json(m)
         }
-        Err(message) => refuse(&message, errors),
+        Err(Refusal { message, finer }) => {
+            let mut refused = refuse(&message, errors);
+            if let (Some(f), JobResult::Json(m)) = (finer, &mut refused) {
+                if let Some(error) = m.get_mut("error").and_then(Value::as_object_mut) {
+                    error.insert("finer".into(), json!({"elements": f.elements, "seconds": f.seconds}));
+                }
+            }
+            refused
+        }
     }
 }
 
@@ -1209,7 +1401,7 @@ fn analyse(
     live: &Shape,
     watch: &dyn Watch,
     limits: &StressLimits,
-) -> Result<Map<String, Value>, String> {
+) -> Result<Map<String, Value>, Refusal> {
     let material = material_of(req.get("material"))?;
     let gravity = gravity_of(req.get("gravity"))?;
     let density = match (gravity, material.density) {
@@ -1223,9 +1415,11 @@ fn analyse(
     };
     let size = positive(req, "size")?;
     let refine = refine_of(req.get("refine"))?;
+    let finer_asked = size.is_none() && req.get("finer") == Some(&Value::Bool(true));
     let started = Instant::now();
     let mut warnings: Vec<String> = Vec::new();
-    let max_elements = match positive(req, "maxElements")? {
+    let asked_elements = positive(req, "maxElements")?;
+    let max_elements = match asked_elements {
         None => DEFAULT_MAX_ELEMENTS,
         Some(n) if n > MAX_ELEMENTS as f64 => {
             warnings.push(format!(
@@ -1238,33 +1432,37 @@ fn analyse(
 
     let solids = kernel::count(live, Kind::Solid);
     if solids == 0 {
-        return Err(format!("{id} is not a solid, it has no volume to analyse"));
+        return Err(format!("{id} is not a solid, it has no volume to analyse").into());
     }
     if solids > 1 {
         return Err(format!(
             "{id} is {solids} separate solids, the analysis takes one solid, split it into bodies or join the pieces"
-        ));
+        )
+        .into());
     }
     let open = kernel::open_edge_count(live);
     if open > 0 {
         return Err(format!(
             "{id} is not closed, {open} of its edges bound only one face, so it has no inside to analyse"
-        ));
+        )
+        .into());
     }
     let sound = crate::soundness::of(live);
     if let Some(why) = sound.fault() {
-        return Err(format!("{id} {why}, the analysis needs one closed solid"));
+        return Err(format!("{id} {why}, the analysis needs one closed solid").into());
     }
     // Not turned over here: the faces a support or a load names were picked
     // on the body as it is, and a pressure pushes along their normals.
     if sound.inside_out() {
-        return Err(format!("{id} {}, the analysis needs a solid that faces outward", crate::soundness::INSIDE_OUT));
+        return Err(
+            format!("{id} {}, the analysis needs a solid that faces outward", crate::soundness::INSIDE_OUT).into()
+        );
     }
     let shape = kernel::copy(live).map_err(|e| format!("{id} could not be copied for meshing, {e}"))?;
     let volume = kernel::volume(&shape).abs();
     let area = kernel::area(&shape).abs();
     if !(volume > 0.0 && area > 0.0) {
-        return Err(format!("{id} encloses no volume"));
+        return Err(format!("{id} encloses no volume").into());
     }
     let thickness = 2.0 * volume / area;
 
@@ -1338,23 +1536,59 @@ fn analyse(
         (weld(&t.positions, &t.indices, &t.face_ids), planar)
     });
     if surface.triangles.is_empty() {
-        return Err(format!("{id} could not be triangulated"));
+        return Err(format!("{id} could not be triangulated").into());
     }
     let open = open_edges(&surface);
     if open > 0 {
         return Err(format!(
             "the surface of {id} does not close once triangulated, {open} of its mesh edges are open, so it has no inside to fill"
-        ));
+        ).into());
     }
 
     let mut tick = || {
         crate::heartbeat::beat();
         !(watch.cancelled() || crate::cancel::requested())
     };
-    let stuff = |size: f64, tick: &mut dyn FnMut() -> bool| {
-        tetmesh::tetrahedralize(&surface, &MeshOptions { size, max_tets: max_elements }, tick)
+    let first = tetmesh::tetrahedralize(&surface, &MeshOptions { size: effective, max_tets: max_elements }, &mut tick);
+    let needed = NeededFaces {
+        held: held.iter().map(|h| h.0).collect(),
+        loaded: loads.iter().flat_map(|l| l.0.faces.iter().copied()).collect(),
     };
-    let (mesh, stats): (TetMesh, MeshStats) = stuff(effective, &mut tick).map_err(|e| mesh_error_text(&e))?;
+    let first_size = first.as_ref().ok().map(|m| m.1.size);
+    let mut offer = None;
+    let mut gave_up_at = String::new();
+    let meshed = if size.is_some() || first.as_ref().is_ok_and(|m| needed.carried_by(&m.0)) {
+        first
+    } else {
+        // A mesh the solver takes runs today with a warning, so its retry stays within the elements asked for.
+        let solvable = first.as_ref().is_ok_and(|m| needed.solvable_on(&m.0));
+        let ceiling = if solvable {
+            max_elements
+        } else if finer_asked {
+            FINER_MAX_ELEMENTS
+        } else if asked_elements.is_some() && refine != Refine::Fine {
+            // Fine names its elements to start finer, so it must not give up before Standard does.
+            max_elements
+        } else {
+            limits.auto_elements.min(adapt::release_elements_within(limits.retry_seconds)).max(max_elements)
+        };
+        let Retried { mesh, wall } = mesh_finer(&surface, volume, first, ceiling, &needed, &mut tick);
+        let gave_up = match &mesh {
+            Ok(m) => !needed.solvable_on(&m.0),
+            Err(e) => {
+                matches!(e, MeshError::TooThin { .. } | MeshError::TooSmall { .. } | MeshError::TooManyElements { .. })
+            }
+        };
+        if gave_up {
+            gave_up_at = wall_words(wall);
+            if !finer_asked {
+                offer = Finer::past(volume, ceiling, wall, limits);
+            }
+        }
+        mesh
+    };
+    let (mesh, stats) = meshed.map_err(|e| Refusal { message: mesh_error_text(&e) + &gave_up_at, finer: offer })?;
+    let retried = size.is_none() && first_size != Some(stats.size);
 
     // Every spot in one list, the supports' first, each with its name for a refusal.
     let mut spots = Vec::new();
@@ -1380,9 +1614,20 @@ fn analyse(
         material: solve::Material { e: material.e, nu: material.nu },
         weight: gravity.zip(density).map(|(g, d)| body_force(d, g)),
         volume,
+        memory_cap: if finer_asked { limits.finer_memory_cap } else { limits.memory_cap },
     };
     let h0 = stats.size;
-    let mut cur = solve_pass(mesh, stats, h0, &setup, &mut tick).map_err(PassFail::text)?;
+    let mut cur = solve_pass(mesh, stats, h0, &setup, &mut tick).map_err(|e| {
+        let finer = match &e {
+            PassFail::Solve(SolveError::TooLarge { needed, .. }, elements)
+                if retried && !finer_asked && *needed <= solve::memory_limit_under(limits.finer_memory_cap) =>
+            {
+                Some(Finer::of_compact(*elements))
+            }
+            _ => offer,
+        };
+        Refusal { message: e.text() + &gave_up_at, finer }
+    })?;
     let mut finest = refine::finest(&cur.mesh);
     let mut passes = vec![(cur.mesh.tets.len(), cur.sol.max_von_mises)];
     let mut last_secs = started.elapsed().as_secs_f64();
@@ -1442,7 +1687,7 @@ fn analyse(
                 stop = "memory";
                 break;
             }
-            Err(e) => return Err(e.text()),
+            Err(e) => return Err(e.text().into()),
         }
     }
     let Pass { mesh, stats, sol, spotted, held } = cur;
@@ -1495,7 +1740,8 @@ fn analyse(
             stats.size, thickness
         ));
     }
-    if stats.size > requested * 1.0001 {
+    // A finer retry sizes the mesh by its thinnest wall, not by the element limit.
+    if !retried && stats.size > requested * 1.0001 {
         warnings.push(format!(
             "the element size grew from {requested:.3} mm to {:.3} mm to stay within {max_elements} elements, allow more elements for a finer mesh",
             stats.size
@@ -1562,6 +1808,10 @@ fn analyse(
     out.insert("surface".into(), surface_of(&mesh, &sol));
     Ok(out)
 }
+
+#[cfg(test)]
+#[path = "stress_finer_tests.rs"]
+mod finer_tests;
 
 #[cfg(test)]
 mod tests {

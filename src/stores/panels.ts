@@ -11,6 +11,7 @@ import {
   type StressSetup,
   type StressTarget,
 } from "../ui/stress";
+import type { StressFiner } from "../geometry/client";
 import type { StressSpot, StressSupportType, Vec3 } from "../types";
 
 /** A key/value readout line. */
@@ -81,9 +82,11 @@ export interface StressData {
   result: StressResultView | null;
   /** Why the last Run did not produce a result, cleared by the next. */
   error: string | null;
+  /** What running past the limits would take, when the error offers that. */
+  finer: StressFiner | null;
   /** "hidden" takes the colours off so faces can be picked again while the rows stay; "none" before a Run or after the
-   *  model changed under them. */
-  colours: "shown" | "hidden" | "none";
+   *  model changed under them; "pending" while a fresh result's colours are being drawn. */
+  colours: "shown" | "hidden" | "none" | "pending";
   /** Null until a result with displacements arrives. */
   deform: StressDeform | null;
   /** Probe mode, and the points pinned with it. */
@@ -134,6 +137,7 @@ export const usePanelsStore = defineStore("panels", () => {
       requestId: null,
       result: null,
       error: null,
+      finer: null,
       colours: "none",
       deform: null,
       probe: false,
@@ -240,6 +244,7 @@ export const usePanelsStore = defineStore("panels", () => {
     stress.value.running = true;
     stress.value.requestId = null;
     stress.value.error = null;
+    stress.value.finer = null;
     stress.value.ranSetup = JSON.stringify(stress.value.setup);
   }
 
@@ -248,12 +253,13 @@ export const usePanelsStore = defineStore("panels", () => {
   }
 
   /** Settle a Run: a result, an error, or neither for a cancel. */
-  function stressFinished(outcome: { result?: StressResultView; error?: string }) {
+  function stressFinished(outcome: { result?: StressResultView; error?: string; finer?: StressFiner }) {
     if (!stress.value) return;
     stress.value.running = false;
     stress.value.requestId = null;
     if (outcome.result) stress.value.result = markRaw(outcome.result);
     stress.value.error = outcome.error ?? null;
+    stress.value.finer = outcome.finer ?? null;
   }
 
   /** Drop the result and everything drawn from it: the deformed shape and the probes. */

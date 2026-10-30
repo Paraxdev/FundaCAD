@@ -8,7 +8,7 @@ import IconButton from "../ui/IconButton.vue";
 import Slider from "../ui/Slider.vue";
 import Switch from "../ui/Switch.vue";
 import StressVerdict from "./StressVerdict.vue";
-import { plainWarning } from "../../ui/stressWarnings";
+import { plainWarningFor } from "../../ui/stressWarnings";
 import { deformLabel, legendEnds, legendGradient, setupSummary, type StressResultView } from "../../ui/stress";
 import { getUnit } from "../../ui/units";
 
@@ -24,6 +24,7 @@ const gradient = legendGradient();
 const unit = computed(() => getUnit());
 
 const modelChanged = computed(() => stress.value.colours === "none");
+const drawing = computed(() => stress.value.colours === "pending");
 const setupChanged = computed(
   () => stress.value.ranSetup !== null && stress.value.ranSetup !== JSON.stringify(stress.value.setup),
 );
@@ -31,6 +32,11 @@ const ranWith = computed(() => {
   const ran = stress.value.ranSetup;
   return ran ? setupSummary(JSON.parse(ran)) : setupSummary(stress.value.setup);
 });
+const ranFine = computed(() => ranSetupRefine() === "fine");
+function ranSetupRefine() {
+  const ran = stress.value.ranSetup;
+  return (ran ? JSON.parse(ran) : stress.value.setup).refine;
+}
 const keyRows = computed(() => props.result.rows);
 const ends = computed(() => legendEnds(props.result.legend));
 const detailsOpen = ref(false);
@@ -104,7 +110,7 @@ const deformStep = computed(() => {
     </template>
 
     <div class="stress-view-row">
-      <label v-if="!modelChanged" class="stress-gravity" title="Show the stress colours on the body">
+      <label v-if="!modelChanged && !drawing" class="stress-gravity" title="Show the stress colours on the body">
         <Switch
           :model-value="stress.colours === 'shown'"
           class="stress-colours"
@@ -113,7 +119,11 @@ const deformStep = computed(() => {
         />
         <span class="measure-k">Colours</span>
       </label>
-      <label v-if="deform && !modelChanged" class="stress-gravity" title="Draw the body bent under the load">
+      <label
+        v-if="deform && !modelChanged && !drawing"
+        class="stress-gravity"
+        title="Draw the body bent under the load"
+      >
         <Switch
           :model-value="deform.shown"
           class="stress-shape"
@@ -127,7 +137,7 @@ const deformStep = computed(() => {
         size="sm"
         class="stress-probe"
         :pressed="stress.probe"
-        :disabled="modelChanged && !stress.probe"
+        :disabled="(modelChanged || drawing) && !stress.probe"
         tip="Read the stress at a point on the body"
         @click="engine.ui.panels.setStressProbe(!stress.probe)"
         >Read a point</Button
@@ -179,7 +189,7 @@ const deformStep = computed(() => {
     </div>
 
     <div v-for="(w, i) in result.warnings" :key="'w' + i" class="measure-hint stress-warning">{{
-      plainWarning(w)
+      plainWarningFor(w, ranFine)
     }}</div>
   </div>
 </template>

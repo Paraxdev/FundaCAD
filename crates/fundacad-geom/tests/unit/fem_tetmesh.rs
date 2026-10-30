@@ -566,6 +566,81 @@ fn coarsening_errors_ask_for_more_elements() {
     assert!(e.to_string().ends_with("the limit of 60000 elements forces elements this large, allow more elements"));
 }
 
+/// A tube along z from 0 to `height`; face ids 0 top, 1 bottom, 2 outside, 3 bore.
+fn tube(outer: f64, inner: f64, height: f64, segments: usize) -> SurfaceMesh {
+    let mut s = Shape::default();
+    let ring = |s: &mut Shape, r: f64, z: f64| -> Vec<u32> {
+        (0..segments)
+            .map(|k| {
+                let (sn, cs) = (std::f64::consts::TAU * k as f64 / segments as f64).sin_cos();
+                s.vertex([r * cs, r * sn, z])
+            })
+            .collect()
+    };
+    let (ob, ot, ib, it) =
+        (ring(&mut s, outer, 0.0), ring(&mut s, outer, height), ring(&mut s, inner, 0.0), ring(&mut s, inner, height));
+    for k in 0..segments {
+        let k1 = (k + 1) % segments;
+        s.quad([it[k], ot[k], ot[k1], it[k1]], 0, [0.0, 0.0, 1.0]);
+        s.quad([ib[k], ob[k], ob[k1], ib[k1]], 1, [0.0, 0.0, -1.0]);
+        let q = [ob[k], ob[k1], ot[k1], ot[k]];
+        let c = s.centroid(&q);
+        s.quad(q, 2, [c[0], c[1], 0.0]);
+        let q = [ib[k], ib[k1], it[k1], it[k]];
+        let c = s.centroid(&q);
+        s.quad(q, 3, [-c[0], -c[1], 0.0]);
+    }
+    s.mesh()
+}
+
+#[test]
+fn thinnest_wall_of_a_plate_is_its_thickness() {
+    let plate = cuboid([30.0, 20.0, 2.0], &|p| rotate(p, 0.11, -0.07, 0.4));
+    let wall = thinnest_wall(&plate, 5.0, &mut || true).unwrap().expect("a wall");
+    assert!((wall.thickness - 2.0).abs() < 1e-9, "{wall:?}");
+    assert!(wall.face == 4 || wall.face == 5, "{wall:?}");
+    // Walls thicker than the reach are not looked for.
+    assert_eq!(thinnest_wall(&plate, 1.5, &mut || true).unwrap(), None);
+}
+
+#[test]
+fn thinnest_wall_of_a_tube_is_between_bore_and_outside() {
+    let t = tube(3.0, 1.7, 8.0, 48);
+    let wall = thinnest_wall(&t, 4.0, &mut || true).unwrap().expect("a wall");
+    assert!((wall.thickness - 1.3).abs() < 0.03, "{wall:?}");
+    assert!(wall.face == 2 || wall.face == 3, "{wall:?}");
+    let r = wall.at[0].hypot(wall.at[1]);
+    assert!(r > 1.6 && r < 3.0, "{wall:?}");
+}
+
+#[test]
+fn a_gap_between_two_bodies_is_not_a_wall() {
+    let a = cuboid([10.0, 10.0, 5.0], &|p| p);
+    let b = cuboid([10.0, 10.0, 5.0], &|p| add(p, [0.0, 0.0, 5.5]));
+    let both = join(&a, &b);
+    assert_eq!(thinnest_wall(&both, 2.0, &mut || true).unwrap(), None);
+    let wall = thinnest_wall(&both, 6.0, &mut || true).unwrap().expect("a wall");
+    assert!((wall.thickness - 5.0).abs() < 1e-9, "{wall:?}");
+}
+
+#[test]
+fn a_thin_sliver_does_not_set_the_wall() {
+    // A 0.3 mm fin on about 0.4 % of the area is ignored, on about 3 % it is the wall.
+    let cube = cuboid([20.0; 3], &|p| p);
+    let small = join(&cube, &cuboid([2.0, 2.0, 0.3], &|p| add(p, [30.0, 0.0, 0.0])));
+    assert_eq!(thinnest_wall(&small, 5.0, &mut || true).unwrap(), None);
+    let large = join(&cube, &cuboid([6.0, 6.0, 0.3], &|p| add(p, [30.0, 0.0, 0.0])));
+    let wall = thinnest_wall(&large, 5.0, &mut || true).unwrap().expect("a wall");
+    assert!((wall.thickness - 0.3).abs() < 1e-9, "{wall:?}");
+    assert!(wall.at[0] > 29.0, "{wall:?}");
+}
+
+#[test]
+fn thinnest_wall_can_be_cancelled() {
+    let plate = cuboid([30.0, 20.0, 2.0], &|p| p);
+    assert_eq!(thinnest_wall(&plate, 5.0, &mut || false), Err(MeshError::Cancelled));
+}
+
 type V3 = [f64; 3];
 
 fn add(a: V3, b: V3) -> V3 {

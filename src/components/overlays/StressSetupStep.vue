@@ -15,11 +15,12 @@ import {
   GRAVITY_DIRECTIONS,
   GRAVITY_MARK_COLOR,
   LOAD_MARK_COLOR,
-  REFINE_CHOICES,
+  MESH_DETAIL_CHOICES,
   SUPPORT_COLORS,
   SUPPORT_KINDS,
   cssHex,
   faceCountLabel,
+  finerLabel,
   sameTarget,
   type StressFaceSet,
   type StressSetup,
@@ -33,6 +34,11 @@ const engine = useEngine();
 const panels = usePanelsStore();
 
 const running = computed(() => !!panels.stress?.running);
+// The time on the button was for the setup that ran.
+const finer = computed(() => {
+  const s = panels.stress;
+  return s?.finer && s.ranSetup === JSON.stringify(s.setup) ? s.finer : null;
+});
 const loadColor = cssHex(LOAD_MARK_COLOR);
 const gravityColor = cssHex(GRAVITY_MARK_COLOR);
 const LOAD_KINDS = [
@@ -55,8 +61,8 @@ const bodyOptions = computed(() => {
   return opts;
 });
 
-// Open on first show when a size or refinement is set, so a value that changes the Run is never hidden.
-const moreOpen = ref(props.setup.size != null || props.setup.refine !== "standard");
+// Open on first show when the detail is not Standard, so a value that changes the Run is never hidden.
+const moreOpen = ref(props.setup.refine !== "standard");
 
 function supportColor(t: StressSupportType): string {
   return cssHex(SUPPORT_COLORS[t]);
@@ -331,32 +337,23 @@ function placing(target: StressTarget, as: "face" | "spot"): boolean {
     </Button>
     <div v-show="moreOpen" class="stress-fold stress-more-body">
       <div class="stress-field">
-        <span class="measure-k">Mesh size</span>
-        <NumberField
-          v-model="setup.size"
-          commit="live"
-          nullable
-          unit="mm"
-          :width-ch="7"
-          class="stress-size"
-          placeholder="auto"
-          label="Mesh size"
-        />
-      </div>
-      <div class="sm-hint">Smaller is finer and slower.</div>
-      <div class="stress-field">
-        <span class="measure-k">Refinement</span>
+        <span class="measure-k">Mesh detail</span>
         <Select
           v-model="setup.refine"
-          :options="REFINE_CHOICES"
-          label="Refinement"
-          class="stress-refine"
-          title="Refine the mesh where stress is high"
+          :options="MESH_DETAIL_CHOICES"
+          label="Mesh detail"
+          class="stress-detail"
+          title="How closely the run looks at the part"
         />
       </div>
-      <div class="sm-hint">Fine finds the peak more closely and takes longer. Off uses one even mesh.</div>
+      <div class="sm-hint"
+        >Fine finds the peak more closely and takes longer. Coarse uses one even mesh and is quickest.</div
+      >
     </div>
 
     <div v-if="panels.stress?.error" class="measure-hint stress-error">{{ panels.stress.error }}</div>
+    <Button v-if="finer" variant="primary" size="sm" class="stress-finer" @click="engine.ui.panels.runStress(true)">{{
+      finerLabel(finer.seconds)
+    }}</Button>
   </div>
 </template>

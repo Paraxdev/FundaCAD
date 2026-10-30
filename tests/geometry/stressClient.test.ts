@@ -52,4 +52,11 @@ describe("Geometry.stress", () => {
     b.reply({ ok: false, error: { message: "the body is not closed" } });
     expect(await b.done).toEqual({ ok: false, message: "the body is not closed" });
   });
+
+  it("hands on the finer answer of a refusal", async () => {
+    const { done, reply } = start();
+    const finer = { elements: 90000, seconds: 120 };
+    reply({ ok: false, error: { message: "finer detail would take long", finer } });
+    expect(await done).toEqual({ ok: false, message: "finer detail would take long", finer });
+  });
 });

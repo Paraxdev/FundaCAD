@@ -470,6 +470,27 @@ describe("stress panel flow", () => {
     expect(usePanelsStore().stress!.result).not.toBeNull();
   });
 
+  it("does not call the model changed while the colours are still being drawn", async () => {
+    let t = 0;
+    vi.spyOn(performance, "now").mockImplementation(() => (t += 100));
+    const r = rig();
+    setUp(r);
+    r.showDisplay({
+      positions: Float32Array.from([0, 0, 0, 1, 0, 0, 0, 1, 0]),
+      indices: Uint32Array.from([0, 1, 2]),
+      faceIds: Int32Array.from([7]),
+      faceStart: 7,
+    });
+    const run = r.ui.runStress();
+    r.settle({ ok: true, result: reply });
+    await flush();
+    expect(usePanelsStore().stress!.result).not.toBeNull();
+    expect(usePanelsStore().stress!.colours).not.toBe("none");
+    await run;
+    expect(usePanelsStore().stress!.colours).toBe("shown");
+    vi.restoreAllMocks();
+  });
+
   it("closing stops a Run in flight and drops its late reply", async () => {
     const r = rig();
     setUp(r);

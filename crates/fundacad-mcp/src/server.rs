@@ -2967,7 +2967,7 @@ impl FundaCad {
             if let Some(refusal) = Self::missing_body(&link, &doc, &wanted).await {
                 return refusal;
             }
-            return failure(format!("The analysis was refused: {why}"));
+            return failure(format!("The analysis was refused: {why}{}", crate::stress::finer_hint(&reply)));
         }
         let r = reply.get("result").cloned().unwrap_or_else(|| json!({}));
         let mut out = crate::stress::report(&r, &request.supports);

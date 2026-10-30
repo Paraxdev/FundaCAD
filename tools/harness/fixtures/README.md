@@ -14,3 +14,5 @@ Documents the harness tests open through File > Open. They are JSON documents, w
 - `zebra_joins.json`: three 30 x 30 x 25 mm blocks in a row for judging zebra stripes, the front top edge of the
   left one sharp (G0), of the middle one an 8 mm fillet (G1), of the right one an 8 mm G2 fillet.
 - `zebra_wall.json`: a plain 30 mm extrusion whose front wall is a 32.5 mm radius arc between two flat sides.
+- `standoff_plate_1_3.json`, `standoff_plate_1_2.json`: a 100 x 60 x 2 mm plate with four hollow standoffs (8 mm across, 6 mm
+  above the plate, holes through the plate) whose walls are 1.3 mm and 1.2 mm, for the Stress thin wall tests.
