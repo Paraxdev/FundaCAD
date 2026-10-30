@@ -27,6 +27,7 @@ import { OP_WORD, plannedOperation, type ExtrudeOp } from "./extrudeOperation";
 import { sweepProbePoints } from "./sweepProbe";
 import { previewVerdict } from "./previewVerdict";
 import { HeldSignal } from "./heldEdit";
+import { boxBindings, type BoxField } from "./boxBindings";
 
 /** Below this the extrude is straight: the frontend prism draws instantly and no kernel preview is asked for. */
 const TAPER_EPS = 0.05;
@@ -63,7 +64,7 @@ export class ExtrudeTool {
   private grabbing = false;
   /** The drag is relative to it, so grabbing a 40 mm extrude does not snap it to the cursor's projection. */
   private grabValue = 0;
-  private dim = new DimInput();
+  private dim = new DimInput(() => this.store);
   private hitScratch = new THREE.Vector3();
   private onDone: ((id: string | null) => void) | null = null;
 
@@ -908,9 +909,8 @@ export class ExtrudeTool {
     if (Math.abs(this.distance) < 1e-3) return; // ignore zero
     // A typed ∠ is the truth for the taper, the same rule the depth follows.
     const tv = this.dim.getValue("taper");
-    if (tv != null && this.dim.isUserDriven("taper")) {
-      this.taper = Math.max(-MAX_TAPER_DEG, Math.min(MAX_TAPER_DEG, tv));
-    }
+    const taperTyped = tv != null && this.dim.isUserDriven("taper");
+    if (taperTyped) this.taper = Math.max(-MAX_TAPER_DEG, Math.min(MAX_TAPER_DEG, tv));
     const first = this.selected[0];
     if (!first) return;
     // A typed value has not been previewed until the pointer moves, and the
@@ -933,6 +933,13 @@ export class ExtrudeTool {
     // Shared with the live engine preview, so the commit is exactly what was on screen.
     const feature = this.buildFeature();
     const id = feature.id;
+    const ext = feature as Extract<Feature, { type: "extrude" }>;
+    const boxed: BoxField[] = [{ box: "distance", field: "distance", value: ext.distance as number }];
+    // A typed angle past the limit was clamped, so binding its expression would build a taper the tool refused.
+    if (!taperTyped || tv === this.taper) {
+      boxed.push({ box: "taper", field: "taper", value: typeof ext.taper === "number" ? ext.taper : 0, kind: "angle" });
+    }
+    const bindings = boxBindings(this.dim, this.store, id, boxed);
     const dir = first.plane.n.clone().multiplyScalar(this.distance >= 0 ? 1 : -1);
     this.lastCommit = {
       id,
@@ -948,9 +955,9 @@ export class ExtrudeTool {
     }
     if (this.editId) {
       this.store.endEditPreview(false); // replaceFeature triggers the rebuild
-      this.store.replaceFeature(this.editId, feature);
+      this.store.replaceFeature(this.editId, feature, bindings);
     } else {
-      this.store.addFeature(feature);
+      this.store.addFeature(feature, undefined, bindings);
     }
     if (unverified) this.store.verifyCommit(id, "Extrude");
     this.overlay.clearRegionSelection();

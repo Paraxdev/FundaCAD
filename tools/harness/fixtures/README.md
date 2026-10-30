@@ -3,6 +3,7 @@
 Documents the harness tests open through File > Open. They are JSON documents, written by hand.
 
 - `plate.json`: one 40 x 20 x 5 mm box centred on the origin, current document version.
+- `plate_width.json`: the plate with a parameter `width` of 20 that nothing uses yet, for typing names into a value box.
 - `block.json`: one 20 x 20 x 30 mm box centred on the origin, tall enough that a steep draft on a
   side face is refused, current document version.
 - `steps.json`: three primitives named Base, Post and Ball that do not depend on each other, so the History tests

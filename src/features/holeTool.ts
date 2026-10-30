@@ -25,6 +25,7 @@ import {
   type HoleSize,
 } from "./holeStandards";
 import { rebaseHole, trackedFace, upgradeFace, withExtent } from "./holeFace";
+import { boxBindings } from "./boxBindings";
 
 type HoleFeature = Extract<Feature, { type: "hole" }>;
 
@@ -83,7 +84,7 @@ export class HoleTool {
   private armed = false;
   private markers: THREE.Group | null = null;
 
-  private dim = new DimInput();
+  private dim = new DimInput(() => this.store);
   private onDone: ((id: string | null) => void) | null = null;
   private readonly gesture: CanvasGesture;
 
@@ -579,13 +580,17 @@ export class HoleTool {
     // The preview built this very face, so its extent is the one to keep.
     this.face = withExtent(this.face!, this.store.buildState.result?.trackedFaces?.[this.previewId]);
     const feature = this.buildFeature();
+    const bindings =
+      typeof feature.depth === "number"
+        ? boxBindings(this.dim, this.store, feature.id, [{ box: "depth", field: "depth", value: feature.depth }])
+        : [];
     const editId = this.editId;
     this.cleanup(false);
     if (editId) {
       this.store.endEditPreview(false);
-      this.store.replaceFeature(editId, feature);
+      this.store.replaceFeature(editId, feature, bindings);
     } else {
-      this.store.addFeature(feature);
+      this.store.addFeature(feature, undefined, bindings);
     }
     if (verdict.kind === "wait") this.store.verifyCommit(feature.id, "Hole");
     this.onDone?.(feature.id);

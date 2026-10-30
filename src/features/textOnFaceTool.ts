@@ -3,6 +3,7 @@ import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore } from "../document/store";
 import type { Feature, Selector, Vec3 } from "../types";
 import { DimInput } from "../sketch/dimInput";
+import { boxBindings } from "./boxBindings";
 import { TextPanel, type TextValues } from "../sketch/textPanel";
 import { fetchFonts } from "../sketch/textCache";
 import { setPrompt } from "../ui/prompt";
@@ -38,7 +39,7 @@ export class TextOnFaceTool {
   private previewing = false;
   private fonts: string[] = [];
 
-  private dim = new DimInput();
+  private dim = new DimInput(() => this.store);
   private panel = new TextPanel();
   private onDone: ((id: string | null) => void) | null = null;
   private readonly gesture: CanvasGesture;
@@ -270,9 +271,11 @@ export class TextOnFaceTool {
       toast("Type some text to put on the face.");
       return;
     }
+    const text = features[0]! as Feature & { depth: number };
+    const bindings = boxBindings(this.dim, this.store, text.id, [{ box: "depth", field: "depth", value: text.depth }]);
     this.cleanup();
-    this.store.addFeatures(features);
-    this.onDone?.(features[0]!.id);
+    this.store.addFeatures(features, bindings);
+    this.onDone?.(text.id);
   }
 
   cancel() {

@@ -80,6 +80,7 @@ function fakeStore(axisReply: FaceAxisReply | null = null) {
   };
   const store = {
     nextId: () => "p1",
+    boundExpr: () => null,
     setPreview(feature: Feature | null, o?: { hold?: boolean }) {
       previews.push({ feature, hold: !!o?.hold });
       state.hasPreview = feature !== null;

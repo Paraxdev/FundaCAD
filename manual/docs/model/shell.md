@@ -15,7 +15,7 @@ Letting go of the arrow only ends the drag, so you can still type a value. A mug
 ## Thicken
 
 1. Click Thicken, then click the face. Ctrl-click adds more faces.
-2. Drag the arrow or type the thickness. Press S to grow the wall on both sides.
+2. Drag the arrow or type the thickness. Press S to grow the wall on both sides. Once you type in the value box, S is a letter there instead.
 3. Press Enter or click to apply.
 
 The step's rows in the History card change it later. Operation picks New body or Join, the default, and Symmetric is the same as S.

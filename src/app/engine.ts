@@ -349,6 +349,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
     // Without `toolBusy` the handle and its F and G keys stay live under every other tool, without `datumDef` a
     // click on a construction plane while aiming falls through to the body behind it.
     section: new SectionTool(e.viewport, {
+      doc: () => e.store,
       toolBusy: () => e.toolBusy(),
       afterEdit: () => e.restoreBodyGizmo(),
       saved: {
@@ -364,9 +365,9 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
         return f ? e.datumPlaneDef(f) : null;
       },
     }),
-    planeOffset: new PlaneOffsetTool(e.viewport),
-    datumPose: new DatumPoseTool(e.viewport),
-    lightAim: new LightAimTool(e.viewport),
+    planeOffset: new PlaneOffsetTool(e.viewport, () => e.store),
+    datumPose: new DatumPoseTool(e.viewport, () => e.store),
+    lightAim: new LightAimTool(e.viewport, () => e.store),
     revolvePitch: new RevolvePitchTool(e.viewport, e.store, e.overlay),
     joint: new JointTool(e.viewport, e.store),
     mechanism: new MechanismTool(e.viewport, e.store),

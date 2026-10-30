@@ -3,7 +3,7 @@
 
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
-import { DimInput } from "../sketch/dimInput";
+import { DimInput, type DimDocument } from "../sketch/dimInput";
 import { setPrompt } from "../ui/prompt";
 import { clearOfCards } from "../ui/promptPlacement";
 import { renderPrefs, setRenderPref } from "../ui/renderPrefs";
@@ -49,11 +49,14 @@ export class LightAimTool {
   private foot = new THREE.Vector3();
   private downOnStalk = false;
   private downPos = { x: 0, y: 0 };
-  private dim = new DimInput();
+  private dim = new DimInput(() => this.doc());
   private onDone: (() => void) | null = null;
   private readonly gesture: CanvasGesture;
 
-  constructor(private viewport: Viewport) {
+  constructor(
+    private viewport: Viewport,
+    private doc: () => DimDocument | null = () => null,
+  ) {
     this.gesture = new CanvasGesture(viewport.domElement, {
       move: (e) => this.onMove(e),
       down: (e) => this.onDown(e),

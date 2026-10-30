@@ -14,7 +14,7 @@ Letting go of the arrow does not finish the push, so you can still change the bo
 
 ## Stop at a face
 
-Click another face instead of empty space, and the face moves up to it. T does the same: press it, then click the face to stop at.
+Click another face instead of empty space, and the face moves up to it. T does the same: press it, then click the face to stop at. Once you type in the value box, T is a letter there instead.
 
 ## Box options
 

@@ -7,6 +7,7 @@ import type { DocumentStore } from "../document/store";
 import type { Feature, ParamTarget, Vec3 } from "../types";
 import { driveField, driveStart } from "../document/mechanism";
 import { DimInput } from "../sketch/dimInput";
+import { boxBindings } from "./boxBindings";
 import { setPrompt } from "../ui/prompt";
 import { toast } from "../ui/toast";
 import { snap } from "../ui/units";
@@ -53,7 +54,7 @@ export class MechanismTool {
   private downPos = { x: 0, y: 0 };
   private downOnGizmo = false;
 
-  private dim = new DimInput();
+  private dim = new DimInput(() => this.store);
   private onDone: ((id: string | null) => void) | null = null;
   private previewing = false;
   private readonly held = new HeldSignal();
@@ -270,8 +271,11 @@ export class MechanismTool {
       this.cleanup(true);
     } else {
       const patch = { [this.field]: this.value } as unknown as Partial<Feature>;
+      const bindings = boxBindings(this.dim, this.store, id, [
+        { box: this.field, field: this.field, value: this.value, kind: this.field === "offset" ? "length" : "angle" },
+      ]);
       this.cleanup(false);
-      this.store.updateFeature(id, patch);
+      this.store.updateFeature(id, patch, bindings);
     }
     done?.(id);
   }

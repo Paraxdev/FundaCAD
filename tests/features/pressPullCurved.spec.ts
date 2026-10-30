@@ -8,11 +8,16 @@ import { createPinia, setActivePinia } from "pinia";
 import * as THREE from "three";
 import { PressPullTool } from "../../src/features/pressPullTool";
 import type { DocumentStore, RebuildState } from "../../src/document/store";
+import { classifyExprInput } from "../../src/params/engine";
 import type { Viewport } from "../../src/viewport/viewport";
 import type { Feature, Selector, Vec3 } from "../../src/types";
 import type { FaceAxisReply, FaceResize } from "../../src/geometry/client";
 import { usePromptStore } from "../../src/stores/prompt";
 import { setA11yPref } from "../../src/ui/a11yPrefs";
+
+// The real store reads names in the value box; these fakes hold no parameters.
+const classifyTargetExpr: DocumentStore["classifyTargetExpr"] = (bound, pending, raw, kind) =>
+  classifyExprInput({ parameters: {}, features: [] }, raw, kind, bound, pending);
 
 let frames: (() => void)[] = [];
 const flushFrame = () => {
@@ -84,6 +89,8 @@ function fakeStore(reply: FaceAxisReply | null) {
   const added: Feature[] = [];
   const store = {
     nextId: () => "p1",
+    boundExpr: () => null,
+    classifyTargetExpr,
     setPreview(feature: Feature | null) {
       if (feature) previews.push(feature);
     },
@@ -353,6 +360,27 @@ describe("press/pull's T key", () => {
   it("asks for a face to stop at by the physical key on a Cyrillic layout", async () => {
     const { t } = await started([0, 0, 1], [0, 0, 1], NO_AXIS);
     t["onKey"](new KeyboardEvent("keydown", { key: "е", code: "KeyT" }));
+    expect(picking(t)).toBe(true);
+  });
+
+  const keyInBox = (typed: string | null) => {
+    const input = document.querySelector<HTMLInputElement>('.dim-field[data-field="distance"] input')!;
+    if (typed !== null) {
+      input.value = typed;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "t", code: "KeyT", bubbles: true }));
+  };
+
+  it("is typed into a field that already has typed text, so a name with a t reads", async () => {
+    const { t } = await started([0, 0, 1], [0, 0, 1], NO_AXIS);
+    keyInBox("wid");
+    expect(picking(t)).toBe(false);
+  });
+
+  it("still asks for a face from the box before anything is typed", async () => {
+    const { t } = await started([0, 0, 1], [0, 0, 1], NO_AXIS);
+    keyInBox(null);
     expect(picking(t)).toBe(true);
   });
 

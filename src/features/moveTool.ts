@@ -127,7 +127,7 @@ export class MoveTool {
   private box: THREE.Box3 | null = null;
   private stepLabel = "";
 
-  private dim = new DimInput();
+  private dim = new DimInput(() => this.store);
   private onDone: ((id: string | null) => void) | null = null;
   /** unsubscribes a settled drag's wait for its rebuild */
   private pendingReopen: (() => void) | null = null;

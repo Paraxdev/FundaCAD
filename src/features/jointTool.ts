@@ -6,6 +6,7 @@ import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore } from "../document/store";
 import type { Feature, Vec3 } from "../types";
 import { DimInput } from "../sketch/dimInput";
+import { boxBindings } from "./boxBindings";
 import { setPrompt } from "../ui/prompt";
 import { snap } from "../ui/units";
 import {
@@ -56,7 +57,7 @@ export class JointTool {
   private downPos = { x: 0, y: 0 };
   private downOnGizmo = false;
 
-  private dim = new DimInput();
+  private dim = new DimInput(() => this.store);
   private onDone: ((id: string | null) => void) | null = null;
   private previewing = false;
   private opened = { offset: 0, angle: 0 };
@@ -292,13 +293,21 @@ export class JointTool {
     const id = this.id;
     const { offset, angle } = this;
     const done = this.onDone;
+    const bindings = boxBindings(this.dim, this.store, id, [
+      ...(offset ? [{ box: "offset", field: "offset", value: offset }] : []),
+      ...(angle ? [{ box: "angle", field: "angle", value: angle, kind: "angle" as const }] : []),
+    ]);
     this.cleanup(false);
     // 0 drops the field so a joint that never slid or turned reads exactly as it
     // did before the tool was opened on it.
-    this.store.updateFeature(id, {
-      offset: offset || undefined,
-      angle: angle || undefined,
-    } as unknown as Partial<Feature>);
+    this.store.updateFeature(
+      id,
+      {
+        offset: offset || undefined,
+        angle: angle || undefined,
+      } as unknown as Partial<Feature>,
+      bindings,
+    );
     done?.(id);
   }
 

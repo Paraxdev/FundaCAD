@@ -5,7 +5,7 @@ import * as THREE from "three";
 import { asFeature } from "../types";
 import type { EdgeRef } from "../viewport/edgeLines";
 import type { Viewport } from "../viewport/viewport";
-import type { DocumentStore, RebuildState } from "../document/store";
+import type { DocumentStore, RebuildState, SketchBinding } from "../document/store";
 import { featureValueRule } from "../document/numFields";
 import type { Feature, ParamTarget, Selector } from "../types";
 import { midMatchTol, polylineMid, edgeSelectorFrom } from "../viewport/edgeMatch";
@@ -55,6 +55,7 @@ import {
 import { CanvasGesture } from "./canvasGesture";
 import { HeldSignal } from "./heldEdit";
 import { blendEditCommit } from "./blendEdit";
+import { boxBindings } from "./boxBindings";
 import { pointOnEdge } from "./edgeNudge";
 import { blendClickTarget, missPrompt, screenPolylineDist } from "./blendPick";
 import { EDGE_GRAB_PX } from "../viewport/edgeBand";
@@ -170,7 +171,7 @@ export class EdgeFeatureTool {
   /** pending debounced engine preview, see schedulePreviewDuringDrag */
   private previewTimer: number | null = null;
 
-  private dim = new DimInput();
+  private dim = new DimInput(() => this.store);
   private onDone: ((id: string | null) => void) | null = null;
 
   private readonly gesture: CanvasGesture;
@@ -1308,9 +1309,12 @@ export class EdgeFeatureTool {
         built: feature,
         paramRef: this.paramRef,
       });
+      const bindings = this.paramRef ? [] : this.sizeBindings(feature);
       const refused =
         edit.refused ??
-        (edit.feature || edit.param ? this.store.commitFeatureEdit(this.editId, edit.feature, edit.param) : null);
+        (edit.feature || edit.param || bindings.length
+          ? this.store.commitFeatureEdit(this.editId, edit.feature, edit.param, bindings)
+          : null);
       // A commit ends the preview itself; anything else puts the committed model back.
       this.store.endEditPreview();
       if (refused) toast(refused, { kind: "warning" });
@@ -1318,13 +1322,18 @@ export class EdgeFeatureTool {
       this.store.endEditPreview();
     } else {
       this.store.setPreview(null);
-      this.store.addFeature(feature);
+      this.store.addFeature(feature, undefined, this.sizeBindings(feature));
     }
     if (decision.unverified) {
       this.store.verifyCommit(feature.id, `${treatmentLabel(this.kind)} ${fmtLength(decision.value)}`);
     }
     this.cleanup();
     this.onDone?.(feature.id);
+  }
+
+  private sizeBindings(f: Feature): SketchBinding[] {
+    const field = f.type === "fillet" ? "radius" : "distance";
+    return boxBindings(this.dim, this.store, f.id, [{ box: this.field.name, field, value: this.size() }]);
   }
 
   cancel() {

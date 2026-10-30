@@ -7,6 +7,7 @@ import type { DocumentStore } from "../document/store";
 import { featureValueRule } from "../document/numFields";
 import type { Axis3, Feature, Selector, Vec3 } from "../types";
 import { DimInput } from "../sketch/dimInput";
+import { boxBindings } from "./boxBindings";
 import { setPrompt } from "../ui/prompt";
 import { isEditableTarget } from "../ui/focus";
 import { toolChar } from "../input/shortcuts";
@@ -77,7 +78,7 @@ export class PatternTool {
   private downPos = { x: 0, y: 0 };
   private downOnGizmo = false;
 
-  private dim = new DimInput();
+  private dim = new DimInput(() => this.store);
   private onDone: ((id: string | null) => void) | null = null;
 
   private readonly gesture: CanvasGesture;
@@ -442,7 +443,7 @@ export class PatternTool {
       return;
     }
     const char = toolChar(e);
-    if (this.kind === "circular" && char === "c" && !e.ctrlKey && !e.metaKey) {
+    if (this.kind === "circular" && char === "c" && !this.dim.typesText(e) && !e.ctrlKey && !e.metaKey) {
       e.preventDefault();
       e.stopPropagation();
       this.place = this.place === "origin" ? "centre" : "origin";
@@ -656,6 +657,25 @@ export class PatternTool {
     const target = this.features.length ? { features: this.features } : { bodies: this.bodies };
     const kind = this.kind;
     const done = this.onDone;
+    const id = this.store.nextId();
+    const bindings = boxBindings(
+      this.dim,
+      this.store,
+      id,
+      kind === "rect"
+        ? [
+            { box: "spacingX", field: "spacingX", value },
+            { box: "spacingY", field: "spacingY", value: valueY },
+            { box: "countX", field: "countX", value: count, kind: "count" },
+            { box: "countY", field: "countY", value: countY, kind: "count" },
+          ]
+        : [
+            kind === "linear"
+              ? { box: "spacing", field: "spacing", value }
+              : { box: "angle", field: "angle", value, kind: "angle" },
+            { box: "count", field: "count", value: count, kind: "count" },
+          ],
+    );
     this.cleanup();
     // A pattern of one copy would be a timeline feature that does nothing, so say so instead.
     if (kind === "rect" ? count * countY < 2 : count < 2) {
@@ -663,13 +683,14 @@ export class PatternTool {
       done?.(null);
       return;
     }
-    const id = this.store.nextId();
     this.store.addFeature(
       kind === "rect"
         ? ({ id, type: "patternRect", countX: count, countY, spacingX: value, spacingY: valueY, ...target } as Feature)
         : kind === "linear"
           ? ({ id, type: "patternLinear", count, spacing: value, axis, ...target } as Feature)
           : ({ id, type: "patternCircular", count, angle: value, ...placed, ...target } as Feature),
+      undefined,
+      bindings,
     );
     done?.(id);
   }

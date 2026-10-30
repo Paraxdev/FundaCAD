@@ -3,7 +3,7 @@
 
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
-import type { DocumentStore, RebuildState } from "../document/store";
+import type { DocumentStore, RebuildState, SketchBinding } from "../document/store";
 import type { FaceAxisReply } from "../geometry/client";
 import type { Feature, PressPullDirection, PressPullMode, Selector, Vec3 } from "../types";
 import {
@@ -53,6 +53,7 @@ import {
 } from "./pressPullAxis";
 import { featureKey, PreviewOutcomes } from "./previewOutcomes";
 import { axialSpan, ResizeGuides } from "./resizeGuides";
+import { boxBindings, type BoxField } from "./boxBindings";
 import { toolChar } from "../input/shortcuts";
 
 /** A flat face as a tracked selector so the push follows upstream edits; a curved face keeps its picked point. */
@@ -188,7 +189,7 @@ export class PressPullTool {
   /** What the kernel said about each push sent this gesture. */
   private outcomes = new PreviewOutcomes(/^Press\/Pull[^:]*:\s*/i);
 
-  private dim = new DimInput();
+  private dim = new DimInput(() => this.store);
   private onDone: ((id: string | null) => void) | null = null;
   private readonly held = new HeldSignal();
 
@@ -410,7 +411,7 @@ export class PressPullTool {
       this.cancel();
       return;
     }
-    if (toolChar(e) === "t" && this.phase === "drag" && !this.pickingTarget && !this.resizing) {
+    if (toolChar(e) === "t" && !this.dim.typesText(e) && this.phase === "drag" && !this.pickingTarget && !this.resizing) {
       this.pickingTarget = true;
       this.dim.hide(); // Enter must not commit a plain distance while picking
       this.clearPreviewTimer();
@@ -1200,11 +1201,19 @@ export class PressPullTool {
       (this.round || this.slant) && feature.type === "press-pull" && this.faces.length === 1
         ? this.faceAnchor.clone().addScaledVector(this.axis, this.value)
         : null;
-    this.store.addFeature(feature);
+    this.store.addFeature(feature, undefined, this.bindings(feature));
     if (decision.unverified) this.store.verifyCommit(feature.id, "Press/Pull");
     this.cleanup();
     this.onDone?.(feature.id);
     if (reselect) this.reselectAfterBuild(feature.id, reselect);
+  }
+
+  private bindings(feature: Feature): SketchBinding[] {
+    if (feature.type !== "press-pull") return [];
+    const fields: BoxField[] = [{ box: "distance", field: "distance", value: feature.distance as number }];
+    if (typeof feature.taper === "number")
+      fields.push({ box: "taper", field: "taper", value: feature.taper, kind: "angle" });
+    return boxBindings(this.dim, this.store, feature.id, fields);
   }
 
   /** Selects the resized face where it now stands once the commit builds, since the viewport's own carry over
