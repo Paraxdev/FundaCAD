@@ -358,9 +358,9 @@ fn read_fnda(raw: &[u8]) -> Result<(Value, Vec<(String, Vec<u8>)>, Vec<String>),
         return damaged();
     };
 
-    let mut doc: Option<Value> = None;
-    let mut blobs = Vec::new();
+    let mut entries = Vec::new();
     let mut unread = Vec::new();
+    let mut expanded = 0u64;
     let count = u32_at(table, 4) as usize;
     let mut p = 8usize;
     for _ in 0..count {
@@ -392,9 +392,16 @@ fn read_fnda(raw: &[u8]) -> Result<(Value, Vec<(String, Vec<u8>)>, Vec<String>),
         if kind != KIND_DOCUMENT && kind != KIND_GEOMETRY {
             continue;
         }
-        if rawlen as u64 > MAX_TOTAL {
-            return fail("this document expands to more than 8 GiB and was refused");
-        }
+        expanded = expanded.saturating_add(rawlen as u64);
+        entries.push((kind, codec, name, off, stored, rawlen, digest, shard, k, m));
+    }
+    if expanded > MAX_TOTAL {
+        return fail("this document expands to more than 8 GiB and was refused");
+    }
+
+    let mut doc: Option<Value> = None;
+    let mut blobs = Vec::new();
+    for (kind, codec, name, off, stored, rawlen, digest, shard, k, m) in entries {
         if shard == 0 || k == 0 {
             return damaged();
         }
@@ -409,7 +416,7 @@ fn read_fnda(raw: &[u8]) -> Result<(Value, Vec<(String, Vec<u8>)>, Vec<String>),
             q += (k + m) * shard;
         }
         data.truncate(stored);
-        let body = if codec == 1 { inflate_raw(&data).unwrap_or_default() } else { data };
+        let body = if codec == 1 { inflate_raw(&data, rawlen).unwrap_or_default() } else { data };
         if body.len() != rawlen || hash(&body) != digest {
             return damaged();
         }
@@ -425,10 +432,10 @@ fn read_fnda(raw: &[u8]) -> Result<(Value, Vec<(String, Vec<u8>)>, Vec<String>),
     }
 }
 
-fn inflate_raw(data: &[u8]) -> Option<Vec<u8>> {
+fn inflate_raw(data: &[u8], rawlen: usize) -> Option<Vec<u8>> {
     let mut out = Vec::new();
-    flate2::read::DeflateDecoder::new(data).read_to_end(&mut out).ok()?;
-    Some(out)
+    flate2::read::DeflateDecoder::new(data).take(rawlen as u64 + 1).read_to_end(&mut out).ok()?;
+    (out.len() == rawlen).then_some(out)
 }
 
 fn read_zip(path: &Path) -> Result<(Value, Vec<(String, Vec<u8>)>), DocumentFileError> {
