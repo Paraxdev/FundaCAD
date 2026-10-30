@@ -4,7 +4,6 @@ import { contributedMenus } from "../plugins/contrib";
 import { toggleShortcutHUD } from "../input/shortcuts";
 import { checkForUpdates, showAbout } from "../ui/updates";
 import { useDialogStore } from "../stores/dialogs";
-import { usePanelsStore } from "../stores/panels";
 import { setWorkspace } from "../ui/workspace";
 import { MANUAL_URL, openExternal } from "../ui/welcome";
 import { openReportDialog } from "../ui/bugReporter";
@@ -14,6 +13,7 @@ import { beforeUpdate } from "./unsavedGuard";
 import { PRODUCT_NAME } from "./channel";
 import { allCommands } from "../ui/commands";
 import { analysisFlags } from "../ui/railActive";
+import { canStep } from "../ui/canStep";
 import type { Engine } from "./engine";
 import { pickedFeatureIds, toggleSuppressRows } from "./featureRows";
 
@@ -57,14 +57,6 @@ function viewItems(e: Engine): MenuDef["items"] {
 }
 
 /** `disabled` and `checked` are thunks, re-evaluated every time a menu opens. */
-/** An open sketch, then an open Stress panel, keep their own undo in front of the model's. */
-function canStep(e: Engine, way: "undo" | "redo"): boolean {
-  if (e.sketch.active) return way === "undo" ? e.sketch.canUndoSketch : e.sketch.canRedoSketch;
-  const stress = usePanelsStore().stress;
-  if (stress) return way === "undo" ? stress.canUndo : stress.canRedo;
-  return way === "undo" ? e.store.canUndo : e.store.canRedo;
-}
-
 export function buildMenubar(e: Engine): MenuDef[] {
   return withContributions([
     {
