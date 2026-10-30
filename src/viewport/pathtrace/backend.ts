@@ -79,6 +79,9 @@ export interface TracerBackend {
   /** The trace is on screen through every restart, so each frame before its
    *  first whole sample needs a picture of its own. */
   setMotionPreview?(on: boolean): void;
+  /** Puts a finished frame that waits for the refresh on the canvas now, so the overlay
+   *  drawn in this task goes with it. */
+  flushFrame?(): void;
   /** The camera the image on the canvas was traced with, when it can be told
    *  and may be older than the last updateCamera. */
   shownView?(): FrameView | null;

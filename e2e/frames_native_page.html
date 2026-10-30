@@ -16,21 +16,30 @@ async function run(prefer, w, h) {
     const b = glBlit(c);
     const gl = c.getContext("webgl2");
     const px = new Uint8Array(4);
+    let want = null;
     return { ...b, upload(f) {
       b.upload(f);
       // Bottom left on screen is the frame's last row, first pixel.
-      gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
       const at = (f.height - 1) * f.width * 4;
-      if (Math.abs(px[0] - f.pixels[at]) > 1 || Math.abs(px[1] - f.pixels[at + 1]) > 1) bad++;
+      want = [f.pixels[at], f.pixels[at + 1]];
+    }, show() {
+      b.show();
+      gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+      if (Math.abs(px[0] - want[0]) > 1 || Math.abs(px[1] - want[1]) > 1) bad++;
       checked++;
     } };
   };
   const t = new NativeTracer({ canvas, prefer, blit, connect: (_w, _h, p) => connectNative(w, h, p) });
   await t.init();
-  for (let i = 0; i < 10; i++) await t.renderSample(0);
+  const sample = async () => {
+    const ms = await t.renderSample(0);
+    t.flushFrame();
+    return ms;
+  };
+  for (let i = 0; i < 10; i++) await sample();
   const times = [];
   const t0 = performance.now();
-  for (let i = 0; i < N; i++) times.push(await t.renderSample(0));
+  for (let i = 0; i < N; i++) times.push(await sample());
   const total = performance.now() - t0;
   times.sort((a, b) => a - b);
   const r = { kind: t.name, w, h, frames: N, ms: +total.toFixed(1), fps: +(N * 1000 / total).toFixed(1),
@@ -41,7 +50,7 @@ async function run(prefer, w, h) {
   t["generation"] = Math.max(t["generation"], g);
   let resized = 0;
   for (let i = 0; i < 30; i++) {
-    await t.renderSample(0);
+    await sample();
     if (canvas.width === 1280 && canvas.height === 720) resized++;
   }
   r.after_resize_1280x720 = resized;

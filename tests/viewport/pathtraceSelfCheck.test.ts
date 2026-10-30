@@ -14,7 +14,7 @@ function tracer(answer: unknown, calls: string[]) {
   const link = { kind: "fake", close() {}, next: async () => null, release() {} };
   return new NativeTracer({
     canvas,
-    blit: () => ({ maxTextureSize: 4096, upload: () => {}, dispose: () => {} }),
+    blit: () => ({ maxTextureSize: 4096, upload: () => {}, show: () => {}, dispose: () => {} }),
     connect: async () => {
       calls.push("connect");
       return { link: link as never, generation: 1, source: "test" };

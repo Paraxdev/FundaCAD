@@ -17,6 +17,7 @@ class FakeTracer implements TracerBackend {
   readonly name = "fake";
   readonly canvas = { style: {} as Record<string, string> } as unknown as HTMLCanvasElement;
   readonly maxStorageBytes = Infinity;
+  flushFrame?: () => void;
   calls: string[] = [];
   count = 0;
   pending: ((n: number) => void)[] = [];
@@ -202,6 +203,16 @@ describe("path trace host", () => {
     await flush();
     expect(n).toBe(0);
     expect(host.state).toBe("off");
+  });
+
+  it("puts a waiting frame on the canvas first, so this tick's overlay goes with the picture", async () => {
+    const { host, t } = await started();
+    const before: string[][] = [];
+    t.flushFrame = () => before.push([...t.calls]);
+    t.calls.length = 0;
+    host.tick(frame());
+    expect(before).toEqual([[]]);
+    expect(t.calls).toContain("sample");
   });
 
   it("traces when still, shows the image after the first sample and stops at the cap", async () => {

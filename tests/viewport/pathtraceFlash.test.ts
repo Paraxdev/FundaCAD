@@ -1,9 +1,8 @@
-import { createRequire } from "node:module";
 import { describe, expect, it } from "vitest";
+// @ts-expect-error an e2e helper in plain CommonJS, with no types.
+import flash from "../../e2e/lib/flash.cjs";
 
-const { analyse, blackEdges, flashesPerSecond, isBand, toGrid } = createRequire(import.meta.url)(
-  "../../e2e/lib/flash.cjs",
-);
+const { analyse, blackEdges, flashesPerSecond, isBand, toGrid } = flash;
 
 const COLS = 8;
 const ROWS = 5;

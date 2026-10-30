@@ -196,6 +196,7 @@ export class PathTraceHost {
   }
 
   tick(f: TraceFrame) {
+    this.backend?.flushFrame?.();
     // A projection change can also swap the rig's camera object.
     if (this.cameraMoved(f.camera) || f.cameraChanged || f.camera !== this.cameraSeen) this.cameraDirty = true;
     this.cameraSeen = f.camera;

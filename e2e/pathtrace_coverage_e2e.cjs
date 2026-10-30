@@ -173,7 +173,7 @@ let serve = null;
         )
         .then((h) => h.jsonValue());
     // The traced canvas copied in the task that drew it: a WebGPU canvas is
-    // blank once presented, and the native frames land in their own upload.
+    // blank once presented, and the native frames land in a draw of their own.
     const traced = () =>
       page.evaluate(
         () =>
@@ -187,9 +187,9 @@ let serve = null;
               g.drawImage(b.canvas, 0, 0);
               return window.__bodyBox(g.getImageData(0, 0, c.width, c.height).data, c.width, c.height);
             };
-            const native = typeof b.blit?.upload === "function";
+            const native = typeof b.blit?.show === "function";
             const hook = native ? b.blit : b;
-            const key = native ? "upload" : "renderSample";
+            const key = native ? "show" : "renderSample";
             const own = hook[key];
             hook[key] = function (...a) {
               const r = own.apply(this, a);

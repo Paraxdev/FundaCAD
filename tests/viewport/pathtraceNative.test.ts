@@ -31,11 +31,16 @@ class FakeLink implements FrameLink {
 
 function setup(link: FakeLink, generation = 1, call?: (cmd: string, args?: unknown) => Promise<unknown>) {
   const uploads: number[] = [];
+  const draws: number[] = [];
+  const refreshes: (() => void)[] = [];
   const blit = (log: string[]): Blit => ({
     maxTextureSize: 4096,
     upload: (f) => {
       uploads.push(f.seq);
       log.push(`upload ${f.seq}`);
+    },
+    show: () => {
+      draws.push(uploads[uploads.length - 1]!);
     },
     dispose: () => {},
   });
@@ -45,9 +50,97 @@ function setup(link: FakeLink, generation = 1, call?: (cmd: string, args?: unkno
     blit: () => blit(link.log),
     connect: async () => ({ link, generation, source: "test" }),
     call: call ?? (async (cmd) => (cmd === "pt_status" ? { samples: 1, fault: null } : undefined)),
+    raf: (cb) => refreshes.push(cb),
+    caf: () => {},
   });
-  return { t, uploads };
+  const refresh = () => {
+    for (const cb of refreshes.splice(0)) cb();
+  };
+  return { t, uploads, draws, refresh };
 }
+
+describe("the native tracer's present slot", () => {
+  const camera = () => new THREE.PerspectiveCamera();
+
+  it("draws once per refresh, the newest frame that landed", async () => {
+    const { t, uploads, draws, refresh } = setup(new FakeLink());
+    await t.init();
+    await t.renderSample(0);
+    await t.renderSample(0);
+    expect(uploads).toEqual([1, 2]);
+    expect(draws).toEqual([]);
+    refresh();
+    expect(draws).toEqual([2]);
+    refresh();
+    expect(draws).toEqual([2]);
+    t.dispose();
+  });
+
+  it("flushes a waiting frame so the overlay drawn in this task matches it", async () => {
+    const { t, draws } = setup(new FakeLink());
+    await t.init();
+    await t.renderSample(0);
+    t.flushFrame();
+    expect(draws).toEqual([1]);
+    t.dispose();
+  });
+
+  it("never uploads a frame with a pixel no sample reached, the last picture stays", async () => {
+    const link = new FakeLink();
+    const next = link.next.bind(link);
+    link.next = async () => {
+      const f = await next();
+      if (f.seq === 3) f.pixels.fill(0, f.pixels.length - 8);
+      return f;
+    };
+    const { t, uploads, draws, refresh } = setup(link);
+    await t.init();
+    for (let i = 0; i < 3; i++) {
+      await t.renderSample(0);
+      refresh();
+    }
+    expect(uploads).toEqual([1, 2]);
+    expect(draws).toEqual([1, 2]);
+    expect(link.log).toContain("release 3");
+    t.dispose();
+  });
+
+  it("names the camera of the frame on the canvas, not of one still waiting", async () => {
+    const { t, refresh } = setup(new FakeLink(), 1, async (cmd) =>
+      cmd === "pt_camera" ? 0 : cmd === "pt_status" ? { samples: 1, fault: null } : undefined,
+    );
+    await t.init();
+    const moved = camera();
+    moved.position.x = 1;
+    moved.updateMatrixWorld();
+    t.updateCamera(moved, null);
+    await t.scene.idle();
+    await t.renderSample(0);
+    expect(t.shownView()).toBeNull();
+    refresh();
+    expect(t.shownView()?.matrices[12]).toBe(1);
+    t.dispose();
+  });
+
+  it("counts no samples until the frame on the canvas is of the newest camera", async () => {
+    const { t, refresh } = setup(new FakeLink(), 1, async (cmd) =>
+      cmd === "pt_camera" ? 1 : cmd === "pt_status" ? { samples: 1, fault: null } : undefined,
+    );
+    await t.init();
+    expect(await t.samples()).toBe(0);
+    t.updateCamera(camera(), null);
+    await t.scene.idle();
+    await t.renderSample(0);
+    refresh();
+    // Frame 1 was started before the camera was taken.
+    expect(await t.samples()).toBe(0);
+    await t.renderSample(0);
+    expect(await t.samples()).toBe(0);
+    refresh();
+    expect(await t.samples()).toBe(1);
+    t.dispose();
+  });
+});
 
 describe("the native tracer backend", () => {
   it("uploads a frame into its canvas and counts it as a sample", async () => {
@@ -56,6 +149,7 @@ describe("the native tracer backend", () => {
     await t.init();
     await t.renderSample(0);
     expect(uploads).toEqual([1]);
+    t.flushFrame();
     expect(await t.samples()).toBe(1);
     expect(t.name).toBe("native fake (test)");
   });
@@ -121,6 +215,7 @@ describe("the native tracer backend", () => {
       t.setSize(100, 50, 1);
       expect(await t.samples()).toBe(0);
       await t.renderSample(0);
+      t.flushFrame();
       expect(await t.samples()).toBe(0);
       await vi.advanceTimersByTimeAsync(200);
       expect(await t.samples()).toBe(0);
@@ -130,8 +225,11 @@ describe("the native tracer backend", () => {
       ];
       // The prefetch was asked for before the resize.
       await t.renderSample(0);
+      t.flushFrame();
       expect(await t.samples()).toBe(0);
       await t.renderSample(0);
+      expect(await t.samples()).toBe(0);
+      t.flushFrame();
       expect(await t.samples()).toBe(256);
     } finally {
       vi.useRealTimers();
@@ -180,6 +278,8 @@ describe("the native tracer backend", () => {
     it("counts no sample until the calls queued before it have landed", async () => {
       const { t, order, release } = slowEnv();
       await t.init();
+      await t.renderSample(0);
+      t.flushFrame();
       t.updateLook(roomLook("studio|h1"));
       const s = t.samples();
       await new Promise((r) => setTimeout(r, 10));
@@ -417,13 +517,16 @@ describe("the camera a native frame was traced with", () => {
     t.updateCamera(at(1), null);
     await t.scene.idle();
     await t.renderSample(0);
+    t.flushFrame();
     expect(t.shownView()?.matrices[12]).toBe(1);
     // Frame 2 was asked for while frame 1 uploaded, before the camera moved.
     t.updateCamera(at(2), null);
     await t.scene.idle();
     await t.renderSample(0);
+    t.flushFrame();
     expect(t.shownView()?.matrices[12]).toBe(1);
     await t.renderSample(0);
+    t.flushFrame();
     expect(t.shownView()?.matrices[12]).toBe(2);
   });
 });
@@ -457,7 +560,7 @@ function slowNative(frameMs: number, cameraWaits = true) {
       await wait(frameMs);
       unlock();
       await wait(1);
-      return { seq: s, generation: 1, width: 1, height: 1, pixels: new Uint8Array(4), release() {} };
+      return { seq: s, generation: 1, width: 1, height: 1, pixels: new Uint8Array(4).fill(255), release() {} };
     },
     async resize() {
       return 1;
@@ -477,13 +580,22 @@ function slowNative(frameMs: number, cameraWaits = true) {
     return d;
   };
   const shown: number[] = [];
-  const blit: Blit = { maxTextureSize: 4096, upload: (f) => shown.push(f.seq), dispose() {} };
+  let landed = 0;
+  const blit: Blit = {
+    maxTextureSize: 4096,
+    upload: (f) => (landed = f.seq),
+    show: () => shown.push(landed),
+    dispose() {},
+  };
   const canvas = { style: {} as Record<string, string>, remove() {} } as unknown as HTMLCanvasElement;
   const t = new NativeTracer({
     canvas,
     blit: () => blit,
     connect: async () => ({ link, generation: 1, source: "slow" }),
     call,
+    // The page's tick stands in for the refresh, it flushes the slot as the host does.
+    raf: () => 0,
+    caf: () => {},
   });
   return { t, shown, cameraOf, cameraCalls: () => cameraCalls };
 }
@@ -525,6 +637,7 @@ async function orbit(frameMs: number, hz: number, cameraWaits = true) {
     }
     await vi.advanceTimersByTimeAsync(tickMs);
     now += tickMs;
+    n.t.flushFrame();
     const seq = n.shown.at(-1);
     const v = n.t.shownView();
     ticks.push({

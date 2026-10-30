@@ -283,13 +283,13 @@ let serve = null;
 
     await settled();
     // Copied in the task that drew it: a WebGPU canvas is blank once presented,
-    // and the native frames land in their own upload.
+    // and the native frames land in a draw of their own.
     const boxes = await page.evaluate(async () => {
       const b = window.viewport.trace.backend;
       const traced = await new Promise((ok) => {
-        const native = typeof b.blit?.upload === "function";
+        const native = typeof b.blit?.show === "function";
         const hook = native ? b.blit : b;
-        const key = native ? "upload" : "renderSample";
+        const key = native ? "show" : "renderSample";
         const own = hook[key];
         hook[key] = function (...a) {
           const r = own.apply(this, a);
