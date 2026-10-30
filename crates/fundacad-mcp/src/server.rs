@@ -1140,7 +1140,16 @@ note: left out of the file, because this build cannot read them and a .funda has
         annotations(read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
     pub async fn t_material_list(&self, _args: JsonObject) -> Result<CallToolResult, McpError> {
-        Ok(text(materials_doc::list(&self.state.lock().await.doc)))
+        let st = self.state.lock().await;
+        let mut out = materials_doc::list(&st.doc);
+        // The mesh of an older build, or of none, says nothing about where the saved faces are now.
+        if !st.mesh.is_empty() && st.built_for.as_deref() == Some(&signature(&st.doc)) {
+            if let Some(note) = materials_doc::lost_faces_note(&st.doc, &st.mesh) {
+                out.push('\n');
+                out.push_str(&note);
+            }
+        }
+        Ok(text(out))
     }
 
     #[tool(
@@ -2140,7 +2149,7 @@ impl FundaCad {
         }
         let (mesh, paint) = {
             let st = self.state.lock().await;
-            (st.mesh.clone(), materials_doc::paint(&st.doc))
+            (st.mesh.clone(), materials_doc::paint(&st.doc, &st.mesh))
         };
         if mesh.is_empty() {
             return failure("Nothing to render: the document produced no bodies.");

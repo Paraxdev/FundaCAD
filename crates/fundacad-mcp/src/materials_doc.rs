@@ -512,7 +512,7 @@ fn changed_keys(before: &Doc, after: &Doc, key: &str) -> BTreeSet<String> {
 }
 
 /// The colours `view` paints for the assignments. A face number means nothing here while the timeline is not whole.
-pub fn paint(doc: &Doc) -> BTreeMap<String, BodyPaint> {
+pub fn paint(doc: &Doc, mesh: &[MeshBody]) -> BTreeMap<String, BodyPaint> {
     let colours: BTreeMap<String, Rgb> =
         library(doc).iter().filter_map(|m| Some((m.get("id")?.as_str()?.to_string(), rgb(m.get("color")?)?))).collect();
     let colour = |id: &Value| id.as_str().and_then(|id| colours.get(id)).copied();
@@ -523,10 +523,9 @@ pub fn paint(doc: &Doc) -> BTreeMap<String, BodyPaint> {
         }
     }
     if faces_unreliable(doc).is_none() {
-        for (key, id) in doc.get("faceMaterials").and_then(Value::as_object).into_iter().flatten() {
-            if let (Some((body, face)), Some(c)) = (parse_face_key(key), colour(id)) {
-                out.entry(body.to_string()).or_default().faces.insert(face, c);
-            }
+        for saved in placed_faces(doc, mesh) {
+            let (Some(c), false) = (colour(saved.material), saved.on.is_empty()) else { continue };
+            out.entry(saved.body.to_string()).or_default().faces.extend(saved.on.iter().map(|f| (*f as u64, c)));
         }
     }
     out
@@ -541,6 +540,30 @@ fn rgb(hex: &Value) -> Option<Rgb> {
 /// Saves each assigned face's print beside its key, the form `savedFaceRefs` writes.
 pub fn write_prints(doc: &mut Doc, prints: Vec<(String, Value)>) {
     edit_map(doc, "facePrints", |m| m.extend(prints));
+}
+
+fn placed_faces<'a>(doc: &'a Doc, mesh: &[MeshBody]) -> Vec<crate::face_prints::Placed<'a>> {
+    let none = Map::new();
+    let map = |key: &str| doc.get(key).and_then(Value::as_object);
+    let prints = map("facePrints").unwrap_or(&none);
+    map("faceMaterials").map_or(vec![], |materials| crate::face_prints::placed(materials, prints, mesh))
+}
+
+/// For `material_list`, given the mesh of the document's current build. `wearers` names the saved numbers, and those
+/// of a lost face can name another face by now.
+pub fn lost_faces_note(doc: &Doc, mesh: &[MeshBody]) -> Option<String> {
+    faces_unreliable(doc).is_none().then_some(())?;
+    let lost: Vec<String> = placed_faces(doc, mesh)
+        .iter()
+        .filter(|saved| saved.on.is_empty())
+        .map(|saved| format!("{} F{} ({})", saved.body, saved.face, saved.material.as_str().unwrap_or_default()))
+        .collect();
+    (!lost.is_empty()).then(|| {
+        format!(
+            "On no face since a rebuild, so drawn nowhere: {}. Those numbers may name other faces now. material_assign can put a material on the face again, or clear the old number.",
+            lost.join(", ")
+        )
+    })
 }
 
 /// Moves each saved face to the number it has in this build, the way the app does when it saves, so the keys, the list

@@ -225,6 +225,35 @@ fn a_saved_file_holds_what_the_app_reads_and_opens_again_unchanged() {
 }
 
 #[test]
+fn a_saved_face_that_is_gone_is_reported_and_not_painted_on_another_face() {
+    let mut mcp = Mcp::start(&BTreeMap::new(), &std::env::temp_dir());
+    box_part(&mut mcp);
+    ok(mcp.call("material_set", json!({"id": "m-green", "name": "Green", "color": "#00dd00"})));
+    let shot = |mcp: &mut Mcp| {
+        let reply = mcp.call("view", json!({"width": 200, "height": 200}));
+        assert!(!reply.is_error, "{}", reply.text);
+        reply.images.into_iter().next().expect("a picture")
+    };
+    let plain = shot(&mut mcp);
+
+    let mut file = saved_document(&mut mcp, "lost");
+    file["faceMaterials"] = json!({"body1#1": "m-green"});
+    file["facePrints"] = json!({"body1#1": {"centroid": [0, 0, 500], "normal": [0, 0, 1], "area": 1, "surface": "plane",
+                                            "points": [0, 0, 500], "faces": 7}});
+    let path = std::env::temp_dir().join(format!("mcp-materials-{}-lost.funda", std::process::id()));
+    std::fs::write(&path, file.to_string()).expect("written");
+    ok(mcp.call("doc_open", json!({"path": path})));
+    _ = std::fs::remove_file(&path);
+
+    assert_eq!(shot(&mut mcp), plain, "the old number names another face now");
+    let list = ok(mcp.call("material_list", json!({})));
+    assert!(list.contains("On no face since a rebuild, so drawn nowhere: body1 F1 (m-green)."), "{list}");
+    ok(mcp.call("material_assign", json!({"material": null, "faces": [{"body": "body1", "face": 1}]})));
+    let list = ok(mcp.call("material_list", json!({})));
+    assert!(!list.contains("On no face"), "{list}");
+}
+
+#[test]
 fn view_shows_an_assigned_colour() {
     let mut mcp = Mcp::start(&BTreeMap::new(), &std::env::temp_dir());
     box_part(&mut mcp);

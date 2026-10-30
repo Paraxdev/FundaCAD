@@ -5,6 +5,7 @@ use fundacad_mcp::materials_doc::*;
 use fundacad_mcp::mesh::MeshBody;
 use fundacad_mcp::model::{new_document, Doc};
 use serde_json::{json, Value};
+use std::collections::BTreeMap;
 
 fn args(v: Value) -> serde_json::Map<String, Value> {
     v.as_object().cloned().unwrap()
@@ -16,6 +17,24 @@ fn ids(doc: &Doc) -> Vec<String> {
 
 fn find(doc: &Doc, id: &str) -> Value {
     library(doc).into_iter().find(|m| m["id"] == id).map(Value::Object).unwrap_or(Value::Null)
+}
+
+/// `count` unit squares stacked up from `z`, one face each.
+fn flat_faces(id: &str, count: u32, z: f32) -> MeshBody {
+    let mut positions = vec![];
+    let mut indices = vec![];
+    for n in 0..count {
+        let at = z + 5.0 * n as f32;
+        positions.extend([0.0, 0.0, at, 1.0, 0.0, at, 1.0, 1.0, at, 0.0, 1.0, at]);
+        indices.extend([0, 1, 2, 0, 2, 3].map(|i| i + 4 * n));
+    }
+    MeshBody {
+        info: json!({"id": id, "faceCount": count}).as_object().unwrap().clone(),
+        positions,
+        indices,
+        face_ids: (0..count).flat_map(|n| [n, n]).collect(),
+        edges: vec![],
+    }
 }
 
 #[test]
@@ -239,6 +258,35 @@ fn the_list_names_each_material_its_wearers_and_the_starter_to_copy_from() {
 }
 
 #[test]
+fn a_face_lost_in_a_rebuild_paints_nothing_and_the_list_says_so() {
+    let mesh = flat_faces("body1", 2, 0.0);
+    let here = fundacad_mcp::face_prints::body_prints(&mesh)[0].clone();
+    let gone = fundacad_mcp::face_prints::body_prints(&flat_faces("body1", 3, 50.0))[1].clone();
+    let mut d = new_document();
+    d.insert("materials".into(), json!([{"id": "m-a", "color": "#102030"}, {"id": "m-b", "color": "#fff"}]));
+    d.insert("faceMaterials".into(), json!({"body1#1": "m-a", "body1#0": "m-b", "body1#9": "m-b", "body2#0": "m-a"}));
+    d.insert("facePrints".into(), json!({"body1#1": gone, "body1#0": here}));
+    let mesh = [mesh];
+
+    let got = paint(&d, &mesh);
+    assert_eq!(got.len(), 1, "{got:?}");
+    assert_eq!(got["body1"].faces, BTreeMap::from([(0, [255, 255, 255])]), "F1 is another face by now");
+    assert_eq!(
+        lost_faces_note(&d, &mesh).as_deref(),
+        Some(
+            "On no face since a rebuild, so drawn nowhere: body1 F1 (m-a), body1 F9 (m-b), body2 F0 (m-a). Those numbers may name other faces now. material_assign can put a material on the face again, or clear the old number."
+        )
+    );
+
+    let mut held = d.clone();
+    held.insert("suppressed".into(), json!(["f1"]));
+    assert_eq!(lost_faces_note(&held, &mesh), None, "numbers mean nothing while the timeline is not whole");
+
+    d.insert("faceMaterials".into(), json!({"body1#0": "m-b"}));
+    assert_eq!(lost_faces_note(&d, &mesh), None);
+}
+
+#[test]
 fn a_face_moves_to_its_new_number_unless_the_timeline_is_not_whole() {
     let quad = |z: f32| [0.0, 0.0, z, 1.0, 0.0, z, 1.0, 1.0, z, 0.0, 1.0, z];
     let mesh = MeshBody {
@@ -316,7 +364,8 @@ fn the_paint_for_view_reads_the_assignments_and_skips_what_it_cannot_place() {
     );
     d.insert("bodyMaterial".into(), json!({"body1": "m-a", "body2": "m-gone"}));
     d.insert("faceMaterials".into(), json!({"body1#2": "m-b", "body3#0": "m-a", "nonsense": "m-a"}));
-    let got = paint(&d);
+    let mesh = [flat_faces("body1", 3, 0.0), flat_faces("body3", 1, 0.0)];
+    let got = paint(&d, &mesh);
     assert_eq!(got.len(), 2, "{got:?}");
     assert_eq!(got["body1"].body, Some([16, 32, 48]));
     assert_eq!(got["body1"].faces.get(&2), Some(&[255, 255, 255]));
@@ -324,7 +373,7 @@ fn the_paint_for_view_reads_the_assignments_and_skips_what_it_cannot_place() {
 
     // Under a rollback the numbers belong to another build than the one drawn.
     d.insert("rollback".into(), json!(1));
-    let held = paint(&d);
+    let held = paint(&d, &mesh);
     assert_eq!(held["body1"].body, Some([16, 32, 48]));
     assert!(held["body1"].faces.is_empty() && !held.contains_key("body3"), "{held:?}");
 }

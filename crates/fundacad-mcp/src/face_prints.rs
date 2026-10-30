@@ -376,13 +376,14 @@ struct Ref<'a> {
     on: Vec<usize>,
 }
 
-/// `faceMaterials` and `facePrints` as the app saves them after a first build of `mesh`: resolveFaceRefs without a
-/// track, then savedFaceRefs. A key that is not the app's, or a key with no material, rides along untouched.
-pub fn rekeyed(
-    materials: &Map<String, Value>,
-    prints: &Map<String, Value>,
-    mesh: &[MeshBody],
-) -> (Map<String, Value>, Map<String, Value>) {
+struct Located<'a> {
+    refs: Vec<Ref<'a>>,
+    foreign: Vec<&'a String>,
+    geoms: Vec<(&'a str, BodyGeom)>,
+}
+
+/// resolveFaceRefs without a track.
+fn locate<'a>(materials: &'a Map<String, Value>, prints: &Map<String, Value>, mesh: &[MeshBody]) -> Located<'a> {
     let mut refs: Vec<Ref> = vec![];
     let mut foreign = vec![];
     for (key, material) in materials {
@@ -421,6 +422,35 @@ pub fn rekeyed(
         }
         geoms.push((id, g));
     }
+    Located { refs, foreign, geoms }
+}
+
+/// One saved face and the faces of `mesh` it draws on, none when it is lost.
+pub struct Placed<'a> {
+    pub body: &'a str,
+    pub face: u64,
+    pub material: &'a Value,
+    pub on: Vec<usize>,
+}
+
+/// Where the app draws each saved face. A lost face draws nothing, whatever now holds its old number.
+pub fn placed<'a>(
+    materials: &'a Map<String, Value>,
+    prints: &Map<String, Value>,
+    mesh: &[MeshBody],
+) -> Vec<Placed<'a>> {
+    let refs = locate(materials, prints, mesh).refs;
+    refs.into_iter().map(|r| Placed { body: r.body, face: r.face, material: r.material, on: r.on }).collect()
+}
+
+/// `faceMaterials` and `facePrints` as the app saves them after a first build of `mesh`: resolveFaceRefs without a
+/// track, then savedFaceRefs. A key that is not the app's, or a key with no material, rides along untouched.
+pub fn rekeyed(
+    materials: &Map<String, Value>,
+    prints: &Map<String, Value>,
+    mesh: &[MeshBody],
+) -> (Map<String, Value>, Map<String, Value>) {
+    let Located { mut refs, foreign, geoms } = locate(materials, prints, mesh);
     let mut out_materials = Map::new();
     let mut out_prints = Map::new();
     // Lost refs first: a ref found on a face wins that key.
