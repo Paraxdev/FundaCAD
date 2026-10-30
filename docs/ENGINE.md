@@ -329,7 +329,7 @@ the bundle:
   then the warning, which is not optional: this is the Funda Engine and the sidecar is retired, anything that builds differently from the sidecar is worth a report, plugin
   geometry runs as WebAssembly components, and the sidecar's documents open
   here.
-- The newest 10 betas also stay on as normal releases of their own, `v1.0.<run
+- The newest 20 betas also stay on as normal releases of their own, `v1.0.<run
   number>`, titled `FundaCAD 1.0.<run number> beta`, with the same installers
   and plugin bundles plus a `SHA256SUMS.txt`, but no `latest.json`, so a version can be linked and
   packaged after the rolling beta moves on while installed betas keep their

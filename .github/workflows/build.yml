@@ -1379,10 +1379,10 @@ jobs:
             err=$(tr -s '\r\n' ' ' < publish-error.txt | sed 's/ $//')
             echo "::warning::no $V release, GitHub would not publish it on ${SHA:0:7}, so its draft is deleted: $err. This token may not tag a commit that changes a workflow file, the rolling beta has this build"
           fi
-          # Only the newest 10 betas stay as versions. A stable release or a rolling tag never matches,
+          # Only the newest 20 betas stay as versions. A stable release or a rolling tag never matches,
           # and a failed list or delete costs a tidy up, never the release.
           old=$(gh release list --repo "$R" --exclude-drafts --exclude-pre-releases --limit 1000 --json tagName --jq '.[].tagName' \
-            | grep -E '^v1\.0\.[0-9]+$' | sort -V | head -n -10 || true)
+            | grep -E '^v1\.0\.[0-9]+$' | sort -V | head -n -20 || true)
           for tag in $old; do
             gh release delete "$tag" --repo "$R" --cleanup-tag --yes || echo "::warning::the old release $tag could not be deleted"
           done
