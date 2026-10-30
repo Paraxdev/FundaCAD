@@ -1349,8 +1349,9 @@ jobs:
           set -euo pipefail
           R='${{ github.repository }}'
           V="v$VERSION"
-          sed '0,/^Rolling FundaCAD 1\.0 beta (/s//FundaCAD 1.0 beta (/' notes.md > version-notes.md
-          printf '\nThe [rolling beta](https://github.com/%s/releases/tag/beta) always has the newest build.\n' "$R" >> version-notes.md
+          # GitHub cannot pin a release, so each version links the rolling two first.
+          printf 'The newest builds are always on the [rolling beta](https://github.com/%s/releases/tag/beta) and the [development build](https://github.com/%s/releases/tag/development).\n\n' "$R" "$R" > version-notes.md
+          sed '0,/^Rolling FundaCAD 1\.0 beta (/s//FundaCAD 1.0 beta (/' notes.md >> version-notes.md
           stable=$(gh release list --repo "$R" --exclude-drafts --exclude-pre-releases --limit 1000 \
             --json tagName --jq '.[].tagName' | grep -E '^v1\.([1-9][0-9]*)\.(0|[1-9][0-9]*)$' || true)
           latest=true

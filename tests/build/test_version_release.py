@@ -97,7 +97,12 @@ class VersionRelease(unittest.TestCase):
         )
         self.assertIn("\nFundaCAD 1.0 beta (1.0.412), Rust engine", notes)
         self.assertNotIn("Rolling FundaCAD", notes)
-        self.assertTrue(notes.endswith("The [rolling beta](https://github.com/o/r/releases/tag/beta) always has the newest build.\n"))
+        self.assertTrue(
+            notes.startswith(
+                "The newest builds are always on the [rolling beta](https://github.com/o/r/releases/tag/beta)"
+                " and the [development build](https://github.com/o/r/releases/tag/development).\n\n"
+            )
+        )
         self.assertEqual(
             self.sums,
             [
