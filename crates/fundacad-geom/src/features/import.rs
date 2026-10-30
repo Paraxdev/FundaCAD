@@ -2,11 +2,11 @@
 //! `heal_snapped.heal_stored` is not ported, it repairs blobs from before the mesh gate this engine's blobs pass.
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
 
 use fundacad_core::schema::{Import, ImportNode, ImportPart};
 use opencascade::mesh_import as occ;
 use opencascade::primitives::Shape;
+use opencascade::progress::ProgressRange;
 use opencascade::xcaf;
 use serde_json::Value;
 
@@ -87,19 +87,8 @@ pub fn brep_b64_to_shape(b64: &str) -> FResult<Shape> {
     if !has_magic(&data, BREP_MAGIC) {
         return Err(Fail::msg("embedded payload is not a valid BREP (bad header)"));
     }
-    // The clock alone names two reads of the same tick alike, and each then
-    // loads whichever body was written last.
-    static NTH: AtomicU64 = AtomicU64::new(0);
-    let nonce = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos());
-    let path = std::env::temp_dir().join(format!(
-        "fundacad-{}-{nonce:x}-{}.brep",
-        std::process::id(),
-        NTH.fetch_add(1, Ordering::Relaxed)
-    ));
-    std::fs::write(&path, &data).map_err(|_| Fail::Internal("OSError".into()))?;
-    let read = Shape::read_brep_text(&path);
-    let _ = std::fs::remove_file(&path);
-    read.map_err(|_| Fail::Internal("Standard_Failure".into()))
+    Shape::from_brep_text(&String::from_utf8_lossy(&data), &ProgressRange::detached())
+        .map_err(|_| Fail::Internal("Standard_Failure".into()))
 }
 
 /// `_import_shape`: the blob named by `geom`, else the inline copy.
