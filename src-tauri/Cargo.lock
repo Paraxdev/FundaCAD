@@ -2035,6 +2035,7 @@ dependencies = [
  "fundacad-protocol",
  "futures-util",
  "getrandom 0.3.4",
+ "libc",
  "png 0.17.16",
  "rmcp",
  "schemars 1.2.1",

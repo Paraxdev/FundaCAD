@@ -141,9 +141,8 @@ fn geometry_sections_together_past_the_limit_are_refused_before_reading() {
     let tmp = tempfile::tempdir().unwrap();
     let path = tmp.path().join("part.fundab");
     let each = 3u64 << 29;
-    let sections: Vec<Section> = (0..6)
-        .map(|i| Section { name: format!("g{i}"), ..Section::new(2, 0, vec![0u8; 16], each) })
-        .collect();
+    let sections: Vec<Section> =
+        (0..6).map(|i| Section { name: format!("g{i}"), ..Section::new(2, 0, vec![0u8; 16], each) }).collect();
     write_raw(&path, &sections);
     let e = fundacad_mcp::docfile::read_document(&path).unwrap_err();
     assert!(e.0.contains("8 GiB"), "{}", e.0);
