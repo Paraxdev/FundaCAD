@@ -54,7 +54,13 @@ function fakeStore() {
     nextId: () => "p1",
     boundExpr: () => null,
     classifyTargetExpr: ((bound, pending, raw, kind) =>
-      classifyExprInput({ parameters: {}, features: [] }, raw, kind, bound, pending)) as DocumentStore["classifyTargetExpr"],
+      classifyExprInput(
+        { parameters: {}, features: [] },
+        raw,
+        kind,
+        bound,
+        pending,
+      )) as DocumentStore["classifyTargetExpr"],
     setPreview(feature: Feature | null) {
       state.hasPreview = feature !== null;
       if (feature) state.building = true;

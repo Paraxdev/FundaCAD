@@ -411,7 +411,13 @@ export class PressPullTool {
       this.cancel();
       return;
     }
-    if (toolChar(e) === "t" && !this.dim.typesText(e) && this.phase === "drag" && !this.pickingTarget && !this.resizing) {
+    if (
+      toolChar(e) === "t" &&
+      !this.dim.typesText(e) &&
+      this.phase === "drag" &&
+      !this.pickingTarget &&
+      !this.resizing
+    ) {
       this.pickingTarget = true;
       this.dim.hide(); // Enter must not commit a plain distance while picking
       this.clearPreviewTimer();
