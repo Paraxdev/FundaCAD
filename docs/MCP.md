@@ -278,6 +278,13 @@ window's reason (it lists refusals by proposal id in its status) rather than
 timing out. An ordinary edit is taken as usual. The window's side is
 `src/live/liveSession.ts`.
 
+A material tool's proposal also carries `edit`, what changed:
+`{kind: "materials", library?, bodies?: {bodyId: materialId or null}, faces?: [{body, face, material or null, print?}]}`.
+The window applies it through its store as one undo step without loading anything, so
+the section view and the rest of the project state stay as they are. A window that
+does not know the edit takes the document beside it, as for any other proposal. The
+wire key is `edit` because a socket request's `op` is the operation's name.
+
 On Windows the engine a private session spawns is put in a job object with
 `KILL_ON_JOB_CLOSE`, so it dies with this process however this process dies.
 That is not housekeeping: an MCP host kills its servers with `TerminateProcess`,
@@ -301,7 +308,11 @@ which a fresh engine could no longer start one and every build failed.
 | `printability` | what would go wrong printing the parts on an FDM printer: overhangs past 45 deg, walls under two nozzle widths, floors under two layers, gaps that would fuse, long bridges and open shells, each with its face and a `view` focus. As modelled or laid flat as `export` would. Changes nothing |
 | `inspect` | exact volume, area, bbox, and every face and edge with a ready-made selector |
 | `measure` | exact measurements on the B-rep. One thing (`a`): a face's surface, area, outward normal, radius and axis; an edge's length, direction, circle and arc; a body's volume, area and size. Two (`a`, `b`): the minimum distance with both closest points, the gap between parallel planar faces (a wall), centre to centre or axis to axis distance (a hole pitch), and the angle between planes, straight edges and axes. A thing is a face or edge selector from `inspect` with its `body`, `{body, face: n}` or `{body, edge: n}` (inspect's F and E numbers, for the current build only), a body id or name, or `{point: [x, y, z]}`; `want` narrows it to `distance`, `angle` or `centres`. Text in mm and degrees to 3 places, then a `raw:` line with the unrounded reply. Changes nothing |
-| `view` | a PNG: orthographic, flat-shaded, with sections, body filtering and zoom |
+| `material_list` | the render materials of the document with every set field, which bodies and faces wear each, and the starter materials to copy from. Changes nothing. The stress tool's material is another thing and is not here |
+| `material_set` | create or edit one render material with any field the app has, including `surface` and `surfaceGraph` as the node editor saves them. An `id` that exists edits it and keeps the fields left out, a field sent as null goes back to its default, `from` starts from a copy. Values are normalized like the app's (`src/document/materials.ts`, pinned by `tests/vectors/materials.json`) and the reply says what was clamped or dropped; an unknown field or a graph the app could not compile is refused |
+| `material_remove` | delete materials by id, along with the body and face assignments that wore them |
+| `material_assign` | put a material on `bodies` and `faces`, or clear them with material null. A face is a selector from `inspect` with its `body`, or `{body, face: n}`. It is saved with the print the app finds the face by, so it stays on its face through a later fillet. Faces are refused while the document has `rollback` or `suppressed` set, since the MCP builds the whole timeline and its face numbers would not be the app's |
+| `view` | a PNG: orthographic, flat-shaded, with sections, body filtering and zoom. Bodies and faces show the plain colour of their assigned material, not its metal or glass shading |
 | `doc_import` | read a STEP, STL, 3MF, OBJ, BREP or GLB file in as a body to model against, by `path` or as inline `content`, compressed and in pieces if it is large |
 | `export` | STEP, STL, 3MF, DXF, SVG, to a path with that format's extension. `separate` writes a file per body named after it, `body` one body, `layFlat` turns each part onto a flat face for printing |
 | `guide_highlight` / `guide_wait` / `guide_clear` | guide mode, below: show the user a step in their own window and wait for them |
@@ -616,6 +627,8 @@ one-shot calls is not a session, use `--script`, which is either a JSON array of
 | `src/render.rs`, `src/png.rs` | the rasteriser and its PNG |
 | `src/describe.rs` | turning an `inspect` report into something worth reading |
 | `src/measure.rs` | the `measure` tool's request and its text |
+| `src/materials.rs`, `src/materials_doc.rs` | the app's material rules and the material tools' edits on the document |
+| `src/face_prints.rs` | the face prints a saved face assignment is found by |
 | `src/docfile.rs` | reading and writing `.funda` and `.fundab` |
 | `src/schema.rs`, `src/schema.json` | the feature reference the agent reads |
 | `tests/` | one suite per module, driving the built binaries over real stdio and a real socket |
