@@ -775,7 +775,7 @@ function onClassicCamera(on: boolean) {
                   >, and took the last one for a {{ detectedWheel }}</template
                 ><template v-else-if="nav.wheelDevice === 'auto'"
                   >, and has not seen a scroll over the model yet</template
-                >. Pick one if it guesses wrong.
+                >. Pick one if it guesses wrong. On Mouse a pinch pans too, as Ctrl with a wheel does.
               </p>
             </div>
             <div class="pref-card">

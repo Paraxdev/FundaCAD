@@ -133,6 +133,7 @@ describe("Preferences choices", () => {
     const hint = () => $("#prefs-wheel-device-hint").textContent!.replace(/\s+/g, " ");
     expect(hint()).not.toContain("took the last one");
     expect(hint()).toContain("has not seen a scroll over the model yet");
+    expect(hint()).toContain("On Mouse a pinch pans too, as Ctrl with a wheel does.");
     noteDetectedWheel("touchpad");
     await flushPromises();
     expect(hint()).toContain("and took the last one for a touchpad");

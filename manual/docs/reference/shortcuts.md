@@ -76,7 +76,7 @@ Reset puts one key back, Reset all a whole page. A key marked fixed cannot be ch
 | Right drag | Orbit |
 | Middle drag, Shift+right drag | Pan |
 | Wheel | Zoom |
-| Ctrl+wheel | Pan up and down (a touchpad pinch still zooms) |
+| Ctrl+wheel | Pan up and down (a touchpad pinch still zooms, but pans too with Scrolling set to Mouse in Preferences) |
 | Right click | Context menu |
 | Left click | Select a body, then a face on it |
 | Left drag to the right | Box select what is fully inside |
