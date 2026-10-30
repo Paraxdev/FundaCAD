@@ -82,9 +82,9 @@ fn an_edge_drawn_off_its_faces_is_redrawn_where_they_meet() {
     sound(block).unwrap();
     let got = kernel::volume(block);
     assert!((got - BLOCK_VOLUME).abs() < 1e-3 * BLOCK_VOLUME, "volume {got}, want {BLOCK_VOLUME}");
-    let (away, widest) = opencascade::xcaf::edges_away(block, 1e-3);
+    let (away, widest) = opencascade::xcaf::edges_away(block, 1e-3).unwrap();
     assert_eq!(away, 0, "an edge is still {widest} mm from its faces");
-    let tolerance = opencascade::xcaf::widest_tolerance(block);
+    let tolerance = opencascade::xcaf::widest_tolerance(block).unwrap();
     assert!(tolerance <= 1e-3, "tolerance {tolerance}");
     let heal = notes.iter().find(|n| n.contains("redrawn")).unwrap_or_else(|| panic!("{notes:?}"));
     assert!(
@@ -104,7 +104,7 @@ fn an_edge_whose_faces_do_not_meet_keeps_the_body_as_read() {
     let post = &r.bodies[2].shape;
     assert_eq!(kernel::count(post, Kind::Face), 3);
     assert_eq!(kernel::count(post, Kind::Solid), 1);
-    let (away, widest) = opencascade::xcaf::edges_away(post, 1e-3);
+    let (away, widest) = opencascade::xcaf::edges_away(post, 1e-3).unwrap();
     assert_eq!(away, 1);
     assert!((widest - 2.0).abs() < 0.1, "{widest}");
     let note = notes

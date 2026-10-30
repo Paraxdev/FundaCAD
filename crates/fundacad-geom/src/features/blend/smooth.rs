@@ -266,8 +266,9 @@ fn poke(
     let mut slack: HashMap<usize, f64> = HashMap::new();
     for (out, i) in pokes.into_iter().take(500) {
         let f = face_of[i];
-        let tol =
-            *slack.entry(f).or_insert_with(|| 1e-3 + opencascade_sys::xcaf::step_widest_tolerance(faces[f].raw()));
+        let tol = *slack
+            .entry(f)
+            .or_insert_with(|| 1e-3 + opencascade_sys::xcaf::step_widest_tolerance(faces[f].raw()).unwrap_or(0.0));
         if kernel::distance_to_point(&before, mesh.at[i].to_array()).is_none_or(|d| d > tol) {
             return out;
         }
