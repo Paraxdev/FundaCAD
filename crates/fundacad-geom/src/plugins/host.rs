@@ -116,8 +116,14 @@ impl ResourceLimiter for Limits {
     }
 }
 
+/// Plugin shapes live in host memory, which the wasm memory cap does not cover.
+pub(super) const MAX_LIVE_SHAPES: usize = 1_000_000;
+pub(super) const MAX_FILE_READ: u64 = 256 << 20;
+
 pub struct State {
     table: ResourceTable,
+    live_shapes: usize,
+    pub(super) shape_cap: usize,
     wasi: WasiCtx,
     limits: Limits,
     scope: Scope,
@@ -224,25 +230,7 @@ impl Component {
         cancel: Option<CancelToken>,
         f: impl FnOnce(&Plugin, &mut Store<State>) -> wasmtime::Result<R>,
     ) -> Result<R, String> {
-        let wasi = WasiCtxBuilder::new()
-            .inherit_stderr()
-            .allow_tcp(false)
-            .allow_udp(false)
-            .allow_ip_name_lookup(false)
-            .build();
-        let limits = store_limits();
-        let mut store = Store::new(
-            engine(),
-            State {
-                table: ResourceTable::new(),
-                wasi,
-                limits,
-                scope,
-                cancel: cancel.clone(),
-                files_read: self.files_read,
-                refusals: Vec::new(),
-            },
-        );
+        let mut store = Store::new(engine(), State::new(scope, cancel.clone(), self.files_read));
         store.limiter(|s| &mut s.limits);
         let started = Instant::now();
         store.epoch_deadline_callback(move |ctx| {
@@ -319,7 +307,7 @@ impl Component {
     /// The faces one spec claims, each with the tag that goes back with it.
     pub fn resolve_pass(&self, pass: &str, body: &Shape, spec: &Value) -> Result<Vec<(Shape, String)>, String> {
         self.call(Scope::None, super::MESH_PASS_BUDGET, None, |p, s| {
-            let h = s.data_mut().table.push(HostShape(body.clone()))?;
+            let h = s.data_mut().own(body.clone())?;
             let r = p.call_resolve_pass(&mut *s, pass, h, &spec.to_string())?;
             Ok(match r {
                 Ok(hs) => hs.into_iter().map(|c| take(s.data_mut(), c.face).map(|f| (f, c.tag))).collect(),
@@ -338,24 +326,59 @@ impl Component {
         split_creases: bool,
     ) -> Result<MeshData, String> {
         self.call(Scope::None, super::MESH_PASS_BUDGET, None, |p, s| {
-            let h = s.data_mut().table.push(HostShape(face.clone()))?;
+            let h = s.data_mut().own(face.clone())?;
             let options = DisplaceOptions { density_cap, split_creases };
             p.call_displace(&mut *s, pass, h, &spec.to_string(), tag, options)
         })?
     }
 }
 
-fn take(state: &mut State, h: Resource<HostShape>) -> Result<Shape, String> {
-    state.table.delete(h).map(|s| s.0).map_err(|e| format!("the plugin returned a shape it does not hold: {e}"))
+pub(super) fn take(state: &mut State, h: Resource<HostShape>) -> Result<Shape, String> {
+    let s = state.table.delete(h).map(|s| s.0).map_err(|e| format!("the plugin returned a shape it does not hold: {e}"))?;
+    state.live_shapes -= 1;
+    Ok(s)
 }
 
 impl State {
+    #[cfg(test)]
+    pub(super) fn bare() -> Self {
+        Self::new(Scope::None, None, false)
+    }
+
+    fn new(scope: Scope, cancel: Option<CancelToken>, files_read: bool) -> Self {
+        let wasi = WasiCtxBuilder::new()
+            .inherit_stderr()
+            .allow_tcp(false)
+            .allow_udp(false)
+            .allow_ip_name_lookup(false)
+            .build();
+        State {
+            table: ResourceTable::new(),
+            live_shapes: 0,
+            shape_cap: MAX_LIVE_SHAPES,
+            wasi,
+            limits: store_limits(),
+            scope,
+            cancel,
+            files_read,
+            refusals: Vec::new(),
+        }
+    }
+
     fn shape(&self, h: &Resource<HostShape>) -> wasmtime::Result<&Shape> {
         Ok(&self.table.get(h)?.0)
     }
 
-    fn own(&mut self, s: Shape) -> wasmtime::Result<Resource<HostShape>> {
-        Ok(self.table.push(HostShape(s))?)
+    pub(super) fn own(&mut self, s: Shape) -> wasmtime::Result<Resource<HostShape>> {
+        if self.live_shapes >= self.shape_cap {
+            return Err(wasmtime::Error::msg(format!(
+                "the plugin holds more than {} shapes at once",
+                self.shape_cap
+            )));
+        }
+        let h = self.table.push(HostShape(s))?;
+        self.live_shapes += 1;
+        Ok(h)
     }
 
     fn own_all(&mut self, v: Vec<Shape>) -> wasmtime::Result<Vec<Resource<HostShape>>> {
@@ -536,6 +559,7 @@ impl kernel::HostShape for State {
 
     fn drop(&mut self, s: Resource<HostShape>) -> wasmtime::Result<()> {
         self.table.delete(s)?;
+        self.live_shapes -= 1;
         Ok(())
     }
 }
@@ -1058,7 +1082,7 @@ impl files::Host for State {
         if !self.files_read {
             return Ok(Err(NO_FILES.into()));
         }
-        Ok(std::fs::read(&path).map_err(|e| io_text(&e, &path)))
+        Ok(read_file(&path, MAX_FILE_READ))
     }
 
     fn list_dir(&mut self, path: String) -> wasmtime::Result<Result<Vec<types::DirEntry>, String>> {
@@ -1085,6 +1109,22 @@ impl files::Host for State {
 }
 
 /// An OS error the way Python's OSError prints it, which plugin messages quote.
+/// Reads through take() as well, so a file that grows after the size check is caught.
+pub(super) fn read_file(path: &str, cap: u64) -> Result<Vec<u8>, String> {
+    use std::io::Read;
+    let too_big = || format!("{} is larger than the {} MiB a plugin may read at once", py_repr(path), cap >> 20);
+    let f = std::fs::File::open(path).map_err(|e| io_text(&e, path))?;
+    if f.metadata().map_err(|e| io_text(&e, path))?.len() > cap {
+        return Err(too_big());
+    }
+    let mut out = Vec::new();
+    f.take(cap + 1).read_to_end(&mut out).map_err(|e| io_text(&e, path))?;
+    if out.len() as u64 > cap {
+        return Err(too_big());
+    }
+    Ok(out)
+}
+
 fn io_text(e: &std::io::Error, path: &str) -> String {
     let (code, what) = match e.kind() {
         std::io::ErrorKind::NotFound => (2, "No such file or directory"),

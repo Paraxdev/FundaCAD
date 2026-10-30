@@ -369,3 +369,30 @@ fn a_planar_delaunay_past_its_point_cap_is_refused() {
     let e = kx::delaunay_2d(&points).unwrap_err();
     assert!(e.contains("10000000 points"), "{e}");
 }
+
+#[test]
+fn a_plugin_store_refuses_shapes_past_its_live_cap_and_counts_drops() {
+    use host::kernel::HostShape as _;
+    let cube = k::make_box((0.0, 0.0, 0.0), (1.0, 1.0, 1.0)).unwrap();
+    let mut st = host::State::bare();
+    st.shape_cap = 2;
+    let a = st.own(cube.clone()).unwrap();
+    let b = st.own(cube.clone()).unwrap();
+    let e = st.own(cube.clone()).unwrap_err().to_string();
+    assert!(e.contains("more than 2 shapes"), "{e}");
+    st.drop(a).unwrap();
+    host::take(&mut st, b).unwrap();
+    st.own(cube.clone()).unwrap();
+    st.own(cube).unwrap();
+}
+
+#[test]
+fn a_plugin_file_read_past_its_cap_is_refused() {
+    let root = temp_root("read-cap");
+    let path = root.join("big.bin");
+    std::fs::write(&path, [7u8; 10]).unwrap();
+    let path = path.to_string_lossy().into_owned();
+    assert_eq!(host::read_file(&path, 10).unwrap(), vec![7u8; 10]);
+    let e = host::read_file(&path, 9).unwrap_err();
+    assert!(e.contains("larger than"), "{e}");
+}
