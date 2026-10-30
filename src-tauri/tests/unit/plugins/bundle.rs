@@ -3,8 +3,8 @@ use std::path::PathBuf;
 
 use fundacad_lib::plugins::bundle::{
     allowed_bundle_url, bundle_target, component_path, extract_into, grants_match, is_official_url, now_secs,
-    official_label, official_url, safe_entry, safe_id, sha256_hex, swap_into_place, CappedBody, Consented,
-    BUNDLE_PREFIX,
+    official_label, official_url, read_capped, safe_entry, safe_id, sha256_hex, swap_into_place, CappedBody,
+    ChunkSource, Consented, BUNDLE_PREFIX,
 };
 
 /// An id becomes a directory under the plugins root, so every refusal below is a path guard.
@@ -465,6 +465,84 @@ fn a_refused_body_does_not_keep_growing() {
     assert!(!body.push(&[0u8; 1024]));
     assert!(!body.push(&[0u8; 1024]));
     assert!(body.into_bytes().len() <= 3);
+}
+
+struct Reply {
+    declared: Option<u64>,
+    chunks: std::collections::VecDeque<Result<Vec<u8>, String>>,
+    pulled: usize,
+}
+
+impl ChunkSource for Reply {
+    type Error = String;
+    fn declared_len(&self) -> Option<u64> {
+        self.declared
+    }
+    fn next_chunk(&mut self) -> impl std::future::Future<Output = Result<Option<Vec<u8>>, String>> + Send {
+        self.pulled += 1;
+        std::future::ready(self.chunks.pop_front().transpose())
+    }
+}
+
+fn reply(declared: Option<u64>, chunks: &[&[u8]]) -> Reply {
+    Reply { declared, chunks: chunks.iter().map(|c| Ok(c.to_vec())).collect(), pulled: 0 }
+}
+
+fn block_on<F: std::future::Future>(f: F) -> F::Output {
+    let mut f = std::pin::pin!(f);
+    let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
+    loop {
+        if let std::task::Poll::Ready(v) = f.as_mut().poll(&mut cx) {
+            return v;
+        }
+    }
+}
+
+#[test]
+fn a_reply_declaring_more_than_the_cap_is_refused_before_any_read() {
+    let mut r = reply(Some(11), &[b"12345"]);
+    assert_eq!(block_on(read_capped(&mut r, 10)), Ok(None));
+    assert_eq!(r.pulled, 0);
+}
+
+#[test]
+fn a_reply_stops_being_read_at_the_chunk_that_passes_the_cap() {
+    let mut r = reply(None, &[b"12345", b"67890", b"x", b"never read"]);
+    assert_eq!(block_on(read_capped(&mut r, 10)), Ok(None));
+    assert_eq!(r.pulled, 3);
+
+    let mut lying = reply(Some(4), &[b"1234", b"5"]);
+    assert_eq!(block_on(read_capped(&mut lying, 4)), Ok(None), "a short declared length is not trusted");
+}
+
+#[test]
+fn a_reply_within_the_cap_comes_back_whole_and_a_read_error_comes_back_as_is() {
+    let mut r = reply(Some(10), &[b"abcde", b"", b"fghij"]);
+    assert_eq!(block_on(read_capped(&mut r, 10)), Ok(Some(b"abcdefghij".to_vec())));
+
+    let mut broken = reply(None, &[b"ab"]);
+    broken.chunks.push_back(Err("reset".into()));
+    assert_eq!(block_on(read_capped(&mut broken, 10)), Err("reset".to_string()));
+}
+
+/// The three plugin request paths read their bodies only through read_capped.
+#[test]
+fn no_plugin_request_reads_a_whole_body_unchecked() {
+    let sources = [
+        ("mod.rs", include_str!("../../../src/plugins/mod.rs")),
+        ("web.rs", include_str!("../../../src/plugins/web.rs")),
+        ("localnet.rs", include_str!("../../../src/plugins/localnet.rs")),
+    ];
+    let unchecked: Vec<String> = sources
+        .iter()
+        .flat_map(|(name, text)| {
+            [".bytes().await", ".text().await", ".json().await", ".json::<", "bytes_stream("]
+                .into_iter()
+                .filter(|call| text.contains(*call))
+                .map(move |call| format!("{name} {call}"))
+        })
+        .collect();
+    assert_eq!(unchecked, Vec::<String>::new());
 }
 
 /// The unpack budget sums declared sizes, which holds only while no entry can inflate past the size its headers give.

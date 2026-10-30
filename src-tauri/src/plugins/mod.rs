@@ -13,7 +13,7 @@ pub mod web;
 
 use bundle::{
     allowed_bundle_url, bundle_target, extract_into, grants_match, is_official_url, now_secs, official_label, safe_id,
-    sha256_hex, swap_into_place, CappedBody, Consented, MAX_DOWNLOAD, OFFICIAL_IDS,
+    sha256_hex, swap_into_place, Consented, MAX_DOWNLOAD, OFFICIAL_IDS,
 };
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -276,18 +276,18 @@ async fn fetch_bundle(url: &url::Url) -> Result<Vec<u8>, String> {
         .ok_or_else(|| format!("the download is larger than {MAX_DOWNLOAD} bytes"))
 }
 
-/// The whole body, or None as soon as it passes `cap`, refusing a declared length over the cap before reading any.
+impl bundle::ChunkSource for reqwest::Response {
+    type Error = reqwest::Error;
+    fn declared_len(&self) -> Option<u64> {
+        self.content_length()
+    }
+    async fn next_chunk(&mut self) -> Result<Option<Vec<u8>>, reqwest::Error> {
+        Ok(self.chunk().await?.map(|b| b.to_vec()))
+    }
+}
+
 pub(crate) async fn read_capped(mut resp: reqwest::Response, cap: usize) -> Result<Option<Vec<u8>>, reqwest::Error> {
-    if resp.content_length().is_some_and(|n| n > cap as u64) {
-        return Ok(None);
-    }
-    let mut body = CappedBody::new(cap);
-    while let Some(chunk) = resp.chunk().await? {
-        if !body.push(&chunk) {
-            return Ok(None);
-        }
-    }
-    Ok(Some(body.into_bytes()))
+    bundle::read_capped(&mut resp, cap).await
 }
 
 /// Read a bundle off the user's own disk.

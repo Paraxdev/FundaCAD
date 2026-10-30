@@ -46,6 +46,27 @@ impl CappedBody {
     }
 }
 
+/// A reply body as read_capped sees it: the length it declares, then its chunks in order.
+pub trait ChunkSource {
+    type Error;
+    fn declared_len(&self) -> Option<u64>;
+    fn next_chunk(&mut self) -> impl std::future::Future<Output = Result<Option<Vec<u8>>, Self::Error>> + Send;
+}
+
+/// The whole body, or None as soon as it passes `cap`, refusing a declared length over the cap before reading any.
+pub async fn read_capped<S: ChunkSource>(src: &mut S, cap: usize) -> Result<Option<Vec<u8>>, S::Error> {
+    if src.declared_len().is_some_and(|n| n > cap as u64) {
+        return Ok(None);
+    }
+    let mut body = CappedBody::new(cap);
+    while let Some(chunk) = src.next_chunk().await? {
+        if !body.push(&chunk) {
+            return Ok(None);
+        }
+    }
+    Ok(Some(body.into_bytes()))
+}
+
 /// The manifest fields that make up the promise, compared as plain string sets.
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct Consented {
