@@ -53,9 +53,32 @@ pub fn is_binary_path(path: &Path) -> bool {
 pub fn hash(data: &[u8]) -> String {
     let mut h = blake2::Blake2bVar::new(16).expect("16 is a legal blake2b length");
     h.update(data);
+    hex_digest(h)
+}
+
+fn hex_digest(h: blake2::Blake2bVar) -> String {
     let mut out = [0u8; 16];
     h.finalize_variable(&mut out).expect("16 byte digest");
     out.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// The digest and length of what `r` yields, read in chunks so it is never held whole.
+fn hash_stream(mut r: impl Read) -> Option<(String, u64)> {
+    let mut h = blake2::Blake2bVar::new(16).expect("16 is a legal blake2b length");
+    let mut buf = vec![0u8; 1 << 16];
+    let mut len = 0u64;
+    loop {
+        match r.read(&mut buf) {
+            Ok(0) => break,
+            Ok(n) => {
+                h.update(&buf[..n]);
+                len += n as u64;
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+            Err(_) => return None,
+        }
+    }
+    Some((hex_digest(h), len))
 }
 
 fn is_hash(s: &str) -> bool {
@@ -458,6 +481,9 @@ fn read_fnda(raw: &[u8]) -> Result<(Value, Vec<(String, Vec<u8>)>, Vec<String>),
         if kind != KIND_DOCUMENT && kind != KIND_GEOMETRY {
             continue;
         }
+        if kind == KIND_DOCUMENT && rawlen as u64 > MAX_DOC_TEXT {
+            return fail("the document in this file is longer than FundaCAD opens and was refused");
+        }
         expanded = expanded.saturating_add(rawlen as u64);
         entries.push((kind, codec, name, off, stored, rawlen, digest, shard, k, m));
     }
@@ -488,8 +514,20 @@ fn read_fnda(raw: &[u8]) -> Result<(Value, Vec<(String, Vec<u8>)>, Vec<String>),
             q = q.saturating_add(stride);
         }
         data.truncate(stored);
-        let body = if codec == 1 { inflate_raw(&data, rawlen).unwrap_or_default() } else { data };
-        if body.len() != rawlen || hash(&body) != digest {
+        // A deflated section is hashed as it streams before it is kept, so one that fails its digest is never held.
+        let body = if codec == 1 {
+            let streamed = hash_stream(flate2::read::DeflateDecoder::new(&data[..]).take(rawlen as u64 + 1));
+            if streamed != Some((digest.clone(), rawlen as u64)) {
+                return damaged();
+            }
+            inflate_raw(&data, rawlen).unwrap_or_default()
+        } else {
+            if hash(&data) != digest {
+                return damaged();
+            }
+            data
+        };
+        if body.len() != rawlen {
             return damaged();
         }
         if kind == KIND_DOCUMENT {
@@ -541,10 +579,13 @@ fn read_zip(path: &Path) -> Result<(Value, Vec<(String, Vec<u8>)>), DocumentFile
         if !is_hash(h) {
             continue;
         }
+        let Some((streamed, _)) = z.by_name(entry).ok().and_then(hash_stream) else {
+            continue;
+        };
+        if streamed != h {
+            return wrong_geometry();
+        }
         if let Some(data) = read_entry(&mut z, entry) {
-            if hash(&data) != h {
-                return wrong_geometry();
-            }
             blobs.push((h.to_string(), data));
         }
     }

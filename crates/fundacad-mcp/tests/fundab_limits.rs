@@ -1,4 +1,4 @@
-//! A .fundab whose table fields disagree with its bytes is refused without large allocations, overflow or deep
+//! A .fundab or zipped document whose declared sizes disagree with its bytes is refused without large allocations, overflow or deep
 //! recursion. The allocator here records the largest single request made on the calling thread.
 
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -43,6 +43,7 @@ struct Section {
     rawlen: u64,
     off: Option<u64>,
     stored: Option<u64>,
+    digest: Option<String>,
     shard: u32,
     k: u16,
     m: u16,
@@ -51,7 +52,19 @@ struct Section {
 impl Section {
     fn new(kind: u8, codec: u8, stored_bytes: Vec<u8>, rawlen: u64) -> Self {
         let shard = stored_bytes.len().max(1) as u32;
-        Section { kind, codec, name: String::new(), stored_bytes, rawlen, off: None, stored: None, shard, k: 1, m: 0 }
+        Section {
+            kind,
+            codec,
+            name: String::new(),
+            stored_bytes,
+            rawlen,
+            off: None,
+            stored: None,
+            digest: None,
+            shard,
+            k: 1,
+            m: 0,
+        }
     }
 }
 
@@ -80,9 +93,9 @@ fn write_raw(path: &Path, sections: &[Section]) {
         table.extend_from_slice(&s.off.unwrap_or(off).to_le_bytes());
         table.extend_from_slice(&s.stored.unwrap_or(s.stored_bytes.len() as u64).to_le_bytes());
         table.extend_from_slice(&s.rawlen.to_le_bytes());
-        let digest = fundacad_mcp::docfile::hash(&s.stored_bytes);
+        let digest = s.digest.clone().unwrap_or_else(|| fundacad_mcp::docfile::hash(&s.stored_bytes));
         let digest: Vec<u8> = (0..16).map(|i| u8::from_str_radix(&digest[2 * i..2 * i + 2], 16).unwrap()).collect();
-        table.extend_from_slice(if s.codec == 0 { &digest } else { &[0u8; 16] });
+        table.extend_from_slice(if s.codec == 0 || s.digest.is_some() { &digest } else { &[0u8; 16] });
         table.extend_from_slice(&s.shard.to_le_bytes());
         table.extend_from_slice(&s.k.to_le_bytes());
         table.extend_from_slice(&s.m.to_le_bytes());
@@ -216,4 +229,66 @@ fn a_document_nested_within_the_depth_limit_still_reads() {
     for nested in [&[0x81u8][..], &[0xC0], &[0xA1, 0x60]] {
         assert!(reads_document_holding(nested, 100), "{nested:x?}");
     }
+}
+
+#[test]
+fn a_document_section_longer_than_the_app_opens_is_refused_before_inflating() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("part.fundab");
+    write_raw(&path, &[Section::new(1, 1, deflated_zeros(64 << 20), fundacad_mcp::docfile::MAX_DOC_TEXT + 1)]);
+    let (out, largest) = largest_allocation_during(|| fundacad_mcp::docfile::read_document(&path));
+    assert_eq!(out.unwrap_err().0, "the document in this file is longer than FundaCAD opens and was refused");
+    assert!(largest < 32 << 20, "the reader asked for {largest} bytes at once");
+}
+
+#[test]
+fn a_geometry_section_that_does_not_hash_to_its_digest_is_refused_without_holding_it() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("part.fundab");
+    write_raw(&path, &[Section::new(2, 1, deflated_zeros(256 << 20), 256 << 20)]);
+    let (out, largest) = largest_allocation_during(|| fundacad_mcp::docfile::read_document(&path));
+    assert!(out.is_err());
+    assert!(largest < 32 << 20, "the reader asked for {largest} bytes at once");
+}
+
+const SMALLEST_DOC: &[u8] = &[0xA1, 0x68, b'f', b'e', b'a', b't', b'u', b'r', b'e', b's', 0x80];
+
+#[test]
+fn a_deflated_geometry_section_that_hashes_to_its_digest_still_reads() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("part.fundab");
+    let brep = b"DBRep_DrawableShape\n".repeat(4096);
+    let digest = fundacad_mcp::docfile::hash(&brep);
+    let mut e = flate2::write::DeflateEncoder::new(Vec::new(), flate2::Compression::fast());
+    e.write_all(&brep).unwrap();
+    let mut geometry = Section::new(2, 1, e.finish().unwrap(), brep.len() as u64);
+    geometry.name = digest.clone();
+    geometry.digest = Some(digest.clone());
+    write_raw(&path, &[Section::new(1, 0, SMALLEST_DOC.to_vec(), SMALLEST_DOC.len() as u64), geometry]);
+    let (doc, blobs) = fundacad_mcp::docfile::read_document(&path).unwrap();
+    assert_eq!((doc.get("features"), blobs), (Some(&serde_json::json!([])), vec![(digest, brep)]));
+}
+
+#[test]
+fn a_zipped_blob_that_does_not_hash_to_its_manifest_entry_is_refused_without_holding_it() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("part.funda");
+    let mut z = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());
+    let options = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+    let manifest = serde_json::json!({"blobs": [{"hash": "0".repeat(32), "entry": "blob"}]});
+    for (name, data) in [
+        ("manifest.json", manifest.to_string().into_bytes()),
+        ("document.json", br#"{"features":[]}"#.to_vec()),
+        ("blob", vec![0u8; 256 << 20]),
+    ] {
+        z.start_file(name, options).unwrap();
+        z.write_all(&data).unwrap();
+    }
+    z.finish().unwrap();
+    let (out, largest) = largest_allocation_during(|| fundacad_mcp::docfile::read_document(&path));
+    assert_eq!(
+        out.unwrap_err().0,
+        "this document's geometry does not match its hash, the file is damaged or was modified"
+    );
+    assert!(largest < 32 << 20, "the reader asked for {largest} bytes at once");
 }
