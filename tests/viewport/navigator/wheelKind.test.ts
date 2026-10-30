@@ -77,6 +77,21 @@ describe("wheelEvidence under a webview zoom or display scale", () => {
     }
   });
 
+  it("reads a legacy delta above the notch grid as a touchpad, as truncation only lowers it", () => {
+    expect(wheelEvidence(ev({ deltaY: 80.4, wheelDeltaY: -97 }), false, [1, 1.25])).toBe("touchpad");
+    expect(wheelEvidence(ev({ deltaY: 100.4, wheelDeltaY: -121 }), false, [1, 1.1])).toBe("touchpad");
+  });
+
+  it("reads a delta that only nears a whole pixel as a touchpad", () => {
+    expect(wheelEvidence(ev({ deltaY: 45.005, wheelDeltaY: -54 }), false, [1, 1.1])).toBe("touchpad");
+    expect(wheelEvidence(ev({ deltaY: 40.005, wheelDeltaY: -48 }), false, [1, 1.25])).toBe("touchpad");
+  });
+
+  it("leaves whole pixels off the notch grid undecided under a scale", () => {
+    expect(wheelEvidence(ev({ deltaY: 100 / 1.1, wheelDeltaY: -111 }), false, [1, 1.1])).toBe(null);
+    expect(wheelEvidence(ev({ deltaY: 45, wheelDeltaY: -54 }), false, [1, 1.1])).toBe(null);
+  });
+
   it("keeps the 100 percent answers exact", () => {
     expect(wheelEvidence(ev({ deltaY: 100, wheelDeltaY: -119 }), false, [1])).toBe(null);
     expect(wheelEvidence(ev({ deltaY: 90.9, wheelDeltaY: -120 }), false, [1])).toBe("mouse");
