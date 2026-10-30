@@ -562,6 +562,34 @@ jobs:
           FUNDACAD_MCP_MODE=attach FUNDACAD_SESSION_FILE="$session" \
             python3 scripts/bundle-smoke.py --work "$RUNNER_TEMP/smoke-gui" -- "$RUNNER_TEMP/deb-root/usr/bin/fundacad" --mcp
 
+      # The AppImage no longer forces X11, so its native Wayland window gets the
+      # Flatpak's headless cage smoke. Not a gate until it has run green on dev.
+      - name: Start the AppImage under headless Wayland
+        if: matrix.platform == 'ubuntu-22.04'
+        continue-on-error: true
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo timeout -k 10 300 apt-get install -y -qq cage
+          img=$(find src-tauri/target/release/bundle/appimage -maxdepth 1 -name '*.AppImage' | head -1)
+          if [ -z "$img" ]; then echo "::error::no AppImage to start"; exit 1; fi
+          fuse=()
+          if ! { [ -e /dev/fuse ] && { command -v fusermount3 || command -v fusermount; } >/dev/null; }; then
+            fuse=(--appimage-extract-and-run)
+          fi
+          XDG_DATA_HOME="$RUNNER_TEMP/wayland-data" sh scripts/wayland-smoke.sh "$RUNNER_TEMP/wayland-smoke" \
+            dbus-run-session -- "$img" "${fuse[@]}"
+
+      - name: Upload the AppImage Wayland smoke log
+        if: always() && matrix.platform == 'ubuntu-22.04'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wayland-smoke-appimage
+          path: ${{ runner.temp }}/wayland-smoke/app.log
+          if-no-files-found: ignore
+          retention-days: 7
+
       # What Orca reads: the AppImage on its own accessibility bus, its AT-SPI
       # tree dumped and red on a nameless button or no web document. Not a gate
       # until wave 1 of the accessibility work has run green here.
