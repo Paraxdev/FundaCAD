@@ -43,4 +43,18 @@
   .ui-segmented-bar.ui-segmented-sm .ui-segment {
     min-height: 20px;
   }
+
+  // A header chip or a Select beside a fixed field gives up width before a neighbour is pushed past the card.
+  .timeline-related {
+    flex: 0 1 auto;
+    min-width: 0;
+    height: auto;
+    white-space: normal;
+  }
+  .stress-field {
+    flex-wrap: wrap;
+  }
+  .stress-field .select-trigger {
+    flex-basis: 12em;
+  }
 }
