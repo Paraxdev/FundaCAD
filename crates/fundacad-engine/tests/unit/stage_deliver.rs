@@ -139,3 +139,21 @@ fn a_link_in_the_stage_is_not_followed() {
     assert_eq!(out["ok"], json!(false));
     assert!(s.users_files().is_empty());
 }
+
+#[test]
+fn a_separate_export_that_fails_midway_leaves_no_folder_behind() {
+    let s = Scratch::new("midway");
+    let staged = export(&s.user("Lamp.stl"), true, &s.stage());
+    let base = s.stage().join("Lamp");
+    fs::create_dir(&base).unwrap();
+    // Foot.stl is named in the reply but missing, so its copy fails after Shade.stl was copied.
+    fs::write(base.join("Shade.stl"), "solid").unwrap();
+    let reply =
+        envelope::ok(&json!("x1"), &json!({"path": base, "paths": [base.join("Shade.stl"), base.join("Foot.stl")]}));
+    let out = answer(&staged.finish(&reply));
+    assert_eq!((&out["id"], &out["ok"]), (&json!("x1"), &json!(false)));
+    let message = out["error"]["message"].as_str().unwrap();
+    let failed = format!("could not write {}: ", s.user("Lamp").join("Foot.stl").display());
+    assert!(message.starts_with(&failed), "{message}");
+    assert!(s.users_files().is_empty());
+}

@@ -29,7 +29,7 @@ pub enum Delivery {
         from: PathBuf,
         to: PathBuf,
     },
-    /// `folder` must not exist yet: create it, then copy each file into it.
+    /// `folder` must not exist yet: create it, then copy each file into it, or remove it again when one copy fails.
     Folder {
         folder: PathBuf,
         files: Vec<(PathBuf, PathBuf)>,
@@ -147,7 +147,9 @@ impl Delivery {
                         format!("could not create {}: {e}", folder.display())
                     });
                 }
-                files.iter().try_for_each(|(from, to)| copy_into(from, to))
+                files.iter().try_for_each(|(from, to)| copy_into(from, to)).inspect_err(|_| {
+                    let _ = std::fs::remove_dir_all(folder);
+                })
             }
         }
     }
