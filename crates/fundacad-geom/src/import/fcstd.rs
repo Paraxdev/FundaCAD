@@ -240,7 +240,7 @@ pub fn read_fcstd(path: &Path) -> Result<Imported, String> {
             continue;
         };
         let read = if file.to_lowercase().ends_with(".bin") {
-            Shape::from_brep_bytes(&bytes, &ProgressRange::detached())
+            opencascade::xcaf::from_freecad_bin(&bytes)
         } else {
             Shape::from_brep_text(&String::from_utf8_lossy(&bytes), &ProgressRange::detached())
         };

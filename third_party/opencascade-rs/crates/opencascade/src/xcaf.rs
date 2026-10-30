@@ -308,6 +308,20 @@ pub fn from_bin(data: &[u8]) -> Result<Shape, Error> {
     Shape::from_brep_bytes(data, &ProgressRange::detached())
 }
 
+/// The V4 header, `THE_ASCII_VERSIONS[4]`: FreeCAD writes it since OCCT 7.6, V3 before.
+const BIN_V4_HEADER: &[u8] = b"
+Open CASCADE Topology V4, (c) Open Cascade
+";
+
+/// A binary shape from a FreeCAD file, read only under the V3 or V4 header,
+/// so the V1 and V2 readers never see bytes a file chose.
+pub fn from_freecad_bin(data: &[u8]) -> Result<Shape, Error> {
+    if !data.starts_with(BIN_V3_HEADER) && !data.starts_with(BIN_V4_HEADER) {
+        return Err(Error::BrepBadHeader);
+    }
+    Shape::from_brep_bytes(data, &ProgressRange::detached())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

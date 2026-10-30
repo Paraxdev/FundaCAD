@@ -92,3 +92,59 @@ fn a_file_that_is_not_a_freecad_document_says_so() {
     let e = import_path(&fixture("two_parts_mode1.igs")).unwrap_err();
     assert!(e.contains("FreeCAD"), "{e}");
 }
+
+/// plate.FCStd with its ball stored as a binary shape of BinTools `version`.
+fn plate_with_a_binary_ball(version: i32) -> PathBuf {
+    use opencascade::primitives::Shape;
+    use opencascade::progress::ProgressRange;
+    use opencascade::shape_io::BrepWriteOptions;
+    use std::io::Read;
+
+    let mut z = zip::ZipArchive::new(std::fs::File::open(fixture("plate.FCStd")).unwrap()).unwrap();
+    let path = std::env::temp_dir().join(format!("fundacad-fcstd-bin-v{version}-{}.FCStd", std::process::id()));
+    let mut out = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());
+    let opts = zip::write::SimpleFileOptions::default();
+    for i in 0..z.len() {
+        let mut entry = z.by_index(i).unwrap();
+        let mut name = entry.name().unwrap().to_string();
+        let mut bytes = Vec::new();
+        entry.read_to_end(&mut bytes).unwrap();
+        if name == "Sph.Shape.brp" {
+            let ball = Shape::from_brep_text(std::str::from_utf8(&bytes).unwrap(), &ProgressRange::detached()).unwrap();
+            let options = BrepWriteOptions { with_triangles: false, with_normals: false, version };
+            bytes = ball.to_brep_bytes(options, &ProgressRange::detached()).unwrap();
+            name = "Sph.Shape.bin".into();
+        } else if name == "Document.xml" {
+            bytes = String::from_utf8(bytes).unwrap().replace("Sph.Shape.brp", "Sph.Shape.bin").into_bytes();
+        }
+        out.start_file(name, opts).unwrap();
+        out.write_all(&bytes).unwrap();
+    }
+    out.finish().unwrap();
+    path
+}
+
+fn imported_with_a_binary_ball(version: i32) -> Map<String, Value> {
+    let path = plate_with_a_binary_ball(version);
+    let reply = import_path(&path);
+    let _ = std::fs::remove_file(&path);
+    reply.unwrap()
+}
+
+#[test]
+fn a_binary_shape_is_read_only_under_the_headers_freecad_writes() {
+    for version in [3, 4] {
+        let r = build(imported_with_a_binary_ball(version));
+        let names: Vec<&str> = r.bodies.iter().map(|b| b.name.as_str()).collect();
+        assert_eq!(names, ["Plate with hole", "Ball"], "V{version}");
+        near(kernel::volume(&r.bodies[1].shape), 4.0 / 3.0 * PI * 125.0);
+    }
+    for version in [1, 2] {
+        let reply = imported_with_a_binary_ball(version);
+        let notes = reply["notes"].to_string();
+        assert!(notes.contains("Ball: its shape could not be read"), "V{version}: {notes}");
+        let r = build(reply);
+        let names: Vec<&str> = r.bodies.iter().map(|b| b.name.as_str()).collect();
+        assert_eq!(names, ["Plate with hole"], "V{version}");
+    }
+}
