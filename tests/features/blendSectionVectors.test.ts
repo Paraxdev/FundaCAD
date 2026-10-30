@@ -13,7 +13,7 @@ interface Entry {
   points: [number, number][];
 }
 
-const SECTIONS = (RAW as { sections: Entry[] }).sections;
+const SECTIONS = (RAW as unknown as { sections: Entry[] }).sections;
 
 function wedge(angle: number, z: number): EdgeSample {
   const t = (angle * Math.PI) / 180;
