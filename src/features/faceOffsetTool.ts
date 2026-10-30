@@ -85,7 +85,7 @@ export class FaceOffsetTool {
   private unsubBuild: (() => void) | null = null;
   private outcomes = new PreviewOutcomes(/^(Offset face|Thicken|Shell)[^:]*:\s*/i);
 
-  private dim = new DimInput();
+  private dim = new DimInput(() => this.store);
   private onDone: ((id: string | null) => void) | null = null;
 
   private readonly gesture: CanvasGesture;

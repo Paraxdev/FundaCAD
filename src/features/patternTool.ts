@@ -77,7 +77,7 @@ export class PatternTool {
   private downPos = { x: 0, y: 0 };
   private downOnGizmo = false;
 
-  private dim = new DimInput();
+  private dim = new DimInput(() => this.store);
   private onDone: ((id: string | null) => void) | null = null;
 
   private readonly gesture: CanvasGesture;

@@ -51,7 +51,7 @@ export class DraftTool {
   private commitPending = false;
   private readonly held = new HeldSignal();
 
-  private dim = new DimInput();
+  private dim = new DimInput(() => this.store);
   private onDone: ((id: string | null) => void) | null = null;
 
   private readonly gesture: CanvasGesture;

@@ -42,7 +42,7 @@ export class ThreadTool {
   // Opened lazily: a gesture that commits before the value settles skips a round trip nobody saw.
   private previewing = false;
 
-  private dim = new DimInput();
+  private dim = new DimInput(() => this.store);
   private onDone: ((id: string | null) => void) | null = null;
 
   private readonly gesture: CanvasGesture;

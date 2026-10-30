@@ -8,11 +8,16 @@ import { createPinia, setActivePinia } from "pinia";
 import * as THREE from "three";
 import { PressPullTool } from "../../src/features/pressPullTool";
 import type { DocumentStore, RebuildState } from "../../src/document/store";
+import { classifyExprInput } from "../../src/params/engine";
 import type { Viewport } from "../../src/viewport/viewport";
 import type { Feature, Selector, Vec3 } from "../../src/types";
 import type { FaceAxisReply, FaceResize } from "../../src/geometry/client";
 import { usePromptStore } from "../../src/stores/prompt";
 import { setA11yPref } from "../../src/ui/a11yPrefs";
+
+// The real store reads names in the value box; these fakes hold no parameters.
+const classifyTargetExpr: DocumentStore["classifyTargetExpr"] = (bound, pending, raw, kind) =>
+  classifyExprInput({ parameters: {}, features: [] }, raw, kind, bound, pending);
 
 let frames: (() => void)[] = [];
 const flushFrame = () => {
@@ -84,6 +89,7 @@ function fakeStore(reply: FaceAxisReply | null) {
   const added: Feature[] = [];
   const store = {
     nextId: () => "p1",
+    classifyTargetExpr,
     setPreview(feature: Feature | null) {
       if (feature) previews.push(feature);
     },

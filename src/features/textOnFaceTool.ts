@@ -38,7 +38,7 @@ export class TextOnFaceTool {
   private previewing = false;
   private fonts: string[] = [];
 
-  private dim = new DimInput();
+  private dim = new DimInput(() => this.store);
   private panel = new TextPanel();
   private onDone: ((id: string | null) => void) | null = null;
   private readonly gesture: CanvasGesture;

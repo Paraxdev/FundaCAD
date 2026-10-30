@@ -83,7 +83,7 @@ export class HoleTool {
   private armed = false;
   private markers: THREE.Group | null = null;
 
-  private dim = new DimInput();
+  private dim = new DimInput(() => this.store);
   private onDone: ((id: string | null) => void) | null = null;
   private readonly gesture: CanvasGesture;
 

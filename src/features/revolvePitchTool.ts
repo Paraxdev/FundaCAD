@@ -94,7 +94,7 @@ export class RevolvePitchTool {
   private downPos = { x: 0, y: 0 };
   private downOnGizmo = false;
 
-  private dim = new DimInput();
+  private dim = new DimInput(() => this.store);
   private onDone: ((id: string | null) => void) | null = null;
   /** Set once a typed value opened the store's edit preview, lazily since opening it rebuilds. */
   private previewing = false;

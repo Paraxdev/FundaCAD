@@ -188,7 +188,7 @@ export class PressPullTool {
   /** What the kernel said about each push sent this gesture. */
   private outcomes = new PreviewOutcomes(/^Press\/Pull[^:]*:\s*/i);
 
-  private dim = new DimInput();
+  private dim = new DimInput(() => this.store);
   private onDone: ((id: string | null) => void) | null = null;
   private readonly held = new HeldSignal();
 

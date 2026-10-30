@@ -7,7 +7,9 @@
 // its own buttons still have marks in them, which they lost to a flex rule.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { DimInput } from "../../src/sketch/dimInput";
+import { DimInput, type DimDocument } from "../../src/sketch/dimInput";
+import { classifyExprInput } from "../../src/params/engine";
+import type { CadDocument } from "../../src/types";
 import { icon, iconElement } from "../../src/ui/icons";
 import { escapeClaimed } from "../../src/ui/escapeClaim";
 
@@ -977,5 +979,89 @@ describe("DimInput lists by keyboard", () => {
     expect(document.activeElement).toBe(inputs()[0]);
     tag.focus();
     expect(key(tag, "Tab", { shiftKey: true }).defaultPrevented).toBe(false);
+  });
+});
+
+describe("DimInput reads parameter names", () => {
+  const doc: CadDocument = {
+    parameters: { width: 40 },
+    paramDefs: { width: { expr: "40", value: 40, unit: "mm" } },
+    features: [],
+  };
+  const source: DimDocument = {
+    classifyTargetExpr: (bound, pending, raw, kind) => classifyExprInput(doc, raw, kind, bound, pending),
+  };
+  const input = () => root().querySelector<HTMLInputElement>("input")!;
+  const type = (text: string) => {
+    input().value = text;
+    input().dispatchEvent(new Event("input", { bubbles: true }));
+  };
+  const enter = () => input().dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  const problem = () => root().querySelector(".dim-problem")?.textContent ?? null;
+  let commit: ReturnType<typeof vi.fn<(values: Record<string, number>) => void>>;
+
+  beforeEach(() => {
+    dim.dispose();
+    dim = new DimInput(() => source);
+    commit = vi.fn();
+    dim.show([{ name: "depth", label: "Depth", positive: true }], commit);
+  });
+
+  it("reads a parameter name as its value", () => {
+    type("width");
+    expect(problem()).toBeNull();
+    expect(dim.getValue("depth")).toBe(40);
+    expect(dim.exprOf("depth")).toEqual({ expr: "width" });
+    enter();
+    expect(commit).toHaveBeenCalledWith({ depth: 40 });
+  });
+
+  it("reads an expression with names", () => {
+    type("width / 4");
+    expect(dim.getValue("depth")).toBe(10);
+    expect(dim.exprOf("depth")).toEqual({ expr: "width / 4" });
+    enter();
+    expect(commit).toHaveBeenCalledWith({ depth: 10 });
+  });
+
+  it("reads name = expr and keeps the new name for the tool to create", () => {
+    type("rib = width / 4");
+    expect(problem()).toBeNull();
+    expect(dim.getValue("depth")).toBe(10);
+    expect(dim.exprOf("depth")).toEqual({ expr: "width / 4", name: "rib" });
+    enter();
+    expect(commit).toHaveBeenCalledWith({ depth: 10 });
+  });
+
+  it("refuses an unknown name and says which one", () => {
+    type("widht / 4");
+    enter();
+    expect(commit).not.toHaveBeenCalled();
+    expect(problem()).toBe('Depth: no parameter named "widht"');
+    expect(dim.exprOf("depth")).toBeNull();
+  });
+
+  it("refuses name = expr for a name that already exists, as the History rows do", () => {
+    type("width = 12");
+    enter();
+    expect(commit).not.toHaveBeenCalled();
+    expect(problem()).toBe('Depth: "width" already exists');
+  });
+
+  it("still judges a named value by the field's rule", () => {
+    type("width - 50");
+    enter();
+    expect(commit).not.toHaveBeenCalled();
+    expect(problem()).toBe("Depth must be more than 0");
+  });
+
+  it("keeps plain numbers and maths in the field's own unit, with no expression to bind", () => {
+    type("1,000");
+    enter();
+    expect(commit).not.toHaveBeenCalled();
+    expect(problem()).toMatch(/ambiguous/);
+    type("10 + 5");
+    expect(dim.getValue("depth")).toBe(15);
+    expect(dim.exprOf("depth")).toBeNull();
   });
 });

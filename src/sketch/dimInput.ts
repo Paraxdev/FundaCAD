@@ -17,8 +17,14 @@ import { claimEscape } from "../ui/escapeClaim";
 import { onPreviewError } from "../ui/previewError";
 import { getUnit, parseField } from "../ui/units";
 import { commonUnits, measureError, toUnit, tryParseMeasure, unitById, type UnitDef } from "../ui/measure";
-import { valueProblem, type ValueRule } from "../document/numFields";
+import { valueProblem, type FieldKind, type ValueRule } from "../document/numFields";
+import { splitNameValue, type ExprInput } from "../params/engine";
 import { replayedPress } from "../viewport/navigator/input";
+
+/** Where the box reads parameter names from, the document store in the app. */
+export interface DimDocument {
+  classifyTargetExpr(boundName: string | null, pendingName: string | null, raw: string, kind: FieldKind): ExprInput;
+}
 
 export interface DimFieldDef extends ValueRule {
   name: string;
@@ -279,7 +285,7 @@ export class DimInput {
   private boxNo = ++boxCount;
   private helpId = `dim-help-${this.boxNo}`;
 
-  constructor() {
+  constructor(private doc: () => DimDocument | null = () => null) {
     this.root = document.createElement("div");
     this.root.className = "dim-input";
     this.root.style.display = "none";
@@ -683,6 +689,9 @@ export class DimInput {
     if (v === null) {
       const err = measureError(raw, f.unit);
       if (err === null) return `${f.def.label} takes a plain number, no unit`;
+      const expr = this.typedExpr(f);
+      if (expr && !expr.ok)
+        return `${f.def.label}: ${expr.error.replace(/^unknown parameter /, "no parameter named ")}`;
       return `${f.def.label}: ${/unknown parameter/.test(err) ? `"${raw}" is not a number` : err}`;
     }
     return this.rangeProblem(f.def, v);
@@ -704,10 +713,38 @@ export class DimInput {
   }
 
   private parse(f: Field): number | null {
+    const v = this.parseMeasure(f);
+    if (v !== null) return v;
+    const expr = this.typedExpr(f);
+    return expr?.ok ? expr.value : null;
+  }
+
+  private parseMeasure(f: Field): number | null {
     const text = this.numberText(f);
     // Parsed against THIS field's unit: a field the user put into inches reads a bare "2" as two inches.
     if (!f.unit) return parseField(text, f.def.kind);
     return tryParseMeasure(text, f.unit)?.value ?? null;
+  }
+
+  /** Text that names a parameter, judged as the History rows judge it: canonical units, bare numbers in mm. Null when
+   *  there is no document or the field's own parser reads it or fails for another reason ("1,000" stays ambiguous). */
+  private typedExpr(f: Field): ExprInput | null {
+    const doc = this.doc();
+    const text = this.numberText(f).trim();
+    if (!doc || !text || this.parseMeasure(f) !== null) return null;
+    const err = measureError(text, f.unit);
+    if (!(err && /unknown parameter/.test(err)) && !splitNameValue(text)) return null;
+    return doc.classifyTargetExpr(null, null, text, f.def.kind ?? "length");
+  }
+
+  /** The typed parameter expression a tool binds the feature field to, with the new name of a `name = expr`; null for
+   *  a number, plain maths or text that does not read. */
+  exprOf(name: string): { expr: string; name?: string } | null {
+    const f = this.fields.find((x) => x.def.name === name);
+    if (!f || f.hidden || !f.userDriven) return null;
+    const r = this.typedExpr(f);
+    if (!r?.ok) return null;
+    return r.name ? { expr: r.expr, name: r.name } : { expr: r.expr };
   }
 
   private numberText(f: Field): string {

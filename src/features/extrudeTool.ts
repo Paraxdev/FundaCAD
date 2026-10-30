@@ -63,7 +63,7 @@ export class ExtrudeTool {
   private grabbing = false;
   /** The drag is relative to it, so grabbing a 40 mm extrude does not snap it to the cursor's projection. */
   private grabValue = 0;
-  private dim = new DimInput();
+  private dim = new DimInput(() => this.store);
   private hitScratch = new THREE.Vector3();
   private onDone: ((id: string | null) => void) | null = null;
 

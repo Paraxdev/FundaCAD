@@ -12,9 +12,14 @@ import { HoleTool } from "../../src/features/holeTool";
 import { closeOpenEdit } from "../../src/app/selection";
 import type { ResolvedEntity } from "../../src/sketch/snap";
 import type { DocumentStore, RebuildState } from "../../src/document/store";
+import { classifyExprInput } from "../../src/params/engine";
 import type { Viewport } from "../../src/viewport/viewport";
 import type { Engine } from "../../src/app/engine";
 import type { Feature } from "../../src/types";
+
+// The real store reads names in the value box; these fakes hold no parameters.
+const classifyTargetExpr: DocumentStore["classifyTargetExpr"] = (bound, pending, raw, kind) =>
+  classifyExprInput({ parameters: {}, features: [] }, raw, kind, bound, pending);
 
 const toasts = vi.hoisted(() => [] as string[]);
 vi.mock("../../src/ui/toast", () => ({ toast: (m: string) => toasts.push(m) }));
@@ -166,6 +171,7 @@ describe("extrude depth box", () => {
       document: { features: [{ id: "f1", type: "sketch" }] },
       buildState: { result: { mesh: { positions: [0, 0, 0] } } },
       nextId: () => "f9",
+      classifyTargetExpr,
       hiddenBodyIds: () => undefined,
       addFeature,
     };
@@ -241,6 +247,7 @@ describe("hole depth box", () => {
     const added: Feature[] = [];
     const store = {
       nextId: () => "h1",
+      classifyTargetExpr,
       setPreview: () => {},
       addFeature: (f: Feature) => added.push(f),
       verifyCommit: () => {},
@@ -260,7 +267,7 @@ describe("hole depth box", () => {
     const added = startHole();
     type("depth", "abc");
     enter("depth");
-    expect([added, isBad(), problem()]).toEqual([[], true, 'Depth: "abc" is not a number']);
+    expect([added, isBad(), problem()]).toEqual([[], true, 'Depth: no parameter named "abc"']);
   });
 
   it('a typed 4 then "abc" builds depth 4, marked', () => {

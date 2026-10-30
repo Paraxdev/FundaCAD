@@ -5,8 +5,13 @@ import { createPinia, setActivePinia } from "pinia";
 import * as THREE from "three";
 import { HoleTool } from "../../src/features/holeTool";
 import type { DocumentStore, RebuildState } from "../../src/document/store";
+import { classifyExprInput } from "../../src/params/engine";
 import type { Viewport } from "../../src/viewport/viewport";
 import type { Feature } from "../../src/types";
+
+// The real store reads names in the value box; these fakes hold no parameters.
+const classifyTargetExpr: DocumentStore["classifyTargetExpr"] = (bound, pending, raw, kind) =>
+  classifyExprInput({ parameters: {}, features: [] }, raw, kind, bound, pending);
 
 let frames: (() => void)[] = [];
 
@@ -35,6 +40,7 @@ function fakeStore() {
   const added: Feature[] = [];
   const store = {
     nextId: () => "h1",
+    classifyTargetExpr,
     setPreview: () => {},
     addFeature: (f: Feature) => added.push(f),
     verifyCommit: () => {},
