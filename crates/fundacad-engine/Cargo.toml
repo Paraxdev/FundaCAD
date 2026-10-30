@@ -25,6 +25,10 @@ windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_System_
 name = "stdio_worker"
 harness = false
 
+[[test]]
+name = "sandbox_probe"
+harness = false
+
 [features]
 # The WebSocket transport, for browser dev, e2e and the Python protocol suites.
 # The app talks to its worker over stdio and leaves it off.

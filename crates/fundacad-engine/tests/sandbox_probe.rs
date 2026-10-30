@@ -1,0 +1,178 @@
+//! The engine's reduced rights from the inside: this test binary starts itself as a child that enters the sandbox the
+//! way the engine does, then tries what a hijacked engine would try, and reports each attempt on its stdout.
+
+use fundacad_engine::sandbox::{self, Policy};
+use std::collections::HashMap;
+use std::io::{self, BufRead, BufReader, Read, Write};
+use std::net::{TcpListener, TcpStream, UdpSocket};
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
+
+fn report(key: &str, attempt: io::Result<()>) {
+    match attempt {
+        Ok(()) => println!("{key}=ok"),
+        Err(e) => println!("{key}=err {e}"),
+    }
+    io::stdout().flush().unwrap();
+}
+
+fn accept_one(door: &TcpListener) -> io::Result<()> {
+    door.set_nonblocking(true)?;
+    let t0 = Instant::now();
+    let (mut stream, _) = loop {
+        match door.accept() {
+            Ok(pair) => break pair,
+            Err(e) if e.kind() == io::ErrorKind::WouldBlock && t0.elapsed() < Duration::from_secs(10) => {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            Err(e) => return Err(e),
+        }
+    };
+    stream.set_nonblocking(false)?;
+    let mut hello = [0u8; 2];
+    stream.read_exact(&mut hello)?;
+    if &hello != b"hi" {
+        return Err(io::Error::other("the door read something else"));
+    }
+    Ok(())
+}
+
+fn child(allowed: &Path, outside: &Path, port: u16) {
+    let outcome = sandbox::enter(Policy::Tool, &[allowed.to_path_buf()]);
+    println!("outcome={outcome:?}");
+    // Stands in for the live door, which binds after enter and before close_network.
+    let door = TcpListener::bind("127.0.0.1:0");
+    println!("door_bind={}", door.as_ref().map_or_else(|e| format!("err {e}"), |_| "ok".into()));
+    sandbox::close_network(&outcome);
+
+    report("write_allowed", std::fs::write(allowed.join("inside.txt"), b"ok"));
+    report("write_outside", std::fs::write(outside.join("escaped.txt"), b"no"));
+    report("read_outside", std::fs::read(outside.join("read.txt")).map(|_| ()));
+    report("tcp_connect", TcpStream::connect(("127.0.0.1", port)).map(|_| ()));
+    report("udp_socket", UdpSocket::bind("127.0.0.1:0").map(|_| ()));
+    #[cfg(unix)]
+    report("unix_socket", std::os::unix::net::UnixDatagram::unbound().map(|_| ()));
+
+    if let Ok(door) = door {
+        println!("door={}", door.local_addr().unwrap().port());
+        io::stdout().flush().unwrap();
+        report("door_accept", accept_one(&door));
+    }
+}
+
+struct Probe {
+    results: HashMap<String, String>,
+    stderr: String,
+}
+
+impl Probe {
+    fn get(&self, key: &str) -> &str {
+        self.results.get(key).map(String::as_str).unwrap_or_else(|| panic!("no {key} in {:?}", self.results))
+    }
+
+    fn ok(&self, key: &str) {
+        assert_eq!(self.get(key), "ok", "{key}, stderr: {}", self.stderr);
+    }
+
+    /// EACCES, so the refusal came from the sandbox and not from a missing listener or file.
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    fn refused(&self, key: &str) {
+        let got = self.get(key);
+        assert!(got.starts_with("err") && got.contains("os error 13"), "{key}: {got}, stderr: {}", self.stderr);
+    }
+}
+
+fn run_probe(root: &Path) -> Probe {
+    let allowed = root.join("allowed");
+    let outside = root.join("outside");
+    std::fs::create_dir_all(&allowed).unwrap();
+    std::fs::create_dir_all(&outside).unwrap();
+    std::fs::write(outside.join("read.txt"), b"a user file").unwrap();
+    let target = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = target.local_addr().unwrap().port();
+
+    let mut child = Command::new(std::env::current_exe().unwrap())
+        .arg("--child")
+        .arg(&allowed)
+        .arg(&outside)
+        .arg(port.to_string())
+        .env(sandbox::ENV, "1")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("spawn the probe child");
+    let mut stderr = child.stderr.take().unwrap();
+    let stderr = std::thread::spawn(move || {
+        let mut s = String::new();
+        stderr.read_to_string(&mut s).ok();
+        s
+    });
+    let mut results = HashMap::new();
+    for line in BufReader::new(child.stdout.take().unwrap()).lines() {
+        let line = line.unwrap();
+        let Some((key, value)) = line.split_once('=') else { continue };
+        if key == "door" {
+            let mut knock = TcpStream::connect(("127.0.0.1", value.parse::<u16>().unwrap())).unwrap();
+            knock.write_all(b"hi").unwrap();
+        }
+        results.insert(key.to_string(), value.to_string());
+    }
+    let status = child.wait().unwrap();
+    let stderr = stderr.join().unwrap();
+    assert!(status.success(), "probe child exited with {status}, stderr: {stderr}");
+    let escaped = outside.join("escaped.txt");
+    if escaped.exists() {
+        results.insert("escaped_file".into(), "exists".into());
+    }
+    Probe { results, stderr }
+}
+
+fn the_engine_keeps_what_it_needs(p: &Probe) {
+    p.ok("door_bind");
+    p.ok("write_allowed");
+    p.ok("read_outside");
+    p.ok("door_accept");
+}
+
+#[cfg(target_os = "linux")]
+fn the_engine_cannot_write_outside_its_folders_or_open_a_socket(p: &Probe) {
+    let outcome = p.get("outcome");
+    assert!(outcome.starts_with("On"), "outcome {outcome}, stderr: {}", p.stderr);
+    if outcome.contains("writes: true") {
+        p.refused("write_outside");
+        assert!(!p.results.contains_key("escaped_file"), "the file outside was written");
+    } else {
+        println!("note: landlock not available on this kernel, so the write outside was not checked");
+    }
+    p.refused("tcp_connect");
+    p.refused("udp_socket");
+    p.refused("unix_socket");
+    assert!(p.stderr.trim().is_empty(), "the sandbox logged: {}", p.stderr);
+}
+
+#[cfg(not(target_os = "linux"))]
+fn the_engine_cannot_write_outside_its_folders_or_open_a_socket(p: &Probe) {
+    println!("note: no reduced rights on this platform yet, outcome {}", p.get("outcome"));
+}
+
+fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    if args.get(1).map(String::as_str) == Some("--child") {
+        child(Path::new(&args[2]), Path::new(&args[3]), args[4].parse().unwrap());
+        return;
+    }
+    let root: PathBuf = std::env::temp_dir().join(format!("fundacad-sandbox-probe-{}", std::process::id()));
+    let probe = run_probe(&root);
+    std::fs::remove_dir_all(&root).ok();
+    for (name, test) in [
+        ("the_engine_keeps_what_it_needs", the_engine_keeps_what_it_needs as fn(&Probe)),
+        (
+            "the_engine_cannot_write_outside_its_folders_or_open_a_socket",
+            the_engine_cannot_write_outside_its_folders_or_open_a_socket,
+        ),
+    ] {
+        test(&probe);
+        println!("test {name} ... ok");
+    }
+}
