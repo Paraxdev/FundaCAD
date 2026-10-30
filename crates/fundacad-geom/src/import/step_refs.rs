@@ -92,17 +92,31 @@ pub fn scan(path: &Path) -> Result<Scan, String> {
     let mut vertices: HashSet<Id> = HashSet::new();
     let mut vertex_at: HashMap<Id, Id> = HashMap::new();
     let mut edges: HashMap<Id, Edge> = HashMap::new();
+    let mut holds: HashMap<Id, Vec<Id>> = HashMap::new();
     let (mut faces, mut last_id, mut documents) = (0usize, 0, 0usize);
     for_each_record(path, |rec| {
         let Some((id, kind, rest)) = head(rec) else { return Ok(()) };
         last_id = last_id.max(id);
         if document_ref(kind).is_some() {
             documents += 1;
-        } else if kind.is_empty() && complex_names(rest).any(|n| document_ref(n).is_some()) {
-            return Err(
-                "this STEP file names an external document inside a complex entity, which FundaCAD does not read"
-                    .into(),
-            );
+        } else if is_usage(kind) {
+            let a = args(rest);
+            if let (Some(parent), Some(child)) =
+                (a.get(3).and_then(|r| reference(r)), a.get(4).and_then(|r| reference(r)))
+            {
+                holds.entry(parent).or_default().push(child);
+            }
+        } else if kind.is_empty() {
+            for n in complex_names(rest) {
+                if document_ref(n).is_some() {
+                    return Err("this STEP file names an external document inside a complex entity, which FundaCAD                                 does not read"
+                        .into());
+                }
+                if is_usage(n) {
+                    return Err("this STEP file places an assembly part through a complex entity, which FundaCAD                                 does not read"
+                        .into());
+                }
+            }
         }
         match kind {
             b"VERTEX_POINT" => {
@@ -127,6 +141,9 @@ pub fn scan(path: &Path) -> Result<Scan, String> {
         }
         Ok(())
     })?;
+    if holds_itself(&holds) {
+        return Err("this STEP assembly holds itself through its own parts, so it has no end to place".into());
+    }
     let is_vertex = |v: &Id| vertices.contains(v);
     let mut ends: BTreeMap<Id, (Id, Id)> = edges
         .iter()
@@ -308,6 +325,41 @@ fn document_ref(kind: &[u8]) -> Option<DocumentRef> {
     } else {
         None
     }
+}
+
+fn is_usage(kind: &[u8]) -> bool {
+    kind.eq_ignore_ascii_case(b"NEXT_ASSEMBLY_USAGE_OCCURRENCE") || kind.eq_ignore_ascii_case(b"NAUO")
+}
+
+/// Whether a product definition reaches itself through the parts it holds, searched without recursion.
+fn holds_itself(holds: &HashMap<Id, Vec<Id>>) -> bool {
+    // 1 while on the current path, 2 once every part below it is known to end.
+    let mut state: HashMap<Id, u8> = HashMap::new();
+    for &root in holds.keys() {
+        if state.contains_key(&root) {
+            continue;
+        }
+        state.insert(root, 1);
+        let mut stack: Vec<(Id, usize)> = vec![(root, 0)];
+        while let Some(top) = stack.last_mut() {
+            let (node, i) = *top;
+            let Some(&child) = holds.get(&node).and_then(|c| c.get(i)) else {
+                state.insert(node, 2);
+                stack.pop();
+                continue;
+            };
+            top.1 += 1;
+            match state.get(&child) {
+                Some(1) => return true,
+                Some(_) => {}
+                None => {
+                    state.insert(child, 1);
+                    stack.push((child, 0));
+                }
+            }
+        }
+    }
+    false
 }
 
 /// Every unquoted name followed by `(` in the parts of a complex entity.

@@ -3,6 +3,7 @@
 
 use std::path::PathBuf;
 
+use fundacad_geom::import::{self, blobstore::BlobStore};
 use opencascade::xcaf;
 
 /// inside_out_cube.step (product definition #5, representation #10) under `levels` assembly levels,
@@ -77,4 +78,20 @@ fn an_assembly_nested_too_deep_is_refused() {
     let err = xcaf::read_step_assembly(&assembly("nested_deep.step", 300, 1, false)).err().map(|e| e.to_string());
     let err = err.expect("an assembly 300 levels deep is refused");
     assert!(err.contains("nested too deep"), "{err}");
+}
+
+#[test]
+fn an_assembly_that_holds_itself_is_refused_before_it_is_read() {
+    let path = assembly("holds_itself.step", 3, 1, true);
+    let store = BlobStore::open(path.parent().unwrap()).unwrap();
+    let err = import::import_geometry(path.to_str().unwrap(), "step", &store).err();
+    let err = err.expect("an assembly whose parts hold it is refused");
+    assert!(err.contains("holds itself"), "{err}");
+}
+
+#[test]
+fn a_shared_assembly_without_a_loop_still_imports() {
+    let path = assembly("shared_import.step", 3, 2, false);
+    let store = BlobStore::open(path.parent().unwrap()).unwrap();
+    import::import_geometry(path.to_str().unwrap(), "step", &store).unwrap();
 }
