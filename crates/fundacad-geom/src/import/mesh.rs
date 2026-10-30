@@ -56,8 +56,11 @@ fn count_stream(r: impl Read, needle: &[u8], limit: u64, max_bytes: Option<u64>)
     count
 }
 
+/// A 3MF at the scan triangle cap writes about 80 bytes of XML a triangle, vertices included.
+const MAX_3MF_UNPACKED_BYTES: u64 = 1 << 30;
+
 fn threemf_unpacks_too_far() -> String {
-    format!("could not read the 3MF file: it unpacks past {} MiB", super::MAX_IMPORT_FILE_BYTES / (1024 * 1024))
+    format!("could not read the 3MF file: it unpacks past {} MiB", MAX_3MF_UNPACKED_BYTES / (1024 * 1024))
 }
 
 /// The unpacked bytes each `.model` part of a 3MF declares.
@@ -77,7 +80,7 @@ pub fn peek_triangle_count(path: &Path, fmt: &str) -> Result<Option<u64>, String
                 threemf_part_sizes(&mut z, &parts)
             })
             .map_or(0, |s| s.iter().fold(0u64, |a, &b| a.saturating_add(b)));
-        if declared > super::MAX_IMPORT_FILE_BYTES {
+        if declared > MAX_3MF_UNPACKED_BYTES {
             return Err(threemf_unpacks_too_far());
         }
     }
@@ -238,7 +241,7 @@ fn threemf_meshes(path: &Path) -> Result<Vec<Triangles>, String> {
     let mut parts = model_parts(&z).map_err(|e| bad(&e))?;
     parts.sort_by_key(|n| n != "3D/3dmodel.model");
     let mut out = Vec::new();
-    let mut budget = super::MAX_IMPORT_FILE_BYTES;
+    let mut budget = MAX_3MF_UNPACKED_BYTES;
     for name in parts {
         let mut xml = String::new();
         let part = z.by_name(&name).map_err(|e| bad(&e))?;

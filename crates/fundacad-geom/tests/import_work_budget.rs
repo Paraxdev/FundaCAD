@@ -225,17 +225,27 @@ fn a_small_3mf_still_imports() {
 }
 
 #[test]
+fn a_3mf_part_declaring_a_scan_sized_model_still_imports() {
+    let mut crc = flate2::Crc::new();
+    crc.update(CUBE_MODEL.as_bytes());
+    let deflated = deflate(CUBE_MODEL.as_bytes(), flate2::FlushCompress::Finish);
+    let honest = import_3mf("honest", threemf_zip(&deflated, crc.sum(), CUBE_MODEL.len() as u32));
+    let declared = import_3mf("scan-sized", threemf_zip(&deflated, crc.sum(), 300 << 20));
+    assert_eq!(declared, honest);
+}
+
+#[test]
 fn a_3mf_part_that_unpacks_past_the_budget_is_refused() {
     let spaces = vec![b' '; 1 << 20];
     let block = deflate(&spaces, flate2::FlushCompress::Sync);
-    let mut data: Vec<u8> = std::iter::repeat_n(&block[..], 300).flatten().copied().collect();
+    let mut data: Vec<u8> = std::iter::repeat_n(&block[..], 1100).flatten().copied().collect();
     data.extend([0x03, 0x00]);
     let (mut crc, mut one) = (flate2::Crc::new(), flate2::Crc::new());
     one.update(&spaces);
-    for _ in 0..300 {
+    for _ in 0..1100 {
         crc.combine(&one);
     }
-    let zip = threemf_zip(&data, crc.sum(), 300 << 20);
+    let zip = threemf_zip(&data, crc.sum(), 1100 << 20);
     let e = within(120, move || import_3mf("unpacked", zip).err()).expect("a part past the budget is refused");
     assert!(e.contains("unpacks past"), "{e}");
 }
