@@ -3,7 +3,7 @@
 
 use fundacad_geom::builder::NoWatch;
 use fundacad_geom::fem::adapt::release_seconds;
-use fundacad_geom::stress::{stress_result_with, StressLimits, MAX_ELEMENTS};
+use fundacad_geom::stress::{stress_result_with, StressLimits, FINER_MAX_ELEMENTS, MAX_ELEMENTS};
 use fundacad_protocol::JobResult;
 use serde_json::{json, Value};
 
@@ -202,6 +202,7 @@ fn asking(mut req: Value) -> Value {
 
 fn assert_finer_answer(r: &Value, elements: std::ops::Range<f64>) {
     let finer = &r["error"]["finer"];
+    assert!(finer.is_object(), "{r}");
     assert!(elements.contains(&num(&finer["elements"])), "{r}");
     assert!(num(&finer["seconds"]) >= 1.0, "{r}");
 }
@@ -276,15 +277,15 @@ fn a_part_too_thin_for_the_finer_limit_gets_no_button() {
 fn a_face_narrower_than_the_finest_mesh_answers_with_a_finer_run() {
     let r = run_within(
         json!({
-            "document": ribbed_block(0.8), "body": "body1",
+            "document": ribbed_block(1.25), "body": "body1", "maxElements": 8000,
             "fixed": [nearest([-BLOCK[0] / 2.0, 0.0, 0.0])],
             "loads": [{"faces": [rib_top()], "force": [0, 0, -20]}],
             "material": "PLA",
         }),
-        StressLimits { auto_elements: 30_000, ..no_time_limit() },
+        no_time_limit(),
     );
     assert!(r["error"]["message"].as_str().is_some_and(|m| !m.is_empty()), "{r}");
-    assert_finer_answer(&r, 30_000.0..400_000.0);
+    assert_finer_answer(&r, 8_000.0..FINER_MAX_ELEMENTS as f64);
 }
 
 #[test]
@@ -312,13 +313,52 @@ fn a_mesh_past_the_memory_limit_is_priced_as_a_compact_part() {
 
 #[test]
 fn walls_of_1_2_mm_retry_past_the_old_limit_without_asking() {
-    let mut req = plate_on_its_side();
-    let mut doc = with_bore(standoff_plate(), OUTER - 1.2);
-    doc["features"][0]["length"] = json!(100.0);
-    doc["features"][0]["width"] = json!(60.0);
-    req["document"] = doc;
-    req["fixed"] = json!([nearest([-50.0, 0.0, 0.0])]);
-    let r = run(req);
+    let r = run(wide_plate_with_walls(1.2));
     assert!(r.get("error").is_none(), "{r}");
     assert!(num(&r["mesh"]["elements"]) > MAX_ELEMENTS as f64, "{}", r["mesh"]);
+}
+
+fn wide_plate_with_walls(wall: f64) -> Value {
+    let mut doc = with_bore(standoff_plate(), OUTER - wall);
+    doc["features"][0]["length"] = json!(100.0);
+    doc["features"][0]["width"] = json!(60.0);
+    let mut req = plate_on_its_side();
+    req["document"] = doc;
+    req["fixed"] = json!([nearest([-50.0, 0.0, 0.0])]);
+    req
+}
+
+// The solver asked 14.5 GB of this part at 338650 elements, with 8 GiB to give.
+#[test]
+fn a_wall_the_lifted_memory_cannot_hold_gets_no_button() {
+    let r = run_within(wide_plate_with_walls(0.8), StressLimits { auto_elements: 30_000, ..no_time_limit() });
+    let message = r["error"]["message"].as_str().unwrap_or_else(|| panic!("{r}"));
+    assert!(message.contains("the thinnest wall is about 0.80 mm thick"), "{r}");
+    assert!(r["error"].get("finer").is_none(), "{r}");
+}
+
+#[test]
+fn a_wall_that_less_free_memory_cannot_hold_gets_no_button() {
+    let limits = StressLimits { auto_elements: 30_000, finer_memory_cap: 1 << 29, ..no_time_limit() };
+    let r = run_within(plate_on_its_side(), limits);
+    assert!(r["error"]["message"].as_str().is_some_and(|m| !m.is_empty()), "{r}");
+    assert!(r["error"].get("finer").is_none(), "{r}");
+}
+
+#[test]
+fn a_held_face_no_mesh_within_the_limit_carries_stays_on_the_first_mesh_with_its_warning() {
+    let study = |fixed: Value| {
+        run(json!({
+            "document": ribbed_block(0.1), "body": "body1", "fixed": fixed,
+            "loads": [{"faces": [nearest([-BLOCK[0] / 2.0, 0.0, 0.0])], "force": [0, 0, -20]}],
+            "material": "PLA", "refine": "off",
+        }))
+    };
+    let wide = nearest([0.0, 0.0, -BLOCK[2] / 2.0]);
+    let warned = study(json!([rib_top(), wide.clone()]));
+    assert!(warned["warnings"].to_string().contains("got no elements"), "{warned}");
+    let carried = study(json!([wide]));
+    for field in ["size", "nodes", "elements"] {
+        assert_eq!(warned["mesh"][field], carried["mesh"][field], "{field}");
+    }
 }

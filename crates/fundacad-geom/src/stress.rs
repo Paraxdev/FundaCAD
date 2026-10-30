@@ -44,8 +44,9 @@ const REFINE_SECONDS: f64 = 60.0;
 /// person may wait with 4 times to spare for a slower machine.
 const RETRY_SECONDS: f64 = 15.0;
 
-/// Elements a run the person asked for after a finer answer may grow a mesh to.
-pub const FINER_MAX_ELEMENTS: usize = 400_000;
+/// Elements a run the person asked for after a finer answer may grow a mesh to, a little past what
+/// `FINER_MEMORY_CAP` holds of a thin walled part as a mesh can land above the count it was promised.
+pub const FINER_MAX_ELEMENTS: usize = 250_000;
 
 /// What bounds one analysis. Tests lift `refine_seconds` so a slow debug build refines as far as a fast one.
 #[derive(Clone, Copy, Debug)]
@@ -1087,16 +1088,20 @@ impl Finer {
         Finer { elements, seconds: adapt::release_compact_seconds(elements).ceil() as u64 }
     }
 
-    /// The run past `ceiling` elements that should keep `wall`, when it is one the finer limit allows.
-    fn past(volume: f64, ceiling: usize, wall: Option<ThinWall>) -> Option<Finer> {
+    /// The run past `ceiling` elements that should keep `wall`, when the lifted limits can hold it, so the button
+    /// never promises a run the solver would refuse for memory.
+    fn past(volume: f64, ceiling: usize, wall: Option<ThinWall>, limits: &StressLimits) -> Option<Finer> {
         let floor = size_floor(volume, ceiling);
+        let most =
+            adapt::elements_in_memory(solve::memory_limit_under(limits.finer_memory_cap)).min(FINER_MAX_ELEMENTS);
+        let elements_at = |h: f64| (TETS_PER_SIZE_CUBED * volume / h.powi(3)).ceil() as usize;
         // The retry that fits shrinks once more below the wall's size, as the finer run's own retry does.
-        let h = match wall.map(|w| w.thickness * WALL_SHARE * RETRY_SHRINK) {
-            Some(h) if h < floor => h,
-            _ => floor * FINER_STEP,
+        let elements = match wall.map(|w| w.thickness * WALL_SHARE * RETRY_SHRINK) {
+            Some(h) if h < floor => elements_at(h),
+            // No size is known to bring a lost face back, so any finer mesh the memory holds may do.
+            _ => elements_at(floor * FINER_STEP).min(most).max(ceiling + 1),
         };
-        let elements = (TETS_PER_SIZE_CUBED * volume / h.powi(3)).ceil() as usize;
-        (elements <= FINER_MAX_ELEMENTS).then(|| Finer::of(elements))
+        (elements <= most).then(|| Finer::of(elements))
     }
 }
 
@@ -1569,7 +1574,7 @@ fn analyse(
         if gave_up {
             gave_up_at = wall_words(wall);
             if !finer_asked {
-                offer = Finer::past(volume, ceiling, wall);
+                offer = Finer::past(volume, ceiling, wall, limits);
             }
         }
         mesh
@@ -1795,6 +1800,10 @@ fn analyse(
     out.insert("surface".into(), surface_of(&mesh, &sol));
     Ok(out)
 }
+
+#[cfg(test)]
+#[path = "stress_finer_tests.rs"]
+mod finer_tests;
 
 #[cfg(test)]
 mod tests {

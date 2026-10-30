@@ -123,3 +123,23 @@ fn the_release_clock_matches_the_measured_runs_and_prices_a_compact_part_higher(
     assert!(release_elements_within(release_seconds(120_000)).abs_diff(120_000) <= 1);
     assert_eq!(release_elements_within(f64::INFINITY), usize::MAX);
 }
+
+#[test]
+fn the_release_clock_quotes_the_times_the_button_and_the_retry_ceiling_say() {
+    let said = |n| release_seconds(n).ceil() as u64;
+    assert_eq!([said(47_715), said(100_000), said(176_497), said(220_000)], [4, 9, 19, 26]);
+    assert_eq!(release_compact_seconds(100_000).ceil() as u64, 36);
+    assert_eq!(release_elements_within(15.0), 148_133);
+}
+
+#[test]
+fn the_memory_a_thin_walled_part_holds_covers_the_measured_runs() {
+    assert_eq!(elements_in_memory(0), 0);
+    for (elements, gb) in
+        [(58_210, 1.5), (98_261, 2.7), (147_619, 4.5), (199_205, 6.4), (298_265, 12.6), (338_650, 14.5)]
+    {
+        let said = elements_in_memory((gb * 1e9) as u64) as f64;
+        assert!((said / elements as f64 - 1.0).abs() < 0.15, "{elements}: {said} in {gb} GB");
+    }
+    assert!((215_000..225_000).contains(&elements_in_memory(fundacad_geom::fem::solve::FINER_MEMORY_CAP)));
+}

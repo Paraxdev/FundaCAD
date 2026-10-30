@@ -77,6 +77,16 @@ pub fn release_elements_within(seconds: f64) -> usize {
     (RELEASE_REFERENCE_ELEMENTS * (seconds / RELEASE_SECONDS_AT_REFERENCE).powf(1.0 / WORK_EXPONENT)) as usize
 }
 
+/// Standoff plates with walls 0.8 to 1.2 mm asked 1.5 GB at 58210 elements, 2.7 at 98261, 4.5 at 147619, 6.4 and 7.8
+/// near 198000, 12.6 at 298265 and 14.5 at 338650, and peaked at 3.0 GB at 98094. A solid part takes about 2.7 times that.
+const THIN_FACTOR_BYTES_AT_REFERENCE: f64 = 3e9;
+const FACTOR_EXPONENT: f64 = 4.0 / 3.0;
+
+/// The most elements of a thin walled part whose factorisation fits in `bytes`.
+pub fn elements_in_memory(bytes: u64) -> usize {
+    (RELEASE_REFERENCE_ELEMENTS * (bytes as f64 / THIN_FACTOR_BYTES_AT_REFERENCE).powf(1.0 / FACTOR_EXPONENT)) as usize
+}
+
 /// The element cap of the next refinement pass after the passes of `counts` (pass 0 first), or None when the plan's
 /// passes, the work budget or the growth rule say stop. `reference` is the element count whose work the budget
 /// multiplies.
