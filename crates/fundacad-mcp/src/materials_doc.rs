@@ -8,6 +8,7 @@ use serde_json::{Map, Value};
 use crate::materials::{self, Field, FIELDS, KNOWN_KEYS, NODE_TYPES, SURFACE_KINDS};
 use crate::mesh::MeshBody;
 use crate::model::{Doc, DocumentError};
+use crate::render::{BodyPaint, Rgb};
 
 pub type Material = Map<String, Value>;
 
@@ -508,6 +509,33 @@ fn changed_keys(before: &Doc, after: &Doc, key: &str) -> BTreeSet<String> {
     let (old, new) = (before.get(key).and_then(Value::as_object), after.get(key).and_then(Value::as_object));
     let keys = old.into_iter().chain(new).flat_map(Map::keys);
     keys.filter(|k| old.and_then(|m| m.get(*k)) != new.and_then(|m| m.get(*k))).cloned().collect()
+}
+
+/// The colours `view` paints for the assignments. A face number means nothing here while the timeline is not whole.
+pub fn paint(doc: &Doc) -> BTreeMap<String, BodyPaint> {
+    let colours: BTreeMap<String, Rgb> =
+        library(doc).iter().filter_map(|m| Some((m.get("id")?.as_str()?.to_string(), rgb(m.get("color")?)?))).collect();
+    let colour = |id: &Value| id.as_str().and_then(|id| colours.get(id)).copied();
+    let mut out = BTreeMap::<String, BodyPaint>::new();
+    for (body, id) in doc.get("bodyMaterial").and_then(Value::as_object).into_iter().flatten() {
+        if let Some(c) = colour(id) {
+            out.entry(body.clone()).or_default().body = Some(c);
+        }
+    }
+    if faces_unreliable(doc).is_none() {
+        for (key, id) in doc.get("faceMaterials").and_then(Value::as_object).into_iter().flatten() {
+            if let (Some((body, face)), Some(c)) = (parse_face_key(key), colour(id)) {
+                out.entry(body.to_string()).or_default().faces.insert(face, c);
+            }
+        }
+    }
+    out
+}
+
+fn rgb(hex: &Value) -> Option<Rgb> {
+    let hex = materials::as_hex(hex)?;
+    let channel = |at: usize| u8::from_str_radix(hex.get(at..at + 2)?, 16).ok();
+    Some([channel(1)?, channel(3)?, channel(5)?])
 }
 
 /// Saves each assigned face's print beside its key, the form `savedFaceRefs` writes.

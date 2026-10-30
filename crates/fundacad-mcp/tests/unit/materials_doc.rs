@@ -306,3 +306,25 @@ fn the_live_edit_says_what_a_material_edit_changed_and_nothing_else() {
     assign(&mut bare, None, &["body1".to_string()], &[]).unwrap();
     assert_eq!(live_edit(&plain, &bare), json!({"kind": "materials"}));
 }
+
+#[test]
+fn the_paint_for_view_reads_the_assignments_and_skips_what_it_cannot_place() {
+    let mut d = new_document();
+    d.insert(
+        "materials".into(),
+        json!([{"id": "m-a", "name": "A", "color": "#102030"}, {"id": "m-b", "color": "#fff"}]),
+    );
+    d.insert("bodyMaterial".into(), json!({"body1": "m-a", "body2": "m-gone"}));
+    d.insert("faceMaterials".into(), json!({"body1#2": "m-b", "body3#0": "m-a", "nonsense": "m-a"}));
+    let got = paint(&d);
+    assert_eq!(got.len(), 2, "{got:?}");
+    assert_eq!(got["body1"].body, Some([16, 32, 48]));
+    assert_eq!(got["body1"].faces.get(&2), Some(&[255, 255, 255]));
+    assert_eq!((got["body3"].body, got["body3"].faces.get(&0)), (None, Some(&[16, 32, 48])));
+
+    // Under a rollback the numbers belong to another build than the one drawn.
+    d.insert("rollback".into(), json!(1));
+    let held = paint(&d);
+    assert_eq!(held["body1"].body, Some([16, 32, 48]));
+    assert!(held["body1"].faces.is_empty() && !held.contains_key("body3"), "{held:?}");
+}

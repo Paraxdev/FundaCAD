@@ -223,3 +223,25 @@ fn a_saved_file_holds_what_the_app_reads_and_opens_again_unchanged() {
     _ = std::fs::remove_file(&path);
     assert_same_materials(&again, &fixture);
 }
+
+#[test]
+fn view_shows_an_assigned_colour() {
+    let mut mcp = Mcp::start(&BTreeMap::new(), &std::env::temp_dir());
+    box_part(&mut mcp);
+    let shot = |mcp: &mut Mcp| {
+        let reply = mcp.call("view", json!({"width": 200, "height": 200}));
+        assert!(!reply.is_error, "{}", reply.text);
+        reply.images.into_iter().next().expect("a picture")
+    };
+    let plain = shot(&mut mcp);
+    ok(mcp.call("material_set", json!({"id": "m-green", "name": "Green", "color": "#00dd00"})));
+    assert_eq!(shot(&mut mcp), plain, "a material nothing wears paints nothing");
+    ok(mcp.call("material_assign", json!({"material": "m-green", "bodies": ["body1"]})));
+    let green = shot(&mut mcp);
+    assert_ne!(green, plain);
+    ok(mcp.call("material_assign", json!({"material": "m-green", "faces": [{"body": "body1", "face": 1}]})));
+    ok(mcp.call("material_assign", json!({"material": null, "bodies": ["body1"]})));
+    let one_face = shot(&mut mcp);
+    assert_ne!(one_face, plain);
+    assert_ne!(one_face, green);
+}

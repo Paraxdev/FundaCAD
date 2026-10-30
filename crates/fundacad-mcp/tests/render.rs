@@ -444,3 +444,33 @@ fn the_colour_bar_is_drawn_only_when_asked_and_the_model_makes_room() {
     }
     assert!(painted(&with_bar) > 10_000);
 }
+
+#[test]
+fn an_assigned_colour_paints_its_body_and_a_face_paints_over_it_under_a_highlight() {
+    use std::collections::BTreeMap;
+    let share = |c: &Canvas, test: fn(Rgb) -> bool| {
+        (0..c.h).flat_map(|y| (0..c.w).map(move |x| (x, y))).filter(|(x, y)| test(c.pixel(*x, *y))).count()
+    };
+    let green = |p: Rgb| p[1] > 60 && i32::from(p[1]) > i32::from(p[0]) + 40 && i32::from(p[1]) > i32::from(p[2]) + 40;
+    let blue = |p: Rgb| p[2] > 60 && i32::from(p[2]) > i32::from(p[0]) + 40 && i32::from(p[2]) > i32::from(p[1]) + 40;
+    let drawn = |paint: r::BodyPaint, highlight: Option<Vec<i64>>| {
+        let mut req = request(200, 200, "front");
+        req.paint = BTreeMap::from([("b1".to_string(), paint)]);
+        req.highlight = highlight.map(|h| ("b1".to_string(), h));
+        draw(&[cube("b1")], &req)
+    };
+    let body = r::BodyPaint { body: Some([0, 220, 0]), faces: BTreeMap::new() };
+    let face = r::BodyPaint { body: Some([0, 220, 0]), faces: BTreeMap::from([(2, [0, 0, 220])]) };
+    let away = r::BodyPaint { body: Some([0, 220, 0]), faces: BTreeMap::from([(5, [0, 0, 220])]) };
+    let plain = draw(&[cube("b1")], &request(200, 200, "front"));
+    assert_eq!((share(&plain, green), share(&plain, blue)), (0, 0));
+
+    let on_body = drawn(body, None);
+    assert!(share(&on_body, green) > 1000, "{}", share(&on_body, green));
+    assert_eq!(share(&on_body, blue), 0);
+
+    let on_face = drawn(face.clone(), None);
+    assert!(share(&on_face, blue) > 1000, "{}", share(&on_face, blue));
+    assert_eq!(share(&drawn(away, None), blue), 0, "a face pointing away must not show");
+    assert_eq!(share(&drawn(face, Some(vec![2])), blue), 0, "a highlight must win over a material");
+}

@@ -1293,7 +1293,7 @@ note: left out of the file, because this build cannot read them and a .funda has
 
     #[tool(
         name = "view",
-        description = "Render the built model as a PNG. Orthographic, flat-shaded, with edges drawn. Use it to check what the numbers cannot tell you. `section` cuts it open, which is the only way to see a bore, a pocket or a thread; `bodies` draws one part of an assembly; `focus` zooms in on a point, which is the only way to see a small feature on a large part.",
+        description = "Render the built model as a PNG. Orthographic, flat-shaded, with edges drawn. Use it to check what the numbers cannot tell you. A render material shows as its plain colour. `section` cuts it open, which is the only way to see a bore, a pocket or a thread; `bodies` draws one part of an assembly; `focus` zooms in on a point, which is the only way to see a small feature on a large part.",
         input_schema = crate::tools::view(),
         annotations(read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
@@ -2138,9 +2138,9 @@ impl FundaCad {
             lines.extend(skipped_lines(&r.result));
             build_failures = lines.join("\n");
         }
-        let mesh = {
+        let (mesh, paint) = {
             let st = self.state.lock().await;
-            st.mesh.clone()
+            (st.mesh.clone(), materials_doc::paint(&st.doc))
         };
         if mesh.is_empty() {
             return failure("Nothing to render: the document produced no bodies.");
@@ -2185,6 +2185,7 @@ impl FundaCad {
             azimuth: camera.angles.map(|a| a.0),
             elevation: camera.angles.map(|a| a.1),
             highlight,
+            paint,
             section: section.clone(),
             bodies: bodies.clone(),
             focus: args.get("focus").cloned().unwrap_or(Value::Null),
