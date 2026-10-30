@@ -1,4 +1,4 @@
-//! Reduced rights for the engine: it may write only to its own folders, and on Linux it cannot open internet sockets.
+//! Reduced rights for the engine: it may write only to its own folders, and on Linux it cannot open new sockets.
 //! A memory bug in the geometry kernel then cannot act as the user. Entered at start, before any request is read.
 
 use std::path::PathBuf;
@@ -86,6 +86,34 @@ pub fn enter_with(env: Option<&str>, policy: Policy, writable: &[PathBuf]) -> Ou
     }
 }
 
+/// Refuses new sockets in every thread from here on. Call it once the live door listens: accepting on it needs none.
+pub fn close_network(entered: &Outcome) {
+    if let Some(line) = close_network_with(entered, platform_close_network) {
+        eprintln!("{line}");
+    }
+}
+
+/// Closes the network only after [`enter`] put the engine into its reduced rights, and gives the one line on failure.
+pub fn close_network_with(entered: &Outcome, close: impl FnOnce() -> Result<(), String>) -> Option<String> {
+    if !entered.is_on() {
+        return None;
+    }
+    let why = close().err()?;
+    let why = why.split_whitespace().collect::<Vec<_>>().join(" ");
+    Some(format!("engine: runs with the network open, {why}"))
+}
+
+#[cfg(target_os = "linux")]
+mod linux;
+#[cfg(target_os = "linux")]
+use linux::{close_network as platform_close_network, enter as platform_enter};
+
+#[cfg(not(target_os = "linux"))]
 fn platform_enter(_writable: &[PathBuf]) -> Outcome {
     Outcome::Failed("reduced rights are not available on this platform yet".into())
+}
+
+#[cfg(not(target_os = "linux"))]
+fn platform_close_network() -> Result<(), String> {
+    Ok(())
 }

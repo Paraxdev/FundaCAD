@@ -74,3 +74,19 @@ fn a_tool_left_alone_does_not_touch_the_process() {
     assert_eq!(enter_with(None, Policy::Tool, &[]), Outcome::NotAsked);
     assert_eq!(enter_with(Some("0"), Policy::Worker, &[]), Outcome::TurnedOff);
 }
+
+#[test]
+fn the_network_stays_untouched_when_the_engine_runs_with_full_rights() {
+    for entered in [Outcome::NotAsked, Outcome::TurnedOff, Outcome::Failed("no landlock".into())] {
+        let line = close_network_with(&entered, || panic!("closed the network after {entered:?}"));
+        assert_eq!(line, None);
+    }
+}
+
+#[test]
+fn a_network_that_will_not_close_logs_one_line_with_the_reason() {
+    let line = close_network_with(&Outcome::On { writes: true }, || Err("seccomp said\nEINVAL".into()));
+    let line = line.expect("one line");
+    assert!(line.contains("network") && line.contains("seccomp said EINVAL"), "{line}");
+    assert_eq!(close_network_with(&Outcome::On { writes: false }, || Ok(())), None);
+}
