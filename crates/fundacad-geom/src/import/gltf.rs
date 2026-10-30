@@ -8,6 +8,9 @@ use serde_json::Value;
 
 type Mat4 = [f64; 16];
 
+const MAX_INDICES: usize = 3 * super::scan::MAX_SCAN_TRIANGLES as usize;
+const MAX_VERTICES: usize = MAX_INDICES;
+
 const IDENTITY: Mat4 = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0];
 
 /// Column major, as glTF stores it.
@@ -76,13 +79,28 @@ impl Doc<'_> {
         self.json.get(key).and_then(Value::as_array).map_or(&[], Vec::as_slice)
     }
 
-    /// An accessor's elements as f64 rows of `width`.
-    fn accessor(&self, index: usize, width: usize) -> Result<Vec<f64>, String> {
+    /// An accessor's elements as f64 rows of `width`, refused past `limit` rows.
+    fn accessor(&self, index: usize, width: usize, limit: usize) -> Result<Vec<f64>, String> {
         let bad = || "couldn't read this glTF file, it may be corrupt or not a .glb".to_string();
         let acc = self.arr("accessors").get(index).ok_or_else(bad)?;
-        let count = acc.get("count").and_then(Value::as_u64).ok_or_else(bad)? as usize;
+        let count = acc.get("count").and_then(Value::as_u64).ok_or_else(bad)?;
+        if count > limit as u64 {
+            return Err(super::scan::too_dense_for_a_scan(count / 3));
+        }
+        let count = count as usize;
         let kind = acc.get("componentType").and_then(Value::as_u64).ok_or_else(bad)?;
+        let size = match kind {
+            5120 | 5121 => 1,
+            5122 | 5123 => 2,
+            5125 | 5126 => 4,
+            _ => return Err(bad()),
+        };
         let Some(view_index) = acc.get("bufferView").and_then(Value::as_u64) else {
+            // Zero filled, so no larger than the buffers could have held it.
+            let held: usize = self.buffers.iter().map(|b| b.len()).sum();
+            if count.checked_mul(size * width).is_none_or(|n| n > held) {
+                return Err(bad());
+            }
             return Ok(vec![0.0; count * width]);
         };
         let view = self.arr("bufferViews").get(view_index as usize).ok_or_else(bad)?;
@@ -91,20 +109,28 @@ impl Doc<'_> {
             .buffers
             .get(buffer)
             .ok_or_else(|| format!("this glTF refers to buffer {buffer}, which it does not carry"))?;
-        let size = match kind {
-            5120 | 5121 => 1,
-            5122 | 5123 => 2,
-            5125 | 5126 => 4,
-            _ => return Err(bad()),
+        let element = size * width;
+        let stride = match view.get("byteStride") {
+            None => element,
+            Some(s) => usize::try_from(s.as_u64().ok_or_else(bad)?).map_err(|_| bad())?,
         };
-        let stride = view.get("byteStride").and_then(Value::as_u64).map_or(size * width, |s| s as usize);
-        let start = view.get("byteOffset").and_then(Value::as_u64).unwrap_or(0) as usize
-            + acc.get("byteOffset").and_then(Value::as_u64).unwrap_or(0) as usize;
+        if stride < element {
+            return Err(bad());
+        }
+        let offset = |v: &Value| usize::try_from(v.get("byteOffset").and_then(Value::as_u64).unwrap_or(0));
+        let start = offset(view).ok().zip(offset(acc).ok()).and_then(|(a, b)| a.checked_add(b)).ok_or_else(bad)?;
+        if count > 0 {
+            let end =
+                (count - 1).checked_mul(stride).and_then(|e| e.checked_add(start)).and_then(|e| e.checked_add(element));
+            if end.is_none_or(|e| e > bin.len()) {
+                return Err(bad());
+            }
+        }
         let mut out = Vec::with_capacity(count * width);
         for i in 0..count {
             for c in 0..width {
                 let at = start + i * stride + c * size;
-                let b = bin.get(at..at + size).ok_or_else(bad)?;
+                let b = &bin[at..at + size];
                 out.push(match kind {
                     5126 => f64::from(f32::from_le_bytes([b[0], b[1], b[2], b[3]])),
                     5125 => f64::from(u32::from_le_bytes([b[0], b[1], b[2], b[3]])),
@@ -258,24 +284,35 @@ pub fn read_gltf(json: &Value, buffers: &[Cow<'_, [u8]>], mm_per_unit: f64) -> R
 
     let mut pos = Vec::new();
     let mut idx = Vec::new();
+    // A spec glTF reaches each node once; a little slack keeps sloppy exporters importing.
+    let mut visits_left = nodes.len().saturating_mul(4).max(1024);
+    // Every primitive that adds geometry adds a triangle, so the index cap already bounds a real file.
+    let mut primitives_left = super::scan::MAX_SCAN_TRIANGLES;
+    if roots.len() > visits_left {
+        return Err("this glTF places its nodes under too many parents to import".into());
+    }
     let mut stack: Vec<(usize, Mat4, usize)> = roots.into_iter().rev().map(|r| (r, IDENTITY, 0)).collect();
     while let Some((n, parent, depth)) = stack.pop() {
         if depth > 64 {
             return Err(bad());
         }
+        visits_left =
+            visits_left.checked_sub(1).ok_or("this glTF places its nodes under too many parents to import")?;
         let node = nodes.get(n).ok_or_else(bad)?;
         let world = mul(&parent, &local_matrix(node));
         if let Some(mesh) = node.get("mesh").and_then(Value::as_u64).and_then(|m| doc.arr("meshes").get(m as usize)) {
             for prim in mesh.get("primitives").and_then(Value::as_array).into_iter().flatten() {
+                primitives_left =
+                    primitives_left.checked_sub(1).ok_or("this glTF places too many mesh primitives to import")?;
                 if prim.get("mode").and_then(Value::as_u64).unwrap_or(4) != 4 {
                     continue;
                 }
                 let Some(p) = prim.get("attributes").and_then(|a| a.get("POSITION")).and_then(Value::as_u64) else {
                     continue;
                 };
-                let points = doc.accessor(p as usize, 3)?;
+                let points = doc.accessor(p as usize, 3, MAX_VERTICES - pos.len() / 3)?;
                 let nvert = points.len() / 3;
-                let base = (pos.len() / 3) as u32;
+                let base = u32::try_from(pos.len() / 3).map_err(|_| bad())?;
                 for v in points.chunks_exact(3) {
                     let x = world[0] * v[0] + world[4] * v[1] + world[8] * v[2] + world[12];
                     let y = world[1] * v[0] + world[5] * v[1] + world[9] * v[2] + world[13];
@@ -283,7 +320,12 @@ pub fn read_gltf(json: &Value, buffers: &[Cow<'_, [u8]>], mm_per_unit: f64) -> R
                     pos.extend([x * mm_per_unit, -z * mm_per_unit, y * mm_per_unit]);
                 }
                 let tris: Vec<u32> = match prim.get("indices").and_then(Value::as_u64) {
-                    Some(i) => doc.accessor(i as usize, 1)?.into_iter().map(|v| v as u32).collect(),
+                    Some(i) => {
+                        doc.accessor(i as usize, 1, MAX_INDICES - idx.len())?.into_iter().map(|v| v as u32).collect()
+                    }
+                    None if nvert > MAX_INDICES - idx.len() => {
+                        return Err(super::scan::too_dense_for_a_scan(nvert as u64 / 3))
+                    }
                     None => (0..nvert as u32).collect(),
                 };
                 if tris.iter().any(|&t| t as usize >= nvert) {
@@ -292,7 +334,12 @@ pub fn read_gltf(json: &Value, buffers: &[Cow<'_, [u8]>], mm_per_unit: f64) -> R
                 idx.extend(tris[..tris.len() / 3 * 3].iter().map(|t| t + base));
             }
         }
-        for c in node.get("children").and_then(Value::as_array).into_iter().flatten().rev() {
+        let children = node.get("children").and_then(Value::as_array).map_or(&[][..], Vec::as_slice);
+        // Every queued child costs a visit when it is popped, so the queue never outgrows the budget.
+        if stack.len().saturating_add(children.len()) > visits_left {
+            return Err("this glTF places its nodes under too many parents to import".into());
+        }
+        for c in children.iter().rev() {
             if let Some(c) = c.as_u64() {
                 stack.push((c as usize, world, depth + 1));
             }
