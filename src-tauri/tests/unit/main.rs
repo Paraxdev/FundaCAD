@@ -6,6 +6,7 @@ mod library;
 mod log_file;
 mod log_redact;
 mod plugins;
+mod recovery;
 mod safe_mode;
 mod session_file;
 mod settings_files;
