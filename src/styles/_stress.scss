@@ -121,6 +121,15 @@
   gap: var(--s-1) var(--s-2);
   padding: var(--s-1) 0;
 }
+// The count and the Clear that empties it, always a line of their own, so Clear never wraps away alone.
+.stress-count-line {
+  display: flex;
+  flex: 1 0 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  min-width: 0;
+}
 .stress-count {
   min-width: 0;
 }

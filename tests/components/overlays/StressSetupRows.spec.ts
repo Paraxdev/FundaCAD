@@ -86,4 +86,20 @@ describe("StressSetupStep rows", () => {
     clearLoad.click();
     expect(panels.clearStressPlaces.mock.calls).toEqual([[{ support: 1 }], [{ load: 1 }]]);
   });
+
+  it("keeps Clear on the count line it acts on, the three ways to place on the line below", async () => {
+    await mounted();
+    const rows = (sel: string) =>
+      [...document.body.querySelectorAll(sel)].map((row) =>
+        [...row.children].map((c) => [...c.classList].find((k) => k.startsWith("stress-"))),
+      );
+    expect(rows(".stress-count-line")).toEqual([
+      ["stress-count", "stress-clear-support"],
+      ["stress-count", "stress-clear-load"],
+    ]);
+    expect(rows(".stress-face-actions")).toEqual([
+      ["stress-place-support", "stress-spot-support", "stress-set-support"],
+      ["stress-place-load", "stress-spot-load", "stress-set-load"],
+    ]);
+  });
 });

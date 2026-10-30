@@ -16,6 +16,19 @@ def support_faces(s):
     return row.locator(".stress-count").inner_text().strip()
 
 
+def rows_lay_out(s):
+    """Each Clear shares its count's line, and the three ways to place share the line under it."""
+    for item in s.page.locator(".stress-item").all():
+        if not item.locator(".stress-count").count():
+            continue
+        count = item.locator(".stress-count").bounding_box()
+        clear = item.locator("[class*=stress-clear-]").bounding_box()
+        mid = count["y"] + count["height"] / 2
+        assert clear["y"] < mid < clear["y"] + clear["height"], (count, clear)
+        tops = {round(b.bounding_box()["y"]) for b in item.locator(".stress-face-actions button").all()}
+        assert len(tops) == 1 and min(tops) >= clear["y"] + clear["height"], (tops, clear)
+
+
 def notes(s, since):
     return [r["text"] for r in s.messages(since=since, raw=True)["rows"]]
 
@@ -38,6 +51,9 @@ def run(s, shot=None):
     s.page.locator(".stress-set-support").first.click()
     s.settle()
     assert support_faces(s) == "1 face", support_faces(s)
+    rows_lay_out(s)
+    if shot:
+        s.screenshot(shot.replace(".png", "_placed.png"))
     before = model(s)
 
     mark = s.messages(raw=True)["seq"]
