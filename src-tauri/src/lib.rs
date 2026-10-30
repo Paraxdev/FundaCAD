@@ -465,6 +465,7 @@ pub fn run() {
         plugins::keystore::plugin_secret_delete,
         plugins::launch::plugin_system_dirs,
         plugins::launch::plugin_launch,
+        spacemouse::spacemouse_flatpak_hint,
         spacemouse::spacemouse_inventory,
         spacemouse::spacemouse_start,
         spacemouse::spacemouse_stop,
