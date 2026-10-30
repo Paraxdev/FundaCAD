@@ -289,6 +289,41 @@ fn a_local_blob_that_no_longer_matches_its_hash_is_not_embedded() {
     assert_eq!(docfile::write_with(&path, &doc(&d), Some(&store), &fetched).unwrap(), 1);
 }
 
+fn with_import_only_in_history(digest: &str) -> Map<String, Value> {
+    let old = json!({"id": "im", "type": "import", "geom": digest}).to_string();
+    json!({"version": 9, "features": [],
+           "versions": {"objects": {"0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f": old, "aa": "not json"}, "versions": []}})
+    .as_object()
+    .unwrap()
+    .clone()
+}
+
+#[test]
+fn geometry_only_an_earlier_version_imports_is_embedded() {
+    let tmp = tempfile::tempdir().unwrap();
+    let data = geometry();
+    let d = digest(&data);
+    let store = tmp.path().join("blobs");
+    std::fs::create_dir_all(&store).unwrap();
+    std::fs::write(store.join(format!("{d}.bbrep")), &data).unwrap();
+    let path = tmp.path().join("part.funda");
+    assert_eq!(docfile::write(&path, &with_import_only_in_history(&d), Some(&store)).unwrap(), 1);
+    let fresh = tmp.path().join("fresh");
+    assert_eq!(docfile::read(&path, Some(&fresh)).unwrap().1, 1);
+    assert_eq!(std::fs::read(fresh.join(format!("{d}.bbrep"))).unwrap(), data);
+}
+
+#[test]
+fn saving_is_refused_when_an_earlier_version_imports_geometry_that_is_gone() {
+    let tmp = tempfile::tempdir().unwrap();
+    let d = digest(&geometry());
+    let path = tmp.path().join("part.funda");
+    let err = docfile::write(&path, &with_import_only_in_history(&d), Some(&tmp.path().join("empty")))
+        .expect_err("saved a document whose history names geometry that is nowhere");
+    assert!(err.to_string().contains("earlier version"), "{err}");
+    assert!(!path.exists());
+}
+
 #[test]
 fn geometry_only_a_feature_this_version_does_not_know_names_is_kept() {
     let tmp = tempfile::tempdir().unwrap();

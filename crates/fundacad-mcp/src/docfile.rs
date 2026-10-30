@@ -176,6 +176,33 @@ pub fn referenced_geometry(doc: &Map<String, Value>) -> Vec<String> {
             out.push(geom.to_string());
         }
     }
+    for g in history_geometry(doc) {
+        if !out.contains(&g) {
+            out.push(g);
+        }
+    }
+    out
+}
+
+// The version history keeps each feature as JSON text, and the app requires every import it names
+// (src/document/versions.ts referencedGeometry).
+fn history_geometry(doc: &Map<String, Value>) -> Vec<String> {
+    let objects = doc.get("versions").and_then(|v| v.get("objects")).and_then(Value::as_object);
+    let mut out: Vec<String> = Vec::new();
+    for text in objects.into_iter().flat_map(|o| o.values()).filter_map(Value::as_str) {
+        if !text.contains("\"geom\"") {
+            continue;
+        }
+        let Ok(f) = serde_json::from_str::<Value>(text) else { continue };
+        if f.get("type").and_then(Value::as_str) != Some("import") {
+            continue;
+        }
+        if let Some(g) = f.get("geom").and_then(Value::as_str).filter(|g| is_hash(g)) {
+            if !out.iter().any(|o| o == g) {
+                out.push(g.to_string());
+            }
+        }
+    }
     out
 }
 
@@ -251,7 +278,10 @@ pub fn write_with(
         }
     }
     if !missing.is_empty() {
-        let names = importing_features(&body, &missing);
+        let mut names = importing_features(&body, &missing);
+        if names.is_empty() {
+            names = "used by an earlier version".into();
+        }
         return fail(format!(
             "{} imported {} ({names}) {} no geometry left, neither in the engine nor in {}, so \
              nothing was written. doc_import the original file again (or doc_open the .funda \
