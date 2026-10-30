@@ -142,8 +142,9 @@ finds or builds the kernel like this:
 `build-flatpak` repackages the Linux `.deb` with
 `packaging/flatpak/dev.fundacad.app.yml` on the GNOME runtime (Flathub), which
 carries WebKitGTK 4.1 and GTK 3, and checks that `ldd` resolves every library
-the binary links inside it. It runs on X11 like the AppImage, reads a
-SpaceMouse over hidraw (`--device=all`, the host still needs the udev rule),
+the binary links inside it. It runs on native Wayland with an X11 fallback,
+reads game controllers through `--device=input` and a SpaceMouse through the
+spacenavd socket (`/run/spnav.sock`), since hidraw would need `--device=all`,
 and has no in-app updates, since the updater only replaces AppImages
 (`src-tauri/src/lib.rs`). A failed Flatpak build leaves it out of the
 release without holding the release back.
