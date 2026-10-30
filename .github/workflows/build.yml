@@ -77,7 +77,7 @@ jobs:
         run: node scripts/check-font-sizes.mjs
 
       - name: Install Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: npm
@@ -358,7 +358,7 @@ jobs:
           key: occt-static-v2-${{ runner.os }}-${{ hashFiles('third_party/opencascade-rs/crates/occt-sys/src/lib.rs', 'third_party/opencascade-rs/crates/opencascade-sys/build.rs', 'third_party/opencascade-rs/crates/opencascade-sys/Cargo.toml') }}
 
       - name: Install Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: npm
@@ -907,7 +907,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
 
@@ -1388,7 +1388,7 @@ jobs:
       - name: Install Linux system dependencies
         uses: ./.github/actions/linux-deps
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: npm
