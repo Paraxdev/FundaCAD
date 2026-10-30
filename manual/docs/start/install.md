@@ -57,11 +57,11 @@ On Linux only the AppImage updates itself. For the other files, install the newe
 
 ## If FundaCAD opens blank
 
-When two starts in a row fail to show the window, the next one is in safe mode. Plugins, saved preferences and work recovery are off, and on Linux so is WebKit compositing, the most common cause of a blank window. Nothing saved is changed.
+When two starts in a row fail to show the window, the next one is in safe mode. Plugins, saved preferences and work recovery are off, and on Linux so is WebKit compositing, the most common cause of a blank window. On a Wayland desktop the AppImage and the `.deb` also open the window through X11. Nothing saved is changed.
 
 Click Restart normally on the banner to leave it. To start in safe mode yourself, add `--safe-mode` to the command that starts FundaCAD.
 
-On Linux FundaCAD opens as a Wayland window when the session has Wayland. If it opens blank or closes at start there, run it on X11 instead. For the AppImage put `GDK_BACKEND=x11` in front of the command, as in `GDK_BACKEND=x11 ./FundaCAD-linux-x86_64.AppImage`, and for the `.deb` start it with `GDK_BACKEND=x11 fundacad`. For the Flatpak run `flatpak override --user --nosocket=wayland dev.fundacad.app` once, and `flatpak override --user --socket=wayland dev.fundacad.app` to go back.
+On Linux FundaCAD opens as a Wayland window when the session has Wayland. If it opens blank or closes at start there, safe mode runs it on X11. To keep it on X11 outside safe mode, for the AppImage put `GDK_BACKEND=x11` in front of the command, as in `GDK_BACKEND=x11 ./FundaCAD-linux-x86_64.AppImage`, and for the `.deb` start it with `GDK_BACKEND=x11 fundacad`. For the Flatpak run `flatpak override --user --nosocket=wayland dev.fundacad.app` once, and `flatpak override --user --socket=wayland dev.fundacad.app` to go back.
 
 ## Where FundaCAD keeps its files
 
