@@ -34,7 +34,7 @@ import {
 
 const auto = ref(autoUpdateCheck());
 const period = ref(updatePeriod());
-// Null until the install is known, so no control flashes in for an install that cannot update itself.
+// Null until the install and its build channel are known, so no control or guessed channel flashes in.
 const supported = ref<boolean | null>(null);
 const options = UPDATE_PERIODS.map((p) => ({ value: p.id, label: p.label }));
 const build = ref(buildChannel());
@@ -55,8 +55,7 @@ onMounted(() => {
     channel.value = updateChannel();
     seen.value = stableReleaseSeen();
   });
-  void syncBuildChannel();
-  void updatesSupported().then((ok) => (supported.value = ok));
+  void Promise.all([updatesSupported(), syncBuildChannel()]).then(([ok]) => (supported.value = ok));
 });
 onUnmounted(() => {
   stop();

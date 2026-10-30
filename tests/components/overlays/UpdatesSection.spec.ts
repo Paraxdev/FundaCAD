@@ -5,6 +5,7 @@ const h = vi.hoisted(() => ({
   supported: true,
   seen: false,
   build: null as "beta" | "development" | null,
+  synced: Promise.resolve(),
   answer: null as string | null,
   choose: vi.fn(),
   open: vi.fn(async (_url: string) => {}),
@@ -17,7 +18,10 @@ vi.mock("../../../src/ui/updateChannel", async (orig) => {
   return {
     ...m,
     stableReleaseSeen: () => h.seen,
-    syncBuildChannel: async () => void (h.build && m.adoptBuildChannel(h.build)),
+    syncBuildChannel: async () => {
+      await h.synced;
+      if (h.build) m.adoptBuildChannel(h.build);
+    },
   };
 });
 
@@ -53,6 +57,7 @@ beforeEach(() => {
   h.supported = true;
   h.seen = false;
   h.build = null;
+  h.synced = Promise.resolve();
   h.answer = null;
   h.choose.mockReset().mockImplementation(async () => h.answer);
   h.open.mockClear();
@@ -108,6 +113,17 @@ describe("Updates in Preferences", () => {
     h.build = "development";
     const w = await open();
     expect(w.get("[data-updates-channel-info]").text()).toBe("Channel Development");
+  });
+
+  it("shows no control until Rust named the build channel, so a guessed channel never shows", async () => {
+    let sync = () => {};
+    h.synced = new Promise((resolve) => (sync = resolve));
+    h.build = "development";
+    const w = await open();
+    const before = [w.find("#prefs-update-auto").exists(), w.find("#prefs-update-channel").exists()];
+    sync();
+    await flushPromises();
+    expect([before, w.get("#prefs-update-channel").text()]).toEqual([[false, false], "Development"]);
   });
 });
 
