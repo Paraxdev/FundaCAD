@@ -182,3 +182,38 @@ fn a_cbor_string_longer_than_its_section_is_refused() {
     write_raw(&path, &[Section::new(1, 0, doc.to_vec(), doc.len() as u64)]);
     assert!(fundacad_mcp::docfile::read_document(&path).is_err());
 }
+
+fn reads_document_holding(nested: &[u8], times: usize) -> bool {
+    let mut doc = vec![0xA2, 0x68];
+    doc.extend_from_slice(b"features");
+    doc.extend_from_slice(&[0x80, 0x61, b'x']);
+    for _ in 0..times {
+        doc.extend_from_slice(nested);
+    }
+    doc.push(0xA0);
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("part.fundab");
+    let len = doc.len() as u64;
+    write_raw(&path, &[Section::new(1, 0, doc, len)]);
+    std::thread::Builder::new()
+        .stack_size(8 << 20)
+        .spawn(move || fundacad_mcp::docfile::read_document(&path).is_ok())
+        .unwrap()
+        .join()
+        .unwrap()
+}
+
+#[test]
+fn a_document_nested_past_the_depth_limit_is_refused() {
+    for nested in [&[0x81u8][..], &[0xC0], &[0xA1, 0x60]] {
+        assert!(!reads_document_holding(nested, 1_000_000), "{nested:x?}");
+        assert!(!reads_document_holding(nested, 200), "{nested:x?}");
+    }
+}
+
+#[test]
+fn a_document_nested_within_the_depth_limit_still_reads() {
+    for nested in [&[0x81u8][..], &[0xC0], &[0xA1, 0x60]] {
+        assert!(reads_document_holding(nested, 100), "{nested:x?}");
+    }
+}

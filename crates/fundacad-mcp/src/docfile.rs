@@ -19,6 +19,8 @@ const KIND_GEOMETRY: u8 = 2;
 /// The last kind this build knows, the app carries every section above it.
 const KIND_SEGMENTS: u8 = 4;
 const MAX_TOTAL: u64 = 8 << 30;
+// serde_json's own nesting limit, so a document read here can go through JSON again.
+const MAX_CBOR_DEPTH: usize = 128;
 
 #[derive(Debug, Clone)]
 pub struct DocumentFileError(pub String);
@@ -492,7 +494,7 @@ fn read_entry<R: Read + Seek>(z: &mut zip::ZipArchive<R>, name: &str) -> Option<
 // Just enough CBOR to read a document.
 
 fn cbor(b: &[u8]) -> Result<Value, DocumentFileError> {
-    let (value, _) = cbor_item(b, 0)?;
+    let (value, _) = cbor_item(b, 0, 0)?;
     Ok(value)
 }
 
@@ -516,8 +518,8 @@ fn cbor_len(b: &[u8], p: usize, ai: u8) -> Result<(Option<u64>, usize), Document
     })
 }
 
-fn cbor_item(b: &[u8], mut p: usize) -> Result<(Value, usize), DocumentFileError> {
-    if p >= b.len() {
+fn cbor_item(b: &[u8], mut p: usize, depth: usize) -> Result<(Value, usize), DocumentFileError> {
+    if p >= b.len() || depth > MAX_CBOR_DEPTH {
         return bad_cbor();
     }
     let ib = b[p];
@@ -549,7 +551,7 @@ fn cbor_item(b: &[u8], mut p: usize) -> Result<(Value, usize), DocumentFileError
             match n {
                 None => {
                     while p < b.len() && b[p] != 0xFF {
-                        let (part, next) = cbor_item(b, p)?;
+                        let (part, next) = cbor_item(b, p, depth + 1)?;
                         p = next;
                         match part {
                             Value::String(s) => parts.extend_from_slice(s.as_bytes()),
@@ -578,7 +580,7 @@ fn cbor_item(b: &[u8], mut p: usize) -> Result<(Value, usize), DocumentFileError
                     None if p >= b.len() => return bad_cbor(),
                     _ => {}
                 }
-                let (item, next) = cbor_item(b, p)?;
+                let (item, next) = cbor_item(b, p, depth + 1)?;
                 out.push(item);
                 p = next;
             }
@@ -594,8 +596,8 @@ fn cbor_item(b: &[u8], mut p: usize) -> Result<(Value, usize), DocumentFileError
                     None if p >= b.len() => return bad_cbor(),
                     _ => {}
                 }
-                let (key, next) = cbor_item(b, p)?;
-                let (value, next) = cbor_item(b, next)?;
+                let (key, next) = cbor_item(b, p, depth + 1)?;
+                let (value, next) = cbor_item(b, next, depth + 1)?;
                 let key = match key {
                     Value::String(s) => s,
                     other => other.to_string(),
@@ -607,7 +609,7 @@ fn cbor_item(b: &[u8], mut p: usize) -> Result<(Value, usize), DocumentFileError
             Ok((Value::Object(out), if n.is_some() { p } else { p + 1 }))
         }
         // A tag: the tagged value is what matters here.
-        _ => cbor_item(b, p),
+        _ => cbor_item(b, p, depth + 1),
     }
 }
 
