@@ -120,6 +120,29 @@ Set FUNDACAD_ALLOW_WINDOWS_GNU=1 to build it anyway.
         build.include(dir);
     }
 
+    // Xcode 15's libc++ has a pointer_traits that is not SFINAE friendly, so the
+    // C++20 contiguous_range check cxx.h makes on rust::Slice fails hard there.
+    // The shims compile against a copy whose Slice iterator names its
+    // element_type, found through -iquote before cxx-build's own include dir.
+    // cxx-build's cxx.h is a symlink into the cargo registry: read it only.
+    if target.contains("apple") {
+        let out = std::path::PathBuf::from(std::env::var("OUT_DIR").unwrap());
+        let src = out.join("cxxbridge").join("include").join("rust").join("cxx.h");
+        let header = std::fs::read_to_string(&src).expect("cxx.h not found in cxx-build's include dir");
+        let class = header.find("class Slice<T>::iterator final {").expect("cxx.h no longer defines rust::Slice<T>::iterator");
+        let end = class + header[class..].find("};").unwrap();
+        let patched = if header[class..end].contains("element_type") {
+            header
+        } else {
+            let public = class + header[class..end].find("public:").unwrap() + "public:".len();
+            format!("{}\n  using element_type = T;{}", &header[..public], &header[public..])
+        };
+        let dir = out.join("cxx-apple");
+        std::fs::create_dir_all(dir.join("rust")).unwrap();
+        std::fs::write(dir.join("rust").join("cxx.h"), patched).unwrap();
+        build.flag(format!("-iquote{}", dir.display()));
+    }
+
     build
         .cpp(true)
         // Match the kernel's C++20: the shims include OCCT headers, and the same
