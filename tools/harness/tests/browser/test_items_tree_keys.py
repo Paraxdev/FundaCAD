@@ -68,7 +68,8 @@ def test_arrows_space_f2_and_the_row_menu_select_rename_and_hide_a_body(s):
     s.page.keyboard.press("ControlOrMeta+A")
     s.page.keyboard.type("Lid")
     s.page.keyboard.press("Enter")
-    s.page.wait_for_function(f"() => ({BODY})().name === 'Lid' && ({FOCUS})().name === 'Lid'")
+    s.page.wait_for_function(f"() => ({BODY})().name === 'Lid'")
+    s.page.wait_for_function(f"() => ({FOCUS})().name === 'Lid'")
     s.page.wait_for_timeout(100)
     assert focused(s) == {"role": "treeitem", "level": "2", "name": "Lid", "selected": "true"}
 
