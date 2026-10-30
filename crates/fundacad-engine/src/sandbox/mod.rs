@@ -1,7 +1,7 @@
 //! Reduced rights for the engine: it may write only to its own folders, and on Linux it cannot open new sockets.
 //! A memory bug in the geometry kernel then cannot act as the user. Entered at start, before any request is read.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub mod stage;
 
@@ -94,6 +94,14 @@ pub fn prepare(writable: &[PathBuf]) -> Vec<PathBuf> {
     writable.iter().filter(|dir| std::fs::create_dir_all(dir).is_ok()).cloned().collect()
 }
 
+/// True when `dir` is one of the `shared` folders or lies above one. Opening it to the engine would open the user's
+/// profile or the temp folder every app shares, so Windows refuses to label it.
+pub fn opens_shared_folder(dir: &Path, shared: &[PathBuf]) -> bool {
+    let real = |p: &Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+    let dir = real(dir);
+    shared.iter().any(|s| real(s).starts_with(&dir))
+}
+
 /// Refuses new sockets in every thread from here on. Call it once the live door listens: accepting on it needs none.
 pub fn close_network(entered: &Outcome) {
     if let Some(line) = close_network_with(entered, platform_close_network) {
@@ -116,7 +124,14 @@ mod linux;
 #[cfg(target_os = "linux")]
 use linux::{close_network as platform_close_network, enter as platform_enter};
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(windows)]
+mod windows;
+#[cfg(windows)]
+use windows::enter as platform_enter;
+#[cfg(windows)]
+pub use windows::Job;
+
+#[cfg(not(any(target_os = "linux", windows)))]
 fn platform_enter(_writable: &[PathBuf]) -> Outcome {
     Outcome::Failed("reduced rights are not available on this platform yet".into())
 }

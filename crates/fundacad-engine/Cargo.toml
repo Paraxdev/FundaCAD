@@ -19,7 +19,14 @@ getrandom = { version = "0.3", optional = true, features = ["std"] }
 landlock = "0.4.7"
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_System_Console"] }
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_Security_Authorization",
+    "Win32_System_Console",
+    "Win32_System_JobObjects",
+    "Win32_System_SystemServices",
+    "Win32_System_Threading",
+] }
 
 [[test]]
 name = "stdio_worker"

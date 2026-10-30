@@ -38,7 +38,9 @@ fn accept_one(door: &TcpListener) -> io::Result<()> {
     Ok(())
 }
 
-fn child(allowed: &Path, outside: &Path, port: u16) {
+fn child(allowed: &Path, outside: &Path, port: u16, documents: &str) {
+    // The parent puts this process in its job first.
+    io::stdin().read_line(&mut String::new()).unwrap();
     let outcome = sandbox::enter(Policy::Tool, &[allowed.to_path_buf()]);
     println!("outcome={outcome:?}");
     // Stands in for the live door, which binds after enter and before close_network.
@@ -49,6 +51,11 @@ fn child(allowed: &Path, outside: &Path, port: u16) {
     report("write_allowed", std::fs::write(allowed.join("inside.txt"), b"ok"));
     report("write_outside", std::fs::write(outside.join("escaped.txt"), b"no"));
     report("read_outside", std::fs::read(outside.join("read.txt")).map(|_| ()));
+    if documents != "-" {
+        report("write_documents", std::fs::write(documents, b"no"));
+    }
+    #[cfg(windows)]
+    report("start_process", Command::new("cmd").args(["/c", "exit"]).status().map(|_| ()));
     report("tcp_connect", TcpStream::connect(("127.0.0.1", port)).map(|_| ()));
     report("udp_socket", UdpSocket::bind("127.0.0.1:0").map(|_| ()));
     #[cfg(unix)]
@@ -75,12 +82,20 @@ impl Probe {
         assert_eq!(self.get(key), "ok", "{key}, stderr: {}", self.stderr);
     }
 
-    /// EACCES, so the refusal came from the sandbox and not from a missing listener or file.
-    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    /// Access denied, so the refusal came from the sandbox and not from a missing listener or file.
+    #[cfg_attr(not(any(target_os = "linux", windows)), allow(dead_code))]
     fn refused(&self, key: &str) {
+        let denied = if cfg!(windows) { "os error 5" } else { "os error 13" };
         let got = self.get(key);
-        assert!(got.starts_with("err") && got.contains("os error 13"), "{key}: {got}, stderr: {}", self.stderr);
+        assert!(got.starts_with("err") && got.contains(denied), "{key}: {got}, stderr: {}", self.stderr);
     }
+}
+
+/// A file the child tries to write among the user's documents, when that folder exists here.
+fn documents_file() -> Option<PathBuf> {
+    let documents =
+        PathBuf::from(std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })?).join("Documents");
+    documents.is_dir().then(|| documents.join(format!("fundacad-sandbox-probe-{}.txt", std::process::id())))
 }
 
 fn run_probe(root: &Path) -> Probe {
@@ -90,6 +105,7 @@ fn run_probe(root: &Path) -> Probe {
     std::fs::create_dir_all(&outside).unwrap();
     std::fs::write(outside.join("read.txt"), b"a user file").unwrap();
     let target = TcpListener::bind("127.0.0.1:0").unwrap();
+    let documents = documents_file();
     let port = target.local_addr().unwrap().port();
 
     let mut child = Command::new(std::env::current_exe().unwrap())
@@ -97,11 +113,16 @@ fn run_probe(root: &Path) -> Probe {
         .arg(&allowed)
         .arg(&outside)
         .arg(port.to_string())
+        .arg(documents.as_deref().unwrap_or(Path::new("-")))
         .env(sandbox::ENV, "1")
+        .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
         .expect("spawn the probe child");
+    #[cfg(windows)]
+    let _job = sandbox::Job::contain(&child).expect("put the probe child in a job");
+    writeln!(child.stdin.take().unwrap(), "go").unwrap();
     let mut stderr = child.stderr.take().unwrap();
     let stderr = std::thread::spawn(move || {
         let mut s = String::new();
@@ -124,6 +145,10 @@ fn run_probe(root: &Path) -> Probe {
     let escaped = outside.join("escaped.txt");
     if escaped.exists() {
         results.insert("escaped_file".into(), "exists".into());
+    }
+    if let Some(file) = documents.filter(|file| file.exists()) {
+        std::fs::remove_file(file).ok();
+        results.insert("escaped_documents".into(), "exists".into());
     }
     Probe { results, stderr }
 }
@@ -151,16 +176,50 @@ fn the_engine_cannot_write_outside_its_folders_or_open_a_socket(p: &Probe) {
     assert!(p.stderr.trim().is_empty(), "the sandbox logged: {}", p.stderr);
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(windows)]
+fn the_engine_cannot_write_outside_its_folders_or_open_a_socket(p: &Probe) {
+    let outcome = p.get("outcome");
+    assert!(outcome.starts_with("On"), "outcome {outcome}, stderr: {}", p.stderr);
+    p.refused("write_outside");
+    assert!(!p.results.contains_key("escaped_file"), "the file outside was written");
+    if p.results.contains_key("write_documents") {
+        p.refused("write_documents");
+        assert!(!p.results.contains_key("escaped_documents"), "the file in Documents was written");
+    } else {
+        println!("note: no Documents folder here, so that write was not checked");
+    }
+    assert!(p.get("start_process").starts_with("err"), "the job let the engine start a process");
+    // Closing the network on Windows needs an AppContainer or a firewall rule.
+    p.ok("tcp_connect");
+    p.ok("udp_socket");
+    assert!(p.stderr.trim().is_empty(), "the sandbox logged: {}", p.stderr);
+}
+
+/// The engine ends when the app drops its job, even when the app itself is killed and closes no pipe.
+#[cfg(windows)]
+fn the_job_ends_the_engine_when_the_app_lets_go() {
+    let mut child = Command::new(std::env::current_exe().unwrap()).arg("--sleep").spawn().expect("spawn the sleeper");
+    let job = sandbox::Job::contain(&child).expect("put the sleeper in a job");
+    assert!(child.try_wait().unwrap().is_none(), "the sleeper ended early");
+    drop(job);
+    let t0 = Instant::now();
+    while child.try_wait().unwrap().is_none() {
+        assert!(t0.elapsed() < Duration::from_secs(10), "the sleeper outlived its job");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+#[cfg(not(any(target_os = "linux", windows)))]
 fn the_engine_cannot_write_outside_its_folders_or_open_a_socket(p: &Probe) {
     println!("note: no reduced rights on this platform yet, outcome {}", p.get("outcome"));
 }
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    if args.get(1).map(String::as_str) == Some("--child") {
-        child(Path::new(&args[2]), Path::new(&args[3]), args[4].parse().unwrap());
-        return;
+    match args.get(1).map(String::as_str) {
+        Some("--child") => return child(Path::new(&args[2]), Path::new(&args[3]), args[4].parse().unwrap(), &args[5]),
+        Some("--sleep") => return std::thread::sleep(Duration::from_secs(30)),
+        _ => {}
     }
     let root: PathBuf = std::env::temp_dir().join(format!("fundacad-sandbox-probe-{}", std::process::id()));
     let probe = run_probe(&root);
@@ -174,5 +233,10 @@ fn main() {
     ] {
         test(&probe);
         println!("test {name} ... ok");
+    }
+    #[cfg(windows)]
+    {
+        the_job_ends_the_engine_when_the_app_lets_go();
+        println!("test the_job_ends_the_engine_when_the_app_lets_go ... ok");
     }
 }

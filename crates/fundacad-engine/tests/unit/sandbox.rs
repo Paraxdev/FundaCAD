@@ -106,3 +106,22 @@ fn the_writable_folders_exist_before_the_rules_name_them() {
     assert!(fresh.is_dir());
     let _ = std::fs::remove_dir_all(&root);
 }
+
+#[test]
+fn a_shared_folder_or_one_above_it_is_never_opened_to_the_engine() {
+    let root = std::env::temp_dir().join(format!("fundacad-sandbox-shared-{}", std::process::id()));
+    let profile = root.join("Users").join("maker");
+    let temp = profile.join("AppData").join("Local").join("Temp");
+    let own = profile.join("AppData").join("Local").join("fundacad").join("engine-tmp");
+    std::fs::create_dir_all(&temp).unwrap();
+    std::fs::create_dir_all(&own).unwrap();
+    let shared = [profile.clone(), temp.clone(), root.join("Windows")];
+
+    assert!(opens_shared_folder(&temp, &shared));
+    assert!(opens_shared_folder(&profile, &shared));
+    assert!(opens_shared_folder(&root, &shared));
+    assert!(opens_shared_folder(&temp.join("."), &shared));
+    assert!(!opens_shared_folder(&own, &shared));
+    assert!(!opens_shared_folder(&temp.join("fundacad"), &shared));
+    let _ = std::fs::remove_dir_all(&root);
+}

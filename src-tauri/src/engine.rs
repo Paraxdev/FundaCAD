@@ -120,6 +120,8 @@ struct Worker {
     child: Child,
     stdin: BufWriter<ChildStdin>,
     generation: u64,
+    #[cfg(windows)]
+    _job: Option<fundacad_engine::sandbox::Job>,
 }
 
 /// Called from `main` before Tauri starts. `--engine --ws` is the same engine on its own WebSocket, which the shipped
@@ -323,6 +325,8 @@ fn spawn(inner: &Inner) -> std::io::Result<std::process::ChildStdout> {
         cmd.creation_flags(CREATE_NO_WINDOW);
     }
     let mut child = cmd.spawn()?;
+    #[cfg(windows)]
+    let job = contain(&child);
     let stdin = child.stdin.take().ok_or_else(|| std::io::Error::other("no worker stdin"))?;
     let stdout = child.stdout.take().ok_or_else(|| std::io::Error::other("no worker stdout"))?;
     if let Some(stderr) = child.stderr.take() {
@@ -350,8 +354,30 @@ fn spawn(inner: &Inner) -> std::io::Result<std::process::ChildStdout> {
         });
     }
     let generation = inner.generation.fetch_add(1, Ordering::SeqCst) + 1;
-    *lock(&inner.worker) = Some(Worker { child, stdin: BufWriter::new(stdin), generation });
+    *lock(&inner.worker) = Some(Worker {
+        child,
+        stdin: BufWriter::new(stdin),
+        generation,
+        #[cfg(windows)]
+        _job: job,
+    });
     Ok(stdout)
+}
+
+/// Each engine runs in its own job, part of its reduced rights: it ends with the app and starts no process.
+#[cfg(windows)]
+fn contain(child: &Child) -> Option<fundacad_engine::sandbox::Job> {
+    use fundacad_engine::sandbox::{decide, Decision, Job, Policy, ENV};
+    if decide(std::env::var(ENV).ok().as_deref(), Policy::Worker) != Decision::Enter {
+        return None;
+    }
+    match Job::contain(child) {
+        Ok(job) => Some(job),
+        Err(e) => {
+            let _ = writeln!(std::io::stderr(), "[engine] runs outside its job, {e}");
+            None
+        }
+    }
 }
 
 /// The live door's port, from the worker's first `LISTENING` line only and only in the exact form `LISTENING <port>`.
