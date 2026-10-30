@@ -478,3 +478,17 @@ fn an_open_refuses_sections_that_together_expand_past_its_budget() {
     assert_eq!(std::fs::read_dir(dir.join("blobs")).unwrap().count(), 0);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn a_document_section_past_the_json_cap_is_refused_before_it_is_read() {
+    let dir = tmpdir("doccap");
+    let (path, _, _) = sample(&dir);
+    retable(&path, |entries| {
+        entries.iter_mut().find(|e| e.kind == KIND_DOCUMENT).unwrap().raw_len = (1 << 30) + 1;
+    });
+    let err = read_file(&path, &dir.join("blobs"), None).map(|_| ()).unwrap_err();
+    assert!(err.contains("1024 MiB"), "{err}");
+    let err = read_section_of_kind(&path, KIND_DOCUMENT).unwrap_err();
+    assert!(err.contains("1024 MiB"), "{err}");
+    std::fs::remove_dir_all(&dir).ok();
+}

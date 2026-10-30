@@ -174,7 +174,11 @@ pub fn read_summary(path: &Path) -> Result<Option<Summary>, String> {
         return Ok(Some(summarise("fundab", head)));
     }
     drop(file);
-    let reader = BufReader::new(std::fs::File::open(path).map_err(damaged)?);
-    let head: Head = serde_json::from_reader(reader).map_err(damaged)?;
+    let file = std::fs::File::open(path).map_err(damaged)?;
+    let cap = crate::json_doc::MAX_DOC_TEXT;
+    if file.metadata().map_err(damaged)?.len() > cap {
+        return Err(crate::json_doc::too_big(cap));
+    }
+    let head: Head = serde_json::from_reader(BufReader::new(file.take(cap))).map_err(damaged)?;
     Ok(Some(summarise("funda", head)))
 }

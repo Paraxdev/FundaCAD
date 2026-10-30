@@ -156,3 +156,14 @@ fn it_serialises_as_the_webview_reads_it() {
     assert_eq!(s["current"], "wide");
     assert_eq!(s["format"], "funda");
 }
+
+#[test]
+fn a_json_document_past_one_gib_is_not_summarised() {
+    let dir = tmpdir("gib");
+    let path = dir.join("huge.funda");
+    std::fs::write(&path, DOC).unwrap();
+    std::fs::OpenOptions::new().write(true).open(&path).unwrap().set_len((1 << 30) + 1).unwrap();
+    let got = read_summary(&path).map(|_| ()).err();
+    let _ = std::fs::remove_dir_all(&dir);
+    assert_eq!(got.as_deref(), Some("This document is larger than 1024 MiB and was refused."));
+}

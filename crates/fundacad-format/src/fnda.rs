@@ -665,6 +665,13 @@ fn check_raw_len(entry: &Entry) -> Result<(), String> {
     Ok(())
 }
 
+fn check_document_len(entry: &Entry) -> Result<(), String> {
+    if entry.raw_len > crate::json_doc::MAX_DOC_TEXT {
+        return Err(crate::json_doc::too_big(crate::json_doc::MAX_DOC_TEXT));
+    }
+    Ok(())
+}
+
 fn decode_section<S: Write>(
     mut reader: SectionReader,
     entry: &Entry,
@@ -784,6 +791,7 @@ pub fn read_file_with(
     let mut report = RepairReport::default();
     let entries = read_index(&mut f, &mut report)?;
     let doc = entries.iter().find(|e| e.kind == KIND_DOCUMENT).ok_or_else(|| DAMAGED.to_string())?;
+    check_document_len(doc)?;
     let mut cbor = Vec::new();
     read_section(&f, doc, &mut cbor, &mut report)?;
     let document_json = cbor_to_json(&cbor)?;
@@ -1075,6 +1083,9 @@ pub fn read_section_of_kind(path: &Path, kind: u8) -> Result<Option<Vec<u8>>, St
     let mut report = RepairReport::default();
     let entries = read_index(&mut f, &mut report)?;
     let Some(entry) = entries.iter().find(|e| e.kind == kind) else { return Ok(None) };
+    if kind == KIND_DOCUMENT {
+        check_document_len(entry)?;
+    }
     let mut out = Vec::new();
     read_section(&f, entry, &mut out, &mut report)?;
     Ok(Some(out))
