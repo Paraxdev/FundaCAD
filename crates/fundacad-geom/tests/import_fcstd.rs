@@ -148,3 +148,41 @@ fn a_binary_shape_is_read_only_under_the_headers_freecad_writes() {
         assert_eq!(names, ["Plate with hole"], "V{version}");
     }
 }
+
+/// A document of `objects` visible parts that all name the one shape member `shape`, `size` zero bytes long.
+fn packed_document(name: &str, objects: usize, size: usize) -> PathBuf {
+    let path = blob_dir().join(name);
+    let mut zip = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());
+    let (mut list, mut data) = (String::new(), String::new());
+    for i in 0..objects {
+        list.push_str(&format!(r#"<Object type="Part::Feature" name="P{i}"/>"#));
+        data.push_str(&format!(
+            r#"<Object name="P{i}"><Properties Count="2"><Property name="Shape" type="Part::PropertyPartShape"><Part file="shape.bin"/></Property><Property name="Visibility" type="App::PropertyBool"><Bool value="true"/></Property></Properties></Object>"#
+        ));
+    }
+    let options = zip::write::SimpleFileOptions::default();
+    zip.start_file("Document.xml", options).unwrap();
+    write!(
+        zip,
+        r#"<?xml version="1.0"?><Document SchemaVersion="4"><Objects Count="{objects}">{list}</Objects><ObjectData Count="{objects}">{data}</ObjectData></Document>"#
+    )
+    .unwrap();
+    zip.start_file("shape.bin", options).unwrap();
+    zip.write_all(&vec![0u8; size]).unwrap();
+    zip.finish().unwrap();
+    path
+}
+
+#[test]
+fn a_member_that_unpacks_past_the_cap_is_refused() {
+    let path = packed_document("past_cap.FCStd", 1, 2 << 20);
+    let e = import::fcstd::read_fcstd_within(&path, 1 << 20).err().expect("a member past the cap is refused");
+    assert!(e.contains("too large"), "{e}");
+}
+
+#[test]
+fn members_read_again_count_against_the_same_cap() {
+    let path = packed_document("shared_member.FCStd", 3, 400 << 10);
+    let e = import::fcstd::read_fcstd_within(&path, 1 << 20).err().expect("the members together pass the cap");
+    assert!(e.contains("too large"), "{e}");
+}

@@ -117,7 +117,7 @@ impl MeshAccess {
     }
 
     pub fn face_reversed(&self, face: usize) -> bool {
-        self.face_ok(face).is_some_and(|(m, f)| ffi::mesh_access_face_reversed(m, f))
+        self.face_ok(face).is_some_and(|(m, f)| ffi::mesh_access_face_reversed(m, f).unwrap_or(false))
     }
 
     /// The plane's axis direction when the face is planar.
@@ -176,7 +176,9 @@ impl MeshAccess {
     pub fn edge_faces(&self, edge: usize) -> Vec<usize> {
         let mut v = Vec::new();
         if let Some((m, e)) = self.edge_ok(edge) {
-            ffi::mesh_access_edge_faces(m, e, &mut v);
+            if ffi::mesh_access_edge_faces(m, e, &mut v).is_err() {
+                v.clear();
+            }
         }
         v.into_iter().map(|i| i.max(0) as usize).collect()
     }

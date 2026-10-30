@@ -20,6 +20,7 @@ pub mod step_refs;
 pub mod svg;
 pub mod threeds;
 pub mod x3d;
+pub mod xbf_header;
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -226,10 +227,7 @@ pub fn assembly_payload(asm: &StepAssembly) -> Imported {
 }
 
 pub fn read_step(path: &Path) -> Result<Imported, String> {
-    let scan = crate::bench::phase("step_refs", || step_refs::scan(path)).unwrap_or_else(|e| {
-        eprintln!("[import] STEP vertex check skipped: {e}");
-        step_refs::Scan::default()
-    });
+    let scan = crate::bench::phase("step_refs", || step_refs::scan(path))?;
     let source = scan.repaired.as_ref().map_or(path, |r| r.path());
     let progress = crate::cancel::progress_beating();
     let asm = crate::bench::phase("step_read", || {
@@ -237,7 +235,7 @@ pub fn read_step(path: &Path) -> Result<Imported, String> {
     })
     .map_err(|e| occt_message(&e))?;
     let mut imported = from_assembly(asm);
-    if let Some(note) = scan.note() {
+    for note in [scan.documents_note(), scan.note()].into_iter().flatten() {
         push_note(&mut imported.fields, note);
     }
     if scan.faces > 0 && kernel::count(&imported.shape, Kind::Face) == 0 {
@@ -305,12 +303,14 @@ pub fn read_iges(path: &Path) -> Result<Imported, String> {
 /// An OCCT binary XCAF document, read like STEP, in millimetres.
 pub fn read_xbf(path: &Path) -> Result<Imported, String> {
     const UNREADABLE: &str = "could not read the XBF file (it may be truncated or not an OCCT XBF document)";
-    let mut magic = [0u8; 7];
-    let mut opened = std::fs::File::open(path).map_err(|e| e.to_string())?;
-    if std::io::Read::read_exact(&mut opened, &mut magic).is_err() || &magic != b"BINFILE" {
-        return Err(UNREADABLE.into());
+    let opened = std::fs::File::open(path).map_err(|e| e.to_string())?;
+    match xbf_header::lists_references(std::io::BufReader::new(opened)) {
+        None => return Err(UNREADABLE.into()),
+        Some(true) => {
+            return Err("this XBF document lists other documents to load with it, which FundaCAD does not import".into())
+        }
+        Some(false) => {}
     }
-    drop(opened);
     let progress = crate::cancel::progress_beating();
     let asm = crate::bench::phase("xbf_read", || {
         stage::sampling_xcaf_read(&progress, || xcaf::read_xbf_assembly_with(path, &progress.start()))

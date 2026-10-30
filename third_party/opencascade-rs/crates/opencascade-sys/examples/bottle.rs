@@ -247,5 +247,5 @@ pub fn main() {
     );
     // let success = stl_writer.pin_mut().write_stl(triangulation.Shape(), "bottle.stl".to_owned());
 
-    println!("Done! Success = {success}");
+    println!("Done! Success = {}", success.unwrap_or(false));
 }

@@ -10,7 +10,7 @@ use opencascade::progress::ProgressRange;
 use quick_xml::events::{BytesStart, Event};
 use serde_json::{json, Map, Value};
 
-use super::Imported;
+use super::{Imported, MAX_IMPORT_BREP_FILE_BYTES};
 use crate::kernel::{self, Kind};
 
 #[derive(Default)]
@@ -35,10 +35,31 @@ fn attr(e: &BytesStart, key: &[u8]) -> Option<String> {
         .and_then(|a| a.unescape_value().ok().map(|v| v.into_owned()))
 }
 
-fn member(z: &mut zip::ZipArchive<std::fs::File>, name: &str) -> Option<Vec<u8>> {
+/// A member inflated within what is left of `budget`, the bytes the whole document may unpack to.
+fn member(
+    z: &mut zip::ZipArchive<std::fs::File>,
+    name: &str,
+    budget: &mut u64,
+    cap: u64,
+) -> Result<Option<Vec<u8>>, String> {
+    let Ok(entry) = z.by_name(name) else { return Ok(None) };
+    if entry.size() > *budget {
+        return Err(too_large(cap));
+    }
     let mut out = Vec::new();
-    z.by_name(name).ok()?.read_to_end(&mut out).ok()?;
-    Some(out)
+    if entry.take(budget.saturating_add(1)).read_to_end(&mut out).is_err() {
+        return Ok(None);
+    }
+    let n = out.len() as u64;
+    if n > *budget {
+        return Err(too_large(cap));
+    }
+    *budget -= n;
+    Ok(Some(out))
+}
+
+fn too_large(cap: u64) -> String {
+    format!("this FreeCAD file unpacks past {} MiB, too large to import", cap >> 20)
 }
 
 /// The objects of `Document.xml` by name, in document order.
@@ -176,13 +197,20 @@ fn then(outer: &Rigid, inner: &Rigid) -> Rigid {
 }
 
 pub fn read_fcstd(path: &Path) -> Result<Imported, String> {
+    read_fcstd_within(path, MAX_IMPORT_BREP_FILE_BYTES)
+}
+
+/// `read_fcstd` with `cap` on the bytes all the members it reads unpack to together.
+pub fn read_fcstd_within(path: &Path, cap: u64) -> Result<Imported, String> {
     let file = std::fs::File::open(path).map_err(|e| not_freecad(&e))?;
     let mut z = zip::ZipArchive::new(file).map_err(|e| not_freecad(&e))?;
-    let xml = member(&mut z, "Document.xml").ok_or_else(|| not_freecad(&"it holds no Document.xml"))?;
+    let mut budget = cap;
+    let xml =
+        member(&mut z, "Document.xml", &mut budget, cap)?.ok_or_else(|| not_freecad(&"it holds no Document.xml"))?;
     let xml = String::from_utf8_lossy(&xml).into_owned();
     let mut objects = objects(&xml)?;
     if objects.iter().any(|(_, o)| o.visible.is_none()) {
-        if let Some(gui) = member(&mut z, "GuiDocument.xml") {
+        if let Some(gui) = member(&mut z, "GuiDocument.xml", &mut budget, cap)? {
             let gui = gui_visibility(&String::from_utf8_lossy(&gui));
             for (name, o) in &mut objects {
                 if o.visible.is_none() {
@@ -235,7 +263,7 @@ pub fn read_fcstd(path: &Path) -> Result<Imported, String> {
         }
         let Some(file) = &o.shape_file else { continue };
         let label = o.label.clone().filter(|l| !l.trim().is_empty()).unwrap_or_else(|| name.clone());
-        let Some(bytes) = member(&mut z, file) else {
+        let Some(bytes) = member(&mut z, file, &mut budget, cap)? else {
             notes.push(format!("{label}: its shape is missing from the file"));
             continue;
         };

@@ -73,7 +73,7 @@ fn a_corner_round_after_a_g2_fillet_keeps_its_vertices_tight() {
     let s = g2_then_corner();
     assert_eq!(kernel::count(&s, Kind::Face), 13);
     assert!((kernel::volume(&s) - 16863.63).abs() < 0.5, "{}", kernel::volume(&s));
-    let widest = opencascade_sys::xcaf::step_widest_tolerance(s.raw());
+    let widest = opencascade_sys::xcaf::step_widest_tolerance(s.raw()).unwrap();
     assert!(widest < 0.01, "a vertex or edge {widest} mm wide");
 }
 
