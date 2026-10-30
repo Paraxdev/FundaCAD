@@ -182,6 +182,11 @@ export const REFINE_CHOICES: readonly { value: StressRefine; label: string }[] =
 /** The element limit sent with Fine; the engine's default is about half. */
 export const FINE_MAX_ELEMENTS = 60_000;
 
+/** The one button of a finer answer. The time is rough, so whole minutes. */
+export function finerLabel(seconds: number): string {
+  return `Run with finer detail (about ${Math.max(1, Math.round(seconds / 60))} min)`;
+}
+
 /** One row of the setup, by its id. */
 export type StressTarget = { support: number } | { load: number };
 

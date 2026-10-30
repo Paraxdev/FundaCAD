@@ -20,6 +20,7 @@ import {
   SUPPORT_KINDS,
   cssHex,
   faceCountLabel,
+  finerLabel,
   sameTarget,
   type StressSetup,
   type StressTarget,
@@ -32,6 +33,11 @@ const engine = useEngine();
 const panels = usePanelsStore();
 
 const running = computed(() => !!panels.stress?.running);
+// The time on the button was for the setup that ran.
+const finer = computed(() => {
+  const s = panels.stress;
+  return s?.finer && s.ranSetup === JSON.stringify(s.setup) ? s.finer : null;
+});
 const loadColor = cssHex(LOAD_MARK_COLOR);
 const gravityColor = cssHex(GRAVITY_MARK_COLOR);
 const LOAD_KINDS = [
@@ -330,5 +336,8 @@ function placing(target: StressTarget, as: "face" | "spot"): boolean {
     </div>
 
     <div v-if="panels.stress?.error" class="measure-hint stress-error">{{ panels.stress.error }}</div>
+    <Button v-if="finer" variant="primary" size="sm" class="stress-finer" @click="engine.ui.panels.runStress(true)">{{
+      finerLabel(finer.seconds)
+    }}</Button>
   </div>
 </template>
