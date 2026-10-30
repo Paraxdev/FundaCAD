@@ -15,4 +15,15 @@ describe("the AppImage repack", () => {
     expect(chmod).toBeGreaterThan(-1);
     expect(chmod).toBeLessThan(pack);
   });
+
+  it("drops the GTK hook's GDK_BACKEND=x11 and fails if a hook still sets it", () => {
+    const strip = lines.findIndex(
+      (l) => l.startsWith("sed -i") && l.includes("GDK_BACKEND") && l.includes("apprun-hooks/"),
+    );
+    const check = lines.findIndex((l) => l.includes("grep") && l.includes("GDK_BACKEND") && l.includes("apprun-hooks/"));
+    const pack = lines.findIndex((l) => l.startsWith('ARCH=x86_64 "$work/appimagetool"'));
+    expect(strip).toBeGreaterThan(-1);
+    expect(check).toBeGreaterThan(strip);
+    expect(check).toBeLessThan(pack);
+  });
 });

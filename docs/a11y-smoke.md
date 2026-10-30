@@ -76,9 +76,9 @@ python -m pytest tools/harness/tests -m a11y -q
 
 WebKitGTK 4.1 on GTK 3 is the least proven of the three webviews, so Linux gets the most care.
 
-- Run the script in a Wayland session and in an X11 session. The Flatpak and the AppImage force `GDK_BACKEND=x11`
-  (WebKitGTK under Tauri crashes on the Wayland backend, tauri-apps/tauri#8541), so on Wayland Orca reads an
-  XWayland client. Step 8 is there for that: check key echo and caret tracking in a text field on both sessions.
+- Run the script in a Wayland session and in an X11 session. The Flatpak, the AppImage and the `.deb` run on
+  native Wayland and fall back to X11 where the session has no Wayland, so Orca reads a different backend in each.
+  Step 8 is there for that: check key echo and caret tracking in a text field on both sessions.
 - Run it from the Flatpak and from the `.deb`, and from the AppImage when time allows. GNOME is the baseline desktop,
   KDE Plasma a second one.
 - Find the versions with `orca --version`, `echo $XDG_SESSION_TYPE`, `dpkg -s libwebkit2gtk-4.1-0 | grep Version`
@@ -181,7 +181,7 @@ Newest first. Write the steps as fourteen marks in order, like `P P P S S W P P 
 
 | Date | FundaCAD | OS and session | Package | Webview | Screen reader | Steps 1 to 14 | Tester | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| to record | next release | Ubuntu 24.04 GNOME, Wayland (XWayland) | Flatpak | WebKitGTK 4.1, GNOME 50 runtime | Orca |  |  | First run, the Orca on WebKitGTK 4.1 baseline. Note key echo and caret tracking under XWayland. |
+| to record | next release | Ubuntu 24.04 GNOME, Wayland | Flatpak | WebKitGTK 4.1, GNOME 50 runtime | Orca |  |  | First run, the Orca on WebKitGTK 4.1 baseline. Note key echo and caret tracking under native Wayland. |
 | to record | next release | Ubuntu 22.04 GNOME, X11 | `.deb` | WebKitGTK 4.1 (system) | Orca |  |  | First run, the X11 half of the baseline. |
 | to record | next release | Windows 11 | installer | WebView2 | NVDA |  |  | First run. |
 | to record | next release | macOS 14 or later | `.dmg` | WKWebView | VoiceOver |  |  | First run, the only check of the macOS tree. |
