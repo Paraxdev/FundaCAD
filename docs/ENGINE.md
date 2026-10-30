@@ -405,8 +405,10 @@ worker reached over Tauri IPC, so the webview never opens a socket.
   Linux leg installs `cmake`, which `.github/actions/linux-deps` deliberately
   leaves out.
 - The updater is on for every channel. Since run 386 `tauri.conf.json` carries
-  this project's own minisign pubkey (`57D9422..`), and `release` signs each
-  installer with `TAURI_SIGNING_PRIVATE_KEY` and writes a signed `latest.json`.
+  this project's own minisign pubkey (`57D9422..`). The `sign` job, which builds
+  nothing, signs each updater bundle with `TAURI_SIGNING_PRIVATE_KEY` from the
+  `updater-signing` environment when the `UPDATER_SIGNING` variable is `true`,
+  and `release` writes a signed `latest.json` from those signatures.
   It still withholds the feed, with a warning, if the pubkey is upstream's
   again or nothing was signed. Installs from before 1.0.386 carry upstream's
   key, so they cannot verify an update and need a new installer.
