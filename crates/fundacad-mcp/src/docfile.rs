@@ -19,6 +19,7 @@ const KIND_GEOMETRY: u8 = 2;
 /// The last kind this build knows, the app carries every section above it.
 const KIND_SEGMENTS: u8 = 4;
 const MAX_TOTAL: u64 = 8 << 30;
+const MAX_DOC: u64 = 1 << 30;
 
 #[derive(Debug, Clone)]
 pub struct DocumentFileError(pub String);
@@ -358,17 +359,85 @@ fn read_fnda(raw: &[u8]) -> Result<(Value, Vec<(String, Vec<u8>)>, Vec<String>),
         return damaged();
     };
 
+    let rows = table_rows(table)?;
+    let mut spans: Vec<(usize, usize)> =
+        rows.iter().map(|r| (r.off, r.end)).filter(|(start, end)| end > start).collect();
+    spans.sort_unstable();
+    if spans.windows(2).any(|w| w[0].1 > w[1].0) {
+        return damaged();
+    }
+    let mut read: Vec<&Row> = Vec::new();
+    for r in &rows {
+        if r.kind == KIND_DOCUMENT && r.rawlen as u64 > MAX_DOC {
+            return fail(format!("this document is larger than {} MiB and was refused", MAX_DOC >> 20));
+        }
+        let repeat = r.kind == KIND_GEOMETRY && read.iter().any(|o| o.kind == KIND_GEOMETRY && o.name == r.name);
+        if (r.kind == KIND_DOCUMENT || r.kind == KIND_GEOMETRY) && !repeat {
+            read.push(r);
+        }
+    }
+    if read.iter().try_fold(0u64, |sum, r| sum.checked_add(r.rawlen as u64)).is_none_or(|sum| sum > MAX_TOTAL) {
+        return fail("this document expands to more than 8 GiB and was refused");
+    }
+
     let mut doc: Option<Value> = None;
-    let mut blobs = Vec::new();
-    let mut unread = Vec::new();
+    let mut blobs: Vec<(String, Vec<u8>)> = Vec::new();
+    let unread = rows
+        .iter()
+        .filter(|r| r.kind > KIND_SEGMENTS)
+        .map(|r| if r.name.is_empty() { format!("kind {}", r.kind) } else { r.name.clone() })
+        .collect();
+    for r in read {
+        if r.stored > raw.len() {
+            return damaged();
+        }
+        let mut data = Vec::with_capacity(r.stored);
+        let mut q = r.off;
+        while q < r.end && q < raw.len() && data.len() < r.stored {
+            data.extend_from_slice(&raw[q..(q + r.shard * r.k).min(raw.len())]);
+            q += (r.k + r.m) * r.shard;
+        }
+        data.truncate(r.stored);
+        let body = if r.codec == 1 { inflate_raw(&data, r.rawlen).unwrap_or_default() } else { data };
+        if body.len() != r.rawlen || hash(&body) != r.digest {
+            return damaged();
+        }
+        if r.kind == KIND_DOCUMENT {
+            doc = Some(cbor(&body)?);
+        } else if r.name == r.digest {
+            blobs.push((r.digest.clone(), body));
+        }
+    }
+    match doc {
+        Some(doc) => Ok((doc, blobs, unread)),
+        None => fail("this .fundab file has no document in it"),
+    }
+}
+
+struct Row {
+    kind: u8,
+    codec: u8,
+    name: String,
+    off: usize,
+    /// Where the section's shards and CRC table end.
+    end: usize,
+    stored: usize,
+    rawlen: usize,
+    digest: String,
+    shard: usize,
+    k: usize,
+    m: usize,
+}
+
+fn table_rows(table: &[u8]) -> Result<Vec<Row>, DocumentFileError> {
     let count = u32_at(table, 4) as usize;
+    let mut rows = Vec::new();
     let mut p = 8usize;
     for _ in 0..count {
         if p + 4 > table.len() {
             return damaged();
         }
-        let kind = table[p];
-        let codec = table[p + 1];
+        let (kind, codec) = (table[p], table[p + 1]);
         let nl = u16_at(table, p + 2) as usize;
         p += 4;
         if p + nl + 24 + 16 + 8 > table.len() {
@@ -386,48 +455,22 @@ fn read_fnda(raw: &[u8]) -> Result<(Value, Vec<(String, Vec<u8>)>, Vec<String>),
         let k = u16_at(table, p + 4) as usize;
         let m = u16_at(table, p + 6) as usize;
         p += 8;
-        if kind > KIND_SEGMENTS {
-            unread.push(if name.is_empty() { format!("kind {kind}") } else { name.clone() });
-        }
-        if kind != KIND_DOCUMENT && kind != KIND_GEOMETRY {
-            continue;
-        }
-        if rawlen as u64 > MAX_TOTAL {
-            return fail("this document expands to more than 8 GiB and was refused");
-        }
         if shard == 0 || k == 0 {
             return damaged();
         }
-        let groups = stored.div_ceil(shard * k);
-        let mut data = Vec::with_capacity(stored);
-        let mut q = off;
-        for _ in 0..groups {
-            let end = (q + shard * k).min(raw.len());
-            if q < raw.len() {
-                data.extend_from_slice(&raw[q..end]);
-            }
-            q += (k + m) * shard;
-        }
-        data.truncate(stored);
-        let body = if codec == 1 { inflate_raw(&data).unwrap_or_default() } else { data };
-        if body.len() != rawlen || hash(&body) != digest {
+        let len = stored.div_ceil(shard * k).checked_mul((k + m) * (shard + 4));
+        let Some(end) = len.and_then(|len| off.checked_add(len)) else {
             return damaged();
-        }
-        if kind == KIND_DOCUMENT {
-            doc = Some(cbor(&body)?);
-        } else if name == digest {
-            blobs.push((digest, body));
-        }
+        };
+        rows.push(Row { kind, codec, name, off, end, stored, rawlen, digest, shard, k, m });
     }
-    match doc {
-        Some(doc) => Ok((doc, blobs, unread)),
-        None => fail("this .fundab file has no document in it"),
-    }
+    Ok(rows)
 }
 
-fn inflate_raw(data: &[u8]) -> Option<Vec<u8>> {
+/// One byte past `rawlen` is enough to prove the declared length wrong.
+fn inflate_raw(data: &[u8], rawlen: usize) -> Option<Vec<u8>> {
     let mut out = Vec::new();
-    flate2::read::DeflateDecoder::new(data).read_to_end(&mut out).ok()?;
+    flate2::read::DeflateDecoder::new(data).take(rawlen as u64 + 1).read_to_end(&mut out).ok()?;
     Some(out)
 }
 

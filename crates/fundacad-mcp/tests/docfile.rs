@@ -121,9 +121,22 @@ fn write_fundab_with(
     blobs: &[(String, Vec<u8>)],
     extra: &[(u8, &str, Vec<u8>)],
 ) {
+    write_fundab_edited(path, document, blobs, extra, |_| {});
+}
+
+type Row = (u8, String, usize, usize, usize, [u8; 16]);
+
+/// Rows are kind, name, offset, stored length, raw length and hash, editable before the table is written.
+fn write_fundab_edited(
+    path: &Path,
+    document: &Map<String, Value>,
+    blobs: &[(String, Vec<u8>)],
+    extra: &[(u8, &str, Vec<u8>)],
+    edit: impl FnOnce(&mut Vec<Row>),
+) {
     let (shard, k, m) = (4096usize, 8usize, 4usize);
     let mut body = vec![0u8; 64];
-    let mut entries: Vec<(u8, String, usize, usize, usize, [u8; 16])> = Vec::new();
+    let mut entries: Vec<Row> = Vec::new();
     let mut sections: Vec<(u8, String, Vec<u8>)> = vec![(1, "document".into(), cbor(&Value::Object(document.clone())))];
     for (h, b) in blobs {
         sections.push((2, h.clone(), b.clone()));
@@ -148,6 +161,7 @@ fn write_fundab_with(
         h.finalize_variable(&mut d).unwrap();
         entries.push((kind, name, off, stored.len(), raw.len(), d));
     }
+    edit(&mut entries);
     let mut table: Vec<u8> = b"FTBL".to_vec();
     table.extend_from_slice(&(entries.len() as u32).to_le_bytes());
     for (kind, name, off, sl, rl, h) in &entries {
@@ -250,6 +264,59 @@ fn damaged_binary_and_wrong_geometry_are_refused() {
     let store = tmp.path().join("b2");
     assert!(docfile::read(&jpath, Some(&store)).is_err(), "geometry that does not match its hash was accepted");
     assert!(!store.join(format!("{d}.bbrep")).exists());
+}
+
+fn fundab_error(tag: &str, blobs: &[(String, Vec<u8>)], edit: impl FnOnce(&mut Vec<Row>)) -> String {
+    let tmp = tempfile::tempdir().unwrap();
+    let d = digest(&geometry());
+    let path = tmp.path().join(format!("{tag}.fundab"));
+    write_fundab_edited(&path, &doc(&d), blobs, &[], edit);
+    docfile::read_document(&path).map(|_| ()).unwrap_err().0
+}
+
+#[test]
+fn a_fundab_whose_sections_share_bytes_is_refused() {
+    let data = geometry();
+    let d = digest(&data);
+    for shift in [0, 1] {
+        let err = fundab_error("overlap", &[(d.clone(), data.clone())], |rows| {
+            let mut copy = rows[1].clone();
+            copy.0 = 9;
+            copy.2 += shift;
+            rows.push(copy);
+        });
+        assert!(err.contains("damaged"), "{err}");
+    }
+}
+
+#[test]
+fn a_fundab_holds_one_byte_budget_across_its_sections() {
+    let blobs: Vec<(String, Vec<u8>)> = (0..2u8).map(|i| vec![i; 1000]).map(|b| (digest(&b), b)).collect();
+    let err = fundab_error("budget", &blobs, |rows| {
+        for row in rows.iter_mut().filter(|r| r.0 == 2) {
+            row.4 = 5 << 30;
+        }
+    });
+    assert_eq!(err, "this document expands to more than 8 GiB and was refused");
+}
+
+#[test]
+fn a_fundab_document_section_past_1_gib_is_refused_before_it_is_read() {
+    let err = fundab_error("doccap", &[], |rows| rows[0].4 = (1 << 30) + 1);
+    assert_eq!(err, "this document is larger than 1024 MiB and was refused");
+}
+
+#[test]
+fn a_fundab_that_lists_one_geometry_twice_reads_it_once() {
+    let data = geometry();
+    let d = digest(&data);
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("twice.fundab");
+    let twice = [(d.clone(), data.clone()), (d.clone(), data.clone())];
+    // The second copy declares a length its bytes do not have, so reading it would fail the open.
+    write_fundab_edited(&path, &doc(&d), &twice, &[], |rows| rows[2].4 += 1);
+    let (back, blobs) = docfile::read_document(&path).unwrap();
+    assert_eq!((back, blobs), (doc(&d), vec![(d, data)]));
 }
 
 #[test]
