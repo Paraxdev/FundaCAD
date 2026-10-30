@@ -23,6 +23,7 @@ use tungstenite::Message;
 
 /// GPU time per frame, as in the app.
 const TRACE_BUDGET: Duration = Duration::from_millis(12);
+const LOCK_GAP: Duration = Duration::from_micros(200);
 const MAX_CONNECTIONS: usize = 4;
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 /// The largest pt_mesh body the app's page sends is a few tens of MB.
@@ -53,8 +54,8 @@ impl TracerSource {
         self.lock_for(None)
     }
 
-    /// A frame marks itself started under the camera's lock, so pt_camera's
-    /// answer and the frames that see its camera agree.
+    /// A frame marks itself started under the camera's lock, so pt_camera's answer and the frames that see its camera
+    /// agree. A first sample under way keeps its camera, as in the app.
     fn lock_for(&self, frame: Option<u32>) -> MutexGuard<'_, State> {
         let mut s = self.state.lock().unwrap_or_else(|p| p.into_inner());
         let camera = {
@@ -62,7 +63,11 @@ impl TracerSource {
             if let Some(seq) = frame {
                 a.drawn = seq;
             }
-            a.camera.take()
+            if s.tracer.sample_under_way() {
+                None
+            } else {
+                a.camera.take()
+            }
         };
         if let Some(c) = camera {
             s.tracer.set_camera(c);
@@ -87,26 +92,38 @@ impl TracerSource {
 impl FrameSource for TracerSource {
     fn render(&self, out: &mut [u8], width: u32, height: u32, seq: u32) {
         let mut s = self.lock_for(Some(seq));
-        if s.fault.is_some() {
-            out.fill(0);
-            return;
-        }
-        match catch_unwind(AssertUnwindSafe(|| s.tracer.frame(width, height, TRACE_BUDGET))) {
-            Ok(px) if px.len() == out.len() => out.copy_from_slice(&px),
-            Ok(px) => {
-                s.fault = Some(format!("a {} byte frame for a {} byte slot", px.len(), out.len()));
+        loop {
+            if s.fault.is_some() {
                 out.fill(0);
+                return;
             }
-            Err(e) => {
-                let why = e
-                    .downcast_ref::<String>()
-                    .cloned()
-                    .or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string()))
-                    .unwrap_or_else(|| "the tracer panicked".into());
-                eprintln!("[tracer_serve] tracer fault: {why}");
-                s.fault = Some(why);
-                out.fill(0);
+            match catch_unwind(AssertUnwindSafe(|| s.tracer.advance(width, height, TRACE_BUDGET))) {
+                Ok(None) => {}
+                Ok(Some(px)) if px.len() == out.len() => {
+                    out.copy_from_slice(&px);
+                    return;
+                }
+                Ok(Some(px)) => {
+                    s.fault = Some(format!("a {} byte frame for a {} byte slot", px.len(), out.len()));
+                    out.fill(0);
+                    return;
+                }
+                Err(e) => {
+                    let why = e
+                        .downcast_ref::<String>()
+                        .cloned()
+                        .or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string()))
+                        .unwrap_or_else(|| "the tracer panicked".into());
+                    eprintln!("[tracer_serve] tracer fault: {why}");
+                    s.fault = Some(why);
+                    out.fill(0);
+                    return;
+                }
             }
+            drop(s);
+            // A mutex is not fair, so without a pause a status waits for the whole sample.
+            std::thread::sleep(LOCK_GAP);
+            s = self.lock();
         }
     }
 }

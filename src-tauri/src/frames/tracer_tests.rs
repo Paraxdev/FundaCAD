@@ -111,3 +111,48 @@ fn a_camera_sent_during_a_frame_answers_at_once_and_the_next_frame_traces_with_i
     drop(t);
     release();
 }
+
+#[test]
+fn a_camera_waits_for_the_first_sample_under_way_and_a_picture_does_not() {
+    let _turn = one_at_a_time();
+    let Ok(t) = tracer() else {
+        eprintln!("skipped: no native tracer");
+        return;
+    };
+    with(|t| t.set_cap(4096)).unwrap();
+    let camera = Camera {
+        eye: [3.5, -12.0, 4.25],
+        target: [0.5, 1.5, -0.75],
+        up: [0.0, 0.0, 1.0],
+        fov: 38.0,
+        ortho: None,
+        lens: None,
+    };
+    let mut out = vec![0; 256 * 192 * 4];
+    t.render(&mut out, 256, 192, 1);
+    pt_camera(camera).unwrap();
+    {
+        let mut s = t.lock();
+        s.tracer.set_frame_budget(256 * 8);
+        assert!(s.tracer.step());
+        assert!(s.tracer.sample_under_way());
+    }
+    pt_camera(Camera { eye: [-6.0, 9.5, 2.0], ..camera }).unwrap();
+    assert!(t.lock().tracer.sample_under_way(), "a status restarted the first sample under way");
+    t.render(&mut out, 256, 192, 2);
+    assert!(out.chunks(4).all(|p| p[3] == 255), "a frame left with a pixel no sample reached");
+    assert!(t.aim().camera.is_some(), "the frame that ended the first sample took the newer camera");
+    assert_eq!(pt_status().unwrap().samples, 0, "the next status did not take the waiting camera");
+
+    with(|t| {
+        t.set_frame_budget(256 * 8);
+        t.step()
+    })
+    .unwrap();
+    pt_camera(camera).unwrap();
+    let s = t.lock_for_picture();
+    assert!(s.tracer.samples() == 0 && t.aim().camera.is_none(), "a picture left a camera waiting");
+    drop(s);
+    drop(t);
+    release();
+}

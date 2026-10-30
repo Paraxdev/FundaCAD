@@ -202,27 +202,48 @@ impl Tracer {
         self.sample - before
     }
 
-    /// Applies pending scene changes, traces for `budget` and resolves. At the cap it hands out the held frame, then
-    /// the denoised one; a software band can end mid sample, so the sample count is no sign of a finished picture.
+    /// The first sample since a reset has begun and not ended, so some rows hold no light yet.
+    pub fn sample_under_way(&self) -> bool {
+        self.sample == 0 && self.row0 > 0
+    }
+
+    /// `advance` until it has a frame. A budget of zero still traces a first sample.
     pub fn frame(&mut self, w: u32, h: u32, budget: Duration) -> Vec<u8> {
+        let mut slice = budget;
+        loop {
+            if let Some(px) = self.advance(w, h, slice) {
+                return px;
+            }
+            slice = slice.max(Duration::from_millis(1));
+        }
+    }
+
+    /// Applies pending scene changes, traces for `budget` and resolves. None while the first sample since a reset is
+    /// unfinished, since unsampled rows are black and a frame of them flashes. After a fault the frame is all zeros, so
+    /// a caller's loop always ends. At the cap it hands out the held frame, then the denoised one; a software band can
+    /// end mid sample, so the sample count is no sign of a finished picture.
+    pub fn advance(&mut self, w: u32, h: u32, budget: Duration) -> Option<Vec<u8>> {
         if self.fault().is_some() {
-            return vec![0; w.max(1) as usize * h.max(1) as usize * 4];
+            return Some(vec![0; w.max(1) as usize * h.max(1) as usize * 4]);
         }
         self.resize(w, h);
         self.apply();
         if self.done() && self.held.as_ref().is_some_and(|h| h.key == self.key()) {
             self.collect_denoise();
             self.rebloom_held();
-            return self.held.as_ref().map(|h| h.pixels.clone()).unwrap_or_default();
+            return self.held.as_ref().map(|h| h.pixels.clone());
         }
         self.trace_for(budget);
+        if self.sample == 0 && self.fault().is_none() {
+            return None;
+        }
         let pixels = self.resolve();
         self.held =
             Some(Held { key: self.key(), pixels: pixels.clone(), denoised: false, bloom: self.bloom, denoise: None });
         if self.done() {
             self.start_denoise();
         }
-        pixels
+        Some(pixels)
     }
 
     pub(super) fn key(&self) -> FrameKey {

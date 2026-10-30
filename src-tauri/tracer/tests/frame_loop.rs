@@ -83,6 +83,57 @@ mod t {
         Some(s)
     }
 
+    /// The quad fills the view from above, so a row without light was never traced.
+    #[test]
+    fn a_frame_after_a_camera_move_has_no_unsampled_rows() {
+        let Some(mut s) = red_quad_at_cap(2) else { return };
+        for (i, budget) in [Duration::from_millis(1), Duration::ZERO].into_iter().enumerate() {
+            let x = 0.1 * (i + 1) as f32;
+            let camera: Camera = serde_json::from_value(
+                serde_json::json!({ "eye": [x, 0, 6], "target": [x, 0, 0], "up": [0, 1, 0], "fov": 50 }),
+            )
+            .unwrap();
+            s.set_camera(camera);
+            s.set_frame_budget(64 * 8);
+            let px = s.frame(64, 48, budget);
+            let black: Vec<usize> =
+                px.chunks(64 * 4).enumerate().filter(|(_, r)| r.chunks(4).all(|p| p[0] == 0)).map(|(y, _)| y).collect();
+            assert!(
+                black.is_empty(),
+                "budget {budget:?}: {} of 48 rows are black, from row {:?}",
+                black.len(),
+                black.first()
+            );
+        }
+    }
+
+    #[test]
+    fn no_frame_leaves_until_every_pixel_has_a_sample() {
+        let Some(mut s) = red_quad_at_cap(2) else { return };
+        s.frame(64, 48, Duration::from_millis(1));
+        let camera: Camera = serde_json::from_value(
+            serde_json::json!({ "eye": [0.3, 0, 6], "target": [0.3, 0, 0], "up": [0, 1, 0], "fov": 50 }),
+        )
+        .unwrap();
+        s.set_camera(camera);
+        assert!(!s.sample_under_way(), "a reset starts no sample");
+        assert_eq!(s.advance(64, 48, Duration::ZERO), None, "nothing traced yet");
+        s.set_frame_budget(64 * 8);
+        assert!(s.step());
+        assert!(s.sample_under_way());
+        assert_eq!(s.advance(64, 48, Duration::ZERO), None, "only the top band has light");
+        let partial = s.resolve();
+        let alpha = |row: usize, px: &[u8]| px[row * 64 * 4 + 3];
+        assert_eq!((alpha(0, &partial), alpha(47, &partial)), (255, 0), "an unsampled pixel is marked");
+        let whole = loop {
+            if let Some(px) = s.advance(64, 48, Duration::from_millis(1)) {
+                break px;
+            }
+        };
+        assert!(!s.sample_under_way());
+        assert!(whole.chunks(4).all(|p| p[3] == 255), "a whole frame has no marked pixel");
+    }
+
     fn frames_until_denoised(s: &mut Tracer) {
         let start = std::time::Instant::now();
         while !s.denoised() {
