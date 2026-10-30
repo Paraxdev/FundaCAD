@@ -750,7 +750,7 @@ jobs:
         run: |
           sudo timeout -k 10 300 apt-get install -y -qq cage
           sh scripts/wayland-smoke.sh "$RUNNER_TEMP/wayland-smoke" \
-            dbus-run-session -- flatpak run dev.fundacad.app
+            dbus-run-session -- flatpak run --env=WAYLAND_DEBUG=client dev.fundacad.app
 
       - name: Upload the Wayland smoke log
         if: always()

@@ -5,16 +5,26 @@ import { describe, expect, it } from "vitest";
 
 import workflow from "../../.github/workflows/build.yml?raw";
 
-const job = /^ {2}build-flatpak:\r?\n([\s\S]*?)(?=^ {2}\S)/m.exec(workflow)?.[1] ?? "";
-const steps = job
-  .split(/^ {6}- /m)
-  .slice(1)
-  .map((text) => ({ name: /name: (.*)/.exec(text)?.[1]?.trim() ?? "", text }));
-const smoke = steps.find((s) => s.text.includes("scripts/wayland-smoke.sh"));
+function jobSteps(name: string) {
+  const job = new RegExp(String.raw`^ {2}${name}:\r?\n([\s\S]*?)(?=^ {2}\S)`, "m").exec(workflow)?.[1] ?? "";
+  return job
+    .split(/^ {6}- /m)
+    .slice(1)
+    .map((text) => ({ name: /name: (.*)/.exec(text)?.[1]?.trim() ?? "", text }));
+}
 
 describe("the Flatpak job's Wayland smoke", () => {
+  const steps = jobSteps("build-flatpak");
+  const smoke = steps.find((s) => s.text.includes("scripts/wayland-smoke.sh"));
+
   it("runs the installed Flatpak through the smoke script", () => {
-    expect(smoke?.text).toMatch(/sh scripts\/wayland-smoke\.sh "\$RUNNER_TEMP\/[^"]+"[\s\S]*flatpak run[^\n]*dev\.fundacad\.app/);
+    expect(smoke?.text).toMatch(
+      /sh scripts\/wayland-smoke\.sh "\$RUNNER_TEMP\/[^"]+"[\s\S]*flatpak run[^\n]*dev\.fundacad\.app/,
+    );
+  });
+
+  it("passes the protocol log switch into the sandbox, since the smoke reads that log", () => {
+    expect(smoke?.text).toMatch(/flatpak run --env=WAYLAND_DEBUG=client dev\.fundacad\.app/);
   });
 
   it("installs cage first", () => {
@@ -22,7 +32,7 @@ describe("the Flatpak job's Wayland smoke", () => {
   });
 
   it("does not gate the job yet", () => {
-    expect(smoke?.text).toMatch(/^ {8}continue-on-error: true$/m);
+    expect(smoke?.text).toMatch(/^ {8}continue-on-error: true\r?$/m);
   });
 
   it("comes after the Flatpak is installed", () => {
