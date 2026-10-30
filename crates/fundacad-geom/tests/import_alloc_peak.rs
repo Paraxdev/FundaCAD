@@ -5,8 +5,11 @@ use std::borrow::Cow;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 
-use fundacad_geom::import::{gltf, scan, x3d};
+use fundacad_geom::import::{gltf, mesh, scan, x3d};
 use serde_json::json;
+
+#[path = "support/threemf.rs"]
+mod threemf;
 
 struct Peak;
 
@@ -78,4 +81,29 @@ fn a_gltf_node_listing_more_children_than_the_visit_budget_is_refused_before_the
     let (out, peak) = peak_of(|| gltf::read_gltf(&doc, &[Cow::Owned(Vec::new())], 1.0).err());
     assert_eq!(out.as_deref(), Some("this glTF places its nodes under too many parents to import"));
     assert!(peak < 1 << 20, "{peak}");
+}
+
+fn read_3mf_part(tag: &str, zip: Vec<u8>) -> (Result<usize, String>, usize) {
+    let dir = std::env::temp_dir().join(format!("fundacad-3mf-peak-{}-{tag}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("part.3mf");
+    std::fs::write(&path, zip).unwrap();
+    let out = peak_of(|| mesh::read_triangles(&path, "3mf").map(|(_, idx)| idx.len()));
+    let _ = std::fs::remove_dir_all(&dir);
+    out
+}
+
+#[test]
+fn a_3mf_part_of_many_small_elements_is_read_without_holding_it_whole() {
+    let block = "<metadata/>".repeat(1 << 16);
+    let (out, peak) = read_3mf_part("tags", threemf::repeated_part(block.as_bytes(), 300));
+    assert_eq!(out, Ok(0));
+    assert!(peak < 16 << 20, "{peak}");
+}
+
+#[test]
+fn a_3mf_part_holding_one_long_run_of_text_is_refused_without_holding_it() {
+    let (out, peak) = read_3mf_part("text", threemf::repeated_part(&[b' '; 1 << 20], 300));
+    assert_eq!(out, Err("could not read the 3MF file: it holds a run of text longer than 16 MiB".to_string()));
+    assert!(peak < 64 << 20, "{peak}");
 }

@@ -233,6 +233,31 @@ fn model_parts<R: std::io::Read + std::io::Seek>(z: &zip::ZipArchive<R>) -> zip:
         .collect()
 }
 
+const MAX_3MF_TEXT_RUN: usize = 16 << 20;
+
+/// A part read as it unpacks, counting its bytes and refusing a text or tag run
+/// longer than `MAX_3MF_TEXT_RUN`, the most the XML reader ever buffers at once.
+struct ModelPart<R> {
+    inner: R,
+    read: u64,
+    run: usize,
+}
+
+impl<R: Read> Read for ModelPart<R> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let n = self.inner.read(buf)?;
+        self.read += n as u64;
+        for &b in &buf[..n] {
+            self.run = if b == b'<' || b == b'>' { 0 } else { self.run + 1 };
+        }
+        if self.run > MAX_3MF_TEXT_RUN {
+            let why = format!("it holds a run of text longer than {} MiB", MAX_3MF_TEXT_RUN >> 20);
+            return Err(std::io::Error::other(why));
+        }
+        Ok(n)
+    }
+}
+
 /// Every mesh object of every model part, root part first.
 fn threemf_meshes(path: &Path) -> Result<Vec<Triangles>, String> {
     use quick_xml::events::Event;
@@ -243,14 +268,22 @@ fn threemf_meshes(path: &Path) -> Result<Vec<Triangles>, String> {
     let mut out = Vec::new();
     let mut budget = MAX_3MF_UNPACKED_BYTES;
     for name in parts {
-        let mut xml = String::new();
         let part = z.by_name(&name).map_err(|e| bad(&e))?;
-        part.take(budget + 1).read_to_string(&mut xml).map_err(|e| bad(&e))?;
-        budget = budget.checked_sub(xml.len() as u64).ok_or_else(threemf_unpacks_too_far)?;
-        let mut reader = quick_xml::Reader::from_str(&xml);
+        let part = ModelPart { inner: part.take(budget + 1), read: 0, run: 0 };
+        let mut reader = quick_xml::Reader::from_reader(std::io::BufReader::new(part));
+        let mut buf = Vec::new();
         let mut current: Option<Triangles> = None;
         loop {
-            match reader.read_event().map_err(|e| bad(&e))? {
+            buf.clear();
+            let event = reader.read_event_into(&mut buf);
+            if reader.get_ref().get_ref().read > budget {
+                return Err(threemf_unpacks_too_far());
+            }
+            let event = event.map_err(|e| match e {
+                quick_xml::Error::Io(io) => bad(&io),
+                e => bad(&e),
+            })?;
+            match event {
                 Event::Start(e) | Event::Empty(e) => {
                     let local = e.local_name();
                     let attr = |key: &[u8]| {
@@ -289,6 +322,7 @@ fn threemf_meshes(path: &Path) -> Result<Vec<Triangles>, String> {
                 _ => {}
             }
         }
+        budget -= reader.get_ref().get_ref().read;
     }
     Ok(out)
 }

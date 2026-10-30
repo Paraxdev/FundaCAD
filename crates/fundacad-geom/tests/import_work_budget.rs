@@ -8,6 +8,10 @@ use std::time::Duration;
 use fundacad_geom::import::{self, blobstore::BlobStore, dxf, gltf, mesh, off, ply, scan, svg, x3d};
 use serde_json::{json, Value};
 
+#[path = "support/threemf.rs"]
+mod threemf;
+use threemf::{deflate, repeated_part, threemf_zip};
+
 /// Runs `f` on its own thread and fails the test if it takes longer than `secs`.
 fn within<T: Send + 'static>(secs: u64, f: impl FnOnce() -> T + Send + 'static) -> T {
     let (tx, rx) = mpsc::channel();
@@ -188,51 +192,6 @@ fn an_x3d_shape_with_many_children_reused_many_times_is_held_to_a_visit_budget()
     assert_eq!(out.as_deref(), Some("this scene reuses its nodes too many times to import"));
 }
 
-/// A one part 3MF zip written by hand, so the sizes it declares can differ from the data.
-fn threemf_zip(deflated: &[u8], crc: u32, declared: u32) -> Vec<u8> {
-    let name = b"3D/3dmodel.model";
-    let head = |sig: u32, central: bool| {
-        let mut h = sig.to_le_bytes().to_vec();
-        if central {
-            h.extend(20u16.to_le_bytes());
-        }
-        for v in [20u16, 0, 8, 0, 0x21] {
-            h.extend(v.to_le_bytes());
-        }
-        for v in [crc, deflated.len() as u32, declared] {
-            h.extend(v.to_le_bytes());
-        }
-        h.extend((name.len() as u16).to_le_bytes());
-        h.extend(0u16.to_le_bytes());
-        if central {
-            h.extend([0u8; 10]);
-            h.extend(0u32.to_le_bytes());
-        }
-        h.extend(name);
-        h
-    };
-    let mut z = head(0x0403_4b50, false);
-    z.extend(deflated);
-    let cd_at = z.len() as u32;
-    let cd = head(0x0201_4b50, true);
-    z.extend(&cd);
-    z.extend(0x0605_4b50u32.to_le_bytes());
-    for v in [0u16, 0, 1, 1] {
-        z.extend(v.to_le_bytes());
-    }
-    z.extend((cd.len() as u32).to_le_bytes());
-    z.extend(cd_at.to_le_bytes());
-    z.extend(0u16.to_le_bytes());
-    z
-}
-
-fn deflate(data: &[u8], flush: flate2::FlushCompress) -> Vec<u8> {
-    let mut c = flate2::Compress::new(flate2::Compression::fast(), false);
-    let mut out = Vec::with_capacity(data.len() / 8 + 1024);
-    c.compress_vec(data, &mut out, flush).unwrap();
-    out
-}
-
 const CUBE_MODEL: &str = r#"<?xml version="1.0"?><model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"><resources><object id="1" type="model"><mesh><vertices><vertex x="0" y="0" z="0"/><vertex x="10" y="0" z="0"/><vertex x="10" y="10" z="0"/><vertex x="0" y="10" z="0"/><vertex x="0" y="0" z="10"/><vertex x="10" y="0" z="10"/><vertex x="10" y="10" z="10"/><vertex x="0" y="10" z="10"/></vertices><triangles><triangle v1="0" v2="2" v3="1"/><triangle v1="0" v2="3" v3="2"/><triangle v1="4" v2="5" v3="6"/><triangle v1="4" v2="6" v3="7"/><triangle v1="0" v2="1" v3="5"/><triangle v1="0" v2="5" v3="4"/><triangle v1="1" v2="2" v3="6"/><triangle v1="1" v2="6" v3="5"/><triangle v1="2" v2="3" v3="7"/><triangle v1="2" v2="7" v3="6"/><triangle v1="3" v2="0" v3="4"/><triangle v1="3" v2="4" v3="7"/></triangles></mesh></object></resources><build><item objectid="1"/></build></model>"#;
 
 fn import_3mf(tag: &str, zip: Vec<u8>) -> Result<serde_json::Map<String, Value>, String> {
@@ -267,16 +226,7 @@ fn a_3mf_part_declaring_a_scan_sized_model_still_imports() {
 
 #[test]
 fn a_3mf_part_that_unpacks_past_the_budget_is_refused() {
-    let spaces = vec![b' '; 1 << 20];
-    let block = deflate(&spaces, flate2::FlushCompress::Sync);
-    let mut data: Vec<u8> = std::iter::repeat_n(&block[..], 1100).flatten().copied().collect();
-    data.extend([0x03, 0x00]);
-    let (mut crc, mut one) = (flate2::Crc::new(), flate2::Crc::new());
-    one.update(&spaces);
-    for _ in 0..1100 {
-        crc.combine(&one);
-    }
-    let zip = threemf_zip(&data, crc.sum(), 1100 << 20);
+    let zip = repeated_part(&[b' '; 1 << 20], 1100);
     let e = within(120, move || import_3mf("unpacked", zip).err()).expect("a part past the budget is refused");
     assert!(e.contains("unpacks past"), "{e}");
 }
