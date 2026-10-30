@@ -55,3 +55,38 @@ fn the_token_is_not_readable_by_other_accounts() {
     assert_eq!(mode, 0o600, "the session file is group/world readable");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn a_leftover_temporary_does_not_stop_the_write() {
+    let dir = std::env::temp_dir().join(format!("fundacad-session-stale-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join(format!("{FILE_NAME}.3.tmp")), "stale").unwrap();
+    let info = SessionInfo { port: 2, token: "fresh".into(), pid: 3 };
+    let path = write_into(&dir, &info).unwrap();
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), to_json(&info));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The token goes into a new file, so a handle on an older temporary of the same name never sees it.
+#[cfg(unix)]
+#[test]
+fn the_token_lands_in_a_fresh_owner_only_file() {
+    use std::io::Read;
+    use std::os::unix::fs::PermissionsExt;
+    let dir = std::env::temp_dir().join(format!("fundacad-session-fresh-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let tmp = dir.join(format!("{FILE_NAME}.4.tmp"));
+    std::fs::write(&tmp, "").unwrap();
+    std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o644)).unwrap();
+    let mut held = std::fs::File::open(&tmp).unwrap();
+
+    let path = write_into(&dir, &SessionInfo { port: 3, token: "secret-token".into(), pid: 4 }).unwrap();
+    let mut seen = String::new();
+    held.read_to_string(&mut seen).unwrap();
+    assert!(!seen.contains("secret-token"), "the token was written into the older file: {seen:?}");
+    let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+    assert_eq!(mode, 0o600);
+    let _ = std::fs::remove_dir_all(&dir);
+}
