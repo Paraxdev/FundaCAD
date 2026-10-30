@@ -431,3 +431,161 @@ fn proposal_ids_never_repeat_across_a_release_or_a_new_session() {
     assert_eq!((ids.len(), unique.len()), (13, 13), "{ids:?}");
     assert!(ids.iter().all(|id| id.starts_with('p')), "{ids:?}");
 }
+
+fn ask(s: &mut LiveSession, who: &str, path: &str) -> Value {
+    wire(
+        s,
+        who,
+        "session_ask",
+        json!({"name": "Claude", "ask": {"kind": "save", "tool": "doc_save", "path": path, "exts": ["funda"]}}),
+    )
+}
+
+fn poll(s: &mut LiveSession, who: &str, id: &Value) -> Value {
+    wire(s, who, "session_ask", json!({"askId": id}))
+}
+
+fn host(s: &mut LiveSession, who: &str) -> Value {
+    wire(s, who, "session_host", json!({"document": doc(1), "revision": 1}))
+}
+
+#[test]
+fn an_ask_reaches_the_app_once_and_its_answer_goes_back_once() {
+    let (mut s, _) = session();
+    host(&mut s, APP);
+    let r = ask(&mut s, AGENT, "/home/u/bracket.funda");
+    assert_eq!(r["ok"], true);
+    let id = r["askId"].clone();
+    assert!(id.as_str().is_some_and(|i| i.starts_with('a')));
+    let asks = host(&mut s, APP)["asks"].clone();
+    assert_eq!(
+        asks,
+        json!([{"askId": id, "kind": "save", "tool": "doc_save", "path": "/home/u/bracket.funda",
+            "exts": ["funda"], "name": "Claude"}])
+    );
+    assert!(host(&mut s, APP).get("asks").is_none());
+    assert_eq!(poll(&mut s, AGENT, &id), json!({"ok": true, "answered": false}));
+    let picked = "/run/user/1000/doc/ab12/bracket.funda";
+    assert_eq!(wire(&mut s, APP, "session_answer", json!({"askId": id, "path": picked})), json!({"ok": true}));
+    assert_eq!(poll(&mut s, AGENT, &id), json!({"ok": true, "answered": true, "path": picked}));
+    assert_eq!(poll(&mut s, AGENT, &id)["reason"], "unknown");
+}
+
+#[test]
+fn a_declined_ask_answers_no_path() {
+    let (mut s, _) = session();
+    host(&mut s, APP);
+    let id = ask(&mut s, AGENT, "/home/u/a.funda")["askId"].clone();
+    host(&mut s, APP);
+    wire(&mut s, APP, "session_answer", json!({"askId": id, "path": null}));
+    assert_eq!(poll(&mut s, AGENT, &id), json!({"ok": true, "answered": true, "path": null}));
+}
+
+#[test]
+fn without_a_host_nobody_can_be_asked() {
+    let (mut s, _) = session();
+    let r = ask(&mut s, AGENT, "/home/u/a.funda");
+    assert_eq!((r["ok"].clone(), r["reason"].clone()), (json!(false), json!("no-host")));
+}
+
+#[test]
+fn a_guest_has_one_ask_open_at_a_time() {
+    let (mut s, _) = session();
+    host(&mut s, APP);
+    assert_eq!(ask(&mut s, AGENT, "/a.funda")["ok"], true);
+    assert_eq!(ask(&mut s, AGENT, "/b.funda")["reason"], "busy");
+    assert_eq!(ask(&mut s, OTHER, "/b.funda")["ok"], true);
+    assert_eq!(host(&mut s, APP)["asks"].as_array().map(Vec::len), Some(2));
+}
+
+#[test]
+fn a_cancelled_ask_is_never_handed_over_or_answered() {
+    let (mut s, _) = session();
+    host(&mut s, APP);
+    let id = ask(&mut s, AGENT, "/a.funda")["askId"].clone();
+    assert_eq!(wire(&mut s, AGENT, "session_ask", json!({"askId": id, "cancel": true})), json!({"ok": true}));
+    assert!(host(&mut s, APP).get("asks").is_none());
+    assert_eq!(wire(&mut s, APP, "session_answer", json!({"askId": id, "path": "/x"}))["reason"], "unknown");
+    assert_eq!(ask(&mut s, AGENT, "/b.funda")["ok"], true);
+}
+
+#[test]
+fn a_release_or_a_new_host_closes_open_asks() {
+    let (mut s, _) = session();
+    host(&mut s, APP);
+    let id = ask(&mut s, AGENT, "/a.funda")["askId"].clone();
+    host(&mut s, APP);
+    wire(&mut s, APP, "session_release", json!({}));
+    assert_eq!(poll(&mut s, AGENT, &id), json!({"ok": true, "answered": true, "path": null, "closed": true}));
+
+    host(&mut s, APP);
+    let id = ask(&mut s, AGENT, "/a.funda")["askId"].clone();
+    assert!(host(&mut s, "app2").get("asks").is_none());
+    assert_eq!(poll(&mut s, AGENT, &id)["closed"], true);
+}
+
+#[test]
+fn the_same_host_keeps_its_asks_when_it_opens_another_document() {
+    let (mut s, _) = session();
+    host(&mut s, APP);
+    let id = ask(&mut s, AGENT, "/a.funda")["askId"].clone();
+    let r = wire(&mut s, APP, "session_host", json!({"doc": "d2", "document": doc(1), "revision": 1}));
+    assert_eq!(r["asks"][0]["askId"], id);
+}
+
+#[test]
+fn an_expired_guest_takes_its_ask_with_it() {
+    let (mut s, t) = session();
+    host(&mut s, APP);
+    let id = ask(&mut s, AGENT, "/a.funda")["askId"].clone();
+    advance(&t, GUEST_TTL + 1.0);
+    assert!(host(&mut s, APP).get("asks").is_none());
+    assert_eq!(wire(&mut s, APP, "session_answer", json!({"askId": id, "path": "/x"}))["reason"], "unknown");
+    assert_eq!(poll(&mut s, AGENT, &id)["reason"], "unknown");
+}
+
+#[test]
+fn a_leaving_guest_takes_its_ask_with_it() {
+    let (mut s, _) = session();
+    host(&mut s, APP);
+    let id = ask(&mut s, AGENT, "/a.funda")["askId"].clone();
+    wire(&mut s, AGENT, "session_leave", json!({}));
+    assert!(host(&mut s, APP).get("asks").is_none());
+    assert_eq!(poll(&mut s, AGENT, &id)["reason"], "unknown");
+}
+
+#[test]
+fn only_a_guest_asks_and_only_the_host_answers() {
+    let (mut s, _) = session();
+    host(&mut s, APP);
+    assert_eq!(ask(&mut s, APP, "/a.funda")["reason"], "not a guest");
+    let id = ask(&mut s, AGENT, "/a.funda")["askId"].clone();
+    assert_eq!(wire(&mut s, OTHER, "session_answer", json!({"askId": id, "path": "/x"}))["reason"], "not the host");
+    assert_eq!(poll(&mut s, OTHER, &id)["reason"], "unknown");
+    assert_eq!(poll(&mut s, AGENT, &id)["answered"], false);
+}
+
+#[test]
+fn a_malformed_ask_is_refused_and_a_long_one_is_trimmed() {
+    let (mut s, _) = session();
+    host(&mut s, APP);
+    let bad = |s: &mut LiveSession, a: Value| wire(s, AGENT, "session_ask", json!({"ask": a}))["reason"].clone();
+    assert_eq!(bad(&mut s, json!({"kind": "delete", "path": "/a"})), "bad-ask");
+    assert_eq!(bad(&mut s, json!({"kind": "open", "path": ""})), "bad-ask");
+    assert_eq!(bad(&mut s, json!({"kind": "open", "path": 3})), "bad-ask");
+    assert_eq!(bad(&mut s, json!({"kind": "open", "path": "/".repeat(MAX_ASK_PATH + 1)})), "bad-ask");
+    assert_eq!(bad(&mut s, Value::Null), "bad-ask");
+    let exts: Vec<String> = (0..20).map(|i| format!("e{i}")).chain(["../x".into(), "s t l".into()]).collect();
+    let r = wire(
+        &mut s,
+        AGENT,
+        "session_ask",
+        json!({"ask": {"kind": "folder", "tool": "x".repeat(500), "path": "/out", "exts": exts}}),
+    );
+    assert_eq!(r["ok"], true);
+    let a = host(&mut s, APP)["asks"][0].clone();
+    assert_eq!(a["exts"].as_array().map(Vec::len), Some(MAX_ASK_EXTS));
+    assert_eq!(a["tool"].as_str().map(str::len), Some(MAX_ASK_TOOL));
+    assert_eq!(a["name"], AGENT);
+    assert!(is_session_op("session_ask") && is_session_op("session_answer"));
+}

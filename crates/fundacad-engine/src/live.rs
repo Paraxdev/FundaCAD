@@ -15,8 +15,27 @@ pub const MAX_NOTE: usize = 400;
 pub const MAX_CAPTION: usize = 600;
 /// Refusals of the engine's own kept for guests, as many as the app keeps of its own.
 pub const MAX_REFUSED: usize = 16;
+/// Characters of a path a guest asks the user for, as long as Linux lets a path be.
+pub const MAX_ASK_PATH: usize = 4096;
+/// File extensions an ask may filter the dialog by.
+pub const MAX_ASK_EXTS: usize = 8;
+/// Characters of the tool name an ask carries into the dialog title.
+pub const MAX_ASK_TOOL: usize = 40;
 
 pub type Clock = Box<dyn Fn() -> f64 + Send>;
+
+/// A guest's request that the user pick a path in the host's file dialog.
+struct Ask {
+    id: String,
+    guest: String,
+    /// What the host is handed: kind, tool, path, exts and the guest's name.
+    shown: Map<String, Value>,
+    handed: bool,
+    /// `Some(None)` once the user declined or the host went away.
+    answer: Option<Option<String>>,
+    closed: bool,
+    seen: f64,
+}
 
 pub struct LiveSession {
     clock: Clock,
@@ -42,6 +61,8 @@ pub struct LiveSession {
     guide_step: Option<Map<String, Value>>,
     guide_wait: Option<Map<String, Value>>,
     next_guide_seq: i64,
+    asks: Vec<Ask>,
+    next_ask: u64,
 }
 
 fn truthy(v: Option<&Value>) -> bool {
@@ -94,6 +115,8 @@ impl LiveSession {
             guide_step: None,
             guide_wait: None,
             next_guide_seq: 0,
+            asks: Vec::new(),
+            next_ask: 0,
         }
     }
 
@@ -104,6 +127,7 @@ impl LiveSession {
     }
 
     fn reset(&mut self) {
+        self.close_asks();
         self.host_id = None;
         self.doc = Value::Null;
         self.document = Value::Null;
@@ -150,6 +174,9 @@ impl LiveSession {
         title: Value,
         status: Value,
     ) -> Value {
+        if self.host_id.as_deref() != Some(host_id) {
+            self.close_asks();
+        }
         if self.host_id.as_deref() != Some(host_id) || self.doc != doc {
             self.host_id = Some(host_id.to_owned());
             self.doc = doc;
@@ -177,7 +204,20 @@ impl LiveSession {
         }
         let over = self.refused.len().saturating_sub(MAX_REFUSED);
         self.refused.drain(..over);
-        json!({"ok": true, "guests": guests, "proposals": taken})
+        let mut out = json!({"ok": true, "guests": guests, "proposals": taken});
+        let asks: Vec<Value> = self
+            .asks
+            .iter_mut()
+            .filter(|a| !a.handed && a.answer.is_none())
+            .map(|a| {
+                a.handed = true;
+                Value::Object(a.shown.clone())
+            })
+            .collect();
+        if !asks.is_empty() {
+            out["asks"] = Value::Array(asks);
+        }
+        out
     }
 
     /// `release`: only the host ends the session, and the document goes with it.
@@ -310,6 +350,85 @@ impl LiveSession {
         self.guests.remove(guest_id);
         self.pending.retain(|p| p.get("guest").and_then(Value::as_str) != Some(guest_id));
         self.drop_guide_of(guest_id);
+        self.asks.retain(|a| a.guest != guest_id);
+        json!({"ok": true})
+    }
+
+    fn close_asks(&mut self) {
+        for a in self.asks.iter_mut().filter(|a| a.answer.is_none()) {
+            a.answer = Some(None);
+            a.closed = true;
+        }
+    }
+
+    /// `ask` from a guest: queue a request that the user pick a path in the host's file dialog.
+    pub fn ask(&mut self, guest_id: &str, ask: Option<&Value>, name: Option<&Value>) -> Value {
+        self.touch(guest_id, name);
+        self.guest_names();
+        if self.host_id.is_none() {
+            return json!({"ok": false, "reason": "no-host",
+                "message": "no FundaCAD window is sharing a document"});
+        }
+        if self.asks.iter().any(|a| a.guest == guest_id) {
+            return json!({"ok": false, "reason": "busy",
+                "message": "the user is already being asked for a file for this assistant"});
+        }
+        let Some(mut shown) = ask_shown(ask) else {
+            return json!({"ok": false, "reason": "bad-ask",
+                "message": "an ask needs a kind of open, save or folder and a path"});
+        };
+        self.next_ask += 1;
+        let id = format!("a{}-{}", self.nonce, self.next_ask);
+        let name = self.guests.get(guest_id).map_or_else(|| json!(guest_id), |(n, _)| json!(name_text(n)));
+        shown.insert("askId".into(), json!(id));
+        shown.insert("name".into(), name);
+        let seen = (self.clock)();
+        self.asks.push(Ask {
+            id: id.clone(),
+            guest: guest_id.to_owned(),
+            shown,
+            handed: false,
+            answer: None,
+            closed: false,
+            seen,
+        });
+        json!({"ok": true, "askId": id})
+    }
+
+    /// The guest's poll of its ask, also its heartbeat. An answer is given once and the ask goes with it.
+    pub fn ask_poll(&mut self, guest_id: &str, id: &str, cancel: bool, name: Option<&Value>) -> Value {
+        self.touch(guest_id, name);
+        self.guest_names();
+        let Some(i) = self.asks.iter().position(|a| a.id == id && a.guest == guest_id) else {
+            return json!({"ok": false, "reason": "unknown", "message": "no such ask is open"});
+        };
+        if cancel {
+            self.asks.remove(i);
+            return json!({"ok": true});
+        }
+        self.asks[i].seen = (self.clock)();
+        let Some(answer) = self.asks[i].answer.clone() else {
+            return json!({"ok": true, "answered": false});
+        };
+        let closed = self.asks.remove(i).closed;
+        let mut out = json!({"ok": true, "answered": true, "path": answer});
+        if closed {
+            out["closed"] = json!(true);
+        }
+        out
+    }
+
+    /// `answer` from the host: the path the user picked, or none when they cancelled.
+    pub fn answer(&mut self, host_id: &str, id: Option<&Value>, path: Option<&Value>) -> Value {
+        if self.host_id.as_deref() != Some(host_id) {
+            return json!({"ok": false, "reason": "not the host"});
+        }
+        self.guest_names();
+        let id = id.and_then(Value::as_str);
+        let Some(a) = self.asks.iter_mut().find(|a| Some(a.id.as_str()) == id && a.answer.is_none()) else {
+            return json!({"ok": false, "reason": "unknown", "message": "no such ask is open"});
+        };
+        a.answer = Some(path.and_then(Value::as_str).filter(|p| !p.is_empty()).map(str::to_owned));
         json!({"ok": true})
     }
 
@@ -362,7 +481,10 @@ impl LiveSession {
             self.guests.remove(&g);
             self.pending.retain(|p| p.get("guest").and_then(Value::as_str) != Some(g.as_str()));
             self.drop_guide_of(&g);
+            self.asks.retain(|a| a.guest != g);
         }
+        // A release forgets its guests, so an ask nobody polls expires on its own clock too.
+        self.asks.retain(|a| now - a.seen <= GUEST_TTL);
         let mut names: Vec<String> = self.guests.values().map(|(n, _)| name_text(n)).collect();
         names.sort();
         names
@@ -390,7 +512,31 @@ impl LiveSession {
     }
 }
 
-/// The six `session_*` ops for the connection `who`. `Err` is the error message for the reply envelope.
+/// What the host is shown of an ask, `None` for one it could not show.
+fn ask_shown(ask: Option<&Value>) -> Option<Map<String, Value>> {
+    let ask = ask?.as_object()?;
+    let kind = ask.get("kind").and_then(Value::as_str).filter(|k| matches!(*k, "open" | "save" | "folder"))?;
+    let path = ask.get("path").and_then(Value::as_str).filter(|p| !p.is_empty() && p.len() <= MAX_ASK_PATH)?;
+    let tool: String = ask.get("tool").and_then(Value::as_str).unwrap_or("").chars().take(MAX_ASK_TOOL).collect();
+    let exts: Vec<Value> = ask
+        .get("exts")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .filter(|e| !e.is_empty() && e.len() <= 10 && e.chars().all(|c| c.is_ascii_alphanumeric()))
+        .take(MAX_ASK_EXTS)
+        .map(|e| json!(e))
+        .collect();
+    let mut shown = Map::new();
+    shown.insert("kind".into(), json!(kind));
+    shown.insert("tool".into(), json!(tool));
+    shown.insert("path".into(), json!(path));
+    shown.insert("exts".into(), Value::Array(exts));
+    Some(shown)
+}
+
+/// The eight `session_*` ops for the connection `who`. `Err` is the error message for the reply envelope.
 pub fn session_reply(live: &mut LiveSession, who: &str, op: &str, req: &Map<String, Value>) -> Result<Value, String> {
     let get = |k: &str| req.get(k).cloned().unwrap_or(Value::Null);
     let revision = |k: &str| -> Result<i64, String> {
@@ -428,6 +574,16 @@ pub fn session_reply(live: &mut LiveSession, who: &str, op: &str, req: &Map<Stri
                 live.guide_guest(who, req.get("command"), req.get("name"))
             }
         }
+        "session_ask" => {
+            if live.host_id.as_deref() == Some(who) {
+                json!({"ok": false, "reason": "not a guest"})
+            } else if let Some(id) = req.get("askId").filter(|v| !v.is_null()) {
+                live.ask_poll(who, id.as_str().unwrap_or_default(), truthy(req.get("cancel")), req.get("name"))
+            } else {
+                live.ask(who, req.get("ask"), req.get("name"))
+            }
+        }
+        "session_answer" => live.answer(who, req.get("askId"), req.get("path")),
         other => return Err(format!("unknown session op: {other}")),
     })
 }
@@ -435,6 +591,13 @@ pub fn session_reply(live: &mut LiveSession, who: &str, op: &str, req: &Map<Stri
 pub fn is_session_op(op: &str) -> bool {
     matches!(
         op,
-        "session_host" | "session_release" | "session_state" | "session_propose" | "session_leave" | "session_guide"
+        "session_host"
+            | "session_release"
+            | "session_state"
+            | "session_propose"
+            | "session_leave"
+            | "session_guide"
+            | "session_ask"
+            | "session_answer"
     )
 }
