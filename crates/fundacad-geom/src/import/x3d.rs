@@ -628,14 +628,25 @@ impl Walk<'_> {
         let ntri = tris.len() / 3;
         self.budget.fits_triangles(ntri)?;
         self.budget.triangles -= ntri;
+        // Only points a triangle uses are kept, so a reused shape cannot copy a large unused point list per visit.
+        let mut slot = vec![u32::MAX; points.len() / 3];
+        for &i in &tris {
+            slot[i as usize] = 0;
+        }
         let base =
             u32::try_from(self.pos.len() / 3).map_err(|_| super::scan::too_dense_for_a_scan(MAX_TRIANGLES as u64))?;
-        for p in points.chunks_exact(3) {
+        let mut next = base;
+        for (p, s) in points.chunks_exact(3).zip(&mut slot) {
+            if *s == u32::MAX {
+                continue;
+            }
+            *s = next;
+            next += 1;
             for r in m {
                 self.pos.push(r[0] * p[0] + r[1] * p[1] + r[2] * p[2] + r[3]);
             }
         }
-        self.idx.extend(tris.iter().map(|&i| base + i as u32));
+        self.idx.extend(tris.iter().map(|&i| slot[i as usize]));
         self.colors.extend(std::iter::repeat_n(color, ntri));
         Ok(())
     }

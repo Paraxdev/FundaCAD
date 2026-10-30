@@ -288,6 +288,9 @@ pub fn read_gltf(json: &Value, buffers: &[Cow<'_, [u8]>], mm_per_unit: f64) -> R
     let mut visits_left = nodes.len().saturating_mul(4).max(1024);
     // Every primitive that adds geometry adds a triangle, so the index cap already bounds a real file.
     let mut primitives_left = super::scan::MAX_SCAN_TRIANGLES;
+    if roots.len() > visits_left {
+        return Err("this glTF places its nodes under too many parents to import".into());
+    }
     let mut stack: Vec<(usize, Mat4, usize)> = roots.into_iter().rev().map(|r| (r, IDENTITY, 0)).collect();
     while let Some((n, parent, depth)) = stack.pop() {
         if depth > 64 {
