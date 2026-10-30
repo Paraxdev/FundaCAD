@@ -26,7 +26,7 @@ Theme colours the whole app. These ship with FundaCAD:
 3. Solarized Light
 4. Colour-Blind Safe, its colours stay apart for every common kind of colour blindness, and its Y axis is yellow
 
-Upload theme… adds your own from a JSON file of colour tokens, such as `--bg` and `--accent`. Remove takes it away again.
+Upload theme… adds your own from a JSON file of colour tokens, such as `--bg` and `--accent`, with values in hex or rgb(). Remove takes it away again.
 
 ## Size and text
 
