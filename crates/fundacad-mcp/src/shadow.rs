@@ -36,9 +36,17 @@ pub fn own_folder(dir: &Path) -> bool {
     std::fs::symlink_metadata(dir).is_ok_and(|m| m.is_dir()) && owned_by_this_account(dir)
 }
 
-#[cfg(not(windows))]
+/// Owned by this process's effective user and writable by no one else.
+#[cfg(unix)]
+fn owned_by_this_account(dir: &Path) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    let me = unsafe { libc::geteuid() };
+    std::fs::symlink_metadata(dir).is_ok_and(|m| m.uid() == me && m.mode() & 0o022 == 0)
+}
+
+#[cfg(not(any(unix, windows)))]
 fn owned_by_this_account(_dir: &Path) -> bool {
-    true
+    false
 }
 
 /// The folder's owner is this process's user, or the owner its token gives new files, which for an
