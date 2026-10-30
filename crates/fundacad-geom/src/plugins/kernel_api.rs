@@ -149,15 +149,20 @@ pub fn is_valid(s: &Shape) -> bool {
     ffi::po_is_valid(s.raw())
 }
 
+/// A finer request is raised to this share of the face's diagonal, so the
+/// native mesher's work stays bounded (the plugin's budget cannot stop it).
+pub const MIN_RELATIVE_DEFLECTION: f64 = 1e-5;
+
 pub fn triangulate(face: &Shape, deflection: f64) -> Result<Mesh, String> {
     if !(deflection > 0.0) {
         return Err("the deflection must be greater than 0".into());
     }
+    let linear = deflection.max(MIN_RELATIVE_DEFLECTION * kernel::bbox_diagonal(face));
     let access = MeshAccess::new(face);
     let t = mesh::tessellate(
         face,
         &access,
-        MeshParams { linear: deflection, angular: 0.5, relative: false, display: true, force_remesh: false },
+        MeshParams { linear, angular: 0.5, relative: false, display: true, force_remesh: false },
     );
     Ok(Mesh {
         positions: t.positions,

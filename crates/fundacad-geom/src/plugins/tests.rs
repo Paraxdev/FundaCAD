@@ -341,3 +341,31 @@ fn one_plugin_memory_still_grows_to_the_whole_cap() {
     assert!(limits.memory_growing(MEMORY_LIMIT / 2, MEMORY_LIMIT, None).unwrap());
     assert!(!matches!(limits.memory_growing(MEMORY_LIMIT, MEMORY_LIMIT + (64 << 10), None), Ok(true)));
 }
+
+#[test]
+fn a_triangulation_finer_than_its_floor_meshes_at_the_floor() {
+    let triangles = |times_floor: f64| {
+        let ball = k::make_sphere((0.0, 0.0, 0.0), 10.0).unwrap();
+        let face = k::items(&ball, k::Items::Faces).remove(0);
+        let floor = k::MIN_RELATIVE_DEFLECTION * kernel::bbox_diagonal(&face);
+        k::triangulate(&face, times_floor * floor).unwrap().indices.len()
+    };
+    assert_eq!(triangles(0.25), triangles(1.0));
+    assert!(triangles(4.0) < triangles(1.0));
+}
+
+#[test]
+fn a_helical_sweep_past_its_turn_cap_is_refused() {
+    let tri = k::polygon_face(&[(5.0, 0.0, 0.0), (6.0, 0.0, 0.0), (5.0, 0.0, 1.0)]).unwrap();
+    for degrees in [360.0 * 1000.5, -360.0 * 1000.5] {
+        let r = kx::helical_sweep(&tri, (0.0, 0.0, 0.0), (0.0, 0.0, 1.0), degrees, 2.0);
+        assert!(r.as_ref().err().is_some_and(|e| e.contains("1000 turns")), "{:?}", r.err());
+    }
+}
+
+#[test]
+fn a_planar_delaunay_past_its_point_cap_is_refused() {
+    let points = vec![0.0; 2 * (kx::MAX_DELAUNAY_POINTS + 1)];
+    let e = kx::delaunay_2d(&points).unwrap_err();
+    assert!(e.contains("10000000 points"), "{e}");
+}
