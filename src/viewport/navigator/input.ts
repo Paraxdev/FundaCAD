@@ -13,6 +13,8 @@ export interface InputPrefs {
   wheelDevice(): WheelDevice;
   /** What a touchpad's two-finger scroll does; Shift does the other. */
   touchpadScroll(): "orbit" | "pan";
+  /** The factors the engine may have divided wheel deltas by. */
+  wheelScales(): readonly number[];
   /** Told the kind each wheel stream was read as, for the settings. */
   detected?(kind: WheelKind): void;
 }
@@ -457,7 +459,7 @@ export function bindInput(dom: HTMLElement, nav: Navigator, prefs: InputPrefs): 
       sendMenu(e.clientX, e.clientY);
   };
 
-  // A mouse wheel zooms; a touchpad's two finger scroll orbits or pans by the setting, Shift the other (wheelKind.ts).
+  // A mouse wheel zooms and, with Ctrl, pans; a touchpad's two finger scroll orbits or pans by the setting, Shift the other (wheelKind.ts).
   const kinds = new WheelClassifier();
   /** Safari's pinch arrives as gesture events rather than ctrl+wheel. */
   let gestureScale: number | null = null;
@@ -468,15 +470,16 @@ export function bindInput(dom: HTMLElement, nav: Navigator, prefs: InputPrefs): 
     const [x, y] = local(e);
     const dx = e.deltaX * unit;
     const dy = e.deltaY * unit;
-    const read = kinds.classify(e, clock());
+    const read = kinds.classify(e, clock(), prefs.wheelScales());
     if (read.fresh) prefs.detected?.(read.kind);
     const set = prefs.wheelDevice();
     const kind = set === "auto" ? read.kind : set;
-    // A trackpad pinch arrives as ctrl+wheel in small steps; a mouse wheel
-    // turned with Ctrl held arrives the same way but a whole notch at a time.
+    // A trackpad pinch arrives as ctrl+wheel in small steps; with a mouse wheel Ctrl pans up and down instead,
+    // and a wheel the setting calls a touchpad keeps a notch's zoom rather than a pinch's.
     if (e.ctrlKey) {
       if (gestureScale !== null) return; // Safari sends the pinch twice
-      nav.wheel(x, y, dy, Math.abs(dy) < 50);
+      if (kind === "mouse") nav.scrollPan(x, y, 0, dy);
+      else nav.wheel(x, y, dy, Math.abs(dy) < 50);
       return;
     }
     if (kind === "mouse") {

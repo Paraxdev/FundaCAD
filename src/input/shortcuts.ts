@@ -464,6 +464,7 @@ export function shortcutHudGroups(skip: ReadonlySet<string> = new Set()): HudGro
       rows: [
         ...bindingRows(pointerBindings()).map((r) => (custom ? { ...r, changed: true } : r)),
         { key: "Wheel", label: "Zoom" },
+        { key: "Ctrl+Wheel", label: "Pan up and down (a touchpad pinch zooms)" },
         { key: "Left drag", label: "Box select (see Always, below)" },
         { key: "Left click", label: "Select a body, then a face on it (pause over it to light the face up first)" },
       ],

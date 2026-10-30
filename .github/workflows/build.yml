@@ -1452,6 +1452,11 @@ jobs:
           SC_CHROME: /usr/bin/google-chrome
         run: node e2e/history_side_e2e.cjs
 
+      - name: A real wheel reads as a mouse at every zoom end-to-end
+        env:
+          SC_CHROME: /usr/bin/google-chrome
+        run: node e2e/wheel_zoom_e2e.cjs
+
       # Starts two engines of its own, so the one above is left alone.
       - name: Browser save keeps imported geometry end-to-end
         env:

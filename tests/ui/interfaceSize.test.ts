@@ -3,6 +3,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import baseScss from "../../src/styles/_base.scss?raw";
+import { wheelEvidence } from "../../src/viewport/navigator/wheelKind";
 
 const setZoom = vi.fn((_: number) => Promise.resolve());
 vi.mock("@tauri-apps/api/webview", () => ({ getCurrentWebview: () => ({ setZoom }) }));
@@ -206,5 +207,75 @@ describe("the first paint", () => {
   it("hides the body, not the root, so the window keeps the theme background", () => {
     const base = baseScss.replace(/\r\n/g, "\n");
     expect(base).toContain("html[data-sizing] body {\n  opacity: 0;\n}");
+  });
+});
+
+describe("the factors a wheel event's deltas may be divided by", () => {
+  const settled = () => new Promise((r) => setTimeout(r, 0));
+  const notch = (deltaY: number, wheelDeltaY: number) => ({
+    deltaX: 0,
+    deltaY,
+    deltaMode: 0,
+    shiftKey: false,
+    ctrlKey: false,
+    wheelDeltaY,
+  });
+
+  async function scalesAt(pct: number, dpr: number) {
+    boot({}, true);
+    vi.stubGlobal("devicePixelRatio", dpr);
+    const m = await load();
+    m.applyInterfaceSize(pct);
+    await settled();
+    await settled();
+    return m.wheelScales();
+  }
+
+  it("is exactly 1 at 100 percent on a 100 percent display", async () => {
+    expect(await scalesAt(100, 1)).toEqual([1]);
+  });
+
+  it("offers the device pixel ratio at 100 percent, and above it the zoom and not the product", async () => {
+    expect(await scalesAt(100, 1.25)).toEqual([1, 1.25]);
+    expect(await scalesAt(110, 1.375)).toEqual([1, 1.1]);
+    expect(await scalesAt(110, 1.1)).toEqual([1, 1.1]);
+    expect(await scalesAt(80, 1)).toEqual([1, 0.8]);
+  });
+
+  it("leaves the zoom out when the webview refused it, as then only the root is zoomed", async () => {
+    setZoom.mockImplementationOnce(() => Promise.reject(new Error("no")));
+    vi.spyOn(console, "warn").mockImplementationOnce(() => {});
+    expect(await scalesAt(150, 1.25)).toEqual([1, 1.25]);
+  });
+
+  // Measured in Chromium with a page zoom and --force-device-scale-factor together: both deltas follow the zoom alone.
+  it.each([
+    [80, 1.25, 1, 125, -150],
+    [90, 1.5, 1.35, 111.111, -133],
+    [110, 1.25, 1.375, 90.909, -109],
+    [110, 1.25, 1.375, 30.3, -109],
+    [110, 1.5, 1.65, 90.909, -109],
+    [125, 1.25, 1.5625, 80, -96],
+    [125, 1.5, 1.875, 26.664, -96],
+    [150, 1.5, 2.25, 66.667, -80],
+    [175, 1.25, 2.1875, 57.143, -68],
+    [200, 1.75, 3.5, 16.665, -60],
+  ])("reads a notch at %s percent on a %s display as a mouse", async (pct, _os, dpr, deltaY, wheelDeltaY) => {
+    const scales = await scalesAt(pct, dpr);
+    expect(wheelEvidence(notch(deltaY, wheelDeltaY), false, scales)).toBe("mouse");
+    expect(wheelEvidence(notch(-deltaY, -wheelDeltaY), false, scales)).toBe("mouse");
+  });
+
+  it.each([
+    [110, 1.375],
+    [125, 1.5625],
+    [150, 2.25],
+    [200, 3.5],
+  ])("still reads a touchpad as a touchpad at %s percent, device pixel ratio %s", async (pct, dpr) => {
+    const scales = await scalesAt(pct, dpr);
+    const zoom = pct / 100;
+    expect(wheelEvidence(notch(3.7 / zoom, -11), false, scales)).toBe("touchpad");
+    expect(wheelEvidence(notch(37.3 / zoom, -53), false, scales)).toBe("touchpad");
+    expect(wheelEvidence({ ...notch(60 / zoom, -72), deltaX: 2.5 }, false, scales)).toBe("touchpad");
   });
 });
