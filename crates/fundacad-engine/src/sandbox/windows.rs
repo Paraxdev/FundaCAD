@@ -232,7 +232,7 @@ impl Drop for Job {
     }
 }
 
-/// Resumes a process created suspended. std closes the handle of its first thread, so the thread is found by its id.
+/// Resumes the one thread of a process created suspended. std closes its handle, so the thread is found by its id.
 fn resume(pid: u32) -> io::Result<()> {
     let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0) };
     if snapshot == INVALID_HANDLE_VALUE {
@@ -245,9 +245,7 @@ fn resume(pid: u32) -> io::Result<()> {
     while more {
         if entry.th32OwnerProcessID == pid {
             found = resume_thread(entry.th32ThreadID);
-            if found.is_err() {
-                break;
-            }
+            break;
         }
         more = unsafe { Thread32Next(snapshot, &mut entry) } != 0;
     }
