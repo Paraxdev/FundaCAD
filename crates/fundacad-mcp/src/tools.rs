@@ -419,6 +419,70 @@ pub fn stress() -> JsonObject {
     )
 }
 
+pub fn material_list() -> JsonObject {
+    object(json!({}), &[])
+}
+
+pub fn material_set() -> JsonObject {
+    let number = |what: &str| json!({"type": ["number", "null"], "description": what});
+    let colour = |what: &str| json!({"type": ["string", "null"], "description": what});
+    object(
+        json!({
+            "id": {"type": "string",
+                   "description": "edits this material when the document has it, other fields stay. A new id creates \
+                                   it; left out, one is made from the name"},
+            "from": {"type": "string", "description": "start from a copy of this document or starter material's look"},
+            "name": {"type": "string", "description": "the name shown in the Render workspace"},
+            "color": {"type": "string", "description": "base colour, \"#rrggbb\""},
+            "metalness": number("0 to 1, 0 is plastic or paint, 1 is bare metal"),
+            "roughness": number("0 to 1, 0 is a mirror, 1 is chalk"),
+            "opacity": number("0 to 1, 1 is solid. Glass is low, about 0.25, with a low roughness"),
+            "emissive": number("0 to 1, glow in the material's own colour"),
+            "castsLight": {"type": ["boolean", "null"], "description": "false when a glowing part should not light its neighbours"},
+            "clearcoat": number("0 to 1, glossy coat over the base, like car paint or a glaze"),
+            "ior": number("1 to 2.5, how much see-through material bends light: water 1.33, glass 1.5, diamond 2.42"),
+            "thickness": number("mm light travels through see-through material, left out is measured from the body"),
+            "attenuationColor": colour("\"#rrggbb\" that light turns into inside see-through material, for tinted glass"),
+            "attenuationDistance": number("mm until light has fully taken that colour, 0 is never"),
+            "dispersion": number("0 to 10, the rainbow fire of a cut gem, needs some thickness"),
+            "scatterDistance": number("mm until light inside has scattered, for frosted or milky material, 0 is clear"),
+            "iridescence": number("0 to 1, thin film rainbow like an oil slick"),
+            "specularColor": colour("\"#rrggbb\" tint of a non-metal's highlight, white when left out"),
+            "sheen": number("0 to 1, soft rim at grazing angles, velvet or cloth"),
+            "anisotropy": number("0 to 1, highlights stretched one way, brushed metal or print layer lines"),
+            "flakes": number("0 to 1, glitter or metal flake density, as in metallic car paint"),
+            "flakeSize": number("mm per flake"),
+            "surface": {"type": ["object", "null"],
+                        "description": "a simple surface pattern: {kind: noise, scratches, brushed, voronoi or wave; scale: feature size in mm, above 0; amount: 0 to 1, how much it pushes roughness; angle: radians, the direction of scratches, brushed and wave; bump: 0 to 1, relief; color: \"#rrggbb\" tint; colorAmount: 0 to 1}"},
+            "surfaceGraph": {"type": ["object", "null"],
+                             "description": "a node graph as the node editor saves it, wins over `surface`: {nodes: [{id, type, params, in}], output: the output node's id}. `in` maps an input to the id of the node feeding it. Types: noise (params scale, detail, roughness, distortion), scratches, brushed, voronoi, wave (params scale, angle), fresnel (param power, rises at grazing angles) give a number. ramp (params colorA, colorB, input t), colorramp (param stops \"0:#000000;1:#ffffff\", input t) turn a number into a colour. mix (inputs a, b, t), math (inputs a, b, param op: add, subtract, multiply, min, max, pow) combine numbers. output (inputs roughness, bump, color; params roughAmount, bumpAmount, colorAmount, 0 to 1) is the one sink"}
+        }),
+        &[],
+    )
+}
+
+pub fn material_remove() -> JsonObject {
+    object(
+        json!({"ids": {"type": "array", "items": {"type": "string"},
+                       "description": "the ids to remove; what wears them goes back to its default look"}}),
+        &["ids"],
+    )
+}
+
+pub fn material_assign() -> JsonObject {
+    object(
+        json!({
+            "material": {"type": ["string", "null"], "description": "a material id, or null to clear the assignment"},
+            "bodies": {"type": "array", "items": {"type": "string"}, "description": "body ids or names"},
+            "faces": {"type": "array", "items": {"anyOf": [{"type": "object"}, {"type": "string"}]},
+                      "description": "face selectors copied from `inspect` (detail:true, selectors:true), body \
+                                      included, or {body, face: n} with its F number. A face's material wins over \
+                                      its body's"}
+        }),
+        &["material"],
+    )
+}
+
 pub fn inspect() -> JsonObject {
     paged(inspect_fields(), "rows (default 30, with detail 5 bodies)")
 }

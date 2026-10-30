@@ -183,7 +183,10 @@ fn check(key: &str, v: &Value) -> Result<Option<String>, DocumentError> {
             )),
         },
         ("surfaceGraph", _) => match materials::normalize_graph(v) {
-            Some(g) => Ok(dropped_nodes(v, &g)),
+            Some(g) => match graph_fault(&g) {
+                Some(why) => err(format!("`surfaceGraph` is refused: {why}.")),
+                None => Ok(dropped_nodes(v, &g)),
+            },
             None => err(format!(
                 "`surfaceGraph` needs `nodes` and an `output` naming one of them. Node types: {}.",
                 NODE_TYPES.join(", ")
@@ -191,6 +194,97 @@ fn check(key: &str, v: &Value) -> Result<Option<String>, DocumentError> {
         },
         _ => Ok(None),
     }
+}
+
+/// The ports compileGraph reads, and whether each takes a colour.
+fn port_takes_colour(kind: &str, port: &str) -> Option<bool> {
+    match (kind, port) {
+        ("output", "color") => Some(true),
+        ("output", "roughness" | "bump")
+        | ("ramp" | "colorramp", "t")
+        | ("mix", "a" | "b" | "t")
+        | ("math", "a" | "b") => Some(false),
+        _ => None,
+    }
+}
+
+fn stops_read(raw: &str) -> bool {
+    let good = raw.split(';').filter(|part| {
+        part.split_once(':').is_some_and(|(pos, hex)| {
+            let hex = hex.trim();
+            pos.trim().parse::<f64>().is_ok_and(f64::is_finite)
+                && hex.len() == 7
+                && hex.starts_with('#')
+                && hex[1..].bytes().all(|b| b.is_ascii_hexdigit())
+        })
+    });
+    good.count() >= 2
+}
+
+fn has_loop<'a>(
+    id: &'a str,
+    by_id: &BTreeMap<&'a str, &'a Value>,
+    path: &mut Vec<&'a str>,
+    done: &mut HashSet<&'a str>,
+) -> bool {
+    if path.contains(&id) {
+        return true;
+    }
+    if !done.insert(id) {
+        return false;
+    }
+    path.push(id);
+    let wires = by_id.get(id).and_then(|n| n["in"].as_object());
+    let looped = wires.into_iter().flatten().filter_map(|(_, s)| s.as_str()).any(|s| has_loop(s, by_id, path, done));
+    path.pop();
+    looped
+}
+
+/// normalizeGraph only checks the shape, since a saved graph may be partial. compileGraph declares one variable per
+/// node, so a wire to nothing, a colour in a number port, a loop or two ids that read alike would not compile.
+fn graph_fault(graph: &Value) -> Option<String> {
+    let nodes = graph["nodes"].as_array().map_or(&[][..], Vec::as_slice);
+    let id_of = |n: &'_ Value| n["id"].as_str().unwrap_or_default().to_string();
+    let by_id: BTreeMap<&str, &Value> = nodes.iter().map(|n| (n["id"].as_str().unwrap_or_default(), n)).collect();
+    let mut seen = HashSet::new();
+    for n in nodes {
+        let id = id_of(n);
+        let variable: String = id.chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '_' }).collect();
+        if !seen.insert(variable) {
+            return Some(format!("node id {id} is used twice or reads like another, use letters and digits"));
+        }
+        let kind = n["type"].as_str().unwrap_or_default();
+        let params = &n["params"];
+        for key in ["colorA", "colorB"] {
+            if kind == "ramp" && params.get(key).is_some_and(|c| materials::as_hex(c).is_none()) {
+                return Some(format!("{id} needs {key} as a colour like \"#a51321\""));
+            }
+        }
+        if kind == "colorramp" && params.get("stops").is_some_and(|s| !s.as_str().is_some_and(stops_read)) {
+            return Some(format!("{id} needs stops as \"0:#000000;1:#ffffff\", at least two"));
+        }
+        for (port, src) in n["in"].as_object().into_iter().flatten() {
+            let Some(wants_colour) = port_takes_colour(kind, port) else {
+                return Some(format!("a {kind} node has no input {port}"));
+            };
+            let Some(source) = src.as_str().and_then(|s| by_id.get(s)) else {
+                return Some(format!("{id}.{port} is wired to {src}, which is not a node"));
+            };
+            let source_kind = source["type"].as_str().unwrap_or_default();
+            if source_kind == "output" {
+                return Some(format!("{id}.{port} is wired to the output node, which gives nothing"));
+            }
+            if matches!(source_kind, "ramp" | "colorramp") != wants_colour {
+                let (takes, gives) = if wants_colour { ("a colour", "a number") } else { ("a number", "a colour") };
+                return Some(format!("{id}.{port} takes {takes} but {} gives {gives}", id_of(source)));
+            }
+        }
+    }
+    let output = graph["output"].as_str().unwrap_or_default();
+    if by_id.get(output).is_none_or(|n| n["type"] != "output") {
+        return Some(format!("`output` must name a node of type output, got {output}"));
+    }
+    has_loop(output, &by_id, &mut vec![], &mut HashSet::new()).then(|| "its wires make a loop".to_string())
 }
 
 fn dropped_nodes(given: &Value, kept: &Value) -> Option<String> {
@@ -291,7 +385,7 @@ pub fn set(doc: &mut Doc, args: &Map<String, Value>) -> Result<SetOutcome, Docum
     Ok(SetOutcome { id, created: at.is_none(), material, notes })
 }
 
-fn require_known(doc: &Doc, id: &str) -> Result<(), DocumentError> {
+pub fn require_known(doc: &Doc, id: &str) -> Result<(), DocumentError> {
     if library(doc).iter().any(|m| m["id"] == id) {
         Ok(())
     } else {
@@ -332,6 +426,17 @@ pub fn remove(doc: &mut Doc, ids: &[String]) -> Result<Uses, DocumentError> {
     let lib = library(doc).into_iter().filter(|m| !m["id"].as_str().is_some_and(|id| gone.contains(id))).collect();
     write_library(doc, lib);
     Ok(dropped)
+}
+
+/// The MCP builds the whole timeline, so its face numbers are not those the app shows while part of it is switched off.
+pub fn faces_unreliable(doc: &Doc) -> Option<String> {
+    let off = doc.get("rollback").is_some_and(|r| !r.is_null())
+        || doc.get("suppressed").and_then(Value::as_array).is_some_and(|s| !s.is_empty());
+    off.then(|| {
+        "A material cannot go on a face while the timeline is rolled back or has suppressed features, since the face \
+         numbers here would not be the ones the app shows. Assign the body, or roll forward and turn them back on first."
+            .to_string()
+    })
 }
 
 /// `material` None clears. A face is written without a print, so the app finds it by its index on the next build.

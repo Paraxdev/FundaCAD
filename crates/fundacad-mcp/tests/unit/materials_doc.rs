@@ -172,6 +172,57 @@ fn removing_drops_every_use_and_its_prints() {
 }
 
 #[test]
+fn a_graph_the_shader_could_not_compile_is_refused() {
+    let out = |wires: Value| json!({"id": "o", "type": "output", "in": wires});
+    let noise = json!({"id": "n", "type": "noise"});
+    let ramp = json!({"id": "r", "type": "ramp", "in": {"t": "n"}});
+    let cases = [
+        (json!({"nodes": [noise, out(json!({"roughness": "gone"}))], "output": "o"}), "gone"),
+        (json!({"nodes": [noise, ramp, out(json!({"roughness": "r"}))], "output": "o"}), "a colour"),
+        (json!({"nodes": [noise, out(json!({"color": "n"}))], "output": "o"}), "a number"),
+        (json!({"nodes": [noise, out(json!({"glow": "n"}))], "output": "o"}), "glow"),
+        (
+            json!({"nodes": [{"id": "n", "type": "mix", "in": {"a": "o"}}, out(json!({"bump": "n"}))], "output": "o"}),
+            "output",
+        ),
+        (
+            json!({"nodes": [{"id": "a", "type": "mix", "in": {"a": "b"}}, {"id": "b", "type": "mix", "in": {"a": "a"}},
+                             out(json!({"bump": "a"}))], "output": "o"}),
+            "loop",
+        ),
+        (json!({"nodes": [noise, noise, out(json!({"bump": "n"}))], "output": "o"}), "twice"),
+        (
+            json!({"nodes": [{"id": "a-b", "type": "noise"}, {"id": "a_b", "type": "noise"}, out(json!({"bump": "a-b"}))],
+                   "output": "o"}),
+            "twice",
+        ),
+        (json!({"nodes": [noise], "output": "n"}), "output"),
+        (
+            json!({"nodes": [{"id": "r", "type": "ramp", "params": {"colorA": "red"}}, out(json!({"color": "r"}))],
+                   "output": "o"}),
+            "colorA",
+        ),
+        (
+            json!({"nodes": [{"id": "r", "type": "colorramp", "params": {"stops": "black to white"}},
+                             out(json!({"color": "r"}))], "output": "o"}),
+            "stops",
+        ),
+    ];
+    for (graph, word) in cases {
+        let mut doc = new_document();
+        let e = set(&mut doc, &args(json!({"name": "A", "surfaceGraph": graph.clone()}))).unwrap_err().0;
+        assert!(e.contains(word), "{graph}: {e}");
+    }
+    let good = json!({"nodes": [
+        {"id": "n", "type": "noise", "params": {"scale": 3}},
+        {"id": "r", "type": "colorramp", "params": {"stops": "0:#102030;1:#a0b0c0"}, "in": {"t": "n"}},
+        {"id": "o", "type": "output", "in": {"roughness": "n", "color": "r"}, "params": {"colorAmount": 0.5}}
+    ], "output": "o"});
+    let mut doc = new_document();
+    set(&mut doc, &args(json!({"name": "A", "surfaceGraph": good}))).unwrap();
+}
+
+#[test]
 fn the_list_names_each_material_its_wearers_and_the_starter_to_copy_from() {
     let mut doc = new_document();
     let text = list(&doc);

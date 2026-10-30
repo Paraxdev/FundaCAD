@@ -24,6 +24,7 @@ use crate::docfile;
 use crate::docget;
 use crate::link::{args as call_args, EngineLink, Mode};
 use crate::live::{LiveError, LiveLink};
+use crate::materials_doc;
 use crate::mesh::MeshBody;
 use crate::model::{self, Doc};
 use crate::render::{self, ViewRequest};
@@ -52,6 +53,9 @@ pub const MUTATORS: &[&str] = &[
     "edit",
     "sketch_merge",
     "sketch_tie",
+    "material_set",
+    "material_remove",
+    "material_assign",
 ];
 
 /// They must not wait for a document: `schema` is what an agent reads BEFORE anything exists.
@@ -212,6 +216,7 @@ fn edit_note(name: &str, args: &JsonObject) -> String {
         .get("id")
         .and_then(Value::as_str)
         .or_else(|| args.get("name").and_then(Value::as_str))
+        .or_else(|| args.get("material").and_then(Value::as_str))
         .or_else(|| args.get("feature").and_then(|f| f.get("type")).and_then(Value::as_str));
     match subject {
         Some(s) => format!("{name}: {s}"),
@@ -1124,6 +1129,70 @@ note: left out of the file, because this build cannot read them and a .funda has
     )]
     pub async fn t_edit(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         Ok(self.edit(&args).await)
+    }
+
+    #[tool(
+        name = "material_list",
+        description = "The document's render materials (the Render workspace's look of a part: colour, metal, glass, glow, paint, patterns) with every set field and which bodies and faces wear each, plus the starter materials to copy from. To dress a part: material_list, material_set, material_assign.",
+        input_schema = crate::tools::material_list(),
+        annotations(read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
+    )]
+    pub async fn t_material_list(&self, _args: JsonObject) -> Result<CallToolResult, McpError> {
+        Ok(text(materials_doc::list(&self.state.lock().await.doc)))
+    }
+
+    #[tool(
+        name = "material_set",
+        description = "Create or edit one render material, for its looks only (stress takes its own material). Name an existing `id` to edit: the fields you leave out stay, a field sent as null goes back to its default. Otherwise it creates one; `from` starts from a copy of another. Glass: low opacity and roughness, ior 1.5. Metal: metalness 1. Glow: emissive. Car paint: clearcoat 1, flakes. Then `material_assign` puts it on bodies or faces.",
+        input_schema = crate::tools::material_set(),
+        annotations(read_only_hint = false, destructive_hint = true, idempotent_hint = false, open_world_hint = false)
+    )]
+    pub async fn t_material_set(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
+        let mut st = self.state.lock().await;
+        let done = match materials_doc::set(&mut st.doc, &args) {
+            Ok(done) => done,
+            Err(e) => return Ok(doc_error(e)),
+        };
+        let verb = if done.created { "Created" } else { "Edited" };
+        let mut lines = vec![format!("{verb} {}: {}", done.id, Value::Object(done.material))];
+        lines.extend(done.notes);
+        Ok(text(lines.join("\n")))
+    }
+
+    #[tool(
+        name = "material_remove",
+        description = "Remove render materials from the document. Bodies and faces wearing them go back to their default look.",
+        input_schema = crate::tools::material_remove(),
+        annotations(read_only_hint = false, destructive_hint = true, idempotent_hint = true, open_world_hint = false)
+    )]
+    pub async fn t_material_remove(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
+        let ids: Vec<String> = args
+            .get("ids")
+            .and_then(Value::as_array)
+            .map_or(vec![], |a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect());
+        if ids.is_empty() {
+            return Ok(failure("`ids` must list the materials to remove, material_list shows them."));
+        }
+        let mut st = self.state.lock().await;
+        let gone = match materials_doc::remove(&mut st.doc, &ids) {
+            Ok(gone) => gone,
+            Err(e) => return Ok(doc_error(e)),
+        };
+        let (bodies, faces) = (gone.bodies.len(), gone.faces.len());
+        Ok(text(format!(
+            "Removed {}. {bodies} bodies and {faces} faces went back to their default look.",
+            ids.join(", ")
+        )))
+    }
+
+    #[tool(
+        name = "material_assign",
+        description = "Put a render material on `bodies` and `faces`, or clear them with material null. Take the material id from material_list or material_set, and the faces from `inspect`.",
+        input_schema = crate::tools::material_assign(),
+        annotations(read_only_hint = false, destructive_hint = true, idempotent_hint = true, open_world_hint = false)
+    )]
+    pub async fn t_material_assign(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
+        Ok(self.material_assign(&args).await)
     }
 
     #[tool(
@@ -2620,6 +2689,95 @@ impl FundaCad {
 }
 
 impl FundaCad {
+    async fn material_assign(&self, args: &JsonObject) -> CallToolResult {
+        let material = match args.get("material") {
+            Some(Value::Null) => None,
+            Some(Value::String(id)) => Some(id.as_str()),
+            _ => return failure("`material` is a material id from material_list, or null to clear."),
+        };
+        let list = |key: &str| args.get(key).and_then(Value::as_array).map_or(&[][..], Vec::as_slice);
+        let (bodies, faces) = (list("bodies"), list("faces"));
+        if bodies.is_empty() && faces.is_empty() {
+            return failure("Give `bodies` or `faces` to assign to.");
+        }
+        let (link, doc) = {
+            let mut st = self.state.lock().await;
+            if let Some(id) = material {
+                if let Err(e) = materials_doc::require_known(&st.doc, id) {
+                    return doc_error(e);
+                }
+            }
+            model::recompute_parameters(&mut st.doc);
+            (st.link.clone(), st.doc.clone())
+        };
+        let mut body_ids = vec![];
+        for wanted in bodies {
+            let Some(wanted) = wanted.as_str() else {
+                return failure(format!("`bodies` lists body ids, got {wanted}"));
+            };
+            body_ids.push(wanted.to_string());
+        }
+        // A stale assignment must stay clearable, so clearing never asks the build.
+        if material.is_some() && !body_ids.is_empty() {
+            let payload = json!({"document": doc, "detail": false, "summary": true});
+            let reply = match link.call("inspect", payload).await {
+                Ok(r) => r,
+                Err(e) => return engine_gone(&e),
+            };
+            if reply.get("ok") != Some(&json!(true)) {
+                return failure(format!("Could not read the bodies: {}", error_message(&reply)));
+            }
+            let built = reply["result"]["bodies"].as_array().map_or(&[][..], Vec::as_slice);
+            for wanted in &mut body_ids {
+                let hit =
+                    built.iter().find(|b| b["id"] == *wanted).or_else(|| built.iter().find(|b| b["name"] == *wanted));
+                match hit.and_then(|b| b["id"].as_str()) {
+                    Some(id) => *wanted = id.to_string(),
+                    None if built.is_empty() => {
+                        return failure(format!("no body '{wanted}', this build made no bodies"))
+                    }
+                    None => return failure(no_such_body(wanted, built)),
+                }
+            }
+        }
+        let mut face_keys = vec![];
+        for (i, face) in faces.iter().enumerate() {
+            let by_number = face.get("body").and_then(Value::as_str).zip(face.get("face").and_then(Value::as_u64));
+            if let (None, Some((body, n))) = (material, by_number) {
+                face_keys.push((body.to_string(), n));
+                continue;
+            }
+            if let Some(why) = materials_doc::faces_unreliable(&doc) {
+                return failure(why);
+            }
+            let payload = json!({"document": doc, "a": face});
+            let reply = match link.call("measure", payload).await {
+                Ok(r) => r,
+                Err(e) => return engine_gone(&e),
+            };
+            if reply.get("ok") != Some(&json!(true)) {
+                let why = error_message(&reply);
+                let why =
+                    why.strip_prefix("a ").unwrap_or(&why).replace("measure takes one", "give each its own selector");
+                return failure(format!("faces[{i}]: {why}"));
+            }
+            let item = &reply["result"]["a"];
+            match (item["kind"].as_str(), item["body"].as_str(), item["index"].as_u64()) {
+                (Some("face"), Some(body), Some(n)) => face_keys.push((body.to_string(), n)),
+                _ => return failure(format!("faces[{i}] is not a face selector, `inspect` lists them: {face}")),
+            }
+        }
+        let mut st = self.state.lock().await;
+        if let Err(e) = materials_doc::assign(&mut st.doc, material, &body_ids, &face_keys) {
+            return doc_error(e);
+        }
+        let (b, f) = (body_ids.len(), face_keys.len());
+        text(match material {
+            Some(id) => format!("{id} is now on {b} bodies and {f} faces."),
+            None => format!("Cleared the material of {b} bodies and {f} faces."),
+        })
+    }
+
     async fn measure(&self, args: &JsonObject) -> CallToolResult {
         let mut payload = match crate::measure::request_of(args) {
             Ok(p) => p,
