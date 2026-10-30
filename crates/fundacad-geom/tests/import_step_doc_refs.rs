@@ -85,9 +85,45 @@ fn a_document_reference_inside_a_complex_entity_is_refused() {
          #90004 = ( APPLIED_DOCUMENT_REFERENCE(#90003,'',(#5)) REPRESENTATION_ITEM('') );"
     );
     let err = import(&main_file("complex.step", PD, &extra)).unwrap_err();
+    assert_eq!(err, "this STEP file names an external document inside a complex entity, which FundaCAD does not read");
+}
+
+/// Comments running longer than the scan holds of one record, so the record they open is read past in pieces.
+/// Each is short, since OCCT's lexer cannot hold one token that long.
+fn long_comment() -> String {
+    "/* x */\n".repeat((8 << 20) + 16)
+}
+
+const FILE: &str = "#90003 = DOCUMENT_FILE('sibling.stp','sibling.stp','',#90002,'',$);\n";
+const APPLIED: &str = "#90004 = APPLIED_DOCUMENT_REFERENCE(#90003,'',(#5));\n";
+
+#[test]
+fn a_record_too_long_to_hold_is_copied_whole_into_the_file_read() {
+    let file = main_file("long_record.step", PD, &format!("{DOCUMENT}\n{FILE}{APPLIED}{}", long_comment()));
+    let out = import(&file);
+    let _ = std::fs::remove_file(&file);
+    let out = out.unwrap();
+    assert_eq!(
+        (faces(&out), notes(&out)),
+        (
+            6,
+            vec![
+                "1 solid was inside out, its faces pointed into the material, so it was turned outward".to_string(),
+                "1 external document named by this STEP file was not loaded, FundaCAD reads only the file itself."
+                    .into()
+            ]
+        )
+    );
+}
+
+#[test]
+fn a_record_too_long_to_hold_that_names_a_document_is_refused() {
+    let file = main_file("long_record_ref.step", PD, &format!("{DOCUMENT}\n{FILE}{}{APPLIED}", long_comment()));
+    let err = import(&file).unwrap_err();
+    let _ = std::fs::remove_file(&file);
     assert_eq!(
         err,
-        "FundaCAD could not check this STEP file before reading it: this STEP file names an external document \
-         inside a complex entity, which FundaCAD does not read"
+        "FundaCAD could not check this STEP file before reading it: a record FundaCAD cannot read to its end names \
+         one of the entities it checks"
     );
 }

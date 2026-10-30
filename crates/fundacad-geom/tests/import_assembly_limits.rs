@@ -122,8 +122,7 @@ fn with_complex_usages(path: PathBuf) -> PathBuf {
     path
 }
 
-const TOO_DEEP: &str = "FundaCAD could not check this STEP file before reading it: this STEP assembly is nested \
-                        more than 256 levels deep, which FundaCAD does not import";
+const TOO_DEEP: &str = "this STEP assembly is nested more than 256 levels deep, which FundaCAD does not import";
 
 #[test]
 fn an_assembly_nested_one_level_past_the_cap_is_refused_before_it_is_read() {
@@ -157,17 +156,76 @@ fn a_complex_entity_instance_without_its_parent_and_part_is_refused() {
     std::fs::write(&path, text).unwrap();
     assert_eq!(
         import_step(&path).unwrap_err(),
-        "FundaCAD could not check this STEP file before reading it: this STEP file places an assembly part through a \
-         complex entity whose parent and part FundaCAD cannot find"
+        "this STEP file places an assembly part through a complex entity whose parent and part FundaCAD cannot find"
     );
 }
 
 #[test]
 fn a_complex_entity_instance_that_closes_a_loop_is_refused() {
     let err = import_step(&with_complex_usages(assembly("complex_loop.step", 3, 1, true))).unwrap_err();
+    assert_eq!(err, "this STEP assembly holds itself through its own parts, so it has no end to place");
+}
+
+/// inside_out_cube.step with its shape placed through `levels` mapped items, each nesting the one
+/// before it. `back` points the innermost map at the outermost shape instead of the cube.
+fn mapped(name: &str, levels: u32, back: bool) -> PathBuf {
+    let fixtures = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures");
+    let text = std::fs::read_to_string(fixtures.join("inside_out_cube.step")).unwrap();
+    let end = text.rfind("ENDSEC;").unwrap();
+    let rep = |level: u32| 100_001 + 3 * level;
+    let mut extra = String::new();
+    for level in 0..levels {
+        let (item, map) = (rep(level) + 1, rep(level) + 2);
+        let inner = match level {
+            0 if back => rep(levels - 1),
+            0 => 10,
+            _ => rep(level - 1),
+        };
+        extra.push_str(&format!(
+            "#{} = SHAPE_REPRESENTATION('',(#11,#{item}),#345);\n#{item} = MAPPED_ITEM('',#{map},#11);\n\
+             #{map} = REPRESENTATION_MAP(#11,#{inner});\n",
+            rep(level)
+        ));
+    }
+    let top = format!("#3 = SHAPE_DEFINITION_REPRESENTATION(#4,#{});", rep(levels - 1));
+    let text = format!("{}{extra}{}", &text[..end], &text[end..])
+        .replace("#3 = SHAPE_DEFINITION_REPRESENTATION(#4,#10);", &top);
+    let dir = std::env::temp_dir().join(format!("fundacad-assembly-limits-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let out = dir.join(name);
+    std::fs::write(&out, text).unwrap();
+    out
+}
+
+const MAPPED_TOO_DEEP: &str =
+    "this STEP file nests shapes more than 256 levels deep through mapped items, which FundaCAD does not import";
+
+#[test]
+fn a_shape_placed_through_a_few_mapped_items_still_imports() {
+    let out = import_step(&mapped("mapped_3.step", 3, false)).unwrap();
+    assert_eq!(out.get("faces"), Some(&serde_json::json!(6)), "{out:?}");
+}
+
+#[test]
+fn a_shape_nested_through_mapped_items_exactly_to_the_cap_still_imports() {
+    let out = import_step(&mapped("mapped_256.step", 256, false)).unwrap();
+    assert_eq!(out.get("faces"), Some(&serde_json::json!(6)), "{out:?}");
+}
+
+#[test]
+fn a_shape_nested_through_mapped_items_one_level_past_the_cap_is_refused() {
+    assert_eq!(import_step(&mapped("mapped_257.step", 257, false)).unwrap_err(), MAPPED_TOO_DEEP);
+}
+
+#[test]
+fn a_shape_nested_through_thousands_of_mapped_items_is_refused() {
+    assert_eq!(import_step(&mapped("mapped_5000.step", 5000, false)).unwrap_err(), MAPPED_TOO_DEEP);
+}
+
+#[test]
+fn a_shape_that_maps_itself_through_its_mapped_items_is_refused() {
     assert_eq!(
-        err,
-        "FundaCAD could not check this STEP file before reading it: this STEP assembly holds itself through its own \
-         parts, so it has no end to place"
+        import_step(&mapped("mapped_loop.step", 3, true)).unwrap_err(),
+        "this STEP file places a shape inside itself through its mapped items, so it has no end to place"
     );
 }

@@ -5,7 +5,7 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs::File;
-use std::io::{BufRead, BufReader, BufWriter, Read, Write};
+use std::io::{BufRead, BufReader, BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::Path;
 
 use super::packed::{temp_step, Unpacked};
@@ -93,10 +93,21 @@ pub fn scan(path: &Path) -> Result<Scan, String> {
     let mut vertex_at: HashMap<Id, Id> = HashMap::new();
     let mut edges: HashMap<Id, Edge> = HashMap::new();
     let mut holds: HashMap<Id, Vec<Id>> = HashMap::new();
+    let (mut mapped, mut maps): (HashMap<Id, Id>, HashMap<Id, Id>) = (HashMap::new(), HashMap::new());
     let (mut faces, mut last_id, mut documents) = (0usize, 0, 0usize);
-    for_each_record(path, |rec| {
+    for_each_record(path, |rec, _| {
         let Some((id, kind, rest)) = head(rec) else { return Ok(()) };
         last_id = last_id.max(id);
+        let parts: Vec<(&[u8], &[u8])> =
+            if kind.is_empty() { complex_parts(rest).collect() } else { vec![(kind, rest)] };
+        for (name, a) in &parts {
+            let second = || args(a).get(1).and_then(|r| reference(r));
+            if named(name, "MAPPED_ITEM", "MPPITM") {
+                mapped.extend(second().map(|map| (id, map)));
+            } else if named(name, "REPRESENTATION_MAP", "RPRMP") {
+                maps.extend(second().map(|rep| (id, rep)));
+            }
+        }
         if document_ref(kind).is_some() {
             documents += 1;
         } else if is_usage(kind) {
@@ -104,7 +115,6 @@ pub fn scan(path: &Path) -> Result<Scan, String> {
                 holds.entry(parent).or_default().push(child);
             }
         } else if kind.is_empty() {
-            let parts: Vec<(&[u8], &[u8])> = complex_parts(rest).collect();
             if parts.iter().any(|(n, _)| document_ref(n).is_some()) {
                 return Err(
                     "this STEP file names an external document inside a complex entity, which FundaCAD does not read"
@@ -156,6 +166,23 @@ pub fn scan(path: &Path) -> Result<Scan, String> {
         }
         Some(_) => {}
     }
+    if !mapped.is_empty() {
+        match assembly_depth(&mapped_nesting(path, &mapped, &maps)?) {
+            None => {
+                return Err(
+                    "this STEP file places a shape inside itself through its mapped items, so it has no end to place"
+                        .into(),
+                )
+            }
+            Some(depth) if depth > MAX_DEPTH => {
+                return Err(format!(
+                    "this STEP file nests shapes more than {MAX_DEPTH} levels deep through mapped items, which \
+                     FundaCAD does not import"
+                ))
+            }
+            Some(_) => {}
+        }
+    }
     let is_vertex = |v: &Id| vertices.contains(v);
     let mut ends: BTreeMap<Id, (Id, Id)> = edges
         .iter()
@@ -169,7 +196,7 @@ pub fn scan(path: &Path) -> Result<Scan, String> {
 
     let mut oriented: HashMap<Id, (Id, bool)> = HashMap::new();
     let mut loops: Vec<Vec<Id>> = Vec::new();
-    for_each_record(path, |rec| {
+    for_each_record(path, |rec, _| {
         let Some((id, kind, rest)) = head(rec) else { return Ok(()) };
         match kind {
             b"ORIENTED_EDGE" => {
@@ -285,7 +312,12 @@ pub fn scan(path: &Path) -> Result<Scan, String> {
     let failed = |e: std::io::Error| format!("couldn't write the repaired STEP file into the temp folder ({e})");
     let mut w = BufWriter::with_capacity(1 << 20, out);
     let mut written: HashSet<Id> = HashSet::new();
-    for_each_record(path, |rec| {
+    let mut source = File::open(path).map_err(|e| format!("{UNCHECKED}{e}"))?;
+    for_each_record(path, |rec, cut| {
+        if let Some(Cut { at, len }) = cut {
+            source.seek(SeekFrom::Start(at)).map_err(failed)?;
+            return std::io::copy(&mut (&mut source).take(len), &mut w).map(drop).map_err(failed);
+        }
         let record = head(rec);
         match record.and_then(|(_, kind, rest)| Some((document_ref(kind)?, kind, rest))) {
             Some((DocumentRef::Applied, ..)) => return Ok(()),
@@ -340,7 +372,59 @@ fn document_ref(kind: &[u8]) -> Option<DocumentRef> {
 }
 
 fn is_usage(kind: &[u8]) -> bool {
-    kind.eq_ignore_ascii_case(b"NEXT_ASSEMBLY_USAGE_OCCURRENCE") || kind.eq_ignore_ascii_case(b"NAUO")
+    named(kind, "NEXT_ASSEMBLY_USAGE_OCCURRENCE", "NAUO")
+}
+
+fn named(kind: &[u8], long: &str, short: &str) -> bool {
+    kind.eq_ignore_ascii_case(long.as_bytes()) || kind.eq_ignore_ascii_case(short.as_bytes())
+}
+
+/// For each record holding a mapped item, the representations that item places inside it.
+fn mapped_nesting(
+    path: &Path,
+    mapped: &HashMap<Id, Id>,
+    maps: &HashMap<Id, Id>,
+) -> Result<HashMap<Id, Vec<Id>>, String> {
+    let mut nests: HashMap<Id, Vec<Id>> = HashMap::new();
+    for_each_record(path, |rec, cut| {
+        if cut.is_some() {
+            return Err(format!(
+                "{UNCHECKED}a record too long to check whole sits in a file that places shapes through mapped items"
+            ));
+        }
+        let Some((id, _, rest)) = head(rec) else { return Ok(()) };
+        let placed = references(rest).filter_map(|r| maps.get(mapped.get(&r)?));
+        let placed: Vec<Id> = placed.copied().collect();
+        if !placed.is_empty() {
+            nests.entry(id).or_default().extend(placed);
+        }
+        Ok(())
+    })?;
+    Ok(nests)
+}
+
+/// Every `#id` outside a quoted string.
+fn references(s: &[u8]) -> impl Iterator<Item = Id> + '_ {
+    let (mut i, mut quoted) = (0usize, false);
+    std::iter::from_fn(move || {
+        while i < s.len() {
+            if s[i] == b'\'' {
+                i += quote_at(s, i, &mut quoted);
+                continue;
+            }
+            i += 1;
+            if quoted || s[i - 1] != b'#' {
+                continue;
+            }
+            let digits = s[i..].iter().take_while(|b| b.is_ascii_digit()).count();
+            let id = std::str::from_utf8(&s[i..i + digits]).ok()?.parse().ok();
+            i += digits;
+            if id.is_some() {
+                return id;
+            }
+        }
+        None
+    })
 }
 
 /// The relating (parent) and related (part) product definitions of a usage, its arguments 3 and 4.
@@ -390,7 +474,6 @@ fn assembly_depth(holds: &HashMap<Id, Vec<Id>>) -> Option<usize> {
 
 /// Every unquoted name followed by `(` in the parts of a complex entity, with the text from its `(` on.
 fn complex_parts(s: &[u8]) -> impl Iterator<Item = (&[u8], &[u8])> {
-    let ident = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
     let (mut i, mut quoted) = (0usize, false);
     std::iter::from_fn(move || {
         while i < s.len() {
@@ -420,7 +503,7 @@ fn curve_ends(path: &Path, mut look: HashSet<Id>) -> Result<HashMap<Id, (Id, Id)
     let mut found: HashMap<Id, (Id, Id)> = HashMap::new();
     let mut inner: HashMap<Id, Id> = HashMap::new();
     for _ in 0..3 {
-        for_each_record(path, |rec| {
+        for_each_record(path, |rec, _| {
             let Some((id, kind, rest)) = head(rec).filter(|h| look.contains(&h.0)) else { return Ok(()) };
             let a = args(rest);
             match kind {
@@ -464,7 +547,7 @@ fn points(path: &Path, look: HashSet<Id>) -> Result<HashMap<Id, [f64; 3]>, Strin
     if look.is_empty() {
         return Ok(found);
     }
-    for_each_record(path, |rec| {
+    for_each_record(path, |rec, _| {
         let Some((id, b"CARTESIAN_POINT", rest)) = head(rec).filter(|h| look.contains(&h.0)) else { return Ok(()) };
         let a = args(rest);
         let xyz: Vec<f64> = a
@@ -493,33 +576,128 @@ fn list(s: &[u8]) -> impl Iterator<Item = &[u8]> {
     s.split(|&b| b == b',')
 }
 
-/// A record past this never ended (a quote left open, or no `;` at all), so the scan gives up rather than hold the
-/// rest of the file.
-const MAX_RECORD: usize = 64 << 20;
+const UNCHECKED: &str = "FundaCAD could not check this STEP file before reading it: ";
 
-/// Every `;` ended record, a `;` inside a quoted string kept in its record.
-fn for_each_record(path: &Path, mut f: impl FnMut(&[u8]) -> Result<(), String>) -> Result<(), String> {
-    let file = File::open(path).map_err(|e| e.to_string())?;
-    let mut reader = BufReader::with_capacity(1 << 20, file);
-    let mut rec: Vec<u8> = Vec::new();
-    let mut quoted = false;
+/// The bytes held of one record. Past this (a quote left open, or a huge list) the rest is read in pieces and only
+/// searched for the names in WATCHED.
+const MAX_RECORD: usize = 64 << 20;
+const PIECE: u64 = 1 << 20;
+
+/// The entities the checks above read, long and short names.
+const WATCHED: [&str; 10] = [
+    "APPLIED_DOCUMENT_REFERENCE",
+    "APDCRF",
+    "PRODUCT_DEFINITION_WITH_ASSOCIATED_DOCUMENTS",
+    "PDWAD",
+    "NEXT_ASSEMBLY_USAGE_OCCURRENCE",
+    "NAUO",
+    "MAPPED_ITEM",
+    "MPPITM",
+    "REPRESENTATION_MAP",
+    "RPRMP",
+];
+/// Longer than any name in WATCHED, so a name split between two pieces is whole in the second.
+const OVERLAP: usize = 64;
+
+/// The place in the file of a record longer than MAX_RECORD, which is handed over cut to that length.
+#[derive(Clone, Copy)]
+struct Cut {
+    at: u64,
+    len: u64,
+}
+
+/// Every `;` ended record, a `;` inside a quoted string kept in its record. A record that is cut, or that the file
+/// ends inside, is refused when its text names one of WATCHED, since what it holds cannot be read as records.
+fn for_each_record(path: &Path, mut f: impl FnMut(&[u8], Option<Cut>) -> Result<(), String>) -> Result<(), String> {
+    let io = |e: std::io::Error| format!("{UNCHECKED}{e}");
+    let refused = || format!("{UNCHECKED}a record FundaCAD cannot read to its end names one of the entities it checks");
+    let mut reader = BufReader::with_capacity(1 << 20, File::open(path).map_err(io)?);
+    let (mut rec, mut piece): (Vec<u8>, Vec<u8>) = (Vec::new(), Vec::new());
+    let (mut quoted, mut at, mut len) = (false, 0u64, 0u64);
+    // Set once the record is cut: whether the next piece opens inside a name already too long to be watched.
+    let mut spill: Option<bool> = None;
     loop {
-        let mut i = rec.len();
-        if i > MAX_RECORD {
-            return Err(format!("a STEP record runs past {} MiB", MAX_RECORD >> 20));
+        let buf = if spill.is_some() { &mut piece } else { &mut rec };
+        let from = buf.len();
+        let room = if spill.is_some() { PIECE } else { (MAX_RECORD + 1 - from) as u64 };
+        let n = (&mut reader).take(room).read_until(b';', buf).map_err(io)?;
+        let mut i = from;
+        while i < buf.len() {
+            i += if buf[i] == b'\'' { quote_at(buf, i, &mut quoted) } else { 1 };
         }
-        let room = (MAX_RECORD + 1 - i) as u64;
-        if (&mut reader).take(room).read_until(b';', &mut rec).map_err(|e| e.to_string())? == 0 {
-            return if rec.is_empty() { Ok(()) } else { f(&rec) };
+        len += n as u64;
+        let eof = n == 0;
+        let ended = !eof && !quoted && buf.last() == Some(&b';');
+        if let Some(skip) = spill {
+            if watched(&piece, skip, eof || ended) {
+                return Err(refused());
+            }
+            let (keep, skip) = overlap(&piece, skip);
+            piece.drain(..keep);
+            spill = Some(skip);
+        } else if eof {
+            if rec.is_empty() {
+                return Ok(());
+            }
+            if watched(&rec, false, true) {
+                return Err(refused());
+            }
+        } else if !ended && rec.len() > MAX_RECORD {
+            if watched(&rec, false, false) {
+                return Err(refused());
+            }
+            let (keep, skip) = overlap(&rec, false);
+            piece.extend_from_slice(&rec[keep..]);
+            spill = Some(skip);
         }
-        while i < rec.len() {
-            i += if rec[i] == b'\'' { quote_at(&rec, i, &mut quoted) } else { 1 };
-        }
-        if quoted || rec.last() != Some(&b';') {
+        if !eof && !ended {
             continue;
         }
-        f(&rec)?;
+        f(&rec, spill.map(|_| Cut { at, len }))?;
+        if eof {
+            return Ok(());
+        }
+        (at, len, spill) = (at + len, 0, None);
         rec.clear();
+        piece.clear();
+    }
+}
+
+fn ident(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || b == b'_'
+}
+
+/// Whether `s` holds a name in WATCHED as a whole word, leaving out a word at its start when `skip_first` (it began
+/// in an earlier piece) and a word at its end unless `to_end` (it may go on in the next piece).
+fn watched(s: &[u8], skip_first: bool, to_end: bool) -> bool {
+    let mut i = 0;
+    while i < s.len() {
+        if !ident(s[i]) {
+            i += 1;
+            continue;
+        }
+        let from = i;
+        while i < s.len() && ident(s[i]) {
+            i += 1;
+        }
+        if (from == 0 && skip_first) || (i == s.len() && !to_end) {
+            continue;
+        }
+        if WATCHED.iter().any(|w| s[from..i].eq_ignore_ascii_case(w.as_bytes())) {
+            return true;
+        }
+    }
+    false
+}
+
+/// Where in `s` the next piece starts from, so a word cut at its end is read whole there, and whether that start is
+/// inside a word too long to be watched.
+fn overlap(s: &[u8], skip: bool) -> (usize, bool) {
+    let from = s.len().saturating_sub(OVERLAP);
+    match s[from..].iter().rposition(|&b| !ident(b)) {
+        Some(p) => (from + p, false),
+        None if from == 0 => (0, skip),
+        None => (s.len(), true),
     }
 }
 

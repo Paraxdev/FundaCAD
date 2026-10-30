@@ -227,8 +227,7 @@ pub fn assembly_payload(asm: &StepAssembly) -> Imported {
 }
 
 pub fn read_step(path: &Path) -> Result<Imported, String> {
-    let scan = crate::bench::phase("step_refs", || step_refs::scan(path))
-        .map_err(|e| format!("FundaCAD could not check this STEP file before reading it: {e}"))?;
+    let scan = crate::bench::phase("step_refs", || step_refs::scan(path))?;
     let source = scan.repaired.as_ref().map_or(path, |r| r.path());
     let progress = crate::cancel::progress_beating();
     let asm = crate::bench::phase("step_read", || {
