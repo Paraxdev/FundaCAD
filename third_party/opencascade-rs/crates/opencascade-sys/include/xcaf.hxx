@@ -16,6 +16,7 @@
 #include <Message_Printer.hxx>
 #include <Message_ProgressRange.hxx>
 #include <Message_ProgressScope.hxx>
+#include <OSD_FileSystem.hxx>
 #include <PCDM_ReaderStatus.hxx>
 #include <Quantity_Color.hxx>
 #include <Quantity_ColorRGBA.hxx>
@@ -624,7 +625,8 @@ inline std::unique_ptr<StepAssembly> iges_assembly_read(rust::Str path, const Me
 }
 
 // A fresh application per read keeps the XCAFApp singleton, which the STEP
-// and IGES readers share, out of it.
+// and IGES readers share, out of it. Opening from a stream skips CDF's
+// LoadReferences, so the header's reference list never opens other files.
 inline std::unique_ptr<StepAssembly> xbf_assembly_read(rust::Str path, const Message_ProgressRange &progress) {
   std::string file(path.data(), path.size());
   Handle(TDocStd_Application) app = new TDocStd_Application();
@@ -641,9 +643,14 @@ inline std::unique_ptr<StepAssembly> xbf_assembly_read(rust::Str path, const Mes
     }
   } closer{app, doc};
   const std::string unreadable = "could not read the XBF file (it may be truncated or not an OCCT XBF document";
+  std::shared_ptr<std::istream> stream =
+      OSD_FileSystem::DefaultFileSystem()->OpenIStream(TCollection_AsciiString(file.c_str()), std::ios::in | std::ios::binary);
+  if (!stream || !stream->good()) {
+    throw std::runtime_error(unreadable + ")");
+  }
   PCDM_ReaderStatus status = PCDM_RS_OpenError;
   try {
-    status = app->Open(TCollection_ExtendedString(file.c_str(), Standard_True), doc, whole.Next(19));
+    status = app->Open(*stream, doc, whole.Next(19));
   } catch (const Standard_Failure &) {
     throw std::runtime_error(unreadable + ")");
   }
