@@ -78,6 +78,14 @@ fn a_gltf_node_reached_through_many_parents_is_held_to_a_visit_budget() {
 }
 
 #[test]
+fn a_gltf_node_listed_twice_under_one_parent_still_imports() {
+    let acc = json!({"bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3"});
+    let doc = gltf_doc(acc, json!([{"children": [1, 1, 1]}, {"mesh": 0}]), 36);
+    let (pos, idx) = read(doc, triangle_bin()).unwrap();
+    assert_eq!((pos.len(), idx), (27, vec![0, 1, 2, 3, 4, 5, 6, 7, 8]));
+}
+
+#[test]
 fn a_gltf_accessor_without_a_buffer_view_is_no_larger_than_its_buffers() {
     let acc = json!({"componentType": 5126, "count": 3_000_000, "type": "VEC3"});
     let out = read(gltf_doc(acc, json!([{"mesh": 0}]), 36), triangle_bin()).err();
@@ -405,4 +413,23 @@ fn a_ply_vertex_count_past_what_its_rows_can_hold_is_refused() {
     let body = vec![0u8; 1 << 20];
     let e = ply::read_ply(&ply_binary(1 << 20, &body)).err().expect("the count is refused");
     assert!(e.contains("more than the file holds"), "{e}");
+}
+
+const ASCII_PLY_HEAD: &str =
+    "ply\nformat ascii 1.0\nelement vertex 3\nproperty float x\nproperty float y\nproperty float z\n";
+
+#[test]
+fn an_ascii_ply_whose_last_row_lacks_a_newline_still_imports() {
+    let data = format!(
+        "{ASCII_PLY_HEAD}element face 1\nproperty list uchar int vertex_indices\nend_header\n0 0 0\n1 0 0\n0 1 0\n3 0 1 2"
+    );
+    assert_eq!(ply::read_ply(data.as_bytes()).map(|m| m.idx), Ok(vec![0, 1, 2]));
+}
+
+#[test]
+fn an_ascii_ply_with_an_element_of_no_properties_still_imports() {
+    let data = format!(
+        "{ASCII_PLY_HEAD}element face 1\nproperty list uchar int vertex_indices\nelement marker 2\nend_header\n0 0 0\n1 0 0\n0 1 0\n3 0 1 2\n\n\n"
+    );
+    assert_eq!(ply::read_ply(data.as_bytes()).map(|m| m.idx), Ok(vec![0, 1, 2]));
 }
