@@ -329,7 +329,7 @@ the bundle:
   then the warning, which is not optional: this is the Funda Engine and the sidecar is retired, anything that builds differently from the sidecar is worth a report, plugin
   geometry runs as WebAssembly components, and the sidecar's documents open
   here.
-- Every beta also stays on as a normal release of its own, `v1.0.<run
+- The newest 10 betas also stay on as normal releases of their own, `v1.0.<run
   number>`, titled `FundaCAD 1.0.<run number> beta`, with the same installers
   and plugin bundles plus a `SHA256SUMS.txt`, but no `latest.json`, so a version can be linked and
   packaged after the rolling beta moves on while installed betas keep their
@@ -341,7 +341,8 @@ the bundle:
   HTTP 422, or an error that names `tag_name` or a workflow) is deleted with a
   warning that quotes GitHub's error, and the build has only the rolling beta.
   Any other failure, such as a failed create or a 5xx on publish, fails the
-  step, and a rerun of the job publishes the draft it keeps.
+  step, and a rerun of the job publishes the draft it keeps. Publishing a beta
+  deletes older versions with their tags, and a failed delete only warns.
   `tests/build/test_version_release.py` runs the step against a stub `gh`.
 
 ### 6.1 The updater endpoint
