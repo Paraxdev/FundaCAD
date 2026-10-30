@@ -9,6 +9,8 @@ import sys
 from fundacad_harness import Session
 
 PLATE = "tools/harness/fixtures/plate.json"
+# minWidth and minHeight in src-tauri/tauri.conf.json
+MIN_WINDOW = (800, 600)
 
 
 def support_faces(s):
@@ -27,6 +29,19 @@ def rows_lay_out(s):
         assert clear["y"] < mid < clear["y"] + clear["height"], (count, clear)
         tops = {round(b.bounding_box()["y"]) for b in item.locator(".stress-face-actions button").all()}
         assert len(tops) == 1 and min(tops) >= clear["y"] + clear["height"], (tops, clear)
+
+
+def at_smallest_window(s, shot):
+    """The panel keeps its 340 px column and its row layout in the smallest window the app allows."""
+    s.page.set_viewport_size({"width": MIN_WINDOW[0], "height": MIN_WINDOW[1]})
+    s.settle()
+    box = s.page.locator(".stress-panel").bounding_box()
+    assert box["width"] == 340 and box["x"] + box["width"] <= MIN_WINDOW[0], box
+    rows_lay_out(s)
+    if shot:
+        s.screenshot(shot.replace(".png", "_smallest.png"))
+    s.page.set_viewport_size({"width": 1400, "height": 900})
+    s.settle()
 
 
 def notes(s, since):
@@ -54,6 +69,7 @@ def run(s, shot=None):
     rows_lay_out(s)
     if shot:
         s.screenshot(shot.replace(".png", "_placed.png"))
+    at_smallest_window(s, shot)
     before = model(s)
 
     mark = s.messages(raw=True)["seq"]
