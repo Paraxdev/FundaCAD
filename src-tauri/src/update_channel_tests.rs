@@ -86,3 +86,26 @@ fn only_a_lower_remote_version_counts_as_a_downgrade() {
     assert!(!is_downgrade(&v("1.0.200"), &v("1.1.0")));
     assert!(!is_downgrade(&v("1.0.200"), &v("1.0.200")));
 }
+
+fn updater_section(conf: &str) -> serde_json::Value {
+    let json: serde_json::Value = serde_json::from_str(conf).unwrap();
+    json["plugins"]["updater"].clone()
+}
+
+#[test]
+fn each_release_config_names_its_own_build_channel() {
+    let beta = updater_section(include_str!("../tauri.conf.json"));
+    let dev = updater_section(include_str!("../tauri.dev.conf.json"));
+    let stable = updater_section(include_str!("../tauri.stable.conf.json"));
+    assert_eq!(build_channel(Some(&beta)), Some(Channel::Beta));
+    assert_eq!(build_channel(Some(&dev)), Some(Channel::Development));
+    assert_eq!(build_channel(Some(&stable)), Some(Channel::Stable));
+}
+
+#[test]
+fn a_missing_or_unknown_updater_endpoint_has_no_build_channel() {
+    assert_eq!(build_channel(None), None);
+    assert_eq!(build_channel(Some(&serde_json::json!({}))), None);
+    assert_eq!(build_channel(Some(&serde_json::json!({ "endpoints": [] }))), None);
+    assert_eq!(build_channel(Some(&serde_json::json!({ "endpoints": ["https://example.com/latest.json"] }))), None);
+}

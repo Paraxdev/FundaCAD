@@ -415,6 +415,7 @@ pub fn run() {
         engine::engine_send,
         restart_for_update,
         updates_supported,
+        update_channel::update_check,
         frontend_ready,
         frontend_stalled,
         log_tail,
