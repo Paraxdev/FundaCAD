@@ -5,7 +5,7 @@ use std::borrow::Cow;
 use std::sync::mpsc;
 use std::time::Duration;
 
-use fundacad_geom::import::{gltf, x3d};
+use fundacad_geom::import::{self, blobstore::BlobStore, gltf, x3d};
 use serde_json::{json, Value};
 
 /// Runs `f` on its own thread and fails the test if it takes longer than `secs`.
@@ -139,4 +139,87 @@ fn x3d_shapes_reused_past_the_triangle_budget_are_refused() {
     let xml = x3d_doubling(&leaf, 12);
     let e = within(60, move || x3d::read_x3d(&xml, Some(1.0)).err()).expect("a scene past the budget is refused");
     assert!(e.contains("triangles"), "{e}");
+}
+
+/// A one part 3MF zip written by hand, so the sizes it declares can differ from the data.
+fn threemf_zip(deflated: &[u8], crc: u32, declared: u32) -> Vec<u8> {
+    let name = b"3D/3dmodel.model";
+    let head = |sig: u32, central: bool| {
+        let mut h = sig.to_le_bytes().to_vec();
+        if central {
+            h.extend(20u16.to_le_bytes());
+        }
+        for v in [20u16, 0, 8, 0, 0x21] {
+            h.extend(v.to_le_bytes());
+        }
+        for v in [crc, deflated.len() as u32, declared] {
+            h.extend(v.to_le_bytes());
+        }
+        h.extend((name.len() as u16).to_le_bytes());
+        h.extend(0u16.to_le_bytes());
+        if central {
+            h.extend([0u8; 10]);
+            h.extend(0u32.to_le_bytes());
+        }
+        h.extend(name);
+        h
+    };
+    let mut z = head(0x0403_4b50, false);
+    z.extend(deflated);
+    let cd_at = z.len() as u32;
+    let cd = head(0x0201_4b50, true);
+    z.extend(&cd);
+    z.extend(0x0605_4b50u32.to_le_bytes());
+    for v in [0u16, 0, 1, 1] {
+        z.extend(v.to_le_bytes());
+    }
+    z.extend((cd.len() as u32).to_le_bytes());
+    z.extend(cd_at.to_le_bytes());
+    z.extend(0u16.to_le_bytes());
+    z
+}
+
+fn deflate(data: &[u8], flush: flate2::FlushCompress) -> Vec<u8> {
+    let mut c = flate2::Compress::new(flate2::Compression::fast(), false);
+    let mut out = Vec::with_capacity(data.len() / 8 + 1024);
+    c.compress_vec(data, &mut out, flush).unwrap();
+    out
+}
+
+const CUBE_MODEL: &str = r#"<?xml version="1.0"?><model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"><resources><object id="1" type="model"><mesh><vertices><vertex x="0" y="0" z="0"/><vertex x="10" y="0" z="0"/><vertex x="10" y="10" z="0"/><vertex x="0" y="10" z="0"/><vertex x="0" y="0" z="10"/><vertex x="10" y="0" z="10"/><vertex x="10" y="10" z="10"/><vertex x="0" y="10" z="10"/></vertices><triangles><triangle v1="0" v2="2" v3="1"/><triangle v1="0" v2="3" v3="2"/><triangle v1="4" v2="5" v3="6"/><triangle v1="4" v2="6" v3="7"/><triangle v1="0" v2="1" v3="5"/><triangle v1="0" v2="5" v3="4"/><triangle v1="1" v2="2" v3="6"/><triangle v1="1" v2="6" v3="5"/><triangle v1="2" v2="3" v3="7"/><triangle v1="2" v2="7" v3="6"/><triangle v1="3" v2="0" v3="4"/><triangle v1="3" v2="4" v3="7"/></triangles></mesh></object></resources><build><item objectid="1"/></build></model>"#;
+
+fn import_3mf(tag: &str, zip: Vec<u8>) -> Result<serde_json::Map<String, Value>, String> {
+    let dir = std::env::temp_dir().join(format!("fundacad-3mf-budget-{}-{tag}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("part.3mf");
+    std::fs::write(&path, zip).unwrap();
+    let store = BlobStore::open(dir.join("blobs")).unwrap();
+    let out = import::import_geometry(path.to_str().unwrap(), "3mf", &store);
+    let _ = std::fs::remove_dir_all(&dir);
+    out
+}
+
+#[test]
+fn a_small_3mf_still_imports() {
+    let mut crc = flate2::Crc::new();
+    crc.update(CUBE_MODEL.as_bytes());
+    let zip =
+        threemf_zip(&deflate(CUBE_MODEL.as_bytes(), flate2::FlushCompress::Finish), crc.sum(), CUBE_MODEL.len() as u32);
+    import_3mf("cube", zip).unwrap();
+}
+
+#[test]
+fn a_3mf_part_that_unpacks_past_the_budget_is_refused() {
+    let spaces = vec![b' '; 1 << 20];
+    let block = deflate(&spaces, flate2::FlushCompress::Sync);
+    let mut data: Vec<u8> = std::iter::repeat_n(&block[..], 300).flatten().copied().collect();
+    data.extend([0x03, 0x00]);
+    let (mut crc, mut one) = (flate2::Crc::new(), flate2::Crc::new());
+    one.update(&spaces);
+    for _ in 0..300 {
+        crc.combine(&one);
+    }
+    let zip = threemf_zip(&data, crc.sum(), 300 << 20);
+    let e = within(120, move || import_3mf("unpacked", zip).err()).expect("a part past the budget is refused");
+    assert!(e.contains("unpacks past"), "{e}");
 }

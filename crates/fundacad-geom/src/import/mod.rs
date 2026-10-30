@@ -430,7 +430,7 @@ pub fn import_geometry_in(
         "ifc" => outward(ifc::import_ifc(&std::fs::read(p).map_err(|e| e.to_string())?)?),
         "brep" => outward(Imported { shape: Shape::read_brep_text(p).map_err(|e| e.to_string())?, fields: Map::new() }),
         "stl" | "3mf" | "obj" => {
-            let peek = mesh::peek_triangle_count(p, &fmt).filter(|&n| n > mesh::MAX_IMPORT_TRIANGLES);
+            let peek = mesh::peek_triangle_count(p, &fmt)?.filter(|&n| n > mesh::MAX_IMPORT_TRIANGLES);
             if let Some(ntri) = peek {
                 scan::admit(ntri)?;
             }
