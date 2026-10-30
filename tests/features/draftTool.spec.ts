@@ -10,6 +10,7 @@ import type { Viewport } from "../../src/viewport/viewport";
 import type { Feature, Selector } from "../../src/types";
 import { usePromptStore } from "../../src/stores/prompt";
 import { setA11yPref } from "../../src/ui/a11yPrefs";
+import { classifyExprInput } from "../../src/params/engine";
 
 let frames: (() => void)[] = [];
 const flushFrame = () => {
@@ -52,6 +53,8 @@ function fakeStore() {
   const store = {
     nextId: () => "p1",
     boundExpr: () => null,
+    classifyTargetExpr: ((bound, pending, raw, kind) =>
+      classifyExprInput({ parameters: {}, features: [] }, raw, kind, bound, pending)) as DocumentStore["classifyTargetExpr"],
     setPreview(feature: Feature | null) {
       state.hasPreview = feature !== null;
       if (feature) state.building = true;
@@ -261,6 +264,18 @@ describe("DraftTool X key", () => {
     const was = axis()!;
     press("ч", "KeyX");
     expect(axis()).toBe({ X: "Y", Y: "Z", Z: "X" }[was]);
+    t.cancel();
+  });
+
+  it("types X into an angle field that already has typed text, so a name like max_x reads", () => {
+    const t = started();
+    const axis = () => /pull along ([XYZ]), X cycles/.exec(usePromptStore().text ?? "")?.[1];
+    const was = axis()!;
+    const input = document.querySelector<HTMLInputElement>('.dim-field[data-field="angle"] input')!;
+    input.value = "ma";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "x", code: "KeyX", bubbles: true }));
+    expect(axis()).toBe(was);
     t.cancel();
   });
 

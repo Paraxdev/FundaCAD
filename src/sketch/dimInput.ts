@@ -12,7 +12,7 @@ import {
   type UiIconButtonOptions,
 } from "../components/ui/dom";
 import { iconElement } from "../ui/icons";
-import { isHistoryKey, isMenuKey } from "../ui/focus";
+import { isEditableTarget, isHistoryKey, isMenuKey } from "../ui/focus";
 import { claimEscape } from "../ui/escapeClaim";
 import { onPreviewError } from "../ui/previewError";
 import { getUnit, parseField } from "../ui/units";
@@ -343,6 +343,14 @@ export class DimInput {
   /** Lets the owning tool's capture-phase handler take Escape for its own box, not from other editors. */
   ownsTarget(el: EventTarget | null): boolean {
     return el instanceof Node && this.root.contains(el);
+  }
+
+  /** A tool's letter key is text in a field typed into, since names use letters. The box focuses itself, so its
+   *  untouched field still lends the tool the key. */
+  typesText(e: KeyboardEvent): boolean {
+    if (!isEditableTarget(e.target)) return false;
+    const f = this.fields.find((x) => x.input === e.target);
+    return !f || f.userDriven;
   }
 
   ownsField(el: EventTarget | null): boolean {

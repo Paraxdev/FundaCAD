@@ -168,7 +168,7 @@ export class DraftTool {
       return;
     }
     // The pull axis is a guess from the normal, a coin toss on a face at 45 degrees to two axes, so X cycles it.
-    if (toolChar(e) === "x" && this.phase === "drag") {
+    if (toolChar(e) === "x" && !this.dim.typesText(e) && this.phase === "drag") {
       this.pull = this.pull === "X" ? "Y" : this.pull === "Y" ? "Z" : "X";
       this.lever = this.leverFor(this.pull);
       this.pushPreview();

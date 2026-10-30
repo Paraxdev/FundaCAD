@@ -230,7 +230,7 @@ export class FaceOffsetTool {
       return;
     }
     // Thicken's one option worth a key: grow the wall both ways about the surface
-    if (toolChar(e) === "s" && this.mode === "thicken" && this.phase === "drag") {
+    if (toolChar(e) === "s" && !this.dim.typesText(e) && this.mode === "thicken" && this.phase === "drag") {
       this.symmetric = !this.symmetric;
       this.refreshPreview(true);
     }

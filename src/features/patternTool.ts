@@ -443,7 +443,7 @@ export class PatternTool {
       return;
     }
     const char = toolChar(e);
-    if (this.kind === "circular" && char === "c" && !e.ctrlKey && !e.metaKey) {
+    if (this.kind === "circular" && char === "c" && !this.dim.typesText(e) && !e.ctrlKey && !e.metaKey) {
       e.preventDefault();
       e.stopPropagation();
       this.place = this.place === "origin" ? "centre" : "origin";

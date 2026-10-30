@@ -363,6 +363,27 @@ describe("press/pull's T key", () => {
     expect(picking(t)).toBe(true);
   });
 
+  const keyInBox = (typed: string | null) => {
+    const input = document.querySelector<HTMLInputElement>('.dim-field[data-field="distance"] input')!;
+    if (typed !== null) {
+      input.value = typed;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "t", code: "KeyT", bubbles: true }));
+  };
+
+  it("is typed into a field that already has typed text, so a name with a t reads", async () => {
+    const { t } = await started([0, 0, 1], [0, 0, 1], NO_AXIS);
+    keyInBox("wid");
+    expect(picking(t)).toBe(false);
+  });
+
+  it("still asks for a face from the box before anything is typed", async () => {
+    const { t } = await started([0, 0, 1], [0, 0, 1], NO_AXIS);
+    keyInBox(null);
+    expect(picking(t)).toBe(true);
+  });
+
   it("does nothing with Single key shortcuts off", async () => {
     setA11yPref("singleKeys", false);
     const { t } = await started([0, 0, 1], [0, 0, 1], NO_AXIS);
