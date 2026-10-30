@@ -430,6 +430,10 @@ folder.
   like `main.js`, and `scripts/build-plugins.py` builds it again when it packs
   the bundle, so the zip carries the component and never the crate.
   `rustup target add wasm32-wasip2` once per machine.
+- The file `geometryWasm` names must really be inside the plugin folder. A
+  link to a file elsewhere, such as a cargo target dir, is refused as outside
+  the installed copy, so copy the build output in instead (the build script
+  already writes a copy).
 - The world exports four hooks: `run-feature` (a rebuild-time handler),
   `resolve-pass` and `displace` (a mesh pass, a tessellation-time hook that runs
   against the FINAL shape, so the effect survives the booleans and fillets
