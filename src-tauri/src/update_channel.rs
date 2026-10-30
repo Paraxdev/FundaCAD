@@ -2,6 +2,7 @@ use semver::Version;
 use serde::Serialize;
 use tauri::{Manager, Runtime, Webview};
 use tauri_plugin_updater::{RemoteRelease, Updater, UpdaterExt};
+use time::format_description::well_known::Rfc3339;
 use url::Url;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -21,6 +22,8 @@ pub enum Product {
 pub struct Plan {
     pub endpoint: &'static str,
     pub allow_downgrade: bool,
+    /// The stable feed, looked at beside the picked one until a stable release was seen.
+    pub probe: Option<&'static str>,
 }
 
 const ALL: [Channel; 3] = [Channel::Stable, Channel::Beta, Channel::Development];
@@ -61,11 +64,12 @@ impl Channel {
 
 /// Where the next check looks and whether it may offer an older version. A channel of the other product is an Err:
 /// FundaCAD Dev installs beside FundaCAD and never replaces it.
-pub fn plan(build: Channel, picked: Channel) -> Result<Plan, String> {
+pub fn plan(build: Channel, picked: Channel, stable_seen: bool) -> Result<Plan, String> {
     if build.product() != picked.product() {
         return Err(format!("the {} channel is another product, install it beside this app", picked.as_str()));
     }
-    Ok(Plan { endpoint: picked.endpoint(), allow_downgrade: picked != build })
+    let probe = (picked != Channel::Stable && !stable_seen).then(|| Channel::Stable.endpoint());
+    Ok(Plan { endpoint: picked.endpoint(), allow_downgrade: picked != build, probe })
 }
 
 pub fn accepts(current: &Version, remote: &Version, allow_downgrade: bool) -> bool {
@@ -105,14 +109,13 @@ pub struct ChannelCheck {
     stable: bool,
 }
 
-fn updater_for<R: Runtime>(
-    webview: &Webview<R>,
+fn updater_for<R: Runtime, M: Manager<R>>(
+    app: &M,
     endpoint: &str,
     comparator: impl Fn(Version, RemoteRelease) -> bool + Send + Sync + 'static,
 ) -> Result<Updater, String> {
     let url = Url::parse(endpoint).map_err(|e| e.to_string())?;
-    webview
-        .updater_builder()
+    app.updater_builder()
         .endpoints(vec![url])
         .map_err(|e| e.to_string())?
         .version_comparator(comparator)
@@ -120,30 +123,34 @@ fn updater_for<R: Runtime>(
         .map_err(|e| e.to_string())
 }
 
-// Any stable latest.json that parses means a stable release exists, the comparator keeps the probe from offering it.
-async fn stable_feed_exists<R: Runtime>(webview: &Webview<R>) -> bool {
-    match updater_for(webview, Channel::Stable.endpoint(), |_, _| false) {
-        Ok(updater) => updater.check().await.is_ok(),
-        Err(_) => false,
-    }
+fn own_channel<R: Runtime>(webview: &Webview<R>) -> Option<Channel> {
+    build_channel(webview.config().plugins.0.get("updater"))
 }
 
-/// Checks the picked channel's feed, building the updater per check because the plugin's own check cannot change
-/// endpoints. `stable` says whether a stable release exists, so the picker can offer it.
-#[tauri::command]
-pub async fn update_check<R: Runtime>(webview: Webview<R>, channel: String) -> Result<ChannelCheck, String> {
-    let picked = Channel::parse(&channel).ok_or_else(|| format!("unknown update channel {channel}"))?;
-    let build = build_channel(webview.config().plugins.0.get("updater"))
-        .ok_or_else(|| "this build has no known update channel".to_string())?;
-    let plan = plan(build, picked)?;
-    let allow_downgrade = plan.allow_downgrade;
-    let found = updater_for(&webview, plan.endpoint, move |current, release| {
-        accepts(&current, &release.version, allow_downgrade)
-    })?
-    .check()
-    .await
-    .map_err(|e| e.to_string())?;
-    let stable = picked == Channel::Stable || stable_feed_exists(&webview).await;
+/// Checks `endpoint`, and `probe` beside it when given: any latest.json there that parses means a stable release
+/// exists, and its comparator keeps the probe from offering it. `stable` is true when there is nothing to probe.
+async fn check_feeds<R: Runtime, M: Manager<R>>(
+    app: &M,
+    endpoint: &str,
+    allow_downgrade: bool,
+    probe: Option<String>,
+) -> Result<ChannelCheck, String> {
+    let updater =
+        updater_for(app, endpoint, move |current, release| accepts(&current, &release.version, allow_downgrade))?;
+    let probe = probe.map(|url| {
+        let prober = updater_for(app, &url, |_, _| false);
+        tauri::async_runtime::spawn(async move {
+            match prober {
+                Ok(prober) => prober.check().await.is_ok(),
+                Err(_) => false,
+            }
+        })
+    });
+    let found = updater.check().await.map_err(|e| e.to_string())?;
+    let stable = match probe {
+        Some(task) => task.await.unwrap_or(false),
+        None => true,
+    };
     let update = found.map(|update| {
         let downgrade = match (Version::parse(&update.current_version), Version::parse(&update.version)) {
             (Ok(current), Ok(remote)) => is_downgrade(&current, &remote),
@@ -152,14 +159,34 @@ pub async fn update_check<R: Runtime>(webview: Webview<R>, channel: String) -> R
         ChannelUpdate {
             current_version: update.current_version.clone(),
             version: update.version.clone(),
-            date: update.raw_json.get("pub_date").and_then(|d| d.as_str()).map(str::to_owned),
+            date: update.date.and_then(|d| d.format(&Rfc3339).ok()),
             body: update.body.clone(),
             raw_json: update.raw_json.clone(),
             downgrade,
-            rid: webview.resources_table().add(update),
+            rid: app.resources_table().add(update),
         }
     });
     Ok(ChannelCheck { update, stable })
+}
+
+/// Checks the picked channel's feed, building the updater per check because the plugin's own check cannot change
+/// endpoints. `stable` says whether a stable release exists, so the picker can offer it.
+#[tauri::command]
+pub async fn update_check<R: Runtime>(
+    webview: Webview<R>,
+    channel: String,
+    stable_seen: bool,
+) -> Result<ChannelCheck, String> {
+    let picked = Channel::parse(&channel).ok_or_else(|| format!("unknown update channel {channel}"))?;
+    let build = own_channel(&webview).ok_or_else(|| "this build has no known update channel".to_string())?;
+    let plan = plan(build, picked, stable_seen)?;
+    check_feeds(&webview, plan.endpoint, plan.allow_downgrade, plan.probe.map(str::to_owned)).await
+}
+
+/// The frontend's own idea of the build channel comes from VITE_FUNDACAD_RELEASE, which a local build may lack.
+#[tauri::command]
+pub fn update_build_channel<R: Runtime>(webview: Webview<R>) -> Option<&'static str> {
+    own_channel(&webview).map(Channel::as_str)
 }
 
 #[cfg(test)]

@@ -416,6 +416,7 @@ pub fn run() {
         restart_for_update,
         updates_supported,
         update_channel::update_check,
+        update_channel::update_build_channel,
         frontend_ready,
         frontend_stalled,
         log_tail,
