@@ -353,3 +353,128 @@ fn an_open_writes_no_mesh_section_to_disk() {
     assert_eq!(std::fs::read_dir(store.join("carry")).unwrap().count(), 0);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+fn encode_table(entries: &[Entry]) -> Vec<u8> {
+    let mut t = TABLE_MAGIC.to_vec();
+    t.extend_from_slice(&(entries.len() as u32).to_le_bytes());
+    for e in entries {
+        t.extend_from_slice(&[e.kind, e.codec]);
+        t.extend_from_slice(&(e.name.len() as u16).to_le_bytes());
+        t.extend_from_slice(e.name.as_bytes());
+        for v in [e.offset, e.stored_len, e.raw_len] {
+            t.extend_from_slice(&v.to_le_bytes());
+        }
+        t.extend_from_slice(&e.raw_hash);
+        t.extend_from_slice(&e.layout.shard_size.to_le_bytes());
+        t.extend_from_slice(&e.layout.data_shards.to_le_bytes());
+        t.extend_from_slice(&e.layout.parity_shards.to_le_bytes());
+    }
+    t
+}
+
+/// Rewrite a file's section table through `edit`, both copies, with headers that point at the new table.
+fn retable(path: &Path, edit: impl FnOnce(&mut Vec<Entry>)) {
+    let mut entries = index_of(path);
+    edit(&mut entries);
+    let table = encode_table(&entries);
+    let mut bytes = std::fs::read(path).unwrap();
+    let h = HEADER_LEN as usize;
+    let mut tail = bytes.split_off(bytes.len() - h);
+    let (a, b) = (bytes.len() as u64, (bytes.len() + table.len()) as u64);
+    bytes.extend_from_slice(&table);
+    bytes.extend_from_slice(&table);
+    for header in [&mut bytes[..h], &mut tail[..]] {
+        header[16..24].copy_from_slice(&a.to_le_bytes());
+        header[24..32].copy_from_slice(&b.to_le_bytes());
+        header[32..40].copy_from_slice(&(table.len() as u64).to_le_bytes());
+        header[40..44].copy_from_slice(&crc32fast::hash(&table).to_le_bytes());
+        let crc = crc32fast::hash(&header[0..56]);
+        header[56..60].copy_from_slice(&crc.to_le_bytes());
+    }
+    bytes.extend_from_slice(&tail);
+    std::fs::write(path, bytes).unwrap();
+}
+
+#[test]
+fn a_table_whose_sections_share_bytes_is_refused() {
+    for shift in [0, 1] {
+        let dir = tmpdir("overlap");
+        let (path, _, _) = sample(&dir);
+        retable(&path, |entries| {
+            let mut copy = entries.iter().find(|e| e.kind == KIND_GEOMETRY).unwrap().clone();
+            copy.kind = 9;
+            copy.offset += shift;
+            entries.push(copy);
+        });
+        let err = read_file(&path, &dir.join("blobs"), Some(&dir.join("carry"))).map(|_| ()).unwrap_err();
+        assert!(err.contains("damaged"), "{err}");
+        assert!(!dir.join("carry").exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+#[test]
+fn one_geometry_hash_is_extracted_once_however_often_the_table_lists_it() {
+    let dir = tmpdir("dedupe");
+    let geometry = big_blob(50_000);
+    let hash = {
+        let mut h = Blake2b128::new();
+        h.update(&geometry);
+        hex(&h.finalize())
+    };
+    let blob = dir.join("blob.bin");
+    std::fs::write(&blob, &geometry).unwrap();
+    let blobs = BTreeMap::from([(hash.clone(), blob)]);
+    let (info, cbor) = (json_to_cbor("{}").unwrap(), json_to_cbor(r#"{"features":[]}"#).unwrap());
+    let meshes = BTreeMap::new();
+    let mut specs = document_sections(&info, &cbor, &blobs, &meshes, &[]);
+    specs.push(SectionSpec {
+        kind: KIND_GEOMETRY,
+        name: hash.clone(),
+        source: Source::Bytes(&geometry),
+        layout: LARGE_LAYOUT,
+    });
+    let path = dir.join("twice.fundab");
+    write(&mut File::create(&path).unwrap(), &specs).unwrap();
+    // The second copy declares a length its bytes do not have, so reading it would fail the open.
+    retable(&path, |entries| entries.iter_mut().filter(|e| e.kind == KIND_GEOMETRY).nth(1).unwrap().raw_len += 1);
+    read_file(&path, &dir.join("blobs"), None).unwrap();
+    assert_eq!(std::fs::read(dir.join("blobs").join(format!("{hash}.bbrep"))).unwrap(), geometry);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn an_open_refuses_sections_that_together_expand_past_its_budget() {
+    let dir = tmpdir("budget");
+    let parts: Vec<Vec<u8>> = (0..2u8).map(|i| vec![i; 1000]).collect();
+    let cbor = json_to_cbor("{}").unwrap();
+    let doc = SectionSpec {
+        kind: KIND_DOCUMENT,
+        name: "document".into(),
+        source: Source::Bytes(&cbor),
+        layout: SMALL_LAYOUT,
+    };
+    let specs: Vec<SectionSpec> = std::iter::once(doc)
+        .chain(parts.iter().map(|p| {
+            let mut h = Blake2b128::new();
+            h.update(p);
+            SectionSpec {
+                kind: KIND_GEOMETRY,
+                name: hex(&h.finalize()),
+                source: Source::Bytes(p),
+                layout: SMALL_LAYOUT,
+            }
+        }))
+        .collect();
+    let path = dir.join("big.fundab");
+    write(&mut File::create(&path).unwrap(), &specs).unwrap();
+    retable(&path, |entries| {
+        for e in entries.iter_mut().filter(|e| e.kind == KIND_GEOMETRY) {
+            e.raw_len = 5 << 30;
+        }
+    });
+    let err = read_file(&path, &dir.join("blobs"), None).map(|_| ()).unwrap_err();
+    assert!(err.contains("8 GiB"), "{err}");
+    assert_eq!(std::fs::read_dir(dir.join("blobs")).unwrap().count(), 0);
+    let _ = std::fs::remove_dir_all(&dir);
+}

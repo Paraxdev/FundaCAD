@@ -3,7 +3,7 @@
 //! reader rebuilds damaged shards from parity and proves the section by its BLAKE2b hash. The header and the section
 //! table are each stored twice, so losing the start or the end of the file is survivable.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
@@ -465,7 +465,20 @@ fn decode_table(t: &[u8]) -> Option<Vec<Entry>> {
             layout: Layout { shard_size, data_shards, parity_shards },
         });
     }
-    Some(out)
+    let mut spans = out.iter().map(span).collect::<Option<Vec<_>>>()?;
+    spans.retain(|(start, end)| end > start);
+    spans.sort_unstable();
+    spans.windows(2).all(|w| w[0].1 <= w[1].0).then_some(out)
+}
+
+/// The bytes a section takes on disk: its shards, then its CRC table. None when the declared sizes overflow.
+fn span(e: &Entry) -> Option<(u64, u64)> {
+    let shards = e
+        .stored_len
+        .div_ceil(e.layout.shard_size as u64 * e.layout.data_shards as u64)
+        .checked_mul(e.shards_per_group())?;
+    let len = shards.checked_mul(e.layout.shard_size as u64)?.checked_add(shards.checked_mul(4)?)?;
+    Some((e.offset, e.offset.checked_add(len)?))
 }
 
 /// The section table, from whichever copy of the header and table survives.
@@ -641,9 +654,13 @@ fn read_section<S: Write>(file: &File, entry: &Entry, sink: &mut S, report: &mut
     decode_section(reader, entry, sink, report)
 }
 
+fn too_big() -> String {
+    format!("This document expands to more than {} GiB and was refused.", MAX_RAW >> 30)
+}
+
 fn check_raw_len(entry: &Entry) -> Result<(), String> {
     if entry.raw_len > MAX_RAW {
-        return Err(format!("This document expands to more than {} GiB and was refused.", MAX_RAW >> 30));
+        return Err(too_big());
     }
     Ok(())
 }
@@ -725,7 +742,7 @@ pub fn read_file(path: &Path, blob_dir: &Path, carry_dir: Option<&Path>) -> Resu
 
 enum Role {
     Geometry,
-    Carried(usize),
+    Carried,
 }
 
 struct Job<'a> {
@@ -733,6 +750,26 @@ struct Job<'a> {
     dest: PathBuf,
     role: Role,
     rows: Vec<&'a segments::Row>,
+}
+
+/// The index of the job that writes `dest`, queued unless one already does. None when `dest` holds the bytes already.
+fn queue_job<'a>(
+    jobs: &mut Vec<Job<'a>>,
+    queued: &mut HashMap<PathBuf, usize>,
+    e: &'a Entry,
+    dest: PathBuf,
+    role: Role,
+    rows: Vec<&'a segments::Row>,
+) -> Option<usize> {
+    if let Some(&i) = queued.get(&dest) {
+        return Some(i);
+    }
+    if published(&dest, e.raw_len) {
+        return None;
+    }
+    queued.insert(dest.clone(), jobs.len());
+    jobs.push(Job { entry: e, dest, role, rows });
+    Some(jobs.len() - 1)
 }
 
 /// Sections the segment index describes are decoded one at a time on all
@@ -755,30 +792,28 @@ pub fn read_file_with(
         rows.iter().filter(|r| r.kind == e.kind && r.raw_hash == e.raw_hash && r.stored_len == e.stored_len).collect()
     };
 
-    let mut jobs = Vec::new();
+    let mut jobs: Vec<Job> = Vec::new();
+    let mut queued = HashMap::new();
+    let mut queue = |e, dest, role| queue_job(&mut jobs, &mut queued, e, dest, role, rows_of(e));
     std::fs::create_dir_all(blob_dir).map_err(io)?;
     for e in entries.iter().filter(|e| e.kind == KIND_GEOMETRY) {
         let hash = hex(&e.raw_hash);
         if e.name != hash {
             return Err(DAMAGED.to_string());
         }
-        let dest = blob_dir.join(format!("{hash}.bbrep"));
-        if !published(&dest, e.raw_len) {
-            jobs.push(Job { entry: e, dest, role: Role::Geometry, rows: rows_of(e) });
-        }
+        queue(e, blob_dir.join(format!("{hash}.bbrep")), Role::Geometry);
     }
-    let mut carried: Vec<(Carried, bool)> = Vec::new();
+    let mut carried: Vec<(Carried, Option<usize>)> = Vec::new();
     if let Some(dir) = carry_dir {
         std::fs::create_dir_all(dir).map_err(io)?;
         for e in entries.iter().filter(|e| carries(e)) {
             let hash = hex(&e.raw_hash);
-            let dest = dir.join(format!("{hash}.bin"));
-            let have = published(&dest, e.raw_len);
-            if !have {
-                jobs.push(Job { entry: e, dest, role: Role::Carried(carried.len()), rows: rows_of(e) });
-            }
-            carried.push((Carried { kind: e.kind, name: e.name.clone(), hash }, have));
+            let job = queue(e, dir.join(format!("{hash}.bin")), Role::Carried);
+            carried.push((Carried { kind: e.kind, name: e.name.clone(), hash }, job));
         }
+    }
+    if jobs.iter().try_fold(0u64, |sum, j| sum.checked_add(j.entry.raw_len)).is_none_or(|sum| sum > MAX_RAW) {
+        return Err(too_big());
     }
 
     if !jobs.is_empty() {
@@ -811,16 +846,15 @@ pub fn read_file_with(
             return Err(err.clone());
         }
     }
-    for (job, r) in jobs.iter().zip(results) {
-        // A section this version does not read never blocks the open.
-        if let Some(Ok(r)) = r {
-            report.repaired_shards += r.repaired_shards;
-            if let Role::Carried(i) = job.role {
-                carried[i].1 = true;
-            }
-        }
+    for r in results.iter().flatten().flatten() {
+        report.repaired_shards += r.repaired_shards;
     }
-    let carried = carried.into_iter().filter(|(_, ok)| *ok).map(|(c, _)| c).collect();
+    // A section this version does not read never blocks the open.
+    let carried = carried
+        .into_iter()
+        .filter(|(_, job)| job.is_none_or(|i| matches!(results[i], Some(Ok(_)))))
+        .map(|(c, _)| c)
+        .collect();
     Ok(Opened { document_json, entries, report, carried })
 }
 
