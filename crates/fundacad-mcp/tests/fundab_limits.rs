@@ -292,3 +292,12 @@ fn a_zipped_blob_that_does_not_hash_to_its_manifest_entry_is_refused_without_hol
     );
     assert!(largest < 32 << 20, "the reader asked for {largest} bytes at once");
 }
+
+#[test]
+fn a_document_reads_here_exactly_as_deep_as_serde_json_reads_it() {
+    for times in 120..136 {
+        let json = format!(r#"{{"features":[],"x":{}{{}}{}}}"#, "[".repeat(times), "]".repeat(times));
+        let parsed = serde_json::from_str::<serde_json::Value>(&json).is_ok();
+        assert_eq!(reads_document_holding(&[0x81], times), parsed, "{times} arrays deep");
+    }
+}

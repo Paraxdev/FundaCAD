@@ -19,8 +19,8 @@ const KIND_GEOMETRY: u8 = 2;
 /// The last kind this build knows, the app carries every section above it.
 const KIND_SEGMENTS: u8 = 4;
 const MAX_TOTAL: u64 = 8 << 30;
-// serde_json's own nesting limit, so a document read here can go through JSON again.
-const MAX_CBOR_DEPTH: usize = 128;
+// serde_json refuses 128 containers nested in each other, so an item here sits inside at most 126 of them.
+const MAX_CBOR_DEPTH: usize = 126;
 /// The app refuses to open a .funda longer than this (fundacad_format::json_doc::MAX_DOC_TEXT).
 pub const MAX_DOC_TEXT: u64 = 1 << 30;
 
