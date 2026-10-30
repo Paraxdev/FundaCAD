@@ -13,8 +13,7 @@ const entries = pins
   .map((l) => l.split(/\s+/));
 
 const fetchStart = build.indexOf("- name: Fetch the AppImage tools (Linux)");
-const fetchStep =
-  fetchStart < 0 ? "" : build.slice(fetchStart, build.indexOf("\n      - ", fetchStart + 1));
+const fetchStep = fetchStart < 0 ? "" : build.slice(fetchStart, build.indexOf("\n      - ", fetchStart + 1));
 
 describe("the pinned AppImage tools", () => {
   it("pins every tool the AppImage build uses to a tagged release or commit with a sha256", () => {
@@ -33,7 +32,7 @@ describe("the pinned AppImage tools", () => {
     for (const [sha, file, url] of entries) {
       expect(sha).toMatch(/^[0-9a-f]{64}$/);
       expect(url).toMatch(/^https:\/\//);
-      expect(url.endsWith(`/${file}`)).toBe(true);
+      expect(url?.endsWith(`/${file}`)).toBe(true);
       expect(url).not.toMatch(/\/(continuous|latest|master|main)\//);
     }
   });

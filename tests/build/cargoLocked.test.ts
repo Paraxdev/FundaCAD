@@ -17,11 +17,11 @@ describe("cargo in build.yml", () => {
   });
 
   it("passes --locked to every cargo build, test and run", () => {
-    expect(cargoRuns.filter((l) => !/\s--locked\b/.test(l.split(" -- ")[0]))).toEqual([]);
+    expect(cargoRuns.filter((l) => !/\s--locked\b/.test(l.split(" -- ")[0] ?? ""))).toEqual([]);
   });
 
   it("passes --locked through tauri-action to the release cargo build", () => {
-    const args = [...code.matchAll(/^\s*args: (.*)$/gm)].map((m) => m[1].trim());
+    const args = [...code.matchAll(/^\s*args: (.*)$/gm)].map((m) => (m[1] ?? "").trim());
     expect(args.length).toBeGreaterThan(0);
     for (const a of args) expect(a).toMatch(/ -- --locked$/);
   });

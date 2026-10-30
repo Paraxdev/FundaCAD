@@ -12,7 +12,7 @@ function job(name: string): string {
   const start = lines.indexOf(`  ${name}:`);
   if (start < 0) return "";
   let end = start + 1;
-  while (end < lines.length && !/^ {0,2}\S/.test(lines[end])) end++;
+  while (end < lines.length && !/^ {0,2}\S/.test(lines[end] ?? "")) end++;
   return lines.slice(start, end).join("\n");
 }
 
@@ -25,7 +25,7 @@ describe("the CI scans in the test job", () => {
   it("runs gitleaks from a tagged release only after its sha256 matches, with the repo config", () => {
     const i = named("Secret scan (gitleaks)");
     expect(i).toBeGreaterThanOrEqual(0);
-    const step = steps[i];
+    const step = steps[i] ?? "";
     const url = step.match(/https:\/\/\S+/g) ?? [];
     expect(url).toHaveLength(1);
     expect(url[0]).toMatch(

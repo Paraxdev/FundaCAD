@@ -10,23 +10,23 @@ const all = import.meta.glob("../../.github/**/*.{yml,yaml}", {
   eager: true,
 }) as Record<string, string>;
 const buildPath = Object.keys(all).find((p) => p.endsWith("/workflows/build.yml"))!;
-const build = all[buildPath].replace(/\r\n/g, "\n");
-const updaterAction = all[Object.keys(all).find((p) => p.endsWith("/actions/updater-artifacts/action.yml"))!].replace(
-  /\r\n/g,
-  "\n",
-);
+const build = (all[buildPath] ?? "").replace(/\r\n/g, "\n");
+const updaterAction = (
+  all[Object.keys(all).find((p) => p.endsWith("/actions/updater-artifacts/action.yml"))!] ?? ""
+).replace(/\r\n/g, "\n");
 
 function job(name: string): string {
   const lines = build.split("\n");
   const start = lines.indexOf(`  ${name}:`);
   if (start < 0) return "";
   let end = start + 1;
-  while (end < lines.length && !/^ {0,2}\S/.test(lines[end])) end++;
+  while (end < lines.length && !/^ {0,2}\S/.test(lines[end] ?? "")) end++;
   return lines.slice(start, end).join("\n");
 }
 
 const steps = (text: string) => text.split(/\n {6}- /).slice(1);
-const usesOf = (text: string) => [...text.matchAll(/^\s*(?:- )?uses:\s*(\S+)/gm)].map((m) => m[1].replace(/@.*$/, ""));
+const usesOf = (text: string) =>
+  [...text.matchAll(/^\s*(?:- )?uses:\s*(\S+)/gm)].map((m) => (m[1] ?? "").replace(/@.*$/, ""));
 const runText = (text: string) =>
   [...(text + "\n").matchAll(/^([ \t]*)(?:- )?run:[ \t]*(\|?)(.*)\n((?:\1[ \t]+.*\n|[ \t]*\n)*)/gm)]
     .map((m) => m[3] + "\n" + m[4])
