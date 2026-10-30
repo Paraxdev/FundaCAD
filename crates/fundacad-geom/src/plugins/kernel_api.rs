@@ -149,15 +149,20 @@ pub fn is_valid(s: &Shape) -> bool {
     ffi::po_is_valid(s.raw())
 }
 
+/// A finer request is raised to this share of the face's diagonal, so the
+/// native mesher's work stays bounded (the plugin's budget cannot stop it).
+pub const MIN_RELATIVE_DEFLECTION: f64 = 1e-5;
+
 pub fn triangulate(face: &Shape, deflection: f64) -> Result<Mesh, String> {
     if !(deflection > 0.0) {
         return Err("the deflection must be greater than 0".into());
     }
+    let linear = deflection.max(MIN_RELATIVE_DEFLECTION * kernel::bbox_diagonal(face));
     let access = MeshAccess::new(face);
     let t = mesh::tessellate(
         face,
         &access,
-        MeshParams { linear: deflection, angular: 0.5, relative: false, display: true, force_remesh: false },
+        MeshParams { linear, angular: 0.5, relative: false, display: true, force_remesh: false },
     );
     Ok(Mesh {
         positions: t.positions,
@@ -358,15 +363,54 @@ pub fn read_blob(id: &str) -> Result<Shape, String> {
     opencascade::xcaf::from_bin(&bytes).map_err(|e| e.to_string())
 }
 
+fn store_err(e: &dyn std::fmt::Display) -> String {
+    format!("could not store the imported geometry ({e}). Check free disk space and permissions on the FundaCAD data directory.")
+}
+
 pub fn write_blob(s: &Shape) -> Result<String, String> {
-    let store_err = |e: &dyn std::fmt::Display| {
-        format!(
-            "could not store the imported geometry ({e}). Check free disk space and permissions on the FundaCAD data directory."
-        )
-    };
     let bytes = opencascade::xcaf::to_bin_v3(s).map_err(|e| store_err(&e))?;
     let store = BlobStore::open(blobstore::default_root()).map_err(|e| store_err(&e))?;
     store.put_bytes(&bytes).map_err(|e| store_err(&e))
+}
+
+/// What one plugin call may put in the shared blob store, which nothing clears.
+pub struct BlobBudget {
+    pub per_blob: usize,
+    pub total: usize,
+    used: usize,
+}
+
+impl Default for BlobBudget {
+    fn default() -> Self {
+        BlobBudget { per_blob: 256 << 20, total: 1 << 30, used: 0 }
+    }
+}
+
+impl BlobBudget {
+    fn check(&self, len: usize) -> Result<(), String> {
+        let mib = |n: usize| n >> 20;
+        if len > self.per_blob {
+            return Err(format!(
+                "this shape needs {} MiB stored, past the cap of {} MiB for one stored shape",
+                mib(len),
+                mib(self.per_blob)
+            ));
+        }
+        if self.used + len > self.total {
+            return Err(format!("a plugin call may store at most {} MiB of shapes in total", mib(self.total)));
+        }
+        Ok(())
+    }
+}
+
+/// A plugin's write-blob: refused before anything is stored once the budget runs out.
+pub fn write_blob_capped(s: &Shape, root: &Path, budget: &mut BlobBudget) -> Result<String, String> {
+    let bytes = opencascade::xcaf::to_bin_v3(s).map_err(|e| store_err(&e))?;
+    budget.check(bytes.len())?;
+    let store = BlobStore::open(root).map_err(|e| store_err(&e))?;
+    let digest = store.put_bytes(&bytes).map_err(|e| store_err(&e))?;
+    budget.used += bytes.len();
+    Ok(digest)
 }
 
 const MAX_PREVIEW_TRIANGLES: usize = 400_000;
@@ -469,9 +513,7 @@ pub fn export_with(
     if meshed.is_empty() {
         return Err("nothing to export, no meshable bodies".into());
     }
-    let target = Path::new(path);
-    let _ = std::fs::remove_file(target);
-    let info = super::exporter_call(exporter, meshed, &options, target, cancel)?;
+    let info = replace_after(Path::new(path), |part| super::exporter_call(exporter, meshed, &options, part, cancel))?;
     let mut res = Map::new();
     res.insert("path".into(), json!(path));
     if let Some(info @ Value::Object(_)) = info {
@@ -481,4 +523,22 @@ pub fn export_with(
         res.insert("warnings".into(), Value::Array(r.errors.iter().map(builder::FeatureError::wire).collect()));
     }
     Ok(res)
+}
+
+/// Runs `write` against a fresh file next to `target` and moves it over `target` only when `write` succeeds,
+/// so a failed or cancelled export leaves the old file as it was.
+pub(super) fn replace_after<T>(target: &Path, write: impl FnOnce(&Path) -> Result<T, String>) -> Result<T, String> {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let name = target.file_name().ok_or("exportWith: the path names no file")?.to_string_lossy();
+    let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let part = target.with_file_name(format!(".{name}.{}.{n}.part", std::process::id()));
+    let _ = std::fs::remove_file(&part);
+    let r = write(&part).and_then(|v| match std::fs::metadata(&part) {
+        Ok(_) => std::fs::rename(&part, target).map(|()| v).map_err(|e| format!("could not replace the file: {e}")),
+        Err(_) => Err("the exporter wrote nothing".into()),
+    });
+    if r.is_err() {
+        let _ = std::fs::remove_file(&part);
+    }
+    r
 }

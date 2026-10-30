@@ -40,6 +40,9 @@ struct Declared {
     exporters: Vec<String>,
     generators: Vec<String>,
     files_read: bool,
+    official: bool,
+    /// Why it is not loaded when another plugin owns one of its names.
+    clash: Option<String>,
     /// The manifest's and the component's size and time, so a bundle replaced
     /// on disk is read again and one left alone keeps its compiled component.
     stamp: Vec<(u64, Option<SystemTime>)>,
@@ -183,8 +186,32 @@ fn file_stamp(path: &Path) -> (u64, Option<SystemTime>) {
     std::fs::metadata(path).map_or((0, None), |m| (m.len(), m.modified().ok()))
 }
 
-fn wasm_path(dir: &Path, rel: &str) -> PathBuf {
-    rel.split('/').fold(dir.to_path_buf(), |p, part| p.join(part))
+/// The component inside the plugin dir that the manifest names, by the rule src-tauri's bundle.rs `safe_entry`
+/// unpacks entries with, and still inside the dir once links are resolved. None when it would be anywhere else.
+fn wasm_path(dir: &Path, rel: &str) -> Option<PathBuf> {
+    let b = rel.as_bytes();
+    if rel.is_empty() || rel.len() > 512 || rel.contains(['\\', '\0']) || b[0] == b'/' || b.get(1) == Some(&b':') {
+        return None;
+    }
+    let mut path = dir.to_path_buf();
+    for part in rel.split('/').filter(|p| !p.is_empty() && *p != ".") {
+        let mut parts = Path::new(part).components();
+        match (parts.next(), parts.next()) {
+            (Some(std::path::Component::Normal(_)), None) => path.push(part),
+            _ => return None,
+        }
+    }
+    if path == dir {
+        return None;
+    }
+    match (path.canonicalize(), dir.canonicalize()) {
+        (Ok(real), Ok(base)) if !real.starts_with(&base) => None,
+        _ => Some(path),
+    }
+}
+
+fn outside(rel: &str) -> String {
+    format!("its manifest names {rel:?} as its component, which is outside the installed copy, so it is not loaded")
 }
 
 fn discover() -> Vec<Declared> {
@@ -232,7 +259,7 @@ fn read_list(path: &Path) -> std::io::Result<Vec<u8>> {
     }
 }
 
-/// The ids discovery would register from these roots, in the order it finds them.
+/// The ids discovery would register from these roots, official plugins first.
 pub fn discovered_ids(roots: &[PluginRoot]) -> Vec<String> {
     discover_in(roots).into_iter().map(|d| d.id).collect()
 }
@@ -274,8 +301,8 @@ fn discover_in(roots: &[PluginRoot]) -> Vec<Declared> {
             }
             let wasm = man.get(MANIFEST_WASM).and_then(Value::as_str).map(str::to_owned);
             let mut stamp = vec![file_stamp(&dir.join("manifest.json"))];
-            if let Some(rel) = &wasm {
-                stamp.push(file_stamp(&wasm_path(&dir, rel)));
+            if let Some(path) = wasm.as_deref().and_then(|rel| wasm_path(&dir, rel)) {
+                stamp.push(file_stamp(&path));
             }
             out.push(Declared {
                 wasm,
@@ -284,12 +311,48 @@ fn discover_in(roots: &[PluginRoot]) -> Vec<Declared> {
                 exporters: strings(&man, MANIFEST_EXPORTERS),
                 generators: strings(&man, MANIFEST_GENERATORS),
                 files_read: strings(&man, "grants").iter().any(|g| g == "files.read"),
+                // A checkout's plugins/ holds only the plugins FundaCAD ships.
+                official: !root.records || recorded_official(&dir),
+                clash: None,
                 id,
                 dir,
             });
         }
     }
+    out.sort_by_key(|d| !d.official);
+    settle_owners(&mut out);
     out
+}
+
+fn recorded_official(dir: &Path) -> bool {
+    std::fs::read(dir.join(RECORD))
+        .ok()
+        .and_then(|b| serde_json::from_slice::<Value>(&b).ok())
+        .and_then(|r| r.get("official").and_then(Value::as_bool))
+        .unwrap_or(false)
+}
+
+/// Each feature type, exporter and shape generator belongs to the first plugin in `found` that declares it, so a later
+/// one declaring it too is not loaded. Mesh passes go to the first in this order that registers them.
+fn settle_owners(found: &mut [Declared]) {
+    let mut owners: HashMap<(&'static str, String), String> = HashMap::new();
+    for d in found.iter_mut() {
+        let names = [("feature type", &d.types), ("exporter", &d.exporters), ("shape generator", &d.generators)];
+        let taken = names.iter().find_map(|(kind, list)| {
+            list.iter().find_map(|n| {
+                let owner = owners.get(&(*kind, n.clone()))?;
+                Some(format!("its {kind} {n:?} is already provided by the {owner:?} plugin"))
+            })
+        });
+        if taken.is_none() {
+            for (kind, list) in names {
+                for n in list {
+                    owners.insert((kind, n.clone()), d.id.clone());
+                }
+            }
+        }
+        d.clash = taken;
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -359,10 +422,15 @@ enum Missing {
 pub const NO_COMPONENT: &str = "the installed copy was made for the previous engine and has no component for FundaCAD 1.0, updating the plugin in Preferences, Plugins fixes it";
 
 fn compile(d: &Declared) -> Loaded {
+    if let Some(why) = &d.clash {
+        return Loaded::Broken(why.clone());
+    }
     let Some(rel) = &d.wasm else {
         return Loaded::Broken(NO_COMPONENT.into());
     };
-    let path = wasm_path(&d.dir, rel);
+    let Some(path) = wasm_path(&d.dir, rel) else {
+        return Loaded::Broken(outside(rel));
+    };
     if !path.is_file() {
         return Loaded::Broken(format!(
             "its manifest names {rel:?}, which is not in the installed copy, updating the plugin in Preferences, Plugins fixes it"
@@ -508,7 +576,7 @@ fn identity(entry: &mut Entry) -> String {
     }
     let d = &entry.declared;
     let manifest = std::fs::read(d.dir.join("manifest.json")).unwrap_or_default();
-    let wasm = d.wasm.as_deref().and_then(|rel| std::fs::read(wasm_path(&d.dir, rel)).ok()).unwrap_or_default();
+    let wasm = d.wasm.as_deref().and_then(|rel| std::fs::read(wasm_path(&d.dir, rel)?).ok()).unwrap_or_default();
     let id = crate::cache::keys::hash_hex(&[d.id.as_bytes(), b"\0", &manifest, b"\0", &wasm]);
     entry.identity = Some(id.clone());
     id
@@ -520,7 +588,7 @@ pub fn feature_identities() -> HashMap<String, String> {
     let mut reg = current();
     let mut out = HashMap::new();
     for e in reg.entries.iter_mut() {
-        if e.declared.types.is_empty() {
+        if e.declared.types.is_empty() || e.declared.clash.is_some() {
             continue;
         }
         let id = identity(e);

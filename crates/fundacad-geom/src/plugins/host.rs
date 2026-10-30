@@ -10,7 +10,7 @@ use fundacad_protocol::CancelToken;
 use opencascade::primitives::Shape;
 use serde_json::Value;
 use wasmtime::component::{HasSelf, Linker, Resource, ResourceTable};
-use wasmtime::{Config, Engine, Store, StoreLimits, StoreLimitsBuilder, UpdateDeadline};
+use wasmtime::{Config, Engine, ResourceLimiter, Store, StoreLimits, StoreLimitsBuilder, UpdateDeadline};
 use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 
 use super::kernel_api as k;
@@ -53,10 +53,81 @@ enum Scope {
     Export(PathBuf),
 }
 
+/// StoreLimits caps each linear memory on its own, this also caps their sum.
+pub(super) struct Limits {
+    per_store: StoreLimits,
+    memory_total: usize,
+    last_growth: usize,
+}
+
+pub(super) fn store_limits() -> Limits {
+    let per_store = StoreLimitsBuilder::new()
+        .memory_size(super::MEMORY_LIMIT)
+        .table_elements(1 << 20)
+        .instances(64)
+        .tables(64)
+        .memories(8)
+        .trap_on_grow_failure(true)
+        .build();
+    Limits { per_store, memory_total: 0, last_growth: 0 }
+}
+
+impl ResourceLimiter for Limits {
+    fn memory_growing(&mut self, current: usize, desired: usize, maximum: Option<usize>) -> wasmtime::Result<bool> {
+        self.last_growth = 0;
+        if !self.per_store.memory_growing(current, desired, maximum)? {
+            return Ok(false);
+        }
+        let growth = desired.saturating_sub(current);
+        let total = self.memory_total.saturating_add(growth);
+        if total > super::MEMORY_LIMIT {
+            return Err(wasmtime::Error::msg(format!(
+                "the plugin's memories passed their cap of {} MiB in total",
+                super::MEMORY_LIMIT >> 20
+            )));
+        }
+        self.memory_total = total;
+        self.last_growth = growth;
+        Ok(true)
+    }
+
+    fn memory_grow_failed(&mut self, error: wasmtime::Error) -> wasmtime::Result<()> {
+        self.memory_total -= std::mem::take(&mut self.last_growth);
+        self.per_store.memory_grow_failed(error)
+    }
+
+    fn table_growing(&mut self, current: usize, desired: usize, maximum: Option<usize>) -> wasmtime::Result<bool> {
+        self.per_store.table_growing(current, desired, maximum)
+    }
+
+    fn table_grow_failed(&mut self, error: wasmtime::Error) -> wasmtime::Result<()> {
+        self.per_store.table_grow_failed(error)
+    }
+
+    fn instances(&self) -> usize {
+        self.per_store.instances()
+    }
+
+    fn tables(&self) -> usize {
+        self.per_store.tables()
+    }
+
+    fn memories(&self) -> usize {
+        self.per_store.memories()
+    }
+}
+
+/// Plugin shapes live in host memory, which the wasm memory cap does not cover.
+pub(super) const MAX_LIVE_SHAPES: usize = 1_000_000;
+pub(super) const MAX_FILE_READ: u64 = 256 << 20;
+
 pub struct State {
     table: ResourceTable,
+    live_shapes: usize,
+    pub(super) shape_cap: usize,
+    pub(super) blobs: k::BlobBudget,
     wasi: WasiCtx,
-    limits: StoreLimits,
+    limits: Limits,
     scope: Scope,
     cancel: Option<CancelToken>,
     files_read: bool,
@@ -161,32 +232,7 @@ impl Component {
         cancel: Option<CancelToken>,
         f: impl FnOnce(&Plugin, &mut Store<State>) -> wasmtime::Result<R>,
     ) -> Result<R, String> {
-        let wasi = WasiCtxBuilder::new()
-            .inherit_stderr()
-            .allow_tcp(false)
-            .allow_udp(false)
-            .allow_ip_name_lookup(false)
-            .build();
-        let limits = StoreLimitsBuilder::new()
-            .memory_size(super::MEMORY_LIMIT)
-            .table_elements(1 << 20)
-            .instances(64)
-            .tables(64)
-            .memories(8)
-            .trap_on_grow_failure(true)
-            .build();
-        let mut store = Store::new(
-            engine(),
-            State {
-                table: ResourceTable::new(),
-                wasi,
-                limits,
-                scope,
-                cancel: cancel.clone(),
-                files_read: self.files_read,
-                refusals: Vec::new(),
-            },
-        );
+        let mut store = Store::new(engine(), State::new(scope, cancel.clone(), self.files_read));
         store.limiter(|s| &mut s.limits);
         let started = Instant::now();
         store.epoch_deadline_callback(move |ctx| {
@@ -263,7 +309,7 @@ impl Component {
     /// The faces one spec claims, each with the tag that goes back with it.
     pub fn resolve_pass(&self, pass: &str, body: &Shape, spec: &Value) -> Result<Vec<(Shape, String)>, String> {
         self.call(Scope::None, super::MESH_PASS_BUDGET, None, |p, s| {
-            let h = s.data_mut().table.push(HostShape(body.clone()))?;
+            let h = s.data_mut().own(body.clone())?;
             let r = p.call_resolve_pass(&mut *s, pass, h, &spec.to_string())?;
             Ok(match r {
                 Ok(hs) => hs.into_iter().map(|c| take(s.data_mut(), c.face).map(|f| (f, c.tag))).collect(),
@@ -282,24 +328,58 @@ impl Component {
         split_creases: bool,
     ) -> Result<MeshData, String> {
         self.call(Scope::None, super::MESH_PASS_BUDGET, None, |p, s| {
-            let h = s.data_mut().table.push(HostShape(face.clone()))?;
+            let h = s.data_mut().own(face.clone())?;
             let options = DisplaceOptions { density_cap, split_creases };
             p.call_displace(&mut *s, pass, h, &spec.to_string(), tag, options)
         })?
     }
 }
 
-fn take(state: &mut State, h: Resource<HostShape>) -> Result<Shape, String> {
-    state.table.delete(h).map(|s| s.0).map_err(|e| format!("the plugin returned a shape it does not hold: {e}"))
+pub(super) fn take(state: &mut State, h: Resource<HostShape>) -> Result<Shape, String> {
+    let s =
+        state.table.delete(h).map(|s| s.0).map_err(|e| format!("the plugin returned a shape it does not hold: {e}"))?;
+    state.live_shapes -= 1;
+    Ok(s)
 }
 
 impl State {
+    #[cfg(test)]
+    pub(super) fn bare() -> Self {
+        Self::new(Scope::None, None, false)
+    }
+
+    fn new(scope: Scope, cancel: Option<CancelToken>, files_read: bool) -> Self {
+        let wasi = WasiCtxBuilder::new()
+            .inherit_stderr()
+            .allow_tcp(false)
+            .allow_udp(false)
+            .allow_ip_name_lookup(false)
+            .build();
+        State {
+            table: ResourceTable::new(),
+            live_shapes: 0,
+            shape_cap: MAX_LIVE_SHAPES,
+            blobs: k::BlobBudget::default(),
+            wasi,
+            limits: store_limits(),
+            scope,
+            cancel,
+            files_read,
+            refusals: Vec::new(),
+        }
+    }
+
     fn shape(&self, h: &Resource<HostShape>) -> wasmtime::Result<&Shape> {
         Ok(&self.table.get(h)?.0)
     }
 
-    fn own(&mut self, s: Shape) -> wasmtime::Result<Resource<HostShape>> {
-        Ok(self.table.push(HostShape(s))?)
+    pub(super) fn own(&mut self, s: Shape) -> wasmtime::Result<Resource<HostShape>> {
+        if self.live_shapes >= self.shape_cap {
+            return Err(wasmtime::Error::msg(format!("the plugin holds more than {} shapes at once", self.shape_cap)));
+        }
+        let h = self.table.push(HostShape(s))?;
+        self.live_shapes += 1;
+        Ok(h)
     }
 
     fn own_all(&mut self, v: Vec<Shape>) -> wasmtime::Result<Vec<Resource<HostShape>>> {
@@ -480,6 +560,7 @@ impl kernel::HostShape for State {
 
     fn drop(&mut self, s: Resource<HostShape>) -> wasmtime::Result<()> {
         self.table.delete(s)?;
+        self.live_shapes -= 1;
         Ok(())
     }
 }
@@ -764,7 +845,8 @@ impl kernel::Host for State {
     }
 
     fn write_blob(&mut self, s: Resource<HostShape>) -> wasmtime::Result<Result<String, String>> {
-        Ok(k::write_blob(self.shape(&s)?))
+        let root = crate::import::blobstore::default_root();
+        Ok(k::write_blob_capped(&self.table.get(&s)?.0, &root, &mut self.blobs))
     }
 }
 
@@ -1002,7 +1084,7 @@ impl files::Host for State {
         if !self.files_read {
             return Ok(Err(NO_FILES.into()));
         }
-        Ok(std::fs::read(&path).map_err(|e| io_text(&e, &path)))
+        Ok(read_file(&path, MAX_FILE_READ))
     }
 
     fn list_dir(&mut self, path: String) -> wasmtime::Result<Result<Vec<types::DirEntry>, String>> {
@@ -1026,6 +1108,22 @@ impl files::Host for State {
     fn is_file(&mut self, path: String) -> wasmtime::Result<bool> {
         Ok(self.files_read && Path::new(&path).is_file())
     }
+}
+
+/// Reads through take() as well, so a file that grows after the size check is caught.
+pub(super) fn read_file(path: &str, cap: u64) -> Result<Vec<u8>, String> {
+    use std::io::Read;
+    let too_big = || format!("{} is larger than the {} MiB a plugin may read at once", py_repr(path), cap >> 20);
+    let f = std::fs::File::open(path).map_err(|e| io_text(&e, path))?;
+    if f.metadata().map_err(|e| io_text(&e, path))?.len() > cap {
+        return Err(too_big());
+    }
+    let mut out = Vec::new();
+    f.take(cap + 1).read_to_end(&mut out).map_err(|e| io_text(&e, path))?;
+    if out.len() as u64 > cap {
+        return Err(too_big());
+    }
+    Ok(out)
 }
 
 /// An OS error the way Python's OSError prints it, which plugin messages quote.
