@@ -231,7 +231,7 @@ impl Socket {
         payload.insert("chunked".into(), json!(true));
         let mut streamed: Option<(Map<String, Value>, Vec<MeshBody>)> = None;
         let text = Value::Object(payload).to_string();
-        self.ws.send(Message::Text(text.into())).await.map_err(closed)?;
+        self.ws.send(Message::Text(text.into())).await.map_err(unsent)?;
         loop {
             let Some(msg) = self.ws.next().await else {
                 return Err(io::Error::new(io::ErrorKind::BrokenPipe, "the engine closed the connection"));
@@ -298,6 +298,15 @@ impl Socket {
 fn closed(e: tokio_tungstenite::tungstenite::Error) -> io::Error {
     io::Error::new(io::ErrorKind::BrokenPipe, e.to_string())
 }
+
+/// The request did not leave, so sending it again cannot apply it twice.
+fn unsent(e: tokio_tungstenite::tungstenite::Error) -> io::Error {
+    io::Error::new(io::ErrorKind::NotConnected, e.to_string())
+}
+
+/// Ops that change nothing, so one whose reply was lost can be asked again.
+const SAFE_TO_RESEND: &[&str] =
+    &["ping", "session_state", "rebuild", "inspect", "measure", "interference", "printability", "stress"];
 
 pub struct EngineLink {
     port: AtomicU16,
@@ -536,9 +545,10 @@ impl EngineLink {
                 Ok(Ok(reply)) => return Ok(reply),
                 Ok(Err(e)) => {
                     // The worker can be killed under a socket (a stall reap, an OCCT crash): one silent reconnect,
-                    // then the caller sees the error.
+                    // then the caller sees the error. A change whose reply was lost may have been applied.
                     state.socket = None;
-                    if attempt == 1 {
+                    let resend = e.kind() == io::ErrorKind::NotConnected || SAFE_TO_RESEND.contains(&op);
+                    if attempt == 1 || !resend {
                         return Err(e);
                     }
                 }
