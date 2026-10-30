@@ -764,7 +764,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: fundacad-bundle-ubuntu-22.04
           path: linux
@@ -868,7 +868,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: fundacad-bundle-ubuntu-22.04
           path: linux
@@ -920,7 +920,7 @@ jobs:
           config: src-tauri/tauri.${{ needs.channel.outputs.config }}.conf.json
           signing: ${{ vars.UPDATER_SIGNING == 'true' }}
 
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         if: steps.decide.outputs.sign == 'true'
         with:
           pattern: fundacad-bundle-*
@@ -1018,12 +1018,12 @@ jobs:
           persist-credentials: false
 
       # By pattern, so only this build's installers and bundles reach dist/.
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: fundacad-bundle-*
           path: dist
 
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         if: needs.sign.outputs.signed == 'true'
         with:
           name: fundacad-signatures
@@ -1399,7 +1399,7 @@ jobs:
           npm i --no-save playwright-core@1.56.0
 
       - name: Fetch the engine rust-geom built
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: fundacad-engine-linux
           path: engine-bin
