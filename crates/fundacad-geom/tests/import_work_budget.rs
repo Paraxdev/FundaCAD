@@ -395,6 +395,15 @@ fn an_svg_path_without_curves_reused_many_times_is_held_to_a_parse_budget() {
 }
 
 #[test]
+fn a_large_svg_drawn_once_is_not_held_to_the_reuse_budget() {
+    let d = "M0 0 ".repeat(14 << 20);
+    let data = format!(r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="4" height="4"/><path d="{d}"/></svg>"#)
+        .into_bytes();
+    let read = within(120, move || svg::read_svg(&data).map(|r| r.sketches.len()));
+    assert_eq!(read, Ok(1));
+}
+
+#[test]
 fn an_obj_face_fanning_past_the_scan_cap_is_refused() {
     let text = format!("v 0 0 0\nf {}\n", "1 ".repeat(10_000_003));
     assert_eq!(mesh::obj_triangles(&text).err(), Some(scan::too_dense_for_a_scan(10_000_001)));
