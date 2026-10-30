@@ -10,3 +10,6 @@ Documents the harness tests open through File > Open. They are JSON documents, w
 - `whole_sketch_extrude.json`: document version 9 on purpose, so opening it also runs the
   migration. Extrude `e` covers its whole 30 x 30 sketch and names no areas, extrude `e2` names an
   area by a point that is nowhere on its sketch, so that area is really gone.
+- `zebra_joins.json`: three 30 x 30 x 25 mm blocks in a row for judging zebra stripes, the front top edge of the
+  left one sharp (G0), of the middle one an 8 mm fillet (G1), of the right one an 8 mm G2 fillet.
+- `zebra_wall.json`: a plain 30 mm extrusion whose front wall is a 32.5 mm radius arc between two flat sides.

@@ -1,0 +1,18 @@
+{
+  "version": 10,
+  "parameters": {},
+  "features": [
+    {
+      "id": "s",
+      "type": "sketch",
+      "plane": "XY",
+      "entities": [
+        { "type": "line", "x1": -30, "y1": 15, "x2": 30, "y2": 15 },
+        { "type": "line", "x1": 30, "y1": 15, "x2": 30, "y2": -5 },
+        { "type": "arc", "x1": 30, "y1": -5, "x2": -30, "y2": -5, "mx": 0, "my": -25 },
+        { "type": "line", "x1": -30, "y1": -5, "x2": -30, "y2": 15 }
+      ]
+    },
+    { "id": "e", "type": "extrude", "sketch": "s", "distance": 30, "operation": "new" }
+  ]
+}

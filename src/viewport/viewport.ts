@@ -39,6 +39,9 @@ import { sceneStats } from "../diagnostics/sceneStats";
 import { crumb } from "../diagnostics/breadcrumbs";
 import {
   makeZebraMaterial,
+  fitZebraMaterial,
+  releaseZebraFrame,
+  type ZebraSettings,
   buildCurvatureCombs,
   buildClashMesh,
   buildClearanceLine,
@@ -458,6 +461,7 @@ export class Viewport {
         this.edgeRule.reset();
       }
       if (renderPrefs().tangentEdges !== this.tangentEdges) this.applyTangentEdges();
+      this.syncZebraPrefs();
       this.syncViewMode();
       this.overlays = savedOverlays();
       this.requestRender();
@@ -1645,6 +1649,7 @@ export class Viewport {
   private draftThreshold = 45;
   private zebra = false;
   private zebraMat: THREE.ShaderMaterial | null = null;
+  private zebraSettings: ZebraSettings = { direction: renderPrefs().zebraDirection, width: renderPrefs().zebraWidth };
   // Each body's own material while zebra is on.
   private savedMats = new Map<string, THREE.Material | THREE.Material[]>();
   private combs = false;
@@ -1876,10 +1881,22 @@ export class Viewport {
     this.applyZebra();
     this.onAnalysisChange?.();
   }
+  private syncZebraPrefs() {
+    const { zebraDirection: direction, zebraWidth: width } = renderPrefs();
+    const s = this.zebraSettings;
+    if (s && s.direction === direction && s.width === width) return;
+    this.zebraSettings = { direction, width };
+    if (this.zebra) this.applyZebra();
+  }
+  /** An opened document fits its own stripe frame, not the one held through the last document's edits. */
+  forgetZebraFrame() {
+    if (this.zebraMat) releaseZebraFrame(this.zebraMat);
+  }
   private applyZebra() {
     if (!this.model) return;
     if (this.zebra) {
       if (!this.zebraMat) this.zebraMat = makeZebraMaterial();
+      fitZebraMaterial(this.zebraMat, this.model.box, this.zebraSettings);
       for (const b of this.model.bodies) {
         if (b.mesh.material !== this.zebraMat) {
           this.savedMats.set(b.id, b.mesh.material);

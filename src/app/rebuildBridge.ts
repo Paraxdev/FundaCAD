@@ -16,7 +16,10 @@ export function installRebuildBridge(e: Engine): void {
   let pendingFit = true;
   // New homes the camera for a 20 mm part, so an import into an empty view is fitted too.
   let viewEmpty = true;
-  e.store.onOpen(() => (viewEmpty = true));
+  e.store.onOpen(() => {
+    viewEmpty = true;
+    e.viewport.forgetZebraFrame();
+  });
   // The launch fit holds until a model is drawn, the startup document is empty. A template's fit whose model never
   // landed is not the next document's, an opener asks again after the begin.
   let launchFit = true;

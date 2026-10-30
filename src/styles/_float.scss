@@ -580,6 +580,12 @@
   background-color: var(--float-chip-bg);
   background-size: cover;
 }
+.zebra-opts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  margin: var(--s-1) var(--s-1) var(--s-2);
+}
 .pop-rule {
   height: 1px;
   margin: 10px 0;
