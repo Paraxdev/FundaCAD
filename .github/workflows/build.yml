@@ -742,6 +742,25 @@ jobs:
           python3 scripts/bundle-smoke.py --work "$RUNNER_TEMP/smoke-flatpak" -- \
             flatpak run --env=FUNDACAD_MCP_MODE=standalone dev.fundacad.app --mcp
 
+      # A new GUI smoke can be flaky, so this becomes gating once it has run green on dev.
+      - name: Start the Flatpak under headless Wayland
+        continue-on-error: true
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          sudo timeout -k 10 300 apt-get install -y -qq cage
+          sh scripts/wayland-smoke.sh "$RUNNER_TEMP/wayland-smoke" \
+            dbus-run-session -- flatpak run dev.fundacad.app
+
+      - name: Upload the Wayland smoke log
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wayland-smoke-flatpak
+          path: ${{ runner.temp }}/wayland-smoke/app.log
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Upload the Flatpak
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
