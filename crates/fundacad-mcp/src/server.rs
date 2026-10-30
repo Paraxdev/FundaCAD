@@ -1145,7 +1145,7 @@ note: left out of the file, because this build cannot read them and a .funda has
 
     #[tool(
         name = "material_set",
-        description = "Create or edit one render material, for its looks only (stress takes its own material). Name an existing `id` to edit: the fields you leave out stay, a field sent as null goes back to its default. Otherwise it creates one; `from` starts from a copy of another. Glass: low opacity and roughness, ior 1.5. Metal: metalness 1. Glow: emissive. Car paint: clearcoat 1, flakes. Then `material_assign` puts it on bodies or faces.",
+        description = "Create or edit one render material, for its looks only (stress takes its own material). Name an existing `id` to edit: the fields you leave out stay, a field sent as null goes back to its default. Otherwise it creates one; `from` starts from a copy of another. Glass: low opacity and roughness, ior 1.5. Metal: metalness 1. Glow: emissive. Car paint: clearcoat 1, flakes. Fields without a description and the surface patterns are in schema(\"material\"). Then `material_assign` puts it on bodies or faces.",
         input_schema = crate::tools::material_set(),
         annotations(read_only_hint = false, destructive_hint = true, idempotent_hint = false, open_world_hint = false)
     )]
