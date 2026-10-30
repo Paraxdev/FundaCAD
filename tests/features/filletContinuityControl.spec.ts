@@ -316,5 +316,27 @@ describe("fillet continuity control", () => {
       expect(t.ghostDraws.length).toBeGreaterThan(0);
       expect(t.ghostDraws.at(-1)?.[4]).toBe("G1");
     });
+
+    it("a radius that makes the curve count redraws a chosen G3's preview as G1", () => {
+      t.tool.cancel();
+      document.body.innerHTML = "";
+      vi.useFakeTimers();
+      const frames: FrameRequestCallback[] = [];
+      vi.stubGlobal("requestAnimationFrame", (f: FrameRequestCallback) => frames.push(f));
+      try {
+        t = setup([1e-7]);
+        input().blur();
+        key(document.body, "3");
+        expect(t.ghostDraws.at(-1)?.[4]).toBe("G3");
+        type("20");
+        frames.at(-1)!(0);
+        expect(t.ghostDraws.at(-1)?.slice(1)).toEqual([20, "fillet", false, "G3"]);
+        vi.advanceTimersByTime(150);
+        expect(chosen()).toEqual(["G1"]);
+        expect(t.ghostDraws.at(-1)?.slice(1)).toEqual([20, "fillet", false, "G1"]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 });
