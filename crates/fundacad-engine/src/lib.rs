@@ -19,6 +19,7 @@ use fundacad_protocol::{
 use serde_json::{json, Map, Value};
 use std::collections::{HashMap, VecDeque};
 use std::io;
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
@@ -661,7 +662,7 @@ fn run_one<J: Jobs>(pool: &Arc<Pool<J>>, jobs: &mut J, docs: &mut Docs, q: Queue
     if pool.opts.test_ops {
         supervise::test_hold(&op, &ctx);
     }
-    let result = match op.as_str() {
+    let dispatched = catch_unwind(AssertUnwindSafe(|| match op.as_str() {
         _ if cancel.is_cancelled() => error_result("cancelled"),
         "rebuild" | "computeAll" => {
             let tolerance = req.get("tolerance").and_then(Value::as_f64).unwrap_or(0.1);
@@ -669,7 +670,7 @@ fn run_one<J: Jobs>(pool: &Arc<Pool<J>>, jobs: &mut J, docs: &mut Docs, q: Queue
             let fresh = op == "computeAll";
             // computeAll resends every body, so the client's etags are ignored.
             let known = req.get("known").and_then(Value::as_object).filter(|_| !fresh).unwrap_or(&empty);
-            match docs.entry((client, doc)).or_default().apply(&req, fresh) {
+            match docs.entry((client, doc.clone())).or_default().apply(&req, fresh) {
                 Some(doc) => jobs.rebuild(doc, tolerance, known, fresh, &ctx),
                 None => {
                     let mut m = Map::new();
@@ -681,7 +682,12 @@ fn run_one<J: Jobs>(pool: &Arc<Pool<J>>, jobs: &mut J, docs: &mut Docs, q: Queue
         "" => error_result("a request needs an op"),
         supervise::TEST_SLEEP_OP if pool.opts.test_ops => supervise::test_sleep(&req, &ctx),
         other => jobs.run(other, &req, &ctx),
-    };
+    }));
+    let result = dispatched.unwrap_or_else(|panic| {
+        // The held copy may be half patched, so the client's next delta asks for a resync.
+        docs.remove(&(client, doc.clone()));
+        panicked(&op, &*panic)
+    });
 
     let answered_elsewhere = claimed.swap(true, Ordering::SeqCst);
     ticking.store(false, Ordering::SeqCst);
@@ -700,18 +706,34 @@ fn run_one<J: Jobs>(pool: &Arc<Pool<J>>, jobs: &mut J, docs: &mut Docs, q: Queue
         result
     };
     let opts = ReplyOptions { binary: truthy(req.get("binary")), chunked: truthy(req.get("chunked")) };
-    let mut reply = send_reply(id, result, opts, Some(cancel), Limits::default());
-    // Frees the slot just before the last message: a stream checks its cancel
-    // token between chunks, and a cancel reaches that token only through the slot.
-    let mut answer = std::iter::from_fn(|| {
-        let m = reply.next();
-        if reply.is_done() {
-            clear_running(pool, serial);
-        }
-        m
-    });
-    let _ = out.send(&mut answer);
+    let encoded = catch_unwind(AssertUnwindSafe(|| {
+        let mut reply = send_reply(id.clone(), result, opts, Some(cancel), Limits::default());
+        // Frees the slot just before the last message: a stream checks its cancel
+        // token between chunks, and a cancel reaches that token only through the slot.
+        let mut answer = std::iter::from_fn(|| {
+            let m = reply.next();
+            if reply.is_done() {
+                clear_running(pool, serial);
+            }
+            m
+        });
+        let _ = out.send(&mut answer);
+    }));
     clear_running(pool, serial);
+    if let Err(panic) = encoded {
+        let mut reply = send_reply(id, panicked(&op, &*panic), ReplyOptions::default(), None, Limits::default());
+        let _ = out.send(&mut std::iter::from_fn(|| reply.next()));
+    }
+}
+
+/// The answer to a job that panicked; the job thread lives on and takes the next request.
+fn panicked(op: &str, panic: &(dyn std::any::Any + Send)) -> JobResult {
+    let why = panic
+        .downcast_ref::<&str>()
+        .map(|s| s.to_string())
+        .or_else(|| panic.downcast_ref::<String>().cloned())
+        .unwrap_or_else(|| "no message".into());
+    error_result(&format!("the engine failed inside {op}: {why}"))
 }
 
 fn truthy(v: Option<&Value>) -> bool {
