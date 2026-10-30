@@ -1,4 +1,4 @@
-// The native side of inserting and linking FundaCAD documents: the dialog, reading off disk, the temp STEP path.
+// The native side of inserting and linking FundaCAD documents: the dialog, reading off disk, the private STEP bake.
 // io/fundaInsert.ts holds the part that needs no native shell.
 
 import type { DocumentStore } from "../document/store";
@@ -44,9 +44,15 @@ export async function statDocument(path: string): Promise<LinkStat> {
 // A stat taken before the read, so a change made during the read still shows as stale on the next open.
 const statOf = (stat: LinkStat) => (typeof stat === "object" ? { stat } : {});
 
-async function tempStepPath(): Promise<string> {
-  const { tempDir, join } = await import("@tauri-apps/api/path");
-  return join(await tempDir(), `fundacad-insert-${Date.now().toString(36)}.step`);
+/** Runs one bake on a fresh path in the app's private bake directory, and removes that file once it is done. */
+async function withBake<T>(s: DocumentStore["session"], run: (temp: string) => Promise<T>): Promise<T> {
+  const { invoke } = await import("@tauri-apps/api/core");
+  const temp = await s.step(invoke<string>("bake_temp_path"));
+  try {
+    return await run(temp);
+  } finally {
+    await invoke("bake_temp_remove", { path: temp }).catch(() => {});
+  }
 }
 
 async function say(message: string, kind: "info" | "error" = "info", action?: { label: string; onClick: () => void }) {
@@ -88,8 +94,9 @@ export async function insertDocumentFromDialog(store: DocumentStore, geometry: G
     await say(`Couldn't read ${baseName(path)}`, "error");
     return;
   }
-  const temp = await s.step(tempStepPath());
-  const res = await insertFundaDocument(store, geometry, { path, text, ...statOf(stat) }, mode, temp);
+  const res = await withBake(s, (temp) =>
+    insertFundaDocument(store, geometry, { path, text, ...statOf(stat) }, mode, temp),
+  );
   if (!res.ok) {
     if (!res.cancelled) await say(`Couldn't insert ${baseName(path)}: ${res.message}`, "error");
     return;
@@ -111,8 +118,10 @@ export async function refreshLink(store: DocumentStore, geometry: GeometryBacken
     await say(`Couldn't read ${f.link.path}, it may have moved`, "error");
     return;
   }
-  const temp = await s.step(tempStepPath());
-  const res = await updateFundaLink(store, geometry, featureId, { path: f.link.path, text, ...statOf(stat) }, temp);
+  const path = f.link.path;
+  const res = await withBake(s, (temp) =>
+    updateFundaLink(store, geometry, featureId, { path, text, ...statOf(stat) }, temp),
+  );
   if (!res.ok && !res.cancelled) await say(`Couldn't update ${baseName(f.link.path)}: ${res.message}`, "error");
 }
 

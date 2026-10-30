@@ -3,6 +3,7 @@
 
 // `pub` so tests/container_seam.rs can drive the engine environment and the
 // container the way the app does.
+mod bake_temp;
 pub mod container;
 pub mod doc_paths;
 pub mod engine;
@@ -381,6 +382,8 @@ pub fn run() {
         recovery_read,
         recovery_list,
         recovery_clear,
+        bake_temp::bake_temp_path,
+        bake_temp::bake_temp_remove,
         container::container_save,
         container::container_open,
         container::container_open_checked,
