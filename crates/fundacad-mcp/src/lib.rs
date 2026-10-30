@@ -14,6 +14,7 @@ pub mod layflat;
 pub mod link;
 pub mod live;
 pub mod looseends;
+pub mod materials;
 pub mod measure;
 pub mod mesh;
 pub mod model;

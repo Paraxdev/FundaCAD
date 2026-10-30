@@ -4,6 +4,7 @@ mod docget;
 mod edits;
 mod layflat;
 mod looseends;
+mod materials;
 mod mesh;
 mod printrep;
 mod scope;

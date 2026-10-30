@@ -1,0 +1,1093 @@
+{
+ "about": "Render material rules from src/document/materials.ts, replayed by tests/document/materialVectors.test.ts and crates/fundacad-mcp/tests/unit/materials.rs. Regenerate the outputs from the TypeScript when a rule changes.",
+ "starter": [
+  {
+   "id": "m-aluminium",
+   "name": "Aluminium",
+   "color": "#b8bcc0",
+   "metalness": 0.9,
+   "roughness": 0.35
+  },
+  {
+   "id": "m-steel",
+   "name": "Steel",
+   "color": "#8f959b",
+   "metalness": 0.95,
+   "roughness": 0.28
+  },
+  {
+   "id": "m-brass",
+   "name": "Brass",
+   "color": "#c9a227",
+   "metalness": 0.9,
+   "roughness": 0.3
+  },
+  {
+   "id": "m-copper",
+   "name": "Copper",
+   "color": "#b06a3b",
+   "metalness": 0.95,
+   "roughness": 0.25
+  },
+  {
+   "id": "m-gold",
+   "name": "Gold",
+   "color": "#d4af37",
+   "metalness": 1,
+   "roughness": 0.22
+  },
+  {
+   "id": "m-chrome",
+   "name": "Chrome",
+   "color": "#e8ecf0",
+   "metalness": 1,
+   "roughness": 0.03
+  },
+  {
+   "id": "m-titanium",
+   "name": "Titanium",
+   "color": "#9a9ea3",
+   "metalness": 0.9,
+   "roughness": 0.42
+  },
+  {
+   "id": "m-carpaint",
+   "name": "Car paint, red",
+   "color": "#a51321",
+   "metalness": 0.55,
+   "roughness": 0.38,
+   "clearcoat": 1
+  },
+  {
+   "id": "m-ceramic",
+   "name": "Ceramic, glazed",
+   "color": "#eceae4",
+   "metalness": 0,
+   "roughness": 0.32,
+   "clearcoat": 1
+  },
+  {
+   "id": "m-plastic-white",
+   "name": "Plastic, white",
+   "color": "#e8e8e8",
+   "metalness": 0.02,
+   "roughness": 0.6
+  },
+  {
+   "id": "m-plastic-black",
+   "name": "Plastic, black",
+   "color": "#232323",
+   "metalness": 0.02,
+   "roughness": 0.5
+  },
+  {
+   "id": "m-rubber",
+   "name": "Rubber",
+   "color": "#1d1f22",
+   "metalness": 0,
+   "roughness": 0.95
+  },
+  {
+   "id": "m-wood",
+   "name": "Wood",
+   "color": "#9a6b3f",
+   "metalness": 0,
+   "roughness": 0.8
+  },
+  {
+   "id": "m-glass",
+   "name": "Glass",
+   "color": "#cfe4ee",
+   "metalness": 0,
+   "roughness": 0.05,
+   "opacity": 0.25
+  },
+  {
+   "id": "m-glass-frosted",
+   "name": "Glass, frosted",
+   "color": "#e6eef2",
+   "metalness": 0,
+   "roughness": 0.5,
+   "opacity": 0.3
+  },
+  {
+   "id": "m-glass-tinted",
+   "name": "Glass, tinted",
+   "color": "#d8efe6",
+   "metalness": 0,
+   "roughness": 0.05,
+   "opacity": 0.2,
+   "attenuationColor": "#2a8f6a",
+   "attenuationDistance": 20
+  },
+  {
+   "id": "m-diamond",
+   "name": "Diamond",
+   "color": "#f4f8fb",
+   "metalness": 0,
+   "roughness": 0,
+   "opacity": 0.1,
+   "ior": 2.42,
+   "dispersion": 5
+  },
+  {
+   "id": "m-acrylic",
+   "name": "Acrylic, clear",
+   "color": "#dfeaf0",
+   "metalness": 0,
+   "roughness": 0.15,
+   "opacity": 0.45
+  },
+  {
+   "id": "m-emitter",
+   "name": "Indicator, lit",
+   "color": "#42e07a",
+   "metalness": 0,
+   "roughness": 0.4,
+   "emissive": 0.8
+  }
+ ],
+ "normalize": [
+  {
+   "name": "plain",
+   "raw": {
+    "id": "m-a",
+    "name": "A",
+    "color": "#112233"
+   },
+   "out": {
+    "id": "m-a",
+    "name": "A",
+    "color": "#112233"
+   }
+  },
+  {
+   "name": "colour alias, short hex",
+   "raw": {
+    "id": "m-b",
+    "name": "B",
+    "colour": "#ABC"
+   },
+   "out": {
+    "id": "m-b",
+    "name": "B",
+    "color": "#aabbcc"
+   }
+  },
+  {
+   "name": "hex alias without hash",
+   "raw": {
+    "name": "Coffee",
+    "hex": " C0FFEE "
+   },
+   "out": {
+    "id": "m-coffee",
+    "name": "Coffee",
+    "color": "#c0ffee"
+   }
+  },
+  {
+   "name": "bad colour",
+   "raw": {
+    "id": "m-c",
+    "color": "#12345"
+   },
+   "out": null
+  },
+  {
+   "name": "null colour falls to colour",
+   "raw": {
+    "id": "m-d",
+    "color": null,
+    "colour": "#fff"
+   },
+   "out": {
+    "id": "m-d",
+    "name": "m-d",
+    "color": "#ffffff"
+   }
+  },
+  {
+   "name": "wrong type colour does not fall through",
+   "raw": {
+    "id": "m-e",
+    "color": 5,
+    "colour": "#fff"
+   },
+   "out": null
+  },
+  {
+   "name": "no colour",
+   "raw": {
+    "id": "m-f",
+    "name": "F"
+   },
+   "out": null
+  },
+  {
+   "name": "a string",
+   "raw": "red",
+   "out": null
+  },
+  {
+   "name": "null",
+   "raw": null,
+   "out": null
+  },
+  {
+   "name": "an array",
+   "raw": [
+    "#ffffff"
+   ],
+   "out": null
+  },
+  {
+   "name": "a number",
+   "raw": 5,
+   "out": null
+  },
+  {
+   "name": "name only",
+   "raw": {
+    "name": "  Brushed Steel #2 ",
+    "color": "#8f959b"
+   },
+   "out": {
+    "id": "m-brushed-steel-2",
+    "name": "Brushed Steel #2",
+    "color": "#8f959b"
+   }
+  },
+  {
+   "name": "neither id nor name",
+   "raw": {
+    "color": "#010203"
+   },
+   "out": {
+    "id": "m-material-4",
+    "name": "m-material-4",
+    "color": "#010203"
+   },
+   "index": 3
+  },
+  {
+   "name": "blank id",
+   "raw": {
+    "id": "   ",
+    "name": "Car paint, red",
+    "color": "#a51321"
+   },
+   "out": {
+    "id": "m-car-paint-red",
+    "name": "Car paint, red",
+    "color": "#a51321"
+   }
+  },
+  {
+   "name": "blank name",
+   "raw": {
+    "id": "m-g",
+    "name": "  ",
+    "color": "#a51321"
+   },
+   "out": {
+    "id": "m-g",
+    "name": "m-g",
+    "color": "#a51321"
+   }
+  },
+  {
+   "name": "non string name",
+   "raw": {
+    "id": "m-h",
+    "name": 7,
+    "color": "#a51321"
+   },
+   "out": {
+    "id": "m-h",
+    "name": "m-h",
+    "color": "#a51321"
+   }
+  },
+  {
+   "name": "every default",
+   "raw": {
+    "id": "m-i",
+    "name": "I",
+    "color": "#ffffff",
+    "metalness": 0.1,
+    "roughness": 0.55,
+    "opacity": 1,
+    "emissive": 0,
+    "clearcoat": 0,
+    "ior": 1.5,
+    "thickness": 0,
+    "attenuationDistance": 0,
+    "dispersion": 0,
+    "iridescence": 0,
+    "sheen": 0,
+    "anisotropy": 0,
+    "flakes": 0,
+    "flakeSize": 0.1,
+    "scatterDistance": 0,
+    "castsLight": true
+   },
+   "out": {
+    "id": "m-i",
+    "name": "I",
+    "color": "#ffffff",
+    "thickness": 0
+   }
+  },
+  {
+   "name": "clamped high",
+   "raw": {
+    "id": "m-j",
+    "name": "J",
+    "color": "#ffffff",
+    "metalness": 2,
+    "roughness": 1.5,
+    "opacity": 7,
+    "emissive": 3,
+    "clearcoat": 9,
+    "ior": 3,
+    "thickness": 500,
+    "attenuationDistance": 2000,
+    "dispersion": 11,
+    "iridescence": 4,
+    "sheen": 1.2,
+    "anisotropy": 2,
+    "flakes": 5,
+    "flakeSize": 9,
+    "scatterDistance": 101
+   },
+   "out": {
+    "id": "m-j",
+    "name": "J",
+    "color": "#ffffff",
+    "metalness": 1,
+    "roughness": 1,
+    "emissive": 1,
+    "clearcoat": 1,
+    "ior": 2.5,
+    "thickness": 200,
+    "attenuationDistance": 1000,
+    "dispersion": 10,
+    "iridescence": 1,
+    "sheen": 1,
+    "anisotropy": 1,
+    "flakes": 1,
+    "flakeSize": 5,
+    "scatterDistance": 100
+   }
+  },
+  {
+   "name": "clamped low",
+   "raw": {
+    "id": "m-k",
+    "name": "K",
+    "color": "#ffffff",
+    "metalness": -1,
+    "roughness": -0.5,
+    "opacity": -2,
+    "emissive": -1,
+    "clearcoat": -1,
+    "ior": 0.5,
+    "thickness": -3,
+    "attenuationDistance": -1,
+    "dispersion": -1,
+    "iridescence": -1,
+    "sheen": -1,
+    "anisotropy": -1,
+    "flakes": -1,
+    "flakeSize": 0.001,
+    "scatterDistance": -5
+   },
+   "out": {
+    "id": "m-k",
+    "name": "K",
+    "color": "#ffffff",
+    "metalness": 0,
+    "roughness": 0,
+    "opacity": 0,
+    "ior": 1,
+    "thickness": 0,
+    "flakeSize": 0.01
+   }
+  },
+  {
+   "name": "in range kept",
+   "raw": {
+    "id": "m-l",
+    "name": "L",
+    "color": "#ffffff",
+    "metalness": 0.33,
+    "roughness": 0.125,
+    "opacity": 0.5,
+    "emissive": 0.75,
+    "clearcoat": 0.4,
+    "ior": 1.33,
+    "thickness": 12.5,
+    "attenuationColor": "#2A8F6A",
+    "attenuationDistance": 40,
+    "dispersion": 2.5,
+    "iridescence": 0.6,
+    "specularColor": "#f00",
+    "sheen": 0.3,
+    "anisotropy": 0.8,
+    "flakes": 0.7,
+    "flakeSize": 0.4,
+    "scatterDistance": 3,
+    "castsLight": false
+   },
+   "out": {
+    "id": "m-l",
+    "name": "L",
+    "color": "#ffffff",
+    "metalness": 0.33,
+    "roughness": 0.125,
+    "opacity": 0.5,
+    "emissive": 0.75,
+    "clearcoat": 0.4,
+    "ior": 1.33,
+    "thickness": 12.5,
+    "attenuationColor": "#2a8f6a",
+    "attenuationDistance": 40,
+    "dispersion": 2.5,
+    "iridescence": 0.6,
+    "specularColor": "#ff0000",
+    "sheen": 0.3,
+    "anisotropy": 0.8,
+    "flakes": 0.7,
+    "flakeSize": 0.4,
+    "scatterDistance": 3,
+    "castsLight": false
+   }
+  },
+  {
+   "name": "wrong types dropped",
+   "raw": {
+    "id": "m-m",
+    "name": "M",
+    "color": "#ffffff",
+    "metalness": "0.5",
+    "roughness": true,
+    "opacity": null,
+    "ior": "1.4",
+    "thickness": "auto",
+    "attenuationColor": "teal",
+    "specularColor": 12,
+    "castsLight": "no",
+    "sheen": [
+     0.5
+    ]
+   },
+   "out": {
+    "id": "m-m",
+    "name": "M",
+    "color": "#ffffff"
+   }
+  },
+  {
+   "name": "surface kept",
+   "raw": {
+    "id": "m-n",
+    "name": "N",
+    "color": "#ffffff",
+    "surface": {
+     "kind": "brushed",
+     "scale": 0.8,
+     "amount": 0.4,
+     "angle": 1.2,
+     "bump": 0.3,
+     "color": "#ABC",
+     "colorAmount": 0.25
+    }
+   },
+   "out": {
+    "id": "m-n",
+    "name": "N",
+    "color": "#ffffff",
+    "surface": {
+     "kind": "brushed",
+     "scale": 0.8,
+     "amount": 0.4,
+     "angle": 1.2,
+     "bump": 0.3,
+     "color": "#aabbcc",
+     "colorAmount": 0.25
+    }
+   }
+  },
+  {
+   "name": "surface clamped and trimmed",
+   "raw": {
+    "id": "m-o",
+    "name": "O",
+    "color": "#ffffff",
+    "surface": {
+     "kind": "noise",
+     "scale": 2,
+     "amount": 3,
+     "angle": "up",
+     "bump": 0,
+     "color": "#abcdef",
+     "colorAmount": 0,
+     "extra": 1
+    }
+   },
+   "out": {
+    "id": "m-o",
+    "name": "O",
+    "color": "#ffffff",
+    "surface": {
+     "kind": "noise",
+     "scale": 2,
+     "amount": 1
+    }
+   }
+  },
+  {
+   "name": "surface bad kind",
+   "raw": {
+    "id": "m-p",
+    "name": "P",
+    "color": "#ffffff",
+    "surface": {
+     "kind": "marble",
+     "scale": 2,
+     "amount": 0.5
+    }
+   },
+   "out": {
+    "id": "m-p",
+    "name": "P",
+    "color": "#ffffff"
+   }
+  },
+  {
+   "name": "surface zero scale",
+   "raw": {
+    "id": "m-q",
+    "name": "Q",
+    "color": "#ffffff",
+    "surface": {
+     "kind": "wave",
+     "scale": 0,
+     "amount": 0.5
+    }
+   },
+   "out": {
+    "id": "m-q",
+    "name": "Q",
+    "color": "#ffffff"
+   }
+  },
+  {
+   "name": "surface no amount",
+   "raw": {
+    "id": "m-r",
+    "name": "R",
+    "color": "#ffffff",
+    "surface": {
+     "kind": "wave",
+     "scale": 3
+    }
+   },
+   "out": {
+    "id": "m-r",
+    "name": "R",
+    "color": "#ffffff"
+   }
+  },
+  {
+   "name": "surface tint without amount",
+   "raw": {
+    "id": "m-s",
+    "name": "S",
+    "color": "#ffffff",
+    "surface": {
+     "kind": "voronoi",
+     "scale": 3,
+     "amount": 0.2,
+     "color": "#ff0000",
+     "bump": 2
+    }
+   },
+   "out": {
+    "id": "m-s",
+    "name": "S",
+    "color": "#ffffff",
+    "surface": {
+     "kind": "voronoi",
+     "scale": 3,
+     "amount": 0.2,
+     "bump": 1
+    }
+   }
+  },
+  {
+   "name": "graph kept",
+   "raw": {
+    "id": "m-t",
+    "name": "T",
+    "color": "#ffffff",
+    "surfaceGraph": {
+     "nodes": [
+      {
+       "id": "n1",
+       "type": "noise",
+       "params": {
+        "scale": 4,
+        "detail": 3
+       },
+       "x": 10,
+       "y": 20.5
+      },
+      {
+       "id": "r1",
+       "type": "colorramp",
+       "params": {
+        "stops": "0:#000000;1:#ffffff"
+       },
+       "in": {
+        "t": "n1"
+       }
+      },
+      {
+       "id": "out",
+       "type": "output",
+       "in": {
+        "color": "r1",
+        "roughness": "n1"
+       },
+       "x": "far"
+      }
+     ],
+     "output": "out"
+    }
+   },
+   "out": {
+    "id": "m-t",
+    "name": "T",
+    "color": "#ffffff",
+    "surfaceGraph": {
+     "nodes": [
+      {
+       "id": "n1",
+       "type": "noise",
+       "params": {
+        "scale": 4,
+        "detail": 3
+       },
+       "x": 10,
+       "y": 20.5
+      },
+      {
+       "id": "r1",
+       "type": "colorramp",
+       "params": {
+        "stops": "0:#000000;1:#ffffff"
+       },
+       "in": {
+        "t": "n1"
+       }
+      },
+      {
+       "id": "out",
+       "type": "output",
+       "in": {
+        "color": "r1",
+        "roughness": "n1"
+       }
+      }
+     ],
+     "output": "out"
+    }
+   }
+  },
+  {
+   "name": "graph drops bad nodes",
+   "raw": {
+    "id": "m-u",
+    "name": "U",
+    "color": "#ffffff",
+    "surfaceGraph": {
+     "nodes": [
+      {
+       "id": "a",
+       "type": "marble"
+      },
+      {
+       "type": "noise"
+      },
+      {
+       "id": 7,
+       "type": "wave"
+      },
+      null,
+      "x",
+      {
+       "id": "m",
+       "type": "math",
+       "params": [
+        1,
+        2
+       ],
+       "in": "a"
+      },
+      {
+       "id": "o",
+       "type": "output",
+       "in": {
+        "color": "m"
+       }
+      }
+     ],
+     "output": "o"
+    }
+   },
+   "out": {
+    "id": "m-u",
+    "name": "U",
+    "color": "#ffffff",
+    "surfaceGraph": {
+     "nodes": [
+      {
+       "id": "m",
+       "type": "math",
+       "params": [
+        1,
+        2
+       ]
+      },
+      {
+       "id": "o",
+       "type": "output",
+       "in": {
+        "color": "m"
+       }
+      }
+     ],
+     "output": "o"
+    }
+   }
+  },
+  {
+   "name": "graph output gone",
+   "raw": {
+    "id": "m-v",
+    "name": "V",
+    "color": "#ffffff",
+    "surfaceGraph": {
+     "nodes": [
+      {
+       "id": "o",
+       "type": "marble"
+      }
+     ],
+     "output": "o"
+    }
+   },
+   "out": {
+    "id": "m-v",
+    "name": "V",
+    "color": "#ffffff"
+   }
+  },
+  {
+   "name": "graph without output",
+   "raw": {
+    "id": "m-w",
+    "name": "W",
+    "color": "#ffffff",
+    "surfaceGraph": {
+     "nodes": [
+      {
+       "id": "o",
+       "type": "output"
+      }
+     ]
+    }
+   },
+   "out": {
+    "id": "m-w",
+    "name": "W",
+    "color": "#ffffff"
+   }
+  },
+  {
+   "name": "graph nodes not a list",
+   "raw": {
+    "id": "m-x",
+    "name": "X",
+    "color": "#ffffff",
+    "surfaceGraph": {
+     "nodes": {
+      "o": 1
+     },
+     "output": "o"
+    }
+   },
+   "out": {
+    "id": "m-x",
+    "name": "X",
+    "color": "#ffffff"
+   }
+  },
+  {
+   "name": "unknown keys ride through",
+   "raw": {
+    "id": "m-y",
+    "name": "Y",
+    "color": "#ffffff",
+    "future": {
+     "a": [
+      1,
+      2
+     ]
+    },
+    "note": "kept",
+    "__proto__": {
+     "evil": 1
+    },
+    "colour": "#000000",
+    "hex": "#000000"
+   },
+   "out": {
+    "id": "m-y",
+    "name": "Y",
+    "color": "#ffffff",
+    "future": {
+     "a": [
+      1,
+      2
+     ]
+    },
+    "note": "kept"
+   }
+  },
+  {
+   "name": "javascript trim",
+   "raw": {
+    "id": "\u00a0m-z\ufeff",
+    "name": "\u2003Velvet\u3000",
+    "color": "\t#FFFFFF\n"
+   },
+   "out": {
+    "id": "m-z",
+    "name": "Velvet",
+    "color": "#ffffff"
+   }
+  },
+  {
+   "name": "next line is not trimmed",
+   "raw": {
+    "name": "\u0085Nel",
+    "color": "#ffffff"
+   },
+   "out": {
+    "id": "m-nel",
+    "name": "\u0085Nel",
+    "color": "#ffffff"
+   }
+  },
+  {
+   "name": "whole floats",
+   "raw": {
+    "id": "m-aa",
+    "name": "AA",
+    "color": "#ffffff",
+    "metalness": 1,
+    "thickness": 20,
+    "surface": {
+     "kind": "wave",
+     "scale": 2,
+     "amount": 1,
+     "angle": 0
+    }
+   },
+   "out": {
+    "id": "m-aa",
+    "name": "AA",
+    "color": "#ffffff",
+    "metalness": 1,
+    "thickness": 20,
+    "surface": {
+     "kind": "wave",
+     "scale": 2,
+     "amount": 1,
+     "angle": 0
+    }
+   }
+  }
+ ],
+ "hex": [
+  {
+   "raw": "#ABC",
+   "out": "#aabbcc"
+  },
+  {
+   "raw": "abc",
+   "out": "#aabbcc"
+  },
+  {
+   "raw": "#abcdef",
+   "out": "#abcdef"
+  },
+  {
+   "raw": "ABCDEF",
+   "out": "#abcdef"
+  },
+  {
+   "raw": " #a1b2c3 ",
+   "out": "#a1b2c3"
+  },
+  {
+   "raw": "#abcd",
+   "out": null
+  },
+  {
+   "raw": "##abc",
+   "out": null
+  },
+  {
+   "raw": "#ggg",
+   "out": null
+  },
+  {
+   "raw": "",
+   "out": null
+  },
+  {
+   "raw": 5,
+   "out": null
+  },
+  {
+   "raw": null,
+   "out": null
+  },
+  {
+   "raw": "#abcdef0",
+   "out": null
+  },
+  {
+   "raw": "\u00a0#fff\u2028",
+   "out": "#ffffff"
+  }
+ ],
+ "slug": [
+  {
+   "name": "Car paint, red",
+   "id": "m-car-paint-red"
+  },
+  {
+   "name": "  Brushed Steel #2 ",
+   "id": "m-brushed-steel-2"
+  },
+  {
+   "name": "***",
+   "id": "m-material"
+  },
+  {
+   "name": "",
+   "id": "m-material"
+  },
+  {
+   "name": "\u0130stanbul",
+   "id": "m-i-stanbul"
+  },
+  {
+   "name": "\u212aelvin",
+   "id": "m-kelvin"
+  },
+  {
+   "name": "Stra\u00dfe 3",
+   "id": "m-stra-e-3"
+  },
+  {
+   "name": "material 4",
+   "id": "m-material-4"
+  },
+  {
+   "name": "--a--b--",
+   "id": "m-a-b"
+  },
+  {
+   "name": "\u03a3\u039f\u03a6\u039f\u03a3",
+   "id": "m-material"
+  },
+  {
+   "name": "\u00dcn\u00efc\u00f6d\u00e9",
+   "id": "m-n-c-d"
+  }
+ ],
+ "unique": [
+  {
+   "id": "m-a",
+   "taken": [],
+   "out": "m-a"
+  },
+  {
+   "id": "m-a",
+   "taken": [
+    "m-a"
+   ],
+   "out": "m-a-2"
+  },
+  {
+   "id": "m-a",
+   "taken": [
+    "m-a",
+    "m-a-2",
+    "m-a-4"
+   ],
+   "out": "m-a-3"
+  },
+  {
+   "id": "m-a-2",
+   "taken": [
+    "m-a-2"
+   ],
+   "out": "m-a-2-2"
+  }
+ ],
+ "fresh": [
+  {
+   "names": [],
+   "base": "Material",
+   "out": "Material"
+  },
+  {
+   "names": [
+    "material"
+   ],
+   "base": "Material",
+   "out": "Material 2"
+  },
+  {
+   "names": [
+    "Material",
+    "MATERIAL 2",
+    "material 4"
+   ],
+   "base": "Material",
+   "out": "Material 3"
+  },
+  {
+   "names": [
+    "Glass",
+    "Glass 2"
+   ],
+   "base": "Glass",
+   "out": "Glass 3"
+  },
+  {
+   "names": [
+    "Steel"
+   ],
+   "base": "Glass",
+   "out": "Glass"
+  }
+ ]
+}
