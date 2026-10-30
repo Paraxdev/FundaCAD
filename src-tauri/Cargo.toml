@@ -66,6 +66,8 @@ futures-executor = "0.3"
 # .app.tar.gz, which macOS unpacks without it). It is also what pulled zip 4 in.
 tauri-plugin-updater = { version = "2", default-features = false, features = ["rustls-tls"] }
 tauri-plugin-process = "2"
+# Same major as tauri-plugin-updater, whose version comparator hands out semver::Version.
+semver = "1"
 # The document files (.fundab, the ZIP container, the JSON .funda) live in the
 # fundacad-format crate, shared with the engine and the CLI. The app owns them,
 # not the engine worker, so a save never waits on a worker that is restarting.

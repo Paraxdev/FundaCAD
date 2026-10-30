@@ -22,6 +22,7 @@ pub mod settings_files;
 mod spacemouse;
 mod system_info;
 pub mod thumbs;
+pub mod update_channel;
 pub mod webkit;
 
 /// Kept in step with src/io/documentExt.ts.
