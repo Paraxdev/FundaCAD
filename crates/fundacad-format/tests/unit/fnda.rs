@@ -488,7 +488,19 @@ fn an_unread_section_past_the_budget_is_dropped_and_the_open_goes_on() {
     let opened = read_file(&path, &dir.join("blobs"), Some(&carry)).unwrap();
     assert!(same_json(&opened.document_json, r#"{"version":11,"features":[]}"#));
     assert!(opened.carried.is_empty());
+    assert_eq!(opened.report, RepairReport { dropped_sections: 1, ..Default::default() });
     assert_eq!(std::fs::read_dir(&carry).unwrap().count(), 0);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn an_unread_section_that_fails_its_check_is_counted_as_dropped() {
+    let dir = tmpdir("carrydamaged");
+    let (path, payload) = future_file(&dir);
+    retable(&path, |entries| entries.iter_mut().find(|e| e.kind == 9).unwrap().raw_len = payload.len() as u64 + 1);
+    let opened = read_file(&path, &dir.join("blobs"), Some(&dir.join("sections"))).unwrap();
+    assert!(opened.carried.is_empty());
+    assert_eq!(opened.report, RepairReport { dropped_sections: 1, ..Default::default() });
     let _ = std::fs::remove_dir_all(&dir);
 }
 

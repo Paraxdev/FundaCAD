@@ -164,6 +164,7 @@ pub struct OpenedDocument {
     pub document: String,
     pub repaired_shards: u64,
     pub used_backup_index: bool,
+    pub dropped_sections: u64,
     pub carried: Vec<fundacad_format::fnda::Carried>,
 }
 
@@ -183,6 +184,7 @@ pub async fn container_open_checked(
         document: o.document,
         repaired_shards: o.report.repaired_shards,
         used_backup_index: o.report.used_backup_index,
+        dropped_sections: o.report.dropped_sections,
         carried: o.carried,
     })
 }
@@ -194,6 +196,7 @@ pub struct OpenedDroppedDocument {
     pub repaired_shards: u64,
     pub used_backup_index: bool,
     pub was_container: bool,
+    pub dropped_sections: u64,
     pub carried: Vec<fundacad_format::fnda::Carried>,
 }
 
@@ -215,6 +218,7 @@ pub async fn container_open_bytes(
         repaired_shards: opened.report.repaired_shards,
         used_backup_index: opened.report.used_backup_index,
         was_container: opened.was_container,
+        dropped_sections: opened.report.dropped_sections,
         carried: opened.carried,
     })
 }

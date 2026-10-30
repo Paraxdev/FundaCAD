@@ -362,6 +362,7 @@ export async function openDocumentBytes(
       wasContainer: r.wasContainer,
       repaired: r.repairedShards > 0 || r.usedBackupIndex,
       carried: r.carried ?? [],
+      dropped: r.droppedSections ?? 0,
     };
   } catch (e) {
     await reportError(`Couldn't open ${file.name}: ${errMsg(e)}`);
@@ -502,6 +503,7 @@ export async function openDocumentAtPath(
       wasContainer,
       repaired: r.repairedShards > 0 || r.usedBackupIndex,
       carried: r.carried ?? [],
+      dropped: r.droppedSections ?? 0,
     };
   } catch (e) {
     // Rust's container errors are already user-facing sentences (a newer
@@ -518,6 +520,7 @@ interface RustOpened {
   repairedShards: number;
   usedBackupIndex: boolean;
   carried?: CarriedSection[];
+  droppedSections?: number;
 }
 
 interface OpenedDocument {
@@ -525,13 +528,14 @@ interface OpenedDocument {
   wasContainer: boolean;
   repaired: boolean;
   carried: CarriedSection[];
+  dropped: number;
 }
 
 /** Load a document Rust has read. `path` is null for one dropped as bytes. */
 async function finishOpen(
   store: DocumentStore,
   base: string,
-  { text, wasContainer, repaired, carried }: OpenedDocument,
+  { text, wasContainer, repaired, carried, dropped }: OpenedDocument,
   geometry: GeometryBackend | undefined,
   path: string | null,
   ticket: OpenTicket,
@@ -573,6 +577,15 @@ async function finishOpen(
       kind: "warning",
       timeout: 12000,
     });
+  }
+  if (dropped > 0) {
+    const { toast } = await import("../ui/toast");
+    const [sections, them] = dropped === 1 ? ["1 section", "it"] : [`${dropped} sections`, "them"];
+    toast(
+      `${base} holds ${sections} from a newer version of FundaCAD that this version could not keep. ` +
+        `Saving over the file leaves ${them} out, so use Save As to keep the original whole.`,
+      { kind: "warning", timeout: 12000 },
+    );
   }
   return "ok";
 }

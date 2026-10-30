@@ -152,6 +152,24 @@ describe("a document dropped as bytes in the desktop app", () => {
     expect(store.carriedSections).toEqual([]);
   });
 
+  it("warns when sections of a newer file could not be kept, as a save over it leaves them out", async () => {
+    host.reply = () => ({ document: DROPPED, repairedShards: 0, usedBackupIndex: false, droppedSections: 2 });
+    const { openDocumentAtPath } = await import("../../src/io/files");
+    const { store } = setup();
+    const outcome = await openDocumentAtPath(store, "D:/work/newer.fundab");
+    expect({ outcome, reported: host.reported, toasts: host.toasts }).toEqual({
+      outcome: "ok",
+      reported: [],
+      toasts: [
+        {
+          message:
+            "newer.fundab holds 2 sections from a newer version of FundaCAD that this version could not keep. Saving over the file leaves them out, so use Save As to keep the original whole.",
+          kind: "warning",
+        },
+      ],
+    });
+  });
+
   it("offers the save every hash shaped string a feature this version does not know names", async () => {
     const blob = "0123456789abcdef0123456789abcdef";
     host.reply = () => ({

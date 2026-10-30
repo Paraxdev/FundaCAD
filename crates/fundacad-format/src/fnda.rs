@@ -97,6 +97,8 @@ pub struct RepairReport {
     pub repaired_shards: u64,
     /// true when the primary header or table was damaged and a copy was used
     pub used_backup_index: bool,
+    /// sections of a kind this version does not read that could not be kept, so a save leaves them out
+    pub dropped_sections: u64,
 }
 
 pub fn hex(bytes: &[u8]) -> String {
@@ -828,6 +830,7 @@ pub fn read_file_with(
                 let Some(left) = budget.checked_sub(e.raw_len) else {
                     jobs.pop();
                     queued.remove(&dest);
+                    report.dropped_sections += 1;
                     continue;
                 };
                 budget = left;
@@ -870,11 +873,13 @@ pub fn read_file_with(
         report.repaired_shards += r.repaired_shards;
     }
     // A section this version does not read never blocks the open.
-    let carried = carried
+    let kept = carried.len();
+    let carried: Vec<Carried> = carried
         .into_iter()
         .filter(|(_, job)| job.is_none_or(|i| matches!(results[i], Some(Ok(_)))))
         .map(|(c, _)| c)
         .collect();
+    report.dropped_sections += (kept - carried.len()) as u64;
     Ok(Opened { document_json, entries, report, carried })
 }
 
