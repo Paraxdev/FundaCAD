@@ -396,3 +396,31 @@ fn a_plugin_file_read_past_its_cap_is_refused() {
     let e = host::read_file(&path, 9).unwrap_err();
     assert!(e.contains("larger than"), "{e}");
 }
+
+#[test]
+fn a_plugin_call_stores_shapes_only_within_its_blob_budget() {
+    let root = temp_root("blob-budget");
+    let small = k::make_box((0.0, 0.0, 0.0), (1.0, 1.0, 1.0)).unwrap();
+    let other = k::make_box((0.0, 0.0, 0.0), (2.0, 1.0, 1.0)).unwrap();
+    let len = opencascade::xcaf::to_bin_v3(&small).unwrap().len();
+    let stored = || std::fs::read_dir(&root).unwrap().count();
+
+    let mut b = k::BlobBudget::default();
+    b.total = len + len / 2;
+    k::write_blob_capped(&small, &root, &mut b).unwrap();
+    let e = k::write_blob_capped(&other, &root, &mut b).unwrap_err();
+    assert!(e.contains("in total"), "{e}");
+    assert_eq!(stored(), 1);
+
+    let mut b = k::BlobBudget::default();
+    b.per_blob = len - 1;
+    let e = k::write_blob_capped(&other, &root, &mut b).unwrap_err();
+    assert!(e.contains("for one stored shape"), "{e}");
+
+    let mut b = k::BlobBudget::default();
+    b.count = 1;
+    k::write_blob_capped(&small, &root, &mut b).unwrap();
+    let e = k::write_blob_capped(&other, &root, &mut b).unwrap_err();
+    assert!(e.contains("at most 1 shapes"), "{e}");
+    assert_eq!(stored(), 1);
+}

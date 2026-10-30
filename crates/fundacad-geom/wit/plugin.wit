@@ -220,6 +220,7 @@ interface kernel {
   gtransform: func(shape: borrow<shape>, matrix: list<f64>) -> result<shape, string>;
 
   // The content-addressed blob store: a shape by its id, and a shape stored.
+  // One call of the plugin stores at most 1024 shapes, 256 MiB each, 1 GiB in all.
   read-blob: func(id: string) -> result<shape, string>;
   write-blob: func(shape: borrow<shape>) -> result<string, string>;
 }

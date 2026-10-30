@@ -124,6 +124,7 @@ pub struct State {
     table: ResourceTable,
     live_shapes: usize,
     pub(super) shape_cap: usize,
+    pub(super) blobs: k::BlobBudget,
     wasi: WasiCtx,
     limits: Limits,
     scope: Scope,
@@ -356,6 +357,7 @@ impl State {
             table: ResourceTable::new(),
             live_shapes: 0,
             shape_cap: MAX_LIVE_SHAPES,
+            blobs: k::BlobBudget::default(),
             wasi,
             limits: store_limits(),
             scope,
@@ -844,7 +846,8 @@ impl kernel::Host for State {
     }
 
     fn write_blob(&mut self, s: Resource<HostShape>) -> wasmtime::Result<Result<String, String>> {
-        Ok(k::write_blob(self.shape(&s)?))
+        let root = crate::import::blobstore::default_root();
+        Ok(k::write_blob_capped(&self.table.get(&s)?.0, &root, &mut self.blobs))
     }
 }
 

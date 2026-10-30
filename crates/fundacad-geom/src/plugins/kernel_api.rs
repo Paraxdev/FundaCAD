@@ -363,14 +363,58 @@ pub fn read_blob(id: &str) -> Result<Shape, String> {
     opencascade::xcaf::from_bin(&bytes).map_err(|e| e.to_string())
 }
 
+fn store_err(e: &dyn std::fmt::Display) -> String {
+    format!("could not store the imported geometry ({e}). Check free disk space and permissions on the FundaCAD data directory.")
+}
+
 pub fn write_blob(s: &Shape) -> Result<String, String> {
-    let store_err = |e: &dyn std::fmt::Display| {
-        format!(
-            "could not store the imported geometry ({e}). Check free disk space and permissions on the FundaCAD data directory."
-        )
-    };
     let bytes = opencascade::xcaf::to_bin_v3(s).map_err(|e| store_err(&e))?;
     let store = BlobStore::open(blobstore::default_root()).map_err(|e| store_err(&e))?;
+    store.put_bytes(&bytes).map_err(|e| store_err(&e))
+}
+
+/// What one plugin call may put in the shared blob store, which nothing clears.
+pub struct BlobBudget {
+    pub per_blob: usize,
+    pub total: usize,
+    pub count: usize,
+    used: usize,
+    written: usize,
+}
+
+impl Default for BlobBudget {
+    fn default() -> Self {
+        BlobBudget { per_blob: 256 << 20, total: 1 << 30, count: 1024, used: 0, written: 0 }
+    }
+}
+
+impl BlobBudget {
+    fn charge(&mut self, len: usize) -> Result<(), String> {
+        let mib = |n: usize| n >> 20;
+        if len > self.per_blob {
+            return Err(format!(
+                "this shape needs {} MiB stored, past the cap of {} MiB for one stored shape",
+                mib(len),
+                mib(self.per_blob)
+            ));
+        }
+        if self.written >= self.count {
+            return Err(format!("a plugin call may store at most {} shapes", self.count));
+        }
+        if self.used + len > self.total {
+            return Err(format!("a plugin call may store at most {} MiB of shapes in total", mib(self.total)));
+        }
+        self.used += len;
+        self.written += 1;
+        Ok(())
+    }
+}
+
+/// A plugin's write-blob: refused before anything is stored once the budget runs out.
+pub fn write_blob_capped(s: &Shape, root: &Path, budget: &mut BlobBudget) -> Result<String, String> {
+    let bytes = opencascade::xcaf::to_bin_v3(s).map_err(|e| store_err(&e))?;
+    budget.charge(bytes.len())?;
+    let store = BlobStore::open(root).map_err(|e| store_err(&e))?;
     store.put_bytes(&bytes).map_err(|e| store_err(&e))
 }
 
