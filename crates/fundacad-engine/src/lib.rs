@@ -4,6 +4,7 @@
 
 mod doc_state;
 pub mod live;
+pub mod sandbox;
 pub mod stdio;
 pub mod supervise;
 pub mod sysmem;
