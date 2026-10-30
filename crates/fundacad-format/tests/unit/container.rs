@@ -314,3 +314,36 @@ fn a_manifest_hash_that_is_not_a_digest_refuses_the_open() {
     assert_eq!(names, ["legacy.funda", "outside.bbrep"], "nothing new beside the store");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn manifest_rows_that_give_one_entry_two_hashes_are_refused_before_anything_is_written() {
+    let dir = tmpdir("shared_entry");
+    let data = b"payload".repeat(10);
+    let real = hash_bytes(&data);
+    let src = dir.join("shared.funda");
+    {
+        let mut z = zip::ZipWriter::new(File::create(&src).unwrap());
+        let opts = SimpleFileOptions::default();
+        let row = |hash: String| BlobRow { entry: "b0".into(), hash, bytes: data.len() as u64 };
+        let manifest = Manifest {
+            container: 1,
+            hash_alg: HASH_ALG.to_string(),
+            app: String::new(),
+            blobs: vec![row(real.clone()), row(hash_bytes(b"other bytes"))],
+            meshes: vec![],
+        };
+        z.start_file("manifest.json", opts).unwrap();
+        z.write_all(serde_json::to_string(&manifest).unwrap().as_bytes()).unwrap();
+        z.start_file("document.json", opts).unwrap();
+        z.write_all(br#"{"version":5}"#).unwrap();
+        z.start_file("b0", opts).unwrap();
+        z.write_all(&data).unwrap();
+        z.finish().unwrap();
+    }
+
+    let store = dir.join("blobs");
+    let err = read_container(&src, &store).unwrap_err();
+    assert!(err.contains("damaged"), "{err}");
+    assert!(!store.join(format!("{real}.bbrep")).exists(), "no geometry is published from a refused open");
+    let _ = std::fs::remove_dir_all(&dir);
+}

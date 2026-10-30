@@ -417,7 +417,7 @@ pub fn read_container_checked(
 
 fn read_zip_container(path: &Path, blob_dir: &Path) -> Result<(String, Manifest), String> {
     let manifest = read_manifest(path)?;
-    if !manifest.blobs.iter().all(|row| crate::json_doc::is_hash(&row.hash)) {
+    if !manifest.blobs.iter().all(|row| crate::json_doc::is_hash(&row.hash)) || rows_share_an_entry(&manifest.blobs) {
         return Err("This document is damaged and cannot be opened.".to_string());
     }
     std::fs::create_dir_all(blob_dir).map_err(|e| e.to_string())?;
@@ -438,6 +438,13 @@ fn read_zip_container(path: &Path, blob_dir: &Path) -> Result<(String, Manifest)
     }
 
     Ok((document_json, manifest))
+}
+
+/// One entry holds one set of bytes, so it matches one hash. With that and one extraction per hash, an open inflates
+/// each archive entry at most once, so the declared total `guard` checked is the budget for the whole open.
+fn rows_share_an_entry(rows: &[BlobRow]) -> bool {
+    let mut hash_of: BTreeMap<&str, &str> = BTreeMap::new();
+    rows.iter().any(|row| *hash_of.entry(&row.entry).or_insert(&row.hash) != row.hash)
 }
 
 fn extract_verified(
