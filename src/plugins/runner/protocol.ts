@@ -34,6 +34,7 @@ export const MAX_LOG = 2000;
 
 /** Largest result kept, in characters of the JSON ./guest.ts sends it as. */
 export const MAX_RESULT = 4_000_000;
+export const RESULT_TOO_BIG = `the plugin returned more than ${MAX_RESULT} characters`;
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 
@@ -56,7 +57,7 @@ export function parseFromGuest(raw: unknown): ToHost | null {
       } catch {
         return { t: "failed", why: "the plugin returned a result that could not be read" };
       }
-      if (size > MAX_RESULT) return { t: "failed", why: `the plugin returned more than ${MAX_RESULT} characters` };
+      if (size > MAX_RESULT) return { t: "failed", why: RESULT_TOO_BIG };
       return { t: "done", value: raw.value };
     }
     case "failed":
