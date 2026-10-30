@@ -15,3 +15,18 @@ export async function nativeDialog(): Promise<Pick<Dialog, "open" | "save" | "me
     message: (...a) => withFocusReturn(() => d.message(...a)),
   };
 }
+
+// FreeCAD writes .FCStd.
+const MIXED_CASE_EXTS = ["FCStd"];
+
+/** GTK file dialogs on Linux match case, so a list handed to one offers each
+ *  extension in lower and upper case. */
+export function dialogExts(exts: readonly string[]): string[] {
+  const out = new Set<string>();
+  for (const e of exts) {
+    out.add(e.toLowerCase());
+    out.add(e.toUpperCase());
+  }
+  for (const m of MIXED_CASE_EXTS) if (out.has(m.toLowerCase())) out.add(m);
+  return [...out];
+}

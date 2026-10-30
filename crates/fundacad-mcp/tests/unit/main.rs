@@ -2,6 +2,7 @@ mod budget;
 mod clash;
 mod docget;
 mod edits;
+mod flatpak_folder;
 mod layflat;
 mod looseends;
 mod mesh;
