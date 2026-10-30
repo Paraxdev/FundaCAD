@@ -209,11 +209,14 @@ fn the_job_ends_the_engine_when_the_app_lets_go() {
     }
 }
 
-/// The engine is created suspended and runs only once its job holds it, so not one instruction runs outside.
+/// The engine is created suspended and runs only once its job holds it, so not one instruction runs outside, however
+/// long the job takes to take it.
 #[cfg(windows)]
 fn the_engine_runs_only_inside_its_job() {
+    let mut cmd = Command::new(std::env::current_exe().unwrap());
     let (mut child, job) =
-        sandbox::Job::spawn(Command::new(std::env::current_exe().unwrap()).arg("--in-job"), 0).expect("spawn in a job");
+        sandbox::Job::spawn_with(cmd.arg("--in-job"), 0, || std::thread::sleep(Duration::from_secs(1)))
+            .expect("spawn in a job");
     let _job = job.expect("a job holds the engine");
     assert_eq!(child.wait().unwrap().code(), Some(0), "the engine ran outside its job");
 }

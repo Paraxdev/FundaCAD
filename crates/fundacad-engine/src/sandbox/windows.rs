@@ -208,11 +208,22 @@ impl Job {
     /// Starts `cmd` with the creation `flags` inside a new job. It is created suspended and resumed once the job holds
     /// it, so it runs no instruction outside. When no job can hold it, it runs without one and the reason comes back.
     pub fn spawn(cmd: &mut Command, flags: u32) -> io::Result<(Child, io::Result<Job>)> {
+        Job::spawn_with(cmd, flags, || {})
+    }
+
+    /// [`Job::spawn`] running `before_job` between the start and the job taking the engine, so a test can widen that gap.
+    #[doc(hidden)]
+    pub fn spawn_with(
+        cmd: &mut Command,
+        flags: u32,
+        before_job: impl FnOnce(),
+    ) -> io::Result<(Child, io::Result<Job>)> {
         let job = match Job::new() {
             Ok(job) => job,
             Err(e) => return Ok((cmd.creation_flags(flags).spawn()?, Err(e))),
         };
         let mut child = cmd.creation_flags(flags | CREATE_SUSPENDED).spawn()?;
+        before_job();
         let held = match unsafe { AssignProcessToJobObject(job.0, child.as_raw_handle() as HANDLE) } {
             0 => Err(io::Error::last_os_error()),
             _ => Ok(job),
