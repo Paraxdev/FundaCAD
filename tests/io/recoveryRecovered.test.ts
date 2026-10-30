@@ -8,12 +8,14 @@ const host = vi.hoisted(() => ({
   invoked: [] as { cmd: string; args: Record<string, unknown> }[],
   snapshot: "",
   pick: "recover" as string | null,
+  lockedSlot: "",
 }));
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: async (cmd: string, args: Record<string, unknown>) => {
     host.invoked.push({ cmd, args });
     if (cmd === "recovery_list") return [[recoveredSlot(), 1000]];
     if (cmd === "recovery_read") return host.snapshot;
+    if (cmd === "recovery_clear" && args.slot === host.lockedSlot) throw new Error("file locked");
     return null;
   },
 }));
@@ -47,6 +49,7 @@ async function clears(act: () => Promise<unknown> | void) {
 describe("a snapshot the user recovered", () => {
   beforeEach(() => {
     host.pick = "recover";
+    host.lockedSlot = "";
     vi.useFakeTimers();
     (globalThis as unknown as Record<string, unknown>).window = {
       __TAURI_INTERNALS__: {},
@@ -56,7 +59,10 @@ describe("a snapshot the user recovered", () => {
       clearTimeout: globalThis.clearTimeout.bind(globalThis),
     };
   });
-  afterEach(() => vi.useRealTimers());
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
 
   it("is kept while the recovered work lives only in memory", async () => {
     const store = await recovered();
@@ -98,5 +104,25 @@ describe("a snapshot the user recovered", () => {
     await vi.advanceTimersByTimeAsync(0);
     const later = await clears(() => clearRecovery("D:/parts/c.funda"));
     expect(later).toEqual([slotFor("D:/parts/c.funda"), slotFor(null)]);
+  });
+
+  it("is cleared on the next snapshot when it was locked, without counting as an autosave failure", async () => {
+    const store = await recovered();
+    host.lockedSlot = recoveredSlot();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const locked = await clears(async () => {
+      store.addFeature(box("a-more", 5));
+      await vi.advanceTimersByTimeAsync(30_000);
+    });
+    host.lockedSlot = "";
+    const retried = await clears(async () => {
+      store.addFeature(box("a-last", 5));
+      await vi.advanceTimersByTimeAsync(30_000);
+    });
+    expect({ locked, retried, warned: warn.mock.calls.map((c) => c[0]) }).toEqual({
+      locked: [recoveredSlot()],
+      retried: [recoveredSlot()],
+      warned: [],
+    });
   });
 });

@@ -37,11 +37,20 @@ interface Envelope {
 // or given up, so a crash in between still finds it.
 let recovered: { slot: string; session: DocumentSession } | null = null;
 
-function dropRecovered(session: DocumentSession, invoke: (cmd: string, args: { slot: string }) => Promise<unknown>) {
+async function dropRecovered(
+  session: DocumentSession,
+  invoke: (cmd: string, args: { slot: string }) => Promise<unknown>,
+) {
   if (recovered?.session !== session) return;
-  const slot = recovered.slot;
+  const was = recovered;
   recovered = null;
-  return invoke("recovery_clear", { slot });
+  try {
+    await invoke("recovery_clear", { slot: was.slot });
+  } catch (e) {
+    // A locked file: keep it so the next snapshot or save tries again.
+    recovered ??= was;
+    throw e;
+  }
 }
 
 interface Snapshot {
@@ -91,7 +100,7 @@ export function installAutosave(store: DocumentStore) {
       const { invoke } = await import("@tauri-apps/api/core");
       if (givenUp.has(snap.session)) return;
       await invoke("recovery_write", { slot: snap.slot, json: snap.json });
-      if (snap.slot !== recovered?.slot) await dropRecovered(snap.session, invoke);
+      if (snap.slot !== recovered?.slot) await dropRecovered(snap.session, invoke).catch(() => {});
       // A Discard while the write was in flight cleared the slot before the write landed.
       if (givenUp.has(snap.session)) await invoke("recovery_clear", { slot: snap.slot });
       else if (snap.session === store.session) {
