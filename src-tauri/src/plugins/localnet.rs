@@ -8,6 +8,7 @@ use std::net::{IpAddr, SocketAddr, ToSocketAddrs};
 use std::time::Duration;
 use tauri::State;
 
+pub use super::addr::is_local;
 use super::bundle::safe_id;
 use super::files::Handles;
 
@@ -70,20 +71,6 @@ pub struct LocalResponse {
     pub content_type: Option<String>,
     pub text: Option<String>,
     pub base64: Option<String>,
-}
-
-/// Private, unique-local or link-local. Not loopback, not anything routable.
-pub fn is_local(ip: IpAddr) -> bool {
-    match ip {
-        IpAddr::V4(v4) => v4.is_private() || v4.is_link_local(),
-        IpAddr::V6(v6) => {
-            if let Some(v4) = v6.to_ipv4_mapped() {
-                return is_local(IpAddr::V4(v4));
-            }
-            let first = v6.segments()[0];
-            (first & 0xfe00) == 0xfc00 || (first & 0xffc0) == 0xfe80
-        }
-    }
 }
 
 /// The host and port of an http(s) URL, and the IP when the host is a literal.

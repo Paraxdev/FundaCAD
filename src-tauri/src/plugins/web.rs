@@ -4,14 +4,15 @@
 
 use serde::{Deserialize, Serialize};
 use std::io::Write;
-use std::net::{IpAddr, SocketAddr, ToSocketAddrs};
+use std::net::{SocketAddr, ToSocketAddrs};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 use tauri::AppHandle;
 
+use super::addr::is_public;
 use super::bundle::safe_id;
 use super::data::{data_dir, safe_name};
-use super::localnet::{is_local, target_of};
+use super::localnet::target_of;
 
 const MAX_TEXT: usize = 64 * 1024 * 1024;
 const MAX_DOWNLOAD: u64 = 512 * 1024 * 1024;
@@ -79,28 +80,6 @@ pub fn host_allowed(host: &str, list: &[String]) -> bool {
             host == entry
         }
     })
-}
-
-/// The inverse of localnet's rule, so the loopback engine port and the local network stay out of reach even for a name
-/// that resolves there.
-fn is_public(ip: IpAddr) -> bool {
-    let v4 = match ip {
-        IpAddr::V4(v4) => Some(v4),
-        IpAddr::V6(v6) => v6.to_ipv4_mapped(),
-    };
-    let special = match (ip, v4) {
-        (_, Some(v4)) => {
-            v4.is_loopback()
-                || v4.is_unspecified()
-                || v4.is_broadcast()
-                || v4.is_documentation()
-                || v4.octets()[0] == 0
-                || (v4.octets()[0] == 100 && (v4.octets()[1] & 0xc0) == 64)
-        }
-        (IpAddr::V6(v6), None) => v6.is_loopback() || v6.is_unspecified(),
-        _ => false,
-    };
-    !special && !is_local(v4.map(IpAddr::V4).unwrap_or(ip))
 }
 
 /// The URL is https, names an allowed host, and the host is a name, not an address.

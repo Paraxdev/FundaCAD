@@ -1,3 +1,4 @@
+mod addr;
 mod bundle;
 mod data;
 mod discovery;

@@ -1,6 +1,7 @@
 //! Installing plugins from any HTTPS URL or a local zip: check the bundle is the one the user agreed to and unpack it
 //! where it can only be itself. Grants are opaque strings here; signatures and revocation are a later phase.
 
+pub mod addr;
 pub mod bundle;
 pub mod data;
 pub mod files;

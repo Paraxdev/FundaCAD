@@ -28,9 +28,11 @@ SRC="$REPO/src-tauri/src/plugins/bundle.rs"
 # The other Tauri-free half: which files a plugin has been handed, and what it
 # may be told about them. Same reasoning, same crate.
 HANDED="$REPO/src-tauri/src/plugins/handed.rs"
+# Which addresses a plugin request may reach, also plain arithmetic.
+ADDR="$REPO/src-tauri/src/plugins/addr.rs"
 OUT="$REPO/src-tauri/target/plugin-guard"
 
-for f in "$SRC" "$HANDED"; do
+for f in "$SRC" "$HANDED" "$ADDR"; do
   [ -f "$f" ] || { echo "missing $f"; exit 1; }
 done
 
@@ -62,8 +64,11 @@ TOML
 # Windows path where the shell here hands out /d/dev/... ones.
 SRCW="$(cygpath -m "$SRC" 2>/dev/null || echo "$SRC")"
 HANDEDW="$(cygpath -m "$HANDED" 2>/dev/null || echo "$HANDED")"
+ADDRW="$(cygpath -m "$ADDR" 2>/dev/null || echo "$ADDR")"
 cat > "$OUT/src/lib.rs" <<RS
 pub mod plugins {
+    #[path = "$ADDRW"]
+    pub mod addr;
     #[path = "$SRCW"]
     pub mod bundle;
     #[path = "$HANDEDW"]
@@ -74,6 +79,8 @@ RS
 TESTS="$(cygpath -m "$REPO/src-tauri/tests/unit/plugins" 2>/dev/null || echo "$REPO/src-tauri/tests/unit/plugins")"
 mkdir -p "$OUT/tests"
 cat > "$OUT/tests/unit.rs" <<RS
+#[path = "$TESTS/addr.rs"]
+mod addr;
 #[path = "$TESTS/bundle.rs"]
 mod bundle;
 #[path = "$TESTS/handed.rs"]
