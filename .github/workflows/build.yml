@@ -134,7 +134,7 @@ jobs:
       - name: 3D mouse spacenavd tests
         env:
           CARGO_TARGET_DIR: ${{ runner.temp }}/spnav-target
-        run: cargo test --manifest-path src-tauri/spnav/Cargo.toml -- --test-threads=4
+        run: cargo test --locked --manifest-path src-tauri/spnav/Cargo.toml -- --test-threads=4
 
       # The app's log file, rotation and redirect, std only like the above.
       - name: Linux log file tests
@@ -446,7 +446,7 @@ jobs:
           NO_STRIP: true
           VITE_FUNDACAD_RELEASE: ${{ needs.channel.outputs.tag || 'beta' }}
         with:
-          args: --verbose ${{ env.TAURI_CONFIG_ARGS }}
+          args: --verbose ${{ env.TAURI_CONFIG_ARGS }} -- --locked
 
       # The kernel's bounded char read is a C++20 library behaviour, so it holds
       # only where the platform's standard library implements it. The test job
@@ -456,7 +456,7 @@ jobs:
       - name: Crafted geometry is refused on this platform
         if: matrix.platform != 'ubuntu-22.04'
         shell: bash
-        run: cargo test -p fundacad-geom --test import_crafted_geometry -- --test-threads=4
+        run: cargo test --locked -p fundacad-geom --test import_crafted_geometry -- --test-threads=4
 
       # Checked against the bytes rather than the arguments: `engine_attach` is
       # the IPC command the webview reaches the engine through
@@ -1389,7 +1389,7 @@ jobs:
           SC_CHROME: /usr/bin/google-chrome
           CARGO_TARGET_DIR: ${{ runner.temp }}/frames-target
         run: |
-          cargo build --release --example frames_serve --manifest-path src-tauri/frames/Cargo.toml
+          cargo build --locked --release --example frames_serve --manifest-path src-tauri/frames/Cargo.toml
           node e2e/frames_ws_e2e.cjs
 
       # lavapipe is Mesa's CPU Vulkan driver, so the image tests trace on the
@@ -1401,7 +1401,7 @@ jobs:
         env:
           CARGO_TARGET_DIR: ${{ runner.temp }}/frames-target
           FUNDACAD_TRACER_ALLOW_CPU: "1"
-        run: cargo test --manifest-path src-tauri/tracer/Cargo.toml -- --test-threads=4
+        run: cargo test --locked --manifest-path src-tauri/tracer/Cargo.toml -- --test-threads=4
 
       # The traced bloom checks on lavapipe, through tracer_serve outside the
       # app. A smaller page keeps 256 software samples well inside the wait.
@@ -1414,7 +1414,7 @@ jobs:
           CARGO_TARGET_DIR: ${{ runner.temp }}/frames-target
           FUNDACAD_TRACER_ALLOW_CPU: "1"
         run: |
-          cargo build --release --example tracer_serve --manifest-path src-tauri/tracer/Cargo.toml
+          cargo build --locked --release --example tracer_serve --manifest-path src-tauri/tracer/Cargo.toml
           node e2e/pathtrace_bloom_e2e.cjs /tmp/pathtrace_bloom_shots
 
       # The agent harness starts its own engine, vite and Chrome on free ports,
@@ -1621,10 +1621,10 @@ jobs:
         run: python3 scripts/build-plugin-wasm.py
 
       - name: Build the workspace binaries
-        run: cargo build --workspace --features fundacad-engine/ws
+        run: cargo build --locked --workspace --features fundacad-engine/ws
 
       - name: Rust workspace tests
-        run: cargo test --workspace --features fundacad-engine/ws
+        run: cargo test --locked --workspace --features fundacad-engine/ws
 
       # Text outlines come from the system's fonts, and the text goldens were
       # frozen with Windows' Arial and Times New Roman. A case whose font is
@@ -1673,7 +1673,7 @@ jobs:
         working-directory: src-tauri
         run: |
           mkdir -p ../dist
-          cargo test --tests --workspace
+          cargo test --locked --tests --workspace
 
       - name: Upload the engine for the e2e job
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -1689,7 +1689,7 @@ jobs:
       # that differs or a rebuild that hangs only once optimised fails here. A
       # release build finds plugins only through FUNDACAD_PLUGIN_DIR.
       - name: Build the release engine
-        run: cargo build --release -p fundacad-cli
+        run: cargo build --locked --release -p fundacad-cli
 
       - name: Golden parity checks, release build
         shell: bash
