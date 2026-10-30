@@ -417,53 +417,82 @@ fn local(n: &Node) -> Affine {
     then(&m, &shift([-c[0], -c[1], -c[2]]))
 }
 
-struct Walk {
+const MAX_TRIANGLES: usize = super::scan::MAX_SCAN_TRIANGLES as usize;
+// Unwelded triangles carry nine coordinates each, so this sits above any scene under MAX_TRIANGLES.
+const MAX_VALUES: usize = 10 * MAX_TRIANGLES;
+const MAX_VISITS: usize = 2_000_000;
+
+/// What one file may still walk, shared by all its top level nodes: DEF/USE
+/// reuse is a DAG, so a few short lines can reach far more than they hold.
+struct Budget {
+    visits: usize,
+    triangles: usize,
+    values: usize,
+}
+
+impl Budget {
+    fn new() -> Self {
+        Budget { visits: MAX_VISITS, triangles: MAX_TRIANGLES, values: MAX_VALUES }
+    }
+
+    fn take_values(&mut self, n: usize) -> Result<(), String> {
+        self.values =
+            self.values.checked_sub(n).ok_or_else(|| super::scan::too_dense_for_a_scan(MAX_TRIANGLES as u64))?;
+        Ok(())
+    }
+}
+
+struct Walk<'b> {
     pos: Vec<f64>,
     idx: Vec<u32>,
     colors: Vec<Option<[u8; 3]>>,
     skipped: HashMap<String, usize>,
+    budget: &'b mut Budget,
 }
 
-impl Walk {
-    fn node(&mut self, n: &Node, m: &Affine, depth: usize) {
+impl Walk<'_> {
+    fn node(&mut self, n: &Node, m: &Affine, depth: usize) -> Result<(), String> {
         if depth > 256 {
-            return;
+            return Ok(());
         }
+        self.budget.visits =
+            self.budget.visits.checked_sub(1).ok_or("this scene reuses its nodes too many times to import")?;
         match n.kind.as_str() {
             "Transform" => {
                 let m = then(m, &local(n));
                 for c in n.children() {
-                    self.node(&c, &m, depth + 1);
+                    self.node(&c, &m, depth + 1)?;
                 }
             }
             "Group" | "StaticGroup" | "Anchor" | "Collision" | "Billboard" | "Scene" | "CADAssembly" | "CADLayer"
             | "CADPart" | "CADFace" => {
                 for c in n.children() {
-                    self.node(&c, m, depth + 1);
+                    self.node(&c, m, depth + 1)?;
                 }
             }
             "Switch" => {
                 let which = n.nums("whichChoice").and_then(|v| v.first().copied()).unwrap_or(-1.0);
                 if which >= 0.0 {
                     if let Some(c) = n.children().get(which as usize) {
-                        self.node(c, m, depth + 1);
+                        self.node(c, m, depth + 1)?;
                     }
                 }
             }
             "LOD" => {
                 if let Some(c) = n.children().first() {
-                    self.node(c, m, depth + 1);
+                    self.node(c, m, depth + 1)?;
                 }
             }
-            "Shape" => self.shape(n, m),
+            "Shape" => self.shape(n, m)?,
             "Inline" | "ExternProtoDeclare" | "ProtoDeclare" | "ProtoInstance" => {
                 *self.skipped.entry(n.kind.clone()).or_insert(0) += 1;
             }
             _ => {}
         }
+        Ok(())
     }
 
-    fn shape(&mut self, n: &Node, m: &Affine) {
+    fn shape(&mut self, n: &Node, m: &Affine) -> Result<(), String> {
         let color = n
             .child("appearance", &["Appearance"])
             .and_then(|a| a.child("material", &["Material"]))
@@ -481,10 +510,10 @@ impl Walk {
             "ElevationGrid",
             "Text",
         ];
-        let Some(g) = n.child("geometry", &all) else { return };
+        let Some(g) = n.child("geometry", &all) else { return Ok(()) };
         if !GEOMETRY.contains(&g.kind.as_str()) {
             *self.skipped.entry(g.kind.clone()).or_insert(0) += 1;
-            return;
+            return Ok(());
         }
         let (points, tris): (Vec<f64>, Vec<i64>) = match g.kind.as_str() {
             "Box" => {
@@ -504,17 +533,17 @@ impl Walk {
                 (p, t.to_vec())
             }
             kind => {
-                let pts = g
-                    .child("coord", &["Coordinate", "CoordinateDouble"])
-                    .and_then(|c| c.nums("point").map(<[f64]>::to_vec))
-                    .unwrap_or_default();
+                let coord = g.child("coord", &["Coordinate", "CoordinateDouble"]);
+                let point = coord.as_ref().and_then(|c| c.nums("point")).unwrap_or(&[]);
+                let index = g.nums(if kind == "IndexedFaceSet" { "coordIndex" } else { "index" }).unwrap_or(&[]);
+                self.budget.take_values(point.len().saturating_add(index.len()))?;
+                let pts = point.to_vec();
                 let nv = (pts.len() / 3) as i64;
                 let mut t = Vec::new();
                 match kind {
                     "IndexedFaceSet" => {
                         let mut face: Vec<i64> = Vec::new();
-                        let ci = g.nums("coordIndex").unwrap_or(&[]);
-                        for &i in ci.iter().chain(std::iter::once(&-1.0)) {
+                        for &i in index.iter().chain(std::iter::once(&-1.0)) {
                             if i < 0.0 {
                                 for k in 1..face.len().saturating_sub(1) {
                                     t.extend([face[0], face[k], face[k + 1]]);
@@ -525,13 +554,13 @@ impl Walk {
                             }
                         }
                     }
-                    "IndexedTriangleSet" => t.extend(g.nums("index").unwrap_or(&[]).iter().map(|&i| i as i64)),
+                    "IndexedTriangleSet" => t.extend(index.iter().map(|&i| i as i64)),
                     _ => t.extend(0..nv),
                 }
                 t.truncate(t.len() / 3 * 3);
                 if t.iter().any(|&i| i < 0 || i >= nv) {
                     *self.skipped.entry(format!("{kind} with a bad index")).or_insert(0) += 1;
-                    return;
+                    return Ok(());
                 }
                 if !g.flag("ccw", true) {
                     for tri in t.chunks_exact_mut(3) {
@@ -541,25 +570,38 @@ impl Walk {
                 (pts, t)
             }
         };
-        let base = (self.pos.len() / 3) as u32;
+        let ntri = tris.len() / 3;
+        self.budget.triangles =
+            self.budget.triangles.checked_sub(ntri).ok_or_else(|| {
+                super::scan::too_dense_for_a_scan((MAX_TRIANGLES - self.budget.triangles + ntri) as u64)
+            })?;
+        let base =
+            u32::try_from(self.pos.len() / 3).map_err(|_| super::scan::too_dense_for_a_scan(MAX_TRIANGLES as u64))?;
         for p in points.chunks_exact(3) {
             for r in m {
                 self.pos.push(r[0] * p[0] + r[1] * p[1] + r[2] * p[2] + r[3]);
             }
         }
         self.idx.extend(tris.iter().map(|&i| base + i as u32));
-        self.colors.extend(std::iter::repeat_n(color, tris.len() / 3));
+        self.colors.extend(std::iter::repeat_n(color, ntri));
+        Ok(())
     }
 }
 
 /// Y up turned Z up millimetres. `mm_per_unit` is the file's unit when the importer was
 /// told, else metres by the glTF rule.
-fn objects(top: Vec<Rc<Node>>, mut notes: Vec<String>, mm_per_unit: Option<f64>) -> (Vec<MeshObject>, Vec<String>) {
+fn objects(
+    top: Vec<Rc<Node>>,
+    mut notes: Vec<String>,
+    mm_per_unit: Option<f64>,
+) -> Result<(Vec<MeshObject>, Vec<String>), String> {
     let mut out = Vec::new();
     let mut skipped: HashMap<String, usize> = HashMap::new();
+    let mut budget = Budget::new();
     for n in top {
-        let mut w = Walk { pos: Vec::new(), idx: Vec::new(), colors: Vec::new(), skipped: HashMap::new() };
-        w.node(&n, &ID, 0);
+        let mut w =
+            Walk { pos: Vec::new(), idx: Vec::new(), colors: Vec::new(), skipped: HashMap::new(), budget: &mut budget };
+        w.node(&n, &ID, 0)?;
         for (k, v) in w.skipped {
             *skipped.entry(k).or_insert(0) += v;
         }
@@ -590,7 +632,7 @@ fn objects(top: Vec<Rc<Node>>, mut notes: Vec<String>, mm_per_unit: Option<f64>)
     for o in &mut out {
         o.pos = o.pos.chunks_exact(3).flat_map(|p| [p[0] * scale, -p[2] * scale, p[1] * scale]).collect();
     }
-    (out, notes)
+    Ok((out, notes))
 }
 
 pub fn read_vrml(text: &str, mm_per_unit: Option<f64>) -> Result<(Vec<MeshObject>, Vec<String>), String> {
@@ -603,9 +645,9 @@ pub fn read_vrml(text: &str, mm_per_unit: Option<f64>) -> Result<(Vec<MeshObject
             if skipped.len() == 1 { " was" } else { "s were" }
         ));
     }
-    Ok(objects(top, notes, mm_per_unit))
+    objects(top, notes, mm_per_unit)
 }
 
 pub fn read_x3d(xml: &str, mm_per_unit: Option<f64>) -> Result<(Vec<MeshObject>, Vec<String>), String> {
-    Ok(objects(parse_x3d(xml)?, Vec::new(), mm_per_unit))
+    objects(parse_x3d(xml)?, Vec::new(), mm_per_unit)
 }
