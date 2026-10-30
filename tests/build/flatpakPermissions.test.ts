@@ -5,6 +5,8 @@ import { describe, expect, it } from "vitest";
 
 import release from "../../packaging/flatpak/dev.fundacad.app.yml?raw";
 import sourceCheck from "../../packaging/flatpak/source-check/fundacad-source-check.yml?raw";
+import buildWorkflow from "../../.github/workflows/build.yml?raw";
+import sourceWorkflow from "../../.github/workflows/flatpak-source.yml?raw";
 
 function finishArgs(manifest: string): string[] {
   const lines = manifest.split(/\r?\n/);
@@ -39,5 +41,18 @@ describe.each([
     expect(args).toContain("--device=dri");
     expect(args).toContain("--device=input");
     expect(args).toContain("--filesystem=/run/spnav.sock:ro");
+  });
+});
+
+// Flatpak 1.14, the Ubuntu 24.04 package, refuses --device=input in build-finish.
+describe.each([
+  ["build", buildWorkflow],
+  ["flatpak-source", sourceWorkflow],
+])("the %s workflow", (_name, workflow) => {
+  it("installs Flatpak from the upstream PPA before flatpak-builder runs", () => {
+    const ppa = workflow.indexOf("add-apt-repository -y -n ppa:flatpak/stable");
+    const install = workflow.indexOf("apt-get install -y -qq flatpak flatpak-builder");
+    expect(ppa).toBeGreaterThan(-1);
+    expect(install).toBeGreaterThan(ppa);
   });
 });
