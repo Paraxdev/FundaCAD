@@ -221,6 +221,8 @@ pub fn check_save(raw: &str) -> Result<PathBuf, String> {
     Ok(path.to_path_buf())
 }
 
+const EXPORT_EXTS: [&str; 7] = ["stl", "3mf", "step", "stp", "glb", "dxf", "svg"];
+
 /// An absolute path that names no Windows device or file stream, for a file the engine writes in any format.
 pub fn check_write(raw: &str) -> Result<PathBuf, String> {
     let path = Path::new(raw);
@@ -314,9 +316,25 @@ impl Provenance {
         check_save(raw)
     }
 
+    /// A path no dialog handed over must also name a model file, so a page cannot overwrite a user's other files.
     pub fn check_write(&self, raw: &str) -> Result<PathBuf, String> {
-        self.refuse_unvouched(raw)?;
+        if !lock(&self.session).contains(raw) {
+            refuse_off_disk(raw, &read_link_on_disk)?;
+            let ext = Path::new(raw).extension().and_then(|e| e.to_str()).unwrap_or("");
+            if !EXPORT_EXTS.iter().any(|e| e.eq_ignore_ascii_case(ext)) {
+                return Err(format!("{raw} is not a model file FundaCAD exports, so nothing was written."));
+            }
+        }
         check_write(raw)
+    }
+
+    /// For a file the engine reads by path, the checks an open makes.
+    pub fn check_read(&self, raw: &str) -> Result<PathBuf, String> {
+        self.refuse_unvouched(raw)?;
+        if cfg!(windows) && (names_a_device(Path::new(raw)) || names_a_stream(Path::new(raw))) {
+            return Err(format!("{raw} names a Windows device or a file stream, so it was not read."));
+        }
+        require_file(raw)
     }
 
     pub fn stat(&self, raw: &str) -> Result<Option<DocStat>, String> {

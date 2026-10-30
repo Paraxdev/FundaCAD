@@ -551,7 +551,7 @@ pub fn check_request_path(text: &str, held: &crate::doc_paths::Provenance) -> Re
     };
     let Some(Value::String(path)) = path else { return Ok(()) };
     match op.as_ref().and_then(Value::as_str) {
-        Some("import") => held.refuse_unvouched(&path),
+        Some("import") => held.check_read(&path).map(drop),
         Some("export" | "exportWith") => held.check_write(&path).map(drop),
         _ => Ok(()),
     }
