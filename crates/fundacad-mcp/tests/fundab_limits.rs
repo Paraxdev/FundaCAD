@@ -86,6 +86,8 @@ fn write_raw(path: &Path, sections: &[Section]) {
     for s in sections {
         let off = body.len() as u64;
         body.extend_from_slice(&s.stored_bytes);
+        // The CRC slot the reader counts into a single shard section span.
+        body.extend_from_slice(&[0u8; 4]);
         table.push(s.kind);
         table.push(s.codec);
         table.extend_from_slice(&(s.name.len() as u16).to_le_bytes());
@@ -138,8 +140,10 @@ fn a_section_that_inflates_past_its_declared_size_is_refused_without_inflating_i
 fn geometry_sections_together_past_the_limit_are_refused_before_reading() {
     let tmp = tempfile::tempdir().unwrap();
     let path = tmp.path().join("part.fundab");
-    let each = 3u64 << 30;
-    let sections: Vec<Section> = (0..4).map(|_| Section::new(2, 0, vec![0u8; 16], each)).collect();
+    let each = 3u64 << 29;
+    let sections: Vec<Section> = (0..6)
+        .map(|i| Section { name: format!("g{i}"), ..Section::new(2, 0, vec![0u8; 16], each) })
+        .collect();
     write_raw(&path, &sections);
     let e = fundacad_mcp::docfile::read_document(&path).unwrap_err();
     assert!(e.0.contains("8 GiB"), "{}", e.0);
@@ -237,7 +241,7 @@ fn a_document_section_longer_than_the_app_opens_is_refused_before_inflating() {
     let path = tmp.path().join("part.fundab");
     write_raw(&path, &[Section::new(1, 1, deflated_zeros(64 << 20), fundacad_mcp::docfile::MAX_DOC_TEXT + 1)]);
     let (out, largest) = largest_allocation_during(|| fundacad_mcp::docfile::read_document(&path));
-    assert_eq!(out.unwrap_err().0, "the document in this file is longer than FundaCAD opens and was refused");
+    assert_eq!(out.unwrap_err().0, "this document is larger than 1024 MiB and was refused");
     assert!(largest < 32 << 20, "the reader asked for {largest} bytes at once");
 }
 

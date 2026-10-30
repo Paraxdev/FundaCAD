@@ -91,6 +91,15 @@ pub fn is_safe_key(key: &str) -> bool {
     !key.is_empty()
         && !key.contains("..")
         && key.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.')
+        && !names_a_device(key)
+}
+
+/// Windows maps these names to a device whatever extension follows; refused on every OS so a file stays portable.
+fn names_a_device(key: &str) -> bool {
+    let stem = key.split('.').next().unwrap_or("").to_ascii_uppercase();
+    let numbered =
+        |base: &str| stem.strip_prefix(base).is_some_and(|n| n.len() == 1 && n.as_bytes()[0].is_ascii_digit());
+    ["CON", "PRN", "AUX", "NUL"].contains(&stem.as_str()) || numbered("COM") || numbered("LPT")
 }
 
 /// fsync a directory so a rename INTO it is durable across a crash. Tolerant of
@@ -296,13 +305,9 @@ pub fn write_document(
 
 /// Open any document, whatever its extension says: the format is read from the
 /// bytes, so a binary file renamed to `.funda` still opens.
-pub fn open_document_checked(
-    path: &Path,
-    blob_dir: &Path,
-    mesh_dir: Option<&Path>,
-) -> Result<(String, crate::fnda::RepairReport), String> {
+pub fn open_document_checked(path: &Path, blob_dir: &Path) -> Result<(String, crate::fnda::RepairReport), String> {
     if looks_like_container(path) {
-        return read_container_checked(path, blob_dir, mesh_dir).map(|(doc, _, report)| (doc, report));
+        return read_container_checked(path, blob_dir).map(|(doc, _, report)| (doc, report));
     }
     crate::json_doc::read_json_document(path, blob_dir).map(|doc| (doc, crate::fnda::RepairReport::default()))
 }
@@ -315,17 +320,12 @@ pub struct OpenedFile {
 
 /// `open_document_checked`, also copying the sections of a kind this version
 /// does not read into `carry_dir`, so a save can write them back.
-pub fn open_document_full(
-    path: &Path,
-    blob_dir: &Path,
-    mesh_dir: Option<&Path>,
-    carry_dir: Option<&Path>,
-) -> Result<OpenedFile, String> {
+pub fn open_document_full(path: &Path, blob_dir: &Path, carry_dir: Option<&Path>) -> Result<OpenedFile, String> {
     if crate::fnda::looks_like_fnda(path) {
-        let o = crate::fnda::read_file(path, blob_dir, mesh_dir, carry_dir)?;
+        let o = crate::fnda::read_file(path, blob_dir, carry_dir)?;
         return Ok(OpenedFile { document: o.document_json, report: o.report, carried: o.carried });
     }
-    let (document, report) = open_document_checked(path, blob_dir, mesh_dir)?;
+    let (document, report) = open_document_checked(path, blob_dir)?;
     Ok(OpenedFile { document, report, carried: Vec::new() })
 }
 
@@ -338,16 +338,11 @@ pub struct OpenedBytes {
 
 /// `open_document_checked` for a document held as bytes with no path, like a file dropped on a webview that does not
 /// name its paths. The readers need a seekable file, so the bytes are staged in a temp file first.
-pub fn open_document_bytes(
-    bytes: &[u8],
-    blob_dir: &Path,
-    mesh_dir: Option<&Path>,
-    carry_dir: Option<&Path>,
-) -> Result<OpenedBytes, String> {
+pub fn open_document_bytes(bytes: &[u8], blob_dir: &Path, carry_dir: Option<&Path>) -> Result<OpenedBytes, String> {
     let staged = std::env::temp_dir().join(format!("fundacad-open-{}.tmp", uuid_hex()));
     std::fs::write(&staged, bytes).map_err(|e| format!("could not stage the document for opening ({e})"))?;
     let was_container = looks_like_container(&staged);
-    let opened = open_document_full(&staged, blob_dir, mesh_dir, carry_dir);
+    let opened = open_document_full(&staged, blob_dir, carry_dir);
     let _ = std::fs::remove_file(&staged);
     opened.map(|o| OpenedBytes { document: o.document, report: o.report, carried: o.carried, was_container })
 }
@@ -412,34 +407,29 @@ pub fn read_manifest(path: &Path) -> Result<Manifest, String> {
 /// Open a container: extract its geometry into `blob_dir` and return `(document_json, manifest)`. Each blob streams to
 /// a temp file while hashed and publishes under that hash only when it matches the manifest; a mismatch means
 /// truncation or tampering and is a hard error.
-pub fn read_container(path: &Path, blob_dir: &Path, mesh_dir: Option<&Path>) -> Result<(String, Manifest), String> {
-    read_container_checked(path, blob_dir, mesh_dir).map(|(doc, manifest, _)| (doc, manifest))
+pub fn read_container(path: &Path, blob_dir: &Path) -> Result<(String, Manifest), String> {
+    read_container_checked(path, blob_dir).map(|(doc, manifest, _)| (doc, manifest))
 }
 
 /// As `read_container`, also saying what had to be repaired on the way in.
 pub fn read_container_checked(
     path: &Path,
     blob_dir: &Path,
-    mesh_dir: Option<&Path>,
 ) -> Result<(String, Manifest, crate::fnda::RepairReport), String> {
     if crate::fnda::looks_like_fnda(path) {
-        let opened = crate::fnda::read_file(path, blob_dir, mesh_dir, None)?;
+        let opened = crate::fnda::read_file(path, blob_dir, None)?;
         let manifest = manifest_of(&opened.entries, "");
         return Ok((opened.document_json, manifest, opened.report));
     }
-    read_zip_container(path, blob_dir, mesh_dir)
-        .map(|(doc, manifest)| (doc, manifest, crate::fnda::RepairReport::default()))
+    read_zip_container(path, blob_dir).map(|(doc, manifest)| (doc, manifest, crate::fnda::RepairReport::default()))
 }
 
-fn read_zip_container(path: &Path, blob_dir: &Path, mesh_dir: Option<&Path>) -> Result<(String, Manifest), String> {
+fn read_zip_container(path: &Path, blob_dir: &Path) -> Result<(String, Manifest), String> {
     let manifest = read_manifest(path)?;
-    if !manifest.blobs.iter().all(|row| crate::json_doc::is_hash(&row.hash)) {
+    if !manifest.blobs.iter().all(|row| crate::json_doc::is_hash(&row.hash)) || rows_share_an_entry(&manifest.blobs) {
         return Err("This document is damaged and cannot be opened.".to_string());
     }
     std::fs::create_dir_all(blob_dir).map_err(|e| e.to_string())?;
-    if let Some(d) = mesh_dir {
-        std::fs::create_dir_all(d).map_err(|e| e.to_string())?;
-    }
 
     let mut z = open_archive(path)?;
     let mut document_json = String::new();
@@ -453,28 +443,23 @@ fn read_zip_container(path: &Path, blob_dir: &Path, mesh_dir: Option<&Path>) -> 
         if final_path.exists() {
             continue; // same hash => same bytes; nothing to do
         }
-        extract_verified(&mut z, &row.entry, Some(&row.hash), &final_path, blob_dir)?;
-    }
-
-    if let Some(dir) = mesh_dir {
-        for row in &manifest.meshes {
-            // Keys land in a filename, so validate rather than trust the file. Meshes are derived data: a bad row costs
-            // a re-tessellation and must never fail an open.
-            if !is_safe_key(&row.key) {
-                continue;
-            }
-            let dest = dir.join(format!("{}.bin", row.key));
-            let _ = extract_verified(&mut z, &row.entry, None, &dest, dir);
-        }
+        extract_verified(&mut z, &row.entry, &row.hash, &final_path, blob_dir)?;
     }
 
     Ok((document_json, manifest))
 }
 
+/// One entry holds one set of bytes, so it matches one hash. With that and one extraction per hash, an open inflates
+/// each archive entry at most once, so the declared total `guard` checked is the budget for the whole open.
+fn rows_share_an_entry(rows: &[BlobRow]) -> bool {
+    let mut hash_of: BTreeMap<&str, &str> = BTreeMap::new();
+    rows.iter().any(|row| *hash_of.entry(&row.entry).or_insert(&row.hash) != row.hash)
+}
+
 fn extract_verified(
     z: &mut zip::ZipArchive<File>,
     entry: &str,
-    want_hash: Option<&str>,
+    want_hash: &str,
     final_path: &Path,
     dest_dir: &Path,
 ) -> Result<(), String> {
@@ -495,13 +480,11 @@ fn extract_verified(
         }
         out.flush().map_err(|e| e.to_string())?;
         out.sync_all().map_err(|e| e.to_string())?;
-        if let Some(want) = want_hash {
-            if hex(&h.finalize()) != want {
-                return Err("This document's geometry does not match its manifest, the file \
-                            is damaged or was modified. Opening it was refused rather than \
-                            showing you the wrong shape."
-                    .to_string());
-            }
+        if hex(&h.finalize()) != want_hash {
+            return Err("This document's geometry does not match its manifest, the file \
+                        is damaged or was modified. Opening it was refused rather than \
+                        showing you the wrong shape."
+                .to_string());
         }
         Ok(())
     };
@@ -559,7 +542,7 @@ mod tests {
         }
 
         let out = dir.join("blobs");
-        read_container(&evil, &out, Some(&dir.join("meshes"))).unwrap();
+        read_container(&evil, &out).unwrap();
         let names: Vec<_> =
             std::fs::read_dir(&out).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().to_string()).collect();
         assert_eq!(names, vec![format!("{h}.bbrep")], "nothing escaped the store");

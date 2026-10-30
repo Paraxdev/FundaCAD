@@ -68,14 +68,14 @@ fn the_binary_sibling_keeps_its_geometry_and_its_unknown_section() {
     fnda::write(&mut std::fs::File::create(&sibling).unwrap(), &sections).unwrap();
 
     let (blobs_b, carry) = (dir.join("blobs_b"), dir.join("sections"));
-    let opened = open_document_full(&sibling, &blobs_b, None, Some(&carry)).unwrap();
+    let opened = open_document_full(&sibling, &blobs_b, Some(&carry)).unwrap();
     assert_eq!(serde_json::from_str::<Value>(&opened.document).unwrap(), without_geometry(input()));
     let carried: Vec<_> = opened.carried.iter().map(|c| (c.clone(), carry.join(format!("{}.bin", c.hash)))).collect();
     let saved = dir.join("saved.fundab");
     write_document(&saved, &opened.document, &geometry, &BTreeMap::new(), &carried, "t").unwrap();
 
     let (blobs_c, carry_c) = (dir.join("blobs_c"), dir.join("sections_c"));
-    let again = open_document_full(&saved, &blobs_c, None, Some(&carry_c)).unwrap();
+    let again = open_document_full(&saved, &blobs_c, Some(&carry_c)).unwrap();
     assert_eq!(serde_json::from_str::<Value>(&again.document).unwrap(), without_geometry(input()));
     assert_eq!(again.carried, opened.carried);
     assert_eq!(std::fs::read(blobs_c.join(format!("{HASH}.bbrep"))).unwrap(), std::fs::read(&blob).unwrap());

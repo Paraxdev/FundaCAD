@@ -3,7 +3,7 @@
 //! reader rebuilds damaged shards from parity and proves the section by its BLAKE2b hash. The header and the section
 //! table are each stored twice, so losing the start or the end of the file is survivable.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
@@ -97,6 +97,8 @@ pub struct RepairReport {
     pub repaired_shards: u64,
     /// true when the primary header or table was damaged and a copy was used
     pub used_backup_index: bool,
+    /// sections of a kind this version does not read that could not be kept, so a save leaves them out
+    pub dropped_sections: u64,
 }
 
 pub fn hex(bytes: &[u8]) -> String {
@@ -465,7 +467,20 @@ fn decode_table(t: &[u8]) -> Option<Vec<Entry>> {
             layout: Layout { shard_size, data_shards, parity_shards },
         });
     }
-    Some(out)
+    let mut spans = out.iter().map(span).collect::<Option<Vec<_>>>()?;
+    spans.retain(|(start, end)| end > start);
+    spans.sort_unstable();
+    spans.windows(2).all(|w| w[0].1 <= w[1].0).then_some(out)
+}
+
+/// The bytes a section takes on disk: its shards, then its CRC table. None when the declared sizes overflow.
+fn span(e: &Entry) -> Option<(u64, u64)> {
+    let shards = e
+        .stored_len
+        .div_ceil(e.layout.shard_size as u64 * e.layout.data_shards as u64)
+        .checked_mul(e.shards_per_group())?;
+    let len = shards.checked_mul(e.layout.shard_size as u64)?.checked_add(shards.checked_mul(4)?)?;
+    Some((e.offset, e.offset.checked_add(len)?))
 }
 
 /// The section table, from whichever copy of the header and table survives.
@@ -641,9 +656,20 @@ fn read_section<S: Write>(file: &File, entry: &Entry, sink: &mut S, report: &mut
     decode_section(reader, entry, sink, report)
 }
 
+fn too_big() -> String {
+    format!("This document expands to more than {} GiB and was refused.", MAX_RAW >> 30)
+}
+
 fn check_raw_len(entry: &Entry) -> Result<(), String> {
     if entry.raw_len > MAX_RAW {
-        return Err(format!("This document expands to more than {} GiB and was refused.", MAX_RAW >> 30));
+        return Err(too_big());
+    }
+    Ok(())
+}
+
+fn check_document_len(entry: &Entry) -> Result<(), String> {
+    if entry.raw_len > crate::json_doc::MAX_DOC_TEXT {
+        return Err(crate::json_doc::too_big(crate::json_doc::MAX_DOC_TEXT));
     }
     Ok(())
 }
@@ -717,21 +743,15 @@ impl Default for ReadOptions {
     }
 }
 
-/// Open a file: the document as JSON, each geometry blob and cached mesh verified and published into its store, and
-/// with `carry_dir` the sections of a kind this version does not read.
-pub fn read_file(
-    path: &Path,
-    blob_dir: &Path,
-    mesh_dir: Option<&Path>,
-    carry_dir: Option<&Path>,
-) -> Result<Opened, String> {
-    read_file_with(path, blob_dir, mesh_dir, carry_dir, &ReadOptions::default())
+/// Open a file: the document as JSON, each geometry blob verified and published into its store, and with `carry_dir`
+/// the sections of a kind this version does not read. Cached meshes stay in the file, as nothing reads them back.
+pub fn read_file(path: &Path, blob_dir: &Path, carry_dir: Option<&Path>) -> Result<Opened, String> {
+    read_file_with(path, blob_dir, carry_dir, &ReadOptions::default())
 }
 
 enum Role {
     Geometry,
-    Mesh,
-    Carried(usize),
+    Carried,
 }
 
 struct Job<'a> {
@@ -741,12 +761,31 @@ struct Job<'a> {
     rows: Vec<&'a segments::Row>,
 }
 
+/// The index of the job that writes `dest`, queued unless one already does. None when `dest` holds the bytes already.
+fn queue_job<'a>(
+    jobs: &mut Vec<Job<'a>>,
+    queued: &mut HashMap<PathBuf, usize>,
+    e: &'a Entry,
+    dest: PathBuf,
+    role: Role,
+    rows: Vec<&'a segments::Row>,
+) -> Option<usize> {
+    if let Some(&i) = queued.get(&dest) {
+        return Some(i);
+    }
+    if published(&dest, e.raw_len) {
+        return None;
+    }
+    queued.insert(dest.clone(), jobs.len());
+    jobs.push(Job { entry: e, dest, role, rows });
+    Some(jobs.len() - 1)
+}
+
 /// Sections the segment index describes are decoded one at a time on all
 /// threads; the others are extracted side by side, one per thread.
 pub fn read_file_with(
     path: &Path,
     blob_dir: &Path,
-    mesh_dir: Option<&Path>,
     carry_dir: Option<&Path>,
     o: &ReadOptions,
 ) -> Result<Opened, String> {
@@ -754,6 +793,7 @@ pub fn read_file_with(
     let mut report = RepairReport::default();
     let entries = read_index(&mut f, &mut report)?;
     let doc = entries.iter().find(|e| e.kind == KIND_DOCUMENT).ok_or_else(|| DAMAGED.to_string())?;
+    check_document_len(doc)?;
     let mut cbor = Vec::new();
     read_section(&f, doc, &mut cbor, &mut report)?;
     let document_json = cbor_to_json(&cbor)?;
@@ -762,40 +802,45 @@ pub fn read_file_with(
         rows.iter().filter(|r| r.kind == e.kind && r.raw_hash == e.raw_hash && r.stored_len == e.stored_len).collect()
     };
 
-    let mut jobs = Vec::new();
+    let mut jobs: Vec<Job> = Vec::new();
+    let mut queued = HashMap::new();
     std::fs::create_dir_all(blob_dir).map_err(io)?;
     for e in entries.iter().filter(|e| e.kind == KIND_GEOMETRY) {
         let hash = hex(&e.raw_hash);
         if e.name != hash {
             return Err(DAMAGED.to_string());
         }
-        let dest = blob_dir.join(format!("{hash}.bbrep"));
-        if !published(&dest, e.raw_len) {
-            jobs.push(Job { entry: e, dest, role: Role::Geometry, rows: rows_of(e) });
-        }
+        queue_job(&mut jobs, &mut queued, e, blob_dir.join(format!("{hash}.bbrep")), Role::Geometry, rows_of(e));
     }
-    if let Some(dir) = mesh_dir {
-        std::fs::create_dir_all(dir).map_err(io)?;
-        for e in entries.iter().filter(|e| e.kind == KIND_MESH && safe_key(&e.name)) {
-            jobs.push(Job { entry: e, dest: dir.join(format!("{}.bin", e.name)), role: Role::Mesh, rows: rows_of(e) });
-        }
-    }
-    let mut carried: Vec<(Carried, bool)> = Vec::new();
+    let mut budget = jobs
+        .iter()
+        .try_fold(0u64, |sum, j| sum.checked_add(j.entry.raw_len))
+        .and_then(|sum| MAX_RAW.checked_sub(sum))
+        .ok_or_else(too_big)?;
+    let mut carried: Vec<(Carried, Option<usize>)> = Vec::new();
     if let Some(dir) = carry_dir {
         std::fs::create_dir_all(dir).map_err(io)?;
         for e in entries.iter().filter(|e| carries(e)) {
             let hash = hex(&e.raw_hash);
+            let before = jobs.len();
             let dest = dir.join(format!("{hash}.bin"));
-            let have = published(&dest, e.raw_len);
-            if !have {
-                jobs.push(Job { entry: e, dest, role: Role::Carried(carried.len()), rows: rows_of(e) });
+            let job = queue_job(&mut jobs, &mut queued, e, dest.clone(), Role::Carried, rows_of(e));
+            if jobs.len() > before {
+                // A section this version does not read is dropped once the budget runs out, the open goes on.
+                let Some(left) = budget.checked_sub(e.raw_len) else {
+                    jobs.pop();
+                    queued.remove(&dest);
+                    report.dropped_sections += 1;
+                    continue;
+                };
+                budget = left;
             }
-            carried.push((Carried { kind: e.kind, name: e.name.clone(), hash }, have));
+            carried.push((Carried { kind: e.kind, name: e.name.clone(), hash }, job));
         }
     }
 
     if !jobs.is_empty() {
-        for dir in [Some(blob_dir), mesh_dir, carry_dir].into_iter().flatten() {
+        for dir in [Some(blob_dir), carry_dir].into_iter().flatten() {
             sweep_stale_tmp(dir);
         }
     }
@@ -824,17 +869,17 @@ pub fn read_file_with(
             return Err(err.clone());
         }
     }
-    for (job, r) in jobs.iter().zip(results) {
-        // A cached mesh that fails costs a re-tessellation, and a section
-        // this version does not read never blocks the open.
-        if let Some(Ok(r)) = r {
-            report.repaired_shards += r.repaired_shards;
-            if let Role::Carried(i) = job.role {
-                carried[i].1 = true;
-            }
-        }
+    for r in results.iter().flatten().flatten() {
+        report.repaired_shards += r.repaired_shards;
     }
-    let carried = carried.into_iter().filter(|(_, ok)| *ok).map(|(c, _)| c).collect();
+    // A section this version does not read never blocks the open.
+    let kept = carried.len();
+    let carried: Vec<Carried> = carried
+        .into_iter()
+        .filter(|(_, job)| job.is_none_or(|i| matches!(results[i], Some(Ok(_)))))
+        .map(|(c, _)| c)
+        .collect();
+    report.dropped_sections += (kept - carried.len()) as u64;
     Ok(Opened { document_json, entries, report, carried })
 }
 
@@ -855,12 +900,6 @@ fn segment_rows(f: &File, entries: &[Entry], report: &mut RepairReport) -> Vec<s
 /// A blob already in a store is trusted by its name only when it is whole.
 fn published(dest: &Path, raw_len: u64) -> bool {
     std::fs::metadata(dest).is_ok_and(|m| m.is_file() && m.len() == raw_len)
-}
-
-fn safe_key(key: &str) -> bool {
-    !key.is_empty()
-        && !key.contains("..")
-        && key.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.')
 }
 
 static TMP_SERIAL: AtomicUsize = AtomicUsize::new(0);
@@ -1061,6 +1100,9 @@ pub fn read_section_of_kind(path: &Path, kind: u8) -> Result<Option<Vec<u8>>, St
     let mut report = RepairReport::default();
     let entries = read_index(&mut f, &mut report)?;
     let Some(entry) = entries.iter().find(|e| e.kind == kind) else { return Ok(None) };
+    if kind == KIND_DOCUMENT {
+        check_document_len(entry)?;
+    }
     let mut out = Vec::new();
     read_section(&f, entry, &mut out, &mut report)?;
     Ok(Some(out))
@@ -1204,7 +1246,7 @@ mod tests {
         let (path, _) = future_file(&dir);
         set_codec(&path, 9, 7);
         let carry = dir.join("sections");
-        let opened = read_file(&path, &dir.join("blobs"), None, Some(&carry)).unwrap();
+        let opened = read_file(&path, &dir.join("blobs"), Some(&carry)).unwrap();
         assert!(same_json(&opened.document_json, r#"{"version":11,"features":[]}"#));
         assert!(opened.carried.is_empty());
         assert_eq!(std::fs::read_dir(&carry).unwrap().count(), 0);

@@ -16,7 +16,7 @@ pub fn blob_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(dir)
 }
 
-/// Packed viewport meshes, only a reopen speed cache, kept beside the blobs so a container can seed it.
+/// Packed viewport meshes a save may write into a container. An open no longer fills it.
 pub fn mesh_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     use tauri::Manager;
     let dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("meshes");
@@ -155,8 +155,7 @@ pub async fn container_open(
 ) -> Result<String, String> {
     let path = held.check_open(&path)?;
     let blobs = blob_dir(&app)?;
-    let meshes = mesh_dir(&app)?;
-    open_document_checked(&path, &blobs, Some(&meshes)).map(|(doc, _)| doc)
+    open_document_checked(&path, &blobs).map(|(doc, _)| doc)
 }
 
 #[derive(serde::Serialize)]
@@ -165,6 +164,7 @@ pub struct OpenedDocument {
     pub document: String,
     pub repaired_shards: u64,
     pub used_backup_index: bool,
+    pub dropped_sections: u64,
     pub carried: Vec<fundacad_format::fnda::Carried>,
 }
 
@@ -178,13 +178,13 @@ pub async fn container_open_checked(
 ) -> Result<OpenedDocument, String> {
     let path = held.check_open(&path)?;
     let blobs = blob_dir(&app)?;
-    let meshes = mesh_dir(&app)?;
     let sections = section_dir(&app)?;
-    let o = open_document_full(&path, &blobs, Some(&meshes), Some(&sections))?;
+    let o = open_document_full(&path, &blobs, Some(&sections))?;
     Ok(OpenedDocument {
         document: o.document,
         repaired_shards: o.report.repaired_shards,
         used_backup_index: o.report.used_backup_index,
+        dropped_sections: o.report.dropped_sections,
         carried: o.carried,
     })
 }
@@ -196,6 +196,7 @@ pub struct OpenedDroppedDocument {
     pub repaired_shards: u64,
     pub used_backup_index: bool,
     pub was_container: bool,
+    pub dropped_sections: u64,
     pub carried: Vec<fundacad_format::fnda::Carried>,
 }
 
@@ -210,14 +211,14 @@ pub async fn container_open_bytes(
         return Err("the dropped document did not arrive as bytes".into());
     };
     let blobs = blob_dir(&app)?;
-    let meshes = mesh_dir(&app)?;
     let sections = section_dir(&app)?;
-    let opened = open_document_bytes(bytes, &blobs, Some(&meshes), Some(&sections))?;
+    let opened = open_document_bytes(bytes, &blobs, Some(&sections))?;
     Ok(OpenedDroppedDocument {
         document: opened.document,
         repaired_shards: opened.report.repaired_shards,
         used_backup_index: opened.report.used_backup_index,
         was_container: opened.was_container,
+        dropped_sections: opened.report.dropped_sections,
         carried: opened.carried,
     })
 }

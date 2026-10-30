@@ -90,7 +90,7 @@ fn rows_of(path: &Path) -> Vec<segments::Row> {
 }
 
 fn open(path: &Path, blob_dir: &Path, threads: usize) -> Result<Opened, String> {
-    read_file_with(path, blob_dir, None, None, &ReadOptions { threads })
+    read_file_with(path, blob_dir, None, &ReadOptions { threads })
 }
 
 fn assert_blobs(blob_dir: &Path, blobs: &[Vec<u8>]) {
@@ -169,7 +169,7 @@ fn a_stale_index_opens_on_the_serial_path_and_a_save_writes_a_fresh_one() {
     assert_eq!(rows_of(&stale), rows_of(&fresh));
     let store = dir.join("blobs");
     test_hooks::take();
-    let opened = read_file_with(&stale, &store, None, Some(&dir.join("carry")), &ReadOptions { threads: 4 }).unwrap();
+    let opened = read_file_with(&stale, &store, Some(&dir.join("carry")), &ReadOptions { threads: 4 }).unwrap();
     assert_eq!(test_hooks::take().0, 0);
     assert!(opened.carried.is_empty());
     assert_blobs(&store, &blobs);
@@ -372,7 +372,7 @@ fn a_carried_section_already_kept_is_listed_in_file_order() {
     let carry = dir.join("carry");
     std::fs::create_dir_all(&carry).unwrap();
     std::fs::write(carry.join(format!("{}.bin", hash_hex(&a))), &a).unwrap();
-    let opened = read_file_with(&path, &dir.join("blobs"), None, Some(&carry), &ReadOptions { threads: 4 }).unwrap();
+    let opened = read_file_with(&path, &dir.join("blobs"), Some(&carry), &ReadOptions { threads: 4 }).unwrap();
     let names: Vec<&str> = opened.carried.iter().map(|c| c.name.as_str()).collect();
     assert_eq!(names, ["later", "big"]);
     assert_eq!(std::fs::read(carry.join(format!("{}.bin", hash_hex(&b)))).unwrap(), b);

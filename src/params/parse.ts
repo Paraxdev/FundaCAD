@@ -73,7 +73,16 @@ const IDENT_START = /[A-Za-z_]/;
 const IDENT_PART = /[A-Za-z0-9_]/;
 const TWO_CHAR_OPS = ["<=", ">=", "==", "!=", "&&", "||"];
 
+/** Longest expression text in characters, the engine's limit. It also bounds a flat chain like `a+a+a`. */
+export const MAX_EXPR_LEN = 1024;
+/** Deepest nesting of parentheses, calls, unary operators and powers, the engine's limit. */
+export const MAX_EXPR_DEPTH = 100;
+
 export function tokenize(src: string): Token[] {
+  // The engine counts code points, not UTF-16 units.
+  if (src.length > MAX_EXPR_LEN && [...src].length > MAX_EXPR_LEN) {
+    throw new ExprError(`expression is longer than ${MAX_EXPR_LEN} characters`);
+  }
   const out: Token[] = [];
   let i = 0;
   while (i < src.length) {
@@ -136,6 +145,7 @@ const CMP_OPS: BinOp[] = ["<=", ">=", "==", "!=", "<", ">"];
 
 class Parser {
   private i = 0;
+  private depth = 0;
   constructor(private readonly toks: Token[]) {}
 
   private peek(): Token | undefined {
@@ -202,7 +212,19 @@ class Parser {
       else return l;
     }
   }
+  // Every recursive path (parentheses, call arguments, `- !`, `^`) passes through here, so one counter bounds them all.
   private unary(): ExprNode {
+    if (this.depth >= MAX_EXPR_DEPTH) {
+      throw new ExprError(`expression nests deeper than ${MAX_EXPR_DEPTH} levels`, this.peek()?.start);
+    }
+    this.depth++;
+    try {
+      return this.unaryInner();
+    } finally {
+      this.depth--;
+    }
+  }
+  private unaryInner(): ExprNode {
     if (this.takeOp("-")) return { t: "neg", e: this.unary() };
     if (this.takeOp("!")) return { t: "not", e: this.unary() };
     return this.pow();

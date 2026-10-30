@@ -64,7 +64,7 @@ fn a_local_header_naming_another_file_than_the_central_directory_is_refused() {
     rename(&mut bytes, LOCAL, LOCAL_NAME_AT, "document.json", "decoyent.json");
     std::fs::write(&path, &bytes).unwrap();
 
-    let opened = read_container(&path, &dir.join("blobs"), None);
+    let opened = read_container(&path, &dir.join("blobs"));
     assert_eq!(opened.map(|(doc, _)| doc), Err(DAMAGED.to_string()));
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -80,7 +80,7 @@ fn a_second_entry_under_the_document_name_is_refused() {
     rename(&mut bytes, CENTRAL, CENTRAL_NAME_AT, "mesh/abcd.bin", "document.json");
     std::fs::write(&path, &bytes).unwrap();
 
-    let opened = read_container(&path, &dir.join("blobs"), None);
+    let opened = read_container(&path, &dir.join("blobs"));
     assert_eq!(opened.map(|(doc, _)| doc), Err(DAMAGED.to_string()));
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -89,11 +89,11 @@ fn a_second_entry_under_the_document_name_is_refused() {
 #[test]
 fn a_container_zip_4_wrote_still_opens() {
     let dir = scratch("zip4");
-    let (doc, manifest) = read_container(&zip4_fixture(), &dir.join("blobs"), Some(&dir.join("meshes"))).unwrap();
+    let (doc, manifest) = read_container(&zip4_fixture(), &dir.join("blobs")).unwrap();
     let h = hash_bytes(&blob_bytes());
     assert_eq!(doc, doc_json(&h));
     assert_eq!(manifest.blobs.len(), 1);
     assert_eq!(std::fs::read(dir.join("blobs").join(format!("{h}.bbrep"))).unwrap(), blob_bytes());
-    assert_eq!(std::fs::read(dir.join("meshes/abcd.bin")).unwrap(), DECOY_DOC);
+    assert!(!dir.join("meshes").exists(), "an open extracts no mesh");
     let _ = std::fs::remove_dir_all(&dir);
 }
