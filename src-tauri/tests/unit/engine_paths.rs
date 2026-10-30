@@ -114,10 +114,12 @@ fn an_export_writes_another_kind_of_file_only_where_a_dialog_put_it() {
 fn an_escaped_path_key_is_still_checked() {
     let held = Provenance::default();
     let remote = serde_json::to_string(REMOTE).unwrap();
-    let escaped = format!(r#"{{"id":"1","op":"import","format":"step","path":{remote}}}"#);
-    assert!(check_request_path(&escaped, &held).unwrap_err().contains("network or device path"));
-    let op_escaped = format!(r#"{{"id":"1","op":"import","format":"step","path":{remote}}}"#);
-    assert!(check_request_path(&op_escaped, &held).unwrap_err().contains("network or device path"));
+    let plain = check(json!({"id": "1", "op": "import", "format": "step", "path": REMOTE}), &held);
+    assert!(plain.as_ref().unwrap_err().contains("network or device path"));
+    let key_escaped = format!(r#"{{"id":"1","op":"import","format":"step","path":{remote}}}"#);
+    assert_eq!(check_request_path(&key_escaped, &held), plain);
+    let both_escaped = format!(r#"{{"id":"1","op":"import","format":"step","path":{remote}}}"#);
+    assert_eq!(check_request_path(&both_escaped, &held), plain);
 }
 
 #[cfg(windows)]
