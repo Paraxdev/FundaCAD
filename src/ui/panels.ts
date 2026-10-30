@@ -1042,7 +1042,7 @@ export function createPanels(deps: PanelsDeps) {
     glyphs?.setProbePins(panels.stress?.pins ?? []);
   }
 
-  async function runStress() {
+  async function runStress(finer = false) {
     const d = panels.stress;
     if (!d || d.running) return;
     if (!geometry.stress) {
@@ -1069,13 +1069,16 @@ export function createPanels(deps: PanelsDeps) {
     panels.stressStarted();
     clearResult();
     refreshStressMarks();
-    const res = await geometry.stress(store.builtDocument(), req.body, req.options, (id) => {
+    const options = finer ? { ...req.options, finer: true } : req.options;
+    const res = await geometry.stress(store.builtDocument(), req.body, options, (id) => {
       if (seq === runSeq) panels.stressSent(id);
     });
     if (seq !== runSeq || !panels.stress) return;
     if (!res.ok) {
       const message = panelMessage(res.message);
-      panels.stressFinished(res.cancelled ? {} : { error: sentence(message) });
+      panels.stressFinished(
+        res.cancelled ? {} : { error: sentence(message), ...(res.finer ? { finer: res.finer } : {}) },
+      );
       setStatus(
         res.cancelled ? "Stress analysis cancelled" : `Stress analysis failed: ${message}`,
         res.cancelled ? "" : "error",
