@@ -5,7 +5,7 @@ use std::borrow::Cow;
 use std::sync::mpsc;
 use std::time::Duration;
 
-use fundacad_geom::import::{self, blobstore::BlobStore, dxf, gltf, mesh, ply, scan, svg, x3d};
+use fundacad_geom::import::{self, blobstore::BlobStore, dxf, gltf, mesh, off, ply, scan, svg, x3d};
 use serde_json::{json, Value};
 
 /// Runs `f` on its own thread and fails the test if it takes longer than `secs`.
@@ -398,6 +398,19 @@ fn an_svg_path_without_curves_reused_many_times_is_held_to_a_parse_budget() {
 fn an_obj_face_fanning_past_the_scan_cap_is_refused() {
     let text = format!("v 0 0 0\nf {}\n", "1 ".repeat(10_000_003));
     assert_eq!(mesh::obj_triangles(&text).err(), Some(scan::too_dense_for_a_scan(10_000_001)));
+}
+
+#[test]
+fn an_off_face_fanning_past_the_scan_cap_is_refused() {
+    let text = format!(
+        "OFF
+1 1 0
+0 0 0
+10000003 {}
+",
+        "0 ".repeat(10_000_003)
+    );
+    assert_eq!(off::read_off(&text).err(), Some(scan::too_dense_for_a_scan(10_000_001)));
 }
 
 fn ply_binary(vertices: usize, body: &[u8]) -> Vec<u8> {
