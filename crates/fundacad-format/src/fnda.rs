@@ -717,20 +717,14 @@ impl Default for ReadOptions {
     }
 }
 
-/// Open a file: the document as JSON, each geometry blob and cached mesh verified and published into its store, and
-/// with `carry_dir` the sections of a kind this version does not read.
-pub fn read_file(
-    path: &Path,
-    blob_dir: &Path,
-    mesh_dir: Option<&Path>,
-    carry_dir: Option<&Path>,
-) -> Result<Opened, String> {
-    read_file_with(path, blob_dir, mesh_dir, carry_dir, &ReadOptions::default())
+/// Open a file: the document as JSON, each geometry blob verified and published into its store, and with `carry_dir`
+/// the sections of a kind this version does not read. Cached meshes stay in the file, as nothing reads them back.
+pub fn read_file(path: &Path, blob_dir: &Path, carry_dir: Option<&Path>) -> Result<Opened, String> {
+    read_file_with(path, blob_dir, carry_dir, &ReadOptions::default())
 }
 
 enum Role {
     Geometry,
-    Mesh,
     Carried(usize),
 }
 
@@ -746,7 +740,6 @@ struct Job<'a> {
 pub fn read_file_with(
     path: &Path,
     blob_dir: &Path,
-    mesh_dir: Option<&Path>,
     carry_dir: Option<&Path>,
     o: &ReadOptions,
 ) -> Result<Opened, String> {
@@ -774,12 +767,6 @@ pub fn read_file_with(
             jobs.push(Job { entry: e, dest, role: Role::Geometry, rows: rows_of(e) });
         }
     }
-    if let Some(dir) = mesh_dir {
-        std::fs::create_dir_all(dir).map_err(io)?;
-        for e in entries.iter().filter(|e| e.kind == KIND_MESH && safe_key(&e.name)) {
-            jobs.push(Job { entry: e, dest: dir.join(format!("{}.bin", e.name)), role: Role::Mesh, rows: rows_of(e) });
-        }
-    }
     let mut carried: Vec<(Carried, bool)> = Vec::new();
     if let Some(dir) = carry_dir {
         std::fs::create_dir_all(dir).map_err(io)?;
@@ -795,7 +782,7 @@ pub fn read_file_with(
     }
 
     if !jobs.is_empty() {
-        for dir in [Some(blob_dir), mesh_dir, carry_dir].into_iter().flatten() {
+        for dir in [Some(blob_dir), carry_dir].into_iter().flatten() {
             sweep_stale_tmp(dir);
         }
     }
@@ -825,8 +812,7 @@ pub fn read_file_with(
         }
     }
     for (job, r) in jobs.iter().zip(results) {
-        // A cached mesh that fails costs a re-tessellation, and a section
-        // this version does not read never blocks the open.
+        // A section this version does not read never blocks the open.
         if let Some(Ok(r)) = r {
             report.repaired_shards += r.repaired_shards;
             if let Role::Carried(i) = job.role {
@@ -855,12 +841,6 @@ fn segment_rows(f: &File, entries: &[Entry], report: &mut RepairReport) -> Vec<s
 /// A blob already in a store is trusted by its name only when it is whole.
 fn published(dest: &Path, raw_len: u64) -> bool {
     std::fs::metadata(dest).is_ok_and(|m| m.is_file() && m.len() == raw_len)
-}
-
-fn safe_key(key: &str) -> bool {
-    !key.is_empty()
-        && !key.contains("..")
-        && key.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.')
 }
 
 static TMP_SERIAL: AtomicUsize = AtomicUsize::new(0);
@@ -1204,7 +1184,7 @@ mod tests {
         let (path, _) = future_file(&dir);
         set_codec(&path, 9, 7);
         let carry = dir.join("sections");
-        let opened = read_file(&path, &dir.join("blobs"), None, Some(&carry)).unwrap();
+        let opened = read_file(&path, &dir.join("blobs"), Some(&carry)).unwrap();
         assert!(same_json(&opened.document_json, r#"{"version":11,"features":[]}"#));
         assert!(opened.carried.is_empty());
         assert_eq!(std::fs::read_dir(&carry).unwrap().count(), 0);

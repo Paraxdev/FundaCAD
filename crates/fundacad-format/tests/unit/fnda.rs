@@ -46,7 +46,7 @@ fn round_trips_the_document_and_its_geometry() {
     let (path, doc, geometry) = sample(&dir);
     assert!(looks_like_fnda(&path));
     let blobs = dir.join("blobs");
-    let opened = read_file(&path, &blobs, None, None).unwrap();
+    let opened = read_file(&path, &blobs, None).unwrap();
     assert!(same_json(&opened.document_json, &doc));
     assert_eq!(opened.report, RepairReport::default());
     let blob = std::fs::read_dir(&blobs).unwrap().next().unwrap().unwrap().path();
@@ -88,7 +88,7 @@ fn repairs_damaged_shards_from_parity() {
     }
     std::fs::write(&path, &bytes).unwrap();
     let blobs = dir.join("blobs");
-    let opened = read_file(&path, &blobs, None, None).unwrap();
+    let opened = read_file(&path, &blobs, None).unwrap();
     assert!(same_json(&opened.document_json, &doc));
     assert!(opened.report.repaired_shards >= 3, "{:?}", opened.report);
     let blob = std::fs::read_dir(&blobs).unwrap().next().unwrap().unwrap().path();
@@ -104,11 +104,11 @@ fn survives_a_destroyed_header_through_the_trailer_and_backup_table() {
         *b = 0;
     }
     std::fs::write(&path, &bytes).unwrap();
-    let opened = read_file(&path, &dir.join("blobs"), None, None).unwrap();
+    let opened = read_file(&path, &dir.join("blobs"), None).unwrap();
     assert!(same_json(&opened.document_json, &doc));
     assert!(opened.report.used_backup_index);
     assert!(looks_like_fnda(&path), "known by its trailer");
-    let app = fundacad_format::container::open_document_full(&path, &dir.join("blobs_app"), None, None).unwrap();
+    let app = fundacad_format::container::open_document_full(&path, &dir.join("blobs_app"), None).unwrap();
     assert!(same_json(&app.document, &doc) && app.report.used_backup_index);
 }
 
@@ -140,7 +140,7 @@ fn refuses_damage_beyond_the_parity() {
         bytes[at] ^= 0xFF;
     }
     std::fs::write(&path, &bytes).unwrap();
-    let err = read_file(&path, &dir.join("blobs"), None, None).err().unwrap();
+    let err = read_file(&path, &dir.join("blobs"), None).err().unwrap();
     assert!(err.contains("damaged"), "{err}");
 }
 
@@ -194,7 +194,7 @@ fn a_section_of_an_unknown_kind_is_carried_and_written_back() {
     let dir = tmpdir("carry");
     let (path, payload) = future_file(&dir);
     let carry = dir.join("sections");
-    let opened = read_file(&path, &dir.join("blobs"), None, Some(&carry)).unwrap();
+    let opened = read_file(&path, &dir.join("blobs"), Some(&carry)).unwrap();
     let original = index_of(&path).into_iter().find(|e| e.kind == 9).unwrap();
     assert_eq!(opened.carried, vec![Carried { kind: 9, name: "futureIndex".into(), hash: hex(&original.raw_hash) }]);
     let kept = carry.join(format!("{}.bin", opened.carried[0].hash));
@@ -215,7 +215,7 @@ fn a_section_of_an_unknown_kind_is_carried_and_written_back() {
 fn nothing_is_carried_without_a_carry_folder() {
     let dir = tmpdir("nocarry");
     let (path, _) = future_file(&dir);
-    let opened = read_file(&path, &dir.join("blobs"), None, None).unwrap();
+    let opened = read_file(&path, &dir.join("blobs"), None).unwrap();
     assert!(opened.carried.is_empty());
     assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 2);
 }
@@ -266,7 +266,7 @@ fn a_big_section_round_trips_in_segments() {
     let geometry = big_blob(3 << 20);
     let (path, hash) = write_blob(&dir, "seg", &geometry, &opts(4));
     let blobs = dir.join("blobs");
-    read_file(&path, &blobs, None, None).unwrap();
+    read_file(&path, &blobs, None).unwrap();
     assert_eq!(std::fs::read(blobs.join(format!("{hash}.bbrep"))).unwrap(), geometry);
     assert_eq!(verify(&path).unwrap(), RepairReport::default());
 }
@@ -282,7 +282,7 @@ fn the_info_and_the_document_stay_one_stream_however_big() {
     write_with(&mut File::create(&path).unwrap(), &document_sections(&info, &cbor, &none, &none, &[]), &opts(4))
         .unwrap();
     assert!(index_of(&path).iter().all(|e| e.kind != KIND_SEGMENTS));
-    let opened = read_file(&path, &dir.join("blobs"), None, None).unwrap();
+    let opened = read_file(&path, &dir.join("blobs"), None).unwrap();
     assert!(opened.document_json.contains(&long));
 }
 
@@ -320,6 +320,36 @@ fn a_carried_index_is_never_written_twice() {
     let again = dir.join("again.fundab");
     write_with(&mut File::create(&again).unwrap(), &sections, &opts(2)).unwrap();
     assert_eq!(index_of(&again).iter().filter(|e| e.kind == KIND_SEGMENTS).count(), 1);
-    let opened = read_file(&again, &dir.join("blobs"), None, Some(&dir.join("carry"))).unwrap();
+    let opened = read_file(&again, &dir.join("blobs"), Some(&dir.join("carry"))).unwrap();
     assert!(opened.carried.is_empty());
+}
+
+#[test]
+fn an_open_writes_no_mesh_section_to_disk() {
+    let dir = tmpdir("nomesh");
+    let blob = dir.join("blob.bin");
+    std::fs::write(&blob, b"geometry").unwrap();
+    let hash = {
+        let mut h = Blake2b128::new();
+        h.update(b"geometry");
+        hex(&h.finalize())
+    };
+    let blobs = BTreeMap::from([(hash, blob)]);
+    let mesh = dir.join("mesh.bin");
+    std::fs::write(&mesh, b"MESH".repeat(100)).unwrap();
+    let meshes = BTreeMap::from([("abcd-t0".to_string(), mesh)]);
+    let info = json_to_cbor(r#"{"app":"test"}"#).unwrap();
+    let cbor = json_to_cbor(r#"{"version":9,"features":[]}"#).unwrap();
+    let path = dir.join("part.fundab");
+    write(&mut File::create(&path).unwrap(), &document_sections(&info, &cbor, &blobs, &meshes, &[])).unwrap();
+    assert!(index_of(&path).iter().any(|e| e.kind == KIND_MESH));
+    let store = dir.join("store");
+    let opened = read_file(&path, &store.join("blobs"), Some(&store.join("carry"))).unwrap();
+    assert!(opened.carried.is_empty());
+    let mut written: Vec<_> =
+        std::fs::read_dir(&store).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().to_string()).collect();
+    written.sort();
+    assert_eq!(written, ["blobs", "carry"]);
+    assert_eq!(std::fs::read_dir(store.join("carry")).unwrap().count(), 0);
+    let _ = std::fs::remove_dir_all(&dir);
 }

@@ -46,7 +46,7 @@ fn an_engine_blob_survives_the_container_and_rebuilds() {
     fundacad_lib::container::write_container(&dest, &doc, &map, &BTreeMap::new(), &[], "seam-test")
         .expect("write_container failed");
 
-    let (got_doc, manifest) = fundacad_lib::container::read_container(&dest, &blobs_b, None).expect("read_container");
+    let (got_doc, manifest) = fundacad_lib::container::read_container(&dest, &blobs_b).expect("read_container");
     assert_eq!(
         serde_json::from_str::<serde_json::Value>(&got_doc).unwrap(),
         serde_json::from_str::<serde_json::Value>(&doc).unwrap(),
@@ -116,9 +116,7 @@ fn a_section_this_version_does_not_read_is_saved_back_into_a_fundab_only() {
     let dir = tmpdir("carried");
     let stores = Stores { blobs: dir.join("blobs"), meshes: dir.join("meshes"), sections: dir.join("sections") };
     let payload: Vec<u8> = (0..4000u32).map(|i| (i % 249) as u8).collect();
-    let opened =
-        open_document_full(&future_fundab(&dir, &payload), &stores.blobs, Some(&stores.meshes), Some(&stores.sections))
-            .unwrap();
+    let opened = open_document_full(&future_fundab(&dir, &payload), &stores.blobs, Some(&stores.sections)).unwrap();
     assert_eq!(opened.carried.len(), 1);
 
     let bin = dir.join("saved.fundab");
@@ -128,15 +126,15 @@ fn a_section_this_version_does_not_read_is_saved_back_into_a_fundab_only() {
             .unwrap();
     }
     let elsewhere = dir.join("sections_b");
-    let again = open_document_full(&bin, &dir.join("blobs_b"), None, Some(&elsewhere)).unwrap();
+    let again = open_document_full(&bin, &dir.join("blobs_b"), Some(&elsewhere)).unwrap();
     assert_eq!(again.carried, opened.carried);
     assert_eq!(std::fs::read(elsewhere.join(format!("{}.bin", again.carried[0].hash))).unwrap(), payload);
-    assert!(open_document_full(&json, &dir.join("blobs_b"), None, Some(&elsewhere)).unwrap().carried.is_empty());
+    assert!(open_document_full(&json, &dir.join("blobs_b"), Some(&elsewhere)).unwrap().carried.is_empty());
 
     let mut forged = opened.carried[0].clone();
     forged.hash = "../../escape".into();
     save_document(&stores, &bin, &opened.document, vec![], vec![], vec![], vec![forged], "seam-test").unwrap();
-    assert!(open_document_full(&bin, &dir.join("blobs_b"), None, Some(&elsewhere)).unwrap().carried.is_empty());
+    assert!(open_document_full(&bin, &dir.join("blobs_b"), Some(&elsewhere)).unwrap().carried.is_empty());
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -158,7 +156,7 @@ fn geometry_a_hash_shaped_string_names_is_embedded_when_stored_and_skipped_when_
     save_document(&stores, &dest, &doc, vec![], vec![stored.clone(), absent.clone()], vec![], vec![], "seam-test")
         .unwrap();
     let fresh = dir.join("blobs_b");
-    open_document_full(&dest, &fresh, None, None).unwrap();
+    open_document_full(&dest, &fresh, None).unwrap();
     assert_eq!(std::fs::read(fresh.join(format!("{stored}.bbrep"))).unwrap(), data);
 
     let err = save_document(&stores, &dest, &doc, vec![absent], vec![], vec![], vec![], "seam-test").unwrap_err();
@@ -190,14 +188,14 @@ fn a_big_import_saved_in_segments_opens_the_same_every_way() {
     assert!(index.is_some(), "a 3 MiB blob is saved in segments");
 
     let full = dir.join("blobs_full");
-    let opened = open_document_full(&dest, &full, Some(&dir.join("meshes_b")), Some(&dir.join("sections_b"))).unwrap();
+    let opened = open_document_full(&dest, &full, Some(&dir.join("sections_b"))).unwrap();
     assert!(opened.carried.is_empty(), "the index is never carried");
     assert_eq!(opened.report, fnda::RepairReport::default());
     let checked = dir.join("blobs_checked");
-    let (got, _) = open_document_checked(&dest, &checked, None).unwrap();
+    let (got, _) = open_document_checked(&dest, &checked).unwrap();
     let dropped = dir.join("blobs_dropped");
     let from_bytes =
-        open_document_bytes(&std::fs::read(&dest).unwrap(), &dropped, None, Some(&dir.join("sections_c"))).unwrap();
+        open_document_bytes(&std::fs::read(&dest).unwrap(), &dropped, Some(&dir.join("sections_c"))).unwrap();
     assert!(from_bytes.was_container && from_bytes.carried.is_empty());
     for (store, text) in [(&full, &opened.document), (&checked, &got), (&dropped, &from_bytes.document)] {
         assert_eq!(
@@ -208,8 +206,7 @@ fn a_big_import_saved_in_segments_opens_the_same_every_way() {
     }
 
     let fixture_store = dir.join("blobs_fixture");
-    let fixture =
-        open_document_full(Path::new(&fixture("versions/segmented.fundab")), &fixture_store, None, None).unwrap();
+    let fixture = open_document_full(Path::new(&fixture("versions/segmented.fundab")), &fixture_store, None).unwrap();
     assert_eq!(serde_json::from_str::<serde_json::Value>(&fixture.document).unwrap()["version"], 10);
     assert_eq!(std::fs::read_dir(&fixture_store).unwrap().count(), 1);
     let _ = std::fs::remove_dir_all(&dir);

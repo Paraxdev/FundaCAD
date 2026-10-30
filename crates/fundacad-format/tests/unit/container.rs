@@ -67,22 +67,23 @@ fn roundtrip_preserves_bytes_exactly() {
     }
 
     let out = dir.join("blobs");
-    let meshes_out = dir.join("meshes");
-    let (got_doc, manifest) = read_container(&dest, &out, Some(&meshes_out)).unwrap();
+    let (got_doc, manifest) = read_container(&dest, &out).unwrap();
 
     assert_eq!(got_doc, doc, "document survives byte-for-byte");
     assert_eq!(manifest.container, CONTAINER_VERSION);
     assert_eq!(std::fs::read(out.join(format!("{ha}.bbrep"))).unwrap(), a);
     assert_eq!(std::fs::read(out.join(format!("{hb}.bbrep"))).unwrap(), b);
-    assert!(meshes_out.join("deadbeef-t0.bin").exists());
+    let mut beside: Vec<_> =
+        std::fs::read_dir(&dir).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().to_string()).collect();
+    beside.sort();
+    assert_eq!(beside, ["a.bin", "b.bin", "blobs", "m.bin", "part.funda"], "an open writes only the blob store");
 
-    // Meshes are a cache: the same container must open fine without them.
     let out2 = dir.join("blobs2");
-    let (got2, _) = read_container(&dest, &out2, None).unwrap();
+    let (got2, _) = read_container(&dest, &out2).unwrap();
     assert_eq!(got2, doc);
 
     // Re-reading is idempotent, not a duplicate-write, and leaves no litter.
-    read_container(&dest, &out, Some(&meshes_out)).unwrap();
+    read_container(&dest, &out).unwrap();
     let names: Vec<_> =
         std::fs::read_dir(&out).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().to_string()).collect();
     assert_eq!(names.len(), 2, "re-read did not duplicate: {names:?}");
@@ -123,7 +124,7 @@ fn tampered_geometry_is_refused_and_nothing_is_published() {
     }
 
     let out = dir.join("blobs");
-    let err = read_container(&tampered, &out, None).unwrap_err();
+    let err = read_container(&tampered, &out).unwrap_err();
     assert!(err.contains("does not match"), "unexpected message: {err}");
     assert!(!out.join(format!("{h}.bbrep")).exists(), "a mismatching blob must never be published");
     let _ = std::fs::remove_dir_all(&dir);
@@ -142,7 +143,7 @@ fn truncated_file_is_refused_not_crashed_on() {
     let trunc = dir.join("trunc.funda");
     std::fs::write(&trunc, &whole[..whole.len() / 2]).unwrap();
 
-    assert!(read_container(&trunc, &dir.join("blobs"), None).is_err());
+    assert!(read_container(&trunc, &dir.join("blobs")).is_err());
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -230,7 +231,7 @@ fn a_document_held_as_bytes_publishes_its_geometry_like_one_opened_by_path() {
         let dest = dir.join(name);
         write_document(&dest, &doc, &blobs, &BTreeMap::new(), &[], "test").unwrap();
         let store = dir.join(format!("store-{name}"));
-        let opened = open_document_bytes(&std::fs::read(&dest).unwrap(), &store, None, None).unwrap();
+        let opened = open_document_bytes(&std::fs::read(&dest).unwrap(), &store, None).unwrap();
         let got: serde_json::Value = serde_json::from_str(&opened.document).unwrap();
         let want: serde_json::Value = serde_json::from_str(&doc).unwrap();
         assert_eq!(got, want, "{name}: the document without its geometry map");
@@ -259,7 +260,7 @@ fn a_section_this_version_does_not_read_survives_a_save_as_fundab_only() {
     fundacad_format::fnda::write(&mut File::create(&src).unwrap(), &sections).unwrap();
 
     let carry = dir.join("sections");
-    let opened = open_document_full(&src, &dir.join("blobs"), None, Some(&carry)).unwrap();
+    let opened = open_document_full(&src, &dir.join("blobs"), Some(&carry)).unwrap();
     assert_eq!(opened.carried.len(), 1);
     let carried: Vec<_> = opened.carried.iter().map(|c| (c.clone(), carry.join(format!("{}.bin", c.hash)))).collect();
 
@@ -267,10 +268,10 @@ fn a_section_this_version_does_not_read_survives_a_save_as_fundab_only() {
     let json = dir.join("again.funda");
     write_document(&bin, &opened.document, &b, &m, &carried, "t").unwrap();
     write_document(&json, &opened.document, &b, &m, &carried, "t").unwrap();
-    let again = open_document_full(&bin, &dir.join("blobs"), None, Some(&dir.join("sections2"))).unwrap();
+    let again = open_document_full(&bin, &dir.join("blobs"), Some(&dir.join("sections2"))).unwrap();
     assert_eq!(again.carried, opened.carried);
     assert_eq!(std::fs::read(dir.join("sections2").join(format!("{}.bin", again.carried[0].hash))).unwrap(), payload);
-    assert!(open_document_full(&json, &dir.join("blobs"), None, Some(&carry)).unwrap().carried.is_empty());
+    assert!(open_document_full(&json, &dir.join("blobs"), Some(&carry)).unwrap().carried.is_empty());
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -301,7 +302,7 @@ fn a_manifest_hash_that_is_not_a_digest_refuses_the_open() {
     }
 
     let store = dir.join("blobs");
-    let err = read_container(&src, &store, None).unwrap_err();
+    let err = read_container(&src, &store).unwrap_err();
     assert!(err.contains("damaged"), "{err}");
     assert_eq!(std::fs::read(&outside).unwrap(), b"kept as it was");
     let mut names: Vec<_> = std::fs::read_dir(&dir)
