@@ -60,8 +60,7 @@ describe("describeStressChange", () => {
     ["own weight direction", (s) => (s.gravity.direction = "+X"), "Own weight", false],
     ["material", (s) => (s.material = "steel"), "Material", false],
     ["custom material value", (s) => (s.custom.E = 1234), "Material", true],
-    ["mesh size", (s) => (s.size = 2), "Mesh size", true],
-    ["refinement", (s) => (s.refine = "off"), "Refinement", false],
+    ["mesh detail", (s) => (s.refine = "off"), "Mesh detail", false],
   ];
   for (const [what, change, label, merge] of cases)
     it(`names a ${what} change "${label}"`, () => {

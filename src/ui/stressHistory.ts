@@ -37,7 +37,6 @@ export function setupKey(s: StressSetup): string {
     [s.gravity.on, s.gravity.direction],
     s.material,
     [s.custom.E, s.custom.nu, s.custom.yield, s.custom.density],
-    s.size,
     s.refine,
   ]);
 }
@@ -109,8 +108,7 @@ export function describeStressChange(before: StressSetup, after: StressSetup): S
   if (!same(before.gravity, after.gravity)) return { label: "Own weight", merge: false };
   if (before.material !== after.material) return { label: "Material", merge: false };
   if (!same(before.custom, after.custom)) return { label: "Material", merge: true };
-  if (before.size !== after.size) return { label: "Mesh size", merge: true };
-  if (before.refine !== after.refine) return { label: "Refinement", merge: false };
+  if (before.refine !== after.refine) return { label: "Mesh detail", merge: false };
   return { label: "Stress setup", merge: false };
 }
 

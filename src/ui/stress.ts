@@ -568,7 +568,7 @@ export function formatStressResult(
   }
   details.push({ k: "Mesh", v: meshRow(r.mesh) });
   const refinement = refinementRow(r.mesh);
-  if (refinement) details.push({ k: "Refinement", v: refinement });
+  if (refinement) details.push({ k: "Mesh detail", v: refinement });
   // Fine starts on a finer mesh, so on some parts its peak reads lower than Standard's (Wall bracket 14.0 against
   // 15.2 MPa, a deep round groove 5% lower) and on others higher.
   if (refine === "fine") details.push({ k: "Note", v: FINE_NOTE });
@@ -611,7 +611,7 @@ function refinementRow(m: StressReply["mesh"]): string | null {
   const passes = m.passes ?? [];
   const why = REFINE_STOPS[m.stop];
   if (passes.length < 2) {
-    if (m.stop === "off") return "Off";
+    if (m.stop === "off") return "Coarse";
     if (m.stop === "settled") return `Not needed, ${why}`;
     return why ? why[0]!.toUpperCase() + why.slice(1) : null;
   }

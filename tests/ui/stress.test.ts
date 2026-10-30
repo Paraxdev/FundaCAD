@@ -289,7 +289,7 @@ describe("formatStressResult", () => {
 
   it("says in Details whether refinement ran and why it stopped, and nothing for an older reply", () => {
     const refinement = (m: Partial<StressReply["mesh"]>) =>
-      formatStressResult({ ...reply, mesh: { ...reply.mesh, ...m } }, "mm").details.find((d) => d.k === "Refinement")
+      formatStressResult({ ...reply, mesh: { ...reply.mesh, ...m } }, "mm").details.find((d) => d.k === "Mesh detail")
         ?.v ?? null;
     const one = [{ elements: 4800, maxVonMises: 15.077 }];
     const two = [{ elements: 3100, maxVonMises: 28.46 }, ...one];
@@ -309,7 +309,7 @@ describe("formatStressResult", () => {
       unknownRefined: refinement({ passes: two, stop: "later" }),
     }).toEqual({
       older: null,
-      off: "Off",
+      off: "Coarse",
       settled: "Not needed, a finer mesh would barely move the peak",
       settledLater:
         "Refined once, the peak went from 28.46 to 15.077 MPa, then a finer mesh would barely move the peak",
@@ -323,7 +323,7 @@ describe("formatStressResult", () => {
       unknownRefined: "Refined once, the peak went from 28.46 to 15.077 MPa",
     });
     const rows = formatStressResult({ ...reply, mesh: { ...reply.mesh, passes: one, stop: "settled" } }, "mm").details;
-    expect(rows.slice(-2).map((r) => r.k)).toEqual(["Mesh", "Refinement"]);
+    expect(rows.slice(-2).map((r) => r.k)).toEqual(["Mesh", "Mesh detail"]);
   });
 
   it("tells a Fine result in Details that Standard can read a higher peak, and says nothing for Standard or Off", () => {
@@ -334,7 +334,7 @@ describe("formatStressResult", () => {
     expect(rows("off")).toEqual([]);
     expect(rows()).toEqual([]);
     const v = formatStressResult({ ...reply, mesh: { ...reply.mesh, stop: "settled" } }, "mm", ["fixed"], "fine");
-    expect(v.details.slice(-3).map((d) => d.k)).toEqual(["Mesh", "Refinement", "Note"]);
+    expect(v.details.slice(-3).map((d) => d.k)).toEqual(["Mesh", "Mesh detail", "Note"]);
   });
 
   it("lists each of three supports' reactions and the weight in the details, none of them in the key rows", () => {
