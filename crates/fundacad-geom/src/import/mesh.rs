@@ -313,6 +313,10 @@ pub fn obj_triangles(text: &str) -> Result<Triangles, String> {
                 let i: i64 = s.parse().map_err(|_| format!("invalid literal for int() with base 10: '{s}'"))?;
                 idx.push(if i > 0 { i - 1 } else { verts.len() as i64 + i });
             }
+            let fan = idx.len().saturating_sub(2) as u64;
+            if (tris.len() / 3) as u64 + fan > super::scan::MAX_SCAN_TRIANGLES {
+                return Err(super::scan::too_dense_for_a_scan((tris.len() / 3) as u64 + fan));
+            }
             for k in 1..idx.len().saturating_sub(1) {
                 tris.extend([idx[0], idx[k], idx[k + 1]]);
             }
