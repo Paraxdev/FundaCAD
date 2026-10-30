@@ -695,11 +695,18 @@ describe("Preferences sliders, hints and upload errors", () => {
     for (const ref of refs) expect(document.getElementById(ref)?.textContent?.trim(), ref).toBeTruthy();
   });
 
-  it("names every theme FundaCAD ships in the theme hint, and the vision themes in the Accessibility one", async () => {
+  it("offers every shipped theme in the picker, keeps its hint short, and names the vision themes in Accessibility", async () => {
     await open();
-    const text = (id: string) => $(`#${id}`).textContent!.replace(/\s+/g, " ");
-    const shipped = themes().filter((t) => !t.custom);
-    expect(shipped.filter((t) => !text("prefs-theme-hint").includes(t.label)).map((t) => t.label)).toEqual([]);
+    const text = (id: string) => $(`#${id}`).textContent!.replace(/\s+/g, " ").trim();
+    ($("#prefs-theme") as HTMLElement).click();
+    await flushPromises();
+    const offered = [...document.querySelectorAll('[role="option"]')].map((o) => o.textContent!.trim());
+    expect(
+      themes()
+        .filter((t) => !t.custom && !offered.includes(t.label))
+        .map((t) => t.label),
+    ).toEqual([]);
+    expect(text("prefs-theme-hint")).toBe("System follows your computer's light, dark and contrast settings.");
     for (const label of ["High Contrast Dark", "High Contrast Light", "Colour-Blind Safe", "FundaCAD Light"]) {
       expect(text("prefs-a11y-theme-hint")).toContain(label);
     }

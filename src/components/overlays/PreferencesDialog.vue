@@ -492,13 +492,9 @@ function onClassicCamera(on: boolean) {
                   @update:model-value="onTheme"
                 />
               </div>
-              <p id="prefs-theme-hint" class="pref-hint">
-                System follows your OS: FundaCAD Noir or FundaCAD Light, and High Contrast when the OS asks for more
-                contrast. Shipped with FundaCAD: FundaCAD Noir, FundaCAD Light, High Contrast Dark, High Contrast Light,
-                Colour-Blind Safe, Dracula, Solarized Light, Noir Blue, Noir Red and Noir Orange. Upload a JSON palette
-                to add your own, it is stored in this browser's preferences. Keys are colour tokens like
-                <code>--bg</code> and <code>--accent</code>, values are hex or rgb().
-              </p>
+              <p id="prefs-theme-hint" class="pref-hint"
+                >System follows your computer's light, dark and contrast settings.</p
+              >
               <div class="prefs-actions">
                 <input
                   ref="fileInput"
@@ -840,9 +836,9 @@ function onClassicCamera(on: boolean) {
                   >
                 </div>
                 <p id="prefs-a11y-theme-hint" class="pref-hint">
-                  Themes are picked under Appearance. High Contrast Dark and High Contrast Light hold text at 7:1 and
-                  every edge at 4.5:1, Colour-Blind Safe draws the axes, planes and gizmos in vermilion, yellow and sky
-                  blue, and FundaCAD Light and Solarized Light are light themes.
+                  Themes are picked under Appearance. High Contrast Dark and High Contrast Light make text and edges
+                  stand out most. Colour-Blind Safe draws the axes, planes and gizmos in colours that stay easy to tell
+                  apart. FundaCAD Light and Solarized Light are light themes.
                 </p>
               </div>
               <A11yContrastRows />
