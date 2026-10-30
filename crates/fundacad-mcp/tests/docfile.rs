@@ -479,3 +479,10 @@ fn a_funda_with_two_entries_named_document_json_is_refused() {
     let err = docfile::read_document(&path).map(|_| ()).unwrap_err();
     assert!(err.0.contains("is damaged"), "{err}");
 }
+
+#[test]
+fn the_text_limit_is_the_one_the_app_opens_with() {
+    let format = include_str!("../../fundacad-format/src/json_doc.rs");
+    assert!(format.contains("pub const MAX_DOC_TEXT: u64 = 1 << 30;"), "fundacad-format moved its limit");
+    assert_eq!(docfile::MAX_DOC_TEXT, 1 << 30);
+}
