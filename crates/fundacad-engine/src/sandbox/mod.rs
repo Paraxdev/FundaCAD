@@ -3,6 +3,8 @@
 
 use std::path::PathBuf;
 
+pub mod stage;
+
 /// `0`, `off`, `false` or `no` turns the sandbox off for debugging; `1`, `on`, `true` or `yes` turns it on for a tool.
 pub const ENV: &str = "FUNDACAD_ENGINE_SANDBOX";
 
