@@ -332,13 +332,67 @@ describe("wheel", () => {
     expect(pivots.size).toBe(1);
   });
 
-  it("a pinch zooms about the pointer whatever the device setting", () => {
-    setNavPrefs({ wheelDevice: "mouse" });
-    const { rig } = rigWithBox();
-    const s0 = rig.viewScale();
-    wheel(rig, { deltaY: -5, ctrlKey: true });
-    steady(rig);
-    expect(rig.viewScale()).toBeLessThan(s0);
+  describe("with Ctrl", () => {
+    const run = (init: Record<string, unknown>, prefs: Parameters<typeof setNavPrefs>[0] = {}) => {
+      setNavPrefs(prefs);
+      const { rig } = rigWithBox();
+      rig.setProjectionMode("ortho");
+      rig.navigator.reseatAndContain();
+      const s0 = rig.navigator.pose.scale;
+      const t0 = rig.getTarget();
+      wheel(rig, { ctrlKey: true, ...init });
+      steady(rig);
+      return { zoom: rig.navigator.pose.scale / s0, moved: rig.getTarget().sub(t0) };
+    };
+    const notch = { deltaY: 100, wheelDeltaY: -120 };
+
+    it("a mouse notch pans the view and does not zoom", () => {
+      const r = run(notch, { wheelDevice: "mouse" });
+      expect(r.zoom).toBeCloseTo(1, 9);
+      expect(r.moved.length()).toBeGreaterThan(1e-3);
+      expect(run(notch, { wheelDevice: "auto" }).moved.length()).toBeGreaterThan(1e-3);
+    });
+
+    it("pans down and up with the notch direction, as a touchpad scroll pans", () => {
+      const down = run(notch, { wheelDevice: "mouse" }).moved;
+      const up = run({ deltaY: -100, wheelDeltaY: 120 }, { wheelDevice: "mouse" }).moved;
+      expect(up.dot(down)).toBeLessThan(0);
+      const scroll = run({ deltaY: 100, ctrlKey: false }, { wheelDevice: "touchpad", touchpadScroll: "pan" }).moved;
+      expect(down.angleTo(scroll)).toBeLessThan(1e-6);
+    });
+
+    it("pans every notch on Mouse, and at an Interface size where the deltas are fractions", () => {
+      expect(run({ deltaY: 100 / 6, wheelDeltaY: -20 }, { wheelDevice: "mouse" }).zoom).toBeCloseTo(1, 9);
+      globalThis.devicePixelRatio = 1.1;
+      try {
+        const r = run({ deltaY: 90.90908893868948, wheelDeltaY: -109 }, { wheelDevice: "auto" });
+        expect(r.zoom).toBeCloseTo(1, 9);
+        expect(r.moved.length()).toBeGreaterThan(1e-3);
+      } finally {
+        globalThis.devicePixelRatio = 1;
+      }
+    });
+
+    it("a pinch zooms on Automatic and on Touchpad", () => {
+      expect(run({ deltaY: -5.5 }, { wheelDevice: "auto" }).zoom).toBeLessThan(1);
+      const r = run({ deltaY: -5.5 }, { wheelDevice: "touchpad" });
+      expect(r.zoom).toBeLessThan(1);
+      expect(r.moved.length()).toBeLessThan(1e-9);
+    });
+
+    it("a notch zooms when the setting says touchpad", () => {
+      expect(run(notch, { wheelDevice: "touchpad" }).zoom).toBeGreaterThan(1);
+    });
+
+    it("without Ctrl a mouse notch still zooms at an Interface size", () => {
+      globalThis.devicePixelRatio = 1.1;
+      try {
+        const r = run({ ctrlKey: false, deltaY: -90.90908893868948, wheelDeltaY: 109 }, { wheelDevice: "auto" });
+        expect(r.zoom).toBeLessThan(1);
+      } finally {
+        globalThis.devicePixelRatio = 1;
+      }
+    });
   });
 
   it("forcing a device overrules what the deltas look like", () => {

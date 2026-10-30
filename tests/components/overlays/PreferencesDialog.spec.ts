@@ -6,7 +6,13 @@ import PreferencesDialog from "../../../src/components/overlays/PreferencesDialo
 import { focusables } from "../../../src/components/ui/focusables";
 import { useDialogStore } from "../../../src/stores/dialogs";
 import { getUnit, setUnit } from "../../../src/ui/units";
-import { getHoverDwellMs, getNavPrefs, setHoverDwellMs, setNavPrefs } from "../../../src/ui/interactionPrefs";
+import {
+  getHoverDwellMs,
+  getNavPrefs,
+  noteDetectedWheel,
+  setHoverDwellMs,
+  setNavPrefs,
+} from "../../../src/ui/interactionPrefs";
 import { a11yPrefs, getVerbosity, resetA11yPrefs, setA11yPref } from "../../../src/ui/a11yPrefs";
 import { contrastSetting } from "../../../src/ui/contrastSetting";
 import { motionOn, setMotion } from "../../../src/ui/motion";
@@ -119,6 +125,24 @@ describe("Preferences choices", () => {
       expect(radios(g).map((r) => [r.tabIndex, r.getAttribute("aria-checked")])).toEqual(
         radios(g).map((r) => (r.getAttribute("aria-checked") === "true" ? [0, "true"] : [-1, "false"])),
       );
+  });
+
+  it("the Scrolling hint says what Automatic took the last scroll for, and updates while open", async () => {
+    await open();
+    await category("navigation");
+    const hint = () => $("#prefs-wheel-device-hint").textContent!.replace(/\s+/g, " ");
+    expect(hint()).not.toContain("took the last one");
+    expect(hint()).toContain("has not seen a scroll over the model yet");
+    noteDetectedWheel("touchpad");
+    await flushPromises();
+    expect(hint()).toContain("and took the last one for a touchpad");
+    noteDetectedWheel("mouse");
+    await flushPromises();
+    expect(hint()).toContain("and took the last one for a mouse");
+    setNavPrefs({ wheelDevice: "touchpad" });
+    await flushPromises();
+    expect(hint()).not.toContain("took the last one");
+    expect(hint()).not.toContain("not seen a scroll");
   });
 
   it("steps Tab and Shift+Tab once per group through the dialog, wrapping at both ends", async () => {

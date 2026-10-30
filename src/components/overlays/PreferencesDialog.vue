@@ -769,9 +769,12 @@ function onClassicCamera(on: boolean) {
                 />
               </div>
               <p id="prefs-wheel-device-hint" class="pref-hint">
-                A mouse wheel zooms; a touchpad's two fingers turn or move the view and a pinch zooms. Automatic tells
-                them apart each time you scroll<template v-if="nav.wheelDevice === 'auto' && detectedWheel"
+                A mouse wheel zooms and, with Ctrl held, pans up and down; a touchpad's two fingers turn or move the
+                view and a pinch zooms. Automatic tells them apart each time you scroll<template
+                  v-if="nav.wheelDevice === 'auto' && detectedWheel"
                   >, and took the last one for a {{ detectedWheel }}</template
+                ><template v-else-if="nav.wheelDevice === 'auto'"
+                  >, and has not seen a scroll over the model yet</template
                 >. Pick one if it guesses wrong.
               </p>
             </div>

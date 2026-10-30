@@ -457,7 +457,7 @@ export function bindInput(dom: HTMLElement, nav: Navigator, prefs: InputPrefs): 
       sendMenu(e.clientX, e.clientY);
   };
 
-  // A mouse wheel zooms; a touchpad's two finger scroll orbits or pans by the setting, Shift the other (wheelKind.ts).
+  // A mouse wheel zooms and, with Ctrl, pans; a touchpad's two finger scroll orbits or pans by the setting, Shift the other (wheelKind.ts).
   const kinds = new WheelClassifier();
   /** Safari's pinch arrives as gesture events rather than ctrl+wheel. */
   let gestureScale: number | null = null;
@@ -468,15 +468,17 @@ export function bindInput(dom: HTMLElement, nav: Navigator, prefs: InputPrefs): 
     const [x, y] = local(e);
     const dx = e.deltaX * unit;
     const dy = e.deltaY * unit;
-    const read = kinds.classify(e, clock());
+    // The webview zoom of Interface size, or a display scale, divides the deltas the engine sends.
+    const dpr = globalThis.devicePixelRatio || 1;
+    const read = kinds.classify(e, clock(), dpr === 1 ? [1] : [1, dpr]);
     if (read.fresh) prefs.detected?.(read.kind);
     const set = prefs.wheelDevice();
     const kind = set === "auto" ? read.kind : set;
-    // A trackpad pinch arrives as ctrl+wheel in small steps; a mouse wheel
-    // turned with Ctrl held arrives the same way but a whole notch at a time.
+    // A trackpad pinch arrives as ctrl+wheel; with a mouse wheel Ctrl pans the view up and down instead.
     if (e.ctrlKey) {
       if (gestureScale !== null) return; // Safari sends the pinch twice
-      nav.wheel(x, y, dy, Math.abs(dy) < 50);
+      if (kind === "mouse") nav.scrollPan(x, y, 0, dy);
+      else nav.wheel(x, y, dy, true);
       return;
     }
     if (kind === "mouse") {
