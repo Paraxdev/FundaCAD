@@ -18,7 +18,7 @@ finish-args:
   - --device=dri
   # A SpaceMouse is read over hidraw (src-tauri/src/spacemouse.rs), which only
   # --device=all exposes. The host still needs the udev rule from
-  # packaging/99-spacemouse.rules for permission to open it.
+  # packaging/70-spacemouse.rules for permission to open it.
   - --device=all
   # Plugin bundles are downloaded from the GitHub release.
   - --share=network
