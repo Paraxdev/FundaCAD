@@ -20,6 +20,8 @@ const KIND_GEOMETRY: u8 = 2;
 const KIND_SEGMENTS: u8 = 4;
 const MAX_TOTAL: u64 = 8 << 30;
 const MAX_DOC: u64 = 1 << 30;
+/// Below the app's budget: this reader holds each geometry body in memory, the app streams it to disk.
+const MAX_GEOMETRY: u64 = 2 << 30;
 
 #[derive(Debug, Clone)]
 pub struct DocumentFileError(pub String);
@@ -373,6 +375,12 @@ fn read_fnda(raw: &[u8]) -> Result<(Value, Vec<(String, Vec<u8>)>, Vec<String>),
         }
         let repeat = r.kind == KIND_GEOMETRY && read.iter().any(|o| o.kind == KIND_GEOMETRY && o.name == r.name);
         if (r.kind == KIND_DOCUMENT || r.kind == KIND_GEOMETRY) && !repeat {
+            if r.kind == KIND_GEOMETRY && r.rawlen as u64 > MAX_GEOMETRY {
+                return fail(format!(
+                    "this document has a geometry section larger than {} MiB and was refused",
+                    MAX_GEOMETRY >> 20
+                ));
+            }
             read.push(r);
         }
     }

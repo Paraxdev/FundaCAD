@@ -291,13 +291,20 @@ fn a_fundab_whose_sections_share_bytes_is_refused() {
 
 #[test]
 fn a_fundab_holds_one_byte_budget_across_its_sections() {
-    let blobs: Vec<(String, Vec<u8>)> = (0..2u8).map(|i| vec![i; 1000]).map(|b| (digest(&b), b)).collect();
+    let blobs: Vec<(String, Vec<u8>)> = (0..5u8).map(|i| vec![i; 1000]).map(|b| (digest(&b), b)).collect();
     let err = fundab_error("budget", &blobs, |rows| {
         for row in rows.iter_mut().filter(|r| r.0 == 2) {
-            row.4 = 5 << 30;
+            row.4 = 2 << 30;
         }
     });
     assert_eq!(err, "this document expands to more than 8 GiB and was refused");
+}
+
+#[test]
+fn a_fundab_geometry_section_past_2_gib_is_refused_before_it_is_read() {
+    let data = geometry();
+    let err = fundab_error("geomcap", &[(digest(&data), data)], |rows| rows[1].4 = (2 << 30) + 1);
+    assert_eq!(err, "this document has a geometry section larger than 2048 MiB and was refused");
 }
 
 #[test]
