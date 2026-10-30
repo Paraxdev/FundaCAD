@@ -177,12 +177,17 @@ pub fn read_ply(data: &[u8]) -> Result<MeshObject, String> {
     if faces as u64 > MAX_SCAN_TRIANGLES {
         return Err(too_dense_for_a_scan(faces as u64));
     }
-    let left = data.len() - body;
+    // A binary row takes at least its scalars and list counts, an ascii value one
+    // digit and a separator (the last one may lack it), so no count sizes more than the file holds.
+    let mut left = data.len() - body + usize::from(format == Format::Ascii);
     for e in &elements {
-        // Every row takes at least one byte (binary) or two (ascii), so a
-        // count past what is left is a lie and must not size an allocation.
-        if e.count > left {
-            return Err(bad(&format!("it claims {} {} elements, more than the file holds", e.count, e.name)));
+        let row: usize = match format {
+            Format::Ascii => 2 * e.props.len(),
+            _ => e.props.iter().map(|p| p.list.unwrap_or(p.kind).size()).sum(),
+        };
+        match e.count.checked_mul(row.max(1)).and_then(|need| left.checked_sub(need)) {
+            Some(rest) => left = rest,
+            None => return Err(bad(&format!("it claims {} {} elements, more than the file holds", e.count, e.name))),
         }
     }
     let mut r = Reader { data, at: body, format };

@@ -13,6 +13,7 @@ use super::heal2d::{self, Filled, Seg, Sub, P};
 
 const MAX_USE_DEPTH: usize = 16;
 const MAX_ELEMENTS: usize = 200_000;
+const MAX_PATH_BYTES: usize = 64 << 20;
 const SVG_NS: &str = "http://www.w3.org/2000/svg";
 const INKSCAPE_NS: &str = "http://www.inkscape.org/namespaces/inkscape";
 
@@ -192,6 +193,7 @@ struct Ctx<'a> {
     colours: HashSet<String>,
     curves: usize,
     elements: usize,
+    path_bytes: usize,
 }
 
 struct Group {
@@ -305,8 +307,23 @@ impl<'a> Ctx<'a> {
                 }
             }
             _ => {
+                if !style.visible {
+                    return Ok(());
+                }
+                let data = match tag {
+                    "path" => n.attribute("d"),
+                    "polygon" | "polyline" => n.attribute("points"),
+                    _ => None,
+                };
+                self.path_bytes += data.map_or(0, str::len);
+                if self.path_bytes > MAX_PATH_BYTES {
+                    return Err(format!(
+                        "this SVG reuses more than {} MiB of path data, simplify it before importing",
+                        MAX_PATH_BYTES >> 20
+                    ));
+                }
                 let Some((subs, area)) = shape(n, &m) else { return Ok(()) };
-                if !style.visible || subs.is_empty() {
+                if subs.is_empty() {
                     return Ok(());
                 }
                 self.curves += subs.iter().map(|s| s.segs.len()).sum::<usize>();
@@ -686,6 +703,7 @@ pub fn read_svg(data: &[u8]) -> Result<SvgRead, String> {
         colours: HashSet::new(),
         curves: 0,
         elements: 0,
+        path_bytes: 0,
     };
     let m = root_matrix(root);
     let base = Style { fill: Paint::Color("black".into()), evenodd: false, stroke: false, visible: true };

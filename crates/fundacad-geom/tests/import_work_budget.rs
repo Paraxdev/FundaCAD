@@ -5,7 +5,7 @@ use std::borrow::Cow;
 use std::sync::mpsc;
 use std::time::Duration;
 
-use fundacad_geom::import::{self, blobstore::BlobStore, dxf, gltf, x3d};
+use fundacad_geom::import::{self, blobstore::BlobStore, dxf, gltf, ply, svg, x3d};
 use serde_json::{json, Value};
 
 /// Runs `f` on its own thread and fails the test if it takes longer than `secs`.
@@ -302,4 +302,66 @@ fn dropped_bytes_are_staged_in_a_fresh_private_directory() {
     let _ = std::fs::remove_dir_all(&blobs);
     assert!(reply.get("error").is_none(), "{reply}");
     assert!(untouched, "a directory already in the temp dir was written into");
+}
+
+fn svg_reusing(path: &str, uses: usize) -> Vec<u8> {
+    let refs: String = (0..uses).map(|_| r##"<use href="#p"/>"##).collect();
+    format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="10mm" height="10mm" viewBox="0 0 10 10"><defs>{path}</defs><rect width="4" height="4"/>{refs}</svg>"#
+    )
+    .into_bytes()
+}
+
+#[test]
+fn a_hidden_svg_path_reused_many_times_is_not_parsed() {
+    let d: String = (0..200_000).map(|_| "l1 0 ").collect();
+    let data = svg_reusing(&format!(r#"<path id="p" visibility="hidden" d="M0 0 {d}"/>"#), 5000);
+    let read = within(30, move || svg::read_svg(&data).map(|r| r.sketches.len())).expect("the drawing reads");
+    assert_eq!(read, 1);
+}
+
+#[test]
+fn an_svg_path_without_curves_reused_many_times_is_held_to_a_parse_budget() {
+    let d: String = (0..200_000).map(|_| "M0 0 ").collect();
+    let data = svg_reusing(&format!(r#"<path id="p" d="{d}"/>"#), 5000);
+    let e = within(30, move || svg::read_svg(&data).err()).expect("the reuse is refused");
+    assert!(e.contains("path data"), "{e}");
+}
+
+fn ply_binary(vertices: usize, body: &[u8]) -> Vec<u8> {
+    let mut data = format!(
+        "ply
+format binary_little_endian 1.0
+element vertex {vertices}
+property float x
+property float y
+property float z
+element face 1
+property list uchar int vertex_indices
+end_header
+"
+    )
+    .into_bytes();
+    data.extend_from_slice(body);
+    data
+}
+
+fn ply_triangle_body() -> Vec<u8> {
+    let mut body = triangle_bin();
+    body.push(3);
+    body.extend([0i32, 1, 2].iter().flat_map(|i| i.to_le_bytes()));
+    body
+}
+
+#[test]
+fn a_binary_ply_triangle_still_imports() {
+    let mesh = ply::read_ply(&ply_binary(3, &ply_triangle_body())).expect("the triangle reads");
+    assert_eq!(mesh.idx, [0, 1, 2]);
+}
+
+#[test]
+fn a_ply_vertex_count_past_what_its_rows_can_hold_is_refused() {
+    let body = vec![0u8; 1 << 20];
+    let e = ply::read_ply(&ply_binary(1 << 20, &body)).err().expect("the count is refused");
+    assert!(e.contains("more than the file holds"), "{e}");
 }
