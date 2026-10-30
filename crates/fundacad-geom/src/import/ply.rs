@@ -185,7 +185,7 @@ pub fn read_ply(data: &[u8]) -> Result<MeshObject, String> {
             Format::Ascii => 2 * e.props.len(),
             _ => e.props.iter().map(|p| p.list.unwrap_or(p.kind).size()).sum(),
         };
-        match e.count.checked_mul(row.max(1)).and_then(|need| left.checked_sub(need)) {
+        match e.count.checked_mul(row).and_then(|need| left.checked_sub(need)) {
             Some(rest) => left = rest,
             None => return Err(bad(&format!("it claims {} {} elements, more than the file holds", e.count, e.name))),
         }
@@ -206,6 +206,10 @@ pub fn read_ply(data: &[u8]) -> Result<MeshObject, String> {
             .flatten();
         if is_vertex && xyz.is_none() {
             return Err(bad("its vertices have no x, y and z"));
+        }
+        // Its rows hold nothing to read, and the row check above did not bound its count.
+        if e.props.is_empty() {
+            continue;
         }
         let corners =
             e.props.iter().position(|p| p.list.is_some() && (p.name == "vertex_indices" || p.name == "vertex_index"));

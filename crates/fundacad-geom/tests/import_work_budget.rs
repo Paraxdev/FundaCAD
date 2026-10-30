@@ -428,3 +428,17 @@ fn an_ascii_ply_with_an_element_of_no_properties_still_imports() {
     );
     assert_eq!(ply::read_ply(data.as_bytes()).map(|m| m.idx), Ok(vec![0, 1, 2]));
 }
+
+#[test]
+fn a_binary_ply_with_a_large_element_of_no_properties_still_imports() {
+    let mut data = ply_binary(3, &ply_triangle_body());
+    let at = data.windows(10).position(|w| w == b"end_header").unwrap();
+    data.splice(
+        at..at,
+        b"element marker 1000000
+"
+        .iter()
+        .copied(),
+    );
+    assert_eq!(ply::read_ply(&data).map(|m| m.idx), Ok(vec![0, 1, 2]));
+}
