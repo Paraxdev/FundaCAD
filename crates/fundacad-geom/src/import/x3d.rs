@@ -21,6 +21,8 @@ struct Node {
     fields: HashMap<String, Val>,
 }
 
+const KID_SLOTS: [&str; 4] = ["children", "choice", "level", "xml"];
+
 impl Node {
     fn nums(&self, key: &str) -> Option<&[f64]> {
         match self.fields.get(key) {
@@ -41,19 +43,38 @@ impl Node {
         if let Some(Val::Node(n)) = self.fields.get(key) {
             return Some(n.clone());
         }
-        self.children().into_iter().find(|n| kinds.contains(&n.kind.as_str()))
+        self.kids().find(|n| kinds.contains(&n.kind.as_str())).cloned()
+    }
+
+    fn slot(&self, key: &str) -> &[Rc<Node>] {
+        match self.fields.get(key) {
+            Some(Val::Nodes(v)) => v,
+            Some(Val::Node(n)) => std::slice::from_ref(n),
+            _ => &[],
+        }
+    }
+
+    fn kids(&self) -> impl Iterator<Item = &Rc<Node>> {
+        KID_SLOTS.into_iter().flat_map(|key| self.slot(key))
+    }
+
+    fn kid_count(&self) -> usize {
+        KID_SLOTS.into_iter().map(|key| self.slot(key).len()).sum()
+    }
+
+    fn nth_kid(&self, mut i: usize) -> Option<&Rc<Node>> {
+        for key in KID_SLOTS {
+            let s = self.slot(key);
+            if i < s.len() {
+                return Some(&s[i]);
+            }
+            i -= s.len();
+        }
+        None
     }
 
     fn children(&self) -> Vec<Rc<Node>> {
-        let mut out = Vec::new();
-        for key in ["children", "choice", "level", "xml"] {
-            match self.fields.get(key) {
-                Some(Val::Nodes(v)) => out.extend(v.iter().cloned()),
-                Some(Val::Node(n)) => out.push(n.clone()),
-                _ => {}
-            }
-        }
-        out
+        self.kids().cloned().collect()
     }
 }
 
@@ -467,31 +488,30 @@ impl Walk<'_> {
         if depth > 256 {
             return Ok(());
         }
-        self.budget.visits =
-            self.budget.visits.checked_sub(1).ok_or("this scene reuses its nodes too many times to import")?;
+        self.take_visits(1)?;
         match n.kind.as_str() {
             "Transform" => {
                 let m = then(m, &local(n));
-                for c in n.children() {
-                    self.node(&c, &m, depth + 1)?;
+                for c in n.kids() {
+                    self.node(c, &m, depth + 1)?;
                 }
             }
             "Group" | "StaticGroup" | "Anchor" | "Collision" | "Billboard" | "Scene" | "CADAssembly" | "CADLayer"
             | "CADPart" | "CADFace" => {
-                for c in n.children() {
-                    self.node(&c, m, depth + 1)?;
+                for c in n.kids() {
+                    self.node(c, m, depth + 1)?;
                 }
             }
             "Switch" => {
                 let which = n.nums("whichChoice").and_then(|v| v.first().copied()).unwrap_or(-1.0);
                 if which >= 0.0 {
-                    if let Some(c) = n.children().get(which as usize) {
+                    if let Some(c) = n.nth_kid(which as usize) {
                         self.node(c, m, depth + 1)?;
                     }
                 }
             }
             "LOD" => {
-                if let Some(c) = n.children().first() {
+                if let Some(c) = n.kids().next() {
                     self.node(c, m, depth + 1)?;
                 }
             }
@@ -504,10 +524,25 @@ impl Walk<'_> {
         Ok(())
     }
 
+    fn take_visits(&mut self, n: usize) -> Result<(), String> {
+        self.budget.visits =
+            self.budget.visits.checked_sub(n).ok_or("this scene reuses its nodes too many times to import")?;
+        Ok(())
+    }
+
+    /// `n.child`, charged for the XML children it scans, since a reused node rescans them each visit.
+    fn child(&mut self, n: &Node, key: &str, kinds: &[&str]) -> Result<Option<Rc<Node>>, String> {
+        self.take_visits(n.kid_count())?;
+        Ok(n.child(key, kinds))
+    }
+
     fn shape(&mut self, n: &Node, m: &Affine) -> Result<(), String> {
-        let color = n
-            .child("appearance", &["Appearance"])
-            .and_then(|a| a.child("material", &["Material"]))
+        let appearance = self.child(n, "appearance", &["Appearance"])?;
+        let material = match appearance {
+            Some(a) => self.child(&a, "material", &["Material"])?,
+            None => None,
+        };
+        let color = material
             .and_then(|mat| mat.nums("diffuseColor").filter(|v| v.len() >= 3).map(|v| unit_color([v[0], v[1], v[2]])));
         const GEOMETRY: [&str; 4] = ["IndexedFaceSet", "IndexedTriangleSet", "TriangleSet", "Box"];
         let all = [
@@ -522,7 +557,7 @@ impl Walk<'_> {
             "ElevationGrid",
             "Text",
         ];
-        let Some(g) = n.child("geometry", &all) else { return Ok(()) };
+        let Some(g) = self.child(n, "geometry", &all)? else { return Ok(()) };
         if !GEOMETRY.contains(&g.kind.as_str()) {
             *self.skipped.entry(g.kind.clone()).or_insert(0) += 1;
             return Ok(());
@@ -545,7 +580,7 @@ impl Walk<'_> {
                 (p, t.to_vec())
             }
             kind => {
-                let coord = g.child("coord", &["Coordinate", "CoordinateDouble"]);
+                let coord = self.child(&g, "coord", &["Coordinate", "CoordinateDouble"])?;
                 let point = coord.as_ref().and_then(|c| c.nums("point")).unwrap_or(&[]);
                 let index = g.nums(if kind == "IndexedFaceSet" { "coordIndex" } else { "index" }).unwrap_or(&[]);
                 self.budget.take_values(point.len().saturating_add(index.len()))?;

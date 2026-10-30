@@ -165,6 +165,29 @@ fn x3d_shapes_reused_past_the_triangle_budget_are_refused() {
     assert!(e.contains("triangles"), "{e}");
 }
 
+/// `n` reuses of an empty group, as X3D children.
+fn empty_uses(n: usize) -> String {
+    "<Group USE=\"e\"/>".repeat(n)
+}
+
+#[test]
+fn an_x3d_switch_reused_many_times_walks_only_its_chosen_child() {
+    let leaf =
+        format!("<Switch whichChoice=\"50001\"><Group DEF=\"e\"/>{}<Shape><Box/></Shape></Switch>", empty_uses(50_000));
+    let xml = x3d_doubling(&leaf, 16);
+    let (objects, _) = within(30, move || x3d::read_x3d(&xml, Some(1.0))).unwrap();
+    let tris: usize = objects.iter().map(|o| o.idx.len() / 3).sum();
+    assert_eq!(tris, 12 * ((1 << 17) - 1));
+}
+
+#[test]
+fn an_x3d_shape_with_many_children_reused_many_times_is_held_to_a_visit_budget() {
+    let leaf = format!("<Group DEF=\"e\"/><Shape>{}<Box/></Shape>", empty_uses(50_000));
+    let xml = x3d_doubling(&leaf, 16);
+    let out = within(30, move || x3d::read_x3d(&xml, Some(1.0)).err());
+    assert_eq!(out.as_deref(), Some("this scene reuses its nodes too many times to import"));
+}
+
 /// A one part 3MF zip written by hand, so the sizes it declares can differ from the data.
 fn threemf_zip(deflated: &[u8], crc: u32, declared: u32) -> Vec<u8> {
     let name = b"3D/3dmodel.model";
