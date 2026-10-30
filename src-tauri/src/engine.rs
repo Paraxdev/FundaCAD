@@ -2,12 +2,13 @@
 //! A job that ignores Cancel past a grace period is stopped by restarting the worker, which exits by itself when stdin
 //! closes.
 
+use fundacad_engine::sandbox::stage::{stage, Staged};
 use fundacad_protocol::stdio::{read_message, write_message, Message};
 use fundacad_protocol::{envelope, message_id};
 use serde_json::Value;
 use std::collections::{HashMap, VecDeque};
 use std::io::{BufRead, BufReader, BufWriter, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -41,7 +42,11 @@ struct Inner {
     /// The generation last ended on purpose by a cancel, which is no crash.
     cancel_killed: AtomicU64,
     /// Where `session.json` goes, None without an app data directory.
-    session_dir: Option<std::path::PathBuf>,
+    session_dir: Option<PathBuf>,
+    /// Exports are written here by the engine and copied into place by the shell, None without an app cache directory.
+    export_root: Option<PathBuf>,
+    /// Export requests sent and not yet answered, by id, to their stage folder.
+    staged: Mutex<HashMap<String, (PathBuf, Staged)>>,
     /// What the crash report quotes: the worker's last stderr lines and the
     /// requests it was sent last.
     stderr_tail: Arc<Mutex<VecDeque<String>>>,
@@ -161,6 +166,11 @@ fn live_door(engine: &Arc<fundacad_engine::Engine>) {
 
 impl Engine {
     pub fn start(app: &AppHandle) -> Engine {
+        let export_root = app.path().app_cache_dir().ok().map(|dir| dir.join("engine-tmp").join("exports"));
+        if let Some(root) = &export_root {
+            // Left by an earlier run; the app runs once, so no other engine is writing there.
+            let _ = std::fs::remove_dir_all(root);
+        }
         let inner = Arc::new(Inner {
             app: app.clone(),
             worker: Mutex::new(None),
@@ -172,6 +182,8 @@ impl Engine {
             stopping: AtomicBool::new(false),
             cancel_killed: AtomicU64::new(0),
             session_dir: app.path().app_data_dir().ok(),
+            export_root,
+            staged: Mutex::new(HashMap::new()),
             stderr_tail: Arc::new(Mutex::new(VecDeque::new())),
             recent: Mutex::new(VecDeque::new()),
         });
@@ -361,7 +373,9 @@ fn relay(inner: &Arc<Inner>, stdout: std::process::ChildStdout) -> String {
         match read_message(&mut reader) {
             Ok(Some(msg)) => {
                 settle(inner, &msg);
-                deliver(inner, &msg);
+                if let Some(msg) = unstage(inner, msg) {
+                    deliver(inner, &msg);
+                }
             }
             Ok(None) => return "its output closed".into(),
             Err(e) => return format!("unreadable output ({e})"),
@@ -428,11 +442,61 @@ fn deliver(inner: &Inner, msg: &Message) {
     }
 }
 
+/// An export's final reply waits until the shell copied its files into place, on its own thread so a big file holds
+/// up no other reply. `None` when that thread delivers it.
+fn unstage(inner: &Arc<Inner>, msg: Message) -> Option<Message> {
+    if lock(&inner.staged).is_empty() {
+        return Some(msg);
+    }
+    let Some(Value::String(id)) = message_id(&msg) else { return Some(msg) };
+    let terminal = match &msg {
+        Message::Text(t) => text_is_terminal(t),
+        Message::Binary(b) => binary_is_final(b),
+    };
+    if !terminal {
+        return Some(msg);
+    }
+    let Some((dir, staged)) = lock(&inner.staged).remove(&id) else { return Some(msg) };
+    let Message::Text(reply) = msg else {
+        let _ = std::fs::remove_dir_all(&dir);
+        return Some(msg);
+    };
+    let inner = inner.clone();
+    std::thread::spawn(move || {
+        let reply = staged.finish(&reply);
+        let _ = std::fs::remove_dir_all(&dir);
+        deliver(&inner, &Message::Text(reply));
+    });
+    None
+}
+
+/// Points an export into a fresh stage folder; other requests go out as they are.
+fn stage_export(inner: &Inner, id: Option<&str>, text: String) -> Result<String, String> {
+    static STAGES: AtomicU64 = AtomicU64::new(0);
+    let Some(root) = &inner.export_root else { return Ok(text) };
+    let dir = root.join(STAGES.fetch_add(1, Ordering::Relaxed).to_string());
+    let Some(staged) = stage(&text, &dir)? else { return Ok(text) };
+    let id = id.ok_or("an export request needs an id")?;
+    std::fs::create_dir_all(&dir).map_err(|e| format!("could not prepare the export folder: {e}"))?;
+    let request = staged.request.clone();
+    lock(&inner.staged).insert(id.to_string(), (dir, staged));
+    Ok(request)
+}
+
+fn drop_stage(inner: &Inner, id: &str) {
+    if let Some((dir, _)) = lock(&inner.staged).remove(id) {
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}
+
 fn set_up(inner: &Inner, up: bool) {
     if inner.up.swap(up, Ordering::SeqCst) != up {
         if !up {
             lock(&inner.in_flight).clear();
             lock(&inner.cancels).clear();
+            for (_, (dir, _)) in lock(&inner.staged).drain() {
+                let _ = std::fs::remove_dir_all(dir);
+            }
         }
         let _ = inner.app.emit("engine:state", up);
     }
@@ -520,6 +584,11 @@ pub fn engine_send(
     let text = String::from_utf8(bytes.clone()).map_err(|e| e.to_string())?;
     check_request_path(&text, &held)?;
     let Head { id, op, target, soft, doc, all } = head(&text);
+    // A request head() cannot read is staged too, the way the worker would read it.
+    let text = match op.as_deref() {
+        Some("export" | "exportWith") | None => stage_export(&state.0, id.as_deref(), text)?,
+        Some(_) => text,
+    };
     remember(
         &state.0.recent,
         format!(
@@ -553,6 +622,7 @@ pub fn engine_send(
     send_to_worker(&state.0, &Message::Text(text)).inspect_err(|_| {
         lock(&state.0.in_flight).remove(&id);
         lock(&state.0.cancels).remove(&id);
+        drop_stage(&state.0, &id);
     })
 }
 

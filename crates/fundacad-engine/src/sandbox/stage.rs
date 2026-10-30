@@ -1,9 +1,12 @@
 //! Exports are written into the engine's own folder first, then the shell copies them where the user saves, so the
-//! engine never needs to write the user's folders. Only the pure part lives here: the shell does the copying.
+//! engine never needs to write the user's folders. The shell stages the request and finishes the reply with this code.
 
-use fundacad_protocol::pyjson::truthy;
+use fundacad_protocol::envelope;
+use fundacad_protocol::pyjson::{self, truthy};
 use serde_json::{Map, Value};
+use std::fs::File;
 use std::path::{Path, PathBuf, MAIN_SEPARATOR};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 /// An export request pointed into a stage folder, and what it takes to bring its reply back to the user's path.
 #[derive(Debug)]
@@ -106,6 +109,81 @@ impl Staged {
         reply.insert("paths".into(), Value::Array(named));
         Ok(Some(Delivery::Folder { folder: PathBuf::from(real), files }))
     }
+
+    /// The engine's final reply for this export, rewritten to name the user's files once they are copied there. A
+    /// copy that fails turns it into an error reply.
+    pub fn finish(&self, reply: &str) -> String {
+        let Ok(mut msg) = serde_json::from_str::<Map<String, Value>>(reply) else { return reply.to_string() };
+        let id = msg.get("id").cloned().unwrap_or(Value::Null);
+        let settled = if msg.get("ok") == Some(&Value::Bool(true)) {
+            match msg.get_mut("result") {
+                Some(Value::Object(result)) => self.settle(result),
+                _ => Ok(None),
+            }
+        } else {
+            self.settle(&mut msg)
+        };
+        match settled.and_then(|d| d.map_or(Ok(()), |d| d.deliver())) {
+            Ok(()) => pyjson::to_string(&Value::Object(msg)),
+            Err(e) => envelope::err(&id, &e, None),
+        }
+    }
+}
+
+impl Delivery {
+    /// Copies the staged files to the user's paths.
+    pub fn deliver(&self) -> Result<(), String> {
+        match self {
+            Delivery::File { from, to } => copy_into(from, to),
+            Delivery::Folder { folder, files } => {
+                if let Err(e) = std::fs::create_dir(folder) {
+                    let shown = folder.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                    return Err(if e.kind() == std::io::ErrorKind::AlreadyExists {
+                        format!(
+                            "{shown} already exists, the separate-bodies export writes a folder of that name. \
+                             Choose another name, or move the existing folder."
+                        )
+                    } else {
+                        format!("could not create {}: {e}", folder.display())
+                    });
+                }
+                files.iter().try_for_each(|(from, to)| copy_into(from, to))
+            }
+        }
+    }
+}
+
+/// Writes a part file next to `to` and renames it over, so a failed copy leaves the user's old file as it was.
+fn copy_into(from: &Path, to: &Path) -> Result<(), String> {
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    let failed = |e: &dyn std::fmt::Display| format!("could not write {}: {e}", to.display());
+    let mut source = open_no_link(from).map_err(|e| failed(&e))?;
+    if !source.metadata().map_err(|e| failed(&e))?.is_file() {
+        return Err(outside(&from.display()));
+    }
+    let name = to.file_name().ok_or_else(|| failed(&"the path names no file"))?.to_string_lossy();
+    let n = NEXT.fetch_add(1, Ordering::Relaxed);
+    let part = to.with_file_name(format!(".{name}.{}.{n}.part", std::process::id()));
+    let copied = File::create(&part)
+        .and_then(|mut out| std::io::copy(&mut source, &mut out))
+        .and_then(|_| std::fs::rename(&part, to));
+    if copied.is_err() {
+        let _ = std::fs::remove_file(&part);
+    }
+    copied.map_err(|e| failed(&e))
+}
+
+/// A link the engine planted in its folder opens as itself, never as the file it points to, so the shell cannot be
+/// made to copy another file out.
+fn open_no_link(path: &Path) -> std::io::Result<File> {
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::custom_flags(&mut options, libc::O_NOFOLLOW);
+    // FILE_FLAG_OPEN_REPARSE_POINT
+    #[cfg(windows)]
+    std::os::windows::fs::OpenOptionsExt::custom_flags(&mut options, 0x0020_0000);
+    options.open(path)
 }
 
 fn outside(path: &dyn std::fmt::Display) -> String {
