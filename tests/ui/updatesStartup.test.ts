@@ -13,18 +13,24 @@ const h = vi.hoisted(() => ({
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: async (cmd: string) => {
     if (cmd === "updates_supported") return h.supported;
+    if (cmd === "update_build_channel") return null;
+    if (cmd === "update_check") {
+      const update = { rid: 1, currentVersion: "1.0.400", version: "1.0.413", rawJson: {}, downgrade: false };
+      return { update: h.found ? update : null, stable: false };
+    }
     h.events.push(cmd);
   },
 }));
 vi.mock("@tauri-apps/plugin-updater", () => ({
-  check: async () =>
-    h.found
-      ? {
-          version: "1.0.413",
-          download: async () => void h.events.push("download"),
-          install: async () => void h.events.push("install"),
-        }
-      : null,
+  Update: class {
+    version = "1.0.413";
+    async download() {
+      h.events.push("download");
+    }
+    async install() {
+      h.events.push("install");
+    }
+  },
 }));
 vi.mock("../../src/ui/toast", () => ({
   toast: (message: string, opts: { kind?: string; action?: Action } = {}) =>

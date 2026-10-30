@@ -23,6 +23,7 @@ pub mod settings_files;
 mod spacemouse;
 mod system_info;
 pub mod thumbs;
+pub mod update_channel;
 pub mod webkit;
 
 /// Kept in step with src/io/documentExt.ts.
@@ -368,6 +369,8 @@ pub fn run() {
         engine::engine_send,
         restart_for_update,
         updates_supported,
+        update_channel::update_check,
+        update_channel::update_build_channel,
         frontend_ready,
         frontend_stalled,
         log_tail,

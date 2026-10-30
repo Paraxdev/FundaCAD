@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 
 import { sourceforgeUrl } from "../../src/app/channel";
+import { releasePageUrl } from "../../src/ui/updateChannel";
 import capabilityRaw from "../../src-tauri/capabilities/default.json?raw";
 
 type Permission = string | { identifier: string; allow?: { url: string }[] };
@@ -15,6 +16,10 @@ const allowed = (url: string) => scopes.some((s) => s.endsWith("/*") && url.star
 describe("the opener scope", () => {
   it.each(["beta", "development", "stable", "other"])("allows the SourceForge folder of the %s channel", (tag) => {
     expect([sourceforgeUrl(tag), allowed(sourceforgeUrl(tag))]).toEqual([sourceforgeUrl(tag), true]);
+  });
+
+  it.each(["stable", "beta", "development"] as const)("allows the release page of the %s channel", (ch) => {
+    expect(allowed(releasePageUrl(ch))).toBe(true);
   });
 
   it("does not allow another SourceForge project", () => {
