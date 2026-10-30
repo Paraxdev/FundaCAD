@@ -21,6 +21,7 @@ import {
   cssHex,
   faceCountLabel,
   sameTarget,
+  type StressFaceSet,
   type StressSetup,
   type StressTarget,
 } from "../../ui/stress";
@@ -65,6 +66,10 @@ function supportHint(t: StressSupportType): string {
   return SUPPORT_KINDS.find((k) => k.value === t)?.hint ?? "";
 }
 
+function holdsPlaces(row: { faces: StressFaceSet; spots?: readonly unknown[] }): boolean {
+  return row.faces.selectors.length > 0 || !!row.spots?.length;
+}
+
 function placing(target: StressTarget, as: "face" | "spot"): boolean {
   return sameTarget(panels.stress?.placing ?? null, target) && panels.stress?.placeAs === as;
 }
@@ -101,7 +106,6 @@ function placing(target: StressTarget, as: "face" | "spot"): boolean {
           @update:model-value="engine.ui.panels.setStressSupportType(x.id, $event)"
         />
         <IconButton
-          v-if="setup.supports.length > 1"
           class="stress-remove-support"
           icon="close"
           :tip="`Remove support ${i + 1}`"
@@ -136,6 +140,15 @@ function placing(target: StressTarget, as: "face" | "spot"): boolean {
             tip="Use the faces selected in the view"
             @click="engine.ui.panels.setStressFacesFromSelection({ support: x.id })"
             >Use selected faces</Button
+          >
+          <Button
+            size="sm"
+            class="stress-clear-support"
+            :tip="`Clear the faces and spots of support ${i + 1}`"
+            :disabled="!holdsPlaces(x)"
+            disabled-reason="Nothing placed yet"
+            @click="engine.ui.panels.clearStressPlaces({ support: x.id })"
+            >Clear</Button
           >
         </span>
       </div>
@@ -209,6 +222,15 @@ function placing(target: StressTarget, as: "face" | "spot"): boolean {
             tip="Use the faces selected in the view"
             @click="engine.ui.panels.setStressFacesFromSelection({ load: l.id })"
             >Use selected faces</Button
+          >
+          <Button
+            size="sm"
+            class="stress-clear-load"
+            :tip="`Clear the faces and spots of load ${i + 1}`"
+            :disabled="!holdsPlaces(l)"
+            disabled-reason="Nothing placed yet"
+            @click="engine.ui.panels.clearStressPlaces({ load: l.id })"
+            >Clear</Button
           >
         </span>
       </div>
