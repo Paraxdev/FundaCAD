@@ -28,6 +28,9 @@ pub const MAX_CONNS_PER_IP: usize = 8;
 /// Handshakes not yet past the Gate have their own cap, so they never take an authorized client's slot.
 pub const MAX_PENDING_HANDSHAKES: usize = 16;
 
+/// Refused sockets still waiting for their client to hang up; past this one is hung up at once.
+pub const MAX_LINGERING_CLOSES: usize = 16;
+
 /// A foreign Origin is refused even with the token; no Origin (a non-browser
 /// client) is allowed.
 pub const ALLOWED_ORIGINS: [&str; 5] = [
@@ -147,6 +150,7 @@ struct Shared {
     gate: Gate,
     conns: Mutex<HashMap<IpAddr, usize>>,
     pending: AtomicUsize,
+    lingering: AtomicUsize,
     max_message: usize,
     handshake_timeout: Duration,
     max_conns_per_ip: usize,
@@ -187,6 +191,7 @@ impl Server {
                 gate,
                 conns: Mutex::default(),
                 pending: AtomicUsize::new(0),
+                lingering: AtomicUsize::new(0),
                 max_message: MAX_FRAME,
                 handshake_timeout: HANDSHAKE_TIMEOUT,
                 max_conns_per_ip: MAX_CONNS_PER_IP,
@@ -204,6 +209,7 @@ impl Server {
                 gate,
                 conns: Mutex::default(),
                 pending: AtomicUsize::new(0),
+                lingering: AtomicUsize::new(0),
                 max_message: MAX_FRAME,
                 handshake_timeout: HANDSHAKE_TIMEOUT,
                 max_conns_per_ip: MAX_CONNS_PER_IP,
@@ -300,20 +306,20 @@ impl Drop for Slot<'_> {
     }
 }
 
-struct PendingHandshake<'a>(&'a AtomicUsize);
+struct Counted<'a>(&'a AtomicUsize);
 
-impl Drop for PendingHandshake<'_> {
+impl Drop for Counted<'_> {
     fn drop(&mut self) {
         self.0.fetch_sub(1, Ordering::SeqCst);
     }
 }
 
-fn take_pending(shared: &Shared) -> Option<PendingHandshake<'_>> {
-    if shared.pending.fetch_add(1, Ordering::SeqCst) >= MAX_PENDING_HANDSHAKES {
-        shared.pending.fetch_sub(1, Ordering::SeqCst);
+fn take_count(n: &AtomicUsize, cap: usize) -> Option<Counted<'_>> {
+    if n.fetch_add(1, Ordering::SeqCst) >= cap {
+        n.fetch_sub(1, Ordering::SeqCst);
         return None;
     }
-    Some(PendingHandshake(&shared.pending))
+    Some(Counted(n))
 }
 
 fn take_slot<'a>(shared: &'a Shared, ip: IpAddr) -> Option<Slot<'a>> {
@@ -389,7 +395,7 @@ fn to_io(e: WsError) -> io::Error {
 // The handshake callback's error type is tungstenite's, not ours to shrink.
 #[allow(clippy::result_large_err)]
 fn connection(stream: TcpStream, shared: &Shared) {
-    let Some(pending) = take_pending(shared) else { return };
+    let Some(pending) = take_count(&shared.pending, MAX_PENDING_HANDSHAKES) else { return };
     let _ = stream.set_nodelay(true);
     let peer = stream.peer_addr().ok().map(|a| a.ip());
     let stream = Conn { stream, deadline: Some(Instant::now() + shared.handshake_timeout) };
@@ -411,12 +417,12 @@ fn connection(stream: TcpStream, shared: &Shared) {
     let (query, origin) = seen.lock().unwrap_or_else(|p| p.into_inner()).clone();
     drop(pending);
     if !shared.gate.authorized(query.as_deref(), origin.as_deref()) {
-        close_and_linger(&mut ws, CloseCode::Policy, "unauthorized");
+        refuse(&mut ws, shared, "unauthorized");
         return;
     }
     let _slot = match peer.map(|ip| take_slot(shared, ip)) {
         Some(None) => {
-            close_and_linger(&mut ws, CloseCode::Policy, "too many connections");
+            refuse(&mut ws, shared, "too many connections");
             return;
         }
         slot => slot,
@@ -488,6 +494,16 @@ fn drain(sock: &mut Socket, into: &mut Vec<Message>) -> ReadState {
             Err(_) => return ReadState::Done,
         }
     }
+}
+
+fn refuse(sock: &mut Socket, shared: &Shared, reason: &'static str) {
+    if let Some(_lingering) = take_count(&shared.lingering, MAX_LINGERING_CLOSES) {
+        close_and_linger(sock, CloseCode::Policy, reason);
+        return;
+    }
+    let _ = sock.close(Some(CloseFrame { code: CloseCode::Policy, reason: reason.into() }));
+    let _ = sock.flush();
+    let _ = sock.get_ref().shutdown(std::net::Shutdown::Both);
 }
 
 /// Sends a close frame and waits for the client to hang up: dropping a socket with unread bytes resets it, and the

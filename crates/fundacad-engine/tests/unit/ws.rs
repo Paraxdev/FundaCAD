@@ -312,3 +312,13 @@ fn refused_clients_waiting_out_their_close_leave_the_handshake_cap_free() {
     assert_eq!(call(&mut ws, json!({"id": 1, "op": "ping"}))["ok"], true);
     drop(refused);
 }
+
+#[test]
+fn past_the_lingering_close_cap_a_refused_client_is_hung_up_at_once() {
+    let s = start("", None);
+    let refused: Vec<Socket> = (0..MAX_LINGERING_CLOSES).map(|_| connect(s.port, "token=nope", None)).collect();
+    std::thread::sleep(Duration::from_millis(300));
+    let mut extra = connect(s.port, "token=nope", None);
+    assert!(hung_up(extra.get_mut(), Duration::from_secs(3), b""));
+    drop(refused);
+}
