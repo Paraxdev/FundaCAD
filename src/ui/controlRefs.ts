@@ -181,7 +181,7 @@ export function refOf(el: HTMLElement): string {
   }
   if (el.matches(".ctx-item")) return `ctx:${label}`;
   if (el.matches(".choice-btn, .ui-confirm .btn")) return `choice:${label}`;
-  if (el.matches(".opt-row")) return `opt:${label}`;
+  if (el.matches(".opt-row, .ui-list-row")) return `opt:${label}`;
   return `text:"${label}"`;
 }
 
