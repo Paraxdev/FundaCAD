@@ -226,10 +226,8 @@ pub fn assembly_payload(asm: &StepAssembly) -> Imported {
 }
 
 pub fn read_step(path: &Path) -> Result<Imported, String> {
-    let scan = crate::bench::phase("step_refs", || step_refs::scan(path)).unwrap_or_else(|e| {
-        eprintln!("[import] STEP vertex check skipped: {e}");
-        step_refs::Scan::default()
-    });
+    let scan = crate::bench::phase("step_refs", || step_refs::scan(path))
+        .map_err(|e| format!("FundaCAD could not check this STEP file before reading it: {e}"))?;
     let source = scan.repaired.as_ref().map_or(path, |r| r.path());
     let progress = crate::cancel::progress_beating();
     let asm = crate::bench::phase("step_read", || {
@@ -237,7 +235,7 @@ pub fn read_step(path: &Path) -> Result<Imported, String> {
     })
     .map_err(|e| occt_message(&e))?;
     let mut imported = from_assembly(asm);
-    if let Some(note) = scan.note() {
+    for note in [scan.documents_note(), scan.note()].into_iter().flatten() {
         push_note(&mut imported.fields, note);
     }
     if scan.faces > 0 && kernel::count(&imported.shape, Kind::Face) == 0 {

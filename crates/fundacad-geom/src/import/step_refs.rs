@@ -38,11 +38,26 @@ pub struct Scan {
     pub faces: usize,
     /// Edges with a start or end that is not a vertex.
     pub bad: usize,
-    /// A copy with the vertices put back, when at least one edge could be repaired.
+    /// Records naming another document, which OCCT would open and read beside this file.
+    pub documents: usize,
+    /// A copy with the vertices put back and the document references left out, when either was needed.
     pub repaired: Option<Repaired>,
 }
 
 impl Scan {
+    pub fn documents_note(&self) -> Option<String> {
+        match self.documents {
+            0 => None,
+            1 => Some(
+                "1 external document named by this STEP file was not loaded, FundaCAD reads only the file itself."
+                    .into(),
+            ),
+            n => Some(format!(
+                "{n} external documents named by this STEP file were not loaded, FundaCAD reads only the file itself."
+            )),
+        }
+    }
+
     pub fn note(&self) -> Option<String> {
         if self.bad == 0 {
             return None;
@@ -77,10 +92,18 @@ pub fn scan(path: &Path) -> Result<Scan, String> {
     let mut vertices: HashSet<Id> = HashSet::new();
     let mut vertex_at: HashMap<Id, Id> = HashMap::new();
     let mut edges: HashMap<Id, Edge> = HashMap::new();
-    let (mut faces, mut last_id) = (0usize, 0);
+    let (mut faces, mut last_id, mut documents) = (0usize, 0, 0usize);
     for_each_record(path, |rec| {
         let Some((id, kind, rest)) = head(rec) else { return Ok(()) };
         last_id = last_id.max(id);
+        if document_ref(kind).is_some() {
+            documents += 1;
+        } else if kind.is_empty() && complex_names(rest).any(|n| document_ref(n).is_some()) {
+            return Err(
+                "this STEP file names an external document inside a complex entity, which FundaCAD does not read"
+                    .into(),
+            );
+        }
         match kind {
             b"VERTEX_POINT" => {
                 vertices.insert(id);
@@ -111,8 +134,8 @@ pub fn scan(path: &Path) -> Result<Scan, String> {
         .map(|(&id, e)| (id, (e.start, e.end)))
         .collect();
     let bad = ends.len();
-    if bad == 0 {
-        return Ok(Scan { faces, bad, repaired: None });
+    if bad == 0 && documents == 0 {
+        return Ok(Scan { faces, bad, documents, repaired: None });
     }
 
     let mut oriented: HashMap<Id, (Id, bool)> = HashMap::new();
@@ -225,8 +248,8 @@ pub fn scan(path: &Path) -> Result<Scan, String> {
     let good = |v: &Id| is_vertex(v) || point_of.contains_key(v);
     ends.retain(|id, &mut (s, e)| (edges[id].start, edges[id].end) != (s, e));
     let fixed = ends.values().filter(|(s, e)| good(s) && good(e)).count();
-    if ends.is_empty() {
-        return Ok(Scan { faces, bad, repaired: None });
+    if ends.is_empty() && documents == 0 {
+        return Ok(Scan { faces, bad, documents, repaired: None });
     }
 
     let (file, out) = temp_step()?;
@@ -234,7 +257,19 @@ pub fn scan(path: &Path) -> Result<Scan, String> {
     let mut w = BufWriter::with_capacity(1 << 20, out);
     let mut written: HashSet<Id> = HashSet::new();
     for_each_record(path, |rec| {
-        if let Some((id, b"EDGE_CURVE", rest)) = head(rec) {
+        let record = head(rec);
+        match record.and_then(|(_, kind, rest)| Some((document_ref(kind)?, kind, rest))) {
+            Some((DocumentRef::Applied, ..)) => return Ok(()),
+            Some((DocumentRef::Product, kind, rest)) => {
+                let a = args(rest);
+                w.write_all(&rec[..rec.len() - rest.len() - kind.len()]).map_err(failed)?;
+                w.write_all(b"PRODUCT_DEFINITION(").map_err(failed)?;
+                w.write_all(&a[..a.len().min(4)].join(&b","[..])).map_err(failed)?;
+                return w.write_all(b");").map_err(failed);
+            }
+            None => {}
+        }
+        if let Some((id, b"EDGE_CURVE", rest)) = record {
             if let Some(&(s, e)) = ends.get(&id) {
                 let a = args(rest);
                 w.write_all(&rec[..rec.len() - rest.len()]).map_err(failed)?;
@@ -254,7 +289,51 @@ pub fn scan(path: &Path) -> Result<Scan, String> {
         w.write_all(rec).map_err(failed)
     })?;
     w.flush().map_err(failed)?;
-    Ok(Scan { faces, bad, repaired: Some(Repaired { file, fixed, unfixed: bad - fixed }) })
+    Ok(Scan { faces, bad, documents, repaired: Some(Repaired { file, fixed, unfixed: bad - fixed }) })
+}
+
+#[derive(Clone, Copy)]
+enum DocumentRef {
+    Applied,
+    Product,
+}
+
+/// The entity names, long and short, that OCCT's XCAF reader follows to another file.
+fn document_ref(kind: &[u8]) -> Option<DocumentRef> {
+    let is = |name: &str| kind.eq_ignore_ascii_case(name.as_bytes());
+    if is("APPLIED_DOCUMENT_REFERENCE") || is("APDCRF") {
+        Some(DocumentRef::Applied)
+    } else if is("PRODUCT_DEFINITION_WITH_ASSOCIATED_DOCUMENTS") || is("PDWAD") {
+        Some(DocumentRef::Product)
+    } else {
+        None
+    }
+}
+
+/// Every unquoted name followed by `(` in the parts of a complex entity.
+fn complex_names(s: &[u8]) -> impl Iterator<Item = &[u8]> {
+    let ident = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
+    let (mut i, mut quoted) = (0usize, false);
+    std::iter::from_fn(move || {
+        while i < s.len() {
+            if s[i] == b'\'' {
+                i += quote_at(s, i, &mut quoted);
+                continue;
+            }
+            if quoted || !s[i].is_ascii_alphabetic() || (i > 0 && ident(s[i - 1])) {
+                i += 1;
+                continue;
+            }
+            let from = i;
+            while i < s.len() && ident(s[i]) {
+                i += 1;
+            }
+            if trim_start(&s[i..]).starts_with(b"(") {
+                return Some(&s[from..i]);
+            }
+        }
+        None
+    })
 }
 
 /// The first and last control point of each clamped B-spline curve asked for, through SURFACE_CURVE and SEAM_CURVE.
