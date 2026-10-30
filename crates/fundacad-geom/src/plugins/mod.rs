@@ -40,6 +40,9 @@ struct Declared {
     exporters: Vec<String>,
     generators: Vec<String>,
     files_read: bool,
+    official: bool,
+    /// Why it is not loaded when another plugin owns one of its names.
+    clash: Option<String>,
     /// The manifest's and the component's size and time, so a bundle replaced
     /// on disk is read again and one left alone keeps its compiled component.
     stamp: Vec<(u64, Option<SystemTime>)>,
@@ -308,12 +311,48 @@ fn discover_in(roots: &[PluginRoot]) -> Vec<Declared> {
                 exporters: strings(&man, MANIFEST_EXPORTERS),
                 generators: strings(&man, MANIFEST_GENERATORS),
                 files_read: strings(&man, "grants").iter().any(|g| g == "files.read"),
+                // A checkout's plugins/ holds only the plugins FundaCAD ships.
+                official: !root.records || recorded_official(&dir),
+                clash: None,
                 id,
                 dir,
             });
         }
     }
+    out.sort_by_key(|d| !d.official);
+    settle_owners(&mut out);
     out
+}
+
+fn recorded_official(dir: &Path) -> bool {
+    std::fs::read(dir.join(RECORD))
+        .ok()
+        .and_then(|b| serde_json::from_slice::<Value>(&b).ok())
+        .and_then(|r| r.get("official").and_then(Value::as_bool))
+        .unwrap_or(false)
+}
+
+/// Each feature type, exporter and shape generator belongs to the first plugin in `found` that declares it, so a later
+/// one declaring it too is not loaded. Mesh passes go to the first in this order that registers them.
+fn settle_owners(found: &mut [Declared]) {
+    let mut owners: HashMap<(&'static str, String), String> = HashMap::new();
+    for d in found.iter_mut() {
+        let names = [("feature type", &d.types), ("exporter", &d.exporters), ("shape generator", &d.generators)];
+        let taken = names.iter().find_map(|(kind, list)| {
+            list.iter().find_map(|n| {
+                let owner = owners.get(&(*kind, n.clone()))?;
+                Some(format!("its {kind} {n:?} is already provided by the {owner:?} plugin"))
+            })
+        });
+        if taken.is_none() {
+            for (kind, list) in names {
+                for n in list {
+                    owners.insert((kind, n.clone()), d.id.clone());
+                }
+            }
+        }
+        d.clash = taken;
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -383,6 +422,9 @@ enum Missing {
 pub const NO_COMPONENT: &str = "the installed copy was made for the previous engine and has no component for FundaCAD 1.0, updating the plugin in Preferences, Plugins fixes it";
 
 fn compile(d: &Declared) -> Loaded {
+    if let Some(why) = &d.clash {
+        return Loaded::Broken(why.clone());
+    }
     let Some(rel) = &d.wasm else {
         return Loaded::Broken(NO_COMPONENT.into());
     };
@@ -546,7 +588,7 @@ pub fn feature_identities() -> HashMap<String, String> {
     let mut reg = current();
     let mut out = HashMap::new();
     for e in reg.entries.iter_mut() {
-        if e.declared.types.is_empty() {
+        if e.declared.types.is_empty() || e.declared.clash.is_some() {
             continue;
         }
         let id = identity(e);

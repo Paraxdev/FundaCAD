@@ -456,3 +456,56 @@ fn a_component_named_outside_its_bundle_is_not_loaded_or_hashed() {
     assert!(!why.contains("outside the installed copy"), "{why}");
     let _ = std::fs::remove_dir_all(&root);
 }
+
+fn put_installed(root: &Path, id: &str, official: bool, man: Value) {
+    put_manifest(root, id, man);
+    let record = json!({"id": id, "official": official, "consented": {"grants": []}});
+    std::fs::write(root.join(id).join(RECORD), record.to_string()).unwrap();
+}
+
+#[test]
+fn a_name_belongs_to_one_plugin_and_an_official_one_owns_it_first() {
+    let root = temp_root("owners");
+    std::fs::write(root.join(DISABLED), "[]").unwrap();
+    put_installed(&root, "Acme.Tools", false, json!({"id": "Acme.Tools", "featureTypes": ["ribbon", "acme"]}));
+    put_installed(&root, "Zed.Official", true, json!({"id": "Zed.Official", "featureTypes": ["ribbon"]}));
+    let roots = [PluginRoot { dir: root.clone(), records: true }];
+    assert_eq!(discovered_ids(&roots), ["Zed.Official", "Acme.Tools"], "mesh passes look in this order too");
+    let mut reg = Registry::default();
+    reg.replace(discover_in(&roots));
+    assert!(
+        matches!(component_for(&mut reg, Claim::Feature, "ribbon"), Err(Missing::Broken(id, _)) if id == "Zed.Official")
+    );
+    let m = component_for(&mut reg, Claim::Feature, "acme").err().expect("not loaded");
+    assert_eq!(
+        missing(Claim::Feature, "acme", m),
+        "this needs the \"Acme.Tools\" plugin, which is installed but would not load: its feature type \"ribbon\" is already provided by the \"Zed.Official\" plugin"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_second_plugin_naming_an_owned_exporter_or_shape_is_not_loaded() {
+    let root = temp_root("owners-checkout");
+    put_manifest(&root, "A.One", json!({"id": "A.One", "exporters": ["x"], "shapeGenerators": ["g"]}));
+    put_manifest(&root, "B.Two", json!({"id": "B.Two", "exporters": ["y"]}));
+    put_manifest(&root, "C.Three", json!({"id": "C.Three", "exporters": ["z"], "shapeGenerators": ["g"]}));
+    put_manifest(&root, "D.Four", json!({"id": "D.Four", "exporters": ["w", "x"]}));
+    let mut reg = Registry::default();
+    reg.replace(discover_in(&checkout(&root)));
+    let why = |reg: &mut Registry, claim, name: &str| match component_for(reg, claim, name) {
+        Err(Missing::Broken(id, why)) => format!("{id}: {why}"),
+        _ => panic!("{name} resolved"),
+    };
+    assert_eq!(why(&mut reg, Claim::Exporter, "x"), format!("A.One: {NO_COMPONENT}"));
+    assert_eq!(why(&mut reg, Claim::Exporter, "y"), format!("B.Two: {NO_COMPONENT}"));
+    assert_eq!(
+        why(&mut reg, Claim::Exporter, "z"),
+        "C.Three: its shape generator \"g\" is already provided by the \"A.One\" plugin"
+    );
+    assert_eq!(
+        why(&mut reg, Claim::Exporter, "w"),
+        "D.Four: its exporter \"x\" is already provided by the \"A.One\" plugin"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
