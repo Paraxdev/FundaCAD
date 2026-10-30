@@ -61,6 +61,8 @@ When two starts in a row fail to show the window, the next one is in safe mode. 
 
 Click Restart normally on the banner to leave it. To start in safe mode yourself, add `--safe-mode` to the command that starts FundaCAD.
 
+On Linux FundaCAD opens as a Wayland window when the session has Wayland. If it opens blank or closes at start there, run it on X11 instead. For the AppImage put `GDK_BACKEND=x11` in front of the command, as in `GDK_BACKEND=x11 ./FundaCAD-linux-x86_64.AppImage`, and for the `.deb` start it with `GDK_BACKEND=x11 fundacad`. For the Flatpak run `flatpak override --user --nosocket=wayland dev.fundacad.app` once, and `flatpak override --user --socket=wayland dev.fundacad.app` to go back.
+
 ## Where FundaCAD keeps its files
 
 | System | App data | Log |
