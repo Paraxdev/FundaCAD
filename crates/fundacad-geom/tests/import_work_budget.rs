@@ -5,7 +5,7 @@ use std::borrow::Cow;
 use std::sync::mpsc;
 use std::time::Duration;
 
-use fundacad_geom::import::{self, blobstore::BlobStore, gltf, x3d};
+use fundacad_geom::import::{self, blobstore::BlobStore, dxf, gltf, x3d};
 use serde_json::{json, Value};
 
 /// Runs `f` on its own thread and fails the test if it takes longer than `secs`.
@@ -222,4 +222,56 @@ fn a_3mf_part_that_unpacks_past_the_budget_is_refused() {
     let zip = threemf_zip(&data, crc.sum(), 300 << 20);
     let e = within(120, move || import_3mf("unpacked", zip).err()).expect("a part past the budget is refused");
     assert!(e.contains("unpacks past"), "{e}");
+}
+
+fn dxf_with(blocks: &[(&str, &str)], entities: &str) -> Vec<u8> {
+    let mut t = String::from("0\nSECTION\n2\nBLOCKS\n");
+    for (name, body) in blocks {
+        t += &format!("0\nBLOCK\n8\n0\n2\n{name}\n70\n0\n10\n0\n20\n0\n30\n0\n{body}0\nENDBLK\n");
+    }
+    t += &format!("0\nENDSEC\n0\nSECTION\n2\nENTITIES\n{entities}0\nENDSEC\n0\nEOF\n");
+    t.into_bytes()
+}
+
+fn insert_array(block: &str, cols: &str, rows: &str) -> String {
+    format!("0\nINSERT\n8\n0\n2\n{block}\n10\n0\n20\n0\n30\n0\n70\n{cols}\n71\n{rows}\n44\n1\n45\n1\n")
+}
+
+const TEXT: &str = "0\nTEXT\n8\n0\n10\n0\n20\n0\n30\n0\n40\n1\n1\nA\n";
+const LINE: &str = "0\nLINE\n8\n0\n10\n0\n20\n0\n30\n0\n11\n1\n21\n0\n31\n0\n";
+
+#[test]
+fn a_dxf_insert_array_of_lines_still_imports() {
+    let data = dxf_with(&[("L", LINE)], &insert_array("L", "3", "3"));
+    let read = dxf::read_dxf(&data).expect("a small array imports");
+    let lines: usize = read.sketches.iter().map(|(_, e)| e.len()).sum();
+    assert_eq!(lines, 9);
+}
+
+#[test]
+fn nested_dxf_insert_arrays_are_held_to_a_work_budget() {
+    let mid = insert_array("LEAF", "1000", "1000");
+    let data = dxf_with(&[("LEAF", TEXT), ("MID", &mid)], &insert_array("MID", "1000", "1000"));
+    let e = within(30, move || dxf::read_dxf(&data).err()).expect("the nested arrays are refused");
+    assert!(e.contains("array cells"), "{e}");
+}
+
+#[test]
+fn a_dxf_insert_array_past_the_work_budget_is_refused_before_walking() {
+    let n = i64::MAX.to_string();
+    let data = dxf_with(&[("EMPTY", "")], &insert_array("EMPTY", &n, &n));
+    let e = within(30, move || dxf::read_dxf(&data).err()).expect("the array is refused");
+    assert!(e.contains("array cells"), "{e}");
+}
+
+#[test]
+fn a_dxf_polygon_mesh_whose_size_overflows_is_skipped() {
+    let vertex = "0\nVERTEX\n8\n0\n10\n0\n20\n0\n30\n0\n70\n64\n";
+    let mesh = format!(
+        "0\nPOLYLINE\n8\nM\n66\n1\n70\n16\n71\n4611686018427387905\n72\n4\n{}0\nSEQEND\n8\nM\n",
+        vertex.repeat(4)
+    );
+    let data = dxf_with(&[], &format!("{mesh}{LINE}"));
+    let read = within(30, move || dxf::read_dxf(&data).map(|r| r.objects.len())).expect("the drawing reads");
+    assert_eq!(read, 0);
 }
