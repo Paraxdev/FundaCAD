@@ -1538,7 +1538,7 @@ jobs:
           TMPDIR: ${{ runner.temp }}/harness
         run: |
           mkdir -p "$TMPDIR"
-          python -m pytest tools/harness/tests -m "smoke and not a11y" -q
+          python -m pytest tools/harness/tests -m "smoke and not a11y" -q --durations=25
 
       - name: Agent harness logs on failure
         if: failure()
@@ -1549,10 +1549,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      # The axe baseline was seeded on Windows Chrome, so this stays
-      # continue-on-error until wave 1 of the accessibility epic has landed.
       - name: Accessibility smoke (axe and aria snapshots)
-        continue-on-error: true
         timeout-minutes: 10
         env:
           FUNDACAD_ENGINE_CMD: ${{ github.workspace }}/engine-bin/fundacad-engine
