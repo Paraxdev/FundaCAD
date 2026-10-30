@@ -12,7 +12,7 @@ import {
   type PickHost,
 } from "../../src/harness/picks";
 import { HarnessError } from "../../src/harness/locate";
-import { OriginTiles } from "../../src/viewport/originTiles";
+import { OriginTiles, TILE_GAP_PX, TILE_SIZE_PX } from "../../src/viewport/originTiles";
 import { HIT_MIN_PX } from "../../src/viewport/planeHit";
 
 type V = [number, number, number];
@@ -293,7 +293,7 @@ describe("planes and free points", () => {
     const { h } = rig();
     const tiles = new OriginTiles(new THREE.Scene());
     tiles.setShown(true);
-    tiles.group.scale.setScalar(5 / 16);
+    tiles.group.scale.setScalar(10 / (TILE_GAP_PX + TILE_SIZE_PX / 2));
     // Tile centres (10, 10, 0), (10, 0, 10) and (0, 10, 10), through the rig's projection.
     const centres = { XY: [230, 460], XZ: [200, 400], YZ: [130, 360] } as const;
     const vp = h.viewport as unknown as Record<string, unknown>;

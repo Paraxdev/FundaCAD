@@ -1168,16 +1168,18 @@ guard test cannot see them; hold them to these rules by hand.
 - Neutral parts read tokens through `themeColor` and are read again on a theme
   change.
 - Sizes are screen pixels, held through `gizmoScale.ts` at every zoom.
-- Each tile has its corner on the origin and spans the positive side of its two
-  axes, so two of its edges run along the axis arrows. A tile is as long as an
-  arrow, 64px, and while the tiles show both share one floor, so a tile edge and
-  an arrow stay equal at every zoom and never fall below about 41px (hidden, the
-  arrows may shrink to their own floor, `triadMinScale`). Only the far corner is
-  rounded, 27px, the same squircle as `corner-shape: squircle`, a rail tile's 17px
-  on 40px scaled up (`TILE_CORNER_RADIUS_PX` and `SQUIRCLE_EXPONENT` in
-  `src/viewport/originTiles.ts` and `cornerProfile.ts`). While the tiles show,
-  the arrows draw over their rims and under their names (`OriginTriad.drawOver`),
-  so the edges along the axes keep the axis colours.
+- Each tile spans the positive side of its two axes, set 10px out from both
+  arrows (`TILE_GAP_PX`), so its two inner edges run parallel to the arrows and
+  the three tiles stand apart instead of meeting at the origin. A tile is as long
+  as an arrow, 64px, and while the tiles show both share one floor, so a tile edge
+  and an arrow stay equal at every zoom and never fall below about 41px (hidden,
+  the arrows may shrink to their own floor, `triadMinScale`). The gap scales with
+  the tile. Only the far corner is rounded, 27px, the same squircle as
+  `corner-shape: squircle`, a rail tile's 17px on 40px scaled up
+  (`TILE_CORNER_RADIUS_PX` and `SQUIRCLE_EXPONENT` in
+  `src/viewport/originTiles.ts` and `cornerProfile.ts`). The inner rims show in
+  the plane's colour beside the axis coloured arrows. While the tiles show, the
+  arrows draw over the tiles and under their names (`OriginTriad.drawOver`).
 - A tile's name sits at its centre. Where the tiles overlap, the tile drawn in
   front keeps its name there and a name that would cover another name or sit on
   that tile walks toward its own far corner. A tile seen edge on has its name
@@ -1186,7 +1188,10 @@ guard test cannot see them; hold them to these rules by hand.
   mostly hidden behind another keeps a full target. The names keep those boxes
   apart, moving off their walk when they must. Elsewhere, where tiles overlap, a
   press goes to the one drawn in front (`placeLabels` and `pickPlaneOnScreen` in
-  `src/viewport/planeHit.ts`).
+  `src/viewport/planeHit.ts`). The origin lies on no tile, so a mouse press there
+  picks nothing, but under a coarse pointer the 48px box round a foreshortened
+  tile may still reach it, as XZ's does at the home view: a full touch target is
+  worth more than an empty origin.
 - What a body hides draws faint, not gone.
 - A name in the scene is a camera facing sprite, `--ui` 700 at 11px, inked in
   `--text` or `--viewport-bg`, whichever reads on the ground. It fades out when
