@@ -311,7 +311,7 @@ impl Upload {
     }
 }
 
-fn token_hex(bytes: usize) -> String {
+pub(crate) fn token_hex(bytes: usize) -> String {
     let mut buf = vec![0u8; bytes];
     if getrandom::fill(&mut buf).is_err() {
         let n = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos() as u64);

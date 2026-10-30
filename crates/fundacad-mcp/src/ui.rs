@@ -2,6 +2,7 @@
 //! Python child speaking JSON lines on stdio. Standalone only, so the window it drives is never the user's.
 
 use std::collections::VecDeque;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
@@ -46,21 +47,36 @@ pub struct UiBridge {
     next_id: u64,
     said: Arc<std::sync::Mutex<VecDeque<String>>>,
     python: String,
+    home: WorkFolder,
     #[cfg(windows)]
     job: crate::link::job::ProcessJob,
 }
 
 impl UiBridge {
     pub async fn spawn() -> Result<UiBridge, String> {
-        let argv = python_command();
+        let mut argv = python_command();
+        if Path::new(&argv[0]).parent().is_some_and(|d| !d.as_os_str().is_empty()) {
+            argv[0] = absolute(&argv[0]);
+        }
         let python = join_command(&argv);
+        let home = WorkFolder::new()?;
         let mut cmd = Command::new(&argv[0]);
         cmd.args(&argv[1..]).args(["-m", "fundacad_harness", "serve"]);
-        let engine = crate::link::engine_command();
-        if engine.first().is_some_and(|p| std::path::Path::new(p).is_file()) {
+        let mut engine = crate::link::engine_command();
+        if engine.first().is_some_and(|p| Path::new(p).is_file()) {
+            engine[0] = absolute(&engine[0]);
             cmd.env("FUNDACAD_ENGINE_CMD", join_command(&engine));
         }
-        cmd.env("PYTHONIOENCODING", "utf-8")
+        if std::env::var_os("FUNDACAD_REPO").is_none() {
+            if let Some(repo) = host_checkout() {
+                cmd.env("FUNDACAD_REPO", repo);
+            }
+        }
+        // `-m` puts the working folder first on sys.path; PYTHONSAFEPATH stops that on 3.11+, where `-P`
+        // would be an error on older Pythons, and an empty folder of our own covers those.
+        cmd.current_dir(&home.0)
+            .env("PYTHONSAFEPATH", "1")
+            .env("PYTHONIOENCODING", "utf-8")
             .env("PYTHONUNBUFFERED", "1")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -102,6 +118,7 @@ impl UiBridge {
             next_id: 0,
             said,
             python,
+            home,
             #[cfg(windows)]
             job,
         })
@@ -173,7 +190,43 @@ impl UiBridge {
         }
         #[cfg(windows)]
         self.job.close();
+        self.home.remove();
     }
+}
+
+/// The harness child's working folder: new, empty and this account's, so it holds nothing Python could import.
+struct WorkFolder(PathBuf);
+
+impl WorkFolder {
+    fn new() -> Result<WorkFolder, String> {
+        let dir = std::env::temp_dir().join(format!("fundacad-ui-{}", crate::upload::token_hex(8)));
+        #[cfg_attr(not(unix), allow(unused_mut))]
+        let mut builder = std::fs::DirBuilder::new();
+        #[cfg(unix)]
+        std::os::unix::fs::DirBuilderExt::mode(&mut builder, 0o700);
+        builder.create(&dir).map_err(|e| format!("could not make a working folder for the ui harness: {e}"))?;
+        Ok(WorkFolder(dir))
+    }
+
+    fn remove(&self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+impl Drop for WorkFolder {
+    fn drop(&mut self) {
+        self.remove();
+    }
+}
+
+fn absolute(path: &str) -> String {
+    std::path::absolute(path).map_or_else(|_| path.to_string(), |p| p.to_string_lossy().into_owned())
+}
+
+/// The checkout the host runs in, found as the harness's own find_repo would from there.
+fn host_checkout() -> Option<PathBuf> {
+    let here = std::env::current_dir().ok()?;
+    here.ancestors().find(|d| d.join("package.json").is_file() && d.join("src-tauri").is_dir()).map(PathBuf::from)
 }
 
 fn reply_result(reply: &Value) -> CallToolResult {
