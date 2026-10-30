@@ -12,13 +12,17 @@ const h = vi.hoisted(() => ({
   downgrade: false,
   stable: false,
   checkFails: false,
+  build: null as string | null,
+  checks: [] as unknown[],
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({
-  invoke: async (cmd: string, args?: { channel: string }) => {
+  invoke: async (cmd: string, args?: { channel: string; stableSeen: boolean }) => {
     if (cmd === "updates_supported") return true;
+    if (cmd === "update_build_channel") return h.build;
     if (cmd !== "update_check") return void h.events.push(cmd);
     h.events.push(`check ${args?.channel}`);
+    h.checks.push(args);
     if (h.checkFails) throw "error sending request";
     const update = { rid: 7, currentVersion: "1.1.2", version: "1.0.500", rawJson: {}, downgrade: h.downgrade };
     return { update: h.found ? update : null, stable: h.stable };
@@ -71,6 +75,7 @@ async function launch(settings: Record<string, string> = {}) {
 
 beforeEach(() => {
   Object.assign(h, { events: [], toasts: [], answers: [], found: true, downgrade: false, stable: false });
+  Object.assign(h, { build: null, checks: [] });
   h.checkFails = false;
   vi.stubGlobal("window", { __TAURI_INTERNALS__: {} });
   vi.spyOn(console, "error").mockImplementation(() => {});
@@ -105,6 +110,33 @@ describe("an update check", () => {
     expect(channel.stableReleaseSeen()).toBe(false);
     await updates.checkForUpdates(false, async () => "go");
     expect([channel.stableReleaseSeen(), h.store.get("fundacad.updates.stableSeen")]).toEqual([true, "yes"]);
+  });
+
+  it("tells the command once a stable release was seen, so it stops probing the stable feed", async () => {
+    const { updates } = await launch();
+    h.found = false;
+    h.stable = true;
+    await updates.checkForUpdates(false, async () => "go");
+    await updates.checkForUpdates(false, async () => "go");
+    expect(h.checks).toEqual([
+      { channel: "beta", stableSeen: false },
+      { channel: "beta", stableSeen: true },
+    ]);
+  });
+
+  it("asks the channel Rust reads from this build's updater config when the frontend guessed another", async () => {
+    const { updates, channel } = await launch({
+      "fundacad.updates.channel": "stable",
+      "fundacad.updates.stableSeen": "yes",
+    });
+    h.found = false;
+    h.build = "development";
+    await updates.checkForUpdates(true, async () => "go");
+    expect([h.events, channel.buildChannel(), channel.updateChannel()]).toEqual([
+      ["check development"],
+      "development",
+      "development",
+    ]);
   });
 
   it("installs the update the command found, looked up by its id", async () => {

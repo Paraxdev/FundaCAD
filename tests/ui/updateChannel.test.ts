@@ -38,7 +38,7 @@ describe("the channel of a build", () => {
     ["v1.1.0", "stable"],
   ])("is the default channel of a %s build", async (release, channel) => {
     const m = await load(release);
-    expect([m.BUILD_CHANNEL, m.updateChannel()]).toEqual([channel, channel]);
+    expect([m.buildChannel(), m.updateChannel()]).toEqual([channel, channel]);
   });
 });
 
@@ -98,6 +98,32 @@ describe("picking a channel", () => {
     expect((await load("development")).updateChannel()).toBe("development");
     store.set("fundacad.updates.channel", "development");
     expect((await load("beta")).updateChannel()).toBe("beta");
+  });
+});
+
+describe("the build channel Rust reads from the updater config", () => {
+  it("replaces the frontend's guess and checks the stored channel against that product", async () => {
+    store.set("fundacad.updates.channel", "stable");
+    store.set("fundacad.updates.stableSeen", "yes");
+    const m = await load("beta");
+    const heard = vi.fn();
+    m.onUpdateChannelChange(heard);
+    m.adoptBuildChannel("beta");
+    const before = [m.buildChannel(), m.updateChannel(), heard.mock.calls.length];
+    m.adoptBuildChannel("development");
+    expect([
+      before,
+      [m.buildChannel(), m.updateChannel(), heard.mock.calls.length, m.setUpdateChannel("beta")],
+    ]).toEqual([
+      ["beta", "stable", 0],
+      ["development", "development", 1, false],
+    ]);
+  });
+
+  it("counts a stable release as seen only for a stable build", async () => {
+    const m = await load("v1.1.0");
+    m.adoptBuildChannel("beta");
+    expect([m.stableReleaseSeen(), m.updateChannel()]).toEqual([false, "beta"]);
   });
 });
 

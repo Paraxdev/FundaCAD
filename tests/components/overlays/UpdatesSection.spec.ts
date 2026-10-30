@@ -4,6 +4,7 @@ import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 const h = vi.hoisted(() => ({
   supported: true,
   seen: false,
+  build: null as "beta" | "development" | null,
   answer: null as string | null,
   choose: vi.fn(),
   open: vi.fn(async (_url: string) => {}),
@@ -11,16 +12,21 @@ const h = vi.hoisted(() => ({
 vi.mock("../../../src/ui/updates", () => ({ updatesSupported: async () => h.supported }));
 vi.mock("../../../src/ui/choice", () => ({ choose: h.choose }));
 vi.mock("../../../src/ui/welcome", () => ({ openExternal: h.open }));
-vi.mock("../../../src/ui/updateChannel", async (orig) => ({
-  ...(await orig<typeof import("../../../src/ui/updateChannel")>()),
-  stableReleaseSeen: () => h.seen,
-}));
+vi.mock("../../../src/ui/updateChannel", async (orig) => {
+  const m = await orig<typeof import("../../../src/ui/updateChannel")>();
+  return {
+    ...m,
+    stableReleaseSeen: () => h.seen,
+    syncBuildChannel: async () => void (h.build && m.adoptBuildChannel(h.build)),
+  };
+});
 
 import UpdatesSection from "../../../src/components/overlays/UpdatesSection.vue";
 import { autoUpdateCheck, setAutoUpdateCheck, setUpdatePeriod, updatePeriod } from "../../../src/ui/updatePrefs";
-import { recordStableSeen, setUpdateChannel, updateChannel } from "../../../src/ui/updateChannel";
+import { adoptBuildChannel, recordStableSeen, setUpdateChannel, updateChannel } from "../../../src/ui/updateChannel";
 
 enableAutoUnmount(afterEach);
+afterEach(() => adoptBuildChannel("beta"));
 
 async function open() {
   const w = mount(UpdatesSection, { attachTo: document.body });
@@ -46,6 +52,7 @@ async function pick(name: string) {
 beforeEach(() => {
   h.supported = true;
   h.seen = false;
+  h.build = null;
   h.answer = null;
   h.choose.mockReset().mockImplementation(async () => h.answer);
   h.open.mockClear();
@@ -94,6 +101,13 @@ describe("Updates in Preferences", () => {
       false,
       "Channel Beta",
     ]);
+  });
+
+  it("names the channel this build's updater config holds when the frontend guessed another", async () => {
+    h.supported = false;
+    h.build = "development";
+    const w = await open();
+    expect(w.get("[data-updates-channel-info]").text()).toBe("Channel Development");
   });
 });
 

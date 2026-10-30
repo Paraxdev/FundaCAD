@@ -5,7 +5,7 @@ import type { Update } from "@tauri-apps/plugin-updater";
 import { PRODUCT_NAME, sourceforgeUrl, versionLabel } from "../app/channel";
 import { choose } from "./choice";
 import { toast } from "./toast";
-import { recordStableSeen, UPDATE_CHANNELS, updateChannel } from "./updateChannel";
+import { recordStableSeen, stableReleaseSeen, syncBuildChannel, UPDATE_CHANNELS, updateChannel } from "./updateChannel";
 import { openExternal } from "./welcome";
 import {
   autoUpdateCheck,
@@ -123,7 +123,11 @@ type ChannelCheck = {
  *  under `rid`, so the plugin's Update downloads and installs it as if its own check() had found it. */
 async function checkChannel(): Promise<{ update: Update; downgrade: boolean } | null> {
   const { invoke } = await import("@tauri-apps/api/core");
-  const result = await invoke<ChannelCheck>("update_check", { channel: updateChannel() });
+  await syncBuildChannel();
+  const result = await invoke<ChannelCheck>("update_check", {
+    channel: updateChannel(),
+    stableSeen: stableReleaseSeen(),
+  });
   recordStableSeen(result.stable);
   if (!result.update) return null;
   const { downgrade, ...meta } = result.update;

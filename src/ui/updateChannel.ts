@@ -25,10 +25,6 @@ export function channelOfTag(tag: string): UpdateChannel {
   return tag === "beta" || tag === "development" ? tag : "stable";
 }
 
-export const BUILD_CHANNEL: UpdateChannel = channelOfTag(
-  (import.meta.env.VITE_FUNDACAD_RELEASE as string | undefined) || "beta",
-);
-
 export function channelAction(build: UpdateChannel, picked: UpdateChannel): "switch" | "beside" {
   return (build === "development") === (picked === "development") ? "switch" : "beside";
 }
@@ -54,13 +50,21 @@ export function channelOptions(
   });
 }
 
-let stableSeen = BUILD_CHANNEL === "stable" || readSetting(STABLE_KEY) === "yes";
-let picked = ((): UpdateChannel => {
-  const stored = asUpdateChannel(readSetting(CHANNEL_KEY));
-  if (!stored || channelAction(BUILD_CHANNEL, stored) === "beside") return BUILD_CHANNEL;
-  return stored === "stable" && !stableSeen ? BUILD_CHANNEL : stored;
-})();
+// A guess until syncBuildChannel hears from Rust, which reads the build channel from this build's updater endpoint.
+let build = channelOfTag((import.meta.env.VITE_FUNDACAD_RELEASE as string | undefined) || "beta");
+let stableRecorded = readSetting(STABLE_KEY) === "yes";
+let picked = storedPick();
 const listeners = new Set<() => void>();
+
+function storedPick(): UpdateChannel {
+  const stored = asUpdateChannel(readSetting(CHANNEL_KEY));
+  if (!stored || channelAction(build, stored) === "beside") return build;
+  return stored === "stable" && !stableReleaseSeen() ? build : stored;
+}
+
+function notify() {
+  for (const fn of listeners) fn();
+}
 
 function store(key: string, value: string) {
   try {
@@ -70,25 +74,49 @@ function store(key: string, value: string) {
   }
 }
 
+export const buildChannel = (): UpdateChannel => build;
 export const updateChannel = (): UpdateChannel => picked;
-export const stableReleaseSeen = (): boolean => stableSeen;
+export function stableReleaseSeen(): boolean {
+  return build === "stable" || stableRecorded;
+}
+
+/** A build made without VITE_FUNDACAD_RELEASE guesses beta, while update_check goes by the updater config. */
+export function adoptBuildChannel(next: UpdateChannel) {
+  if (next === build) return;
+  build = next;
+  picked = storedPick();
+  notify();
+}
+
+let buildSync: Promise<void> | undefined;
+
+export function syncBuildChannel(): Promise<void> {
+  buildSync ??= import("@tauri-apps/api/core")
+    .then(({ invoke }) => invoke<string | null>("update_build_channel"))
+    .then((ch) => {
+      const known = asUpdateChannel(ch);
+      if (known) adoptBuildChannel(known);
+    })
+    .catch(() => {});
+  return buildSync;
+}
 
 /** False, and nothing stored, for a channel of the other product: that one installs beside this app. */
 export function setUpdateChannel(next: UpdateChannel): boolean {
-  if (channelAction(BUILD_CHANNEL, next) === "beside") return false;
+  if (channelAction(build, next) === "beside") return false;
   if (next === picked) return true;
   picked = next;
   store(CHANNEL_KEY, next);
-  for (const fn of listeners) fn();
+  notify();
   return true;
 }
 
 /** A stable release never goes away, so a later check that misses it leaves it seen. */
 export function recordStableSeen(seen: boolean) {
-  if (!seen || stableSeen) return;
-  stableSeen = true;
+  if (!seen || stableReleaseSeen()) return;
+  stableRecorded = true;
   store(STABLE_KEY, "yes");
-  for (const fn of listeners) fn();
+  notify();
 }
 
 export function onUpdateChannelChange(fn: () => void): () => void {

@@ -9,13 +9,14 @@ import { toast } from "../../ui/toast";
 import { updatesSupported } from "../../ui/updates";
 import {
   besideTitle,
-  BUILD_CHANNEL,
+  buildChannel,
   channelAction,
   channelOptions,
   onUpdateChannelChange,
   releasePageUrl,
   setUpdateChannel,
   stableReleaseSeen,
+  syncBuildChannel,
   UPDATE_CHANNELS,
   updateChannel,
   type UpdateChannel,
@@ -36,9 +37,10 @@ const period = ref(updatePeriod());
 // Null until the install is known, so no control flashes in for an install that cannot update itself.
 const supported = ref<boolean | null>(null);
 const options = UPDATE_PERIODS.map((p) => ({ value: p.id, label: p.label }));
+const build = ref(buildChannel());
 const channel = ref(updateChannel());
 const seen = ref(stableReleaseSeen());
-const channelOpts = computed(() => channelOptions(BUILD_CHANNEL, seen.value));
+const channelOpts = computed(() => channelOptions(build.value, seen.value));
 const channelLabel = (ch: UpdateChannel) => UPDATE_CHANNELS.find((c) => c.id === ch)!.label;
 
 let stop = () => {};
@@ -49,9 +51,11 @@ onMounted(() => {
     period.value = updatePeriod();
   });
   stopChannel = onUpdateChannelChange(() => {
+    build.value = buildChannel();
     channel.value = updateChannel();
     seen.value = stableReleaseSeen();
   });
+  void syncBuildChannel();
   void updatesSupported().then((ok) => (supported.value = ok));
 });
 onUnmounted(() => {
@@ -69,7 +73,7 @@ function openLink(url: string) {
 }
 
 async function onChannel(picked: UpdateChannel) {
-  if (channelAction(BUILD_CHANNEL, picked) === "switch") {
+  if (channelAction(build.value, picked) === "switch") {
     setUpdateChannel(picked);
     return;
   }
@@ -96,7 +100,7 @@ async function onChannel(picked: UpdateChannel) {
     </div>
     <div v-if="supported === false" class="pref-card" data-updates-channel-info>
       <div class="pref-head">
-        <span class="pref-title">Channel</span> <span class="pref-hint">{{ channelLabel(BUILD_CHANNEL) }}</span>
+        <span class="pref-title">Channel</span> <span class="pref-hint">{{ channelLabel(build) }}</span>
       </div>
     </div>
     <template v-else-if="supported">
