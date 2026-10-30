@@ -112,12 +112,15 @@ impl LiveLink {
 
     /// Waits for the app to take `document` and returns the revision it landed on. `replaces` says it is a whole
     /// other document, not an edit of the open one, which the app refuses while an import is read into its own.
+    /// `edit`, when given, is the same change in a form the app applies to its open document instead of loading
+    /// `document`.
     pub async fn push(
         &mut self,
         link: &EngineLink,
         document: &Doc,
         note: &str,
         replaces: bool,
+        edit: Option<Value>,
     ) -> Result<i64, LiveError> {
         if self.base.is_none() {
             self.pull(link).await?;
@@ -142,6 +145,9 @@ impl LiveLink {
         }
         if let (true, Value::Object(m)) = (replaces, &mut request) {
             m.insert("replaces".into(), json!(true));
+        }
+        if let (Some(edit), Value::Object(m)) = (edit, &mut request) {
+            m.insert("edit".into(), edit);
         }
         let reply = link.call("session_propose", request).await.map_err(lost)?;
         if reply.get("ok") != Some(&json!(true)) {

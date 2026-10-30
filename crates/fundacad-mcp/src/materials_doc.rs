@@ -1,7 +1,7 @@
 //! Render material edits on the document map, made the way the Render workspace makes them (src/document/store.ts
 //! addMaterial, updateMaterial, removeMaterials, setBodiesMaterial and setFacesMaterial).
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use serde_json::{Map, Value};
 
@@ -461,6 +461,53 @@ pub fn assign(
     edit_map(doc, "facePrints", |m| m.retain(|key, _| !keys.contains(key)));
     write_library(doc, lib);
     Ok(())
+}
+
+/// The difference between two documents as the app's `materials` live edit: the whole library when it changed, each body
+/// and face whose assignment changed (null clears), and a face's print when it has one.
+pub fn live_edit(before: &Doc, after: &Doc) -> Value {
+    let mut edit = Map::new();
+    edit.insert("kind".into(), Value::from("materials"));
+    let lib = library(after);
+    if library(before) != lib {
+        edit.insert("library".into(), Value::Array(lib.into_iter().map(Value::Object).collect()));
+    }
+    let bodies = changed_keys(before, after, "bodyMaterial");
+    if !bodies.is_empty() {
+        let holder = after.get("bodyMaterial");
+        let row = |b: String| {
+            let id = holder.and_then(|m| m.get(&b)).cloned().unwrap_or(Value::Null);
+            (b, id)
+        };
+        edit.insert("bodies".into(), Value::Object(bodies.into_iter().map(row).collect()));
+    }
+    let mut keys = changed_keys(before, after, "faceMaterials");
+    keys.extend(changed_keys(before, after, "facePrints"));
+    let faces: Vec<Value> = keys
+        .iter()
+        .filter_map(|key| {
+            let (body, face) = parse_face_key(key)?;
+            let material = after.get("faceMaterials").and_then(|m| m.get(key)).cloned().unwrap_or(Value::Null);
+            let mut row = Map::new();
+            row.insert("body".into(), Value::from(body));
+            row.insert("face".into(), Value::from(face));
+            row.insert("material".into(), material);
+            if let Some(print) = after.get("facePrints").and_then(|m| m.get(key)) {
+                row.insert("print".into(), print.clone());
+            }
+            Some(Value::Object(row))
+        })
+        .collect();
+    if !faces.is_empty() {
+        edit.insert("faces".into(), Value::Array(faces));
+    }
+    Value::Object(edit)
+}
+
+fn changed_keys(before: &Doc, after: &Doc, key: &str) -> BTreeSet<String> {
+    let (old, new) = (before.get(key).and_then(Value::as_object), after.get(key).and_then(Value::as_object));
+    let keys = old.into_iter().chain(new).flat_map(Map::keys);
+    keys.filter(|k| old.and_then(|m| m.get(*k)) != new.and_then(|m| m.get(*k))).cloned().collect()
 }
 
 /// Saves each assigned face's print beside its key, the form `savedFaceRefs` writes.

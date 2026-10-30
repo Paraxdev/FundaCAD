@@ -431,3 +431,42 @@ fn proposal_ids_never_repeat_across_a_release_or_a_new_session() {
     assert_eq!((ids.len(), unique.len()), (13, 13), "{ids:?}");
     assert!(ids.iter().all(|id| id.starts_with('p')), "{ids:?}");
 }
+
+#[test]
+fn a_proposal_carries_its_edit_so_the_app_can_apply_it_as_an_edit() {
+    let (mut s, _) = session();
+    s.publish_doc(APP, json!("doc-a"), doc(3), 7, Value::Null, Value::Null);
+    let edit = json!({"kind": "materials", "bodies": {"body1": "m-steel"}});
+    let carried = wire(
+        &mut s,
+        AGENT,
+        "session_propose",
+        json!({"document": doc(3), "baseRevision": 7, "doc": "doc-a", "edit": edit}),
+    );
+    let bare = wire(&mut s, AGENT, "session_propose", json!({"document": doc(4), "baseRevision": 7, "doc": "doc-a"}));
+    let odd = wire(
+        &mut s,
+        AGENT,
+        "session_propose",
+        json!({"document": doc(5), "baseRevision": 7, "doc": "doc-a", "edit": 1}),
+    );
+    // A refused proposal leaves its edit on nothing.
+    let late = wire(
+        &mut s,
+        AGENT,
+        "session_propose",
+        json!({"document": doc(6), "baseRevision": 6, "doc": "doc-a", "edit": edit}),
+    );
+    let handed = s.publish_doc(APP, json!("doc-a"), doc(3), 7, Value::Null, Value::Null);
+    let edits: Vec<(usize, Value)> = handed["proposals"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| (features(&p["document"]), p.get("edit").cloned().unwrap_or(Value::Null)))
+        .collect();
+    assert_eq!(
+        (carried["ok"].clone(), bare["ok"].clone(), odd["ok"].clone(), late["reason"].clone()),
+        (json!(true), json!(true), json!(true), json!("stale"))
+    );
+    assert_eq!(edits, vec![(3, edit), (4, Value::Null), (5, Value::Null)]);
+}

@@ -321,3 +321,74 @@ async fn a_doc_open_the_app_refused_leaves_doc_save_on_the_file_it_saved_to_befo
     assert_eq!(host.feature_names(), vec!["theirs".to_string(); 3]);
     assert!(!bare.is_error && bare.text.contains("theirs.funda"), "{}", bare.text);
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_material_tool_reaches_the_app_as_an_edit_beside_the_document_it_falls_back_to() {
+    let engine = RealEngine::start();
+    let mut host = Host::new(engine.socket().await);
+    host.tick().await;
+
+    let mcp = Mcp::start(&engine.mcp_env("auto", true), &std::env::temp_dir());
+    let (mcp, made) = while_pumping(
+        mcp,
+        &mut host,
+        "material_set",
+        json!({"id": "m-brass", "name": "Brass", "color": "#b5a642", "metalness": 1}),
+        4.0,
+    )
+    .await;
+    assert!(!made.is_error && made.text.contains("applied in FundaCAD"), "{}", made.text);
+    let (mcp, on_body) =
+        while_pumping(mcp, &mut host, "material_assign", json!({"material": "m-brass", "bodies": ["body1"]}), 4.0)
+            .await;
+    assert!(!on_body.is_error, "{}", on_body.text);
+    let (_mcp, on_face) = while_pumping(
+        mcp,
+        &mut host,
+        "material_assign",
+        json!({"material": "m-brass", "faces": [{"body": "body1", "face": 2}]}),
+        4.0,
+    )
+    .await;
+    assert!(!on_face.is_error, "{}", on_face.text);
+
+    let [made, on_body, on_face] = &host.proposals[..] else {
+        panic!("three proposals, got {:?}", host.proposals);
+    };
+    let brass = made["edit"]["library"].as_array().unwrap().iter().find(|m| m["id"] == "m-brass");
+    assert_eq!(brass.map(|m| m["metalness"].clone()), Some(json!(1)));
+    assert_eq!(made["edit"]["library"], made["document"]["materials"]);
+    assert_eq!((made["edit"].get("bodies"), made["edit"].get("faces")), (None, None));
+
+    assert_eq!(on_body["edit"], json!({"kind": "materials", "bodies": {"body1": "m-brass"}}));
+    assert_eq!(on_body["document"]["bodyMaterial"], json!({"body1": "m-brass"}));
+
+    assert_eq!(on_face["edit"]["faces"][0]["material"], "m-brass");
+    assert_eq!(
+        (on_face["edit"]["faces"][0]["body"].clone(), on_face["edit"]["faces"][0]["face"].clone()),
+        (json!("body1"), json!(2))
+    );
+    assert_eq!(on_face["edit"]["faces"][0]["print"], on_face["document"]["facePrints"]["body1#2"]);
+    assert!(on_face["edit"]["faces"][0]["print"].is_object(), "{}", on_face["edit"]);
+    assert_eq!(on_face["document"]["faceMaterials"], json!({"body1#2": "m-brass"}));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn only_a_material_tool_sends_an_edit() {
+    let engine = RealEngine::start();
+    let mut host = Host::new(engine.socket().await);
+    host.tick().await;
+
+    let mcp = Mcp::start(&engine.mcp_env("auto", true), &std::env::temp_dir());
+    let (_mcp, out) = while_pumping(
+        mcp,
+        &mut host,
+        "feature_add",
+        json!({"feature": {"id": "b2", "type": "box", "length": 5, "width": 5, "height": 5}}),
+        4.0,
+    )
+    .await;
+    assert!(!out.is_error, "{}", out.text);
+    assert_eq!(host.proposals.len(), 1);
+    assert_eq!(host.proposals[0].get("edit"), None);
+}

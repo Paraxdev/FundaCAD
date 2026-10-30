@@ -266,3 +266,43 @@ fn a_face_moves_to_its_new_number_unless_the_timeline_is_not_whole() {
         assert_eq!(held["faceMaterials"], json!({"body1#1": "m-a"}));
     }
 }
+
+#[test]
+fn the_live_edit_says_what_a_material_edit_changed_and_nothing_else() {
+    let mut before = new_document();
+    let m_a = json!({"id": "m-a", "name": "A", "color": "#111111"});
+    before.insert("materials".into(), json!([m_a]));
+    before.insert("bodyMaterial".into(), json!({"body1": "m-a", "body2": "m-a"}));
+    before.insert("faceMaterials".into(), json!({"body1#1": "m-a", "body1#2": "m-a"}));
+    before.insert("facePrints".into(), json!({"body1#1": {"p": [1]}, "body1#2": {"p": [2]}}));
+
+    assert_eq!(live_edit(&before, &before), json!({"kind": "materials"}));
+
+    let mut after = before.clone();
+    after.insert("features".into(), json!([{"id": "other"}]));
+    after.insert("bodyMaterial".into(), json!({"body1": "m-a", "body3": "m-a"}));
+    after.insert("faceMaterials".into(), json!({"body1#1": "m-a", "body1#5": "m-a"}));
+    after.insert("facePrints".into(), json!({"body1#1": {"p": [9]}, "body1#5": {"p": [5]}}));
+    assert_eq!(
+        live_edit(&before, &after),
+        json!({"kind": "materials",
+        "bodies": {"body2": null, "body3": "m-a"},
+        "faces": [
+            {"body": "body1", "face": 1, "material": "m-a", "print": {"p": [9]}},
+            {"body": "body1", "face": 2, "material": null},
+            {"body": "body1", "face": 5, "material": "m-a", "print": {"p": [5]}},
+        ]})
+    );
+
+    let mut edited = before.clone();
+    set(&mut edited, &args(json!({"id": "m-a", "roughness": 0.5}))).unwrap();
+    let edit = live_edit(&before, &edited);
+    assert_eq!(edit["library"], Value::Array(library(&edited).into_iter().map(Value::Object).collect()));
+    assert!(edit.get("bodies").is_none() && edit.get("faces").is_none(), "{edit}");
+
+    // The starter library stands in for a missing one, so writing it down is no change.
+    let mut bare = new_document();
+    let plain = bare.clone();
+    assign(&mut bare, None, &["body1".to_string()], &[]).unwrap();
+    assert_eq!(live_edit(&plain, &bare), json!({"kind": "materials"}));
+}
