@@ -18,7 +18,7 @@ import {
 import { drawnSurfaceInFrames, readAt, weakSpot as drawnWeakSpot, type DrawnSurface } from "./stressDrawn";
 import { locator, type Locator } from "./stressLocate";
 import { weakSpotLabel } from "./stressVerdict";
-import { sentence } from "./stressWarnings";
+import { plainError, sentence } from "./stressWarnings";
 import {
   AXES,
   LOAD_MARK_COLOR,
@@ -34,7 +34,6 @@ import {
   formatStressResult,
   intoDirection,
   newSetup,
-  panelMessage,
   pinAxisSegment,
   pressureSites,
   probeLabel,
@@ -1075,10 +1074,8 @@ export function createPanels(deps: PanelsDeps) {
     });
     if (seq !== runSeq || !panels.stress) return;
     if (!res.ok) {
-      const message = panelMessage(res.message);
-      panels.stressFinished(
-        res.cancelled ? {} : { error: sentence(message), ...(res.finer ? { finer: res.finer } : {}) },
-      );
+      const message = plainError(res.message, !!res.finer);
+      panels.stressFinished(res.cancelled ? {} : { error: message, ...(res.finer ? { finer: res.finer } : {}) });
       setStatus(
         res.cancelled ? "Stress analysis cancelled" : `Stress analysis failed: ${message}`,
         res.cancelled ? "" : "error",

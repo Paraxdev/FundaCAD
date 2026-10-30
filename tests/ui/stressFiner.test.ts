@@ -100,6 +100,23 @@ describe("the finer answer of a stress Run", () => {
     expect(s.finer).toEqual(offer);
   });
 
+  it("shows the refusal in plain words, with its fix only when no button offers one", async () => {
+    const thin =
+      "the body could not be meshed, parts of the body are thinner than about one element of 1.579 mm, so the mesh would come apart or lose material there, use a smaller element size";
+    const r = rig();
+    const offered = r.ui.runStress();
+    r.settle({ ok: false, message: thin, finer: offer });
+    await offered;
+    expect(usePanelsStore().stress!.error).toBe("The mesh comes apart in the thin walls of this body.");
+
+    const plain = r.ui.runStress();
+    r.settle({ ok: false, message: thin });
+    await plain;
+    expect(usePanelsStore().stress!.error).toBe(
+      "The mesh comes apart in the thin walls of this body. Thicker walls would let it run.",
+    );
+  });
+
   it("asks for finer once when run with the offer, and the next Run drops it again", async () => {
     const r = rig();
     const first = r.ui.runStress();
