@@ -554,10 +554,11 @@ same request gives the same answer every time.
   `"refine": "fine"`. Past that the error carries
   `"finer": { "elements": 180000, "seconds": 20 }`, a rough estimate. The same request
   with `"finer": true` may then reach 250000 elements and 8 GiB once, the free memory rule
-  still applies. There is no `finer` when a thin walled part of that many elements would
-  not fit that memory (about 220000 elements at 8 GiB, a solid part fits about half and
-  can still be refused for memory), and an error from a wall that gave way names its
-  thickness and place in `message`.
+  still applies. There is no `finer` when that many elements would not fit that memory:
+  8 GiB holds about 220000 of a thin walled part and about 100000 of a part with no thin
+  wall, whose `seconds` are about 4 times as long, so such a part that loses a face past
+  the 148000 gets no `finer`. An error from a wall that gave way names its thickness and
+  place in `message`.
 - A study the solver would run with a warning, only some fixed faces lost, also retries,
   within `maxElements` (30000 by default). When a retry keeps those faces the answer has a
   finer mesh and other numbers than the warned run of an earlier build. When none does,

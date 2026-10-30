@@ -2,7 +2,7 @@
 //! standoffs, held on a side or inside two bores and pushed on two standoff tops.
 
 use fundacad_geom::builder::NoWatch;
-use fundacad_geom::fem::adapt::release_seconds;
+use fundacad_geom::fem::adapt::{elements_in_compact_memory, release_compact_seconds, release_seconds};
 use fundacad_geom::stress::{stress_result_with, StressLimits, FINER_MAX_ELEMENTS, MAX_ELEMENTS};
 use fundacad_protocol::JobResult;
 use serde_json::{json, Value};
@@ -343,6 +343,60 @@ fn a_wall_that_less_free_memory_cannot_hold_gets_no_button() {
     let r = run_within(plate_on_its_side(), limits);
     assert!(r["error"]["message"].as_str().is_some_and(|m| !m.is_empty()), "{r}");
     assert!(r["error"].get("finer").is_none(), "{r}");
+}
+
+/// A solid block loaded on a bevel narrower than its elements, so a face is lost with no wall to blame.
+fn load_on_a_narrow_bevel() -> Value {
+    const BEVEL: f64 = 0.1;
+    let [_, y, z] = BLOCK.map(|side| side / 2.0);
+    json!({
+        "document": {"features": [
+            {"id": "block", "type": "box", "length": BLOCK[0], "width": BLOCK[1], "height": BLOCK[2]},
+            {"id": "bevel", "type": "chamfer", "distance": BEVEL,
+             "edges": [{"kind": "edge", "by": "nearest", "point": [0.0, -y, z]}]},
+        ]},
+        "body": "body1",
+        "fixed": [nearest([0.0, 0.0, -z])],
+        "loads": [{"faces": [nearest([0.0, BEVEL / 2.0 - y, z - BEVEL / 2.0])], "force": [0, 0, -20]}],
+        "material": "PLA",
+    })
+}
+
+#[test]
+fn a_lost_face_with_no_wall_is_quoted_as_a_solid_part() {
+    let mut study = load_on_a_narrow_bevel();
+    study["maxElements"] = json!(8000);
+    let r = run_within(study, no_time_limit());
+    assert_finer_answer(&r, 8_000.0..30_000.0);
+    let elements = num(&r["error"]["finer"]["elements"]) as usize;
+    assert_eq!(num(&r["error"]["finer"]["seconds"]), release_compact_seconds(elements).ceil(), "{r}");
+}
+
+// 1 GiB holds about 46000 elements of a thin walled part and 22000 of a solid one.
+#[test]
+fn a_lost_face_with_no_wall_gets_no_button_when_a_solid_part_would_not_fit() {
+    let limits = StressLimits { auto_elements: 30_000, finer_memory_cap: 1 << 30, ..no_time_limit() };
+    let r = run_within(load_on_a_narrow_bevel(), limits);
+    assert!(r["error"]["message"].as_str().is_some_and(|m| m.contains("got no elements")), "{r}");
+    assert!(r["error"].get("finer").is_none(), "{r}");
+}
+
+#[test]
+fn the_memory_a_solid_part_asks_is_what_its_price_says() {
+    let mut study = load_on_a_narrow_bevel();
+    study["fixed"] = json!([nearest([0.0, 0.0, -BLOCK[2] / 2.0])]);
+    study["loads"] = json!([{"faces": [nearest([0.0, 0.0, BLOCK[2] / 2.0])], "force": [0, 0, -20]}]);
+    study["refine"] = json!("off");
+    for elements in [30_000, 60_000, 100_000] {
+        study["maxElements"] = json!(elements);
+        let r = run_within(study.clone(), StressLimits { memory_cap: 1 << 20, ..no_time_limit() });
+        let message = r["error"]["message"].as_str().unwrap_or_else(|| panic!("{r}"));
+        let words: Vec<&str> = message.split_whitespace().collect();
+        let meshed: f64 = words[words.iter().position(|w| *w == "of").unwrap() + 1].parse().unwrap();
+        let gb: f64 = words[words.iter().position(|w| *w == "about").unwrap() + 1].parse().unwrap();
+        let said = elements_in_compact_memory((gb * 1e9) as u64) as f64;
+        assert!((said / meshed - 1.0).abs() < 0.25, "{meshed} elements: {gb} GB holds {said}");
+    }
 }
 
 #[test]

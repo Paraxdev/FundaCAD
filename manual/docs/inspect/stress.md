@@ -53,7 +53,7 @@ More options holds Mesh detail, how finely the part is split into small pieces. 
 | Standard | Splits finer where the stress is high and solves again. |
 | Fine | Finds the peak more closely and takes longer. |
 
-Thin walls and small faces get a finer split by themselves. If that would take too long or need too much memory, the run stops and offers one button, such as Run with finer detail (about 20 seconds). Press it to run once with the limit raised. A part too thin for even that run gets no button, the message says which wall is the thinnest.
+Thin walls and small faces get a finer split by themselves. If that would take too long or need too much memory, the run stops and offers one button, such as Run with finer detail (about 20 seconds). Press it to run once with the limit raised. A part too thin for even that run gets no button, the message says which wall is the thinnest. A solid part with a face too narrow for the mesh gets no button either, as a split that fine would not fit in memory, so pick a wider face.
 
 A study that used to warn that a fixed face got too little of the split now tries a finer one first, so its numbers can differ from an older result.
 

@@ -67,7 +67,7 @@ pub fn release_seconds(elements: usize) -> f64 {
     RELEASE_SECONDS_AT_REFERENCE * (elements as f64 / RELEASE_REFERENCE_ELEMENTS).powf(WORK_EXPONENT)
 }
 
-/// [`release_seconds`] for a part compact enough that the solver's memory is what stopped it.
+/// [`release_seconds`] for a part with no thin wall, or compact enough that the solver's memory is what stopped it.
 pub fn release_compact_seconds(elements: usize) -> f64 {
     RELEASE_COMPACT_SLOWDOWN * release_seconds(elements)
 }
@@ -78,13 +78,20 @@ pub fn release_elements_within(seconds: f64) -> usize {
 }
 
 /// Standoff plates with walls 0.8 to 1.2 mm asked 1.5 GB at 58210 elements, 2.7 at 98261, 4.5 at 147619, 6.4 and 7.8
-/// near 198000, 12.6 at 298265 and 14.5 at 338650, and peaked at 3.0 GB at 98094. A solid part takes about 2.7 times that.
+/// near 198000, 12.6 at 298265 and 14.5 at 338650, and peaked at 3.0 GB at 98094.
 const THIN_FACTOR_BYTES_AT_REFERENCE: f64 = 3e9;
 const FACTOR_EXPONENT: f64 = 4.0 / 3.0;
+/// A solid block asked 0.9 GB at 19602 elements, about 2.7 times a thin walled part of as many.
+const COMPACT_FACTOR_GROWTH: f64 = 2.7;
 
 /// The most elements of a thin walled part whose factorisation fits in `bytes`.
 pub fn elements_in_memory(bytes: u64) -> usize {
     (RELEASE_REFERENCE_ELEMENTS * (bytes as f64 / THIN_FACTOR_BYTES_AT_REFERENCE).powf(1.0 / FACTOR_EXPONENT)) as usize
+}
+
+/// The most elements of a part with no thin wall whose factorisation fits in `bytes`.
+pub fn elements_in_compact_memory(bytes: u64) -> usize {
+    elements_in_memory((bytes as f64 / COMPACT_FACTOR_GROWTH) as u64)
 }
 
 /// The element cap of the next refinement pass after the passes of `counts` (pass 0 first), or None when the plan's

@@ -1091,9 +1091,17 @@ impl Finer {
     /// The run past `ceiling` elements that should keep `wall`, when the lifted limits can hold it, so the button
     /// never promises a run the solver would refuse for memory.
     fn past(volume: f64, ceiling: usize, wall: Option<ThinWall>, limits: &StressLimits) -> Option<Finer> {
+        Finer::within(volume, ceiling, wall, solve::memory_limit_under(limits.finer_memory_cap))
+    }
+
+    fn within(volume: f64, ceiling: usize, wall: Option<ThinWall>, memory: u64) -> Option<Finer> {
         let floor = size_floor(volume, ceiling);
-        let most =
-            adapt::elements_in_memory(solve::memory_limit_under(limits.finer_memory_cap)).min(FINER_MAX_ELEMENTS);
+        // No wall found means no thin part to price it as, and a solid one asks more memory and time.
+        let (holds, of): (_, fn(usize) -> Finer) = match wall {
+            Some(_) => (adapt::elements_in_memory(memory), Finer::of),
+            None => (adapt::elements_in_compact_memory(memory), Finer::of_compact),
+        };
+        let most = holds.min(FINER_MAX_ELEMENTS);
         let elements_at = |h: f64| (TETS_PER_SIZE_CUBED * volume / h.powi(3)).ceil() as usize;
         // The retry that fits shrinks once more below the wall's size, as the finer run's own retry does.
         let elements = match wall.map(|w| w.thickness * WALL_SHARE * RETRY_SHRINK) {
@@ -1101,7 +1109,7 @@ impl Finer {
             // No size is known to bring a lost face back, so any finer mesh the memory holds may do.
             _ => elements_at(floor * FINER_STEP).min(most).max(ceiling + 1),
         };
-        (elements <= most).then(|| Finer::of(elements))
+        (elements <= most).then(|| of(elements))
     }
 }
 
