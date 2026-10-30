@@ -374,6 +374,28 @@ async fn a_material_tool_reaches_the_app_as_an_edit_beside_the_document_it_falls
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn a_live_list_never_asks_for_a_build_to_move_face_numbers() {
+    let engine = RealEngine::start();
+    let mut host = Host::new(engine.socket().await);
+    host.tick().await;
+
+    let mcp = Mcp::start(&engine.mcp_env("auto", true), &std::env::temp_dir());
+    let (mcp, made) =
+        while_pumping(mcp, &mut host, "material_set", json!({"id": "m-brass", "color": "#b5a642"}), 4.0).await;
+    assert!(!made.is_error, "{}", made.text);
+    let face = json!({"material": "m-brass", "faces": [{"body": "body1", "face": 2}]});
+    let (mcp, on_face) = while_pumping(mcp, &mut host, "material_assign", face, 4.0).await;
+    assert!(!on_face.is_error, "{}", on_face.text);
+    let added = json!({"feature": {"id": "b2", "type": "box", "length": 5, "width": 5, "height": 5}});
+    let (mcp, out) = while_pumping(mcp, &mut host, "feature_add", added, 4.0).await;
+    assert!(!out.is_error, "{}", out.text);
+
+    let (_mcp, list) = while_pumping(mcp, &mut host, "material_list", json!({}), 4.0).await;
+    assert!(list.text.contains("body1 F2"), "{}", list.text);
+    assert!(!list.text.contains("has not been built"), "{}", list.text);
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn only_a_material_tool_sends_an_edit() {
     let engine = RealEngine::start();
     let mut host = Host::new(engine.socket().await);
