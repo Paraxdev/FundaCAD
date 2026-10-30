@@ -10,7 +10,7 @@ use fundacad_protocol::CancelToken;
 use opencascade::primitives::Shape;
 use serde_json::Value;
 use wasmtime::component::{HasSelf, Linker, Resource, ResourceTable};
-use wasmtime::{Config, Engine, Store, StoreLimits, StoreLimitsBuilder, UpdateDeadline};
+use wasmtime::{Config, Engine, ResourceLimiter, Store, StoreLimits, StoreLimitsBuilder, UpdateDeadline};
 use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 
 use super::kernel_api as k;
@@ -53,10 +53,73 @@ enum Scope {
     Export(PathBuf),
 }
 
+/// StoreLimits caps each linear memory on its own, this also caps their sum.
+pub(super) struct Limits {
+    per_store: StoreLimits,
+    memory_total: usize,
+    last_growth: usize,
+}
+
+pub(super) fn store_limits() -> Limits {
+    let per_store = StoreLimitsBuilder::new()
+        .memory_size(super::MEMORY_LIMIT)
+        .table_elements(1 << 20)
+        .instances(64)
+        .tables(64)
+        .memories(8)
+        .trap_on_grow_failure(true)
+        .build();
+    Limits { per_store, memory_total: 0, last_growth: 0 }
+}
+
+impl ResourceLimiter for Limits {
+    fn memory_growing(&mut self, current: usize, desired: usize, maximum: Option<usize>) -> wasmtime::Result<bool> {
+        if !self.per_store.memory_growing(current, desired, maximum)? {
+            return Ok(false);
+        }
+        let growth = desired.saturating_sub(current);
+        let total = self.memory_total.saturating_add(growth);
+        if total > super::MEMORY_LIMIT {
+            return Err(wasmtime::Error::msg(format!(
+                "the plugin's memories passed their cap of {} MiB in total",
+                super::MEMORY_LIMIT >> 20
+            )));
+        }
+        self.memory_total = total;
+        self.last_growth = growth;
+        Ok(true)
+    }
+
+    fn memory_grow_failed(&mut self, error: wasmtime::Error) -> wasmtime::Result<()> {
+        self.memory_total -= std::mem::take(&mut self.last_growth);
+        self.per_store.memory_grow_failed(error)
+    }
+
+    fn table_growing(&mut self, current: usize, desired: usize, maximum: Option<usize>) -> wasmtime::Result<bool> {
+        self.per_store.table_growing(current, desired, maximum)
+    }
+
+    fn table_grow_failed(&mut self, error: wasmtime::Error) -> wasmtime::Result<()> {
+        self.per_store.table_grow_failed(error)
+    }
+
+    fn instances(&self) -> usize {
+        self.per_store.instances()
+    }
+
+    fn tables(&self) -> usize {
+        self.per_store.tables()
+    }
+
+    fn memories(&self) -> usize {
+        self.per_store.memories()
+    }
+}
+
 pub struct State {
     table: ResourceTable,
     wasi: WasiCtx,
-    limits: StoreLimits,
+    limits: Limits,
     scope: Scope,
     cancel: Option<CancelToken>,
     files_read: bool,
@@ -167,14 +230,7 @@ impl Component {
             .allow_udp(false)
             .allow_ip_name_lookup(false)
             .build();
-        let limits = StoreLimitsBuilder::new()
-            .memory_size(super::MEMORY_LIMIT)
-            .table_elements(1 << 20)
-            .instances(64)
-            .tables(64)
-            .memories(8)
-            .trap_on_grow_failure(true)
-            .build();
+        let limits = store_limits();
         let mut store = Store::new(
             engine(),
             State {

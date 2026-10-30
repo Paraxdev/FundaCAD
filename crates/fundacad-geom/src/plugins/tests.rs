@@ -323,3 +323,21 @@ fn a_finished_export_replaces_the_old_file_with_only_its_own_bytes() {
     assert_eq!(dir_names(&root), ["project.3mf"]);
     let _ = std::fs::remove_dir_all(&root);
 }
+
+#[test]
+fn a_plugin_store_caps_its_linear_memories_in_total() {
+    use wasmtime::ResourceLimiter;
+    let over_half = MEMORY_LIMIT / 2 + (64 << 10);
+    let mut limits = host::store_limits();
+    assert!(limits.memory_growing(0, over_half, None).unwrap());
+    assert!(!matches!(limits.memory_growing(0, over_half, None), Ok(true)));
+}
+
+#[test]
+fn one_plugin_memory_still_grows_to_the_whole_cap() {
+    use wasmtime::ResourceLimiter;
+    let mut limits = host::store_limits();
+    assert!(limits.memory_growing(0, MEMORY_LIMIT / 2, None).unwrap());
+    assert!(limits.memory_growing(MEMORY_LIMIT / 2, MEMORY_LIMIT, None).unwrap());
+    assert!(!matches!(limits.memory_growing(MEMORY_LIMIT, MEMORY_LIMIT + (64 << 10), None), Ok(true)));
+}
