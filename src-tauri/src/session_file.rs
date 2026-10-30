@@ -6,18 +6,25 @@ use std::path::{Path, PathBuf};
 /// Also read by `crates/fundacad-mcp/src/app_session.rs`, which resolves the same directory from the bundle identifier.
 pub const FILE_NAME: &str = "session.json";
 
-/// Serialised by hand, four fields are not worth a serde_json dependency. `pid` is for a human telling two windows
+/// Serialised by hand, a few fields are not worth a serde_json dependency. `pid` is for a human telling two windows
 /// apart; no liveness is stored, as a pid can be recycled and the reader's handshake answers that anyway.
 #[derive(Debug, PartialEq, Eq)]
 pub struct SessionInfo {
     pub port: u16,
     pub token: String,
     pub pid: u32,
+    /// Where the engine may write an export, so an assistant attached to it stages its exports there. Left out when
+    /// the path is not UTF-8, as JSON cannot carry it; that assistant then writes beside its path as before.
+    pub export_dir: Option<PathBuf>,
 }
 
 /// Always escaped, though the token is hex today: a quote in a token would silently parse into a different token.
 pub fn to_json(info: &SessionInfo) -> String {
-    format!("{{\"port\":{},\"token\":{},\"pid\":{}}}\n", info.port, json_string(&info.token), info.pid)
+    let export_dir = match info.export_dir.as_deref().and_then(Path::to_str) {
+        Some(dir) => format!(",\"exportDir\":{}", json_string(dir)),
+        None => String::new(),
+    };
+    format!("{{\"port\":{},\"token\":{},\"pid\":{}{export_dir}}}\n", info.port, json_string(&info.token), info.pid)
 }
 
 /// A JSON string literal. Minimal and complete for what goes in this file:

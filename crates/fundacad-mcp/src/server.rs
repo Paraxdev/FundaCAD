@@ -535,7 +535,7 @@ impl FundaCad {
             return;
         };
         self.state.lock().await.app_build = app.build.clone();
-        let link = Arc::new(EngineLink::attach(app.port, app.token.clone()));
+        let link = Arc::new(EngineLink::attach(app.port, app.token.clone()).with_export_dir(app.export_dir.clone()));
         let mut live = LiveLink::new();
         let doc = match live.pull(&link).await {
             Ok(doc) => doc,
@@ -1280,8 +1280,8 @@ note: left out of the file, because this build cannot read them and a .funda has
                 return Ok(failure(format!("No such directory: {}", parent.display())));
             }
         }
-        // The engine writes while building, before a failure is known, so it writes to a TEMPORARY sibling that is
-        // moved into place only once the export is accepted; a refusal never touches what is already at `path`.
+        // The engine writes while building, before a failure is known, so it writes to a TEMPORARY folder whose file
+        // is moved into place only once the export is accepted; a refusal never touches what is already at `path`.
         let separate = truthy(args.get("separate"));
         let wanted = args.get("body").and_then(Value::as_str).filter(|b| !b.is_empty()).map(str::to_string);
         if separate && wanted.is_some() {
@@ -1347,12 +1347,22 @@ note: left out of the file, because this build cannot read them and a .funda has
                 }
             }
         }
-        // A temporary folder beside `path` holding a file of the same name, since the STEP's top assembly
-        // is named after the file; a refusal removes only the folder.
-        let tmp_root = temp_sibling(&path);
-        if let Err(e) = std::fs::create_dir(&tmp_root) {
-            return Ok(failure(format!("Could not write beside {}: {e}", path.display())));
-        }
+        // A temporary folder holding a file of the same name, since the STEP's top assembly is named after the
+        // file; a refusal removes only the folder. Beside `path`, unless the app's engine may write only in its own.
+        let copy = link.export_dir.is_some();
+        let tmp_root = match &link.export_dir {
+            Some(root) => match crate::stage::make(root) {
+                Ok(dir) => dir,
+                Err(e) => return Ok(failure(format!("Could not write in the app's folder {}: {e}", root.display()))),
+            },
+            None => {
+                let dir = temp_sibling(&path);
+                if let Err(e) = std::fs::create_dir(&dir) {
+                    return Ok(failure(format!("Could not write beside {}: {e}", path.display())));
+                }
+                dir
+            }
+        };
         // A separate export's folder is the path less its extension, split as the engine splits it. A path whose
         // extension is not the format's is the whole folder name, and the parts take the format's extension.
         let file_name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
@@ -1424,7 +1434,7 @@ note: left out of the file, because this build cannot read them and a .funda has
             )));
         }
         let mut out = if separate {
-            match place_files(&result, &folder, page, full, guard) {
+            match place_files(&result, &folder, page, full, guard, (&tmp_root, copy)) {
                 Ok(written) => written,
                 Err(e) => {
                     discard();
@@ -1437,7 +1447,7 @@ note: left out of the file, because this build cannot read them and a .funda has
                 discard();
                 return Ok(failure(why));
             }
-            if let Err(e) = std::fs::rename(&tmp_path, &path) {
+            if let Err(e) = crate::stage::put(&tmp_path, &path, copy) {
                 discard();
                 return Ok(failure(format!("Could not write {}: {e}", path.display())));
             }
@@ -1507,12 +1517,19 @@ fn place_files(
     page: Page,
     full: bool,
     guard: impl Fn(&Path) -> Option<String>,
+    (stage, copy): (&Path, bool),
 ) -> Result<String, String> {
     let written: Vec<PathBuf> = result
         .get("paths")
         .and_then(Value::as_array)
         .map(|a| a.iter().filter_map(Value::as_str).map(PathBuf::from).collect())
         .unwrap_or_default();
+    if let Some(from) = written.iter().find(|from| !crate::stage::inside(from, stage)) {
+        return Err(format!(
+            "The engine named a file outside its export folder: {}. No part was written.",
+            from.display()
+        ));
+    }
     if folder.exists() && !folder.is_dir() {
         return Err(format!("{} is a file, and a separate export writes a folder of that name.", folder.display()));
     }
@@ -1529,7 +1546,7 @@ fn place_files(
     for from in &written {
         let Some(name) = from.file_name() else { continue };
         let to = folder.join(name);
-        if let Err(e) = std::fs::rename(from, &to) {
+        if let Err(e) = crate::stage::put(from, &to, copy) {
             // The ones already moved replaced what was there: say which, or
             // the folder reads as untouched when it now mixes old and new.
             let placed = if lines.is_empty() {

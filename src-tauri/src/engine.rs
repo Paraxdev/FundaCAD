@@ -327,6 +327,7 @@ fn spawn(inner: &Inner) -> std::io::Result<std::process::ChildStdout> {
     let stdout = child.stdout.take().ok_or_else(|| std::io::Error::other("no worker stdout"))?;
     if let Some(stderr) = child.stderr.take() {
         let session_dir = inner.session_dir.clone();
+        let export_dir = inner.export_root.clone();
         let tail = inner.stderr_tail.clone();
         lock(&tail).clear();
         std::thread::spawn(move || {
@@ -335,7 +336,8 @@ fn spawn(inner: &Inner) -> std::io::Result<std::process::ChildStdout> {
                 // Written once the port answers, so the file never names a port
                 // nobody is listening on yet.
                 if let (Some(dir), Some(port)) = (&session_dir, announced_port(&mut announced, &line)) {
-                    let info = crate::session_file::SessionInfo { port, token: token.clone(), pid: std::process::id() };
+                    let (token, pid, export_dir) = (token.clone(), std::process::id(), export_dir.clone());
+                    let info = crate::session_file::SessionInfo { port, token, pid, export_dir };
                     if let Err(e) = crate::session_file::write_into(dir, &info) {
                         eprintln!("[engine] no session file: {e}");
                     }
