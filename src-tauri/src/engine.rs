@@ -476,11 +476,16 @@ pub fn engine_attach(state: tauri::State<'_, Engine>, channel: Channel<InvokeRes
 
 /// One request, as the UTF-8 bytes of its JSON.
 #[tauri::command]
-pub fn engine_send(state: tauri::State<'_, Engine>, request: Request<'_>) -> Result<(), String> {
+pub fn engine_send(
+    state: tauri::State<'_, Engine>,
+    held: tauri::State<'_, crate::doc_paths::Provenance>,
+    request: Request<'_>,
+) -> Result<(), String> {
     let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
         return Err("engine_send takes the request as raw bytes".into());
     };
     let text = String::from_utf8(bytes.clone()).map_err(|e| e.to_string())?;
+    check_request_path(&text, &held)?;
     let Head { id, op, target, soft, doc, all } = head(&text);
     remember(
         &state.0.recent,
@@ -516,6 +521,29 @@ pub fn engine_send(state: tauri::State<'_, Engine>, request: Request<'_>) -> Res
         lock(&state.0.in_flight).remove(&id);
         lock(&state.0.cancels).remove(&id);
     })
+}
+
+/// The `path` the worker reads for an import or writes for an export passes the checks the container commands make.
+/// A request with a repeated key fails the strict parse and is read like the worker reads it, the last one counting.
+pub fn check_request_path(text: &str, held: &crate::doc_paths::Provenance) -> Result<(), String> {
+    #[derive(serde::Deserialize)]
+    struct Strict {
+        op: Option<Value>,
+        path: Option<Value>,
+    }
+    let (op, path) = match serde_json::from_str::<Strict>(text) {
+        Ok(s) => (s.op, s.path),
+        Err(_) => match serde_json::from_str::<serde_json::Map<String, Value>>(text) {
+            Ok(mut m) => (m.remove("op"), m.remove("path")),
+            Err(_) => return Ok(()),
+        },
+    };
+    let Some(Value::String(path)) = path else { return Ok(()) };
+    match op.as_ref().and_then(Value::as_str) {
+        Some("import") => held.refuse_unvouched(&path),
+        Some("export" | "exportWith") => held.check_write(&path).map(drop),
+        _ => Ok(()),
+    }
 }
 
 /// Seconds since the Unix epoch with milliseconds, no date crate needed.

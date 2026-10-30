@@ -221,6 +221,18 @@ pub fn check_save(raw: &str) -> Result<PathBuf, String> {
     Ok(path.to_path_buf())
 }
 
+/// An absolute path that names no Windows device or file stream, for a file the engine writes in any format.
+pub fn check_write(raw: &str) -> Result<PathBuf, String> {
+    let path = Path::new(raw);
+    if !path.is_absolute() {
+        return Err(format!("{raw} is not a full path, so nothing was written."));
+    }
+    if cfg!(windows) && (names_a_device(path) || names_a_stream(path)) {
+        return Err(format!("{raw} names a Windows device or a file stream, so nothing was written."));
+    }
+    Ok(path.to_path_buf())
+}
+
 /// Windows maps these names to a device whatever extension follows, and ignores trailing spaces before it.
 fn names_a_device(path: &Path) -> bool {
     let name = path.file_name().map(|n| n.to_string_lossy().to_uppercase()).unwrap_or_default();
@@ -300,6 +312,11 @@ impl Provenance {
     pub fn check_save(&self, raw: &str) -> Result<PathBuf, String> {
         self.refuse_unvouched(raw)?;
         check_save(raw)
+    }
+
+    pub fn check_write(&self, raw: &str) -> Result<PathBuf, String> {
+        self.refuse_unvouched(raw)?;
+        check_write(raw)
     }
 
     pub fn stat(&self, raw: &str) -> Result<Option<DocStat>, String> {
