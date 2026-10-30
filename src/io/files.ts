@@ -49,7 +49,9 @@ import { importedBodyColors } from "../document/faceColors";
 import { openNotices } from "../document/openNotice";
 import type { FaceColorRuns } from "../types";
 import { isSessionEnded, type OpenOp } from "../document/session";
-import { nativeDialog } from "./nativeDialog";
+import { dialogExts, nativeDialog } from "./nativeDialog";
+
+export { dialogExts };
 
 const isTauri = () => "__TAURI_INTERNALS__" in window;
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -796,21 +798,6 @@ export const IMPORT_EXTS = [
   "3ds",
   "svg",
 ];
-
-// FreeCAD writes .FCStd.
-const MIXED_CASE_EXTS = ["FCStd"];
-
-/** GTK file dialogs on Linux match case, so a list handed to one offers each
- *  extension in lower and upper case. */
-export function dialogExts(exts: readonly string[]): string[] {
-  const out = new Set<string>();
-  for (const e of exts) {
-    out.add(e.toLowerCase());
-    out.add(e.toUpperCase());
-  }
-  for (const m of MIXED_CASE_EXTS) if (out.has(m.toLowerCase())) out.add(m);
-  return [...out];
-}
 
 /** Import an external mesh or B-rep file as a new body. The engine reads it by path, so this needs the native app. */
 export async function importModel(store: DocumentStore, geometry: GeometryBackend) {

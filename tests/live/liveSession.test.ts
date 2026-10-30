@@ -13,6 +13,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DocumentStore, EMPTY_DOCUMENT } from "../../src/document/store";
 import { GUIDE_LINGER_MS, LiveSessionHost, REFUSED_STALE } from "../../src/live/liveSession";
 import { GuideSession } from "../../src/ui/guide/guideSession";
+import type { AskUser, PathAsk } from "../../src/live/pathAsk";
 import { emptySnapshot } from "../../src/ui/guide/wait";
 import type { CadDocument, SectionView } from "../../src/types";
 import type { GeometryBackend } from "../../src/geometry/client";
@@ -588,5 +589,117 @@ describe("guide mode over the live session", () => {
     expect(guide.state.step).not.toBeNull();
     await host.stop();
     expect(guide.state.step).toBeNull();
+  });
+});
+
+describe("an assistant's path ask in the window", () => {
+  const ASK = { askId: "g-1", kind: "save", tool: "doc_save", path: "/home/me/bracket.funda", exts: ["funda"] };
+  const PICK = "/run/user/1000/doc/ab12/bracket.funda";
+  const settle = () => new Promise((r) => setTimeout(r, 0));
+
+  function rig(askUser: AskUser) {
+    const geo = backend();
+    const store = new DocumentStore(geo, EMPTY_DOCUMENT);
+    const host = new LiveSessionHost(store, geo, () => true, undefined, askUser);
+    return { geo, host };
+  }
+
+  const answers = (geo: StubBackend) => geo.sent.filter((m) => m.op === "session_answer").map((m) => m.payload);
+
+  function pending() {
+    const shown: { ask: PathAsk; pick: (p: string | null) => void }[] = [];
+    const askUser: AskUser = (ask) => new Promise((pick) => shown.push({ ask, pick }));
+    return { shown, askUser };
+  }
+
+  it("shows the ask in a dialog and answers with the user's pick", async () => {
+    const askUser = vi.fn<AskUser>(async () => PICK);
+    const { geo, host } = rig(askUser);
+    geo.reply = { ok: true, guests: ["an assistant"], proposals: [], asks: [{ ...ASK, name: "an assistant" }] };
+    host.start();
+    await host.tick();
+    await settle();
+    await host.stop();
+
+    expect(askUser).toHaveBeenCalledTimes(1);
+    expect(askUser.mock.calls[0]![0]).toMatchObject({ askId: "g-1", kind: "save", path: ASK.path, exts: ["funda"] });
+    expect(answers(geo)).toEqual([{ askId: "g-1", path: PICK }]);
+  });
+
+  it("answers null when the user cancels or the dialog fails", async () => {
+    const askUser = vi.fn<AskUser>(async (a) => {
+      if (a.askId === "g-2") throw new Error("no portal");
+      return null;
+    });
+    const { geo, host } = rig(askUser);
+    geo.reply = { ok: true, guests: [], proposals: [], asks: [ASK, { ...ASK, askId: "g-2" }] };
+    host.start();
+    await host.tick();
+    await settle();
+    await host.stop();
+
+    expect(answers(geo)).toEqual([
+      { askId: "g-1", path: null },
+      { askId: "g-2", path: null },
+    ]);
+  });
+
+  it("keeps publishing while a dialog is open and shows asks one at a time", async () => {
+    const { shown, askUser } = pending();
+    const { geo, host } = rig(askUser);
+    geo.reply = { ok: true, guests: [], proposals: [], asks: [ASK] };
+    host.start();
+    await host.tick();
+    geo.reply = { ok: true, guests: [], proposals: [], asks: [{ ...ASK, askId: "g-2", kind: "open" }] };
+    await host.tick();
+    await settle();
+
+    expect(geo.sent.filter((m) => m.op === "session_host").length, "the open dialog held the tick").toBe(2);
+    expect(
+      shown.map((s) => s.ask.askId),
+      "a second dialog opened over the first",
+    ).toEqual(["g-1"]);
+
+    shown[0]!.pick(PICK);
+    await settle();
+    expect(answers(geo)).toEqual([{ askId: "g-1", path: PICK }]);
+    expect(shown.map((s) => s.ask.askId)).toEqual(["g-1", "g-2"]);
+
+    shown[1]!.pick(null);
+    await settle();
+    await host.stop();
+    expect(answers(geo)).toEqual([
+      { askId: "g-1", path: PICK },
+      { askId: "g-2", path: null },
+    ]);
+  });
+
+  it("ignores a malformed ask", async () => {
+    const askUser = vi.fn<AskUser>(async () => PICK);
+    const { geo, host } = rig(askUser);
+    const bad = [null, "junk", { ...ASK, askId: "" }, { ...ASK, kind: "delete" }, { ...ASK, path: 7 }];
+    geo.reply = { ok: true, guests: [], proposals: [], asks: bad };
+    host.start();
+    await host.tick();
+    await settle();
+    await host.stop();
+
+    expect(askUser).not.toHaveBeenCalled();
+    expect(answers(geo)).toEqual([]);
+  });
+
+  it("drops waiting asks when the window stops sharing", async () => {
+    const { shown, askUser } = pending();
+    const { geo, host } = rig(askUser);
+    geo.reply = { ok: true, guests: [], proposals: [], asks: [ASK, { ...ASK, askId: "g-2" }] };
+    host.start();
+    await host.tick();
+    await settle();
+    await host.stop();
+
+    shown[0]!.pick(PICK);
+    await settle();
+    expect(shown.map((s) => s.ask.askId)).toEqual(["g-1"]);
+    expect(answers(geo), "an answer went out after the release").toEqual([]);
   });
 });
