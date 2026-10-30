@@ -70,6 +70,8 @@ const LOG_EVERY = 240;
 const MAX_SIDE = 8192;
 /** Bands are whole rows, so a coarse grid that takes in the last row and column finds them. */
 const ALPHA_GRID = 8;
+/** The first alpha of a coarse picture, sent ahead of a first sample too slow for the budget. */
+const COARSE_ALPHA = 128;
 
 /** The native side writes alpha 0 where no sample landed, and over all of a fault or picture frame. */
 function everyPixelSampled(f: NativeFrame): boolean {
@@ -415,12 +417,13 @@ export class NativeTracer implements TracerBackend {
   private bloomSent: Promise<unknown> = Promise.resolve();
   private cameras = new FrameCameras();
   private shownSeq: number | null = null;
-  private slot: PresentSlot<number>;
+  private shownCoarse = false;
+  private slot: PresentSlot<{ seq: number; coarse: boolean }>;
   readonly scene: NativeScene;
 
   constructor(private o: NativeTracerOptions = {}) {
     this.canvas = o.canvas ?? document.createElement("canvas");
-    this.slot = new PresentSlot((seq) => this.showFrame(seq), o.raf, o.caf);
+    this.slot = new PresentSlot(({ seq, coarse }) => this.showFrame(seq, coarse), o.raf, o.caf);
     this.scene = new NativeScene(o.call ?? tauriCall, (e) =>
       this.fault(`The native tracer refused the scene: ${e instanceof Error ? e.message : String(e)}`),
     );
@@ -602,7 +605,7 @@ export class NativeTracer implements TracerBackend {
       if (frame.generation >= this.generation && whole && !this.disposed && everyPixelSampled(frame)) {
         // Uploaded now so the shared buffer goes back at once, an unshown frame holds no slot of the pool.
         this.blit.upload(frame);
-        this.slot.put(frame.seq);
+        this.slot.put({ seq: frame.seq, coarse: frame.pixels[3] === COARSE_ALPHA });
         this.count++;
       }
     } finally {
@@ -613,9 +616,10 @@ export class NativeTracer implements TracerBackend {
     return ms;
   }
 
-  private showFrame(seq: number) {
+  private showFrame(seq: number, coarse: boolean) {
     this.blit?.show();
     this.shownSeq = seq;
+    this.shownCoarse = coarse;
     if (!this.resizeTimer && !this.resizing) this.sized = true;
   }
 
@@ -722,7 +726,7 @@ export class NativeTracer implements TracerBackend {
     if (s.fault) this.fault(`The native tracer stopped: ${s.fault}`);
     if (epoch !== this.epoch) return 0;
     // Status runs ahead of the frames: the host must not put the trace up over an older camera's picture.
-    const onCanvas = this.shownSeq !== null && this.cameras.isNewest(this.shownSeq);
+    const onCanvas = this.shownSeq !== null && !this.shownCoarse && this.cameras.isNewest(this.shownSeq);
     return this.sized && onCanvas ? s.samples : 0;
   }
 

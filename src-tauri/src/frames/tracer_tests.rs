@@ -113,6 +113,44 @@ fn a_camera_sent_during_a_frame_answers_at_once_and_the_next_frame_traces_with_i
 }
 
 #[test]
+fn a_newer_camera_drops_the_sample_behind_a_coarse_picture_at_the_next_frame() {
+    let _turn = one_at_a_time();
+    let Ok(t) = tracer() else {
+        eprintln!("skipped: no native tracer");
+        return;
+    };
+    with(|t| t.set_cap(4096)).unwrap();
+    let camera = Camera {
+        eye: [3.5, -12.0, 4.25],
+        target: [0.5, 1.5, -0.75],
+        up: [0.0, 0.0, 1.0],
+        fov: 38.0,
+        ortho: None,
+        lens: None,
+    };
+    let mut out = vec![0; 256 * 192 * 4];
+    t.render(&mut out, 256, 192, 1);
+    pt_camera(camera).unwrap();
+    with(|t| t.set_frame_budget(256 * 8)).unwrap();
+    t.render(&mut out, 256, 192, 2);
+    assert_eq!(out[3], 128, "a first sample over the budget sends a coarse picture first");
+    assert!(out.chunks(4).all(|p| p[3] != 0), "a coarse picture left with a pixel no sample reached");
+    {
+        let mut s = t.lock();
+        s.tracer.set_frame_budget(256 * 8);
+        assert!(s.tracer.step());
+        assert!(s.tracer.sample_under_way() && s.tracer.coarse_out());
+    }
+    pt_camera(Camera { eye: [-6.0, 9.5, 2.0], ..camera }).unwrap();
+    assert!(t.lock().tracer.sample_under_way(), "only a frame may drop the sample, a status counts it");
+    assert!(t.aim().camera.is_some());
+    drop(t.lock_for(Some(3)));
+    assert!(t.aim().camera.is_none(), "the next frame did not take the newer camera");
+    drop(t);
+    release();
+}
+
+#[test]
 fn a_camera_waits_for_the_first_sample_under_way_and_a_picture_does_not() {
     let _turn = one_at_a_time();
     let Ok(t) = tracer() else {

@@ -173,7 +173,7 @@ impl TracerSource {
             if let Some(seq) = frame {
                 a.drawn = seq;
             }
-            if s.tracer.sample_under_way() {
+            if s.tracer.sample_under_way() && !(frame.is_some() && s.tracer.coarse_out()) {
                 None
             } else {
                 a.camera.take()
@@ -233,6 +233,12 @@ impl FrameSource for TracerSource {
             // A mutex is not fair, so without a pause the sync commands on the UI thread wait for the whole sample.
             std::thread::sleep(LOCK_GAP);
             s = self.lock();
+            // A newer camera drops the sample behind a coarse picture. The page tied this seq to the camera before, so
+            // this frame goes out empty and the next one takes the camera.
+            if s.tracer.coarse_out() && self.aim().camera.is_some() {
+                out.fill(0);
+                return;
+            }
         }
     }
 }

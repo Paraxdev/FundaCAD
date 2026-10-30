@@ -140,6 +140,33 @@ describe("the native tracer's present slot", () => {
     expect(await t.samples()).toBe(1);
     t.dispose();
   });
+
+  it("shows a coarse picture of the newest camera but counts no samples on it", async () => {
+    const link = new FakeLink();
+    const next = link.next.bind(link);
+    link.next = async () => {
+      const f = await next();
+      if (f.seq === 2) f.pixels[3] = 128;
+      return f;
+    };
+    const { t, draws, refresh } = setup(link, 1, async (cmd) =>
+      cmd === "pt_camera" ? 1 : cmd === "pt_status" ? { samples: 1, fault: null } : undefined,
+    );
+    await t.init();
+    t.updateCamera(camera(), null);
+    await t.scene.idle();
+    for (let i = 0; i < 2; i++) {
+      await t.renderSample(0);
+      refresh();
+    }
+    expect(draws).toEqual([1, 2]);
+    expect(t.shownView()).not.toBeNull();
+    expect(await t.samples()).toBe(0);
+    await t.renderSample(0);
+    refresh();
+    expect(await t.samples()).toBe(1);
+    t.dispose();
+  });
 });
 
 describe("the native tracer backend", () => {

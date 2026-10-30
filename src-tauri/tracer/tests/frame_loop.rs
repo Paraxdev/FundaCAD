@@ -83,6 +83,49 @@ mod t {
         Some(s)
     }
 
+    fn moved_camera() -> Camera {
+        serde_json::from_value(
+            serde_json::json!({ "eye": [0.3, 0, 6], "target": [0.3, 0, 0], "up": [0, 1, 0], "fov": 50 }),
+        )
+        .unwrap()
+    }
+
+    /// The budget stands in for a slow adapter: a band of 8 rows in 48 leaves a sample far over one dispatch.
+    #[test]
+    fn a_sample_over_the_budget_sends_a_coarse_whole_picture_first() {
+        let Some(mut s) = red_quad_at_cap(1) else { return };
+        let Some(mut plain) = red_quad_at_cap(1) else { return };
+        s.set_camera(moved_camera());
+        s.set_frame_budget(64 * 8);
+        let coarse = s.advance(64, 48, Duration::ZERO).expect("a picture of the new camera leaves at once");
+        assert_eq!(s.samples(), 0, "a coarse pass is not a sample");
+        assert!(coarse.chunks(4).all(|p| p[3] != 0), "a coarse picture has no unsampled pixel");
+        assert!(coarse[3] != 255, "the page tells a coarse picture by its first alpha");
+        let rgb = |x: usize, y: usize| &coarse[(y * 64 + x) * 4..][..3];
+        for (x, y) in [(0, 0), (30, 12), (60, 45)] {
+            assert_eq!(rgb(x, y), rgb(x + 1, y + 1), "a coarse block is one colour at {x}, {y}");
+        }
+
+        let whole = s.frame(64, 48, Duration::from_millis(12));
+        assert_eq!(s.samples(), 1);
+        assert!(whole.chunks(4).all(|p| p[3] == 255), "the sample after it is a plain frame");
+        plain.set_camera(moved_camera());
+        plain.set_frame_budget(64 * 48);
+        let direct = plain.frame(64, 48, Duration::from_millis(12));
+        assert!(whole == direct, "the coarse pass left something in the first sample");
+        assert!(whole != coarse, "the first sample replaces the coarse picture");
+    }
+
+    #[test]
+    fn a_first_sample_that_fits_sends_no_coarse_picture() {
+        let Some(mut s) = red_quad_at_cap(1) else { return };
+        s.set_camera(moved_camera());
+        s.set_frame_budget(64 * 48);
+        assert_eq!(s.advance(64, 48, Duration::ZERO), None, "nothing traced with no budget");
+        let px = s.frame(64, 48, Duration::from_millis(12));
+        assert_eq!(px[3], 255);
+    }
+
     /// The quad fills the view from above, so a row without light was never traced.
     #[test]
     fn a_frame_after_a_camera_move_has_no_unsampled_rows() {

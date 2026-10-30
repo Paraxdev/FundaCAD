@@ -287,6 +287,7 @@ pub struct Tracer {
     sample: u32,
     row0: u32,
     rows: u32,
+    coarse_out: bool,
     cap: u32,
     camera: Camera,
     look: Look,
@@ -448,6 +449,7 @@ impl Tracer {
             sample: 0,
             row0: 0,
             rows: 0,
+            coarse_out: false,
             cap: 256,
             camera: Camera::default(),
             look: Look::default(),
@@ -586,12 +588,17 @@ impl Tracer {
         c
     }
 
-    fn reset(&mut self) {
-        self.sample = 0;
-        self.row0 = 0;
+    fn clear_accum(&self) {
         let mut enc = self.device.create_command_encoder(&Default::default());
         enc.clear_buffer(&self.accum, 0, None);
         self.queue.submit([enc.finish()]);
+    }
+
+    fn reset(&mut self) {
+        self.sample = 0;
+        self.row0 = 0;
+        self.coarse_out = false;
+        self.clear_accum();
         self.bind = None;
     }
 
