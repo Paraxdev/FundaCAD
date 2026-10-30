@@ -537,6 +537,10 @@ pub fn engine_send(
 /// The `path` the worker reads for an import or writes for an export passes the checks the container commands make.
 /// A request with a repeated key fails the strict parse and is read like the worker reads it, the last one counting.
 pub fn check_request_path(text: &str, held: &crate::doc_paths::Provenance) -> Result<(), String> {
+    // A `path` key is spelled out or escaped, so a request with neither carries none and skips the full parse.
+    if !text.contains("\"path\"") && !text.contains(r"\u") {
+        return Ok(());
+    }
     #[derive(serde::Deserialize)]
     struct Strict {
         op: Option<Value>,
