@@ -167,6 +167,7 @@ fn start(app: AppHandle) {
         let mut warned = false;
         // The HID inventory is published whenever it CHANGES, see stream().
         let mut last_inventory: Option<String> = None;
+        let flatpak = crate::system_info::in_flatpak();
         while WANTED.load(Ordering::SeqCst) {
             // A connected spacenavd is never a reason to warn, it may be holding
             // an idle device that is simply not readable directly.
@@ -179,7 +180,7 @@ fn start(app: AppHandle) {
                         eprintln!("[spacemouse] found \"{name}\" but could not open it: {detail}");
                         if !warned {
                             warned = true;
-                            let hint = hint.map(str::to_string);
+                            let hint = blocked_hint(flatpak, hint).map(str::to_string);
                             let _ = app.emit("spacemouse:blocked", DeviceBlocked { name, detail, hint });
                         }
                     }
@@ -218,6 +219,24 @@ fn through_daemon(app: &AppHandle, last: &mut Option<String>) -> Result<(), Opti
 #[cfg(not(target_os = "linux"))]
 fn through_daemon(_app: &AppHandle, _last: &mut Option<String>) -> Result<(), Option<&'static str>> {
     Err(None)
+}
+
+const FLATPAK_HINT: &str =
+    "start spacenavd on this computer, or grant the device with: flatpak override --user --device=all dev.fundacad.app";
+
+/// The Flatpak shares no hidraw node, so the udev rule alone cannot help there whatever spacenavd's state.
+fn blocked_hint(flatpak: bool, daemon: Option<&'static str>) -> Option<&'static str> {
+    if flatpak {
+        Some(FLATPAK_HINT)
+    } else {
+        daemon
+    }
+}
+
+/// For the settings section, which shows it before any device is plugged in.
+#[tauri::command]
+pub fn spacemouse_flatpak_hint() -> Option<&'static str> {
+    blocked_hint(crate::system_info::in_flatpak(), None)
 }
 
 /// Why the reader isn't running. Only `Unreadable` is worth telling the user
@@ -582,3 +601,7 @@ mod tests {
         assert!(declares_multi_axis(desc));
     }
 }
+
+#[cfg(test)]
+#[path = "spacemouse_tests.rs"]
+mod hint_tests;

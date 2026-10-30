@@ -1,8 +1,9 @@
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
 
 use fundacad_lib::safe_mode::{
-    begin, cleared, clears_count, decide, has_flag, init_script, misses, restart_args, uncount, Reason, MARKER,
+    begin, cleared, clears_count, decide, falls_back_to_x11, has_flag, init_script, misses, restart_args, uncount,
+    Reason, MARKER,
 };
 
 fn dir(tag: &str) -> PathBuf {
@@ -118,4 +119,22 @@ fn a_stall_restart_takes_back_only_its_own_start() {
     assert_eq!(misses(&d), 1);
     begin(&d).unwrap();
     assert_eq!(decide(misses(&d), false, None), Some(Reason::FailedStarts(2)));
+}
+
+/// The AppImage and the Flatpak no longer force X11, so a Wayland stack that cannot show the window gets XWayland back
+/// in safe mode. A Flatpak on Wayland has no DISPLAY (fallback-x11), and a GDK_BACKEND someone set is theirs.
+#[test]
+fn safe_mode_on_wayland_falls_back_to_x11_when_there_is_one() {
+    let os = |v: &'static str| Some(OsStr::new(v));
+    let cases = [
+        (true, None, os("wayland-0"), os(":0")),
+        (false, None, os("wayland-0"), os(":0")),
+        (true, os("wayland"), os("wayland-0"), os(":0")),
+        (true, None, None, os(":0")),
+        (true, None, os("wayland-0"), None),
+        (true, None, os("wayland-0"), os("")),
+        (true, None, os(""), os(":0")),
+    ];
+    let got: Vec<bool> = cases.iter().map(|&(safe, gdk, wl, x)| falls_back_to_x11(safe, gdk, wl, x)).collect();
+    assert_eq!(got, [true, false, false, false, false, false, false]);
 }

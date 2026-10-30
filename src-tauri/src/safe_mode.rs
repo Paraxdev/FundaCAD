@@ -2,7 +2,7 @@
 //! The count file is written after the single instance check and removed on mount, so a leftover is an unfinished
 //! start.
 
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::path::Path;
 
 pub const MARKER: &str = "launch-pending";
@@ -10,6 +10,7 @@ pub const THRESHOLD: u32 = 2;
 pub const FLAG: &str = "--safe-mode";
 pub const ENV: &str = "FUNDACAD_SAFE_MODE";
 pub const COMPOSITING: &str = "WEBKIT_DISABLE_COMPOSITING_MODE";
+pub const GDK_BACKEND: &str = "GDK_BACKEND";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Reason {
@@ -52,6 +53,17 @@ pub fn decide(prev_misses: u32, flag: bool, env: Option<&str>) -> Option<Reason>
     } else {
         None
     }
+}
+
+/// A safe session on Wayland opens through XWayland where there is one. A Flatpak on Wayland gets no DISPLAY.
+pub fn falls_back_to_x11(
+    safe: bool,
+    gdk_backend: Option<&OsStr>,
+    wayland_display: Option<&OsStr>,
+    display: Option<&OsStr>,
+) -> bool {
+    let set = |v: Option<&OsStr>| v.is_some_and(|v| !v.is_empty());
+    safe && gdk_backend.is_none() && set(wayland_display) && set(display)
 }
 
 pub fn has_flag<I: IntoIterator<Item = OsString>>(args: I) -> bool {

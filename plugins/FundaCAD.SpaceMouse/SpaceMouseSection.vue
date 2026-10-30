@@ -3,7 +3,8 @@
 // handles and never a ref. onUnmounted frees the renderer, its geometries and materials and the rAF.
 
 import * as THREE from "three";
-import { onMounted, onUnmounted, shallowRef, useTemplateRef, type ComponentPublicInstance } from "vue";
+import { onMounted, onUnmounted, ref, shallowRef, useTemplateRef, type ComponentPublicInstance } from "vue";
+import { invoke } from "fundacad";
 import {
   AXIS_LABELS,
   AXIS_NAMES,
@@ -70,6 +71,9 @@ function updateBars(m: Motion) {
     }
   }
 }
+
+// Set only in the Flatpak, which shares no raw HID device.
+const flatpakHint = ref<string | null>(null);
 
 const testCanvas = useTemplateRef<HTMLCanvasElement>("testCanvas");
 
@@ -194,6 +198,10 @@ function tickTest() {
 }
 
 onMounted(() => {
+  invoke<string | null>("spacemouse_flatpak_hint").then(
+    (hint) => (flatpakHint.value = hint),
+    () => {},
+  );
   if (testCanvas.value) initTest(testCanvas.value);
   unsub = onSpaceMouseMotion((m) => {
     lastMotion = m;
@@ -223,6 +231,9 @@ onUnmounted(() => {
     <div class="sm-col">
       <div class="sm-section">Live axes, move the puck</div>
       <div class="sm-hint">Push/tilt/twist and watch which bar reacts, then map it beside.</div>
+      <div v-if="flatpakHint" class="sm-hint" data-testid="spacemouse-flatpak-hint">
+        To reach a 3D mouse from the Flatpak, {{ flatpakHint }}
+      </div>
       <div v-for="a in AXIS_NAMES" :key="a" class="sm-axis-row">
         <span class="sm-axis-label">{{ AXIS_LABELS[a] }}</span>
         <div class="sm-axis-track">

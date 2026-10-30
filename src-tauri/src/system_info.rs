@@ -13,13 +13,17 @@ pub struct SystemInfo {
 #[tauri::command]
 pub fn system_info() -> SystemInfo {
     let (os, arch) = (std::env::consts::OS, std::env::consts::ARCH);
-    let flatpak = Path::new("/.flatpak-info").exists();
+    let flatpak = in_flatpak();
     let appimage = std::env::var_os("APPIMAGE").is_some();
     let release = if os == "linux" { os_release(Path::new("/"), flatpak) } else { None };
     SystemInfo {
         system: describe(os, arch, release.as_deref(), flatpak, appimage),
         webview: webview(os, tauri::webview_version().ok().as_deref()),
     }
+}
+
+pub fn in_flatpak() -> bool {
+    cfg!(target_os = "linux") && Path::new("/.flatpak-info").exists()
 }
 
 /// Inside a Flatpak /etc/os-release is the runtime's, so only the host's copy under /run/host counts.

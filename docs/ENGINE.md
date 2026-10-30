@@ -464,7 +464,9 @@ name the missing WebKitGTK, then start once that is installed), each ending
 in the same smoke. It is not in the release job's `needs`, so for now a
 broken `Depends` shows red without holding the beta. A second Linux step opens the AppImage window
 under Xvfb and builds the box through a server attached to it, which proves
-the page loaded; it does not gate anything yet.
+the page loaded; it does not gate anything yet. A third starts the AppImage in cage on a headless
+Wayland output and checks that it maps a native Wayland window, as the Flatpak job does, and does not gate
+anything either.
 
 The two never touch each other's release. Each has its own tag, its own
 concurrency group (`release-development`, `release-beta`) and its own feed,

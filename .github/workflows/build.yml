@@ -562,6 +562,34 @@ jobs:
           FUNDACAD_MCP_MODE=attach FUNDACAD_SESSION_FILE="$session" \
             python3 scripts/bundle-smoke.py --work "$RUNNER_TEMP/smoke-gui" -- "$RUNNER_TEMP/deb-root/usr/bin/fundacad" --mcp
 
+      # The AppImage no longer forces X11, so its native Wayland window gets the
+      # Flatpak's headless cage smoke. Not a gate until it has run green on dev.
+      - name: Start the AppImage under headless Wayland
+        if: matrix.platform == 'ubuntu-22.04'
+        continue-on-error: true
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo timeout -k 10 300 apt-get install -y -qq cage
+          img=$(find src-tauri/target/release/bundle/appimage -maxdepth 1 -name '*.AppImage' | head -1)
+          if [ -z "$img" ]; then echo "::error::no AppImage to start"; exit 1; fi
+          fuse=()
+          if ! { [ -e /dev/fuse ] && { command -v fusermount3 || command -v fusermount; } >/dev/null; }; then
+            fuse=(--appimage-extract-and-run)
+          fi
+          XDG_DATA_HOME="$RUNNER_TEMP/wayland-data" sh scripts/wayland-smoke.sh "$RUNNER_TEMP/wayland-smoke" \
+            dbus-run-session -- "$img" "${fuse[@]}"
+
+      - name: Upload the AppImage Wayland smoke log
+        if: always() && matrix.platform == 'ubuntu-22.04'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wayland-smoke-appimage
+          path: ${{ runner.temp }}/wayland-smoke/app.log
+          if-no-files-found: ignore
+          retention-days: 7
+
       # What Orca reads: the AppImage on its own accessibility bus, its AT-SPI
       # tree dumped and red on a nameless button or no web document. Not a gate
       # until wave 1 of the accessibility work has run green here.
@@ -715,6 +743,9 @@ jobs:
           [ -n "$v" ] || { echo "::error::no version in $deb"; exit 1; }
           cp "$deb" packaging/flatpak/fundacad.deb
 
+          # The finish-args use --device=input, which needs Flatpak 1.15.6; Ubuntu 24.04 ships 1.14, whose
+          # build-finish refuses it. The upstream Flatpak PPA has a current release.
+          sudo add-apt-repository -y -n ppa:flatpak/stable
           bash scripts/ci-apt-update.sh -qq
           sudo timeout -k 10 900 apt-get install -y -qq flatpak flatpak-builder
           flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
@@ -741,6 +772,25 @@ jobs:
         run: |
           python3 scripts/bundle-smoke.py --work "$RUNNER_TEMP/smoke-flatpak" -- \
             flatpak run --env=FUNDACAD_MCP_MODE=standalone dev.fundacad.app --mcp
+
+      # A new GUI smoke can be flaky, so this becomes gating once it has run green on dev.
+      - name: Start the Flatpak under headless Wayland
+        continue-on-error: true
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          sudo timeout -k 10 300 apt-get install -y -qq cage
+          sh scripts/wayland-smoke.sh "$RUNNER_TEMP/wayland-smoke" \
+            dbus-run-session -- flatpak run --env=WAYLAND_DEBUG=client dev.fundacad.app
+
+      - name: Upload the Wayland smoke log
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wayland-smoke-flatpak
+          path: ${{ runner.temp }}/wayland-smoke/app.log
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Upload the Flatpak
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

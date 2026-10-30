@@ -198,19 +198,20 @@ struct SafeMode {
     set_compositing: bool,
     /// The count `safe_mode::begin` found before this start, once it counted it.
     counted: std::sync::OnceLock<u32>,
+    set_x11: bool,
 }
 
 pub(crate) fn safe_mode_active(app: &tauri::AppHandle) -> bool {
     app.try_state::<SafeMode>().is_some_and(|s| s.reason.is_some())
 }
 
-/// The banner's "Restart normally": a new process without this session's safe mode switch, variable or compositing
-/// setting, and a cleared count.
+/// The banner's "Restart normally": a new process without this session's safe mode switch, variable, compositing or
+/// X11 setting, and a cleared count.
 #[tauri::command]
 fn safe_mode_exit(app: tauri::AppHandle) {
-    let (dir, set_compositing) = {
+    let (dir, set_compositing, set_x11) = {
         let safe = app.state::<SafeMode>();
-        (safe.dir.clone(), safe.set_compositing)
+        (safe.dir.clone(), safe.set_compositing, safe.set_x11)
     };
     safe_mode::cleared(&dir);
     let args = safe_mode::restart_args(app.env().args_os);
@@ -218,6 +219,9 @@ fn safe_mode_exit(app: tauri::AppHandle) {
         cmd.env_remove(safe_mode::ENV);
         if set_compositing {
             cmd.env_remove(safe_mode::COMPOSITING);
+        }
+        if set_x11 {
+            cmd.env_remove(safe_mode::GDK_BACKEND);
         }
     });
 }
@@ -263,15 +267,26 @@ fn safe_mode_decide() -> SafeMode {
         // Issue #6: with it off WebKitGTK came up on GPUs the DMABUF rule misses.
         std::env::set_var(safe_mode::COMPOSITING, "1");
     }
+    let set_x11 = cfg!(target_os = "linux")
+        && safe_mode::falls_back_to_x11(
+            reason.is_some(),
+            std::env::var_os(safe_mode::GDK_BACKEND).as_deref(),
+            std::env::var_os("WAYLAND_DISPLAY").as_deref(),
+            std::env::var_os("DISPLAY").as_deref(),
+        );
+    if set_x11 {
+        std::env::set_var(safe_mode::GDK_BACKEND, "x11");
+    }
     if let Some(r) = reason {
         println!(
             "[safe-mode] starting in safe mode because {}: no plugins, default preferences, \
-             no work recovery{}. Restart normally from the banner to leave it.",
+             no work recovery{}{}. Restart normally from the banner to leave it.",
             r.describe(),
             if set_compositing { ", WebKit compositing off" } else { "" },
+            if set_x11 { ", X11 instead of Wayland" } else { "" },
         );
     }
-    SafeMode { reason, dir, set_compositing, counted: std::sync::OnceLock::new() }
+    SafeMode { reason, dir, set_compositing, set_x11, counted: std::sync::OnceLock::new() }
 }
 
 /// The dialog plugin allows each picked or saved path on the fs scope, which tells its listeners, so Rust learns the
@@ -422,6 +437,7 @@ pub fn run() {
         plugins::keystore::plugin_secret_delete,
         plugins::launch::plugin_system_dirs,
         plugins::launch::plugin_launch,
+        spacemouse::spacemouse_flatpak_hint,
         spacemouse::spacemouse_inventory,
         spacemouse::spacemouse_start,
         spacemouse::spacemouse_stop,

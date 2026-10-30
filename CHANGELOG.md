@@ -477,6 +477,14 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Changed
 
+- **On Linux the AppImage and the Flatpak open as native Wayland windows.** They
+  no longer go through XWayland, and still use X11 where the session has no
+  Wayland. The Flatpak no longer asks for every device, only game controllers
+  and the spacenavd socket for a 3D mouse. If the window opens blank or closes
+  at start on Wayland, safe mode opens the AppImage and the `.deb` through X11.
+  To stay on X11, put `GDK_BACKEND=x11` in front of the AppImage command, or
+  run `flatpak override --user --nosocket=wayland dev.fundacad.app` once.
+
 - **No text is smaller than 11 px.** Labels, counts and badge digits that were
   9 or 10 px are 11 px now, and the error under a field or a dimension is 12 px.
   Every text size follows the Interface size.

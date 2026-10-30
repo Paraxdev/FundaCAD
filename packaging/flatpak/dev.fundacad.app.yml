@@ -11,15 +11,14 @@ sdk: org.gnome.Sdk
 command: fundacad
 finish-args:
   - --share=ipc
-  # X11, as the AppImage does (GDK_BACKEND=x11 in its GTK hook): WebKitGTK
-  # under Tauri crashes on the Wayland backend, tauri-apps/tauri#8541.
-  - --socket=x11
-  - --env=GDK_BACKEND=x11
+  # Native Wayland, and X11 only in a session that has no Wayland.
+  - --socket=wayland
+  - --socket=fallback-x11
   - --device=dri
-  # A SpaceMouse is read over hidraw (src-tauri/src/spacemouse.rs), which only
-  # --device=all exposes. The host still needs the udev rule from
-  # packaging/99-spacemouse.rules for permission to open it.
-  - --device=all
+  # Game controllers through /dev/input (Flatpak 1.15.6 or newer) and a 3D mouse through spacenavd.
+  # A 3D mouse over hidraw needs: flatpak override --user --device=all dev.fundacad.app
+  - --device=input
+  - --filesystem=/run/spnav.sock:ro
   # Plugin bundles are downloaded from the GitHub release.
   - --share=network
   # Documents live anywhere under home, and the MCP server opens paths it is
