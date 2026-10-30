@@ -90,3 +90,19 @@ fn a_network_that_will_not_close_logs_one_line_with_the_reason() {
     assert!(line.contains("network") && line.contains("seccomp said EINVAL"), "{line}");
     assert_eq!(close_network_with(&Outcome::On { writes: false }, || Ok(())), None);
 }
+
+#[test]
+fn the_writable_folders_exist_before_the_rules_name_them() {
+    let root = std::env::temp_dir().join(format!("fundacad-sandbox-prepare-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).unwrap();
+    let file = root.join("a-file");
+    std::fs::write(&file, b"x").unwrap();
+    let fresh = root.join("blobs").join("deep");
+
+    let kept = prepare(&[root.clone(), fresh.clone(), file.join("under-a-file")]);
+
+    assert_eq!(kept, vec![root.clone(), fresh.clone()]);
+    assert!(fresh.is_dir());
+    let _ = std::fs::remove_dir_all(&root);
+}

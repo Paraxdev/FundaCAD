@@ -120,12 +120,23 @@ struct Worker {
 /// Called from `main` before Tauri starts. `--engine --ws` is the same engine on its own WebSocket, which the shipped
 /// `fundacad-mcp` starts as its private engine, so a packaged app needs no second copy of the kernel.
 pub fn run_worker() -> ! {
+    use fundacad_engine::sandbox;
     fundacad_engine::set_build(env!("FUNDACAD_BUILD"));
+    let ws = std::env::args().nth(2).as_deref() == Some("--ws");
+    // Before any thread starts: on Linux the write rules bind only this thread and the ones it starts later.
+    let entered = if ws {
+        sandbox::Outcome::NotAsked
+    } else {
+        sandbox::enter(sandbox::Policy::Worker, &fundacad_geom::engine_writes())
+    };
     fundacad_geom::plugins::load();
-    if std::env::args().nth(2).as_deref() == Some("--ws") {
+    if ws {
         fundacad_engine::ws::run(fundacad_geom::jobs::GeomJobs)
     }
-    fundacad_engine::stdio::serve(fundacad_geom::jobs::GeomJobs, live_door)
+    fundacad_engine::stdio::serve(fundacad_geom::jobs::GeomJobs, move |engine| {
+        live_door(engine);
+        sandbox::close_network(&entered);
+    })
 }
 
 /// The app's token for the live session port, handed to the worker it spawns.
@@ -266,6 +277,13 @@ pub fn configure_env(cmd: &mut Command, blobs: Option<&Path>, plugins: Option<&P
     cmd.env(LIVE_TOKEN_ENV, live_token);
 }
 
+/// The engine's temp folder lies inside the app's cache, among the few folders its reduced rights let it write.
+pub fn private_temp(cmd: &mut Command, dir: &Path) {
+    for var in ["TMPDIR", "TMP", "TEMP"] {
+        cmd.env(var, dir);
+    }
+}
+
 fn spawn(inner: &Inner) -> std::io::Result<std::process::ChildStdout> {
     let exe = std::env::current_exe()?;
     let mut cmd = Command::new(exe);
@@ -282,6 +300,10 @@ fn spawn(inner: &Inner) -> std::io::Result<std::process::ChildStdout> {
         if safe { None } else { crate::plugins::plugins_root(&inner.app).ok() }.as_deref(),
         &token,
     );
+    let temp = inner.app.path().app_cache_dir().map(|dir| dir.join("engine-tmp"));
+    if let Some(dir) = temp.ok().filter(|dir| std::fs::create_dir_all(dir).is_ok()) {
+        private_temp(&mut cmd, &dir);
+    }
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;

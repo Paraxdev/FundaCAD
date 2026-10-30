@@ -80,10 +80,16 @@ pub fn enter(policy: Policy, writable: &[PathBuf]) -> Outcome {
 
 pub fn enter_with(env: Option<&str>, policy: Policy, writable: &[PathBuf]) -> Outcome {
     match decide(env, policy) {
-        Decision::Enter => platform_enter(writable),
+        Decision::Enter => platform_enter(&prepare(writable)),
         Decision::NotAsked => Outcome::NotAsked,
         Decision::TurnedOff => Outcome::TurnedOff,
     }
+}
+
+/// Creates the writable folders and keeps those that exist: a rule cannot name a missing folder, which would then stay
+/// read only.
+pub fn prepare(writable: &[PathBuf]) -> Vec<PathBuf> {
+    writable.iter().filter(|dir| std::fs::create_dir_all(dir).is_ok()).cloned().collect()
 }
 
 /// Refuses new sockets in every thread from here on. Call it once the live door listens: accepting on it needs none.
