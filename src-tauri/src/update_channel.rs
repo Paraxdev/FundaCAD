@@ -123,8 +123,8 @@ fn updater_for<R: Runtime, M: Manager<R>>(
         .map_err(|e| e.to_string())
 }
 
-fn own_channel<R: Runtime>(webview: &Webview<R>) -> Option<Channel> {
-    build_channel(webview.config().plugins.0.get("updater"))
+fn own_channel<R: Runtime, M: Manager<R>>(app: &M) -> Option<Channel> {
+    build_channel(app.config().plugins.0.get("updater"))
 }
 
 /// Checks `endpoint`, then `probe` when given and the check reached its feed: any latest.json there that parses means
@@ -171,10 +171,20 @@ pub async fn update_check<R: Runtime>(
     channel: String,
     stable_seen: bool,
 ) -> Result<ChannelCheck, String> {
-    let picked = Channel::parse(&channel).ok_or_else(|| format!("unknown update channel {channel}"))?;
-    let build = own_channel(&webview).ok_or_else(|| "this build has no known update channel".to_string())?;
+    check_channel(&webview, &channel, stable_seen, str::to_owned).await
+}
+
+/// update_check with `fetch` mapping each planned feed URL to the one requested, so tests serve them from localhost.
+async fn check_channel<R: Runtime, M: Manager<R>>(
+    app: &M,
+    channel: &str,
+    stable_seen: bool,
+    fetch: impl Fn(&str) -> String,
+) -> Result<ChannelCheck, String> {
+    let picked = Channel::parse(channel).ok_or_else(|| format!("unknown update channel {channel}"))?;
+    let build = own_channel(app).ok_or_else(|| "this build has no known update channel".to_string())?;
     let plan = plan(build, picked, stable_seen)?;
-    check_feeds(&webview, plan.endpoint, plan.allow_downgrade, plan.probe.map(str::to_owned)).await
+    check_feeds(app, &fetch(plan.endpoint), plan.allow_downgrade, plan.probe.map(fetch)).await
 }
 
 /// The frontend's own idea of the build channel comes from VITE_FUNDACAD_RELEASE, which a local build may lack.

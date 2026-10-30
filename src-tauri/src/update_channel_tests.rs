@@ -219,7 +219,7 @@ fn bytes(value: serde_json::Value) -> Vec<u8> {
     serde_json::to_vec(&value).unwrap()
 }
 
-/// The app runs 0.1.0, the mock context's version, with the updater plugin set up from a config the way a release is,
+/// A beta build at 0.1.0, the mock context's version, its updater plugin set up from a config the way a release is,
 /// apart from plain HTTP for the localhost feed.
 fn app_with_updater() -> (tauri::App<MockRuntime>, tauri::WebviewWindow<MockRuntime>) {
     let mut context = tauri::test::mock_context(tauri::test::noop_assets());
@@ -227,7 +227,7 @@ fn app_with_updater() -> (tauri::App<MockRuntime>, tauri::WebviewWindow<MockRunt
         "updater".into(),
         json!({
             "pubkey": TEST_PUBKEY,
-            "endpoints": ["https://example.invalid/latest.json"],
+            "endpoints": [BETA_URL],
             "dangerousInsecureTransportProtocol": true,
         }),
     );
@@ -331,6 +331,31 @@ fn a_check_that_misses_its_feed_never_probes_stable() {
             true,
             json!({ "update": null, "stable": true }),
             ["/none.json", "/beta.json", "/stable.json"].map(String::from).to_vec(),
+        ),
+    );
+}
+
+#[test]
+fn update_check_probes_stable_only_while_no_stable_release_was_seen() {
+    let feed = serve(|base| {
+        vec![
+            ("/beta.json", bytes(release(base, "0.1.0", "/payload"))),
+            ("/stable.json", bytes(release(base, "0.3.0", "/payload"))),
+        ]
+    });
+    let (_app, window) = app_with_updater();
+    let local = |url: &str| feed.url(&format!("/{}.json", Channel::from_endpoint(url).unwrap().as_str()));
+    let run = |seen| tauri::async_runtime::block_on(check_channel(&window, "beta", seen, local)).unwrap();
+    let unseen = run(false);
+    let hits_unseen = feed.hits();
+    let seen = run(true);
+    assert_eq!(
+        (as_sent(&unseen), hits_unseen, as_sent(&seen), feed.hits()),
+        (
+            json!({ "update": null, "stable": true }),
+            ["/beta.json", "/stable.json"].map(String::from).to_vec(),
+            json!({ "update": null, "stable": true }),
+            ["/beta.json", "/stable.json", "/beta.json"].map(String::from).to_vec(),
         ),
     );
 }
