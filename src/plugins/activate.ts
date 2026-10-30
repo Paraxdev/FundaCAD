@@ -47,12 +47,16 @@ export function activatePlugins(e: Engine): () => void {
   // Loading is async, so a fast install, remove, install could tear down before the thing exists.
   // Checking the intent again after the await lets the last instruction win.
   const wanted = new Set<string>();
+  // Switched on again while a load is pending, the pending load is reused, so one instance starts.
+  const loading = new Set<string>();
 
   const sync = () => {
     const on = new Set(activeIds(installedIds(), Object.keys(dev), pluginEnabled));
     for (const id of on) {
       if (wanted.has(id)) continue;
       wanted.add(id);
+      if (loading.has(id)) continue;
+      loading.add(id);
       void moduleFor(id, dev)
         .then((m) => {
           const activate = m && activatorOf(m);
@@ -60,6 +64,7 @@ export function activatePlugins(e: Engine): () => void {
           return activate ? activate(e) : () => {};
         })
         .then((stop) => {
+          loading.delete(id);
           if (!wanted.has(id)) {
             stop(); // removed again while it was loading
             return;
@@ -67,6 +72,7 @@ export function activatePlugins(e: Engine): () => void {
           running.set(id, stop);
         })
         .catch((err) => {
+          loading.delete(id);
           wanted.delete(id);
           // Not fatal: a plugin that will not start must not keep the window from opening.
           console.error(`[plugins] ${id} could not start:`, err);

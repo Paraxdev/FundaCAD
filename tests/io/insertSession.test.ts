@@ -11,12 +11,12 @@ const host = vi.hoisted(() => ({
 }));
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: async (cmd: string) => {
+    if (cmd === "bake_temp_path") return "T:/bakes/insert-1.step";
     if (cmd !== "container_open") return undefined;
     if (host.hold) await host.hold;
     return JSON.stringify({ parameters: {}, features: [{ id: "lid", type: "box", length: 5, width: 5, height: 1 }] });
   },
 }));
-vi.mock("@tauri-apps/api/path", () => ({ tempDir: async () => "T:/", join: async (a: string, b: string) => a + b }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: async () => "D:/parts/lid.funda", message: async () => {} }));
 vi.mock("../../src/ui/choice", () => ({ choose: async () => "append" }));
 vi.mock("../../src/ui/toast", () => ({
