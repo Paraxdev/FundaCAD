@@ -1,4 +1,4 @@
-//! A request whose reply never came may still have been applied, so only ops that change nothing are sent again.
+//! A request whose reply never came may still have been applied, so only ops that cannot apply twice are sent again.
 
 use std::sync::{Arc, Mutex};
 
@@ -58,4 +58,15 @@ async fn a_read_only_op_whose_reply_was_lost_is_asked_again() {
     let reply = link.call("inspect", json!({})).await;
     assert!(reply.is_ok(), "one silent reconnect for an op that changes nothing: {reply:?}");
     assert_eq!(*seen.lock().unwrap(), vec!["inspect", "inspect"]);
+}
+
+#[tokio::test]
+async fn a_blob_transfer_whose_reply_was_lost_is_asked_again() {
+    for op in ["blobHas", "blobRead", "blobWrite"] {
+        let (port, seen) = engine_that_drops_the_first_reply().await;
+        let link = EngineLink::attach(port, "t");
+        let reply = link.call(op, json!({})).await;
+        assert!(reply.is_ok(), "{op} reconnects once: {reply:?}");
+        assert_eq!(*seen.lock().unwrap(), vec![op, op]);
+    }
 }

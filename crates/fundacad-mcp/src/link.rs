@@ -304,9 +304,21 @@ fn unsent(e: tokio_tungstenite::tungstenite::Error) -> io::Error {
     io::Error::new(io::ErrorKind::NotConnected, e.to_string())
 }
 
-/// Ops that change nothing, so one whose reply was lost can be asked again.
-const SAFE_TO_RESEND: &[&str] =
-    &["ping", "session_state", "rebuild", "inspect", "measure", "interference", "printability", "stress"];
+/// Ops a lost reply can ask again: they change nothing, or (blobWrite) the engine refuses a chunk at an
+/// offset it already holds and stores a blob only when its bytes hash to its name.
+const SAFE_TO_RESEND: &[&str] = &[
+    "ping",
+    "session_state",
+    "rebuild",
+    "inspect",
+    "measure",
+    "interference",
+    "printability",
+    "stress",
+    "blobHas",
+    "blobRead",
+    "blobWrite",
+];
 
 pub struct EngineLink {
     port: AtomicU16,
