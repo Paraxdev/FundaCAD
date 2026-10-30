@@ -962,32 +962,86 @@ fn solve_error_text(e: &SolveError, elements: usize) -> String {
     }
 }
 
-/// Meshes again with smaller elements after the automatic size came apart, no larger than the thinnest wall
-/// allows, until a mesh holds or the finest that `ceiling` elements allow came apart too; then `failed` stands.
+/// The faces a study acts through: a support holds the nodes on its faces, a load pushes on the boundary triangles
+/// tagged with its faces.
+struct NeededFaces {
+    held: Vec<u32>,
+    loaded: Vec<u32>,
+}
+
+impl NeededFaces {
+    fn holding(&self, mesh: &TetMesh) -> usize {
+        self.held.iter().filter(|f| mesh.node_faces.iter().any(|p| p.1 == **f)).count()
+    }
+
+    fn loadable(&self, mesh: &TetMesh) -> bool {
+        self.loaded.iter().all(|f| mesh.boundary_face.contains(f))
+    }
+
+    /// A narrow held face can carry a single row of nodes, and the body turns about a row whatever holds it.
+    fn held_in_a_row(&self, mesh: &TetMesh) -> bool {
+        let mut nodes = mesh.node_faces.iter().filter(|p| self.held.contains(&p.1)).map(|p| mesh.nodes[p.0 as usize]);
+        let Some(a) = nodes.next() else { return false };
+        let rest: Vec<[f64; 3]> = nodes.collect();
+        let from_a = |p: [f64; 3]| dot(sub(p, a), sub(p, a));
+        let far = rest.iter().copied().max_by(|p, q| from_a(*p).total_cmp(&from_a(*q))).unwrap_or(a);
+        let along = sub(far, a);
+        let reach = from_a(far);
+        rest.iter().all(|&p| {
+            let across = cross(along, sub(p, a));
+            dot(across, across) <= 1e-6 * reach * reach
+        })
+    }
+
+    fn carried_by(&self, mesh: &TetMesh) -> bool {
+        self.holding(mesh) == self.held.len() && self.loadable(mesh) && !self.held_in_a_row(mesh)
+    }
+
+    /// The solver refuses a mesh without a loaded face, without any held face or held in one row, and only warns of
+    /// some held face.
+    fn solvable_on(&self, mesh: &TetMesh) -> bool {
+        self.holding(mesh) > 0 && self.loadable(mesh) && !self.held_in_a_row(mesh)
+    }
+}
+
+/// Meshes again with smaller elements after the automatic size came apart or lost a face the study needs, until a
+/// mesh carries them or the finest that `ceiling` elements allow did not. A wall that came apart sets the size, as
+/// shrinking by steps would stuff it for nothing, while a lost face has no such size and comes back by lattice phase.
 fn mesh_finer(
     surface: &SurfaceMesh,
     volume: f64,
-    failed: MeshError,
+    first: Result<(TetMesh, MeshStats), MeshError>,
     ceiling: usize,
+    needed: &NeededFaces,
     tick: &mut dyn FnMut() -> bool,
 ) -> Result<(TetMesh, MeshStats), MeshError> {
-    let mut h = match failed {
-        MeshError::TooThin { size, .. } | MeshError::TooSmall { size, .. } => size,
-        other => return Err(other),
+    let (mut h, mut came_apart) = match &first {
+        Ok((_, stats)) => (stats.size, false),
+        Err(MeshError::TooThin { size, .. } | MeshError::TooSmall { size, .. }) => (*size, true),
+        Err(_) => return first,
     };
     let wall = tetmesh::thinnest_wall(surface, 2.0 * h, tick)?;
     let floor = size_floor(volume, ceiling);
-    loop {
-        if h <= floor {
-            return Err(failed);
+    let mut kept = first;
+    while h > floor {
+        h *= RETRY_SHRINK;
+        if let (true, Some(w)) = (came_apart, wall) {
+            h = h.min(w.thickness * WALL_SHARE);
         }
-        let shrunk = h * RETRY_SHRINK;
-        h = wall.map_or(shrunk, |w| shrunk.min(w.thickness * WALL_SHARE)).max(floor);
+        h = h.max(floor);
         match tetmesh::tetrahedralize(surface, &MeshOptions { size: h, max_tets: ceiling }, tick) {
-            Err(MeshError::TooThin { .. } | MeshError::TooSmall { .. }) => continue,
-            other => return other,
+            Ok(m) if needed.carried_by(&m.0) => return Ok(m),
+            Ok(m) => {
+                came_apart = false;
+                if kept.is_err() {
+                    kept = Ok(m);
+                }
+            }
+            Err(MeshError::TooThin { .. } | MeshError::TooSmall { .. }) => came_apart = true,
+            Err(other) => return Err(other),
         }
     }
+    kept
 }
 
 fn mesh_error_text(e: &MeshError) -> String {
@@ -1389,15 +1443,22 @@ fn analyse(
         !(watch.cancelled() || crate::cancel::requested())
     };
     let first = tetmesh::tetrahedralize(&surface, &MeshOptions { size: effective, max_tets: max_elements }, &mut tick);
-    let retried = first.is_err() && size.is_none();
-    let (mesh, stats): (TetMesh, MeshStats) = match first {
-        Err(e) if retried => {
-            let ceiling = if asked_elements.is_some() { max_elements } else { limits.auto_elements };
-            mesh_finer(&surface, volume, e, ceiling, &mut tick)
+    let needed = NeededFaces {
+        held: held.iter().map(|h| h.0).collect(),
+        loaded: loads.iter().flat_map(|l| l.0.faces.iter().copied()).collect(),
+    };
+    let first_size = first.as_ref().ok().map(|m| m.1.size);
+    let (mesh, stats): (TetMesh, MeshStats) =
+        if size.is_some() || first.as_ref().is_ok_and(|m| needed.carried_by(&m.0)) {
+            first
+        } else {
+            // A mesh the solver takes runs today with a warning, so its retry stays within the elements asked for.
+            let solvable = first.as_ref().is_ok_and(|m| needed.solvable_on(&m.0));
+            let ceiling = if solvable || asked_elements.is_some() { max_elements } else { limits.auto_elements };
+            mesh_finer(&surface, volume, first, ceiling, &needed, &mut tick)
         }
-        other => other,
-    }
-    .map_err(|e| mesh_error_text(&e))?;
+        .map_err(|e| mesh_error_text(&e))?;
+    let retried = size.is_none() && first_size != Some(stats.size);
 
     // Every spot in one list, the supports' first, each with its name for a refusal.
     let mut spots = Vec::new();

@@ -105,3 +105,67 @@ fn a_plate_held_in_two_bores_and_pushed_on_the_other_standoffs_meshes_by_itself(
         "material": "PLA",
     })));
 }
+
+const BLOCK: [f64; 3] = [20.0, 20.0, 20.0];
+const RIB: f64 = 1.0;
+const RISE: f64 = 1.0;
+// A fixed face needs two rows of nodes to stop the body turning, so it comes back at a wider rib than a load does.
+const HELD_RIB: f64 = 1.2;
+
+/// A block with one low narrow rib across its top, so the top of the rib is a small face on a coarse mesh.
+fn ribbed_block(rib: f64) -> Value {
+    json!({ "features": [
+        {"id": "block", "type": "box", "length": BLOCK[0], "width": BLOCK[1], "height": BLOCK[2]},
+        {"id": "rib", "type": "box", "length": rib, "width": BLOCK[1], "height": 2.0 * RISE},
+        {"id": "ribm", "type": "move", "dz": BLOCK[2] / 2.0, "bodies": ["body2"]},
+        {"id": "join", "type": "boolean", "operation": "union", "target": "body1", "tools": ["body2"]},
+    ]})
+}
+
+fn rib_top() -> Value {
+    nearest([0.0, 0.0, BLOCK[2] / 2.0 + RISE])
+}
+
+#[test]
+fn a_narrow_loaded_face_gets_a_finer_mesh_by_itself() {
+    sane(&run(json!({
+        "document": ribbed_block(RIB), "body": "body1",
+        "fixed": [nearest([-BLOCK[0] / 2.0, 0.0, 0.0])],
+        "loads": [{"faces": [rib_top()], "force": [0, 0, -20]}],
+        "material": "PLA",
+    })));
+}
+
+#[test]
+fn a_narrow_fixed_face_gets_a_finer_mesh_by_itself() {
+    sane(&run(json!({
+        "document": ribbed_block(HELD_RIB), "body": "body1",
+        "fixed": [rib_top()],
+        "loads": [{"faces": [nearest([-BLOCK[0] / 2.0, 0.0, 0.0])], "force": [0, 0, -20]}],
+        "material": "PLA",
+    })));
+}
+
+#[test]
+fn a_narrow_fixed_face_beside_a_wide_one_gets_a_finer_mesh_by_itself() {
+    let r = run(json!({
+        "document": ribbed_block(RIB), "body": "body1",
+        "fixed": [rib_top(), nearest([0.0, 0.0, -BLOCK[2] / 2.0])],
+        "loads": [{"faces": [nearest([-BLOCK[0] / 2.0, 0.0, 0.0])], "force": [0, 0, -20]}],
+        "material": "PLA",
+    }));
+    sane(&r);
+    let warnings = r["warnings"].as_array().map_or(&[][..], |w| w.as_slice());
+    assert!(!warnings.iter().any(|w| w.as_str().is_some_and(|w| w.contains("got no elements"))), "{warnings:?}");
+}
+
+#[test]
+fn an_asked_size_that_loses_a_narrow_face_stays_refused() {
+    let r = run(json!({
+        "document": ribbed_block(RIB), "body": "body1", "size": 3.0,
+        "fixed": [nearest([-BLOCK[0] / 2.0, 0.0, 0.0])],
+        "loads": [{"faces": [rib_top()], "force": [0, 0, -20]}],
+        "material": "PLA",
+    }));
+    assert!(r["error"]["message"].as_str().is_some_and(|m| m.contains("got no elements")), "{r}");
+}
