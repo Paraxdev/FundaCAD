@@ -1,7 +1,7 @@
 //! A STEP file can name other documents (PRODUCT_DEFINITION_WITH_ASSOCIATED_DOCUMENTS, APPLIED_DOCUMENT_REFERENCE),
 //! which OCCT's XCAF reader would open and read beside it. FundaCAD imports only the file it was given.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 use fundacad_geom::import::{self, blobstore::BlobStore};
@@ -33,7 +33,7 @@ fn main_file(name: &str, pd: &str, extra: &str) -> PathBuf {
     out
 }
 
-fn import(path: &PathBuf) -> Result<Map<String, Value>, String> {
+fn import(path: &Path) -> Result<Map<String, Value>, String> {
     let store = BlobStore::open(dir()).unwrap();
     import::import_geometry(path.to_str().unwrap(), "step", &store)
 }
