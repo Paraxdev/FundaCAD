@@ -11,3 +11,4 @@ mod session_file;
 mod settings_files;
 mod thumbs;
 mod webkit;
+mod worker_port;

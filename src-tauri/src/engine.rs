@@ -298,12 +298,11 @@ fn spawn(inner: &Inner) -> std::io::Result<std::process::ChildStdout> {
         let tail = inner.stderr_tail.clone();
         lock(&tail).clear();
         std::thread::spawn(move || {
+            let mut announced = false;
             for line in BufReader::new(stderr).lines().map_while(Result::ok) {
                 // Written once the port answers, so the file never names a port
                 // nobody is listening on yet.
-                if let (Some(dir), Some(port)) =
-                    (&session_dir, line.strip_prefix("LISTENING ").and_then(|p| p.trim().parse::<u16>().ok()))
-                {
+                if let (Some(dir), Some(port)) = (&session_dir, announced_port(&mut announced, &line)) {
                     let info = crate::session_file::SessionInfo { port, token: token.clone(), pid: std::process::id() };
                     if let Err(e) = crate::session_file::write_into(dir, &info) {
                         eprintln!("[engine] no session file: {e}");
@@ -319,6 +318,20 @@ fn spawn(inner: &Inner) -> std::io::Result<std::process::ChildStdout> {
     let generation = inner.generation.fetch_add(1, Ordering::SeqCst) + 1;
     *lock(&inner.worker) = Some(Worker { child, stdin: BufWriter::new(stdin), generation });
     Ok(stdout)
+}
+
+/// The live door's port, from the worker's first `LISTENING` line only and only in the exact form `LISTENING <port>`.
+/// Later stderr lines carry document and plugin text, so they never move the port.
+pub fn announced_port(announced: &mut bool, line: &str) -> Option<u16> {
+    if *announced || !line.starts_with("LISTENING") {
+        return None;
+    }
+    *announced = true;
+    let digits = line.strip_prefix("LISTENING ")?;
+    if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    digits.parse::<u16>().ok().filter(|&p| p != 0)
 }
 
 /// Forwards the worker's messages until it goes away, and says why.
