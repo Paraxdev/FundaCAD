@@ -67,9 +67,11 @@ import {
   STARTER_LIBRARY,
   uniqueId,
 } from "./materials";
+import type { MaterialEdit } from "./materialEdit";
 import { faceKey } from "./faceMaterials";
 import {
   bodyPrints,
+  type FacePrint,
   type FaceRef,
   type FaceResolution,
   type FaceTrack,
@@ -2429,20 +2431,21 @@ export class DocumentStore {
   }
 
   // Batched with one emit, like setBodiesMaterial: a drop can land on a run of faces.
-  setFacesMaterial(faces: Iterable<{ body: string; face: number }>, material: string | null) {
+  // `at` is the print to fall back on while this window has no build of that face.
+  setFacesMaterial(faces: Iterable<{ body: string; face: number; at?: FacePrint }>, material: string | null) {
     const target = material !== null && this.materials.some((m) => m.id === material) ? material : null;
     const overlay = this.faceMaterial;
     const owners = new Map(overlay.owners());
     const on = overlay.resolution();
     const result = this.build.result;
-    const fresh = (body: string, face: number, m: string): FaceRef => {
+    const fresh = (body: string, face: number, m: string, given?: FacePrint): FaceRef => {
       const span = result?.bodies?.find((b) => b.id === body);
-      const at = result && span ? bodyPrints(result, span)[face] : undefined;
+      const at = (result && span ? bodyPrints(result, span)[face] : undefined) ?? given;
       return at ? { body, face, material: m, at } : { body, face, material: m };
     };
     const writes = new Map<string, FaceRef | null>();
     const now = (id: string) => (writes.has(id) ? writes.get(id) : overlay.get(id));
-    for (const { body, face } of faces) {
+    for (const { body, face, at } of faces) {
       const key = faceKey(body, face);
       let id = owners.get(key);
       let ref = id === undefined ? undefined : now(id);
@@ -2459,10 +2462,11 @@ export class DocumentStore {
         ref = now(id)!;
       }
       if (id !== undefined && ref) {
-        if (ref.material !== target) writes.set(id, target === null ? null : { ...ref, ...fresh(body, face, target) });
+        if (ref.material !== target)
+          writes.set(id, target === null ? null : { ...ref, ...fresh(body, face, target, at) });
       } else if (target !== null) {
         const added = newFaceRefId();
-        writes.set(added, fresh(body, face, target));
+        writes.set(added, fresh(body, face, target, at));
         owners.set(key, added);
       }
     }
@@ -2594,6 +2598,59 @@ export class DocumentStore {
     this.markUnstepped();
     this.emitBuild();
     return { added, updated };
+  }
+
+  // An assistant's material tool as one undo step. By id, so undoing it leaves a library edit made since, which no undo
+  // step holds. A use of a material the edit removed goes with it, named or not.
+  applyMaterialEdit(edit: MaterialEdit) {
+    this.undoAsOne(() => {
+      if (edit.library) this.swapLibrary(edit.library);
+      const known = new Set(this.materials.map((m) => m.id));
+      const named = (m: string | null) => m === null || known.has(m);
+      const goneBodies = [...this.bodyMaterial.entries()].filter(([, m]) => !known.has(m)).map(([body]) => body);
+      this.writeOverlayBatch(this.bodyMaterial, goneBodies, null);
+      const goneFaces = [...this.faceMaterial.entries()]
+        .filter(([, ref]) => !known.has(ref.material))
+        .map(([id]) => id);
+      this.writeOverlayBatch(this.faceMaterial, goneFaces, null);
+      for (const material of new Set(edit.bodies.map((b) => b.material).filter(named))) {
+        this.setBodiesMaterial(
+          edit.bodies.filter((b) => b.material === material).map((b) => b.body),
+          material,
+        );
+      }
+      for (const material of new Set(edit.faces.map((f) => f.material).filter(named))) {
+        this.setFacesMaterial(
+          edit.faces.filter((f) => f.material === material),
+          material,
+        );
+      }
+    });
+  }
+
+  private swapLibrary(next: readonly MaterialDef[]) {
+    const byId = (rows: readonly MaterialDef[]) => new Map(rows.map((m) => [m.id, m]));
+    const before = byId(this.materials);
+    const after = byId(next);
+    const changed = [...new Set([...before.keys(), ...after.keys()])].filter(
+      (id) => JSON.stringify(before.get(id)) !== JSON.stringify(after.get(id)),
+    );
+    if (!changed.length) return;
+    const write = (to: Map<string, MaterialDef>) => {
+      const held = new Set(changed);
+      const rows = this.materials.filter((m) => !held.has(m.id));
+      for (const id of changed) {
+        const m = to.get(id);
+        if (m) rows.push(m);
+      }
+      const at = new Map([...to.keys()].map((id, i) => [id, i]));
+      const rank = (m: MaterialDef) => at.get(m.id) ?? at.size;
+      this.materials = rows.sort((a, b) => rank(a) - rank(b));
+      this.markDirty();
+      this.emitBuild();
+    };
+    write(after);
+    this.pushOverlayUndo({ undo: () => write(before), redo: () => write(after) });
   }
 
   // Batched with one emit, like setBodiesElement: it is applied to a selection.

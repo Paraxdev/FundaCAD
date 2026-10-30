@@ -4,6 +4,7 @@
 // attached. No Vue import: the headless suite reaches this file.
 
 import type { CadDocument } from "../types";
+import { readMaterialEdit } from "../document/materialEdit";
 import type { DocumentStore } from "../document/store";
 import type { GeometryBackend } from "../geometry/client";
 import type { GuideSession } from "../ui/guide/guideSession";
@@ -46,6 +47,8 @@ interface Proposal {
   name: string;
   note: string | null;
   document: CadDocument;
+  /** The same change as `document` in a form applied to the open document, for a kind this window knows. */
+  edit?: unknown;
   /** The document session the assistant read, set by an engine that knows sessions. */
   doc?: string;
   /** A whole other document (the assistant's doc_new, doc_open or doc_set), not an edit of the open one. */
@@ -263,7 +266,14 @@ export class LiveSessionHost {
       this.refuse(p.id, REFUSED_WHILE_IMPORTING);
       return;
     }
-    this.store.loadDocument(p.document, { replace: true, untitled: !!p.replaces && OTHER_FILE.test(p.note ?? "") });
+    const materials = readMaterialEdit(p.edit);
+    if (materials) {
+      this.store.applyMaterialEdit(materials);
+      // No doc change to bump it in `start`, and the next proposal in this batch was written without this edit.
+      this.revision += 1;
+    } else {
+      this.store.loadDocument(p.document, { replace: true, untitled: !!p.replaces && OTHER_FILE.test(p.note ?? "") });
+    }
     this.applied = [...this.applied, p.id].slice(-APPLIED_MEMORY);
     this.lastGuestSeen = this.now();
     this.emit({ lastEdit: { note: p.note ?? null, by: p.name, at: this.now() } });
