@@ -192,6 +192,15 @@ fn an_x3d_shape_with_many_children_reused_many_times_is_held_to_a_visit_budget()
     assert_eq!(out.as_deref(), Some("this scene reuses its nodes too many times to import"));
 }
 
+#[test]
+fn an_x3d_scene_of_many_plain_shapes_without_reuse_still_imports() {
+    let shape = "<Shape><Appearance><Material/><TextureTransform/></Appearance><IndexedFaceSet coordIndex=\"0 1 2 -1\"><Coordinate point=\"0 0 0 1 0 0 0 1 0\"/><Normal vector=\"0 0 1\"/><Color color=\"1 0 0\"/></IndexedFaceSet></Shape>";
+    let xml = format!("<X3D><Scene>{}</Scene></X3D>", shape.repeat(210_000));
+    let (objects, _) = within(120, move || x3d::read_x3d(&xml, Some(1.0))).unwrap();
+    let tris: usize = objects.iter().map(|o| o.idx.len() / 3).sum();
+    assert_eq!(tris, 210_000);
+}
+
 const CUBE_MODEL: &str = r#"<?xml version="1.0"?><model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"><resources><object id="1" type="model"><mesh><vertices><vertex x="0" y="0" z="0"/><vertex x="10" y="0" z="0"/><vertex x="10" y="10" z="0"/><vertex x="0" y="10" z="0"/><vertex x="0" y="0" z="10"/><vertex x="10" y="0" z="10"/><vertex x="10" y="10" z="10"/><vertex x="0" y="10" z="10"/></vertices><triangles><triangle v1="0" v2="2" v3="1"/><triangle v1="0" v2="3" v3="2"/><triangle v1="4" v2="5" v3="6"/><triangle v1="4" v2="6" v3="7"/><triangle v1="0" v2="1" v3="5"/><triangle v1="0" v2="5" v3="4"/><triangle v1="1" v2="2" v3="6"/><triangle v1="1" v2="6" v3="5"/><triangle v1="2" v2="3" v3="7"/><triangle v1="2" v2="7" v3="6"/><triangle v1="3" v2="0" v3="4"/><triangle v1="3" v2="4" v3="7"/></triangles></mesh></object></resources><build><item objectid="1"/></build></model>"#;
 
 fn import_3mf(tag: &str, zip: Vec<u8>) -> Result<serde_json::Map<String, Value>, String> {

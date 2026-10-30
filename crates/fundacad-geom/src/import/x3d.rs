@@ -442,6 +442,7 @@ const MAX_TRIANGLES: usize = super::scan::MAX_SCAN_TRIANGLES as usize;
 // Unwelded triangles carry nine coordinates each, so this sits above any scene under MAX_TRIANGLES.
 const MAX_VALUES: usize = 10 * MAX_TRIANGLES;
 const MAX_VISITS: usize = 2_000_000;
+const FREE_KIDS: usize = 8;
 
 /// What one file may still walk, shared by all its top level nodes: DEF/USE
 /// reuse is a DAG, so a few short lines can reach far more than they hold.
@@ -530,9 +531,10 @@ impl Walk<'_> {
         Ok(())
     }
 
-    /// `n.child`, charged for the XML children it scans, since a reused node rescans them each visit.
+    /// `n.child`, charged for the XML children it scans past the few a plain node holds,
+    /// since a reused node rescans them each visit.
     fn child(&mut self, n: &Node, key: &str, kinds: &[&str]) -> Result<Option<Rc<Node>>, String> {
-        self.take_visits(n.kid_count())?;
+        self.take_visits(n.kid_count().saturating_sub(FREE_KIDS))?;
         Ok(n.child(key, kinds))
     }
 
