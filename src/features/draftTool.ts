@@ -15,6 +15,7 @@ import { previewVerdict } from "./previewVerdict";
 import { HeldSignal } from "./heldEdit";
 import { toolChar } from "../input/shortcuts";
 import { singleKeysOn } from "../ui/a11yPrefs";
+import { boxBindings } from "./boxBindings";
 
 type Phase = "pick" | "drag";
 
@@ -328,8 +329,11 @@ export class DraftTool {
       return;
     }
     const feature = this.buildFeature();
+    const bindings = boxBindings(this.dim, this.store, feature.id, [
+      { box: "angle", field: "angle", value: (feature as { angle: number }).angle, kind: "angle" },
+    ]);
     this.store.setPreview(null); // addFeature re-adds it as a committed feature
-    this.store.addFeature(feature);
+    this.store.addFeature(feature, undefined, bindings);
     if (verdict.kind === "wait") this.store.verifyCommit(feature.id, `Draft ${this.angle}°`);
     this.cleanup();
     this.onDone?.(feature.id);

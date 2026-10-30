@@ -89,6 +89,7 @@ function fakeStore(reply: FaceAxisReply | null) {
   const added: Feature[] = [];
   const store = {
     nextId: () => "p1",
+    boundExpr: () => null,
     classifyTargetExpr,
     setPreview(feature: Feature | null) {
       if (feature) previews.push(feature);

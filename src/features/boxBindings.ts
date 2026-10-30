@@ -25,7 +25,9 @@ export function boxBindings(dim: DimInput, store: BoundSource, feature: string, 
     const kind = f.kind ?? "length";
     const typed = dim.exprOf(f.box);
     if (typed) {
-      out.push({ target, kind, ...typed });
+      // A box value the tool turned into another number (a clamp, a radius read as a move) binds nothing.
+      const v = dim.getValue(f.box);
+      if (v != null && Math.abs(v - f.value) < 1e-3) out.push({ target, kind, ...typed });
       continue;
     }
     const bound = store.boundExpr(target);

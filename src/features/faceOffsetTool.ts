@@ -23,6 +23,7 @@ import { deltaForDiameter, deltaForRadius, radialDrag, type RoundFace } from "./
 import { offeredResize, resizeAxis, type OfferedResize, type ResizeAxis } from "./pressPullAxis";
 import { featureKey, PreviewOutcomes } from "./previewOutcomes";
 import { axialSpan, ResizeGuides } from "./resizeGuides";
+import { boxBindings } from "./boxBindings";
 import { toolChar } from "../input/shortcuts";
 
 export type FaceOffsetMode = "offsetFace" | "thicken" | "shell";
@@ -699,8 +700,12 @@ export class FaceOffsetTool {
     if (decision.action === "cancel") return this.cancel();
     this.value = decision.value;
     const feature = this.buildFeature();
+    const key = feature.type === "offsetFace" ? "distance" : "thickness";
+    const value = (feature as unknown as Record<string, number | undefined>)[key];
+    const bindings =
+      value == null ? [] : boxBindings(this.dim, this.store, feature.id, [{ box: "distance", field: key, value }]);
     this.store.setPreview(null); // addFeature re-adds it as a committed feature
-    this.store.addFeature(feature);
+    this.store.addFeature(feature, undefined, bindings);
     if (decision.unverified) this.store.verifyCommit(feature.id, `${LABEL[this.mode]} ${this.sizeText(this.value)}`);
     this.cleanup();
     this.onDone?.(feature.id);

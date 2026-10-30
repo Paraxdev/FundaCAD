@@ -248,6 +248,7 @@ describe("hole depth box", () => {
     const added: Feature[] = [];
     const store = {
       nextId: () => "h1",
+      boundExpr: () => null,
       classifyTargetExpr,
       setPreview: () => {},
       addFeature: (f: Feature) => added.push(f),

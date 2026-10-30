@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import * as THREE from "three";
 import { ExtrudeTool } from "../../src/features/extrudeTool";
+import { DraftTool } from "../../src/features/draftTool";
+import { HoleTool } from "../../src/features/holeTool";
 import { DocumentStore } from "../../src/document/store";
 import type { DimInput } from "../../src/sketch/dimInput";
 import type { GeometryBackend } from "../../src/geometry/client";
@@ -221,5 +223,95 @@ describe("editing an extrude in the Extrude tool", () => {
     enter("distance");
     expect(depth(s)).toBe(12);
     expect(s.boundExpr(target)).toMatchObject({ name: "depth", expr: "12" });
+  });
+});
+
+/** The document half of the store is the real one, the scene half answers as an idle kernel would. */
+function sceneless(real: DocumentStore, id: string) {
+  return {
+    get document() {
+      return real.document;
+    },
+    classifyTargetExpr: real.classifyTargetExpr.bind(real),
+    boundExpr: real.boundExpr.bind(real),
+    isParamBound: real.isParamBound.bind(real),
+    addFeature: real.addFeature.bind(real),
+    replaceFeature: real.replaceFeature.bind(real),
+    nextId: () => id,
+    setPreview: () => {},
+    verifyCommit: () => {},
+    onBuild: () => () => {},
+    hasPreview: false,
+    previewError: null,
+    buildState: { building: false, result: null },
+  } as unknown as DocumentStore;
+}
+
+function fakeViewport() {
+  return {
+    suspendPicking: false,
+    domElement: document.createElement("canvas"),
+    addToScene: () => {},
+    removeFromScene: () => {},
+    requestRender: () => {},
+    pixelWorldSize: () => 0.1,
+    projectToScreen: () => ({ x: 0, y: 0 }),
+    probe: () => null,
+    clearHover: () => {},
+    hoverFaceAt: () => null,
+    pickFaceForPressPull: () => null,
+    selectedFacesForPressPull: () => ({
+      selectors: [{ kind: "face", by: "nearest", point: [0, 0, 0] }],
+      faceIds: [7],
+      normal: new THREE.Vector3(1, 0, 0),
+      anchor: new THREE.Vector3(0, 0, 5),
+      bodyId: "b1",
+    }),
+    planarFace: () => ({ normal: new THREE.Vector3(0, 0, 1), origin: new THREE.Vector3(0, 0, 10) }),
+    faceAreaCentroidWorld: () => new THREE.Vector3(0, 0, 10),
+    modelBox: () => new THREE.Box3(new THREE.Vector3(-10, -10, 0), new THREE.Vector3(10, 10, 10)),
+  } as never;
+}
+
+const solid = () =>
+  model({
+    features: [{ id: "f1", type: "box", width: 20, depth: 20, height: 10 } as unknown as Feature],
+  });
+const field_ = (s: DocumentStore, id: string, key: string) =>
+  (s.document.features.find((f) => f.id === id) as Record<string, unknown> | undefined)?.[key];
+
+describe("other model tools keep a typed parameter expression", () => {
+  let frames: (() => void)[] = [];
+  beforeEach(() => {
+    frames = [];
+    vi.stubGlobal("requestAnimationFrame", (fn: () => void) => frames.push(fn));
+    vi.stubGlobal("cancelAnimationFrame", () => {});
+  });
+  afterEach(() => vi.unstubAllGlobals());
+  const flushFrame = () => frames.splice(0).forEach((f) => f());
+
+  it("Draft binds its angle, which follows width", async () => {
+    const s = solid();
+    new DraftTool(fakeViewport(), sceneless(s, "p1")).start(() => {});
+    type("angle", "width / 8");
+    flushFrame();
+    enter("angle");
+    expect(field_(s, "p1", "angle")).toBe(5);
+    expect(s.boundExpr({ kind: "feature", feature: "p1", field: "angle" })?.expr).toBe("width / 8");
+    expect(s.setParamExpr("width", "80")).toBeNull();
+    await ticks();
+    expect(field_(s, "p1", "angle")).toBe(10);
+  });
+
+  it("Hole binds its depth, which follows width", async () => {
+    const s = solid();
+    new HoleTool(fakeViewport(), sceneless(s, "h1")).start(() => {});
+    type("depth", "width / 8");
+    enter("depth");
+    expect(field_(s, "h1", "depth")).toBe(5);
+    expect(s.boundExpr({ kind: "feature", feature: "h1", field: "depth" })?.expr).toBe("width / 8");
+    expect(s.setParamExpr("width", "80")).toBeNull();
+    await ticks();
+    expect(field_(s, "h1", "depth")).toBe(10);
   });
 });

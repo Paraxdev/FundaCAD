@@ -51,6 +51,7 @@ function fakeStore() {
   const state = { hasPreview: false, previewError: null as string | null, building: false };
   const store = {
     nextId: () => "p1",
+    boundExpr: () => null,
     setPreview(feature: Feature | null) {
       state.hasPreview = feature !== null;
       if (feature) state.building = true;
