@@ -31,19 +31,23 @@ def bait(s: Session) -> dict:
     return seen
 
 
-@pytest.fixture(scope="module")
-def scans():
-    """The A1 screens with Comfortable text on, picked in Settings as a person would."""
+# A fallback wider than the shipped face, as DejaVu Sans on a Linux runner is, so a layout with no slack shows here too.
+WIDE = ':root { --ui: Verdana, "DejaVu Sans", sans-serif !important; }'
 
+
+def scan_screens(wide: bool) -> dict:
     def scan(s: Session, name: str) -> dict:
         settled(s)
+        if wide:
+            s.page.add_style_tag(content=WIDE)
+            settled(s)
         found = {
             "comfortable": s.page.evaluate("() => document.documentElement.dataset.text || ''"),
             "small": small_text(s.page),
             "cut": cut_labels(s.page) + clipped_controls(s.page),
         }
         try:
-            s.screenshot(out_dir() / f"text_{name}.png")
+            s.screenshot(out_dir() / f"text_{'wide_' if wide else ''}{name}.png")
         except Exception as e:
             found["shot"] = str(e).splitlines()[0]
         return found
@@ -57,8 +61,20 @@ def scans():
         found = walk(s, FLOWS, scan, fresh_page, reset_budget=RESET_BUDGET)
     finally:
         s.close()
-    (out_dir() / "text_size.json").write_text(json.dumps({"found": found, "state": state}, indent=1), encoding="utf-8")
+    name = "text_size_wide.json" if wide else "text_size.json"
+    (out_dir() / name).write_text(json.dumps({"found": found, "state": state}, indent=1), encoding="utf-8")
     return {"found": found, "state": state}
+
+
+@pytest.fixture(scope="module")
+def scans():
+    """The A1 screens with Comfortable text on, picked in Settings as a person would."""
+    return scan_screens(False)
+
+
+@pytest.fixture(scope="module")
+def wide_scans():
+    return scan_screens(True)
 
 
 def test_the_checks_find_small_text_and_a_cut_label(scans):
@@ -79,3 +95,10 @@ def test_comfortable_text_cuts_no_base_control(scans, screen):
     assert not isinstance(found, str), f"{screen} did not open: {found}"
     assert found["comfortable"] == "comfortable", f"Comfortable text was off on {screen}"
     assert found["cut"] == [], f"{screen}, shot in {out_dir()}:\n" + "\n".join(found["cut"])
+
+
+@pytest.mark.parametrize("screen", SCREENS)
+def test_comfortable_text_cuts_no_base_control_in_a_wider_font(wide_scans, screen):
+    found = wide_scans["found"].get(screen, "the walk never reached it")
+    assert not isinstance(found, str), f"{screen} did not open: {found}"
+    assert found["cut"] == [], f"{screen}, shot in {out_dir()}:" + chr(10) + chr(10).join(found["cut"])
