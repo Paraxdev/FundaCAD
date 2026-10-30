@@ -427,7 +427,7 @@ jobs:
 
       - name: Upload plugin bundles
         if: matrix.platform == 'ubuntu-22.04'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: fundacad-bundle-plugins
           retention-days: 7
@@ -606,7 +606,7 @@ jobs:
 
       - name: Upload the AppImage Wayland smoke log
         if: always() && matrix.platform == 'ubuntu-22.04'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: wayland-smoke-appimage
           path: ${{ runner.temp }}/wayland-smoke/app.log
@@ -630,7 +630,7 @@ jobs:
 
       - name: Upload the AT-SPI dump
         if: always() && matrix.platform == 'ubuntu-22.04'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: atspi-dump
           path: |
@@ -670,7 +670,7 @@ jobs:
 
       - name: Upload the UI Automation walk
         if: always() && matrix.platform == 'windows-latest'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: uia-walk
           path: ${{ runner.temp }}/uia/
@@ -728,7 +728,7 @@ jobs:
       # after tauri-action still uploads, for debugging, but under a name the
       # release and build-flatpak never download, so its files are not shipped.
       - name: Upload artifacts
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: ${{ job.status == 'success' && 'fundacad-bundle' || 'failed-bundle' }}-${{ matrix.platform }}
@@ -821,7 +821,7 @@ jobs:
 
       - name: Upload the Wayland smoke log
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: wayland-smoke-flatpak
           path: ${{ runner.temp }}/wayland-smoke/app.log
@@ -829,7 +829,7 @@ jobs:
           retention-days: 7
 
       - name: Upload the Flatpak
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: fundacad-bundle-flatpak
           retention-days: 7
@@ -950,7 +950,7 @@ jobs:
           want=$(wc -l < bundles.txt); got=$(find sigs -name '*.sig' | wc -l)
           [ "$want" -eq "$got" ] || { echo "::error::signed $got of $want updater bundles"; exit 1; }
 
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: steps.decide.outputs.sign == 'true'
         with:
           name: fundacad-signatures
@@ -1513,7 +1513,7 @@ jobs:
 
       - name: Agent harness logs on failure
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: harness-logs
           path: ${{ runner.temp }}/harness
@@ -1537,7 +1537,7 @@ jobs:
 
       - name: Accessibility smoke report
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: a11y-smoke
           path: ${{ runner.temp }}/a11y
@@ -1604,7 +1604,7 @@ jobs:
 
       - name: Tracer log
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: tracer-macos-log
           path: ${{ runner.temp }}/tracer.log
@@ -1749,7 +1749,7 @@ jobs:
           cargo test --locked --tests --workspace
 
       - name: Upload the engine for the e2e job
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: fundacad-engine-linux
           retention-days: 1
