@@ -68,7 +68,7 @@ runs:
         # linuxdeploy's GTK hook forces X11 for its bundled GTK (tauri-apps/tauri#8541). The system
         # GTK picks Wayland itself and falls back to X11 where the session has no Wayland.
         sed -i '/^[[:space:]]*export GDK_BACKEND=/d' "$root"/apprun-hooks/*.sh
-        ! grep -n 'GDK_BACKEND' "$root"/AppRun "$root"/apprun-hooks/*.sh \
+        ! grep -nE '^[^#]*\bGDK_BACKEND:?=' "$root"/AppRun "$root"/apprun-hooks/*.sh \
           || { echo "::error::an AppRun hook still sets GDK_BACKEND"; exit 1; }
 
         # With the system stack gone, a system without WebKitGTK would fail with
