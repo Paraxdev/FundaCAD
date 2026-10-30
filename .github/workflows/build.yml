@@ -373,11 +373,12 @@ jobs:
           node -e "const fs=require('fs');const f='src-tauri/tauri.conf.json';const j=JSON.parse(fs.readFileSync(f));j.version='$v';fs.writeFileSync(f,JSON.stringify(j,null,2)+'\n')"
           echo "stamped $v"
 
-      - name: Disable updater artifacts when they could not be trusted
+      - name: Leave updater signing to the sign job
+        id: updater
         uses: ./.github/actions/updater-artifacts
         with:
           config: src-tauri/tauri.${{ needs.channel.outputs.config }}.conf.json
-          signing-key: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          signing: ${{ vars.UPDATER_SIGNING == 'true' }}
 
       # Plugin bundles for this release, built from the same commit as the
       # engine that runs their components. Once, not per platform: a bundle is
@@ -439,8 +440,6 @@ jobs:
         uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
           # CMake 4 refuses OCCT 7.8.1's declared minimum. Harmless on a runner
           # still shipping CMake 3, and the day one moves this is why it builds.
           CMAKE_POLICY_VERSION_MINIMUM: "3.5"
@@ -491,9 +490,6 @@ jobs:
       - name: Un-bundle the system stack from the AppImage
         if: matrix.platform == 'ubuntu-22.04'
         uses: ./.github/actions/appimage-unbundle
-        with:
-          signing-key: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          signing-key-password: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
       - name: Depend on the renamed GTK package (deb)
         if: matrix.platform == 'ubuntu-22.04'
@@ -665,6 +661,20 @@ jobs:
           if (Test-Path $lnk) { throw 'an update over an install brought back the Start menu entry its user removed' }
           Write-Host 'update over the install: the removed entry stayed removed'
 
+      # The bundler makes the macOS updater bundle only with updater artifacts on, which the
+      # bundle job keeps off. Same layout as the bundler's: the .app at the top of the archive.
+      - name: Pack the macOS updater bundle for the sign job
+        if: matrix.platform == 'macos-14' && steps.updater.outputs.sign == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd src-tauri/target/release/bundle/macos
+          app=$(find . -maxdepth 1 -name '*.app' -type d | head -1)
+          [ -n "$app" ] || { echo "::error::no .app was produced"; exit 1; }
+          app=${app#./}
+          COPYFILE_DISABLE=1 tar -czf "$app.tar.gz" "$app"
+          ls -l "$app.tar.gz"
+
       # A week, the cap tests/build/artifactRetention.test.ts holds, so the
       # beta release can be republished from them by hand. A leg that failed
       # after tauri-action still uploads, for debugging, but under a name the
@@ -687,7 +697,6 @@ jobs:
             src-tauri/target/release/bundle/**/*.app.tar.gz
             src-tauri/target/release/fundacad.exe
             src-tauri/target/release/fundacad-dev.exe
-            src-tauri/target/release/bundle/**/*.sig
 
   # The Linux build as a Flatpak, repackaged from the .deb above. The GNOME
   # runtime carries WebKitGTK and GTK, which the AppImage takes from the system
@@ -807,6 +816,75 @@ jobs:
           docker run --rm -v "$PWD":/w -w /w ${{ matrix.image }} \
             sh scripts/package-install-smoke.sh ${{ matrix.kind }} /w/pkg
 
+  # Signs the updater bundles with the key the updater-signing environment holds. It builds
+  # nothing and runs only the lockfile's tauri CLI, so no npm, crates.io or downloaded tool sees the key.
+  sign:
+    needs: [channel, bundle]
+    if: >-
+      always() && needs.channel.outputs.release != '' && vars.UPDATER_SIGNING == 'true'
+      && (needs.bundle.result == 'success'
+          || (needs.channel.outputs.gated == 'false' && !cancelled()
+              && (needs.bundle.result == 'failure' || needs.bundle.result == 'cancelled')))
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    environment: updater-signing
+    permissions:
+      contents: read
+    outputs:
+      signed: ${{ steps.decide.outputs.sign }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+
+      - name: Install the locked tauri CLI without running any package scripts
+        run: npm ci --ignore-scripts
+
+      - id: decide
+        uses: ./.github/actions/updater-artifacts
+        with:
+          config: src-tauri/tauri.${{ needs.channel.outputs.config }}.conf.json
+          signing: ${{ vars.UPDATER_SIGNING == 'true' }}
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        if: steps.decide.outputs.sign == 'true'
+        with:
+          pattern: fundacad-bundle-*
+          path: dist
+
+      # Basenames differ per platform, so the release job finds each signature by its bundle's name.
+      - name: Sign the updater bundles
+        if: steps.decide.outputs.sign == 'true'
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          [ -n "$TAURI_SIGNING_PRIVATE_KEY" ] || { echo "::error::the updater-signing environment has no TAURI_SIGNING_PRIVATE_KEY"; exit 1; }
+          mkdir sigs
+          find dist -type f \( -name '*.AppImage' -o -name '*setup.exe' -o -name '*.msi' -o -name '*.app.tar.gz' \) > bundles.txt
+          [ -s bundles.txt ] || { echo "::error::no updater bundle to sign"; exit 1; }
+          while IFS= read -r f; do
+            sig="sigs/$(basename "$f").sig"
+            [ ! -e "$sig" ] || { echo "::error::two bundles are named $(basename "$f")"; exit 1; }
+            node_modules/.bin/tauri signer sign "$f"
+            mv "$f.sig" "$sig"
+            echo "signed $f"
+          done < bundles.txt
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: steps.decide.outputs.sign == 'true'
+        with:
+          name: fundacad-signatures
+          retention-days: 7
+          if-no-files-found: error
+          path: sigs/*.sig
+
   # The rolling "beta" pre-release from main, the rolling "development"
   # pre-release from dev, or a stable release from a tag.
   #
@@ -830,7 +908,7 @@ jobs:
   # plugins from this release (RELEASE_TAG in src/plugins/index.ts).
 
   release:
-    needs: [channel, bundle, build-flatpak]
+    needs: [channel, bundle, build-flatpak, sign]
     # A failed Flatpak leaves it out of the release rather than holding the
     # release back: always() lets this run once build-flatpak has finished
     # either way. On dev a failed bundle leg does the same for its own files,
@@ -841,6 +919,8 @@ jobs:
       && (needs.bundle.result == 'success'
           || (needs.channel.outputs.gated == 'false' && !cancelled()
               && (needs.bundle.result == 'failure' || needs.bundle.result == 'cancelled')))
+      && (needs.sign.result == 'success' || needs.sign.result == 'skipped'
+          || (needs.channel.outputs.gated == 'false' && needs.sign.result == 'failure'))
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     permissions:
@@ -870,11 +950,17 @@ jobs:
           pattern: fundacad-bundle-*
           path: dist
 
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        if: needs.sign.outputs.signed == 'true'
+        with:
+          name: fundacad-signatures
+          path: sigs
+
       # One fixed name per platform and format, with no version in it, so every
       # build replaces the same files on the release. The SourceForge mirror
       # copies whatever the release carries, and versioned names piled up there
       # as a new file per build. The version stays in the title and the notes.
-      # A signature follows its bundle as <name>.sig. Plugin bundles already
+      # A signature from the sign job follows its bundle as <name>.sig. Plugin bundles already
       # have fixed names and are copied as they are.
       - name: Give every asset its fixed name
         shell: bash
@@ -883,11 +969,12 @@ jobs:
           mkdir -p release
           : > missing.txt
           put() { # $1 = find pattern under dist, $2 = published name
-            local src
+            local src sig
             src=$(find dist -type f -name "$1" | head -1)
             [ -n "$src" ] || { echo "NOTE: no $1 in this build, $2 left out"; echo "$2" >> missing.txt; return 0; }
             cp "$src" "release/$2"
-            [ ! -f "$src.sig" ] || cp "$src.sig" "release/$2.sig"
+            sig="sigs/$(basename "$src").sig"
+            [ ! -f "$sig" ] || cp "$sig" "release/$2.sig"
             echo "$(basename "$src") -> $2"
           }
           put '*.AppImage'    FundaCAD-linux-x86_64.AppImage

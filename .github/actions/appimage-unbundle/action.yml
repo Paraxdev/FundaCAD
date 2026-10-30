@@ -1,17 +1,7 @@
 name: Un-bundle the system stack from the AppImage
 description: >
   Strip the bundled GTK/WebKit/GStreamer stack out of the AppImage, repack it
-  and re-sign it.
-
-inputs:
-  signing-key:
-    description: The minisign private key, empty to leave the AppImage unsigned.
-    required: false
-    default: ""
-  signing-key-password:
-    description: Password for the signing key.
-    required: false
-    default: ""
+  for the sign job to sign.
 
 runs:
   using: composite
@@ -35,9 +25,6 @@ runs:
     # leaves no coredump on a host where the shipped one does neither.
     - name: Un-bundle the system stack from the AppImage
       shell: bash
-      env:
-        TAURI_SIGNING_PRIVATE_KEY: ${{ inputs.signing-key }}
-        TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ inputs.signing-key-password }}
       run: |
         set -euo pipefail
         img=$(find src-tauri/target/release/bundle/appimage -maxdepth 1 -name '*.AppImage' | head -1)
@@ -108,12 +95,5 @@ runs:
           --runtime-file "$LDAI_RUNTIME_FILE" "$root" "$img"
         echo "after: $(du -m "$img" | cut -f1) MB"
 
-        # The old .sig covers the old bytes. Leaving it would hand every existing
-        # install an update whose signature does not verify.
+        # A .sig from the bundler would cover the old bytes. The sign job signs the repacked AppImage.
         rm -f "$img.sig"
-        if [ -n "${TAURI_SIGNING_PRIVATE_KEY:-}" ]; then
-          npx --yes @tauri-apps/cli signer sign "$img"
-          test -f "$img.sig"
-        else
-          echo "::warning::no signing key, AppImage left unsigned (not shippable)"
-        fi

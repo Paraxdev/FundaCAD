@@ -67,7 +67,8 @@ the release keeps one file per download instead of one per build:
 | Windows | `FundaCAD-windows-x64-setup.exe`, `FundaCAD-windows-x64.msi`, `FundaCAD-windows-x64-portable.exe` |
 | macOS | `FundaCAD-macos-arm64.dmg`, `FundaCAD-macos-arm64.app.tar.gz` (updater) |
 
-Signatures are the same name plus `.sig`; `latest.json` and the
+Signatures are the same name plus `.sig`, made by the `sign` job from the
+finished bundles (the bundle job never holds the key); `latest.json` and the
 `plugin-<id>.zip` bundles keep their names. The version is in the release
 title and notes.
 

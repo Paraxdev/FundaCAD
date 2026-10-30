@@ -18,8 +18,9 @@
 //   npm run tauri signer generate -- -w <a path OUTSIDE this repo>
 //
 // then put the private key and its password in the TAURI_SIGNING_PRIVATE_KEY
-// and TAURI_SIGNING_PRIVATE_KEY_PASSWORD repository secrets and paste the public
-// half into tauri.conf.json.
+// and TAURI_SIGNING_PRIVATE_KEY_PASSWORD secrets of the updater-signing
+// environment, set the repository variable UPDATER_SIGNING to true and paste
+// the public half into tauri.conf.json.
 //
 // So the "is it still upstream's key" gate lives in the RELEASE job rather than
 // here, and a test that fails on every ordinary run is a test everyone learns to
