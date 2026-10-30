@@ -428,12 +428,33 @@ fn a_plugin_call_stores_shapes_only_within_its_blob_budget() {
     let e = k::write_blob_capped(&other, &root, &mut b).unwrap_err();
     assert!(e.contains("for one stored shape"), "{e}");
 
-    let mut b = k::BlobBudget::default();
-    b.count = 1;
-    k::write_blob_capped(&small, &root, &mut b).unwrap();
-    let e = k::write_blob_capped(&other, &root, &mut b).unwrap_err();
-    assert!(e.contains("at most 1 shapes"), "{e}");
     assert_eq!(stored(), 1);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_plugin_call_may_store_any_number_of_shapes_within_its_bytes() {
+    let root = temp_root("blob-many");
+    let small = k::make_box((0.0, 0.0, 0.0), (1.0, 1.0, 1.0)).unwrap();
+    let mut b = k::BlobBudget::default();
+    let stored: Result<Vec<String>, String> = (0..1100).map(|_| k::write_blob_capped(&small, &root, &mut b)).collect();
+    assert_eq!(stored.map(|d| d.len()), Ok(1100));
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_failed_blob_store_leaves_the_budget_unspent() {
+    let root = temp_root("blob-unspent");
+    let not_a_dir = root.join("file");
+    std::fs::write(&not_a_dir, b"x").unwrap();
+    let small = k::make_box((0.0, 0.0, 0.0), (1.0, 1.0, 1.0)).unwrap();
+    let len = opencascade::xcaf::to_bin_v3(&small).unwrap().len();
+
+    let mut b = k::BlobBudget::default();
+    b.total = len + len / 2;
+    assert!(k::write_blob_capped(&small, &not_a_dir, &mut b).is_err());
+    assert!(k::write_blob_capped(&small, &root.join("store"), &mut b).is_ok());
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 fn broken_reason(root: &Path, rel: &str) -> String {

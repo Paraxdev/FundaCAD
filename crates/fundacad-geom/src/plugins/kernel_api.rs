@@ -377,19 +377,17 @@ pub fn write_blob(s: &Shape) -> Result<String, String> {
 pub struct BlobBudget {
     pub per_blob: usize,
     pub total: usize,
-    pub count: usize,
     used: usize,
-    written: usize,
 }
 
 impl Default for BlobBudget {
     fn default() -> Self {
-        BlobBudget { per_blob: 256 << 20, total: 1 << 30, count: 1024, used: 0, written: 0 }
+        BlobBudget { per_blob: 256 << 20, total: 1 << 30, used: 0 }
     }
 }
 
 impl BlobBudget {
-    fn charge(&mut self, len: usize) -> Result<(), String> {
+    fn check(&self, len: usize) -> Result<(), String> {
         let mib = |n: usize| n >> 20;
         if len > self.per_blob {
             return Err(format!(
@@ -398,14 +396,9 @@ impl BlobBudget {
                 mib(self.per_blob)
             ));
         }
-        if self.written >= self.count {
-            return Err(format!("a plugin call may store at most {} shapes", self.count));
-        }
         if self.used + len > self.total {
             return Err(format!("a plugin call may store at most {} MiB of shapes in total", mib(self.total)));
         }
-        self.used += len;
-        self.written += 1;
         Ok(())
     }
 }
@@ -413,9 +406,11 @@ impl BlobBudget {
 /// A plugin's write-blob: refused before anything is stored once the budget runs out.
 pub fn write_blob_capped(s: &Shape, root: &Path, budget: &mut BlobBudget) -> Result<String, String> {
     let bytes = opencascade::xcaf::to_bin_v3(s).map_err(|e| store_err(&e))?;
-    budget.charge(bytes.len())?;
+    budget.check(bytes.len())?;
     let store = BlobStore::open(root).map_err(|e| store_err(&e))?;
-    store.put_bytes(&bytes).map_err(|e| store_err(&e))
+    let digest = store.put_bytes(&bytes).map_err(|e| store_err(&e))?;
+    budget.used += bytes.len();
+    Ok(digest)
 }
 
 const MAX_PREVIEW_TRIANGLES: usize = 400_000;
