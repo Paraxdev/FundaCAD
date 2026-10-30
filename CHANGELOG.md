@@ -477,6 +477,13 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Changed
 
+- **The Flatpak no longer reaches your whole home folder.** It reaches the
+  FundaCAD folder in Documents, which it makes when it starts, and the files you
+  pick in its file chooser. An AI assistant works in that folder too. For any
+  other file FundaCAD opens the file chooser with the assistant's request in its
+  title, and Cancel refuses it. With no window open, or Live document set to Do
+  not share, the assistant can only use the FundaCAD folder.
+
 - **On Linux the AppImage and the Flatpak open as native Wayland windows.** They
   no longer go through XWayland, and still use X11 where the session has no
   Wayland. The Flatpak no longer asks for every device, only game controllers
