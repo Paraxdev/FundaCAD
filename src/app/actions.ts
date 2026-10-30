@@ -20,6 +20,8 @@ import { isChoiceOpen } from "../ui/choice";
 import { openReportDialog } from "../ui/bugReporter";
 import { ideaUrl } from "../ui/reportText";
 import { MANUAL_URL, openExternal } from "../ui/welcome";
+import { changeInterfaceSize } from "../ui/interfaceSize";
+import type { ZoomChord } from "../input/platform";
 import type { StandardView } from "../viewport/cameras";
 import type { FaceOffsetMode } from "../features/faceOffsetTool";
 
@@ -114,6 +116,8 @@ export function createActions(e: Engine): (action: string) => void {
     if (action === "suggest-idea") return void openExternal(ideaUrl());
     if (action === "preferences") return void useDialogStore().openPreferences();
     if (action === "accessibility-settings") return void useDialogStore().openPreferences("access");
+    const size = /^interface-size-(up|down|reset)$/.exec(action);
+    if (size) return changeInterfaceSize(size[1] as ZoomChord);
     if (action === "manual") return void openExternal(MANUAL_URL);
     // Moving focus leaves a sketch open and a pick waiting.
     if (action === "region-next" || action === "region-prev")

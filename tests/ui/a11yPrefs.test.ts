@@ -68,6 +68,9 @@ describe("defaults", () => {
       contrast: "system",
       solidPanels: false,
       targets: "default",
+      interfaceSize: 100,
+      comfortableText: false,
+      viewportLabels: "m",
     });
     expect(m.getVerbosity()).toBe("normal");
     expect(m.singleKeysOn()).toBe(true);
@@ -239,6 +242,9 @@ describe("reset and the screen reader preset", () => {
       contrast: "system",
       solidPanels: true,
       targets: "default",
+      interfaceSize: 100,
+      comfortableText: false,
+      viewportLabels: "m",
     });
     expect(stored.get("fundacad.a11y.verbosity")).toBe("verbose");
     expect(stored.get("fundacad.a11y.singleKeys")).toBe("off");

@@ -1,8 +1,5 @@
 import { onMounted, onUnmounted, type Ref } from "vue";
-import { LEFT_CARDS, RIGHT_CARDS, clearRow, promptInsets, type Box } from "../ui/promptPlacement";
-
-const COLUMNS =
-  "#float-layer .float-left, #float-layer .float-left-stack, #float-layer .tool-rail, #float-layer .float-right";
+import { COLUMNS, LEFT_CARDS, RIGHT_CARDS, clearRow, promptInsets, type Box } from "../ui/promptPlacement";
 
 const rects = (sel: string): Box[] => [...document.querySelectorAll(sel)].map((o) => o.getBoundingClientRect());
 

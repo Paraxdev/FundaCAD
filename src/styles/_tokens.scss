@@ -52,6 +52,15 @@
   --ui: "Space Grotesk", "Inter", system-ui, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
+  /* Type scale. No text goes under --fs-micro (11px), error text uses --fs-small or larger. */
+  --fs-micro: 0.6875rem;
+  --fs-small: 0.75rem;
+  --fs-body: 0.8125rem;
+  --fs-title: 0.9375rem;
+  --fs-display: 1.125rem;
+  /* Viewport label size, set on the root by viewportLabels.ts: 1 is Medium. */
+  --vp-label-scale: 1;
+
   --r-xs: 2px;
   --r-sm: 3px;
   --r-md: 4px;

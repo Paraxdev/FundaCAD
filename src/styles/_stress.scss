@@ -71,7 +71,7 @@
   height: 28px;
   padding-top: 0;
   padding-bottom: 0;
-  font-size: 12px;
+  font-size: var(--fs-small);
 }
 
 // A label at the left and its control or controls filling the rest of the line.

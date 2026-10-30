@@ -20,6 +20,7 @@ import PluginsSection from "./PluginsSection.vue";
 import ExperimentalSection from "./ExperimentalSection.vue";
 import UpdatesSection from "./UpdatesSection.vue";
 import A11yContrastRows from "./A11yContrastRows.vue";
+import A11ySizeRows from "./A11ySizeRows.vue";
 import {
   addCustomTheme,
   asThemeId,
@@ -222,6 +223,9 @@ const a11yChanged = computed(
     a11y.value.verbosity !== DEFAULT_A11Y.verbosity ||
     a11y.value.singleKeys !== DEFAULT_A11Y.singleKeys ||
     a11y.value.targets !== DEFAULT_A11Y.targets ||
+    a11y.value.interfaceSize !== DEFAULT_A11Y.interfaceSize ||
+    a11y.value.comfortableText !== DEFAULT_A11Y.comfortableText ||
+    a11y.value.viewportLabels !== DEFAULT_A11Y.viewportLabels ||
     dwell.value !== DEFAULT_DWELL_MS,
 );
 function pickAnimations(id: string) {
@@ -842,6 +846,7 @@ function onClassicCamera(on: boolean) {
                 </p>
               </div>
               <A11yContrastRows />
+              <A11ySizeRows />
             </div>
           </div>
 

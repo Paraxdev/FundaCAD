@@ -141,7 +141,7 @@ const label = { display: "grid", gridTemplateColumns: "150px 1fr", alignItems: "
 const heading = {
   margin: "10px 0 4px",
   fontWeight: 600,
-  fontSize: "11px",
+  fontSize: "var(--fs-micro, 11px)",
   textTransform: "uppercase" as const,
   letterSpacing: "0.05em",
   color: "var(--text-dim, #aaa1b5)",
@@ -305,7 +305,12 @@ const heading = {
       <ul
         v-if="problems.length || previewProblem"
         class="scr-problems"
-        :style="{ margin: '8px 0', paddingLeft: '16px', color: 'var(--warn, #ffab2e)', fontSize: '11px' }"
+        :style="{
+          margin: '8px 0',
+          paddingLeft: '16px',
+          color: 'var(--warn, #ffab2e)',
+          fontSize: 'var(--fs-small, 12px)',
+        }"
       >
         <li v-for="msg in problems" :key="msg">{{ msg }}</li>
         <li v-if="!problems.length && previewProblem">{{ previewProblem }}</li>

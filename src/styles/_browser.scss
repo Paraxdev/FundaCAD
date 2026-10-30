@@ -24,7 +24,7 @@
   cursor: pointer;
   user-select: none;
   font-weight: 600;
-  font-size: 12.5px;
+  font-size: var(--fs-body);
   color: var(--text);
   border-radius: var(--r-sm);
   transition: background var(--t-fast) var(--ease);
@@ -53,7 +53,7 @@
   color: var(--text-dim);
 }
 .tree-count {
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: var(--text-mute);
@@ -131,7 +131,8 @@
 }
 
 /* In-canvas sketch dimensions stay off the spacing scale on purpose: they are projected
-   from Three.js every frame, so their px sizes are a picking budget, not chrome. */
+   from Three.js every frame, so their px sizes are a picking budget, not chrome. They grow
+   with Viewport label size, the text never under --fs-micro. */
 .sketch-dims {
   position: fixed;
   inset: 0;
@@ -169,10 +170,10 @@
   position: absolute;
   transform: translate(-50%, -50%);
   color: var(--text);
-  font-size: 11px;
+  font-size: max(var(--fs-micro), calc(var(--fs-micro) * var(--vp-label-scale)));
   font-weight: 550;
   font-variant-numeric: tabular-nums;
-  padding: 2px 7px;
+  padding: calc(2px * var(--vp-label-scale)) calc(7px * var(--vp-label-scale));
   white-space: nowrap;
   cursor: pointer;
   pointer-events: auto;
@@ -221,14 +222,14 @@
 .sketch-glyph {
   position: absolute;
   transform: translate(-50%, -50%);
-  min-width: 16px;
-  height: 16px;
-  padding: 0 3px;
+  min-width: calc(16px * var(--vp-label-scale));
+  height: calc(16px * var(--vp-label-scale));
+  padding: 0 calc(3px * var(--vp-label-scale));
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--accent-hot);
-  font-size: 10px;
+  font-size: max(var(--fs-micro), calc(var(--fs-micro) * var(--vp-label-scale)));
   font-weight: 600;
   line-height: 1;
   cursor: pointer;
@@ -254,8 +255,8 @@
   cursor: default;
 }
 .sketch-dim .sketch-dim-field {
-  width: 52px;
-  height: 19px;
+  width: calc(52px * var(--vp-label-scale));
+  height: calc(19px * var(--vp-label-scale));
   padding: 0 var(--s-1);
   font-variant-numeric: tabular-nums;
 }

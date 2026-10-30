@@ -233,7 +233,7 @@ const rowStyle = (active: boolean) => ({
   background: active ? "var(--accent-tint-2, rgba(75,249,188,0.24))" : "transparent",
 });
 const badge = {
-  fontSize: "9px",
+  fontSize: "var(--fs-micro, 11px)",
   padding: "0 5px",
   borderRadius: "var(--r-pill, 999px)",
   border: "1px solid var(--accent, #4bf9bc)",
@@ -302,7 +302,7 @@ const tabStyle = (on: boolean) => ({ fontWeight: on ? 600 : 400, opacity: on ? 1
               <div
                 :style="{
                   margin: '8px 0 2px',
-                  fontSize: '10px',
+                  fontSize: 'var(--fs-micro, 11px)',
                   letterSpacing: '0.08em',
                   textTransform: 'uppercase',
                   color: 'var(--text-mute, #7d7590)',
@@ -333,16 +333,21 @@ const tabStyle = (on: boolean) => ({ fontWeight: on ? 600 : 400, opacity: on ? 1
                 >
                   <span :style="{ minWidth: '92px' }">{{ e.source === "custom" ? e.familyName : e.sizeLabel }}</span>
                   <span v-if="e.source === 'custom'" class="scr-badge" :style="badge">Custom</span>
-                  <span :style="{ color: 'var(--text-dim, #aaa1b5)', fontSize: '11px' }">
+                  <span :style="{ color: 'var(--text-dim, #aaa1b5)', fontSize: 'var(--fs-micro, 11px)' }">
                     <template v-if="e.lengths.length > 1"
                       >L {{ formatLength(e.lengths[0]!, e.system === "inch" ? "in" : "mm") }} to
                       {{ formatLength(e.lengths[e.lengths.length - 1]!, e.system === "inch" ? "in" : "mm") }}</template
                     >
                     <template v-else-if="e.source === 'custom'">{{ e.size }}</template>
                   </span>
-                  <span :style="{ marginLeft: 'auto', color: 'var(--text-mute, #7d7590)', fontSize: '11px' }">{{
-                    e.drives.map(driveLabel).join(", ")
-                  }}</span>
+                  <span
+                    :style="{
+                      marginLeft: 'auto',
+                      color: 'var(--text-mute, #7d7590)',
+                      fontSize: 'var(--fs-micro, 11px)',
+                    }"
+                    >{{ e.drives.map(driveLabel).join(", ") }}</span
+                  >
                 </div>
               </div>
             </template>
@@ -351,7 +356,7 @@ const tabStyle = (on: boolean) => ({ fontWeight: on ? 600 : 400, opacity: on ? 1
         </div>
 
         <div v-if="spec" class="scr-detail">
-          <div :style="{ fontWeight: 600, fontSize: '13px', marginBottom: '6px' }" class="scr-name">{{
+          <div :style="{ fontWeight: 600, fontSize: 'var(--fs-body, 13px)', marginBottom: '6px' }" class="scr-name">{{
             spec.name
           }}</div>
           <div :style="{ display: 'flex', gap: '12px' }">

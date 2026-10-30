@@ -20,7 +20,7 @@
   flex: none;
 }
 .palette-title {
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-weight: 700;
   letter-spacing: 1.2px;
   color: var(--text-dim);
@@ -40,7 +40,7 @@
   background: var(--accent);
 }
 .palette-section {
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-weight: 600;
   letter-spacing: 0.6px;
   text-transform: uppercase;
@@ -53,7 +53,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 12.5px;
+  font-size: var(--fs-body);
   color: var(--text);
   /* The shared list row size (.tree-folder, .feature-row, .home-nav-row, .choice-check). */
   padding: var(--s-2) var(--s-3);
@@ -76,7 +76,7 @@
   margin-top: var(--s-4);
 }
 .rel-summary {
-  font-size: 11.5px;
+  font-size: var(--fs-small);
   font-weight: 600;
   color: var(--text-dim);
   margin-bottom: var(--s-2);
@@ -86,7 +86,7 @@
 }
 .rel-empty {
   margin: 0;
-  font-size: 11px;
+  font-size: var(--fs-micro);
   line-height: 1.45;
   color: var(--text-mute);
 }
@@ -125,7 +125,7 @@
   border: 1px solid var(--accent);
   border-radius: var(--r-sm);
   color: var(--accent);
-  font-size: 10px;
+  font-size: var(--fs-micro);
   line-height: 1;
 }
 .rel-row.conflict .rel-sym {
@@ -155,7 +155,7 @@
   min-width: 0;
 }
 .rel-name {
-  font-size: 12px;
+  font-size: var(--fs-small);
   color: var(--text);
   white-space: nowrap;
   overflow: hidden;
@@ -166,12 +166,12 @@
 }
 .rel-value {
   flex: none;
-  font-size: 11.5px;
+  font-size: var(--fs-small);
   font-variant-numeric: tabular-nums;
   color: var(--text-dim);
 }
 .rel-detail {
-  font-size: 10.5px;
+  font-size: var(--fs-micro);
   color: var(--text-mute);
   white-space: nowrap;
   overflow: hidden;

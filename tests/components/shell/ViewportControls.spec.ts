@@ -164,6 +164,102 @@ describe("ViewportControls popover controls", () => {
   });
 });
 
+describe("a view controls column taller than its room", () => {
+  let fire: () => void = () => {};
+  beforeEach(() => {
+    const seen: (() => void)[] = [];
+    fire = () => seen.forEach((cb) => cb());
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(cb: () => void) {
+          seen.push(cb);
+        }
+        observe() {}
+        disconnect() {}
+      },
+    );
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function sized(w: Awaited<ReturnType<typeof render>>["w"], content: number, room: number) {
+    const rail = w.get("#viewcontrols").element as HTMLElement;
+    const list = w.get(".vc-scroll").element as HTMLElement;
+    let top = 0;
+    Object.defineProperty(rail.parentElement!, "clientHeight", { configurable: true, get: () => room });
+    Object.defineProperty(list, "scrollHeight", { configurable: true, get: () => content });
+    Object.defineProperty(list, "clientHeight", { configurable: true, get: () => Math.min(content, room) });
+    Object.defineProperty(list, "scrollTop", {
+      configurable: true,
+      get: () => top,
+      set: (v: number) => {
+        top = Math.max(0, Math.min(content - Math.min(content, room), v));
+      },
+    });
+    return list;
+  }
+  const state = (w: Awaited<ReturnType<typeof render>>["w"]) => ({
+    scrolls: w.get("#viewcontrols").classes("scrolls"),
+    cues: w.findAll(".vc-more").map((c) => [c.attributes("aria-label"), c.attributes("tabindex")]),
+  });
+
+  it("keeps its shadow room and shows no cue while every control fits", async () => {
+    const { w } = await render(TIER);
+    sized(w, 400, 600);
+    fire();
+    await nextTick();
+    await nextTick();
+    expect(state(w)).toEqual({ scrolls: false, cues: [] });
+  });
+
+  it("clips at the column and pages to the controls out of sight from cues outside the Tab walk", async () => {
+    const { w } = await render(TIER);
+    const list = sized(w, 700, 300);
+    fire();
+    await nextTick();
+    await nextTick();
+    const atTop = state(w);
+    await w.get(".vc-more-down").trigger("click");
+    const middle = { top: list.scrollTop, cues: state(w).cues.map((c) => c[0]) };
+    await w.get(".vc-more-down").trigger("click");
+    const atEnd = { top: list.scrollTop, cues: state(w).cues.map((c) => c[0]) };
+    await w.get(".vc-more-up").trigger("click");
+    expect({ atTop, middle, atEnd, back: list.scrollTop }).toEqual({
+      atTop: { scrolls: true, cues: [["More view controls below", "-1"]] },
+      middle: { top: 225, cues: ["More view controls above", "More view controls below"] },
+      atEnd: { top: 400, cues: ["More view controls above"] },
+      back: 175,
+    });
+  });
+
+  it("measures again when a group appears", async () => {
+    const { w } = await render(TIER);
+    sized(w, 400, 600);
+    fire();
+    await nextTick();
+    sized(w, 700, 600);
+    useUiStore().lowPerformance = true;
+    await flushPromises();
+    expect(state(w)).toEqual({ scrolls: true, cues: [["More view controls below", "-1"]] });
+  });
+
+  it("brings a focused control into view past the cues", async () => {
+    const seen: [string | null, unknown][] = [];
+    Element.prototype.scrollIntoView = vi.fn(function (this: HTMLElement, arg: unknown) {
+      seen.push([this.getAttribute("aria-label"), arg]);
+    });
+    try {
+      const { w } = await render(TIER);
+      (w.get('[aria-label="Snapping"]').element as HTMLElement).focus();
+      expect(seen).toEqual([["Snapping", { block: "nearest" }]]);
+    } finally {
+      delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+    }
+  });
+});
+
 describe("ViewportControls popover openers", () => {
   const card = () => document.querySelector<HTMLElement>(".float-popover");
   const settle = async () => {
@@ -259,7 +355,7 @@ describe("ViewportControls View mode and toolbar", () => {
   it("makes the controls column one vertical toolbar whose arrows step over View mode", async () => {
     const { w } = await render(TIER);
     const bar = w.get('[role="toolbar"]');
-    expect([bar.attributes("aria-label"), bar.attributes("aria-orientation"), bar.attributes("id")]).toEqual([
+    expect([bar.attributes("aria-label"), bar.attributes("aria-orientation"), bar.element.parentElement?.id]).toEqual([
       "View controls",
       "vertical",
       "viewcontrols",

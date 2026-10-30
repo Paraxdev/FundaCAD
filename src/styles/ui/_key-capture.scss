@@ -14,7 +14,7 @@
   border-radius: var(--float-chip-radius);
   corner-shape: squircle;
   color: var(--text-dim);
-  font-size: 13px;
+  font-size: var(--fs-body);
   text-align: center;
   cursor: default;
   transition: background var(--t-fast) var(--ease);
@@ -29,10 +29,10 @@
   align-items: center;
   gap: var(--s-1);
   color: var(--text-mute);
-  font-size: 12px;
+  font-size: var(--fs-small);
 }
 .key-capture-hint {
   margin: var(--s-3) 0 0;
   color: var(--text-mute);
-  font-size: 12px;
+  font-size: var(--fs-small);
 }

@@ -9,6 +9,7 @@ import { SQUIRCLE_EXPONENT, roundedSquareCorners, type Vec2 } from "./cornerProf
 import { themeColor } from "./themeColors";
 import { pickPlaneOnScreen, placeLabels, type P2, type PlaneHit, type PlaneOnScreen } from "./planeHit";
 import type { Plane3 } from "../types";
+import { viewportLabelScale } from "../ui/viewportLabels";
 
 type Sign = 1 | -1;
 type Axis = "x" | "y" | "z";
@@ -230,7 +231,8 @@ export class OriginTiles {
       );
       label.userData.role = "label";
       label.renderOrder = TILE_ORDER.label;
-      label.scale.set(LABEL_BOX_PX.w, LABEL_BOX_PX.h, 1);
+      const box = this.labelBox();
+      label.scale.set(box.w, box.h, 1);
       fill.add(ghost, rim, label);
       this.group.add(fill);
       return { fill, ghost, rim, label };
@@ -326,7 +328,7 @@ export class OriginTiles {
   pick(x: number, y: number, frame: ScreenFrame, minPx: number): PlaneHit | null {
     if (!this.tiles.XY.fill.visible || this.group.scale.x <= 0) return null;
     const tiles = this.onScreen(frame);
-    return pickPlaneOnScreen(tiles, this.labelsOnScreen(frame, tiles), { x, y }, minPx, LABEL_BOX_PX);
+    return pickPlaneOnScreen(tiles, this.labelsOnScreen(frame, tiles), { x, y }, minPx, this.labelBox());
   }
 
   private placeNames(frame: ScreenFrame) {
@@ -384,7 +386,19 @@ export class OriginTiles {
     }
   }
 
+  /** A plane name's box in screen px at Viewport label size, the painted name and its press target. */
+  labelBox(): { w: number; h: number } {
+    const s = viewportLabelScale();
+    return { w: LABEL_BOX_PX.w * s, h: LABEL_BOX_PX.h * s };
+  }
+
+  /** Call after Viewport label size changes. */
+  applyLabelScale() {
+    this.paintLook();
+  }
+
   private paintLook() {
+    const box = this.labelBox();
     for (const k of PLANES) {
       const look = TILE_LOOK[this.states[k]];
       const t = this.tiles[k];
@@ -396,7 +410,7 @@ export class OriginTiles {
       // The hovered name takes its rim's colour, the only colour left of a tile seen edge on.
       t.label.material.color.setHex(hot ? t.rim.material.color.getHex() : this.ink);
       const grow = hot ? LABEL_HOT_SCALE : 1;
-      t.label.scale.set((LABEL_BOX_PX.w * grow) / this.k, (LABEL_BOX_PX.h * grow) / this.k, 1);
+      t.label.scale.set((box.w * grow) / this.k, (box.h * grow) / this.k, 1);
     }
   }
 

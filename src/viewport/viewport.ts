@@ -120,6 +120,8 @@ import type { TraceState } from "./pathtrace/state";
 import { onWorkspaceChange, workspace } from "../ui/workspace";
 import { invalidateThemeColors } from "./themeColors";
 import { onThemeChange } from "../ui/theme";
+import { onA11yPrefsChange } from "../ui/a11yPrefs";
+import { viewportLabelScale } from "../ui/viewportLabels";
 import { onContrastChange } from "../ui/contrastSetting";
 import type { ViewCubeSide } from "../types";
 
@@ -464,6 +466,13 @@ export class Viewport {
       this.syncZebraPrefs();
       this.syncViewMode();
       this.overlays = savedOverlays();
+      this.requestRender();
+    });
+    let labelScale = viewportLabelScale();
+    onA11yPrefsChange(() => {
+      if (viewportLabelScale() === labelScale) return;
+      labelScale = viewportLabelScale();
+      this.scene.originTiles.applyLabelScale();
       this.requestRender();
     });
     const recolor = () => {

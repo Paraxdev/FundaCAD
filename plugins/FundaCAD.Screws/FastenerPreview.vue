@@ -187,7 +187,7 @@ onBeforeUnmount(() => {
         left: '8px',
         right: '8px',
         bottom: '6px',
-        fontSize: '11px',
+        fontSize: 'var(--fs-micro, 11px)',
         color: 'var(--text-dim, #aaa1b5)',
       }"
     >

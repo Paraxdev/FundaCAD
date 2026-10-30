@@ -9,6 +9,7 @@ import { useDialogStore } from "../stores/dialogs";
 import { latinKey, matchChord } from "../input/platform";
 import { useShellStore } from "../stores/shell";
 import { useCommandPaletteStore } from "../stores/commandPalette";
+import { interfaceSizeKey } from "../ui/interfaceSize";
 import type { Engine } from "./engine";
 import { pickedFeatureIds } from "./featureRows";
 
@@ -63,6 +64,9 @@ export function installKeyboard(e: Engine): void {
   window.addEventListener("keydown", (ev) => {
     if (isPageSelectAll(ev)) ev.preventDefault();
   });
+
+  // Registered at boot ahead of every tool's own capture listener, so the pattern count never reads Ctrl+Minus.
+  window.addEventListener("keydown", interfaceSizeKey, true);
 
   // Failures with no toast of their own would otherwise exist only in devtools, where a user reporting a bug never looks.
   window.addEventListener("error", (ev) => {

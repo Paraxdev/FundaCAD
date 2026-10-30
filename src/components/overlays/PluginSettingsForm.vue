@@ -278,6 +278,6 @@ const isDefault = (p: SettingProp) => {
 .plugset-error {
   color: var(--error);
   margin: 2px 0 0;
-  font-size: 0.9em;
+  font-size: var(--fs-small);
 }
 </style>

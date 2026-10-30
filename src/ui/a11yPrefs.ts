@@ -9,7 +9,50 @@ export type Verbosity = "off" | "errors" | "normal" | "verbose";
 /** "system" is More when the OS asks for contrast, else Standard; contrastSetting.ts resolves and applies it. */
 export type Contrast = "system" | "standard" | "more" | "maximum";
 
-export interface A11yPrefs {
+// The size settings, one block spread into the shared tables below.
+/** The browser's zoom steps, in percent. */
+export const INTERFACE_SIZES: readonly number[] = [80, 90, 100, 110, 125, 150, 175, 200];
+export const INTERFACE_SIZE_MAX = 200;
+export type ViewportLabels = "s" | "m" | "l" | "xl";
+export const VIEWPORT_LABELS: readonly ViewportLabels[] = ["s", "m", "l", "xl"];
+
+export interface SizePrefs {
+  /** The zoom of the whole interface in percent, one of INTERFACE_SIZES. */
+  interfaceSize: number;
+  /** Line height 1.5, letter spacing 0.12em and word spacing 0.16em on all text, the WCAG text spacing test. */
+  comfortableText: boolean;
+  /** The size of the names drawn over the model: sketch dimensions and glyphs, plane names and the view cube. */
+  viewportLabels: ViewportLabels;
+}
+
+const SIZE_DEFAULTS: SizePrefs = { interfaceSize: 100, comfortableText: false, viewportLabels: "m" };
+const SIZE_KEYS: Record<keyof SizePrefs, string> = {
+  interfaceSize: "fundacad.a11y.interfaceSize",
+  comfortableText: "fundacad.a11y.comfortableText",
+  viewportLabels: "fundacad.a11y.viewportLabels",
+};
+
+export function asInterfaceSize(v: unknown): number | null {
+  const n = typeof v === "string" && v.trim() !== "" ? Number(v) : v;
+  return typeof n === "number" && INTERFACE_SIZES.includes(n) ? n : null;
+}
+
+export function asComfortableText(v: unknown): boolean | null {
+  if (v === true || v === "true") return true;
+  return v === false || v === "false" ? false : null;
+}
+
+export function asViewportLabels(v: unknown): ViewportLabels | null {
+  return VIEWPORT_LABELS.includes(v as ViewportLabels) ? (v as ViewportLabels) : null;
+}
+
+const SIZE_GATES: { [K in keyof SizePrefs]: (v: unknown) => SizePrefs[K] | null } = {
+  interfaceSize: asInterfaceSize,
+  comfortableText: asComfortableText,
+  viewportLabels: asViewportLabels,
+};
+
+export interface A11yPrefs extends SizePrefs {
   animations: Animations;
   /** How much the announcer speaks: nothing, errors only, prompts and results, or every change too. */
   verbosity: Verbosity;
@@ -30,6 +73,7 @@ export const DEFAULT_A11Y: Readonly<A11yPrefs> = {
   contrast: "system",
   solidPanels: false,
   targets: "default",
+  ...SIZE_DEFAULTS,
 };
 
 /** One click for screen reader users. Later settings join it: Notification time Until dismissed. */
@@ -47,6 +91,7 @@ const KEYS: Record<keyof A11yPrefs, string> = {
   contrast: "fundacad.a11y.contrast",
   solidPanels: "fundacad.a11y.solidPanels",
   targets: "fundacad.a11y.targets",
+  ...SIZE_KEYS,
 };
 
 const ANIMATIONS: readonly Animations[] = ["system", "on", "off"];
@@ -87,6 +132,7 @@ const GATES: { [K in keyof A11yPrefs]: (v: unknown) => A11yPrefs[K] | null } = {
   contrast: asContrast,
   solidPanels: asFlag,
   targets: asTargets,
+  ...SIZE_GATES,
 };
 
 function readStored(): A11yPrefs {
@@ -134,7 +180,7 @@ export function singleKeysOn(): boolean {
 }
 
 // singleKeys is stored as "on" or "off", solidPanels as "true" or "false".
-function store(k: keyof A11yPrefs, v: string | boolean | null) {
+function store(k: keyof A11yPrefs, v: A11yPrefs[keyof A11yPrefs] | null) {
   try {
     if (v === null) localStorage.removeItem(KEYS[k]);
     else localStorage.setItem(KEYS[k], typeof v === "boolean" && k === "singleKeys" ? (v ? "on" : "off") : String(v));

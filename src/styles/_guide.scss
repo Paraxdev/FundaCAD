@@ -69,7 +69,7 @@
   animation: glass-in var(--t-med) var(--ease);
 }
 .guide-count {
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -77,12 +77,12 @@
 }
 .guide-caption {
   margin: var(--s-1) 0 0;
-  font-size: 13px;
+  font-size: var(--fs-body);
   line-height: 1.45;
 }
 .guide-hint {
   margin: var(--s-1) 0 0;
-  font-size: 12px;
+  font-size: var(--fs-small);
   color: var(--text-dim);
 }
 .guide-actions {

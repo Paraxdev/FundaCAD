@@ -1,0 +1,46 @@
+// Comfortable text: the WCAG 1.4.12 spacing on every element, important so a rule's own line height cannot hold
+// it back. Base controls trade their fixed heights for minimums and wrap a long label instead of cutting it off.
+:root[data-text="comfortable"] {
+  &,
+  & * {
+    line-height: 1.5 !important;
+    letter-spacing: 0.12em !important;
+    word-spacing: 0.16em !important;
+  }
+
+  .btn-label,
+  .ui-segment-label,
+  .ui-field-label,
+  .ui-list-row-label,
+  .home-example-name,
+  .home-example-line,
+  .param-row label {
+    overflow: visible;
+    white-space: normal;
+    text-overflow: clip;
+    overflow-wrap: break-word;
+  }
+
+  .ui-segment {
+    height: auto;
+    white-space: normal;
+  }
+  // A row of tabs too wide for its dock starts a second row, a tab past the edge could not be read or clicked.
+  .ui-tabs:not(.ui-tabs-vertical) {
+    flex-wrap: wrap;
+  }
+  .ui-segmented-md .ui-segment,
+  .ui-tabs-bar .ui-tab {
+    height: auto;
+    min-height: 32px;
+  }
+  .ui-segmented-sm .ui-segment {
+    min-height: 24px;
+  }
+  .ui-segmented-bar.ui-segmented-md .ui-segment {
+    min-height: 28px;
+  }
+  .ui-segmented-bar.ui-segmented-sm .ui-segment {
+    min-height: 20px;
+  }
+}

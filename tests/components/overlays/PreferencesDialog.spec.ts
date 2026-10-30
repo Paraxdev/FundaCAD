@@ -95,6 +95,7 @@ describe("Preferences choices", () => {
       ["prefs-wheel-device", "Scrolling", "Automatic|Touchpad|Mouse"],
       ["prefs-touchpad-scroll", "Two-finger scroll", "Orbits|Pans"],
       ["prefs-contrast", "Contrast", "Follow system|Standard|More|Maximum"],
+      ["prefs-viewport-labels", "Viewport labels", "Small|Medium|Large|Extra large"],
       ["prefs-verbosity", "Announcements", "Off|Errors|Normal|Verbose"],
       ["prefs-motion", "Animations", "Follow system|On|Off"],
       ["prefs-env-width", "HDR environment size", expect.stringMatching(/^2048\|4096\|8192\|16384\|GPU maximum/)],
@@ -513,6 +514,35 @@ describe("Preferences Accessibility", () => {
     await flushPromises();
     expect([a11yPrefs().animations, getVerbosity(), getHoverDwellMs()]).toEqual(["system", "normal", 800]);
     expect([a11yPrefs().solidPanels, solidBox().checked]).toEqual([false, false]);
+    expect(reset.getAttribute("aria-disabled")).toBe("true");
+  });
+
+  it("holds Interface size in the Vision group, and Reset to defaults puts a changed size back to 100", async () => {
+    await open();
+    await category("access");
+    expect($("#prefs-interface-size").closest("[role=group]")!.getAttribute("aria-labelledby")).toBe(
+      "prefs-a11y-vision",
+    );
+    const reset = $("[data-a11y-reset]");
+    setA11yPref("interfaceSize", 125);
+    await flushPromises();
+    expect(reset.getAttribute("aria-disabled")).toBeNull();
+    reset.click();
+    await flushPromises();
+    expect([a11yPrefs().interfaceSize, label($("#prefs-interface-size"))]).toEqual([100, "100%"]);
+    expect(reset.getAttribute("aria-disabled")).toBe("true");
+  });
+
+  it("lets Reset to defaults put a changed Viewport labels size back to Medium", async () => {
+    await open();
+    await category("access");
+    const reset = $("[data-a11y-reset]");
+    setA11yPref("viewportLabels", "l");
+    await flushPromises();
+    expect(reset.getAttribute("aria-disabled")).toBeNull();
+    reset.click();
+    await flushPromises();
+    expect(a11yPrefs().viewportLabels).toBe("m");
     expect(reset.getAttribute("aria-disabled")).toBe("true");
   });
 

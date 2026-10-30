@@ -1,4 +1,5 @@
-import { SIZE as CUBE_SIZE, MARGIN as CUBE_MARGIN } from "../viewport/viewCube";
+import { cubeSize, MARGIN as CUBE_MARGIN } from "../viewport/viewCube";
+import { onA11yPrefsChange } from "./a11yPrefs";
 import { RIGHT_CARDS, clearOfCards, type Box } from "./promptPlacement";
 
 const GAP = 12;
@@ -29,7 +30,7 @@ export interface StackPanel {
 
 /** Where the column starts: just under the view cube's square. */
 export function stackTop(area: Box): number {
-  return area.top + CUBE_MARGIN + CUBE_SIZE + GAP;
+  return area.top + CUBE_MARGIN + cubeSize() + GAP;
 }
 
 /** The water level that fills `left`: each panel takes it, clamped between its floor and its height. */
@@ -100,6 +101,7 @@ interface Open {
 }
 const open: Open[] = [];
 let observer: ResizeObserver | null = null;
+let offPrefs: (() => void) | null = null;
 let frame = 0;
 let uses = 0;
 
@@ -238,6 +240,7 @@ export const panelStack = {
     if (!open.length) {
       observer = new ResizeObserver(schedule);
       window.addEventListener("resize", schedule);
+      offPrefs = onA11yPrefsChange(schedule);
     }
     const entry = {
       id,
@@ -272,6 +275,8 @@ export const panelStack = {
     observer?.disconnect();
     observer = null;
     window.removeEventListener("resize", schedule);
+    offPrefs?.();
+    offPrefs = null;
     cancelAnimationFrame(frame);
     frame = 0;
   },

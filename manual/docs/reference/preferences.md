@@ -11,7 +11,7 @@ Preferences holds the settings that belong to you, not to a document. Open it fr
 | Appearance | Theme, Icons, Units, Home background |
 | Viewport | Reflections, Background, Environment brightness, Tangent edges, Bloom, Path tracer, Performance mode, Potato mode |
 | Navigation | Smoothing, Orbit pivot, Orbit inertia, Scrolling, Two-finger scroll, Classic camera |
-| Accessibility | Animations, Hover delay |
+| Accessibility | Animations, Hover delay, Interface size, Comfortable text, Viewport labels |
 | Updates | Check for updates automatically, and how often |
 | AI assistants | See [Connect an AI assistant](../ai/connect.md) |
 | Plugins | See [Plugins](../plugins/index.md) |
@@ -27,6 +27,16 @@ Theme colours the whole app. These ship with FundaCAD:
 4. Colour-Blind Safe, its colours stay apart for every common kind of colour blindness, and its Y axis is yellow
 
 Upload theme… adds your own from a JSON file of colour tokens, such as `--bg` and `--accent`. Remove takes it away again.
+
+## Size and text
+
+Interface size, under Accessibility, makes every panel, menu and label larger or smaller, from 80 to 200 percent. Ctrl+Plus, Ctrl+Minus and Ctrl+0 step it up, down and back to 100 percent from anywhere, even while you type in a box, and the command palette has Larger Interface, Smaller Interface and Reset Interface Size. FundaCAD keeps the size when you restart it, and Reset to defaults puts it back to 100 percent.
+
+At a large size, or in a small window, the tool rail and the view controls on the right scroll when they no longer fit. An arrow at the top or bottom of the rail pages through the tools out of sight, and Tab scrolls each one into view as it reaches it. When the window gets too narrow for the title bar, the document name and the Model and Render switch move to the top of the File menu.
+
+Comfortable text spaces lines, letters and words further apart, which some people with low vision or dyslexia read more easily. Buttons and labels grow to fit the wider text.
+
+Viewport labels sizes what is drawn over the model: sketch dimensions, constraint marks, plane names and the view cube. Pick Small, Medium, Large or Extra large, Medium is the default.
 
 ## Good to know
 

@@ -57,6 +57,7 @@ Reset puts one key back, Reset all a whole page. A key marked fixed cannot be ch
 | Ctrl+S, Ctrl+Shift+S | Save, Save As |
 | Ctrl+N, Ctrl+O, Ctrl+E | New, Open, Export |
 | Ctrl+, | Preferences |
+| Ctrl+Plus, Ctrl+Minus, Ctrl+0 | Interface size larger, smaller, back to 100 percent |
 | Ctrl+Alt+S, Ctrl+Alt+H | Show or hide the items and the history |
 | Home or F6, Shift+Home | Fit view, reset camera |
 | Arrow keys | Turn or tilt the view 15°, 5° with Shift |

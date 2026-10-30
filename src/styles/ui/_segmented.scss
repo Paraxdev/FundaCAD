@@ -59,13 +59,13 @@
 }
 
 .ui-segmented-md {
-  font-size: 12.5px;
+  font-size: var(--fs-body);
 }
 .ui-segmented-md .ui-segment {
   height: 32px;
 }
 .ui-segmented-sm {
-  font-size: 11.5px;
+  font-size: var(--fs-small);
 }
 .ui-segmented-sm .ui-segment {
   height: 24px;
@@ -144,7 +144,7 @@
   flex-direction: column;
 }
 .ui-segmented-lg {
-  font-size: 12.5px;
+  font-size: var(--fs-body);
 }
 .ui-segmented-lg .ui-segment {
   height: 40px;

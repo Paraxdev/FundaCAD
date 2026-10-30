@@ -15,7 +15,7 @@
   backdrop-filter: var(--float-blur);
   box-shadow: var(--float-shadow);
   color: var(--text);
-  font-size: 12.5px;
+  font-size: var(--fs-body);
   animation: pop-in var(--t-fast) var(--ease);
 }
 
@@ -79,7 +79,7 @@
 .ui-menu-keys {
   flex: none;
   padding-left: var(--s-4);
-  font-size: 11px;
+  font-size: var(--fs-micro);
   color: var(--text-dim);
 }
 

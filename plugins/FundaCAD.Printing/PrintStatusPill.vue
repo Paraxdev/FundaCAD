@@ -15,7 +15,7 @@ const PILL = {
   border: "1px solid var(--accent, #ff7a3c)",
   borderRadius: "var(--r-pill)",
   padding: "var(--s-3) var(--s-5)",
-  fontSize: "12px",
+  fontSize: "var(--fs-small, 12px)",
   color: "var(--text, #e6e8ec)",
   boxShadow: "var(--shadow-2, 0 2px 8px rgba(0, 0, 0, 0.4))",
   pointerEvents: "none",

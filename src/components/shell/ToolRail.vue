@@ -23,9 +23,11 @@ import {
 import { HOLD_MS, IDLE, holdStep, type HoldEvent, type HoldPhase } from "../../ui/holdGesture";
 import { contextMenu } from "../../ui/menu";
 import { useSelectionOffers } from "../../composables/useSelectionOffers";
+import { useScrollCue } from "../../composables/useScrollCue";
 import { runningTool } from "../../ui/runningTool";
 import { railActive, railToggles } from "../../ui/railActive";
 import RailButton from "../ui/RailButton.vue";
+import IconButton from "../ui/IconButton.vue";
 import Popover from "../ui/Popover.vue";
 import Toolbar from "../ui/Toolbar.vue";
 
@@ -52,7 +54,17 @@ function measureFit() {
   void nextTick(() => {
     const l = listEl.value;
     if (l) scrolls.value = l.scrollHeight > l.clientHeight + 1;
+    void nextTick(placeCue);
   });
+}
+const cue = useScrollCue(listEl);
+/** Distance from the rail's bottom to the list's, where the More tools below cue sits. */
+const cueBottom = ref(0);
+function placeCue() {
+  const rail = railEl.value;
+  const l = listEl.value;
+  if (rail && l) cueBottom.value = rail.clientHeight - (l.offsetTop + l.offsetHeight);
+  cue.update();
 }
 let fitRo: ResizeObserver | null = null;
 onMounted(() => {
@@ -397,13 +409,13 @@ function toggleIsolate() {
     id="toolrail"
     ref="railEl"
     class="tool-rail"
-    :class="{ compact, scrolls }"
+    :class="{ compact, scrolls, 'more-above': cue.above.value, 'more-below': cue.below.value }"
     :data-mode="mode"
     :data-sketch-tool="mode === 'sketch' ? ribbon.activeSketchTool : undefined"
     aria-label="Tools"
   >
     <Toolbar class="rail-bar" label="Tools" orientation="vertical">
-      <div ref="listEl" class="rail-list">
+      <div ref="listEl" class="rail-list" @scroll.passive="cue.update()" @focusin="cue.reveal">
         <RailButton
           icon="search"
           label="Search"
@@ -540,6 +552,25 @@ function toggleIsolate() {
         </template>
       </div>
     </Toolbar>
+    <IconButton
+      v-if="cue.above.value"
+      class="rail-more rail-more-up"
+      icon="caretDown"
+      tip="More tools above"
+      size="md"
+      tabindex="-1"
+      @click="cue.page(-1)"
+    />
+    <IconButton
+      v-if="cue.below.value"
+      class="rail-more rail-more-down"
+      icon="caretDown"
+      tip="More tools below"
+      size="md"
+      tabindex="-1"
+      :style="{ bottom: `${cueBottom}px` }"
+      @click="cue.page(1)"
+    />
 
     <Popover
       v-if="flyout"
