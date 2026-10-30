@@ -59,6 +59,8 @@ class Session(Actions):
         settle_timeout: float = 60,
         open: bool = True,
     ):
+        if record:
+            record = out_path(record, ".py")
         self.repo = find_repo(repo)
         self.engine_cmd = find_engine(self.repo, engine)
         self.chrome = find_chrome(chrome)
