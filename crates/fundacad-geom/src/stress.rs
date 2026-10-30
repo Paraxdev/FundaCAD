@@ -1546,7 +1546,8 @@ fn analyse(
             max_elements
         } else if finer_asked {
             FINER_MAX_ELEMENTS
-        } else if asked_elements.is_some() {
+        } else if asked_elements.is_some() && refine != Refine::Fine {
+            // Fine names its elements to start finer, so it must not give up before Standard does.
             max_elements
         } else {
             limits.auto_elements.min(adapt::elements_within(limits.refine_seconds)).max(max_elements)

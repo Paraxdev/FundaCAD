@@ -202,6 +202,17 @@ fn no_time_limit() -> StressLimits {
 }
 
 #[test]
+fn fine_retries_as_far_as_standard_but_an_asked_limit_alone_holds() {
+    let mut limited = plate_on_its_side();
+    limited["maxElements"] = json!(35_000);
+    assert_finer_answer(&run(limited.clone()), 35_000.0..90_000.0);
+    limited["refine"] = json!("fine");
+    let r = run(limited);
+    sane(&r);
+    assert!(num(&r["mesh"]["elements"]) > 35_000.0, "{}", r["mesh"]);
+}
+
+#[test]
 fn a_wall_past_the_element_limit_answers_with_a_finer_run() {
     let r = run_within(plate_on_its_side(), StressLimits { auto_elements: 30_000, ..no_time_limit() });
     assert_finer_answer(&r, 30_000.0..60_000.0);

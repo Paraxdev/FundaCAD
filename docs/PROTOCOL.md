@@ -549,7 +549,8 @@ same request gives the same answer every time.
   about 50000 elements (a slender or thin walled one goes further). A mesh that would
   not fit is refused with the `maxElements` that would.
 - Without `size`, a mesh that comes apart or loses a face the study needs is meshed again
-  finer by itself, up to 80000 elements and what about a minute allows. Past that the
+  finer by itself, up to 80000 elements and what about a minute allows. A `maxElements` in
+  the request is the ceiling of this retry, except with `"refine": "fine"`. Past that the
   error carries `"finer": { "elements": 90000, "seconds": 120 }`, a rough estimate.
   The same request with `"finer": true` may then reach 400000 elements and 8 GB once, the
   free memory rule still applies. A run past those has no `finer`, and an error from a
