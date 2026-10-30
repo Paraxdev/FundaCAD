@@ -550,6 +550,17 @@ async fn a_gzipped_file_is_unpacked_before_the_engine_sees_it() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn any_file_name_unpacks_beside_the_spooled_upload_without_touching_it() {
+    let _serial = serial();
+    for name in ["payload.gz", "spool.gz", "payload", "spool"] {
+        let (srv, engine) = server_with(part_reply());
+        let out = run(&srv, json!({"content": b64(&gzip(STL)), "name": name, "format": "stl"})).await;
+        assert!(!is_error(&out), "{name}: {}", text_of(&out));
+        assert_eq!(engine.calls()[0].saw.as_deref(), Some(STL), "{name}");
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn a_name_ending_gz_says_so_without_being_told() {
     let _serial = serial();
     // And the format has to come from what is INSIDE: "gz" is not a format, and
