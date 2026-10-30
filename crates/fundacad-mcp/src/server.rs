@@ -2689,6 +2689,28 @@ impl FundaCad {
 }
 
 impl FundaCad {
+    /// What keeps each face on its material when a later feature reorders the body's faces.
+    async fn face_prints(&self, faces: &[(String, u64)]) -> Result<Vec<(String, Value)>, CallToolResult> {
+        let stale = {
+            let st = self.state.lock().await;
+            st.mesh.is_empty() || st.built_for.as_deref() != Some(&signature(&st.doc))
+        };
+        if stale {
+            self.rebuild().await?;
+        }
+        let mesh = self.state.lock().await.mesh.clone();
+        let mut by_body: HashMap<&str, Vec<Value>> = HashMap::new();
+        let mut out = vec![];
+        for (id, face) in faces {
+            let Some(body) = mesh.iter().find(|b| b.id() == id) else { continue };
+            let prints = by_body.entry(id).or_insert_with(|| crate::face_prints::body_prints(body));
+            if let Some(print) = prints.get(*face as usize) {
+                out.push((materials_doc::face_key(id, *face), print.clone()));
+            }
+        }
+        Ok(out)
+    }
+
     async fn material_assign(&self, args: &JsonObject) -> CallToolResult {
         let material = match args.get("material") {
             Some(Value::Null) => None,
@@ -2767,10 +2789,18 @@ impl FundaCad {
                 _ => return failure(format!("faces[{i}] is not a face selector, `inspect` lists them: {face}")),
             }
         }
+        let prints = match material {
+            Some(_) if !face_keys.is_empty() => match self.face_prints(&face_keys).await {
+                Ok(p) => p,
+                Err(e) => return e,
+            },
+            _ => vec![],
+        };
         let mut st = self.state.lock().await;
         if let Err(e) = materials_doc::assign(&mut st.doc, material, &body_ids, &face_keys) {
             return doc_error(e);
         }
+        materials_doc::write_prints(&mut st.doc, prints);
         let (b, f) = (body_ids.len(), face_keys.len());
         text(match material {
             Some(id) => format!("{id} is now on {b} bodies and {f} faces."),

@@ -461,3 +461,8 @@ pub fn assign(
     write_library(doc, lib);
     Ok(())
 }
+
+/// Saves each assigned face's print beside its key, the form `savedFaceRefs` writes.
+pub fn write_prints(doc: &mut Doc, prints: Vec<(String, Value)>) {
+    edit_map(doc, "facePrints", |m| m.extend(prints));
+}

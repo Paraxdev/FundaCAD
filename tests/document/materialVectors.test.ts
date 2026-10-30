@@ -12,6 +12,8 @@ import {
   uniqueId,
   type MaterialDef,
 } from "../../src/document/materials";
+import { bodyPrints, loadFaceRefs, resolveFaceRefs, type FacePrint } from "../../src/document/faceRefs";
+import type { RebuildResult } from "../../src/types";
 
 interface Vectors {
   starter: MaterialDef[];
@@ -20,6 +22,27 @@ interface Vectors {
   slug: { name: string; id: string }[];
   unique: { id: string; taken: string[]; out: string }[];
   fresh: { names: string[]; base: string; out: string }[];
+  prints: PrintCase[];
+}
+
+interface PrintCase {
+  name: string;
+  positions: number[];
+  indices: number[];
+  faceIds: number[];
+  faceCount: number;
+  prints: FacePrint[];
+}
+
+function resultOf(c: Omit<PrintCase, "name" | "prints">): RebuildResult {
+  return {
+    mesh: {
+      positions: new Float32Array(c.positions),
+      indices: new Uint32Array(c.indices),
+      faceIds: new Uint32Array(c.faceIds),
+    },
+    bodies: [{ id: "body1", faceStart: 0, faceCount: c.faceCount }],
+  } as unknown as RebuildResult;
 }
 
 // Parsed by hand: an import would turn the "__proto__" key of one case into a prototype.
@@ -44,5 +67,24 @@ describe("material vectors shared with the MCP", () => {
       const library = c.names.map((name, i) => ({ id: `m-${i}`, name, color: "#ffffff" }));
       expect(freshMaterialName(library, c.base)).toBe(c.out);
     }
+  });
+
+  it("prints each face the same way", () => {
+    for (const c of V.prints) {
+      const result = resultOf(c);
+      expect(JSON.stringify(bodyPrints(result, result.bodies![0]!)), c.name).toBe(JSON.stringify(c.prints));
+    }
+  });
+
+  it("finds a printed face after a build reorders the faces, where a bare key would stay on the old number", () => {
+    const box = V.prints[0]!;
+    const order = [3, 5, 0, 1, 2, 4];
+    const reordered = resultOf({ ...box, faceIds: box.faceIds.map((f) => order[f]!) });
+    const materials = { "body1#2": "m-steel" };
+    const entries = (prints: unknown) =>
+      loadFaceRefs(materials, prints).map((ref, i): [string, typeof ref] => [String(i), ref]);
+    const lands = (prints: unknown) => resolveFaceRefs(entries(prints), reordered, null).faces.get("0");
+    expect(lands({ "body1#2": box.prints[2] })).toEqual([order[2]]);
+    expect(lands({})).toEqual([2]);
   });
 });

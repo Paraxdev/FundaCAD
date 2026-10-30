@@ -26,6 +26,14 @@ fn box_part(mcp: &mut Mcp) -> Value {
     selectors["body1"]["faces"].as_object().expect("a face map").values().next().expect("a face").clone()
 }
 
+fn saved_document(mcp: &mut Mcp, name: &str) -> Value {
+    let path = std::env::temp_dir().join(format!("mcp-materials-{}-{name}.funda", std::process::id()));
+    ok(mcp.call("doc_save", json!({"path": path})));
+    let saved = serde_json::from_slice(&std::fs::read(&path).expect("saved")).expect("JSON");
+    _ = std::fs::remove_file(&path);
+    saved
+}
+
 #[test]
 fn a_material_goes_on_a_body_and_a_face_and_comes_off_again() {
     let mut mcp = Mcp::start(&BTreeMap::new(), &std::env::temp_dir());
@@ -87,4 +95,35 @@ fn faces_wait_while_the_timeline_is_not_whole_and_bodies_do_not() {
         "rolled back",
     );
     ok(mcp.call("material_assign", json!({"material": "m-steel", "bodies": ["body1"]})));
+}
+
+#[test]
+fn an_assigned_face_is_saved_with_its_print_and_a_later_fillet_does_not_lose_it() {
+    let mut mcp = Mcp::start(&BTreeMap::new(), &std::env::temp_dir());
+    box_part(&mut mcp);
+    let top = json!({"kind": "face", "by": "nearest", "point": [0, 0, 5], "body": "body1"});
+    ok(mcp.call("material_assign", json!({"material": "m-steel", "faces": [top]})));
+    ok(mcp.call(
+        "feature_add",
+        json!({"feature": {"id": "soft", "type": "fillet", "radius": 1,
+                           "edges": {"kind": "edge", "by": "all", "body": "body1"}}}),
+    ));
+    ok(mcp.call("build", json!({})));
+    let saved = saved_document(&mut mcp, "print");
+    let keys = saved["faceMaterials"].as_object().expect("the face keys");
+    assert_eq!(keys.len(), 1, "{saved}");
+    let (key, material) = keys.iter().next().unwrap();
+    assert_eq!(material, "m-steel");
+    let print = &saved["facePrints"][key];
+    assert_eq!(print["centroid"], json!([0, 0, 5]), "{print}");
+    assert_eq!(print["normal"], json!([0, 0, 1]), "{print}");
+    assert_eq!(print["area"], json!(600), "{print}");
+    assert_eq!(print["surface"], "plane");
+    assert_eq!(print["faces"], 6);
+    assert_eq!(print["points"].as_array().map(Vec::len), Some(24), "{print}");
+
+    let face: u64 = key.split('#').nth(1).unwrap().parse().unwrap();
+    ok(mcp.call("material_assign", json!({"material": null, "faces": [{"body": "body1", "face": face}]})));
+    let saved = saved_document(&mut mcp, "cleared");
+    assert!(saved.get("facePrints").is_none(), "{saved}");
 }

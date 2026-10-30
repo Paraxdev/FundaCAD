@@ -9,6 +9,7 @@ pub mod describe;
 pub mod docfile;
 pub mod docget;
 pub mod edits;
+pub mod face_prints;
 pub mod guide;
 pub mod layflat;
 pub mod link;

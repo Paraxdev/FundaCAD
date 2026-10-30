@@ -63,3 +63,14 @@ fn writes_whole_numbers_without_a_fraction() {
         r##"{"id":"m","name":"m","color":"#ffffff","metalness":1,"thickness":20}"##
     );
 }
+
+#[test]
+fn prints_a_face_like_the_app() {
+    let v = vectors();
+    for c in cases(&v, "prints") {
+        let mut body = fundacad_mcp::mesh::MeshBody::from_value(c);
+        body.info.remove("prints");
+        let got = fundacad_mcp::face_prints::body_prints(&body);
+        assert_eq!(serde_json::to_string(&got).unwrap(), serde_json::to_string(&c["prints"]).unwrap(), "{}", c["name"]);
+    }
+}
