@@ -91,6 +91,15 @@ pub fn cleared(dir: &Path) {
     let _ = std::fs::remove_file(dir.join(MARKER));
 }
 
+/// Takes back one start's count: `prev` is what its `begin` returned, so earlier unfinished starts still count.
+pub fn uncount(dir: &Path, prev: u32) {
+    if prev == 0 {
+        cleared(dir);
+    } else {
+        let _ = std::fs::write(dir.join(MARKER), prev.to_string());
+    }
+}
+
 /// The arguments a normal restart is given: these, without the switch.
 pub fn restart_args(args: Vec<OsString>) -> Vec<OsString> {
     args.into_iter().filter(|a| a != FLAG).collect()

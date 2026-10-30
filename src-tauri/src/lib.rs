@@ -140,9 +140,9 @@ fn frontend_stalled(app: tauri::AppHandle) {
         eprintln!("[frontend] the page runs but never painted");
         return;
     }
-    let (dir, reason) = {
+    let (dir, reason, counted) = {
         let safe = app.state::<SafeMode>();
-        (safe.dir.clone(), safe.reason)
+        (safe.dir.clone(), safe.reason, safe.counted.get().copied())
     };
     match webkit::on_stall(std::env::var_os(webkit::DMABUF).is_some(), webkit::opted_out()) {
         webkit::StallAction::Restart => {}
@@ -165,7 +165,9 @@ fn frontend_stalled(app: tauri::AppHandle) {
     // The stalled start is not a failed one, or the restart would count towards safe mode. A safe session keeps its
     // switch and count, so it comes back safe.
     if safe_mode::clears_count(reason) {
-        safe_mode::cleared(&dir);
+        if let Some(prev) = counted {
+            safe_mode::uncount(&dir, prev);
+        }
     }
     let args = app.env().args_os;
     respawn(&app, args, |cmd| {
@@ -193,6 +195,8 @@ struct SafeMode {
     reason: Option<safe_mode::Reason>,
     dir: std::path::PathBuf,
     set_compositing: bool,
+    /// The count `safe_mode::begin` found before this start, once it counted it.
+    counted: std::sync::OnceLock<u32>,
 }
 
 pub(crate) fn safe_mode_active(app: &tauri::AppHandle) -> bool {
@@ -266,7 +270,7 @@ fn safe_mode_decide() -> SafeMode {
             if set_compositing { ", WebKit compositing off" } else { "" },
         );
     }
-    SafeMode { reason, dir, set_compositing }
+    SafeMode { reason, dir, set_compositing, counted: std::sync::OnceLock::new() }
 }
 
 /// The dialog plugin allows each picked or saved path on the fs scope, which tells its listeners, so Rust learns the
@@ -472,13 +476,14 @@ pub fn run() {
                 },
             };
             app.manage(run);
-            let (reason, dir) = {
-                let safe = app.state::<SafeMode>();
-                (safe.reason, safe.dir.clone())
-            };
+            let safe = app.state::<SafeMode>();
+            let reason = safe.reason;
             if reason.is_none() {
-                if let Err(e) = safe_mode::begin(&dir) {
-                    eprintln!("[safe-mode] could not count this start in {}: {e}", dir.display());
+                match safe_mode::begin(&safe.dir) {
+                    Ok(prev) => {
+                        let _ = safe.counted.set(prev);
+                    }
+                    Err(e) => eprintln!("[safe-mode] could not count this start in {}: {e}", safe.dir.display()),
                 }
             }
             if let (Ok(data), Ok(root)) = (app.path().app_data_dir(), plugins::plugins_root(app.handle())) {
