@@ -335,7 +335,8 @@ impl Component {
 }
 
 pub(super) fn take(state: &mut State, h: Resource<HostShape>) -> Result<Shape, String> {
-    let s = state.table.delete(h).map(|s| s.0).map_err(|e| format!("the plugin returned a shape it does not hold: {e}"))?;
+    let s =
+        state.table.delete(h).map(|s| s.0).map_err(|e| format!("the plugin returned a shape it does not hold: {e}"))?;
     state.live_shapes -= 1;
     Ok(s)
 }
@@ -373,10 +374,7 @@ impl State {
 
     pub(super) fn own(&mut self, s: Shape) -> wasmtime::Result<Resource<HostShape>> {
         if self.live_shapes >= self.shape_cap {
-            return Err(wasmtime::Error::msg(format!(
-                "the plugin holds more than {} shapes at once",
-                self.shape_cap
-            )));
+            return Err(wasmtime::Error::msg(format!("the plugin holds more than {} shapes at once", self.shape_cap)));
         }
         let h = self.table.push(HostShape(s))?;
         self.live_shapes += 1;

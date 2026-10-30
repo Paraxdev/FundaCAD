@@ -227,6 +227,14 @@ pub fn safe_entry(name: &str) -> Option<PathBuf> {
     }
 }
 
+/// The component file a manifest's `geometryWasm` names, when it is one inside `dir` by the `safe_entry` rule and
+/// still inside once links are resolved. crates/fundacad-geom/src/plugins `wasm_path` loads by the same rule.
+pub fn component_path(dir: &Path, rel: &str) -> Option<PathBuf> {
+    let path = dir.join(safe_entry(rel)?);
+    let real = path.canonicalize().ok()?;
+    (real.starts_with(dir.canonicalize().ok()?) && real.is_file()).then_some(path)
+}
+
 /// Set equality of what arrived and what was agreed to. Asking for less is still a refusal, since the screen the user
 /// answered did not describe this bundle.
 pub fn grants_match(expect: &Consented, found: &Consented) -> Result<(), String> {

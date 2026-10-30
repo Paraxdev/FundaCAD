@@ -183,8 +183,32 @@ fn file_stamp(path: &Path) -> (u64, Option<SystemTime>) {
     std::fs::metadata(path).map_or((0, None), |m| (m.len(), m.modified().ok()))
 }
 
-fn wasm_path(dir: &Path, rel: &str) -> PathBuf {
-    rel.split('/').fold(dir.to_path_buf(), |p, part| p.join(part))
+/// The component inside the plugin dir that the manifest names, by the rule src-tauri's bundle.rs `safe_entry`
+/// unpacks entries with, and still inside the dir once links are resolved. None when it would be anywhere else.
+fn wasm_path(dir: &Path, rel: &str) -> Option<PathBuf> {
+    let b = rel.as_bytes();
+    if rel.is_empty() || rel.len() > 512 || rel.contains(['\\', '\0']) || b[0] == b'/' || b.get(1) == Some(&b':') {
+        return None;
+    }
+    let mut path = dir.to_path_buf();
+    for part in rel.split('/').filter(|p| !p.is_empty() && *p != ".") {
+        let mut parts = Path::new(part).components();
+        match (parts.next(), parts.next()) {
+            (Some(std::path::Component::Normal(_)), None) => path.push(part),
+            _ => return None,
+        }
+    }
+    if path == dir {
+        return None;
+    }
+    match (path.canonicalize(), dir.canonicalize()) {
+        (Ok(real), Ok(base)) if !real.starts_with(&base) => None,
+        _ => Some(path),
+    }
+}
+
+fn outside(rel: &str) -> String {
+    format!("its manifest names {rel:?} as its component, which is outside the installed copy, so it is not loaded")
 }
 
 fn discover() -> Vec<Declared> {
@@ -274,8 +298,8 @@ fn discover_in(roots: &[PluginRoot]) -> Vec<Declared> {
             }
             let wasm = man.get(MANIFEST_WASM).and_then(Value::as_str).map(str::to_owned);
             let mut stamp = vec![file_stamp(&dir.join("manifest.json"))];
-            if let Some(rel) = &wasm {
-                stamp.push(file_stamp(&wasm_path(&dir, rel)));
+            if let Some(path) = wasm.as_deref().and_then(|rel| wasm_path(&dir, rel)) {
+                stamp.push(file_stamp(&path));
             }
             out.push(Declared {
                 wasm,
@@ -362,7 +386,9 @@ fn compile(d: &Declared) -> Loaded {
     let Some(rel) = &d.wasm else {
         return Loaded::Broken(NO_COMPONENT.into());
     };
-    let path = wasm_path(&d.dir, rel);
+    let Some(path) = wasm_path(&d.dir, rel) else {
+        return Loaded::Broken(outside(rel));
+    };
     if !path.is_file() {
         return Loaded::Broken(format!(
             "its manifest names {rel:?}, which is not in the installed copy, updating the plugin in Preferences, Plugins fixes it"
@@ -508,7 +534,7 @@ fn identity(entry: &mut Entry) -> String {
     }
     let d = &entry.declared;
     let manifest = std::fs::read(d.dir.join("manifest.json")).unwrap_or_default();
-    let wasm = d.wasm.as_deref().and_then(|rel| std::fs::read(wasm_path(&d.dir, rel)).ok()).unwrap_or_default();
+    let wasm = d.wasm.as_deref().and_then(|rel| std::fs::read(wasm_path(&d.dir, rel)?).ok()).unwrap_or_default();
     let id = crate::cache::keys::hash_hex(&[d.id.as_bytes(), b"\0", &manifest, b"\0", &wasm]);
     entry.identity = Some(id.clone());
     id

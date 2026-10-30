@@ -2,8 +2,9 @@ use std::io::Write;
 use std::path::PathBuf;
 
 use fundacad_lib::plugins::bundle::{
-    allowed_bundle_url, bundle_target, extract_into, grants_match, is_official_url, now_secs, official_label,
-    official_url, safe_entry, safe_id, sha256_hex, swap_into_place, CappedBody, Consented, BUNDLE_PREFIX,
+    allowed_bundle_url, bundle_target, component_path, extract_into, grants_match, is_official_url, now_secs,
+    official_label, official_url, safe_entry, safe_id, sha256_hex, swap_into_place, CappedBody, Consented,
+    BUNDLE_PREFIX,
 };
 
 /// An id becomes a directory under the plugins root, so every refusal below is a path guard.
@@ -492,4 +493,22 @@ fn an_entry_that_inflates_past_its_declared_size_is_refused_and_not_written() {
     assert!(extract_into(&bytes, &dir).is_err(), "an entry larger than declared must be refused");
     assert!(!dir.join("big.bin").exists(), "nothing of the oversized entry may be written");
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_component_path_stays_inside_the_plugin_directory() {
+    let root = tmpdir("component-path");
+    let dir = root.join("P");
+    std::fs::create_dir_all(dir.join("geometry")).unwrap();
+    std::fs::write(root.join("outside.wasm"), b"x").unwrap();
+    std::fs::write(dir.join("p.wasm"), b"x").unwrap();
+    std::fs::write(dir.join("geometry").join("g.wasm"), b"x").unwrap();
+    let abs = root.join("outside.wasm").to_string_lossy().replace('\\', "/");
+    for rel in ["../outside.wasm", "geometry/../../outside.wasm", abs.as_str(), "", "/p.wasm"] {
+        assert_eq!(component_path(&dir, rel), None, "{rel:?}");
+    }
+    assert_eq!(component_path(&dir, "p.wasm"), Some(dir.join("p.wasm")));
+    assert_eq!(component_path(&dir, "geometry/g.wasm"), Some(dir.join("geometry").join("g.wasm")));
+    assert_eq!(component_path(&dir, "missing.wasm"), None);
+    let _ = std::fs::remove_dir_all(&root);
 }

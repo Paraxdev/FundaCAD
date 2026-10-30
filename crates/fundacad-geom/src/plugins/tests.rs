@@ -424,3 +424,35 @@ fn a_plugin_call_stores_shapes_only_within_its_blob_budget() {
     assert!(e.contains("at most 1 shapes"), "{e}");
     assert_eq!(stored(), 1);
 }
+
+fn broken_reason(root: &Path, rel: &str) -> String {
+    put_manifest(root, "P", json!({"id": "P", "version": "1.0.0", MANIFEST_WASM: rel, "featureTypes": ["t"]}));
+    let mut reg = Registry::default();
+    reg.replace(discover_in(&checkout(root)));
+    match compile(&reg.entries[0].declared) {
+        Loaded::Broken(why) => why,
+        _ => panic!("{rel:?} loaded"),
+    }
+}
+
+#[test]
+fn a_component_named_outside_its_bundle_is_not_loaded_or_hashed() {
+    let root = temp_root("wasm-outside");
+    std::fs::write(root.join("outside.wasm"), b"not in the bundle").unwrap();
+    let abs = root.join("outside.wasm").to_string_lossy().replace('\\', "/");
+    for rel in ["../outside.wasm", "./../outside.wasm", abs.as_str()] {
+        let why = broken_reason(&root, rel);
+        assert!(why.contains("outside the installed copy"), "{rel:?}: {why}");
+        let mut reg = Registry::default();
+        reg.replace(discover_in(&checkout(&root)));
+        let with = identity(&mut reg.entries[0]);
+        std::fs::write(root.join("outside.wasm"), b"other bytes").unwrap();
+        let mut reg = Registry::default();
+        reg.replace(discover_in(&checkout(&root)));
+        assert_eq!(with, identity(&mut reg.entries[0]), "{rel:?}");
+    }
+    std::fs::write(root.join("P").join("p.wasm"), b"in the bundle").unwrap();
+    let why = broken_reason(&root, "p.wasm");
+    assert!(!why.contains("outside the installed copy"), "{why}");
+    let _ = std::fs::remove_dir_all(&root);
+}

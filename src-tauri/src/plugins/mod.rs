@@ -80,8 +80,7 @@ fn has_component(dir: &Path) -> bool {
         .ok()
         .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
         .and_then(|m| m.get("geometryWasm")?.as_str().map(str::to_owned))
-        .filter(|rel| !rel.is_empty())
-        .is_some_and(|rel| rel.split('/').fold(dir.to_path_buf(), |p, part| p.join(part)).is_file())
+        .is_some_and(|rel| bundle::component_path(dir, &rel).is_some())
 }
 
 /// A directory with no readable record is not reported as installed: nobody has a record of agreeing to it.
