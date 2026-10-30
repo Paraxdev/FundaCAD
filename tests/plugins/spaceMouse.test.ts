@@ -190,8 +190,17 @@ describe("blockedText, the toast for a device that cannot be read", () => {
       hint: "start spacenavd (sudo systemctl enable --now spacenavd) or install the udev rule",
     });
     expect(text).toBe(
-      `Found "SpaceNavigator" but can't read it, start spacenavd (sudo systemctl enable --now spacenavd) or install the udev rule, see the 3D mouse page of the manual`,
+      `Found "SpaceNavigator" but can't read it, start spacenavd (sudo systemctl enable --now spacenavd) or install the udev rule. See the 3D mouse page of the manual.`,
     );
+  });
+
+  it("ends the Flatpak command with the sentence, so the manual pointer is a sentence of its own", () => {
+    const text = blockedText({
+      name: "SpaceMouse Compact",
+      detail: "No such file or directory",
+      hint: "start spacenavd on this computer, or grant the device with: flatpak override --user --device=all dev.fundacad.app",
+    });
+    expect(text).toMatch(/--device=all dev\.fundacad\.app\. See the 3D mouse page of the manual\.$/);
   });
 
   it("keeps the general advice when there is no hint", () => {
