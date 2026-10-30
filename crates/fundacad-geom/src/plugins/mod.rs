@@ -259,7 +259,7 @@ fn read_list(path: &Path) -> std::io::Result<Vec<u8>> {
     }
 }
 
-/// The ids discovery would register from these roots, in the order it finds them.
+/// The ids discovery would register from these roots, official plugins first.
 pub fn discovered_ids(roots: &[PluginRoot]) -> Vec<String> {
     discover_in(roots).into_iter().map(|d| d.id).collect()
 }
