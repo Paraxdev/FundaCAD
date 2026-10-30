@@ -22,3 +22,5 @@ Plug it in and press any button, FundaCAD only notices a controller after its fi
 To change a button, open its Settings in Edit, Preferences, Plugins and pick a key or a command under Buttons. Pan speed, Rotate speed, Zoom speed, Cursor speed, Stick deadzone and the invert switches are there too.
 
 On a Steam Deck, add FundaCAD to Steam as a non-Steam game and start it from there, so the app sees a controller. The trackpads keep working as a mouse.
+
+In the Flatpak, a controller needs Flatpak 1.15.6 or newer. Check yours with `flatpak --version`. On an older one, give the Flatpak every device with `flatpak override --user --device=all dev.fundacad.app`, then restart FundaCAD.

@@ -28,6 +28,8 @@ flatpak install --user ./FundaCAD-linux-x86_64.flatpak
 flatpak run dev.fundacad.app
 ```
 
+The Flatpak runs on Wayland, or on X11 where there is no Wayland. Besides your home folder, the network and the graphics card, it reaches only game controllers and the `spacenavd` service for a [3D mouse](../plugins/spacemouse.md#flatpak).
+
 The other files:
 
 1. Ubuntu 22.04, Debian 12 and newer: `sudo apt install ./FundaCAD-linux-x86_64.deb`
