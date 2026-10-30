@@ -48,7 +48,7 @@ async function clickTile(page, plane) {
 const P = (origin, normal, xdir) => ({ origin, normal, xdir });
 
 async function openPage(browser) {
-  const page = await browser.newPage({ viewport: { width: W, height: H } });
+  const page = await browser.newPage({ colorScheme: "dark", viewport: { width: W, height: H } });
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
   await page.addInitScript((ws) => {

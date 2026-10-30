@@ -303,6 +303,56 @@ fn by_default_the_apps_own_dot_folders_are_reached() {
 }
 
 #[test]
+fn a_kept_out_place_is_refused_in_either_mode_but_an_app_folder_inside_it_is_reached() {
+    let base = dir();
+    let me = base.path().join("me");
+    let data = me.join("AppData").join("Roaming").join("dev.fundacad.app");
+    let recovery = data.join("recovery");
+    let startup = me.join("AppData").join("Roaming").join("Microsoft").join("Windows").join("Startup");
+    let agents = me.join("Library").join("LaunchAgents");
+    let proj = base.path().join("proj");
+    for d in [&recovery, &startup, &proj, &data.join("plugins")] {
+        std::fs::create_dir_all(d).unwrap();
+    }
+    let places = vec![
+        (data.clone(), "the app's own data folder"),
+        (startup.clone(), "a folder whose files run at login"),
+        (agents.clone(), "a folder whose files run at login"),
+    ];
+    let lenient = open(&[&recovery], &me).refusing(places.clone());
+    let (strict, _) = PathScope::new(vec![recovery.clone()], vec![me.join("AppData")], Some(me.clone()));
+    for scope in [lenient, strict.refusing(places)] {
+        let ok = recovery.join("a.funda");
+        assert_eq!(scope.check(&s(&ok), None), Ok(ok.clone()), "strict {}", scope.is_strict());
+        for (p, what) in [
+            (data.join("a.funda"), "app's own data folder"),
+            (data.join("plugins").join("x").join("main.js"), "app's own data folder"),
+            (recovery.join("..").join("launch-approvals.json"), "app's own data folder"),
+            (startup.join("a.funda"), "run at login"),
+            (startup.join("new").join("b.step"), "run at login"),
+            (agents.join("a.funda"), "run at login"),
+        ] {
+            let err = scope.check(&s(&p), None).unwrap_err();
+            assert!(err.contains(what), "strict {} {}: {err}", scope.is_strict(), p.display());
+        }
+        if cfg!(any(windows, target_os = "macos")) {
+            let other_case = me.join("library").join("launchagents").join("a.funda");
+            assert!(scope.check(&s(&other_case), None).is_err(), "{}", other_case.display());
+        }
+        let beside = data.with_file_name("dev.fundacad.app.old").join("a.funda");
+        assert_eq!(scope.check(&s(&beside), None), Ok(beside.clone()));
+    }
+    let scope = open(&[], &me).refusing(vec![(startup.clone(), "a folder whose files run at login")]);
+    assert_eq!(scope.check(&s(&proj.join("a.funda")), None), Ok(proj.join("a.funda")));
+    if link_dir(&startup, &proj.join("innocent")) {
+        let err = scope.check(&s(&proj.join("innocent").join("a.funda")), None).unwrap_err();
+        assert!(err.contains("run at login"), "{err}");
+    } else {
+        eprintln!("symlinks need developer mode here, the link case skipped");
+    }
+}
+
+#[test]
 fn strict_mode_is_a_given_folder_or_the_strict_env() {
     let one = [PathBuf::from("D:/parts")];
     assert!(strict(&one, None));

@@ -14,10 +14,11 @@
     - tab "Experimental"
   - tabpanel "Appearance":
     - heading "Appearance" [level=3]
-    - combobox "Theme"
+    - combobox /^Theme, /
     - button "Upload theme…"
     - alert
-    - combobox "Icons"
+    - status
+    - combobox /^Icons, /
     - radiogroup "Units":
       - radio "mm" [checked]
       - radio "cm"

@@ -6,4 +6,6 @@ FundaCAD is a free, open source CAD program for designing parts you want to 3D p
 
 Every step stays in the History, so you can change a number later and the rest of the part rebuilds. The tools are on the rail down the left side, and Ctrl+K finds any of them by name.
 
-Start with [Install](start/install.md), then build a plate in [Your first part](start/first-part.md). The manual follows the beta, so the development build can be a little ahead of it.
+Start with [Install](start/install.md), then build a plate in [Your first part](start/first-part.md).
+
+The manual comes in two versions, Beta for the beta and Dev for the development build. Pick one in the switch next to FundaCAD at the top of the page, it keeps the page you are on.

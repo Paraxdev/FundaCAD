@@ -8,8 +8,8 @@ Ask an assistant to show you how to do something, such as "show me how to round 
 
 If the button is folded away, for example Fillet inside Modify, the ring sits on Modify and the caption says to open it first. Then the ring moves to Fillet.
 
-- **Next** tells the assistant you are done with this step, when it waits for you rather than for something in the model.
-- **Stop** takes the ring and caption away at once and tells the assistant you stopped. It does not undo anything you did.
+1. **Next** tells the assistant you are done with this step, when it waits for you rather than for something in the model.
+2. **Stop** takes the ring and caption away at once and tells the assistant you stopped. It does not undo anything you did.
 
 ## What it needs
 

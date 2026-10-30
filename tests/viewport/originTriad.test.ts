@@ -6,6 +6,17 @@ import { describe, it, expect } from "vitest";
 import * as THREE from "three";
 import { AXIS_COLOR, OriginTriad, TRIAD_OPACITY, mutedAxisColor } from "../../src/viewport/originTriad";
 import { edgeHoverColor } from "../../src/viewport/highlight";
+import { TILE_ORDER } from "../../src/viewport/originTiles";
+
+/** The render order of every mesh the triad draws, sleeves left out. */
+function drawnOrders(triad: OriginTriad): number[] {
+  const out: number[] = [];
+  triad.group.traverse((o) => {
+    const m = (o as THREE.Mesh).material as THREE.Material | undefined;
+    if (m && m.visible) out.push(o.renderOrder);
+  });
+  return out;
+}
 
 /** Every material the arm paints with, drawn and occluded pass alike. */
 function armColors(arm: THREE.Object3D): number[] {
@@ -106,6 +117,21 @@ describe("OriginTriad", () => {
     expect(armColors(triad.arms[2]!)).toEqual(base[2]);
     triad.highlight(null);
     expect(triad.arms.map(armColors)).toEqual(base);
+    triad.dispose();
+  });
+
+  it("draws over the origin planes while they show, so their edges read as the arrows, and goes back under", () => {
+    const triad = new OriginTriad(new THREE.Scene());
+    const base = drawnOrders(triad);
+    triad.drawOver(TILE_ORDER.rim);
+    const over = drawnOrders(triad);
+    expect(over.length).toBe(base.length);
+    for (const o of over) {
+      expect(o).toBeGreaterThan(TILE_ORDER.rim);
+      expect(o).toBeLessThan(TILE_ORDER.label);
+    }
+    triad.drawOver(null);
+    expect(drawnOrders(triad)).toEqual(base);
     triad.dispose();
   });
 });

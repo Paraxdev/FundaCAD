@@ -70,9 +70,9 @@ function findingStyle(index: number): CSSProperties {
 </script>
 
 <template>
-  <FloatingPanel :open="!!d" panel-class="printability-panel" @close="ctl?.close()">
+  <FloatingPanel :open="!!d" title="Printability" panel-class="printability-panel" @close="ctl?.close()">
     <div v-if="ctl && d && setup" :style="BODY">
-      <div class="measure-title">Printability</div>
+      <div class="measure-title" aria-hidden="true">Printability</div>
 
       <div class="measure-row">
         <span class="measure-k">Bodies</span>

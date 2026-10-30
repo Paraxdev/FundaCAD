@@ -29,7 +29,7 @@ const GAP = 0.1;
     console.log(`${ok ? "ok  " : "FAIL"} ${name} ${JSON.stringify(detail)}`);
   };
   try {
-    const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
+    const page = await browser.newPage({ colorScheme: "dark", viewport: { width: 1280, height: 860 } });
     page.on("pageerror", (e) => res.errors.push(e.message));
     await page.addInitScript(
       ([port]) => {

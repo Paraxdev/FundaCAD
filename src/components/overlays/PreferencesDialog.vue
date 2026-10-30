@@ -2,7 +2,7 @@
 // Mirrors the setting modules (ui/theme, icons, units, renderPrefs) with no store of its own, every change applies live.
 // The mirrors re-read on each module's subscription, the modules stay Vue-free so the headless suite can import them.
 
-import { computed, nextTick, onMounted, onUnmounted, ref, watch, type Directive } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, useId, watch, type Directive } from "vue";
 import { useDialogStore } from "../../stores/dialogs";
 import { pluginFocus } from "../../plugins/settingsFocus";
 import Button from "../ui/Button.vue";
@@ -12,11 +12,14 @@ import Segmented from "../ui/Segmented.vue";
 import Select from "../ui/Select.vue";
 import Slider from "../ui/Slider.vue";
 import Tabs from "../ui/Tabs.vue";
+import { tabPanelAttrs } from "../ui/tabIds";
 import McpSection from "./McpSection.vue";
 import DenoiserRow from "../shell/DenoiserRow.vue";
+import LargerTargetsRow from "./LargerTargetsRow.vue";
 import PluginsSection from "./PluginsSection.vue";
 import ExperimentalSection from "./ExperimentalSection.vue";
 import UpdatesSection from "./UpdatesSection.vue";
+import A11yContrastRows from "./A11yContrastRows.vue";
 import {
   addCustomTheme,
   asThemeId,
@@ -27,6 +30,7 @@ import {
   setTheme,
   themes,
 } from "../../ui/theme";
+import { describeFailures } from "../../ui/contrast";
 import { asIconPackId, getIconPack, iconPacks, onIconPackChange, setIconPack } from "../../ui/icons";
 import { asUnit, getUnit, onUnitChange, setUnit } from "../../ui/units";
 import {
@@ -93,6 +97,8 @@ const theme = ref(getTheme());
 const themeList = ref(themes());
 // The last upload's rejection reason, empty when it was fine.
 const themeError = ref("");
+// The contrast pairs the last accepted upload misses.
+const themeWarning = ref("");
 const fileInput = ref<HTMLInputElement | null>(null);
 const homeBg = ref(getHomeBackground());
 const homeImageInput = ref<HTMLInputElement | null>(null);
@@ -132,7 +138,7 @@ onMounted(() => {
     onA11yPrefsChange(() => {
       a11y.value = a11yPrefs();
       reducesMotion.value = systemReducesMotion();
-      if (a11y.value.verbosity !== "verbose") presetNote.value = "";
+      if (a11y.value.verbosity !== "verbose" || a11y.value.singleKeys || !a11y.value.solidPanels) presetNote.value = "";
     }),
     onNavPrefsChange(() => {
       nav.value = getNavPrefs();
@@ -165,10 +171,9 @@ const category = ref(pluginFocus.value ? "plugins" : (known(dialogs.prefsCategor
 // Taken once, so an open that sets `preferences` directly, as the Live session pill does, lands on Appearance.
 dialogs.prefsCategory = null;
 const panes = ref<HTMLElement | null>(null);
+const panesId = useId();
 const pane = (id: string) => ({
-  id: `prefs-pane-${id}`,
-  role: "tabpanel",
-  "aria-label": categories.value.find((c) => c.value === id)?.label,
+  ...tabPanelAttrs(panesId, id),
   "data-pane": id,
   // AI assistants and Plugins have no title, so the pane itself takes the focus.
   tabindex: id === "mcp" || id === "plugins" ? -1 : undefined,
@@ -211,8 +216,12 @@ const VERBOSITY = [
 ];
 const a11yChanged = computed(
   () =>
+    a11y.value.contrast !== DEFAULT_A11Y.contrast ||
+    a11y.value.solidPanels !== DEFAULT_A11Y.solidPanels ||
     a11y.value.animations !== DEFAULT_A11Y.animations ||
     a11y.value.verbosity !== DEFAULT_A11Y.verbosity ||
+    a11y.value.singleKeys !== DEFAULT_A11Y.singleKeys ||
+    a11y.value.targets !== DEFAULT_A11Y.targets ||
     dwell.value !== DEFAULT_DWELL_MS,
 );
 function pickAnimations(id: string) {
@@ -229,7 +238,7 @@ async function screenReaderPreset() {
   // Emptied for a tick first, so a second press changes the live region and is spoken again.
   presetNote.value = "";
   await nextTick();
-  presetNote.value = "Announcements set to Verbose.";
+  presetNote.value = "Announcements set to Verbose, Single key shortcuts turned off and Solid panels on.";
 }
 
 // Note: Slider puts fallthrough attributes on its wrapper and repeats aria-valuetext in its output,
@@ -238,6 +247,12 @@ const vRangeHint: Directive<HTMLElement, string> = {
   mounted(el, { value }) {
     el.querySelector("input[type=range]")?.setAttribute("aria-describedby", value);
     el.querySelector("output")?.setAttribute("aria-hidden", "true");
+  },
+};
+// Checkbox puts fallthrough attributes on its label, so the box itself takes the hint here.
+const vCheckHint: Directive<HTMLElement, string> = {
+  mounted(el, { value }) {
+    el.querySelector("input[type=checkbox]")?.setAttribute("aria-describedby", value);
   },
 };
 
@@ -294,6 +309,7 @@ function onTheme(id: string) {
 // A real button opens the native picker, a bare file input reads as a mystery control on a settings screen.
 function pickThemeFile() {
   themeError.value = "";
+  themeWarning.value = "";
   fileInput.value?.click();
 }
 
@@ -304,6 +320,7 @@ async function onUpload(ev: Event) {
   input.value = "";
   if (!file) return;
   themeError.value = "";
+  themeWarning.value = "";
   let parsed: unknown;
   try {
     parsed = JSON.parse(await file.text());
@@ -320,10 +337,16 @@ async function onUpload(ev: Event) {
   themeList.value = themes();
   // Adding a palette does not switch to it, and a user who just uploaded one wants to see it.
   setTheme(res.theme.id);
+  const shortfall = describeFailures(res.failing);
+  if (!shortfall) return;
+  // The status line empties for a tick first, so the same file uploaded again is spoken again.
+  await nextTick();
+  themeWarning.value = `${res.theme.label} is added, but ${shortfall}`;
 }
 
 function onRemoveTheme() {
   themeError.value = "";
+  themeWarning.value = "";
   // Removing the active palette falls back to the built-in one in the module, whose onThemeChange refreshes both refs.
   if (activeIsCustom.value) removeCustomTheme(theme.value);
 }
@@ -439,6 +462,7 @@ function onClassicCamera(on: boolean) {
         variant="bar"
         orientation="vertical"
         label="Preference categories"
+        :panels="panesId"
         class="prefs-nav prefs-cats"
         @click="revealPane"
       >
@@ -465,8 +489,10 @@ function onClassicCamera(on: boolean) {
                 />
               </div>
               <p id="prefs-theme-hint" class="pref-hint">
-                FundaCAD Noir, Dracula, Solarized Light and the Noir Blue/Red/Orange tints ship with FundaCAD. Upload a
-                JSON palette to add your own, it is stored in this browser's preferences. Keys are colour tokens like
+                System follows your OS: FundaCAD Noir or FundaCAD Light, and High Contrast when the OS asks for more
+                contrast. Shipped with FundaCAD: FundaCAD Noir, FundaCAD Light, High Contrast Dark, High Contrast Light,
+                Colour-Blind Safe, Dracula, Solarized Light, Noir Blue, Noir Red and Noir Orange. Upload a JSON palette
+                to add your own, it is stored in this browser's preferences. Keys are colour tokens like
                 <code>--bg</code> and <code>--accent</code>, values are hex or rgb().
               </p>
               <div class="prefs-actions">
@@ -482,6 +508,7 @@ function onClassicCamera(on: boolean) {
                 <Button v-if="activeIsCustom" @click="onRemoveTheme">Remove</Button>
               </div>
               <p id="prefs-theme-error" class="pref-hint prefs-theme-error" role="alert">{{ themeError }}</p>
+              <p id="prefs-theme-warning" class="pref-hint prefs-theme-warning" role="status">{{ themeWarning }}</p>
             </div>
             <div class="pref-card">
               <div class="pref-head">
@@ -792,8 +819,9 @@ function onClassicCamera(on: boolean) {
             >
             <span id="prefs-a11y-preset-status" class="prefs-a11y-status" role="status">{{ presetNote }}</span>
             <p id="prefs-a11y-actions-hint" class="pref-hint">
-              Screen reader preset sets Announcements to Verbose, the setup that suits NVDA, VoiceOver and other screen
-              readers. Reset to defaults clears every choice below, so Animations follows the system again.
+              Screen reader preset sets Announcements to Verbose, turns Single key shortcuts off and Solid panels on,
+              the setup that suits NVDA, VoiceOver and other screen readers. Reset to defaults clears every choice
+              below, so Contrast and Animations follow the system again.
             </p>
           </div>
 
@@ -808,10 +836,12 @@ function onClassicCamera(on: boolean) {
                   >
                 </div>
                 <p id="prefs-a11y-theme-hint" class="pref-hint">
-                  Themes are picked under Appearance. Colour-Blind Safe draws the axes, planes and gizmos in vermilion,
-                  yellow and sky blue, and Solarized Light is a light theme.
+                  Themes are picked under Appearance. High Contrast Dark and High Contrast Light hold text at 7:1 and
+                  every edge at 4.5:1, Colour-Blind Safe draws the axes, planes and gizmos in vermilion, yellow and sky
+                  blue, and FundaCAD Light and Solarized Light are light themes.
                 </p>
               </div>
+              <A11yContrastRows />
             </div>
           </div>
 
@@ -859,6 +889,22 @@ function onClassicCamera(on: boolean) {
                   selects whatever is highlighted, so a longer delay makes it easier to select whole parts.
                 </p>
               </div>
+              <div class="pref-card">
+                <Checkbox
+                  id="prefs-single-keys"
+                  v-check-hint="'prefs-single-keys-hint'"
+                  class="pref-head pref-check"
+                  :model-value="a11y.singleKeys"
+                  @update:model-value="(on: boolean) => setA11yPref('singleKeys', on)"
+                  ><span class="pref-title">Single key shortcuts</span></Checkbox
+                >
+                <p id="prefs-single-keys-hint" class="pref-hint">
+                  Letter, digit and symbol keys on their own start tools and views, such as E for Extrude. Turn this off
+                  when voice control or screen reader browse mode types letters. Ctrl or Cmd chords, Escape, Delete, the
+                  F keys, the arrows and the command palette keep working.
+                </p>
+              </div>
+              <LargerTargetsRow />
             </div>
           </div>
 

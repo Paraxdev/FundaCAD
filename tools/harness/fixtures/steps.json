@@ -1,0 +1,9 @@
+{
+  "version": 10,
+  "parameters": {},
+  "features": [
+    { "id": "base", "type": "box", "name": "Base", "length": 40, "width": 20, "height": 5 },
+    { "id": "post", "type": "cylinder", "name": "Post", "radius": 4, "height": 20 },
+    { "id": "ball", "type": "sphere", "name": "Ball", "radius": 6 }
+  ]
+}

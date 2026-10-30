@@ -1,23 +1,31 @@
+- link "Skip to model"
 - banner:
   - button "Home"
-  - navigation:
-    - button "File"
-    - button "Edit"
-    - button "View"
-    - button "Help"
-  - button "Undo"
-  - button "Redo"
+  - navigation "Menu":
+    - menubar "Menu":
+      - menuitem "File"
+      - menuitem "Edit"
+      - menuitem "View"
+      - menuitem "Help"
+  - toolbar "Undo and redo":
+    - button "Undo"
+    - button "Redo"
   - radiogroup "Workspace":
     - radio "Model" [checked]
     - radio "Render"
-- complementary:
-  - text: Items
-- navigation "Tools":
-  - button /^Search/
-  - button /^Sketch/
-  - button "Create"
-  - button "Modify"
-  - button "Construct"
-  - button "Inspect"
-- group "View mode"
-- region "History"
+- main "Model":
+  - heading [level=1]
+  - complementary "Items":
+    - heading "Items" [level=2]
+    - tree "Items"
+  - navigation "Tools":
+    - toolbar "Tools":
+      - button /^Search/
+      - button /^Sketch/
+      - button "Create"
+      - button "Modify"
+      - button "Construct"
+      - button "Inspect"
+  - toolbar "View controls":
+    - radiogroup "View mode"
+  - region "History"

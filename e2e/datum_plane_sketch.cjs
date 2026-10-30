@@ -32,7 +32,7 @@ const DATUM = {
 
 (async () => {
   const browser = await chromium.launch({ executablePath: CHROME, headless: true });
-  const page = await browser.newPage();
+  const page = await browser.newPage({ colorScheme: "dark" });
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
 

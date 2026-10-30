@@ -37,7 +37,7 @@ const check = (name, ok, detail) => {
 (async () => {
   fs.mkdirSync(OUT, { recursive: true });
   const browser = await chromium.launch({ executablePath: EXE, args: ARGS });
-  const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+  const page = await browser.newPage({ colorScheme: "dark", viewport: { width: 1400, height: 900 } });
   page.on("pageerror", (e) => {
     console.error("PAGE ERROR:", e.message);
     failures++;

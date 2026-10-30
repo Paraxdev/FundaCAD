@@ -14,9 +14,9 @@ A datum axis selected beforehand is used at once. The revolve starts as a full t
 
 The step's rows change it after it is made.
 
-- Angle: how far it turns, 360 degrees by default.
-- Pitch: how far one turn climbs, for a spring or a coil. Empty means a flat revolve.
-- Operation: New body, Join, Cut or Intersect.
-- Axis: the X, Y or Z axis of the origin.
+1. Angle: how far it turns, 360 degrees by default.
+2. Pitch: how far one turn climbs, for a spring or a coil. Empty means a flat revolve.
+3. Operation: New body, Join, Cut or Intersect.
+4. Axis: the X, Y or Z axis of the origin.
 
 Double-click the revolve to drag it on the model. The straight arrow sets the pitch and the curved one the angle, so ten turns is 3600 degrees.

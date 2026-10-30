@@ -15,9 +15,9 @@ Double-click the step in the History to change it later. Delete the step to get 
 
 ## Settings
 
-- **Kind** (Pattern in the History): patterns such as Knurl, Hex, Waves, Ribs, Brick, Carbon fibre, Voronoi, Perlin noise, Leather and Grip. Heightmap turns a picture into height, light is high.
-- **Depth** and **Scale**: the size of the pattern, 0.4 mm and 2 mm to start.
-- **Direction**: Out (emboss), In (deboss) or Both, called Emboss, Deboss and Symmetric in the History.
-- **Print color**: gives the pattern its own colour from the [palette](multicolor.md), for multicolour prints.
+1. **Kind** (Pattern in the History): patterns such as Knurl, Hex, Waves, Ribs, Brick, Carbon fibre, Voronoi, Perlin noise, Leather and Grip. Heightmap turns a picture into height, light is high.
+2. **Depth** and **Scale**: the size of the pattern, 0.4 mm and 2 mm to start.
+3. **Direction**: Out (emboss), In (deboss) or Both, called Emboss, Deboss and Symmetric in the History.
+4. **Print color**: gives the pattern its own colour from the [palette](multicolor.md), for multicolour prints.
 
 A heavy texture can slow the model. Mesh mm under Advanced makes it coarser.

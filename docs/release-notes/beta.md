@@ -3,27 +3,29 @@
 ## What's new since the last beta
 
 **Security**
-- A zip names each file in two places. Opening a .funda file or installing a plugin now refuses a zip whose two names disagree, a trick that can hide a file from a check.
-- The zip, Wasmtime and rustls libraries inside the app move past their published security fixes.
-
-**Big models**
-- A big STEP with broken vertices loads whole, with the vertices repaired, and a body with tens of thousands of faces is meshed at a detail the view can draw.
-- Box select on a huge model repaints only what changed, so the box follows the pointer smoothly.
-- A fillet or chamfer on thousands of edges opens much faster. Past 3,000 edges it asks first and names the count, and past 5,000 it refuses and says why, since a preview that big runs for minutes and can use up all free memory.
-
-**Modeling**
-- In the value box, Enter or Space on a button presses that button, so Cancel no longer commits the tool. A refused value says why.
-- On a narrow window, each floating panel takes the space it fits, so Parameters and Stress stay open beside the side panel instead of folding under History.
+- Opening a .funda file is safer, damaged or crafted geometry inside it is refused instead of read.
+- AI assistants can save only .funda files and export only the format you asked for, and never into folders that start programs.
+- A document no longer opens the files it links to by itself, and a network link opens only once you picked it.
+- Only FundaCAD's own plugins are shown as official, and that label can no longer be faked.
+- Release builds are harder to tamper with.
 
 **Accessibility**
-- Screen readers hear prompts, selections, build results, errors, saves and exports through one announcer. An error that keeps repeating is said once, and a prompt is cleared once it has been heard.
-- Every control has a name of its own, a unit picker is named after its field, such as Width unit, and History steps and tree rows say failed, suppressed or rolled back in words.
-- Dialogs, Home, the command palette and Versions keep the app behind them out of reach, and give focus back when they close.
-- In Preferences, Accessibility, Animations can follow the system, Announcements sets how much a screen reader hears, and Screen reader preset sets it to Verbose in one click.
+- The tree, toolbars, pickers, lists and the command palette all work by keyboard.
+- F6 moves between the main parts of the window, and screen readers can jump between them.
+- Shortcuts can be changed, and they no longer fire while you type.
+- Text and controls stay readable in every theme, and controls are big enough to hit easily.
 
-**AI assistants and help**
-- An AI assistant reads a big model in a fraction of the tokens, since long replies fold alike rows and come a page at a time.
-- The manual at fundacad.dev matches the app again, with shorter pages and every picture retaken.
+**Modeling**
+- The origin planes start at the origin and line up with the axis arrows.
+- The arrow on a drop-down turns down when the list opens, instead of sliding away.
+
+**Help**
+- The manual has a beta and a dev version, with a switch on every page, and its lists are numbered.
+
+**After you update**
+- Plugins that start other programs, such as Printing, ask for your OK once more.
+- An older document that links to another file through Insert Document says that file "may have changed" until you press Update once.
+- A document opened from a .json file is saved with Save As.
 
 ## Known limits
 

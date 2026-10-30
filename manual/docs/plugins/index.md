@@ -30,11 +30,11 @@ Remove deletes the plugin from your computer. Its settings stay unless you tick 
 
 Click Settings on the plugin's row.
 
-- The Search plugin settings box finds a setting in any plugin.
-- The arrow beside a changed setting puts that one back.
-- Reset to defaults puts back all of that plugin's settings.
+1. The Search plugin settings box finds a setting in any plugin.
+2. The arrow beside a changed setting puts that one back.
+3. Reset to defaults puts back all of that plugin's settings.
 
 ## Install one
 
-- Under Made by FundaCAD, press Install.
-- Under Add a plugin, paste a web address and press Read it, or press Choose a file. FundaCAD shows what the plugin asks for, and installs it only when you press Install.
+1. Under Made by FundaCAD, press Install.
+2. Under Add a plugin, paste a web address and press Read it, or press Choose a file. FundaCAD shows what the plugin asks for, and installs it only when you press Install.

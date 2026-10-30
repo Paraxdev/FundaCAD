@@ -4,6 +4,7 @@
 // `pub` so tests/container_seam.rs can drive the engine environment and the
 // container the way the app does.
 pub mod container;
+pub mod doc_paths;
 pub mod engine;
 pub use fundacad_format::{fnda, json_doc};
 mod drop_paths;
@@ -13,6 +14,7 @@ mod launch;
 pub mod launch_args;
 pub mod library;
 mod log_file;
+pub mod os_a11y_prefs;
 pub mod plugins;
 pub mod safe_mode;
 pub mod session_file;
@@ -133,6 +135,11 @@ fn recovery_clear(app: tauri::AppHandle, slot: String) -> Result<(), String> {
 
 /// In app updates only apply to what the Tauri updater can replace: NSIS on Windows, the .app, the AppImage. A deb or
 /// rpm install belongs to the package manager, so the frontend hides the update UI.
+#[tauri::command]
+async fn os_a11y_prefs() -> os_a11y_prefs::OsA11yPrefs {
+    tauri::async_runtime::spawn_blocking(os_a11y_prefs::read).await.unwrap_or_default()
+}
+
 #[tauri::command]
 fn updates_supported() -> bool {
     if cfg!(target_os = "linux") {
@@ -312,6 +319,18 @@ fn safe_mode_decide() -> SafeMode {
     SafeMode { reason, dir, set_compositing }
 }
 
+/// The dialog plugin allows each picked or saved path on the fs scope, which tells its listeners, so Rust learns the
+/// dialog paths with no change to the page.
+fn vouch_dialog_paths(app: &tauri::AppHandle) {
+    use tauri_plugin_fs::FsExt;
+    let Some(scope) = app.try_fs_scope() else { return };
+    let app = app.clone();
+    scope.listen(move |event| {
+        let tauri::scope::fs::Event::PathAllowed(path) = event else { return };
+        app.state::<doc_paths::Provenance>().vouch_all([path.to_string_lossy().as_ref()]);
+    });
+}
+
 /// Writes a diagnosis if the frontend never checks in. It rules the engine out by name: the loudest thing in the log, a
 /// healthy engine above a blank window reads as an engine problem, and it is not.
 fn watch_frontend_load(app: tauri::AppHandle) {
@@ -400,6 +419,7 @@ pub fn run() {
         log_tail,
         log_line,
         system_info::system_info,
+        os_a11y_prefs,
         safe_mode_exit,
         launch::take_launch_paths,
         drop_paths::drop_paths_take,
@@ -413,6 +433,8 @@ pub fn run() {
         container::container_open_bytes,
         container::container_verify,
         container::container_is_container,
+        container::container_stat,
+        container::paths_note_recent,
         home_commands::library_stat,
         home_commands::library_list,
         home_commands::doc_summary,
@@ -426,6 +448,7 @@ pub fn run() {
         plugins::plugin_entry,
         plugins::plugin_code,
         plugins::plugin_remove,
+        plugins::plugin_set_disabled,
         plugins::files::plugin_file_pick,
         plugins::files::plugin_file_read,
         plugins::files::plugin_file_write,
@@ -472,6 +495,7 @@ pub fn run() {
         .manage(spacemouse::Inventory::default())
         .manage(launch::LaunchPaths::default())
         .manage(drop_paths::Held::default())
+        .manage(doc_paths::Provenance::default())
         // Files a person handed to a plugin this session, never on disk, so a plugin cannot come back tomorrow holding
         // a token for a file somebody forgot they offered.
         .manage(plugins::files::Handles::default())
@@ -512,7 +536,11 @@ pub fn run() {
                     println!("[settings] a settings file did not read and was kept as {}", kept.display());
                 }
             }
+            if let Ok(dir) = app.path().app_data_dir() {
+                app.state::<doc_paths::Provenance>().keep_in(dir.join("vouched-paths.json"));
+            }
             launch::queue_first_launch(app);
+            vouch_dialog_paths(app.handle());
             app.manage(engine::Engine::start(app.handle()));
             if reason.is_none() {
                 frames::denoiser::load_installed(app.handle());

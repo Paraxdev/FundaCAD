@@ -120,11 +120,35 @@ Set FUNDACAD_ALLOW_WINDOWS_GNU=1 to build it anyway.
         build.include(dir);
     }
 
+    // Xcode 15's libc++ has a pointer_traits that is not SFINAE friendly, so the
+    // C++20 contiguous_range check cxx.h makes on rust::Slice fails hard there.
+    // The shims compile against a copy whose Slice iterator names its
+    // element_type, found through -iquote before cxx-build's own include dir.
+    // cxx-build's cxx.h is a symlink into the cargo registry: read it only.
+    if target.contains("apple") {
+        let out = std::path::PathBuf::from(std::env::var("OUT_DIR").unwrap());
+        let src = out.join("cxxbridge").join("include").join("rust").join("cxx.h");
+        let header = std::fs::read_to_string(&src).expect("cxx.h not found in cxx-build's include dir");
+        let class = header.find("class Slice<T>::iterator final {").expect("cxx.h no longer defines rust::Slice<T>::iterator");
+        let end = class + header[class..].find("};").unwrap();
+        let patched = if header[class..end].contains("element_type") {
+            header
+        } else {
+            let public = class + header[class..end].find("public:").unwrap() + "public:".len();
+            format!("{}\n  using element_type = T;{}", &header[..public], &header[public..])
+        };
+        let dir = out.join("cxx-apple");
+        std::fs::create_dir_all(dir.join("rust")).unwrap();
+        std::fs::write(dir.join("rust").join("cxx.h"), patched).unwrap();
+        build.flag(format!("-iquote{}", dir.display()));
+    }
+
     build
         .cpp(true)
-        // The shims use C++14 generic lambdas and later. MSVC defaults to C++14
-        // and ignores this flag, so only GCC and Clang ever saw the old c++11.
-        .flag_if_supported("-std=c++17")
+        // Match the kernel's C++20: the shims include OCCT headers, and the same
+        // inline definition compiled under two standards is an ODR violation on
+        // GCC and Clang. MSVC takes /std from its own default and ignores this.
+        .flag_if_supported("-std=c++20")
         .define("_USE_MATH_DEFINES", "TRUE")
         .include(occt_config.include_dir)
         .include("include")
@@ -162,7 +186,8 @@ fn patch_occt(occt: &OcctConfig) -> std::path::PathBuf {
     build
         .cpp(true)
         .opt_level(2)
-        .flag_if_supported("-std=c++17")
+        // The patched members are OCCT's own sources, compiled as the kernel is.
+        .flag_if_supported("-std=c++20")
         .define("_USE_MATH_DEFINES", "TRUE")
         .include(&occt.include_dir);
     let run = |cmd: &mut Command| {
@@ -442,6 +467,36 @@ fn unoptimised_flags(line: &str) -> bool {
     })
 }
 
+/// Exceptions on keep OCCT's range checks, which No_Exception compiles out, and
+/// C++20 bounds each `stream >> char_array` by the array's size (P0487R1).
+#[cfg(feature = "builtin")]
+const KERNEL_CACHE_SEEDS: [&str; 2] =
+    ["BUILD_RELEASE_DISABLE_EXCEPTIONS:BOOL=OFF", "BUILD_CPP_STANDARD:STRING=C++20"];
+
+/// A cached entry for one of the seeded variables that holds another value.
+#[cfg(feature = "builtin")]
+fn stale_seed(line: &str) -> bool {
+    KERNEL_CACHE_SEEDS.iter().any(|seed| {
+        let name = seed.split(':').next().unwrap();
+        line.strip_prefix(name).is_some_and(|rest| rest.starts_with(':')) && line != *seed
+    })
+}
+
+/// A kernel configured before the seeds above, which is rebuilt once. Our own
+/// builds leave the stamp, so a kernel without it is old or prebuilt elsewhere.
+/// A missing build cache (a prebuilt root, or the CI cache that drops `build`)
+/// cannot prove the seeds, so it is treated as needing the rebuild too.
+#[cfg(feature = "builtin")]
+fn kernel_unchecked(root: &std::path::Path) -> bool {
+    if root.join(STATE_DIR).join("checked-reads").exists() {
+        return false;
+    }
+    match std::fs::read_to_string(root.join("build").join("CMakeCache.txt")) {
+        Ok(cache) => cache.lines().any(stale_seed),
+        Err(_) => true,
+    }
+}
+
 /// An MSVC kernel compiled without optimisation, which is rebuilt once.
 #[cfg(feature = "builtin")]
 fn kernel_unoptimised(root: &std::path::Path) -> bool {
@@ -457,7 +512,7 @@ fn kernel_unoptimised(root: &std::path::Path) -> bool {
 /// Builds and installs the kernel into `root` unless a complete one is there.
 #[cfg(feature = "builtin")]
 fn build_kernel_into(root: &std::path::Path) {
-    if kernel_config_dir(root).is_some() && !kernel_unoptimised(root) {
+    if kernel_config_dir(root).is_some() && !kernel_unoptimised(root) && !kernel_unchecked(root) {
         return;
     }
     refuse_foreign_kernel(root);
@@ -490,11 +545,15 @@ directory named OCCT to build one there.
     let lock = std::fs::File::create(state.join("kernel.lock")).unwrap();
     lock.lock().unwrap();
     if kernel_config_dir(root).is_some() {
-        if !kernel_unoptimised(root) {
+        let why = if kernel_unoptimised(root) {
+            "was compiled without optimisation"
+        } else if kernel_unchecked(root) {
+            "was built with its range checks off"
+        } else {
             return;
-        }
+        };
         println!(
-            "cargo:warning=the OpenCASCADE kernel in {} was compiled without optimisation, rebuilding it once, about twenty minutes",
+            "cargo:warning=the OpenCASCADE kernel in {} {why}, rebuilding it once, about twenty minutes",
             root.display()
         );
     }
@@ -518,7 +577,7 @@ directory named OCCT to build one there.
         if line.starts_with("//") {
             comment.push_str(line);
             comment.push('\n');
-        } else if generator.is_some() && unoptimised_flags(line) {
+        } else if (generator.is_some() && unoptimised_flags(line)) || stale_seed(line) {
             comment.clear();
         } else {
             seeded.push_str(&std::mem::take(&mut comment));
@@ -529,6 +588,12 @@ directory named OCCT to build one there.
     seeded.push_str(&comment);
     if !seeded.contains("CMAKE_EXPORT_NO_PACKAGE_REGISTRY") {
         seeded.push_str("CMAKE_EXPORT_NO_PACKAGE_REGISTRY:BOOL=ON\n");
+    }
+    for seed in KERNEL_CACHE_SEEDS {
+        if !seeded.lines().any(|line| line == seed) {
+            seeded.push_str(seed);
+            seeded.push('\n');
+        }
     }
     if seeded != cached {
         std::fs::write(&cache, seeded).unwrap();
@@ -552,6 +617,7 @@ directory named OCCT to build one there.
     std::fs::remove_file(&installing).unwrap();
     // Whatever flags this build came out with, it is not rebuilt for them again.
     std::fs::write(state.join("release-flags"), "").unwrap();
+    std::fs::write(state.join("checked-reads"), "").unwrap();
     if kernel_config_dir(root).is_none() {
         panic!("OpenCASCADE was built but {} holds no complete install", root.display());
     }

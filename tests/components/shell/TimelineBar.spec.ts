@@ -4,8 +4,8 @@
 // joint begin their preview only on the first change, mechanism and datum keep
 // theirs in place, a new sketch has no sketch id yet.
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ref } from "vue";
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
+import { nextTick, ref } from "vue";
 import { mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import TimelineBar from "../../../src/components/shell/TimelineBar.vue";
@@ -16,10 +16,15 @@ import { useTimelineStore } from "../../../src/stores/timeline";
 import { useSelectionStore } from "../../../src/stores/selection";
 import type { Engine } from "../../../src/app/engine";
 import { contextMenu, type CtxItem } from "../../../src/ui/menu";
+import { announce } from "../../../src/ui/announce";
 
 vi.mock("../../../src/ui/menu", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../src/ui/menu")>()),
   contextMenu: vi.fn(),
+}));
+vi.mock("../../../src/ui/announce", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../src/ui/announce")>()),
+  announce: vi.fn(),
 }));
 vi.mock("../../../src/composables/useSelectionOffers", () => ({
   useSelectionOffers: () => ({ counts: ref({}) }),
@@ -69,8 +74,12 @@ interface Opts {
   regions?: string[];
   /** features the last build failed */
   failed?: string[];
+  /** features that built with something to say: id -> reason */
+  notes?: Record<string, string>;
   /** the saved rollback marker, 6 (after every feature) when left out */
   rollback?: number;
+  /** mounted into the document, so focus moves */
+  attach?: boolean;
 }
 
 function mountBar(o: Opts = {}) {
@@ -159,7 +168,13 @@ function mountBar(o: Opts = {}) {
       removeFeatures: (ids: string[]) => log.push(`remove:${ids.join(",")}`),
       rollbackIndex: o.rollback ?? 6,
       buildState: {
-        result: o.failed ? { featureErrors: o.failed.map((id) => ({ feature_id: id, message: "failed" })) } : null,
+        result:
+          o.failed || o.notes
+            ? {
+                featureErrors: (o.failed ?? []).map((id) => ({ feature_id: id, message: "failed" })),
+                diagnostics: Object.entries(o.notes ?? {}).map(([feature_id, reason]) => ({ feature_id, reason })),
+              }
+            : null,
         building: false,
         errorFeatureId: null,
       },
@@ -169,6 +184,16 @@ function mountBar(o: Opts = {}) {
       },
       renameFeature: (id: string, name: string) => log.push(`rename:${id}:${name}`),
       setRollback: (i: number) => log.push(`rollback:${i}`),
+      moveFeature: (id: string, to: number) => {
+        log.push(`move:${id}:${to}`);
+        const list = (e.store.document as unknown as { features: { id: string }[] }).features;
+        const [f] = list.splice(
+          list.findIndex((x) => x.id === id),
+          1,
+        );
+        list.splice(to, 0, f!);
+        e.bridge.docVersion.value++;
+      },
     },
   } as unknown as Engine;
   const sel = createSelection(e);
@@ -182,6 +207,7 @@ function mountBar(o: Opts = {}) {
     onRepick: () => {},
   });
   const w = mount(TimelineBar, {
+    ...(o.attach ? { attachTo: document.body } : {}),
     global: { provide: { [ENGINE as symbol]: e }, stubs: { FeatureProperties: true, Icon: true } },
   });
   const chip = (id: string) => w.get(`.timeline-node[data-id="${id}"]`);
@@ -333,29 +359,73 @@ describe("an import's chip", () => {
     expect(m.chip("i2").attributes("title")).not.toContain("File:");
   });
 
-  it("reads the file name after the chip's name too, since a screen reader skips the tooltip", () => {
+  it("reads the file name in the chip's description too, since a screen reader skips the tooltip", () => {
     const m = mountBar({ features: [imp("i1", "gear-box", { nodes }), imp("i2", "gear-box")] });
-    expect(m.chip("i1").find(".sr-only").text()).toBe(", file: gear-box");
-    expect(m.chip("i2").find(".sr-only").exists()).toBe(false);
+    expect(said(m, "i1")).toBe("Import, step 1 of 2, file: gear-box");
+    expect(said(m, "i2")).toBe("Import, step 2 of 2");
   });
 });
 
-describe("a chip's state in words", () => {
-  const said = (m: ReturnType<typeof mountBar>, id: string) => m.chip(id).find(".sr-only");
+/** The text of the description a chip points at. */
+function said(m: ReturnType<typeof mountBar>, id: string) {
+  const ref = m.chip(id).attributes("aria-describedby");
+  return ref === undefined ? undefined : m.w.get(`[id="${ref}"]`).text();
+}
 
-  it("reads a failure, a suppressed step and the rolled back steps after the name", () => {
+describe("a chip's state in words", () => {
+  it("is named by its step and reads its position, a failure, a suppression and a roll back as its description", () => {
     const m = mountBar({ failed: ["ex1"], suppressed: ["rv"], rollback: 4 });
-    expect(said(m, "ex1").text()).toBe(", failed: failed");
-    expect(said(m, "rv").text()).toBe(", suppressed");
-    expect(said(m, "mc").text()).toBe(", rolled back");
-    expect(said(m, "dp").text()).toBe(", rolled back");
-    expect(said(m, "sk").exists()).toBe(false);
-    expect(said(m, "jt").exists()).toBe(false);
+    expect(m.chip("ex1").attributes("aria-label")).toBe(m.chip("ex1").get(".t-name").text());
+    expect(said(m, "sk")).toBe("step 1 of 6");
+    expect(said(m, "ex1")).toBe("step 2 of 6, failed: failed");
+    expect(said(m, "rv")).toBe("step 3 of 6, suppressed");
+    expect(said(m, "jt")).toBe("step 4 of 6");
+    expect(said(m, "mc")).toBe("step 5 of 6, rolled back");
+    expect(said(m, "dp")).toBe("step 6 of 6, rolled back");
+  });
+
+  it("reads a note as a warning and a picked step as selected", async () => {
+    const m = mountBar({ notes: { jt: "no faces moved" } });
+    expect(said(m, "jt")).toBe("step 4 of 6, warning: no faces moved");
+    await m.chip("rv").trigger("click");
+    expect(said(m, "rv")).toBe("step 3 of 6, selected");
+    expect(said(m, "jt")).toBe("step 4 of 6, warning: no faces moved");
+  });
+
+  it("draws a corner glyph whose shape tells a failure from a warning, and none on a clean step", () => {
+    const m = mountBar({ failed: ["ex1"], notes: { jt: "no faces moved" } });
+    const flag = (id: string) =>
+      m
+        .chip(id)
+        .findAll(".t-flag > *")
+        .map((i) => i.attributes("name"));
+    expect(flag("ex1")).toEqual(["error"]);
+    expect(flag("jt")).toEqual(["warning"]);
+    expect(flag("sk")).toEqual([]);
+    expect(m.chip("ex1").get(".t-flag").attributes("aria-hidden")).toBe("true");
+  });
+
+  it("reads the kind of a step that carries a name of its own", () => {
+    const ext = (id: string, name?: string) => ({ id, type: "extrude", sketch: "s", distance: 1, name });
+    const m = mountBar({ features: [ext("a", "Lid"), ext("b"), ext("c", "Extrude top")] });
+    expect(m.chip("a").attributes("aria-label")).toBe("Lid");
+    expect(said(m, "a")).toBe("Extrude, step 1 of 3");
+    expect(said(m, "b")).toBe("step 2 of 3");
+    expect(said(m, "c")).toBe("step 3 of 3");
   });
 
   it("reads a step whose Active when condition is 0 as switched off", () => {
     const m = mountBar({ features: [{ id: "a", type: "sketch", plane: "XY", entities: [], activeWhen: 0 }] });
-    expect(said(m, "a").text()).toBe(", switched off");
+    expect(said(m, "a")).toBe("step 1 of 1, switched off");
+  });
+
+  it("marks the step the model is built up to as the current step, and none when all is rolled back", () => {
+    const current = (m: ReturnType<typeof mountBar>) =>
+      ["sk", "ex1", "rv", "jt", "mc", "dp"].map((id) => m.chip(id).attributes("aria-current") ?? "");
+    expect(current(mountBar({ rollback: 3 }))).toEqual(["", "", "step", "", "", ""]);
+    expect(current(mountBar())).toEqual(["", "", "", "", "", "step"]);
+    expect(current(mountBar({ rollback: 0 }))).toEqual(["", "", "", "", "", ""]);
+    expect(current(mountBar({ rollback: 6, preview: { id: "ex1" } }))).toEqual(["", "step", "", "", "", ""]);
   });
 });
 
@@ -697,5 +767,323 @@ describe("History's head toggles", () => {
     } finally {
       scroll.mockRestore();
     }
+  });
+});
+
+describe("History steps by keys", () => {
+  const ids = ["sk", "ex1", "rv", "jt", "mc", "dp"];
+  const mounted: ReturnType<typeof mountBar>[] = [];
+  afterEach(() => {
+    for (const m of mounted.splice(0)) m.w.unmount();
+  });
+  // Vue skips a handler for an event first seen in the ms it was attached.
+  const open = async (o: Opts = {}) => {
+    const m = mountBar({ ...o, attach: true });
+    mounted.push(m);
+    await new Promise((r) => setTimeout(r, 2));
+    return m;
+  };
+  const el = (m: ReturnType<typeof mountBar>, id: string) => m.chip(id).element as HTMLElement;
+  const focused = () => (document.activeElement as HTMLElement | null)?.dataset.id;
+  const press = (key: string, init: KeyboardEventInit = {}) => {
+    const e = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...init });
+    (document.activeElement ?? document.body).dispatchEvent(e);
+    return e;
+  };
+  const lit = (m: ReturnType<typeof mountBar>) => ids.map((id) => m.chip(id).classes("selected"));
+
+  it("is a list named Steps of buttons with one Tab stop, on the last step built", async () => {
+    const m = await open({ rollback: 3, ops: ["import"] });
+    const track = m.w.get(".timeline-track");
+    expect(track.attributes("role")).toBe("list");
+    expect(track.attributes("aria-label")).toBe("Steps");
+    expect(m.w.findAll(".timeline-item").map((x) => x.attributes("role"))).toEqual(ids.map(() => "listitem"));
+    expect(m.w.get(".timeline-node.running").attributes("role")).toBe("listitem");
+    expect(ids.map((id) => m.chip(id).attributes("role"))).toEqual(ids.map(() => "button"));
+    expect(ids.map((id) => m.chip(id).attributes("tabindex"))).toEqual(["-1", "-1", "0", "-1", "-1", "-1"]);
+    await m.chip("jt").trigger("click");
+    expect(m.chip("jt").attributes("tabindex")).toBe("0");
+  });
+
+  it("names no list while the empty line shows", async () => {
+    const m = await open({ features: [] });
+    expect(m.w.get(".timeline-track").attributes("role")).toBeUndefined();
+  });
+
+  it("walks the steps with the arrows, Home and End, stops at the ends and keeps the keys from the window", async () => {
+    const m = await open();
+    const heard = vi.fn();
+    window.addEventListener("keydown", heard);
+    el(m, "ex1").focus();
+    press("ArrowDown");
+    expect(focused()).toBe("rv");
+    press("ArrowRight");
+    expect(focused()).toBe("jt");
+    press("ArrowUp");
+    press("ArrowLeft");
+    expect(focused()).toBe("ex1");
+    press("Home");
+    expect(focused()).toBe("sk");
+    press("ArrowUp");
+    expect(focused()).toBe("sk");
+    press("End");
+    expect(focused()).toBe("dp");
+    press("ArrowDown");
+    expect(focused()).toBe("dp");
+    expect(heard).not.toHaveBeenCalled();
+    window.removeEventListener("keydown", heard);
+    await m.w.vm.$nextTick();
+    expect(m.chip("dp").attributes("tabindex")).toBe("0");
+  });
+
+  it("Space picks a step and folds it again, Shift+Space takes a run", async () => {
+    const m = await open();
+    el(m, "rv").focus();
+    press(" ");
+    await m.w.vm.$nextTick();
+    expect(lit(m)).toEqual([false, false, true, false, false, false]);
+    expect(m.w.findAll(".timeline-props")).toHaveLength(1);
+    press(" ");
+    await m.w.vm.$nextTick();
+    expect(m.w.findAll(".timeline-props")).toHaveLength(0);
+    press(" ");
+    el(m, "mc").focus();
+    press(" ", { shiftKey: true });
+    await m.w.vm.$nextTick();
+    expect(lit(m)).toEqual([false, false, true, true, true, false]);
+  });
+
+  it("Enter edits the focused step, closing an open edit first", async () => {
+    const m = await open({ tool: { name: "extrude", on: "ex1" }, preview: { id: "ex1" } });
+    el(m, "rv").focus();
+    const e = press("Enter");
+    expect(e.defaultPrevented).toBe(true);
+    expect(m.log).toEqual(["cancel:extrude", "startEdit:revolvePitch"]);
+  });
+
+  it("F2 renames the focused step, picked or not, and Enter in the field hands focus back", async () => {
+    const m = await open();
+    await m.chip("sk").trigger("click");
+    el(m, "jt").focus();
+    press("F2");
+    await m.w.vm.$nextTick();
+    await m.w.vm.$nextTick();
+    const field = m.chip("jt").find(".t-rename input");
+    expect(field.exists()).toBe(true);
+    expect(m.chip("jt").attributes("role")).toBeUndefined();
+    expect(document.activeElement).toBe(field.element);
+    press("ArrowDown");
+    expect(m.chip("jt").find(".t-rename input").exists()).toBe(true);
+    (field.element as HTMLInputElement).value = "Hinge";
+    await field.trigger("input");
+    await new Promise((r) => setTimeout(r, 2));
+    press("Enter");
+    await m.w.vm.$nextTick();
+    await m.w.vm.$nextTick();
+    expect(m.log).toContain("rename:jt:Hinge");
+    expect(focused()).toBe("jt");
+    expect(m.chip("jt").attributes("role")).toBe("button");
+  });
+
+  it.each([
+    ["Shift+F10", { key: "F10", shiftKey: true }],
+    ["the Menu key", { key: "ContextMenu" }],
+  ])(
+    "%s opens the step's menu under it, and the browser's own contextmenu after it opens no second",
+    async (_, init) => {
+      const m = await open();
+      vi.mocked(contextMenu).mockClear();
+      el(m, "ex1").focus();
+      const e = press(init.key, init);
+      expect(e.defaultPrevented).toBe(true);
+      expect(vi.mocked(contextMenu)).toHaveBeenCalledTimes(1);
+      const [x, y, items] = vi.mocked(contextMenu).mock.calls[0]!;
+      const r = el(m, "ex1").getBoundingClientRect();
+      expect([x, y]).toEqual([r.left + 24, r.bottom]);
+      expect((items as CtxItem[]).map((i) => i.label)).toContain("Rename");
+      await m.chip("ex1").trigger("contextmenu");
+      expect(vi.mocked(contextMenu)).toHaveBeenCalledTimes(1);
+      await m.chip("ex1").trigger("contextmenu");
+      expect(vi.mocked(contextMenu)).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it("Alt with an arrow moves the focused step past its neighbour, says where it went and keeps focus on it", async () => {
+    const m = await open();
+    vi.mocked(announce).mockClear();
+    const heard = vi.fn();
+    window.addEventListener("keydown", heard);
+    el(m, "rv").focus();
+    const e = press("ArrowLeft", { altKey: true });
+    await m.w.vm.$nextTick();
+    expect(e.defaultPrevented).toBe(true);
+    expect(focused()).toBe("rv");
+    press("ArrowDown", { altKey: true });
+    await m.w.vm.$nextTick();
+    press("ArrowRight", { altKey: true });
+    await m.w.vm.$nextTick();
+    press("ArrowUp", { altKey: true });
+    await m.w.vm.$nextTick();
+    window.removeEventListener("keydown", heard);
+    expect(heard).not.toHaveBeenCalled();
+    expect(m.log.filter((l) => l.startsWith("move:"))).toEqual(["move:rv:1", "move:rv:2", "move:rv:3", "move:rv:2"]);
+    expect(vi.mocked(announce).mock.calls.map((c) => c[0])).toEqual([
+      "Moved Revolve before Extrude",
+      "Moved Revolve after Extrude",
+      "Moved Revolve after Joint",
+      "Moved Revolve before Joint",
+    ]);
+    expect(m.w.findAll(".timeline-node[data-id]").map((x) => x.attributes("data-id"))).toEqual(ids);
+    expect(focused()).toBe("rv");
+    expect(m.chip("rv").attributes("tabindex")).toBe("0");
+  });
+
+  it("says a step at either end is already first or last and moves nothing", async () => {
+    const m = await open();
+    vi.mocked(announce).mockClear();
+    el(m, "sk").focus();
+    press("ArrowLeft", { altKey: true });
+    el(m, "dp").focus();
+    press("ArrowRight", { altKey: true });
+    expect(m.log.filter((l) => l.startsWith("move:"))).toEqual([]);
+    expect(vi.mocked(announce).mock.calls.map((c) => c[0])).toEqual([
+      "Sketch is already the first step",
+      "Datum Plane is already the last step",
+    ]);
+  });
+
+  it("moves a step past the next one Related to Selection shows, not one it hides", async () => {
+    localStorage.removeItem("fundacad.historyRelated");
+    const feats = [
+      { id: "sk", type: "sketch", plane: "XY", entities: [] },
+      { id: "jt", type: "joint" },
+      { id: "ex1", type: "extrude", sketch: "sk", distance: 2 },
+    ];
+    const m = await open({ features: feats, regions: ["sk"] });
+    expect(m.w.get('.timeline-item[data-feature="jt"]').isVisible()).toBe(false);
+    vi.mocked(announce).mockClear();
+    el(m, "ex1").focus();
+    press("ArrowLeft", { altKey: true });
+    expect(m.log.filter((l) => l.startsWith("move:"))).toEqual(["move:ex1:0"]);
+    expect(vi.mocked(announce)).toHaveBeenCalledWith("Moved Extrude before Sketch");
+  });
+
+  it("lets a press outside the History take focus off a clicked step", async () => {
+    const m = await open();
+    el(m, "rv").focus();
+    document.body.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    expect(focused()).toBeUndefined();
+    el(m, "rv").focus();
+    el(m, "jt").dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    expect(focused()).toBe("rv");
+  });
+});
+
+describe("History's rollback slider", () => {
+  const mounted: ReturnType<typeof mountBar>[] = [];
+  afterEach(() => {
+    for (const m of mounted.splice(0)) m.w.unmount();
+  });
+  const open = async (o: Opts = {}) => {
+    const m = mountBar({ ...o, attach: true });
+    mounted.push(m);
+    await new Promise((r) => setTimeout(r, 2));
+    return m;
+  };
+  const range = (m: ReturnType<typeof mountBar>) => m.w.get(".tl-rollback input").element as HTMLInputElement;
+  const press = (m: ReturnType<typeof mountBar>, key: string) => {
+    const e = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });
+    let reached = false;
+    const seen = () => (reached = true);
+    window.addEventListener("keydown", seen);
+    range(m).dispatchEvent(e);
+    window.removeEventListener("keydown", seen);
+    return reached;
+  };
+
+  it("is a range named Rollback over every step, read as the step it sits after", async () => {
+    const m = await open({ rollback: 3 });
+    const r = range(m);
+    expect([r.type, r.min, r.max, r.step, r.value]).toEqual(["range", "0", "6", "1", "3"]);
+    expect(document.getElementById(r.getAttribute("aria-labelledby")!)?.textContent).toBe("Rollback");
+    expect(r.getAttribute("aria-valuetext")).toBe(`after ${m.chip("rv").get(".t-name").text()}, step 3 of 6`);
+    const start = await open({ rollback: 0 });
+    expect(range(start).getAttribute("aria-valuetext")).toBe(
+      `at the start, before ${start.chip("sk").get(".t-name").text()}`,
+    );
+    expect(m.w.findAll(".timeline-marker").map((x) => x.attributes("aria-hidden"))).toEqual(["true"]);
+  });
+
+  it("moves the saved marker one step a key and keeps those keys from the window", async () => {
+    const m = await open({ rollback: 3 });
+    range(m).focus();
+    expect(press(m, "ArrowLeft")).toBe(false);
+    expect(press(m, "Home")).toBe(false);
+    expect(press(m, "End")).toBe(false);
+    expect(m.log.filter((l) => l.startsWith("rollback:"))).toEqual(["rollback:2", "rollback:0", "rollback:6"]);
+    expect(press(m, "Escape")).toBe(true);
+  });
+
+  it("calls setRollback on the store itself, as the real store's method reads this", async () => {
+    const m = await open({ rollback: 3 });
+    const store = m.e.store as unknown as { setRollback: (i: number) => void };
+    const calls: unknown[] = [];
+    store.setRollback = function (this: unknown, i: number) {
+      calls.push(this === store ? i : "unbound");
+    };
+    range(m).focus();
+    press(m, "ArrowLeft");
+    expect(calls).toEqual([2]);
+  });
+
+  it("sits just before the steps, so the marker draws its focus, and keeps the moved marker in view", async () => {
+    const m = await open({ rollback: 3 });
+    expect(m.w.get(".tl-rollback").element.nextElementSibling?.classList.contains("timeline-scroll")).toBe(true);
+    const seen = vi.fn();
+    const was = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = seen;
+    onTestFinished(() => void (Element.prototype.scrollIntoView = was));
+    const roll = async (k: number) => {
+      (m.e.store as unknown as { rollbackIndex: number }).rollbackIndex = k;
+      m.e.bridge.docVersion.value++;
+      await nextTick();
+      await nextTick();
+    };
+    await roll(2);
+    expect(seen).not.toHaveBeenCalled();
+    range(m).focus();
+    await roll(1);
+    expect(seen).toHaveBeenCalledTimes(1);
+    expect(seen.mock.contexts[0]).toBe(m.w.get(".timeline-marker").element);
+  });
+
+  it("stands down during an edit, on the edited step, as the transport does", async () => {
+    const m = await open({ rollback: 6, preview: { id: "ex1" } });
+    expect(range(m).value).toBe("2");
+    expect(range(m).getAttribute("aria-disabled")).toBe("true");
+    range(m).focus();
+    press(m, "ArrowLeft");
+    expect(m.log.filter((l) => l.startsWith("rollback:"))).toEqual([]);
+  });
+
+  it("is left out while the empty line shows", async () => {
+    const m = await open({ features: [] });
+    expect(m.w.find(".tl-rollback").exists()).toBe(false);
+  });
+});
+
+describe("the rollback marker over filtered out rows", () => {
+  const isEnd = (m: ReturnType<typeof mountBar>) => m.w.get(".timeline-marker").classes("is-end");
+
+  it("is the visual end of the list when Related to Selection hides every row after it", () => {
+    expect(isEnd(mountBar({ regions: ["sk"], rollback: 3 }))).toBe(true);
+  });
+
+  it("is not while a row after it shows, or with nothing filtered", async () => {
+    expect(isEnd(mountBar({ regions: ["sk"], rollback: 1 }))).toBe(false);
+    expect(isEnd(mountBar({ rollback: 3 }))).toBe(false);
+    const m = mountBar({ regions: ["sk"], rollback: 3 });
+    await m.w.get('[data-testid="history-related"]').trigger("click");
+    expect(isEnd(m)).toBe(false);
   });
 });

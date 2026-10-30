@@ -377,6 +377,19 @@ describe("move gizmo raised by a body selection", () => {
     expect(again.defaultPrevented).toBe(false);
   });
 
+  it("claims the raised gizmo from the M key on a Cyrillic layout too", () => {
+    const { vp } = fakeViewport();
+    const tool = new MoveTool(vp, fakeStore().store);
+    tool.startTarget(probe([0, 0, 0]).target, () => {});
+    tool.markAmbient();
+    const field = document.querySelector<HTMLInputElement>(".dim-input input")!;
+    field.focus();
+    const m = new KeyboardEvent("keydown", { key: "ь", code: "KeyM", bubbles: true, cancelable: true });
+    field.dispatchEvent(m);
+    expect(m.defaultPrevented).toBe(true);
+    expect(tool.ambient).toBe(false);
+  });
+
   it("hides its value row while the handles overlay is off, and shows it again", () => {
     const { vp, setHandles } = fakeViewport();
     const tool = new MoveTool(vp, fakeStore().store);

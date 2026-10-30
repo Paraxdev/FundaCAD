@@ -4,12 +4,14 @@ import { chooseViewMode, nextViewMode, requestPathTraced, toggleCleanView, type 
 import { contributedAction } from "../plugins/contrib";
 import { openParamsDialog } from "../ui/paramsDialog";
 import { toggleShortcutHUD } from "../input/shortcuts";
+import { cycleRegion, goToRegion } from "../ui/regions";
 import { choose } from "../ui/choice";
 import { endPickSession } from "../ui/treePick";
-import { SKETCH_TOOLS, SKETCH_MODIFY, NON_REPEATABLE } from "./actionTables";
+import { SKETCH_TOOLS, SKETCH_MODIFY, NON_REPEATABLE, GO_REGIONS } from "./actionTables";
 import { booleanOpOfAction } from "../features/booleanOps";
 import { useDialogStore } from "../stores/dialogs";
 import { useUiStore } from "../stores/ui";
+import { useShellStore } from "../stores/shell";
 import { useSketchPaletteStore } from "../stores/sketchPalette";
 import type { Engine } from "./engine";
 import { saveWork, saveWorkAs } from "./documentActions";
@@ -113,6 +115,16 @@ export function createActions(e: Engine): (action: string) => void {
     if (action === "preferences") return void useDialogStore().openPreferences();
     if (action === "accessibility-settings") return void useDialogStore().openPreferences("access");
     if (action === "manual") return void openExternal(MANUAL_URL);
+    // Moving focus leaves a sketch open and a pick waiting.
+    if (action === "region-next" || action === "region-prev")
+      return void cycleRegion(action === "region-next" ? 1 : -1);
+    const go = GO_REGIONS[action];
+    if (go) {
+      if (go === "items") useShellStore().setItems(true);
+      if (go === "history") useShellStore().setHistory(true);
+      // After the palette has closed and handed focus back, and a pane just shown has mounted.
+      return void setTimeout(() => goToRegion(go));
+    }
     // The arrow keys turn the view and nothing else: they leave a sketch open,
     // and a tool that reads the arrows itself (the pattern count) keeps them.
     const step = /^view-step-(left|right|up|down)(-fine)?$/.exec(action);

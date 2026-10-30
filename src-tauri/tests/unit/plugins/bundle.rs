@@ -2,8 +2,8 @@ use std::io::Write;
 use std::path::PathBuf;
 
 use fundacad_lib::plugins::bundle::{
-    allowed_bundle_url, extract_into, grants_match, is_official_url, now_secs, safe_entry, safe_id, sha256_hex,
-    Consented,
+    allowed_bundle_url, bundle_target, extract_into, grants_match, is_official_url, now_secs, official_label,
+    official_url, safe_entry, safe_id, sha256_hex, Consented, BUNDLE_PREFIX,
 };
 
 /// An id becomes a directory under the plugins root, so every refusal below is a path guard.
@@ -166,6 +166,125 @@ fn official_is_a_label_and_not_a_permission() {
     let third_party = "https://plugins.example.com/x.zip";
     assert!(allowed_bundle_url(third_party));
     assert!(!is_official_url(third_party));
+}
+
+#[test]
+fn official_holds_only_for_a_tag_and_asset_the_parser_leaves_as_written() {
+    for ours in [
+        "https://github.com/Paraxdev/fundacad/releases/download/beta/plugin-mcp.zip",
+        "https://github.com/Paraxdev/fundacad/releases/download/v1.0.493/plugin-FundaCAD.Screws.zip",
+    ] {
+        assert!(is_official_url(ours), "ours but refused: {ours}");
+        assert_eq!(official_url(ours).map(|u| u.as_str().to_string()).as_deref(), Some(ours));
+    }
+    assert!(is_official_url(&format!("{BUNDLE_PREFIX}beta/x.zip")));
+
+    let base = "https://github.com/Paraxdev/fundacad/releases/download/";
+    let tails = [
+        "%2e%2e/%2e%2e/%2e%2e/someone/else/releases/download/beta/x.zip",
+        "%2E%2E/%2E%2E/%2E%2E/someone/else/releases/download/beta/x.zip",
+        "%2e%2E/%2E%2e/%2e%2E/someone/else/releases/download/beta/x.zip",
+        ".%2e/.%2E/.%2e/someone/else/releases/download/beta/x.zip",
+        "%2e./%2E./%2e./someone/else/releases/download/beta/x.zip",
+        "%2e/beta/x.zip",
+        "%2E/beta/x.zip",
+        "./beta/x.zip",
+        "beta/./x.zip",
+        "beta/%2e",
+        "beta/x%2ezip",
+        "beta/x.zip?x",
+        "beta/x.zip?",
+        "beta/x.zip#x",
+        "beta/x.zip#",
+        "beta/x.zip/",
+        "beta/sub/x.zip",
+        "beta",
+        "beta/",
+        "/x.zip",
+        "beta//x.zip",
+        "beta/x\t.zip",
+    ];
+    for tail in tails {
+        let url = format!("{base}{tail}");
+        assert!(!is_official_url(&url), "wrongly ours: {url}");
+        assert!(official_url(&url).is_none(), "parsed as ours: {url}");
+    }
+
+    let tail = "beta/x.zip";
+    for prefix in [
+        "https://github.com:443/Paraxdev/fundacad/releases/download/",
+        "https://github.com:8443/Paraxdev/fundacad/releases/download/",
+        "https://GitHub.com/Paraxdev/fundacad/releases/download/",
+        "https://GITHUB.COM/Paraxdev/fundacad/releases/download/",
+        "https://github.com./Paraxdev/fundacad/releases/download/",
+        "https://user@github.com/Paraxdev/fundacad/releases/download/",
+        "https://user:pw@github.com/Paraxdev/fundacad/releases/download/",
+        "https://:pw@github.com/Paraxdev/fundacad/releases/download/",
+        "HTTPS://github.com/Paraxdev/fundacad/releases/download/",
+        "https:github.com/Paraxdev/fundacad/releases/download/",
+        "https://github.com\\Paraxdev/fundacad/releases/download/",
+        "https://github.com/paraxdev/fundacad/releases/download/",
+        "https://github.com/Paraxdev/fundacad/releases/download/../download/",
+        " https://github.com/Paraxdev/fundacad/releases/download/",
+    ] {
+        let url = format!("{prefix}{tail}");
+        assert!(!is_official_url(&url), "wrongly ours: {url}");
+    }
+}
+
+/// What is fetched is what gets stored as the source and labelled, even where the parser rewrites the text it was given.
+#[test]
+fn the_url_fetched_is_the_one_stored_and_labelled() {
+    let ours = format!("{BUNDLE_PREFIX}beta/plugin-mcp.zip");
+    let target = bundle_target(&ours).expect("ours is fetchable");
+    assert_eq!(target.url.as_str(), ours);
+    assert!(target.official);
+
+    let fetched = "https://github.com/Paraxdev/fundacad/releases/download/beta/x.zip";
+    let elsewhere = "https://github.com/someone/else/releases/download/beta/x.zip";
+    let base = "https://github.com/Paraxdev/fundacad/releases/download/";
+    for (raw, want) in [
+        ("https://GitHub.com/Paraxdev/fundacad/releases/download/beta/x.zip".to_string(), fetched),
+        ("https://GITHUB.COM/Paraxdev/fundacad/releases/download/beta/x.zip".to_string(), fetched),
+        ("https://github.com:443/Paraxdev/fundacad/releases/download/beta/x.zip".to_string(), fetched),
+        (format!("{base}%2e%2e/%2e%2e/%2e%2e/%2e%2e/someone/else/releases/download/beta/x.zip"), elsewhere),
+        (format!("{base}%2E%2E/%2E%2E/%2E%2E/%2E%2E/someone/else/releases/download/beta/x.zip"), elsewhere),
+        (format!("{base}.%2e/%2e./.%2E/%2E./someone/else/releases/download/beta/x.zip"), elsewhere),
+    ] {
+        let target = bundle_target(&raw).unwrap_or_else(|e| panic!("{raw}: {e}"));
+        assert_eq!(target.url.as_str(), want, "fetched from {raw}");
+        assert_eq!(target.official, want == fetched, "labelled from {raw}");
+        // The window installs with the source inspect handed back, so both screens must agree on the label.
+        let installed = bundle_target(target.url.as_str()).unwrap();
+        assert_eq!((installed.url, installed.official), (target.url, target.official), "relabelled: {raw}");
+    }
+
+    let third_party = "https://plugins.example.com:8443/a/b.zip?token=abc";
+    let target = bundle_target(third_party).expect("a self hosted URL is fetchable");
+    assert_eq!(target.url.as_str(), third_party);
+    assert!(!target.official);
+
+    for bad in [
+        "http://github.com/Paraxdev/fundacad/releases/download/beta/x.zip",
+        "https://github.com@evil.example.com/x.zip",
+    ] {
+        assert!(bundle_target(bad).is_err(), "fetchable: {bad}");
+    }
+}
+
+#[test]
+fn app_side_code_from_a_release_is_official_only_for_a_shipped_id() {
+    for kind in ["builtin", "process"] {
+        assert!(official_label(true, kind, "FundaCAD.Printing"), "{kind}");
+        assert!(!official_label(true, kind, "FundaCAD.Unknown"), "{kind}");
+        assert!(!official_label(true, kind, "fundacad.printing"), "{kind}");
+        assert!(!official_label(true, kind, ""), "{kind}");
+        assert!(!official_label(false, kind, "FundaCAD.Printing"), "{kind}");
+    }
+    for kind in ["compute", "panel"] {
+        assert!(official_label(true, kind, "FundaCAD.Unknown"), "{kind}");
+        assert!(!official_label(false, kind, "FundaCAD.Printing"), "{kind}");
+    }
 }
 
 #[test]

@@ -46,6 +46,8 @@ modules:
       - -DCMAKE_POSITION_INDEPENDENT_CODE=ON
       - -DBUILD_PATCH=/run/build/occt/occt-patch
       - -DBUILD_LIBRARY_TYPE=Static
+      - -DBUILD_RELEASE_DISABLE_EXCEPTIONS=OFF
+      - -DBUILD_CPP_STANDARD=C++20
       - -DBUILD_MODULE_ApplicationFramework=FALSE
       - -DBUILD_MODULE_Draw=FALSE
       - -DUSE_D3D=FALSE
@@ -65,6 +67,11 @@ modules:
       - -DUSE_XLIB=FALSE
       - -DINSTALL_DIR_LIB=lib
       - -DINSTALL_DIR_INCLUDE=include
+    # The stamp opencascade-sys leaves on its own kernels: without it the
+    # kernel counts as built before the range checks and is rebuilt, which
+    # cannot happen at /app/occt.
+    post-install:
+      - install -Dm644 /dev/null /app/occt/.fundacad/checked-reads
     # Linked statically into the binary, nothing of it ships.
     cleanup:
       - /occt

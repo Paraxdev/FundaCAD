@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { fmtKeys } from "../../input/platform";
-import { computed, nextTick, onMounted, onUnmounted, ref, useTemplateRef, watch } from "vue";
+import { chordsOf } from "../../input/platform";
+import { computed, nextTick, onMounted, onUnmounted, ref, useId, useTemplateRef, watch } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { useDocValue, useBuildValue } from "../../app/useDoc";
 import { pickedFeatureCount, useSelectionStore } from "../../stores/selection";
@@ -11,8 +11,12 @@ import Icon from "./Icon.vue";
 import Button from "../ui/Button.vue";
 import Chip from "../ui/Chip.vue";
 import IconButton from "../ui/IconButton.vue";
+import Slider from "../ui/Slider.vue";
 import TextField from "../ui/TextField.vue";
 import { contextMenu } from "../../ui/menu";
+import { announce } from "../../ui/announce";
+import { useRovingFocus } from "../ui/useRovingFocus";
+import { isMenuKeyEvent } from "../ui/treeContext";
 import {
   buildProgress,
   busyLine,
@@ -233,18 +237,22 @@ function chipTitle(f: { id: string; type: string; name?: string; shown?: string;
   );
 }
 
-// The tooltip and the chip's colour, as words a screen reader reads after the chip's name.
+// The glyph, the tooltip and the chip's colour, as words a screen reader reads after the chip's name.
 const chipStates = computed(() =>
   features.value.map((f, i) => {
     const err = errors.value.get(f.id);
     const note = notes.value.get(f.id);
     const placeholder = placeholders.value.get(f.id);
+    const kind = metaFor(f).label;
     return [
+      f.shown.toLowerCase().includes(kind.toLowerCase()) ? "" : kind,
+      `step ${i + 1} of ${features.value.length}`,
       f.type === "import" && f.name && f.shown !== f.name ? `file: ${f.name}` : "",
-      err ? `failed: ${err}` : note ? `note: ${note}` : "",
+      err ? `failed: ${err}` : note ? `warning: ${note}` : "",
       f.inactive ? "switched off" : suppressed.value.has(f.id) ? "suppressed" : "",
       placeholder !== undefined ? placeholderNote(placeholder) : "",
       i >= rollback.value ? "rolled back" : "",
+      isPicked(f.id) ? "selected" : "",
     ]
       .filter(Boolean)
       .join(", ");
@@ -290,9 +298,11 @@ function hasOwnName(id: string): boolean {
 }
 // One save per edit, as in InlineLabel: the blur of a field that is closing commits again and falls out here.
 let renameOpenId: string | null = null;
-function startRename(id: string) {
+let renameByKeys = false;
+function startRename(id: string, fromKeys = false) {
   renamingId.value = id;
   renameOpenId = id;
+  renameByKeys = fromKeys;
   void nextTick(() => track.value?.querySelector<HTMLInputElement>(".t-rename input")?.focus());
 }
 // The field commits on Enter and blur and reverts on Escape before these run, they only close it.
@@ -304,9 +314,106 @@ function saveRename(name: string) {
 function onRenameFieldKey(e: KeyboardEvent) {
   if (e.key !== "Enter" && e.key !== "Escape") return;
   e.preventDefault();
+  const id = renamingId.value;
   renameOpenId = null;
   renamingId.value = null;
+  // A rename begun from the keys hands focus back to its chip, the closing field would leave it on the body.
+  if (renameByKeys && id) void nextTick(() => chipEl(id)?.focus());
+  renameByKeys = false;
 }
+const CHIP_SELECTOR = ":scope > .timeline-item > .timeline-node";
+const chipEl = (id: string) => track.value?.querySelector<HTMLElement>(`.timeline-node[data-id="${CSS.escape(id)}"]`);
+// One Tab stop for the steps, on the picked step, else the last one built. The side panel draws them as a column, so
+// Up and Down step as well as Left and Right.
+const stepRoving = useRovingFocus({
+  items: () => features.value.map((f) => ({ disabled: filtering.value && !related.value?.has(f.id) })),
+  active: () => {
+    const i = features.value.findIndex((f) => f.id === selection.featureId);
+    return i >= 0 ? i : Math.min(rollback.value, features.value.length) - 1;
+  },
+  container: track,
+  itemSelector: CHIP_SELECTOR,
+  orientation: "both",
+  wrap: false,
+});
+const stateIds = useId();
+const REORDER_KEYS: Record<string, -1 | 1> = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 };
+// A move redraws the chips, which can drop the focused one's focus and leaves the roving stop on its old index.
+let refocus: { id: string; at: number } | null = null;
+watch(
+  features,
+  () => {
+    const r = refocus;
+    refocus = null;
+    if (!r || performance.now() - r.at > 2000) return;
+    const j = features.value.findIndex((f) => f.id === r.id);
+    if (j >= 0) stepRoving.focus(j);
+  },
+  { flush: "post" },
+);
+// Past the next step the list shows, the same index both ways as a drop on that chip.
+function reorderStep(i: number, delta: -1 | 1) {
+  const list = features.value;
+  const f = list[i];
+  if (!f) return;
+  let j = i + delta;
+  while (j >= 0 && j < list.length && filtering.value && !related.value?.has(list[j]!.id)) j += delta;
+  const to = list[j];
+  if (!to) return announce(`${f.shown} is already the ${delta < 0 ? "first" : "last"} step`);
+  refocus = { id: f.id, at: performance.now() };
+  store.moveFeature(f.id, j);
+  announce(`Moved ${f.shown} ${delta < 0 ? "before" : "after"} ${to.shown}`);
+}
+let menuKeyAt = -Infinity;
+function claim(e: KeyboardEvent) {
+  e.preventDefault();
+  e.stopPropagation();
+}
+// Space is a click, Shift+Space a Shift click for a run, Enter the double click that edits, Alt with an arrow a move.
+function onChipKey(e: KeyboardEvent, id: string, i: number) {
+  if (e.target !== e.currentTarget) return;
+  if (isMenuKeyEvent(e)) {
+    claim(e);
+    menuKeyAt = performance.now();
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    openMenu(new MouseEvent("contextmenu", { clientX: r.left + 24, clientY: r.bottom }), id, i, true);
+    return;
+  }
+  const delta = e.altKey && !e.ctrlKey && !e.metaKey ? REORDER_KEYS[e.key] : undefined;
+  if (delta) {
+    claim(e);
+    reorderStep(i, delta);
+    return;
+  }
+  if (e.ctrlKey || e.altKey || e.metaKey) return;
+  if (e.key === " ") {
+    claim(e);
+    onChipClick(id, new MouseEvent("click", { shiftKey: e.shiftKey, detail: 1 }));
+  } else if (e.key === "Enter") {
+    claim(e);
+    onChipDblclick(id);
+  } else if (e.key === "F2") {
+    claim(e);
+    startRename(id, true);
+  } else {
+    stepRoving.onKeydown(e);
+    if (e.defaultPrevented) e.stopPropagation();
+  }
+}
+// Chromium and WebKitGTK follow the Menu key with a contextmenu event of their own, the menu is open already.
+function onChipContextmenu(e: MouseEvent, id: string, i: number) {
+  if (performance.now() - menuKeyAt > 1000) return openMenu(e, id, i);
+  menuKeyAt = -Infinity;
+  e.preventDefault();
+}
+// The viewport keeps focus where it was on a press, so a clicked chip would go on taking the arrows meant for the model.
+function onDocPointerdown(e: PointerEvent) {
+  const a = document.activeElement;
+  const t = track.value;
+  if (!(a instanceof HTMLElement) || !t || a.parentElement?.parentElement !== t || !a.matches(".timeline-node")) return;
+  if (!(e.target instanceof Node && t.contains(e.target))) a.blur();
+}
+
 function onRenameKey(e: KeyboardEvent) {
   if (e.key !== "F2" || renamingId.value || !selection.featureId || several.value) return;
   const t = e.target as HTMLElement | null;
@@ -319,12 +426,14 @@ function onRenameKey(e: KeyboardEvent) {
 let offEditPreview: (() => void) | null = null;
 onMounted(() => {
   window.addEventListener("keydown", onRenameKey);
+  document.addEventListener("pointerdown", onDocPointerdown, true);
   offEditPreview = store.onEditPreview(() => {
     editTick.value++;
   });
 });
 onUnmounted(() => {
   window.removeEventListener("keydown", onRenameKey);
+  document.removeEventListener("pointerdown", onDocPointerdown, true);
   offEditPreview?.();
 });
 
@@ -418,6 +527,25 @@ function onMarkerDown(e: PointerEvent) {
   window.addEventListener("pointercancel", cancel);
 }
 
+// The marker by keys: a Rollback range outside the moving chips, so its focus survives every step. setRollback(k) builds
+// features[0..k-1], so k is read as the step it sits after.
+const markerFocus = ref(false);
+function rollbackText(k: number) {
+  const f = features.value;
+  if (!f.length) return "no steps";
+  if (k <= 0) return `at the start, before ${f[0]!.shown}`;
+  return `after ${f[Math.min(k, f.length) - 1]!.shown}, step ${k} of ${f.length}`;
+}
+function onRollbackKey(e: KeyboardEvent) {
+  if (e.defaultPrevented) e.stopPropagation();
+}
+watch(rollback, () => {
+  if (!markerFocus.value) return;
+  void nextTick(() =>
+    track.value?.querySelector(".timeline-marker")?.scrollIntoView?.({ block: "nearest", inline: "nearest" }),
+  );
+});
+
 /** Which gap (0..n) the pointer falls into. The arithmetic, including the track's axis (the strip can sit on the
  *  right), is in ui/trackGaps.ts. */
 function gapIndexAt(ev: PointerEvent): number {
@@ -429,7 +557,7 @@ function gapIndexAt(ev: PointerEvent): number {
   );
 }
 
-function openMenu(e: MouseEvent, id: string, i: number) {
+function openMenu(e: MouseEvent, id: string, i: number, fromKeys = false) {
   e.preventDefault();
   const targets = rowTargets(id, features.value);
   if (targets.length > 1) {
@@ -442,7 +570,7 @@ function openMenu(e: MouseEvent, id: string, i: number) {
   contextMenu(e.clientX, e.clientY, [
     ...repick,
     ...(placeholders.value.has(id) ? [] : [{ label: "Edit", onClick: () => timeline.edit(id) }]),
-    { label: "Rename", shortcut: "F2", onClick: () => startRename(id) },
+    { label: "Rename", shortcut: "F2", onClick: () => startRename(id, fromKeys) },
     ...(linkedPath(id)
       ? [
           {
@@ -533,7 +661,8 @@ function openMultiMenu(e: MouseEvent, ids: string[]) {
         size="md"
         variant="plain"
         :icon-size="14"
-        :tip="fmtKeys('Hide the history (Ctrl+Alt+H)')"
+        tip="Hide the history"
+        :keys="chordsOf('history')"
         @click="shellStore.setHistory(false)"
       />
     </div>
@@ -577,8 +706,29 @@ function openMultiMenu(e: MouseEvent, ids: string[]) {
       />
     </div>
 
+    <Slider
+      v-if="features.length"
+      class="tl-rollback sr-only"
+      label="Rollback"
+      :model-value="rollback"
+      :min="0"
+      :max="features.length"
+      commit="end"
+      :value-text="rollbackText"
+      :disabled="editing"
+      disabled-reason="Finish or cancel the edit to move the rollback"
+      @update:model-value="(v: number) => store.setRollback(v)"
+      @keydown="onRollbackKey"
+      @focusin="markerFocus = true"
+      @focusout="markerFocus = false"
+    />
     <div ref="scroller" class="timeline-scroll" @dragover="onDragOverScroller">
-      <div ref="track" class="timeline-track">
+      <div
+        ref="track"
+        class="timeline-track"
+        :role="showEmpty ? undefined : 'list'"
+        :aria-label="showEmpty ? undefined : 'Steps'"
+      >
         <div v-if="showEmpty" class="timeline-empty">
           Your modeling history will appear here. Start with a Sketch, or drop a STEP, STL or 3MF file.
         </div>
@@ -587,13 +737,20 @@ function openMultiMenu(e: MouseEvent, ids: string[]) {
             <div
               v-if="i === rollback"
               class="timeline-marker"
+              aria-hidden="true"
+              :class="{ 'is-end': filtering && features.slice(i).every((g) => !related?.has(g.id)) }"
               title="Drag to roll the model back / forward"
               @pointerdown="onMarkerDown"
               ><span class="marker-grip"></span
             ></div>
-            <div v-show="!filtering || related?.has(f.id)" class="timeline-item" :data-feature="f.id">
+            <div v-show="!filtering || related?.has(f.id)" role="listitem" class="timeline-item" :data-feature="f.id">
               <div
                 class="timeline-node"
+                :role="renamingId === f.id ? undefined : 'button'"
+                :aria-label="renamingId === f.id ? undefined : f.shown"
+                :aria-describedby="renamingId === f.id ? undefined : `${stateIds}-${i}`"
+                :aria-current="i === rollback - 1 ? 'step' : undefined"
+                :tabindex="stepRoving.tabindex(i)"
                 :data-id="f.id"
                 :class="{
                   selected: isPicked(f.id),
@@ -612,7 +769,9 @@ function openMultiMenu(e: MouseEvent, ids: string[]) {
                 @mousedown="onChipMouseDown"
                 @click="onChipClick(f.id, $event)"
                 @dblclick="onChipDblclick(f.id)"
-                @contextmenu="openMenu($event, f.id, i)"
+                @contextmenu="onChipContextmenu($event, f.id, i)"
+                @keydown="onChipKey($event, f.id, i)"
+                @focus="stepRoving.onFocus(i)"
                 @dragstart="onDragStart(f.id, $event)"
                 @dragover="onDragOver(f.id, $event)"
                 @dragleave="dropTarget = null"
@@ -642,7 +801,11 @@ function openMultiMenu(e: MouseEvent, ids: string[]) {
                   />
                 </span>
                 <span v-else class="t-name">{{ f.shown }}</span>
-                <span v-if="chipStates[i]" class="sr-only">, {{ chipStates[i] }}</span>
+                <span :id="`${stateIds}-${i}`" class="sr-only t-state">{{ chipStates[i] }}</span>
+                <!-- A shape as well as a colour, so a failure and a warning stay apart in greyscale. -->
+                <span v-if="errors.has(f.id) || notes.has(f.id)" class="t-flag" aria-hidden="true">
+                  <Icon :name="errors.has(f.id) ? 'error' : 'warning'" :size="11" />
+                </span>
                 <Icon
                   class="t-caret"
                   :name="selection.featureId === f.id && !several ? 'caretDown' : 'caretRight'"
@@ -658,13 +821,14 @@ function openMultiMenu(e: MouseEvent, ids: string[]) {
           <div
             v-if="rollback >= features.length"
             class="timeline-marker"
+            aria-hidden="true"
             title="Drag to roll the model back / forward"
             @pointerdown="onMarkerDown"
             ><span class="marker-grip"></span
           ></div>
 
           <!-- An import shows here from the moment it starts, not only once its file is read. -->
-          <div v-for="op in rows" :key="op.key" class="timeline-node running" :data-op="op.key">
+          <div v-for="op in rows" :key="op.key" role="listitem" class="timeline-node running" :data-op="op.key">
             <span class="t-build" :title="op.label">{{ op.stage ? `${op.label}, ${op.stage}` : op.label }}</span>
             <Button
               class="t-op-cancel"
@@ -675,7 +839,7 @@ function openMultiMenu(e: MouseEvent, ids: string[]) {
               >Cancel</Button
             >
           </div>
-          <div v-if="building" class="timeline-node building">
+          <div v-if="building" role="listitem" class="timeline-node building">
             <span class="t-build">{{ chip.label }}</span>
             <span class="t-bar"><i :style="{ width: `${chip.pct}%` }"></i></span>
           </div>

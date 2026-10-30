@@ -17,6 +17,6 @@ With no sketch open, L, R, C, A and P start a sketch with Line, Rectangle, Circl
 
 Every way out keeps what you drew.
 
-- Esc backs out one step at a time, and the last press closes the sketch.
-- Exit Sketching on the rail closes it at once.
-- E or Q closes it and starts Extrude or Press/Pull.
+1. Esc backs out one step at a time, and the last press closes the sketch.
+2. Exit Sketching on the rail closes it at once.
+3. E or Q closes it and starts Extrude or Press/Pull.

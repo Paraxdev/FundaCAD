@@ -2,6 +2,7 @@
 
 import { iconElement } from "../../ui/icons";
 import { unitById } from "../../ui/measure";
+import { ariaKeys } from "../../input/platform";
 import { tipText } from "./tip";
 import { swallowDisabled } from "./useDisabled";
 
@@ -110,6 +111,11 @@ export interface UiButtonOptions extends DisabledOptions {
   keys?: string | undefined;
 }
 
+function setKeys(el: HTMLElement, keys: string | undefined) {
+  const aria = ariaKeys(keys);
+  if (aria) el.setAttribute("aria-keyshortcuts", aria);
+}
+
 /** Button.vue as DOM. */
 export function uiButton(o: UiButtonOptions = {}): HTMLButtonElement {
   const b = document.createElement("button");
@@ -126,7 +132,8 @@ export function uiButton(o: UiButtonOptions = {}): HTMLButtonElement {
     text.className = "btn-label";
     text.textContent = o.label;
     b.append(text);
-  } else if (tip) b.setAttribute("aria-label", tip);
+  } else if (o.tip) b.setAttribute("aria-label", o.tip);
+  setKeys(b, o.keys);
   initDisabled(b, tip, o);
   return b;
 }
@@ -152,7 +159,8 @@ export function uiIconButton(o: UiIconButtonOptions): HTMLButtonElement {
   if (o.active !== undefined) setPressed(b, o.active);
   const tip = tipText(o.tip, o.keys)!;
   const badged = o.badge !== undefined && o.badge !== null && o.badge !== "";
-  b.setAttribute("aria-label", badged ? `${tip}, ${o.badge}` : tip);
+  b.setAttribute("aria-label", badged ? `${o.tip}, ${o.badge}` : o.tip);
+  setKeys(b, o.keys);
   b.append(iconElement(o.icon, o.iconSize ?? (size === "lg" ? 20 : 14)));
   if (badged) {
     const badge = document.createElement("span");
@@ -176,6 +184,8 @@ export interface UiUnitChipOptions extends DisabledOptions {
 }
 
 const unitLabel = (id: string) => unitById(id)?.label ?? id;
+/** Each picker chip's own name, which its aria-label carries ahead of the unit it shows, as Select.vue does. */
+const chipNames = new WeakMap<HTMLElement, string>();
 
 /** UnitChip.vue as DOM: a caption span, or with options the closed Select chip trigger. The caller owns the menu
  *  and marks it with setExpanded. */
@@ -192,7 +202,7 @@ export function uiUnitChip(o: UiUnitChipOptions): HTMLElement {
   b.setAttribute("role", "combobox");
   b.className = "ui-unit-chip is-picker ui-select-sm";
   const tip = tipText(o.tip ?? "Unit", o.keys)!;
-  b.setAttribute("aria-label", o.tip ?? "Unit");
+  chipNames.set(b, o.tip ?? "Unit");
   b.setAttribute("aria-haspopup", "listbox");
   b.setAttribute("aria-expanded", "false");
   const value = document.createElement("span");
@@ -211,6 +221,7 @@ export function setChipUnit(chip: HTMLElement, unit: string): void {
   }
   chip.dataset.value = unit;
   chip.querySelector(".select-value")!.textContent = unitLabel(unit);
+  chip.setAttribute("aria-label", `${chipNames.get(chip) ?? "Unit"}, ${unitLabel(unit)}`);
 }
 
 /** A picker trigger's open state, with the id of the list it opened. */

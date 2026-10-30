@@ -15,13 +15,13 @@ A node is a point with three radii, Radius X, Y and Z, so it can be a ball or a 
 
 While the tool is open:
 
-- Alt-drag a node to pull a linked one out of it.
-- Shift-click a node to link it to the picked one.
-- Del removes the picked node.
+1. Alt-drag a node to pull a linked one out of it.
+2. Shift-click a node to link it to the picked one.
+3. Del removes the picked node.
 
 ## Settings
 
-- **Blend**: above 0, rounds the joints where limbs meet.
-- **Operation**: New body, or Join, Cut or Intersect with a body you have.
+1. **Blend**: above 0, rounds the joints where limbs meet.
+2. **Operation**: New body, or Join, Cut or Intersect with a body you have.
 
 Each position, radius and turn is a value in the History card, so a parameter can drive it.

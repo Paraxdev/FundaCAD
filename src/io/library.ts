@@ -43,6 +43,8 @@ export interface DocumentLibrary {
   /** The cached preview of each path, null where there is none or the file changed since. At most 48 per call. */
   thumbs(paths: string[]): Promise<(string | null)[]>;
   putThumb(path: string, dataUrl: string): Promise<void>;
+  /** Tells the app the user picked this path on Home, so it may open a network path for the rest of the session. */
+  vouch(path: string): Promise<void>;
 }
 
 export const tauriLibrary: DocumentLibrary = {
@@ -70,6 +72,10 @@ export const tauriLibrary: DocumentLibrary = {
   async putThumb(path, dataUrl) {
     const { invoke } = await import("@tauri-apps/api/core");
     await invoke("thumb_put", { path, dataUrl });
+  },
+  async vouch(path) {
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("paths_note_recent", { path });
   },
 };
 

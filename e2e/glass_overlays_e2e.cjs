@@ -37,7 +37,7 @@ const check = (name, ok, detail) => {
     executablePath: process.env.SC_CHROME || "/usr/bin/chromium",
     args: ["--use-angle=d3d11", "--enable-gpu", "--ignore-gpu-blocklist", "--no-sandbox"],
   });
-  const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+  const page = await browser.newPage({ colorScheme: "dark", viewport: { width: 1400, height: 900 } });
   page.on("pageerror", (e) => console.error("PAGE ERROR:", e.message));
   await page.addInitScript(
     ([port, t]) => {

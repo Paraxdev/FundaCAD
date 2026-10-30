@@ -3,7 +3,8 @@
 
 import Panel from "../ui/Panel.vue";
 
-withDefaults(defineProps<{ open: boolean; closeOnEsc?: boolean; panelClass?: string }>(), {
+// The title names the region and is read as its heading; the panel's own content draws what is seen.
+withDefaults(defineProps<{ open: boolean; title: string; closeOnEsc?: boolean; panelClass?: string }>(), {
   closeOnEsc: false,
   panelClass: "",
 });
@@ -11,7 +12,14 @@ const emit = defineEmits<{ close: [] }>();
 </script>
 
 <template>
-  <Panel :open="open" :close-on-esc="closeOnEsc" :panel-class="panelClass" @close="emit('close')">
+  <Panel
+    :open="open"
+    :title="title"
+    title-hidden
+    :close-on-esc="closeOnEsc"
+    :panel-class="panelClass"
+    @close="emit('close')"
+  >
     <slot />
   </Panel>
 </template>

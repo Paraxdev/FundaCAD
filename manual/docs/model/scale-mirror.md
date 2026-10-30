@@ -24,9 +24,9 @@ Mirror reflects bodies across a plane and joins each one to its original. Model 
 
 The panel holds two lists, Objects and Mirror plane:
 
-- Click a list to make it the one your clicks fill. Tab switches between them.
-- Enter moves on to an empty list, then applies.
-- Shift or Ctrl click adds a body while you pick the plane.
-- Clear all empties a list, and the minus beside an entry removes it.
+1. Click a list to make it the one your clicks fill. Tab switches between them.
+2. Enter moves on to an empty list, then applies.
+3. Shift or Ctrl click adds a body while you pick the plane.
+4. Clear all empties a list, and the minus beside an entry removes it.
 
 A flat face adds a datum plane named Mirror plane that follows the face.

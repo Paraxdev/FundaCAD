@@ -37,6 +37,7 @@ import FilletMembers from "./components/overlays/FilletMembers.vue";
 import ProjectFilterBar from "./components/overlays/ProjectFilterBar.vue";
 import MeasureReadout from "./components/overlays/MeasureReadout.vue";
 import Announcer from "./components/ui/Announcer.vue";
+import SkipLink from "./components/shell/SkipLink.vue";
 import { onMounted, onUnmounted, ref, shallowRef, useTemplateRef, watch } from "vue";
 import { useEngine } from "./app/engineKey";
 import { isNarrowStage } from "./ui/layoutBreakpoints";
@@ -93,10 +94,12 @@ watch(
 <template>
   <!-- First, so its live regions exist before anything has a message to speak. -->
   <Announcer />
+  <SkipLink />
   <!-- src/styles/_layout.scss and the e2e suite select on these element ids and class names. -->
   <TitleBar />
   <SafeModeBanner />
-  <div id="main">
+  <main id="main" aria-label="Model">
+    <h1 class="sr-only">{{ ui.docName }}</h1>
     <!-- The float layer takes no pointer events, only its cards do, so the model stays pickable between them. -->
     <div id="stage" ref="stage" :class="{ narrow: shell.narrow }">
       <!-- Inert under Home, so Tab and screen readers stay on what is on screen. -->
@@ -122,7 +125,7 @@ watch(
     </div>
     <!-- Mounts nothing outside the Render workspace, so the grid track collapses. -->
     <RenderDock />
-  </div>
+  </main>
 
   <!-- Each Teleports to body, so none inherits a stacking context from #app's grid. -->
   <ToastStack />

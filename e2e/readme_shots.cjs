@@ -247,7 +247,7 @@ const ZOOM = Number(process.env.ZOOM || 1);
 (async () => {
   fs.mkdirSync(OUT, { recursive: true });
   const browser = await chromium.launch({ executablePath: EXE, args: ["--no-sandbox"] });
-  const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
+  const page = await browser.newPage({ colorScheme: "dark", viewport: { width: 1600, height: 1000 } });
   const errors = [];
   page.on("console", (m) => {
     if (m.type() === "error") errors.push(m.text());

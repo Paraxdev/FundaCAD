@@ -20,9 +20,9 @@ Clear takes the material off the selection. The tile the selection wears has an 
 
 ## Keep the library tidy
 
-- In this document lists the materials the model wears, with how many bodies and faces wear each.
-- Search materials filters the tiles by name.
-- New adds a copy of the selected material for you to change.
-- Ctrl or Shift click picks several tiles, then Remove from the model, Delete or Deselect.
-- Right-click a tile to apply it, Duplicate, Remove from the model or Delete it, Del deletes too. Whatever wore a deleted material goes back to the default grey.
-- Import… and Export… at the bottom share a material library file between documents.
+1. In this document lists the materials the model wears, with how many bodies and faces wear each.
+2. Search materials filters the tiles by name.
+3. New adds a copy of the selected material for you to change.
+4. Ctrl or Shift click picks several tiles, then Remove from the model, Delete or Deselect.
+5. Right-click a tile to apply it, Duplicate, Remove from the model or Delete it, Del deletes too. Whatever wore a deleted material goes back to the default grey.
+6. Import… and Export… at the bottom share a material library file between documents.

@@ -18,9 +18,9 @@ While a sketch is open, the rail holds the drawing tools. The line at the bottom
 
 ## Buttons with more than one tool
 
-- Rectangle also holds Center Rect and Rect 3-Pt.
-- Circle also holds Circle 2-Pt and Circle 3-Pt.
-- Spline also holds Control Point Spline.
-- Slot also holds Point.
+1. Rectangle also holds Center Rect and Rect 3-Pt.
+2. Circle also holds Circle 2-Pt and Circle 3-Pt.
+3. Spline also holds Control Point Spline.
+4. Slot also holds Point.
 
 Such a button runs the tool you used last. Right-click it, or press and hold it, to pick another.

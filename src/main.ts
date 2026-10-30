@@ -7,12 +7,15 @@ import "@fontsource/jetbrains-mono/latin-400.css";
 import "@fontsource/jetbrains-mono/latin-500.css";
 import "./styles/main.scss";
 import { initTheme } from "./ui/theme";
+import { initContrast } from "./ui/contrastSetting";
 import { installGlassBlurSwitch } from "./ui/glassBlur";
 
 // Applies a stored non-default theme before anything renders, so the app never paints one palette then swaps.
 initTheme();
+initContrast();
 installGlassBlurSwitch();
 import "./diagnostics/breadcrumbs"; // installs window error listeners (bug-report trail)
+import "./ui/targets"; // sets data-targets on <html> before the first paint
 import { createApp, markRaw } from "vue";
 import { createPinia, setActivePinia } from "pinia";
 import App from "./App.vue";
@@ -25,6 +28,7 @@ import { harnessWanted } from "./harness/wanted";
 import { installGuidePressGuard } from "./ui/guide/pressGuard";
 import { watchFirstFrame } from "./app/firstFrame";
 import { trackFocus } from "./components/ui/focusables";
+import { installRegionKeys, trackRegionFocus } from "./ui/regions";
 
 // Before anything is constructed, so a failure inside createEngine still reaches the user.
 installGlobalErrorHandlers();
@@ -41,6 +45,8 @@ const engine = createEngine(canvas);
 
 installGuidePressGuard();
 trackFocus();
+trackRegionFocus();
+installRegionKeys(() => (engine.sketch.active ? "sketch" : "model"));
 const app = createApp(App);
 // A reactive proxy would break structuredClone in the undo snapshot and the identity checks of the delta protocol.
 app.provide(ENGINE, markRaw(engine));

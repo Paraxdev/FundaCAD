@@ -7,6 +7,7 @@ import {
   customThemes,
   DEFAULT_THEME_ID,
   getTheme,
+  NOIR_PALETTE,
   removeCustomTheme,
   setTheme,
   themeMode,
@@ -31,9 +32,10 @@ afterEach(() => {
 });
 
 describe("asThemeId", () => {
-  it("accepts the built-in theme", () => {
+  it("accepts the built-in theme and System, the default", () => {
     expect(asThemeId(BUILTIN_THEME.id)).toBe(BUILTIN_THEME.id);
-    expect(DEFAULT_THEME_ID).toBe(BUILTIN_THEME.id);
+    expect(DEFAULT_THEME_ID).toBe("system");
+    expect(asThemeId(DEFAULT_THEME_ID)).toBe("system");
   });
 
   it("accepts an uploaded theme once it exists, and not before", () => {
@@ -64,10 +66,11 @@ describe("asThemeId", () => {
 });
 
 describe("the theme roster", () => {
-  it("leads with the built-in theme and labels every entry", () => {
+  it("leads with System, then the built-in theme, and labels every entry", () => {
     const list = themes();
 
-    expect(list[0]).toStrictEqual(BUILTIN_THEME);
+    expect(list[0]?.id).toBe("system");
+    expect(list[1]).toStrictEqual(BUILTIN_THEME);
 
     for (const t of list) {
       expect(t.label.trim().length).toBeGreaterThan(0);
@@ -267,6 +270,12 @@ describe("addCustomTheme", () => {
     });
   });
 
+  it("keeps an uploaded control edge colour", () => {
+    const res = addCustomTheme({ "--bg": "#141414", "--control-edge": "rgba(255, 255, 255, 0.6)" });
+
+    expect(res.ok && res.theme.palette["--control-edge"]).toBe("rgba(255, 255, 255, 0.6)");
+  });
+
   it("loads an older theme that still sets the retired glow, without the glow", () => {
     const res = addCustomTheme({
       label: "Old mint",
@@ -311,6 +320,53 @@ describe("addCustomTheme", () => {
     });
   });
 
+  it("drops a value shaped like rgb() that names no colour, so the contrast check never throws", () => {
+    const res = addCustomTheme({ "--bg": "#111111", "--panel": "rgb(1, 2)" });
+
+    expect(res.ok && res.theme.palette).toStrictEqual({ "--bg": "#111111" });
+  });
+
+  it("lists the pairs a low contrast upload fails, worst first, with the bar each misses", () => {
+    const res = addCustomTheme({ label: "Murk", "--text-mute": "#4a4458", "--line-strong": "#3a3448" });
+
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const failing = res.failing.map((r) => r.what);
+    expect(failing).toEqual(expect.arrayContaining(["--text-mute on --panel", "--line-strong on --raised"]));
+    expect(res.failing.every((r) => r.ratio < r.min)).toBe(true);
+    const share = res.failing.map((r) => r.ratio / r.min);
+    expect(share).toEqual([...share].sort((a, b) => a - b));
+    expect(res.failing.find((r) => r.what === "--text-mute on --panel")?.min).toBe(4.5);
+  });
+
+  it("lists no pair for an upload of any palette FundaCAD ships", () => {
+    const shipped = themes().filter((t): t is ShippedTheme => "palette" in t && !t.custom);
+    const flagged = shipped.flatMap((t) => {
+      const res = addCustomTheme({ label: t.label, mode: t.mode, ...t.palette });
+      return res.ok ? res.failing.map((r) => `${t.label}: ${r.what}`) : [`${t.label}: refused`];
+    });
+
+    expect(flagged).toEqual([]);
+  });
+
+  it("checks an upload against Noir's own value for every token it leaves out", () => {
+    const root = tokensScss.slice(0, tokensScss.indexOf(":root.theme-light"));
+    const drifted = Object.entries(NOIR_PALETTE).filter(([token, value]) => !root.includes(`${token}: ${value};`));
+
+    expect(drifted).toEqual([]);
+    expect(Object.keys(NOIR_PALETTE)).toEqual(
+      expect.arrayContaining([
+        "--panel",
+        "--text-mute",
+        "--accent",
+        "--on-accent",
+        "--field-bg",
+        "--check-off",
+        "--axis-z",
+      ]),
+    );
+  });
+
   it("names a theme from its label, then name, then filename", () => {
     const a = addCustomTheme({
       label: "Studio",
@@ -348,10 +404,10 @@ describe("removeCustomTheme", () => {
   it("cannot remove the built-in theme", () => {
     removeCustomTheme(BUILTIN_THEME.id);
 
-    expect(themes()[0]).toStrictEqual(BUILTIN_THEME);
+    expect(themes()[1]).toStrictEqual(BUILTIN_THEME);
   });
 
-  it("falls back to the built-in theme when the active one is removed", () => {
+  it("falls back to System when the active one is removed", () => {
     const res = addCustomTheme({
       label: "Temp",
       "--bg": "#123456",

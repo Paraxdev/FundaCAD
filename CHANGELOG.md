@@ -25,6 +25,10 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- **The manual has a Beta and a Dev version.** fundacad.dev opens the Beta
+  manual, and a switch at the top of every page opens the same page in Dev.
+  Help, Manual in the app opens the version that matches your build.
+
 - **G3 fillets.** The fillet box has a third continuity icon, G3, on key 3. It
   eases into the faces with no jump in curvature and none in how fast the
   curvature changes either. G2 and G3 now need both faces flat across the edge,
@@ -509,6 +513,11 @@ This file starts on 2026-08-03. For anything before that, see the
 - Each drag of the move gizmo is its own row in the timeline, so an undo takes back the last nudge instead of the whole sitting, and the next drag starts from the pose the last one produced.
 
 ### Fixed
+
+- **A dropdown's arrow stays put.** Hovering a dropdown, such as the Items
+  filter, slid its arrow up and out of sight, and an open list showed none. The
+  arrow now holds still, points right while the list is closed and turns down
+  while it is open, like the arrows on the Items tree.
 
 - **A STEP file whose edges lost their vertices imports whole.** Some exporters
   (SolidWorks 2014 seen) write an edge whose end names another entity where a

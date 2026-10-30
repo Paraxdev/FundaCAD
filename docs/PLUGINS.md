@@ -75,7 +75,7 @@ that is no.
 | `document.write` | Change the document you have open |
 | `document.history` | See your edit history |
 | `geometry.build` | Use the geometry engine to build and measure shapes |
-| `files.read` | Read files you pick for it |
+| `files.read` | Read files you pick for it, or for a plugin with `geometryWasm`: Read any file you can open on this computer |
 | `files.write` | Save files where you tell it to |
 | `network` | Connect to *(the hosts it names)* |
 | `network.local` | Talk to devices on your local network |

@@ -29,6 +29,7 @@ import { createSelection } from "../../../src/app/selection";
 import { contribute, resetContributions } from "../../../src/plugins/contrib";
 import { setBrowserFilter } from "../../../src/ui/browserFilter";
 import { contextMenu, type CtxItem } from "../../../src/ui/menu";
+import { announce } from "../../../src/ui/announce";
 import { useBrowserStore } from "../../../src/stores/browser";
 import { awaitTreePick, resetTreePicks, treePickWaiting, type TreePick } from "../../../src/ui/treePick";
 import {
@@ -48,6 +49,11 @@ vi.mock("../../../src/ui/menu", async (importOriginal) => ({
   contextMenu: vi.fn(),
 }));
 
+vi.mock("../../../src/ui/announce", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../src/ui/announce")>()),
+  announce: vi.fn(),
+}));
+
 const DATUM_DEF = { origin: [0, 0, 5], normal: [0, 0, 1], xdir: [1, 0, 0] } as const;
 
 /** The narrowest engine BrowserPane actually touches. The document is a plain
@@ -57,7 +63,9 @@ function makeEngine(doc: CadDocument, bodies: { id: string; name: string; nodeRe
   const buildVersion = ref(0);
   const hidden = new Set<string>();
   const hiddenSketches = new Set<string>();
+  const suppressed = new Set<string>();
   const removed: string[][] = [];
+  const removedBodies: string[][] = [];
   const lit: unknown[] = [];
   const planeWrites: Map<string, boolean>[] = [];
   /** Every batched body visibility write, to count re-renders by. */
@@ -150,11 +158,21 @@ function makeEngine(doc: CadDocument, bodies: { id: string; name: string; nodeRe
     },
     colorPalette: [{ name: "Slot 1", color: "#ff0000" }],
     isPlaneVisible: () => true,
+    isSuppressed: (id: string) => suppressed.has(id),
     isBodyVisible: (id: string) => !hidden.has(id),
     setBodiesVisibility: (vis: Map<string, boolean>) => {
       bodyWrites.push(new Map(vis));
       for (const [id, v] of vis) v ? hidden.delete(id) : hidden.add(id);
       buildVersion.value++;
+    },
+    moveFeature: (id: string, to: number) => {
+      const f = doc.features.find((x) => x.id === id)!;
+      doc.features.splice(doc.features.indexOf(f), 1);
+      doc.features.splice(to, 0, f);
+      docVersion.value++;
+    },
+    removeBodies: (ids: readonly string[]) => {
+      removedBodies.push([...ids]);
     },
     removeFeatures: (ids: string[]) => {
       removed.push([...ids]);
@@ -181,8 +199,10 @@ function makeEngine(doc: CadDocument, bodies: { id: string; name: string; nodeRe
     store,
     bodyWrites,
     removed,
+    removedBodies,
     lit,
     planeWrites,
+    suppressed,
     isSketchVisible: (id: string) => !hiddenSketches.has(id),
     /** Edit in place, identity is preserved on purpose. */
     edit(fn: (d: CadDocument) => void) {
@@ -306,6 +326,14 @@ describe("BrowserPane", () => {
     setActivePinia(createPinia());
   });
 
+  it("is a complementary region named by its Items heading", () => {
+    const w = render(makeEngine({ parameters: {}, features: [] }));
+    const aside = w.get("aside#browser");
+    const h = w.get("h2.float-card-title");
+    expect(h.text()).toBe("Items");
+    expect(aside.attributes("aria-labelledby")).toBe(h.attributes("id"));
+  });
+
   // --- elements: the user's own folders over the bodies --------------------
 
   it("draws an element as a folder, with the bodies filed into it under it", async () => {
@@ -374,7 +402,7 @@ describe("BrowserPane", () => {
     expect(fake.store.isBodyVisible("body2")).toBe(false);
     await nextTick();
     expect(eyeName(folderNamed(w, "Rig"))).toBe("hidden");
-    expect(folderNamed(w, "Rig")!.find(".tree-eye").attributes("aria-pressed")).toBe("false");
+    expect(folderNamed(w, "Rig")!.find(".tree-eye").attributes("aria-label")).toBe("Show Rig");
   });
 
   it("takes a body dragged onto an element head into it, and back out on the Bodies head", async () => {
@@ -536,12 +564,15 @@ describe("BrowserPane", () => {
     ]);
     fake.store.buildState.errorFeatureId = "s1";
     const w = render(fake);
-    expect(rowNamed(w, "Base").find(".sr-only").text()).toBe(", failed");
-    expect(rowNamed(w, "Lid").find(".sr-only").exists()).toBe(false);
+    expect(rowNamed(w, "Base").find(".tree-state").text()).toBe("failed");
+    expect(rowNamed(w, "Lid").find(".tree-state").exists()).toBe(false);
     const eye = () => rowNamed(w, "Bracket").find(".tree-eye");
-    expect(eye().attributes("aria-pressed")).toBe("true");
+    expect(eye().attributes("aria-label")).toBe("Hide Bracket");
     await clickEye(rowNamed(w, "Bracket"));
-    expect(eye().attributes("aria-pressed")).toBe("false");
+    expect([eye().attributes("aria-label"), rowNamed(w, "Bracket").find(".tree-state").text()]).toEqual([
+      "Show Bracket",
+      "hidden",
+    ]);
   });
 
   it("starts assembly nodes COLLAPSED and expands them on click", async () => {
@@ -1225,5 +1256,252 @@ describe("Items head and foot controls", () => {
     expect(close.attributes("title")).toContain("Hide the items");
     await close.trigger("click");
     expect(useShellStore().itemsOpen).toBe(false);
+  });
+});
+
+describe("Items tree by keys", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+  });
+  // Vue skips a handler attached in the same ms an event was first seen, see TreeControls.spec.ts.
+  async function open(fake: ReturnType<typeof makeEngine>) {
+    const w = mount(BrowserPane, { global: { provide: { [ENGINE as symbol]: fake.engine } }, attachTo: document.body });
+    await nextTick();
+    await new Promise((r) => setTimeout(r, 2));
+    return w;
+  }
+  function press(key: string, init: KeyboardEventInit = {}) {
+    const e = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...init });
+    (document.activeElement ?? document.body).dispatchEvent(e);
+    return e;
+  }
+  const focusOn = (el: { element: Element }) => (el.element as HTMLElement).focus();
+  const focusedLabel = () => document.activeElement?.getAttribute("aria-label");
+
+  it("is a multiselectable tree named Items whose heads and rows carry level, position and state", async () => {
+    contribute("p", { browserSections: [{ key: "referenceImages", component: MarkerSection }] });
+    const fake = makeEngine({ parameters: {}, features: [sketch("s1"), sketch("s2")] }, []);
+    const w = await open(fake);
+    const tree = w.get('#browser .float-card-body [role="tree"]');
+    expect([tree.attributes("aria-label"), tree.attributes("aria-multiselectable")]).toEqual(["Items", "true"]);
+    const head = folderNamed(w, "Sketches")!;
+    expect([head.attributes("role"), head.attributes("aria-level"), head.attributes("aria-expanded")]).toEqual([
+      "treeitem",
+      "1",
+      "true",
+    ]);
+    const s2 = rowNamed(w, "Sketch2");
+    expect(["aria-level", "aria-posinset", "aria-setsize", "aria-selected"].map((a) => s2.attributes(a))).toEqual([
+      "2",
+      "2",
+      "2",
+      "false",
+    ]);
+    // A tree may own only rows and groups of rows, so a section's own controls sit inside a row named by it.
+    expect(tree.find('[role="group"]').exists()).toBe(false);
+    const section = tree.get('[role="treeitem"][aria-label="Reference images"]');
+    expect(["aria-level", "aria-selected"].map((a) => section.attributes(a))).toEqual(["1", undefined]);
+    expect(section.find('[role="treeitem"]').exists()).toBe(false);
+    const empty = w.get(".empty-state");
+    expect([empty.attributes("role"), empty.attributes("aria-disabled"), empty.attributes("aria-selected")]).toEqual([
+      "treeitem",
+      "true",
+      undefined,
+    ]);
+    w.unmount();
+  });
+
+  it("walks the rows by arrows, and Space adds a body to the selection as a Ctrl click does", async () => {
+    const fake = makeEngine({ parameters: {}, features: [] }, [
+      { id: "b1", name: "Body1" },
+      { id: "b2", name: "Body2" },
+    ]);
+    const w = await open(fake);
+    await rowNamed(w, "Body1").trigger("click");
+    focusOn(rowNamed(w, "Body1"));
+    expect(press("ArrowDown").defaultPrevented).toBe(true);
+    expect(focusedLabel()).toBe("Body2");
+    press(" ");
+    expect(fake.engine.viewport.getSelectedBodies()).toEqual(["b1", "b2"]);
+    press(" ");
+    expect(fake.engine.viewport.getSelectedBodies()).toEqual(["b1"]);
+    w.unmount();
+  });
+
+  it("closes a section on Enter and opens it again on Right, and its head says so", async () => {
+    const fake = makeEngine({ parameters: {}, features: [sketch("s1")] }, []);
+    const w = await open(fake);
+    focusOn(folderNamed(w, "Sketches")!);
+    press("Enter");
+    await nextTick();
+    expect([
+      useBrowserStore().isCollapsed("f:Sketches"),
+      folderNamed(w, "Sketches")!.attributes("aria-expanded"),
+    ]).toEqual([true, "false"]);
+    press("ArrowRight");
+    await nextTick();
+    expect(folderNamed(w, "Sketches")!.attributes("aria-expanded")).toBe("true");
+    press("ArrowDown");
+    expect(focusedLabel()).toBe("Sketch1");
+    w.unmount();
+  });
+
+  it("deletes the focused row on Delete without the window's Delete also running", async () => {
+    const fake = makeEngine({ parameters: {}, features: [sketch("s1"), sketch("s2")] }, []);
+    const w = await open(fake);
+    const heard: string[] = [];
+    const spy = (e: KeyboardEvent) => heard.push(e.key);
+    window.addEventListener("keydown", spy);
+    focusOn(rowNamed(w, "Sketch2"));
+    press("Delete");
+    window.removeEventListener("keydown", spy);
+    expect([fake.removed, heard]).toEqual([[["s2"]], []]);
+    w.unmount();
+  });
+
+  it("deletes the whole selection the focused body is in as one step, never part of it", async () => {
+    const fake = makeEngine({ parameters: {}, features: [] }, [
+      { id: "b1", name: "Body1" },
+      { id: "b2", name: "Body2" },
+      { id: "b3", name: "Body3" },
+    ]);
+    const w = await open(fake);
+    await rowNamed(w, "Body1").trigger("click");
+    await rowNamed(w, "Body2").trigger("click", { shiftKey: true });
+    // The real viewport hands its selection back to the browser store, the fake one does not.
+    useBrowserStore().setSelectedBodies(fake.engine.viewport.getSelectedBodies());
+    await nextTick();
+    focusOn(rowNamed(w, "Body2"));
+    press("Backspace");
+    expect(fake.removedBodies).toEqual([["b1", "b2"]]);
+    w.unmount();
+  });
+
+  it("leaves Delete to the window after a click that unpicked its row, which removes the picked rows as before", async () => {
+    const fake = makeEngine({ parameters: {}, features: [sketch("s1"), sketch("s2")] }, []);
+    const w = await open(fake);
+    const heard: string[] = [];
+    const spy = (e: KeyboardEvent) => heard.push(e.key);
+    window.addEventListener("keydown", spy);
+    await rowNamed(w, "Sketch1").trigger("click");
+    await rowNamed(w, "Sketch2").trigger("click", { ctrlKey: true });
+    await rowNamed(w, "Sketch2").trigger("pointerdown");
+    await rowNamed(w, "Sketch2").trigger("click", { ctrlKey: true });
+    focusOn(rowNamed(w, "Sketch2"));
+    press("Delete");
+    window.removeEventListener("keydown", spy);
+    expect([rowNamed(w, "Sketch2").attributes("aria-selected"), fake.removed, heard]).toEqual([
+      "false",
+      [],
+      ["Delete"],
+    ]);
+    w.unmount();
+  });
+
+  it("gives a plugin section that draws nothing no row and no Tab stop, and a row once it draws", async () => {
+    const shown = ref(false);
+    const Maybe = { setup: () => ({ shown }), template: `<div v-if="shown" class="marker">Contributed</div>` };
+    contribute("p", { browserSections: [{ key: "referenceImages", component: Maybe }] });
+    const fake = makeEngine({ parameters: {}, features: [] }, [{ id: "b1", name: "Body1" }]);
+    const w = await open(fake);
+    const settle = () => new Promise((r) => setTimeout(r, 0)).then(() => nextTick());
+    const state = () => {
+      const tops = w.findAll('[role="treeitem"][aria-level="1"]');
+      return [
+        w.findAll('[aria-label="Reference images"]').length,
+        w.findAll("[data-tree-item]").filter((r) => r.attributes("tabindex") === "0").length,
+        folderNamed(w, "Bodies")!.attributes("aria-setsize") === String(tops.length),
+      ];
+    };
+    await settle();
+    expect(state()).toEqual([0, 1, true]);
+    shown.value = true;
+    await settle();
+    await settle();
+    expect([...state(), w.find(".marker").exists()]).toEqual([1, 1, true, true]);
+    w.unmount();
+  });
+
+  it("offers Show only these on an element head, the eye's Alt click by keys", async () => {
+    const fake = makeEngine({ parameters: {}, features: [] }, [
+      { id: "b1", name: "Body1" },
+      { id: "b2", name: "Body2" },
+      { id: "b3", name: "Body3" },
+    ]);
+    const w = await open(fake);
+    const rig = fake.store.addElement("Rig");
+    fake.store.setBodiesElement(["b1", "b2"], rig);
+    await nextTick();
+    vi.mocked(contextMenu).mockClear();
+    focusOn(folderNamed(w, "Rig")!);
+    press("F10", { shiftKey: true });
+    const items = vi.mocked(contextMenu).mock.calls.at(-1)![2] as CtxItem[];
+    const visibility = items.find((i) => i.label === "Visibility")!;
+    visibility.children!.find((c) => c.label === "Show only these 2")!.onClick!();
+    expect(fake.bodyWrites.at(-1)).toEqual(
+      new Map([
+        ["b1", true],
+        ["b2", true],
+        ["b3", false],
+      ]),
+    );
+    w.unmount();
+  });
+
+  it("rests the Tab stop on the selected row and says a suppressed row is suppressed", async () => {
+    const fake = makeEngine({ parameters: {}, features: [sketch("s1"), sketch("s2")] }, []);
+    fake.suppressed.add("s2");
+    const w = await open(fake);
+    await rowNamed(w, "Sketch2").trigger("click");
+    await nextTick();
+    const stops = w.findAll('[role="treeitem"]').filter((r) => r.attributes("tabindex") === "0");
+    expect(stops.map((r) => r.attributes("aria-label"))).toEqual(["Sketch2"]);
+    const s2 = rowNamed(w, "Sketch2");
+    expect(w.get(`#${s2.attributes("aria-describedby")}`).text()).toBe("suppressed");
+    w.unmount();
+  });
+
+  it("moves a sketch past its neighbour on Alt+Up and Alt+Down, keeps it focused and says where it went", async () => {
+    const e1 = { id: "e1", type: "extrude", sketch: "s1" } as unknown as Feature;
+    const fake = makeEngine({ parameters: {}, features: [sketch("s1", "Base"), e1, sketch("s2", "Lid")] }, []);
+    const w = await open(fake);
+    vi.mocked(announce).mockClear();
+    focusOn(rowNamed(w, "Lid"));
+    expect(press("ArrowUp", { altKey: true }).defaultPrevented).toBe(true);
+    await nextTick();
+    await nextTick();
+    expect(fake.engine.store.document.features.map((f) => f.id)).toEqual(["s2", "s1", "e1"]);
+    expect(focusedLabel()).toBe("Lid");
+    press("ArrowDown", { altKey: true });
+    await nextTick();
+    expect(fake.engine.store.document.features.map((f) => f.id)).toEqual(["s1", "s2", "e1"]);
+    expect(vi.mocked(announce).mock.calls.map((c) => c[0])).toEqual(["Moved Lid above Base", "Moved Lid below Base"]);
+    w.unmount();
+  });
+
+  it("says a row at the end of its section or a body cannot move, and moves nothing", async () => {
+    const fake = makeEngine({ parameters: {}, features: [sketch("s1"), sketch("s2")] }, [{ id: "b1", name: "Body1" }]);
+    const w = await open(fake);
+    vi.mocked(announce).mockClear();
+    focusOn(rowNamed(w, "Sketch1"));
+    press("ArrowUp", { altKey: true });
+    focusOn(rowNamed(w, "Body1"));
+    press("ArrowDown", { altKey: true });
+    expect(fake.engine.store.document.features.map((f) => f.id)).toEqual(["s1", "s2"]);
+    expect(vi.mocked(announce).mock.calls.map((c) => c[0])).toEqual([
+      "Sketch1 is already first in Sketches",
+      "Body1 keeps its place, only timeline features move",
+    ]);
+    w.unmount();
+  });
+
+  it("lets Alt+Up on an empty note pass without a word", async () => {
+    const fake = makeEngine({ parameters: {}, features: [] }, []);
+    const w = await open(fake);
+    vi.mocked(announce).mockClear();
+    focusOn(w.get(".empty-state"));
+    press("ArrowUp", { altKey: true });
+    expect(announce).not.toHaveBeenCalled();
+    w.unmount();
   });
 });

@@ -53,6 +53,7 @@ import {
 } from "./pressPullAxis";
 import { featureKey, PreviewOutcomes } from "./previewOutcomes";
 import { axialSpan, ResizeGuides } from "./resizeGuides";
+import { toolChar } from "../input/shortcuts";
 
 /** A flat face as a tracked selector so the push follows upstream edits; a curved face keeps its picked point. */
 function upToFace(
@@ -409,7 +410,7 @@ export class PressPullTool {
       this.cancel();
       return;
     }
-    if ((e.key === "t" || e.key === "T") && this.phase === "drag" && !this.pickingTarget && !this.resizing) {
+    if (toolChar(e) === "t" && this.phase === "drag" && !this.pickingTarget && !this.resizing) {
       this.pickingTarget = true;
       this.dim.hide(); // Enter must not commit a plain distance while picking
       this.clearPreviewTimer();

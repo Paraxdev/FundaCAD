@@ -5,6 +5,7 @@ site_description = "FundaCAD is free, open source parametric CAD for 3D printing
 docs_dir = "docs"
 repo_url = "https://github.com/Paraxdev/fundacad"
 repo_name = "Paraxdev/fundacad"
+extra_css = ["stylesheets/lists.css"]
 nav = [
   { "Home" = "index.md" },
   { "Getting started" = ["start/install.md", "start/first-part.md", "start/examples.md", "start/report.md"] },

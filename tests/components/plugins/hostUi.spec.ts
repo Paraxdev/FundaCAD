@@ -30,7 +30,9 @@ const BASE = [
   "Switch",
   "SwitchRow",
   "Tabs",
+  "TabPanel",
   "TextField",
+  "Toolbar",
   "UnitChip",
 ];
 
@@ -45,8 +47,20 @@ const KEPT = [
   "RenderSwitch",
 ];
 
-// Building blocks of other base components, an old path kept for the app's own callers, or the app's single announcer.
-const NOT_FOR_PLUGINS = ["Announcer", "ChoiceList", "RailButton", "Toggle"];
+// Building blocks of other base components, an old path kept for the app's own callers, the app's single announcer,
+// KeyCapture, which a plugin's key setting already gets through the host's settings form, or the Items tree, whose
+// items read their place from the host's own list.
+const NOT_FOR_PLUGINS = [
+  "Announcer",
+  "ChoiceList",
+  "Combobox",
+  "KeyCapture",
+  "Listbox",
+  "RailButton",
+  "Toggle",
+  "Tree",
+  "TreeItem",
+];
 
 const baseFiles = Object.keys(import.meta.glob("../../../src/components/ui/*.vue")).map(
   (p) => /\/(\w+)\.vue$/.exec(p)![1]!,

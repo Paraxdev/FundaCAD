@@ -56,7 +56,7 @@ const COLOUR_BASELINE: Record<string, number> = {
   "src/styles/_glass.scss": 3,
   "src/styles/_inspector.scss": 3,
   "src/styles/_layout.scss": 3,
-  "src/styles/_modals.scss": 71,
+  "src/styles/_modals.scss": 69,
   "src/styles/_notice.scss": 1,
   "src/styles/_renderdock.scss": 5,
   "src/styles/_timeline.scss": 5,
@@ -645,37 +645,46 @@ describe("design spec guard", () => {
     expect(root["--accent"]).toBe("#9a9ff0");
   });
 
-  it("reads every light theme text token at 4.5:1 or better on each fill it sits on", () => {
-    const css = styleOf(TOKENS, scssFiles.get(TOKENS) ?? "");
-    const light = themes().find((t) => t.id === "solarized-light") as ShippedTheme;
-    const vars = { ...block(css, ":root"), ...light.palette, ...block(css, ":root.theme-light") };
-    const scene = resolveColour("var(--viewport-bg)", vars);
-    const card = over(resolveColour("var(--float-bg)", vars), scene);
-    const fills: [string, Rgba][] = [
-      ["card", card],
-      ["solid card", over(resolveColour("var(--float-bg-solid)", vars), scene)],
-      ["tile", over(resolveColour("var(--float-tile-bg)", vars), card)],
-      ["chip", over(resolveColour("var(--float-chip-bg)", vars), card)],
-      ["field", over(resolveColour("var(--field-bg)", vars), card)],
-    ];
-    const failing = ["--text", "--text-dim", "--text-mute", "--accent", "--accent-hot"].flatMap((text) =>
-      fills
-        .map(([fill, bg]) => ({
-          text,
-          fill,
-          ratio: Math.round(contrastRatio(resolveColour(`var(${text})`, vars), bg) * 100) / 100,
-        }))
-        .filter(({ ratio }) => ratio < 4.5),
+  const lightThemes = themes().filter((t) => !t.custom && t.mode === "light") as ShippedTheme[];
+
+  it("checks every shipped light theme, Solarized Light, FundaCAD Light and High Contrast Light", () => {
+    expect(lightThemes.map((t) => t.id)).toEqual(
+      expect.arrayContaining(["solarized-light", "fundacad-light", "high-contrast-light"]),
     );
-    expect(failing).toEqual([]);
-    expect(
-      contrastRatio(resolveColour("var(--on-accent)", vars), resolveColour("var(--accent)", vars)),
-    ).toBeGreaterThan(4.5);
   });
 
-  it("lifts the light theme cards clear of the viewport they float over", () => {
+  it.each(lightThemes.map((t) => [t.label, t] as const))(
+    "reads %s text at 4.5:1 or better on each fill",
+    (_, light) => {
+      const css = styleOf(TOKENS, scssFiles.get(TOKENS) ?? "");
+      const vars = { ...block(css, ":root"), ...light.palette, ...block(css, ":root.theme-light") };
+      const scene = resolveColour("var(--viewport-bg)", vars);
+      const card = over(resolveColour("var(--float-bg)", vars), scene);
+      const fills: [string, Rgba][] = [
+        ["card", card],
+        ["solid card", over(resolveColour("var(--float-bg-solid)", vars), scene)],
+        ["tile", over(resolveColour("var(--float-tile-bg)", vars), card)],
+        ["chip", over(resolveColour("var(--float-chip-bg)", vars), card)],
+        ["field", over(resolveColour("var(--field-bg)", vars), card)],
+      ];
+      const failing = ["--text", "--text-dim", "--text-mute", "--accent", "--accent-hot"].flatMap((text) =>
+        fills
+          .map(([fill, bg]) => ({
+            text,
+            fill,
+            ratio: Math.round(contrastRatio(resolveColour(`var(${text})`, vars), bg) * 100) / 100,
+          }))
+          .filter(({ ratio }) => ratio < 4.5),
+      );
+      expect(failing).toEqual([]);
+      expect(
+        contrastRatio(resolveColour("var(--on-accent)", vars), resolveColour("var(--accent)", vars)),
+      ).toBeGreaterThan(4.5);
+    },
+  );
+
+  it.each(lightThemes.map((t) => [t.label, t] as const))("lifts the %s cards clear of the viewport", (_, light) => {
     const css = styleOf(TOKENS, scssFiles.get(TOKENS) ?? "");
-    const light = themes().find((t) => t.id === "solarized-light") as ShippedTheme;
     const vars = { ...block(css, ":root"), ...light.palette, ...block(css, ":root.theme-light") };
     const scene = resolveColour("var(--viewport-bg)", vars);
     expect(contrastRatio(over(resolveColour("var(--float-bg)", vars), scene), scene)).toBeGreaterThan(1.15);

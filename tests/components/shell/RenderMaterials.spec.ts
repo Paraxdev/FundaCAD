@@ -65,6 +65,7 @@ function makeEngine() {
     updateMaterial: vi.fn(),
     addMaterial: vi.fn(() => "m-new"),
     addMaterialPreset: vi.fn((raw: { name: string }) => (raw ? "m-" + raw.name : null)),
+    removeMaterials: vi.fn(),
     buildState: { building: false, result: { bodies: [{ id: "body1", name: "Body1" }] } },
   };
   return {
@@ -314,5 +315,85 @@ describe("RenderMaterials New menu", () => {
     contribute("A.One", { materialPresets: () => [{ group: "Paints", materials: [null as never, {} as never, ok] }] });
     await newButton().trigger("click");
     expect(menus[0]![1]!.children!.map((i) => i.label)).toEqual(["Red"]);
+  });
+});
+
+describe("RenderMaterials library keys", () => {
+  const tiles = () => w.findAll(".rd-tile");
+  const focused = () => document.activeElement?.getAttribute("data-material");
+  const picked = () =>
+    tiles()
+      .filter((t) => t.classes("is-selected"))
+      .map((t) => t.attributes("data-material"));
+  async function press(k: string, init: KeyboardEventInit = {}) {
+    document.activeElement!.dispatchEvent(
+      new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true, ...init }),
+    );
+    await nextTick();
+  }
+
+  beforeEach(() => {
+    w.unmount();
+    w = mount(RenderMaterials, { attachTo: document.body, global: { provide: { [ENGINE as symbol]: fake.engine } } });
+    // Vue's outer handler skips an event no newer than its own attach time, and fake timers freeze Date.now.
+    vi.advanceTimersByTime(1);
+  });
+
+  it("is one multiselectable listbox with a single Tab stop and tiles named by material then finish", () => {
+    const grid = w.get(".rd-grid");
+    expect([grid.attributes("role"), grid.attributes("aria-label"), grid.attributes("aria-multiselectable")]).toEqual([
+      "listbox",
+      "Material library",
+      "true",
+    ]);
+    expect(tiles().map((t) => t.attributes("tabindex"))).toEqual(["0", "-1", "-1", "-1", "-1"]);
+    const gold = tile("m-gold");
+    expect(gold.attributes("aria-label")).toBe(`Gold, ${gold.get(".rd-sub").text()}`);
+    const how = document.getElementById(gold.attributes("aria-describedby")!);
+    expect(how?.textContent).toMatch(/Space .*Enter applies/);
+  });
+
+  it("moves focus with the arrows without picking, and Space toggles the focused tile", async () => {
+    (tile("m-brass").element as HTMLElement).focus();
+    await press("ArrowRight");
+    expect([focused(), picked()]).toEqual(["m-gold", []]);
+    await press(" ");
+    expect(picked()).toEqual(["m-gold"]);
+    await press("ArrowRight");
+    await press(" ");
+    expect(picked()).toEqual(["m-gold", "m-steel"]);
+    await press(" ");
+    expect(picked()).toEqual(["m-gold"]);
+    expect(tile("m-steel").attributes("tabindex")).toBe("0");
+  });
+
+  it("applies the focused tile on Enter, as a double-click does, and picks only it", async () => {
+    fake.selectFace(["body1#2"]);
+    await poll();
+    await tile("m-brass").trigger("click");
+    (tile("m-steel").element as HTMLElement).focus();
+    await press("Enter");
+    await poll();
+    expect(fake.faceMaterial.get("body1#2")).toBe("m-steel");
+    expect(picked()).toEqual(["m-steel"]);
+  });
+
+  it("runs a Shift arrow from the tile a click picked, and Delete still removes the picks", async () => {
+    await tile("m-gold").trigger("click");
+    (tile("m-gold").element as HTMLElement).focus();
+    await press("ArrowRight", { shiftKey: true });
+    await press("ArrowRight", { shiftKey: true });
+    expect(picked()).toEqual(["m-gold", "m-steel", "m-glass"]);
+    await press("Delete");
+    expect(fake.store.removeMaterials).toHaveBeenCalledWith(["m-gold", "m-steel", "m-glass"]);
+  });
+
+  it("keeps the click rules: a plain click on the only pick puts it down, Shift-click takes a run", async () => {
+    await tile("m-gold").trigger("click");
+    await tile("m-gold").trigger("click");
+    expect(picked()).toEqual([]);
+    await tile("m-gold").trigger("click");
+    await tile("m-glass").trigger("click", { shiftKey: true });
+    expect(picked()).toEqual(["m-gold", "m-steel", "m-glass"]);
   });
 });

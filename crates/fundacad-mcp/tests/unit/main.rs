@@ -8,5 +8,7 @@ mod mesh;
 mod printrep;
 mod scope;
 mod section;
+mod shadow;
 mod shortcuts;
 mod stress;
+mod write_target;

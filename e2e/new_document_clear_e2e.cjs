@@ -34,7 +34,7 @@ if (!TOKEN) {
   });
   try {
     if (MODE === "tool") return await toolRun(browser);
-    const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+    const page = await browser.newPage({ colorScheme: "dark", viewport: { width: 1400, height: 900 } });
     page.on("pageerror", (e) => console.error("PAGE ERROR:", e.message));
     await page.addInitScript((ws) => {
       const W = window.WebSocket;
@@ -304,7 +304,7 @@ if (!TOKEN) {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function openApp(browser) {
-  const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+  const page = await browser.newPage({ colorScheme: "dark", viewport: { width: 1400, height: 900 } });
   page.on("pageerror", (e) => console.error("PAGE ERROR:", e.message));
   await page.addInitScript((ws) => {
     const W = window.WebSocket;
@@ -327,7 +327,7 @@ async function openApp(browser) {
 
 /** Pixels in the middle of the view, clear of the side panels, that differ by more than 40 levels. */
 async function changedPixels(browser, a, b) {
-  const page = await browser.newPage();
+  const page = await browser.newPage({ colorScheme: "dark" });
   try {
     return await page.evaluate(
       async ([a, b]) => {

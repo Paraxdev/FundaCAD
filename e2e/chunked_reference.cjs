@@ -31,7 +31,7 @@ const BUDGET_MS = 15 * 60 * 1000;
     executablePath: process.env.SC_CHROME || "/usr/bin/chromium",
     args: ["--use-angle=swiftshader", "--no-sandbox", "--js-flags=--max-old-space-size=8192"],
   });
-  const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+  const page = await browser.newPage({ colorScheme: "dark", viewport: { width: 1400, height: 900 } });
   page.on("pageerror", (e) => console.error("PAGE ERROR:", e.message));
   page.on("console", (m) => {
     if (m.type() === "error") console.error("CONSOLE:", m.text());

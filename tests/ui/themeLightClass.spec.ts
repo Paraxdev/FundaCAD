@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { DEFAULT_THEME_ID, setTheme } from "../../src/ui/theme";
+import { BUILTIN_THEME, DEFAULT_THEME_ID, setTheme } from "../../src/ui/theme";
 
 const light = () => document.documentElement.classList.contains("theme-light");
 
@@ -17,7 +17,7 @@ describe("light theme class", () => {
     setTheme("dracula");
     expect(light()).toBe(false);
     setTheme("solarized-light");
-    setTheme(DEFAULT_THEME_ID);
+    setTheme(BUILTIN_THEME.id);
     expect(light()).toBe(false);
   });
 });

@@ -30,6 +30,11 @@ pub fn queue_opened<R: Runtime>(app: &tauri::AppHandle<R>, urls: &[tauri::Url]) 
 }
 
 #[tauri::command]
-pub fn take_launch_paths(state: tauri::State<'_, LaunchPaths>) -> Vec<String> {
-    state.take()
+pub fn take_launch_paths(
+    state: tauri::State<'_, LaunchPaths>,
+    held: tauri::State<'_, crate::doc_paths::Provenance>,
+) -> Vec<String> {
+    let paths = state.take();
+    held.vouch_all(paths.iter().map(String::as_str));
+    paths
 }

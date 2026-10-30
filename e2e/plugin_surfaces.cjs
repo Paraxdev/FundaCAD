@@ -81,7 +81,7 @@ async function setEnabled(page, id, on) {
 
 (async () => {
   const browser = await chromium.launch({ executablePath: CHROME, headless: true });
-  const page = await browser.newPage();
+  const page = await browser.newPage({ colorScheme: "dark" });
   const failures = [];
   page.on("pageerror", (e) => failures.push(`page error: ${e.message}`));
 

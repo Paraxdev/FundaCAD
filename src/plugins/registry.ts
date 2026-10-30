@@ -7,7 +7,24 @@ const KEY = "fundacad.plugins";
 
 /** A set, not a map of booleans: "on" is the absence of an entry, so it has only one representation. */
 let off: ReadonlySet<string> = read();
+/** The set the engine last took. A switch it was not told about is undone back to this one. */
+let told: ReadonlySet<string> = off;
 const listeners = new Set<() => void>();
+let synced: Promise<void> = Promise.resolve();
+
+/** The engine cannot read this window's storage, so the set is copied to the plugins root for it, in order. */
+function tellEngine(set: ReadonlySet<string>): Promise<void> {
+  if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) return Promise.resolve();
+  const ids = [...set].sort();
+  const sent = synced.then(async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("plugin_set_disabled", { ids });
+    told = set;
+  });
+  synced = sent.catch(() => {});
+  return sent;
+}
+tellEngine(off).catch((e: unknown) => console.warn("the engine was not told which plugins are off:", e));
 
 /** Accepts a list of ids, or the older `{id: boolean}` map still in people's storage, where `false` means off.
  *  The next write saves the new shape. */
@@ -42,12 +59,7 @@ export function disabledPlugins(): ReadonlySet<string> {
   return off;
 }
 
-export function setPluginEnabled(id: string, value: boolean): void {
-  if (typeof value !== "boolean" || pluginEnabled(id) === value) return;
-  // A fresh set, so a subscriber can compare identity with disabledPlugins() to decide to redraw.
-  const next = new Set(off);
-  if (value) next.delete(id);
-  else next.add(id);
+function apply(next: ReadonlySet<string>) {
   off = next;
   try {
     localStorage.setItem(KEY, JSON.stringify([...next].sort()));
@@ -55,6 +67,22 @@ export function setPluginEnabled(id: string, value: boolean): void {
     /* private mode / no storage: the choice just does not survive the session */
   }
   for (const fn of listeners) fn();
+}
+
+/** Takes effect in this window at once. Rejects when the engine could not be told, and unless a later switch is on its
+ *  way, goes back to the last set the engine took, so the window never shows a plugin off that the engine still runs. */
+export function setPluginEnabled(id: string, value: boolean): Promise<void> {
+  if (typeof value !== "boolean" || pluginEnabled(id) === value) return Promise.resolve();
+  // A fresh set, so a subscriber can compare identity with disabledPlugins() to decide to redraw.
+  const next = new Set(off);
+  if (value) next.delete(id);
+  else next.add(id);
+  const sent = tellEngine(next).catch((e: unknown) => {
+    if (off === next) apply(told);
+    throw e;
+  });
+  apply(next);
+  return sent;
 }
 
 export function onPluginChange(fn: () => void): () => void {

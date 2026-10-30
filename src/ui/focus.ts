@@ -27,6 +27,43 @@ export function isMenuKey(e: KeyboardEvent): boolean {
   return MENU_KEYS.has(e.key) || (typeof e.key === "string" && e.key.length === 1);
 }
 
+const NAV_KEYS = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown"]);
+const roles = (names: string[]) => names.map((r) => `[role="${r}"]`);
+const ARROW_WIDGETS = roles([
+  "menu",
+  "menubar",
+  "listbox",
+  "tablist",
+  "radiogroup",
+  "toolbar",
+  "tree",
+  "treegrid",
+  "grid",
+  "slider",
+  "spinbutton",
+  "combobox",
+])
+  .concat("input[type=range]", ".ui-menu")
+  .join(",");
+// Toolbars, tabs and radios leave out letters, Enter and Space, so E after clicking a rail button still starts Extrude.
+const TYPING_WIDGETS = roles(["menu", "menubar", "listbox", "tree", "treegrid", "grid", "combobox"])
+  .concat(".ui-menu")
+  .join(",");
+
+/** A key the focused widget moves, runs or types ahead with, or one a handler already took (defaultPrevented), so the
+ *  global shortcuts leave it: an arrow in a menu, slider or tab list must not also turn the view (KB-4). Ctrl, Alt and
+ *  Meta chords, Escape, Delete and the F keys still pass. */
+export function widgetOwnsKey(e: KeyboardEvent): boolean {
+  if (e.defaultPrevented) return true;
+  if (typeof Element === "undefined" || !(e.target instanceof Element)) return false;
+  if (e.ctrlKey || e.altKey || e.metaKey) return false;
+  if (NAV_KEYS.has(e.key)) return e.target.closest(ARROW_WIDGETS) !== null;
+  if (e.key === "Enter" || (typeof e.key === "string" && e.key.length === 1)) {
+    return e.target.closest(TYPING_WIDGETS) !== null;
+  }
+  return false;
+}
+
 /** Enter or Space on a value box button (Confirm, Cancel, an option, a tool's extra control). Window capture
  *  listeners hear it before the button's own click, so a tool leaves it, the way it leaves isMenuKey. */
 export function isBoxButtonKey(e: KeyboardEvent): boolean {

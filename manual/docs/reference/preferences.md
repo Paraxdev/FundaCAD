@@ -21,24 +21,24 @@ Preferences holds the settings that belong to you, not to a document. Open it fr
 
 Theme colours the whole app. These ship with FundaCAD:
 
-- FundaCAD Noir, the default, and its tints Noir Blue, Noir Red and Noir Orange
-- Dracula
-- Solarized Light
-- Colour-Blind Safe, its colours stay apart for every common kind of colour blindness, and its Y axis is yellow
+1. FundaCAD Noir, the default, and its tints Noir Blue, Noir Red and Noir Orange
+2. Dracula
+3. Solarized Light
+4. Colour-Blind Safe, its colours stay apart for every common kind of colour blindness, and its Y axis is yellow
 
 Upload theme… adds your own from a JSON file of colour tokens, such as `--bg` and `--accent`. Remove takes it away again.
 
 ## Good to know
 
-- Units changes the display only, geometry is always stored in millimetres.
-- Tangent edges sets how the line along a smooth fillet shows: Show, Faint or Hide.
-- Path tracer picks where Path traced runs: Auto, Native or WebGPU. High quality denoise downloads a better denoiser for Native.
-- Performance mode and Potato mode lighten the view on a slow computer. Potato mode includes Performance mode.
-- Orbit pivot is what a drag turns the view about: Under cursor, Origin or Selection.
-- Classic camera brings back the earlier camera, after a restart.
-- Animations off makes every move instant. It follows the system's reduce motion setting until you change it.
-- Hover delay is how long the pointer rests on a part before one face lights up instead of the whole part.
-- Updates checks Daily unless you pick Every launch or Weekly. Turned off, nothing is sent until you use Help, Check for Updates….
+1. Units changes the display only, geometry is always stored in millimetres.
+2. Tangent edges sets how the line along a smooth fillet shows: Show, Faint or Hide.
+3. Path tracer picks where Path traced runs: Auto, Native or WebGPU. High quality denoise downloads a better denoiser for Native.
+4. Performance mode and Potato mode lighten the view on a slow computer. Potato mode includes Performance mode.
+5. Orbit pivot is what a drag turns the view about: Under cursor, Origin or Selection.
+6. Classic camera brings back the earlier camera, after a restart.
+7. Animations off makes every move instant. It follows the system's reduce motion setting until you change it.
+8. Hover delay is how long the pointer rests on a part before one face lights up instead of the whole part.
+9. Updates checks Daily unless you pick Every launch or Weekly. Turned off, nothing is sent until you use Help, Check for Updates….
 
 ## Experimental
 

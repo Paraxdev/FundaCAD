@@ -690,7 +690,7 @@ impl Shape {
     }
 
     pub fn read_brep_text(path: impl AsRef<Path>) -> Result<Self, Error> {
-        let inner = ffi::b_rep_tools::read(path.as_ref().to_string_lossy().to_string());
+        let inner = ffi::b_rep_tools::read(path.as_ref().to_string_lossy().to_string())?;
 
         if inner.is_null() {
             Err(Error::BrepReadFailed)
@@ -711,7 +711,7 @@ impl Shape {
     }
 
     pub fn read_brep_bin(path: impl AsRef<Path>) -> Result<Self, Error> {
-        let inner = ffi::bin_tools::read_bin(path.as_ref().to_string_lossy().to_string());
+        let inner = ffi::bin_tools::read_bin(path.as_ref().to_string_lossy().to_string())?;
 
         if inner.is_null() {
             Err(Error::BrepReadFailed)

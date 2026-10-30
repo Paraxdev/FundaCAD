@@ -14,7 +14,11 @@ function render(tabs: Tab[], modelValue: T = "a") {
   return mount(Tabs<T>, { props: { tabs, modelValue, label: "Steps" } });
 }
 
-type Extra = { variant?: "underline" | "bar" | "nav"; orientation?: "horizontal" | "vertical" } & Named;
+type Extra = {
+  variant?: "underline" | "bar" | "nav";
+  orientation?: "horizontal" | "vertical";
+  panels?: string;
+} & Named;
 
 async function live(tabs: Tab[], modelValue: T = "a", extra: Extra = { label: "Steps" }) {
   const w = mount(Tabs<T>, {
@@ -169,6 +173,26 @@ describe("Tabs", () => {
   it("names the bar by labelledby alone when given one", async () => {
     const w = await live(abc(), "a", { labelledby: "steps-head" });
     expect([w.attributes("aria-label"), w.attributes("aria-labelledby")]).toEqual([undefined, "steps-head"]);
+  });
+
+  it("gives each tab an id and the selected one aria-controls on its panel when given panels", async () => {
+    const w = await live(abc(), "b", { label: "Steps", panels: "st" });
+    const ids = () => tabEls(w).map((t) => [t.attributes("id"), t.attributes("aria-controls")]);
+    expect(ids()).toEqual([
+      ["st-tab-a", undefined],
+      ["st-tab-b", "st-panel-b"],
+      ["st-tab-c", undefined],
+    ]);
+    (tabEls(w)[1]!.element as HTMLElement).focus();
+    await press("ArrowRight");
+    expect(ids()[2]).toEqual(["st-tab-c", "st-panel-c"]);
+  });
+
+  it("leaves tabs without ids or aria-controls when it has no panels, and the nav look ignores panels", async () => {
+    const plain = await live(abc(), "a");
+    const nav = await live(abc(), "a", { variant: "nav", label: "Settings", panels: "st" });
+    const attrs = (w: W) => tabEls(w).flatMap((t) => [t.attributes("id"), t.attributes("aria-controls")]);
+    expect([...attrs(plain), ...attrs(nav)].every((a) => a === undefined)).toBe(true);
   });
 
   it("warns in a dev build when it has no name", () => {

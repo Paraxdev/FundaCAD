@@ -2,15 +2,17 @@
 
 FundaCAD has to work with NVDA on Windows, VoiceOver on macOS and Orca on Linux. CI reads the page and each
 platform's accessibility tree on every push (see [What CI checks](#what-ci-checks)), but no job can listen to a
-screen reader. This page is the hand check a person runs before each release: about ten minutes per screen reader,
-the same eight steps everywhere, and a results table that keeps what was heard.
+screen reader. This page is the hand check a person runs before each release: about twenty minutes per screen
+reader, the same thirteen steps everywhere, and a results table that keeps what was heard.
 
 ## What CI checks
 
 | Check | Where | Red when |
 | --- | --- | --- |
 | axe-core 4.10.2 (WCAG 2.0, 2.1 and 2.2, A and AA) over Home, the empty workspace, an open example, Sketch, Extrude, Settings, Render, Stress, the command palette and a confirm dialog | `e2e` job, step "Accessibility smoke (axe and aria snapshots)", `tools/harness/tests/browser/test_a11y.py` | a rule finds more nodes on a screen than `tools/harness/tests/browser/axe_baseline.json` allows, or a rule the baseline does not list for that screen finds any |
-| Aria snapshots of the shell, Home and Settings | the same step, partial templates in `tools/harness/tests/browser/aria/` | a landmark, role or name a template holds is gone or renamed |
+| Aria snapshots of the shell, Home, Settings and the command palette (`fil` typed and ArrowDown pressed: the combobox, its named listbox, Fillet with its group and key, and the active match selected) | the same step, partial templates in `tools/harness/tests/browser/aria/` | a landmark, role or name a template holds is gone or renamed |
+| The Items tree and History by keys alone: Tab reaches one row or step, arrows walk them, Space selects, F2 renames, Shift+F10 opens the menu, Alt and an arrow move a step, the Rollback slider names the step it sits after | the same step, `tools/harness/tests/browser/test_items_tree_keys.py` and `test_history_keys.py` | a key stops working, focus leaves the row or step, or a role, name, level, state or value text the tests read changes |
+| Pointer targets: at least 24 by 24 CSS px, about 32 with Larger click targets, with no layout change | the same step, `tools/harness/tests/browser/test_targets.py`; the token and hit area guard is `tests/ui/hitTargets.test.ts` in the `test` job | a control on a screen above hits under 24 px either way, a grown area takes another control's centre or the edge of its own box, Larger click targets leaves one under 32 px on the shell, Home, an example, Sketch, Settings, the palette or a confirm (bar the spacing exceptions the test names with their reason), or turning it on moves a control or changes a scroll size |
 | Icon only controls have a name | `node scripts/check-ui-controls.mjs` in the `test` job, and `tests/ui/designSpec.test.ts` | an `IconButton` with no `tip`, a `RailButton` with no `label`, or an icon only `Segmented` option with no `label` or `tip`, and no `aria-label` or `aria-labelledby` either |
 | Linux: the AppImage's AT-SPI tree, what Orca reads | `bundle` job, ubuntu-22.04 leg, step "Dump the AppImage accessibility tree over AT-SPI", `scripts/a11y/atspi_dump.py` | a showing push button, toggle button, menu button or menu item has no name, or the app has no web document |
 | Windows: the exe's UI Automation tree, what NVDA and Narrator read | `bundle` job, windows-latest leg, step "Walk the exe window over UI Automation", `scripts/a11y/uia_walk.ps1` | an on screen Button, SplitButton or MenuItem has no name, there is no Document, or the Document holds no named Button after 120 s |
@@ -113,6 +115,40 @@ Each step says what to do and what you should hear. Mark it in the results: **P*
    the document and focus returns.
 8. **Type in a field (1 min).** In the palette search (Ctrl+K), type `extrude`. Each letter is echoed, Left and Right
    read the character under the caret, and the list of matches is reachable and read. Escape closes the palette.
+9. **Walk the Items tree (2 min).** With "Box with a lid" open, Tab from the Items filter: you hear "Items, tree" and
+   a row with its name, state, level and position ("Origin, expanded, level 1" and "1 of" the count). Down and Up walk
+   the rows, Right opens a folder, Left closes it or goes to its parent. Reach Body1: Space reads it selected. F2
+   reads the rename field, type `Lid` and press Enter: focus is back on the row, now read as Lid. Shift+F10 opens its
+   menu, Hide hides it, and the row now reads hidden. Escape from the menu returns to the row. Typing a letter jumps
+   to the next row that starts with it. Fail: a row read without its level or position, a menu that leaves focus
+   nowhere, or Space moving the view instead of selecting.
+10. **Walk History (2 min).** Tab to the Rollback slider in History: you hear "Rollback, slider" with the step it sits
+    after ("after" the last step's name, "step 4 of 4"). Left arrow rolls back one step and reads the new step. Tab
+    reaches the steps list: one step, read with its name, kind, place and state ("rolled back", "failed", "warning",
+    "suppressed", "selected"), and "current step" on the one the model is rolled to. Left and Right walk the steps,
+    Enter opens a step's values (Tab reaches them), Shift+F10 opens its menu, Alt+Left moves it before its neighbour
+    and you hear where it went. Fail: steps read without a state, focus lost after a move, or the slider read as a
+    bare number.
+11. **Hear the count and the command (1 min).** Press Ctrl+K and type `fil`. After a short pause you hear how many
+   commands match and the first of them, "4 commands. Fillet, Modify, F", once, not once per letter. Press
+   ArrowDown: focus stays in the search field and you hear the second match with its group, "Vertical Edge Fillet,
+   Print" (NVDA may add "2 of 4"). Press ArrowUp: "Fillet, Modify, F", the first match with its group and
+   shortcut. Type more letters until nothing matches: "No matching command". Press Escape: the palette closes
+   and no count follows. Fail: silence on an arrow, a count per letter, or a count after Escape. Orca follows
+   the active match through `aria-activedescendant`, the weakest of the three readers here: write down whether
+   every arrow was read.
+12. **Pick from a list (1 min).** Press Ctrl+, (comma) and Tab to Theme. You hear its name and its value together,
+    "Theme, FundaCAD Noir" (or the theme in use), as a combobox or pop up button, on VoiceOver and Orca as well
+    as NVDA. ArrowDown opens the list, read as "Theme", and each arrow reads one theme. Enter picks it, the list
+    closes and the trigger reads the new value. Escape closes Preferences.
+13. **Pick a material and an environment (2 min).** Press Ctrl+K, type `materials` and press Enter: the Render
+    dock opens. Tab into the material library: you hear "Material library, list box" and one tile by name and
+    finish ("Gold, Satin, metallic"), and the next Tab leaves the grid. The arrows move from tile to tile in rows
+    and columns without changing the model, and a letter jumps to the next tile starting with it. Space selects or
+    deselects the focused tile, Ctrl+A selects them all, and Enter applies the focused tile as a double click
+    does. Open the Environment tab: Studio is one Tab stop too ("Environment, list box", then "Studio, Neutral
+    room, even light"), and Space or Enter puts the focused one in use. Fail: a Tab stop per tile, an arrow that
+    also turns the view, or a tile read without its selected state.
 
 Some of these are expected to be silent today: tool prompts, the added feature and toasts are spoken once the
 announcer lands. Record what you hear anyway. A step that was P and turns S or W is a regression and blocks the
@@ -130,9 +166,9 @@ When there is time left, or before a major release:
 
 ## Results
 
-Newest first. Write the steps as eight marks in order, like `P P P S S W P P`, and put each W in the notes.
+Newest first. Write the steps as thirteen marks in order, like `P P P S S W P P P P P P P`, and put each W in the notes.
 
-| Date | FundaCAD | OS and session | Package | Webview | Screen reader | Steps 1 to 8 | Tester | Notes |
+| Date | FundaCAD | OS and session | Package | Webview | Screen reader | Steps 1 to 13 | Tester | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | to record | next release | Ubuntu 24.04 GNOME, Wayland (XWayland) | Flatpak | WebKitGTK 4.1, GNOME 50 runtime | Orca |  |  | First run, the Orca on WebKitGTK 4.1 baseline. Note key echo and caret tracking under XWayland. |
 | to record | next release | Ubuntu 22.04 GNOME, X11 | `.deb` | WebKitGTK 4.1 (system) | Orca |  |  | First run, the X11 half of the baseline. |

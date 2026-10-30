@@ -44,6 +44,17 @@ fn is_hash(s: &str) -> bool {
     s.len() == 32 && s.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 
+/// The stored meshes for `keys`. An absent mesh is a cache miss, never an error.
+pub fn mesh_sources(dir: &std::path::Path, keys: Vec<String>) -> BTreeMap<String, PathBuf> {
+    keys.into_iter()
+        .filter(|k| is_safe_key(k))
+        .filter_map(|k| {
+            let p = dir.join(format!("{k}.bin"));
+            p.exists().then_some((k, p))
+        })
+        .collect()
+}
+
 /// `container_save` without the app handle.
 #[allow(clippy::too_many_arguments)]
 pub fn save_document(
@@ -56,6 +67,11 @@ pub fn save_document(
     carried: Vec<fundacad_format::fnda::Carried>,
     app_version: &str,
 ) -> Result<(), String> {
+    if !hashes.iter().all(|h| is_hash(h)) {
+        return Err("This document names imported geometry by a malformed id, so saving was stopped. \
+                    The previous file is unchanged."
+            .to_string());
+    }
     let mut blobs = BTreeMap::new();
     let mut missing = Vec::new();
     for h in hashes {
@@ -84,13 +100,7 @@ pub fn save_document(
         }
     }
 
-    let mut meshes = BTreeMap::new();
-    for k in mesh_keys {
-        let p = stores.meshes.join(format!("{k}.bin"));
-        if p.exists() {
-            meshes.insert(k, p); // absent meshes are a cache miss, never an error
-        }
-    }
+    let meshes = mesh_sources(&stores.meshes, mesh_keys);
 
     let carried: Vec<_> = carried
         .into_iter()
@@ -113,6 +123,7 @@ pub fn save_document(
 #[tauri::command]
 pub async fn container_save(
     app: tauri::AppHandle,
+    held: tauri::State<'_, crate::doc_paths::Provenance>,
     path: String,
     document_json: String,
     hashes: Vec<String>,
@@ -120,11 +131,12 @@ pub async fn container_save(
     optional_hashes: Option<Vec<String>>,
     carried: Option<Vec<fundacad_format::fnda::Carried>>,
 ) -> Result<(), String> {
+    let path = held.check_save(&path)?;
     let stores = Stores { blobs: blob_dir(&app)?, meshes: mesh_dir(&app)?, sections: section_dir(&app)? };
     let app_version = app.package_info().version.to_string();
     save_document(
         &stores,
-        std::path::Path::new(&path),
+        &path,
         &document_json,
         hashes,
         optional_hashes.unwrap_or_default(),
@@ -136,10 +148,15 @@ pub async fn container_save(
 
 /// Opens a binary or JSON document. Its blobs land in the store before this returns, so the rebuild on load finds them.
 #[tauri::command]
-pub async fn container_open(app: tauri::AppHandle, path: String) -> Result<String, String> {
+pub async fn container_open(
+    app: tauri::AppHandle,
+    held: tauri::State<'_, crate::doc_paths::Provenance>,
+    path: String,
+) -> Result<String, String> {
+    let path = held.check_open(&path)?;
     let blobs = blob_dir(&app)?;
     let meshes = mesh_dir(&app)?;
-    open_document_checked(std::path::Path::new(&path), &blobs, Some(&meshes)).map(|(doc, _)| doc)
+    open_document_checked(&path, &blobs, Some(&meshes)).map(|(doc, _)| doc)
 }
 
 #[derive(serde::Serialize)]
@@ -154,11 +171,16 @@ pub struct OpenedDocument {
 /// `container_open`, plus what the error correction had to repair. A file that
 /// needed repair opens normally; saving it writes a clean copy.
 #[tauri::command]
-pub async fn container_open_checked(app: tauri::AppHandle, path: String) -> Result<OpenedDocument, String> {
+pub async fn container_open_checked(
+    app: tauri::AppHandle,
+    held: tauri::State<'_, crate::doc_paths::Provenance>,
+    path: String,
+) -> Result<OpenedDocument, String> {
+    let path = held.check_open(&path)?;
     let blobs = blob_dir(&app)?;
     let meshes = mesh_dir(&app)?;
     let sections = section_dir(&app)?;
-    let o = open_document_full(std::path::Path::new(&path), &blobs, Some(&meshes), Some(&sections))?;
+    let o = open_document_full(&path, &blobs, Some(&meshes), Some(&sections))?;
     Ok(OpenedDocument {
         document: o.document,
         repaired_shards: o.report.repaired_shards,
@@ -202,12 +224,38 @@ pub async fn container_open_bytes(
 
 /// Check a format 2 file end to end without opening it.
 #[tauri::command]
-pub async fn container_verify(path: String) -> Result<fundacad_format::fnda::RepairReport, String> {
-    fundacad_format::fnda::verify(std::path::Path::new(&path))
+pub async fn container_verify(
+    held: tauri::State<'_, crate::doc_paths::Provenance>,
+    path: String,
+) -> Result<fundacad_format::fnda::RepairReport, String> {
+    verify_document(&held, &path)
+}
+
+pub fn verify_document(
+    held: &crate::doc_paths::Provenance,
+    path: &str,
+) -> Result<fundacad_format::fnda::RepairReport, String> {
+    fundacad_format::fnda::verify(&held.check_open(path)?)
 }
 
 /// True if `path` is a container rather than a legacy plain-JSON document.
 #[tauri::command]
-pub fn container_is_container(path: String) -> bool {
-    looks_like_container(std::path::Path::new(&path))
+pub fn container_is_container(held: tauri::State<'_, crate::doc_paths::Provenance>, path: String) -> bool {
+    held.check_open(&path).is_ok_and(|p| looks_like_container(&p))
+}
+
+/// A linked document's size and modified time, or null when it is gone. Async so a slow network stat never holds the
+/// main thread.
+#[tauri::command]
+pub async fn container_stat(
+    held: tauri::State<'_, crate::doc_paths::Provenance>,
+    path: String,
+) -> Result<Option<crate::doc_paths::DocStat>, String> {
+    held.stat(&path)
+}
+
+/// The user picked `path` on Home's recent list or a Home folder, so it may be opened this session.
+#[tauri::command]
+pub fn paths_note_recent(held: tauri::State<'_, crate::doc_paths::Provenance>, path: String) -> Result<(), String> {
+    held.note_recent(&path)
 }

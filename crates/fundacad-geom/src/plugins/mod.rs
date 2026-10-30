@@ -5,7 +5,7 @@ mod host;
 mod kernel_api;
 mod kernel_ext;
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use std::time::{Duration, Instant, SystemTime};
@@ -65,6 +65,10 @@ struct Registry {
 }
 
 const RESCAN_EVERY: Duration = Duration::from_secs(1);
+const RECORD: &str = "installed.json";
+/// Written by src-tauri/src/plugins `write_disabled`, the ids switched off in the window.
+const DISABLED: &str = "disabled_ids.json";
+const LIST_TRIES: u32 = 10;
 
 impl Registry {
     fn replace(&mut self, found: Vec<Declared>) {
@@ -130,19 +134,35 @@ pub fn reset_for_tests() {
     reg.checked = None;
 }
 
+/// A directory plugins are read from. With `records`, a plugin counts only beside the app's consent record for it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PluginRoot {
+    pub dir: PathBuf,
+    pub records: bool,
+}
+
+fn checkout_plugins() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugins")
+}
+
+/// Every root but a checkout's own plugins/, which has no records, needs them: the app's install dir is one.
+pub fn plugin_root(dir: PathBuf) -> PluginRoot {
+    PluginRoot { records: !same_dir(&dir, &checkout_plugins()), dir }
+}
+
 /// FUNDACAD_PLUGIN_DIR, then a checkout's own plugins/.
-pub fn plugin_roots() -> Vec<PathBuf> {
-    let mut out: Vec<PathBuf> = Vec::new();
+pub fn plugin_roots() -> Vec<PluginRoot> {
+    let mut out: Vec<PluginRoot> = Vec::new();
     if let Some(dir) = std::env::var_os("FUNDACAD_PLUGIN_DIR").filter(|d| !d.is_empty()) {
-        out.push(PathBuf::from(dir));
+        out.push(plugin_root(PathBuf::from(dir)));
     }
     if cfg!(debug_assertions) {
-        let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugins");
-        if !out.iter().any(|p| same_dir(p, &repo)) {
-            out.push(repo);
+        let repo = checkout_plugins();
+        if !out.iter().any(|p| same_dir(&p.dir, &repo)) {
+            out.push(PluginRoot { dir: repo, records: false });
         }
     }
-    out.into_iter().filter(|d| d.is_dir()).collect()
+    out.into_iter().filter(|r| r.dir.is_dir()).collect()
 }
 
 fn same_dir(a: &Path, b: &Path) -> bool {
@@ -171,26 +191,85 @@ fn discover() -> Vec<Declared> {
     discover_in(&plugin_roots())
 }
 
-fn discover_in(roots: &[PathBuf]) -> Vec<Declared> {
+/// The app's install record, src-tauri/src/plugins `Installed`. It covers the manifest when the grants the person agreed
+/// to equal the ones asked for now, as sets.
+fn consented(dir: &Path, man: &Value) -> bool {
+    let Some(record) = std::fs::read(dir.join(RECORD)).ok().and_then(|b| serde_json::from_slice::<Value>(&b).ok())
+    else {
+        return false;
+    };
+    let Some(agreed) = record.pointer("/consented/grants").and_then(Value::as_array) else {
+        return false;
+    };
+    let agreed: BTreeSet<&str> = agreed.iter().filter_map(Value::as_str).collect();
+    let asked: BTreeSet<&str> =
+        man.get("grants").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).collect();
+    agreed == asked
+}
+
+/// None when a list is missing or unreadable, which switches every plugin off: the window writes one at every start and
+/// on every switch, renamed into place whole, so only a root an older version installed has none.
+fn switched_off(roots: &[PluginRoot]) -> Option<BTreeSet<String>> {
+    let mut off = BTreeSet::new();
+    for root in roots.iter().filter(|r| r.records) {
+        let bytes = read_list(&root.dir.join(DISABLED)).ok()?;
+        off.extend(serde_json::from_slice::<Vec<String>>(&bytes).ok()?);
+    }
+    Some(off)
+}
+
+/// Windows refuses a read while another process holds the file unshared, which a scanner or a replace does for a moment.
+fn read_list(path: &Path) -> std::io::Result<Vec<u8>> {
+    let mut tries = 0;
+    loop {
+        match std::fs::read(path) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound && tries < LIST_TRIES => {
+                tries += 1;
+                std::thread::sleep(Duration::from_millis(25));
+            }
+            read => return read,
+        }
+    }
+}
+
+/// The ids discovery would register from these roots, in the order it finds them.
+pub fn discovered_ids(roots: &[PluginRoot]) -> Vec<String> {
+    discover_in(roots).into_iter().map(|d| d.id).collect()
+}
+
+fn discover_in(roots: &[PluginRoot]) -> Vec<Declared> {
     let mut out: Vec<Declared> = Vec::new();
+    // From the app's root, and applied to every root, so a checkout's copy does not stand in for one switched off.
+    let Some(off) = switched_off(roots) else {
+        return out;
+    };
     for root in roots {
-        let Ok(rd) = std::fs::read_dir(root) else {
+        let Ok(rd) = std::fs::read_dir(&root.dir) else {
             continue;
         };
         let mut dirs: Vec<PathBuf> = rd.filter_map(|e| e.ok()).map(|e| e.path()).collect();
         dirs.sort();
         for dir in dirs.into_iter().filter(|d| d.is_dir()) {
+            // The app unpacks bundles nobody has agreed to yet into .inspect- and .staging- dirs of its root.
+            if dir.file_name().is_some_and(|n| n.to_string_lossy().starts_with('.')) {
+                continue;
+            }
             let Some(man) =
                 std::fs::read(dir.join("manifest.json")).ok().and_then(|b| serde_json::from_slice::<Value>(&b).ok())
             else {
                 continue;
             };
+            if root.records && !consented(&dir, &man) {
+                continue;
+            }
             let id = man
                 .get("id")
                 .and_then(Value::as_str)
                 .map(str::to_owned)
                 .unwrap_or_else(|| dir.file_name().unwrap_or_default().to_string_lossy().into_owned());
-            if out.iter().any(|d| d.id == id) {
+            // The window names an installed plugin by its directory, which a manifest's own id need not match.
+            let named = dir.file_name().unwrap_or_default().to_string_lossy();
+            if off.contains(&id) || off.contains(named.as_ref()) || out.iter().any(|d| d.id == id) {
                 continue;
             }
             let wasm = man.get(MANIFEST_WASM).and_then(Value::as_str).map(str::to_owned);

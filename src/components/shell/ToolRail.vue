@@ -24,9 +24,10 @@ import { HOLD_MS, IDLE, holdStep, type HoldEvent, type HoldPhase } from "../../u
 import { contextMenu } from "../../ui/menu";
 import { useSelectionOffers } from "../../composables/useSelectionOffers";
 import { runningTool } from "../../ui/runningTool";
-import { railActive } from "../../ui/railActive";
+import { railActive, railToggles } from "../../ui/railActive";
 import RailButton from "../ui/RailButton.vue";
 import Popover from "../ui/Popover.vue";
+import Toolbar from "../ui/Toolbar.vue";
 
 const engine = useEngine();
 const ribbon = useRibbonStore();
@@ -184,6 +185,7 @@ const flyout = shallowRef<{ id: string; anchor: HTMLElement; items: RailTool[] }
 const hold = shallowRef<HoldPhase>(IDLE);
 let holdTimer: ReturnType<typeof setTimeout> | null = null;
 let pressDown = false;
+let pressedFamily: string | null = null;
 const tiles = new Map<string, HTMLElement>();
 
 function family(id: string): RailFamily | null {
@@ -262,6 +264,7 @@ function sendHold(ev: HoldEvent) {
 function onFamilyDown(e: PointerEvent, f: RailFamily) {
   if (e.button !== 0 || f.style === "category") return;
   pressDown = true;
+  pressedFamily = f.id;
   tiles.set(f.id, tileOf(e));
   (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
   sendHold({ type: "press", groupId: f.id, hasVariants: f.items.length > 1 });
@@ -270,7 +273,11 @@ function onFamilyDown(e: PointerEvent, f: RailFamily) {
 }
 
 function onFamilyClick(e: MouseEvent, f: RailFamily) {
-  if (f.style !== "category") return;
+  // A pointer press on a variants face went through the hold gesture; a click without one came from a key or a
+  // screen reader, and opens the variants like a category.
+  const pointer = pressedFamily === f.id;
+  pressedFamily = null;
+  if (f.style !== "category" && pointer) return;
   tiles.set(f.id, tileOf(e));
   if (flyout.value?.id === f.id) closeFlyout();
   else openFlyout(f);
@@ -291,6 +298,8 @@ function rowAt(x: number, y: number): { groupId: string; action: string } | null
   return action ? { groupId: open.id, action } : null;
 }
 function onWindowUp(e: PointerEvent) {
+  // The click this release makes comes after it in the same task, and reads the press first.
+  if (pressedFamily) setTimeout(() => (pressedFamily = null), 0);
   if (e.button !== 0 || !pressDown) return;
   const over = rowAt(e.clientX, e.clientY);
   // A finger that held a family open and lifted off its rows leaves the list
@@ -359,6 +368,15 @@ function run(action: string, ev?: MouseEvent) {
 function isActive(action: string): boolean {
   return railActive(action, mode.value, ribbon.activeSketchTool, ribbon.viewOn);
 }
+const pressedOf = (action: string) => (railToggles(action, mode.value) ? isActive(action) : undefined);
+
+/** A family is a popup button, so which of its tools is on goes into its name instead of aria-pressed. */
+function familyState(f: RailFamily): string {
+  const on = f.items.find((t) => isActive(t.action));
+  if (!on) return "";
+  return f.style === "category" ? `${on.label} on` : "on";
+}
+const flyoutLabel = computed(() => (flyout.value ? (family(flyout.value.id)?.label ?? "Tools") : "Tools"));
 
 function toggleIsolate() {
   if (isolateActive.value) {
@@ -384,134 +402,144 @@ function toggleIsolate() {
     :data-sketch-tool="mode === 'sketch' ? ribbon.activeSketchTool : undefined"
     aria-label="Tools"
   >
-    <div ref="listEl" class="rail-list">
-      <RailButton
-        icon="search"
-        label="Search"
-        keys="Ctrl F"
-        data-action="search"
-        @click="cmdk.toggle(ribbon.context)"
-      />
-      <RailButton
-        v-if="mode === 'sketch'"
-        icon="close"
-        label="Exit Sketching"
-        :sub="sketchName"
-        data-action="finish"
-        @click="ribbon.act('finish')"
-      />
-      <RailButton
-        v-else-if="mode === 'running' && running"
-        :icon="running.icon"
-        :label="running.label"
-        keys="Esc"
-        active
-        data-action="running-tool"
-        @click="running.cancel()"
-      />
-      <RailButton
-        v-else-if="mode === 'selection'"
-        icon="select-all"
-        label="Deselect All"
-        :sub="sel.summary.value"
-        keys="Esc"
-        data-action="deselect"
-        @click="sel.clear()"
-      />
-      <div class="rail-sep" aria-hidden="true"></div>
+    <Toolbar class="rail-bar" label="Tools" orientation="vertical">
+      <div ref="listEl" class="rail-list">
+        <RailButton
+          icon="search"
+          label="Search"
+          keys="Ctrl F"
+          data-action="search"
+          @click="cmdk.toggle(ribbon.context)"
+        />
+        <RailButton
+          v-if="mode === 'sketch'"
+          icon="close"
+          label="Exit Sketching"
+          :sub="sketchName"
+          data-action="finish"
+          @click="ribbon.act('finish')"
+        />
+        <RailButton
+          v-else-if="mode === 'running' && running"
+          :icon="running.icon"
+          :label="running.label"
+          keys="Esc"
+          active
+          data-action="running-tool"
+          @click="running.cancel()"
+        />
+        <RailButton
+          v-else-if="mode === 'selection'"
+          icon="select-all"
+          label="Deselect All"
+          :sub="sel.summary.value"
+          keys="Esc"
+          data-action="deselect"
+          @click="sel.clear()"
+        />
+        <div class="rail-sep" aria-hidden="true"></div>
 
-      <template v-for="e in entries" :key="e.kind === 'tool' ? e.action : e.id">
-        <RailButton
-          v-if="e.kind === 'tool'"
-          :icon="e.icon"
-          :label="e.label"
-          :keys="e.keys"
-          :active="isActive(e.action)"
-          :data-action="e.action"
-          @click="run(e.action, $event)"
-        />
-        <RailButton
-          v-else
-          :icon="e.style === 'variants' ? faceOf(e, chosen[e.id]).icon : e.icon"
-          :label="e.label"
-          :sub="
-            e.style === 'variants' && faceOf(e, chosen[e.id]).label !== e.label ? faceOf(e, chosen[e.id]).label : ''
-          "
-          :keys="e.style === 'variants' ? faceOf(e, chosen[e.id]).keys : ''"
-          :active="e.items.some((t) => isActive(t.action)) || flyout?.id === e.id"
-          menu
-          :data-family="e.id"
-          data-own-touch
-          :class="{ holding: hold.phase !== 'idle' && 'groupId' in hold && hold.groupId === e.id }"
-          @pointerdown="onFamilyDown($event, e)"
-          @click="onFamilyClick($event, e)"
-          @contextmenu="onFamilyContext($event, e)"
-        />
-      </template>
+        <template v-for="e in entries" :key="e.kind === 'tool' ? e.action : e.id">
+          <RailButton
+            v-if="e.kind === 'tool'"
+            :icon="e.icon"
+            :label="e.label"
+            :keys="e.keys"
+            :active="isActive(e.action)"
+            :pressed="pressedOf(e.action)"
+            :data-action="e.action"
+            @click="run(e.action, $event)"
+          />
+          <RailButton
+            v-else
+            :icon="e.style === 'variants' ? faceOf(e, chosen[e.id]).icon : e.icon"
+            :label="e.label"
+            :sub="
+              e.style === 'variants' && faceOf(e, chosen[e.id]).label !== e.label ? faceOf(e, chosen[e.id]).label : ''
+            "
+            :keys="e.style === 'variants' ? faceOf(e, chosen[e.id]).keys : ''"
+            :active="e.items.some((t) => isActive(t.action)) || flyout?.id === e.id"
+            menu
+            popup="dialog"
+            :expanded="flyout?.id === e.id"
+            :spoken="familyState(e)"
+            :data-family="e.id"
+            data-own-touch
+            :class="{ holding: hold.phase !== 'idle' && 'groupId' in hold && hold.groupId === e.id }"
+            @pointerdown="onFamilyDown($event, e)"
+            @click="onFamilyClick($event, e)"
+            @contextmenu="onFamilyContext($event, e)"
+          />
+        </template>
 
-      <!-- A plugin's tools, folded under its own name (selection mode only). -->
-      <template v-for="g in mode === 'selection' ? sel.pluginGroups.value : []" :key="`grp:${g.pluginId}`">
-        <RailButton
-          class="rail-group"
-          :class="{ collapsed: isCollapsed(g.pluginId) }"
-          :icon="isCollapsed(g.pluginId) ? 'caretRight' : 'caretDown'"
-          :icon-size="18"
-          :label="g.name"
-          :tip="`${g.name} · ${g.offers.length} tool${g.offers.length === 1 ? '' : 's'}`"
-          :aria-expanded="!isCollapsed(g.pluginId)"
-          :data-group="g.pluginId"
-          @click="toggleGroup(g.pluginId)"
-        />
-        <RailButton
-          v-for="o in isCollapsed(g.pluginId) ? [] : g.offers"
-          :key="`offer:${o.tool}`"
-          class="rail-child"
-          :icon="o.iconName"
-          :label="o.label"
-          :keys="o.hint"
-          :data-action="`offer:${o.tool}`"
-          @click="run(`offer:${o.tool}`, $event)"
-        />
-      </template>
-    </div>
+        <!-- A plugin's tools, folded under its own name (selection mode only). -->
+        <template v-for="g in mode === 'selection' ? sel.pluginGroups.value : []" :key="`grp:${g.pluginId}`">
+          <RailButton
+            class="rail-group"
+            :class="{ collapsed: isCollapsed(g.pluginId) }"
+            :icon="isCollapsed(g.pluginId) ? 'caretRight' : 'caretDown'"
+            :icon-size="18"
+            :label="g.name"
+            :tip="`${g.name} · ${g.offers.length} tool${g.offers.length === 1 ? '' : 's'}`"
+            :aria-expanded="!isCollapsed(g.pluginId)"
+            :data-group="g.pluginId"
+            @click="toggleGroup(g.pluginId)"
+          />
+          <RailButton
+            v-for="o in isCollapsed(g.pluginId) ? [] : g.offers"
+            :key="`offer:${o.tool}`"
+            class="rail-child"
+            :icon="o.iconName"
+            :label="o.label"
+            :keys="o.hint"
+            :data-action="`offer:${o.tool}`"
+            @click="run(`offer:${o.tool}`, $event)"
+          />
+        </template>
+      </div>
 
-    <div class="rail-list rail-foot">
-      <template v-if="mode === 'sketch'">
-        <RailButton
-          icon="offset"
-          label="Construction"
-          :sub="sketchPalette.state.construction ? 'On' : 'Off'"
-          :active="sketchPalette.state.construction"
-          data-action="construction"
-          @click="engine.handleAction('construction')"
-        />
-      </template>
-      <template v-else>
-        <RailButton
-          icon="isolate"
-          label="Isolate"
-          :sub="isolateActive ? 'On' : 'Off'"
-          :active="isolateActive"
-          data-action="isolate"
-          @click="toggleIsolate()"
-        />
-        <RailButton
-          icon="section"
-          label="Section View"
-          :sub="sectionOn ? 'On' : 'Off'"
-          :active="sectionOn"
-          data-action="section"
-          @click="ribbon.act('section')"
-        />
-        <RailButton
-          icon="measure"
-          label="Measure"
-          :active="measureOn"
-          data-action="measure"
-          @click="ribbon.act('measure')"
-        />
-      </template>
-    </div>
+      <div class="rail-list rail-foot">
+        <template v-if="mode === 'sketch'">
+          <RailButton
+            icon="offset"
+            label="Construction"
+            :sub="sketchPalette.state.construction ? 'On' : 'Off'"
+            :active="sketchPalette.state.construction"
+            :pressed="sketchPalette.state.construction"
+            data-action="construction"
+            @click="engine.handleAction('construction')"
+          />
+        </template>
+        <template v-else>
+          <RailButton
+            icon="isolate"
+            label="Isolate"
+            :sub="isolateActive ? 'On' : 'Off'"
+            :active="isolateActive"
+            :pressed="isolateActive"
+            data-action="isolate"
+            @click="toggleIsolate()"
+          />
+          <RailButton
+            icon="section"
+            label="Section View"
+            :sub="sectionOn ? 'On' : 'Off'"
+            :active="sectionOn"
+            :pressed="sectionOn"
+            data-action="section"
+            @click="ribbon.act('section')"
+          />
+          <RailButton
+            icon="measure"
+            label="Measure"
+            :active="measureOn"
+            :pressed="measureOn"
+            data-action="measure"
+            @click="ribbon.act('measure')"
+          />
+        </template>
+      </div>
+    </Toolbar>
 
     <Popover
       v-if="flyout"
@@ -520,9 +548,15 @@ function toggleIsolate() {
       side="right"
       :gap="6"
       kind="rail-flyout"
+      :label="flyoutLabel"
       @close="closeFlyout()"
     >
-      <div class="rail-flyout-grid" :style="{ gridTemplateRows: `repeat(${flyoutRows}, auto)` }">
+      <Toolbar
+        class="rail-flyout-grid"
+        :label="`${flyoutLabel} tools`"
+        orientation="both"
+        :style="{ gridTemplateRows: `repeat(${flyoutRows}, auto)` }"
+      >
         <RailButton
           v-for="(t, i) in flyout.items"
           :key="t.action"
@@ -531,10 +565,11 @@ function toggleIsolate() {
           :label="t.label"
           :keys="t.keys"
           :active="isActive(t.action)"
+          :pressed="pressedOf(t.action)"
           :data-pick="t.action"
           @click="pickFromFlyout(t, $event)"
         />
-      </div>
+      </Toolbar>
     </Popover>
   </nav>
 </template>

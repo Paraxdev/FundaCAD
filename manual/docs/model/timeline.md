@@ -8,11 +8,11 @@ Ctrl+Alt+H shows or hides the card.
 
 ## Working with steps
 
-- Click a step to open its values under it, and click it again to fold it.
-- Double-click a step to edit it with its own tool. Esc goes back.
-- Press F2 to rename the selected step.
-- Ctrl-click or Shift-click to take several steps, then right-click to suppress or delete them together.
-- With something selected, Related to Selection shows only the steps that made it.
+1. Click a step to open its values under it, and click it again to fold it.
+2. Double-click a step to edit it with its own tool. Esc goes back.
+3. Press F2 to rename the selected step.
+4. Ctrl-click or Shift-click to take several steps, then right-click to suppress or delete them together.
+5. With something selected, Related to Selection shows only the steps that made it.
 
 Right-click a step for Edit, Rename, Suppress, Add condition, Roll back before this, Roll to here and Delete. [Reorder and suppress](suppress.md) has more on suppressing and conditions.
 

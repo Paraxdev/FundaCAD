@@ -651,8 +651,9 @@ export type CoreFeature =
       notes?: string[];
       // The unit a glTF, VRML or X3D file declared, informational: stored geometry is already millimetres.
       unit?: string;
-      // Kept in step with another FundaCAD document; `stamp` fingerprints what it held when last read.
-      link?: { path: string; stamp: string };
+      // Kept in step with another FundaCAD document; `stamp` fingerprints what it held when last read, `size` and
+      // `mtime` (ms since the epoch) are the file's then, which tell an open whether it changed without reading it.
+      link?: { path: string; stamp: string; size?: number; mtime?: number };
       // Set by GeometryBackend.generateShape and read back by that plugin; the build ignores it.
       generatedBy?: { plugin: string; spec: Record<string, unknown> };
       // A read only reference scan: one mesh, never in a boolean, snapped to and measured but not edited.

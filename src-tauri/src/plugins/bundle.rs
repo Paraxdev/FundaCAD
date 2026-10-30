@@ -41,16 +41,77 @@ pub fn sha256_hex(bytes: &[u8]) -> String {
     hex_of(&h.finalize())
 }
 
-/// Labels a plugin, never permits one. The prefix test works only because the prefix ends at a path separator, without
-/// it `https://github.com/Paraxdev` would also match `https://github.com/Paraxdev.evil.com/`.
-pub fn is_official_url(url: &str) -> bool {
-    if !url.starts_with(BUNDLE_PREFIX) {
-        return false;
+const BUNDLE_HOST: &str = "github.com";
+const BUNDLE_PATH: &str = "/Paraxdev/fundacad/releases/download/";
+
+/// Labels a plugin, never permits one. Decided on the parsed URL, which is the one fetched, and only when the parser
+/// left the text exactly as written, so the address the consent screen shows is the address downloaded.
+pub fn official_url(raw: &str) -> Option<url::Url> {
+    let parsed = url::Url::parse(raw).ok()?;
+    if parsed.as_str() != raw
+        || parsed.scheme() != "https"
+        || parsed.host_str() != Some(BUNDLE_HOST)
+        || parsed.port().is_some()
+        || !parsed.username().is_empty()
+        || parsed.password().is_some()
+        || parsed.query().is_some()
+        || parsed.fragment().is_some()
+        || parsed.path().contains('%')
+    {
+        return None;
     }
-    let tail = &url[BUNDLE_PREFIX.len()..];
-    // `..` climbs back out of the prefix at fetch time, which would let an
-    // "official" label be worn by an asset somewhere else on the host.
-    !tail.is_empty() && !tail.contains("..") && !tail.contains('@') && !tail.contains("://")
+    let plain = |s: &str| !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || "._+-".contains(c));
+    let mut rest = parsed.path().strip_prefix(BUNDLE_PATH)?.split('/');
+    match (rest.next(), rest.next(), rest.next()) {
+        (Some(tag), Some(asset), None) if plain(tag) && plain(asset) => Some(parsed),
+        _ => None,
+    }
+}
+
+pub fn is_official_url(raw: &str) -> bool {
+    official_url(raw).is_some()
+}
+
+/// The ids of plugins/*/manifest.json whose code runs in the window, kept in step by tests/unit/plugins/official.rs.
+pub const OFFICIAL_IDS: &[&str] = &[
+    "FundaCAD.ExtraParameters",
+    "FundaCAD.Gamepad",
+    "FundaCAD.MultiColor",
+    "FundaCAD.Navigation",
+    "FundaCAD.Onshape",
+    "FundaCAD.Organic",
+    "FundaCAD.PrintLook",
+    "FundaCAD.PrintToolbox",
+    "FundaCAD.Printing",
+    "FundaCAD.ReferenceImages",
+    "FundaCAD.Screws",
+    "FundaCAD.SpaceMouse",
+    "FundaCAD.Texture",
+];
+
+/// A kind that runs in the app's own context is official only as one of the plugins FundaCAD ships, so a release
+/// asset alone cannot introduce new app side code.
+pub fn official_label(url_official: bool, kind: &str, id: &str) -> bool {
+    url_official && (!matches!(kind, "builtin" | "process") || OFFICIAL_IDS.contains(&id))
+}
+
+/// The parsed form is what gets fetched, stored as the source and labelled, so the three cannot disagree.
+pub struct BundleTarget {
+    pub url: url::Url,
+    pub official: bool,
+}
+
+pub fn bundle_target(raw: &str) -> Result<BundleTarget, String> {
+    let refused =
+        || format!("a plugin can only be downloaded over https from a named host, and that is not one: {raw}");
+    if !allowed_bundle_url(raw) {
+        return Err(refused());
+    }
+    let url = url::Url::parse(raw).map_err(|_| refused())?;
+    if !allowed_bundle_url(url.as_str()) {
+        return Err(refused());
+    }
+    Ok(BundleTarget { official: is_official_url(url.as_str()), url })
 }
 
 /// HTTPS, a real host and nothing in the authority that changes its meaning. HTTPS is the point: without it every later

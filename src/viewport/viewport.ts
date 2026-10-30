@@ -28,6 +28,7 @@ import { SectionCaps } from "./sectionCaps";
 import { pickFacePlaneAt } from "../features/facePlanePick";
 import { FpsMeter } from "./fpsMeter";
 import { planeHitMinPx } from "./planeHit";
+import { TILE_ORDER, triadMinScale } from "./originTiles";
 import { StutterWatch } from "./stutterWatch";
 import { MotionQuality, motionPixelScale, pixelBoundView, type DrawnView } from "./motionQuality";
 import { EdgeBlend, EdgeMotionRule, type EdgeLoad, type EdgeMode } from "./edgeMotion";
@@ -116,6 +117,7 @@ import type { TraceState } from "./pathtrace/state";
 import { onWorkspaceChange, workspace } from "../ui/workspace";
 import { invalidateThemeColors } from "./themeColors";
 import { onThemeChange } from "../ui/theme";
+import { onContrastChange } from "../ui/contrastSetting";
 import type { ViewCubeSide } from "../types";
 
 /** A selection captured before a rebuild replaces the Highlighter (selectionMemo.ts). */
@@ -460,7 +462,7 @@ export class Viewport {
       this.overlays = savedOverlays();
       this.requestRender();
     });
-    onThemeChange(() => {
+    const recolor = () => {
       // Explicit, so the result does not depend on which subscriber ran first.
       invalidateThemeColors();
       this.scene.grid.applyTheme();
@@ -470,7 +472,10 @@ export class Viewport {
       this.cube.applyTheme();
       this.emphasis?.setColor(edgeHoverColor());
       this.requestRender();
-    });
+    };
+    onThemeChange(recolor);
+    // More and Maximum swap the muted text and strong line the triad and the cube are painted in.
+    onContrastChange(recolor);
     this.loop();
   }
 
@@ -4519,8 +4524,14 @@ export class Viewport {
           if (this.scene.grid.group.visible) this.reportGridStep(this.scene.grid.step);
         }
         // Origin arrows keep a constant screen size, measured at the origin where they are drawn.
-        if (this.overlayDrawn("origin"))
-          this.scene.triad.update(this.pixelWorldSize(WORLD_ORIGIN), this.modelDiagonal());
+        if (this.overlayDrawn("origin")) {
+          this.scene.triad.update(
+            this.pixelWorldSize(WORLD_ORIGIN),
+            this.modelDiagonal(),
+            triadMinScale(this.planesOnTop),
+          );
+          this.scene.triad.drawOver(this.planesOnTop ? TILE_ORDER.rim : null);
+        }
         if (this.planesOnTop) this.syncOriginTiles();
         // Focus on whatever the view is centred on, every frame since a wheel changes the orbit distance.
         this.scene.post.focusDistance = this.rig.active.position.distanceTo(t);

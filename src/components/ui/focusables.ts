@@ -19,7 +19,7 @@ export function focusables(root: Element | null | undefined): HTMLElement[] {
 }
 
 // Walks up for display:none instead of reading getClientRects, which happy-dom fills even for a hidden element.
-function shown(el: HTMLElement): boolean {
+export function shown(el: HTMLElement): boolean {
   for (let n: Element | null = el; n; n = n.parentElement) if (getComputedStyle(n).display === "none") return false;
   return getComputedStyle(el).visibility !== "hidden";
 }
@@ -28,6 +28,8 @@ const usable = (el: HTMLElement) => el.isConnected && !el.closest("[hidden], [in
 
 function take(el: HTMLElement | null | undefined): boolean {
   if (!el || !usable(el)) return false;
+  // A landmark dropped the tabindex landOn gave it when focus left, so it needs it again to take focus back.
+  if (el.hasAttribute("data-focus-landing")) landOn(el);
   el.focus();
   return document.activeElement === el;
 }
@@ -89,7 +91,11 @@ export function lastFocus(exclude: (node: Node) => boolean = () => false): HTMLE
 // The tabindex goes once focus moves on, so a blank click cannot focus it, but not on the blur of the window leaving.
 export function mainLandmark(): HTMLElement | null {
   const el = document.querySelector<HTMLElement>(LANDMARK);
-  if (!el) return null;
+  return el ? landOn(el) : null;
+}
+
+/** Makes any container focusable the way `mainLandmark` does, for a region with no control to land on. */
+export function landOn(el: HTMLElement): HTMLElement {
   el.setAttribute("data-focus-landing", "");
   if (el.hasAttribute("tabindex")) return el;
   el.setAttribute("tabindex", "-1");

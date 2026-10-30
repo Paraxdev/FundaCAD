@@ -44,7 +44,8 @@
   background: var(--accent-tint-2);
 }
 
-.menubar {
+.menubar,
+.menubar-bar {
   display: flex;
   align-items: stretch;
   height: 100%;
@@ -161,6 +162,12 @@
 }
 .tb-rest {
   display: contents;
+}
+/* Undo and Redo sit in one toolbar box, spaced like the bar's own row. */
+.tb-history {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
 }
 /* Under Home, inert takes these controls' input; a display: contents box paints nothing,
    so the dimming goes on its children. */

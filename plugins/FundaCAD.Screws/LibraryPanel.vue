@@ -243,10 +243,10 @@ const tabStyle = (on: boolean) => ({ fontWeight: on ? 600 : 400, opacity: on ? 1
 </script>
 
 <template>
-  <FloatingPanel :open="open" close-on-esc panel-class="scr-panel" @close="open = false">
+  <FloatingPanel :open="open" title="Fasteners" close-on-esc panel-class="scr-panel" @close="open = false">
     <div class="scr-library" :style="{ width: '860px', maxWidth: '82vw' }" @pointerenter="refreshFace">
       <div :style="{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }">
-        <div class="measure-title" :style="{ margin: 0 }">Fasteners</div>
+        <div class="measure-title" aria-hidden="true" :style="{ margin: 0 }">Fasteners</div>
         <button
           type="button"
           class="btn scr-tab-catalogue"

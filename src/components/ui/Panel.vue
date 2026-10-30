@@ -10,17 +10,22 @@ const props = withDefaults(
     open: boolean;
     title?: string | undefined;
     hint?: string | undefined;
+    /** Keeps the title as a screen reader heading only, for a panel whose content draws its own head. */
+    titleHidden?: boolean;
     /** Draws a close button in the head. */
     closable?: boolean;
     closeOnEsc?: boolean;
     panelClass?: string;
   }>(),
-  { title: undefined, hint: undefined, closable: false, closeOnEsc: false, panelClass: "" },
+  { title: undefined, hint: undefined, titleHidden: false, closable: false, closeOnEsc: false, panelClass: "" },
 );
 const emit = defineEmits<{ close: [] }>();
 const slots = useSlots();
 const titleId = useId();
-const hasHead = computed(() => !!props.title || props.closable || !!slots["head-actions"]);
+const shownTitle = computed(() => !!props.title && !props.titleHidden);
+// An untitled panel, as from a plugin, still needs a name to be a region in the landmarks list.
+const name = computed(() => props.title || "Panel");
+const hasHead = computed(() => shownTitle.value || props.closable || !!slots["head-actions"]);
 
 // Capture phase and no stopPropagation: the panels are non-modal, so Escape also reaches the global handler.
 function onEsc(e: KeyboardEvent) {
@@ -67,11 +72,12 @@ onUnmounted(() => {
       ref="el"
       class="measure-panel ui-panel"
       :class="panelClass"
-      :role="title ? 'region' : undefined"
-      :aria-labelledby="title ? titleId : undefined"
+      role="region"
+      :aria-labelledby="titleId"
     >
+      <h2 v-if="!shownTitle" :id="titleId" class="sr-only">{{ name }}</h2>
       <div v-if="hasHead" class="ui-panel-head">
-        <div v-if="title" :id="titleId" class="measure-title ui-panel-title">{{ title }}</div>
+        <h2 v-if="shownTitle" :id="titleId" class="measure-title ui-panel-title">{{ title }}</h2>
         <slot name="head-actions" />
         <button
           v-if="closable"

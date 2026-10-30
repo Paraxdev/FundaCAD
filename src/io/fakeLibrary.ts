@@ -62,5 +62,6 @@ export function fakeLibrary(files: readonly FakeFile[], picks: readonly string[]
       if (!f) throw new Error("the document is not on disk");
       f.thumb = dataUrl;
     },
+    async vouch() {},
   };
 }

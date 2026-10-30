@@ -43,6 +43,12 @@ describe("Slider speech", () => {
     expect(vi.mocked(announce).mock.calls[0]?.slice(0, 2)).toEqual(["Opacity 55%", "polite"]);
   });
 
+  it("speaks a drag with its valueText in place of the readout", async () => {
+    const w = await render({ valueText: (v: number) => `after step ${v / 10}` });
+    await drag(w, 30);
+    expect(vi.mocked(announce).mock.calls[0]?.[0]).toBe("Opacity after step 3");
+  });
+
   it("names an unlabelled slider by its tip", async () => {
     const w = await render({ label: undefined, tip: "Exposure", unit: "EV", min: -5, max: 5, modelValue: 0 });
     await drag(w, 2);

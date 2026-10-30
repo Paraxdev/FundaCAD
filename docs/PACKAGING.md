@@ -120,6 +120,15 @@ finds or builds the kernel like this:
   (`/O2 /Ob2`) stay in place. A kernel built the old way is recognised by the
   flags in its `build/CMakeCache.txt` and rebuilt once, which a cargo warning
   announces; the `release-flags` stamp in `.fundacad` keeps that to once.
+- **Checked reads.** The kernel is configured with
+  `BUILD_RELEASE_DISABLE_EXCEPTIONS=OFF`, so OCCT keeps its index range checks
+  in Release and an out of range index in a geometry blob throws instead of
+  reading wild memory, and with `BUILD_CPP_STANDARD=C++20`, under which every
+  `stream >> char_array` in the shape readers stops at the array's size. A
+  kernel whose `build/CMakeCache.txt` holds other values is rebuilt once; the
+  `checked-reads` stamp in `.fundacad` keeps that to once. A cached kernel
+  without its `build` directory is not recognised, which is why the CI cache
+  key carries a version token.
 - **CMake 4.** `CMAKE_POLICY_VERSION_MINIMUM=3.5` (set by the root
   `.cargo/config.toml`) lets CMake 4 configure OCCT 7.8.1, whose declared
   minimum it otherwise refuses.

@@ -140,6 +140,19 @@ describe("Render dock rows on the base controls", () => {
     expect(tabBody("environment").isVisible()).toBe(true);
   });
 
+  it("ties the selected tab to its page, which that tab names", async () => {
+    for (const t of ["material", "environment", "camera"]) {
+      await w.get(`[role=tab][data-tab="${t}"]`).trigger("click");
+      const tab = w.get("#renderdock [role=tab][aria-selected=true]");
+      const page = w.get(`[id="${tab.attributes("aria-controls")}"]`);
+      expect([page.element, page.attributes("role"), page.attributes("aria-labelledby")]).toEqual([
+        tabBody(t).element,
+        "tabpanel",
+        tab.attributes("id"),
+      ]);
+    }
+  });
+
   describe("the Camera tab", () => {
     afterEach(() => setRenderPref("focusBlur", 0));
 

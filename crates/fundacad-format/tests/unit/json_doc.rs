@@ -103,3 +103,66 @@ fn refuses_a_document_that_already_uses_the_key() {
     assert!(err.contains("already has"));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn a_text_past_the_cap_is_refused() {
+    let dir = tmpdir("cap_over");
+    let path = dir.join("big.funda");
+    std::fs::write(&path, "x".repeat(33)).unwrap();
+    let err = read_text_capped(&path, 32).unwrap_err();
+    assert!(err.contains("larger than"), "{err}");
+}
+
+#[test]
+fn a_text_at_the_cap_is_read_whole() {
+    let dir = tmpdir("cap_at");
+    let path = dir.join("fit.funda");
+    std::fs::write(&path, "y".repeat(32)).unwrap();
+    assert_eq!(read_text_capped(&path, 32).unwrap(), "y".repeat(32));
+}
+
+struct Unreadable;
+
+impl std::io::Read for Unreadable {
+    fn read(&mut self, _: &mut [u8]) -> std::io::Result<usize> {
+        Err(std::io::Error::other("read"))
+    }
+}
+
+#[test]
+fn a_file_the_disk_reports_past_the_cap_is_refused_unread() {
+    let cap = 3 << 20;
+    let err = read_text_within(Unreadable, cap + 1, cap).unwrap_err();
+    assert_eq!(err, "This document is larger than 3 MiB and was refused.");
+}
+
+#[test]
+fn a_json_document_past_one_gib_is_refused_unread() {
+    let dir = tmpdir("gib_open");
+    let path = dir.join("huge.funda");
+    std::fs::File::create(&path).unwrap().set_len((1 << 30) + 1).unwrap();
+    let got = read_json_document(&path, &dir.join("blobs")).err();
+    let _ = std::fs::remove_dir_all(&dir);
+    assert_eq!(got.as_deref(), Some("This document is larger than 1024 MiB and was refused."));
+}
+
+#[test]
+fn a_json_save_past_one_gib_is_refused_before_writing() {
+    let dir = tmpdir("gib_save");
+    let blob = dir.join("big.bbrep");
+    std::fs::File::create(&blob).unwrap().set_len(800 << 20).unwrap();
+    let dest = dir.join("p.funda");
+    let blobs = BTreeMap::from([("0123456789abcdef0123456789abcdef".to_string(), blob)]);
+    let got = write_json_document(&dest, "{}", &blobs).err();
+    let written = dest.exists();
+    let _ = std::fs::remove_dir_all(&dir);
+    assert_eq!(
+        (got.as_deref(), written),
+        (
+            Some(
+                "This document is larger than the 1024 MiB a .funda file can hold. Save it as a .fundab file instead."
+            ),
+            false
+        )
+    );
+}

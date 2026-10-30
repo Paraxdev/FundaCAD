@@ -217,9 +217,10 @@ describe("dom.ts control state", () => {
     expect([
       chip.dataset.value,
       chip.textContent,
+      chip.getAttribute("aria-label"),
       chip.getAttribute("aria-expanded"),
       chip.getAttribute("aria-controls"),
-    ]).toEqual(["deg", "°", "true", "units-1"]);
+    ]).toEqual(["deg", "°", "Unit, °", "true", "units-1"]);
     setExpanded(chip, false);
     expect([
       chip.getAttribute("aria-expanded"),

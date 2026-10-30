@@ -273,3 +273,43 @@ fn a_section_this_version_does_not_read_survives_a_save_as_fundab_only() {
     assert!(open_document_full(&json, &dir.join("blobs"), None, Some(&carry)).unwrap().carried.is_empty());
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// A manifest hash becomes a file name in the blob store, so a row whose hash is not a digest refuses the open.
+#[test]
+fn a_manifest_hash_that_is_not_a_digest_refuses_the_open() {
+    let dir = tmpdir("hash_row");
+    let outside = blob(&dir, "outside.bbrep", b"kept as it was");
+    let data = b"payload".repeat(10);
+    let src = dir.join("legacy.funda");
+    {
+        let mut z = zip::ZipWriter::new(File::create(&src).unwrap());
+        let opts = SimpleFileOptions::default();
+        let manifest = Manifest {
+            container: 1,
+            hash_alg: HASH_ALG.to_string(),
+            app: String::new(),
+            blobs: vec![BlobRow { entry: "b0".into(), hash: "../outside".into(), bytes: data.len() as u64 }],
+            meshes: vec![],
+        };
+        z.start_file("manifest.json", opts).unwrap();
+        z.write_all(serde_json::to_string(&manifest).unwrap().as_bytes()).unwrap();
+        z.start_file("document.json", opts).unwrap();
+        z.write_all(br#"{"version":5}"#).unwrap();
+        z.start_file("b0", opts).unwrap();
+        z.write_all(&data).unwrap();
+        z.finish().unwrap();
+    }
+
+    let store = dir.join("blobs");
+    let err = read_container(&src, &store, None).unwrap_err();
+    assert!(err.contains("damaged"), "{err}");
+    assert_eq!(std::fs::read(&outside).unwrap(), b"kept as it was");
+    let mut names: Vec<_> = std::fs::read_dir(&dir)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .filter(|n| n != "blobs")
+        .collect();
+    names.sort();
+    assert_eq!(names, ["legacy.funda", "outside.bbrep"], "nothing new beside the store");
+    let _ = std::fs::remove_dir_all(&dir);
+}
