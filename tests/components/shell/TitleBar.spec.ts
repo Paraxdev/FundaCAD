@@ -12,6 +12,7 @@ import type { Engine } from "../../../src/app/engine";
 import type { HomeCallbacks } from "../../../src/ui/home";
 import { useHomeStore } from "../../../src/stores/home";
 import { useUiStore } from "../../../src/stores/ui";
+import { usePanelsStore } from "../../../src/stores/panels";
 import TitleBar from "../../../src/components/shell/TitleBar.vue";
 
 vi.mock("../../../src/app/menubarDef", () => ({
@@ -99,5 +100,32 @@ describe("the document name", () => {
     expect(star.attributes("aria-hidden")).toBe("true");
     expect(name.get(".sr-only").text()).toBe("Unsaved changes");
     expect(spoken(name.element).trim()).toBe("bracket.funda Unsaved changes");
+  });
+});
+
+describe("Undo and Redo in the title bar", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    document.body.innerHTML = "";
+  });
+
+  it("follow the Stress setup while the panel is open, and the model once it closes", async () => {
+    const ui = useUiStore();
+    ui.canUndo = true;
+    ui.canRedo = false;
+    const panels = usePanelsStore();
+    panels.showStress("body1");
+    const w = mount(TitleBar, { attachTo: document.body, global: { provide: { [ENGINE as symbol]: makeEngine() } } });
+    const off = () => ["#undo-btn", "#redo-btn"].map((id) => w.get(id).attributes("aria-disabled") === "true");
+    await nextTick();
+    expect(off()).toEqual([true, true]);
+
+    panels.stress!.canRedo = true;
+    await nextTick();
+    expect(off()).toEqual([true, false]);
+
+    panels.stress = null;
+    await nextTick();
+    expect(off()).toEqual([false, true]);
   });
 });

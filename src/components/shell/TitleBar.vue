@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { markRaw, ref, onMounted, onUnmounted } from "vue";
+import { computed, markRaw, ref, onMounted, onUnmounted } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { useUiStore } from "../../stores/ui";
+import { usePanelsStore } from "../../stores/panels";
 import { useHomeStore } from "../../stores/home";
 import { buildMenubar } from "../../app/menubarDef";
 import { onContribChange } from "../../plugins/contrib";
@@ -21,6 +22,10 @@ import brandLockupLight from "../../../assets/brand/fundacad-lockup-app-light.sv
 const engine = useEngine();
 const ui = useUiStore();
 const home = useHomeStore();
+const panels = usePanelsStore();
+// An open Stress panel undoes its own setup, not the model.
+const canUndo = computed(() => (panels.stress ? panels.stress.canUndo : ui.canUndo));
+const canRedo = computed(() => (panels.stress ? panels.stress.canRedo : ui.canRedo));
 const folded = useMediaQuery(TITLEBAR_FOLD_QUERY);
 
 // The wordmark SVG is light on dark and an <img> cannot be recoloured from CSS, so light themes get a dark-ink asset.
@@ -74,7 +79,7 @@ onUnmounted(() => {
           size="sm"
           variant="plain"
           :icon-size="15"
-          :disabled="!ui.canUndo"
+          :disabled="!canUndo"
           @click="engine.doUndo()"
         />
         <IconButton
@@ -86,7 +91,7 @@ onUnmounted(() => {
           size="sm"
           variant="plain"
           :icon-size="15"
-          :disabled="!ui.canRedo"
+          :disabled="!canRedo"
           @click="engine.doRedo()"
         />
       </Toolbar>

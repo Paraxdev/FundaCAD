@@ -275,22 +275,23 @@ export function createDocumentActions(e: Engine): Pick<Engine, "newDocument" | "
       );
     },
 
-    // An open sketch swallows undo, since store.undo() would remove the whole sketch. Move is put away first, or a
-    // re-open waiting on a drag's rebuild lands on the undone model (FI-2). Home closes so the change is seen.
+    // An open sketch swallows undo, since store.undo() would remove the whole sketch, and so does an open Stress panel,
+    // whose setup is not on the model's stack. Move is put away first, or a re-open waiting on a drag's rebuild lands on
+    // the undone model (FI-2). Home closes so the change is seen.
     doUndo() {
       closeHome();
       // A drag not yet entered is the last step, so undo takes back only that.
       const pending = e.tools.move.pending;
       e.tools.move.cancel();
       if (pending) return;
-      if (!e.sketch.undoEdit()) e.store.undo();
+      if (!e.sketch.undoEdit() && !e.ui.panels.undoStress()) e.store.undo();
     },
     doRedo() {
       closeHome();
       // A drag not yet entered is a new step, which leaves nothing to redo.
       if (e.tools.move.pending) return e.tools.move.settle();
       e.tools.move.cancel();
-      if (!e.sketch.redoEdit()) e.store.redo();
+      if (!e.sketch.redoEdit() && !e.ui.panels.redoStress()) e.store.redo();
     },
   };
 }
