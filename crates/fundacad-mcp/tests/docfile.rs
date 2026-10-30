@@ -188,6 +188,26 @@ fn write_fundab_with(
 }
 
 #[test]
+fn a_funda_longer_than_the_app_opens_is_not_written() {
+    let tmp = tempfile::tempdir().unwrap();
+    let data = geometry();
+    let d = digest(&data);
+    let fetched = std::collections::HashMap::from([(d.clone(), data.clone())]);
+    let empty = tmp.path().join("empty");
+    let path = tmp.path().join("part.funda");
+    assert_eq!(docfile::write_with(&path, &doc(&d), Some(&empty), &fetched).unwrap(), 1);
+    let len = std::fs::metadata(&path).unwrap().len();
+    std::fs::remove_file(&path).unwrap();
+
+    for cap in [len - 1, data.len() as u64] {
+        let refused = docfile::write_within(&path, &doc(&d), Some(&empty), &fetched, cap);
+        assert!(refused.is_err_and(|e| e.0.contains(".fundab")), "cap {cap}");
+        assert!(!path.exists(), "cap {cap}");
+    }
+    assert_eq!(docfile::write_within(&path, &doc(&d), Some(&empty), &fetched, len).unwrap(), 1);
+}
+
+#[test]
 fn json_round_trips_with_geometry_embedded_last() {
     let tmp = tempfile::tempdir().unwrap();
     let data = geometry();
@@ -250,6 +270,24 @@ fn damaged_binary_and_wrong_geometry_are_refused() {
     let store = tmp.path().join("b2");
     assert!(docfile::read(&jpath, Some(&store)).is_err(), "geometry that does not match its hash was accepted");
     assert!(!store.join(format!("{d}.bbrep")).exists());
+
+    let zpath = tmp.path().join("bad-zip.funda");
+    let mut z = zip::ZipWriter::new(std::fs::File::create(&zpath).unwrap());
+    let options = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    let manifest = json!({"blobs": [{"hash": d, "entry": "blobs/a.bbrep"}]}).to_string();
+    for (name, data) in [
+        ("document.json", Value::Object(doc(&d)).to_string().into_bytes()),
+        ("manifest.json", manifest.into_bytes()),
+        ("blobs/a.bbrep", b"not the geometry".to_vec()),
+    ] {
+        z.start_file(name, options).unwrap();
+        z.write_all(&data).unwrap();
+    }
+    z.finish().unwrap();
+    let store = tmp.path().join("b3");
+    let err = docfile::read(&zpath, Some(&store)).unwrap_err();
+    assert!(err.to_string().contains("does not match its hash"), "{err}");
+    assert!(!store.join(format!("{d}.bbrep")).exists());
 }
 
 #[test]
@@ -287,6 +325,41 @@ fn a_local_blob_that_no_longer_matches_its_hash_is_not_embedded() {
     assert!(docfile::write(&path, &doc(&d), Some(&store)).is_err());
     let fetched = std::collections::HashMap::from([(d.clone(), data)]);
     assert_eq!(docfile::write_with(&path, &doc(&d), Some(&store), &fetched).unwrap(), 1);
+}
+
+fn with_import_only_in_history(digest: &str) -> Map<String, Value> {
+    let old = json!({"id": "im", "type": "import", "geom": digest}).to_string();
+    json!({"version": 9, "features": [],
+           "versions": {"objects": {"0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f": old, "aa": "not json"}, "versions": []}})
+    .as_object()
+    .unwrap()
+    .clone()
+}
+
+#[test]
+fn geometry_only_an_earlier_version_imports_is_embedded() {
+    let tmp = tempfile::tempdir().unwrap();
+    let data = geometry();
+    let d = digest(&data);
+    let store = tmp.path().join("blobs");
+    std::fs::create_dir_all(&store).unwrap();
+    std::fs::write(store.join(format!("{d}.bbrep")), &data).unwrap();
+    let path = tmp.path().join("part.funda");
+    assert_eq!(docfile::write(&path, &with_import_only_in_history(&d), Some(&store)).unwrap(), 1);
+    let fresh = tmp.path().join("fresh");
+    assert_eq!(docfile::read(&path, Some(&fresh)).unwrap().1, 1);
+    assert_eq!(std::fs::read(fresh.join(format!("{d}.bbrep"))).unwrap(), data);
+}
+
+#[test]
+fn saving_is_refused_when_an_earlier_version_imports_geometry_that_is_gone() {
+    let tmp = tempfile::tempdir().unwrap();
+    let d = digest(&geometry());
+    let path = tmp.path().join("part.funda");
+    let err = docfile::write(&path, &with_import_only_in_history(&d), Some(&tmp.path().join("empty")))
+        .expect_err("saved a document whose history names geometry that is nowhere");
+    assert!(err.to_string().contains("earlier version"), "{err}");
+    assert!(!path.exists());
 }
 
 #[test]
@@ -405,4 +478,11 @@ fn a_funda_with_two_entries_named_document_json_is_refused() {
     });
     let err = docfile::read_document(&path).map(|_| ()).unwrap_err();
     assert!(err.0.contains("is damaged"), "{err}");
+}
+
+#[test]
+fn the_text_limit_is_the_one_the_app_opens_with() {
+    let format = include_str!("../../fundacad-format/src/json_doc.rs");
+    assert!(format.contains("pub const MAX_DOC_TEXT: u64 = 1 << 30;"), "fundacad-format moved its limit");
+    assert_eq!(docfile::MAX_DOC_TEXT, 1 << 30);
 }

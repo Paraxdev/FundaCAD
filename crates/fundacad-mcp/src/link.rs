@@ -93,7 +93,7 @@ pub fn is_rust_engine_app(path: &Path) -> bool {
 }
 
 /// The program and arguments before `--ws`. `FUNDACAD_ENGINE_CMD` overrides it when that binary exists; else the
-/// binary beside this one, then the app beside it (`fundacad --engine`), then target dirs found by walking UP.
+/// binary beside this one, then the app beside it (`fundacad --engine`), then, in a dev build, target dirs found by walking UP.
 pub fn engine_command() -> Vec<String> {
     if let Some(cmd) = appenv("ENGINE_CMD").filter(|c| !c.trim().is_empty()) {
         let parts = split_command(&cmd);
@@ -109,26 +109,38 @@ pub fn engine_command() -> Vec<String> {
     if let Some(app) = app {
         return vec![app.to_string_lossy().into_owned(), "--engine".into()];
     }
-    let mut here = std::env::current_exe()
+    let here = std::env::current_exe()
         .ok()
         .and_then(|e| e.parent().map(PathBuf::from))
         .or_else(|| std::env::current_dir().ok())
         .unwrap_or_default();
-    for _ in 0..8 {
-        for profile in ["debug", "release"] {
-            let candidate = here.join("target").join(profile).join(exe_name());
-            if candidate.is_file() {
-                return vec![candidate.to_string_lossy().into_owned()];
-            }
-        }
-        match here.parent() {
-            Some(parent) => here = parent.to_path_buf(),
-            None => break,
-        }
+    if let Some(built) = target_dir_engine(&here, cfg!(debug_assertions)) {
+        return vec![built.to_string_lossy().into_owned()];
     }
     // Nothing found. Returned rather than refused so the caller fails where it
     // tries to use it, with the name in the message.
     vec![exe_name().to_string()]
+}
+
+/// The engine a checkout built, in `target/{debug,release}` of `start` or a folder above it. Only a dev build
+/// looks: above an installed binary sit folders other accounts may write to.
+pub fn target_dir_engine(start: &Path, dev_build: bool) -> Option<PathBuf> {
+    if !dev_build {
+        return None;
+    }
+    start.ancestors().take(8).find_map(|dir| {
+        ["debug", "release"]
+            .iter()
+            .map(|profile| dir.join("target").join(profile).join(exe_name()))
+            .find(|p| p.is_file())
+    })
+}
+
+fn engine_spawn_error(program: &str, e: io::Error) -> io::Error {
+    if e.kind() != io::ErrorKind::NotFound {
+        return e;
+    }
+    io::Error::new(e.kind(), format!("could not start the engine {program}: {e}. Set FUNDACAD_ENGINE_CMD to its path"))
 }
 
 fn looks_runnable(program: &str) -> bool {
@@ -219,7 +231,7 @@ impl Socket {
         payload.insert("chunked".into(), json!(true));
         let mut streamed: Option<(Map<String, Value>, Vec<MeshBody>)> = None;
         let text = Value::Object(payload).to_string();
-        self.ws.send(Message::Text(text.into())).await.map_err(closed)?;
+        self.ws.send(Message::Text(text.into())).await.map_err(unsent)?;
         loop {
             let Some(msg) = self.ws.next().await else {
                 return Err(io::Error::new(io::ErrorKind::BrokenPipe, "the engine closed the connection"));
@@ -286,6 +298,27 @@ impl Socket {
 fn closed(e: tokio_tungstenite::tungstenite::Error) -> io::Error {
     io::Error::new(io::ErrorKind::BrokenPipe, e.to_string())
 }
+
+/// The request did not leave, so sending it again cannot apply it twice.
+fn unsent(e: tokio_tungstenite::tungstenite::Error) -> io::Error {
+    io::Error::new(io::ErrorKind::NotConnected, e.to_string())
+}
+
+/// Ops a lost reply can ask again: they change nothing, or (blobWrite) the engine refuses a chunk at an
+/// offset it already holds and stores a blob only when its bytes hash to its name.
+const SAFE_TO_RESEND: &[&str] = &[
+    "ping",
+    "session_state",
+    "rebuild",
+    "inspect",
+    "measure",
+    "interference",
+    "printability",
+    "stress",
+    "blobHas",
+    "blobRead",
+    "blobWrite",
+];
 
 pub struct EngineLink {
     port: AtomicU16,
@@ -440,7 +473,7 @@ impl EngineLink {
         }
         cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
         cmd.kill_on_drop(true);
-        let mut child = cmd.spawn()?;
+        let mut child = cmd.spawn().map_err(|e| engine_spawn_error(&argv[0], e))?;
         state.build = None;
         // Drained for the engine's life, or a full pipe blocks its next log line.
         // Our stdout is the MCP protocol, so its output goes to stderr, the host's log.
@@ -524,9 +557,10 @@ impl EngineLink {
                 Ok(Ok(reply)) => return Ok(reply),
                 Ok(Err(e)) => {
                     // The worker can be killed under a socket (a stall reap, an OCCT crash): one silent reconnect,
-                    // then the caller sees the error.
+                    // then the caller sees the error. A change whose reply was lost may have been applied.
                     state.socket = None;
-                    if attempt == 1 {
+                    let resend = e.kind() == io::ErrorKind::NotConnected || SAFE_TO_RESEND.contains(&op);
+                    if attempt == 1 || !resend {
                         return Err(e);
                     }
                 }

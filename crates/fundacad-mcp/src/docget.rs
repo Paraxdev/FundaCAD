@@ -59,6 +59,7 @@ pub fn fold_body_ids(ids: &Map<String, Value>) -> Map<String, Value> {
 /// body. Any other key is kept as it is.
 pub fn unfold_body_ids(ids: &Map<String, Value>) -> Result<Map<String, Value>, String> {
     let mut out = Map::new();
+    let mut unfolded = 0u64;
     for (k, v) in ids {
         let (Some((k0, k1)), Some((v0, v1))) = (k.split_once(".."), v.as_str().and_then(|s| s.split_once(".."))) else {
             out.insert(k.clone(), v.clone());
@@ -80,6 +81,10 @@ pub fn unfold_body_ids(ids: &Map<String, Value>) -> Result<Map<String, Value>, S
         }
         if kn1 - kn0 >= MOST_IN_RANGE {
             return Err(format!("the bodyIds range \"{k}\" stands for more than {MOST_IN_RANGE} bodies"));
+        }
+        unfolded += kn1 - kn0 + 1;
+        if unfolded > MOST_IN_RANGE {
+            return Err(format!("the bodyIds ranges together stand for more than {MOST_IN_RANGE} bodies"));
         }
         for n in 0..=kn1 - kn0 {
             out.insert(format!("{kh}{}", kn0 + n), Value::String(format!("{vh}{}", vn0 + n)));

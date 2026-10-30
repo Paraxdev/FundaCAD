@@ -159,7 +159,7 @@ with Session() as s:
 | `expand(target, open=True)` | opens or closes an Items folder by its caret (a click on the row selects); a label matches the folders first, so an assembly opens by the name its History step shares |
 | `open_file(path, discard=True)` | File > Open, answering the file chooser and the unsaved changes question, returns once the app has loaded the file and is refused with the error it logged when it loaded none |
 | `import_file(path)` | drops the file on the canvas, the way a browser tab imports a model; waits up to 300 s or `settle_timeout`, whichever is longer, and with `settle=False` returns once the file is dropped |
-| `save_as(path)` | File > Save As, the download lands at `path` |
+| `save_as(path)` | File > Save As, the download lands at `path`, a `.funda` file in a folder that exists |
 | `new_document(discard=True)` | Ctrl+N, answering the unsaved changes question |
 | `settle(trace=None, timeout=None)`, `wait_for(text, timeout=10)` | explicit waits, `wait_for` looks at the prompt, and at the messages logged and the labels shown since the last action began |
 
@@ -206,7 +206,7 @@ step line says so, since a browser tab keeps no document over a reload. A second
 ## Recording
 
 `Session(record="walk.py")` writes every action to `walk.py` as it happens, and `python walk.py`
-plays it back in a new session:
+plays it back in a new session. The path must end in `.py` and its folder must already exist:
 
 ```python
 # Recorded by fundacad-harness 0.1.0, driver api 1, 2026-10-20.

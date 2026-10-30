@@ -237,7 +237,8 @@ impl Upload {
         if std::fs::create_dir_all(&dir).is_err() {
             return fail("could not make a place to spool the file.");
         }
-        let spool = dir.join("spool");
+        // safe_filename never keeps a `~`, so no upload name can land on a scratch file.
+        let spool = dir.join("~spool");
         Ok(Upload {
             id,
             compression,
@@ -310,7 +311,7 @@ impl Upload {
     }
 }
 
-fn token_hex(bytes: usize) -> String {
+pub(crate) fn token_hex(bytes: usize) -> String {
     let mut buf = vec![0u8; bytes];
     if getrandom::fill(&mut buf).is_err() {
         let n = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos() as u64);
@@ -497,7 +498,7 @@ fn unzip_one(src_path: &Path, dst_path: &Path, fmt: &str, told_format: bool) -> 
 }
 
 pub fn unpack(up: &mut Upload) -> Result<PathBuf, UploadError> {
-    let payload = up.dir.join("payload");
+    let payload = up.dir.join("~payload");
     decode_spool(up, &payload)?;
     let mut compression = up.compression.clone();
     if up.sniff {

@@ -36,9 +36,17 @@ pub fn own_folder(dir: &Path) -> bool {
     std::fs::symlink_metadata(dir).is_ok_and(|m| m.is_dir()) && owned_by_this_account(dir)
 }
 
-#[cfg(not(windows))]
+/// Owned by this process's effective user and writable by no one else.
+#[cfg(unix)]
+fn owned_by_this_account(dir: &Path) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    let me = unsafe { libc::geteuid() };
+    std::fs::symlink_metadata(dir).is_ok_and(|m| m.uid() == me && m.mode() & 0o022 == 0)
+}
+
+#[cfg(not(any(unix, windows)))]
 fn owned_by_this_account(_dir: &Path) -> bool {
-    true
+    false
 }
 
 /// The folder's owner is this process's user, or the owner its token gives new files, which for an
@@ -101,6 +109,18 @@ fn held(path: &Path) -> std::io::Result<File> {
     o.open(path)
 }
 
+/// The umask would leave the folder group writable on most Linux desktops, which own_folder refuses.
+#[cfg(unix)]
+fn make_private_folder(dir: &Path) -> std::io::Result<()> {
+    use std::os::unix::fs::DirBuilderExt;
+    std::fs::DirBuilder::new().recursive(true).mode(0o700).create(dir)
+}
+
+#[cfg(not(unix))]
+fn make_private_folder(dir: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(dir)
+}
+
 /// The copy, held, when it has the executable's bytes.
 fn held_copy(exe: &Path, copy: &Path) -> Option<File> {
     let mut kept = held(copy).ok()?;
@@ -117,7 +137,7 @@ fn copy_of(exe: &Path) -> std::io::Result<(PathBuf, File)> {
     let stem = exe.file_stem().and_then(|s| s.to_str()).unwrap_or("fundacad");
     let ext = exe.extension().and_then(|s| s.to_str()).map(|e| format!(".{e}")).unwrap_or_default();
     let dir = shadow_dir();
-    std::fs::create_dir_all(&dir)?;
+    make_private_folder(&dir)?;
     if !own_folder(&dir) {
         return Err(std::io::Error::other(format!("{} is a link or another account's folder", dir.display())));
     }

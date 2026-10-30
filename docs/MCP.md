@@ -87,6 +87,12 @@ before it moves the first one. `export` refuses any format but STEP, STL,
 3MF, DXF and SVG, and `doc_save` refuses the app's recovery folder, since the
 app offers each file there back at launch.
 
+The `save_as` step of `ui_do` keeps to the `doc_save` rules, and the `record`
+of `ui_open` to the same rules for a `.py` file: not into the recovery folder,
+only into a folder that exists, and over a file only when it is an earlier
+recording (its first line starts `# Recorded by fundacad-harness`) unless the
+step, or the `ui_open` call, passes `overwrite: true`.
+
 Strict mode keeps the server to a folder list. It is on when a folder is
 given with `--allow-path <folder>` (repeatable, after `--mcp` for
 `fundacad`, which checks that `--mcp` is its first argument), listed in
@@ -514,7 +520,7 @@ window someone is working in.
 
 | tool | what it is for |
 | --- | --- |
-| `ui_open` | start the private app (`headed`, `record`, `viewport`, `gpu`, `settle_timeout`), about 10 s; a second call says what is open |
+| `ui_open` | start the private app (`headed`, `record`, `overwrite`, `viewport`, `gpu`, `settle_timeout`), about 10 s; a second call says what is open |
 | `ui_do` | steps in order, `[{"do": "tool", "label": "Extrude"}, {"do": "type", "target": "D", "text": "20"}]`, stopping at the first that fails |
 | `ui_read` | screen, history, bodies, status, errors, selection or handles, as short text |
 | `ui_shot` | a PNG of the page or one control, `max_px` at most 1600 |

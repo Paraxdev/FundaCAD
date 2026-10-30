@@ -529,7 +529,9 @@ pub fn ui_open() -> JsonObject {
             "headed": {"type": "boolean",
                        "description": "show the browser window, hidden by default"},
             "record": {"type": "string",
-                       "description": "write every step to this Python file, which replays with `python <file>`"},
+                       "description": "write every step to this .py file, which replays with `python <file>`"},
+            "overwrite": {"type": "boolean",
+                          "description": "replace a file there that is not a recording"},
             "viewport": {"type": "string", "description": "WIDTHxHEIGHT, 1400x900 by default"},
             "gpu": {"type": "boolean",
                     "description": "use the GPU, software rendering by default"},
@@ -557,7 +559,7 @@ pub fn ui_do() -> JsonObject {
                     click_at {sketch: [x, y] | world: [x, y, z] | screen: [x, y]}; \
                     drag {from, to, space?}; drag_handle {name, by? px | mm?}; \
                     view {name} (iso, top, front, right, fit); undo; redo; \
-                    open_file {path, discard?}; import_file {path}; save_as {path}; new_document {discard?}; \
+                    open_file {path, discard?}; import_file {path}; save_as {path, overwrite?} (.funda, as doc_save); new_document {discard?}; \
                     wait_for {text, timeout? up to 60 s}. \
                     Face selectors: [body:]top|bottom|front|back|left|right|+x..-z|largest|smallest|near=x,y,z|index=n. \
                     Edge selectors: near=x,y,z|between <face> <face>|longest|shortest. \

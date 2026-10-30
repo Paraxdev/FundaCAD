@@ -2,6 +2,7 @@
 //! Python child speaking JSON lines on stdio. Standalone only, so the window it drives is never the user's.
 
 use std::collections::VecDeque;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
@@ -12,7 +13,8 @@ use serde_json::{json, Value};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, Lines};
 use tokio::process::{Child, ChildStdin, ChildStdout, Command};
 
-use crate::server::{failure, log, text, FundaCad, MAX_IMAGE_PX};
+use crate::server::{failure, log, text, truthy, FundaCad, MAX_IMAGE_PX};
+use crate::{docfile, write_target};
 
 pub const UI_TOOLS: &[&str] = &["ui_open", "ui_do", "ui_read", "ui_shot", "ui_close"];
 
@@ -45,21 +47,36 @@ pub struct UiBridge {
     next_id: u64,
     said: Arc<std::sync::Mutex<VecDeque<String>>>,
     python: String,
+    home: WorkFolder,
     #[cfg(windows)]
     job: crate::link::job::ProcessJob,
 }
 
 impl UiBridge {
     pub async fn spawn() -> Result<UiBridge, String> {
-        let argv = python_command();
+        let mut argv = python_command();
+        if Path::new(&argv[0]).parent().is_some_and(|d| !d.as_os_str().is_empty()) {
+            argv[0] = absolute(&argv[0]);
+        }
         let python = join_command(&argv);
+        let home = WorkFolder::new()?;
         let mut cmd = Command::new(&argv[0]);
         cmd.args(&argv[1..]).args(["-m", "fundacad_harness", "serve"]);
-        let engine = crate::link::engine_command();
-        if engine.first().is_some_and(|p| std::path::Path::new(p).is_file()) {
+        let mut engine = crate::link::engine_command();
+        if engine.first().is_some_and(|p| Path::new(p).is_file()) {
+            engine[0] = absolute(&engine[0]);
             cmd.env("FUNDACAD_ENGINE_CMD", join_command(&engine));
         }
-        cmd.env("PYTHONIOENCODING", "utf-8")
+        if std::env::var_os("FUNDACAD_REPO").is_none() {
+            if let Some(repo) = host_checkout() {
+                cmd.env("FUNDACAD_REPO", repo);
+            }
+        }
+        // `-m` puts the working folder first on sys.path; PYTHONSAFEPATH stops that on 3.11+, where `-P`
+        // would be an error on older Pythons, and an empty folder of our own covers those.
+        cmd.current_dir(&home.0)
+            .env("PYTHONSAFEPATH", "1")
+            .env("PYTHONIOENCODING", "utf-8")
             .env("PYTHONUNBUFFERED", "1")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -101,6 +118,7 @@ impl UiBridge {
             next_id: 0,
             said,
             python,
+            home,
             #[cfg(windows)]
             job,
         })
@@ -172,7 +190,43 @@ impl UiBridge {
         }
         #[cfg(windows)]
         self.job.close();
+        self.home.remove();
     }
+}
+
+/// The harness child's working folder: new, empty and this account's, so it holds nothing Python could import.
+struct WorkFolder(PathBuf);
+
+impl WorkFolder {
+    fn new() -> Result<WorkFolder, String> {
+        let dir = std::env::temp_dir().join(format!("fundacad-ui-{}", crate::upload::token_hex(8)));
+        #[cfg_attr(not(unix), allow(unused_mut))]
+        let mut builder = std::fs::DirBuilder::new();
+        #[cfg(unix)]
+        std::os::unix::fs::DirBuilderExt::mode(&mut builder, 0o700);
+        builder.create(&dir).map_err(|e| format!("could not make a working folder for the ui harness: {e}"))?;
+        Ok(WorkFolder(dir))
+    }
+
+    fn remove(&self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+impl Drop for WorkFolder {
+    fn drop(&mut self) {
+        self.remove();
+    }
+}
+
+fn absolute(path: &str) -> String {
+    std::path::absolute(path).map_or_else(|_| path.to_string(), |p| p.to_string_lossy().into_owned())
+}
+
+/// The checkout the host runs in, found as the harness's own find_repo would from there.
+fn host_checkout() -> Option<PathBuf> {
+    let here = std::env::current_dir().ok()?;
+    here.ancestors().find(|d| d.join("package.json").is_file() && d.join("src-tauri").is_dir()).map(PathBuf::from)
 }
 
 fn reply_result(reply: &Value) -> CallToolResult {
@@ -233,11 +287,16 @@ impl FundaCad {
         annotations(read_only_hint = false, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
     pub async fn t_ui_open(&self, mut args: JsonObject) -> Result<CallToolResult, McpError> {
+        let overwrite = truthy(args.remove("overwrite").as_ref());
         if let Some(raw) = args.get("record").and_then(Value::as_str).filter(|r| !r.is_empty()) {
-            match self.scoped(raw).await {
-                Ok(p) => args.insert("record".into(), json!(p.to_string_lossy())),
+            let p = match self.scoped(raw).await {
+                Ok(p) => p,
                 Err(e) => return Ok(e),
             };
+            if let Some(why) = write_target::save_refusal(&p, &["py"], "ui_open record", overwrite) {
+                return Ok(failure(why));
+            }
+            args.insert("record".into(), json!(p.to_string_lossy()));
         }
         Ok(self.relay("open", args).await)
     }
@@ -251,15 +310,24 @@ impl FundaCad {
     pub async fn t_ui_do(&self, mut args: JsonObject) -> Result<CallToolResult, McpError> {
         if let Some(steps) = args.get_mut("steps").and_then(Value::as_array_mut) {
             for step in steps.iter_mut().filter_map(Value::as_object_mut) {
-                let files =
-                    matches!(step.get("do").and_then(Value::as_str), Some("open_file" | "import_file" | "save_as"));
+                let verb = step.get("do").and_then(Value::as_str);
+                let saves = verb == Some("save_as");
+                let files = saves || matches!(verb, Some("open_file" | "import_file"));
+                let overwrite = saves && truthy(step.remove("overwrite").as_ref());
                 let Some(raw) = step.get("path").and_then(Value::as_str).filter(|_| files) else {
                     continue;
                 };
-                match self.scoped(raw).await {
-                    Ok(p) => step.insert("path".into(), json!(p.to_string_lossy())),
+                let p = match self.scoped(raw).await {
+                    Ok(p) => p,
                     Err(e) => return Ok(e),
                 };
+                if saves {
+                    if let Some(why) = write_target::save_refusal(&p, &[docfile::TEXT_EXT], "ui_do save_as", overwrite)
+                    {
+                        return Ok(failure(why));
+                    }
+                }
+                step.insert("path".into(), json!(p.to_string_lossy()));
             }
         }
         Ok(self.relay("do", args).await)

@@ -199,6 +199,9 @@ fn cut_at(body: &MeshBody, plane: &Plane, shift: f64, tol: f64) -> (Cut, bool) {
     };
     let mut segments: Vec<([f64; 2], [f64; 2])> = Vec::new();
     for tri in body.indices.chunks_exact(3) {
+        if tri.iter().any(|&i| (i as usize + 1) * 3 > pos.len()) {
+            continue;
+        }
         let ps: Vec<([f64; 3], f64)> = tri
             .iter()
             .map(|&i| {

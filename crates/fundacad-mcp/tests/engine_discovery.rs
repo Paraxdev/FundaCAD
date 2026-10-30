@@ -3,7 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
-use fundacad_mcp::link::{engine_command, is_rust_engine_app, split_command};
+use fundacad_mcp::link::{engine_command, is_rust_engine_app, split_command, target_dir_engine};
 
 const VARS: &[&str] = &["FUNDACAD_ENGINE_CMD", "SINDRI_ENGINE_CMD", "SINDRICAD_ENGINE_CMD"];
 
@@ -89,4 +89,21 @@ fn only_an_app_built_with_the_rust_engine_is_started_as_one() {
     assert!(is_rust_engine_app(&rust));
     assert!(!is_rust_engine_app(&python));
     assert!(!is_rust_engine_app(&dir.path().join("absent.exe")));
+}
+
+#[test]
+fn only_a_dev_build_takes_an_engine_from_a_target_dir_above_it() {
+    let root = tempfile::tempdir().expect("temp dir");
+    let built = root.path().join("target").join("release").join(if cfg!(windows) {
+        "fundacad-engine.exe"
+    } else {
+        "fundacad-engine"
+    });
+    std::fs::create_dir_all(built.parent().unwrap()).unwrap();
+    std::fs::write(&built, b"").unwrap();
+    let start = root.path().join("bin").join("fundacad");
+    std::fs::create_dir_all(&start).unwrap();
+
+    assert_eq!(target_dir_engine(&start, true).as_deref(), Some(built.as_path()));
+    assert_eq!(target_dir_engine(&start, false), None);
 }

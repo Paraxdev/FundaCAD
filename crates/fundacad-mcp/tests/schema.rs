@@ -255,7 +255,7 @@ fn the_tool_list_has_no_space_runs_no_empty_required_and_stays_small() {
             assert!(json.len() < 6300, "stress is {} bytes", json.len());
         }
     }
-    assert!(total < 42000, "tools/list is {total} bytes");
+    assert!(total < 42100, "tools/list is {total} bytes");
 }
 
 #[test]
