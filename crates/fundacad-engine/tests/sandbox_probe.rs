@@ -39,8 +39,6 @@ fn accept_one(door: &TcpListener) -> io::Result<()> {
 }
 
 fn child(allowed: &Path, outside: &Path, port: u16, documents: &str) {
-    // The parent puts this process in its job first.
-    io::stdin().read_line(&mut String::new()).unwrap();
     let outcome = sandbox::enter(Policy::Tool, &[allowed.to_path_buf()]);
     println!("outcome={outcome:?}");
     // Stands in for the live door, which binds after enter and before close_network.
@@ -108,21 +106,22 @@ fn run_probe(root: &Path) -> Probe {
     let documents = documents_file();
     let port = target.local_addr().unwrap().port();
 
-    let mut child = Command::new(std::env::current_exe().unwrap())
-        .arg("--child")
+    let mut cmd = Command::new(std::env::current_exe().unwrap());
+    cmd.arg("--child")
         .arg(&allowed)
         .arg(&outside)
         .arg(port.to_string())
         .arg(documents.as_deref().unwrap_or(Path::new("-")))
         .env(sandbox::ENV, "1")
-        .stdin(Stdio::piped())
+        .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("spawn the probe child");
+        .stderr(Stdio::piped());
     #[cfg(windows)]
-    let _job = sandbox::Job::contain(&child).expect("put the probe child in a job");
-    writeln!(child.stdin.take().unwrap(), "go").unwrap();
+    let (mut child, job) = sandbox::Job::spawn(&mut cmd, 0).expect("spawn the probe child");
+    #[cfg(windows)]
+    let _job = job.expect("put the probe child in a job");
+    #[cfg(not(windows))]
+    let mut child = cmd.spawn().expect("spawn the probe child");
     let mut stderr = child.stderr.take().unwrap();
     let stderr = std::thread::spawn(move || {
         let mut s = String::new();
@@ -198,8 +197,9 @@ fn the_engine_cannot_write_outside_its_folders_or_open_a_socket(p: &Probe) {
 /// The engine ends when the app drops its job, even when the app itself is killed and closes no pipe.
 #[cfg(windows)]
 fn the_job_ends_the_engine_when_the_app_lets_go() {
-    let mut child = Command::new(std::env::current_exe().unwrap()).arg("--sleep").spawn().expect("spawn the sleeper");
-    let job = sandbox::Job::contain(&child).expect("put the sleeper in a job");
+    let (mut child, job) = sandbox::Job::spawn(Command::new(std::env::current_exe().unwrap()).arg("--sleep"), 0)
+        .expect("spawn the sleeper");
+    let job = job.expect("put the sleeper in a job");
     assert!(child.try_wait().unwrap().is_none(), "the sleeper ended early");
     drop(job);
     let t0 = Instant::now();
@@ -207,6 +207,25 @@ fn the_job_ends_the_engine_when_the_app_lets_go() {
         assert!(t0.elapsed() < Duration::from_secs(10), "the sleeper outlived its job");
         std::thread::sleep(Duration::from_millis(20));
     }
+}
+
+/// The engine is created suspended and runs only once its job holds it, so not one instruction runs outside.
+#[cfg(windows)]
+fn the_engine_runs_only_inside_its_job() {
+    let (mut child, job) =
+        sandbox::Job::spawn(Command::new(std::env::current_exe().unwrap()).arg("--in-job"), 0).expect("spawn in a job");
+    let _job = job.expect("a job holds the engine");
+    assert_eq!(child.wait().unwrap().code(), Some(0), "the engine ran outside its job");
+}
+
+/// Exits 0 only when this process already belongs to a job.
+#[cfg(windows)]
+fn in_job() -> ! {
+    use windows_sys::Win32::System::JobObjects::IsProcessInJob;
+    use windows_sys::Win32::System::Threading::GetCurrentProcess;
+    let mut inside = 0;
+    let ok = unsafe { IsProcessInJob(GetCurrentProcess(), std::ptr::null_mut(), &mut inside) };
+    std::process::exit(if ok != 0 && inside != 0 { 0 } else { 3 })
 }
 
 #[cfg(not(any(target_os = "linux", windows)))]
@@ -219,6 +238,8 @@ fn main() {
     match args.get(1).map(String::as_str) {
         Some("--child") => return child(Path::new(&args[2]), Path::new(&args[3]), args[4].parse().unwrap(), &args[5]),
         Some("--sleep") => return std::thread::sleep(Duration::from_secs(30)),
+        #[cfg(windows)]
+        Some("--in-job") => in_job(),
         _ => {}
     }
     let root: PathBuf = std::env::temp_dir().join(format!("fundacad-sandbox-probe-{}", std::process::id()));
@@ -238,5 +259,7 @@ fn main() {
     {
         the_job_ends_the_engine_when_the_app_lets_go();
         println!("test the_job_ends_the_engine_when_the_app_lets_go ... ok");
+        the_engine_runs_only_inside_its_job();
+        println!("test the_engine_runs_only_inside_its_job ... ok");
     }
 }

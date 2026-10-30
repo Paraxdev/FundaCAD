@@ -7,9 +7,11 @@ use std::ffi::OsStr;
 use std::io;
 use std::os::windows::ffi::OsStrExt;
 use std::os::windows::io::AsRawHandle;
+use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
+use std::process::{Child, Command};
 use std::ptr::{addr_of, null, null_mut};
-use windows_sys::Win32::Foundation::{CloseHandle, LocalFree, ERROR_SUCCESS, HANDLE};
+use windows_sys::Win32::Foundation::{CloseHandle, LocalFree, ERROR_SUCCESS, HANDLE, INVALID_HANDLE_VALUE};
 use windows_sys::Win32::Security::Authorization::{
     ConvertSecurityDescriptorToStringSecurityDescriptorW, ConvertStringSecurityDescriptorToSecurityDescriptorW,
     ConvertStringSidToSidW, GetNamedSecurityInfoW, SetNamedSecurityInfoW, SDDL_REVISION_1, SE_FILE_OBJECT,
@@ -18,12 +20,17 @@ use windows_sys::Win32::Security::{
     GetLengthSid, GetSecurityDescriptorSacl, SetTokenInformation, TokenIntegrityLevel, ACL, LABEL_SECURITY_INFORMATION,
     PSECURITY_DESCRIPTOR, PSID, SID_AND_ATTRIBUTES, TOKEN_ADJUST_DEFAULT, TOKEN_MANDATORY_LABEL,
 };
+use windows_sys::Win32::System::Diagnostics::ToolHelp::{
+    CreateToolhelp32Snapshot, Thread32First, Thread32Next, TH32CS_SNAPTHREAD, THREADENTRY32,
+};
 use windows_sys::Win32::System::JobObjects::{
     AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation, SetInformationJobObject,
     JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_ACTIVE_PROCESS, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
 };
 use windows_sys::Win32::System::SystemServices::SE_GROUP_INTEGRITY;
-use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+use windows_sys::Win32::System::Threading::{
+    GetCurrentProcess, OpenProcessToken, OpenThread, ResumeThread, CREATE_SUSPENDED, THREAD_SUSPEND_RESUME,
+};
 
 /// Low processes may write the folder and everything below it, also what is made there later.
 const LOW_LABEL: &str = "S:(ML;OICI;NW;;;LW)";
@@ -180,7 +187,7 @@ pub struct Job(HANDLE);
 unsafe impl Send for Job {}
 
 impl Job {
-    pub fn contain(child: &std::process::Child) -> io::Result<Job> {
+    fn new() -> io::Result<Job> {
         let job = unsafe { CreateJobObjectW(null(), null()) };
         if job.is_null() {
             return Err(io::Error::last_os_error());
@@ -195,15 +202,70 @@ impl Job {
         {
             return Err(io::Error::last_os_error());
         }
-        if unsafe { AssignProcessToJobObject(job.0, child.as_raw_handle() as HANDLE) } == 0 {
-            return Err(io::Error::last_os_error());
-        }
         Ok(job)
+    }
+
+    /// Starts `cmd` with the creation `flags` inside a new job. It is created suspended and resumed once the job holds
+    /// it, so it runs no instruction outside. When no job can hold it, it runs without one and the reason comes back.
+    pub fn spawn(cmd: &mut Command, flags: u32) -> io::Result<(Child, io::Result<Job>)> {
+        let job = match Job::new() {
+            Ok(job) => job,
+            Err(e) => return Ok((cmd.creation_flags(flags).spawn()?, Err(e))),
+        };
+        let mut child = cmd.creation_flags(flags | CREATE_SUSPENDED).spawn()?;
+        let held = match unsafe { AssignProcessToJobObject(job.0, child.as_raw_handle() as HANDLE) } {
+            0 => Err(io::Error::last_os_error()),
+            _ => Ok(job),
+        };
+        if let Err(e) = resume(child.id()) {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(e);
+        }
+        Ok((child, held))
     }
 }
 
 impl Drop for Job {
     fn drop(&mut self) {
         unsafe { CloseHandle(self.0) };
+    }
+}
+
+/// Resumes a process created suspended. std closes the handle of its first thread, so the thread is found by its id.
+fn resume(pid: u32) -> io::Result<()> {
+    let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0) };
+    if snapshot == INVALID_HANDLE_VALUE {
+        return Err(io::Error::last_os_error());
+    }
+    let mut entry: THREADENTRY32 = unsafe { std::mem::zeroed() };
+    entry.dwSize = std::mem::size_of::<THREADENTRY32>() as u32;
+    let mut found = Err(io::Error::other("the new engine has no thread to resume"));
+    let mut more = unsafe { Thread32First(snapshot, &mut entry) } != 0;
+    while more {
+        if entry.th32OwnerProcessID == pid {
+            found = resume_thread(entry.th32ThreadID);
+            if found.is_err() {
+                break;
+            }
+        }
+        more = unsafe { Thread32Next(snapshot, &mut entry) } != 0;
+    }
+    unsafe { CloseHandle(snapshot) };
+    found
+}
+
+fn resume_thread(id: u32) -> io::Result<()> {
+    let thread = unsafe { OpenThread(THREAD_SUSPEND_RESUME, 0, id) };
+    if thread.is_null() {
+        return Err(io::Error::last_os_error());
+    }
+    let resumed = unsafe { ResumeThread(thread) };
+    let err = io::Error::last_os_error();
+    unsafe { CloseHandle(thread) };
+    if resumed == u32::MAX {
+        Err(err)
+    } else {
+        Ok(())
     }
 }

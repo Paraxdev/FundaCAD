@@ -320,16 +320,9 @@ fn spawn(inner: &Inner) -> std::io::Result<std::process::ChildStdout> {
     let env = std::env::var(fundacad_engine::sandbox::ENV).ok();
     let reduced = fundacad_engine::sandbox::worker_env(&mut cmd, inner.temp.as_deref(), env.as_deref());
     #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        cmd.creation_flags(CREATE_NO_WINDOW);
-    }
-    let mut child = cmd.spawn()?;
-    #[cfg(windows)]
-    let job = contain(&child, reduced);
+    let (mut child, job) = spawn_in_job(&mut cmd, reduced)?;
     #[cfg(not(windows))]
-    let _ = reduced;
+    let (mut child, _) = (cmd.spawn()?, reduced);
     let stdin = child.stdin.take().ok_or_else(|| std::io::Error::other("no worker stdin"))?;
     let stdout = child.stdout.take().ok_or_else(|| std::io::Error::other("no worker stdout"))?;
     if let Some(stderr) = child.stderr.take() {
@@ -369,14 +362,17 @@ fn spawn(inner: &Inner) -> std::io::Result<std::process::ChildStdout> {
 
 /// Each engine runs in its own job, part of its reduced rights: it ends with the app and starts no process.
 #[cfg(windows)]
-fn contain(child: &Child, reduced: bool) -> Option<fundacad_engine::sandbox::Job> {
+fn spawn_in_job(cmd: &mut Command, reduced: bool) -> std::io::Result<(Child, Option<fundacad_engine::sandbox::Job>)> {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
     if !reduced {
-        return None;
+        return Ok((cmd.creation_flags(CREATE_NO_WINDOW).spawn()?, None));
     }
-    let job = fundacad_engine::sandbox::Job::contain(child).inspect_err(|e| {
+    let (child, job) = fundacad_engine::sandbox::Job::spawn(cmd, CREATE_NO_WINDOW)?;
+    let job = job.inspect_err(|e| {
         let _ = writeln!(std::io::stderr(), "[engine] runs outside its job, {e}");
     });
-    job.ok()
+    Ok((child, job.ok()))
 }
 
 /// The live door's port, from the worker's first `LISTENING` line only and only in the exact form `LISTENING <port>`.
