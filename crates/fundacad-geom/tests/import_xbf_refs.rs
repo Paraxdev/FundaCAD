@@ -60,3 +60,29 @@ fn an_xbf_with_a_truncated_header_is_refused_as_unreadable() {
     let e = import::import_geometry(file.to_str().unwrap(), "xbf", &store).unwrap_err();
     assert!(e.contains("could not read the XBF file"), "{e}");
 }
+
+/// An XBF header written with its integers big endian, holding `info` as its user info lines.
+fn big_endian_header(info: &[&str]) -> Vec<u8> {
+    let mut v = b"BINFILE".to_vec();
+    for _ in 0..14 {
+        v.extend_from_slice(&0i32.to_be_bytes());
+    }
+    for text in ["", "", "", "", "", "", ""] {
+        v.extend_from_slice(&(text.len() as i32).to_be_bytes());
+    }
+    v.extend_from_slice(&(info.len() as i32).to_be_bytes());
+    for line in info {
+        v.extend_from_slice(&(line.len() as i32).to_be_bytes());
+        v.extend_from_slice(line.as_bytes());
+    }
+    v
+}
+
+#[test]
+fn a_big_endian_header_is_read_for_its_references_too() {
+    let read = |info: &[&str]| import::xbf_header::lists_references(&big_endian_header(info)[..]);
+    assert_eq!(
+        [read(&["START_REF", "0 1 other_documents.xbf", "END_REF"]), read(&["FILE_FORMAT: BinXCAF"])],
+        [Some(true), Some(false)]
+    );
+}

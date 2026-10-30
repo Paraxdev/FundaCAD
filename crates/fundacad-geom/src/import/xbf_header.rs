@@ -8,13 +8,16 @@ const MAX_ENTRIES: i32 = 1 << 16;
 const MAX_STRING: i32 = 1 << 16;
 const REF_START: &[u8] = b"START_REF";
 
-struct Header<R: Read>(R);
+struct Header<R: Read> {
+    file: R,
+    big_endian: bool,
+}
 
 impl<R: Read> Header<R> {
     fn int(&mut self) -> Option<i32> {
         let mut b = [0u8; 4];
-        self.0.read_exact(&mut b).ok()?;
-        Some(i32::from_le_bytes(b))
+        self.file.read_exact(&mut b).ok()?;
+        Some(if self.big_endian { i32::from_be_bytes(b) } else { i32::from_le_bytes(b) })
     }
 
     fn bytes(&mut self, unit: usize) -> Option<Vec<u8>> {
@@ -23,16 +26,21 @@ impl<R: Read> Header<R> {
             return None;
         }
         let mut v = vec![0u8; n as usize * unit];
-        self.0.read_exact(&mut v).ok()?;
+        self.file.read_exact(&mut v).ok()?;
         Some(v)
     }
 }
 
-/// Whether the document names other documents to load, `None` when the header cannot be read.
+/// Whether the document names other documents to load, `None` when the header cannot be read in either byte order.
 pub fn lists_references(file: impl Read) -> Option<bool> {
-    let mut h = Header(file.take(HEADER_CAP));
+    let mut head = Vec::new();
+    file.take(HEADER_CAP).read_to_end(&mut head).ok()?;
+    read(Header { file: &head[..], big_endian: false }).or_else(|| read(Header { file: &head[..], big_endian: true }))
+}
+
+fn read(mut h: Header<&[u8]>) -> Option<bool> {
     let mut magic = [0u8; 7];
-    h.0.read_exact(&mut magic).ok()?;
+    h.file.read_exact(&mut magic).ok()?;
     if &magic != b"BINFILE" {
         return None;
     }
