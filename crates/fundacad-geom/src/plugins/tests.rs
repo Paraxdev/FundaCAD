@@ -273,3 +273,53 @@ fn os_errors_read_as_python_prints_them() {
     assert_eq!(host::py_repr("C:\\x\\it's"), "\"C:\\\\x\\\\it's\"");
     assert_eq!(host::py_repr("a'b\"c"), "'a\\'b\"c'");
 }
+
+fn dir_names(dir: &Path) -> Vec<String> {
+    let mut v: Vec<String> =
+        std::fs::read_dir(dir).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+    v.sort();
+    v
+}
+
+fn append(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    use std::io::Write;
+    let mut f = std::fs::OpenOptions::new().create(true).append(true).open(path).map_err(|e| e.to_string())?;
+    f.write_all(bytes).map_err(|e| e.to_string())
+}
+
+#[test]
+fn a_failed_export_keeps_the_old_file_byte_for_byte() {
+    let root = temp_root("export-fail");
+    let target = root.join("project.3mf");
+    std::fs::write(&target, b"the old project").unwrap();
+
+    let r: Result<(), String> = k::replace_after(&target, |part| {
+        append(part, b"half of a new")?;
+        Err("cancelled".into())
+    });
+    assert_eq!(r, Err("cancelled".into()));
+    assert_eq!(std::fs::read(&target).unwrap(), b"the old project");
+    assert_eq!(dir_names(&root), ["project.3mf"]);
+
+    let r: Result<(), String> = k::replace_after(&target, |_| Ok(()));
+    assert!(r.unwrap_err().contains("wrote nothing"));
+    assert_eq!(std::fs::read(&target).unwrap(), b"the old project");
+    assert_eq!(dir_names(&root), ["project.3mf"]);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_finished_export_replaces_the_old_file_with_only_its_own_bytes() {
+    let root = temp_root("export-ok");
+    let target = root.join("project.3mf");
+    std::fs::write(&target, b"the old project").unwrap();
+    let r = k::replace_after(&target, |part| {
+        append(part, b"new ")?;
+        append(part, b"bytes")?;
+        Ok(7)
+    });
+    assert_eq!(r, Ok(7));
+    assert_eq!(std::fs::read(&target).unwrap(), b"new bytes");
+    assert_eq!(dir_names(&root), ["project.3mf"]);
+    let _ = std::fs::remove_dir_all(&root);
+}

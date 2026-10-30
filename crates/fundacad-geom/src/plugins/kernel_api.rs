@@ -469,9 +469,7 @@ pub fn export_with(
     if meshed.is_empty() {
         return Err("nothing to export, no meshable bodies".into());
     }
-    let target = Path::new(path);
-    let _ = std::fs::remove_file(target);
-    let info = super::exporter_call(exporter, meshed, &options, target, cancel)?;
+    let info = replace_after(Path::new(path), |part| super::exporter_call(exporter, meshed, &options, part, cancel))?;
     let mut res = Map::new();
     res.insert("path".into(), json!(path));
     if let Some(info @ Value::Object(_)) = info {
@@ -481,4 +479,22 @@ pub fn export_with(
         res.insert("warnings".into(), Value::Array(r.errors.iter().map(builder::FeatureError::wire).collect()));
     }
     Ok(res)
+}
+
+/// Runs `write` against a fresh file next to `target` and moves it over `target` only when `write` succeeds,
+/// so a failed or cancelled export leaves the old file as it was.
+pub(super) fn replace_after<T>(target: &Path, write: impl FnOnce(&Path) -> Result<T, String>) -> Result<T, String> {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let name = target.file_name().ok_or("exportWith: the path names no file")?.to_string_lossy();
+    let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let part = target.with_file_name(format!(".{name}.{}.{n}.part", std::process::id()));
+    let _ = std::fs::remove_file(&part);
+    let r = write(&part).and_then(|v| match std::fs::metadata(&part) {
+        Ok(_) => std::fs::rename(&part, target).map(|()| v).map_err(|e| format!("could not replace the file: {e}")),
+        Err(_) => Err("the exporter wrote nothing".into()),
+    });
+    if r.is_err() {
+        let _ = std::fs::remove_file(&part);
+    }
+    r
 }
