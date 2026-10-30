@@ -1349,8 +1349,9 @@ jobs:
           set -euo pipefail
           R='${{ github.repository }}'
           V="v$VERSION"
-          sed '0,/^Rolling FundaCAD 1\.0 beta (/s//FundaCAD 1.0 beta (/' notes.md > version-notes.md
-          printf '\nThe [rolling beta](https://github.com/%s/releases/tag/beta) always has the newest build.\n' "$R" >> version-notes.md
+          # GitHub cannot pin a release, so each version links the rolling two first.
+          printf 'The newest builds are always on the [rolling beta](https://github.com/%s/releases/tag/beta) and the [development build](https://github.com/%s/releases/tag/development).\n\n' "$R" "$R" > version-notes.md
+          sed '0,/^Rolling FundaCAD 1\.0 beta (/s//FundaCAD 1.0 beta (/' notes.md >> version-notes.md
           stable=$(gh release list --repo "$R" --exclude-drafts --exclude-pre-releases --limit 1000 \
             --json tagName --jq '.[].tagName' | grep -E '^v1\.([1-9][0-9]*)\.(0|[1-9][0-9]*)$' || true)
           latest=true
@@ -1378,6 +1379,13 @@ jobs:
             err=$(tr -s '\r\n' ' ' < publish-error.txt | sed 's/ $//')
             echo "::warning::no $V release, GitHub would not publish it on ${SHA:0:7}, so its draft is deleted: $err. This token may not tag a commit that changes a workflow file, the rolling beta has this build"
           fi
+          # Only the newest 20 betas stay as versions. A stable release or a rolling tag never matches,
+          # and a failed list or delete costs a tidy up, never the release.
+          old=$(gh release list --repo "$R" --exclude-drafts --exclude-pre-releases --limit 1000 --json tagName --jq '.[].tagName' \
+            | grep -E '^v1\.0\.[0-9]+$' | sort -V | head -n -20 || true)
+          for tag in $old; do
+            gh release delete "$tag" --repo "$R" --cleanup-tag --yes || echo "::warning::the old release $tag could not be deleted"
+          done
 
   # Browser end-to-end checks for the imported-assembly Browser tree.
   #
@@ -1535,7 +1543,7 @@ jobs:
           TMPDIR: ${{ runner.temp }}/harness
         run: |
           mkdir -p "$TMPDIR"
-          python -m pytest tools/harness/tests -m "smoke and not a11y" -q
+          python -m pytest tools/harness/tests -m "smoke and not a11y" -q --durations=25
 
       - name: Agent harness logs on failure
         if: failure()
@@ -1546,10 +1554,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      # The axe baseline was seeded on Windows Chrome, so this stays
-      # continue-on-error until wave 1 of the accessibility epic has landed.
       - name: Accessibility smoke (axe and aria snapshots)
-        continue-on-error: true
         timeout-minutes: 10
         env:
           FUNDACAD_ENGINE_CMD: ${{ github.workspace }}/engine-bin/fundacad-engine

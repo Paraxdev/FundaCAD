@@ -36,7 +36,7 @@
 
 ## Downloads
 
-Windows: the setup exe or the portable exe. macOS: the dmg. Linux: the AppImage, deb, rpm or Flatpak. Each beta also stays on the releases page as its own version, with a SHA256SUMS.txt to check the files.
+Windows: the setup exe or the portable exe. macOS: the dmg. Linux: the AppImage, deb, rpm or Flatpak. The last 20 betas also stay on the releases page as their own versions, with a SHA256SUMS.txt to check the files.
 
 ## If you installed an earlier beta
 
