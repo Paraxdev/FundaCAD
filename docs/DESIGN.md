@@ -1184,7 +1184,7 @@ guard test cannot see them; hold them to these rules by hand.
   as an arrow, 64px, and while the tiles show both share one floor, so a tile edge
   and an arrow stay equal at every zoom and never fall below about 41px (hidden,
   the arrows may shrink to their own floor, `triadMinScale`). The gap scales with
-  the tile. Only the far corner is rounded, 27px, the same squircle as
+  the tile. All four corners are rounded, 27px, the same squircle as
   `corner-shape: squircle`, a rail tile's 17px on 40px scaled up
   (`TILE_CORNER_RADIUS_PX` and `SQUIRCLE_EXPONENT` in
   `src/viewport/originTiles.ts` and `cornerProfile.ts`). The inner rims show in

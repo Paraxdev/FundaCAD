@@ -34,7 +34,7 @@ A printed part is weaker across its layer lines, so do not trust a safety factor
 ## Look closer
 
 1. Play swings the part between still and bent, Pause holds it where it is.
-2. The Exaggeration slider draws the bend larger. True size draws it as it really is.
+2. The Exaggeration slider draws the bend larger or smaller. True size draws it as it really is. The line under the verdict says which, such as drawn 25x larger or drawn at 0.5x true size.
 3. Colours turns the stress colours on and off. Deformed shape turns the bent shape on and off.
 4. Read a point, then click the part to read the stress and the bend there. Each reading is listed as Point 1, Point 2 and so on, with a button to remove it.
 

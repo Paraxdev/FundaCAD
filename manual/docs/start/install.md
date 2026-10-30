@@ -28,7 +28,9 @@ flatpak install --user ./FundaCAD-linux-x86_64.flatpak
 flatpak run dev.fundacad.app
 ```
 
-The Flatpak runs on Wayland, or on X11 where there is no Wayland. Besides your home folder, the network and the graphics card, it reaches only game controllers and the `spacenavd` service for a [3D mouse](../plugins/spacemouse.md#flatpak).
+The Flatpak runs on Wayland, or on X11 where there is no Wayland. Besides the network and the graphics card, it reaches only game controllers and the `spacenavd` service for a [3D mouse](../plugins/spacemouse.md#flatpak).
+
+Of your files, the Flatpak reaches only the FundaCAD folder in Documents and the files you pick in its file chooser. An AI assistant works in that folder too, and FundaCAD asks you before it opens or saves anything else, see [Connect an AI assistant](../ai/connect.md#in-the-flatpak).
 
 The other files:
 

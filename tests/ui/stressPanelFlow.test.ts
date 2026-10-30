@@ -304,6 +304,26 @@ describe("stress panel flow", () => {
     expect(r.calls[0]!.opts.loads).toEqual([{ spots: [{ at: [5, 5, 10], radius: 2 }], force: [0, 0, -100] }]);
   });
 
+  it("clears a row of its faces and spots, stops placing on it and takes its tint off", () => {
+    const r = rig();
+    setUp(r);
+    const d = usePanelsStore().stress!;
+    r.ui.placeStressSpot({ support: 1 }, "spot");
+    r.handlers().placeSpot!({ at: [5, 5, 0], normal: [0, 0, -1], body: "b1", faceId: 1 }, true);
+    expect(d.setup.supports[0]!.spots).toHaveLength(1);
+    expect(d.placing).toEqual({ support: 1 });
+    r.ui.clearStressPlaces({ support: 1 });
+    expect(d.placing).toBeNull();
+    expect(d.setup.supports[0]!.faces.selectors).toEqual([]);
+    expect(d.setup.supports[0]!.spots).toBeUndefined();
+    expect(r.marks.at(-1)).toEqual([
+      { faceIds: [], color: 0x4ac6ff },
+      { faceIds: [2], color: 0xff9a2e },
+    ]);
+    expect(r.study()!.supports[0]!.faces, "the saved study drops them too").toEqual([]);
+    expect(d.setup.loads[0]!.faces.faceIds, "the load keeps its face").toEqual([2]);
+  });
+
   it("a click adds the whole face clicked, Shift adds more, and a face held already is not added twice", async () => {
     const r = rig();
     r.ui.showStress();

@@ -54,7 +54,7 @@ reach the supervisor.
 `op`, so the desktop relay reads it from the request's first bytes). It is optional: a request without it belongs to
 the document `""`. The held document a delta rebuild patches is kept per connection and `doc`, and `doc_end` ends
 every job of one `doc`. App wide ops (`ping`, `cancel`, `listFonts`, `tessellateText`, `session_release`,
-`session_state`, `session_leave`, `session_guide`) carry no `doc`. `doc_end` names the `doc` it ends, and
+`session_state`, `session_leave`, `session_guide`, `session_ask`, `session_answer`) carry no `doc`. `doc_end` names the `doc` it ends, and
 `session_host` and `session_propose` name the live session's document, never a job's.
 
 ## Reply envelope
@@ -949,7 +949,7 @@ section 2.3).
 
 ### `session_*`, the live session
 
-Six ops that share one document between the app window and an outside client
+Eight ops that share one document between the app window and an outside client
 (the MCP server, `crates/fundacad-mcp`). They are answered on the **read path**, never behind
 the heavy-op lock: the window publishes on a loop, and a publish that queued
 behind a rebuild would make the window invisible to an agent for exactly as long
@@ -1015,6 +1015,31 @@ guide. The `state` is opaque to the engine; the window fills `ack` (the newest `
 acted on), `step`, `wait` (with `done` once it is decided) and `stopped` (`n` counts the
 user's Stop presses, so a guest reports each one once). A guest sending `state` is
 refused with `not the host`.
+
+```jsonc
+// a guest asking the user to pick a path in the window's file dialog (the Flatpak MCP
+// server, for a path outside its folder). kind is open, save or folder.
+{ "op": "session_ask", "id": "...", "name": "an assistant",
+  "ask": { "kind": "save", "tool": "doc_save", "path": "/home/me/bracket.funda", "exts": ["funda"] } }
+// -> { "ok": true, "askId": "a3f...-1" }
+// -> { "ok": false, "reason": "no-host" | "busy" | "bad-ask", "message": "..." }
+
+// the guest's poll, also its heartbeat; "cancel": true drops the ask
+{ "op": "session_ask", "id": "...", "askId": "a3f...-1" }
+// -> { "ok": true, "answered": false }
+// -> { "ok": true, "answered": true, "path": "/run/user/1000/doc/ab12/bracket.funda" | null,
+//      "closed": true }
+
+// the window, after the dialog closes: the picked path, or null for Cancel
+{ "op": "session_answer", "id": "...", "askId": "a3f...-1", "path": "..." | null }
+// -> { "ok": true } | { "ok": false, "reason": "not the host" | "unknown" }
+```
+
+A `session_host` reply carries `"asks": [ { "askId", "kind", "tool", "path", "exts", "name" } ]`
+while any are open. Every reply hands each open ask until it is answered, so one in a reply
+that never reached the window is not lost, and the host shows each `askId` once. A guest has
+one ask open at a time. A release or a new host answers open asks with `path: null` and
+`closed: true`, and a guest that leaves or stops polling for `GUEST_TTL` takes its ask with it.
 
 A proposal is refused if `baseRevision` is not the current revision. That is the
 rule that stops an agent's edit landing on a model the user has since changed,

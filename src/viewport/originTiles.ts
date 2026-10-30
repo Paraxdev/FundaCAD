@@ -5,7 +5,7 @@
 import * as THREE from "three";
 import { glyphScale, glyphWorldScale } from "./gizmoScale";
 import { MIN_TRIAD_SCALE, TRIAD_LENGTH_PX, axisColor, type AxisKey } from "./originTriad";
-import { SQUIRCLE_EXPONENT, roundedSquareCorners, type Vec2 } from "./cornerProfile";
+import { SQUIRCLE_EXPONENT, roundedSquare, type Vec2 } from "./cornerProfile";
 import { themeColor } from "./themeColors";
 import { pickPlaneOnScreen, placeLabels, type P2, type PlaneHit, type PlaneOnScreen } from "./planeHit";
 import type { Plane3 } from "../types";
@@ -38,7 +38,6 @@ export interface TilePose {
 // As long as an axis arrow, rounded like a 40 px rail tile with its 17 px corner.
 export const TILE_SIZE_PX = TRIAD_LENGTH_PX;
 export const TILE_GAP_PX = 10;
-/** Only the corner away from the origin is rounded, the other three face the arrows. */
 export const TILE_CORNER_RADIUS_PX = 27;
 export const TILE_OCTANT: Octant = { x: 1, y: 1, z: 1 };
 /** The tiles are click targets, so they stop shrinking at about 41 px, a rail tile. */
@@ -155,26 +154,17 @@ function shapeOf(pts: Vec2[]): THREE.Shape {
 }
 
 /** A tile's outline in its own frame, local x and y along the plane's two axes as `tilePose` turns it. */
-export function tileOutline(plane: Plane3, shape: TileShape, segments = CORNER_SEGMENTS, inset = 0): Vec2[] {
-  const [a, b] = SPAN[plane];
-  const corners: Vec2[] = [
-    [1, -1],
-    [1, 1],
-    [-1, 1],
-    [-1, -1],
-  ];
-  const far = ([x, y]: Vec2) => x === shape.octant[a] && y === shape.octant[b];
-  const legs = corners.map((c) => (far(c) ? shape.radiusPx - inset : 0)) as [number, number, number, number];
-  return roundedSquareCorners(shape.sizePx - 2 * inset, legs, shape.exponent, segments);
+export function tileOutline(shape: TileShape, segments = CORNER_SEGMENTS, inset = 0): Vec2[] {
+  return roundedSquare(shape.sizePx - 2 * inset, shape.radiusPx - inset, shape.exponent, segments);
 }
 
-function fillGeometry(plane: Plane3, shape: TileShape): THREE.BufferGeometry {
-  return new THREE.ShapeGeometry(shapeOf(tileOutline(plane, shape)));
+function fillGeometry(shape: TileShape): THREE.BufferGeometry {
+  return new THREE.ShapeGeometry(shapeOf(tileOutline(shape)));
 }
 
-function rimGeometry(plane: Plane3, shape: TileShape): THREE.BufferGeometry {
-  const ring = shapeOf(tileOutline(plane, shape));
-  const hole = tileOutline(plane, shape, CORNER_SEGMENTS, RIM_PX);
+function rimGeometry(shape: TileShape): THREE.BufferGeometry {
+  const ring = shapeOf(tileOutline(shape));
+  const hole = tileOutline(shape, CORNER_SEGMENTS, RIM_PX);
   ring.holes.push(new THREE.Path(hole.map(([x, y]) => new THREE.Vector2(x, y))));
   return new THREE.ShapeGeometry(ring);
 }
@@ -210,7 +200,7 @@ export class OriginTiles {
   constructor(scene: THREE.Scene, shape: Partial<TileShape> = {}) {
     this.shape = { ...TILE_SHAPE, ...shape };
     const make = (k: Plane3): Tile => {
-      const fill = new THREE.Mesh(fillGeometry(k, this.shape), tileMaterial(true));
+      const fill = new THREE.Mesh(fillGeometry(this.shape), tileMaterial(true));
       fill.userData.plane = k;
       fill.renderOrder = TILE_ORDER.fill;
       fill.visible = false;
@@ -218,7 +208,7 @@ export class OriginTiles {
       const ghost = new THREE.Mesh(fill.geometry, tileMaterial(false));
       ghost.userData.role = "ghost";
       ghost.renderOrder = TILE_ORDER.ghost;
-      const rim = new THREE.Mesh(rimGeometry(k, this.shape), tileMaterial(true));
+      const rim = new THREE.Mesh(rimGeometry(this.shape), tileMaterial(true));
       rim.userData.role = "rim";
       rim.renderOrder = TILE_ORDER.rim;
       const label = new THREE.Sprite(
@@ -251,9 +241,9 @@ export class OriginTiles {
       const t = this.tiles[k];
       t.fill.geometry.dispose();
       t.rim.geometry.dispose();
-      t.fill.geometry = fillGeometry(k, this.shape);
+      t.fill.geometry = fillGeometry(this.shape);
       t.ghost.geometry = t.fill.geometry;
-      t.rim.geometry = rimGeometry(k, this.shape);
+      t.rim.geometry = rimGeometry(this.shape);
     }
     this.pose();
   }
@@ -310,7 +300,7 @@ export class OriginTiles {
       return {
         plane,
         centre,
-        outline: tileOutline(plane, this.shape, PICK_SEGMENTS).map(([x, y]) => at(x, y)),
+        outline: tileOutline(this.shape, PICK_SEGMENTS).map(([x, y]) => at(x, y)),
         su: { x: u.x - centre.x, y: u.y - centre.y },
         sv: { x: v.x - centre.x, y: v.y - centre.y },
         facing: Math.abs(toEye.dot(normal)),

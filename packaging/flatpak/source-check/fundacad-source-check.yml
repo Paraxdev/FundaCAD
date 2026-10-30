@@ -22,9 +22,9 @@ finish-args:
   - --filesystem=/run/spnav.sock:ro
   # Plugin bundles, the OIDN denoiser and the update feed are downloaded at run time.
   - --share=network
-  # Documents live anywhere under home, and the MCP server opens paths it is
-  # given, so the file chooser portal alone is not enough.
-  - --filesystem=home
+  # Assistants work in Documents/FundaCAD and ask through the file chooser
+  # portal for any other path, as the app's own dialogs do.
+  - --filesystem=xdg-documents/FundaCAD:create
 modules:
   # The static kernel opencascade-sys links, built the way occt-sys builds it
   # (src/lib.rs of occt-sys 0.6.0), then found through FUNDACAD_OCCT_ROOT.

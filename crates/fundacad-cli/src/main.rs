@@ -3,7 +3,7 @@
 
 mod golden;
 
-use fundacad_engine::{Engine, Outbox};
+use fundacad_engine::{sandbox, Engine, Outbox};
 use fundacad_geom::jobs::GeomJobs;
 use fundacad_protocol::Message;
 use serde_json::{json, Value};
@@ -40,16 +40,24 @@ const USAGE: &str = "usage:
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     fundacad_engine::set_build(env!("FUNDACAD_BUILD"));
+    // Before any thread starts. Off unless FUNDACAD_ENGINE_SANDBOX asks, since golden-check --record writes the repo.
+    let entered = match args.first().map(String::as_str) {
+        Some("--stdio" | "golden-check") => sandbox::enter(sandbox::Policy::Tool, &fundacad_geom::engine_writes()),
+        _ => sandbox::Outcome::NotAsked,
+    };
     // The engine loads the installed plugins' manifests, an eval or a library user has none.
     fundacad_geom::plugins::load();
     match args.first().map(String::as_str) {
         Some("--ws") => fundacad_engine::ws::run(GeomJobs),
-        Some("--stdio") => fundacad_engine::stdio::run(GeomJobs),
+        Some("--stdio") => fundacad_engine::stdio::serve(GeomJobs, |_| sandbox::close_network(&entered)),
         Some("rebuild") => rebuild(&args[1..]),
         Some("doc-json") => doc_json(&args[1..]),
         Some("select-eval") => select_eval(&args[1..]),
         Some("fillet-eval") => fillet_eval(&args[1..]),
-        Some("golden-check") => golden::run(&args[1..]),
+        Some("golden-check") => {
+            sandbox::close_network(&entered);
+            golden::run(&args[1..])
+        }
         Some("-h" | "--help") => {
             println!("{USAGE}");
             ExitCode::SUCCESS

@@ -21,9 +21,9 @@ finish-args:
   - --filesystem=/run/spnav.sock:ro
   # Plugin bundles are downloaded from the GitHub release.
   - --share=network
-  # Documents live anywhere under home, and the MCP server opens paths it is
-  # given, so the file chooser portal alone is not enough.
-  - --filesystem=home
+  # Assistants work in Documents/FundaCAD and ask through the file chooser
+  # portal for any other path, as the app's own dialogs do.
+  - --filesystem=xdg-documents/FundaCAD:create
 modules:
   - name: fundacad
     buildsystem: simple

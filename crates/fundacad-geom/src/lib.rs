@@ -30,5 +30,11 @@ pub mod trace;
 
 pub use opencascade;
 
+/// The folders the engine writes to: its blob store, its disk cache and its temp folder. Read from the environment, so
+/// call it after the variables that move them are set.
+pub fn engine_writes() -> Vec<std::path::PathBuf> {
+    vec![import::blobstore::default_root(), cache::store::default_root(), std::env::temp_dir()]
+}
+
 /// Build time constant from the `occt-sys` crate, the number to quote in a geometry bug report.
 pub const OCCT_VERSION: &str = "7.8.1";

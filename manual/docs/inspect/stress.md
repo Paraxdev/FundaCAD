@@ -14,13 +14,16 @@ The answer opens in the Results tab, see [Reading the stress result](stress-resu
 
 ## Placing supports and loads
 
-Each support and load has three buttons.
+Each support and load has four buttons.
 
 1. Click faces: click a face to add all of it. Shift click adds more, Esc stops.
 2. Spot: click the body to place a round spot, for a local support or load. Set its Radius, or drag its rim in the view.
 3. Use selected faces: takes the faces you already selected in the view.
+4. Clear: takes away the row's faces and spots, so you can place it again.
 
-Add support and Add load add more rows. The colours of the rows match the marks in the view.
+Add support and Add load add more rows. The colours of the rows match the marks in the view. The X at the top right of a row removes it.
+
+While Stress is open, Ctrl+Z and Ctrl+Y undo and redo only your setup, such as a support's faces, a load's force or the material. A note says what was undone. Once you close Stress, they undo the model again.
 
 ## Supports
 

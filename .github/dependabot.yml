@@ -6,3 +6,8 @@ updates:
     target-branch: "dev"
     schedule:
       interval: "weekly"
+    # One pull request for every action bump, so one CI run tests them together.
+    groups:
+      actions:
+        patterns:
+          - "*"

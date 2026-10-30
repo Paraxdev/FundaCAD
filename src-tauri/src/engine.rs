@@ -2,12 +2,13 @@
 //! A job that ignores Cancel past a grace period is stopped by restarting the worker, which exits by itself when stdin
 //! closes.
 
+use fundacad_engine::sandbox::stage::{stage, Staged};
 use fundacad_protocol::stdio::{read_message, write_message, Message};
 use fundacad_protocol::{envelope, message_id};
 use serde_json::Value;
 use std::collections::{HashMap, VecDeque};
 use std::io::{BufRead, BufReader, BufWriter, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -41,7 +42,13 @@ struct Inner {
     /// The generation last ended on purpose by a cancel, which is no crash.
     cancel_killed: AtomicU64,
     /// Where `session.json` goes, None without an app data directory.
-    session_dir: Option<std::path::PathBuf>,
+    session_dir: Option<PathBuf>,
+    /// The engine's own temp folder, None without a usable app cache directory, and then the engine runs unrestricted.
+    temp: Option<PathBuf>,
+    /// Exports are written here by the engine and copied into place by the shell, inside `temp`.
+    export_root: Option<PathBuf>,
+    /// Export requests sent and not yet answered, by id, to their stage folder.
+    staged: Mutex<HashMap<String, (PathBuf, Staged)>>,
     /// What the crash report quotes: the worker's last stderr lines and the
     /// requests it was sent last.
     stderr_tail: Arc<Mutex<VecDeque<String>>>,
@@ -115,17 +122,30 @@ struct Worker {
     child: Child,
     stdin: BufWriter<ChildStdin>,
     generation: u64,
+    #[cfg(windows)]
+    _job: Option<fundacad_engine::sandbox::Job>,
 }
 
 /// Called from `main` before Tauri starts. `--engine --ws` is the same engine on its own WebSocket, which the shipped
 /// `fundacad-mcp` starts as its private engine, so a packaged app needs no second copy of the kernel.
 pub fn run_worker() -> ! {
+    use fundacad_engine::sandbox;
     fundacad_engine::set_build(env!("FUNDACAD_BUILD"));
+    let ws = std::env::args().nth(2).as_deref() == Some("--ws");
+    // Before any thread starts: on Linux the write rules bind only this thread and the ones it starts later.
+    let entered = if ws {
+        sandbox::Outcome::NotAsked
+    } else {
+        sandbox::enter(sandbox::Policy::Worker, &fundacad_geom::engine_writes())
+    };
     fundacad_geom::plugins::load();
-    if std::env::args().nth(2).as_deref() == Some("--ws") {
+    if ws {
         fundacad_engine::ws::run(fundacad_geom::jobs::GeomJobs)
     }
-    fundacad_engine::stdio::serve(fundacad_geom::jobs::GeomJobs, live_door)
+    fundacad_engine::stdio::serve(fundacad_geom::jobs::GeomJobs, move |engine| {
+        live_door(engine);
+        sandbox::close_network(&entered);
+    })
 }
 
 /// The app's token for the live session port, handed to the worker it spawns.
@@ -150,6 +170,18 @@ fn live_door(engine: &Arc<fundacad_engine::Engine>) {
 
 impl Engine {
     pub fn start(app: &AppHandle) -> Engine {
+        let temp = app.path().app_cache_dir().ok().map(|dir| dir.join("engine-tmp"));
+        // A stage path that is not text could not be put into an export request.
+        let temp = temp.filter(|dir| dir.to_str().is_some() && std::fs::create_dir_all(dir).is_ok());
+        if temp.is_none() {
+            let line = "[engine] runs without reduced rights, the app has no cache folder to stage its exports in";
+            let _ = writeln!(std::io::stderr(), "{line}");
+        }
+        let export_root = temp.as_ref().map(|dir| dir.join("exports"));
+        if let Some(root) = &export_root {
+            // Left by an earlier run; the app runs once, so no other engine is writing there.
+            let _ = std::fs::remove_dir_all(root);
+        }
         let inner = Arc::new(Inner {
             app: app.clone(),
             worker: Mutex::new(None),
@@ -161,6 +193,9 @@ impl Engine {
             stopping: AtomicBool::new(false),
             cancel_killed: AtomicU64::new(0),
             session_dir: app.path().app_data_dir().ok(),
+            temp,
+            export_root,
+            staged: Mutex::new(HashMap::new()),
             stderr_tail: Arc::new(Mutex::new(VecDeque::new())),
             recent: Mutex::new(VecDeque::new()),
         });
@@ -282,17 +317,17 @@ fn spawn(inner: &Inner) -> std::io::Result<std::process::ChildStdout> {
         if safe { None } else { crate::plugins::plugins_root(&inner.app).ok() }.as_deref(),
         &token,
     );
+    let env = std::env::var(fundacad_engine::sandbox::ENV).ok();
+    let reduced = fundacad_engine::sandbox::worker_env(&mut cmd, inner.temp.as_deref(), env.as_deref());
     #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        cmd.creation_flags(CREATE_NO_WINDOW);
-    }
-    let mut child = cmd.spawn()?;
+    let (mut child, job) = spawn_in_job(&mut cmd, reduced)?;
+    #[cfg(not(windows))]
+    let (mut child, _) = (cmd.spawn()?, reduced);
     let stdin = child.stdin.take().ok_or_else(|| std::io::Error::other("no worker stdin"))?;
     let stdout = child.stdout.take().ok_or_else(|| std::io::Error::other("no worker stdout"))?;
     if let Some(stderr) = child.stderr.take() {
         let session_dir = inner.session_dir.clone();
+        let export_dir = inner.export_root.clone();
         let tail = inner.stderr_tail.clone();
         lock(&tail).clear();
         std::thread::spawn(move || {
@@ -301,7 +336,8 @@ fn spawn(inner: &Inner) -> std::io::Result<std::process::ChildStdout> {
                 // Written once the port answers, so the file never names a port
                 // nobody is listening on yet.
                 if let (Some(dir), Some(port)) = (&session_dir, announced_port(&mut announced, &line)) {
-                    let info = crate::session_file::SessionInfo { port, token: token.clone(), pid: std::process::id() };
+                    let (token, pid, export_dir) = (token.clone(), std::process::id(), export_dir.clone());
+                    let info = crate::session_file::SessionInfo { port, token, pid, export_dir };
                     if let Err(e) = crate::session_file::write_into(dir, &info) {
                         eprintln!("[engine] no session file: {e}");
                     }
@@ -314,8 +350,29 @@ fn spawn(inner: &Inner) -> std::io::Result<std::process::ChildStdout> {
         });
     }
     let generation = inner.generation.fetch_add(1, Ordering::SeqCst) + 1;
-    *lock(&inner.worker) = Some(Worker { child, stdin: BufWriter::new(stdin), generation });
+    *lock(&inner.worker) = Some(Worker {
+        child,
+        stdin: BufWriter::new(stdin),
+        generation,
+        #[cfg(windows)]
+        _job: job,
+    });
     Ok(stdout)
+}
+
+/// Each engine runs in its own job, part of its reduced rights: it ends with the app and starts no process.
+#[cfg(windows)]
+fn spawn_in_job(cmd: &mut Command, reduced: bool) -> std::io::Result<(Child, Option<fundacad_engine::sandbox::Job>)> {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    if !reduced {
+        return Ok((cmd.creation_flags(CREATE_NO_WINDOW).spawn()?, None));
+    }
+    let (child, job) = fundacad_engine::sandbox::Job::spawn(cmd, CREATE_NO_WINDOW)?;
+    let job = job.inspect_err(|e| {
+        let _ = writeln!(std::io::stderr(), "[engine] runs outside its job, {e}");
+    });
+    Ok((child, job.ok()))
 }
 
 /// The live door's port, from the worker's first `LISTENING` line only and only in the exact form `LISTENING <port>`.
@@ -339,7 +396,9 @@ fn relay(inner: &Arc<Inner>, stdout: std::process::ChildStdout) -> String {
         match read_message(&mut reader) {
             Ok(Some(msg)) => {
                 settle(inner, &msg);
-                deliver(inner, &msg);
+                if let Some(msg) = unstage(inner, msg) {
+                    deliver(inner, &msg);
+                }
             }
             Ok(None) => return "its output closed".into(),
             Err(e) => return format!("unreadable output ({e})"),
@@ -406,11 +465,61 @@ fn deliver(inner: &Inner, msg: &Message) {
     }
 }
 
+/// An export's final reply waits until the shell copied its files into place, on its own thread so a big file holds
+/// up no other reply. `None` when that thread delivers it.
+fn unstage(inner: &Arc<Inner>, msg: Message) -> Option<Message> {
+    if lock(&inner.staged).is_empty() {
+        return Some(msg);
+    }
+    let Some(Value::String(id)) = message_id(&msg) else { return Some(msg) };
+    let terminal = match &msg {
+        Message::Text(t) => text_is_terminal(t),
+        Message::Binary(b) => binary_is_final(b),
+    };
+    if !terminal {
+        return Some(msg);
+    }
+    let Some((dir, staged)) = lock(&inner.staged).remove(&id) else { return Some(msg) };
+    let Message::Text(reply) = msg else {
+        let _ = std::fs::remove_dir_all(&dir);
+        return Some(msg);
+    };
+    let inner = inner.clone();
+    std::thread::spawn(move || {
+        let reply = staged.finish(&reply);
+        let _ = std::fs::remove_dir_all(&dir);
+        deliver(&inner, &Message::Text(reply));
+    });
+    None
+}
+
+/// Points an export into a fresh stage folder; other requests go out as they are.
+fn stage_export(inner: &Inner, id: Option<&str>, text: String) -> Result<String, String> {
+    static STAGES: AtomicU64 = AtomicU64::new(0);
+    let Some(root) = &inner.export_root else { return Ok(text) };
+    let dir = root.join(STAGES.fetch_add(1, Ordering::Relaxed).to_string());
+    let Some(staged) = stage(&text, &dir)? else { return Ok(text) };
+    let id = id.ok_or("an export request needs an id")?;
+    std::fs::create_dir_all(&dir).map_err(|e| format!("could not prepare the export folder: {e}"))?;
+    let request = staged.request.clone();
+    lock(&inner.staged).insert(id.to_string(), (dir, staged));
+    Ok(request)
+}
+
+fn drop_stage(inner: &Inner, id: &str) {
+    if let Some((dir, _)) = lock(&inner.staged).remove(id) {
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}
+
 fn set_up(inner: &Inner, up: bool) {
     if inner.up.swap(up, Ordering::SeqCst) != up {
         if !up {
             lock(&inner.in_flight).clear();
             lock(&inner.cancels).clear();
+            for (_, (dir, _)) in lock(&inner.staged).drain() {
+                let _ = std::fs::remove_dir_all(dir);
+            }
         }
         let _ = inner.app.emit("engine:state", up);
     }
@@ -498,6 +607,11 @@ pub fn engine_send(
     let text = String::from_utf8(bytes.clone()).map_err(|e| e.to_string())?;
     check_request_path(&text, &held)?;
     let Head { id, op, target, soft, doc, all } = head(&text);
+    // A request head() cannot read is staged too, the way the worker would read it.
+    let text = match op.as_deref() {
+        Some("export" | "exportWith") | None => stage_export(&state.0, id.as_deref(), text)?,
+        Some(_) => text,
+    };
     remember(
         &state.0.recent,
         format!(
@@ -531,6 +645,7 @@ pub fn engine_send(
     send_to_worker(&state.0, &Message::Text(text)).inspect_err(|_| {
         lock(&state.0.in_flight).remove(&id);
         lock(&state.0.cancels).remove(&id);
+        drop_stage(&state.0, &id);
     })
 }
 

@@ -325,6 +325,8 @@ pub struct EngineLink {
     pub token: String,
     /// True when this link joined somebody else's engine and starts nothing.
     pub attached: bool,
+    /// The app's folder its engine may write exports into; an export written elsewhere would be refused.
+    pub export_dir: Option<PathBuf>,
     state: Mutex<LinkState>,
     #[cfg(windows)]
     job: crate::link::job::ProcessJob,
@@ -351,6 +353,7 @@ impl EngineLink {
             port: AtomicU16::new(free_port().unwrap_or(0)),
             token: mint_token(),
             attached: false,
+            export_dir: None,
             state: Mutex::new(LinkState::default()),
             #[cfg(windows)]
             job: crate::link::job::ProcessJob::new(),
@@ -362,10 +365,16 @@ impl EngineLink {
             port: AtomicU16::new(port),
             token: token.into(),
             attached: true,
+            export_dir: None,
             state: Mutex::new(LinkState::default()),
             #[cfg(windows)]
             job: crate::link::job::ProcessJob::new(),
         }
+    }
+
+    pub fn with_export_dir(mut self, dir: Option<PathBuf>) -> EngineLink {
+        self.export_dir = dir;
+        self
     }
 
     /// The explicit environment override, which knows nothing about a running app.
@@ -398,7 +407,7 @@ impl EngineLink {
                     app.pid.map_or("?".into(), |p| p.to_string()),
                     app.port
                 ));
-                let link = EngineLink::attach(app.port, app.token.clone());
+                let link = EngineLink::attach(app.port, app.token.clone()).with_export_dir(app.export_dir.clone());
                 return Ok((link, Some(app)));
             }
             if mode == Mode::Attach {

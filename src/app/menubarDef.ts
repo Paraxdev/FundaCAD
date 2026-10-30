@@ -13,6 +13,7 @@ import { beforeUpdate } from "./unsavedGuard";
 import { PRODUCT_NAME } from "./channel";
 import { allCommands } from "../ui/commands";
 import { analysisFlags } from "../ui/railActive";
+import { canStep } from "../ui/canStep";
 import type { Engine } from "./engine";
 import { pickedFeatureIds, toggleSuppressRows } from "./featureRows";
 
@@ -80,13 +81,13 @@ export function buildMenubar(e: Engine): MenuDef[] {
         {
           label: "Undo",
           shortcut: "Ctrl+Z",
-          disabled: () => !(e.sketch.active ? e.sketch.canUndoSketch : e.store.canUndo),
+          disabled: () => !canStep(e, "undo"),
           onClick: () => e.doUndo(),
         },
         {
           label: "Redo",
           shortcut: "Ctrl+Y",
-          disabled: () => !(e.sketch.active ? e.sketch.canRedoSketch : e.store.canRedo),
+          disabled: () => !canStep(e, "redo"),
           onClick: () => e.doRedo(),
         },
         { separator: true, label: "" },
