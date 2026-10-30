@@ -157,3 +157,69 @@ fn a_filleted_face_keeps_one_material_and_the_number_measure_shows() {
     ok(mcp.call("material_assign", json!({"material": null, "faces": [{"body": "body1", "face": now}]})));
     assert!(saved_document(&mut mcp, "off").get("faceMaterials").is_none());
 }
+
+fn fixture_path() -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/mcp-materials.json")
+}
+
+// The numbers a print's sampled points hold follow the tessellation, so only these are held to the fixture.
+fn stable_print(print: &Value) -> Value {
+    json!([print["centroid"], print["normal"], print["area"], print["surface"], print["faces"]])
+}
+
+fn assert_same_materials(saved: &Value, want: &Value) {
+    for key in ["features", "materials", "bodyMaterial", "faceMaterials"] {
+        assert_eq!(saved[key], want[key], "{key}");
+    }
+    let (saved, want) = (saved["facePrints"].as_object().unwrap(), want["facePrints"].as_object().unwrap());
+    assert_eq!(saved.keys().collect::<Vec<_>>(), want.keys().collect::<Vec<_>>());
+    for (key, print) in want {
+        assert_eq!(stable_print(&saved[key]), stable_print(print), "{key}");
+    }
+}
+
+// tests/document/mcpMaterialsFile.test.ts reads the same fixture through the app's store.
+// Set BLESS_MCP_MATERIALS=1 to write the fixture again after a change meant to alter the file.
+#[test]
+fn a_saved_file_holds_what_the_app_reads_and_opens_again_unchanged() {
+    let mut mcp = Mcp::start(&BTreeMap::new(), &std::env::temp_dir());
+    box_part(&mut mcp);
+    let graph = json!({"nodes": [
+        {"id": "n", "type": "noise", "params": {"scale": 3}, "x": 40, "y": 60},
+        {"id": "r", "type": "colorramp", "params": {"stops": "0:#102030;1:#a0b0c0"}, "in": {"t": "n"}},
+        {"id": "o", "type": "output", "in": {"roughness": "n", "color": "r"}, "params": {"colorAmount": 0.5}}
+    ], "output": "o"});
+    ok(mcp.call(
+        "material_set",
+        json!({"name": "Teal paint", "color": "#1a7f7a", "metalness": 0.4, "roughness": 0.35, "clearcoat": 1,
+               "flakes": 0.5, "flakeSize": 0.2,
+               "surface": {"kind": "brushed", "scale": 2, "amount": 0.6, "angle": 45},
+               "surfaceGraph": graph}),
+    ));
+    ok(mcp.call("material_set", json!({"from": "m-glass", "name": "Green glass", "attenuationColor": "#2a8f6a"})));
+    ok(mcp.call("material_assign", json!({"material": "m-teal-paint", "bodies": ["body1"]})));
+    let (top, bottom) = (
+        json!({"kind": "face", "by": "nearest", "point": [0, 0, 5], "body": "body1"}),
+        json!({"kind": "face", "by": "nearest", "point": [0, 0, -5], "body": "body1"}),
+    );
+    ok(mcp.call("material_assign", json!({"material": "m-green-glass", "faces": [top]})));
+    ok(mcp.call("material_assign", json!({"material": "m-steel", "faces": [bottom]})));
+
+    let path = std::env::temp_dir().join(format!("mcp-materials-{}-file.funda", std::process::id()));
+    ok(mcp.call("doc_save", json!({"path": path})));
+    let saved: Value = serde_json::from_slice(&std::fs::read(&path).expect("saved")).expect("JSON");
+    if std::env::var_os("BLESS_MCP_MATERIALS").is_some() {
+        std::fs::write(fixture_path(), serde_json::to_string_pretty(&saved).unwrap() + "\n").expect("blessed");
+    }
+    let fixture = serde_json::from_slice(&std::fs::read(fixture_path()).expect("the fixture")).expect("JSON");
+    assert_same_materials(&saved, &fixture);
+
+    ok(mcp.call("doc_open", json!({"path": path})));
+    let list = ok(mcp.call("material_list", json!({})));
+    assert!(list.contains("worn by bodies body1"), "{list}");
+    assert!(list.contains("m-green-glass"), "{list}");
+    ok(mcp.call("build", json!({})));
+    let again = saved_document(&mut mcp, "again");
+    _ = std::fs::remove_file(&path);
+    assert_same_materials(&again, &fixture);
+}
