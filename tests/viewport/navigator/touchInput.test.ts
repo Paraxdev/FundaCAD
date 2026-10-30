@@ -11,7 +11,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createNavigatorRig } from "../../../src/viewport/navigator/rig";
 import { LONG_PRESS_MS, replayedPress } from "../../../src/viewport/navigator/input";
 import { getNavPrefs, setNavPrefs } from "../../../src/ui/interactionPrefs";
+import { applyInterfaceSize } from "../../../src/ui/interfaceSize";
 import { BoxScene, H, UNIT_BOX, W } from "./kit";
+
+vi.mock("@tauri-apps/api/webview", () => ({ getCurrentWebview: () => ({ setZoom: () => Promise.resolve() }) }));
 
 type Listener = (e: FakeEvent) => void;
 
@@ -380,8 +383,47 @@ describe("wheel", () => {
       expect(r.moved.length()).toBeLessThan(1e-9);
     });
 
-    it("a notch zooms when the setting says touchpad", () => {
-      expect(run(notch, { wheelDevice: "touchpad" }).zoom).toBeGreaterThan(1);
+    it("a notch zooms a notch's worth when the setting says touchpad", () => {
+      expect(run(notch, { wheelDevice: "touchpad" }).zoom).toBeCloseTo(Math.pow(1.0016, 100), 6);
+    });
+
+    it("a pinch pans on Mouse", () => {
+      const r = run({ deltaY: -5.5 }, { wheelDevice: "mouse" });
+      expect(r.zoom).toBeCloseTo(1, 9);
+      expect(r.moved.length()).toBeGreaterThan(1e-3);
+    });
+
+    it("pans at an Interface size on a scaled display, even right after a touchpad", async () => {
+      const atWebviewZoom = async (pct: number) => {
+        const g = globalThis as unknown as Record<string, unknown>;
+        g.window = { __TAURI_INTERNALS__: {} };
+        g.document = { documentElement: { style: {}, dataset: {} } };
+        applyInterfaceSize(pct);
+        await vi.dynamicImportSettled();
+        await vi.advanceTimersByTimeAsync(0);
+        delete g.window;
+        delete g.document;
+      };
+      await atWebviewZoom(110);
+      globalThis.devicePixelRatio = 1.375;
+      try {
+        setNavPrefs({ wheelDevice: "auto" });
+        const { rig } = rigWithBox();
+        rig.setProjectionMode("ortho");
+        rig.navigator.reseatAndContain();
+        wheel(rig, { deltaX: 6.5, deltaY: 1.25 });
+        steady(rig);
+        vi.advanceTimersByTime(1000);
+        const s0 = rig.navigator.pose.scale;
+        const t0 = rig.getTarget();
+        wheel(rig, { ctrlKey: true, deltaY: 90.909, wheelDeltaY: -109 });
+        steady(rig);
+        expect(rig.navigator.pose.scale / s0).toBeCloseTo(1, 9);
+        expect(rig.getTarget().sub(t0).length()).toBeGreaterThan(1e-3);
+      } finally {
+        globalThis.devicePixelRatio = 1;
+        await atWebviewZoom(100);
+      }
     });
 
     it("without Ctrl a mouse notch still zooms at an Interface size", () => {

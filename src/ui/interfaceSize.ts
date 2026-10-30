@@ -54,6 +54,13 @@ export function applyInterfaceSize(pct: number) {
     .finally(reveal);
 }
 
+/** What the deltas of a wheel event may have been divided by, for wheelKind.ts. Page zoom divides them and a display
+ *  scale does not, yet devicePixelRatio is the product of the two, so it only stands in for a zoom we did not set. */
+export function wheelScales(): number[] {
+  const scale = webviewPct === 100 ? globalThis.devicePixelRatio || 1 : webviewPct / 100;
+  return scale === 1 ? [1] : [1, scale];
+}
+
 /** The next step up or down from `pct`, held between the smallest step and the largest. */
 export function steppedInterfaceSize(pct: number, dir: 1 | -1): number {
   const next = dir > 0 ? INTERFACE_SIZES.find((s) => s > pct) : [...INTERFACE_SIZES].reverse().find((s) => s < pct);

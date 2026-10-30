@@ -8,6 +8,7 @@ import { stepAngles } from "./viewStep";
 import { frameRotation, pivotProbes, pivotShift, viewQuaternion } from "./orbitPivot";
 import { anchorDolly, groundAnchor, orthoZoomStep } from "./zoomAnchor";
 import { ease, flightSeconds, worthFlying } from "./viewFlight";
+import { wheelScales } from "../ui/interfaceSize";
 import { cameraFlightsOn } from "../ui/motion";
 import type {
   CameraRig,
@@ -288,8 +289,7 @@ export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & {
     const dy = Math.max(-240, Math.min(240, e.deltaY * unit));
     emit("inputstart");
     // Ctrl with a mouse wheel pans up and down; a pinch (ctrl+wheel in small steps) still zooms.
-    const dpr = globalThis.devicePixelRatio || 1;
-    const told = wheelEvidence(e, undefined, dpr === 1 ? [1] : [1, dpr]);
+    const told = wheelEvidence(e, undefined, wheelScales());
     if (e.ctrlKey && (told === "mouse" || (told === null && Math.abs(dy) >= 50))) {
       const half = dom.getBoundingClientRect().height / 2 || 1;
       controls.truck(0, (dy / half) * rig.viewScale(), false);

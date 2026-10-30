@@ -1,8 +1,19 @@
 // The Classic camera: a wheel zooms, Ctrl with a mouse notch pans up and down, and a pinch still zooms.
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
 import { createLegacyRig } from "../../src/viewport/legacyRig";
+import { applyInterfaceSize } from "../../src/ui/interfaceSize";
+
+vi.mock("@tauri-apps/api/webview", () => ({ getCurrentWebview: () => ({ setZoom: () => Promise.resolve() }) }));
+
+async function atWebviewZoom(pct: number) {
+  Object.assign(window, { __TAURI_INTERNALS__: {} });
+  applyInterfaceSize(pct);
+  await vi.dynamicImportSettled();
+  await new Promise((r) => setTimeout(r, 0));
+  delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
+}
 
 function setup() {
   const dom = document.createElement("canvas");
@@ -57,6 +68,20 @@ describe("Classic camera wheel", () => {
       wheel({ deltaY: 90.90908893868948, wheelDeltaY: -109, ctrlKey: true });
     } finally {
       globalThis.devicePixelRatio = 1;
+    }
+    expect(rig.viewScale()).toBeCloseTo(s0, 9);
+  });
+
+  it("Ctrl with a one line notch pans at an Interface size on a scaled display", async () => {
+    const { rig, wheel } = setup();
+    const s0 = rig.viewScale();
+    await atWebviewZoom(110);
+    globalThis.devicePixelRatio = 1.375;
+    try {
+      wheel({ deltaY: 30.3, wheelDeltaY: -109, ctrlKey: true });
+    } finally {
+      globalThis.devicePixelRatio = 1;
+      await atWebviewZoom(100);
     }
     expect(rig.viewScale()).toBeCloseTo(s0, 9);
   });

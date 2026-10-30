@@ -11,6 +11,7 @@ import { measureFitInsets } from "../../app/fitInsets";
 import { Navigator, lookQuatUp } from "./navigator";
 import { clonePose, distanceOf, eyeOf, forwardOf, setOrientation } from "./pose";
 import { getNavPrefs, noteDetectedWheel, onNavPrefsChange } from "../../ui/interactionPrefs";
+import { wheelScales } from "../../ui/interfaceSize";
 
 const STANDARD: Record<StandardView, { dir: [number, number, number]; up: [number, number, number] }> = {
   front: { dir: [0, -1, 0], up: [0, 0, 1] },
@@ -95,6 +96,7 @@ export function createNavigatorRig(dom: HTMLElement, aspect: number): CameraRig 
   const input = bindInput(dom, nav, {
     wheelDevice: () => getNavPrefs().wheelDevice,
     touchpadScroll: () => getNavPrefs().touchpadScroll,
+    wheelScales,
     detected: noteDetectedWheel,
   });
 
