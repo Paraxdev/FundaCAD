@@ -465,3 +465,31 @@ fn a_refused_body_does_not_keep_growing() {
     assert!(!body.push(&[0u8; 1024]));
     assert!(body.into_bytes().len() <= 3);
 }
+
+/// The unpack budget sums declared sizes, which holds only while no entry can inflate past the size its headers give.
+#[test]
+fn an_entry_that_inflates_past_its_declared_size_is_refused_and_not_written() {
+    let body = vec![0u8; 2 * 1024 * 1024];
+    let mut buf = std::io::Cursor::new(Vec::new());
+    {
+        let mut w = zip::ZipWriter::new(&mut buf);
+        let opts = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+        w.start_file("big.bin", opts).unwrap();
+        w.write_all(&body).unwrap();
+        w.finish().unwrap();
+    }
+    let mut bytes = buf.into_inner();
+    assert!(bytes.len() < body.len() / 100, "the entry must be stored compressed");
+    let declared = 1000u32.to_le_bytes();
+    for (signature, name_at, size_at) in [(LOCAL, LOCAL_NAME_AT, 22), (CENTRAL, CENTRAL_NAME_AT, 24)] {
+        let at = (0..bytes.len() - name_at - 7)
+            .find(|&p| &bytes[p..p + 4] == signature && &bytes[p + name_at..p + name_at + 7] == b"big.bin")
+            .expect("record for big.bin");
+        assert_eq!(bytes[at + size_at..at + size_at + 4], (body.len() as u32).to_le_bytes());
+        bytes[at + size_at..at + size_at + 4].copy_from_slice(&declared);
+    }
+    let dir = tmpdir("inflate");
+    assert!(extract_into(&bytes, &dir).is_err(), "an entry larger than declared must be refused");
+    assert!(!dir.join("big.bin").exists(), "nothing of the oversized entry may be written");
+    let _ = std::fs::remove_dir_all(&dir);
+}
