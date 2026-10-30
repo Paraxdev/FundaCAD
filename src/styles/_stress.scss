@@ -61,7 +61,9 @@
   bottom: 0;
 }
 :root[data-pointer="touch"] .stress-item-head > .stress-remove-load.icon-btn.icon-btn-sm::before,
-:root[data-targets="large"] .stress-item-head > .stress-remove-load.icon-btn.icon-btn-sm::before {
+:root[data-pointer="touch"] .stress-item-head > .stress-remove-support.icon-btn.icon-btn-sm::before,
+:root[data-targets="large"] .stress-item-head > .stress-remove-load.icon-btn.icon-btn-sm::before,
+:root[data-targets="large"] .stress-item-head > .stress-remove-support.icon-btn.icon-btn-sm::before {
   right: -4px;
 }
 .stress-fold {
