@@ -1773,6 +1773,10 @@ impl FundaCad {
             if let Some(tracked) = result.get("trackedFaces").and_then(Value::as_object) {
                 model::write_tracked_faces(&mut st.doc, tracked);
             }
+            // In live mode the window's document already holds the numbers of the window's own build.
+            if st.live.is_none() {
+                materials_doc::rekey_faces(&mut st.doc, &mesh);
+            }
             st.mesh = mesh.clone();
             st.built_for = Some(signature(&st.doc));
         }
@@ -2689,8 +2693,7 @@ impl FundaCad {
 }
 
 impl FundaCad {
-    /// What keeps each face on its material when a later feature reorders the body's faces.
-    async fn face_prints(&self, faces: &[(String, u64)]) -> Result<Vec<(String, Value)>, CallToolResult> {
+    async fn catch_up(&self) -> Result<(), CallToolResult> {
         let stale = {
             let st = self.state.lock().await;
             st.mesh.is_empty() || st.built_for.as_deref() != Some(&signature(&st.doc))
@@ -2698,6 +2701,12 @@ impl FundaCad {
         if stale {
             self.rebuild().await?;
         }
+        Ok(())
+    }
+
+    /// What keeps each face on its material when a later feature reorders the body's faces.
+    async fn face_prints(&self, faces: &[(String, u64)]) -> Result<Vec<(String, Value)>, CallToolResult> {
+        self.catch_up().await?;
         let mesh = self.state.lock().await.mesh.clone();
         let mut by_body: HashMap<&str, Vec<Value>> = HashMap::new();
         let mut out = vec![];
@@ -2721,6 +2730,11 @@ impl FundaCad {
         let (bodies, faces) = (list("bodies"), list("faces"));
         if bodies.is_empty() && faces.is_empty() {
             return failure("Give `bodies` or `faces` to assign to.");
+        }
+        // The saved keys must hold the numbers this build shows before a face is named. A document that does not
+        // build fails below if it has to, a clear by number still works.
+        if !faces.is_empty() && self.state.lock().await.live.is_none() {
+            _ = self.catch_up().await;
         }
         let (link, doc) = {
             let mut st = self.state.lock().await;

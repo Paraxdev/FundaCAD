@@ -2,6 +2,7 @@
 
 use fundacad_mcp::materials::starter;
 use fundacad_mcp::materials_doc::*;
+use fundacad_mcp::mesh::MeshBody;
 use fundacad_mcp::model::{new_document, Doc};
 use serde_json::{json, Value};
 
@@ -235,4 +236,33 @@ fn the_list_names_each_material_its_wearers_and_the_starter_to_copy_from() {
     assert!(text.contains("body1") && text.contains("body2 F3"), "{text}");
     assert!(text.contains("m-lost"), "a body wearing a missing material is pointed out: {text}");
     assert!(text.contains("m-aluminium (Aluminium)"), "{text}");
+}
+
+#[test]
+fn a_face_moves_to_its_new_number_unless_the_timeline_is_not_whole() {
+    let quad = |z: f32| [0.0, 0.0, z, 1.0, 0.0, z, 1.0, 1.0, z, 0.0, 1.0, z];
+    let mesh = MeshBody {
+        info: json!({"id": "body1", "faceCount": 2}).as_object().unwrap().clone(),
+        positions: [quad(0.0), quad(5.0)].concat(),
+        indices: vec![0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7],
+        face_ids: vec![0, 0, 1, 1],
+        edges: vec![],
+    };
+    let lower = fundacad_mcp::face_prints::body_prints(&mesh)[0].clone();
+    let doc = |extra: Value| {
+        let mut d = json!({"faceMaterials": {"body1#1": "m-a"}, "facePrints": {"body1#1": lower}});
+        d.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        d.as_object().unwrap().clone()
+    };
+
+    let mut whole = doc(json!({}));
+    rekey_faces(&mut whole, std::slice::from_ref(&mesh));
+    assert_eq!(whole["faceMaterials"], json!({"body1#0": "m-a"}));
+    assert_eq!(whole["facePrints"], json!({"body1#0": lower}));
+
+    for off in [json!({"rollback": 1}), json!({"suppressed": ["f1"]})] {
+        let mut held = doc(off);
+        rekey_faces(&mut held, std::slice::from_ref(&mesh));
+        assert_eq!(held["faceMaterials"], json!({"body1#1": "m-a"}));
+    }
 }

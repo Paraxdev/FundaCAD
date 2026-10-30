@@ -1,7 +1,6 @@
 // tests/vectors/materials.json, replayed by the MCP too (crates/fundacad-mcp/tests/unit/materials.rs), so an
 // assistant's material is repaired exactly as the Render workspace repairs it.
 
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   asHex,
@@ -12,8 +11,9 @@ import {
   uniqueId,
   type MaterialDef,
 } from "../../src/document/materials";
-import { bodyPrints, loadFaceRefs, resolveFaceRefs, type FacePrint } from "../../src/document/faceRefs";
+import { bodyPrints, loadFaceRefs, resolveFaceRefs, savedFaceRefs, type FacePrint } from "../../src/document/faceRefs";
 import type { RebuildResult } from "../../src/types";
+import vectorsJson from "../vectors/materials.json?raw";
 
 interface Vectors {
   starter: MaterialDef[];
@@ -23,6 +23,18 @@ interface Vectors {
   unique: { id: string; taken: string[]; out: string }[];
   fresh: { names: string[]; base: string; out: string }[];
   prints: PrintCase[];
+  rekey: RekeyCase[];
+}
+
+interface RekeyCase {
+  name: string;
+  positions: number[];
+  indices: number[];
+  faceIds: number[];
+  faceCount: number;
+  materials: Record<string, string>;
+  prints: Record<string, FacePrint>;
+  out: { materials: Record<string, string>; prints: Record<string, FacePrint> };
 }
 
 interface PrintCase {
@@ -34,7 +46,7 @@ interface PrintCase {
   prints: FacePrint[];
 }
 
-function resultOf(c: Omit<PrintCase, "name" | "prints">): RebuildResult {
+function resultOf(c: Pick<PrintCase, "positions" | "indices" | "faceIds" | "faceCount">): RebuildResult {
   return {
     mesh: {
       positions: new Float32Array(c.positions),
@@ -46,7 +58,7 @@ function resultOf(c: Omit<PrintCase, "name" | "prints">): RebuildResult {
 }
 
 // Parsed by hand: an import would turn the "__proto__" key of one case into a prototype.
-const V = JSON.parse(readFileSync(new URL("../vectors/materials.json", import.meta.url), "utf8")) as Vectors;
+const V = JSON.parse(vectorsJson) as Vectors;
 
 describe("material vectors shared with the MCP", () => {
   it("offers the same starter library", () => {
@@ -73,6 +85,15 @@ describe("material vectors shared with the MCP", () => {
     for (const c of V.prints) {
       const result = resultOf(c);
       expect(JSON.stringify(bodyPrints(result, result.bodies![0]!)), c.name).toBe(JSON.stringify(c.prints));
+    }
+  });
+
+  it("saves each face at the number it finds itself on", () => {
+    for (const c of V.rekey) {
+      const result = resultOf(c);
+      const entries = loadFaceRefs(c.materials, c.prints).map((ref, i): [string, typeof ref] => [String(i), ref]);
+      const saved = savedFaceRefs(entries, resolveFaceRefs(entries, result, null), result);
+      expect(JSON.stringify(saved), c.name).toBe(JSON.stringify(c.out));
     }
   });
 

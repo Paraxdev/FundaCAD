@@ -6,6 +6,7 @@ use std::collections::{BTreeMap, HashSet};
 use serde_json::{Map, Value};
 
 use crate::materials::{self, Field, FIELDS, KNOWN_KEYS, NODE_TYPES, SURFACE_KINDS};
+use crate::mesh::MeshBody;
 use crate::model::{Doc, DocumentError};
 
 pub type Material = Map<String, Value>;
@@ -465,4 +466,18 @@ pub fn assign(
 /// Saves each assigned face's print beside its key, the form `savedFaceRefs` writes.
 pub fn write_prints(doc: &mut Doc, prints: Vec<(String, Value)>) {
     edit_map(doc, "facePrints", |m| m.extend(prints));
+}
+
+/// Moves each saved face to the number it has in this build, the way the app does when it saves, so the keys, the list
+/// and a later assign all speak of the same face. Numbers mean nothing here while the timeline is not whole.
+pub fn rekey_faces(doc: &mut Doc, mesh: &[MeshBody]) {
+    let Some(materials) = doc.get("faceMaterials").and_then(Value::as_object).filter(|m| !m.is_empty()) else { return };
+    if faces_unreliable(doc).is_some() {
+        return;
+    }
+    let none = Map::new();
+    let prints = doc.get("facePrints").and_then(Value::as_object).unwrap_or(&none);
+    let (materials, prints) = crate::face_prints::rekeyed(materials, prints, mesh);
+    edit_map(doc, "faceMaterials", |m| *m = materials);
+    edit_map(doc, "facePrints", |m| *m = prints);
 }

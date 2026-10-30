@@ -74,3 +74,29 @@ fn prints_a_face_like_the_app() {
         assert_eq!(serde_json::to_string(&got).unwrap(), serde_json::to_string(&c["prints"]).unwrap(), "{}", c["name"]);
     }
 }
+
+#[test]
+fn saved_faces_find_their_new_numbers_like_the_app() {
+    let v = vectors();
+    for c in cases(&v, "rekey") {
+        let mut mesh = c.clone();
+        mesh["id"] = json!("body1");
+        let mesh = [fundacad_mcp::mesh::MeshBody::from_value(&mesh)];
+        let (materials, prints) = fundacad_mcp::face_prints::rekeyed(
+            c["materials"].as_object().unwrap(),
+            c["prints"].as_object().unwrap(),
+            &mesh,
+        );
+        let got = json!({"materials": materials, "prints": prints});
+        assert_eq!(serde_json::to_string(&got).unwrap(), serde_json::to_string(&c["out"]).unwrap(), "{}", c["name"]);
+    }
+}
+
+#[test]
+fn a_saved_key_the_app_cannot_read_rides_along() {
+    let materials = json!({"not a key": "m-a", "body1#x": "m-b", "body1#0": 7});
+    let prints = json!({"not a key": {"any": 1}, "body1#9": {"any": 2}});
+    let (m, p) = fundacad_mcp::face_prints::rekeyed(materials.as_object().unwrap(), prints.as_object().unwrap(), &[]);
+    assert_eq!(Value::Object(m), materials);
+    assert_eq!(Value::Object(p), json!({"not a key": {"any": 1}}));
+}

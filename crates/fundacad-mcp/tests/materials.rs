@@ -117,13 +117,43 @@ fn an_assigned_face_is_saved_with_its_print_and_a_later_fillet_does_not_lose_it(
     let print = &saved["facePrints"][key];
     assert_eq!(print["centroid"], json!([0, 0, 5]), "{print}");
     assert_eq!(print["normal"], json!([0, 0, 1]), "{print}");
-    assert_eq!(print["area"], json!(600), "{print}");
+    assert_eq!(print["area"], json!(504), "{print}");
     assert_eq!(print["surface"], "plane");
-    assert_eq!(print["faces"], 6);
-    assert_eq!(print["points"].as_array().map(Vec::len), Some(24), "{print}");
+    assert_eq!(print["faces"], 26);
+    assert!(print["points"].as_array().is_some_and(|p| p.len() >= 12), "{print}");
 
     let face: u64 = key.split('#').nth(1).unwrap().parse().unwrap();
     ok(mcp.call("material_assign", json!({"material": null, "faces": [{"body": "body1", "face": face}]})));
     let saved = saved_document(&mut mcp, "cleared");
+    assert!(saved.get("faceMaterials").is_none(), "{saved}");
     assert!(saved.get("facePrints").is_none(), "{saved}");
+}
+
+#[test]
+fn a_filleted_face_keeps_one_material_and_the_number_measure_shows() {
+    let mut mcp = Mcp::start(&BTreeMap::new(), &std::env::temp_dir());
+    box_part(&mut mcp);
+    let top = json!({"kind": "face", "by": "nearest", "point": [0, 0, 5], "body": "body1"});
+    ok(mcp.call("material_assign", json!({"material": "m-steel", "faces": [top.clone()]})));
+    ok(mcp.call(
+        "feature_add",
+        json!({"feature": {"id": "soft", "type": "fillet", "radius": 1,
+                           "edges": {"kind": "edge", "by": "all", "body": "body1"}}}),
+    ));
+
+    // No build between the fillet and this: the assign has to catch up first.
+    ok(mcp.call("material_assign", json!({"material": "m-glass", "faces": [top.clone()]})));
+    let saved = saved_document(&mut mcp, "second");
+    let keys = saved["faceMaterials"].as_object().expect("the face keys");
+    assert_eq!(keys.len(), 1, "{saved}");
+    let (key, material) = keys.iter().next().unwrap();
+    assert_eq!(material, "m-glass");
+    let now: u64 = key.split('#').nth(1).unwrap().parse().unwrap();
+
+    let measured = ok(mcp.call("measure", json!({"a": top})));
+    assert!(measured.split(|c: char| !c.is_alphanumeric()).any(|w| w == format!("F{now}")), "F{now}: {measured}");
+    assert!(ok(mcp.call("material_list", json!({}))).contains(&format!("body1 F{now}")));
+
+    ok(mcp.call("material_assign", json!({"material": null, "faces": [{"body": "body1", "face": now}]})));
+    assert!(saved_document(&mut mcp, "off").get("faceMaterials").is_none());
 }
