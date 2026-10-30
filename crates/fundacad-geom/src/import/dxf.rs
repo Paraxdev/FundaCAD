@@ -12,8 +12,9 @@ use super::mesh::{MeshObject, MAX_IMPORT_TRIANGLES};
 pub const MAX_SKETCH_ENTITIES: usize = 20_000;
 const BINARY_SENTINEL: &[u8] = b"AutoCAD Binary DXF\r\n\x1a\0";
 const MAX_INSERT_DEPTH: usize = 16;
-/// Entities walked plus INSERT array cells, so nested arrays of skipped or empty blocks still cost.
-const MAX_DXF_WORK: u64 = 5_000_000;
+/// Group codes walked plus INSERT array cells, so nested arrays of skipped, empty or heavy blocks still cost.
+/// A drawing walked once costs about its own group codes, which a text DXF under the import cap holds fewer of.
+const MAX_DXF_WORK: u64 = super::MAX_IMPORT_FILE_BYTES / 4;
 
 pub struct DxfRead {
     pub sketches: Vec<(String, Vec<Value>)>,
@@ -152,6 +153,11 @@ struct Ent {
 }
 
 impl Ent {
+    /// Each walk scans the group codes of the entity and of its vertices.
+    fn cost(&self) -> u64 {
+        let own = self.pairs.len() as u64 + 1;
+        self.subs.iter().fold(own, |a, s| a.saturating_add(s.pairs.len() as u64 + 1))
+    }
     fn get(&self, code: i32) -> Option<&V> {
         self.pairs.iter().find(|(c, _)| *c == code).map(|(_, v)| v)
     }
@@ -556,7 +562,7 @@ struct Walker<'a> {
 impl Walker<'_> {
     fn walk(&mut self, ents: &[Ent], m: &Mat, inherit: Option<&str>) {
         for e in ents {
-            self.out.work += 1;
+            self.out.work += e.cost();
             if self.out.full() {
                 return;
             }
@@ -1109,7 +1115,7 @@ pub fn read_dxf(data: &[u8]) -> Result<DxfRead, String> {
     let o = walker.out;
     if o.work > MAX_DXF_WORK {
         return Err(format!(
-            "this DXF repeats its blocks into more than {MAX_DXF_WORK} entities and array cells, too much to import. Explode or split the drawing in the source app and import the part you need"
+            "this DXF repeats its blocks into more drawing data and array cells than an import walks, too much to import. Explode or split the drawing in the source app and import the part you need"
         ));
     }
     if o.count > MAX_SKETCH_ENTITIES {

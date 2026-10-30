@@ -281,6 +281,39 @@ fn a_dxf_insert_array_past_the_work_budget_is_refused_before_walking() {
 }
 
 #[test]
+fn a_dxf_insert_array_of_a_block_heavy_with_vertices_is_held_to_a_work_budget() {
+    let vertex = "0
+VERTEX
+8
+0
+10
+0
+20
+0
+30
+0
+70
+64
+";
+    let mesh = format!("0
+POLYLINE
+8
+0
+66
+1
+70
+64
+{}0
+SEQEND
+8
+0
+", vertex.repeat(20_000));
+    let data = dxf_with(&[("HEAVY", &mesh)], &insert_array("HEAVY", "1000", "1000"));
+    let e = within(30, move || dxf::read_dxf(&data).err()).expect("the array is refused");
+    assert!(e.contains("array cells"), "{e}");
+}
+
+#[test]
 fn a_dxf_polygon_mesh_whose_size_overflows_is_skipped() {
     let vertex = "0\nVERTEX\n8\n0\n10\n0\n20\n0\n30\n0\n70\n64\n";
     let mesh = format!(
