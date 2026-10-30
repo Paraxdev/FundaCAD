@@ -549,12 +549,19 @@ same request gives the same answer every time.
   about 50000 elements (a slender or thin walled one goes further). A mesh that would
   not fit is refused with the `maxElements` that would.
 - Without `size`, a mesh that comes apart or loses a face the study needs is meshed again
-  finer by itself, up to 80000 elements and what about a minute allows. A `maxElements` in
-  the request is the ceiling of this retry, except with `"refine": "fine"`. Past that the
-  error carries `"finer": { "elements": 90000, "seconds": 120 }`, a rough estimate.
-  The same request with `"finer": true` may then reach 400000 elements and 8 GB once, the
-  free memory rule still applies. A run past those has no `finer`, and an error from a
-  wall that gave way names its thickness and place in `message`.
+  finer by itself, up to about 148000 elements, what 15 s of a release build allows. A
+  `maxElements` in the request is the ceiling of this retry, except with
+  `"refine": "fine"`. Past that the error carries
+  `"finer": { "elements": 180000, "seconds": 20 }`, a rough estimate. The same request
+  with `"finer": true` may then reach 250000 elements and 8 GiB once, the free memory rule
+  still applies. There is no `finer` when a thin walled part of that many elements would
+  not fit that memory (about 220000 elements at 8 GiB, a solid part fits about half and
+  can still be refused for memory), and an error from a wall that gave way names its
+  thickness and place in `message`.
+- A study the solver would run with a warning, only some fixed faces lost, also retries,
+  within `maxElements` (30000 by default). When a retry keeps those faces the answer has a
+  finer mesh and other numbers than the warned run of an earlier build. When none does,
+  it stays on the first mesh with its warning. An explicit `size` never retries.
 - A load only on fixed faces does nothing to the part: it is refused when every load
   is and gravity is off, and otherwise draws a warning.
 
