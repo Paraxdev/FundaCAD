@@ -23,7 +23,7 @@ import {
 } from "../../src/viewport/originTiles";
 import { AXIS_COLOR, MIN_TRIAD_SCALE, OriginTriad, TRIAD_LENGTH_PX } from "../../src/viewport/originTriad";
 import { GLYPH_MODEL_FRACTION } from "../../src/viewport/gizmoScale";
-import { SQUIRCLE_EXPONENT, roundedSquareCorners } from "../../src/viewport/cornerProfile";
+import { SQUIRCLE_EXPONENT, roundedSquare } from "../../src/viewport/cornerProfile";
 import { markOverlay, overlayLayer } from "../../src/viewport/overlayKinds";
 import type { Plane3 } from "../../src/types";
 
@@ -137,6 +137,7 @@ describe("tilePose", () => {
 describe("a tile on its plane", () => {
   const L = TILE_SHAPE.sizePx;
   const G = TILE_SHAPE.gapPx;
+  const R = TILE_SHAPE.radiusPx;
   /** The two axes a plane spans and its normal, as indices into a world point. */
   const AXES: Record<Plane3, [number, number, number]> = { XY: [0, 1, 2], XZ: [0, 2, 1], YZ: [1, 2, 0] };
   const tidy = (n: number) => Math.round(n * 1e6) / 1e6 + 0;
@@ -146,15 +147,15 @@ describe("a tile on its plane", () => {
       new THREE.Vector3().fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld).toArray().map(tidy),
     );
   };
-  /** The cyclic neighbours of the tile's square corner at (G, G) on the plane. */
-  const sides = (pts: number[][], a: number, b: number) => {
-    const i = pts.findIndex((p) => p[a] === G && p[b] === G);
-    expect(i).toBeGreaterThanOrEqual(0);
-    const at = (j: number) => pts[(j + pts.length) % pts.length]!;
-    return [at(i - 1), at(i + 1)].map((p) => [p[a], p[b]]).sort((p, q) => p[0]! - q[0]!);
+  /** Whether `from` and `to` follow each other in the ring, a straight run between them. */
+  const run = (ring: number[][], from: number[], to: number[]) => {
+    const i = ring.findIndex((p) => p[0] === from[0] && p[1] === from[1]);
+    expect(i, `${from}`).toBeGreaterThanOrEqual(0);
+    const near = [ring[(i + ring.length - 1) % ring.length], ring[(i + 1) % ring.length]];
+    expect(near).toContainEqual(to);
   };
 
-  it("has its square corner a gap out on both arrows and runs its two edges parallel to them", () => {
+  it("rounds all four corners and runs its sides a gap off both arrows, parallel to them", () => {
     const t = new OriginTiles(new THREE.Scene());
     t.group.updateMatrixWorld(true);
     for (const k of PLANES) {
@@ -169,17 +170,18 @@ describe("a tile on its plane", () => {
           }
         }
         const has = (x: number, y: number) => pts.some((p) => p[a] === x && p[b] === y);
-        expect([has(G, G), has(G + L, G), has(G, G + L), has(G + L, G + L)]).toEqual([true, true, true, false]);
+        expect([has(G, G), has(G + L, G), has(G, G + L), has(G + L, G + L)]).toEqual([false, false, false, false]);
       }
-      expect(sides(worldPoints(t.planes[k]), a, b)).toEqual([
-        [G, G + L],
-        [G + L, G],
-      ]);
+      const ring = worldPoints(t.planes[k]).map((p) => [p[a]!, p[b]!]);
+      for (const side of [G, G + L]) {
+        run(ring, [G + R, side], [G + L - R, side]);
+        run(ring, [side, G + R], [side, G + L - R]);
+      }
     }
     t.dispose();
   });
 
-  it("picks along the same outline, its corner a gap out and its sides parallel to the arrows", () => {
+  it("picks along the same outline, its near sides a gap off the arrows and parallel to them", () => {
     const t = new OriginTiles(new THREE.Scene());
     const eyes: Record<Plane3, { at: THREE.Vector3Tuple; up: THREE.Vector3Tuple }> = {
       XY: { at: [0, 0, 300], up: [0, 1, 0] },
@@ -195,7 +197,7 @@ describe("a tile on its plane", () => {
       cam.updateMatrixWorld(true);
       const [a, b] = AXES[k];
       const corner = [0, 1, 2].map((i) => (i === a || i === b ? G : 0)) as THREE.Vector3Tuple;
-      const along = (axis: number) => corner.map((c, i) => (i === axis ? c + L : c)) as THREE.Vector3Tuple;
+      const along = (axis: number, d: number) => corner.map((c, i) => (i === axis ? c + d : c)) as THREE.Vector3Tuple;
       const screen = (p: THREE.Vector3Tuple) => {
         const s = new THREE.Vector3(...p).project(cam);
         return [tidy((s.x * 0.5 + 0.5) * 400), tidy((-s.y * 0.5 + 0.5) * 400)];
@@ -204,12 +206,8 @@ describe("a tile on its plane", () => {
         .onScreen({ camera: cam, rect })
         .find((s) => s.plane === k)!
         .outline.map((p) => [tidy(p.x), tidy(p.y)]);
-      const [cx, cy] = screen(corner);
-      const i = ring.findIndex(([x, y]) => x === cx && y === cy);
-      expect(i).toBeGreaterThanOrEqual(0);
-      const near = [ring[(i + ring.length - 1) % ring.length], ring[(i + 1) % ring.length]];
-      expect(near).toContainEqual(screen(along(a)));
-      expect(near).toContainEqual(screen(along(b)));
+      expect(ring).not.toContainEqual(screen(corner));
+      for (const axis of [a, b]) run(ring, screen(along(axis, R)), screen(along(axis, L - R)));
     }
     t.dispose();
   });
@@ -485,9 +483,8 @@ describe("OriginTiles", () => {
       }
       return a;
     };
-    // Only the far corner, local (+, +) for XY, is rounded.
     const square = (size: number, leg: number) => {
-      const pts = roundedSquareCorners(size, [0, leg, 0, 0], TILE_SHAPE.exponent, CORNER_SEGMENTS);
+      const pts = roundedSquare(size, leg, TILE_SHAPE.exponent, CORNER_SEGMENTS);
       let a = 0;
       pts.forEach((p, i) => {
         const q = pts[(i + 1) % pts.length]!;
@@ -536,7 +533,7 @@ describe("tiles and arrows", () => {
         expect(arm / pws).toBeGreaterThanOrEqual(41);
         for (const plane of PLANES) {
           const pose = tilePose(plane, TILE_SHAPE);
-          const pts = tileOutline(plane, TILE_SHAPE).map(([x, y]) =>
+          const pts = tileOutline(TILE_SHAPE).map(([x, y]) =>
             new THREE.Vector3(x, y, 0).applyMatrix4(tiles.planes[plane].matrixWorld),
           );
           const gap = TILE_SHAPE.gapPx / TILE_SHAPE.sizePx;
@@ -552,7 +549,7 @@ describe("tiles and arrows", () => {
     triad.dispose();
   });
 
-  it("keeps the three tiles off the origin and their square corners apart at home on screen", () => {
+  it("keeps the three tiles off the origin and their near corners apart at home on screen", () => {
     const t = new OriginTiles(new THREE.Scene());
     const cam = homeCamera();
     const rect = { left: 0, top: 0, width: 1200, height: 800 };
