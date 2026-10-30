@@ -77,6 +77,22 @@ fn a_gltf_node_reached_through_many_parents_is_held_to_a_visit_budget() {
     assert!(within(30, move || read(doc, triangle_bin())).is_err());
 }
 
+#[test]
+fn a_gltf_accessor_without_a_buffer_view_is_no_larger_than_its_buffers() {
+    let acc = json!({"componentType": 5126, "count": 3_000_000, "type": "VEC3"});
+    let out = read(gltf_doc(acc, json!([{"mesh": 0}]), 36), triangle_bin()).err();
+    assert_eq!(out.as_deref(), Some("couldn't read this glTF file, it may be corrupt or not a .glb"));
+}
+
+#[test]
+fn a_gltf_mesh_of_empty_primitives_placed_many_times_is_held_to_a_primitive_budget() {
+    let acc = json!({"bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3"});
+    let mut doc = gltf_doc(acc, json!([{"children": vec![1; 1023]}, {"mesh": 0}]), 36);
+    doc["meshes"] = json!([{"primitives": vec![json!({}); 10_000]}]);
+    let out = within(60, move || read(doc, triangle_bin()).err());
+    assert_eq!(out.as_deref(), Some("this glTF places too many mesh primitives to import"));
+}
+
 /// `levels` VRML groups, each listing the one before it twice, over `leaf`.
 fn vrml_doubling(leaf: &str, levels: usize) -> String {
     let mut s = format!("#VRML V2.0 utf8\nDEF L0 {leaf}\n");

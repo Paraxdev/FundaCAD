@@ -89,7 +89,18 @@ impl Doc<'_> {
         }
         let count = count as usize;
         let kind = acc.get("componentType").and_then(Value::as_u64).ok_or_else(bad)?;
+        let size = match kind {
+            5120 | 5121 => 1,
+            5122 | 5123 => 2,
+            5125 | 5126 => 4,
+            _ => return Err(bad()),
+        };
         let Some(view_index) = acc.get("bufferView").and_then(Value::as_u64) else {
+            // Zero filled, so no larger than the buffers could have held it.
+            let held: usize = self.buffers.iter().map(|b| b.len()).sum();
+            if count.checked_mul(size * width).is_none_or(|n| n > held) {
+                return Err(bad());
+            }
             return Ok(vec![0.0; count * width]);
         };
         let view = self.arr("bufferViews").get(view_index as usize).ok_or_else(bad)?;
@@ -98,12 +109,6 @@ impl Doc<'_> {
             .buffers
             .get(buffer)
             .ok_or_else(|| format!("this glTF refers to buffer {buffer}, which it does not carry"))?;
-        let size = match kind {
-            5120 | 5121 => 1,
-            5122 | 5123 => 2,
-            5125 | 5126 => 4,
-            _ => return Err(bad()),
-        };
         let element = size * width;
         let stride = match view.get("byteStride") {
             None => element,
@@ -281,6 +286,8 @@ pub fn read_gltf(json: &Value, buffers: &[Cow<'_, [u8]>], mm_per_unit: f64) -> R
     let mut idx = Vec::new();
     // A spec glTF reaches each node once; a little slack keeps sloppy exporters importing.
     let mut visits_left = nodes.len().saturating_mul(4).max(1024);
+    // Every primitive that adds geometry adds a triangle, so the index cap already bounds a real file.
+    let mut primitives_left = super::scan::MAX_SCAN_TRIANGLES;
     let mut stack: Vec<(usize, Mat4, usize)> = roots.into_iter().rev().map(|r| (r, IDENTITY, 0)).collect();
     while let Some((n, parent, depth)) = stack.pop() {
         if depth > 64 {
@@ -292,6 +299,8 @@ pub fn read_gltf(json: &Value, buffers: &[Cow<'_, [u8]>], mm_per_unit: f64) -> R
         let world = mul(&parent, &local_matrix(node));
         if let Some(mesh) = node.get("mesh").and_then(Value::as_u64).and_then(|m| doc.arr("meshes").get(m as usize)) {
             for prim in mesh.get("primitives").and_then(Value::as_array).into_iter().flatten() {
+                primitives_left =
+                    primitives_left.checked_sub(1).ok_or("this glTF places too many mesh primitives to import")?;
                 if prim.get("mode").and_then(Value::as_u64).unwrap_or(4) != 4 {
                     continue;
                 }
