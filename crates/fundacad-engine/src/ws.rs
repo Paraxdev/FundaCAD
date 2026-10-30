@@ -8,6 +8,7 @@ use fundacad_protocol::{Message, MAX_FRAME};
 use std::collections::{BTreeSet, HashMap};
 use std::io::{self, Read, Write};
 use std::net::{IpAddr, SocketAddr, TcpListener, TcpStream};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tungstenite::protocol::frame::coding::CloseCode;
@@ -24,6 +25,12 @@ pub const EXIT_PORT_IN_USE: i32 = 3;
 /// Every client is on 127.0.0.1, so in practice this caps open sockets.
 pub const MAX_CONNS_PER_IP: usize = 8;
 
+/// Handshakes not yet past the Gate have their own cap, so they never take an authorized client's slot.
+pub const MAX_PENDING_HANDSHAKES: usize = 16;
+
+/// Refused sockets still waiting for their client to hang up; past this one is hung up at once.
+pub const MAX_LINGERING_CLOSES: usize = 16;
+
 /// A foreign Origin is refused even with the token; no Origin (a non-browser
 /// client) is allowed.
 pub const ALLOWED_ORIGINS: [&str; 5] = [
@@ -36,6 +43,7 @@ pub const ALLOWED_ORIGINS: [&str; 5] = [
 
 /// Nothing supervises a `--ws` engine from outside, so it abandons a job that ignores a cancel this long by itself.
 const CANCEL_GRACE: Duration = Duration::from_secs(2);
+/// The whole handshake's budget, not one read's.
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 const CLOSE_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -141,7 +149,10 @@ struct Shared {
     engine: Arc<Engine>,
     gate: Gate,
     conns: Mutex<HashMap<IpAddr, usize>>,
+    pending: AtomicUsize,
+    lingering: AtomicUsize,
     max_message: usize,
+    handshake_timeout: Duration,
     max_conns_per_ip: usize,
 }
 
@@ -179,7 +190,10 @@ impl Server {
                 engine,
                 gate,
                 conns: Mutex::default(),
+                pending: AtomicUsize::new(0),
+                lingering: AtomicUsize::new(0),
                 max_message: MAX_FRAME,
+                handshake_timeout: HANDSHAKE_TIMEOUT,
                 max_conns_per_ip: MAX_CONNS_PER_IP,
             }),
         })
@@ -194,7 +208,10 @@ impl Server {
                 engine,
                 gate,
                 conns: Mutex::default(),
+                pending: AtomicUsize::new(0),
+                lingering: AtomicUsize::new(0),
                 max_message: MAX_FRAME,
+                handshake_timeout: HANDSHAKE_TIMEOUT,
                 max_conns_per_ip: MAX_CONNS_PER_IP,
             }),
         })
@@ -204,6 +221,14 @@ impl Server {
     pub fn with_max_message(mut self, bytes: usize) -> Server {
         if let Some(s) = Arc::get_mut(&mut self.shared) {
             s.max_message = bytes;
+        }
+        self
+    }
+
+    /// How long a client has, from connect to the end of its handshake.
+    pub fn with_handshake_timeout(mut self, timeout: Duration) -> Server {
+        if let Some(s) = Arc::get_mut(&mut self.shared) {
+            s.handshake_timeout = timeout;
         }
         self
     }
@@ -281,6 +306,22 @@ impl Drop for Slot<'_> {
     }
 }
 
+struct Counted<'a>(&'a AtomicUsize);
+
+impl Drop for Counted<'_> {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
+fn take_count(n: &AtomicUsize, cap: usize) -> Option<Counted<'_>> {
+    if n.fetch_add(1, Ordering::SeqCst) >= cap {
+        n.fetch_sub(1, Ordering::SeqCst);
+        return None;
+    }
+    Some(Counted(n))
+}
+
 fn take_slot<'a>(shared: &'a Shared, ip: IpAddr) -> Option<Slot<'a>> {
     let mut conns = shared.conns.lock().unwrap_or_else(|p| p.into_inner());
     let n = conns.entry(ip).or_insert(0);
@@ -291,7 +332,42 @@ fn take_slot<'a>(shared: &'a Shared, ip: IpAddr) -> Option<Slot<'a>> {
     Some(Slot { shared, ip })
 }
 
-type Socket = WebSocket<TcpStream>;
+/// A TcpStream whose reads, while `deadline` is set, all share that one deadline.
+struct Conn {
+    stream: TcpStream,
+    deadline: Option<Instant>,
+}
+
+impl std::ops::Deref for Conn {
+    type Target = TcpStream;
+    fn deref(&self) -> &TcpStream {
+        &self.stream
+    }
+}
+
+impl Read for Conn {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        if let Some(deadline) = self.deadline {
+            let left = deadline.saturating_duration_since(Instant::now());
+            if left.is_zero() {
+                return Err(io::ErrorKind::TimedOut.into());
+            }
+            self.stream.set_read_timeout(Some(left))?;
+        }
+        self.stream.read(buf)
+    }
+}
+
+impl Write for Conn {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.stream.write(buf)
+    }
+    fn flush(&mut self) -> io::Result<()> {
+        self.stream.flush()
+    }
+}
+
+type Socket = WebSocket<Conn>;
 
 struct WsOut(Arc<Mutex<Socket>>);
 
@@ -319,10 +395,10 @@ fn to_io(e: WsError) -> io::Error {
 // The handshake callback's error type is tungstenite's, not ours to shrink.
 #[allow(clippy::result_large_err)]
 fn connection(stream: TcpStream, shared: &Shared) {
+    let Some(pending) = take_count(&shared.pending, MAX_PENDING_HANDSHAKES) else { return };
     let _ = stream.set_nodelay(true);
-    let _ = stream.set_read_timeout(Some(HANDSHAKE_TIMEOUT));
     let peer = stream.peer_addr().ok().map(|a| a.ip());
-    let slot = peer.map(|ip| take_slot(shared, ip));
+    let stream = Conn { stream, deadline: Some(Instant::now() + shared.handshake_timeout) };
 
     let seen: Arc<Mutex<(Option<String>, Option<String>)>> = Arc::default();
     let seen_cb = seen.clone();
@@ -338,15 +414,20 @@ fn connection(stream: TcpStream, shared: &Shared) {
         return;
     };
 
-    if matches!(slot, Some(None)) {
-        close_and_linger(&mut ws, CloseCode::Policy, "too many connections");
-        return;
-    }
     let (query, origin) = seen.lock().unwrap_or_else(|p| p.into_inner()).clone();
+    drop(pending);
     if !shared.gate.authorized(query.as_deref(), origin.as_deref()) {
-        close_and_linger(&mut ws, CloseCode::Policy, "unauthorized");
+        refuse(&mut ws, shared, "unauthorized");
         return;
     }
+    let _slot = match peer.map(|ip| take_slot(shared, ip)) {
+        Some(None) => {
+            refuse(&mut ws, shared, "too many connections");
+            return;
+        }
+        slot => slot,
+    };
+    ws.get_mut().deadline = None;
     let _ = ws.get_ref().set_read_timeout(None);
     let Ok(waiter) = ws.get_ref().try_clone() else {
         return;
@@ -415,12 +496,23 @@ fn drain(sock: &mut Socket, into: &mut Vec<Message>) -> ReadState {
     }
 }
 
+fn refuse(sock: &mut Socket, shared: &Shared, reason: &'static str) {
+    if let Some(_lingering) = take_count(&shared.lingering, MAX_LINGERING_CLOSES) {
+        close_and_linger(sock, CloseCode::Policy, reason);
+        return;
+    }
+    let _ = sock.close(Some(CloseFrame { code: CloseCode::Policy, reason: reason.into() }));
+    let _ = sock.flush();
+    let _ = sock.get_ref().shutdown(std::net::Shutdown::Both);
+}
+
 /// Sends a close frame and waits for the client to hang up: dropping a socket with unread bytes resets it, and the
 /// reset can reach the client before the close frame, hiding the close code.
 fn close_and_linger(sock: &mut Socket, code: CloseCode, reason: &'static str) {
     let _ = sock.close(Some(CloseFrame { code, reason: reason.into() }));
     let _ = sock.flush();
     let stream = sock.get_mut();
+    stream.deadline = None;
     let deadline = Instant::now() + CLOSE_TIMEOUT;
     let mut buf = [0u8; 64 * 1024];
     while let Some(left) = deadline.checked_duration_since(Instant::now()) {

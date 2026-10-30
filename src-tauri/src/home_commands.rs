@@ -36,13 +36,15 @@ fn thumbs_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
 #[tauri::command]
 pub async fn thumb_get(app: tauri::AppHandle, paths: Vec<String>) -> Result<Vec<Option<String>>, String> {
     let dir = thumbs_dir(&app)?;
-    tauri::async_runtime::spawn_blocking(move || crate::thumbs::get_all(&dir, &paths)).await.map_err(|e| e.to_string())
+    tauri::async_runtime::spawn_blocking(move || crate::thumbs::get_all(&dir, &app.state::<Provenance>(), &paths))
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub async fn thumb_put(app: tauri::AppHandle, path: String, data_url: String) -> Result<(), String> {
     let dir = thumbs_dir(&app)?;
-    tauri::async_runtime::spawn_blocking(move || crate::thumbs::put(&dir, &path, &data_url))
+    tauri::async_runtime::spawn_blocking(move || crate::thumbs::put(&dir, &app.state::<Provenance>(), &path, &data_url))
         .await
         .map_err(|e| e.to_string())?
 }

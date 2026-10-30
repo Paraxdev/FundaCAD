@@ -5,6 +5,7 @@ use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
+use crate::doc_paths::Provenance;
 use crate::library::stat_one;
 
 pub const GET_CAP: usize = 48;
@@ -45,7 +46,8 @@ fn decode(data_url: &str) -> Result<(&'static str, Vec<u8>), String> {
     Ok((mime, bytes))
 }
 
-pub fn put(dir: &Path, path: &str, data_url: &str) -> Result<(), String> {
+pub fn put(dir: &Path, held: &Provenance, path: &str, data_url: &str) -> Result<(), String> {
+    held.refuse_unknown(path)?;
     let (mime, bytes) = decode(data_url)?;
     let st = stat_one(path);
     if !st.exists {
@@ -92,8 +94,8 @@ pub fn get_one(dir: &Path, path: &str) -> Option<String> {
     Some(format!("{prefix}{}", base64::engine::general_purpose::STANDARD.encode(bytes)))
 }
 
-pub fn get_all(dir: &Path, paths: &[String]) -> Vec<Option<String>> {
-    paths.iter().take(GET_CAP).map(|p| get_one(dir, p)).collect()
+pub fn get_all(dir: &Path, held: &Provenance, paths: &[String]) -> Vec<Option<String>> {
+    paths.iter().take(GET_CAP).map(|p| held.refuse_unknown(p).ok().and_then(|()| get_one(dir, p))).collect()
 }
 
 /// Keeps the `keep` most recently written pictures.

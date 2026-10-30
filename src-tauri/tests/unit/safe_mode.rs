@@ -2,7 +2,7 @@ use std::ffi::OsString;
 use std::path::PathBuf;
 
 use fundacad_lib::safe_mode::{
-    begin, cleared, clears_count, decide, has_flag, init_script, misses, restart_args, Reason, MARKER,
+    begin, cleared, clears_count, decide, has_flag, init_script, misses, restart_args, uncount, Reason, MARKER,
 };
 
 fn dir(tag: &str) -> PathBuf {
@@ -101,4 +101,21 @@ fn only_a_normal_session_clears_the_count() {
     for r in [Reason::FailedStarts(2), Reason::Flag, Reason::Env] {
         assert!(!clears_count(Some(r)), "{r:?}");
     }
+}
+
+#[test]
+fn a_stall_restart_takes_back_only_its_own_start() {
+    let d = dir("stall");
+    let prev = begin(&d).unwrap();
+    uncount(&d, prev);
+    assert_eq!(misses(&d), 0);
+    assert!(!d.join(MARKER).exists());
+
+    // A start that stalled under both renderers stays counted, the next one's restart keeps it.
+    begin(&d).unwrap();
+    let prev = begin(&d).unwrap();
+    uncount(&d, prev);
+    assert_eq!(misses(&d), 1);
+    begin(&d).unwrap();
+    assert_eq!(decide(misses(&d), false, None), Some(Reason::FailedStarts(2)));
 }

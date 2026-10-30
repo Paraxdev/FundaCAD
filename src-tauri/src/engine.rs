@@ -251,9 +251,7 @@ fn supervise(inner: Arc<Inner>) {
 /// 256-bit secret for the live session port, from the OS CSPRNG. A failure is
 /// fatal rather than a fallback to a guessable token.
 fn random_token() -> String {
-    let mut buf = [0u8; 32];
-    getrandom::getrandom(&mut buf).expect("OS CSPRNG unavailable");
-    buf.iter().map(|b| format!("{b:02x}")).collect()
+    fundacad_engine::ws::mint_token().expect("OS CSPRNG unavailable")
 }
 
 /// The blob store is passed because container.rs reads and writes the same directory, and the plugin root because Rust
@@ -298,12 +296,11 @@ fn spawn(inner: &Inner) -> std::io::Result<std::process::ChildStdout> {
         let tail = inner.stderr_tail.clone();
         lock(&tail).clear();
         std::thread::spawn(move || {
+            let mut announced = false;
             for line in BufReader::new(stderr).lines().map_while(Result::ok) {
                 // Written once the port answers, so the file never names a port
                 // nobody is listening on yet.
-                if let (Some(dir), Some(port)) =
-                    (&session_dir, line.strip_prefix("LISTENING ").and_then(|p| p.trim().parse::<u16>().ok()))
-                {
+                if let (Some(dir), Some(port)) = (&session_dir, announced_port(&mut announced, &line)) {
                     let info = crate::session_file::SessionInfo { port, token: token.clone(), pid: std::process::id() };
                     if let Err(e) = crate::session_file::write_into(dir, &info) {
                         eprintln!("[engine] no session file: {e}");
@@ -319,6 +316,20 @@ fn spawn(inner: &Inner) -> std::io::Result<std::process::ChildStdout> {
     let generation = inner.generation.fetch_add(1, Ordering::SeqCst) + 1;
     *lock(&inner.worker) = Some(Worker { child, stdin: BufWriter::new(stdin), generation });
     Ok(stdout)
+}
+
+/// The live door's port, from the worker's first `LISTENING` line only and only in the exact form `LISTENING <port>`.
+/// Later stderr lines carry document and plugin text, so they never move the port.
+pub fn announced_port(announced: &mut bool, line: &str) -> Option<u16> {
+    if *announced || !line.starts_with("LISTENING") {
+        return None;
+    }
+    *announced = true;
+    let digits = line.strip_prefix("LISTENING ")?;
+    if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    digits.parse::<u16>().ok().filter(|&p| p != 0)
 }
 
 /// Forwards the worker's messages until it goes away, and says why.
@@ -476,11 +487,16 @@ pub fn engine_attach(state: tauri::State<'_, Engine>, channel: Channel<InvokeRes
 
 /// One request, as the UTF-8 bytes of its JSON.
 #[tauri::command]
-pub fn engine_send(state: tauri::State<'_, Engine>, request: Request<'_>) -> Result<(), String> {
+pub fn engine_send(
+    state: tauri::State<'_, Engine>,
+    held: tauri::State<'_, crate::doc_paths::Provenance>,
+    request: Request<'_>,
+) -> Result<(), String> {
     let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
         return Err("engine_send takes the request as raw bytes".into());
     };
     let text = String::from_utf8(bytes.clone()).map_err(|e| e.to_string())?;
+    check_request_path(&text, &held)?;
     let Head { id, op, target, soft, doc, all } = head(&text);
     remember(
         &state.0.recent,
@@ -516,6 +532,33 @@ pub fn engine_send(state: tauri::State<'_, Engine>, request: Request<'_>) -> Res
         lock(&state.0.in_flight).remove(&id);
         lock(&state.0.cancels).remove(&id);
     })
+}
+
+/// The `path` the worker reads for an import or writes for an export passes the checks the container commands make.
+/// A request with a repeated key fails the strict parse and is read like the worker reads it, the last one counting.
+pub fn check_request_path(text: &str, held: &crate::doc_paths::Provenance) -> Result<(), String> {
+    // A `path` key is spelled out or escaped, so a request with neither carries none and skips the full parse.
+    if !text.contains("\"path\"") && !text.contains(r"\u") {
+        return Ok(());
+    }
+    #[derive(serde::Deserialize)]
+    struct Strict {
+        op: Option<Value>,
+        path: Option<Value>,
+    }
+    let (op, path) = match serde_json::from_str::<Strict>(text) {
+        Ok(s) => (s.op, s.path),
+        Err(_) => match serde_json::from_str::<serde_json::Map<String, Value>>(text) {
+            Ok(mut m) => (m.remove("op"), m.remove("path")),
+            Err(_) => return Ok(()),
+        },
+    };
+    let Some(Value::String(path)) = path else { return Ok(()) };
+    match op.as_ref().and_then(Value::as_str) {
+        Some("import") => held.check_read(&path).map(drop),
+        Some("export" | "exportWith") => held.check_write(&path).map(drop),
+        _ => Ok(()),
+    }
 }
 
 /// Seconds since the Unix epoch with milliseconds, no date crate needed.

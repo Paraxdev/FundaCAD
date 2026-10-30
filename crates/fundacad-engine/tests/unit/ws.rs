@@ -240,3 +240,85 @@ fn a_guest_beside_the_app_transport_sees_the_document_the_app_hosts() {
     assert_eq!(state["result"]["attached"], json!(true), "{state}");
     assert_eq!(state["result"]["title"], json!("part"), "{state}");
 }
+
+/// Whether the server hung up on a raw socket within `within`, sending `drip` every 100 ms meanwhile.
+fn hung_up(stream: &mut TcpStream, within: Duration, drip: &[u8]) -> bool {
+    use std::io::{Read, Write};
+    stream.set_read_timeout(Some(Duration::from_millis(100))).unwrap();
+    let t0 = Instant::now();
+    let mut buf = [0u8; 256];
+    while t0.elapsed() < within {
+        if !drip.is_empty() && stream.write_all(drip).is_err() {
+            return true;
+        }
+        match stream.read(&mut buf) {
+            Ok(0) => return true,
+            Ok(_) => {}
+            Err(e) if matches!(e.kind(), io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut) => {}
+            Err(_) => return true,
+        }
+    }
+    false
+}
+
+#[test]
+fn unfinished_handshakes_leave_every_slot_to_authorized_clients() {
+    use std::io::Write;
+    let s = start("", None);
+    let held: Vec<TcpStream> = (0..MAX_CONNS_PER_IP)
+        .map(|_| {
+            let mut t = TcpStream::connect(("127.0.0.1", s.port)).unwrap();
+            t.write_all(b"GET /?token=wrong HTTP/1.1\r\n").unwrap();
+            t
+        })
+        .collect();
+    std::thread::sleep(Duration::from_millis(300));
+    let mut ws = connect(s.port, &good_query(), None);
+    assert_eq!(call(&mut ws, json!({"id": 1, "op": "ping"}))["ok"], true);
+    drop(held);
+}
+
+#[test]
+fn a_handshake_ends_at_its_deadline_however_often_bytes_arrive() {
+    let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
+    let jobs = Slow { now: Arc::default(), peak: Arc::default() };
+    let server =
+        Server::bind(jobs, addr, Gate::new(TOKEN, "")).unwrap().with_handshake_timeout(Duration::from_millis(600));
+    let port = server.port();
+    std::thread::spawn(move || server.serve());
+    let mut raw = TcpStream::connect(("127.0.0.1", port)).unwrap();
+    std::io::Write::write_all(&mut raw, b"GET /?token=wrong HTTP/1.1\r\nX-Pad: ").unwrap();
+    // Packets of 128 bytes or more stay clear of tungstenite's own small packet check.
+    assert!(hung_up(&mut raw, Duration::from_secs(4), &[b'a'; 128]));
+}
+
+#[test]
+fn past_the_pending_handshake_cap_a_socket_is_closed_at_once() {
+    let s = start("", None);
+    let held: Vec<TcpStream> =
+        (0..MAX_PENDING_HANDSHAKES).map(|_| TcpStream::connect(("127.0.0.1", s.port)).unwrap()).collect();
+    std::thread::sleep(Duration::from_millis(300));
+    let mut extra = TcpStream::connect(("127.0.0.1", s.port)).unwrap();
+    assert!(hung_up(&mut extra, Duration::from_secs(3), b""));
+    drop(held);
+}
+
+#[test]
+fn refused_clients_waiting_out_their_close_leave_the_handshake_cap_free() {
+    let s = start("", None);
+    let refused: Vec<Socket> = (0..MAX_PENDING_HANDSHAKES).map(|_| connect(s.port, "token=nope", None)).collect();
+    std::thread::sleep(Duration::from_millis(300));
+    let mut ws = connect(s.port, &good_query(), None);
+    assert_eq!(call(&mut ws, json!({"id": 1, "op": "ping"}))["ok"], true);
+    drop(refused);
+}
+
+#[test]
+fn past_the_lingering_close_cap_a_refused_client_is_hung_up_at_once() {
+    let s = start("", None);
+    let refused: Vec<Socket> = (0..MAX_LINGERING_CLOSES).map(|_| connect(s.port, "token=nope", None)).collect();
+    std::thread::sleep(Duration::from_millis(300));
+    let mut extra = connect(s.port, "token=nope", None);
+    assert!(hung_up(extra.get_mut(), Duration::from_secs(3), b""));
+    drop(refused);
+}

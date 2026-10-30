@@ -16,6 +16,7 @@ pub mod library;
 mod log_file;
 pub mod os_a11y_prefs;
 pub mod plugins;
+pub mod recovery;
 pub mod safe_mode;
 pub mod session_file;
 pub mod settings_files;
@@ -61,76 +62,25 @@ fn recovery_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
     Ok(dir)
 }
 
-/// slot names are caller-chosen but sanitized hard: they become file names.
-fn slot_file(app: &tauri::AppHandle, slot: &str) -> Result<std::path::PathBuf, String> {
-    let safe: String = slot
-        .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
-        .take(80)
-        .collect();
-    if safe.is_empty() {
-        return Err("empty recovery slot".into());
-    }
-    Ok(recovery_dir(app)?.join(format!("{safe}.{DOC_EXT}")))
-}
-
 #[tauri::command]
 // async: Tauri runs sync commands on the main thread, where a multi MB snapshot write would stall the UI.
 async fn recovery_write(app: tauri::AppHandle, slot: String, json: String) -> Result<(), String> {
-    let path = slot_file(&app, &slot)?;
-    let tmp = path.with_extension(concat!("funda", ".tmp"));
-    std::fs::write(&tmp, json).map_err(|e| e.to_string())?;
-    std::fs::rename(&tmp, &path).map_err(|e| e.to_string())
+    recovery::write(&recovery_dir(&app)?, &slot, &json)
 }
 
 #[tauri::command]
 fn recovery_read(app: tauri::AppHandle, slot: String) -> Result<Option<String>, String> {
-    let path = slot_file(&app, &slot)?;
-    match std::fs::read_to_string(&path) {
-        Ok(s) => Ok(Some(s)),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(e) => Err(e.to_string()),
-    }
+    recovery::read(&recovery_dir(&app)?, &slot)
 }
 
-/// list slots with their last-modified time (ms since epoch), newest first.
 #[tauri::command]
 fn recovery_list(app: tauri::AppHandle) -> Result<Vec<(String, u64)>, String> {
-    let dir = recovery_dir(&app)?;
-    let mut out = Vec::new();
-    for entry in std::fs::read_dir(&dir).map_err(|e| e.to_string())? {
-        let entry = entry.map_err(|e| e.to_string())?;
-        let p = entry.path();
-        // Both names: a snapshot written before the rename is exactly what recovery exists for.
-        match p.extension().and_then(|e| e.to_str()) {
-            Some(e) if e == DOC_EXT || LEGACY_DOC_EXTS.contains(&e) => {}
-            _ => continue,
-        }
-        let name = match p.file_stem().and_then(|s| s.to_str()) {
-            Some(n) => n.to_string(),
-            None => continue,
-        };
-        let mtime = entry
-            .metadata()
-            .and_then(|m| m.modified())
-            .ok()
-            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-            .map(|d| d.as_millis() as u64)
-            .unwrap_or(0);
-        out.push((name, mtime));
-    }
-    out.sort_by(|a, b| b.1.cmp(&a.1));
-    Ok(out)
+    recovery::list(&recovery_dir(&app)?)
 }
 
 #[tauri::command]
 fn recovery_clear(app: tauri::AppHandle, slot: String) -> Result<(), String> {
-    let path = slot_file(&app, &slot)?;
-    match std::fs::remove_file(&path) {
-        Ok(()) => Ok(()),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(e) => Err(e.to_string()),
-    }
+    recovery::clear(&recovery_dir(&app)?, &slot)
 }
 
 /// In app updates only apply to what the Tauri updater can replace: NSIS on Windows, the .app, the AppImage. A deb or
@@ -190,9 +140,9 @@ fn frontend_stalled(app: tauri::AppHandle) {
         eprintln!("[frontend] the page runs but never painted");
         return;
     }
-    let (dir, reason) = {
+    let (dir, reason, counted) = {
         let safe = app.state::<SafeMode>();
-        (safe.dir.clone(), safe.reason)
+        (safe.dir.clone(), safe.reason, safe.counted.get().copied())
     };
     match webkit::on_stall(std::env::var_os(webkit::DMABUF).is_some(), webkit::opted_out()) {
         webkit::StallAction::Restart => {}
@@ -215,7 +165,9 @@ fn frontend_stalled(app: tauri::AppHandle) {
     // The stalled start is not a failed one, or the restart would count towards safe mode. A safe session keeps its
     // switch and count, so it comes back safe.
     if safe_mode::clears_count(reason) {
-        safe_mode::cleared(&dir);
+        if let Some(prev) = counted {
+            safe_mode::uncount(&dir, prev);
+        }
     }
     let args = app.env().args_os;
     respawn(&app, args, |cmd| {
@@ -243,6 +195,8 @@ struct SafeMode {
     reason: Option<safe_mode::Reason>,
     dir: std::path::PathBuf,
     set_compositing: bool,
+    /// The count `safe_mode::begin` found before this start, once it counted it.
+    counted: std::sync::OnceLock<u32>,
 }
 
 pub(crate) fn safe_mode_active(app: &tauri::AppHandle) -> bool {
@@ -316,7 +270,7 @@ fn safe_mode_decide() -> SafeMode {
             if set_compositing { ", WebKit compositing off" } else { "" },
         );
     }
-    SafeMode { reason, dir, set_compositing }
+    SafeMode { reason, dir, set_compositing, counted: std::sync::OnceLock::new() }
 }
 
 /// The dialog plugin allows each picked or saved path on the fs scope, which tells its listeners, so Rust learns the
@@ -327,7 +281,7 @@ fn vouch_dialog_paths(app: &tauri::AppHandle) {
     let app = app.clone();
     scope.listen(move |event| {
         let tauri::scope::fs::Event::PathAllowed(path) = event else { return };
-        app.state::<doc_paths::Provenance>().vouch_all([path.to_string_lossy().as_ref()]);
+        app.state::<doc_paths::Provenance>().vouch_picked(path.to_string_lossy().as_ref());
     });
 }
 
@@ -522,13 +476,14 @@ pub fn run() {
                 },
             };
             app.manage(run);
-            let (reason, dir) = {
-                let safe = app.state::<SafeMode>();
-                (safe.reason, safe.dir.clone())
-            };
+            let safe = app.state::<SafeMode>();
+            let reason = safe.reason;
             if reason.is_none() {
-                if let Err(e) = safe_mode::begin(&dir) {
-                    eprintln!("[safe-mode] could not count this start in {}: {e}", dir.display());
+                match safe_mode::begin(&safe.dir) {
+                    Ok(prev) => {
+                        let _ = safe.counted.set(prev);
+                    }
+                    Err(e) => eprintln!("[safe-mode] could not count this start in {}: {e}", safe.dir.display()),
                 }
             }
             if let (Ok(data), Ok(root)) = (app.path().app_data_dir(), plugins::plugins_root(app.handle())) {
