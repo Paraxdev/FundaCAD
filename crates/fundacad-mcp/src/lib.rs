@@ -28,6 +28,7 @@ pub mod server;
 pub mod shadow;
 pub mod shortcuts;
 pub mod sketchmerge;
+pub mod stage;
 pub mod stress;
 pub mod tools;
 pub mod ui;
