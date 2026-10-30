@@ -1115,7 +1115,7 @@ pub fn read_dxf(data: &[u8]) -> Result<DxfRead, String> {
     let o = walker.out;
     if o.work > MAX_DXF_WORK {
         return Err(format!(
-            "this DXF repeats its blocks into more drawing data and array cells than an import walks, too much to import. Explode or split the drawing in the source app and import the part you need"
+            "this DXF repeats its blocks into more than {MAX_DXF_WORK} values and array cells, too much to import. Explode or split the drawing in the source app and import the part you need"
         ));
     }
     if o.count > MAX_SKETCH_ENTITIES {
