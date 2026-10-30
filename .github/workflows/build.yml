@@ -52,6 +52,23 @@ jobs:
       - name: Repo hygiene
         run: sh scripts/check-repo-hygiene.sh
 
+      - name: Secret scan (gitleaks)
+        run: |
+          set -eu
+          dir="$RUNNER_TEMP/gitleaks"
+          mkdir -p "$dir"
+          curl -fsSL --retry 3 -o "$dir/gitleaks.tar.gz" \
+            https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  $dir/gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf "$dir/gitleaks.tar.gz" -C "$dir" gitleaks
+          "$dir/gitleaks" dir . --config .gitleaks.toml --redact --no-banner
+
+      # The runner's own node and its preinstalled gh are enough.
+      - name: Action pins match their tags
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/verify-action-pins.mjs
+
       # No deps, so the runner's own node is enough this early.
       - name: UI controls
         run: node scripts/check-ui-controls.mjs
