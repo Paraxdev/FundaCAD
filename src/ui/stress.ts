@@ -167,16 +167,14 @@ export interface StressSetup {
   gravity: { on: boolean; direction: AxisDirection };
   material: string;
   custom: { E: number; nu: number; yield: number; density: number };
-  /** Element size in mm whatever the display unit, as the engine's warnings
-   *  quote it; null for the engine's automatic size. */
-  size: number | null;
+  /** The Mesh detail of More options: "off" is Coarse. */
   refine: StressRefine;
 }
 
-export const REFINE_CHOICES: readonly { value: StressRefine; label: string }[] = [
+export const MESH_DETAIL_CHOICES: readonly { value: StressRefine; label: string }[] = [
+  { value: "off", label: "Coarse" },
   { value: "standard", label: "Standard" },
   { value: "fine", label: "Fine" },
-  { value: "off", label: "Off" },
 ];
 
 /** The element limit sent with Fine; the engine's default is about half. */
@@ -224,7 +222,6 @@ export function newSetup(body: string | null): StressSetup {
       yield: STUDY_DEFAULTS.yield,
       density: STUDY_DEFAULTS.density,
     },
-    size: null,
     refine: "standard",
   };
 }
@@ -278,7 +275,8 @@ export function studyFromSetup(s: StressSetup, prev?: Readonly<StressStudy> | nu
       yield: num(s.custom.yield, pc?.yield ?? d.yield),
       density: num(s.custom.density, pc?.density ?? d.density),
     },
-    size: typeof s.size === "number" && Number.isFinite(s.size) && s.size > 0 ? s.size : null,
+    // A size from an older study stays in the file unused, so reading it back is no edit.
+    size: prev?.size ?? null,
     ...(s.refine === "fine" || s.refine === "off" ? { refine: s.refine } : {}),
   };
 }
@@ -313,7 +311,6 @@ export function setupFromStudy(study: StressStudy, faces: (selectors: Selector[]
     gravity: { ...study.gravity },
     material: study.material,
     custom: { ...study.custom },
-    size: study.size,
     refine: study.refine ?? "standard",
   };
 }
@@ -485,11 +482,6 @@ export function buildStressRequest(s: StressSetup): StressRequest {
   }
   const options: StressOptions = { supports, loads, material };
   if (s.gravity.on) options.gravity = gravityVector(s.gravity.direction);
-  if (s.size !== null) {
-    if (!isNum(s.size) || !(s.size > 0))
-      return { ok: false, message: "the mesh size must be above 0, or blank for automatic" };
-    options.size = s.size;
-  }
   if (s.refine === "fine") {
     options.refine = "fine";
     options.maxElements = FINE_MAX_ELEMENTS;
@@ -574,7 +566,6 @@ export function formatStressResult(
       details.push({ k: `Support ${i + 1}${label ? `, ${label}` : ""}`, v: fmtForce(f) });
     }
   }
-  // In mm like the element size box and the engine's warnings about it.
   details.push({ k: "Mesh", v: meshRow(r.mesh) });
   const refinement = refinementRow(r.mesh);
   if (refinement) details.push({ k: "Refinement", v: refinement });

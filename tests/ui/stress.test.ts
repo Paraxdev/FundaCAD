@@ -3,6 +3,7 @@ import {
   setupSummary,
   CUSTOM_MATERIAL,
   FINE_MAX_ELEMENTS,
+  MESH_DETAIL_CHOICES,
   STRESS_MATERIALS,
   buildStressRequest,
   forceVector,
@@ -117,15 +118,13 @@ describe("buildStressRequest", () => {
     expect(r.ok && r.options.loads).toEqual([{ faces: [top], pressure: 0.5 }]);
   });
 
-  it("sends a custom material as numbers and the element size in mm whatever the display unit", () => {
+  it("sends a custom material as numbers whatever the display unit", () => {
     setUnit("in");
     const s = ready();
     s.material = CUSTOM_MATERIAL;
     s.custom = { E: 2300, nu: 0.35, yield: 40, density: 1.1 };
-    s.size = 2;
     const r = buildStressRequest(s);
     expect(r.ok && r.options.material).toEqual({ E: 2300, nu: 0.35, yield: 40, density: 1.1, name: "Custom" });
-    expect(r.ok && r.options.size).toBe(2);
   });
 
   it('refuses a cleared custom field, which a number input reads as ""', () => {
@@ -137,9 +136,6 @@ describe("buildStressRequest", () => {
       const r = buildStressRequest(s);
       expect(r.ok, k).toBe(false);
     }
-    const s = ready();
-    s.size = blank;
-    expect(buildStressRequest(s).ok).toBe(false);
   });
 
   it("says what is missing, in order", () => {
@@ -160,8 +156,6 @@ describe("buildStressRequest", () => {
     s.custom.nu = 0.5;
     expect(msg(s)).toMatch(/Poisson/);
     s.custom.nu = 0.3;
-    s.size = -1;
-    expect(msg(s)).toMatch(/mesh size/);
     s.loads = [];
     expect(msg(s)).toMatch(/^add a load, or turn on Own weight/);
   });
@@ -195,8 +189,25 @@ describe("refinement", () => {
       options: { ...base, refine: "fine", maxElements: FINE_MAX_ELEMENTS },
     });
     s.refine = "off";
-    s.size = 1.7;
-    expect(buildStressRequest(s)).toEqual({ ok: true, body: "b1", options: { ...base, size: 1.7, refine: "off" } });
+    expect(buildStressRequest(s)).toEqual({ ok: true, body: "b1", options: { ...base, refine: "off" } });
+  });
+
+  it("offers Coarse, Standard and Fine, and Coarse is the old Off", () => {
+    expect(MESH_DETAIL_CHOICES.map((c) => [c.value, c.label])).toEqual([
+      ["off", "Coarse"],
+      ["standard", "Standard"],
+      ["fine", "Fine"],
+    ]);
+  });
+
+  it("runs an old study with a size on the automatic size, and reading it back changes nothing in the file", () => {
+    const old = { ...studyFromSetup(ready()), size: 1.7, refine: "off" as const };
+    const s = setupFromStudy(old, asFaces);
+    expect(s.refine).toBe("off");
+    const r = buildStressRequest(s);
+    expect(r.ok && "size" in r.options).toBe(false);
+    expect(studyFromSetup(s, old)).toEqual(old);
+    expect(studyFromSetup(s).size).toBeNull();
   });
 
   it("saves refine only when it is not Standard and reads it back", () => {

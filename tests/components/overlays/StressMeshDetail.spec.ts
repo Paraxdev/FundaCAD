@@ -70,3 +70,38 @@ describe("the finer answer in the Stress setup", () => {
     expect(button(w).exists()).toBe(false);
   });
 });
+
+describe("Mesh detail in More options", () => {
+  it("offers Coarse, Standard and Fine with no size box, and Standard to begin with", async () => {
+    const { w, store } = await mounted();
+    const detail = w.find(".stress-detail");
+    expect(detail.attributes("aria-label")).toBe("Mesh detail, Standard");
+    expect(detail.text()).toBe("Standard");
+    expect(w.find(".stress-size").exists()).toBe(false);
+    expect(w.find(".stress-more-body").text()).not.toMatch(/size|smaller|larger/i);
+    await detail.trigger("click");
+    await flushPromises();
+    const options = [...document.querySelectorAll('[role="option"]')];
+    expect(options.map((o) => o.textContent?.trim())).toEqual(["Coarse", "Standard", "Fine"]);
+    (options[2] as HTMLElement).click();
+    await flushPromises();
+    expect(store.stress!.setup.refine).toBe("fine");
+    expect(detail.text()).toBe("Fine");
+  });
+
+  it("stays shut on Standard, and opens by itself when a study has another detail", async () => {
+    const standard = await mounted();
+    await flushPromises();
+    expect(standard.w.find(".stress-more").attributes("aria-expanded")).toBe("false");
+    standard.w.unmount();
+    const store = usePanelsStore();
+    store.stress!.setup.refine = "off";
+    const again = mount(StressSetupStep, {
+      props: { setup: store.stress!.setup, bodies: [{ id: "b1", name: "Plate" }] },
+      global: { provide: { [ENGINE as symbol]: { ui: { panels: { runStress: vi.fn() } } } as unknown as Engine } },
+      attachTo: document.body,
+    });
+    await flushPromises();
+    expect(again.find(".stress-more").attributes("aria-expanded")).toBe("true");
+  });
+});

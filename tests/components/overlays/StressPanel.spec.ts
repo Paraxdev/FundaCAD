@@ -177,15 +177,6 @@ describe("StressPanel", () => {
     density.value = "1.5";
     density.dispatchEvent(new Event("input"));
     expect(p.stress!.setup.custom.density).toBe(1.5);
-    const size = q(".stress-size input") as HTMLInputElement;
-    size.focus();
-    size.value = "1.5";
-    size.dispatchEvent(new Event("input"));
-    expect(p.stress!.setup.size).toBe(1.5);
-    await flushPromises();
-    size.value = "";
-    size.dispatchEvent(new Event("input"));
-    expect(p.stress!.setup.size).toBeNull();
   });
 
   it("reads arithmetic into the number boxes and flags text that is not a value", async () => {
@@ -247,14 +238,11 @@ describe("StressPanel", () => {
     await type(".stress-nu", "0.3");
     await type(".stress-yield", "45");
     await type(".stress-density", "1.1");
-    q(".stress-more")!.click();
-    await type(".stress-size", "2");
     const s = p.stress!.setup;
-    expect([s.supports[0]!.spots![0]!.radius, s.loads[0]!.custom[2], s.custom, s.size]).toEqual([
+    expect([s.supports[0]!.spots![0]!.radius, s.loads[0]!.custom[2], s.custom]).toEqual([
       3.5,
       -1,
       { E: 2100, nu: 0.3, yield: 45, density: 1.1 },
-      2,
     ]);
     s.loads[0]!.kind = "pressure";
     await flushPromises();
@@ -288,7 +276,6 @@ describe("StressPanel", () => {
       "Poisson's ratio",
       "Yield",
       "Density",
-      "Mesh size",
     ]);
     p.stress!.setup.loads[0]!.kind = "pressure";
     await flushPromises();
@@ -327,7 +314,7 @@ describe("StressPanel", () => {
     expect(p.stress!.setup.custom.density).toBeCloseTo(d0 - 0.1, 9);
   });
 
-  it("folds More options with the mesh size, open at once when a size is set", async () => {
+  it("folds More options with the mesh detail, open at once when it is not Standard", async () => {
     await mounted();
     const p = usePanelsStore();
     p.showStress("b1");
@@ -338,14 +325,14 @@ describe("StressPanel", () => {
     more.click();
     await flushPromises();
     expect(shown(q(".stress-more-body"))).toBe(true);
-    expect(q(".stress-size .ui-unit-chip")?.textContent).toBe("mm");
+    expect(q(".stress-detail")?.textContent).toContain("Standard");
     p.stress = null;
     await flushPromises();
     p.showStress("b1");
-    p.stress!.setup.size = 7.5;
+    p.stress!.setup.refine = "off";
     await flushPromises();
     expect(shown(q(".stress-more-body"))).toBe(true);
-    expect((q(".stress-size input") as HTMLInputElement).value).toBe("7.5");
+    expect(q(".stress-detail")?.textContent).toContain("Coarse");
   });
 
   it("keeps the body while a Run is out and swaps Run for Cancel until it settles", async () => {
