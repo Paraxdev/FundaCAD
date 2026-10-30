@@ -259,13 +259,10 @@ pub async fn plugin_web_request(app: AppHandle, plugin: String, request: WebRequ
         });
     }
 
-    if resp.content_length().is_some_and(|n| n as usize > MAX_TEXT) {
-        return Err(format!("the reply from {host} is larger than {MAX_TEXT} bytes"));
-    }
-    let bytes = resp.bytes().await.map_err(|e| format!("{host}: {e}"))?;
-    if bytes.len() > MAX_TEXT {
-        return Err(format!("the reply from {host} is larger than {MAX_TEXT} bytes"));
-    }
+    let bytes = super::read_capped(resp, MAX_TEXT)
+        .await
+        .map_err(|e| format!("{host}: {e}"))?
+        .ok_or_else(|| format!("the reply from {host} is larger than {MAX_TEXT} bytes"))?;
     Ok(WebResponse {
         status,
         content_type,

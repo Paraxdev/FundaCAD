@@ -198,13 +198,10 @@ pub async fn plugin_local_request(
     let status = resp.status().as_u16();
     let content_type =
         resp.headers().get(reqwest::header::CONTENT_TYPE).and_then(|v| v.to_str().ok()).map(str::to_string);
-    if resp.content_length().is_some_and(|n| n as usize > MAX_RESPONSE) {
-        return Err(format!("the reply is larger than {MAX_RESPONSE} bytes"));
-    }
-    let bytes = resp.bytes().await.map_err(|e| e.to_string())?;
-    if bytes.len() > MAX_RESPONSE {
-        return Err(format!("the reply is larger than {MAX_RESPONSE} bytes"));
-    }
+    let bytes = super::read_capped(resp, MAX_RESPONSE)
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| format!("the reply is larger than {MAX_RESPONSE} bytes"))?;
     Ok(if request.binary {
         LocalResponse {
             status,

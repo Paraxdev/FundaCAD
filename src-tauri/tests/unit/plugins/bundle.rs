@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use fundacad_lib::plugins::bundle::{
     allowed_bundle_url, bundle_target, extract_into, grants_match, is_official_url, now_secs, official_label,
-    official_url, safe_entry, safe_id, sha256_hex, swap_into_place, Consented, BUNDLE_PREFIX,
+    official_url, safe_entry, safe_id, sha256_hex, swap_into_place, CappedBody, Consented, BUNDLE_PREFIX,
 };
 
 /// An id becomes a directory under the plugins root, so every refusal below is a path guard.
@@ -435,4 +435,33 @@ fn a_first_install_needs_no_old_one_to_set_aside() {
     assert_eq!(std::fs::read(dest.join("main.js")).unwrap(), b"new");
     assert_eq!(entries(&root), vec!["Acme.Tool".to_string()]);
     let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_body_is_refused_as_soon_as_its_running_total_passes_the_cap() {
+    let mut body = CappedBody::new(10);
+    assert!(body.push(b"12345"));
+    assert!(body.push(b"67890"));
+    assert!(!body.push(b"x"));
+    assert!(!body.push(b""), "once over, it stays over");
+
+    let mut big = CappedBody::new(4);
+    assert!(!big.push(b"12345"), "one chunk larger than the cap is refused on its own");
+}
+
+#[test]
+fn a_body_within_the_cap_comes_back_whole_and_in_order() {
+    let mut body = CappedBody::new(10);
+    for chunk in [&b"ab"[..], b"", b"cde", b"fghij"] {
+        assert!(body.push(chunk));
+    }
+    assert_eq!(body.into_bytes(), b"abcdefghij");
+}
+
+#[test]
+fn a_refused_body_does_not_keep_growing() {
+    let mut body = CappedBody::new(3);
+    assert!(!body.push(&[0u8; 1024]));
+    assert!(!body.push(&[0u8; 1024]));
+    assert!(body.into_bytes().len() <= 3);
 }

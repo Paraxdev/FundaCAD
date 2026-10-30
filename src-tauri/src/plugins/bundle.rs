@@ -17,6 +17,35 @@ pub const MAX_DOWNLOAD: usize = 32 * 1024 * 1024;
 const MAX_UNPACKED: u64 = 64 * 1024 * 1024;
 const MAX_ENTRIES: usize = 4000;
 
+/// A reply body gathered chunk by chunk and refused the moment it passes `cap`, since a chunked reply carries no
+/// Content-Length to check up front.
+pub struct CappedBody {
+    bytes: Vec<u8>,
+    cap: usize,
+    over: bool,
+}
+
+impl CappedBody {
+    pub fn new(cap: usize) -> Self {
+        CappedBody { bytes: Vec::new(), cap, over: false }
+    }
+
+    /// False once the running total is past the cap, and nothing is kept from then on.
+    pub fn push(&mut self, chunk: &[u8]) -> bool {
+        if self.over || chunk.len() > self.cap - self.bytes.len() {
+            self.over = true;
+            self.bytes = Vec::new();
+            return false;
+        }
+        self.bytes.extend_from_slice(chunk);
+        true
+    }
+
+    pub fn into_bytes(self) -> Vec<u8> {
+        self.bytes
+    }
+}
+
 /// The manifest fields that make up the promise, compared as plain string sets.
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct Consented {
