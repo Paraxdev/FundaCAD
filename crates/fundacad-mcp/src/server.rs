@@ -22,6 +22,7 @@ use crate::budget::{self, Page};
 use crate::describe;
 use crate::docfile;
 use crate::docget;
+use crate::flatpak_folder::{reach, AskKind, EngineAsker, PathAsk, Sandbox};
 use crate::link::{args as call_args, EngineLink, Mode};
 use crate::live::{LiveError, LiveLink};
 use crate::mesh::MeshBody;
@@ -350,6 +351,8 @@ pub struct FundaCad {
     /// The user's guide Stop presses already reported, so each is said once.
     pub(crate) guide_stops: Arc<std::sync::atomic::AtomicI64>,
     scope: Arc<PathScope>,
+    /// Some in the Flatpak, where an assistant reaches one folder and asks the user for any other path.
+    sandbox: Option<Arc<Sandbox>>,
 }
 
 impl FundaCad {
@@ -375,7 +378,14 @@ impl FundaCad {
             ui: Arc::new(Mutex::new(None)),
             guide_stops: Arc::new(std::sync::atomic::AtomicI64::new(crate::guide::UNSEEN)),
             scope: Arc::new(PathScope::for_server(std::env::args_os()).0),
+            sandbox: Sandbox::detect().map(Arc::new),
         }
+    }
+
+    /// The Flatpak's folder rules as given rather than detected, for a test.
+    pub fn with_sandbox(mut self, sandbox: Option<Sandbox>) -> FundaCad {
+        self.sandbox = sandbox.map(Arc::new);
+        self
     }
 
     /// Every mode's tools. Guide mode is listed everywhere and says why where it cannot work.
@@ -399,6 +409,27 @@ impl FundaCad {
 
     fn scoped_in(&self, st: &State, raw: &str) -> Result<PathBuf, CallToolResult> {
         self.scope.check(raw, doc_file(st).as_deref()).map_err(failure)
+    }
+
+    /// `path` itself, or in the Flatpak, outside its folder, the file the user picks in the app window.
+    async fn reached(
+        &self,
+        kind: AskKind,
+        tool: &str,
+        path: PathBuf,
+        exts: &[&str],
+    ) -> Result<PathBuf, CallToolResult> {
+        let Some(sandbox) = self.sandbox.as_deref() else {
+            return Ok(path);
+        };
+        // A private engine has no window to ask; the app's answers no-host while no window shares.
+        let (link, name, window) = {
+            let st = self.state.lock().await;
+            let name = st.live.as_ref().map_or_else(|| LiveLink::new().name, |l| l.name.clone());
+            (st.link.clone(), name, st.live.is_some() || st.link.attached)
+        };
+        let ask = PathAsk::new(kind, tool, path, exts);
+        reach(ask, Some(sandbox), window, &EngineAsker::new(link, name)).await.map_err(failure)
     }
 
     /// The ui tools as well, which standalone gets and nothing else does.
@@ -428,6 +459,12 @@ impl FundaCad {
             log("[mcp] files are reached in any plain folder except home itself, drive roots and hidden folders; --allow-path keeps to given folders");
         }
         server.scope = Arc::new(scope);
+        if let Some(sandbox) = &server.sandbox {
+            log(&format!(
+                "[mcp] in the Flatpak, files are reached in {}; any other path asks the user in the FundaCAD window",
+                sandbox.folder.display()
+            ));
+        }
         if mode == Mode::Standalone {
             server = server.with_ui();
         }
@@ -748,6 +785,11 @@ impl FundaCad {
             },
             Err(e) => return Ok(e),
         };
+        let exts = [docfile::TEXT_EXT, docfile::BINARY_EXT];
+        let path = match self.reached(AskKind::Open, "doc_open", path, &exts).await {
+            Ok(p) => p,
+            Err(e) => return Ok(e),
+        };
         let (doc, blobs, unread) = match docfile::read_document_full(&path) {
             Ok(v) => v,
             Err(e) => return Ok(failure(e.to_string())),
@@ -813,15 +855,23 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
         annotations(read_only_hint = false, destructive_hint = true, idempotent_hint = true, open_world_hint = false)
     )]
     pub async fn t_doc_save(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
-        let mut st = self.state.lock().await;
-        let given = args.get("path").and_then(Value::as_str).filter(|p| !p.is_empty()).map(str::to_string);
-        let Some(given) = given.or_else(|| st.path.as_ref().map(|p| p.to_string_lossy().into_owned())) else {
-            return Ok(failure("No path given and this document has never been saved."));
+        let path = {
+            let st = self.state.lock().await;
+            let given = args.get("path").and_then(Value::as_str).filter(|p| !p.is_empty()).map(str::to_string);
+            let Some(given) = given.or_else(|| st.path.as_ref().map(|p| p.to_string_lossy().into_owned())) else {
+                return Ok(failure("No path given and this document has never been saved."));
+            };
+            match self.scoped_in(&st, &given) {
+                Ok(p) => p,
+                Err(e) => return Ok(e),
+            }
         };
-        let path = match self.scoped_in(&st, &given) {
+        let ext = if docfile::is_binary_path(&path) { docfile::BINARY_EXT } else { docfile::TEXT_EXT };
+        let path = match self.reached(AskKind::Save, "doc_save", path, &[ext]).await {
             Ok(p) => p,
             Err(e) => return Ok(e),
         };
+        let mut st = self.state.lock().await;
         if let Some(why) = write_target::recovery_refusal(&path) {
             return Ok(failure(why));
         }
@@ -1253,6 +1303,11 @@ note: left out of the file, because this build cannot read them and a .funda has
         if exts.is_empty() {
             return Ok(failure(format!("Cannot export '{format}' files. Formats: {}.", EXPORT_FORMATS.join(", "))));
         }
+        let kind = if truthy(args.get("separate")) { AskKind::Folder } else { AskKind::Save };
+        let path = match self.reached(kind, "export", path, exts).await {
+            Ok(p) => p,
+            Err(e) => return Ok(e),
+        };
         let what = format!("export to {}", format.to_ascii_uppercase());
         let overwrite = truthy(args.get("overwrite"));
         let guard = |to: &Path| {
@@ -2878,6 +2933,12 @@ impl FundaCad {
         let mut upload_id: Option<String> = None;
         let (path, fmt, source) = if has_path {
             let path = match self.scoped(args.get("path").and_then(Value::as_str).unwrap_or_default()).await {
+                Ok(p) => p,
+                Err(e) => return e,
+            };
+            let ext = path.extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
+            let exts: Vec<&str> = std::iter::once(ext.as_str()).filter(|e| !e.is_empty()).collect();
+            let path = match self.reached(AskKind::Open, "doc_import", path, &exts).await {
                 Ok(p) => p,
                 Err(e) => return e,
             };
