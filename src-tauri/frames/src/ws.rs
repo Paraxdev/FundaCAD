@@ -1,11 +1,13 @@
-use std::io;
+use std::io::{self, Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use tungstenite::handshake::server::{ErrorResponse, Request, Response};
 use tungstenite::http::StatusCode;
+use tungstenite::protocol::frame::coding::CloseCode;
+use tungstenite::protocol::CloseFrame;
 use tungstenite::Message;
 
 use crate::{frame_bytes, write_header, FrameSource, Transport, HEADER_BYTES};
@@ -20,8 +22,12 @@ pub type Notes = Arc<dyn Fn(&str) + Send + Sync>;
 /// Every client is the app's own page, so a few sockets are plenty.
 pub const MAX_CONNECTIONS: usize = 4;
 
+/// Handshakes not yet past the gate have their own cap, so they never take the page's slot.
+pub const MAX_PENDING_HANDSHAKES: usize = 8;
+
 // Also how often a connection thread looks at the stop flag.
 const POLL: Duration = Duration::from_millis(500);
+/// The whole handshake's budget, not one read's.
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Clone, Copy)]
@@ -36,6 +42,7 @@ struct Shared {
     seq: AtomicU32,
     stop: AtomicBool,
     connections: AtomicUsize,
+    pending: AtomicUsize,
     source: Arc<dyn FrameSource>,
     authorize: Authorize,
     notes: Option<Notes>,
@@ -63,6 +70,7 @@ impl WebSocketTransport {
             seq: AtomicU32::new(0),
             stop: AtomicBool::new(false),
             connections: AtomicUsize::new(0),
+            pending: AtomicUsize::new(0),
             source,
             authorize,
             notes,
@@ -113,24 +121,71 @@ fn accept_loop(listener: TcpListener, shared: Arc<Shared>) {
             break;
         }
         let Ok(stream) = stream else { continue };
-        if shared.connections.fetch_add(1, Ordering::SeqCst) >= MAX_CONNECTIONS {
-            shared.connections.fetch_sub(1, Ordering::SeqCst);
+        if shared.pending.fetch_add(1, Ordering::SeqCst) >= MAX_PENDING_HANDSHAKES {
+            shared.pending.fetch_sub(1, Ordering::SeqCst);
             continue;
         }
         let s = shared.clone();
         let spawned = std::thread::Builder::new().name("frames-ws-conn".into()).spawn(move || {
-            serve(stream, &s);
-            s.connections.fetch_sub(1, Ordering::SeqCst);
+            let pending = Counted(&s.pending);
+            serve(stream, &s, pending);
         });
         if spawned.is_err() {
-            shared.connections.fetch_sub(1, Ordering::SeqCst);
+            shared.pending.fetch_sub(1, Ordering::SeqCst);
         }
     }
 }
 
-fn serve(stream: TcpStream, shared: &Shared) {
+/// One unit of a counter, given back when dropped.
+struct Counted<'a>(&'a AtomicUsize);
+
+impl<'a> Counted<'a> {
+    fn take(n: &'a AtomicUsize, cap: usize) -> Option<Counted<'a>> {
+        if n.fetch_add(1, Ordering::SeqCst) >= cap {
+            n.fetch_sub(1, Ordering::SeqCst);
+            return None;
+        }
+        Some(Counted(n))
+    }
+}
+
+impl Drop for Counted<'_> {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
+/// A TcpStream whose reads, while `deadline` is set, all share that one deadline.
+struct Conn {
+    stream: TcpStream,
+    deadline: Option<Instant>,
+}
+
+impl Read for Conn {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        if let Some(deadline) = self.deadline {
+            let left = deadline.saturating_duration_since(Instant::now());
+            if left.is_zero() {
+                return Err(io::ErrorKind::TimedOut.into());
+            }
+            self.stream.set_read_timeout(Some(left))?;
+        }
+        self.stream.read(buf)
+    }
+}
+
+impl Write for Conn {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.stream.write(buf)
+    }
+    fn flush(&mut self) -> io::Result<()> {
+        self.stream.flush()
+    }
+}
+
+fn serve(stream: TcpStream, shared: &Shared, pending: Counted<'_>) {
     let _ = stream.set_nodelay(true);
-    let _ = stream.set_read_timeout(Some(HANDSHAKE_TIMEOUT));
+    let stream = Conn { stream, deadline: Some(Instant::now() + HANDSHAKE_TIMEOUT) };
     let gate = |req: &Request, resp: Response| -> Result<Response, ErrorResponse> {
         let origin = req.headers().get("origin").and_then(|o| o.to_str().ok());
         if (shared.authorize)(req.uri().query(), origin) {
@@ -142,7 +197,14 @@ fn serve(stream: TcpStream, shared: &Shared) {
         }
     };
     let Ok(mut ws) = tungstenite::accept_hdr(stream, gate) else { return };
-    let _ = ws.get_ref().set_read_timeout(Some(POLL));
+    drop(pending);
+    let Some(_slot) = Counted::take(&shared.connections, MAX_CONNECTIONS) else {
+        let _ = ws.close(Some(CloseFrame { code: CloseCode::Policy, reason: "too many connections".into() }));
+        let _ = ws.flush();
+        return;
+    };
+    ws.get_mut().deadline = None;
+    let _ = ws.get_ref().stream.set_read_timeout(Some(POLL));
     loop {
         match ws.read() {
             Ok(Message::Text(t)) => {
