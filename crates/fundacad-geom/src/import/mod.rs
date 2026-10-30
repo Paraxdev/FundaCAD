@@ -701,24 +701,21 @@ fn import_bytes(
     unit: Option<&str>,
 ) -> Result<Map<String, Value>, String> {
     use base64::Engine as _;
-    use std::sync::atomic::{AtomicU64, Ordering};
-    static NEXT: AtomicU64 = AtomicU64::new(0);
+    use std::io::Write as _;
     let file = spool_name(name, fmt);
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(data.as_bytes())
         .map_err(|e| format!("{file} arrived damaged ({e})"))?;
-    let dir = std::env::temp_dir().join(format!(
-        "fundacad-drop-{}-{}",
-        std::process::id(),
-        NEXT.fetch_add(1, Ordering::Relaxed)
-    ));
-    std::fs::create_dir_all(&dir).map_err(|e| format!("could not stage {file} for import ({e})"))?;
-    let path = dir.join(&file);
-    let result = std::fs::write(&path, &bytes)
-        .map_err(|e| format!("could not stage {file} for import ({e})"))
-        .and_then(|()| import_geometry_in(&path.to_string_lossy(), fmt, store, unit));
-    let _ = std::fs::remove_dir_all(&dir);
-    result
+    let staging = |e: std::io::Error| format!("could not stage {file} for import ({e})");
+    let dir = tempfile::Builder::new().prefix("fundacad-drop-").tempdir().map_err(staging)?;
+    let path = dir.path().join(&file);
+    std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&path)
+        .and_then(|mut f| f.write_all(&bytes))
+        .map_err(staging)?;
+    import_geometry_in(&path.to_string_lossy(), fmt, store, unit)
 }
 
 pub fn blob_result(op: &str, req: &Map<String, Value>) -> JobResult {

@@ -275,3 +275,31 @@ fn a_dxf_polygon_mesh_whose_size_overflows_is_skipped() {
     let read = within(30, move || dxf::read_dxf(&data).map(|r| r.objects.len())).expect("the drawing reads");
     assert_eq!(read, 0);
 }
+
+const SOLID_STL: &str = "solid t\nfacet normal 0 0 1\nouter loop\nvertex 0 0 0\nvertex 1 0 0\nvertex 0 1 0\nendloop\nendfacet\nendsolid t\n";
+
+#[test]
+fn dropped_bytes_are_staged_in_a_fresh_private_directory() {
+    use base64::Engine as _;
+    let blobs = std::env::temp_dir().join(format!("fundacad-budget-blobs-{}", std::process::id()));
+    std::env::set_var("FUNDACAD_BLOB_DIR", &blobs);
+    let earlier: Vec<_> =
+        (0..64).map(|n| std::env::temp_dir().join(format!("fundacad-drop-{}-{n}", std::process::id()))).collect();
+    for dir in &earlier {
+        std::fs::create_dir_all(dir).unwrap();
+        std::fs::write(dir.join("part.stl"), "kept").unwrap();
+    }
+    let data = base64::engine::general_purpose::STANDARD.encode(SOLID_STL);
+    let req = json!({"op": "import", "format": "stl", "name": "part.stl", "data": data});
+    let reply = match import::import_result(req.as_object().unwrap()) {
+        fundacad_protocol::JobResult::Json(m) => Value::Object(m),
+        fundacad_protocol::JobResult::Mesh(_) => panic!("an import replies with json"),
+    };
+    let untouched = earlier.iter().all(|d| std::fs::read_to_string(d.join("part.stl")).is_ok_and(|s| s == "kept"));
+    for dir in &earlier {
+        let _ = std::fs::remove_dir_all(dir);
+    }
+    let _ = std::fs::remove_dir_all(&blobs);
+    assert!(reply.get("error").is_none(), "{reply}");
+    assert!(untouched, "a directory already in the temp dir was written into");
+}
