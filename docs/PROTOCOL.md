@@ -1028,9 +1028,10 @@ refused with `not the host`.
 ```
 
 A `session_host` reply carries `"asks": [ { "askId", "kind", "tool", "path", "exts", "name" } ]`
-when there are new ones, each handed over once. A guest has one ask open at a time. A
-release or a new host answers open asks with `path: null` and `closed: true`, and a guest
-that leaves or stops polling for `GUEST_TTL` takes its ask with it.
+while any are open. Every reply hands each open ask until it is answered, so one in a reply
+that never reached the window is not lost, and the host shows each `askId` once. A guest has
+one ask open at a time. A release or a new host answers open asks with `path: null` and
+`closed: true`, and a guest that leaves or stops polling for `GUEST_TTL` takes its ask with it.
 
 A proposal is refused if `baseRevision` is not the current revision. That is the
 rule that stops an agent's edit landing on a model the user has since changed,

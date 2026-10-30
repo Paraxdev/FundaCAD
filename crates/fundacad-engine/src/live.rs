@@ -30,7 +30,6 @@ struct Ask {
     guest: String,
     /// What the host is handed: kind, tool, path, exts and the guest's name.
     shown: Map<String, Value>,
-    handed: bool,
     /// `Some(None)` once the user declined or the host went away.
     answer: Option<Option<String>>,
     closed: bool,
@@ -205,15 +204,9 @@ impl LiveSession {
         let over = self.refused.len().saturating_sub(MAX_REFUSED);
         self.refused.drain(..over);
         let mut out = json!({"ok": true, "guests": guests, "proposals": taken});
-        let asks: Vec<Value> = self
-            .asks
-            .iter_mut()
-            .filter(|a| !a.handed && a.answer.is_none())
-            .map(|a| {
-                a.handed = true;
-                Value::Object(a.shown.clone())
-            })
-            .collect();
+        // Each reply hands every open ask, so one lost on its way to the window comes again; the host shows it once.
+        let asks: Vec<Value> =
+            self.asks.iter().filter(|a| a.answer.is_none()).map(|a| Value::Object(a.shown.clone())).collect();
         if !asks.is_empty() {
             out["asks"] = Value::Array(asks);
         }
@@ -383,15 +376,7 @@ impl LiveSession {
         shown.insert("askId".into(), json!(id));
         shown.insert("name".into(), name);
         let seen = (self.clock)();
-        self.asks.push(Ask {
-            id: id.clone(),
-            guest: guest_id.to_owned(),
-            shown,
-            handed: false,
-            answer: None,
-            closed: false,
-            seen,
-        });
+        self.asks.push(Ask { id: id.clone(), guest: guest_id.to_owned(), shown, answer: None, closed: false, seen });
         json!({"ok": true, "askId": id})
     }
 

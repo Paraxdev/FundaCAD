@@ -84,6 +84,8 @@ export class LiveSessionHost {
   private guideBusyAt = -Infinity;
   private unsubscribeGuide: (() => void) | null = null;
   private asks: PathAsk[] = [];
+  /** Ids of the asks the engine hands now, queued or on screen. */
+  private takenAsks = new Set<string>();
   private asking = false;
 
   constructor(
@@ -190,6 +192,7 @@ export class LiveSessionHost {
     this.guide?.reset();
     // The release answers every open ask as closed, so nothing waiting is shown after it.
     this.asks = [];
+    this.takenAsks.clear();
     this.emit({ sharing: false, guests: [] });
     await this.geometry.session?.("session_release").catch(() => null);
   }
@@ -247,8 +250,10 @@ export class LiveSessionHost {
   }
 
   private takeAsks(res: Record<string, unknown>): void {
-    const asks = Array.isArray(res["asks"]) ? res["asks"].map(parseAsk) : [];
-    for (const a of asks) if (a) this.asks.push(a);
+    const handed = (Array.isArray(res["asks"]) ? res["asks"].map(parseAsk) : []).filter((a) => a !== null);
+    // The engine hands an ask in every reply until it is answered, in case a reply never arrived.
+    for (const a of handed) if (!this.takenAsks.has(a.askId)) this.asks.push(a);
+    this.takenAsks = new Set(handed.map((a) => a.askId));
     if (this.asks.length) void this.showAsks();
   }
 

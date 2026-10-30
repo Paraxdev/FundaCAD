@@ -450,7 +450,7 @@ fn host(s: &mut LiveSession, who: &str) -> Value {
 }
 
 #[test]
-fn an_ask_reaches_the_app_once_and_its_answer_goes_back_once() {
+fn an_ask_reaches_the_app_until_answered_and_its_answer_goes_back_once() {
     let (mut s, _) = session();
     host(&mut s, APP);
     let r = ask(&mut s, AGENT, "/home/u/bracket.funda");
@@ -463,10 +463,12 @@ fn an_ask_reaches_the_app_once_and_its_answer_goes_back_once() {
         json!([{"askId": id, "kind": "save", "tool": "doc_save", "path": "/home/u/bracket.funda",
             "exts": ["funda"], "name": "Claude"}])
     );
-    assert!(host(&mut s, APP).get("asks").is_none());
+    // A reply lost on its way to the window must not lose the ask, so every reply hands it until it is answered.
+    assert_eq!(host(&mut s, APP)["asks"], asks);
     assert_eq!(poll(&mut s, AGENT, &id), json!({"ok": true, "answered": false}));
     let picked = "/run/user/1000/doc/ab12/bracket.funda";
     assert_eq!(wire(&mut s, APP, "session_answer", json!({"askId": id, "path": picked})), json!({"ok": true}));
+    assert!(host(&mut s, APP).get("asks").is_none());
     assert_eq!(poll(&mut s, AGENT, &id), json!({"ok": true, "answered": true, "path": picked}));
     assert_eq!(poll(&mut s, AGENT, &id)["reason"], "unknown");
 }

@@ -688,6 +688,24 @@ describe("an assistant's path ask in the window", () => {
     expect(answers(geo)).toEqual([]);
   });
 
+  it("shows an ask once though every publish hands it until it is answered", async () => {
+    const { shown, askUser } = pending();
+    const { geo, host } = rig(askUser);
+    geo.reply = { ok: true, guests: [], proposals: [], asks: [ASK] };
+    host.start();
+    await host.tick();
+    await host.tick();
+    await settle();
+    shown[0]!.pick(PICK);
+    await settle();
+    await host.tick();
+    await settle();
+    await host.stop();
+
+    expect(shown.map((s) => s.ask.askId)).toEqual(["g-1"]);
+    expect(answers(geo)).toEqual([{ askId: "g-1", path: PICK }]);
+  });
+
   it("drops waiting asks when the window stops sharing", async () => {
     const { shown, askUser } = pending();
     const { geo, host } = rig(askUser);
