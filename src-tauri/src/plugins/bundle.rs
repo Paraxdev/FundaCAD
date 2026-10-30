@@ -267,6 +267,35 @@ pub fn extract_into(bytes: &[u8], dest: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// Puts a staged install at `dest`. The previous install is set aside, not deleted, until the new one is in place,
+/// and is put back if that fails. The staging dir is gone either way.
+pub fn swap_into_place(staging: &Path, dest: &Path) -> Result<(), String> {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let fail = |e: std::io::Error| {
+        let _ = std::fs::remove_dir_all(staging);
+        format!("could not put the plugin in place: {e}")
+    };
+    let name = dest.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    // A leading dot can never be a plugin id (safe_id), so the aside dir cannot shadow one.
+    let aside = dest.with_file_name(format!(".old-{name}-{}-{n}", std::process::id()));
+    let had_old = match std::fs::rename(dest, &aside) {
+        Ok(()) => true,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => false,
+        Err(e) => return Err(fail(e)),
+    };
+    if let Err(e) = std::fs::rename(staging, dest) {
+        if had_old {
+            let _ = std::fs::rename(&aside, dest);
+        }
+        return Err(fail(e));
+    }
+    if had_old {
+        let _ = std::fs::remove_dir_all(&aside);
+    }
+    Ok(())
+}
+
 pub fn now_secs() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }

@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use fundacad_lib::plugins::bundle::{
     allowed_bundle_url, bundle_target, extract_into, grants_match, is_official_url, now_secs, official_label,
-    official_url, safe_entry, safe_id, sha256_hex, Consented, BUNDLE_PREFIX,
+    official_url, safe_entry, safe_id, sha256_hex, swap_into_place, Consented, BUNDLE_PREFIX,
 };
 
 /// An id becomes a directory under the plugins root, so every refusal below is a path guard.
@@ -382,4 +382,57 @@ fn what_arrived_must_be_what_was_shown() {
         ..shown.clone()
     };
     assert!(grants_match(&shown, &extra_host).is_err(), "an added host slipped through");
+}
+
+fn entries(dir: &std::path::Path) -> Vec<String> {
+    let mut names: Vec<String> =
+        std::fs::read_dir(dir).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+    names.sort();
+    names
+}
+
+#[test]
+fn a_swap_that_cannot_place_the_new_install_keeps_the_old_one() {
+    let root = tmpdir("swap-fail");
+    let dest = root.join("Acme.Tool");
+    std::fs::create_dir_all(&dest).unwrap();
+    std::fs::write(dest.join("main.js"), b"old").unwrap();
+    let missing = root.join(".staging-Acme.Tool");
+
+    assert!(swap_into_place(&missing, &dest).is_err(), "a missing staging dir was put in place");
+    assert_eq!(std::fs::read(dest.join("main.js")).unwrap(), b"old", "the old install was lost");
+    assert_eq!(entries(&root), vec!["Acme.Tool".to_string()], "the swap left something beside the install");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_finished_swap_replaces_the_whole_old_install_and_leaves_nothing_beside_it() {
+    let root = tmpdir("swap-ok");
+    let dest = root.join("Acme.Tool");
+    std::fs::create_dir_all(&dest).unwrap();
+    std::fs::write(dest.join("main.js"), b"old").unwrap();
+    std::fs::write(dest.join("stale.js"), b"old").unwrap();
+    let staging = root.join(".staging-Acme.Tool");
+    std::fs::create_dir_all(&staging).unwrap();
+    std::fs::write(staging.join("main.js"), b"new").unwrap();
+
+    swap_into_place(&staging, &dest).unwrap();
+    assert_eq!(std::fs::read(dest.join("main.js")).unwrap(), b"new");
+    assert!(!dest.join("stale.js").exists(), "a file of the old install survived the update");
+    assert_eq!(entries(&root), vec!["Acme.Tool".to_string()]);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_first_install_needs_no_old_one_to_set_aside() {
+    let root = tmpdir("swap-first");
+    let dest = root.join("Acme.Tool");
+    let staging = root.join(".staging-Acme.Tool");
+    std::fs::create_dir_all(&staging).unwrap();
+    std::fs::write(staging.join("main.js"), b"new").unwrap();
+
+    swap_into_place(&staging, &dest).unwrap();
+    assert_eq!(std::fs::read(dest.join("main.js")).unwrap(), b"new");
+    assert_eq!(entries(&root), vec!["Acme.Tool".to_string()]);
+    let _ = std::fs::remove_dir_all(&root);
 }

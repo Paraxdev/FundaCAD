@@ -12,7 +12,7 @@ pub mod web;
 
 use bundle::{
     allowed_bundle_url, bundle_target, extract_into, grants_match, is_official_url, now_secs, official_label, safe_id,
-    sha256_hex, Consented, MAX_DOWNLOAD, OFFICIAL_IDS,
+    sha256_hex, swap_into_place, Consented, MAX_DOWNLOAD, OFFICIAL_IDS,
 };
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -93,6 +93,10 @@ pub fn plugin_list(app: AppHandle) -> Result<Vec<Installed>, String> {
         return Ok(out);
     };
     for entry in entries.flatten() {
+        // Dot dirs are staging, inspect and set aside copies, never an install of their own.
+        if entry.file_name().to_string_lossy().starts_with('.') {
+            continue;
+        }
         if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
             if let Some(rec) = read_record(&entry.path()) {
                 out.push(rec);
@@ -161,6 +165,7 @@ fn install_bytes(
     }
 
     let official = official_label(official, &found.kind, &id);
+    let dest = root.join(&id);
     let record = Installed {
         id: id.clone(),
         version: found.version.clone(),
@@ -168,7 +173,7 @@ fn install_bytes(
         source,
         sha256: got,
         installed_at: now_secs(),
-        dir: String::new(),
+        dir: dest.to_string_lossy().to_string(),
         consented: found,
         official,
         component: false,
@@ -178,20 +183,8 @@ fn install_bytes(
         return finish(Err(format!("{}: {e}", staging.display())), &staging);
     }
 
-    let dest = root.join(&id);
-    let _ = std::fs::remove_dir_all(&dest);
-    std::fs::rename(&staging, &dest).map_err(|e| {
-        let _ = std::fs::remove_dir_all(&staging);
-        format!("could not put the plugin in place: {e}")
-    })?;
-
-    // Written last, once the directory is where it will stay, so the path in the
-    // record is the path the plugin actually has.
-    let mut record = read_record(&dest).ok_or("the installed plugin lost its record")?;
-    record.dir = dest.to_string_lossy().to_string();
-    let text = serde_json::to_string_pretty(&record).map_err(|e| e.to_string())?;
-    std::fs::write(dest.join(RECORD), text).map_err(|e| format!("{}: {e}", dest.display()))?;
-    Ok(record)
+    swap_into_place(&staging, &dest)?;
+    read_record(&dest).ok_or_else(|| "the installed plugin lost its record".to_string())
 }
 
 /// Read before anything is installed, since for an unseen URL the consent screen's only source is the bundle. Fetching
