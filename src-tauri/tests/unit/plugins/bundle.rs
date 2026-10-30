@@ -3,8 +3,8 @@ use std::path::PathBuf;
 
 use fundacad_lib::plugins::bundle::{
     allowed_bundle_url, bundle_target, component_path, extract_into, grants_match, is_official_url, now_secs,
-    official_label, official_url, read_capped, safe_entry, safe_id, sha256_hex, swap_into_place, CappedBody,
-    ChunkSource, Consented, BUNDLE_PREFIX,
+    official_label, official_url, read_capped, safe_entry, safe_id, settle_set_aside, sha256_hex, swap_into_place,
+    CappedBody, ChunkSource, Consented, BUNDLE_PREFIX,
 };
 
 /// An id becomes a directory under the plugins root, so every refusal below is a path guard.
@@ -435,6 +435,31 @@ fn a_first_install_needs_no_old_one_to_set_aside() {
     swap_into_place(&staging, &dest).unwrap();
     assert_eq!(std::fs::read(dest.join("main.js")).unwrap(), b"new");
     assert_eq!(entries(&root), vec!["Acme.Tool".to_string()]);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn an_install_set_aside_by_a_swap_that_never_finished_is_put_back_or_removed() {
+    let root = tmpdir("swap-settle");
+    let put = |dir: &str, text: &str| {
+        std::fs::create_dir_all(root.join(dir)).unwrap();
+        std::fs::write(root.join(dir).join("main.js"), text).unwrap();
+    };
+    let gone = format!(".old-Acme.Gone-{}-0", u32::MAX);
+    let beside = format!(".old-Acme.Kept-{}-1", u32::MAX);
+    let running = format!(".old-Acme.Busy-{}-2", std::process::id());
+    put(&gone, "old gone");
+    put(&beside, "old kept");
+    put("Acme.Kept", "new kept");
+    put(&running, "mid swap");
+    put(".staging-Acme.Tool", "staged");
+
+    settle_set_aside(&root);
+    let mut want = vec![running.clone(), ".staging-Acme.Tool".to_string(), "Acme.Gone".into(), "Acme.Kept".into()];
+    want.sort();
+    assert_eq!(entries(&root), want);
+    assert_eq!(std::fs::read_to_string(root.join("Acme.Gone/main.js")).unwrap(), "old gone");
+    assert_eq!(std::fs::read_to_string(root.join("Acme.Kept/main.js")).unwrap(), "new kept");
     let _ = std::fs::remove_dir_all(&root);
 }
 

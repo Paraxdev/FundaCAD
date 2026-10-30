@@ -88,6 +88,7 @@ fn has_component(dir: &Path) -> bool {
 #[tauri::command]
 pub fn plugin_list(app: AppHandle) -> Result<Vec<Installed>, String> {
     let root = plugins_root(&app)?;
+    bundle::settle_set_aside(&root);
     let mut out = Vec::new();
     let Ok(entries) = std::fs::read_dir(&root) else {
         return Ok(out);

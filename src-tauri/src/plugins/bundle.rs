@@ -344,7 +344,9 @@ pub fn swap_into_place(staging: &Path, dest: &Path) -> Result<(), String> {
     };
     if let Err(e) = std::fs::rename(staging, dest) {
         if had_old {
-            let _ = std::fs::rename(&aside, dest);
+            if let Err(back) = std::fs::rename(&aside, dest) {
+                return Err(format!("{}, and the previous install could not be put back yet: {back}", fail(e)));
+            }
         }
         return Err(fail(e));
     }
@@ -352,6 +354,34 @@ pub fn swap_into_place(staging: &Path, dest: &Path) -> Result<(), String> {
         let _ = std::fs::remove_dir_all(&aside);
     }
     Ok(())
+}
+
+/// What a swap that never finished left set aside: put back when the install is gone, otherwise removed. This
+/// process's own are skipped, since one of its swaps may still be running.
+pub fn settle_set_aside(root: &Path) {
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return;
+    };
+    let me = std::process::id().to_string();
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let Some(rest) = name.strip_prefix(".old-") else {
+            continue;
+        };
+        let mut parts = rest.rsplitn(3, '-');
+        let (Some(_), Some(pid), Some(id)) = (parts.next(), parts.next(), parts.next()) else {
+            continue;
+        };
+        if pid == me || safe_id(id).is_err() {
+            continue;
+        }
+        let dest = root.join(id);
+        if !dest.exists() {
+            let _ = std::fs::rename(entry.path(), &dest);
+        } else {
+            let _ = std::fs::remove_dir_all(entry.path());
+        }
+    }
 }
 
 pub fn now_secs() -> u64 {
