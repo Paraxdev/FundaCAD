@@ -21,10 +21,7 @@ fn safe_name(slot: &str) -> Result<String, String> {
 /// Every file a slot may live in, the current name first. A snapshot from before the rename still belongs to its slot.
 fn candidates(dir: &Path, slot: &str) -> Result<Vec<PathBuf>, String> {
     let safe = safe_name(slot)?;
-    Ok(std::iter::once(DOC_EXT)
-        .chain(LEGACY_DOC_EXTS)
-        .map(|ext| dir.join(format!("{safe}.{ext}")))
-        .collect())
+    Ok(std::iter::once(DOC_EXT).chain(LEGACY_DOC_EXTS).map(|ext| dir.join(format!("{safe}.{ext}"))).collect())
 }
 
 pub fn write(dir: &Path, slot: &str, json: &str) -> Result<(), String> {

@@ -17,7 +17,15 @@ fn a_later_listening_line_never_moves_the_port() {
 
 #[test]
 fn only_the_exact_form_counts() {
-    for line in ["LISTENING  40123", "LISTENING 40123 ", "LISTENING +40123", "LISTENING 0", "LISTENING 70000", "LISTENING", "LISTENING 4o123"] {
+    for line in [
+        "LISTENING  40123",
+        "LISTENING 40123 ",
+        "LISTENING +40123",
+        "LISTENING 0",
+        "LISTENING 70000",
+        "LISTENING",
+        "LISTENING 4o123",
+    ] {
         assert_eq!(ports(&[line]), Vec::<u16>::new(), "{line:?}");
     }
 }
