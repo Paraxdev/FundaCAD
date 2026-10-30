@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { plainError, plainWarning, sentence } from "../../src/ui/stressWarnings";
+import { plainError, plainWarning, plainWarningFor, sentence } from "../../src/ui/stressWarnings";
 
 // The engine's warnings as fundacad-geom's stress.rs words them, numbers formatted the way it formats them.
 const MESH_TAIL =
@@ -32,6 +32,15 @@ describe("plainWarning", () => {
       "A printed part is weaker across its layers, often by half. Keep a margin when the load pulls the layers apart.",
       "Load 3 is only on fixed faces, so it does nothing to the part.",
     ]);
+  });
+
+  it("does not tell a Fine run to choose Fine", () => {
+    const thin =
+      "the elements (2.375 mm) are larger than half the part's typical thickness (2 V / A, 3.912 mm), so its thinnest walls may have fewer than 2 elements through them and read stiffer than they are, use a smaller size or allow more elements";
+    expect(plainWarningFor(thin, true)).toBe(
+      "The mesh is coarse for the thinnest walls, so they read stiffer than they are.",
+    );
+    expect(plainWarningFor(thin, false)).toContain("Choose Fine");
   });
 
   it("passes a warning it does not know through as a sentence, without the request's paths", () => {

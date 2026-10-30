@@ -52,6 +52,12 @@ export function plainWarning(w: string): string {
   return sentence(panelMessage(w));
 }
 
+/** A Fine run has no finer choice left, so the advice to pick Fine goes. */
+export function plainWarningFor(w: string, fine: boolean): string {
+  const said = plainWarning(w);
+  return fine ? said.replace(` ${PICK_FINE}`, "") : said;
+}
+
 const WALLS_FIX = "Thicker walls would let it run.";
 const FACE_FIX = "Pick a wider face.";
 const SIMPLER_FIX = "Close other programs, or study a simpler part.";

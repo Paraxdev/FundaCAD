@@ -1,0 +1,103 @@
+{
+ "version": 10,
+ "parameters": {},
+ "features": [
+  {
+   "id": "sp",
+   "type": "sketch",
+   "plane": "XY",
+   "entities": [
+    {
+     "type": "rectangle",
+     "width": 100,
+     "height": 60,
+     "x": 0,
+     "y": 0
+    }
+   ]
+  },
+  {
+   "id": "plate",
+   "type": "extrude",
+   "sketch": "sp",
+   "distance": 2,
+   "operation": "new"
+  },
+  {
+   "id": "so",
+   "type": "sketch",
+   "plane": "XY",
+   "entities": [
+    {
+     "type": "circle",
+     "radius": 4,
+     "x": -38,
+     "y": -20
+    },
+    {
+     "type": "circle",
+     "radius": 4,
+     "x": -38,
+     "y": 20
+    },
+    {
+     "type": "circle",
+     "radius": 4,
+     "x": 38,
+     "y": -20
+    },
+    {
+     "type": "circle",
+     "radius": 4,
+     "x": 38,
+     "y": 20
+    }
+   ]
+  },
+  {
+   "id": "posts",
+   "type": "extrude",
+   "sketch": "so",
+   "distance": 8,
+   "operation": "join"
+  },
+  {
+   "id": "sh",
+   "type": "sketch",
+   "plane": "XY",
+   "entities": [
+    {
+     "type": "circle",
+     "radius": 2.8,
+     "x": -38,
+     "y": -20
+    },
+    {
+     "type": "circle",
+     "radius": 2.8,
+     "x": -38,
+     "y": 20
+    },
+    {
+     "type": "circle",
+     "radius": 2.8,
+     "x": 38,
+     "y": -20
+    },
+    {
+     "type": "circle",
+     "radius": 2.8,
+     "x": 38,
+     "y": 20
+    }
+   ]
+  },
+  {
+   "id": "holes",
+   "type": "extrude",
+   "sketch": "sh",
+   "distance": 8,
+   "operation": "cut"
+  }
+ ]
+}

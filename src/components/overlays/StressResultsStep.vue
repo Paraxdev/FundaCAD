@@ -8,7 +8,7 @@ import IconButton from "../ui/IconButton.vue";
 import Slider from "../ui/Slider.vue";
 import Switch from "../ui/Switch.vue";
 import StressVerdict from "./StressVerdict.vue";
-import { plainWarning } from "../../ui/stressWarnings";
+import { plainWarningFor } from "../../ui/stressWarnings";
 import { deformLabel, legendEnds, legendGradient, setupSummary, type StressResultView } from "../../ui/stress";
 import { getUnit } from "../../ui/units";
 
@@ -31,6 +31,11 @@ const ranWith = computed(() => {
   const ran = stress.value.ranSetup;
   return ran ? setupSummary(JSON.parse(ran)) : setupSummary(stress.value.setup);
 });
+const ranFine = computed(() => ranSetupRefine() === "fine");
+function ranSetupRefine() {
+  const ran = stress.value.ranSetup;
+  return (ran ? JSON.parse(ran) : stress.value.setup).refine;
+}
 const keyRows = computed(() => props.result.rows);
 const ends = computed(() => legendEnds(props.result.legend));
 const detailsOpen = ref(false);
@@ -179,7 +184,7 @@ const deformStep = computed(() => {
     </div>
 
     <div v-for="(w, i) in result.warnings" :key="'w' + i" class="measure-hint stress-warning">{{
-      plainWarning(w)
+      plainWarningFor(w, ranFine)
     }}</div>
   </div>
 </template>
