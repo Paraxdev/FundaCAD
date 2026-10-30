@@ -41,6 +41,20 @@ pub fn work(elements: usize) -> f64 {
     (elements as f64).powf(WORK_EXPONENT)
 }
 
+/// A release build at this many elements took about `SECONDS_AT_REFERENCE` to solve.
+const REFERENCE_ELEMENTS: f64 = 50_000.0;
+const SECONDS_AT_REFERENCE: f64 = 25.0;
+
+/// The seconds one solve of this many elements is predicted to take.
+pub fn solve_seconds(elements: usize) -> f64 {
+    SECONDS_AT_REFERENCE * (elements as f64 / REFERENCE_ELEMENTS).powf(WORK_EXPONENT)
+}
+
+/// The most elements [`solve_seconds`] predicts can be solved in `seconds`.
+pub fn elements_within(seconds: f64) -> usize {
+    (REFERENCE_ELEMENTS * (seconds / SECONDS_AT_REFERENCE).powf(1.0 / WORK_EXPONENT)) as usize
+}
+
 /// The element cap of the next refinement pass after the passes of `counts` (pass 0 first), or None when the plan's
 /// passes, the work budget or the growth rule say stop. `reference` is the element count whose work the budget
 /// multiplies.

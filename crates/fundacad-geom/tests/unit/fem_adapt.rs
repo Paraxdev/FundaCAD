@@ -101,3 +101,13 @@ fn a_pass_is_settled_only_below_a_reach_a_measured_pass_stayed_under() {
     assert!(!settled(0.1892));
     assert!(settled(0.0));
 }
+
+#[test]
+fn the_solve_time_grows_as_the_work_and_turns_back_into_elements() {
+    let at = solve_seconds(40_000);
+    assert!(at > 0.0);
+    assert!((solve_seconds(80_000) / at - 2f64.powf(1.3)).abs() < 1e-9);
+    assert!(elements_within(at).abs_diff(40_000) <= 1);
+    assert_eq!(elements_within(f64::INFINITY), usize::MAX);
+    assert_eq!(elements_within(0.0), 0);
+}

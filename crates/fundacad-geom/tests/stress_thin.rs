@@ -168,4 +168,100 @@ fn an_asked_size_that_loses_a_narrow_face_stays_refused() {
         "material": "PLA",
     }));
     assert!(r["error"]["message"].as_str().is_some_and(|m| m.contains("got no elements")), "{r}");
+    assert!(r["error"].get("finer").is_none(), "{r}");
+}
+
+fn run_within(req: Value, limits: StressLimits) -> Value {
+    let Value::Object(m) = req else { panic!("a request is an object") };
+    json_of(stress_result_with(&m, &NoWatch, &limits))
+}
+
+fn plate_on_its_side() -> Value {
+    json!({
+        "document": standoff_plate(), "body": "body1",
+        "fixed": [nearest([-LENGTH / 2.0, 0.0, 0.0])],
+        "loads": [{"faces": [top(1), top(2)], "force": [0, 0, -20]}],
+        "material": "PLA",
+    })
+}
+
+fn asking(mut req: Value) -> Value {
+    req["finer"] = json!(true);
+    req
+}
+
+fn assert_finer_answer(r: &Value, elements: std::ops::Range<f64>) {
+    let finer = &r["error"]["finer"];
+    assert!(elements.contains(&num(&finer["elements"])), "{r}");
+    assert!(num(&finer["seconds"]) >= 1.0, "{r}");
+}
+
+fn no_time_limit() -> StressLimits {
+    StressLimits { refine_seconds: f64::INFINITY, ..Default::default() }
+}
+
+#[test]
+fn a_wall_past_the_element_limit_answers_with_a_finer_run() {
+    let r = run_within(plate_on_its_side(), StressLimits { auto_elements: 30_000, ..no_time_limit() });
+    assert_finer_answer(&r, 30_000.0..60_000.0);
+}
+
+#[test]
+fn a_wall_past_the_time_limit_answers_with_a_finer_run() {
+    let r = run_within(plate_on_its_side(), StressLimits { refine_seconds: 1.0, ..no_time_limit() });
+    assert_finer_answer(&r, 30_000.0..60_000.0);
+}
+
+#[test]
+fn a_mesh_past_the_memory_limit_answers_with_a_finer_run() {
+    let r = run_within(plate_on_its_side(), StressLimits { memory_cap: 1 << 20, ..no_time_limit() });
+    assert!(r["error"]["message"].as_str().is_some_and(|m| m.contains("memory")), "{r}");
+    assert_finer_answer(&r, 30_000.0..60_000.0);
+}
+
+#[test]
+fn asking_for_the_finer_run_lifts_the_element_and_memory_limits_once() {
+    let limits = StressLimits { auto_elements: 30_000, memory_cap: 1 << 20, ..no_time_limit() };
+    sane(&run_within(asking(plate_on_its_side()), limits));
+}
+
+#[test]
+fn a_finer_run_past_its_own_memory_limit_is_a_plain_refusal() {
+    let limits = StressLimits { memory_cap: 1 << 20, finer_memory_cap: 1 << 20, ..no_time_limit() };
+    for req in [plate_on_its_side(), asking(plate_on_its_side())] {
+        let r = run_within(req, limits);
+        assert!(r["error"]["message"].as_str().is_some_and(|m| m.contains("memory")), "{r}");
+        assert!(r["error"].get("finer").is_none(), "{r}");
+    }
+}
+
+#[test]
+fn a_part_too_thin_for_the_finer_limit_gets_no_button() {
+    let mut doc = standoff_plate();
+    let features = doc["features"].as_array_mut().unwrap();
+    for f in features.iter_mut().filter(|f| f["id"].as_str().is_some_and(|i| i.starts_with('b'))) {
+        if f["type"] == "cylinder" {
+            f["radius"] = json!(OUTER - 0.2);
+        }
+    }
+    let mut req = plate_on_its_side();
+    req["document"] = doc;
+    let r = run_within(req, no_time_limit());
+    assert!(r["error"]["message"].as_str().is_some_and(|m| !m.is_empty()), "{r}");
+    assert!(r["error"].get("finer").is_none(), "{r}");
+}
+
+#[test]
+fn a_face_narrower_than_the_finest_mesh_answers_with_a_finer_run() {
+    let r = run_within(
+        json!({
+            "document": ribbed_block(0.8), "body": "body1",
+            "fixed": [nearest([-BLOCK[0] / 2.0, 0.0, 0.0])],
+            "loads": [{"faces": [rib_top()], "force": [0, 0, -20]}],
+            "material": "PLA",
+        }),
+        StressLimits { auto_elements: 30_000, ..no_time_limit() },
+    );
+    assert!(r["error"]["message"].as_str().is_some_and(|m| !m.is_empty()), "{r}");
+    assert_finer_answer(&r, 30_000.0..400_000.0);
 }
