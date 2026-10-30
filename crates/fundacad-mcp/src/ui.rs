@@ -234,11 +234,16 @@ impl FundaCad {
         annotations(read_only_hint = false, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
     pub async fn t_ui_open(&self, mut args: JsonObject) -> Result<CallToolResult, McpError> {
+        let overwrite = truthy(args.remove("overwrite").as_ref());
         if let Some(raw) = args.get("record").and_then(Value::as_str).filter(|r| !r.is_empty()) {
-            match self.scoped(raw).await {
-                Ok(p) => args.insert("record".into(), json!(p.to_string_lossy())),
+            let p = match self.scoped(raw).await {
+                Ok(p) => p,
                 Err(e) => return Ok(e),
             };
+            if let Some(why) = write_target::save_refusal(&p, &["py"], "ui_open record", overwrite) {
+                return Ok(failure(why));
+            }
+            args.insert("record".into(), json!(p.to_string_lossy()));
         }
         Ok(self.relay("open", args).await)
     }

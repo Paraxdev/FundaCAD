@@ -231,3 +231,42 @@ fn ui_do_save_as_follows_the_doc_save_rules_before_the_harness_is_asked() {
     let ok = mcp.call("ui_do", save(&parts.join("b.funda"), false));
     assert!(!ok.is_error && ok.text.contains("did save_as"), "{}", ok.text);
 }
+
+#[test]
+fn ui_open_record_follows_the_save_rules_before_the_harness_is_asked() {
+    let work = tempfile::Builder::new().prefix("ui-record-").tempdir().unwrap();
+    let (home, roam, xdg) = (work.path().join("home"), work.path().join("roam"), work.path().join("xdg"));
+    let data = if cfg!(windows) {
+        roam.clone()
+    } else if cfg!(target_os = "macos") {
+        home.join("Library").join("Application Support")
+    } else {
+        xdg.clone()
+    }
+    .join(fundacad_mcp::app_session::APP_IDENTIFIER);
+    let (scripts, recovery) = (work.path().join("scripts"), data.join("recovery"));
+    std::fs::create_dir_all(&scripts).unwrap();
+    std::fs::create_dir_all(&recovery).unwrap();
+    let mine = scripts.join("mine.py");
+    std::fs::write(&mine, "print('my own script')\n").unwrap();
+    let earlier = scripts.join("earlier.py");
+    std::fs::write(&earlier, "# Recorded by fundacad-harness 0.1.0, driver api 1\n").unwrap();
+    let s = |p: &Path| p.to_string_lossy().replace('\\', "/");
+    let (h, r, x) = (s(&home), s(&roam), s(&xdg));
+    let mut mcp = standalone(&[("USERPROFILE", &h), ("HOME", &h), ("APPDATA", &r), ("XDG_DATA_HOME", &x)]);
+    for (path, why) in [
+        (scripts.join("steps.txt"), "writes only .py"),
+        (mine.clone(), "already holds a file"),
+        (recovery.join("r.py"), "recovery folder"),
+        (scripts.join("missing").join("steps.py"), "No such directory"),
+    ] {
+        let reply = mcp.call("ui_open", json!({"record": s(&path)}));
+        assert!(reply.is_error && reply.text.contains(why), "{}: {}", path.display(), reply.text);
+    }
+    let ok = mcp.call("ui_open", json!({"record": s(&earlier)}));
+    assert!(!ok.is_error && ok.text.contains("opened"), "{}", ok.text);
+    mcp.call("ui_close", json!({}));
+    let ok = mcp.call("ui_open", json!({"record": s(&mine), "overwrite": true}));
+    assert!(!ok.is_error && ok.text.contains("opened"), "{}", ok.text);
+    assert!(!ok.text.contains("overwrite"), "overwrite reached the harness: {}", ok.text);
+}

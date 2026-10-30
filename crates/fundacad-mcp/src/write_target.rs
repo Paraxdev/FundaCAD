@@ -4,6 +4,8 @@ use std::io::Read;
 use std::path::Path;
 
 const SNIFF: u64 = 4096;
+/// The first line of every recording the harness writes, see tools/harness recorder.py.
+pub const RECORDING_HEADER: &[u8] = b"# Recorded by fundacad-harness ";
 
 fn fits(path: &Path, exts: &[&str]) -> bool {
     path.extension().is_some_and(|e| exts.contains(&e.to_string_lossy().to_ascii_lowercase().as_str()))
@@ -86,6 +88,7 @@ pub fn looks_like(exts: &[&str], head: &[u8], len: u64) -> bool {
         Some("3mf") => zip,
         Some("dxf") => head.starts_with(b"AutoCAD Binary DXF") || matches!(first_line(text), b"0" | b"999"),
         Some("svg") => holds(head, b"<svg"),
+        Some("py") => first_line(text).starts_with(RECORDING_HEADER),
         _ => false,
     }
 }
