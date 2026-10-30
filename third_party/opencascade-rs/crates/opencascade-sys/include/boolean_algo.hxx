@@ -20,7 +20,7 @@ struct FcBooleanRun {
 };
 
 inline std::unique_ptr<std::vector<TopoDS_Shape>> fc_boolean_vector(const TopTools_ListOfShape &list) {
-  return std::unique_ptr<std::vector<TopoDS_Shape>>(new std::vector<TopoDS_Shape>(list.begin(), list.end()));
+  return list_to_vector(list);
 }
 
 inline std::unique_ptr<FcBooleanRun> FcBooleanRun_perform(int kind, const TopTools_ListOfShape &arguments,
