@@ -45,6 +45,51 @@ describe("wheelEvidence", () => {
   });
 });
 
+describe("wheelEvidence under a webview zoom or display scale", () => {
+  // Measured in Chromium page zoom: deltaY is 100 / zoom and wheelDeltaY the truncated 120 / zoom.
+  const measured: [number, number, number][] = [
+    [0.8, 125, -149],
+    [1.1, 90.90908893868948, -109],
+    [1.25, 80, -96],
+    [1.5, 66.66666666666667, -80],
+    [1.75, 57.142857142857146, -68],
+    [2, 50, -60],
+  ];
+
+  it.each(measured)("reads a mouse notch at %s as a mouse", (zoom, deltaY, wheelDeltaY) => {
+    expect(wheelEvidence(ev({ deltaY, wheelDeltaY }), false, [1, zoom])).toBe("mouse");
+    expect(wheelEvidence(ev({ deltaY: -deltaY, wheelDeltaY: -wheelDeltaY }), false, [zoom])).toBe("mouse");
+  });
+
+  it("reads a one line notch at 200 percent as a mouse", () => {
+    expect(wheelEvidence(ev({ deltaY: 100 / 6, wheelDeltaY: -60 }), false, [2])).toBe("mouse");
+  });
+
+  it("reads a display scaled notch whose legacy delta lost a unit as a mouse", () => {
+    expect(wheelEvidence(ev({ deltaY: 100, wheelDeltaY: -119 }), false, [1.1])).toBe("mouse");
+  });
+
+  it("still reads a touchpad as a touchpad at any size", () => {
+    for (const zoom of [0.8, 1.1, 1.5, 2]) {
+      expect(wheelEvidence(ev({ deltaY: 3.7 / zoom, wheelDeltaY: -11 }), false, [1, zoom])).toBe("touchpad");
+      expect(wheelEvidence(ev({ deltaY: 37.3 / zoom, wheelDeltaY: -112 }), false, [1, zoom])).toBe("touchpad");
+      expect(wheelEvidence(ev({ deltaX: 2.5, deltaY: 60 / zoom }), false, [1, zoom])).toBe("touchpad");
+    }
+  });
+
+  it("keeps the 100 percent answers exact", () => {
+    expect(wheelEvidence(ev({ deltaY: 100, wheelDeltaY: -119 }), false, [1])).toBe(null);
+    expect(wheelEvidence(ev({ deltaY: 90.9, wheelDeltaY: -120 }), false, [1])).toBe("mouse");
+  });
+
+  it("holds a mouse stream at zoom through the classifier", () => {
+    const c = new WheelClassifier();
+    const e = ev({ deltaY: 90.90908893868948, wheelDeltaY: -109 });
+    expect(c.classify(e, 0, [1, 1.1])).toEqual({ kind: "mouse", fresh: true });
+    expect(c.detected()).toBe("mouse");
+  });
+});
+
 describe("WheelClassifier", () => {
   it("holds a stream's kind until it pauses", () => {
     const c = new WheelClassifier();

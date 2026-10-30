@@ -23,6 +23,19 @@ function macWheelLine(d: number, wd: number): boolean {
   return Math.abs(steps - Math.round(steps)) < 1e-6;
 }
 
+const gap = (v: number, step: number) => Math.abs(v - step * Math.round(v / step));
+
+/** Whether `v` sits on a multiple of `step` once a zoom or display scale in `scales` is undone. Under a scale
+ *  the engine scales the deltas by 1/scale and truncates the legacy delta, so a small tolerance is allowed;
+ *  at scale 1 the match stays exact. */
+function onGrid(v: number, step: number, tol: number, scales: readonly number[]): boolean {
+  if (v === 0) return true;
+  const hit = (x: number, t: number) => Math.round(x / step) !== 0 && gap(x, step) <= t;
+  return scales.some((s) =>
+    s === 1 ? gap(v, step) === 0 && hit(v, 0) : hit(v, tol) || hit(v * s, tol * Math.max(s, 1)),
+  );
+}
+
 interface WheelLike {
   deltaX: number;
   deltaY: number;
@@ -31,8 +44,9 @@ interface WheelLike {
   ctrlKey: boolean;
 }
 
-/** What one event says on its own, or null when it could be either. */
-export function wheelEvidence(e: WheelLike, mac = onMac()): WheelKind | null {
+/** What one event says on its own, or null when it could be either. `scales` are the zoom factors the engine
+ *  may have divided the deltas by: the webview zoom of Interface size, or the display scale. */
+export function wheelEvidence(e: WheelLike, mac = onMac(), scales: readonly number[] = [1]): WheelKind | null {
   // Lines or pages: only a wheel scrolls by those.
   if (e.deltaMode !== 0) return "mouse";
   const legacy = e as WheelLike & { wheelDeltaX?: number; wheelDeltaY?: number };
@@ -49,12 +63,12 @@ export function wheelEvidence(e: WheelLike, mac = onMac()): WheelKind | null {
   const big = Math.max(Math.abs(dx), Math.abs(dy));
   if (big === 0) return null;
   // A whole notch: a legacy delta that is a multiple of 120 and a notch's worth of pixels.
-  if (wd !== 0 && Math.abs(wd) % 120 === 0 && big >= NOTCH_MIN_PX) return "mouse";
+  if (wd !== 0 && big * Math.max(...scales) >= NOTCH_MIN_PX && onGrid(Math.abs(wd), 120, 1, scales)) return "mouse";
   // A slow notch on macOS comes as a few px and a fraction, like a touchpad's.
   if (mac && macWheelLine(dy !== 0 ? dy : dx, wd)) return "mouse";
   // Less than a notch, or a fraction of a pixel. A high resolution wheel reads as a touchpad
   // too, which the navigation setting can overrule.
-  if (big < NOTCH_MIN_PX || !Number.isInteger(dx) || !Number.isInteger(dy)) return "touchpad";
+  if (big < NOTCH_MIN_PX || !onGrid(dx, 1, 0.01, scales) || !onGrid(dy, 1, 0.01, scales)) return "touchpad";
   return null;
 }
 
@@ -64,10 +78,10 @@ export class WheelClassifier {
   private seen: WheelKind | null = null;
   private last = -Infinity;
 
-  classify(e: WheelLike, nowMs: number): { kind: WheelKind; fresh: boolean } {
+  classify(e: WheelLike, nowMs: number, scales?: readonly number[]): { kind: WheelKind; fresh: boolean } {
     const fresh = nowMs - this.last > STREAM_GAP_MS || nowMs < this.last;
     this.last = nowMs;
-    const told = wheelEvidence(e);
+    const told = wheelEvidence(e, undefined, scales);
     if (fresh) this.kind = told ?? this.seen ?? "mouse";
     if (told) this.seen = told;
     return { kind: this.kind, fresh };
