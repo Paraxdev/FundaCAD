@@ -260,10 +260,13 @@ jobs:
       matrix:
         include:
           - platform: ubuntu-22.04
-          - platform: macos-14 # Apple Silicon (arm64) runner
+          - platform: macos-15 # Apple Silicon (arm64) runner
           - platform: windows-latest
     runs-on: ${{ matrix.platform }}
     timeout-minutes: 150
+    # C++ built by cmake takes its target from the SDK otherwise, and Apple targets are the only readers.
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "11.0"
 
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -355,7 +358,7 @@ jobs:
           path: |
             target/OCCT
             !target/OCCT/build
-          key: occt-static-v2-${{ runner.os }}-${{ hashFiles('third_party/opencascade-rs/crates/occt-sys/src/lib.rs', 'third_party/opencascade-rs/crates/opencascade-sys/build.rs', 'third_party/opencascade-rs/crates/opencascade-sys/Cargo.toml') }}
+          key: occt-static-v2-${{ runner.os == 'macOS' && matrix.platform || runner.os }}-${{ hashFiles('third_party/opencascade-rs/crates/occt-sys/src/lib.rs', 'third_party/opencascade-rs/crates/opencascade-sys/build.rs', 'third_party/opencascade-rs/crates/opencascade-sys/Cargo.toml') }}
 
       - name: Install Node
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -709,10 +712,28 @@ jobs:
           if (Test-Path $lnk) { throw 'an update over an install brought back the Start menu entry its user removed' }
           Write-Host 'update over the install: the removed entry stayed removed'
 
+      # There is no Mac to try it on, and a newer build image can raise what the app needs without a word.
+      - name: Check the macOS version the app needs
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          checked=0
+          while IFS= read -r bin; do
+            file "$bin" | grep -q Mach-O || continue
+            minos=$(vtool -show-build "$bin" | awk '$1 == "minos" {print $2}' | head -1)
+            echo "$bin needs macOS ${minos:-unknown}"
+            if [ -z "$minos" ] || [ "${minos%%.*}" -gt 11 ]; then
+              echo "::error::$bin needs macOS ${minos:-unknown}, the app promises 11.0"; exit 1
+            fi
+            checked=$((checked + 1))
+          done < <(find src-tauri/target/release/bundle/macos -ipath '*.app/Contents/MacOS/*' -type f)
+          [ "$checked" -gt 0 ] || { echo "::error::no app binary to check"; exit 1; }
+
       # The bundler makes the macOS updater bundle only with updater artifacts on, which the
       # bundle job keeps off. Same layout as the bundler's: the .app at the top of the archive.
       - name: Pack the macOS updater bundle for the sign job
-        if: matrix.platform == 'macos-14' && steps.updater.outputs.sign == 'true'
+        if: matrix.platform == 'macos-15' && steps.updater.outputs.sign == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -1079,7 +1100,7 @@ jobs:
           }
           add linux-x86_64   release/FundaCAD-linux-x86_64.AppImage
           add windows-x86_64 release/FundaCAD-windows-x64-setup.exe
-          add darwin-aarch64 release/FundaCAD-macos-arm64.app.tar.gz  # macos-14 runners are arm64
+          add darwin-aarch64 release/FundaCAD-macos-arm64.app.tar.gz  # macos-15 runners are arm64
           cat latest.json
 
       - name: Publish the release
@@ -1379,7 +1400,7 @@ jobs:
   e2e:
     needs: rust-geom
     runs-on: ubuntu-22.04
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -1549,12 +1570,12 @@ jobs:
         run: tail -50 /tmp/ci_engine.log /tmp/ci_vite.log || true
 
   # The native tracer on Metal. A macOS app always traces natively, since its
-  # WKWebView has no WebGPU, and the macos-14 runner is an Apple Silicon VM
+  # WKWebView has no WebGPU, and the macos-15 runner is an Apple Silicon VM
   # with the same Apple Paravirtual device a Mac VM user has. Every image test
   # passes by skipping when no adapter fits, so a skip fails the job here.
   # continue-on-error until it has passed once.
   tracer-macos:
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 40
     continue-on-error: true
     permissions:
