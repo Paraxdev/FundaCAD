@@ -409,11 +409,11 @@ fn connection(stream: TcpStream, shared: &Shared) {
     };
 
     let (query, origin) = seen.lock().unwrap_or_else(|p| p.into_inner()).clone();
+    drop(pending);
     if !shared.gate.authorized(query.as_deref(), origin.as_deref()) {
         close_and_linger(&mut ws, CloseCode::Policy, "unauthorized");
         return;
     }
-    drop(pending);
     let _slot = match peer.map(|ip| take_slot(shared, ip)) {
         Some(None) => {
             close_and_linger(&mut ws, CloseCode::Policy, "too many connections");

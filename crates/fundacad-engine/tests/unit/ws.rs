@@ -302,3 +302,13 @@ fn past_the_pending_handshake_cap_a_socket_is_closed_at_once() {
     assert!(hung_up(&mut extra, Duration::from_secs(3), b""));
     drop(held);
 }
+
+#[test]
+fn refused_clients_waiting_out_their_close_leave_the_handshake_cap_free() {
+    let s = start("", None);
+    let refused: Vec<Socket> = (0..MAX_PENDING_HANDSHAKES).map(|_| connect(s.port, "token=nope", None)).collect();
+    std::thread::sleep(Duration::from_millis(300));
+    let mut ws = connect(s.port, &good_query(), None);
+    assert_eq!(call(&mut ws, json!({"id": 1, "op": "ping"}))["ok"], true);
+    drop(refused);
+}
