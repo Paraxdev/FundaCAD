@@ -97,7 +97,8 @@ pub fn is_safe_key(key: &str) -> bool {
 /// Windows maps these names to a device whatever extension follows; refused on every OS so a file stays portable.
 fn names_a_device(key: &str) -> bool {
     let stem = key.split('.').next().unwrap_or("").to_ascii_uppercase();
-    let numbered = |base: &str| stem.strip_prefix(base).is_some_and(|n| n.len() == 1 && n.as_bytes()[0].is_ascii_digit());
+    let numbered =
+        |base: &str| stem.strip_prefix(base).is_some_and(|n| n.len() == 1 && n.as_bytes()[0].is_ascii_digit());
     ["CON", "PRN", "AUX", "NUL"].contains(&stem.as_str()) || numbered("COM") || numbered("LPT")
 }
 
