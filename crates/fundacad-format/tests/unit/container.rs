@@ -347,3 +347,13 @@ fn manifest_rows_that_give_one_entry_two_hashes_are_refused_before_anything_is_w
     assert!(!store.join(format!("{real}.bbrep")).exists(), "no geometry is published from a refused open");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn mesh_keys_that_name_a_windows_device_are_refused_on_every_os() {
+    for key in ["CON", "prn", "Aux", "NUL", "nul.anything", "COM1", "com9", "LPT1", "lpt9.bin", "COM0"] {
+        assert!(!is_safe_key(key), "{key} names a device");
+    }
+    for key in ["CONSOLE", "COM10", "LPT", "prnt", "a1b2c3", "mesh-1_body.part", "nulx.bin"] {
+        assert!(is_safe_key(key), "{key} is an ordinary name");
+    }
+}
