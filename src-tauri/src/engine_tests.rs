@@ -97,16 +97,3 @@ fn every_status_frame_keeps_its_request_in_flight_and_only_a_reply_ends_it() {
     };
     assert_eq!([padded(64 * 1024), padded(64 * 1024 + 1)].map(|t| text_is_terminal(&t)), [false, true]);
 }
-
-#[test]
-fn the_engine_gets_its_own_temp_folder_on_every_platform() {
-    let mut cmd = Command::new("fundacad");
-    private_temp(&mut cmd, Path::new("/cache/engine-tmp"));
-    let env: HashMap<String, Option<String>> = cmd
-        .get_envs()
-        .map(|(k, v)| (k.to_string_lossy().into_owned(), v.map(|v| v.to_string_lossy().into_owned())))
-        .collect();
-    for var in ["TMPDIR", "TMP", "TEMP"] {
-        assert_eq!(env[var].as_deref(), Some("/cache/engine-tmp"), "{var}");
-    }
-}

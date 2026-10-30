@@ -125,3 +125,34 @@ fn a_shared_folder_or_one_above_it_is_never_opened_to_the_engine() {
     assert!(!opens_shared_folder(&temp.join("fundacad"), &shared));
     let _ = std::fs::remove_dir_all(&root);
 }
+
+fn env_of(cmd: &std::process::Command) -> Vec<(String, Option<String>)> {
+    let mut env: Vec<_> = cmd
+        .get_envs()
+        .map(|(k, v)| (k.to_string_lossy().into_owned(), v.map(|v| v.to_string_lossy().into_owned())))
+        .collect();
+    env.sort();
+    env
+}
+
+#[test]
+fn the_apps_worker_gets_its_own_temp_folder_and_enters() {
+    let mut cmd = std::process::Command::new("fundacad");
+    let enters = worker_env(&mut cmd, Some(std::path::Path::new("/cache/engine-tmp")), None);
+    let temp = |var: &str| (var.to_string(), Some("/cache/engine-tmp".to_string()));
+    assert_eq!((env_of(&cmd), enters), (vec![temp("TEMP"), temp("TMP"), temp("TMPDIR")], true));
+}
+
+#[test]
+fn the_variable_still_turns_the_apps_worker_off() {
+    let mut cmd = std::process::Command::new("fundacad");
+    assert!(!worker_env(&mut cmd, Some(std::path::Path::new("/cache/engine-tmp")), Some("0")));
+    assert_eq!(env_of(&cmd).len(), 3);
+}
+
+#[test]
+fn without_a_folder_to_stage_exports_in_the_apps_worker_runs_without_reduced_rights() {
+    let mut cmd = std::process::Command::new("fundacad");
+    let enters = worker_env(&mut cmd, None, Some("1"));
+    assert_eq!((env_of(&cmd), enters), (vec![(ENV.to_string(), Some("0".to_string()))], false));
+}

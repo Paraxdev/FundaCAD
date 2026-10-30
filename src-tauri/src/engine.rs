@@ -43,7 +43,9 @@ struct Inner {
     cancel_killed: AtomicU64,
     /// Where `session.json` goes, None without an app data directory.
     session_dir: Option<PathBuf>,
-    /// Exports are written here by the engine and copied into place by the shell, None without an app cache directory.
+    /// The engine's own temp folder, None without a usable app cache directory, and then the engine runs unrestricted.
+    temp: Option<PathBuf>,
+    /// Exports are written here by the engine and copied into place by the shell, inside `temp`.
     export_root: Option<PathBuf>,
     /// Export requests sent and not yet answered, by id, to their stage folder.
     staged: Mutex<HashMap<String, (PathBuf, Staged)>>,
@@ -168,7 +170,14 @@ fn live_door(engine: &Arc<fundacad_engine::Engine>) {
 
 impl Engine {
     pub fn start(app: &AppHandle) -> Engine {
-        let export_root = app.path().app_cache_dir().ok().map(|dir| dir.join("engine-tmp").join("exports"));
+        let temp = app.path().app_cache_dir().ok().map(|dir| dir.join("engine-tmp"));
+        // A stage path that is not text could not be put into an export request.
+        let temp = temp.filter(|dir| dir.to_str().is_some() && std::fs::create_dir_all(dir).is_ok());
+        if temp.is_none() {
+            let line = "[engine] runs without reduced rights, the app has no cache folder to stage its exports in";
+            let _ = writeln!(std::io::stderr(), "{line}");
+        }
+        let export_root = temp.as_ref().map(|dir| dir.join("exports"));
         if let Some(root) = &export_root {
             // Left by an earlier run; the app runs once, so no other engine is writing there.
             let _ = std::fs::remove_dir_all(root);
@@ -184,6 +193,7 @@ impl Engine {
             stopping: AtomicBool::new(false),
             cancel_killed: AtomicU64::new(0),
             session_dir: app.path().app_data_dir().ok(),
+            temp,
             export_root,
             staged: Mutex::new(HashMap::new()),
             stderr_tail: Arc::new(Mutex::new(VecDeque::new())),
@@ -291,13 +301,6 @@ pub fn configure_env(cmd: &mut Command, blobs: Option<&Path>, plugins: Option<&P
     cmd.env(LIVE_TOKEN_ENV, live_token);
 }
 
-/// The engine's temp folder lies inside the app's cache, among the few folders its reduced rights let it write.
-pub fn private_temp(cmd: &mut Command, dir: &Path) {
-    for var in ["TMPDIR", "TMP", "TEMP"] {
-        cmd.env(var, dir);
-    }
-}
-
 fn spawn(inner: &Inner) -> std::io::Result<std::process::ChildStdout> {
     let exe = std::env::current_exe()?;
     let mut cmd = Command::new(exe);
@@ -314,10 +317,8 @@ fn spawn(inner: &Inner) -> std::io::Result<std::process::ChildStdout> {
         if safe { None } else { crate::plugins::plugins_root(&inner.app).ok() }.as_deref(),
         &token,
     );
-    let temp = inner.app.path().app_cache_dir().map(|dir| dir.join("engine-tmp"));
-    if let Some(dir) = temp.ok().filter(|dir| std::fs::create_dir_all(dir).is_ok()) {
-        private_temp(&mut cmd, &dir);
-    }
+    let env = std::env::var(fundacad_engine::sandbox::ENV).ok();
+    let reduced = fundacad_engine::sandbox::worker_env(&mut cmd, inner.temp.as_deref(), env.as_deref());
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
@@ -326,7 +327,9 @@ fn spawn(inner: &Inner) -> std::io::Result<std::process::ChildStdout> {
     }
     let mut child = cmd.spawn()?;
     #[cfg(windows)]
-    let job = contain(&child);
+    let job = contain(&child, reduced);
+    #[cfg(not(windows))]
+    let _ = reduced;
     let stdin = child.stdin.take().ok_or_else(|| std::io::Error::other("no worker stdin"))?;
     let stdout = child.stdout.take().ok_or_else(|| std::io::Error::other("no worker stdout"))?;
     if let Some(stderr) = child.stderr.take() {
@@ -366,18 +369,14 @@ fn spawn(inner: &Inner) -> std::io::Result<std::process::ChildStdout> {
 
 /// Each engine runs in its own job, part of its reduced rights: it ends with the app and starts no process.
 #[cfg(windows)]
-fn contain(child: &Child) -> Option<fundacad_engine::sandbox::Job> {
-    use fundacad_engine::sandbox::{decide, Decision, Job, Policy, ENV};
-    if decide(std::env::var(ENV).ok().as_deref(), Policy::Worker) != Decision::Enter {
+fn contain(child: &Child, reduced: bool) -> Option<fundacad_engine::sandbox::Job> {
+    if !reduced {
         return None;
     }
-    match Job::contain(child) {
-        Ok(job) => Some(job),
-        Err(e) => {
-            let _ = writeln!(std::io::stderr(), "[engine] runs outside its job, {e}");
-            None
-        }
-    }
+    let job = fundacad_engine::sandbox::Job::contain(child).inspect_err(|e| {
+        let _ = writeln!(std::io::stderr(), "[engine] runs outside its job, {e}");
+    });
+    job.ok()
 }
 
 /// The live door's port, from the worker's first `LISTENING` line only and only in the exact form `LISTENING <port>`.

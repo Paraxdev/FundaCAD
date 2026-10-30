@@ -35,6 +35,20 @@ pub fn decide(env: Option<&str>, policy: Policy) -> Decision {
     }
 }
 
+/// Points the app's worker at its own temp folder, which also holds the stage its exports go through, and says whether
+/// it enters its reduced rights, given the shell's value of [`ENV`]. Without that folder an export to the user's folder
+/// would be refused, so the worker then runs without them.
+pub fn worker_env(cmd: &mut std::process::Command, temp: Option<&Path>, env: Option<&str>) -> bool {
+    let Some(dir) = temp else {
+        cmd.env(ENV, "0");
+        return false;
+    };
+    for var in ["TMPDIR", "TMP", "TEMP"] {
+        cmd.env(var, dir);
+    }
+    decide(env, Policy::Worker) == Decision::Enter
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Outcome {
     /// Every restriction this system offers is in force. `writes` is false on a kernel that cannot limit writes,
