@@ -85,8 +85,8 @@ export interface StressData {
   /** What running past the limits would take, when the error offers that. */
   finer: StressFiner | null;
   /** "hidden" takes the colours off so faces can be picked again while the rows stay; "none" before a Run or after the
-   *  model changed under them. */
-  colours: "shown" | "hidden" | "none";
+   *  model changed under them; "pending" while a fresh result's colours are being drawn. */
+  colours: "shown" | "hidden" | "none" | "pending";
   /** Null until a result with displacements arrives. */
   deform: StressDeform | null;
   /** Probe mode, and the points pinned with it. */

@@ -24,6 +24,7 @@ const gradient = legendGradient();
 const unit = computed(() => getUnit());
 
 const modelChanged = computed(() => stress.value.colours === "none");
+const drawing = computed(() => stress.value.colours === "pending");
 const setupChanged = computed(
   () => stress.value.ranSetup !== null && stress.value.ranSetup !== JSON.stringify(stress.value.setup),
 );
@@ -109,7 +110,7 @@ const deformStep = computed(() => {
     </template>
 
     <div class="stress-view-row">
-      <label v-if="!modelChanged" class="stress-gravity" title="Show the stress colours on the body">
+      <label v-if="!modelChanged && !drawing" class="stress-gravity" title="Show the stress colours on the body">
         <Switch
           :model-value="stress.colours === 'shown'"
           class="stress-colours"
@@ -118,7 +119,11 @@ const deformStep = computed(() => {
         />
         <span class="measure-k">Colours</span>
       </label>
-      <label v-if="deform && !modelChanged" class="stress-gravity" title="Draw the body bent under the load">
+      <label
+        v-if="deform && !modelChanged && !drawing"
+        class="stress-gravity"
+        title="Draw the body bent under the load"
+      >
         <Switch
           :model-value="deform.shown"
           class="stress-shape"
@@ -132,7 +137,7 @@ const deformStep = computed(() => {
         size="sm"
         class="stress-probe"
         :pressed="stress.probe"
-        :disabled="modelChanged && !stress.probe"
+        :disabled="(modelChanged || drawing) && !stress.probe"
         tip="Read the stress at a point on the body"
         @click="engine.ui.panels.setStressProbe(!stress.probe)"
         >Read a point</Button

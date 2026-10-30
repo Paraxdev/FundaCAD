@@ -1129,6 +1129,7 @@ export function createPanels(deps: PanelsDeps) {
       return;
     }
     if (r.surface) {
+      panels.setStressColours("pending");
       const disp = r.surface.displacement;
       const moves = !!disp && disp.length === r.surface.positions.length;
       const locate = locator(r.surface);
@@ -1136,6 +1137,7 @@ export function createPanels(deps: PanelsDeps) {
       const drawn = await drawnSurfaceInFrames(display, r.surface, locate, view.legend);
       if (seq !== runSeq) return;
       if (epoch !== docEpoch) {
+        panels.setStressColours("none");
         setStatus("Stress: the model changed while it ran, run it again to see the colours", "");
         return;
       }
