@@ -281,7 +281,7 @@ fn vouch_dialog_paths(app: &tauri::AppHandle) {
     let app = app.clone();
     scope.listen(move |event| {
         let tauri::scope::fs::Event::PathAllowed(path) = event else { return };
-        app.state::<doc_paths::Provenance>().vouch_all([path.to_string_lossy().as_ref()]);
+        app.state::<doc_paths::Provenance>().vouch_picked(path.to_string_lossy().as_ref());
     });
 }
 

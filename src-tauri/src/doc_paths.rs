@@ -201,18 +201,20 @@ pub fn stat_path(raw: &str) -> Result<Option<DocStat>, String> {
     }
 }
 
+fn is_doc_ext(ext: &str) -> bool {
+    [crate::DOC_EXT, fundacad_format::json_doc::BINARY_DOC_EXT]
+        .into_iter()
+        .chain(crate::LEGACY_DOC_EXTS)
+        .any(|e| e.eq_ignore_ascii_case(ext))
+}
+
 /// Only an absolute path with a document extension, so a save never writes any other kind of file.
 pub fn check_save(raw: &str) -> Result<PathBuf, String> {
     let path = Path::new(raw);
     if !path.is_absolute() {
         return Err(format!("{raw} is not a full path, so it was not saved."));
     }
-    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
-    let ours = [crate::DOC_EXT, fundacad_format::json_doc::BINARY_DOC_EXT]
-        .into_iter()
-        .chain(crate::LEGACY_DOC_EXTS)
-        .any(|e| e.eq_ignore_ascii_case(ext));
-    if !ours {
+    if !is_doc_ext(path.extension().and_then(|e| e.to_str()).unwrap_or("")) {
         return Err("FundaCAD saves documents only as .funda, .fundab, .neocad or .sindri files.".to_string());
     }
     if cfg!(windows) && (names_a_device(path) || names_a_stream(path)) {
@@ -264,6 +266,7 @@ struct Kept {
 #[derive(Default)]
 pub struct Provenance {
     session: Mutex<Vouched>,
+    picked: Mutex<Vouched>,
     kept: Mutex<Kept>,
 }
 
@@ -299,6 +302,12 @@ impl Provenance {
         }
     }
 
+    /// A file or save dialog, the one source that also vouches for writing any kind of file there.
+    pub fn vouch_picked(&self, raw: &str) {
+        self.vouch_all([raw]);
+        lock(&self.picked).vouch(raw);
+    }
+
     pub fn refuse_unvouched(&self, raw: &str) -> Result<(), String> {
         if lock(&self.session).contains(raw) {
             return Ok(());
@@ -316,13 +325,20 @@ impl Provenance {
         check_save(raw)
     }
 
-    /// A path no dialog handed over must also name a model file, so a page cannot overwrite a user's other files.
+    /// A path no dialog picked must also name a model file and not be a link, so a page cannot overwrite a user's
+    /// other files. A drop, a launch argument or a recent entry vouches only for reading.
     pub fn check_write(&self, raw: &str) -> Result<PathBuf, String> {
-        if !lock(&self.session).contains(raw) {
-            refuse_off_disk(raw, &read_link_on_disk)?;
-            let ext = Path::new(raw).extension().and_then(|e| e.to_str()).unwrap_or("");
+        let ext = Path::new(raw).extension().and_then(|e| e.to_str()).unwrap_or("");
+        if is_doc_ext(ext) {
+            return Err(format!("{raw} is a FundaCAD document, and an export never writes over one."));
+        }
+        if !lock(&self.picked).contains(raw) {
+            self.refuse_unvouched(raw)?;
             if !EXPORT_EXTS.iter().any(|e| e.eq_ignore_ascii_case(ext)) {
                 return Err(format!("{raw} is not a model file FundaCAD exports, so nothing was written."));
+            }
+            if std::fs::symlink_metadata(raw).is_ok_and(|m| !m.is_file()) {
+                return Err(format!("{raw} is not a file, so nothing was written."));
             }
         }
         check_write(raw)

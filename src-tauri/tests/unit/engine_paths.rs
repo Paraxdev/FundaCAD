@@ -96,6 +96,15 @@ fn an_export_writes_another_kind_of_file_only_where_a_dialog_put_it() {
     held.vouch_all(picked.iter().map(String::as_str));
     for op in ["export", "exportWith"] {
         for path in &picked {
+            let err = check(json!({"id": "1", "op": op, "path": path, "document": {}}), &held).unwrap_err();
+            assert_eq!(err, format!("{path} is not a model file FundaCAD exports, so nothing was written."), "{op}");
+        }
+    }
+    for path in &picked {
+        held.vouch_picked(path);
+    }
+    for op in ["export", "exportWith"] {
+        for path in &picked {
             assert_eq!(check(json!({"id": "1", "op": op, "path": path, "document": {}}), &held), Ok(()), "{op} {path}");
         }
     }
@@ -140,4 +149,38 @@ fn other_ops_and_requests_without_a_path_pass() {
         Ok(())
     );
     assert_eq!(check_request_path("not json", &held), Ok(()));
+}
+
+#[test]
+fn an_export_never_writes_over_a_document_however_the_path_was_handed_over() {
+    let held = Provenance::default();
+    let docs = [local("a.funda"), local("a.FUNDAB"), local("a.neocad"), local("a.sindri")];
+    held.vouch_all(docs.iter().map(String::as_str));
+    for path in &docs {
+        held.vouch_picked(path);
+    }
+    for op in ["export", "exportWith"] {
+        for path in &docs {
+            let err = check(json!({"id": "1", "op": op, "path": path, "document": {}}), &held).unwrap_err();
+            assert_eq!(err, format!("{path} is a FundaCAD document, and an export never writes over one."), "{op}");
+        }
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn an_export_does_not_follow_a_link_at_a_model_name_no_dialog_picked() {
+    let held = Provenance::default();
+    let target = existing("link-target.txt");
+    let link = local(&format!("fundacad-engine-paths-{}-link.stl", std::process::id()));
+    let _ = std::fs::remove_file(&link);
+    std::os::unix::fs::symlink(&target, &link).unwrap();
+    let req = json!({"id": "1", "op": "export", "path": link, "document": {}});
+    assert_eq!(check(req.clone(), &held), Err(format!("{link} is not a file, so nothing was written.")));
+    held.vouch_all([link.as_str()]);
+    assert_eq!(check(req.clone(), &held), Err(format!("{link} is not a file, so nothing was written.")));
+    held.vouch_picked(&link);
+    assert_eq!(check(req, &held), Ok(()));
+    let _ = std::fs::remove_file(&link);
+    let _ = std::fs::remove_file(&target);
 }
