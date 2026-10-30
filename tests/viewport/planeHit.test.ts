@@ -186,7 +186,7 @@ describe("hit area on screen", () => {
       [[1, -1.5, 1.1], ["XY", "XZ"], "XZ"],
     ] as const) {
       const { t, frame, screen, labels } = tilesAt(dir as [number, number, number]);
-      const corner = screenOf(frame, TILE_GAP_PX + 4, TILE_GAP_PX + 4, 0);
+      const corner = screenOf(frame, TILE_GAP_PX + 12, TILE_GAP_PX + 12, 0);
       expect(screen.filter((s) => polygonDistance(corner, s.outline) === 0).map((s) => s.plane)).toEqual(under);
       expect(pickPlaneOnScreen(screen, labels, corner, HIT_MIN_PX, LABEL_BOX_PX)).toMatchObject({
         plane: want,
