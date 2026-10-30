@@ -310,6 +310,32 @@ fn the_stable_probe_reports_a_stable_feed_without_offering_its_release() {
 }
 
 #[test]
+fn a_check_that_misses_its_feed_never_probes_stable() {
+    let feed = serve(|base| {
+        vec![
+            ("/beta.json", bytes(release(base, "0.1.0", "/payload"))),
+            ("/stable.json", bytes(release(base, "0.3.0", "/payload"))),
+        ]
+    });
+    let (_app, window) = app_with_updater();
+    let failed = tauri::async_runtime::block_on(check_feeds(
+        &window,
+        &feed.url("/none.json"),
+        false,
+        Some(feed.url("/stable.json")),
+    ));
+    let reached = check(&window, &feed.url("/beta.json"), false, Some(feed.url("/stable.json")));
+    assert_eq!(
+        (failed.is_err(), as_sent(&reached), feed.hits()),
+        (
+            true,
+            json!({ "update": null, "stable": true }),
+            ["/none.json", "/beta.json", "/stable.json"].map(String::from).to_vec(),
+        ),
+    );
+}
+
+#[test]
 fn a_found_update_downloads_only_with_a_signature_from_the_config_pubkey() {
     let feed = serve(|base| {
         vec![

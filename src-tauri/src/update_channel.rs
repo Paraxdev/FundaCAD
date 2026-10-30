@@ -127,8 +127,8 @@ fn own_channel<R: Runtime>(webview: &Webview<R>) -> Option<Channel> {
     build_channel(webview.config().plugins.0.get("updater"))
 }
 
-/// Checks `endpoint`, and `probe` beside it when given: any latest.json there that parses means a stable release
-/// exists, and its comparator keeps the probe from offering it. `stable` is true when there is nothing to probe.
+/// Checks `endpoint`, then `probe` when given and the check reached its feed: any latest.json there that parses means
+/// a stable release exists, and its comparator keeps the probe from offering it. `stable` is true with no probe.
 async fn check_feeds<R: Runtime, M: Manager<R>>(
     app: &M,
     endpoint: &str,
@@ -137,18 +137,12 @@ async fn check_feeds<R: Runtime, M: Manager<R>>(
 ) -> Result<ChannelCheck, String> {
     let updater =
         updater_for(app, endpoint, move |current, release| accepts(&current, &release.version, allow_downgrade))?;
-    let probe = probe.map(|url| {
-        let prober = updater_for(app, &url, |_, _| false);
-        tauri::async_runtime::spawn(async move {
-            match prober {
-                Ok(prober) => prober.check().await.is_ok(),
-                Err(_) => false,
-            }
-        })
-    });
     let found = updater.check().await.map_err(|e| e.to_string())?;
     let stable = match probe {
-        Some(task) => task.await.unwrap_or(false),
+        Some(url) => match updater_for(app, &url, |_, _| false) {
+            Ok(prober) => prober.check().await.is_ok(),
+            Err(_) => false,
+        },
         None => true,
     };
     let update = found.map(|update| {
