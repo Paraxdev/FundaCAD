@@ -230,5 +230,26 @@ AppImage, `.deb` and `.rpm` are not code signed in the Apple or Windows sense.
 ### The updater
 
 Tauri's updater verifies a release with the minisign key in `tauri.conf.json`,
-which is still upstream's, so the release job withholds `latest.json` until a
-key of this project's is generated (tests/security/updater.test.ts).
+this project's own since 1.0.386. The release job withholds `latest.json` if
+that key is upstream's again (tests/security/updater.test.ts).
+
+The `sign` job alone holds the private key. It installs the lockfile with
+`npm ci --ignore-scripts`, so the only code it runs is the tauri CLI, and it
+signs the bundles the `bundle` job built. That job runs npm, crates.io and
+downloaded tools, so a compromised build dependency could still get a
+trojaned bundle signed. The key never reaches that code, the bytes do.
+
+Signing needs a one time setup in the repository settings:
+
+- an environment `updater-signing` holding the secrets
+  `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, with
+  deployment rules for the branches `dev` and `main` and the tags `v1.*`;
+- the repository variable `UPDATER_SIGNING` set to `true`;
+- the old repository level copies of both secrets deleted.
+
+Until then the `sign` job is skipped and every release ships without
+`latest.json`. On `dev` a failed `sign` job does not stop the release, it
+publishes without `latest.json` and deletes the old one, since the asset names
+are fixed and an old signature would pair with new bytes. Development installs
+then stop updating until a signed run succeeds, and only the job's warning
+says so.
