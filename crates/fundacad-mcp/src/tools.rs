@@ -419,6 +419,68 @@ pub fn stress() -> JsonObject {
     )
 }
 
+pub fn material_list() -> JsonObject {
+    object(json!({}), &[])
+}
+
+pub fn material_set() -> JsonObject {
+    let number = |what: &str| json!({"type": ["number", "null"], "description": what});
+    let bare_number = json!({"type": ["number", "null"]});
+    let bare_colour = json!({"type": ["string", "null"]});
+    object(
+        json!({
+            "id": {"type": "string",
+                   "description": "edits this material when the document has it, other fields stay. A new id creates it; left out, one is made from the name"},
+            "from": {"type": "string", "description": "start from a copy of this document or starter material's look"},
+            "name": {"type": "string", "description": "the name shown in the Render workspace"},
+            "color": {"type": "string", "description": "base colour, \"#rrggbb\""},
+            "metalness": number("0 to 1, 0 is plastic or paint, 1 is bare metal"),
+            "roughness": number("0 to 1, 0 is a mirror, 1 is chalk"),
+            "opacity": number("0 to 1, 1 is solid. Glass is low, about 0.25, with a low roughness"),
+            "emissive": number("0 to 1, glow in the material's own colour"),
+            "castsLight": {"type": ["boolean", "null"]},
+            "clearcoat": number("0 to 1, glossy coat over the base, like car paint or a glaze"),
+            "ior": number("1 to 2.5, how much see-through material bends light: water 1.33, glass 1.5"),
+            "thickness": bare_number,
+            "attenuationColor": bare_colour,
+            "attenuationDistance": bare_number,
+            "dispersion": bare_number,
+            "scatterDistance": bare_number,
+            "iridescence": bare_number,
+            "specularColor": bare_colour,
+            "sheen": bare_number,
+            "anisotropy": bare_number,
+            "flakes": bare_number,
+            "flakeSize": bare_number,
+            "surface": {"type": ["object", "null"]},
+            "surfaceGraph": {"type": ["object", "null"]}
+        }),
+        &[],
+    )
+}
+
+pub fn material_remove() -> JsonObject {
+    object(
+        json!({"ids": {"type": "array", "items": {"type": "string"},
+                       "description": "the ids to remove; what wears them goes back to its default look"}}),
+        &["ids"],
+    )
+}
+
+pub fn material_assign() -> JsonObject {
+    object(
+        json!({
+            "material": {"type": ["string", "null"], "description": "a material id, or null to clear the assignment"},
+            "bodies": {"type": "array", "items": {"type": "string"}, "description": "body ids or names"},
+            "faces": {"type": "array", "items": {"anyOf": [{"type": "object"}, {"type": "string"}]},
+                      "description": "face selectors copied from `inspect` (detail:true, selectors:true), body \
+                                      included, or {body, face: n} with its F number. A face's material wins over \
+                                      its body's"}
+        }),
+        &["material"],
+    )
+}
+
 pub fn inspect() -> JsonObject {
     paged(inspect_fields(), "rows (default 30, with detail 5 bodies)")
 }

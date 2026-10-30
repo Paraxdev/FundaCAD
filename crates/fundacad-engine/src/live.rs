@@ -539,7 +539,7 @@ pub fn session_reply(live: &mut LiveSession, who: &str, op: &str, req: &Map<Stri
         "session_propose" => {
             let base = revision("baseRevision")?;
             let replaces = truthy(req.get("replaces"));
-            live.propose_replacing(
+            let out = live.propose_replacing(
                 who,
                 get("document"),
                 base,
@@ -547,7 +547,17 @@ pub fn session_reply(live: &mut LiveSession, who: &str, op: &str, req: &Map<Stri
                 req.get("note"),
                 req.get("name"),
                 replaces,
-            )
+            );
+            // The window applies an `edit` to its own open document, and a window that does not know it still has
+            // the whole document. Anything but an object is no edit.
+            if let (Some(true), Some(edit)) =
+                (out.get("ok").and_then(Value::as_bool), req.get("edit").filter(|e| e.is_object()))
+            {
+                if let Some(p) = live.pending.last_mut() {
+                    p.insert("edit".into(), edit.clone());
+                }
+            }
+            out
         }
         "session_leave" => live.leave(who),
         "session_guide" => {

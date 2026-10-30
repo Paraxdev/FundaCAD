@@ -22,6 +22,10 @@ export const OPS = [
   "edit",
   "sketch_merge",
   "sketch_tie",
+  "material_list",
+  "material_set",
+  "material_remove",
+  "material_assign",
   "build",
   "interference",
   "measure",
@@ -133,6 +137,26 @@ export const OP_TABLE: Record<Op, OpSpec> = {
   sketch_tie: {
     needs: ["document.write"],
     why: "adds constraints to a sketch and moves its loose ends onto what they touch",
+    writes: true,
+  },
+  material_list: {
+    needs: ["document.read"],
+    why: "reads the render materials of the open document and what wears them",
+    writes: false,
+  },
+  material_set: {
+    needs: ["document.write"],
+    why: "creates or changes a render material of the open document",
+    writes: true,
+  },
+  material_remove: {
+    needs: ["document.write"],
+    why: "removes render materials of the open document and clears what wore them",
+    writes: true,
+  },
+  material_assign: {
+    needs: ["document.write"],
+    why: "puts a render material on bodies and faces of the open document, or clears them",
     writes: true,
   },
 

@@ -255,7 +255,32 @@ fn the_tool_list_has_no_space_runs_no_empty_required_and_stays_small() {
             assert!(json.len() < 6300, "stress is {} bytes", json.len());
         }
     }
-    assert!(total < 42100, "tools/list is {total} bytes");
+    assert!(total < 46250, "tools/list is {total} bytes");
+}
+
+#[test]
+fn material_patterns_are_read_from_schema_and_stay_out_of_the_tool_list() {
+    let tools = fundacad_mcp::server::FundaCad::with_link(fundacad_mcp::link::EngineLink::private()).tools();
+    let set = tools.iter().find(|t| t.name == "material_set").expect("material_set");
+    let fields = set.input_schema["properties"].as_object().expect("the fields").clone();
+    let set = serde_json::to_string(set).expect("a tool serialises");
+    assert!(set.contains("schema(\\\"material\\\")"), "{set}");
+    assert!(!set.contains("colorramp") && !set.contains("voronoi"), "{set}");
+
+    let text = s::schema_text(Some("material"));
+    let words = fundacad_mcp::materials::NODE_TYPES.iter().chain(&fundacad_mcp::materials::SURFACE_KINDS);
+    for word in words {
+        assert!(text.contains(word), "{word} is missing: {text}");
+    }
+    for (field, _) in fields.iter().filter(|(_, v)| v.get("description").is_none()) {
+        assert!(text.contains(&format!("  {field}: ")), "{field} is explained nowhere: {text}");
+    }
+    let (_, example) = text.split_once("Example:").expect("an example");
+    let args = serde_json::from_str::<Value>(example.trim()).expect("the example is JSON");
+    let mut doc = fundacad_mcp::model::new_document();
+    let done = fundacad_mcp::materials_doc::set(&mut doc, args.as_object().expect("the arguments")).expect("accepted");
+    assert_eq!(done.notes, Vec::<String>::new(), "the example is taken as written");
+    assert_eq!(done.material["surfaceGraph"], args["surfaceGraph"]);
 }
 
 #[test]

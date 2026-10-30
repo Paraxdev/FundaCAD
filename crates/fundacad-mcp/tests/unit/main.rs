@@ -5,6 +5,8 @@ mod edits;
 mod flatpak_folder;
 mod layflat;
 mod looseends;
+mod materials;
+mod materials_doc;
 mod mesh;
 mod printrep;
 mod scope;
