@@ -96,6 +96,10 @@ runs:
           echo "::error::the bundle carries a Python interpreter"; exit 1
         fi
 
+        # Parts of the extracted tree come out 0700, which other users of a
+        # system wide AppImage cannot read, and appimagetool now refuses that.
+        chmod -R a+rX "$root"
+
         curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 -o "$work/appimagetool" \
           https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
         chmod +x "$work/appimagetool"
