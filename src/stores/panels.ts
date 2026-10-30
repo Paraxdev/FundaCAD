@@ -94,6 +94,9 @@ export interface StressData {
   placeAs: "face" | "spot";
   /** The setup as JSON when the last Run started, to tell when the result no longer matches it. */
   ranSetup: string | null;
+  /** Whether the panel's own undo and redo have a setup step to take back or put back. */
+  canUndo: boolean;
+  canRedo: boolean;
 }
 
 /** The floating measure-panel popups. Independent fields, since Properties and Overhang settings can be open
@@ -138,6 +141,8 @@ export const usePanelsStore = defineStore("panels", () => {
       placing: null,
       placeAs: "face",
       ranSetup: null,
+      canUndo: false,
+      canRedo: false,
     };
   }
 

@@ -68,8 +68,8 @@ function placesChange(
   if (faces) return { label: `${row} faces`, merge: false };
   if (!spots) return null;
   if (sa.length === sb.length) {
-    const k = sa.findIndex((s, i) => s.radius !== sb[i].radius);
-    if (k >= 0 && sa.every((s, i) => same(s.at, sb[i].at)))
+    const k = sa.findIndex((s, i) => s.radius !== sb[i]!.radius);
+    if (k >= 0 && sa.every((s, i) => same(s.at, sb[i]!.at)))
       return { label: `${row} spot ${k + 1} radius`, merge: true };
   }
   return { label: `${row} spots`, merge: false };
@@ -77,12 +77,16 @@ function placesChange(
 
 /** The panel's name for what changed from `before` to `after`, rows numbered as the panel shows them. */
 export function describeStressChange(before: StressSetup, after: StressSetup): StressChange {
-  if (before.body !== after.body) return { label: "Body", merge: false };
+  if (before.body !== after.body) {
+    // The first faces picked on a setup with no body pick the body too, the user did the picking.
+    const bare = [...before.supports, ...before.loads].every((r) => !r.faces.selectors.length && !r.spots?.length);
+    const rest = before.body === null && bare ? describeStressChange({ ...before, body: after.body }, after) : null;
+    return rest && rest.label !== "Stress setup" ? rest : { label: "Body", merge: false };
+  }
   const rows = rowsChange("support", before.supports, after.supports);
   if (rows) return rows;
-  for (let i = 0; i < before.supports.length; i++) {
-    const a = before.supports[i];
-    const b = after.supports[i];
+  for (const [i, a] of before.supports.entries()) {
+    const b = after.supports[i]!;
     if (a.id !== b.id) return { label: "Supports", merge: false };
     if (a.type !== b.type) return { label: `Support ${i + 1} type`, merge: false };
     const places = placesChange(`Support ${i + 1}`, a, b);
@@ -90,9 +94,8 @@ export function describeStressChange(before: StressSetup, after: StressSetup): S
   }
   const loads = rowsChange("load", before.loads, after.loads);
   if (loads) return loads;
-  for (let i = 0; i < before.loads.length; i++) {
-    const a = before.loads[i];
-    const b = after.loads[i];
+  for (const [i, a] of before.loads.entries()) {
+    const b = after.loads[i]!;
     const row = `Load ${i + 1}`;
     if (a.id !== b.id) return { label: "Loads", merge: false };
     if (a.kind !== b.kind) return { label: `${row} kind`, merge: false };
