@@ -325,6 +325,10 @@ pub fn extract_into(bytes: &[u8], dest: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// Held through every swap by any FundaCAD process sharing the plugins dir, so a set aside dir found while it is free
+/// is a leftover and never one a swap still needs.
+pub const SWAP_LOCK: &str = ".swap.lock";
+
 /// Puts a staged install at `dest`. The previous install is set aside, not deleted, until the new one is in place,
 /// and is put back if that fails. The staging dir is gone either way.
 pub fn swap_into_place(staging: &Path, dest: &Path) -> Result<(), String> {
@@ -333,6 +337,8 @@ pub fn swap_into_place(staging: &Path, dest: &Path) -> Result<(), String> {
         let _ = std::fs::remove_dir_all(staging);
         format!("could not put the plugin in place: {e}")
     };
+    let root = dest.parent().ok_or_else(|| fail(std::io::ErrorKind::InvalidInput.into()))?;
+    let _held = open_swap_lock(root).and_then(|f| f.lock().map(|()| f)).map_err(fail)?;
     let name = dest.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     // A leading dot can never be a plugin id (safe_id), so the aside dir cannot shadow one.
@@ -356,23 +362,32 @@ pub fn swap_into_place(staging: &Path, dest: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// What a swap that never finished left set aside: put back when the install is gone, otherwise removed. This
-/// process's own are skipped, since one of its swaps may still be running.
+fn open_swap_lock(root: &Path) -> std::io::Result<std::fs::File> {
+    std::fs::OpenOptions::new().create(true).truncate(false).write(true).open(root.join(SWAP_LOCK))
+}
+
+/// What a swap that never finished left set aside: put back when the install is gone, otherwise removed. Skipped
+/// while any swap runs, in this process or another.
 pub fn settle_set_aside(root: &Path) {
+    let Ok(lock) = open_swap_lock(root) else {
+        return;
+    };
+    let Ok(()) = lock.try_lock() else {
+        return;
+    };
     let Ok(entries) = std::fs::read_dir(root) else {
         return;
     };
-    let me = std::process::id().to_string();
     for entry in entries.flatten() {
         let name = entry.file_name().to_string_lossy().into_owned();
         let Some(rest) = name.strip_prefix(".old-") else {
             continue;
         };
         let mut parts = rest.rsplitn(3, '-');
-        let (Some(_), Some(pid), Some(id)) = (parts.next(), parts.next(), parts.next()) else {
+        let (Some(_), Some(_), Some(id)) = (parts.next(), parts.next(), parts.next()) else {
             continue;
         };
-        if pid == me || safe_id(id).is_err() {
+        if safe_id(id).is_err() {
             continue;
         }
         let dest = root.join(id);

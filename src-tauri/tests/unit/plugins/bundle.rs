@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use fundacad_lib::plugins::bundle::{
     allowed_bundle_url, bundle_target, component_path, extract_into, grants_match, is_official_url, now_secs,
     official_label, official_url, read_capped, safe_entry, safe_id, settle_set_aside, sha256_hex, swap_into_place,
-    CappedBody, ChunkSource, Consented, BUNDLE_PREFIX,
+    CappedBody, ChunkSource, Consented, BUNDLE_PREFIX, SWAP_LOCK,
 };
 
 /// An id becomes a directory under the plugins root, so every refusal below is a path guard.
@@ -402,7 +402,11 @@ fn a_swap_that_cannot_place_the_new_install_keeps_the_old_one() {
 
     assert!(swap_into_place(&missing, &dest).is_err(), "a missing staging dir was put in place");
     assert_eq!(std::fs::read(dest.join("main.js")).unwrap(), b"old", "the old install was lost");
-    assert_eq!(entries(&root), vec!["Acme.Tool".to_string()], "the swap left something beside the install");
+    assert_eq!(
+        entries(&root),
+        vec![SWAP_LOCK.to_string(), "Acme.Tool".into()],
+        "the swap left something beside the install"
+    );
     let _ = std::fs::remove_dir_all(&root);
 }
 
@@ -420,7 +424,7 @@ fn a_finished_swap_replaces_the_whole_old_install_and_leaves_nothing_beside_it()
     swap_into_place(&staging, &dest).unwrap();
     assert_eq!(std::fs::read(dest.join("main.js")).unwrap(), b"new");
     assert!(!dest.join("stale.js").exists(), "a file of the old install survived the update");
-    assert_eq!(entries(&root), vec!["Acme.Tool".to_string()]);
+    assert_eq!(entries(&root), vec![SWAP_LOCK.to_string(), "Acme.Tool".into()]);
     let _ = std::fs::remove_dir_all(&root);
 }
 
@@ -434,7 +438,7 @@ fn a_first_install_needs_no_old_one_to_set_aside() {
 
     swap_into_place(&staging, &dest).unwrap();
     assert_eq!(std::fs::read(dest.join("main.js")).unwrap(), b"new");
-    assert_eq!(entries(&root), vec!["Acme.Tool".to_string()]);
+    assert_eq!(entries(&root), vec![SWAP_LOCK.to_string(), "Acme.Tool".into()]);
     let _ = std::fs::remove_dir_all(&root);
 }
 
@@ -447,19 +451,65 @@ fn an_install_set_aside_by_a_swap_that_never_finished_is_put_back_or_removed() {
     };
     let gone = format!(".old-Acme.Gone-{}-0", u32::MAX);
     let beside = format!(".old-Acme.Kept-{}-1", u32::MAX);
-    let running = format!(".old-Acme.Busy-{}-2", std::process::id());
+    let reused_pid = format!(".old-Acme.Mine-{}-2", std::process::id());
     put(&gone, "old gone");
     put(&beside, "old kept");
     put("Acme.Kept", "new kept");
-    put(&running, "mid swap");
+    put(&reused_pid, "old mine");
     put(".staging-Acme.Tool", "staged");
 
     settle_set_aside(&root);
-    let mut want = vec![running.clone(), ".staging-Acme.Tool".to_string(), "Acme.Gone".into(), "Acme.Kept".into()];
-    want.sort();
+    let want: Vec<String> =
+        [".staging-Acme.Tool", SWAP_LOCK, "Acme.Gone", "Acme.Kept", "Acme.Mine"].map(String::from).into();
     assert_eq!(entries(&root), want);
     assert_eq!(std::fs::read_to_string(root.join("Acme.Gone/main.js")).unwrap(), "old gone");
     assert_eq!(std::fs::read_to_string(root.join("Acme.Kept/main.js")).unwrap(), "new kept");
+    assert_eq!(std::fs::read_to_string(root.join("Acme.Mine/main.js")).unwrap(), "old mine");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// The lock stands in for a second FundaCAD process between the two renames of its swap.
+#[test]
+fn a_set_aside_install_is_left_alone_while_any_swap_holds_the_lock() {
+    let root = tmpdir("swap-held");
+    let aside = format!(".old-Acme.Busy-{}-0", u32::MAX);
+    std::fs::create_dir_all(root.join(&aside)).unwrap();
+    std::fs::write(root.join(&aside).join("main.js"), "old").unwrap();
+    let held = std::fs::File::create(root.join(SWAP_LOCK)).unwrap();
+    held.lock().unwrap();
+
+    settle_set_aside(&root);
+    assert_eq!(entries(&root), vec![aside.clone(), SWAP_LOCK.to_string()]);
+    drop(held);
+    settle_set_aside(&root);
+    assert_eq!(entries(&root), vec![SWAP_LOCK.to_string(), "Acme.Busy".into()]);
+    assert_eq!(std::fs::read_to_string(root.join("Acme.Busy/main.js")).unwrap(), "old");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_swap_waits_while_another_swap_holds_the_lock() {
+    let root = tmpdir("swap-wait");
+    let dest = root.join("Acme.Tool");
+    std::fs::create_dir_all(&dest).unwrap();
+    std::fs::write(dest.join("main.js"), b"old").unwrap();
+    let staging = root.join(".staging-Acme.Tool");
+    std::fs::create_dir_all(&staging).unwrap();
+    std::fs::write(staging.join("main.js"), b"new").unwrap();
+    let held = std::fs::File::create(root.join(SWAP_LOCK)).unwrap();
+    held.lock().unwrap();
+
+    let swap = {
+        let (staging, dest) = (staging.clone(), dest.clone());
+        std::thread::spawn(move || swap_into_place(&staging, &dest))
+    };
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    let want: Vec<String> = [".staging-Acme.Tool", SWAP_LOCK, "Acme.Tool"].map(String::from).into();
+    assert_eq!(entries(&root), want, "the swap ran while another one held the lock");
+    drop(held);
+    swap.join().unwrap().unwrap();
+    assert_eq!(std::fs::read(dest.join("main.js")).unwrap(), b"new");
+    assert_eq!(entries(&root), vec![SWAP_LOCK.to_string(), "Acme.Tool".into()]);
     let _ = std::fs::remove_dir_all(&root);
 }
 
