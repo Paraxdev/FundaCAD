@@ -1,9 +1,11 @@
-// In-app updates via tauri-plugin-updater from the rolling release's latest.json. The Rust `updates_supported` command
+// In-app updates via tauri-plugin-updater from the picked channel's latest.json. The Rust `updates_supported` command
 // gates out deb, rpm, Flatpak and browser dev, where the updater cannot replace the install.
 
+import type { Update } from "@tauri-apps/plugin-updater";
 import { PRODUCT_NAME, sourceforgeUrl, versionLabel } from "../app/channel";
 import { choose } from "./choice";
 import { toast } from "./toast";
+import { recordStableSeen, UPDATE_CHANNELS, updateChannel } from "./updateChannel";
 import { openExternal } from "./welcome";
 import {
   autoUpdateCheck,
@@ -98,7 +100,7 @@ export function updateAction(
 const MIRROR_ACTION = {
   label: "Open SourceForge",
   onClick: () => {
-    const url = sourceforgeUrl();
+    const url = sourceforgeUrl(updateChannel());
     openExternal(url).catch(() => toast(`Open ${url} in a browser.`, { timeout: 30000 }));
   },
 };
@@ -110,6 +112,39 @@ function failed(err: unknown): void {
     kind: "error",
     action: MIRROR_ACTION,
   });
+}
+
+type ChannelCheck = {
+  update: (ConstructorParameters<typeof Update>[0] & { downgrade: boolean }) | null;
+  stable: boolean;
+};
+
+/** update_check (src-tauri/src/update_channel.rs) builds the updater for the picked channel and keeps the found update
+ *  under `rid`, so the plugin's Update downloads and installs it as if its own check() had found it. */
+async function checkChannel(): Promise<{ update: Update; downgrade: boolean } | null> {
+  const { invoke } = await import("@tauri-apps/api/core");
+  const result = await invoke<ChannelCheck>("update_check", { channel: updateChannel() });
+  recordStableSeen(result.stable);
+  if (!result.update) return null;
+  const { downgrade, ...meta } = result.update;
+  const { Update } = await import("@tauri-apps/plugin-updater");
+  return { update: new Update(meta), downgrade };
+}
+
+const OLDER_LABEL = "Install older version";
+const channelLabel = () => UPDATE_CHANNELS.find((c) => c.id === updateChannel())?.label ?? "";
+
+async function confirmOlder(update: Update): Promise<boolean> {
+  const pick = await choose(
+    `${channelLabel()} ${versionLabel(update.version)} is older than this version`,
+    [
+      { value: "install", label: OLDER_LABEL },
+      { value: "cancel", label: "Cancel" },
+    ],
+    undefined,
+    `It replaces ${PRODUCT_NAME} ${versionLabel(update.currentVersion)} on this computer. Your files and settings stay.`,
+  );
+  return pick === "install";
 }
 
 /** `interactive` is Help's check: it asks with a modal and reports up to date, not applicable and failures. The
@@ -125,10 +160,9 @@ export async function checkForUpdates(interactive: boolean, beforeInstall: Befor
       );
     return false;
   }
-  let update;
+  let found;
   try {
-    const { check } = await import("@tauri-apps/plugin-updater");
-    update = await check();
+    found = await checkChannel();
   } catch (err) {
     console.error("[updates] check failed:", err);
     if (interactive) {
@@ -142,11 +176,24 @@ export async function checkForUpdates(interactive: boolean, beforeInstall: Befor
     }
     return false;
   }
-  if (!update) {
+  if (!found) {
     if (interactive) toast(`${PRODUCT_NAME} ${await appVersion()} is up to date.`);
     return true;
   }
+  const { update, downgrade } = found;
   const run = updateAction(update, beforeInstall);
+  if (downgrade) {
+    const runOnceConfirmed = async () => {
+      if (await confirmOlder(update)) await run();
+    };
+    if (interactive) await runOnceConfirmed();
+    else
+      toast(`${channelLabel()} ${versionLabel(update.version)} is available, older than this version.`, {
+        timeout: 30000,
+        action: { label: OLDER_LABEL, onClick: () => void runOnceConfirmed() },
+      });
+    return true;
+  }
   if (!interactive) {
     toast(`${PRODUCT_NAME} ${versionLabel(update.version)} is available.`, {
       timeout: 30000,

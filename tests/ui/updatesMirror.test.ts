@@ -9,17 +9,21 @@ const h = vi.hoisted(() => ({
   downloadFails: false,
 }));
 
-vi.mock("@tauri-apps/api/core", () => ({ invoke: async () => true }));
-vi.mock("@tauri-apps/plugin-updater", () => ({
-  check: async () => {
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: async (cmd: string) => {
+    if (cmd !== "update_check") return true;
     if (h.checkFails) throw new Error("offline");
-    return {
-      version: "1.0.413",
-      download: async () => {
-        if (h.downloadFails) throw new Error("reset");
-      },
-      install: async () => {},
-    };
+    const update = { rid: 1, currentVersion: "1.0.400", version: "1.0.413", rawJson: {}, downgrade: false };
+    return { update, stable: false };
+  },
+}));
+vi.mock("@tauri-apps/plugin-updater", () => ({
+  Update: class {
+    version = "1.0.413";
+    async download() {
+      if (h.downloadFails) throw new Error("reset");
+    }
+    async install() {}
   },
 }));
 vi.mock("../../src/ui/toast", () => ({
