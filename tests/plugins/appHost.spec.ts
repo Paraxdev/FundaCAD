@@ -139,6 +139,10 @@ describe("what this host cannot do yet, it refuses by name", () => {
     "sketch_merge",
     "sketch_tie",
     "edit",
+    "material_list",
+    "material_set",
+    "material_remove",
+    "material_assign",
   ] as const;
   // Served, but only by the desktop app. A host built without a bridge refuses
   // them for a different reason and has to say which reason it is: "you did not
