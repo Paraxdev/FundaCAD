@@ -1533,6 +1533,7 @@ jobs:
           FLASH_TRACER: webgpu
           FLASH_MODEL: tests/fixtures/closed_room.funda
           FLASH_MOST_BLACK: "0.3"
+          FLASH_MOST_CHANGED: "0.5"
           FLASH_CAMERA: 0,-150,0,0,0,0
           FLASH_ONLY: realtime_off
           FLASH_PAUSE_SCALE: "2"

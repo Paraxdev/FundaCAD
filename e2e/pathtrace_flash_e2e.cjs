@@ -20,6 +20,7 @@
 // FLASH_CAMERA=ex,ey,ez,tx,ty,tz starts each orbit from that view, for a model seen from inside.
 // tests/fixtures/closed_room.funda is a closed room with one lamp, use it from inside: FLASH_CAMERA=0,-150,0,0,0,0.
 // FLASH_MOST_BLACK fails a frame on the trace with more than this share of black cells, for a scene known to be lit.
+// FLASH_MOST_CHANGED fails a step on the trace that changes more than this share of cells, for a scene that stays alike.
 const { spawn } = require("child_process");
 const { chromium } = require("playwright-core");
 const fs = require("fs");
@@ -41,6 +42,7 @@ const SETTLE_MS = Number(process.env.FLASH_SETTLE_MS || 1200);
 // One mode of the three, by its report name.
 const ONLY = process.env.FLASH_ONLY || "";
 const MOST_BLACK = process.env.FLASH_MOST_BLACK ? Number(process.env.FLASH_MOST_BLACK) : null;
+const MOST_CHANGED = process.env.FLASH_MOST_CHANGED ? Number(process.env.FLASH_MOST_CHANGED) : null;
 const CAMERA = process.env.FLASH_CAMERA ? process.env.FLASH_CAMERA.split(",").map(Number) : null;
 const target = process.env.CARGO_TARGET_DIR || path.join(__dirname, "..", "src-tauri", "target");
 const SERVE =
@@ -421,7 +423,7 @@ let serve = null;
     const run = async (name, realtimeOn, motion) => {
       await page.evaluate(async (m) => (await import("/src/ui/motion.ts")).setMotion(m), motion);
       await setPref("realtimeWhileMoving", realtimeOn);
-      // Auto is orthographic within 0.5 degrees of a world axis, and an orthographic eye sits outside the model,
+      // Auto is orthographic within 0.5 degrees of a world axis, and that frustum reaches far behind the eye,
       // so from inside a room this orbit would cross to a picture of its outer wall and back.
       if (CAMERA)
         await page.evaluate((c) => {
@@ -522,6 +524,12 @@ let serve = null;
         const most = Math.max(0, ...counted.map(share));
         check(`${name}: every frame covers the lit view`, most <= MOST_BLACK, `at most ${most.toFixed(3)} black`);
       }
+      if (MOST_CHANGED !== null)
+        check(
+          `${name}: no step changes the whole view`,
+          trace.maxChanged <= MOST_CHANGED,
+          `${trace.maxChanged} changed`,
+        );
       // The limit is WCAG's, flashes that occur concurrently over a quarter of the frame.
       // Up to two up and down pairs fit in a second at the gate, TRACE_RETURN_MS apart.
       if (realtimeOn)
