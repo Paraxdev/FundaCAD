@@ -156,7 +156,7 @@ const PROJECTIONS = [
   {
     value: "auto" as ProjectionMode,
     label: "Automatic",
-    hint: "orthographic when looking straight on from outside the model",
+    hint: "orthographic when looking straight on, inside the model only on a view you pick",
   },
 ];
 function pickProjection(m: ProjectionMode) {

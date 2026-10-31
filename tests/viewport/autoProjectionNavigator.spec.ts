@@ -8,11 +8,38 @@ import { autoWantsOrtho, EDGE_HYSTERESIS, onWorldAxis } from "../../src/viewport
 import { autoProjectionCases } from "./autoProjectionCases";
 
 describe("auto projection, default navigator", () => {
-  autoProjectionCases(() => {
+  const make = () => {
     const dom = document.createElement("canvas");
     const rig = createNavigatorRig(dom, 4 / 3);
     rig.resize(800, 600);
     return rig;
+  };
+  autoProjectionCases(make);
+
+  it("a wheel or pan cutting a click's flight short on an axis stays perspective inside", () => {
+    const cuts: [string, (rig: ReturnType<typeof make>) => void][] = [
+      ["zoom", (rig) => rig.zoomBy(0.98)],
+      ["pan", (rig) => rig.panScreen(0.01, 0)],
+    ];
+    for (const [name, cut] of cuts) {
+      const rig = make();
+      rig.setContentBox(new THREE.Box3(new THREE.Vector3(-100, -100, -100), new THREE.Vector3(100, 100, 100)));
+      rig.setProjectionMode("auto");
+      rig.setLookAt(new THREE.Vector3(5, -50, 0), new THREE.Vector3(0, 0, 0), false);
+      rig.update(1 / 60);
+      rig.setStandardView("front");
+      let frames = 0;
+      const look = new THREE.Vector3();
+      do {
+        rig.update(1 / 240);
+        rig.viewDirection(look);
+        frames++;
+      } while (!onWorldAxis(look.x, look.y, look.z) && frames < 1000);
+      expect([name, frames < 1000, rig.isOrtho()]).toEqual([name, true, false]);
+      cut(rig);
+      for (let i = 0; i < 120; i++) rig.update(1 / 60);
+      expect([name, rig.isOrtho()]).toEqual([name, false]);
+    }
   });
 });
 

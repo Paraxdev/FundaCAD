@@ -138,10 +138,12 @@ export interface CameraRig {
   /** Back to the view a fresh window opens on: no roll, Z up, looking in from
    *  the front right corner, framed on `box`, or on the origin when there is none. */
   resetView(box: THREE.Box3 | null): void;
+  /** A named view is a deliberate choice, so 'auto' shows it orthographic on an axis even with the eye inside the content box. */
   setStandardView(view: StandardView): void;
   /** Orient to an arbitrary view direction (eye = target + dir·d) with a chosen
-   *  world up. Used by the ViewCube for corners, edges and redefined sides. */
-  setViewDir(dir: THREE.Vector3, up: THREE.Vector3): void;
+   *  world up. Used by the ViewCube for corners, edges and redefined sides. `deliberate`: a click, which 'auto' shows
+   *  orthographic on an axis even with the eye inside the content box. */
+  setViewDir(dir: THREE.Vector3, up: THREE.Vector3, deliberate?: boolean): void;
   /** Square the camera to a plane: up = `up`, looking down -`normal`. `onArrive` runs when a flight lands (at once when it
    *  snaps), the place for anything that must not happen mid flight. */
   lookAtPlane(

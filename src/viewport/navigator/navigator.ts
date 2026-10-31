@@ -106,6 +106,8 @@ export class Navigator {
   // An orthographic view's eye is only scale over lens, a zoom, fit or re-seat moves it through the model while the
   // picture stays outside, so 'auto' asks the content box only of a view set by its eye.
   private eyeSet = false;
+  // A click on a view until its flight lands, so 'auto' may go orthographic on arrival with the eye inside. Input drops it.
+  private deliberate = false;
   private stamp = makePose();
   private listeners: Record<NavigatorEvent, Set<() => void>> = {
     inputstart: new Set(),
@@ -239,7 +241,7 @@ export class Navigator {
    *  not take input at all. False when the input has to be ignored. */
   private takeInput(): boolean {
     if (this.flight?.hard) return false;
-    this.flight = null;
+    this.abandonFlight();
     // An orbit still easing (or coasting) after its release stops where it is
     // shown, or it would carry a new gesture's anchor away from the cursor.
     if (!this.gesture) this.orbit?.freeze();
@@ -409,7 +411,7 @@ export class Navigator {
     const ours = this.orbit !== null && this.orbit === this.scrollChannel && !this.gesture;
     if (ours) {
       if (this.flight?.hard) return;
-      this.flight = null;
+      this.abandonFlight();
     } else if (!this.takeInput()) return;
     const same =
       !fresh &&
@@ -487,7 +489,10 @@ export class Navigator {
         this.moved();
       }
     }
-    if (!this.flight) this.eyeSet = false;
+    if (!this.flight) {
+      this.eyeSet = false;
+      this.deliberate = false;
+    }
     this.sanitize();
     return this.version !== before;
   }
@@ -608,6 +613,7 @@ export class Navigator {
   private autoOrtho(eyeSet = this.eyeSet): boolean {
     const eye = eyeOf(this.pose, new THREE.Vector3());
     const dir = this.pose.target.clone().sub(eye);
+    if (this.deliberate && !this.flight && onWorldAxis(dir.x, dir.y, dir.z)) return true;
     if (this.pose.ortho && !eyeSet) return onWorldAxis(dir.x, dir.y, dir.z);
     return autoWantsOrtho(dir, eye, this.box, this.pose.ortho);
   }
@@ -627,7 +633,7 @@ export class Navigator {
       this.zooms = [];
       this.orbit = null;
       this.pan = null;
-      this.flight = null;
+      this.abandonFlight();
       this.moved();
       return;
     }
@@ -636,6 +642,11 @@ export class Navigator {
       if (p.elev < lo || p.elev > hi) setTurntable(p, p.yaw, Math.min(hi, Math.max(lo, p.elev)));
     }
     copyPose(this.good, p);
+  }
+
+  private abandonFlight() {
+    this.flight = null;
+    this.deliberate = false;
   }
 
   private stopAll() {
@@ -656,11 +667,13 @@ export class Navigator {
       onArrive?: (() => void) | undefined;
       duration?: number;
       byEye?: boolean;
+      deliberate?: boolean;
     } = {},
   ) {
     this.stopAll();
     this.flight = null;
     this.eyeSet = opts.byEye ?? false;
+    this.deliberate = opts.deliberate ?? false;
     const target = clonePose(to);
     target.ortho = this.pose.ortho;
     target.scale = clampScale(this.limits, target.fov, target.scale);
@@ -784,7 +797,7 @@ export class Navigator {
   restoreUp(animate = true) {
     // A flight still in the air (sketch entry) is abandoned where it stands:
     // landing it would run its arrival for a sketch that has already closed.
-    this.flight = null;
+    this.abandonFlight();
     if (this.pose.level) return;
     const t = decompose(this.pose.q);
     const p = clonePose(this.pose);
@@ -813,7 +826,7 @@ export class Navigator {
     const p = this.destination();
     p.target.copy(c);
     p.scale = frameScale(p, this.frame, r);
-    this.flyTo(p, { animate: opts.animate });
+    this.flyTo(p, { animate: opts.animate, deliberate: this.deliberate });
   }
 
   /** Frame a box, keeping the view direction, FIT_MARGIN clear on every side. */
@@ -828,7 +841,7 @@ export class Navigator {
       p.target.copy(c);
       p.scale = frameScale(p, this.frame, EMPTY_VIEW_MM);
     }
-    this.flyTo(p, { animate: opts.animate });
+    this.flyTo(p, { animate: opts.animate, deliberate: this.deliberate });
   }
 
   /** The view a fresh window opens on. Given the box, it frames the box itself
@@ -860,14 +873,14 @@ export class Navigator {
 
   /** Turn about the target keeping the scale, so a zoomed detail stays centred and the same size.
    *  When that would leave the model wholly off screen the turn frames it instead. */
-  turnTo(q: THREE.Quaternion, animate = true) {
+  turnTo(q: THREE.Quaternion, animate = true, deliberate = false) {
     if (!this.flight && this.unsettled) {
       this.unsettled = false;
       this.reseatAndContain();
     }
     const p = this.poseWith(q);
     if (this.box && boxOffScreen(p, this.frame, this.box)) frameBox(p, this.frame, this.box);
-    this.flyTo(p, { animate });
+    this.flyTo(p, { animate, deliberate });
   }
 
   lookAtPlane(
