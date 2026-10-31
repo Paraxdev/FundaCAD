@@ -6,11 +6,11 @@ fn frame(t: &TracerSource) -> u32 {
     with(|t| t.samples()).unwrap()
 }
 
-/// The tracer is one per process, so its tests take turns.
 fn new_look() -> Look {
     serde_json::from_str(r#"{"sunDir":[0.3,-0.4,1],"sunColor":[3,3,3]}"#).unwrap()
 }
 
+/// The tracer is one per process, so its tests take turns.
 fn one_at_a_time() -> MutexGuard<'static, ()> {
     static TURN: Mutex<()> = Mutex::new(());
     TURN.lock().unwrap_or_else(|p| p.into_inner())

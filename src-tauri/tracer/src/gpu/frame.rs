@@ -41,7 +41,8 @@ const MAX_COARSE_BLOCK: u32 = 8;
 /// A shorter sample comes soon enough, and a coarse picture ahead of it reads as one bright frame.
 const COARSE_MIN_SAMPLE: Duration = Duration::from_millis(40);
 
-/// The block side that makes a coarse pass about one band long, or None when the sample is one band or known to be short.
+/// The block side that makes a coarse pass about one band long, or None when the sample is under two bands or known to
+/// be short.
 fn coarse_block(rows: u32, height: u32, sample_cost: Option<Duration>) -> Option<u32> {
     if rows == 0 || rows * 2 > height || sample_cost.is_some_and(|c| c < COARSE_MIN_SAMPLE) {
         return None;
