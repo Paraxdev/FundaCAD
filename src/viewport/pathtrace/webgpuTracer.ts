@@ -4,12 +4,13 @@
 import * as THREE from "three";
 import type { Denoise } from "../../ui/renderPrefs";
 import { SAMPLE_CAP, type PictureOptions, type TraceLook, type TraceScene, type TracerBackend } from "./backend";
-import { fitPreview, FrameBudget, type PreviewTracer } from "./budget";
+import { coverPreview, fitPreview, FrameBudget, type PreviewBackend, type PreviewTracer } from "./budget";
 import { repackInPlace, type SwappableBvhData } from "./bvhSwap";
 import { traceCameraFor, type TraceLens } from "./camera";
 import { backgroundTexture } from "./environment";
 import { AtrousFilter, filterMix } from "./atrous";
 import { CROSSFADE_MS, FinalDenoise } from "./denoise";
+import { PreviewBlend } from "./previewBlend";
 import { OidnPass, type OidnLike } from "./oidnPass";
 import { TraceBloom, type FadeQuad, type TraceBloomDeps, type TraceBloomSettings } from "./tracePost";
 import smallWeights from "./weights/rt_hdr_calb_cnrm_small.tza?url";
@@ -35,7 +36,8 @@ const DEFAULT_STORAGE_BINDING = 128 * 1024 * 1024;
 
 interface TracerInternals {
   _blitQuad: FadeQuad;
-  _pathTracer: { outputTarget: THREE.Texture };
+  _pathTracer: PreviewBackend & { outputTarget: THREE.Texture };
+  lowResTarget: THREE.Texture & { setSize(width: number, height: number): void };
   _bvhData?: SwappableBvhData & { textureAtlas: { setTextures(r: unknown, t: unknown): void }; textures: unknown };
   _renderer: unknown;
   scene: THREE.Scene;
@@ -71,6 +73,7 @@ export class WebGpuTracer implements TracerBackend {
   private device: GpuQueueDevice | null = null;
   private picturing = false;
   private post: TraceBloom | null = null;
+  private previewBlend: PreviewBlend<THREE.Texture> | null = null;
   private bloomWanted: TraceBloomSettings | null = null;
 
   constructor() {
@@ -141,7 +144,18 @@ export class WebGpuTracer implements TracerBackend {
     t.minSamples = this.preview ? 1 : 0;
     t.fadeDuration = this.preview ? CROSSFADE_MS : 0;
     t.lowResScale = PREVIEW_SCALE;
+    coverPreview((t as unknown as TracerInternals)._pathTracer);
     this.tracer = t;
+    // The tracer only fills its low res target when a preview hands over to the trace, so it can hold the last one.
+    const last = (t as unknown as TracerInternals).lowResTarget;
+    this.previewBlend = new PreviewBlend<THREE.Texture>(last, {
+      draw: (from, to, mix) => this.post?.drawPlain(from, to, mix),
+      keep: (preview) => {
+        const { width, height } = preview.image as { width: number; height: number };
+        last.setSize(width, height);
+        r.copyTextureToTexture(preview, last);
+      },
+    });
     this.post = new TraceBloom({
       renderer: r as unknown as TraceBloomDeps["renderer"],
       blitQuad: (t as unknown as TracerInternals)._blitQuad,
@@ -425,7 +439,11 @@ export class WebGpuTracer implements TracerBackend {
     this.showsDenoise = false;
     const raw = this.internals._pathTracer.outputTarget;
     // The library drew its preview, a redraw of the raw target would be black.
-    if (this.preview && samples < 1) return this.post?.drewItself(raw);
+    if (this.preview && samples < 1) {
+      this.post?.drewItself(raw);
+      if (this.internals._pathTracer.lowResMode) this.previewBlend?.drew(raw, performance.now());
+      return;
+    }
     const mix = this.level === "off" || samples < 1 ? 0 : filterMix(samples, this.cap);
     if (mix <= 0 || !this.atrous) return this.drewItself(raw);
     const { width, height } = raw.image as { width: number; height: number };

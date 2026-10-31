@@ -233,9 +233,12 @@ fn serve(stream: TcpStream, shared: &Shared, pending: Counted<'_>) {
 
 fn frame(shared: &Shared) -> Vec<u8> {
     let size = *shared.size.lock().unwrap();
-    let seq = shared.seq.fetch_add(1, Ordering::SeqCst).wrapping_add(1);
     let mut out = vec![0u8; HEADER_BYTES + frame_bytes(size.width, size.height)];
-    write_header(&mut out, seq, size.generation, size.width, size.height);
-    shared.source.render(&mut out[HEADER_BYTES..], size.width, size.height, seq);
-    out
+    loop {
+        let seq = shared.seq.fetch_add(1, Ordering::SeqCst).wrapping_add(1);
+        write_header(&mut out, seq, size.generation, size.width, size.height);
+        if shared.source.render(&mut out[HEADER_BYTES..], size.width, size.height, seq) {
+            return out;
+        }
+    }
 }

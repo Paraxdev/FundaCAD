@@ -32,6 +32,21 @@ pub fn adapt_rows(rows: u32, width: u32, height: u32, took: Duration, target: Du
 
 pub const MIN_BAND_PATHS: u32 = 65_536;
 
+/// The first alpha of a coarse picture, which the page must not count as a sample on the canvas. The canvas ignores
+/// alpha, and 0 means a pixel no sample reached.
+const COARSE_ALPHA: u8 = 128;
+
+const MAX_COARSE_BLOCK: u32 = 8;
+
+/// The block side that makes a coarse pass about one band long, or None when two bands hold the sample anyway.
+fn coarse_block(rows: u32, height: u32) -> Option<u32> {
+    if rows == 0 || rows * 2 > height {
+        return None;
+    }
+    let side = (height as f64 / rows as f64).sqrt().ceil() as u32;
+    Some(side.clamp(2, MAX_COARSE_BLOCK))
+}
+
 /// U in trace.wgsl: 8 words, 7 vec4s, 4 lights of 2 vec4s, the light count,
 /// the background, the emitter table and the ground's two.
 pub(super) const UNIFORM_SIZE: u64 = 32 + 7 * 16 + 8 * 16 + 5 * 16;
@@ -42,7 +57,7 @@ fn power(c: [f32; 3]) -> f32 {
 }
 
 impl Tracer {
-    fn write_uniform(&self, rows: u32) {
+    fn write_uniform(&self, rows: u32, block: u32) {
         let c = &self.camera;
         let sub = |a: [f32; 3], b: [f32; 3]| [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
         let norm = |a: [f32; 3]| {
@@ -91,7 +106,7 @@ impl Tracer {
             Estimator::Bsdf => 2,
             Estimator::Mis => 3,
         };
-        let flags = (self.sample == 0) as u32 | est << 1;
+        let flags = (self.sample == 0 && block == 1) as u32 | est << 1 | block << 3;
         let ints = [self.w, self.h, self.sample, self.row0, rows, self.n_inst, l.bounces.max(1), flags];
         let mut data: Vec<f32> = ints.map(f32::from_bits).to_vec();
         let v4 = |v: [f32; 3], w: f32| [v[0], v[1], v[2], w];
@@ -160,22 +175,26 @@ impl Tracer {
         self.queue.write_buffer(&self.uniform, 0, bytes(&data));
     }
 
-    /// One dispatch over a band of rows. False once the sample cap is reached.
-    pub fn step(&mut self) -> bool {
-        if self.sample >= self.cap {
-            return false;
-        }
-        let rows = self.rows.min(self.h - self.row0);
-        self.write_uniform(rows);
+    fn dispatch(&mut self, rows: u32, block: u32) {
+        self.write_uniform(rows, block);
         let bind = self.bind_group();
         let mut enc = self.device.create_command_encoder(&Default::default());
         {
             let mut pass = enc.begin_compute_pass(&Default::default());
             pass.set_pipeline(&self.pipes.trace);
             pass.set_bind_group(0, &bind, &[]);
-            pass.dispatch_workgroups(self.w.div_ceil(8), rows.div_ceil(8), 1);
+            pass.dispatch_workgroups(self.w.div_ceil(block).div_ceil(8), rows.div_ceil(8), 1);
         }
         self.queue.submit([enc.finish()]);
+    }
+
+    /// One dispatch over a band of rows. False once the sample cap is reached.
+    pub fn step(&mut self) -> bool {
+        if self.sample >= self.cap {
+            return false;
+        }
+        let rows = self.rows.min(self.h - self.row0);
+        self.dispatch(rows, 1);
         self.row0 += rows;
         if self.row0 >= self.h {
             self.row0 = 0;
@@ -202,27 +221,78 @@ impl Tracer {
         self.sample - before
     }
 
-    /// Applies pending scene changes, traces for `budget` and resolves. At the cap it hands out the held frame, then
-    /// the denoised one; a software band can end mid sample, so the sample count is no sign of a finished picture.
+    /// The first sample since a reset has begun and not ended, so some rows hold no light yet.
+    pub fn sample_under_way(&self) -> bool {
+        self.sample == 0 && self.row0 > 0
+    }
+
+    /// A coarse picture of this restart has left, so the sample behind it may be dropped for a newer camera.
+    pub fn coarse_out(&self) -> bool {
+        self.coarse_out
+    }
+
+    /// `advance` until it has a frame of a whole sample. A budget of zero still traces a first sample.
     pub fn frame(&mut self, w: u32, h: u32, budget: Duration) -> Vec<u8> {
+        let mut slice = budget;
+        loop {
+            match self.advance(w, h, slice) {
+                Some(px) if self.sample > 0 || self.fault().is_some() => return px,
+                _ => slice = slice.max(Duration::from_millis(1)),
+            }
+        }
+    }
+
+    /// One dispatch of one path per block, so a restart whose sample takes many bands still has a picture at once.
+    fn coarse_picture(&mut self) -> Option<Vec<u8>> {
+        if self.coarse_out || self.sample != 0 || self.row0 != 0 {
+            return None;
+        }
+        let block = coarse_block(self.rows, self.h)?;
+        let start = Instant::now();
+        self.dispatch(self.h.div_ceil(block), block);
+        if self.wait().is_err() {
+            return None;
+        }
+        let took = start.elapsed();
+        let mut pixels = self.resolve();
+        pixels[3] = COARSE_ALPHA;
+        self.clear_accum();
+        self.coarse_out = true;
+        // The rows of the full size with this many paths, so the bands keep following the adapter while none runs.
+        self.rows = adapt_rows(self.h / (block * block), self.w, self.h, took, BAND_TARGET);
+        Some(pixels)
+    }
+
+    /// Applies pending scene changes, traces for `budget` and resolves. None while the first sample since a reset is
+    /// unfinished, since unsampled rows are black and a frame of them flashes. When that sample takes many bands, a
+    /// coarse picture goes first. After a fault the frame is all zeros, so a caller's loop always ends. At the cap it
+    /// hands out the held frame, then the denoised one; a software band can end mid sample, so the sample count is no
+    /// sign of a finished picture.
+    pub fn advance(&mut self, w: u32, h: u32, budget: Duration) -> Option<Vec<u8>> {
         if self.fault().is_some() {
-            return vec![0; w.max(1) as usize * h.max(1) as usize * 4];
+            return Some(vec![0; w.max(1) as usize * h.max(1) as usize * 4]);
         }
         self.resize(w, h);
         self.apply();
         if self.done() && self.held.as_ref().is_some_and(|h| h.key == self.key()) {
             self.collect_denoise();
             self.rebloom_held();
-            return self.held.as_ref().map(|h| h.pixels.clone()).unwrap_or_default();
+            return self.held.as_ref().map(|h| h.pixels.clone());
+        }
+        if let Some(px) = self.coarse_picture() {
+            return Some(px);
         }
         self.trace_for(budget);
+        if self.sample == 0 && self.fault().is_none() {
+            return None;
+        }
         let pixels = self.resolve();
         self.held =
             Some(Held { key: self.key(), pixels: pixels.clone(), denoised: false, bloom: self.bloom, denoise: None });
         if self.done() {
             self.start_denoise();
         }
-        pixels
+        Some(pixels)
     }
 
     pub(super) fn key(&self) -> FrameKey {

@@ -108,6 +108,16 @@ describe("TraceBloom", () => {
     expect(nodes).toEqual([]);
   });
 
+  it("draws a mix of previews on the plain blit with bloom on, as the tracer draws a preview", () => {
+    const { post, blit } = rig();
+    post.set({ strength: 0.252, radius: 0.48, threshold: 1.28 });
+    post.drawPlain(raw, clean, 0.5);
+    expect(blit.renders).toBe(1);
+    expect(blit.material.fromTexture).toBe(raw);
+    expect(blit.material.texture).toBe(clean);
+    expect(blit.material.transition).toBe(0.5);
+  });
+
   it("draws through a bloom of the faded linear colour and redraws the last frame", () => {
     const { post, blit, nodes } = rig();
     post.setViewSize(1200, 800);

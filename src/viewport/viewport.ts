@@ -1058,7 +1058,8 @@ export class Viewport {
   /** The Realtime frame the trace replaces, drawn once more and copied so it
    *  can fade out over the first traced samples. */
   private freezeRealtime() {
-    if (!motionOn() || this.scene.renderer.getContext().isContextLost()) return;
+    // Runs with Animations off too: it is no motion, and it softens a change over the whole view.
+    if (this.scene.renderer.getContext().isContextLost()) return;
     this.scene.post.render(this.rig.active);
     this.freeze.capture(performance.now());
   }

@@ -16,6 +16,8 @@ use tauri::ipc::{InvokeBody, Request};
 /// GPU time per frame; the resolve and readback come on top.
 const TRACE_BUDGET: Duration = Duration::from_millis(12);
 
+const LOCK_GAP: Duration = Duration::from_micros(200);
+
 /// Device and pipeline creation together. A driver that never answers keeps its thread, and Path traced greys with the
 /// reason instead of the frames thread waiting for good.
 const CREATE_LIMIT: Duration = Duration::from_secs(60);
@@ -155,14 +157,14 @@ impl TracerSource {
         a.drawn
     }
 
-    /// Whoever takes the tracer takes the camera left for it, so a status or a
-    /// picture never sees the one before.
+    /// Whoever takes the tracer takes the camera left for it, so a status never counts the samples of the one before.
     fn lock(&self) -> MutexGuard<'_, State> {
         self.lock_for(None)
     }
 
-    /// A frame marks itself started under the camera's lock, so pt_camera's
-    /// answer and the frames that see its camera agree.
+    /// A frame marks itself started under the camera's lock, so pt_camera's answer and the frames that see its camera
+    /// agree. A first sample under way keeps its camera: a frame only leaves once that sample ends, so a restart per
+    /// camera would hold the picture for the whole move on a slow GPU.
     fn lock_for(&self, frame: Option<u32>) -> MutexGuard<'_, State> {
         // A panic in wgpu poisons nothing for the next caller; pt_status reports the fault.
         let mut s = self.state.lock().unwrap_or_else(|p| p.into_inner());
@@ -171,9 +173,22 @@ impl TracerSource {
             if let Some(seq) = frame {
                 a.drawn = seq;
             }
-            a.camera.take()
+            if s.tracer.sample_under_way() && !(frame.is_some() && s.tracer.coarse_out()) {
+                None
+            } else {
+                a.camera.take()
+            }
         };
         if let Some(c) = camera {
+            s.tracer.set_camera(c);
+        }
+        s
+    }
+
+    /// A picture is traced from the newest camera, even when that drops a first sample under way.
+    fn lock_for_picture(&self) -> MutexGuard<'_, State> {
+        let mut s = self.lock();
+        if let Some(c) = self.aim().camera.take() {
             s.tracer.set_camera(c);
         }
         s
@@ -182,35 +197,52 @@ impl TracerSource {
     fn aim(&self) -> MutexGuard<'_, Aim> {
         self.aim.lock().unwrap_or_else(|p| p.into_inner())
     }
+
+    /// `out` is all zeros on a fault or during a picture, and the page drops such a frame.
+    fn render_for(&self, out: &mut [u8], width: u32, height: u32, seq: u32, budget: Duration) -> bool {
+        let mut s = self.lock_for(Some(seq));
+        loop {
+            s.take_fault();
+            if s.fault.is_some() || s.picture.is_some() {
+                out.fill(0);
+                return true;
+            }
+            match catch_unwind(AssertUnwindSafe(|| s.tracer.advance(width, height, budget))) {
+                Ok(None) => {}
+                Ok(Some(px)) if px.len() == out.len() => {
+                    out.copy_from_slice(&px);
+                    s.take_fault();
+                    return true;
+                }
+                Ok(Some(px)) => {
+                    s.fault = Some(format!("a {} byte frame for a {} byte slot", px.len(), out.len()));
+                    out.fill(0);
+                    return true;
+                }
+                Err(e) => {
+                    let why = panic_text(e);
+                    eprintln!("[frames] tracer fault: {why}");
+                    s.fault = Some(why);
+                    out.fill(0);
+                    return true;
+                }
+            }
+            drop(s);
+            // A mutex is not fair, so without a pause the sync commands on the UI thread wait for the whole sample.
+            std::thread::sleep(LOCK_GAP);
+            s = self.lock();
+            // A newer camera drops the sample behind a coarse picture. The page tied this seq to the camera before, so
+            // no frame goes out with it and the next seq takes the camera at once.
+            if s.tracer.coarse_out() && self.aim().camera.is_some() {
+                return false;
+            }
+        }
+    }
 }
 
 impl FrameSource for TracerSource {
-    fn render(&self, out: &mut [u8], width: u32, height: u32, seq: u32) {
-        let mut s = self.lock_for(Some(seq));
-        s.take_fault();
-        if s.fault.is_some() {
-            out.fill(0);
-            return;
-        }
-        if s.picture.is_some() {
-            return;
-        }
-        match catch_unwind(AssertUnwindSafe(|| s.tracer.frame(width, height, TRACE_BUDGET))) {
-            Ok(px) if px.len() == out.len() => {
-                out.copy_from_slice(&px);
-                s.take_fault();
-            }
-            Ok(px) => {
-                s.fault = Some(format!("a {} byte frame for a {} byte slot", px.len(), out.len()));
-                out.fill(0);
-            }
-            Err(e) => {
-                let why = panic_text(e);
-                eprintln!("[frames] tracer fault: {why}");
-                s.fault = Some(why);
-                out.fill(0);
-            }
-        }
+    fn render(&self, out: &mut [u8], width: u32, height: u32, seq: u32) -> bool {
+        self.render_for(out, width, height, seq, TRACE_BUDGET)
     }
 }
 
@@ -404,7 +436,7 @@ impl Drop for Running {
 pub fn picture(width: u32, height: u32, samples: u32) -> Result<Vec<u8>, String> {
     let t = open()?;
     let mut p = {
-        let mut s = t.lock();
+        let mut s = t.lock_for_picture();
         s.take_fault();
         if let Some(f) = &s.fault {
             return Err(format!("the native tracer stopped: {f}"));
