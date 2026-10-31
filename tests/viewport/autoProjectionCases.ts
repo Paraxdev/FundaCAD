@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import * as THREE from "three";
 import type { CameraRig } from "../../src/viewport/cameras";
+import { Viewport } from "../../src/viewport/viewport";
 
 const ROOM = new THREE.Box3(new THREE.Vector3(-100, -100, -100), new THREE.Vector3(100, 100, 100));
 const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
@@ -10,6 +11,25 @@ function lookFrom(rig: CameraRig, eye: THREE.Vector3, target = v(0, 0, 0)): bool
   rig.setLookAt(eye, target, false);
   for (let i = 0; i < 30; i++) rig.update(1 / 60);
   return rig.isOrtho();
+}
+
+/** Just the sketch entry and exit of a viewport, on a real rig. */
+function sketchViewport(rig: CameraRig): Viewport {
+  const vp = Object.create(Viewport.prototype) as Viewport;
+  const stub = () => {};
+  return Object.assign(vp, {
+    rig,
+    scene: { grid: { group: { visible: true } } },
+    sketchOrtho: false,
+    requestRender: stub,
+    setModelDimmed: stub,
+    syncBloomable: stub,
+    showSketchFace: stub,
+  });
+}
+
+function settle(rig: CameraRig) {
+  for (let i = 0; i < 120; i++) rig.update(1 / 60);
 }
 
 /** The same cases for both camera rigs, `make` giving a fresh one with the room as its content. */
@@ -130,6 +150,53 @@ export function autoProjectionCases(make: () => CameraRig) {
     for (let i = 0; i < 30; i++) rig.update(1 / 60);
     expect(rig.isOrtho()).toBe(false);
     expect(rig.active.position.y).toBeCloseTo(-50, 3);
+  });
+
+  it("leaving a sketch on a plane deep in the box keeps an orthographic view, with no swap", () => {
+    const rig = room();
+    expect(lookFrom(rig, v(0, -150, 0))).toBe(true);
+    const vp = sketchViewport(rig);
+    vp.enterSketchView(v(0, 60, 0), v(0, -1, 0), v(0, 0, 1));
+    settle(rig);
+    expect([rig.projectionMode(), rig.isOrtho(), ROOM.containsPoint(rig.getPosition())]).toEqual(["ortho", true, true]);
+    vp.exitSketchView();
+    expect([rig.projectionMode(), rig.isOrtho()]).toEqual(["auto", true]);
+    for (let i = 0; i < 120; i++) {
+      rig.update(1 / 60);
+      expect(rig.isOrtho()).toBe(true);
+    }
+  });
+
+  it("leaving a sketch entered in perspective inside the box goes back to perspective", () => {
+    const rig = room();
+    expect(lookFrom(rig, v(0, -50, 0))).toBe(false);
+    const vp = sketchViewport(rig);
+    vp.enterSketchView(v(0, 60, 0), v(0, -1, 0), v(0, 0, 1));
+    settle(rig);
+    expect(rig.isOrtho()).toBe(true);
+    vp.exitSketchView();
+    settle(rig);
+    expect([rig.projectionMode(), rig.isOrtho()]).toEqual(["auto", false]);
+  });
+
+  it("leaving a sketch on a plane off the axes gives perspective, though it came from orthographic", () => {
+    const rig = room();
+    expect(lookFrom(rig, v(0, -1500, 0))).toBe(true);
+    const vp = sketchViewport(rig);
+    vp.enterSketchView(v(0, 0, 0), v(-0.3, -1, 0).normalize(), v(0, 0, 1));
+    settle(rig);
+    expect(rig.isOrtho()).toBe(true);
+    vp.exitSketchView();
+    settle(rig);
+    expect([rig.projectionMode(), rig.isOrtho()]).toEqual(["auto", false]);
+  });
+
+  it("choosing Automatic from Orthographic with the eye inside goes to perspective", () => {
+    const rig = room();
+    rig.setProjectionMode("ortho");
+    expect(lookFrom(rig, v(0, -50, 0))).toBe(true);
+    rig.setProjectionMode("auto");
+    expect(rig.isOrtho()).toBe(false);
   });
 
   it("returns to orthographic once the eye is well clear of the box", () => {

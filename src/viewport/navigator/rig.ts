@@ -119,8 +119,8 @@ export function createNavigatorRig(dom: HTMLElement, aspect: number): CameraRig 
     projectionMode(): ProjectionMode {
       return nav.projectionMode();
     },
-    setProjectionMode(m) {
-      nav.setProjectionMode(m);
+    setProjectionMode(m, keepOrtho) {
+      nav.setProjectionMode(m, keepOrtho);
       write();
     },
     resize(w, h) {

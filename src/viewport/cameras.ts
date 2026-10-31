@@ -50,7 +50,8 @@ export interface CameraRig {
   /** 'auto' = perspective while orbiting, orthographic whenever the view axis is world axis aligned, so straight on views
    *  have no parallax skew between bodies, unless the eye is inside the content box. */
   projectionMode(): ProjectionMode;
-  setProjectionMode(mode: ProjectionMode): void;
+  /** `keepOrtho`: an orthographic view handed back to 'auto' stays while on an axis, its eye was never set. */
+  setProjectionMode(mode: ProjectionMode, keepOrtho?: boolean): void;
   resize(w: number, h: number): void;
   /** Advance one frame. True when the pose on screen changed. */
   update(dt: number): boolean;

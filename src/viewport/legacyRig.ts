@@ -371,8 +371,8 @@ export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & {
     projectionMode() {
       return mode;
     },
-    setProjectionMode(m: ProjectionMode) {
-      const wantOrtho = m === "ortho" || (m === "auto" && viewAxisAligned(mode !== "auto"));
+    setProjectionMode(m: ProjectionMode, keepOrtho = false) {
+      const wantOrtho = m === "ortho" || (m === "auto" && viewAxisAligned(mode !== "auto" && !keepOrtho));
       mode = m;
       if (wantOrtho !== usingOrtho) swapProjection();
     },

@@ -196,8 +196,8 @@ export class Navigator {
   projectionMode(): ProjectionMode {
     return this.mode;
   }
-  setProjectionMode(m: ProjectionMode) {
-    const want = m === "ortho" || (m === "auto" && this.autoOrtho(this.mode !== "auto"));
+  setProjectionMode(m: ProjectionMode, keepOrtho = false) {
+    const want = m === "ortho" || (m === "auto" && this.autoOrtho(this.mode !== "auto" && !keepOrtho));
     this.mode = m;
     if (want !== this.pose.ortho) {
       this.pose.ortho = want;
