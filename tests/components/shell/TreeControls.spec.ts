@@ -312,8 +312,7 @@ describe("tree rows and heads as tree items", () => {
     const input = w.get<HTMLInputElement>(".tree-label.renaming input");
     await input.setValue("Lid");
     await input.trigger("keydown", { key: "Enter" });
-    await nextTick();
-    await nextTick();
+    await new Promise((done) => setTimeout(done));
     expect(rename).toHaveBeenCalledWith("Lid");
     expect(document.activeElement).toBe(r);
   });
