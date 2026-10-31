@@ -10,6 +10,7 @@ import { anchorDolly, groundAnchor, orthoZoomStep } from "./zoomAnchor";
 import { ease, flightSeconds, worthFlying } from "./viewFlight";
 import { wheelScales } from "../ui/interfaceSize";
 import { cameraFlightsOn } from "../ui/motion";
+import { autoWantsOrtho } from "./autoProjection";
 import type {
   CameraRig,
   CameraState,
@@ -135,16 +136,11 @@ export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & {
     }
   }
 
-  // 'auto' snaps to ortho within 0.5 deg of a world axis: view transitions converge inside it, and a deliberate orbit
-  // nudge (~0.4 deg/px) leaves it within a couple of pixels.
-  const AXIS_SNAP_COS = Math.cos((0.5 * Math.PI) / 180);
   const tmpTarget = new THREE.Vector3();
   const tmpPos = new THREE.Vector3();
   function viewAxisAligned(): boolean {
-    const d = controls.getTarget(tmpTarget).sub(controls.getPosition(tmpPos));
-    const len = d.length();
-    if (len < 1e-9) return false;
-    return Math.max(Math.abs(d.x), Math.abs(d.y), Math.abs(d.z)) / len >= AXIS_SNAP_COS;
+    const eye = controls.getPosition(tmpPos);
+    return autoWantsOrtho(controls.getTarget(tmpTarget).sub(eye), eye, contentBox, usingOrtho);
   }
   /** In 'auto', keep the actual projection in sync with the view axis. Returns
    *  true when a swap happened (caller should re-render). */

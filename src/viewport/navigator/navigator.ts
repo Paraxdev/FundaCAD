@@ -6,6 +6,7 @@ import type { NavScene, ProjectionMode } from "../cameras";
 import { centreDepth, orbitPivot, zoomAnchor, type AnchorContext } from "./anchor";
 import { stepAngles, type StepDir } from "../viewStep";
 import { OrbitChannel, PanChannel, ZoomChannel } from "./channels";
+import { autoWantsOrtho } from "../autoProjection";
 import { makeFlight, stepFlight, type Flight } from "./flight";
 import { clampScale, contentLimits, defaultLimits, elevRange, minScaleOf, type Limits } from "./limits";
 import { decompose, turntableQuat, wrapAngle } from "./math";
@@ -47,8 +48,6 @@ export const CLICK_SLOP_PX = 5;
 export const ZOOM_PER_DRAG_PX = 3;
 /** Drag distance over which a banked view (3D mouse roll) comes back level. */
 export const RELEVEL_PX = 80;
-/** 'auto' projection is orthographic within this of a world axis. */
-const AXIS_SNAP_COS = Math.cos((0.5 * Math.PI) / 180);
 /** The model ball the target is kept in, in bounding radii. */
 export const CONTAIN_FACTOR = 1.5;
 /** Seconds of drag velocity an inertial orbit carries on after release. */
@@ -196,7 +195,7 @@ export class Navigator {
   }
   setProjectionMode(m: ProjectionMode) {
     this.mode = m;
-    const want = m === "ortho" || (m === "auto" && this.axisAligned());
+    const want = m === "ortho" || (m === "auto" && this.autoOrtho());
     if (want !== this.pose.ortho) {
       this.pose.ortho = want;
       this.moved();
@@ -479,7 +478,7 @@ export class Navigator {
       this.emit("rest");
     }
     if (this.mode === "auto" && this.gesture?.kind !== "orbit" && !this.orbit) {
-      const want = this.axisAligned();
+      const want = this.autoOrtho();
       if (want !== this.pose.ortho) {
         this.pose.ortho = want;
         this.moved();
@@ -602,9 +601,9 @@ export class Navigator {
     return depth >= this.limits.minDistance && depth * halfTan(p.fov) <= this.limits.maxScale;
   }
 
-  private axisAligned(): boolean {
-    const f = forwardOf(this.pose, new THREE.Vector3());
-    return Math.max(Math.abs(f.x), Math.abs(f.y), Math.abs(f.z)) >= AXIS_SNAP_COS;
+  private autoOrtho(): boolean {
+    const eye = eyeOf(this.pose, new THREE.Vector3());
+    return autoWantsOrtho(this.pose.target.clone().sub(eye), eye, this.box, this.pose.ortho);
   }
 
   private moved() {

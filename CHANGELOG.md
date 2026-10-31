@@ -555,6 +555,8 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Fixed
 
+- **Automatic projection stays in perspective inside your model.** Looking along an axis from inside a closed model, such as a room, snapped to a flat orthographic picture of its outside, and a held arrow key flashed that picture several times a second. Automatic now keeps perspective while the eye is inside the model's bounds, in every view mode and in the Classic camera, and still goes orthographic on an axis from outside.
+
 - **A dropdown's arrow stays put.** Hovering a dropdown, such as the Items
   filter, slid its arrow up and out of sight, and an open list showed none. The
   arrow now holds still, points right while the list is closed and turns down
