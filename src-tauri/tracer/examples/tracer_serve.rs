@@ -90,23 +90,23 @@ impl TracerSource {
 }
 
 impl FrameSource for TracerSource {
-    fn render(&self, out: &mut [u8], width: u32, height: u32, seq: u32) {
+    fn render(&self, out: &mut [u8], width: u32, height: u32, seq: u32) -> bool {
         let mut s = self.lock_for(Some(seq));
         loop {
             if s.fault.is_some() {
                 out.fill(0);
-                return;
+                return true;
             }
             match catch_unwind(AssertUnwindSafe(|| s.tracer.advance(width, height, TRACE_BUDGET))) {
                 Ok(None) => {}
                 Ok(Some(px)) if px.len() == out.len() => {
                     out.copy_from_slice(&px);
-                    return;
+                    return true;
                 }
                 Ok(Some(px)) => {
                     s.fault = Some(format!("a {} byte frame for a {} byte slot", px.len(), out.len()));
                     out.fill(0);
-                    return;
+                    return true;
                 }
                 Err(e) => {
                     let why = e
@@ -117,7 +117,7 @@ impl FrameSource for TracerSource {
                     eprintln!("[tracer_serve] tracer fault: {why}");
                     s.fault = Some(why);
                     out.fill(0);
-                    return;
+                    return true;
                 }
             }
             drop(s);
@@ -125,10 +125,9 @@ impl FrameSource for TracerSource {
             std::thread::sleep(LOCK_GAP);
             s = self.lock();
             // A newer camera drops the sample behind a coarse picture. The page tied this seq to the camera before, so
-            // this frame goes out empty and the next one takes the camera.
+            // no frame goes out with it and the next seq takes the camera at once.
             if s.tracer.coarse_out() && self.aim().camera.is_some() {
-                out.fill(0);
-                return;
+                return false;
             }
         }
     }

@@ -12,10 +12,19 @@ use tungstenite::Message;
 
 struct Stamp;
 impl FrameSource for Stamp {
-    fn render(&self, out: &mut [u8], _w: u32, _h: u32, seq: u32) {
+    fn render(&self, out: &mut [u8], _w: u32, _h: u32, seq: u32) -> bool {
         for c in out.chunks_exact_mut(4) {
             c.copy_from_slice(&seq.to_le_bytes());
         }
+        true
+    }
+}
+
+struct OddSeqsHaveNoPicture;
+impl FrameSource for OddSeqsHaveNoPicture {
+    fn render(&self, out: &mut [u8], w: u32, h: u32, seq: u32) -> bool {
+        Stamp.render(out, w, h, seq);
+        seq % 2 == 0
     }
 }
 
@@ -53,6 +62,14 @@ fn next(ws: &mut Client) -> Vec<u8> {
             return b.to_vec();
         }
     }
+}
+
+#[test]
+fn a_seq_with_no_picture_is_not_sent_and_the_next_one_answers_the_same_request() {
+    let t = WebSocketTransport::start(Arc::new(OddSeqsHaveNoPicture), gate(), None, 64, 32).unwrap();
+    let mut ws = connect(&t, &format!("?token={TOKEN}"), None).unwrap();
+    let seqs: Vec<u32> = (0..3).map(|_| read_header(&next(&mut ws)).unwrap()[0]).collect();
+    assert_eq!(seqs, [2, 4, 6]);
 }
 
 #[test]

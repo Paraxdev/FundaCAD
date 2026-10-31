@@ -151,6 +151,72 @@ fn a_newer_camera_drops_the_sample_behind_a_coarse_picture_at_the_next_frame() {
 }
 
 #[test]
+fn a_newer_camera_mid_sample_behind_a_coarse_picture_sends_nothing_and_the_next_seq_shows_it() {
+    let _turn = one_at_a_time();
+    let Ok(t) = tracer() else {
+        eprintln!("skipped: no native tracer");
+        return;
+    };
+    with(|t| t.set_cap(4096)).unwrap();
+    let camera = Camera {
+        eye: [3.5, -12.0, 4.25],
+        target: [0.5, 1.5, -0.75],
+        up: [0.0, 0.0, 1.0],
+        fov: 38.0,
+        ortho: None,
+        lens: None,
+    };
+    let (w, h) = (256, 192);
+    let mut out = vec![0; w as usize * h as usize * 4];
+    t.render(&mut out, w, h, 1);
+    pt_camera(camera).unwrap();
+    with(|t| t.set_frame_budget(w * 8)).unwrap();
+    assert!(t.render(&mut out, w, h, 2));
+    assert_eq!(out[3], 128, "a first sample over the budget sends a coarse picture first");
+    assert!(with(|t| {
+        t.set_frame_budget(w * 8);
+        t.step()
+    })
+    .unwrap());
+
+    // No budget, so the frame traces nothing and the first sample cannot end before the camera lands.
+    let sent = std::thread::scope(|scope| {
+        let camera_mid_frame = scope.spawn(|| {
+            while t.aim().drawn != 3 {
+                std::thread::yield_now();
+            }
+            pt_camera(Camera { eye: [-6.0, 9.5, 2.0], ..camera }).unwrap()
+        });
+        let sent = t.render_for(&mut out, w, h, 3, Duration::ZERO);
+        assert_eq!(camera_mid_frame.join().unwrap(), 3, "the camera answered another seq than the frame under way");
+        sent
+    });
+    assert!(!sent, "a frame went out for a seq the page tied to the older camera");
+
+    assert!(t.render(&mut out, w, h, 4));
+    assert_eq!(out[3], 128, "the next seq did not restart on the newer camera");
+    assert!(t.aim().camera.is_none());
+    drop(t);
+    release();
+}
+
+#[test]
+fn a_fault_sends_an_all_zero_frame_that_the_page_drops() {
+    let _turn = one_at_a_time();
+    let Ok(t) = tracer() else {
+        eprintln!("skipped: no native tracer");
+        return;
+    };
+    t.lock().fault = Some("a test fault".into());
+    let mut out = vec![9; 32 * 24 * 4];
+    assert!(t.render(&mut out, 32, 24, 1));
+    assert!(out.iter().all(|b| *b == 0), "a fault frame left a pixel the page could show");
+    t.lock().fault = None;
+    drop(t);
+    release();
+}
+
+#[test]
 fn a_camera_waits_for_the_first_sample_under_way_and_a_picture_does_not() {
     let _turn = one_at_a_time();
     let Ok(t) = tracer() else {

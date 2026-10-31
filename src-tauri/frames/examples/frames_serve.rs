@@ -7,12 +7,13 @@ use fundacad_frames::{frame_bytes, FrameSource, Notes, WebSocketTransport};
 struct Pattern(Vec<u8>);
 
 impl FrameSource for Pattern {
-    fn render(&self, out: &mut [u8], _w: u32, _h: u32, seq: u32) {
+    fn render(&self, out: &mut [u8], _w: u32, _h: u32, seq: u32) -> bool {
         out.copy_from_slice(&self.0[..out.len()]);
         let n = out.len();
         out[..4].copy_from_slice(&seq.to_le_bytes());
         out[n / 2..n / 2 + 4].copy_from_slice(&seq.to_le_bytes());
         out[n - 4..].copy_from_slice(&seq.to_le_bytes());
+        true
     }
 }
 
