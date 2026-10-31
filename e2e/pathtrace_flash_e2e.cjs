@@ -421,9 +421,12 @@ let serve = null;
     const run = async (name, realtimeOn, motion) => {
       await page.evaluate(async (m) => (await import("/src/ui/motion.ts")).setMotion(m), motion);
       await setPref("realtimeWhileMoving", realtimeOn);
+      // Auto is orthographic within 0.5 degrees of a world axis, and an orthographic eye sits outside the model,
+      // so from inside a room this orbit would cross to a picture of its outer wall and back.
       if (CAMERA)
         await page.evaluate((c) => {
           const V = window.viewport.camera.position.constructor;
+          window.viewport.rig.setProjectionMode("persp");
           window.viewport.rig.setLookAt(new V(c[0], c[1], c[2]), new V(c[3], c[4], c[5]), false);
         }, CAMERA);
       await page.waitForTimeout(1500);
@@ -502,6 +505,7 @@ let serve = null;
       console.log(name, JSON.stringify(out));
       check(`${name}: no partial frame on screen`, screen.bands === 0, `${screen.bands} of ${screen.frames}`);
       check(`${name}: no lit frame goes black`, screen.blackFrames === 0, `${screen.blackFrames} of ${screen.frames}`);
+      check(`${name}: no lit trace goes black`, trace.blackFrames === 0, `${trace.blackFrames} of ${trace.frames}`);
       check(
         `${name}: no partial frame reaches the trace canvas`,
         trace.bands === 0,
