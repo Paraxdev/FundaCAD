@@ -31,6 +31,32 @@ afterEach(() => {
 
 const root = () => document.querySelector<HTMLElement>(".dim-input")!;
 
+describe("DimInput focus on the frame after show", () => {
+  function showThenFocus(other: HTMLElement) {
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => frames.push(cb));
+    document.body.appendChild(other);
+    dim.show([{ name: "radius", label: "R" }], () => {});
+    other.focus();
+    frames.forEach((f) => f(0));
+    vi.unstubAllGlobals();
+  }
+
+  it("leaves a text field that took focus meanwhile", () => {
+    const field = document.createElement("input");
+    showThenFocus(field);
+    expect(document.activeElement).toBe(field);
+    field.remove();
+  });
+
+  it("takes focus back from a button a press landed on", () => {
+    const button = document.createElement("button");
+    showThenFocus(button);
+    expect(root().contains(document.activeElement)).toBe(true);
+    button.remove();
+  });
+});
+
 describe("DimInput hit testing", () => {
   it("drops out of the way of a drag that started somewhere else", () => {
     dim.show([{ name: "radius", label: "R" }], () => {});
