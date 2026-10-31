@@ -86,3 +86,15 @@ def test_arrows_space_f2_and_the_row_menu_select_rename_and_hide_a_body(s):
     row = s.page.locator('#browser [role=treeitem]:has(.tree-label:text-is("Lid"))')
     expect(row.locator(".tree-eye")).to_have_attribute("aria-label", "Show Lid")
     expect(row.locator(".tree-state")).to_have_text("hidden")
+
+
+@pytest.mark.parametrize("key", ["Enter", "Escape"])
+def test_closing_a_rename_by_keys_hands_focus_back_to_its_row(s, key):
+    down_to(s, "Box")
+    # A frame left over from an earlier key can put focus back by luck, so let it pass.
+    s.page.wait_for_timeout(500)
+    s.page.keyboard.press("F2")
+    expect(s.page.locator("#browser .feature-row input")).to_be_focused()
+    s.page.keyboard.press(key)
+    s.page.wait_for_function(f"() => ({FOCUS})().role === 'treeitem'", timeout=5000)
+    assert focused(s)["name"] == "Box"
