@@ -10,7 +10,7 @@ import { anchorDolly, groundAnchor, orthoZoomStep } from "./zoomAnchor";
 import { ease, flightSeconds, worthFlying } from "./viewFlight";
 import { wheelScales } from "../ui/interfaceSize";
 import { cameraFlightsOn } from "../ui/motion";
-import { autoWantsOrtho, onWorldAxis } from "./autoProjection";
+import { AXIS_SNAP_COS, autoWantsOrtho, onWorldAxis } from "./autoProjection";
 import type {
   CameraRig,
   CameraState,
@@ -141,11 +141,12 @@ export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & {
   // As in the navigator, 'auto' asks the content box of an orthographic view only when it is set by its eye, so a rebuild
   // growing the model around the camera never swaps the picture.
   let eyeSet = false;
-  let deliberate = false;
+  let deliberate: THREE.Vector3 | null = null;
   function viewAxisAligned(askBox = eyeSet): boolean {
     const eye = controls.getPosition(tmpPos);
     const dir = controls.getTarget(tmpTarget).sub(eye);
-    if (deliberate && onWorldAxis(dir.x, dir.y, dir.z)) return true;
+    if (deliberate && onWorldAxis(dir.x, dir.y, dir.z) && dir.dot(deliberate) >= AXIS_SNAP_COS * dir.length())
+      return true;
     if (usingOrtho && !askBox) return onWorldAxis(dir.x, dir.y, dir.z);
     return autoWantsOrtho(dir, eye, contentBox, usingOrtho);
   }
@@ -420,7 +421,7 @@ export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & {
       const swapped = applyAutoProjection();
       if (!moved) {
         eyeSet = false;
-        deliberate = false;
+        deliberate = null;
       }
       // After camera-controls positions the camera: update() rewrites the orientation each frame, so re-banking is idempotent
       // and never touches camera.up, which would fight the sketch plane up handling.
@@ -532,7 +533,6 @@ export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & {
     },
     setStandardView(view: StandardView) {
       rollAngle = 0;
-      deliberate = true;
       // a free tumble may have left the orbit up-vector anywhere; a standard
       // view means "square me to the world", restore Z-up first
       persp.up.set(0, 0, 1);
@@ -551,15 +551,16 @@ export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & {
       const [x, y, z] = dirs[view];
       const t = controls.getTarget(new THREE.Vector3());
       const n = new THREE.Vector3(x, y, z).normalize().multiplyScalar(d);
+      deliberate = n.clone().normalize().negate();
       controls.setPosition(t.x + n.x, t.y + n.y, t.z + n.z, true);
     },
     setViewDir(dir, up, click = false) {
       rollAngle = 0;
-      deliberate = click;
       // Orbiting keeps +Z up afterwards unless `up` differs: for the cube's axis views this matches setStandardView, and
       // top/bottom (up = +-Y) square correctly.
       const d = Math.max(controls.distance, 50);
       const n = dir.clone().normalize();
+      deliberate = click ? n.clone().negate() : null;
       const u = up.clone().normalize();
       persp.up.copy(u);
       ortho.up.copy(u);
@@ -569,7 +570,7 @@ export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & {
     },
     lookAtPlane(origin, normal, up, opts) {
       rollAngle = 0;
-      deliberate = false;
+      deliberate = null;
       // A flight in the air is abandoned, not landed: its destination is superseded, and landing first would show a pose
       // nobody asked for.
       flight = null;
@@ -696,7 +697,7 @@ export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & {
       rig.setFov(st.fov);
       rig.setProjectionMode(st.mode);
       eyeSet = !st.ortho;
-      deliberate = false;
+      deliberate = null;
       const d =
         usingOrtho && !(eyeSet && mode === "auto")
           ? controls.distance
@@ -765,7 +766,7 @@ export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & {
       ortho.up.set(0, 0, 1);
       controls.updateCameraUp();
       eyeSet = true;
-      deliberate = false;
+      deliberate = null;
       // The swap to perspective dollies to the distance this height gives, so it has to say the same as the eye.
       const d = eye.distanceTo(target);
       if (usingOrtho && mode === "auto" && d > 0) {

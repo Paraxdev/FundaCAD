@@ -612,7 +612,7 @@ export class Navigator {
   private autoOrtho(eyeSet = this.eyeSet): boolean {
     const eye = eyeOf(this.pose, new THREE.Vector3());
     const dir = this.pose.target.clone().sub(eye);
-    if (this.deliberate && onWorldAxis(dir.x, dir.y, dir.z)) return true;
+    if (this.deliberate && !this.flight && onWorldAxis(dir.x, dir.y, dir.z)) return true;
     if (this.pose.ortho && !eyeSet) return onWorldAxis(dir.x, dir.y, dir.z);
     return autoWantsOrtho(dir, eye, this.box, this.pose.ortho);
   }

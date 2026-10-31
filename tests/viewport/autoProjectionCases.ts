@@ -314,6 +314,19 @@ export function autoProjectionCases(make: () => CameraRig) {
     expect(rig.isOrtho()).toBe(false);
   });
 
+  it("a named view clicked while looking along another axis inside swaps the projection once, not on the way", () => {
+    const rig = room();
+    expect(lookFrom(rig, v(0, -50, 0))).toBe(false);
+    rig.setStandardView("top");
+    const seen: boolean[] = [rig.isOrtho()];
+    for (let i = 0; i < 90; i++) {
+      rig.update(1 / 60);
+      seen.push(rig.isOrtho());
+    }
+    expect(seen.filter((o, i) => i > 0 && o !== seen[i - 1]).length).toBeLessThanOrEqual(1);
+    expect(seen[seen.length - 1]).toBe(true);
+  });
+
   it("the home view after a click inside is perspective", () => {
     const rig = room();
     inside(rig);
