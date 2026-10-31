@@ -124,6 +124,21 @@ describe("flash analysis of shown frames", () => {
       expect(concurrentFlashesPerSecond(staggered)).toBe(0.5);
     });
 
+    it("says when a run drew too few frames to judge a flash limit", () => {
+      expect(analyse(steps([0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2], 500), COLS).tooFew).toBe(true);
+      expect(analyse(steps([0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2], 500), COLS).tooFew).toBe(false);
+    });
+
+    it("catches the faintest swing just over the limit, however long its fade", () => {
+      const halfFlash = 156.25;
+      const triangle = Array.from({ length: 200 }, (_, i) => {
+        const up = i % 20 < 10;
+        const along = (i % 10) / 10;
+        return { t: (i * halfFlash) / 10, lum: plain(0.2 + 0.101 * (up ? along : 1 - along)) };
+      });
+      expect(concurrentFlashesPerSecond(triangle)).toBe(3.5);
+    });
+
     it("counts half of the frame going up as the other half goes down", () => {
       const frames = alternating(40, 0, 1).map((v, i) => ({
         t: i * 62.5,

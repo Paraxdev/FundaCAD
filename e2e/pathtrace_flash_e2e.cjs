@@ -376,6 +376,7 @@ let serve = null;
     }
     console.log(`backend ${backendName}`);
     report.backend = backendName;
+    check("the chosen tracer is the one running", (WEBGPU ? /WebGPU/ : /^native/).test(backendName), backendName);
     report.adapters = await page.evaluate(async () => {
       const gl = document.createElement("canvas").getContext("webgl2");
       const info = gl?.getExtension("WEBGL_debug_renderer_info");
@@ -505,6 +506,8 @@ let serve = null;
       };
       report.runs[name] = out;
       console.log(name, JSON.stringify(out));
+      check(`${name}: enough frames to judge on screen`, !screen.tooFew, `${screen.frames}`);
+      check(`${name}: enough frames to judge on the trace`, !trace.tooFew, `${trace.frames}`);
       check(`${name}: no partial frame on screen`, screen.bands === 0, `${screen.bands} of ${screen.frames}`);
       check(`${name}: no lit frame goes black`, screen.blackFrames === 0, `${screen.blackFrames} of ${screen.frames}`);
       check(`${name}: no lit trace goes black`, trace.blackFrames === 0, `${trace.blackFrames} of ${trace.frames}`);
@@ -536,12 +539,10 @@ let serve = null;
         check(`${name}: at most four swaps a second`, out.swaps.mostInASecond <= 4, out.swaps.mostInASecond);
       check(`${name}: at most three flashes a second on screen`, !screen.concurrentOverLimit, `${screen.concurrent}`);
       check(`${name}: at most three flashes a second on the trace`, !trace.concurrentOverLimit, `${trace.concurrent}`);
-      // The per cell count is stricter than the rule. WebGPU's preview noise goes over 3 on it, so there it is only printed.
-      if (WEBGPU) console.log(`  NOTE  ${name}: per cell count, screen ${screen.flashes}, trace ${trace.flashes}`);
-      else {
-        check(`${name}: at most three per cell on screen`, !screen.overLimit, `${screen.flashes}`);
-        check(`${name}: at most three per cell on the trace`, !trace.overLimit, `${trace.flashes}`);
-      }
+      // The per cell count is stricter than the rule. WebGPU's preview noise on a bright model goes over 3 on it,
+      // and this test fails there on purpose, WebGPU cannot be named safe on such a model.
+      check(`${name}: at most three per cell on screen`, !screen.overLimit, `${screen.flashes}`);
+      check(`${name}: at most three per cell on the trace`, !trace.overLimit, `${trace.flashes}`);
     };
 
     if (!ONLY || ONLY === "realtime_on_motion_on") await run("realtime_on_motion_on", true, true);
@@ -582,6 +583,7 @@ let serve = null;
       );
       report.denoiseSwap = { denoised, draws: counted.length, seen: { ...seen, bad: seen.bad.slice(0, 4) } };
       console.log("denoise_swap", denoised, counted.length, seen.maxChanged, seen.concurrent, seen.flashes);
+      check("denoise swap: the denoised picture came up", denoised, `${counted.length} draws`);
       check("denoise swap: at most three flashes a second", !seen.concurrentOverLimit, seen.concurrent);
       check("denoise swap: no lit frame goes black", seen.blackFrames === 0, seen.blackFrames);
       await setPref("denoise", "off");

@@ -50,7 +50,8 @@ done
 # nothing about `git add -f` or a model that predates the rule, which is exactly
 # why this checks what git ACTUALLY tracks.
 #
-# Allowed: tests/fixtures/closed_room.funda, three primitives for the flash test, the synthetic bench fixture the perf harness needs, the generated
+# Allowed: tests/fixtures/closed_room.funda, three primitives for the flash test,
+# the synthetic bench fixture the perf harness needs, the generated
 # assembly-tree fixtures (boxes emitted by tools/gen_asm_fixtures.py — no real
 # geometry, reproducible from source), the loose face fixtures written by
 # crates/fundacad-geom/tests/step/gen_loose_faces.py (and sbsm_bad_vertex_ref.step, a copy of one edited by hand to mistype a vertex ref), the inside out boxes

@@ -8,9 +8,12 @@ const FLASH_AREA = 0.25;
 const FLASHES_ALLOWED = 3;
 // sRGB 6 of 255, below any lit surface or background the app draws.
 const NEAR_BLACK = 0.002;
-// How far back a change may add up. The difference of two noisy frames does not grow with the
-// time between them, a fade's does, so a fade adds up here and noise does not.
-const FADE_MS = 150;
+// How far back a change may add up: half a flash at the limit, so anything faster than the limit
+// fits inside it. The difference of two noisy frames does not grow with the time between them, a
+// fade's does, so a fade adds up here and noise does not.
+const FADE_MS = 1000 / (2 * FLASHES_ALLOWED);
+// Fewer frames than this over a whole orbit cannot show a flash limit being broken.
+const MIN_FRAMES = 8;
 
 /** Mean relative luminance per cell of an RGBA image, row 0 first as given. Self contained,
  *  it also runs in a page. */
@@ -189,6 +192,7 @@ function analyse(frames, cols) {
   const concurrent = concurrentFlashesPerSecond(frames);
   return {
     frames: frames.length,
+    tooFew: frames.length < MIN_FRAMES,
     meanLow: means.length ? +Math.min(...means).toFixed(4) : 0,
     meanHigh: means.length ? +Math.max(...means).toFixed(4) : 0,
     bands,
