@@ -487,7 +487,16 @@ let serve = null;
         trace.bands === 0,
         `${trace.bands} of ${trace.frames}`,
       );
+      if (realtimeOn)
+        check(
+          `${name}: Realtime fades into the trace`,
+          log.ticks.some((k) => k.freeze > 0),
+          "no fade seen",
+        );
       // The limit is WCAG's, flashes that occur concurrently over a quarter of the frame.
+      // Up to two up and down pairs fit in a second at the gate, TRACE_RETURN_MS apart.
+      if (realtimeOn)
+        check(`${name}: at most four swaps a second`, out.swaps.mostInASecond <= 4, out.swaps.mostInASecond);
       check(`${name}: at most three flashes a second on screen`, !screen.concurrentOverLimit, `${screen.concurrent}`);
       check(`${name}: at most three flashes a second on the trace`, !trace.concurrentOverLimit, `${trace.concurrent}`);
       // The per cell count is stricter than the rule. WebGPU's preview noise goes over 3 on it, so there it is only printed.
@@ -501,6 +510,46 @@ let serve = null;
     if (!ONLY || ONLY === "realtime_on_motion_on") await run("realtime_on_motion_on", true, true);
     if (!ONLY || ONLY === "realtime_on_motion_off") await run("realtime_on_motion_off", true, false);
     if (!ONLY || ONLY === "realtime_off") await run("realtime_off", false, true);
+
+    // The swap from noisy to denoised at the cap, and from the Realtime picture to the trace before it.
+    if (!ONLY || ONLY === "denoise_swap") {
+      await setPref("realtimeWhileMoving", true);
+      await setPref("denoise", "standard");
+      await page.waitForTimeout(1000);
+      await page.evaluate(async () => {
+        const f = window.__flash;
+        f.draws.length = 0;
+        f.ticks.length = 0;
+        f.cameras.length = 0;
+        f.on = true;
+        (await import("/src/ui/experimentalPrefs.ts")).setExperimentalPref("sampleCap", 32);
+        window.viewport.rig.orbitBy(0.02, 0);
+      });
+      const end = Date.now() + 20000;
+      let denoised = false;
+      while (Date.now() < end && !denoised) {
+        await page.waitForTimeout(250);
+        denoised = await page.evaluate(() => window.viewport.trace.denoised && window.viewport.trace.state === "done");
+      }
+      await page.waitForTimeout(500);
+      const log = await page.evaluate(() => {
+        const f = window.__flash;
+        f.on = false;
+        return { draws: f.draws, ticks: f.ticks };
+      });
+      if (process.env.FLASH_DUMP) fs.writeFileSync(path.join(OUT, "denoise_swap_log.json"), JSON.stringify(log));
+      const counted = WEBGPU ? log.draws.filter((d) => d.shown) : log.draws;
+      const seen = analyse(
+        counted.map((d) => ({ t: d.t, lum: Float32Array.from(d.lum) })),
+        COLS,
+      );
+      report.denoiseSwap = { denoised, draws: counted.length, seen: { ...seen, bad: seen.bad.slice(0, 4) } };
+      console.log("denoise_swap", denoised, counted.length, seen.maxChanged, seen.concurrent, seen.flashes);
+      check("denoise swap: at most three flashes a second", !seen.concurrentOverLimit, seen.concurrent);
+      check("denoise swap: no lit frame goes black", seen.blackFrames === 0, seen.blackFrames);
+      await setPref("denoise", "off");
+      await page.evaluate(async () => (await import("/src/ui/experimentalPrefs.ts")).resetExperimentalPrefs());
+    }
 
     // How fast this tracer is on this scene: one small move, then the trace at rest.
     await setPref("realtimeWhileMoving", true);

@@ -31,6 +31,9 @@ export const FIRST_SAMPLE_TIMEOUT_MS = 10_000;
 
 /** Out of Path traced this long frees the WebGPU device and the mirrored scene. */
 export const IDLE_DISPOSE_MS = 60_000;
+/** Realtime and the trace can differ over the whole view, so each swap is half a flash. Waiting this long before
+ *  going back to the trace holds any stop and go orbit to two flashes in a second, the limit is 3 (WCAG 2.3.1). */
+export const TRACE_RETURN_MS = 700;
 
 export interface CrashGuard {
   arm(): Promise<void>;
@@ -105,6 +108,8 @@ export interface PictureRequest {
 export class PathTraceHost {
   state: TraceState = "off";
   shown = false;
+  private now = 0;
+  private leftAt = -Infinity;
   samples = 0;
   /** A traced picture holds the tracer. */
   picturing = false;
@@ -196,6 +201,7 @@ export class PathTraceHost {
   }
 
   tick(f: TraceFrame) {
+    this.now = f.now;
     this.backend?.flushFrame?.();
     // A projection change can also swap the rig's camera object.
     if (this.cameraMoved(f.camera) || f.cameraChanged || f.camera !== this.cameraSeen) this.cameraDirty = true;
@@ -267,7 +273,8 @@ export class PathTraceHost {
       if (!this.inFlight) this.traceFrame(b);
       this.poll(b);
     } else if (!this.settled && this.samples >= this.cap) this.settled = !b.present(f.now);
-    this.show(this.samples > 0 || (hold && this.shown));
+    const up = this.samples > 0 || (hold && this.shown);
+    this.show(up && (this.shown || f.now - this.leftAt >= TRACE_RETURN_MS));
   }
 
   private cameraMoved(c: THREE.Camera): boolean {
@@ -363,6 +370,7 @@ export class PathTraceHost {
   private show(on: boolean) {
     if (on === this.shown) return;
     this.shown = on;
+    if (!on) this.leftAt = this.now;
     this.onShownChange?.(on);
   }
 

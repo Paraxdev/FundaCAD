@@ -5,6 +5,7 @@ import {
   FIRST_SAMPLE_TIMEOUT_MS,
   IDLE_DISPOSE_MS,
   PathTraceHost,
+  TRACE_RETURN_MS,
   type TraceFrame,
 } from "../../src/viewport/pathtrace/host";
 import { TRIANGLE_BUDGET } from "../../src/viewport/pathtrace/mirror";
@@ -329,6 +330,52 @@ describe("path trace host", () => {
     }
   });
 
+  it("brings the trace back at most once per TRACE_RETURN_MS through a stop and go orbit", async () => {
+    const { host, t } = await started();
+    let now = 1000;
+    const swaps: number[] = [];
+    let was = false;
+    const step = (over: Partial<TraceFrame["inputs"]>) => {
+      host.tick(frame(over, now));
+      if (host.shown !== was) swaps.push(now);
+      was = host.shown;
+      now += 16;
+    };
+    for (let i = 0; i < 20; i++) step({});
+    t.answer(4);
+    await flush();
+    for (let i = 0; i < 40; i++) {
+      // A short move, then a rest just past STILL_MS, on and on.
+      for (let j = 0; j < 5; j++) step({ stillMs: 10 });
+      for (let j = 0; j < 12; j++) {
+        step({});
+        t.answer(4);
+        await flush();
+      }
+    }
+    expect(swaps.length).toBeGreaterThan(4);
+    const ups = swaps.filter((_, i) => i % 2 === 0);
+    for (let i = 1; i < ups.length; i++) expect(ups[i]! - ups[i - 1]!).toBeGreaterThanOrEqual(TRACE_RETURN_MS);
+  });
+
+  it("brings the trace up at once after a rest longer than TRACE_RETURN_MS", async () => {
+    const { host, t } = await started();
+    host.tick(frame({}, 1000));
+    t.answer(4);
+    await flush();
+    host.tick(frame({}, 1016));
+    expect(host.shown).toBe(true);
+    host.tick(frame({ stillMs: 10 }, 1032));
+    expect(host.shown).toBe(false);
+    host.tick(frame({}, 1032 + TRACE_RETURN_MS - 16));
+    t.answer(4);
+    await flush();
+    host.tick(frame({}, 1032 + TRACE_RETURN_MS - 1));
+    expect(host.shown).toBe(false);
+    host.tick(frame({}, 1032 + TRACE_RETURN_MS));
+    expect(host.shown).toBe(true);
+  });
+
   it("keeps the traced picture up and traces every frame of an orbit with Realtime while moving off", async () => {
     const { host, t } = await started();
     const off = { realtimeWhileMoving: false };
@@ -414,7 +461,7 @@ describe("path trace host", () => {
     expect(host.shown).toBe(false);
     t.answer(1);
     await flush();
-    host.tick(frame({}, 1320));
+    host.tick(frame({}, 1320 + TRACE_RETURN_MS));
     expect(host.shown).toBe(true);
   });
 
