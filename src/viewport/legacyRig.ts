@@ -251,7 +251,10 @@ export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & {
   const emit = (ev: NavEvent) => {
     for (const fn of listeners[ev]) fn();
   };
-  controls.addEventListener("controlstart", () => emit("inputstart"));
+  controls.addEventListener("controlstart", () => {
+    deliberate = null;
+    emit("inputstart");
+  });
   controls.addEventListener("controlend", () => emit("inputend"));
   controls.addEventListener("update", () => emit("change"));
   controls.addEventListener("rest", () => emit("rest"));
@@ -638,6 +641,7 @@ export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & {
       rollAngle += angle;
     },
     tumble(az, pol) {
+      deliberate = null;
       // Offset and orbit up rotate by one quaternion, so the polar angle camera-controls sees never changes and its (0, pi)
       // clamp has nothing to bite. Signs match controls.rotate(): +az is CCW from above, +pol tips the camera down.
       const target = controls.getTarget(new THREE.Vector3());
@@ -747,10 +751,12 @@ export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & {
       controls.truck(dx * s, dy * s, false);
     },
     orbitBy(az, pol) {
+      deliberate = null;
       controls.rotate(az, pol, false);
     },
     stepView(dir, fine) {
       const [az, pol] = stepAngles(dir, fine);
+      deliberate = null;
       controls.rotate(az, pol, false);
     },
     setPivotSource() {},

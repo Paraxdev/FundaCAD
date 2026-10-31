@@ -2,6 +2,7 @@ import { expect, it } from "vitest";
 import * as THREE from "three";
 import type { CameraRig } from "../../src/viewport/cameras";
 import { Viewport } from "../../src/viewport/viewport";
+import { VIEW_STEP } from "../../src/viewport/viewStep";
 
 const ROOM = new THREE.Box3(new THREE.Vector3(-100, -100, -100), new THREE.Vector3(100, 100, 100));
 const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
@@ -325,6 +326,74 @@ export function autoProjectionCases(make: () => CameraRig) {
     }
     expect(seen.filter((o, i) => i > 0 && o !== seen[i - 1]).length).toBeLessThanOrEqual(1);
     expect(seen[seen.length - 1]).toBe(true);
+  });
+
+  it("a move off the clicked view and back before a frame lands in perspective", () => {
+    const moves: [string, (rig: CameraRig, sign: number) => void][] = [
+      ["step", (rig, sign) => rig.stepView(sign > 0 ? "left" : "right", false)],
+      ["orbit", (rig, sign) => rig.orbitBy(sign * 0.3, 0)],
+      ["tumble", (rig, sign) => rig.tumble(sign * 0.3, 0)],
+    ];
+    for (const [name, move] of moves) {
+      const rig = room();
+      expect(lookFrom(rig, v(0, -50, 0))).toBe(false);
+      rig.setStandardView("front");
+      move(rig, 1);
+      move(rig, -1);
+      settle(rig);
+      expect([name, rig.isOrtho()]).toEqual([name, false]);
+    }
+  });
+
+  it("a held arrow after a click inside never turns orthographic, round and round", () => {
+    const rig = room();
+    expect(lookFrom(rig, v(0, -50, 0))).toBe(false);
+    rig.setStandardView("front");
+    const seen: boolean[] = [];
+    for (let i = 0; i < 2 * Math.round((2 * Math.PI) / VIEW_STEP); i++) {
+      rig.stepView("left", false);
+      rig.update(1 / 60);
+      seen.push(rig.isOrtho());
+      rig.update(1 / 60);
+      seen.push(rig.isOrtho());
+    }
+    expect(seen.filter(Boolean).length).toBe(0);
+  });
+
+  it("a fit or a rebuild during the flight of a click keeps it orthographic on arrival", () => {
+    const fitted = room();
+    inside(fitted);
+    fitted.setStandardView("front");
+    fitted.update(1 / 60);
+    fitted.fit(new THREE.Box3(v(-10, -10, -10), v(10, 10, 10)), true);
+    settle(fitted);
+    expect(fitted.getPosition(v(0, 0, 0)).length()).toBeLessThan(100);
+    expect(fitted.isOrtho()).toBe(true);
+    const rebuilt = room();
+    inside(rebuilt);
+    rebuilt.setStandardView("front");
+    rebuilt.update(1 / 60);
+    rebuilt.setContentBox(new THREE.Box3(v(-120, -120, -120), v(120, 120, 120)));
+    settle(rebuilt);
+    expect(rebuilt.isOrtho()).toBe(true);
+  });
+
+  it("a view set by its eye or restored during the flight of a click stays perspective inside", () => {
+    const byEye = room();
+    inside(byEye);
+    byEye.setStandardView("top");
+    byEye.update(1 / 60);
+    byEye.setLookAt(v(0, -50, 0), v(0, 0, 0), false);
+    settle(byEye);
+    expect(byEye.isOrtho()).toBe(false);
+    const restored = room();
+    expect(lookFrom(restored, v(0, -50, 0))).toBe(false);
+    const before = restored.getState();
+    restored.setStandardView("top");
+    restored.update(1 / 60);
+    restored.setState(before, true);
+    settle(restored);
+    expect(restored.isOrtho()).toBe(false);
   });
 
   it("the home view after a click inside is perspective", () => {
