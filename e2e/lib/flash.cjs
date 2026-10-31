@@ -8,6 +8,9 @@ const FLASH_AREA = 0.25;
 const FLASHES_ALLOWED = 3;
 // sRGB 6 of 255, below any lit surface or background the app draws.
 const NEAR_BLACK = 0.002;
+// How far back a change may add up. The difference of two noisy frames does not grow with the
+// time between them, a fade's does, so a fade adds up here and noise does not.
+const FADE_MS = 150;
 
 /** Mean relative luminance per cell of an RGBA image, row 0 first as given. Self contained,
  *  it also runs in a page. */
@@ -120,6 +123,48 @@ function flashesPerSecond(frames) {
   return worst / 2;
 }
 
+/** Shares of cells that rose and fell by a flash's change, from one frame to a later one. */
+function movedTogether(a, b) {
+  let up = 0;
+  let down = 0;
+  for (let i = 0; i < a.length; i++) {
+    const d = b[i] - a[i];
+    if (d >= FLASH_DELTA && a[i] < FLASH_DARKER_BELOW) up++;
+    else if (-d >= FLASH_DELTA && b[i] < FLASH_DARKER_BELOW) down++;
+  }
+  return { up: up / a.length, down: down / a.length };
+}
+
+/** Like flashesPerSecond, but WCAG's "concurrently": a change counts only when a quarter of the
+ *  frame moves the same way at once. Noise that adds up per cell over a second reads low here. */
+function concurrentFlashesPerSecond(frames) {
+  const changes = [];
+  let dir = 0;
+  let since = 0;
+  for (let i = 1; i < frames.length; i++) {
+    let up = 0;
+    let down = 0;
+    for (let j = i - 1; j >= since && frames[i].t - frames[j].t <= FADE_MS; j--) {
+      const m = movedTogether(frames[j].lum, frames[i].lum);
+      up = Math.max(up, m.up);
+      down = Math.max(down, m.down);
+    }
+    const next = dir !== 1 && up >= FLASH_AREA ? 1 : dir !== -1 && down >= FLASH_AREA ? -1 : 0;
+    if (next) {
+      dir = next;
+      since = i;
+      changes.push(frames[i].t);
+    }
+  }
+  let worst = 0;
+  let start = 0;
+  changes.forEach((t, end) => {
+    while (changes[start] <= t - 1000) start++;
+    worst = Math.max(worst, end - start + 1);
+  });
+  return worst / 2;
+}
+
 /** frames: [{ t: ms, lum: cells of relative luminance }], in shown order. */
 function analyse(frames, cols) {
   const means = frames.map((f) => mean(f.lum));
@@ -141,6 +186,7 @@ function analyse(frames, cols) {
     if (band || mostlyBlack) bad.push({ i, t: f.t, band, blacked: +blacked.toFixed(3), mean: +means[i].toFixed(4) });
   });
   const flashes = flashesPerSecond(frames);
+  const concurrent = concurrentFlashesPerSecond(frames);
   return {
     frames: frames.length,
     meanLow: means.length ? +Math.min(...means).toFixed(4) : 0,
@@ -150,7 +196,9 @@ function analyse(frames, cols) {
     maxChanged: +maxChanged.toFixed(3),
     maxBlacked: +maxBlacked.toFixed(3),
     flashes,
+    concurrent,
     overLimit: flashes > FLASHES_ALLOWED,
+    concurrentOverLimit: concurrent > FLASHES_ALLOWED,
     bad,
   };
 }
@@ -164,5 +212,6 @@ module.exports = {
   changedShare,
   blackedShare,
   flashesPerSecond,
+  concurrentFlashesPerSecond,
   analyse,
 };

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 // @ts-expect-error an e2e helper in plain CommonJS, with no types.
 import flash from "../../e2e/lib/flash.cjs";
 
-const { analyse, blackEdges, flashesPerSecond, isBand, toGrid } = flash;
+const { analyse, blackEdges, concurrentFlashesPerSecond, flashesPerSecond, isBand, toGrid } = flash;
 
 const COLS = 8;
 const ROWS = 5;
@@ -59,6 +59,87 @@ describe("flash analysis of shown frames", () => {
   it("counts a slow fade up and down as one flash", () => {
     const ramp = [0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.3, 0.25, 0.2, 0.15, 0.1];
     expect(flashesPerSecond(steps(ramp, 40))).toBe(1);
+  });
+
+  describe("concurrent count", () => {
+    const NOISE_COLS = 40;
+    const NOISE_ROWS = 25;
+    // A fixed generator, so a read near the limit is the same on every run.
+    function noiseFrames(n: number, ms: number, low: number, spread: number) {
+      let seed = 12345;
+      const next = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32;
+      return Array.from({ length: n }, (_, i) => ({
+        t: i * ms,
+        lum: Float32Array.from({ length: NOISE_COLS * NOISE_ROWS }, () => low + spread * next()),
+      }));
+    }
+
+    it("reads noise that differs per frame low, while the cell count reads it high", () => {
+      const noise = noiseFrames(120, 16, 0.1, 0.2);
+      expect(flashesPerSecond(noise)).toBeGreaterThan(3);
+      expect(concurrentFlashesPerSecond(noise)).toBe(0);
+    });
+
+    it("reads a true flash high, as the cell count does", () => {
+      const swing = steps(alternating(40, 0.1, 0.6), 62.5);
+      expect(concurrentFlashesPerSecond(swing)).toBe(8);
+      expect(flashesPerSecond(swing)).toBe(8);
+    });
+
+    it("reads a flash through noise high", () => {
+      const noise = noiseFrames(80, 16, 0.1, 0.05);
+      const frames = noise.map((f, i) => ({ t: f.t, lum: f.lum.map((v) => v + (Math.floor(i / 4) % 2) * 0.4) }));
+      expect(concurrentFlashesPerSecond(frames)).toBeGreaterThan(3);
+    });
+
+    it("passes three flashes a second and fails three and a half", () => {
+      const at = (changes: number) => {
+        const v: number[] = [];
+        for (let i = 0; i <= changes; i++) v.push(i % 2 ? 0.6 : 0.1);
+        return steps(v, 1000 / (changes + 1));
+      };
+      expect(concurrentFlashesPerSecond(at(6))).toBeLessThanOrEqual(3);
+      expect(concurrentFlashesPerSecond(at(7))).toBeGreaterThan(3);
+    });
+
+    it("ignores a swing that is small, too bright or under a quarter of the frame", () => {
+      expect(concurrentFlashesPerSecond(steps(alternating(60, 0.2, 0.28), 16))).toBe(0);
+      expect(concurrentFlashesPerSecond(steps(alternating(60, 0.82, 0.98), 16))).toBe(0);
+      const small = alternating(60, 0, 1).map((v, i) => {
+        const lum = plain(0.3);
+        lum.fill(v, 0, COLS);
+        return { t: i * 16, lum };
+      });
+      expect(concurrentFlashesPerSecond(small)).toBe(0);
+    });
+
+    it("adds up a slow fade, even when its cells cross at different frames", () => {
+      const ramp = [0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.3, 0.25, 0.2, 0.15, 0.1];
+      expect(concurrentFlashesPerSecond(steps(ramp, 40))).toBe(1);
+      // Cell c starts its fade c frames late, so no one step moves a quarter of the frame.
+      const staggered = Array.from({ length: 60 }, (_, i) => ({
+        t: i * 16,
+        lum: plain(0).map((_v, c) => 0.1 + 0.3 * Math.min(1, Math.max(0, (i - c) / 3))),
+      }));
+      expect(concurrentFlashesPerSecond(staggered)).toBe(0.5);
+    });
+
+    it("counts half of the frame going up as the other half goes down", () => {
+      const frames = alternating(40, 0, 1).map((v, i) => ({
+        t: i * 62.5,
+        lum: plain(0).map((_v, c) => (c % 2 === v ? 0.6 : 0.1)),
+      }));
+      expect(concurrentFlashesPerSecond(frames)).toBe(8);
+    });
+
+    it("is reported beside the cell count by analyse", () => {
+      expect(analyse(steps(alternating(40, 0.1, 0.6), 62.5), COLS)).toMatchObject({
+        flashes: 8,
+        concurrent: 8,
+        overLimit: true,
+        concurrentOverLimit: true,
+      });
+    });
   });
 
   it("finds the black rows below a partial frame", () => {
