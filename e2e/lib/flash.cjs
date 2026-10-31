@@ -12,8 +12,8 @@ const NEAR_BLACK = 0.002;
 // fits inside it. The difference of two noisy frames does not grow with the time between them, a
 // fade's does, so a fade adds up here and noise does not.
 const FADE_MS = 1000 / (2 * FLASHES_ALLOWED);
-// Fewer frames than this over a whole orbit cannot show a flash limit being broken.
-const MIN_FRAMES = 8;
+// Fewer frames than this over a whole orbit is a dead tracer, which would pass every flash check.
+const MIN_FRAMES = 4;
 
 /** Mean relative luminance per cell of an RGBA image, row 0 first as given. Self contained,
  *  it also runs in a page. */

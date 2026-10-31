@@ -124,9 +124,9 @@ describe("flash analysis of shown frames", () => {
       expect(concurrentFlashesPerSecond(staggered)).toBe(0.5);
     });
 
-    it("says when a run drew too few frames to judge a flash limit", () => {
-      expect(analyse(steps([0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2], 500), COLS).tooFew).toBe(true);
-      expect(analyse(steps([0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2], 500), COLS).tooFew).toBe(false);
+    it("says when a run drew so few frames that its tracer looks dead", () => {
+      expect(analyse(steps([0.2, 0.2, 0.2], 2000), COLS).tooFew).toBe(true);
+      expect(analyse(steps([0.2, 0.2, 0.2, 0.2], 2000), COLS).tooFew).toBe(false);
     });
 
     it("catches the faintest swing just over the limit, however long its fade", () => {

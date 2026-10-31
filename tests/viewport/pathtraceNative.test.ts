@@ -105,6 +105,26 @@ describe("the native tracer's present slot", () => {
     t.dispose();
   });
 
+  it("never uploads the all zero frame of a fault or a picture, the last picture stays", async () => {
+    const link = new FakeLink();
+    const next = link.next.bind(link);
+    link.next = async () => {
+      const f = await next();
+      if (f.seq === 2) f.pixels.fill(0);
+      return f;
+    };
+    const { t, uploads, draws, refresh } = setup(link);
+    await t.init();
+    for (let i = 0; i < 3; i++) {
+      await t.renderSample(0);
+      refresh();
+    }
+    expect(uploads).toEqual([1, 3]);
+    expect(draws).toEqual([1, 3]);
+    expect(link.log).toContain("release 2");
+    t.dispose();
+  });
+
   it("names the camera of the frame on the canvas, not of one still waiting", async () => {
     const { t, refresh } = setup(new FakeLink(), 1, async (cmd) =>
       cmd === "pt_camera" ? 0 : cmd === "pt_status" ? { samples: 1, fault: null } : undefined,

@@ -1514,7 +1514,7 @@ jobs:
       # A stop and go orbit on lavapipe: no partial or black frame on screen, and
       # under the WCAG 2.3.1 flash limit in each Realtime while moving mode.
       - name: Path traced flash end-to-end
-        timeout-minutes: 10
+        timeout-minutes: 5
         env:
           SC_TOKEN: citoken
           SC_CHROME: /usr/bin/google-chrome
@@ -1525,7 +1525,7 @@ jobs:
       # WebGPU on SwiftShader in a closed room, where paths outlast one preview round.
       # A preview that stops early shows dots on black, an open scene never does.
       - name: WebGPU tracer preview end-to-end
-        timeout-minutes: 10
+        timeout-minutes: 5
         env:
           SC_TOKEN: citoken
           SC_CHROME: /usr/bin/google-chrome
