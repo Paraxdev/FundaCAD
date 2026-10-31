@@ -4,7 +4,7 @@
 import * as THREE from "three";
 import type { Denoise } from "../../ui/renderPrefs";
 import { SAMPLE_CAP, type PictureOptions, type TraceLook, type TraceScene, type TracerBackend } from "./backend";
-import { fitPreview, FrameBudget, type PreviewTracer } from "./budget";
+import { coverPreview, fitPreview, FrameBudget, type PreviewBackend, type PreviewTracer } from "./budget";
 import { repackInPlace, type SwappableBvhData } from "./bvhSwap";
 import { traceCameraFor, type TraceLens } from "./camera";
 import { backgroundTexture } from "./environment";
@@ -35,7 +35,7 @@ const DEFAULT_STORAGE_BINDING = 128 * 1024 * 1024;
 
 interface TracerInternals {
   _blitQuad: FadeQuad;
-  _pathTracer: { outputTarget: THREE.Texture };
+  _pathTracer: PreviewBackend & { outputTarget: THREE.Texture };
   _bvhData?: SwappableBvhData & { textureAtlas: { setTextures(r: unknown, t: unknown): void }; textures: unknown };
   _renderer: unknown;
   scene: THREE.Scene;
@@ -141,6 +141,7 @@ export class WebGpuTracer implements TracerBackend {
     t.minSamples = this.preview ? 1 : 0;
     t.fadeDuration = this.preview ? CROSSFADE_MS : 0;
     t.lowResScale = PREVIEW_SCALE;
+    coverPreview((t as unknown as TracerInternals)._pathTracer);
     this.tracer = t;
     this.post = new TraceBloom({
       renderer: r as unknown as TraceBloomDeps["renderer"],

@@ -3,10 +3,12 @@ import {
   BUDGET_STEPS,
   BUDGET_START,
   costProfile,
+  coverPreview,
   fitPreview,
   FrameBudget,
   MAX_SLOTS,
   MIN_SLOTS,
+  previewRounds,
   previewScale,
   renderScaleFor,
   STEP_UP_MS,
@@ -122,6 +124,37 @@ describe("path trace cost profile", () => {
     const k = tracedPictureScale(1400, 864, 4, 8192);
     expect(1400 * k * 864 * k).toBeLessThanOrEqual(8_294_400);
     expect(tracedPictureScale(3000, 500, 4, 8192) * 3000).toBeLessThanOrEqual(8192);
+  });
+});
+
+describe("path trace preview coverage", () => {
+  // Steps of one library round, from WaveFrontPathTracer: at most five, and no more than the bounce limit.
+  const stepsOf = (bounces: number) => previewRounds(bounces) * Math.min(bounces, 5);
+
+  it("runs enough steps for a path that lasts to the bounce limit to write its pixel", () => {
+    for (const bounces of [1, 2, 3, 4, 5, 6, 8, 13, 64]) expect(stepsOf(bounces)).toBeGreaterThanOrEqual(bounces + 2);
+  });
+
+  it("takes two rounds at the default six bounces, where one round left dots on black in a mirror room", () => {
+    expect(previewRounds(6)).toBe(2);
+  });
+
+  it("covers a preview update and leaves a full resolution update at one round", () => {
+    let rounds = 0;
+    const t = {
+      lowResMode: true,
+      maxBounces: 6,
+      update() {
+        rounds++;
+      },
+    };
+    coverPreview(t);
+    t.update();
+    expect(rounds).toBe(2);
+    rounds = 0;
+    t.lowResMode = false;
+    t.update();
+    expect(rounds).toBe(1);
   });
 });
 

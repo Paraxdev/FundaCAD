@@ -36,6 +36,8 @@ const [VW, VH] = (process.env.SC_VIEWPORT || "800x560").split("x").map(Number);
 const ORBIT_MS = Number(process.env.FLASH_ORBIT_MS || 8000);
 const PAUSE_SCALE = Number(process.env.FLASH_PAUSE_SCALE || 1);
 const SETTLE_MS = Number(process.env.FLASH_SETTLE_MS || 1200);
+// One mode of the three, by its report name.
+const ONLY = process.env.FLASH_ONLY || "";
 const CAMERA = process.env.FLASH_CAMERA ? process.env.FLASH_CAMERA.split(",").map(Number) : null;
 const target = process.env.CARGO_TARGET_DIR || path.join(__dirname, "..", "src-tauri", "target");
 const SERVE =
@@ -423,6 +425,8 @@ let serve = null;
       });
       // WebGPU's canvas holds raw passes behind the Realtime picture, only what is up counts there.
       const counted = WEBGPU ? log.draws.filter((d) => d.shown) : log.draws;
+      // Per draw luminance, to tell one step across the frame from noise that only adds up per cell.
+      if (process.env.FLASH_DUMP) fs.writeFileSync(path.join(OUT, `${name}_log.json`), JSON.stringify(log));
       const trace = analyse(
         counted.map((d) => ({ t: d.t, lum: Float32Array.from(d.lum) })),
         COLS,
@@ -477,9 +481,9 @@ let serve = null;
       check(`${name}: at most three flashes a second on the trace`, !trace.overLimit, `${trace.flashes}`);
     };
 
-    await run("realtime_on_motion_on", true, true);
-    await run("realtime_on_motion_off", true, false);
-    await run("realtime_off", false, true);
+    if (!ONLY || ONLY === "realtime_on_motion_on") await run("realtime_on_motion_on", true, true);
+    if (!ONLY || ONLY === "realtime_on_motion_off") await run("realtime_on_motion_off", true, false);
+    if (!ONLY || ONLY === "realtime_off") await run("realtime_off", false, true);
 
     // How fast this tracer is on this scene: one small move, then the trace at rest.
     await setPref("realtimeWhileMoving", true);
