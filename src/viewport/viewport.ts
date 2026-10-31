@@ -371,7 +371,7 @@ export class Viewport {
     this.cube = new ViewCube(canvas, this.scene.renderer, {
       applySide: (side) => this.applyCubeSide(side),
       applyDir: (dir, up) => {
-        this.rig.setViewDir(dir, up);
+        this.rig.setViewDir(dir, up, true);
         this.requestRender();
       },
       getOverrides: () => this.store?.viewOverrides ?? {},
@@ -3783,7 +3783,7 @@ export class Viewport {
     if (!ov) return false;
     const normal = new THREE.Vector3(...ov.normal);
     const up = new THREE.Vector3(...ov.up);
-    this.rig.setViewDir(normal, up);
+    this.rig.setViewDir(normal, up, true);
     return true;
   }
 

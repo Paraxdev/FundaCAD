@@ -141,9 +141,11 @@ export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & {
   // As in the navigator, 'auto' asks the content box of an orthographic view only when it is set by its eye, so a rebuild
   // growing the model around the camera never swaps the picture.
   let eyeSet = false;
+  let deliberate = false;
   function viewAxisAligned(askBox = eyeSet): boolean {
     const eye = controls.getPosition(tmpPos);
     const dir = controls.getTarget(tmpTarget).sub(eye);
+    if (deliberate && onWorldAxis(dir.x, dir.y, dir.z)) return true;
     if (usingOrtho && !askBox) return onWorldAxis(dir.x, dir.y, dir.z);
     return autoWantsOrtho(dir, eye, contentBox, usingOrtho);
   }
@@ -416,7 +418,10 @@ export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & {
         ortho.updateProjectionMatrix();
       }
       const swapped = applyAutoProjection();
-      if (!moved) eyeSet = false;
+      if (!moved) {
+        eyeSet = false;
+        deliberate = false;
+      }
       // After camera-controls positions the camera: update() rewrites the orientation each frame, so re-banking is idempotent
       // and never touches camera.up, which would fight the sketch plane up handling.
       if (rollAngle !== 0) {
@@ -527,6 +532,7 @@ export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & {
     },
     setStandardView(view: StandardView) {
       rollAngle = 0;
+      deliberate = true;
       // a free tumble may have left the orbit up-vector anywhere; a standard
       // view means "square me to the world", restore Z-up first
       persp.up.set(0, 0, 1);
@@ -547,8 +553,9 @@ export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & {
       const n = new THREE.Vector3(x, y, z).normalize().multiplyScalar(d);
       controls.setPosition(t.x + n.x, t.y + n.y, t.z + n.z, true);
     },
-    setViewDir(dir, up) {
+    setViewDir(dir, up, click = false) {
       rollAngle = 0;
+      deliberate = click;
       // Orbiting keeps +Z up afterwards unless `up` differs: for the cube's axis views this matches setStandardView, and
       // top/bottom (up = +-Y) square correctly.
       const d = Math.max(controls.distance, 50);
@@ -562,6 +569,7 @@ export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & {
     },
     lookAtPlane(origin, normal, up, opts) {
       rollAngle = 0;
+      deliberate = false;
       // A flight in the air is abandoned, not landed: its destination is superseded, and landing first would show a pose
       // nobody asked for.
       flight = null;
@@ -688,6 +696,7 @@ export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & {
       rig.setFov(st.fov);
       rig.setProjectionMode(st.mode);
       eyeSet = !st.ortho;
+      deliberate = false;
       const d =
         usingOrtho && !(eyeSet && mode === "auto")
           ? controls.distance
@@ -756,6 +765,7 @@ export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & {
       ortho.up.set(0, 0, 1);
       controls.updateCameraUp();
       eyeSet = true;
+      deliberate = false;
       // The swap to perspective dollies to the distance this height gives, so it has to say the same as the eye.
       const d = eye.distanceTo(target);
       if (usingOrtho && mode === "auto" && d > 0) {

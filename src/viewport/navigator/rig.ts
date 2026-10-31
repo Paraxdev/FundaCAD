@@ -274,10 +274,14 @@ export function createNavigatorRig(dom: HTMLElement, aspect: number): CameraRig 
     },
     setStandardView(view) {
       const v = STANDARD[view];
-      nav.turnTo(lookQuatUp(new THREE.Vector3(...v.dir).normalize(), new THREE.Vector3(...v.up)), cameraFlightsOn());
+      nav.turnTo(
+        lookQuatUp(new THREE.Vector3(...v.dir).normalize(), new THREE.Vector3(...v.up)),
+        cameraFlightsOn(),
+        true,
+      );
     },
-    setViewDir(dir, up) {
-      nav.turnTo(lookQuatUp(dir.clone().normalize(), up), cameraFlightsOn());
+    setViewDir(dir, up, deliberate = false) {
+      nav.turnTo(lookQuatUp(dir.clone().normalize(), up), cameraFlightsOn(), deliberate);
     },
     lookAtPlane(origin, normal, up, opts) {
       nav.lookAtPlane(origin, normal, up, !!opts?.animate && cameraFlightsOn(), opts?.onArrive);

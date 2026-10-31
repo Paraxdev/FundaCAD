@@ -106,6 +106,7 @@ export class Navigator {
   // An orthographic view's eye is only scale over lens, a zoom, fit or re-seat moves it through the model while the
   // picture stays outside, so 'auto' asks the content box only of a view set by its eye.
   private eyeSet = false;
+  private deliberate = false;
   private stamp = makePose();
   private listeners: Record<NavigatorEvent, Set<() => void>> = {
     inputstart: new Set(),
@@ -487,7 +488,10 @@ export class Navigator {
         this.moved();
       }
     }
-    if (!this.flight) this.eyeSet = false;
+    if (!this.flight) {
+      this.eyeSet = false;
+      this.deliberate = false;
+    }
     this.sanitize();
     return this.version !== before;
   }
@@ -608,6 +612,7 @@ export class Navigator {
   private autoOrtho(eyeSet = this.eyeSet): boolean {
     const eye = eyeOf(this.pose, new THREE.Vector3());
     const dir = this.pose.target.clone().sub(eye);
+    if (this.deliberate && onWorldAxis(dir.x, dir.y, dir.z)) return true;
     if (this.pose.ortho && !eyeSet) return onWorldAxis(dir.x, dir.y, dir.z);
     return autoWantsOrtho(dir, eye, this.box, this.pose.ortho);
   }
@@ -656,11 +661,13 @@ export class Navigator {
       onArrive?: (() => void) | undefined;
       duration?: number;
       byEye?: boolean;
+      deliberate?: boolean;
     } = {},
   ) {
     this.stopAll();
     this.flight = null;
     this.eyeSet = opts.byEye ?? false;
+    this.deliberate = opts.deliberate ?? false;
     const target = clonePose(to);
     target.ortho = this.pose.ortho;
     target.scale = clampScale(this.limits, target.fov, target.scale);
@@ -860,14 +867,14 @@ export class Navigator {
 
   /** Turn about the target keeping the scale, so a zoomed detail stays centred and the same size.
    *  When that would leave the model wholly off screen the turn frames it instead. */
-  turnTo(q: THREE.Quaternion, animate = true) {
+  turnTo(q: THREE.Quaternion, animate = true, deliberate = false) {
     if (!this.flight && this.unsettled) {
       this.unsettled = false;
       this.reseatAndContain();
     }
     const p = this.poseWith(q);
     if (this.box && boxOffScreen(p, this.frame, this.box)) frameBox(p, this.frame, this.box);
-    this.flyTo(p, { animate });
+    this.flyTo(p, { animate, deliberate });
   }
 
   lookAtPlane(

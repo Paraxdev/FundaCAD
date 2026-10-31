@@ -204,4 +204,124 @@ export function autoProjectionCases(make: () => CameraRig) {
     expect(lookFrom(rig, v(0, -50, 0))).toBe(false);
     expect(lookFrom(rig, v(0, -300, 0))).toBe(true);
   });
+
+  const UP = v(0, 0, 1);
+  const inside = (rig: CameraRig) => lookFrom(rig, v(30, -50, 20));
+
+  it("a named view on an axis with the eye inside the content box is orthographic", () => {
+    for (const [view, along] of [
+      ["front", v(0, -1, 0)],
+      ["top", v(0, 0, 1)],
+      ["right", v(1, 0, 0)],
+    ] as const) {
+      const rig = room();
+      expect(inside(rig)).toBe(false);
+      rig.setStandardView(view);
+      settle(rig);
+      expect([view, rig.isOrtho()]).toEqual([view, true]);
+      expect(rig.getPosition(v(0, 0, 0)).dot(along)).toBeGreaterThan(0);
+    }
+  });
+
+  it("a view cube click on an axis with the eye inside is orthographic, a sketch exit direction is not", () => {
+    const clicked = room();
+    inside(clicked);
+    clicked.setViewDir(v(0, -1, 0), UP, true);
+    settle(clicked);
+    expect(clicked.isOrtho()).toBe(true);
+    const plain = room();
+    inside(plain);
+    plain.setViewDir(v(0, -1, 0), UP);
+    settle(plain);
+    expect(plain.isOrtho()).toBe(false);
+  });
+
+  it("an edge, corner or isometric view stays perspective inside", () => {
+    for (const dir of [v(1, -1, 0), v(1, -1, 1), v(0, -1, 1)]) {
+      const rig = room();
+      inside(rig);
+      rig.setViewDir(dir, UP, true);
+      settle(rig);
+      expect(rig.isOrtho()).toBe(false);
+    }
+    const rig = room();
+    inside(rig);
+    rig.setStandardView("iso");
+    settle(rig);
+    expect(rig.isOrtho()).toBe(false);
+  });
+
+  it("a named view from outside the content box is orthographic as before", () => {
+    const rig = room();
+    expect(lookFrom(rig, v(900, -1500, 700))).toBe(false);
+    rig.setStandardView("front");
+    settle(rig);
+    expect(rig.isOrtho()).toBe(true);
+  });
+
+  it("an explicit projection mode holds through a named view", () => {
+    const persp = room();
+    persp.setProjectionMode("persp");
+    inside(persp);
+    persp.setStandardView("front");
+    settle(persp);
+    expect(persp.isOrtho()).toBe(false);
+    const ortho = room();
+    ortho.setProjectionMode("ortho");
+    inside(ortho);
+    ortho.setStandardView("iso");
+    settle(ortho);
+    expect(ortho.isOrtho()).toBe(true);
+  });
+
+  it("after a click inside, a step off the axis is perspective and a later landing on an axis stays so", () => {
+    const rig = room();
+    inside(rig);
+    rig.setStandardView("front");
+    settle(rig);
+    expect(rig.isOrtho()).toBe(true);
+    const eye = rig.getPosition(v(0, 0, 0)).clone();
+    expect(lookFrom(rig, v(eye.x + 14, eye.y, eye.z + 5))).toBe(false);
+    expect(lookFrom(rig, v(0, -50, 0))).toBe(false);
+    expect(lookFrom(rig, v(50, 0, 0))).toBe(false);
+  });
+
+  it("after a click inside, a zoom and a rebuild keep the orthographic view", () => {
+    const rig = room();
+    inside(rig);
+    rig.setStandardView("front");
+    settle(rig);
+    for (let i = 0; i < 4; i++) {
+      rig.zoomBy(0.7);
+      settle(rig);
+      expect(rig.isOrtho()).toBe(true);
+    }
+    rig.setContentBox(new THREE.Box3(v(-400, -400, -400), v(400, 400, 400)));
+    settle(rig);
+    expect(rig.isOrtho()).toBe(true);
+  });
+
+  it("a rebuild never turns a perspective view inside the box orthographic", () => {
+    const rig = room();
+    inside(rig);
+    rig.setStandardView("iso");
+    settle(rig);
+    expect(rig.isOrtho()).toBe(false);
+    rig.setViewDir(v(0, -1, 0), UP);
+    settle(rig);
+    rig.setContentBox(new THREE.Box3(v(-120, -120, -120), v(120, 120, 120)));
+    settle(rig);
+    expect(rig.isOrtho()).toBe(false);
+  });
+
+  it("the home view after a click inside is perspective", () => {
+    const rig = room();
+    inside(rig);
+    rig.setStandardView("front");
+    settle(rig);
+    expect(rig.isOrtho()).toBe(true);
+    rig.resetView(ROOM);
+    settle(rig);
+    expect(rig.isOrtho()).toBe(false);
+  });
 }
