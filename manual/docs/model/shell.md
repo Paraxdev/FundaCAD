@@ -6,7 +6,7 @@ Shell hollows a body, and Thicken gives a face a wall of its own. Both are under
 
 ## Shell
 
-1. Click Shell, then click the face that should open. Ctrl-click opens more faces of the same body.
+1. Click Shell, then click the face that should open. Ctrl-click opens more faces of the same body. Faces you select first, even on several bodies, all open, each on its own body.
 2. Drag the arrow or type the wall thickness.
 3. Press Enter or click to apply, or Esc to cancel.
 

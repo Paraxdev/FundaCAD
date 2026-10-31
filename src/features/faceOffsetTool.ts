@@ -637,7 +637,17 @@ export class FaceOffsetTool {
     const faces = this.faces.length === 1 ? (this.faces[0] ?? this.faces) : this.faces;
     const body = this.bodyId != null ? { body: this.bodyId } : {};
     if (this.mode === "shell") {
-      return { id: this.previewId, type: "shell", faces, thickness: Math.abs(v) };
+      // The engine takes an unbound selector for the active body, which is not the body of a selected face.
+      const bound = this.faces.map((s, i) => {
+        const owner = this.viewport.faceIdToBodyId(this.faceIds[i] ?? -1);
+        return owner ? ({ ...s, body: owner } as Selector) : s;
+      });
+      return {
+        id: this.previewId,
+        type: "shell",
+        faces: bound.length === 1 ? bound[0]! : bound,
+        thickness: Math.abs(v),
+      };
     }
     if (this.mode === "thicken") {
       return {

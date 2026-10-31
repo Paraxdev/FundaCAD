@@ -6,6 +6,7 @@ Documents the harness tests open through File > Open. They are JSON documents, w
 - `plate_width.json`: the plate with a parameter `width` of 20 that nothing uses yet, for typing names into a value box.
 - `block.json`: one 20 x 20 x 30 mm box centred on the origin, tall enough that a steep draft on a
   side face is refused, current document version.
+- `two_boxes.json`: a 20 x 20 x 30 mm box and a 30 x 30 x 40 mm box 60 mm along X, two bodies where the second is the active one, for Shell across bodies.
 - `steps.json`: three primitives named Base, Post and Ball that do not depend on each other, so the History tests
   can roll back, edit and reorder them by keys without breaking the build.
 - `whole_sketch_extrude.json`: document version 9 on purpose, so opening it also runs the

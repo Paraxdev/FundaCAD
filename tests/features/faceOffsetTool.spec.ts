@@ -64,6 +64,7 @@ function fakeViewport(opts: { round?: RoundFace | null; thickness?: number | nul
     thicknessBehind: () => opts.thickness ?? null,
     faceTriangles: () => [],
     faceIdNear: () => 7,
+    faceIdToBodyId: (id: number) => (id === 7 ? "b1" : "b2"),
   };
   return { vp: vp as unknown as Viewport, scene, canvas };
 }
@@ -289,6 +290,30 @@ describe("FaceOffsetTool", () => {
       anchor: [20, 0, -5],
       axis: [-1, 0, 0],
     });
+  });
+
+  it("Shell names the body of each selected face, so faces of another body than the active one are found", () => {
+    const { vp, canvas } = fakeViewport();
+    const far: Selector = { kind: "face", by: "nearest", point: [20, 0, -5] };
+    Object.assign(vp, {
+      selectedFacesForPressPull: () => ({
+        selectors: [FACE, far],
+        faceIds: [7, 8],
+        normal: new THREE.Vector3(0, 0, 1),
+        anchor: new THREE.Vector3(0, 0, 0),
+        bodyId: "b1",
+        round: null,
+      }),
+    });
+    const s = fakeStore();
+    const t = new FaceOffsetTool(vp, s.store);
+    t.start("shell", () => {});
+    dragTo(t, canvas, 2, { release: false });
+    const sent = s.previews.filter((p) => p.feature).at(-1)?.feature as Extract<Feature, { type: "shell" }>;
+    expect(sent.faces).toEqual([
+      { ...FACE, body: "b1" },
+      { ...far, body: "b2" },
+    ]);
   });
 
   it("the handle rides on the face as it moves", () => {
