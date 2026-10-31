@@ -90,12 +90,17 @@ mod t {
         .unwrap()
     }
 
-    /// The budget stands in for a slow adapter: a band of 8 rows in 48 leaves a sample far over one dispatch.
+    fn other_look() -> Look {
+        serde_json::from_str(r#"{"sunDir":[0.3,-0.4,1],"sunColor":[2,2,2]}"#).unwrap()
+    }
+
+    /// A new look leaves no time for its sample, and a band of 8 rows in 48 leaves that sample far over one dispatch.
     #[test]
-    fn a_sample_over_the_budget_sends_a_coarse_whole_picture_first() {
+    fn a_sample_of_no_known_time_over_the_budget_sends_a_coarse_whole_picture_first() {
         let Some(mut s) = red_quad_at_cap(1) else { return };
         let Some(mut plain) = red_quad_at_cap(1) else { return };
         s.set_camera(moved_camera());
+        s.set_look(other_look());
         s.set_frame_budget(64 * 8);
         let coarse = s.advance(64, 48, Duration::ZERO).expect("a picture of the new camera leaves at once");
         assert_eq!(s.samples(), 0, "a coarse pass is not a sample");
@@ -110,6 +115,7 @@ mod t {
         assert_eq!(s.samples(), 1);
         assert!(whole.chunks(4).all(|p| p[3] == 255), "the sample after it is a plain frame");
         plain.set_camera(moved_camera());
+        plain.set_look(other_look());
         plain.set_frame_budget(64 * 48);
         let direct = plain.frame(64, 48, Duration::from_millis(12));
         assert!(whole == direct, "the coarse pass left something in the first sample");

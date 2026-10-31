@@ -535,10 +535,9 @@ impl Tracer {
 
     /// The first dispatch traces about this many paths, so one dispatch never
     /// holds the GPU long enough to stall the UI or trip the driver's timeout.
-    /// Only the bands change, the accumulation and the held frame stay.
+    /// Only the band size changes, the accumulation and the held frame stay.
     pub fn set_frame_budget(&mut self, paths: u32) {
         self.rows = (paths / self.w).clamp(8, self.h.next_multiple_of(8)).next_multiple_of(8);
-        self.sample_cost = None;
     }
 
     pub fn set_cap(&mut self, cap: u32) {

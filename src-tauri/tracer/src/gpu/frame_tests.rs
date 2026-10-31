@@ -110,6 +110,9 @@ fn a_scene_change_forgets_the_time_and_a_camera_keeps_it() {
     s.set_camera(camera(0.5));
     assert_eq!(s.sample_cost, Some(ms(20)), "a camera is the same scene");
 
+    s.set_frame_budget(64 * 8);
+    assert_eq!(s.sample_cost, Some(ms(20)), "a budget changes the bands, not what they add up to");
+
     s.set_look(new_look());
     assert_eq!(s.sample_cost, None, "a look");
 
@@ -129,10 +132,6 @@ fn a_scene_change_forgets_the_time_and_a_camera_keeps_it() {
     s.sample_cost = Some(ms(20));
     s.resize(32, 24);
     assert_eq!(s.sample_cost, None, "a size");
-
-    s.sample_cost = Some(ms(20));
-    s.set_frame_budget(32 * 8);
-    assert_eq!(s.sample_cost, None, "a budget");
 }
 
 #[test]
