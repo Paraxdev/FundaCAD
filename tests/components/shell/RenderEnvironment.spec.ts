@@ -128,7 +128,10 @@ describe("RenderEnvironment naming", () => {
 });
 
 describe("RenderEnvironment tiles", () => {
+  // Vue drops a bubbling event a listener attached in the same millisecond, which a test can reach and a keypress cannot.
   const key = async (el: Element, k: string) => {
+    const t = Date.now();
+    while (Date.now() === t);
     el.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true }));
     await flushPromises();
   };
