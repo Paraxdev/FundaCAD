@@ -1,7 +1,8 @@
 // What Path traced shows while the view moves, measured: no partial or black frame, no flash
 // over the WCAG 2.3.1 general limit, and how long a camera change takes to reach the screen.
 //
-// A stop and go orbit on the native tracer in the real app. Each frame is seen twice:
+// A stop and go orbit in the real app, on the native tracer or with FLASH_TRACER=webgpu on
+// WebGPU, there on SwiftShader unless FLASH_WEBGPU_REAL=1. Each frame is seen twice:
 // - the trace canvas, read in the same task as each draw, so nothing is missed;
 // - the composed page, from the browser's screencast, which holds the Realtime picture,
 //   the fade and the overlays, but can skip frames.
@@ -13,7 +14,10 @@
 // SC_TRACER_SERVE points at the tracer_serve example, or SC_TRACER_PORT at one already
 // listening with the same token, with SC_TRACER_FRAMES_PORT for its frame socket when it sits
 // behind a port map, as in Docker. FLASH_MEASURE_ONLY=1 prints and writes the numbers and
-// always exits 0, for a baseline on code known to fail.
+// always exits 0, for a baseline on code known to fail. FLASH_MODEL is a .funda file to orbit
+// in place of the small test plate. FLASH_PAUSE_SCALE and FLASH_SETTLE_MS stretch the orbit's
+// pauses and its end, so a slow software adapter gets to a sample before the next move.
+// FLASH_CAMERA=ex,ey,ez,tx,ty,tz starts each orbit from that view, for a model seen from inside.
 const { spawn } = require("child_process");
 const { chromium } = require("playwright-core");
 const fs = require("fs");
@@ -26,8 +30,13 @@ const URL = process.env.SC_URL || "http://localhost:5173/";
 const PORT = process.env.SC_ENGINE_PORT || "8765";
 const OUT = path.resolve(process.argv[2] || "pathtrace_flash_shots");
 const MEASURE_ONLY = process.env.FLASH_MEASURE_ONLY === "1";
+const WEBGPU = process.env.FLASH_TRACER === "webgpu";
+const MODEL = process.env.FLASH_MODEL ? fs.readFileSync(process.env.FLASH_MODEL, "utf8") : null;
 const [VW, VH] = (process.env.SC_VIEWPORT || "800x560").split("x").map(Number);
 const ORBIT_MS = Number(process.env.FLASH_ORBIT_MS || 8000);
+const PAUSE_SCALE = Number(process.env.FLASH_PAUSE_SCALE || 1);
+const SETTLE_MS = Number(process.env.FLASH_SETTLE_MS || 1200);
+const CAMERA = process.env.FLASH_CAMERA ? process.env.FLASH_CAMERA.split(",").map(Number) : null;
 const target = process.env.CARGO_TARGET_DIR || path.join(__dirname, "..", "src-tauri", "target");
 const SERVE =
   process.env.SC_TRACER_SERVE ||
@@ -62,7 +71,7 @@ function startTracerServe() {
 }
 
 // Runs in the page. The trace canvas has no preserved buffer, so it is read right after each draw.
-function installCapture([cols, rows]) {
+function installCapture([cols, rows, webgpu]) {
   const log = { on: false, draws: [], ticks: [], cameras: [] };
   window.__flash = log;
   const linear = Float32Array.from({ length: 256 }, (_, i) => {
@@ -70,14 +79,7 @@ function installCapture([cols, rows]) {
     return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
   });
   const backend = () => window.viewport?.trace?.backend;
-  const real = WebGL2RenderingContext.prototype.drawArrays;
-  WebGL2RenderingContext.prototype.drawArrays = function (...a) {
-    real.apply(this, a);
-    if (!log.on || this.canvas === window.viewport?.canvas || this.getContextAttributes().depth !== false) return;
-    const w = this.drawingBufferWidth;
-    const h = this.drawingBufferHeight;
-    const px = new Uint8Array(w * h * 4);
-    this.readPixels(0, 0, w, h, this.RGBA, this.UNSIGNED_BYTE, px);
+  const record = (px, w, h) => {
     const lum = new Array(cols * rows).fill(0);
     const hits = new Array(cols * rows).fill(0);
     for (let y = 0; y < h; y += 2) {
@@ -103,6 +105,41 @@ function installCapture([cols, rows]) {
     log.draws.push(entry);
     queueMicrotask(() => (entry.seq = backend()?.shownSeq ?? null));
   };
+  if (webgpu) {
+    // The app greys Path traced on a fallback adapter, and SwiftShader is one.
+    Object.defineProperty(GPUAdapterInfo.prototype, "isFallbackAdapter", { get: () => false });
+    // A WebGPU canvas reads blank after its task, so it is copied right after the submit that drew it.
+    let drew = false;
+    const copy = new OffscreenCanvas(1, 1);
+    const g = copy.getContext("2d", { willReadFrequently: true });
+    const texture = GPUCanvasContext.prototype.getCurrentTexture;
+    GPUCanvasContext.prototype.getCurrentTexture = function () {
+      drew = true;
+      return texture.call(this);
+    };
+    const submit = GPUQueue.prototype.submit;
+    GPUQueue.prototype.submit = function (buffers) {
+      submit.call(this, buffers);
+      const c = backend()?.canvas;
+      if (!drew || !log.on || !c?.width) return;
+      drew = false;
+      copy.width = c.width;
+      copy.height = c.height;
+      g.drawImage(c, 0, 0);
+      record(g.getImageData(0, 0, c.width, c.height).data, c.width, c.height);
+    };
+  } else {
+    const real = WebGL2RenderingContext.prototype.drawArrays;
+    WebGL2RenderingContext.prototype.drawArrays = function (...a) {
+      real.apply(this, a);
+      if (!log.on || this.canvas === window.viewport?.canvas || this.getContextAttributes().depth !== false) return;
+      const w = this.drawingBufferWidth;
+      const h = this.drawingBufferHeight;
+      const px = new Uint8Array(w * h * 4);
+      this.readPixels(0, 0, w, h, this.RGBA, this.UNSIGNED_BYTE, px);
+      record(px, w, h);
+    };
+  }
   const loop = () => {
     requestAnimationFrame(loop);
     if (!log.on) return;
@@ -120,6 +157,7 @@ function installCapture([cols, rows]) {
   };
   requestAnimationFrame(loop);
   log.watchCameras = () => {
+    if (webgpu) return true;
     const c = backend()?.cameras;
     if (!c || c.__watched) return !!c;
     c.__watched = true;
@@ -191,20 +229,28 @@ function swapsPerSecond(ticks) {
   return { swaps: swaps.length, mostInASecond: most };
 }
 
+function browserArgs() {
+  const common = ["--no-sandbox", "--enable-gpu", "--ignore-gpu-blocklist"];
+  // Chrome offers no WebGPU adapter at all once ANGLE is told to use SwiftShader, so a WebGPU run leaves ANGLE alone.
+  if (WEBGPU && process.env.FLASH_WEBGPU_REAL === "1") return [...common, "--enable-unsafe-webgpu"];
+  if (WEBGPU) return ["--no-sandbox", "--enable-unsafe-webgpu", "--use-webgpu-adapter=swiftshader"];
+  // The native page still draws Realtime with WebGL, on SwiftShader so the GPU stays idle.
+  return [...common, "--use-angle=swiftshader"];
+}
+
 let serve = null;
 (async () => {
   fs.mkdirSync(OUT, { recursive: true });
   let port = process.env.SC_TRACER_PORT;
-  if (!port) {
+  if (!port && !WEBGPU) {
     serve = startTracerServe();
     port = await serve.port;
   }
-  const url =
-    URL + (URL.includes("?") ? "&" : "?") + `token=${encodeURIComponent(TOKEN)}&tracer=native-dev&port=${port}`;
+  const pick = WEBGPU ? "tracer=webgpu" : `tracer=native-dev&port=${port}`;
+  const url = URL + (URL.includes("?") ? "&" : "?") + `token=${encodeURIComponent(TOKEN)}&${pick}`;
   const browser = await chromium.launch({
     ...(EXE ? { executablePath: EXE } : { channel: "chrome" }),
-    // The native page still draws Realtime with WebGL, on SwiftShader so the GPU stays idle.
-    args: ["--no-sandbox", "--enable-gpu", "--ignore-gpu-blocklist", "--use-angle=swiftshader"],
+    args: browserArgs(),
   });
   const report = { viewport: [VW, VH], orbitMs: ORBIT_MS, runs: {} };
   try {
@@ -216,7 +262,7 @@ let serve = null;
     page.on("console", (m) => {
       if (/tracer|native|fault/i.test(m.text())) console.log(`[page] ${m.text().slice(0, 300)}`);
     });
-    await page.addInitScript(installCapture, [COLS, ROWS]);
+    await page.addInitScript(installCapture, [COLS, ROWS, WEBGPU]);
     // Only the engine's socket: the native frames carry their own token.
     await page.addInitScript(
       ([port, t, frames, tracer]) => {
@@ -247,17 +293,20 @@ let serve = null;
     }
     const setPref = (k, v) =>
       page.evaluate(async ([k, v]) => (await import("/src/ui/renderPrefs.ts")).setRenderPref(k, v), [k, v]);
-    await page.evaluate(async () => {
+    await page.evaluate(async (model) => {
       const s = window.store;
-      s.addFeature({ id: s.nextId(), type: "box", length: 80, width: 80, height: 6 });
-      s.addFeature({ id: s.nextId(), type: "cylinder", radius: 12, height: 40 });
+      if (model) s.load(model);
+      else {
+        s.addFeature({ id: s.nextId(), type: "box", length: 80, width: 80, height: 6 });
+        s.addFeature({ id: s.nextId(), type: "cylinder", radius: 12, height: 40 });
+      }
       await s.rebuildNow();
       for (let i = 0; i < 300; i++) {
         const b = s.buildState;
         if (!b.building && b.result?.bodies?.length >= 2) return;
         await new Promise((r) => setTimeout(r, 100));
       }
-    });
+    }, MODEL);
     await page.evaluate(() => window.__fundacad.handleAction("iso"));
     await page.waitForTimeout(400);
     await page.evaluate(() => window.__fundacad.handleAction("fit"));
@@ -293,7 +342,15 @@ let serve = null;
     }
     console.log(`backend ${backendName}`);
     report.backend = backendName;
-    if (!/^native/.test(backendName)) throw new Error(`the native tracer did not start: ${backendName}`);
+    report.adapters = await page.evaluate(async () => {
+      const gl = document.createElement("canvas").getContext("webgl2");
+      const info = gl?.getExtension("WEBGL_debug_renderer_info");
+      const a = await navigator.gpu?.requestAdapter();
+      return { webgl: info && gl.getParameter(info.UNMASKED_RENDERER_WEBGL), webgpu: a?.info?.architecture };
+    });
+    console.log(JSON.stringify(report.adapters));
+    if (!(WEBGPU ? /WebGPU/ : /^native/).test(backendName))
+      throw new Error(`the wanted tracer did not start: ${backendName}`);
     // The middle of the view: the panels around it are lit whatever the trace does.
     const box = await page.evaluate(() => {
       const r = window.viewport.canvas.getBoundingClientRect();
@@ -307,7 +364,7 @@ let serve = null;
     const cdp = await page.context().newCDPSession(page);
 
     // Pauses either side of STILL_MS, so the trace restarts and is cut off again.
-    const PAUSES = [60, 180, 90, 240, 400, 160, 700];
+    const PAUSES = [60, 180, 90, 240, 400, 160, 700].map((p) => p * PAUSE_SCALE);
     // Stepped in the page's own frames, so the steps do not wait on this script.
     const orbit = (ms) =>
       page.evaluate(
@@ -332,6 +389,11 @@ let serve = null;
     const run = async (name, realtimeOn, motion) => {
       await page.evaluate(async (m) => (await import("/src/ui/motion.ts")).setMotion(m), motion);
       await setPref("realtimeWhileMoving", realtimeOn);
+      if (CAMERA)
+        await page.evaluate((c) => {
+          const V = window.viewport.camera.position.constructor;
+          window.viewport.rig.setLookAt(new V(c[0], c[1], c[2]), new V(c[3], c[4], c[5]), false);
+        }, CAMERA);
       await page.waitForTimeout(1500);
       const frames = [];
       const onFrame = (e) => {
@@ -350,7 +412,7 @@ let serve = null;
       await cdp.send("Page.startScreencast", { format: "jpeg", quality: 80, everyNthFrame: 1 });
       const startWall = Date.now();
       await orbit(ORBIT_MS);
-      await page.waitForTimeout(1200);
+      await page.waitForTimeout(SETTLE_MS);
       console.log(`${name}: orbit done, ${frames.length} screencast frames`);
       await cdp.send("Page.stopScreencast");
       cdp.off("Page.screencastFrame", onFrame);
@@ -359,8 +421,10 @@ let serve = null;
         f.on = false;
         return { draws: f.draws, ticks: f.ticks, cameras: f.cameras };
       });
+      // WebGPU's canvas holds raw passes behind the Realtime picture, only what is up counts there.
+      const counted = WEBGPU ? log.draws.filter((d) => d.shown) : log.draws;
       const trace = analyse(
-        log.draws.map((d) => ({ t: d.t, lum: Float32Array.from(d.lum) })),
+        counted.map((d) => ({ t: d.t, lum: Float32Array.from(d.lum) })),
         COLS,
       );
       // Decoded on a blank page once the run is over, so it costs the run nothing.
@@ -396,6 +460,9 @@ let serve = null;
         swaps: swapsPerSecond(log.ticks),
         lag: lag(log.cameras, log.draws),
         rafs: log.ticks.length,
+        draws: log.draws.length,
+        darkCounted: counted.filter((d) => d.lum.reduce((sum, l) => sum + l, 0) / d.lum.length < 0.2 * trace.meanHigh)
+          .length,
       };
       report.runs[name] = out;
       console.log(name, JSON.stringify(out));
@@ -413,6 +480,28 @@ let serve = null;
     await run("realtime_on_motion_on", true, true);
     await run("realtime_on_motion_off", true, false);
     await run("realtime_off", false, true);
+
+    // How fast this tracer is on this scene: one small move, then the trace at rest.
+    await setPref("realtimeWhileMoving", true);
+    await page.waitForTimeout(1500);
+    report.timing = await page.evaluate(async () => {
+      const v = window.viewport;
+      const before = v.trace.samples;
+      v.rig.orbitBy(0.02, 0);
+      const start = performance.now();
+      const marks = { 1: null, 16: null, 64: null, 256: null };
+      let restarted = false;
+      while (performance.now() - start < 10000 && marks[256] === null) {
+        await new Promise((r) => requestAnimationFrame(r));
+        const n = v.trace.samples;
+        restarted ||= n < before;
+        if (!restarted) continue;
+        for (const m of Object.keys(marks))
+          if (marks[m] === null && n >= m) marks[m] = Math.round(performance.now() - start);
+      }
+      return { before, msToSamples: marks, samples: v.trace.samples };
+    });
+    console.log("timing", JSON.stringify(report.timing));
   } finally {
     fs.writeFileSync(path.join(OUT, "report.json"), JSON.stringify(report, null, 1));
     await browser.close();
