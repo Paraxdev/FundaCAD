@@ -21,7 +21,8 @@ const grown = new THREE.Box3();
 
 /** Whether 'auto' wants orthographic: a view along a world axis, unless the eye is inside the content box, where the
  *  frustum would start outside the walls. An orthographic view stays until the eye is inside the box, a perspective one
- *  until it is clear of it by the hysteresis. `dir` runs from the eye to the target. */
+ *  until it is clear of it by the hysteresis. `dir` runs from the eye to the target. The navigator's orthographic eye is
+ *  only scale over lens, so it asks this just when a view is set by its eye. */
 export function autoWantsOrtho(
   dir: THREE.Vector3,
   eye: THREE.Vector3,

@@ -68,6 +68,70 @@ export function autoProjectionCases(make: () => CameraRig) {
     expect(swaps).toBe(0);
   });
 
+  it("zooming in about a point deep in the box stays orthographic", () => {
+    const rig = room();
+    expect(lookFrom(rig, v(0, -1500, 0))).toBe(true);
+    for (let i = 0; i < 8; i++) {
+      rig.zoomBy(0.5, v(0, 0, 0));
+      for (let t = 0; t < 10; t++) rig.update(1 / 60);
+      expect(rig.isOrtho()).toBe(true);
+    }
+  });
+
+  it("a fit along a long part stays orthographic", () => {
+    const beam = new THREE.Box3(v(-10, -250, -10), v(10, 250, 10));
+    const rig = make();
+    rig.setContentBox(beam);
+    rig.setProjectionMode("auto");
+    expect(lookFrom(rig, v(0, -1500, 0))).toBe(true);
+    rig.fit(beam, false);
+    for (let i = 0; i < 30; i++) rig.update(1 / 60);
+    expect(rig.isOrtho()).toBe(true);
+  });
+
+  it("a rebuild growing the box around the view stays orthographic", () => {
+    const rig = room();
+    expect(lookFrom(rig, v(0, -1500, 0))).toBe(true);
+    rig.setContentBox(new THREE.Box3(v(-2000, -2000, -2000), v(2000, 2000, 2000)));
+    for (let i = 0; i < 30; i++) rig.update(1 / 60);
+    expect(rig.isOrtho()).toBe(true);
+  });
+
+  it("a view set to an eye inside along the same axis goes to perspective and keeps that eye", () => {
+    const rig = room();
+    expect(lookFrom(rig, v(0, -1500, 0))).toBe(true);
+    expect(lookFrom(rig, v(0, -50, 0))).toBe(false);
+    expect(rig.active.position.y).toBeCloseTo(-50, 3);
+  });
+
+  it("a state taken orthographic comes back orthographic with no swap on the way", () => {
+    const beam = new THREE.Box3(v(-10, -250, -10), v(10, 250, 10));
+    const rig = make();
+    rig.setContentBox(beam);
+    rig.setProjectionMode("auto");
+    expect(lookFrom(rig, v(0, -1500, 0))).toBe(true);
+    rig.fit(beam, false);
+    for (let i = 0; i < 30; i++) rig.update(1 / 60);
+    const framed = rig.getState();
+    rig.setState(framed, false);
+    expect(rig.isOrtho()).toBe(true);
+    for (let i = 0; i < 30; i++) {
+      rig.update(1 / 60);
+      expect(rig.isOrtho()).toBe(true);
+    }
+  });
+
+  it("a state taken in perspective inside the box comes back in perspective at its eye", () => {
+    const rig = room();
+    expect(lookFrom(rig, v(0, -50, 0))).toBe(false);
+    const inside = rig.getState();
+    expect(lookFrom(rig, v(0, -1500, 0))).toBe(true);
+    rig.setState(inside, false);
+    for (let i = 0; i < 30; i++) rig.update(1 / 60);
+    expect(rig.isOrtho()).toBe(false);
+    expect(rig.active.position.y).toBeCloseTo(-50, 3);
+  });
+
   it("returns to orthographic once the eye is well clear of the box", () => {
     const rig = room();
     expect(lookFrom(rig, v(0, -50, 0))).toBe(false);

@@ -22,6 +22,8 @@ export interface CameraState {
   scale: number;
   fov: number;
   mode: ProjectionMode;
+  /** Taken in an orthographic view, whose scale says nothing about where an eye stands. */
+  ortho?: boolean;
 }
 
 export interface FitOptions {
@@ -46,7 +48,7 @@ export interface CameraRig {
   get active(): THREE.Camera;
   isOrtho(): boolean;
   /** 'auto' = perspective while orbiting, orthographic whenever the view axis is world axis aligned, so straight on views
-   *  have no parallax skew between bodies. */
+   *  have no parallax skew between bodies, unless the eye is inside the content box. */
   projectionMode(): ProjectionMode;
   setProjectionMode(mode: ProjectionMode): void;
   resize(w: number, h: number): void;
