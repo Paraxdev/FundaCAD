@@ -1540,6 +1540,17 @@ jobs:
           FLASH_SETTLE_MS: "2000"
         run: node e2e/pathtrace_flash_e2e.cjs /tmp/pathtrace_flash_webgpu_shots
 
+      - name: Flash test frames on failure
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: flash-frames
+          path: |
+            /tmp/pathtrace_flash_shots
+            /tmp/pathtrace_flash_webgpu_shots
+          if-no-files-found: ignore
+          retention-days: 7
+
       # The agent harness starts its own engine, vite and Chrome on free ports,
       # so the engine and vite above are left alone.
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
