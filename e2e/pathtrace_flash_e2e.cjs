@@ -18,6 +18,8 @@
 // in place of the small test plate. FLASH_PAUSE_SCALE and FLASH_SETTLE_MS stretch the orbit's
 // pauses and its end, so a slow software adapter gets to a sample before the next move.
 // FLASH_CAMERA=ex,ey,ez,tx,ty,tz starts each orbit from that view, for a model seen from inside.
+// tests/fixtures/closed_room.funda is a closed room with one lamp, use it from inside: FLASH_CAMERA=0,-150,0,0,0,0.
+// FLASH_MOST_BLACK fails a frame on the trace with more than this share of black cells, for a scene known to be lit.
 const { spawn } = require("child_process");
 const { chromium } = require("playwright-core");
 const fs = require("fs");
@@ -38,6 +40,7 @@ const PAUSE_SCALE = Number(process.env.FLASH_PAUSE_SCALE || 1);
 const SETTLE_MS = Number(process.env.FLASH_SETTLE_MS || 1200);
 // One mode of the three, by its report name.
 const ONLY = process.env.FLASH_ONLY || "";
+const MOST_BLACK = process.env.FLASH_MOST_BLACK ? Number(process.env.FLASH_MOST_BLACK) : null;
 const CAMERA = process.env.FLASH_CAMERA ? process.env.FLASH_CAMERA.split(",").map(Number) : null;
 const target = process.env.CARGO_TARGET_DIR || path.join(__dirname, "..", "src-tauri", "target");
 const SERVE =
@@ -295,13 +298,35 @@ let serve = null;
       },
       [PORT, TOKEN, process.env.SC_TRACER_FRAMES_PORT || "", String(port)],
     );
-    await page.goto(url);
-    await page.waitForFunction(() => !!window.store && !!window.viewport, null, { timeout: 120000 });
-    await page.waitForTimeout(1500);
-    const modal = await page.$(".modal-close");
-    if (modal) {
-      await modal.click();
-      await page.waitForTimeout(300);
+    const openApp = async () => {
+      await page.goto(url);
+      await page.waitForFunction(() => !!window.store && !!window.viewport, null, { timeout: 120000 });
+      await page.waitForTimeout(1500);
+      const modal = await page.$(".modal-close");
+      if (modal) {
+        await modal.click();
+        await page.waitForTimeout(300);
+      }
+    };
+    // A software WebGL renderer reads as a low powered computer, which greys Path traced until a second click lifts it.
+    const pickPathTraced = () =>
+      page.evaluate(() => {
+        const pt = document.querySelector('[data-view-mode="pathtraced"]');
+        if (pt.getAttribute("aria-disabled") === "true") pt.click();
+        pt.click();
+      });
+    await openApp();
+    // A cold vite finds the WebGPU tracer's modules on first use and reloads the page, which would lose the model.
+    if (WEBGPU) {
+      for (let tries = 0; tries < 3; tries++) {
+        await page.waitForFunction(() => !!window.store && !!window.viewport, null, { timeout: 120000 });
+        await pickPathTraced().catch(() => {});
+        const ready = await page
+          .waitForFunction(() => /WebGPU/.test(window.viewport?.trace?.backendName ?? ""), null, { timeout: 60000 })
+          .catch(() => null);
+        if (ready) break;
+      }
+      await openApp();
     }
     const setPref = (k, v) =>
       page.evaluate(async ([k, v]) => (await import("/src/ui/renderPrefs.ts")).setRenderPref(k, v), [k, v]);
@@ -325,12 +350,7 @@ let serve = null;
     await page.waitForTimeout(800);
     await setPref("denoise", "off");
     await setPref("bloom", 0);
-    // A software WebGL renderer reads as a low powered computer, which greys Path traced until a second click lifts it.
-    await page.evaluate(() => {
-      const pt = document.querySelector('[data-view-mode="pathtraced"]');
-      if (pt.getAttribute("aria-disabled") === "true") pt.click();
-      pt.click();
-    });
+    await pickPathTraced();
     await page
       .waitForFunction(() => (window.viewport.trace?.samples ?? 0) >= 1 && window.__flash.watchCameras(), null, {
         timeout: 90000,
@@ -493,6 +513,11 @@ let serve = null;
           log.ticks.some((k) => k.freeze > 0),
           "no fade seen",
         );
+      if (MOST_BLACK !== null) {
+        const share = (d) => d.lum.filter((l) => l < 0.01).length / d.lum.length;
+        const most = Math.max(0, ...counted.map(share));
+        check(`${name}: every frame covers the lit view`, most <= MOST_BLACK, `at most ${most.toFixed(3)} black`);
+      }
       // The limit is WCAG's, flashes that occur concurrently over a quarter of the frame.
       // Up to two up and down pairs fit in a second at the gate, TRACE_RETURN_MS apart.
       if (realtimeOn)

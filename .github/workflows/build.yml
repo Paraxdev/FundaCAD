@@ -1511,6 +1511,34 @@ jobs:
           cargo build --locked --release --example tracer_serve --manifest-path src-tauri/tracer/Cargo.toml
           node e2e/pathtrace_bloom_e2e.cjs /tmp/pathtrace_bloom_shots
 
+      # A stop and go orbit on lavapipe: no partial or black frame on screen, and
+      # under the WCAG 2.3.1 flash limit in each Realtime while moving mode.
+      - name: Path traced flash end-to-end
+        timeout-minutes: 10
+        env:
+          SC_TOKEN: citoken
+          SC_CHROME: /usr/bin/google-chrome
+          CARGO_TARGET_DIR: ${{ runner.temp }}/frames-target
+          FUNDACAD_TRACER_ALLOW_CPU: "1"
+        run: node e2e/pathtrace_flash_e2e.cjs /tmp/pathtrace_flash_shots
+
+      # WebGPU on SwiftShader in a closed room, where paths outlast one preview round.
+      # A preview that stops early shows dots on black, an open scene never does.
+      - name: WebGPU tracer preview end-to-end
+        timeout-minutes: 10
+        env:
+          SC_TOKEN: citoken
+          SC_CHROME: /usr/bin/google-chrome
+          SC_VIEWPORT: 480x340
+          FLASH_TRACER: webgpu
+          FLASH_MODEL: tests/fixtures/closed_room.funda
+          FLASH_MOST_BLACK: "0.3"
+          FLASH_CAMERA: 0,-150,0,0,0,0
+          FLASH_ONLY: realtime_off
+          FLASH_PAUSE_SCALE: "2"
+          FLASH_SETTLE_MS: "2000"
+        run: node e2e/pathtrace_flash_e2e.cjs /tmp/pathtrace_flash_webgpu_shots
+
       # The agent harness starts its own engine, vite and Chrome on free ports,
       # so the engine and vite above are left alone.
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0

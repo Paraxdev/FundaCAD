@@ -46,6 +46,7 @@ green-select.png
 *.stl
 *.3mf
 !tests/fixtures/textured_box.funda
+!tests/fixtures/closed_room.funda
 !examples/stress/*.funda
 !tests/fixtures/versions/*.funda
 !tests/fixtures/versions/*.fundab
