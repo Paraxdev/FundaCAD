@@ -49,6 +49,17 @@ describe("DimInput focus on the frame after show", () => {
     field.remove();
   });
 
+  it("selects a value seeded after show again, so typing replaces it", () => {
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => frames.push(cb));
+    dim.show([{ name: "radius", label: "R" }], () => {});
+    dim.seed("radius", 12);
+    frames.forEach((f) => f(0));
+    vi.unstubAllGlobals();
+    const input = document.activeElement as HTMLInputElement;
+    expect([input.selectionStart, input.selectionEnd]).toEqual([0, input.value.length]);
+  });
+
   it("takes focus back from a button a press landed on", () => {
     const button = document.createElement("button");
     showThenFocus(button);

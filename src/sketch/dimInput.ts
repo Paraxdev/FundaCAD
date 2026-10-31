@@ -508,10 +508,12 @@ export class DimInput {
     this.nameGroup();
     // show() is often called from a pointerdown, and the browser moves focus to the click target after it returns,
     // so focus again next frame too or typing and Tab go nowhere. A field that took focus by then, such as a rename in
-    // the Items tree after a selection raised Move, keeps it: losing it would close that field.
+    // the Items tree after a selection raised Move, keeps it: losing it would close that field. The box's own field
+    // still goes through focus(), since a value seeded after show lost its selection and typing would append to it.
     this.focus();
     requestAnimationFrame(() => {
-      if (!isEditableTarget(document.activeElement)) this.focus();
+      const now = document.activeElement;
+      if (this.ownsField(now) || !isEditableTarget(now)) this.focus();
     });
     // Subscribed per showing, or a tool would inherit the last tool's refusal. onPreviewError fires at once, so a box
     // opening onto an already failing preview shows it.
