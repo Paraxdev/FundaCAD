@@ -288,7 +288,8 @@ pub struct Tracer {
     row0: u32,
     rows: u32,
     coarse_out: bool,
-    /// What a whole sample takes, from the bands timed since the scene or the size last changed.
+    /// The time of the last whole sample since the scene or the size changed. A cut sample says nothing, its top rows
+    /// are often cheap sky.
     sample_cost: Option<Duration>,
     /// The time in bands of the sample under way.
     spent: Duration,

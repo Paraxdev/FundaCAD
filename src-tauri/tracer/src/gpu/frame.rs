@@ -211,28 +211,26 @@ impl Tracer {
     pub fn trace_for(&mut self, budget: Duration) -> u32 {
         let start = Instant::now();
         let before = self.sample;
-        loop {
-            let t = Instant::now();
-            if start.elapsed() >= budget || self.fault().is_some() || !self.step() {
-                break;
-            }
-            if self.wait().is_err() {
-                break;
-            }
-            let took = t.elapsed();
-            self.time_band(took);
-            self.rows = adapt_rows(self.rows, self.w, self.h, took, BAND_TARGET);
-        }
+        while start.elapsed() < budget && self.fault().is_none() && self.trace_band() {}
         self.sample - before
+    }
+
+    fn trace_band(&mut self) -> bool {
+        let t = Instant::now();
+        if !self.step() || self.wait().is_err() {
+            return false;
+        }
+        let took = t.elapsed();
+        self.time_band(took);
+        self.rows = adapt_rows(self.rows, self.w, self.h, took, BAND_TARGET);
+        true
     }
 
     /// Called after the band's rows are counted, so row0 0 means the sample just ended.
     fn time_band(&mut self, took: Duration) {
         self.spent += took;
-        let traced = if self.row0 == 0 { self.h } else { self.row0 };
-        self.sample_cost = Some(self.spent * self.h / traced.max(1));
         if self.row0 == 0 {
-            self.spent = Duration::ZERO;
+            self.sample_cost = Some(std::mem::take(&mut self.spent));
         }
     }
 
@@ -273,7 +271,6 @@ impl Tracer {
         pixels[3] = COARSE_ALPHA;
         self.clear_accum();
         self.coarse_out = true;
-        self.sample_cost = Some(took * (block * block));
         // The rows of the full size with this many paths, so the bands keep following the adapter while none runs.
         self.rows = adapt_rows(self.h / (block * block), self.w, self.h, took, BAND_TARGET);
         Some(pixels)

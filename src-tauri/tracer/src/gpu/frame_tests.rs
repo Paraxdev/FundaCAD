@@ -100,7 +100,7 @@ fn a_restart_of_three_bands_goes_by_the_time_of_its_sample() {
     s.sample_cost = Some(ms(200));
     let px = s.advance(64, 48, Duration::ZERO).expect("a long sample has a picture first");
     assert_eq!(px[3], COARSE_ALPHA);
-    assert_ne!(s.sample_cost, Some(ms(200)), "the coarse pass times the sample again");
+    assert_eq!(s.sample_cost, Some(ms(200)), "a coarse pass is no whole sample");
 }
 
 #[test]
@@ -145,15 +145,49 @@ fn the_first_sample_after_a_scene_change_has_its_coarse_picture() {
 }
 
 #[test]
-fn the_bands_so_far_give_the_time_of_a_whole_sample() {
+fn only_a_whole_sample_gives_the_time() {
     let Some(mut s) = traced_quad() else { return };
+    s.sample_cost = Some(ms(60));
     s.spent = Duration::ZERO;
     s.row0 = 12;
     s.time_band(ms(5));
-    assert_eq!((s.sample_cost, s.spent), (Some(ms(20)), ms(5)), "a quarter of the rows");
+    assert_eq!((s.sample_cost, s.spent), (Some(ms(60)), ms(5)), "a quarter of the rows");
     s.row0 = 0;
     s.time_band(ms(25));
     assert_eq!((s.sample_cost, s.spent), (Some(ms(30)), Duration::ZERO), "a wrap ends the sample");
+}
+
+/// The top rows are often cheap sky, so a sample cut off there must not read as a short one.
+#[test]
+fn a_long_sample_cut_by_a_camera_keeps_its_coarse_picture() {
+    let Some(mut s) = traced_quad() else { return };
+    s.resize(64, 2400);
+    s.set_frame_budget(64 * 8);
+    s.sample_cost = Some(ms(60));
+    assert!(s.trace_band());
+    assert!(s.sample_under_way() && s.spent > Duration::ZERO, "row {} of 2400", s.row0);
+    assert_eq!(s.sample_cost, Some(ms(60)));
+    s.set_camera(camera(0.5));
+    let px = s.advance(64, 2400, Duration::ZERO).expect("a long sample has a picture first");
+    assert_eq!(px[3], COARSE_ALPHA);
+}
+
+#[test]
+fn the_time_the_tracer_measures_goes_through_a_camera_into_the_gate() {
+    let Some(mut s) = traced_quad() else { return };
+    s.set_camera(camera(0.5));
+    s.set_frame_budget(64 * 8);
+    let start = Instant::now();
+    s.frame(64, 48, ms(12));
+    let wall = start.elapsed();
+    let cost = s.sample_cost.expect("a whole sample was traced");
+    assert!(cost > Duration::ZERO && cost <= wall, "{cost:?} of {wall:?}");
+
+    s.set_camera(camera(1.0));
+    s.set_frame_budget(64 * 8);
+    assert_eq!(s.sample_cost, Some(cost));
+    let first = s.advance(64, 48, Duration::ZERO).map(|px| px[3]);
+    assert_eq!(first, (cost >= COARSE_MIN_SAMPLE).then_some(COARSE_ALPHA), "after a sample of {cost:?}");
 }
 
 #[test]
