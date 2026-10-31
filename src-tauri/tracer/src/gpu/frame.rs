@@ -38,9 +38,12 @@ const COARSE_ALPHA: u8 = 128;
 
 const MAX_COARSE_BLOCK: u32 = 8;
 
-/// The block side that makes a coarse pass about one band long, or None when two bands hold the sample anyway.
+/// A shorter sample comes soon enough, and a coarse picture ahead of it reads as one bright frame.
+const COARSE_MIN_BANDS: u32 = 4;
+
+/// The block side that makes a coarse pass about one band long, or None when the sample holds too few bands to need one.
 fn coarse_block(rows: u32, height: u32) -> Option<u32> {
-    if rows == 0 || rows * 2 > height {
+    if rows == 0 || rows * COARSE_MIN_BANDS > height {
         return None;
     }
     let side = (height as f64 / rows as f64).sqrt().ceil() as u32;
