@@ -10,6 +10,7 @@ import { anchorDolly, groundAnchor, orthoZoomStep } from "./zoomAnchor";
 import { ease, flightSeconds, worthFlying } from "./viewFlight";
 import { wheelScales } from "../ui/interfaceSize";
 import { cameraFlightsOn } from "../ui/motion";
+import { autoWantsOrtho, onWorldAxis } from "./autoProjection";
 import type {
   CameraRig,
   CameraState,
@@ -135,16 +136,16 @@ export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & {
     }
   }
 
-  // 'auto' snaps to ortho within 0.5 deg of a world axis: view transitions converge inside it, and a deliberate orbit
-  // nudge (~0.4 deg/px) leaves it within a couple of pixels.
-  const AXIS_SNAP_COS = Math.cos((0.5 * Math.PI) / 180);
   const tmpTarget = new THREE.Vector3();
   const tmpPos = new THREE.Vector3();
-  function viewAxisAligned(): boolean {
-    const d = controls.getTarget(tmpTarget).sub(controls.getPosition(tmpPos));
-    const len = d.length();
-    if (len < 1e-9) return false;
-    return Math.max(Math.abs(d.x), Math.abs(d.y), Math.abs(d.z)) / len >= AXIS_SNAP_COS;
+  // As in the navigator, 'auto' asks the content box of an orthographic view only when it is set by its eye, so a rebuild
+  // growing the model around the camera never swaps the picture.
+  let eyeSet = false;
+  function viewAxisAligned(askBox = eyeSet): boolean {
+    const eye = controls.getPosition(tmpPos);
+    const dir = controls.getTarget(tmpTarget).sub(eye);
+    if (usingOrtho && !askBox) return onWorldAxis(dir.x, dir.y, dir.z);
+    return autoWantsOrtho(dir, eye, contentBox, usingOrtho);
   }
   /** In 'auto', keep the actual projection in sync with the view axis. Returns
    *  true when a swap happened (caller should re-render). */
@@ -370,9 +371,9 @@ export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & {
     projectionMode() {
       return mode;
     },
-    setProjectionMode(m: ProjectionMode) {
+    setProjectionMode(m: ProjectionMode, keepOrtho = false) {
+      const wantOrtho = m === "ortho" || (m === "auto" && viewAxisAligned(mode !== "auto" && !keepOrtho));
       mode = m;
-      const wantOrtho = m === "ortho" || (m === "auto" && viewAxisAligned());
       if (wantOrtho !== usingOrtho) swapProjection();
     },
     resize(w: number, h: number) {
@@ -415,6 +416,7 @@ export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & {
         ortho.updateProjectionMatrix();
       }
       const swapped = applyAutoProjection();
+      if (!moved) eyeSet = false;
       // After camera-controls positions the camera: update() rewrites the orientation each frame, so re-banking is idempotent
       // and never touches camera.up, which would fight the sketch plane up handling.
       if (rollAngle !== 0) {
@@ -675,6 +677,7 @@ export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & {
         scale: rig.viewScale(),
         fov: persp.fov,
         mode,
+        ortho: usingOrtho,
       };
     },
     setState(st: CameraState, animate = false) {
@@ -684,7 +687,11 @@ export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & {
       const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(q);
       rig.setFov(st.fov);
       rig.setProjectionMode(st.mode);
-      const d = usingOrtho ? controls.distance : st.scale / Math.tan((persp.fov * Math.PI) / 360);
+      eyeSet = !st.ortho;
+      const d =
+        usingOrtho && !(eyeSet && mode === "auto")
+          ? controls.distance
+          : st.scale / Math.tan((persp.fov * Math.PI) / 360);
       const t = new THREE.Vector3(...st.target);
       const eye = t.clone().addScaledVector(fwd, -d);
       persp.up.copy(up);
@@ -748,6 +755,12 @@ export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & {
       persp.up.set(0, 0, 1);
       ortho.up.set(0, 0, 1);
       controls.updateCameraUp();
+      eyeSet = true;
+      // The swap to perspective dollies to the distance this height gives, so it has to say the same as the eye.
+      const d = eye.distanceTo(target);
+      if (usingOrtho && mode === "auto" && d > 0) {
+        controls.zoomTo(orthoHalfHeight() / (d * Math.tan((persp.fov * Math.PI) / 360)), animate);
+      }
       controls.setLookAt(eye.x, eye.y, eye.z, target.x, target.y, target.z, animate);
     },
     lerpLookAt(eyeA, targetA, eyeB, targetB, t, animate = false) {

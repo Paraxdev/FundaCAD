@@ -3960,6 +3960,7 @@ export class Viewport {
   }
 
   enterSketchView(origin: THREE.Vector3, normal: THREE.Vector3, up: THREE.Vector3) {
+    if (!this.sketchOrtho) this.sketchFromOrtho = this.rig.isOrtho();
     // Stay on the side of the plane the camera is already on (viewFlight.viewSideNormal).
     const eye = this.rig.getPosition();
     const side = viewSideNormal([normal.x, normal.y, normal.z], [eye.x, eye.y, eye.z], [origin.x, origin.y, origin.z]);
@@ -3997,7 +3998,7 @@ export class Viewport {
       this.sketchPrevMode = this.rig.projectionMode();
       this.rig.setProjectionMode("ortho");
     } else {
-      this.rig.setProjectionMode(this.sketchPrevMode);
+      this.rig.setProjectionMode(this.sketchPrevMode, this.sketchFromOrtho);
     }
     this.sketchOrtho = on;
     this.requestRender();
@@ -4015,6 +4016,7 @@ export class Viewport {
   }
   private sketchPrevMode: ProjectionMode = "auto";
   private sketchOrtho = false; // currently in the sketch's forced flat (ortho) view
+  private sketchFromOrtho = false;
   private sketchDimmed = false;
 
   /** Dim the model behind an open sketch. depthWrite stays off so the sketch grid

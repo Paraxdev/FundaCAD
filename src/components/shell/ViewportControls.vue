@@ -153,7 +153,11 @@ const projection = computed<ProjectionMode>(() => {
 const PROJECTIONS = [
   { value: "persp" as ProjectionMode, label: "Perspective" },
   { value: "ortho" as ProjectionMode, label: "Orthographic" },
-  { value: "auto" as ProjectionMode, label: "Automatic", hint: "orthographic when looking straight on" },
+  {
+    value: "auto" as ProjectionMode,
+    label: "Automatic",
+    hint: "orthographic when looking straight on from outside the model",
+  },
 ];
 function pickProjection(m: ProjectionMode) {
   engine.viewport.setProjection(m);

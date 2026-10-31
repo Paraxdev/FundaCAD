@@ -6,6 +6,7 @@ import type { NavScene, ProjectionMode } from "../cameras";
 import { centreDepth, orbitPivot, zoomAnchor, type AnchorContext } from "./anchor";
 import { stepAngles, type StepDir } from "../viewStep";
 import { OrbitChannel, PanChannel, ZoomChannel } from "./channels";
+import { autoWantsOrtho, onWorldAxis } from "../autoProjection";
 import { makeFlight, stepFlight, type Flight } from "./flight";
 import { clampScale, contentLimits, defaultLimits, elevRange, minScaleOf, type Limits } from "./limits";
 import { decompose, turntableQuat, wrapAngle } from "./math";
@@ -47,8 +48,6 @@ export const CLICK_SLOP_PX = 5;
 export const ZOOM_PER_DRAG_PX = 3;
 /** Drag distance over which a banked view (3D mouse roll) comes back level. */
 export const RELEVEL_PX = 80;
-/** 'auto' projection is orthographic within this of a world axis. */
-const AXIS_SNAP_COS = Math.cos((0.5 * Math.PI) / 180);
 /** The model ball the target is kept in, in bounding radii. */
 export const CONTAIN_FACTOR = 1.5;
 /** Seconds of drag velocity an inertial orbit carries on after release. */
@@ -104,6 +103,9 @@ export class Navigator {
   private unsettled = false;
   private good: Pose = makePose();
   private version = 0;
+  // An orthographic view's eye is only scale over lens, a zoom, fit or re-seat moves it through the model while the
+  // picture stays outside, so 'auto' asks the content box only of a view set by its eye.
+  private eyeSet = false;
   private stamp = makePose();
   private listeners: Record<NavigatorEvent, Set<() => void>> = {
     inputstart: new Set(),
@@ -194,9 +196,9 @@ export class Navigator {
   projectionMode(): ProjectionMode {
     return this.mode;
   }
-  setProjectionMode(m: ProjectionMode) {
+  setProjectionMode(m: ProjectionMode, keepOrtho = false) {
+    const want = m === "ortho" || (m === "auto" && this.autoOrtho(this.mode !== "auto" && !keepOrtho));
     this.mode = m;
-    const want = m === "ortho" || (m === "auto" && this.axisAligned());
     if (want !== this.pose.ortho) {
       this.pose.ortho = want;
       this.moved();
@@ -479,12 +481,13 @@ export class Navigator {
       this.emit("rest");
     }
     if (this.mode === "auto" && this.gesture?.kind !== "orbit" && !this.orbit) {
-      const want = this.axisAligned();
+      const want = this.autoOrtho();
       if (want !== this.pose.ortho) {
         this.pose.ortho = want;
         this.moved();
       }
     }
+    if (!this.flight) this.eyeSet = false;
     this.sanitize();
     return this.version !== before;
   }
@@ -602,9 +605,11 @@ export class Navigator {
     return depth >= this.limits.minDistance && depth * halfTan(p.fov) <= this.limits.maxScale;
   }
 
-  private axisAligned(): boolean {
-    const f = forwardOf(this.pose, new THREE.Vector3());
-    return Math.max(Math.abs(f.x), Math.abs(f.y), Math.abs(f.z)) >= AXIS_SNAP_COS;
+  private autoOrtho(eyeSet = this.eyeSet): boolean {
+    const eye = eyeOf(this.pose, new THREE.Vector3());
+    const dir = this.pose.target.clone().sub(eye);
+    if (this.pose.ortho && !eyeSet) return onWorldAxis(dir.x, dir.y, dir.z);
+    return autoWantsOrtho(dir, eye, this.box, this.pose.ortho);
   }
 
   private moved() {
@@ -650,10 +655,12 @@ export class Navigator {
       hard?: boolean;
       onArrive?: (() => void) | undefined;
       duration?: number;
+      byEye?: boolean;
     } = {},
   ) {
     this.stopAll();
     this.flight = null;
+    this.eyeSet = opts.byEye ?? false;
     const target = clonePose(to);
     target.ortho = this.pose.ortho;
     target.scale = clampScale(this.limits, target.fov, target.scale);
@@ -686,7 +693,7 @@ export class Navigator {
     const d = eye.distanceTo(target);
     if (!(d > 0) || !Number.isFinite(d)) return;
     const q = lookQuat(eye, target);
-    this.flyTo(this.poseWith(q, target, d * halfTan(this.pose.fov)), { animate });
+    this.flyTo(this.poseWith(q, target, d * halfTan(this.pose.fov)), { animate, byEye: true });
   }
 
   rotateTo(azimuth: number, polar: number, animate = false) {
