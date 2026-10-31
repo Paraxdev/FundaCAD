@@ -105,7 +105,11 @@ function installCapture([cols, rows, webgpu]) {
       seq: null,
     };
     log.draws.push(entry);
-    queueMicrotask(() => (entry.seq = backend()?.shownSeq ?? null));
+    // After the tick: a restart draws and then hides the trace in one task, that draw is never composited.
+    queueMicrotask(() => {
+      entry.seq = backend()?.shownSeq ?? null;
+      entry.shown = v.shown;
+    });
   };
   if (webgpu) {
     // The app greys Path traced on a fallback adapter, and SwiftShader is one.
@@ -123,8 +127,9 @@ function installCapture([cols, rows, webgpu]) {
     GPUQueue.prototype.submit = function (buffers) {
       submit.call(this, buffers);
       const c = backend()?.canvas;
-      if (!drew || !log.on || !c?.width) return;
+      if (!drew) return;
       drew = false;
+      if (!log.on || !c?.width) return;
       copy.width = c.width;
       copy.height = c.height;
       g.drawImage(c, 0, 0);
