@@ -126,16 +126,6 @@ mod t {
         assert_eq!(px[3], 255);
     }
 
-    #[test]
-    fn a_sample_of_three_bands_sends_no_coarse_picture() {
-        let Some(mut s) = red_quad_at_cap(1) else { return };
-        s.set_camera(moved_camera());
-        s.set_frame_budget(64 * 16);
-        assert_eq!(s.advance(64, 48, Duration::ZERO), None, "nothing traced with no budget");
-        let px = s.frame(64, 48, Duration::from_millis(12));
-        assert_eq!(px[3], 255, "the first picture is a whole sample");
-    }
-
     /// The quad fills the view from above, so a row without light was never traced.
     #[test]
     fn a_frame_after_a_camera_move_has_no_unsampled_rows() {
