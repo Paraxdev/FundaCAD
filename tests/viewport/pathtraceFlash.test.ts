@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error an e2e helper in plain CommonJS, with no types.
 import flash from "../../e2e/lib/flash.cjs";
+// @ts-expect-error a test helper in plain CommonJS, with no types.
+import flashRun from "./fixtures/flashRun.cjs";
 
-const { analyse, blackEdges, boundedLog, concurrentFlashesPerSecond, flashesPerSecond, isBand, toGrid } = flash;
+const { analyse, blackEdges, boundedLog, concurrentFlashesPerSecond, flashesPerSecond, isBand, scrubber, toGrid } =
+  flash;
+const { capped } = flashRun;
 
 const COLS = 8;
 const ROWS = 5;
@@ -212,5 +216,48 @@ describe("the bounded page log", () => {
     expect(out).toEqual([]);
     log.flush();
     expect(out).toEqual(["... lines cut: 1", "b", "c"]);
+  });
+
+  it("prints each line once over several flushes, and says only what each one cut", () => {
+    const out: string[] = [];
+    const log = boundedLog((l: string) => out.push(l), { head: 1, tail: 1, width: 100 });
+    ["a", "b", "c"].forEach((l) => log.line(l));
+    log.flush();
+    log.flush();
+    log.line("d");
+    log.flush();
+    expect(out).toEqual(["a", "... lines cut: 1", "c", "d"]);
+  });
+
+  it("counts a multi-line message by its lines, and cuts each to the width", () => {
+    const out: string[] = [];
+    const log = boundedLog((l: string) => out.push(l), { head: 2, tail: 1, width: 4 });
+    log.line("one\r\ntwo\nabcdefgh\nfour");
+    log.flush();
+    expect(out).toEqual(["one", "two", "... lines cut: 1", "four"]);
+  });
+});
+
+describe("capping a log file", () => {
+  it("leaves a file within the cap as it is", () => {
+    expect(capped("0123456789", { head: 5, tail: 5 })).toBe("0123456789");
+  });
+
+  it("keeps the start and end of a larger file and says how many bytes it cut", () => {
+    expect(capped("0123456789", { head: 2, tail: 3 })).toBe("01\n... bytes cut: 5\n789");
+  });
+
+  it("scrubs what it keeps", () => {
+    expect(capped("a secret b", { head: 100, tail: 100, scrub: scrubber("secret") })).toBe("a <token> b");
+  });
+});
+
+describe("scrubbing a secret", () => {
+  it("replaces it plain and URL encoded", () => {
+    expect(scrubber("a b")("x a b y a%20b z")).toBe("x <token> y <token> z");
+  });
+
+  it("does nothing with no secret", () => {
+    expect(scrubber("")("x y")).toBe("x y");
   });
 });

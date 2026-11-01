@@ -1,6 +1,7 @@
 // Flash and blackout analysis of a run of shown frames, for e2e/pathtrace_flash_e2e.cjs.
 // WCAG 2.3.1 general flash: a flash is a pair of opposing changes of at least 10 percent
 // of full relative luminance where the darker image is below 0.80, over a quarter of the frame.
+const fs = require("fs");
 
 const FLASH_DELTA = 0.1;
 const FLASH_DARKER_BELOW = 0.8;
@@ -210,26 +211,59 @@ function analyse(frames, cols) {
 /** Prints the first `head` lines as they come and holds the last `tail` until flush: a chatty run's failure comes last. */
 function boundedLog(write, { head, tail, width }) {
   let seen = 0;
+  let cut = 0;
   const held = [];
   return {
     line(text) {
-      const cut = text.length > width ? `${text.slice(0, width)}... (${text.length} chars)` : text;
-      if (seen++ < head) write(cut);
-      else {
-        held.push(cut);
-        if (held.length > tail) held.shift();
+      for (const one of text.split(/\r?\n/)) {
+        const kept = one.length > width ? `${one.slice(0, width)}... (${one.length} chars)` : one;
+        if (seen++ < head) write(kept);
+        else {
+          held.push(kept);
+          if (held.length > tail) {
+            held.shift();
+            cut++;
+          }
+        }
       }
     },
     flush() {
-      const dropped = seen - head - held.length;
-      if (dropped > 0) write(`... lines cut: ${dropped}`);
+      if (cut > 0) write(`... lines cut: ${cut}`);
+      cut = 0;
       for (const l of held.splice(0)) write(l);
     },
   };
 }
 
+function scrubber(secret) {
+  if (!secret) return (text) => text;
+  return (text) => text.split(secret).join("<token>").split(encodeURIComponent(secret)).join("<token>");
+}
+
+function capLogFile(file, { head, tail, scrub = (text) => text }) {
+  const { size } = fs.statSync(file);
+  const fd = fs.openSync(file, "r");
+  const read = (length, position) => {
+    const bytes = Buffer.alloc(length);
+    fs.readSync(fd, bytes, 0, length, position);
+    return bytes.toString("utf8");
+  };
+  let kept;
+  try {
+    kept =
+      size <= head + tail
+        ? read(size, 0)
+        : `${read(head, 0)}\n... bytes cut: ${size - head - tail}\n${read(tail, size - tail)}`;
+  } finally {
+    fs.closeSync(fd);
+  }
+  fs.writeFileSync(file, scrub(kept));
+}
+
 module.exports = {
   boundedLog,
+  capLogFile,
+  scrubber,
   toGrid,
   toGridSource: toGrid.toString(),
   mean,

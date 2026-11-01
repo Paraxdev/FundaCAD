@@ -22,6 +22,7 @@
 // FLASH_MOST_BLACK fails a frame on the trace with more than this share of black cells, for a scene known to be lit.
 // FLASH_MOST_CHANGED fails a step on the trace that changes more than this share of cells, for a scene that stays alike.
 // A WebGPU run also prints the adapter and the whole page console, and leaves Chrome's stderr in chrome_stderr.log in outDir.
+// FLASH_DEADLINE_S fails a WebGPU run that takes longer, and still prints what it held.
 const { spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
@@ -35,9 +36,11 @@ if (WEBGPU) {
   process.env.DEBUG_FILE = CHROME_LOG;
 }
 const { chromium } = require("playwright-core");
-const { analyse, blackEdges, boundedLog, toGridSource } = require("./lib/flash.cjs");
+const { analyse, blackEdges, boundedLog, capLogFile, scrubber, toGridSource } = require("./lib/flash.cjs");
 
 const TOKEN = process.env.SC_TOKEN || "";
+const scrub = scrubber(TOKEN);
+const DEADLINE_S = WEBGPU ? Number(process.env.FLASH_DEADLINE_S || 0) : 0;
 const EXE = process.env.SC_CHROME || "";
 const URL = process.env.SC_URL || "http://localhost:5173/";
 const PORT = process.env.SC_ENGINE_PORT || "8765";
@@ -280,14 +283,16 @@ async function webgpuAdapterFacts() {
   return { info: plain(a.info), limits: plain(a.limits), features: [...a.features] };
 }
 
-async function tailChromeLog() {
+async function finishChromeLog(printTail) {
   if (!WEBGPU) return;
   // Playwright's log stream writes behind the last line, and this is about to exit.
   await new Promise((r) => setTimeout(r, 500));
-  console.log(`--- end of ${CHROME_LOG}`);
+  if (printTail) console.log(`--- end of ${CHROME_LOG}`);
   try {
+    capLogFile(CHROME_LOG, { head: 2 * 1024 * 1024, tail: 6 * 1024 * 1024, scrub });
+    if (!printTail) return;
     const tail = boundedLog(console.log, { head: 0, tail: 300, width: 2000 });
-    fs.readFileSync(CHROME_LOG, "utf8").split(/\r?\n/).forEach(tail.line);
+    tail.line(fs.readFileSync(CHROME_LOG, "utf8").trimEnd());
     tail.flush();
   } catch (e) {
     console.log(`no Chrome log: ${e.message}`);
@@ -295,6 +300,7 @@ async function tailChromeLog() {
 }
 
 let serve = null;
+let deadlineHit = false;
 (async () => {
   fs.mkdirSync(OUT, { recursive: true });
   let port = process.env.SC_TRACER_PORT;
@@ -310,6 +316,18 @@ let serve = null;
   });
   const report = { viewport: [VW, VH], orbitMs: ORBIT_MS, runs: {} };
   const pageLog = WEBGPU ? boundedLog(console.log, { head: 1000, tail: 300, width: 2000 }) : null;
+  // A timed out Actions step signals only its shell, never node, so no handler here would run: the run stops itself first.
+  const stopAtDeadline = async () => {
+    deadlineHit = true;
+    console.error(`FAILED: still running after ${DEADLINE_S} s, stopping before the step's time limit`);
+    fs.writeFileSync(path.join(OUT, "report.json"), JSON.stringify(report, null, 1));
+    pageLog.flush();
+    await Promise.race([browser.close().catch(() => {}), new Promise((r) => setTimeout(r, 5000))]);
+    pageLog.flush();
+    await finishChromeLog(true);
+    process.exit(1);
+  };
+  const deadline = DEADLINE_S ? setTimeout(stopAtDeadline, DEADLINE_S * 1000) : null;
   try {
     const page = await browser.newPage({ colorScheme: "dark", viewport: { width: VW, height: VH } });
     page.on("pageerror", (e) => {
@@ -317,7 +335,7 @@ let serve = null;
       failures++;
     });
     page.on("console", (m) => {
-      if (pageLog) pageLog.line(`[page ${new Date().toISOString()} ${m.type()}] ${m.text()}`);
+      if (pageLog) pageLog.line(scrub(`[page ${new Date().toISOString()} ${m.type()}] ${m.text()}`));
       else if (/tracer|native|fault/i.test(m.text())) console.log(`[page] ${m.text().slice(0, 300)}`);
     });
     await page.addInitScript(installCapture, [COLS, ROWS, WEBGPU]);
@@ -658,14 +676,18 @@ let serve = null;
     fs.writeFileSync(path.join(OUT, "report.json"), JSON.stringify(report, null, 1));
     pageLog?.flush();
     await browser.close();
+    pageLog?.flush();
+    clearTimeout(deadline);
     serve?.srv.kill();
   }
-  if (failures) await tailChromeLog();
+  if (deadlineHit) return;
+  await finishChromeLog(failures > 0);
   console.log(failures ? `${failures} failed` : "all passed");
   process.exit(failures && !MEASURE_ONLY ? 1 : 0);
 })().catch(async (e) => {
+  if (deadlineHit) return;
   console.error(e);
-  await tailChromeLog();
+  await finishChromeLog(true);
   serve?.srv.kill();
   process.exit(1);
 });

@@ -18,6 +18,7 @@ describe("the flash steps", () => {
         limit: /^ {8}timeout-minutes: (\d+)$/m.exec(text)?.[1],
         tolerated: /continue-on-error/.test(text),
         run: /^ {8}run: (.*)$/m.exec(text)?.[1],
+        deadline: /^ {10}FLASH_DEADLINE_S: "(\d+)"$/m.exec(text)?.[1],
       };
     });
     expect(seen).toEqual([
@@ -26,12 +27,14 @@ describe("the flash steps", () => {
         limit: "5",
         tolerated: false,
         run: "node e2e/pathtrace_flash_e2e.cjs /tmp/pathtrace_flash_shots",
+        deadline: undefined,
       },
       {
         name: FLASH_STEPS[1],
         limit: "5",
         tolerated: true,
         run: "node e2e/pathtrace_flash_e2e.cjs /tmp/pathtrace_flash_webgpu_shots",
+        deadline: "280",
       },
     ]);
   });
