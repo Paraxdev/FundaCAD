@@ -222,7 +222,8 @@ export class TargetEditTool {
     if (!hit) return null;
     if (t.kind === "edge") return hit.kind === "edge" ? hit.selector : null;
     if (hit.kind !== "face") return null;
-    return { kind: "face", by: "nearest", point: hit.point } as Selector;
+    const body = t.ownBody ? this.viewport.faceIdToBodyId(hit.faceId) : null;
+    return { kind: "face", by: "nearest", point: hit.point, ...(body ? { body } : {}) } as Selector;
   }
 
   private toggle(entry: TargetEntry, t: TargetField) {
@@ -280,7 +281,7 @@ export class TargetEditTool {
       const edge = this.viewport.edgeLineByMid(p);
       return edge ? { kind: "edge", edge } : null;
     }
-    const faceId = this.viewport.faceIdNear(p);
+    const faceId = this.viewport.faceIdNear(p, 0, sel.body);
     return faceId === null ? null : { kind: "face", faceId };
   }
 

@@ -45,6 +45,8 @@ export class FaceOffsetTool {
   private phase: Phase = "pick";
   private faces: Selector[] = [];
   private faceIds: number[] = [];
+  /** Read once per face, while its id is live: a built preview renumbers the faces of every body after a shelled one. */
+  private faceOwners: (string | null)[] = [];
   private bodyId: string | null = null;
   private anchor = new THREE.Vector3();
   private axis = new THREE.Vector3(0, 0, 1);
@@ -168,14 +170,16 @@ export class FaceOffsetTool {
       );
       return;
     }
-    // Ctrl/Cmd-click adds another face of the same body; all share the one distance, as press/pull and the engine do.
+    // Ctrl/Cmd-click adds another face; all share the one distance, as press/pull and the engine do. Only a shell
+    // binds each face to its own body, the others act on one body.
     if (e.ctrlKey || e.metaKey) {
       const hit = this.viewport.pickFaceForPressPull(e.clientX, e.clientY);
-      if (hit && hit.bodyId === this.bodyId) {
+      if (hit && (this.mode === "shell" || hit.bodyId === this.bodyId)) {
         e.preventDefault();
         e.stopImmediatePropagation();
         this.faces.push(hit.selector);
         this.faceIds.push(hit.faceId);
+        this.faceOwners.push(hit.bodyId);
         const wasRound = this.round !== null;
         if (this.round && !this.inTangentRun()) this.dropRound();
         // The handle moves to the face just picked; a round run keeps its lead face, which it reads a size from.
@@ -273,6 +277,7 @@ export class FaceOffsetTool {
   ) {
     this.faces = faces;
     this.faceIds = faceIds;
+    this.faceOwners = faceIds.map((id) => this.viewport.faceIdToBodyId(id));
     this.bodyId = bodyId;
     this.round = this.mode === "offsetFace" ? round : null;
     this.contact = null;
@@ -637,7 +642,17 @@ export class FaceOffsetTool {
     const faces = this.faces.length === 1 ? (this.faces[0] ?? this.faces) : this.faces;
     const body = this.bodyId != null ? { body: this.bodyId } : {};
     if (this.mode === "shell") {
-      return { id: this.previewId, type: "shell", faces, thickness: Math.abs(v) };
+      // The engine takes an unbound selector for the active body, which is not the body of a selected face.
+      const bound = this.faces.map((s, i) => {
+        const owner = this.faceOwners[i];
+        return owner ? ({ ...s, body: owner } as Selector) : s;
+      });
+      return {
+        id: this.previewId,
+        type: "shell",
+        faces: bound.length === 1 ? bound[0]! : bound,
+        thickness: Math.abs(v),
+      };
     }
     if (this.mode === "thicken") {
       return {

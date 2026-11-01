@@ -25,6 +25,8 @@ export interface TargetField {
   alsoReads?: string;
   /** A face pick writes a tracked selector with its body, so the row keeps naming that face when an edit moves it. */
   tracked?: boolean;
+  /** A face pick writes its body: the feature acts on each selector's own body, and one with none means the active one. */
+  ownBody?: boolean;
 }
 
 /** Empty is the usual case and means every shown body it reaches, so hiding a body changes what it builds. Naming
@@ -66,6 +68,7 @@ export const FEATURE_TARGETS: Partial<Record<FeatureType, readonly TargetField[]
       shape: "selector",
       arity: "many",
       whenEmpty: "sealed hollow",
+      ownBody: true,
     },
   ],
   offsetFace: [{ field: "faces", label: "Faces", kind: "face", shape: "selector", arity: "many" }],

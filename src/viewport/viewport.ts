@@ -2390,7 +2390,7 @@ export class Viewport {
   /** The face whose surface is nearest `point`, as the engine's by:"nearest" resolves.
    *  Never compare against faceCentroidWorld: triangle centroids move with tessellation
    *  density. `extraTol` covers a known offset such as a texture's depth. */
-  faceIdNear(point: [number, number, number], extraTol = 0): number | null {
+  faceIdNear(point: [number, number, number], extraTol = 0, onBody?: string): number | null {
     if (!this.model) return null;
     const target = new THREE.Vector3(point[0], point[1], point[2]);
     const local = new THREE.Vector3();
@@ -2400,6 +2400,7 @@ export class Viewport {
     let best: number | null = null;
     let bestDist = Infinity;
     for (const body of this.model.bodies) {
+      if (onBody !== undefined && body.id !== onBody) continue;
       // compare in the body's local space: one matrix inverse per body instead
       // of three vector transforms per triangle.
       inv.copy(body.mesh.matrixWorld).invert();
