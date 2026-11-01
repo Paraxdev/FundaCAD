@@ -3,9 +3,10 @@
 
 import * as THREE from "three";
 import { Spring } from "./math";
+import type { NearestSweep } from "./zoomSnap";
 
-// A channel snaps to its goal once what is left is a ten-thousandth of a pixel
-// or so; the snap is the same exact transform, so nothing it pins moves.
+// A channel lands on its goal once what is left is too small to see; a zoom gets its measure from what is in view (see
+// zoomSnap.ts). The landing is the same exact transform, so nothing it pins moves.
 const EPS_LOG = 1e-7;
 const EPS_ANGLE = 1e-6;
 const EPS_PX = 1e-3;
@@ -18,8 +19,8 @@ export class ZoomChannel {
   readonly px: number;
   readonly py: number;
   goal = 0;
-  /** The nearest surface in view near the end of this zoom, undefined until looked for. */
-  nearest: number | null | undefined;
+  /** The look over the view near the end of this zoom, null until it starts. */
+  sweep: NearestSweep | null = null;
   private spring = new Spring();
 
   constructor(anchor: THREE.Vector3, px: number, py: number) {
@@ -31,7 +32,7 @@ export class ZoomChannel {
   add(logFactor: number) {
     if (!Number.isFinite(logFactor)) return;
     this.goal += logFactor;
-    this.nearest = undefined;
+    this.sweep = null;
   }
 
   left(): number {

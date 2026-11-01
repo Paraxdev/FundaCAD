@@ -8,21 +8,41 @@ import { depthOf, project, type Frame, type Pose } from "./pose";
 
 export const ZOOM_SNAP_PX = 0.1;
 
-const GRID_X = 9;
-const GRID_Y = 5;
+/** How many times the largest possible snap a zoom has left when it starts looking. */
+export const SWEEP_FROM = 8;
 
-/** The nearest surface over a grid reaching the frame's edges, where a wall beside the eye is nearest. */
-export function nearestDepth(p: Pose, ctx: AnchorContext): number | null {
-  let nearest: number | null = null;
-  for (let j = 0; j < GRID_Y; j++) {
-    for (let i = 0; i < GRID_X; i++) {
-      const x = (i / (GRID_X - 1)) * ctx.frame.width;
-      const y = (j / (GRID_Y - 1)) * ctx.frame.height;
+const RAYS = 45;
+const RAY_BUDGET_MS = 2;
+const GOLDEN = 0.618033988749895;
+
+/** The frame's corners, edge midpoints and centre, where a wall beside the eye is nearest, then points that share no
+ *  column or row, so a bar of either direction wider than about a sixteenth of the frame meets one. */
+function rayPixel(k: number, frame: Frame): { x: number; y: number } {
+  if (k < 9) return { x: ((k % 3) / 2) * frame.width, y: (Math.floor(k / 3) / 2) * frame.height };
+  const i = k - 8.5;
+  return { x: (i / (RAYS - 9)) * frame.width, y: ((i * GOLDEN) % 1) * frame.height };
+}
+
+/** Looks for the nearest surface in view a budget at a time, as a model of many bodies can take milliseconds a ray. */
+export class NearestSweep {
+  private cast = 0;
+  private seen: number | null = null;
+
+  /** True once every ray is in. Always casts one, so a heavy model still gets there or the spring lands first. */
+  advance(p: Pose, ctx: AnchorContext, budgetMs = RAY_BUDGET_MS): boolean {
+    const until = performance.now() + budgetMs;
+    while (this.cast < RAYS) {
+      const { x, y } = rayPixel(this.cast++, ctx.frame);
       const d = depthUnder(p, ctx, x, y);
-      if (d !== null && d > 0 && (nearest === null || d < nearest)) nearest = d;
+      if (d !== null && d > 0 && (this.seen === null || d < this.seen)) this.seen = d;
+      if (performance.now() >= until) break;
     }
+    return this.cast >= RAYS;
   }
-  return nearest;
+
+  nearest(): number | null {
+    return this.seen;
+  }
 }
 
 /** The log left that shifts nothing in view by more than `ZOOM_SNAP_PX`. */

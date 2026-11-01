@@ -395,6 +395,8 @@ export class Viewport {
     this.rig.setScene({
       raycast: (origin, dir) => this.surfaceDistance(origin, dir),
       groundZ: () => (this.scene.grid.group.visible ? this.targetGridZ : null),
+      // No raycast index is built while a reply streams in, so a ray tests every triangle.
+      raysCostly: () => this.streaming,
     });
     this.rig.setPivotSource(() => {
       const pivot = getNavPrefs().orbitPivot;

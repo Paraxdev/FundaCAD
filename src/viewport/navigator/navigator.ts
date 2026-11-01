@@ -6,7 +6,7 @@ import type { NavScene, ProjectionMode } from "../cameras";
 import { centreDepth, orbitPivot, zoomAnchor, type AnchorContext } from "./anchor";
 import { stepAngles, type StepDir } from "../viewStep";
 import { OrbitChannel, PanChannel, ZoomChannel } from "./channels";
-import { nearestDepth, zoomSnapLog } from "./zoomSnap";
+import { NearestSweep, SWEEP_FROM, zoomSnapLog } from "./zoomSnap";
 import { autoWantsOrtho, onWorldAxis } from "../autoProjection";
 import { makeFlight, stepFlight, type Flight } from "./flight";
 import { clampScale, contentLimits, defaultLimits, elevRange, minScaleOf, type Limits } from "./limits";
@@ -145,16 +145,19 @@ export class Navigator {
     const h = Math.max(1, height);
     if (w === this.frame.width && h === this.frame.height) return;
     this.frame = { width: w, height: h };
+    this.forgetNearest();
     this.recomputeLimits();
     this.touch();
   }
 
   setScene(scene: NavScene | null) {
     this.scene = scene;
+    this.forgetNearest();
   }
 
   setContentBox(box: THREE.Box3 | null) {
     this.box = box && !box.isEmpty() ? box.clone() : null;
+    this.forgetNearest();
     this.recomputeLimits();
   }
 
@@ -163,6 +166,7 @@ export class Navigator {
   }
 
   setAnchorPlane(plane: THREE.Plane | null) {
+    this.forgetNearest();
     this.plane = plane ? plane.clone() : null;
   }
 
@@ -517,15 +521,24 @@ export class Navigator {
 
   /** The log a zoom may drop at once, none while anything else moves the view, as it goes by what is in view now. */
   private zoomSnap(ch: ZoomChannel, tau: number): number {
-    if (!(tau > 0) || this.gesture || this.orbit || this.pan || ch === this.pinchZoom) {
-      ch.nearest = undefined;
+    const busy = this.gesture || this.orbit || this.pan || ch === this.pinchZoom;
+    if (!(tau > 0) || busy || this.scene?.raysCostly?.()) {
+      ch.sweep = null;
       return 0;
     }
     const p = this.pose;
-    // A near surface only ever shrinks this, so no rays are spent until the zoom is close to it.
-    if (!ch.near(1.5 * zoomSnapLog(p, this.frame, ch.anchor, null), tau)) return 0;
-    if (ch.nearest === undefined) ch.nearest = p.ortho ? null : nearestDepth(p, this.ctx());
-    return zoomSnapLog(p, this.frame, ch.anchor, ch.nearest);
+    const most = zoomSnapLog(p, this.frame, ch.anchor, null);
+    // A near surface only ever shrinks this, so no rays are spent until the zoom is close to it, early enough for a look
+    // spread over frames to finish in time.
+    if (!ch.near(SWEEP_FROM * most, tau)) return 0;
+    if (p.ortho) return most;
+    ch.sweep ??= new NearestSweep();
+    if (!ch.sweep.advance(p, this.ctx())) return 0;
+    return zoomSnapLog(p, this.frame, ch.anchor, ch.sweep.nearest());
+  }
+
+  private forgetNearest() {
+    for (const ch of this.zooms) ch.sweep = null;
   }
 
   /** How much of a log zoom about A the limits allow. */
@@ -756,6 +769,7 @@ export class Navigator {
     const got = this.limitedLog(a, Math.log(factor));
     if (got === 0) return;
     scaleAbout(this.pose, a, Math.exp(got));
+    this.forgetNearest();
     this.moved();
   }
 
