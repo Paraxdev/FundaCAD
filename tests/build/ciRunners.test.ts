@@ -37,4 +37,10 @@ describe("the build workflow's runners", () => {
     const minutes = Number(/timeout-minutes: (\d+)/.exec(job("e2e"))?.[1]);
     expect(minutes).toBeGreaterThanOrEqual(60);
   });
+
+  it("runs the heavy tests beside e2e, each in exactly one job", () => {
+    expect(job("e2e")).toContain('-m "smoke and not a11y and not heavy"');
+    expect(job("e2e-heavy")).toContain('-m "smoke and heavy"');
+    expect(job("e2e-heavy")).toMatch(/needs: rust-geom\r?$/m);
+  });
 });
