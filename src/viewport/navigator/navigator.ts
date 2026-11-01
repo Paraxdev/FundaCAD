@@ -83,6 +83,7 @@ export class Navigator {
   limits: Limits = defaultLimits();
   private box: THREE.Box3 | null = null;
   private parts: readonly THREE.Box3[] = [];
+  private zoomsTogether = 0;
   private plane: THREE.Plane | null = null;
   private scene: NavScene | null = null;
   private locked = false;
@@ -509,7 +510,11 @@ export class Navigator {
   }
 
   private stepZooms(tau: number, dt: number) {
-    if (!this.zooms.length) return;
+    if (!this.zooms.length) {
+      this.zoomsTogether = 0;
+      return;
+    }
+    this.zoomsTogether = Math.max(this.zoomsTogether, this.zooms.length);
     for (const ch of this.zooms) {
       const want = ch.step(tau, dt, this.zoomSnap(ch, tau, dt));
       if (want === 0) continue;
@@ -541,7 +546,8 @@ export class Navigator {
       ch.sweep = null;
       return 0;
     }
-    if (p.ortho) return most;
+    // Zooms running together each get a share, as what their landings skip adds up on screen.
+    if (p.ortho) return most / this.zoomsTogether;
     if (ch.sweep && Math.abs(ch.goal - ch.sweep.goal) > reach) ch.sweep = null;
     ch.sweep ??= new NearestSweep(ch.goal);
     if (!ch.sweep.advance(p, this.ctx())) {
@@ -551,7 +557,7 @@ export class Navigator {
     const parts = this.parts.length || !this.box ? this.parts : [this.box];
     const floor = visibleNearDepth(p, this.frame.width / this.frame.height, parts);
     const nearest = nearestBound(ch.sweep.nearest(), floor, depthOf(p, ch.anchor));
-    return zoomSnapLog(p, this.frame, ch.anchor, nearest);
+    return zoomSnapLog(p, this.frame, ch.anchor, nearest) / this.zoomsTogether;
   }
 
   private forgetNearest() {

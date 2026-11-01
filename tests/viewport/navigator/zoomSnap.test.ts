@@ -633,6 +633,43 @@ describe("a zoom's tail", () => {
     });
   });
 
+  it.each([
+    ["all in one frame", 0],
+    ["a frame apart", 1],
+    ["three frames apart", 3],
+  ])("shares the threshold between notches at four spots, %s", (_name, gap) => {
+    const spots = [
+      [100, 100],
+      [W - 100, 100],
+      [100, H - 100],
+      [W - 100, H - 100],
+    ];
+    const watch = [
+      new THREE.Vector3(-900, 1000, -500),
+      new THREE.Vector3(900, 1000, 500),
+      new THREE.Vector3(0, 1000, 0),
+    ];
+    const a = room().nav;
+    const b = unsnapped(room()).nav;
+    let worst = 0;
+    for (let f = 0; f < 400; f++) {
+      if (gap === 0 ? f === 0 : f % gap === 0 && f / gap < 4) {
+        const at = gap === 0 ? spots : [spots[f / gap]];
+        for (const [x, y] of at) {
+          a.wheel(x, y, -NOTCH);
+          b.wheel(x, y, -NOTCH);
+          a.update(0);
+          b.update(0);
+        }
+      }
+      a.update(DT);
+      b.update(DT);
+      worst = Math.max(worst, maxDiff(screenPrint(a, watch), screenPrint(b, watch)));
+    }
+    expect(a.isBusy()).toBe(false);
+    expect(worst).toBeLessThanOrEqual(ZOOM_SNAP_PX);
+  });
+
   it("knows how many frames the spring has left", () => {
     const ch = new ZoomChannel(new THREE.Vector3(), 0, 0);
     ch.add(0.2);
