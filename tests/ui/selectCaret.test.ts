@@ -18,6 +18,16 @@ function decls(pick: (selector: string) => boolean, props: (prop: string) => boo
   return out;
 }
 
+// Every class a Select's trigger or value can carry: its own and those its callers pass in.
+const SELECT_CLASSES = [
+  "sm-select",
+  "select-trigger",
+  "select-value",
+  ...Object.values(import.meta.glob("../../src/components/**/*.vue", { query: "?raw", import: "default", eager: true }))
+    .flatMap((text) => [...(text as string).matchAll(/<Select\b(?:[^>"]|"[^"]*")*?\sclass="([^"]+)"/g)])
+    .flatMap((m) => (m[1] ?? "").split(/\s+/)),
+];
+
 const MOVES = new Set(["transform", "translate", "rotate", "top", "bottom", "margin", "margin-top", "inset"]);
 
 describe("the Select caret", () => {
@@ -81,13 +91,21 @@ describe("the Select caret", () => {
 });
 
 describe("the Select value", () => {
-  it("is centred by the trigger's flex, so a well of fixed height cannot hang its line low", () => {
+  it("is centred by the trigger's flex, and no other rule on any Select takes that back", () => {
     expect(
       decls(
-        (s) => s === ".select-trigger",
+        (s) => {
+          const last = s.split(/[\s>+~]+/).pop() ?? "";
+          return SELECT_CLASSES.some((c) => new RegExp(`\.${c}(?![\w-])`).test(last));
+        },
         (p) => p === "display" || p === "align-items",
       ),
-    ).toEqual([".select-trigger { display: flex }", ".select-trigger { align-items: center }"]);
+    ).toEqual([
+      ".select-trigger { display: flex }",
+      ".select-trigger { align-items: center }",
+      ".home-view-select { display: none }",
+      "#stage.narrow .home-view-select { display: flex }",
+    ]);
   });
 
   it("takes the width left beside the caret and can shrink below its text, so a long label still ellipsizes", () => {
