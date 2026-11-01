@@ -26,7 +26,12 @@ describe("a native flash run", () => {
     const long = `tracer ${"x".repeat(400)}`;
     const run = runFlash(
       { FLASH_DEADLINE_S: "0.05" },
-      { consoleLines: ["boring", "tracer ready", long], chromeLines: ["never"], gotoThrowsAfterMs: 300 },
+      {
+        consoleLines: ["boring", "tracer ready", long],
+        chromeLines: ["never"],
+        pageErrors: ["boom token=s3cret"],
+        gotoThrowsAfterMs: 300,
+      },
     );
     expect({ status: run.status, lines: run.lines, files: run.files }).toEqual({
       status: 1,
@@ -38,7 +43,8 @@ describe("a native flash run", () => {
       ],
       files: ["report.json"],
     });
-    expect(run.stderr).toContain("fake stop");
+    expect(run.stderr).toContain("PAGE ERROR: boom token=s3cret");
+    expect(run.stderr).toContain("fake stop at http://localhost:5173/?token=s3cret&tracer=native-dev&port=1");
     expect(run.stderr).not.toContain("still running");
   });
 });
@@ -106,5 +112,12 @@ describe("a WebGPU flash run", () => {
       "ERROR ws://x/?token=<token>",
     ]);
     expect(run.chromeLogText).toBe("ERROR ws://x/?token=<token>\n");
+  });
+
+  it("never shows the engine token in a page error or a thrown error either", () => {
+    const run = runFlash(webgpu, { pageErrors: ["boom ws://x/?token=s3cret"], gotoThrowsAfterMs: 0 });
+    expect(run.stderr).not.toContain("s3cret");
+    expect(run.stderr).toContain("PAGE ERROR: boom ws://x/?token=<token>");
+    expect(run.stderr).toContain("fake stop at http://localhost:5173/?token=<token>&tracer=webgpu");
   });
 });

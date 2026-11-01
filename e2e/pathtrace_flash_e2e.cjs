@@ -26,6 +26,7 @@
 const { spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
+const { inspect } = require("util");
 const OUT = path.resolve(process.argv[2] || "pathtrace_flash_shots");
 const WEBGPU = process.env.FLASH_TRACER === "webgpu";
 const CHROME_LOG = path.join(OUT, "chrome_stderr.log");
@@ -39,7 +40,7 @@ const { chromium } = require("playwright-core");
 const { analyse, blackEdges, boundedLog, capLogFile, scrubber, toGridSource } = require("./lib/flash.cjs");
 
 const TOKEN = process.env.SC_TOKEN || "";
-const scrub = scrubber(TOKEN);
+const scrub = scrubber(WEBGPU ? TOKEN : "");
 const DEADLINE_S = WEBGPU ? Number(process.env.FLASH_DEADLINE_S || 0) : 0;
 const EXE = process.env.SC_CHROME || "";
 const URL = process.env.SC_URL || "http://localhost:5173/";
@@ -333,7 +334,7 @@ let deadline = null;
   try {
     const page = await browser.newPage({ colorScheme: "dark", viewport: { width: VW, height: VH } });
     page.on("pageerror", (e) => {
-      console.error("PAGE ERROR:", e.message);
+      console.error("PAGE ERROR:", scrub(e.message));
       failures++;
     });
     page.on("console", (m) => {
@@ -689,7 +690,7 @@ let deadline = null;
 })().catch(async (e) => {
   if (deadlineHit) return;
   clearTimeout(deadline);
-  console.error(e);
+  console.error(scrub(inspect(e)));
   await finishChromeLog(true);
   serve?.srv.kill();
   process.exit(1);

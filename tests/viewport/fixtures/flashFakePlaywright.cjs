@@ -6,6 +6,7 @@ const Module = require("module");
 const {
   consoleLines = [],
   chromeLines = [],
+  pageErrors = [],
   gotoThrowsAfterMs = null,
   launchHangs = false,
   launchThrows = false,
@@ -22,11 +23,12 @@ function fakePlaywright() {
       this.listeners[event] = listener;
     },
     async addInitScript() {},
-    async goto() {
+    async goto(url) {
       for (const text of consoleLines) this.listeners.console({ type: () => "log", text: () => text });
+      for (const message of pageErrors) this.listeners.pageerror({ message });
       if (gotoThrowsAfterMs === null) return;
       await new Promise((r) => setTimeout(r, gotoThrowsAfterMs));
-      throw new Error("fake stop");
+      throw new Error(`fake stop at ${url}`);
     },
     waitForFunction: () => new Promise((_, reject) => pending.push(reject)),
   };

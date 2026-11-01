@@ -243,8 +243,17 @@ describe("capping a log file", () => {
     expect(capped("0123456789", { head: 5, tail: 5 })).toBe("0123456789");
   });
 
-  it("keeps the start and end of a larger file and says how many bytes it cut", () => {
-    expect(capped("0123456789", { head: 2, tail: 3 })).toBe("01\n... bytes cut: 5\n789");
+  it("keeps whole lines from the start and end of a larger file and says how many bytes it cut", () => {
+    expect(capped("one\ntwo\nthree\nfour\n", { head: 5, tail: 6 })).toBe("one\n... bytes cut: 10\nfour\n");
+  });
+
+  it("drops a line too long to keep whole", () => {
+    expect(capped("0123456789", { head: 2, tail: 3 })).toBe("... bytes cut: 10\n");
+  });
+
+  it("leaves no piece of a secret that the cut goes through", () => {
+    const text = "one\ntwo secret two\nthree secret\nfour\n";
+    expect(capped(text, { head: 11, tail: 8, scrub: scrubber("secret") })).toBe("one\n... bytes cut: 28\nfour\n");
   });
 
   it("scrubs what it keeps", () => {

@@ -246,14 +246,19 @@ function capLogFile(file, { head, tail, scrub = (text) => text }) {
   const read = (length, position) => {
     const bytes = Buffer.alloc(length);
     fs.readSync(fd, bytes, 0, length, position);
-    return bytes.toString("utf8");
+    return bytes;
   };
   let kept;
   try {
-    kept =
-      size <= head + tail
-        ? read(size, 0)
-        : `${read(head, 0)}\n... bytes cut: ${size - head - tail}\n${read(tail, size - tail)}`;
+    if (size <= head + tail) kept = read(size, 0).toString("utf8");
+    else {
+      // Whole lines only: a secret the cut goes through would get past the scrub in two pieces.
+      const start = read(head, 0);
+      const end = read(tail, size - tail);
+      const first = start.subarray(0, start.lastIndexOf(10) + 1);
+      const last = end.subarray(end.includes(10) ? end.indexOf(10) + 1 : end.length);
+      kept = `${first}... bytes cut: ${size - first.length - last.length}\n${last}`;
+    }
   } finally {
     fs.closeSync(fd);
   }
