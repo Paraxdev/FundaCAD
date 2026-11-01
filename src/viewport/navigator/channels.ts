@@ -25,7 +25,7 @@ export class ZoomChannel {
   readonly px: number;
   readonly py: number;
   goal = 0;
-  /** The look over the view near the end of this zoom, null until it starts. */
+  /** The look over the view near the end of this zoom, null until it starts or once the zoom is far from its goal. */
   sweep: NearestSweep | null = null;
   private spring = new Spring();
 
@@ -36,9 +36,7 @@ export class ZoomChannel {
   }
 
   add(logFactor: number) {
-    if (!Number.isFinite(logFactor)) return;
-    this.goal += logFactor;
-    this.sweep = null;
+    if (Number.isFinite(logFactor)) this.goal += logFactor;
   }
 
   left(): number {

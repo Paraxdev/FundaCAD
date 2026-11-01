@@ -536,9 +536,14 @@ export class Navigator {
     const most = zoomSnapLog(p, this.frame, ch.anchor, null);
     // A near surface only ever shrinks this, so no rays are spent until the zoom is close to it, early enough for a look
     // spread over frames to finish in time.
-    if (!ch.near(SWEEP_FROM * most, tau)) return 0;
+    const reach = SWEEP_FROM * most;
+    if (!ch.near(reach, tau)) {
+      ch.sweep = null;
+      return 0;
+    }
     if (p.ortho) return most;
-    ch.sweep ??= new NearestSweep();
+    if (ch.sweep && Math.abs(ch.goal - ch.sweep.goal) > reach) ch.sweep = null;
+    ch.sweep ??= new NearestSweep(ch.goal);
     if (!ch.sweep.advance(p, this.ctx())) {
       ch.sweep.giveUpIfLate(ch.framesLeft(tau, dt));
       return 0;

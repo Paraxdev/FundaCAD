@@ -82,6 +82,12 @@ function framesLeft(nav: Navigator, dt = DT) {
   return frames;
 }
 
+/** The frames the spring alone would still take on `nav`'s first zoom. */
+function framesToLanding(nav: Navigator) {
+  const [ch] = (nav as unknown as { zooms: ZoomChannel[] }).zooms;
+  return ch ? ch.framesLeft(nav.opts.smoothTime, DT) : 0;
+}
+
 function nearestOf(nav: Navigator, scene: BoxScene): number | null {
   const sweep = new NearestSweep();
   while (!sweep.advance(nav.pose, { scene, plane: null, box: nav.contentBox(), frame: nav.frame }, Infinity));
@@ -533,6 +539,25 @@ describe("a zoom's tail", () => {
       const { frames } = slow((n) => (n === 0 ? 40 : 0.01));
       expect(frames).toBeLessThan(rest - 10);
     });
+
+    it("stays given up through the small steps of a pinch running out", () => {
+      const { nav, scene } = room();
+      let now = 0;
+      vi.spyOn(performance, "now").mockImplementation(() => now);
+      const cast = scene.raycast.bind(scene);
+      scene.raycast = (o, d) => {
+        now += 20;
+        return cast(o, d);
+      };
+      nav.wheel(W / 2, H / 2, -NOTCH);
+      while (framesToLanding(nav) > 35) nav.update(DT);
+      scene.rays = 0;
+      for (let f = 0; f < 30; f++) {
+        nav.wheel(W / 2, H / 2, -0.001, true);
+        nav.update(DT);
+      }
+      expect(scene.rays).toBeLessThanOrEqual(3);
+    });
   });
 
   it("casts nothing and keeps the spring's own rule while the scene says rays are costly", () => {
@@ -574,6 +599,38 @@ describe("a zoom's tail", () => {
     const { landed, rest, jump } = snapJump(() => room([post]), [new THREE.Vector3(-125, 400, 0)], dt);
     expect(landed).toBeLessThan(rest);
     expect(jump).toBeLessThanOrEqual(ZOOM_SNAP_PX);
+  });
+
+  describe("under a pinch stream that runs out, each step well under the sweep's reach", () => {
+    const stream = (nav: Navigator, frames: number, step: (f: number) => number) => {
+      for (let f = 0; f < frames; f++) {
+        nav.wheel(W / 2, H / 2, step(f), true);
+        nav.update(DT);
+      }
+    };
+
+    it("keeps its look over the view rather than casting again every frame", () => {
+      const { nav, scene } = room();
+      const spring = unsnapped(room()).nav;
+      scene.rays = 0;
+      for (const n of [nav, spring]) stream(n, 200, (f) => -4 * 0.97 ** f);
+      settle(nav);
+      settle(spring);
+      expect(scene.rays).toBeLessThan(45 * 3);
+      expect(nav.pose.scale / spring.pose.scale).toBeCloseTo(1, 9);
+    });
+
+    it("looks again once a steady stream has carried the goal past the look's reach", () => {
+      const { nav, scene } = room();
+      // Slow enough to count as near the goal all the while, on a channel a notch keeps from landing at the first step.
+      const steady = () => -0.018;
+      nav.wheel(W / 2, H / 2, -NOTCH);
+      stream(nav, 120, steady);
+      scene.rays = 0;
+      stream(nav, 240, steady);
+      expect(scene.rays).toBeGreaterThanOrEqual(45);
+      expect(scene.rays).toBeLessThan(45 * 60);
+    });
   });
 
   it("knows how many frames the spring has left", () => {

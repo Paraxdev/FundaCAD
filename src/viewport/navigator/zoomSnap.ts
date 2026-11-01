@@ -32,6 +32,9 @@ export class NearestSweep {
   private gaveUp = false;
   private seen: number | null = null;
 
+  /** `goal` is the zoom's goal when the look started, for telling when a stream of small steps has outrun it. */
+  constructor(readonly goal = 0) {}
+
   /** True once every ray is in. Casts at least one each frame, until `giveUpIfLate` says that cannot pay. */
   advance(p: Pose, ctx: AnchorContext, budgetMs = RAY_BUDGET_MS): boolean {
     if (this.gaveUp) return false;
