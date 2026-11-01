@@ -3,10 +3,10 @@
 
 import * as THREE from "three";
 import type { NavScene, ProjectionMode } from "../cameras";
-import { centreDepth, orbitPivot, zoomAnchor, type AnchorContext } from "./anchor";
+import { centreDepth, orbitPivot, visibleNearDepth, zoomAnchor, type AnchorContext } from "./anchor";
 import { stepAngles, type StepDir } from "../viewStep";
 import { OrbitChannel, PanChannel, ZoomChannel } from "./channels";
-import { NearestSweep, SWEEP_FROM, zoomSnapLog } from "./zoomSnap";
+import { NearestSweep, SWEEP_FROM, nearestBound, zoomSnapLog } from "./zoomSnap";
 import { autoWantsOrtho, onWorldAxis } from "../autoProjection";
 import { makeFlight, stepFlight, type Flight } from "./flight";
 import { clampScale, contentLimits, defaultLimits, elevRange, minScaleOf, type Limits } from "./limits";
@@ -82,6 +82,7 @@ export class Navigator {
   private userLimits: Partial<Limits> = {};
   limits: Limits = defaultLimits();
   private box: THREE.Box3 | null = null;
+  private parts: readonly THREE.Box3[] = [];
   private plane: THREE.Plane | null = null;
   private scene: NavScene | null = null;
   private locked = false;
@@ -155,14 +156,19 @@ export class Navigator {
     this.forgetNearest();
   }
 
-  setContentBox(box: THREE.Box3 | null) {
+  setContentBox(box: THREE.Box3 | null, parts: readonly THREE.Box3[] = []) {
     this.box = box && !box.isEmpty() ? box.clone() : null;
+    this.parts = parts;
     this.forgetNearest();
     this.recomputeLimits();
   }
 
   contentBox(): THREE.Box3 | null {
     return this.box;
+  }
+
+  contentParts(): readonly THREE.Box3[] {
+    return this.parts;
   }
 
   setAnchorPlane(plane: THREE.Plane | null) {
@@ -534,7 +540,9 @@ export class Navigator {
     if (p.ortho) return most;
     ch.sweep ??= new NearestSweep();
     if (!ch.sweep.advance(p, this.ctx())) return 0;
-    return zoomSnapLog(p, this.frame, ch.anchor, ch.sweep.nearest());
+    const parts = this.parts.length || !this.box ? this.parts : [this.box];
+    const floor = visibleNearDepth(p, this.frame.width / this.frame.height, parts);
+    return zoomSnapLog(p, this.frame, ch.anchor, nearestBound(ch.sweep.nearest(), floor, depthOf(p, ch.anchor)));
   }
 
   private forgetNearest() {

@@ -6,6 +6,7 @@ import type * as THREE from "three";
 import { depthUnder, type AnchorContext } from "./anchor";
 import { depthOf, project, type Frame, type Pose } from "./pose";
 
+/** What a landing adds to its frame, on top of the spring's own step that frame. */
 export const ZOOM_SNAP_PX = 0.1;
 
 /** How many times the largest possible snap a zoom has left when it starts looking. */
@@ -13,6 +14,7 @@ export const SWEEP_FROM = 8;
 
 const RAYS = 45;
 const RAY_BUDGET_MS = 2;
+const RAY_TRUST = 8;
 const GOLDEN = 0.618033988749895;
 
 /** The frame's corners, edge midpoints and centre, where a wall beside the eye is nearest, then points that share no
@@ -43,6 +45,15 @@ export class NearestSweep {
   nearest(): number | null {
     return this.seen;
   }
+}
+
+/** The depth to answer to. Rays can pass between thin parts, so they are only trusted to within `RAY_TRUST`, less where
+ *  `floor`, the parts' nearest depth in the frustum, shows nothing can be nearer. A part further inside still moves only
+ *  its depth ratio over `RAY_TRUST` times the threshold. */
+export function nearestBound(seen: number | null, floor: number, anchorDepth: number): number | null {
+  if (Number.isNaN(floor)) return seen;
+  const known = seen === null ? anchorDepth : Math.min(seen, anchorDepth);
+  return Math.min(known, Math.max(floor, known / RAY_TRUST));
 }
 
 /** The log left that shifts nothing in view by more than `ZOOM_SNAP_PX`. */

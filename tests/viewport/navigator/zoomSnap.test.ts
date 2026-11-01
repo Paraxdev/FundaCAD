@@ -5,7 +5,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
 import { H, W, BoxScene, maxDiff, pixel, screenPrint, settle, setup } from "./kit";
-import { NearestSweep, ZOOM_SNAP_PX, zoomSnapLog } from "../../../src/viewport/navigator/zoomSnap";
+import { NearestSweep, ZOOM_SNAP_PX, nearestBound, zoomSnapLog } from "../../../src/viewport/navigator/zoomSnap";
 import { ZoomChannel } from "../../../src/viewport/navigator/channels";
 import { Navigator } from "../../../src/viewport/navigator/navigator";
 import { makePose } from "../../../src/viewport/navigator/pose";
@@ -120,6 +120,32 @@ describe("zoomSnapLog", () => {
 
   it("has no surface to answer to with nothing in view", () => {
     expect(zoomSnapLog(persp(), { width: W, height: H }, anchorAt(1000), null)).toBeCloseTo(ZOOM_SNAP_PX / R, 12);
+  });
+});
+
+describe("nearestBound", () => {
+  it("goes by what the rays saw when nothing in the parts can be nearer", () => {
+    expect(nearestBound(300, 300, 1000)).toBe(300);
+    expect(nearestBound(300, 900, 1000)).toBe(300);
+  });
+
+  it("goes by the anchor when the rays saw nothing nearer", () => {
+    expect(nearestBound(4000, 4000, 1000)).toBe(1000);
+    expect(nearestBound(null, 1000, 1000)).toBe(1000);
+  });
+
+  it("drops to the parts' nearest depth, which no surface can pass", () => {
+    expect(nearestBound(800, 200, 1000)).toBe(200);
+  });
+
+  it("trusts the rays to within a factor where the parts say nothing, an eye inside a box", () => {
+    expect(nearestBound(800, 0, 1000)).toBe(100);
+    expect(nearestBound(null, 0, 1000)).toBe(125);
+  });
+
+  it("has the rays alone with no part in the frustum, as nothing thin can be there", () => {
+    expect(nearestBound(800, NaN, 1000)).toBe(800);
+    expect(nearestBound(null, NaN, 1000)).toBeNull();
   });
 });
 
@@ -322,6 +348,66 @@ describe("a zoom's tail", () => {
     expect(nav.pose.scale / (s0 * Math.exp(2 * -NOTCH * Math.log(1.0016)))).toBeCloseTo(1, 9);
   });
 
+  describe("with a thin part between the rays, much nearer than anything they saw", () => {
+    const EYE_END = 174;
+    const wall = () => box(-5000, 1000, -5000, 5000, 1100, 5000);
+    const behind = () => box(-5000, -500, -5000, 5000, -400, 5000);
+
+    /** A pole `ratio` times nearer than the wall when the notch ends, 290 px left of the anchor by then. */
+    const pole = (ratio: number) => {
+      const depth = (1000 - EYE_END) / ratio;
+      const tanV = Math.tan((makePose().fov * Math.PI) / 360);
+      const x = (290 / (H / 2)) * tanV * depth;
+      // Under a pixel wide when the notch ends, so no ray meets it.
+      const half = depth / 4000;
+      return {
+        part: box(-x - half, EYE_END + depth, -5000, -x + half, EYE_END + depth + 2 * half, 5000),
+        watch: [new THREE.Vector3(-x, EYE_END + depth, 0)],
+      };
+    };
+    const scene = (parts: THREE.Box3[], given?: THREE.Box3[]) => () => {
+      const nav = new Navigator();
+      nav.setFrame(W, H);
+      const s = new BoxScene(parts);
+      nav.setScene(s);
+      nav.setContentBox(s.box(), given);
+      nav.setProjectionMode("persp");
+      nav.setLookAt(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 1000, 0));
+      settle(nav);
+      return { nav, scene: s };
+    };
+
+    // What the snap may add: the threshold, or its share past the factor the rays are trusted to.
+    const most = (ratio: number) => ZOOM_SNAP_PX * Math.max(1, ratio / 8);
+
+    it.each([6.4, 20, 100])("keeps the jump small at %f:1 with the eye outside the model", (ratio) => {
+      const { part, watch } = pole(ratio);
+      const made = scene([wall(), part]);
+      expect(nearestOf(made().nav, made().scene)).toBeGreaterThan(900);
+      const { landed, rest, jump } = snapJump(made, watch);
+      expect(landed).toBeLessThan(rest);
+      expect(jump).toBeGreaterThan(0);
+      expect(jump).toBeLessThanOrEqual(most(ratio));
+    });
+
+    it.each([6.4, 20, 100])("keeps the jump small at %f:1 from inside one body, where no box helps", (ratio) => {
+      const { part, watch } = pole(ratio);
+      const { landed, rest, jump } = snapJump(scene([wall(), behind(), part]), watch);
+      expect(landed).toBeLessThan(rest);
+      expect(jump).toBeGreaterThan(0);
+      expect(jump).toBeLessThanOrEqual(most(ratio));
+    });
+
+    it("lands as early from inside the model as from outside it when its parts show nothing near", () => {
+      const outside = snapJump(scene([wall()]), []).landed;
+      const parted = snapJump(scene([wall(), behind()], [wall(), behind()]), []).landed;
+      const oneBody = snapJump(scene([wall(), behind()]), []).landed;
+      expect(parted).toBe(outside);
+      expect(oneBody).toBeGreaterThan(parted);
+      expect(oneBody * DT).toBeLessThan(0.85);
+    });
+  });
+
   describe("under auto projection, where a zoom out leaves the box and goes orthographic", () => {
     /** The eye on a world axis inside a box whose near face is at y `face`. */
     const auto = (face: number) => {
@@ -448,6 +534,13 @@ describe("a zoom's tail", () => {
     scene.rays = 0;
     nav.update(DT);
     expect(scene.rays).toBeGreaterThanOrEqual(45);
+  });
+
+  it.each([1 / 30, 1 / 10])("adds at most the threshold on frames of %f s", (dt) => {
+    const post = box(-130, 400, -5000, -110, 420, 5000);
+    const { landed, rest, jump } = snapJump(() => room([post]), [new THREE.Vector3(-125, 400, 0)], dt);
+    expect(landed).toBeLessThan(rest);
+    expect(jump).toBeLessThanOrEqual(ZOOM_SNAP_PX);
   });
 
   it("is instant at smooth time 0, as before", () => {
