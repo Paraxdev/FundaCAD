@@ -95,3 +95,70 @@ def test_a_built_preview_does_not_move_a_face_to_another_body(s, doc, face):
     assert shells, s.page.evaluate("() => document.body.innerText").split("refused")[-1][:200]
     assert [f["body"] for f in shells[-1]] == ["body1", "body2"]
     assert faces_of(s) == {"body1": 11, "body2": 11}
+
+
+def open_on_two_bodies(s):
+    pick(s, "body1:top")
+    pick(s, "body2:front", add=True)
+    s.tool("Shell")
+
+
+def shells_after(s):
+    return [[f.get("body") for f in faces] for faces in s.page.evaluate(SHELLS)]
+
+
+def test_a_drag_then_a_typed_value_keep_each_face_on_its_body(s):
+    s.open_file(TWO)
+    open_on_two_bodies(s)
+    s.drag_handle("offset", mm=1)
+    s.settle()
+    s.type("field:distance", "2", enter=True)
+    s.settle()
+    assert shells_after(s) == [["body1", "body2"]]
+    assert faces_of(s) == {"body1": 11, "body2": 11}
+
+
+def test_a_face_added_over_a_built_preview_keeps_each_face_on_its_body(s):
+    s.open_file(TWO)
+    open_on_two_bodies(s)
+    s.type("field:distance", "1")
+    s.settle()
+    s.pick_face("body1:front", add=True)
+    s.settle()
+    s.type("field:distance", "2", enter=True)
+    s.settle()
+    assert shells_after(s) == [["body1", "body2", "body1"]]
+    assert faces_of(s) == {"body1": 10, "body2": 11}
+
+
+@pytest.mark.parametrize("steps", [["Undo"], ["Undo", "Redo"]])
+def test_undo_and_redo_with_the_tool_open_keep_each_face_on_its_body(s, steps):
+    s.open_file(TWO)
+    pick(s, "body1:right")
+    shell(s, "1")
+    s.press("Escape")
+    open_on_two_bodies(s)
+    s.type("field:distance", "2")
+    s.settle()
+    for step in steps:
+        s.menu(f"Edit/{step}")
+        s.settle()
+    s.type("field:distance", "3", enter=True)
+    s.settle()
+    assert shells_after(s)[-1] == ["body1", "body2"]
+    assert faces_of(s)["body2"] == 11
+
+
+def test_a_face_added_by_editing_a_saved_shell_opens_on_its_own_body(s):
+    s.open_file(TWO)
+    open_on_two_bodies(s)
+    s.type("field:distance", "1", enter=True)
+    s.settle()
+    s.page.locator(".target-edit").first.click(timeout=5000)
+    s.settle()
+    s.pick_face("body1:front")
+    s.settle()
+    s.press("Enter")
+    s.settle()
+    assert shells_after(s) == [["body1", "body2", "body1"]]
+    assert faces_of(s) == {"body1": 10, "body2": 11}
