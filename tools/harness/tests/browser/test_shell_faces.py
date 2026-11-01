@@ -6,6 +6,7 @@ pytestmark = pytest.mark.browser
 
 BLOCK = "tools/harness/fixtures/block.json"
 TWO = "tools/harness/fixtures/two_boxes.json"
+NEAR = "tools/harness/fixtures/near_boxes.json"
 
 SHELLS = "() => window.store.document.features.filter((f) => f.type === 'shell').map((f) => [].concat(f.faces))"
 
@@ -74,4 +75,23 @@ def test_faces_of_two_bodies_open_on_both(s):
     pick(s, "body2:top", add=True)
     faces = shell(s)
     assert {f["body"] for f in faces} == {"body1", "body2"}
+    assert faces_of(s) == {"body1": 11, "body2": 11}
+
+
+# A built preview renumbers every face after the first shelled body. body2's top keeps its old id only by chance, every
+# other face of it then read as body1's. From the far box the engine refuses that, from the near one it opens a wrong face.
+@pytest.mark.parametrize("doc,face", [(TWO, "front"), (NEAR, "right")])
+def test_a_built_preview_does_not_move_a_face_to_another_body(s, doc, face):
+    s.open_file(doc)
+    pick(s, "body1:top")
+    pick(s, f"body2:{face}", add=True)
+    s.tool("Shell")
+    s.type("field:distance", "1")
+    s.settle()
+    assert faces_of(s) == {"body1": 11, "body2": 11}
+    s.press("Enter")
+    s.settle()
+    shells = s.page.evaluate(SHELLS)
+    assert shells, s.page.evaluate("() => document.body.innerText").split("refused")[-1][:200]
+    assert [f["body"] for f in shells[-1]] == ["body1", "body2"]
     assert faces_of(s) == {"body1": 11, "body2": 11}
