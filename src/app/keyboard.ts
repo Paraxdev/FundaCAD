@@ -5,6 +5,7 @@ import { saveWork, saveWorkAs } from "./documentActions";
 import { SKETCH_TOOLS } from "./actionTables";
 import { logError, toggleConsole } from "../ui/logStore";
 import { isSessionEnded } from "../document/session";
+import { isBrowserNotice } from "../diagnostics/browserNotice";
 import { useDialogStore } from "../stores/dialogs";
 import { latinKey, matchChord } from "../input/platform";
 import { useShellStore } from "../stores/shell";
@@ -70,6 +71,7 @@ export function installKeyboard(e: Engine): void {
 
   // Failures with no toast of their own would otherwise exist only in devtools, where a user reporting a bug never looks.
   window.addEventListener("error", (ev) => {
+    if (isBrowserNotice(ev.message, ev.error)) return;
     logError(ev.error ?? ev.message, {
       source: "window",
       detail: ev.filename ? `${ev.filename}:${ev.lineno}:${ev.colno}` : undefined,
