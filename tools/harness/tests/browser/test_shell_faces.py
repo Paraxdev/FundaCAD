@@ -1,5 +1,7 @@
 """Shell opens every selected face, on one body or across several."""
 
+import json
+
 import pytest
 
 pytestmark = pytest.mark.browser
@@ -43,7 +45,7 @@ def test_every_selected_face_of_one_body_is_opened(s, picks):
     for i, p in enumerate(picks):
         pick(s, p, add=i > 0)
     faces = shell(s)
-    assert len(faces) == len(picks)
+    assert [f["body"] for f in faces] == ["body1"] * len(picks)
     # n faces opened leave 6 - n outer walls, n rims and 6 - n inner walls.
     assert faces_of(s) == {"body1": 12 - len(picks)}
 
@@ -178,3 +180,75 @@ def test_a_face_added_by_editing_a_saved_shell_opens_on_its_own_body(s):
     s.settle()
     assert shells_after(s) == [["body1", "body2", "body1"]]
     assert faces_of(s) == {"body1": 10, "body2": 11}
+
+
+def test_a_face_of_another_body_added_inside_the_tool_opens_on_that_body(s):
+    s.open_file(TWO)
+    pick(s, "body1:top")
+    s.tool("Shell")
+    pick(s, "body2:top", add=True)
+    s.type("field:distance", "2")
+    s.press("Enter")
+    s.settle()
+    assert shells_after(s) == [["body1", "body2"]]
+    assert faces_of(s) == {"body1": 11, "body2": 11}
+
+
+def open_doc(s, tmp_path, features):
+    path = tmp_path / "doc.json"
+    path.write_text(json.dumps({"version": 10, "parameters": {}, "features": features}))
+    s.open_file(path.as_posix())
+    s.settle()
+
+
+def box(fid, operation=None):
+    new = {"operation": operation} if operation else {}
+    return {"id": fid, "type": "box", "length": 20, "width": 20, "height": 30, **new}
+
+
+def move(body, dx):
+    return {"id": f"move{dx}", "type": "move", "dx": dx, "dy": 0, "dz": 0, "rx": 0, "ry": 0, "rz": 0, "bodies": [body]}
+
+
+def shell_at(point, body=None):
+    bound = {"body": body} if body else {}
+    return {"id": "s", "type": "shell", "thickness": 1, "faces": {"kind": "face", "by": "nearest", "point": point, **bound}}
+
+
+def edit_saved_shell(s):
+    s.page.locator("#timeline [role=list] [tabindex]").last.click(timeout=5000)
+    s.settle()
+    s.page.locator(".target-edit").first.click(timeout=5000)
+    s.settle()
+
+
+def test_a_saved_shell_with_no_body_opens_for_edit_and_takes_a_face_on_another_body(s, tmp_path):
+    open_doc(s, tmp_path, [box("a"), box("b", "new"), move("body2", 60), shell_at([60, 0, 15])])
+    assert faces_of(s) == {"body1": 6, "body2": 11}
+    edit_saved_shell(s)
+    s.pick_face("body1:front")
+    s.settle()
+    s.press("Enter")
+    s.settle()
+    assert shells_after(s) == [[None, "body1"]]
+    assert faces_of(s) == {"body1": 11, "body2": 11}
+
+
+def test_the_row_highlights_a_touching_face_on_the_body_its_selector_names(s, tmp_path):
+    open_doc(s, tmp_path, [box("a"), box("b", "new"), move("body2", 20), shell_at([10, 0, 0], "body2")])
+    assert faces_of(s) == {"body1": 6, "body2": 11}
+    edit_saved_shell(s)
+    assert [body for body, _ in s.selection(raw=True)["faces"]] == ["body2"]
+
+
+# A shell names its body in a one-body document too, as every other face and edge pick does. A body added later cannot
+# move it, an unbound one would go to the new active body. The price is a clear refusal once its body id is gone.
+def test_a_one_body_shell_stays_on_its_body_when_a_body_is_added_before_it(s, tmp_path):
+    open_doc(s, tmp_path, [box("a"), box("b", "new"), move("body2", 60), shell_at([0, 0, 15], "body1")])
+    assert faces_of(s) == {"body1": 11, "body2": 6}
+
+
+def test_a_shell_whose_body_id_is_gone_is_refused_and_does_not_open_another_body(s, tmp_path):
+    open_doc(s, tmp_path, [box("a"), shell_at([0, 0, 15], "body2")])
+    assert faces_of(s) == {"body1": 6}
+    assert s.page.evaluate("() => window.store.buildState.errorMessage") == "Shell: the target body no longer exists"

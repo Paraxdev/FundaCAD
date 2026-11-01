@@ -341,6 +341,80 @@ describe("FaceOffsetTool", () => {
     ]);
   });
 
+  const shellFaces = (s: ReturnType<typeof fakeStore>) =>
+    (s.previews.filter((p) => p.feature).at(-1)?.feature as Extract<Feature, { type: "shell" }>).faces;
+  const ctrlClick = (canvas: HTMLCanvasElement) =>
+    canvas.dispatchEvent(
+      new PointerEvent("pointerdown", { clientX: 0, clientY: 0, button: 0, ctrlKey: true, bubbles: true }),
+    );
+  const FAR: Selector = { kind: "face", by: "nearest", point: [20, 0, -5] };
+  const pickFar = (bodyId: string | null) => () => ({
+    selector: FAR,
+    faceId: 8,
+    anchor: new THREE.Vector3(0, 0, 0),
+    normal: new THREE.Vector3(0, 0, 1),
+    bodyId,
+  });
+
+  it("a one-face Shell sends a bare selector with its body, in a one-body document too", () => {
+    const { vp, canvas } = fakeViewport();
+    const s = fakeStore();
+    const t = new FaceOffsetTool(vp, s.store);
+    t.start("shell", () => {});
+    dragTo(t, canvas, 2, { release: false });
+    expect(shellFaces(s)).toEqual({ ...FACE, body: "b1" });
+  });
+
+  it("a face whose owner is not known stays unbound, the engine then takes the active body", () => {
+    const { vp, canvas } = fakeViewport();
+    Object.assign(vp, { faceIdToBodyId: () => null });
+    const s = fakeStore();
+    const t = new FaceOffsetTool(vp, s.store);
+    t.start("shell", () => {});
+    dragTo(t, canvas, 2, { release: false });
+    expect(shellFaces(s)).toEqual(FACE);
+  });
+
+  it("Shell keeps a ctrl-clicked face on the body it was picked on, whatever the ids read later", () => {
+    const { vp, canvas } = fakeViewport();
+    const s = fakeStore();
+    const t = new FaceOffsetTool(vp, s.store);
+    t.start("shell", () => {});
+    Object.assign(vp, { pickFaceForPressPull: pickFar("b1"), faceIdToBodyId: () => "b9" });
+    ctrlClick(canvas);
+    dragTo(t, canvas, 2, { release: false });
+    expect(shellFaces(s)).toEqual([
+      { ...FACE, body: "b1" },
+      { ...FAR, body: "b1" },
+    ]);
+  });
+
+  it("Shell takes a ctrl-clicked face of another body, on that body", () => {
+    const { vp, canvas } = fakeViewport();
+    const s = fakeStore();
+    const t = new FaceOffsetTool(vp, s.store);
+    t.start("shell", () => {});
+    Object.assign(vp, { pickFaceForPressPull: pickFar("b2") });
+    ctrlClick(canvas);
+    dragTo(t, canvas, 2, { release: false });
+    expect(shellFaces(s)).toEqual([
+      { ...FACE, body: "b1" },
+      { ...FAR, body: "b2" },
+    ]);
+  });
+
+  it("Offset Face still ignores a ctrl-clicked face of another body, it moves one body's faces", () => {
+    const { vp, canvas } = fakeViewport();
+    const s = fakeStore();
+    const t = new FaceOffsetTool(vp, s.store);
+    t.start("offsetFace", () => {});
+    Object.assign(vp, { pickFaceForPressPull: pickFar("b2") });
+    ctrlClick(canvas);
+    dragTo(t, canvas, 2, { release: false });
+    const sent = s.previews.filter((p) => p.feature).at(-1)?.feature as Extract<Feature, { type: "offsetFace" }>;
+    expect(sent.faces).toEqual(FACE);
+  });
+
   it("the handle rides on the face as it moves", () => {
     const { vp, canvas } = fakeViewport();
     const s = fakeStore();
