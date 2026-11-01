@@ -83,9 +83,11 @@ export const DEFAULTS: GamepadConfig = {
 };
 
 // A Gamepad id has no set format: WebKit gives the device name alone, Chromium appends "(Vendor: 256f Product: c635)",
-// Firefox prefixes "256f-c635-", at times without leading zeros.
-const THREE_D_MOUSE_NAME = /3d\s*connexion|\bspace\s*(mouse|navigator|pilot|explorer|travell?er|ball)/i;
-const VENDOR_PRODUCT = /(?:vendor:\s*|^)([0-9a-f]{1,4})(?:\s+product:\s*|-)([0-9a-f]{1,4})\b/i;
+// Firefox prefixes "256f-c635-", at times without leading zeros. WebKit is why the two udev-listed Logitech products
+// with no Space or 3Dconnexion in their names, CADman and nuLOOQ, are named here as well.
+const THREE_D_MOUSE_NAME =
+  /3d[\s-]*connexion|\bspace[\s-]*(mouse|navigator|pilot|explorer|travell?er|ball)|\bcad[\s-]*man\b|\bnu[\s-]*looq\b/i;
+const VENDOR_PRODUCT = /(?:vendor:\s*(?:0x)?|^)([0-9a-f]{1,4})(?:\s+product:\s*(?:0x)?|-)([0-9a-f]{1,4})\b/i;
 const CONNEXION_VENDOR = 0x256f;
 // 046d is also Logitech's own gamepads, so only the products packaging/70-spacemouse.rules lists count.
 const LOGITECH_VENDOR = 0x046d;

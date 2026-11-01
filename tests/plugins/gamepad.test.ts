@@ -137,6 +137,19 @@ describe("isThreeDMouse", () => {
     "256f-c635-Unknown device",
     "046d-c626-Unknown device",
     "46d-c626-Unknown device",
+    "Unknown (STANDARD GAMEPAD Vendor: 256F Product: C635)",
+    "Spaceball 5000",
+    "SpaceTraveler",
+    "Space Traveller 3D Mouse",
+    "Logitech CADman",
+    "3Dconnexion CADMan",
+    "LOGITECH CAD Man",
+    "Logitech NuLOOQ Navigator",
+    "nuLOOQ",
+    "Space-Mouse Compact",
+    "3D-connexion Receiver",
+    "Unknown device (Vendor: 0x256f Product: 0xc635)",
+    "Unknown device (Vendor: 0x046d Product: 0xc626)",
   ])("knows %s", (id) => {
     expect(isThreeDMouse(id)).toBe(true);
   });
@@ -151,6 +164,15 @@ describe("isThreeDMouse", () => {
     "046d-c216-Logitech Dual Action",
     "Logitech Extreme 3D Pro (Vendor: 046d Product: c215)",
     "Valve Software Steam Deck Controller",
+    "Logitech Extreme 3D",
+    "046d-c215-Logitech Extreme 3D Pro",
+    "VKBsim Space Gunfighter",
+    "Hyperspace Pilot Joystick",
+    "Backspace Mouse Pad",
+    "Cadmania Pad",
+    "Madcadman Controller",
+    "Pad (Vendor: 0x256e Product: 0xc635)",
+    "Logitech Cordless RumblePad 2 (Vendor: 0x046d Product: 0xc219)",
   ])("leaves %s alone", (id) => {
     expect(isThreeDMouse(id)).toBe(false);
   });
