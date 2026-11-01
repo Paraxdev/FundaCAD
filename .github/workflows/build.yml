@@ -1537,7 +1537,11 @@ jobs:
 
       # WebGPU on SwiftShader in a closed room, where paths outlast one preview round.
       # A preview that stops early shows dots on black, an open scene never does.
+      # Not a gate until it has run green here, breadcrumb a9pnm1yn: it gathers no
+      # sample on a GitHub runner, and the native flash step above stays a gate.
       - name: WebGPU tracer preview end-to-end
+        id: webgpu_preview
+        continue-on-error: true
         timeout-minutes: 5
         env:
           SC_TOKEN: citoken
@@ -1554,7 +1558,7 @@ jobs:
         run: node e2e/pathtrace_flash_e2e.cjs /tmp/pathtrace_flash_webgpu_shots
 
       - name: Flash test frames on failure
-        if: failure()
+        if: failure() || steps.webgpu_preview.outcome == 'failure'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: flash-frames

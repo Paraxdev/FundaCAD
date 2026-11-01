@@ -119,8 +119,8 @@ export function createNavigatorRig(dom: HTMLElement, aspect: number): CameraRig 
     projectionMode(): ProjectionMode {
       return nav.projectionMode();
     },
-    setProjectionMode(m) {
-      nav.setProjectionMode(m);
+    setProjectionMode(m, keepOrtho) {
+      nav.setProjectionMode(m, keepOrtho);
       write();
     },
     resize(w, h) {
@@ -155,6 +155,7 @@ export function createNavigatorRig(dom: HTMLElement, aspect: number): CameraRig 
         scale: p.scale,
         fov: p.fov,
         mode: nav.projectionMode(),
+        ortho: p.ortho,
       };
     },
     setState(st, anim = false) {
@@ -164,7 +165,7 @@ export function createNavigatorRig(dom: HTMLElement, aspect: number): CameraRig 
       setOrientation(p, new THREE.Quaternion(...st.quaternion));
       p.scale = st.scale;
       p.fov = st.fov;
-      nav.flyTo(p, { animate: anim && cameraFlightsOn() });
+      nav.flyTo(p, { animate: anim && cameraFlightsOn(), byEye: !st.ortho });
     },
     setScene(s) {
       nav.setScene(s);
@@ -273,10 +274,14 @@ export function createNavigatorRig(dom: HTMLElement, aspect: number): CameraRig 
     },
     setStandardView(view) {
       const v = STANDARD[view];
-      nav.turnTo(lookQuatUp(new THREE.Vector3(...v.dir).normalize(), new THREE.Vector3(...v.up)), cameraFlightsOn());
+      nav.turnTo(
+        lookQuatUp(new THREE.Vector3(...v.dir).normalize(), new THREE.Vector3(...v.up)),
+        cameraFlightsOn(),
+        true,
+      );
     },
-    setViewDir(dir, up) {
-      nav.turnTo(lookQuatUp(dir.clone().normalize(), up), cameraFlightsOn());
+    setViewDir(dir, up, deliberate = false) {
+      nav.turnTo(lookQuatUp(dir.clone().normalize(), up), cameraFlightsOn(), deliberate);
     },
     lookAtPlane(origin, normal, up, opts) {
       nav.lookAtPlane(origin, normal, up, !!opts?.animate && cameraFlightsOn(), opts?.onArrive);

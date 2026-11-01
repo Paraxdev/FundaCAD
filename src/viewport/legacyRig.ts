@@ -10,6 +10,7 @@ import { anchorDolly, groundAnchor, orthoZoomStep } from "./zoomAnchor";
 import { ease, flightSeconds, worthFlying } from "./viewFlight";
 import { wheelScales } from "../ui/interfaceSize";
 import { cameraFlightsOn } from "../ui/motion";
+import { AXIS_SNAP_COS, autoWantsOrtho, onWorldAxis } from "./autoProjection";
 import type {
   CameraRig,
   CameraState,
@@ -135,16 +136,19 @@ export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & {
     }
   }
 
-  // 'auto' snaps to ortho within 0.5 deg of a world axis: view transitions converge inside it, and a deliberate orbit
-  // nudge (~0.4 deg/px) leaves it within a couple of pixels.
-  const AXIS_SNAP_COS = Math.cos((0.5 * Math.PI) / 180);
   const tmpTarget = new THREE.Vector3();
   const tmpPos = new THREE.Vector3();
-  function viewAxisAligned(): boolean {
-    const d = controls.getTarget(tmpTarget).sub(controls.getPosition(tmpPos));
-    const len = d.length();
-    if (len < 1e-9) return false;
-    return Math.max(Math.abs(d.x), Math.abs(d.y), Math.abs(d.z)) / len >= AXIS_SNAP_COS;
+  // As in the navigator, 'auto' asks the content box of an orthographic view only when it is set by its eye, so a rebuild
+  // growing the model around the camera never swaps the picture.
+  let eyeSet = false;
+  let deliberate: THREE.Vector3 | null = null;
+  function viewAxisAligned(askBox = eyeSet): boolean {
+    const eye = controls.getPosition(tmpPos);
+    const dir = controls.getTarget(tmpTarget).sub(eye);
+    if (deliberate && onWorldAxis(dir.x, dir.y, dir.z) && dir.dot(deliberate) >= AXIS_SNAP_COS * dir.length())
+      return true;
+    if (usingOrtho && !askBox) return onWorldAxis(dir.x, dir.y, dir.z);
+    return autoWantsOrtho(dir, eye, contentBox, usingOrtho);
   }
   /** In 'auto', keep the actual projection in sync with the view axis. Returns
    *  true when a swap happened (caller should re-render). */
@@ -247,7 +251,10 @@ export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & {
   const emit = (ev: NavEvent) => {
     for (const fn of listeners[ev]) fn();
   };
-  controls.addEventListener("controlstart", () => emit("inputstart"));
+  controls.addEventListener("controlstart", () => {
+    deliberate = null;
+    emit("inputstart");
+  });
   controls.addEventListener("controlend", () => emit("inputend"));
   controls.addEventListener("update", () => emit("change"));
   controls.addEventListener("rest", () => emit("rest"));
@@ -370,9 +377,9 @@ export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & {
     projectionMode() {
       return mode;
     },
-    setProjectionMode(m: ProjectionMode) {
+    setProjectionMode(m: ProjectionMode, keepOrtho = false) {
+      const wantOrtho = m === "ortho" || (m === "auto" && viewAxisAligned(mode !== "auto" && !keepOrtho));
       mode = m;
-      const wantOrtho = m === "ortho" || (m === "auto" && viewAxisAligned());
       if (wantOrtho !== usingOrtho) swapProjection();
     },
     resize(w: number, h: number) {
@@ -415,6 +422,10 @@ export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & {
         ortho.updateProjectionMatrix();
       }
       const swapped = applyAutoProjection();
+      if (!moved) {
+        eyeSet = false;
+        deliberate = null;
+      }
       // After camera-controls positions the camera: update() rewrites the orientation each frame, so re-banking is idempotent
       // and never touches camera.up, which would fight the sketch plane up handling.
       if (rollAngle !== 0) {
@@ -543,14 +554,16 @@ export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & {
       const [x, y, z] = dirs[view];
       const t = controls.getTarget(new THREE.Vector3());
       const n = new THREE.Vector3(x, y, z).normalize().multiplyScalar(d);
+      deliberate = n.clone().normalize().negate();
       controls.setPosition(t.x + n.x, t.y + n.y, t.z + n.z, true);
     },
-    setViewDir(dir, up) {
+    setViewDir(dir, up, click = false) {
       rollAngle = 0;
       // Orbiting keeps +Z up afterwards unless `up` differs: for the cube's axis views this matches setStandardView, and
       // top/bottom (up = +-Y) square correctly.
       const d = Math.max(controls.distance, 50);
       const n = dir.clone().normalize();
+      deliberate = click ? n.clone().negate() : null;
       const u = up.clone().normalize();
       persp.up.copy(u);
       ortho.up.copy(u);
@@ -560,6 +573,7 @@ export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & {
     },
     lookAtPlane(origin, normal, up, opts) {
       rollAngle = 0;
+      deliberate = null;
       // A flight in the air is abandoned, not landed: its destination is superseded, and landing first would show a pose
       // nobody asked for.
       flight = null;
@@ -627,6 +641,7 @@ export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & {
       rollAngle += angle;
     },
     tumble(az, pol) {
+      deliberate = null;
       // Offset and orbit up rotate by one quaternion, so the polar angle camera-controls sees never changes and its (0, pi)
       // clamp has nothing to bite. Signs match controls.rotate(): +az is CCW from above, +pol tips the camera down.
       const target = controls.getTarget(new THREE.Vector3());
@@ -675,6 +690,7 @@ export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & {
         scale: rig.viewScale(),
         fov: persp.fov,
         mode,
+        ortho: usingOrtho,
       };
     },
     setState(st: CameraState, animate = false) {
@@ -684,7 +700,12 @@ export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & {
       const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(q);
       rig.setFov(st.fov);
       rig.setProjectionMode(st.mode);
-      const d = usingOrtho ? controls.distance : st.scale / Math.tan((persp.fov * Math.PI) / 360);
+      eyeSet = !st.ortho;
+      deliberate = null;
+      const d =
+        usingOrtho && !(eyeSet && mode === "auto")
+          ? controls.distance
+          : st.scale / Math.tan((persp.fov * Math.PI) / 360);
       const t = new THREE.Vector3(...st.target);
       const eye = t.clone().addScaledVector(fwd, -d);
       persp.up.copy(up);
@@ -730,10 +751,12 @@ export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & {
       controls.truck(dx * s, dy * s, false);
     },
     orbitBy(az, pol) {
+      deliberate = null;
       controls.rotate(az, pol, false);
     },
     stepView(dir, fine) {
       const [az, pol] = stepAngles(dir, fine);
+      deliberate = null;
       controls.rotate(az, pol, false);
     },
     setPivotSource() {},
@@ -748,6 +771,13 @@ export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & {
       persp.up.set(0, 0, 1);
       ortho.up.set(0, 0, 1);
       controls.updateCameraUp();
+      eyeSet = true;
+      deliberate = null;
+      // The swap to perspective dollies to the distance this height gives, so it has to say the same as the eye.
+      const d = eye.distanceTo(target);
+      if (usingOrtho && mode === "auto" && d > 0) {
+        controls.zoomTo(orthoHalfHeight() / (d * Math.tan((persp.fov * Math.PI) / 360)), animate);
+      }
       controls.setLookAt(eye.x, eye.y, eye.z, target.x, target.y, target.z, animate);
     },
     lerpLookAt(eyeA, targetA, eyeB, targetB, t, animate = false) {
