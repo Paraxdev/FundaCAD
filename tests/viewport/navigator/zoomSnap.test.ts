@@ -70,7 +70,16 @@ function snapJump(make: () => { nav: Navigator }, watch: THREE.Vector3[], dt = D
       break;
     }
   }
-  return { landed, rest: landed + settle(b, dt), jump };
+  return { landed, rest: landed + framesLeft(b, dt), jump };
+}
+
+function framesLeft(nav: Navigator, dt = DT) {
+  let frames = 0;
+  while (nav.isBusy() && frames < 2000) {
+    nav.update(dt);
+    frames++;
+  }
+  return frames;
 }
 
 function nearestOf(nav: Navigator, scene: BoxScene): number | null {
@@ -243,11 +252,12 @@ describe("a zoom's tail", () => {
     expect(scene.rays).toBeLessThanOrEqual(46);
   });
 
-  it("casts none orthographic", () => {
+  it("casts none orthographic, and lands all the same", () => {
     const { nav, scene } = room([], true);
     scene.rays = 0;
-    tail(nav, []);
+    const { frames } = tail(nav, []);
     expect(scene.rays).toBeLessThanOrEqual(17 + 1);
+    expect(frames * DT).toBeLessThan(0.85);
   });
 
   it("lands on the same goal as the spring would, over many notches", () => {
@@ -459,7 +469,8 @@ describe("a zoom's tail", () => {
     const springTail = () => {
       const { nav } = unsnapped(room());
       nav.wheel(W / 2, H / 2, -NOTCH);
-      return { frames: settle(nav), scale: nav.pose.scale };
+      nav.update(DT);
+      return { frames: 1 + framesLeft(nav), scale: nav.pose.scale };
     };
 
     /** A notch with every ray taking `ms` on a mocked clock: the most rays in one frame of the tail, and how it ended. */
