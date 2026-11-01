@@ -67,8 +67,14 @@ if (!TOKEN) {
   process.exit(1);
 }
 let failures = 0;
+const pageLog = WEBGPU ? boundedLog(console.log, { head: 1000, tail: 300, width: 2000 }) : null;
+// The script's own lines, after whatever page console came before them.
+const say = (...args) => {
+  pageLog?.flush();
+  console.log(...args);
+};
 const check = (name, ok, detail) => {
-  console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail ? `, ${detail}` : ""}`);
+  say(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail ? `, ${detail}` : ""}`);
   if (!ok) failures++;
 };
 
@@ -306,7 +312,6 @@ let deadline = null;
 (async () => {
   fs.mkdirSync(OUT, { recursive: true });
   const report = { viewport: [VW, VH], orbitMs: ORBIT_MS, runs: {} };
-  const pageLog = WEBGPU ? boundedLog(console.log, { head: 1000, tail: 300, width: 2000 }) : null;
   let browser = null;
   // A timed out Actions step signals only its shell, never node, so no handler here would run: the run stops itself first.
   const stopAtDeadline = async () => {
@@ -383,7 +388,7 @@ let deadline = null;
     // A cold vite finds the WebGPU tracer's modules on first use and reloads the page, which would lose the model.
     if (WEBGPU) {
       report.webgpuAdapter = await page.evaluate(webgpuAdapterFacts).catch((e) => ({ failed: e.message }));
-      console.log("webgpu adapter", JSON.stringify(report.webgpuAdapter));
+      say("webgpu adapter", JSON.stringify(report.webgpuAdapter));
       for (let tries = 0; tries < 3; tries++) {
         await page.waitForFunction(() => !!window.store && !!window.viewport, null, { timeout: 120000 });
         await pickPathTraced().catch(() => {});
@@ -436,9 +441,9 @@ let deadline = null;
           t.samples,
         ];
       });
-      console.log("no tracer:", JSON.stringify(v));
+      say("no tracer:", JSON.stringify(v));
     }
-    console.log(`backend ${backendName}`);
+    say(`backend ${backendName}`);
     report.backend = backendName;
     check("the chosen tracer is the one running", (WEBGPU ? /WebGPU/ : /^native/).test(backendName), backendName);
     report.adapters = await page.evaluate(async () => {
@@ -447,7 +452,7 @@ let deadline = null;
       const a = await navigator.gpu?.requestAdapter();
       return { webgl: info && gl.getParameter(info.UNMASKED_RENDERER_WEBGL), webgpu: a?.info?.architecture };
     });
-    console.log(JSON.stringify(report.adapters));
+    say(JSON.stringify(report.adapters));
     if (!(WEBGPU ? /WebGPU/ : /^native/).test(backendName))
       throw new Error(`the wanted tracer did not start: ${backendName}`);
     // The middle of the view: the panels around it are lit whatever the trace does.
@@ -515,7 +520,7 @@ let deadline = null;
       const startWall = Date.now();
       await orbit(ORBIT_MS);
       await page.waitForTimeout(SETTLE_MS);
-      console.log(`${name}: orbit done, ${frames.length} screencast frames`);
+      say(`${name}: orbit done, ${frames.length} screencast frames`);
       await cdp.send("Page.stopScreencast");
       cdp.off("Page.screencastFrame", onFrame);
       const log = await page.evaluate(() => {
@@ -569,7 +574,7 @@ let deadline = null;
           .length,
       };
       report.runs[name] = out;
-      console.log(name, JSON.stringify(out));
+      say(name, JSON.stringify(out));
       check(`${name}: enough frames to judge on screen`, !screen.tooFew, `${screen.frames}`);
       check(`${name}: enough frames to judge on the trace`, !trace.tooFew, `${trace.frames}`);
       check(`${name}: no partial frame on screen`, screen.bands === 0, `${screen.bands} of ${screen.frames}`);
@@ -646,7 +651,7 @@ let deadline = null;
         COLS,
       );
       report.denoiseSwap = { denoised, draws: counted.length, seen: { ...seen, bad: seen.bad.slice(0, 4) } };
-      console.log("denoise_swap", denoised, counted.length, seen.maxChanged, seen.concurrent, seen.flashes);
+      say("denoise_swap", denoised, counted.length, seen.maxChanged, seen.concurrent, seen.flashes);
       check("denoise swap: the denoised picture came up", denoised, `${counted.length} draws`);
       check("denoise swap: at most three flashes a second", !seen.concurrentOverLimit, seen.concurrent);
       check("denoise swap: no lit frame goes black", seen.blackFrames === 0, seen.blackFrames);
@@ -674,7 +679,7 @@ let deadline = null;
       }
       return { before, msToSamples: marks, samples: v.trace.samples };
     });
-    console.log("timing", JSON.stringify(report.timing));
+    say("timing", JSON.stringify(report.timing));
   } finally {
     fs.writeFileSync(path.join(OUT, "report.json"), JSON.stringify(report, null, 1));
     pageLog?.flush();

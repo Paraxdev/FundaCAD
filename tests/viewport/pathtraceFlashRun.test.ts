@@ -90,6 +90,19 @@ describe("a WebGPU flash run", () => {
     expect(run.stderr).not.toContain("still running");
   });
 
+  it("prints the console tail it held before its own next line, so they read in the order they came", () => {
+    const consoleLines = Array.from({ length: 1400 }, (_, i) => `m${i}`);
+    const run = runFlash(webgpu, { consoleLines, chromeLines: ["c1"], opensApp: true });
+    const printedTail = Array.from({ length: 300 }, (_, i) => `[page log] m${1100 + i}`);
+    expect(run.lines.slice(run.lines.indexOf("[page log] m999") + 1)).toEqual([
+      "... lines cut: 100",
+      ...printedTail,
+      `webgpu adapter ${JSON.stringify({ fake: "adapter" })}`,
+      `--- end of ${run.chromeLog}`,
+      "c1",
+    ]);
+  });
+
   it("that fails before its deadline prints the held tail once and the deadline stays quiet", () => {
     const run = runFlash(
       { ...webgpu, FLASH_DEADLINE_S: "5" },
