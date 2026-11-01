@@ -18,15 +18,38 @@ function decls(pick: (selector: string) => boolean, props: (prop: string) => boo
   return out;
 }
 
-// Every class a Select's trigger or value can carry: its own and those its callers pass in.
+// Every class a Select's trigger or value can carry: its own, its states and those its callers pass in.
 const SELECT_CLASSES = [
   "sm-select",
   "select-trigger",
   "select-value",
+  "ui-select-sm",
+  "ui-select-md",
+  "open",
+  "is-open",
   ...Object.values(import.meta.glob("../../src/components/**/*.vue", { query: "?raw", import: "default", eager: true }))
     .flatMap((text) => [...(text as string).matchAll(/<Select\b(?:[^>"]|"[^"]*")*?\sclass="([^"]+)"/g)])
     .flatMap((m) => (m[1] ?? "").split(/\s+/)),
 ];
+
+// Whatever sits inside :is() or :where() is part of the compound, so only top-level combinators split.
+function lastCompound(selector: string): string {
+  let depth = 0;
+  let start = 0;
+  [...selector].forEach((c, i) => {
+    if (c === "(") depth++;
+    else if (c === ")") depth--;
+    else if (depth === 0 && /[\s>+~]/.test(c)) start = i + 1;
+  });
+  return selector.slice(start);
+}
+
+function stylesASelect(selector: string): boolean {
+  const last = lastCompound(selector);
+  return (
+    /\[role=["']?combobox/.test(last) || SELECT_CLASSES.some((c) => new RegExp(String.raw`\.${c}(?![\w-])`).test(last))
+  );
+}
 
 const MOVES = new Set(["transform", "translate", "rotate", "top", "bottom", "margin", "margin-top", "inset"]);
 
@@ -92,15 +115,7 @@ describe("the Select caret", () => {
 
 describe("the Select value", () => {
   it("is centred by the trigger's flex, and no other rule on any Select takes that back", () => {
-    expect(
-      decls(
-        (s) => {
-          const last = s.split(/[\s>+~]+/).pop() ?? "";
-          return SELECT_CLASSES.some((c) => new RegExp(`\.${c}(?![\w-])`).test(last));
-        },
-        (p) => p === "display" || p === "align-items",
-      ),
-    ).toEqual([
+    expect(decls(stylesASelect, (p) => p === "display" || p === "align-items")).toEqual([
       ".select-trigger { display: flex }",
       ".select-trigger { align-items: center }",
       ".home-view-select { display: none }",
@@ -112,12 +127,14 @@ describe("the Select value", () => {
     expect(
       decls(
         (s) => s === ".select-trigger .select-value",
-        (p) => p === "flex" || p === "min-width" || p === "text-overflow",
+        (p) => ["flex", "min-width", "overflow", "text-overflow", "white-space"].includes(p),
       ),
     ).toEqual([
       ".select-trigger .select-value { flex: 1 1 auto }",
       ".select-trigger .select-value { min-width: 0 }",
+      ".select-trigger .select-value { overflow: hidden }",
       ".select-trigger .select-value { text-overflow: ellipsis }",
+      ".select-trigger .select-value { white-space: nowrap }",
     ]);
   });
 });
