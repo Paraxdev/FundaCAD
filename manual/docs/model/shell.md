@@ -12,7 +12,7 @@ Shell hollows a body, and Thicken gives a face a wall of its own. Both are under
 
 Letting go of the arrow only ends the drag, so you can still type a value. A mug is a cylinder with its top face shelled to a few millimetres.
 
-A shell remembers the body of each face. If deleting an earlier step takes that body's number away, the step says the target body no longer exists, so pick its faces again in the History card.
+A shell remembers the body of each face, and a body keeps its number when other steps are added or deleted, so the shell stays on that body. If you delete the step that made the body, the shell says the target body no longer exists, so pick its faces again in the History card. A later body never takes that number.
 
 ## Thicken
 

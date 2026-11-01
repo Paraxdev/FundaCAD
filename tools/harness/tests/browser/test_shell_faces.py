@@ -252,3 +252,52 @@ def test_a_shell_whose_body_id_is_gone_is_refused_and_does_not_open_another_body
     open_doc(s, tmp_path, [box("a"), shell_at([0, 0, 15], "body2")])
     assert faces_of(s) == {"body1": 6}
     assert s.page.evaluate("() => window.store.buildState.errorMessage") == "Shell: the target body no longer exists"
+
+
+def sized(fid, side):
+    return {**box(fid, "new"), "length": side, "width": side, "height": side * 1.5}
+
+
+def remove_step(s, fid):
+    s.page.evaluate("(id) => window.store.removeFeature(id)", fid)
+    s.settle()
+
+
+def build_error(s):
+    return s.page.evaluate("() => window.store.buildState.errorMessage")
+
+
+@pytest.mark.parametrize(
+    "later,left",
+    [
+        ([sized("b", 40)], {"body2": 11}),
+        ([sized("b", 40), sized("c", 60)], {"body2": 11, "body3": 6}),
+    ],
+)
+def test_deleting_an_earlier_body_step_leaves_a_shell_on_its_body(s, tmp_path, later, left):
+    open_doc(s, tmp_path, [box("a"), *later, shell_at([0, 0, 30], "body2")])
+    remove_step(s, "a")
+    assert faces_of(s) == left
+    assert build_error(s) is None
+    saved = tmp_path / "saved.funda"
+    s.save_as(saved.as_posix())
+    s.open_file(saved.as_posix())
+    s.settle()
+    assert faces_of(s) == left
+    assert build_error(s) is None
+
+
+def test_a_deleted_body_is_refused_and_a_later_body_does_not_take_its_number(s, tmp_path):
+    open_doc(s, tmp_path, [box("a"), sized("b", 40), sized("c", 60), shell_at([0, 0, 30], "body3")])
+    remove_step(s, "c")
+    assert faces_of(s) == {"body1": 6, "body2": 6}
+    assert build_error(s) == "Shell: the target body no longer exists"
+
+    doc = s.page.evaluate("() => JSON.parse(JSON.stringify(window.store.document))")
+    doc["features"].insert(0, sized("d", 80))
+    path = tmp_path / "added.json"
+    path.write_text(json.dumps({"version": 10, **doc}))
+    s.open_file(path.as_posix())
+    s.settle()
+    assert faces_of(s) == {"body4": 6, "body1": 6, "body2": 6}
+    assert build_error(s) == "Shell: the target body no longer exists"
