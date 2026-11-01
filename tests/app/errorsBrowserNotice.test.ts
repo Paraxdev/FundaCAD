@@ -17,10 +17,14 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe("window errors and the resize notice", () => {
   it("knows the notice in both browsers' wording and nothing else", () => {
-    expect(isBrowserNotice(NOTICE)).toBe(true);
-    expect(isBrowserNotice("ResizeObserver loop limit exceeded")).toBe(true);
-    expect(isBrowserNotice("TypeError: x is undefined")).toBe(false);
-    expect(isBrowserNotice(new Event("error"))).toBe(false);
+    expect(isBrowserNotice(NOTICE, undefined)).toBe(true);
+    expect(isBrowserNotice("ResizeObserver loop limit exceeded", null)).toBe(true);
+    expect(isBrowserNotice("TypeError: x is undefined", undefined)).toBe(false);
+    expect(isBrowserNotice(new Event("error"), undefined)).toBe(false);
+  });
+
+  it("a thrown Error with the same text is a real error", () => {
+    expect(isBrowserNotice(NOTICE, new Error(NOTICE))).toBe(false);
   });
 
   it("a notice reaches no toast or crumb, a real error reaches both", async () => {
@@ -38,11 +42,12 @@ describe("window errors and the resize notice", () => {
     fire(NOTICE);
     const quiet = { toasts: [...toasts], crumbs: breadcrumbs().length - before, logged: err.mock.calls.length };
     fire("engine fell over");
+    window.onerror?.(NOTICE, "plugin.js", 1, 1, new Error(NOTICE));
     const loud = { toasts: toasts.length, crumbs: breadcrumbs().length - before, logged: err.mock.calls.length };
     err.mockRestore();
     expect({ quiet, loud }).toEqual({
       quiet: { toasts: [], crumbs: 0, logged: 0 },
-      loud: { toasts: 1, crumbs: 1, logged: 1 },
+      loud: { toasts: 2, crumbs: 1, logged: 2 },
     });
   });
 });

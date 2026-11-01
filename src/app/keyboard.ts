@@ -71,7 +71,7 @@ export function installKeyboard(e: Engine): void {
 
   // Failures with no toast of their own would otherwise exist only in devtools, where a user reporting a bug never looks.
   window.addEventListener("error", (ev) => {
-    if (isBrowserNotice(ev.message)) return;
+    if (isBrowserNotice(ev.message, ev.error)) return;
     logError(ev.error ?? ev.message, {
       source: "window",
       detail: ev.filename ? `${ev.filename}:${ev.lineno}:${ev.colno}` : undefined,

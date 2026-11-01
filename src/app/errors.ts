@@ -21,7 +21,7 @@ export function installGlobalErrorHandlers(): void {
     });
   });
   window.onerror = (message, source, lineno, colno, error) => {
-    if (isBrowserNotice(message)) return;
+    if (isBrowserNotice(message, error)) return;
     console.error("Uncaught error:", error ?? message, source, lineno, colno);
     toast(headline(error ?? message), {
       kind: "error",
