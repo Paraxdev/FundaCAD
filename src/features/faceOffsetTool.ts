@@ -45,6 +45,8 @@ export class FaceOffsetTool {
   private phase: Phase = "pick";
   private faces: Selector[] = [];
   private faceIds: number[] = [];
+  /** Read once per face, while its id is live: a built preview renumbers the faces of every body after a shelled one. */
+  private faceOwners: (string | null)[] = [];
   private bodyId: string | null = null;
   private anchor = new THREE.Vector3();
   private axis = new THREE.Vector3(0, 0, 1);
@@ -176,6 +178,7 @@ export class FaceOffsetTool {
         e.stopImmediatePropagation();
         this.faces.push(hit.selector);
         this.faceIds.push(hit.faceId);
+        this.faceOwners.push(hit.bodyId);
         const wasRound = this.round !== null;
         if (this.round && !this.inTangentRun()) this.dropRound();
         // The handle moves to the face just picked; a round run keeps its lead face, which it reads a size from.
@@ -273,6 +276,7 @@ export class FaceOffsetTool {
   ) {
     this.faces = faces;
     this.faceIds = faceIds;
+    this.faceOwners = faceIds.map((id) => this.viewport.faceIdToBodyId(id));
     this.bodyId = bodyId;
     this.round = this.mode === "offsetFace" ? round : null;
     this.contact = null;
@@ -639,7 +643,7 @@ export class FaceOffsetTool {
     if (this.mode === "shell") {
       // The engine takes an unbound selector for the active body, which is not the body of a selected face.
       const bound = this.faces.map((s, i) => {
-        const owner = this.viewport.faceIdToBodyId(this.faceIds[i] ?? -1);
+        const owner = this.faceOwners[i];
         return owner ? ({ ...s, body: owner } as Selector) : s;
       });
       return {
