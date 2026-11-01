@@ -4,7 +4,7 @@
 
 **Security**
 - A STEP or XBF import no longer reads other files or network locations that the file names.
-- A damaged or oversized document or import stops with a clear message instead of freezing or filling memory or disk.
+- More damaged or oversized documents and imports now stop with a clear message, instead of freezing or filling memory or disk.
 - Plugins work within firmer limits, and installing a plugin or exporting through one keeps your old file if something goes wrong.
 - The assistant connection checks documents more strictly and follows the same save rules everywhere.
 - On Windows and Linux, the part of FundaCAD that reads your files runs with fewer rights, so a bad file can do less harm.
@@ -41,14 +41,13 @@
 - Settings, Updates has a channel picker.
 
 **Linux**
-- The Flatpak and AppImage use native Wayland, so text stays sharp at a fractional display scale.
+- The Flatpak and AppImage now use native Wayland, for sharper text at a fractional display scale.
 
 **After you update**
 - In the Flatpak, assistants work in Documents/FundaCAD and ask before using any other path.
 - A STEP file that refers to other documents imports without those references, and a note on the import says so.
 - A plugin that uses a name another plugin already uses is not loaded, and the plugin list names the plugin that owns it.
 - On Linux with a SpaceMouse, unplug it and plug it back in once. If you set it up with setup-spacemouse.sh, run it again.
-- In the Flatpak, a 3D mouse needs this once: flatpak override --user --device=all dev.fundacad.app
 - If you set Scrolling to Mouse to work around the wheel problem, you can set it back to Automatic.
 
 ## Known limits
@@ -58,6 +57,7 @@
 - With Realtime while moving off, the traced picture can trail the edges for a moment while you drag.
 - While you zoom in Path traced, the picture can restart a few times before it settles and show a single brighter frame.
 - With the camera inside a solid wall, also while it passes through one, Path traced shows a black picture.
+- In the Flatpak, a 3D mouse does not work without setup. See the 3D mouse page of the manual.
 - On Ubuntu with the open nouveau Nvidia driver, the Flatpak and AppImage close right after they start on Wayland.
 - On Linux, an HDR dropped on the window is not picked up yet. Use Import HDR in the Render panel.
 - With more than 128 edges in one fillet or chamfer, the drag stops the size only at the 128 edges nearest the arrow. A size too big for an edge farther away shows as a red preview instead.
