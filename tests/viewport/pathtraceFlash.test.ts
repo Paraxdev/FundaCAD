@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 // @ts-expect-error an e2e helper in plain CommonJS, with no types.
 import flash from "../../e2e/lib/flash.cjs";
 
-const { analyse, blackEdges, concurrentFlashesPerSecond, flashesPerSecond, isBand, toGrid } = flash;
+const { analyse, blackEdges, boundedLog, concurrentFlashesPerSecond, flashesPerSecond, isBand, toGrid } = flash;
 
 const COLS = 8;
 const ROWS = 5;
@@ -178,5 +178,39 @@ describe("flash analysis of shown frames", () => {
     );
     expect(band.bands).toBe(1);
     expect(band.bad[0]).toMatchObject({ i: 1, band: true });
+  });
+});
+
+describe("the bounded page log", () => {
+  const run = (count: number, sizes: { head: number; tail: number; width: number }) => {
+    const out: string[] = [];
+    const log = boundedLog((l: string) => out.push(l), sizes);
+    for (let i = 0; i < count; i++) log.line(`m${i}`);
+    log.flush();
+    return out;
+  };
+
+  it("prints every line of a quiet run, in order", () => {
+    expect(run(4, { head: 3, tail: 2, width: 100 })).toEqual(["m0", "m1", "m2", "m3"]);
+  });
+
+  it("keeps the start and the end of a chatty run and says how much it cut", () => {
+    expect(run(10, { head: 2, tail: 3, width: 100 })).toEqual(["m0", "m1", "... lines cut: 5", "m7", "m8", "m9"]);
+  });
+
+  it("cuts a long line and says how long it was", () => {
+    const out: string[] = [];
+    const log = boundedLog((l: string) => out.push(l), { head: 1, tail: 1, width: 4 });
+    log.line("abcdefgh");
+    expect(out).toEqual(["abcd... (8 chars)"]);
+  });
+
+  it("with no head prints only the tail, once flushed", () => {
+    const out: string[] = [];
+    const log = boundedLog((l: string) => out.push(l), { head: 0, tail: 2, width: 100 });
+    ["a", "b", "c"].forEach(log.line);
+    expect(out).toEqual([]);
+    log.flush();
+    expect(out).toEqual(["... lines cut: 1", "b", "c"]);
   });
 });

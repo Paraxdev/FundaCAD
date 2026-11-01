@@ -207,7 +207,29 @@ function analyse(frames, cols) {
   };
 }
 
+/** Prints the first `head` lines as they come and holds the last `tail` until flush: a chatty run's failure comes last. */
+function boundedLog(write, { head, tail, width }) {
+  let seen = 0;
+  const held = [];
+  return {
+    line(text) {
+      const cut = text.length > width ? `${text.slice(0, width)}... (${text.length} chars)` : text;
+      if (seen++ < head) write(cut);
+      else {
+        held.push(cut);
+        if (held.length > tail) held.shift();
+      }
+    },
+    flush() {
+      const dropped = seen - head - held.length;
+      if (dropped > 0) write(`... lines cut: ${dropped}`);
+      for (const l of held.splice(0)) write(l);
+    },
+  };
+}
+
 module.exports = {
+  boundedLog,
   toGrid,
   toGridSource: toGrid.toString(),
   mean,

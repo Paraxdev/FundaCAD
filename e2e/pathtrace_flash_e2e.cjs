@@ -21,19 +21,27 @@
 // tests/fixtures/closed_room.funda is a closed room with one lamp, use it from inside: FLASH_CAMERA=0,-150,0,0,0,0.
 // FLASH_MOST_BLACK fails a frame on the trace with more than this share of black cells, for a scene known to be lit.
 // FLASH_MOST_CHANGED fails a step on the trace that changes more than this share of cells, for a scene that stays alike.
+// A WebGPU run also prints the adapter and the whole page console, and leaves Chrome's stderr in chrome_stderr.log in outDir.
 const { spawn } = require("child_process");
-const { chromium } = require("playwright-core");
 const fs = require("fs");
 const path = require("path");
-const { analyse, blackEdges, toGridSource } = require("./lib/flash.cjs");
+const OUT = path.resolve(process.argv[2] || "pathtrace_flash_shots");
+const WEBGPU = process.env.FLASH_TRACER === "webgpu";
+const CHROME_LOG = path.join(OUT, "chrome_stderr.log");
+// Playwright hands Chrome's stderr only to its pw:browser debug channel, and reads these two as it loads.
+if (WEBGPU) {
+  fs.mkdirSync(OUT, { recursive: true });
+  process.env.DEBUG = [process.env.DEBUG, "pw:browser"].filter(Boolean).join(",");
+  process.env.DEBUG_FILE = CHROME_LOG;
+}
+const { chromium } = require("playwright-core");
+const { analyse, blackEdges, boundedLog, toGridSource } = require("./lib/flash.cjs");
 
 const TOKEN = process.env.SC_TOKEN || "";
 const EXE = process.env.SC_CHROME || "";
 const URL = process.env.SC_URL || "http://localhost:5173/";
 const PORT = process.env.SC_ENGINE_PORT || "8765";
-const OUT = path.resolve(process.argv[2] || "pathtrace_flash_shots");
 const MEASURE_ONLY = process.env.FLASH_MEASURE_ONLY === "1";
-const WEBGPU = process.env.FLASH_TRACER === "webgpu";
 const MODEL = process.env.FLASH_MODEL ? fs.readFileSync(process.env.FLASH_MODEL, "utf8") : null;
 const [VW, VH] = (process.env.SC_VIEWPORT || "800x560").split("x").map(Number);
 const ORBIT_MS = Number(process.env.FLASH_ORBIT_MS || 8000);
@@ -249,10 +257,41 @@ function swapsPerSecond(ticks) {
 function browserArgs() {
   const common = ["--no-sandbox", "--enable-gpu", "--ignore-gpu-blocklist"];
   // Chrome offers no WebGPU adapter at all once ANGLE is told to use SwiftShader, so a WebGPU run leaves ANGLE alone.
-  if (WEBGPU && process.env.FLASH_WEBGPU_REAL === "1") return [...common, "--enable-unsafe-webgpu"];
-  if (WEBGPU) return ["--no-sandbox", "--enable-unsafe-webgpu", "--use-webgpu-adapter=swiftshader"];
+  if (WEBGPU && process.env.FLASH_WEBGPU_REAL === "1")
+    return [...common, "--enable-unsafe-webgpu", "--enable-logging=stderr"];
+  if (WEBGPU)
+    return ["--no-sandbox", "--enable-unsafe-webgpu", "--use-webgpu-adapter=swiftshader", "--enable-logging=stderr"];
   // The native page still draws Realtime with WebGL, on SwiftShader so the GPU stays idle.
   return [...common, "--use-angle=swiftshader"];
+}
+
+async function webgpuAdapterFacts() {
+  const a = await Promise.race([
+    navigator.gpu?.requestAdapter(),
+    new Promise((r) => setTimeout(() => r("timed out after 10 s"), 10000)),
+  ]);
+  if (!a || typeof a === "string") return { adapter: a ?? null };
+  // Limits and info are getters on the prototype, JSON.stringify sees none of them.
+  const plain = (o) => {
+    const out = {};
+    for (const k in o) if (typeof o[k] !== "function") out[k] = o[k];
+    return out;
+  };
+  return { info: plain(a.info), limits: plain(a.limits), features: [...a.features] };
+}
+
+async function tailChromeLog() {
+  if (!WEBGPU) return;
+  // Playwright's log stream writes behind the last line, and this is about to exit.
+  await new Promise((r) => setTimeout(r, 500));
+  console.log(`--- end of ${CHROME_LOG}`);
+  try {
+    const tail = boundedLog(console.log, { head: 0, tail: 300, width: 2000 });
+    fs.readFileSync(CHROME_LOG, "utf8").split(/\r?\n/).forEach(tail.line);
+    tail.flush();
+  } catch (e) {
+    console.log(`no Chrome log: ${e.message}`);
+  }
 }
 
 let serve = null;
@@ -270,6 +309,7 @@ let serve = null;
     args: browserArgs(),
   });
   const report = { viewport: [VW, VH], orbitMs: ORBIT_MS, runs: {} };
+  const pageLog = WEBGPU ? boundedLog(console.log, { head: 1000, tail: 300, width: 2000 }) : null;
   try {
     const page = await browser.newPage({ colorScheme: "dark", viewport: { width: VW, height: VH } });
     page.on("pageerror", (e) => {
@@ -277,7 +317,8 @@ let serve = null;
       failures++;
     });
     page.on("console", (m) => {
-      if (/tracer|native|fault/i.test(m.text())) console.log(`[page] ${m.text().slice(0, 300)}`);
+      if (pageLog) pageLog.line(`[page ${new Date().toISOString()} ${m.type()}] ${m.text()}`);
+      else if (/tracer|native|fault/i.test(m.text())) console.log(`[page] ${m.text().slice(0, 300)}`);
     });
     await page.addInitScript(installCapture, [COLS, ROWS, WEBGPU]);
     // Only the engine's socket: the native frames carry their own token.
@@ -320,6 +361,8 @@ let serve = null;
     await openApp();
     // A cold vite finds the WebGPU tracer's modules on first use and reloads the page, which would lose the model.
     if (WEBGPU) {
+      report.webgpuAdapter = await page.evaluate(webgpuAdapterFacts).catch((e) => ({ failed: e.message }));
+      console.log("webgpu adapter", JSON.stringify(report.webgpuAdapter));
       for (let tries = 0; tries < 3; tries++) {
         await page.waitForFunction(() => !!window.store && !!window.viewport, null, { timeout: 120000 });
         await pickPathTraced().catch(() => {});
@@ -613,13 +656,16 @@ let serve = null;
     console.log("timing", JSON.stringify(report.timing));
   } finally {
     fs.writeFileSync(path.join(OUT, "report.json"), JSON.stringify(report, null, 1));
+    pageLog?.flush();
     await browser.close();
     serve?.srv.kill();
   }
+  if (failures) await tailChromeLog();
   console.log(failures ? `${failures} failed` : "all passed");
   process.exit(failures && !MEASURE_ONLY ? 1 : 0);
-})().catch((e) => {
+})().catch(async (e) => {
   console.error(e);
+  await tailChromeLog();
   serve?.srv.kill();
   process.exit(1);
 });
