@@ -196,14 +196,17 @@
   color: var(--text, #e6e8ec);
 }
 /* A <button> standing in for a <select> (Select.vue): this adds what the UA gives a
-   <select> for free. */
+   <select> for free. Flex: a well of fixed height leaves its padding less than a line, and a
+   button pins that line to the top of its padding, so it would hang low. */
 .select-trigger {
-  display: block;
+  display: flex;
+  align-items: center;
   width: 100%;
   text-align: left;
 }
 .select-trigger .select-value {
-  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
