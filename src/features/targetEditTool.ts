@@ -281,7 +281,7 @@ export class TargetEditTool {
       const edge = this.viewport.edgeLineByMid(p);
       return edge ? { kind: "edge", edge } : null;
     }
-    const faceId = this.viewport.faceIdNear(p);
+    const faceId = this.viewport.faceIdNear(p, 0, sel.body);
     return faceId === null ? null : { kind: "face", faceId };
   }
 
