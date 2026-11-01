@@ -149,6 +149,22 @@ def test_undo_and_redo_with_the_tool_open_keep_each_face_on_its_body(s, steps):
     assert faces_of(s)["body2"] == 11
 
 
+def test_a_redo_that_renumbers_the_faces_with_the_tool_open_keeps_each_face_on_its_body(s):
+    s.open_file(TWO)
+    pick(s, "body1:right")
+    shell(s, "1")
+    s.press("Escape")
+    s.menu("Edit/Undo")
+    s.settle()
+    open_on_two_bodies(s)
+    s.menu("Edit/Redo")
+    s.settle()
+    s.type("field:distance", "2", enter=True)
+    s.settle()
+    assert shells_after(s)[-1] == ["body1", "body2"]
+    assert faces_of(s)["body2"] == 11
+
+
 def test_a_face_added_by_editing_a_saved_shell_opens_on_its_own_body(s):
     s.open_file(TWO)
     open_on_two_bodies(s)
