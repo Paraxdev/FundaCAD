@@ -34,21 +34,26 @@ def test_extrude_reedit(s):
     example("extrude_reedit").run(s)
 
 
+@pytest.mark.heavy
 def test_big_model_orbit(s, tmp_path):
     example("big_model_orbit").run(s, tmp_path)
 
 
+@pytest.mark.heavy
 def test_big_model_zoom(s, tmp_path):
     example("big_model_zoom").run(s, tmp_path)
 
 
+@pytest.mark.heavy
 def test_big_model_box(s, tmp_path):
     example("big_model_box").run(s, tmp_path)
 
 
+@pytest.mark.heavy
 def test_shipped_examples(s):
     example("shipped_examples").run(s)
 
 
+@pytest.mark.heavy
 def test_big_printer_import(s):
     example("big_printer_import").run(s)
