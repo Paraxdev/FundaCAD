@@ -3,7 +3,13 @@
 const fs = require("fs");
 const Module = require("module");
 
-const { consoleLines = [], chromeLines = [], gotoThrowsAfterMs = null } = JSON.parse(process.env.FAKE_PW);
+const {
+  consoleLines = [],
+  chromeLines = [],
+  gotoThrowsAfterMs = null,
+  launchHangs = false,
+  launchThrows = false,
+} = JSON.parse(process.env.FAKE_PW);
 const realLoad = Module._load;
 
 function fakePlaywright() {
@@ -35,6 +41,9 @@ function fakePlaywright() {
       async launch({ args }) {
         console.log(`fake launch ${JSON.stringify(args)}`);
         for (const line of chromeLines) logFile?.write(`${line}\n`);
+        if (launchThrows) throw new Error("fake launch failed");
+        // Exits by itself, so a run that never stops at its deadline fails here and not on the test's own timeout.
+        if (launchHangs) await new Promise(() => setTimeout(() => process.exit(7), 5000));
         return browser;
       },
     },

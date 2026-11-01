@@ -301,8 +301,24 @@ async function finishChromeLog(printTail) {
 
 let serve = null;
 let deadlineHit = false;
+let deadline = null;
 (async () => {
   fs.mkdirSync(OUT, { recursive: true });
+  const report = { viewport: [VW, VH], orbitMs: ORBIT_MS, runs: {} };
+  const pageLog = WEBGPU ? boundedLog(console.log, { head: 1000, tail: 300, width: 2000 }) : null;
+  let browser = null;
+  // A timed out Actions step signals only its shell, never node, so no handler here would run: the run stops itself first.
+  const stopAtDeadline = async () => {
+    deadlineHit = true;
+    console.error(`FAILED: still running after ${DEADLINE_S} s, stopping before the step's time limit`);
+    fs.writeFileSync(path.join(OUT, "report.json"), JSON.stringify(report, null, 1));
+    pageLog.flush();
+    await Promise.race([browser?.close().catch(() => {}), new Promise((r) => setTimeout(r, 5000))]);
+    pageLog.flush();
+    await finishChromeLog(true);
+    process.exit(1);
+  };
+  deadline = DEADLINE_S ? setTimeout(stopAtDeadline, DEADLINE_S * 1000) : null;
   let port = process.env.SC_TRACER_PORT;
   if (!port && !WEBGPU) {
     serve = startTracerServe();
@@ -310,24 +326,10 @@ let deadlineHit = false;
   }
   const pick = WEBGPU ? "tracer=webgpu" : `tracer=native-dev&port=${port}`;
   const url = URL + (URL.includes("?") ? "&" : "?") + `token=${encodeURIComponent(TOKEN)}&${pick}`;
-  const browser = await chromium.launch({
+  browser = await chromium.launch({
     ...(EXE ? { executablePath: EXE } : { channel: "chrome" }),
     args: browserArgs(),
   });
-  const report = { viewport: [VW, VH], orbitMs: ORBIT_MS, runs: {} };
-  const pageLog = WEBGPU ? boundedLog(console.log, { head: 1000, tail: 300, width: 2000 }) : null;
-  // A timed out Actions step signals only its shell, never node, so no handler here would run: the run stops itself first.
-  const stopAtDeadline = async () => {
-    deadlineHit = true;
-    console.error(`FAILED: still running after ${DEADLINE_S} s, stopping before the step's time limit`);
-    fs.writeFileSync(path.join(OUT, "report.json"), JSON.stringify(report, null, 1));
-    pageLog.flush();
-    await Promise.race([browser.close().catch(() => {}), new Promise((r) => setTimeout(r, 5000))]);
-    pageLog.flush();
-    await finishChromeLog(true);
-    process.exit(1);
-  };
-  const deadline = DEADLINE_S ? setTimeout(stopAtDeadline, DEADLINE_S * 1000) : null;
   try {
     const page = await browser.newPage({ colorScheme: "dark", viewport: { width: VW, height: VH } });
     page.on("pageerror", (e) => {
@@ -686,6 +688,7 @@ let deadlineHit = false;
   process.exit(failures && !MEASURE_ONLY ? 1 : 0);
 })().catch(async (e) => {
   if (deadlineHit) return;
+  clearTimeout(deadline);
   console.error(e);
   await finishChromeLog(true);
   serve?.srv.kill();

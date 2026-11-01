@@ -63,6 +63,27 @@ describe("a WebGPU flash run", () => {
     expect(run.stderr).not.toContain("fake browser closed");
   });
 
+  it("whose browser never launches still stops at FLASH_DEADLINE_S and prints Chrome's log", () => {
+    const run = runFlash({ ...webgpu, FLASH_DEADLINE_S: "0.5" }, { launchHangs: true, chromeLines: ["c1"] });
+    expect({ status: run.status, afterLoad: run.lines.slice(1), files: run.files }).toEqual({
+      status: 1,
+      afterLoad: [run.lines[1], `--- end of ${run.chromeLog}`, "c1"],
+      files: ["chrome_stderr.log", "report.json"],
+    });
+    expect(run.lines[1]).toMatch(/^fake launch /);
+    expect(run.stderr).toContain("still running after 0.5 s");
+  });
+
+  it("whose launch fails before the deadline reports that and the deadline stays quiet while it finishes", () => {
+    const run = runFlash({ ...webgpu, FLASH_DEADLINE_S: "0.2" }, { launchThrows: true, chromeLines: ["c1"] });
+    expect({ status: run.status, afterLaunch: run.lines.slice(2) }).toEqual({
+      status: 1,
+      afterLaunch: [`--- end of ${run.chromeLog}`, "c1"],
+    });
+    expect(run.stderr).toContain("fake launch failed");
+    expect(run.stderr).not.toContain("still running");
+  });
+
   it("that fails before its deadline prints the held tail once and the deadline stays quiet", () => {
     const run = runFlash(
       { ...webgpu, FLASH_DEADLINE_S: "5" },
