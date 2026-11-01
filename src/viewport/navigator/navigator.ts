@@ -6,6 +6,7 @@ import type { NavScene, ProjectionMode } from "../cameras";
 import { centreDepth, orbitPivot, zoomAnchor, type AnchorContext } from "./anchor";
 import { stepAngles, type StepDir } from "../viewStep";
 import { OrbitChannel, PanChannel, ZoomChannel } from "./channels";
+import { nearestDepth, zoomSnapLog } from "./zoomSnap";
 import { autoWantsOrtho, onWorldAxis } from "../autoProjection";
 import { makeFlight, stepFlight, type Flight } from "./flight";
 import { clampScale, contentLimits, defaultLimits, elevRange, minScaleOf, type Limits } from "./limits";
@@ -500,7 +501,7 @@ export class Navigator {
   private stepZooms(tau: number, dt: number) {
     if (!this.zooms.length) return;
     for (const ch of this.zooms) {
-      const want = ch.step(tau, dt);
+      const want = ch.step(tau, dt, this.zoomSnap(ch, tau));
       if (want === 0) continue;
       const got = this.limitedLog(ch.anchor, want);
       if (got !== 0) {
@@ -512,6 +513,19 @@ export class Navigator {
     // A pinch's channel stays while the fingers are down, even at rest.
     this.zooms = this.zooms.filter((c) => c === this.pinchZoom || !c.settled());
     this.unsettled = true;
+  }
+
+  /** The log a zoom may drop at once, none while anything else moves the view, as it goes by what is in view now. */
+  private zoomSnap(ch: ZoomChannel, tau: number): number {
+    if (!(tau > 0) || this.gesture || this.orbit || this.pan || ch === this.pinchZoom) {
+      ch.nearest = undefined;
+      return 0;
+    }
+    const p = this.pose;
+    // A near surface only ever shrinks this, so no rays are spent until the zoom is close to it.
+    if (!ch.near(1.5 * zoomSnapLog(p, this.frame, ch.anchor, null), tau)) return 0;
+    if (ch.nearest === undefined) ch.nearest = p.ortho ? null : nearestDepth(p, this.ctx());
+    return zoomSnapLog(p, this.frame, ch.anchor, ch.nearest);
   }
 
   /** How much of a log zoom about A the limits allow. */

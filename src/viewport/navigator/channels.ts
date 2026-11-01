@@ -18,6 +18,8 @@ export class ZoomChannel {
   readonly px: number;
   readonly py: number;
   goal = 0;
+  /** The nearest surface in view near the end of this zoom, undefined until looked for. */
+  nearest: number | null | undefined;
   private spring = new Spring();
 
   constructor(anchor: THREE.Vector3, px: number, py: number) {
@@ -27,16 +29,26 @@ export class ZoomChannel {
   }
 
   add(logFactor: number) {
-    if (Number.isFinite(logFactor)) this.goal += logFactor;
+    if (!Number.isFinite(logFactor)) return;
+    this.goal += logFactor;
+    this.nearest = undefined;
   }
 
-  /** The log factor to apply this frame. */
-  step(tau: number, dt: number): number {
+  left(): number {
+    return Math.abs(this.goal - this.spring.x);
+  }
+
+  /** Within `log` of the goal and easing into it, rather than crossing it at speed. */
+  near(log: number, tau: number): boolean {
+    return this.left() < log && Math.abs(this.spring.v) < (log * 2) / tau;
+  }
+
+  /** The log factor to apply this frame, landing on the goal once within `snapLog` of it. */
+  step(tau: number, dt: number, snapLog = 0): number {
     const before = this.spring.x;
     this.spring.step(this.goal, tau, dt);
-    if (Math.abs(this.goal - this.spring.x) < EPS_LOG && Math.abs(this.spring.v) < EPS_LOG * 100) {
-      this.spring.reset(this.goal);
-    }
+    const atRest = this.left() < EPS_LOG && Math.abs(this.spring.v) < EPS_LOG * 100;
+    if (atRest || (snapLog > 0 && this.near(snapLog, tau))) this.spring.reset(this.goal);
     return this.spring.x - before;
   }
 
