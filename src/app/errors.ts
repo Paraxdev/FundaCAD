@@ -1,6 +1,7 @@
 import { toast } from "../ui/toast";
 import { describe } from "../ui/logStore";
 import { isSessionEnded } from "../document/session";
+import { isBrowserNotice } from "../diagnostics/browserNotice";
 
 /** Logs and toasts any uncaught error or rejection, so a failure never leaves just a blank viewport. */
 export function installGlobalErrorHandlers(): void {
@@ -20,6 +21,7 @@ export function installGlobalErrorHandlers(): void {
     });
   });
   window.onerror = (message, source, lineno, colno, error) => {
+    if (isBrowserNotice(message)) return;
     console.error("Uncaught error:", error ?? message, source, lineno, colno);
     toast(headline(error ?? message), {
       kind: "error",
