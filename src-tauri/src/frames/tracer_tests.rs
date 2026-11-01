@@ -6,6 +6,10 @@ fn frame(t: &TracerSource) -> u32 {
     with(|t| t.samples()).unwrap()
 }
 
+fn new_look() -> Look {
+    serde_json::from_str(r#"{"sunDir":[0.3,-0.4,1],"sunColor":[3,3,3]}"#).unwrap()
+}
+
 /// The tracer is one per process, so its tests take turns.
 fn one_at_a_time() -> MutexGuard<'static, ()> {
     static TURN: Mutex<()> = Mutex::new(());
@@ -131,9 +135,13 @@ fn a_newer_camera_drops_the_sample_behind_a_coarse_picture_at_the_next_frame() {
     let mut out = vec![0; 256 * 192 * 4];
     t.render(&mut out, 256, 192, 1);
     pt_camera(camera).unwrap();
-    with(|t| t.set_frame_budget(256 * 8)).unwrap();
+    with(|t| {
+        t.set_look(new_look());
+        t.set_frame_budget(256 * 8);
+    })
+    .unwrap();
     t.render(&mut out, 256, 192, 2);
-    assert_eq!(out[3], 128, "a first sample over the budget sends a coarse picture first");
+    assert_eq!(out[3], 128, "a first sample of no known time sends a coarse picture first");
     assert!(out.chunks(4).all(|p| p[3] != 0), "a coarse picture left with a pixel no sample reached");
     {
         let mut s = t.lock();
@@ -170,9 +178,13 @@ fn a_newer_camera_mid_sample_behind_a_coarse_picture_sends_nothing_and_the_next_
     let mut out = vec![0; w as usize * h as usize * 4];
     t.render(&mut out, w, h, 1);
     pt_camera(camera).unwrap();
-    with(|t| t.set_frame_budget(w * 8)).unwrap();
+    with(|t| {
+        t.set_look(new_look());
+        t.set_frame_budget(w * 8);
+    })
+    .unwrap();
     assert!(t.render(&mut out, w, h, 2));
-    assert_eq!(out[3], 128, "a first sample over the budget sends a coarse picture first");
+    assert_eq!(out[3], 128, "a first sample of no known time sends a coarse picture first");
     assert!(with(|t| {
         t.set_frame_budget(w * 8);
         t.step()

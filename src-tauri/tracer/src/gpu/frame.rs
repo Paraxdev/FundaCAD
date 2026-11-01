@@ -38,13 +38,17 @@ const COARSE_ALPHA: u8 = 128;
 
 const MAX_COARSE_BLOCK: u32 = 8;
 
-/// The block side that makes a coarse pass about one band long, or None when two bands hold the sample anyway.
-fn coarse_block(rows: u32, height: u32) -> Option<u32> {
-    if rows == 0 || rows * 2 > height {
+/// A shorter sample comes soon enough, and a coarse picture ahead of it reads as one bright frame.
+const COARSE_MIN_SAMPLE: Duration = Duration::from_millis(40);
+
+/// The block side that makes a coarse pass about one band long, or None when the sample is under two bands or known to
+/// be short.
+fn coarse_block(rows: u32, height: u32, sample_cost: Option<Duration>) -> Option<u32> {
+    if rows == 0 || rows * 2 > height || sample_cost.is_some_and(|c| c < COARSE_MIN_SAMPLE) {
         return None;
     }
     let side = (height as f64 / rows as f64).sqrt().ceil() as u32;
-    Some(side.clamp(2, MAX_COARSE_BLOCK))
+    Some(side.min(MAX_COARSE_BLOCK))
 }
 
 /// U in trace.wgsl: 8 words, 7 vec4s, 4 lights of 2 vec4s, the light count,
@@ -208,17 +212,27 @@ impl Tracer {
     pub fn trace_for(&mut self, budget: Duration) -> u32 {
         let start = Instant::now();
         let before = self.sample;
-        loop {
-            let t = Instant::now();
-            if start.elapsed() >= budget || self.fault().is_some() || !self.step() {
-                break;
-            }
-            if self.wait().is_err() {
-                break;
-            }
-            self.rows = adapt_rows(self.rows, self.w, self.h, t.elapsed(), BAND_TARGET);
-        }
+        while start.elapsed() < budget && self.fault().is_none() && self.trace_band() {}
         self.sample - before
+    }
+
+    fn trace_band(&mut self) -> bool {
+        let t = Instant::now();
+        if !self.step() || self.wait().is_err() {
+            return false;
+        }
+        let took = t.elapsed();
+        self.time_band(took);
+        self.rows = adapt_rows(self.rows, self.w, self.h, took, BAND_TARGET);
+        true
+    }
+
+    /// Called after the band's rows are counted, so row0 0 means the sample just ended.
+    fn time_band(&mut self, took: Duration) {
+        self.spent += took;
+        if self.row0 == 0 {
+            self.sample_cost = Some(std::mem::take(&mut self.spent));
+        }
     }
 
     /// The first sample since a reset has begun and not ended, so some rows hold no light yet.
@@ -242,12 +256,12 @@ impl Tracer {
         }
     }
 
-    /// One dispatch of one path per block, so a restart whose sample takes many bands still has a picture at once.
+    /// One dispatch of one path per block, so a restart whose sample takes long still has a picture at once.
     fn coarse_picture(&mut self) -> Option<Vec<u8>> {
         if self.coarse_out || self.sample != 0 || self.row0 != 0 {
             return None;
         }
-        let block = coarse_block(self.rows, self.h)?;
+        let block = coarse_block(self.rows, self.h, self.sample_cost)?;
         let start = Instant::now();
         self.dispatch(self.h.div_ceil(block), block);
         if self.wait().is_err() {
@@ -264,7 +278,7 @@ impl Tracer {
     }
 
     /// Applies pending scene changes, traces for `budget` and resolves. None while the first sample since a reset is
-    /// unfinished, since unsampled rows are black and a frame of them flashes. When that sample takes many bands, a
+    /// unfinished, since unsampled rows are black and a frame of them flashes. When that sample takes long, a
     /// coarse picture goes first. After a fault the frame is all zeros, so a caller's loop always ends. At the cap it
     /// hands out the held frame, then the denoised one; a software band can end mid sample, so the sample count is no
     /// sign of a finished picture.
@@ -456,19 +470,5 @@ impl Tracer {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_software_band_follows_the_dispatch_time() {
-        let ms = Duration::from_millis;
-        assert_eq!(adapt_rows(272, 1920, 1080, ms(30), ms(10)), 96);
-        assert_eq!(adapt_rows(96, 1920, 1080, ms(10), ms(10)), 96);
-        assert_eq!(adapt_rows(96, 1920, 1080, ms(1), ms(10)), 192);
-        assert_eq!(adapt_rows(1080, 1920, 1080, ms(1), ms(10)), 1080);
-        assert_eq!(adapt_rows(100, 1920, 1080, Duration::ZERO, ms(10)), 200);
-        // 65536 paths at 1920 wide is 34 rows, 40 on the workgroup grid.
-        assert_eq!(adapt_rows(48, 1920, 1080, ms(400), ms(10)), 40);
-        assert_eq!(adapt_rows(8, 64, 48, ms(400), ms(10)), 48);
-    }
-}
+#[path = "frame_tests.rs"]
+mod tests;

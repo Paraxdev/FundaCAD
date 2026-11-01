@@ -26,6 +26,8 @@ pub(super) struct Target {
     sample: u32,
     row0: u32,
     rows: u32,
+    sample_cost: Option<Duration>,
+    spent: Duration,
     cap: u32,
     bind: Option<wgpu::BindGroup>,
     resolve_bind: Option<wgpu::BindGroup>,
@@ -133,6 +135,8 @@ impl Tracer {
             sample: 0,
             row0: 0,
             rows,
+            sample_cost: None,
+            spent: Duration::ZERO,
             cap: samples.max(1),
             bind: None,
             resolve_bind: None,
@@ -228,6 +232,8 @@ impl Tracer {
         swap(&mut self.sample, &mut t.sample);
         swap(&mut self.row0, &mut t.row0);
         swap(&mut self.rows, &mut t.rows);
+        swap(&mut self.sample_cost, &mut t.sample_cost);
+        swap(&mut self.spent, &mut t.spent);
         swap(&mut self.cap, &mut t.cap);
         swap(&mut self.bind, &mut t.bind);
         swap(&mut self.resolve_bind, &mut t.resolve_bind);

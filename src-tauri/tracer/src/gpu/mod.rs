@@ -288,6 +288,11 @@ pub struct Tracer {
     row0: u32,
     rows: u32,
     coarse_out: bool,
+    /// The time of the last whole sample since the scene or the size changed. A cut sample says nothing, its top rows
+    /// are often cheap sky.
+    sample_cost: Option<Duration>,
+    /// The time in bands of the sample under way.
+    spent: Duration,
     cap: u32,
     camera: Camera,
     look: Look,
@@ -450,6 +455,8 @@ impl Tracer {
             row0: 0,
             rows: 0,
             coarse_out: false,
+            sample_cost: None,
+            spent: Duration::ZERO,
             cap: 256,
             camera: Camera::default(),
             look: Look::default(),
@@ -524,7 +531,7 @@ impl Tracer {
             self.rows = h;
         }
         self.resolve_bind = None;
-        self.reset();
+        self.reset_untimed();
     }
 
     /// The first dispatch traces about this many paths, so one dispatch never
@@ -548,7 +555,7 @@ impl Tracer {
     pub fn set_look(&mut self, l: Look) {
         if l != self.look {
             self.look = l;
-            self.reset();
+            self.reset_untimed();
         }
     }
 
@@ -556,7 +563,7 @@ impl Tracer {
     pub fn set_estimator(&mut self, e: Estimator) {
         if e != self.estimator {
             self.estimator = e;
-            self.reset();
+            self.reset_untimed();
         }
     }
 
@@ -583,7 +590,7 @@ impl Tracer {
             self.upload_instances();
         }
         if c.reset {
-            self.reset();
+            self.reset_untimed();
         }
         c
     }
@@ -598,8 +605,15 @@ impl Tracer {
         self.sample = 0;
         self.row0 = 0;
         self.coarse_out = false;
+        self.spent = Duration::ZERO;
         self.clear_accum();
         self.bind = None;
+    }
+
+    /// A reset of something a sample's time depends on, unlike a camera, which keeps it through a zoom.
+    fn reset_untimed(&mut self) {
+        self.sample_cost = None;
+        self.reset();
     }
 
     /// Bloom on the linear frame before tone mapping. Never restarts the
