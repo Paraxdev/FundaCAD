@@ -511,7 +511,7 @@ export class Navigator {
   private stepZooms(tau: number, dt: number) {
     if (!this.zooms.length) return;
     for (const ch of this.zooms) {
-      const want = ch.step(tau, dt, this.zoomSnap(ch, tau));
+      const want = ch.step(tau, dt, this.zoomSnap(ch, tau, dt));
       if (want === 0) continue;
       const got = this.limitedLog(ch.anchor, want);
       if (got !== 0) {
@@ -526,7 +526,7 @@ export class Navigator {
   }
 
   /** The log a zoom may drop at once, none while anything else moves the view, as it goes by what is in view now. */
-  private zoomSnap(ch: ZoomChannel, tau: number): number {
+  private zoomSnap(ch: ZoomChannel, tau: number, dt: number): number {
     const busy = this.gesture || this.orbit || this.pan || ch === this.pinchZoom;
     if (!(tau > 0) || busy || this.scene?.raysCostly?.()) {
       ch.sweep = null;
@@ -539,10 +539,14 @@ export class Navigator {
     if (!ch.near(SWEEP_FROM * most, tau)) return 0;
     if (p.ortho) return most;
     ch.sweep ??= new NearestSweep();
-    if (!ch.sweep.advance(p, this.ctx())) return 0;
+    if (!ch.sweep.advance(p, this.ctx())) {
+      ch.sweep.giveUpIfLate(ch.framesLeft(tau, dt));
+      return 0;
+    }
     const parts = this.parts.length || !this.box ? this.parts : [this.box];
     const floor = visibleNearDepth(p, this.frame.width / this.frame.height, parts);
-    return zoomSnapLog(p, this.frame, ch.anchor, nearestBound(ch.sweep.nearest(), floor, depthOf(p, ch.anchor)));
+    const nearest = nearestBound(ch.sweep.nearest(), floor, depthOf(p, ch.anchor));
+    return zoomSnapLog(p, this.frame, ch.anchor, nearest);
   }
 
   private forgetNearest() {

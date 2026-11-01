@@ -28,10 +28,14 @@ function rayPixel(k: number, frame: Frame): { x: number; y: number } {
 /** Looks for the nearest surface in view a budget at a time, as a model of many bodies can take milliseconds a ray. */
 export class NearestSweep {
   private cast = 0;
+  private frames = 0;
+  private gaveUp = false;
   private seen: number | null = null;
 
-  /** True once every ray is in. Always casts one, so a heavy model still gets there or the spring lands first. */
+  /** True once every ray is in. Casts at least one each frame, until `giveUpIfLate` says that cannot pay. */
   advance(p: Pose, ctx: AnchorContext, budgetMs = RAY_BUDGET_MS): boolean {
+    if (this.gaveUp) return false;
+    this.frames++;
     const until = performance.now() + budgetMs;
     while (this.cast < RAYS) {
       const { x, y } = rayPixel(this.cast++, ctx.frame);
@@ -40,6 +44,12 @@ export class NearestSweep {
       if (performance.now() >= until) break;
     }
     return this.cast >= RAYS;
+  }
+
+  /** Stops for good if the rest of the rays, at the pace so far, come after `framesLeft`, when the spring has landed
+   *  anyway. Waits for a second frame, as one slow ray can be a hitch rather than the model. */
+  giveUpIfLate(framesLeft: number) {
+    if (this.frames > 1 && (RAYS - this.cast) * this.frames > framesLeft * this.cast) this.gaveUp = true;
   }
 
   nearest(): number | null {

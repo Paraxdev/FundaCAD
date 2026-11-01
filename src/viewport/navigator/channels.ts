@@ -12,6 +12,12 @@ const EPS_ANGLE = 1e-6;
 const EPS_PX = 1e-3;
 
 /** Wheel or pinch zoom about one anchor, in log scale units. */
+const MAX_FRAMES_LEFT = 4096;
+
+function atRest(s: Spring, goal: number): boolean {
+  return Math.abs(goal - s.x) < EPS_LOG && Math.abs(s.v) < EPS_LOG * 100;
+}
+
 export class ZoomChannel {
   readonly anchor: THREE.Vector3;
   /** The pixel the anchor was taken under; a wheel at the same pixel keeps
@@ -44,12 +50,24 @@ export class ZoomChannel {
     return this.left() < log && Math.abs(this.spring.v) < (log * 2) / tau;
   }
 
+  /** How many frames of `dt` the spring still takes to come to rest by itself. */
+  framesLeft(tau: number, dt: number): number {
+    const s = new Spring();
+    s.x = this.spring.x;
+    s.v = this.spring.v;
+    let frames = 0;
+    while (!atRest(s, this.goal) && frames < MAX_FRAMES_LEFT) {
+      s.step(this.goal, tau, dt);
+      frames++;
+    }
+    return frames;
+  }
+
   /** The log factor to apply this frame, landing on the goal once within `snapLog` of it. */
   step(tau: number, dt: number, snapLog = 0): number {
     const before = this.spring.x;
     this.spring.step(this.goal, tau, dt);
-    const atRest = this.left() < EPS_LOG && Math.abs(this.spring.v) < EPS_LOG * 100;
-    if (atRest || (snapLog > 0 && this.near(snapLog, tau))) this.spring.reset(this.goal);
+    if (atRest(this.spring, this.goal) || (snapLog > 0 && this.near(snapLog, tau))) this.spring.reset(this.goal);
     return this.spring.x - before;
   }
 

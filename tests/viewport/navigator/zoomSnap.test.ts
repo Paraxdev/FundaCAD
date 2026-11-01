@@ -466,50 +466,72 @@ describe("a zoom's tail", () => {
   describe("on a model where each ray costs time", () => {
     afterEach(() => vi.restoreAllMocks());
 
-    const springTail = () => {
+    const springTail = (dt = DT) => {
       const { nav } = unsnapped(room());
       nav.wheel(W / 2, H / 2, -NOTCH);
-      nav.update(DT);
-      return { frames: 1 + framesLeft(nav), scale: nav.pose.scale };
+      nav.update(dt);
+      return { frames: 1 + framesLeft(nav, dt), scale: nav.pose.scale };
     };
 
-    /** A notch with every ray taking `ms` on a mocked clock: the most rays in one frame of the tail, and how it ended. */
-    const slow = (ms: number) => {
+    /** A notch with each ray taking `ms(n)` on a mocked clock: rays cast in the tail, the most in one frame of it, how it
+     *  ended. */
+    const slow = (ms: (n: number) => number, dt = DT) => {
       const { nav, scene } = room();
       let now = 0;
+      let n = 0;
       vi.spyOn(performance, "now").mockImplementation(() => now);
       const cast = scene.raycast.bind(scene);
       scene.raycast = (o, d) => {
-        now += ms;
+        now += ms(n++);
         return cast(o, d);
       };
       nav.wheel(W / 2, H / 2, -NOTCH);
-      nav.update(DT);
+      nav.update(dt);
+      n = 0;
+      const start = scene.rays;
       let most = 0;
       let frames = 1;
       while (nav.isBusy() && frames < 2000) {
         const before = scene.rays;
-        nav.update(DT);
+        nav.update(dt);
         frames++;
         // The last frame also reseats at rest.
         if (nav.isBusy()) most = Math.max(most, scene.rays - before);
       }
-      return { most, frames, scale: nav.pose.scale };
+      return { rays: scene.rays - start, most, frames, scale: nav.pose.scale };
     };
 
     it("spreads the rays over frames and still lands early on a middling model", () => {
       const { frames: rest } = springTail();
-      const { most, frames } = slow(0.5);
+      const { most, frames } = slow(() => 0.5);
       expect(most).toBeLessThanOrEqual(4);
       expect(frames).toBeLessThan(rest);
     });
 
-    it("spends one ray a frame on a heavy model, which ends on its goal all the same", () => {
-      const { frames: rest, scale } = springTail();
-      const heavy = slow(20);
-      expect(heavy.most).toBe(1);
-      expect(heavy.frames).toBeLessThanOrEqual(rest);
-      expect(heavy.scale / scale).toBeCloseTo(1, 9);
+    it.each([2, 5, 15, 40])(
+      "gives up after two frames of %d ms rays, which could not finish before the spring",
+      (ms) => {
+        const { frames: rest, scale } = springTail();
+        const heavy = slow(() => ms);
+        // The reseat at rest is the third.
+        expect(heavy.rays).toBe(3);
+        expect(heavy.frames).toBe(rest);
+        expect(heavy.scale / scale).toBeCloseTo(1, 9);
+      },
+    );
+
+    it("keeps going at one ray a frame when the frames are quick enough for it to pay", () => {
+      const dt = 1 / 144;
+      const { frames: rest } = springTail(dt);
+      const { most, frames } = slow(() => 3, dt);
+      expect(most).toBe(1);
+      expect(frames).toBeLessThan(rest - 20);
+    });
+
+    it("is not put off by one slow ray", () => {
+      const { frames: rest } = springTail();
+      const { frames } = slow((n) => (n === 0 ? 40 : 0.01));
+      expect(frames).toBeLessThan(rest - 10);
     });
   });
 
@@ -552,6 +574,19 @@ describe("a zoom's tail", () => {
     const { landed, rest, jump } = snapJump(() => room([post]), [new THREE.Vector3(-125, 400, 0)], dt);
     expect(landed).toBeLessThan(rest);
     expect(jump).toBeLessThanOrEqual(ZOOM_SNAP_PX);
+  });
+
+  it("knows how many frames the spring has left", () => {
+    const ch = new ZoomChannel(new THREE.Vector3(), 0, 0);
+    ch.add(0.2);
+    for (let f = 0; f < 5; f++) ch.step(0.125, DT);
+    const said = ch.framesLeft(0.125, DT);
+    let frames = 0;
+    while (ch.left() > 0) {
+      ch.step(0.125, DT);
+      frames++;
+    }
+    expect(said).toBe(frames);
   });
 
   it("is instant at smooth time 0, as before", () => {
