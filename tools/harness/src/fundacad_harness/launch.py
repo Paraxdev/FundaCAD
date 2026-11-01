@@ -70,7 +70,8 @@ def split_command(text: str) -> list[str]:
 def find_engine(repo: Path, engine: str | os.PathLike | None = None, env: dict | None = None) -> list[str]:
     env = os.environ if env is None else env
     if engine:
-        parts = split_command(str(engine)) if isinstance(engine, str) else [str(engine)]
+        # A string is a command line unless it already names a file, whose path may hold a space.
+        parts = [str(engine)] if not isinstance(engine, str) or Path(engine).is_file() else split_command(engine)
         if not parts or not Path(parts[0]).is_file():
             raise LaunchError(f"engine {engine} is not a file")
         return parts
