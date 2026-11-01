@@ -1,7 +1,16 @@
 // Keys and clicks go out as ordinary DOM events, so whatever answers Enter, Escape or a canvas click answers the pad
 // the same way. Pads come from the webview's Gamepad API, WebKitGTK built without libmanette reports none.
 
-import { CURSOR, getGamepadConfig, motionOf, parseKey, pressed, settings, type Binding } from "./gamepad";
+import {
+  CURSOR,
+  getGamepadConfig,
+  isThreeDMouse,
+  motionOf,
+  parseKey,
+  pressed,
+  settings,
+  type Binding,
+} from "./gamepad";
 import { padState } from "./state";
 import GamepadSection from "./GamepadSection.vue";
 import { contribute, stickyFact } from "fundacad";
@@ -25,7 +34,7 @@ export async function activate(e: Engine): Promise<() => void> {
   const pick = (): Gamepad | null => {
     let best: Gamepad | null = null;
     for (const p of navigator.getGamepads()) {
-      if (!p || !p.connected) continue;
+      if (!p || !p.connected || isThreeDMouse(p.id)) continue;
       if (p.mapping === "standard") return p;
       best ??= p;
     }
@@ -93,6 +102,10 @@ export async function activate(e: Engine): Promise<() => void> {
   };
 
   const onConnect = (ev: GamepadEvent) => {
+    if (isThreeDMouse(ev.gamepad.id)) {
+      stickyFact(`[gamepad] ignoring a 3D mouse: ${ev.gamepad.id}`);
+      return;
+    }
     stickyFact(`[gamepad] connected: ${ev.gamepad.id} (${ev.gamepad.mapping || "no standard mapping"})`);
     start();
   };
