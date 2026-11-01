@@ -93,4 +93,50 @@ describe("the Gamepad plugin beside a 3D mouse", () => {
     connect(pad(XBOX, [0, 0, 0, 0]));
     expect(breadcrumbs()).toContain(`[gamepad] connected: ${XBOX} (standard)`);
   });
+
+  it("polls again when a real controller arrives after a lone 3D mouse stopped the loop", async () => {
+    const pads = [pad(SPACEMOUSE, [1, 0, 1, 0])];
+    await run(pads);
+    stepFrame();
+    expect(frames).toEqual([]);
+
+    pads.push(pad(XBOX, [0, 0, 1, 0]));
+    connect(pads[1]!);
+    expect(frames).toHaveLength(1);
+    stepFrame();
+    expect(padState.name).toBe(XBOX);
+    expect(rig.panScreen).not.toHaveBeenCalled();
+    expect(rig.orbitBy).toHaveBeenCalledTimes(1);
+    expect(frames).toHaveLength(1);
+  });
+
+  it("stops when a real controller leaves a 3D mouse behind and polls again when it returns", async () => {
+    const xbox = pad(XBOX, [0, 0, 1, 0]);
+    const pads = [pad(SPACEMOUSE, [1, 0, 0, 0]), xbox];
+    await run(pads);
+    stepFrame();
+    expect(padState.name).toBe(XBOX);
+    expect(frames).toHaveLength(1);
+
+    pads.pop();
+    stepFrame();
+    expect(padState.name).toBeNull();
+    expect(frames).toEqual([]);
+
+    pads.push(xbox);
+    connect(xbox);
+    stepFrame();
+    expect(padState.name).toBe(XBOX);
+    expect(frames).toHaveLength(1);
+    expect(rig.panScreen).not.toHaveBeenCalled();
+  });
+
+  it("stays stopped when the 3D mouse is the one that connects", async () => {
+    const mouse = pad(SPACEMOUSE, [1, 0, 1, 0]);
+    await run([mouse]);
+    stepFrame();
+    connect(mouse);
+    expect(frames).toEqual([]);
+    expect(padState.name).toBeNull();
+  });
 });
