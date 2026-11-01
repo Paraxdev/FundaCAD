@@ -79,3 +79,27 @@ describe("the Select caret", () => {
     ).toEqual([]);
   });
 });
+
+describe("the Select value", () => {
+  it("is centred by the trigger's flex, so a well of fixed height cannot hang its line low", () => {
+    expect(
+      decls(
+        (s) => s === ".select-trigger",
+        (p) => p === "display" || p === "align-items",
+      ),
+    ).toEqual([".select-trigger { display: flex }", ".select-trigger { align-items: center }"]);
+  });
+
+  it("takes the width left beside the caret and can shrink below its text, so a long label still ellipsizes", () => {
+    expect(
+      decls(
+        (s) => s === ".select-trigger .select-value",
+        (p) => p === "flex" || p === "min-width" || p === "text-overflow",
+      ),
+    ).toEqual([
+      ".select-trigger .select-value { flex: 1 1 auto }",
+      ".select-trigger .select-value { min-width: 0 }",
+      ".select-trigger .select-value { text-overflow: ellipsis }",
+    ]);
+  });
+});
