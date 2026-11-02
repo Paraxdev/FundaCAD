@@ -17,12 +17,13 @@ export function isEditableTarget(t: EventTarget | null): boolean {
   );
 }
 
+const MENU_ROWS = '.ui-menu, [role="listbox"]';
 const MENU_KEYS = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "Enter", "Tab"]);
 
-/** A key a focused menu row moves, runs or types ahead with. Window capture listeners hear it before the menu does,
- *  so a tool asks here and leaves it, the way it asks escapeClaimed() for Escape. */
+/** A key a focused menu or list row moves, runs or types ahead with. Window capture listeners hear it before the row
+ *  does, so a tool asks here and leaves it, the way it asks escapeClaimed() for Escape. */
 export function isMenuKey(e: KeyboardEvent): boolean {
-  if (typeof Element === "undefined" || !(e.target instanceof Element && e.target.closest(".ui-menu"))) return false;
+  if (typeof Element === "undefined" || !(e.target instanceof Element && e.target.closest(MENU_ROWS))) return false;
   if (e.ctrlKey || e.altKey || e.metaKey) return false;
   return MENU_KEYS.has(e.key) || (typeof e.key === "string" && e.key.length === 1);
 }
