@@ -3181,6 +3181,7 @@ export class SketchMode {
     if (end) this.noteOriginPin(end.hit);
     const done = this.commitFromCursor(this.lastCursor);
     if (done) this.keyDraw.drawn(done, end);
+    else if (this.base) this.keyDraw.refused();
   }
 
   private commitFromCursor(cursor: THREE.Vector2): Drawn | null {

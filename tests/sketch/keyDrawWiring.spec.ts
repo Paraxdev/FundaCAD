@@ -497,6 +497,56 @@ describe("the next point typed in X and Y", () => {
   });
 });
 
+describe("a refusal from the size box's own Enter", () => {
+  const said = () => vi.mocked(announce).mock.calls.filter((c) => c[1] === "assertive").map((c) => c[0]);
+
+  it("marks the box, keeps its field and is spoken, for a cursor moved along one axis", () => {
+    const { s } = makeDrawing("rectangle");
+    startAt(s, "5", "-7");
+    fieldEl("width").focus();
+    vi.mocked(announce).mockClear();
+    key(s, "ArrowRight", fieldEl("width"));
+    enter("width");
+    expect(s.entities).toEqual([]);
+    expect(said()).toEqual(["Too small to draw, give it a size"]);
+    expect(fieldEl("width").getAttribute("aria-invalid")).toBe("true");
+    expect(document.activeElement).toBe(fieldEl("width"));
+    expect(toast).toHaveBeenCalled();
+  });
+
+  it("is the same for a width typed with the height left alone", () => {
+    const { s } = makeDrawing("rectangle");
+    startAt(s, "5", "-7");
+    vi.mocked(announce).mockClear();
+    type("width", "40");
+    enter("width");
+    expect(s.entities).toEqual([]);
+    expect(said()).toEqual(["Too small to draw, give it a size"]);
+  });
+
+  it("brings focus back to the box from the surface's Enter", () => {
+    const { s } = makeDrawing("rectangle");
+    startAt(s, "5", "-7");
+    type("width", "40");
+    (document.activeElement as HTMLElement).blur();
+    vi.mocked(announce).mockClear();
+    key(s, "Enter");
+    expect(said()).toEqual(["Too small to draw, give it a size"]);
+    expect(document.activeElement?.closest(".dim-input")).not.toBeNull();
+  });
+
+  it("says nothing when a shape was drawn", () => {
+    const { s } = makeDrawing("rectangle");
+    startAt(s, "5", "-7");
+    type("width", "40");
+    type("height", "20");
+    vi.mocked(announce).mockClear();
+    enter("height");
+    expect(s.entities).toHaveLength(1);
+    expect(said()).toEqual([]);
+  });
+});
+
 describe("Ctrl+Z with a size box focused", () => {
   function undoable(tool: string) {
     const t = makeDrawing(tool);

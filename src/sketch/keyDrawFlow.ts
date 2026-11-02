@@ -410,7 +410,7 @@ export class KeyDrawFlow {
     const c = hitAt(p, this.host.candidates());
     const second = !!this.host.base();
     const done = this.host.place(hitOf(p, c));
-    if (second && !done) return this.refuseTooSmall();
+    if (second && !done) return this.refused();
     const ents = this.host.entities();
     const at = pointSentence(p, c, ents);
     const text = done ? `${at}. ${drawnSentence(done.entity, ents, done.closed)}` : at;
@@ -419,10 +419,12 @@ export class KeyDrawFlow {
     this.host.changed();
   }
 
-  private refuseTooSmall() {
+  /** The tool refused a second point as too small: the toast alone is lost on a listener. */
+  refused() {
     const dim = this.host.dim();
     dim.flag(TOO_SMALL);
     if (dim.hasField("x")) dim.focusField("x");
+    else if (!dim.ownsField(document.activeElement)) dim.focus();
     announce(TOO_SMALL, "assertive");
     this.host.changed();
   }
