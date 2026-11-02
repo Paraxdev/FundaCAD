@@ -43,6 +43,7 @@ import { TextPanel } from "./textPanel";
 import type { TextValues } from "./textPanel";
 import { fetchFonts } from "./textCache";
 import { isEditableTarget, isBoxButtonKey, isMenuKey } from "../ui/focus";
+import { inputModality } from "../ui/inputModality";
 import { SketchDimensions, type ExtraDim } from "./sketchDimensions";
 import { SketchGlyphs } from "./sketchGlyphs";
 import { RelationsPanel } from "./relationsPanel";
@@ -719,6 +720,7 @@ export class SketchMode {
     this.refreshActive();
     this.armPreEdit(); // the session's baseline: the first edit undoes back to here
     this.setTool("rectangle");
+    this.armIfOpenedByKeys();
     this.setViewLocked(this.viewLocked); // apply lock-to-plane preference
     if (this.constraints.length > 0) this.requestSolve(); // restore DOF state
     this.onState?.();
@@ -2923,6 +2925,10 @@ export class SketchMode {
 
     if (this.base) this.basePreview(hit.p, e);
     else this.overlay.setPreview([]);
+  }
+
+  private armIfOpenedByKeys() {
+    if (inputModality() === "keyboard") this.keyDraw.armedByKeys();
   }
 
   private onPointerLeave() {

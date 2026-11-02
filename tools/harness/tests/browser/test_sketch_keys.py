@@ -66,9 +66,7 @@ def tool(s, key, name):
 def point(s, x, y):
     kb = s.page.keyboard
     kb.type(str(x))
-    in_field(s, "X")
     kb.press("Tab")
-    in_field(s, "Y")
     kb.type(str(y))
     kb.press("Enter")
 
@@ -177,6 +175,57 @@ def test_a_40_by_20_plate_with_a_10_mm_hole_is_drawn_and_extruded_by_keys_alone(
     # The mesh volume of a polygon disc, a little over the exact (800 - 25 pi) * 8 = 5771.68.
     assert s.page.evaluate(VOLUME) == pytest.approx((800 - 25 * math.pi) * 8, abs=1.5)
     spoke(s, "Built, 1 body")
+    no_pointer(s)
+
+
+def test_a_sketch_opened_by_keys_says_its_keys_and_takes_them_at_once(s):
+    to_items_plane(s)
+    spoke(s, "Enter or a digit types X and Y")
+    assert s.page.evaluate("() => !!document.activeElement?.closest('[data-key-surface]')")
+    s.page.keyboard.press("Enter")
+    in_field(s, "X")
+    no_pointer(s)
+
+
+def test_a_chain_goes_on_from_a_typed_length_and_angle_and_at_in_y_keeps_x(s):
+    kb = s.page.keyboard
+    to_items_plane(s)
+    tool(s, "l", "line")
+    point(s, 5, -7)
+    spoke(s, "Point at 5, minus 7")
+    kb.type("40")
+    kb.press("Tab")
+    kb.type("30")
+    kb.press("Enter")
+    s.page.wait_for_function("() => window.sketch.entities.length === 1")
+    kb.press("Enter")
+    in_field(s, "X")
+    assert len(shapes(s)) == 1
+    kb.type("@5")
+    kb.press("Tab")
+    kb.type("@-3")
+    kb.press("Enter")
+    s.page.wait_for_function("() => window.sketch.entities.length === 2")
+    second = shapes(s)[1]
+    assert [second["x1"], second["y1"], second["x2"], second["y2"]] == pytest.approx(
+        [5 + 40 * math.cos(math.pi / 6), 13, 10 + 40 * math.cos(math.pi / 6), 10], abs=1e-6
+    )
+    no_pointer(s)
+
+
+def test_a_refused_size_is_spoken_and_stays_on_its_field(s):
+    kb = s.page.keyboard
+    to_items_plane(s)
+    tool(s, "r", "rectangle")
+    point(s, 7, -3)
+    spoke(s, "Point at 7, minus 3")
+    kb.type("30")
+    kb.press("Tab")
+    kb.type("0")
+    kb.press("Enter")
+    spoke(s, "must be more than 0")
+    in_field(s, "H")
+    assert shapes(s) == []
     no_pointer(s)
 
 

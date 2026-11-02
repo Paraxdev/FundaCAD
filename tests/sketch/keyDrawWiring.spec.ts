@@ -31,6 +31,7 @@ import {
 import { SketchPlane } from "../../src/sketch/plane";
 import { toast } from "../../src/ui/toast";
 import { announce, cancelAnnouncement } from "../../src/ui/announce";
+import { setInputModalityForTest } from "../../src/ui/inputModality";
 import type { SketchConstraint } from "../../src/types";
 
 type Internals = {
@@ -875,6 +876,30 @@ describe("a second point that makes no shape", () => {
     typePoint("@5,-1");
     expect(s.entities).toHaveLength(1);
     expect(calls().map((c) => c[1])).toEqual(["polite"]);
+  });
+});
+
+describe("a sketch that just opened", () => {
+  afterEach(() => setInputModalityForTest("pointer"));
+  const opened = (tool: string) => {
+    const r = makeSketch(tool);
+    (r.s as never as { armIfOpenedByKeys(): void }).armIfOpenedByKeys();
+    return r.s;
+  };
+
+  it("gives the keys prompt when keys opened it", () => {
+    setInputModalityForTest("keyboard");
+    expect(opened("rectangle").keyDraw.keyPrompt()).toContain("arrows move the cursor");
+  });
+
+  it("keeps the pointer's prompt when a click opened it", () => {
+    setInputModalityForTest("pointer");
+    expect(opened("rectangle").keyDraw.keyPrompt()).toBeNull();
+  });
+
+  it("stays out of a tool with no key drawing, whichever opened it", () => {
+    setInputModalityForTest("keyboard");
+    expect(opened("select").keyDraw.keyPrompt()).toBeNull();
   });
 });
 
