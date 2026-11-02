@@ -52,11 +52,12 @@ import { clickFeatureRow, deleteRows, rowTargets } from "../../app/featureRows";
 import { VisibilityPaint } from "../../ui/visibilityPaint";
 import { routeTreeClick, treePickWaiting, type TreePick } from "../../ui/treePick";
 import { featurePick } from "../../app/featurePick";
+import { BASE_PLANES, sketchOnPlane, treeClickDeps } from "../../app/planePick";
 import { switchEdit } from "../../app/selection";
 import { contributedBrowserSections, contributedPalette, onContribChange } from "../../plugins/contrib";
 import type { Component } from "vue";
 import { featuresOf } from "../../types";
-import type { CadDocument, Feature, Plane3 } from "../../types";
+import type { CadDocument, Feature } from "../../types";
 import { bodyLabels } from "../../ui/bodyLabels";
 
 const engine = useEngine();
@@ -185,24 +186,8 @@ type TreeNode = FolderNode | RowNode | EmptyNode | PluginNode;
 // The panel reads live engine state directly rather than taking props, so several callbacks consult the viewport or a
 // tool.
 
-function sketchOnPlane(plane: Plane3) {
-  if (engine.sketch.active) {
-    engine.setStatus("Finish this sketch before starting another", "");
-    return;
-  }
-  engine.sketch.enter(plane, store);
-}
-
 // A tool waiting for a pick takes the row first.
-
-/** A tool holds the screen but takes no rows (Extrude aiming, a gizmo up, a
- *  plugin's pick). A sketch is left out: the rows keep working inside one. */
-function busyHint(): string | null {
-  if (!engine.toolOwnsScreen() || engine.sketch.active) return null;
-  return "The active tool takes its pick in the view, finish it or press Esc";
-}
-
-const treeClick = { busyHint, hint: (text: string) => engine.setStatus(text, "") };
+const treeClick = treeClickDeps(engine);
 
 /** The row's own action, unless a waiting tool takes the click or refuses it.
  *  `pick` is a thunk so a datum is resolved where it stands at click time. */
@@ -544,7 +529,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
     folder(
       "Origin",
       "origin",
-      (["XY", "XZ", "YZ"] as Plane3[]).map((p) => ({
+      BASE_PLANES.map((p) => ({
         kind: "row" as const,
         k: `o:${p}`,
         depth: 1,
@@ -557,7 +542,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
           (e) => {
             const mods = modsOf(e);
             if (mods.toggle || mods.range) selectRowIn(["o:XY", "o:XZ", "o:YZ"], `o:${p}`, e);
-            else sketchOnPlane(p);
+            else sketchOnPlane(engine, { kind: "basePlane", plane: p });
           },
         ),
         title: fmtKeys(`Click to start a sketch on the ${p} plane · Ctrl+click or Shift+click to select several`),
