@@ -3,7 +3,7 @@
 FundaCAD has to work with NVDA on Windows, VoiceOver on macOS and Orca on Linux. CI reads the page and each
 platform's accessibility tree on every push (see [What CI checks](#what-ci-checks)), but no job can listen to a
 screen reader. This page is the hand check a person runs before each release: about twenty minutes per screen
-reader, the same fourteen steps everywhere, and a results table that keeps what was heard.
+reader, the same fifteen steps everywhere, and a results table that keeps what was heard.
 
 ## What CI checks
 
@@ -12,6 +12,7 @@ reader, the same fourteen steps everywhere, and a results table that keeps what 
 | axe-core 4.10.2 (WCAG 2.0, 2.1 and 2.2, A and AA) over Home, the empty workspace, an open example, Sketch, Extrude, Settings, Render, Stress, the command palette and a confirm dialog | `e2e` job, step "Accessibility smoke (axe and aria snapshots)", `tools/harness/tests/browser/test_a11y.py` | a rule finds more nodes on a screen than `tools/harness/tests/browser/axe_baseline.json` allows, or a rule the baseline does not list for that screen finds any |
 | Aria snapshots of the shell, Home, Settings and the command palette (`fil` typed and ArrowDown pressed: the combobox, its named listbox, Fillet with its group and key, and the active match selected) | the same step, partial templates in `tools/harness/tests/browser/aria/` | a landmark, role or name a template holds is gone or renamed |
 | The Items tree and History by keys alone: Tab reaches one row or step, arrows walk them, Space selects, F2 renames, Shift+F10 opens the menu, Alt and an arrow move a step, the Rollback slider names the step it sits after | the same step, `tools/harness/tests/browser/test_items_tree_keys.py` and `test_history_keys.py` | a key stops working, focus leaves the row or step, or a role, name, level, state or value text the tests read changes |
+| Drawing by keys: a 40 by 20 plate with a 10 mm hole from Items to Extrude with no pointer event, a closed slanted line chain by `@dx,dy` and a second document that starts clean, Tab to a midpoint, arrows moving the cursor in Rectangle and turning the view in Select and when the plane is edge-on, in both camera rigs | the same step, `tools/harness/tests/browser/test_sketch_keys.py` | a pointer event reaches the page, a point or snap is not spoken, a shape comes out different from the keys typed, Tab does not reach a profile with a hole, or an arrow turns the view in a draw tool or stops turning it elsewhere |
 | Pointer targets: at least 24 by 24 CSS px, about 32 with Larger click targets, with no layout change | the same step, `tools/harness/tests/browser/test_targets.py`; the token and hit area guard is `tests/ui/hitTargets.test.ts` in the `test` job | a control on a screen above hits under 24 px either way, a grown area takes another control's centre or the edge of its own box, Larger click targets leaves one under 32 px on the shell, Home, an example, Sketch, Settings, the palette or a confirm (bar the spacing exceptions the test names with their reason), or turning it on moves a control or changes a scroll size |
 | Icon only controls have a name | `node scripts/check-ui-controls.mjs` in the `test` job, and `tests/ui/designSpec.test.ts` | an `IconButton` with no `tip`, a `RailButton` with no `label`, or an icon only `Segmented` option with no `label` or `tip`, and no `aria-label` or `aria-labelledby` either |
 | Size and text: Interface size 150 and 200 percent, Comfortable text, the 11 px floor | `e2e` job, step "Agent harness smoke set", `tools/harness/tests/browser/test_size.py`, `test_reach.py`, `test_text_size.py` and `test_bottom_row.py`; the font size guard `node scripts/check-font-sizes.mjs` in the `test` job | a control is clipped, covered or out of the Tab walk at 150 percent in 1366 by 768, at 200 percent in 1280 by 800 or in 800 by 600, rendered text is under 11 px, Comfortable text cuts a base control's label, the frame rate chip overlaps the hint card or a rail card, or a font size is set outside the `--fs-*` tokens |
@@ -161,6 +162,14 @@ Each step says what to do and what you should hear. Mark it in the results: **P*
     puts the size back. Fail: a size not spoken, or spoken twice per press, a control Tab reaches but nothing reads, a
     workspace row read without its checked state, or a restart that opens at 100 percent or shows it first.
 
+15. **Draw by keys (3 min).** With a new document open, press F6 until you hear the Items panel, Tab to "Items, tree",
+    arrow to "XY plane" and press Enter: you hear "Sketch mode". Press R, type `5`, Tab, `-7`, Enter: you hear "Point at
+    5, minus 7". Type `40`, Tab, `20`, Enter: you hear "Rectangle 1, 40 by 20". Press C, type `25`, Tab, `3`, Enter, then
+    `10` and Enter: you hear the point and "Circle 1, diameter 10". Press an arrow with Rectangle armed: you hear "Cursor
+    at" and the view does not turn. Press E and Tab: you hear "Profile 1 of 2, area 721.59 mm squared, 1 hole". Enter,
+    `8`, Enter: you hear "Built, 1 body". This is one way to draw among others. Fail: a point or shape that is not
+    spoken, an arrow that turns the view while a draw tool is armed, or a Tab that skips a profile.
+
 Some of these are expected to be silent today: tool prompts, the added feature and toasts are spoken once the
 announcer lands. Record what you hear anyway. A step that was P and turns S or W is a regression and blocks the
 release; one that was S and is still S is not.
@@ -177,9 +186,9 @@ When there is time left, or before a major release:
 
 ## Results
 
-Newest first. Write the steps as fourteen marks in order, like `P P P S S W P P P P P P P P`, and put each W in the notes.
+Newest first. Write the steps as fifteen marks in order, like `P P P S S W P P P P P P P P P`, and put each W in the notes.
 
-| Date | FundaCAD | OS and session | Package | Webview | Screen reader | Steps 1 to 14 | Tester | Notes |
+| Date | FundaCAD | OS and session | Package | Webview | Screen reader | Steps 1 to 15 | Tester | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | to record | next release | Ubuntu 24.04 GNOME, Wayland | Flatpak | WebKitGTK 4.1, GNOME 50 runtime | Orca |  |  | First run, the Orca on WebKitGTK 4.1 baseline. Note key echo and caret tracking under native Wayland. |
 | to record | next release | Ubuntu 22.04 GNOME, X11 | `.deb` | WebKitGTK 4.1 (system) | Orca |  |  | First run, the X11 half of the baseline. |
