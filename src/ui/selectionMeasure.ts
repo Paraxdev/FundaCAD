@@ -1,7 +1,7 @@
-// The one-line readout for what is selected: how many, and for edges and round
-// faces the numbers you would otherwise reach for Measure to get.
+// The one-line readout for several picked things, and the measures it and the prompts share.
 
 import { shallowRef } from "vue";
+import { fmtLength } from "./units";
 
 export type Pt3 = readonly [number, number, number];
 
@@ -69,22 +69,19 @@ export function roundFacePrompt(round: RoundSize): string {
   );
 }
 
-/** "1 edge · 300.74 mm · ⌀95.73 mm", "3 faces", "1 face · ⌀50 mm", "1 face · R2 mm". */
+/** "3 faces", "2 edges · 300.74 mm". One face or edge goes through describePick once its facts are known. */
 export function describeSelection(input: {
   count: number;
   noun: string;
   plural: string;
   edges?: readonly (readonly Pt3[])[];
-  roundFace?: RoundSize | null;
 }): string {
   if (input.count <= 0) return "";
   const parts = [`${input.count} ${input.count === 1 ? input.noun : input.plural}`];
   if (input.edges?.length) {
-    parts.push(mm(input.edges.reduce((s, e) => s + polylineLength(e), 0)));
+    parts.push(fmtLength(input.edges.reduce((s, e) => s + polylineLength(e), 0)));
     const d = input.edges.length === 1 ? circleDiameter(input.edges[0]!) : null;
-    if (d !== null) parts.push(`⌀${mm(d)}`);
-  } else if (input.roundFace) {
-    parts.push(roundSize(input.roundFace));
+    if (d !== null) parts.push(`⌀${fmtLength(d)}`);
   }
   return parts.join(" · ");
 }

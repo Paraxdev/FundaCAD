@@ -234,10 +234,12 @@ const COUNT_NOUN: Record<string, [one: string, many: string]> = {
   f: ["face", "faces"],
   e: ["edge", "edges"],
   p: ["plane", "planes"],
+  b: ["body", "bodies"],
+  r: ["profile", "profiles"],
   other: ["item", "items"],
 };
 
-/** What to say for a selection change, by row keys (`f:`, `e:`, `p:`). Null when nothing changed. */
+/** What to say for a selection change, by row keys (`f:`, `e:`, `p:`, `b:`, `r:`). Null when nothing changed. */
 export function describeChange(
   prev: readonly string[],
   next: readonly string[],

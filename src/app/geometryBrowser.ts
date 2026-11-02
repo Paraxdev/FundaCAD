@@ -58,6 +58,32 @@ export interface GeometryBrowserHost {
 
 type Body = NonNullable<NonNullable<RebuildState["result"]>["bodies"]>[number];
 
+export function ownerNamesOf(store: Engine["store"]): (id: string) => string | null {
+  const names = new Map(store.document.features.map((f) => [f.id, stepName(f as Parameters<typeof stepName>[0])]));
+  return (id) => names.get(id) ?? null;
+}
+
+/** The selected faces, edges and bodies as row keys, a run's pieces as one. */
+export function pickedRowKeys(e: {
+  store: Engine["store"];
+  viewport: Pick<Viewport, "faceIdToBodyId" | "getSelectedBodies" | "getSelectedFaceIds" | "selectedEdgeLines">;
+}): string[] {
+  const keys = new Set<string>();
+  const metas = new Map<string, Body | null>();
+  for (const faceId of e.viewport.getSelectedFaceIds()) {
+    const id = e.viewport.faceIdToBodyId(faceId);
+    if (id === null) continue;
+    if (!metas.has(id)) metas.set(id, e.store.buildState.result?.bodies?.find((b) => b.id === id) ?? null);
+    const body = metas.get(id);
+    if (body) keys.add(faceKeyOf(body, faceId - body.faceStart));
+  }
+  for (const edge of e.viewport.selectedEdgeLines()) {
+    if (edge.body !== undefined) keys.add(edgeKeyOf(edge.body, edge.slot));
+  }
+  for (const id of e.viewport.getSelectedBodies()) keys.add(`b:${id}`);
+  return [...keys];
+}
+
 // A reply at 10,004 faces measured 1.47 MB.
 const CACHED_REPLIES = 4;
 const ROW_CHANGED = "That row has changed, the list is catching up";
@@ -83,20 +109,15 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
   // A body with no etag is rebuilt on every build, so its reply is good for this build alone.
   const cacheKey = (body: Body) => `${body.id}|${body.etag ?? `#${resultSerial}`}`;
 
-  function ownerNames(): (id: string) => string | null {
-    const names = new Map(e.store.document.features.map((f) => [f.id, stepName(f as Parameters<typeof stepName>[0])]));
-    return (id) => names.get(id) ?? null;
-  }
-
   function showRows(body: BodyMeta, key: string, reply: TopologyReply | null) {
     const stamp = `${key}|${list.kind}|${reply ? "reply" : "bare"}`;
     if (!rowsStale && rowsKey === stamp) return;
     if (list.kind === "edges") {
       const refs = e.viewport.bodyEdgeRefs(body.id);
       edgeRefs = new Map(refs.map((r) => [r.slot, r]));
-      list.setRows(edgeRows(refs, refs[0]?.draw.refs.length ?? 0, reply?.edgeFaces, body, ownerNames()));
+      list.setRows(edgeRows(refs, refs[0]?.draw.refs.length ?? 0, reply?.edgeFaces, body, ownerNamesOf(e.store)));
     } else if (reply) {
-      list.setRows(faceRows(reply, body, ownerNames()));
+      list.setRows(faceRows(reply, body, ownerNamesOf(e.store)));
     } else {
       // Old face rows stay until the new ones land, so focus can survive them. Their numbers may no longer mean the
       // same faces, which is why rowsKey keeps the old stamp and pickRows refuses them.
@@ -215,25 +236,8 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
     return e.viewport.selectionBodyIds().find((id) => ids.has(id)) ?? null;
   }
 
-  function readSelection(): readonly string[] {
-    const keys = new Set<string>();
-    const metas = new Map<string, Body | null>();
-    for (const faceId of e.viewport.getSelectedFaceIds()) {
-      const id = e.viewport.faceIdToBodyId(faceId);
-      if (id === null) continue;
-      if (!metas.has(id)) metas.set(id, metaOf(id));
-      const body = metas.get(id);
-      if (body) keys.add(faceKeyOf(body, faceId - body.faceStart));
-    }
-    for (const edge of e.viewport.selectedEdgeLines()) {
-      if (edge.body !== undefined) keys.add(edgeKeyOf(edge.body, edge.slot));
-    }
-    for (const id of e.viewport.getSelectedBodies()) keys.add(`b:${id}`);
-    return [...keys];
-  }
-
   function syncSelected(): boolean {
-    const next = readSelection();
+    const next = pickedRowKeys(e);
     const was = list.selected;
     if (next.length === was.length && next.every((k, i) => k === was[i])) return false;
     list.setSelected(next);
@@ -363,6 +367,13 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
     },
 
     pickBlocked,
+
+    /** A row's facts, while its number still means this build's face or edge. */
+    rowFacts(key: string): GeometryRow["facts"] | null {
+      const row = list.rows.find((r) => r.key === key);
+      const body = row ? metaOf(row.bodyId) : null;
+      return row && body && rowsKey?.startsWith(`${cacheKey(body)}|`) ? row.facts : null;
+    },
 
     /** Selects these rows as one change, a click's route. The reason in words when refused. */
     pickRows(rows: readonly GeometryRow[], o: { additive: boolean }): string | null {

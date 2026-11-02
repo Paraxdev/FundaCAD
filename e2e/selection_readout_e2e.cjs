@@ -73,7 +73,7 @@ const check = (name, ok, detail) => {
   const edge = await readout();
   check(
     "a round edge reads count, length and diameter",
-    /^1 edge · 15\d\.\d+ mm · ⌀50 mm$/.test(edge),
+    /^1 edge · round · 15\d\.\d+ mm · ⌀50 mm/.test(edge),
     JSON.stringify(edge),
   );
   await page.screenshot({ path: path.join(OUT, "01_edge.png") });
@@ -84,7 +84,7 @@ const check = (name, ok, detail) => {
   });
   await wake();
   const side = await readout();
-  check("a round face reads its diameter", /^1 face · ⌀50 mm$/.test(side), JSON.stringify(side));
+  check("a round face reads its diameter", /^1 face · (hole|cylinder) · ⌀50 mm/.test(side), JSON.stringify(side));
 
   await page.evaluate(() => {
     window.viewport.clearSelection();
@@ -92,7 +92,7 @@ const check = (name, ok, detail) => {
   });
   await wake();
   const top = await readout();
-  check("a flat face reads only its count", top === "1 face", JSON.stringify(top));
+  check("a flat face reads its type", /^1 face · flat\b/.test(top), JSON.stringify(top));
 
   await browser.close();
   console.log(failures ? `\n${failures} FAILED` : "\nall checks passed");

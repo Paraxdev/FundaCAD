@@ -535,6 +535,11 @@ describe("describeChange", () => {
     expect(change([], ["f:body1:3", "x:1", "x:2", "e:body1:10"])).toMatch(/^1 face, 1 edge, 2 items selected/);
   });
 
+  it("counts bodies and profiles by their own nouns", () => {
+    expect(change([], ["b:body1", "b:body2"])).toMatch(/^2 bodies selected/);
+    expect(change([], ["f:body1:3", "b:body1", "r:3.5", "r:-8.25"])).toMatch(/^1 face, 1 body, 2 profiles selected/);
+  });
+
   it("a repeated key counts once", () => {
     expect(change([], ["f:body1:3", "f:body1:3"])).toBe("Flat face 4, in full");
   });

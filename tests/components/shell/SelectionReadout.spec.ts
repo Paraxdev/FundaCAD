@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { nextTick, ref } from "vue";
+import { nextTick, ref, shallowRef } from "vue";
 import { enableAutoUnmount, mount } from "@vue/test-utils";
 
 const sel = vi.hoisted(() => ({
-  readout: null as unknown as { value: string | null },
+  readout: null as unknown as { value: string },
+  speech: null as unknown as { value: { text: string; verbose?: boolean } | null },
   toolOwns: null as unknown as { value: boolean },
 }));
 vi.mock("../../../src/ui/announce", () => ({ announce: vi.fn() }));
@@ -18,42 +19,59 @@ enableAutoUnmount(afterEach);
 describe("the selection readout", () => {
   beforeEach(() => {
     vi.mocked(announce).mockClear();
-    sel.readout = ref<string | null>(null);
+    sel.readout = ref("");
+    sel.speech = shallowRef(null);
     sel.toolOwns = ref(false);
   });
 
-  it("speaks each settled selection under one debounced key", async () => {
-    mount(SelectionReadout);
-    sel.readout.value = "1 face · ⌀50 mm";
+  it("shows the symbols and speaks the words", async () => {
+    const w = mount(SelectionReadout);
+    sel.readout.value = "1 face · hole · ⌀50 mm";
+    sel.speech.value = { text: "Hole 7, diameter 50 millimetres, Body1" };
     await nextTick();
-    sel.readout.value = "2 faces · 680 mm²";
+    expect(w.get("[data-testid=selection-readout]").text()).toBe("1 face · hole · ⌀50 mm");
+    expect(vi.mocked(announce).mock.calls).toEqual([
+      ["Hole 7, diameter 50 millimetres, Body1", "polite", { key: "selection", delay: 250 }],
+    ]);
+  });
+
+  it("speaks each change under one debounced key, the same words twice included", async () => {
+    mount(SelectionReadout);
+    sel.speech.value = { text: "Face 4 added, 2 selected" };
+    await nextTick();
+    sel.speech.value = { text: "Face 4 added, 2 selected" };
     await nextTick();
     expect(vi.mocked(announce).mock.calls).toEqual([
-      ["1 face · ⌀50 mm", "polite", { key: "selection", delay: 250 }],
-      ["2 faces · 680 mm²", "polite", { key: "selection", delay: 250 }],
+      ["Face 4 added, 2 selected", "polite", { key: "selection", delay: 250 }],
+      ["Face 4 added, 2 selected", "polite", { key: "selection", delay: 250 }],
     ]);
   });
 
-  it("says Nothing selected only at Verbose when the selection clears", async () => {
+  it("marks what is only worth saying at Verbose", async () => {
     mount(SelectionReadout);
-    sel.readout.value = "1 edge";
+    sel.speech.value = { text: "Nothing selected", verbose: true };
     await nextTick();
-    sel.readout.value = "";
-    await nextTick();
-    expect(vi.mocked(announce).mock.calls[1]).toEqual([
-      "Nothing selected",
-      "polite",
-      { key: "selection", delay: 250, verbose: true },
+    expect(vi.mocked(announce).mock.calls).toEqual([
+      ["Nothing selected", "polite", { key: "selection", delay: 250, verbose: true }],
     ]);
   });
 
-  it("stays quiet while a tool owns the screen, its prompt speaks instead", async () => {
+  it("does not speak again when only the text on screen changes", async () => {
     mount(SelectionReadout);
+    sel.speech.value = { text: "Flat face 4" };
+    await nextTick();
+    sel.readout.value = "1 face · flat · 60 by 40 mm";
+    await nextTick();
+    expect(announce).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows and says nothing while a tool owns the screen, its prompt speaks instead", async () => {
+    const w = mount(SelectionReadout);
     sel.toolOwns.value = true;
     sel.readout.value = "1 face";
+    sel.speech.value = { text: "Flat face 4" };
     await nextTick();
-    sel.readout.value = "";
-    await nextTick();
+    expect(w.find("[data-testid=selection-readout]").exists()).toBe(false);
     expect(announce).not.toHaveBeenCalled();
   });
 });

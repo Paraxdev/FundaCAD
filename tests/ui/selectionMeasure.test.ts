@@ -4,8 +4,10 @@ import {
   describeSelection,
   polylineLength,
   roundFacePrompt,
+  roundSize,
   type Pt3,
 } from "../../src/ui/selectionMeasure";
+import { setUnit } from "../../src/ui/units";
 
 const circle = (r: number, n = 64, z = 5): Pt3[] =>
   Array.from({ length: n + 1 }, (_, i) => {
@@ -55,21 +57,22 @@ describe("selection measure", () => {
     expect(describeSelection({ count: 2, noun: "edge", plural: "edges", edges: [line, line] })).toBe("2 edges · 20 mm");
   });
 
-  it("counts faces and adds a round face's diameter", () => {
+  it("follows the display unit, the total and the diameter alike", () => {
+    setUnit("cm");
+    const text = describeSelection({ count: 1, noun: "edge", plural: "edges", edges: [circle(10)] });
+    setUnit("mm");
+    expect(text).toMatch(/^1 edge · 6\.\d+ cm · ⌀2 cm$/);
+  });
+
+  it("counts faces, and nothing for none", () => {
     expect(describeSelection({ count: 3, noun: "face", plural: "faces" })).toBe("3 faces");
-    expect(describeSelection({ count: 1, noun: "face", plural: "faces", roundFace: { radius: 25, full: true } })).toBe(
-      "1 face · ⌀50 mm",
-    );
+    expect(describeSelection({ count: 1, noun: "face", plural: "faces" })).toBe("1 face");
     expect(describeSelection({ count: 0, noun: "face", plural: "faces" })).toBe("");
   });
 
-  it("gives a partial arc its radius, not a diameter", () => {
-    expect(describeSelection({ count: 1, noun: "face", plural: "faces", roundFace: { radius: 2, full: false } })).toBe(
-      "1 face · R2 mm",
-    );
-    expect(describeSelection({ count: 1, noun: "face", plural: "faces", roundFace: { radius: 2, full: true } })).toBe(
-      "1 face · ⌀4 mm",
-    );
+  it("gives a round face's size by its radius on a partial arc and a diameter on a full wrap", () => {
+    expect(roundSize({ radius: 2, full: false })).toBe("R2 mm");
+    expect(roundSize({ radius: 2, full: true })).toBe("⌀4 mm");
   });
 
   it("prompts a partial arc by its radius and offers removal only on a full wrap", () => {
