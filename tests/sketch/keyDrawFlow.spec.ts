@@ -14,7 +14,7 @@ vi.mock("../../src/sketch/solver", () => ({
 vi.mock("../../src/ui/announce", () => ({ announce: vi.fn(), cancelAnnouncement: vi.fn() }));
 
 import { DimInput } from "../../src/sketch/dimInput";
-import { EDGE_ON_PROMPT, KeyDrawFlow, type KeyDrawHost, type KeyHit } from "../../src/sketch/keyDrawFlow";
+import { EDGE_ON_PROMPT, KeyDrawFlow, type Drawn, type KeyDrawHost, type KeyHit } from "../../src/sketch/keyDrawFlow";
 import type { ResolvedEntity, SnapCandidate } from "../../src/sketch/snap";
 import { setA11yPref } from "../../src/ui/a11yPrefs";
 import { announce } from "../../src/ui/announce";
@@ -42,6 +42,7 @@ function rig(tool = "rectangle", over: Partial<KeyDrawHost> = {}) {
     cursor: v(13.5, -7.25),
     edgeOn: false,
     placed: [] as KeyHit[],
+    drawn: null as Drawn | null,
     prompts: [] as string[],
     boxAt: [] as THREE.Vector2[],
     candidates: [
@@ -65,6 +66,7 @@ function rig(tool = "rectangle", over: Partial<KeyDrawHost> = {}) {
       state.placed.push(hit);
       state.base = hit.p.clone();
       dim.hide();
+      return state.drawn;
     },
     positionBox: (p) => state.boxAt.push(p.clone()),
     prompt: (t) => state.prompts.push(t),
@@ -386,5 +388,41 @@ describe("a character opens the box with it typed in X", () => {
     expect(dim.isActive).toBe(false);
     expect(press(free()).defaultPrevented).toBe(true);
     expect(boxFields()).toEqual(["x", "y"]);
+  });
+});
+
+describe("what is said when a shape is finished", () => {
+  const said = () => vi.mocked(announce).mock.calls;
+
+  it("joins the point and the shape a typed second point finished, in one sentence", () => {
+    const { flow, state } = rig("rectangle");
+    flow.placed(v(11, -4));
+    state.drawn = { entity: { type: "rectangle", id: "r1", width: 40, height: 20.5, x: 31, y: 6.25 }, closed: false };
+    state.entities.push(state.drawn.entity);
+    press(free());
+    type("x", "@40,20.5");
+    press(field("x"));
+    expect(said()).toEqual([["Point at 51, 16.5. Rectangle 1, 40 by 20.5", "polite", { key: "sketch-point" }]]);
+  });
+
+  it("says the point alone while no shape came of it", () => {
+    const { state } = rig("line");
+    press(free());
+    type("x", "5");
+    type("y", "-7");
+    press(field("y"));
+    expect(state.drawn).toBeNull();
+    expect(said()).toEqual([["Point at 5, minus 7", "polite", { key: "sketch-point" }]]);
+  });
+
+  it("says a shape finished from the size box by its own sentence, closed or not", () => {
+    const { flow, state } = rig("line");
+    flow.drawn({ entity: { type: "line", id: "l1", x1: 0, y1: 0, x2: 3, y2: 4 }, closed: false });
+    flow.drawn({ entity: { type: "line", id: "l2", x1: 30, y1: 20, x2: 30, y2: 26 }, closed: true });
+    expect(state.placed).toEqual([]);
+    expect(said()).toEqual([
+      ["Line 1, length 5", "polite", { key: "sketch-point" }],
+      ["Line 2, length 6, loop closed", "polite", { key: "sketch-point" }],
+    ]);
   });
 });

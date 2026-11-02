@@ -81,7 +81,7 @@ import {
 } from "./directDims";
 import { expandPattern, translated } from "./pattern";
 import { MirrorFlow, type MirrorHost } from "./mirrorFlow";
-import { KeyDrawFlow, type KeyDrawHost, type KeyHit } from "./keyDrawFlow";
+import { KeyDrawFlow, type Drawn, type KeyDrawHost, type KeyHit } from "./keyDrawFlow";
 import { showMirrorPanel } from "../features/mirrorPanel";
 import { mirrorLineColor, mirrorObjectsColor } from "../features/mirrorColors";
 import { onThemeChange } from "../ui/theme";
@@ -1918,7 +1918,7 @@ export class SketchMode {
     }
   }
 
-  private placeTwoPoint(hit: KeyHit) {
+  private placeTwoPoint(hit: KeyHit): Drawn | null {
     const p = hit.p;
     this.keyDraw.placed(p);
     if (!this.base) {
@@ -1926,16 +1926,16 @@ export class SketchMode {
       this.baseRef = hit.ref ?? null;
       if (this.tool === "line") this.chainStart = p.clone(); // remember loop start
       this.showDimFields();
-      return;
+      return null;
     }
-    this.commitFromCursor(p);
+    return this.commitFromCursor(p);
   }
 
-  private placeKeyHit(hit: KeyHit) {
+  private placeKeyHit(hit: KeyHit): Drawn | null {
     this.lastCursor.copy(hit.p);
     this.lastHit = { p: hit.p.clone(), raw: hit.p.clone(), kind: hit.kind, ref: hit.ref, typed: true };
     this.noteOriginPin(hit);
-    this.placeTwoPoint(hit);
+    return this.placeTwoPoint(hit);
   }
 
   // 3-point arc: click start, click end, then click the point it passes through
@@ -3114,18 +3114,20 @@ export class SketchMode {
   }
 
   private commitFromBox() {
-    if (!this.keyDraw.openForNext()) this.commitFromCursor(this.lastCursor);
+    if (this.keyDraw.openForNext()) return;
+    const done = this.commitFromCursor(this.lastCursor);
+    if (done) this.keyDraw.drawn(done);
   }
 
-  private commitFromCursor(cursor: THREE.Vector2) {
-    if (!this.base) return;
+  private commitFromCursor(cursor: THREE.Vector2): Drawn | null {
+    if (!this.base) return null;
     const inferred = this.tool === "line" ? this.inferLine(cursor) : null;
     if (inferred) cursor = inferred.end;
     this.showInfer(null);
     const { entity } = this.computeGeometry(this.base, cursor);
     if (this.isDegenerate(entity)) {
       toast("Too small to draw, give it a size");
-      return;
+      return null;
     }
     if (this.constructionMode) entity.construction = true;
     entity.id = newEntityId(); // stamp a stable id (computeGeometry left it "")
@@ -3135,12 +3137,13 @@ export class SketchMode {
     } else if (entity.type === "circle") {
       this.lockTypedDims(entity, { diameter: this.dim.isUserDriven("diameter") });
     }
+    let closed = false;
     if (this.tool === "line" && entity.type === "line") {
       const end = new THREE.Vector2(entity.x2, entity.y2);
       // clicked back on the start point → close the loop and end the chain
-      const closing = this.chainStart != null && end.distanceTo(this.chainStart) < 1e-3;
+      closed = this.chainStart != null && end.distanceTo(this.chainStart) < 1e-3;
       if (inferred) this.constraints.push(...bindNew(inferred.relations, entity.id));
-      if (closing) {
+      if (closed) {
         this.base = null;
         this.chainStart = null;
         this.dim.hide();
@@ -3158,6 +3161,7 @@ export class SketchMode {
     this.overlay.setPreview([]);
     this.requestSolve(); // re-solve if any constraints exist (updates DOF colour)
     this.onState?.();
+    return { entity, closed };
   }
 
   /** Judged from what the cursor snapped to, for preview and commit. A chain's closing segment was not aimed, so it

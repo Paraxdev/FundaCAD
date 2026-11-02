@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { coordWords, pointSentence, snapWords } from "../../src/sketch/sketchSpeech";
+import { coordWords, drawnSentence, pointSentence, snapWords } from "../../src/sketch/sketchSpeech";
 import { setUnit } from "../../src/ui/units";
 import type { ResolvedEntity, SnapCandidate } from "../../src/sketch/snap";
 
@@ -75,5 +75,30 @@ describe("pointSentence", () => {
     expect(pointSentence({ x: 5, y: -7 }, null, ents)).toBe("Point at 5, minus 7");
     const c = cand({ kind: "midpoint", ref: { entity: "l2", at: "mid" } });
     expect(pointSentence({ x: 16, y: 6 }, c, ents)).toBe("Point at 16, 6, snapped to the midpoint of Line 2");
+  });
+});
+
+describe("drawnSentence", () => {
+  it("gives a line its length, and says when it closed a loop", () => {
+    const line: ResolvedEntity = { type: "line", id: "l2", x1: 12, y1: 3, x2: 15, y2: 7.5 };
+    expect(drawnSentence(line, ents, false)).toBe("Line 2, length 5.408");
+    expect(drawnSentence(line, ents, true)).toBe("Line 2, length 5.408, loop closed");
+  });
+
+  it("gives a rectangle its two sides and a circle its diameter, not its radius", () => {
+    expect(drawnSentence(ents[2]!, ents, false)).toBe("Rectangle 1, 6 by 4");
+    expect(drawnSentence(ents[3]!, ents, false)).toBe("Circle 1, diameter 5.5");
+  });
+
+  it("says the sizes in the display unit", () => {
+    setUnit("in");
+    expect(drawnSentence({ type: "rectangle", id: "r1", width: 50.8, height: 25.4, x: 0, y: 0 }, ents, false)).toBe(
+      "Rectangle 1, 2 by 1",
+    );
+  });
+
+  it("falls back to the kind when the shape is not in the list, and names any other shape alone", () => {
+    expect(drawnSentence({ type: "line", id: "gone", x1: 0, y1: 0, x2: 0, y2: 9 }, ents, false)).toBe("line, length 9");
+    expect(drawnSentence(ents[5]!, ents, false)).toBe("Point 1");
   });
 });

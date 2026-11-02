@@ -40,3 +40,14 @@ export function pointSentence(p: { x: number; y: number }, c: SnapCandidate | nu
   const at = `Point at ${coordWords(p.x, p.y)}`;
   return c ? `${at}, snapped to ${snapWords(c, ents)}` : at;
 }
+
+export function drawnSentence(e: ResolvedEntity, ents: ResolvedEntity[], closed: boolean): string {
+  const name = entityLabel(ents, e.id) ?? e.type;
+  if (e.type === "line") {
+    const len = `${name}, length ${numberWords(Math.hypot(e.x2 - e.x1, e.y2 - e.y1))}`;
+    return closed ? `${len}, loop closed` : len;
+  }
+  if (e.type === "rectangle") return `${name}, ${numberWords(e.width)} by ${numberWords(e.height)}`;
+  if (e.type === "circle") return `${name}, diameter ${numberWords(2 * e.radius)}`;
+  return name;
+}

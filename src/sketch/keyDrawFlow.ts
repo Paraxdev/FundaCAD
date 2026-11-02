@@ -8,7 +8,7 @@ import { keyTargetFree } from "../ui/focus";
 import type { DimInput } from "./dimInput";
 import { hitAt } from "./keyCursor";
 import { readPoint } from "./pointEntry";
-import { pointSentence } from "./sketchSpeech";
+import { drawnSentence, pointSentence } from "./sketchSpeech";
 import type { ResolvedEntity, SnapCandidate, SnapKind, SnapRef } from "./snap";
 
 export const KEY_DRAW_TOOLS: ReadonlySet<string> = new Set(["line", "rectangle", "circle"]);
@@ -25,6 +25,12 @@ export interface KeyHit {
   ref?: SnapRef | undefined;
 }
 
+/** A shape a placed point finished. */
+export interface Drawn {
+  entity: ResolvedEntity;
+  closed: boolean;
+}
+
 export interface KeyDrawHost {
   tool(): string;
   base(): THREE.Vector2 | null;
@@ -33,7 +39,7 @@ export interface KeyDrawHost {
   entities(): ResolvedEntity[];
   planeTooEdgeOn(): boolean;
   dim(): DimInput;
-  place(hit: KeyHit): void;
+  place(hit: KeyHit): Drawn | null;
   positionBox(p: THREE.Vector2): void;
   prompt(text: string): void;
 }
@@ -61,6 +67,10 @@ export class KeyDrawFlow {
   reset() {
     this.last = null;
     this.session = false;
+  }
+
+  drawn(done: Drawn) {
+    announce(drawnSentence(done.entity, this.host.entities(), done.closed), "polite", { key: "sketch-point" });
   }
 
   pointerPressed() {
@@ -139,7 +149,10 @@ export class KeyDrawFlow {
     this.session = true;
     const p = new THREE.Vector2(r.x, r.y);
     const c = hitAt(p, this.host.candidates());
-    this.host.place({ p, kind: c?.kind ?? "free", label: c?.label, ref: c?.ref });
-    announce(pointSentence(p, c, this.host.entities()), "polite", { key: "sketch-point" });
+    const done = this.host.place({ p, kind: c?.kind ?? "free", label: c?.label, ref: c?.ref });
+    const ents = this.host.entities();
+    const at = pointSentence(p, c, ents);
+    const text = done ? `${at}. ${drawnSentence(done.entity, ents, done.closed)}` : at;
+    announce(text, "polite", { key: "sketch-point" });
   }
 }

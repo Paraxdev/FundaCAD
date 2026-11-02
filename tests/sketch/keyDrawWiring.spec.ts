@@ -21,6 +21,7 @@ import { SketchMode } from "../../src/sketch/sketchMode";
 import { candidatesFromEntities, originCandidate, type ResolvedEntity, type SnapCandidate, type SnapKind } from "../../src/sketch/snap";
 import { SketchPlane } from "../../src/sketch/plane";
 import { toast } from "../../src/ui/toast";
+import { announce } from "../../src/ui/announce";
 import type { SketchConstraint } from "../../src/types";
 
 type Internals = {
@@ -540,5 +541,53 @@ describe("Enter on a size box nobody touched", () => {
     startAt(s, "2", "9");
     enter("width");
     expect(fieldNames()).toEqual(["x", "y"]);
+  });
+});
+
+describe("what a keys drawing says", () => {
+  beforeEach(() => vi.mocked(announce).mockClear());
+  const said = () => vi.mocked(announce).mock.calls.map((c) => c[0]);
+
+  it("says the point with the line it finished, and that the last one closed the loop", () => {
+    const { s } = makeDrawing("line");
+    startAt(s, "7", "-3");
+    for (const step of ["@40,0", "@0,20", "@-40,0"]) {
+      key(s, "@", fieldEl("length"));
+      typePoint(step);
+    }
+    expect(said()).toEqual([
+      "Point at 7, minus 3",
+      "Point at 47, minus 3. Line 1, length 40",
+      "Point at 47, 17. Line 2, length 20",
+      "Point at 7, 17. Line 3, length 40",
+    ]);
+    key(s, "@", fieldEl("length"));
+    typePoint("@0,-20");
+    expect(said().at(-1)).toBe("Point at 7, minus 3, snapped to the start of Line 1. Line 4, length 20, loop closed");
+  });
+
+  it("says a rectangle and a circle sized in the box, whichever way the first point came", () => {
+    const rect = makeDrawing("rectangle");
+    startAt(rect.s, "7", "-3");
+    rect.s.keyDraw.pointerPressed();
+    type("width", "40");
+    type("height", "20");
+    enter("width");
+    expect(said().at(-1)).toBe("Rectangle 1, 40 by 20");
+    dim?.dispose();
+    const circ = makeDrawing("circle");
+    startAt(circ.s, "7", "-3");
+    type("diameter", "10");
+    enter("diameter");
+    expect(said().at(-1)).toBe("Circle 1, diameter 10");
+  });
+
+  it("stays silent for a click that finishes a shape", () => {
+    const { s } = makeDrawing("rectangle");
+    startAt(s, "7", "-3");
+    vi.mocked(announce).mockClear();
+    (s as unknown as { commitFromCursor(c: THREE.Vector2): unknown }).commitFromCursor(v(30, 9));
+    expect(s.entities.length).toBe(1);
+    expect(said()).toEqual([]);
   });
 });
