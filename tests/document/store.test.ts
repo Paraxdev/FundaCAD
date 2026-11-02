@@ -1181,3 +1181,66 @@ describe("suppress and unsuppress are undo steps", () => {
     expect(rebuilds[rebuilds.length - 1]!.features.map((f) => f.id)).toContain("f1");
   });
 });
+
+describe("modelBeforePreview", () => {
+  const built = (name: string) => ({ bodies: [{ id: name }], featureErrors: [] }) as unknown as RebuildResult;
+  const shell = { id: "sh", type: "shell", faces: [], thickness: 1.25 } as unknown as Feature;
+  const added = { id: "c9", type: "chamfer", edges: [], distance: 0.75 } as unknown as Feature;
+  let next: RebuildResult;
+  let store: DocumentStore;
+  const settle = () => vi.runAllTimersAsync();
+  beforeEach(() => {
+    vi.useFakeTimers();
+    next = built("none");
+    store = new DocumentStore(
+      stubBackend([], () => ({ ok: true, result: next })),
+      { parameters: {}, features: [] },
+    );
+  });
+  afterEach(() => void vi.useRealTimers());
+
+  const buildWith = async (feature: Feature, result: RebuildResult) => {
+    next = result;
+    store.addFeature(feature);
+    await settle();
+  };
+  const preview = async () => {
+    next = built("preview");
+    store.setPreview(shell);
+    await settle();
+  };
+
+  it("is null before anything has built", () => {
+    expect(store.modelBeforePreview).toBeNull();
+  });
+
+  it("is the build without the preview while one shows", async () => {
+    const committed = built("committed");
+    await buildWith(added, committed);
+    expect(store.modelBeforePreview).toBe(committed);
+    await preview();
+    expect(store.buildState.result).toBe(next);
+    expect(store.modelBeforePreview).toBe(committed);
+  });
+
+  it("is null once Undo leaves it describing another document, and back after Redo", async () => {
+    const committed = built("committed");
+    await buildWith(added, committed);
+    await preview();
+    store.undo();
+    await settle();
+    expect(store.modelBeforePreview).toBeNull();
+    store.redo();
+    await settle();
+    expect(store.modelBeforePreview).toBe(committed);
+  });
+
+  it("does not leak into the next document", async () => {
+    await buildWith(added, built("first"));
+    next = built("second");
+    store.loadDocument({ parameters: {}, features: [{ ...added, id: "c8" } as Feature] });
+    expect(store.modelBeforePreview).toBeNull();
+    await settle();
+    expect(store.modelBeforePreview).toBe(next);
+  });
+});
