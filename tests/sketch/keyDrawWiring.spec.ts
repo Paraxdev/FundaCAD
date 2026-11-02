@@ -17,7 +17,7 @@ vi.mock("../../src/ui/announce", () => ({ announce: vi.fn(), cancelAnnouncement:
 import { DimInput } from "../../src/sketch/dimInput";
 import { KeyDrawFlow } from "../../src/sketch/keyDrawFlow";
 import { SketchMode } from "../../src/sketch/sketchMode";
-import { originCandidate, type ResolvedEntity, type SnapCandidate, type SnapKind } from "../../src/sketch/snap";
+import { candidatesFromEntities, originCandidate, type ResolvedEntity, type SnapCandidate, type SnapKind } from "../../src/sketch/snap";
 import { SketchPlane } from "../../src/sketch/plane";
 import type { SketchConstraint } from "../../src/types";
 
@@ -88,6 +88,7 @@ function makeSketch(tool: string) {
     viewport: {
       projectToScreen: () => ({ x: 300, y: 200 }),
       viewDirection: () => new THREE.Vector3(0, 0, -1),
+      requestRender() {},
     },
     planeMmPerPx: () => 0.5,
     commitFromCursor() {},
@@ -244,5 +245,200 @@ describe("a typed point is exact", () => {
     const end = v(50, 5);
     s.lastHit = { p: end.clone(), raw: end.clone(), kind: "free", typed: true } as never;
     expect(s.inferLine(end)?.relations.map((c) => c.type)).toContain("horizontal");
+  });
+});
+
+const withoutId = (e: ResolvedEntity) => {
+  const { id: _id, ...rest } = e;
+  return rest;
+};
+
+// The real commit, with only the canvas and the solver left out.
+function makeDrawing(tool: string) {
+  const t = makeSketch(tool);
+  const s = t.s as Internals & Record<string, unknown>;
+  delete s.commitFromCursor;
+  Object.assign(s, {
+    constructionMode: false,
+    entityCurve: (e: ResolvedEntity) => e,
+    requestSolve() {},
+    onState() {},
+    refreshActive() {
+      s.candidates = [...originCandidate(s.plane as SketchPlane), ...candidatesFromEntities(s.entities)];
+    },
+  });
+  return t;
+}
+
+function enter(name: string) {
+  fieldEl(name).dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+}
+
+function typePoint(x: string, y?: string) {
+  type("x", x);
+  if (y !== undefined) type("y", y);
+  enter("x");
+}
+
+function startAt(s: Internals, x: string, y: string) {
+  key(s, "Enter");
+  typePoint(x, y);
+}
+
+describe("@ as the first character of a size field", () => {
+  it("turns the box into X and Y for the next point, with the @ in X", async () => {
+    const { s } = makeDrawing("line");
+    startAt(s, "7", "-3");
+    expect(fieldNames()).toEqual(["length", "angle"]);
+    expect(key(s, "@", fieldEl("length"))).toBe(true);
+    expect(fieldNames()).toEqual(["x", "y"]);
+    await new Promise<void>((r) => requestAnimationFrame(() => r()));
+    expect(fieldEl("x").value).toBe("@");
+    expect(s.base).toEqual(v(7, -3));
+  });
+
+  it("does the same from the angle field, and with the field emptied again", () => {
+    const { s } = makeDrawing("line");
+    startAt(s, "7", "-3");
+    type("angle", "3");
+    type("angle", "");
+    expect(key(s, "@", fieldEl("angle"))).toBe(true);
+    expect(fieldNames()).toEqual(["x", "y"]);
+  });
+
+  it("stays text in a field that holds something, and the box is as it was", () => {
+    const { s } = makeDrawing("rectangle");
+    startAt(s, "7", "-3");
+    type("width", "5");
+    expect(key(s, "@", fieldEl("width"))).toBe(false);
+    expect(fieldNames()).toEqual(["width", "height"]);
+  });
+
+  it("is not taken with no point placed, where the first point's box is already X and Y", () => {
+    const { s } = makeDrawing("rectangle");
+    key(s, "Enter");
+    expect(fieldNames()).toEqual(["x", "y"]);
+    expect(key(s, "@", fieldEl("x"))).toBe(false);
+  });
+
+  it("is not taken in a tool that has no key drawing", () => {
+    const { s } = makeDrawing("line");
+    startAt(s, "7", "-3");
+    s.tool = "polygon";
+    expect(key(s, "@", fieldEl("length"))).toBe(false);
+    expect(fieldNames()).toEqual(["length", "angle"]);
+  });
+
+  it("works with single key shortcuts off, which are for keys outside a field", async () => {
+    const prefs = await import("../../src/ui/a11yPrefs");
+    const spy = vi.spyOn(prefs, "singleKeysOn").mockReturnValue(false);
+    const { s } = makeDrawing("line");
+    startAt(s, "7", "-3");
+    expect(key(s, "@", fieldEl("length"))).toBe(true);
+    expect(fieldNames()).toEqual(["x", "y"]);
+    spy.mockRestore();
+  });
+});
+
+describe("the next point typed in X and Y", () => {
+  it("draws a closed four line chain from off the origin and ends the chain on its start", () => {
+    const { s } = makeDrawing("line");
+    startAt(s, "7", "-3");
+    for (const step of ["@40,0", "@0,20", "@-40,0"]) {
+      key(s, "@", fieldEl("length"));
+      typePoint(step);
+      expect(fieldNames()).toEqual(["length", "angle"]);
+    }
+    expect(s.chainStart).toEqual(v(7, -3));
+    key(s, "@", fieldEl("length"));
+    typePoint("@0,-20");
+    expect(s.entities.map(withoutId)).toEqual([
+      { type: "line", x1: 7, y1: -3, x2: 47, y2: -3 },
+      { type: "line", x1: 47, y1: -3, x2: 47, y2: 17 },
+      { type: "line", x1: 47, y1: 17, x2: 7, y2: 17 },
+      { type: "line", x1: 7, y1: 17, x2: 7, y2: -3 },
+    ]);
+    expect(s.base).toBeNull();
+    expect(s.chainStart).toBeNull();
+    expect(dim?.isActive).toBe(false);
+  });
+
+  it("closes onto the start the same when the end is typed absolute", () => {
+    const { s } = makeDrawing("line");
+    startAt(s, "7", "-3");
+    key(s, "@", fieldEl("length"));
+    typePoint("@40,0");
+    key(s, "@", fieldEl("length"));
+    typePoint("@0,20");
+    key(s, "@", fieldEl("length"));
+    typePoint("7", "-3");
+    expect(s.entities.map(withoutId)).toEqual([
+      { type: "line", x1: 7, y1: -3, x2: 47, y2: -3 },
+      { type: "line", x1: 47, y1: -3, x2: 47, y2: 17 },
+      { type: "line", x1: 47, y1: 17, x2: 7, y2: -3 },
+    ]);
+    expect(s.base).toBeNull();
+    expect(s.chainStart).toBeNull();
+  });
+
+  it("draws a rectangle by its second corner in both directions", () => {
+    for (const [at, entity] of [
+      ["@40,20", { type: "rectangle", width: 40, height: 20, x: 27, y: 7 }],
+      ["@-40,-20", { type: "rectangle", width: 40, height: 20, x: -13, y: -13 }],
+    ] as const) {
+      const { s } = makeDrawing("rectangle");
+      startAt(s, "7", "-3");
+      key(s, "@", fieldEl("width"));
+      typePoint(at);
+      expect(s.entities.map(withoutId)).toEqual([entity]);
+      expect(s.base).toBeNull();
+      expect(dim?.isActive).toBe(false);
+      dim?.dispose();
+    }
+  });
+
+  it("draws a circle through a typed point of its rim", () => {
+    const { s } = makeDrawing("circle");
+    startAt(s, "7", "-3");
+    key(s, "@", fieldEl("diameter"));
+    typePoint("7", "5");
+    expect(s.entities.map(withoutId)).toEqual([{ type: "circle", radius: 8, x: 7, y: -3 }]);
+  });
+
+  it("refuses a second point on the first with the box still open, and Escape drops the shape", () => {
+    const { s } = makeDrawing("rectangle");
+    startAt(s, "7", "-3");
+    key(s, "@", fieldEl("width"));
+    typePoint("@0,0");
+    expect(s.entities).toEqual([]);
+    expect(fieldNames()).toEqual(["x", "y"]);
+    key(s, "Escape", fieldEl("x"));
+    expect(s.base).toBeNull();
+    expect(dim?.isActive).toBe(false);
+  });
+
+  it("keeps a typed width and height as driving dimensions after a first point by keys", () => {
+    const { s } = makeDrawing("rectangle");
+    startAt(s, "7", "-3");
+    type("width", "40");
+    type("height", "20");
+    enter("width");
+    expect(s.entities.map(withoutId)).toEqual([{ type: "rectangle", width: 40, height: 20, x: 27, y: 7 }]);
+    expect(s.constraints.map((c) => c.type)).toEqual(["p2pDistance", "p2pDistance"]);
+  });
+
+  it("measures from the last point of this sketch, and from 0, 0 once a new sketch is entered", () => {
+    const { s } = makeDrawing("line");
+    startAt(s, "7", "-3");
+    key(s, "Escape", fieldEl("length"));
+    key(s, "Enter");
+    typePoint("@5,3");
+    expect(s.base).toEqual(v(12, 0));
+    key(s, "Escape", fieldEl("length"));
+    s.keyDraw.reset();
+    key(s, "Enter");
+    expect(fieldEl("x").value).toBe("12");
+    typePoint("@5,3");
+    expect(s.base).toEqual(v(5, 3));
   });
 });

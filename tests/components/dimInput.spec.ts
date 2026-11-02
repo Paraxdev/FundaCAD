@@ -1188,6 +1188,21 @@ describe("DimInput.typeInto", () => {
     expect(dim.getRaw("y")).toBe("-3");
   });
 
+  it("calls a field fresh until text is typed in it, and again once that text is gone", () => {
+    open();
+    const other = document.createElement("input");
+    expect([dim.isFreshField(field("x")), dim.isFreshField(field("y")), dim.isFreshField(other)]).toEqual([
+      true,
+      true,
+      false,
+    ]);
+    dim.typeInto("x", "7");
+    expect([dim.isFreshField(field("x")), dim.isFreshField(field("y"))]).toEqual([false, true]);
+    field("x").value = "";
+    expect(dim.isFreshField(field("x"))).toBe(true);
+    expect(dim.isFreshField(null)).toBe(false);
+  });
+
   it("does nothing for a field the box lacks or when no box is open", () => {
     dim.typeInto("x", "5");
     open();

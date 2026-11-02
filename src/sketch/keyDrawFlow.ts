@@ -1,4 +1,5 @@
-// Drawing a line, rectangle or circle without a pointer: Enter, a digit, -, . or @ opens a box with X and Y for the first point.
+// Drawing a line, rectangle or circle without a pointer: Enter, a digit, -, . or @ opens a box with X and Y for a point,
+// and @ as the first character of a size field turns that box into X and Y for the next one.
 
 import * as THREE from "three";
 import { announce } from "../ui/announce";
@@ -65,8 +66,9 @@ export class KeyDrawFlow {
     // AltGr arrives as Ctrl+Alt on Windows, and it is how some layouts type @.
     const altGr = e.key === "@" && e.ctrlKey && e.altKey;
     if (!altGr && (e.ctrlKey || e.altKey)) return false;
+    if (this.armed() && this.host.base()) return this.turnSizeToPoint(e);
     if (opener && !singleKeysOn()) return false;
-    if (!this.armed() || this.host.base() || !keyTargetFree(e.target)) return false;
+    if (!this.armed() || !keyTargetFree(e.target)) return false;
     e.preventDefault();
     if (this.host.planeTooEdgeOn()) {
       this.host.prompt(EDGE_ON_PROMPT);
@@ -75,6 +77,17 @@ export class KeyDrawFlow {
     if (this.host.dim().isActive) this.host.dim().focus();
     else this.open();
     if (opener) this.host.dim().typeInto("x", e.key);
+    return true;
+  }
+
+  // Typing a character into a field is not a single key shortcut, so this is not gated on singleKeysOn.
+  private turnSizeToPoint(e: KeyboardEvent): boolean {
+    const dim = this.host.dim();
+    if (e.key !== "@" || !dim.isFreshField(e.target)) return false;
+    e.preventDefault();
+    e.stopPropagation();
+    this.open();
+    dim.typeInto("x", "@");
     return true;
   }
 

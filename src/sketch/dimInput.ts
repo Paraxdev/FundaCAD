@@ -360,6 +360,12 @@ export class DimInput {
     return this.fields.some((f) => f.input === el);
   }
 
+  /** A field of this box with nothing typed in it, or its typing wiped out. */
+  isFreshField(el: EventTarget | null): boolean {
+    const f = this.fields.find((x) => x.input === el);
+    return !!f && (!f.userDriven || f.input.value === "");
+  }
+
   /** For a tool whose Tab means something else (the fillet flip): Shift+Tab from a field steps back onto Cancel. */
   focusLastStop() {
     const from = document.activeElement instanceof HTMLElement ? document.activeElement : this.root;
