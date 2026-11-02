@@ -195,7 +195,12 @@ describe("walkEndSentence", () => {
   });
 
   it("says so too when the spot it began from is a snap", () => {
-    const c = { p: new THREE.Vector2(20, -20), kind: "endpoint", priority: 90, ref: { entity: "l1", at: 1 } } as SnapCandidate;
+    const c = {
+      p: new THREE.Vector2(20, -20),
+      kind: "endpoint",
+      priority: 90,
+      ref: { entity: "l1", at: 1 },
+    } as SnapCandidate;
     expect(walkEndSentence({ x: 20, y: -20 }, c, ents)).toBe(
       "End of nearest snaps, cursor at 20, minus 20, snapped to the end of Line 1",
     );

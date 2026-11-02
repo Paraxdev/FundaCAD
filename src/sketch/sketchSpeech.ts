@@ -69,7 +69,12 @@ export function walkEndSentence(p: { x: number; y: number }, c: SnapCandidate | 
 }
 
 /** `angle` is given only when one was typed, in degrees. */
-export function drawnSentence(e: ResolvedEntity, ents: ResolvedEntity[], closed: boolean, angle?: number | null): string {
+export function drawnSentence(
+  e: ResolvedEntity,
+  ents: ResolvedEntity[],
+  closed: boolean,
+  angle?: number | null,
+): string {
   const name = entityLabel(ents, e.id) ?? e.type;
   if (e.type === "line") {
     const len = `${name}, length ${numberWords(Math.hypot(e.x2 - e.x1, e.y2 - e.y1))}`;

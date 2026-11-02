@@ -1359,7 +1359,9 @@ describe("DimInput keys that beat the frame after show", () => {
     expect(document.activeElement).toBe(button(".dim-ok"));
     open();
     tab(field("x"));
-    field("y").dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true }));
+    field("y").dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true }),
+    );
     runFrames();
     expect(document.activeElement).toBe(field("x"));
   });
@@ -1387,7 +1389,13 @@ describe("DimInput keys that beat the frame after show", () => {
 describe("DimInput.hasField", () => {
   it("is true for a shown field only, false for another name, after hide and for the next box", () => {
     expect(dim.hasField("radius")).toBe(false);
-    dim.show([{ name: "radius", label: "R" }, { name: "angle", label: "A" }], () => {});
+    dim.show(
+      [
+        { name: "radius", label: "R" },
+        { name: "angle", label: "A" },
+      ],
+      () => {},
+    );
     expect([dim.hasField("radius"), dim.hasField("angle"), dim.hasField("x")]).toEqual([true, true, false]);
     dim.hide();
     expect(dim.hasField("radius")).toBe(false);

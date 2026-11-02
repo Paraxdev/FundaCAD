@@ -589,7 +589,12 @@ describe("a character opens the box with it typed in X", () => {
 });
 
 describe("a field of the X and Y box left alone", () => {
-  const anchor = { p: v(60.1234, 10.5678), kind: "endpoint", priority: 90, ref: { entity: "l2", at: 1 } } as SnapCandidate;
+  const anchor = {
+    p: v(60.1234, 10.5678),
+    kind: "endpoint",
+    priority: 90,
+    ref: { entity: "l2", at: 1 },
+  } as SnapCandidate;
   const opened = () => {
     const r = rig("line");
     r.state.candidates.push(anchor);
@@ -728,7 +733,10 @@ describe("what the size box's Enter says of the end the cursor stands on", () =>
   it("is joined to the shape's own sentence, and a shape without it is said alone", () => {
     const { flow } = rig("line");
     const done = { entity: { type: "line", id: "l1", x1: 10, y1: 3, x2: 40, y2: 22.5 }, closed: false } as const;
-    flow.drawn(done, { hit: { p: v(40, 22.5), kind: "midpoint" }, said: "Point at 40, 22.5, snapped to the midpoint of Line 2" });
+    flow.drawn(done, {
+      hit: { p: v(40, 22.5), kind: "midpoint" },
+      said: "Point at 40, 22.5, snapped to the midpoint of Line 2",
+    });
     flow.drawn(done, null);
     flow.drawn(done);
     expect(vi.mocked(announce).mock.calls.map((c) => c[0])).toEqual([
@@ -1071,7 +1079,10 @@ describe("arrows move the cursor", () => {
 
     it("leaves a Slider its value", () => {
       const { state } = rig("rectangle");
-      const w = mount(Slider, { attachTo: document.body, props: { modelValue: 5, min: 0, max: 10, step: 1, label: "S" } });
+      const w = mount(Slider, {
+        attachTo: document.body,
+        props: { modelValue: 5, min: 0, max: 10, step: 1, label: "S" },
+      });
       const thumb = w.get('[role="slider"], input[type="range"]').element as HTMLElement;
       thumb.focus();
       const e = arrow("ArrowRight", thumb);
