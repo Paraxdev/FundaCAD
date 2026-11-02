@@ -209,8 +209,16 @@ describe("states", () => {
     expect(labels(w)).toEqual(["Straight edge 1"]);
   });
 
-  it("notes faces the engine's cap left out", async () => {
-    const { w } = await open({ ...reply("body1", 2), truncated: { faces: 1234 } });
+  it("notes faces the engine's cap left out on Faces alone", async () => {
+    const { r, w } = await open({ ...reply("body1", 2), truncated: { faces: 1234 } });
+    expect(w.get(".geometry-pager").text()).toContain("1,234 more faces");
+    r.wires.set("body1", [edge("body1", 0, 1)]);
+    await w.getComponent({ name: "Segmented" }).vm.$emit("update:modelValue", "edges");
+    await settle();
+    expect(labels(w)).toEqual(["Straight edge 1"]);
+    expect(w.get(".geometry-pager").text()).not.toContain("more faces");
+    await w.getComponent({ name: "Segmented" }).vm.$emit("update:modelValue", "faces");
+    await settle();
     expect(w.get(".geometry-pager").text()).toContain("1,234 more faces");
   });
 

@@ -63,6 +63,7 @@ useWheelScroll(scroller);
 
 const faces = computed(() => list.kind === "faces");
 const planes = computed(() => list.kind === "planes");
+const facesLeft = computed(() => (faces.value ? list.truncated : null));
 const noun = computed<string>(() => list.kind);
 const bodyName = computed(() => list.bodies.find((b) => b.id === list.bodyId)?.name ?? "");
 const bodyOptions = computed(() => list.bodies.map((b) => ({ value: b.id, label: b.name })));
@@ -354,8 +355,8 @@ onUnmounted(() => {
         </template>
       </Listbox>
     </div>
-    <div v-if="list.filtered.length || list.truncated" class="geometry-pager">
-      <p v-if="list.truncated" class="geometry-range">{{ count(list.truncated) }} more faces are not listed.</p>
+    <div v-if="list.filtered.length || facesLeft" class="geometry-pager">
+      <p v-if="facesLeft" class="geometry-range">{{ count(facesLeft) }} more faces are not listed.</p>
       <span v-if="list.filtered.length" class="geometry-range">{{ range }}</span>
       <template v-if="list.pageCount > 1">
         <Button size="sm" :disabled="list.page === 0" disabled-reason="This is the first page" @click="turnPage(-1)"
