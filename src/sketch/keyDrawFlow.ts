@@ -40,6 +40,8 @@ export interface KeyDrawHost {
 
 export class KeyDrawFlow {
   private last: THREE.Vector2 | null = null;
+  // The point in flight came from X and Y, so Enter on its untouched size box has no click to wait for.
+  private session = false;
 
   constructor(private readonly host: KeyDrawHost) {}
 
@@ -58,6 +60,21 @@ export class KeyDrawFlow {
 
   reset() {
     this.last = null;
+    this.session = false;
+  }
+
+  pointerPressed() {
+    this.session = false;
+  }
+
+  /** Enter on a size box nobody touched, with the cursor still on the point: X and Y for the next one. */
+  openForNext(): boolean {
+    const base = this.host.base();
+    const dim = this.host.dim();
+    if (!this.session || !this.armed() || !base || !dim.isActive || dim.touched()) return false;
+    if (this.host.cursor().distanceTo(base) > 1e-9) return false;
+    this.open();
+    return true;
   }
 
   onKey(e: KeyboardEvent): boolean {
@@ -119,6 +136,7 @@ export class KeyDrawFlow {
       announce(r.problem, "assertive");
       return;
     }
+    this.session = true;
     const p = new THREE.Vector2(r.x, r.y);
     const c = hitAt(p, this.host.candidates());
     this.host.place({ p, kind: c?.kind ?? "free", label: c?.label, ref: c?.ref });

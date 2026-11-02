@@ -13,12 +13,14 @@ vi.mock("../../src/sketch/solver", () => ({
   },
 }));
 vi.mock("../../src/ui/announce", () => ({ announce: vi.fn(), cancelAnnouncement: vi.fn() }));
+vi.mock("../../src/ui/toast", () => ({ toast: vi.fn() }));
 
 import { DimInput } from "../../src/sketch/dimInput";
 import { KeyDrawFlow } from "../../src/sketch/keyDrawFlow";
 import { SketchMode } from "../../src/sketch/sketchMode";
 import { candidatesFromEntities, originCandidate, type ResolvedEntity, type SnapCandidate, type SnapKind } from "../../src/sketch/snap";
 import { SketchPlane } from "../../src/sketch/plane";
+import { toast } from "../../src/ui/toast";
 import type { SketchConstraint } from "../../src/types";
 
 type Internals = {
@@ -35,6 +37,7 @@ type Internals = {
   candidates: SnapCandidate[];
   keyDrawHost(): ConstructorParameters<typeof KeyDrawFlow>[0];
   onKey(e: Partial<KeyboardEvent>): void;
+  onPointerDown(e: Partial<PointerEvent>): void;
   inferLine(c: THREE.Vector2): { relations: SketchConstraint[]; end: THREE.Vector2 } | null;
   placeKeyHit(h: { p: THREE.Vector2; kind: SnapKind; label?: string }): void;
 };
@@ -84,7 +87,7 @@ function makeSketch(tool: string) {
     dimFlow: { picking: false, plan: null, resetDimPicks() {} },
     constraintTools: { hasPending: () => false, resetPending() {} },
     overlay: { setPreview() {} },
-    inferTag: { hide() {} },
+    inferTag: { hide() {}, show() {} },
     viewport: {
       projectToScreen: () => ({ x: 300, y: 200 }),
       viewDirection: () => new THREE.Vector3(0, 0, -1),
@@ -440,5 +443,102 @@ describe("the next point typed in X and Y", () => {
     expect(fieldEl("x").value).toBe("12");
     typePoint("@5,3");
     expect(s.base).toEqual(v(5, 3));
+  });
+});
+
+describe("Enter on a size box nobody touched", () => {
+  beforeEach(() => vi.mocked(toast).mockClear());
+
+  it("opens X and Y for the next point after a point typed by keys, for each tool", () => {
+    for (const [tool, first] of [
+      ["line", "length"],
+      ["rectangle", "width"],
+      ["circle", "diameter"],
+    ] as const) {
+      const { s } = makeDrawing(tool);
+      startAt(s, "7", "-3");
+      expect(fieldNames()).not.toEqual(["x", "y"]);
+      enter(first);
+      expect(fieldNames(), tool).toEqual(["x", "y"]);
+      expect([fieldEl("x").value, fieldEl("y").value]).toEqual(["7", "-3"]);
+      expect(toast).not.toHaveBeenCalled();
+      expect(s.entities).toEqual([]);
+      dim?.dispose();
+    }
+  });
+
+  it("does the same with focus on nothing in the box, and a chain goes on the same way", () => {
+    const { s } = makeDrawing("line");
+    startAt(s, "7", "-3");
+    key(s, "Enter");
+    expect(fieldNames()).toEqual(["x", "y"]);
+    typePoint("@40,5");
+    expect(s.entities.map(withoutId)).toEqual([{ type: "line", x1: 7, y1: -3, x2: 47, y2: 2 }]);
+    enter("length");
+    expect(fieldNames()).toEqual(["x", "y"]);
+    expect([fieldEl("x").value, fieldEl("y").value]).toEqual(["47", "2"]);
+  });
+
+  it("says it needs a size when the first point was a click", () => {
+    const { s } = makeDrawing("line");
+    startAt(s, "7", "-3");
+    s.keyDraw.pointerPressed();
+    enter("length");
+    expect(fieldNames()).toEqual(["length", "angle"]);
+    expect(toast).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(toast).mock.calls[0]![0]).toMatch(/size/);
+    expect(vi.mocked(toast).mock.calls[0]![0]).not.toMatch(/click/i);
+  });
+
+  it("forgets the keys when the canvas takes a left press, and not for a right one", () => {
+    const { s } = makeDrawing("line");
+    Object.assign(s, { dims: { clearSelection() {} }, snapAt: () => null, rightDownAt: null, rightDragged: false });
+    startAt(s, "7", "-3");
+    s.onPointerDown({ button: 2, clientX: 1, clientY: 1 });
+    enter("length");
+    expect(fieldNames()).toEqual(["x", "y"]);
+    startAt(s, "9", "4");
+    s.onPointerDown({ button: 0, clientX: 1, clientY: 1 });
+    enter("length");
+    expect(fieldNames()).toEqual(["length", "angle"]);
+    expect(toast).toHaveBeenCalledTimes(1);
+  });
+
+  it("is a refusal when something was typed, even if it is 0, or the angle alone", () => {
+    const { s } = makeDrawing("line");
+    startAt(s, "7", "-3");
+    type("length", "0");
+    enter("length");
+    expect(fieldNames()).toEqual(["length", "angle"]);
+    expect(toast).toHaveBeenCalledTimes(1);
+    expect(s.entities).toEqual([]);
+    dim?.dispose();
+    const other = makeDrawing("line");
+    startAt(other.s, "7", "-3");
+    type("angle", "30");
+    enter("angle");
+    expect(fieldNames()).toEqual(["length", "angle"]);
+    expect(toast).toHaveBeenCalledTimes(2);
+    expect(other.s.entities).toEqual([]);
+  });
+
+  it("commits at the cursor once it has left the point", () => {
+    const { s } = makeDrawing("line");
+    startAt(s, "7", "-3");
+    s.lastCursor.set(30, 5);
+    enter("length");
+    expect(s.entities.map(withoutId)).toEqual([{ type: "line", x1: 7, y1: -3, x2: 30, y2: 5 }]);
+    expect(toast).not.toHaveBeenCalled();
+  });
+
+  it("starts again from a keys point after a click, and keeps nothing from the first sketch", () => {
+    const first = makeDrawing("line");
+    startAt(first.s, "7", "-3");
+    first.s.keyDraw.pointerPressed();
+    dim?.dispose();
+    const { s } = makeDrawing("rectangle");
+    startAt(s, "2", "9");
+    enter("width");
+    expect(fieldNames()).toEqual(["x", "y"]);
   });
 });

@@ -1715,6 +1715,7 @@ export class SketchMode {
       this.rightDragged = false;
     }
     if (e.button !== 0) return; // left only; middle/right still navigate
+    this.keyDraw.pointerPressed();
     // Project picks 3D geometry with raw client coords, so it branches before the plane-point conversion.
     if (this.tool === "project") {
       e.preventDefault();
@@ -3056,7 +3057,7 @@ export class SketchMode {
       }
       if (this.base) {
         e.preventDefault();
-        this.commitFromCursor(this.lastCursor);
+        this.commitFromBox();
         return;
       }
     }
@@ -3112,6 +3113,10 @@ export class SketchMode {
     return false;
   }
 
+  private commitFromBox() {
+    if (!this.keyDraw.openForNext()) this.commitFromCursor(this.lastCursor);
+  }
+
   private commitFromCursor(cursor: THREE.Vector2) {
     if (!this.base) return;
     const inferred = this.tool === "line" ? this.inferLine(cursor) : null;
@@ -3119,7 +3124,7 @@ export class SketchMode {
     this.showInfer(null);
     const { entity } = this.computeGeometry(this.base, cursor);
     if (this.isDegenerate(entity)) {
-      toast("Too small to draw, click somewhere else to set its size");
+      toast("Too small to draw, give it a size");
       return;
     }
     if (this.constructionMode) entity.construction = true;
@@ -3285,7 +3290,7 @@ export class SketchMode {
             ];
     this.dim.show(
       defs,
-      () => this.commitFromCursor(this.lastCursor),
+      () => this.commitFromBox(),
       undefined,
       undefined,
       undefined,

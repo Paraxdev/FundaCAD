@@ -1302,6 +1302,11 @@ export class DimInput {
     this.setProblem(message);
   }
 
+  /** Any field that a keystroke or a Tab has frozen. */
+  touched(): boolean {
+    return this.active && this.fields.some((f) => f.userDriven);
+  }
+
   isUserDriven(name: string): boolean {
     const f = this.fields.find((x) => x.def.name === name);
     return !!f && f.userDriven;
