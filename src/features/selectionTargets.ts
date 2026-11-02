@@ -83,7 +83,7 @@ export const FEATURE_TARGETS: Partial<Record<FeatureType, readonly TargetField[]
     },
     ACTS_ON,
   ],
-  draft: [{ field: "faces", label: "Faces", kind: "face", shape: "selector", arity: "many" }],
+  draft: [{ field: "faces", label: "Faces", kind: "face", shape: "selector", arity: "many", ownBody: true }],
   hole: [{ field: "face", label: "Face", kind: "face", shape: "selector", arity: "one" }],
   textOnFace: [{ field: "face", label: "Face", kind: "face", shape: "selector", arity: "one" }],
   // Two body targets with opposite fates, labelled by fate: which body is kept is the whole meaning of a Subtract.
