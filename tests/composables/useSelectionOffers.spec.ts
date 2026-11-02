@@ -8,6 +8,7 @@ import type { Engine } from "../../src/app/engine";
 import { useSelectionOffers } from "../../src/composables/useSelectionOffers";
 import { SessionEnded } from "../../src/document/session";
 import { useSelectionStore } from "../../src/stores/selection";
+import { describePick } from "../../src/ui/describePick";
 import { exactRound } from "../../src/ui/selectionMeasure";
 import { setUnit } from "../../src/ui/units";
 import { edge, land, result, rig, settle, topology } from "../app/geometryBrowserRig";
@@ -842,5 +843,44 @@ describe("planes", () => {
     await r.frame();
     expect(r.sel.readout.value).toBe("");
     expect(r.sel.speech.value).toEqual({ text: "Nothing selected", verbose: true });
+  });
+});
+
+describe("the readout and the canvas keys' light", () => {
+  async function listed() {
+    const t = setup();
+    await t.build();
+    t.browser.show(true);
+    await land(t.asks[0]!, topology("body1"));
+    return t;
+  }
+
+  it("shows the lit row's words, follows the cursor and goes back when the light goes out", async () => {
+    const t = await listed();
+    t.selection.faces = [2];
+    await t.settled();
+    const selected = t.sel.readout.value;
+    t.list.setCursor("f:body1:1");
+    t.list.setLit(true);
+    expect(t.sel.readout.value).toBe(describePick(t.list.rows[1]!.facts).readout);
+    t.list.setCursor("f:body1:0");
+    expect(t.sel.readout.value).toBe(describePick(t.list.rows[0]!.facts).readout);
+    expect(t.sel.readout.value).not.toBe(selected);
+    t.list.setLit(false);
+    expect(t.sel.readout.value).toBe(selected);
+  });
+
+  it("does not take the readout for a row that is only the cursor", async () => {
+    const t = await listed();
+    t.list.setCursor("f:body1:1");
+    expect(t.sel.readout.value).toBe("");
+  });
+
+  it("does not speak for the light, stepping has its own voice", async () => {
+    const t = await listed();
+    t.list.setCursor("f:body1:1");
+    t.list.setLit(true);
+    await t.settled();
+    expect(t.sel.speech.value).toBeNull();
   });
 });

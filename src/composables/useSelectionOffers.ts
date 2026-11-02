@@ -2,6 +2,7 @@ import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from "vue";
 import type { Engine } from "../app/engine";
 import { createSelectionWords } from "../app/selectionWords";
 import { useGeometryBrowserStore } from "../stores/geometryBrowser";
+import { describePick } from "../ui/describePick";
 import { useSelectionStore } from "../stores/selection";
 import {
   appearanceOffers,
@@ -45,6 +46,7 @@ export function useSelectionOffers(engine: Engine, opts: { words?: boolean } = {
   const counts = shallowRef<SelectionCounts>({});
   const toolOwns = ref(false);
   const words = opts.words ? createSelectionWords(engine) : null;
+  const geometry = useGeometryBrowserStore();
   let signature = "";
 
   const kind = computed(() => primaryKind(counts.value));
@@ -75,6 +77,7 @@ export function useSelectionOffers(engine: Engine, opts: { words?: boolean } = {
   // (viewport/clickIntent.ts), so the readout spells it out. Speech leaves that out, it is no use without a pointer.
   const readout = computed(() => {
     if (!words) return summary.value;
+    if (geometry.litRow) return describePick(geometry.litRow.facts).readout;
     if (words.line.value) return words.line.value;
     const k = kind.value;
     if (!k) return words.planeCount.value > 1 ? `${words.planeCount.value} planes` : "";
