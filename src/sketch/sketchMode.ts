@@ -3166,6 +3166,7 @@ export class SketchMode {
   private commitFromBox() {
     if (this.keyDraw.openForNext()) return;
     const end = this.keyDraw.boxEnd();
+    if (end) this.noteOriginPin(end.hit);
     const done = this.commitFromCursor(this.lastCursor);
     if (done) this.keyDraw.drawn(done, end);
   }

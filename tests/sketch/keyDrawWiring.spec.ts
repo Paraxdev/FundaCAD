@@ -742,6 +742,51 @@ describe("a chain's next point after a typed length and angle", () => {
   });
 });
 
+describe("a second point the size box's Enter places on the origin", () => {
+  it.each(["rectangle", "line"])("pins the %s's end there, as a click does", (tool) => {
+    const { s } = makeDrawing(tool);
+    startAt(s, "7", "-3");
+    const first = tool === "line" ? "length" : "width";
+    key(s, "ArrowRight", fieldEl(first));
+    key(s, "Tab", fieldEl(first));
+    expect(s.lastCursor).toEqual(v(0, 0));
+    enter(first);
+    expect(s.entities).toHaveLength(1);
+    expect(s.originPin).toEqual({ at: v(0, 0), count: 0 });
+    expect(vi.mocked(announce).mock.calls.at(-1)?.[0]).toContain("snapped to the origin");
+  });
+
+  it("does not pin when a size was typed, since the end is then not the origin", () => {
+    const { s } = makeDrawing("rectangle");
+    startAt(s, "7", "-3");
+    key(s, "ArrowRight", fieldEl("width"));
+    key(s, "Tab", fieldEl("width"));
+    type("width", "30");
+    enter("width");
+    expect(s.entities).toHaveLength(1);
+    expect(s.originPin).toBeNull();
+  });
+
+  it("does not pin a cursor an arrow left off the origin, nor a cursor no key moved", () => {
+    const a = makeDrawing("rectangle").s;
+    startAt(a, "7", "-3");
+    key(a, "ArrowRight", fieldEl("width"));
+    enter("width");
+    expect(a.entities).toHaveLength(1);
+    expect(a.originPin).toBeNull();
+    dim?.dispose();
+
+    const b = makeDrawing("rectangle").s;
+    b.base = v(7, -3);
+    b.keyDraw.placed(v(7, -3));
+    (b as never as { showDimFields(): void }).showDimFields();
+    b.lastCursor.set(0, 0);
+    enter("width");
+    expect(b.entities).toHaveLength(1);
+    expect(b.originPin).toBeNull();
+  });
+});
+
 describe("what a keys drawing says", () => {
   beforeEach(() => vi.mocked(announce).mockClear());
   const said = () => vi.mocked(announce).mock.calls.map((c) => c[0]);
