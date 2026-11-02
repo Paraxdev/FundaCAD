@@ -603,6 +603,25 @@ describe("what a keys drawing says", () => {
     expect(said().at(-1)).toBe("Circle 1, diameter 10");
   });
 
+  it("says the end Tab picked when the size box's Enter draws to it, and not when a size was typed", () => {
+    const { s } = makeDrawing("line");
+    s.entities = [{ type: "line", id: "l1", x1: 60, y1: 10, x2: 100, y2: 50 }];
+    (s as unknown as { refreshActive(): void }).refreshActive();
+    startAt(s, "7", "-3");
+    vi.mocked(announce).mockClear();
+    key(s, "ArrowRight", fieldEl("length"));
+    key(s, "Tab", fieldEl("length"));
+    key(s, "Tab", fieldEl("length"));
+    expect(s.lastCursor).toEqual(v(60, 10));
+    enter("length");
+    expect(said().at(-1)).toBe("Point at 60, 10, snapped to the start of Line 1. Line 2, length 54.571");
+    expect(s.entities.map(withoutId).at(-1)).toEqual({ type: "line", x1: 7, y1: -3, x2: 60, y2: 10 });
+    key(s, "ArrowRight", fieldEl("length"));
+    type("length", "25");
+    enter("length");
+    expect(said().at(-1)).toMatch(/^Line 3, length 25$/);
+  });
+
   it("stays silent for a click that finishes a shape", () => {
     const { s } = makeDrawing("rectangle");
     startAt(s, "7", "-3");

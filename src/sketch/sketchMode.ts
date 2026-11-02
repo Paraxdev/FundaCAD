@@ -3165,8 +3165,9 @@ export class SketchMode {
 
   private commitFromBox() {
     if (this.keyDraw.openForNext()) return;
+    const end = this.keyDraw.endSentence();
     const done = this.commitFromCursor(this.lastCursor);
-    if (done) this.keyDraw.drawn(done);
+    if (done) this.keyDraw.drawn(done, end);
   }
 
   private commitFromCursor(cursor: THREE.Vector2): Drawn | null {

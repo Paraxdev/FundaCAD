@@ -148,8 +148,16 @@ export class KeyDrawFlow {
     if (this.keys) this.host.changed();
   }
 
-  drawn(done: Drawn) {
-    announce(drawnSentence(done.entity, this.host.entities(), done.closed), "polite", { key: "sketch-point" });
+  /** The end point a size box's Enter commits, said only while it is the cursor a key moved and no size was typed. Read before the commit. */
+  endSentence(): string | null {
+    if (!this.armed() || !this.engaged || this.host.dim().touched()) return null;
+    const at = this.host.cursor();
+    return pointSentence(at, hitAt(at, this.host.candidates()), this.host.entities());
+  }
+
+  drawn(done: Drawn, end?: string | null) {
+    const shape = drawnSentence(done.entity, this.host.entities(), done.closed);
+    announce(end ? `${end}. ${shape}` : shape, "polite", { key: "sketch-point" });
     this.settleFocus();
     this.host.changed();
   }

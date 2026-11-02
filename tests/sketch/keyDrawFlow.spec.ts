@@ -454,6 +454,74 @@ describe("what is said when a shape is finished", () => {
   });
 });
 
+describe("what the size box's Enter says of the end the cursor stands on", () => {
+  const showSize = () =>
+    dim.show(
+      [
+        { name: "width", label: "W" },
+        { name: "height", label: "H" },
+      ],
+      () => {},
+    );
+  const arrow = (k: string, target: Element | Window = free()) => press(target, { key: k });
+
+  it("names the point and its snap once Tab walked the cursor onto one", () => {
+    const { flow, state } = rig("rectangle");
+    state.base = v(10, 3);
+    showSize();
+    arrow("ArrowRight", field("width"));
+    press(field("width"), { key: "Tab" });
+    press(field("width"), { key: "Tab" });
+    expect([state.cursor.x, state.cursor.y]).toEqual([40, 22.5]);
+    expect(flow.endSentence()).toBe("Point at 40, 22.5, snapped to the midpoint of Line 2");
+  });
+
+  it("names a bare point after an arrow alone, a negative as minus", () => {
+    const { flow, state } = rig("rectangle");
+    state.base = v(10, 3);
+    showSize();
+    arrow("ArrowRight", field("width"));
+    arrow("ArrowDown", field("width"));
+    expect(flow.endSentence()).toBe("Point at 15, minus 10");
+  });
+
+  it("is null before any key moved the cursor, once the pointer moved it, and with nothing armed", () => {
+    const { flow, state } = rig("rectangle");
+    state.base = v(10, 3);
+    showSize();
+    expect(flow.endSentence()).toBeNull();
+    arrow("ArrowRight", field("width"));
+    expect(flow.endSentence()).not.toBeNull();
+    flow.pointerMoved();
+    expect(flow.endSentence()).toBeNull();
+    arrow("ArrowRight", field("width"));
+    state.tool = "polygon";
+    expect(flow.endSentence()).toBeNull();
+  });
+
+  it("is null when a size was typed, since the end is then not where the cursor is", () => {
+    const { flow, state } = rig("rectangle");
+    state.base = v(10, 3);
+    showSize();
+    arrow("ArrowRight", field("width"));
+    type("height", "7");
+    expect(flow.endSentence()).toBeNull();
+  });
+
+  it("is joined to the shape's own sentence, and a shape without it is said alone", () => {
+    const { flow } = rig("line");
+    const done = { entity: { type: "line", id: "l1", x1: 10, y1: 3, x2: 40, y2: 22.5 }, closed: false } as const;
+    flow.drawn(done, "Point at 40, 22.5, snapped to the midpoint of Line 2");
+    flow.drawn(done, null);
+    flow.drawn(done);
+    expect(vi.mocked(announce).mock.calls.map((c) => c[0])).toEqual([
+      "Point at 40, 22.5, snapped to the midpoint of Line 2. Line 1, length 35.781",
+      "Line 1, length 35.781",
+      "Line 1, length 35.781",
+    ]);
+  });
+});
+
 describe("focus and prompt of a keys session", () => {
   const showSize = () =>
     dim.show(
