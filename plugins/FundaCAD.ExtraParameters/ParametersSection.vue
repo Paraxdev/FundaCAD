@@ -53,8 +53,9 @@ function pick(id: string) {
 
 const num = (e: Event) => Number((e.target as HTMLInputElement).value);
 const readAngle = readAs("angle");
+const readLength = readAs("length");
 const readPlain = readAs(null);
-const rowParse = (row: TuneRow) => (row.unit === "mm" ? undefined : row.unit === "°" ? readAngle : readPlain);
+const rowParse = (row: TuneRow) => (row.unit === "mm" ? readLength : row.unit === "°" ? readAngle : readPlain);
 const rowStyle = { display: "flex", alignItems: "center", gap: "6px", paddingRight: "8px" };
 // The name takes its longest name's width up to 62% of the row, but it is the one that gives way: the slider and the
 // number field keep their minimum widths and the name ellipsizes in what is left.

@@ -26,6 +26,7 @@ const scope = computed(() => {
   return n === 1 ? "The one body" : `All ${n}`;
 });
 
+const readLength = readAs("length");
 type NumberKey = "nozzle" | "layer" | "overhang" | "minGap" | "maxBridge";
 const NUMBERS: {
   key: NumberKey;
@@ -37,8 +38,8 @@ const NUMBERS: {
   step: number;
   parse?: (raw: string) => number;
 }[] = [
-  { key: "nozzle", label: "Nozzle", cls: "printability-nozzle", unit: "mm", min: 0, step: 0.05 },
-  { key: "layer", label: "Layer", cls: "printability-layer", unit: "mm", min: 0, step: 0.05 },
+  { key: "nozzle", label: "Nozzle", cls: "printability-nozzle", unit: "mm", min: 0, step: 0.05, parse: readLength },
+  { key: "layer", label: "Layer", cls: "printability-layer", unit: "mm", min: 0, step: 0.05, parse: readLength },
   {
     key: "overhang",
     label: "Overhang angle",
@@ -49,8 +50,16 @@ const NUMBERS: {
     step: 1,
     parse: readAs("angle"),
   },
-  { key: "minGap", label: "Smallest gap", cls: "printability-gap", unit: "mm", min: 0, step: 0.05 },
-  { key: "maxBridge", label: "Longest bridge", cls: "printability-bridge", unit: "mm", min: 0, step: 1 },
+  { key: "minGap", label: "Smallest gap", cls: "printability-gap", unit: "mm", min: 0, step: 0.05, parse: readLength },
+  {
+    key: "maxBridge",
+    label: "Longest bridge",
+    cls: "printability-bridge",
+    unit: "mm",
+    min: 0,
+    step: 1,
+    parse: readLength,
+  },
 ];
 
 const focus = computed(() => d.value?.hovered ?? d.value?.picked ?? null);

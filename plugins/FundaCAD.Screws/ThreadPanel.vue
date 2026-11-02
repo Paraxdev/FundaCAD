@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import { readAs } from "fundacad";
 import { FloatingPanel, NumberField } from "fundacad/ui";
 import { choicesFor, choiceOf, nearestIn, offByText, threadDraft, threadTool, type ThreadDraft } from "./threadTool";
 import type { ThreadSystem } from "./threadSpec";
+
+const readLength = readAs("length");
 
 const SYSTEMS: { value: ThreadSystem; label: string }[] = [
   { value: "iso", label: "ISO metric" },
@@ -122,6 +125,7 @@ function num(ev: Event): number {
           :style="FIELD"
           limits="arrows"
           nullable
+          :parse="readLength"
           :min="0"
           :step="0.05"
           data-testid="thread-clearance"

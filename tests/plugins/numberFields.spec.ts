@@ -274,6 +274,21 @@ describe("the Printability overhang angle reads an angle", () => {
     return { setup, input, request: () => buildPrintabilityRequest(setup, []) };
   }
 
+  it.each([
+    ["nozzle", "nozzle"],
+    ["layer", "layer"],
+    ["gap", "minGap"],
+    ["bridge", "maxBridge"],
+  ] as const)("the %s field refuses 5 deg, an angle, and Check will not run", async (cls, key) => {
+    const { setup, request } = await overhang();
+    const input = inputOf(document.body.querySelector(`.printability-${cls}`));
+    type(input, "5 deg");
+    await flushPromises();
+    expect(input.getAttribute("aria-invalid")).toBe("true");
+    expect(setup[key]).toBeNull();
+    expect(request().ok).toBe(false);
+  });
+
   it.each(["1 in", "5 mm", '2"', "10 deg 1 in"])("refuses %s, a length, and Check will not run", async (text) => {
     const { setup, input, request } = await overhang();
     type(input, text);
@@ -360,6 +375,14 @@ describe("the Standard Thread clearance", () => {
     await leave(input);
     expect(threadDraft.value!.clearance).toBe(0.3);
     expect(changed).toHaveBeenCalledOnce();
+  });
+
+  it("refuses 5 deg, an angle, and keeps the clearance", async () => {
+    const { input } = await panel();
+    type(input, "5 deg");
+    await enter(input);
+    expect(threadDraft.value!.clearance).toBe(0.2);
+    expect(input.getAttribute("aria-invalid")).toBe("true");
   });
 
   it.each([
@@ -569,6 +592,15 @@ describe("the Parameters number row", () => {
         expect(Number(store.document.paramDefs!["gap"]!.expr)).toBe(value);
       },
     );
+  });
+
+  it("a row in mm refuses 5 deg, an angle, and keeps the value", async () => {
+    const { store, setExpr, input } = await section({ kind: "number" }, "45", "mm");
+    type(input, "5 deg");
+    await enter(input);
+    expect(setExpr).not.toHaveBeenCalled();
+    expect(store.document.paramDefs!["gap"]!.expr).toBe("45");
+    expect(input.getAttribute("aria-invalid")).toBe("true");
   });
 
   it("a row in mm keeps a written length and a fraction", async () => {
