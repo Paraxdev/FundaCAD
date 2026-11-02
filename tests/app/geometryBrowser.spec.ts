@@ -515,6 +515,47 @@ describe("a failed fetch", () => {
     expect(r.asks).toHaveLength(2);
   });
 
+  it("tries once more on a build that keeps the body's etag, a build with the same result does not", async () => {
+    const r = rig();
+    await r.build();
+    r.browser.show(true);
+    r.asks[0]!.fail(new Error("engine restarted"));
+    await settle();
+    expect(r.list.state).toBe("error");
+    await r.build();
+    expect(r.asks).toHaveLength(1);
+    await r.build(
+      result([
+        { id: "body1", etag: "e1" },
+        { id: "body2", etag: "e2b" },
+      ]),
+    );
+    expect(r.asks.map((a) => a.body)).toEqual(["body1", "body1"]);
+    expect(r.list.state).toBe("loading");
+    await land(r.asks[1]!, topology("body1", 2));
+    expect([r.list.state, keys(r.list.rows)]).toEqual(["ready", ["f:body1:0", "f:body1:1"]]);
+  });
+
+  it("still shows the error and its reason after a visit to Planes, and asks nothing more", async () => {
+    const r = rig();
+    await r.build();
+    r.browser.show(true);
+    await land(r.asks[0]!, null);
+    r.browser.setKind("planes");
+    expect(r.list.state).toBe("ready");
+    r.browser.setKind("faces");
+    expect([r.list.state, r.list.error, r.list.rows]).toEqual([
+      "error",
+      "The engine could not list this body's faces.",
+      [],
+    ]);
+    r.browser.setKind("edges");
+    expect(r.list.state).toBe("error");
+    expect(r.asks).toHaveLength(1);
+    r.browser.retry();
+    expect([r.asks.length, r.list.state]).toEqual([2, "loading"]);
+  });
+
   it("keeps edge rows through a failure, without the facts the op gives", async () => {
     const r = rig(result([{ id: "body1", etag: "e1", faceOwners: ["f1", "f1", "f1"] }]));
     r.wires.set("body1", [edge("body1", 0, 2), edge("body1", 1, 2)]);
@@ -1325,7 +1366,8 @@ describe("a lit origin plane", () => {
     r.viewport.showAllPlanes.mockClear();
     return r;
   }
-  const xy = (r: ReturnType<typeof rig>) => r.list.rows.find((x) => x.plane?.kind === "basePlane" && x.plane.plane === "XY")!;
+  const xy = (r: ReturnType<typeof rig>) =>
+    r.list.rows.find((x) => x.plane?.kind === "basePlane" && x.plane.plane === "XY")!;
 
   it("shows the tiles while lit and takes them away after", async () => {
     const r = await planes();

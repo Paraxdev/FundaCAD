@@ -106,6 +106,7 @@ const ROW_CHANGED = "That row has changed, the list is catching up";
 
 export function createGeometryBrowser(e: GeometryBrowserHost) {
   const list = useGeometryBrowserStore();
+const FAILED = "The engine could not list this body's faces.";
   const cache = new Map<string, TopologyReply>();
 
   let shown = false;
@@ -165,8 +166,7 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
     }
     if (!reply) {
       failedKey = key;
-      if (list.kind === "faces") list.setRows([]);
-      list.setState("error", "The engine could not list this body's faces.");
+      showFailure();
       return;
     }
     cache.set(key, reply);
@@ -177,6 +177,12 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
   function showWithReply(body: Body, key: string, reply: TopologyReply) {
     showRows(body, key, reply);
     list.setTruncated(reply.truncated?.faces ?? null);
+  // Edge rows stand without the op, face rows do not.
+  function showFailure() {
+    if (list.kind === "faces") list.setRows([]);
+    list.setState("error", FAILED);
+  }
+
     list.setState("ready");
   }
 
@@ -233,7 +239,8 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
       return;
     }
     showRows(body, key, null);
-    if (asking?.key !== key && failedKey !== key) ask(body, key);
+    if (failedKey === key) showFailure();
+    else if (asking?.key !== key) ask(body, key);
   }
 
   const wanted = () => shown || stepped;
@@ -373,6 +380,8 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
       }
       const bodies = visibleBodies();
       const labelOf = bodyLabelsOf(e.store);
+        // A request lost to an engine restart is asked once more, an engine that always fails costs one per build.
+        failedKey = null;
       list.setBodies(bodies.map((b) => ({ id: b.id, name: labelOf(b.id) ?? b.name })));
       if (!bodies.some((b) => b.id === list.bodyId)) setBody(selectionOwner(bodies) ?? bodies[0]?.id ?? null);
       syncSelected();
