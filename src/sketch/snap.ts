@@ -31,6 +31,8 @@ export interface SnapCandidate {
   /** Names of the lines through this anchor along the sketch's x and y ("X Axis"). */
   lineLabels?: { x: string; y: string } | undefined;
   ref?: SnapRef | undefined;
+  /** The entity it belongs to, `id~k` for a rectangle's edge k. Only speech reads it, ref stays what the solver holds. */
+  owner?: string | undefined;
 }
 
 /** `axis: "x"` means the cursor took the anchor's x, standing on its vertical line. */
@@ -323,59 +325,59 @@ export function curvesFromEntities(entities: ResolvedEntity[]): SnapCurve[] {
 
 export function candidatesFromEntities(entities: ResolvedEntity[]): SnapCandidate[] {
   const out: SnapCandidate[] = [];
-  const add = (x: number, y: number, kind: SnapKind, priority: number, ref?: SnapRef) =>
-    out.push({ p: new THREE.Vector2(x, y), kind, priority, ...(ref ? { ref } : {}) });
+  const add = (x: number, y: number, kind: SnapKind, priority: number, owner: string, ref?: SnapRef) =>
+    out.push({ p: new THREE.Vector2(x, y), kind, priority, owner, ...(ref ? { ref } : {}) });
 
   for (const e of entities) {
     if (e.type === "line") {
-      add(e.x1, e.y1, "endpoint", 100, { entity: e.id, at: 0 });
-      add(e.x2, e.y2, "endpoint", 100, { entity: e.id, at: 1 });
-      add((e.x1 + e.x2) / 2, (e.y1 + e.y2) / 2, "midpoint", 80, { entity: e.id, at: "mid" });
+      add(e.x1, e.y1, "endpoint", 100, e.id, { entity: e.id, at: 0 });
+      add(e.x2, e.y2, "endpoint", 100, e.id, { entity: e.id, at: 1 });
+      add((e.x1 + e.x2) / 2, (e.y1 + e.y2) / 2, "midpoint", 80, e.id, { entity: e.id, at: "mid" });
     } else if (e.type === "rectangle") {
       // Through rectCorners so a rotated rectangle snaps to where it is drawn, inline corners would drift apart.
       const c = rectCorners(e.x, e.y, e.width, e.height, e.angle);
-      c.forEach((p, k) => add(p.x, p.y, "endpoint", 100, { entity: e.id, at: k }));
-      add(e.x, e.y, "center", 90);
+      c.forEach((p, k) => add(p.x, p.y, "endpoint", 100, e.id, { entity: e.id, at: k }));
+      add(e.x, e.y, "center", 90, e.id);
       for (let k = 0; k < 4; k++) {
         const a = c[k]!;
         const b = c[(k + 1) % 4]!;
-        add((a.x + b.x) / 2, (a.y + b.y) / 2, "midpoint", 80);
+        add((a.x + b.x) / 2, (a.y + b.y) / 2, "midpoint", 80, `${e.id}~${k}`);
       }
     } else if (e.type === "circle") {
-      add(e.x, e.y, "center", 90, { entity: e.id, at: 0 });
+      add(e.x, e.y, "center", 90, e.id, { entity: e.id, at: 0 });
     } else if (e.type === "arc") {
-      add(e.x1, e.y1, "endpoint", 100, { entity: e.id, at: 0 });
-      add(e.x2, e.y2, "endpoint", 100, { entity: e.id, at: 1 });
-      add(e.mx, e.my, "midpoint", 80);
+      add(e.x1, e.y1, "endpoint", 100, e.id, { entity: e.id, at: 0 });
+      add(e.x2, e.y2, "endpoint", 100, e.id, { entity: e.id, at: 1 });
+      add(e.mx, e.my, "midpoint", 80, e.id);
     } else if (e.type === "spline") {
-      for (const p of e.points) add(p.x, p.y, "endpoint", 100); // fit points snap
+      for (const p of e.points) add(p.x, p.y, "endpoint", 100, e.id); // fit points snap
     } else if (e.type === "bspline") {
       const last = e.poles.length - 1;
       e.poles.forEach((p, k) => {
         const end = !e.closed && (k === 0 || k === last);
-        add(p.x, p.y, end ? "endpoint" : "control", end ? 100 : 60);
+        add(p.x, p.y, end ? "endpoint" : "control", end ? 100 : 60, e.id);
       });
     } else if (e.type === "point") {
-      add(e.x, e.y, "endpoint", 110, { entity: e.id, at: 0 }); // a placed point is a strong snap target
+      add(e.x, e.y, "endpoint", 110, e.id, { entity: e.id, at: 0 }); // a placed point is a strong snap target
     } else if (e.type === "projected") {
       // Projected curves snap like native ones. Centers come from asRound, poly interior vertices are samples so they
       // snap weakly (60).
       const round = asRound(e);
-      if (round) add(round.x, round.y, "center", 90);
+      if (round) add(round.x, round.y, "center", 90, e.id);
       const cv = e.curve;
       if (cv.kind === "line") {
-        add(cv.x1, cv.y1, "endpoint", 100);
-        add(cv.x2, cv.y2, "endpoint", 100);
-        add((cv.x1 + cv.x2) / 2, (cv.y1 + cv.y2) / 2, "midpoint", 80);
+        add(cv.x1, cv.y1, "endpoint", 100, e.id);
+        add(cv.x2, cv.y2, "endpoint", 100, e.id);
+        add((cv.x1 + cv.x2) / 2, (cv.y1 + cv.y2) / 2, "midpoint", 80, e.id);
       } else if (cv.kind === "arc") {
-        add(cv.x1, cv.y1, "endpoint", 100);
-        add(cv.x2, cv.y2, "endpoint", 100);
-        add(cv.mx, cv.my, "midpoint", 80); // exact model point, same as native arcs
+        add(cv.x1, cv.y1, "endpoint", 100, e.id);
+        add(cv.x2, cv.y2, "endpoint", 100, e.id);
+        add(cv.mx, cv.my, "midpoint", 80, e.id); // exact model point, same as native arcs
       } else if (cv.kind === "poly") {
         const pts = cv.pts;
         pts.forEach(([x, y], i) => {
           const isEnd = i === 0 || i === pts.length - 1;
-          add(x, y, "endpoint", isEnd ? 100 : 60);
+          add(x, y, "endpoint", isEnd ? 100 : 60, e.id);
         });
       }
     }

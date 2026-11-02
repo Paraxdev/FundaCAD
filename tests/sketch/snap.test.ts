@@ -167,6 +167,55 @@ describe("candidatesFromEntities", () => {
   });
 });
 
+describe("candidatesFromEntities, owner", () => {
+  const owners = (c: SnapCandidate[]) => c.map((x) => [x.kind, x.owner, x.ref?.entity]);
+
+  it("names the entity of each anchor, and the edge of a rectangle's midpoints", () => {
+    const rect = candidatesFromEntities([
+      { type: "rectangle", id: "r7", width: 21, height: 9, x: 3, y: -4, angle: 0.4 },
+    ]);
+    expect(owners(rect)).toEqual([
+      ["endpoint", "r7", "r7"],
+      ["endpoint", "r7", "r7"],
+      ["endpoint", "r7", "r7"],
+      ["endpoint", "r7", "r7"],
+      ["center", "r7", undefined],
+      ["midpoint", "r7~0", undefined],
+      ["midpoint", "r7~1", undefined],
+      ["midpoint", "r7~2", undefined],
+      ["midpoint", "r7~3", undefined],
+    ]);
+  });
+
+  it("covers every other kind, also where the solver holds no ref", () => {
+    const ents: ResolvedEntity[] = [
+      { type: "line", id: "l1", x1: 1, y1: 2, x2: 9, y2: 5 },
+      { type: "circle", id: "c1", radius: 3, x: 7, y: 8 },
+      { type: "arc", id: "a1", x1: 0, y1: 0, x2: 4, y2: 1, mx: 2, my: 2 },
+      {
+        type: "spline",
+        id: "s1",
+        points: [
+          { x: 0, y: 0 },
+          { x: 1, y: 3 },
+        ],
+      },
+      { type: "point", id: "p1", x: 3, y: 4 },
+    ];
+    const all = candidatesFromEntities(ents);
+    expect(all.map((x) => x.owner)).toEqual(["l1", "l1", "l1", "c1", "a1", "a1", "a1", "s1", "s1", "p1"]);
+    expect(all.every((x) => x.owner !== undefined)).toBe(true);
+  });
+
+  it("leaves what snap() returns as it was", () => {
+    const cands = candidatesFromEntities([{ type: "line", id: "l1", x1: 1, y1: 2, x2: 9, y2: 5 }]);
+    const r = snap(v(1.1, 2.1), cands, screen, 1, 10);
+    expect(r.kind).toBe("endpoint");
+    expect(r.ref).toEqual({ entity: "l1", at: 0 });
+    expect("owner" in r).toBe(false);
+  });
+});
+
 describe("candidatesFromEntities, projected reference geometry", () => {
   it("a projected line snaps like a native one: endpoints 100, midpoint 80", () => {
     const c = candidatesFromEntities([

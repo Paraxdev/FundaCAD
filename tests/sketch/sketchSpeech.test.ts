@@ -69,11 +69,49 @@ describe("snapWords", () => {
     expect(snapWords(cand({ ref: { entity: "p2", at: 0 } }), ents)).toBe("Point 2");
   });
 
+  it("reads an owner with no ref, the edge of a rectangle, an arc's middle, a rectangle's center", () => {
+    expect(snapWords(cand({ kind: "midpoint", owner: "r1~2" }), ents)).toBe("the midpoint of Rectangle 1 edge 3");
+    expect(snapWords(cand({ kind: "midpoint", owner: "a1" }), ents)).toBe("the midpoint of Arc 1");
+    expect(snapWords(cand({ kind: "center", owner: "r1" }), ents)).toBe("the center of Rectangle 1");
+    expect(snapWords(cand({ kind: "endpoint", owner: "l1", ref: { entity: "l1", at: 0 } }), ents)).toBe(
+      "the start of Line 1",
+    );
+  });
+
+  it("names a spline point, a control point, and a point on a curve", () => {
+    const more: ResolvedEntity[] = [
+      ...ents,
+      {
+        type: "spline",
+        id: "s1",
+        points: [
+          { x: 0, y: 0 },
+          { x: 3, y: 4 },
+        ],
+      },
+      {
+        type: "bspline",
+        id: "b1",
+        poles: [
+          { x: 0, y: 0 },
+          { x: 3, y: 4 },
+          { x: 6, y: 1 },
+        ],
+        closed: false,
+      },
+    ] as ResolvedEntity[];
+    expect(snapWords(cand({ owner: "s1" }), more)).toBe("a point of Spline 1");
+    expect(snapWords(cand({ kind: "control", owner: "b1" }), more)).toBe("a control point of Control point spline 1");
+    expect(snapWords(cand({ owner: "b1" }), more)).toBe("a point of Control point spline 1");
+    expect(snapWords(cand({ kind: "curve", ref: { entity: "l2", at: "curve" } }), ents)).toBe("a point on Line 2");
+  });
+
   it("falls back to the label without an owner, or when the owner is gone", () => {
     expect(snapWords(cand({ kind: "center", label: "Origin" }), ents)).toBe("the origin");
     expect(snapWords(cand({ kind: "center", label: "Face Center" }), ents)).toBe("the face center");
     expect(snapWords(cand({ kind: "midpoint" }), ents)).toBe("the midpoint");
     expect(snapWords(cand({ kind: "midpoint", ref: { entity: "gone", at: "mid" } }), ents)).toBe("the midpoint");
+    expect(snapWords(cand({ kind: "midpoint", owner: "gone~1" }), ents)).toBe("the midpoint");
   });
 });
 

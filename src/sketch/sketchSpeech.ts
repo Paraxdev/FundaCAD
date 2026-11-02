@@ -28,18 +28,21 @@ function ownerKind(ents: ResolvedEntity[], id: string): ResolvedEntity["type"] |
 
 export function snapWords(c: SnapCandidate, ents: ResolvedEntity[]): string {
   const plain = `the ${(snapLabel(c) ?? c.kind).toLowerCase()}`;
-  const ref = c.ref;
-  if (!ref) return plain;
-  const name = entityLabel(ents, ref.entity);
-  const kind = ownerKind(ents, ref.entity);
-  if (!name || !kind) return plain;
-  if (ref.at === "mid") return `the midpoint of ${name}`;
-  if (ref.at === "curve") return `a point on ${name}`;
-  if (kind === "line" || kind === "arc") return `the ${ref.at === 0 ? "start" : "end"} of ${name}`;
-  if (kind === "rectangle") return `corner ${ref.at + 1} of ${name}`;
-  if (kind === "circle") return `the center of ${name}`;
+  const owner = c.owner ?? c.ref?.entity;
+  const name = owner ? entityLabel(ents, owner) : null;
+  const kind = owner ? ownerKind(ents, owner) : null;
+  if (!owner || !name || !kind) return plain;
+  const at = c.ref?.at;
+  if (at === "curve") return `a point on ${name}`;
   if (kind === "point") return name;
-  return plain;
+  if (c.kind === "midpoint") return `the midpoint of ${name}`;
+  if (c.kind === "center") return `the center of ${name}`;
+  if (c.kind === "control") return `a control point of ${name}`;
+  if (c.kind !== "endpoint") return plain;
+  if ((kind === "line" || kind === "arc") && (at === 0 || at === 1))
+    return `the ${at === 0 ? "start" : "end"} of ${name}`;
+  if (kind === "rectangle" && typeof at === "number") return `corner ${at + 1} of ${name}`;
+  return kind === "spline" || kind === "bspline" ? `a point of ${name}` : `an endpoint of ${name}`;
 }
 
 export function pointSentence(p: { x: number; y: number }, c: SnapCandidate | null, ents: ResolvedEntity[]): string {
