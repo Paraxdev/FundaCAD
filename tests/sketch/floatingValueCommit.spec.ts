@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { SketchMode } from "../../src/sketch/sketchMode";
 import { DimInput } from "../../src/sketch/dimInput";
-import { noKeyDraw } from "./keyDrawStub";
+import { noKeyDraw, noKeySurface } from "./keyDrawStub";
 import type { ResolvedEntity } from "../../src/sketch/snap";
 import { PatternFlow, type PatternHost } from "../../src/sketch/patternFlow";
 import type { SketchPattern } from "../../src/types";
@@ -60,6 +60,7 @@ function makeSketch(tool: string) {
     constructionMode: false,
     dim,
     keyDraw: noKeyDraw,
+    keySurface: noKeySurface,
     overlay: { setPreview: (p: ResolvedEntity[]) => previews.push(p) },
     entityCurve: (e: ResolvedEntity) => e,
     viewport: { requestRender: () => renders++ },

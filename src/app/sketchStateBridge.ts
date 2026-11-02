@@ -18,6 +18,8 @@ export function installSketchStateBridge(e: Engine): void {
     palette.offNormal = !square;
   };
 
+  ribbon.bindKeyArmed(() => e.sketch.armedByKeys());
+
   let sketchWasActive = false;
   e.sketch.onState = () => {
     if (e.sketch.active !== sketchWasActive) endPickSession();
@@ -33,7 +35,7 @@ export function installSketchStateBridge(e: Engine): void {
     palette.visible = e.sketch.active;
     ui.sketchActive = e.sketch.active;
     if (e.sketch.active) {
-      if (!SELF_PROMPTING.has(e.sketch.tool)) setPrompt(SKETCH_PROMPTS[e.sketch.tool] ?? null);
+      if (!SELF_PROMPTING.has(e.sketch.tool)) setPrompt(e.sketch.keyPrompt ?? SKETCH_PROMPTS[e.sketch.tool] ?? null);
     } else {
       setPrompt(null);
     }

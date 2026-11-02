@@ -45,6 +45,8 @@ function rig(tool = "rectangle", over: Partial<KeyDrawHost> = {}) {
     drawn: null as Drawn | null,
     prompts: [] as string[],
     boxAt: [] as THREE.Vector2[],
+    surfaced: 0,
+    changed: 0,
     candidates: [
       { p: v(0, 0), kind: "center", priority: 95, label: "Origin" },
       { p: v(40, 22.5), kind: "midpoint", priority: 80, ref: { entity: "l2", at: "mid" } },
@@ -70,6 +72,13 @@ function rig(tool = "rectangle", over: Partial<KeyDrawHost> = {}) {
     },
     positionBox: (p) => state.boxAt.push(p.clone()),
     prompt: (t) => state.prompts.push(t),
+    focusSurface: () => {
+      state.surfaced++;
+      return true;
+    },
+    changed: () => {
+      state.changed++;
+    },
     ...over,
   };
   const flow = new KeyDrawFlow(host);
@@ -424,5 +433,129 @@ describe("what is said when a shape is finished", () => {
       ["Line 1, length 5", "polite", { key: "sketch-point" }],
       ["Line 2, length 6, loop closed", "polite", { key: "sketch-point" }],
     ]);
+  });
+});
+
+describe("focus and prompt of a keys session", () => {
+  const showSize = () =>
+    dim.show([{ name: "width", label: "W" }, { name: "height", label: "H" }], () => {});
+
+  it("armed by keys moves focus to the surface once and asks for the prompt again", () => {
+    const { flow, state } = rig("rectangle");
+    flow.armedByKeys();
+    expect([state.surfaced, state.changed]).toEqual([1, 1]);
+    expect(flow.keyPrompt()).toMatch(/Enter or a digit types X and Y/);
+  });
+
+  it("armed by keys in a tool that is not a key tool changes nothing", () => {
+    for (const tool of ["select", "arc", "polygon"]) {
+      const { flow, state } = rig(tool);
+      flow.armedByKeys();
+      expect([tool, state.surfaced, state.changed, flow.keyPrompt()]).toEqual([tool, 0, 0, null]);
+    }
+  });
+
+  it("speaks the pointer's prompt until keys arm or open something", () => {
+    const { flow, state } = rig("circle");
+    expect(flow.keyPrompt()).toBeNull();
+    press(free());
+    expect(flow.keyPrompt()).toMatch(/X and Y/);
+    expect(state.changed).toBeGreaterThan(0);
+  });
+
+  it("reads the X and Y line while the box has X, the size line once a point is placed, X and Y again after @", () => {
+    const { flow, state } = rig("line");
+    flow.armedByKeys();
+    press(free());
+    expect(flow.keyPrompt()).toMatch(/Type X and Y/);
+    type("x", "25");
+    type("y", "3");
+    press(field("y"));
+    state.base = v(25, 3);
+    showSize();
+    expect(flow.keyPrompt()).toMatch(/size/);
+    expect(flow.keyPrompt()).not.toMatch(/X and Y/);
+    field("width").focus();
+    press(field("width"), { key: "@" });
+    expect(boxFields()).toEqual(["x", "y"]);
+    expect(flow.keyPrompt()).toMatch(/Type X and Y/);
+  });
+
+  it("is null when the tool is changed away or after the pointer pressed, and says so once", () => {
+    const { flow, state } = rig("line");
+    flow.armedByKeys();
+    state.changed = 0;
+    flow.pointerPressed();
+    expect([flow.keyPrompt(), state.changed]).toEqual([null, 1]);
+    flow.pointerPressed();
+    expect(state.changed).toBe(1);
+    flow.armedByKeys();
+    flow.disarm();
+    expect(flow.keyPrompt()).toBeNull();
+    flow.armedByKeys();
+    state.tool = "select";
+    expect(flow.keyPrompt()).toBeNull();
+  });
+
+  it("is a pointer session again after reset, with nothing leaking into the next sketch", () => {
+    const { flow } = rig("rectangle");
+    flow.armedByKeys();
+    flow.reset();
+    expect(flow.keyPrompt()).toBeNull();
+  });
+
+  it("brings focus back to the surface when a placed point closed the box onto the body", () => {
+    const { flow, state } = rig("line");
+    press(free());
+    type("x", "25");
+    type("y", "3");
+    press(field("y"));
+    expect(document.activeElement).toBe(document.body);
+    expect(state.surfaced).toBe(1);
+    expect(flow.keyPrompt()).toMatch(/size/);
+  });
+
+  it("leaves focus alone when it is on a control, when a box is still open and when no keys session runs", () => {
+    const { flow, state } = rig("line");
+    flow.armedByKeys();
+    state.surfaced = 0;
+    document.getElementById("rail")!.focus();
+    flow.settleFocus();
+    expect(state.surfaced).toBe(0);
+    (document.activeElement as HTMLElement).blur();
+    showSize();
+    (document.activeElement as HTMLElement).blur();
+    flow.settleFocus();
+    expect(state.surfaced).toBe(0);
+    dim.hide();
+    flow.settleFocus();
+    expect(state.surfaced).toBe(1);
+    flow.pointerPressed();
+    flow.settleFocus();
+    expect(state.surfaced).toBe(1);
+  });
+
+  it("takes focus back after Escape dropped an open box, and says nothing outside a keys session", () => {
+    const { flow, state } = rig("rectangle");
+    press(free());
+    dim.hide();
+    state.changed = 0;
+    flow.cancelled();
+    expect([state.surfaced, state.changed]).toEqual([1, 1]);
+    flow.pointerPressed();
+    state.changed = 0;
+    flow.cancelled();
+    expect([state.surfaced, state.changed]).toEqual([1, 0]);
+  });
+
+  it("takes focus back after a finished shape closed the size box", () => {
+    const { flow, state } = rig("circle");
+    flow.armedByKeys();
+    state.surfaced = 0;
+    state.base = v(1, 2);
+    showSize();
+    dim.hide();
+    flow.drawn({ entity: { type: "circle", id: "c1", x: 1, y: 2, radius: 5 }, closed: false });
+    expect(state.surfaced).toBe(1);
   });
 });

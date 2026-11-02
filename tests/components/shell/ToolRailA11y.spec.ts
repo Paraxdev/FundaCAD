@@ -203,4 +203,40 @@ describe("the tool rail for keyboard and screen reader users", () => {
     );
     expect(pressed).toEqual(["false", "false", "false"]);
   });
+
+  describe("telling the sketch a tool was armed from the keyboard", () => {
+    let keyArmed: number;
+    beforeEach(() => {
+      keyArmed = 0;
+      useRibbonStore().bindKeyArmed(() => keyArmed++);
+      useRibbonStore().context = "sketch";
+    });
+
+    it("happens for a click with no pointer behind it, after the tool was acted on, and not for a pointer click", async () => {
+      mountRail();
+      await settle();
+      const line = btn('[data-action="line"]');
+      line.click();
+      expect({ acted, keyArmed }).toEqual({ acted: ["line"], keyArmed: 1 });
+      line.dispatchEvent(new MouseEvent("click", { detail: 1, bubbles: true }));
+      expect({ acted, keyArmed }).toEqual({ acted: ["line", "line"], keyArmed: 1 });
+      btn('[data-action="arc"]').dispatchEvent(new MouseEvent("click", { detail: 0, bubbles: true }));
+      expect({ acted, keyArmed }).toEqual({ acted: ["line", "line", "arc"], keyArmed: 2 });
+    });
+
+    it("also happens for a tool picked from a flyout by key, and not by pointer", async () => {
+      mountRail();
+      await settle();
+      btn('[data-family="fam:rectangle"]').click();
+      await settle();
+      flyout()!.querySelector<HTMLElement>('[data-pick="rectangle"]')!.click();
+      expect({ acted, keyArmed }).toEqual({ acted: ["rectangle"], keyArmed: 1 });
+      btn('[data-family="fam:rectangle"]').click();
+      await settle();
+      flyout()!
+        .querySelector<HTMLElement>('[data-pick="rectangle"]')!
+        .dispatchEvent(new MouseEvent("click", { detail: 1, bubbles: true }));
+      expect({ acted, keyArmed }).toEqual({ acted: ["rectangle", "rectangle"], keyArmed: 1 });
+    });
+  });
 });

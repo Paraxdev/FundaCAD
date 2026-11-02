@@ -1220,3 +1220,15 @@ describe("DimInput.typeInto", () => {
     expect([field("x").selectionStart, field("x").selectionEnd]).toEqual([0, 1]);
   });
 });
+
+describe("DimInput.hasField", () => {
+  it("is true for a shown field only, false for another name, after hide and for the next box", () => {
+    expect(dim.hasField("radius")).toBe(false);
+    dim.show([{ name: "radius", label: "R" }, { name: "angle", label: "A" }], () => {});
+    expect([dim.hasField("radius"), dim.hasField("angle"), dim.hasField("x")]).toEqual([true, true, false]);
+    dim.hide();
+    expect(dim.hasField("radius")).toBe(false);
+    dim.show([{ name: "x", label: "X" }], () => {});
+    expect([dim.hasField("radius"), dim.hasField("x")]).toEqual([false, true]);
+  });
+});

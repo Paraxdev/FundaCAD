@@ -16,7 +16,9 @@ vi.mock("../../src/ui/announce", () => ({ announce: vi.fn(), cancelAnnouncement:
 vi.mock("../../src/ui/toast", () => ({ toast: vi.fn() }));
 
 import { DimInput } from "../../src/sketch/dimInput";
-import { KeyDrawFlow } from "../../src/sketch/keyDrawFlow";
+import { KEY_DRAW_TOOLS, KeyDrawFlow } from "../../src/sketch/keyDrawFlow";
+import { noKeySurface } from "./keyDrawStub";
+import { KeySurface } from "../../src/sketch/keySurface";
 import { SketchMode } from "../../src/sketch/sketchMode";
 import { candidatesFromEntities, originCandidate, type ResolvedEntity, type SnapCandidate, type SnapKind } from "../../src/sketch/snap";
 import { SketchPlane } from "../../src/sketch/plane";
@@ -35,6 +37,7 @@ type Internals = {
   lastHit: { typed?: boolean } | null;
   dim: DimInput;
   keyDraw: KeyDrawFlow;
+  keySurface: unknown;
   candidates: SnapCandidate[];
   keyDrawHost(): ConstructorParameters<typeof KeyDrawFlow>[0];
   onKey(e: Partial<KeyboardEvent>): void;
@@ -99,6 +102,7 @@ function makeSketch(tool: string) {
     setTool: (t: string) => calls.setTool.push(t),
     finish: (commit: boolean) => calls.finish.push(commit),
   });
+  s.keySurface = noKeySurface;
   s.keyDraw = new KeyDrawFlow(s.keyDrawHost());
   return { s, calls };
 }
@@ -589,5 +593,90 @@ describe("what a keys drawing says", () => {
     (s as unknown as { commitFromCursor(c: THREE.Vector2): unknown }).commitFromCursor(v(30, 9));
     expect(s.entities.length).toBe(1);
     expect(said()).toEqual([]);
+  });
+});
+
+describe("focus and prompt in the sketch", () => {
+  function keysSketch(tool: string) {
+    const { s, calls } = makeDrawing(tool);
+    const surfaceModel = new KeySurface();
+    surfaceModel.mount();
+    const surface = { model: surfaceModel, el: document.querySelector<HTMLElement>("[data-key-surface]")! };
+    const states: number[] = [];
+    Object.assign(s, {
+      active: true,
+      keySurface: surfaceModel,
+      onState: () => states.push(1),
+      setTool: (t: string) => {
+        s.tool = t;
+        s.keyDraw.disarm();
+        surfaceModel.setStop(KEY_DRAW_TOOLS.has(t));
+      },
+    });
+    surfaceModel.setStop(KEY_DRAW_TOOLS.has(tool));
+    document.body.insertAdjacentHTML("beforeend", '<button id="rail">r</button>');
+    return { s, calls, surface, states, prompt: () => (s as unknown as { keyPrompt: string | null }).keyPrompt };
+  }
+
+  it("a letter arming a draw tool moves focus off a rail button onto the surface and reads the keys prompt", () => {
+    const { s, surface, states, prompt } = keysSketch("select");
+    const rail = document.getElementById("rail")!;
+    rail.focus();
+    expect(prompt()).toBeNull();
+    key(s, "r", rail);
+    expect(s.tool).toBe("rectangle");
+    expect(document.activeElement).toBe(surface.el);
+    expect(surface.el.tabIndex).toBe(0);
+    expect(prompt()).toMatch(/X and Y/);
+    expect(states.length).toBeGreaterThan(0);
+  });
+
+  it("a letter arming another tool leaves focus and the prompt alone, and takes the surface out of the Tab order", () => {
+    const { s, surface, prompt } = keysSketch("line");
+    const rail = document.getElementById("rail")!;
+    rail.focus();
+    key(s, "a", rail);
+    expect(s.tool).toBe("arc");
+    expect(document.activeElement).toBe(rail);
+    expect(surface.el.tabIndex).toBe(-1);
+    expect(prompt()).toBeNull();
+  });
+
+  it("arming by keys, then switching to another tool, ends the keys prompt", () => {
+    const { s, prompt } = keysSketch("select");
+    key(s, "c");
+    expect(prompt()).not.toBeNull();
+    key(s, "t");
+    expect(s.tool).toBe("trim");
+    expect(prompt()).toBeNull();
+  });
+
+  it("Escape closing the X and Y box puts focus back on the surface", () => {
+    const { s, surface, prompt } = keysSketch("select");
+    key(s, "l");
+    key(s, "Enter", surface.el);
+    expect(fieldNames()).toEqual(["x", "y"]);
+    expect(prompt()).toMatch(/Type X and Y/);
+    key(s, "Escape", fieldEl("x"));
+    expect(dim?.isActive).toBe(false);
+    expect(document.activeElement).toBe(surface.el);
+    expect(prompt()).toMatch(/Enter or a digit/);
+  });
+
+  it("a point typed in X and Y moves the prompt on to the size", () => {
+    const { s, prompt } = keysSketch("select");
+    key(s, "r");
+    key(s, "Enter");
+    typePoint("7", "-3");
+    expect(fieldNames()).toEqual(["width", "height"]);
+    expect(prompt()).toMatch(/size/);
+    expect(prompt()).not.toMatch(/Type X and Y/);
+  });
+
+  it("a prompt is null outside a sketch", () => {
+    const { s, prompt } = keysSketch("select");
+    key(s, "l");
+    (s as unknown as { active: boolean }).active = false;
+    expect(prompt()).toBeNull();
   });
 });

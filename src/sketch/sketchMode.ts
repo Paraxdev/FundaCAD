@@ -81,7 +81,8 @@ import {
 } from "./directDims";
 import { expandPattern, translated } from "./pattern";
 import { MirrorFlow, type MirrorHost } from "./mirrorFlow";
-import { KeyDrawFlow, type Drawn, type KeyDrawHost, type KeyHit } from "./keyDrawFlow";
+import { KeySurface } from "./keySurface";
+import { KeyDrawFlow, KEY_DRAW_TOOLS, type Drawn, type KeyDrawHost, type KeyHit } from "./keyDrawFlow";
 import { showMirrorPanel } from "../features/mirrorPanel";
 import { mirrorLineColor, mirrorObjectsColor } from "../features/mirrorColors";
 import { onThemeChange } from "../ui/theme";
@@ -432,6 +433,7 @@ export class SketchMode {
   private mirrorFlow: MirrorFlow;
   private dimFlow: DimFlow;
   private keyDraw: KeyDrawFlow;
+  private keySurface = new KeySurface();
   private projectFlow: ProjectFlow;
   private modifyFlow: ModifyFlow;
 
@@ -639,6 +641,8 @@ export class SketchMode {
     );
     this.history.reset(); // fresh history per session (armed once entities load)
     this.keyDraw.reset();
+    this.keySurface.mount();
+    this.keySurface.setStop(KEY_DRAW_TOOLS.has(this.tool));
     this.pickedAt = new Map();
     if (!this.fonts.length)
       void fetchFonts().then((f) => {
@@ -818,6 +822,7 @@ export class SketchMode {
     this.viewport.rig.setOrbitLocked(false); // restore free orbit in model mode
     this.viewport.suspendPicking = false;
     this.active = false;
+    this.keySurface.dispose();
     if (!this.viewSquare) {
       this.viewSquare = true;
       this.onViewSquare?.(true);
@@ -859,6 +864,8 @@ export class SketchMode {
     const preselected = t === "dimension" ? [...this.selected] : [];
     if (t !== this.tool && this.tangentArc) this.setTangentArc(false);
     this.tool = t;
+    this.keyDraw.disarm();
+    this.keySurface.setStop(KEY_DRAW_TOOLS.has(t));
     this.base = null;
     this.inferTag.hide();
     this.chainStart = null;
@@ -2914,6 +2921,8 @@ export class SketchMode {
         this.dim.positionCentred(at.x, at.y);
       },
       prompt: (text) => setPrompt(text),
+      focusSurface: () => this.keySurface.focus(),
+      changed: () => this.onState?.(),
     };
   }
 
@@ -3026,6 +3035,7 @@ export class SketchMode {
       }
       if (action === "cancel-geometry") {
         this.cancelGeometry();
+        this.keyDraw.cancelled();
       } else if (action === "clear-selection") {
         this.selected.clear();
         this.refreshActive();
@@ -3064,7 +3074,20 @@ export class SketchMode {
     // Q and E fall through to the global keymap (Press/Pull, Extrude).
     const t = sketchToolKey(e, this.tool);
     if (t === "tangent-arc") this.setTangentArc(!this.tangentArc);
-    else if (t) this.setTool(t);
+    else if (t) {
+      this.setTool(t);
+      this.keyDraw.armedByKeys();
+    }
+  }
+
+  /** The tool was armed from the keyboard, by a rail button's click that no pointer made. */
+  armedByKeys() {
+    this.keyDraw.armedByKeys();
+  }
+
+  /** The prompt of a keys session, null when a pointer is drawing. */
+  get keyPrompt(): string | null {
+    return this.active ? this.keyDraw.keyPrompt() : null;
   }
 
   private computeGeometry(a: THREE.Vector2, cursor: THREE.Vector2) {

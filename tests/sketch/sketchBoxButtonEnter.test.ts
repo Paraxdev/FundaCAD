@@ -1,7 +1,7 @@
 // Enter on a focused value box button (Confirm, Cancel, an option) is that button's. The sketch's window capture
 // listener hears it first and committed the shape from the cursor, so Cancel on Enter drew the rectangle.
 
-import { noKeyDraw } from "./keyDrawStub";
+import { noKeyDraw, noKeySurface } from "./keyDrawStub";
 import { describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
 import { SketchMode } from "../../src/sketch/sketchMode";
@@ -32,6 +32,7 @@ function rectangleMidDrag() {
     commitFromCursor,
     dim: { isActive: true, ownsTarget: () => true },
     keyDraw: noKeyDraw,
+    keySurface: noKeySurface,
     patternFlow: { hasPending: () => false },
     mirrorFlow: { running: false },
   });

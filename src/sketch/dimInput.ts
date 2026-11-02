@@ -1307,6 +1307,10 @@ export class DimInput {
     return this.active && this.fields.some((f) => f.userDriven);
   }
 
+  hasField(name: string): boolean {
+    return this.active && this.fields.some((f) => f.def.name === name);
+  }
+
   isUserDriven(name: string): boolean {
     const f = this.fields.find((x) => x.def.name === name);
     return !!f && f.userDriven;

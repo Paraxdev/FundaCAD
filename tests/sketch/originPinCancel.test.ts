@@ -5,7 +5,7 @@
 // The methods are the real ones off the prototype; only the viewport, overlay
 // and solver around them are stubs.
 
-import { noKeyDraw } from "./keyDrawStub";
+import { noKeyDraw, noKeySurface } from "./keyDrawStub";
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { SketchMode } from "../../src/sketch/sketchMode";
@@ -49,6 +49,7 @@ function makeSketch(tool: string) {
     glyphs: { setInteractive() {} },
     dim: { isActive: false, ownsTarget: () => false, hide() {} },
     keyDraw: noKeyDraw,
+    keySurface: noKeySurface,
     patternFlow: { hasPending: () => false, flushPending() {} },
     modifyFlow: { offsetting: false, filletArmed: false, setFilletFirst() {}, reset() {} },
     mirrorFlow: { running: false, reset() {} },

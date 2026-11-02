@@ -1,7 +1,7 @@
 // SketchMode's own Mirror wiring: keys, hover, cancel and undo reach the real MirrorFlow. The methods are the real ones
 // off the prototype; the viewport, overlay and panels around them are stubs.
 
-import { noKeyDraw } from "./keyDrawStub";
+import { noKeyDraw, noKeySurface } from "./keyDrawStub";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import * as THREE from "three";
@@ -92,6 +92,7 @@ function makeSketch(pre: string[]) {
     glyphs: { setInteractive() {}, hide() {} },
     dim: { isActive: false, ownsTarget: () => false, hide() {} },
     keyDraw: noKeyDraw,
+    keySurface: noKeySurface,
     patternFlow: { hasPending: () => false, flushPending() {} },
     modifyFlow: { offsetting: false, filletArmed: false, reset() {} },
     dimFlow: { picking: false, plan: null, resetDimPicks() {} },

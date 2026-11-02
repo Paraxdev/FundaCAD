@@ -155,6 +155,19 @@ describe("focusRegion", () => {
     expect(active()).toBe($("#canvas"));
   });
 
+  it("lands the viewport on the key surface while it is a Tab stop, ahead of the canvas", () => {
+    $("#viewport").innerHTML = `<canvas id="canvas" tabindex="0"></canvas>`;
+    $("#main").insertAdjacentHTML("beforeend", `<div id="surface" data-key-surface tabindex="0"></div>`);
+    focusRegion({ kind: "viewport", el: $("#main") });
+    expect(active()).toBe($("#surface"));
+  });
+
+  it("lands the viewport on the Model landmark when the key surface is no Tab stop", () => {
+    $("#main").insertAdjacentHTML("beforeend", `<div id="surface" data-key-surface tabindex="-1"></div>`);
+    focusRegion({ kind: "viewport", el: $("#main") });
+    expect(active()).toBe($("#main"));
+  });
+
   it("keeps the canvas out while it is no Tab stop", () => {
     $("#viewport").innerHTML = `<canvas id="canvas" tabindex="-1"></canvas>`;
     focusRegion({ kind: "viewport", el: $("#main") });

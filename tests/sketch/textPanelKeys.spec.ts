@@ -1,7 +1,7 @@
 // SketchMode listens for keys on the window in the capture phase, ahead of anything inside the Text tool's panel. Its
 // onKey is the real one off the prototype, wired the way SketchMode wires it; the panel is the real one, mounted.
 
-import { noKeyDraw } from "./keyDrawStub";
+import { noKeyDraw, noKeySurface } from "./keyDrawStub";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { nextTick } from "vue";
 import { enableAutoUnmount, mount } from "@vue/test-utils";
@@ -46,6 +46,7 @@ function sketchInTextTool() {
     moveDrag: null,
     dim: { isActive: false, ownsTarget: () => false },
     keyDraw: noKeyDraw,
+    keySurface: noKeySurface,
     patternFlow: { hasPending: () => false },
     mirrorFlow: { running: false },
     modifyFlow: { offsetting: false, filletArmed: false },

@@ -15,6 +15,12 @@ export const KEY_DRAW_TOOLS: ReadonlySet<string> = new Set(["line", "rectangle",
 
 const OPENERS: ReadonlySet<string> = new Set([..."0123456789", "-", ".", "@"]);
 
+export const KEY_PROMPTS = {
+  armed: "Enter or a digit types X and Y · Esc",
+  point: "Type X and Y, or @dx,dy from the last point · Enter · Esc",
+  size: "Type the size, or @dx,dy · Enter · Esc",
+};
+
 export const EDGE_ON_PROMPT = "The sketch plane is edge-on, turn the view to draw on it";
 
 /** What a placed point carries, the same fields a pointer click's snap result does. */
@@ -42,12 +48,17 @@ export interface KeyDrawHost {
   place(hit: KeyHit): Drawn | null;
   positionBox(p: THREE.Vector2): void;
   prompt(text: string): void;
+  focusSurface(): boolean;
+  /** The prompt or the surface's state may have changed. */
+  changed(): void;
 }
 
 export class KeyDrawFlow {
   private last: THREE.Vector2 | null = null;
   // The point in flight came from X and Y, so Enter on its untouched size box has no click to wait for.
   private session = false;
+  // A tool armed, or a point opened or placed, by keys: the prompt speaks keys and focus is kept off the page body.
+  private keys = false;
 
   constructor(private readonly host: KeyDrawHost) {}
 
@@ -66,15 +77,54 @@ export class KeyDrawFlow {
 
   reset() {
     this.last = null;
+    this.disarm();
+  }
+
+  /** A tool change ends a keys session, the arming key starts the next one through armedByKeys. */
+  disarm() {
     this.session = false;
+    this.keys = false;
+  }
+
+  /** A letter or a keyboard click on the rail armed the tool: focus goes where the next Enter or digit is heard. */
+  armedByKeys() {
+    if (!this.armed()) return;
+    this.keys = true;
+    this.host.focusSurface();
+    this.host.changed();
+  }
+
+  /** The text for the prompt line in a keys session, null for a pointer's own prompt. */
+  keyPrompt(): string | null {
+    if (!this.keys || !this.armed()) return null;
+    const dim = this.host.dim();
+    if (dim.hasField("x")) return KEY_PROMPTS.point;
+    return this.host.base() ? KEY_PROMPTS.size : KEY_PROMPTS.armed;
+  }
+
+  /** A box closed onto the page body: focus goes back to the surface so the next key still reaches the sketch. */
+  settleFocus() {
+    if (!this.keys || !this.armed() || this.host.dim().isActive) return;
+    const at = document.activeElement;
+    if (!at || at === document.body) this.host.focusSurface();
+  }
+
+  /** Escape dropped what was half drawn. */
+  cancelled() {
+    this.settleFocus();
+    if (this.keys) this.host.changed();
   }
 
   drawn(done: Drawn) {
     announce(drawnSentence(done.entity, this.host.entities(), done.closed), "polite", { key: "sketch-point" });
+    this.settleFocus();
+    this.host.changed();
   }
 
   pointerPressed() {
-    this.session = false;
+    const was = this.keys;
+    this.disarm();
+    if (was) this.host.changed();
   }
 
   /** Enter on a size box nobody touched, with the cursor still on the point: X and Y for the next one. */
@@ -104,6 +154,7 @@ export class KeyDrawFlow {
     if (this.host.dim().isActive) this.host.dim().focus();
     else this.open();
     if (opener) this.host.dim().typeInto("x", e.key);
+    this.host.changed();
     return true;
   }
 
@@ -115,10 +166,12 @@ export class KeyDrawFlow {
     e.stopPropagation();
     this.open();
     dim.typeInto("x", "@");
+    this.host.changed();
     return true;
   }
 
   private open() {
+    this.keys = true;
     const dim = this.host.dim();
     const at = this.host.cursor();
     dim.show(
@@ -147,6 +200,7 @@ export class KeyDrawFlow {
       return;
     }
     this.session = true;
+    this.keys = true;
     const p = new THREE.Vector2(r.x, r.y);
     const c = hitAt(p, this.host.candidates());
     const done = this.host.place({ p, kind: c?.kind ?? "free", label: c?.label, ref: c?.ref });
@@ -154,5 +208,7 @@ export class KeyDrawFlow {
     const at = pointSentence(p, c, ents);
     const text = done ? `${at}. ${drawnSentence(done.entity, ents, done.closed)}` : at;
     announce(text, "polite", { key: "sketch-point" });
+    this.settleFocus();
+    this.host.changed();
   }
 }
