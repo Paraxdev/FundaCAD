@@ -149,6 +149,24 @@ describe("a first point typed in X and Y", () => {
     }
   });
 
+  it("opens on a digit, a minus or an @ before the tool's own key handling sees it, and a typed X goes on to the first point", async () => {
+    for (const k of ["5", "-", ".", "@"]) {
+      const { s } = makeSketch("line");
+      expect(key(s, k), k).toBe(true);
+      expect(fieldNames()).toEqual(["x", "y"]);
+      await new Promise<void>((r) => requestAnimationFrame(() => r()));
+      expect(fieldEl("x").value).toBe(k);
+      dim?.dispose();
+    }
+    const { s, calls } = makeSketch("line");
+    key(s, "3");
+    type("x", "30");
+    type("y", "12");
+    fieldEl("y").dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    expect(s.base).toEqual(v(30, 12));
+    expect(calls.setTool).toEqual([]);
+  });
+
   it("pins the origin when typed on it, as a click on it does", () => {
     const { s } = makeSketch("rectangle");
     key(s, "Enter");

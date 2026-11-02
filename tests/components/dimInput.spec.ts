@@ -1142,3 +1142,66 @@ describe("DimInput.wasTyped", () => {
     expect(dim.wasTyped("x")).toBe(false);
   });
 });
+
+describe("DimInput.typeInto", () => {
+  const field = (name: string) => document.querySelector<HTMLInputElement>(`.dim-field[data-field="${name}"] input`)!;
+  const frame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
+  const open = () => {
+    dim.show(
+      [
+        { name: "x", label: "X", free: true },
+        { name: "y", label: "Y", free: true },
+      ],
+      () => {},
+    );
+    dim.updateFromCursor({ x: 12.5, y: -3 });
+  };
+
+  it("replaces a seeded value, then a frame and a second character give both", async () => {
+    open();
+    dim.typeInto("x", "7");
+    await frame();
+    dim.typeInto("x", "3");
+    await frame();
+    expect(field("x").value).toBe("73");
+    expect(field("y").value).toBe("-3");
+    expect(document.activeElement).toBe(field("x"));
+    expect([field("x").selectionStart, field("x").selectionEnd]).toEqual([2, 2]);
+    expect([dim.wasTyped("x"), dim.wasTyped("y"), dim.isUserDriven("x")]).toEqual([true, false, true]);
+  });
+
+  it("keeps the character the open box's own refocus frame would have selected over", async () => {
+    open();
+    dim.typeInto("y", "-");
+    dim.typeInto("y", "4");
+    await frame();
+    await frame();
+    expect(field("y").value).toBe("-4");
+    expect(field("x").value).toBe("12.5");
+    expect([field("y").selectionStart, field("y").selectionEnd]).toEqual([2, 2]);
+  });
+
+  it("fires the box's input path, so a refused value is flagged at once", () => {
+    open();
+    dim.typeInto("x", "2");
+    expect(dim.getRaw("x")).toBe("2");
+    expect(dim.getRaw("y")).toBe("-3");
+  });
+
+  it("does nothing for a field the box lacks or when no box is open", () => {
+    dim.typeInto("x", "5");
+    open();
+    dim.typeInto("z", "5");
+    expect([field("x").value, field("y").value]).toEqual(["12.5", "-3"]);
+    expect(dim.wasTyped("x")).toBe(false);
+  });
+
+  it("goes back to selecting a field on focus once the frame has run", async () => {
+    open();
+    dim.typeInto("x", "9");
+    await frame();
+    await frame();
+    dim.focus();
+    expect([field("x").selectionStart, field("x").selectionEnd]).toEqual([0, 1]);
+  });
+});

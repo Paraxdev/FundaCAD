@@ -283,6 +283,7 @@ export class DimInput {
   private typedProblem: string | null = null;
   /** Fields a keystroke changed since show(), which a confirm does not clear the way it clears `typed`. */
   private typedNames = new Set<string>();
+  private holdCaret = false;
   private focusName: string | null = null;
   private boxNo = ++boxCount;
   private helpId = `dim-help-${this.boxNo}`;
@@ -869,8 +870,23 @@ export class DimInput {
     const f = this.fields.find((x) => x.def.name === this.focusName && !x.hidden) ?? this.fields[0];
     if (f && this.active) {
       f.input.focus();
-      f.input.select();
+      if (!this.holdCaret) f.input.select();
     }
+  }
+
+  /** Writes text into a field as a keystroke would, replacing a value the tool seeded and otherwise appending. */
+  typeInto(name: string, text: string) {
+    const f = this.fields.find((x) => x.def.name === name && !x.hidden);
+    if (!f || !this.active) return;
+    this.focusName = name;
+    // show() refocuses next frame and selects the whole value, which would swallow what is typed before then.
+    this.holdCaret = true;
+    requestAnimationFrame(() => (this.holdCaret = false));
+    this.focus();
+    const input = f.input;
+    input.value = f.userDriven ? input.value + text : text;
+    input.setSelectionRange(input.value.length, input.value.length);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
   }
 
   focusField(name: string) {

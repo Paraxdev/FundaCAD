@@ -1,7 +1,8 @@
-// Drawing a line, rectangle or circle without a pointer: Enter opens a box with X and Y for the first point.
+// Drawing a line, rectangle or circle without a pointer: Enter, a digit, -, . or @ opens a box with X and Y for the first point.
 
 import * as THREE from "three";
 import { announce } from "../ui/announce";
+import { singleKeysOn } from "../ui/a11yPrefs";
 import { keyTargetFree } from "../ui/focus";
 import type { DimInput } from "./dimInput";
 import { hitAt } from "./keyCursor";
@@ -10,6 +11,8 @@ import { pointSentence } from "./sketchSpeech";
 import type { ResolvedEntity, SnapCandidate, SnapKind, SnapRef } from "./snap";
 
 export const KEY_DRAW_TOOLS: ReadonlySet<string> = new Set(["line", "rectangle", "circle"]);
+
+const OPENERS: ReadonlySet<string> = new Set([..."0123456789", "-", ".", "@"]);
 
 export const EDGE_ON_PROMPT = "The sketch plane is edge-on, turn the view to draw on it";
 
@@ -57,7 +60,12 @@ export class KeyDrawFlow {
   }
 
   onKey(e: KeyboardEvent): boolean {
-    if (e.key !== "Enter" || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return false;
+    const opener = OPENERS.has(e.key);
+    if ((e.key !== "Enter" && !opener) || e.repeat || e.metaKey) return false;
+    // AltGr arrives as Ctrl+Alt on Windows, and it is how some layouts type @.
+    const altGr = e.key === "@" && e.ctrlKey && e.altKey;
+    if (!altGr && (e.ctrlKey || e.altKey)) return false;
+    if (opener && !singleKeysOn()) return false;
     if (!this.armed() || this.host.base() || !keyTargetFree(e.target)) return false;
     e.preventDefault();
     if (this.host.planeTooEdgeOn()) {
@@ -66,6 +74,7 @@ export class KeyDrawFlow {
     }
     if (this.host.dim().isActive) this.host.dim().focus();
     else this.open();
+    if (opener) this.host.dim().typeInto("x", e.key);
     return true;
   }
 

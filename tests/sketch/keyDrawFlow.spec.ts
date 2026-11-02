@@ -16,6 +16,7 @@ vi.mock("../../src/ui/announce", () => ({ announce: vi.fn(), cancelAnnouncement:
 import { DimInput } from "../../src/sketch/dimInput";
 import { EDGE_ON_PROMPT, KeyDrawFlow, type KeyDrawHost, type KeyHit } from "../../src/sketch/keyDrawFlow";
 import type { ResolvedEntity, SnapCandidate } from "../../src/sketch/snap";
+import { setA11yPref } from "../../src/ui/a11yPrefs";
 import { announce } from "../../src/ui/announce";
 
 let dim: DimInput;
@@ -28,6 +29,7 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 beforeEach(() => vi.mocked(announce).mockClear());
+afterEach(() => setA11yPref("singleKeys", true));
 
 const v = (x: number, y: number) => new THREE.Vector2(x, y);
 
@@ -270,5 +272,119 @@ describe("pending", () => {
     state.base = null;
     state.tool = "select";
     expect(flow.pending()).toBe(false);
+  });
+});
+
+const frame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
+
+describe("a character opens the box with it typed in X", () => {
+  for (const ch of ["7", "0", "-", ".", "@"]) {
+    for (const tool of ["line", "rectangle", "circle"]) {
+      it(`${JSON.stringify(ch)} in the ${tool} tool`, async () => {
+        const { state } = rig(tool);
+        const e = press(free(), { key: ch });
+        expect(e.defaultPrevented).toBe(true);
+        expect(boxFields()).toEqual(["x", "y"]);
+        await frame();
+        expect(field("x").value).toBe(ch);
+        expect(field("y").value).toBe("-7.25");
+        expect(document.activeElement).toBe(field("x"));
+        expect(state.boxAt).toEqual([v(13.5, -7.25)]);
+        expect(state.placed).toEqual([]);
+      });
+    }
+  }
+
+  it("goes on typing into X, and reads the whole entry on Enter", async () => {
+    const { state } = rig("rectangle");
+    press(free(), { key: "2" });
+    await frame();
+    field("x").value += "5";
+    field("x").dispatchEvent(new Event("input", { bubbles: true }));
+    press(field("x"), { key: "Tab" });
+    type("y", "-7");
+    press(field("y"));
+    expect(state.placed.map((h) => h.p)).toEqual([v(25, -7)]);
+  });
+
+  it("types each of two quick characters, the first being a frame before the second", async () => {
+    rig("line");
+    press(free(), { key: "1" });
+    await frame();
+    press(free(), { key: "2" });
+    expect(field("x").value).toBe("12");
+  });
+
+  it("types into an open box when focus has left it", () => {
+    rig("circle");
+    press(free());
+    type("x", "4");
+    (document.activeElement as HTMLElement).blur();
+    press(free(), { key: "5" });
+    expect(field("x").value).toBe("45");
+  });
+
+  it("leaves a letter alone", () => {
+    rig("line");
+    for (const key of ["a", "r", "e", ","]) expect(press(free(), { key }).defaultPrevented, key).toBe(false);
+    expect(dim.isActive).toBe(false);
+  });
+
+  it("leaves Ctrl, Meta and Alt chords alone, but takes an AltGr @", async () => {
+    rig("line");
+    for (const init of [{ ctrlKey: true }, { metaKey: true }, { altKey: true }]) {
+      expect(press(free(), { key: "5", ...init }).defaultPrevented, JSON.stringify(init)).toBe(false);
+      expect(press(free(), { key: "@", ...init }).defaultPrevented, `@ ${JSON.stringify(init)}`).toBe(false);
+    }
+    expect(dim.isActive).toBe(false);
+    expect(press(free(), { key: "@", ctrlKey: true, altKey: true }).defaultPrevented).toBe(true);
+    await frame();
+    expect(field("x").value).toBe("@");
+  });
+
+  it("takes a shifted character, as an AZERTY digit comes", async () => {
+    rig("line");
+    expect(press(free(), { key: "4", shiftKey: true }).defaultPrevented).toBe(true);
+    await frame();
+    expect(field("x").value).toBe("4");
+  });
+
+  it("ignores a held key and every opener on a control or inside the own box", () => {
+    rig("line");
+    expect(press(free(), { key: "5", repeat: true }).defaultPrevented).toBe(false);
+    expect(press(document.getElementById("rail")!, { key: "5" }).defaultPrevented).toBe(false);
+    expect(dim.isActive).toBe(false);
+    press(free());
+    expect(press(field("x"), { key: "5" }).defaultPrevented).toBe(false);
+    expect(field("x").value).toBe("13.5");
+  });
+
+  it("is left alone in other tools and once a point is placed", () => {
+    for (const tool of ["select", "arc", "polygon"]) {
+      rig(tool);
+      expect(press(free(), { key: "5" }).defaultPrevented, tool).toBe(false);
+      expect(dim.isActive, tool).toBe(false);
+      dim.dispose();
+    }
+    const { state } = rig("rectangle");
+    state.base = v(1, 2);
+    expect(press(free(), { key: "5" }).defaultPrevented).toBe(false);
+  });
+
+  it("edge-on: says so and opens nothing", () => {
+    const { state } = rig("line");
+    state.edgeOn = true;
+    expect(press(free(), { key: "5" }).defaultPrevented).toBe(true);
+    expect(state.prompts).toEqual([EDGE_ON_PROMPT]);
+    expect(dim.isActive).toBe(false);
+  });
+
+  it("with single key shortcuts off opens nothing and leaves the key alone, Enter still opens", () => {
+    rig("line");
+    setA11yPref("singleKeys", false);
+    for (const key of ["5", "-", ".", "@"]) expect(press(free(), { key }).defaultPrevented, key).toBe(false);
+    expect(dim.isActive).toBe(false);
+    expect(press(free()).defaultPrevented).toBe(true);
+    expect(boxFields()).toEqual(["x", "y"]);
   });
 });
