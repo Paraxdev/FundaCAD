@@ -5,7 +5,7 @@ import * as THREE from "three";
 import { singleKeysOn } from "../ui/a11yPrefs";
 import { announce, cancelAnnouncement } from "../ui/announce";
 import { escapeClaimed } from "../ui/escapeClaim";
-import { isEditableTarget, isRailButton, keyTargetFree, widgetOwnsKey } from "../ui/focus";
+import { isEditableTarget, keyTargetFree, widgetOwnsKey } from "../ui/focus";
 import type { DimInput } from "./dimInput";
 import { coarseStep, fineStep, hasSnap, hitAt, snapRing, stepCoord } from "./keyCursor";
 import { readPoint } from "./pointEntry";
@@ -254,11 +254,10 @@ export class KeyDrawFlow {
     if (this.host.planeTooEdgeOn()) return false;
     const dim = this.host.dim();
     const t = e.target;
-    const rail = isRailButton(t);
     if (dim.ownsTarget(t)) {
       // Once something is typed the arrows are the caret's, and Alt+Down opens the unit list.
       if (!dim.ownsField(t) || dim.touched() || e.altKey) return false;
-    } else if (!keyTargetFree(t) && !rail) {
+    } else if (!keyTargetFree(t)) {
       if (e.altKey || isEditableTarget(t) || widgetOwnsKey(e)) return false;
       // A plain control has no use for the key, so it only loses the view step.
       e.preventDefault();
@@ -277,7 +276,6 @@ export class KeyDrawFlow {
     const said = this.stepSaid === step ? null : step;
     this.stepSaid = step;
     this.moveTo(p, hitAt(p, this.host.candidates()), said);
-    if (rail) this.host.focusSurface();
     this.host.changed();
     return true;
   }

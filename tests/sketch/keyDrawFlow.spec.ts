@@ -13,6 +13,11 @@ vi.mock("../../src/sketch/solver", () => ({
 }));
 vi.mock("../../src/ui/announce", () => ({ announce: vi.fn(), cancelAnnouncement: vi.fn() }));
 
+import { mount } from "@vue/test-utils";
+import { nextTick } from "vue";
+import Select from "../../src/components/ui/Select.vue";
+import Slider from "../../src/components/ui/Slider.vue";
+import Toolbar from "../../src/components/ui/Toolbar.vue";
 import { DimInput } from "../../src/sketch/dimInput";
 import { EDGE_ON_PROMPT, KeyDrawFlow, type Drawn, type KeyDrawHost, type KeyHit } from "../../src/sketch/keyDrawFlow";
 import type { ResolvedEntity, SnapCandidate } from "../../src/sketch/snap";
@@ -851,18 +856,86 @@ describe("arrows move the cursor", () => {
     expect(arrow("ArrowLeft", document.getElementById("panel")!, { altKey: true }).defaultPrevented).toBe(false);
   });
 
-  it("moves from a rail button and takes focus to the surface", () => {
-    const { state } = rig("rectangle");
-    document.body.insertAdjacentHTML(
-      "beforeend",
-      '<nav class="tool-rail"><div role="toolbar"><button id="tool">t</button></div></nav>',
-    );
-    const e = arrow("ArrowDown", document.getElementById("tool")!);
-    expect(e.defaultPrevented).toBe(true);
-    expect(state.cursor).toEqual(v(13.5, -10));
-    expect(state.surfaced).toBe(1);
-    arrow("ArrowDown", free());
-    expect(state.surfaced).toBe(1);
+  describe("on the real widgets that move by arrows, a draw tool armed", () => {
+    const untouched = (state: { moved: KeyHit[]; surfaced: number }) => {
+      expect(state.moved).toEqual([]);
+      expect(state.surfaced).toBe(0);
+    };
+
+    it("leaves a rail's vertical Toolbar its walk", () => {
+      const { state } = rig("rectangle");
+      const w = mount(Toolbar, {
+        attachTo: document.body,
+        props: { label: "Tools", orientation: "vertical" },
+        slots: { default: '<button id="a">a</button><button id="b">b</button><button id="c">c</button>' },
+      });
+      const a = document.getElementById("a")!;
+      a.focus();
+      arrow("ArrowDown", a);
+      expect(document.activeElement?.id).toBe("b");
+      arrow("ArrowDown", document.activeElement!);
+      expect(document.activeElement?.id).toBe("c");
+      arrow("ArrowUp", document.activeElement!);
+      expect(document.activeElement?.id).toBe("b");
+      untouched(state);
+      w.unmount();
+    });
+
+    it("leaves a Select its list", async () => {
+      const { state } = rig("rectangle");
+      const w = mount(Select, {
+        attachTo: document.body,
+        props: {
+          modelValue: "a",
+          options: [
+            { value: "a", label: "A" },
+            { value: "b", label: "B" },
+          ],
+          "aria-label": "Pick",
+        },
+      });
+      const trigger = w.get('[role="combobox"]').element as HTMLElement;
+      trigger.focus();
+      arrow("ArrowDown", trigger);
+      await nextTick();
+      expect(trigger.getAttribute("aria-expanded")).toBe("true");
+      untouched(state);
+      w.unmount();
+    });
+
+    it("leaves a Slider its value", () => {
+      const { state } = rig("rectangle");
+      const w = mount(Slider, { attachTo: document.body, props: { modelValue: 5, min: 0, max: 10, step: 1, label: "S" } });
+      const thumb = w.get('[role="slider"], input[type="range"]').element as HTMLElement;
+      thumb.focus();
+      const e = arrow("ArrowRight", thumb);
+      expect(e.defaultPrevented).toBe(true);
+      expect(w.emitted("update:modelValue")?.[0]).toEqual([6]);
+      untouched(state);
+      w.unmount();
+    });
+
+    it.each([
+      ["a listbox option", '<div role="listbox"><div role="option" id="t" tabindex="0">o</div></div>'],
+      ["a menu row", '<div class="ui-menu"><button role="menuitem" id="t">m</button></div>'],
+      ["a tab", '<div role="tablist"><button role="tab" id="t">t</button></div>'],
+      ["a radio", '<div role="radiogroup"><button role="radio" id="t">r</button></div>'],
+      ["a tree row", '<div role="tree"><div role="treeitem" id="t" tabindex="0">r</div></div>'],
+      ["a timeline step", '<div role="list"><div role="listitem"><div role="button" id="t" tabindex="0">s</div></div></div>'],
+      ["a text field", '<input type="text" id="t">'],
+      ["a number field", '<input type="number" id="t">'],
+      ["a text area", '<textarea id="t"></textarea>'],
+    ])("takes nothing from %s", (_, html) => {
+      for (const parent of ["main", "body"]) {
+        const { state } = rig("rectangle");
+        (parent === "main" ? document.getElementById("main")! : document.body).insertAdjacentHTML("beforeend", html);
+        for (const key of ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]) {
+          expect(arrow(key, document.getElementById("t")!).defaultPrevented, key).toBe(false);
+          expect(arrow(key, document.getElementById("t")!, { shiftKey: true }).defaultPrevented, key).toBe(false);
+        }
+        untouched(state);
+      }
+    });
   });
 
   describe("in the value box", () => {

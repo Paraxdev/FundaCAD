@@ -43,7 +43,8 @@ const ARROW_WIDGETS = roles([
   "spinbutton",
   "combobox",
 ])
-  .concat("input[type=range]", ".ui-menu")
+  // The timeline's steps are buttons in a list, walked by arrows.
+  .concat("input[type=range]", ".ui-menu", '[role="list"]')
   .join(",");
 // Toolbars, tabs and radios leave out letters, Enter and Space, so E after clicking a rail button still starts Extrude.
 const TYPING_WIDGETS = roles(["menu", "menubar", "listbox", "tree", "treegrid", "grid", "combobox"])

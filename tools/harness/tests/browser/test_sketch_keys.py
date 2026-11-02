@@ -391,6 +391,29 @@ def test_arrows_move_the_cursor_with_a_draw_tool_and_turn_the_view_with_select(s
     no_pointer(s)
 
 
+def test_the_rail_walks_by_arrows_with_a_draw_tool_armed_and_the_cursor_stays(s):
+    kb = s.page.keyboard
+    to_items_plane(s)
+    assert s.page.evaluate("() => window.sketch.tool") == "rectangle"
+    for _ in range(8):
+        kb.press("F6")
+        if s.page.evaluate("() => !!document.activeElement?.closest('.tool-rail')"):
+            break
+    pose = s.page.evaluate(POSE)
+    seen = [s.page.evaluate(LABEL)]
+    for _ in range(3):
+        kb.press("ArrowDown")
+        seen.append(s.page.evaluate(LABEL))
+    assert len(set(seen)) == 4, seen
+    assert s.page.evaluate("() => !!document.activeElement?.closest('.tool-rail')")
+    kb.press("ArrowUp")
+    assert s.page.evaluate(LABEL) == seen[2]
+    assert s.page.evaluate("() => [window.sketch.lastCursor.x, window.sketch.lastCursor.y]") == [0, 0]
+    assert s.page.evaluate(POSE) == pose
+    assert s.page.evaluate("() => window.sketch.base") is None
+    no_pointer(s)
+
+
 def test_arrows_turn_the_view_when_the_sketch_plane_is_edge_on(s):
     kb = s.page.keyboard
     to_items_plane(s)
