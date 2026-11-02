@@ -339,6 +339,14 @@ export class FaceOffsetTool {
       () => this.onTyped(),
     );
     // The box says only what this tool judged, held refusals included.
+    this.dim.restoresOnUndo(
+      "distance",
+      () => this.value,
+      (value) => {
+        this.value = value;
+        this.refreshPreview();
+      },
+    );
     this.dim.showOwnProblem(this.outcomes.refusal);
     this.syncToggle();
     this.dim.updateFromCursor({ distance: this.readout() });

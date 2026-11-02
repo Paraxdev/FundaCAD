@@ -501,6 +501,22 @@ export class PressPullTool {
       undefined,
       () => this.onTyped(),
     );
+    this.dim.restoresOnUndo(
+      "distance",
+      () => this.value,
+      (value) => {
+        this.value = value;
+        this.refreshPreview();
+      },
+    );
+    this.dim.restoresOnUndo(
+      "taper",
+      () => this.taper,
+      (taper) => {
+        this.taper = taper;
+        this.refreshPreview();
+      },
+    );
     this.dim.setOptionHidden("direction", !this.holeAxis);
     this.syncToggle();
     // A round face opens at the size it already is, the number to edit; a flat face opens at 0, a travel.

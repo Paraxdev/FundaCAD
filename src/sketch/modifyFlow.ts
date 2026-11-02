@@ -430,6 +430,13 @@ export class ModifyFlow {
       () => this.commitOffset(),
       () => this.cancelOffset(),
     );
+    this.host.dim().restoresOnUndo(
+      "offset",
+      () => ({ side: this.offsetPick?.side ?? 1, mag: this.offsetPick?.mag ?? 0 }),
+      (held) => {
+        if (this.offsetPick) Object.assign(this.offsetPick, held);
+      },
+    );
     setPrompt("Move to pick the side, or type a distance · Enter · Esc");
   }
 

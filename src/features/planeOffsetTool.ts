@@ -67,6 +67,14 @@ export class PlaneOffsetTool {
       () => this.commit(),
       () => this.cancel(),
     );
+    this.dim.restoresOnUndo(
+      "offset",
+      () => this.value,
+      (value) => {
+        this.value = value;
+        this.updateGhost();
+      },
+    );
     const s = this.viewport.projectToScreen(this.anchor);
     this.dim.position(s.x, s.y);
     this.dim.updateFromCursor({ offset: 0 });

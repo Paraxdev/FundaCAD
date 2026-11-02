@@ -177,6 +177,23 @@ export class PatternTool {
       () => this.commitSoon(),
       () => this.cancel(),
     );
+    const restoring = (name: string, key: "value" | "valueY" | "count" | "countY") =>
+      this.dim.restoresOnUndo(
+        name,
+        () => this[key],
+        (held) => {
+          this[key] = held;
+          this.refreshPrompt();
+          this.updateGhosts();
+        },
+      );
+    restoring("spacingX", "value");
+    restoring("spacingY", "valueY");
+    restoring("countX", "count");
+    restoring("countY", "countY");
+    restoring("spacing", "value");
+    restoring("angle", "value");
+    restoring("count", "count");
     this.pushFields();
     this.refreshPrompt();
     this.updateGhosts();

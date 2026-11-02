@@ -123,6 +123,16 @@ export class JointTool {
       () => this.commit(),
       () => this.cancel(),
     );
+    for (const name of ["offset", "angle"] as const) {
+      this.dim.restoresOnUndo(
+        name,
+        () => this[name],
+        (held) => {
+          this[name] = held;
+          this.pushPreview();
+        },
+      );
+    }
     this.dim.updateFromCursor({ offset: this.offset, angle: this.angle });
     setPrompt(
       "Drag the arrow to slide the joined body along the mate axis, the dial to turn it about the axis. Either can be typed. Enter applies, Esc cancels.",

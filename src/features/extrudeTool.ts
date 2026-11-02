@@ -314,7 +314,7 @@ export class ExtrudeTool {
    *  from lagging one word behind until Enter. */
   private onTypedDistance() {
     if (this.phase !== "drag") return;
-    this.touched = true;
+    if (this.dim.hasTyped()) this.touched = true;
     this.held.sync(this.pending);
     if (!this.dim.isUserDriven("distance")) return;
     const v = this.dim.getValue("distance");
@@ -487,6 +487,22 @@ export class ExtrudeTool {
       },
       undefined,
       () => this.onTypedDistance(),
+    );
+    this.dim.restoresOnUndo(
+      "distance",
+      () => ({ distance: this.distance, touched: this.touched }),
+      (held) => {
+        Object.assign(this, held);
+        this.updatePreview();
+      },
+    );
+    this.dim.restoresOnUndo(
+      "taper",
+      () => this.taper,
+      (taper) => {
+        this.taper = taper;
+        this.updatePreview();
+      },
     );
     this.dim.updateFromCursor({ taper: this.taper });
     if (this.editId) {

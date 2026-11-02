@@ -132,6 +132,8 @@ interface Field {
   hidden?: boolean;
   /** What the browser's own undo of this field would act on, see `ownsHistoryKey`. */
   edit?: FieldEdit;
+  /** Reads the tool's value behind this field, returning what puts it back, see `restoresOnUndo`. */
+  capture?: () => () => void;
 }
 
 interface FieldEdit {
@@ -144,6 +146,7 @@ interface FieldEdit {
   userDriven: boolean;
   typed: boolean;
   lastGood: number | null;
+  restore: (() => void) | null;
 }
 
 const isHistoryInput = (t: string) => t === "historyUndo" || t === "historyRedo";
@@ -489,6 +492,7 @@ export class DimInput {
           userDriven: field.userDriven,
           typed: !!field.typed,
           lastGood: field.lastGood,
+          restore: field.capture?.() ?? null,
         };
       });
       input.addEventListener("input", (e) => {
@@ -501,10 +505,11 @@ export class DimInput {
           edit.redoable = type === "historyUndo" || (type === "historyRedo" && input.value !== edit.end);
         }
         // Only an undo lets a field go: text typed over with the same text is still typing, and locks it.
-        if (edit && type === "historyUndo" && input.value === edit.from) {
+        const takenBack = edit && type === "historyUndo" && input.value === edit.from;
+        if (edit && type === "historyUndo") field.lastGood = edit.lastGood;
+        if (takenBack) {
           field.userDriven = edit.userDriven;
           field.typed = edit.typed;
-          field.lastGood = edit.lastGood;
         } else {
           field.userDriven = true; // typing freezes the field from cursor tracking
           field.typed = true;
@@ -518,6 +523,7 @@ export class DimInput {
         this.setTypedProblem(
           this.fieldProblem(field) ?? this.fields.map((x) => this.fieldProblem(x)).find(Boolean) ?? null,
         );
+        if (takenBack) edit.restore?.();
         this.onInput?.();
       });
       this.sizeToContent(field);
@@ -1258,6 +1264,17 @@ export class DimInput {
     f.lastGood = null;
     f.userDriven = true;
     this.sizeToContent(f);
+  }
+
+  /** For a tool that keeps its own value and reads the field only while it is user driven: Ctrl+Z taking the typing back
+   *  puts back what the tool held before it, which the text cannot say (a drag's sign). A no-op on a field not shown. */
+  restoresOnUndo<T>(name: string, read: () => T, write: (held: T) => void) {
+    const f = this.fields.find((x) => x.def.name === name);
+    if (!f) return;
+    f.capture = () => {
+      const held = read();
+      return () => write(held);
+    };
   }
 
   /** `seed` for a value that is not a number, such as a size name. */

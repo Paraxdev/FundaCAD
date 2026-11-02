@@ -205,6 +205,16 @@ export class ThreadTool {
       () => this.commit(),
       () => this.cancel(),
     );
+    for (const name of ["pitch", "length"] as const) {
+      this.dim.restoresOnUndo(
+        name,
+        () => this[name],
+        (held) => {
+          this[name] = held;
+          this.valueChanged();
+        },
+      );
+    }
     const s = this.viewport.projectToScreen(this.origin);
     this.dim.position(s.x, s.y);
     this.dim.updateFromCursor({ pitch: this.pitch, length: this.length });

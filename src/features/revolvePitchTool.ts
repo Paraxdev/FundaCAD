@@ -164,6 +164,17 @@ export class RevolvePitchTool {
       () => this.commit(),
       () => this.cancel(),
     );
+    for (const name of ["pitch", "angle"] as const) {
+      this.dim.restoresOnUndo(
+        name,
+        () => this[name],
+        (held) => {
+          this[name] = held;
+          this.refresh();
+          this.schedulePreview();
+        },
+      );
+    }
     // Shown, not seeded: seeding locks a field against cursor tracking, and the box read 0 through the whole drag.
     this.dim.updateFromCursor({ pitch: this.pitch, angle: this.angle });
     setPrompt(

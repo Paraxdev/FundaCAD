@@ -296,3 +296,54 @@ def test_two_typed_fields_are_taken_back_before_the_sketch_has_the_key(s):
     assert s.page.evaluate("() => window.sketch.entities.length") == drawn - 1
     s.press("Escape")
     s.press("Escape")
+
+
+def type_seven_and_take_it_back(s):
+    s.page.keyboard.type("7")
+    s.page.wait_for_timeout(400)
+    s.page.keyboard.press("Control+z")
+
+
+def open_on_block(s, tool):
+    s.press("Escape")
+    s.new_document()
+    s.open_file(BLOCK)
+    s.view("iso")
+    s.pick_edge("between top front") if tool == "Fillet" else s.pick_face("top")
+    s.tool(tool)
+    s.settle()
+
+
+@pytest.mark.parametrize("tool", ["Shell", "Extrude"])
+def test_enter_straight_after_a_field_undo_on_a_face_commits_nothing_as_the_field_shows_nothing(s, tool):
+    open_on_block(s, tool)
+    start = fields(s)
+    assert start["values"][0] == "0"
+    type_seven_and_take_it_back(s)
+    s.page.keyboard.press("Enter")
+    assert fields(s)["steps"] == ["box"], "the 7 was taken back"
+    assert fields(s)["values"] == start["values"]
+    assert s.bodies(raw=True)[0]["faces"] == 6, "nor does the preview keep it"
+
+
+def test_enter_straight_after_a_field_undo_commits_the_fillet_the_field_shows(s):
+    open_on_block(s, "Fillet")
+    shown = fields(s)["values"][0]
+    type_seven_and_take_it_back(s)
+    s.page.keyboard.press("Enter")
+    s.settle()
+    assert (s.last_error(), last_step(s)["radius"]) == ("none", float(shown))
+
+
+@pytest.mark.parametrize("towards", [(0.5, 0.35), (0.5, 0.85)])
+def test_enter_straight_after_a_field_undo_commits_the_extrude_the_field_shows(s, towards):
+    extrude_on_sketch(s)
+    sweep(s, towards)
+    shown = fields(s)["values"][0]
+    dragged = s.page.evaluate("() => window.extrude.distance")
+    assert abs(abs(dragged) - float(shown)) < 0.01
+    type_seven_and_take_it_back(s)
+    assert fields(s)["values"][0] == shown
+    s.page.keyboard.press("Enter")
+    s.settle()
+    assert last_step(s)["distance"] == pytest.approx(dragged, abs=1e-3), "the drag's depth and its side"

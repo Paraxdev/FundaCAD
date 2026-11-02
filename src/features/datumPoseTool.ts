@@ -127,6 +127,16 @@ export class DatumPoseTool {
       () => this.finish(),
       () => this.cancel(),
     );
+    for (const f of ["offset", "tiltX", "tiltY", "spin"] as const) {
+      this.dim.restoresOnUndo(
+        f,
+        () => this.pose[f],
+        (held) => {
+          this.pose = { ...this.pose, [f]: held };
+          this.refresh();
+        },
+      );
+    }
     this.dim.updateFromCursor({ ...this.pose });
     setPrompt(
       "Drag the arrow to offset, a ring to tilt or spin · 5° steps, Shift 1°, Alt free · type exact values · Enter · Esc",
