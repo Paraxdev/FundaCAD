@@ -547,7 +547,7 @@ pub fn inspect_bodies_at(
     Ok(out)
 }
 
-fn cap(req: &Map<String, Value>, key: &str, default: usize) -> usize {
+pub(crate) fn cap(req: &Map<String, Value>, key: &str, default: usize) -> usize {
     match req.get(key) {
         None | Some(Value::Null) => default,
         Some(v) => v.as_f64().map_or(default, |x| if x < 0.0 { 0 } else { x.trunc() as usize }),

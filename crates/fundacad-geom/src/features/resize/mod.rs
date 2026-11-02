@@ -7,7 +7,7 @@ mod check;
 pub(crate) mod memo;
 mod neighbours;
 mod run;
-mod surface;
+pub(crate) mod surface;
 
 use glam::DVec3;
 use opencascade::primitives::Shape;

@@ -26,6 +26,7 @@ pub mod soundness;
 pub mod stress;
 pub mod text;
 pub mod topo;
+pub mod topology;
 pub mod trace;
 
 pub use opencascade;
