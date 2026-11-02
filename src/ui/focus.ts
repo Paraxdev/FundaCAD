@@ -42,8 +42,10 @@ const ARROW_WIDGETS = roles([
   "slider",
   "spinbutton",
   "combobox",
+  "separator",
+  "scrollbar",
 ])
-  .concat("input[type=range]", ".ui-menu")
+  .concat("input[type=range]", "input[type=radio]", ".ui-menu")
   .join(",");
 // Toolbars, tabs and radios leave out letters, Enter and Space, so E after clicking a rail button still starts Extrude.
 const TYPING_WIDGETS = roles(["menu", "menubar", "listbox", "tree", "treegrid", "grid", "combobox"])
