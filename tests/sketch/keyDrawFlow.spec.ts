@@ -1087,7 +1087,6 @@ describe("arrows move the cursor", () => {
       ["a tab", '<div role="tablist"><button role="tab" id="t">t</button></div>'],
       ["a radio", '<div role="radiogroup"><button role="radio" id="t">r</button></div>'],
       ["a tree row", '<div role="tree"><div role="treeitem" id="t" tabindex="0">r</div></div>'],
-      ["a timeline step", '<div role="list"><div role="listitem"><div role="button" id="t" tabindex="0">s</div></div></div>'],
       ["a text field", '<input type="text" id="t">'],
       ["a number field", '<input type="number" id="t">'],
       ["a text area", '<textarea id="t"></textarea>'],

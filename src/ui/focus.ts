@@ -43,8 +43,7 @@ const ARROW_WIDGETS = roles([
   "spinbutton",
   "combobox",
 ])
-  // The timeline's steps are buttons in a list, walked by arrows.
-  .concat("input[type=range]", ".ui-menu", '[role="list"]')
+  .concat("input[type=range]", ".ui-menu")
   .join(",");
 // Toolbars, tabs and radios leave out letters, Enter and Space, so E after clicking a rail button still starts Extrude.
 const TYPING_WIDGETS = roles(["menu", "menubar", "listbox", "tree", "treegrid", "grid", "combobox"])
@@ -109,7 +108,7 @@ export function keyTargetFree(t: EventTarget | null): boolean {
   return t.closest("#main") !== null;
 }
 
-/** A button of the tool rail, which has no use for a sketch's arrows beyond moving between tools. */
+/** A button of the tool rail. */
 export function isRailButton(t: EventTarget | null): boolean {
   return typeof Element !== "undefined" && t instanceof Element && t.closest(".tool-rail button") !== null;
 }
