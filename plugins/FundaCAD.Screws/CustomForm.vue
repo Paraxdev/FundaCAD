@@ -2,6 +2,7 @@
 // The fields asked for follow the kind and part types, from catalogue/fields.json, the list the geometry checks against.
 
 import { computed, reactive, ref } from "vue";
+import { NumberField } from "fundacad/ui";
 import FastenerPreview from "./FastenerPreview.vue";
 import {
   HANDS,
@@ -70,36 +71,30 @@ function part(p: PartName): Record<string, unknown> {
   return draft[p] as Record<string, unknown>;
 }
 
-function num(v: string): number | undefined {
-  const x = Number(v);
-  return v.trim() === "" || !Number.isFinite(x) ? undefined : x;
+// The form's numbers are in its own units, and a written unit would fold to mm whatever those are, so a plain number
+// is all that reads.
+function plainNumber(raw: string): number {
+  const x = Number(raw.trim().replace(",", "."));
+  if (!Number.isFinite(x)) throw new Error("Not a number");
+  return x;
 }
 
-function readPath(path: string): string {
-  const v = getPath(draft, path);
-  return typeof v === "number" ? String(v) : "";
+const numberOr = (v: unknown, blank: number | null = null) => (typeof v === "number" ? v : blank);
+
+function writePath(path: string, v: number | null) {
+  setPath(draft, path, v ?? undefined);
 }
 
-function writePath(path: string, ev: Event) {
-  setPath(draft, path, num((ev.target as HTMLInputElement).value));
-}
-
-function readField(p: PartName, field: string): string {
-  const v = part(p)[field];
-  return typeof v === "number" ? String(v) : "";
-}
-
-function writeField(p: PartName, field: string, ev: Event) {
-  part(p)[field] = num((ev.target as HTMLInputElement).value);
+function writeField(p: PartName, field: string, v: number | null) {
+  part(p)[field] = v ?? undefined;
 }
 
 const tpi = computed(() => {
   const pitch = part("thread")?.["pitch"];
-  return typeof pitch === "number" && pitch > 0 ? String(+(1 / pitch).toFixed(3)) : "";
+  return typeof pitch === "number" && pitch > 0 ? +(1 / pitch).toFixed(3) : null;
 });
 
-function writeTpi(ev: Event) {
-  const v = num((ev.target as HTMLInputElement).value);
+function writeTpi(v: number | null) {
   part("thread")["pitch"] = v && v > 0 ? +(1 / v).toFixed(8) : undefined;
 }
 
@@ -199,39 +194,52 @@ const heading = {
         <template v-for="[f, text] in PARTS[p][String(part(p)['type'])]?.fields ?? []" :key="f">
           <label v-if="p === 'thread' && f === 'pitch' && inch" :style="label">
             <span>Threads per inch</span>
-            <input
-              class="measure-number scr-tpi"
-              type="number"
-              step="any"
-              min="0"
+            <NumberField
+              class="scr-tpi"
+              label="Threads per inch"
+              size="sm"
+              commit="live"
+              limits="arrows"
+              nullable
+              :parse="plainNumber"
+              :min="0"
               :style="field"
-              :value="tpi"
-              @input="writeTpi"
+              :model-value="tpi"
+              @update:model-value="writeTpi"
+              @error="$event && writeTpi(null)"
             />
           </label>
           <label v-else :style="label">
             <span>{{ text }} ({{ inch ? "in" : "mm" }})</span>
-            <input
-              class="measure-number"
+            <NumberField
               :class="`scr-${p}-${f}`"
-              type="number"
-              step="any"
-              min="0"
+              :label="`${text} (${inch ? 'in' : 'mm'})`"
+              size="sm"
+              commit="live"
+              limits="arrows"
+              nullable
+              :parse="plainNumber"
+              :min="0"
               :style="field"
-              :value="readField(p, f)"
-              @input="writeField(p, f, $event)"
+              :model-value="numberOr(part(p)[f])"
+              @update:model-value="writeField(p, f, $event)"
+              @error="$event && writeField(p, f, null)"
             />
           </label>
         </template>
         <label v-if="p === 'head' && part('head')['type'] === 'countersunk'" :style="label">
           <span>Countersink angle (deg)</span>
-          <input
-            class="measure-number"
-            type="number"
-            step="any"
+          <NumberField
+            label="Countersink angle (deg)"
+            size="sm"
+            commit="live"
+            limits="arrows"
+            nullable
+            :parse="plainNumber"
             :style="field"
-            :value="readField('head', 'angle') || '90'"
-            @input="writeField('head', 'angle', $event)"
+            :model-value="numberOr(part('head')['angle'], 90)"
+            @update:model-value="writeField('head', 'angle', $event)"
+            @error="$event && writeField('head', 'angle', null)"
           />
         </label>
         <label
@@ -239,14 +247,19 @@ const heading = {
           :style="label"
         >
           <span>Driver number (optional)</span>
-          <input
-            class="measure-number"
-            type="number"
-            step="1"
-            min="0"
+          <NumberField
+            label="Driver number (optional)"
+            size="sm"
+            commit="live"
+            limits="arrows"
+            nullable
+            :parse="plainNumber"
+            :min="0"
+            :step="1"
             :style="field"
-            :value="readField('drive', 'number')"
-            @input="writeField('drive', 'number', $event)"
+            :model-value="numberOr(part('drive')['number'])"
+            @update:model-value="writeField('drive', 'number', $event)"
+            @error="$event && writeField('drive', 'number', null)"
           />
         </label>
         <template v-if="p === 'thread'">
@@ -279,15 +292,19 @@ const heading = {
       <div v-if="KINDS[kind].fields.length" :style="heading">Lengths</div>
       <label v-for="[path, text] in KINDS[kind].fields" :key="path" :style="label">
         <span>{{ text }} ({{ inch ? "in" : "mm" }})</span>
-        <input
-          class="measure-number"
+        <NumberField
           :class="`scr-len-${path.replace('.', '-')}`"
-          type="number"
-          step="any"
-          min="0"
+          :label="`${text} (${inch ? 'in' : 'mm'})`"
+          size="sm"
+          commit="live"
+          limits="arrows"
+          nullable
+          :parse="plainNumber"
+          :min="0"
           :style="field"
-          :value="readPath(path)"
-          @input="writePath(path, $event)"
+          :model-value="numberOr(getPath(draft, path))"
+          @update:model-value="writePath(path, $event)"
+          @error="$event && writePath(path, null)"
         />
       </label>
 

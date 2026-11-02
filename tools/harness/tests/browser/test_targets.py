@@ -31,10 +31,10 @@ LARGE_SHORT = (
         "the History strip scrolls, so it clips a grown hit area to the step's own height",
     ),
     (
-        "div.feature-row.tree-child > input",
+        "div.feature-row.tree-child > span.ui-field.ui-number-field > input",
         1,
         24,
-        "the Extra Parameters fields are text inputs, which draw no ::before, and a taller box would show",
+        "the Extra Parameters number fields are text inputs, which draw no ::before, and a taller box would show",
     ),
 )
 # The range input grows its own box to --hit-min under a negative margin, so only its centre and width stay put.

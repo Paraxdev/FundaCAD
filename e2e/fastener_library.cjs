@@ -178,8 +178,8 @@ const BLOCK = JSON.stringify({
     refused.join(" | "),
   );
   await page.fill(".scr-name", "Long M3 cap screw");
-  await page.fill(".scr-len-length", "22");
-  await page.fill(".scr-len-thread-length", "30");
+  await page.fill(".scr-len-length input", "22");
+  await page.fill(".scr-len-thread-length input", "30");
   await page.waitForTimeout(200);
   const impossible = await page.$$eval(".scr-problems li", (li) => li.map((x) => x.textContent));
   check(
@@ -187,7 +187,7 @@ const BLOCK = JSON.stringify({
     impossible.some((t) => t.includes("thread cannot be longer")),
     impossible.join(" | "),
   );
-  await page.fill(".scr-len-thread-length", "18");
+  await page.fill(".scr-len-thread-length input", "18");
   await page.waitForFunction(
     () => !document.querySelector(".scr-problems") && !document.querySelector(".scr-form .scr-preview-status"),
     null,

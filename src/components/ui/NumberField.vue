@@ -48,6 +48,9 @@ const props = defineProps<
     problem?: string | null | undefined;
     min?: number | undefined;
     max?: number | undefined;
+    /** `arrows` holds `min` and `max` to the arrow keys, as a native number input does: typed text past them commits
+     *  for the owner to judge. `refuse`, the default, also refuses it. */
+    limits?: "refuse" | "arrows";
     /** In the shown unit, ten times with Shift. */
     step?: number;
     /** A blank field means null instead of the last value. */
@@ -105,8 +108,10 @@ function check(raw: string): { value: number | null; error: string | null; expr?
     return { value: null, error: e instanceof Error && e.message ? e.message : "Not a value" };
   }
   if (v === null) return { value: null, error: null, expr: true };
-  if (props.min !== undefined && v < props.min) return { value: v, error: `At least ${caption(props.min)}` };
-  if (props.max !== undefined && v > props.max) return { value: v, error: `At most ${caption(props.max)}` };
+  if (props.limits !== "arrows") {
+    if (props.min !== undefined && v < props.min) return { value: v, error: `At least ${caption(props.min)}` };
+    if (props.max !== undefined && v > props.max) return { value: v, error: `At most ${caption(props.max)}` };
+  }
   return { value: v, error: props.validate?.(v) ?? null };
 }
 

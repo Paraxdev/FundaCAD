@@ -4,7 +4,7 @@
 
 import { computed, type CSSProperties } from "vue";
 import { useBrowserStore } from "fundacad";
-import { FloatingPanel } from "fundacad/ui";
+import { FloatingPanel, NumberField } from "fundacad/ui";
 import type { PrintabilityKind } from "fundacad";
 import { CHECKS, KIND_COLORS, KIND_LABELS, UP_CHOICES, cssHex } from "./printability";
 import { printabilityPanel } from "./printabilityPanel";
@@ -25,6 +25,16 @@ const scope = computed(() => {
   const n = bodies.length;
   return n === 1 ? "The one body" : `All ${n}`;
 });
+
+type NumberKey = "nozzle" | "layer" | "overhang" | "minGap" | "maxBridge";
+const NUMBERS: { key: NumberKey; label: string; cls: string; unit: string; min: number; max?: number; step: number }[] =
+  [
+    { key: "nozzle", label: "Nozzle", cls: "printability-nozzle", unit: "mm", min: 0, step: 0.05 },
+    { key: "layer", label: "Layer", cls: "printability-layer", unit: "mm", min: 0, step: 0.05 },
+    { key: "overhang", label: "Overhang angle", cls: "printability-overhang", unit: "°", min: 1, max: 89, step: 1 },
+    { key: "minGap", label: "Smallest gap", cls: "printability-gap", unit: "mm", min: 0, step: 0.05 },
+    { key: "maxBridge", label: "Longest bridge", cls: "printability-bridge", unit: "mm", min: 0, step: 1 },
+  ];
 
 const focus = computed(() => d.value?.hovered ?? d.value?.picked ?? null);
 
@@ -80,70 +90,25 @@ function findingStyle(index: number): CSSProperties {
       </div>
 
       <div class="measure-divider" />
-      <div class="measure-row">
-        <span class="measure-k">Nozzle</span>
+      <div v-for="n in NUMBERS" :key="n.key" class="measure-row">
+        <span class="measure-k">{{ n.label }}</span>
         <span class="measure-v"
-          ><input
-            v-model.number="setup.nozzle"
-            class="measure-number printability-nozzle"
-            type="number"
-            min="0"
-            step="0.05"
+          ><NumberField
+            :class="n.cls"
+            :label="n.label"
+            size="sm"
+            :width-ch="6"
+            commit="live"
+            limits="arrows"
+            nullable
+            :min="n.min"
+            :max="n.max"
+            :step="n.step"
+            :model-value="setup[n.key]"
+            @update:model-value="setup[n.key] = $event"
+            @error="$event && (setup[n.key] = null)"
           />
-          mm</span
-        >
-      </div>
-      <div class="measure-row">
-        <span class="measure-k">Layer</span>
-        <span class="measure-v"
-          ><input
-            v-model.number="setup.layer"
-            class="measure-number printability-layer"
-            type="number"
-            min="0"
-            step="0.05"
-          />
-          mm</span
-        >
-      </div>
-      <div class="measure-row">
-        <span class="measure-k">Overhang angle</span>
-        <span class="measure-v"
-          ><input
-            v-model.number="setup.overhang"
-            class="measure-number printability-overhang"
-            type="number"
-            min="1"
-            max="89"
-            step="1"
-          />
-          °</span
-        >
-      </div>
-      <div class="measure-row">
-        <span class="measure-k">Smallest gap</span>
-        <span class="measure-v"
-          ><input
-            v-model.number="setup.minGap"
-            class="measure-number printability-gap"
-            type="number"
-            min="0"
-            step="0.05"
-          />
-          mm</span
-        >
-      </div>
-      <div class="measure-row">
-        <span class="measure-k">Longest bridge</span>
-        <span class="measure-v"
-          ><input
-            v-model.number="setup.maxBridge"
-            class="measure-number printability-bridge"
-            type="number"
-            min="0"
-            step="1"
-          />
-          mm</span
+          {{ n.unit }}</span
         >
       </div>
       <div class="measure-row">

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { FloatingPanel } from "fundacad/ui";
+import { FloatingPanel, NumberField } from "fundacad/ui";
 import { choicesFor, choiceOf, nearestIn, offByText, threadDraft, threadTool, type ThreadDraft } from "./threadTool";
 import type { ThreadSystem } from "./threadSpec";
 
@@ -116,14 +116,17 @@ function num(ev: Event): number {
       </label>
       <label v-if="d.printFit" :style="ROW" title="Radial clearance, so a printed thread turns into its mate"
         >Clearance, mm
-        <input
-          type="number"
+        <NumberField
+          label="Clearance, mm"
+          size="sm"
           :style="FIELD"
-          min="0"
-          step="0.05"
+          limits="arrows"
+          nullable
+          :min="0"
+          :step="0.05"
           data-testid="thread-clearance"
-          :value="d.clearance"
-          @change="set({ clearance: Math.max(0, num($event)) })"
+          :model-value="d.clearance"
+          @update:model-value="set({ clearance: Math.max(0, $event ?? 0) })"
         />
       </label>
       <div :style="ACTIONS">

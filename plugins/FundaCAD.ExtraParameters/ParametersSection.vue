@@ -9,7 +9,7 @@ import {
   useDocValue,
   useEngine,
 } from "fundacad";
-import { Icon } from "fundacad/ui";
+import { Icon, NumberField } from "fundacad/ui";
 import { setupOpen } from "./state";
 import { nameColumnChars, rowTooltip, tuneGroups, type TuneRow } from "./view";
 
@@ -66,7 +66,7 @@ const nameStyle = computed(() => ({
 }));
 const fieldStyle = { flex: "1", minWidth: "0", font: "inherit", color: "inherit" };
 const sliderStyle = { ...fieldStyle, flex: "1 0 60px", minWidth: "60px" };
-const numberStyle = { ...fieldStyle, flex: "1 0 76px", minWidth: "76px" };
+const numberStyle = { flex: "1 0 76px", minWidth: "76px" };
 </script>
 
 <template>
@@ -187,15 +187,17 @@ const numberStyle = { ...fieldStyle, flex: "1 0 76px", minWidth: "76px" };
             </template>
 
             <template v-else>
-              <input
-                type="number"
-                :aria-label="row.name"
+              <NumberField
+                :label="row.name"
+                size="sm"
                 :style="numberStyle"
+                limits="arrows"
+                nullable
                 :min="row.control.min"
                 :max="row.control.max"
-                :step="row.control.step ?? 'any'"
-                :value="row.def.value"
-                @change="commit(row, num($event))"
+                :step="row.control.step ?? 1"
+                :model-value="row.def.value"
+                @update:model-value="commit(row, $event ?? 0)"
               />
               <span style="flex: 0 0 auto; min-width: 3.5em; text-align: left">{{ row.unit }}</span>
             </template>
