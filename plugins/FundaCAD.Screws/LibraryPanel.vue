@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Mounted for the life of the plugin, `open` decides whether it draws.
 
-import { computed, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { FloatingPanel } from "fundacad/ui";
 import { openTextFile, saveTextFile, toast, useEngine } from "fundacad";
 import FastenerPreview from "./FastenerPreview.vue";
@@ -240,12 +240,48 @@ const badge = {
   color: "var(--accent, #4bf9bc)",
 };
 const tabStyle = (on: boolean) => ({ fontWeight: on ? 600 : 400, opacity: on ? 1 : 0.65 });
+
+// The panel is capped to the span between the rail and the right cards, which a plugin has no stylesheet to query.
+const STACK_BELOW = 640;
+const libraryEl = ref<HTMLElement | null>(null);
+const stacked = ref(false);
+let widthWatch: ResizeObserver | null = null;
+watch(libraryEl, (el) => {
+  widthWatch?.disconnect();
+  widthWatch = null;
+  if (!el) return;
+  widthWatch = new ResizeObserver(() => {
+    stacked.value = el.offsetWidth < STACK_BELOW;
+  });
+  widthWatch.observe(el);
+});
+onBeforeUnmount(() => widthWatch?.disconnect());
 </script>
 
 <template>
-  <FloatingPanel :open="open" title="Fasteners" close-on-esc panel-class="scr-panel" @close="open = false">
-    <div class="scr-library" :style="{ width: '860px', maxWidth: '82vw' }" @pointerenter="refreshFace">
-      <div :style="{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }">
+  <FloatingPanel
+    :open="open"
+    title="Fasteners"
+    close-on-esc
+    panel-class="scr-panel measure-panel-column"
+    @close="open = false"
+  >
+    <div
+      ref="libraryEl"
+      class="scr-library"
+      :style="{ display: 'flex', flexDirection: 'column', width: '860px', maxWidth: '100%', minHeight: 0 }"
+      @pointerenter="refreshFace"
+    >
+      <div
+        :style="{
+          display: 'flex',
+          flexWrap: 'wrap',
+          flexShrink: 0,
+          alignItems: 'center',
+          gap: '8px 12px',
+          marginBottom: '8px',
+        }"
+      >
         <div class="measure-title" aria-hidden="true" :style="{ margin: 0 }">Fasteners</div>
         <button
           type="button"
@@ -261,7 +297,15 @@ const tabStyle = (on: boolean) => ({ fontWeight: on ? 600 : 400, opacity: on ? 1
         <button type="button" class="btn scr-close" title="Close" @click="open = false">Close</button>
       </div>
 
-      <div v-if="tab === 'catalogue'" :style="{ display: 'grid', gridTemplateColumns: '380px 1fr', gap: '14px' }">
+      <div
+        v-if="tab === 'catalogue'"
+        :style="{
+          display: 'grid',
+          flexShrink: 0,
+          gridTemplateColumns: stacked ? 'minmax(0, 1fr)' : 'minmax(0, 45fr) minmax(0, 55fr)',
+          gap: '14px',
+        }"
+      >
         <div>
           <input
             v-model="filters.query"
@@ -294,7 +338,10 @@ const tabStyle = (on: boolean) => ({ fontWeight: on ? 600 : 400, opacity: on ? 1
               <option v-for="h in options.heads" :key="h" :value="h">{{ h }}</option>
             </select>
           </div>
-          <div class="scr-list" :style="{ maxHeight: '56vh', overflow: 'auto', paddingRight: '4px' }">
+          <div
+            class="scr-list"
+            :style="{ maxHeight: stacked ? '28vh' : '56vh', overflow: 'auto', paddingRight: '4px' }"
+          >
             <div v-if="!shown.length" class="measure-hint"
               >Nothing matches. Clear a filter, or add your own under My fasteners.</div
             >
@@ -359,9 +406,9 @@ const tabStyle = (on: boolean) => ({ fontWeight: on ? 600 : 400, opacity: on ? 1
           <div :style="{ fontWeight: 600, fontSize: 'var(--fs-body, 13px)', marginBottom: '6px' }" class="scr-name">{{
             spec.name
           }}</div>
-          <div :style="{ display: 'flex', gap: '12px' }">
+          <div :style="{ display: 'flex', flexWrap: 'wrap', gap: '12px' }">
             <FastenerPreview :spec="spec" :width="250" :height="200" @measured="volume = $event" />
-            <div :style="{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }">
+            <div :style="{ flex: '1 1 150px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: '4px' }">
               <template v-if="choice">
                 <label v-if="lengths.length > 1"
                   >Length
@@ -448,7 +495,7 @@ const tabStyle = (on: boolean) => ({ fontWeight: on ? 600 : 400, opacity: on ? 1
           </div>
           <div class="scr-specs" :style="{ marginTop: '10px', maxHeight: '32vh', overflow: 'auto' }">
             <div v-for="(r, i) in rows" :key="i" class="measure-row" :style="{ padding: '1px 0' }">
-              <span class="measure-k" :style="{ whiteSpace: 'pre' }">{{ r.label }}</span>
+              <span class="measure-k" :style="{ whiteSpace: 'pre-wrap' }">{{ r.label }}</span>
               <span class="measure-v" :style="{ textAlign: 'right' }">{{ r.value }}</span>
             </div>
           </div>
@@ -456,12 +503,13 @@ const tabStyle = (on: boolean) => ({ fontWeight: on ? 600 : 400, opacity: on ? 1
         <div v-else class="measure-hint">Pick a size on the left to see it and its specs.</div>
       </div>
 
-      <div v-else>
+      <div v-else :style="{ display: 'flex', flexDirection: 'column', minHeight: 0 }">
         <CustomForm
           v-if="editing"
           :key="editing.id ?? 'new'"
           :initial="editing.initial"
           :editing="!!editing.id"
+          :stacked="stacked"
           @save="onSave"
           @cancel="editing = null"
         />

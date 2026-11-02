@@ -1086,7 +1086,11 @@ defineEmits<{ close: [] }>();
   narrow Render stage), and only when none does it keeps its `min-width` beside the
   rail, under the cards. An open panel stays open across the Model and Render switch,
   as every inspect panel does, narrowing to fit the smaller stage, so a row of buttons
-  in a panel wraps rather than clips. The in-view chips (`.dim-input`, `.sketch-dims`,
+  in a panel wraps rather than clips. The cap is on the panel's box, so a child with a
+  fixed width or a `min-width` runs out of the glass and under the rail: size wide content
+  with `max-width: 100%`, never against the window (`vw`), and let it reflow. `panelClass`
+  `measure-panel-column` hands the panel's height cap down, so a scroller inside it with
+  `min-height` set shrinks and the rows around it stay in view. The in-view chips (`.dim-input`, `.sketch-dims`,
   `.snap-tag`, `.prompt` and the like) draw over a panel they meet.
   The shell is `min-width: 180px`, `padding: var(--s-4)`, `font-size: var(--fs-small)`.
 

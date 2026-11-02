@@ -15,7 +15,7 @@ import {
   type PartName,
 } from "./spec";
 
-const props = defineProps<{ initial: FastenerSpec | null; editing: boolean }>();
+const props = defineProps<{ initial: FastenerSpec | null; editing: boolean; stacked?: boolean }>();
 const emit = defineEmits<{ save: [spec: FastenerSpec]; cancel: [] }>();
 
 const DEFAULT_TYPES: Record<PartName, string> = {
@@ -149,8 +149,17 @@ const heading = {
 </script>
 
 <template>
-  <div class="scr-form" :style="{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: '16px' }">
-    <div :style="{ maxHeight: '62vh', overflow: 'auto', paddingRight: '6px' }">
+  <div
+    class="scr-form"
+    :style="{
+      display: 'grid',
+      gridTemplateColumns: stacked ? 'minmax(0, 1fr)' : 'minmax(0, 1fr) 300px',
+      gridTemplateRows: stacked ? 'minmax(0, 1fr) auto' : 'minmax(0, 1fr)',
+      gap: '16px',
+      minHeight: 0,
+    }"
+  >
+    <div :style="{ minHeight: '140px', overflow: 'auto', paddingRight: '6px' }">
       <label :style="label"
         ><span>Name</span
         ><input
@@ -300,32 +309,43 @@ const heading = {
       />
     </div>
 
-    <div>
+    <div
+      :style="{
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignContent: 'flex-start',
+        alignItems: 'flex-start',
+        columnGap: '16px',
+        minWidth: 0,
+      }"
+    >
       <FastenerPreview :spec="previewSpec" :width="300" :height="220" @problem="previewProblem = $event" />
-      <ul
-        v-if="problems.length || previewProblem"
-        class="scr-problems"
-        :style="{
-          margin: '8px 0',
-          paddingLeft: '16px',
-          color: 'var(--warn, #ffab2e)',
-          fontSize: 'var(--fs-small, 12px)',
-        }"
-      >
-        <li v-for="msg in problems" :key="msg">{{ msg }}</li>
-        <li v-if="!problems.length && previewProblem">{{ previewProblem }}</li>
-      </ul>
-      <div v-else class="measure-hint">Everything needed to build it is there.</div>
-      <div :style="{ display: 'flex', gap: '8px', marginTop: '10px' }">
-        <button
-          type="button"
-          class="btn scr-save"
-          :disabled="problems.length > 0 || !!previewProblem"
-          @click="emit('save', spec)"
+      <div :style="{ flex: '1 1 200px', minWidth: 0 }">
+        <ul
+          v-if="problems.length || previewProblem"
+          class="scr-problems"
+          :style="{
+            margin: '8px 0',
+            paddingLeft: '16px',
+            color: 'var(--warn, #ffab2e)',
+            fontSize: 'var(--fs-small, 12px)',
+          }"
         >
-          {{ editing ? "Save changes" : "Add to my fasteners" }}
-        </button>
-        <button type="button" class="btn" @click="emit('cancel')">Cancel</button>
+          <li v-for="msg in problems" :key="msg">{{ msg }}</li>
+          <li v-if="!problems.length && previewProblem">{{ previewProblem }}</li>
+        </ul>
+        <div v-else class="measure-hint">Everything needed to build it is there.</div>
+        <div :style="{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '10px' }">
+          <button
+            type="button"
+            class="btn scr-save"
+            :disabled="problems.length > 0 || !!previewProblem"
+            @click="emit('save', spec)"
+          >
+            {{ editing ? "Save changes" : "Add to my fasteners" }}
+          </button>
+          <button type="button" class="btn" @click="emit('cancel')">Cancel</button>
+        </div>
       </div>
     </div>
   </div>

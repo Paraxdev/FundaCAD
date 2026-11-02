@@ -161,7 +161,14 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div :style="{ position: 'relative', width: `${width ?? 300}px`, height: `${height ?? 220}px` }">
+  <div
+    :style="{
+      position: 'relative',
+      width: `${width ?? 300}px`,
+      maxWidth: '100%',
+      aspectRatio: `${width ?? 300} / ${height ?? 220}`,
+    }"
+  >
     <canvas
       ref="canvas"
       class="scr-preview"

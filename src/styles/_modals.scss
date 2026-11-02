@@ -647,6 +647,11 @@
 .measure-panel[data-capped] {
   overflow-y: auto;
 }
+/* Hands its cap down to a scroller inside it, so the rows around that scroller stay in view. */
+.measure-panel-column {
+  display: flex;
+  flex-direction: column;
+}
 .measure-panel[data-folded] {
   overflow: hidden;
   cursor: pointer;
