@@ -8,6 +8,7 @@ import { ExtrudeTool } from "../../src/features/extrudeTool";
 import { circleLoop, rectCorners } from "../../src/sketch/region";
 import { announce } from "../../src/ui/announce";
 import { usePromptStore } from "../../src/stores/prompt";
+import { claimEscape } from "../../src/ui/escapeClaim";
 
 vi.mock("../../src/ui/announce", () => ({ announce: vi.fn() }));
 
@@ -285,6 +286,85 @@ describe("Enter and Space in Extrude's pick", () => {
     expect(said().at(-1)).toContain("Profile 2 of 2");
     press("Enter");
     expect(r.t.selected).toEqual([g1, g2]);
+  });
+});
+
+describe("a key that belongs to what has focus in Extrude's pick", () => {
+  function pressOn(target: Element, key: string) {
+    const e = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });
+    target.dispatchEvent(e);
+    return e;
+  }
+  function place(html: string, selector: string) {
+    const host = document.createElement("div");
+    host.innerHTML = html;
+    document.body.appendChild(host);
+    return host.querySelector(selector)!;
+  }
+  const others = [
+    ["a text field in the page", '<input id="t" type="text">', "#t"],
+    ["a text field in the sketch area", '<main id="main"><input id="t" type="text"></main>', "#t"],
+    ["a text area", '<textarea id="t"></textarea>', "#t"],
+    ["a dialog's button", '<div role="dialog"><button id="t">OK</button></div>', "#t"],
+    ["a button in the main area", '<main id="main"><button id="t">OK</button></main>', "#t"],
+    ["a tree row", '<div role="tree"><div id="t" role="treeitem" tabindex="0">Plate</div></div>', "#t"],
+  ] as const;
+
+  it.each(others)("leaves Tab, Enter and Space to %s, nothing lit", (_n, html, selector) => {
+    const r = rig([plate(), disc()]);
+    r.start();
+    const target = place(html, selector);
+    for (const k of ["Tab", "Enter", " "]) expect(pressOn(target, k).defaultPrevented, k).toBe(false);
+    expect(r.hover).not.toHaveBeenCalled();
+    expect(r.t.selected).toEqual([]);
+    expect(said()).toEqual([]);
+  });
+
+  it.each(others)("leaves Enter and Space to %s after a walk lit a profile", (_n, html, selector) => {
+    const r = rig([plate(), disc()]);
+    r.start();
+    press("Tab");
+    vi.mocked(announce).mockClear();
+    const target = place(html, selector);
+    for (const k of ["Enter", " "]) expect(pressOn(target, k).defaultPrevented, k).toBe(false);
+    expect(r.t.phase).toBe("pick");
+    expect(r.t.selected).toEqual([]);
+    expect(said()).toEqual([]);
+  });
+
+  it("walks from a rail button by Tab, and leaves its Enter to the button", () => {
+    const [p, d] = [plate(), disc()];
+    const r = rig([d, p]);
+    r.start();
+    const rail = place('<div class="tool-rail"><button id="t">Extrude</button></div>', "#t");
+    expect(pressOn(rail, "Enter").defaultPrevented).toBe(false);
+    expect(said()).toEqual([]);
+    expect(pressOn(rail, "Tab").defaultPrevented).toBe(true);
+    expect(r.hover).toHaveBeenLastCalledWith(p);
+  });
+
+  it("leaves all three alone while an open dialog claims Escape, and takes them again once it closed", async () => {
+    const [p, d] = [plate(), disc()];
+    const r = rig([d, p]);
+    r.start();
+    press("Tab");
+    vi.mocked(announce).mockClear();
+    const release = claimEscape();
+    for (const k of ["Tab", "Enter", " "]) expect(press(k).defaultPrevented, k).toBe(false);
+    expect(said()).toEqual([]);
+    expect(r.t.selected).toEqual([]);
+    release();
+    await new Promise((f) => setTimeout(f, 0));
+    expect(press(" ").defaultPrevented).toBe(true);
+    expect(r.t.selected).toEqual([p]);
+  });
+
+  it("still takes them with focus on the page body", () => {
+    const [p, d] = [plate(), disc()];
+    const r = rig([d, p]);
+    r.start();
+    for (const k of ["Tab", " "]) expect(pressOn(document.body, k).defaultPrevented, k).toBe(true);
+    expect(r.t.selected).toEqual([p]);
   });
 });
 

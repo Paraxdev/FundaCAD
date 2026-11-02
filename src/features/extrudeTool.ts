@@ -10,7 +10,7 @@ import type { Feature } from "../types";
 import { pointInRegion } from "../sketch/region";
 import { DimInput } from "../sketch/dimInput";
 import { escapeClaimed } from "../ui/escapeClaim";
-import { isBoxButtonKey, isMenuKey } from "../ui/focus";
+import { isBoxButtonKey, isMenuKey, isRailButton, keyTargetFree } from "../ui/focus";
 import { announce } from "../ui/announce";
 import { setPrompt } from "../ui/prompt";
 import { KeySurface } from "../sketch/keySurface";
@@ -463,7 +463,9 @@ export class ExtrudeTool {
   /** Tab and Shift+Tab light the profiles largest first without picking, Space adds the lit one, Enter takes it when
    *  nothing is picked yet. Tab with no profile at all is left to the page. */
   private onPickKey(e: KeyboardEvent): boolean {
-    if (e.ctrlKey || e.altKey || e.metaKey) return false;
+    // Window capture hears a key before the field, button or dialog it belongs to.
+    if (e.ctrlKey || e.altKey || e.metaKey || escapeClaimed()) return false;
+    if (!keyTargetFree(e.target) && !(e.key === "Tab" && isRailButton(e.target))) return false;
     const take = () => {
       e.preventDefault();
       e.stopPropagation();
