@@ -20,6 +20,9 @@
   width: 100%;
   height: 100%;
 }
+#canvas:focus-visible {
+  outline-offset: calc(-1 * var(--focus-ring-width));
+}
 
 /* Fixed, not absolute: placed in client coordinates and appended to <body>. A solid
    edge takes what is wholly inside, a dashed one anything it touches. */

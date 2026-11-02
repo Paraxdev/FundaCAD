@@ -15,6 +15,7 @@
     - radio "Render"
 - main "Model":
   - heading [level=1]
+  - img "3D view"
   - complementary "Items":
     - heading "Items" [level=2]
     - tablist "Items pages":
