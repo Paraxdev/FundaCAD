@@ -63,10 +63,13 @@ class KeyboardPage(unittest.TestCase):
         page = PAGE.read_text(encoding="utf-8")
         speech = (ROOT / "src" / "sketch" / "sketchSpeech.ts").read_text(encoding="utf-8")
         self.assertIn('"No snap, cursor at 20, minus 20"', page)
-        self.assertIn('"End of snaps, cursor at 20, minus 20, snapped to the end of Line 2"', page)
+        self.assertIn('"End of nearest snaps, cursor at 20, minus 20, snapped to the end of Line 2"', page)
         self.assertIn("`cursor at ${coordWords(p.x, p.y)}`", speech)
         self.assertIn("`No snap, ${at}`", speech)
-        self.assertIn("`End of snaps, ${at}, snapped to ", speech)
+        self.assertIn("`End of nearest snaps, ${at}, snapped to ", speech)
+        self.assertIn("Tab walks the 16 candidates nearest the cursor", page)
+        limit = (ROOT / "src" / "sketch" / "keyCursor.ts").read_text(encoding="utf-8")
+        self.assertIn("const RING_LIMIT = 16;", limit)
 
     def test_every_link_on_these_pages_resolves(self):
         for name in LINKERS + ["sketch/keyboard.md"]:

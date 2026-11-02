@@ -22,7 +22,7 @@ With Single key shortcuts turned off in Preferences, the letters and digits do n
 | Arrows | Move the keyboard cursor one grid step. Up is +Y and Right is +X on the sketch plane |
 | Shift+arrows, Alt+arrows | Move one step finer, one step coarser |
 | Enter, after arrows | Places the point at the cursor |
-| Tab, Shift+Tab, after arrows | Next and previous snap candidate near the cursor, nearest first. The last stop is back where the cursor was |
+| Tab, Shift+Tab, after arrows | Next and previous of the 16 snap candidates nearest the cursor, nearest first. The last stop is back where the cursor was |
 | Esc | Drops what is half drawn, then arms Select, then closes the sketch |
 
 Arrows turn the view as usual in every other tool, and when the sketch plane is edge-on to the view.
@@ -54,7 +54,7 @@ Typing `@` as the first character of a size box turns it back into X and Y for t
 
 ## Snaps
 
-Press arrows to move the cursor, then Tab. Each press names a snap near the cursor and moves the cursor onto it, such as "Cursor at 20, 5, snapped to the midpoint of Line 2". Enter places the point there, with the snap kept, as a click on a snap would. After the last candidate, Tab says "No snap, cursor at 20, minus 20" and the cursor is back where it was. If that spot is itself a snap, Tab says "End of snaps, cursor at 20, minus 20, snapped to the end of Line 2". With no candidate, Tab moves focus as usual. See [Snapping](snapping.md).
+Press arrows to move the cursor, then Tab. Each press names a snap near the cursor and moves the cursor onto it, such as "Cursor at 20, 5, snapped to the midpoint of Line 2". Enter places the point there, with the snap kept, as a click on a snap would. After the last candidate, Tab says "No snap, cursor at 20, minus 20" and the cursor is back where it was. If that spot is itself a snap, Tab says "End of nearest snaps, cursor at 20, minus 20, snapped to the end of Line 2". Tab walks the 16 candidates nearest the cursor, to reach a farther one, move the cursor closer with arrows and press Tab again, or type its coordinates. With no candidate, Tab moves focus as usual. See [Snapping](snapping.md).
 
 ## A plate with a hole
 

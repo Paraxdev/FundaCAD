@@ -1335,7 +1335,7 @@ describe("Tab cycles the snaps", () => {
     tab();
     tab();
     expect(vi.mocked(announce).mock.calls.at(-1)?.[0]).toBe(
-      "End of snaps, cursor at 15, minus 7.25, snapped to the origin",
+      "End of nearest snaps, cursor at 15, minus 7.25, snapped to the origin",
     );
   });
 
