@@ -1,6 +1,8 @@
-import { computed, onMounted, onUnmounted, ref, shallowRef } from "vue";
+import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from "vue";
 import type { Engine } from "../app/engine";
 import { createSelectionWords } from "../app/selectionWords";
+import { useGeometryBrowserStore } from "../stores/geometryBrowser";
+import { useSelectionStore } from "../stores/selection";
 import {
   appearanceOffers,
   primaryCount,
@@ -72,9 +74,10 @@ export function useSelectionOffers(engine: Engine, opts: { words?: boolean } = {
   // A body selection gives no hint that a second click or a pause reaches the face or edge under the cursor
   // (viewport/clickIntent.ts), so the readout spells it out. Speech leaves that out, it is no use without a pointer.
   const readout = computed(() => {
-    const k = kind.value;
-    if (!k || !words) return summary.value;
+    if (!words) return summary.value;
     if (words.line.value) return words.line.value;
+    const k = kind.value;
+    if (!k) return words.planeCount.value > 1 ? `${words.planeCount.value} planes` : "";
     const base = describeSelection({
       // A run of pieces is one face to the person who picked it.
       count: (k === "face" && words.faceRowCount.value) || primaryCount(counts.value),
@@ -110,6 +113,13 @@ export function useSelectionOffers(engine: Engine, opts: { words?: boolean } = {
   function wake() {
     if (!raf) raf = requestAnimationFrame(tick);
   }
+
+  // A screen reader's click on a row may send no pointer or key release.
+  if (words)
+    watch(
+      () => [useSelectionStore().rows, useGeometryBrowserStore().selected],
+      () => wake(),
+    );
 
   // Capture, since a value box stops the key bubbling. Every route that clears on Escape does so during this event.
   let escaped = false;

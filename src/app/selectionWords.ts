@@ -2,11 +2,13 @@
 // the other users of useSelectionOffers cost nothing here.
 
 import { computed, shallowRef } from "vue";
+import { isOriginKey, useSelectionStore } from "../stores/selection";
 import { describeChange, describePick, type FaceFacts, type PickFacts, type PickWords } from "../ui/describePick";
-import { edgeKeyOf, edgeRows, faceRows } from "../ui/geometryRows";
+import { edgeKeyOf, edgeRows, faceRows, planeRows } from "../ui/geometryRows";
 import { exactRound, type Pt3 } from "../ui/selectionMeasure";
 import type { Engine } from "./engine";
 import { ownerNamesOf, pickedRowKeys } from "./geometryBrowser";
+import { BASE_PLANES } from "./planePick";
 
 export interface SelectionSpeech {
   text: string;
@@ -30,9 +32,10 @@ export function createSelectionWords(e: Engine) {
   const lone = shallowRef<{ facts: PickFacts; faceId: number | null } | null>(null);
   const edges = shallowRef<readonly (readonly Pt3[])[]>([]);
   const faceRowCount = shallowRef(0);
+  const planeCount = shallowRef(0);
 
   let said: string[] = [];
-  let seen: { signature: string; result: unknown } | null = null;
+  let seen: { signature: string; result: unknown; rows: unknown } | null = null;
   let asking = 0;
   // When the lone item's words went out, while they may still be waiting to be spoken.
   let spokenAt: number | null = null;
@@ -69,6 +72,12 @@ export function createSelectionWords(e: Engine) {
 
   // A mesh walk per Ctrl-click would freeze a big body (faceAnalysis.ts), so only a lone face gets one.
   function factsOf(key: string): PickFacts | null {
+    if (key.startsWith("p:")) {
+      const planes = planeRows(BASE_PLANES, e.store.document.features, e.datumPlaneDef, (id) =>
+        e.store.isSuppressed(id),
+      );
+      return planes.find((r) => r.key === key)?.facts ?? null;
+    }
     const row = e.geometryBrowser.rowFacts(key);
     if (row) return row;
     if (!key.startsWith("e:")) return null;
@@ -79,7 +88,11 @@ export function createSelectionWords(e: Engine) {
 
   function wordsOf(key: string, known: PickFacts | null): Said {
     const facts = known ?? factsOf(key);
-    if (facts) return describePick(facts);
+    if (facts) {
+      const words = describePick(facts);
+      // A row's Enter starts a sketch, a plane picked elsewhere may not.
+      return facts.kind === "plane" ? { label: words.label, spoken: words.readout.replaceAll(" · ", ", ") } : words;
+    }
     const kind = key.slice(0, 2);
     if (kind === "b:") {
       const name = metaOf(key.slice(2))?.name ?? key.slice(2);
@@ -113,6 +126,14 @@ export function createSelectionWords(e: Engine) {
     );
   }
 
+  // Planes stay selected as rows of Items, the viewport knows nothing of them.
+  function pickedPlaneKeys(rows: readonly string[]): string[] {
+    const features = e.store.document.features;
+    const isDatum = (k: string) =>
+      features.some((f) => f.id === k && f.type === "datumPlane") && !e.store.isSuppressed(k);
+    return rows.filter((k) => isOriginKey(k) || isDatum(k)).map((k) => `p:${k}`);
+  }
+
   const line = computed(() => {
     const now = lone.value;
     if (!now) return "";
@@ -134,13 +155,16 @@ export function createSelectionWords(e: Engine) {
       return;
     }
     const result = e.store.buildState.result;
-    if (seen?.signature === signature && seen.result === result) return;
-    seen = { signature, result };
+    const rows = useSelectionStore().rows.keys;
+    if (seen?.signature === signature && seen.result === result && seen.rows === rows) return;
+    seen = { signature, result, rows };
     asking++;
 
     const regionKeys = e.overlay.selectedRegions().map((r) => `r:${r.interior3D.x}`);
     const rowKeys = pickedRowKeys(e);
-    const keys = [...rowKeys, ...regionKeys];
+    const planeKeys = pickedPlaneKeys(rows);
+    const keys = [...rowKeys, ...regionKeys, ...planeKeys];
+    planeCount.value = planeKeys.length;
     faceRowCount.value = rowKeys.filter((k) => k.startsWith("f:")).length;
     edges.value = e.viewport.selectedEdgeLines().map((x) => x.points);
 
@@ -163,5 +187,5 @@ export function createSelectionWords(e: Engine) {
     if (needsEngine) askEngine(only!);
   }
 
-  return { speech, line, edges, faceRowCount, update };
+  return { speech, line, edges, faceRowCount, planeCount, update };
 }

@@ -7,6 +7,7 @@ import { enableAutoUnmount, mount } from "@vue/test-utils";
 import type { Engine } from "../../src/app/engine";
 import { useSelectionOffers } from "../../src/composables/useSelectionOffers";
 import { SessionEnded } from "../../src/document/session";
+import { useSelectionStore } from "../../src/stores/selection";
 import { exactRound } from "../../src/ui/selectionMeasure";
 import { setUnit } from "../../src/ui/units";
 import { edge, land, result, rig, settle, topology } from "../app/geometryBrowserRig";
@@ -750,5 +751,96 @@ describe("Escape", () => {
     const off = vi.spyOn(window, "removeEventListener");
     r.wrapper.unmount();
     expect(off.mock.calls.filter((c) => c[0] === "keydown" && c[2] === true)).toHaveLength(1);
+  });
+});
+
+describe("planes", () => {
+  const LID = {
+    id: "d1",
+    type: "datumPlane",
+    name: "Lid",
+    plane: { origin: [12, -7, 31], normal: [0.6, 0, 0.8], xDir: [0.8, 0, -0.6] },
+  };
+  const WITH_LID = { parameters: {}, features: [SECOND.features[0], LID] };
+  const pickRows = (keys: string[]) => (useSelectionStore().rows = { keys, anchor: keys.at(-1) ?? null });
+
+  it("reads one origin plane in words, off a row, with no key hint in speech", async () => {
+    const r = setup();
+    await r.build();
+    pickRows(["o:XZ"]);
+    await nextTick();
+    await r.frame();
+    expect(r.sel.readout.value).toBe("XZ plane · origin · facing front");
+    expect(r.sel.speech.value).toEqual({ text: "XZ plane, origin, facing front" });
+  });
+
+  it("reads a slanted datum by its name", async () => {
+    const r = setup();
+    r.store.load(JSON.stringify(WITH_LID));
+    await r.build();
+    pickRows(["d1"]);
+    await nextTick();
+    await r.frame();
+    expect(r.sel.readout.value).toBe("Lid · datum plane · tilted 37° from up");
+    expect(r.sel.speech.value?.text).toBe("Lid, datum plane, tilted 37° from up");
+  });
+
+  it("ignores a feature row that is no plane, a suppressed datum and one the document lost", async () => {
+    const r = setup();
+    r.store.load(JSON.stringify(WITH_LID));
+    await r.build();
+    pickRows(["g1"]);
+    await nextTick();
+    await r.frame();
+    expect(r.sel.readout.value).toBe("");
+    expect(r.sel.speech.value).toBeNull();
+    r.store.isSuppressed = (id: string) => id === "d1";
+    pickRows(["d1"]);
+    await nextTick();
+    await r.frame();
+    expect(r.sel.speech.value).toBeNull();
+    r.store.load(JSON.stringify(SECOND));
+    await r.build();
+    pickRows(["d1"]);
+    await nextTick();
+    await r.frame();
+    expect(r.sel.readout.value).toBe("");
+    expect(r.sel.speech.value).toBeNull();
+  });
+
+  it("counts several, says one added or removed, and counts them with other picks", async () => {
+    const r = setup();
+    await r.build();
+    pickRows(["o:XY"]);
+    await nextTick();
+    await r.frame();
+    pickRows(["o:XY", "o:YZ"]);
+    await nextTick();
+    await r.frame();
+    expect(r.sel.readout.value).toBe("2 planes");
+    expect(r.sel.speech.value?.text).toBe("YZ plane added, 2 selected");
+    pickRows(["o:YZ"]);
+    await nextTick();
+    await r.frame();
+    expect(r.sel.speech.value?.text).toBe("XY plane removed, 1 selected");
+    r.selection.faces = [3, 4];
+    await r.settled();
+    expect(r.sel.readout.value).toBe("2 faces");
+    expect(r.sel.speech.value?.text).toBe("2 faces, 1 plane selected");
+  });
+
+  it("wakes the readout with no pointer or key, and a plane cleared says so", async () => {
+    const r = setup();
+    await r.build();
+    await r.frame();
+    pickRows(["o:XY"]);
+    await nextTick();
+    expect(frames).toHaveLength(1);
+    await r.frame();
+    pickRows([]);
+    await nextTick();
+    await r.frame();
+    expect(r.sel.readout.value).toBe("");
+    expect(r.sel.speech.value).toEqual({ text: "Nothing selected", verbose: true });
   });
 });

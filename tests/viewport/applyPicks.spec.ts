@@ -1,38 +1,13 @@
 // The list's way to select: real Highlighter and BodyEdges, only the camera and frame requests are stubbed.
-import * as THREE from "three";
 import { describe, expect, it, vi } from "vitest";
 import { bandIndex } from "../../src/viewport/faceBands";
-import { BodyEdges, type EdgeRef } from "../../src/viewport/edgeLines";
+import type { EdgeRef } from "../../src/viewport/edgeLines";
 import { Highlighter } from "../../src/viewport/highlight";
 import { Picker, type Hit, type PickMods, type PickRef } from "../../src/viewport/picking";
 import { Viewport } from "../../src/viewport/viewport";
 import type { ScopeView } from "../../src/viewport/pickScope";
-import type { BodyMesh, ModelView } from "../../src/viewport/render";
-
-type P3 = [number, number, number];
-
-function bodyMesh(id: string, faceStart: number, edges: { id: string; points: P3[] }[]): BodyMesh {
-  const geometry = new THREE.BoxGeometry(17, 9, 23);
-  const n = geometry.getAttribute("position").count;
-  geometry.setAttribute("color", new THREE.BufferAttribute(new Float32Array(n * 3), 3));
-  const mesh = new THREE.Mesh(geometry);
-  mesh.position.set(41, -13, 7);
-  const tris = geometry.getIndex()!.count / 3;
-  const faceIds = Array.from({ length: tris }, (_, t) => faceStart + Math.floor(t / 2));
-  const faceTriangles = new Map<number, number[]>();
-  faceIds.forEach((f, t) => faceTriangles.set(f, [...(faceTriangles.get(f) ?? []), t]));
-  return {
-    id,
-    name: id,
-    faceStart,
-    faceCount: 6,
-    mesh,
-    faceIds,
-    baseColors: new Float32Array(n * 3),
-    faceTriangles,
-    edges: new BodyEdges(edges.map((e) => ({ ...e, body: id })) as never, new THREE.Vector2(800, 600)),
-  } as unknown as BodyMesh;
-}
+import type { ModelView } from "../../src/viewport/render";
+import { bodyMesh } from "./pickRig";
 
 // Far enough out that a plain click takes a chain, near enough in that it takes one edge.
 const FAR_VIEW: ScopeView = { edgePx: 12, viewportPx: 900, pixelWorldSize: 0.4, modelDiagonal: 90 };
