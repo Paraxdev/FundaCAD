@@ -463,6 +463,18 @@ export class DimInput {
       this.root.appendChild(wrap);
 
       input.addEventListener("keydown", (e) => this.onKey(e, field));
+      // Registered ahead of the input listener below, which tells the tool: an undo back to the text before the first
+      // keystroke takes the typing back, so a seed left in the field does not count as typed.
+      let beforeTyping: string | null = null;
+      input.addEventListener("beforeinput", (e) => {
+        const history = e.inputType === "historyUndo" || e.inputType === "historyRedo";
+        if (!history && !this.typedNames.has(field.def.name)) beforeTyping = input.value;
+      });
+      input.addEventListener("input", (e) => {
+        const takenBack = (e as InputEvent).inputType === "historyUndo" && input.value === beforeTyping;
+        if (takenBack) this.typedNames.delete(field.def.name);
+        else this.typedNames.add(field.def.name);
+      });
       // A click into a value the tool wrote selects it, so typing replaces it; the release would drop the selection.
       let keepSelection = false;
       input.addEventListener("pointerdown", () => {
@@ -478,7 +490,6 @@ export class DimInput {
       input.addEventListener("input", () => {
         field.userDriven = true; // typing freezes the field from cursor tracking
         field.typed = true;
-        this.typedNames.add(field.def.name);
         wrap.classList.add("typed");
         this.sizeToContent(field);
         this.adoptTypedUnit(field);

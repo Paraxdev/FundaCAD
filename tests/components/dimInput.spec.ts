@@ -1155,6 +1155,78 @@ describe("DimInput.wasTyped", () => {
     dim.hide();
     expect(dim.wasTyped("x")).toBe(false);
   });
+
+  describe("after the browser's own undo", () => {
+    const edit = (name: string, type: string, text: string) => {
+      const f = field(name);
+      f.dispatchEvent(new InputEvent("beforeinput", { inputType: type, bubbles: true, cancelable: true }));
+      f.value = text;
+      f.dispatchEvent(new InputEvent("input", { inputType: type, bubbles: true }));
+    };
+    const showXY = (onInput?: () => void) =>
+      dim.show(
+        [
+          { name: "x", label: "X" },
+          { name: "y", label: "Y" },
+        ],
+        () => {},
+        undefined,
+        undefined,
+        undefined,
+        onInput,
+      );
+
+    it("is false once the undo is back at the text before the first keystroke", () => {
+      showXY();
+      dim.seedText("x", "12.5");
+      edit("x", "insertText", "12.57");
+      edit("x", "insertText", "12.579");
+      expect(dim.wasTyped("x")).toBe(true);
+      edit("x", "historyUndo", "12.5");
+      expect([dim.wasTyped("x"), dim.wasTyped("y")]).toEqual([false, false]);
+    });
+
+    it("stays true for an undo that leaves some typing in the field", () => {
+      showXY();
+      dim.seedText("x", "12.5");
+      edit("x", "insertText", "12.57");
+      edit("x", "insertText", "12.579");
+      edit("x", "historyUndo", "12.57");
+      expect(dim.wasTyped("x")).toBe(true);
+    });
+
+    it("follows a redo and a second undo, then a new first keystroke from new text", () => {
+      showXY();
+      dim.seedText("x", "12.5");
+      edit("x", "insertText", "12.57");
+      edit("x", "historyUndo", "12.5");
+      edit("x", "historyRedo", "12.57");
+      expect(dim.wasTyped("x")).toBe(true);
+      edit("x", "historyUndo", "12.5");
+      expect(dim.wasTyped("x")).toBe(false);
+      dim.seedText("x", "3");
+      edit("x", "insertText", "39");
+      expect(dim.wasTyped("x")).toBe(true);
+      edit("x", "historyUndo", "3");
+      expect(dim.wasTyped("x")).toBe(false);
+    });
+
+    it("leaves the field the undo did not touch", () => {
+      showXY();
+      edit("x", "insertText", "4");
+      edit("y", "insertText", "5");
+      edit("y", "historyUndo", "");
+      expect([dim.wasTyped("x"), dim.wasTyped("y")]).toEqual([true, false]);
+    });
+
+    it("has already changed when the tool hears the input", () => {
+      const seen: boolean[] = [];
+      showXY(() => seen.push(dim.wasTyped("x")));
+      edit("x", "insertText", "4");
+      edit("x", "historyUndo", "");
+      expect(seen).toEqual([true, false]);
+    });
+  });
 });
 
 describe("DimInput.typeInto", () => {
