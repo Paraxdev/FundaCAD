@@ -55,10 +55,13 @@ function runsOf(meta: BodyMeta): ReadonlyMap<number, readonly number[]> {
 
 export const edgeKeyOf = (bodyId: string, slot: number) => `e:${bodyId}:${slot}`;
 
-/** The key of the row that holds this face, its run's row for a piece of a run. */
-export function faceKeyOf(meta: BodyMeta, local: number): string {
-  return `f:${meta.id}:${runsOf(meta).get(local)?.[0] ?? local}`;
+/** The key of the row that holds each face of this body, its run's row for a piece of a run. */
+export function faceKeysOf(meta: BodyMeta): (local: number) => string {
+  const runs = runsOf(meta);
+  return (local) => `f:${meta.id}:${runs.get(local)?.[0] ?? local}`;
 }
+
+export const faceKeyOf = (meta: BodyMeta, local: number): string => faceKeysOf(meta)(local);
 
 function faceSize(f: TopologyFace): number {
   if (f.surface === "plane" && f.size) return f.size[0];

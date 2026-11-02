@@ -11,7 +11,7 @@ import { bodyLabels } from "../ui/bodyLabels";
 import {
   edgeKeyOf,
   edgeRows,
-  faceKeyOf,
+  faceKeysOf,
   faceRows,
   planeRowKey,
   planeRows,
@@ -85,13 +85,16 @@ export function pickedRowKeys(e: {
   viewport: Pick<Viewport, "faceIdToBodyId" | "getSelectedBodies" | "getSelectedFaceIds" | "selectedEdgeLines">;
 }): string[] {
   const keys = new Set<string>();
-  const metas = new Map<string, Body | null>();
+  const keyers = new Map<string, { start: number; keyOf: (local: number) => string } | null>();
   for (const faceId of e.viewport.getSelectedFaceIds()) {
     const id = e.viewport.faceIdToBodyId(faceId);
     if (id === null) continue;
-    if (!metas.has(id)) metas.set(id, e.store.buildState.result?.bodies?.find((b) => b.id === id) ?? null);
-    const body = metas.get(id);
-    if (body) keys.add(faceKeyOf(body, faceId - body.faceStart));
+    if (!keyers.has(id)) {
+      const body = e.store.buildState.result?.bodies?.find((b) => b.id === id);
+      keyers.set(id, body ? { start: body.faceStart, keyOf: faceKeysOf(body) } : null);
+    }
+    const keyer = keyers.get(id);
+    if (keyer) keys.add(keyer.keyOf(faceId - keyer.start));
   }
   for (const edge of e.viewport.selectedEdgeLines()) {
     if (edge.body !== undefined) keys.add(edgeKeyOf(edge.body, edge.slot));
@@ -103,10 +106,10 @@ export function pickedRowKeys(e: {
 // A reply at 10,004 faces measured 1.47 MB.
 const CACHED_REPLIES = 4;
 const ROW_CHANGED = "That row has changed, the list is catching up";
+const FAILED = "The engine could not list this body's faces.";
 
 export function createGeometryBrowser(e: GeometryBrowserHost) {
   const list = useGeometryBrowserStore();
-const FAILED = "The engine could not list this body's faces.";
   const cache = new Map<string, TopologyReply>();
 
   let shown = false;
@@ -174,15 +177,15 @@ const FAILED = "The engine could not list this body's faces.";
     showWithReply(body, key, reply);
   }
 
-  function showWithReply(body: Body, key: string, reply: TopologyReply) {
-    showRows(body, key, reply);
-    list.setTruncated(reply.truncated?.faces ?? null);
   // Edge rows stand without the op, face rows do not.
   function showFailure() {
     if (list.kind === "faces") list.setRows([]);
     list.setState("error", FAILED);
   }
 
+  function showWithReply(body: Body, key: string, reply: TopologyReply) {
+    showRows(body, key, reply);
+    list.setTruncated(reply.truncated?.faces ?? null);
     list.setState("ready");
   }
 
@@ -377,11 +380,11 @@ const FAILED = "The engine could not list this body's faces.";
         lastResult = s.result;
         resultSerial++;
         rowsStale = true;
+        // A request lost to an engine restart is asked once more, an engine that always fails costs one per build.
+        failedKey = null;
       }
       const bodies = visibleBodies();
       const labelOf = bodyLabelsOf(e.store);
-        // A request lost to an engine restart is asked once more, an engine that always fails costs one per build.
-        failedKey = null;
       list.setBodies(bodies.map((b) => ({ id: b.id, name: labelOf(b.id) ?? b.name })));
       if (!bodies.some((b) => b.id === list.bodyId)) setBody(selectionOwner(bodies) ?? bodies[0]?.id ?? null);
       syncSelected();
