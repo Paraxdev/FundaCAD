@@ -1193,6 +1193,26 @@ describe("planes", () => {
     expect(r.list.error).toBeNull();
   });
 
+  it("hides the note about faces left out, and the faces bring it back", async () => {
+    const r = await planesRig();
+    await land(r.asks[0]!, { ...topology("body1", 3), truncated: { faces: 9 } });
+    expect(r.list.truncated).toBe(9);
+    r.browser.setKind("planes");
+    expect(r.list.truncated).toBeNull();
+    r.browser.setKind("faces");
+    expect(r.list.truncated).toBe(9);
+  });
+
+  it("puts out a lit plane when the list leaves Planes, a pointer's row has no leave event then", async () => {
+    const r = await planesRig(LID);
+    r.browser.setKind("planes");
+    r.browser.hover(r.list.rows[3]!);
+    expect(r.viewport.hoverDatum).toHaveBeenLastCalledWith("d1");
+    r.browser.setKind("edges");
+    expect(r.viewport.hoverDatum).toHaveBeenLastCalledWith(null);
+    expect(r.viewport.hoverPlane).toHaveBeenLastCalledWith(null);
+  });
+
   it("forgets a size limit and a type on the way in, a plane has neither", async () => {
     const r = await planesRig();
     r.list.setFilters({ minSize: 12.5, type: "flat", facing: "down" });

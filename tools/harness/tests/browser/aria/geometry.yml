@@ -8,6 +8,7 @@
     - radiogroup "What to list":
       - radio "Faces" [checked]
       - radio "Edges"
+      - radio "Planes"
     - combobox /^Type /
     - combobox /^Facing /
     - listbox /^Faces of /:
