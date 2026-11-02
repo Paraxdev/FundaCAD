@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { coarseStep, fineStep, hitAt, snapRing, stepCoord } from "../../src/sketch/keyCursor";
+import { coarseStep, fineStep, hasSnap, hitAt, snapRing, stepCoord } from "../../src/sketch/keyCursor";
 import { MIN_SNAP_STEP } from "../../src/sketch/planeGrid";
 import { setUnit } from "../../src/ui/units";
 import type { SnapCandidate } from "../../src/sketch/snap";
@@ -88,6 +88,53 @@ describe("fineStep and coarseStep", () => {
     setUnit("in");
     expect(fineStep(25.4)).toBeCloseTo(25.4 / 4, 6);
     expect(coarseStep(25.4 / 16)).toBeCloseTo(25.4 / 4, 6);
+  });
+});
+
+describe("snapRing on many candidates", () => {
+  const c = (x: number, y: number, priority: number) =>
+    ({ p: new THREE.Vector2(x, y), kind: "endpoint", priority }) as SnapCandidate;
+  const from = new THREE.Vector2(3, -2);
+
+  it("keeps the nearest spots up to the limit, the highest priority at each, from a large shuffled list", () => {
+    const list: SnapCandidate[] = [];
+    for (let i = 5000; i > 0; i--) list.push(c(3 + i, -2 + i / 2, 10), c(3 + i + 0.0005, -2 + i / 2, 60 + (i % 2)));
+    const ring = snapRing(from, list, []);
+    expect(ring.map((k) => [k.p.x, k.p.y, k.priority])).toEqual(
+      Array.from({ length: 16 }, (_, n) => [3 + (n + 1) + 0.0005, -2 + (n + 1) / 2, 60 + ((n + 1) % 2)]),
+    );
+  });
+
+  it("lets a higher priority twin behind the limit still take the last spot", () => {
+    const near = Array.from({ length: 16 }, (_, n) => c(3 + n + 1, -2, 10));
+    const twin = c(3 + 16 + 0.0009, -2, 80);
+    expect(snapRing(from, [...near, twin, c(3 + 17, -2, 90)], []).map((k) => [k.p.x, k.priority]).at(-1)).toEqual([
+      3 + 16 + 0.0009,
+      80,
+    ]);
+  });
+});
+
+describe("hasSnap", () => {
+  const c = (x: number, y: number) => ({ p: new THREE.Vector2(x, y), kind: "endpoint", priority: 10 }) as SnapCandidate;
+  const from = new THREE.Vector2(3, -2);
+  const base = new THREE.Vector2(9, 4);
+
+  it("is false with none, and with only spots on the cursor or the skipped point", () => {
+    expect(hasSnap(from, [], [base])).toBe(false);
+    expect(hasSnap(from, [c(3.0009, -2), c(9, 4.0009)], [base])).toBe(false);
+  });
+
+  it("is true for one spot just past the coincidence reach, and among many", () => {
+    expect(hasSnap(from, [c(3.0011, -2)], [base])).toBe(true);
+    expect(hasSnap(from, [c(3, -2), c(9, 4), c(20, 7)], [base])).toBe(true);
+  });
+
+  it("agrees with the ring on what there is to walk", () => {
+    const list = [c(3, -2), c(9, 4)];
+    expect(hasSnap(from, list, [base])).toBe(snapRing(from, list, [base]).length > 0);
+    list.push(c(-8, 5));
+    expect(hasSnap(from, list, [base])).toBe(snapRing(from, list, [base]).length > 0);
   });
 });
 

@@ -7,7 +7,7 @@ import { announce, cancelAnnouncement } from "../ui/announce";
 import { escapeClaimed } from "../ui/escapeClaim";
 import { isEditableTarget, isRailButton, keyTargetFree, widgetOwnsKey } from "../ui/focus";
 import type { DimInput } from "./dimInput";
-import { coarseStep, fineStep, hitAt, snapRing, stepCoord } from "./keyCursor";
+import { coarseStep, fineStep, hasSnap, hitAt, snapRing, stepCoord } from "./keyCursor";
 import { readPoint } from "./pointEntry";
 import { cursorSentence, drawnSentence, pointSentence } from "./sketchSpeech";
 import type { ResolvedEntity, SnapCandidate, SnapKind, SnapRef } from "./snap";
@@ -293,8 +293,11 @@ export class KeyDrawFlow {
     announce(cursorSentence(p, c, this.host.entities(), step), "polite", { key: "sketch-cursor", delay: 150 });
   }
 
+  // The prompt asks on every arrow, so this does not build the ring.
   private snapsNearby(): boolean {
-    return (this.ring?.list.length ?? this.buildRing().length) > 0;
+    if (this.ring) return this.ring.list.length > 0;
+    const base = this.host.base();
+    return hasSnap(this.host.cursor(), this.host.candidates(), base ? [base] : []);
   }
 
   private buildRing(): SnapCandidate[] {
