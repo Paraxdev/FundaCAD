@@ -1,6 +1,7 @@
 // On-canvas heads-up dimension input: tracking fields follow the cursor, typing holds, Tab locks, Enter commits.
 // Values cross this boundary in MILLIMETRES; length fields show and parse the display unit, angles are degrees.
 
+import { announce } from "../ui/announce";
 import {
   onActivate,
   setChipUnit,
@@ -1417,6 +1418,7 @@ export class DimInput {
       marked ??= problem;
       if (explicit && f.lastGood !== null) continue;
       this.setTypedProblem(problem);
+      announce(problem, "assertive");
       f.input.focus();
       f.input.select();
       return false;

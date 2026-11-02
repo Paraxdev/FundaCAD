@@ -771,6 +771,7 @@ describe("a second point the size box's Enter places on the origin", () => {
     const a = makeDrawing("rectangle").s;
     startAt(a, "7", "-3");
     key(a, "ArrowRight", fieldEl("width"));
+    key(a, "ArrowUp", fieldEl("width"));
     enter("width");
     expect(a.entities).toHaveLength(1);
     expect(a.originPin).toBeNull();
@@ -784,6 +785,42 @@ describe("a second point the size box's Enter places on the origin", () => {
     enter("width");
     expect(b.entities).toHaveLength(1);
     expect(b.originPin).toBeNull();
+  });
+});
+
+describe("a size the box refuses", () => {
+  const assertive = () => vi.mocked(announce).mock.calls.filter((c) => c[1] === "assertive").map((c) => c[0]);
+  beforeEach(() => vi.mocked(announce).mockClear());
+
+  it.each([
+    ["rectangle", "height", "0", "must be more than 0"],
+    ["rectangle", "width", "-3", "must be more than 0"],
+    ["rectangle", "width", "abc", "is not a number"],
+    ["circle", "diameter", "0", "must be more than 0"],
+    ["circle", "diameter", "-6", "must be more than 0"],
+    ["line", "length", "abc", "is not a number"],
+    ["line", "angle", "abc", "is not a number"],
+  ])("speaks it for %s %s %s, draws nothing and stays on the field", (tool, name, text, words) => {
+    const { s } = makeDrawing(tool);
+    startAt(s, "7", "-3");
+    type(name, text);
+    enter(name);
+    expect(s.entities).toEqual([]);
+    expect(assertive()).toHaveLength(1);
+    expect(assertive()[0]).toContain(words);
+    expect(document.activeElement).toBe(fieldEl(name));
+    expect(fieldEl(name).getAttribute("aria-invalid")).toBe("true");
+  });
+
+  it("says nothing assertive for a size it takes, nor for text that falls back on the last good value", () => {
+    const { s } = makeDrawing("rectangle");
+    startAt(s, "7", "-3");
+    type("width", "30");
+    type("height", "12");
+    type("width", "abc");
+    enter("height");
+    expect(s.entities.map(withoutId)).toEqual([{ type: "rectangle", x: 22, y: 3, width: 30, height: 12 }]);
+    expect(assertive()).toEqual([]);
   });
 });
 
