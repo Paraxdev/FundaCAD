@@ -64,6 +64,7 @@ def test_a_waiting_plane_pick_takes_the_row(s):
     row(s, "YZ plane").focus()
     assert open_sketch(s) is None
     s.page.keyboard.press("Enter")
+    s.page.wait_for_function("() => window.sketch.active")
     assert open_sketch(s) == {"origin": [0, 0, 0], "normal": [1, 0, 0], "datum": None}
 
 
