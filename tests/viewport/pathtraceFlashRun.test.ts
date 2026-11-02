@@ -80,6 +80,14 @@ describe("a WebGPU flash run", () => {
     expect(run.stderr).toContain("still running after 0.5 s");
   });
 
+  it.each([
+    ["SwiftShader", {}],
+    ["a real adapter", { FLASH_WEBGPU_REAL: "1" }],
+  ])("on %s has Chrome write its log to stderr, where the run keeps it", (_name, env) => {
+    const run = runFlash({ ...webgpu, ...env, FLASH_DEADLINE_S: "0.2" }, { launchHangs: true });
+    expect(run.lines[1]).toContain('"--enable-logging=stderr"');
+  });
+
   it("whose launch fails before the deadline reports that and the deadline stays quiet while it finishes", () => {
     const run = runFlash({ ...webgpu, FLASH_DEADLINE_S: "0.2" }, { launchThrows: true, chromeLines: ["c1"] });
     expect({ status: run.status, afterLaunch: run.lines.slice(2) }).toEqual({
