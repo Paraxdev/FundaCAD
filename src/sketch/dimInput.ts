@@ -506,7 +506,7 @@ export class DimInput {
         }
         // Only an undo lets a field go: text typed over with the same text is still typing, and locks it.
         const takenBack = edit && type === "historyUndo" && input.value === edit.from;
-        if (edit && type === "historyUndo") field.lastGood = edit.lastGood;
+        if (edit && type === "historyUndo") field.lastGood = takenBack ? edit.lastGood : null;
         if (takenBack) {
           field.userDriven = edit.userDriven;
           field.typed = edit.typed;

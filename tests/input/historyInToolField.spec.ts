@@ -206,6 +206,17 @@ describe("Ctrl+Z and Ctrl+Y in a tool's value box", () => {
     expect(dim.getValue("move")).toBe(null);
   });
 
+  it("an undo stopping on text that is no value does not fall back to a value from before the edit", () => {
+    const { dim, input } = open();
+    typeInto(input, "25.4");
+    document.querySelector<HTMLElement>(".dim-unit")!.click();
+    [...document.querySelectorAll<HTMLElement>(".dim-unit-item")].find((i) => i.textContent === "in")!.click();
+    expect(input.value).toBe("1");
+    typeInto(input, "2");
+    typeInto(input, "-", "historyUndo");
+    expect([input.value, dim.getValue("move")]).toEqual(["-", null]);
+  });
+
   it("deleting back to the text it started from stays typing", () => {
     const { dim, input } = open();
     typeInto(input, "5");
