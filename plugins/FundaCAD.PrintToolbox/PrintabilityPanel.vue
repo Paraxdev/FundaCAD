@@ -79,8 +79,8 @@ function swatch(k: PrintabilityKind): CSSProperties {
 // A long check lists a row per finding; it scrolls rather than running off
 // the bottom of the window, as the app's Stress panel does.
 const BODY: CSSProperties = {
-  minWidth: "300px",
-  maxWidth: "380px",
+  width: "380px",
+  maxWidth: "100%",
   maxHeight: "calc(100vh - 180px)",
   overflowY: "auto",
 };
