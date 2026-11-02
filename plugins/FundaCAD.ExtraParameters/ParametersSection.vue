@@ -4,6 +4,7 @@ import {
   checkResults,
   clampToControl,
   configurationDrift,
+  readAs,
   toast,
   useBrowserStore,
   useDocValue,
@@ -51,6 +52,9 @@ function pick(id: string) {
 }
 
 const num = (e: Event) => Number((e.target as HTMLInputElement).value);
+const readAngle = readAs("angle");
+const readPlain = readAs(null);
+const rowParse = (row: TuneRow) => (row.unit === "mm" ? undefined : row.unit === "°" ? readAngle : readPlain);
 const rowStyle = { display: "flex", alignItems: "center", gap: "6px", paddingRight: "8px" };
 // The name takes its longest name's width up to 62% of the row, but it is the one that gives way: the slider and the
 // number field keep their minimum widths and the name ellipsizes in what is left.
@@ -192,6 +196,7 @@ const numberStyle = { flex: "1 0 76px", minWidth: "76px" };
                 size="sm"
                 :style="numberStyle"
                 limits="arrows"
+                :parse="rowParse(row)"
                 :min="row.control.min"
                 :max="row.control.max"
                 :step="row.control.step ?? 1"

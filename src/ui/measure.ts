@@ -124,6 +124,8 @@ interface Normalised {
   expr: string;
   /** the first unit written, which is the one the value is "in" */
   unit: UnitDef | null;
+  /** every unit written */
+  units: UnitDef[];
   /** more than a bare literal */
   derived: boolean;
 }
@@ -161,6 +163,7 @@ export function normalise(raw: string): Normalised {
       return {
         expr: `${sign === "-" ? "-" : ""}${v * f}`,
         unit: u?.unit ?? null,
+        units: u ? [u.unit] : [],
         derived: true,
       };
     }
@@ -168,6 +171,7 @@ export function normalise(raw: string): Normalised {
 
   let out = "";
   let unit: UnitDef | null = null;
+  const units: UnitDef[] = [];
   let derived = false;
   let terms = 0; // unit-suffixed groups emitted, for the compound rule
   let pendingJoin = false; // a group ended and nothing but space has followed
@@ -208,6 +212,7 @@ export function normalise(raw: string): Normalised {
           derived = true;
         }
         out += String(num.value * u.unit.factor);
+        units.push(u.unit);
         if (!unit) unit = u.unit;
         else if (u.unit !== unit) derived = true;
         terms++;
@@ -236,6 +241,7 @@ export function normalise(raw: string): Normalised {
       const u = matchUnitAt(src, j);
       if (u) {
         out += `*${u.unit.factor}`;
+        units.push(u.unit);
         if (!unit) unit = u.unit;
         derived = true;
         i = u.end;
@@ -244,7 +250,7 @@ export function normalise(raw: string): Normalised {
   }
 
   if (terms > 1) derived = true;
-  return { expr: out, unit, derived };
+  return { expr: out, unit, units, derived };
 }
 
 /** `displayUnit` is what a bare number means, a written unit always wins. `params` resolves "width/2", {} for none.
@@ -283,6 +289,18 @@ export function measureError(
   } catch (e) {
     return e instanceof Error && e.message ? e.message : "not a value";
   }
+}
+
+const DIM_WORD: Record<Dim, string> = { length: "a length", angle: "an angle" };
+
+/** A NumberField `parse` for one kind of value, null for a plain count: fractions, a comma and arithmetic read as ever,
+ *  and a written unit of another kind is refused, since folding it would turn "1 in" into 25.4 degrees. */
+export function readAs(dim: Dim | null): (raw: string) => number {
+  return (raw) => {
+    const wrong = normalise(raw).units.find((u) => u.dim !== dim);
+    if (wrong) throw new ExprError(`This takes ${dim ? DIM_WORD[dim] : "a plain number"}, not ${wrong.label}`);
+    return parseMeasure(raw, null).value;
+  };
 }
 
 /** A drop-in for `Number.parseFloat`: NaN for blank or unparseable text, a written unit folded into mm or degrees. */

@@ -253,6 +253,60 @@ describe("the Standard Thread clearance", () => {
   async function panel() {
     threadDraft.value = {
       editing: null,
+describe("the Printability overhang angle reads an angle", () => {
+  async function overhang() {
+    const state = createPrintabilityState();
+    printabilityPanel.value = {
+      state,
+      data: state.data,
+      bodies: shallowRef([]),
+      run: vi.fn(),
+      cancel: vi.fn(),
+      close: vi.fn(),
+      hover: vi.fn(),
+      pick: vi.fn(),
+    } as unknown as Controller;
+    state.show();
+    mount(PrintabilityPanel, { attachTo: document.body });
+    await flushPromises();
+    const setup = state.data.value!.setup;
+    const input = inputOf(document.body.querySelector(".printability-overhang"));
+    return { setup, input, request: () => buildPrintabilityRequest(setup, []) };
+  }
+
+  it.each(["1 in", "5 mm", '2"', "10 deg 1 in"])("refuses %s, a length, and Check will not run", async (text) => {
+    const { setup, input, request } = await overhang();
+    type(input, text);
+    await flushPromises();
+    expect(input.getAttribute("aria-invalid")).toBe("true");
+    expect(setup.overhang).toBeNull();
+    expect(request().ok).toBe(false);
+  });
+
+  it.each([
+    ["50", 50],
+    ["50,5", 50.5],
+    ["91/2", 45.5],
+    ["30 deg", 30],
+    ["30\u00b0", 30],
+    ["1 rad", 180 / Math.PI],
+  ])("reads %s", async (text, value) => {
+    const { setup, input } = await overhang();
+    type(input, text);
+    await flushPromises();
+    expect(input.getAttribute("aria-invalid")).toBeNull();
+    expect(setup.overhang).toBeCloseTo(value);
+  });
+
+  it("the other Printability fields keep a written length", async () => {
+    await overhang();
+    const nozzle = inputOf(document.body.querySelector(".printability-nozzle"));
+    type(nozzle, "1/2 mm");
+    await flushPromises();
+    expect(nozzle.getAttribute("aria-invalid")).toBeNull();
+  });
+});
+
       face: {},
       faceDiameter: null,
       external: true,
@@ -308,6 +362,18 @@ describe("the Standard Thread clearance", () => {
     await enter(input);
     expect(threadDraft.value!.clearance).toBe(0);
     expect(changed).toHaveBeenCalledOnce();
+  it.each([
+    ["1/2", 0.5],
+    ["1/2 mm", 0.5],
+    ["1 in", 25.4],
+  ])("keeps a written length and a fraction, %s", async (text, value) => {
+    const { input } = await panel();
+    type(input, text);
+    await enter(input);
+    expect(threadDraft.value!.clearance).toBe(value);
+    expect(input.getAttribute("aria-invalid")).toBeNull();
+  });
+
   });
 
   it("a negative clearance lands on 0", async () => {
@@ -368,7 +434,7 @@ describe("the Parameters number row", () => {
     },
   } as unknown as GeometryBackend;
 
-  async function section(control: ParamControl, expr = "0.5", unit: "mm" | "deg" = "mm") {
+  async function section(control: ParamControl, expr = "0.5", unit: string | null = "mm") {
     const doc: CadDocument = {
       parameters: {},
       paramDefs: { gap: { expr, value: Number(expr), unit, control } },
@@ -471,6 +537,55 @@ describe("the Parameters number row", () => {
     await nextTick();
     await enter(input);
     expect(store.document.paramDefs!["gap"]!.expr).toBe("0.6");
+  describe.each([
+    [
+      "deg",
+      ["1 in", "5 mm", '2"', "10 deg 1 in"],
+      [
+        ["30 deg", 30],
+        ["30\u00b0", 30],
+      ],
+    ],
+    ["count", ["1 in", "5 mm", "5 deg"], []],
+    ["furlong", ["1 in", "5 mm", "5 deg"], []],
+    [null, ["1 in", "5 mm", "5 deg"], []],
+  ] as const)("a row in unit %s", (unit, wrong, right) => {
+    it.each([...wrong])("refuses %s and keeps the value", async (text) => {
+      const { store, setExpr, input } = await section({ kind: "number" }, "45", unit);
+      type(input, text);
+      await enter(input);
+      expect(setExpr).not.toHaveBeenCalled();
+      expect(store.document.paramDefs!["gap"]!.expr).toBe("45");
+      expect(input.getAttribute("aria-invalid")).toBe("true");
+    });
+
+    it.each([["7", 7], ["1,5", 1.5], ["3/4", 0.75], ["2+3", 5], ...right] as [string, number][])(
+      "reads %s",
+      async (text, value) => {
+        const { store, input } = await section({ kind: "number" }, "45", unit);
+        type(input, text);
+        await enter(input);
+        expect(input.getAttribute("aria-invalid")).toBeNull();
+        expect(Number(store.document.paramDefs!["gap"]!.expr)).toBe(value);
+      },
+    );
+  });
+
+  it("a row in mm keeps a written length and a fraction", async () => {
+    for (const [text, expr] of [
+      ["1 in", "25.4"],
+      ["1/2 in", "12.7"],
+      ["3/4", "0.75"],
+      ["2 cm", "20"],
+    ] as const) {
+      const { store, input } = await section({ kind: "number" }, "45", "mm");
+      type(input, text);
+      await enter(input);
+      expect(input.getAttribute("aria-invalid")).toBeNull();
+      expect(store.document.paramDefs!["gap"]!.expr).toBe(expr);
+    }
+  });
+
     type(input, "0.3");
     await enter(input);
     press(input, "ArrowDown");

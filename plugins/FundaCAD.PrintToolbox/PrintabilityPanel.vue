@@ -3,7 +3,7 @@
 // results with it. Inline styles on host tokens, as a plugin .vue may not carry a <style> block.
 
 import { computed, type CSSProperties } from "vue";
-import { useBrowserStore } from "fundacad";
+import { readAs, useBrowserStore } from "fundacad";
 import { FloatingPanel, NumberField } from "fundacad/ui";
 import type { PrintabilityKind } from "fundacad";
 import { CHECKS, KIND_COLORS, KIND_LABELS, UP_CHOICES, cssHex } from "./printability";
@@ -27,14 +27,31 @@ const scope = computed(() => {
 });
 
 type NumberKey = "nozzle" | "layer" | "overhang" | "minGap" | "maxBridge";
-const NUMBERS: { key: NumberKey; label: string; cls: string; unit: string; min: number; max?: number; step: number }[] =
-  [
-    { key: "nozzle", label: "Nozzle", cls: "printability-nozzle", unit: "mm", min: 0, step: 0.05 },
-    { key: "layer", label: "Layer", cls: "printability-layer", unit: "mm", min: 0, step: 0.05 },
-    { key: "overhang", label: "Overhang angle", cls: "printability-overhang", unit: "°", min: 1, max: 89, step: 1 },
-    { key: "minGap", label: "Smallest gap", cls: "printability-gap", unit: "mm", min: 0, step: 0.05 },
-    { key: "maxBridge", label: "Longest bridge", cls: "printability-bridge", unit: "mm", min: 0, step: 1 },
-  ];
+const NUMBERS: {
+  key: NumberKey;
+  label: string;
+  cls: string;
+  unit: string;
+  min: number;
+  max?: number;
+  step: number;
+  parse?: (raw: string) => number;
+}[] = [
+  { key: "nozzle", label: "Nozzle", cls: "printability-nozzle", unit: "mm", min: 0, step: 0.05 },
+  { key: "layer", label: "Layer", cls: "printability-layer", unit: "mm", min: 0, step: 0.05 },
+  {
+    key: "overhang",
+    label: "Overhang angle",
+    cls: "printability-overhang",
+    unit: "°",
+    min: 1,
+    max: 89,
+    step: 1,
+    parse: readAs("angle"),
+  },
+  { key: "minGap", label: "Smallest gap", cls: "printability-gap", unit: "mm", min: 0, step: 0.05 },
+  { key: "maxBridge", label: "Longest bridge", cls: "printability-bridge", unit: "mm", min: 0, step: 1 },
+];
 
 const focus = computed(() => d.value?.hovered ?? d.value?.picked ?? null);
 
@@ -104,6 +121,7 @@ function findingStyle(index: number): CSSProperties {
             :min="n.min"
             :max="n.max"
             :step="n.step"
+            :parse="n.parse"
             :model-value="setup[n.key]"
             @update:model-value="setup[n.key] = $event"
             @error="$event && (setup[n.key] = null)"
