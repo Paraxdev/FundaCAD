@@ -441,15 +441,17 @@ describe("the Parameters number row", () => {
     expect(top.input.value).toBe("9");
   });
 
-  it("left blank writes 0 through its control", async () => {
-    const { store, input } = await section(NUMBER);
-    type(input, "");
-    await enter(input);
-    expect(store.document.paramDefs!["gap"]!.expr).toBe("0.3");
-    const open = await section({ kind: "number" });
-    type(open.input, "");
-    await enter(open.input);
-    expect(open.store.document.paramDefs!["gap"]!.expr).toBe("0");
+  it("left blank writes nothing and reads the model back", async () => {
+    for (const leaveIt of [enter, leave]) {
+      const { store, setExpr, input } = await section({ kind: "number" }, "12");
+      type(input, "");
+      await leaveIt(input);
+      await leave(input);
+      expect(setExpr).not.toHaveBeenCalled();
+      expect(store.document.paramDefs!["gap"]!.expr).toBe("12");
+      expect(input.value).toBe("12");
+      expect(input.getAttribute("aria-invalid")).toBeNull();
+    }
   });
 
   it("refuses text that is no number, a name or an expression over one, and keeps the value", async () => {

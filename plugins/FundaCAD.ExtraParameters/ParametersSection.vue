@@ -192,12 +192,11 @@ const numberStyle = { flex: "1 0 76px", minWidth: "76px" };
                 size="sm"
                 :style="numberStyle"
                 limits="arrows"
-                nullable
                 :min="row.control.min"
                 :max="row.control.max"
                 :step="row.control.step ?? 1"
                 :model-value="row.def.value"
-                @update:model-value="commit(row, $event ?? 0)"
+                @update:model-value="$event !== null && commit(row, $event)"
               />
               <span style="flex: 0 0 auto; min-width: 3.5em; text-align: left">{{ row.unit }}</span>
             </template>
