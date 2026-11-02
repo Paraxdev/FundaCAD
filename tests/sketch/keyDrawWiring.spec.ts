@@ -878,6 +878,50 @@ describe("a second point that makes no shape", () => {
   });
 });
 
+describe("wiring a removed line would break", () => {
+  const tabFrom = (name: string) =>
+    fieldEl(name).dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }));
+
+  it("reads @3 in Y as both axes from the last point when X was only passed by Tab", () => {
+    const { s } = makeDrawing("line");
+    s.keyDraw.placed(v(11, -4));
+    key(s, "Enter");
+    tabFrom("x");
+    expect(dim!.isUserDriven("x")).toBe(true);
+    type("y", "@3");
+    enter("y");
+    expect(s.base).toEqual(v(11, -1));
+  });
+
+  it("ends the keys' cursor when the pointer moves over the canvas or leaves it", () => {
+    for (const leave of [false, true]) {
+      const { s } = makeSketch("line");
+      const m = s as never as { snapAt(): unknown; showSnap(): void; onPointerMove(e: unknown): void; onPointerLeave(): void };
+      m.snapAt = () => ({ p: v(21, 8), kind: "free", guides: [], world: new THREE.Vector3(21, 8, 0) });
+      m.showSnap = () => {};
+      (s as never as { active: boolean }).active = true;
+      key(s, "ArrowRight");
+      if (leave) m.onPointerLeave();
+      else m.onPointerMove({ clientX: 1, clientY: 2, ctrlKey: false, buttons: 0, pointerId: 1 });
+      key(s, "Enter");
+      expect(fieldNames(), String(leave)).toEqual(["x", "y"]);
+      expect(s.base, String(leave)).toBeNull();
+      dim?.dispose();
+    }
+  });
+
+  it("starts a session with no last point and the cursor on the plane's zero", () => {
+    const { s } = makeDrawing("line");
+    startAt(s, "7", "-3");
+    (s as never as { cancelGeometry(): void }).cancelGeometry();
+    (s as never as { resetKeyDraw(): void }).resetKeyDraw();
+    expect(s.lastCursor).toEqual(v(0, 0));
+    key(s, "Enter");
+    typePoint("@4,5");
+    expect(s.base).toEqual(v(4, 5));
+  });
+});
+
 describe("what a keys drawing says", () => {
   beforeEach(() => vi.mocked(announce).mockClear());
   const said = () => vi.mocked(announce).mock.calls.map((c) => c[0]);

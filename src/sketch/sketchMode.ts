@@ -472,10 +472,7 @@ export class SketchMode {
     this.boundKey = (e) => this.onKey(e);
     this.boundContext = (e) => this.onContextMenu(e);
     // A snap marker left where the pointer exited the canvas reads as a mark on the drawing.
-    this.boundLeave = () => {
-      this.keyDraw.pointerMoved();
-      this.showSnap(null);
-    };
+    this.boundLeave = () => this.onPointerLeave();
     this.boundTick = () => this.tick();
     const constraintHost: ConstraintHost = {
       tool: () => this.tool,
@@ -645,10 +642,7 @@ export class SketchMode {
       edge.body && isExactPlaneEdge(edge, meshBodies) ? [{ edge: { body: edge.body, points: edge.points }, poly }] : [],
     );
     this.history.reset(); // fresh history per session (armed once entities load)
-    this.keyDraw.reset();
-    this.lastCursor.set(0, 0);
-    this.keySurface.mount();
-    this.keySurface.setStop(KEY_DRAW_TOOLS.has(this.tool));
+    this.resetKeyDraw();
     this.pickedAt = new Map();
     if (!this.fonts.length)
       void fetchFonts().then((f) => {
@@ -2929,6 +2923,18 @@ export class SketchMode {
 
     if (this.base) this.basePreview(hit.p, e);
     else this.overlay.setPreview([]);
+  }
+
+  private onPointerLeave() {
+    this.keyDraw.pointerMoved();
+    this.showSnap(null);
+  }
+
+  private resetKeyDraw() {
+    this.keyDraw.reset();
+    this.lastCursor.set(0, 0);
+    this.keySurface.mount();
+    this.keySurface.setStop(KEY_DRAW_TOOLS.has(this.tool));
   }
 
   private keyDrawHost(): KeyDrawHost {
