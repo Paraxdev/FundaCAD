@@ -79,7 +79,7 @@ function plainNumber(raw: string): number {
   return x;
 }
 
-const numberOr = (v: unknown, blank: number | null = null) => (typeof v === "number" ? v : blank);
+const numberOr = (v: unknown) => (typeof v === "number" ? v : null);
 
 function writePath(path: string, v: number | null) {
   setPath(draft, path, v ?? undefined);
@@ -248,8 +248,10 @@ const heading = {
             :parse="plainNumber"
             :min="1"
             :max="179"
+            :step-from="90"
+            placeholder="90"
             :style="field"
-            :model-value="numberOr(part('head')['angle'], 90)"
+            :model-value="numberOr(part('head')['angle'])"
             @update:model-value="writeField('head', 'angle', $event)"
             @error="refuse('head', 'angle', 'Countersink angle', $event)"
             @vue:unmounted="refused['angle'] = null"

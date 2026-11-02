@@ -53,6 +53,8 @@ const props = defineProps<
     limits?: "refuse" | "arrows";
     /** In the shown unit, ten times with Shift. */
     step?: number;
+    /** Where an arrow starts on a blank field, for an owner whose placeholder hints at a default. Default `min`. */
+    stepFrom?: number | undefined;
     /** A blank field means null instead of the last value. */
     nullable?: boolean;
     /** Shows what the draft would do, on a debounce while typing in `change` mode; text that does not read is
@@ -165,7 +167,7 @@ function onInput(e: Event) {
 
 function stepBy(dir: 1 | -1, big: boolean) {
   const factor = unitDef.value?.factor ?? 1;
-  let base = props.modelValue ?? props.min ?? 0;
+  let base = props.modelValue ?? props.stepFrom ?? props.min ?? 0;
   try {
     if (draft.value.trim() !== "") base = read(draft.value) ?? base;
   } catch {

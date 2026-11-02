@@ -15,6 +15,12 @@ import {
 import { createPrintabilityState } from "../../plugins/FundaCAD.PrintToolbox/printabilityState";
 import CustomForm from "../../plugins/FundaCAD.Screws/CustomForm.vue";
 import ThreadPanel from "../../plugins/FundaCAD.Screws/ThreadPanel.vue";
+import fieldCatalogue from "../../plugins/FundaCAD.Screws/catalogue/fields.json";
+import inchCatalogue from "../../plugins/FundaCAD.Screws/catalogue/inch.json";
+import metricCatalogue from "../../plugins/FundaCAD.Screws/catalogue/metric.json";
+import threadCatalogue from "../../plugins/FundaCAD.Screws/catalogue/threads.json";
+import { specRows } from "../../plugins/FundaCAD.Screws/catalogue";
+import { FILE_FORMAT, parseLibraryFile } from "../../plugins/FundaCAD.Screws/library";
 import {
   KINDS,
   PARTS,
@@ -247,12 +253,6 @@ describe("the Printability settings", () => {
   });
 });
 
-describe("the Standard Thread clearance", () => {
-  const SEL = "[data-testid=thread-clearance]";
-
-  async function panel() {
-    threadDraft.value = {
-      editing: null,
 describe("the Printability overhang angle reads an angle", () => {
   async function overhang() {
     const state = createPrintabilityState();
@@ -307,6 +307,12 @@ describe("the Printability overhang angle reads an angle", () => {
   });
 });
 
+describe("the Standard Thread clearance", () => {
+  const SEL = "[data-testid=thread-clearance]";
+
+  async function panel() {
+    threadDraft.value = {
+      editing: null,
       face: {},
       faceDiameter: null,
       external: true,
@@ -356,12 +362,6 @@ describe("the Printability overhang angle reads an angle", () => {
     expect(changed).toHaveBeenCalledOnce();
   });
 
-  it("left blank is no clearance, and shows 0", async () => {
-    const { changed, input } = await panel();
-    type(input, "");
-    await enter(input);
-    expect(threadDraft.value!.clearance).toBe(0);
-    expect(changed).toHaveBeenCalledOnce();
   it.each([
     ["1/2", 0.5],
     ["1/2 mm", 0.5],
@@ -374,6 +374,12 @@ describe("the Printability overhang angle reads an angle", () => {
     expect(input.getAttribute("aria-invalid")).toBeNull();
   });
 
+  it("left blank is no clearance, and shows 0", async () => {
+    const { changed, input } = await panel();
+    type(input, "");
+    await enter(input);
+    expect(threadDraft.value!.clearance).toBe(0);
+    expect(changed).toHaveBeenCalledOnce();
   });
 
   it("a negative clearance lands on 0", async () => {
@@ -437,7 +443,7 @@ describe("the Parameters number row", () => {
   async function section(control: ParamControl, expr = "0.5", unit: string | null = "mm") {
     const doc: CadDocument = {
       parameters: {},
-      paramDefs: { gap: { expr, value: Number(expr), unit, control } },
+      paramDefs: { gap: { expr, value: Number(expr), ...(unit ? { unit } : {}), control } },
       features: [],
     } as unknown as CadDocument;
     const store = new DocumentStore(backend, doc);
@@ -531,12 +537,6 @@ describe("the Parameters number row", () => {
     }
   });
 
-  it("steps by the control's step, and by 1 without one, inside its limits", async () => {
-    const { store, input } = await section(NUMBER);
-    press(input, "ArrowUp");
-    await nextTick();
-    await enter(input);
-    expect(store.document.paramDefs!["gap"]!.expr).toBe("0.6");
   describe.each([
     [
       "deg",
@@ -586,6 +586,12 @@ describe("the Parameters number row", () => {
     }
   });
 
+  it("steps by the control's step, and by 1 without one, inside its limits", async () => {
+    const { store, input } = await section(NUMBER);
+    press(input, "ArrowUp");
+    await nextTick();
+    await enter(input);
+    expect(store.document.paramDefs!["gap"]!.expr).toBe("0.6");
     type(input, "0.3");
     await enter(input);
     press(input, "ArrowDown");
@@ -647,7 +653,8 @@ describe("the custom fastener form", () => {
     const { field, byLabel } = await form();
     expect(field(".scr-thread-diameter").value).toBe("3");
     expect(field(".scr-len-length").closest("label")!.textContent).toContain("Length");
-    expect(byLabel("Countersink angle").value).toBe("90");
+    expect(byLabel("Countersink angle").value).toBe("");
+    expect(byLabel("Countersink angle").placeholder).toBe("90");
     expect(byLabel("Driver number").value).toBe("");
   });
 
@@ -853,6 +860,95 @@ describe("the custom fastener form", () => {
     press(driver, "ArrowUp");
     await flushPromises();
     expect((await saved())!.drive!["number"]).toBe(1);
+  });
+
+  it("an unset countersink angle saves no angle and states none", async () => {
+    const { byLabel, saved } = await form();
+    expect(byLabel("Countersink angle").value).toBe("");
+    expect((await saved())!.head!["angle"]).toBeUndefined();
+  });
+
+  it("a countersink angle of 90 written whole on an unset field is stored, and gets its table row", async () => {
+    const { byLabel, saved } = await form();
+    type(byLabel("Countersink angle"), "90");
+    await flushPromises();
+    const s = (await saved())!;
+    expect(s.head!["angle"]).toBe(90);
+    expect(specRows(s).map((r) => r.label)).toContain("  Countersink angle");
+  });
+
+  it("a countersink angle of 90 typed key by key is stored", async () => {
+    const { byLabel, saved } = await form();
+    const input = byLabel("Countersink angle");
+    type(input, "9");
+    type(input, "90");
+    await flushPromises();
+    expect((await saved())!.head!["angle"]).toBe(90);
+  });
+
+  it("the arrows on an unset countersink angle step from the 90 it hints at, and store", async () => {
+    const up = await form();
+    press(up.byLabel("Countersink angle"), "ArrowUp");
+    await flushPromises();
+    expect((await up.saved())!.head!["angle"]).toBe(91);
+    const down = await form();
+    press(down.byLabel("Countersink angle"), "ArrowDown");
+    await flushPromises();
+    expect((await down.saved())!.head!["angle"]).toBe(89);
+  });
+
+  it("a countersink angle cleared again leaves nothing stored and hints at 90 after a blur", async () => {
+    const { byLabel, saved } = await form();
+    const input = byLabel("Countersink angle");
+    type(input, "82");
+    await flushPromises();
+    type(input, "");
+    await flushPromises();
+    await leave(input);
+    expect(input.value).toBe("");
+    expect((await saved())!.head!["angle"]).toBeUndefined();
+  });
+
+  it.each([200, 0, -5])("a saved fastener holding an angle of %s opens and saves unchanged until edited", async (a) => {
+    const old = screw({ head: { type: "countersunk", diameter: 7, height: 2, angle: a } });
+    const file = JSON.stringify({ format: FILE_FORMAT, version: 1, fasteners: [old] });
+    expect(parseLibraryFile(file).problems).toEqual([]);
+    const { byLabel, problems, saved, w } = await form(old);
+    const input = byLabel("Countersink angle");
+    expect(input.value).toBe(String(a));
+    expect(input.getAttribute("aria-invalid")).toBeNull();
+    expect(problems()).toEqual([]);
+    expect((await saved())!.head!["angle"]).toBe(a);
+    expect(w.emitted("save")).toHaveLength(1);
+    press(input, a > 179 ? "ArrowUp" : "ArrowDown");
+    await flushPromises();
+    expect((await saved())!.head!["angle"]).toBe(a > 179 ? 179 : 1);
+  });
+
+  it("a saved fastener's out of range angle retyped as it stands is refused and holds Save", async () => {
+    const { byLabel, problems, saved, w } = await form(
+      screw({ head: { type: "countersunk", diameter: 7, height: 2, angle: 200 } }),
+    );
+    type(byLabel("Countersink angle"), "200");
+    await flushPromises();
+    expect(problems()).toEqual([expect.stringMatching(/^Countersink angle: At most 179/)]);
+    await saved();
+    expect(w.emitted("save")).toBeUndefined();
+  });
+
+  it("no catalogue family holds a countersink angle outside 1 to 179", () => {
+    const angles: number[] = [];
+    const walk = (v: unknown) => {
+      if (Array.isArray(v)) v.forEach(walk);
+      else if (v && typeof v === "object") {
+        for (const [k, x] of Object.entries(v)) {
+          if (/(^|\.)angle$/i.test(k)) angles.push(x as number);
+          walk(x);
+        }
+      }
+    };
+    [metricCatalogue, inchCatalogue, threadCatalogue, fieldCatalogue].forEach(walk);
+    expect([...angles].sort((a, b) => a - b)).toEqual([82, 90, 90]);
   });
 
   it("the countersink arrows stop at 1 and at 179", async () => {
