@@ -89,6 +89,16 @@ def walk_to(s, want, limit=6):
     raise AssertionError(f"no profile said {want!r}")
 
 
+def tab_to_snap(s, want, limit=5):
+    for _ in range(limit):
+        seen = len(s.page.evaluate(SPOKEN))
+        s.page.keyboard.press("Tab")
+        s.page.wait_for_function("n => window.__spoken.length > n", arg=seen)
+        if want in s.page.evaluate(SPOKEN)[-1]:
+            return
+    raise AssertionError(f"no snap said {want!r}")
+
+
 def new_document_by_keys(s):
     """Ctrl+N and the unsaved changes question answered with Enter on Discard, so no pointer is used."""
     kb = s.page.keyboard
@@ -223,16 +233,35 @@ def test_tab_picks_a_midpoint_for_a_line_end_and_says_whose_it_is(s):
     for key, at in [("ArrowLeft", "30, 20"), ("ArrowLeft", "20, 20"), ("ArrowLeft", "10, 20"), ("ArrowDown", "10, 10"), ("ArrowDown", "10, 0")]:
         kb.press(key)
         spoke(s, f"Cursor at {at}")
-    for _ in range(5):
-        seen = len(s.page.evaluate(SPOKEN))
-        kb.press("Tab")
-        s.page.wait_for_function("n => window.__spoken.length > n", arg=seen)
-        if "midpoint of Line 1" in s.page.evaluate(SPOKEN)[-1]:
-            break
+    tab_to_snap(s, "midpoint of Line 1")
     assert s.page.evaluate(SPOKEN)[-1] == "Cursor at 20, 0, snapped to the midpoint of Line 1"
     kb.press("Enter")
     s.page.wait_for_function("() => window.sketch.entities.length === 2")
     assert shapes(s)[1] == {"type": "line", "x1": 35, "y1": 20, "x2": 20, "y2": 0}
+    spoke(s, "Point at 20, 0, snapped to the midpoint of Line 1")
+    ids = [e["id"] for e in s.page.evaluate(ENTITIES)]
+    assert s.page.evaluate(CONSTRAINTS) == [{"type": "midpoint", "e": ids[1], "p": 1, "line": ids[0]}]
+    no_pointer(s)
+
+
+def test_enter_in_the_size_box_after_arrows_says_the_end_and_its_snap(s):
+    kb = s.page.keyboard
+    to_items_plane(s)
+    tool(s, "l", "line")
+    point(s, 10, -5)
+    kb.type("@20,10")
+    kb.press("Enter")
+    s.page.wait_for_function("() => window.sketch.entities.length === 1")
+    kb.press("Escape")
+    point(s, 35, 20)
+    s.page.evaluate("() => document.querySelector('.dim-field[data-field=length] input').focus()")
+    for key, at in [("ArrowLeft", "30, 20"), ("ArrowLeft", "20, 20"), ("ArrowLeft", "10, 20"), ("ArrowDown", "10, 10"), ("ArrowDown", "10, 0")]:
+        kb.press(key)
+        spoke(s, f"Cursor at {at}")
+    tab_to_snap(s, "midpoint of Line 1")
+    kb.press("Enter")
+    s.page.wait_for_function("() => window.sketch.entities.length === 2")
+    spoke(s, "Point at 20, 0, snapped to the midpoint of Line 1. Line 2, length 25")
     no_pointer(s)
 
 
