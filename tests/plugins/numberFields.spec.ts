@@ -15,7 +15,14 @@ import {
 import { createPrintabilityState } from "../../plugins/FundaCAD.PrintToolbox/printabilityState";
 import CustomForm from "../../plugins/FundaCAD.Screws/CustomForm.vue";
 import ThreadPanel from "../../plugins/FundaCAD.Screws/ThreadPanel.vue";
-import type { FastenerSpec } from "../../plugins/FundaCAD.Screws/spec";
+import {
+  KINDS,
+  PARTS,
+  fieldPhrase,
+  type FastenerSpec,
+  type Kind,
+  type PartName,
+} from "../../plugins/FundaCAD.Screws/spec";
 import {
   threadDraft,
   threadTool,
@@ -207,6 +214,16 @@ describe("the Printability settings", () => {
     });
   });
 
+  it("overhang typed past its maximum: 95 reaches Check, which refuses it", async () => {
+    const { setup, field, refusal } = await panel();
+    const input = field(".printability-overhang");
+    type(input, "95");
+    await flushPromises();
+    expect(setup.overhang).toBe(95);
+    expect(input.getAttribute("aria-invalid")).toBeNull();
+    expect(refusal()).toMatch(/overhang/);
+  });
+
   it("the overhang arrows stop at 89, and a typed 89.5 or 0.5 still reaches Check, which allows them", async () => {
     const { setup, field, refusal } = await panel();
     const input = field(".printability-overhang");
@@ -299,6 +316,18 @@ describe("the Standard Thread clearance", () => {
     await enter(input);
     expect(threadDraft.value!.clearance).toBe(0);
     expect(changed).toHaveBeenCalledOnce();
+  });
+
+  it("a negative clearance typed at 0 already reads 0 back, not its own text", async () => {
+    const { input } = await panel();
+    type(input, "0");
+    await enter(input);
+    type(input, "-1");
+    await enter(input);
+    await leave(input);
+    expect(threadDraft.value!.clearance).toBe(0);
+    expect(input.value).toBe("0");
+    expect(input.getAttribute("aria-invalid")).toBeNull();
   });
 
   it("refuses text that is no number, with its reason, and keeps the last clearance", async () => {
@@ -395,6 +424,21 @@ describe("the Parameters number row", () => {
     type(input, "40");
     await enter(input);
     expect(store.document.paramDefs!["gap"]!.expr).toBe("9");
+  });
+
+  it("typed past a limit it already sits on reads the limit back, not its own text", async () => {
+    const { store, input } = await section(NUMBER, "0.3");
+    type(input, "0.1");
+    await enter(input);
+    await leave(input);
+    expect(store.document.paramDefs!["gap"]!.expr).toBe("0.3");
+    expect(input.value).toBe("0.3");
+    const top = await section(NUMBER, "9");
+    type(top.input, "40");
+    await enter(top.input);
+    await leave(top.input);
+    expect(top.store.document.paramDefs!["gap"]!.expr).toBe("9");
+    expect(top.input.value).toBe("9");
   });
 
   it("left blank writes 0 through its control", async () => {
@@ -557,16 +601,104 @@ describe("the custom fastener form", () => {
     expect(w.emitted("save")).toBeUndefined();
   });
 
-  it("a negative value is judged by the form's own list, not refused by the field", async () => {
-    const { field, problems } = await form();
-    const input = field(".scr-len-length");
+  it.each(["length", "thread.length"])("the %s typed negative is a problem line that holds Save", async (path) => {
+    const { field, problems, saved, w } = await form();
+    const input = field(`.scr-len-${path.replace(".", "-")}`);
     type(input, "-4");
     await flushPromises();
     expect(problems()[0]).toMatch(/^Missing:.*length/i);
     expect(input.getAttribute("aria-invalid")).toBeNull();
+    await saved();
+    expect(w.emitted("save")).toBeUndefined();
   });
 
-  it("a blank countersink angle or driver number is optional, and an angle may be negative as it could before", async () => {
+  it("threads per inch typed negative leaves the pitch missing, and holds Save", async () => {
+    const { field, problems, saved, w } = await form(screw(INCH));
+    type(field(".scr-tpi"), "-20");
+    await flushPromises();
+    expect(problems()[0]).toMatch(/^Missing:.*pitch/i);
+    await saved();
+    expect(w.emitted("save")).toBeUndefined();
+  });
+
+  // One template input renders every numeric field of every part type, so each of them is walked.
+  const PART_FIELDS = (Object.keys(PARTS) as PartName[]).flatMap((p) =>
+    Object.entries(PARTS[p]).flatMap(([t, def]) => def.fields.map(([f, text]) => ({ p, t, f, text }))),
+  );
+  const KIND_OF = (p: PartName) => (Object.keys(KINDS) as Kind[]).find((k) => KINDS[k].parts.includes(p))!;
+
+  it.each(PART_FIELDS)("the $p $t $f typed negative is a problem line that holds Save", async ({ p, t, f, text }) => {
+    const { field, problems, saved, w } = await form(screw({ kind: KIND_OF(p), [p]: { type: t } }));
+    const input = field(`.scr-${p}-${f}`);
+    const phrase = fieldPhrase(p, text);
+    type(input, "5");
+    await flushPromises();
+    expect(
+      problems()
+        .filter((line) => line?.startsWith("Missing:"))
+        .join(" "),
+    ).not.toContain(phrase);
+    type(input, "-1");
+    await flushPromises();
+    expect(problems()[0]).toMatch(/^Missing:/);
+    expect(problems()[0]).toContain(phrase);
+    expect(input.getAttribute("aria-invalid")).toBeNull();
+    await saved();
+    expect(w.emitted("save")).toBeUndefined();
+  });
+
+  it.each([
+    ["-5", /^Countersink angle: At least 1/],
+    ["0", /^Countersink angle: At least 1/],
+    ["200", /^Countersink angle: At most 179/],
+  ])("the countersink angle typed %s is refused in the field and holds Save", async (text, line) => {
+    const { byLabel, problems, saved, w } = await form();
+    const input = byLabel("Countersink angle");
+    type(input, text);
+    await flushPromises();
+    expect(input.getAttribute("aria-invalid")).toBe("true");
+    expect(problems()).toEqual([expect.stringMatching(line)]);
+    await saved();
+    expect(w.emitted("save")).toBeUndefined();
+    await leave(input);
+    expect(input.value).toBe(text);
+    expect(input.getAttribute("aria-invalid")).toBe("true");
+    type(input, "82");
+    await flushPromises();
+    expect(problems()).toEqual([]);
+    expect((await saved())!.head!["angle"]).toBe(82);
+  });
+
+  it("the driver number typed negative is refused in the field and holds Save", async () => {
+    const { byLabel, problems, saved, w } = await form();
+    const input = byLabel("Driver number");
+    type(input, "-1");
+    await flushPromises();
+    expect(input.getAttribute("aria-invalid")).toBe("true");
+    expect(problems()).toEqual([expect.stringMatching(/^Driver number: At least 0/)]);
+    await saved();
+    expect(w.emitted("save")).toBeUndefined();
+    type(input, "2");
+    await flushPromises();
+    expect(problems()).toEqual([]);
+    expect((await saved())!.drive!["number"]).toBe(2);
+  });
+
+  it("a refusal goes with its field when the part type no longer asks for it", async () => {
+    const { w, byLabel, problems } = await form();
+    type(byLabel("Countersink angle"), "-5");
+    type(byLabel("Driver number"), "-1");
+    await flushPromises();
+    expect(problems()).toHaveLength(2);
+    const select = (option: string) =>
+      w.findAll("select").find((s) => s.findAll("option").some((o) => o.element.value === option))!;
+    await select("countersunk").setValue("socketCap");
+    await select("phillips").setValue("hex");
+    await flushPromises();
+    expect(problems().join(" ")).not.toMatch(/Countersink angle|Driver number/);
+  });
+
+  it("a blank countersink angle or driver number is optional", async () => {
     const { byLabel, saved, problems } = await form();
     type(byLabel("Driver number"), "2");
     await flushPromises();
@@ -574,9 +706,6 @@ describe("the custom fastener form", () => {
     await flushPromises();
     expect(problems()).toEqual([]);
     expect((await saved())!.drive!["number"]).toBeUndefined();
-    type(byLabel("Countersink angle"), "-5");
-    await flushPromises();
-    expect((await saved())!.head!["angle"]).toBe(-5);
   });
 
   it("a written unit is refused in inches, since the form's numbers are in its own unit", async () => {
@@ -609,11 +738,14 @@ describe("the custom fastener form", () => {
     expect((await saved())!.drive!["number"]).toBe(1);
   });
 
-  it("the countersink arrows have no floor", async () => {
-    const { byLabel, saved } = await form(screw({ head: { type: "countersunk", diameter: 7, height: 2, angle: 0 } }));
-    const angle = byLabel("Countersink angle");
-    press(angle, "ArrowDown");
+  it("the countersink arrows stop at 1 and at 179", async () => {
+    const low = await form(screw({ head: { type: "countersunk", diameter: 7, height: 2, angle: 1 } }));
+    press(low.byLabel("Countersink angle"), "ArrowDown");
     await flushPromises();
-    expect((await saved())!.head!["angle"]).toBe(-1);
+    expect((await low.saved())!.head!["angle"]).toBe(1);
+    const high = await form(screw({ head: { type: "countersunk", diameter: 7, height: 2, angle: 179 } }));
+    press(high.byLabel("Countersink angle"), "ArrowUp");
+    await flushPromises();
+    expect((await high.saved())!.head!["angle"]).toBe(179);
   });
 });

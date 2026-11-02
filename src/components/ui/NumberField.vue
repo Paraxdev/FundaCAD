@@ -48,8 +48,8 @@ const props = defineProps<
     problem?: string | null | undefined;
     min?: number | undefined;
     max?: number | undefined;
-    /** `arrows` holds `min` and `max` to the arrow keys, as a native number input does: typed text past them commits
-     *  for the owner to judge. `refuse`, the default, also refuses it. */
+    /** `arrows` holds `min` and `max` to the arrow keys, as a native number input does: typed text past them commits,
+     *  so only an owner that judges the value may ask for it. `refuse`, the default, also refuses it. */
     limits?: "refuse" | "arrows";
     /** In the shown unit, ten times with Shift. */
     step?: number;

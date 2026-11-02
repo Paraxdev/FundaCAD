@@ -89,6 +89,14 @@ function writeField(p: PartName, field: string, v: number | null) {
   part(p)[field] = v ?? undefined;
 }
 
+// A refused optional field leaves nothing in the spec to object to, so its refusal holds Save itself.
+const refused = reactive<Record<string, string | null>>({});
+
+function refuse(p: PartName, f: string, label: string, why: string | null) {
+  refused[f] = why && `${label}: ${why}`;
+  if (why) writeField(p, f, null);
+}
+
 const tpi = computed(() => {
   const pitch = part("thread")?.["pitch"];
   return typeof pitch === "number" && pitch > 0 ? +(1 / pitch).toFixed(3) : null;
@@ -127,7 +135,10 @@ const spec = computed<FastenerSpec>(() => {
   return s;
 });
 
-const problems = computed(() => specProblems(spec.value));
+const problems = computed(() => [
+  ...specProblems(spec.value),
+  ...Object.values(refused).filter((why): why is string => !!why),
+]);
 const previewProblem = ref<string | null>(null);
 const previewSpec = computed(() => (problems.value.length ? null : spec.value));
 
@@ -233,13 +244,15 @@ const heading = {
             label="Countersink angle (deg)"
             size="sm"
             commit="live"
-            limits="arrows"
             nullable
             :parse="plainNumber"
+            :min="1"
+            :max="179"
             :style="field"
             :model-value="numberOr(part('head')['angle'], 90)"
             @update:model-value="writeField('head', 'angle', $event)"
-            @error="$event && writeField('head', 'angle', null)"
+            @error="refuse('head', 'angle', 'Countersink angle', $event)"
+            @vue:unmounted="refused['angle'] = null"
           />
         </label>
         <label
@@ -251,7 +264,6 @@ const heading = {
             label="Driver number (optional)"
             size="sm"
             commit="live"
-            limits="arrows"
             nullable
             :parse="plainNumber"
             :min="0"
@@ -259,7 +271,8 @@ const heading = {
             :style="field"
             :model-value="numberOr(part('drive')['number'])"
             @update:model-value="writeField('drive', 'number', $event)"
-            @error="$event && writeField('drive', 'number', null)"
+            @error="refuse('drive', 'number', 'Driver number', $event)"
+            @vue:unmounted="refused['number'] = null"
           />
         </label>
         <template v-if="p === 'thread'">
