@@ -287,7 +287,7 @@ onBeforeUnmount(() => widthWatch?.disconnect());
           :style="{
             display: 'flex',
             flexWrap: 'wrap',
-            gap: '8px 12px',
+            gap: stacked ? '8px' : '8px 12px',
             order: stacked ? 2 : 0,
             flexBasis: stacked ? '100%' : 'auto',
           }"

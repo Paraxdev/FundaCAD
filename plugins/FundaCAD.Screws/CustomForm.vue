@@ -317,6 +317,7 @@ const heading = {
         alignItems: 'flex-start',
         columnGap: '16px',
         minWidth: 0,
+        paddingBottom: stacked ? 'var(--prompt-clear, 0px)' : 0,
       }"
     >
       <FastenerPreview

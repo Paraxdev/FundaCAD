@@ -1091,7 +1091,8 @@ defineEmits<{ close: [] }>();
   with `max-width: 100%`, never against the window (`vw`), and let it reflow. `panelClass`
   `measure-panel-column` hands the panel's height cap down, so a scroller inside it with
   `min-height` set shrinks and the rows around it stay in view. The in-view chips (`.dim-input`, `.sketch-dims`,
-  `.snap-tag`, `.prompt` and the like) draw over a panel they meet.
+  `.snap-tag`, `.prompt` and the like) draw over a panel they meet, so a form with its
+  actions at the panel's foot keeps `--prompt-clear` free below them.
   The shell is `min-width: 180px`, `padding: var(--s-4)`, `font-size: var(--fs-small)`.
 
 | Class | Recipe |

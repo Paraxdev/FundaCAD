@@ -72,6 +72,7 @@ def assert_form_reachable(s, scrolls: bool = False) -> None:
     s.page.wait_for_timeout(300)
     assert s.page.evaluate(OUTSIDE) == []
     if scrolls:
+        s.page.evaluate("() => { const p = document.querySelector('.scr-panel'); p.scrollTop = p.scrollHeight; }")
         s.page.locator(".scr-save").scroll_into_view_if_needed()
     assert s.page.evaluate(HITS, ".scr-save") == []
     assert s.page.locator(FORM_TEXT).count() > 0
@@ -160,6 +161,24 @@ def test_custom_form_gives_the_fields_more_height_than_the_preview(library, wind
     assert room["fields"] > room["preview"], room
     assert room["overlap"] <= 0, room
     assert room["closeOnFirstRow"], room
+
+
+@pytest.mark.parametrize("window", WINDOWS)
+def test_custom_form_stays_clear_of_the_prompt_with_a_face_selected(library, window):
+    s = library
+    s.page.locator(".scr-close").click()
+    s.page.locator(".scr-library").wait_for(state="detached")
+    place(s, (1400, 900))
+    s.view("top")
+    s.pick_face("body1:top")
+    open_library(s)
+    place(s, window)
+    try:
+        assert "selected" in s.page.locator("#prompt").text_content()
+        # The tools a selected face adds squeeze the panel to 226 wide at 1100, where it scrolls.
+        assert_form_reachable(s, scrolls=window[0] == 1100)
+    finally:
+        s.page.evaluate("() => window.__fundacad.viewport.clearSelection?.()")
 
 
 def test_custom_form_preview_draws_at_its_new_size_after_the_panel_stacks(library):
