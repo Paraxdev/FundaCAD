@@ -1,6 +1,6 @@
 // The sentences a sketch says by keys, in the display unit. Pure, so the wording is tested without a canvas.
 
-import { displayRound, toDisplay } from "../ui/units";
+import { displayRound, fmtGridStep, toDisplay } from "../ui/units";
 import { entityLabel } from "./relations";
 import { snapLabel, type ResolvedEntity, type SnapCandidate } from "./snap";
 
@@ -9,6 +9,12 @@ function numberWords(mm: number): string {
   const v = displayRound(Math.round(toDisplay(mm) * 1000) / 1000);
   if (v === 0) return "0";
   return v < 0 ? `minus ${-v}` : `${v}`;
+}
+
+/** The coordinates for the tag beside the cursor, which is read by eye and so keeps the minus sign. */
+export function coordLabel(x: number, y: number): string {
+  const v = (mm: number) => displayRound(Math.round(toDisplay(mm) * 1000) / 1000) || 0;
+  return `${v(x)}, ${v(y)}`;
 }
 
 export function coordWords(x: number, y: number): string {
@@ -39,6 +45,17 @@ export function snapWords(c: SnapCandidate, ents: ResolvedEntity[]): string {
 export function pointSentence(p: { x: number; y: number }, c: SnapCandidate | null, ents: ResolvedEntity[]): string {
   const at = `Point at ${coordWords(p.x, p.y)}`;
   return c ? `${at}, snapped to ${snapWords(c, ents)}` : at;
+}
+
+/** `step` is given only when it differs from the last one said. */
+export function cursorSentence(
+  p: { x: number; y: number },
+  c: SnapCandidate | null,
+  ents: ResolvedEntity[],
+  step: number | null,
+): string {
+  const at = `Cursor at ${coordWords(p.x, p.y)}${c ? `, snapped to ${snapWords(c, ents)}` : ""}`;
+  return step === null ? at : `Grid step ${fmtGridStep(step)}. ${at}`;
 }
 
 export function drawnSentence(e: ResolvedEntity, ents: ResolvedEntity[], closed: boolean): string {

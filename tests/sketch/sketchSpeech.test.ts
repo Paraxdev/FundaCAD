@@ -1,6 +1,13 @@
 import { afterEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { coordWords, drawnSentence, pointSentence, snapWords } from "../../src/sketch/sketchSpeech";
+import {
+  coordLabel,
+  coordWords,
+  cursorSentence,
+  drawnSentence,
+  pointSentence,
+  snapWords,
+} from "../../src/sketch/sketchSpeech";
 import { setUnit } from "../../src/ui/units";
 import type { ResolvedEntity, SnapCandidate } from "../../src/sketch/snap";
 
@@ -100,5 +107,39 @@ describe("drawnSentence", () => {
   it("falls back to the kind when the shape is not in the list, and names any other shape alone", () => {
     expect(drawnSentence({ type: "line", id: "gone", x1: 0, y1: 0, x2: 0, y2: 9 }, ents, false)).toBe("line, length 9");
     expect(drawnSentence(ents[5]!, ents, false)).toBe("Point 1");
+  });
+});
+
+describe("coordLabel", () => {
+  it("keeps the minus sign for the eye and strips minus zero", () => {
+    expect(coordLabel(5, -7.25)).toBe("5, -7.25");
+    expect(coordLabel(-0.0001, 12.5)).toBe("0, 12.5");
+  });
+
+  it("is in the display unit", () => {
+    setUnit("in");
+    expect(coordLabel(25.4 * 2, -25.4 * 0.5)).toBe("2, -0.5");
+  });
+});
+
+describe("cursorSentence", () => {
+  it("says where the cursor is, with the step only when it is given", () => {
+    expect(cursorSentence({ x: 20, y: -10.5 }, null, ents, null)).toBe("Cursor at 20, minus 10.5");
+    const said = cursorSentence({ x: 20, y: -10.5 }, null, ents, 5);
+    expect(said).toContain("Grid step 5 mm");
+    expect(said).toContain("Cursor at 20, minus 10.5");
+    expect(said.indexOf("Grid step")).toBeLessThan(said.indexOf("Cursor at"));
+  });
+
+  it("names a snap the cursor stands on", () => {
+    const at = cand({ p: new THREE.Vector2(16, 6), kind: "midpoint", ref: { entity: "l2", at: "mid" } });
+    const said = cursorSentence({ x: 16, y: 6 }, at, ents, null);
+    expect(said).toContain("Cursor at 16, 6");
+    expect(said).toContain("midpoint of Line 2");
+  });
+
+  it("gives the step in inches when the display is inches", () => {
+    setUnit("in");
+    expect(cursorSentence({ x: 25.4, y: 0 }, null, ents, 25.4 / 4)).toContain("1/4 in");
   });
 });

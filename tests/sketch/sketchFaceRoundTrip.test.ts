@@ -55,6 +55,7 @@ function makeSketch(doc: CadDocument) {
     history: { reset() {} },
     keyDraw: noKeyDraw,
     keySurface: noKeySurface,
+    lastCursor: new THREE.Vector2(),
     patternFlow: { resetForEnter() {}, flushOnFinish() {} },
     dims: { clearSelection() {} },
     gridFocus: { set() {} },
@@ -118,6 +119,13 @@ describe("a face-anchored sketch round-trips through enter, snapshot and enter",
     expect(f.face).toEqual(SEL);
     expect(f.at).toEqual(ANCHOR.at);
     expect(f.planeId).toBe("dp1");
+  });
+
+  it("starts every sketch with the keyboard cursor on the plane's 0, 0, not where the last one left it", () => {
+    const { s, store } = makeSketch(doc);
+    (s as unknown as { lastCursor: THREE.Vector2 }).lastCursor.set(7.5, -3);
+    s.enter(PLANE, store, undefined, "dp1", ANCHOR);
+    expect((s as unknown as { lastCursor: THREE.Vector2 }).lastCursor).toEqual(new THREE.Vector2(0, 0));
   });
 
   it("keeps them when the SAVED sketch is reopened and closed unchanged", () => {

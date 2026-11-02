@@ -2,23 +2,33 @@
 // and @ as the first character of a size field turns that box into X and Y for the next one.
 
 import * as THREE from "three";
-import { announce } from "../ui/announce";
 import { singleKeysOn } from "../ui/a11yPrefs";
-import { keyTargetFree } from "../ui/focus";
+import { announce, cancelAnnouncement } from "../ui/announce";
+import { escapeClaimed } from "../ui/escapeClaim";
+import { isEditableTarget, isRailButton, keyTargetFree, widgetOwnsKey } from "../ui/focus";
 import type { DimInput } from "./dimInput";
-import { hitAt } from "./keyCursor";
+import { coarseStep, fineStep, hitAt, stepCoord } from "./keyCursor";
 import { readPoint } from "./pointEntry";
-import { drawnSentence, pointSentence } from "./sketchSpeech";
+import { cursorSentence, drawnSentence, pointSentence } from "./sketchSpeech";
 import type { ResolvedEntity, SnapCandidate, SnapKind, SnapRef } from "./snap";
 
 export const KEY_DRAW_TOOLS: ReadonlySet<string> = new Set(["line", "rectangle", "circle"]);
 
+// Up is +Y and Right is +X of the sketch plane, whichever way the camera looks at it.
+const ARROWS: Readonly<Record<string, readonly ["x" | "y", 1 | -1]>> = {
+  ArrowRight: ["x", 1],
+  ArrowLeft: ["x", -1],
+  ArrowUp: ["y", 1],
+  ArrowDown: ["y", -1],
+};
+
 const OPENERS: ReadonlySet<string> = new Set([..."0123456789", "-", ".", "@"]);
 
 export const KEY_PROMPTS = {
-  armed: "Enter or a digit types X and Y · Esc",
+  armed: "Enter or a digit types X and Y · arrows move the cursor · Esc",
+  moved: "Arrows move · Enter places · Esc",
   point: "Type X and Y, or @dx,dy from the last point · Enter · Esc",
-  size: "Type the size, or @dx,dy · Enter · Esc",
+  size: "Type the size, or @dx,dy · arrows move · Enter · Esc",
 };
 
 export const EDGE_ON_PROMPT = "The sketch plane is edge-on, turn the view to draw on it";
@@ -44,6 +54,10 @@ export interface KeyDrawHost {
   candidates(): SnapCandidate[];
   entities(): ResolvedEntity[];
   planeTooEdgeOn(): boolean;
+  /** The grid spacing on screen in mm, which the drawn grid and the snap lattice share. */
+  step(): number;
+  /** The cursor stands at `hit`: marker, tag, previews and live values follow, as they follow a pointer. */
+  moveTo(hit: KeyHit): void;
   dim(): DimInput;
   place(hit: KeyHit): Drawn | null;
   positionBox(p: THREE.Vector2): void;
@@ -59,6 +73,9 @@ export class KeyDrawFlow {
   private session = false;
   // A tool armed, or a point opened or placed, by keys: the prompt speaks keys and focus is kept off the page body.
   private keys = false;
+  // An arrow moved the cursor since the last point, so Enter places there instead of opening X and Y.
+  private engaged = false;
+  private stepSaid: number | null = null;
 
   constructor(private readonly host: KeyDrawHost) {}
 
@@ -73,10 +90,17 @@ export class KeyDrawFlow {
 
   placed(p: THREE.Vector2) {
     this.last = p.clone();
+    this.engaged = false;
+    cancelAnnouncement("sketch-cursor");
+  }
+
+  pointerMoved() {
+    this.engaged = false;
   }
 
   reset() {
     this.last = null;
+    this.stepSaid = null;
     this.disarm();
   }
 
@@ -84,6 +108,7 @@ export class KeyDrawFlow {
   disarm() {
     this.session = false;
     this.keys = false;
+    this.engaged = false;
   }
 
   /** A letter or a keyboard click on the rail armed the tool: focus goes where the next Enter or digit is heard. */
@@ -99,7 +124,8 @@ export class KeyDrawFlow {
     if (!this.keys || !this.armed()) return null;
     const dim = this.host.dim();
     if (dim.hasField("x")) return KEY_PROMPTS.point;
-    return this.host.base() ? KEY_PROMPTS.size : KEY_PROMPTS.armed;
+    if (this.host.base()) return KEY_PROMPTS.size;
+    return this.engaged ? KEY_PROMPTS.moved : KEY_PROMPTS.armed;
   }
 
   /** A box closed onto the page body: focus goes back to the surface so the next key still reaches the sketch. */
@@ -138,23 +164,92 @@ export class KeyDrawFlow {
   }
 
   onKey(e: KeyboardEvent): boolean {
+    if (e.key in ARROWS) return this.onArrow(e);
     const opener = OPENERS.has(e.key);
     if ((e.key !== "Enter" && !opener) || e.repeat || e.metaKey) return false;
     // AltGr arrives as Ctrl+Alt on Windows, and it is how some layouts type @.
     const altGr = e.key === "@" && e.ctrlKey && e.altKey;
     if (!altGr && (e.ctrlKey || e.altKey)) return false;
-    if (this.armed() && this.host.base()) return this.turnSizeToPoint(e);
+    if (!this.armed()) return false;
+    const dim = this.host.dim();
+    if (e.key === "Enter" && e.shiftKey) {
+      if (!keyTargetFree(e.target) && !dim.ownsField(e.target)) return false;
+      return this.openByKey(e, false);
+    }
+    if (this.host.base()) {
+      if (e.key === "Enter" && this.engaged && keyTargetFree(e.target) && !(dim.isActive && dim.touched())) {
+        return this.placeByEnter(e);
+      }
+      return this.turnSizeToPoint(e);
+    }
     if (opener && !singleKeysOn()) return false;
-    if (!this.armed() || !keyTargetFree(e.target)) return false;
+    if (!keyTargetFree(e.target)) return false;
+    if (e.key === "Enter" && this.engaged && !(dim.isActive && dim.touched())) return this.placeByEnter(e);
+    return this.openByKey(e, opener);
+  }
+
+  private openByKey(e: KeyboardEvent, opener: boolean): boolean {
     e.preventDefault();
+    // The box's own Enter would commit what a Shift+Enter in it was only asking to reopen.
+    if (this.host.dim().ownsField(e.target)) e.stopPropagation();
     if (this.host.planeTooEdgeOn()) {
       this.host.prompt(EDGE_ON_PROMPT);
       return true;
     }
-    if (this.host.dim().isActive) this.host.dim().focus();
+    if (this.host.dim().hasField("x")) this.host.dim().focus();
     else this.open();
     if (opener) this.host.dim().typeInto("x", e.key);
     this.host.changed();
+    return true;
+  }
+
+  private onArrow(e: KeyboardEvent): boolean {
+    if (!this.armed() || e.ctrlKey || e.metaKey || e.defaultPrevented || escapeClaimed()) return false;
+    if (this.host.planeTooEdgeOn()) return false;
+    const dim = this.host.dim();
+    const t = e.target;
+    const rail = isRailButton(t);
+    if (dim.ownsTarget(t)) {
+      // Once something is typed the arrows are the caret's, and Alt+Down opens the unit list.
+      if (!dim.ownsField(t) || dim.touched() || e.altKey) return false;
+    } else if (!keyTargetFree(t) && !rail) {
+      if (e.altKey || isEditableTarget(t) || widgetOwnsKey(e)) return false;
+      // A plain control has no use for the key, so it only loses the view step.
+      e.preventDefault();
+      return true;
+    }
+    e.preventDefault();
+    const [axis, dir] = ARROWS[e.key]!;
+    const cell = this.host.step();
+    const step = e.shiftKey ? fineStep(cell) : e.altKey ? coarseStep(cell) : cell;
+    const at = this.host.cursor();
+    const p = new THREE.Vector2(at.x, at.y);
+    p[axis] = stepCoord(p[axis], step, dir);
+    this.keys = true;
+    this.engaged = true;
+    this.moveTo(p, step);
+    if (rail) this.host.focusSurface();
+    this.host.changed();
+    return true;
+  }
+
+  private moveTo(p: THREE.Vector2, step: number) {
+    const c = hitAt(p, this.host.candidates());
+    this.host.moveTo({ p, kind: c?.kind ?? "free", label: c?.label, ref: c?.ref });
+    const dim = this.host.dim();
+    if (dim.hasField("x")) {
+      dim.updateFromCursor({ x: p.x, y: p.y });
+      this.host.positionBox(p);
+    }
+    const said = this.stepSaid === step ? null : step;
+    this.stepSaid = step;
+    announce(cursorSentence(p, c, this.host.entities(), said), "polite", { key: "sketch-cursor", delay: 150 });
+  }
+
+  private placeByEnter(e: KeyboardEvent): boolean {
+    e.preventDefault();
+    if (this.host.planeTooEdgeOn()) this.host.prompt(EDGE_ON_PROMPT);
+    else this.placePoint(this.host.cursor().clone());
     return true;
   }
 
@@ -199,9 +294,12 @@ export class KeyDrawFlow {
       announce(r.problem, "assertive");
       return;
     }
+    this.placePoint(new THREE.Vector2(r.x, r.y));
+  }
+
+  private placePoint(p: THREE.Vector2) {
     this.session = true;
     this.keys = true;
-    const p = new THREE.Vector2(r.x, r.y);
     const c = hitAt(p, this.host.candidates());
     const done = this.host.place({ p, kind: c?.kind ?? "free", label: c?.label, ref: c?.ref });
     const ents = this.host.entities();

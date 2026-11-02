@@ -107,3 +107,8 @@ export function keyTargetFree(t: EventTarget | null): boolean {
   if (t.closest(CONTROLS)) return false;
   return t.closest("#main") !== null;
 }
+
+/** A button of the tool rail, which has no use for a sketch's arrows beyond moving between tools. */
+export function isRailButton(t: EventTarget | null): boolean {
+  return typeof Element !== "undefined" && t instanceof Element && t.closest(".tool-rail button") !== null;
+}

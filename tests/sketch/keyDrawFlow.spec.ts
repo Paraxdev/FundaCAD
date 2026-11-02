@@ -17,7 +17,8 @@ import { DimInput } from "../../src/sketch/dimInput";
 import { EDGE_ON_PROMPT, KeyDrawFlow, type Drawn, type KeyDrawHost, type KeyHit } from "../../src/sketch/keyDrawFlow";
 import type { ResolvedEntity, SnapCandidate } from "../../src/sketch/snap";
 import { setA11yPref } from "../../src/ui/a11yPrefs";
-import { announce } from "../../src/ui/announce";
+import { announce, cancelAnnouncement } from "../../src/ui/announce";
+import { claimEscape } from "../../src/ui/escapeClaim";
 
 let dim: DimInput;
 let listener: ((e: KeyboardEvent) => void) | null = null;
@@ -28,18 +29,28 @@ afterEach(() => {
   dim.dispose();
   document.body.innerHTML = "";
 });
-beforeEach(() => vi.mocked(announce).mockClear());
+beforeEach(() => {
+  vi.mocked(announce).mockClear();
+  vi.mocked(cancelAnnouncement).mockClear();
+});
 afterEach(() => setA11yPref("singleKeys", true));
+// A closed menu or popover releases its Escape claim on the next tick, which a synchronous test would carry over.
+afterEach(() => new Promise((r) => setTimeout(r, 0)));
 
+let flowOf: KeyDrawFlow | null = null;
 const v = (x: number, y: number) => new THREE.Vector2(x, y);
 
 function rig(tool = "rectangle", over: Partial<KeyDrawHost> = {}) {
+  if (listener) window.removeEventListener("keydown", listener, true);
+  dim?.dispose();
   document.body.innerHTML = '<main id="main"><div id="free"></div><button id="rail">r</button></main>';
   dim = new DimInput();
   const state = {
     tool,
     base: null as THREE.Vector2 | null,
     cursor: v(13.5, -7.25),
+    step: 5,
+    moved: [] as KeyHit[],
     edgeOn: false,
     placed: [] as KeyHit[],
     drawn: null as Drawn | null,
@@ -63,9 +74,15 @@ function rig(tool = "rectangle", over: Partial<KeyDrawHost> = {}) {
     candidates: () => state.candidates,
     entities: () => state.entities,
     planeTooEdgeOn: () => state.edgeOn,
+    step: () => state.step,
+    moveTo: (hit) => {
+      state.moved.push(hit);
+      state.cursor = hit.p.clone();
+    },
     dim: () => dim,
     place: (hit) => {
       state.placed.push(hit);
+      flowOf?.placed(hit.p);
       state.base = hit.p.clone();
       dim.hide();
       return state.drawn;
@@ -82,6 +99,7 @@ function rig(tool = "rectangle", over: Partial<KeyDrawHost> = {}) {
     ...over,
   };
   const flow = new KeyDrawFlow(host);
+  flowOf = flow;
   listener = (e) => void flow.onKey(e);
   window.addEventListener("keydown", listener, true);
   return { flow, state };
@@ -557,5 +575,347 @@ describe("focus and prompt of a keys session", () => {
     dim.hide();
     flow.drawn({ entity: { type: "circle", id: "c1", x: 1, y: 2, radius: 5 }, closed: false });
     expect(state.surfaced).toBe(1);
+  });
+});
+
+describe("arrows move the cursor", () => {
+  const arrow = (key: string, target: Element | Window = free(), init: KeyboardEventInit = {}) =>
+    press(target, { key, ...init });
+  const hit = (x: number, y: number) => ({ p: v(x, y), kind: "free", label: undefined, ref: undefined });
+
+  it("takes each arrow one step along one axis, Up and Right being plus", () => {
+    const { state } = rig("rectangle");
+    for (const [key, to] of [
+      ["ArrowRight", [15, -7.25]],
+      ["ArrowUp", [15, -5]],
+      ["ArrowLeft", [10, -5]],
+      ["ArrowDown", [10, -10]],
+    ] as const) {
+      const e = arrow(key);
+      expect(e.defaultPrevented).toBe(true);
+      expect(state.cursor).toEqual(v(to[0], to[1]));
+    }
+    expect(state.moved).toEqual([hit(15, -7.25), hit(15, -5), hit(10, -5), hit(10, -10)]);
+  });
+
+  it("works for the three draw tools only", () => {
+    for (const tool of ["line", "circle"]) {
+      const { state } = rig(tool);
+      expect(arrow("ArrowRight").defaultPrevented).toBe(true);
+      expect(state.cursor).toEqual(v(15, -7.25));
+    }
+    for (const tool of ["select", "arc", "polygon"]) {
+      const { state } = rig(tool);
+      expect(arrow("ArrowRight").defaultPrevented).toBe(false);
+      expect(state.moved).toEqual([]);
+    }
+  });
+
+  it("goes a finer step with Shift and a coarser one with Alt, Shift winning when both are down", () => {
+    const { state } = rig("rectangle");
+    arrow("ArrowRight", free(), { shiftKey: true });
+    expect(state.cursor).toEqual(v(14, -7.25));
+    arrow("ArrowUp", free(), { altKey: true });
+    expect(state.cursor).toEqual(v(14, 0));
+    arrow("ArrowLeft", free(), { altKey: true, shiftKey: true });
+    expect(state.cursor).toEqual(v(13, 0));
+  });
+
+  it("reports the snap candidate it lands on and none one lattice line short", () => {
+    const { state } = rig("line");
+    state.cursor = v(35, 22.5);
+    arrow("ArrowRight");
+    expect(state.moved.at(-1)).toEqual({
+      p: v(40, 22.5),
+      kind: "midpoint",
+      label: undefined,
+      ref: { entity: "l2", at: "mid" },
+    });
+    arrow("ArrowRight");
+    expect(state.moved.at(-1)).toEqual(hit(45, 22.5));
+    state.cursor = v(5, 0);
+    arrow("ArrowLeft");
+    expect(state.moved.at(-1)).toEqual({ p: v(0, 0), kind: "center", label: "Origin", ref: undefined });
+  });
+
+  it("steps from off the lattice and by a fraction", () => {
+    const { state } = rig("rectangle");
+    state.step = 0.1;
+    state.cursor = v(0.3, 0.45);
+    arrow("ArrowRight");
+    arrow("ArrowUp");
+    expect(state.cursor).toEqual(v(0.4, 0.5));
+  });
+
+  it("moves from the page body and from a plain place of the model area alike", () => {
+    const { state } = rig("rectangle");
+    arrow("ArrowRight", document.body);
+    arrow("ArrowRight", free());
+    expect(state.cursor).toEqual(v(20, -7.25));
+  });
+
+  it("is told to the screen as one sentence, with the step only when it changed", () => {
+    const { flow } = rig("rectangle");
+    const said = () => vi.mocked(announce).mock.calls.map((c) => c[0]);
+    arrow("ArrowRight");
+    arrow("ArrowRight");
+    arrow("ArrowRight", free(), { shiftKey: true });
+    arrow("ArrowRight", free(), { shiftKey: true });
+    arrow("ArrowUp");
+    expect(said()).toEqual([
+      "Grid step 5 mm. Cursor at 15, minus 7.25",
+      "Cursor at 20, minus 7.25",
+      "Grid step 1 mm. Cursor at 21, minus 7.25",
+      "Cursor at 22, minus 7.25",
+      "Grid step 5 mm. Cursor at 22, minus 5",
+    ]);
+    expect(
+      vi.mocked(announce).mock.calls.every((c) => c[1] === "polite" && c[2]?.key === "sketch-cursor" && c[2].delay === 150),
+    ).toBe(true);
+    flow.reset();
+    arrow("ArrowUp");
+    expect(said().at(-1)).toMatch(/^Grid step 5 mm\./);
+  });
+
+  it("names the snap it stands on in the sentence", () => {
+    const { state } = rig("line");
+    state.cursor = v(35, 22.5);
+    arrow("ArrowRight");
+    expect(vi.mocked(announce).mock.calls.at(-1)?.[0]).toMatch(/Cursor at 40, 22\.5, snapped to the midpoint of Line 2/);
+  });
+
+  it("is left to the view edge-on, under an open overlay, with Ctrl or Meta, or once a key handler took it", async () => {
+    const { state } = rig("rectangle");
+    state.edgeOn = true;
+    expect(arrow("ArrowRight").defaultPrevented).toBe(false);
+    state.edgeOn = false;
+    const release = claimEscape();
+    expect(arrow("ArrowRight").defaultPrevented).toBe(false);
+    release();
+    // The claim lapses on the next tick.
+    await new Promise((r) => setTimeout(r, 0));
+    expect(arrow("ArrowRight", free(), { ctrlKey: true }).defaultPrevented).toBe(false);
+    expect(arrow("ArrowRight", free(), { metaKey: true }).defaultPrevented).toBe(false);
+    const taken = new KeyboardEvent("keydown", { key: "ArrowRight", cancelable: true, bubbles: true });
+    taken.preventDefault();
+    free().dispatchEvent(taken);
+    expect(state.moved).toEqual([]);
+  });
+
+  it("is not taken from a tree, a slider, a menu or a text field, and none of them loses its arrows", () => {
+    const { state } = rig("rectangle");
+    const main = document.getElementById("main")!;
+    main.insertAdjacentHTML(
+      "beforeend",
+      '<div role="tree"><div role="treeitem" tabindex="0" id="row">r</div></div><input type="range" id="range"><div role="menu"><button role="menuitem" id="item">m</button></div><input type="text" id="text">',
+    );
+    for (const id of ["row", "range", "item", "text"]) {
+      const el = document.getElementById(id)!;
+      expect(arrow("ArrowRight", el).defaultPrevented, id).toBe(false);
+      expect(arrow("ArrowDown", el, { altKey: true }).defaultPrevented, id).toBe(false);
+    }
+    expect(state.moved).toEqual([]);
+  });
+
+  it("stops only the view step on a plain control, and moves nothing", () => {
+    const { state } = rig("rectangle");
+    document.getElementById("main")!.insertAdjacentHTML("beforeend", '<button id="panel">p</button>');
+    const e = arrow("ArrowLeft", document.getElementById("panel")!);
+    expect(e.defaultPrevented).toBe(true);
+    expect(state.moved).toEqual([]);
+    expect(arrow("ArrowLeft", document.getElementById("panel")!, { altKey: true }).defaultPrevented).toBe(false);
+  });
+
+  it("moves from a rail button and takes focus to the surface", () => {
+    const { state } = rig("rectangle");
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      '<nav class="tool-rail"><div role="toolbar"><button id="tool">t</button></div></nav>',
+    );
+    const e = arrow("ArrowDown", document.getElementById("tool")!);
+    expect(e.defaultPrevented).toBe(true);
+    expect(state.cursor).toEqual(v(13.5, -10));
+    expect(state.surfaced).toBe(1);
+    arrow("ArrowDown", free());
+    expect(state.surfaced).toBe(1);
+  });
+
+  describe("in the value box", () => {
+    const showSize = () =>
+      dim.show([{ name: "width", label: "W" }, { name: "height", label: "H" }], () => {});
+
+    it("moves the cursor from a field nothing was typed in", () => {
+      const { state } = rig("rectangle");
+      state.base = v(10, 3);
+      showSize();
+      const e = arrow("ArrowRight", field("width"));
+      expect(e.defaultPrevented).toBe(true);
+      expect(state.cursor).toEqual(v(15, -7.25));
+    });
+
+    it("is the caret's once something is typed in any field, and Alt+Down is the unit list's", () => {
+      const { state } = rig("rectangle");
+      state.base = v(10, 3);
+      showSize();
+      arrow("ArrowDown", field("width"), { altKey: true });
+      expect(state.moved).toEqual([]);
+      type("height", "8");
+      expect(arrow("ArrowRight", field("width")).defaultPrevented).toBe(false);
+      expect(arrow("ArrowLeft", field("height")).defaultPrevented).toBe(false);
+      expect(state.moved).toEqual([]);
+    });
+
+    it("leaves a button of the box to the box", () => {
+      const { state } = rig("rectangle");
+      state.base = v(10, 3);
+      showSize();
+      const button = document.querySelector<HTMLElement>(".dim-input button")!;
+      expect(arrow("ArrowRight", button).defaultPrevented).toBe(false);
+      expect(state.moved).toEqual([]);
+    });
+
+    it("carries the X and Y fields and the box along with the cursor", () => {
+      const { state } = rig("line");
+      press(free());
+      state.boxAt.length = 0;
+      arrow("ArrowRight", field("x"));
+      arrow("ArrowUp", field("y"));
+      expect([field("x").value, field("y").value]).toEqual(["15", "-5"]);
+      expect(state.boxAt).toEqual([v(15, -7.25), v(15, -5)]);
+    });
+  });
+});
+
+describe("Enter places at the cursor an arrow moved", () => {
+  const arrow = (key: string, init: KeyboardEventInit = {}) => press(free(), { key, ...init });
+  const showSize = () => dim.show([{ name: "width", label: "W" }, { name: "height", label: "H" }], () => {});
+
+  it("places there after an arrow and opens X and Y before one", () => {
+    const { state } = rig("rectangle");
+    arrow("ArrowRight");
+    arrow("ArrowUp");
+    const e = press(free());
+    expect(e.defaultPrevented).toBe(true);
+    expect(state.placed).toEqual([{ p: v(15, -5), kind: "free", label: undefined, ref: undefined }]);
+    expect(state.base).toEqual(v(15, -5));
+    expect(boxFields()).toEqual([]);
+    expect(vi.mocked(announce).mock.calls.at(-1)).toEqual(["Point at 15, minus 5", "polite", { key: "sketch-point" }]);
+  });
+
+  it("carries a snap the cursor stands on", () => {
+    const { state } = rig("line");
+    state.cursor = v(35, 22.5);
+    arrow("ArrowRight");
+    press(free());
+    expect(state.placed).toEqual([
+      { p: v(40, 22.5), kind: "midpoint", label: undefined, ref: { entity: "l2", at: "mid" } },
+    ]);
+    expect(vi.mocked(announce).mock.calls.at(-1)?.[0]).toBe("Point at 40, 22.5, snapped to the midpoint of Line 2");
+  });
+
+  it("drops an arrow's sentence still waiting when a point is placed", () => {
+    const { flow } = rig("rectangle");
+    arrow("ArrowRight");
+    flow.placed(v(15, -7.25));
+    expect(cancelAnnouncement).toHaveBeenCalledWith("sketch-cursor");
+  });
+
+  it("places the next point from the surface, a second one needing another arrow", () => {
+    const { state } = rig("rectangle");
+    arrow("ArrowRight");
+    press(free());
+    showSize();
+    arrow("ArrowUp");
+    arrow("ArrowUp");
+    state.placed.length = 0;
+    press(free());
+    expect(state.placed.map((h) => h.p)).toEqual([v(15, 0)]);
+    state.placed.length = 0;
+    press(free());
+    expect(state.placed).toEqual([]);
+  });
+
+  it("leaves a box with typed text to the box", () => {
+    const { state } = rig("rectangle");
+    arrow("ArrowRight");
+    press(free());
+    showSize();
+    arrow("ArrowUp");
+    type("width", "40");
+    const e = press(free());
+    expect(e.defaultPrevented).toBe(false);
+    expect(state.placed).toHaveLength(1);
+  });
+
+  it("opens X and Y again once the pointer moved the cursor, or the tool was changed away", () => {
+    const { flow, state } = rig("rectangle");
+    arrow("ArrowRight");
+    flow.pointerMoved();
+    press(free());
+    expect(boxFields()).toEqual(["x", "y"]);
+    expect(state.placed).toEqual([]);
+    dim.hide();
+    arrow("ArrowRight");
+    flow.disarm();
+    press(free());
+    expect(boxFields()).toEqual(["x", "y"]);
+    expect(state.placed).toEqual([]);
+  });
+
+  it("opens X and Y with Shift+Enter whether or not an arrow moved the cursor", () => {
+    const { state } = rig("rectangle");
+    expect(press(free(), { shiftKey: true }).defaultPrevented).toBe(true);
+    expect(boxFields()).toEqual(["x", "y"]);
+    dim.hide();
+    arrow("ArrowRight");
+    press(free(), { shiftKey: true });
+    expect(boxFields()).toEqual(["x", "y"]);
+    expect([field("x").value, field("y").value]).toEqual(["15", "-7.25"]);
+    expect(state.placed).toEqual([]);
+  });
+
+  it("opens the box for a second point with Shift+Enter from the size box, without committing it", () => {
+    const { state } = rig("rectangle");
+    state.base = v(10, 3);
+    showSize();
+    field("width").focus();
+    const e = press(field("width"), { shiftKey: true });
+    expect(e.defaultPrevented).toBe(true);
+    expect(boxFields()).toEqual(["x", "y"]);
+    expect(state.placed).toEqual([]);
+  });
+
+  it("opens with Shift+Enter when single key shortcuts are off, and leaves a control's Enter alone", () => {
+    setA11yPref("singleKeys", false);
+    const { state } = rig("rectangle");
+    press(free(), { shiftKey: true });
+    expect(boxFields()).toEqual(["x", "y"]);
+    dim.hide();
+    const e = press(document.getElementById("rail")!, { shiftKey: true });
+    expect(e.defaultPrevented).toBe(false);
+    expect(state.placed).toEqual([]);
+  });
+
+  it("places nothing edge-on and says why", () => {
+    const { state } = rig("rectangle");
+    arrow("ArrowRight");
+    state.edgeOn = true;
+    expect(press(free()).defaultPrevented).toBe(true);
+    expect(state.placed).toEqual([]);
+    expect(state.prompts).toEqual([EDGE_ON_PROMPT]);
+  });
+});
+
+describe("the prompt follows the cursor", () => {
+  it("says the cursor can be placed once an arrow moved it, and the size line after a point", () => {
+    const { flow, state } = rig("circle");
+    flow.armedByKeys();
+    expect(flow.keyPrompt()).toMatch(/arrows move the cursor/);
+    press(free(), { key: "ArrowLeft" });
+    expect(flow.keyPrompt()).toMatch(/Enter places/);
+    press(free());
+    expect(state.base).not.toBeNull();
+    expect(flow.keyPrompt()).toMatch(/size/);
+    expect(flow.keyPrompt()).toMatch(/arrows move/);
   });
 });

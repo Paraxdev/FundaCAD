@@ -34,13 +34,16 @@ type Internals = {
   chainStart: THREE.Vector2 | null;
   originPin: { at: THREE.Vector2; count: number } | null;
   lastCursor: THREE.Vector2;
-  lastHit: { typed?: boolean } | null;
+  lastHit: { p: THREE.Vector2; typed?: boolean; kind?: string } | null;
+  gridSnap: boolean;
+  planeMmPerPx: () => number;
   dim: DimInput;
   keyDraw: KeyDrawFlow;
   keySurface: unknown;
   candidates: SnapCandidate[];
   keyDrawHost(): ConstructorParameters<typeof KeyDrawFlow>[0];
   onKey(e: Partial<KeyboardEvent>): void;
+  snapTag: unknown;
   onPointerDown(e: Partial<PointerEvent>): void;
   inferLine(c: THREE.Vector2): { relations: SketchConstraint[]; end: THREE.Vector2 } | null;
   placeKeyHit(h: { p: THREE.Vector2; kind: SnapKind; label?: string }): void;
@@ -60,6 +63,7 @@ function makeSketch(tool: string) {
   document.body.innerHTML = '<main id="main"><div id="free"></div></main>';
   dim = new DimInput();
   const calls = { setTool: [] as string[], finish: [] as boolean[] };
+  const seen = { snaps: [] as unknown[][], tags: [] as unknown[][] };
   const plane = new SketchPlane("XY");
   const s = Object.create(SketchMode.prototype) as Internals;
   Object.assign(s, {
@@ -90,12 +94,19 @@ function makeSketch(tool: string) {
     mirrorFlow: { running: false },
     dimFlow: { picking: false, plan: null, resetDimPicks() {} },
     constraintTools: { hasPending: () => false, resetPending() {} },
-    overlay: { setPreview() {} },
+    overlay: {
+      setPreview() {},
+      setGuides() {},
+      setSnapScale() {},
+      setSnap: (...a: unknown[]) => seen.snaps.push(a),
+    },
+    snapTag: { hide() {}, show: (...a: unknown[]) => seen.tags.push(a) },
     inferTag: { hide() {}, show() {} },
     viewport: {
       projectToScreen: () => ({ x: 300, y: 200 }),
       viewDirection: () => new THREE.Vector3(0, 0, -1),
       requestRender() {},
+      pixelWorldSize: () => 0.5,
     },
     planeMmPerPx: () => 0.5,
     commitFromCursor() {},
@@ -104,7 +115,7 @@ function makeSketch(tool: string) {
   });
   s.keySurface = noKeySurface;
   s.keyDraw = new KeyDrawFlow(s.keyDrawHost());
-  return { s, calls };
+  return { s, calls, seen };
 }
 
 const fieldEl = (name: string) => document.querySelector<HTMLInputElement>(`.dim-field[data-field="${name}"] input`)!;
@@ -678,5 +689,58 @@ describe("focus and prompt in the sketch", () => {
     key(s, "l");
     (s as unknown as { active: boolean }).active = false;
     expect(prompt()).toBeNull();
+  });
+});
+
+describe("the keyboard cursor in the sketch", () => {
+  it("moves the cursor and the hit that inference reads together, exactly", () => {
+    const { s, seen } = makeSketch("line");
+    s.base = v(5, -7.25);
+    expect(key(s, "ArrowRight")).toBe(true);
+    expect(s.lastCursor).toEqual(v(20, -7.25));
+    expect(s.lastHit).toMatchObject({ p: v(20, -7.25), kind: "free", typed: true });
+    expect(s.inferLine(s.lastCursor)?.relations.map((r) => r.type)).toContain("horizontal");
+    key(s, "ArrowUp");
+    expect(s.lastCursor).toEqual(v(20, 0));
+    expect(s.lastHit?.p).toEqual(s.lastCursor);
+    expect(seen.tags.length).toBe(2);
+  });
+
+  it("shows the grid marker and a silent tag with the coordinates", () => {
+    const { s, seen } = makeSketch("rectangle");
+    key(s, "ArrowLeft");
+    expect(s.lastCursor).toEqual(v(0, -7.25));
+    expect(seen.snaps.map((a) => a[1])).toEqual(["grid"]);
+    expect(seen.tags).toEqual([["0, -7.25", { x: 300, y: 200 }, { silent: true }]]);
+  });
+
+  it("shows a candidate's own kind and name when the cursor lands on one", () => {
+    const { s, seen } = makeSketch("circle");
+    s.lastCursor.set(-20, 0);
+    key(s, "ArrowRight");
+    expect(seen.snaps.map((a) => a[1])).toEqual(["center"]);
+    expect(seen.tags[0]?.[0]).toBe("Origin");
+  });
+
+  it("places a first point at the cursor with Enter and opens the tool's size box", () => {
+    const { s } = makeSketch("rectangle");
+    key(s, "ArrowRight");
+    key(s, "ArrowUp");
+    expect(key(s, "Enter")).toBe(true);
+    expect(s.base).toEqual(v(20, 0));
+    expect(fieldNames()).toEqual(["width", "height"]);
+  });
+
+  it("steps by the drawn grid when snapping is off and by the snap lattice when it is on", () => {
+    const { s } = makeSketch("line");
+    const host = s.keyDrawHost();
+    s.planeMmPerPx = () => 0.5;
+    expect(host.step()).toBe(20);
+    s.gridSnap = true;
+    expect(host.step()).toBe(20);
+    s.planeMmPerPx = () => 0.0001;
+    expect(host.step()).toBe(0.01);
+    s.gridSnap = false;
+    expect(host.step()).toBe(0.005);
   });
 });

@@ -82,6 +82,7 @@ import {
 import { expandPattern, translated } from "./pattern";
 import { MirrorFlow, type MirrorHost } from "./mirrorFlow";
 import { KeySurface } from "./keySurface";
+import { coordLabel } from "./sketchSpeech";
 import { KeyDrawFlow, KEY_DRAW_TOOLS, type Drawn, type KeyDrawHost, type KeyHit } from "./keyDrawFlow";
 import { showMirrorPanel } from "../features/mirrorPanel";
 import { mirrorLineColor, mirrorObjectsColor } from "../features/mirrorColors";
@@ -470,7 +471,10 @@ export class SketchMode {
     this.boundKey = (e) => this.onKey(e);
     this.boundContext = (e) => this.onContextMenu(e);
     // A snap marker left where the pointer exited the canvas reads as a mark on the drawing.
-    this.boundLeave = () => this.showSnap(null);
+    this.boundLeave = () => {
+      this.keyDraw.pointerMoved();
+      this.showSnap(null);
+    };
     this.boundTick = () => this.tick();
     const constraintHost: ConstraintHost = {
       tool: () => this.tool,
@@ -641,6 +645,7 @@ export class SketchMode {
     );
     this.history.reset(); // fresh history per session (armed once entities load)
     this.keyDraw.reset();
+    this.lastCursor.set(0, 0);
     this.keySurface.mount();
     this.keySurface.setStop(KEY_DRAW_TOOLS.has(this.tool));
     this.pickedAt = new Map();
@@ -1938,6 +1943,24 @@ export class SketchMode {
     return this.commitFromCursor(p);
   }
 
+  private moveKeyCursor(hit: KeyHit) {
+    const p = hit.p.clone();
+    this.lastCursor.copy(p);
+    this.lastHit = { p: p.clone(), raw: p.clone(), kind: hit.kind, ref: hit.ref, typed: true };
+    this.showSnap(
+      {
+        kind: hit.kind === "free" ? "grid" : hit.kind,
+        world: this.plane.to3D(p.x, p.y),
+        p,
+        label: hit.label ?? coordLabel(p.x, p.y),
+      },
+      true,
+    );
+    if (this.base) this.basePreview(p.clone());
+    else this.overlay.setPreview([]);
+    this.viewport.requestRender();
+  }
+
   private placeKeyHit(hit: KeyHit): Drawn | null {
     this.lastCursor.copy(hit.p);
     this.lastHit = { p: hit.p.clone(), raw: hit.p.clone(), kind: hit.kind, ref: hit.ref, typed: true };
@@ -2845,6 +2868,7 @@ export class SketchMode {
     const hit = this.snapAt(e.clientX, e.clientY, e.ctrlKey);
     if (!hit) return;
     this.lastCursor.copy(hit.p);
+    this.keyDraw.pointerMoved();
     this.showSnap(hit);
 
     if (this.tool === "arc") {
@@ -2914,6 +2938,8 @@ export class SketchMode {
       candidates: () => this.candidates,
       entities: () => this.entities,
       planeTooEdgeOn: () => this.planeTooEdgeOn(),
+      step: () => (this.gridSnap ? this.snapStep() : gridStep(this.planeMmPerPx(), 0)),
+      moveTo: (hit) => this.moveKeyCursor(hit),
       dim: () => this.dim,
       place: (hit) => this.placeKeyHit(hit),
       positionBox: (p) => {
@@ -3376,6 +3402,7 @@ export class SketchMode {
       guides?: SnapGuide[];
       label?: string | undefined;
     } | null,
+    silent = false,
   ) {
     // The guides go with the snap: one left standing after the cursor left its row would misstate the next click.
     this.overlay.setGuides(
@@ -3390,7 +3417,7 @@ export class SketchMode {
       return;
     }
     this.overlay.setSnap(hit.world, hit.kind, this.viewport.camera);
-    if (hit.label) this.snapTag.show(hit.label, this.viewport.projectToScreen(hit.world));
+    if (hit.label) this.snapTag.show(hit.label, this.viewport.projectToScreen(hit.world), { silent });
     else this.snapTag.hide();
     this.snapWorld = hit.world.clone();
     this.snapScaleSeen = 0; // a new point: size it now rather than next frame
