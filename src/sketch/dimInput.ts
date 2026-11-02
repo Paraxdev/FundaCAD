@@ -283,7 +283,8 @@ export class DimInput {
   private typedProblem: string | null = null;
   /** Fields a keystroke changed since show(), which a confirm does not clear the way it clears `typed`. */
   private typedNames = new Set<string>();
-  private holdCaret = false;
+  // A Tab inside the box since show(), so show()'s late refocus has no business moving focus back.
+  private walked = false;
   private focusName: string | null = null;
   private boxNo = ++boxCount;
   private helpId = `dim-help-${this.boxNo}`;
@@ -394,6 +395,7 @@ export class DimInput {
   ) {
     this.hide();
     this.typedNames.clear();
+    this.walked = false;
     this.focusName = null;
     this.onInput = onInput ?? null;
     this.setClickThrough(false); // every other tool wants a clickable box
@@ -521,8 +523,10 @@ export class DimInput {
     // so focus again next frame too or typing and Tab go nowhere. A field that took focus by then, such as a rename in
     // the Items tree after a selection raised Move, keeps it: losing it would close that field. The box's own field
     // still goes through focus(), since a value seeded after show lost its selection and typing would append to it.
+    // Keys can beat that frame on a slow one or in a screen reader's burst, and then they already say where focus goes.
     this.focus();
     requestAnimationFrame(() => {
+      if (this.walked || this.typedNames.size) return;
       const now = document.activeElement;
       if (this.ownsField(now) || !isEditableTarget(now)) this.focus();
     });
@@ -876,7 +880,7 @@ export class DimInput {
     const f = this.fields.find((x) => x.def.name === this.focusName && !x.hidden) ?? this.fields[0];
     if (f && this.active) {
       f.input.focus();
-      if (!this.holdCaret) f.input.select();
+      f.input.select();
     }
   }
 
@@ -885,9 +889,6 @@ export class DimInput {
     const f = this.fields.find((x) => x.def.name === name && !x.hidden);
     if (!f || !this.active) return;
     this.focusName = name;
-    // show() refocuses next frame and selects the whole value, which would swallow what is typed before then.
-    this.holdCaret = true;
-    requestAnimationFrame(() => (this.holdCaret = false));
     this.focus();
     const input = f.input;
     input.value = f.userDriven ? input.value + text : text;
@@ -951,6 +952,7 @@ export class DimInput {
 
   /** False off either end: there Tab stays the browser's and leaves the box, which never traps the keyboard. */
   private moveFocus(from: HTMLElement, back: boolean): boolean {
+    this.walked = true;
     const stops = this.tabStops(from);
     const next = stops[stops.indexOf(from) + (back ? -1 : 1)];
     if (!next) return false;

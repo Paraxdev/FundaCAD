@@ -1211,13 +1211,90 @@ describe("DimInput.typeInto", () => {
     expect(dim.wasTyped("x")).toBe(false);
   });
 
-  it("goes back to selecting a field on focus once the frame has run", async () => {
+  it("selects a field on focus once the frame has run", async () => {
     open();
     dim.typeInto("x", "9");
     await frame();
     await frame();
     dim.focus();
     expect([field("x").selectionStart, field("x").selectionEnd]).toEqual([0, 1]);
+  });
+});
+
+describe("DimInput keys that beat the frame after show", () => {
+  const field = (name: string) => document.querySelector<HTMLInputElement>(`.dim-field[data-field="${name}"] input`)!;
+  const button = (cls: string) => document.querySelector<HTMLElement>(cls)!;
+  const tab = (from: HTMLElement) =>
+    from.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }));
+  let frames: FrameRequestCallback[];
+  const runFrames = () => frames.splice(0).forEach((f) => f(0));
+  const open = () => {
+    dim.show(
+      [
+        { name: "x", label: "X", free: true },
+        { name: "y", label: "Y", free: true },
+      ],
+      () => {},
+    );
+    dim.updateFromCursor({ x: 12.5, y: -3 });
+  };
+
+  beforeEach(() => {
+    frames = [];
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => frames.push(cb));
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("stays on Y after X was typed and Tab pressed, and Y's digits land in Y", () => {
+    open();
+    dim.typeInto("x", "25");
+    tab(field("x"));
+    expect(document.activeElement).toBe(field("y"));
+    runFrames();
+    expect(document.activeElement).toBe(field("y"));
+    dim.typeInto("y", "3");
+    expect([field("x").value, field("y").value]).toEqual(["25", "3"]);
+  });
+
+  it("stays on Y after a Tab with nothing typed, with its seed selected to be replaced", () => {
+    open();
+    tab(field("x"));
+    runFrames();
+    expect(document.activeElement).toBe(field("y"));
+    expect([field("y").selectionStart, field("y").selectionEnd]).toEqual([0, 2]);
+  });
+
+  it("stays on Confirm when two Tabs reached it, and on X after a Shift+Tab back", () => {
+    open();
+    tab(field("x"));
+    tab(field("y"));
+    expect(document.activeElement).toBe(button(".dim-ok"));
+    runFrames();
+    expect(document.activeElement).toBe(button(".dim-ok"));
+    open();
+    tab(field("x"));
+    field("y").dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true }));
+    runFrames();
+    expect(document.activeElement).toBe(field("x"));
+  });
+
+  it("does not select over the first digits typed, so the next one adds to them", () => {
+    open();
+    field("x").value = "2";
+    field("x").setSelectionRange(1, 1);
+    field("x").dispatchEvent(new Event("input", { bubbles: true }));
+    runFrames();
+    expect([field("x").selectionStart, field("x").selectionEnd]).toEqual([1, 1]);
+  });
+
+  it("still takes focus back to the first field when no key came before the frame", () => {
+    open();
+    tab(field("x"));
+    open();
+    (document.activeElement as HTMLElement).blur();
+    runFrames();
+    expect(document.activeElement).toBe(field("x"));
+    expect([field("x").selectionStart, field("x").selectionEnd]).toEqual([0, 4]);
   });
 });
 
