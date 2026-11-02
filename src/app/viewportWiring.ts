@@ -222,6 +222,7 @@ export function installViewportWiring(e: Engine): void {
   // Picking a body raises the Move gizmo on it; the tool hands a plain click back, so the next pick moves it on.
   e.viewport.onBodySelectionChange = (cause) => {
     browser.setSelectedBodies(e.viewport.getSelectedBodies());
+    e.geometryBrowser.selectionChanged();
     if (e.toolBusy()) return;
     const ids = e.viewport.getSelectedBodies();
     if (!ids.length) {
@@ -307,7 +308,10 @@ export function installViewportWiring(e: Engine): void {
       setPrompt(null);
     }
   }
-  e.viewport.onSelectionChange = refreshNudge;
+  e.viewport.onSelectionChange = () => {
+    refreshNudge();
+    e.geometryBrowser.selectionChanged();
+  };
 
   let roundAsk = 0;
   /** The engine's size and wrap replace the mesh's guess in the prompt and the readout. */

@@ -346,7 +346,10 @@ export class Viewport {
 
   /** A chunked reply being drawn and a tool's suspension are two independent reasons, deliberately apart. */
   private get pickSuppressed(): boolean {
-    return this.suspendPicking || this.streaming || this.outOfDate;
+    return this.suspendPicking || this.modelUnsettled;
+  }
+  get modelUnsettled(): boolean {
+    return this.streaming || this.outOfDate;
   }
   get picksSuspended(): boolean {
     return this.pickSuppressed;
