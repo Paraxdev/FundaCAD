@@ -73,6 +73,13 @@ export interface KeyDrawHost {
   changed(): void;
 }
 
+const hitOf = (p: THREE.Vector2, c: SnapCandidate | null): KeyHit => ({
+  p,
+  kind: c?.kind ?? "free",
+  label: c?.label,
+  ref: c?.ref,
+});
+
 export class KeyDrawFlow {
   private last: THREE.Vector2 | null = null;
   // The point in flight came from X and Y, so Enter on its untouched size box has no click to wait for.
@@ -162,16 +169,19 @@ export class KeyDrawFlow {
     if (!this.armed() || !this.engaged || this.host.dim().touched()) return null;
     const p = this.host.cursor().clone();
     const c = hitAt(p, this.host.candidates());
-    return {
-      hit: { p, kind: c?.kind ?? "free", label: c?.label, ref: c?.ref },
-      said: pointSentence(p, c, this.host.entities()),
-    };
+    return { hit: hitOf(p, c), said: pointSentence(p, c, this.host.entities()) };
   }
 
   drawn(done: Drawn, end?: BoxEnd | null) {
     this.endWalk();
-    if (end) this.last = end.hit.p.clone();
-    if (this.keys) this.session = true;
+    const base = this.host.base();
+    const at = base ?? end?.hit.p;
+    if (at) this.last = at.clone();
+    if (this.keys) {
+      this.session = true;
+      // A typed length or angle put the chain's base where no cursor stood.
+      if (base) this.host.moveTo(hitOf(base.clone(), hitAt(base, this.host.candidates())));
+    }
     const shape = drawnSentence(done.entity, this.host.entities(), done.closed);
     announce(end ? `${end.said}. ${shape}` : shape, "polite", { key: "sketch-point" });
     this.settleFocus();
@@ -270,7 +280,7 @@ export class KeyDrawFlow {
   }
 
   private moveTo(p: THREE.Vector2, c: SnapCandidate | null, step: number | null) {
-    this.host.moveTo({ p, kind: c?.kind ?? "free", label: c?.label, ref: c?.ref });
+    this.host.moveTo(hitOf(p, c));
     const dim = this.host.dim();
     if (dim.hasField("x")) {
       dim.updateFromCursor({ x: p.x, y: p.y });
@@ -368,7 +378,7 @@ export class KeyDrawFlow {
     this.session = true;
     this.keys = true;
     const c = hitAt(p, this.host.candidates());
-    const done = this.host.place({ p, kind: c?.kind ?? "free", label: c?.label, ref: c?.ref });
+    const done = this.host.place(hitOf(p, c));
     const ents = this.host.entities();
     const at = pointSentence(p, c, ents);
     const text = done ? `${at}. ${drawnSentence(done.entity, ents, done.closed)}` : at;

@@ -17,6 +17,7 @@ vi.mock("../../src/ui/toast", () => ({ toast: vi.fn() }));
 
 import { DimInput } from "../../src/sketch/dimInput";
 import { KEY_DRAW_TOOLS, KeyDrawFlow } from "../../src/sketch/keyDrawFlow";
+import { stepCoord } from "../../src/sketch/keyCursor";
 import { noKeySurface } from "./keyDrawStub";
 import { KeySurface } from "../../src/sketch/keySurface";
 import { SketchMode } from "../../src/sketch/sketchMode";
@@ -686,6 +687,58 @@ describe("a shape the size box's Enter finished at the cursor", () => {
     expect(s.entities).toHaveLength(1);
     enter("length");
     expect(fieldNames()).toEqual(["x", "y"]);
+  });
+});
+
+describe("a chain's next point after a typed length and angle", () => {
+  const endX = 5 + 40 * Math.cos(Math.PI / 6);
+  const typedLine = () => {
+    const r = makeDrawing("line");
+    startAt(r.s, "5", "-7");
+    type("length", "40");
+    type("angle", "30");
+    enter("length");
+    return r;
+  };
+
+  it("stands the cursor on the line's end, so Enter opens X and Y there and draws nothing", () => {
+    const { s } = typedLine();
+    expect(s.base!.x).toBeCloseTo(endX, 9);
+    expect(s.base!.y).toBeCloseTo(13, 9);
+    expect(s.lastCursor).toEqual(s.base);
+    enter("length");
+    expect(fieldNames()).toEqual(["x", "y"]);
+    expect([fieldEl("x").value, fieldEl("y").value]).toEqual(["39.64", "13"]);
+    expect(s.entities).toHaveLength(1);
+    expect(s.chainStart).toEqual(v(5, -7));
+  });
+
+  it("steps an arrow from the line's end", () => {
+    const { s } = typedLine();
+    const base = s.base!.clone();
+    key(s, "ArrowRight", fieldEl("length"));
+    expect(s.lastCursor).toEqual(v(stepCoord(base.x, s.keyDrawHost().step(), 1), base.y));
+  });
+
+  it("measures @ from the line's end once the chain was dropped", () => {
+    const { s } = typedLine();
+    (s as never as { cancelGeometry(): void }).cancelGeometry();
+    key(s, "Enter");
+    typePoint("@1,2");
+    expect(s.base!.x).toBeCloseTo(endX + 1, 9);
+    expect(s.base!.y).toBeCloseTo(15, 9);
+  });
+
+  it("leaves the cursor to the pointer when a click placed the point", () => {
+    const { s } = makeDrawing("line");
+    s.base = v(5, -7);
+    s.keyDraw.placed(v(5, -7));
+    (s as never as { showDimFields(): void }).showDimFields();
+    s.lastCursor.set(20, 9);
+    type("length", "40");
+    enter("length");
+    expect(s.entities).toHaveLength(1);
+    expect(s.lastCursor).toEqual(v(20, 9));
   });
 });
 
