@@ -11,7 +11,10 @@ import { pointInRegion } from "../sketch/region";
 import { DimInput } from "../sketch/dimInput";
 import { escapeClaimed } from "../ui/escapeClaim";
 import { isBoxButtonKey, isMenuKey } from "../ui/focus";
+import { announce } from "../ui/announce";
 import { setPrompt } from "../ui/prompt";
+import { KeySurface } from "../sketch/keySurface";
+import { walkStep, walkUnits, walkWords } from "./profileWalk";
 import { snap } from "../ui/units";
 import {
   axisDragDistance,
@@ -50,6 +53,8 @@ export class ExtrudeTool {
   active = false;
   private phase: Phase = "pick";
   private selected: WorldRegion[] = [];
+  private lit: WorldRegion | null = null; // the profile the key walk stands on, only in the pick phase
+  private surface = new KeySurface();
   private distance = 10;
   /** `distance` each way off the plane. Reset on every entry since it belongs to the gesture, not the tool; an edit
    *  seeds it from the saved feature. */
@@ -165,7 +170,7 @@ export class ExtrudeTool {
       this.beginDrag();
       if (opts?.grabAt) this.grabHandle(opts.grabAt.x, opts.grabAt.y);
     } else {
-      setPrompt("Click a profile · Ctrl-click adds areas · Enter");
+      setPrompt("Click a profile · Ctrl-click adds areas · Tab walks them · Enter");
     }
     return true;
   }
@@ -254,6 +259,7 @@ export class ExtrudeTool {
 
   private onMove(e: PointerEvent) {
     if (this.phase === "pick") {
+      this.lit = null;
       const r = this.regionUnder(e.clientX, e.clientY);
       this.overlay.setHoverRegion(r);
       this.viewport.domElement.style.cursor = r ? "pointer" : "default";
@@ -338,6 +344,7 @@ export class ExtrudeTool {
   private onDown(e: PointerEvent) {
     if (e.button !== 0) return;
     if (this.phase === "pick") {
+      this.lit = null;
       const r = this.regionUnder(e.clientX, e.clientY);
       if (!r) return;
       e.preventDefault();
@@ -449,7 +456,59 @@ export class ExtrudeTool {
       return;
     }
     if (e.key === "Escape") this.cancel();
+    else if (this.phase === "pick" && this.onPickKey(e)) return;
     else if (e.key === "Enter" && this.phase === "pick" && this.selected.length) this.beginDrag();
+  }
+
+  /** Tab and Shift+Tab light the profiles largest first without picking, Space adds the lit one, Enter takes it when
+   *  nothing is picked yet. Tab with no profile at all is left to the page. */
+  private onPickKey(e: KeyboardEvent): boolean {
+    if (e.ctrlKey || e.altKey || e.metaKey) return false;
+    const take = () => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    if (e.key === "Tab") {
+      const units = walkUnits(this.overlay.regions);
+      if (!units.length) return false;
+      take();
+      const at = this.lit ? units.findIndex((u) => u.members.includes(this.lit!)) : -1;
+      const i = walkStep(units.length, at, e.shiftKey ? -1 : 1);
+      const unit = units[i]!;
+      this.lit = unit.members[0]!;
+      this.overlay.setHoverRegion(this.lit);
+      this.surface.mount(undefined, "Extrude");
+      this.surface.setStop(true);
+      this.surface.focus();
+      announce(walkWords(unit, i, units.length, this.overlay.isRegionSelected(this.lit)));
+      return true;
+    }
+    if (e.shiftKey) return false;
+    if (e.key === " " && this.lit) {
+      take();
+      this.overlay.toggleRegionSelection(this.lit, true);
+      this.selected = this.overlay.selectedRegions();
+      const units = walkUnits(this.overlay.regions);
+      const i = units.findIndex((u) => u.members.includes(this.lit!));
+      const picked = units.filter((u) => this.overlay.isRegionSelected(u.members[0]!)).length;
+      announce(
+        `${walkWords(units[i]!, i, units.length, this.overlay.isRegionSelected(this.lit))} ${picked} of ${units.length} picked.`,
+      );
+      return true;
+    }
+    if (e.key === "Enter" && !this.selected.length) {
+      take();
+      if (!this.lit) {
+        announce("No profile is lit, Tab lights one.");
+        return true;
+      }
+      this.overlay.toggleRegionSelection(this.lit, false);
+      this.selected = this.overlay.selectedRegions();
+      this.lit = null;
+      if (this.selected.length) this.beginDrag();
+      return true;
+    }
+    return false;
   }
 
   /** The operation is recomputed: symmetric reaches material a one sided extrude pointed away from, and the prompt's
@@ -1032,6 +1091,8 @@ export class ExtrudeTool {
     this.active = false;
     this.symmetric = false;
     this.selected = [];
+    this.lit = null;
+    this.surface.dispose();
     if (this.editId !== null || this.forcedSketchId !== null) {
       this.editId = null;
       this.editOp = null;

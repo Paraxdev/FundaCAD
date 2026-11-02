@@ -6,13 +6,13 @@ export class KeySurface {
   private stop = false;
 
   /** Puts the element in the Model area, or the body when there is none. */
-  mount(parent: Element = document.getElementById("main") ?? document.body) {
+  mount(parent: Element = document.getElementById("main") ?? document.body, label = "Sketch") {
     if (this.el?.isConnected) return;
     const el = document.createElement("div");
     el.className = "sr-only";
     el.setAttribute("data-key-surface", "");
     el.setAttribute("role", "application");
-    el.setAttribute("aria-label", "Sketch");
+    el.setAttribute("aria-label", label);
     el.setAttribute("aria-describedby", "prompt");
     el.tabIndex = this.stop ? 0 : -1;
     parent.appendChild(el);
