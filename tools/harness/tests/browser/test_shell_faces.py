@@ -1,6 +1,7 @@
 """Shell opens every selected face, on one body or across several."""
 
 import json
+import math
 
 import pytest
 
@@ -367,3 +368,38 @@ def test_a_real_wall_is_still_added_over_the_preview(s):
     ctrl_click_world(s, 0, -10, 0)
     assert len(commit_shell_faces(s)) == 2
     assert faces_of(s) == {"body1": 10}
+
+
+CUT_CYLINDER = """() => {
+  window.store.addFeature({ id: 's1', type: 'sketch', name: 'S1', plane: 'XY',
+    entities: [{ type: 'circle', id: 'c1', radius: 10, x: 0, y: 0 }] });
+  window.store.addFeature({ id: 'e1', type: 'extrude', sketch: 's1', distance: 30, operation: 'new' });
+  window.store.addFeature({ id: 's2', type: 'sketch', name: 'S2', plane: 'XZ',
+    entities: [{ type: 'circle', id: 'c2', radius: 3, x: 0, y: 15 }, { type: 'circle', id: 'c3', radius: 3, x: 0, y: -15 }] });
+  window.store.addFeature({ id: 'e2', type: 'extrude', sketch: 's2', distance: 40, operation: 'cut', symmetric: true });
+}"""
+PICKED = "() => window.__fundacad.faceOffset.faces.length"
+
+
+def open_top_of_cut_cylinder(s):
+    s.page.evaluate(CUT_CYLINDER)
+    s.settle()
+    s.view("iso")
+    s.pick_face("top")
+    s.tool("Shell")
+    s.type("field:distance", "1")
+    s.settle()
+    assert s.page.evaluate(PICKED) == 1
+
+
+@pytest.mark.parametrize("turn", [-0.8, 0.05, 0.7])
+def test_the_curved_wall_of_a_part_with_a_cut_is_still_added_over_the_preview(s, turn):
+    open_top_of_cut_cylinder(s)
+    ctrl_click_world(s, 10 * math.cos(turn), 10 * math.sin(turn), 6)
+    assert s.page.evaluate(PICKED) == 2
+
+
+def test_a_ctrl_click_through_the_opening_of_a_part_with_a_cut_adds_no_face(s):
+    open_top_of_cut_cylinder(s)
+    ctrl_click_world(s, 3, -3, 30)
+    assert s.page.evaluate(PICKED) == 1
