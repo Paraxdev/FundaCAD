@@ -3,6 +3,7 @@
 
 import * as THREE from "three";
 import type { DocumentStore } from "../document/store";
+import { MATCH_COS } from "../ui/describePick";
 import type { Viewport } from "./viewport";
 
 export class SelectorError extends Error {
@@ -32,7 +33,6 @@ export interface FaceInfo {
 }
 
 const PLANAR_COS = Math.cos((1 * Math.PI) / 180);
-const MATCH_COS = Math.cos((2 * Math.PI) / 180);
 
 export function faceInfo(tris: THREE.Triangle[], body: string, index: number, faceId: number): FaceInfo {
   const normal = new THREE.Vector3();
