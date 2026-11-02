@@ -246,16 +246,28 @@ const STACK_BELOW = 640;
 const libraryEl = ref<HTMLElement | null>(null);
 const stacked = ref(false);
 let widthWatch: ResizeObserver | null = null;
-watch(libraryEl, (el) => {
+let restack = 0;
+const stopWatching = () => {
   widthWatch?.disconnect();
   widthWatch = null;
+  cancelAnimationFrame(restack);
+  restack = 0;
+};
+watch(libraryEl, (el) => {
+  stopWatching();
   if (!el) return;
+  stacked.value = el.offsetWidth < STACK_BELOW;
+  // Restacking changes the layout, so doing it inside the callback makes WebKit report a ResizeObserver loop error.
   widthWatch = new ResizeObserver(() => {
-    stacked.value = el.offsetWidth < STACK_BELOW;
+    if (restack) return;
+    restack = requestAnimationFrame(() => {
+      restack = 0;
+      stacked.value = el.offsetWidth < STACK_BELOW;
+    });
   });
   widthWatch.observe(el);
 });
-onBeforeUnmount(() => widthWatch?.disconnect());
+onBeforeUnmount(stopWatching);
 </script>
 
 <template>
