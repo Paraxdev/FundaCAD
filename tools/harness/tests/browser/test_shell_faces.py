@@ -337,6 +337,7 @@ def test_a_refused_click_keeps_the_thickness_field_so_a_bare_enter_applies_the_s
     open_top_with_preview(s)
     ctrl_click_world(s, *through)
     assert s.page.evaluate("() => document.activeElement?.tagName") == "INPUT"
+    assert "inside the opening" in s.page.evaluate("() => document.querySelector('#viewport .prompt').textContent")
     s.page.keyboard.press("Enter")
     s.settle()
     assert len(s.page.evaluate(SHELLS)) == 1

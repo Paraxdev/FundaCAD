@@ -193,7 +193,10 @@ export class FaceOffsetTool {
       if (hit && (this.mode === "shell" || hit.bodyId === this.bodyId)) {
         e.preventDefault();
         e.stopImmediatePropagation();
-        if (this.onPreviewOnlyFace(hit)) return;
+        if (this.onPreviewOnlyFace(hit)) {
+          setPrompt("That's inside the opening, not a face to add · Esc");
+          return;
+        }
         this.faces.push(hit.selector);
         this.faceIds.push(hit.faceId);
         this.faceOwners.push(hit.bodyId);

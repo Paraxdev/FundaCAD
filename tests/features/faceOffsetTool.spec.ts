@@ -466,6 +466,13 @@ describe("FaceOffsetTool", () => {
       expect(pressReachesViewport("shell", pickAt([2, 3, 0], 11, "b1"))).toEqual(consumed);
     });
 
+    it("says why it refused a press", () => {
+      pressReachesViewport("shell", pickAt([5, 3, -4], 11, "b1"));
+      expect(usePromptStore().text).toBe("That's inside the opening, not a face to add · Esc");
+      pressReachesViewport("shell", pickAt([2, 3, 0], 11, "b1"));
+      expect(usePromptStore().text).toBe("That's inside the opening, not a face to add · Esc");
+    });
+
     it("consumes an accepted press and leaves a miss to the viewport", () => {
       expect(pressReachesViewport("shell", pickAt([20, 2, -6], 8, "b1"))).toEqual({ reached: 0, prevented: true });
       expect(pressReachesViewport("shell", () => null)).toEqual({ reached: 1, prevented: false });
