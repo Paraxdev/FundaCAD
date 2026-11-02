@@ -7,6 +7,7 @@ import { useSelectionStore } from "../stores/selection";
 import { useGeometryBrowserStore, type GeometryKind } from "../stores/geometryBrowser";
 import type { TopologyReply } from "../types";
 import { stepName } from "../ui/featureMeta";
+import { bodyLabels } from "../ui/bodyLabels";
 import {
   edgeKeyOf,
   edgeRows,
@@ -64,6 +65,20 @@ export function ownerNamesOf(store: Engine["store"]): (id: string) => string | n
   return (id) => names.get(id) ?? null;
 }
 
+/** Each built body named the way Items and the pickers name it, a user's rename first and repeats numbered. */
+export function bodyLabelsOf(store: Pick<Engine["store"], "buildState" | "bodyName">): (id: string) => string | null {
+  const labels = bodyLabels(store.buildState.result?.bodies ?? [], (id) => store.bodyName(id));
+  return (id) => labels.get(id) ?? null;
+}
+
+/** A body's meta with its label in place of the engine's name, for rows and words. */
+export function labelled<T extends { id: string; name?: string | null }>(
+  meta: T,
+  labelOf: (id: string) => string | null,
+): T {
+  return { ...meta, name: labelOf(meta.id) ?? meta.name };
+}
+
 /** The selected faces, edges and bodies as row keys, a run's pieces as one. */
 export function pickedRowKeys(e: {
   store: Engine["store"];
@@ -110,8 +125,10 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
   // A body with no etag is rebuilt on every build, so its reply is good for this build alone.
   const cacheKey = (body: Body) => `${body.id}|${body.etag ?? `#${resultSerial}`}`;
 
-  function showRows(body: BodyMeta, key: string, reply: TopologyReply | null) {
-    const stamp = `${key}|${list.kind}|${reply ? "reply" : "bare"}`;
+  function showRows(raw: BodyMeta, key: string, reply: TopologyReply | null) {
+    const body = labelled(raw, bodyLabelsOf(e.store));
+    // A rename keeps the build's result, so the label is part of the stamp.
+    const stamp = `${key}|${list.kind}|${reply ? "reply" : "bare"}|${body.name}`;
     if (!rowsStale && rowsKey === stamp) return;
     // Old face rows stay until the new ones land, so focus can survive them. Their numbers may no longer mean the same
     // faces, which is why rowsKey keeps the old stamp and pickRows refuses them.
@@ -355,7 +372,8 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
         rowsStale = true;
       }
       const bodies = visibleBodies();
-      list.setBodies(bodies.map((b) => ({ id: b.id, name: b.name })));
+      const labelOf = bodyLabelsOf(e.store);
+      list.setBodies(bodies.map((b) => ({ id: b.id, name: labelOf(b.id) ?? b.name })));
       if (!bodies.some((b) => b.id === list.bodyId)) setBody(selectionOwner(bodies) ?? bodies[0]?.id ?? null);
       syncSelected();
       if (wanted()) ensure();

@@ -126,6 +126,32 @@ describe("the cache", () => {
     expect(r.viewport.applyPicks).toHaveBeenLastCalledWith([{ kind: "face", faceId: 8 }], { additive: false });
   });
 
+  it("names bodies as Items does, numbering repeats and taking a rename with no new request", async () => {
+    const r = rig(
+      result([
+        { id: "body1", etag: "e1", name: "Box" },
+        { id: "body2", etag: "e2", name: "Box" },
+        { id: "body3", etag: "e3", name: "Peg" },
+      ]),
+    );
+    await r.build();
+    r.browser.show(true);
+    expect(r.list.bodies).toEqual([
+      { id: "body1", name: "Box" },
+      { id: "body2", name: "Box 2" },
+      { id: "body3", name: "Peg" },
+    ]);
+    r.browser.setBody("body2");
+    await land(r.asks[1]!, topology("body2"));
+    expect(r.list.rows.map((x) => ("body" in x.facts ? x.facts.body : null))).toEqual(["Box 2", "Box 2", "Box 2"]);
+
+    r.store.setBodyName("body2", "Lid");
+    await settle();
+    expect(r.list.bodies.map((b) => b.name)).toEqual(["Box", "Lid", "Peg"]);
+    expect(r.list.rows.map((x) => ("body" in x.facts ? x.facts.body : null))).toEqual(["Lid", "Lid", "Lid"]);
+    expect(r.asks).toHaveLength(2);
+  });
+
   it("takes a new body name and owner from the build without asking again", async () => {
     const r = rig(result([{ id: "body1", etag: "e1", name: "Old" }]));
     await r.build();

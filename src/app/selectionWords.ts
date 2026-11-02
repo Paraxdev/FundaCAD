@@ -7,7 +7,7 @@ import { describeChange, describePick, type FaceFacts, type PickFacts, type Pick
 import { edgeKeyOf, edgeRows, faceRows, planeRows } from "../ui/geometryRows";
 import { exactRound, type Pt3 } from "../ui/selectionMeasure";
 import type { Engine } from "./engine";
-import { ownerNamesOf, pickedRowKeys } from "./geometryBrowser";
+import { bodyLabelsOf, labelled, ownerNamesOf, pickedRowKeys } from "./geometryBrowser";
 import { BASE_PLANES } from "./planePick";
 
 export interface SelectionSpeech {
@@ -40,7 +40,10 @@ export function createSelectionWords(e: Engine) {
   // When the lone item's words went out, while they may still be waiting to be spoken.
   let spokenAt: number | null = null;
 
-  const metaOf = (id: string) => e.store.buildState.result?.bodies?.find((b) => b.id === id) ?? null;
+  const metaOf = (id: string) => {
+    const meta = e.store.buildState.result?.bodies?.find((b) => b.id === id);
+    return meta ? labelled(meta, bodyLabelsOf(e.store)) : null;
+  };
 
   // What the mesh already knows of the one selected face, memoised by press and pull. The engine knows more.
   function meshFacts(key: string): FaceFacts | null {

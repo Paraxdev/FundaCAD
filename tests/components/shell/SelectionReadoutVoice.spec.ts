@@ -123,6 +123,21 @@ describe("one voice for a selection", () => {
     expect(fromList).toHaveLength(2);
   });
 
+  it("names the body the way Items does, a rename included", async () => {
+    const v = await voice();
+    v.browser.show(true);
+    await land(v.asks[0]!, topology("body1", 6));
+    expect(v.browser.pickRows([v.row(2)], { additive: false })).toBeNull();
+    await frame();
+    expect(said().at(-1)).toMatch(/, BODY1(,|$)/);
+    v.store.setBodyName("body1", "Lid");
+    await frame();
+    expect(v.browser.pickRows([v.row(4)], { additive: false })).toBeNull();
+    await frame();
+    expect(said().at(-1)).toMatch(/^Flat face 5, .*, Lid(,|$)/);
+    expect(said().at(-1)).not.toContain("BODY1");
+  });
+
   it("says a plain Face 4 from a Ctrl-click with the list closed, and asks the engine nothing for it", async () => {
     const v = await voice();
     v.click(1, false);
