@@ -437,6 +437,47 @@ describe("FaceOffsetTool", () => {
       expect(shellAfterClick(pickAt([5, 3, -4], 11, "b1"))).toEqual([FACE_B1]);
     });
 
+    // The viewport blurs a field on any press that reaches it, and the typed thickness must keep Enter.
+    const pressReachesViewport = (mode: "shell" | "offsetFace", pick: () => unknown) => {
+      const { vp, canvas } = fakeViewport();
+      const s = fakeStore();
+      Object.assign(s.store, { modelBeforePreview: BEFORE });
+      const t = new FaceOffsetTool(vp, s.store);
+      t.start(mode, () => {});
+      Object.assign(vp, { pickFaceForPressPull: pick });
+      dragTo(t, canvas, 2, { release: false });
+      const viewport = vi.fn();
+      canvas.addEventListener("pointerdown", viewport);
+      const press = new PointerEvent("pointerdown", {
+        clientX: 0,
+        clientY: 0,
+        button: 0,
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true,
+      });
+      canvas.dispatchEvent(press);
+      return { reached: viewport.mock.calls.length, prevented: press.defaultPrevented };
+    };
+
+    it("consumes a refused press, off the model and on the picked face", () => {
+      const consumed = { reached: 0, prevented: true };
+      expect(pressReachesViewport("shell", pickAt([5, 3, -4], 11, "b1"))).toEqual(consumed);
+      expect(pressReachesViewport("shell", pickAt([2, 3, 0], 11, "b1"))).toEqual(consumed);
+    });
+
+    it("consumes an accepted press and leaves a miss to the viewport", () => {
+      expect(pressReachesViewport("shell", pickAt([20, 2, -6], 8, "b1"))).toEqual({ reached: 0, prevented: true });
+      expect(pressReachesViewport("shell", () => null)).toEqual({ reached: 1, prevented: false });
+    });
+
+    it("Offset Face still leaves a press on another body to the viewport", () => {
+      expect(pressReachesViewport("offsetFace", pickAt([5, 3, -4], 11, "b9"))).toEqual({
+        reached: 1,
+        prevented: false,
+      });
+    });
+
     it("takes a hit on another face of the model", () => {
       const point: Vec3 = [20, 2, -6];
       expect(shellAfterClick(pickAt(point, 8, "b1"))).toEqual([

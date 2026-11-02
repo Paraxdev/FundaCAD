@@ -190,9 +190,10 @@ export class FaceOffsetTool {
     // binds each face to its own body, the others act on one body.
     if (e.ctrlKey || e.metaKey) {
       const hit = this.viewport.pickFaceForPressPull(e.clientX, e.clientY);
-      if (hit && (this.mode === "shell" || hit.bodyId === this.bodyId) && !this.onPreviewOnlyFace(hit)) {
+      if (hit && (this.mode === "shell" || hit.bodyId === this.bodyId)) {
         e.preventDefault();
         e.stopImmediatePropagation();
+        if (this.onPreviewOnlyFace(hit)) return;
         this.faces.push(hit.selector);
         this.faceIds.push(hit.faceId);
         this.faceOwners.push(hit.bodyId);

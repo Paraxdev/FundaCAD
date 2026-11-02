@@ -332,6 +332,18 @@ def test_a_ctrl_click_through_the_previews_opening_adds_no_face(s, through):
     assert faces_of(s) == {"body1": 11}
 
 
+@pytest.mark.parametrize("through", [(3, -3, 15), (9.5, 0, 15)], ids=["hole", "rim"])
+def test_a_refused_click_keeps_the_thickness_field_so_a_bare_enter_applies_the_shell(s, through):
+    open_top_with_preview(s)
+    ctrl_click_world(s, *through)
+    assert s.page.evaluate("() => document.activeElement?.tagName") == "INPUT"
+    s.page.keyboard.press("Enter")
+    s.settle()
+    assert len(s.page.evaluate(SHELLS)) == 1
+    assert len(s.page.evaluate(SHELLS)[-1]) == 1
+    assert faces_of(s) == {"body1": 11}
+
+
 def test_a_real_wall_is_still_added_over_the_preview(s):
     open_top_with_preview(s)
     ctrl_click_world(s, 0, -10, 0)
