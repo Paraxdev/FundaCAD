@@ -14,9 +14,9 @@
   min-width: 0;
 }
 
-.browser-tabs {
+#browser .browser-tabs {
   flex: none;
-  margin: 0 var(--s-4) var(--s-2);
+  margin: 0 var(--s-3) var(--s-2);
 }
 /* A page has to pass the card's height on, or .float-card-body loses its scroll. */
 .browser-page {
@@ -33,6 +33,22 @@
   gap: var(--s-2);
   padding: 0 var(--s-3) var(--s-2);
 }
+.geometry-filters .ui-field-row {
+  margin-bottom: 0;
+}
+/* A label beside its control, the control taking the width that is left. */
+.geometry-filters .ui-field-row-inline {
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: var(--s-3);
+}
+.geometry-filters .ui-field-row-inline .ui-field-control {
+  justify-self: stretch;
+  justify-content: flex-end;
+}
+.geometry-filters .select-trigger {
+  flex: 1 1 auto;
+  min-width: 0;
+}
 .geometry-filter-pair {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -43,11 +59,11 @@
   flex-direction: column;
   align-items: flex-start;
   gap: var(--s-1);
-  padding-bottom: var(--s-2);
+  padding: var(--s-1) var(--s-2) var(--s-2);
 }
 .geometry-note .empty-state {
   margin: 0;
-  padding-bottom: 0;
+  padding: 0;
 }
 .geometry-pager {
   flex: none;
