@@ -368,6 +368,36 @@ describe("a key that belongs to what has focus in Extrude's pick", () => {
   });
 });
 
+describe("a lit profile the regions were rebuilt from under", () => {
+  function rebuilt() {
+    const r = rig([plate(), disc()]);
+    r.start();
+    press("Tab");
+    r.overlay.regions.splice(0, r.overlay.regions.length, plate(), disc());
+    vi.mocked(announce).mockClear();
+    return r;
+  }
+
+  it.each([" ", "Enter"])("makes %j say Tab lights one, and picks nothing stale", (k) => {
+    const r = rebuilt();
+    expect(press(k).defaultPrevented).toBe(true);
+    expect(r.overlay.toggleRegionSelection).not.toHaveBeenCalled();
+    expect(r.t.selected).toEqual([]);
+    expect(r.t.phase).toBe("pick");
+    expect(said()).toHaveLength(1);
+    expect(said()[0]).toContain("Tab lights one");
+  });
+
+  it("lights the first of the new regions on the next Tab, and Space then adds it", () => {
+    const r = rebuilt();
+    press("Tab");
+    const lit = r.overlay.regions[0]!;
+    expect(r.hover).toHaveBeenLastCalledWith(lit);
+    press(" ");
+    expect(r.t.selected).toEqual([lit]);
+  });
+});
+
 describe("Esc, the pointer and a second start", () => {
   it("Esc leaves the tool with nothing picked", () => {
     const r = rig([plate(), disc()]);

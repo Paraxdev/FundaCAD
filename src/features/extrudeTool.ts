@@ -486,6 +486,15 @@ export class ExtrudeTool {
       return true;
     }
     if (e.shiftKey) return false;
+    // A rebuild during the pick (a tree toggle, glyphs arriving) leaves the lit region out of the overlay's list.
+    if (this.lit && !this.overlay.regions.includes(this.lit)) {
+      this.lit = null;
+      if (e.key === " ") {
+        take();
+        announce("No profile is lit, Tab lights one.");
+        return true;
+      }
+    }
     if (e.key === " " && this.lit) {
       take();
       this.overlay.toggleRegionSelection(this.lit, true);
