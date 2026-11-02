@@ -7,7 +7,7 @@ import { announce, cancelAnnouncement } from "../ui/announce";
 import { escapeClaimed } from "../ui/escapeClaim";
 import { isEditableTarget, isRailButton, keyTargetFree, widgetOwnsKey } from "../ui/focus";
 import type { DimInput } from "./dimInput";
-import { coarseStep, fineStep, hitAt, stepCoord } from "./keyCursor";
+import { coarseStep, fineStep, hitAt, snapRing, stepCoord } from "./keyCursor";
 import { readPoint } from "./pointEntry";
 import { cursorSentence, drawnSentence, pointSentence } from "./sketchSpeech";
 import type { ResolvedEntity, SnapCandidate, SnapKind, SnapRef } from "./snap";
@@ -26,7 +26,8 @@ const OPENERS: ReadonlySet<string> = new Set([..."0123456789", "-", ".", "@"]);
 
 export const KEY_PROMPTS = {
   armed: "Enter or a digit types X and Y · arrows move the cursor · Esc",
-  moved: "Arrows move · Enter places · Esc",
+  moved: "Arrows move · Enter places · Tab next snap · Esc",
+  movedBare: "Arrows move · Enter places · Esc",
   point: "Type X and Y, or @dx,dy from the last point · Enter · Esc",
   size: "Type the size, or @dx,dy · arrows move · Enter · Esc",
 };
@@ -76,6 +77,8 @@ export class KeyDrawFlow {
   // An arrow moved the cursor since the last point, so Enter places there instead of opening X and Y.
   private engaged = false;
   private stepSaid: number | null = null;
+  // Tab's walk over the snaps, frozen at its first Tab: `at` is -1 on the spot it started from.
+  private ring: { from: THREE.Vector2; list: SnapCandidate[]; at: number } | null = null;
 
   constructor(private readonly host: KeyDrawHost) {}
 
@@ -91,11 +94,13 @@ export class KeyDrawFlow {
   placed(p: THREE.Vector2) {
     this.last = p.clone();
     this.engaged = false;
+    this.ring = null;
     cancelAnnouncement("sketch-cursor");
   }
 
   pointerMoved() {
     this.engaged = false;
+    this.ring = null;
   }
 
   reset() {
@@ -109,6 +114,7 @@ export class KeyDrawFlow {
     this.session = false;
     this.keys = false;
     this.engaged = false;
+    this.ring = null;
   }
 
   /** A letter or a keyboard click on the rail armed the tool: focus goes where the next Enter or digit is heard. */
@@ -125,7 +131,8 @@ export class KeyDrawFlow {
     const dim = this.host.dim();
     if (dim.hasField("x")) return KEY_PROMPTS.point;
     if (this.host.base()) return KEY_PROMPTS.size;
-    return this.engaged ? KEY_PROMPTS.moved : KEY_PROMPTS.armed;
+    if (!this.engaged) return KEY_PROMPTS.armed;
+    return this.snapsNearby() ? KEY_PROMPTS.moved : KEY_PROMPTS.movedBare;
   }
 
   /** A box closed onto the page body: focus goes back to the surface so the next key still reaches the sketch. */
@@ -165,6 +172,7 @@ export class KeyDrawFlow {
 
   onKey(e: KeyboardEvent): boolean {
     if (e.key in ARROWS) return this.onArrow(e);
+    if (e.key === "Tab") return this.onTab(e);
     const opener = OPENERS.has(e.key);
     if ((e.key !== "Enter" && !opener) || e.repeat || e.metaKey) return false;
     // AltGr arrives as Ctrl+Alt on Windows, and it is how some layouts type @.
@@ -189,6 +197,7 @@ export class KeyDrawFlow {
   }
 
   private openByKey(e: KeyboardEvent, opener: boolean): boolean {
+    this.ring = null;
     e.preventDefault();
     // The box's own Enter would commit what a Shift+Enter in it was only asking to reopen.
     if (this.host.dim().ownsField(e.target)) e.stopPropagation();
@@ -227,23 +236,56 @@ export class KeyDrawFlow {
     p[axis] = stepCoord(p[axis], step, dir);
     this.keys = true;
     this.engaged = true;
-    this.moveTo(p, step);
+    this.ring = null;
+    const said = this.stepSaid === step ? null : step;
+    this.stepSaid = step;
+    this.moveTo(p, hitAt(p, this.host.candidates()), said);
     if (rail) this.host.focusSurface();
     this.host.changed();
     return true;
   }
 
-  private moveTo(p: THREE.Vector2, step: number) {
-    const c = hitAt(p, this.host.candidates());
+  private moveTo(p: THREE.Vector2, c: SnapCandidate | null, step: number | null) {
     this.host.moveTo({ p, kind: c?.kind ?? "free", label: c?.label, ref: c?.ref });
     const dim = this.host.dim();
     if (dim.hasField("x")) {
       dim.updateFromCursor({ x: p.x, y: p.y });
       this.host.positionBox(p);
     }
-    const said = this.stepSaid === step ? null : step;
-    this.stepSaid = step;
-    announce(cursorSentence(p, c, this.host.entities(), said), "polite", { key: "sketch-cursor", delay: 150 });
+    announce(cursorSentence(p, c, this.host.entities(), step), "polite", { key: "sketch-cursor", delay: 150 });
+  }
+
+  private snapsNearby(): boolean {
+    return (this.ring?.list.length ?? this.buildRing().length) > 0;
+  }
+
+  private buildRing(): SnapCandidate[] {
+    const base = this.host.base();
+    return snapRing(this.host.cursor(), this.host.candidates(), base ? [base] : []);
+  }
+
+  // Tab only cycles once the cursor was moved by keys and a snap exists, so it never takes the key from a page with none to offer.
+  private onTab(e: KeyboardEvent): boolean {
+    if (!this.armed() || !this.engaged || e.ctrlKey || e.altKey || e.metaKey) return false;
+    if (e.defaultPrevented || escapeClaimed() || this.host.planeTooEdgeOn()) return false;
+    const dim = this.host.dim();
+    if (dim.hasField("x")) return false;
+    const inBox = dim.ownsTarget(e.target);
+    if (inBox ? !dim.ownsField(e.target) || dim.touched() : !keyTargetFree(e.target)) return false;
+    if (!this.ring) {
+      const list = this.buildRing();
+      if (!list.length) return false;
+      this.ring = { from: this.host.cursor().clone(), list, at: -1 };
+    }
+    const ring = this.ring;
+    const last = ring.list.length - 1;
+    ring.at = e.shiftKey ? (ring.at < 0 ? last : ring.at - 1) : ring.at >= last ? -1 : ring.at + 1;
+    const c = ring.at < 0 ? hitAt(ring.from, this.host.candidates()) : ring.list[ring.at]!;
+    e.preventDefault();
+    if (inBox) e.stopPropagation();
+    this.moveTo((ring.at < 0 ? ring.from : ring.list[ring.at]!.p).clone(), c, null);
+    this.host.changed();
+    return true;
   }
 
   private placeByEnter(e: KeyboardEvent): boolean {
@@ -257,6 +299,7 @@ export class KeyDrawFlow {
   private turnSizeToPoint(e: KeyboardEvent): boolean {
     const dim = this.host.dim();
     if (e.key !== "@" || !dim.isFreshField(e.target)) return false;
+    this.ring = null;
     e.preventDefault();
     e.stopPropagation();
     this.open();

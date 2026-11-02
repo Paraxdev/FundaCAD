@@ -95,6 +95,7 @@ import {
   settleOriginPin,
   showsSnapMarker,
   snap,
+  snapLabel,
   type OriginPinRequest,
   type SnapGuide,
   type SnapKind,
@@ -1952,7 +1953,7 @@ export class SketchMode {
         kind: hit.kind === "free" ? "grid" : hit.kind,
         world: this.plane.to3D(p.x, p.y),
         p,
-        label: hit.label ?? coordLabel(p.x, p.y),
+        label: snapLabel(hit) ?? coordLabel(p.x, p.y),
       },
       true,
     );

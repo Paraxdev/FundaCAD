@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { coarseStep, fineStep, hitAt, stepCoord } from "../../src/sketch/keyCursor";
+import { coarseStep, fineStep, hitAt, snapRing, stepCoord } from "../../src/sketch/keyCursor";
 import { MIN_SNAP_STEP } from "../../src/sketch/planeGrid";
 import { setUnit } from "../../src/ui/units";
 import type { SnapCandidate } from "../../src/sketch/snap";
@@ -88,5 +88,79 @@ describe("fineStep and coarseStep", () => {
     setUnit("in");
     expect(fineStep(25.4)).toBeCloseTo(25.4 / 4, 6);
     expect(coarseStep(25.4 / 16)).toBeCloseTo(25.4 / 4, 6);
+  });
+});
+
+describe("snapRing", () => {
+  const from = new THREE.Vector2(13, -2);
+  const pts = (list: SnapCandidate[]) => list.map((x) => [x.p.x, x.p.y]);
+
+  it("is empty with no candidate and with one that is only where the cursor stands", () => {
+    expect(snapRing(from, [], [])).toEqual([]);
+    expect(snapRing(from, [c(13, -2, 100)], [])).toEqual([]);
+    expect(snapRing(from, [c(13.0009, -2, 100)], [])).toEqual([]);
+  });
+
+  it("gives one candidate as it is, and a candidate just past the bucket", () => {
+    const one = c(13.0011, -2, 80, "midpoint");
+    expect(snapRing(from, [one], [])).toEqual([one]);
+  });
+
+  it("orders many by distance from the cursor", () => {
+    const list = [c(40, 7, 100), c(15, -2, 100), c(-30, -2.5, 100), c(13, 9, 100)];
+    expect(pts(snapRing(from, list, []))).toEqual([
+      [15, -2],
+      [13, 9],
+      [40, 7],
+      [-30, -2.5],
+    ]);
+  });
+
+  it("breaks an equal distance by priority, then x, then y", () => {
+    const a = c(18, -2, 60, "control");
+    const b = c(8, -2, 100);
+    const d = c(13, 3, 100);
+    const e = c(13, -7, 100);
+    const ring = snapRing(from, [a, b, d, e], []);
+    expect(ring).toEqual([b, e, d, a]);
+    expect(snapRing(from, [e, d, a, b], [])).toEqual([b, e, d, a]);
+  });
+
+  it("keeps one candidate per spot, the highest priority, whichever comes first", () => {
+    const low = c(20, 4, 60, "control");
+    const high = c(20, 4, 100);
+    const near = c(20.0005, 4, 80, "midpoint");
+    expect(snapRing(from, [low, high, near], [])).toEqual([high]);
+    expect(snapRing(from, [near, low, high], [])).toEqual([high]);
+  });
+
+  it("leaves out the spots in skip, the last placed point among them", () => {
+    const list = [c(20, 4, 100), c(-6, 11, 100), c(30, 30, 100)];
+    expect(pts(snapRing(from, list, [new THREE.Vector2(-6, 11.0004)]))).toEqual([
+      [20, 4],
+      [30, 30],
+    ]);
+    expect(pts(snapRing(from, list, [new THREE.Vector2(-6, 11.002)]))).toEqual([
+      [20, 4],
+      [-6, 11],
+      [30, 30],
+    ]);
+  });
+
+  it("holds the 16 nearest of 20", () => {
+    const list = Array.from({ length: 20 }, (_, k) => c(13 + (k + 1) * 3.5, -2 + (k % 3), 100));
+    const ring = snapRing(from, list, []);
+    expect(ring).toHaveLength(16);
+    expect(pts(ring)).toEqual(pts([...list].sort((a, b) => a.p.distanceTo(from) - b.p.distanceTo(from)).slice(0, 16)));
+    expect(snapRing(from, list, [], 5)).toHaveLength(5);
+  });
+
+  it("does not change what it was given", () => {
+    const list = [c(40, 7, 100), c(15, -2, 100)];
+    snapRing(from, list, []);
+    expect(pts(list)).toEqual([
+      [40, 7],
+      [15, -2],
+    ]);
   });
 });

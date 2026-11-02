@@ -20,7 +20,13 @@ import { KEY_DRAW_TOOLS, KeyDrawFlow } from "../../src/sketch/keyDrawFlow";
 import { noKeySurface } from "./keyDrawStub";
 import { KeySurface } from "../../src/sketch/keySurface";
 import { SketchMode } from "../../src/sketch/sketchMode";
-import { candidatesFromEntities, originCandidate, type ResolvedEntity, type SnapCandidate, type SnapKind } from "../../src/sketch/snap";
+import {
+  candidatesFromEntities,
+  originCandidate,
+  type ResolvedEntity,
+  type SnapCandidate,
+  type SnapKind,
+} from "../../src/sketch/snap";
 import { SketchPlane } from "../../src/sketch/plane";
 import { toast } from "../../src/ui/toast";
 import { announce } from "../../src/ui/announce";
@@ -729,6 +735,54 @@ describe("the keyboard cursor in the sketch", () => {
     expect(key(s, "Enter")).toBe(true);
     expect(s.base).toEqual(v(20, 0));
     expect(fieldNames()).toEqual(["width", "height"]);
+  });
+
+  describe("Tab", () => {
+    const line: ResolvedEntity = { type: "line", id: "l1", x1: 60, y1: 10, x2: 100, y2: 50 };
+    const withLine = (tool: string) => {
+      const r = makeSketch(tool);
+      r.s.entities = [line];
+      r.s.candidates = [...candidatesFromEntities([line]), ...originCandidate(new SketchPlane("XY"))];
+      return r;
+    };
+
+    it("is the page's before an arrow and takes the key after one", () => {
+      const { s } = withLine("line");
+      expect(key(s, "Tab")).toBe(false);
+      key(s, "ArrowRight");
+      expect(key(s, "Tab")).toBe(true);
+    });
+
+    it("walks from the origin to a line's end, names it on the tag, and Enter places it with its ref", () => {
+      const { s, seen } = withLine("line");
+      key(s, "ArrowRight");
+      key(s, "Tab");
+      expect(s.lastCursor).toEqual(v(0, 0));
+      key(s, "Tab");
+      expect(s.lastCursor).toEqual(v(60, 10));
+      expect(seen.snaps.at(-1)?.[1]).toBe("endpoint");
+      expect(seen.tags.at(-1)?.[0]).toBe("Endpoint");
+      key(s, "Enter");
+      expect(s.base).toEqual(v(60, 10));
+      expect(s.lastHit).toMatchObject({ kind: "endpoint", ref: { entity: "l1", at: 0 } });
+      expect(vi.mocked(announce).mock.calls.at(-1)?.[0]).toBe("Point at 60, 10, snapped to the start of Line 1");
+    });
+
+    it("pins the origin when Tab picked it", () => {
+      const { s } = withLine("rectangle");
+      key(s, "ArrowRight");
+      key(s, "Tab");
+      key(s, "Enter");
+      expect(s.originPin).toEqual({ at: v(0, 0), count: 1 });
+    });
+
+    it("says the midpoint it reached", () => {
+      const { s } = withLine("circle");
+      key(s, "ArrowRight");
+      for (let k = 0; k < 3; k++) key(s, "Tab");
+      expect(s.lastCursor).toEqual(v(80, 30));
+      expect(vi.mocked(announce).mock.calls.at(-1)?.[0]).toBe("Cursor at 80, 30, snapped to the midpoint of Line 1");
+    });
   });
 
   it("steps by the drawn grid when snapping is off and by the snap lattice when it is on", () => {

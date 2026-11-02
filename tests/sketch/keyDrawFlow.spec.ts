@@ -456,7 +456,13 @@ describe("what is said when a shape is finished", () => {
 
 describe("focus and prompt of a keys session", () => {
   const showSize = () =>
-    dim.show([{ name: "width", label: "W" }, { name: "height", label: "H" }], () => {});
+    dim.show(
+      [
+        { name: "width", label: "W" },
+        { name: "height", label: "H" },
+      ],
+      () => {},
+    );
 
   it("armed by keys moves focus to the surface once and asks for the prompt again", () => {
     const { flow, state } = rig("rectangle");
@@ -670,7 +676,9 @@ describe("arrows move the cursor", () => {
       "Grid step 5 mm. Cursor at 22, minus 5",
     ]);
     expect(
-      vi.mocked(announce).mock.calls.every((c) => c[1] === "polite" && c[2]?.key === "sketch-cursor" && c[2].delay === 150),
+      vi
+        .mocked(announce)
+        .mock.calls.every((c) => c[1] === "polite" && c[2]?.key === "sketch-cursor" && c[2].delay === 150),
     ).toBe(true);
     flow.reset();
     arrow("ArrowUp");
@@ -681,7 +689,9 @@ describe("arrows move the cursor", () => {
     const { state } = rig("line");
     state.cursor = v(35, 22.5);
     arrow("ArrowRight");
-    expect(vi.mocked(announce).mock.calls.at(-1)?.[0]).toMatch(/Cursor at 40, 22\.5, snapped to the midpoint of Line 2/);
+    expect(vi.mocked(announce).mock.calls.at(-1)?.[0]).toMatch(
+      /Cursor at 40, 22\.5, snapped to the midpoint of Line 2/,
+    );
   });
 
   it("is left to the view edge-on, under an open overlay, with Ctrl or Meta, or once a key handler took it", async () => {
@@ -742,7 +752,13 @@ describe("arrows move the cursor", () => {
 
   describe("in the value box", () => {
     const showSize = () =>
-      dim.show([{ name: "width", label: "W" }, { name: "height", label: "H" }], () => {});
+      dim.show(
+        [
+          { name: "width", label: "W" },
+          { name: "height", label: "H" },
+        ],
+        () => {},
+      );
 
     it("moves the cursor from a field nothing was typed in", () => {
       const { state } = rig("rectangle");
@@ -788,7 +804,14 @@ describe("arrows move the cursor", () => {
 
 describe("Enter places at the cursor an arrow moved", () => {
   const arrow = (key: string, init: KeyboardEventInit = {}) => press(free(), { key, ...init });
-  const showSize = () => dim.show([{ name: "width", label: "W" }, { name: "height", label: "H" }], () => {});
+  const showSize = () =>
+    dim.show(
+      [
+        { name: "width", label: "W" },
+        { name: "height", label: "H" },
+      ],
+      () => {},
+    );
 
   it("places there after an arrow and opens X and Y before one", () => {
     const { state } = rig("rectangle");
@@ -917,5 +940,198 @@ describe("the prompt follows the cursor", () => {
     expect(state.base).not.toBeNull();
     expect(flow.keyPrompt()).toMatch(/size/);
     expect(flow.keyPrompt()).toMatch(/arrows move/);
+  });
+});
+
+describe("Tab cycles the snaps", () => {
+  const key = (k: string, target: Element | Window = free(), init: KeyboardEventInit = {}) =>
+    press(target, { key: k, ...init });
+  const tab = (init: KeyboardEventInit = {}, target: Element | Window = free()) => key("Tab", target, init);
+  const hit = (x: number, y: number, c: SnapCandidate) => ({ p: v(x, y), kind: c.kind, label: c.label, ref: c.ref });
+  const xy = (s: { cursor: THREE.Vector2 }) => [s.cursor.x, s.cursor.y];
+  // After one arrow the cursor is at (15, -7.25), so they lie in this order.
+  const near: SnapCandidate = { p: v(20, 6), kind: "endpoint", priority: 100, ref: { entity: "l1", at: 1 } };
+  const mid: SnapCandidate = { p: v(40, 22.5), kind: "midpoint", priority: 80, ref: { entity: "l2", at: "mid" } };
+  const far: SnapCandidate = { p: v(-30, -25), kind: "center", priority: 95, label: "Origin" };
+  const withRing = (tool = "rectangle") => {
+    const r = rig(tool);
+    r.state.candidates = [mid, far, near];
+    return r;
+  };
+
+  it("is left to the page before an arrow, with no snap to offer, and in other tools", () => {
+    const { state } = withRing();
+    expect(tab().defaultPrevented).toBe(false);
+    key("ArrowRight");
+    state.candidates = [];
+    expect(tab().defaultPrevented).toBe(false);
+    expect(state.moved).toHaveLength(1);
+    const other = withRing("polygon");
+    key("ArrowRight");
+    expect(tab().defaultPrevented).toBe(false);
+    expect(other.state.moved).toEqual([]);
+  });
+
+  it("leaves a candidate that is only under the cursor to the page", () => {
+    const { state } = rig("line");
+    state.candidates = [{ p: v(15, -7.25), kind: "endpoint", priority: 100 }];
+    key("ArrowRight");
+    expect(tab().defaultPrevented).toBe(false);
+  });
+
+  it("walks the snaps nearest first and back to where it started", () => {
+    const { state } = withRing();
+    key("ArrowRight");
+    state.moved.length = 0;
+    const seen: number[][] = [];
+    for (let k = 0; k < 5; k++) {
+      expect(tab().defaultPrevented).toBe(true);
+      seen.push(xy(state));
+    }
+    expect(seen).toEqual([
+      [20, 6],
+      [40, 22.5],
+      [-30, -25],
+      [15, -7.25],
+      [20, 6],
+    ]);
+    expect(state.moved).toEqual([
+      hit(20, 6, near),
+      hit(40, 22.5, mid),
+      hit(-30, -25, far),
+      { p: v(15, -7.25), kind: "free", label: undefined, ref: undefined },
+      hit(20, 6, near),
+    ]);
+  });
+
+  it("walks it back with Shift+Tab, from the start to the last", () => {
+    const { state } = withRing();
+    key("ArrowRight");
+    tab({ shiftKey: true });
+    expect(xy(state)).toEqual([-30, -25]);
+    tab({ shiftKey: true });
+    expect(xy(state)).toEqual([40, 22.5]);
+    tab({ shiftKey: true });
+    tab({ shiftKey: true });
+    expect(xy(state)).toEqual([15, -7.25]);
+    tab();
+    expect(xy(state)).toEqual([20, 6]);
+  });
+
+  it("skips the point already placed", () => {
+    const { state } = withRing("line");
+    state.base = v(20, 6);
+    key("ArrowRight");
+    tab();
+    expect(xy(state)).toEqual([40, 22.5]);
+  });
+
+  it("drops the walk on an arrow, a pointer move and a placed point", () => {
+    const { flow, state } = withRing();
+    key("ArrowRight");
+    tab();
+    tab();
+    key("ArrowUp");
+    expect(xy(state)).toEqual([40, 25]);
+    tab();
+    expect(xy(state)).toEqual([40, 22.5]);
+    flow.pointerMoved();
+    expect(tab().defaultPrevented).toBe(false);
+    key("ArrowLeft");
+    tab();
+    expect(state.moved.at(-1)).toEqual(hit(40, 22.5, mid));
+    key("Enter");
+    expect(state.placed).toEqual([hit(40, 22.5, mid)]);
+    key("ArrowRight");
+    tab();
+    expect(xy(state)).toEqual([20, 6]);
+  });
+
+  it("says each stop with what it is", () => {
+    withRing();
+    key("ArrowRight");
+    vi.mocked(announce).mockClear();
+    tab();
+    tab();
+    tab();
+    expect(vi.mocked(announce).mock.calls.map((c) => c[0])).toEqual([
+      "Cursor at 20, 6, snapped to the end of Line 1",
+      "Cursor at 40, 22.5, snapped to the midpoint of Line 2",
+      "Cursor at minus 30, minus 25, snapped to the origin",
+    ]);
+  });
+
+  it("places the picked midpoint with its ref and says it", () => {
+    const { state } = withRing();
+    key("ArrowRight");
+    tab();
+    tab();
+    key("Enter");
+    expect(state.placed).toEqual([hit(40, 22.5, mid)]);
+    expect(vi.mocked(announce).mock.calls.at(-1)![0]).toBe("Point at 40, 22.5, snapped to the midpoint of Line 2");
+  });
+
+  it("keeps the Tab of a control and of a chord", () => {
+    withRing();
+    key("ArrowRight");
+    const rail = document.getElementById("rail")!;
+    expect(tab({}, rail).defaultPrevented).toBe(false);
+    expect(tab({ ctrlKey: true }).defaultPrevented).toBe(false);
+    expect(tab({ altKey: true }).defaultPrevented).toBe(false);
+  });
+
+  it("stands aside for an open overlay and an edge-on plane", () => {
+    const { state } = withRing();
+    key("ArrowRight");
+    const release = claimEscape();
+    expect(tab().defaultPrevented).toBe(false);
+    release();
+    state.edgeOn = true;
+    expect(tab().defaultPrevented).toBe(false);
+  });
+
+  describe("in a size box", () => {
+    const showSize = () =>
+      dim.show(
+        [
+          { name: "width", label: "W" },
+          { name: "height", label: "H" },
+        ],
+        () => {},
+      );
+
+    it("cycles while nothing is typed and moves on once something is", () => {
+      const { state } = withRing("rectangle");
+      state.base = v(10, 3);
+      showSize();
+      key("ArrowRight", field("width"));
+      expect(tab({}, field("width")).defaultPrevented).toBe(true);
+      expect(xy(state)).toEqual([20, 6]);
+      type("width", "40");
+      const before = state.moved.length;
+      tab({}, field("width"));
+      expect(state.moved).toHaveLength(before);
+      expect(xy(state)).toEqual([20, 6]);
+    });
+
+    it("leaves the Tab of the X and Y box to its fields", () => {
+      const { state } = withRing("line");
+      key("ArrowRight");
+      key("Enter", free(), { shiftKey: true });
+      expect(boxFields()).toEqual(["x", "y"]);
+      tab({}, field("x"));
+      expect(state.moved).toHaveLength(1);
+      expect(document.activeElement).toBe(field("y"));
+    });
+  });
+
+  it("names Tab in the prompt only when a snap is there to reach", () => {
+    const { flow, state } = withRing("circle");
+    flow.armedByKeys();
+    key("ArrowRight");
+    expect(flow.keyPrompt()).toMatch(/Tab next snap/);
+    state.candidates = [];
+    expect(flow.keyPrompt()).toMatch(/Enter places/);
+    expect(flow.keyPrompt()).not.toMatch(/Tab/);
   });
 });

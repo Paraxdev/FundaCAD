@@ -18,6 +18,30 @@ export function hitAt(p: THREE.Vector2, candidates: readonly SnapCandidate[]): S
   return best;
 }
 
+const RING_LIMIT = 16;
+
+/** The snap candidates Tab walks: nearest first from `from`, one per spot (highest priority), none on `from` or `skip`. */
+export function snapRing(
+  from: THREE.Vector2,
+  candidates: readonly SnapCandidate[],
+  skip: readonly THREE.Vector2[],
+  limit = RING_LIMIT,
+): SnapCandidate[] {
+  const kept: SnapCandidate[] = [];
+  const byPriority = [...candidates].sort((a, b) => b.priority - a.priority);
+  for (const c of byPriority) {
+    if (c.p.distanceTo(from) <= COINCIDENT_MM || skip.some((s) => c.p.distanceTo(s) <= COINCIDENT_MM)) continue;
+    if (kept.some((k) => k.p.distanceTo(c.p) <= COINCIDENT_MM)) continue;
+    kept.push(c);
+  }
+  const dist = (c: SnapCandidate) => c.p.distanceTo(from);
+  kept.sort((a, b) => {
+    const d = dist(a) - dist(b);
+    return Math.abs(d) > 1e-9 ? d : b.priority - a.priority || a.p.x - b.p.x || a.p.y - b.p.y;
+  });
+  return kept.slice(0, limit);
+}
+
 // Strips the float fuzz of a multiple (0.30000000000000004) without touching a lattice value such as 1/64 in.
 const clean = (v: number) => Math.round(v * 1e9) / 1e9;
 
