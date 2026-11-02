@@ -171,6 +171,41 @@ describe("Ctrl+Z and Ctrl+Y in a tool's value box", () => {
     expect(input.value).toBe("40.25");
   });
 
+  it("a field undo puts back the value the tool held before the typing, each time", () => {
+    const { dim, input } = open();
+    let held = -12.5;
+    dim.restoresOnUndo(
+      "move",
+      () => held,
+      (v) => {
+        held = v;
+      },
+    );
+    dim.updateFromCursor({ move: 12.5 });
+    typeInto(input, "7");
+    held = 7;
+    typeInto(input, "12.5", "historyUndo");
+    expect(held).toBe(-12.5);
+    typeInto(input, "7", "historyRedo");
+    held = 7;
+    typeInto(input, "12.5", "historyUndo");
+    expect(held).toBe(-12.5);
+  });
+
+  it("an undo landing on text that is no value leaves no typed value behind it", () => {
+    const { dim, input } = open();
+    typeInto(input, "0.7");
+    expect(dim.getValue("move")).toBe(0.7);
+    typeInto(input, "0.", "historyUndo");
+    expect(dim.isUserDriven("move")).toBe(true);
+    expect(dim.getValue("move")).toBe(0);
+    dim.show([{ name: "move", label: "Move", kind: "length", positive: true }], () => {});
+    const again = document.querySelector<HTMLInputElement>(".dim-input input")!;
+    typeInto(again, "0.7");
+    typeInto(again, "0.", "historyUndo");
+    expect(dim.getValue("move")).toBe(null);
+  });
+
   it("deleting back to the text it started from stays typing", () => {
     const { dim, input } = open();
     typeInto(input, "5");

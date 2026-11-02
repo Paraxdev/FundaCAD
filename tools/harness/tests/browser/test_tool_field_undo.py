@@ -347,3 +347,88 @@ def test_enter_straight_after_a_field_undo_commits_the_extrude_the_field_shows(s
     s.page.keyboard.press("Enter")
     s.settle()
     assert last_step(s)["distance"] == pytest.approx(dragged, abs=1e-3), "the drag's depth and its side"
+
+
+def on_block(s):
+    s.press("Escape")
+    s.new_document()
+    s.open_file(BLOCK)
+    s.view("iso")
+    s.settle()
+
+
+def run_in_app(s, script):
+    s.page.evaluate(f"() => {{ const app = window.__fundacad; {script}; }}")
+    s.settle()
+
+
+def open_revolve(s):
+    s.press("Escape")
+    s.new_document()
+    s.open_file(PLATE)
+    s.view("iso")
+    s.page.evaluate(
+        """() => {
+          window.store.addFeature({ id: 's', type: 'sketch', name: 'S', plane: 'XZ',
+            entities: [{ type: 'rectangle', id: 'r1', width: 5, height: 5, x: 40, y: 0 }] });
+          window.store.addFeature({ id: 'rv', type: 'revolve', sketch: 's', angle: 180, regions: [[40, 0, 0]],
+            axis: 'Z', op: 'new' });
+        }"""
+    )
+    s.settle()
+    s.click("feature:rv", double=True)
+    s.settle()
+
+
+def open_draft(s):
+    on_block(s)
+    s.pick_face("front")
+    s.tool("Draft")
+    s.settle()
+
+
+def open_pattern(s):
+    on_block(s)
+    run_in_app(s, "app.pattern.start('linear', ['body1'], () => {})")
+
+
+def open_move(s):
+    on_block(s)
+    run_in_app(s, "app.move.start(['body1'], () => {}); app.move.last = { kind: 'axis', index: 0 }")
+
+
+def open_light(s):
+    on_block(s)
+    run_in_app(s, "app.lightAim.start()")
+
+
+def open_section(s):
+    on_block(s)
+    s.page.evaluate("() => window.section.start('Z')")
+    s.settle()
+
+
+HELD = {
+    "revolve": (open_revolve, "() => [window.__fundacad.revolvePitch.pitch, window.__fundacad.revolvePitch.angle]"),
+    "draft": (open_draft, "() => window.__fundacad.draft.angle"),
+    "pattern": (open_pattern, "() => [window.__fundacad.pattern.value, window.__fundacad.pattern.count]"),
+    "move": (open_move, "() => window.__fundacad.move.t.toArray()"),
+    "light": (open_light, "() => window.__fundacad.lightAim.angles.azimuth"),
+    "section": (open_section, "() => window.section.offset"),
+}
+
+
+@pytest.mark.parametrize("tool", HELD)
+def test_a_field_undo_puts_back_the_value_the_tool_holds(s, tool):
+    opener, held = HELD[tool]
+    opener(s)
+    start = fields(s)
+    assert start["open"]
+    before = s.page.evaluate(held)
+    s.page.keyboard.type("7")
+    s.page.wait_for_timeout(400)
+    assert s.page.evaluate(held) != before, "the typing reached the tool"
+    s.page.keyboard.press("Control+z")
+    assert s.page.evaluate(held) == before
+    assert fields(s)["values"] == start["values"]
+    assert s.page.evaluate(held) == before, "and the next frames leave it"
