@@ -1,0 +1,14 @@
+- complementary "Items":
+  - heading "Items" [level=2]
+  - tablist "Items pages":
+    - tab "Items"
+    - tab "Geometry" [selected]
+  - tabpanel "Geometry":
+    - combobox /^Body /
+    - radiogroup "What to list":
+      - radio "Faces" [checked]
+      - radio "Edges"
+    - combobox /^Type /
+    - combobox /^Facing /
+    - listbox /^Faces of /:
+      - option /^Flat face 1, /
