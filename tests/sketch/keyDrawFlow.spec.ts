@@ -213,6 +213,31 @@ describe("Enter is left alone", () => {
   });
 });
 
+describe("a chain's next point placed from a size box", () => {
+  it("says the keys, since the prompt line stays as it was", () => {
+    const { state } = rig("line");
+    state.base = v(0, 0);
+    state.entities = [{ type: "line", id: "l1", x1: 0, y1: 0, x2: 5, y2: 0 }];
+    state.drawn = { entity: state.entities[0]!, closed: false };
+    dim.show([{ name: "length", label: "L" }], () => {});
+    press(free(), { key: "ArrowRight" });
+    press(free());
+    expect(vi.mocked(announce).mock.calls.at(-1)?.[0]).toMatch(/Line 1, length 5\. Type the size, or @dx,dy/);
+  });
+
+  it("leaves them to the prompt line from X and Y, where the prompt changes", () => {
+    const { state } = rig("line");
+    state.base = v(0, 0);
+    state.entities = [{ type: "line", id: "l1", x1: 0, y1: 0, x2: 5, y2: 0 }];
+    state.drawn = { entity: state.entities[0]!, closed: false };
+    press(free(), { key: "Enter", shiftKey: true });
+    type("x", "5");
+    type("y", "0");
+    press(field("x"));
+    expect(vi.mocked(announce).mock.calls.at(-1)?.[0]).toMatch(/Line 1, length 5$/);
+  });
+});
+
 describe("after an undo or a redo", () => {
   const tab = () => press(free(), { key: "Tab" });
   const right = () => press(free(), { key: "ArrowRight" });

@@ -47,6 +47,7 @@ export interface KeyHit {
 export interface Drawn {
   entity: ResolvedEntity;
   closed: boolean;
+  angle?: number | null | undefined;
 }
 
 export interface BoxEnd {
@@ -200,7 +201,7 @@ export class KeyDrawFlow {
       // A typed length or angle put the chain's base where no cursor stood.
       if (base) this.host.moveTo(hitOf(base.clone(), hitAt(base, this.host.candidates())));
     }
-    const shape = drawnSentence(done.entity, this.host.entities(), done.closed);
+    const shape = drawnSentence(done.entity, this.host.entities(), done.closed, done.angle) + this.chainKeys();
     announce(end ? `${end.said}. ${shape}` : shape, "polite", { key: "sketch-point" });
     this.settleFocus();
     this.host.changed();
@@ -412,14 +413,22 @@ export class KeyDrawFlow {
     this.keys = true;
     const c = hitAt(p, this.host.candidates());
     const second = !!this.host.base();
+    const inXY = this.host.dim().hasField("x");
     const done = this.host.place(hitOf(p, c));
     if (second && !done) return this.refused();
     const ents = this.host.entities();
     const at = pointSentence(p, c, ents);
-    const text = done ? `${at}. ${drawnSentence(done.entity, ents, done.closed)}` : at;
+    const keys = inXY ? "" : this.chainKeys();
+    const text = done ? `${at}. ${drawnSentence(done.entity, ents, done.closed)}${keys}` : at;
     announce(text, "polite", { key: "sketch-point" });
     this.settleFocus();
     this.host.changed();
+  }
+
+  // The prompt line speaks only a change, and from a size box a chain's next point has the prompt its last one had.
+  private chainKeys(): string {
+    const keys = this.host.base() ? this.keyPrompt() : null;
+    return keys ? `. ${keys}` : "";
   }
 
   /** The tool refused a second point as too small: the toast alone is lost on a listener. */

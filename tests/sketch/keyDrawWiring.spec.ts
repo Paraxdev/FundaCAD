@@ -497,6 +497,62 @@ describe("the next point typed in X and Y", () => {
   });
 });
 
+describe("a line finished from its size box", () => {
+  const KEYS = "Type the size, or @dx,dy · arrows move · Enter · Esc";
+  const last = () => vi.mocked(announce).mock.calls.filter((c) => c[2]?.key === "sketch-point").at(-1)?.[0];
+
+  it("says a typed angle and the keys that go on", () => {
+    const { s } = makeDrawing("line");
+    startAt(s, "5", "-7");
+    type("length", "25");
+    type("angle", "30");
+    enter("length");
+    expect(last()).toBe(`Line 1, length 25, angle 30 degrees. ${KEYS}`);
+  });
+
+  it("says a negative angle in words", () => {
+    const { s } = makeDrawing("line");
+    startAt(s, "5", "-7");
+    type("length", "25");
+    type("angle", "-30");
+    enter("length");
+    expect(last()).toBe(`Line 1, length 25, angle minus 30 degrees. ${KEYS}`);
+  });
+
+  it("says no angle when none was typed", () => {
+    const { s } = makeDrawing("line");
+    startAt(s, "5", "-7");
+    type("length", "25");
+    enter("length");
+    expect(last()).toBe(`Line 1, length 25. ${KEYS}`);
+  });
+
+  it("does not take the next segment's angle from the last one's", () => {
+    const { s } = makeDrawing("line");
+    startAt(s, "5", "-7");
+    type("length", "25");
+    type("angle", "30");
+    enter("length");
+    type("length", "10");
+    enter("length");
+    expect(last()).toBe(`Line 2, length 10. ${KEYS}`);
+  });
+
+  it("leaves the keys to the prompt once the chain closed, as the prompt then changes", () => {
+    const { s } = makeDrawing("line");
+    startAt(s, "0", "0");
+    for (const [l, a] of [["20", "0"], ["20", "90"]] as const) {
+      type("length", l);
+      type("angle", a);
+      enter("length");
+    }
+    type("length", String(Math.hypot(20, 20)));
+    type("angle", "-135");
+    enter("length");
+    expect(last()).toBe(`Line 3, length ${Math.round(Math.hypot(20, 20) * 1000) / 1000}, angle minus 135 degrees, loop closed`);
+  });
+});
+
 describe("a refusal from the size box's own Enter", () => {
   const said = () => vi.mocked(announce).mock.calls.filter((c) => c[1] === "assertive").map((c) => c[0]);
 
@@ -1108,12 +1164,14 @@ describe("what a keys drawing says", () => {
     key(s, "Tab", fieldEl("length"));
     expect(s.lastCursor).toEqual(v(60, 10));
     enter("length");
-    expect(said().at(-1)).toBe("Point at 60, 10, snapped to the start of Line 1. Line 2, length 54.571");
+    expect(said().at(-1)).toBe(
+      "Point at 60, 10, snapped to the start of Line 1. Line 2, length 54.571. Type the size, or @dx,dy · arrows move · Enter · Esc",
+    );
     expect(s.entities.map(withoutId).at(-1)).toEqual({ type: "line", x1: 7, y1: -3, x2: 60, y2: 10 });
     key(s, "ArrowRight", fieldEl("length"));
     type("length", "25");
     enter("length");
-    expect(said().at(-1)).toMatch(/^Line 3, length 25$/);
+    expect(said().at(-1)).toMatch(/^Line 3, length 25\. Type the size/);
   });
 
   it("stays silent for a click that finishes a shape", () => {

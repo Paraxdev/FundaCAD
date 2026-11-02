@@ -67,7 +67,7 @@ Press arrows to move the cursor, then Tab. Each press names a snap near the curs
 ## What is spoken
 
 1. A placed point: "Point at 5, minus 7". A snap adds "snapped to the midpoint of Line 2".
-2. A finished shape: "Rectangle 1, 40 by 20", "Circle 1, diameter 10" or "Line 4, length 20, loop closed".
+2. A finished shape: "Rectangle 1, 40 by 20", "Circle 1, diameter 10" or "Line 4, length 20, loop closed". A typed angle is said too, "Line 1, length 25, angle 30 degrees". A line's chain goes on, so its keys follow, "Type the size, or @dx,dy, arrows move, Enter, Esc".
 3. An arrow: "Cursor at 20, 10". When the grid step changed, "Grid step 5 mm" comes first.
 4. A refused entry: the problem, and the box is marked as any refused box is.
 

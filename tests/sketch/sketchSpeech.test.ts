@@ -129,6 +129,10 @@ describe("drawnSentence", () => {
     const line: ResolvedEntity = { type: "line", id: "l2", x1: 12, y1: 3, x2: 15, y2: 7.5 };
     expect(drawnSentence(line, ents, false)).toBe("Line 2, length 5.408");
     expect(drawnSentence(line, ents, true)).toBe("Line 2, length 5.408, loop closed");
+    expect(drawnSentence(line, ents, false, 30)).toBe("Line 2, length 5.408, angle 30 degrees");
+    expect(drawnSentence(line, ents, false, -12.5)).toBe("Line 2, length 5.408, angle minus 12.5 degrees");
+    expect(drawnSentence(line, ents, false, 0)).toBe("Line 2, length 5.408, angle 0 degrees");
+    expect(drawnSentence(line, ents, true, 90)).toBe("Line 2, length 5.408, angle 90 degrees, loop closed");
   });
 
   it("gives a rectangle its two sides and a circle its diameter, not its radius", () => {

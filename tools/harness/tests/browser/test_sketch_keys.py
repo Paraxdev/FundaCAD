@@ -198,6 +198,7 @@ def test_a_chain_goes_on_from_a_typed_length_and_angle_and_at_in_y_keeps_x(s):
     kb.type("30")
     kb.press("Enter")
     s.page.wait_for_function("() => window.sketch.entities.length === 1")
+    spoke(s, "Line 1, length 40, angle 30 degrees. Type the size, or @dx,dy, arrows move, Enter, Esc")
     kb.press("Enter")
     in_field(s, "X")
     assert len(shapes(s)) == 1
@@ -501,6 +502,37 @@ def test_an_undo_keeps_focus_on_the_surface_and_drops_the_snaps_of_what_is_gone(
     kb.press("Control+Z")
     s.page.wait_for_function("() => !window.sketch.base")
     s.page.wait_for_function("() => document.activeElement?.getAttribute('aria-label') === 'Sketch'")
+    no_pointer(s)
+
+
+def test_the_last_stop_of_tabs_walk_says_the_list_ended(s):
+    kb = s.page.keyboard
+    to_items_plane(s)
+    tool(s, "r", "rectangle")
+    kb.press("ArrowRight")
+    spoke(s, "Cursor at 10, 0")
+    kb.press("ArrowDown")
+    spoke(s, "Cursor at 10, minus 10")
+    # The origin is the one snap, so Tab goes to it and then back.
+    tab_to_snap(s, "the origin")
+    kb.press("Tab")
+    spoke(s, "No snap, cursor at 10, minus 10")
+    no_pointer(s)
+
+
+def test_a_refused_second_point_from_the_size_box_is_marked_and_spoken(s):
+    kb = s.page.keyboard
+    to_items_plane(s)
+    tool(s, "r", "rectangle")
+    point(s, 5, -7)
+    spoke(s, "Point at 5, minus 7")
+    in_field(s, "W")
+    kb.type("40")
+    kb.press("Enter")
+    s.page.wait_for_function("() => document.getElementById('a11y-assertive').textContent.includes('Too small to draw')")
+    assert s.page.evaluate("() => document.activeElement.getAttribute('aria-label')") in ("W", "H")
+    assert s.page.evaluate("() => document.querySelector('.dim-input [aria-invalid=true]') !== null")
+    assert shapes(s) == []
     no_pointer(s)
 
 

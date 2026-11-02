@@ -5,11 +5,12 @@ import { entityLabel } from "./relations";
 import { snapLabel, type ResolvedEntity, type SnapCandidate } from "./snap";
 
 // Screen readers disagree on whether a hyphen is spoken, so a negative number is written out.
-function numberWords(mm: number): string {
-  const v = displayRound(Math.round(toDisplay(mm) * 1000) / 1000);
+function signedWords(v: number): string {
   if (v === 0) return "0";
   return v < 0 ? `minus ${-v}` : `${v}`;
 }
+
+const numberWords = (mm: number) => signedWords(displayRound(Math.round(toDisplay(mm) * 1000) / 1000));
 
 /** The coordinates for the tag beside the cursor, which is read by eye and so keeps the minus sign. */
 export function coordLabel(x: number, y: number): string {
@@ -67,11 +68,13 @@ export function walkEndSentence(p: { x: number; y: number }, c: SnapCandidate | 
   return c ? `End of snaps, ${at}, snapped to ${snapWords(c, ents)}` : `No snap, ${at}`;
 }
 
-export function drawnSentence(e: ResolvedEntity, ents: ResolvedEntity[], closed: boolean): string {
+/** `angle` is given only when one was typed, in degrees. */
+export function drawnSentence(e: ResolvedEntity, ents: ResolvedEntity[], closed: boolean, angle?: number | null): string {
   const name = entityLabel(ents, e.id) ?? e.type;
   if (e.type === "line") {
     const len = `${name}, length ${numberWords(Math.hypot(e.x2 - e.x1, e.y2 - e.y1))}`;
-    return closed ? `${len}, loop closed` : len;
+    const line = angle == null ? len : `${len}, angle ${signedWords(Math.round(angle * 1000) / 1000)} degrees`;
+    return closed ? `${line}, loop closed` : line;
   }
   if (e.type === "rectangle") return `${name}, ${numberWords(e.width)} by ${numberWords(e.height)}`;
   if (e.type === "circle") return `${name}, diameter ${numberWords(2 * e.radius)}`;

@@ -3179,8 +3179,10 @@ export class SketchMode {
     if (this.keyDraw.openForNext()) return;
     const end = this.keyDraw.boxEnd();
     if (end) this.noteOriginPin(end.hit);
+    // Read now, as a chain's commit shows the box again.
+    const angle = this.tool === "line" && this.dim.wasTyped("angle") ? this.dim.getValue("angle") : null;
     const done = this.commitFromCursor(this.lastCursor);
-    if (done) this.keyDraw.drawn(done, end);
+    if (done) this.keyDraw.drawn({ ...done, angle }, end);
     else if (this.base) this.keyDraw.refused();
   }
 
