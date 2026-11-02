@@ -11,6 +11,7 @@ import { SKETCH_TOOLS, SKETCH_MODIFY, NON_REPEATABLE, GO_REGIONS } from "./actio
 import { booleanOpOfAction } from "../features/booleanOps";
 import { useDialogStore } from "../stores/dialogs";
 import { useUiStore } from "../stores/ui";
+import { useGeometryBrowserStore } from "../stores/geometryBrowser";
 import { useShellStore } from "../stores/shell";
 import { useSketchPaletteStore } from "../stores/sketchPalette";
 import type { Engine } from "./engine";
@@ -83,6 +84,8 @@ export function createActions(e: Engine): (action: string) => void {
   }
 
   return function handleAction(action: string) {
+    // Out before a tool can start, its own hover shares the light. Turning the view keeps it, that is how to see it.
+    if (!KEEPS_PICK.has(action) && !action.startsWith("view-step-")) useGeometryBrowserStore().setLit(false);
     // A contributed action is never repeated: the core cannot tell whether running it twice is safe.
     if (!NON_REPEATABLE.has(action) && !contributedAction(action)) e.lastAction = action;
     if (SKETCH_TOOLS.has(action)) {

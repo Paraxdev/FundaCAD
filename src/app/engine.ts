@@ -80,6 +80,7 @@ import { installViewportWiring } from "./viewportWiring";
 import { installIsolateCamera } from "./isolateCamera";
 import { installSketchStateBridge } from "./sketchStateBridge";
 import { createActions } from "./actions";
+import { installCanvasPick } from "./canvasPick";
 import { installKeyboard } from "./keyboard";
 import { installTitlebar } from "./titlebar";
 import { installAnnouncements } from "./announcements";
@@ -560,6 +561,7 @@ export function mountUi(e: Engine): void {
   // After the bridge, edge rows read the model it draws.
   e.store.onBuild((s) => e.geometryBrowser.buildChanged(s));
   installSketchStateBridge(e);
+  installCanvasPick(e);
   installKeyboard(e);
 
   createBugReporter({

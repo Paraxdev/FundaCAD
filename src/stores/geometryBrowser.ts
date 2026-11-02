@@ -23,6 +23,8 @@ export const useGeometryBrowserStore = defineStore("geometryBrowser", () => {
   const page = ref(0);
   const cursor = ref<string | null>(null);
   const selected = shallowRef<readonly string[]>([]);
+  /** Whether the cursor's row is lit from the canvas keys. */
+  const lit = ref(false);
 
   const filtered = computed(() => filterRows(rows.value, filters.value));
   const pageCount = computed(() => Math.max(1, Math.ceil(filtered.value.length / GEOMETRY_PAGE_SIZE)));
@@ -30,6 +32,8 @@ export const useGeometryBrowserStore = defineStore("geometryBrowser", () => {
     const from = page.value * GEOMETRY_PAGE_SIZE;
     return filtered.value.slice(from, from + GEOMETRY_PAGE_SIZE);
   });
+
+  const litRow = computed(() => (lit.value && filtered.value.find((r) => r.key === cursor.value)) || null);
 
   // Where the cursor last stood, so a row a build removed hands over to the one now in its place.
   let cursorPlace = 0;
@@ -55,6 +59,7 @@ export const useGeometryBrowserStore = defineStore("geometryBrowser", () => {
     cursor.value = null;
     cursorPlace = 0;
     page.value = 0;
+    lit.value = false;
   }
 
   return {
@@ -69,6 +74,7 @@ export const useGeometryBrowserStore = defineStore("geometryBrowser", () => {
     page,
     cursor,
     selected,
+    litRow,
     filtered,
     pageCount,
     pageRows,
@@ -101,8 +107,8 @@ export const useGeometryBrowserStore = defineStore("geometryBrowser", () => {
       settleCursor();
     },
     setState(next: GeometryState, message: string | null = null) {
-      state.value = next;
       error.value = message;
+      state.value = next;
     },
     setTruncated(faces: number | null) {
       truncated.value = faces;
@@ -114,6 +120,9 @@ export const useGeometryBrowserStore = defineStore("geometryBrowser", () => {
       cursor.value = key;
       if (key !== null) settleCursor();
       else cursorPlace = 0;
+    },
+    setLit(on: boolean) {
+      lit.value = on;
     },
     setSelected(keys: readonly string[]) {
       selected.value = keys;

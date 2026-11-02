@@ -470,6 +470,16 @@ export function shortcutHudGroups(skip: ReadonlySet<string> = new Set()): HudGro
       ],
     },
     {
+      name: "3D view focused",
+      rows: [
+        { key: "] / [", label: "Step to the next / previous face, edge or plane, with a highlight" },
+        { key: "Shift+] / Shift+[", label: "Switch what the brackets step: faces, edges, planes" },
+        { key: "Enter", label: "Select the lit row, or start a sketch on a lit plane" },
+        { key: "Space", label: "Add or remove the lit row" },
+        { key: "Esc", label: "Drop the highlight and clear the selection" },
+      ],
+    },
+    {
       name: "Always",
       rows: [
         { key: "Ctrl+K", label: "Command palette" },

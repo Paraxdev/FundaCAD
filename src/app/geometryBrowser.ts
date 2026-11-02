@@ -112,19 +112,19 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
   function showRows(body: BodyMeta, key: string, reply: TopologyReply | null) {
     const stamp = `${key}|${list.kind}|${reply ? "reply" : "bare"}`;
     if (!rowsStale && rowsKey === stamp) return;
+    // Old face rows stay until the new ones land, so focus can survive them. Their numbers may no longer mean the same
+    // faces, which is why rowsKey keeps the old stamp and pickRows refuses them.
+    if (list.kind !== "edges" && !reply) return;
+    // Before setRows, whose watchers ask refOf about the new rows at once.
+    rowsKey = stamp;
+    rowsStale = false;
     if (list.kind === "edges") {
       const refs = e.viewport.bodyEdgeRefs(body.id);
       edgeRefs = new Map(refs.map((r) => [r.slot, r]));
       list.setRows(edgeRows(refs, refs[0]?.draw.refs.length ?? 0, reply?.edgeFaces, body, ownerNamesOf(e.store)));
-    } else if (reply) {
-      list.setRows(faceRows(reply, body, ownerNamesOf(e.store)));
     } else {
-      // Old face rows stay until the new ones land, so focus can survive them. Their numbers may no longer mean the
-      // same faces, which is why rowsKey keeps the old stamp and pickRows refuses them.
-      return;
+      list.setRows(faceRows(reply!, body, ownerNamesOf(e.store)));
     }
-    rowsKey = stamp;
-    rowsStale = false;
   }
 
   // A hard cancel restarts the engine, too much for a list. Without a soft one the old op is left to finish.
@@ -147,8 +147,8 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
     }
     if (!reply) {
       failedKey = key;
-      list.setState("error", "The engine could not list this body's faces.");
       if (list.kind === "faces") list.setRows([]);
+      list.setState("error", "The engine could not list this body's faces.");
       return;
     }
     cache.set(key, reply);
@@ -412,6 +412,12 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
       }
       if (pickBlocked()) return;
       e.viewport.hoverPick(row && refOf(row));
+    },
+
+    /** From here on the list stays live through builds, tab open or not. */
+    startStepping() {
+      stepped = true;
+      ensure();
     },
 
     /** Moves the cursor along the filtered list and wraps, the first step also starts the fetch. */
