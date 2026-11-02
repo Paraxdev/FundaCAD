@@ -137,8 +137,10 @@ interface Field {
 interface FieldEdit {
   from: string;
   to: string;
-  /** The text after the last keystroke, where a redo stops; null before any. */
-  end: string | null;
+  /** The text after the last keystroke, where a redo stops. */
+  end: string;
+  undoable: boolean;
+  redoable: boolean;
   userDriven: boolean;
   typed: boolean;
   lastGood: number | null;
@@ -481,7 +483,9 @@ export class DimInput {
         field.edit = {
           from: input.value,
           to: input.value,
-          end: null,
+          end: input.value,
+          undoable: false,
+          redoable: false,
           userDriven: field.userDriven,
           typed: !!field.typed,
           lastGood: field.lastGood,
@@ -489,11 +493,15 @@ export class DimInput {
       });
       input.addEventListener("input", (e) => {
         const edit = field.edit;
+        const type = (e as InputEvent).inputType;
         if (edit) {
           edit.to = input.value;
-          if (!isHistoryInput((e as InputEvent).inputType)) edit.end = input.value;
+          if (!isHistoryInput(type)) edit.end = input.value;
+          edit.undoable = type !== "historyUndo" || input.value !== edit.from;
+          edit.redoable = type === "historyUndo" || (type === "historyRedo" && input.value !== edit.end);
         }
-        if (edit && input.value === edit.from) {
+        // Only an undo lets a field go: text typed over with the same text is still typing, and locks it.
+        if (edit && type === "historyUndo" && input.value === edit.from) {
           field.userDriven = edit.userDriven;
           field.typed = edit.typed;
           field.lastGood = edit.lastGood;
@@ -913,7 +921,7 @@ export class DimInput {
   private ownsHistoryKey(field: Field, redo: boolean): boolean {
     const edit = field.edit;
     if (!edit || field.input.value !== edit.to) return false;
-    return redo ? edit.end !== null && edit.to !== edit.end : edit.to !== edit.from;
+    return redo ? edit.redoable : edit.undoable;
   }
 
   private onKey(e: KeyboardEvent, field: Field) {

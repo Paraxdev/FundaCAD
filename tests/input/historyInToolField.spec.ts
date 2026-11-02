@@ -107,6 +107,50 @@ describe("Ctrl+Z and Ctrl+Y in a tool's value box", () => {
     expect(input.value).toBe("31");
   });
 
+  it("typing the text the field already shows locks it as any typing does, only an undo lets it go", () => {
+    const { dim, input } = open();
+    dim.updateFromCursor({ move: 12.5 });
+    typeInto(input, "12.5");
+    expect([dim.isUserDriven("move"), dim.hasTyped()]).toEqual([true, true]);
+    dim.updateFromCursor({ move: 40.25 });
+    expect(input.value).toBe("12.5");
+
+    typeInto(input, "12.5", "historyUndo");
+    expect([dim.isUserDriven("move"), dim.hasTyped()]).toEqual([false, false]);
+    dim.updateFromCursor({ move: 40.25 });
+    expect(input.value).toBe("40.25");
+  });
+
+  it("deleting back to the text it started from stays typing", () => {
+    const { dim, input } = open();
+    typeInto(input, "5");
+    typeInto(input, "", "deleteContentBackward");
+    dim.updateFromCursor({ move: 9.75 });
+    expect([input.value, dim.isUserDriven("move")]).toEqual(["", true]);
+  });
+
+  it("a redo of the same text brings the lock back", () => {
+    const { dim, input } = open();
+    dim.updateFromCursor({ move: 12.5 });
+    typeInto(input, "12.5");
+    typeInto(input, "12.5", "historyUndo");
+    typeInto(input, "12.5", "historyRedo");
+    expect([dim.isUserDriven("move"), dim.hasTyped()]).toEqual([true, true]);
+  });
+
+  it("the text the field already shows, typed over, is still the field's to undo and redo", () => {
+    const { actions, dim, input } = open();
+    dim.updateFromCursor({ move: 12.5 });
+    typeInto(input, "12.5");
+    expect(press(input, "z", { ctrlKey: true }).defaultPrevented).toBe(false);
+    typeInto(input, "12.5", "historyUndo");
+    expect(press(input, "y", { ctrlKey: true }).defaultPrevented).toBe(false);
+    typeInto(input, "12.5", "historyRedo");
+    expect(actions).toEqual([]);
+    expect(press(input, "y", { ctrlKey: true }).defaultPrevented).toBe(true);
+    expect(actions).toEqual(["redo"]);
+  });
+
   it("any other text field keeps its own undo", () => {
     const { actions } = open();
     const other = document.createElement("input");
