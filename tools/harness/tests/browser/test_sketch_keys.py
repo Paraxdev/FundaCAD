@@ -213,6 +213,66 @@ def test_a_chain_goes_on_from_a_typed_length_and_angle_and_at_in_y_keeps_x(s):
     no_pointer(s)
 
 
+def test_tab_to_the_origin_and_the_boxs_enter_pins_it_and_the_next_at_starts_from_there(s):
+    kb = s.page.keyboard
+    to_items_plane(s)
+    tool(s, "r", "rectangle")
+    point(s, 7, -3)
+    spoke(s, "Point at 7, minus 3")
+    kb.press("ArrowRight")
+    tab_to_snap(s, "snapped to the origin")
+    kb.press("Enter")
+    # The pin is a fixed point entity beside the rectangle, as a click on the origin makes.
+    s.page.wait_for_function("() => window.sketch.constraints.length > 0")
+    spoke(s, "Point at 0, 0, snapped to the origin. Rectangle 1")
+    drawn = shapes(s)
+    assert drawn[0] == {"type": "rectangle", "width": 7, "height": 3, "x": 3.5, "y": -1.5}
+    assert [e["type"] for e in drawn[1:]] == ["point"]
+    kb.press("Enter")
+    in_field(s, "X")
+    assert shapes(s) == drawn
+    kb.type("@5,3")
+    kb.press("Enter")
+    spoke(s, "Point at 5, 3")
+    no_pointer(s)
+
+
+def test_extrudes_pick_leaves_tab_enter_and_space_to_a_focused_text_field(s):
+    kb = s.page.keyboard
+    to_items_plane(s)
+    tool(s, "r", "rectangle")
+    point(s, 7, -3)
+    spoke(s, "Point at 7, minus 3")
+    kb.type("40")
+    kb.press("Tab")
+    kb.type("20")
+    kb.press("Enter")
+    s.page.wait_for_function("() => window.sketch.entities.length === 1")
+    kb.press("e")
+    spoke(s, "Extrude, Click a profile")
+    walk_to(s, "Profile 1 of 1")
+    profiles = s.page.evaluate(PROFILES)
+    s.page.evaluate("""() => {
+      const i = document.createElement("input");
+      i.id = "probe";
+      window.__enters = 0;
+      i.addEventListener("keydown", (e) => { if (e.key === "Enter") window.__enters++; });
+      document.body.append(i);
+      i.focus();
+    }""")
+    try:
+        kb.type("a b")
+        kb.press("Enter")
+        assert s.page.evaluate("() => [document.getElementById('probe').value, window.__enters]") == ["a b", 1]
+        kb.press("Tab")
+        assert s.page.evaluate("() => document.activeElement?.id") != "probe"
+        assert s.page.evaluate(PROFILES) == profiles
+        assert s.bodies(raw=True) == []
+    finally:
+        s.page.evaluate("() => document.getElementById('probe')?.remove()")
+    no_pointer(s)
+
+
 def test_a_refused_size_is_spoken_and_stays_on_its_field(s):
     kb = s.page.keyboard
     to_items_plane(s)
