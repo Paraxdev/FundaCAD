@@ -41,6 +41,12 @@ function bracketOf(ev: KeyboardEvent): { delta: 1 | -1; switches: boolean } | nu
   return { delta: k === "]" ? 1 : -1, switches: ev.shiftKey && ev.key !== k };
 }
 
+export function emptyStepWords(list: ReturnType<typeof useGeometryBrowserStore>): string {
+  if (list.state === "error" && list.error) return list.error;
+  if (list.rows.length) return `No ${list.kind} match the filter`;
+  return list.bodyId === null ? "No body to step through" : `No ${list.kind} on this body`;
+}
+
 export interface CanvasPickHost {
   geometryBrowser: Engine["geometryBrowser"];
   viewport: { domElement: HTMLElement };
@@ -65,12 +71,6 @@ export function installCanvasPick(e: CanvasPickHost): () => void {
     list.setLit(false);
   }
 
-  function emptyWords(): string {
-    if (list.state === "error" && list.error) return list.error;
-    if (list.rows.length) return `No ${list.kind} match the filter`;
-    return list.bodyId === null ? "No body to step through" : `No ${list.kind} on this body`;
-  }
-
   function step(delta: 1 | -1) {
     const blocked = ctl.pickBlocked();
     if (blocked) return say(blocked);
@@ -82,7 +82,7 @@ export function installCanvasPick(e: CanvasPickHost): () => void {
     const row = ctl.step(delta);
     if (!row) {
       list.setLit(false);
-      return say(emptyWords());
+      return say(emptyStepWords(list));
     }
     list.setLit(true);
     const { type, facing, minSize } = list.filters;

@@ -41,6 +41,10 @@ const GLOBAL: Command[] = [
   { id: "go-model", label: "Go to Model", group: "Go", context: "global" },
   { id: "go-panels", label: "Go to Panels", group: "Go", context: "global" },
   { id: "go-history", label: "Go to History", group: "Go", context: "global" },
+  { id: "next-face", label: "Next Face", group: "Edit", context: "global" },
+  { id: "previous-face", label: "Previous Face", group: "Edit", context: "global" },
+  { id: "next-edge", label: "Next Edge", group: "Edit", context: "global" },
+  { id: "previous-edge", label: "Previous Edge", group: "Edit", context: "global" },
   { id: "preferences", label: "Preferences…", group: "Edit", context: "global", key: "Ctrl+," },
   { id: "accessibility-settings", label: "Accessibility Settings…", group: "Edit", context: "global" },
   { id: "interface-size-up", label: "Larger Interface", group: "View", context: "global", key: "Ctrl+Plus" },
@@ -54,6 +58,14 @@ const GLOBAL: Command[] = [
   { id: "finish", label: "Finish Sketch", group: "SKETCH", context: "sketch" },
   { id: "palette", label: "Sketch Palette", group: "SKETCH", context: "sketch" },
 ];
+
+/** They ship without a key, so a hint is only ever a key the person chose. The Edit menu lists them too. */
+export const GEOMETRY_COMMANDS: ReadonlySet<string> = new Set([
+  "next-face",
+  "previous-face",
+  "next-edge",
+  "previous-edge",
+]);
 
 function fromGroups(groups: Group[], context: "model" | "sketch"): Command[] {
   const out: Command[] = [];
@@ -78,5 +90,13 @@ function fromGroups(groups: Group[], context: "model" | "sketch"): Command[] {
 
 export function allCommands(): Command[] {
   // modelGroups(), not MODEL: an action whose capability is off must not be reachable here either.
-  return [...fromGroups(modelGroups(), "model"), ...fromGroups(SKETCH, "sketch"), ...GLOBAL];
+  return [
+    ...fromGroups(modelGroups(), "model"),
+    ...fromGroups(SKETCH, "sketch"),
+    ...GLOBAL.map((c) => {
+      if (!GEOMETRY_COMMANDS.has(c.id)) return c;
+      const key = keyHint(c.id);
+      return key === undefined ? c : { ...c, key };
+    }),
+  ];
 }
