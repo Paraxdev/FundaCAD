@@ -11,8 +11,13 @@ function collapsedByDefault(key: string): boolean {
 /** Held here, not in `dataTransfer`, which is unreadable until the drop, so a row on `dragover` could not decide. */
 export type BrowserDrag = { kind: "bodies"; ids: readonly string[] } | { kind: "element"; id: string };
 
+export type ItemsTab = "items" | "geometry";
+
 /** Browser view state that is neither in the document nor derivable from a rebuild. */
 export const useBrowserStore = defineStore("browser", () => {
+  // Here because App.vue unmounts the pane when it hides.
+  const itemsTab = ref<ItemsTab>("items");
+
   /** Only the sections the user toggled. The rest fall back to collapsedByDefault(). */
   const overrides = ref(new Map<string, boolean>());
 
@@ -53,6 +58,7 @@ export const useBrowserStore = defineStore("browser", () => {
   }
 
   return {
+    itemsTab,
     overrides,
     selectedBodyIds,
     pendingRenameId,

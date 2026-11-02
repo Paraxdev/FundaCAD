@@ -3,8 +3,9 @@ import { chordsOf, fmtKeys } from "../../input/platform";
 // A flat list of nodes, not nested components: the stylesheet targets that DOM (`.tree-child` is a padding, not a
 // container) and the e2e suite walks it.
 
-import { computed, onMounted, onUnmounted, ref, shallowRef, useTemplateRef, watch } from "vue";
+import { computed, onUnmounted, ref, shallowRef, useId, useTemplateRef, watch } from "vue";
 import { useEngine } from "../../app/engineKey";
+import { useWheelScroll } from "../../composables/useWheelScroll";
 import { useDocValue } from "../../app/useDoc";
 import { useSelectionStore } from "../../stores/selection";
 import { useBrowserStore } from "../../stores/browser";
@@ -17,6 +18,9 @@ import { itemsMove, itemsTreeMeta, sectionName } from "../../ui/itemsTree";
 import { announce } from "../../ui/announce";
 import IconButton from "../ui/IconButton.vue";
 import Select from "../ui/Select.vue";
+import Tabs from "../ui/Tabs.vue";
+import { tabPanelAttrs } from "../ui/tabIds";
+import GeometryList from "./GeometryList.vue";
 import { useShellStore } from "../../stores/shell";
 import { contextMenu } from "../../ui/menu";
 import {
@@ -56,6 +60,12 @@ import type { CadDocument, Feature, Plane3 } from "../../types";
 import { bodyLabels } from "../../ui/bodyLabels";
 
 const engine = useEngine();
+
+const pages = useId();
+const PAGES = [
+  { value: "items", label: "Items" },
+  { value: "geometry", label: "Geometry" },
+] as const;
 
 /** The card's own menu: whole-document visibility verbs. */
 function openMore(ev: MouseEvent) {
@@ -938,17 +948,7 @@ watch(
   },
 );
 
-// WebKitGTK quirk: wheel events over an overflow panel do not reliably reach the native scroller (kinetic scrolling
-// eats them), so the scroll is driven here, deltaMode-normalized. Bound by hand because it must be non-passive.
-function onWheel(ev: WheelEvent) {
-  const el = root.value;
-  if (!el || el.scrollHeight <= el.clientHeight) return;
-  const step = ev.deltaMode === 1 ? 16 : ev.deltaMode === 2 ? 100 : 1;
-  el.scrollTop += ev.deltaY * step;
-  ev.preventDefault();
-}
-onMounted(() => root.value?.addEventListener("wheel", onWheel, { passive: false }));
-onUnmounted(() => root.value?.removeEventListener("wheel", onWheel));
+useWheelScroll(root);
 </script>
 
 <template>
@@ -966,92 +966,101 @@ onUnmounted(() => root.value?.removeEventListener("wheel", onWheel));
         @click="shell.setItems(false)"
       />
     </div>
-    <div class="browser-title">
-      <Select
-        id="browser-filter"
-        class="browser-filter"
-        label="Show only one kind of item"
-        tip="Show only one kind of item"
-        :model-value="filter"
-        :options="filterOptions"
-        @update:model-value="setBrowserFilter"
-      />
-    </div>
-    <div ref="root" class="float-card-body">
-      <Tree label="Items" multiselectable :items="treeItems" :active-key="activeKey" @reorder="reorderRow">
-        <template v-for="n in nodes" :key="n.k">
-          <TreeFolder
-            v-if="n.kind === 'folder'"
-            :tree-key="n.k"
-            :data-key="n.key"
-            :label="n.label"
-            :icon="n.icon"
-            :count="n.count"
-            :depth="n.depth"
-            :collapsed="n.collapsed"
-            :visible="n.visible"
-            :eye-down="n.eyeDown"
-            :toggle-vis="n.toggleVis"
-            :eye-over="n.eyeOver"
-            :id="n.id"
-            :rename="n.rename"
-            :remove="n.remove"
-            :extra-menu="n.extraMenu"
-            :drag-start="n.dragStart"
-            :accept-drop="n.acceptDrop"
-            :drop-here="n.dropHere"
-            :activate="n.activate"
-            :selected="n.selected"
-            @toggle="browser.toggle(n.key)"
-          />
-          <TreeRow
-            v-else-if="n.kind === 'row'"
-            :tree-key="n.k"
-            :label="n.label"
-            :icon="n.icon"
-            :depth="n.depth"
-            :id="n.id"
-            :swatch="n.swatch"
-            :dim="n.dim"
-            :selected="n.selected"
-            :error="n.error"
-            :suppressed="n.suppressed"
-            :visible="n.visible"
-            :title="n.title"
-            :activate="n.activate"
-            :eye-down="n.eyeDown"
-            :toggle-vis="n.toggleVis"
-            :eye-over="n.eyeOver"
-            :edit="n.edit"
-            :rename="n.rename"
-            :remove="n.remove"
-            :extra-menu="n.extraMenu"
-            :drag-start="n.dragStart"
-            :accept-drop="n.acceptDrop"
-            :drop-here="n.dropHere"
-          />
-          <TreeItem
-            v-else-if="n.kind === 'empty'"
-            class="empty-state tree-child"
-            :item-key="n.k"
-            :label="n.text"
-            :selectable="false"
-            >{{ n.text }}</TreeItem
-          >
+    <Tabs v-model="browser.itemsTab" class="browser-tabs" label="Items pages" :tabs="PAGES" :panels="pages" />
+    <!-- v-show keeps the tree's watchers and scroll, and the list costs nothing until its tab shows. -->
+    <div v-show="browser.itemsTab === 'items'" class="browser-page" v-bind="tabPanelAttrs(pages, 'items')">
+      <div class="browser-title">
+        <Select
+          id="browser-filter"
+          class="browser-filter"
+          label="Show only one kind of item"
+          tip="Show only one kind of item"
+          :model-value="filter"
+          :options="filterOptions"
+          @update:model-value="setBrowserFilter"
+        />
+      </div>
+      <div ref="root" class="float-card-body">
+        <Tree label="Items" multiselectable :items="treeItems" :active-key="activeKey" @reorder="reorderRow">
+          <template v-for="n in nodes" :key="n.k">
+            <TreeFolder
+              v-if="n.kind === 'folder'"
+              :tree-key="n.k"
+              :data-key="n.key"
+              :label="n.label"
+              :icon="n.icon"
+              :count="n.count"
+              :depth="n.depth"
+              :collapsed="n.collapsed"
+              :visible="n.visible"
+              :eye-down="n.eyeDown"
+              :toggle-vis="n.toggleVis"
+              :eye-over="n.eyeOver"
+              :id="n.id"
+              :rename="n.rename"
+              :remove="n.remove"
+              :extra-menu="n.extraMenu"
+              :drag-start="n.dragStart"
+              :accept-drop="n.acceptDrop"
+              :drop-here="n.dropHere"
+              :activate="n.activate"
+              :selected="n.selected"
+              @toggle="browser.toggle(n.key)"
+            />
+            <TreeRow
+              v-else-if="n.kind === 'row'"
+              :tree-key="n.k"
+              :label="n.label"
+              :icon="n.icon"
+              :depth="n.depth"
+              :id="n.id"
+              :swatch="n.swatch"
+              :dim="n.dim"
+              :selected="n.selected"
+              :error="n.error"
+              :suppressed="n.suppressed"
+              :visible="n.visible"
+              :title="n.title"
+              :activate="n.activate"
+              :eye-down="n.eyeDown"
+              :toggle-vis="n.toggleVis"
+              :eye-over="n.eyeOver"
+              :edit="n.edit"
+              :rename="n.rename"
+              :remove="n.remove"
+              :extra-menu="n.extraMenu"
+              :drag-start="n.dragStart"
+              :accept-drop="n.acceptDrop"
+              :drop-here="n.dropHere"
+            />
+            <TreeItem
+              v-else-if="n.kind === 'empty'"
+              class="empty-state tree-child"
+              :item-key="n.k"
+              :label="n.text"
+              :selectable="false"
+              >{{ n.text }}</TreeItem
+            >
 
-          <!-- A section some plugin added. It draws its own rows, decides its own visibility and is unmounted when
-               its capability stops. A tree may own only rows, so the section sits in a row named by it, and in none
-               while it draws nothing. -->
-          <PluginSectionItem
-            v-else
-            :item-key="n.k"
-            :label="n.label"
-            :component="n.component"
-            @empty="setSectionEmpty(n.k, $event)"
-          />
-        </template>
-      </Tree>
+            <!-- A section some plugin added. It draws its own rows, decides its own visibility and is unmounted when
+                 its capability stops. A tree may own only rows, so the section sits in a row named by it, and in none
+                 while it draws nothing. -->
+            <PluginSectionItem
+              v-else
+              :item-key="n.k"
+              :label="n.label"
+              :component="n.component"
+              @empty="setSectionEmpty(n.k, $event)"
+            />
+          </template>
+        </Tree>
+      </div>
     </div>
+    <GeometryList
+      v-if="browser.itemsTab === 'geometry'"
+      class="browser-page"
+      v-bind="tabPanelAttrs(pages, 'geometry')"
+    />
     <div class="float-card-foot">
       <span class="float-card-spacer"></span>
       <IconButton

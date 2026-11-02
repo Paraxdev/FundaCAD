@@ -334,6 +334,65 @@ describe("BrowserPane", () => {
     expect(aside.attributes("aria-labelledby")).toBe(h.attributes("id"));
   });
 
+  describe("tabs", () => {
+    const mounted: VueWrapper[] = [];
+    const withList = (fake: ReturnType<typeof makeEngine>) => {
+      const w = mount(BrowserPane, {
+        global: {
+          provide: { [ENGINE as symbol]: fake.engine },
+          stubs: { GeometryList: { template: '<div class="stub-list"></div>' } },
+        },
+      });
+      mounted.push(w);
+      return w;
+    };
+    // A pane left mounted hears the next test's filter change and draws the real list, the stub lasts one mount.
+    afterEach(() => mounted.splice(0).forEach((w) => w.unmount()));
+    const tabs = (w: VueWrapper) => w.findAll("[role=tab]");
+    const tabState = (w: VueWrapper) =>
+      tabs(w).map((t) => [t.text(), t.attributes("aria-selected"), t.attributes("tabindex")]);
+    const empty = (): CadDocument => ({ parameters: {}, features: [] });
+
+    it("sits Items and Geometry under the heading, on Items at first", () => {
+      const w = withList(makeEngine(empty()));
+      expect(w.get("[role=tablist]").attributes("aria-label")).toBe("Items pages");
+      expect(tabState(w)).toEqual([
+        ["Items", "true", "0"],
+        ["Geometry", "false", "-1"],
+      ]);
+      const kids = [...w.get("aside#browser").element.children].map((c) => c.getAttribute("role") ?? c.className);
+      expect(kids).toEqual(["float-card-head", "tablist", "tabpanel", "float-card-foot"]);
+      expect(w.find(".stub-list").exists()).toBe(false);
+    });
+
+    it("keeps the tree alive while Geometry shows, and only then mounts the list", async () => {
+      const w = withList(makeEngine(empty()));
+      const tree = w.get("[role=tree]").element;
+      await tabs(w)[1]!.trigger("click");
+      expect(tabState(w).map((t) => t[1])).toEqual(["false", "true"]);
+      expect(w.get("[role=tree]").element).toBe(tree);
+      expect((w.findAll("[role=tabpanel]")[0]!.element as HTMLElement).style.display).toBe("none");
+      const list = w.get(".stub-list");
+      expect(list.attributes("role")).toBe("tabpanel");
+      expect(list.attributes("aria-labelledby")).toBe(tabs(w)[1]!.attributes("id"));
+      expect(tabs(w)[1]!.attributes("aria-controls")).toBe(list.attributes("id"));
+
+      await tabs(w)[0]!.trigger("click");
+      expect(w.find(".stub-list").exists()).toBe(false);
+      expect((w.get("[role=tabpanel]").element as HTMLElement).style.display).toBe("");
+    });
+
+    it("stays on Geometry when the pane closes and opens again", async () => {
+      const fake = makeEngine(empty());
+      const first = withList(fake);
+      await tabs(first)[1]!.trigger("click");
+      mounted.pop()!.unmount();
+      const second = withList(fake);
+      expect(tabState(second).map((t) => t[1])).toEqual(["false", "true"]);
+      expect(second.find(".stub-list").exists()).toBe(true);
+    });
+  });
+
   // --- elements: the user's own folders over the bodies --------------------
 
   it("draws an element as a folder, with the bodies filed into it under it", async () => {

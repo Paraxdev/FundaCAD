@@ -1,0 +1,383 @@
+// The Geometry list on a real store and controller, with real Listbox, ListRow, Select and NumberField. Only the engine
+// and the viewport behind the controller are fake.
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { enableAutoUnmount, mount } from "@vue/test-utils";
+import { createPinia, setActivePinia } from "pinia";
+import { nextTick } from "vue";
+import GeometryList from "../../../src/components/shell/GeometryList.vue";
+import NumberField from "../../../src/components/ui/NumberField.vue";
+import { ENGINE } from "../../../src/app/engineKey";
+import { announce } from "../../../src/ui/announce";
+import { setUnit } from "../../../src/ui/units";
+import { renderPrefs, setRenderPref } from "../../../src/ui/renderPrefs";
+import { DOC, edge, land, result, rig, settle, topology } from "../../app/geometryBrowserRig";
+import type { TopologyFace, TopologyReply } from "../../../src/types";
+
+vi.mock("../../../src/ui/toast", () => ({ toast: () => {}, dismissToast: () => {} }));
+vi.mock("../../../src/ui/announce", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../src/ui/announce")>()),
+  announce: vi.fn(),
+}));
+
+enableAutoUnmount(afterEach);
+
+const slanted = (i: number): TopologyFace => ({
+  i,
+  surface: "plane",
+  area: 2400 + i,
+  normal: [0, 0, 1],
+  size: [60 + i, 40],
+  centroid: [113.5 + i, -41.25, 37],
+});
+
+function reply(body: string, n: number): TopologyReply {
+  return { body, faceCount: n, faces: Array.from({ length: n }, (_, i) => slanted(i)) };
+}
+
+/** Mounts on a built document, faces listed once `faces` is given. */
+async function open(faces?: number | TopologyReply) {
+  const count = typeof faces === "number" ? faces : (faces?.faces.length ?? 3);
+  const r = rig(result([{ id: "body1", etag: "e1", faceCount: count }]));
+  await r.build();
+  const setStatus = vi.fn();
+  const engine = { geometryBrowser: r.browser, setStatus };
+  const w = mount(GeometryList, { attachTo: document.body, global: { provide: { [ENGINE as symbol]: engine } } });
+  await nextTick();
+  if (faces !== undefined) {
+    await land(r.asks[0]!, typeof faces === "number" ? reply("body1", faces) : faces);
+    await nextTick();
+  }
+  return { r, w, setStatus };
+}
+
+type W = Awaited<ReturnType<typeof open>>["w"];
+const options = (w: W) => w.findAll("[role=option]");
+const labels = (w: W) => options(w).map((o) => o.find(".ui-list-row-label").text());
+const selects = (w: W) => w.findAllComponents({ name: "Select" });
+const selectOf = (w: W, label: string) => {
+  const row = w.findAll(".ui-field-row").find((x) => x.find(".ui-field-label").text() === label)!;
+  return selects(w).find((s) => row.element.contains(s.element))!;
+};
+
+beforeEach(() => {
+  setActivePinia(createPinia());
+  vi.mocked(announce).mockClear();
+  setUnit("mm");
+});
+
+describe("rows", () => {
+  it("draws each row with its label and hint, and speaks its full words as its name", async () => {
+    const { w } = await open(2);
+    expect(labels(w)).toEqual(["Flat face 1", "Flat face 2"]);
+    const first = options(w)[0]!;
+    expect(first.find(".ui-list-row-hint").text()).toContain("60 by 40 mm");
+    expect(first.find(".ui-list-row-hint").text()).toContain("facing up");
+    const name = first.attributes("aria-label")!;
+    expect(name).toContain("60 by 40 millimetres");
+    expect(name).toContain("facing up");
+    expect(name).toContain("BODY1");
+    expect(name).not.toContain("mm");
+  });
+
+  it("names the list by its kind and its body", async () => {
+    const { w } = await open(1);
+    expect(w.get("[role=listbox]").attributes("aria-label")).toBe("Faces of BODY1");
+    expect(w.get("[role=listbox]").attributes("aria-multiselectable")).toBe("true");
+  });
+
+  it("is one Tab stop whose options keep the Listbox's attrs over ListRow's own", async () => {
+    const { w } = await open(3);
+    expect(options(w).map((o) => o.attributes("tabindex"))).toEqual(["0", "-1", "-1"]);
+    expect(options(w).map((o) => o.attributes("role"))).toEqual(["option", "option", "option"]);
+    expect(options(w).every((o) => o.attributes("data-roving") === "")).toBe(true);
+  });
+
+  it("marks the row a canvas pick selected, and only that row", async () => {
+    const { r, w } = await open(3);
+    r.selection.faces = [1];
+    r.browser.selectionChanged();
+    await nextTick();
+    expect(options(w).map((o) => o.attributes("aria-selected"))).toEqual(["false", "true", "false"]);
+    expect(options(w).map((o) => o.classes("is-selected"))).toEqual([false, true, false]);
+    r.selection.faces = [];
+    r.browser.selectionChanged();
+    await nextTick();
+    expect(options(w).map((o) => o.attributes("aria-selected"))).toEqual(["false", "false", "false"]);
+  });
+
+  it("says a row's lengths in the display unit, and follows a change of it", async () => {
+    const { w } = await open(1);
+    setUnit("cm");
+    await nextTick();
+    expect(options(w)[0]!.find(".ui-list-row-hint").text()).toContain("6 by 4 cm");
+    expect(options(w)[0]!.attributes("aria-label")).toContain("6 by 4 centimetres");
+  });
+
+  it("lists a body's edges once Edges is chosen, with no Facing filter", async () => {
+    const { r, w } = await open(2);
+    r.wires.set("body1", [edge("body1", 0, 2), edge("body1", 1, 2)]);
+    expect(selectOf(w, "Facing")).toBeDefined();
+    await w.getComponent({ name: "Segmented" }).vm.$emit("update:modelValue", "edges");
+    await nextTick();
+    expect(labels(w)).toEqual(["Straight edge 1", "Straight edge 2"]);
+    expect(w.get("[role=listbox]").attributes("aria-label")).toBe("Edges of BODY1");
+    expect(w.findAll(".ui-field-label").map((x) => x.text())).toEqual(["Body", "Type", "Size at least"]);
+  });
+
+  it("switches the body by its field and lists that one", async () => {
+    const r = rig();
+    await r.build();
+    const engine = { geometryBrowser: r.browser, setStatus: vi.fn() };
+    const w = mount(GeometryList, { attachTo: document.body, global: { provide: { [ENGINE as symbol]: engine } } });
+    await land(r.asks[0]!, topology("body1"));
+    await selectOf(w, "Body").vm.$emit("update:modelValue", "body2");
+    await nextTick();
+    expect(r.asks.map((a) => a.body)).toEqual(["body1", "body2"]);
+    expect(selectOf(w, "Body").props("modelValue")).toBe("body2");
+    expect(selectOf(w, "Body").props("options")).toEqual([
+      { value: "body1", label: "BODY1" },
+      { value: "body2", label: "BODY2" },
+    ]);
+  });
+
+  it("stops wanting rows once it unmounts, the next build asks nothing", async () => {
+    const { r, w } = await open(1);
+    w.unmount();
+    await r.build(result([{ id: "body1", etag: "e2", faceCount: 1 }]));
+    expect(r.asks.length).toBe(1);
+  });
+});
+
+describe("states", () => {
+  it("says there is no body yet, with the field off", async () => {
+    const r = rig(result([]));
+    await r.build();
+    const engine = { geometryBrowser: r.browser, setStatus: vi.fn() };
+    const w = mount(GeometryList, { attachTo: document.body, global: { provide: { [ENGINE as symbol]: engine } } });
+    await nextTick();
+    expect(w.get("[role=status]").text()).toContain("No body");
+    expect(w.find("[role=listbox]").exists()).toBe(false);
+    expect(w.find(".geometry-pager").exists()).toBe(false);
+    expect(selects(w)[0]!.props("disabled")).toBe(true);
+  });
+
+  it("says it is listing while the first reply is out, then shows the rows", async () => {
+    const { r, w } = await open();
+    expect(w.get("[role=status]").text()).toContain("Listing the faces");
+    expect(w.get(".geometry-rows").attributes("aria-busy")).toBe("true");
+    await land(r.asks[0]!, reply("body1", 2));
+    expect(w.find("[role=status]").exists()).toBe(false);
+    expect(w.get(".geometry-rows").attributes("aria-busy")).toBeUndefined();
+    expect(options(w).length).toBe(2);
+  });
+
+  it("keeps the old rows, marked busy, while a new build's reply is out", async () => {
+    const { r, w } = await open(2);
+    await r.build(result([{ id: "body1", etag: "e2", faceCount: 2 }]));
+    await nextTick();
+    expect(w.get(".geometry-rows").attributes("aria-busy")).toBe("true");
+    expect(labels(w)).toEqual(["Flat face 1", "Flat face 2"]);
+  });
+
+  it("says when a body has no faces", async () => {
+    const { w } = await open({ body: "body1", faceCount: 0, faces: [] });
+    expect(w.get("[role=status]").text()).toContain("no faces");
+    expect(w.find("[role=listbox]").exists()).toBe(false);
+  });
+
+  it("shows an error with a retry that asks again and clears it", async () => {
+    const { r, w } = await open();
+    await land(r.asks[0]!, null);
+    expect(w.get("[role=alert]").text()).toContain("could not list");
+    expect(w.find("[role=status]").exists()).toBe(false);
+    await w.get("[role=alert] button").trigger("click");
+    expect(r.asks.length).toBe(2);
+    await land(r.asks[1]!, reply("body1", 1));
+    expect(w.find("[role=alert]").exists()).toBe(false);
+    expect(labels(w)).toEqual(["Flat face 1"]);
+  });
+
+  it("keeps edge rows on show beside the error when the engine fails", async () => {
+    const { r, w } = await open();
+    r.wires.set("body1", [edge("body1", 0, 1)]);
+    await w.getComponent({ name: "Segmented" }).vm.$emit("update:modelValue", "edges");
+    await settle();
+    await land(r.asks[r.asks.length - 1]!, null);
+    expect(w.find("[role=alert]").exists()).toBe(true);
+    expect(labels(w)).toEqual(["Straight edge 1"]);
+  });
+
+  it("notes faces the engine's cap left out", async () => {
+    const { w } = await open({ ...reply("body1", 2), truncated: { faces: 1234 } });
+    expect(w.get(".geometry-pager").text()).toContain("1,234 more faces");
+  });
+
+  it("nothing of the first document stays once a second one is open", async () => {
+    const { r, w } = await open(3);
+    await selectOf(w, "Type").vm.$emit("update:modelValue", "cylinder");
+    await nextTick();
+    expect(w.get("[role=status]").text()).toContain("No faces match");
+    r.store.newDocument();
+    await nextTick();
+    expect(w.find("[role=listbox]").exists()).toBe(false);
+    expect(w.get("[role=status]").text()).toContain("No body");
+    expect(selectOf(w, "Type").props("modelValue")).toBe("any");
+    r.state.result = result([{ id: "body1", etag: "e1", faceCount: 2 }]);
+    r.store.load(JSON.stringify(DOC));
+    await r.build();
+    await land(r.asks[r.asks.length - 1]!, reply("body1", 2));
+    expect(labels(w)).toEqual(["Flat face 1", "Flat face 2"]);
+  });
+});
+
+describe("filters", () => {
+  const mixed: TopologyReply = {
+    body: "body1",
+    faceCount: 4,
+    faces: [
+      { i: 0, surface: "plane", area: 2400, normal: [0, 0, 1], size: [60, 40], centroid: [113.5, -41.25, 37] },
+      { i: 1, surface: "plane", area: 900, normal: [0, 0, -1], size: [30, 30], centroid: [113.5, -41.25, 17] },
+      { i: 2, surface: "cylinder", area: 628, axis: [0, 0, 1], radius: 5, length: 20, wraps: true, concave: true },
+      { i: 3, surface: "bspline", area: 412, centroid: [113.5, -41.25, 30] },
+    ],
+  };
+
+  it("narrows by type and tells the new count", async () => {
+    const { w } = await open(mixed);
+    await selectOf(w, "Type").vm.$emit("update:modelValue", "flat");
+    await nextTick();
+    expect(labels(w)).toEqual(["Flat face 1", "Flat face 2"]);
+    expect(vi.mocked(announce).mock.lastCall?.[0]).toBe("2 faces");
+    await selectOf(w, "Type").vm.$emit("update:modelValue", "cylinder");
+    expect(vi.mocked(announce).mock.lastCall?.[0]).toBe("1 face");
+    await selectOf(w, "Type").vm.$emit("update:modelValue", "any");
+    await nextTick();
+    expect(options(w).length).toBe(4);
+  });
+
+  it("narrows by facing", async () => {
+    const { w } = await open(mixed);
+    await selectOf(w, "Facing").vm.$emit("update:modelValue", "down");
+    await nextTick();
+    expect(labels(w)).toEqual(["Flat face 2"]);
+    expect(selectOf(w, "Facing").props("modelValue")).toBe("down");
+  });
+
+  it("narrows by a size, keeping a row exactly at it and dropping one just under", async () => {
+    const { w } = await open(mixed);
+    const size = w.getComponent(NumberField);
+    await size.vm.$emit("update:modelValue", 30);
+    await nextTick();
+    expect(labels(w)).toEqual(["Flat face 1", "Flat face 2"]);
+    await size.vm.$emit("update:modelValue", 30.01);
+    await nextTick();
+    expect(labels(w)).toEqual(["Flat face 1"]);
+    await size.vm.$emit("update:modelValue", null);
+    await nextTick();
+    expect(options(w).length).toBe(4);
+  });
+
+  it("says none match, and Clear filters brings every row back", async () => {
+    const { w } = await open(mixed);
+    await w.getComponent(NumberField).vm.$emit("update:modelValue", 500);
+    await nextTick();
+    expect(w.get("[role=status]").text()).toContain("No faces match");
+    expect(vi.mocked(announce).mock.lastCall?.[0]).toBe("No faces");
+    expect(w.find("[role=listbox]").exists()).toBe(false);
+    expect(w.find(".geometry-pager").exists()).toBe(false);
+    await w.get(".geometry-note button").trigger("click");
+    await nextTick();
+    expect(options(w).length).toBe(4);
+    expect(w.getComponent(NumberField).props("modelValue")).toBeNull();
+  });
+});
+
+describe("pages", () => {
+  const pagerButtons = (w: W) => w.findAll(".geometry-pager button");
+  const range = (w: W) => w.get(".geometry-range").text();
+
+  it("shows one row with no page buttons", async () => {
+    const { w } = await open(1);
+    expect(range(w)).toBe("1 to 1 of 1");
+    expect(pagerButtons(w).length).toBe(0);
+  });
+
+  it("holds exactly 100 rows on one page, the 101st starts a second", async () => {
+    const whole = await open(100);
+    expect(options(whole.w).length).toBe(100);
+    expect(pagerButtons(whole.w).length).toBe(0);
+    whole.w.unmount();
+    setActivePinia(createPinia());
+    const over = await open(101);
+    expect(options(over.w).length).toBe(100);
+    expect(pagerButtons(over.w).length).toBe(2);
+  });
+
+  it("turns pages with Previous and Next, saying each row's true place", async () => {
+    const { w } = await open(250);
+    expect(range(w)).toBe("1 to 100 of 250");
+    expect(pagerButtons(w).map((b) => b.attributes("aria-disabled"))).toEqual(["true", undefined]);
+    expect(options(w)[0]!.attributes("aria-posinset")).toBe("1");
+    expect(options(w)[0]!.attributes("aria-setsize")).toBe("250");
+
+    await pagerButtons(w)[1]!.trigger("click");
+    await pagerButtons(w)[1]!.trigger("click");
+    await nextTick();
+    expect(range(w)).toBe("201 to 250 of 250");
+    expect(options(w).length).toBe(50);
+    expect(options(w)[0]!.attributes("aria-posinset")).toBe("201");
+    expect(options(w)[49]!.attributes("aria-posinset")).toBe("250");
+    expect(labels(w)[0]).toBe("Flat face 201");
+    expect(pagerButtons(w).map((b) => b.attributes("aria-disabled"))).toEqual([undefined, "true"]);
+
+    await pagerButtons(w)[0]!.trigger("click");
+    await nextTick();
+    expect(range(w)).toBe("101 to 200 of 250");
+  });
+
+  it("stays on the turned page through a build", async () => {
+    const { r, w } = await open(250);
+    await pagerButtons(w)[1]!.trigger("click");
+    await nextTick();
+    await r.build(result([{ id: "body1", etag: "e2", faceCount: 250 }]));
+    await land(r.asks[r.asks.length - 1]!, reply("body1", 250));
+    expect(range(w)).toBe("101 to 200 of 250");
+  });
+
+  it("writes large counts with a separator", async () => {
+    const { w } = await open(2004);
+    expect(range(w)).toBe("1 to 100 of 2,004");
+  });
+
+  it("keeps the turned page's row on show through a filter that still holds it", async () => {
+    const { w } = await open(250);
+    await pagerButtons(w)[1]!.trigger("click");
+    await selectOf(w, "Type").vm.$emit("update:modelValue", "flat");
+    await nextTick();
+    expect(range(w)).toBe("101 to 200 of 250");
+  });
+
+  it("falls back to a page that exists when a filter leaves fewer rows", async () => {
+    const { w } = await open(250);
+    await pagerButtons(w)[1]!.trigger("click");
+    await w.getComponent(NumberField).vm.$emit("update:modelValue", 60 + 150);
+    await nextTick();
+    expect(range(w)).toBe("1 to 100 of 100");
+  });
+});
+
+describe("edge rows and the tangent edge setting", () => {
+  it("makes the rows again when the setting changes, not on another setting", async () => {
+    const { r, w } = await open(1);
+    await w.getComponent({ name: "Segmented" }).vm.$emit("update:modelValue", "edges");
+    await nextTick();
+    expect(options(w).length).toBe(0);
+    r.wires.set("body1", [edge("body1", 0, 1)]);
+    setRenderPref("zebraWidth", renderPrefs().zebraWidth + 1);
+    await nextTick();
+    expect(options(w).length).toBe(0);
+    setRenderPref("tangentEdges", renderPrefs().tangentEdges === "hide" ? "show" : "hide");
+    await nextTick();
+    expect(labels(w)).toEqual(["Straight edge 1"]);
+  });
+});
