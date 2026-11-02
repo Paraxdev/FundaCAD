@@ -283,18 +283,37 @@ onBeforeUnmount(() => widthWatch?.disconnect());
         }"
       >
         <div class="measure-title" aria-hidden="true" :style="{ margin: 0 }">Fasteners</div>
+        <div
+          :style="{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '8px 12px',
+            order: stacked ? 2 : 0,
+            flexBasis: stacked ? '100%' : 'auto',
+          }"
+        >
+          <button
+            type="button"
+            class="btn scr-tab-catalogue"
+            :style="tabStyle(tab === 'catalogue')"
+            @click="tab = 'catalogue'"
+            >Catalogue</button
+          >
+          <button type="button" class="btn scr-tab-custom" :style="tabStyle(tab === 'custom')" @click="tab = 'custom'"
+            >My fasteners ({{ userLibrary.length }})</button
+          >
+        </div>
+        <span v-if="!stacked" class="measure-hint" :style="{ margin: '0 0 0 auto' }"
+          >{{ TOTAL.toLocaleString() }} standard items</span
+        >
         <button
           type="button"
-          class="btn scr-tab-catalogue"
-          :style="tabStyle(tab === 'catalogue')"
-          @click="tab = 'catalogue'"
-          >Catalogue</button
+          class="btn scr-close"
+          title="Close"
+          :style="stacked ? { order: 1, marginLeft: 'auto' } : {}"
+          @click="open = false"
+          >Close</button
         >
-        <button type="button" class="btn scr-tab-custom" :style="tabStyle(tab === 'custom')" @click="tab = 'custom'"
-          >My fasteners ({{ userLibrary.length }})</button
-        >
-        <span class="measure-hint" :style="{ margin: '0 0 0 auto' }">{{ TOTAL.toLocaleString() }} standard items</span>
-        <button type="button" class="btn scr-close" title="Close" @click="open = false">Close</button>
       </div>
 
       <div

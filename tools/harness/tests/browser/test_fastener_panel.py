@@ -38,6 +38,22 @@ OUTSIDE = """() => {
 }"""
 
 
+ROOM = """() => {
+  const box = (sel) => document.querySelector(sel).getBoundingClientRect();
+  const fields = box('.scr-form > :first-child');
+  const below = box('.scr-form > :last-child');
+  const preview = box('.scr-form .scr-preview');
+  const title = box('.scr-library .measure-title');
+  const close = box('.scr-close');
+  return {
+    fields: fields.height,
+    preview: preview.height,
+    overlap: below.left < fields.right ? fields.bottom - below.top : 0,
+    closeOnFirstRow: close.top < title.bottom && close.bottom > title.top,
+  };
+}"""
+
+
 def open_library(s) -> None:
     s.page.evaluate("() => window.__fundacad.handleAction('fasteners')")
     s.page.locator(".scr-library").wait_for()
@@ -59,6 +75,8 @@ def assert_form_reachable(s, scrolls: bool = False) -> None:
         s.page.locator(".scr-save").scroll_into_view_if_needed()
     assert s.page.evaluate(HITS, ".scr-save") == []
     assert s.page.locator(FORM_TEXT).count() > 0
+    if scrolls:
+        s.page.locator(".scr-form button:not(.scr-save)").scroll_into_view_if_needed()
     assert s.page.evaluate(HITS, ".scr-form button:not(.scr-save)") == []
     s.page.locator(".scr-form button:not(.scr-save)").click()
     s.page.locator(".scr-new").wait_for()
@@ -125,6 +143,39 @@ def test_custom_form_save_scrolls_into_reach_in_a_short_window(library, window):
     s = library
     place(s, window)
     assert_form_reachable(s, scrolls=True)
+
+
+@pytest.mark.parametrize("history", (True, False))
+@pytest.mark.parametrize("window", WINDOWS + ((1100, 600),))
+def test_custom_form_gives_the_fields_more_height_than_the_preview(library, window, history):
+    s = library
+    if bool(s.page.locator("#float-layer .timeline-shell").count()) != history:
+        s.panel("history")
+    place(s, window)
+    s.page.locator(".scr-tab-custom").click()
+    s.page.locator(".scr-new").click()
+    s.page.locator(".scr-form").wait_for()
+    s.page.wait_for_timeout(300)
+    room = s.page.evaluate(ROOM)
+    assert room["fields"] > room["preview"], room
+    assert room["overlap"] <= 0, room
+    assert room["closeOnFirstRow"], room
+
+
+def test_custom_form_preview_draws_at_its_new_size_after_the_panel_stacks(library):
+    s = library
+    place(s, (1500, 950))
+    s.page.locator(".scr-tab-custom").click()
+    s.page.locator(".scr-new").click()
+    drawn = ".scr-form .scr-preview"
+    s.page.locator(drawn).wait_for()
+    wide = s.page.locator(drawn).evaluate("(c) => [c.width, c.clientWidth]")
+    assert wide[0] == wide[1], wide
+    place(s, (1100, 800))
+    s.page.wait_for_timeout(300)
+    narrow = s.page.locator(drawn).evaluate("(c) => [c.width, c.clientWidth]")
+    assert narrow[1] < wide[1], narrow
+    assert narrow[0] == narrow[1], narrow
 
 
 @pytest.mark.parametrize("window", WINDOWS)

@@ -154,7 +154,7 @@ const heading = {
     :style="{
       display: 'grid',
       gridTemplateColumns: stacked ? 'minmax(0, 1fr)' : 'minmax(0, 1fr) 300px',
-      gridTemplateRows: stacked ? 'minmax(0, 1fr) auto' : 'minmax(0, 1fr)',
+      gridTemplateRows: stacked ? 'minmax(140px, 1fr) auto' : 'minmax(0, 1fr)',
       gap: '16px',
       minHeight: 0,
     }"
@@ -319,13 +319,18 @@ const heading = {
         minWidth: 0,
       }"
     >
-      <FastenerPreview :spec="previewSpec" :width="300" :height="220" @problem="previewProblem = $event" />
-      <div :style="{ flex: '1 1 200px', minWidth: 0 }">
+      <FastenerPreview
+        :spec="previewSpec"
+        :width="stacked ? 88 : 300"
+        :height="stacked ? 64 : 220"
+        @problem="previewProblem = $event"
+      />
+      <div :style="{ flex: '1 1 100%', minWidth: 0, order: stacked ? -1 : 0, marginBottom: stacked ? '8px' : 0 }">
         <ul
           v-if="problems.length || previewProblem"
           class="scr-problems"
           :style="{
-            margin: '8px 0',
+            margin: stacked ? 0 : '8px 0 0',
             paddingLeft: '16px',
             color: 'var(--warn, #ffab2e)',
             fontSize: 'var(--fs-small, 12px)',
@@ -335,17 +340,26 @@ const heading = {
           <li v-if="!problems.length && previewProblem">{{ previewProblem }}</li>
         </ul>
         <div v-else class="measure-hint">Everything needed to build it is there.</div>
-        <div :style="{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '10px' }">
-          <button
-            type="button"
-            class="btn scr-save"
-            :disabled="problems.length > 0 || !!previewProblem"
-            @click="emit('save', spec)"
-          >
-            {{ editing ? "Save changes" : "Add to my fasteners" }}
-          </button>
-          <button type="button" class="btn" @click="emit('cancel')">Cancel</button>
-        </div>
+      </div>
+      <div
+        :style="{
+          display: 'flex',
+          flexWrap: 'wrap',
+          flex: stacked ? '1 1 140px' : '1 1 100%',
+          gap: '8px',
+          marginTop: stacked ? 0 : '10px',
+          minWidth: 0,
+        }"
+      >
+        <button
+          type="button"
+          class="btn scr-save"
+          :disabled="problems.length > 0 || !!previewProblem"
+          @click="emit('save', spec)"
+        >
+          {{ editing ? "Save changes" : "Add to my fasteners" }}
+        </button>
+        <button type="button" class="btn" @click="emit('cancel')">Cancel</button>
       </div>
     </div>
   </div>
