@@ -1289,3 +1289,47 @@ describe("planes", () => {
     expect(r.list.cursor).toBeNull();
   });
 });
+
+describe("a lit origin plane", () => {
+  async function planes() {
+    const r = rig();
+    await r.build();
+    r.browser.show(true);
+    r.browser.setKind("planes");
+    r.viewport.showAllPlanes.mockClear();
+    return r;
+  }
+  const xy = (r: ReturnType<typeof rig>) => r.list.rows.find((x) => x.plane?.kind === "basePlane" && x.plane.plane === "XY")!;
+
+  it("shows the tiles while lit and takes them away after", async () => {
+    const r = await planes();
+    r.browser.hover(xy(r));
+    expect(r.viewport.hoverPlane.mock.calls.at(-1)).toEqual(["XY"]);
+    r.browser.hover(null);
+    expect(r.viewport.hoverPlane.mock.calls.at(-1)).toEqual([null]);
+    expect(r.viewport.showAllPlanes.mock.calls).toEqual([[true], [false]]);
+  });
+
+  it("does not show the tiles for a datum row", async () => {
+    const r = await planes();
+    r.list.setRows([{ ...xy(r), key: "p:dp9", plane: { kind: "datumPlane", id: "dp9" } } as never]);
+    r.browser.hover(r.list.rows[0]!);
+    expect(r.viewport.hoverDatum.mock.calls.at(-1)).toEqual(["dp9"]);
+    expect(r.viewport.showAllPlanes.mock.calls).toEqual([[false]]);
+  });
+
+  it("leaves the tiles to a plane pick that holds the screen, lit or put out", async () => {
+    const r = await planes();
+    r.host.toolOwnsScreen.mockReturnValue(true);
+    r.browser.hover(xy(r));
+    r.browser.hover(null);
+    expect(r.viewport.showAllPlanes).not.toHaveBeenCalled();
+  });
+
+  it("takes the tiles away when the list leaves planes", async () => {
+    const r = await planes();
+    r.browser.hover(xy(r));
+    r.browser.setKind("faces");
+    expect(r.viewport.showAllPlanes.mock.calls.at(-1)).toEqual([false]);
+  });
+});

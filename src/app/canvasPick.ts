@@ -49,9 +49,8 @@ export interface CanvasPickHost {
   setStatus: Engine["setStatus"];
 }
 
-/** A window bubble listener and not a keymap row, since rows go off with Single key shortcuts: every tool's capture
- *  listener has heard the key by now, and a key taken here is defaultPrevented, which the keymap leaves alone. Install
- *  it before the keymap. */
+/** Not keymap rows, which go off with Single key shortcuts. Install before the keymap: it leaves a defaultPrevented key,
+ *  and in window bubble every tool's capture listener has heard the key first. */
 export function installCanvasPick(e: CanvasPickHost): () => void {
   const list = useGeometryBrowserStore();
   const ctl = e.geometryBrowser;

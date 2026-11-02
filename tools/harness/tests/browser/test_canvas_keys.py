@@ -26,6 +26,7 @@ LISTEN = """() => {
 }"""
 
 READOUT = "[data-testid=selection-readout]"
+TILE_SHOWN = "() => window.viewport.scene.originTiles.tiles.XY.fill.visible"
 SKETCH_NORMAL = """() => {
   const k = window.sketch;
   return k.active ? k.plane.n.toArray().map((x) => Math.round(x * 1000) / 1000 + 0) : null;
@@ -34,6 +35,11 @@ SKETCH_NORMAL = """() => {
 
 def heard(s, want):
     s.page.wait_for_function("want => window.__spoken.some((t) => t.includes(want))", arg=want, timeout=15_000)
+
+
+# The readout speaks what changed between two frames, faster keys than a person's would run together.
+def next_frames(s):
+    s.page.evaluate("() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))")
 
 
 def picked(s):
@@ -85,6 +91,7 @@ def test_enter_selects_the_lit_face_space_adds_and_focus_stays_on_the_view(s):
     s.page.keyboard.press("Enter")
     assert picked(s) == {"faces": [["body1", 0]], "edges": []}
     assert active(s) == "canvas"
+    next_frames(s)
     s.page.keyboard.press("]")
     s.page.keyboard.press("Space")
     assert picked(s) == {"faces": [["body1", 0], ["body1", 1]], "edges": []}
@@ -92,7 +99,6 @@ def test_enter_selects_the_lit_face_space_adds_and_focus_stays_on_the_view(s):
     heard(s, "added, 2 selected")
     s.page.keyboard.press("Space")
     assert picked(s) == {"faces": [["body1", 0]], "edges": []}
-    # A selection that comes and goes between two frames is never said, so each change is heard first.
     heard(s, "removed, 1 selected")
     s.page.keyboard.press("Escape")
     assert picked(s) == {"faces": [], "edges": []}
@@ -114,6 +120,7 @@ def test_shift_brackets_switch_to_edges_and_planes_and_a_lit_plane_starts_a_sket
     heard(s, "Planes")
     s.page.keyboard.press("]")
     expect(s.page.locator(READOUT)).to_contain_text("plane")
+    assert s.page.evaluate(TILE_SHOWN)
     s.page.keyboard.press("Enter")
     s.page.wait_for_function("() => window.sketch.active")
     assert s.page.evaluate(SKETCH_NORMAL) == [0, 0, 1]

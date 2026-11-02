@@ -98,6 +98,7 @@ export function rig(
     hoverPick: vi.fn(),
     hoverPlane: vi.fn(),
     hoverDatum: vi.fn(),
+    showAllPlanes: vi.fn(),
     faceTriangles: () => [],
     bodyEdgeRefs: vi.fn((id: string) => wires.get(id) ?? []),
     faceIdToBodyId: (faceId: number) =>
