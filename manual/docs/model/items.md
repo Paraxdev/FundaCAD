@@ -29,3 +29,44 @@ An element is a folder for bodies.
 2. Drag bodies onto the element. Dropping one body onto another puts both in a new element.
 
 Clicking an element selects every body inside it, and its eye hides or shows them all.
+
+## The Geometry tab
+
+The Geometry tab, beside Items, lists the faces, edges and planes of a body in words. It is one way to find and pick them, clicking in the view is another, and both make the same selection. Browse Faces and Edges, in the Edit menu and the command palette, opens the tab and puts focus on the list.
+
+| Row | Beside it |
+| --- | --- |
+| Flat face 4 | 60 by 40 mm, facing up, Extrude 1 |
+| Hole 7 | diameter 10 mm, 20 mm long, Hole 1 |
+| Straight edge 11 | 40 mm, faces 4 and 7 |
+| XY plane | origin |
+
+The number is the row's place on its body, and it can change after a build. The list also holds faces and edges a click cannot reach because something is in front of them. Hidden bodies, and edges hidden by the tangent edge setting, are left out.
+
+### What it lists
+
+1. Body picks the body to list. It follows the selection, and changing it leaves the selection alone.
+2. Faces, Edges and Planes pick the list. Planes holds the origin planes and your datum planes.
+3. Type and Facing narrow the list. Edges have no facing, and planes have only Facing.
+4. Size at least compares a flat face's long side, the diameter of a cylinder, sphere or torus, an edge's length, and for any other face the square root of its area.
+5. Clear filters appears when nothing matches.
+
+A list shows 100 rows at a time. Previous and Next turn the page, and the count beside them says where you are.
+
+### Keys in the list
+
+| Key | What it does |
+| --- | --- |
+| Up, Down | Move and light the row. At the end of a page they turn it. |
+| Home, End | Go to the ends of the page. |
+| PageUp, PageDown | Turn the page. |
+| Enter | Select this row only. On a plane, start a sketch on it. |
+| Space | Add or remove this row. |
+| Shift+Up, Shift+Down, Shift+Space | Take a run of rows on this page. |
+| Ctrl+A | Take every row on this page. |
+| A letter | Jump to the next row starting with it. |
+| Esc | Clear the selection. Focus stays on the row. |
+
+Delete and Backspace do nothing here, so a key press in the list never removes a face. A click on a row picks as these keys do, and Ctrl+click and Shift+click add to it. If a tool is waiting for a plane, Enter or a click on a plane gives it that plane instead of starting a sketch.
+
+To go on from a pick, see [Pick with keys](picking.md#pick-with-keys).
