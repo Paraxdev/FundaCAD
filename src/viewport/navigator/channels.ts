@@ -11,13 +11,13 @@ const EPS_LOG = 1e-7;
 const EPS_ANGLE = 1e-6;
 const EPS_PX = 1e-3;
 
-/** Wheel or pinch zoom about one anchor, in log scale units. */
 const MAX_FRAMES_LEFT = 4096;
 
 function atRest(s: Spring, goal: number): boolean {
   return Math.abs(goal - s.x) < EPS_LOG && Math.abs(s.v) < EPS_LOG * 100;
 }
 
+/** Wheel or pinch zoom about one anchor, in log scale units. */
 export class ZoomChannel {
   readonly anchor: THREE.Vector3;
   /** The pixel the anchor was taken under; a wheel at the same pixel keeps
