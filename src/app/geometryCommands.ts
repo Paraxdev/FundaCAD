@@ -42,7 +42,7 @@ export function createGeometryCommands(e: Pick<Engine, "geometryBrowser" | "setS
     if (!list.litRow && list.filtered.some((r) => r.key === only)) list.setCursor(only!);
     const row = e.geometryBrowser.step(delta);
     if (!row) return say(emptyStepWords(list));
-    const refused = e.geometryBrowser.pickRows([row], { additive: false });
+    const refused = e.geometryBrowser.pickRows([row], { additive: false, stepping: true });
     if (refused) return refuse(refused);
     say(describePick(row.facts).spoken);
   }

@@ -62,7 +62,7 @@ To sketch on a face, step to it, press Enter, then S. To sketch on a plane, pres
 ### What still needs a pointer
 
 1. Vertices are not listed and cannot be stepped to.
-2. A tool that is already running takes no face or edge by keys. That covers Mirror's plane from a face, Stress's Click faces, Text on a face, and adding an edge to a running Fillet.
+2. A tool that is already running takes a face or an edge from the Geometry tab's list, not from the brackets. Mirror's plane from a face, Stress's Click faces, Text on a face and a round face's tangent plane for Sketch still need a click in the view.
 3. Stepping follows the list. There is no step to the face next door, and no way to walk by size.
 4. The view does not turn to a stepped face, and a face behind another shows no light. Its name is still spoken and shown on the readout, and [X](#seeing-through) sees through to it.
 

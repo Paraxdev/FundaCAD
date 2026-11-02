@@ -67,6 +67,6 @@ A list shows 100 rows at a time. Previous and Next turn the page, and the count 
 | A letter | Jump to the next row starting with it. |
 | Esc | Clear the selection. Focus stays on the row. |
 
-Delete and Backspace do nothing here, so a key press in the list never removes a face. A click on a row picks as these keys do, and Ctrl+click and Shift+click add to it. If a tool is waiting for a plane, Enter or a click on a plane gives it that plane instead of starting a sketch.
+Delete and Backspace do nothing here, so a key press in the list never removes a face. A click on a row picks as these keys do, and Ctrl+click and Shift+click add to it. If a tool is waiting for a pick, Enter or a click on a row gives it that plane, face or edge instead. A waiting Sketch takes a plane or a flat face, and a running Fillet or Chamfer adds the edge, or takes it out again if it is already in.
 
 To go on from a pick, see [Pick with keys](picking.md#pick-with-keys).

@@ -198,6 +198,12 @@ import { buildLightRig, type LightRig } from "./lightRig";
 import { hideForPicture, markInPicture, markNotInPicture, widenLines } from "./pictureScene";
 
 /** Each frame of the box preview selects from the selection as it was when the drag began. */
+export interface FaceSketchPlane {
+  plane: PlaneDef;
+  faceId: number;
+  anchor: { selector: Selector; at: [number, number, number] };
+}
+
 export interface AreaDrag {
   x: number;
   y: number;
@@ -2510,14 +2516,13 @@ export class Viewport {
 
   /** So "click a face, press S" skips the plane picker. Null for none or a curved face. The winding already
    *  points out of the material, a body centre test would invert the underside of an overhang. */
-  selectedFaceSketchPlane(): {
-    plane: PlaneDef;
-    faceId: number;
-    anchor: { selector: Selector; at: [number, number, number] };
-  } | null {
-    if (!this.highlighter || !this.model) return null;
-    const faceId = this.highlighter.getSelectedFaces()[0];
-    if (faceId === undefined) return null;
+  selectedFaceSketchPlane(): FaceSketchPlane | null {
+    const faceId = this.highlighter?.getSelectedFaces()[0];
+    return faceId === undefined ? null : this.faceSketchPlane(faceId);
+  }
+
+  faceSketchPlane(faceId: number): FaceSketchPlane | null {
+    if (!this.model) return null;
     // Every vertex on the plane through the centroid, with a model scaled tolerance as selectCoplanarFaces uses.
     const tol = 1e-3 * (this.model.box.getSize(new THREE.Vector3()).length() || 1) + 1e-4;
     const flat = planeOfFace(this.model, faceId, tol);
@@ -2539,6 +2544,13 @@ export class Viewport {
         at: [c.x, c.y, c.z] as [number, number, number],
       },
     };
+  }
+
+  /** For a face picked with no click point, a list row. The centroid lies on the face, as faceCentroidWorld says. */
+  faceSelectorOf(faceId: number): Selector {
+    const c = this.faceCentroidWorld(faceId);
+    const body = this.faceIdToBodyId(faceId);
+    return { kind: "face", by: "nearest", point: [c.x, c.y, c.z], ...(body ? { body } : {}) };
   }
 
   /** The plane of a face, or null when the face is curved. */

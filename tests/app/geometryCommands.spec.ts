@@ -381,13 +381,15 @@ describe("what a command refuses", () => {
     const { r, run } = await opened();
     r.host.toolOwnsScreen.mockReturnValue(true);
     const end = vi.fn();
-    awaitTreePick(() => true, end);
+    const taker = vi.fn(() => true as const);
+    awaitTreePick(taker, end);
     expect(treePickWaiting()).toBe(true);
     vi.useFakeTimers();
     for (const a of ALL) run(a);
     vi.runAllTimers();
     expect(treePickWaiting()).toBe(true);
     expect(end).not.toHaveBeenCalled();
+    expect(taker).not.toHaveBeenCalled();
     expect(r.host.setStatus.mock.calls.map((c) => c[0])).toEqual(STEPS.map(() => "Finish the tool first"));
     expect(picks(r)).toEqual([]);
   });

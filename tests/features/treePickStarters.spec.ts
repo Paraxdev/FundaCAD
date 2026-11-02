@@ -11,7 +11,9 @@ import type { Engine } from "../../src/app/engine";
 import type { GeometryBackend } from "../../src/geometry/client";
 import { usePromptStore } from "../../src/stores/prompt";
 import { ZERO_POSE } from "../../src/document/datumPose";
-import type { PlaneDef } from "../../src/types";
+import type { PlaneDef, Vec3 } from "../../src/types";
+import type { EdgeRef } from "../../src/viewport/edgeLines";
+import { axisFromEdge } from "../../src/features/planeMath";
 
 let frames: (() => void)[] = [];
 const flushFrame = () => {
@@ -111,7 +113,7 @@ describe("a tool's pick answered from the Items tree", () => {
     const r = rig();
     r.starters.offsetPlane();
     expect(r.click({ kind: "body", id: "b1" })).toBe("refused");
-    expect(r.hints).toEqual(["That row is a body, this step needs a plane, or a face picked in the view"]);
+    expect(r.hints).toEqual(["That row is a body, this step needs a plane or a face"]);
     expect(r.planePick()).toBe(true);
     expect(treePickWaiting()).toBe(true);
     expect(usePromptStore().text).toBe("Select a plane or face to offset from");
@@ -263,5 +265,110 @@ describe("a pick session cannot outlive its tool", () => {
       expect(treePickWaiting()).toBe(false);
       expect(r.planePick()).toBe(false);
     }
+  });
+});
+
+describe("a face or an edge row from the Geometry list", () => {
+  const slanted: PlaneDef = { origin: [12.5, -7.25, 30], normal: [0, 0.6, 0.8], xdir: [1, 0, 0] };
+  const anchor = {
+    selector: { kind: "face", by: "nearest", point: [12.5, -7.25, 30], body: "b2" },
+    at: [12.5, -7.25, 30],
+  };
+  const faceSel = (id: number) => ({
+    kind: "face",
+    by: "nearest",
+    point: [id + 0.5, -7.25, 30],
+    body: id > 20 ? "b3" : "b2",
+  });
+  function lidRig() {
+    const r = rig([
+      { id: "b2", name: "Lid" },
+      { id: "b3", name: "Base" },
+    ]);
+    const showSketchFace = vi.fn();
+    Object.assign(r.viewport, {
+      faceSketchPlane: (id: number) => (id === 14 ? { plane: slanted, faceId: 14, anchor } : null),
+      showSketchFace,
+      planarFace: () => null,
+      faceSelectorOf: faceSel,
+      emphasizeEdges: () => {},
+      hoverEdge: () => {},
+    });
+    return { ...r, showSketchFace };
+  }
+  const edgeRow = (points: Vec3[]) =>
+    ({ kind: "edge", edge: { id: "b2:3", body: "b2", points, smooth: false, slot: 3 } as unknown as EdgeRef }) as const;
+
+  it("Sketch starts on a flat face row's plane and follows that face", () => {
+    const r = lidRig();
+    r.starters.startSketch();
+    expect(r.click({ kind: "face", faceId: 14 })).toBe("taken");
+    expect(treePickWaiting()).toBe(false);
+    expect(r.planePick()).toBe(false);
+    flushFrame();
+    expect(r.deps.sketch.enter).toHaveBeenCalledExactlyOnceWith(slanted, r.deps.store, undefined, undefined, anchor);
+    expect(r.showSketchFace).toHaveBeenCalledExactlyOnceWith(14);
+  });
+
+  it("Sketch refuses a face that is not flat in words and keeps waiting for a flat one", () => {
+    const r = lidRig();
+    r.starters.startSketch();
+    expect(r.click({ kind: "face", faceId: 15 })).toBe("refused");
+    expect(r.hints).toHaveLength(1);
+    expect(r.hints[0]).toMatch(/not flat/);
+    expect(treePickWaiting()).toBe(true);
+    flushFrame();
+    expect(r.deps.sketch.enter).not.toHaveBeenCalled();
+    expect(r.click({ kind: "face", faceId: 14 })).toBe("taken");
+  });
+
+  it("Datum Axis on an edge takes an edge row with its body, and refuses a face row", () => {
+    const r = lidRig();
+    r.starters.createDatumAxisOnEdge();
+    expect(r.click({ kind: "face", faceId: 14 })).toBe("refused");
+    expect(r.hints).toHaveLength(1);
+    expect(r.hints[0]).toMatch(/face.*edge/);
+    const points: Vec3[] = [
+      [3.5, -2, 5],
+      [13.5, 4, 9],
+    ];
+    expect(r.click(edgeRow(points))).toBe("taken");
+    expect(treePickWaiting()).toBe(false);
+    flushFrame();
+    const line = axisFromEdge(points)!;
+    expect(r.addFeature).toHaveBeenCalledExactlyOnceWith({
+      id: "f9",
+      type: "datumAxis",
+      origin: line.origin,
+      dir: line.dir,
+      axisEdge: { kind: "edge", by: "nearest", point: [8.5, 1, 7], body: "b2" },
+      name: "Axis",
+    });
+  });
+
+  it("Joint takes a face row for each side, and refuses an edge row", () => {
+    const r = lidRig();
+    r.starters.startJoint();
+    expect(
+      r.click(
+        edgeRow([
+          [1, 2, 3],
+          [4, 6, 3],
+        ]),
+      ),
+    ).toBe("refused");
+    expect(r.click({ kind: "face", faceId: 12 })).toBe("taken");
+    flushFrame();
+    expect(treePickWaiting()).toBe(true);
+    expect(r.click({ kind: "face", faceId: 23 })).toBe("taken");
+    flushFrame();
+    expect(r.addFeature).toHaveBeenCalledExactlyOnceWith({
+      id: "f9",
+      type: "joint",
+      moving: "b2",
+      mate: { body: "b2", face: faceSel(12) },
+      to: { body: "b3", face: faceSel(23) },
+      mode: "rigid",
+    });
   });
 });

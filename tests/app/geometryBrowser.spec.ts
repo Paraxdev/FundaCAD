@@ -1,10 +1,11 @@
 // The Geometry list's controller on a real DocumentStore: what it asks the engine, what it keeps, and what the next
 // document never sees.
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { SessionEnded } from "../../src/document/session";
 import { GEOMETRY_PAGE_SIZE } from "../../src/stores/geometryBrowser";
 import { edge, keys, land, plane, result, rig, settle, topology, type BodySpec } from "./geometryBrowserRig";
+import { awaitTreePick, resetTreePicks, type TreePick, type TreePickAnswer } from "../../src/ui/treePick";
 
 vi.mock("../../src/ui/toast", () => ({ toast: () => {}, dismissToast: () => {} }));
 
@@ -1079,6 +1080,118 @@ describe("picking a row", () => {
     r.browser.hover(r.list.rows[1]!);
     r.browser.hover(null);
     expect(r.viewport.hoverPick).not.toHaveBeenCalled();
+  });
+});
+
+describe("a tool waiting for a pick", () => {
+  async function waiting(answers: TreePickAnswer[] = [true]) {
+    const r = rig(
+      result([
+        { id: "other", etag: "o", faceCount: 7 },
+        { id: "body1", etag: "e1" },
+      ]),
+    );
+    const wires = [edge("body1", 0, 3), edge("body1", 1, 3), edge("body1", 2, 3)];
+    r.wires.set("body1", wires);
+    await r.build();
+    r.browser.setBody("body1");
+    r.browser.show(true);
+    await land(r.asks.at(-1)!, topology("body1", 3, [[0], [1], [2]]));
+    r.host.toolOwnsScreen.mockReturnValue(true);
+    r.host.toolBusy.mockReturnValue(true);
+    const taken: TreePick[] = [];
+    const release = awaitTreePick(
+      (pick) => {
+        taken.push(pick);
+        return answers[taken.length - 1] ?? true;
+      },
+      () => {},
+    );
+    return { ...r, wires, taken, release };
+  }
+  afterEach(() => resetTreePicks());
+
+  it("gets a face row as that face, and nothing is selected", async () => {
+    const r = await waiting();
+    expect(r.browser.pickRows([r.list.rows[1]!], { additive: false })).toBeNull();
+    expect(r.taken).toEqual([{ kind: "face", faceId: 8 }]);
+    expect(r.viewport.applyPicks).not.toHaveBeenCalled();
+    expect(r.host.setStatus).not.toHaveBeenCalled();
+  });
+
+  it("gets a run of edge rows one by one and stops at the first refusal, which is said once", async () => {
+    const r = await waiting([true, "That row is an edge, this step needs a face"]);
+    r.browser.setKind("edges");
+    expect(r.browser.pickRows(r.list.rows, { additive: false })).toBeNull();
+    expect(r.taken).toEqual([
+      { kind: "edge", edge: r.wires[0] },
+      { kind: "edge", edge: r.wires[1] },
+    ]);
+    expect(r.host.setStatus).toHaveBeenCalledExactlyOnceWith("That row is an edge, this step needs a face", "");
+    expect(r.viewport.applyPicks).not.toHaveBeenCalled();
+  });
+
+  it("stops offering rows once a pick ends its wait", async () => {
+    const r = await waiting();
+    r.browser.setKind("edges");
+    const rows = r.list.rows.slice(0, 2);
+    let n = 0;
+    r.release();
+    const release = awaitTreePick(
+      () => (++n === 1 && release(), true),
+      () => {},
+    );
+    r.browser.pickRows(rows, { additive: false });
+    expect(n).toBe(1);
+  });
+
+  it("a step selects only, so a waiting tool is never fed by Next Face", async () => {
+    const r = await waiting();
+    expect(r.browser.pickRows([r.list.rows[0]!], { additive: false, stepping: true })).toMatch(/tool/i);
+    expect(r.taken).toEqual([]);
+    expect(r.viewport.applyPicks).not.toHaveBeenCalled();
+  });
+
+  it("keeps an edge row through the tool's own preview build", async () => {
+    const r = await waiting();
+    r.browser.setKind("edges");
+    r.state.result = result([
+      { id: "other", etag: "o", faceCount: 7 },
+      { id: "body1", etag: "preview" },
+    ]);
+    r.store.setPreview({ id: "p1", type: "box", length: 1, width: 1, height: 1 } as never);
+    await settle();
+    expect(r.store.buildState.previewBuilt).toBeTruthy();
+    expect(r.browser.pickRows([r.list.rows[2]!], { additive: false })).toBeNull();
+    expect(r.taken).toEqual([{ kind: "edge", edge: r.wires[2] }]);
+  });
+
+  it("refuses a face row in the tool's preview build, its number means the drawn model's face", async () => {
+    const r = await waiting();
+    r.state.result = result([
+      { id: "other", etag: "o", faceCount: 7 },
+      { id: "body1", etag: "preview" },
+    ]);
+    r.store.setPreview({ id: "p1", type: "box", length: 1, width: 1, height: 1 } as never);
+    await settle();
+    expect(r.browser.pickRows([r.list.rows[0]!], { additive: false })).toMatch(/\w/);
+    expect(r.taken).toEqual([]);
+  });
+
+  it("refuses a face row from an older build and takes the new row", async () => {
+    const r = await waiting();
+    const old = r.list.rows[0]!;
+    await r.build(
+      result([
+        { id: "other", etag: "o", faceCount: 7 },
+        { id: "body1", etag: "e1b" },
+      ]),
+    );
+    expect(r.browser.pickRows([old], { additive: false })).toMatch(/\w/);
+    expect(r.taken).toEqual([]);
+    await land(r.asks.at(-1)!, topology("body1", 3, [[0], [1], [2]]));
+    expect(r.browser.pickRows([r.list.rows[0]!], { additive: false })).toBeNull();
+    expect(r.taken).toEqual([{ kind: "face", faceId: 7 }]);
   });
 });
 

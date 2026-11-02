@@ -64,6 +64,7 @@ import { edgeHoverColor, edgeSelectColor } from "../viewport/highlight";
 import { onThemeChange } from "../ui/theme";
 import { toast } from "../ui/toast";
 import { isEditableTarget } from "../ui/focus";
+import { awaitTreePick, treePickRefusal, type TreePick, type TreePickAnswer } from "../ui/treePick";
 
 type Phase = "pick" | "drag";
 type Kind = EdgeTreatment;
@@ -134,6 +135,7 @@ export class EdgeFeatureTool {
 
   // Every member is a ghost line drawn through the model (depthTest off), so hidden members stay visible and clickable.
   private ghosts: GhostEdge[] = []; // membership display + toggle targets
+  private releaseRows: (() => void) | null = null;
   private ghostLines: GhostLines | null = null;
   private unmatchedSels: Selector[] = []; // saved selectors we couldn't visualize (kept for commit)
 
@@ -310,6 +312,10 @@ export class EdgeFeatureTool {
     // behaviour in step, and opens the face route from every entry point at once.
     const seed = pre.length ? pre : canConsume(kind, "face") ? this.faceEdgeSelectors() : [];
     this.active = true;
+    this.releaseRows = awaitTreePick(
+      (pick) => this.takeRow(pick),
+      () => this.cancel(),
+    );
     this.kind = kind;
     this.phase = "pick";
     this.onDone = onDone;
@@ -334,6 +340,31 @@ export class EdgeFeatureTool {
     } else {
       setPrompt(`Click an edge to ${kind} · Ctrl-click a chain · Shift-click one · or pick a face`);
     }
+  }
+
+  /** An edge row from the Geometry list acts as a plain click on that edge would. */
+  private takeRow(pick: TreePick): TreePickAnswer {
+    if (pick.kind !== "edge") return treePickRefusal(pick, "an edge");
+    const edge = pick.edge;
+    const scope = pickScope({ shift: false, view: this.viewport.edgeScopeView(edge) }).scope;
+    if (this.phase === "pick") {
+      const sel = edgeSelectorFrom({ points: edge.points, body: edge.body });
+      if (!sel) return treePickRefusal(pick, "an edge");
+      const { mid, tan } = midAndTangent(edge.points);
+      this.beginDrag([sel], mid, tan, edge, { scope });
+      return true;
+    }
+    const mid = polylineMid(edge.points);
+    const here = new MidSet();
+    if (mid) here.add(mid);
+    const member = mid ? this.ghosts.find((g) => here.has(g.mid)) : undefined;
+    if (member) this.removeWithChain(member);
+    else {
+      const over = this.addPicked(edge, scope);
+      if (over) this.refuseOverCap(over);
+    }
+    this.afterMembershipChange();
+    return true;
   }
 
   /** [] when no face is selected. viewport/faceEdges.ts finds the edges by geometry, since the rebuild reply has no
@@ -376,6 +407,10 @@ export class EdgeFeatureTool {
     if (!sels.length || !sels.every((s) => "point" in s)) return false; // structural selectors, can't re-anchor
 
     this.active = true;
+    this.releaseRows = awaitTreePick(
+      (pick) => this.takeRow(pick),
+      () => this.cancel(),
+    );
     this.kind = f.type;
     this.phase = "drag";
     this.onDone = onDone;
@@ -1368,6 +1403,8 @@ export class EdgeFeatureTool {
 
   private cleanup() {
     const el = this.viewport.domElement;
+    this.releaseRows?.();
+    this.releaseRows = null;
     this.gesture.detach();
     el.style.cursor = "default";
     if (this.previewTimer != null) {

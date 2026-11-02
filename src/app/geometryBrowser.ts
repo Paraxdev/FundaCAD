@@ -25,7 +25,8 @@ import type { Viewport } from "../viewport/viewport";
 import type { Engine } from "./engine";
 import { featurePick } from "./featurePick";
 import { writeFeatureRows } from "./featureRows";
-import { BASE_PLANES, refuseAloud, routePlaneRow, sketchOnPlane, type PlanePick } from "./planePick";
+import { BASE_PLANES, refuseAloud, routePlaneRow, sketchOnPlane, treeClickDeps, type PlanePick } from "./planePick";
+import { routeTreeClick, treePickWaiting, type TreePick } from "../ui/treePick";
 
 export interface GeometryBrowserHost {
   store: Engine["store"];
@@ -283,6 +284,28 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
     return faceId === null ? null : { kind: "face", faceId };
   }
 
+  // A tool's preview build replaces the drawn model, but an edge row keeps the points of the build it came from, the
+  // model the tool acts on. A face row is a number in the drawn model, so it must be current.
+  function toolPickOf(row: GeometryRow): TreePick | null {
+    if (row.kind !== "edge") {
+      const ref = refOf(row);
+      return ref?.kind === "face" ? { kind: "face", faceId: ref.faceId } : null;
+    }
+    const body = lastResult?.bodies?.find((b) => b.id === row.bodyId);
+    const edge = edgeRefs.get(row.index);
+    const current = body && rowsKey?.startsWith(`${cacheKey(body)}|`);
+    return current && edge?.body === row.bodyId ? { kind: "edge", edge } : null;
+  }
+
+  // Each row goes to the waiting tool in turn, as clicks in the view would. A refusal is spoken by the route.
+  function offerRows(rows: readonly GeometryRow[]): string | null {
+    const picks = rows.map(toolPickOf);
+    if (picks.some((p) => p === null)) return ROW_CHANGED;
+    const deps = treeClickDeps(e);
+    for (const p of picks as TreePick[]) if (!treePickWaiting() || routeTreeClick(p, deps) !== "taken") break;
+    return null;
+  }
+
   function heldBlocked(): string | null {
     if (e.sketch.active) return "Finish the sketch first";
     return e.toolOwnsScreen() ? "Finish the tool first" : null;
@@ -408,9 +431,11 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
       return row && body && rowsKey?.startsWith(`${cacheKey(body)}|`) ? row.facts : null;
     },
 
-    /** Selects these rows as one change, a click's route. The reason in words when refused. */
-    pickRows(rows: readonly GeometryRow[], o: { additive: boolean }): string | null {
+    /** Selects these rows as one change, a click's route, or hands them to a waiting tool unless only `stepping`. The
+     *  reason in words when refused. */
+    pickRows(rows: readonly GeometryRow[], o: { additive: boolean; stepping?: boolean }): string | null {
       if (list.kind === "planes") return pickPlanes(rows, o.additive);
+      if (treePickWaiting() && !o.stepping) return offerRows(rows);
       const blocked = pickBlocked();
       if (blocked) return blocked;
       const refs = rows.map(refOf);
@@ -418,7 +443,7 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
       e.dropBodyGizmo();
       // applyPicks leaves the policy alone, and with Bodies still set the toolbar would keep showing it.
       if (e.viewport.policy === "bodies") e.handleAction("selmode-faces");
-      e.viewport.applyPicks(refs as PickRef[], o);
+      e.viewport.applyPicks(refs as PickRef[], { additive: o.additive });
       return null;
     },
 
