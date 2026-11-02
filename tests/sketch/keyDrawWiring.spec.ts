@@ -516,14 +516,21 @@ describe("a box positioned for a cursor off the window", () => {
     offScreen(s);
     key(s, "ArrowRight", fieldEl("diameter"));
     expect(parseInt(box().style.left)).toBeLessThanOrEqual(window.innerWidth);
-    (s as unknown as { basePreview(p: THREE.Vector2, e: unknown): void }).basePreview(v(30, 2), { clientX: 1, clientY: 1 });
+    (s as unknown as { basePreview(p: THREE.Vector2, e: unknown): void }).basePreview(v(30, 2), {
+      clientX: 1,
+      clientY: 1,
+    });
     expect(parseInt(box().style.left)).toBe(50000);
   });
 });
 
 describe("a line finished from its size box", () => {
   const KEYS = "Type the size, or @dx,dy · arrows move · Enter · Esc";
-  const last = () => vi.mocked(announce).mock.calls.filter((c) => c[2]?.key === "sketch-point").at(-1)?.[0];
+  const last = () =>
+    vi
+      .mocked(announce)
+      .mock.calls.filter((c) => c[2]?.key === "sketch-point")
+      .at(-1)?.[0];
 
   it("says a typed angle and the keys that go on", () => {
     const { s } = makeDrawing("line");
@@ -580,7 +587,10 @@ describe("a line finished from its size box", () => {
   it("leaves the keys to the prompt once the chain closed, as the prompt then changes", () => {
     const { s } = makeDrawing("line");
     startAt(s, "0", "0");
-    for (const [l, a] of [["20", "0"], ["20", "90"]] as const) {
+    for (const [l, a] of [
+      ["20", "0"],
+      ["20", "90"],
+    ] as const) {
       type("length", l);
       type("angle", a);
       enter("length");
@@ -588,12 +598,18 @@ describe("a line finished from its size box", () => {
     type("length", String(Math.hypot(20, 20)));
     type("angle", "-135");
     enter("length");
-    expect(last()).toBe(`Line 3, length ${Math.round(Math.hypot(20, 20) * 1000) / 1000}, angle minus 135 degrees, loop closed`);
+    expect(last()).toBe(
+      `Line 3, length ${Math.round(Math.hypot(20, 20) * 1000) / 1000}, angle minus 135 degrees, loop closed`,
+    );
   });
 });
 
 describe("a refusal from the size box's own Enter", () => {
-  const said = () => vi.mocked(announce).mock.calls.filter((c) => c[1] === "assertive").map((c) => c[0]);
+  const said = () =>
+    vi
+      .mocked(announce)
+      .mock.calls.filter((c) => c[1] === "assertive")
+      .map((c) => c[0]);
 
   it("marks the box, keeps its field and is spoken, for a cursor moved along one axis", () => {
     const { s } = makeDrawing("rectangle");
@@ -997,7 +1013,11 @@ describe("a second point the size box's Enter places on the origin", () => {
 });
 
 describe("a size the box refuses", () => {
-  const assertive = () => vi.mocked(announce).mock.calls.filter((c) => c[1] === "assertive").map((c) => c[0]);
+  const assertive = () =>
+    vi
+      .mocked(announce)
+      .mock.calls.filter((c) => c[1] === "assertive")
+      .map((c) => c[0]);
   beforeEach(() => vi.mocked(announce).mockClear());
 
   it.each([
@@ -1128,7 +1148,12 @@ describe("wiring a removed line would break", () => {
   it("ends the keys' cursor when the pointer moves over the canvas or leaves it", () => {
     for (const leave of [false, true]) {
       const { s } = makeSketch("line");
-      const m = s as never as { snapAt(): unknown; showSnap(): void; onPointerMove(e: unknown): void; onPointerLeave(): void };
+      const m = s as never as {
+        snapAt(): unknown;
+        showSnap(): void;
+        onPointerMove(e: unknown): void;
+        onPointerLeave(): void;
+      };
       m.snapAt = () => ({ p: v(21, 8), kind: "free", guides: [], world: new THREE.Vector3(21, 8, 0) });
       m.showSnap = () => {};
       (s as never as { active: boolean }).active = true;
