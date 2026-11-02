@@ -434,7 +434,9 @@ export class ModifyFlow {
       "offset",
       () => ({ side: this.offsetPick?.side ?? 1, mag: this.offsetPick?.mag ?? 0 }),
       (held) => {
-        if (this.offsetPick) Object.assign(this.offsetPick, held);
+        if (!this.offsetPick) return;
+        Object.assign(this.offsetPick, held);
+        this.drawOffsetPreview(this.offsetPick);
       },
     );
     setPrompt("Move to pick the side, or type a distance · Enter · Esc");
@@ -504,6 +506,12 @@ export class ModifyFlow {
       this.host.dim().updateFromCursor({ offset: pick.mag });
     }
     this.host.dim().position(ev.clientX, ev.clientY);
+    this.drawOffsetPreview(pick);
+  }
+
+  private drawOffsetPreview(pick: { idx: number; side: number; mag: number }) {
+    const src = this.host.entities()[pick.idx];
+    if (!src) return;
     const res = this.offsetResultFor(pick.idx, pick.side * pick.mag);
     const added = res ? res.entities.slice(this.host.entities().length) : [];
     // keep the source highlighted so it stays obvious what is being offset

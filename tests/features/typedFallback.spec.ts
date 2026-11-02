@@ -130,6 +130,28 @@ describe("sketch offset box", () => {
     t.dim.dispose();
   });
 
+  it("a field undo redraws the ghost at once, and Enter commits that offset", () => {
+    const t = startOffset();
+    t.move();
+    const atCursor = t.last();
+    const input = field("offset");
+    const shown = input.value;
+    const edit = (text: string, inputType: string) => {
+      input.dispatchEvent(new InputEvent("beforeinput", { bubbles: true, cancelable: true, inputType }));
+      input.value = text;
+      input.dispatchEvent(new InputEvent("input", { bubbles: true, inputType }));
+    };
+    edit("-5.5", "insertText");
+    t.move();
+    expect(t.last()).not.toEqual(atCursor);
+    edit(shown, "historyUndo");
+    expect(t.last()).toEqual(atCursor);
+    enter("offset");
+    const committed = t.setEntities.mock.calls[0]![0].slice(1).map(withoutId);
+    expect(committed).toEqual(atCursor.slice(1));
+    t.dim.dispose();
+  });
+
   it("Enter on an emptied box keeps the offset open with its toast", () => {
     const t = startOffset();
     t.move();
