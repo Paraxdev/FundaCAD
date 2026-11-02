@@ -2,7 +2,7 @@
 
 import type { DocumentStore } from "../document/store";
 import { isOriginKey, pickedFeatureCount, useSelectionStore } from "../stores/selection";
-import { actOn, modsOf, selectRow } from "../ui/rowSelection";
+import { actOn, modsOf, selectRow, type RowSelection } from "../ui/rowSelection";
 import type { Engine } from "./engine";
 
 /** Click, Ctrl-click or Shift-click a row. `order` is the rows of that list as drawn, so a run never crosses into
@@ -14,8 +14,12 @@ export function clickFeatureRow(
   id: string,
   ev: { ctrlKey: boolean; metaKey: boolean; shiftKey: boolean },
 ): void {
+  writeFeatureRows(e, selectRow(useSelectionStore().rows, order, id, modsOf(ev)), id);
+}
+
+/** Writes a row selection, `id` being the row this change was about. */
+export function writeFeatureRows(e: Pick<Engine, "selectFeatureRows">, next: RowSelection<string>, id: string): void {
   const sel = useSelectionStore();
-  const next = selectRow(sel.rows, order, id, modsOf(ev));
   const features = next.keys.filter((k) => !isOriginKey(k));
   let primary = sel.featureId;
   if (next.keys.includes(id) && !isOriginKey(id)) primary = id;

@@ -6,11 +6,13 @@ import {
   faceRows,
   filterRows,
   NO_FILTERS,
+  planeRowKey,
+  planeRows,
   type BodyMeta,
   type GeometryRow,
 } from "../../src/ui/geometryRows";
 import { circleDiameter } from "../../src/ui/selectionMeasure";
-import type { TopologyFace, TopologyReply, Vec3 } from "../../src/types";
+import type { Feature, PlaneDef, TopologyFace, TopologyReply, Vec3 } from "../../src/types";
 
 const names: Record<string, string> = { ex1: "Extrude 1", fil1: "Fillet 1" };
 const ownerName = (id: string) => names[id] ?? null;
@@ -459,5 +461,75 @@ describe("filterRows", () => {
   it("applies filters together", () => {
     expect(filter({ type: "flat", facing: "up", minSize: 41 })).toEqual(["a"]);
     expect(filter({ type: "cylinder", facing: "up" })).toEqual([]);
+  });
+});
+
+describe("planeRows", () => {
+  const SLANTED = { origin: [113.5, -41.25, 37], normal: [0, 0.6, 0.8], xdir: [1, 0, 0] } as PlaneDef;
+  const BACK = { origin: [7, 88, -3], normal: [0, 1, 0], xdir: [1, 0, 0] } as PlaneDef;
+  const defs: Record<string, PlaneDef> = { d1: SLANTED, d2: BACK, d3: SLANTED };
+  const datum = (id: string, name?: string) => ({ id, type: "datumPlane", ...(name ? { name } : {}) }) as Feature;
+  const rows = (features: Feature[], off: string[] = []) =>
+    planeRows(
+      ["XY", "XZ"],
+      features,
+      (f) => defs[f.id]!,
+      (id) => off.includes(id),
+    );
+  const planeKeys = (r: readonly GeometryRow[]) => r.map((x) => x.key);
+
+  it("gives the whole row of an origin plane and of a slanted datum off the origin", () => {
+    expect(rows([datum("d1", "Lid")]).filter((r) => r.key !== "p:o:XZ")).toEqual([
+      {
+        key: "p:o:XY",
+        kind: "plane",
+        bodyId: "",
+        index: 0,
+        facts: { kind: "plane", name: "XY", origin: true, normal: [0, 0, 1] },
+        size: 0,
+        facing: "up",
+        type: "flat",
+        plane: { kind: "basePlane", plane: "XY" },
+      },
+      {
+        key: "p:d1",
+        kind: "plane",
+        bodyId: "",
+        index: 2,
+        facts: { kind: "plane", name: "Lid", origin: false, normal: [0, 0.6, 0.8] },
+        size: 0,
+        facing: "up",
+        type: "flat",
+        plane: { kind: "datumPlane", id: "d1" },
+      },
+    ]);
+  });
+
+  it("lists the origin planes alone with no datum, and takes every datum of many in order", () => {
+    expect(planeKeys(rows([]))).toEqual(["p:o:XY", "p:o:XZ"]);
+    expect(planeKeys(rows([datum("d1", "Lid"), { id: "x", type: "box" } as Feature, datum("d2", "Rear")]))).toEqual([
+      "p:o:XY",
+      "p:o:XZ",
+      "p:d1",
+      "p:d2",
+    ]);
+  });
+
+  it("leaves a suppressed datum out, and the next one keeps the number Items gives it", () => {
+    const got = rows([datum("d1"), datum("d2"), datum("d3")], ["d2"]);
+    expect(planeKeys(got)).toEqual(["p:o:XY", "p:o:XZ", "p:d1", "p:d3"]);
+    expect(got.map((r) => (r.facts as { name: string }).name)).toEqual(["XY", "XZ", "Plane1", "Plane3"]);
+    expect(got.map((r) => r.index)).toEqual([0, 1, 2, 3]);
+  });
+
+  it("keeps only the planes a facing filter names, the datum looking back among them", () => {
+    const got = rows([datum("d1", "Lid"), datum("d2", "Rear")]);
+    expect(got.find((r) => r.key === "p:d2")?.facing).toBe("back");
+    expect(planeKeys(filterRows(got, { ...NO_FILTERS, facing: "up" }))).toEqual(["p:o:XY", "p:d1"]);
+  });
+
+  it("names a plane's key among the feature rows Items selects", () => {
+    expect(planeRowKey({ kind: "basePlane", plane: "YZ" })).toBe("o:YZ");
+    expect(planeRowKey({ kind: "datumPlane", id: "d9" })).toBe("d9");
   });
 });

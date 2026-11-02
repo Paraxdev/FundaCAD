@@ -1132,3 +1132,140 @@ describe("a second document", () => {
     expect(r.list.bodyId).toBeNull();
   });
 });
+
+describe("planes", () => {
+  const SLANTED = { origin: [113.5, -41.25, 37], normal: [0, 0.6, 0.8], xdir: [1, 0, 0] };
+  const LID = { id: "d1", type: "datumPlane", name: "Lid", plane: SLANTED };
+  const REAR = { id: "d2", type: "datumPlane", name: "Rear", plane: { ...SLANTED, normal: [0, 1, 0] } };
+  const docWith = (...datums: object[]) =>
+    JSON.stringify({
+      parameters: {},
+      features: [{ id: "f1", type: "box", length: 40, width: 30, height: 20 }, ...datums],
+    });
+
+  async function planesRig(...datums: object[]) {
+    const r = rig();
+    r.store.load(docWith(...datums));
+    await r.build();
+    r.browser.show(true);
+    return r;
+  }
+
+  it("lists them without asking the engine, ready at once", async () => {
+    const r = await planesRig(LID);
+    await land(r.asks[0]!, topology("body1", 3));
+    const asked = r.asks.length;
+    r.browser.setKind("planes");
+    expect(keys(r.list.rows)).toEqual(["p:o:XY", "p:o:XZ", "p:o:YZ", "p:d1"]);
+    expect(r.list.state).toBe("ready");
+    expect(r.asks).toHaveLength(asked);
+  });
+
+  it("lists them while the model is building, as they need no build", async () => {
+    const r = await planesRig(LID);
+    await land(r.asks[0]!, topology("body1", 3));
+    const held = r.store.rebuildNow();
+    r.browser.setKind("planes");
+    expect(keys(r.list.rows)).toEqual(["p:o:XY", "p:o:XZ", "p:o:YZ", "p:d1"]);
+    await held;
+    await settle();
+  });
+
+  it("drops a face reply that lands after the list moved to planes, and asks again on the way back", async () => {
+    const r = await planesRig(LID);
+    r.browser.setKind("planes");
+    expect(r.cancel).toHaveBeenCalledWith("req1", { soft: true });
+    await land(r.asks[0]!, { ...topology("body1", 3), truncated: { faces: 9 } });
+    expect(keys(r.list.rows)).toEqual(["p:o:XY", "p:o:XZ", "p:o:YZ", "p:d1"]);
+    expect(r.list.truncated).toBeNull();
+    expect(r.list.state).toBe("ready");
+    r.browser.setKind("faces");
+    expect(r.asks).toHaveLength(2);
+    await land(r.asks[1]!, topology("body1", 2));
+    expect(keys(r.list.rows)).toEqual(["f:body1:0", "f:body1:1"]);
+  });
+
+  it("drops a failed face request after the move too, so no error shows over the planes", async () => {
+    const r = await planesRig();
+    r.browser.setKind("planes");
+    await land(r.asks[0]!, null);
+    expect(r.list.state).toBe("ready");
+    expect(r.list.error).toBeNull();
+  });
+
+  it("forgets a size limit and a type on the way in, a plane has neither", async () => {
+    const r = await planesRig();
+    r.list.setFilters({ minSize: 12.5, type: "flat", facing: "down" });
+    r.browser.setKind("planes");
+    expect(r.list.filters).toEqual({ type: null, facing: null, minSize: null });
+    expect(r.list.filtered).toHaveLength(3);
+  });
+
+  it("keeps a size limit going from faces to edges, which both have one", async () => {
+    const r = await planesRig();
+    r.list.setFilters({ minSize: 12.5, type: "flat", facing: "down" });
+    r.browser.setKind("edges");
+    expect(r.list.filters).toEqual({ type: null, facing: null, minSize: 12.5 });
+  });
+
+  it("follows a rename, a new datum and a suppressed one", async () => {
+    const r = await planesRig(LID);
+    r.browser.setKind("planes");
+    r.store.updateFeature("d1", { name: "Top" } as never);
+    expect((r.list.rows[3]!.facts as { name: string }).name).toBe("Top");
+    r.store.addFeature(REAR as never);
+    expect(keys(r.list.rows)).toEqual(["p:o:XY", "p:o:XZ", "p:o:YZ", "p:d1", "p:d2"]);
+    r.store.setSuppressed(["d1"], true);
+    expect(keys(r.list.rows)).toEqual(["p:o:XY", "p:o:XZ", "p:o:YZ", "p:d2"]);
+    await settle();
+  });
+
+  it("does not touch the rows on a document change under the faces, or with the tab closed", async () => {
+    const r = await planesRig(LID);
+    await land(r.asks[0]!, topology("body1", 3));
+    r.store.updateFeature("d1", { name: "Top" } as never);
+    expect(keys(r.list.rows)).toEqual(["f:body1:0", "f:body1:1", "f:body1:2"]);
+    r.browser.setKind("planes");
+    r.browser.show(false);
+    r.store.addFeature(REAR as never);
+    expect(keys(r.list.rows)).toEqual(["p:o:XY", "p:o:XZ", "p:o:YZ", "p:d1"]);
+    await settle();
+  });
+
+  it("keeps its rows and cursor when a canvas pick moves the active body", async () => {
+    const r = await planesRig(LID);
+    r.browser.setKind("planes");
+    r.list.setCursor("p:d1");
+    r.selection.bodies = ["body2"];
+    r.browser.selectionChanged();
+    expect(r.list.bodyId).toBe("body2");
+    expect(r.list.cursor).toBe("p:d1");
+    expect(keys(r.list.rows)).toEqual(["p:o:XY", "p:o:XZ", "p:o:YZ", "p:d1"]);
+    expect(r.list.state).toBe("ready");
+  });
+
+  it("offers a Ctrl or Shift click to a pick without starting a sketch", async () => {
+    const r = await planesRig(LID);
+    r.browser.setKind("planes");
+    expect(r.browser.activatePlane(r.list.rows[0]!, false)).toBe(false);
+    expect(r.host.sketch.enter).not.toHaveBeenCalled();
+    expect(r.browser.activatePlane(r.list.rows[0]!)).toBe(true);
+    expect(r.host.sketch.enter).toHaveBeenCalledTimes(1);
+  });
+
+  it("forgets the first document's planes, the second starts on faces and lists only its own", async () => {
+    const r = await planesRig(LID, REAR);
+    r.browser.setKind("planes");
+    r.list.setCursor("p:d2");
+    r.list.setFilters({ facing: "back" });
+    r.store.load(docWith({ ...REAR, id: "g5", name: "Other" }));
+    expect(r.list.kind).toBe("faces");
+    expect(r.list.rows).toEqual([]);
+    expect(r.list.cursor).toBeNull();
+    expect(r.list.filters).toEqual({ type: null, facing: null, minSize: null });
+    await r.build();
+    r.browser.setKind("planes");
+    expect(keys(r.list.rows)).toEqual(["p:o:XY", "p:o:XZ", "p:o:YZ", "p:g5"]);
+    expect(r.list.cursor).toBeNull();
+  });
+});

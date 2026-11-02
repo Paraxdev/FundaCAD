@@ -1,29 +1,36 @@
 // The Geometry list's rows as plain numbers. Words are made per page from `facts`, so 10,000 faces cost one page of
 // describePick.
 
-import type { RebuildResult, TopologyFace, TopologyReply, Vec3 } from "../types";
+import { basePlaneDef } from "../features/mirrorMath";
+import type { Feature, Plane3, PlaneDef, RebuildResult, TopologyFace, TopologyReply, Vec3 } from "../types";
 import { bandIndex } from "../viewport/faceBands";
-import { facingOf, type EdgeFacts, type FaceFacts, type FacingWord } from "./describePick";
+import { facingOf, type EdgeFacts, type FaceFacts, type FacingWord, type PlaneFacts } from "./describePick";
+import { datumPlaneName } from "./featureMeta";
 import { circleDiameter, polylineLength, type Pt3 } from "./selectionMeasure";
 
 export type GeometryRowType = "flat" | "cylinder" | "curved" | "straight" | "round";
 
 export interface GeometryRow {
-  /** `f:<bodyId>:<local>` or `e:<bodyId>:<slot>`. A global face id is worked out only when acting on it, so a build
-   *  that renumbers later bodies moves nothing. */
+  /** `f:<bodyId>:<local>`, `e:<bodyId>:<slot>`, `p:o:<plane>` or `p:<featureId>`. A global face id is worked out only
+   *  when acting on it, so a build that renumbers later bodies moves nothing. */
   key: string;
-  kind: "face" | "edge";
+  kind: "face" | "edge" | "plane";
+  /** Empty on a plane, which belongs to no body. */
   bodyId: string;
-  /** The face's place in its body, its run's lowest for a run, or the edge's wire slot. */
+  /** The face's place in its body, its run's lowest for a run, the edge's wire slot, or the plane's place in the list. */
   index: number;
-  facts: FaceFacts | EdgeFacts;
+  facts: FaceFacts | EdgeFacts | PlaneFacts;
   /** The one length the size filter compares, mm, 0 when nothing says. */
   size: number;
   facing: FacingWord | null;
   type: GeometryRowType;
   /** Every face of a run, ascending. Absent on a face that is alone. */
   members?: readonly number[];
+  /** What a plane row stands for. */
+  plane?: PlaneRef;
 }
+
+export type PlaneRef = { kind: "basePlane"; plane: Plane3 } | { kind: "datumPlane"; id: string };
 
 export interface GeometryFilters {
   type: GeometryRowType | null;
@@ -234,6 +241,40 @@ export function edgeRows(
       type: EDGE_TYPE[curve],
     };
   });
+}
+
+/** The key this plane has among the feature rows Items selects. */
+export const planeRowKey = (p: PlaneRef) => (p.kind === "basePlane" ? `o:${p.plane}` : p.id);
+
+function planeRow(plane: PlaneRef, index: number, name: string, def: PlaneDef): GeometryRow {
+  return {
+    key: `p:${planeRowKey(plane)}`,
+    kind: "plane",
+    bodyId: "",
+    index,
+    facts: { kind: "plane", name, origin: plane.kind === "basePlane", normal: def.normal },
+    size: 0,
+    facing: facingOf(def.normal)?.word ?? null,
+    type: "flat",
+    plane,
+  };
+}
+
+/** The origin planes, then the datum planes that are not suppressed. An unnamed datum keeps the number Items gives it. */
+export function planeRows(
+  planes: readonly Plane3[],
+  features: readonly Feature[],
+  datumDef: (f: Extract<Feature, { type: "datumPlane" }>) => PlaneDef,
+  suppressed: (id: string) => boolean,
+): GeometryRow[] {
+  const rows = planes.map((p, i) => planeRow({ kind: "basePlane", plane: p }, i, p, basePlaneDef(p)));
+  features
+    .filter((f): f is Extract<Feature, { type: "datumPlane" }> => f.type === "datumPlane")
+    .forEach((f, i) => {
+      if (suppressed(f.id)) return;
+      rows.push(planeRow({ kind: "datumPlane", id: f.id }, rows.length, datumPlaneName(f, i), datumDef(f)));
+    });
+  return rows;
 }
 
 // A kernel length can fall a hair under the value it shows, and an inch limit is never exact in mm.

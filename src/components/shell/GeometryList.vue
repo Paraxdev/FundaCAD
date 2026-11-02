@@ -3,8 +3,15 @@ import { computed, nextTick, onMounted, onUnmounted, ref, useTemplateRef, watch 
 import { useEngine } from "../../app/engineKey";
 import { useWheelScroll } from "../../composables/useWheelScroll";
 import { GEOMETRY_PAGE_SIZE, useGeometryBrowserStore, type GeometryKind } from "../../stores/geometryBrowser";
+import { useSelectionStore } from "../../stores/selection";
 import { describePick, type FacingWord } from "../../ui/describePick";
-import { NO_FILTERS, type GeometryFilters, type GeometryRow, type GeometryRowType } from "../../ui/geometryRows";
+import {
+  NO_FILTERS,
+  planeRowKey,
+  type GeometryFilters,
+  type GeometryRow,
+  type GeometryRowType,
+} from "../../ui/geometryRows";
 import { announce } from "../../ui/announce";
 import { onRenderPrefsChange, renderPrefs } from "../../ui/renderPrefs";
 import { getUnit, onUnitChange } from "../../ui/units";
@@ -19,10 +26,12 @@ import Select from "../ui/Select.vue";
 const engine = useEngine();
 const ctl = engine.geometryBrowser;
 const list = useGeometryBrowserStore();
+const selection = useSelectionStore();
 
 const KINDS: { value: GeometryKind; label: string }[] = [
   { value: "faces", label: "Faces" },
   { value: "edges", label: "Edges" },
+  { value: "planes", label: "Planes" },
 ];
 const FACE_TYPES: { value: GeometryRowType | "any"; label: string }[] = [
   { value: "any", label: "Any" },
@@ -53,9 +62,11 @@ const scroller = useTemplateRef<HTMLElement>("scroller");
 useWheelScroll(scroller);
 
 const faces = computed(() => list.kind === "faces");
-const noun = computed(() => (faces.value ? "faces" : "edges"));
+const planes = computed(() => list.kind === "planes");
+const noun = computed<string>(() => list.kind);
 const bodyName = computed(() => list.bodies.find((b) => b.id === list.bodyId)?.name ?? "");
 const bodyOptions = computed(() => list.bodies.map((b) => ({ value: b.id, label: b.name })));
+const listName = computed(() => (planes.value ? "Planes" : `${faces.value ? "Faces" : "Edges"} of ${bodyName.value}`));
 
 const options = computed(() => {
   // describePick reads the display unit from outside Vue.
@@ -76,6 +87,7 @@ const range = computed(() => {
 const failed = computed(() => list.state === "error");
 const filteredOut = computed(() => list.rows.length > 0 && list.filtered.length === 0);
 const blank = computed(() => {
+  if (planes.value) return filteredOut.value ? "No planes match." : null;
   if (list.bodyId === null) return "No body to list yet.";
   if (list.rows.length > 0) return filteredOut.value ? `No ${noun.value} match.` : null;
   if (failed.value) return null;
@@ -99,6 +111,13 @@ const anchor = ref<string | null>(null);
 const rowByKey = computed(() => new Map(list.rows.map((r) => [r.key, r])));
 const rowsOf = (keys: readonly string[]) => keys.flatMap((k) => rowByKey.value.get(k) ?? []);
 
+// Planes stay selected as Items rows, so the two tabs show one selection.
+const chosen = computed(() => {
+  if (!planes.value) return list.selected;
+  const rows = new Set(selection.rows.keys);
+  return list.rows.filter((r) => r.plane && rows.has(planeRowKey(r.plane))).map((r) => r.key);
+});
+
 function pick(rows: readonly GeometryRow[], additive: boolean) {
   const refused = ctl.pickRows(rows, { additive });
   if (refused) engine.setStatus(refused, "");
@@ -106,16 +125,26 @@ function pick(rows: readonly GeometryRow[], additive: boolean) {
 
 function selectOnly(key: string) {
   anchor.value = key;
-  pick(rowsOf([key]), false);
+  const row = rowByKey.value.get(key);
+  if (row?.plane) ctl.activatePlane(row);
+  else pick(rowsOf([key]), false);
+}
+
+// A plain click does what Enter does on a plane, Ctrl and Shift go on to the Listbox and select, as on Items' Origin
+// rows. preventDefault is how a click tells the Listbox to leave it.
+function onRowClick(row: GeometryRow, e: MouseEvent) {
+  if (!row.plane) return;
+  const plain = !(e.ctrlKey || e.metaKey || e.shiftKey);
+  if (ctl.activatePlane(row, plain)) e.preventDefault();
 }
 
 // What the Listbox wants, as the smallest change: an additive pick toggles, so keys only gained or only lost go through
 // it, which also leaves picks outside this list alone. Anything else replaces the selection.
 function onListSelection(next: readonly string[]) {
-  const had = new Set(list.selected);
+  const had = new Set(chosen.value);
   const now = new Set(next);
   const gained = next.filter((k) => !had.has(k));
-  const lost = list.selected.filter((k) => !now.has(k));
+  const lost = chosen.value.filter((k) => !now.has(k));
   const toggled = gained.length === 0 ? lost : lost.length === 0 ? gained : null;
   if (toggled && rowsOf(toggled).length === toggled.length) pick(rowsOf(toggled), true);
   else pick(rowsOf(next), false);
@@ -152,7 +181,7 @@ watch(
   { flush: "pre" },
 );
 watch(
-  [() => list.pageRows, () => list.selected],
+  [() => list.pageRows, chosen],
   () => {
     if (hadFocus && !ownsFocus()) focusCursor();
     else keepTabStop();
@@ -229,7 +258,7 @@ onUnmounted(() => {
 <template>
   <div class="geometry-page">
     <div class="geometry-filters">
-      <FieldRow v-slot="{ id, labelId }" label="Body">
+      <FieldRow v-if="!planes" v-slot="{ id, labelId }" label="Body">
         <Select
           :id="id"
           size="sm"
@@ -249,7 +278,7 @@ onUnmounted(() => {
         @update:model-value="ctl.setKind"
       />
       <div class="geometry-filter-pair">
-        <FieldRow v-slot="{ id, labelId }" label="Type" layout="stacked">
+        <FieldRow v-if="!planes" v-slot="{ id, labelId }" label="Type" layout="stacked">
           <Select
             :id="id"
             size="sm"
@@ -259,7 +288,7 @@ onUnmounted(() => {
             @update:model-value="setFilter({ type: $event === 'any' ? null : $event })"
           />
         </FieldRow>
-        <FieldRow v-if="faces" v-slot="{ id, labelId }" label="Facing" layout="stacked">
+        <FieldRow v-if="faces || planes" v-slot="{ id, labelId }" label="Facing" layout="stacked">
           <Select
             :id="id"
             size="sm"
@@ -270,7 +299,7 @@ onUnmounted(() => {
           />
         </FieldRow>
       </div>
-      <FieldRow v-slot="{ id, labelId }" label="Size at least">
+      <FieldRow v-if="!planes" v-slot="{ id, labelId }" label="Size at least">
         <NumberField
           :id="id"
           size="sm"
@@ -297,9 +326,9 @@ onUnmounted(() => {
       <Listbox
         v-if="options.length"
         multiple
-        :label="`${faces ? 'Faces' : 'Edges'} of ${bodyName}`"
+        :label="listName"
         :items="options"
-        :model-value="list.selected"
+        :model-value="chosen"
         :anchor="anchor"
         @update:model-value="onListSelection($event as string[])"
         @update:anchor="anchor = $event"
@@ -316,6 +345,7 @@ onUnmounted(() => {
             :aria-label="item.spoken"
             :aria-posinset="firstShown + index"
             :aria-setsize="list.filtered.length"
+            @click="onRowClick(item.row, $event)"
             @focus="onRowFocus(item.row)"
             @blur="onRowBlur"
             @pointerenter="ctl.hover(item.row)"

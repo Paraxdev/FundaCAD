@@ -4,7 +4,8 @@ import { createGeometryBrowser, type GeometryBrowserHost } from "../../src/app/g
 import { DocumentStore } from "../../src/document/store";
 import type { GeometryBackend } from "../../src/geometry/client";
 import { useGeometryBrowserStore } from "../../src/stores/geometryBrowser";
-import type { CadDocument, RebuildResult, TopologyFace, TopologyReply } from "../../src/types";
+import { useSelectionStore } from "../../src/stores/selection";
+import type { CadDocument, Feature, PlaneDef, RebuildResult, TopologyFace, TopologyReply } from "../../src/types";
 import type { EdgeRef } from "../../src/viewport/edgeLines";
 
 type Bodies = NonNullable<RebuildResult["bodies"]>;
@@ -94,6 +95,8 @@ export function rig(
   const viewport = {
     applyPicks: vi.fn(),
     hoverPick: vi.fn(),
+    hoverPlane: vi.fn(),
+    hoverDatum: vi.fn(),
     faceTriangles: () => [],
     bodyEdgeRefs: vi.fn((id: string) => wires.get(id) ?? []),
     faceIdToBodyId: (faceId: number) =>
@@ -114,7 +117,14 @@ export function rig(
     store,
     geometry,
     viewport,
-    sketch: { active: false },
+    sketch: { active: false, enter: vi.fn() },
+    datumPlaneDef: vi.fn((f: Feature & { plane?: PlaneDef }) => f.plane),
+    selectFeatureRows: vi.fn((next: { keys: readonly string[]; anchor: string | null }, primary: string | null) => {
+      const sel = useSelectionStore();
+      sel.rows = next as typeof sel.rows;
+      sel.featureId = primary;
+    }),
+    setStatus: vi.fn(),
     toolBusy: vi.fn(() => false),
     toolOwnsScreen: vi.fn(() => false),
     dropBodyGizmo: vi.fn(),

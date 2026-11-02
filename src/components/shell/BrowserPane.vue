@@ -59,6 +59,7 @@ import type { Component } from "vue";
 import { featuresOf } from "../../types";
 import type { CadDocument, Feature } from "../../types";
 import { bodyLabels } from "../../ui/bodyLabels";
+import { datumPlaneName } from "../../ui/featureMeta";
 
 const engine = useEngine();
 
@@ -560,7 +561,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
           kind: "row" as const,
           k: `p:${f.id}`,
           depth: 1,
-          label: f.name || `Plane${i + 1}`,
+          label: datumPlaneName(f, i),
           icon: "plane",
           selected: picked.has(f.id) || selection.featureId === f.id,
           error: errId === f.id,

@@ -10,7 +10,9 @@ import { ENGINE } from "../../../src/app/engineKey";
 import { announce } from "../../../src/ui/announce";
 import { setUnit } from "../../../src/ui/units";
 import { renderPrefs, setRenderPref } from "../../../src/ui/renderPrefs";
-import { DOC, edge, land, result, rig, settle, topology } from "../../app/geometryBrowserRig";
+import { useSelectionStore } from "../../../src/stores/selection";
+import { awaitTreePick, resetTreePicks, treePickRefusal, treePickWaiting } from "../../../src/ui/treePick";
+import { DOC, edge, land, result, rig, settle, topology, type BodySpec } from "../../app/geometryBrowserRig";
 import type { TopologyFace, TopologyReply } from "../../../src/types";
 
 vi.mock("../../../src/ui/toast", () => ({ toast: () => {}, dismissToast: () => {} }));
@@ -832,5 +834,257 @@ describe("keys that must not reach the model", () => {
     await press(w, 1, "z");
     window.removeEventListener("keydown", heard);
     expect(heard).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("the Planes list", () => {
+  const SLANTED = { origin: [113.5, -41.25, 37], normal: [0, 0.6, 0.8], xdir: [1, 0, 0] };
+  const LID = { id: "d1", type: "datumPlane", name: "Lid", plane: SLANTED };
+  const REAR = { id: "d2", type: "datumPlane", name: "Rear", plane: { ...SLANTED, normal: [0, 1, 0] } };
+
+  async function planesOpen(o: { bodies?: BodySpec[]; datums?: object[] } = {}) {
+    const r = rig(result(o.bodies ?? [{ id: "body1", etag: "e1", faceCount: 3, faceStart: 40 }]));
+    r.store.load(JSON.stringify({ parameters: {}, features: [DOC.features[0], ...(o.datums ?? [LID, REAR])] }));
+    await r.build();
+    const setStatus = vi.fn();
+    const engine = { geometryBrowser: r.browser, setStatus };
+    const w = mount(GeometryList, { attachTo: document.body, global: { provide: { [ENGINE as symbol]: engine } } });
+    r.browser.setKind("planes");
+    await nextTick();
+    return { r, w, setStatus };
+  }
+  const enterOn = async (w: W, i: number) => {
+    const row = options(w)[i]!;
+    (row.element as HTMLElement).focus();
+    await row.trigger("keydown", { key: "Enter" });
+    await nextTick();
+  };
+  const spaceOn = async (w: W, i: number) => {
+    const row = options(w)[i]!;
+    (row.element as HTMLElement).focus();
+    await row.trigger("keydown", { key: " " });
+    await nextTick();
+  };
+  const marked = (w: W) => options(w).map((o) => o.attributes("aria-selected") === "true");
+  const fieldLabels = (w: W) => w.findAll(".ui-field-label").map((x) => x.text());
+
+  afterEach(resetTreePicks);
+
+  it("lists the origin planes then the datums, each with its words, the facing the only filter", async () => {
+    const { w } = await planesOpen();
+    expect(labels(w)).toEqual(["XY plane", "XZ plane", "YZ plane", "Lid", "Rear"]);
+    expect(options(w).map((o) => o.find(".ui-list-row-hint").text())).toEqual([
+      "origin",
+      "origin",
+      "origin",
+      "datum plane",
+      "datum plane",
+    ]);
+    expect(options(w)[0]!.attributes("aria-label")).toContain("XY plane, origin, facing up");
+    expect(options(w)[3]!.attributes("aria-label")).toContain("Lid, datum plane");
+    expect(w.get("[role=listbox]").attributes("aria-label")).toBe("Planes");
+    expect(fieldLabels(w)).toEqual(["Facing"]);
+    expect(options(w).map((o) => o.attributes("aria-setsize"))).toEqual(["5", "5", "5", "5", "5"]);
+  });
+
+  it("lists the origin planes with no body at all, so a first sketch can start from here", async () => {
+    const { r, w } = await planesOpen({ bodies: [], datums: [] });
+    expect(labels(w)).toEqual(["XY plane", "XZ plane", "YZ plane"]);
+    expect(w.text()).not.toContain("No body");
+    expect(r.asks).toEqual([]);
+    await enterOn(w, 2);
+    expect(r.host.sketch.enter.mock.calls).toEqual([["YZ", r.store]]);
+  });
+
+  it("narrows by facing, says when nothing matches, and clears", async () => {
+    const { w } = await planesOpen({ datums: [REAR] });
+    selectOf(w, "Facing").vm.$emit("update:modelValue", "up");
+    await nextTick();
+    expect(labels(w)).toEqual(["XY plane"]);
+    expect(vi.mocked(announce).mock.lastCall?.[0]).toBe("1 plane");
+    selectOf(w, "Facing").vm.$emit("update:modelValue", "left");
+    await nextTick();
+    expect(labels(w)).toEqual([]);
+    expect(w.get(".geometry-note").text()).toContain("No planes match");
+    expect(vi.mocked(announce).mock.lastCall?.[0]).toBe("No planes");
+    await w.get(".geometry-note button").trigger("click");
+    expect(labels(w)).toEqual(["XY plane", "XZ plane", "YZ plane", "Rear"]);
+  });
+
+  it("brings the faces back, with their fields, on the way out", async () => {
+    const { r, w } = await planesOpen();
+    r.browser.setKind("faces");
+    await nextTick();
+    await land(r.asks[r.asks.length - 1]!, reply("body1", 2));
+    expect(labels(w)).toEqual(["Flat face 1", "Flat face 2"]);
+    expect(fieldLabels(w)).toEqual(["Body", "Type", "Facing", "Size at least"]);
+  });
+
+  describe("Enter and a plain click", () => {
+    it("Enter starts a sketch on XY by name", async () => {
+      const { r, w, setStatus } = await planesOpen();
+      await enterOn(w, 0);
+      expect(r.host.sketch.enter.mock.calls).toEqual([["XY", r.store]]);
+      expect(setStatus).not.toHaveBeenCalled();
+      expect(marked(w)).toEqual([false, false, false, false, false]);
+    });
+
+    it("Enter starts a sketch on a datum off the origin, where it stands now, linked to it", async () => {
+      const { r, w } = await planesOpen();
+      const moved = { ...SLANTED, origin: [200.5, -3, 11] };
+      r.host.datumPlaneDef.mockReturnValueOnce(moved as never);
+      await enterOn(w, 3);
+      expect(r.host.sketch.enter.mock.calls).toEqual([[moved, r.store, undefined, "d1"]]);
+    });
+
+    it("a plain click does the same, and does not select", async () => {
+      const { r, w } = await planesOpen();
+      await options(w)[1]!.trigger("click");
+      await options(w)[4]!.trigger("click");
+      expect(r.host.sketch.enter.mock.calls).toEqual([
+        ["XZ", r.store],
+        [REAR.plane, r.store, undefined, "d2"],
+      ]);
+      expect(marked(w)).toEqual([false, false, false, false, false]);
+    });
+
+    it("is refused while a sketch is open, by the same words as Items", async () => {
+      const { r, w } = await planesOpen();
+      r.host.sketch.active = true;
+      await enterOn(w, 0);
+      await options(w)[3]!.trigger("click");
+      expect(r.host.sketch.enter).not.toHaveBeenCalled();
+      expect(r.host.setStatus.mock.calls.map((c) => c[0])).toEqual([
+        "Finish this sketch before starting another",
+        "Finish this sketch before starting another",
+      ]);
+    });
+
+    it("goes to a pick that waits, which takes the row and starts nothing", async () => {
+      const { r, w } = await planesOpen();
+      r.host.toolOwnsScreen.mockReturnValue(true);
+      const took: unknown[] = [];
+      awaitTreePick(
+        (p) => {
+          took.push(p);
+          return true;
+        },
+        () => {},
+      );
+      await enterOn(w, 0);
+      await options(w)[3]!.trigger("click");
+      await options(w)[4]!.trigger("click", { ctrlKey: true });
+      expect(took).toEqual([
+        { kind: "basePlane", plane: "XY" },
+        { kind: "datumPlane", id: "d1", def: SLANTED },
+        { kind: "datumPlane", id: "d2", def: REAR.plane },
+      ]);
+      expect(r.host.sketch.enter).not.toHaveBeenCalled();
+      expect(marked(w)).toEqual([false, false, false, false, false]);
+    });
+
+    it("says why when the waiting pick wants something else, and keeps waiting", async () => {
+      const { r, w } = await planesOpen();
+      awaitTreePick(
+        (p) => treePickRefusal(p, "one body"),
+        () => {},
+      );
+      await enterOn(w, 3);
+      expect(r.host.setStatus.mock.calls[0]![0]).toContain("a datum plane");
+      expect(r.host.sketch.enter).not.toHaveBeenCalled();
+      expect(treePickWaiting()).toBe(true);
+    });
+
+    it("is refused when a tool holds the screen and takes no rows", async () => {
+      const { r, w } = await planesOpen();
+      r.host.toolOwnsScreen.mockReturnValue(true);
+      await enterOn(w, 0);
+      expect(r.host.sketch.enter).not.toHaveBeenCalled();
+      expect(r.host.setStatus.mock.calls[0]![0]).toContain("active tool");
+    });
+
+    it("says the row changed when its datum went without the list hearing", async () => {
+      const { r } = await planesOpen();
+      const row = r.list.rows[3]!;
+      r.store.document.features.splice(1, 1);
+      expect(r.browser.activatePlane(row)).toBe(true);
+      expect(r.host.sketch.enter).not.toHaveBeenCalled();
+      expect(r.host.setStatus.mock.calls[0]![0]).toContain("changed");
+    });
+  });
+
+  describe("selecting", () => {
+    const rowsKeys = () => [...useSelectionStore().rows.keys];
+
+    it("Space adds and removes planes as Items rows, Ctrl and Shift clicks too, and starts nothing", async () => {
+      const { r, w } = await planesOpen();
+      await spaceOn(w, 0);
+      expect(rowsKeys()).toEqual(["o:XY"]);
+      await spaceOn(w, 3);
+      expect(rowsKeys()).toEqual(["o:XY", "d1"]);
+      expect(marked(w)).toEqual([true, false, false, true, false]);
+      expect(useSelectionStore().featureId).toBe("d1");
+      await spaceOn(w, 3);
+      expect(rowsKeys()).toEqual(["o:XY"]);
+      await options(w)[1]!.trigger("click", { ctrlKey: true });
+      expect(rowsKeys()).toEqual(["o:XY", "o:XZ"]);
+      await options(w)[4]!.trigger("click", { shiftKey: true });
+      expect(marked(w)).toEqual([false, true, true, true, true]);
+      expect(r.host.sketch.enter).not.toHaveBeenCalled();
+      expect(r.viewport.applyPicks).not.toHaveBeenCalled();
+    });
+
+    it("shows a selection made in Items, and leaves picks outside the list alone", async () => {
+      const { w } = await planesOpen();
+      useSelectionStore().rows = { keys: ["s9", "d2"], anchor: "d2" };
+      await nextTick();
+      expect(marked(w)).toEqual([false, false, false, false, true]);
+      await spaceOn(w, 1);
+      expect(rowsKeys()).toEqual(["s9", "d2", "o:XZ"]);
+    });
+
+    it.each([
+      ["a sketch", (h: ReturnType<typeof rig>) => (h.host.sketch.active = true), "sketch"],
+      ["a tool", (h: ReturnType<typeof rig>) => h.host.toolOwnsScreen.mockReturnValue(true), "tool"],
+    ])("Space is refused in words under %s", async (_what, hold, word) => {
+      const { r, w, setStatus } = await planesOpen();
+      hold(r);
+      await spaceOn(w, 0);
+      expect(rowsKeys()).toEqual([]);
+      expect(setStatus.mock.calls[0]![0]).toContain(word);
+    });
+
+    it("selects a plane while the model builds, which changes nothing about a plane", async () => {
+      const { r, w } = await planesOpen();
+      r.viewport.picksSuspended = true;
+      r.viewport.modelUnsettled = true;
+      await spaceOn(w, 2);
+      expect(rowsKeys()).toEqual(["o:YZ"]);
+    });
+  });
+
+  describe("lighting", () => {
+    it("lights the focused plane in the view and puts it out, an origin plane and a datum alike", async () => {
+      const { r, w } = await planesOpen();
+      (options(w)[1]!.element as HTMLElement).focus();
+      expect(r.viewport.hoverPlane).toHaveBeenLastCalledWith("XZ");
+      expect(r.viewport.hoverDatum).toHaveBeenLastCalledWith(null);
+      (options(w)[3]!.element as HTMLElement).focus();
+      expect(r.viewport.hoverPlane).toHaveBeenLastCalledWith(null);
+      expect(r.viewport.hoverDatum).toHaveBeenLastCalledWith("d1");
+      (options(w)[3]!.element as HTMLElement).blur();
+      expect(r.viewport.hoverDatum).toHaveBeenLastCalledWith(null);
+      expect(r.viewport.hoverPick).not.toHaveBeenCalled();
+    });
+
+    it("puts the plane out when a sketch starts on it, and keeps it dark in a sketch", async () => {
+      const { r, w } = await planesOpen();
+      await enterOn(w, 0);
+      expect(r.host.sketch.enter).toHaveBeenCalledTimes(1);
+      expect(r.viewport.hoverPlane).toHaveBeenLastCalledWith(null);
+      r.host.sketch.active = true;
+      (options(w)[1]!.element as HTMLElement).focus();
+      expect(r.viewport.hoverPlane).toHaveBeenLastCalledWith(null);
+    });
   });
 });

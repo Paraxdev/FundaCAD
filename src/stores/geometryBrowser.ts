@@ -2,7 +2,7 @@ import { defineStore } from "pinia";
 import { computed, ref, shallowRef } from "vue";
 import { filterRows, NO_FILTERS, type GeometryFilters, type GeometryRow } from "../ui/geometryRows";
 
-export type GeometryKind = "faces" | "edges";
+export type GeometryKind = "faces" | "edges" | "planes";
 export type GeometryState = "idle" | "loading" | "ready" | "error";
 
 export const GEOMETRY_PAGE_SIZE = 100;
@@ -79,13 +79,16 @@ export const useGeometryBrowserStore = defineStore("geometryBrowser", () => {
       if (id === bodyId.value) return;
       bodyId.value = id;
       truncated.value = null;
-      clearPlace();
+      // Planes belong to no body, so a pick that moves the active body leaves their list alone.
+      if (kind.value !== "planes") clearPlace();
     },
-    /** A type or a facing belongs to one kind: edges have no facing and faces are never straight. */
+    /** A type or a facing belongs to one kind: edges have no facing and faces are never straight. A plane has no size. */
     setKind(next: GeometryKind) {
       if (next === kind.value) return;
       kind.value = next;
-      filters.value = { ...filters.value, type: null, facing: null };
+      const minSize = next === "planes" ? null : filters.value.minSize;
+      filters.value = { type: null, facing: null, minSize };
+      if (next === "planes") truncated.value = null;
       clearPlace();
     },
     setFilters(next: Partial<GeometryFilters>) {
