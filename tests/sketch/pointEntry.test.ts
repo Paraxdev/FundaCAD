@@ -13,9 +13,16 @@ const typed = (x: string, y?: string) => ({
   y: y ?? "2.5",
   xTyped: true,
   yTyped: y !== undefined,
+  at: { x: 99, y: 2.5 },
 });
-const seedOnly = (x: string, y: string) => ({ x, y, xTyped: false, yTyped: false });
-const yOnly = (x: string, y: string) => ({ x, y, xTyped: false, yTyped: true });
+const seedOnly = (x: string, y: string, at = { x: Number(x), y: Number(y) }) => ({
+  x,
+  y,
+  xTyped: false,
+  yTyped: false,
+  at,
+});
+const yOnly = (x: string, y: string) => ({ x, y, xTyped: false, yTyped: true, at: { x: Number(x), y: -99 } });
 const bad = (r: PointRead) => (r.ok ? null : { field: r.field, problem: r.problem });
 
 describe("readPoint absolute", () => {
@@ -23,10 +30,23 @@ describe("readPoint absolute", () => {
     expect(readPoint(typed("13.5", "-7.25"), U, FROM)).toEqual({ ok: true, x: 13.5, y: -7.25 });
   });
 
-  it("takes the seeded text for a field left alone", () => {
-    expect(readPoint(seedOnly("3.5", "-9"), U, FROM)).toEqual({ ok: true, x: 3.5, y: -9 });
+  it("takes the cursor's own value for a field left alone, not its rounded text", () => {
+    expect(readPoint(seedOnly("60.12", "10.57", { x: 60.1234, y: 10.5678 }), U, FROM)).toEqual({
+      ok: true,
+      x: 60.1234,
+      y: 10.5678,
+    });
+    expect(readPoint(seedOnly("1.06", "-0.33", { x: 26.9875, y: -8.33 }), { x: inch, y: inch }, FROM)).toEqual({
+      ok: true,
+      x: 26.9875,
+      y: -8.33,
+    });
     expect(readPoint(typed("20"), U, FROM)).toEqual({ ok: true, x: 20, y: 2.5 });
-    expect(readPoint(yOnly("6", "10"), U, FROM)).toEqual({ ok: true, x: 6, y: 10 });
+    expect(readPoint(yOnly("6.12", "10"), U, FROM)).toEqual({ ok: true, x: 6.12, y: 10 });
+  });
+
+  it("does not read a field's text when it was left alone, whatever it holds", () => {
+    expect(readPoint(seedOnly("abc", "", { x: 3.5, y: -9 }), U, FROM)).toEqual({ ok: true, x: 3.5, y: -9 });
   });
 
   it("reads inches and a typographic minus", () => {

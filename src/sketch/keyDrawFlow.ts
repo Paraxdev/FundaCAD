@@ -91,6 +91,8 @@ export class KeyDrawFlow {
   private stepSaid: number | null = null;
   // Tab's walk over the snaps, frozen at its first Tab: `at` is -1 on the spot it started from.
   private ring: { from: THREE.Vector2; list: SnapCandidate[]; at: number } | null = null;
+  // What the X and Y box was last filled with, in mm.
+  private boxAt = { x: 0, y: 0 };
 
   constructor(private readonly host: KeyDrawHost) {}
 
@@ -283,7 +285,8 @@ export class KeyDrawFlow {
     this.host.moveTo(hitOf(p, c));
     const dim = this.host.dim();
     if (dim.hasField("x")) {
-      dim.updateFromCursor({ x: p.x, y: p.y });
+      this.boxAt = { x: p.x, y: p.y };
+      dim.updateFromCursor(this.boxAt);
       this.host.positionBox(p);
     }
     announce(cursorSentence(p, c, this.host.entities(), step), "polite", { key: "sketch-cursor", delay: 150 });
@@ -353,7 +356,8 @@ export class KeyDrawFlow {
       ],
       () => this.commit(),
     );
-    dim.updateFromCursor({ x: at.x, y: at.y });
+    this.boxAt = { x: at.x, y: at.y };
+    dim.updateFromCursor(this.boxAt);
     this.host.positionBox(at);
   }
 
@@ -361,7 +365,7 @@ export class KeyDrawFlow {
     const dim = this.host.dim();
     const from = this.host.base() ?? this.last ?? { x: 0, y: 0 };
     const r = readPoint(
-      { x: dim.getRaw("x"), y: dim.getRaw("y"), xTyped: dim.wasTyped("x"), yTyped: dim.wasTyped("y") },
+      { x: dim.getRaw("x"), y: dim.getRaw("y"), xTyped: dim.wasTyped("x"), yTyped: dim.wasTyped("y"), at: this.boxAt },
       { x: dim.unitOf("x"), y: dim.unitOf("y") },
       from,
     );

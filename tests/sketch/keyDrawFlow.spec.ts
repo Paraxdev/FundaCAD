@@ -418,6 +418,47 @@ describe("a character opens the box with it typed in X", () => {
   });
 });
 
+describe("a field of the X and Y box left alone", () => {
+  const anchor = { p: v(60.1234, 10.5678), kind: "endpoint", priority: 90, ref: { entity: "l2", at: 1 } } as SnapCandidate;
+  const opened = () => {
+    const r = rig("line");
+    r.state.candidates.push(anchor);
+    r.state.cursor = anchor.p.clone();
+    press(free(), { shiftKey: true });
+    expect(field("x").value).toBe("60.12");
+    return r;
+  };
+
+  it("places the snap the cursor stood on, with its ref, though the box shows it rounded", () => {
+    const { state } = opened();
+    press(field("x"));
+    expect(state.placed).toEqual([{ p: v(60.1234, 10.5678), kind: "endpoint", label: undefined, ref: anchor.ref }]);
+  });
+
+  it("keeps Y's own value with X typed, and X's own with Y typed", () => {
+    const a = opened();
+    type("x", "20");
+    press(field("x"));
+    expect(a.state.placed.map((h) => h.p)).toEqual([v(20, 10.5678)]);
+    const b = opened();
+    type("y", "-4");
+    press(field("y"));
+    expect(b.state.placed.map((h) => h.p)).toEqual([v(60.1234, -4)]);
+  });
+
+  it("follows an arrow in the open box, and not a pointer that moved under it", () => {
+    const a = opened();
+    press(field("x"), { key: "ArrowRight" });
+    expect(a.state.cursor).toEqual(v(65, 10.5678));
+    press(field("x"));
+    expect(a.state.placed.map((h) => h.p)).toEqual([v(65, 10.5678)]);
+    const b = opened();
+    b.state.cursor = v(-31, 44);
+    press(field("x"));
+    expect(b.state.placed.map((h) => h.p)).toEqual([v(60.1234, 10.5678)]);
+  });
+});
+
 describe("what is said when a shape is finished", () => {
   const said = () => vi.mocked(announce).mock.calls;
 

@@ -8,6 +8,8 @@ export interface PointTyping {
   y: string;
   xTyped: boolean;
   yTyped: boolean;
+  // A field left alone is this value in mm, since its text went through the display rounding.
+  at: { x: number; y: number };
 }
 
 export type PointRead = { ok: true; x: number; y: number } | { ok: false; field: "x" | "y"; problem: string };
@@ -50,10 +52,6 @@ function read(
   const xText = t.xTyped ? t.x.trim() : null;
   const yText = t.yTyped ? t.y.trim() : null;
   const fail = (field: Field, problem: string): PointRead => ({ ok: false, field, problem });
-  const seed = (field: Field): number => {
-    const p = number(field === "x" ? t.x : t.y, units[field]);
-    return p.ok ? p.value : 0;
-  };
   const rel = (field: Field, text: string): Part => {
     const s = split(text);
     if ("problem" in s) return { ok: false, problem: s.problem };
@@ -115,14 +113,14 @@ function read(
   }
 
   let x: number;
-  if (xText === null) x = seed("x");
+  if (xText === null) x = t.at.x;
   else {
     const p = abs("x", xText);
     if (!p.ok) return fail("x", p.problem);
     x = p.value;
   }
   let y: number;
-  if (yText === null) y = seed("y");
+  if (yText === null) y = t.at.y;
   else {
     const p = abs("y", yText);
     if (!p.ok) return fail("y", p.problem);
