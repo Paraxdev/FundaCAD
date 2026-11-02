@@ -48,6 +48,11 @@ export interface Drawn {
   closed: boolean;
 }
 
+export interface BoxEnd {
+  hit: KeyHit;
+  said: string;
+}
+
 export interface KeyDrawHost {
   tool(): string;
   base(): THREE.Vector2 | null;
@@ -93,6 +98,10 @@ export class KeyDrawFlow {
 
   placed(p: THREE.Vector2) {
     this.last = p.clone();
+    this.endWalk();
+  }
+
+  private endWalk() {
     this.engaged = false;
     this.ring = null;
     cancelAnnouncement("sketch-cursor");
@@ -148,16 +157,23 @@ export class KeyDrawFlow {
     if (this.keys) this.host.changed();
   }
 
-  /** The end point a size box's Enter commits, said only while it is the cursor a key moved and no size was typed. Read before the commit. */
-  endSentence(): string | null {
+  /** The point a size box's Enter places: the cursor a key moved, unless a size was typed. Read before the commit, which changes the candidates. */
+  boxEnd(): BoxEnd | null {
     if (!this.armed() || !this.engaged || this.host.dim().touched()) return null;
-    const at = this.host.cursor();
-    return pointSentence(at, hitAt(at, this.host.candidates()), this.host.entities());
+    const p = this.host.cursor().clone();
+    const c = hitAt(p, this.host.candidates());
+    return {
+      hit: { p, kind: c?.kind ?? "free", label: c?.label, ref: c?.ref },
+      said: pointSentence(p, c, this.host.entities()),
+    };
   }
 
-  drawn(done: Drawn, end?: string | null) {
+  drawn(done: Drawn, end?: BoxEnd | null) {
+    this.endWalk();
+    if (end) this.last = end.hit.p.clone();
+    if (this.keys) this.session = true;
     const shape = drawnSentence(done.entity, this.host.entities(), done.closed);
-    announce(end ? `${end}. ${shape}` : shape, "polite", { key: "sketch-point" });
+    announce(end ? `${end.said}. ${shape}` : shape, "polite", { key: "sketch-point" });
     this.settleFocus();
     this.host.changed();
   }

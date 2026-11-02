@@ -29,7 +29,7 @@ import {
 } from "../../src/sketch/snap";
 import { SketchPlane } from "../../src/sketch/plane";
 import { toast } from "../../src/ui/toast";
-import { announce } from "../../src/ui/announce";
+import { announce, cancelAnnouncement } from "../../src/ui/announce";
 import type { SketchConstraint } from "../../src/types";
 
 type Internals = {
@@ -588,6 +588,103 @@ describe("Enter on a size box nobody touched", () => {
     const { s } = makeDrawing("rectangle");
     startAt(s, "2", "9");
     enter("width");
+    expect(fieldNames()).toEqual(["x", "y"]);
+  });
+});
+
+describe("a shape the size box's Enter finished at the cursor", () => {
+  const line: ResolvedEntity = { type: "line", id: "l1", x1: 60, y1: 10, x2: 100, y2: 50 };
+  const withLine = (tool: string) => {
+    const r = makeDrawing(tool);
+    r.s.entities = [line];
+    r.s.candidates = [...candidatesFromEntities([line]), ...originCandidate(new SketchPlane("XY"))];
+    return r;
+  };
+  const arrows = (s: Internals, field: string, ...keys: string[]) => keys.forEach((k) => key(s, k, fieldEl(field)));
+
+  it("measures the next @ from that corner, so a new rectangle starts from it", () => {
+    const { s } = makeDrawing("rectangle");
+    startAt(s, "7", "-3");
+    arrows(s, "width", "ArrowRight", "ArrowUp");
+    const end = s.lastCursor.clone();
+    enter("width");
+    expect(s.entities).toHaveLength(1);
+    expect(key(s, "Enter")).toBe(true);
+    expect(fieldNames()).toEqual(["x", "y"]);
+    expect(s.entities).toHaveLength(1);
+    typePoint("@5,3");
+    expect(s.base).toEqual(v(end.x + 5, end.y + 3));
+  });
+
+  it("gives Enter back to opening X and Y, for a line's next point too", () => {
+    const { s } = makeDrawing("line");
+    startAt(s, "7", "-3");
+    arrows(s, "length", "ArrowRight", "ArrowUp");
+    enter("length");
+    expect(s.entities).toHaveLength(1);
+    enter("length");
+    expect(fieldNames()).toEqual(["x", "y"]);
+    expect(s.entities).toHaveLength(1);
+  });
+
+  it("drops Tab's walk, and the next walk holds the new line's snaps", () => {
+    const { s } = withLine("line");
+    startAt(s, "7", "-3");
+    arrows(s, "length", "ArrowRight", "Tab");
+    const end = s.lastCursor.clone();
+    enter("length");
+    expect(key(s, "Tab", fieldEl("length"))).toBe(false);
+    arrows(s, "length", "ArrowRight");
+    const seen = Array.from({ length: 6 }, () => {
+      key(s, "Tab", fieldEl("length"));
+      return [s.lastCursor.x, s.lastCursor.y];
+    });
+    expect(seen).toContainEqual([(7 + end.x) / 2, (-3 + end.y) / 2]);
+    expect(seen).not.toContainEqual([end.x, end.y]);
+  });
+
+  it("cancels the cursor sentence still waiting, and a box that refused keeps it", () => {
+    const { s } = makeDrawing("rectangle");
+    startAt(s, "7", "-3");
+    arrows(s, "width", "ArrowRight");
+    vi.mocked(cancelAnnouncement).mockClear();
+    s.lastCursor.set(7, 12);
+    enter("width");
+    expect(s.entities).toEqual([]);
+    expect(cancelAnnouncement).not.toHaveBeenCalled();
+    arrows(s, "width", "ArrowRight");
+    enter("width");
+    expect(s.entities).toHaveLength(1);
+    expect(cancelAnnouncement).toHaveBeenCalledWith("sketch-cursor");
+  });
+
+  it("clears the same state when a size was typed, and the corner stays where the size put it", () => {
+    const { s } = makeDrawing("rectangle");
+    startAt(s, "7", "-3");
+    arrows(s, "width", "ArrowRight");
+    const cursor = s.lastCursor.clone();
+    vi.mocked(cancelAnnouncement).mockClear();
+    type("width", "30");
+    type("height", "12");
+    enter("width");
+    expect(s.entities.map(withoutId)).toEqual([{ type: "rectangle", x: 22, y: 3, width: 30, height: 12 }]);
+    expect(cancelAnnouncement).toHaveBeenCalledWith("sketch-cursor");
+    expect(s.lastCursor).toEqual(cursor);
+    expect(key(s, "Enter")).toBe(true);
+    expect(fieldNames()).toEqual(["x", "y"]);
+    typePoint("@1,2");
+    expect(s.base).toEqual(v(8, -1));
+  });
+
+  it("opens X and Y next also when a click placed the first point and keys the second", () => {
+    const { s } = makeDrawing("line");
+    s.base = v(7, -3);
+    s.keyDraw.placed(v(7, -3));
+    (s as never as { showDimFields(): void }).showDimFields();
+    arrows(s, "length", "ArrowRight", "ArrowUp");
+    enter("length");
+    expect(s.entities).toHaveLength(1);
+    enter("length");
     expect(fieldNames()).toEqual(["x", "y"]);
   });
 });
