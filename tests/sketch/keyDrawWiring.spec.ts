@@ -366,6 +366,33 @@ describe("@ as the first character of a size field", () => {
 });
 
 describe("the next point typed in X and Y", () => {
+  it.each([
+    ["@5", 12, -6],
+    ["20", 20, -6],
+  ])("keeps X %s when @ starts Y, and the box stays X and Y", (xText, x2, y2) => {
+    const { s } = makeDrawing("line");
+    startAt(s, "7", "-3");
+    key(s, "@", fieldEl("length"));
+    type("x", xText);
+    fieldEl("y").focus();
+    expect(key(s, "@", fieldEl("y"))).toBe(false);
+    expect(fieldNames()).toEqual(["x", "y"]);
+    expect(fieldEl("x").value).toBe(xText);
+    expect(document.activeElement).toBe(fieldEl("y"));
+    type("y", "@-3");
+    enter("y");
+    expect(s.entities.map(withoutId)).toEqual([{ type: "line", x1: 7, y1: -3, x2, y2 }]);
+  });
+
+  it("leaves @ in an emptied X to the field too, once the box is X and Y", () => {
+    const { s } = makeDrawing("rectangle");
+    startAt(s, "7", "-3");
+    key(s, "@", fieldEl("width"));
+    type("x", "");
+    expect(key(s, "@", fieldEl("x"))).toBe(false);
+    expect(fieldNames()).toEqual(["x", "y"]);
+  });
+
   it("draws a closed four line chain from off the origin and ends the chain on its start", () => {
     const { s } = makeDrawing("line");
     startAt(s, "7", "-3");

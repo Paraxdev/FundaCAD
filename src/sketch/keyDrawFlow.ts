@@ -306,7 +306,7 @@ export class KeyDrawFlow {
   // Typing a character into a field is not a single key shortcut, so this is not gated on singleKeysOn.
   private turnSizeToPoint(e: KeyboardEvent): boolean {
     const dim = this.host.dim();
-    if (e.key !== "@" || !dim.isFreshField(e.target)) return false;
+    if (e.key !== "@" || dim.hasField("x") || !dim.isFreshField(e.target)) return false;
     this.ring = null;
     e.preventDefault();
     e.stopPropagation();
