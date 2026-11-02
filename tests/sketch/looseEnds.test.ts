@@ -350,10 +350,9 @@ describe("a very long or very far curve in the index", () => {
 
   // A horizontal or vertical line has no area, so its cell is twice the reach and this length overran a Map.
   it.each([
-    ["horizontal", line("a", -1e6, 0, 1e6, 0)],
-    ["vertical", line("a", 0, -1e6, 0, 1e6)],
-  ])("a %s line of 2e6 mm at a reach of 0.001 mm is indexed, with an end near it still found", (_, long) => {
-    const onIt = long.x1 === long.x2 ? line("b", 0, 500, 0, 900) : line("b", 500, 0, 900, 0);
+    ["horizontal", line("a", -1e6, 0, 1e6, 0), line("b", 500, 0, 900, 0)],
+    ["vertical", line("a", 0, -1e6, 0, 1e6), line("b", 0, 500, 0, 900)],
+  ])("a %s line of 2e6 mm at a reach of 0.001 mm is indexed, with an end near it still found", (_, long, onIt) => {
     const le = looseEnds([long, onIt], [], 0.001);
     expect(le.capped).toBeFalsy();
     expect(le.untied.some((u) => u.entity === "b")).toBe(true);

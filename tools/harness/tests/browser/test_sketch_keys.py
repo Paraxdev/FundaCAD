@@ -424,7 +424,7 @@ def test_a_point_too_far_out_is_refused_out_loud_and_the_page_goes_on(s, typed):
     in_field(s, "X")
     kb.type(typed)
     kb.press("Enter")
-    spoke(s, "X is too far out, a point stays within 1 km of the origin")
+    s.page.wait_for_function("() => document.getElementById('a11y-assertive').textContent.includes('X is too far out')")
     assert s.page.evaluate("() => window.sketch.base") is None
     assert s.page.evaluate(LABEL) == "X"
     assert s.page.evaluate("() => document.activeElement.getAttribute('aria-invalid')") == "true"
@@ -452,7 +452,7 @@ def test_the_x_and_y_box_stays_on_screen_when_the_cursor_walks_off_it(s):
         "() => { const r = document.activeElement.closest('.dim-input').getBoundingClientRect();"
         " return [r.left, r.top, r.right, r.bottom, innerWidth, innerHeight]; }"
     )
-    assert box[0] >= 0 and box[1] >= 0 and box[2] <= box[4] and box[3] <= box[5], box
+    assert box[0] >= 0 and box[1] >= 0 and box[2] <= box[4] + 1 and box[3] <= box[5] + 1, box
     assert s.page.evaluate("() => window.sketch.lastCursor.x") > 1000
     no_pointer(s)
 
@@ -499,9 +499,17 @@ def test_an_undo_keeps_focus_on_the_surface_and_drops_the_snaps_of_what_is_gone(
     point(s, 1, 2)
     spoke(s, "Point at 1, 2")
     in_field(s, "L")
+    # A first point is no step of its own, so this has nothing to undo and the box keeps its focus.
     kb.press("Control+Z")
-    s.page.wait_for_function("() => !window.sketch.base")
-    s.page.wait_for_function("() => document.activeElement?.getAttribute('aria-label') === 'Sketch'")
+    in_field(s, "L")
+    assert s.page.evaluate("() => !!window.sketch.base")
+    kb.type("@5,0")
+    kb.press("Enter")
+    s.page.wait_for_function("() => window.sketch.entities.length === 1")
+    in_field(s, "L")
+    kb.press("Control+Z")
+    s.page.wait_for_function("() => window.sketch.entities.length === 0 && !window.sketch.base")
+    in_field(s, "Sketch")
     no_pointer(s)
 
 

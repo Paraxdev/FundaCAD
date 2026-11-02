@@ -1057,7 +1057,7 @@ describe("arrows move the cursor", () => {
             { value: "a", label: "A" },
             { value: "b", label: "B" },
           ],
-          "aria-label": "Pick",
+          labelledby: "pick",
         },
       });
       const trigger = w.get('[role="combobox"]').element as HTMLElement;
