@@ -574,3 +574,226 @@ describe("lighting a row in the view", () => {
     expect(r.viewport.hoverPick).toHaveBeenLastCalledWith(null);
   });
 });
+
+const focusedLabel = () => document.activeElement?.querySelector(".ui-list-row-label")?.textContent ?? null;
+
+describe("arrows at a page's end", () => {
+  it("Down from a page's last row turns the page and lands on its first", async () => {
+    const { r, w } = await open(250);
+    focusRow(w, 99);
+    await press(w, 99, "ArrowDown");
+    await nextTick();
+    expect(labels(w)[0]).toBe("Flat face 101");
+    expect(focusedLabel()).toBe("Flat face 101");
+    expect(document.activeElement?.getAttribute("aria-posinset")).toBe("101");
+    expect(r.list.cursor).toBe("f:body1:100");
+    expect(r.viewport.applyPicks).not.toHaveBeenCalled();
+  });
+
+  it("Up from a page's first row turns back and lands on the last", async () => {
+    const { w } = await open(250);
+    focusRow(w, 99);
+    await press(w, 99, "ArrowDown");
+    await nextTick();
+    await press(w, 0, "ArrowUp");
+    await nextTick();
+    expect(focusedLabel()).toBe("Flat face 100");
+    expect(labels(w)[0]).toBe("Flat face 1");
+  });
+
+  it("stops at the list's two ends, it does not wrap", async () => {
+    const { r, w } = await open(150);
+    focusRow(w, 0);
+    await press(w, 0, "ArrowUp");
+    await nextTick();
+    expect(focusedLabel()).toBe("Flat face 1");
+    r.list.setPage(1);
+    await nextTick();
+    focusRow(w, 49);
+    await press(w, 49, "ArrowDown");
+    await nextTick();
+    expect(focusedLabel()).toBe("Flat face 150");
+  });
+
+  it("walks within a page as a plain list", async () => {
+    const { r, w } = await open(250);
+    focusRow(w, 98);
+    await press(w, 98, "ArrowDown");
+    await nextTick();
+    expect(focusedLabel()).toBe("Flat face 100");
+    expect(r.list.page).toBe(0);
+  });
+
+  it("a run stays within its page", async () => {
+    const { r, w } = await open(250);
+    focusRow(w, 99);
+    await press(w, 99, "ArrowDown", { shiftKey: true });
+    await nextTick();
+    expect(r.list.page).toBe(0);
+    expect(focusedLabel()).toBe("Flat face 100");
+  });
+
+  it("PageDown and PageUp turn pages from any row", async () => {
+    const { r, w } = await open(250);
+    focusRow(w, 40);
+    await press(w, 40, "PageDown");
+    await nextTick();
+    expect(focusedLabel()).toBe("Flat face 101");
+    await press(w, 0, "PageDown");
+    await nextTick();
+    expect(focusedLabel()).toBe("Flat face 201");
+    expect(r.list.page).toBe(2);
+    await press(w, 0, "PageUp");
+    await nextTick();
+    expect(focusedLabel()).toBe("Flat face 101");
+    expect(r.list.page).toBe(1);
+  });
+
+  it("PageDown on the last page lands on the last row, PageUp on the first on the first", async () => {
+    const { w } = await open(50);
+    focusRow(w, 10);
+    await press(w, 10, "PageDown");
+    await nextTick();
+    expect(focusedLabel()).toBe("Flat face 50");
+    await press(w, 49, "PageUp");
+    await nextTick();
+    expect(focusedLabel()).toBe("Flat face 1");
+  });
+
+  it("keeps a page key from the window", async () => {
+    const { w } = await open(2);
+    const heard = vi.fn();
+    window.addEventListener("keydown", heard);
+    focusRow(w, 0);
+    await press(w, 0, "PageDown");
+    window.removeEventListener("keydown", heard);
+    expect(heard).not.toHaveBeenCalled();
+  });
+});
+
+describe("focus through a build", () => {
+  const landFaces = async (r: ReturnType<typeof rig>, etag: string, faces: TopologyFace[]) => {
+    await r.build(result([{ id: "body1", etag, faceCount: Math.max(3, faces.length), faceStart: 40 }]));
+    await land(r.asks[r.asks.length - 1]!, { body: "body1", faceCount: faces.length, faces });
+    await nextTick();
+  };
+
+  it("keeps focus on the row when it survives", async () => {
+    const { r, w } = await open(3);
+    focusRow(w, 2);
+    const el = document.activeElement;
+    await landFaces(r, "e2", [slanted(1), slanted(2)]);
+    expect(document.activeElement).toBe(el);
+    expect(focusedLabel()).toBe("Flat face 3");
+  });
+
+  it("hands focus to the row now in its place when the build removed it", async () => {
+    const { r, w } = await open(3);
+    focusRow(w, 1);
+    await landFaces(r, "e2", [slanted(0), slanted(2)]);
+    expect(focusedLabel()).toBe("Flat face 3");
+    expect(r.list.cursor).toBe("f:body1:2");
+  });
+
+  it("hands focus to the new last row when the last one went", async () => {
+    const { r, w } = await open(3);
+    focusRow(w, 2);
+    await landFaces(r, "e2", [slanted(0), slanted(1)]);
+    expect(focusedLabel()).toBe("Flat face 2");
+  });
+
+  it("puts focus on the words when no row is left, and back on a row when they return", async () => {
+    const { r, w } = await open(3);
+    focusRow(w, 1);
+    await landFaces(r, "e2", []);
+    expect(document.activeElement?.getAttribute("role")).toBe("status");
+    await landFaces(r, "e3", [slanted(0), slanted(1)]);
+    expect(focusedLabel()).toBe("Flat face 1");
+  });
+
+  it("takes no focus when it was elsewhere", async () => {
+    const { r, w } = await open(3);
+    const trigger = selects(w)[0]!.element as HTMLElement;
+    trigger.focus();
+    await landFaces(r, "e2", [slanted(0)]);
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it("a filter that drops the focused row hands focus on", async () => {
+    const { r, w } = await open(3);
+    focusRow(w, 0);
+    r.list.setFilters({ minSize: 61 });
+    await nextTick();
+    expect(focusedLabel()).toBe("Flat face 2");
+  });
+});
+
+describe("a press outside", () => {
+  it("blurs a focused row, so the arrows go back to the model", async () => {
+    const { w } = await open(2);
+    focusRow(w, 1);
+    document.body.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it("leaves it on a press inside the list", async () => {
+    const { w } = await open(2);
+    focusRow(w, 1);
+    row(w, 0).element.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    expect(document.activeElement).toBe(row(w, 1).element);
+  });
+
+  it("leaves focus outside the list alone", async () => {
+    const { w } = await open(2);
+    const trigger = selects(w)[0]!.element as HTMLElement;
+    trigger.focus();
+    document.body.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it("stops listening once the list goes", async () => {
+    const { w } = await open(2);
+    const off = vi.spyOn(document, "removeEventListener");
+    w.unmount();
+    expect(off.mock.calls.some((c) => c[0] === "pointerdown" && c[2] === true)).toBe(true);
+    off.mockRestore();
+  });
+});
+
+describe("keys that must not reach the model", () => {
+  it.each(["Delete", "Backspace"])("%s stops at the list", async (key) => {
+    const { r, w } = await open(2);
+    select(r, 40);
+    await nextTick();
+    const heard = vi.fn();
+    window.addEventListener("keydown", heard);
+    focusRow(w, 1);
+    const e = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });
+    row(w, 1).element.dispatchEvent(e);
+    window.removeEventListener("keydown", heard);
+    expect(heard).not.toHaveBeenCalled();
+    expect(e.defaultPrevented).toBe(true);
+    expect(r.viewport.applyPicks).not.toHaveBeenCalled();
+  });
+
+  it("Escape goes on to the window, which clears the selection, and focus stays", async () => {
+    const { w } = await open(2);
+    const heard = vi.fn();
+    window.addEventListener("keydown", heard);
+    focusRow(w, 1);
+    await press(w, 1, "Escape");
+    window.removeEventListener("keydown", heard);
+    expect(heard).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe(row(w, 1).element);
+  });
+
+  it("a letter no row starts goes on too", async () => {
+    const { w } = await open(2);
+    const heard = vi.fn();
+    window.addEventListener("keydown", heard);
+    focusRow(w, 1);
+    await press(w, 1, "z");
+    window.removeEventListener("keydown", heard);
+    expect(heard).toHaveBeenCalledTimes(1);
+  });
+});

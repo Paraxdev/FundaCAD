@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, useTemplateRef } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, useTemplateRef, watch } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { useWheelScroll } from "../../composables/useWheelScroll";
 import { GEOMETRY_PAGE_SIZE, useGeometryBrowserStore, type GeometryKind } from "../../stores/geometryBrowser";
@@ -134,6 +134,68 @@ function onRowBlur() {
   ctl.hover(null);
 }
 
+const ownsFocus = () => !!scroller.value?.contains(document.activeElement);
+
+function focusCursor() {
+  const box = scroller.value;
+  if (!box) return;
+  const at = options.value.findIndex((o) => o.value === list.cursor);
+  const rows = box.querySelectorAll<HTMLElement>("[data-roving]");
+  (rows[Math.max(at, 0)] ?? box.querySelector<HTMLElement>(".empty-state"))?.focus();
+}
+
+// The Listbox has no focus recovery, and a removed row would drop focus on the body, where the next key runs a tool.
+let hadFocus = false;
+watch(
+  () => list.pageRows,
+  () => (hadFocus = ownsFocus()),
+  { flush: "pre" },
+);
+watch(
+  () => list.pageRows,
+  () => {
+    if (hadFocus && !ownsFocus()) focusCursor();
+  },
+  { flush: "post" },
+);
+
+function moveCursor(place: number) {
+  const row = list.filtered[place];
+  if (!row) return;
+  list.setCursor(row.key);
+  void nextTick(focusCursor);
+}
+
+function pageTurnTarget(e: KeyboardEvent): number | null {
+  const at = options.value.findIndex((o) => o.value === list.cursor);
+  if (at < 0) return null;
+  const place = list.page * GEOMETRY_PAGE_SIZE + at;
+  if (e.key === "PageUp") return Math.max(0, (list.page - 1) * GEOMETRY_PAGE_SIZE);
+  if (e.key === "PageDown") return Math.min(list.filtered.length - 1, (list.page + 1) * GEOMETRY_PAGE_SIZE);
+  if (e.shiftKey) return null;
+  if (e.key === "ArrowUp" && at === 0 && list.page > 0) return place - 1;
+  if (e.key === "ArrowDown" && at === options.value.length - 1 && list.page < list.pageCount - 1) return place + 1;
+  return null;
+}
+
+// In capture, as the Listbox consumes these keys itself. Delete would otherwise remove a selected face that may not be
+// the focused row.
+function onListKeys(e: KeyboardEvent) {
+  const guarded = e.key === "Delete" || e.key === "Backspace";
+  const place = guarded || e.altKey || e.ctrlKey || e.metaKey ? null : pageTurnTarget(e);
+  if (!guarded && place === null) return;
+  e.preventDefault();
+  e.stopPropagation();
+  if (place !== null) moveCursor(place);
+}
+
+// The viewport keeps focus put on a press, so a row would go on taking the arrows meant for the model.
+function onDocPointerdown(e: PointerEvent) {
+  const a = document.activeElement;
+  if (!(a instanceof HTMLElement) || !ownsFocus()) return;
+  if (!(e.target instanceof Node && scroller.value?.contains(e.target))) a.blur();
+}
+
 let tangent = renderPrefs().tangentEdges;
 const offPrefs = onRenderPrefsChange(() => {
   if (renderPrefs().tangentEdges === tangent) return;
@@ -141,8 +203,12 @@ const offPrefs = onRenderPrefsChange(() => {
   ctl.show(true);
 });
 
-onMounted(() => ctl.show(true));
+onMounted(() => {
+  document.addEventListener("pointerdown", onDocPointerdown, true);
+  ctl.show(true);
+});
 onUnmounted(() => {
+  document.removeEventListener("pointerdown", onDocPointerdown, true);
   ctl.hover(null);
   ctl.show(false);
   offUnit();
@@ -211,11 +277,11 @@ onUnmounted(() => {
     </div>
     <div ref="scroller" class="float-card-body geometry-rows" :aria-busy="list.state === 'loading' || undefined">
       <div v-if="failed" class="geometry-note" role="alert">
-        <p class="empty-state">{{ list.error }}</p>
+        <p class="empty-state" tabindex="-1">{{ list.error }}</p>
         <Button size="sm" @click="ctl.retry()">Try again</Button>
       </div>
       <div v-if="blank" class="geometry-note">
-        <p class="empty-state" role="status">{{ blank }}</p>
+        <p class="empty-state" role="status" tabindex="-1">{{ blank }}</p>
         <Button v-if="filteredOut" size="sm" @click="setFilter(NO_FILTERS)">Clear filters</Button>
       </div>
       <Listbox
@@ -228,6 +294,7 @@ onUnmounted(() => {
         @update:model-value="onListSelection($event as string[])"
         @update:anchor="anchor = $event"
         @apply="selectOnly"
+        @keydown.capture="onListKeys"
       >
         <template #option="{ item, index, selected, attrs }">
           <ListRow
