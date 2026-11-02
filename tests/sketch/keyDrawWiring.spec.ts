@@ -497,6 +497,49 @@ describe("the next point typed in X and Y", () => {
   });
 });
 
+describe("Ctrl+Z with a size box focused", () => {
+  function undoable(tool: string) {
+    const t = makeDrawing(tool);
+    const s = t.s as Internals & Record<string, unknown>;
+    const focus = vi.fn(() => true);
+    s.keySurface = { ...noKeySurface, focus };
+    Object.assign(s, {
+      active: true,
+      history: { undo: () => ({}), redo: () => ({}) },
+      snapshot: () => ({}),
+      restore() {},
+      modifyFlow: { offsetting: false, filletArmed: false, setFilletFirst() {}, reset() {} },
+    });
+    return { s, focus };
+  }
+  const ctrlZ = (el: Element) =>
+    el.dispatchEvent(new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true }));
+
+  it.each(["undoEdit", "redoEdit"] as const)("%s puts focus on the surface in a keys session", (edit) => {
+    const { s, focus } = undoable("line");
+    startAt(s, "1", "2");
+    fieldEl("length").focus();
+    focus.mockClear();
+    ctrlZ(fieldEl("length"));
+    expect(document.activeElement).toBe(document.body);
+    (s as unknown as Record<string, () => boolean>)[edit]!();
+    expect(s.base).toBeNull();
+    expect(focus).toHaveBeenCalledTimes(1);
+  });
+
+  it("gives the box its focus back when there was nothing to undo", () => {
+    const { s, focus } = undoable("line");
+    (s as unknown as { history: unknown }).history = { undo: () => null };
+    startAt(s, "1", "2");
+    fieldEl("length").focus();
+    focus.mockClear();
+    ctrlZ(fieldEl("length"));
+    (s as unknown as { undoEdit(): boolean }).undoEdit();
+    expect(document.activeElement).toBe(fieldEl("length"));
+    expect(focus).not.toHaveBeenCalled();
+  });
+});
+
 describe("a held Enter with a shape in flight", () => {
   it("draws nothing from the surface, where the tool's own Enter would commit the box", () => {
     const { s } = makeDrawing("rectangle");

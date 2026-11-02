@@ -471,6 +471,39 @@ def test_a_held_enter_opens_the_box_once_and_places_nothing(s):
     no_pointer(s)
 
 
+def test_an_undo_keeps_focus_on_the_surface_and_drops_the_snaps_of_what_is_gone(s):
+    kb = s.page.keyboard
+    to_items_plane(s)
+    tool(s, "r", "rectangle")
+    point(s, 10, 10)
+    spoke(s, "Point at 10, 10")
+    kb.type("20")
+    kb.press("Tab")
+    kb.type("10")
+    kb.press("Enter")
+    s.page.wait_for_function("() => window.sketch.entities.length === 1")
+    kb.press("ArrowRight")
+    kb.press("ArrowUp")
+    tab_to_snap(s, "Rectangle 1")
+    kb.press("Control+Z")
+    s.page.wait_for_function("() => window.sketch.entities.length === 0")
+    assert s.page.evaluate(LABEL) == "Sketch"
+    seen = len(s.page.evaluate(SPOKEN))
+    kb.press("Tab")
+    s.page.wait_for_timeout(300)
+    assert not any("Rectangle 1" in t for t in s.page.evaluate(SPOKEN)[seen:])
+
+    s.page.evaluate("() => document.activeElement?.blur()")
+    tool(s, "l", "line")
+    point(s, 1, 2)
+    spoke(s, "Point at 1, 2")
+    in_field(s, "L")
+    kb.press("Control+Z")
+    s.page.wait_for_function("() => !window.sketch.base")
+    s.page.wait_for_function("() => document.activeElement?.getAttribute('aria-label') === 'Sketch'")
+    no_pointer(s)
+
+
 def test_arrows_turn_the_view_when_the_sketch_plane_is_edge_on(s):
     kb = s.page.keyboard
     to_items_plane(s)

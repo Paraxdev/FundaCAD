@@ -167,6 +167,21 @@ export class KeyDrawFlow {
     if (this.keys) this.host.changed();
   }
 
+  /** Undo or redo swapped the geometry: Tab's stops and the snap under the cursor may be gone, and a box that took the
+   *  key blurred itself onto the body. */
+  historyMoved() {
+    this.ring = null;
+    cancelAnnouncement("sketch-cursor");
+    if (!this.keys || !this.armed()) return;
+    if (this.engaged) {
+      const p = this.host.cursor().clone();
+      this.host.moveTo(hitOf(p, hitAt(p, this.host.candidates())));
+    }
+    const dim = this.host.dim();
+    if (!dim.isActive) this.settleFocus();
+    else if (!document.activeElement || document.activeElement === document.body) dim.focus();
+  }
+
   /** The point a size box's Enter places: the cursor a key moved, unless a size was typed. Read before the commit, which changes the candidates. */
   boxEnd(): BoxEnd | null {
     if (!this.armed() || !this.engaged || this.host.dim().touched()) return null;

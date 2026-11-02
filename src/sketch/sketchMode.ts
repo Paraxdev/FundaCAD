@@ -3969,6 +3969,7 @@ export class SketchMode {
     const prev = this.history.undo(this.snapshot());
     if (!prev) {
       setPrompt("Nothing left to undo in this sketch");
+      this.keyDraw.historyMoved();
       return true;
     }
     this.applyHistory(prev);
@@ -3980,6 +3981,7 @@ export class SketchMode {
     const next = this.history.redo(this.snapshot());
     if (!next) {
       setPrompt("Nothing to redo in this sketch");
+      this.keyDraw.historyMoved();
       return true;
     }
     this.applyHistory(next);
@@ -4003,6 +4005,7 @@ export class SketchMode {
     this.dim.hide();
     this.overlay.setPreview([]);
     this.refreshActive();
+    this.keyDraw.historyMoved();
     this.requestSolve();
     this.onState?.();
   }

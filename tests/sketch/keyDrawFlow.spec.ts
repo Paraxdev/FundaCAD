@@ -213,6 +213,80 @@ describe("Enter is left alone", () => {
   });
 });
 
+describe("after an undo or a redo", () => {
+  const tab = () => press(free(), { key: "Tab" });
+  const right = () => press(free(), { key: "ArrowRight" });
+
+  it("drops Tab's walk, so no stop of a shape that is gone is said", () => {
+    const { flow, state } = rig("rectangle");
+    right();
+    expect(tab().defaultPrevented).toBe(true);
+    state.candidates = [];
+    flow.historyMoved();
+    vi.mocked(announce).mockClear();
+    expect(tab().defaultPrevented).toBe(false);
+    expect(announce).not.toHaveBeenCalled();
+  });
+
+  it("walks the snaps that are left", () => {
+    const { flow, state } = rig("rectangle");
+    right();
+    tab();
+    state.candidates = [{ p: v(1, 1), kind: "endpoint", priority: 90, ref: { entity: "l1", at: 0 } }];
+    flow.historyMoved();
+    tab();
+    expect(state.cursor).toEqual(v(1, 1));
+  });
+
+  it("takes the snap of what is gone off the cursor, and cancels a sentence still waiting", () => {
+    const { flow, state } = rig("rectangle");
+    right();
+    tab();
+    expect(state.moved.at(-1)?.kind).not.toBe("free");
+    const at = state.cursor.clone();
+    state.candidates = [];
+    vi.mocked(cancelAnnouncement).mockClear();
+    flow.historyMoved();
+    expect(state.moved.at(-1)).toMatchObject({ kind: "free", ref: undefined });
+    expect(state.cursor).toEqual(at);
+    expect(cancelAnnouncement).toHaveBeenCalledWith("sketch-cursor");
+  });
+
+  it("puts focus on the surface when a size box that took the key is gone", () => {
+    const { flow, state } = rig("line");
+    flow.armedByKeys();
+    state.surfaced = 0;
+    (document.activeElement as HTMLElement | null)?.blur();
+    flow.historyMoved();
+    expect(state.surfaced).toBe(1);
+  });
+
+  it("gives focus back to a box still open, as with nothing to undo", () => {
+    const { flow, state } = rig("line");
+    press(free());
+    field("x").focus();
+    field("x").blur();
+    state.surfaced = 0;
+    flow.historyMoved();
+    expect(document.activeElement).toBe(field("x"));
+    expect(state.surfaced).toBe(0);
+  });
+
+  it("leaves focus on a control, and a pointer session alone", () => {
+    const { flow, state } = rig("line");
+    flow.armedByKeys();
+    state.surfaced = 0;
+    document.getElementById("rail")!.focus();
+    flow.historyMoved();
+    expect(document.activeElement?.id).toBe("rail");
+    const { flow: pointer, state: ps } = rig("line");
+    (document.activeElement as HTMLElement | null)?.blur();
+    pointer.historyMoved();
+    expect(ps.surfaced).toBe(0);
+    expect(ps.moved).toEqual([]);
+  });
+});
+
 describe("a held Enter", () => {
   it("opens the box once and does not go on to place a point", () => {
     const { state } = rig("line");
