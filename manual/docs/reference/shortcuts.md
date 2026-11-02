@@ -60,12 +60,25 @@ Reset puts one key back, Reset all a whole page. A key marked fixed cannot be ch
 | Ctrl+Plus, Ctrl+Minus, Ctrl+0 | Interface size larger, smaller, back to 100 percent |
 | Ctrl+Alt+S, Ctrl+Alt+H | Show or hide the items and the history |
 | Home or F6, Shift+Home | Fit view, reset camera |
-| Arrow keys | Turn or tilt the view 15°, 5° with Shift |
+| Arrow keys | Turn or tilt the view 15°, 5° with Shift. With Line, Rectangle or Circle armed they move the sketch cursor instead |
 | Z, Shift+Z | Next and previous view mode |
 | Shift+V | Clean view, hides every overlay until pressed again |
 | Del | Delete the selected face or feature |
 | Esc | Cancel the tool or clear the selection |
-| Tab | While box selecting, choose what the box takes |
+| Tab | While box selecting, choose what the box takes. With a sketch cursor moved by arrows, the next snap. In Extrude, the next profile |
+
+## Drawing by keys
+
+With Line, Rectangle or Circle armed in a sketch, see [Draw with keys](../sketch/keyboard.md).
+
+| Key | What it does |
+| --- | --- |
+| Enter, or a digit, `-`, `.`, `@` | Opens X and Y for a point, with the digit typed in X |
+| Shift+Enter | Opens X and Y at any time |
+| Arrows, Shift+arrows, Alt+arrows | Move the sketch cursor one grid step, finer, coarser |
+| Enter after arrows | Places the point at the cursor |
+| Tab, Shift+Tab after arrows | Next and previous snap near the cursor |
+| X `@5,3` | 5 along X and 3 along Y from the last point |
 
 ## Mouse
 
