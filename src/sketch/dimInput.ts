@@ -281,6 +281,8 @@ export class DimInput {
   /** A tool's own control beside the fields, such as the fillet's profile chip. */
   private extra: HTMLElement | null = null;
   private typedProblem: string | null = null;
+  /** Fields a keystroke changed since show(), which a confirm does not clear the way it clears `typed`. */
+  private typedNames = new Set<string>();
   private focusName: string | null = null;
   private boxNo = ++boxCount;
   private helpId = `dim-help-${this.boxNo}`;
@@ -384,6 +386,7 @@ export class DimInput {
     onInput?: () => void,
   ) {
     this.hide();
+    this.typedNames.clear();
     this.focusName = null;
     this.onInput = onInput ?? null;
     this.setClickThrough(false); // every other tool wants a clickable box
@@ -465,6 +468,7 @@ export class DimInput {
       input.addEventListener("input", () => {
         field.userDriven = true; // typing freezes the field from cursor tracking
         field.typed = true;
+        this.typedNames.add(field.def.name);
         wrap.classList.add("typed");
         this.sizeToContent(field);
         this.adoptTypedUnit(field);
@@ -1355,6 +1359,10 @@ export class DimInput {
     this.setClickThrough(true);
     this.root.style.left = `${Math.round(screenX - this.root.offsetWidth / 2)}px`;
     this.root.style.top = `${Math.round(screenY - this.root.offsetHeight / 2)}px`;
+  }
+
+  wasTyped(name: string): boolean {
+    return this.active && this.typedNames.has(name);
   }
 
   hasTyped(): boolean {

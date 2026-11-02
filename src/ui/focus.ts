@@ -94,3 +94,16 @@ export function isPageSelectAll(e: KeyboardEvent): boolean {
   if (e.key.toLowerCase() !== "a") return false;
   return !isEditableTarget(e.target) || isSelectTrigger(e.target);
 }
+
+const CONTROLS =
+  'button, a[href], input, select, textarea, summary, [contenteditable]:not([contenteditable="false"]), [tabindex]:not([tabindex="-1"]), [role]:not([role="application"]):not([role="main"]):not([role="presentation"]):not([role="none"])';
+
+/** True when a keydown landed on the page itself (body, the key surface, a plain element of the model area) and no
+ *  control or widget is there to own Enter or Tab. */
+export function keyTargetFree(t: EventTarget | null): boolean {
+  if (typeof Element === "undefined" || !(t instanceof Element)) return true;
+  if (t === document.body || t === document.documentElement) return true;
+  if (t.closest("[data-key-surface]")) return true;
+  if (t.closest(CONTROLS)) return false;
+  return t.closest("#main") !== null;
+}

@@ -81,6 +81,7 @@ import {
 } from "./directDims";
 import { expandPattern, translated } from "./pattern";
 import { MirrorFlow, type MirrorHost } from "./mirrorFlow";
+import { KeyDrawFlow, type KeyDrawHost, type KeyHit } from "./keyDrawFlow";
 import { showMirrorPanel } from "../features/mirrorPanel";
 import { mirrorLineColor, mirrorObjectsColor } from "../features/mirrorColors";
 import { onThemeChange } from "../ui/theme";
@@ -285,6 +286,8 @@ export class SketchMode {
     kind: SnapKind;
     ref?: SnapRef | undefined;
     noSnap?: boolean;
+    /** Placed by typed numbers, so it is exact and no near-axis guess applies. */
+    typed?: boolean;
   } | null = null;
   private baseRef: SnapRef | null = null;
   private arcStartRef: SnapRef | null = null;
@@ -428,6 +431,7 @@ export class SketchMode {
   private patternFlow: PatternFlow;
   private mirrorFlow: MirrorFlow;
   private dimFlow: DimFlow;
+  private keyDraw: KeyDrawFlow;
   private projectFlow: ProjectFlow;
   private modifyFlow: ModifyFlow;
 
@@ -555,6 +559,7 @@ export class SketchMode {
       onState: () => this.onState?.(),
     };
     this.dimFlow = new DimFlow(dimHost);
+    this.keyDraw = new KeyDrawFlow(this.keyDrawHost());
     const projectHost: ProjectHost = {
       entities: () => this.entities,
       store: () => this.store,
@@ -633,6 +638,7 @@ export class SketchMode {
       edge.body && isExactPlaneEdge(edge, meshBodies) ? [{ edge: { body: edge.body, points: edge.points }, poly }] : [],
     );
     this.history.reset(); // fresh history per session (armed once entities load)
+    this.keyDraw.reset();
     this.pickedAt = new Map();
     if (!this.fonts.length)
       void fetchFonts().then((f) => {
@@ -1734,17 +1740,7 @@ export class SketchMode {
     e.preventDefault();
     const p = hit.p;
 
-    // SK-6: a click that snapped to the Origin while drawing pins it with the fixed point the dimension tool would
-    // create (snap.ts pinOriginPoint), so the solver cannot undo it. Made once the shape commits (SK-10).
-    if (
-      hit.kind === "center" &&
-      hit.label === "Origin" &&
-      this.tool !== "select" &&
-      !MODIFY_TOOLS.has(this.tool) &&
-      !PATTERN_TOOLS.has(this.tool)
-    ) {
-      this.originPin ??= { at: p.clone(), count: this.entities.length };
-    }
+    this.noteOriginPin(hit);
 
     if (this.tool === "select") {
       // Note: Chromium reports detail 0 on pointerdown, so a double press is timed here
@@ -1904,6 +1900,26 @@ export class SketchMode {
     if (this.tool === "break") return this.modifyFlow.breakClick(p);
     if (CONSTRAINT_TOOLS.has(this.tool)) return this.constraintClick(p);
 
+    this.placeTwoPoint(hit);
+  }
+
+  // SK-6: a point that snapped to the Origin while drawing pins it with the fixed point the dimension tool would
+  // create (snap.ts pinOriginPoint), so the solver cannot undo it. Made once the shape commits (SK-10).
+  private noteOriginPin(hit: KeyHit) {
+    if (
+      hit.kind === "center" &&
+      hit.label === "Origin" &&
+      this.tool !== "select" &&
+      !MODIFY_TOOLS.has(this.tool) &&
+      !PATTERN_TOOLS.has(this.tool)
+    ) {
+      this.originPin ??= { at: hit.p.clone(), count: this.entities.length };
+    }
+  }
+
+  private placeTwoPoint(hit: KeyHit) {
+    const p = hit.p;
+    this.keyDraw.placed(p);
     if (!this.base) {
       this.base = p.clone();
       this.baseRef = hit.ref ?? null;
@@ -1911,8 +1927,14 @@ export class SketchMode {
       this.showDimFields();
       return;
     }
-    // second click → commit the entity using current dims
     this.commitFromCursor(p);
+  }
+
+  private placeKeyHit(hit: KeyHit) {
+    this.lastCursor.copy(hit.p);
+    this.lastHit = { p: hit.p.clone(), raw: hit.p.clone(), kind: hit.kind, ref: hit.ref, typed: true };
+    this.noteOriginPin(hit);
+    this.placeTwoPoint(hit);
   }
 
   // 3-point arc: click start, click end, then click the point it passes through
@@ -2876,8 +2898,44 @@ export class SketchMode {
     else this.overlay.setPreview([]);
   }
 
+  private keyDrawHost(): KeyDrawHost {
+    return {
+      tool: () => this.tool,
+      base: () => this.base,
+      cursor: () => this.lastCursor,
+      candidates: () => this.candidates,
+      entities: () => this.entities,
+      planeTooEdgeOn: () => this.planeTooEdgeOn(),
+      dim: () => this.dim,
+      place: (hit) => this.placeKeyHit(hit),
+      positionBox: (p) => {
+        const at = this.viewport.projectToScreen(this.plane.to3D(p.x, p.y));
+        this.dim.positionCentred(at.x, at.y);
+      },
+      prompt: (text) => setPrompt(text),
+    };
+  }
+
+  private cancelGeometry() {
+    this.base = null;
+    this.inferTag.hide();
+    this.chainStart = null;
+    this.originPin = null;
+    this.arcStart = null;
+    this.arcEnd = null;
+    this.modifyFlow.setFilletFirst(null);
+    this.splinePts = [];
+    this.clickPts = [];
+    // An in-progress dimension: picks and an open value box both die here, the tool stays armed.
+    this.dimFlow.resetDimPicks();
+    this.constraintTools.resetPending();
+    this.dim.hide();
+    this.overlay.setPreview([]);
+  }
+
   private onKey(e: KeyboardEvent) {
     if (isMenuKey(e) || isBoxButtonKey(e)) return;
+    if (this.keyDraw.onKey(e)) return;
     // The dim box auto-focuses while drawing, so Esc in it must still cancel.
     const escInOwnDim = e.key === "Escape" && this.dim.isActive && this.dim.ownsTarget(e.target);
     if (!escInOwnDim && isEditableTarget(e.target)) return; // typing in a dim/text field, not a shortcut
@@ -2928,6 +2986,7 @@ export class SketchMode {
         offsetPick: this.modifyFlow.offsetting,
         dragging: !!(this.dragFrom || this.moveDrag),
         pendingGeometry:
+          this.keyDraw.pending() ||
           !!this.base ||
           !!this.arcStart ||
           this.modifyFlow.filletArmed ||
@@ -2965,20 +3024,7 @@ export class SketchMode {
         return;
       }
       if (action === "cancel-geometry") {
-        this.base = null;
-        this.inferTag.hide();
-        this.chainStart = null;
-        this.originPin = null;
-        this.arcStart = null;
-        this.arcEnd = null;
-        this.modifyFlow.setFilletFirst(null);
-        this.splinePts = [];
-        this.clickPts = [];
-        // An in-progress dimension: picks and an open value box both die here, the tool stays armed.
-        this.dimFlow.resetDimPicks();
-        this.constraintTools.resetPending();
-        this.dim.hide();
-        this.overlay.setPreview([]);
+        this.cancelGeometry();
       } else if (action === "clear-selection") {
         this.selected.clear();
         this.refreshActive();
@@ -3125,7 +3171,7 @@ export class SketchMode {
       endRef: h?.ref,
       entities: this.entities,
       step: this.gridSnap ? this.snapStep() : 0,
-      tolDeg: closing ? 0 : INFER_TOL_DEG,
+      tolDeg: closing || h?.typed ? 0 : INFER_TOL_DEG,
       nearMm: this.planeMmPerPx() * hitPx(120),
       smart: this.gridSnap && !h?.noSnap,
       typedAngle: this.dim.isUserDriven("angle"),

@@ -1102,3 +1102,43 @@ describe("DimInput reads parameter names", () => {
     expect(dim.exprOf("depth")).toBeNull();
   });
 });
+
+describe("DimInput.wasTyped", () => {
+  const field = (name: string) => document.querySelector<HTMLInputElement>(`.dim-field[data-field="${name}"] input`)!;
+  const keydown = (el: HTMLElement, k: string) =>
+    el.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true }));
+
+  it("is true for a field a keystroke changed, not for one a seed or a Tab only locked", () => {
+    dim.show(
+      [
+        { name: "x", label: "X" },
+        { name: "y", label: "Y" },
+      ],
+      () => {},
+    );
+    dim.updateFromCursor({ x: 12.5, y: -3 });
+    expect([dim.wasTyped("x"), dim.wasTyped("y")]).toEqual([false, false]);
+    field("x").focus();
+    field("x").value = "7";
+    field("x").dispatchEvent(new Event("input", { bubbles: true }));
+    keydown(field("x"), "Tab");
+    keydown(field("y"), "Tab");
+    expect([dim.isUserDriven("x"), dim.isUserDriven("y")]).toEqual([true, true]);
+    expect([dim.wasTyped("x"), dim.wasTyped("y")]).toEqual([true, false]);
+  });
+
+  it("survives a confirm, and is clean for the next showing and after hide", () => {
+    const seen: boolean[] = [];
+    dim.show([{ name: "x", label: "X" }], () => seen.push(dim.wasTyped("x")));
+    field("x").value = "4";
+    field("x").dispatchEvent(new Event("input", { bubbles: true }));
+    keydown(field("x"), "Enter");
+    expect(seen).toEqual([true]);
+    dim.show([{ name: "x", label: "X" }], () => {});
+    expect(dim.wasTyped("x")).toBe(false);
+    field("x").value = "5";
+    field("x").dispatchEvent(new Event("input", { bubbles: true }));
+    dim.hide();
+    expect(dim.wasTyped("x")).toBe(false);
+  });
+});

@@ -18,6 +18,7 @@
 // but the METHODS under test are the real ones, taken off the prototype. What is
 // faked is the viewport/overlay/solver around them, never the round-trip.
 
+import { noKeyDraw } from "./keyDrawStub";
 import { describe, it, expect, beforeEach } from "vitest";
 import * as THREE from "three";
 import { SketchMode } from "../../src/sketch/sketchMode";
@@ -52,6 +53,7 @@ function makeSketch(doc: CadDocument) {
     selected: new Set<string>(),
     pendingBindings: new Map(),
     history: { reset() {} },
+    keyDraw: noKeyDraw,
     patternFlow: { resetForEnter() {}, flushOnFinish() {} },
     dims: { clearSelection() {} },
     gridFocus: { set() {} },
