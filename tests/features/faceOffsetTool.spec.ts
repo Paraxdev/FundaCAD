@@ -9,7 +9,7 @@ import * as THREE from "three";
 import { FaceOffsetTool } from "../../src/features/faceOffsetTool";
 import type { DocumentStore, RebuildState } from "../../src/document/store";
 import type { Viewport } from "../../src/viewport/viewport";
-import type { Feature, Selector } from "../../src/types";
+import type { Feature, Selector, Vec3 } from "../../src/types";
 import type { RoundFace } from "../../src/features/radialDrag";
 import type { FaceAxisReply } from "../../src/geometry/client";
 import { usePromptStore } from "../../src/stores/prompt";
@@ -401,6 +401,82 @@ describe("FaceOffsetTool", () => {
       { ...FACE, body: "b1" },
       { ...FAR, body: "b2" },
     ]);
+  });
+
+  describe("a Shell preview with its opening, over the model before it", () => {
+    // Body b1 owns face 7 (z = 0, x and y within 10, the picked face) and face 8 (x = 20, y within 5, z -10 to 0).
+    const BEFORE = {
+      mesh: {
+        positions: [-10, -10, 0, 10, -10, 0, 10, 10, 0, -10, 10, 0, 20, -5, -10, 20, 5, -10, 20, 5, 0, 20, -5, 0],
+        indices: [0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7],
+        faceIds: [7, 7, 8, 8],
+      },
+      bodies: [{ id: "b1", name: "b1", faceStart: 7, faceCount: 2 }],
+    };
+    const pickAt = (point: Vec3, faceId: number, bodyId: string | null) => () => ({
+      selector: { kind: "face", by: "nearest", point } as Selector,
+      faceId,
+      anchor: new THREE.Vector3(...point),
+      normal: new THREE.Vector3(0, 0, 1),
+      bodyId,
+    });
+    const shellAfterClick = (pick: ReturnType<typeof pickAt>, before: unknown = BEFORE) => {
+      const { vp, canvas } = fakeViewport();
+      const s = fakeStore();
+      Object.assign(s.store, { modelBeforePreview: before });
+      const t = new FaceOffsetTool(vp, s.store);
+      t.start("shell", () => {});
+      Object.assign(vp, { pickFaceForPressPull: pick });
+      ctrlClick(canvas);
+      dragTo(t, canvas, 2, { release: false });
+      return [shellFaces(s)].flat();
+    };
+    const FACE_B1 = { ...FACE, body: "b1" };
+
+    it("refuses a hit on a wall the model lacks", () => {
+      expect(shellAfterClick(pickAt([5, 3, -4], 11, "b1"))).toEqual([FACE_B1]);
+    });
+
+    it("takes a hit on another face of the model", () => {
+      const point: Vec3 = [20, 2, -6];
+      expect(shellAfterClick(pickAt(point, 8, "b1"))).toEqual([
+        FACE_B1,
+        { kind: "face", by: "nearest", point, body: "b1" },
+      ]);
+    });
+
+    it("refuses a hit on the face already picked, the opening's rim", () => {
+      expect(shellAfterClick(pickAt([2, 3, 0], 11, "b1"))).toEqual([FACE_B1]);
+    });
+
+    it("holds the line at half the smallest thickness from the model", () => {
+      expect(shellAfterClick(pickAt([20.00049, 0, -5], 8, "b1"))).toHaveLength(2);
+      expect(shellAfterClick(pickAt([20.00051, 0, -5], 8, "b1"))).toEqual([FACE_B1]);
+    });
+
+    it("adds as before when the model before is not known, or the body is not in it", () => {
+      const far = pickAt([5, 3, -4], 11, "b1");
+      expect(shellAfterClick(far, null)).toHaveLength(2);
+      expect(shellAfterClick(pickAt([5, 3, -4], 11, "b9"))).toHaveLength(2);
+      expect(shellAfterClick(pickAt([5, 3, -4], 11, null))).toHaveLength(2);
+    });
+
+    it.each(["offsetFace", "thicken"] as const)("%s never reads the model before the preview", (mode) => {
+      const { vp, canvas } = fakeViewport();
+      const s = fakeStore();
+      let reads = 0;
+      Object.defineProperty(s.store, "modelBeforePreview", {
+        get: () => (reads++, BEFORE),
+      });
+      const t = new FaceOffsetTool(vp, s.store);
+      t.start(mode, () => {});
+      Object.assign(vp, { pickFaceForPressPull: pickAt([5, 3, -4], 11, "b1") });
+      ctrlClick(canvas);
+      dragTo(t, canvas, 2, { release: false });
+      const sent = s.previews.filter((p) => p.feature).at(-1)?.feature as Extract<Feature, { type: "thicken" }>;
+      expect(sent.faces).toHaveLength(2);
+      expect(reads).toBe(0);
+    });
   });
 
   it("Offset Face still ignores a ctrl-clicked face of another body, it moves one body's faces", () => {

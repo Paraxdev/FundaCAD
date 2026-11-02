@@ -3085,6 +3085,12 @@ export class DocumentStore {
     return this.effectiveDoc();
   }
 
+  // The model without the open tool's preview, null when what was last built without one is no longer that document.
+  get modelBeforePreview(): RebuildResult | null {
+    const c = this.st.committedShown;
+    return c && buildKey(this.effectiveDoc({ withoutPreview: true })) === c.key ? c.state.result : null;
+  }
+
   // Features up to the rollback marker, minus suppressed ones. The full document is what is saved.
   private effectiveDoc(opts?: { withoutPreview?: boolean }): CadDocument {
     let features = prefixFeatures(this.doc.features, this.rollbackIndex, this.suppressed);

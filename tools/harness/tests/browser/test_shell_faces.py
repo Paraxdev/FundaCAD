@@ -301,3 +301,39 @@ def test_a_deleted_body_is_refused_and_a_later_body_does_not_take_its_number(s, 
     s.settle()
     assert faces_of(s) == {"body4": 6, "body1": 6, "body2": 6}
     assert build_error(s) == "Shell: the target body no longer exists"
+
+
+def ctrl_click_world(s, x, y, z):
+    p = s.bridge.call("worldPoint", x=x, y=y, z=z)
+    s._mouse_click(p["x"], p["y"], mods=["Ctrl"])
+    s.settle()
+
+
+def open_top_with_preview(s):
+    s.open_file(BLOCK)
+    s.pick_face("top")
+    s.tool("Shell")
+    s.type("field:distance", "1")
+    s.settle()
+    assert faces_of(s) == {"body1": 11}
+
+
+def commit_shell_faces(s):
+    s.type("field:distance", "1", enter=True)
+    s.settle()
+    return s.page.evaluate(SHELLS)[-1]
+
+
+@pytest.mark.parametrize("through", [(0, 0, 15), (3, -3, 15), (9.5, 0, 15)], ids=["hole-centre", "hole-off-centre", "rim"])
+def test_a_ctrl_click_through_the_previews_opening_adds_no_face(s, through):
+    open_top_with_preview(s)
+    ctrl_click_world(s, *through)
+    assert len(commit_shell_faces(s)) == 1
+    assert faces_of(s) == {"body1": 11}
+
+
+def test_a_real_wall_is_still_added_over_the_preview(s):
+    open_top_with_preview(s)
+    ctrl_click_world(s, 0, -10, 0)
+    assert len(commit_shell_faces(s)) == 2
+    assert faces_of(s) == {"body1": 10}

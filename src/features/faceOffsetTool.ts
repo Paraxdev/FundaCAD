@@ -25,6 +25,7 @@ import { featureKey, PreviewOutcomes } from "./previewOutcomes";
 import { axialSpan, ResizeGuides } from "./resizeGuides";
 import { boxBindings } from "./boxBindings";
 import { toolChar } from "../input/shortcuts";
+import { nearestMeshFace } from "./nearestMeshFace";
 
 export type FaceOffsetMode = "offsetFace" | "thicken" | "shell";
 
@@ -153,6 +154,21 @@ export class FaceOffsetTool {
     this.viewport.domElement.style.cursor = this.hovering ? "grab" : "default";
   }
 
+  // A Shell preview has walls the model lacks, and the engine resolves a pick on the model before it. A hit off that
+  // model, or on a face already picked (the opening's rim), adds nothing.
+  private onPreviewOnlyFace(hit: { selector: Selector; bodyId: string | null }): boolean {
+    const before = this.mode === "shell" ? this.store.modelBeforePreview : null;
+    if (!before || !hit.bodyId || !("point" in hit.selector)) return false;
+    const at = nearestMeshFace(before, hit.bodyId, hit.selector.point);
+    if (!at) return false;
+    if (at.distance > MIN_OFFSET / 2) return true;
+    return this.faces.some((f, i) => {
+      const owner = this.faceOwners[i];
+      const picked = owner && "point" in f ? nearestMeshFace(before, owner, f.point) : null;
+      return picked?.faceId === at.faceId;
+    });
+  }
+
   private onDown(e: PointerEvent) {
     if (e.button !== 0) return;
     if (this.phase === "pick") {
@@ -174,7 +190,7 @@ export class FaceOffsetTool {
     // binds each face to its own body, the others act on one body.
     if (e.ctrlKey || e.metaKey) {
       const hit = this.viewport.pickFaceForPressPull(e.clientX, e.clientY);
-      if (hit && (this.mode === "shell" || hit.bodyId === this.bodyId)) {
+      if (hit && (this.mode === "shell" || hit.bodyId === this.bodyId) && !this.onPreviewOnlyFace(hit)) {
         e.preventDefault();
         e.stopImmediatePropagation();
         this.faces.push(hit.selector);
