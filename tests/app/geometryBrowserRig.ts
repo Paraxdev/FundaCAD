@@ -44,6 +44,7 @@ export function topology(body: string, faces = 3, edgeFaces?: number[][]): Topol
 
 export interface Ask {
   body: string;
+  opts: unknown;
   id: string;
   doc: CadDocument;
   answer(r: TopologyReply | null): void;
@@ -79,10 +80,10 @@ export function rig(
     async rebuild() {
       return { ok: true as const, result: state.result };
     },
-    topology(doc: CadDocument, body: string, _o: unknown, onStarted?: (id: string) => void) {
+    topology(doc: CadDocument, body: string, opts: unknown, onStarted?: (id: string) => void) {
       const id = `req${asks.length + 1}`;
       onStarted?.(id);
-      return new Promise<TopologyReply | null>((answer, fail) => asks.push({ body, id, doc, answer, fail }));
+      return new Promise<TopologyReply | null>((answer, fail) => asks.push({ body, opts, id, doc, answer, fail }));
     },
     async init() {},
     onStatus: () => () => {},

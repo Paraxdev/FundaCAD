@@ -6,6 +6,7 @@ import { defineComponent, nextTick } from "vue";
 import { enableAutoUnmount, mount } from "@vue/test-utils";
 import type { Engine } from "../../src/app/engine";
 import { useSelectionOffers } from "../../src/composables/useSelectionOffers";
+import { SessionEnded } from "../../src/document/session";
 import { exactRound } from "../../src/ui/selectionMeasure";
 import { setUnit } from "../../src/ui/units";
 import { edge, land, result, rig, settle, topology } from "../app/geometryBrowserRig";
@@ -31,6 +32,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 function setup(first?: Parameters<typeof rig>[0]) {
@@ -60,6 +62,8 @@ function setup(first?: Parameters<typeof rig>[0]) {
       },
     }),
   );
+  const now = { value: 5000 };
+  vi.spyOn(performance, "now").mockImplementation(() => now.value);
   const frame = async () => {
     const due = frames;
     frames = [];
@@ -71,7 +75,7 @@ function setup(first?: Parameters<typeof rig>[0]) {
     window.dispatchEvent(new Event("keyup"));
     await frame();
   };
-  return { ...r, sel, press, planar, regions, owned, frame, settled };
+  return { ...r, sel, press, planar, regions, owned, now, frame, settled };
 }
 
 describe("the readout of one face", () => {
@@ -438,5 +442,225 @@ describe("what a change says", () => {
     expect(plain.summary.value).toBe("1 face");
     expect(plain.speech.value).toBeNull();
     expect(r.press.mock.calls.length).toBe(1);
+  });
+});
+
+describe("the engine's answer for a lone face", () => {
+  const face = (i: number) => ({
+    i,
+    surface: "cylinder" as const,
+    area: 628.5,
+    radius: 5,
+    wraps: true,
+    concave: true,
+    length: 20,
+    axis: [0, 0.6, 0.8] as [number, number, number],
+    centroid: [113.5, -41.25, 37] as [number, number, number],
+  });
+  const reply = (body: string, ...i: number[]) => ({ body, faceCount: 3, faces: i.map(face) });
+
+  it("asks for that face only and replaces the mesh's words on screen and in speech", async () => {
+    const r = setup();
+    await r.build();
+    r.selection.faces = [4];
+    await r.settled();
+    expect(r.sel.readout.value).toBe("1 face · curved");
+    expect(r.asks.map((a) => [a.body, a.opts])).toEqual([["body2", { faces: [1] }]]);
+    await land(r.asks[0]!, reply("body2", 1));
+    expect(r.sel.readout.value).toBe("1 face · hole · ⌀10 mm · 20 mm long");
+    expect(r.sel.speech.value?.text).toMatch(/^Hole 2, diameter 10 millimetres, 20 millimetres long, axis/);
+    expect(r.asks).toHaveLength(1);
+  });
+
+  it("asks for every piece of one split surface and reads them as one", async () => {
+    const r = setup(result([{ id: "body1", etag: "e1", faceCount: 6, faceBands: [[1, 3]] }]));
+    await r.build();
+    r.selection.faces = [1, 3];
+    await r.settled();
+    expect(r.asks.map((a) => a.opts)).toEqual([{ faces: [1, 3] }]);
+    await land(r.asks[0]!, reply("body1", 1, 3));
+    expect(r.sel.speech.value?.text).toContain("Hole 2");
+    expect(r.sel.speech.value?.text).toContain("in 2 pieces");
+  });
+
+  it("drops the reply for a selection that has moved on", async () => {
+    const r = setup();
+    await r.build();
+    r.selection.faces = [0];
+    await r.settled();
+    r.planar.mockReturnValue({ normal: new THREE.Vector3(0, 0, -1), origin: new THREE.Vector3(3, 4, 5) });
+    r.selection.faces = [1];
+    await r.settled();
+    await land(r.asks[0]!, reply("body1", 0));
+    expect(r.sel.readout.value).toBe("1 face · flat · facing down");
+    expect(r.sel.speech.value?.text).toMatch(/^Flat face 2/);
+    await land(r.asks[1]!, reply("body1", 1));
+    expect(r.sel.readout.value).toBe("1 face · hole · ⌀10 mm · 20 mm long");
+  });
+
+  it("drops the reply once the selection has gone", async () => {
+    const r = setup();
+    await r.build();
+    r.selection.faces = [0];
+    await r.settled();
+    r.selection.faces = [];
+    await r.settled();
+    await land(r.asks[0]!, reply("body1", 0));
+    expect(r.sel.readout.value).toBe("");
+    expect(r.sel.speech.value?.text).toBe("Nothing selected");
+  });
+
+  it("drops the reply from before a build and asks again, without speaking", async () => {
+    const r = setup();
+    await r.build();
+    r.selection.faces = [0];
+    await r.settled();
+    const said = r.sel.speech.value;
+    await r.build(
+      result([
+        { id: "body1", etag: "e7" },
+        { id: "body2", etag: "e2" },
+      ]),
+    );
+    await land(r.asks[0]!, reply("body1", 0));
+    expect(r.sel.readout.value).toBe("1 face · curved");
+    await r.settled();
+    expect(r.asks).toHaveLength(2);
+    r.now.value += 100;
+    await land(r.asks[1]!, reply("body1", 0));
+    expect(r.sel.readout.value).toBe("1 face · hole · ⌀10 mm · 20 mm long");
+    expect(r.sel.speech.value).toBe(said);
+  });
+
+  it("speaks a reply inside the wait, up to its last moment, and only shows a later one", async () => {
+    for (const [late, spoken] of [
+      [249, true],
+      [250, false],
+    ] as const) {
+      const r = setup();
+      await r.build();
+      r.selection.faces = [0];
+      await r.settled();
+      const first = r.sel.speech.value;
+      r.now.value += late;
+      await land(r.asks[0]!, reply("body1", 0));
+      expect(r.sel.readout.value).toBe("1 face · hole · ⌀10 mm · 20 mm long");
+      if (spoken) expect(r.sel.speech.value?.text).toMatch(/^Hole 1/);
+      else expect(r.sel.speech.value).toBe(first);
+    }
+  });
+
+  it("leaves added and removed speech alone when the reply comes", async () => {
+    const r = setup();
+    await r.build();
+    r.selection.faces = [0, 1];
+    await r.settled();
+    r.selection.faces = [0];
+    await r.settled();
+    expect(r.sel.speech.value?.text).toBe("Face 2 removed, 1 selected");
+    await land(r.asks[0]!, reply("body1", 0));
+    expect(r.sel.speech.value?.text).toBe("Face 2 removed, 1 selected");
+    expect(r.sel.readout.value).toBe("1 face · hole · ⌀10 mm · 20 mm long");
+  });
+
+  it("asks nothing for a listed face, several faces, an edge or a body", async () => {
+    const r = setup();
+    await r.build();
+    r.browser.show(true);
+    await land(r.asks[0]!, topology("body1"));
+    r.asks.length = 0;
+    r.selection.faces = [1];
+    await r.settled();
+    r.selection.faces = [3, 4];
+    await r.settled();
+    r.selection.faces = [];
+    r.selection.edges = [edge("body1", 2, 3)];
+    await r.settled();
+    r.selection.edges = [];
+    r.selection.bodies = ["body2"];
+    await r.settled();
+    expect(r.asks).toEqual([]);
+  });
+
+  it("asks nothing while a tool owns the screen, and asks when it ends", async () => {
+    const r = setup();
+    await r.build();
+    r.owned.tool = true;
+    r.selection.faces = [1];
+    await r.settled();
+    expect(r.asks).toEqual([]);
+    r.owned.tool = false;
+    await r.settled();
+    expect(r.asks.map((a) => a.opts)).toEqual([{ faces: [1] }]);
+  });
+
+  it("drops a reply when a tool has taken over", async () => {
+    const r = setup();
+    await r.build();
+    r.selection.faces = [1];
+    await r.settled();
+    r.owned.tool = true;
+    await r.settled();
+    await land(r.asks[0]!, reply("body1", 1));
+    expect(r.sel.speech.value).toBeNull();
+    expect(r.sel.readout.value).toBe("1 face · curved");
+  });
+
+  it("asks nothing during a preview, the settled build asks", async () => {
+    const r = setup();
+    await r.build();
+    const real = r.store.buildState;
+    const spy = vi.spyOn(r.store, "buildState", "get").mockReturnValue({ ...real, previewBuilt: [] });
+    r.selection.faces = [1];
+    await r.settled();
+    expect(r.asks).toEqual([]);
+    spy.mockRestore();
+    await r.build(
+      result([
+        { id: "body1", etag: "e5" },
+        { id: "body2", etag: "e2" },
+      ]),
+    );
+    await r.settled();
+    expect(r.asks.map((a) => a.opts)).toEqual([{ faces: [1] }]);
+  });
+
+  it("keeps the mesh's words when the engine cannot answer or the request ends", async () => {
+    const r = setup();
+    await r.build();
+    r.selection.faces = [0];
+    await r.settled();
+    await land(r.asks[0]!, null);
+    expect(r.sel.readout.value).toBe("1 face · curved");
+    r.selection.faces = [1];
+    await r.settled();
+    r.asks[1]!.fail(new SessionEnded());
+    await settle();
+    expect(r.sel.readout.value).toBe("1 face · curved");
+    r.selection.faces = [2];
+    await r.settled();
+    await land(r.asks[2]!, reply("body1", 7));
+    expect(r.sel.readout.value).toBe("1 face · curved");
+  });
+
+  it("drops a first document's reply in a second document with the same body id", async () => {
+    const r = setup();
+    await r.build();
+    r.selection.faces = [0];
+    await r.settled();
+    r.selection.faces = [];
+    await r.settled();
+    r.store.load(JSON.stringify(SECOND));
+    await r.build(result([{ id: "body1", etag: "other", name: "Other" }]));
+    r.selection.faces = [0];
+    await r.settled();
+    r.asks[0]!.answer(reply("body1", 0));
+    await settle();
+    expect(r.sel.readout.value).toBe("1 face · curved");
+    expect(r.asks).toHaveLength(2);
+    expect(r.asks[1]!.doc.features.map((f) => f.id)).toEqual(["g1"]);
+    await land(r.asks[1]!, reply("body1", 0));
+    expect(r.sel.readout.value).toBe("1 face · hole · ⌀10 mm · 20 mm long");
+    expect(r.sel.speech.value?.text).toContain("Other");
   });
 });

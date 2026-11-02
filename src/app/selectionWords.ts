@@ -3,7 +3,7 @@
 
 import { computed, shallowRef } from "vue";
 import { describeChange, describePick, type FaceFacts, type PickFacts, type PickWords } from "../ui/describePick";
-import { edgeKeyOf, edgeRows } from "../ui/geometryRows";
+import { edgeKeyOf, edgeRows, faceRows } from "../ui/geometryRows";
 import { exactRound, type Pt3 } from "../ui/selectionMeasure";
 import type { Engine } from "./engine";
 import { ownerNamesOf, pickedRowKeys } from "./geometryBrowser";
@@ -33,6 +33,9 @@ export function createSelectionWords(e: Engine) {
 
   let said: string[] = [];
   let seen: { signature: string; result: unknown } | null = null;
+  let asking = 0;
+  // When the lone item's words went out, while they may still be waiting to be spoken.
+  let spokenAt: number | null = null;
 
   const metaOf = (id: string) => e.store.buildState.result?.bodies?.find((b) => b.id === id) ?? null;
 
@@ -87,6 +90,29 @@ export function createSelectionWords(e: Engine) {
     return { label: name, spoken: name };
   }
 
+  // The one face alone, so a person who never opens the list never loads a 10,000 face body. A late answer changes the
+  // screen but says nothing more, its first words have been heard by then.
+  function askEngine(key: string) {
+    const build = e.store.buildState;
+    const meta = metaOf(keyPlace(key).bodyId);
+    if (!meta || build.building || build.previewBuilt) return;
+    const mine = asking;
+    const { result } = build;
+    const faces = e.viewport.getSelectedFaceIds().map((id) => id - meta.faceStart);
+    e.store.topology(meta.id, { faces }).then(
+      (reply) => {
+        if (mine !== asking || e.store.buildState.result !== result || !reply) return;
+        const row = faceRows(reply, meta, ownerNamesOf(e.store)).find((r) => r.key === key);
+        if (!row) return;
+        lone.value = { facts: row.facts, faceId: lone.value?.faceId ?? null };
+        if (spokenAt !== null && performance.now() - spokenAt < SELECTION_SPEECH_DELAY) {
+          speech.value = { text: describePick(row.facts).spoken };
+        }
+      },
+      () => {},
+    );
+  }
+
   const line = computed(() => {
     const now = lone.value;
     if (!now) return "";
@@ -101,6 +127,7 @@ export function createSelectionWords(e: Engine) {
   function update(signature: string, toolOwns: boolean) {
     if (toolOwns) {
       // The tool's prompt speaks. Whatever stays selected when it ends is said whole.
+      asking++;
       said = [];
       seen = null;
       speech.value = null;
@@ -109,6 +136,7 @@ export function createSelectionWords(e: Engine) {
     const result = e.store.buildState.result;
     if (seen?.signature === signature && seen.result === result) return;
     seen = { signature, result };
+    asking++;
 
     const regionKeys = e.overlay.selectedRegions().map((r) => `r:${r.interior3D.x}`);
     const rowKeys = pickedRowKeys(e);
@@ -117,7 +145,9 @@ export function createSelectionWords(e: Engine) {
     edges.value = e.viewport.selectedEdgeLines().map((x) => x.points);
 
     const only = keys.length === 1 ? keys[0]! : null;
-    const facts = only ? (factsOf(only) ?? (only.startsWith("f:") ? meshFacts(only) : null)) : null;
+    const known = only ? factsOf(only) : null;
+    const needsEngine = !known && only?.startsWith("f:") === true;
+    const facts = needsEngine ? meshFacts(only!) : known;
     lone.value = facts && {
       facts,
       faceId: facts.kind === "face" ? (e.viewport.getSelectedFaceIds()[0] ?? null) : null,
@@ -125,7 +155,12 @@ export function createSelectionWords(e: Engine) {
 
     const text = describeChange(said, keys, (k) => wordsOf(k, k === only ? facts : null));
     said = keys;
-    if (text) speech.value = keys.length ? { text } : { text, verbose: true };
+    spokenAt = null;
+    if (text) {
+      speech.value = keys.length ? { text } : { text, verbose: true };
+      if (facts && text === describePick(facts).spoken) spokenAt = performance.now();
+    }
+    if (needsEngine) askEngine(only!);
   }
 
   return { speech, line, edges, faceRowCount, update };
