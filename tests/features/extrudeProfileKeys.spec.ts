@@ -13,7 +13,13 @@ import { claimEscape } from "../../src/ui/escapeClaim";
 vi.mock("../../src/ui/announce", () => ({ announce: vi.fn() }));
 
 interface Fake {
-  region: { sketchId: string; loop: THREE.Vector2[]; holes: THREE.Vector2[][]; centroid: THREE.Vector2; interior: THREE.Vector2 };
+  region: {
+    sketchId: string;
+    loop: THREE.Vector2[];
+    holes: THREE.Vector2[][];
+    centroid: THREE.Vector2;
+    interior: THREE.Vector2;
+  };
   groupId?: string | undefined;
   name: string;
   plane: { n: THREE.Vector3; plane: THREE.Plane };
@@ -30,7 +36,13 @@ const tools: ExtrudeTool[] = [];
 const v = (x: number, y: number) => new THREE.Vector2(x, y);
 const plane = { n: new THREE.Vector3(0, 0, 1), plane: new THREE.Plane(new THREE.Vector3(0, 0, 1), 0) };
 
-function fake(name: string, loop: THREE.Vector2[], holes: THREE.Vector2[][], at: THREE.Vector2, groupId?: string): Fake {
+function fake(
+  name: string,
+  loop: THREE.Vector2[],
+  holes: THREE.Vector2[][],
+  at: THREE.Vector2,
+  groupId?: string,
+): Fake {
   return {
     name,
     groupId,

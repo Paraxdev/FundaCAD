@@ -108,10 +108,11 @@ describe("snapRing on many candidates", () => {
   it("lets a higher priority twin behind the limit still take the last spot", () => {
     const near = Array.from({ length: 16 }, (_, n) => c(3 + n + 1, -2, 10));
     const twin = c(3 + 16 + 0.0009, -2, 80);
-    expect(snapRing(from, [...near, twin, c(3 + 17, -2, 90)], []).map((k) => [k.p.x, k.priority]).at(-1)).toEqual([
-      3 + 16 + 0.0009,
-      80,
-    ]);
+    expect(
+      snapRing(from, [...near, twin, c(3 + 17, -2, 90)], [])
+        .map((k) => [k.p.x, k.priority])
+        .at(-1),
+    ).toEqual([3 + 16 + 0.0009, 80]);
   });
 });
 
