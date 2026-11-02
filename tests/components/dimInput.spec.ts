@@ -120,6 +120,20 @@ describe("DimInput hit testing", () => {
     expect(root().style.pointerEvents).toBe("none");
   });
 
+  it("keeps a box centred for a key cursor in the window, and leaves a pointer's where the drawing is", () => {
+    dim.show([{ name: "x", label: "X", free: true }], () => {});
+    Object.defineProperty(root(), "offsetWidth", { configurable: true, value: 200 });
+    Object.defineProperty(root(), "offsetHeight", { configurable: true, value: 40 });
+    dim.positionCentred(50000, -900, true);
+    expect([root().style.left, root().style.top]).toEqual([`${window.innerWidth - 200}px`, "0px"]);
+    dim.positionCentred(-50000, 50000, true);
+    expect([root().style.left, root().style.top]).toEqual(["0px", `${window.innerHeight - 40}px`]);
+    dim.positionCentred(300, 200, true);
+    expect([root().style.left, root().style.top]).toEqual(["200px", "180px"]);
+    dim.positionCentred(50000, -900);
+    expect([root().style.left, root().style.top]).toEqual(["49900px", "-920px"]);
+  });
+
   it("lets a click through a box centred on the drawing, and is clickable again on the next show", () => {
     // The circle's diameter box sits on the radius midpoint, so at a small radius the placing click lands on it.
     dim.show([{ name: "radius", label: "R" }], () => {});

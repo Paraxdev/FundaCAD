@@ -436,6 +436,26 @@ def test_a_point_too_far_out_is_refused_out_loud_and_the_page_goes_on(s, typed):
     s.page.wait_for_function("() => window.sketch.entities.length === 1")
 
 
+def test_the_x_and_y_box_stays_on_screen_when_the_cursor_walks_off_it(s):
+    kb = s.page.keyboard
+    to_items_plane(s)
+    tool(s, "r", "rectangle")
+    for _ in range(40):
+        kb.press("Alt+ArrowRight")
+    kb.press("Shift+Enter")
+    in_field(s, "X")
+    for _ in range(40):
+        kb.press("ArrowDown")
+    s.page.wait_for_timeout(100)
+    box = s.page.evaluate(
+        "() => { const r = document.activeElement.closest('.dim-input').getBoundingClientRect();"
+        " return [r.left, r.top, r.right, r.bottom, innerWidth, innerHeight]; }"
+    )
+    assert box[0] >= 0 and box[1] >= 0 and box[2] <= box[4] and box[3] <= box[5], box
+    assert s.page.evaluate("() => window.sketch.lastCursor.x") > 1000
+    no_pointer(s)
+
+
 def test_arrows_turn_the_view_when_the_sketch_plane_is_edge_on(s):
     kb = s.page.keyboard
     to_items_plane(s)

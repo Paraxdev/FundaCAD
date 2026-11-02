@@ -2957,7 +2957,7 @@ export class SketchMode {
       place: (hit) => this.placeKeyHit(hit),
       positionBox: (p) => {
         const at = this.viewport.projectToScreen(this.plane.to3D(p.x, p.y));
-        this.dim.positionCentred(at.x, at.y);
+        this.dim.positionCentred(at.x, at.y, true);
       },
       prompt: (text) => setPrompt(text),
       focusSurface: () => this.keySurface.focus(),
@@ -3328,7 +3328,7 @@ export class SketchMode {
         PREVIEW_COLOR,
       );
       const at = this.viewport.projectToScreen(this.plane.to3D(c.x + (u.x * r) / 2, c.y + (u.y * r) / 2));
-      this.dim.positionCentred(at.x, at.y);
+      this.dim.positionCentred(at.x, at.y, !e);
       this.overlay.setPreview([geom.preview, ...diameter]);
     } else {
       if (e) this.dim.position(e.clientX, e.clientY);

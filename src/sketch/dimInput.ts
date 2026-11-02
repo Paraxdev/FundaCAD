@@ -1389,10 +1389,13 @@ export class DimInput {
   }
 
   // Centred on the drawing itself, so the placing click can land under it: it must not take that click.
-  positionCentred(screenX: number, screenY: number) {
+  // A pointer's box follows the drawing as it always has, `onScreen` keeps one in the window for a cursor moved by keys.
+  positionCentred(screenX: number, screenY: number, onScreen = false) {
     this.setClickThrough(true);
-    this.root.style.left = `${Math.round(screenX - this.root.offsetWidth / 2)}px`;
-    this.root.style.top = `${Math.round(screenY - this.root.offsetHeight / 2)}px`;
+    const place = (at: number, size: number, room: number) =>
+      onScreen ? Math.max(0, Math.min(at - size / 2, room - size)) : at - size / 2;
+    this.root.style.left = `${Math.round(place(screenX, this.root.offsetWidth, window.innerWidth))}px`;
+    this.root.style.top = `${Math.round(place(screenY, this.root.offsetHeight, window.innerHeight))}px`;
   }
 
   wasTyped(name: string): boolean {
