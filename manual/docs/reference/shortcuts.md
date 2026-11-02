@@ -50,6 +50,14 @@ Reset puts one key back, Reset all a whole page. A key marked fixed cannot be ch
 | Shift+C, Shift+M, Shift+S | Concentric, Midpoint, Symmetric |
 | Shift+F | Fix |
 
+| Key | On the focused 3D view, see [Pick with keys](../model/picking.md#pick-with-keys) |
+| --- | --- |
+| `]`, `[` | Step to the next or previous face, edge or plane, with a light |
+| Shift+`]`, Shift+`[` | Switch what the brackets step through: Faces, Edges or Planes |
+| Enter | Select the lit row only, or start a sketch on a lit plane |
+| Space | Add or remove the lit row |
+| Esc | Put the light out and clear the selection |
+
 | Key | Anywhere |
 | --- | --- |
 | Ctrl+K or Ctrl+F | Command palette |
@@ -59,13 +67,16 @@ Reset puts one key back, Reset all a whole page. A key marked fixed cannot be ch
 | Ctrl+, | Preferences |
 | Ctrl+Plus, Ctrl+Minus, Ctrl+0 | Interface size larger, smaller, back to 100 percent |
 | Ctrl+Alt+S, Ctrl+Alt+H | Show or hide the items and the history |
-| Home or F6, Shift+Home | Fit view, reset camera |
+| Home, Shift+Home | Fit view, reset camera |
+| F6, Shift+F6 | Next and previous region, such as the tools, Items and the 3D view |
 | Arrow keys | Turn or tilt the view 15°, 5° with Shift |
 | Z, Shift+Z | Next and previous view mode |
 | Shift+V | Clean view, hides every overlay until pressed again |
 | Del | Delete the selected face or feature |
 | Esc | Cancel the tool or clear the selection |
 | Tab | While box selecting, choose what the box takes |
+
+Next Face, Previous Face, Next Edge, Previous Edge and Browse Faces and Edges have no key until you give them one. They are in the Edit menu and the command palette. The keys inside the Geometry list are on [the Items card](../model/items.md#keys-in-the-list).
 
 ## Mouse
 
