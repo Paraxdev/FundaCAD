@@ -929,7 +929,14 @@ export class DimInput {
       // Chromium has one undo stack per page, moving focus to the field it acts on, so the browser may act exactly
       // while some field of this box still holds typing.
       const redo = e.key.toLowerCase() === "y" || e.shiftKey;
-      if (this.fields.some((f) => !f.hidden && this.ownsHistoryKey(f, redo))) e.stopPropagation();
+      if (this.fields.some((f) => !f.hidden && this.ownsHistoryKey(f, redo))) {
+        e.stopPropagation();
+        return;
+      }
+      // Otherwise undo and redo belong to the document: put the tool away and let the key reach the window keymap.
+      // Stopped here, a box swallowed every Ctrl+Z and Ctrl+Y after it (FI-2).
+      this.onCancel?.();
+      field.input.blur();
       return;
     }
     if (e.key === "Tab") {

@@ -1,4 +1,7 @@
-// A tool's value box: Ctrl+Z takes back the box's own typing, then does what menu Undo does, and the tool stays open.
+// FI-2: a tool's value box (sketch/dimInput.ts) holding focus used to keep
+// every Ctrl+Z and Ctrl+Y for itself, so undo went dead until someone clicked
+// the canvas. Typing in the box goes back first; with none left, undo and redo
+// put the tool away and reach the document.
 import { afterEach, describe, expect, it } from "vitest";
 import { DimInput } from "../../src/sketch/dimInput";
 import { installKeymap } from "../../src/input/keymap";
@@ -45,22 +48,56 @@ describe("Ctrl+Z and Ctrl+Y in a tool's value box", () => {
     for (const el of document.querySelectorAll(".dim-input")) el.remove();
   });
 
-  it("an untouched box sends the key to the document and the tool stays open with focus", () => {
+  it("Ctrl+Z cancels the tool and undoes the document, and Ctrl+Y then redoes", () => {
     const { actions, input, cancelled } = open();
-    const ev = press(input, "z", { ctrlKey: true });
-    expect(actions).toEqual(["undo"]);
-    expect(cancelled()).toBe(0);
-    expect(input.isConnected).toBe(true);
     expect(document.activeElement).toBe(input);
+
+    const ev = press(input, "z", { ctrlKey: true });
+    expect(cancelled()).toBe(1);
+    expect(actions).toEqual(["undo"]);
+    expect(document.activeElement).not.toBe(input);
     // Chromium has one undo stack per page, left alone this key would undo another field's typing.
     expect(ev.defaultPrevented).toBe(true);
-    press(input, "y", { ctrlKey: true });
-    press(input, "z", { ctrlKey: true, shiftKey: true });
-    expect(actions).toEqual(["undo", "redo", "redo"]);
-    expect(cancelled()).toBe(0);
+
+    press(document.body, "y", { ctrlKey: true });
+    expect(actions).toEqual(["undo", "redo"]);
   });
 
-  it("typing in the box keeps the key for the field's own undo, then the document has it", () => {
+  it("Ctrl+Y with nothing of its own to bring back does the same", () => {
+    const { actions, input, cancelled } = open();
+    press(input, "y", { ctrlKey: true });
+    expect(cancelled()).toBe(1);
+    expect(actions).toEqual(["redo"]);
+    expect(document.activeElement).not.toBe(input);
+  });
+
+  it("reaches the document from a box with no cancel of its own", () => {
+    const actions: string[] = [];
+    off.push(
+      installKeymap(
+        (a) => actions.push(a),
+        () => "model",
+      ),
+    );
+    const dim = new DimInput();
+    dim.show(FIELDS, () => {});
+    const input = document.querySelector<HTMLInputElement>(".dim-input input")!;
+    press(input, "z", { ctrlKey: true, shiftKey: true });
+    expect(actions).toEqual(["redo"]);
+    expect(document.activeElement).not.toBe(input);
+    dim.hide();
+  });
+
+  it("still keeps ordinary typing for the box", () => {
+    const { actions, dim, input } = open();
+    press(input, "m");
+    press(input, "5");
+    expect(actions).toEqual([]);
+    expect(document.activeElement).toBe(input);
+    dim.hide();
+  });
+
+  it("typing in the box keeps the key for the field's own undo, then the tool closes and the document has it", () => {
     const { actions, input, cancelled } = open();
     const before = input.value;
     typeInto(input, "7");
@@ -76,20 +113,33 @@ describe("Ctrl+Z and Ctrl+Y in a tool's value box", () => {
     typeInto(input, "7", "historyRedo");
     press(input, "z", { ctrlKey: true });
     typeInto(input, before, "historyUndo");
+    expect([actions, cancelled()]).toEqual([[], 0]);
     press(input, "z", { ctrlKey: true });
-    expect(actions).toEqual(["undo"]);
-    expect(cancelled()).toBe(0);
+    expect([actions, cancelled()]).toEqual([["undo"], 1]);
+  });
+
+  it("a redo with the typing all brought back closes the tool and goes to the document", () => {
+    const { actions, input, cancelled } = open();
+    const before = input.value;
+    typeInto(input, "7");
+    typeInto(input, before, "historyUndo");
+    typeInto(input, "7", "historyRedo");
+    press(input, "y", { ctrlKey: true });
+    expect([actions, cancelled()]).toEqual([["redo"], 1]);
   });
 
   it("a value the tool wrote is not typing, so the document has the key", () => {
-    const { actions, dim, input } = open();
-    dim.updateFromCursor({ move: 12 });
-    press(input, "z", { ctrlKey: true });
-    expect(actions).toEqual(["undo"]);
-    typeInto(input, "7");
-    dim.seed("move", 3);
-    press(input, "z", { ctrlKey: true });
-    expect(actions).toEqual(["undo", "undo"]);
+    const tracked = open();
+    tracked.dim.updateFromCursor({ move: 12 });
+    press(tracked.input, "z", { ctrlKey: true });
+    expect([tracked.actions, tracked.cancelled()]).toEqual([["undo"], 1]);
+    off.splice(0).forEach((f) => f());
+
+    const seeded = open();
+    typeInto(seeded.input, "7");
+    seeded.dim.seed("move", 3);
+    press(seeded.input, "z", { ctrlKey: true });
+    expect([seeded.actions, seeded.cancelled()]).toEqual([["undo"], 1]);
   });
 
   it("taking the typing back leaves a seeded field locked and a cursor field tracking", () => {
@@ -139,7 +189,7 @@ describe("Ctrl+Z and Ctrl+Y in a tool's value box", () => {
   });
 
   it("the text the field already shows, typed over, is still the field's to undo and redo", () => {
-    const { actions, dim, input } = open();
+    const { actions, dim, input, cancelled } = open();
     dim.updateFromCursor({ move: 12.5 });
     typeInto(input, "12.5");
     expect(press(input, "z", { ctrlKey: true }).defaultPrevented).toBe(false);
@@ -148,7 +198,7 @@ describe("Ctrl+Z and Ctrl+Y in a tool's value box", () => {
     typeInto(input, "12.5", "historyRedo");
     expect(actions).toEqual([]);
     expect(press(input, "y", { ctrlKey: true }).defaultPrevented).toBe(true);
-    expect(actions).toEqual(["redo"]);
+    expect([actions, cancelled()]).toEqual([["redo"], 1]);
   });
 
   describe("with two fields", () => {
@@ -165,18 +215,22 @@ describe("Ctrl+Z and Ctrl+Y in a tool's value box", () => {
         ),
       );
       const dim = new DimInput();
+      let cancelled = 0;
       dim.show(
         TWO,
         () => {},
-        () => dim.hide(),
+        () => {
+          cancelled++;
+          dim.hide();
+        },
       );
       dim.updateFromCursor({ w: 5.5, h: 3.25 });
       const [w, h] = document.querySelectorAll<HTMLInputElement>(".dim-input input");
-      return { actions, dim, w: w!, h: h! };
+      return { actions, dim, w: w!, h: h!, cancelled: () => cancelled };
     }
 
     it("the document has no key while any field of the box holds typing, whichever has focus", () => {
-      const { actions, dim, w, h } = openTwo();
+      const { actions, dim, w, h, cancelled } = openTwo();
       typeInto(w, "7");
       typeInto(h, "8");
       w.focus();
@@ -188,13 +242,14 @@ describe("Ctrl+Z and Ctrl+Y in a tool's value box", () => {
       typeInto(w, "5.5", "historyUndo");
       w.focus();
       expect(actions).toEqual([]);
+      expect(cancelled()).toBe(0);
       expect(dim.hasTyped()).toBe(false);
       expect(press(w, "z", { ctrlKey: true }).defaultPrevented).toBe(true);
-      expect(actions).toEqual(["undo"]);
+      expect([actions, cancelled()]).toEqual([["undo"], 1]);
     });
 
     it("redo walks back the same way, then the document has it", () => {
-      const { actions, w, h } = openTwo();
+      const { actions, w, h, cancelled } = openTwo();
       typeInto(w, "7");
       typeInto(h, "8");
       typeInto(h, "3.25", "historyUndo");
@@ -204,16 +259,17 @@ describe("Ctrl+Z and Ctrl+Y in a tool's value box", () => {
       expect(press(w, "y", { ctrlKey: true }).defaultPrevented).toBe(false);
       typeInto(h, "8", "historyRedo");
       expect(actions).toEqual([]);
+      expect(cancelled()).toBe(0);
       expect(press(h, "y", { ctrlKey: true }).defaultPrevented).toBe(true);
-      expect(actions).toEqual(["redo"]);
+      expect([actions, cancelled()]).toEqual([["redo"], 1]);
     });
 
     it("a tool's write over the other field's typing leaves nothing for the browser", () => {
-      const { actions, dim, w, h } = openTwo();
+      const { actions, dim, w, h, cancelled } = openTwo();
       typeInto(w, "7");
       dim.seed("w", 9.5);
       expect(press(h, "z", { ctrlKey: true }).defaultPrevented).toBe(true);
-      expect(actions).toEqual(["undo"]);
+      expect([actions, cancelled()]).toEqual([["undo"], 1]);
     });
   });
 

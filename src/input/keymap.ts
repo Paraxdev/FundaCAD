@@ -2,14 +2,7 @@
 
 import { resolveShortcut } from "./shortcuts";
 import { comboKey, latinKey } from "./platform";
-import {
-  isEditableTarget,
-  isHistoryKey,
-  isLiveFocusTarget,
-  isSelectTrigger,
-  isToolBoxField,
-  widgetOwnsKey,
-} from "../ui/focus";
+import { isEditableTarget, isLiveFocusTarget, isSelectTrigger, widgetOwnsKey } from "../ui/focus";
 
 /** Returns the uninstall. */
 export function installKeymap(onAction: (a: string) => void, context: () => "model" | "sketch"): () => void {
@@ -17,9 +10,7 @@ export function installKeymap(onAction: (a: string) => void, context: () => "mod
     if (widgetOwnsKey(e)) return;
     // A Select trigger holds no text to undo, so its Ctrl combos reach the keymap as a button's do.
     const selectCombo = (e.ctrlKey || e.metaKey) && isSelectTrigger(e.target);
-    // A value box keeps the keys that are its field's own, so one that got here is the document's.
-    const boxHistory = isHistoryKey(e) && isToolBoxField(e.target);
-    if (isEditableTarget(e.target) && !selectCombo && !boxHistory) {
+    if (isEditableTarget(e.target) && !selectCombo) {
       // A ghost field (ui/focus.ts): blur it and fall through, or it swallows this shortcut and every later one.
       if (e.target instanceof HTMLElement && !isLiveFocusTarget(e.target)) e.target.blur();
       else return;

@@ -1,4 +1,4 @@
-"""Ctrl+Z in a tool's value box takes back the typing, then does what menu Undo does, the tool staying open."""
+"""Ctrl+Z in a tool's value box takes back the typing, with none left the tool closes and the document undoes."""
 
 import pytest
 
@@ -55,24 +55,23 @@ def state(s):
 
 
 @pytest.mark.parametrize("tool", OPEN)
-def test_untouched_field_undoes_like_the_menu_and_the_tool_stays(s, tool):
+def test_untouched_field_closes_the_tool_and_undoes_and_the_menu_keeps_it(s, tool):
     tool_on_second_pick(s, tool)
     start = state(s)
     s.press("Ctrl+Z")
-    key = state(s)
-    assert key == {**start, "steps": start["steps"] - 1}
+    assert (state(s)["open"], state(s)["steps"]) == (False, start["steps"] - 1)
     s.press("Ctrl+Y")
-    assert state(s) == start
+    assert (state(s)["open"], state(s)["steps"]) == (False, start["steps"])
 
     tool_on_second_pick(s, tool)
     s.menu("Edit/Undo")
     menu = state(s)
-    assert {k: menu[k] for k in ("open", "value", "steps")} == {k: key[k] for k in ("open", "value", "steps")}
+    assert (menu["open"], menu["value"], menu["steps"]) == (True, start["value"], start["steps"] - 1)
 
 
 @pytest.mark.parametrize("tool", OPEN)
-def test_typing_in_the_field_is_undone_first_then_the_previous_step(s, tool):
-    field = tool_on_second_pick(s, tool)
+def test_typing_in_the_field_is_undone_first_then_the_tool_closes_on_the_previous_step(s, tool):
+    tool_on_second_pick(s, tool)
     start = state(s)
     s.page.keyboard.type("7")
     assert state(s)["value"] == "7"
@@ -83,11 +82,10 @@ def test_typing_in_the_field_is_undone_first_then_the_previous_step(s, tool):
     s.press("Ctrl+Z")
     assert state(s) == start
     s.press("Ctrl+Z")
-    assert state(s) == {**start, "steps": start["steps"] - 1}
-    s.type(field, "1.5")
-    s.press("Enter")
     after = state(s)
-    assert (after["open"], after["steps"]) == (False, start["steps"]), "the tool still commits"
+    assert (after["open"], after["steps"]) == (False, start["steps"] - 1), "no typing left, as an untouched field"
+    s.press("Ctrl+Y")
+    assert state(s)["steps"] == start["steps"]
 
 
 FIELDS = """() => {
@@ -147,7 +145,7 @@ def last_step(s):
     return s.page.evaluate("() => window.store.document.features.at(-1)")
 
 
-def test_extrude_on_a_sketch_undoes_a_later_step_and_stays(s):
+def test_extrude_on_a_sketch_takes_typing_back_then_closes_on_a_later_step(s):
     extrude_on_sketch(s, later_step=True)
     start = fields(s)
     assert start["open"] and start["steps"] == ["box", "sketch", "box"]
@@ -156,9 +154,16 @@ def test_extrude_on_a_sketch_undoes_a_later_step_and_stays(s):
     s.press("Ctrl+Z")
     assert fields(s) == start, "the field's own undo leaves the document alone"
     s.press("Ctrl+Z")
+    assert fields(s) == {"open": False, "values": None, "steps": ["box", "sketch"], "redo": True}
+    assert s.page.evaluate("() => window.extrude.active") is False
+
+
+def test_extrude_on_a_sketch_stays_when_the_menu_undoes_a_later_step(s):
+    extrude_on_sketch(s, later_step=True)
+    s.menu("Edit/Undo")
     after = fields(s)
     assert (after["open"], after["steps"], after["redo"]) == (True, ["box", "sketch"], True)
-    s.page.keyboard.type("6.5")
+    s.type("D", "6.5")
     s.press("Enter")
     s.settle()
     assert s.last_error() == "none"
@@ -234,12 +239,19 @@ def test_reedit_closes_when_its_step_is_undone_and_the_redo_survives(s, how):
     assert s.last_error() == "none"
 
 
-def test_reedit_stays_when_the_undo_removes_a_later_step(s):
+def test_reedit_closes_when_the_key_removes_a_later_step(s):
     reedit_fillet(s, later_step=True)
     s.press("Ctrl+Z")
     after = fields(s)
+    assert (after["open"], after["steps"], after["redo"]) == (False, ["box", "fillet"], True)
+
+
+def test_reedit_stays_when_the_menu_removes_a_later_step(s):
+    reedit_fillet(s, later_step=True)
+    s.menu("Edit/Undo")
+    after = fields(s)
     assert (after["open"], after["steps"], after["redo"]) == (True, ["box", "fillet"], True)
-    s.page.keyboard.type("2.25")
+    s.type("field:radius", "2.25")
     s.press("Enter")
     s.settle()
     assert (s.last_error(), last_step(s)["radius"]) == ("none", 2.25)
