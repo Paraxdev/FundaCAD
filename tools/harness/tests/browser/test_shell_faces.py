@@ -344,6 +344,23 @@ def test_a_refused_click_keeps_the_thickness_field_so_a_bare_enter_applies_the_s
     assert faces_of(s) == {"body1": 11}
 
 
+@pytest.mark.parametrize("seen", ["hidden", "shown again"])
+def test_a_ctrl_click_through_the_opening_adds_no_face_after_another_body_was_hidden(s, seen):
+    s.open_file("tools/harness/fixtures/two_boxes.json")
+    s.page.evaluate("() => window.store.setBodyVisibility('body2', false)")
+    if seen == "shown again":
+        s.page.evaluate("() => window.store.setBodyVisibility('body2', true)")
+    s.settle()
+    s.view("iso")
+    s.pick_face("body1:top")
+    s.tool("Shell")
+    s.type("field:distance", "1")
+    s.settle()
+    ctrl_click_world(s, 0, 0, 15)
+    assert len(commit_shell_faces(s)) == 1
+    assert faces_of(s)["body1"] == 11
+
+
 def test_a_real_wall_is_still_added_over_the_preview(s):
     open_top_with_preview(s)
     ctrl_click_world(s, 0, -10, 0)

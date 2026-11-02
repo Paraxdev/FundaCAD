@@ -1235,6 +1235,18 @@ describe("modelBeforePreview", () => {
     expect(store.modelBeforePreview).toBe(committed);
   });
 
+  it("stays the same model after a body is hidden, shown or isolated, none of which rebuilds", async () => {
+    const committed = built("committed");
+    await buildWith(added, committed);
+    await preview();
+    store.setBodyVisibility("body2", false);
+    await settle();
+    expect(store.modelBeforePreview).toBe(committed);
+    store.setBodyVisibility("body2", true);
+    await settle();
+    expect(store.modelBeforePreview).toBe(committed);
+  });
+
   it("does not leak into the next document", async () => {
     await buildWith(added, built("first"));
     next = built("second");
