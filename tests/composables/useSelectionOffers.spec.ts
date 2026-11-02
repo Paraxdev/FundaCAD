@@ -54,7 +54,7 @@ function setup(first?: Parameters<typeof rig>[0]) {
     toolOwnsScreen: () => owned.tool,
   } as unknown as Engine;
   let sel!: ReturnType<typeof useSelectionOffers>;
-  mount(
+  const wrapper = mount(
     defineComponent({
       setup() {
         sel = useSelectionOffers(engine, { words: true });
@@ -75,7 +75,7 @@ function setup(first?: Parameters<typeof rig>[0]) {
     window.dispatchEvent(new Event("keyup"));
     await frame();
   };
-  return { ...r, sel, press, planar, regions, owned, now, frame, settled };
+  return { ...r, wrapper, sel, press, planar, regions, owned, now, frame, settled };
 }
 
 describe("the readout of one face", () => {
@@ -662,5 +662,93 @@ describe("the engine's answer for a lone face", () => {
     await land(r.asks[1]!, reply("body1", 0));
     expect(r.sel.readout.value).toBe("1 face · hole · ⌀10 mm · 20 mm long");
     expect(r.sel.speech.value?.text).toContain("Other");
+  });
+});
+
+describe("Escape", () => {
+  const escape = () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+
+  it("says Nothing selected at every verbosity when it clears the selection", async () => {
+    const r = setup();
+    await r.build();
+    r.selection.faces = [3];
+    await r.settled();
+    escape();
+    r.selection.faces = [];
+    await r.frame();
+    expect(r.sel.speech.value).toEqual({ text: "Nothing selected" });
+  });
+
+  it("hears the key even when a field stops it on its way up", async () => {
+    const r = setup();
+    await r.build();
+    r.selection.edges = [edge("body1", 2, 3)];
+    await r.settled();
+    const field = document.body.appendChild(document.createElement("input"));
+    field.addEventListener("keydown", (ev) => ev.stopPropagation());
+    field.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    field.remove();
+    r.selection.edges = [];
+    await r.frame();
+    expect(r.sel.speech.value).toEqual({ text: "Nothing selected" });
+  });
+
+  it("says nothing when it leaves the selection, and a later plain clear is Verbose alone", async () => {
+    const r = setup();
+    await r.build();
+    r.selection.faces = [3];
+    await r.settled();
+    const said = r.sel.speech.value;
+    escape();
+    await r.frame();
+    expect(r.sel.speech.value).toBe(said);
+    r.selection.faces = [];
+    await r.frame();
+    expect(r.sel.speech.value).toEqual({ text: "Nothing selected", verbose: true });
+  });
+
+  it("with nothing selected says nothing, and does not mark the next clear", async () => {
+    const r = setup();
+    await r.build();
+    escape();
+    await r.settled();
+    expect(r.sel.speech.value).toBeNull();
+    r.selection.faces = [3];
+    await r.settled();
+    r.selection.faces = [];
+    await r.settled();
+    expect(r.sel.speech.value).toEqual({ text: "Nothing selected", verbose: true });
+  });
+
+  it("another key does not count", async () => {
+    const r = setup();
+    await r.build();
+    r.selection.faces = [3];
+    await r.settled();
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Delete" }));
+    r.selection.faces = [];
+    await r.frame();
+    expect(r.sel.speech.value).toEqual({ text: "Nothing selected", verbose: true });
+  });
+
+  it("is the tool's while a tool owns the screen", async () => {
+    const r = setup();
+    await r.build();
+    r.selection.faces = [3];
+    await r.settled();
+    r.owned.tool = true;
+    await r.settled();
+    escape();
+    r.selection.faces = [];
+    r.owned.tool = false;
+    await r.frame();
+    expect(r.sel.speech.value).toBeNull();
+  });
+
+  it("leaves no listener behind", async () => {
+    const r = setup();
+    const off = vi.spyOn(window, "removeEventListener");
+    r.wrapper.unmount();
+    expect(off.mock.calls.filter((c) => c[0] === "keydown" && c[2] === true)).toHaveLength(1);
   });
 });

@@ -95,7 +95,8 @@ export function useSelectionOffers(engine: Engine, opts: { words?: boolean } = {
       counts.value = next.counts;
     }
     toolOwns.value = engine.toolOwnsScreen();
-    words?.update(signature, toolOwns.value);
+    words?.update(signature, toolOwns.value, escaped);
+    escaped = false;
     return Object.keys(next.counts).length > 0;
   }
 
@@ -110,14 +111,22 @@ export function useSelectionOffers(engine: Engine, opts: { words?: boolean } = {
     if (!raf) raf = requestAnimationFrame(tick);
   }
 
+  // Capture, since a value box stops the key bubbling. Every route that clears on Escape does so during this event.
+  let escaped = false;
+  const noteEscape = (ev: KeyboardEvent) => {
+    if (ev.key === "Escape") escaped = true;
+  };
+
   let unsubs: (() => void)[] = [];
   onMounted(() => {
+    if (words) window.addEventListener("keydown", noteEscape, true);
     window.addEventListener("pointerup", wake);
     window.addEventListener("keyup", wake);
     unsubs = [engine.store.onDocChange(() => wake()), engine.store.onBuild(() => wake())];
     wake();
   });
   onUnmounted(() => {
+    window.removeEventListener("keydown", noteEscape, true);
     window.removeEventListener("pointerup", wake);
     window.removeEventListener("keyup", wake);
     for (const off of unsubs) off();

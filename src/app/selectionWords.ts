@@ -124,7 +124,7 @@ export function createSelectionWords(e: Engine) {
   });
 
   /** Called every frame, it costs nothing until the selection or the build changed. */
-  function update(signature: string, toolOwns: boolean) {
+  function update(signature: string, toolOwns: boolean, escaped: boolean) {
     if (toolOwns) {
       // The tool's prompt speaks. Whatever stays selected when it ends is said whole.
       asking++;
@@ -157,7 +157,7 @@ export function createSelectionWords(e: Engine) {
     said = keys;
     spokenAt = null;
     if (text) {
-      speech.value = keys.length ? { text } : { text, verbose: true };
+      speech.value = keys.length || escaped ? { text } : { text, verbose: true };
       if (facts && text === describePick(facts).spoken) spokenAt = performance.now();
     }
     if (needsEngine) askEngine(only!);
