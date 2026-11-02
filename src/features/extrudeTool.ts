@@ -972,6 +972,11 @@ export class ExtrudeTool {
     this.onDone?.(null);
   }
 
+  get profileSketches(): string[] {
+    const picked = this.selected.map((r) => r.sketchId);
+    return this.forcedSketchId ? [this.forcedSketchId, ...picked] : picked;
+  }
+
   /** An extrude dragged or typed that Enter would write. */
   get pending(): boolean {
     return (

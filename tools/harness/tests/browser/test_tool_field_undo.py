@@ -189,6 +189,62 @@ def test_undoing_the_typed_tracked_value_lets_the_mouse_drive_again(s):
     assert fields(s)["values"][0] != shown
 
 
+@pytest.mark.parametrize("how", ["Ctrl+Z", "menu"])
+def test_extrude_closes_when_its_sketch_is_undone_and_the_redo_survives(s, how):
+    extrude_on_sketch(s)
+    assert fields(s)["open"]
+    s.press("Ctrl+Z") if how == "Ctrl+Z" else s.menu("Edit/Undo")
+    assert fields(s) == {"open": False, "values": None, "steps": ["box"], "redo": True}
+    assert s.page.evaluate("() => window.extrude.active") is False
+    s.press("Ctrl+Y")
+    assert fields(s) == {"open": False, "values": None, "steps": ["box", "sketch"], "redo": False}
+    assert s.last_error() == "none"
+
+
+def reedit_fillet(s, later_step=False):
+    s.press("Escape")
+    s.new_document()
+    s.open_file(BLOCK)
+    s.view("iso")
+    s.pick_edge("between top front")
+    s.tool("Fillet")
+    s.page.keyboard.type("1.5")
+    s.press("Enter")
+    s.settle()
+    s.press("Escape")
+    fillet = s.page.evaluate("() => window.store.document.features.at(-1).id")
+    if later_step:
+        s.page.evaluate(ADD_BOX_STEP)
+        s.settle()
+    s.click(f"feature:{fillet}", double=True)
+    s.settle()
+
+
+@pytest.mark.parametrize("how", ["Ctrl+Z", "menu"])
+def test_reedit_closes_when_its_step_is_undone_and_the_redo_survives(s, how):
+    reedit_fillet(s)
+    opened = fields(s)
+    assert (opened["open"], opened["values"]) == (True, ["1.5"])
+    s.press("Ctrl+Z") if how == "Ctrl+Z" else s.menu("Edit/Undo")
+    assert fields(s) == {"open": False, "values": None, "steps": ["box"], "redo": True}
+    assert s.page.evaluate("() => [window.edgeFeature.active, window.store.editPreviewId]") == [False, None]
+    s.press("Ctrl+Y")
+    after = fields(s)
+    assert (after["open"], after["steps"]) == (False, ["box", "fillet"])
+    assert s.last_error() == "none"
+
+
+def test_reedit_stays_when_the_undo_removes_a_later_step(s):
+    reedit_fillet(s, later_step=True)
+    s.press("Ctrl+Z")
+    after = fields(s)
+    assert (after["open"], after["steps"], after["redo"]) == (True, ["box", "fillet"], True)
+    s.page.keyboard.type("2.25")
+    s.press("Enter")
+    s.settle()
+    assert (s.last_error(), last_step(s)["radius"]) == ("none", 2.25)
+
+
 def test_two_typed_fields_are_taken_back_before_the_sketch_has_the_key(s):
     s.press("Escape")
     s.new_document()
