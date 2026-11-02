@@ -824,6 +824,60 @@ describe("a size the box refuses", () => {
   });
 });
 
+describe("a second point that makes no shape", () => {
+  const calls = () => vi.mocked(announce).mock.calls;
+  beforeEach(() => vi.mocked(announce).mockClear());
+
+  it.each([
+    ["line", "@0,0"],
+    ["rectangle", "@5,0"],
+    ["rectangle", "7"],
+    ["circle", "@0,0"],
+  ])("refuses %s at %s out loud, marks the box and says no point", (tool, text) => {
+    const { s } = makeDrawing(tool);
+    startAt(s, "7", "-3");
+    const size = tool === "line" ? "length" : tool === "rectangle" ? "width" : "diameter";
+    key(s, "@", fieldEl(size));
+    vi.mocked(announce).mockClear();
+    typePoint(text);
+    expect(s.entities).toEqual([]);
+    expect(s.base).toEqual(v(7, -3));
+    expect(calls()).toHaveLength(1);
+    expect(calls()[0]![1]).toBe("assertive");
+    expect(calls()[0]![0]).toContain("Too small");
+    expect(fieldNames()).toEqual(["x", "y"]);
+    expect(fieldEl("x").getAttribute("aria-invalid")).toBe("true");
+    expect(document.activeElement).toBe(fieldEl("x"));
+  });
+
+  it("does the same for Enter on a cursor walked back onto the first point", () => {
+    const { s } = makeDrawing("line");
+    s.gridSnap = false;
+    key(s, "ArrowRight");
+    const first = s.lastCursor.clone();
+    key(s, "Enter");
+    expect(s.base).toEqual(first);
+    const size = fieldEl("length");
+    key(s, "ArrowRight", size);
+    key(s, "ArrowLeft", size);
+    expect(s.lastCursor).toEqual(first);
+    vi.mocked(announce).mockClear();
+    key(s, "Enter");
+    expect(s.entities).toEqual([]);
+    expect(calls().map((c) => c[1])).toEqual(["assertive"]);
+  });
+
+  it("speaks the point as before when the next point does make a shape", () => {
+    const { s } = makeDrawing("line");
+    startAt(s, "7", "-3");
+    key(s, "@", fieldEl("length"));
+    vi.mocked(announce).mockClear();
+    typePoint("@5,-1");
+    expect(s.entities).toHaveLength(1);
+    expect(calls().map((c) => c[1])).toEqual(["polite"]);
+  });
+});
+
 describe("what a keys drawing says", () => {
   beforeEach(() => vi.mocked(announce).mockClear());
   const said = () => vi.mocked(announce).mock.calls.map((c) => c[0]);

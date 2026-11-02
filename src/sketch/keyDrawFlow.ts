@@ -33,6 +33,7 @@ export const KEY_PROMPTS = {
 };
 
 export const EDGE_ON_PROMPT = "The sketch plane is edge-on, turn the view to draw on it";
+export const TOO_SMALL = "Too small to draw, give it a size";
 
 /** What a placed point carries, the same fields a pointer click's snap result does. */
 export interface KeyHit {
@@ -382,12 +383,22 @@ export class KeyDrawFlow {
     this.session = true;
     this.keys = true;
     const c = hitAt(p, this.host.candidates());
+    const second = !!this.host.base();
     const done = this.host.place(hitOf(p, c));
+    if (second && !done) return this.refuseTooSmall();
     const ents = this.host.entities();
     const at = pointSentence(p, c, ents);
     const text = done ? `${at}. ${drawnSentence(done.entity, ents, done.closed)}` : at;
     announce(text, "polite", { key: "sketch-point" });
     this.settleFocus();
+    this.host.changed();
+  }
+
+  private refuseTooSmall() {
+    const dim = this.host.dim();
+    dim.flag(TOO_SMALL);
+    if (dim.hasField("x")) dim.focusField("x");
+    announce(TOO_SMALL, "assertive");
     this.host.changed();
   }
 }

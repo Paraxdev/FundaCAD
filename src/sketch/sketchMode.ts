@@ -83,7 +83,7 @@ import { expandPattern, translated } from "./pattern";
 import { MirrorFlow, type MirrorHost } from "./mirrorFlow";
 import { KeySurface } from "./keySurface";
 import { coordLabel } from "./sketchSpeech";
-import { KeyDrawFlow, KEY_DRAW_TOOLS, type Drawn, type KeyDrawHost, type KeyHit } from "./keyDrawFlow";
+import { KeyDrawFlow, KEY_DRAW_TOOLS, TOO_SMALL, type Drawn, type KeyDrawHost, type KeyHit } from "./keyDrawFlow";
 import { showMirrorPanel } from "../features/mirrorPanel";
 import { mirrorLineColor, mirrorObjectsColor } from "../features/mirrorColors";
 import { onThemeChange } from "../ui/theme";
@@ -3178,7 +3178,7 @@ export class SketchMode {
     this.showInfer(null);
     const { entity } = this.computeGeometry(this.base, cursor);
     if (this.isDegenerate(entity)) {
-      toast("Too small to draw, give it a size");
+      toast(TOO_SMALL);
       return null;
     }
     if (this.constructionMode) entity.construction = true;
