@@ -394,7 +394,7 @@ const CASES: Case[] = [
 ];
 
 // Voices skip or spell out these symbols, and read a unit abbreviation as letters.
-const NOT_SPOKEN = /[²³°⌀·…—–]| - |\bmm\b|\bcm\b|\bin²|\bR\d/;
+const NOT_SPOKEN = /[²³°⌀·…\u2014\u2013]| - |\bmm\b|\bcm\b|\bin²|\bR\d/;
 
 describe("describePick words", () => {
   for (const c of CASES) {
@@ -409,7 +409,7 @@ describe("describePick words", () => {
       expect(w.spoken).not.toMatch(NOT_SPOKEN);
       for (const text of [w.label, w.hint, w.spoken]) {
         expect(text).not.toMatch(/^,|,\s*,|,\s*$|\s\s|\s,/);
-        expect(text).not.toMatch(/[—–]| - /);
+        expect(text).not.toMatch(/[\u2014\u2013]| - /);
       }
       expect(w.readout).not.toMatch(/^·|·\s*·|·\s*$/);
     });
