@@ -223,7 +223,7 @@ def test_a_refused_size_is_spoken_and_stays_on_its_field(s):
     kb.press("Tab")
     kb.type("0")
     kb.press("Enter")
-    spoke(s, "must be more than 0")
+    s.page.wait_for_function("() => document.getElementById('a11y-assertive').textContent.includes('more than 0')")
     in_field(s, "H")
     assert shapes(s) == []
     no_pointer(s)
