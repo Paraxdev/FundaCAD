@@ -382,6 +382,26 @@ describe("BrowserPane", () => {
       expect((w.get("[role=tabpanel]").element as HTMLElement).style.display).toBe("");
     });
 
+    it("goes back to Items for a rename asked from elsewhere, and the field takes focus there", async () => {
+      const fake = makeEngine({ parameters: {}, features: [sketch("s1")] }, [{ id: "b1", name: "Body1" }]);
+      const w = mount(BrowserPane, {
+        global: {
+          provide: { [ENGINE as symbol]: fake.engine },
+          stubs: { GeometryList: { template: '<div class="stub-list"></div>' } },
+        },
+        attachTo: document.body,
+      });
+      mounted.push(w);
+      await tabs(w)[1]!.trigger("click");
+      useBrowserStore().beginRename("b1");
+      for (let i = 0; i < 4; i++) await nextTick();
+      expect(tabState(w).map((t) => t[1])).toEqual(["true", "false"]);
+      const field = document.activeElement as HTMLInputElement;
+      expect([field.tagName, field.value]).toEqual(["INPUT", "Body1"]);
+      const page = field.closest<HTMLElement>("[role=tabpanel]")!;
+      expect([page.style.display, page.getAttribute("aria-labelledby")]).toEqual(["", tabs(w)[0]!.attributes("id")]);
+    });
+
     it("stays on Geometry when the pane closes and opens again", async () => {
       const fake = makeEngine(empty());
       const first = withList(fake);

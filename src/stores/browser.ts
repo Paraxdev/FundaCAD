@@ -81,6 +81,8 @@ export const useBrowserStore = defineStore("browser", () => {
       selectedBodyIds.value = ids;
     },
     beginRename: (id: string) => {
+      // The rename field lives on the Items page, a hidden one would take the edit out of sight.
+      itemsTab.value = "items";
       pendingRenameId.value = id;
     },
     bumpView: () => {
