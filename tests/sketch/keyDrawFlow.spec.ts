@@ -610,6 +610,18 @@ describe("a field of the X and Y box left alone", () => {
     expect(state.placed).toEqual([{ p: v(60.1234, 10.5678), kind: "endpoint", label: undefined, ref: anchor.ref }]);
   });
 
+  it("places the exact snap too once the browser's undo took the typing back", () => {
+    const { state } = opened();
+    const x = field("x");
+    x.dispatchEvent(new InputEvent("beforeinput", { inputType: "insertText", bubbles: true, cancelable: true }));
+    x.value = "20";
+    x.dispatchEvent(new InputEvent("input", { inputType: "insertText", bubbles: true }));
+    x.value = "60.12";
+    x.dispatchEvent(new InputEvent("input", { inputType: "historyUndo", bubbles: true }));
+    press(x);
+    expect(state.placed.map((h) => h.p)).toEqual([v(60.1234, 10.5678)]);
+  });
+
   it("keeps Y's own value with X typed, and X's own with Y typed", () => {
     const a = opened();
     type("x", "20");

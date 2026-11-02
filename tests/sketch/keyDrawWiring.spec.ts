@@ -534,6 +534,21 @@ describe("a line finished from its size box", () => {
     expect(last()).toBe(`Line 1, length 25, angle 30 degrees. ${KEYS}`);
   });
 
+  it("says no angle once the browser's undo took the typed one back", () => {
+    const { s } = makeDrawing("line");
+    startAt(s, "5", "-7");
+    type("length", "25");
+    const angle = fieldEl("angle");
+    const shown = angle.value;
+    angle.dispatchEvent(new InputEvent("beforeinput", { inputType: "insertText", bubbles: true, cancelable: true }));
+    angle.value = "30";
+    angle.dispatchEvent(new InputEvent("input", { inputType: "insertText", bubbles: true }));
+    angle.value = shown;
+    angle.dispatchEvent(new InputEvent("input", { inputType: "historyUndo", bubbles: true }));
+    enter("length");
+    expect(last()).toBe(`Line 1, length 25. ${KEYS}`);
+  });
+
   it("says a negative angle in words", () => {
     const { s } = makeDrawing("line");
     startAt(s, "5", "-7");
