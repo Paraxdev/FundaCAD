@@ -939,7 +939,7 @@ useWheelScroll(root);
 
 <template>
   <aside id="browser" class="float-card" aria-labelledby="browser-heading">
-    <div class="float-card-head">
+    <div class="float-card-head" data-keeps-delete>
       <h2 id="browser-heading" class="float-card-title">Items</h2>
       <IconButton
         class="float-card-close"
@@ -1047,7 +1047,7 @@ useWheelScroll(root);
       class="browser-page"
       v-bind="tabPanelAttrs(pages, 'geometry')"
     />
-    <div class="float-card-foot">
+    <div class="float-card-foot" data-keeps-delete>
       <span class="float-card-spacer"></span>
       <IconButton
         class="float-card-more"

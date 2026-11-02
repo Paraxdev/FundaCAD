@@ -257,7 +257,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="geometry-page">
+  <div class="geometry-page" data-keeps-delete>
     <div class="geometry-filters">
       <FieldRow v-if="!planes" v-slot="{ id, labelId }" label="Body">
         <Select
