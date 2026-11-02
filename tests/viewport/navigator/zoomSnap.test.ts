@@ -638,7 +638,7 @@ describe("a zoom's tail", () => {
     ["a frame apart", 1],
     ["three frames apart", 3],
   ])("shares the threshold between notches at four spots, %s", (_name, gap) => {
-    const spots = [
+    const spots: [number, number][] = [
       [100, 100],
       [W - 100, 100],
       [100, H - 100],
@@ -654,7 +654,7 @@ describe("a zoom's tail", () => {
     let worst = 0;
     for (let f = 0; f < 400; f++) {
       if (gap === 0 ? f === 0 : f % gap === 0 && f / gap < 4) {
-        const at = gap === 0 ? spots : [spots[f / gap]];
+        const at = gap === 0 ? spots : spots.slice(f / gap, f / gap + 1);
         for (const [x, y] of at) {
           a.wheel(x, y, -NOTCH);
           b.wheel(x, y, -NOTCH);
