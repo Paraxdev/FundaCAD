@@ -83,6 +83,33 @@ def test_picking_a_tool_speaks_its_name_and_prompt_with_commas_for_the_dots(s):
     s.press("Escape")
 
 
+def test_a_picked_face_speaks_words_the_readout_keeps_symbols_and_escape_says_nothing_selected(s):
+    s.open_file(PLATE)
+    s.view("iso")
+    listen(s)
+    s.pick_face("top")
+    # Only the engine's answer knows the face's size, the mesh does not.
+    s.page.wait_for_function(
+        "() => document.querySelector('[data-testid=selection-readout]')?.textContent.includes(' by ')",
+        timeout=15_000,
+    )
+    readout = s.selection(raw=True)["readout"]
+    assert re.match(r"1 face · flat · [\d.]+ by [\d.]+ mm · facing up$", readout), readout
+    spoken = heard(s, "Flat face")
+    lines = [t for t in spoken if "Flat face" in t]
+    assert len(lines) == 1, spoken
+    assert "facing up" in lines[0] and "millimetres" in lines[0], spoken
+    assert not re.search(r"\bmm\b|·|⌀|²", lines[0]), spoken
+
+    s.pick_face("front", add=True)
+    spoken = heard(s, "added, 2 selected")
+    assert s.selection(raw=True)["readout"] == "2 faces"
+
+    s.press("Escape")
+    heard(s, "Nothing selected")
+    assert s.selection(raw=True)["readout"] == ""
+
+
 def test_reopening_an_extrude_speaks_the_extrude_prompt(s):
     s.open_file(SKETCH_EXTRUDE)
     s.view("fit")
