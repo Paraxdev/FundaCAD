@@ -152,12 +152,22 @@ watch(
   { flush: "pre" },
 );
 watch(
-  () => list.pageRows,
+  [() => list.pageRows, () => list.selected],
   () => {
     if (hadFocus && !ownsFocus()) focusCursor();
+    else keepTabStop();
   },
   { flush: "post" },
 );
+
+// The Listbox moves its stop to the first picked row when that changes, and a filter leaves it on an old index. Its
+// stop follows a focus event, and a row holding focus has to hold it or Tab lands on another row.
+function keepTabStop() {
+  const a = document.activeElement;
+  if (ownsFocus() && a instanceof HTMLElement && a.matches("[data-roving]") && a.tabIndex !== 0) {
+    a.dispatchEvent(new FocusEvent("focus"));
+  }
+}
 
 function moveCursor(place: number) {
   const row = list.filtered[place];

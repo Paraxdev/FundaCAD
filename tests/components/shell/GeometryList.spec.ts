@@ -728,6 +728,43 @@ describe("focus through a build", () => {
   });
 });
 
+describe("the one Tab stop", () => {
+  const stops = (w: W) => options(w).flatMap((o) => (o.attributes("tabindex") === "0" ? [o.element] : []));
+
+  it("stays on the focused row when the first picked row changes", async () => {
+    const { r, w } = await open(4);
+    select(r, 41, 43);
+    await nextTick();
+    focusRow(w, 1);
+    await nextTick();
+    expect(stops(w)).toEqual([row(w, 1).element]);
+    select(r, 43);
+    await nextTick();
+    await nextTick();
+    expect(stops(w)).toEqual([row(w, 1).element]);
+  });
+
+  it("stays on the focused row when a filter moves it up the list", async () => {
+    const { r, w } = await open(4);
+    focusRow(w, 3);
+    await nextTick();
+    r.list.setFilters({ minSize: 62 });
+    await nextTick();
+    await nextTick();
+    expect(labels(w)).toEqual(["Flat face 3", "Flat face 4"]);
+    expect(focusedLabel()).toBe("Flat face 4");
+    expect(stops(w)).toEqual([row(w, 1).element]);
+  });
+
+  it("leaves the stop on the first picked row while focus is elsewhere", async () => {
+    const { r, w } = await open(4);
+    select(r, 42);
+    await nextTick();
+    expect(stops(w)).toEqual([row(w, 2).element]);
+    expect(document.activeElement).toBe(document.body);
+  });
+});
+
 describe("a press outside", () => {
   it("blurs a focused row, so the arrows go back to the model", async () => {
     const { w } = await open(2);
