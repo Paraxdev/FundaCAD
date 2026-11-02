@@ -19,6 +19,7 @@ import type {
   Selector,
   SketchEntity,
   U32Wire,
+  TopologyReply,
   Vec3,
 } from "../types";
 import { RebuildAssembly, manifestFromBodies } from "./assembly";
@@ -156,6 +157,9 @@ export type FaceAnchorReply =
       fp?: Record<string, unknown>;
     }
   | { reason: string };
+
+/** `topology` options: only these faces, and no `edgeFaces`, or a cap on how many (docs/PROTOCOL.md). */
+export type TopologyOptions = { faces?: number[]; maxFaces?: number };
 
 /** How a cylinder, cone, sphere or torus face resizes (docs/PROTOCOL.md, faceAxis). */
 export interface FaceResize {
@@ -424,6 +428,14 @@ export interface GeometryBackend {
   faceAxis?(doc: CadDocument, face: Selector, body: string | null): Promise<FaceAxisReply | null>;
   /** Where `point` sits on `face`, as a fingerprint and (u, v) fractions. */
   faceAnchor?(doc: CadDocument, face: Selector, body: string | null, point: Vec3): Promise<FaceAnchorReply | null>;
+  /** One body's faces in plain numbers (id or name). Null on an unknown body, a cancel or an engine without the op.
+   *  `onStarted` as for `stress`. */
+  topology?(
+    doc: CadDocument,
+    body: string,
+    opts?: TopologyOptions,
+    onStarted?: (id: string) => void,
+  ): Promise<TopologyReply | null>;
   /** Linear static stress in one body (id or name). `onStarted` hands back the request id for `cancel(id)`. */
   stress?(doc: CadDocument, body: string, opts: StressOptions, onStarted?: (id: string) => void): Promise<StressResult>;
   /** What would go wrong printing the bodies layer by layer: overhangs, thin walls, gaps, bridges and open
@@ -698,6 +710,7 @@ export const ENGINE_OPS = [
   "blobRead",
   "faceAxis",
   "faceAnchor",
+  "topology",
   "profileCuts",
   "patternAxis",
   "projectGeometry",
@@ -1621,6 +1634,16 @@ export class Geometry implements GeometryBackend {
       point,
       ...(body ? { body } : {}),
     });
+    return msg.ok ? msg.result : null;
+  }
+
+  async topology(
+    doc: CadDocument,
+    body: string,
+    opts: TopologyOptions = {},
+    onStarted?: (id: string) => void,
+  ): Promise<TopologyReply | null> {
+    const msg = await this.call<TopologyReply>("topology", { document: doc, body, ...opts }, onStarted);
     return msg.ok ? msg.result : null;
   }
 

@@ -35,6 +35,33 @@ export interface FaceFingerprint {
   radius?: number; // cylinder/sphere/cone radius, mm
 }
 
+/** One face in the `topology` op's reply (docs/PROTOCOL.md). */
+export interface TopologyFace {
+  i: number;
+  surface: "plane" | "cylinder" | "cone" | "sphere" | "torus" | "bspline" | "other";
+  area?: number;
+  centroid?: Vec3;
+  normal?: Vec3;
+  /** Long side first. */
+  size?: [number, number];
+  axis?: Vec3;
+  radius?: number;
+  major?: number;
+  semiAngle?: number;
+  length?: number;
+  wraps?: boolean;
+  concave?: boolean;
+}
+export interface TopologyReply {
+  body: string;
+  faceCount: number;
+  faces: TopologyFace[];
+  /** One per wire edge of the body, in wire order. Absent when `faces` was asked for. */
+  edgeFaces?: number[][];
+  truncated?: { faces: number };
+  errors?: { message: string; feature_id?: string }[];
+}
+
 /** The body a selector resolves against. Absent means the active body, kept only for
  *  old documents: never omit it on a fresh pick. */
 type SelectorBody = { body?: string };
