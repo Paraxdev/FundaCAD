@@ -211,3 +211,37 @@ describe("snapRing", () => {
     ]);
   });
 });
+
+describe("the cost of the snaps on a large sketch", () => {
+  // A point that counts its own measuring, since a time limit would be flaky.
+  class Counted extends THREE.Vector2 {
+    static calls = 0;
+    override distanceTo(o: THREE.Vector2) {
+      Counted.calls++;
+      return super.distanceTo(o);
+    }
+  }
+  const many = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({
+      p: new Counted(10 + i, 5),
+      kind: "endpoint",
+      priority: 90,
+    })) as SnapCandidate[];
+  const from = new THREE.Vector2(0, 0);
+
+  it("snapRing stops at its limit instead of comparing every candidate with what it kept", () => {
+    const n = 5000;
+    const list = many(n);
+    Counted.calls = 0;
+    expect(snapRing(from, list, [])).toHaveLength(16);
+    // The filter and the sort key are 2n. Comparing the rest with the 16 kept would be 16n.
+    expect(Counted.calls).toBeLessThan(3 * n);
+  });
+
+  it("hasSnap asks only until it finds one", () => {
+    const list = many(5000);
+    Counted.calls = 0;
+    expect(hasSnap(from, list, [])).toBe(true);
+    expect(Counted.calls).toBeLessThanOrEqual(2);
+  });
+});

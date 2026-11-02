@@ -213,6 +213,29 @@ describe("Enter is left alone", () => {
   });
 });
 
+describe("the prompt after an arrow", () => {
+  class Counted extends THREE.Vector2 {
+    static calls = 0;
+    override distanceTo(o: THREE.Vector2) {
+      Counted.calls++;
+      return super.distanceTo(o);
+    }
+  }
+
+  it("asks for one snap and does not build Tab's ring, as it is asked on every arrow", () => {
+    const { flow, state } = rig("rectangle");
+    state.candidates = Array.from({ length: 2000 }, (_, i) => ({
+      p: new Counted(100 + i, 5),
+      kind: "endpoint",
+      priority: 90,
+    })) as SnapCandidate[];
+    press(free(), { key: "ArrowRight" });
+    Counted.calls = 0;
+    expect(flow.keyPrompt()).toBe("Arrows move · Enter places · Tab next snap · Esc");
+    expect(Counted.calls).toBeLessThan(10);
+  });
+});
+
 describe("a chain's next point placed from a size box", () => {
   it("says the keys, since the prompt line stays as it was", () => {
     const { state } = rig("line");
@@ -1009,6 +1032,7 @@ describe("arrows move the cursor", () => {
       const w = mount(Toolbar, {
         attachTo: document.body,
         props: { label: "Tools", orientation: "vertical" },
+        attrs: { class: "tool-rail" },
         slots: { default: '<button id="a">a</button><button id="b">b</button><button id="c">c</button>' },
       });
       const a = document.getElementById("a")!;

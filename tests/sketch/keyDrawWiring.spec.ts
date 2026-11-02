@@ -497,6 +497,30 @@ describe("the next point typed in X and Y", () => {
   });
 });
 
+describe("a box positioned for a cursor off the window", () => {
+  const box = () => document.querySelector<HTMLElement>(".dim-input")!;
+  const offScreen = (s: Internals) =>
+    Object.assign((s as unknown as { viewport: object }).viewport, { projectToScreen: () => ({ x: 50000, y: 50000 }) });
+
+  it("keeps X and Y in the window", () => {
+    const { s } = makeDrawing("rectangle");
+    offScreen(s);
+    key(s, "Enter");
+    expect(parseInt(box().style.left)).toBeLessThanOrEqual(window.innerWidth);
+    expect(parseInt(box().style.top)).toBeLessThanOrEqual(window.innerHeight);
+  });
+
+  it("keeps a circle's diameter in the window for an arrow, and on the drawing for a pointer", () => {
+    const { s } = makeDrawing("circle");
+    startAt(s, "1", "2");
+    offScreen(s);
+    key(s, "ArrowRight", fieldEl("diameter"));
+    expect(parseInt(box().style.left)).toBeLessThanOrEqual(window.innerWidth);
+    (s as unknown as { basePreview(p: THREE.Vector2, e: unknown): void }).basePreview(v(30, 2), { clientX: 1, clientY: 1 });
+    expect(parseInt(box().style.left)).toBe(50000);
+  });
+});
+
 describe("a line finished from its size box", () => {
   const KEYS = "Type the size, or @dx,dy · arrows move · Enter · Esc";
   const last = () => vi.mocked(announce).mock.calls.filter((c) => c[2]?.key === "sketch-point").at(-1)?.[0];
