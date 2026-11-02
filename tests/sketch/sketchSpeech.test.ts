@@ -7,6 +7,7 @@ import {
   drawnSentence,
   pointSentence,
   snapWords,
+  walkEndSentence,
 } from "../../src/sketch/sketchSpeech";
 import { setUnit } from "../../src/ui/units";
 import type { ResolvedEntity, SnapCandidate } from "../../src/sketch/snap";
@@ -179,5 +180,20 @@ describe("cursorSentence", () => {
   it("gives the step in inches when the display is inches", () => {
     setUnit("in");
     expect(cursorSentence({ x: 25.4, y: 0 }, null, ents, 25.4 / 4)).toContain("1/4 in");
+  });
+});
+
+describe("walkEndSentence", () => {
+  const ents = [{ type: "line", id: "l1", x1: 0, y1: 0, x2: 20, y2: -20 }] as ResolvedEntity[];
+
+  it("says the list ended, with a negative as minus", () => {
+    expect(walkEndSentence({ x: 20, y: -20 }, null, ents)).toBe("No snap, cursor at 20, minus 20");
+  });
+
+  it("says so too when the spot it began from is a snap", () => {
+    const c = { p: new THREE.Vector2(20, -20), kind: "endpoint", priority: 90, ref: { entity: "l1", at: 1 } } as SnapCandidate;
+    expect(walkEndSentence({ x: 20, y: -20 }, c, ents)).toBe(
+      "End of snaps, cursor at 20, minus 20, snapped to the end of Line 1",
+    );
   });
 });

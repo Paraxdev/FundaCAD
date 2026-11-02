@@ -61,6 +61,12 @@ export function cursorSentence(
   return step === null ? at : `Grid step ${fmtGridStep(step)}. ${at}`;
 }
 
+/** The stop Tab's walk ends on, back where it began, so a listener hears the list ended. */
+export function walkEndSentence(p: { x: number; y: number }, c: SnapCandidate | null, ents: ResolvedEntity[]): string {
+  const at = `cursor at ${coordWords(p.x, p.y)}`;
+  return c ? `End of snaps, ${at}, snapped to ${snapWords(c, ents)}` : `No snap, ${at}`;
+}
+
 export function drawnSentence(e: ResolvedEntity, ents: ResolvedEntity[], closed: boolean): string {
   const name = entityLabel(ents, e.id) ?? e.type;
   if (e.type === "line") {

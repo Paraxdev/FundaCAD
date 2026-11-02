@@ -54,7 +54,7 @@ Typing `@` as the first character of a size box turns it back into X and Y for t
 
 ## Snaps
 
-Press arrows to move the cursor, then Tab. Each press names a snap near the cursor and moves the cursor onto it, such as "Cursor at 20, 5, snapped to the midpoint of Line 2". Enter places the point there, with the snap kept, as a click on a snap would. After the last candidate, Tab says "No snap, cursor at 20, 10" and the cursor is back where it was. With no candidate, Tab moves focus as usual. See [Snapping](snapping.md).
+Press arrows to move the cursor, then Tab. Each press names a snap near the cursor and moves the cursor onto it, such as "Cursor at 20, 5, snapped to the midpoint of Line 2". Enter places the point there, with the snap kept, as a click on a snap would. After the last candidate, Tab says "No snap, cursor at 20, minus 20" and the cursor is back where it was. If that spot is itself a snap, Tab says "End of snaps, cursor at 20, minus 20, snapped to the end of Line 2". With no candidate, Tab moves focus as usual. See [Snapping](snapping.md).
 
 ## A plate with a hole
 

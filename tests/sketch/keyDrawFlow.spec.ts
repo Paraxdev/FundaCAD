@@ -1264,6 +1264,33 @@ describe("Tab cycles the snaps", () => {
     return r;
   };
 
+  it("says the list ended on the stop back where the walk began, going either way", () => {
+    const { state } = withRing();
+    key("ArrowRight");
+    for (const _ of state.candidates) tab();
+    tab();
+    expect(xy(state)).toEqual([15, -7.25]);
+    const said = () => vi.mocked(announce).mock.calls.at(-1)?.[0];
+    expect(said()).toBe("No snap, cursor at 15, minus 7.25");
+    tab({ shiftKey: true });
+    expect(said()).not.toContain("No snap");
+    tab();
+    expect(said()).toBe("No snap, cursor at 15, minus 7.25");
+  });
+
+  it("says the snap as well when the walk began on one", () => {
+    const { state } = withRing();
+    const start: SnapCandidate = { p: v(15, -7.25), kind: "center", priority: 95, label: "Origin" };
+    state.candidates = [start, mid, near];
+    key("ArrowRight");
+    tab();
+    tab();
+    tab();
+    expect(vi.mocked(announce).mock.calls.at(-1)?.[0]).toBe(
+      "End of snaps, cursor at 15, minus 7.25, snapped to the origin",
+    );
+  });
+
   it("is left to the page before an arrow, with no snap to offer, and in other tools", () => {
     const { state } = withRing();
     expect(tab().defaultPrevented).toBe(false);

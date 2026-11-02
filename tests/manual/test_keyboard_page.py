@@ -59,6 +59,15 @@ class KeyboardPage(unittest.TestCase):
             self.assertIn(fact, text)
         self.assertNotRegex(text.lower(), r"\b(best|most|fastest|easiest)\b")
 
+    def test_the_page_quotes_the_words_the_last_tab_stop_says(self):
+        page = PAGE.read_text(encoding="utf-8")
+        speech = (ROOT / "src" / "sketch" / "sketchSpeech.ts").read_text(encoding="utf-8")
+        self.assertIn('"No snap, cursor at 20, minus 20"', page)
+        self.assertIn('"End of snaps, cursor at 20, minus 20, snapped to the end of Line 2"', page)
+        self.assertIn("`cursor at ${coordWords(p.x, p.y)}`", speech)
+        self.assertIn("`No snap, ${at}`", speech)
+        self.assertIn("`End of snaps, ${at}, snapped to ", speech)
+
     def test_every_link_on_these_pages_resolves(self):
         for name in LINKERS + ["sketch/keyboard.md"]:
             path = DOCS / name

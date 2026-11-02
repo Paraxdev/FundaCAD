@@ -9,7 +9,7 @@ import { isEditableTarget, keyTargetFree, widgetOwnsKey } from "../ui/focus";
 import type { DimInput } from "./dimInput";
 import { coarseStep, fineStep, hasSnap, hitAt, snapRing, stepCoord } from "./keyCursor";
 import { readPoint } from "./pointEntry";
-import { cursorSentence, drawnSentence, pointSentence } from "./sketchSpeech";
+import { cursorSentence, drawnSentence, pointSentence, walkEndSentence } from "./sketchSpeech";
 import type { ResolvedEntity, SnapCandidate, SnapKind, SnapRef } from "./snap";
 
 export const KEY_DRAW_TOOLS: ReadonlySet<string> = new Set(["line", "rectangle", "circle"]);
@@ -299,12 +299,13 @@ export class KeyDrawFlow {
     this.ring = null;
     const said = this.stepSaid === step ? null : step;
     this.stepSaid = step;
-    this.moveTo(p, hitAt(p, this.host.candidates()), said);
+    const c = hitAt(p, this.host.candidates());
+    this.moveTo(p, c, cursorSentence(p, c, this.host.entities(), said));
     this.host.changed();
     return true;
   }
 
-  private moveTo(p: THREE.Vector2, c: SnapCandidate | null, step: number | null) {
+  private moveTo(p: THREE.Vector2, c: SnapCandidate | null, said: string) {
     this.host.moveTo(hitOf(p, c));
     const dim = this.host.dim();
     if (dim.hasField("x")) {
@@ -312,7 +313,7 @@ export class KeyDrawFlow {
       dim.updateFromCursor(this.boxAt);
       this.host.positionBox(p);
     }
-    announce(cursorSentence(p, c, this.host.entities(), step), "polite", { key: "sketch-cursor", delay: 150 });
+    announce(said, "polite", { key: "sketch-cursor", delay: 150 });
   }
 
   // The prompt asks on every arrow, so this does not build the ring.
@@ -346,7 +347,9 @@ export class KeyDrawFlow {
     const c = ring.at < 0 ? hitAt(ring.from, this.host.candidates()) : ring.list[ring.at]!;
     e.preventDefault();
     if (inBox) e.stopPropagation();
-    this.moveTo((ring.at < 0 ? ring.from : ring.list[ring.at]!.p).clone(), c, null);
+    const p = (ring.at < 0 ? ring.from : ring.list[ring.at]!.p).clone();
+    const ents = this.host.entities();
+    this.moveTo(p, c, ring.at < 0 ? walkEndSentence(p, c, ents) : cursorSentence(p, c, ents, null));
     this.host.changed();
     return true;
   }
