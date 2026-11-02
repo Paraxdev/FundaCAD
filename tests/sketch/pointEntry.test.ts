@@ -25,6 +25,23 @@ const seedOnly = (x: string, y: string, at = { x: Number(x), y: Number(y) }) => 
 const yOnly = (x: string, y: string) => ({ x, y, xTyped: false, yTyped: true, at: { x: Number(x), y: -99 } });
 const bad = (r: PointRead) => (r.ok ? null : { field: r.field, problem: r.problem });
 
+describe("readPoint words a refused entry for a person", () => {
+  it.each([
+    [typed("abc", "4"), "x", '"abc" is not a number'],
+    [typed("4", "abc"), "y", '"abc" is not a number'],
+    [typed("@abc"), "x", '"abc" is not a number'],
+    [yOnly("1", "@abc"), "y", '"abc" is not a number'],
+  ])("%j", (t, field, problem) => {
+    expect(bad(readPoint(t, U, FROM))).toEqual({ field, problem });
+  });
+
+  it("keeps the measure parser's own words for other faults", () => {
+    const r = bad(readPoint(typed("1,000", "4"), U, FROM));
+    expect(r?.field).toBe("x");
+    expect(r?.problem).toContain("ambiguous");
+  });
+});
+
 describe("readPoint absolute", () => {
   it("reads X and Y typed, off the origin and asymmetric", () => {
     expect(readPoint(typed("13.5", "-7.25"), U, FROM)).toEqual({ ok: true, x: 13.5, y: -7.25 });

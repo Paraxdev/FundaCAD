@@ -26,7 +26,8 @@ function number(text: string, unit: UnitDef | null): Part {
   if (!text.trim()) return { ok: false, problem: "Type a number" };
   const m = tryParseMeasure(text, unit);
   if (m) return { ok: true, value: m.value };
-  return { ok: false, problem: measureError(text, unit) ?? "Not a number" };
+  const problem = measureError(text, unit) ?? "Not a number";
+  return { ok: false, problem: /unknown parameter/.test(problem) ? `"${text.trim()}" is not a number` : problem };
 }
 
 /** One value, or two split on a semicolon or on the only comma. Null for the problem, with `problem` filled. */
