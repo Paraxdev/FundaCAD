@@ -72,8 +72,13 @@ export function isBoxButtonKey(e: KeyboardEvent): boolean {
   return e.target.closest(".dim-input") !== null;
 }
 
-/** False for a field removed, hidden, or put away by a key handler while the key was still on its way to the window
- *  (sketch/dimInput.ts does for undo and redo); the keymap lets the shortcut through then. */
+/** A field of a tool's value box. */
+export function isToolBoxField(t: EventTarget | null): boolean {
+  return t instanceof Element && t.closest(".dim-input") !== null;
+}
+
+/** False for a field removed or hidden while the key was still on its way to the window; the keymap lets the shortcut
+ *  through then. */
 export function isLiveFocusTarget(el: Element): boolean {
   if (!el.isConnected || document.activeElement !== el) return false;
   const s = getComputedStyle(el);

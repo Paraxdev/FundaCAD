@@ -130,7 +130,21 @@ interface Field {
   /** Set only by a keystroke: an edit tool seeds and locks every field before the user touches any. */
   typed?: boolean;
   hidden?: boolean;
+  /** What the browser's own undo of this field would act on, see `ownsHistoryKey`. */
+  edit?: FieldEdit;
 }
+
+interface FieldEdit {
+  from: string;
+  to: string;
+  /** The text after the last keystroke, where a redo stops; null before any. */
+  end: string | null;
+  userDriven: boolean;
+  typed: boolean;
+  lastGood: number | null;
+}
+
+const isHistoryInput = (t: string) => t === "historyUndo" || t === "historyRedo";
 
 const shownBoxes = new Set<DimInput>();
 let boxCount = 0;
@@ -462,10 +476,32 @@ export class DimInput {
         if (keepSelection) e.preventDefault();
         keepSelection = false;
       });
-      input.addEventListener("input", () => {
-        field.userDriven = true; // typing freezes the field from cursor tracking
-        field.typed = true;
-        wrap.classList.add("typed");
+      input.addEventListener("beforeinput", (e) => {
+        if (isHistoryInput(e.inputType) || this.ownsHistoryKey(field, false)) return;
+        field.edit = {
+          from: input.value,
+          to: input.value,
+          end: null,
+          userDriven: field.userDriven,
+          typed: !!field.typed,
+          lastGood: field.lastGood,
+        };
+      });
+      input.addEventListener("input", (e) => {
+        const edit = field.edit;
+        if (edit) {
+          edit.to = input.value;
+          if (!isHistoryInput((e as InputEvent).inputType)) edit.end = input.value;
+        }
+        if (edit && input.value === edit.from) {
+          field.userDriven = edit.userDriven;
+          field.typed = edit.typed;
+          field.lastGood = edit.lastGood;
+        } else {
+          field.userDriven = true; // typing freezes the field from cursor tracking
+          field.typed = true;
+        }
+        wrap.classList.toggle("typed", !!field.typed);
         this.sizeToContent(field);
         this.adoptTypedUnit(field);
         this.adoptTypedChoice(field);
@@ -874,12 +910,17 @@ export class DimInput {
     this.focus();
   }
 
+  private ownsHistoryKey(field: Field, redo: boolean): boolean {
+    const edit = field.edit;
+    if (!edit || field.input.value !== edit.to) return false;
+    return redo ? edit.end !== null && edit.to !== edit.end : edit.to !== edit.from;
+  }
+
   private onKey(e: KeyboardEvent, field: Field) {
     if (isHistoryKey(e)) {
-      // Undo and redo belong to the document: put the tool away and let the key reach the window keymap.
-      // Stopped here, a box swallowed every Ctrl+Z and Ctrl+Y after it (FI-2).
-      this.onCancel?.();
-      field.input.blur();
+      // Chromium has one undo stack per page, so the browser may act only for typing this field still holds.
+      const redo = e.key.toLowerCase() === "y" || e.shiftKey;
+      if (this.ownsHistoryKey(field, redo)) e.stopPropagation();
       return;
     }
     if (e.key === "Tab") {
