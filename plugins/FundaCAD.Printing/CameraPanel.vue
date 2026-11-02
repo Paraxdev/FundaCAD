@@ -67,7 +67,7 @@ watch(
       class="camera-frame"
       alt="printer camera"
       :src="frame ?? undefined"
-      style="display: block; width: 480px; max-width: 100%; min-height: 180px; background: #111"
+      style="display: block; width: 480px; max-width: 100%; min-height: 180px; object-fit: contain; background: #111"
     />
     <div v-if="offline" class="camera-offline" style="padding: 8px; color: #e24a3b">
       camera unavailable
