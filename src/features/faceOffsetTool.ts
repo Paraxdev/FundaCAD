@@ -4,7 +4,7 @@
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore, RebuildState } from "../document/store";
-import type { Feature, Selector, Vec3 } from "../types";
+import type { Feature, RebuildResult, Selector, Vec3 } from "../types";
 import { DimInput, type DimToggleDef } from "../sketch/dimInput";
 import { setPrompt } from "../ui/prompt";
 import { fmtLength, snap } from "../ui/units";
@@ -48,6 +48,8 @@ export class FaceOffsetTool {
   private faceIds: number[] = [];
   /** Read once per face, while its id is live: a built preview renumbers the faces of every body after a shelled one. */
   private faceOwners: (string | null)[] = [];
+  /** A press would otherwise scan the whole mesh again for every face already picked. */
+  private faceOnModel = new WeakMap<Selector, { model: RebuildResult; faceId: number | undefined }>();
   private bodyId: string | null = null;
   private anchor = new THREE.Vector3();
   private axis = new THREE.Vector3(0, 0, 1);
@@ -162,11 +164,16 @@ export class FaceOffsetTool {
     const at = nearestMeshFace(before, hit.bodyId, hit.selector.point);
     if (!at) return false;
     if (at.distance > MIN_OFFSET / 2) return true;
-    return this.faces.some((f, i) => {
-      const owner = this.faceOwners[i];
-      const picked = owner && "point" in f ? nearestMeshFace(before, owner, f.point) : null;
-      return picked?.faceId === at.faceId;
-    });
+    this.faceOnModel.set(hit.selector, { model: before, faceId: at.faceId });
+    return this.faces.some((f, i) => this.pickedFaceOn(before, f, this.faceOwners[i]) === at.faceId);
+  }
+
+  private pickedFaceOn(model: RebuildResult, face: Selector, owner: string | null | undefined): number | undefined {
+    const known = this.faceOnModel.get(face);
+    if (known?.model === model) return known.faceId;
+    const faceId = owner && "point" in face ? nearestMeshFace(model, owner, face.point)?.faceId : undefined;
+    this.faceOnModel.set(face, { model, faceId });
+    return faceId;
   }
 
   private onDown(e: PointerEvent) {

@@ -502,6 +502,62 @@ describe("FaceOffsetTool", () => {
       expect(shellAfterClick(pickAt([20.00051, 0, -5], 8, "b1"))).toEqual([FACE_B1]);
     });
 
+    describe("over a model that can change under the open tool", () => {
+      // Face 7 is z = 0, face 8 is x = 20, face 9 is y = 30, the same walls whatever ids the model gives them.
+      const threeFaces = (ids: [number, number, number], faceStart = 7) => {
+        const passes = { count: 0 };
+        const faceIds = ids.flatMap((id) => [id, id]);
+        const mesh = {
+          positions: [
+            ...[-10, -10, 0, 10, -10, 0, 10, 10, 0, -10, 10, 0],
+            ...[20, -5, -10, 20, 5, -10, 20, 5, 0, 20, -5, 0],
+            ...[-5, 30, -10, 5, 30, -10, 5, 30, 0, -5, 30, 0],
+          ],
+          indices: [0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7, 8, 9, 10, 8, 10, 11],
+          get faceIds() {
+            passes.count++;
+            return faceIds;
+          },
+        };
+        return { model: { mesh, bodies: [{ id: "b1", name: "b1", faceStart, faceCount: 3 }] }, passes };
+      };
+      const openShell = (model: unknown) => {
+        const { vp, canvas } = fakeViewport();
+        const s = fakeStore();
+        Object.assign(s.store, { modelBeforePreview: model });
+        const t = new FaceOffsetTool(vp, s.store);
+        t.start("shell", () => {});
+        const press = (point: Vec3) => {
+          Object.assign(vp, { pickFaceForPressPull: pickAt(point, 11, "b1") });
+          ctrlClick(canvas);
+        };
+        return { press, s, faces: () => (dragTo(t, canvas, 2, { release: false }), [shellFaces(s)].flat().length) };
+      };
+
+      it("scans the model once for each press, however many faces are picked", () => {
+        const { model, passes } = threeFaces([7, 8, 9]);
+        const { press } = openShell(model);
+        const perPress = [[20, 0, -5] as Vec3, [0, 30, -5] as Vec3, [2, 3, 0] as Vec3, [20, 1, -5] as Vec3].map((p) => {
+          const from = passes.count;
+          press(p);
+          return passes.count - from;
+        });
+        // The first press also reads where the face the tool opened with lies.
+        expect(perPress).toEqual([2, 1, 1, 1]);
+      });
+
+      it("reads the picked faces again on the model that replaced it", () => {
+        const { press, s, faces } = openShell(threeFaces([7, 8, 9]).model);
+        press([20, 0, -5]);
+        Object.assign(s.store, { modelBeforePreview: threeFaces([14, 12, 13], 12).model });
+        press([20, 1, -5]);
+        press([2, 3, 0]);
+        expect(faces()).toBe(2);
+        press([0, 30, -5]);
+        expect(faces()).toBe(3);
+      });
+    });
+
     it("adds as before when the model before is not known, or the body is not in it", () => {
       const far = pickAt([5, 3, -4], 11, "b1");
       expect(shellAfterClick(far, null)).toHaveLength(2);
