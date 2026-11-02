@@ -1555,6 +1555,7 @@ jobs:
           FLASH_ONLY: realtime_off
           FLASH_PAUSE_SCALE: "2"
           FLASH_SETTLE_MS: "2000"
+          FLASH_DEADLINE_S: "280"
         run: node e2e/pathtrace_flash_e2e.cjs /tmp/pathtrace_flash_webgpu_shots
 
       - name: Flash test frames on failure

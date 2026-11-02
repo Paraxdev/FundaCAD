@@ -1,6 +1,7 @@
 // Flash and blackout analysis of a run of shown frames, for e2e/pathtrace_flash_e2e.cjs.
 // WCAG 2.3.1 general flash: a flash is a pair of opposing changes of at least 10 percent
 // of full relative luminance where the darker image is below 0.80, over a quarter of the frame.
+const fs = require("fs");
 
 const FLASH_DELTA = 0.1;
 const FLASH_DARKER_BELOW = 0.8;
@@ -207,7 +208,67 @@ function analyse(frames, cols) {
   };
 }
 
+/** Prints the first `head` lines as they come and holds the last `tail` until flush: a chatty run's failure comes last. */
+function boundedLog(write, { head, tail, width }) {
+  let seen = 0;
+  let cut = 0;
+  const held = [];
+  return {
+    line(text) {
+      for (const one of text.split(/\r?\n/)) {
+        const kept = one.length > width ? `${one.slice(0, width)}... (${one.length} chars)` : one;
+        if (seen++ < head) write(kept);
+        else {
+          held.push(kept);
+          if (held.length > tail) {
+            held.shift();
+            cut++;
+          }
+        }
+      }
+    },
+    flush() {
+      if (cut > 0) write(`... lines cut: ${cut}`);
+      cut = 0;
+      for (const l of held.splice(0)) write(l);
+    },
+  };
+}
+
+function scrubber(secret) {
+  if (!secret) return (text) => text;
+  return (text) => text.split(secret).join("<token>").split(encodeURIComponent(secret)).join("<token>");
+}
+
+function capLogFile(file, { head, tail, scrub = (text) => text }) {
+  const { size } = fs.statSync(file);
+  const fd = fs.openSync(file, "r");
+  const read = (length, position) => {
+    const bytes = Buffer.alloc(length);
+    fs.readSync(fd, bytes, 0, length, position);
+    return bytes;
+  };
+  let kept;
+  try {
+    if (size <= head + tail) kept = read(size, 0).toString("utf8");
+    else {
+      // Whole lines only: a secret the cut goes through would get past the scrub in two pieces.
+      const start = read(head, 0);
+      const end = read(tail, size - tail);
+      const first = start.subarray(0, start.lastIndexOf(10) + 1);
+      const last = end.subarray(end.includes(10) ? end.indexOf(10) + 1 : end.length);
+      kept = `${first}... bytes cut: ${size - first.length - last.length}\n${last}`;
+    }
+  } finally {
+    fs.closeSync(fd);
+  }
+  fs.writeFileSync(file, scrub(kept));
+}
+
 module.exports = {
+  boundedLog,
+  capLogFile,
+  scrubber,
   toGrid,
   toGridSource: toGrid.toString(),
   mean,

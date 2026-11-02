@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error an e2e helper in plain CommonJS, with no types.
 import flash from "../../e2e/lib/flash.cjs";
+// @ts-expect-error a test helper in plain CommonJS, with no types.
+import flashRun from "./fixtures/flashRun.cjs";
 
-const { analyse, blackEdges, concurrentFlashesPerSecond, flashesPerSecond, isBand, toGrid } = flash;
+const { analyse, blackEdges, boundedLog, concurrentFlashesPerSecond, flashesPerSecond, isBand, scrubber, toGrid } =
+  flash;
+const { capped } = flashRun;
 
 const COLS = 8;
 const ROWS = 5;
@@ -178,5 +182,91 @@ describe("flash analysis of shown frames", () => {
     );
     expect(band.bands).toBe(1);
     expect(band.bad[0]).toMatchObject({ i: 1, band: true });
+  });
+});
+
+describe("the bounded page log", () => {
+  const run = (count: number, sizes: { head: number; tail: number; width: number }) => {
+    const out: string[] = [];
+    const log = boundedLog((l: string) => out.push(l), sizes);
+    for (let i = 0; i < count; i++) log.line(`m${i}`);
+    log.flush();
+    return out;
+  };
+
+  it("prints every line of a quiet run, in order", () => {
+    expect(run(4, { head: 3, tail: 2, width: 100 })).toEqual(["m0", "m1", "m2", "m3"]);
+  });
+
+  it("keeps the start and the end of a chatty run and says how much it cut", () => {
+    expect(run(10, { head: 2, tail: 3, width: 100 })).toEqual(["m0", "m1", "... lines cut: 5", "m7", "m8", "m9"]);
+  });
+
+  it("cuts a long line and says how long it was", () => {
+    const out: string[] = [];
+    const log = boundedLog((l: string) => out.push(l), { head: 1, tail: 1, width: 4 });
+    log.line("abcdefgh");
+    expect(out).toEqual(["abcd... (8 chars)"]);
+  });
+
+  it("with no head prints only the tail, once flushed", () => {
+    const out: string[] = [];
+    const log = boundedLog((l: string) => out.push(l), { head: 0, tail: 2, width: 100 });
+    ["a", "b", "c"].forEach(log.line);
+    expect(out).toEqual([]);
+    log.flush();
+    expect(out).toEqual(["... lines cut: 1", "b", "c"]);
+  });
+
+  it("prints each line once over several flushes, and says only what each one cut", () => {
+    const out: string[] = [];
+    const log = boundedLog((l: string) => out.push(l), { head: 1, tail: 1, width: 100 });
+    ["a", "b", "c"].forEach((l) => log.line(l));
+    log.flush();
+    log.flush();
+    log.line("d");
+    log.flush();
+    expect(out).toEqual(["a", "... lines cut: 1", "c", "d"]);
+  });
+
+  it("counts a multi-line message by its lines, and cuts each to the width", () => {
+    const out: string[] = [];
+    const log = boundedLog((l: string) => out.push(l), { head: 2, tail: 1, width: 4 });
+    log.line("one\r\ntwo\nabcdefgh\nfour");
+    log.flush();
+    expect(out).toEqual(["one", "two", "... lines cut: 1", "four"]);
+  });
+});
+
+describe("capping a log file", () => {
+  it("leaves a file within the cap as it is", () => {
+    expect(capped("0123456789", { head: 5, tail: 5 })).toBe("0123456789");
+  });
+
+  it("keeps whole lines from the start and end of a larger file and says how many bytes it cut", () => {
+    expect(capped("one\ntwo\nthree\nfour\n", { head: 5, tail: 6 })).toBe("one\n... bytes cut: 10\nfour\n");
+  });
+
+  it("drops a line too long to keep whole", () => {
+    expect(capped("0123456789", { head: 2, tail: 3 })).toBe("... bytes cut: 10\n");
+  });
+
+  it("leaves no piece of a secret that the cut goes through", () => {
+    const text = "one\ntwo secret two\nthree secret\nfour\n";
+    expect(capped(text, { head: 11, tail: 8, scrub: scrubber("secret") })).toBe("one\n... bytes cut: 28\nfour\n");
+  });
+
+  it("scrubs what it keeps", () => {
+    expect(capped("a secret b", { head: 100, tail: 100, scrub: scrubber("secret") })).toBe("a <token> b");
+  });
+});
+
+describe("scrubbing a secret", () => {
+  it("replaces it plain and URL encoded", () => {
+    expect(scrubber("a b")("x a b y a%20b z")).toBe("x <token> y <token> z");
+  });
+
+  it("does nothing with no secret", () => {
+    expect(scrubber("")("x y")).toBe("x y");
   });
 });
