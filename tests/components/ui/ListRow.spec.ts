@@ -41,7 +41,7 @@ describe("ListRow", () => {
     const w = mount(Listbox, {
       props: { label: "Faces", multiple: true, items, modelValue: ["f:9"] },
       slots: {
-        option: (p: { item: { label: string }; selected: boolean; attrs: Record<string, unknown> }) =>
+        option: (p: { item: { label: string }; selected: boolean; attrs: object }) =>
           h(ListRow, { ...p.attrs, as: "option", label: p.item.label, selected: p.selected }),
       },
     });

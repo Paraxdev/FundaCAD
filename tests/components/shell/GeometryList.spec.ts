@@ -1,6 +1,6 @@
 // The Geometry list on a real store and controller, with real Listbox, ListRow, Select and NumberField. Only the engine
 // and the viewport behind the controller are fake.
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { enableAutoUnmount, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { nextTick } from "vue";
@@ -37,7 +37,7 @@ function reply(body: string, n: number): TopologyReply {
 /** Mounts on a built document, faces listed once `faces` is given. */
 async function open(faces?: number | TopologyReply) {
   const count = typeof faces === "number" ? faces : (faces?.faces.length ?? 3);
-  const r = rig(result([{ id: "body1", etag: "e1", faceCount: count }]));
+  const r = rig(result([{ id: "body1", etag: "e1", faceCount: count, faceStart: 40 }]));
   await r.build();
   const setStatus = vi.fn();
   const engine = { geometryBrowser: r.browser, setStatus };
@@ -94,7 +94,7 @@ describe("rows", () => {
 
   it("marks the row a canvas pick selected, and only that row", async () => {
     const { r, w } = await open(3);
-    r.selection.faces = [1];
+    r.selection.faces = [41];
     r.browser.selectionChanged();
     await nextTick();
     expect(options(w).map((o) => o.attributes("aria-selected"))).toEqual(["false", "true", "false"]);
@@ -379,5 +379,198 @@ describe("edge rows and the tangent edge setting", () => {
     setRenderPref("tangentEdges", renderPrefs().tangentEdges === "hide" ? "show" : "hide");
     await nextTick();
     expect(labels(w)).toEqual(["Straight edge 1"]);
+  });
+});
+
+// Listbox measures columns by offsetTop, which happy-dom leaves at 0.
+const realOffsetTop = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetTop");
+beforeAll(() => {
+  Object.defineProperty(HTMLElement.prototype, "offsetTop", {
+    configurable: true,
+    get(this: HTMLElement) {
+      return [...(this.parentElement?.children ?? [])].indexOf(this) * 40;
+    },
+  });
+});
+afterAll(() => {
+  if (realOffsetTop) Object.defineProperty(HTMLElement.prototype, "offsetTop", realOffsetTop);
+  else delete (HTMLElement.prototype as { offsetTop?: number }).offsetTop;
+});
+
+const row = (w: W, i: number) => options(w)[i]!;
+const focusRow = (w: W, i: number) => (row(w, i).element as HTMLElement).focus();
+const press = (w: W, i: number, key: string, mods: KeyboardEventInit = {}) =>
+  row(w, i).trigger("keydown", { key, ...mods });
+const face = (faceId: number) => ({ kind: "face", faceId });
+const select = (r: ReturnType<typeof rig>, ...faces: number[]) => {
+  r.selection.faces = faces;
+  r.browser.selectionChanged();
+};
+
+describe("picking", () => {
+  it("Enter selects only this row and leaves the rest of the list alone", async () => {
+    const { r, w } = await open(3);
+    select(r, 40, 42);
+    await nextTick();
+    await press(w, 1, "Enter");
+    expect(r.viewport.applyPicks.mock.calls).toEqual([[[face(41)], { additive: false }]]);
+  });
+
+  it("Space adds a row, and takes a selected one back out", async () => {
+    const { r, w } = await open(3);
+    await press(w, 2, " ");
+    expect(r.viewport.applyPicks).toHaveBeenLastCalledWith([face(42)], { additive: true });
+    select(r, 42);
+    await nextTick();
+    await press(w, 2, " ");
+    expect(r.viewport.applyPicks).toHaveBeenCalledTimes(2);
+    expect(r.viewport.applyPicks).toHaveBeenLastCalledWith([face(42)], { additive: true });
+  });
+
+  it("a plain click takes only that row, Ctrl adds it", async () => {
+    const { r, w } = await open(3);
+    select(r, 40);
+    await nextTick();
+    await row(w, 1).trigger("click", { ctrlKey: true });
+    expect(r.viewport.applyPicks).toHaveBeenLastCalledWith([face(41)], { additive: true });
+    await row(w, 2).trigger("click");
+    expect(r.viewport.applyPicks).toHaveBeenLastCalledWith([face(42)], { additive: false });
+    expect(r.viewport.applyPicks).toHaveBeenCalledTimes(2);
+  });
+
+  it("Shift and an arrow grows a run from the row, as one change", async () => {
+    const { r, w } = await open(4);
+    focusRow(w, 1);
+    await press(w, 1, "ArrowDown", { shiftKey: true });
+    expect(r.viewport.applyPicks.mock.calls).toEqual([[[face(41), face(42)], { additive: true }]]);
+    expect(document.activeElement).toBe(row(w, 2).element);
+  });
+
+  it("a run that shrinks takes only the row it lost out", async () => {
+    const { r, w } = await open(4);
+    await press(w, 1, "Enter");
+    select(r, 41, 42, 43);
+    await nextTick();
+    focusRow(w, 3);
+    r.viewport.applyPicks.mockClear();
+    await press(w, 3, "ArrowUp", { shiftKey: true });
+    expect(r.viewport.applyPicks.mock.calls).toEqual([[[face(43)], { additive: true }]]);
+  });
+
+  it("a run that gains and loses replaces the selection, a selected body goes with it", async () => {
+    const { r, w } = await open(4);
+    r.selection.bodies = ["body1"];
+    r.browser.selectionChanged();
+    await nextTick();
+    focusRow(w, 0);
+    await press(w, 0, "ArrowDown", { shiftKey: true });
+    expect(r.viewport.applyPicks.mock.calls).toEqual([[[face(40), face(41)], { additive: false }]]);
+  });
+
+  it("Ctrl+A takes this page's rows as one change, not other pages", async () => {
+    const { r, w } = await open(150);
+    focusRow(w, 0);
+    await press(w, 0, "a", { ctrlKey: true });
+    expect(r.viewport.applyPicks).toHaveBeenCalledTimes(1);
+    const [refs, how] = r.viewport.applyPicks.mock.calls[0] as unknown as [unknown[], unknown];
+    expect(refs.length).toBe(100);
+    expect(refs[99]).toEqual(face(139));
+    expect(how).toEqual({ additive: true });
+  });
+
+  it("a picked edge row goes by its edge", async () => {
+    const { r, w } = await open(1);
+    const wire = edge("body1", 0, 1);
+    r.wires.set("body1", [wire]);
+    await w.getComponent({ name: "Segmented" }).vm.$emit("update:modelValue", "edges");
+    await nextTick();
+    await press(w, 0, "Enter");
+    expect(r.viewport.applyPicks).toHaveBeenLastCalledWith([{ kind: "edge", edge: wire }], { additive: false });
+  });
+
+  it.each([
+    ["a sketch is open", (r: ReturnType<typeof rig>) => (r.host.sketch.active = true), "sketch"],
+    ["a tool owns the screen", (r: ReturnType<typeof rig>) => r.host.toolOwnsScreen.mockReturnValue(true), "tool"],
+    ["the model is building", (r: ReturnType<typeof rig>) => (r.viewport.picksSuspended = true), "building"],
+  ])("refuses in words while %s", async (_why, block, word) => {
+    const { r, w, setStatus } = await open(2);
+    block(r);
+    await press(w, 0, "Enter");
+    await press(w, 1, " ");
+    expect(r.viewport.applyPicks).not.toHaveBeenCalled();
+    expect(setStatus).toHaveBeenCalledTimes(2);
+    expect(setStatus.mock.calls[0]![0]).toContain(word);
+    expect(setStatus.mock.calls[0]![1]).toBe("");
+  });
+
+  it("refuses a row from before a build until the new rows land", async () => {
+    const { r, w, setStatus } = await open(2);
+    await r.build(result([{ id: "body1", etag: "e2", faceCount: 2, faceStart: 40 }]));
+    await nextTick();
+    await press(w, 0, "Enter");
+    expect(r.viewport.applyPicks).not.toHaveBeenCalled();
+    expect(setStatus.mock.calls[0]![0]).toContain("changed");
+    await land(r.asks[1]!, reply("body1", 2));
+    await press(w, 0, "Enter");
+    expect(r.viewport.applyPicks).toHaveBeenCalledTimes(1);
+  });
+
+  it("types ahead on a row's first word", async () => {
+    const { w } = await open({
+      body: "body1",
+      faceCount: 3,
+      faces: [
+        slanted(0),
+        { i: 1, surface: "cylinder", area: 628, axis: [0, 0, 1], radius: 5, length: 20, wraps: true, concave: true },
+        slanted(2),
+      ],
+    });
+    focusRow(w, 0);
+    await press(w, 0, "h");
+    expect(document.activeElement).toBe(row(w, 1).element);
+  });
+});
+
+describe("lighting a row in the view", () => {
+  it("lights the focused row, and nothing once focus leaves", async () => {
+    const { r, w } = await open(2);
+    focusRow(w, 1);
+    expect(r.viewport.hoverPick).toHaveBeenLastCalledWith(face(41));
+    expect(r.list.cursor).toBe("f:body1:1");
+    (row(w, 1).element as HTMLElement).blur();
+    expect(r.viewport.hoverPick).toHaveBeenLastCalledWith(null);
+  });
+
+  it("lights the row under the pointer, then goes back to the focused one", async () => {
+    const { r, w } = await open(3);
+    focusRow(w, 0);
+    await row(w, 2).trigger("pointerenter");
+    expect(r.viewport.hoverPick).toHaveBeenLastCalledWith(face(42));
+    await row(w, 2).trigger("pointerleave");
+    expect(r.viewport.hoverPick).toHaveBeenLastCalledWith(face(40));
+  });
+
+  it("lights nothing after the pointer leaves with no row focused", async () => {
+    const { r, w } = await open(3);
+    await row(w, 2).trigger("pointerenter");
+    await row(w, 2).trigger("pointerleave");
+    expect(r.viewport.hoverPick).toHaveBeenLastCalledWith(null);
+  });
+
+  it("touches no light while a tool runs, its own hover shares it", async () => {
+    const { r, w } = await open(2);
+    r.host.toolOwnsScreen.mockReturnValue(true);
+    r.viewport.hoverPick.mockClear();
+    focusRow(w, 1);
+    (row(w, 1).element as HTMLElement).blur();
+    await row(w, 0).trigger("pointerenter");
+    expect(r.viewport.hoverPick).not.toHaveBeenCalled();
+  });
+
+  it("puts the light out when the list goes", async () => {
+    const { r, w } = await open(2);
+    focusRow(w, 1);
+    w.unmount();
+    expect(r.viewport.hoverPick).toHaveBeenLastCalledWith(null);
   });
 });

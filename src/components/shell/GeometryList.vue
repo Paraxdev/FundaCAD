@@ -4,7 +4,7 @@ import { useEngine } from "../../app/engineKey";
 import { useWheelScroll } from "../../composables/useWheelScroll";
 import { GEOMETRY_PAGE_SIZE, useGeometryBrowserStore, type GeometryKind } from "../../stores/geometryBrowser";
 import { describePick, type FacingWord } from "../../ui/describePick";
-import { NO_FILTERS, type GeometryFilters, type GeometryRowType } from "../../ui/geometryRows";
+import { NO_FILTERS, type GeometryFilters, type GeometryRow, type GeometryRowType } from "../../ui/geometryRows";
 import { announce } from "../../ui/announce";
 import { onRenderPrefsChange, renderPrefs } from "../../ui/renderPrefs";
 import { getUnit, onUnitChange } from "../../ui/units";
@@ -16,7 +16,8 @@ import NumberField from "../ui/NumberField.vue";
 import Segmented from "../ui/Segmented.vue";
 import Select from "../ui/Select.vue";
 
-const ctl = useEngine().geometryBrowser;
+const engine = useEngine();
+const ctl = engine.geometryBrowser;
 const list = useGeometryBrowserStore();
 
 const KINDS: { value: GeometryKind; label: string }[] = [
@@ -61,7 +62,7 @@ const options = computed(() => {
   void unit.value;
   return list.pageRows.map((row) => {
     const words = describePick(row.facts);
-    return { value: row.key, label: words.label, hint: words.hint, spoken: words.spoken };
+    return { value: row.key, label: words.label, hint: words.hint, spoken: words.spoken, row };
   });
 });
 
@@ -94,6 +95,45 @@ function turnPage(delta: 1 | -1) {
   if (lead) list.setCursor(lead.key);
 }
 
+const anchor = ref<string | null>(null);
+const rowByKey = computed(() => new Map(list.rows.map((r) => [r.key, r])));
+const rowsOf = (keys: readonly string[]) => keys.flatMap((k) => rowByKey.value.get(k) ?? []);
+
+function pick(rows: readonly GeometryRow[], additive: boolean) {
+  const refused = ctl.pickRows(rows, { additive });
+  if (refused) engine.setStatus(refused, "");
+}
+
+function selectOnly(key: string) {
+  anchor.value = key;
+  pick(rowsOf([key]), false);
+}
+
+// What the Listbox wants, as the smallest change: an additive pick toggles, so keys only gained or only lost go through
+// it, which also leaves picks outside this list alone. Anything else replaces the selection.
+function onListSelection(next: readonly string[]) {
+  const had = new Set(list.selected);
+  const now = new Set(next);
+  const gained = next.filter((k) => !had.has(k));
+  const lost = list.selected.filter((k) => !now.has(k));
+  const toggled = gained.length === 0 ? lost : lost.length === 0 ? gained : null;
+  if (toggled && rowsOf(toggled).length === toggled.length) pick(rowsOf(toggled), true);
+  else pick(rowsOf(next), false);
+}
+
+let focusedRow: GeometryRow | null = null;
+
+function onRowFocus(row: GeometryRow) {
+  focusedRow = row;
+  list.setCursor(row.key);
+  ctl.hover(row);
+}
+
+function onRowBlur() {
+  focusedRow = null;
+  ctl.hover(null);
+}
+
 let tangent = renderPrefs().tangentEdges;
 const offPrefs = onRenderPrefsChange(() => {
   if (renderPrefs().tangentEdges === tangent) return;
@@ -103,6 +143,7 @@ const offPrefs = onRenderPrefsChange(() => {
 
 onMounted(() => ctl.show(true));
 onUnmounted(() => {
+  ctl.hover(null);
   ctl.show(false);
   offUnit();
   offPrefs();
@@ -183,6 +224,10 @@ onUnmounted(() => {
         :label="`${faces ? 'Faces' : 'Edges'} of ${bodyName}`"
         :items="options"
         :model-value="list.selected"
+        :anchor="anchor"
+        @update:model-value="onListSelection($event as string[])"
+        @update:anchor="anchor = $event"
+        @apply="selectOnly"
       >
         <template #option="{ item, index, selected, attrs }">
           <ListRow
@@ -194,6 +239,10 @@ onUnmounted(() => {
             :aria-label="item.spoken"
             :aria-posinset="firstShown + index"
             :aria-setsize="list.filtered.length"
+            @focus="onRowFocus(item.row)"
+            @blur="onRowBlur"
+            @pointerenter="ctl.hover(item.row)"
+            @pointerleave="ctl.hover(focusedRow)"
           />
         </template>
       </Listbox>
