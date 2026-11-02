@@ -1,13 +1,31 @@
-// Next Face, Previous Face, Next Edge and Previous Edge. A command has no Enter to follow it, so where the canvas
-// brackets only light a row, these select it.
+// Next Face, Previous Face, Next Edge, Previous Edge and Browse Faces and Edges. A command has no Enter to follow it, so
+// where the canvas brackets only light a row, these select it.
 
 import { watch } from "vue";
+import { useBrowserStore } from "../stores/browser";
 import { useGeometryBrowserStore, type GeometryKind } from "../stores/geometryBrowser";
+import { useShellStore } from "../stores/shell";
 import { announce } from "../ui/announce";
 import { describePick } from "../ui/describePick";
 import { emptyStepWords } from "./canvasPick";
 import type { Engine } from "./engine";
 import { SELECTION_SPEECH_DELAY } from "./selectionWords";
+
+function focusGeometryList() {
+  const box = document.querySelector(".geometry-rows");
+  const target =
+    box?.querySelector<HTMLElement>('[data-roving][tabindex="0"]') ??
+    box?.querySelector<HTMLElement>("[data-roving]") ??
+    box?.querySelector<HTMLElement>(".empty-state");
+  target?.focus();
+}
+
+export function browseGeometry() {
+  useBrowserStore().itemsTab = "geometry";
+  useShellStore().setItems(true);
+  // After the palette has closed and handed focus back, and a pane just shown has mounted.
+  setTimeout(focusGeometryList);
+}
 
 export function createGeometryCommands(e: Pick<Engine, "geometryBrowser" | "setStatus">) {
   let dropWait: (() => void) | null = null;

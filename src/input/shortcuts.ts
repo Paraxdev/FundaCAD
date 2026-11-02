@@ -84,6 +84,7 @@ export const SHORTCUTS: Shortcut[] = [
   { key: "", action: "previous-face", context: "global", label: "Previous face" },
   { key: "", action: "next-edge", context: "global", label: "Next edge" },
   { key: "", action: "previous-edge", context: "global", label: "Previous edge" },
+  { key: "", action: "browse-geometry", context: "global", label: "Browse faces and edges" },
   { key: "arrowleft", action: "view-step-left", context: "global", label: "Turn the view left 15°" },
   { key: "arrowright", action: "view-step-right", context: "global", label: "Turn the view right 15°" },
   { key: "arrowup", action: "view-step-up", context: "global", label: "Tilt the view up 15°" },

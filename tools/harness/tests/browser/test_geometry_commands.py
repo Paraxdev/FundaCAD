@@ -1,5 +1,5 @@
-"""Next and Previous Face and Edge from the command search, by real keys: each selects and speaks, and a sketch or a
-waiting pick stays and is refused in words."""
+"""Next and Previous Face and Edge and Browse Faces and Edges from the command search and the Edit menu, by real keys:
+each selects and speaks, a sketch or a waiting pick stays and is refused in words, and Browse lands focus on a row."""
 
 import pytest
 from playwright.sync_api import expect
@@ -20,6 +20,7 @@ LISTEN = """() => {
   window.__spokenObserver.observe(polite, { childList: true, characterData: true, subtree: true });
 }"""
 
+ROLE_IS_OPTION = "() => document.activeElement?.getAttribute('role') === 'option'"
 
 
 def heard(s, want):
@@ -95,14 +96,33 @@ def test_an_open_sketch_stays_open_and_refuses_in_words(s):
     s.page.get_by_role("tab", name="Items", exact=True).click()
 
 
-def test_a_waiting_plane_pick_survives_a_refused_command(s):
+def test_a_waiting_plane_pick_survives_a_refused_command_and_browse(s):
     s.tool("Sketch")
     s.command("Next Edge")
     heard(s, "Finish the tool first")
-    s.page.get_by_role("tab", name="Geometry").click()
+    s.command("Browse Faces and Edges")
+    expect(s.page.get_by_role("tab", name="Geometry")).to_have_attribute("aria-selected", "true")
     s.page.get_by_role("radio", name="Planes").click()
     row(s, "YZ plane").focus()
     s.page.keyboard.press("Enter")
     s.page.wait_for_function("() => window.sketch.active")
     s.page.get_by_role("radio", name="Faces").click()
+    s.page.get_by_role("tab", name="Items", exact=True).click()
+
+
+def test_browse_from_the_command_search_lands_on_a_row_with_the_tab_open(s):
+    s.command("Browse Faces and Edges")
+    s.page.wait_for_function(ROLE_IS_OPTION)
+    expect(s.page.get_by_role("tab", name="Geometry")).to_have_attribute("aria-selected", "true")
+    assert "Flat face 1" in s.page.evaluate("() => document.activeElement.getAttribute('aria-label')")
+    s.page.keyboard.press("ArrowDown")
+    assert "Flat face 2" in s.page.evaluate("() => document.activeElement.getAttribute('aria-label')")
+    s.page.get_by_role("tab", name="Items", exact=True).click()
+
+
+def test_browse_from_the_edit_menu_lands_on_a_row(s):
+    s.page.locator("#menubar .menu-btn", has_text="Edit").click()
+    s.page.get_by_role("menuitem", name="Browse Faces and Edges").focus()
+    s.page.keyboard.press("Enter")
+    s.page.wait_for_function(ROLE_IS_OPTION)
     s.page.get_by_role("tab", name="Items", exact=True).click()

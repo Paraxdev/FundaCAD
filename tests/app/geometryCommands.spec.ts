@@ -1,9 +1,13 @@
-// Next and Previous Face and Edge, through the one action dispatcher over the real Geometry
+// Next and Previous Face and Edge and Browse Faces and Edges, through the one action dispatcher over the real Geometry
 // list controller and store. Only the engine and the viewport behind the controller are fake.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { enableAutoUnmount, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
+import { defineComponent, h, nextTick } from "vue";
+import GeometryList from "../../src/components/shell/GeometryList.vue";
 import { createActions } from "../../src/app/actions";
 import { NON_REPEATABLE } from "../../src/app/actionTables";
+import { ENGINE } from "../../src/app/engineKey";
 import type { Engine } from "../../src/app/engine";
 import { buildMenubar } from "../../src/app/menubarDef";
 import {
@@ -14,6 +18,8 @@ import {
   shortcutHudGroups,
   shortcutRows,
 } from "../../src/input/shortcuts";
+import { useBrowserStore } from "../../src/stores/browser";
+import { useShellStore } from "../../src/stores/shell";
 import { announce } from "../../src/ui/announce";
 import { allCommands } from "../../src/ui/commands";
 import { describePick } from "../../src/ui/describePick";
@@ -26,7 +32,10 @@ vi.mock("../../src/ui/announce", async (actual) => ({
   announce: vi.fn(),
 }));
 
+enableAutoUnmount(afterEach);
+
 const STEPS = ["next-face", "previous-face", "next-edge", "previous-edge"];
+const ALL = [...STEPS, "browse-geometry"];
 
 const said = () => vi.mocked(announce).mock.calls.map((c) => c[0]);
 const face = (faceId: number) => ({ kind: "face", faceId });
@@ -66,29 +75,31 @@ afterEach(() => {
 
 describe("where the commands are listed", () => {
   it("the palette has all five, no key on any, and none repeats as the last command", () => {
-    const rows = allCommands().filter((c) => STEPS.includes(c.id));
+    const rows = allCommands().filter((c) => ALL.includes(c.id));
     expect(rows.map((c) => [c.id, c.label, c.group, c.context, c.key])).toEqual([
+      ["browse-geometry", "Browse Faces and Edges", "Go", "global", undefined],
       ["next-face", "Next Face", "Edit", "global", undefined],
       ["previous-face", "Previous Face", "Edit", "global", undefined],
       ["next-edge", "Next Edge", "Edit", "global", undefined],
       ["previous-edge", "Previous Edge", "Edit", "global", undefined],
     ]);
-    expect(STEPS.filter((id) => !NON_REPEATABLE.has(id))).toEqual([]);
-    expect(STEPS.map(keyHint)).toEqual(STEPS.map(() => undefined));
+    expect(ALL.filter((id) => !NON_REPEATABLE.has(id))).toEqual([]);
+    expect(ALL.map(keyHint)).toEqual(ALL.map(() => undefined));
   });
 
   it("the Edit menu runs them through the dispatcher", () => {
     const handleAction = vi.fn();
     const edit = buildMenubar({ handleAction } as unknown as Engine).find((m) => m.label === "Edit")!;
-    const items = edit.items.filter((i) => allCommands().find((c) => STEPS.includes(c.id) && c.label === i.label));
+    const items = edit.items.filter((i) => allCommands().find((c) => ALL.includes(c.id) && c.label === i.label));
     expect(items.map((i) => [i.label, i.shortcut])).toEqual([
       ["Next Face", undefined],
       ["Previous Face", undefined],
       ["Next Edge", undefined],
       ["Previous Edge", undefined],
+      ["Browse Faces and Edges", undefined],
     ]);
     for (const i of items) i.onClick!();
-    expect(handleAction.mock.calls.map((c) => c[0])).toEqual(STEPS);
+    expect(handleAction.mock.calls.map((c) => c[0])).toEqual(ALL);
   });
 
   it("an empty key fires nothing, a chosen key fires the command and shows in the palette and the menu", () => {
@@ -107,7 +118,7 @@ describe("where the commands are listed", () => {
   it("the ? dialog lets them be bound, and keeps the canvas keys a fixed group", () => {
     const groups = shortcutHudGroups();
     const rows = groups.find((g) => g.name === "Global")!.rows.filter((x) => /face|edge/.test(x.label));
-    expect(rows.map((x) => x.key)).toEqual(["", "", "", ""]);
+    expect(rows.map((x) => x.key)).toEqual(["", "", "", "", ""]);
     expect(rows.every((x) => x.id !== undefined)).toBe(true);
     const canvas = groups.find((g) => g.name === "3D view focused")!.rows;
     expect(canvas.map((x) => x.key)).toEqual(["] / [", "Shift+] / Shift+[", "Enter", "Space", "Esc"]);
@@ -373,7 +384,7 @@ describe("what a command refuses", () => {
     awaitTreePick(() => true, end);
     expect(treePickWaiting()).toBe(true);
     vi.useFakeTimers();
-    for (const a of STEPS) run(a);
+    for (const a of ALL) run(a);
     vi.runAllTimers();
     expect(treePickWaiting()).toBe(true);
     expect(end).not.toHaveBeenCalled();
@@ -400,5 +411,83 @@ describe("what a command refuses", () => {
     r.host.toolOwnsScreen.mockReturnValue(true);
     run("next-face");
     expect(r.list.litRow?.key).toBe("f:body1:0");
+  });
+});
+
+describe("Browse Faces and Edges", () => {
+  // The two conditions App.vue and BrowserPane.vue put around the real list.
+  const Pane = defineComponent({
+    setup() {
+      const shell = useShellStore();
+      const browser = useBrowserStore();
+      return () => (shell.itemsShown && browser.itemsTab === "geometry" ? h(GeometryList) : null);
+    },
+  });
+
+  function paneOn(r: ReturnType<typeof rig>) {
+    const engine = { geometryBrowser: r.browser, setStatus: r.host.setStatus };
+    return mount(Pane, { attachTo: document.body, global: { provide: { [ENGINE as symbol]: engine } } });
+  }
+
+  async function browse(run: (a: string) => void) {
+    run("browse-geometry");
+    await nextTick();
+    await new Promise((done) => setTimeout(done, 0));
+    await nextTick();
+  }
+
+  it("shows a hidden Items on the Geometry tab, mounts the list, and focus lands on a row", async () => {
+    const r = rig(result([{ id: "body1", etag: "e1", faceCount: 3, faceStart: 40 }]));
+    const { run, e, finish } = commands(r);
+    await r.build();
+    useShellStore().setItems(false);
+    const w = paneOn(r);
+    expect(w.find(".geometry-rows").exists()).toBe(false);
+    r.browser.startStepping();
+    await land(r.asks[0]!, topology("body1", 3));
+    await browse(run);
+    expect(useShellStore().itemsShown).toBe(true);
+    expect(useBrowserStore().itemsTab).toBe("geometry");
+    expect(document.activeElement?.getAttribute("role")).toBe("option");
+    expect(w.find(".geometry-rows").element.contains(document.activeElement)).toBe(true);
+    expect(e.lastAction).toBe("extrude");
+    expect(finish).not.toHaveBeenCalled();
+    expect(picks(r)).toEqual([]);
+  });
+
+  it("waits for the palette to hand focus back before it moves it", async () => {
+    const { r, run } = await opened();
+    const was = document.body.appendChild(document.createElement("button"));
+    was.focus();
+    paneOn(r);
+    vi.useFakeTimers();
+    run("browse-geometry");
+    expect(document.activeElement).toBe(was);
+    await nextTick();
+    vi.runAllTimers();
+    expect(document.activeElement?.getAttribute("role")).toBe("option");
+  });
+
+  it("with the list still coming, focus waits on the note and moves to a row when it lands", async () => {
+    const r = rig(result([{ id: "body1", etag: "e1", faceCount: 2, faceStart: 40 }]));
+    const { run } = commands(r);
+    await r.build();
+    const w = paneOn(r);
+    await browse(run);
+    expect(document.activeElement?.classList.contains("empty-state")).toBe(true);
+    await land(r.asks[0]!, topology("body1", 2));
+    await nextTick();
+    expect(document.activeElement?.getAttribute("role")).toBe("option");
+    expect(w.findAll("[role=option]")).toHaveLength(2);
+  });
+
+  it("an open sketch stays open and may still browse", async () => {
+    const { r } = await opened();
+    r.host.sketch.active = true;
+    const { run, finish } = commands(r);
+    paneOn(r);
+    await browse(run);
+    expect(finish).not.toHaveBeenCalled();
+    expect(document.activeElement?.getAttribute("role")).toBe("option");
   });
 });

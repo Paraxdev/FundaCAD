@@ -114,6 +114,7 @@ export const NON_REPEATABLE = new Set([
   "previous-face",
   "next-edge",
   "previous-edge",
+  "browse-geometry",
 ]);
 
 /** The palette's Go to commands and the region each one focuses. */

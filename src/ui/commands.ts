@@ -41,6 +41,7 @@ const GLOBAL: Command[] = [
   { id: "go-model", label: "Go to Model", group: "Go", context: "global" },
   { id: "go-panels", label: "Go to Panels", group: "Go", context: "global" },
   { id: "go-history", label: "Go to History", group: "Go", context: "global" },
+  { id: "browse-geometry", label: "Browse Faces and Edges", group: "Go", context: "global" },
   { id: "next-face", label: "Next Face", group: "Edit", context: "global" },
   { id: "previous-face", label: "Previous Face", group: "Edit", context: "global" },
   { id: "next-edge", label: "Next Edge", group: "Edit", context: "global" },
@@ -65,6 +66,7 @@ export const GEOMETRY_COMMANDS: ReadonlySet<string> = new Set([
   "previous-face",
   "next-edge",
   "previous-edge",
+  "browse-geometry",
 ]);
 
 function fromGroups(groups: Group[], context: "model" | "sketch"): Command[] {

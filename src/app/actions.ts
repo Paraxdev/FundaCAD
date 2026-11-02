@@ -8,7 +8,7 @@ import { cycleRegion, goToRegion } from "../ui/regions";
 import { choose } from "../ui/choice";
 import { endPickSession } from "../ui/treePick";
 import { SKETCH_TOOLS, SKETCH_MODIFY, NON_REPEATABLE, GO_REGIONS, GEOMETRY_STEPS } from "./actionTables";
-import { createGeometryCommands } from "./geometryCommands";
+import { browseGeometry, createGeometryCommands } from "./geometryCommands";
 import { booleanOpOfAction } from "../features/booleanOps";
 import { useDialogStore } from "../stores/dialogs";
 import { useUiStore } from "../stores/ui";
@@ -56,6 +56,7 @@ const KEEPS_PICK = new Set([
   "previous-face",
   "next-edge",
   "previous-edge",
+  "browse-geometry",
 ]);
 
 /** A body selection raises Move, which toolBusy() counts, so these stand it down first or they refuse silently. */
@@ -141,6 +142,7 @@ export function createActions(e: Engine): (action: string) => void {
     // Here, or the finish below ends the sketch they should refuse in words.
     const geometryStep = GEOMETRY_STEPS[action];
     if (geometryStep) return geometry.selectStep(geometryStep.kind, geometryStep.delta);
+    if (action === "browse-geometry") return browseGeometry();
     // The arrow keys turn the view and nothing else: they leave a sketch open,
     // and a tool that reads the arrows itself (the pattern count) keeps them.
     const step = /^view-step-(left|right|up|down)(-fine)?$/.exec(action);
