@@ -65,7 +65,10 @@ function fillet() {
 function mirror() {
   const heard = { commit: vi.fn(), set: vi.fn(), cancel: vi.fn() };
   const tool = new MirrorTool(canvasOnly(), {} as DocumentStore) as unknown as Internals;
-  attachWith(tool, { ...heard, fields: { objects: ["body2"], line: { plane: "XZ" }, lineId: null, active: "objects" } });
+  attachWith(tool, {
+    ...heard,
+    fields: { objects: ["body2"], line: { plane: "XZ" }, lineId: null, active: "objects" },
+  });
   return heard;
 }
 
