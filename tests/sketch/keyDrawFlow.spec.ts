@@ -267,6 +267,18 @@ describe("a typed first point", () => {
     expect(state.placed.map((h) => h.p)).toEqual([v(4, 9)]);
   });
 
+  it("refuses a point too far out in the box, spoken, with nothing placed", () => {
+    const { state } = rig("line");
+    press(free());
+    type("x", "1e18");
+    press(field("x"));
+    expect(state.placed).toEqual([]);
+    expect(dim.isActive).toBe(true);
+    expect(document.activeElement).toBe(field("x"));
+    expect(document.querySelector(".dim-input")?.textContent).toContain("X is too far out");
+    expect(announce).toHaveBeenCalledWith("X is too far out, a point stays within 1 km of the origin", "assertive");
+  });
+
   it("reads @dx,dy from the last placed point, and from 0, 0 after a reset", () => {
     const { flow, state } = rig("rectangle");
     flow.placed(v(11, -4));

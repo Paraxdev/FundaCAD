@@ -414,6 +414,28 @@ def test_the_rail_walks_by_arrows_with_a_draw_tool_armed_and_the_cursor_stays(s)
     no_pointer(s)
 
 
+@pytest.mark.parametrize("typed", ["1e18", "1e308", "1000000.001"])
+def test_a_point_too_far_out_is_refused_out_loud_and_the_page_goes_on(s, typed):
+    kb = s.page.keyboard
+    to_items_plane(s)
+    tool(s, "l", "line")
+    kb.press("Enter")
+    in_field(s, "X")
+    kb.type(typed)
+    kb.press("Enter")
+    spoke(s, "X is too far out, a point stays within 1 km of the origin")
+    assert s.page.evaluate("() => window.sketch.base") is None
+    assert s.page.evaluate(LABEL) == "X"
+    assert s.page.evaluate("() => document.activeElement.getAttribute('aria-invalid')") == "true"
+    kb.press("Control+A")
+    kb.type("-1000000")
+    kb.press("Enter")
+    s.page.wait_for_function("() => window.sketch.base?.x === -1000000")
+    kb.type("@1500000,0")
+    kb.press("Enter")
+    s.page.wait_for_function("() => window.sketch.entities.length === 1")
+
+
 def test_arrows_turn_the_view_when_the_sketch_plane_is_edge_on(s):
     kb = s.page.keyboard
     to_items_plane(s)

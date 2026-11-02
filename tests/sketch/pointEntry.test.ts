@@ -153,3 +153,49 @@ describe("readPoint relative", () => {
     expect(bad(readPoint(typed("8", "@5,3"), U, FROM))?.field).toBe("y");
   });
 });
+
+describe("readPoint refuses a point past the limit", () => {
+  const far = (axis: string) => `${axis} is too far out, a point stays within 1 km of the origin`;
+
+  it.each([
+    ["X exactly at it", typed("1000000", "0"), { x: 1e6, y: 0 }],
+    ["Y exactly at it, negative", typed("0", "-1000000"), { x: 0, y: -1e6 }],
+    ["a pair just inside", typed("999999.999;999999.999"), { x: 999999.999, y: 999999.999 }],
+    ["a relative value that ends on it", typed("@999989,0"), { x: 1e6, y: -4 }],
+  ])("takes %s", (_, t, want) => {
+    expect(readPoint(t, U, FROM)).toEqual({ ok: true, ...want });
+  });
+
+  it.each([
+    ["X just past it", typed("1000000.001", "0"), "x", far("X")],
+    ["Y just past it, negative", typed("0", "-1000000.001"), "y", far("Y")],
+    ["X far past it", typed("1e18", "0"), "x", far("X")],
+    ["X where tidy would overflow", typed("1e308", "0"), "x", far("X")],
+    ["a pair's Y, marked in X that holds it", typed("0;1e7"), "x", far("Y")],
+    ["a relative X", typed("@1e18,0"), "x", far("X")],
+    ["a relative Y", typed("@0,1e18"), "x", far("Y")],
+    ["a relative Y in its own field", typed("@0", "@1e18"), "y", far("Y")],
+    ["@ in Y with X left alone", yOnly("1", "@1e18"), "y", far("Y")],
+    ["a sum whose parts are each inside", typed("@999990,0"), "x", far("X")],
+    ["a sum past it on Y", typed("@0,-999997"), "x", far("Y")],
+    ["a sum overflowing to infinity", typed("@1e308,0"), "x", far("X")],
+  ])("refuses %s", (_, t, field, problem) => {
+    expect(bad(readPoint(t, U, FROM))).toEqual({ field, problem });
+  });
+
+  it("a sum from a base near the limit, either way", () => {
+    const from = { x: 999999, y: 0 };
+    expect(readPoint(typed("@1,0"), U, from)).toEqual({ ok: true, x: 1e6, y: 0 });
+    expect(bad(readPoint(typed("@1.001,0"), U, from))).toEqual({ field: "x", problem: far("X") });
+  });
+
+  it("is a length, not a number: 39370 in is inside and 39371 in is past it", () => {
+    const I = { x: inch, y: inch };
+    expect(readPoint(typed("39370", "0"), I, ZERO).ok).toBe(true);
+    expect(bad(readPoint(typed("39371", "0"), I, ZERO))).toEqual({ field: "x", problem: far("X") });
+  });
+
+  it("marks X for a cursor left past it with nothing typed", () => {
+    expect(bad(readPoint(seedOnly("2000000", "0"), U, ZERO))).toEqual({ field: "x", problem: far("X") });
+  });
+});

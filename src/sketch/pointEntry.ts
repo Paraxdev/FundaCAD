@@ -20,6 +20,11 @@ type Part = { ok: true; value: number } | { ok: false; problem: string };
 // 1.5 in times 25.4 is 38.099999999999994, and a typed point is meant to stay as typed.
 const tidy = (v: number) => Math.round(v * 1e9) / 1e9;
 
+// The kernel built a true solid at 1e7 mm and an empty body at 1e8, and tidy moves values past 9e6, so a point stops a safe step short.
+export const POINT_LIMIT_MM = 1e6;
+const TOO_FAR = "is too far out, a point stays within 1 km of the origin";
+const within = (v: number) => Math.abs(v) <= POINT_LIMIT_MM;
+
 const SEMICOLON_HINT = "Write X;Y with a ; between the numbers when they have decimal commas";
 
 function number(text: string, unit: UnitDef | null): Part {
@@ -136,5 +141,9 @@ export function readPoint(
   from: { x: number; y: number },
 ): PointRead {
   const r = read(t, units, from);
-  return r.ok ? { ok: true, x: tidy(r.x), y: tidy(r.y) } : r;
+  if (!r.ok) return r;
+  // The field to mark is the one holding the text, as @dx,dy in X can put Y out of reach.
+  if (!within(r.x)) return { ok: false, field: !t.xTyped && t.yTyped ? "y" : "x", problem: `X ${TOO_FAR}` };
+  if (!within(r.y)) return { ok: false, field: !t.yTyped && t.xTyped ? "x" : "y", problem: `Y ${TOO_FAR}` };
+  return { ok: true, x: tidy(r.x), y: tidy(r.y) };
 }
