@@ -456,6 +456,21 @@ def test_the_x_and_y_box_stays_on_screen_when_the_cursor_walks_off_it(s):
     no_pointer(s)
 
 
+def test_a_held_enter_opens_the_box_once_and_places_nothing(s):
+    kb = s.page.keyboard
+    to_items_plane(s)
+    tool(s, "l", "line")
+    kb.down("Enter")
+    kb.down("Enter")
+    kb.down("Enter")
+    kb.up("Enter")
+    in_field(s, "X")
+    s.page.wait_for_timeout(200)
+    assert s.page.evaluate("() => window.sketch.base") is None
+    assert not any("Point at" in t for t in s.page.evaluate(SPOKEN))
+    no_pointer(s)
+
+
 def test_arrows_turn_the_view_when_the_sketch_plane_is_edge_on(s):
     kb = s.page.keyboard
     to_items_plane(s)

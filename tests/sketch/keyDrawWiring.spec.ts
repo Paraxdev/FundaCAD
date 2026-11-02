@@ -497,6 +497,25 @@ describe("the next point typed in X and Y", () => {
   });
 });
 
+describe("a held Enter with a shape in flight", () => {
+  it("draws nothing from the surface, where the tool's own Enter would commit the box", () => {
+    const { s } = makeDrawing("rectangle");
+    startAt(s, "1", "2");
+    type("width", "5");
+    type("height", "6");
+    s.onKey({
+      key: "Enter",
+      target: document.getElementById("free"),
+      repeat: true,
+      preventDefault() {},
+      stopPropagation() {},
+    } as Partial<KeyboardEvent>);
+    expect(s.entities).toEqual([]);
+    key(s, "Enter");
+    expect(s.entities).toHaveLength(1);
+  });
+});
+
 describe("Enter on a size box nobody touched", () => {
   beforeEach(() => vi.mocked(toast).mockClear());
 

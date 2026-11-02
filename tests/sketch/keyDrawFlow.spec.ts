@@ -190,7 +190,9 @@ describe("Enter is left alone", () => {
   it("on a control, a repeat, or with a modifier", () => {
     rig("line");
     expect(press(document.getElementById("rail")!).defaultPrevented).toBe(false);
-    expect(press(free(), { repeat: true }).defaultPrevented).toBe(false);
+    expect(press(document.getElementById("rail")!, { repeat: true }).defaultPrevented).toBe(false);
+    press(free(), { repeat: true });
+    expect(dim.isActive).toBe(false);
     expect(press(free(), { ctrlKey: true }).defaultPrevented).toBe(false);
     expect(press(free(), { altKey: true }).defaultPrevented).toBe(false);
     expect(press(free(), { metaKey: true }).defaultPrevented).toBe(false);
@@ -208,6 +210,35 @@ describe("Enter is left alone", () => {
     state.edgeOn = false;
     press(free());
     expect(boxFields()).toEqual(["x", "y"]);
+  });
+});
+
+describe("a held Enter", () => {
+  it("opens the box once and does not go on to place a point", () => {
+    const { state } = rig("line");
+    press(free());
+    expect(dim.hasField("x")).toBe(true);
+    press(field("x"), { repeat: true });
+    press(field("x"), { repeat: true });
+    expect(state.placed).toEqual([]);
+    expect(dim.hasField("x")).toBe(true);
+    press(field("x"));
+    expect(state.placed).toHaveLength(1);
+  });
+
+  it("does not reach the box's own Enter, which every other tool's box still has", () => {
+    rig("select");
+    const done = vi.fn();
+    dim.show([{ name: "width", label: "W" }], done);
+    type("width", "5");
+    press(field("width"), { repeat: true });
+    expect(done).toHaveBeenCalledTimes(1);
+    rig("line");
+    const held = vi.fn();
+    dim.show([{ name: "width", label: "W" }], held);
+    type("width", "5");
+    expect(press(field("width"), { repeat: true }).defaultPrevented).toBe(true);
+    expect(held).not.toHaveBeenCalled();
   });
 });
 

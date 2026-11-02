@@ -210,6 +210,7 @@ export class KeyDrawFlow {
   onKey(e: KeyboardEvent): boolean {
     if (e.key in ARROWS) return this.onArrow(e);
     if (e.key === "Tab") return this.onTab(e);
+    if (e.key === "Enter" && e.repeat && !e.metaKey) return this.heldEnter(e);
     const opener = OPENERS.has(e.key);
     if ((e.key !== "Enter" && !opener) || e.repeat || e.metaKey) return false;
     // AltGr arrives as Ctrl+Alt on Windows, and it is how some layouts type @.
@@ -231,6 +232,14 @@ export class KeyDrawFlow {
     if (!keyTargetFree(e.target)) return false;
     if (e.key === "Enter" && this.engaged && !(dim.isActive && dim.touched())) return this.placeByEnter(e);
     return this.openByKey(e, opener);
+  }
+
+  // Left to go on, the box's own Enter or the tool's would place what the first press only opened.
+  private heldEnter(e: KeyboardEvent): boolean {
+    if (!this.armed() || (!keyTargetFree(e.target) && !this.host.dim().ownsField(e.target))) return false;
+    e.preventDefault();
+    e.stopPropagation();
+    return true;
   }
 
   private openByKey(e: KeyboardEvent, opener: boolean): boolean {
