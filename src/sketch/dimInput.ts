@@ -926,9 +926,10 @@ export class DimInput {
 
   private onKey(e: KeyboardEvent, field: Field) {
     if (isHistoryKey(e)) {
-      // Chromium has one undo stack per page, so the browser may act only for typing this field still holds.
+      // Chromium has one undo stack per page, moving focus to the field it acts on, so the browser may act exactly
+      // while some field of this box still holds typing.
       const redo = e.key.toLowerCase() === "y" || e.shiftKey;
-      if (this.ownsHistoryKey(field, redo)) e.stopPropagation();
+      if (this.fields.some((f) => !f.hidden && this.ownsHistoryKey(f, redo))) e.stopPropagation();
       return;
     }
     if (e.key === "Tab") {

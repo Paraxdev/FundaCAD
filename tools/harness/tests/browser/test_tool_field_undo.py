@@ -187,3 +187,44 @@ def test_undoing_the_typed_tracked_value_lets_the_mouse_drive_again(s):
     assert fields(s)["steps"] == ["box", "sketch"]
     sweep(s, (0.5, 0.2), (0.6, 0.65))
     assert fields(s)["values"][0] != shown
+
+
+def test_two_typed_fields_are_taken_back_before_the_sketch_has_the_key(s):
+    s.press("Escape")
+    s.new_document()
+    s.open_file(BLOCK)
+    s.view("iso")
+    s.pick_face("top")
+    s.tool("Sketch")
+    s.settle()
+    s.press("r")
+    s.settle()
+    s.click_at(sketch=(-2, 1))
+    s.settle()
+    sweep(s, (0.55, 0.45))
+    s.page.keyboard.type("4.5")
+    s.press("Tab")
+    s.page.keyboard.type("3.5")
+    s.press("Enter")
+    s.settle()
+    drawn = s.page.evaluate("() => window.sketch.entities.length")
+    assert drawn == 1
+    s.click_at(sketch=(3, 2))
+    s.settle()
+    sweep(s, (0.6, 0.4))
+    tracked = fields(s)["values"]
+    s.page.keyboard.type("7")
+    s.press("Tab")
+    s.page.keyboard.type("8")
+    s.press("Shift+Tab")
+    assert fields(s)["values"] == ["7", "8"]
+
+    s.press("Ctrl+Z")
+    assert fields(s)["values"] == ["7", tracked[1]], "the last typed goes first"
+    s.press("Ctrl+Z")
+    assert fields(s)["values"] == tracked
+    assert s.page.evaluate("() => window.sketch.entities.length") == drawn, "the sketch not touched yet"
+    s.press("Ctrl+Z")
+    assert s.page.evaluate("() => window.sketch.entities.length") == drawn - 1
+    s.press("Escape")
+    s.press("Escape")

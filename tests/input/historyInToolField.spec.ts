@@ -151,6 +151,72 @@ describe("Ctrl+Z and Ctrl+Y in a tool's value box", () => {
     expect(actions).toEqual(["redo"]);
   });
 
+  describe("with two fields", () => {
+    const TWO = [
+      { name: "w", label: "W", kind: "length" as const },
+      { name: "h", label: "H", kind: "length" as const },
+    ];
+    function openTwo() {
+      const actions: string[] = [];
+      off.push(
+        installKeymap(
+          (a) => actions.push(a),
+          () => "model",
+        ),
+      );
+      const dim = new DimInput();
+      dim.show(
+        TWO,
+        () => {},
+        () => dim.hide(),
+      );
+      dim.updateFromCursor({ w: 5.5, h: 3.25 });
+      const [w, h] = document.querySelectorAll<HTMLInputElement>(".dim-input input");
+      return { actions, dim, w: w!, h: h! };
+    }
+
+    it("the document has no key while any field of the box holds typing, whichever has focus", () => {
+      const { actions, dim, w, h } = openTwo();
+      typeInto(w, "7");
+      typeInto(h, "8");
+      w.focus();
+      // The browser takes back H, the last typed, and moves focus there.
+      expect(press(w, "z", { ctrlKey: true }).defaultPrevented).toBe(false);
+      typeInto(h, "3.25", "historyUndo");
+      h.focus();
+      expect(press(h, "z", { ctrlKey: true }).defaultPrevented).toBe(false);
+      typeInto(w, "5.5", "historyUndo");
+      w.focus();
+      expect(actions).toEqual([]);
+      expect(dim.hasTyped()).toBe(false);
+      expect(press(w, "z", { ctrlKey: true }).defaultPrevented).toBe(true);
+      expect(actions).toEqual(["undo"]);
+    });
+
+    it("redo walks back the same way, then the document has it", () => {
+      const { actions, w, h } = openTwo();
+      typeInto(w, "7");
+      typeInto(h, "8");
+      typeInto(h, "3.25", "historyUndo");
+      typeInto(w, "5.5", "historyUndo");
+      expect(press(w, "y", { ctrlKey: true }).defaultPrevented).toBe(false);
+      typeInto(w, "7", "historyRedo");
+      expect(press(w, "y", { ctrlKey: true }).defaultPrevented).toBe(false);
+      typeInto(h, "8", "historyRedo");
+      expect(actions).toEqual([]);
+      expect(press(h, "y", { ctrlKey: true }).defaultPrevented).toBe(true);
+      expect(actions).toEqual(["redo"]);
+    });
+
+    it("a tool's write over the other field's typing leaves nothing for the browser", () => {
+      const { actions, dim, w, h } = openTwo();
+      typeInto(w, "7");
+      dim.seed("w", 9.5);
+      expect(press(h, "z", { ctrlKey: true }).defaultPrevented).toBe(true);
+      expect(actions).toEqual(["undo"]);
+    });
+  });
+
   it("any other text field keeps its own undo", () => {
     const { actions } = open();
     const other = document.createElement("input");
