@@ -284,13 +284,14 @@ describe("Enter and Space", () => {
     },
   );
 
-  it("reports a refused pick on the status line", async () => {
+  it("reports a refused pick on the status line and in speech", async () => {
     const r = await ready();
     key("]");
     Object.assign(r.viewport, { picksSuspended: true });
     key("Enter");
     expect(r.viewport.applyPicks).not.toHaveBeenCalled();
     expect(r.host.setStatus.mock.calls.at(-1)![0]).toContain("building");
+    expect(lastSaid()).toBe(r.host.setStatus.mock.calls.at(-1)![0]);
   });
 
   it("Enter on a lit plane starts a sketch and puts the light out", async () => {

@@ -25,7 +25,7 @@ import type { Viewport } from "../viewport/viewport";
 import type { Engine } from "./engine";
 import { featurePick } from "./featurePick";
 import { writeFeatureRows } from "./featureRows";
-import { BASE_PLANES, routePlaneRow, sketchOnPlane, type PlanePick } from "./planePick";
+import { BASE_PLANES, refuseAloud, routePlaneRow, sketchOnPlane, type PlanePick } from "./planePick";
 
 export interface GeometryBrowserHost {
   store: Engine["store"];
@@ -427,7 +427,7 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
     activatePlane(row: GeometryRow, start = true): boolean {
       const pick = planePickOf(row);
       if (!pick) {
-        e.setStatus(ROW_CHANGED, "");
+        refuseAloud(e, ROW_CHANGED);
         return true;
       }
       if (routePlaneRow(e, pick) !== "row") return true;

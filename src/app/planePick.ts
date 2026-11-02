@@ -2,9 +2,19 @@
 
 import type { Engine } from "./engine";
 import type { Plane3 } from "../types";
+import { announce } from "../ui/announce";
 import { routeTreeClick, type TreeClickDeps, type TreeClickRoute, type TreePick } from "../ui/treePick";
 
 export const BASE_PLANES: readonly Plane3[] = ["XY", "XZ", "YZ"];
+
+/** How long a selection's words wait to be spoken, so a run of Ctrl-clicks says only its last. */
+export const SELECTION_SPEECH_DELAY = 250;
+
+// A toast reaches no screen reader. The readout speaks a changed selection under the same key and replaces these words.
+export function refuseAloud(e: Pick<Engine, "setStatus">, text: string) {
+  e.setStatus(text, "");
+  announce(text, "polite", { key: "selection", delay: SELECTION_SPEECH_DELAY });
+}
 
 export type PlanePick = Extract<TreePick, { kind: "basePlane" | "datumPlane" }>;
 export type PlaneRowHost = Pick<Engine, "store" | "toolOwnsScreen" | "setStatus"> & {
@@ -19,12 +29,12 @@ function busyHint(e: PlaneRowHost): string | null {
 }
 
 export function treeClickDeps(e: PlaneRowHost): TreeClickDeps {
-  return { busyHint: () => busyHint(e), hint: (text) => e.setStatus(text, "") };
+  return { busyHint: () => busyHint(e), hint: (text) => refuseAloud(e, text) };
 }
 
 export function sketchOnPlane(e: PlaneRowHost, pick: PlanePick) {
   if (e.sketch.active) {
-    e.setStatus("Finish this sketch before starting another", "");
+    refuseAloud(e, "Finish this sketch before starting another");
     return;
   }
   if (pick.kind === "basePlane") e.sketch.enter(pick.plane, e.store);

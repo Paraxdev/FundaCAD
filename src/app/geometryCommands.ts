@@ -9,7 +9,7 @@ import { announce } from "../ui/announce";
 import { describePick } from "../ui/describePick";
 import { emptyStepWords } from "./canvasPick";
 import type { Engine } from "./engine";
-import { SELECTION_SPEECH_DELAY } from "./selectionWords";
+import { refuseAloud, SELECTION_SPEECH_DELAY } from "./planePick";
 
 function focusGeometryList() {
   const box = document.querySelector(".geometry-rows");
@@ -34,11 +34,7 @@ export function createGeometryCommands(e: Pick<Engine, "geometryBrowser" | "setS
   // nothing to say: a body of one face, or the row already selected.
   const say = (text: string) => announce(text, "polite", { key: "selection", delay: SELECTION_SPEECH_DELAY });
 
-  // A toast reaches no screen reader.
-  function refuse(text: string) {
-    e.setStatus(text, "");
-    say(text);
-  }
+  const refuse = (text: string) => refuseAloud(e, text);
 
   function select(delta: 1 | -1) {
     const list = useGeometryBrowserStore();

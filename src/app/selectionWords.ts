@@ -8,16 +8,13 @@ import { edgeKeyOf, edgeRows, faceRows, planeRows } from "../ui/geometryRows";
 import { exactRound, type Pt3 } from "../ui/selectionMeasure";
 import type { Engine } from "./engine";
 import { bodyLabelsOf, labelled, ownerNamesOf, pickedRowKeys } from "./geometryBrowser";
-import { BASE_PLANES } from "./planePick";
+import { BASE_PLANES, SELECTION_SPEECH_DELAY } from "./planePick";
 
 export interface SelectionSpeech {
   text: string;
   /** Only worth saying at Verbose. */
   verbose?: boolean;
 }
-
-/** How long a selection's words wait to be spoken, so a run of Ctrl-clicks says only its last. */
-export const SELECTION_SPEECH_DELAY = 250;
 
 type Said = Pick<PickWords, "label" | "spoken">;
 

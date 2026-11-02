@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { watch } from "vue";
 import { useEngine } from "../../app/engineKey";
-import { SELECTION_SPEECH_DELAY } from "../../app/selectionWords";
+import { SELECTION_SPEECH_DELAY } from "../../app/planePick";
 import { useSelectionOffers } from "../../composables/useSelectionOffers";
 import { announce } from "../../ui/announce";
 

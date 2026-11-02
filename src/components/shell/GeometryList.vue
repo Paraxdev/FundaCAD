@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, useTemplateRef, watch } from "vue";
 import { useEngine } from "../../app/engineKey";
+import { refuseAloud } from "../../app/planePick";
 import { useWheelScroll } from "../../composables/useWheelScroll";
 import { GEOMETRY_PAGE_SIZE, useGeometryBrowserStore, type GeometryKind } from "../../stores/geometryBrowser";
 import { useSelectionStore } from "../../stores/selection";
@@ -121,7 +122,7 @@ const chosen = computed(() => {
 
 function pick(rows: readonly GeometryRow[], additive: boolean) {
   const refused = ctl.pickRows(rows, { additive });
-  if (refused) engine.setStatus(refused, "");
+  if (refused) refuseAloud(engine, refused);
 }
 
 function selectOnly(key: string) {

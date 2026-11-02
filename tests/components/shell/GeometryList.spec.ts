@@ -511,6 +511,8 @@ describe("picking", () => {
     expect(setStatus).toHaveBeenCalledTimes(2);
     expect(setStatus.mock.calls[0]![0]).toContain(word);
     expect(setStatus.mock.calls[0]![1]).toBe("");
+    const spoken = vi.mocked(announce).mock.calls.filter((c) => c[2]?.key === "selection");
+    expect(spoken.map((c) => c[0])).toEqual(setStatus.mock.calls.map((c) => c[0]));
   });
 
   it("refuses a row from before a build until the new rows land", async () => {
@@ -520,6 +522,7 @@ describe("picking", () => {
     await press(w, 0, "Enter");
     expect(r.viewport.applyPicks).not.toHaveBeenCalled();
     expect(setStatus.mock.calls[0]![0]).toContain("changed");
+    expect(vi.mocked(announce).mock.lastCall?.[0]).toBe(setStatus.mock.calls[0]![0]);
     await land(r.asks[1]!, reply("body1", 2));
     await press(w, 0, "Enter");
     expect(r.viewport.applyPicks).toHaveBeenCalledTimes(1);
@@ -1009,6 +1012,7 @@ describe("the Planes list", () => {
       await enterOn(w, 0);
       expect(r.host.sketch.enter).not.toHaveBeenCalled();
       expect(r.host.setStatus.mock.calls[0]![0]).toContain("active tool");
+      expect(vi.mocked(announce).mock.lastCall?.[0]).toBe(r.host.setStatus.mock.calls[0]![0]);
     });
 
     it("says the row changed when its datum went without the list hearing", async () => {
@@ -1018,6 +1022,7 @@ describe("the Planes list", () => {
       expect(r.browser.activatePlane(row)).toBe(true);
       expect(r.host.sketch.enter).not.toHaveBeenCalled();
       expect(r.host.setStatus.mock.calls[0]![0]).toContain("changed");
+      expect(vi.mocked(announce).mock.lastCall?.[0]).toBe(r.host.setStatus.mock.calls[0]![0]);
     });
   });
 

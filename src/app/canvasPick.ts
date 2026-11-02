@@ -6,6 +6,7 @@ import { announce } from "../ui/announce";
 import { isChoiceOpen } from "../ui/choice";
 import { describePick } from "../ui/describePick";
 import type { Engine } from "./engine";
+import { refuseAloud } from "./planePick";
 
 const KINDS: readonly GeometryKind[] = ["faces", "edges", "planes"];
 const KIND_WORDS: Record<GeometryKind, string> = { faces: "Faces", edges: "Edges", planes: "Planes" };
@@ -106,7 +107,7 @@ export function installCanvasPick(e: CanvasPickHost): () => void {
       return;
     }
     const refused = ctl.pickRows([row], { additive });
-    if (refused) e.setStatus(refused, "");
+    if (refused) refuseAloud(e, refused);
   }
 
   function onKey(ev: KeyboardEvent) {
