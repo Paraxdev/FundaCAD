@@ -1,6 +1,7 @@
 """Shell opens every selected face, on one body or across several."""
 
 import json
+import math
 
 import pytest
 
@@ -301,3 +302,104 @@ def test_a_deleted_body_is_refused_and_a_later_body_does_not_take_its_number(s, 
     s.settle()
     assert faces_of(s) == {"body4": 6, "body1": 6, "body2": 6}
     assert build_error(s) == "Shell: the target body no longer exists"
+
+
+def ctrl_click_world(s, x, y, z):
+    p = s.bridge.call("worldPoint", x=x, y=y, z=z)
+    s._mouse_click(p["x"], p["y"], mods=["Ctrl"])
+    s.settle()
+
+
+def open_top_with_preview(s):
+    s.open_file(BLOCK)
+    s.pick_face("top")
+    s.tool("Shell")
+    s.type("field:distance", "1")
+    s.settle()
+    assert faces_of(s) == {"body1": 11}
+
+
+def commit_shell_faces(s):
+    s.type("field:distance", "1", enter=True)
+    s.settle()
+    return s.page.evaluate(SHELLS)[-1]
+
+
+@pytest.mark.parametrize("through", [(0, 0, 15), (3, -3, 15), (9.5, 0, 15)], ids=["hole-centre", "hole-off-centre", "rim"])
+def test_a_ctrl_click_through_the_previews_opening_adds_no_face(s, through):
+    open_top_with_preview(s)
+    ctrl_click_world(s, *through)
+    assert len(commit_shell_faces(s)) == 1
+    assert faces_of(s) == {"body1": 11}
+
+
+@pytest.mark.parametrize("through", [(3, -3, 15), (9.5, 0, 15)], ids=["hole", "rim"])
+def test_a_refused_click_keeps_the_thickness_field_so_a_bare_enter_applies_the_shell(s, through):
+    open_top_with_preview(s)
+    ctrl_click_world(s, *through)
+    assert s.page.evaluate("() => document.activeElement?.tagName") == "INPUT"
+    assert "inside the opening" in s.page.evaluate("() => document.querySelector('#viewport .prompt').textContent")
+    s.page.keyboard.press("Enter")
+    s.settle()
+    assert len(s.page.evaluate(SHELLS)) == 1
+    assert len(s.page.evaluate(SHELLS)[-1]) == 1
+    assert faces_of(s) == {"body1": 11}
+
+
+@pytest.mark.parametrize("seen", ["hidden", "shown again"])
+def test_a_ctrl_click_through_the_opening_adds_no_face_after_another_body_was_hidden(s, seen):
+    s.open_file("tools/harness/fixtures/two_boxes.json")
+    s.page.evaluate("() => window.store.setBodyVisibility('body2', false)")
+    if seen == "shown again":
+        s.page.evaluate("() => window.store.setBodyVisibility('body2', true)")
+    s.settle()
+    s.view("iso")
+    s.pick_face("body1:top")
+    s.tool("Shell")
+    s.type("field:distance", "1")
+    s.settle()
+    ctrl_click_world(s, 0, 0, 15)
+    assert len(commit_shell_faces(s)) == 1
+    assert faces_of(s)["body1"] == 11
+
+
+def test_a_real_wall_is_still_added_over_the_preview(s):
+    open_top_with_preview(s)
+    ctrl_click_world(s, 0, -10, 0)
+    assert len(commit_shell_faces(s)) == 2
+    assert faces_of(s) == {"body1": 10}
+
+
+CUT_CYLINDER = """() => {
+  window.store.addFeature({ id: 's1', type: 'sketch', name: 'S1', plane: 'XY',
+    entities: [{ type: 'circle', id: 'c1', radius: 10, x: 0, y: 0 }] });
+  window.store.addFeature({ id: 'e1', type: 'extrude', sketch: 's1', distance: 30, operation: 'new' });
+  window.store.addFeature({ id: 's2', type: 'sketch', name: 'S2', plane: 'XZ',
+    entities: [{ type: 'circle', id: 'c2', radius: 3, x: 0, y: 15 }, { type: 'circle', id: 'c3', radius: 3, x: 0, y: -15 }] });
+  window.store.addFeature({ id: 'e2', type: 'extrude', sketch: 's2', distance: 40, operation: 'cut', symmetric: true });
+}"""
+PICKED = "() => window.__fundacad.faceOffset.faces.length"
+
+
+def open_top_of_cut_cylinder(s):
+    s.page.evaluate(CUT_CYLINDER)
+    s.settle()
+    s.view("iso")
+    s.pick_face("top")
+    s.tool("Shell")
+    s.type("field:distance", "1")
+    s.settle()
+    assert s.page.evaluate(PICKED) == 1
+
+
+@pytest.mark.parametrize("turn", [-0.8, 0.05, 0.7])
+def test_the_curved_wall_of_a_part_with_a_cut_is_still_added_over_the_preview(s, turn):
+    open_top_of_cut_cylinder(s)
+    ctrl_click_world(s, 10 * math.cos(turn), 10 * math.sin(turn), 6)
+    assert s.page.evaluate(PICKED) == 2
+
+
+def test_a_ctrl_click_through_the_opening_of_a_part_with_a_cut_adds_no_face(s):
+    open_top_of_cut_cylinder(s)
+    ctrl_click_world(s, 3, -3, 30)
+    assert s.page.evaluate(PICKED) == 1

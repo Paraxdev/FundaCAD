@@ -33,7 +33,7 @@ export class SessionState {
   // The features the model on screen was built from, and the load it belongs to.
   drawnFrom: { ids: Set<string>; load: number } | null = null;
   // The last preview-free build and its key: leaving a tool or undoing a refused commit shows it again without a rebuild.
-  committedShown: { key: string; state: RebuildState } | null = null;
+  committedShown: { key: string; modelKey: string; state: RebuildState } | null = null;
   /** A commit the kernel had not answered for yet, see verifyCommit. */
   provisional: { id: string; what: string; key: string } | null = null;
   /** Set when a preview is dropped or a refused commit undone, the only times

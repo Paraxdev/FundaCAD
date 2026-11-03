@@ -88,6 +88,16 @@ export class LightAimTool {
       () => this.finish(),
       () => this.cancel(),
     );
+    this.dim.restoresOnUndo(
+      "azimuth",
+      () => this.angles.azimuth,
+      (az) => setRenderPref("keyAzimuth", az),
+    );
+    this.dim.restoresOnUndo(
+      "elevation",
+      () => this.angles.elevation,
+      (el) => setRenderPref("keyElevation", el),
+    );
     this.dim.updateFromCursor({ ...this.before });
     setPrompt("Drag the sun to aim the key light · 5° steps, Shift 1°, Alt free · type exact angles · Enter · Esc");
     this.gesture.frame();

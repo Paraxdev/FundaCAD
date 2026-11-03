@@ -120,6 +120,14 @@ export class MechanismTool {
       () => this.commit(),
       () => this.cancel(),
     );
+    this.dim.restoresOnUndo(
+      field,
+      () => this.value,
+      (value) => {
+        this.value = value;
+        this.pushPreview();
+      },
+    );
     this.dim.updateFromCursor({ [field]: this.value });
     setPrompt(
       field === "offset"

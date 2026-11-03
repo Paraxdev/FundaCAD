@@ -352,6 +352,15 @@ export class SectionTool {
     this.gizmo = this.handle.group;
     this.viewport.addToScene(this.gizmo, "section");
     this.dim.show([{ name: "offset", label: "Offset", icon: "offsetPlane", kind: "length" }], () => this.confirm());
+    this.dim.restoresOnUndo(
+      "offset",
+      () => this.offset,
+      (offset) => {
+        this.offset = offset;
+        this.pushPlane();
+        this.save();
+      },
+    );
     this.dim.updateFromCursor({ offset: this.offset });
     this.place();
     this.prompt();

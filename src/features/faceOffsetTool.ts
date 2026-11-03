@@ -4,7 +4,7 @@
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore, RebuildState } from "../document/store";
-import type { Feature, Selector, Vec3 } from "../types";
+import type { Feature, RebuildResult, Selector, Vec3 } from "../types";
 import { DimInput, type DimToggleDef } from "../sketch/dimInput";
 import { setPrompt } from "../ui/prompt";
 import { fmtLength, snap } from "../ui/units";
@@ -25,6 +25,7 @@ import { featureKey, PreviewOutcomes } from "./previewOutcomes";
 import { axialSpan, ResizeGuides } from "./resizeGuides";
 import { boxBindings } from "./boxBindings";
 import { toolChar } from "../input/shortcuts";
+import { nearestMeshFace } from "./nearestMeshFace";
 
 export type FaceOffsetMode = "offsetFace" | "thicken" | "shell";
 
@@ -47,6 +48,8 @@ export class FaceOffsetTool {
   private faceIds: number[] = [];
   /** Read once per face, while its id is live: a built preview renumbers the faces of every body after a shelled one. */
   private faceOwners: (string | null)[] = [];
+  /** A press would otherwise scan the whole mesh again for every face already picked. */
+  private faceOnModel = new WeakMap<Selector, { model: RebuildResult; faceId: number | undefined }>();
   private bodyId: string | null = null;
   private anchor = new THREE.Vector3();
   private axis = new THREE.Vector3(0, 0, 1);
@@ -153,6 +156,26 @@ export class FaceOffsetTool {
     this.viewport.domElement.style.cursor = this.hovering ? "grab" : "default";
   }
 
+  // A Shell preview has walls the model lacks, and the engine resolves a pick on the model before it. A hit off that
+  // model, or on a face already picked (the opening's rim), adds nothing.
+  private onPreviewOnlyFace(hit: { selector: Selector; bodyId: string | null }): boolean {
+    const before = this.mode === "shell" ? this.store.modelBeforePreview : null;
+    if (!before || !hit.bodyId || !("point" in hit.selector)) return false;
+    const at = nearestMeshFace(before, hit.bodyId, hit.selector.point);
+    if (!at) return false;
+    if (at.distance > MIN_OFFSET / 2) return true;
+    this.faceOnModel.set(hit.selector, { model: before, faceId: at.faceId });
+    return this.faces.some((f, i) => this.pickedFaceOn(before, f, this.faceOwners[i]) === at.faceId);
+  }
+
+  private pickedFaceOn(model: RebuildResult, face: Selector, owner: string | null | undefined): number | undefined {
+    const known = this.faceOnModel.get(face);
+    if (known?.model === model) return known.faceId;
+    const faceId = owner && "point" in face ? nearestMeshFace(model, owner, face.point)?.faceId : undefined;
+    this.faceOnModel.set(face, { model, faceId });
+    return faceId;
+  }
+
   private onDown(e: PointerEvent) {
     if (e.button !== 0) return;
     if (this.phase === "pick") {
@@ -177,6 +200,10 @@ export class FaceOffsetTool {
       if (hit && (this.mode === "shell" || hit.bodyId === this.bodyId)) {
         e.preventDefault();
         e.stopImmediatePropagation();
+        if (this.onPreviewOnlyFace(hit)) {
+          setPrompt("That's inside the opening, not a face to add · Esc");
+          return;
+        }
         this.faces.push(hit.selector);
         this.faceIds.push(hit.faceId);
         this.faceOwners.push(hit.bodyId);
@@ -322,6 +349,14 @@ export class FaceOffsetTool {
       () => this.onTyped(),
     );
     // The box says only what this tool judged, held refusals included.
+    this.dim.restoresOnUndo(
+      "distance",
+      () => this.value,
+      (value) => {
+        this.value = value;
+        this.refreshPreview();
+      },
+    );
     this.dim.showOwnProblem(this.outcomes.refusal);
     this.syncToggle();
     this.dim.updateFromCursor({ distance: this.readout() });

@@ -316,6 +316,12 @@ function buildKey(doc: CadDocument): string {
   return JSON.stringify(rest);
 }
 
+// Hiding or showing a body rebuilds nothing, so the model is the same one.
+function modelKey(doc: CadDocument): string {
+  const { bodyVisibility: _shown, ...rest } = doc;
+  return buildKey(rest as CadDocument);
+}
+
 // Features up to the rollback marker, unsuppressed, strictly before the sketch being edited.
 export function prefixFeatures(
   features: Feature[],
@@ -3085,6 +3091,12 @@ export class DocumentStore {
     return this.effectiveDoc();
   }
 
+  // The model without the open tool's preview, null when what was last built without one is no longer that document.
+  get modelBeforePreview(): RebuildResult | null {
+    const c = this.st.committedShown;
+    return c && modelKey(this.effectiveDoc({ withoutPreview: true })) === c.modelKey ? c.state.result : null;
+  }
+
   // Features up to the rollback marker, minus suppressed ones. The full document is what is saved.
   private effectiveDoc(opts?: { withoutPreview?: boolean }): CadDocument {
     let features = prefixFeatures(this.doc.features, this.rollbackIndex, this.suppressed);
@@ -3329,7 +3341,9 @@ export class DocumentStore {
               if (this.build.streamed !== null && (!reply.ok || settled.heldRefusal)) this.emitBuildAbort();
               this.build = settled;
               if (reply.ok) st.drawnFrom = { ids: new Set(sent.features.map((f) => f.id)), load: sentLoad };
-              if (key !== null && reply.ok) this.st.committedShown = { key, state: settled };
+              if (key !== null && reply.ok) {
+                this.st.committedShown = { key, modelKey: modelKey(effective), state: settled };
+              }
               const appliedAtMs = performance.now();
               this.emitBuild();
               // Compute All is no edit, and its reply carries no stage timing.

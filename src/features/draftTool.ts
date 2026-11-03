@@ -216,6 +216,14 @@ export class DraftTool {
       () => this.commit(true),
       () => this.cancel(),
     );
+    this.dim.restoresOnUndo(
+      "angle",
+      () => this.angle,
+      (angle) => {
+        this.angle = angle;
+        this.pushPreview();
+      },
+    );
     const s = this.viewport.projectToScreen(this.anchor);
     this.dim.position(s.x, s.y);
     this.dim.updateFromCursor({ angle: 0 });

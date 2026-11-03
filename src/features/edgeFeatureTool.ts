@@ -748,6 +748,14 @@ export class EdgeFeatureTool {
         : undefined,
       this.chip?.el,
     );
+    this.dim.restoresOnUndo(
+      this.field.name,
+      () => ({ value: this.value, touched: this.touched }),
+      (held) => {
+        this.touched = held.touched;
+        this.showValue(held.value);
+      },
+    );
     this.dim.showOwnProblem(this.refusalShown);
     if (keepTyped) this.dim.seed(this.field.name, this.value);
     else this.dim.updateFromCursor({ [this.field.name]: this.value });
@@ -759,6 +767,13 @@ export class EdgeFeatureTool {
   private setValue(v: number) {
     this.value = v;
     this.signed = (this.kind === this.positiveKind ? 1 : -1) * v;
+  }
+
+  private showValue(v: number) {
+    const wasNeutral = this.neutral;
+    this.setValue(v);
+    this.schedulePreviewDuringDrag();
+    if (this.neutral !== wasNeutral) this.promptForPhase();
   }
 
   /** The committed field for `k` is bound and commit writes a plain number; startEdit's refusal, for the field being
@@ -1194,13 +1209,10 @@ export class EdgeFeatureTool {
       if (!this.grabbing && this.dim.isUserDriven(this.field.name)) {
         const v = this.dim.getValue(this.field.name);
         if (v != null && Math.abs(v - this.value) > 1e-6) {
-          const wasNeutral = this.neutral;
           // A typed value is held only to the absolute floor, not the drag's zoom scaled step, and lands on the
           // current treatment's side so a later grab carries on from it.
-          this.setValue(clampValue(v, { min: MIN_EDGE_VALUE, max: Infinity }));
           this.touched = true;
-          this.schedulePreviewDuringDrag();
-          if (this.neutral !== wasNeutral) this.promptForPhase();
+          this.showValue(clampValue(v, { min: MIN_EDGE_VALUE, max: Infinity }));
         }
       }
       this.held.sync(this.pending);

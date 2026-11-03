@@ -168,6 +168,14 @@ export class TextOnFaceTool {
       undefined,
       () => this.readDepth(),
     );
+    this.dim.restoresOnUndo(
+      "depth",
+      () => this.depth,
+      (depth) => {
+        this.depth = depth;
+        this.valueChanged();
+      },
+    );
     this.dim.updateFromCursor({ depth: this.depth });
     // The panel goes on the far side of the canvas from the click, so it covers
     // neither the letters nor the dot that drags them.
