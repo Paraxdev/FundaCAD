@@ -51,6 +51,11 @@ const TYPING_WIDGETS = roles(["menu", "menubar", "listbox", "tree", "treegrid", 
   .concat(".ui-menu")
   .join(",");
 
+/** Whether letters typed at `el` go to a widget's own type ahead rather than to the shortcuts. */
+export function typesAhead(el: Element): boolean {
+  return el.closest(TYPING_WIDGETS) !== null;
+}
+
 /** A key the focused widget moves, runs or types ahead with, or one a handler already took (defaultPrevented), so the
  *  global shortcuts leave it: an arrow in a menu, slider or tab list must not also turn the view (KB-4). Ctrl, Alt and
  *  Meta chords, Escape, Delete and the F keys still pass. */
@@ -60,7 +65,7 @@ export function widgetOwnsKey(e: KeyboardEvent): boolean {
   if (e.ctrlKey || e.altKey || e.metaKey) return false;
   if (NAV_KEYS.has(e.key)) return e.target.closest(ARROW_WIDGETS) !== null;
   if (e.key === "Enter" || (typeof e.key === "string" && e.key.length === 1)) {
-    return e.target.closest(TYPING_WIDGETS) !== null;
+    return typesAhead(e.target);
   }
   return false;
 }
