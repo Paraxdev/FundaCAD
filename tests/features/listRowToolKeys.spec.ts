@@ -11,6 +11,7 @@ import { EdgeFeatureTool } from "../../src/features/edgeFeatureTool";
 import { MirrorTool } from "../../src/features/mirrorTool";
 import { PatternTool } from "../../src/features/patternTool";
 import { SketchMode } from "../../src/sketch/sketchMode";
+import { noKeyDraw } from "../sketch/keyDrawStub";
 import type { DocumentStore } from "../../src/document/store";
 import type { Viewport } from "../../src/viewport/viewport";
 import type { Feature } from "../../src/types";
@@ -125,6 +126,7 @@ function sketch() {
     mirrorFlow: { running: true, enter: heard.enter, switchField: heard.switchField, cancel: heard.cancel },
     dimFlow: { picking: false, plan: null },
     constraintTools: { hasPending: () => false },
+    keyDraw: noKeyDraw,
     setTool: heard.setTool,
   });
   const listen = (e: KeyboardEvent) => s.onKey(e);

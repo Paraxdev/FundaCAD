@@ -59,7 +59,10 @@ describe("an action and the light", () => {
 
 describe("the shortcuts help", () => {
   it("lists every canvas key once, with Single key shortcuts on and off", () => {
-    const keysOf = () => shortcutHudGroups().find((g) => g.name === "3D view focused")!.rows.map((r) => r.key);
+    const keysOf = () =>
+      shortcutHudGroups()
+        .find((g) => g.name === "3D view focused")!
+        .rows.map((r) => r.key);
     const want = ["] / [", "Shift+] / Shift+[", "Enter", "Space", "Esc"];
     expect(keysOf()).toEqual(want);
     setA11yPref("singleKeys", false);
