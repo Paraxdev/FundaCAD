@@ -731,6 +731,26 @@ describe("arrows at a page's end", () => {
     expect(r.list.page).toBe(1);
   });
 
+  it("says the new range when a key turns the page, as the pager buttons do, and nothing when it does not", async () => {
+    const { w } = await open(2002);
+    focusRow(w, 40);
+    vi.mocked(announce).mockClear();
+    await press(w, 40, "PageDown");
+    await nextTick();
+    await press(w, 0, "PageUp");
+    await nextTick();
+    await press(w, 0, "PageUp");
+    await nextTick();
+    focusRow(w, 99);
+    await press(w, 99, "ArrowDown");
+    await nextTick();
+    expect(vi.mocked(announce).mock.calls.map((c) => c[0])).toEqual([
+      "101 to 200 of 2,002",
+      "1 to 100 of 2,002",
+      "101 to 200 of 2,002",
+    ]);
+  });
+
   it("PageDown on the last page lands on the last row, PageUp on the first on the first", async () => {
     const { w } = await open(50);
     focusRow(w, 10);

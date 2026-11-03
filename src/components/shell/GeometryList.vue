@@ -129,12 +129,14 @@ function sayCountOnceListed() {
 }
 watch(() => list.state, sayCountOnceListed);
 
+const sayRange = () => announce(range.value, "polite", { key: "geometry-page" });
+
 // A page's cursor moves with it, or the next build would take the list back to the cursor's page.
 function turnPage(delta: 1 | -1) {
   const lead = list.filtered[(list.page + delta) * GEOMETRY_PAGE_SIZE];
   if (!lead) return;
   list.setCursor(lead.key);
-  announce(range.value, "polite", { key: "geometry-page" });
+  sayRange();
 }
 
 const anchor = ref<string | null>(null);
@@ -228,7 +230,9 @@ function keepTabStop() {
 function moveCursor(place: number) {
   const row = list.filtered[place];
   if (!row) return;
+  const was = list.page;
   list.setCursor(row.key);
+  if (list.page !== was) sayRange();
   void nextTick(focusCursor);
 }
 

@@ -59,7 +59,7 @@ A list shows 100 rows at a time. Previous and Next turn the page, and the count 
 | --- | --- |
 | Up, Down | Move and light the row. At the end of a page they turn it. |
 | Home, End | Go to the ends of the page. |
-| PageUp, PageDown | Turn the page. |
+| PageUp, PageDown | Turn the page and say its range, such as 101 to 200 of 2,002. |
 | Enter | Select this row only. On a plane, start a sketch on it. |
 | Space | Add or remove this row. |
 | Shift+Up, Shift+Down, Shift+Space | Take a run of rows on this page. |
