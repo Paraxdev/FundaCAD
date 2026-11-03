@@ -256,6 +256,9 @@ function onListKeys(e: KeyboardEvent) {
   if (!guarded && place === null) return;
   e.preventDefault();
   e.stopPropagation();
+  if (guarded && list.selected.some((k) => k.startsWith("f:"))) {
+    announce("Delete works in the 3D view. F6 goes there.", "polite", { key: "geometry-delete" });
+  }
   if (place !== null) moveCursor(place);
 }
 

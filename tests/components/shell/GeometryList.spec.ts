@@ -930,6 +930,18 @@ describe("keys that must not reach the model", () => {
     expect(r.viewport.applyPicks).not.toHaveBeenCalled();
   });
 
+  it.each(["Delete", "Backspace"])("%s with a face picked says where it works, and nothing with none", async (key) => {
+    const { r, w } = await open(2);
+    focusRow(w, 1);
+    await press(w, 1, key);
+    expect(announce).not.toHaveBeenCalled();
+    select(r, 40);
+    await nextTick();
+    vi.mocked(announce).mockClear();
+    await press(w, 1, key);
+    expect(vi.mocked(announce).mock.calls.map((c) => c[0])).toEqual(["Delete works in the 3D view. F6 goes there."]);
+  });
+
   it("Escape goes on to the window, which clears the selection, and focus stays", async () => {
     const { w } = await open(2);
     const heard = vi.fn();
