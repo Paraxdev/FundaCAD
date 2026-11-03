@@ -512,6 +512,33 @@ describe("the engine's answer for a lone face", () => {
     expect(r.sel.speech.value?.text).toBe("Nothing selected");
   });
 
+  it("soft cancels an ask the next click supersedes, and leaves an answered one alone", async () => {
+    const r = setup();
+    await r.build();
+    r.cancel.mockClear();
+    r.selection.faces = [0];
+    await r.settled();
+    r.selection.faces = [1];
+    await r.settled();
+    expect(r.cancel.mock.calls).toEqual([["req1", { soft: true }]]);
+    await land(r.asks[1]!, reply("body1", 1));
+    r.selection.faces = [];
+    await r.settled();
+    expect(r.cancel).toHaveBeenCalledTimes(1);
+  });
+
+  it("cancels no ask on an engine without a soft cancel, a hard one would restart it", async () => {
+    const r = setup();
+    await r.build();
+    (r.host.geometry as { softCancel: boolean }).softCancel = false;
+    r.cancel.mockClear();
+    r.selection.faces = [0];
+    await r.settled();
+    r.selection.faces = [1];
+    await r.settled();
+    expect(r.cancel).not.toHaveBeenCalled();
+  });
+
   it("drops the reply from before a build and asks again, without speaking", async () => {
     const r = setup();
     await r.build();

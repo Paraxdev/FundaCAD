@@ -7,7 +7,7 @@ import { describeChange, describePick, type FaceFacts, type PickFacts, type Pick
 import { edgeKeyOf, edgeRows, faceRows, planeRows } from "../ui/geometryRows";
 import { exactRound, type Pt3 } from "../ui/selectionMeasure";
 import type { Engine } from "./engine";
-import { bodyLabelsOf, labelled, ownerNamesOf, pickedRowKeys } from "./geometryBrowser";
+import { bodyLabelsOf, labelled, ownerNamesOf, pickedRowKeys, softCancelOp } from "./geometryBrowser";
 import { BASE_PLANES, SELECTION_SPEECH_DELAY } from "./planePick";
 
 export interface SelectionSpeech {
@@ -34,6 +34,8 @@ export function createSelectionWords(e: Engine) {
   let said: string[] = [];
   let seen: { signature: string; result: unknown; rows: unknown } | null = null;
   let asking = 0;
+  // The engine runs one op at a time, so a click's ask left running would hold up the next one and the next rebuild.
+  let askingId: string | null = null;
   // When the lone item's words went out, while they may still be waiting to be spoken.
   let spokenAt: number | null = null;
 
@@ -112,9 +114,15 @@ export function createSelectionWords(e: Engine) {
     const mine = asking;
     const { result } = build;
     const faces = e.viewport.getSelectedFaceIds().map((id) => id - meta.faceStart);
-    e.store.topology(meta.id, { faces }).then(
+    const onStarted = (id: string) => {
+      if (mine === asking) askingId = id;
+      else softCancelOp(e.geometry, id);
+    };
+    e.store.topology(meta.id, { faces }, onStarted).then(
       (reply) => {
-        if (mine !== asking || e.store.buildState.result !== result || !reply) return;
+        if (mine !== asking) return;
+        askingId = null;
+        if (e.store.buildState.result !== result || !reply) return;
         const row = faceRows(reply, meta, ownerNamesOf(e.store)).find((r) => r.key === key);
         if (!row) return;
         lone.value = { facts: row.facts, faceId: lone.value?.faceId ?? null };
@@ -122,8 +130,16 @@ export function createSelectionWords(e: Engine) {
           speech.value = { text: describePick(row.facts).spoken };
         }
       },
-      () => {},
+      () => {
+        if (mine === asking) askingId = null;
+      },
     );
+  }
+
+  function supersede() {
+    asking++;
+    if (askingId) softCancelOp(e.geometry, askingId);
+    askingId = null;
   }
 
   // Planes stay selected as rows of Items, the viewport knows nothing of them.
@@ -148,7 +164,7 @@ export function createSelectionWords(e: Engine) {
   function update(signature: string, toolOwns: boolean, escaped: boolean) {
     if (toolOwns) {
       // The tool's prompt speaks. Whatever stays selected when it ends is said whole.
-      asking++;
+      supersede();
       said = [];
       seen = null;
       speech.value = null;
@@ -158,7 +174,7 @@ export function createSelectionWords(e: Engine) {
     const rows = useSelectionStore().rows.keys;
     if (seen?.signature === signature && seen.result === result && seen.rows === rows) return;
     seen = { signature, result, rows };
-    asking++;
+    supersede();
 
     const regionKeys = e.overlay.selectedRegions().map((r) => `r:${r.interior3D.x}`);
     const rowKeys = pickedRowKeys(e);

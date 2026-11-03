@@ -104,6 +104,11 @@ export function pickedRowKeys(e: {
   return [...keys];
 }
 
+// A hard cancel restarts the engine, too much for a list. Without a soft one the old op is left to finish.
+export function softCancelOp(geometry: Pick<GeometryBackend, "cancel" | "softCancel">, requestId: string): void {
+  if (geometry.softCancel) void geometry.cancel?.(requestId, { soft: true }).catch(() => {});
+}
+
 // A reply at 10,004 faces measured 1.47 MB.
 const CACHED_REPLIES = 4;
 const ROW_CHANGED = "That row has changed, the list is catching up";
@@ -150,10 +155,7 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
     }
   }
 
-  // A hard cancel restarts the engine, too much for a list. Without a soft one the old op is left to finish.
-  function softCancel(requestId: string) {
-    if (e.geometry.softCancel) void e.geometry.cancel?.(requestId, { soft: true }).catch(() => {});
-  }
+  const softCancel = (requestId: string) => softCancelOp(e.geometry, requestId);
 
   function stopAsking() {
     const was = asking;
