@@ -9,6 +9,7 @@ export interface ToolFocusHost {
 const LISTS = '[role="listbox"], [role="tree"], [role="treegrid"], [role="grid"]';
 // The palette starts most tools from the keyboard, and like a menu it hands focus back when it closes.
 const PASSING = '[role="dialog"], [role="alertdialog"], [role="menu"], .ui-menu';
+const SURFACE = "[data-key-surface]";
 
 type Place = { el: HTMLElement; list: Element | null };
 
@@ -17,8 +18,10 @@ const onPage = (a: Element | null) => a === null || a === document.body || a ===
 /** A tool's own box takes focus and drops it on the page when it goes, where the next key runs a shortcut and Tab starts
  *  over. When a key started the tool, focus from before it goes back then, to the list's tab stop if a build replaced
  *  the row, however that focus got there. A tool a pointer started gives nothing back. A sketch started from a list
- *  takes focus to the 3D view, or its keys would type ahead in the list, and after a key start gives it back to the
- *  list when it ends if focus is still there. Frames, as restoreWhenIdle, since no tool says when it starts or ends. */
+ *  takes focus out of it, or its keys would type ahead there: to the sketch's key surface, what a screen reader types
+ *  into, or to the canvas while no draw tool makes the surface a Tab stop. After a key start focus goes back to the list
+ *  when the sketch ends if it is still in the view, after a click it stays in the view. Frames, as restoreWhenIdle,
+ *  since no tool says when it starts or ends. */
 export function installToolFocus(
   e: ToolFocusHost,
   o: { frame?: (fn: () => void) => number; cancelFrame?: (id: number) => void } = {},
@@ -34,6 +37,13 @@ export function installToolFocus(
   let from: Place | null = null;
   let moved: Place | null = null;
   let handle = 0;
+
+  // As F6 into the view does.
+  function enterView(view: HTMLElement) {
+    const surface = document.querySelector<HTMLElement>(SURFACE);
+    if (surface && surface.tabIndex >= 0) surface.focus({ preventScroll: true });
+    if (!surface || document.activeElement !== surface) view.focus({ preventScroll: true });
+  }
 
   function giveBack(to: Place) {
     const stop = to.list?.isConnected ? to.list.querySelector<HTMLElement>('[tabindex="0"]') : null;
@@ -61,7 +71,7 @@ export function installToolFocus(
       const a = document.activeElement;
       if (a instanceof HTMLElement && !onPage(a) && typesAhead(a)) {
         moved = { el: a, list: a.closest(LISTS) };
-        view.focus({ preventScroll: true });
+        enterView(view);
       }
     }
     sketching = e.sketch.active;
@@ -77,7 +87,10 @@ export function installToolFocus(
     if (working) {
       const a = document.activeElement;
       const to = moved ?? from;
-      if (byKey && to && (onPage(a) || (moved && a === view))) giveBack(to);
+      const inView = a === view || !!a?.matches(SURFACE);
+      if (byKey && to && (onPage(a) || (moved && inView))) giveBack(to);
+      // The surface goes with the sketch and drops focus on the page.
+      else if (moved && onPage(a)) view.focus({ preventScroll: true });
       moved = null;
     }
     working = false;

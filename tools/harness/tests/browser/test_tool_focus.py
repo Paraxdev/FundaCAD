@@ -1,5 +1,6 @@
 """Focus after a tool started from the Geometry list: a Fillet and a sketch started by keys give focus back to the row,
-a sketch a click started does not, and a pick in the 3D view leaves focus there."""
+a sketch a click started does not, and a pick in the 3D view leaves focus there. A sketch holds focus on its key
+surface, or on the canvas while no draw tool is armed."""
 
 import re
 
@@ -11,6 +12,8 @@ from test_geometry_browser import browse, down_to, focus, give_radius, list_kind
 pytestmark = [pytest.mark.browser, pytest.mark.a11y]
 
 IN_LIST = "() => document.activeElement?.closest('[role=listbox]') !== null"
+ON_SURFACE = "() => document.activeElement?.matches('[data-key-surface]') === true"
+TOOL_AND_STOP = "() => [window.sketch.tool, document.querySelector('[data-key-surface]').tabIndex]"
 
 
 def focus_in_list(s, start=None):
@@ -53,13 +56,32 @@ def test_a_fillet_keys_started_from_a_clicked_edge_row_gives_focus_back_to_the_l
     assert s.page.evaluate("() => window.store.document.features.some((f) => f.type === 'fillet')")
 
 
-def test_a_sketch_from_a_plane_row_goes_to_the_view_and_back_to_the_row(s):
+def test_a_sketch_from_a_plane_row_goes_to_its_key_surface_and_back_to_the_row(s):
     browse(s)
     list_kind(s, "Planes")
     down_to(s, "XY plane")
     s.page.keyboard.press("Enter")
     s.page.wait_for_function("() => window.sketch.active")
+    s.page.wait_for_function(ON_SURFACE)
+    s.page.keyboard.press("Escape")
+    next_frames(s)
+    s.page.keyboard.press("Escape")
+    s.page.wait_for_function("() => !window.sketch.active")
+    focus_in_list(s, "XY plane")
+
+
+# Arc draws nothing by keys, so the sketch's key surface is no Tab stop and the canvas takes focus instead.
+def test_a_sketch_on_arc_a_plane_row_took_goes_to_the_view_and_back_to_the_row(s):
+    browse(s)
+    list_kind(s, "Planes")
+    to_canvas(s)
+    s.page.keyboard.press("a")
+    s.page.wait_for_function("() => document.getElementById('prompt')?.textContent.includes('plane')")
+    s.page.get_by_role("option", name=re.compile("^XY plane")).click()
+    s.page.evaluate("() => { window.__pointer = 0; }")
+    s.page.wait_for_function("() => window.sketch.active")
     s.page.wait_for_function("() => document.activeElement?.id === 'canvas'")
+    assert s.page.evaluate(TOOL_AND_STOP) == ["arc", -1]
     s.page.keyboard.press("Escape")
     next_frames(s)
     s.page.keyboard.press("Escape")
@@ -74,7 +96,7 @@ def test_a_sketch_a_click_on_a_plane_row_started_leaves_focus_on_the_view(s):
     s.page.get_by_role("option", name=re.compile("^XY plane")).click()
     s.page.evaluate("() => { window.__pointer = 0; }")
     s.page.wait_for_function("() => window.sketch.active")
-    s.page.wait_for_function("() => document.activeElement?.id === 'canvas'")
+    s.page.wait_for_function(ON_SURFACE)
     s.page.keyboard.press("Escape")
     next_frames(s)
     s.page.keyboard.press("Escape")

@@ -1,7 +1,8 @@
 // Where focus goes when a tool or a sketch starts and ends: back to where focus was when keys started the tool and its own
-// box dropped focus on the page, and to the 3D view when a sketch starts from a list.
+// box dropped focus on the page, and to the sketch's key surface or the 3D view when a sketch starts from a list.
 import { afterEach, describe, expect, it } from "vitest";
 import { installToolFocus } from "../../src/app/toolFocus";
+import { KeySurface } from "../../src/sketch/keySurface";
 
 afterEach(() => {
   document.body.innerHTML = "";
@@ -58,7 +59,20 @@ function setup() {
     $("box").blur();
     $("box").remove();
   };
-  return { $, host, frame, idle, key, click, startTool, endTool, stop };
+  // As sketchMode: the surface is a Tab stop while Line, Rectangle or Circle is armed, and goes with the sketch.
+  const keys = new KeySurface();
+  const sketch = (on: boolean, armed = true) => {
+    if (on) {
+      keys.mount(document.body);
+      keys.setStop(armed);
+    } else {
+      if (document.activeElement === surface()) surface()!.blur();
+      keys.dispose();
+    }
+    host.sketch.active = on;
+  };
+  const surface = () => document.querySelector<HTMLElement>("[data-key-surface]");
+  return { $, host, frame, idle, key, click, startTool, endTool, stop, keys, sketch, surface };
 }
 
 describe("focus after a tool", () => {
@@ -199,7 +213,25 @@ describe("focus after a tool", () => {
 });
 
 describe("focus when a sketch starts", () => {
-  it("goes to the 3D view from a list, whose type ahead would take the sketch's keys", () => {
+  it("goes to the sketch's key surface from a list, whose type ahead would take the sketch's keys", () => {
+    const t = setup();
+    t.$("row2").focus();
+    t.frame();
+    t.sketch(true);
+    t.frame();
+    expect(document.activeElement).toBe(t.surface());
+  });
+
+  it("goes to the 3D view from a list while no draw tool makes the surface a Tab stop", () => {
+    const t = setup();
+    t.$("row2").focus();
+    t.frame();
+    t.sketch(true, false);
+    t.frame();
+    expect(document.activeElement).toBe(t.$("view"));
+  });
+
+  it("goes to the 3D view from a list when the sketch has no surface", () => {
     const t = setup();
     t.$("row2").focus();
     t.frame();
@@ -212,14 +244,14 @@ describe("focus when a sketch starts", () => {
     const t = setup();
     t.$("rail").focus();
     t.frame();
-    t.host.sketch.active = true;
+    t.sketch(true);
     t.frame();
     expect(document.activeElement).toBe(t.$("rail"));
   });
 
   it("is moved once, a person may Tab back to the list during the sketch", () => {
     const t = setup();
-    t.host.sketch.active = true;
+    t.sketch(true);
     t.frame();
     t.$("row2").focus();
     t.frame();
@@ -228,22 +260,47 @@ describe("focus when a sketch starts", () => {
 });
 
 describe("focus when a sketch ends", () => {
-  const sketchFrom = (t: ReturnType<typeof setup>, id: string) => {
+  const sketchFrom = (t: ReturnType<typeof setup>, id: string, armed = true) => {
     t.$(id).focus();
     t.frame();
     t.key();
-    t.host.sketch.active = true;
+    t.sketch(true, armed);
     t.frame();
-    expect(document.activeElement).toBe(t.$("view"));
+    expect(document.activeElement).toBe(armed ? t.surface() : t.$("view"));
   };
 
   it("goes back to the plane row it started from, once idle holds two frames", () => {
     const t = setup();
     sketchFrom(t, "row2");
-    t.host.sketch.active = false;
+    t.sketch(false);
     t.frame();
-    expect(document.activeElement).toBe(t.$("view"));
+    expect(document.activeElement).toBe(document.body);
     t.frame();
+    expect(document.activeElement).toBe(t.$("row2"));
+  });
+
+  it("goes back to the row from the key surface or the 3D view, if focus is still there", () => {
+    for (const armed of [true, false]) {
+      const t = setup();
+      sketchFrom(t, "row2", armed);
+      t.host.sketch.active = false;
+      t.idle();
+      expect(document.activeElement).toBe(t.$("row2"));
+      t.stop();
+    }
+  });
+
+  it("leaves focus on the surface the sketch's own keys gave it, and gives the row back after", () => {
+    const t = setup();
+    t.$("row2").focus();
+    t.frame();
+    t.key();
+    t.sketch(true);
+    t.keys.focus();
+    t.frame();
+    expect(document.activeElement).toBe(t.surface());
+    t.sketch(false);
+    t.idle();
     expect(document.activeElement).toBe(t.$("row2"));
   });
 
@@ -256,31 +313,34 @@ describe("focus when a sketch ends", () => {
     t.frame();
     t.host.tool = false;
     t.frame();
-    t.host.sketch.active = true;
+    t.sketch(true);
     t.frame();
-    expect(document.activeElement).toBe(t.$("view"));
-    t.host.sketch.active = false;
+    expect(document.activeElement).toBe(t.surface());
+    t.sketch(false);
     t.idle();
     expect(document.activeElement).toBe(t.$("row2"));
   });
 
   // A mouse user's next letter is a tool key, which the list would take as type ahead.
-  it("gives nothing back to a plane row a click started it from, it stays on the 3D view", () => {
-    const t = setup();
-    t.click("row2");
-    t.host.sketch.active = true;
-    t.frame();
-    expect(document.activeElement).toBe(t.$("view"));
-    t.key();
-    t.host.sketch.active = false;
-    t.idle();
-    expect(document.activeElement).toBe(t.$("view"));
+  it("gives nothing back to a plane row a click started it from, it stays in the 3D view", () => {
+    for (const armed of [true, false]) {
+      const t = setup();
+      t.click("row2");
+      t.sketch(true, armed);
+      t.frame();
+      expect(document.activeElement).toBe(armed ? t.surface() : t.$("view"));
+      t.key();
+      t.sketch(false);
+      t.idle();
+      expect(document.activeElement).toBe(t.$("view"));
+      t.stop();
+    }
   });
 
   it("goes back to an Items tree plane row", () => {
     const t = setup();
     sketchFrom(t, "plane");
-    t.host.sketch.active = false;
+    t.sketch(false);
     t.idle();
     expect(document.activeElement).toBe(t.$("plane"));
   });
@@ -289,7 +349,7 @@ describe("focus when a sketch ends", () => {
     const t = setup();
     sketchFrom(t, "row1");
     t.$("row1").remove();
-    t.host.sketch.active = false;
+    t.sketch(false);
     t.idle();
     expect(document.activeElement).toBe(t.$("row2"));
   });
@@ -298,7 +358,7 @@ describe("focus when a sketch ends", () => {
     const t = setup();
     sketchFrom(t, "row2");
     t.$("rail").focus();
-    t.host.sketch.active = false;
+    t.sketch(false);
     t.idle();
     expect(document.activeElement).toBe(t.$("rail"));
   });
