@@ -286,6 +286,22 @@ describe("a zoom's tail", () => {
     expect(scene.rays).toBeLessThanOrEqual(46);
   });
 
+  it("tests the part boxes once its rays are in, not every frame after", () => {
+    const wall = box(-5000, 1000, -5000, 5000, 1100, 5000);
+    const nav = new Navigator();
+    nav.setFrame(W, H);
+    const scene = new BoxScene([wall]);
+    nav.setScene(scene);
+    const part = wall.clone();
+    const tested = vi.spyOn(part, "containsPoint");
+    nav.setContentBox(scene.box(), [part]);
+    nav.setProjectionMode("persp");
+    nav.setLookAt(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 1000, 0));
+    settle(nav);
+    tail(nav, []);
+    expect(tested).toHaveBeenCalledTimes(1);
+  });
+
   it("casts none orthographic, and lands all the same", () => {
     const { nav, scene } = room([], true);
     scene.rays = 0;

@@ -33,6 +33,8 @@ export class NearestSweep {
   private gaveUp = false;
   private wasSlow = false;
   private seen: number | null = null;
+  /** What the part boxes say, worked out once the rays are in, as the rest of the tail barely moves the view. */
+  boxes: { floor: number; inside: boolean } | null = null;
 
   /** `goal` is the zoom's goal when the look started, for telling when a stream of small steps has outrun it. `before`
    *  is the rays a frame an earlier look managed, 0 for none, so a slow model is known before a ray, or after one when

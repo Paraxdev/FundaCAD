@@ -562,8 +562,11 @@ export class Navigator {
       this.rayPaceHere = true;
     }
     if (!done) return 0;
-    const parts = this.parts.length || !this.box ? this.parts : [this.box];
-    const { floor, inside } = partsFloor(p, this.frame.width / this.frame.height, parts);
+    if (!ch.sweep.boxes) {
+      const parts = this.parts.length || !this.box ? this.parts : [this.box];
+      ch.sweep.boxes = partsFloor(p, this.frame.width / this.frame.height, parts);
+    }
+    const { floor, inside } = ch.sweep.boxes;
     const nearest = nearestBound(ch.sweep.nearest(), floor, inside, depthOf(p, ch.anchor));
     return zoomSnapLog(p, this.frame, ch.anchor, nearest) / this.zoomsTogether;
   }
