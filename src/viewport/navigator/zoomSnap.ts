@@ -2,9 +2,9 @@
 // about an anchor shifts a point by the log left, times its pixels from the anchor's pixel, times anchor depth over
 // point depth, so the log that may be dropped follows from the nearest surface in view.
 
-import type * as THREE from "three";
-import { depthUnder, type AnchorContext } from "./anchor";
-import { depthOf, project, type Frame, type Pose } from "./pose";
+import * as THREE from "three";
+import { depthUnder, visibleNearDepth, type AnchorContext } from "./anchor";
+import { depthOf, eyeOf, project, type Frame, type Pose } from "./pose";
 
 /** What a landing adds to its frame, on top of the spring's own step that frame. */
 export const ZOOM_SNAP_PX = 0.1;
@@ -16,6 +16,7 @@ const RAYS = 45;
 const RAY_BUDGET_MS = 2;
 const RAY_TRUST = 8;
 const GOLDEN = 0.618033988749895;
+const eye = new THREE.Vector3();
 
 /** The frame's corners, edge midpoints and centre, where a wall beside the eye is nearest, then points that share no
  *  column or row, so a bar of either direction wider than about a sixteenth of the frame meets one. */
@@ -60,13 +61,22 @@ export class NearestSweep {
   }
 }
 
-/** The depth to answer to. Rays can pass between thin parts, so they are only trusted to within `RAY_TRUST`, less where
- *  `floor`, the parts' nearest depth in the frustum, shows nothing can be nearer. A part further inside still moves only
- *  its depth ratio over `RAY_TRUST` times the threshold. */
-export function nearestBound(seen: number | null, floor: number, anchorDepth: number): number | null {
-  if (Number.isNaN(floor)) return seen;
+/** The nearest depth in the frustum of the parts whose box the eye is outside of, NaN for none, as nothing of theirs can
+ *  be nearer, and whether a box holds the eye, which bounds nothing. */
+export function partsFloor(p: Pose, aspect: number, parts: readonly THREE.Box3[]): { floor: number; inside: boolean } {
+  eyeOf(p, eye);
+  const inside = parts.some((b) => b.containsPoint(eye));
+  const outside = inside ? parts.filter((b) => !b.containsPoint(eye)) : parts;
+  return { floor: visibleNearDepth(p, aspect, outside), inside };
+}
+
+/** The depth to answer to. Rays can pass between thin parts, so they are only trusted to within `RAY_TRUST`, and only
+ *  inside a box, where `floor` cannot speak for that part. A thin part of it further inside still moves only its depth
+ *  ratio over `RAY_TRUST` times the threshold. */
+export function nearestBound(seen: number | null, floor: number, inside: boolean, anchorDepth: number): number | null {
+  if (Number.isNaN(floor) && !inside) return seen;
   const known = seen === null ? anchorDepth : Math.min(seen, anchorDepth);
-  return Math.min(known, Math.max(floor, known / RAY_TRUST));
+  return Math.min(known, inside ? known / RAY_TRUST : known, Number.isNaN(floor) ? known : floor);
 }
 
 /** The log left that shifts nothing in view by more than `ZOOM_SNAP_PX`. */

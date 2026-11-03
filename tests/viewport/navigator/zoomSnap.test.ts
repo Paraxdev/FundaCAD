@@ -140,27 +140,27 @@ describe("zoomSnapLog", () => {
 
 describe("nearestBound", () => {
   it("goes by what the rays saw when nothing in the parts can be nearer", () => {
-    expect(nearestBound(300, 300, 1000)).toBe(300);
-    expect(nearestBound(300, 900, 1000)).toBe(300);
+    expect([nearestBound(300, 300, false, 1000), nearestBound(300, 900, false, 1000)]).toEqual([300, 300]);
   });
 
   it("goes by the anchor when the rays saw nothing nearer", () => {
-    expect(nearestBound(4000, 4000, 1000)).toBe(1000);
-    expect(nearestBound(null, 1000, 1000)).toBe(1000);
+    expect([nearestBound(4000, 4000, false, 1000), nearestBound(null, 1000, false, 1000)]).toEqual([1000, 1000]);
   });
 
-  it("drops to the parts' nearest depth, which no surface can pass", () => {
-    expect(nearestBound(800, 200, 1000)).toBe(200);
+  it("drops to the nearest box the eye is outside of, however far below the rays, as no surface of it can pass", () => {
+    expect([nearestBound(800, 200, false, 1000), nearestBound(800, 50, false, 1000)]).toEqual([200, 50]);
   });
 
-  it("trusts the rays to within a factor where the parts say nothing, an eye inside a box", () => {
-    expect(nearestBound(800, 0, 1000)).toBe(100);
-    expect(nearestBound(null, 0, 1000)).toBe(125);
+  it("trusts the rays to within a factor inside a box, where it says nothing", () => {
+    expect([nearestBound(800, NaN, true, 1000), nearestBound(null, NaN, true, 1000)]).toEqual([100, 125]);
+  });
+
+  it("still drops to a box the eye is outside of from inside another", () => {
+    expect([nearestBound(800, 50, true, 1000), nearestBound(800, 300, true, 1000)]).toEqual([50, 100]);
   });
 
   it("has the rays alone with no part in the frustum, as nothing thin can be there", () => {
-    expect(nearestBound(800, NaN, 1000)).toBe(800);
-    expect(nearestBound(null, NaN, 1000)).toBeNull();
+    expect([nearestBound(800, NaN, false, 1000), nearestBound(null, NaN, false, 1000)]).toEqual([800, null]);
   });
 });
 
@@ -396,15 +396,27 @@ describe("a zoom's tail", () => {
     // What the snap may add: the threshold, or its share past the factor the rays are trusted to.
     const most = (ratio: number) => ZOOM_SNAP_PX * Math.max(1, ratio / 8);
 
-    it.each([6.4, 20, 100])("keeps the jump small at %f:1 with the eye outside the model", (ratio) => {
+    it.each([6.4, 20, 100])("holds the jump to the threshold at %f:1 with the eye outside the model's box", (ratio) => {
       const { part, watch } = pole(ratio);
       const made = scene([wall(), part]);
       expect(nearestOf(made().nav, made().scene)).toBeGreaterThan(900);
       const { landed, rest, jump } = snapJump(made, watch);
       expect(landed).toBeLessThan(rest);
       expect(jump).toBeGreaterThan(0);
-      expect(jump).toBeLessThanOrEqual(most(ratio));
+      expect(jump).toBeLessThanOrEqual(ZOOM_SNAP_PX);
     });
+
+    it.each([6.4, 20, 100])(
+      "holds the jump to the threshold at %f:1 from inside a body, the part being another",
+      (ratio) => {
+        const { part, watch } = pole(ratio);
+        const hull = box(-5000, -500, -5000, 5000, 1100, 5000);
+        const { landed, rest, jump } = snapJump(scene([wall(), behind(), part], [hull, part]), watch);
+        expect(landed).toBeLessThan(rest);
+        expect(jump).toBeGreaterThan(0);
+        expect(jump).toBeLessThanOrEqual(ZOOM_SNAP_PX);
+      },
+    );
 
     it.each([6.4, 20, 100])("keeps the jump small at %f:1 from inside one body, where no box helps", (ratio) => {
       const { part, watch } = pole(ratio);

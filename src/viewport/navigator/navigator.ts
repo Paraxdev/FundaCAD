@@ -3,10 +3,10 @@
 
 import * as THREE from "three";
 import type { NavScene, ProjectionMode } from "../cameras";
-import { centreDepth, orbitPivot, visibleNearDepth, zoomAnchor, type AnchorContext } from "./anchor";
+import { centreDepth, orbitPivot, zoomAnchor, type AnchorContext } from "./anchor";
 import { stepAngles, type StepDir } from "../viewStep";
 import { OrbitChannel, PanChannel, ZoomChannel } from "./channels";
-import { NearestSweep, SWEEP_FROM, nearestBound, zoomSnapLog } from "./zoomSnap";
+import { NearestSweep, SWEEP_FROM, nearestBound, partsFloor, zoomSnapLog } from "./zoomSnap";
 import { autoWantsOrtho, onWorldAxis } from "../autoProjection";
 import { makeFlight, stepFlight, type Flight } from "./flight";
 import { clampScale, contentLimits, defaultLimits, elevRange, minScaleOf, type Limits } from "./limits";
@@ -555,8 +555,8 @@ export class Navigator {
       return 0;
     }
     const parts = this.parts.length || !this.box ? this.parts : [this.box];
-    const floor = visibleNearDepth(p, this.frame.width / this.frame.height, parts);
-    const nearest = nearestBound(ch.sweep.nearest(), floor, depthOf(p, ch.anchor));
+    const { floor, inside } = partsFloor(p, this.frame.width / this.frame.height, parts);
+    const nearest = nearestBound(ch.sweep.nearest(), floor, inside, depthOf(p, ch.anchor));
     return zoomSnapLog(p, this.frame, ch.anchor, nearest) / this.zoomsTogether;
   }
 
