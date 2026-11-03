@@ -194,7 +194,7 @@ const iconBtn = { background: "none", border: "none", color: "inherit", cursor: 
     @close="setupOpen = false"
   >
     <div class="measure-title" aria-hidden="true">Parameter Setup</div>
-    <div style="max-height: 70vh; overflow: auto; padding-right: 4px; min-width: 560px">
+    <div style="max-height: 70vh; overflow: auto; padding-right: 4px; width: 560px; max-width: 100%">
       <div v-if="empty" class="measure-hint">Add a user parameter first (Modify, Parameters).</div>
 
       <template v-else>
