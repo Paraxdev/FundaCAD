@@ -330,34 +330,186 @@ describe("path trace host", () => {
     }
   });
 
-  it("brings the trace back at most once per TRACE_RETURN_MS through a stop and go orbit", async () => {
+  it("brings the trace back once through a stop and go orbit, then waits for the orbit to rest", async () => {
     const { host, t } = await started();
     let now = 1000;
+    let lastMove = -Infinity;
     const swaps: number[] = [];
     let was = false;
-    const step = (over: Partial<TraceFrame["inputs"]>) => {
-      host.tick(frame(over, now));
+    const step = (moving: boolean) => {
+      if (moving) lastMove = now;
+      host.tick(frame({ stillMs: now - lastMove }, now));
       if (host.shown !== was) swaps.push(now);
       was = host.shown;
       now += 16;
     };
-    for (let i = 0; i < 20; i++) step({});
+    for (let i = 0; i < 20; i++) step(false);
     t.answer(4);
     await flush();
     for (let i = 0; i < 40; i++) {
       // A short move, then a rest just past STILL_MS, on and on.
-      for (let j = 0; j < 5; j++) step({ stillMs: 10 });
+      for (let j = 0; j < 5; j++) step(true);
       for (let j = 0; j < 12; j++) {
-        step({});
+        step(false);
         t.answer(4);
         await flush();
       }
     }
-    expect(swaps.length).toBeGreaterThan(4);
-    const ups = swaps.filter((_, i) => i % 2 === 0);
-    for (let i = 1; i < ups.length; i++) expect(ups[i]! - ups[i - 1]!).toBeGreaterThanOrEqual(TRACE_RETURN_MS);
+    // Up, away at the first move, back once, away again, then nothing while the rhythm goes on.
+    expect(swaps).toHaveLength(4);
+    expect(swaps[2]! - swaps[1]!).toBeGreaterThanOrEqual(TRACE_RETURN_MS);
     // No second holds a swap away from the trace and the swap back.
     for (let i = 2; i < swaps.length; i++) expect(swaps[i]! - swaps[i - 2]!).toBeGreaterThan(1000);
+  });
+
+  // The t2 rig rhythm: a wheel burst, then a pause of about a second, as a person zooms notch by notch.
+  const zoomRhythm = async (pauses: number[], restMs: number) => {
+    const { host, t } = await started();
+    let now = 1000;
+    let lastMove = -Infinity;
+    const swaps: { at: number; on: boolean; still: number }[] = [];
+    let was = false;
+    const step = async (moving: boolean) => {
+      if (moving) lastMove = now;
+      const still = now - lastMove;
+      host.tick(frame({ stillMs: still }, now));
+      if (host.shown !== was) swaps.push({ at: now, on: host.shown, still });
+      was = host.shown;
+      t.answer(4);
+      await flush();
+      now += 16;
+    };
+    for (let i = 0; i < 20; i++) await step(false);
+    for (const pause of pauses) {
+      for (let ms = 0; ms < 300; ms += 16) await step(true);
+      for (let ms = 0; ms < pause; ms += 16) await step(false);
+    }
+    for (let ms = 0; ms < restMs; ms += 16) await step(false);
+    return { swaps, shown: host.shown };
+  };
+  const onSpans = (swaps: { at: number; on: boolean }[]) =>
+    swaps.flatMap((s, i) => (s.on && swaps[i + 1] && !swaps[i + 1]!.on ? [swaps[i + 1]!.at - s.at] : []));
+
+  it("lets a notch rhythm pop the trace in at most once, at its first pause", async () => {
+    const { swaps, shown } = await zoomRhythm([900, 1000, 1100, 1200, 900, 1000], 0);
+    // The first span is the trace up before the rhythm, then one pop in the first pause, then none.
+    const spans = onSpans(swaps);
+    expect(spans.length).toBeLessThanOrEqual(2);
+    expect(swaps.filter((s) => s.on).length).toBeLessThanOrEqual(2);
+    expect(shown).toBe(false);
+  });
+
+  it("brings the trace back after the rhythm once the view has rested twice TRACE_RETURN_MS", async () => {
+    const { swaps, shown } = await zoomRhythm([900, 1000, 1100, 1200, 900, 1000], 3000);
+    expect(shown).toBe(true);
+    expect(swaps.at(-1)!.still).toBeGreaterThanOrEqual(2 * TRACE_RETURN_MS);
+  });
+
+  it("still shows the trace in each pause of a rhythm once the pauses run past twice TRACE_RETURN_MS", async () => {
+    const { swaps } = await zoomRhythm([1000, 1000, 2500, 2500, 2500], 0);
+    const ups = swaps.filter((s) => s.on);
+    // Up before the rhythm, the one pop in its first pause, then once in each long pause, never later than the wait.
+    expect(ups).toHaveLength(5);
+    for (const u of ups.slice(2)) expect(u.still).toBeLessThan(2 * TRACE_RETURN_MS + 50);
+  });
+
+  // A view driven frame by frame, stillMs is the time since the last move, as the viewport hands it over.
+  const drive = async () => {
+    const { host, t } = await started();
+    const v = { now: 1000, lastMove: -Infinity, leftAt: -Infinity, upAt: -Infinity };
+    let over: Partial<TraceFrame["inputs"]> = {};
+    host.onShownChange = (on) => {
+      if (on) v.upAt = v.now;
+      else v.leftAt = v.now;
+    };
+    const step = async (moving: boolean) => {
+      if (moving) v.lastMove = v.now;
+      host.tick(frame({ ...over, stillMs: v.now - v.lastMove }, v.now, { cameraChanged: moving }));
+      t.answer(4);
+      await flush();
+      v.now += 16;
+    };
+    const move = async (ms: number) => {
+      for (let i = 0; i < ms; i += 16) await step(true);
+    };
+    const rest = async (ms: number) => {
+      for (let i = 0; i < ms; i += 16) await step(false);
+    };
+    // A pop in the first pause of a rhythm, so the next return waits longer.
+    const rhythm = async () => {
+      await rest(320);
+      await move(300);
+      await rest(1300);
+      await move(300);
+    };
+    const set = (o: Partial<TraceFrame["inputs"]>) => {
+      over = o;
+    };
+    return { host, v, step, move, rest, rhythm, set };
+  };
+
+  it("goes back to the plain gate once a return stays up a second", async () => {
+    const { host, v, step, move, rest, rhythm } = await drive();
+    await rhythm();
+    expect(host.shown).toBe(false);
+    // A long rest brings it back, and it stays up past a second.
+    await rest(3600);
+    expect(host.shown).toBe(true);
+    await move(100);
+    while (v.now < v.leftAt + TRACE_RETURN_MS) await step(false);
+    expect(host.shown).toBe(false);
+    await step(false);
+    expect(host.shown).toBe(true);
+    expect(v.upAt - v.lastMove).toBeLessThan(2 * TRACE_RETURN_MS);
+  });
+
+  it.each([
+    [
+      "a resize",
+      (d: Awaited<ReturnType<typeof drive>>) => {
+        const wide = { ...glCanvas, clientWidth: 1000 } as unknown as HTMLCanvasElement;
+        (d.host as unknown as { webglCanvas: HTMLCanvasElement }).webglCanvas = wide;
+        return d.step(false);
+      },
+    ],
+    [
+      "X-ray",
+      async (d: Awaited<ReturnType<typeof drive>>) => {
+        d.set({ xray: true });
+        await d.step(false);
+        d.set({});
+      },
+    ],
+  ])("starts no rhythm when %s drops a return within a second, only a move does", async (_, drop) => {
+    const d = await drive();
+    const { host, v, move, rest } = d;
+    await rest(320);
+    await move(900);
+    await rest(300);
+    expect(host.shown).toBe(true);
+    await drop(d);
+    expect(host.shown).toBe(false);
+    expect(v.leftAt - v.upAt).toBeLessThan(1000);
+    await rest(TRACE_RETURN_MS + 16);
+    expect(host.shown).toBe(true);
+    expect(v.upAt - v.leftAt).toBeLessThan(TRACE_RETURN_MS + 16);
+    expect(v.upAt - v.lastMove).toBeLessThan(2 * TRACE_RETURN_MS);
+  });
+
+  it("brings the trace back on the plain gate through an orbit with Realtime while moving off, after a rhythm", async () => {
+    const { host, v, step, rhythm, set } = await drive();
+    await rhythm();
+    expect(host.shown).toBe(false);
+    set({ realtimeWhileMoving: false });
+    const leftAt = v.leftAt;
+    // A stop and go orbit, the camera steps every other frame.
+    while (v.now < leftAt + TRACE_RETURN_MS + 64) {
+      await step(true);
+      await step(false);
+    }
+    expect(host.shown).toBe(true);
+    expect(v.upAt - leftAt).toBeGreaterThanOrEqual(TRACE_RETURN_MS);
+    expect(v.upAt - leftAt).toBeLessThan(TRACE_RETURN_MS + 32);
   });
 
   it("brings the trace up at once after a rest longer than TRACE_RETURN_MS", async () => {
