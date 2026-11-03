@@ -237,7 +237,7 @@ export class PathTraceHost {
     if (s !== "trace" && s !== "done") {
       this.traceSince = 0;
       if (!this.sawSample) this.disarm();
-      return this.show(false);
+      return this.show(false, s === "moving");
     }
     const b = this.backend;
     if (!b) {
@@ -284,7 +284,8 @@ export class PathTraceHost {
       this.poll(b);
     } else if (!this.settled && this.samples >= this.cap) this.settled = !b.present(f.now);
     const up = this.samples > 0 || (hold && this.shown);
-    const back = f.now - this.leftAt >= TRACE_RETURN_MS && f.inputs.stillMs >= this.rhythmStill;
+    // A held trace swaps with nothing while moving, so no rhythm holds it back.
+    const back = f.now - this.leftAt >= TRACE_RETURN_MS && (hold || f.inputs.stillMs >= this.rhythmStill);
     this.show(up && (this.shown || back));
   }
 
@@ -378,13 +379,14 @@ export class PathTraceHost {
     }
   }
 
-  private show(on: boolean) {
+  private show(on: boolean, moved = false) {
     if (on === this.shown) return;
     this.shown = on;
     if (on) this.upAt = this.now;
     else {
+      if (this.now - this.upAt >= RHYTHM_PAIR_MS) this.rhythmStill = 0;
       // The first show is no return, leftAt is still -Infinity then.
-      if (this.leftAt > -Infinity) this.rhythmStill = this.now - this.upAt < RHYTHM_PAIR_MS ? RHYTHM_STILL_MS : 0;
+      else if (moved && this.leftAt > -Infinity) this.rhythmStill = RHYTHM_STILL_MS;
       this.leftAt = this.now;
     }
     this.onShownChange?.(on);

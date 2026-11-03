@@ -413,16 +413,21 @@ describe("path trace host", () => {
     for (const u of ups.slice(2)) expect(u.still).toBeLessThan(2 * TRACE_RETURN_MS + 50);
   });
 
-  it("goes back to the plain gate once a return stays up a second", async () => {
+  // A view driven frame by frame, stillMs is the time since the last move, as the viewport hands it over.
+  const drive = async () => {
     const { host, t } = await started();
-    let now = 1000;
-    let lastMove = -Infinity;
+    const v = { now: 1000, lastMove: -Infinity, leftAt: -Infinity, upAt: -Infinity };
+    let over: Partial<TraceFrame["inputs"]> = {};
+    host.onShownChange = (on) => {
+      if (on) v.upAt = v.now;
+      else v.leftAt = v.now;
+    };
     const step = async (moving: boolean) => {
-      if (moving) lastMove = now;
-      host.tick(frame({ stillMs: now - lastMove }, now));
+      if (moving) v.lastMove = v.now;
+      host.tick(frame({ ...over, stillMs: v.now - v.lastMove }, v.now, { cameraChanged: moving }));
       t.answer(4);
       await flush();
-      now += 16;
+      v.now += 16;
     };
     const move = async (ms: number) => {
       for (let i = 0; i < ms; i += 16) await step(true);
@@ -430,20 +435,81 @@ describe("path trace host", () => {
     const rest = async (ms: number) => {
       for (let i = 0; i < ms; i += 16) await step(false);
     };
-    await rest(320);
     // A pop in the first pause of a rhythm, so the next return waits longer.
-    await move(300);
-    await rest(1300);
-    await move(300);
+    const rhythm = async () => {
+      await rest(320);
+      await move(300);
+      await rest(1300);
+      await move(300);
+    };
+    const set = (o: Partial<TraceFrame["inputs"]>) => {
+      over = o;
+    };
+    return { host, v, step, move, rest, rhythm, set };
+  };
+
+  it("goes back to the plain gate once a return stays up a second", async () => {
+    const { host, v, step, move, rest, rhythm } = await drive();
+    await rhythm();
     expect(host.shown).toBe(false);
     // A long rest brings it back, and it stays up past a second.
     await rest(3600);
     expect(host.shown).toBe(true);
     await move(100);
-    const leftAt = now - 100;
-    await rest(TRACE_RETURN_MS + 100);
+    while (v.now < v.leftAt + TRACE_RETURN_MS) await step(false);
+    expect(host.shown).toBe(false);
+    await step(false);
     expect(host.shown).toBe(true);
-    expect(now - leftAt).toBeLessThan(2 * TRACE_RETURN_MS);
+    expect(v.upAt - v.lastMove).toBeLessThan(2 * TRACE_RETURN_MS);
+  });
+
+  it.each([
+    [
+      "a resize",
+      (d: Awaited<ReturnType<typeof drive>>) => {
+        const wide = { ...glCanvas, clientWidth: 1000 } as unknown as HTMLCanvasElement;
+        (d.host as unknown as { webglCanvas: HTMLCanvasElement }).webglCanvas = wide;
+        return d.step(false);
+      },
+    ],
+    [
+      "X-ray",
+      async (d: Awaited<ReturnType<typeof drive>>) => {
+        d.set({ xray: true });
+        await d.step(false);
+        d.set({});
+      },
+    ],
+  ])("starts no rhythm when %s drops a return within a second, only a move does", async (_, drop) => {
+    const d = await drive();
+    const { host, v, move, rest } = d;
+    await rest(320);
+    await move(900);
+    await rest(300);
+    expect(host.shown).toBe(true);
+    await drop(d);
+    expect(host.shown).toBe(false);
+    expect(v.leftAt - v.upAt).toBeLessThan(1000);
+    await rest(TRACE_RETURN_MS + 16);
+    expect(host.shown).toBe(true);
+    expect(v.upAt - v.leftAt).toBeLessThan(TRACE_RETURN_MS + 16);
+    expect(v.upAt - v.lastMove).toBeLessThan(2 * TRACE_RETURN_MS);
+  });
+
+  it("brings the trace back on the plain gate through an orbit with Realtime while moving off, after a rhythm", async () => {
+    const { host, v, step, rhythm, set } = await drive();
+    await rhythm();
+    expect(host.shown).toBe(false);
+    set({ realtimeWhileMoving: false });
+    const leftAt = v.leftAt;
+    // A stop and go orbit, the camera steps every other frame.
+    while (v.now < leftAt + TRACE_RETURN_MS + 64) {
+      await step(true);
+      await step(false);
+    }
+    expect(host.shown).toBe(true);
+    expect(v.upAt - leftAt).toBeGreaterThanOrEqual(TRACE_RETURN_MS);
+    expect(v.upAt - leftAt).toBeLessThan(TRACE_RETURN_MS + 32);
   });
 
   it("brings the trace up at once after a rest longer than TRACE_RETURN_MS", async () => {
