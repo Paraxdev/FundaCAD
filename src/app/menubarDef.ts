@@ -118,10 +118,9 @@ export function buildMenubar(e: Engine): MenuDef[] {
           onClick: () => e.selectedFeature && toggleSuppressRows(e.store, pickedFeatureIds(e)),
         },
         { separator: true, label: "" },
-        ...geometryItems(e),
-        { separator: true, label: "" },
         // No ellipsis: it opens a workspace, not a window.
         { label: "Materials", onClick: () => setWorkspace("render") },
+        // Before the geometry rows, so it stays in view when a short window scrolls the menu: it holds Accessibility.
         {
           label: "Preferences…",
           shortcut: "Ctrl+,",
@@ -129,6 +128,8 @@ export function buildMenubar(e: Engine): MenuDef[] {
             useDialogStore().openPreferences();
           },
         },
+        { separator: true, label: "" },
+        ...geometryItems(e),
       ],
     },
     { label: "View", items: viewItems(e) },
