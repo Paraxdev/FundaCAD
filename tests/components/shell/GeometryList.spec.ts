@@ -302,6 +302,39 @@ describe("filters", () => {
   });
 });
 
+describe("what to list", () => {
+  const kind = (w: W, k: string) => w.getComponent({ name: "Segmented" }).vm.$emit("update:modelValue", k);
+  const said = () => vi.mocked(announce).mock.calls.map((c) => c[0]);
+
+  it("says the count on a switch of Faces, Edges and Planes, as a filter does", async () => {
+    const { r, w } = await open(2);
+    r.wires.set("body1", [edge("body1", 0, 2), edge("body1", 1, 2), edge("body1", 2, 2)]);
+    vi.mocked(announce).mockClear();
+    await kind(w, "edges");
+    await nextTick();
+    expect(said()).toEqual(["3 edges"]);
+    await kind(w, "planes");
+    await nextTick();
+    expect(said()[1]).toBe(`${options(w).length} planes`);
+    await kind(w, "faces");
+    await nextTick();
+    expect(said()).toEqual(["3 edges", said()[1], "2 faces"]);
+  });
+
+  it("waits for the rows the engine is still listing", async () => {
+    const { r, w } = await open();
+    await kind(w, "planes");
+    await nextTick();
+    vi.mocked(announce).mockClear();
+    await kind(w, "faces");
+    await nextTick();
+    expect(said()).toEqual([]);
+    await land(r.asks[r.asks.length - 1]!, reply("body1", 1));
+    await nextTick();
+    expect(said()).toEqual(["1 face"]);
+  });
+});
+
 describe("pages", () => {
   const pagerButtons = (w: W) => w.findAll(".geometry-pager button");
   const range = (w: W) => w.get(".geometry-range").text();

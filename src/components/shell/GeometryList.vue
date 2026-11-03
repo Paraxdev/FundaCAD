@@ -96,12 +96,30 @@ const blank = computed(() => {
   return list.state === "ready" ? `This body has no ${noun.value}.` : `Listing the ${noun.value}.`;
 });
 
-function setFilter(next: Partial<GeometryFilters>) {
-  list.setFilters(next);
+function sayCount() {
   const n = list.filtered.length;
   const words = n === 1 ? noun.value.slice(0, -1) : noun.value;
   announce(`${n === 0 ? "No" : count(n)} ${words}`, "polite", { key: "geometry-filter", delay: 250 });
 }
+
+function setFilter(next: Partial<GeometryFilters>) {
+  list.setFilters(next);
+  sayCount();
+}
+
+// Faces wait for the engine's reply, so the count is said once the rows are in. An error or no body says its own words.
+let countDue = false;
+function setKind(next: GeometryKind) {
+  countDue ||= next !== list.kind;
+  ctl.setKind(next);
+  sayCountOnceListed();
+}
+function sayCountOnceListed() {
+  if (!countDue || list.state === "loading") return;
+  countDue = false;
+  if (list.state === "ready") sayCount();
+}
+watch(() => list.state, sayCountOnceListed);
 
 // A page's cursor moves with it, or the next build would take the list back to the cursor's page.
 function turnPage(delta: 1 | -1) {
@@ -281,7 +299,7 @@ onUnmounted(() => {
         size="sm"
         :model-value="list.kind"
         :options="KINDS"
-        @update:model-value="ctl.setKind"
+        @update:model-value="setKind"
       />
       <div class="geometry-filter-pair">
         <FieldRow v-if="!planes" v-slot="{ id, labelId }" label="Type" layout="stacked">
