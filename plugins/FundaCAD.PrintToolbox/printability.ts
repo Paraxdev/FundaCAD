@@ -12,13 +12,13 @@ import type {
 
 export interface PrintabilitySetup {
   /** mm whatever the display unit: these are nozzle-sized numbers, and the
-   *  engine's report quotes them in mm. */
-  nozzle: number;
-  layer: number;
+   *  engine's report quotes them in mm. Null while a field holds no number. */
+  nozzle: number | null;
+  layer: number | null;
   /** Degrees past vertical a face may lean before it needs support. */
-  overhang: number;
-  minGap: number;
-  maxBridge: number;
+  overhang: number | null;
+  minGap: number | null;
+  maxBridge: number | null;
   up: PrintabilityUp;
   /** Lay each body on its largest flat face instead of turning it by `up`. */
   layFlat: boolean;
@@ -89,7 +89,7 @@ export type PrintabilityRequest = { ok: true; options: PrintabilityOptions } | {
 /** The panel's settings as the op's options for `bodies` (empty checks every body), or the first thing in the way,
  *  phrased for the status line. Every setting is sent, so the engine checks against what the panel shows. */
 export function buildPrintabilityRequest(s: PrintabilitySetup, bodies: string[]): PrintabilityRequest {
-  // A cleared number input reads as "", which compares as 0, so check the type first.
+  // A cleared field is null, which compares as 0, so check the type first.
   if (!isNum(s.nozzle) || !(s.nozzle > 0)) return { ok: false, message: "the nozzle width must be above 0" };
   if (!isNum(s.layer) || !(s.layer > 0)) return { ok: false, message: "the layer height must be above 0" };
   if (!isNum(s.overhang) || !(s.overhang > 0 && s.overhang < 90)) {

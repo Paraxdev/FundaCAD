@@ -89,7 +89,7 @@ describe("the Parameters section", () => {
     expect(rows).toEqual(["gap", "pitch", "solidCore", "joinedRings"]);
     expect(w.find('[data-param="solidCore"] input[type="checkbox"]').exists()).toBe(true);
     expect(w.find('[data-param="joinedRings"] input[type="range"]').exists()).toBe(true);
-    expect(w.find('[data-param="gap"] input[type="number"]').exists()).toBe(true);
+    expect(w.find('[data-param="gap"] .ui-number-field input').exists()).toBe(true);
     // a formula has no control, it is reported
     expect(w.find('[data-param="pitch"] input').exists()).toBe(false);
     expect(w.find('[data-param="pitch"]').text()).toContain("fx 1");
@@ -115,9 +115,9 @@ describe("the Parameters section", () => {
     await settle();
     expect(store.document.paramDefs!["solidCore"]!.expr).toBe("0");
 
-    const gap = w.find('[data-param="gap"] input[type="number"]');
-    (gap.element as HTMLInputElement).value = "0.1";
-    await gap.trigger("change");
+    const gap = w.find('[data-param="gap"] input');
+    await gap.setValue("0.1");
+    await gap.trigger("keydown", { key: "Enter" });
     await settle();
     expect(store.document.paramDefs!["gap"]!.expr).toBe("0.3"); // not below its minimum
 

@@ -252,6 +252,35 @@ describe("NumberField", () => {
   });
 });
 
+describe("NumberField limits", () => {
+  it("with arrows commits typed text past min and max, unrefused", async () => {
+    const { w, input } = await render({ min: 0, max: 10, limits: "arrows" });
+    await commit(input, "-1");
+    await commit(input, "11");
+    expect(emitted(w)).toEqual([[-1], [11]]);
+    expect(input.attributes("aria-invalid")).toBeUndefined();
+  });
+
+  it("with arrows still holds the arrow keys inside min and max", async () => {
+    const top = await render({ modelValue: 10, min: 0, max: 10, limits: "arrows" });
+    await top.input.trigger("keydown", { key: "ArrowUp" });
+    expect(top.el.value).toBe("10");
+    const bottom = await render({ modelValue: 0, min: 0, max: 10, limits: "arrows" });
+    await bottom.input.trigger("keydown", { key: "ArrowDown" });
+    expect(bottom.el.value).toBe("0");
+  });
+
+  it("refuses by default, and still judges a validate with arrows", async () => {
+    const plain = await render({ min: 0 });
+    await commit(plain.input, "-1");
+    expect(emitted(plain.w)).toEqual([]);
+    const judged = await render({ min: 0, limits: "arrows", validate: () => "No" });
+    await commit(judged.input, "-1");
+    expect(emitted(judged.w)).toEqual([]);
+    expect(judged.input.attributes("title")).toBe("No");
+  });
+});
+
 describe("NumberField expressions", () => {
   // A feature row: a plain number is in the row's unit, anything the grammar leaves to the parameter engine is text.
   const parse = (raw: string, unit: Parameters<NonNullable<Props["parse"]>>[1]) => {

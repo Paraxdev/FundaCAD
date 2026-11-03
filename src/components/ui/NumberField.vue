@@ -48,8 +48,13 @@ const props = defineProps<
     problem?: string | null | undefined;
     min?: number | undefined;
     max?: number | undefined;
+    /** `arrows` holds `min` and `max` to the arrow keys, as a native number input does: typed text past them commits,
+     *  so only an owner that judges the value may ask for it. `refuse`, the default, also refuses it. */
+    limits?: "refuse" | "arrows";
     /** In the shown unit, ten times with Shift. */
     step?: number;
+    /** Where an arrow starts on a blank field, for an owner whose placeholder hints at a default. Default `min`. */
+    stepFrom?: number | undefined;
     /** A blank field means null instead of the last value. */
     nullable?: boolean;
     /** Shows what the draft would do, on a debounce while typing in `change` mode; text that does not read is
@@ -105,8 +110,10 @@ function check(raw: string): { value: number | null; error: string | null; expr?
     return { value: null, error: e instanceof Error && e.message ? e.message : "Not a value" };
   }
   if (v === null) return { value: null, error: null, expr: true };
-  if (props.min !== undefined && v < props.min) return { value: v, error: `At least ${caption(props.min)}` };
-  if (props.max !== undefined && v > props.max) return { value: v, error: `At most ${caption(props.max)}` };
+  if (props.limits !== "arrows") {
+    if (props.min !== undefined && v < props.min) return { value: v, error: `At least ${caption(props.min)}` };
+    if (props.max !== undefined && v > props.max) return { value: v, error: `At most ${caption(props.max)}` };
+  }
   return { value: v, error: props.validate?.(v) ?? null };
 }
 
@@ -160,7 +167,7 @@ function onInput(e: Event) {
 
 function stepBy(dir: 1 | -1, big: boolean) {
   const factor = unitDef.value?.factor ?? 1;
-  let base = props.modelValue ?? props.min ?? 0;
+  let base = props.modelValue ?? props.stepFrom ?? props.min ?? 0;
   try {
     if (draft.value.trim() !== "") base = read(draft.value) ?? base;
   } catch {

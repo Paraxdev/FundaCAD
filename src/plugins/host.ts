@@ -115,7 +115,7 @@ export type { PluginSettings, SettingProp, SettingValues, SettingsSchema } from 
 /** The app's display precision rule, so a plugin's readout rounds a length like every other panel. */
 export { roundForDisplay as displayRound } from "../ui/measure";
 /** Number boxes read through the app's measure grammar (units, fractions, arithmetic, decimal comma). */
-export { fieldNumber, fieldError } from "../ui/measure";
+export { fieldNumber, fieldError, readAs } from "../ui/measure";
 
 export { stripDocumentExt } from "../io/documentExt";
 
