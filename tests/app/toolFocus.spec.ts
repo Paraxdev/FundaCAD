@@ -35,6 +35,7 @@ function setup(shown = true) {
     frames.clear();
     due.forEach((fn) => fn());
   };
+  const idle = () => (frame(), frame());
   // The tool's box takes focus and is removed with the tool.
   const startTool = () => {
     host.tool = true;
@@ -49,7 +50,7 @@ function setup(shown = true) {
     $("box").blur();
     $("box").remove();
   };
-  return { $, host, frame, startTool, endTool, stop };
+  return { $, host, frame, idle, startTool, endTool, stop };
 }
 
 describe("focus after a tool", () => {
@@ -62,7 +63,24 @@ describe("focus after a tool", () => {
     t.endTool();
     expect(document.activeElement).toBe(document.body);
     t.frame();
+    expect(document.activeElement).toBe(document.body);
+    t.frame();
     expect(document.activeElement).toBe(t.$("row2"));
+  });
+
+  // A picker stands down in the frame of a click and hands the pick on in the next, as a sketch opening on a face.
+  it("gives nothing back when another tool starts the frame after one ends", () => {
+    const t = setup();
+    t.$("row2").focus();
+    t.frame();
+    t.startTool();
+    t.frame();
+    t.endTool();
+    t.frame();
+    t.host.sketch.active = true;
+    t.frame();
+    t.frame();
+    expect(document.activeElement).toBe(document.body);
   });
 
   it("passes over the palette the tool was started from, it is gone by then", () => {
@@ -75,7 +93,7 @@ describe("focus after a tool", () => {
     t.$("palette").remove();
     t.frame();
     t.endTool();
-    t.frame();
+    t.idle();
     expect(document.activeElement).toBe(t.$("row2"));
   });
 
@@ -87,7 +105,7 @@ describe("focus after a tool", () => {
     t.frame();
     t.$("row1").remove();
     t.endTool();
-    t.frame();
+    t.idle();
     expect(document.activeElement).toBe(t.$("row2"));
   });
 
@@ -99,7 +117,7 @@ describe("focus after a tool", () => {
     t.frame();
     t.endTool();
     t.$("rail").focus();
-    t.frame();
+    t.idle();
     expect(document.activeElement).toBe(t.$("rail"));
   });
 
@@ -110,7 +128,7 @@ describe("focus after a tool", () => {
     t.startTool();
     t.frame();
     t.endTool();
-    t.frame();
+    t.idle();
     expect(document.activeElement).toBe(document.body);
   });
 
@@ -123,7 +141,7 @@ describe("focus after a tool", () => {
     t.startTool();
     t.frame();
     t.endTool();
-    t.frame();
+    t.idle();
     expect(document.activeElement).toBe(document.body);
   });
 
@@ -135,7 +153,7 @@ describe("focus after a tool", () => {
     t.startTool();
     t.frame();
     t.endTool();
-    t.frame();
+    t.idle();
     expect(document.activeElement).toBe(document.body);
   });
 });

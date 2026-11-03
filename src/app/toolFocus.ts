@@ -37,6 +37,7 @@ export function installToolFocus(
   const shown = o.shown ?? keyboardShown;
   let sketching = false;
   let working = false;
+  let idle = 0;
   let seen: Element | null = null;
   let from: { el: HTMLElement; list: Element | null } | null = null;
   let handle = 0;
@@ -53,17 +54,21 @@ export function installToolFocus(
       if (a && !onPage(a) && typesAhead(a)) e.viewport.domElement.focus({ preventScroll: true });
     }
     sketching = e.sketch.active;
-    const now = e.toolAtWork();
-    if (!now) {
-      if (working && from && onPage(document.activeElement)) giveBack(from);
-      const a = document.activeElement;
-      if (a !== seen && !a?.closest(PASSING)) {
-        seen = a;
-        from = a instanceof HTMLElement && !onPage(a) && shown(a) ? { el: a, list: a.closest(LISTS) } : null;
-      }
-    }
-    working = now;
     handle = frame(tick);
+    if (e.toolAtWork()) {
+      working = true;
+      idle = 0;
+      return;
+    }
+    // Idle must hold two frames, as restoreWhenIdle's, or a pick handed on would see focus on the page in between.
+    if (working && ++idle < 2) return;
+    if (working && from && onPage(document.activeElement)) giveBack(from);
+    working = false;
+    const a = document.activeElement;
+    if (a !== seen && !a?.closest(PASSING)) {
+      seen = a;
+      from = a instanceof HTMLElement && !onPage(a) && shown(a) ? { el: a, list: a.closest(LISTS) } : null;
+    }
   };
   handle = frame(tick);
   return () => cancelFrame(handle);
