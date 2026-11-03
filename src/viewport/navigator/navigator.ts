@@ -109,6 +109,10 @@ export class Navigator {
   private unsettled = false;
   private good: Pose = makePose();
   private version = 0;
+  // Pose moves, and the count update() last reported: an arrow step or a 3D mouse turn lands between frames, and the
+  // next frame has to count it or the viewport's still timer never starts.
+  private moves = 0;
+  private movesSeen = 0;
   // An orthographic view's eye is only scale over lens, a zoom, fit or re-seat moves it through the model while the
   // picture stays outside, so 'auto' asks the content box only of a view set by its eye.
   private eyeSet = false;
@@ -473,9 +477,8 @@ export class Navigator {
     this.unsettled = true;
   }
 
-  /** Advance one frame of `dt` seconds. True when the pose changed. */
+  /** Advance one frame of `dt` seconds. True when the pose moved since the last update, between frames too. */
   update(dt: number): boolean {
-    const before = this.version;
     const tau = this.opts.smoothTime;
     if (this.flight) {
       const done = stepFlight(this.flight, dt, this.pose);
@@ -511,7 +514,9 @@ export class Navigator {
       this.deliberate = false;
     }
     this.sanitize();
-    return this.version !== before;
+    const moved = this.moves !== this.movesSeen;
+    this.movesSeen = this.moves;
+    return moved;
   }
 
   private stepZooms(tau: number, dt: number) {
@@ -681,6 +686,7 @@ export class Navigator {
 
   private moved() {
     this.version++;
+    this.moves++;
     this.emit("change");
   }
 
