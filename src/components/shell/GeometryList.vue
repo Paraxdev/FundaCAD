@@ -227,6 +227,13 @@ function onListKeys(e: KeyboardEvent) {
   if (place !== null) moveCursor(place);
 }
 
+// The Listbox lets a first letter no row starts go on, and the window keymap leaves letters typed in a list alone.
+function onUnmatchedLetter(e: KeyboardEvent) {
+  if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.key.length !== 1 || e.key === " ") return;
+  if (!(e.target instanceof Element) || !e.target.closest("[role=option]")) return;
+  announce(`No row starts with ${e.key.toUpperCase()}. F6 goes to the 3D view.`, "polite", { key: "geometry-letter" });
+}
+
 // The viewport keeps focus put on a press, so a row would go on taking the arrows meant for the model.
 function onDocPointerdown(e: PointerEvent) {
   const a = document.activeElement;
@@ -313,7 +320,12 @@ onUnmounted(() => {
         />
       </FieldRow>
     </div>
-    <div ref="scroller" class="float-card-body geometry-rows" :aria-busy="list.state === 'loading' || undefined">
+    <div
+      ref="scroller"
+      class="float-card-body geometry-rows"
+      :aria-busy="list.state === 'loading' || undefined"
+      @keydown="onUnmatchedLetter"
+    >
       <div v-if="failed" class="geometry-note" role="alert">
         <p class="empty-state" tabindex="-1">{{ list.error }}</p>
         <Button size="sm" @click="ctl.retry()">Try again</Button>

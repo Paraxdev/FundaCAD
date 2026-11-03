@@ -861,6 +861,17 @@ describe("keys that must not reach the model", () => {
     window.removeEventListener("keydown", heard);
     expect(heard).toHaveBeenCalledTimes(1);
   });
+
+  it("says when no row starts with a letter, and where a tool key works", async () => {
+    const { w } = await open(2);
+    focusRow(w, 1);
+    await press(w, 1, "s");
+    expect(vi.mocked(announce).mock.calls.map((c) => c[0])).toEqual(["No row starts with S. F6 goes to the 3D view."]);
+    vi.mocked(announce).mockClear();
+    await press(w, 1, "f");
+    await press(w, 1, "s", { ctrlKey: true });
+    expect(announce).not.toHaveBeenCalled();
+  });
 });
 
 describe("the Planes list", () => {

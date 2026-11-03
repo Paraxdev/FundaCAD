@@ -64,7 +64,7 @@ A list shows 100 rows at a time. Previous and Next turn the page, and the count 
 | Space | Add or remove this row. |
 | Shift+Up, Shift+Down, Shift+Space | Take a run of rows on this page. |
 | Ctrl+A | Take every row on this page. |
-| A letter | Jump to the next row starting with it. |
+| A letter | Jump to the next row starting with it. Tool keys such as S and F do not run here, F6 goes to the 3D view, where they do. |
 | Esc | Clear the selection. Focus stays on the row. |
 
 Delete and Backspace do nothing here, so a key press in the list never removes a face. A click on a row picks as these keys do, and Ctrl+click and Shift+click add to it. If a tool is waiting for a pick, Enter or a click on a row gives it that plane, face or edge instead. A waiting Sketch takes a plane or a flat face, and a running Fillet or Chamfer adds the edge, or takes it out again if it is already in.
