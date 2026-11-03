@@ -11,6 +11,8 @@ If a flat face is already selected, the sketch opens on it straight away. A roun
 
 XY is the floor, so a sketch there is a view from above.
 
+To start without a pointer, press F6 to reach the Items tree, arrow to a plane and press Enter. See [Draw with keys](keyboard.md).
+
 With no sketch open, L, R, C, A and P start a sketch with Line, Rectangle, Circle, Arc or Project ready.
 
 ## Leave a sketch

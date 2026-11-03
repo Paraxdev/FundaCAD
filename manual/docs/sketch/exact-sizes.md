@@ -18,4 +18,6 @@ While a shape hangs on the cursor, a small value box shows its size. Type a numb
 
 A typed width, height or diameter stays on the shape as a dimension, so it holds when you drag the shape.
 
+The first point of a line, rectangle or circle can be typed too, as X and Y, see [Draw with keys](keyboard.md).
+
 A box takes other units too. Type `1 in`, or click the unit beside the number to change it.

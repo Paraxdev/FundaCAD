@@ -63,8 +63,10 @@ function take(el: HTMLElement | null | undefined): boolean {
   return document.activeElement === el;
 }
 
-// The canvas only counts once it is a Tab stop of its own, until then the Model landmark takes focus.
+// The key surface and the canvas only count while they are Tab stops, until then the Model landmark takes focus.
 function enterViewport(el: HTMLElement): boolean {
+  const surface = el.querySelector<HTMLElement>("[data-key-surface]");
+  if (surface && surface.tabIndex >= 0 && take(surface)) return true;
   const canvas = el.querySelector<HTMLElement>("canvas[tabindex]");
   return (!!canvas && canvas.tabIndex >= 0 && take(canvas)) || take(landOn(el));
 }

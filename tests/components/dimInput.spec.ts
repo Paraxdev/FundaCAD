@@ -120,6 +120,20 @@ describe("DimInput hit testing", () => {
     expect(root().style.pointerEvents).toBe("none");
   });
 
+  it("keeps a box centred for a key cursor in the window, and leaves a pointer's where the drawing is", () => {
+    dim.show([{ name: "x", label: "X", free: true }], () => {});
+    Object.defineProperty(root(), "offsetWidth", { configurable: true, value: 200 });
+    Object.defineProperty(root(), "offsetHeight", { configurable: true, value: 40 });
+    dim.positionCentred(50000, -900, true);
+    expect([root().style.left, root().style.top]).toEqual([`${window.innerWidth - 200}px`, "0px"]);
+    dim.positionCentred(-50000, 50000, true);
+    expect([root().style.left, root().style.top]).toEqual(["0px", `${window.innerHeight - 40}px`]);
+    dim.positionCentred(300, 200, true);
+    expect([root().style.left, root().style.top]).toEqual(["200px", "180px"]);
+    dim.positionCentred(50000, -900);
+    expect([root().style.left, root().style.top]).toEqual(["49900px", "-920px"]);
+  });
+
   it("lets a click through a box centred on the drawing, and is clickable again on the next show", () => {
     // The circle's diameter box sits on the radius midpoint, so at a small radius the placing click lands on it.
     dim.show([{ name: "radius", label: "R" }], () => {});
@@ -1100,5 +1114,292 @@ describe("DimInput reads parameter names", () => {
     type("10 + 5");
     expect(dim.getValue("depth")).toBe(15);
     expect(dim.exprOf("depth")).toBeNull();
+  });
+});
+
+describe("DimInput.wasTyped", () => {
+  const field = (name: string) => document.querySelector<HTMLInputElement>(`.dim-field[data-field="${name}"] input`)!;
+  const keydown = (el: HTMLElement, k: string) =>
+    el.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true }));
+
+  it("is true for a field a keystroke changed, not for one a seed or a Tab only locked", () => {
+    dim.show(
+      [
+        { name: "x", label: "X" },
+        { name: "y", label: "Y" },
+      ],
+      () => {},
+    );
+    dim.updateFromCursor({ x: 12.5, y: -3 });
+    expect([dim.wasTyped("x"), dim.wasTyped("y")]).toEqual([false, false]);
+    field("x").focus();
+    field("x").value = "7";
+    field("x").dispatchEvent(new Event("input", { bubbles: true }));
+    keydown(field("x"), "Tab");
+    keydown(field("y"), "Tab");
+    expect([dim.isUserDriven("x"), dim.isUserDriven("y")]).toEqual([true, true]);
+    expect([dim.wasTyped("x"), dim.wasTyped("y")]).toEqual([true, false]);
+  });
+
+  it("survives a confirm, and is clean for the next showing and after hide", () => {
+    const seen: boolean[] = [];
+    dim.show([{ name: "x", label: "X" }], () => seen.push(dim.wasTyped("x")));
+    field("x").value = "4";
+    field("x").dispatchEvent(new Event("input", { bubbles: true }));
+    keydown(field("x"), "Enter");
+    expect(seen).toEqual([true]);
+    dim.show([{ name: "x", label: "X" }], () => {});
+    expect(dim.wasTyped("x")).toBe(false);
+    field("x").value = "5";
+    field("x").dispatchEvent(new Event("input", { bubbles: true }));
+    dim.hide();
+    expect(dim.wasTyped("x")).toBe(false);
+  });
+
+  describe("after the browser's own undo", () => {
+    const edit = (name: string, type: string, text: string) => {
+      const f = field(name);
+      f.dispatchEvent(new InputEvent("beforeinput", { inputType: type, bubbles: true, cancelable: true }));
+      f.value = text;
+      f.dispatchEvent(new InputEvent("input", { inputType: type, bubbles: true }));
+    };
+    const showXY = (onInput?: () => void) =>
+      dim.show(
+        [
+          { name: "x", label: "X" },
+          { name: "y", label: "Y" },
+        ],
+        () => {},
+        undefined,
+        undefined,
+        undefined,
+        onInput,
+      );
+
+    it("is false once the undo is back at the text before the first keystroke", () => {
+      showXY();
+      dim.seedText("x", "12.5");
+      edit("x", "insertText", "12.57");
+      edit("x", "insertText", "12.579");
+      expect(dim.wasTyped("x")).toBe(true);
+      edit("x", "historyUndo", "12.5");
+      expect([dim.wasTyped("x"), dim.wasTyped("y")]).toEqual([false, false]);
+    });
+
+    it("stays true for an undo that leaves some typing in the field", () => {
+      showXY();
+      dim.seedText("x", "12.5");
+      edit("x", "insertText", "12.57");
+      edit("x", "insertText", "12.579");
+      edit("x", "historyUndo", "12.57");
+      expect(dim.wasTyped("x")).toBe(true);
+    });
+
+    it("follows a redo and a second undo, then a new first keystroke from new text", () => {
+      showXY();
+      dim.seedText("x", "12.5");
+      edit("x", "insertText", "12.57");
+      edit("x", "historyUndo", "12.5");
+      edit("x", "historyRedo", "12.57");
+      expect(dim.wasTyped("x")).toBe(true);
+      edit("x", "historyUndo", "12.5");
+      expect(dim.wasTyped("x")).toBe(false);
+      dim.seedText("x", "3");
+      edit("x", "insertText", "39");
+      expect(dim.wasTyped("x")).toBe(true);
+      edit("x", "historyUndo", "3");
+      expect(dim.wasTyped("x")).toBe(false);
+    });
+
+    it("leaves the field the undo did not touch", () => {
+      showXY();
+      edit("x", "insertText", "4");
+      edit("y", "insertText", "5");
+      edit("y", "historyUndo", "");
+      expect([dim.wasTyped("x"), dim.wasTyped("y")]).toEqual([true, false]);
+    });
+
+    it("has already changed when the tool hears the input", () => {
+      const seen: boolean[] = [];
+      showXY(() => seen.push(dim.wasTyped("x")));
+      edit("x", "insertText", "4");
+      edit("x", "historyUndo", "");
+      expect(seen).toEqual([true, false]);
+    });
+  });
+});
+
+describe("DimInput.typeInto", () => {
+  const field = (name: string) => document.querySelector<HTMLInputElement>(`.dim-field[data-field="${name}"] input`)!;
+  const frame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
+  const open = () => {
+    dim.show(
+      [
+        { name: "x", label: "X", free: true },
+        { name: "y", label: "Y", free: true },
+      ],
+      () => {},
+    );
+    dim.updateFromCursor({ x: 12.5, y: -3 });
+  };
+
+  it("replaces a seeded value, then a frame and a second character give both", async () => {
+    open();
+    dim.typeInto("x", "7");
+    await frame();
+    dim.typeInto("x", "3");
+    await frame();
+    expect(field("x").value).toBe("73");
+    expect(field("y").value).toBe("-3");
+    expect(document.activeElement).toBe(field("x"));
+    expect([field("x").selectionStart, field("x").selectionEnd]).toEqual([2, 2]);
+    expect([dim.wasTyped("x"), dim.wasTyped("y"), dim.isUserDriven("x")]).toEqual([true, false, true]);
+  });
+
+  it("keeps the character the open box's own refocus frame would have selected over", async () => {
+    open();
+    dim.typeInto("y", "-");
+    dim.typeInto("y", "4");
+    await frame();
+    await frame();
+    expect(field("y").value).toBe("-4");
+    expect(field("x").value).toBe("12.5");
+    expect([field("y").selectionStart, field("y").selectionEnd]).toEqual([2, 2]);
+  });
+
+  it("fires the box's input path, so a refused value is flagged at once", () => {
+    open();
+    dim.typeInto("x", "2");
+    expect(dim.getRaw("x")).toBe("2");
+    expect(dim.getRaw("y")).toBe("-3");
+  });
+
+  it("calls a field fresh until text is typed in it, and again once that text is gone", () => {
+    open();
+    const other = document.createElement("input");
+    expect([dim.isFreshField(field("x")), dim.isFreshField(field("y")), dim.isFreshField(other)]).toEqual([
+      true,
+      true,
+      false,
+    ]);
+    dim.typeInto("x", "7");
+    expect([dim.isFreshField(field("x")), dim.isFreshField(field("y"))]).toEqual([false, true]);
+    field("x").value = "";
+    expect(dim.isFreshField(field("x"))).toBe(true);
+    expect(dim.isFreshField(null)).toBe(false);
+  });
+
+  it("does nothing for a field the box lacks or when no box is open", () => {
+    dim.typeInto("x", "5");
+    open();
+    dim.typeInto("z", "5");
+    expect([field("x").value, field("y").value]).toEqual(["12.5", "-3"]);
+    expect(dim.wasTyped("x")).toBe(false);
+  });
+
+  it("selects a field on focus once the frame has run", async () => {
+    open();
+    dim.typeInto("x", "9");
+    await frame();
+    await frame();
+    dim.focus();
+    expect([field("x").selectionStart, field("x").selectionEnd]).toEqual([0, 1]);
+  });
+});
+
+describe("DimInput keys that beat the frame after show", () => {
+  const field = (name: string) => document.querySelector<HTMLInputElement>(`.dim-field[data-field="${name}"] input`)!;
+  const button = (cls: string) => document.querySelector<HTMLElement>(cls)!;
+  const tab = (from: HTMLElement) =>
+    from.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }));
+  let frames: FrameRequestCallback[];
+  const runFrames = () => frames.splice(0).forEach((f) => f(0));
+  const open = () => {
+    dim.show(
+      [
+        { name: "x", label: "X", free: true },
+        { name: "y", label: "Y", free: true },
+      ],
+      () => {},
+    );
+    dim.updateFromCursor({ x: 12.5, y: -3 });
+  };
+
+  beforeEach(() => {
+    frames = [];
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => frames.push(cb));
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("stays on Y after X was typed and Tab pressed, and Y's digits land in Y", () => {
+    open();
+    dim.typeInto("x", "25");
+    tab(field("x"));
+    expect(document.activeElement).toBe(field("y"));
+    runFrames();
+    expect(document.activeElement).toBe(field("y"));
+    dim.typeInto("y", "3");
+    expect([field("x").value, field("y").value]).toEqual(["25", "3"]);
+  });
+
+  it("stays on Y after a Tab with nothing typed, with its seed selected to be replaced", () => {
+    open();
+    tab(field("x"));
+    runFrames();
+    expect(document.activeElement).toBe(field("y"));
+    expect([field("y").selectionStart, field("y").selectionEnd]).toEqual([0, 2]);
+  });
+
+  it("stays on Confirm when two Tabs reached it, and on X after a Shift+Tab back", () => {
+    open();
+    tab(field("x"));
+    tab(field("y"));
+    expect(document.activeElement).toBe(button(".dim-ok"));
+    runFrames();
+    expect(document.activeElement).toBe(button(".dim-ok"));
+    open();
+    tab(field("x"));
+    field("y").dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true }),
+    );
+    runFrames();
+    expect(document.activeElement).toBe(field("x"));
+  });
+
+  it("does not select over the first digits typed, so the next one adds to them", () => {
+    open();
+    field("x").value = "2";
+    field("x").setSelectionRange(1, 1);
+    field("x").dispatchEvent(new Event("input", { bubbles: true }));
+    runFrames();
+    expect([field("x").selectionStart, field("x").selectionEnd]).toEqual([1, 1]);
+  });
+
+  it("still takes focus back to the first field when no key came before the frame", () => {
+    open();
+    tab(field("x"));
+    open();
+    (document.activeElement as HTMLElement).blur();
+    runFrames();
+    expect(document.activeElement).toBe(field("x"));
+    expect([field("x").selectionStart, field("x").selectionEnd]).toEqual([0, 4]);
+  });
+});
+
+describe("DimInput.hasField", () => {
+  it("is true for a shown field only, false for another name, after hide and for the next box", () => {
+    expect(dim.hasField("radius")).toBe(false);
+    dim.show(
+      [
+        { name: "radius", label: "R" },
+        { name: "angle", label: "A" },
+      ],
+      () => {},
+    );
+    expect([dim.hasField("radius"), dim.hasField("angle"), dim.hasField("x")]).toEqual([true, true, false]);
+    dim.hide();
+    expect(dim.hasField("radius")).toBe(false);
+    dim.show([{ name: "x", label: "X" }], () => {});
+    expect([dim.hasField("radius"), dim.hasField("x")]).toEqual([false, true]);
   });
 });

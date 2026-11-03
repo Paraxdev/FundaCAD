@@ -1,6 +1,7 @@
 // On-canvas heads-up dimension input: tracking fields follow the cursor, typing holds, Tab locks, Enter commits.
 // Values cross this boundary in MILLIMETRES; length fields show and parse the display unit, angles are degrees.
 
+import { announce } from "../ui/announce";
 import {
   onActivate,
   setChipUnit,
@@ -300,6 +301,10 @@ export class DimInput {
   /** A tool's own control beside the fields, such as the fillet's profile chip. */
   private extra: HTMLElement | null = null;
   private typedProblem: string | null = null;
+  /** Fields a keystroke changed since show(), which a confirm does not clear the way it clears `typed`. */
+  private typedNames = new Set<string>();
+  // A Tab inside the box since show(), so show()'s late refocus has no business moving focus back.
+  private walked = false;
   private focusName: string | null = null;
   private boxNo = ++boxCount;
   private helpId = `dim-help-${this.boxNo}`;
@@ -376,6 +381,12 @@ export class DimInput {
     return this.fields.some((f) => f.input === el);
   }
 
+  /** A field of this box with nothing typed in it, or its typing wiped out. */
+  isFreshField(el: EventTarget | null): boolean {
+    const f = this.fields.find((x) => x.input === el);
+    return !!f && (!f.userDriven || f.input.value === "");
+  }
+
   /** For a tool whose Tab means something else (the fillet flip): Shift+Tab from a field steps back onto Cancel. */
   focusLastStop() {
     const from = document.activeElement instanceof HTMLElement ? document.activeElement : this.root;
@@ -403,6 +414,8 @@ export class DimInput {
     onInput?: () => void,
   ) {
     this.hide();
+    this.typedNames.clear();
+    this.walked = false;
     this.focusName = null;
     this.onInput = onInput ?? null;
     this.setClickThrough(false); // every other tool wants a clickable box
@@ -469,6 +482,18 @@ export class DimInput {
       this.root.appendChild(wrap);
 
       input.addEventListener("keydown", (e) => this.onKey(e, field));
+      // Registered ahead of the input listener below, which tells the tool: an undo back to the text before the first
+      // keystroke takes the typing back, so a seed left in the field does not count as typed.
+      let beforeTyping: string | null = null;
+      input.addEventListener("beforeinput", (e) => {
+        const history = e.inputType === "historyUndo" || e.inputType === "historyRedo";
+        if (!history && !this.typedNames.has(field.def.name)) beforeTyping = input.value;
+      });
+      input.addEventListener("input", (e) => {
+        const takenBack = (e as InputEvent).inputType === "historyUndo" && input.value === beforeTyping;
+        if (takenBack) this.typedNames.delete(field.def.name);
+        else this.typedNames.add(field.def.name);
+      });
       // A click into a value the tool wrote selects it, so typing replaces it; the release would drop the selection.
       let keepSelection = false;
       input.addEventListener("pointerdown", () => {
@@ -560,8 +585,10 @@ export class DimInput {
     // so focus again next frame too or typing and Tab go nowhere. A field that took focus by then, such as a rename in
     // the Items tree after a selection raised Move, keeps it: losing it would close that field. The box's own field
     // still goes through focus(), since a value seeded after show lost its selection and typing would append to it.
+    // Keys can beat that frame on a slow one or in a screen reader's burst, and then they already say where focus goes.
     this.focus();
     requestAnimationFrame(() => {
+      if (this.walked || this.typedNames.size) return;
       const now = document.activeElement;
       if (this.ownsField(now) || !isEditableTarget(now)) this.focus();
     });
@@ -919,6 +946,18 @@ export class DimInput {
     }
   }
 
+  /** Writes text into a field as a keystroke would, replacing a value the tool seeded and otherwise appending. */
+  typeInto(name: string, text: string) {
+    const f = this.fields.find((x) => x.def.name === name && !x.hidden);
+    if (!f || !this.active) return;
+    this.focusName = name;
+    this.focus();
+    const input = f.input;
+    input.value = f.userDriven ? input.value + text : text;
+    input.setSelectionRange(input.value.length, input.value.length);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
   focusField(name: string) {
     this.focusName = name;
     this.focus();
@@ -988,6 +1027,7 @@ export class DimInput {
 
   /** False off either end: there Tab stays the browser's and leaves the box, which never traps the keyboard. */
   private moveFocus(from: HTMLElement, back: boolean): boolean {
+    this.walked = true;
     const stops = this.tabStops(from);
     const next = stops[stops.indexOf(from) + (back ? -1 : 1)];
     if (!next) return false;
@@ -1350,6 +1390,15 @@ export class DimInput {
     this.setProblem(message);
   }
 
+  /** Any field that a keystroke or a Tab has frozen. */
+  touched(): boolean {
+    return this.active && this.fields.some((f) => f.userDriven);
+  }
+
+  hasField(name: string): boolean {
+    return this.active && this.fields.some((f) => f.def.name === name);
+  }
+
   isUserDriven(name: string): boolean {
     const f = this.fields.find((x) => x.def.name === name);
     return !!f && f.userDriven;
@@ -1425,10 +1474,17 @@ export class DimInput {
   }
 
   // Centred on the drawing itself, so the placing click can land under it: it must not take that click.
-  positionCentred(screenX: number, screenY: number) {
+  // A pointer's box follows the drawing as it always has, `onScreen` keeps one in the window for a cursor moved by keys.
+  positionCentred(screenX: number, screenY: number, onScreen = false) {
     this.setClickThrough(true);
-    this.root.style.left = `${Math.round(screenX - this.root.offsetWidth / 2)}px`;
-    this.root.style.top = `${Math.round(screenY - this.root.offsetHeight / 2)}px`;
+    const place = (at: number, size: number, room: number) =>
+      onScreen ? Math.max(0, Math.min(at - size / 2, room - size)) : at - size / 2;
+    this.root.style.left = `${Math.round(place(screenX, this.root.offsetWidth, window.innerWidth))}px`;
+    this.root.style.top = `${Math.round(place(screenY, this.root.offsetHeight, window.innerHeight))}px`;
+  }
+
+  wasTyped(name: string): boolean {
+    return this.active && this.typedNames.has(name);
   }
 
   hasTyped(): boolean {
@@ -1450,6 +1506,7 @@ export class DimInput {
       marked ??= problem;
       if (explicit && f.lastGood !== null) continue;
       this.setTypedProblem(problem);
+      announce(problem, "assertive");
       f.input.focus();
       f.input.select();
       return false;

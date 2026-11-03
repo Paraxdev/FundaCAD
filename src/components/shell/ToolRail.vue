@@ -375,6 +375,7 @@ function run(action: string, ev?: MouseEvent) {
     return;
   }
   ribbon.act(action);
+  if (ev?.detail === 0) ribbon.actedByKeys();
 }
 
 function isActive(action: string): boolean {

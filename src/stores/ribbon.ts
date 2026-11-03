@@ -22,5 +22,14 @@ export const useRibbonStore = defineStore("ribbon", () => {
     run?.(action);
   }
 
-  return { context, activeSketchTool, sketchId, viewOn, bind, act };
+  let keyArmed: (() => void) | null = null;
+  function bindKeyArmed(fn: () => void) {
+    keyArmed = fn;
+  }
+  /** A tool button was pressed from the keyboard: the sketch moves focus to where its keys are heard. */
+  function actedByKeys() {
+    keyArmed?.();
+  }
+
+  return { context, activeSketchTool, sketchId, viewOn, bind, act, bindKeyArmed, actedByKeys };
 });

@@ -43,6 +43,7 @@ import { TextPanel } from "./textPanel";
 import type { TextValues } from "./textPanel";
 import { fetchFonts } from "./textCache";
 import { isEditableTarget, isBoxButtonKey, isMenuKey } from "../ui/focus";
+import { inputModality } from "../ui/inputModality";
 import { SketchDimensions, type ExtraDim } from "./sketchDimensions";
 import { SketchGlyphs } from "./sketchGlyphs";
 import { RelationsPanel } from "./relationsPanel";
@@ -81,6 +82,9 @@ import {
 } from "./directDims";
 import { expandPattern, translated } from "./pattern";
 import { MirrorFlow, type MirrorHost } from "./mirrorFlow";
+import { KeySurface } from "./keySurface";
+import { coordLabel } from "./sketchSpeech";
+import { KeyDrawFlow, KEY_DRAW_TOOLS, TOO_SMALL, type Drawn, type KeyDrawHost, type KeyHit } from "./keyDrawFlow";
 import { showMirrorPanel } from "../features/mirrorPanel";
 import { mirrorLineColor, mirrorObjectsColor } from "../features/mirrorColors";
 import { onThemeChange } from "../ui/theme";
@@ -92,6 +96,7 @@ import {
   settleOriginPin,
   showsSnapMarker,
   snap,
+  snapLabel,
   type OriginPinRequest,
   type SnapGuide,
   type SnapKind,
@@ -285,6 +290,8 @@ export class SketchMode {
     kind: SnapKind;
     ref?: SnapRef | undefined;
     noSnap?: boolean;
+    /** Placed by typed numbers, so it is exact and no near-axis guess applies. */
+    typed?: boolean;
   } | null = null;
   private baseRef: SnapRef | null = null;
   private arcStartRef: SnapRef | null = null;
@@ -428,6 +435,8 @@ export class SketchMode {
   private patternFlow: PatternFlow;
   private mirrorFlow: MirrorFlow;
   private dimFlow: DimFlow;
+  private keyDraw: KeyDrawFlow;
+  private keySurface = new KeySurface();
   private projectFlow: ProjectFlow;
   private modifyFlow: ModifyFlow;
 
@@ -464,7 +473,7 @@ export class SketchMode {
     this.boundKey = (e) => this.onKey(e);
     this.boundContext = (e) => this.onContextMenu(e);
     // A snap marker left where the pointer exited the canvas reads as a mark on the drawing.
-    this.boundLeave = () => this.showSnap(null);
+    this.boundLeave = () => this.onPointerLeave();
     this.boundTick = () => this.tick();
     const constraintHost: ConstraintHost = {
       tool: () => this.tool,
@@ -555,6 +564,7 @@ export class SketchMode {
       onState: () => this.onState?.(),
     };
     this.dimFlow = new DimFlow(dimHost);
+    this.keyDraw = new KeyDrawFlow(this.keyDrawHost());
     const projectHost: ProjectHost = {
       entities: () => this.entities,
       store: () => this.store,
@@ -633,6 +643,7 @@ export class SketchMode {
       edge.body && isExactPlaneEdge(edge, meshBodies) ? [{ edge: { body: edge.body, points: edge.points }, poly }] : [],
     );
     this.history.reset(); // fresh history per session (armed once entities load)
+    this.resetKeyDraw();
     this.pickedAt = new Map();
     if (!this.fonts.length)
       void fetchFonts().then((f) => {
@@ -709,6 +720,7 @@ export class SketchMode {
     this.refreshActive();
     this.armPreEdit(); // the session's baseline: the first edit undoes back to here
     this.setTool("rectangle");
+    this.armIfOpenedByKeys();
     this.setViewLocked(this.viewLocked); // apply lock-to-plane preference
     if (this.constraints.length > 0) this.requestSolve(); // restore DOF state
     this.onState?.();
@@ -812,6 +824,7 @@ export class SketchMode {
     this.viewport.rig.setOrbitLocked(false); // restore free orbit in model mode
     this.viewport.suspendPicking = false;
     this.active = false;
+    this.keySurface.dispose();
     if (!this.viewSquare) {
       this.viewSquare = true;
       this.onViewSquare?.(true);
@@ -853,6 +866,8 @@ export class SketchMode {
     const preselected = t === "dimension" ? [...this.selected] : [];
     if (t !== this.tool && this.tangentArc) this.setTangentArc(false);
     this.tool = t;
+    this.keyDraw.disarm();
+    this.keySurface.setStop(KEY_DRAW_TOOLS.has(t));
     this.base = null;
     this.inferTag.hide();
     this.chainStart = null;
@@ -1709,6 +1724,7 @@ export class SketchMode {
       this.rightDragged = false;
     }
     if (e.button !== 0) return; // left only; middle/right still navigate
+    this.keyDraw.pointerPressed();
     // Project picks 3D geometry with raw client coords, so it branches before the plane-point conversion.
     if (this.tool === "project") {
       e.preventDefault();
@@ -1734,17 +1750,7 @@ export class SketchMode {
     e.preventDefault();
     const p = hit.p;
 
-    // SK-6: a click that snapped to the Origin while drawing pins it with the fixed point the dimension tool would
-    // create (snap.ts pinOriginPoint), so the solver cannot undo it. Made once the shape commits (SK-10).
-    if (
-      hit.kind === "center" &&
-      hit.label === "Origin" &&
-      this.tool !== "select" &&
-      !MODIFY_TOOLS.has(this.tool) &&
-      !PATTERN_TOOLS.has(this.tool)
-    ) {
-      this.originPin ??= { at: p.clone(), count: this.entities.length };
-    }
+    this.noteOriginPin(hit);
 
     if (this.tool === "select") {
       // Note: Chromium reports detail 0 on pointerdown, so a double press is timed here
@@ -1904,15 +1910,59 @@ export class SketchMode {
     if (this.tool === "break") return this.modifyFlow.breakClick(p);
     if (CONSTRAINT_TOOLS.has(this.tool)) return this.constraintClick(p);
 
+    this.placeTwoPoint(hit);
+  }
+
+  // SK-6: a point that snapped to the Origin while drawing pins it with the fixed point the dimension tool would
+  // create (snap.ts pinOriginPoint), so the solver cannot undo it. Made once the shape commits (SK-10).
+  private noteOriginPin(hit: KeyHit) {
+    if (
+      hit.kind === "center" &&
+      hit.label === "Origin" &&
+      this.tool !== "select" &&
+      !MODIFY_TOOLS.has(this.tool) &&
+      !PATTERN_TOOLS.has(this.tool)
+    ) {
+      this.originPin ??= { at: hit.p.clone(), count: this.entities.length };
+    }
+  }
+
+  private placeTwoPoint(hit: KeyHit): Drawn | null {
+    const p = hit.p;
+    this.keyDraw.placed(p);
     if (!this.base) {
       this.base = p.clone();
       this.baseRef = hit.ref ?? null;
       if (this.tool === "line") this.chainStart = p.clone(); // remember loop start
       this.showDimFields();
-      return;
+      return null;
     }
-    // second click → commit the entity using current dims
-    this.commitFromCursor(p);
+    return this.commitFromCursor(p);
+  }
+
+  private moveKeyCursor(hit: KeyHit) {
+    const p = hit.p.clone();
+    this.lastCursor.copy(p);
+    this.lastHit = { p: p.clone(), raw: p.clone(), kind: hit.kind, ref: hit.ref, typed: true };
+    this.showSnap(
+      {
+        kind: hit.kind === "free" ? "grid" : hit.kind,
+        world: this.plane.to3D(p.x, p.y),
+        p,
+        label: snapLabel(hit) ?? coordLabel(p.x, p.y),
+      },
+      true,
+    );
+    if (this.base) this.basePreview(p.clone());
+    else this.overlay.setPreview([]);
+    this.viewport.requestRender();
+  }
+
+  private placeKeyHit(hit: KeyHit): Drawn | null {
+    this.lastCursor.copy(hit.p);
+    this.lastHit = { p: hit.p.clone(), raw: hit.p.clone(), kind: hit.kind, ref: hit.ref, typed: true };
+    this.noteOriginPin(hit);
+    return this.placeTwoPoint(hit);
   }
 
   // 3-point arc: click start, click end, then click the point it passes through
@@ -2815,6 +2865,7 @@ export class SketchMode {
     const hit = this.snapAt(e.clientX, e.clientY, e.ctrlKey);
     if (!hit) return;
     this.lastCursor.copy(hit.p);
+    this.keyDraw.pointerMoved();
     this.showSnap(hit);
 
     if (this.tool === "arc") {
@@ -2876,8 +2927,64 @@ export class SketchMode {
     else this.overlay.setPreview([]);
   }
 
+  private armIfOpenedByKeys() {
+    if (inputModality() === "keyboard") this.keyDraw.armedByKeys();
+  }
+
+  private onPointerLeave() {
+    this.keyDraw.pointerMoved();
+    this.showSnap(null);
+  }
+
+  private resetKeyDraw() {
+    this.keyDraw.reset();
+    this.lastCursor.set(0, 0);
+    this.keySurface.mount();
+    this.keySurface.setStop(KEY_DRAW_TOOLS.has(this.tool));
+  }
+
+  private keyDrawHost(): KeyDrawHost {
+    return {
+      tool: () => this.tool,
+      base: () => this.base,
+      cursor: () => this.lastCursor,
+      candidates: () => this.candidates,
+      entities: () => this.entities,
+      planeTooEdgeOn: () => this.planeTooEdgeOn(),
+      step: () => (this.gridSnap ? this.snapStep() : gridStep(this.planeMmPerPx(), 0)),
+      moveTo: (hit) => this.moveKeyCursor(hit),
+      dim: () => this.dim,
+      place: (hit) => this.placeKeyHit(hit),
+      positionBox: (p) => {
+        const at = this.viewport.projectToScreen(this.plane.to3D(p.x, p.y));
+        this.dim.positionCentred(at.x, at.y, true);
+      },
+      prompt: (text) => setPrompt(text),
+      focusSurface: () => this.keySurface.focus(),
+      changed: () => this.onState?.(),
+    };
+  }
+
+  private cancelGeometry() {
+    this.base = null;
+    this.inferTag.hide();
+    this.chainStart = null;
+    this.originPin = null;
+    this.arcStart = null;
+    this.arcEnd = null;
+    this.modifyFlow.setFilletFirst(null);
+    this.splinePts = [];
+    this.clickPts = [];
+    // An in-progress dimension: picks and an open value box both die here, the tool stays armed.
+    this.dimFlow.resetDimPicks();
+    this.constraintTools.resetPending();
+    this.dim.hide();
+    this.overlay.setPreview([]);
+  }
+
   private onKey(e: KeyboardEvent) {
     if (isMenuKey(e) || isBoxButtonKey(e)) return;
+    if (this.keyDraw.onKey(e)) return;
     // The dim box auto-focuses while drawing, so Esc in it must still cancel.
     const escInOwnDim = e.key === "Escape" && this.dim.isActive && this.dim.ownsTarget(e.target);
     if (!escInOwnDim && isEditableTarget(e.target)) return; // typing in a dim/text field, not a shortcut
@@ -2928,6 +3035,7 @@ export class SketchMode {
         offsetPick: this.modifyFlow.offsetting,
         dragging: !!(this.dragFrom || this.moveDrag),
         pendingGeometry:
+          this.keyDraw.pending() ||
           !!this.base ||
           !!this.arcStart ||
           this.modifyFlow.filletArmed ||
@@ -2965,20 +3073,8 @@ export class SketchMode {
         return;
       }
       if (action === "cancel-geometry") {
-        this.base = null;
-        this.inferTag.hide();
-        this.chainStart = null;
-        this.originPin = null;
-        this.arcStart = null;
-        this.arcEnd = null;
-        this.modifyFlow.setFilletFirst(null);
-        this.splinePts = [];
-        this.clickPts = [];
-        // An in-progress dimension: picks and an open value box both die here, the tool stays armed.
-        this.dimFlow.resetDimPicks();
-        this.constraintTools.resetPending();
-        this.dim.hide();
-        this.overlay.setPreview([]);
+        this.cancelGeometry();
+        this.keyDraw.cancelled();
       } else if (action === "clear-selection") {
         this.selected.clear();
         this.refreshActive();
@@ -3010,14 +3106,27 @@ export class SketchMode {
       }
       if (this.base) {
         e.preventDefault();
-        this.commitFromCursor(this.lastCursor);
+        this.commitFromBox();
         return;
       }
     }
     // Q and E fall through to the global keymap (Press/Pull, Extrude).
     const t = sketchToolKey(e, this.tool);
     if (t === "tangent-arc") this.setTangentArc(!this.tangentArc);
-    else if (t) this.setTool(t);
+    else if (t) {
+      this.setTool(t);
+      this.keyDraw.armedByKeys();
+    }
+  }
+
+  /** The tool was armed from the keyboard, by a rail button's click that no pointer made. */
+  armedByKeys() {
+    this.keyDraw.armedByKeys();
+  }
+
+  /** The prompt of a keys session, null when a pointer is drawing. */
+  get keyPrompt(): string | null {
+    return this.active ? this.keyDraw.keyPrompt() : null;
   }
 
   private computeGeometry(a: THREE.Vector2, cursor: THREE.Vector2) {
@@ -3066,15 +3175,26 @@ export class SketchMode {
     return false;
   }
 
-  private commitFromCursor(cursor: THREE.Vector2) {
-    if (!this.base) return;
+  private commitFromBox() {
+    if (this.keyDraw.openForNext()) return;
+    const end = this.keyDraw.boxEnd();
+    if (end) this.noteOriginPin(end.hit);
+    // Read now, as a chain's commit shows the box again.
+    const angle = this.tool === "line" && this.dim.wasTyped("angle") ? this.dim.getValue("angle") : null;
+    const done = this.commitFromCursor(this.lastCursor);
+    if (done) this.keyDraw.drawn({ ...done, angle }, end);
+    else if (this.base) this.keyDraw.refused();
+  }
+
+  private commitFromCursor(cursor: THREE.Vector2): Drawn | null {
+    if (!this.base) return null;
     const inferred = this.tool === "line" ? this.inferLine(cursor) : null;
     if (inferred) cursor = inferred.end;
     this.showInfer(null);
     const { entity } = this.computeGeometry(this.base, cursor);
     if (this.isDegenerate(entity)) {
-      toast("Too small to draw, click somewhere else to set its size");
-      return;
+      toast(TOO_SMALL);
+      return null;
     }
     if (this.constructionMode) entity.construction = true;
     entity.id = newEntityId(); // stamp a stable id (computeGeometry left it "")
@@ -3084,12 +3204,13 @@ export class SketchMode {
     } else if (entity.type === "circle") {
       this.lockTypedDims(entity, { diameter: this.dim.isUserDriven("diameter") });
     }
+    let closed = false;
     if (this.tool === "line" && entity.type === "line") {
       const end = new THREE.Vector2(entity.x2, entity.y2);
       // clicked back on the start point → close the loop and end the chain
-      const closing = this.chainStart != null && end.distanceTo(this.chainStart) < 1e-3;
+      closed = this.chainStart != null && end.distanceTo(this.chainStart) < 1e-3;
       if (inferred) this.constraints.push(...bindNew(inferred.relations, entity.id));
-      if (closing) {
+      if (closed) {
         this.base = null;
         this.chainStart = null;
         this.dim.hide();
@@ -3107,6 +3228,7 @@ export class SketchMode {
     this.overlay.setPreview([]);
     this.requestSolve(); // re-solve if any constraints exist (updates DOF colour)
     this.onState?.();
+    return { entity, closed };
   }
 
   /** Judged from what the cursor snapped to, for preview and commit. A chain's closing segment was not aimed, so it
@@ -3125,7 +3247,7 @@ export class SketchMode {
       endRef: h?.ref,
       entities: this.entities,
       step: this.gridSnap ? this.snapStep() : 0,
-      tolDeg: closing ? 0 : INFER_TOL_DEG,
+      tolDeg: closing || h?.typed ? 0 : INFER_TOL_DEG,
       nearMm: this.planeMmPerPx() * hitPx(120),
       smart: this.gridSnap && !h?.noSnap,
       typedAngle: this.dim.isUserDriven("angle"),
@@ -3209,7 +3331,7 @@ export class SketchMode {
         PREVIEW_COLOR,
       );
       const at = this.viewport.projectToScreen(this.plane.to3D(c.x + (u.x * r) / 2, c.y + (u.y * r) / 2));
-      this.dim.positionCentred(at.x, at.y);
+      this.dim.positionCentred(at.x, at.y, !e);
       this.overlay.setPreview([geom.preview, ...diameter]);
     } else {
       if (e) this.dim.position(e.clientX, e.clientY);
@@ -3239,7 +3361,7 @@ export class SketchMode {
             ];
     this.dim.show(
       defs,
-      () => this.commitFromCursor(this.lastCursor),
+      () => this.commitFromBox(),
       undefined,
       undefined,
       undefined,
@@ -3298,6 +3420,7 @@ export class SketchMode {
       guides?: SnapGuide[];
       label?: string | undefined;
     } | null,
+    silent = false,
   ) {
     // The guides go with the snap: one left standing after the cursor left its row would misstate the next click.
     this.overlay.setGuides(
@@ -3312,7 +3435,7 @@ export class SketchMode {
       return;
     }
     this.overlay.setSnap(hit.world, hit.kind, this.viewport.camera);
-    if (hit.label) this.snapTag.show(hit.label, this.viewport.projectToScreen(hit.world));
+    if (hit.label) this.snapTag.show(hit.label, this.viewport.projectToScreen(hit.world), { silent });
     else this.snapTag.hide();
     this.snapWorld = hit.world.clone();
     this.snapScaleSeen = 0; // a new point: size it now rather than next frame
@@ -3849,6 +3972,7 @@ export class SketchMode {
     const prev = this.history.undo(this.snapshot());
     if (!prev) {
       setPrompt("Nothing left to undo in this sketch");
+      this.keyDraw.historyMoved();
       return true;
     }
     this.applyHistory(prev);
@@ -3860,6 +3984,7 @@ export class SketchMode {
     const next = this.history.redo(this.snapshot());
     if (!next) {
       setPrompt("Nothing to redo in this sketch");
+      this.keyDraw.historyMoved();
       return true;
     }
     this.applyHistory(next);
@@ -3883,6 +4008,7 @@ export class SketchMode {
     this.dim.hide();
     this.overlay.setPreview([]);
     this.refreshActive();
+    this.keyDraw.historyMoved();
     this.requestSolve();
     this.onState?.();
   }

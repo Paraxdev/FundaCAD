@@ -7,9 +7,13 @@ export class SnapTag {
   private el: HTMLDivElement | null = null;
   private said = "";
 
-  show(text: string, at: { x: number; y: number }) {
-    // Every pointer move lands here, so only a new snap that holds for a moment is spoken.
-    if (text !== this.said) {
+  show(text: string, at: { x: number; y: number }, opts: { silent?: boolean } = {}) {
+    if (opts.silent) {
+      // A keyboard move says its own position, and a pointer arriving on the same name must still be heard.
+      if (this.said) cancelAnnouncement("snap");
+      this.said = "";
+    } else if (text !== this.said) {
+      // Every pointer move lands here, so only a new snap that holds for a moment is spoken.
       this.said = text;
       announce(text, "polite", { key: "snap", delay: 300 });
     }
