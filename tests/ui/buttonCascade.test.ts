@@ -13,6 +13,15 @@ describe("Button cascade", () => {
     expect(families).toEqual(["inherit"]);
   });
 
+  it("gives every bare button, a Select trigger and a home tile among them, the UI face too", () => {
+    const families: string[] = [];
+    postcss.parse(compileMainScss()).walkRules((rule) => {
+      if (rule.parent?.type === "root" && rule.selectors.length === 1 && rule.selectors[0] === "button")
+        rule.walkDecls("font-family", (d) => void families.push(d.value));
+    });
+    expect(families).toEqual(["inherit"]);
+  });
+
   it("keeps a pressed ghost button's accent ink under the pointer", () => {
     const hover: string[] = [];
     postcss.parse(compileMainScss()).walkRules((rule) => {

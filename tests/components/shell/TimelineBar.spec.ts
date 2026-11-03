@@ -1087,3 +1087,14 @@ describe("the rollback marker over filtered out rows", () => {
     expect(isEnd(m)).toBe(false);
   });
 });
+
+describe("History heading", () => {
+  it("is an h2 that names the History region", () => {
+    const { w } = mountBar({});
+    const heads = w.findAll("h2.float-card-title");
+    const id = heads[0]?.attributes("id");
+    expect([heads.length, heads[0]?.text(), Boolean(id)]).toEqual([1, "History", true]);
+    expect([w.attributes("aria-labelledby"), w.attributes("aria-label")]).toEqual([id, undefined]);
+    expect(w.find("span.float-card-title").exists()).toBe(false);
+  });
+});

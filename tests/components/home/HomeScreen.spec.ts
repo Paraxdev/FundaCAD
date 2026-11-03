@@ -990,7 +990,7 @@ describe("Home on a first run", () => {
     ).toEqual([
       ["Wall bracket", "Find where it bends", "stress"],
       ["Box with a lid", "A lid that fits, ready to print", "shell"],
-      ["Capsule holder", "A cap that screws on, ready to print", "thread"],
+      ["Capsule holder", "A screw-on cap, ready to print", "thread"],
       ["Plate", "Change a size, the holes follow", "box"],
       ["Pinned lever", "See the load on a pin", "rotate"],
     ]);

@@ -624,9 +624,9 @@ function openMultiMenu(e: MouseEvent, ids: string[]) {
 </script>
 
 <template>
-  <section id="timeline" class="timeline-shell float-card" aria-label="History">
+  <section id="timeline" class="timeline-shell float-card" aria-labelledby="history-heading">
     <div class="float-card-head">
-      <span class="float-card-title">History</span>
+      <h2 id="history-heading" class="float-card-title">History</h2>
       <Chip
         v-if="related"
         as="button"

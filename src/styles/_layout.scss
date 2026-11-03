@@ -106,6 +106,8 @@ button {
   /* The default control size every button is measured against (.btn resolves the same).
      About 33px tall: 6px/11px gave 29px, under the 32px that reads as clickable. */
   padding: var(--s-3) var(--s-4);
+  /* A button does not inherit the page's font, so a Select trigger or a tile would fall back to the system face. */
+  font-family: inherit;
   font-size: var(--fs-small);
   font-weight: 500;
   cursor: pointer;

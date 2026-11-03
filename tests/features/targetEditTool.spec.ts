@@ -101,6 +101,22 @@ describe("TargetEditTool", () => {
     expect(h.tool.rows()).toEqual([{ entry: saved, label: "1 face (not on this build)", resolved: false }]);
   });
 
+  it("a face clicked for a draft on a second body is written with that body", () => {
+    const draft = { id: "d", type: "draft", faces: [{ ...SAVED, body: "body1" }], angle: 3 } as unknown as Feature;
+    const h = harness(draft, FEATURE_TARGETS.draft![0]!);
+    h.vp.faceIdToBodyId = () => "body2";
+    h.click();
+    h.tool.commit();
+    expect(h.patches).toEqual([
+      {
+        faces: [
+          { ...SAVED, body: "body1" },
+          { kind: "face", by: "nearest", point: POINT, body: "body2" },
+        ],
+      },
+    ]);
+  });
+
   it("a face field that acts on one body writes no body on each face", () => {
     const offset = { id: "o", type: "offsetFace", faces: [SAVED], distance: 1, body: "body1" } as unknown as Feature;
     const h = harness(offset, FEATURE_TARGETS.offsetFace![0]!);
