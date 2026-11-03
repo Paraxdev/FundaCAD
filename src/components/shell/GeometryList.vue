@@ -69,6 +69,9 @@ const noun = computed<string>(() => list.kind);
 const bodyName = computed(() => list.bodies.find((b) => b.id === list.bodyId)?.name ?? "");
 const bodyOptions = computed(() => list.bodies.map((b) => ({ value: b.id, label: b.name })));
 const listName = computed(() => (planes.value ? "Planes" : `${faces.value ? "Faces" : "Edges"} of ${bodyName.value}`));
+const listKeys = computed(
+  () => `Enter ${planes.value ? "starts a sketch" : "picks"}, Esc clears the selection, F6 goes to the 3D view.`,
+);
 
 const options = computed(() => {
   // describePick reads the display unit from outside Vue.
@@ -380,6 +383,7 @@ onUnmounted(() => {
         v-if="options.length"
         multiple
         :label="listName"
+        :aria-description="listKeys"
         :items="options"
         :model-value="chosen"
         :anchor="anchor"

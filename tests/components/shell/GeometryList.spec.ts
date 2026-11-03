@@ -87,6 +87,15 @@ describe("rows", () => {
     expect(w.get("[role=listbox]").attributes("aria-multiselectable")).toBe("true");
   });
 
+  it("describes its keys, Enter on a plane as the sketch it starts", async () => {
+    const { w } = await open(1);
+    const keys = () => w.get("[role=listbox]").attributes("aria-description");
+    expect(keys()).toBe("Enter picks, Esc clears the selection, F6 goes to the 3D view.");
+    await w.getComponent({ name: "Segmented" }).vm.$emit("update:modelValue", "planes");
+    await nextTick();
+    expect(keys()).toBe("Enter starts a sketch, Esc clears the selection, F6 goes to the 3D view.");
+  });
+
   it("is one Tab stop whose options keep the Listbox's attrs over ListRow's own", async () => {
     const { w } = await open(3);
     expect(options(w).map((o) => o.attributes("tabindex"))).toEqual(["0", "-1", "-1"]);
