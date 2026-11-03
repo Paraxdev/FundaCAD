@@ -30,10 +30,10 @@ function mounted() {
   const stop = installToolFocus(e as unknown as Engine, {
     frame: (fn) => frames.push(fn),
     cancelFrame: () => {},
-    shown: () => true,
   });
   const frame = () => frames.splice(0).forEach((fn) => fn());
-  return { $, e, tools, frame, idle: () => (frame(), frame()), stop };
+  const key = () => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true }));
+  return { $, e, tools, frame, idle: () => (frame(), frame()), key, stop };
 }
 
 describe("tool focus wiring", () => {
@@ -54,6 +54,7 @@ describe("tool focus wiring", () => {
     const t = mounted();
     t.$("row").focus();
     t.frame();
+    t.key();
     t.tools.edgeFeature!.active = true;
     const box = document.body.appendChild(document.createElement("input"));
     box.focus();
@@ -70,6 +71,7 @@ describe("tool focus wiring", () => {
     const t = mounted();
     t.$("row").focus();
     t.frame();
+    t.key();
     t.e.planePick = true;
     t.frame();
     t.e.planePick = false;

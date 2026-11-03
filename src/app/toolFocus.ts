@@ -10,37 +10,26 @@ const LISTS = '[role="listbox"], [role="tree"], [role="treegrid"], [role="grid"]
 // The palette starts most tools from the keyboard, and like a menu it hands focus back when it closes.
 const PASSING = '[role="dialog"], [role="alertdialog"], [role="menu"], .ui-menu';
 
-function keyboardShown(el: Element): boolean {
-  try {
-    return el.matches(":focus-visible");
-  } catch {
-    return false;
-  }
-}
-
 type Place = { el: HTMLElement; list: Element | null };
 
 const onPage = (a: Element | null) => a === null || a === document.body || a === document.documentElement;
 
 /** A tool's own box takes focus and drops it on the page when it goes, where the next key runs a shortcut and Tab starts
- *  over. A keyboard user's focus from before the tool goes back then, to the list's tab stop if a build replaced the
- *  row. Pointer focus is left alone. A sketch started from a list takes focus to the 3D view, or its keys would type
- *  ahead in the list, and gives it back to the list when it ends if focus is still there. Frames, as restoreWhenIdle,
- *  since no tool says when it starts or ends. */
+ *  over. When a key started the tool, focus from before it goes back then, to the list's tab stop if a build replaced
+ *  the row, however that focus got there. A tool a pointer started gives nothing back. A sketch started from a list
+ *  takes focus to the 3D view, or its keys would type ahead in the list, and after a key start gives it back to the
+ *  list when it ends if focus is still there. Frames, as restoreWhenIdle, since no tool says when it starts or ends. */
 export function installToolFocus(
   e: ToolFocusHost,
-  o: {
-    frame?: (fn: () => void) => number;
-    cancelFrame?: (id: number) => void;
-    shown?: (el: Element) => boolean;
-  } = {},
+  o: { frame?: (fn: () => void) => number; cancelFrame?: (id: number) => void } = {},
 ): () => void {
   const frame = o.frame ?? requestAnimationFrame;
   const cancelFrame = o.cancelFrame ?? cancelAnimationFrame;
-  const shown = o.shown ?? keyboardShown;
   let sketching = false;
   let working = false;
   let idle = 0;
+  let lastKey = false;
+  let byKey = false;
   let seen: Element | null = null;
   let from: Place | null = null;
   let moved: Place | null = null;
@@ -55,8 +44,12 @@ export function installToolFocus(
   function remember(a: Element | null) {
     if (a === seen || a?.closest(PASSING)) return;
     seen = a;
-    from = a instanceof HTMLElement && !onPage(a) && shown(a) ? { el: a, list: a.closest(LISTS) } : null;
+    from = a instanceof HTMLElement && !onPage(a) ? { el: a, list: a.closest(LISTS) } : null;
   }
+  // Input during a tool belongs to the tool, so the last one before it says what started it.
+  const onInput = (ev: Event) => {
+    if (!e.toolAtWork()) lastKey = ev.type === "keydown";
+  };
   // Keys can move focus to a row and start a tool from it between two frames, so focus is heard as it moves too.
   const onFocusIn = (ev: FocusEvent) => {
     if (!working && !e.toolAtWork()) remember(ev.target as Element);
@@ -74,6 +67,7 @@ export function installToolFocus(
     sketching = e.sketch.active;
     handle = frame(tick);
     if (e.toolAtWork()) {
+      if (!working || idle > 0) byKey = lastKey;
       working = true;
       idle = 0;
       return;
@@ -83,7 +77,7 @@ export function installToolFocus(
     if (working) {
       const a = document.activeElement;
       const to = moved ?? from;
-      if (to && (onPage(a) || (moved && a === view))) giveBack(to);
+      if (byKey && to && (onPage(a) || (moved && a === view))) giveBack(to);
       moved = null;
     }
     working = false;
@@ -91,8 +85,12 @@ export function installToolFocus(
   };
   handle = frame(tick);
   document.addEventListener("focusin", onFocusIn, true);
+  window.addEventListener("keydown", onInput, true);
+  window.addEventListener("pointerdown", onInput, true);
   return () => {
     cancelFrame(handle);
     document.removeEventListener("focusin", onFocusIn, true);
+    window.removeEventListener("keydown", onInput, true);
+    window.removeEventListener("pointerdown", onInput, true);
   };
 }

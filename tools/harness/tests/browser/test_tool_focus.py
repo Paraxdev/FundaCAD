@@ -1,9 +1,11 @@
-"""Focus after a tool started from the Geometry list, real keys only: a Fillet and a sketch give focus back to the row,
-and a pick in the 3D view leaves focus there."""
+"""Focus after a tool started from the Geometry list: a Fillet and a sketch started by keys give focus back to the row,
+a sketch a click started does not, and a pick in the 3D view leaves focus there."""
+
+import re
 
 import pytest
 
-# s is the fixture that opens the offset box with a pointer press count.
+# s is the fixture that opens the offset box with a count of pointer presses, which must stay at none.
 from test_geometry_browser import browse, down_to, focus, give_radius, list_kind, next_frames, s, to_canvas  # noqa
 
 pytestmark = [pytest.mark.browser, pytest.mark.a11y]
@@ -43,6 +45,28 @@ def test_a_sketch_from_a_plane_row_goes_to_the_view_and_back_to_the_row(s):
     s.page.keyboard.press("Escape")
     s.page.wait_for_function("() => !window.sketch.active")
     focus_in_list(s, "XY plane")
+
+
+# A mouse user's next letter is a tool key, the list would take it as type ahead.
+def test_a_sketch_a_click_on_a_plane_row_started_leaves_focus_on_the_view(s):
+    browse(s)
+    list_kind(s, "Planes")
+    s.page.get_by_role("option", name=re.compile("^XY plane")).click()
+    s.page.evaluate("() => { window.__pointer = 0; }")
+    s.page.wait_for_function("() => window.sketch.active")
+    s.page.wait_for_function("() => document.activeElement?.id === 'canvas'")
+    s.page.keyboard.press("Escape")
+    next_frames(s)
+    s.page.keyboard.press("Escape")
+    s.page.wait_for_function("() => !window.sketch.active")
+    next_frames(s)
+    next_frames(s)
+    assert focus(s)["id"] == "canvas"
+    s.page.evaluate("() => { window.__spoken = []; }")
+    s.page.keyboard.press("e")
+    next_frames(s)
+    assert not s.page.evaluate("() => window.__spoken.some((t) => t.startsWith('No row starts'))")
+    assert focus(s)["role"] != "option"
 
 
 def test_a_pick_in_the_view_after_a_fillet_and_an_undo_leaves_focus_on_the_view(s):

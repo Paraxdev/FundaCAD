@@ -1,5 +1,5 @@
-// Where focus goes when a tool or a sketch starts and ends: back to a keyboard user's place when the tool's own box drops
-// it on the page, and to the 3D view when a sketch starts from a list.
+// Where focus goes when a tool or a sketch starts and ends: back to where focus was when keys started the tool and its own
+// box dropped focus on the page, and to the 3D view when a sketch starts from a list.
 import { afterEach, describe, expect, it } from "vitest";
 import { installToolFocus } from "../../src/app/toolFocus";
 
@@ -7,7 +7,7 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
-function setup(shown = true) {
+function setup() {
   document.body.innerHTML = `
     <canvas id="view" tabindex="0"></canvas>
     <div role="listbox" id="list">
@@ -29,7 +29,6 @@ function setup(shown = true) {
   const stop = installToolFocus(host, {
     frame: (fn) => (frames.set(++ids, fn), ids),
     cancelFrame: (id) => frames.delete(id),
-    shown: () => shown,
   });
   const frame = () => {
     const due = [...frames.values()];
@@ -37,8 +36,16 @@ function setup(shown = true) {
     due.forEach((fn) => fn());
   };
   const idle = () => (frame(), frame());
+  const key = () => (document.activeElement ?? document).dispatchEvent(new KeyboardEvent("keydown", { bubbles: true }));
+  // A browser fires pointerdown before it moves focus.
+  const click = (id: string) => {
+    $(id).dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    $(id).focus();
+  };
   // The tool's box takes focus and is removed with the tool.
-  const startTool = () => {
+  const startTool = (by: "key" | "pointer" = "key") => {
+    if (by === "key") key();
+    else document.body.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
     host.tool = true;
     const box = document.createElement("input");
     box.id = "box";
@@ -51,7 +58,7 @@ function setup(shown = true) {
     $("box").blur();
     $("box").remove();
   };
-  return { $, host, frame, idle, startTool, endTool, stop };
+  return { $, host, frame, idle, key, click, startTool, endTool, stop };
 }
 
 describe("focus after a tool", () => {
@@ -137,15 +144,32 @@ describe("focus after a tool", () => {
     expect(document.activeElement).toBe(t.$("rail"));
   });
 
-  it("leaves focus a pointer put somewhere alone", () => {
-    const t = setup(false);
+  it("gives nothing back after a tool a pointer started", () => {
+    const t = setup();
     t.$("rail").focus();
     t.frame();
-    t.startTool();
+    t.startTool("pointer");
     t.frame();
     t.endTool();
     t.idle();
     expect(document.activeElement).toBe(document.body);
+  });
+
+  it("goes back to a row a pointer focused when keys start the tool from the palette", () => {
+    const t = setup();
+    t.click("row2");
+    t.frame();
+    t.key();
+    t.$("search").focus();
+    t.frame();
+    t.key();
+    // The palette gives focus back as it closes.
+    t.$("row2").focus();
+    t.startTool();
+    t.frame();
+    t.endTool();
+    t.idle();
+    expect(document.activeElement).toBe(t.$("row2"));
   });
 
   it("gives nothing back when the tool started with focus on the page", () => {
@@ -207,6 +231,7 @@ describe("focus when a sketch ends", () => {
   const sketchFrom = (t: ReturnType<typeof setup>, id: string) => {
     t.$(id).focus();
     t.frame();
+    t.key();
     t.host.sketch.active = true;
     t.frame();
     expect(document.activeElement).toBe(t.$("view"));
@@ -226,6 +251,7 @@ describe("focus when a sketch ends", () => {
     const t = setup();
     t.$("row2").focus();
     t.frame();
+    t.key();
     t.host.tool = true;
     t.frame();
     t.host.tool = false;
@@ -236,6 +262,19 @@ describe("focus when a sketch ends", () => {
     t.host.sketch.active = false;
     t.idle();
     expect(document.activeElement).toBe(t.$("row2"));
+  });
+
+  // A mouse user's next letter is a tool key, which the list would take as type ahead.
+  it("gives nothing back to a plane row a click started it from, it stays on the 3D view", () => {
+    const t = setup();
+    t.click("row2");
+    t.host.sketch.active = true;
+    t.frame();
+    expect(document.activeElement).toBe(t.$("view"));
+    t.key();
+    t.host.sketch.active = false;
+    t.idle();
+    expect(document.activeElement).toBe(t.$("view"));
   });
 
   it("goes back to an Items tree plane row", () => {
