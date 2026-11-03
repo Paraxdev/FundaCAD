@@ -468,6 +468,8 @@ jobs:
           CMAKE_POLICY_VERSION_MINIMUM: "3.5"
           NO_STRIP: true
           VITE_FUNDACAD_RELEASE: ${{ needs.channel.outputs.tag || 'beta' }}
+          # The 7 GB macOS runner gives Node about 2 GB, and vite build reached that limit.
+          NODE_OPTIONS: ${{ matrix.platform == 'macos-15' && '--max-old-space-size=4096' || '' }}
         with:
           args: --verbose ${{ env.TAURI_CONFIG_ARGS }} -- --locked
 
