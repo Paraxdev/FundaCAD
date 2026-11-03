@@ -6,6 +6,7 @@ import type { NavScene, ProjectionMode } from "../cameras";
 import { centreDepth, orbitPivot, zoomAnchor, type AnchorContext } from "./anchor";
 import { stepAngles, type StepDir } from "../viewStep";
 import { OrbitChannel, PanChannel, ZoomChannel } from "./channels";
+import { NearestSweep, SWEEP_FROM, nearestBound, partsFloor, zoomSnapLog } from "./zoomSnap";
 import { autoWantsOrtho, onWorldAxis } from "../autoProjection";
 import { makeFlight, stepFlight, type Flight } from "./flight";
 import { clampScale, contentLimits, defaultLimits, elevRange, minScaleOf, type Limits } from "./limits";
@@ -81,6 +82,11 @@ export class Navigator {
   private userLimits: Partial<Limits> = {};
   limits: Limits = defaultLimits();
   private box: THREE.Box3 | null = null;
+  private parts: readonly THREE.Box3[] = [];
+  private zoomsTogether = 0;
+  /** Rays a frame the last look over the view managed in this scene, 0 until one has, and whether on this model. */
+  private rayPace = 0;
+  private rayPaceHere = false;
   private plane: THREE.Plane | null = null;
   private scene: NavScene | null = null;
   private locked = false;
@@ -144,16 +150,22 @@ export class Navigator {
     const h = Math.max(1, height);
     if (w === this.frame.width && h === this.frame.height) return;
     this.frame = { width: w, height: h };
+    this.forgetNearest();
     this.recomputeLimits();
     this.touch();
   }
 
   setScene(scene: NavScene | null) {
     this.scene = scene;
+    this.rayPace = 0;
+    this.forgetNearest();
   }
 
-  setContentBox(box: THREE.Box3 | null) {
+  setContentBox(box: THREE.Box3 | null, parts: readonly THREE.Box3[] = []) {
     this.box = box && !box.isEmpty() ? box.clone() : null;
+    this.parts = parts;
+    this.rayPaceHere = false;
+    this.forgetNearest();
     this.recomputeLimits();
   }
 
@@ -161,7 +173,12 @@ export class Navigator {
     return this.box;
   }
 
+  contentParts(): readonly THREE.Box3[] {
+    return this.parts;
+  }
+
   setAnchorPlane(plane: THREE.Plane | null) {
+    this.forgetNearest();
     this.plane = plane ? plane.clone() : null;
   }
 
@@ -498,9 +515,13 @@ export class Navigator {
   }
 
   private stepZooms(tau: number, dt: number) {
-    if (!this.zooms.length) return;
+    if (!this.zooms.length) {
+      this.zoomsTogether = 0;
+      return;
+    }
+    this.zoomsTogether = Math.max(this.zoomsTogether, this.zooms.length);
     for (const ch of this.zooms) {
-      const want = ch.step(tau, dt);
+      const want = ch.step(tau, dt, this.zoomSnap(ch, tau, dt));
       if (want === 0) continue;
       const got = this.limitedLog(ch.anchor, want);
       if (got !== 0) {
@@ -512,6 +533,46 @@ export class Navigator {
     // A pinch's channel stays while the fingers are down, even at rest.
     this.zooms = this.zooms.filter((c) => c === this.pinchZoom || !c.settled());
     this.unsettled = true;
+  }
+
+  /** The log a zoom may drop at once, none while anything else moves the view, as it goes by what is in view now. */
+  private zoomSnap(ch: ZoomChannel, tau: number, dt: number): number {
+    const busy = this.gesture || this.orbit || this.pan || ch === this.pinchZoom;
+    if (!(tau > 0) || busy || this.scene?.raysCostly?.()) {
+      ch.sweep = null;
+      return 0;
+    }
+    const p = this.pose;
+    const most = zoomSnapLog(p, this.frame, ch.anchor, null);
+    // A near surface only ever shrinks this, so no rays are spent until the zoom is close to it, early enough for a look
+    // spread over frames to finish in time.
+    const reach = SWEEP_FROM * most;
+    if (!ch.near(reach, tau)) {
+      ch.sweep = null;
+      return 0;
+    }
+    // Zooms running together each get a share, as what their landings skip adds up on screen.
+    if (p.ortho) return most / this.zoomsTogether;
+    if (ch.sweep && Math.abs(ch.goal - ch.sweep.goal) > reach) ch.sweep = null;
+    ch.sweep ??= new NearestSweep(ch.goal, this.rayPace, this.rayPaceHere);
+    const done = ch.sweep.advance(p, this.ctx(), () => ch.framesLeft(tau, dt));
+    const pace = ch.sweep.pace();
+    if (pace > 0) {
+      this.rayPace = pace;
+      this.rayPaceHere = true;
+    }
+    if (!done) return 0;
+    if (!ch.sweep.boxes) {
+      const parts = this.parts.length || !this.box ? this.parts : [this.box];
+      ch.sweep.boxes = partsFloor(p, this.frame.width / this.frame.height, parts);
+    }
+    const { floor, inside } = ch.sweep.boxes;
+    const nearest = nearestBound(ch.sweep.nearest(), floor, inside, depthOf(p, ch.anchor));
+    return zoomSnapLog(p, this.frame, ch.anchor, nearest) / this.zoomsTogether;
+  }
+
+  private forgetNearest() {
+    for (const ch of this.zooms) ch.sweep = null;
   }
 
   /** How much of a log zoom about A the limits allow. */
@@ -742,6 +803,7 @@ export class Navigator {
     const got = this.limitedLog(a, Math.log(factor));
     if (got === 0) return;
     scaleAbout(this.pose, a, Math.exp(got));
+    this.forgetNearest();
     this.moved();
   }
 

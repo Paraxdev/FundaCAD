@@ -272,6 +272,10 @@ export function orbitPivot(p: Pose, ctx: AnchorContext, x: number, y: number): T
 /** Depth of the surface at the centre of the screen, or null for none: the
  *  model, then the sketch plane or ground within 2·d. */
 export function centreDepth(p: Pose, ctx: AnchorContext): number | null {
-  const ray = castRay(p, ctx, ctx.frame.width / 2, ctx.frame.height / 2);
+  return depthUnder(p, ctx, ctx.frame.width / 2, ctx.frame.height / 2);
+}
+
+export function depthUnder(p: Pose, ctx: AnchorContext, x: number, y: number): number | null {
+  const ray = castRay(p, ctx, x, y);
   return modelDepth(p, ctx, ray) ?? planeDepth(p, ctx, ray);
 }

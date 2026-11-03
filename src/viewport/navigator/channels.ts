@@ -3,12 +3,19 @@
 
 import * as THREE from "three";
 import { Spring } from "./math";
+import type { NearestSweep } from "./zoomSnap";
 
-// A channel snaps to its goal once what is left is a ten-thousandth of a pixel
-// or so; the snap is the same exact transform, so nothing it pins moves.
+// A channel lands on its goal once what is left is too small to see; a zoom gets its measure from what is in view (see
+// zoomSnap.ts). The landing is the same exact transform, so nothing it pins moves.
 const EPS_LOG = 1e-7;
 const EPS_ANGLE = 1e-6;
 const EPS_PX = 1e-3;
+
+const MAX_FRAMES_LEFT = 4096;
+
+function atRest(s: Spring, goal: number): boolean {
+  return Math.abs(goal - s.x) < EPS_LOG && Math.abs(s.v) < EPS_LOG * 100;
+}
 
 /** Wheel or pinch zoom about one anchor, in log scale units. */
 export class ZoomChannel {
@@ -18,6 +25,8 @@ export class ZoomChannel {
   readonly px: number;
   readonly py: number;
   goal = 0;
+  /** The look over the view near the end of this zoom, null until it starts or once the zoom is far from its goal. */
+  sweep: NearestSweep | null = null;
   private spring = new Spring();
 
   constructor(anchor: THREE.Vector3, px: number, py: number) {
@@ -30,13 +39,33 @@ export class ZoomChannel {
     if (Number.isFinite(logFactor)) this.goal += logFactor;
   }
 
-  /** The log factor to apply this frame. */
-  step(tau: number, dt: number): number {
+  left(): number {
+    return Math.abs(this.goal - this.spring.x);
+  }
+
+  /** Within `log` of the goal and easing into it, rather than crossing it at speed. */
+  near(log: number, tau: number): boolean {
+    return this.left() < log && Math.abs(this.spring.v) < (log * 2) / tau;
+  }
+
+  /** How many frames of `dt` the spring still takes to come to rest by itself. */
+  framesLeft(tau: number, dt: number): number {
+    const s = new Spring();
+    s.x = this.spring.x;
+    s.v = this.spring.v;
+    let frames = 0;
+    while (!atRest(s, this.goal) && frames < MAX_FRAMES_LEFT) {
+      s.step(this.goal, tau, dt);
+      frames++;
+    }
+    return frames;
+  }
+
+  /** The log factor to apply this frame, landing on the goal once within `snapLog` of it. */
+  step(tau: number, dt: number, snapLog = 0): number {
     const before = this.spring.x;
     this.spring.step(this.goal, tau, dt);
-    if (Math.abs(this.goal - this.spring.x) < EPS_LOG && Math.abs(this.spring.v) < EPS_LOG * 100) {
-      this.spring.reset(this.goal);
-    }
+    if (atRest(this.spring, this.goal) || (snapLog > 0 && this.near(snapLog, tau))) this.spring.reset(this.goal);
     return this.spring.x - before;
   }
 

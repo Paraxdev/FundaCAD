@@ -53,7 +53,6 @@ export function createNavigatorRig(dom: HTMLElement, aspect: number): CameraRig 
   const eye = new THREE.Vector3();
   const upV = new THREE.Vector3();
   let written = -1;
-  let parts: readonly THREE.Box3[] = [];
   function write() {
     const p = nav.pose;
     if (written === nav.poseVersion()) return;
@@ -70,6 +69,7 @@ export function createNavigatorRig(dom: HTMLElement, aspect: number): CameraRig 
     }
     // A big assembly's union box reaches the eye plane long before any part does (SV08 from above
     // at 600mm: corner 39mm behind the eye, nearest part 19mm in front), so near goes by the parts.
+    const parts = nav.contentParts();
     const seen = parts.length ? visibleNearDepth(p, a, parts) : NaN;
     const pc = perspClip(distanceOf(p), Number.isFinite(seen) ? seen : zmin, zmax);
     persp.fov = p.fov;
@@ -171,8 +171,7 @@ export function createNavigatorRig(dom: HTMLElement, aspect: number): CameraRig 
       nav.setScene(s);
     },
     setContentBox(box, partBoxes) {
-      parts = partBoxes ?? [];
-      nav.setContentBox(box);
+      nav.setContentBox(box, partBoxes);
       nav.touch();
     },
     setAnchorPlane(plane) {

@@ -12,6 +12,8 @@ export interface NavScene {
   raycast(origin: THREE.Vector3, dir: THREE.Vector3): number | null;
   /** Height of the ground plane while it is drawn, else null. */
   groundZ(): number | null;
+  /** True while a ray is far dearer than usual, so a nicety should not cast any. */
+  raysCostly?(): boolean;
 }
 
 /** A saved view, plain data so it survives JSON. */
