@@ -120,6 +120,7 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
 
   let shown = false;
   let stepped = false;
+  let pickingRows = false;
   let asking: { key: string; requestId: string | null } | null = null;
   let failedKey: string | null = null;
   // Which body and etag the rows on show were made from, and whether they must be made again whatever it says.
@@ -445,9 +446,17 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
       e.dropBodyGizmo();
       // applyPicks leaves the policy alone, and with Bodies still set the toolbar would keep showing it.
       if (e.viewport.policy === "bodies") e.handleAction("selmode-faces");
-      e.viewport.applyPicks(refs as PickRef[], { additive: o.additive });
+      pickingRows = !o.stepping;
+      try {
+        e.viewport.applyPicks(refs as PickRef[], { additive: o.additive });
+      } finally {
+        pickingRows = false;
+      }
       return null;
     },
+
+    /** True while the list's own pick is applied, not a step's. */
+    pickingRows: () => pickingRows,
 
     /** Enter or a plain click on a plane row: a waiting pick takes it, otherwise a sketch starts on it. `start` false
      *  only offers it to the pick, for a Ctrl or Shift click. True when nothing further should happen. */

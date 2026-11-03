@@ -2,6 +2,7 @@
 // the whole app, so its subscription order is read from the source.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
+import { Vector3 } from "three";
 import { installViewportWiring } from "../../src/app/viewportWiring";
 import type { Engine } from "../../src/app/engine";
 
@@ -30,6 +31,7 @@ function lenient<T extends object>(base: T): T {
 
 function engine() {
   const selectionChanged = vi.fn();
+  const pickingRows = vi.fn(() => false);
   const viewport = lenient({
     domElement: document.createElement("canvas"),
     getSelectedBodies: () => ["body2"],
@@ -44,10 +46,10 @@ function engine() {
     store: lenient({ buildState: { result: null }, document: { features: [] } }),
     tools: lenient({ move: lenient({}) }),
     overlay: lenient({ regions: [] }),
-    geometryBrowser: { selectionChanged },
+    geometryBrowser: { selectionChanged, pickingRows },
     toolBusy: () => true,
   });
-  return { e: e as unknown as Engine, viewport, selectionChanged };
+  return { e: e as unknown as Engine, viewport, selectionChanged, pickingRows };
 }
 
 beforeEach(() => {
@@ -64,6 +66,19 @@ describe("geometry browser wiring", () => {
     viewport.onSelectionChange!();
     expect(selectionChanged).toHaveBeenCalledTimes(1);
     expect(promptCalls.length).toBeGreaterThan(0);
+  });
+
+  it("leaves the pointer advice out of a pick from the list, whose row's words are said instead", () => {
+    const { e, viewport, pickingRows } = engine();
+    viewport.selectedFacesForPressPull = () => ({ faceIds: [5], normal: new Vector3(0, 0, 1), anchor: new Vector3() });
+    installViewportWiring(e);
+    (e as unknown as { toolBusy(): boolean }).toolBusy = () => false;
+    promptCalls.length = 0;
+    pickingRows.mockReturnValueOnce(true);
+    viewport.onSelectionChange!();
+    expect(promptCalls).toEqual([null]);
+    viewport.onSelectionChange!();
+    expect(promptCalls[1]).toContain("drag the handle to push or pull");
   });
 
   it("hears a body selection, even while a tool is busy", () => {

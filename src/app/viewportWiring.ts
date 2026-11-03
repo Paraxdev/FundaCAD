@@ -281,7 +281,11 @@ export function installViewportWiring(e: Engine): void {
 
     if (e.toolBusy()) return;
     const plural = (n: number, one: string) => `${n} ${one}${n > 1 ? "s" : ""}`;
-    if (edges.length) {
+    // The list's keys drag no handle and delete nothing there, and the readout says the row's own words.
+    if (listPick && (edges.length || faces?.faceIds.length)) {
+      setPrompt(null);
+      if (faces?.round) askExactRound(faces.selectors[0]!, faces.bodyId, faces.faceIds[0]!);
+    } else if (edges.length) {
       setPrompt(
         `${plural(edges.length, "edge")} selected, drag the handle to round it off ` +
           `(out fillets, back past zero chamfers) · Esc to clear`,
@@ -308,7 +312,9 @@ export function installViewportWiring(e: Engine): void {
       setPrompt(null);
     }
   }
+  let listPick = false;
   e.viewport.onSelectionChange = () => {
+    listPick = e.geometryBrowser.pickingRows();
     refreshNudge();
     e.geometryBrowser.selectionChanged();
   };
@@ -321,7 +327,7 @@ export function installViewportWiring(e: Engine): void {
       const r = offeredResize(reply, ["cylinder"]);
       if (ask !== roundAsk || !r) return;
       exactRound.value = { faceId, radius: r.radius, full: r.full };
-      if (!e.toolBusy()) setPrompt(roundFacePrompt(r));
+      if (!e.toolBusy() && !listPick) setPrompt(roundFacePrompt(r));
     });
   }
 
