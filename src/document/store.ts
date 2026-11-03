@@ -33,6 +33,7 @@ import type {
   Selector,
   StressStudy,
   Vec3,
+  TopologyReply,
   ViewCubeSide,
   ViewOverride,
 } from "../types";
@@ -45,6 +46,7 @@ import type {
   GeometryBackend,
   PatternAxisReply,
   ProjectionResult,
+  TopologyOptions,
 } from "../geometry/client";
 import { FORMAT_VERSION, migrateDocument } from "./migrate";
 import {
@@ -3142,6 +3144,15 @@ export class DocumentStore {
   // answer.
   async faceAnchor(face: Selector, body: string | null, point: Vec3): Promise<FaceAnchorReply | null> {
     return (await this.geometry.faceAnchor?.(this.effectiveDoc({ withoutPreview: true }), face, body, point)) ?? null;
+  }
+
+  // Asked of the document as built on screen. Null when the backend cannot answer.
+  async topology(
+    body: string,
+    opts?: TopologyOptions,
+    onStarted?: (id: string) => void,
+  ): Promise<TopologyReply | null> {
+    return (await this.geometry.topology?.(this.effectiveDoc(), body, opts, onStarted)) ?? null;
   }
 
   // Only lines reaching the box of the `reach` points, on the model before any preview or live edit, which is what that

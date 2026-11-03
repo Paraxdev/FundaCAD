@@ -26,6 +26,7 @@ import { createApp, markRaw } from "vue";
 import { createPinia, setActivePinia } from "pinia";
 import App from "./App.vue";
 import { installGlobalErrorHandlers } from "./app/errors";
+import { installCanvasStop } from "./app/canvasPick";
 import { createEngine, mountUi } from "./app/engine";
 import { ENGINE } from "./app/engineKey";
 import { installDevGlobals } from "./app/devGlobals";
@@ -47,6 +48,7 @@ setActivePinia(pinia);
 // components/shell/ViewportPane.vue adopts the canvas in onMounted.
 const canvas = document.createElement("canvas");
 canvas.id = "canvas"; // keeps the #canvas rule in styles/_layout.scss
+installCanvasStop(canvas);
 const engine = createEngine(canvas);
 
 installGuidePressGuard();

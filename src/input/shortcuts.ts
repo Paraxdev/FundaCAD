@@ -80,6 +80,11 @@ export const SHORTCUTS: Shortcut[] = [
     label: "Next region (menu bar, tools, Items, model, panels, History)",
   },
   { key: "f6", shift: true, action: "region-prev", context: "global", label: "Previous region" },
+  { key: "", action: "next-face", context: "global", label: "Next face" },
+  { key: "", action: "previous-face", context: "global", label: "Previous face" },
+  { key: "", action: "next-edge", context: "global", label: "Next edge" },
+  { key: "", action: "previous-edge", context: "global", label: "Previous edge" },
+  { key: "", action: "browse-geometry", context: "global", label: "Browse faces and edges" },
   { key: "arrowleft", action: "view-step-left", context: "global", label: "Turn the view left 15°" },
   { key: "arrowright", action: "view-step-right", context: "global", label: "Turn the view right 15°" },
   { key: "arrowup", action: "view-step-up", context: "global", label: "Tilt the view up 15°" },
@@ -467,6 +472,16 @@ export function shortcutHudGroups(skip: ReadonlySet<string> = new Set()): HudGro
         { key: "Ctrl+Wheel", label: "Pan up and down (a touchpad pinch zooms)" },
         { key: "Left drag", label: "Box select (see Always, below)" },
         { key: "Left click", label: "Select a body, then a face on it (pause over it to light the face up first)" },
+      ],
+    },
+    {
+      name: "3D view focused",
+      rows: [
+        { key: "] / [", label: "Step to the next / previous face, edge or plane, with a highlight" },
+        { key: "Shift+] / Shift+[", label: "Switch what the brackets step: faces, edges, planes" },
+        { key: "Enter", label: "Select the lit row, or start a sketch on a lit plane" },
+        { key: "Space", label: "Add or remove the lit row" },
+        { key: "Esc", label: "Drop the highlight and clear the selection" },
       ],
     },
     {

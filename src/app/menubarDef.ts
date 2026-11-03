@@ -11,7 +11,7 @@ import { ideaUrl, REPO_URL } from "../ui/reportText";
 import type { MenuDef } from "../ui/menu";
 import { beforeUpdate } from "./unsavedGuard";
 import { PRODUCT_NAME } from "./channel";
-import { allCommands } from "../ui/commands";
+import { allCommands, GEOMETRY_COMMANDS } from "../ui/commands";
 import { analysisFlags } from "../ui/railActive";
 import { canStep } from "../ui/canStep";
 import type { Engine } from "./engine";
@@ -54,6 +54,14 @@ function viewItems(e: Engine): MenuDef["items"] {
     onClick: () => e.handleAction(a.id),
   }));
   return [...view, { separator: true, label: "" }, ...analysis];
+}
+
+// Left enabled in a sketch: refusing in words says why, a greyed item says nothing.
+function geometryItems(e: Engine): MenuDef["items"] {
+  const all = allCommands();
+  return [...GEOMETRY_COMMANDS]
+    .map((id) => all.find((c) => c.id === id)!)
+    .map((c) => ({ label: c.label, ...(c.key ? { shortcut: c.key } : {}), onClick: () => e.handleAction(c.id) }));
 }
 
 /** `disabled` and `checked` are thunks, re-evaluated every time a menu opens. */
@@ -109,6 +117,8 @@ export function buildMenubar(e: Engine): MenuDef[] {
           disabled: () => !e.selectedFeature,
           onClick: () => e.selectedFeature && toggleSuppressRows(e.store, pickedFeatureIds(e)),
         },
+        { separator: true, label: "" },
+        ...geometryItems(e),
         { separator: true, label: "" },
         // No ellipsis: it opens a workspace, not a window.
         { label: "Materials", onClick: () => setWorkspace("render") },

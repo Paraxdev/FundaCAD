@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { enableAutoUnmount, mount } from "@vue/test-utils";
 
+import { h } from "vue";
 import ListRow from "../../../src/components/ui/ListRow.vue";
+import Listbox from "../../../src/components/ui/Listbox.vue";
 
 enableAutoUnmount(afterEach);
 
@@ -28,6 +30,30 @@ describe("ListRow", () => {
       "option",
       "false",
     ]);
+  });
+
+  it("inside a Listbox takes the listbox's attrs over its own, each row its own", () => {
+    const items = [
+      { value: "f:7", label: "Flat face 8" },
+      { value: "f:9", label: "Flat face 10" },
+      { value: "f:12", label: "Hole 13" },
+    ];
+    const w = mount(Listbox, {
+      props: { label: "Faces", multiple: true, items, modelValue: ["f:9"] },
+      slots: {
+        option: (p: { item: { label: string }; selected: boolean; attrs: object }) =>
+          h(ListRow, { ...p.attrs, as: "option", label: p.item.label, selected: p.selected }),
+      },
+    });
+    const rows = w.findAll(".ui-list-row");
+    expect(rows.map((r) => [r.attributes("role"), r.attributes("aria-selected"), r.attributes("tabindex")])).toEqual([
+      ["option", "false", "-1"],
+      ["option", "true", "0"],
+      ["option", "false", "-1"],
+    ]);
+    expect(rows.map((r) => r.classes("is-selected"))).toEqual([false, true, false]);
+    expect(new Set(rows.map((r) => r.attributes("id"))).size).toBe(3);
+    expect(rows.every((r) => r.attributes("data-roving") === "")).toBe(true);
   });
 
   it("renders the leading and trailing slots around the text", () => {

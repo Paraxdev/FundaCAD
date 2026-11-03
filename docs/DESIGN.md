@@ -894,7 +894,9 @@ columns measured from where the options sit), Home and End, type ahead on the la
 skipped. Moving focus never selects, since a pick may start a render: Space selects, and Enter emits `apply`. With
 `multiple` (`aria-multiselectable`) Space toggles, Shift with Space or an arrow takes the run from the anchor, and
 Cmd+A on macOS or Ctrl+A elsewhere takes every enabled option. It stops the keys it uses from reaching the window
-shortcuts, so an arrow in a grid does not also turn the view.
+shortcuts, so an arrow in a grid does not also turn the view. For plain rows its `option` slot holds a `ListRow` with
+`as="option"`, bound to the slot's `attrs`, and `aria-label` when speech says more than `label` and `hint`
+(`GeometryList.vue`).
 
 Old fields that still paint: `.sm-input` (dialogs, the dock), `.param-row input` (feature values; `.input-error`
 and `.param-stale` use hard coded reds and ambers), native `<select>`s, and `.dim-field` in the value box

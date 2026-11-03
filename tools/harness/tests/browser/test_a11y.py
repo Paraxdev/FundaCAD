@@ -27,7 +27,14 @@ pytestmark = [pytest.mark.browser, pytest.mark.smoke, pytest.mark.a11y]
 BASELINE = Path(__file__).with_name("axe_baseline.json")
 ALLOWED = read_baseline(BASELINE)
 ARIA_DIR = Path(__file__).with_name("aria")
-ARIA = {"empty_workspace": "shell.yml", "home": "home.yml", "palette": "palette.yml", "settings": "settings.yml"}
+ARIA = {
+    "empty_workspace": "shell.yml",
+    "geometry": "geometry.yml",
+    "home": "home.yml",
+    "palette": "palette.yml",
+    "planes": "planes.yml",
+    "settings": "settings.yml",
+}
 # A template naming a node the page lacks must fail, so the templates can never match vacuously.
 ARIA_NEGATIVE = ("empty_workspace", '- dialog "No such dialog"')
 
@@ -114,6 +121,17 @@ def show_confirm(s):
     s.page.get_by_role("alertdialog", name=re.compile("^Discard unsaved changes")).wait_for()
 
 
+def show_geometry(s):
+    s.page.get_by_role("tab", name="Geometry").click()
+    s.page.get_by_role("option").first.wait_for()
+
+
+def show_planes(s):
+    show_geometry(s)
+    s.page.get_by_role("radio", name="Planes").click()
+    s.page.get_by_role("option", name="XY plane").wait_for()
+
+
 def aria_mismatch(s: Session, template: str, timeout: float = 5000) -> str:
     try:
         expect(s.page.locator("body")).to_match_aria_snapshot(template, timeout=timeout)
@@ -136,6 +154,15 @@ def leave_render(s):
     s.page.locator("#renderdock").wait_for(state="detached")
 
 
+def leave_geometry(s):
+    s.page.get_by_role("tab", name="Items", exact=True).click()
+
+
+def leave_planes(s):
+    s.page.get_by_role("radio", name="Faces").click()
+    leave_geometry(s)
+
+
 def escape(s):
     s.page.keyboard.press("Escape")
 
@@ -155,6 +182,8 @@ FLOWS = (
     ("render", show_render, leave_render, open_fixture),
     ("stress", show_stress, escape, open_fixture),
     ("palette", show_palette, escape, open_fixture),
+    ("geometry", show_geometry, leave_geometry, open_fixture),
+    ("planes", show_planes, leave_planes, open_fixture),
     ("confirm", show_confirm, escape, open_fixture),
 )
 SCREENS = [name for name, *_ in FLOWS]

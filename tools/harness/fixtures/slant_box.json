@@ -1,0 +1,8 @@
+{
+  "version": 10,
+  "parameters": {},
+  "features": [
+    { "id": "bx", "type": "box", "name": "Wedge", "length": 60, "width": 25, "height": 15 },
+    { "id": "mv", "type": "move", "dx": -72.5, "dy": 18.25, "dz": 44, "rx": 20, "ry": 0, "rz": 0, "bodies": ["body1"] }
+  ]
+}

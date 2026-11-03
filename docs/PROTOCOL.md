@@ -336,6 +336,62 @@ optional `info` object the exporter chose to report.
 Plugin geometry runs in WebAssembly components inside each plugin, sandboxed by the
 engine's plugin host (`docs/ENGINE.md` section 2.3).
 
+### `topology`
+
+One body's faces in plain numbers and which faces each wire edge joins, for a list that
+describes them in words. It is `inspect` without selectors, neighbours and whole body
+measures, so it costs much less, and it adds a flat face's size, a round face's length
+and hole or boss. Rebuilds through the same warm cache. It beats the job's heartbeat and
+stops on `cancel` between faces.
+
+```jsonc
+{ "op": "topology", "id": "...", "document": { /* CadDocument */ },
+  "body": "body1",        // required, an id or a name
+  "faces": [3],           // optional, only these faces, and no edgeFaces
+  "maxFaces": 200000 }    // optional
+```
+
+Reply:
+```jsonc
+{ "body": "body1", "faceCount": 9,
+  "faces": [
+    { "i": 0, "surface": "plane", "area": 2400.0, "centroid": [x,y,z],
+      "normal": [0,0,1], "size": [60.0, 40.0] },
+    { "i": 7, "surface": "cylinder", "area": 628.319, "centroid": [x,y,z], "axis": [0,0,1],
+      "radius": 5.0, "length": 20.0, "wraps": true, "concave": true },
+    { "i": 3, "surface": "cone", "area": 90.1, "centroid": [x,y,z], "axis": [0,1,0],
+      "semiAngle": 0.52, "length": 8.0, "wraps": true, "concave": false },
+    { "i": 4, "surface": "sphere", "area": 50.2, "centroid": [x,y,z], "radius": 2.0, "concave": false },
+    { "i": 5, "surface": "torus", "area": 44.0, "centroid": [x,y,z], "axis": [0,0,1],
+      "major": 9.0, "radius": 1.5, "wraps": true, "concave": false },
+    { "i": 8, "surface": "bspline", "area": 412.0, "centroid": [x,y,z] }
+  ],
+  "edgeFaces": [[0, 3], [3, 4], [7]],  // one per wire edge of this body, in wire order
+  "truncated": { "faces": 1234 },      // only when a cap was hit
+  "errors": [ { "message": "...", "feature_id": "..." } ] }
+```
+
+- `i` is the face's number in the mesh's `faceIds`, so `faceStart + i` is its id in the
+  viewport. `faceCount` counts every face of the body, where the mesh's own `faceCount`
+  stops at the last face with triangles, so a row can have no triangles to pick.
+- `surface` is `plane`, `cylinder`, `cone`, `sphere`, `torus`, `bspline` or `other`. A face
+  gives only the facts of its surface, and a reference scan's one face has no more than `i`,
+  `surface` and maybe `area`.
+- `centroid` is the middle of the face's area, which for a whole bore is on its axis. This
+  is not `inspect`'s `centroid`, which is a point on a curved face.
+- `normal` is outward, and only on a plane. `axis` is a line, its sign means nothing.
+- `size` is `[long, short]` of the smallest area rectangle around the boundary in the
+  face's plane, so a rectangle turned in its plane or a slanted face reads its true sides.
+  A curved outline can read up to about 0.0002 mm small.
+- `length` is how far the boundary spreads along `axis`.
+- `concave` is true where the material lies away from the axis or centre, a bore or a
+  pocket. `radius` on a torus is its tube, `major` its ring.
+- `edgeFaces` lists a seam's one face once, and holds every wire edge whatever `maxFaces`
+  says. It can name a face past the cap.
+- `faces` is sorted and a number past the last face is left out, since a number can go
+  stale when the document changes. A `faces` that is not a list of whole numbers, a missing
+  `body` or an unknown one is an `error`, and so is an empty document, which has no body.
+
 ### `interference`
 
 Pairwise interference (clash) check among the document's live bodies. Display

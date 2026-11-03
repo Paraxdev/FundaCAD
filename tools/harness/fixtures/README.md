@@ -3,6 +3,8 @@
 Documents the harness tests open through File > Open. They are JSON documents, written by hand.
 
 - `plate.json`: one 40 x 20 x 5 mm box centred on the origin, current document version.
+- `offset_box.json`: a 40 x 30 x 20 mm box named Crate, moved to (113.5, -41.25, 37), so no face or edge sits on an origin plane.
+- `slant_box.json`: a 60 x 25 x 15 mm box named Wedge, turned 20 degrees about X and moved off the origin, for faces that read as tilted.
 - `plate_width.json`: the plate with a parameter `width` of 20 that nothing uses yet, for typing names into a value box.
 - `block.json`: one 20 x 20 x 30 mm box centred on the origin, tall enough that a steep draft on a
   side face is refused, current document version.

@@ -55,7 +55,7 @@ import { asFeature } from "../types";
 import { dismissToast, toast } from "../ui/toast";
 import { resolveRealEntities } from "../sketch/resolve";
 import { defaultReach, gapReport, type GapReport } from "../sketch/looseEnds";
-import { edgeMatchSelectorFrom } from "../viewport/edgeMatch";
+import { edgeMatchSelectorFrom, edgeSelectorFrom } from "../viewport/edgeMatch";
 import type { Hit } from "../viewport/picking";
 import { isDrivable, nextJointId, NO_DRIVE } from "../document/mechanism";
 import { upgradeFace } from "./holeFace";
@@ -210,8 +210,18 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     };
     const releaseTree = awaitTreePick(
       (pick) => {
+        if (pick.kind === "face") {
+          const flat = viewport.faceSketchPlane(pick.faceId);
+          if (!flat) return "That face is not flat, pick a round face in the view for its tangent plane";
+          const { selector, at } = flat.anchor;
+          cleanup();
+          deferPick(viewport.domElement, () =>
+            onPick(flat.plane, { def: flat.plane, kind: "planar", selector, faceId: flat.faceId, at }, null),
+          );
+          return true;
+        }
         const spec = pick.kind === "basePlane" ? pick.plane : pick.kind === "datumPlane" ? pick.def : null;
-        if (!spec) return treePickRefusal(pick, "a plane, or a face picked in the view");
+        if (!spec) return treePickRefusal(pick, "a plane or a face");
         cleanup();
         deferPick(viewport.domElement, () => onPick(spec, null, pick.kind === "datumPlane" ? pick.id : null));
         return true;
@@ -1341,7 +1351,15 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     const onEsc = (e: KeyboardEvent) => {
       if (e.key === "Escape") cancel();
     };
-    const releaseTree = awaitTreePick((pick) => treePickRefusal(pick, "a face, pick it in the view"), cancel);
+    const releaseTree = awaitTreePick((pick) => {
+      if (pick.kind !== "face") return treePickRefusal(pick, "a face");
+      cleanup();
+      const n = viewport.planarFace(pick.faceId)?.normal;
+      const normal: Vec3 | null = n ? [n.x, n.y, n.z] : null;
+      const sel = viewport.faceSelectorOf(pick.faceId);
+      requestAnimationFrame(() => onPick(sel, normal));
+      return true;
+    }, cancel);
     const cleanup = () => {
       releaseTree();
       setPlanePick(false);
@@ -1391,7 +1409,15 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     const onEsc = (e: KeyboardEvent) => {
       if (e.key === "Escape") cancel();
     };
-    const releaseTree = awaitTreePick((pick) => treePickRefusal(pick, "an edge, pick it in the view"), cancel);
+    const releaseTree = awaitTreePick((pick) => {
+      if (pick.kind !== "edge") return treePickRefusal(pick, "an edge");
+      const pts = pick.edge.points.map((q) => [q[0], q[1], q[2]] as Vec3);
+      const sel = edgeSelectorFrom({ points: pts, body: pick.edge.body });
+      if (!sel) return treePickRefusal(pick, "an edge");
+      cleanup();
+      requestAnimationFrame(() => onPick(sel, pts));
+      return true;
+    }, cancel);
     const cleanup = () => {
       releaseTree();
       setPlanePick(false);

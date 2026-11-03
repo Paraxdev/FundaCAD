@@ -82,6 +82,9 @@ export function assemblyName(f: Nameable): string | null {
   return roots.length === 1 ? roots[0]!.name || null : null;
 }
 
+/** A datum plane's name, or its place among the datum planes when it has none. */
+export const datumPlaneName = (f: { name?: string }, place: number) => f.name || `Plane${place + 1}`;
+
 /** The name History and Items agree on. An import takes its assembly name, but only while its
  *  name is still the file's: `source` is a path, and the engine names an import after the file
  *  stem (or the stem of a .gz one), so a name that is not that was typed. */

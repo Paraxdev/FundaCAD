@@ -7,10 +7,12 @@ import { toggleShortcutHUD } from "../input/shortcuts";
 import { cycleRegion, goToRegion } from "../ui/regions";
 import { choose } from "../ui/choice";
 import { endPickSession } from "../ui/treePick";
-import { SKETCH_TOOLS, SKETCH_MODIFY, NON_REPEATABLE, GO_REGIONS } from "./actionTables";
+import { SKETCH_TOOLS, SKETCH_MODIFY, NON_REPEATABLE, GO_REGIONS, GEOMETRY_STEPS } from "./actionTables";
+import { browseGeometry, createGeometryCommands } from "./geometryCommands";
 import { booleanOpOfAction } from "../features/booleanOps";
 import { useDialogStore } from "../stores/dialogs";
 import { useUiStore } from "../stores/ui";
+import { useGeometryBrowserStore } from "../stores/geometryBrowser";
 import { useShellStore } from "../stores/shell";
 import { useSketchPaletteStore } from "../stores/sketchPalette";
 import type { Engine } from "./engine";
@@ -50,6 +52,11 @@ const KEEPS_PICK = new Set([
   "viewmode-cycle",
   "viewmode-cycle-back",
   "clean-view",
+  "next-face",
+  "previous-face",
+  "next-edge",
+  "previous-edge",
+  "browse-geometry",
 ]);
 
 /** A body selection raises Move, which toolBusy() counts, so these stand it down first or they refuse silently. */
@@ -59,6 +66,7 @@ const BODY_VERBS = new Set(["mirror", "pattern-linear", "pattern-circular", "pat
 export function createActions(e: Engine): (action: string) => void {
   const ui = useUiStore();
   const palette = useSketchPaletteStore();
+  const geometry = createGeometryCommands(e);
 
   function startFaceOffset(mode: FaceOffsetMode) {
     if (e.toolBusy()) return;
@@ -83,6 +91,8 @@ export function createActions(e: Engine): (action: string) => void {
   }
 
   return function handleAction(action: string) {
+    // Out before a tool can start, its own hover shares the light. Turning the view keeps it, that is how to see it.
+    if (!KEEPS_PICK.has(action) && !action.startsWith("view-step-")) useGeometryBrowserStore().setLit(false);
     // A contributed action is never repeated: the core cannot tell whether running it twice is safe.
     if (!NON_REPEATABLE.has(action) && !contributedAction(action)) e.lastAction = action;
     if (SKETCH_TOOLS.has(action)) {
@@ -129,6 +139,10 @@ export function createActions(e: Engine): (action: string) => void {
       // After the palette has closed and handed focus back, and a pane just shown has mounted.
       return void setTimeout(() => goToRegion(go));
     }
+    // Here, or the finish below ends the sketch they should refuse in words.
+    const geometryStep = GEOMETRY_STEPS[action];
+    if (geometryStep) return geometry.selectStep(geometryStep.kind, geometryStep.delta);
+    if (action === "browse-geometry") return browseGeometry(e);
     // The arrow keys turn the view and nothing else: they leave a sketch open,
     // and a tool that reads the arrows itself (the pattern count) keeps them.
     const step = /^view-step-(left|right|up|down)(-fine)?$/.exec(action);

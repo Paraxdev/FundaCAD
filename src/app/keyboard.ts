@@ -14,6 +14,8 @@ import { interfaceSizeKey } from "../ui/interfaceSize";
 import type { Engine } from "./engine";
 import { pickedFeatureIds } from "./featureRows";
 
+const KEEPS_DELETE = '[role="tab"], [role="radio"], input, [data-keeps-delete]';
+
 /** The keymap plus window level handlers that bypass it, such as the file shortcuts that must work mid sketch. */
 export function installKeyboard(e: Engine): void {
   installKeymap(
@@ -50,11 +52,12 @@ export function installKeyboard(e: Engine): void {
   });
 
   // A selected face is removed and healed; otherwise only a feature the user picked is deleted, never the profile
-  // that exiting a sketch auto selects.
+  // that exiting a sketch auto selects. A focused tab, radio or panel control does not stand for the model.
   window.addEventListener("keydown", (ev) => {
     if (isEditableTarget(ev.target) || widgetOwnsKey(ev)) return;
     if (e.toolBusy()) return;
     if (ev.key !== "Delete" && ev.key !== "Backspace") return;
+    if (ev.target instanceof Element && ev.target.closest(KEEPS_DELETE)) return;
     if (e.deleteSelectedFace()) return;
     if (e.selectedFeature && e.selectedFeatureExplicit) {
       e.store.removeFeatures(pickedFeatureIds(e));

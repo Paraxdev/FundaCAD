@@ -39,6 +39,9 @@ export interface FaceHit {
 
 export type Hit = EdgeHit | FaceHit;
 
+/** A pick named by what it is, not by where it was hit. */
+export type PickRef = { kind: "face"; faceId: number } | { kind: "edge"; edge: EdgeRef };
+
 /** Shift sets both, but Ctrl adds without meaning "no tangent chain"; reducing the pair to one boolean at
  *  the call site is how the two came to disagree. */
 export interface PickMods {

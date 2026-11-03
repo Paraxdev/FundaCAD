@@ -2,8 +2,8 @@
 
 FundaCAD has to work with NVDA on Windows, VoiceOver on macOS and Orca on Linux. CI reads the page and each
 platform's accessibility tree on every push (see [What CI checks](#what-ci-checks)), but no job can listen to a
-screen reader. This page is the hand check a person runs before each release: about twenty minutes per screen
-reader, the same fifteen steps everywhere, and a results table that keeps what was heard.
+screen reader. This page is the hand check a person runs before each release: about twenty eight minutes per screen
+reader, the same sixteen steps everywhere, and a results table that keeps what was heard.
 
 ## What CI checks
 
@@ -13,6 +13,7 @@ reader, the same fifteen steps everywhere, and a results table that keeps what w
 | Aria snapshots of the shell, Home, Settings and the command palette (`fil` typed and ArrowDown pressed: the combobox, its named listbox, Fillet with its group and key, and the active match selected) | the same step, partial templates in `tools/harness/tests/browser/aria/` | a landmark, role or name a template holds is gone or renamed |
 | The Items tree and History by keys alone: Tab reaches one row or step, arrows walk them, Space selects, F2 renames, Shift+F10 opens the menu, Alt and an arrow move a step, the Rollback slider names the step it sits after | the same step, `tools/harness/tests/browser/test_items_tree_keys.py` and `test_history_keys.py` | a key stops working, focus leaves the row or step, or a role, name, level, state or value text the tests read changes |
 | Drawing by keys: a 40 by 20 plate with a 10 mm hole from Items to Extrude with no pointer event, a closed slanted line chain by `@dx,dy` and a second document that starts clean, Tab to a midpoint, arrows moving the cursor in Rectangle and turning the view in Select and when the plane is edge-on, in both camera rigs | the same step, `tools/harness/tests/browser/test_sketch_keys.py` | a pointer event reaches the page, a point or snap is not spoken, a shape comes out different from the keys typed, Tab does not reach a profile with a hole, or an arrow turns the view in a draw tool or stops turning it elsewhere |
+| The Geometry tab by keys alone: Tab reaches one row, arrows walk and turn pages, Enter, Space and the runs pick, `]` and `[` step on the 3D view, two edges take a fillet, a sketch starts on a face and on a plane, and axe walks the tab | the same step, `tools/harness/tests/browser/test_geometry_browser.py`, `test_geometry_commands.py` and `test_geometry_planes.py` | a key stops working, focus leaves the list, the selection differs from a click's, or a role, name or spoken word the tests read changes. None of this listens to a screen reader, see step 10 |
 | Pointer targets: at least 24 by 24 CSS px, about 32 with Larger click targets, with no layout change | the same step, `tools/harness/tests/browser/test_targets.py`; the token and hit area guard is `tests/ui/hitTargets.test.ts` in the `test` job | a control on a screen above hits under 24 px either way, a grown area takes another control's centre or the edge of its own box, Larger click targets leaves one under 32 px on the shell, Home, an example, Sketch, Settings, the palette or a confirm (bar the spacing exceptions the test names with their reason), or turning it on moves a control or changes a scroll size |
 | Icon only controls have a name | `node scripts/check-ui-controls.mjs` in the `test` job, and `tests/ui/designSpec.test.ts` | an `IconButton` with no `tip`, a `RailButton` with no `label`, or an icon only `Segmented` option with no `label` or `tip`, and no `aria-label` or `aria-labelledby` either |
 | Size and text: Interface size 150 and 200 percent, Comfortable text, the 11 px floor | `e2e` job, step "Agent harness smoke set", `tools/harness/tests/browser/test_size.py`, `test_reach.py`, `test_text_size.py` and `test_bottom_row.py`; the font size guard `node scripts/check-font-sizes.mjs` in the `test` job | a control is clipped, covered or out of the Tab walk at 150 percent in 1366 by 768, at 200 percent in 1280 by 800 or in 800 by 600, rendered text is under 11 px, Comfortable text cuts a base control's label, the frame rate chip overlaps the hint card or a rail card, or a font size is set outside the `--fs-*` tokens |
@@ -124,14 +125,30 @@ Each step says what to do and what you should hear. Mark it in the results: **P*
    menu, Hide hides it, and the row now reads hidden. Escape from the menu returns to the row. Typing a letter jumps
    to the next row that starts with it. Fail: a row read without its level or position, a menu that leaves focus
    nowhere, or Space moving the view instead of selecting.
-10. **Walk History (2 min).** Tab to the Rollback slider in History: you hear "Rollback, slider" with the step it sits
+10. **Pick faces and edges by keys (3 min).** This step has not been run with NVDA, VoiceOver or Orca, so nothing here
+    is known to work yet: write down what you hear, it is the first record. Bring Lid back from its row's menu
+    (Shift+F10). Press Ctrl+K, type `browse` and press Enter: focus lands on a row of a list box named "Faces of Lid".
+    NVDA and Orca should go to focus mode by themselves: write down whether they did. Each row is read with its type,
+    size, facing, body and feature, such as "Flat face 1, 60 by 40 millimetres, 2400 square millimetres, facing up, at
+    height 37 millimetres, Lid, from Extrude 1", and its place in the count. Down and Up walk the rows, Enter selects,
+    Escape says "Nothing selected" and focus stays. Shift+Tab to What to list and choose Edges, Tab back to the list,
+    press Enter on one edge and Space on another: you hear the second added and "2 selected". Press Ctrl+K, type
+    `fillet`, press Enter, type `1` and press Enter: History gains a Fillet. Ctrl+Z takes it back. List the faces again,
+    press Enter on a face read as facing up, press Ctrl+K, type `sketch` and press Enter: a sketch opens on that face.
+    Leave it and press Ctrl+Z until History is as it was. Press F6 until you hear "3D view". Leave browse mode or focus
+    mode as it is and press `]` then `[`: each is read as a row in the same words, and nothing is selected. Then
+    switch modes and try again (VoiceOver has none): write down which mode lets the brackets through. Press Enter on a lit row: that row is
+    selected, not whatever sits at the centre of the view. Space adds another, Escape says "Nothing selected". Fail: a
+    row read without its type, size, facing or body, a bracket that speaks nothing in both modes, or Enter picking
+    something other than the lit row.
+11. **Walk History (2 min).** Tab to the Rollback slider in History: you hear "Rollback, slider" with the step it sits
     after ("after" the last step's name, "step 4 of 4"). Left arrow rolls back one step and reads the new step. Tab
     reaches the steps list: one step, read with its name, kind, place and state ("rolled back", "failed", "warning",
     "suppressed", "selected"), and "current step" on the one the model is rolled to. Left and Right walk the steps,
     Enter opens a step's values (Tab reaches them), Shift+F10 opens its menu, Alt+Left moves it before its neighbour
     and you hear where it went. Fail: steps read without a state, focus lost after a move, or the slider read as a
     bare number.
-11. **Hear the count and the command (1 min).** Press Ctrl+K and type `fil`. After a short pause you hear how many
+12. **Hear the count and the command (1 min).** Press Ctrl+K and type `fil`. After a short pause you hear how many
    commands match and the first of them, "4 commands. Fillet, Modify, F", once, not once per letter. Press
    ArrowDown: focus stays in the search field and you hear the second match with its group, "Vertical Edge Fillet,
    Print" (NVDA may add "2 of 4"). Press ArrowUp: "Fillet, Modify, F", the first match with its group and
@@ -139,11 +156,11 @@ Each step says what to do and what you should hear. Mark it in the results: **P*
    and no count follows. Fail: silence on an arrow, a count per letter, or a count after Escape. Orca follows
    the active match through `aria-activedescendant`, the weakest of the three readers here: write down whether
    every arrow was read.
-12. **Pick from a list (1 min).** Press Ctrl+, (comma) and Tab to Theme. You hear its name and its value together,
+13. **Pick from a list (1 min).** Press Ctrl+, (comma) and Tab to Theme. You hear its name and its value together,
     "Theme, FundaCAD Noir" (or the theme in use), as a combobox or pop up button, on VoiceOver and Orca as well
     as NVDA. ArrowDown opens the list, read as "Theme", and each arrow reads one theme. Enter picks it, the list
     closes and the trigger reads the new value. Escape closes Preferences.
-13. **Pick a material and an environment (2 min).** Press Ctrl+K, type `materials` and press Enter: the Render
+14. **Pick a material and an environment (2 min).** Press Ctrl+K, type `materials` and press Enter: the Render
     dock opens. Tab into the material library: you hear "Material library, list box" and one tile by name and
     finish ("Gold, Satin, metallic"), and the next Tab leaves the grid. The arrows move from tile to tile in rows
     and columns without changing the model, and a letter jumps to the next tile starting with it. Space selects or
@@ -151,7 +168,7 @@ Each step says what to do and what you should hear. Mark it in the results: **P*
     does. Open the Environment tab: Studio is one Tab stop too ("Environment, list box", then "Studio, Neutral
     room, even light"), and Space or Enter puts the focused one in use. Fail: a Tab stop per tile, an arrow that
     also turns the view, or a tile read without its selected state.
-14. **Change the size (2 min).** Press Ctrl+Plus twice (Cmd+Plus on a Mac): you hear "Interface size 110 percent",
+15. **Change the size (2 min).** Press Ctrl+Plus twice (Cmd+Plus on a Mac): you hear "Interface size 110 percent",
     then "Interface size 125 percent", once per press, and focus stays where it was. Ctrl+0 says "Interface size 100
     percent". Press Ctrl+, (comma) and Tab to Interface size: you hear "Interface size, 100%" as a combobox or pop up
     button, and its hint naming the keys. Tab on: "Comfortable text, checkbox, not checked" with its hint, then the
@@ -162,7 +179,7 @@ Each step says what to do and what you should hear. Mark it in the results: **P*
     puts the size back. Fail: a size not spoken, or spoken twice per press, a control Tab reaches but nothing reads, a
     workspace row read without its checked state, or a restart that opens at 100 percent or shows it first.
 
-15. **Draw by keys (3 min).** With a new document open, press F6 until you hear the Items panel, Tab to "Items, tree",
+16. **Draw by keys (3 min).** With a new document open, press F6 until you hear the Items panel, Tab to "Items, tree",
     arrow to "XY plane" and press Enter: you hear "Sketch mode". Press R, type `5`, Tab, `-7`, Enter: you hear "Point at
     5, minus 7". Type `40`, Tab, `20`, Enter: you hear "Rectangle 1, 40 by 20". Press C, type `25`, Tab, `3`, Enter, then
     `10` and Enter: you hear the point and "Circle 1, diameter 10". Press an arrow with Rectangle armed: you hear "Cursor
@@ -188,7 +205,7 @@ When there is time left, or before a major release:
 
 Newest first. Write the steps as fifteen marks in order, like `P P P S S W P P P P P P P P P`, and put each W in the notes.
 
-| Date | FundaCAD | OS and session | Package | Webview | Screen reader | Steps 1 to 15 | Tester | Notes |
+| Date | FundaCAD | OS and session | Package | Webview | Screen reader | Steps 1 to 16 | Tester | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | to record | next release | Ubuntu 24.04 GNOME, Wayland | Flatpak | WebKitGTK 4.1, GNOME 50 runtime | Orca |  |  | First run, the Orca on WebKitGTK 4.1 baseline. Note key echo and caret tracking under native Wayland. |
 | to record | next release | Ubuntu 22.04 GNOME, X11 | `.deb` | WebKitGTK 4.1 (system) | Orca |  |  | First run, the X11 half of the baseline. |

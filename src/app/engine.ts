@@ -80,7 +80,9 @@ import { installViewportWiring } from "./viewportWiring";
 import { installIsolateCamera } from "./isolateCamera";
 import { installSketchStateBridge } from "./sketchStateBridge";
 import { createActions } from "./actions";
+import { installCanvasPick } from "./canvasPick";
 import { installKeyboard } from "./keyboard";
+import { installToolFocus } from "./toolFocus";
 import { installTitlebar } from "./titlebar";
 import { installAnnouncements } from "./announcements";
 import { beforeUpdate, installUnsavedGuard } from "./unsavedGuard";
@@ -91,6 +93,7 @@ import { useUiStore } from "../stores/ui";
 import { useBrowserStore } from "../stores/browser";
 import { createDocBridge, type DocBridge } from "./docBridge";
 import { wireDocumentSwap } from "./documentSwap";
+import { createGeometryBrowser, type GeometryBrowser } from "./geometryBrowser";
 import { watchOutOfDate } from "./staleModel";
 import { LiveSessionHost } from "../live/liveSession";
 import { GuideSession } from "../ui/guide/guideSession";
@@ -144,6 +147,7 @@ export interface Engine {
   /** The arrow on an edge or face selection. Not in `tools`: counted by toolBusy(), any selection would disable every
    *  command. */
   nudge: SelectionNudge;
+  geometryBrowser: GeometryBrowser;
   ui: EngineUi;
 
   starters: ReturnType<typeof createFeatureStarters>;
@@ -428,6 +432,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
     browser: useBrowserStore(),
     selectFeature: (id) => e.selectFeature(id),
   });
+  e.geometryBrowser = createGeometryBrowser(e);
   watchOutOfDate(e.store, (on) => e.viewport.setModelOutOfDate(on));
   installEnvironmentSync(e.store);
 
@@ -554,7 +559,11 @@ export function mountUi(e: Engine): void {
   installViewportWiring(e);
   installIsolateCamera(e.store, e.viewport);
   installRebuildBridge(e);
+  // After the bridge, edge rows read the model it draws.
+  e.store.onBuild((s) => e.geometryBrowser.buildChanged(s));
   installSketchStateBridge(e);
+  installCanvasPick(e);
+  installToolFocus(e);
   installKeyboard(e);
 
   createBugReporter({

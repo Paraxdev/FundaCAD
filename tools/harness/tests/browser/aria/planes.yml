@@ -1,0 +1,15 @@
+- complementary "Items":
+  - heading "Items" [level=2]
+  - tablist "Items pages":
+    - tab "Items"
+    - tab "Geometry" [selected]
+  - tabpanel "Geometry":
+    - radiogroup "What to list":
+      - radio "Faces"
+      - radio "Edges"
+      - radio "Planes" [checked]
+    - combobox /^Facing /
+    - listbox "Planes":
+      - option /^XY plane, origin, facing up/
+      - option /^XZ plane, origin, /
+      - option /^YZ plane, origin, /

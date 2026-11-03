@@ -54,7 +54,7 @@ import {
   clearOverlayObjects,
 } from "./overlays";
 import { barycentric, displacedPositions, stressColors } from "../ui/stress";
-import { Picker, modelScale, type EdgeCandidate, type Hit, type PickMods } from "./picking";
+import { Picker, modelScale, type EdgeCandidate, type Hit, type PickMods, type PickRef } from "./picking";
 import { bandIndex, expandToBand, type BandIndex } from "./faceBands";
 import { flushRaycastIndex } from "./raycastIndex";
 import { applyKeptSpan, firstKeptHit, SECTION_PICK_SLACK, type KeptHit } from "./sectionPick";
@@ -198,6 +198,12 @@ import { buildLightRig, type LightRig } from "./lightRig";
 import { hideForPicture, markInPicture, markNotInPicture, widenLines } from "./pictureScene";
 
 /** Each frame of the box preview selects from the selection as it was when the drag began. */
+export interface FaceSketchPlane {
+  plane: PlaneDef;
+  faceId: number;
+  anchor: { selector: Selector; at: [number, number, number] };
+}
+
 export interface AreaDrag {
   x: number;
   y: number;
@@ -346,7 +352,13 @@ export class Viewport {
 
   /** A chunked reply being drawn and a tool's suspension are two independent reasons, deliberately apart. */
   private get pickSuppressed(): boolean {
-    return this.suspendPicking || this.streaming || this.outOfDate;
+    return this.suspendPicking || this.modelUnsettled;
+  }
+  get modelUnsettled(): boolean {
+    return this.streaming || this.outOfDate;
+  }
+  get picksSuspended(): boolean {
+    return this.pickSuppressed;
   }
   // Until the user moves the camera the model stays framed on resize: under remote
   // desktops and fractional scaling the canvas settles a frame after the first fit.
@@ -958,23 +970,58 @@ export class Viewport {
   /** Apply a pick to the selection. The ambiguous-edge menu runs this too, so a
    *  menu pick and a click can never select differently. */
   applyPick(hit: Hit | null, mods: PickMods) {
-    if (this.highlighter) {
-      if (!mods.additive) {
-        this.highlighter.clearSelection();
-        this.edgeScope = { scope: "chain", reason: "tangent" }; // a replaced selection carries nothing over
-      }
-      if (hit?.kind === "edge") {
-        this.highlighter.toggleSelectEdge(hit.edge);
-        this.noteEdgePickScope(hit.edge, mods.exact, mods.additive);
-      } else if (hit?.kind === "face") {
-        // A face the kernel split is picked as the whole run; Shift takes one piece.
-        const want = mods.exact ? [hit.faceId] : expandToBand(hit.faceId, this.faceBands);
-        for (const f of want) this.highlighter.toggleSelectFace(f);
-      }
-      this.requestRender();
-    }
+    this.writePicks(hit ? [hit] : [], mods.additive, mods.exact, mods.exact);
     this.onHit?.(hit, mods.exact);
     this.onSelectionChange?.();
+  }
+
+  /** A pick that names its faces and edges rather than a screen point. A Bodies policy lives in the app's ui state, so
+   *  the caller runs selmode-faces first or the toolbar keeps showing Bodies. */
+  applyPicks(refs: readonly PickRef[], o: { additive: boolean }) {
+    this.setSelectionMode("faces");
+    this.faceClick = null;
+    this.edgeClick = null;
+    this.writePicks(refs, o.additive, false, true);
+    this.onSelectionChange?.();
+  }
+
+  // Two pieces of one run in one call would toggle the run on and off again, so each face and edge is written once.
+  private writePicks(refs: readonly PickRef[], additive: boolean, exactFace: boolean, exactEdge: boolean) {
+    if (!this.highlighter) return;
+    if (!additive) {
+      this.highlighter.clearSelection();
+      this.edgeScope = { scope: "chain", reason: "tangent" }; // a replaced selection carries nothing over
+    }
+    const written = new Set<number | EdgeRef>();
+    for (const ref of refs) {
+      if (ref.kind === "edge") {
+        if (written.has(ref.edge)) continue;
+        written.add(ref.edge);
+        this.highlighter.toggleSelectEdge(ref.edge);
+        this.noteEdgePickScope(ref.edge, exactEdge, additive);
+        continue;
+      }
+      // A face the kernel split is picked as the whole run; Shift takes one piece.
+      for (const f of exactFace ? [ref.faceId] : expandToBand(ref.faceId, this.faceBands)) {
+        if (written.has(f)) continue;
+        written.add(f);
+        this.highlighter.toggleSelectFace(f);
+      }
+    }
+    this.requestRender();
+  }
+
+  /** Lights what a list row names, an edge drawn over the model since the row may be on the far side. */
+  hoverPick(ref: PickRef | null) {
+    this.highlighter?.clearHover();
+    this.emphasiseEdge(ref?.kind === "edge" ? ref.edge : null);
+    if (ref?.kind === "edge") this.highlighter?.hoverEdge(ref.edge);
+    else if (ref) this.highlighter?.hoverFaceRun(expandToBand(ref.faceId, this.faceBands));
+    this.requestRender();
+  }
+
+  bodyEdgeRefs(bodyId: string): EdgeRef[] {
+    return this.visibleEdgeLines().filter((e) => e.body === bodyId);
   }
 
   setSelectionMode(m: "faces" | "bodies") {
@@ -2469,14 +2516,13 @@ export class Viewport {
 
   /** So "click a face, press S" skips the plane picker. Null for none or a curved face. The winding already
    *  points out of the material, a body centre test would invert the underside of an overhang. */
-  selectedFaceSketchPlane(): {
-    plane: PlaneDef;
-    faceId: number;
-    anchor: { selector: Selector; at: [number, number, number] };
-  } | null {
-    if (!this.highlighter || !this.model) return null;
-    const faceId = this.highlighter.getSelectedFaces()[0];
-    if (faceId === undefined) return null;
+  selectedFaceSketchPlane(): FaceSketchPlane | null {
+    const faceId = this.highlighter?.getSelectedFaces()[0];
+    return faceId === undefined ? null : this.faceSketchPlane(faceId);
+  }
+
+  faceSketchPlane(faceId: number): FaceSketchPlane | null {
+    if (!this.model) return null;
     // Every vertex on the plane through the centroid, with a model scaled tolerance as selectCoplanarFaces uses.
     const tol = 1e-3 * (this.model.box.getSize(new THREE.Vector3()).length() || 1) + 1e-4;
     const flat = planeOfFace(this.model, faceId, tol);
@@ -2498,6 +2544,13 @@ export class Viewport {
         at: [c.x, c.y, c.z] as [number, number, number],
       },
     };
+  }
+
+  /** For a face picked with no click point, a list row. The centroid lies on the face, as faceCentroidWorld says. */
+  faceSelectorOf(faceId: number): Selector {
+    const c = this.faceCentroidWorld(faceId);
+    const body = this.faceIdToBodyId(faceId);
+    return { kind: "face", by: "nearest", point: [c.x, c.y, c.z], ...(body ? { body } : {}) };
   }
 
   /** The plane of a face, or null when the face is curved. */

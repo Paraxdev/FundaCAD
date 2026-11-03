@@ -110,6 +110,11 @@ export const NON_REPEATABLE = new Set([
   "go-model",
   "go-panels",
   "go-history",
+  "next-face",
+  "previous-face",
+  "next-edge",
+  "previous-edge",
+  "browse-geometry",
 ]);
 
 /** The palette's Go to commands and the region each one focuses. */
@@ -120,6 +125,14 @@ export const GO_REGIONS: Record<string, RegionKind> = {
   "go-model": "viewport",
   "go-panels": "panel",
   "go-history": "history",
+};
+
+/** The commands that select the next or previous row of a Geometry list. */
+export const GEOMETRY_STEPS: Record<string, { kind: "faces" | "edges"; delta: 1 | -1 }> = {
+  "next-face": { kind: "faces", delta: 1 },
+  "previous-face": { kind: "faces", delta: -1 },
+  "next-edge": { kind: "edges", delta: 1 },
+  "previous-edge": { kind: "edges", delta: -1 },
 };
 
 /** Entity patterns word their own prompt as curves are picked and the pattern

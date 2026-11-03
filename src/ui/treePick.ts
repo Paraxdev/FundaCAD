@@ -1,7 +1,8 @@
-// Offers an Items row click to a tool waiting for a pick: canvas picks never saw row clicks, and an Origin plane row
+// Offers an Items or Geometry row to a tool waiting for a pick: canvas picks never saw row clicks, and an Origin plane row
 // would start a sketch, abandoning Offset Plane, Split and the rest. The row's own action runs only when nothing waits.
 
 import type { Plane3, PlaneDef, Vec3 } from "../types";
+import type { EdgeRef } from "../viewport/edgeLines";
 
 /** What a row stands for, resolved at click time so a taker needs nothing else. */
 export type TreePick =
@@ -12,7 +13,9 @@ export type TreePick =
   | { kind: "body"; id: string }
   | { kind: "bodies"; ids: readonly string[] }
   | { kind: "sketch"; id: string }
-  | { kind: "feature"; id: string };
+  | { kind: "feature"; id: string }
+  | { kind: "face"; faceId: number }
+  | { kind: "edge"; edge: EdgeRef };
 
 /** `true` when the pick was taken, otherwise the short hint saying why not. */
 export type TreePickAnswer = true | string;
@@ -57,6 +60,8 @@ const NOUN: Record<TreePick["kind"], string> = {
   bodies: "a folder of bodies",
   sketch: "a sketch",
   feature: "a feature",
+  face: "a face",
+  edge: "an edge",
 };
 
 /** The hint for a row a step cannot take: what the row is and what the step wants. */

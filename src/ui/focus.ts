@@ -17,12 +17,13 @@ export function isEditableTarget(t: EventTarget | null): boolean {
   );
 }
 
+const MENU_ROWS = '.ui-menu, [role="listbox"]';
 const MENU_KEYS = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "Enter", "Tab"]);
 
-/** A key a focused menu row moves, runs or types ahead with. Window capture listeners hear it before the menu does,
- *  so a tool asks here and leaves it, the way it asks escapeClaimed() for Escape. */
+/** A key a focused menu or list row moves, runs or types ahead with. Window capture listeners hear it before the row
+ *  does, so a tool asks here and leaves it, the way it asks escapeClaimed() for Escape. */
 export function isMenuKey(e: KeyboardEvent): boolean {
-  if (typeof Element === "undefined" || !(e.target instanceof Element && e.target.closest(".ui-menu"))) return false;
+  if (typeof Element === "undefined" || !(e.target instanceof Element && e.target.closest(MENU_ROWS))) return false;
   if (e.ctrlKey || e.altKey || e.metaKey) return false;
   return MENU_KEYS.has(e.key) || (typeof e.key === "string" && e.key.length === 1);
 }
@@ -52,6 +53,11 @@ const TYPING_WIDGETS = roles(["menu", "menubar", "listbox", "tree", "treegrid", 
   .concat(".ui-menu")
   .join(",");
 
+/** Whether letters typed at `el` go to a widget's own type ahead rather than to the shortcuts. */
+export function typesAhead(el: Element): boolean {
+  return el.closest(TYPING_WIDGETS) !== null;
+}
+
 /** A key the focused widget moves, runs or types ahead with, or one a handler already took (defaultPrevented), so the
  *  global shortcuts leave it: an arrow in a menu, slider or tab list must not also turn the view (KB-4). Ctrl, Alt and
  *  Meta chords, Escape, Delete and the F keys still pass. */
@@ -61,7 +67,7 @@ export function widgetOwnsKey(e: KeyboardEvent): boolean {
   if (e.ctrlKey || e.altKey || e.metaKey) return false;
   if (NAV_KEYS.has(e.key)) return e.target.closest(ARROW_WIDGETS) !== null;
   if (e.key === "Enter" || (typeof e.key === "string" && e.key.length === 1)) {
-    return e.target.closest(TYPING_WIDGETS) !== null;
+    return typesAhead(e.target);
   }
   return false;
 }

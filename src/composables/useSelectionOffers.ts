@@ -1,5 +1,9 @@
-import { computed, onMounted, onUnmounted, ref, shallowRef } from "vue";
+import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from "vue";
 import type { Engine } from "../app/engine";
+import { createSelectionWords } from "../app/selectionWords";
+import { useGeometryBrowserStore } from "../stores/geometryBrowser";
+import { describePick } from "../ui/describePick";
+import { useSelectionStore } from "../stores/selection";
 import {
   appearanceOffers,
   primaryCount,
@@ -13,7 +17,9 @@ import { contextMenu } from "../ui/menu";
 import { materialMenu } from "../ui/browserTree";
 import type { SelectionCounts } from "../features/toolCapabilities";
 import { shippedPluginName } from "../plugins/shipped";
-import { describeSelection, exactRound, type Pt3, type RoundSize } from "../ui/selectionMeasure";
+import { describeSelection } from "../ui/selectionMeasure";
+
+const pluralOf = (k: keyof typeof KIND_LABEL) => (k === "body" ? "bodies" : `${KIND_LABEL[k]}s`);
 
 export interface PluginToolGroup {
   pluginId: string;
@@ -35,13 +41,12 @@ function readCounts(engine: Engine): { counts: SelectionCounts; signature: strin
   return { counts: c, signature };
 }
 
-export function useSelectionOffers(engine: Engine) {
+/** `words` is for the readout alone, the one speaker for selection changes. */
+export function useSelectionOffers(engine: Engine, opts: { words?: boolean } = {}) {
   const counts = shallowRef<SelectionCounts>({});
   const toolOwns = ref(false);
-  const measured = shallowRef<{ edges: Pt3[][]; roundFace: (RoundSize & { faceId: number }) | null }>({
-    edges: [],
-    roundFace: null,
-  });
+  const words = opts.words ? createSelectionWords(engine) : null;
+  const geometry = useGeometryBrowserStore();
   let signature = "";
 
   const kind = computed(() => primaryKind(counts.value));
@@ -63,48 +68,41 @@ export function useSelectionOffers(engine: Engine) {
     }));
   });
   const looks = computed(() => appearanceOffers(counts.value));
-  const describe = (withNumbers: boolean) => {
+  const summary = computed(() => {
     const k = kind.value;
     if (!k) return "";
-    const one = KIND_LABEL[k];
-    return describeSelection({
-      count: primaryCount(counts.value),
-      noun: one,
-      plural: one === "body" ? "bodies" : `${one}s`,
-      ...(withNumbers && k === "edge" ? { edges: measured.value.edges } : {}),
-      ...(withNumbers && k === "face" ? { roundFace: roundFace() } : {}),
-    });
-  };
-  const roundFace = (): RoundSize | null => {
-    const mesh = measured.value.roundFace;
-    const exact = exactRound.value;
-    return mesh && exact?.faceId === mesh.faceId ? exact : mesh;
-  };
-  const summary = computed(() => describe(false));
-  // A body selection gives no hint that a second click or a pause reaches the face or edge under the cursor
-  // (viewport/clickIntent.ts), so the readout spells it out.
-  const readout = computed(() => {
-    const base = describe(true);
-    if (base && kind.value === "body" && engine.viewport.policy === "auto") {
-      return `${base} · click again for a face, or pause over it`;
-    }
-    return base;
+    return describeSelection({ count: primaryCount(counts.value), noun: KIND_LABEL[k], plural: pluralOf(k) });
   });
+  // A body selection gives no hint that a second click or a pause reaches the face or edge under the cursor
+  // (viewport/clickIntent.ts), so the readout spells it out. Speech leaves that out, it is no use without a pointer.
+  const readout = computed(() => {
+    if (!words) return summary.value;
+    if (geometry.litRow) return describePick(geometry.litRow.facts).readout;
+    if (words.line.value) return words.line.value;
+    const k = kind.value;
+    if (!k) return words.planeCount.value > 1 ? `${words.planeCount.value} planes` : "";
+    const base = describeSelection({
+      // A run of pieces is one face to the person who picked it.
+      count: (k === "face" && words.faceRowCount.value) || primaryCount(counts.value),
+      noun: KIND_LABEL[k],
+      plural: pluralOf(k),
+      ...(k === "edge" ? { edges: words.edges.value } : {}),
+    });
+    return k === "body" && engine.viewport.policy === "auto"
+      ? `${base} · click again for a face, or pause over it`
+      : base;
+  });
+  const speech = computed(() => words?.speech.value ?? null);
 
   function refresh(): boolean {
     const next = readCounts(engine);
     if (next.signature !== signature) {
       signature = next.signature;
       counts.value = next.counts;
-      const edges = next.counts.edge ? engine.viewport.selectedEdgeLines().map((e) => e.points) : [];
-      const faces = next.counts.face === 1 ? engine.viewport.selectedFacesForPressPull() : null;
-      const round = faces?.round;
-      measured.value = {
-        edges,
-        roundFace: round ? { faceId: faces.faceIds[0]!, radius: round.radius, full: round.full ?? true } : null,
-      };
     }
     toolOwns.value = engine.toolOwnsScreen();
+    words?.update(signature, toolOwns.value, escaped);
+    escaped = false;
     return Object.keys(next.counts).length > 0;
   }
 
@@ -119,14 +117,29 @@ export function useSelectionOffers(engine: Engine) {
     if (!raf) raf = requestAnimationFrame(tick);
   }
 
+  // A screen reader's click on a row may send no pointer or key release.
+  if (words)
+    watch(
+      () => [useSelectionStore().rows, useGeometryBrowserStore().selected],
+      () => wake(),
+    );
+
+  // Capture, since a value box stops the key bubbling. Every route that clears on Escape does so during this event.
+  let escaped = false;
+  const noteEscape = (ev: KeyboardEvent) => {
+    if (ev.key === "Escape") escaped = true;
+  };
+
   let unsubs: (() => void)[] = [];
   onMounted(() => {
+    if (words) window.addEventListener("keydown", noteEscape, true);
     window.addEventListener("pointerup", wake);
     window.addEventListener("keyup", wake);
     unsubs = [engine.store.onDocChange(() => wake()), engine.store.onBuild(() => wake())];
     wake();
   });
   onUnmounted(() => {
+    window.removeEventListener("keydown", noteEscape, true);
     window.removeEventListener("pointerup", wake);
     window.removeEventListener("keyup", wake);
     for (const off of unsubs) off();
@@ -175,5 +188,20 @@ export function useSelectionOffers(engine: Engine) {
     wake();
   }
 
-  return { counts, kind, offers, appOffers, pluginGroups, looks, summary, readout, toolOwns, run, look, clear, wake };
+  return {
+    counts,
+    kind,
+    offers,
+    appOffers,
+    pluginGroups,
+    looks,
+    summary,
+    readout,
+    speech,
+    toolOwns,
+    run,
+    look,
+    clear,
+    wake,
+  };
 }

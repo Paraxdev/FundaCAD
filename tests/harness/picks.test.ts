@@ -12,6 +12,7 @@ import {
   type PickHost,
 } from "../../src/harness/picks";
 import { HarnessError } from "../../src/harness/locate";
+import { faceIdOf } from "../../src/viewport/modelSelectors";
 import { OriginTiles, TILE_GAP_PX, TILE_SIZE_PX } from "../../src/viewport/originTiles";
 import { HIT_MIN_PX } from "../../src/viewport/planeHit";
 
@@ -373,5 +374,76 @@ describe("planes and free points", () => {
     expect(err(() => sketchPoint(h, 1, 1, all)).kind).toBe("BadArgs");
     (h.sketch as { active: boolean }).active = true;
     expect(sketchPoint(h, 1, 0, all)).toEqual({ x: 110, y: 500, covered: false });
+  });
+});
+
+const vec3 = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+
+// Two slanted tetrahedra away from the origin, with an empty body after them.
+function slantedRig(wedgeExtras: THREE.Triangle[][] = []): PickHost {
+  const tet = (p: THREE.Vector3, q: THREE.Vector3, r: THREE.Vector3, s: THREE.Vector3) => [
+    [new THREE.Triangle(p, r, q)],
+    [new THREE.Triangle(p, q, s)],
+    [new THREE.Triangle(q, r, s)],
+    [new THREE.Triangle(r, p, s)],
+  ];
+  const wedge = [...tet(vec3(37, -12, 4), vec3(61, -9, 7), vec3(44, 16, 5), vec3(49, -3, 29)), ...wedgeExtras];
+  const slab = tet(vec3(-71, 23, 11), vec3(-48, 31, 18), vec3(-59, 52, 13), vec3(-63, 33, 47));
+  const faces = [...wedge, ...slab];
+  return {
+    store: {
+      buildState: {
+        result: {
+          bodies: [
+            { id: "body1", name: "Wedge", faceStart: 0, faceCount: wedge.length },
+            { id: "body2", name: "Slab", faceStart: wedge.length, faceCount: slab.length },
+            { id: "body3", name: "Empty", faceStart: faces.length, faceCount: 0 },
+          ],
+        },
+      },
+    },
+    viewport: { faceTriangles: (fid: number) => faces[fid] ?? [] },
+  } as unknown as PickHost;
+}
+
+describe("faceIdOf", () => {
+  const ids = (h: PickHost, body: string, count: number) =>
+    Array.from({ length: count }, (_, i) => faceIdOf(h, body, i));
+  const resolved = (h: PickHost, body: string, count: number) =>
+    Array.from({ length: count }, (_, i) => resolveFace(h, `${body}:index=${i}`).faceId);
+
+  it("agrees with an index selector on every face of a slanted body off the origin", () => {
+    const h = slantedRig();
+    expect(ids(h, "body1", 4)).toEqual([0, 1, 2, 3]);
+    expect(ids(h, "body2", 4)).toEqual([4, 5, 6, 7]);
+    expect(resolved(h, "body1", 4)).toEqual([0, 1, 2, 3]);
+    expect(resolved(h, "body2", 4)).toEqual([4, 5, 6, 7]);
+  });
+
+  it("follows a later body's faces when an earlier body gains a face", () => {
+    const before = slantedRig();
+    const after = slantedRig([[new THREE.Triangle(vec3(70, 2, 9), vec3(83, 5, 12), vec3(76, 19, 31))]]);
+    expect(ids(after, "body2", 4)).toEqual([5, 6, 7, 8]);
+    expect(resolved(after, "body2", 4)).toEqual([5, 6, 7, 8]);
+    expect(ids(after, "body1", 5)).toEqual([0, 1, 2, 3, 4]);
+    const centre = (h: PickHost) => resolveFace(h, "body2:index=2").centroid.toArray();
+    expect(centre(after)).toEqual(centre(before));
+  });
+
+  it("answers null past either end of a body, and for a body that is gone or has no faces", () => {
+    const h = slantedRig();
+    expect([
+      faceIdOf(h, "body2", 3),
+      faceIdOf(h, "body2", 4),
+      faceIdOf(h, "body2", -1),
+      faceIdOf(h, "body2", 1.5),
+      faceIdOf(h, "body9", 0),
+      faceIdOf(h, "body3", 0),
+    ]).toEqual([7, null, null, null, null, null]);
+  });
+
+  it("answers null with no build yet", () => {
+    const h = { store: { buildState: { result: null } }, viewport: {} } as unknown as PickHost;
+    expect(faceIdOf(h, "body1", 0)).toBeNull();
   });
 });
