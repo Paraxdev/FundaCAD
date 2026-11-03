@@ -14,7 +14,8 @@
   .ui-list-row-label,
   .home-example-name,
   .home-example-line,
-  .param-row label {
+  .param-row label,
+  .select-trigger .select-value {
     overflow: visible;
     white-space: normal;
     text-overflow: clip;
