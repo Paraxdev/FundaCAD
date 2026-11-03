@@ -739,6 +739,21 @@ describe("focus through a build", () => {
     await nextTick();
     expect(focusedLabel()).toBe("Flat face 2");
   });
+
+  it("takes no focus from the 3D view when a pick there changes the selection, after a build it held focus through", async () => {
+    const { r, w } = await open(3);
+    focusRow(w, 1);
+    await landFaces(r, "e2", [slanted(0), slanted(1), slanted(2)]);
+    expect(focusedLabel()).toBe("Flat face 2");
+    const view = document.body.appendChild(Object.assign(document.createElement("canvas"), { tabIndex: 0 }));
+    view.focus();
+    select(r, 41);
+    await nextTick();
+    await nextTick();
+    expect(options(w)[1]!.attributes("aria-selected")).toBe("true");
+    expect(document.activeElement).toBe(view);
+    view.remove();
+  });
 });
 
 describe("the one Tab stop", () => {

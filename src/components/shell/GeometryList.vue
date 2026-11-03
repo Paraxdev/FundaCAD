@@ -177,16 +177,13 @@ function focusCursor() {
 
 // The Listbox has no focus recovery, and a removed row would drop focus on the body, where the next key runs a tool.
 let hadFocus = false;
-watch(
-  () => list.pageRows,
-  () => (hadFocus = ownsFocus()),
-  { flush: "pre" },
-);
+watch([() => list.pageRows, chosen], () => (hadFocus = ownsFocus()), { flush: "pre" });
 watch(
   [() => list.pageRows, chosen],
   () => {
     if (hadFocus && !ownsFocus()) focusCursor();
     else keepTabStop();
+    hadFocus = false;
   },
   { flush: "post" },
 );
