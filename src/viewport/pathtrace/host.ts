@@ -35,6 +35,12 @@ export const IDLE_DISPOSE_MS = 60_000;
  *  second). The trace comes back no sooner than this after it gave way, over a second, so however a move stops and
  *  goes, the swap away and the swap back never fall in the same second. */
 export const TRACE_RETURN_MS = 1100;
+/** A return that the next move drops within this long is a flash pair of its own: a move rhythm is under way. */
+const RHYTHM_PAIR_MS = 1000;
+/** In a move rhythm the trace waits for the view to rest this long, so a person zooming notch by notch sees it pop
+ *  in once, not once a pause. It does not grow past this: whoever pauses longer to look gets the trace they paused
+ *  for. A return that stays up ends the rhythm. */
+const RHYTHM_STILL_MS = 2 * TRACE_RETURN_MS;
 
 export interface CrashGuard {
   arm(): Promise<void>;
@@ -111,6 +117,9 @@ export class PathTraceHost {
   shown = false;
   private now = 0;
   private leftAt = -Infinity;
+  private upAt = -Infinity;
+  /** The rest a return waits for in a move rhythm, 0 outside one. */
+  private rhythmStill = 0;
   samples = 0;
   /** A traced picture holds the tracer. */
   picturing = false;
@@ -275,7 +284,8 @@ export class PathTraceHost {
       this.poll(b);
     } else if (!this.settled && this.samples >= this.cap) this.settled = !b.present(f.now);
     const up = this.samples > 0 || (hold && this.shown);
-    this.show(up && (this.shown || f.now - this.leftAt >= TRACE_RETURN_MS));
+    const back = f.now - this.leftAt >= TRACE_RETURN_MS && f.inputs.stillMs >= this.rhythmStill;
+    this.show(up && (this.shown || back));
   }
 
   private cameraMoved(c: THREE.Camera): boolean {
@@ -371,7 +381,12 @@ export class PathTraceHost {
   private show(on: boolean) {
     if (on === this.shown) return;
     this.shown = on;
-    if (!on) this.leftAt = this.now;
+    if (on) this.upAt = this.now;
+    else {
+      // The first show is no return, leftAt is still -Infinity then.
+      if (this.leftAt > -Infinity) this.rhythmStill = this.now - this.upAt < RHYTHM_PAIR_MS ? RHYTHM_STILL_MS : 0;
+      this.leftAt = this.now;
+    }
     this.onShownChange?.(on);
   }
 
