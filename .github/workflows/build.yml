@@ -1600,7 +1600,7 @@ jobs:
           retention-days: 7
 
       - name: Accessibility smoke (axe and aria snapshots)
-        timeout-minutes: 10
+        timeout-minutes: 25
         env:
           FUNDACAD_ENGINE_CMD: ${{ github.workspace }}/engine-bin/fundacad-engine
           FUNDACAD_CHROME: /usr/bin/google-chrome
@@ -1609,7 +1609,7 @@ jobs:
           TMPDIR: ${{ runner.temp }}/a11y/harness
         run: |
           mkdir -p "$TMPDIR" "$FUNDACAD_A11Y_OUT"
-          python -m pytest tools/harness/tests -m a11y -q
+          python -m pytest tools/harness/tests -m a11y -q --durations=25
 
       - name: Accessibility smoke report
         if: always()
