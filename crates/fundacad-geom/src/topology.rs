@@ -124,21 +124,25 @@ fn lists(shape: &Shape, scan: bool, only: Option<&[usize]>, max_faces: usize) ->
     m.insert("faceCount".into(), json!(faces.len()));
     m.insert("faces".into(), Value::Array(rows));
     if only.is_none() {
-        let edge_faces: Vec<Value> = walked
-            .iter()
-            .filter(|e| e.drawn)
-            .map(|e| {
-                let mut of = e.faces.clone();
-                of.dedup();
-                json!(of)
-            })
-            .collect();
-        m.insert("edgeFaces".into(), Value::Array(edge_faces));
+        m.insert("edgeFaces".into(), Value::Array(edge_faces(&walked)));
     }
     if shown.len() < asked.len() {
         m.insert("truncated".into(), json!({"faces": asked.len() - shown.len()}));
     }
     Some(m)
+}
+
+/// The faces each drawn edge joins, in wire order. An edge that runs through one face twice names it once.
+pub fn edge_faces(walked: &[WalkedEdge]) -> Vec<Value> {
+    walked
+        .iter()
+        .filter(|e| e.drawn)
+        .map(|e| {
+            let mut of = e.faces.clone();
+            of.dedup();
+            json!(of)
+        })
+        .collect()
 }
 
 // A scan's face has no surface, and measuring the missing surface segfaults on Linux.

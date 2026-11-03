@@ -9,7 +9,8 @@ use fundacad_geom::builder::{self, NoWatch, Rebuild, Watch};
 use fundacad_geom::import::{self, blobstore::BlobStore};
 use fundacad_geom::kernel::{self, Kind};
 use fundacad_geom::reply;
-use fundacad_geom::topology::topology_result;
+use fundacad_geom::mesh::WalkedEdge;
+use fundacad_geom::topology::{edge_faces, topology_result};
 use fundacad_protocol::{CancelToken, FullBody, JobResult, WireBody};
 use opencascade::select_access as sa;
 use serde_json::{json, Map, Value};
@@ -445,6 +446,20 @@ fn max_faces_cuts_rows_and_says_how_many_keeping_every_edge() {
     let picked = ask(&raw, json!({"body": "body1", "faces": [1, 4, 6], "maxFaces": 2}));
     assert_eq!(picked["faces"], json!([list[1], list[4]]));
     assert_eq!(picked["truncated"], json!({"faces": 1}));
+}
+
+// A seam is not drawn, so no body built here has a drawn edge through one face twice.
+#[test]
+fn an_edge_through_one_face_twice_names_it_once_and_an_undrawn_edge_is_left_out() {
+    let walked = |faces: Vec<usize>, drawn: bool| WalkedEdge { edge: 0, faces, points: vec![], drawn };
+    let wire = edge_faces(&[
+        walked(vec![2, 2], true),
+        walked(vec![0, 1], true),
+        walked(vec![3, 3], false),
+        walked(vec![4, 5, 4], true),
+        walked(vec![], true),
+    ]);
+    assert_eq!(wire, vec![json!([2]), json!([0, 1]), json!([4, 5, 4]), json!([])]);
 }
 
 #[test]
