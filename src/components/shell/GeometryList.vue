@@ -124,7 +124,9 @@ watch(() => list.state, sayCountOnceListed);
 // A page's cursor moves with it, or the next build would take the list back to the cursor's page.
 function turnPage(delta: 1 | -1) {
   const lead = list.filtered[(list.page + delta) * GEOMETRY_PAGE_SIZE];
-  if (lead) list.setCursor(lead.key);
+  if (!lead) return;
+  list.setCursor(lead.key);
+  announce(range.value, "polite", { key: "geometry-page" });
 }
 
 const anchor = ref<string | null>(null);
@@ -387,11 +389,17 @@ onUnmounted(() => {
       <p v-if="facesLeft" class="geometry-range">{{ count(facesLeft) }} more faces are not listed.</p>
       <span v-if="list.filtered.length" class="geometry-range">{{ range }}</span>
       <template v-if="list.pageCount > 1">
-        <Button size="sm" :disabled="list.page === 0" disabled-reason="This is the first page" @click="turnPage(-1)"
+        <Button
+          size="sm"
+          :aria-label="`Previous page of ${noun}`"
+          :disabled="list.page === 0"
+          disabled-reason="This is the first page"
+          @click="turnPage(-1)"
           >Previous</Button
         >
         <Button
           size="sm"
+          :aria-label="`Next page of ${noun}`"
           :disabled="list.page >= list.pageCount - 1"
           disabled-reason="This is the last page"
           @click="turnPage(1)"

@@ -378,6 +378,17 @@ describe("pages", () => {
     expect(range(w)).toBe("101 to 200 of 250");
   });
 
+  it("names its buttons by what they turn and says the new range", async () => {
+    const { w } = await open(2002);
+    expect(pagerButtons(w).map((b) => b.attributes("aria-label"))).toEqual([
+      "Previous page of faces",
+      "Next page of faces",
+    ]);
+    vi.mocked(announce).mockClear();
+    await pagerButtons(w)[1]!.trigger("click");
+    expect(vi.mocked(announce).mock.calls.map((c) => c[0])).toEqual(["101 to 200 of 2,002"]);
+  });
+
   it("stays on the turned page through a build", async () => {
     const { r, w } = await open(250);
     await pagerButtons(w)[1]!.trigger("click");
