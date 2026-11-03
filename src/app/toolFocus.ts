@@ -18,12 +18,15 @@ function keyboardShown(el: Element): boolean {
   }
 }
 
+type Place = { el: HTMLElement; list: Element | null };
+
 const onPage = (a: Element | null) => a === null || a === document.body || a === document.documentElement;
 
 /** A tool's own box takes focus and drops it on the page when it goes, where the next key runs a shortcut and Tab starts
  *  over. A keyboard user's focus from before the tool goes back then, to the list's tab stop if a build replaced the
  *  row. Pointer focus is left alone. A sketch started from a list takes focus to the 3D view, or its keys would type
- *  ahead in the list. Frames, as restoreWhenIdle, since no tool says when it starts or ends. */
+ *  ahead in the list, and gives it back to the list when it ends if focus is still there. Frames, as restoreWhenIdle,
+ *  since no tool says when it starts or ends. */
 export function installToolFocus(
   e: ToolFocusHost,
   o: {
@@ -39,19 +42,24 @@ export function installToolFocus(
   let working = false;
   let idle = 0;
   let seen: Element | null = null;
-  let from: { el: HTMLElement; list: Element | null } | null = null;
+  let from: Place | null = null;
+  let moved: Place | null = null;
   let handle = 0;
 
-  function giveBack(to: { el: HTMLElement; list: Element | null }) {
+  function giveBack(to: Place) {
     const stop = to.list?.isConnected ? to.list.querySelector<HTMLElement>('[tabindex="0"]') : null;
     const target = to.el.isConnected ? to.el : stop;
     if (target && !target.closest("[inert], [hidden]")) target.focus();
   }
 
   const tick = () => {
+    const view = e.viewport.domElement;
     if (e.sketch.active && !sketching) {
       const a = document.activeElement;
-      if (a && !onPage(a) && typesAhead(a)) e.viewport.domElement.focus({ preventScroll: true });
+      if (a instanceof HTMLElement && !onPage(a) && typesAhead(a)) {
+        moved = { el: a, list: a.closest(LISTS) };
+        view.focus({ preventScroll: true });
+      }
     }
     sketching = e.sketch.active;
     handle = frame(tick);
@@ -62,7 +70,12 @@ export function installToolFocus(
     }
     // Idle must hold two frames, as restoreWhenIdle's, or a pick handed on would see focus on the page in between.
     if (working && ++idle < 2) return;
-    if (working && from && onPage(document.activeElement)) giveBack(from);
+    if (working) {
+      const a = document.activeElement;
+      const to = moved ?? from;
+      if (to && (onPage(a) || (moved && a === view))) giveBack(to);
+      moved = null;
+    }
     working = false;
     const a = document.activeElement;
     if (a !== seen && !a?.closest(PASSING)) {

@@ -14,6 +14,7 @@ function setup(shown = true) {
       <div role="option" id="row1" tabindex="-1">Edge 1</div>
       <div role="option" id="row2" tabindex="0">Edge 2</div>
     </div>
+    <div role="tree"><div role="treeitem" id="plane" tabindex="0">XY plane</div></div>
     <button id="rail">Fillet</button>
     <div role="dialog" id="palette"><input id="search" /></div>`;
   const $ = (id: string) => document.getElementById(id)!;
@@ -184,5 +185,67 @@ describe("focus when a sketch starts", () => {
     t.$("row2").focus();
     t.frame();
     expect(document.activeElement).toBe(t.$("row2"));
+  });
+});
+
+describe("focus when a sketch ends", () => {
+  const sketchFrom = (t: ReturnType<typeof setup>, id: string) => {
+    t.$(id).focus();
+    t.frame();
+    t.host.sketch.active = true;
+    t.frame();
+    expect(document.activeElement).toBe(t.$("view"));
+  };
+
+  it("goes back to the plane row it started from, once idle holds two frames", () => {
+    const t = setup();
+    sketchFrom(t, "row2");
+    t.host.sketch.active = false;
+    t.frame();
+    expect(document.activeElement).toBe(t.$("view"));
+    t.frame();
+    expect(document.activeElement).toBe(t.$("row2"));
+  });
+
+  it("goes back to the face row a waiting Sketch took", () => {
+    const t = setup();
+    t.$("row2").focus();
+    t.frame();
+    t.host.tool = true;
+    t.frame();
+    t.host.tool = false;
+    t.frame();
+    t.host.sketch.active = true;
+    t.frame();
+    expect(document.activeElement).toBe(t.$("view"));
+    t.host.sketch.active = false;
+    t.idle();
+    expect(document.activeElement).toBe(t.$("row2"));
+  });
+
+  it("goes back to an Items tree plane row", () => {
+    const t = setup();
+    sketchFrom(t, "plane");
+    t.host.sketch.active = false;
+    t.idle();
+    expect(document.activeElement).toBe(t.$("plane"));
+  });
+
+  it("goes to the list's tab stop when a build replaced the row", () => {
+    const t = setup();
+    sketchFrom(t, "row1");
+    t.$("row1").remove();
+    t.host.sketch.active = false;
+    t.idle();
+    expect(document.activeElement).toBe(t.$("row2"));
+  });
+
+  it("stays where the person took focus during the sketch", () => {
+    const t = setup();
+    sketchFrom(t, "row2");
+    t.$("rail").focus();
+    t.host.sketch.active = false;
+    t.idle();
+    expect(document.activeElement).toBe(t.$("rail"));
   });
 });
