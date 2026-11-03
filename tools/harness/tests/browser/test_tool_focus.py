@@ -33,6 +33,26 @@ def test_a_fillet_from_an_edge_row_gives_focus_back_to_the_list(s):
     assert s.page.evaluate("() => window.store.document.features.some((f) => f.type === 'fillet')")
 
 
+# A row the mouse focused has no :focus-visible, keys that start a tool from it still get it back.
+def test_a_fillet_keys_started_from_a_clicked_edge_row_gives_focus_back_to_the_list(s):
+    browse(s)
+    list_kind(s, "Edges")
+    s.page.get_by_role("option", name=re.compile("^Straight edge 2,")).click()
+    s.page.evaluate("() => { window.__pointer = 0; }")
+    now = focus(s)
+    assert now["role"] == "option" and now["name"].startswith("Straight edge 2,"), now
+    assert not s.page.evaluate("() => document.activeElement.matches(':focus-visible')")
+    s.page.keyboard.press("Control+K")
+    s.page.wait_for_function("() => document.activeElement?.closest('[aria-label=\"Command palette\"]') !== null")
+    s.page.keyboard.type("Fillet")
+    next_frames(s)
+    s.page.keyboard.press("Enter")
+    give_radius(s, 2.5)
+    # The fillet build renumbers the edges, so the list's tab stop may stand in for the row.
+    focus_in_list(s)
+    assert s.page.evaluate("() => window.store.document.features.some((f) => f.type === 'fillet')")
+
+
 def test_a_sketch_from_a_plane_row_goes_to_the_view_and_back_to_the_row(s):
     browse(s)
     list_kind(s, "Planes")
