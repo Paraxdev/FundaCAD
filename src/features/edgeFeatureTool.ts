@@ -315,6 +315,7 @@ export class EdgeFeatureTool {
     this.releaseRows = awaitTreePick(
       (pick) => this.takeRow(pick),
       () => this.cancel(),
+      { keepsOnRewind: true },
     );
     this.kind = kind;
     this.phase = "pick";
@@ -410,6 +411,7 @@ export class EdgeFeatureTool {
     this.releaseRows = awaitTreePick(
       (pick) => this.takeRow(pick),
       () => this.cancel(),
+      { keepsOnRewind: true },
     );
     this.kind = f.type;
     this.phase = "drag";

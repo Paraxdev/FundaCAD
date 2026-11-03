@@ -72,7 +72,7 @@ import {
   openOnBranch,
   openPathGuarded,
 } from "./documentActions";
-import { endPickSession } from "../ui/treePick";
+import { endRewoundPick } from "../ui/treePick";
 import { createDatumPlanes } from "./datumPlanes";
 import { createSketchVisibility } from "./sketchVisibility";
 import { installRebuildBridge } from "./rebuildBridge";
@@ -419,7 +419,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   Object.assign(e, createDatumPlanes(e));
   Object.assign(e, createSelection(e));
   Object.assign(e, createDocumentActions(e));
-  e.store.onRewind(endPickSession);
+  e.store.onRewind(endRewoundPick);
   wireDocumentSwap(e.store, {
     cancelTools: () => cancelActiveTools(e.tools),
     sketch: e.sketch,

@@ -4,7 +4,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { createFeatureStarters, type FeatureStartersDeps } from "../../src/features/featureStarters";
-import { endPickSession, resetTreePicks, routeTreeClick, treePickWaiting, type TreePick } from "../../src/ui/treePick";
+import { endRewoundPick, resetTreePicks, routeTreeClick, treePickWaiting, type TreePick } from "../../src/ui/treePick";
 import { createActions } from "../../src/app/actions";
 import { DocumentStore } from "../../src/document/store";
 import type { Engine } from "../../src/app/engine";
@@ -236,7 +236,7 @@ describe("a pick session cannot outlive its tool", () => {
       { id: "b2", name: "B" },
     ]);
     const store = new DocumentStore(stubBackend, { parameters: {}, features: [] });
-    store.onRewind(endPickSession);
+    store.onRewind(endRewoundPick);
     store.addFeature({ id: "x", type: "box", length: 1, width: 1, height: 1 } as never);
     r.starters.startBoolean("subtract");
     store.undo();
@@ -251,7 +251,7 @@ describe("a pick session cannot outlive its tool", () => {
   it("redo, a load and a new document end it too", () => {
     const r = rig([{ id: "b1", name: "A" }]);
     const store = new DocumentStore(stubBackend, { parameters: {}, features: [] });
-    store.onRewind(endPickSession);
+    store.onRewind(endRewoundPick);
     store.addFeature({ id: "x", type: "box", length: 1, width: 1, height: 1 } as never);
     store.undo();
     for (const replace of [

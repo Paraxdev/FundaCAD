@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   awaitTreePick,
   endPickSession,
+  endRewoundPick,
   resetTreePicks,
   routeTreeClick,
   treePickRefusal,
@@ -102,5 +103,23 @@ describe("routing a row click", () => {
     r2();
     endPickSession();
     expect(ended).toBe(1);
+  });
+  it("a rewind ends a waiting pick, but not one whose tool goes on through an undo", () => {
+    const ended: string[] = [];
+    awaitTreePick(
+      () => true,
+      () => ended.push("wait"),
+    );
+    endRewoundPick();
+    expect([ended, treePickWaiting()]).toEqual([["wait"], false]);
+    awaitTreePick(
+      () => true,
+      () => ended.push("tool"),
+      { keepsOnRewind: true },
+    );
+    endRewoundPick();
+    expect([ended, routeTreeClick(YZ, deps())]).toEqual([["wait"], "taken"]);
+    endPickSession();
+    expect(ended).toEqual(["wait", "tool"]);
   });
 });

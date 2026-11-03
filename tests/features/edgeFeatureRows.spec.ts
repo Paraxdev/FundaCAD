@@ -4,8 +4,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import * as THREE from "three";
 import { EdgeFeatureTool } from "../../src/features/edgeFeatureTool";
-import { endPickSession, resetTreePicks, routeTreeClick, treePickWaiting, type TreePick } from "../../src/ui/treePick";
-import type { DocumentStore } from "../../src/document/store";
+import {
+  endPickSession,
+  endRewoundPick,
+  resetTreePicks,
+  routeTreeClick,
+  treePickWaiting,
+  type TreePick,
+} from "../../src/ui/treePick";
+import { DocumentStore } from "../../src/document/store";
+import type { GeometryBackend } from "../../src/geometry/client";
 import type { EdgeRef } from "../../src/viewport/edgeLines";
 import type { Viewport } from "../../src/viewport/viewport";
 
@@ -117,6 +125,22 @@ describe("an edge row while Fillet waits", () => {
     expect(hints[0]).toMatch(/face.*edge/);
     click(edgeRow(1));
     expect(click({ kind: "face", faceId: 17 })).toBe("refused");
+    expect(tool.memberRows()).toHaveLength(1);
+    tool.cancel();
+  });
+
+  it("stays open through an undo or a redo and still takes rows, as Edit, Undo keeps the tool", () => {
+    const { tool, click } = rig();
+    const backend = { rebuild: async () => ({ ok: false, error: { message: "stub" } }), onStatus: () => () => {} };
+    const store = new DocumentStore(backend as unknown as GeometryBackend, { parameters: {}, features: [] });
+    store.onRewind(endRewoundPick);
+    store.addFeature({ id: "x", type: "box", length: 1, width: 1, height: 1 } as never);
+    const done = vi.fn();
+    tool.start("fillet", done);
+    store.undo();
+    store.redo();
+    expect([tool.active, done.mock.calls.length, treePickWaiting()]).toEqual([true, 0, true]);
+    expect(click(edgeRow(0))).toBe("taken");
     expect(tool.memberRows()).toHaveLength(1);
     tool.cancel();
   });

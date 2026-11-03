@@ -8,7 +8,14 @@ import { MirrorTool, PLANE_REFUSED } from "../../src/features/mirrorTool";
 import { basePlaneDef, reflectionMatrix } from "../../src/features/mirrorMath";
 import { useToolPanelStore } from "../../src/stores/toolPanels";
 import { usePromptStore } from "../../src/stores/prompt";
-import { endPickSession, resetTreePicks, routeTreeClick, treePickWaiting, type TreePick } from "../../src/ui/treePick";
+import {
+  endPickSession,
+  endRewoundPick,
+  resetTreePicks,
+  routeTreeClick,
+  treePickWaiting,
+  type TreePick,
+} from "../../src/ui/treePick";
 import type { FacePlanePick, PlanePickTarget } from "../../src/features/facePlanePick";
 import type { PlaneDef } from "../../src/types";
 import type { Viewport } from "../../src/viewport/viewport";
@@ -547,7 +554,7 @@ describe("store undo and redo", () => {
         { id: "f2", type: "datumPlane", plane: DATUM, offset: 3.5 },
       ] as Feature[],
     });
-    store.onRewind(endPickSession);
+    store.onRewind(endRewoundPick);
     const r = rig();
     const tool = new MirrorTool(r.viewport, store, (_vp, x) => PLANE_AT[x] ?? null);
     return { store, tool, r };
