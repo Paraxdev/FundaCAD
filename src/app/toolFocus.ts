@@ -52,6 +52,16 @@ export function installToolFocus(
     if (target && !target.closest("[inert], [hidden]")) target.focus();
   }
 
+  function remember(a: Element | null) {
+    if (a === seen || a?.closest(PASSING)) return;
+    seen = a;
+    from = a instanceof HTMLElement && !onPage(a) && shown(a) ? { el: a, list: a.closest(LISTS) } : null;
+  }
+  // Keys can move focus to a row and start a tool from it between two frames, so focus is heard as it moves too.
+  const onFocusIn = (ev: FocusEvent) => {
+    if (!working && !e.toolAtWork()) remember(ev.target as Element);
+  };
+
   const tick = () => {
     const view = e.viewport.domElement;
     if (e.sketch.active && !sketching) {
@@ -77,12 +87,12 @@ export function installToolFocus(
       moved = null;
     }
     working = false;
-    const a = document.activeElement;
-    if (a !== seen && !a?.closest(PASSING)) {
-      seen = a;
-      from = a instanceof HTMLElement && !onPage(a) && shown(a) ? { el: a, list: a.closest(LISTS) } : null;
-    }
+    remember(document.activeElement);
   };
   handle = frame(tick);
-  return () => cancelFrame(handle);
+  document.addEventListener("focusin", onFocusIn, true);
+  return () => {
+    cancelFrame(handle);
+    document.removeEventListener("focusin", onFocusIn, true);
+  };
 }

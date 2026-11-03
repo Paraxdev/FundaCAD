@@ -84,6 +84,21 @@ describe("focus after a tool", () => {
     expect(document.activeElement).toBe(document.body);
   });
 
+  // Keys can outrun the frames, a test driver's always do.
+  it("goes back to a row focused and left between two frames", () => {
+    const t = setup();
+    t.$("rail").focus();
+    t.frame();
+    t.$("row2").focus();
+    t.$("search").focus();
+    t.$("row2").focus();
+    t.startTool();
+    t.frame();
+    t.endTool();
+    t.idle();
+    expect(document.activeElement).toBe(t.$("row2"));
+  });
+
   it("passes over the palette the tool was started from, it is gone by then", () => {
     const t = setup();
     t.$("row2").focus();
