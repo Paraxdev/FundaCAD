@@ -392,6 +392,8 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
       if (kind === "planes") stopAsking();
       list.setKind(kind);
       rowsKey = null;
+      // The old rows are gone, and a build in flight puts off ensure, so "ready" would say a body has none.
+      if (kind !== "planes") list.setState("loading");
       if (wanted()) ensure();
     },
     /** Ask again after an error. */

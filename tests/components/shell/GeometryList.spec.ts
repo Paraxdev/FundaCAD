@@ -367,6 +367,30 @@ describe("what to list", () => {
     await nextTick();
     expect(said()).toEqual(["1 face"]);
   });
+
+  it("says the new kind's count once a build in flight lets it list them, and is listing until then", async () => {
+    const { r, w } = await open(2);
+    r.wires.set("body1", [edge("body1", 0, 2), edge("body1", 1, 2), edge("body1", 2, 2)]);
+    await kind(w, "edges");
+    await nextTick();
+    const geometry = r.host.geometry as unknown as { rebuild: () => Promise<unknown> };
+    const quick = geometry.rebuild;
+    let finish = () => {};
+    geometry.rebuild = () => new Promise((ok) => (finish = () => ok(quick())));
+    const built = r.store.rebuildNow();
+    await settle();
+    expect(r.store.buildState.building).toBe(true);
+    vi.mocked(announce).mockClear();
+    await kind(w, "faces");
+    await nextTick();
+    expect(said()).toEqual([]);
+    expect(w.get(".empty-state").text()).toBe("Listing the faces.");
+    finish();
+    await built;
+    await settle();
+    await nextTick();
+    expect(said()).toEqual(["2 faces"]);
+  });
 });
 
 describe("pages", () => {
