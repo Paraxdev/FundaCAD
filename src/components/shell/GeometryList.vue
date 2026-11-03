@@ -102,6 +102,14 @@ function sayCount() {
   announce(`${n === 0 ? "No" : count(n)} ${words}`, "polite", { key: "geometry-filter", delay: 250 });
 }
 
+const sizeError = ref<string | null>(null);
+// The field goes with Planes and comes back empty.
+watch(planes, () => (sizeError.value = null));
+function onSizeError(error: string | null) {
+  sizeError.value = error;
+  if (error) announce(error, "polite", { key: "geometry-size", delay: 250 });
+}
+
 function setFilter(next: Partial<GeometryFilters>) {
   list.setFilters(next);
   sayCount();
@@ -325,18 +333,25 @@ onUnmounted(() => {
           />
         </FieldRow>
       </div>
-      <FieldRow v-if="!planes" v-slot="{ id, labelId }" label="Size at least">
+      <FieldRow
+        v-if="!planes"
+        v-slot="{ id, labelId, describedby }"
+        label="Size at least"
+        :error="sizeError ?? undefined"
+      >
         <NumberField
           :id="id"
           size="sm"
           commit="live"
           nullable
           :labelledby="labelId"
+          :aria-describedby="describedby"
           :unit="unit"
           :min="0"
           :width-ch="6"
           :model-value="list.filters.minSize"
           @update:model-value="setFilter({ minSize: $event })"
+          @error="onSizeError"
         />
       </FieldRow>
     </div>

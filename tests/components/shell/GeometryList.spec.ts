@@ -287,6 +287,31 @@ describe("filters", () => {
     expect(options(w).length).toBe(4);
   });
 
+  it("says why a size is refused, as the field's description and aloud", async () => {
+    const { w } = await open(mixed);
+    const input = w.getComponent(NumberField).get("input");
+    vi.mocked(announce).mockClear();
+    await input.setValue("-5");
+    await nextTick();
+    expect(input.attributes("aria-invalid")).toBe("true");
+    const note = document.getElementById(input.attributes("aria-describedby") ?? "");
+    expect(note?.textContent).toBe("At least 0 mm");
+    expect(vi.mocked(announce).mock.calls.map((c) => c[0])).toEqual(["At least 0 mm"]);
+    expect(options(w).length).toBe(4);
+    const kind = w.getComponent({ name: "Segmented" });
+    await kind.vm.$emit("update:modelValue", "planes");
+    await kind.vm.$emit("update:modelValue", "faces");
+    await nextTick();
+    expect(w.find(".ui-field-hint").exists()).toBe(false);
+    const again = w.getComponent(NumberField).get("input");
+    await again.setValue("-5");
+    await nextTick();
+    await again.setValue("12");
+    await nextTick();
+    expect(again.attributes("aria-invalid")).toBeUndefined();
+    expect(again.attributes("aria-describedby")).toBeUndefined();
+  });
+
   it("says none match, and Clear filters brings every row back", async () => {
     const { w } = await open(mixed);
     await w.getComponent(NumberField).vm.$emit("update:modelValue", 500);
