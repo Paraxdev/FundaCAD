@@ -23,7 +23,7 @@ import { useShellStore } from "../../src/stores/shell";
 import { announce } from "../../src/ui/announce";
 import { allCommands } from "../../src/ui/commands";
 import { describePick } from "../../src/ui/describePick";
-import { awaitTreePick, resetTreePicks, treePickWaiting } from "../../src/ui/treePick";
+import { awaitTreePick, resetTreePicks, treePickRefusal, treePickWaiting, type TreePick } from "../../src/ui/treePick";
 import { edge, land, result, rig, settle, topology } from "./geometryBrowserRig";
 
 vi.mock("../../src/ui/toast", () => ({ toast: () => {}, dismissToast: () => {} }));
@@ -392,6 +392,16 @@ describe("what a command refuses", () => {
     expect(taker).not.toHaveBeenCalled();
     expect(r.host.setStatus.mock.calls.map((c) => c[0])).toEqual(STEPS.map(() => "Finish the tool first"));
     expect(picks(r)).toEqual([]);
+  });
+
+  it("a pick the screen does not count as a tool, as setting a view's face, is passed over and the step selects", async () => {
+    const { r, run } = await opened();
+    const taker = vi.fn((pick: TreePick) => treePickRefusal(pick, "a model face, pick it in the view"));
+    awaitTreePick(taker, vi.fn());
+    run("next-face");
+    expect(taker).not.toHaveBeenCalled();
+    expect(picks(r)).toEqual([[face(40)]]);
+    expect(treePickWaiting()).toBe(true);
   });
 
   it("a build under way refuses, and the same command works once it has landed", async () => {
