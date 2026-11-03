@@ -33,12 +33,18 @@ export class NearestSweep {
   private gaveUp = false;
   private seen: number | null = null;
 
-  /** `goal` is the zoom's goal when the look started, for telling when a stream of small steps has outrun it. */
-  constructor(readonly goal = 0) {}
+  /** `goal` is the zoom's goal when the look started, for telling when a stream of small steps has outrun it. `before`
+   *  is the rays a frame an earlier look on the model managed, 0 for none, so a slow model is known before a ray. */
+  constructor(
+    readonly goal = 0,
+    private readonly before = 0,
+  ) {}
 
-  /** True once every ray is in. Casts at least one each frame, until `giveUpIfLate` says that cannot pay. */
-  advance(p: Pose, ctx: AnchorContext, budgetMs = RAY_BUDGET_MS): boolean {
-    if (this.gaveUp) return false;
+  /** True once every ray is in. Casts at least one each frame, until the rest of them, at the pace so far, would come
+   *  after `framesLeft()`, when the spring has landed anyway. */
+  advance(p: Pose, ctx: AnchorContext, framesLeft: () => number, budgetMs = RAY_BUDGET_MS): boolean {
+    if (this.cast >= RAYS) return true;
+    if (this.gaveUp || (this.frames === 0 && this.before > 0 && this.late(this.before, framesLeft))) return false;
     this.frames++;
     const until = performance.now() + budgetMs;
     while (this.cast < RAYS) {
@@ -47,13 +53,20 @@ export class NearestSweep {
       if (d !== null && d > 0 && (this.seen === null || d < this.seen)) this.seen = d;
       if (performance.now() >= until) break;
     }
-    return this.cast >= RAYS;
+    if (this.cast >= RAYS) return true;
+    // One slow ray can be a hitch rather than the model, so the pace counts from a second frame.
+    if (this.frames > 1) this.late(this.cast / this.frames, framesLeft);
+    return false;
   }
 
-  /** Stops for good if the rest of the rays, at the pace so far, come after `framesLeft`, when the spring has landed
-   *  anyway. Waits for a second frame, as one slow ray can be a hitch rather than the model. */
-  giveUpIfLate(framesLeft: number) {
-    if (this.frames > 1 && (RAYS - this.cast) * this.frames > framesLeft * this.cast) this.gaveUp = true;
+  /** Rays a frame, once all are in or more than one frame has gone, else 0. */
+  pace(): number {
+    return this.cast >= RAYS || this.frames > 1 ? this.cast / this.frames : 0;
+  }
+
+  private late(pace: number, framesLeft: () => number): boolean {
+    this.gaveUp = RAYS - this.cast > framesLeft() * pace;
+    return this.gaveUp;
   }
 
   nearest(): number | null {

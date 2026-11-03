@@ -90,7 +90,8 @@ function framesToLanding(nav: Navigator) {
 
 function nearestOf(nav: Navigator, scene: BoxScene): number | null {
   const sweep = new NearestSweep();
-  while (!sweep.advance(nav.pose, { scene, plane: null, box: nav.contentBox(), frame: nav.frame }, Infinity));
+  const ctx = { scene, plane: null, box: nav.contentBox(), frame: nav.frame };
+  while (!sweep.advance(nav.pose, ctx, () => Infinity, Infinity));
   return sweep.nearest();
 }
 
@@ -199,8 +200,20 @@ describe("NearestSweep", () => {
     const { nav, scene } = room();
     const sweep = new NearestSweep();
     scene.rays = 0;
-    expect(sweep.advance(nav.pose, { scene, plane: null, box: null, frame: nav.frame }, 0)).toBe(false);
+    expect(sweep.advance(nav.pose, { scene, plane: null, box: null, frame: nav.frame }, () => Infinity, 0)).toBe(false);
     expect(scene.rays).toBe(1);
+  });
+
+  it("casts nothing when an earlier look's pace could not finish before the spring lands", () => {
+    const { nav, scene } = room();
+    const ctx = { scene, plane: null, box: null, frame: nav.frame };
+    const late = new NearestSweep(0, 1);
+    const inTime = new NearestSweep(0, 1);
+    scene.rays = 0;
+    const answers = [late.advance(nav.pose, ctx, () => 44, 0), late.advance(nav.pose, ctx, () => 1000, 0)];
+    const rays = scene.rays;
+    answers.push(inTime.advance(nav.pose, ctx, () => 45, 0));
+    expect([answers, rays, scene.rays]).toEqual([[false, false, false], 0, 1]);
   });
 });
 
@@ -503,20 +516,23 @@ describe("a zoom's tail", () => {
         now += ms(n++);
         return cast(o, d);
       };
-      nav.wheel(W / 2, H / 2, -NOTCH);
-      nav.update(dt);
-      n = 0;
-      const start = scene.rays;
-      let most = 0;
-      let frames = 1;
-      while (nav.isBusy() && frames < 2000) {
-        const before = scene.rays;
+      const notch = () => {
+        nav.wheel(W / 2, H / 2, -NOTCH);
         nav.update(dt);
-        frames++;
-        // The last frame also reseats at rest.
-        if (nav.isBusy()) most = Math.max(most, scene.rays - before);
-      }
-      return { rays: scene.rays - start, most, frames, scale: nav.pose.scale };
+        n = 0;
+        const start = scene.rays;
+        let most = 0;
+        let frames = 1;
+        while (nav.isBusy() && frames < 2000) {
+          const before = scene.rays;
+          nav.update(dt);
+          frames++;
+          // The last frame also reseats at rest.
+          if (nav.isBusy()) most = Math.max(most, scene.rays - before);
+        }
+        return { rays: scene.rays - start, most, frames, scale: nav.pose.scale };
+      };
+      return { ...notch(), nav, again: notch };
     };
 
     it("spreads the rays over frames and still lands early on a middling model", () => {
@@ -537,6 +553,28 @@ describe("a zoom's tail", () => {
         expect(heavy.scale / scale).toBeCloseTo(1, 9);
       },
     );
+
+    it("casts no ray in later tails once a look has given up on the model, until the model changes", () => {
+      const heavy = slow(() => 40);
+      const later = heavy.again();
+      heavy.nav.setContentBox(heavy.nav.contentBox());
+      const changed = heavy.again();
+      expect([heavy.rays, later.rays, changed.rays]).toEqual([3, 1, 3]);
+    });
+
+    it("looks again in later tails on a model whose rays came in time", () => {
+      const middling = slow(() => 0.5);
+      const later = middling.again();
+      expect([middling.rays, later.rays]).toEqual([46, 46]);
+    });
+
+    it("works out the spring's landing no more once the look has given up", () => {
+      const left = vi.spyOn(ZoomChannel.prototype, "framesLeft");
+      const heavy = slow(() => 40);
+      const first = left.mock.calls.length;
+      heavy.again();
+      expect([first, left.mock.calls.length - first]).toEqual([1, 1]);
+    });
 
     it("keeps going at one ray a frame when the frames are quick enough for it to pay", () => {
       const dt = 1 / 144;
