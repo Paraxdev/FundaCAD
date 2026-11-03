@@ -356,6 +356,8 @@ describe("path trace host", () => {
     expect(swaps.length).toBeGreaterThan(4);
     const ups = swaps.filter((_, i) => i % 2 === 0);
     for (let i = 1; i < ups.length; i++) expect(ups[i]! - ups[i - 1]!).toBeGreaterThanOrEqual(TRACE_RETURN_MS);
+    // No second holds a swap away from the trace and the swap back.
+    for (let i = 2; i < swaps.length; i++) expect(swaps[i]! - swaps[i - 2]!).toBeGreaterThan(1000);
   });
 
   it("brings the trace up at once after a rest longer than TRACE_RETURN_MS", async () => {

@@ -603,9 +603,10 @@ let deadline = null;
           `${trace.maxChanged} changed`,
         );
       // The limit is WCAG's, flashes that occur concurrently over a quarter of the frame.
-      // Up to two up and down pairs fit in a second at the gate, TRACE_RETURN_MS apart.
+      // The gate holds the trace back TRACE_RETURN_MS, over a second, after it gave way, so a second holds at most
+      // the swap to the trace and the swap away from it.
       if (realtimeOn)
-        check(`${name}: at most four swaps a second`, out.swaps.mostInASecond <= 4, out.swaps.mostInASecond);
+        check(`${name}: at most two swaps a second`, out.swaps.mostInASecond <= 2, out.swaps.mostInASecond);
       check(`${name}: at most three flashes a second on screen`, !screen.concurrentOverLimit, `${screen.concurrent}`);
       check(`${name}: at most three flashes a second on the trace`, !trace.concurrentOverLimit, `${trace.concurrent}`);
       // The per cell count is stricter than the rule. WebGPU's preview noise on a bright model goes over 3 on it,

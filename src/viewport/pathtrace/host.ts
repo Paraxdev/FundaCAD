@@ -31,9 +31,10 @@ export const FIRST_SAMPLE_TIMEOUT_MS = 10_000;
 
 /** Out of Path traced this long frees the WebGPU device and the mirrored scene. */
 export const IDLE_DISPOSE_MS = 60_000;
-/** Realtime and the trace can differ over the whole view, so each swap is half a flash. Waiting this long before
- *  going back to the trace holds any stop and go orbit to two flashes in a second, the limit is 3 (WCAG 2.3.1). */
-export const TRACE_RETURN_MS = 700;
+/** Realtime and the trace can differ over the whole view, so each swap is half a flash (WCAG 2.3.1 counts them a
+ *  second). The trace comes back no sooner than this after it gave way, over a second, so however a move stops and
+ *  goes, the swap away and the swap back never fall in the same second. */
+export const TRACE_RETURN_MS = 1100;
 
 export interface CrashGuard {
   arm(): Promise<void>;
