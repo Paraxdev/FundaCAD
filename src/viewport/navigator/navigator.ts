@@ -84,8 +84,9 @@ export class Navigator {
   private box: THREE.Box3 | null = null;
   private parts: readonly THREE.Box3[] = [];
   private zoomsTogether = 0;
-  /** Rays a frame the last look over the view managed on this model, 0 until one has. */
+  /** Rays a frame the last look over the view managed in this scene, 0 until one has, and whether on this model. */
   private rayPace = 0;
+  private rayPaceHere = false;
   private plane: THREE.Plane | null = null;
   private scene: NavScene | null = null;
   private locked = false;
@@ -163,7 +164,7 @@ export class Navigator {
   setContentBox(box: THREE.Box3 | null, parts: readonly THREE.Box3[] = []) {
     this.box = box && !box.isEmpty() ? box.clone() : null;
     this.parts = parts;
-    this.rayPace = 0;
+    this.rayPaceHere = false;
     this.forgetNearest();
     this.recomputeLimits();
   }
@@ -553,9 +554,13 @@ export class Navigator {
     // Zooms running together each get a share, as what their landings skip adds up on screen.
     if (p.ortho) return most / this.zoomsTogether;
     if (ch.sweep && Math.abs(ch.goal - ch.sweep.goal) > reach) ch.sweep = null;
-    ch.sweep ??= new NearestSweep(ch.goal, this.rayPace);
+    ch.sweep ??= new NearestSweep(ch.goal, this.rayPace, this.rayPaceHere);
     const done = ch.sweep.advance(p, this.ctx(), () => ch.framesLeft(tau, dt));
-    this.rayPace = ch.sweep.pace() || this.rayPace;
+    const pace = ch.sweep.pace();
+    if (pace > 0) {
+      this.rayPace = pace;
+      this.rayPaceHere = true;
+    }
     if (!done) return 0;
     const parts = this.parts.length || !this.box ? this.parts : [this.box];
     const { floor, inside } = partsFloor(p, this.frame.width / this.frame.height, parts);

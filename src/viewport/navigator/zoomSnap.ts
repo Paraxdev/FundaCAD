@@ -31,20 +31,30 @@ export class NearestSweep {
   private cast = 0;
   private frames = 0;
   private gaveUp = false;
+  private wasSlow = false;
   private seen: number | null = null;
 
   /** `goal` is the zoom's goal when the look started, for telling when a stream of small steps has outrun it. `before`
-   *  is the rays a frame an earlier look on the model managed, 0 for none, so a slow model is known before a ray. */
+   *  is the rays a frame an earlier look managed, 0 for none, so a slow model is known before a ray, or after one when
+   *  `beforeHere` is false, as that look was on an earlier model. */
   constructor(
     readonly goal = 0,
     private readonly before = 0,
+    private readonly beforeHere = true,
   ) {}
 
   /** True once every ray is in. Casts at least one each frame, until the rest of them, at the pace so far, would come
    *  after `framesLeft()`, when the spring has landed anyway. */
   advance(p: Pose, ctx: AnchorContext, framesLeft: () => number, budgetMs = RAY_BUDGET_MS): boolean {
     if (this.cast >= RAYS) return true;
-    if (this.gaveUp || (this.frames === 0 && this.before > 0 && this.late(this.before, framesLeft))) return false;
+    if (this.gaveUp) return false;
+    let left: number | undefined;
+    const leftNow = () => (left ??= framesLeft());
+    if (this.frames === 0 && this.before > 0) {
+      this.wasSlow = this.late(this.before, leftNow);
+      this.gaveUp = this.wasSlow && this.beforeHere;
+      if (this.gaveUp) return false;
+    }
     this.frames++;
     const until = performance.now() + budgetMs;
     while (this.cast < RAYS) {
@@ -54,19 +64,23 @@ export class NearestSweep {
       if (performance.now() >= until) break;
     }
     if (this.cast >= RAYS) return true;
-    // One slow ray can be a hitch rather than the model, so the pace counts from a second frame.
-    if (this.frames > 1) this.late(this.cast / this.frames, framesLeft);
+    if (this.paced()) this.gaveUp = this.late(this.cast / this.frames, leftNow);
     return false;
   }
 
-  /** Rays a frame, once all are in or more than one frame has gone, else 0. */
+  /** Rays a frame, once all are in or the pace so far counts, else 0. */
   pace(): number {
-    return this.cast >= RAYS || this.frames > 1 ? this.cast / this.frames : 0;
+    return this.cast >= RAYS || this.paced() ? this.cast / this.frames : 0;
+  }
+
+  /** One slow ray can be a hitch rather than the model, so the pace counts from a second frame, or from the first when
+   *  the model was slow before it changed. */
+  private paced(): boolean {
+    return this.frames > 1 || (this.frames === 1 && this.wasSlow);
   }
 
   private late(pace: number, framesLeft: () => number): boolean {
-    this.gaveUp = RAYS - this.cast > framesLeft() * pace;
-    return this.gaveUp;
+    return RAYS - this.cast > framesLeft() * pace;
   }
 
   nearest(): number | null {

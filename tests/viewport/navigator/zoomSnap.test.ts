@@ -215,6 +215,21 @@ describe("NearestSweep", () => {
     answers.push(inTime.advance(nav.pose, ctx, () => 45, 0));
     expect([answers, rays, scene.rays]).toEqual([[false, false, false], 0, 1]);
   });
+
+  it("casts one frame when a late pace came from an earlier model, and gives up only if that frame is late too", () => {
+    const { nav, scene } = room();
+    const ctx = { scene, plane: null, box: null, frame: nav.frame };
+    const slowStill = new NearestSweep(0, 1, false);
+    const quickNow = new NearestSweep(0, 1, false);
+    scene.rays = 0;
+    const answers = [slowStill.advance(nav.pose, ctx, () => 43, 0), slowStill.advance(nav.pose, ctx, () => 43, 0)];
+    const rays = scene.rays;
+    answers.push(
+      quickNow.advance(nav.pose, ctx, () => 44, 0),
+      quickNow.advance(nav.pose, ctx, () => 44, 0),
+    );
+    expect([answers, rays, slowStill.pace(), scene.rays - rays]).toEqual([[false, false, false, false], 1, 1, 2]);
+  });
 });
 
 describe("a zoom's tail", () => {
@@ -554,12 +569,31 @@ describe("a zoom's tail", () => {
       },
     );
 
-    it("casts no ray in later tails once a look has given up on the model, until the model changes", () => {
+    it("casts no ray in later tails once a look has given up on the model, and one when the model changes", () => {
       const heavy = slow(() => 40);
       const later = heavy.again();
       heavy.nav.setContentBox(heavy.nav.contentBox());
       const changed = heavy.again();
-      expect([heavy.rays, later.rays, changed.rays]).toEqual([3, 1, 3]);
+      const afterChange = heavy.again();
+      // Each count holds the reseat at rest.
+      expect([heavy.rays, later.rays, changed.rays, afterChange.rays]).toEqual([3, 1, 2, 1]);
+    });
+
+    it("looks again and lands early once a model change has made its rays quick", () => {
+      const { frames: rest } = springTail();
+      let ms = 40;
+      const heavy = slow(() => ms);
+      heavy.nav.setContentBox(heavy.nav.contentBox());
+      ms = 0.5;
+      const changed = heavy.again();
+      expect(changed.rays).toBe(46);
+      expect(changed.frames).toBeLessThan(rest);
+    });
+
+    it("forgets the pace on a new scene, which takes two frames to be sure of again", () => {
+      const heavy = slow(() => 40);
+      heavy.nav.setScene((heavy.nav as unknown as { scene: BoxScene }).scene);
+      expect(heavy.again().rays).toBe(3);
     });
 
     it("looks again in later tails on a model whose rays came in time", () => {
