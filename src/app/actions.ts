@@ -142,7 +142,7 @@ export function createActions(e: Engine): (action: string) => void {
     // Here, or the finish below ends the sketch they should refuse in words.
     const geometryStep = GEOMETRY_STEPS[action];
     if (geometryStep) return geometry.selectStep(geometryStep.kind, geometryStep.delta);
-    if (action === "browse-geometry") return browseGeometry();
+    if (action === "browse-geometry") return browseGeometry(e);
     // The arrow keys turn the view and nothing else: they leave a sketch open,
     // and a tool that reads the arrows itself (the pattern count) keeps them.
     const step = /^view-step-(left|right|up|down)(-fine)?$/.exec(action);

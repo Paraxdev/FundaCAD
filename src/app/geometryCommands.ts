@@ -20,7 +20,9 @@ function focusGeometryList() {
   target?.focus();
 }
 
-export function browseGeometry() {
+export function browseGeometry(e: Pick<Engine, "geometryBrowser">) {
+  const list = useGeometryBrowserStore();
+  if (list.kind === "planes") e.geometryBrowser.setKind(list.bodyKind);
   useBrowserStore().itemsTab = "geometry";
   useShellStore().setItems(true);
   // After the palette has closed and handed focus back, and a pane just shown has mounted.

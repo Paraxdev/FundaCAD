@@ -467,6 +467,21 @@ describe("Browse Faces and Edges", () => {
     expect(picks(r)).toEqual([]);
   });
 
+  it("opens on Faces after Planes, or on Edges when that was the last of the two", async () => {
+    const r = rig(result([{ id: "body1", etag: "e1", faceCount: 3, faceStart: 40 }]));
+    const { run } = commands(r);
+    await r.build();
+    r.browser.setKind("planes");
+    await browse(run);
+    expect(r.list.kind).toBe("faces");
+    r.browser.setKind("edges");
+    r.browser.setKind("planes");
+    await browse(run);
+    expect(r.list.kind).toBe("edges");
+    await browse(run);
+    expect(r.list.kind).toBe("edges");
+  });
+
   it("waits for the palette to hand focus back before it moves it", async () => {
     const { r, run } = await opened();
     const was = document.body.appendChild(document.createElement("button"));

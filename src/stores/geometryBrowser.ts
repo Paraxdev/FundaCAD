@@ -12,6 +12,8 @@ export const GEOMETRY_PAGE_SIZE = 100;
  *  mirrors them as row keys. */
 export const useGeometryBrowserStore = defineStore("geometryBrowser", () => {
   const kind = ref<GeometryKind>("faces");
+  // Browse Faces and Edges opens on the last of these two.
+  const bodyKind = ref<Exclude<GeometryKind, "planes">>("faces");
   const bodyId = ref<string | null>(null);
   const bodies = shallowRef<readonly { id: string; name: string }[]>([]);
   const filters = shallowRef<GeometryFilters>(NO_FILTERS);
@@ -65,6 +67,7 @@ export const useGeometryBrowserStore = defineStore("geometryBrowser", () => {
 
   return {
     kind,
+    bodyKind,
     bodyId,
     bodies,
     filters,
@@ -93,6 +96,7 @@ export const useGeometryBrowserStore = defineStore("geometryBrowser", () => {
     setKind(next: GeometryKind) {
       if (next === kind.value) return;
       kind.value = next;
+      if (next !== "planes") bodyKind.value = next;
       const minSize = next === "planes" ? null : filters.value.minSize;
       filters.value = { type: null, facing: null, minSize };
       if (next === "planes") truncated.value = null;
