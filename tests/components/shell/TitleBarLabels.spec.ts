@@ -65,6 +65,9 @@ describe("TitleBar undo and redo", () => {
     expect(w.get("#undo-btn").attributes("title")).toBe("Undo Add support (Ctrl+Z)");
     ui.sketchActive = true;
     await nextTick();
+    expect(w.get("#undo-btn").attributes("title")).toBe("Undo (Ctrl+Z)");
+    ui.sketchCanUndo = true;
+    await nextTick();
     expect(w.get("#undo-btn").attributes("title")).toBe("Undo sketch edit (Ctrl+Z)");
   });
 
