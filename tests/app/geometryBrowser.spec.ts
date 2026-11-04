@@ -1168,7 +1168,9 @@ describe("a tool waiting for a pick", () => {
       { kind: "edge", edge: r.wires[0] },
       { kind: "edge", edge: r.wires[1] },
     ]);
-    expect(r.host.setStatus).toHaveBeenCalledExactlyOnceWith("That row is an edge, this step needs a face", "");
+    expect(r.host.setStatus).toHaveBeenCalledExactlyOnceWith("That row is an edge, this step needs a face", "", {
+      silent: true,
+    });
     expect(r.viewport.applyPicks).not.toHaveBeenCalled();
   });
 
