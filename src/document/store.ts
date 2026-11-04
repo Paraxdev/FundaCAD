@@ -1651,8 +1651,10 @@ export class DocumentStore {
     );
   }
 
-  /** A bound numeric field is re-asserted by the recompute; use setTargetValue/setTargetExpr. */
+  /** A bound numeric field is re-asserted by the recompute; use setTargetValue/setTargetExpr. A step that is gone, as
+   *  after an undo, is refused before the undo step, which would have cleared the redo. */
   updateFeature(id: string, patch: Partial<Feature>, bindings?: SketchBinding[]) {
+    if (!this.doc.features.some((f) => f.id === id)) return;
     this.mutate((d) => {
       const i = d.features.findIndex((f) => f.id === id);
       if (i >= 0) d.features[i] = { ...d.features[i], ...patch } as Feature;
