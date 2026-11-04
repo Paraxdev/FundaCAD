@@ -53,6 +53,7 @@ import {
 import type { AxisDirection, Selector, StressStudy, StressSupportType, Vec3 } from "../types";
 import { isVec3 } from "../document/stressStudy";
 import { bodyLabels, labelledBodies } from "./bodyLabels";
+import { awaitTreePick, treePickRefusal, type TreePickAnswer } from "./treePick";
 import * as THREE from "three";
 
 type StressOverlay = NonNullable<Parameters<Viewport["setStressOverlay"]>[0]>;
@@ -770,7 +771,11 @@ export function createPanels(deps: PanelsDeps) {
     if (d.colours === "shown") setStressColours(false);
     if (d.deform?.shown) setStressShape(false);
     const body = bodyOnModel();
+    releaseRows?.();
+    releaseRows = null;
     panels.setStressPlacing(target, as);
+    if (as === "face")
+      releaseRows = awaitTreePick(takeFaceRow, stopPlacing, { keepsOnRewind: true, keepsOnCommand: true });
     const color = "support" in target ? SUPPORT_COLORS[(row as { type: StressSupportType }).type] : LOAD_MARK_COLOR;
     const radius = as === "face" ? null : body ? spotRadiusFor(body) : defaultSpotRadius(NaN);
     glyphs?.setPlacing?.({ color, radius });
@@ -796,7 +801,32 @@ export function createPanels(deps: PanelsDeps) {
     refreshStressMarks();
   }
 
+  let releaseRows: (() => void) | null = null;
+
+  // A row names a face and not a spot, so only Click faces waits for rows.
+  function takeFaceRow(pick: Parameters<typeof treePickRefusal>[0]): TreePickAnswer {
+    if (pick.kind !== "face") return treePickRefusal(pick, "a face");
+    const d = panels.stress;
+    const target = d?.placing;
+    if (!d || !target) return "Stress is not waiting for a face";
+    const body = viewport.faceIdToBodyId(pick.faceId);
+    if (!body) return "That face is on no body";
+    if (d.setup.body && d.setup.body !== body) {
+      return bodyOnModel()
+        ? "That face is on another body, pick a face of the body analysed"
+        : "The body analysed is not on the current model, pick another body first";
+    }
+    const sel = viewport.faceSelectorOf(pick.faceId);
+    if (sel.kind !== "face" || sel.by !== "nearest") return "The model is still building";
+    if (!d.setup.body) panels.setStressBody(body);
+    addStressFace(target, body, pick.faceId, sel.point);
+    stopPlacing();
+    return true;
+  }
+
   function stopPlacing() {
+    releaseRows?.();
+    releaseRows = null;
     if (!panels.stress?.placing) return;
     panels.setStressPlacing(null);
     glyphs?.setPlacing?.(null);
@@ -1227,6 +1257,7 @@ export function createPanels(deps: PanelsDeps) {
           }
         : null;
     runSeq++;
+    stopPlacing();
     panels.stress = null;
     history.reset(null);
     colours = null;

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import * as THREE from "three";
 import { createPanels, type PanelsDeps } from "../../src/ui/panels";
+import { resetTreePicks, routeTreeClick, treePickWaiting, awaitTreePick } from "../../src/ui/treePick";
 import { usePanelsStore } from "../../src/stores/panels";
 import type { StressOptions, StressReply, StressResult } from "../../src/geometry/client";
 import type { CadDocument, StressStudy, Vec3 } from "../../src/types";
@@ -18,7 +19,10 @@ const asSent = (s: EngineSurface) => drawnSurface(null, s, locator(s), { min: 1,
 // setup says, Cancel names its own request, the colours go on the body, the
 // setup is saved with the document, and the view's glyphs follow it.
 
-beforeEach(() => setActivePinia(createPinia()));
+beforeEach(() => {
+  setActivePinia(createPinia());
+  resetTreePicks();
+});
 
 type FaceMap = Record<number, { body: string; z: number; n: number; tris?: THREE.Triangle[] }>;
 // Face 1 is the bottom of body b1 (normal -Z), face 2 its top (+Z), face 9 on b2.
@@ -86,6 +90,12 @@ function rig() {
             faceIds: selected,
           }
         : null,
+    // A point on the face off its middle, as a triangle centroid is.
+    faceSelectorOf: (f: number) => {
+      const t = (FACES[f]?.tris ?? quad(FACES[f]!.z, FACES[f]!.n))[0]!;
+      const c = t.getMidpoint(new THREE.Vector3());
+      return { kind: "face", by: "nearest", point: [c.x, c.y, c.z], body: FACES[f]!.body };
+    },
     faceTriangles: (f: number) => FACES[f]?.tris ?? (FACES[f] ? quad(FACES[f]!.z, FACES[f]!.n) : []),
     bodyProperties: () => ({ com: new THREE.Vector3(5, 5, 5) }),
     setStressDeformation: (k: number) => deformations.push(k),
@@ -1691,5 +1701,124 @@ describe("the colours and the deformed shape, each with its own switch", () => {
       colours: "none",
       deform: null,
     });
+  });
+});
+
+describe("Click faces takes a face row", () => {
+  const row = (faceId: number) => {
+    const hints: string[] = [];
+    const route = routeTreeClick({ kind: "face", faceId }, { busyHint: () => null, hint: (t) => hints.push(t) });
+    return { route, hints };
+  };
+
+  it("a row adds its face like one click and stops placing, with the body set when none is", () => {
+    const r = rig();
+    r.ui.showStress();
+    const d = usePanelsStore().stress!;
+    r.ui.placeStressSpot({ support: 1 });
+    expect(treePickWaiting()).toBe(true);
+    expect(row(1)).toEqual({ route: "taken", hints: [] });
+    expect(d.placing).toBeNull();
+    expect(treePickWaiting()).toBe(false);
+    expect(d.setup.body).toBe("b1");
+    expect(d.setup.supports[0]!.faces).toEqual({
+      selectors: [{ kind: "face", by: "nearest", point: [6.6667, 3.3333, 0], body: "b1" }],
+      faceIds: [1],
+      normalSum: [0, 0, -100],
+      area: 100,
+    });
+  });
+
+  it("a face of another body is refused and placing goes on, a second row of the body is taken", () => {
+    const r = rig();
+    r.ui.showStress();
+    const d = usePanelsStore().stress!;
+    r.ui.placeStressSpot({ load: 1 });
+    expect(row(2).route).toBe("taken");
+    r.ui.placeStressSpot({ load: 1 });
+    const other = row(9);
+    expect(other.route).toBe("refused");
+    expect(other.hints).toHaveLength(1);
+    expect(other.hints[0]).toMatch(/another body/);
+    expect(d.placing).toEqual({ load: 1 });
+    expect(treePickWaiting()).toBe(true);
+    expect(d.setup.loads[0]!.faces.faceIds).toEqual([2]);
+    expect(row(1).route).toBe("taken");
+    expect(d.setup.loads[0]!.faces.faceIds).toEqual([2, 1]);
+    expect(d.setup.body).toBe("b1");
+  });
+
+  it("the same face twice is left as it is, and an edge or a body row is refused in words", () => {
+    const r = rig();
+    r.ui.showStress();
+    const d = usePanelsStore().stress!;
+    r.ui.placeStressSpot({ support: 1 });
+    const hints: string[] = [];
+    const deps = { busyHint: () => null, hint: (t: string) => hints.push(t) };
+    const edge = { kind: "edge", edge: { id: 4, body: "b1" } } as never;
+    expect(routeTreeClick(edge, deps)).toBe("refused");
+    expect(routeTreeClick({ kind: "body", id: "b1" }, deps)).toBe("refused");
+    expect(hints).toHaveLength(2);
+    expect(hints[0]).toMatch(/edge/);
+    expect(hints[1]).toMatch(/body/);
+    expect(d.placing).toEqual({ support: 1 });
+    expect(row(2).route).toBe("taken");
+    r.ui.placeStressSpot({ support: 1 });
+    expect(row(2).route).toBe("taken");
+    expect(d.setup.supports[0]!.faces.faceIds).toEqual([2]);
+    expect(d.setup.supports[0]!.faces.selectors).toHaveLength(1);
+    expect(d.placing, "a held face still ends the placing").toBeNull();
+  });
+
+  it("spot placing and the button again keep no session, and a face with no body is refused", () => {
+    const r = rig();
+    r.ui.showStress();
+    const d = usePanelsStore().stress!;
+    r.ui.placeStressSpot({ load: 1 }, "spot");
+    expect(treePickWaiting()).toBe(false);
+    expect(row(1)).toEqual({ route: "row", hints: [] });
+    expect(d.placing).toEqual({ load: 1 });
+    r.ui.placeStressSpot({ load: 1 });
+    expect(treePickWaiting()).toBe(true);
+    r.ui.placeStressSpot({ load: 1 });
+    expect(treePickWaiting()).toBe(false);
+    r.ui.placeStressSpot({ load: 1 });
+    r.ui.placeStressSpot({ load: 1 }, "spot");
+    expect(treePickWaiting(), "switching to spots drops the face session").toBe(false);
+    r.ui.placeStressSpot({ load: 1 });
+    const none = row(77);
+    expect(none.route).toBe("refused");
+    expect(d.setup.loads[0]!.faces.faceIds).toEqual([]);
+  });
+
+  it("another picker starting ends the placing, and a second Stress setup has no session left", () => {
+    const r = rig();
+    r.ui.showStress();
+    const d = usePanelsStore().stress!;
+    r.ui.placeStressSpot({ support: 1 });
+    let taken = 0;
+    awaitTreePick(
+      () => (taken++, true),
+      () => {},
+    );
+    expect(d.placing).toBeNull();
+    expect(row(2).route).toBe("taken");
+    expect(taken).toBe(1);
+    expect(d.setup.supports[0]!.faces.faceIds).toEqual([]);
+
+    r.ui.placeStressSpot({ support: 1 });
+    r.ui.closeStress();
+    expect(treePickWaiting()).toBe(false);
+    expect(row(2)).toEqual({ route: "row", hints: [] });
+
+    const r2 = rig();
+    r2.ui.showStress();
+    const d2 = usePanelsStore().stress!;
+    expect(d2.placing ?? null).toBeNull();
+    expect(treePickWaiting()).toBe(false);
+    r2.ui.placeStressSpot({ load: 1 });
+    expect(row(1).route).toBe("taken");
+    expect(d2.setup.loads[0]!.faces.faceIds).toEqual([1]);
+    expect(d2.setup.supports[0]!.faces.faceIds).toEqual([]);
   });
 });
