@@ -11,6 +11,9 @@ import { autoDeformScale, probeLabel, probeValues, swingScale } from "../../src/
 import { drawnSurface, readAt, weakSpot, type DisplayMesh } from "../../src/ui/stressDrawn";
 import { locator, type EngineSurface } from "../../src/ui/stressLocate";
 
+const spoken = vi.hoisted(() => [] as string[]);
+vi.mock("../../src/ui/announce", () => ({ announce: (t: string) => spoken.push(t) }));
+
 // Without a display mesh the engine surface is drawn as it came.
 const asSent = (s: EngineSurface) => drawnSurface(null, s, locator(s), { min: 1, max: 4 });
 
@@ -1715,9 +1718,14 @@ describe("Click faces takes a face row", () => {
     const r = rig();
     r.ui.showStress();
     const d = usePanelsStore().stress!;
+    spoken.length = 0;
     r.ui.placeStressSpot({ support: 1 });
     expect(treePickWaiting()).toBe(true);
+    expect(spoken).toHaveLength(1);
+    expect(spoken[0]).toMatch(/face for the support/);
     expect(row(1)).toEqual({ route: "taken", hints: [] });
+    expect(spoken).toHaveLength(2);
+    expect(spoken[1]).toMatch(/support has 1 face,.*Click faces/);
     expect(d.placing).toBeNull();
     expect(treePickWaiting()).toBe(false);
     expect(d.setup.body).toBe("b1");
@@ -1743,8 +1751,11 @@ describe("Click faces takes a face row", () => {
     expect(d.placing).toEqual({ load: 1 });
     expect(treePickWaiting()).toBe(true);
     expect(d.setup.loads[0]!.faces.faceIds).toEqual([2]);
+    spoken.length = 0;
     expect(row(1).route).toBe("taken");
     expect(d.setup.loads[0]!.faces.faceIds).toEqual([2, 1]);
+    expect(spoken).toHaveLength(1);
+    expect(spoken[0]).toMatch(/load has 2 faces/);
     expect(d.setup.body).toBe("b1");
   });
 

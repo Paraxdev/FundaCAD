@@ -53,6 +53,7 @@ import {
 import type { AxisDirection, Selector, StressStudy, StressSupportType, Vec3 } from "../types";
 import { isVec3 } from "../document/stressStudy";
 import { bodyLabels, labelledBodies } from "./bodyLabels";
+import { announce } from "./announce";
 import { awaitTreePick, treePickRefusal, type TreePickAnswer } from "./treePick";
 import * as THREE from "three";
 
@@ -774,8 +775,10 @@ export function createPanels(deps: PanelsDeps) {
     releaseRows?.();
     releaseRows = null;
     panels.setStressPlacing(target, as);
-    if (as === "face")
+    if (as === "face") {
       releaseRows = awaitTreePick(takeFaceRow, stopPlacing, { keepsOnRewind: true, keepsOnCommand: true });
+      announce(`Pick a face for the ${"support" in target ? "support" : "load"}, Esc to stop`);
+    }
     const color = "support" in target ? SUPPORT_COLORS[(row as { type: StressSupportType }).type] : LOAD_MARK_COLOR;
     const radius = as === "face" ? null : body ? spotRadiusFor(body) : defaultSpotRadius(NaN);
     glyphs?.setPlacing?.({ color, radius });
@@ -821,6 +824,9 @@ export function createPanels(deps: PanelsDeps) {
     if (!d.setup.body) panels.setStressBody(body);
     addStressFace(target, body, pick.faceId, sel.point);
     stopPlacing();
+    const n = panels.stressRow(target)?.faces.faceIds.length ?? 0;
+    const noun = "support" in target ? "support" : "load";
+    announce(`The ${noun} has ${n} ${n === 1 ? "face" : "faces"}, Click faces again for another`);
     return true;
   }
 
