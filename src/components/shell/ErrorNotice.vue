@@ -8,6 +8,7 @@ import { revealEntry } from "../../ui/logStore";
 import { motionOn } from "../../ui/motion";
 import Button from "../ui/Button.vue";
 import Chip from "../ui/Chip.vue";
+import IconButton from "../ui/IconButton.vue";
 
 type Phase = "hidden" | "icon" | "grow" | "text" | "leave";
 
@@ -28,6 +29,7 @@ const slot = ref<HTMLElement | null>(null);
 let timers: number[] = [];
 let holdTimer = 0;
 let hovered = false;
+let focused = false;
 
 const later = (ms: number, fn: () => void) => {
   timers.push(window.setTimeout(fn, ms));
@@ -48,7 +50,7 @@ async function fitWidth(): Promise<number> {
 function hold() {
   clearTimeout(holdTimer);
   const n = shown.value;
-  if (!n || hovered) return;
+  if (!n || n.holdMs === null || hovered || focused) return;
   holdTimer = window.setTimeout(leave, n.holdMs);
 }
 
@@ -63,6 +65,9 @@ function leave() {
 
 function finish() {
   clearTimers();
+  // The wrap is removed under the pointer or focus, which fires no leave or focusout.
+  hovered = false;
+  focused = false;
   phase.value = "hidden";
   shown.value = null;
   width.value = ICON_W;
@@ -122,6 +127,16 @@ function onLeave() {
   hovered = false;
   if (phase.value === "text") hold();
 }
+function onFocusIn() {
+  focused = true;
+  clearTimeout(holdTimer);
+}
+function onFocusOut(e: FocusEvent) {
+  const to = e.relatedTarget;
+  if (to instanceof Node && (e.currentTarget as HTMLElement).contains(to)) return;
+  focused = false;
+  if (phase.value === "text") hold();
+}
 
 let off: (() => void) | null = null;
 onMounted(() => {
@@ -138,7 +153,14 @@ onUnmounted(() => {
 
 <template>
   <div ref="slot" class="notice-slot">
-    <div v-if="shown && phase !== 'hidden'" class="err-notice-wrap" @mouseenter="onEnter" @mouseleave="onLeave">
+    <div
+      v-if="shown && phase !== 'hidden'"
+      class="err-notice-wrap"
+      @mouseenter="onEnter"
+      @mouseleave="onLeave"
+      @focusin="onFocusIn"
+      @focusout="onFocusOut"
+    >
       <Chip
         id="error-notice"
         as="button"
@@ -160,6 +182,16 @@ onUnmounted(() => {
       <Button v-if="shown.action && phase === 'text'" size="sm" class="err-action" @click="runAction">{{
         shown.action.label
       }}</Button>
+      <IconButton
+        v-if="shown.holdMs === null && phase === 'text'"
+        icon="close"
+        tip="Dismiss"
+        size="sm"
+        variant="plain"
+        :icon-size="12"
+        class="err-dismiss"
+        @click="finish"
+      />
     </div>
     <!-- The chip's width at rest, measured so the grow has a target. -->
     <Chip v-if="shown" ref="measure" variant="error" size="md" class="err-notice err-measure" aria-hidden="true">

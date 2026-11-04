@@ -1,4 +1,5 @@
 import { toast } from "../ui/toast";
+import { plainError, SEE_CONSOLE } from "../ui/plainError";
 import { describe } from "../ui/logStore";
 import { isSessionEnded } from "../document/session";
 import { isBrowserNotice } from "../diagnostics/browserNotice";
@@ -6,8 +7,8 @@ import { isBrowserNotice } from "../diagnostics/browserNotice";
 /** Logs and toasts any uncaught error or rejection, so a failure never leaves just a blank viewport. */
 export function installGlobalErrorHandlers(): void {
   const headline = (v: unknown) => {
-    const m = v instanceof Error ? v.message : typeof v === "string" ? v : "";
-    return m ? `Unexpected error: ${m.split("\n")[0]}` : "Unexpected error";
+    const m = plainError(v, "");
+    return m ? `Unexpected error: ${m}` : `Something went wrong. ${SEE_CONSOLE}`;
   };
   const agent = typeof navigator === "undefined" ? "" : `\n\nPlatform: ${navigator.userAgent}`;
   window.addEventListener("unhandledrejection", (e) => {

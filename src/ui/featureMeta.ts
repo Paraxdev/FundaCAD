@@ -102,3 +102,14 @@ export function stepName(f: Nameable): string {
 export function labelOf(f: Feature): string {
   return featureMeta(f as { type: string; operation?: unknown; thin?: unknown }).label;
 }
+
+/** stepName, with the 1-based place among same-labelled steps added to an unnamed one. A named
+ *  step counts toward the place so a rename does not renumber the others. */
+export function numberedName(f: Nameable & { id?: string }, features: readonly (Nameable & { id?: string })[]): string {
+  if (f.name?.trim()) return stepName(f);
+  const label = featureMeta(f).label;
+  const at = features.findIndex((g) => g === f || (f.id !== undefined && g.id === f.id));
+  if (at < 0) return label;
+  const place = features.slice(0, at + 1).filter((g) => featureMeta(g).label === label).length;
+  return `${label} ${place}`;
+}

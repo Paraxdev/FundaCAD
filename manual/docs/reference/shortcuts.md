@@ -11,7 +11,7 @@ Press ? or use Help, Keyboard Shortcuts to see every key. On a Mac, use Cmd for 
 3. Press the new keys, or Esc to cancel.
 4. If another command has those keys, pick Replace or Cancel.
 
-Reset puts one key back, Reset all a whole page. A key marked fixed cannot be changed. A plugin with its own keys gets its own page.
+Reset puts one key back, Reset all a whole page, after it asks. A key marked fixed cannot be changed. A plugin with its own keys gets its own page.
 
 ## Keys
 
@@ -90,6 +90,10 @@ With Line, Rectangle or Circle armed in a sketch, see [Draw with keys](../sketch
 | X `@5,3` | 5 along X and 3 along Y from the last point |
 
 Next Face, Previous Face, Next Edge, Previous Edge and Browse Faces and Edges have no key until you give them one. They are in the Edit menu and the command palette. The keys inside the Geometry list are on [the Items card](../model/items.md#keys-in-the-list).
+
+Show Last Message in the command palette says the newest message again and shows it again, for a message that went by too fast. It has no key.
+
+Show Console in the command palette opens the console and puts focus on its heading. The console shortcut does the same, except inside a text box, where they open it without taking focus. Closing the console puts focus back where it was. A screen reader says Error, Warning or Info before each line.
 
 ## Mouse
 

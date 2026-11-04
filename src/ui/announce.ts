@@ -40,7 +40,7 @@ const STALE_MS = 8000;
 
 let readVerbosity: () => Verbosity = () => "normal";
 
-/** Lane a5's Accessibility settings plug the Announcements setting in here; Normal until then. */
+/** Where the Announcements setting is read from; Announcer.vue plugs it in, Normal until then. */
 export function setVerbositySource(read: () => Verbosity): void {
   readVerbosity = read;
 }

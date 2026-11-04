@@ -25,6 +25,8 @@
   flex: 0 0 auto;
 }
 .logcon-title {
+  margin: 0;
+  outline-offset: 2px;
   font-size: var(--fs-micro);
   font-weight: 700;
   letter-spacing: 0.06em;

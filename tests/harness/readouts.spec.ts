@@ -226,7 +226,7 @@ describe("messages", () => {
     vi.useFakeTimers();
     const before = read.messages().seq;
     toast("Saved");
-    vi.advanceTimersByTime(4000);
+    vi.advanceTimersByTime(5500);
     expect(useToastStore().items).toHaveLength(0);
     const m = read.messages(before);
     expect(m.rows.map((r) => [r.level, r.text])).toEqual([["info", "Saved"]]);

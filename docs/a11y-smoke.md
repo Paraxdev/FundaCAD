@@ -3,7 +3,7 @@
 FundaCAD has to work with NVDA on Windows, VoiceOver on macOS and Orca on Linux. CI reads the page and each
 platform's accessibility tree on every push (see [What CI checks](#what-ci-checks)), but no job can listen to a
 screen reader. This page is the hand check a person runs before each release: about twenty eight minutes per screen
-reader, the same sixteen steps everywhere, and a results table that keeps what was heard.
+reader, the same seventeen steps everywhere, and a results table that keeps what was heard.
 
 ## What CI checks
 
@@ -190,7 +190,15 @@ Each step says what to do and what you should hear. Mark it in the results: **P*
     `8`, Enter: you hear "Built, 1 body". This is one way to draw among others. Fail: a point or shape that is not
     spoken, an arrow that turns the view while a draw tool is armed, or a Tab that skips a profile.
 
-Some of these are expected to be silent today: tool prompts, the added feature and toasts are spoken once the
+17. **Hear undo and a message (2 min).** Open "Box with a lid", select a step in the Items tree and press Delete: you
+    hear "Deleted" and the step's name once, with an Undo button on the message. Press Ctrl+Z: you hear "Undid Delete"
+    and the step's name. Press Ctrl+Y: you hear "Redid Delete" and the name. Press Ctrl+K, type `last message` and press
+    Enter: the newest message is said again. In a new document press Ctrl+Z: you hear "Nothing to undo". Open
+    Preferences, set Notification time to Until dismissed and delete a step again: the message stays past ten seconds
+    until you dismiss it. Fail: a message that is not spoken or is spoken twice, an undo that says only "Undo", or a
+    message that goes while the setting is Until dismissed.
+
+Some of these are expected to be silent today: tool prompts and the added feature are spoken once the
 announcer lands. Record what you hear anyway. A step that was P and turns S or W is a regression and blocks the
 release; one that was S and is still S is not.
 
@@ -206,9 +214,9 @@ When there is time left, or before a major release:
 
 ## Results
 
-Newest first. Write the steps as fifteen marks in order, like `P P P S S W P P P P P P P P P`, and put each W in the notes.
+Newest first. Write the steps as seventeen marks in order, like `P P P S S W P P P P P P P P P P P`, and put each W in the notes.
 
-| Date | FundaCAD | OS and session | Package | Webview | Screen reader | Steps 1 to 16 | Tester | Notes |
+| Date | FundaCAD | OS and session | Package | Webview | Screen reader | Steps 1 to 17 | Tester | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | to record | next release | Ubuntu 24.04 GNOME, Wayland | Flatpak | WebKitGTK 4.1, GNOME 50 runtime | Orca |  |  | First run, the Orca on WebKitGTK 4.1 baseline. Note key echo and caret tracking under native Wayland. |
 | to record | next release | Ubuntu 22.04 GNOME, X11 | `.deb` | WebKitGTK 4.1 (system) | Orca |  |  | First run, the X11 half of the baseline. |

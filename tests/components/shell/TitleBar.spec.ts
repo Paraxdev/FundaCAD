@@ -128,4 +128,30 @@ describe("Undo and Redo in the title bar", () => {
     await nextTick();
     expect(off()).toEqual([false, true]);
   });
+
+  it("follow the sketch's own history while a sketch is open, and name only a step it has", async () => {
+    const ui = useUiStore();
+    ui.canUndo = true;
+    ui.undoLabel = "Fillet 2";
+    ui.sketchActive = true;
+    const w = mount(TitleBar, { attachTo: document.body, global: { provide: { [ENGINE as symbol]: makeEngine() } } });
+    const read = () =>
+      ["#undo-btn", "#redo-btn"].map((id) => [
+        w.get(id).attributes("aria-disabled") === "true",
+        w.get(id).attributes("title"),
+      ]);
+    await nextTick();
+    expect(read()).toEqual([
+      [true, "Undo (Ctrl+Z)"],
+      [true, "Redo (Ctrl+Y)"],
+    ]);
+
+    ui.sketchCanUndo = true;
+    await nextTick();
+    expect(read()[0]).toEqual([false, "Undo sketch edit (Ctrl+Z)"]);
+
+    ui.sketchActive = false;
+    await nextTick();
+    expect(read()[0]).toEqual([false, "Undo Fillet 2 (Ctrl+Z)"]);
+  });
 });

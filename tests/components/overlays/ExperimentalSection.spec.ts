@@ -1,5 +1,5 @@
 // The Experimental page: its numbers are NumberFields that commit on Enter or blur, the HDR size a Segmented.
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import ExperimentalSection from "../../../src/components/overlays/ExperimentalSection.vue";
 import {
@@ -8,6 +8,17 @@ import {
   resetExperimentalPrefs,
   setExperimentalPref,
 } from "../../../src/ui/experimentalPrefs";
+
+const toast = vi.hoisted(() => vi.fn());
+vi.mock("../../../src/ui/toast", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../src/ui/toast")>()),
+  toast,
+}));
+const confirm = vi.hoisted(() => vi.fn());
+vi.mock("../../../src/ui/choice", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../src/ui/choice")>()),
+  confirmDanger: confirm,
+}));
 
 enableAutoUnmount(afterEach);
 
@@ -29,7 +40,12 @@ async function type(w: W, key: string, text: string, end: "Enter" | "blur" = "En
   await flushPromises();
 }
 
-beforeEach(() => resetExperimentalPrefs());
+beforeEach(() => {
+  resetExperimentalPrefs();
+  confirm.mockReset();
+  confirm.mockResolvedValue(true);
+  toast.mockReset();
+});
 
 describe("Experimental numbers", () => {
   it("keeps the ids, labels and data hooks on the typed field", async () => {
@@ -126,7 +142,24 @@ describe("Experimental HDR size and reset", () => {
     await flushPromises();
     expect(reset.attributes("aria-disabled")).toBeUndefined();
     await reset.trigger("click");
+    await flushPromises();
+    expect(confirm.mock.calls.map((c) => [c[0], c[1]])).toEqual([["Reset experimental limits?", "Reset"]]);
     expect(experimentalPrefs().bounces).toBe(DEFAULT_EXPERIMENTAL.bounces);
     expect(w.get("[data-experimental-reset]").attributes("aria-disabled")).toBe("true");
+    expect(toast.mock.calls.map((c) => c[0])).toEqual([expect.stringMatching(/Experimental.*defaults/)]);
+  });
+
+  it("keeps every changed limit when the confirm is cancelled", async () => {
+    const w = await open();
+    setExperimentalPref("bounces", 12);
+    setExperimentalPref("envWidth", 4096);
+    await flushPromises();
+    confirm.mockResolvedValueOnce(false);
+    await w.get("[data-experimental-reset]").trigger("click");
+    await flushPromises();
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect([experimentalPrefs().bounces, experimentalPrefs().envWidth]).toEqual([12, 4096]);
+    expect(w.get("[data-experimental-reset]").attributes("aria-disabled")).toBeUndefined();
+    expect(toast).not.toHaveBeenCalled();
   });
 });

@@ -352,7 +352,7 @@ describe("a held Move drag and closing the window", () => {
     const prevented = await closeWindow("save");
     expect({ prevented, said: [...said], saved: host.saved.length, held: refused.pending }).toEqual({
       prevented: true,
-      said: ["The held drag could not be entered, so the save left it out"],
+      said: ["A drag you were holding could not be applied, so the save left it out"],
       saved: 1,
       held: true,
     });

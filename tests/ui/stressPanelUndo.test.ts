@@ -127,8 +127,10 @@ describe("Stress panel undo", () => {
     r.ui.setStressFacesFromSelection({ support: 1 });
     await nextTick();
     expect(d.canUndo).toBe(true);
+    expect([d.undoLabel, d.redoLabel]).toEqual(["Support 1 faces", null]);
 
     expect(r.ui.undoStress()).toBe(true);
+    expect([d.undoLabel, d.redoLabel]).toEqual(["Body", "Support 1 faces"]);
     expect(d.setup.supports[0]!.faces.selectors).toEqual([]);
     expect(d.setup.supports[0]!.faces.faceIds).toEqual([]);
     expect(r.statuses.at(-1)).toBe("Undid: Support 1 faces");

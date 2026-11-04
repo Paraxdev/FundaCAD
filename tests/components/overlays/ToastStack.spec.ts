@@ -37,3 +37,118 @@ describe("ToastStack", () => {
     expect(leaving()).toEqual([true]);
   });
 });
+
+describe("ToastStack region", () => {
+  const region = () => document.querySelector<HTMLElement>(".toast-stack");
+
+  it("is in the page with no toast, named Notifications and not live", () => {
+    mount(ToastStack, { attachTo: document.body });
+    const el = region()!;
+    expect([el.getAttribute("role"), el.getAttribute("aria-label"), el.children.length]).toEqual([
+      "region",
+      "Notifications",
+      0,
+    ]);
+    expect(el.closest("[aria-live]")).toBeNull();
+    expect(el.querySelector("[aria-live], [role=status], [role=alert]")).toBeNull();
+  });
+
+  it("holds one row and then three, in the same region", async () => {
+    mount(ToastStack, { attachTo: document.body });
+    const el = region()!;
+    const st = useToastStore();
+    st.push("Saved 3 parts", "info", undefined, 60000);
+    await nextTick();
+    expect(document.querySelectorAll(".toast-stack")).toHaveLength(1);
+    expect(Array.from(el.querySelectorAll(".toast-msg"), (m) => m.textContent)).toEqual(["Saved 3 parts"]);
+    st.push("Pasted 4 faces", "warning", undefined, 60000);
+    st.push("Opened 2 files", "info", undefined, 60000);
+    await nextTick();
+    expect(region()).toBe(el);
+    expect(Array.from(el.querySelectorAll(".toast-msg"), (m) => m.textContent)).toEqual([
+      "Saved 3 parts",
+      "Pasted 4 faces",
+      "Opened 2 files",
+    ]);
+    expect(el.getAttribute("aria-live")).toBeNull();
+  });
+});
+
+describe("ToastStack pause", () => {
+  const alive = () =>
+    useToastStore()
+      .items.filter((t) => !t.leaving)
+      .map((t) => t.message);
+  const rows = () => Array.from(document.querySelectorAll<HTMLElement>(".toast"));
+  const three = async () => {
+    mount(ToastStack, { attachTo: document.body });
+    const st = useToastStore();
+    st.push("Saved 3 parts", "info", { label: "Open", onClick: () => {} }, 8000);
+    st.push("Pasted 4 faces", "warning", undefined, 8000);
+    st.push("Opened 2 files", "info", undefined, 8000);
+    await nextTick();
+  };
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("pointerenter on the second of three rows holds all, pointerleave gives each a full time", async () => {
+    await three();
+    rows()[1]!.dispatchEvent(new Event("pointerenter"));
+    await nextTick();
+    vi.advanceTimersByTime(30000);
+    expect(alive()).toHaveLength(3);
+    rows()[1]!.dispatchEvent(new Event("pointerleave"));
+    await nextTick();
+    vi.advanceTimersByTime(7990);
+    expect(alive()).toHaveLength(3);
+    vi.advanceTimersByTime(20);
+    expect(alive()).toEqual([]);
+  });
+
+  it("focus on a Dismiss button holds, and dismissing that focused toast frees the others", async () => {
+    await three();
+    const close = rows()[0]!.querySelector<HTMLButtonElement>(".toast-close")!;
+    close.focus();
+    await nextTick();
+    vi.advanceTimersByTime(30000);
+    expect(alive()).toHaveLength(3);
+    close.click();
+    await nextTick();
+    vi.advanceTimersByTime(200);
+    await nextTick();
+    expect(alive()).toEqual(["Pasted 4 faces", "Opened 2 files"]);
+    vi.advanceTimersByTime(8010);
+    expect(alive()).toEqual([]);
+  });
+
+  it("dismissing the row under the pointer frees the others without a pointerleave", async () => {
+    await three();
+    rows()[2]!.dispatchEvent(new Event("pointerenter"));
+    await nextTick();
+    vi.advanceTimersByTime(30000);
+    expect(alive()).toHaveLength(3);
+    useToastStore().dismiss(useToastStore().items[2]!.id);
+    await nextTick();
+    vi.advanceTimersByTime(200);
+    await nextTick();
+    expect(alive()).toHaveLength(2);
+    vi.advanceTimersByTime(8010);
+    expect(alive()).toEqual([]);
+  });
+
+  it("pointer on one row and focus on another hold until both are gone", async () => {
+    await three();
+    const close = rows()[0]!.querySelector<HTMLButtonElement>(".toast-close")!;
+    rows()[2]!.dispatchEvent(new Event("pointerenter"));
+    close.focus();
+    await nextTick();
+    rows()[2]!.dispatchEvent(new Event("pointerleave"));
+    await nextTick();
+    vi.advanceTimersByTime(30000);
+    expect(alive()).toHaveLength(3);
+    close.blur();
+    await nextTick();
+    vi.advanceTimersByTime(8010);
+    expect(alive()).toEqual([]);
+  });
+});

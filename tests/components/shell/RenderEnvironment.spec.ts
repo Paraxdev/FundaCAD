@@ -1,5 +1,8 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { flushPromises, mount } from "@vue/test-utils";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
+import { createPinia, setActivePinia } from "pinia";
+import ModalHost from "../../../src/components/overlays/ModalHost.vue";
+import { useToastStore } from "../../../src/stores/toasts";
 import RenderEnvironment from "../../../src/components/shell/RenderEnvironment.vue";
 import { ENGINE } from "../../../src/app/engineKey";
 import type { Engine } from "../../../src/app/engine";
@@ -128,6 +131,20 @@ describe("RenderEnvironment naming", () => {
 });
 
 describe("RenderEnvironment tiles", () => {
+  let host: VueWrapper;
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    host = mount(ModalHost, { attachTo: document.body });
+  });
+  afterEach(() => host.unmount());
+  const settle = () => new Promise((r) => setTimeout(r, 20));
+  const answer = async (choice: string) => {
+    await settle();
+    [...document.querySelectorAll<HTMLElement>(".ui-confirm-choice")]
+      .find((b) => b.textContent?.trim() === choice)!
+      .click();
+    await settle();
+  };
   // Vue drops a bubbling event a listener attached in the same millisecond, which a test can reach and a keypress cannot.
   const key = async (el: Element, k: string) => {
     const t = Date.now();
@@ -208,7 +225,33 @@ describe("RenderEnvironment tiles", () => {
     beta.element.focus();
     await key(beta.element, "Delete");
     window.removeEventListener("keydown", spy);
+    await answer("Delete");
     expect({ calls, windowKeys }).toEqual({ calls: ["remove b"], windowKeys: [] });
+    w.unmount();
+  });
+
+  it("asks before Delete or Backspace on a tile, Cancel focused, then focuses the neighbour and says it went", async () => {
+    const { w, calls } = await mountSaved();
+    const said = () => useToastStore().items.map((t) => t.message);
+    const beta = w.get<HTMLElement>('[data-saved-environment="Beta"]').element;
+    beta.focus();
+    await key(beta, "Backspace");
+    await settle();
+    expect(document.querySelector(".ui-confirm")?.textContent).toContain("Delete Beta?");
+    expect(document.activeElement?.textContent).toContain("Cancel");
+    expect(
+      [...document.querySelectorAll(".ui-confirm-choice")].map((b) => b.classList.contains("ui-confirm-danger")),
+    ).toEqual([false, true]);
+    await answer("Cancel");
+    expect({ calls, said: said(), back: document.activeElement === beta }).toEqual({ calls: [], said: [], back: true });
+    await key(beta, "Delete");
+    await answer("Delete");
+    const alpha = w.get<HTMLElement>('[data-saved-environment="Alpha"]').element;
+    expect({ calls, said: said(), next: document.activeElement === alpha }).toEqual({
+      calls: ["remove b"],
+      said: ["Deleted the environment Beta."],
+      next: true,
+    });
     w.unmount();
   });
 
@@ -220,7 +263,10 @@ describe("RenderEnvironment tiles", () => {
     expect(w.get('[data-saved-environment="Beta"]').attributes("aria-selected")).toBe("true");
     expect(w.get('[role="group"][aria-label="Your environments"]').find('[data-delete="Beta"]').exists()).toBe(true);
     await w.get('[data-delete="Beta"]').trigger("click");
-    await flushPromises();
+    await answer("Cancel");
+    expect(calls).toEqual([]);
+    await w.get('[data-delete="Beta"]').trigger("click");
+    await answer("Delete");
     expect(calls).toEqual(["remove b"]);
     w.unmount();
   });

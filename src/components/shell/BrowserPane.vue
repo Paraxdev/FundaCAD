@@ -786,7 +786,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
         ),
         edit: editRow(f.id),
         rename: (name: string) => store.updateFeature(f.id, { name } as Partial<Feature>),
-        remove: () => store.removeFeature(f.id),
+        remove: () => deleteRows(engine, [f.id]),
         title: `Joint ${i + 1} · select or double-click to adjust its offset/angle handles · right-click to Rename / Delete`,
       })),
     );
@@ -814,7 +814,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
         ),
         edit: editRow(f.id),
         rename: (name: string) => store.updateFeature(f.id, { name } as Partial<Feature>),
-        remove: () => store.removeFeature(f.id),
+        remove: () => deleteRows(engine, [f.id]),
         title: `Mechanism ${i + 1} on ${nameOf(f.ground)} · double-click to drag its drive · right-click to Rename / Delete`,
       })),
     );

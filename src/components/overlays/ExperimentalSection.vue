@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
+import { confirmDanger } from "../../ui/choice";
+import { toast } from "../../ui/toast";
 import { claimEscape } from "../../ui/escapeClaim";
 import {
   DEFAULT_EXPERIMENTAL,
@@ -50,6 +52,15 @@ onUnmounted(() => {
   off?.();
   holdEscape(false);
 });
+
+async function onReset() {
+  if (
+    !(await confirmDanger("Reset experimental limits?", "Reset", "Every limit on this page goes back to its default."))
+  )
+    return;
+  resetExperimentalPrefs();
+  toast("Experimental limits are back to their defaults.");
+}
 
 const changed = computed(() =>
   (Object.keys(DEFAULT_EXPERIMENTAL) as (keyof ExperimentalPrefs)[]).some(
@@ -192,6 +203,6 @@ const max = (f: Field) => EXPERIMENTAL_RANGE[f.key][1] / f.scale;
     </div>
   </div>
   <div class="prefs-actions">
-    <Button :disabled="!changed" data-experimental-reset @click="resetExperimentalPrefs">Reset to defaults</Button>
+    <Button :disabled="!changed" data-experimental-reset @click="onReset">Reset to defaults</Button>
   </div>
 </template>

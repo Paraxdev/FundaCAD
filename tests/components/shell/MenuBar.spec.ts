@@ -79,6 +79,22 @@ describe("menubar popups", () => {
     expect([run.mock.calls.length, popup(), document.activeElement]).toEqual([1, null, file]);
   });
 
+  it("reads a label thunk on each open and gives the row its stable ref name", async () => {
+    let step = "Undo Box 2";
+    const named = [{ label: "Edit", items: [{ label: () => step, refName: "Undo", onClick: run }] }];
+    const w = mount(MenuBar, { props: { menus: named }, attachTo: document.body });
+    const row = () =>
+      [...document.querySelectorAll<HTMLElement>(".menu-item")].map((r) => [r.textContent, r.dataset.refName]);
+    await w.get(".menu-btn").trigger("click");
+    await flushPromises();
+    expect(row()).toEqual([["Undo Box 2", "Undo"]]);
+    await w.get(".menu-btn").trigger("click");
+    step = "Undo Move Fillet 3";
+    await w.get(".menu-btn").trigger("click");
+    await flushPromises();
+    expect(row()).toEqual([["Undo Move Fillet 3", "Undo"]]);
+  });
+
   it("ArrowRight and ArrowLeft on a row walk to the neighbouring menu", async () => {
     const w = mount(MenuBar, { props: { menus: keyed }, attachTo: document.body });
     await w.get(".menu-btn").trigger("click");

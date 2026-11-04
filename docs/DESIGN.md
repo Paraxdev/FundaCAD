@@ -695,7 +695,7 @@ anything that says what it acts on, then itself: `aria-labelledby="{labelId} {ow
 | `Menu`, `MenuItem`, `MenuSeparator` | Popup and context menus | Menu: `anchor`, or `at` (a point) for a context menu, `side`, `align`, `focus`; MenuItem: `label`, `icon`, `keys`, `checked` (a `menuitemcheckbox`), `danger`, a nested `Menu` for a submenu | hover, keyboard focus, pressed, open, checked, danger, disabled |
 | `Popover` | A card that opens from a button: options, pickers | `anchor`, `side`, `align`; `kind`, a class for the card; `minWidth`; `label` or `labelledby` makes it a `dialog` that takes focus to its first control when a key opened it (`focus`: `keyboard`) and gives it back to the opener on close (`returnFocus`); `role="none"` for a card that is part of its opener, like the `Select` list, which then needs no name; `focus`: `first`, `keyboard` or `none` | open; it closes on Escape and on a press outside |
 | `Dialog` | A modal: a task that holds the rest of the app | `title` or the `title` slot; `size`: `sm`, `md`, `lg`; `closeOnEsc`; `initialFocus`; `returnFocus`; a `footer` slot | focus held inside, focus back on close |
-| `ConfirmDialog` | A short question with a few answers, or a checklist to confirm | `title`, `message`; `options` (`value`, `label`, `hint`, `primary`); `danger`; `multi` with `min`; `confirmLabel`, `cancelLabel` | as `Dialog`, and its buttons |
+| `ConfirmDialog` | A short question with a few answers, or a checklist to confirm | `title`, `message`; `options` (`value`, `label`, `hint`, `primary`, `danger`); `danger`; `multi` with `min`; `confirmLabel`, `cancelLabel` | as `Dialog`, and its buttons |
 | `Panel` | A small tool or readout panel ([7.13](#713-tool-and-readout-panels-measure-panel)) | `open`, `title`, `hint`, `closable`, `closeOnEsc`, `panelClass`; `head-actions` and `foot` slots | none of its own, its controls carry theirs |
 | `Card` | A titled card in a pane, as Items and History are ([7.1](#71-floating-card-float-card)) | `title`; `collapsible` with `v-model:collapsed`; `head-actions` and `foot` slots | a collapsible title: hover, focus |
 | `FieldRow` | A label and its control | `label`; `for`, or the id it hands its slot, or `null` for no `for` when `aria-labelledby` names the control; `hint`; `error`; `layout`: `inline`, `stacked` or `param`, the inspector row that keeps the `.param-row` classes, with `controlClass` for its value column; the slot gets `describedby`, the hint only, and `errorId` while there is an error, for a control that does not speak its own | error |
@@ -992,7 +992,7 @@ their own keys and drag; new rows of that kind wear the `ListRow` look.
 | `Menu` (`.ui-menu`) | `--float-bg-solid` through `--float-blur`, `--float-tile-radius`, squircle, padding 5px, `--float-shadow`, `--fs-body`, `pop-in`. `MenuItem` (`.ui-menu-item`): padding `var(--s-3) var(--s-4)`, chip radius; hover and keyboard focus accent 16% and `--accent-hot`, pressed accent 24%, keys `.ui-menu-keys` `--fs-micro` `--text-dim`, a check gutter when any item has `checked`; `MenuSeparator` 1px `--line` |
 | `.context-menu`, `.menu-popup` | the right click and title bar menus that predate `Menu`: glass solid and glass B, `--float-tile-radius`, separators `.ctx-sep` 1px |
 | `Dialog` (`.modal-panel.ui-dialog`) | glass B with `--shadow-3`, `--float-radius`, on `.modal-overlay`; `sm` `min(420px, 92vw)`, `md` 560px, `lg` 720px, unset is the `.modal-panel` width. `.modal-head`, `.modal-body`, `.modal-foot` share padding `--s-5`; head and foot are layout dividers, `1px solid var(--line)`; `h2` `--fs-title`/600 and the `.modal-close` button in the head; the `footer` slot is right aligned, gap `--s-3`, Cancel present, one primary. `role="dialog"`, `aria-modal`, `aria-labelledby` the `h2` |
-| `ConfirmDialog` (`.ui-confirm`) | a `sm` `Dialog`: the message in `--text-dim`, then one button per answer in even columns that fill the footer, the `primary` one focused, or with `multi` a checklist with Cancel and a confirm; `danger` paints the primary `--error` on `--error-tint` |
+| `ConfirmDialog` (`.ui-confirm`) | a `sm` `Dialog`: the message in `--text-dim`, then one button per answer in even columns that fill the footer, the `primary` one focused, or with `multi` a checklist with Cancel and a confirm; `danger` paints the primary `--error` on `--error-tint`, and an option's own `danger` paints just that answer, so Cancel can keep the focus (`confirmDanger` in `ui/choice.ts`: Cancel first, then the red action) |
 | `.cmdk-card` | glass B, `--float-radius`, `min(560px, 92vw)`, on `.cmdk-backdrop` at `padding-top: 12vh`, `role="dialog"`, `aria-modal`, `aria-label="Command palette"` |
 | `.measure-panel` | see [7.13](#713-tool-and-readout-panels-measure-panel) |
 | `.toast` | glass B, `--float-tile-radius`, padding `var(--s-3) var(--s-4)`, `--fs-body`, bottom centre in `.toast-stack`; `.toast-error` and `.toast-warning` tint the fill; `.toast-action` accent chip |
@@ -1149,12 +1149,24 @@ A tool that collects more than one selection gives each its own row, as
 `opts: { kind?: "info" | "warning" | "error"; action?: { label, onClick }; timeout?: number; detail?: unknown; source?: string }`.
 It returns the toast's id for `dismissToast`, or null for an error.
 
-- `info` (the default) and `warning` show a `.toast` (3.5s, a warning 6s,
-  one with an action 9s so it can be read and its button reached).
+- `info` (the default) and `warning` show a `.toast`. `noticeHoldMs` (`src/ui/noticeTime.ts`) gives its time from the
+  Notification time setting: info 5s, warning 8s, error notice 10s, any message with a button at least 15s, and a
+  caller's `timeout` only lengthens that. Longer is three times it, Until dismissed has no timer (`hold: null`), and the
+  error notice then shows a Dismiss button. A fourth toast evicts the oldest one without a button.
 - The same message, kind and action label again restarts the toast already
   showing, with the newer action, rather than stacking a copy.
 - `error` does not show a toast. It goes to the title bar notice
   (`showErrorNotice`) and the console log, with `detail` kept for the report.
+- Every toast is spoken once by `announce()` from `toast()`: info polite,
+  warning assertive, and the label of a button is added ("Deleted Box 2. Undo
+  button in Notifications."). An error is spoken by the title bar notice. The
+  stack is a permanent region named "Notifications", empty when no toast
+  shows, and is not live, so nothing is said twice.
+- The console is not a dialog but a `role="region"` named by its `h2` "Console"
+  (`tabindex="-1"`). Show Console, the error notice and its chord (outside a
+  text field) focus that heading, and closing returns focus to the opener. The
+  body is `role="log"` with `aria-live="off"`, since toasts already speak, and
+  each row starts with a `.sr-only` Error:, Warning: or Info:.
 - Every toast is also a console entry and a bug report breadcrumb, so do not
   toast on every keystroke or hover.
 
@@ -1455,8 +1467,7 @@ option groups `role="radiogroup"` with `role="radio"`, tabs `aria-selected`. A
 dialog has `role="dialog"` and a name: `aria-labelledby` pointing at its
 visible title (`Dialog.vue`, `ModalFrame.vue` over it and the chooser in
 `ModalHost.vue`, through `useId()`), or an `aria-label` when it has no title
-(`CommandPalette.vue`, `HomeScreen.vue`, `ConsolePanel.vue`,
-`TargetEditPanel.vue`). A modal one also has `aria-modal="true"`. An `Icon`
+(`CommandPalette.vue`, `HomeScreen.vue`, `TargetEditPanel.vue`). A modal one also has `aria-modal="true"`. An `Icon`
 is `aria-hidden` unless it has a `label` ([6.4](#64-icons)). Every base control has a name
 ([The base set](#the-base-set)), and a state, an error or a name never lives in a `title` alone
 ([7.11](#711-tooltips)).

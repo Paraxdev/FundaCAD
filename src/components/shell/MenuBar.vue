@@ -140,7 +140,8 @@ onUnmounted(() => {
           <MenuItem
             v-else
             class="menu-item"
-            :label="it.label"
+            :label="typeof it.label === 'function' ? it.label() : it.label"
+            :data-ref-name="it.refName"
             :keys="it.shortcut"
             :checked="it.checked ? it.checked() : undefined"
             :disabled="!!it.disabled?.()"

@@ -6,7 +6,7 @@ describe("the Edit menu", () => {
   const rows = () =>
     buildMenubar({} as Engine)
       .find((m) => m.label === "Edit")!
-      .items.map((i) => (i.separator ? "-" : i.label));
+      .items.map((i) => (i.separator ? "-" : (i.refName ?? i.label)));
 
   // A short window or a large interface caps the menu's height and scrolls the rest, so Preferences, the way to
   // Accessibility, keeps the place it had before the geometry rows came.

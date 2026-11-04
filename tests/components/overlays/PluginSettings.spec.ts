@@ -4,7 +4,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { defineComponent, h, nextTick } from "vue";
-import { enableAutoUnmount, mount } from "@vue/test-utils";
+import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import PluginsSection from "../../../src/components/overlays/PluginsSection.vue";
 import { contribute, resetContributions } from "../../../src/plugins/contrib";
@@ -18,12 +18,26 @@ vi.mock("../../../src/ui/announce", async (actual) => ({
   announce: vi.fn(),
 }));
 
+const toast = vi.hoisted(() => vi.fn());
+vi.mock("../../../src/ui/toast", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../src/ui/toast")>()),
+  toast,
+}));
+const confirm = vi.hoisted(() => vi.fn());
+vi.mock("../../../src/ui/choice", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../src/ui/choice")>()),
+  confirmDanger: confirm,
+}));
+
 enableAutoUnmount(afterEach);
 
 let a: PluginSettings;
 let b: PluginSettings;
 
 beforeEach(() => {
+  confirm.mockReset();
+  confirm.mockResolvedValue(true);
+  toast.mockReset();
   localStorage.clear();
   vi.mocked(announce).mockClear();
   a = definePluginSettings("Test.Alpha", {
@@ -155,7 +169,24 @@ describe("settings under a plugin's row", () => {
     a.set("gap", 9);
     a.set("mode", "b");
     await rowOf(w, "Test.Alpha").get("[data-plugin-settings-reset]").trigger("click");
+    await flushPromises();
+    expect(confirm.mock.calls.map((c) => [c[0], c[1]])).toEqual([["Reset Test.Alpha settings?", "Reset"]]);
     expect(a.isDefault("gap") && a.isDefault("mode")).toBe(true);
+    expect(toast.mock.calls.map((c) => c[0])).toEqual([expect.stringMatching(/Test\.Alpha.*defaults/)]);
+  });
+
+  it("keeps the plugin's values when the reset is cancelled, and leaves the other plugin alone", async () => {
+    const w = mount(PluginsSection);
+    await expand(w, "Test.Alpha");
+    a.set("gap", 9);
+    a.set("mode", "b");
+    b.set("speed", 3);
+    confirm.mockResolvedValueOnce(false);
+    await rowOf(w, "Test.Alpha").get("[data-plugin-settings-reset]").trigger("click");
+    await flushPromises();
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect([a.get("gap"), a.get("mode"), b.get("speed")]).toEqual([9, "b", 3]);
+    expect(toast).not.toHaveBeenCalled();
   });
 
   it("finds settings across plugins and opens the rows that match", async () => {
