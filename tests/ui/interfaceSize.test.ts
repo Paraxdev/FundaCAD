@@ -134,7 +134,7 @@ describe("applying it", () => {
     }) as Record<string, string>;
     const tokens = "../../src/styles/_tokens.scss";
     const found = Object.entries(sources).flatMap(([file, text]) =>
-      file === tokens ? [] : (text.match(/[\d.]+(vw|vh|vmin|vmax|dvh|svh|lvh)/g) ?? []).map((u) => `${file}: ${u}`),
+      file === tokens ? [] : (text.match(/[\d.]+(vw|vh|vmin|vmax|dvh|svh|lvh|dvw|svw|lvw)/g) ?? []).map((u) => `${file}: ${u}`),
     );
     expect(Object.keys(sources).length).toBeGreaterThan(50);
     expect(sources[tokens]).toContain("--win-h: calc(100vh / var(--page-zoom, 1))");
