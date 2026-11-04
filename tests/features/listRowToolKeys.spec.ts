@@ -10,6 +10,7 @@ import Listbox from "../../src/components/ui/Listbox.vue";
 import { EdgeFeatureTool } from "../../src/features/edgeFeatureTool";
 import { MirrorTool } from "../../src/features/mirrorTool";
 import { PatternTool } from "../../src/features/patternTool";
+import { PressPullTool } from "../../src/features/pressPullTool";
 import { SketchMode } from "../../src/sketch/sketchMode";
 import { noKeyDraw } from "../sketch/keyDrawStub";
 import type { DocumentStore } from "../../src/document/store";
@@ -109,6 +110,22 @@ function pattern() {
   return { count: () => (tool as unknown as { count: number }).count, added, done };
 }
 
+function pressPullWaiting() {
+  const viewport = {
+    suspendPicking: false,
+    domElement: document.createElement("canvas"),
+    selectedFacesForPressPull: () => null,
+    clearHover: () => {},
+    clearPressPullGhost: () => {},
+    setPeek: () => {},
+  } as unknown as Viewport;
+  const done = vi.fn();
+  const tool = new PressPullTool(viewport, {} as DocumentStore);
+  tool.start(done);
+  stopAfter.push(() => tool.cancel());
+  return done;
+}
+
 function sketch() {
   const heard = { enter: vi.fn(), switchField: vi.fn(), cancel: vi.fn(), setTool: vi.fn() };
   const s = Object.create(SketchMode.prototype) as { onKey(e: KeyboardEvent): void };
@@ -197,6 +214,15 @@ describe("a list row's keys while a tool runs", () => {
     press(listRow(), "Escape");
     vi.runAllTimers();
     expect({ added, calls: done.mock.calls }).toEqual({ added: [], calls: [[null]] });
+  });
+
+  it("Press/Pull waiting for a face: Enter on a row commits nothing, Escape on a row cancels", () => {
+    const done = pressPullWaiting();
+    const row = listRow();
+    for (const key of ROW_KEYS) expect(press(row, key).defaultPrevented).toBe(false);
+    expect(done.mock.calls).toEqual([]);
+    press(row, "Escape");
+    expect(done.mock.calls).toEqual([[null]]);
   });
 
   it("a sketch: a row's Enter, Tab and letters reach no flow or tool, the same keys on the page do", () => {

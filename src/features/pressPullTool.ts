@@ -55,6 +55,8 @@ import { featureKey, PreviewOutcomes } from "./previewOutcomes";
 import { axialSpan, ResizeGuides } from "./resizeGuides";
 import { boxBindings, type BoxField } from "./boxBindings";
 import { toolChar } from "../input/shortcuts";
+import { awaitFaceRows } from "./faceRows";
+import type { PressPullFaces } from "../viewport/faceAnalysis";
 
 /** A flat face as a tracked selector so the push follows upstream edits; a curved face keeps its picked point. */
 function upToFace(
@@ -124,6 +126,7 @@ export class PressPullTool {
   private faceIds: number[] = []; // their mesh faceIds (for the instant ghost preview)
   private upTo: Selector | null = null; // "extrude up to this surface" target (else by distance)
   private pickingTarget = false; // waiting for the user to click the up-to target surface
+  private releaseRows: (() => void) | null = null;
   private bodyId: string | null = null;
   private anchor = new THREE.Vector3(); // gizmo origin = the clicked point on the face
   private axis = new THREE.Vector3(0, 0, 1); // drag axis (unit) = face outward normal, or the outward radial on a round face
@@ -223,11 +226,57 @@ export class PressPullTool {
     this.gesture.attach();
 
     if (pre) {
-      this.beginDrag(pre.selectors, pre.faceIds, pre.anchor, pre.normal, pre.bodyId, pre.round ?? pre.lead);
+      this.takeFaces(pre);
       if (opts?.grabAt) this.grabHandle(opts.grabAt.x, opts.grabAt.y);
     } else {
+      this.releaseRows = awaitFaceRows(
+        this.viewport,
+        "a face",
+        (faces) => (this.takeFaces(faces), true),
+        () => this.cancel(),
+      );
       setPrompt("Click a face · Ctrl-click adds more");
     }
+  }
+
+  private takeFaces(f: PressPullFaces) {
+    this.beginDrag(f.selectors, f.faceIds, f.anchor, f.normal, f.bodyId, f.round ?? f.lead);
+  }
+
+  private dropRows() {
+    this.releaseRows?.();
+    this.releaseRows = null;
+  }
+
+  private beginStopPick() {
+    this.pickingTarget = true;
+    this.dim.hide(); // Enter must not commit a plain distance while picking
+    this.clearPreviewTimer();
+    this.viewport.clearPressPullGhost();
+    this.viewport.setPeek(null);
+    setPrompt("Click the face to stop at · Esc");
+    this.releaseRows = awaitFaceRows(
+      this.viewport,
+      "a face",
+      (faces) => this.takeStop(faces),
+      () => this.endStopPick(),
+    );
+  }
+
+  private endStopPick() {
+    this.dropRows();
+    this.pickingTarget = false;
+    // Restore the distance field T-mode hid; left active it let Enter commit a plain distance mid-pick.
+    this.showBox();
+    this.refreshPreview(true);
+  }
+
+  private takeStop(f: PressPullFaces) {
+    const id = f.faceIds[0]!;
+    if (this.faceIds.includes(id)) return "That is the face being pushed, pick the face to stop at";
+    this.upTo = upToFace({ selector: f.selectors[0]!, bodyId: f.bodyId }, this.viewport.planarFace(id));
+    this.commitUpTo();
+    return true;
   }
 
   /** The press landed on the passive selection handle before this tool existed; from here it is the ordinary drag. */
@@ -402,10 +451,7 @@ export class PressPullTool {
   private onKey(e: KeyboardEvent) {
     if (e.key === "Escape") {
       if (this.pickingTarget) {
-        this.pickingTarget = false;
-        // Restore the distance field T-mode hid; left active it let Enter commit a plain distance mid-pick.
-        this.showBox();
-        this.refreshPreview(true);
+        this.endStopPick();
         return;
       }
       this.cancel();
@@ -418,12 +464,7 @@ export class PressPullTool {
       !this.pickingTarget &&
       !this.resizing
     ) {
-      this.pickingTarget = true;
-      this.dim.hide(); // Enter must not commit a plain distance while picking
-      this.clearPreviewTimer();
-      this.viewport.clearPressPullGhost();
-      this.viewport.setPeek(null);
-      setPrompt("Click the face to stop at · Esc");
+      this.beginStopPick();
     }
   }
 
@@ -435,6 +476,7 @@ export class PressPullTool {
     bodyId: string | null = null,
     round: RoundFace | null = null,
   ) {
+    this.dropRows();
     this.faces = faces;
     this.faceIds = faceIds;
     this.upTo = null;
@@ -1290,6 +1332,7 @@ export class PressPullTool {
   }
 
   private cleanup() {
+    this.dropRows();
     const el = this.viewport.domElement;
     this.gesture.detach();
     el.style.cursor = "default";
